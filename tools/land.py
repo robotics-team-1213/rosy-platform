@@ -309,7 +309,27 @@ def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[l
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
     """The real-Chromium tests for the paths base...head changes, opted in on the test host only."""
     changed = lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
-    return [[remote_pytest.BROWSER_ENV, *group] for group in pack(wt, browser_scope.targets(changed))]
+    return [[remote_pytest.BROWSER_ENV, *chunk] for group in pack(wt, browser_scope.targets(changed))
+            for chunk in balanced(wt, group, BROWSER_CHUNKS)]
+
+
+# remote_pytest.run's hosts take invocations from one queue, but one browser invocation still ran
+# ~30 min on one host after the rest; 4 chunks let both hosts share that tail.
+BROWSER_CHUNKS = 4
+
+
+def balanced(wt: Path, paths: list[str], n: int) -> list[list[str]]:
+    """paths in at most n lists of near-equal total size: largest first, each into the lightest list.
+
+    A sub-list of one pack() group keeps its basenames apart."""
+    # ponytail: file size stands in for run time; use recorded pytest --durations if chunks skew.
+    size = {p: (wt / p).stat().st_size if (wt / p).is_file() else 0 for p in paths}
+    bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(min(n, len(paths)))]
+    for path in sorted(paths, key=lambda p: -size[p]):
+        total, members = min(bins, key=lambda b: b[0][0])
+        total[0] += size[path]
+        members.append(path)
+    return [sorted(members) for _, members in bins]
 
 
 def safety_review(wt: Path, base: str, head: str, python: str) -> None:

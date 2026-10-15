@@ -18,8 +18,9 @@ job is left running on the host.
 Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. Each
 host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
 and the ones above the class floor are used, most headroom first; the site PC only
-when no other host qualifies (D-568). Several invocations are spread over the chosen
-hosts at once (D-553). Pytest never runs on this machine (D-584): when no host is reachable
+when no other host qualifies (D-568). Several invocations share one queue over the chosen
+hosts (D-553): each host runs one at a time and takes the next when free, largest test files
+first. Pytest never runs on this machine (D-584): when no host is reachable
 the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
@@ -52,6 +53,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2] / "test"))
 import known_failures  # noqa: E402
 import lab_hosts  # noqa: E402
 import remote_job  # noqa: E402
+from work_queue import Work, cost  # noqa: E402,F401
 
 # Live Fleet host: last resort, Fleet reserve, CPU cap (D-568 3).
 # The address is ROSY_SITE_HOST, else gitignored private/lab-hosts.json (D-226).
@@ -414,26 +416,30 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     hosts = hosts[:len(invocations)]
     if len(hosts) == 1:
         return run_on(hosts[0], invocations, logs, sha, repo, label)
-    # D-553 4: invocation k runs on hosts[k % n]; each host ships and builds its venv once.
-    n = len(hosts)
+    # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
+    work = Work(sorted(range(len(invocations)), key=lambda i: -cost(repo, invocations[i])))
 
-    def attempt(i):
+    def attempt(host):
         try:
-            return run_on(hosts[i], invocations[i::n], logs[i::n], sha, repo, label)
+            run_on(host, invocations, logs, sha, repo, label, work)
+            return True
         except SystemExit as error:  # ship/venv failed; pytest failures are exit codes, not this
-            print(f"[remote-pytest] {hosts[i]} failed ({error}); another host takes its share",
+            print(f"[remote-pytest] {host} failed ({error}); the other hosts take its invocations",
                   file=sys.stderr, flush=True)
-            return None
+            return False
 
-    with ThreadPoolExecutor(n) as pool:
-        parts = list(pool.map(attempt, range(n)))
-    working = [h for h, part in zip(hosts, parts) if part is not None]
-    if not working:
-        raise SystemExit("[remote-pytest] every test host failed to set up")
-    for i, part in enumerate(parts):
-        if part is None:
-            parts[i] = run_on(working[0], invocations[i::n], logs[i::n], sha, repo, label)
-    return [parts[k % n][k // n] for k in range(len(invocations))]
+    with ThreadPoolExecutor(len(hosts)) as pool:
+        ok = list(pool.map(attempt, hosts))
+    while work.todo:  # handed back after a mid-run failure, or left by a lost host, once the rest were done
+        working = [h for h, good in zip(hosts, ok) if good and h not in work.lost]
+        if not working:
+            if not any(ok):
+                raise SystemExit("[remote-pytest] every test host failed to set up")
+            for i in work.todo:  # the only hosts that set up went silent: as run_on reports a lost host
+                work.codes[i] = remote_job.LOST_EXIT
+            break
+        run_on(working[0], invocations, logs, sha, repo, label, work)
+    return [work.codes[i] for i in range(len(invocations))]
 
 
 def quarantine(repo: Path, sha: str) -> dict[str, str]:
@@ -444,7 +450,13 @@ def quarantine(repo: Path, sha: str) -> dict[str, str]:
 
 
 def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, repo: Path,
-           label: str | None) -> list[int]:
+           label: str | None, work: Work | None = None) -> list[int]:
+    """Run invocations on host, one at a time; one exit code per invocation.
+
+    With a shared work (run() over several hosts) the host takes indices from it until none is left or the
+    host is lost; an index that raises mid-run goes back for another host. Codes land in work.codes."""
+    shared = work is not None
+    work = work or Work(range(len(invocations)))
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     lost = None
@@ -453,49 +465,60 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         deps_sha, dirs = deps(repo, sha)
         if remote(host, VENV, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
-        codes = []
-        for k, (inv, log) in enumerate(zip(invocations, logs)):
+        cpu = SITE_CPU_QUOTA if host in SITES else ""
+        k = 0  # job number on this host's run dir
+        while not (lost and shared) and (i := work.take()) is not None:
+            inv, log = invocations[i], logs[i]
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             if lost:
-                codes.append(remote_job.LOST_EXIT)
+                work.codes[i] = remote_job.LOST_EXIT
                 continue
-            cpu = SITE_CPU_QUOTA if host in SITES else ""
             try:
-                codes.append(remote_job.run(host, name, k, log, [name, deps_sha, cpu], [*inv, *PYTEST_TAIL],
-                                            PYTEST_TIMEOUT, SSH))
-            except remote_job.Lost as error:
-                lost = str(error)
-                print(lost, file=sys.stderr, flush=True)
-                codes.append(remote_job.LOST_EXIT)
-                continue
-            text = log.read_bytes().decode("utf-8", errors="replace")
-            print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
-            failed = known_failures.failed_ids(text)
-            ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if codes[-1] == 1 and failed else []
-            if known_failures.should_rerun(codes[-1], failed, ids):  # D-762 stage 1: once, listed ids only
-                print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
-                rerun = log.with_name(log.stem + "-rerun.txt")
-                try:
-                    rerun_code = remote_job.run(host, name, f"{k}r", rerun, [name, deps_sha, cpu],
-                                                [*itertools.takewhile(ENV_ARG.match, inv), *ids, "-q", "-rA",
-                                                 "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
-                except remote_job.Lost as error:
-                    lost, rerun_code = str(error), remote_job.LOST_EXIT
-                    print(lost, file=sys.stderr, flush=True)
-                section = rerun.read_bytes() if rerun.is_file() else b"[remote-pytest] rerun lost\n"
-                with log.open("ab") as out:
-                    out.write(f"\n{known_failures.RERUN_MARKER}\n".encode() + section)
-                if known_failures.rerun_passed(codes[-1], failed, ids, rerun_code,
-                                               section.decode("utf-8", errors="replace")):
-                    print(f"[remote-pytest] FLAKY (passed on rerun): {' '.join(ids)}", flush=True)
-                    codes[-1] = 0  # pre-push reads this exit code
-        return codes
+                work.codes[i], lost = one(host, name, k, inv, log, [name, deps_sha, cpu], repo, sha)
+            except BaseException:
+                work.todo.appendleft(i)  # never dropped: another host (or run()'s fallback) runs it
+                raise
+            k += 1
+        if lost:
+            work.lost.add(host)
+        return [work.codes.get(i) for i in range(len(invocations))]
     finally:
         if lost:  # never kill or clean up a job we cannot see; its own trap drops the lock when it ends
             print(f"[remote-pytest] left ~/rosy-test/runs/{name} on {host}; remove it when the job is done",
                   file=sys.stderr, flush=True)
         else:
             remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
+
+
+def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str], repo: Path,
+        sha: str) -> tuple[int, str | None]:
+    """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
+    try:
+        code = remote_job.run(host, name, k, log, job, [*inv, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH)
+    except remote_job.Lost as error:
+        print(error, file=sys.stderr, flush=True)
+        return remote_job.LOST_EXIT, str(error)
+    text = log.read_bytes().decode("utf-8", errors="replace")
+    print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
+    failed = known_failures.failed_ids(text)
+    ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if code == 1 and failed else []
+    if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only
+        return code, None
+    print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
+    rerun, lost = log.with_name(log.stem + "-rerun.txt"), None
+    try:
+        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*itertools.takewhile(ENV_ARG.match, inv),
+                                    *ids, "-q", "-rA", "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
+    except remote_job.Lost as error:
+        lost, rerun_code = str(error), remote_job.LOST_EXIT
+        print(lost, file=sys.stderr, flush=True)
+    section = rerun.read_bytes() if rerun.is_file() else b"[remote-pytest] rerun lost\n"
+    with log.open("ab") as out:
+        out.write(f"\n{known_failures.RERUN_MARKER}\n".encode() + section)
+    if known_failures.rerun_passed(code, failed, ids, rerun_code, section.decode("utf-8", errors="replace")):
+        print(f"[remote-pytest] FLAKY (passed on rerun): {' '.join(ids)}", flush=True)
+        code = 0  # pre-push reads this exit code
+    return code, lost
 
 
 def affected_invocations(selection: dict, skip: set[str]) -> list[list[str]]:
