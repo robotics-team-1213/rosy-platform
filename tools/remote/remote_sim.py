@@ -43,14 +43,14 @@ PRODUCTION_REFUSAL = "production only, excluded from simulation (D-571)"
 # gets the shared-PC ("ai") caps.
 PROFILES = {"model": {"mem_gb": 6, "cpus": 8}, "ai": {"mem_gb": 4, "cpus": 4}}
 
-# CORE's pip pins, built once per requirements hash. Every step is chained: a failed install is never
+# CORE's pip pins and wheel build tools, cached by requirements and install recipe. A failed install is never
 # stamped .ok. Runs inside the scope (INNER), so the caps and the wall limit cover it.
 DEPS = r"""( flock -w 600 9 || exit 1
   [ -f "$PYDEPS/.ok" ] && exit 0
   rm -rf "$PYDEPS.new"
   UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-  if [ -n "$UV" ]; then "$UV" pip install -q --python /usr/bin/python3 --target "$PYDEPS.new" -r "$REQ" httpx
-  else /usr/bin/python3 -m pip install -q --target "$PYDEPS.new" -r "$REQ" httpx; fi \
+  if [ -n "$UV" ]; then "$UV" pip install -q --python /usr/bin/python3 --target "$PYDEPS.new" -r "$REQ" httpx 'setuptools>=68' wheel
+  else /usr/bin/python3 -m pip install -q --target "$PYDEPS.new" -r "$REQ" httpx 'setuptools>=68' wheel; fi \
     && touch "$PYDEPS.new/.ok" && rm -rf "$PYDEPS" && mv "$PYDEPS.new" "$PYDEPS"
 ) 9>"${PYDEPS%/*}/.lock" || { echo "[remote-sim] CORE pip deps failed"; exit 1; }
 """
@@ -61,10 +61,14 @@ export PATH=/usr/bin:/bin:$PATH  # ~/.local/bin may hold another python3 (Isaac'
 """ + DEPS + r"""source /opt/ros/jazzy/setup.bash
 export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}"
 COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
-colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim \
+DEFAULT_ROBOT="$(PYTHONPATH="contracts/foundation:$PYTHONPATH" python3 -c 'from core_common.profile import DEFAULT_ROBOT; print(DEFAULT_ROBOT)')"
+colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim "$DEFAULT_ROBOT" \
   --parallel-workers "$CPUS" --build-base "$OUT/build" --install-base "$OUT/install" \
   > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
 source "$OUT/install/setup.bash"
+bash deploy/robot/pinky_pro/image/install-motion-contracts.sh "$PWD" "$OUT/install"
+CONTRACT_SITE="$OUT/install/lib/python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages"
+export PYTHONPATH="$CONTRACT_SITE:$PYTHONPATH"
 eval "$BENCH_CMD"
 """
 
@@ -87,7 +91,7 @@ mkdir -p "$OUT/tmp" "$R/sim-pydeps"; printf '%s' "$INNER" > "$OUT/inner.sh"; cd 
 mkdir -p ~/rosy-jobs; echo "$$ sim $CPUS ${MEM%G}" > ~/rosy-jobs/"$NAME".lock; rm -f ~/rosy-jobs/"$NAME".resv
 export GZ_PARTITION=$NAME GZ_IP=127.0.0.1 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_DOMAIN_ID=$((1 + RANDOM % 19))
 export REQ=deploy/robot/pinky_pro/requirements-core.txt OUT TMPDIR=$OUT/tmp ROS_LOG_DIR=$OUT/ros-log
-export PYDEPS=$R/sim-pydeps/$(sha256sum "$REQ" | cut -c1-12)
+export PYDEPS=$R/sim-pydeps/$( { sha256sum "$REQ"; printf '%s' "$INNER"; } | sha256sum | cut -c1-12)
 timeout -k 30 "$SECS" systemd-run --user --scope -q --unit "rosy-sim-$NAME" \
   -p MemoryMax="$MEM" -p CPUQuota="$((CPUS * 100))%" nice -n 10 bash "$OUT/inner.sh" "$@" &
 wait $!
