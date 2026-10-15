@@ -173,7 +173,7 @@ class TripRunner(TripAdmission, TripProgress):
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
-                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": self.lease.job_of(robot_id)})
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})

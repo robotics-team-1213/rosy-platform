@@ -82,7 +82,7 @@ class TripAdmission:
         async with self._lock_for(robot_id):  # a trip start on this robot runs wholly before or after this
             old = self.lease.jobs.get(robot_id)
             if old is not None and old.view["job_id"] != job_id:  # one job per robot, no queue (D-763 4)
-                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": old.view["job_id"]})
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             if old is not None and old.view["lease"]["state"] == "held":
                 return old.view["lease"]
             busy = ("trip" if self.robot_busy(robot_id) else None) or self._engaged(robot_id)
