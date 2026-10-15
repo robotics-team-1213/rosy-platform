@@ -38,6 +38,10 @@ plans:
 ---
 ## 지금 상태
 
+- 2026-10-15: native SIM 설치의 기본 프로파일와 ROS-free 계약 wheel 누락을 고쳤다.
+  실제 3대 CORE 부팅·identity 응답은 확인했으나 편대 무장/HOLD는 미수용이다.
+  상세·입력 검색은 `docs/plans/2026-10-15-gazebo-profile-closure.md`를 따른다.
+
 - D-306의 Gazebo 라이브 뷰어는 읽기 전용 디버그 화면이다. 두 탭에 키보드 방향키/Home/End 이동, 선택 탭만 Tab 순서에 남기는 규칙, 탭과 패널 관계를 추가했다. 호스트 브라우저와 기존 viewer 계약 59건을 검증했고 1280×800 라이브/결과 캡처에서 가로 넘침과 페이지 오류가 없었다. 실제 Gazebo 또는 실물 로봇 증거로 승격하지 않는다.
 - `gz_multi.launch.py`로 N대 네임스페이스 로봇을 띄운다. 도메인 하나 + ros_gz_bridge (D-114). `domain_bridge` 없음.
 - `mode:=nav` 는 spawn 좌표를 `{ns}/initialpose` 로 심는다 (D-115). odom (0,0) 을 관제 pose 로 쓰지 않는다.

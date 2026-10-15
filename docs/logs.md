@@ -8500,3 +8500,9 @@ osy-d395-s1d\`.
 - Change: update the 14-flow inventory and add docs/plans/2026-10-15-pipeline-resource-close.md for complete resource cleanup and measured OMX SIM prerequisites.
 - Evidence: remote RED 2 NEW, corrected source regression 281 passed with terminal exit 0/NEW 0. Existing non-site Docker contexts could not support a run: one daemon permission denial and one missing executable. No Docker install, permission change, daemon start or simulation acceptance was performed.
 - Gate: unchanged. Local landing is authorized; push and runtime activation are separate. Actual reviewed datasets, independent operating acceptance, live SIM and device readback remain required.
+
+## 2026-10-15 · cbf3ab55bd · native SIM installation and actual acceptance-input search
+
+- Change: record the completed resource-cleanup landing and the native Gazebo profile/wheel closure. Update the pipeline inventory with the current reviewed-data and operating-approval search results.
+- Evidence: real native build and contract wheel import smoke succeeded, followed by three matching CORE robot_id readbacks. Formation arming did not pass. Read-only search verified 2769 human-reviewed image/mask pairs with 5538 matching hashes and 857 lane-approved rows; current review owner has zero approved masks and holds no_approved_masks. No qualifying independent signed operating receipt was found in the bounded search.
+- Gate: unchanged. Existing lane-bounded labels are not independent road_surface ground truth. Startup, synthetic READY and conversation admission do not discharge operating or physical acceptance. No push, approval generation, model activation or device motion.

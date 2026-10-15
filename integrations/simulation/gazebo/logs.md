@@ -408,3 +408,9 @@
 - 변경: The test helper treats additional_env=None as an empty mapping and uses evaluate_parameters for the normalized steering-law mapping. Runtime code is unchanged.
 - 증거: CI 38239921624 gz-sim failed with TypeError. A native ROS replay then exposed KeyError in the parameter assertion. After both test fixes, AI PC Jazzy with the existing runtime venv passed 11 tests with 13 skips, exit 0, NEW 0. The remote_pytest transport and resource controls were retained; only its test shell sourced ROS and selected that existing interpreter. The ordinary ROS-free venv skipped this module.
 - gate 변화: Stationary/native test evidence only; no driving acceptance.
+
+## 2026-10-15 · cbf3ab55bd · restore native SIM profile and contract installation
+
+- Change: declare the actual default robot profile as a runtime dependency. The remote runner reuses the release contract wheel installer inside its run scope and caches its wheel build prerequisites by requirements and recipe.
+- Evidence: package regression RED then 42 passed/NEW 0; installer wiring RED 2 then 33 passed/NEW 0. Native build of 17 packages and real wheel import smoke succeeded; all three CORE robot_id responses matched. Swarm arming refused missing swarm.lead; a capability-ready rerun could not start above the SIM resource floor. Logs are under the X: gazebo-profile--7ab1db managed session.
+- Gate: no promotion. Startup readback is not formation/HOLD, site-map, device or field acceptance. Full lab landing remains required.
