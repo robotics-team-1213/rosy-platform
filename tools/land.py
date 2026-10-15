@@ -47,6 +47,7 @@ ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; abse
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
+SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
@@ -326,6 +327,14 @@ def safety_review(wt: Path, base: str, head: str, python: str) -> None:
                    " tools/harness/safety_review_exempt.json with an independent review (D-430 5)")
 
 
+def size_check(wt: Path, base: str, head: str, python: str) -> None:
+    """D-766: every commit base..head passes the size ratchet, before any test host is touched."""
+    if (wt / SIZE_RANGE).is_file():
+        code, text = step(wt, [python, SIZE_RANGE, base, head], None, "size-range", allow_fail=True)
+        if code:
+            raise Stop(f"{text.strip()}\nsize ratchet fails locally; not landing")
+
+
 def record_only(path: str) -> bool:
     """Records no module test reads. Root test/ guards do read docs, so they rerun anyway."""
     name = PurePosixPath(path).name
@@ -338,8 +347,10 @@ def record_only(path: str) -> bool:
 def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict = ENV,
          allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
+    began = time.monotonic()
     result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
                             errors="replace", env=env)
+    print(f"[{label}] {time.monotonic() - began:.0f}s", flush=True)
     text = result.stdout + result.stderr
     if log:
         log.write_text(text, encoding="utf-8")
@@ -358,7 +369,9 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
+    began = time.monotonic()
     codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+    print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
         # print no FAILED lines, so known_failures would wave them through.
@@ -462,6 +475,7 @@ def land(args) -> int:
                            + (f", auto-resolved {resolved}" if resolved else ""))
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
+        size_check(wt, main_sha, candidate, python)
         note = None
         if args.tests == "none":
             invocations: list[list[str]] = []
