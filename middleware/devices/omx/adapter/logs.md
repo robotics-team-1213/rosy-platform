@@ -473,3 +473,9 @@
 - 변경: D-626 devices/omx/adapter으로 이동. Safety 구현 5개와 arm owner/stop/HOLD 유지. caller PYTHONPATH·root 계산·manifest·Docker 소스와 물리 package 표를 정렬했다.
 - 증거: 원격 adapter/profile 및 owner/fence/G2 caller 532 성공·3 skip, 실제 Linux wheel/entrypoint/kinematics config/ament share 설치 확인. 독립 Safety source 승인과 known_failures 0 NEW/0 known.
 - gate 변화: 없음. ROS/vendor/실물 stop/rearm/현장 수용은 별도.
+
+## 2026-10-15 · dbe5db55b · fix(omx): 지속 USB 카메라 미리보기 복구
+
+- 변경: USB 대역폭 부족의 raw 캡처를 MJPEG 640×480으로 고정하고 실제 형식·한 장 버퍼를 확인한다. USB 부재·빈 프레임은 다시 열고 막힌 캡처는 watchdog으로 재시작한다. 호스트 수신 시각의 미리보기만 발행하며 CameraInfo·보정·팔 권한은 만들지 않는다.
+- 증거: 원격 RED 재현 뒤 adapter/배치 526 passed·7 skipped, Fleet OMX UDS/dispatch/observation 37 passed, 각각 NEW 0. 두 실제 카메라의 증가하는 영상과 단일 JPEG AI 추론을 확인했다. 독립 재검토에서 추가 중대 결함 없음.
+- gate 변화: 없음. 실물 프로필·보정·정지 수용과 지속 camera→AI→Fleet 연결은 미완료다. 실제 장치 식별자·로그는 비공개 X: 세션에 보존했다.
