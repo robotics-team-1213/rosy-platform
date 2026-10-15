@@ -65,6 +65,9 @@ colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-
   --parallel-workers "$CPUS" --build-base "$OUT/build" --install-base "$OUT/install" \
   > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
 source "$OUT/install/setup.bash"
+bash deploy/robot/pinky_pro/image/install-motion-contracts.sh "$PWD" "$OUT/install"
+CONTRACT_SITE="$OUT/install/lib/python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages"
+export PYTHONPATH="$CONTRACT_SITE:$PYTHONPATH"
 eval "$BENCH_CMD"
 """
 
