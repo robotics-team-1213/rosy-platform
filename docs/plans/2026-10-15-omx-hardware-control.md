@@ -14,7 +14,7 @@ SIM profile·SIM gripper·SIM API는 실물에서 재사용하지 않는다. 현
 
 **Files:** `deploy/robot/omx/hardware_readiness.py`, `test/test_omx_hardware_readiness.py`, deployment README.
 
-1. 카메라-only·다른 distro·synthetic state·잘못된 Action type에 대해 실패하는 시험을 커밋한다.
+1. 카메라-only·다른 distro·synthetic state·잘못된 Action type·다른 cell 혼합에 대해 실패하는 시험을 커밋한다.
 2. 원격 RED를 확인하고 읽기 전용 discovery/순수 판정을 구현한다.
 3. 올바른 software positive control에서도 motion=false임을 확인하고 원격 GREEN·known_failures를 기록한다.
 4. 현장 기본 환경에서 진단을 실행한다. 설치·bus open·torque·goal 없이 누락을 읽는다.
@@ -76,7 +76,12 @@ SIM profile·SIM gripper·SIM API는 실물에서 재사용하지 않는다. 현
 
 ## 상태와 검증 규칙
 
-- G1 구현/검증 진행 중. G2–G6은 미완료다. 전체 목표는 아직 완료가 아니다.
+- G1 완료: 원격 RED→GREEN·독립 재검토·현장 negative readback. 관련 원격 60시험 통과·NEW 0.
+- G2 부분 진행: 고정 벤더 8패키지와 adapter 1패키지의 Lyrical private native build 성공,
+  controller 4개 패키지 private extraction·핵심 라이브러리 2개 `ldd` 누락 0.
+  지원 runtime/설치 승인·lifecycle/실물 시험은 미완료다. 시스템 패키지·서비스는 변경하지 않았다.
+- G3–G6 미완료. follower 역할·실측 profile·독립 정지·보정이 없어 driver activation·명령은 실행하지 않았다.
+  전체 목표는 아직 완료가 아니다. [직접 증거와 재개 조건](../validation/omx-hardware-control-preparation-2026-10-15/result.md).
 - pytest는 커밋된 HEAD를 `tools/remote/remote_pytest.py`로 원격 실행하고 `test/known_failures.py`로 비교한다.
 - stage마다 실제 source·테스트·runtime·물리 증거를 따로 기록한다. 관련 safety 경로 변경은 독립 리뷰를 받는다.
 - 사용자가 승인한 로컬 병합까지 진행하며 push는 하지 않는다. 다른 세션의 WIP를 보존한다.

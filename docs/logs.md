@@ -8532,3 +8532,8 @@ osy-d395-s1d\`.
 - 검토: 학습·UI·아키텍처를 병렬 조사/검토했다. 반응형 추론을 작업셀 로컬 경로로 정정하고 AI PC/Fleet 후보·admission과 분리했으며, native 수집 T2a와 ROSY 실물 운용 T2b를 나눴다. 없는 action readback을 추정하지 않는다.
 - 증거: 문서 정적/원격 검사는 별도 기록한다. 앞선 연결 시험703 passed·7 skipped·NEW 0은 조작 정책 학습 품질·RL 구현·실물 수용 증거가 아니다.
 - gate 변화: 없음. 신규 holder·API·RL 계약은 제안이고 장치/학습/Spaces를 활성화하지 않는다.
+
+## 2026-10-15 · 731c5ae61 · OMX 실물 제어 완성 목표
+
+- 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
+- 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
