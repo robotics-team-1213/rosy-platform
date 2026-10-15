@@ -93,3 +93,16 @@ push·운영 활성화 요청으로 확대하지 않는다. 후속 브랜치는
   기존 owner에게 공급하고 readback해야 하는 관문으로 남긴다. 2·9·12번의
   미래 World/범용 door·arm/Isaac 학습 환경 확장은 기존 실행 연결 결함과
   구별하며 입출력과 성공 계약 확정 뒤 구현한다.
+
+## 추가 실제 확인 · 2026-10-15
+
+- 14번 자원 close 후속도 `4a45239a5f`로 local main 착지를 마쳤다. 착지 원격
+  6,452 passed, 330 skipped, exit 0, NEW 0이다. push는 하지 않았다.
+- 8·12번 native Gazebo 실행에서 기본 로봇 프로파일과 ROS-free 계약 wheel의
+  설치 누락을 실제로 확인해 기존 의존성과 release installer로 연결했다.
+  3대 CORE 부팅·identity readback까지 성공했으나 편대 무장은 capability 부재로
+  거절됐다. 준비 대기 재실행은 SIM 자원 부족으로 미실행이다. [상세](2026-10-15-gazebo-profile-closure.md).
+- 10·11번 기존 검수 자료를 직접 찾았다. 실제 2,769쌍 해시 일치와 lane 승인
+  857장을 확인했지만 현재 목적의 road-surface 독립 정답/IndexedReview 수용이
+  아니다. 현재 검수 owner는 approved mask 0으로 정상 HOLD한다. 독립 signed
+  운영 수용 receipt도 조사 범위에서 찾지 못했다. 자동 승인·학습·활성화는 하지 않았다.
