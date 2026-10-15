@@ -3746,3 +3746,9 @@
 - Scope: 14 flow entries and outstanding inputs/evidence in docs/plans/2026-10-15-runtime-pipeline-closure.md. No main landing, push, deployment, model activation or robot actuation. Source review found no critical/important issue.
 - Gate: unchanged. This regression does not establish ROS-SIM, ARTIFACT, DEVICE or FIELD acceptance.
 - Final evidence: fc7cd8aea affected checkpoint: 6278 passed, 330 skipped, 3 NEW (journal format and size verdict). Those failures were fixed without changing the size allowance or known-failure list. 30b06737a remote functional/contract/structure regression: 273 passed, terminal exit 0, NEW 0. Broad affected was not repeated at the final SHA; skipped tests remain unverified.
+
+## 2026-10-15 · 39d8e72973 · finish resource cleanup after worker shutdown
+
+- Change: register existing sync/async close callbacks with AsyncExitStack and run them after all background workers are canceled and awaited. A failed close does not skip the other callbacks; exceptions remain visible to the caller. No new owner, dependency or activation.
+- Evidence: 6b2b811f4 remote RED 2 NEW. 39d8e72973 remote app/native outcome/model feedback/harness/structure regression: 281 passed, terminal exit 0, NEW 0. Independent source review found no critical/important issue. Logs: X: pipeline-resources--0c429d session logs/green/run-1.txt.
+- Gate: unchanged. Resource cleanup is not robot standstill, field acceptance or startup-failure recovery.

@@ -19,7 +19,7 @@ import dataclasses
 import hmac
 import logging
 import sqlite3
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
@@ -407,30 +407,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
-            power_display = getattr(app.state, "power_health_display", None)
-            if power_display is not None:
-                await power_display.aclose()
-            backgrounds = [background for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
-                               goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task, calibration_drift_task, notification_task)
-                           if background is not None]
-            for background in backgrounds:
-                background.cancel()
-            for result in await asyncio.gather(*backgrounds, return_exceptions=True):
-                if isinstance(result, Exception):
-                    _LOG.error("Fleet background worker failed before shutdown",
-                               exc_info=(type(result), result, result.__traceback__))
-            if notification_http is not None:
-                await notification_http.aclose()
-            if calibration_drift_watch is not None:
-                await calibration_drift_watch.aclose()
-            close_observation_source = getattr(post_action_observation_source, "aclose", None)
-            if callable(close_observation_source):
-                await close_observation_source()
-            if getattr(app.state, "start_points", None) is not None:
-                app.state.start_points.close()
+            async with AsyncExitStack() as cleanup:
+                for resource in (getattr(app.state, "power_health_display", None), notification_http,
+                                 calibration_drift_watch, post_action_observation_source):
+                    close = getattr(resource, "aclose", None)
+                    if callable(close):
+                        cleanup.push_async_callback(close)
+                start_points = getattr(app.state, "start_points", None)
+                if start_points is not None:
+                    cleanup.callback(start_points.close)
+                backgrounds = [background for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
+                                   goal_evidence_worker, mission_feedback_scheduler,
+                                   mission_model_turn_worker_task, localization_task,
+                                   signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
+                                   lease_task, path_task, calibration_drift_task, notification_task)
+                               if background is not None]
+                for background in backgrounds:
+                    background.cancel()
+                for result in await asyncio.gather(*backgrounds, return_exceptions=True):
+                    if isinstance(result, Exception):
+                        _LOG.error("Fleet background worker failed before shutdown",
+                                   exc_info=(type(result), result, result.__traceback__))
 
     app = FastAPI(
         title="ROSY Fleet",
