@@ -1,6 +1,6 @@
 # OMX 물체 판독·제한 환경 문맥 실험
 
-실행일: 2026-10-15. 기준 소스 `a51b73974ab5eb58935fc6edd25f5de580f66b68`.
+실행일: 2026-10-15. 기준 commit `a51b73974ab5eb58935fc6edd25f5de580f66b68`.
 브랜치 `docs/omx-object-perception-experiments`. **동결 이미지 오프라인 실험**이며 장치 조작·FIELD 수용이 아니다.
 전체 20회: Model PC 10회, AI PC 10회. 실제 명령 전송 0회.
 
@@ -9,13 +9,14 @@
 현장 top/front에서 각각 전진하는 프레임 3개 이상을 확인한 후 640×480 JPEG 각 1장을 고정했다.
 수신 시각 기준 age 약 0.113/0.014초는 캡처 당시 값이며 실험 시점의 영상 신선도나 노출시각이 아니다.
 원본은 비공개 X: 세션 `2026-10-15--042252--inference-integration--f27cbc`의
-`scratch/discussion-20261015125112/{top,front}.jpg`에 보관한다. 이미지/base64/실제 호스트는 커밋하지 않는다.
+`scratch/discussion-20261015125112/{top,front}.jpg`와 같은 폴더의 `frames.json`에 보관한다.
+이미지/base64/실제 호스트는 커밋하지 않는다.
 
 | 입력 | SHA256 |
 |---|---|
-| top.jpg | `1e3f8dcd40dbb0d986aeb56770c4006eab75710a10ebb69493be976d2bae1848` |
-| front.jpg | `60f762f3490346e5a1547b82b3f7c82d8c8ecb9d1a701f2cf1c14584925e15de` |
-| 두 PC 모델 | `0533d74300e4f9bc367d675d4e64ffd073d50ff16a2b4096cc2e8a1cf8c96319` |
+| top.jpg SHA256 | `1e3f8dcd40dbb0d986aeb56770c4006eab75710a10ebb69493be976d2bae1848` |
+| front.jpg SHA256 | `60f762f3490346e5a1547b82b3f7c82d8c8ecb9d1a701f2cf1c14584925e15de` |
+| 두 PC 모델 digest | `0533d74300e4f9bc367d675d4e64ffd073d50ff16a2b4096cc2e8a1cf8c96319` |
 
 두 PC 모두 `qwen3-vl:8b-instruct`, temperature 0, seed 42. 같은 가중치이므로 상호 동의는 독립 검증이 아니다.
 카메라 발행기는 앞선 수정 snapshot `dbe5db55b`이며 Fleet 운영 컨테이너의 배포 SHA와 혼동하지 않는다.
@@ -76,8 +77,8 @@ top의 해당 흰 영역 임시 box `[170,290,279,398]`은 영상 표식일 뿐 
 모델 지연은 단일 호출 측정값이며 벤치마크/실시간 제어 성능으로 쓰지 않는다.
 
 Qwen 공식 [2D grounding notebook](https://github.com/QwenLM/Qwen3-VL/blob/main/cookbooks/2d_grounding.ipynb)은
-Qwen3의 기본 좌표가 0..1000 상대좌표임을 설명한다. 10/15 받은 notebook SHA256은
-`24a39b56467c16aea1062e40157c00800e8f53266714e8270ca3238064fd9898`이다.
+Qwen3의 기본 좌표가 0..1000 상대좌표임을 설명한다. 10/15 받은 notebook의
+SHA256 `24a39b56467c16aea1062e40157c00800e8f53266714e8270ca3238064fd9898`을 기록했다.
 [Ollama structured outputs](https://docs.ollama.com/capabilities/structured-outputs)의 `format` schema를 B3/E에 사용했다.
 좌표 grid 1000을 실제 입력 image width로 꾸미지 않는다. 실제 입력은 640×480이다.
 
