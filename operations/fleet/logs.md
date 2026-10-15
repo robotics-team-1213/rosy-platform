@@ -3791,3 +3791,10 @@
 - 증거: 원격(AI PC, db7b5cf3a) `operations/fleet/test` 전체 5,249 passed, 293 skipped(브라우저 opt-in), 계약·구조 176 passed, `known_failures` 0 new, 로그 X: `work-read/r4a/run-1.txt`, `work-read/r4b/run-1.txt`. 브라우저 3개 파일 93 passed, 로그 X: `browser-run/wrs4-b4.txt`.
 - gate 변화: 없음.
 - 결정: D-763 조각 4, 계획 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`.
+
+## 2026-10-15 · 7f3bd72a1 · 제안 읽기는 Cell Job 상세 범위를, 채널 제출·승인은 이름 있는 운영자를 (D-763 조각 4 리뷰)
+
+- 변경: `GET /api/fleet/proposals/{id}`가 Cell Job 제안을 `GET /api/fleet/cell-jobs/{id}`와 같은 범위·가림으로 읽는다(두 경로가 한 도우미 `cell_job_view`를 쓴다). 이전에는 운영자 누구나 남의 Cell Job 제안을 읽었고 응답의 `mission`에 `proposal_principal_id`가 실렸다. 이제 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만 읽고 나머지는 404 `PROPOSAL_NOT_FOUND`다. 레거시 Mission 제안은 그대로 제안자만. `POST /api/fleet/channel-requests/{id}/admit`·`/submit`은 `require_named_operator`다(직접 Mission admit·`/goal`과 같다). API 참조의 세 경로 인증 문구, 버전 머리는 그대로.
+- 증거: 원격(모델 PC, 7f3bd72a1) `operations/fleet/test` exit 0(293 skipped, 브라우저 opt-in), `test/architecture` exit 0, `known_failures` 둘 다 0 new, 로그 X: `proposal-scope/fleet/run-1.txt`, `proposal-scope/arch/run-1.txt`. 고치기 전 빨강 X: `proposal-scope/red/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 리뷰. API 변경 이력 번호는 착지 때 정한다.
