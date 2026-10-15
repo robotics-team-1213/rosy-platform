@@ -44,7 +44,10 @@ def test_a_turn_to_a_lane_turn_map_entry_robot_carries_the_exit_lanes_heading_an
                                    "pose_yaw_rad": ports.pose.yaw, "odom_stamp_s": STAMP}
     plain = _sw_turn(PIVOT)[1].expects[0]
     assert "map_entry" not in plain
-    assert {k: v for k, v in fields.items() if k != "map_entry"} == plain
+    # expect_tol_m includes each run's read-to-send wall time, so compare it loosely
+    assert fields["expect_tol_m"] == pytest.approx(plain["expect_tol_m"], abs=0.01)
+    loose = ("map_entry", "expect_tol_m")
+    assert {k: v for k, v in fields.items() if k not in loose} == {k: v for k, v in plain.items() if k not in loose}
 
 
 def test_without_an_odom_stamp_the_turn_is_todays():
