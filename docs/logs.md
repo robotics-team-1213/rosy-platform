@@ -8546,3 +8546,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음(SOURCE 구조 증거)
 - 결정: D-766 덧붙임 갱신(기점, 행 이름 바꿈, 범위 검사 연결)
 - 교훈: 없음
+
+## 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
+- 변경: `size_units.txt`에 레인 A 단위 16개(모두 1,000줄 이상)와 Fleet 보관 자리 단위 `situation`·`site_execution`을 더했다. `size_limits.py`: `.kt`(600)·`.mjs`/`.ts`(800), Fleet `PACKAGE_HOLDERS` = `SOURCE_ROOTS`, `STANDALONE`(pyproject 11개, `rosy-cam`), 운영 루트 `operations/signal_observation`, `COVERAGE_ROWS`(`CameraController.kt` 791). `size_range.py`는 커밋마다 그 커밋의 `size_limits.py`로 잰다. 시험: 모든 생산 코드 파일이 세어지는지, Fleet 보관 자리 = `SOURCE_ROOTS`
+- 증거: 시험 PC(`tools/remote/remote_pytest.py`) `test/architecture` 외 3개, `test/` 전체, `middleware/robot_ui/robot/test/` 모두 exit 0, `test/known_failures.py` 0 new. `python tools/harness/size_range.py main HEAD` exit 0
+- gate 변화: 없음. ratchet: `core_common`·`dashboard` 행 삭제, `fleet` 31,884 → 17,788, `control` 30,125 → 15,931, `site_ui/console` 17,718 → 13,330
+- 결정: D-766 덧붙임 「세지 않던 루트와 `.kt`」
+- 교훈: 세는 규칙을 바꾸면 범위 검사가 앞선 커밋을 새 규칙으로 쟀다. 커밋마다 그 커밋의 규칙을 쓴다
