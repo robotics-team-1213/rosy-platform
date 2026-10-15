@@ -627,14 +627,7 @@ class MissionProgressEvent(BaseModel):
     @field_validator("detail")
     @classmethod
     def detail_is_bounded_json(cls, value: dict[str, Any]) -> dict[str, Any]:
-        try:
-            encoded = json.dumps(
-                value, sort_keys=True, separators=(",", ":"),
-                ensure_ascii=False, allow_nan=False,
-            ).encode("utf-8")
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Mission event detail must be finite JSON") from exc
-        if len(encoded) > MISSION_EVENT_DETAIL_MAX_BYTES:
+        if _bounded_finite_json_size(value) > MISSION_EVENT_DETAIL_MAX_BYTES:
             raise ValueError("Mission event detail exceeds the 16 KiB limit")
         return value
 
@@ -904,10 +897,6 @@ class BatteryStatus(BaseModel):
     shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
-
-
-
-
 class SafetySummary(BaseModel):
     estop: bool = False
 
@@ -942,14 +931,6 @@ class PowerStatus(BaseModel):
 
 
 # --- Swarm (D-20, SWM-001~006, API Ref §7.8) --------------------------------
-
-
-
-
-
-
-
-
 
 class PoseSample(BaseModel):
     """Leader Pose Stream payload (SWM-003, ≥10 Hz)."""

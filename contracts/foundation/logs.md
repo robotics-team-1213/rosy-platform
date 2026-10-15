@@ -771,3 +771,11 @@
 - gate 변화: 없음.
 - 결정: D-767 A부. 켜는 것은 Safety-Review·SIM 바퀴 뒤 사용자가 정한다.
 - 교훈: 없음.
+
+## 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
+
+- 변경: `protocol/schemas.py` `MissionProgressEvent.detail_is_bounded_json`이 같은 파일의 `_bounded_finite_json_size`를 쓴다(직렬화 중복 7줄 제거, 16 KiB 한도·필드 그대로). 옮겨 간 모델(`BatteryStatus` 뒤, Swarm 절)이 남긴 빈 줄 12줄 제거. `test/architecture/size_ratchet.txt` 행을 가드 스크립트로 1345로 내림.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
+- 교훈: 없음.
