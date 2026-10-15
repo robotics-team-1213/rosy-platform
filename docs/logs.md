@@ -8488,6 +8488,19 @@ osy-d395-s1d\`.
 - gate 변화: 아직 없다. merge queue와 필수 검사는 단계 3이고 승인되지 않았다. `modules` 러너는 보고만 한다. 격리 목록의 실패는 한 번 다시 돈 뒤 통과하면 CI 잡, pre-push, 착지를 막지 않는다.
 - 결정: 격리 목록에는 증거가 있는 둘(fleet 작업자 유휴 대기)만 넣었다. 비상정지 지연 시험과 수동 조작 중 모드 충돌 시험은 안전 경로라 격리하지 않고 소유자에게 넘겼다. 브라우저 시험 둘은 어떤 실행기도 다시 돌리지 않아 후속 항목으로 남겼다.
 
+## 2026-10-15 · 0bc2a16c1 · runtime connection inventory
+
+- Change: docs/plans/2026-10-15-runtime-pipeline-closure.md maps 14 current flows to source, two fixes and remaining inputs/evidence. Historical Discord/incident plans are distinguished from current implementation.
+- Evidence: 0bc2a16c1 remote regression: 117 passed, terminal exit 0, NEW 0. Live intake, model quality, signed admission, ROS-SIM and device readback remain separate. This branch is separate from shared main.
+- Gate: unchanged. The inventory is a source audit, not runtime or physical acceptance.
+- Final evidence: 30b06737a remote regression: 273 passed, terminal exit 0, NEW 0. Earlier broad affected checkpoint: 6278 passed, 330 skipped and 3 format/size failures, all rechecked passing in the final regression. Local lint exit 0, errors 0, drift warnings 29. No whole-platform acceptance claim.
+
+## 2026-10-15 · 39d8e72973 · continue runtime pipeline closure after landing approval
+
+- Change: update the 14-flow inventory and add docs/plans/2026-10-15-pipeline-resource-close.md for complete resource cleanup and measured OMX SIM prerequisites.
+- Evidence: remote RED 2 NEW, corrected source regression 281 passed with terminal exit 0/NEW 0. Existing non-site Docker contexts could not support a run: one daemon permission denial and one missing executable. No Docker install, permission change, daemon start or simulation acceptance was performed.
+- Gate: unchanged. Local landing is authorized; push and runtime activation are separate. Actual reviewed datasets, independent operating acceptance, live SIM and device readback remain required.
+
 
 ## 2026-10-15 · uncommitted · docs: 화면 폴더 안내를 착지된 경로에 맞춘다
 

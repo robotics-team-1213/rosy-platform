@@ -3738,3 +3738,17 @@
 - 변경: `hold_job`이 list·tuple이 아닌 `drive_modes`(true, 5)를 모드 없음으로 본다(422 `leg_unknown`, TypeError 500이 아니다). lane만 가진 로봇 시험은 `goal_lease`를 빼고 Rule M 사유가 없음을 확인한다. free만 가진 경우를 더했다.
 - 증거: 원격(e0febb524) `test_trip_job_lease.py`·`test_rule_m.py` exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
 - gate 변화: 없음.
+
+## 2026-10-15 · 0bc2a16c1 · native readback and background shutdown
+
+- Change: reconcile up to 20 existing native Task owners concurrently; keep identity, quiescence, two-second freshness, claim CAS and UNKNOWN ownership. Cancel all app background workers before awaiting their results; log failed workers without interrupting remaining cleanup.
+- Evidence: shutdown RED e4804ba77; corrected readback RED b73b04577 reached UNKNOWN instead of COMPLETED. Remote AI PC regression at 0bc2a16c1: 117 passed, exit 0, known_failures NEW 0. Raw logs: X: runtime-pipelines--0fd8e5 session logs/green-2/run-1.txt.
+- Scope: 14 flow entries and outstanding inputs/evidence in docs/plans/2026-10-15-runtime-pipeline-closure.md. No main landing, push, deployment, model activation or robot actuation. Source review found no critical/important issue.
+- Gate: unchanged. This regression does not establish ROS-SIM, ARTIFACT, DEVICE or FIELD acceptance.
+- Final evidence: fc7cd8aea affected checkpoint: 6278 passed, 330 skipped, 3 NEW (journal format and size verdict). Those failures were fixed without changing the size allowance or known-failure list. 30b06737a remote functional/contract/structure regression: 273 passed, terminal exit 0, NEW 0. Broad affected was not repeated at the final SHA; skipped tests remain unverified.
+
+## 2026-10-15 · 39d8e72973 · finish resource cleanup after worker shutdown
+
+- Change: register existing sync/async close callbacks with AsyncExitStack and run them after all background workers are canceled and awaited. A failed close does not skip the other callbacks; exceptions remain visible to the caller. No new owner, dependency or activation.
+- Evidence: 6b2b811f4 remote RED 2 NEW. 39d8e72973 remote app/native outcome/model feedback/harness/structure regression: 281 passed, terminal exit 0, NEW 0. Independent source review found no critical/important issue. Logs: X: pipeline-resources--0c429d session logs/green/run-1.txt.
+- Gate: unchanged. Resource cleanup is not robot standstill, field acceptance or startup-failure recovery.
