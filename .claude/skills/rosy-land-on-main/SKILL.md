@@ -83,6 +83,9 @@ ADR will not land with this branch, add `D-nnn reason` to `tools/harness/adr_gap
 before push. Commit the ADR file **and** its Log row together (the Log is UTF-8 with BOM and
 **CRLF** — keep both), then `python tools/harness/rosy_harness.py lint`. A number lost to a
 collision also goes into `tools/harness/adr_gaps.txt`.
+API reference versions work the same way: `python tools/harness/api_reserve.py next "<topic>"`
+prints and claims `v1.NNN` (`refs/api`), and `api_reserve.py bump v1.NNN` moves every live-version
+pin (reference header, tests, `app.py`) in one command; rename your own `### v1.NNN` row by hand.
 The ADR Log and `adr_gaps.txt` merge with `merge=union`; if that leaves two rows for one
 number, keep the row with the newer Status. `logs.md` still conflicts: keep both entry
 blocks whole, one after the other. Regenerate `index.md` conflicts with
