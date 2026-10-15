@@ -106,8 +106,6 @@ data/calibration/
 # scripts belong in tools/ or outside the repo.
 /*.py
 
-# Upstream reference archives (never vendored)
-reference/src/*.zip
 
 # Agent and tool state, per-machine (.omc/skills is committable)
 .impeccable/

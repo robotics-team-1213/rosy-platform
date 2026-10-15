@@ -25,7 +25,7 @@ Content lives in the subdirectories below; at this root only the harness records
 | Directory | Purpose |
 |-----------|---------|
 | `spec/` | CORE and FLEET software requirements (see `spec/AGENTS.md`) |
-| `reference/` | Live API contract and ADR log. The frozen pinky zip is the repo-root `reference/`, not this directory |
+| `reference/` | Live API contract and ADR log |
 | `plans/` | Dated design + execute plans; the historical WBS (`ROSY Implementation Plan.md`) and Flask parity checklist moved here when `docs/plan/` retired (see `plans/AGENTS.md`) |
 | `deployment/` | Pi 5 runtime, Wi-Fi image, power bench, release keys (see `deployment/AGENTS.md`) |
 | `test/` | P1 test report (see `test/AGENTS.md`) |
