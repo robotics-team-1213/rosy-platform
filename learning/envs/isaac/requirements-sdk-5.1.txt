@@ -1,4 +1,7 @@
 # Repair a separate Isaac Sim 5.1 SDK environment; do not apply to Isaac Lab.
+# These are NVIDIA's exact 5.1.0.0 requirements, not ours to bump: isaacsim_core pins
+# filelock==3.13.1, fsspec==2024.6.1, packaging==23.0 (wheel>=0.46 needs packaging>=24);
+# isaacsim_kernel pins fastapi==0.115.7, which requires starlette<0.46.0.
 filelock==3.13.1
 fsspec==2024.6.1
 markupsafe==2.1.3
