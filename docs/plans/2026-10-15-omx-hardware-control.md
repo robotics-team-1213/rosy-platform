@@ -1,5 +1,7 @@
 # OMX AI Hardware Control Implementation Plan
 
+미완료 항목·재개 조건·연결/학습/UI 후속 범위는 [마감 인계](2026-10-15-omx-integration-unfinished-handoff.md)에 정리했다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** OMX AI의 실물 요청→단일 local owner→vendor controller→물리 feedback→정지/복구→결과 readback을 완성하고, 검증된 조건에서 딸기 왕복을 수행한다.

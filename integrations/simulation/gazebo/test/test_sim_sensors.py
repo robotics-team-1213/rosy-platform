@@ -41,6 +41,14 @@ def test_no_frame_until_every_channel_has_a_reading():
     assert ir.ir_raw([0.013, 0.013, None]) is None
 
 
+def test_multi_launch_ir_calibration_is_the_sim_floor_and_adc_saturation():
+    """map_v2_fleet_multi_real's observer calibration: the sim floor is black, saturation white."""
+    sys.path.insert(0, str(ROOT / "launch"))
+    from gz_multi_parts import SIM_IR_CALIBRATION
+    assert "all(0 < v < 4000 for v in self.ir_raw)" in (SAFETY_ADAPTER / "hazard.py").read_text(encoding="utf-8")
+    assert SIM_IR_CALIBRATION == {"ir_black": [float(_ir().FLOOR_RAW)] * 3, "ir_white": [4000.0] * 3}
+
+
 def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
     callbacks, published, timers = {}, [], []
     now = [1_000_000_000]
