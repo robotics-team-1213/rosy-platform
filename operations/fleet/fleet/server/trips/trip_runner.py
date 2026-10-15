@@ -677,13 +677,6 @@ class TripRunner(TripAdmission, TripProgress):
                          expect=fields)
         return True
 
-    @staticmethod
-    def _core_busy(live: LiveTrip) -> bool:
-        """A new instruction would abort CORE's manoeuvre, or CORE is carrying one out (only our own
-        held replan stop may be replaced)."""
-        state = live.junction.get("state")
-        return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable)
-
     async def _dismiss_sighting(self, live: LiveTrip, index: int, remaining: float, failed: tuple) -> bool:
         """Map vote (user 2026-10-13): CORE waits at a junction its keeper saw where the map has no
         place near. One keeper frame is not a junction against the map, so the answer is a
