@@ -336,8 +336,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · docs(reference): git으로 일하는 법과 인수인계 문서
 - 2026-10-16 · uncommitted · docs(learning): drivable 강화학습과 Gazebo Fleet 검증 방향
 - 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
 - 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
 - 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
-- 2026-10-15 · 476fcd17c · D-766 7(a) 독립 검토 반영(REQUEST CHANGES)
