@@ -8538,3 +8538,9 @@ osy-d395-s1d\`.
 - 변경: 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
 - 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
 - gate 변화: 없음. 새 목표의 물리 제어·정지·보정·왕복 수용은 미완료다.
+
+## 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
+
+- 변경: `docs/solutions/workflow-issues/`에 교훈 네 건(API 번호 경합, 로그 병합 날짜 순서, FULL 전 구조 가드, 감시 없는 착지와 Tailscale 프로필 뒤집힘).
+- 증거: 2026-10-14..15 D-758 0단계 번호 네 번 변경, D-760 4단계 lint out-of-order·재병합 거절, 2c 앵커 누락 FULL 실패, 6시간 무감시 착지 정지.
+- gate 변화: 없음. 도구 개선은 `fix/land-fast-fail-and-log-order`에서 따로 한다.
