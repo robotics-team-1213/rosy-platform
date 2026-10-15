@@ -20,7 +20,8 @@ import cv2
 import numpy as np
 
 from .drivable_paint import drivable_target
-from .lane_mask import LaneMaskEvidence, lane_evidence, lane_marking_mask, preprocess, uncrop_logits
+from .lane_mask import (LaneMaskEvidence, floor_gate_role_error, lane_evidence, lane_marking_mask, preprocess,
+                        uncrop_logits)
 from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, road_delivery_error, verify_files
 
 
@@ -86,12 +87,15 @@ class LaneSegModel:
 
     @classmethod
     def open(cls, folder, *, session_factory: Callable | None = None,
-             threads: int = 2, allow_spinning: bool = True, floor_gate: bool = False) -> "LaneSegModel":
+             threads: int = 2, allow_spinning: bool = True, floor_gate: bool = False,
+             paint_target: str = "lane_marking") -> "LaneSegModel":
+        """paint_target (learned_paint_target) picks the floor gate's role rule, so a model the gate
+        cannot use is refused here instead of failing every frame (D-588)."""
         manifest = load_manifest(folder)
         verify_files(manifest)
-        if floor_gate and not any(c.role in ("wall", "drivable") for c in manifest.classes):
-            # Drivable has its own region validation; lane-mask fallback still requires a wall class.
-            raise ManifestError("floor gate needs a wall or drivable role class; this model has neither")
+        error = floor_gate_role_error(manifest.classes, paint_target) if floor_gate else None
+        if error:
+            raise ManifestError(f"{error}; this model has none")
         factory = session_factory or (lambda p, t: _OrtSession(p, t, allow_spinning))
         try:
             if session_factory is None and manifest.backend == "ncnn":

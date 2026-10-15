@@ -251,6 +251,10 @@ PENDING → RUNNING → COMPLETED
 
 단계 종류마다 필요한 승인은 서버의 단계 종류 등록부가 정한다. 팔을 움직이는 단계는 두 사람(제안자가 아닌 이름 있는 운영자가 승인), 운행뿐인 단계는 한 사람이다. 레거시 `PICK_PLACE`는 실물 하달이 연결될 때까지 제안자 본인 승인으로 남는다. 승인을 기다리는(`PROPOSED`) 작업은 제안자가 철회하거나 승인할 수 있는 다른 이름 있는 운영자가 거절할 수 있다. 거절은 claim을 잡지 않고 끝 상태로 가며(Cell Job HOLD/`CANCELLED_BY_OPERATOR`, Mission `CANCELED`), 행위자와 철회·거절 구분을 감사 기록에 남기고, 그 뒤 승인은 거절된다. 승인과 거절은 화면이 본 정지 세대(`expected_generation`)에서만 된다. 계약: API Ref v1.230.
 
+### MSN-007 다단계 작업이 로봇을 쥔다 (D-763 4항·조각 6)
+
+운행 단계가 든 다단계 작업은 승인부터 끝(완료, 운영자 취소)까지 그 로봇의 CORE trip lease(`job_id`, 단계 사이 IDLE에서 끝나지 않음)와 D-330 `robot` claim을 쥔다. 승인은 현장 설정 trip lease와 통행권이 둘 다 켜져 있고, lease `ttl_s`가 통행권 `ttl_s`(5 s)보다 크고, 로봇이 `trip_lease`·`trip_lease_job`·`goal_lease`와 lease 아래 통행권 강제를 알릴 때만 된다(아니면 422 `LINK_UNBOUNDED_MOTION`). 단계 사이 lease를 갱신하는 것은 Fleet의 trip lease 하나이고 통행권과 목표 임대는 갱신하지 않는다: 그 한도는 움직임을 모는 trip 루프만 늘린다. 작업이 로봇을 쥔 동안 Fleet의 다른 움직임 입구(관제 목표, 대형, 차선 추종, Task 하달, 다른 trip 시작)는 `TRIP_ROBOT_BUSY`이고 멈춤은 통과한다. lease를 잃으면(마지막 확인 갱신 뒤 `ttl_s`) 작업은 사건 경로로 사람·AI PC에 알리고 claim을 쥔 채 HOLD이며 자동으로 다시 가지 않는다(재승인, 새 lease, 새 출발 검사). 계약: API Ref v1.236.
+
 ---
 
 # 9. Formation / Swarm

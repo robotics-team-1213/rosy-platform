@@ -3704,6 +3704,40 @@
 - 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
 - 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
+## 2026-10-15 · aa9913d2f · 다단계 작업이 로봇의 lease와 claim을 쥔다 (D-763 조각 6)
+
+- 변경: `ledger/trip_admission.py` `hold_job`(개정 2 질문 10 (a)(b) 관문, 아니면 422 `LINK_UNBOUNDED_MOTION`; `on_job_lost` 없이는 거절)와 `release_job`. `traffic/trip_lease.py`: `jobs`, 단계 사이 갱신(`period`가 열린 trip 없는 작업도 갱신, `/trip-lease`만 보낸다), 작업의 단계가 lease를 이어받고 닫아도 유지, 시작 실패는 작업 lease를 두고, 작업 lease 상실은 `on_job_lost`. `ledger/trip_runner.py` `start(job_id=)`: 작업이 쥔 로봇의 다른 시작은 정렬 회전 전에 `TRIP_ROBOT_BUSY`. `ledger/trip_guard.py`: `trip_busy`가 작업의 hold와 내구 D-330 `mission` robot claim도 본다. `server/app.py` 한 줄(claims 연결). 서버 크기 단위 순증 0(31904), traffic 2200(≤2201), ledger 7083.
+- 증거: `test/test_trip_job_lease.py`. 원격(7334f9c40) 통과, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음. 아직 `hold_job`을 부르는 운영 경로가 없다(조각 7).
+- 결정: D-763 4항·조각 6.
+- 교훈: 없음.
+
+## 2026-10-15 · d05bccdec · 조각 6 안전 검토 반영
+
+- 변경: Fleet이 보낸 사람의 멈춤(취소, line-follow OFF)은 lease 주인 토큰이라 CORE가 lease를 두므로 `stop_job`이 lease를 놓고 사건 경로를 부르며 작업을 HOLD로 둔다. `hold_job`은 로봇 잠금 안에서, 이미 움직이는 로봇(열린 trip, 콘솔 목표, 대형)을 거절한다. `release_job`은 단계 trip이 열려 있으면 409 `TRIP_BUSY`. 사건 hook 예외는 기록한다. SRS CORE `SAF-007`, Fleet `MSN-007`.
+- 증거: `test/test_trip_job_lease.py` 새 시험 셋. 원격(d05bccdec) 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 3.
+- 교훈: 같은 토큰을 쓰는 Fleet 콘솔의 멈춤은 CORE의 "주인 아닌 멈춤" 규칙에 걸리지 않는다. Fleet 쪽에서 따로 닫아야 한다.
+
+## 2026-10-15 · 9f1f7876f · trip 취소가 실패해도 작업은 HOLD
+
+- 변경: `ledger/trip_guard.py` `end_trip`이 `stop_job`을 따로 `try`에서 부른다. trip 저장소가 실패해도 사람의 멈춤 뒤 작업 lease가 갱신되며 남지 않는다(재검토 LOW).
+- 증거: `test_a_failed_trip_cancel_still_holds_the_job`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-15 · 0b7df2e16 · hold_job의 움직임 한도는 Rule M이 판정한다 (D-760 6, D-763 조각 6)
+
+- 변경: D-760 담당 세션 요청. `ledger/trip_admission.py` `hold_job`이 로봇이 모는 다리(lane·free)마다 `traffic/rule_m.py` `verdict`를 lease 없이 부른다(lane은 통행권 `core`, free는 임대 있는 목표). 422 `LINK_UNBOUNDED_MOTION` 본문은 `reasons`(Rule M의 말: `hold_back`, `no_goal_lease`, `leg_unknown`)와 `missing`(질문 10의 능력·설정)이다. traffic 단위 그대로(2200), ledger 7115, 서버 순증 0.
+- 증거: `test_the_motion_bound_part_is_rule_ms_verdict`, `test_a_lane_only_robot_needs_no_free_leg_bound`. 원격(0b7df2e16) exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-760 Decision 6, D-763 4항.
+
+## 2026-10-15 · e0febb524 · 잘못된 drive_modes는 leg_unknown, 다리 시험을 반증 가능하게
+
+- 변경: `hold_job`이 list·tuple이 아닌 `drive_modes`(true, 5)를 모드 없음으로 본다(422 `leg_unknown`, TypeError 500이 아니다). lane만 가진 로봇 시험은 `goal_lease`를 빼고 Rule M 사유가 없음을 확인한다. free만 가진 경우를 더했다.
+- 증거: 원격(e0febb524) `test_trip_job_lease.py`·`test_rule_m.py` exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음.
 
 ## 2026-10-15 · 0bc2a16c1 · native readback and background shutdown
 

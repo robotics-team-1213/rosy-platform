@@ -1138,3 +1138,10 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 벽시계 워치독(500 ms)을 쓰는 시험은 세션 유지가 시험 대상이 아니면 타임아웃을 고정한다.
+## 2026-10-15 · 84f0c8456 · 작업의 trip lease는 단계 사이 IDLE에서 끝나지 않는다 (D-763 조각 6, API v1.236)
+
+- 변경: `core/trip_lease.py` `_Lease.job_id`. `job_id`로 연 lease는 모드 감시(`end_on_mode`)가 IDLE에서 끝내지 않는다. MANUAL·도킹·비상 정지·넘겨받기·만료·주인 해제는 그대로 끝낸다. renew는 `job_id`를 바꾸지 않는다. 공개 dict에 `job_id`. 통행권 래치(`authority_leased`)는 그대로라 다음 차선 세션에서 lease가 있으면 바로 다시 걸린다.
+- 증거: `test/test_trip_lease.py` D-763 6 절 — 주인 IDLE 뒤 lease 유지, 단계 사이 주인 아닌 `/mode`(MANUAL·NAVIGATION)·`/teleop` 409, 넘겨받기 통과, 주인 아닌 IDLE·E-stop은 lease를 끝냄, 단계 중 주인 아닌 IDLE도 끝냄, 주인 MANUAL은 끝냄, 만료는 지금과 같음, renew가 작업 lease로 바꾸지 않음, `job_id` 검증, 능력, lease를 갱신해도 통행권(`authority_expired`)과 목표 임대가 만료함, lease → 모드 → 첫 통행권 순서. 원격(모델 PC, 7334f9c40) 통과, `known_failures` 0 new, 로그 X: `job-lease/core/run-1.txt`.
+- gate 변화: 없음. SOURCE·호스트 근거만이다. 장치 미확인.
+- 결정: D-763 4항·조각 6, 개정 2 질문 2·3. 팔 단계 중 만료의 동작은 정하지 않았다(남은 질문 1).
+- 교훈: 없음.
