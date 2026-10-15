@@ -700,3 +700,28 @@ def test_run_on_reruns_only_quarantined_failures_once(tmp_path, monkeypatch, lis
     text = log.read_text(encoding="utf-8")
     assert rp.known_failures.RERUN_MARKER in text
     assert text.endswith(rerun_out or "rerun lost\n")
+
+LISTING = ("ID    Tailnet                 Account\n"
+           "665e  team@example.com        team@example.com*\n"
+           "bc4d  other@example.com       other@example.com\n")
+
+
+def test_tailscale_current_profile_is_the_starred_row():
+    assert rp.current_profile(LISTING) == ["665e", "team@example.com", "team@example.com"]
+    assert rp.current_profile(LISTING.replace("*", "")) == []
+
+
+def test_tailscale_profile_mismatch_fails_fast_naming_both():
+    listing = subprocess.CompletedProcess([], 0, LISTING, "")
+    with pytest.raises(SystemExit) as error:
+        rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=lambda *a, **k: listing)
+    assert "current 665e" in str(error.value) and "tailscale switch bc4d" in str(error.value)
+    rp.check_tailscale_profile("665e", which=lambda _: "tailscale", run=lambda *a, **k: listing)  # match: passes
+
+
+def test_tailscale_profile_check_skipped_without_cli_or_key():
+    def never(*a, **k):
+        raise AssertionError("tailscale must not be called")
+
+    rp.check_tailscale_profile("bc4d", which=lambda _: None, run=never)   # no CLI
+    rp.check_tailscale_profile("", which=lambda _: "tailscale", run=never)  # no lab-hosts.json key
