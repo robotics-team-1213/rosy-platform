@@ -6,6 +6,7 @@
 import { NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL,
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
+import { createPowerButton } from "/console/assets/power-action.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
@@ -263,7 +264,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable && robot.online) {
       const powerMode = state.power?.mode;
       if (powerMode) {
-        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode), "");
+        // D-440: after a wake the wheels stay at zero until the LiDAR confirms (motion_ready false).
+        const waking = state.power.motion_ready === false && powerMode === "ACTIVE";
+        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode) + (waking ? " · 준비 중" : ""), "");
         powerTag.title = String(powerMode);
         powerTag.dataset.power = String(powerMode);
         head.appendChild(powerTag);
@@ -658,7 +661,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    actions.append(aim, pin, trip.toggle(robot), cancel, identify);
+    const power = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith });
+    actions.append(aim, pin, trip.toggle(robot), cancel, identify, power);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = document.createElement("ui-button");

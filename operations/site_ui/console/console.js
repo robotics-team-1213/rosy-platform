@@ -17,7 +17,7 @@ import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { pinPrefill } from "./localization-badge.js";
 import { createVisionView } from "/console/assets/vision-view.js";
-import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
+import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
@@ -28,6 +28,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
+import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
@@ -37,18 +38,6 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
-// D-741 6·7 — 주소의 view가 영역을 고른다: 레일의 현재 위치와 그 영역의 하위 탐색, 그 안의 현재 화면(show)이 따라온다.
-const area = new URLSearchParams(location.search);
-const areaNav = [...document.querySelectorAll(".ui-subnav")].find(node => node.dataset.area === area.get("view"));
-if (areaNav) {
-  areaNav.hidden = false;
-  const show = [...areaNav.querySelectorAll("a")].some(link => link.href.endsWith(`show=${area.get("show")}`)) ? area.get("show") : null;
-  for (const link of document.querySelectorAll(".doc-tabs a, .ui-subnav a")) {
-    const to = new URL(link.href).searchParams;
-    if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === show)) link.setAttribute("aria-current", "page");
-    else link.removeAttribute("aria-current");
-  }
-}
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
@@ -60,7 +49,8 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
-const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
+const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
+  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
 const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? "work-new" : "work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
 layoutPanels.push(raised);

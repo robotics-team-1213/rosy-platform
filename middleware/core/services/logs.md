@@ -974,6 +974,12 @@
 - gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
 - 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
 
+## 2026-10-13 · uncommitted · D-24 웨이크 입력과 D-440 기기별 전원 정책 (feat/device-power-policy에서 옮김)
+
+- 변경: `PresenceDetector`가 정말로 연속된 유효 근접 표본과 `min_presence_s` 0.4 s·`max_gap_s` 1.0 s를 요구한다. `PowerManager.on_command(source)`가 받아들여진 명령으로 깨운다(정보 창 없음). `power/devices.py`(수준·기기 선언·벤치 스위치·엄격한 파서)와 기기별 수준·준비·`motion_ready()`를 더했다. 꺼졌다 켜진 기기는 `wake_ready_s`와 깨운 뒤의 확인 보고가 둘 다 있어야 준비된다. 정책이 움직이는 기기는 CORE 기동 뒤에도 확인을 기다린다.
+- 증거: `test/test_power_wake_inputs.py`, `test/test_power_device_policy.py`. 원격 pytest 결과는 이 브랜치의 착지 보고에 둔다.
+- gate 변화: 없음. 벤치 스위치 `power.device_policy.enabled`는 false다. 실기에서 기기를 재우거나 깨운 증거는 없다.
+- 결정: 브랜치의 배터리 "나빠지는 방향만" 웨이크는 옮기지 않았다(main이 이미 단계 변화에만 깨운다).
 ## 2026-10-13 · 15f4e0932 · D-744 차로 호의 원을 지도에 고정 (API v1.221)
 
 - 변경: `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`를 받은 때 `authority.py::_place_map_anchor`가 odom 기록(`_odom_log`의 CORE 벽시계)에서 그 표본을 찾아 원 중심을 odom으로 옮기고, `lane_arc.py::_open_arc`가 그 원과 그 접선으로 호를 연다. 풀지 못하면(없음·비유한·2 s 초과·기록에 없음·odom epoch/frame 변경·전진 1.5 m 초과·원에서 0.075 m 초과) 오늘의 자세 기준 원이다. 능력 `lane_arc_map_anchor`, 호 기록 `map_anchor_used`. Fleet은 `routing/execute.py::exit_segment(map_pose=)`와 `trip_runner._step_lane`이 능력과 `odom_stamp`가 있을 때만 싣는다.

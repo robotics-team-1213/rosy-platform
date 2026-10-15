@@ -60,6 +60,47 @@ def test_ci_provides_the_site_account_oauth_runtime():
     assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
 
 
+def test_fleet_account_oauth_pin_matches_site_runtime():
+    import ast
+    import re
+
+    site = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
+    pin = re.search(r'^oauthlib==[^\s]+', site, re.MULTILINE).group()
+    tree = ast.parse((ROOT / 'operations/fleet/setup.py').read_text(encoding='utf8'))
+    requirements = next(ast.literal_eval(keyword.value) for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) for keyword in node.keywords
+                        if keyword.arg == 'install_requires')
+    assert pin in requirements, 'Fleet wheel and site account runtime must agree'
+
+
+def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkeypatch):
+    import json
+    import yaml
+    from types import SimpleNamespace
+    from tools.harness.affected_tests import CI_FULL_MATRIX
+
+    browser_node = 'middleware/core/gateway/test/test_account_pipeline.py'
+    core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
+    assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    assert 'test_account_pipeline.py' in install['if']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['middleware/core/gateway/test'], [browser_node]]))
+    monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
+    monkeypatch.setattr(subprocess, 'run', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(returncode=0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == 0
+    assert len(calls) == 2
+    assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
+    assert browser_node in calls[1][0]
+    assert calls[1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']

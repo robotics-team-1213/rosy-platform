@@ -1,9 +1,9 @@
-"""Subject: opt-in tracked-obstacle guard in the existing final velocity gate."""
-import json
+"""Subject: opt-in tracked-obstacle guard in the existing final velocity gate.
 
-from rclpy.time import Time
-from std_msgs.msg import String
-from tf2_ros import TransformException
+ROS-free mixin (D-171): SafetyNode owns the two subscriptions and the TF lookup
+(``lookup_odom_base``).
+"""
+import json
 
 from ..control.obstacle_risk import observation_risk, camera_hold, accept_observation
 from ..sensing.pose import planar_pose
@@ -15,8 +15,6 @@ class Obstacles:
         self.declare_parameter('obstacle_tracking_margin', .02)
         self.obstacle_observation = None
         self.camera_observation = None
-        self.create_subscription(String, 'obstacles/tracks', self.on_obstacle_tracks, 10)
-        self.create_subscription(String, 'camera/observation', self.on_camera_observation, 10)
 
     def on_camera_observation(self, msg):
         try:
@@ -41,14 +39,13 @@ class Obstacles:
         visual_hold = camera_hold(self.camera_observation, now)
         if visual_hold:
             return visual_hold
-        try:
-            tf = self.lidar_tf.lookup_transform('odom', 'base_link', Time())
-            stamp = tf.header.stamp.sec+tf.header.stamp.nanosec*1e-9
-            t, q = tf.transform.translation, tf.transform.rotation
-            pose = planar_pose(t.x, t.y, (q.x, q.y, q.z, q.w))
-            if pose is None or not 0 <= now-stamp <= .3:
-                return 'obstacle_pose_unavailable'
-        except TransformException:
+        tf = self.lookup_odom_base()
+        if tf is None:
+            return 'obstacle_pose_unavailable'
+        stamp = tf.header.stamp.sec+tf.header.stamp.nanosec*1e-9
+        t, q = tf.transform.translation, tf.transform.rotation
+        pose = planar_pose(t.x, t.y, (q.x, q.y, q.z, q.w))
+        if pose is None or not 0 <= now-stamp <= .3:
             return 'obstacle_pose_unavailable'
         result = observation_risk(self.obstacle_observation, now, pose,
             self.last_cmd.linear.x, self.robot_r,

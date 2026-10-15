@@ -51,4 +51,4 @@
 - 2026-10-15 · dbe5db55b · fix(omx): 지속 USB 카메라 미리보기 복구
 - 2026-10-11 · 1691d395c · refactor: OMX adapter 장치 holder 이전 검증
 - 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
-- 2026-10-05 · uncommitted · test(omx): 좌석 교체 검사 시간 독립화
+- 2026-10-05 · uncommitted · fix(test): preload 좌석 시험의 관절 시계 고정

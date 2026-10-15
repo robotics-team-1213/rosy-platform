@@ -1,24 +1,26 @@
-"""Subject: command gate. Halt, drive sign, publish /cmd_vel."""
+"""Subject: command gate. Halt, drive sign, publish /cmd_vel.
+
+ROS-free mixin (D-171): SafetyNode builds each Twist (``zero_twist``) and the
+drive-sign parameter (``set_linear_sign_parameter``).
+"""
 import math
 
-from geometry_msgs.msg import Twist
-from rclpy.parameter import Parameter
 from ..sensing.localization import lease_ready
 
 
 class Gate:
 
-    def on_cmd(self, msg: Twist):
+    def on_cmd(self, msg):
         values = (msg.linear.x, msg.linear.y, msg.linear.z,
                   msg.angular.x, msg.angular.y, msg.angular.z)
         if not all(math.isfinite(value) for value in values):
-            self.last_cmd = Twist()
+            self.last_cmd = self.zero_twist()
             self.last_cmd_time = None
             self.halt_with_reason('invalid_command')
             return
         if (self.estop or (self.get_parameter('localization_required').value and
                 not lease_ready(self.localization_status, self.now().nanoseconds * 1e-9))):
-            self.last_cmd = Twist()
+            self.last_cmd = self.zero_twist()
             self.last_cmd_time = None
             self._publish_zero()
             return
@@ -73,9 +75,7 @@ class Gate:
         self._sign_hits = 0
         self.cmd_linear_sign = -self.cmd_linear_sign
         self._sign_flip_t = self.now()
-        self.set_parameters([
-            Parameter('cmd_linear_sign', Parameter.Type.DOUBLE, float(self.cmd_linear_sign)),
-        ])
+        self.set_linear_sign_parameter(float(self.cmd_linear_sign))
         why = (
             f'forward opened front {dfront*100:.1f}cm'
             if want_fwd else
@@ -86,13 +86,13 @@ class Gate:
         )
 
     def _publish_zero(self):
-        self.pub.publish(Twist())
+        self.pub.publish(self.zero_twist())
 
     def stop_motors(self):
         try:
             self.engage_estop('shutdown')
         except Exception:
             try:
-                self.pub.publish(Twist())
+                self.pub.publish(self.zero_twist())
             except Exception:
                 pass

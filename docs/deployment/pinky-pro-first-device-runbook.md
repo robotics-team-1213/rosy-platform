@@ -170,6 +170,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\
 빈 줄을 입력하면 `no console input: re-run and type exactly: ...`로 멈추고 카드는 그대로다. 문구를 다시 입력해 재실행한다.
 처음 쓸 때 준 `-OperatorPublicKey`·`-ReprovisionReceipt`는 여기에도 같이 준다. 끝나면 창에 `EXIT_CODE=`가 남고,
 로그 옆에 `.exit` 표지가 생긴다. 창은 결과를 보인 채 열려 있다.
+카드에 다른 robot의 `provision.json`이 이미 있으면 계획 단계에서 두 이름을 대며 거절한다. 일부러 바꿀 때만 `-ReplaceExistingProvision`을 plan에 준다. 같은 robot 재이미징은 영수증의 모델·preset·국가·Fleet 값을 이어 쓴다(D-746).
 UAC 창에서 "아니요"를 눌렀거나 시간이 지났으면 launcher가 `failed`/`untouched`와 `next:`를 진행 파일에 남기고 실패한다.
 카드는 건드리지 않았으니 다시 띄운다.
 

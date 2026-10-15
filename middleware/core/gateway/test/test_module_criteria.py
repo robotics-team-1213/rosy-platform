@@ -53,6 +53,9 @@ ALLOWED = Counter({
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"profile"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"refresh_profile"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", "name"): 1,
+    # Accepted (D-468): public candidate admission on the injected sensor policy;
+    # absent, failing or non-boolean providers deny local return.
+    ("bridge/control_sensor_adapter.py", "getattr", "self.policy", "'local_return_allowed'"): 1,
     # Accepted (D-126 S1): entry-point provider dispatch. The attribute name
     # selects which of the provider's three factories (make_node, make_policy,
     # load_snapshot) to load; a missing provider or factory fails closed with

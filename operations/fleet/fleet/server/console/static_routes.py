@@ -29,6 +29,7 @@ CONSOLE_ASSETS = {
     "console.js": ("console.js", "application/javascript"),
     "inbox.js": ("inbox.js", "application/javascript"),
     "work-view.js": ("work/work-view.js", "application/javascript"),
+    "work.css": ("work/work.css", "text/css"),
     "channel-request-view.js": ("work/channel-request-view.js", "application/javascript"),
     "incident-view.js": ("incident-view.js", "application/javascript"),
     "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
@@ -91,6 +92,8 @@ CONSOLE_ASSETS = {
     "device-watch.js": ("device-watch.js", "application/javascript"),
     "device-watch.css": ("device-watch.css", "text/css"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
+    "power-action.js": ("shared/power-action.js", "application/javascript"),
+    "area-nav.js": ("shared/area-nav.js", "application/javascript"),
 }
 
 CONSOLE_CSP = (

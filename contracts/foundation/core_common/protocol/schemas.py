@@ -31,6 +31,8 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.docking import DockState, DockingStatus  # noqa: F401
+from core_common.protocol.power import (  # noqa: F401 (PWR-001~005, D-440)
+    DevicePowerState, PowerMode, PowerStatus, PresenceState)
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
@@ -627,14 +629,7 @@ class MissionProgressEvent(BaseModel):
     @field_validator("detail")
     @classmethod
     def detail_is_bounded_json(cls, value: dict[str, Any]) -> dict[str, Any]:
-        try:
-            encoded = json.dumps(
-                value, sort_keys=True, separators=(",", ":"),
-                ensure_ascii=False, allow_nan=False,
-            ).encode("utf-8")
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Mission event detail must be finite JSON") from exc
-        if len(encoded) > MISSION_EVENT_DETAIL_MAX_BYTES:
+        if _bounded_finite_json_size(value) > MISSION_EVENT_DETAIL_MAX_BYTES:
             raise ValueError("Mission event detail exceeds the 16 KiB limit")
         return value
 
@@ -904,52 +899,13 @@ class BatteryStatus(BaseModel):
     shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
-
-
-
-
 class SafetySummary(BaseModel):
     estop: bool = False
 
 
 # --- 절전/근접 웨이크 (PWR-001~004, D-24) -----------------------------------
 
-class PowerMode(str, enum.Enum):
-    """센서·디스플레이 듀티 사이클 모드. 모터 안전 경로와 무관하다."""
-
-    ACTIVE = "ACTIVE"      # 상시 — 활동 중이거나 깨어 있음
-    IDLE = "IDLE"          # 저속 샘플링, LCD 디밍
-    STANDBY = "STANDBY"    # 최저 샘플링, LCD 소등
-
-
-class PresenceState(str, enum.Enum):
-    """초음파 근접 판정 결과 (표시 전용 — 장애물 회피는 Nav2 담당)."""
-
-    NONE = "none"
-    NEAR = "near"          # near_m 이내 접근
-    CONTACT = "contact"    # contact_m 이내 — 접촉으로 간주
-
-
-class PowerStatus(BaseModel):
-    mode: PowerMode = PowerMode.ACTIVE
-    presence: PresenceState = PresenceState.NONE
-    info_visible: bool = False
-    sample_rate_hz: float = 20.0
-    last_wake_reason: Optional[str] = None
-    idle_seconds: float = 0.0
-    lidar_spinning: bool = True     # PWR-005 LiDAR 모터 회전 의도
-    lidar_ready: bool = True        # 스핀업 완료 — 스캔을 신뢰할 수 있는가
-
-
 # --- Swarm (D-20, SWM-001~006, API Ref §7.8) --------------------------------
-
-
-
-
-
-
-
-
 
 class PoseSample(BaseModel):
     """Leader Pose Stream payload (SWM-003, ≥10 Hz)."""
