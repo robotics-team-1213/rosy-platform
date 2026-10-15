@@ -133,6 +133,10 @@ class TripAdmission:
     async def stop_job(self, robot_id: str, reason: str) -> None:
         """A person's stop sent through Fleet carries the lease owner's token, so CORE keeps the lease: Fleet
         gives it up itself, and the job HOLDs through the incident path (rev 2 Q3); no step runs on after it."""
+        try:  # a step trip still open ends first (it shares the lease)
+            await self.cancel_robot(robot_id, reason)
+        except Exception:  # noqa: BLE001 - the lease is given up all the same
+            _LOG.exception("could not end the step trip of %s", robot_id)
         job = self.lease.jobs.get(robot_id)
         if job is not None and job.view["lease"]["state"] == "held":
             lease_id = job.view["lease"]["lease_id"]

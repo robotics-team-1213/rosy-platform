@@ -8563,6 +8563,12 @@ osy-d395-s1d\`.
 - 증거: 당일 runtime 재확인과 기존 검증 기록을 연결했다. 물리 차단과 남은 소프트웨어 구현을 구분했으며 미완료 항목을 완료로 승격하지 않았다.
 - gate 변화: 없음. 사용자 요청은 문서 커밋과 로컬 병합이며 push·활성화·실물 운용은 포함하지 않는다.
 
+## 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
+- 변경: `docs/plans/2026-10-15-main-gateway-handoff.md` 신규. 컴퓨터 이전 전에 D-762/D-761 상태, 2026-11-15 마감, 열린 결정(두 번째 관리자), Dependabot 처리, 이 클론에만 있는 ref의 번들과 복원 명령, 새 컴퓨터 준비(Tailscale 프로필, ssh, 도구), 착지 대기열을 적었다.
+- 증거: 문서만. `rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
 ## 2026-10-15 · 90734f635 · D-766 7(a): 절대 한도와 내려가기만 하는 천장, 단위 데이터 파일, 이동·범위 검사
 - 변경: `test/architecture/test_module_structure.py`에서 `SIZE_VERDICTS`·`REGROWTH_ALLOWANCE`·`HARD_TIER`·`_allowance()`·`FLEET_SERVER_HOLDER_UNITS`를 지우고(2,422 → 약 530줄) `size_ratchet.txt`(넘은 것 62행)와 `size_units.txt`(단위 38개, `small` 25개)를 둔다. 세는 규칙은 `tools/harness/size_limits.py`, 커밋별 검사 `size_range.py`, 순수 이동 검사 `split_check.py`. 두 데이터 파일은 `affected_tests.py` `NOT_TRIGGERS`. D-362 제목·표·4항, 2026-09-30 예산 계획 표·3항, D-168 P6·Alternatives, 분리 기준 X1, `test/architecture/AGENTS.md`, `tools/harness/AGENTS.md`, D-766 덧붙임, slice (c) 계획 `docs/plans/2026-10-15-d766-modularization-plan.md`
 - 증거: 시험 PC `tools/remote/remote_pytest.py`, 아래 보고의 로그

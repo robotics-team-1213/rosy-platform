@@ -339,5 +339,5 @@
 - 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
 - 2026-10-15 · 476fcd17c · D-766 7(a) 독립 검토 반영(REQUEST CHANGES)
 - 2026-10-15 · 90734f635 · D-766 7(a): 절대 한도와 내려가기만 하는 천장, 단위 데이터 파일, 이동·범위 검사
+- 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
 - 2026-10-15 · uncommitted · docs(omx): 미완료 범위와 재개 인계
-- 2026-10-15 · uncommitted · docs(omx): 30분 수신과 실제 소비 경로 기록
