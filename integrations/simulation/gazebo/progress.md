@@ -38,7 +38,7 @@ plans:
 ---
 ## 지금 상태
 
-- 2026-10-15: native SIM 설치의 기본 프로파일와 ROS-free 계약 wheel 누락을 고쳤다.
+- 2026-10-15: remote SIM 실행 구성의 기본 프로파일와 ROS-free 계약 wheel 누락을 고쳤다.
   실제 3대 CORE 부팅·identity 응답은 확인했으나 편대 무장/HOLD는 미수용이다.
   상세·입력 검색은 `docs/plans/2026-10-15-gazebo-profile-closure.md`를 따른다.
 

@@ -414,3 +414,9 @@
 - Change: declare the actual default robot profile as a runtime dependency. The remote runner reuses the release contract wheel installer inside its run scope and caches its wheel build prerequisites by requirements and recipe.
 - Evidence: package regression RED then 42 passed/NEW 0; installer wiring RED 2 then 33 passed/NEW 0. Native build of 17 packages and real wheel import smoke succeeded; all three CORE robot_id responses matched. Swarm arming refused missing swarm.lead; a capability-ready rerun could not start above the SIM resource floor. Logs are under the X: gazebo-profile--7ab1db managed session.
 - Gate: no promotion. Startup readback is not formation/HOLD, site-map, device or field acceptance. Full lab landing remains required.
+
+## 2026-10-15 · 271f923283 · select the default profile in remote build composition
+
+- Change: undo the generic package's robot-specific dependency after D-196/D-310 review. The remote runner reads DEFAULT_ROBOT for colcon's package selection and uses the existing contract installer. No literal backlog or failure guard change.
+- Evidence: initial FULL completed 25944 passed, 1848 skipped and one NEW product-literal failure, so landing stopped. The corrected profile-selection/installer/literal/package regression passed remotely: 36 passed, exit 0, NEW 0. Initial full logs remain in the X: gazebo-profile--7ab1db session under logs/full-initial.
+- Gate: unchanged. Native startup proof belongs to the earlier composition; the final composition still needs actual SIM and the landing-selected regression. No formation/HOLD, device or field acceptance claim.

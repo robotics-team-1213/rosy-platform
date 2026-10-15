@@ -8506,3 +8506,9 @@ osy-d395-s1d\`.
 - Change: record the completed resource-cleanup landing and the native Gazebo profile/wheel closure. Update the pipeline inventory with the current reviewed-data and operating-approval search results.
 - Evidence: real native build and contract wheel import smoke succeeded, followed by three matching CORE robot_id readbacks. Formation arming did not pass. Read-only search verified 2769 human-reviewed image/mask pairs with 5538 matching hashes and 857 lane-approved rows; current review owner has zero approved masks and holds no_approved_masks. No qualifying independent signed operating receipt was found in the bounded search.
 - Gate: unchanged. Existing lane-bounded labels are not independent road_surface ground truth. Startup, synthetic READY and conversation admission do not discharge operating or physical acceptance. No push, approval generation, model activation or device motion.
+
+## 2026-10-15 · 271f923283 · preserve product boundaries in SIM installation closure
+
+- Change: revise the plan after the full guard rejected the generic Gazebo package's robot literal. Default profile selection now belongs to the remote build composition; the package manifest is restored.
+- Evidence: initial FULL 25944 passed, 1848 skipped, one NEW literal failure and no landing. The corrected remote profile/installer/literal/package regression passed 36 checks, exit 0, NEW 0. Failure/backlog policies remain unchanged.
+- Gate: unchanged. Actual final-composition SIM, landing and operating acceptance remain separate evidence.
