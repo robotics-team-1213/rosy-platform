@@ -275,11 +275,11 @@ def test_admit_and_reject_answers_never_name_the_cell_proposer(tmp_path):
     client, tasks = _app(tmp_path)
     job = _resolved(client, "cell-secret", cell_candidate())
     second = _resolved(client, "cell-secret", cell_candidate(), key="req-2")
-    rejected = _post(client, f"/api/fleet/missions/{second}/reject", "op1-secret",
-                     {"expected_generation": _generation(tasks)})
+    generation = _generation(tasks)
+    rejected = _post(client, f"/api/fleet/missions/{second}/reject", "op1-secret", {"expected_generation": generation})
     assert rejected.status_code == 200 and "cell-service" not in rejected.text
     assert "proposal_principal_id" not in rejected.json()["mission"]
-    admitted = _post(client, f"/api/fleet/missions/{job}/admit", "op1-secret", {"expected_generation": _generation(tasks)})
+    admitted = _post(client, f"/api/fleet/missions/{job}/admit", "op1-secret", {"expected_generation": generation})
     assert admitted.status_code == 200, admitted.text
     assert "proposal_principal_id" not in admitted.json()["mission"] and "cell-service" not in admitted.text
 
