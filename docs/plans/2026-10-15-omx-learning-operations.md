@@ -2,7 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 가벼운 부품 집기·트레이 이송의 교시·IL·SIM RL·평가·제한 운용과 Web UI/UX를 연결한다.
+**Goal:** 흰 원형 용기의 딸기를 꺼내 임시로 놓고 원래 용기에 다시 넣는 교시·IL·SIM RL·평가·제한 운용과 Web UI/UX를 연결한다.
+용기 역할은 사용자 확인이다. 임시 놓을 위치·내용물·현재 단계는 아직 미확인이다.
+선행 관측 작업은 [물체·문맥 계획](2026-10-15-omx-object-context.md)에 둔다.
 
 **Architecture:** 기존 [통합 설계](2026-10-15-omx-learning-operations-design.md)와 D-756 준비 도구를 사용한다.
 워크셀은 단독 버스/로컬 owner와 반응형 정책 추론, 모델 PC는 학습·독립 평가,
@@ -41,7 +43,8 @@ GPU 입력 확정 뒤 산정한다. 구현 작업은 별도 격리 브랜치에�
 `contracts/learning/src/rosy/contracts/learning/{omx.py,artifacts.py,omx_execution.py}`.
 실측값은 비공개 운영 설정에 둔다. 새 계약은 선점 도구로 ADR를 확보한 뒤 작성한다.
 
-1. 부품·실측 질량·시작/목표 구역·허용 오차·안정 시간·timeout·독립 판정자를 적는다.
+1. 딸기의 실물/모형·실측 질량·흰 원형 용기·임시 놓을 구역·허용 오차·안정 시간·timeout·독립 판정자를 적는다.
+   꺼냄·임시 놓기·복귀의 개별 증거와 전체 cycle 성공을 구분하고, 같은 cycle의 데이터는 같은 split에 둔다.
 2. 실제 joint/그리퍼 단위·순서·부호, rig·보정·clock·action 의미를 확정한다.
 3. native mapping, hardware API/trust, RL transition, 새 holder의 결정 안건을 분리한다.
 4. 누락·단위/순서 불일치·보정 교체·무권한 시작을 거절하는 생산자/소비자 시험부터 작성한다.
