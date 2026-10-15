@@ -336,6 +336,6 @@
 
 - 2026-10-15 · 271f923283 · preserve product boundaries in SIM installation closure
 - 2026-10-15 · cbf3ab55bd · native SIM installation and actual acceptance-input search
+- 2026-10-15 · dbe5db55b · OMX 관측 경로 복구와 운용 경계
 - 2026-10-15 · 39d8e72973 · continue runtime pipeline closure after landing approval
 - 2026-10-15 · 0bc2a16c1 · runtime connection inventory
-- 2026-10-14 · df1b93395 · D-762 단계 1: merge_group 트리거, CI 전체 티어가 모든 모듈 묶음을 덮는다, 불안정 시험 격리

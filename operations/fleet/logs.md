@@ -3704,6 +3704,12 @@
 - 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
 - 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
+## 2026-10-14 · 70092c527 · D-760 4단계: 로봇마다 공유 상태 읽기 하나
+
+- 변경: `MapPoseService.state(robot_id, max_age_s)`가 로봇마다 하나인 REST 상태 읽기다. 읽기 시작 시각(Fleet 단조 시계)부터 `max_age_s` 안이면 그 값을, 아니면 진행 중인 읽기에 붙거나 새로 읽는다. 실패한 읽기는 아무것도 남기지 않고 같은 예외 객체를 기다리던 모두에게 던진다. 읽기마다 odom을 한 번 넣는다(스냅숏 stamp 그대로). trip 루프의 자세 갱신과 교차로 상태(`HttpLaneJunction(read=)`)가 0.45 s로 한 읽기를 같이 쓰고, 차로 준수(0.45 s), 위치 결정(`read_state`, 0.5 s), 관제 REST 대체(0.45 s, 2 Hz tether 감시가 매번 새로 읽는다)와 하달 직전 읽기(0.2 s)도 같은 읽기를 쓴다(`app.py`가 `console.read_state = map_pose.state`). `refresh`의 로봇 odom 시계 대 Fleet 벽시계 0.2 s 건너뛰기는 Fleet 단조 나이 규칙으로 바꿨다. trip 루프는 응답 없음(`HubError`, `OSError`, `httpx.TransportError`)만 읽지 못한 상태로 보고 그 밖의 읽기 오류는 trip을 끝낸다(D-760 개정 3의 2).
+- 증거: `test_shared_state_read.py`(나이·합류·실패 객체·정확한 stamp, 교차로 읽기 공유, 느린 로봇, trip 루프의 전송 오류 `link_wait`·`ValueError` 실패, 가짜 로봇 2·10대 60 s에 로봇당 120회 = 2.0회/s·어느 1 s에도 3회 이하, 주기 루프의 직접 `state()` 금지). 가짜 로봇을 요청 사이에 바꾸는 기존 시험 8개 파일은 `fakes.fresh_reads(app)`로 공유를 끈다(`fleet_gather.max_age_s = 0`과 같은 뜻). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 전송 계약은 그대로다.
+- 결정: D-760 Decision 8. 차로 준수는 계획의 0.5 s 대신 기본 0.45 s다(시뮬 자세 포트 `tools/sim/native_gazebo_map_pose.py`의 `refresh`가 `max_age_s`를 받지 않는다). 군집(`swarm/session.py`)과 명령 한 번짜리 경로는 그대로다.
 ## 2026-10-15 · aa9913d2f · 다단계 작업이 로봇의 lease와 claim을 쥔다 (D-763 조각 6)
 
 - 변경: `ledger/trip_admission.py` `hold_job`(개정 2 질문 10 (a)(b) 관문, 아니면 422 `LINK_UNBOUNDED_MOTION`; `on_job_lost` 없이는 거절)와 `release_job`. `traffic/trip_lease.py`: `jobs`, 단계 사이 갱신(`period`가 열린 trip 없는 작업도 갱신, `/trip-lease`만 보낸다), 작업의 단계가 lease를 이어받고 닫아도 유지, 시작 실패는 작업 lease를 두고, 작업 lease 상실은 `on_job_lost`. `ledger/trip_runner.py` `start(job_id=)`: 작업이 쥔 로봇의 다른 시작은 정렬 회전 전에 `TRIP_ROBOT_BUSY`. `ledger/trip_guard.py`: `trip_busy`가 작업의 hold와 내구 D-330 `mission` robot claim도 본다. `server/app.py` 한 줄(claims 연결). 서버 크기 단위 순증 0(31904), traffic 2200(≤2201), ledger 7083.
@@ -3752,3 +3758,16 @@
 - Change: register existing sync/async close callbacks with AsyncExitStack and run them after all background workers are canceled and awaited. A failed close does not skip the other callbacks; exceptions remain visible to the caller. No new owner, dependency or activation.
 - Evidence: 6b2b811f4 remote RED 2 NEW. 39d8e72973 remote app/native outcome/model feedback/harness/structure regression: 281 passed, terminal exit 0, NEW 0. Independent source review found no critical/important issue. Logs: X: pipeline-resources--0c429d session logs/green/run-1.txt.
 - Gate: unchanged. Resource cleanup is not robot standstill, field acceptance or startup-failure recovery.
+
+## 2026-10-15 · 95c9263a5 · D-760 4단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: `MapPoseService`가 REST 읽기마다 번호를 매기고(`read_number`), `state`·`refresh`가 `after`를 받는다. 번호가 `after` 이하인 읽기는 나이가 젊어도 주지 않고, 그런 읽기가 진행 중이면 끝나기를 기다린 뒤 새로 읽는다. trip 루프는 단계의 읽기 뒤, 교차로 지시 송신 뒤, 링크 끊김 때 울타리를 친다(`trip_progress._fence`). 그래서 지시 앞의 읽기로 같은 지시를 다시 보내지 않고, `link_wait`는 끊긴 뒤 시작한 읽기로만 끝난다. 한 단계의 자세와 교차로 상태는 여전히 한 읽기다. 상태 읽기의 HTTP 오류는 trip을 그 코드·status로 끝낸다(`TRIP_LOOP_ERROR` 대신). 로스터를 떠난 로봇의 읽기를 지우고, odom을 넣은 뒤 읽기를 남긴다.
+- 증거: `test_shared_state_read_fences.py`(0.43 s 간격으로 송신 뒤 단계가 와도 재송신 없음, 단계마다 새 읽기, 울타리 앞의 진행 중 읽기를 넘겨주지 않음, 끊기기 전 읽기가 끊긴 뒤 닿아도 `link_wait` 유지, 허브와 REST 읽기 분리, HTTP 503으로 `failed`/`HTTP_503`, 로스터 이탈). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 4단계 Safety-Review. 읽기 번호가 없는 자세 포트(시뮬 `native_gazebo_map_pose.py`, 시험 가짜)는 울타리 없이 지금처럼 읽는다.
+## 2026-10-15 · febf77ca9 · D-760 4단계 재검토: SIM 자세 포트 옆에서도 교차로 읽기에 울타리
+
+- 변경: trip 울타리가 자세 포트가 아니라 교차로 포트가 읽는 공유 읽기의 번호를 센다(`HttpLaneJunction(read, read_number)`, `app.py`가 `map_pose.state`·`map_pose.read_number`를 넘긴다). `junction_state`가 `after`를 받는다. `simulation_pose`면 자세 포트가 SIM 포트(`tools/sim/native_gazebo_map_pose.py`, 읽기 번호 없음)라 지금까지 교차로 읽기에 울타리가 없었다. 자세 갱신은 같은 번호의 읽기일 때만 `after`를 받는다(`trip_progress._after`). 울타리는 단계의 자세·교차로 읽기 뒤에 친다(한 단계 한 읽기 그대로).
+- 증거: `test_shared_state_read_fences.py`의 0.43 s 재송신 시험을 SIM 자세 포트로도 돌린다(직진 지시: 지시 앞의 idle 읽기면 다시 보낸다). 수정 전 SIM 경우 실패를 원격에서 확인했다(`X:/DevTemp/shared-state-read/red4/run-1.txt`). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 4단계 Safety-Review 재검토 MEDIUM.

@@ -1,6 +1,6 @@
 """Fleet localization service (D-395 Phase 2 P2-6, contract §3): poll, arbitrate, post.
 
-Every 0.5 s it reads each robot's `/robot/state`. For a robot in CANDIDATES it reads
+Every 0.5 s it reads each robot's `/robot/state` (D-760 8: the shared read, at most 0.5 s old). For a robot in CANDIDATES it reads
 `/localization/candidates`, builds the arbiter `Context` (anchored LOCALIZED map-frame
 peers, see `_track_provenance`, the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
 older than 300 ms) and posts the arbiter's decision. While CORE runs a mission for the
@@ -99,6 +99,7 @@ def build_localization_service(console, sightings, *, enabled: bool = True,
     slots, squares = service_logic.parse_reference_squares(
         load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
     return LocalizationService(console.clients, slots=slots, squares=squares,
+                               read_state=lambda robot_id: console.read_state(robot_id, POLL_S),  # D-760 8
                                sightings=sightings, overhead_cue=bool(overhead_cue),
                                pose_request_overhead=bool(pose_request_overhead),
                                traffic_hold=getattr(console, "hold_for_localization", None))
@@ -120,8 +121,11 @@ class LocalizationService:
                  clock: Callable[[], float] = time.monotonic,
                  wall: Callable[[], float] = time.time, poll_s: float = POLL_S,
                  call_timeout_s: float = CALL_TIMEOUT_S,
-                 traffic_hold: Optional[Callable[[str], Awaitable[Sequence[str]]]] = None) -> None:
+                 traffic_hold: Optional[Callable[[str], Awaitable[Sequence[str]]]] = None,
+                 read_state: Optional[Callable[[str], Awaitable[Mapping]]] = None) -> None:
         self._clients = clients
+        #: D-760 8: the robot's state from the console's shared read (no older than POLL_S); alone, a direct read.
+        self._read_state = read_state or (lambda robot_id: self._clients()[robot_id].state())
         self._slots = tuple(slots)
         self._squares = tuple(squares)
         self._sightings = sightings
@@ -206,7 +210,7 @@ class LocalizationService:
         clients = dict(self._clients())
         self._forget_removed(set(clients))
         ids = sorted(clients)
-        results = await asyncio.gather(*(self._bounded(clients[rid].state()) for rid in ids),
+        results = await asyncio.gather(*(self._bounded(self._read_state(rid)) for rid in ids),
                                        return_exceptions=True)
         states = {rid: r for rid, r in zip(ids, results) if isinstance(r, dict)}
         localized = {rid: p for rid, s in states.items()
