@@ -355,7 +355,7 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 >   1. `7116504e4`의 전체 fleet 원격 실행에서 `test_trip_turn_map_entry.py::test_a_turn_to_a_lane_turn_map_entry_robot_carries_the_exit_lanes_heading_and_the_yaw_pair`가 NEW로 한 번 실패했다. 현장 PC(`robttt`)에서였고, 차이는 `expect_tol_m` 0.128 대 0.129다. 같은 파일이 HEAD `53c056f85`에서 모델 PC·AI PC로 두 번, base `ccb1a2ae0`에서 한 번 통과했다. 이 브랜치는 그 junction `expect` 계산을 바꾸지 않았다. 그래서 호스트에 따라 갈리는 값으로 보고 `known_failures`에는 넣지 않았다. 현장 PC에서 다시 나면 그 시험의 시계·반올림을 본다.
 >   2. 끝 커밋에서 `operations/fleet/test/`, `test/architecture/`, `middleware/core/gateway/test/`를 원격으로 다시 돌리고 `test/known_failures.py`와 비교한다.
 >   3. `Safety-Review:` trailer는 이 부기 커밋에 달았다. 착지 도구가 다른 커밋을 요구하면 같은 판정을 옮긴다. 마지막 판정은 "PASS WITH CONDITIONS — no regressions that could cause unsafe motion"이고, 조건(s7-3, LOW 셋)은 채웠다. `tools/harness/safety_review.py`는 이 브랜치가 safety 태그 경로를 건드리지 않는다고 본다.
->   4. API 버전 번호와 API Reference 절은 조정자가 정한다(`POST /api/fleet/trip-jobs`).
+>   4. API 버전은 v1.242다(조정자가 동료 세션과 정했다). API Reference의 절과 변경 이력 행, 버전을 고정한 시험을 같이 바꿨다.
 > - **SIM 확인 실행법.** AI PC(`ai@100.108.76.123`)의 `~/rosy-test/d763-sim`을 쓴다. 조정자 rig(`setup.sh`로 main 빌드와 venv를 만든다)에 `docs/validation/d763-trip-steps-sim-2026-10-15/evidence/rig/`의 s7 파일을 놓는다. 이 브랜치를 `source-s7`에 checkout하고(`git fetch <bundle> HEAD && git checkout FETCH_HEAD`), `setsid nohup bash run-s7.sh <label> &`로 돌린다. 결과는 `artifacts/<label>/S7-timeline.json`과 `probe-result.json`이다. CORE는 main 빌드를 그대로 쓰고 Fleet만 이 브랜치다. 커밋된 `map_v2_fleet_multi_real.launch.py`로는 trip이 모두 stall한다(관측기에 IR 보정이 없다). 그래서 `evidence/rig/multi_real.overlay.launch.py`를 쓴다.
 > - **열린 질문.**
 >   1. 새 차선 세션(`WAITING no_observation`)에 바로 보낸 bend를 CORE가 `aborted/no_anchor`로 거절해 trip이 1 s 안에 끝난다(조정자 r3·r5). trip 시작 문제이고 이 조각 밖이다.
