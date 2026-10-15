@@ -212,3 +212,16 @@ def test_proposal_read_follows_the_cell_job_detail_scope_and_never_shows_the_pro
     mission = _resolved(named, "op1-secret", _er2_candidate(), key="req-3")
     assert _proposal(named, mission, "op1-secret").status_code == 200
     assert _proposal(named, mission, "op2-secret").status_code == 404  # a legacy Mission stays owner-only
+
+
+def test_forbidden_reads_look_like_missing_and_a_proposer_event_reads_as_proposer(tmp_path):
+    """Security review: a hidden id answers as a missing one; the proposer's own event never names it."""
+    named, _ = _app(tmp_path)
+    job = _resolved(named, "cell-secret", _cell_candidate())
+    missing = "00000000-0000-4000-8000-000000000000"
+    for read in (_proposal, _detail):
+        hidden, absent = read(named, job, "viewer-secret"), read(named, missing, "viewer-secret")
+        assert (hidden.status_code, hidden.json()) == (absent.status_code, absent.json())
+    named.app.state.cell_job_store.cancel(job, actor_id="cell-service", decision="WITHDRAWN_BY_PROPOSER")
+    for body in (_proposal(named, job, "op1-secret").json()["mission"], _detail(named, job, "op1-secret").json()["job"]):
+        assert "proposer" in {event["actor_id"] for event in body["events"]} and "cell-service" not in str(body)
