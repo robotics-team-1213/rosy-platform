@@ -827,6 +827,8 @@ safety_modules:
   - middleware/drive/behaviors/docking/charging.py
   - middleware/drive/behaviors/line_follow/body_stop.py
   - middleware/drive/behaviors/line_follow/clearance.py
+  - middleware/drive/behaviors/line_follow/authority.py  # D-517/D-760 movement authority under the trip lease
+  - middleware/core/gateway/core/trip_lease.py  # D-541/D-760 trip lease ends Fleet-started motion
   - middleware/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
