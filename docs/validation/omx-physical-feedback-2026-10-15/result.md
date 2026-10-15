@@ -44,8 +44,8 @@ raw position은 현장에서 수동으로 자세를 바꾸면 달라질 수 있�
 `logs/observer-*`에 원문을 보관한다.
 실행 파일 SHA-256:
 
-- hardware_observer.py: `4231823a939dc90b04cfe5d22d2222b27d9719aac42b40946f4f04b45fc9edd0`
-- register_probe.py: `a9fd080addf0bd1ed12aa54cb873a32b7472b748e498ddd92484271cb9357110`
+- hardware_observer.py SHA-256: `4231823a939dc90b04cfe5d22d2222b27d9719aac42b40946f4f04b45fc9edd0`
+- register_probe.py SHA-256: `a9fd080addf0bd1ed12aa54cb873a32b7472b748e498ddd92484271cb9357110`
 
 관측은 준비됐으나 실제 trajectory controller/owner 연결은 아직 없다. 기존 vendor 초기화에는
 설정 쓰기·torque·reboot 경로가 있어 이 observer로 대체했다고 주장하지 않는다.
