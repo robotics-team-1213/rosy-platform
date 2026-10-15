@@ -542,3 +542,46 @@ def test_a_newer_ledger_version_is_refused_before_the_steps_table_is_touched(tmp
         CellJobStore(path)
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT 1 FROM sqlite_master WHERE name='fleet_cell_steps'").fetchone() is None
+
+
+# ---- delta review 2026-10-15 ---------------------------------------------------------------------
+
+def test_an_estop_while_the_job_takes_its_lease_refuses_the_job(tmp_path):
+    """Delta review 1: an E-stop during hold_job's CORE call must not leave a job that then drives."""
+    rig = Rig(tmp_path)
+    open_lease = rig.runner.lease.open
+
+    async def open_during_estop(*args, **kwargs):
+        lease = await open_lease(*args, **kwargs)
+        rig.runner.close_all("operator_estop")          # the E-stop lands while the PUT is in flight
+        return lease
+    rig.runner.lease.open = open_during_estop
+    with pytest.raises(TripError) as err:
+        rig.create()
+    assert err.value.code == "JOB_ESTOP" and rig.runner.lease.job_of(R) is None
+    with rig.store._connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_cell_jobs").fetchone()[0] == 0
+
+
+def test_a_lease_lost_before_the_job_row_exists_still_refuses_a_new_lease(tmp_path):
+    """Delta review 3: the hook finds no row yet; the mark stays, so the first tick HOLDs, never re-takes."""
+    rig = Rig(tmp_path)
+    rows_create = rig.jobs.rows.create
+
+    def create_after_loss(mission_id, *args):
+        with pytest.raises(KeyError):                    # no row to HOLD yet (TripLease.lose logs it)
+            asyncio.run(rig.jobs._lost({"job_id": mission_id, "robot_id": R}, {"lease_reason": "renew_timeout"}))
+        rig.runner.lease.jobs[R].view["lease"]["state"] = "lost"
+        return rows_create(mission_id, *args)
+    rig.jobs.rows.create = create_after_loss
+    mid = rig.create()
+    puts = len(rig.ports.lease.puts)
+    rig.ticks()
+    assert rig.job(mid)["status"] == "HOLD" and rig.job(mid)["reason"] == "JOB_LEASE_LOST"
+    assert len(rig.ports.lease.puts) == puts and rig.plans == []
+
+
+def test_a_held_stop_is_taken_over_once_and_forgotten_on_any_halt():
+    """Delta review 2: a recorded arrival stop is consumed by the next trip and cleared by a halt or E-stop."""
+    runner, store, ports, arc = _lane_arrived()
+    assert runner.held_stops and runner.close_all("operator_estop") == [] and runner.held_stops == {}
