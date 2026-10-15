@@ -15,6 +15,7 @@ It then creates ``refs/adr/D-nnn`` with ``git update-ref <ref> <sha> 0{40}``,
 which fails if the ref already exists. All worktrees share one ref store, so
 two sessions cannot both create the same ref; the loser tries the next number.
 The refs are local: they are not pushed and CI does not see them.
+``api_reserve.py`` reuses these helpers for API reference versions (``refs/api``).
 Standard library only.
 """
 
@@ -45,13 +46,18 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return result
 
 
-def reserved() -> dict[str, str]:
-    out = git("for-each-ref", "--format=%(refname:lstrip=2) %(objectname)", "refs/adr").stdout
+def reserved(ns: str = "refs/adr") -> dict[str, str]:
+    out = git("for-each-ref", "--format=%(refname:lstrip=2) %(objectname)", ns).stdout
     return dict(line.split() for line in out.splitlines() if line.strip())
 
 
-def reason_of(adr_id: str) -> str:
-    return git("reflog", "show", "-1", "--format=%gs", f"refs/adr/{adr_id}", check=False).stdout.strip()
+def reason_of(name: str, ns: str = "refs/adr") -> str:
+    return git("reflog", "show", "-1", "--format=%gs", f"{ns}/{name}", check=False).stdout.strip()
+
+
+def _trailing_number(name: str) -> int:
+    match = re.search(r"(\d+)$", name)
+    return int(match.group(1)) if match else 0
 
 
 def _note(numbers: dict[int, str], number: int, source: str) -> None:
@@ -107,23 +113,23 @@ def used_numbers() -> dict[int, str]:
     return numbers
 
 
-def cmd_next(reason: str) -> int:
+def claim(numbers: dict[int, str], ceiling: int | None, reason: str,
+          ns: str = "refs/adr", label=lambda n: f"D-{n}") -> int:
+    """Create ``<ns>/<label(n)>`` for the first free n above every number in ``numbers``."""
     head = git("rev-parse", "HEAD").stdout.strip()
-    numbers = used_numbers()
-    ceiling = main_highest()
     if ceiling is not None:
         for n in sorted(k for k in numbers if k > ceiling + CAP):
-            print(f"warning: ignoring D-{n} (more than {CAP} above main's D-{ceiling}) from {numbers.pop(n)}",
-                  file=sys.stderr)
+            print(f"warning: ignoring {label(n)} (more than {CAP} above main's {label(ceiling)}) "
+                  f"from {numbers.pop(n)}", file=sys.stderr)
     highest = max(numbers, default=0)
     if numbers:
-        print(f"highest in use: D-{highest} from {numbers[highest]}", file=sys.stderr)
+        print(f"highest in use: {label(highest)} from {numbers[highest]}", file=sys.stderr)
     number = highest + 1
     for _ in range(ATTEMPTS):
-        ref = f"refs/adr/D-{number}"
+        ref = f"{ns}/{label(number)}"
         result = git("update-ref", "--create-reflog", "-m", reason, ref, head, ZERO, check=False)
         if result.returncode == 0:
-            print(f"D-{number}")
+            print(label(number))
             return 0
         if git("rev-parse", "--verify", "-q", ref, check=False).returncode != 0:
             print(f"git update-ref {ref} failed: {result.stderr.strip()}", file=sys.stderr)
@@ -133,24 +139,28 @@ def cmd_next(reason: str) -> int:
     return 1
 
 
-def cmd_list() -> int:
-    for name, sha in sorted(reserved().items(), key=lambda kv: int(kv[0][2:]) if kv[0][2:].isdigit() else 0):
-        print(f"{name}\t{sha[:9]}\t{reason_of(name)}")
+def cmd_next(reason: str) -> int:
+    return claim(used_numbers(), main_highest(), reason)
+
+
+def cmd_list(ns: str = "refs/adr") -> int:
+    for name, sha in sorted(reserved(ns).items(), key=lambda kv: _trailing_number(kv[0])):
+        print(f"{name}\t{sha[:9]}\t{reason_of(name, ns)}")
     return 0
 
 
-def cmd_release(adr_id: str, reason: str | None, force: bool) -> int:
-    sha = reserved().get(adr_id)
+def cmd_release(name: str, reason: str | None, force: bool, ns: str = "refs/adr") -> int:
+    sha = reserved(ns).get(name)
     if sha is None:
-        print(f"{adr_id}: not reserved", file=sys.stderr)
+        print(f"{name}: not reserved", file=sys.stderr)
         return 1
-    recorded = reason_of(adr_id)
+    recorded = reason_of(name, ns)
     if not force and reason != recorded:
-        print(f"{adr_id} was reserved for {recorded!r}; pass --reason with that text, or --force",
+        print(f"{name} was reserved for {recorded!r}; pass --reason with that text, or --force",
               file=sys.stderr)
         return 1
-    git("update-ref", "-d", f"refs/adr/{adr_id}", sha)
-    print(f"released {adr_id} ({recorded})")
+    git("update-ref", "-d", f"{ns}/{name}", sha)
+    print(f"released {name} ({recorded})")
     return 0
 
 
