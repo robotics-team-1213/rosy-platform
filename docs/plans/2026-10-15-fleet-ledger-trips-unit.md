@@ -1,7 +1,7 @@
 # Fleet trip 소유자 크기 단위 분리
 
 **날짜:** 2026-10-15
-**범위:** D-168/D-753 구조 판정과 파일 여덟 개의 폴더 이동. 동작 변경 없음. 모듈 이름(`fleet.server.trip_*`)은 그대로다. D-763 조각 4(`feat/fleet-work-read-sources`, API v1.237) 브랜치의 변경이다. 선례: `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`(같은 브랜치, Mission 원장과 작업 읽기), `docs/plans/2026-10-14-fleet-ledger-size-unit.md`.
+**범위:** D-168/D-753 구조 판정과 파일 여덟 개의 폴더 이동. 동작 변경 없음. 모듈 이름(`fleet.server.trip_*`)은 그대로다. D-763 조각 4(`feat/fleet-work-read-sources`, API v1.238) 브랜치의 변경이다. 선례: `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`(같은 브랜치, Mission 원장과 작업 읽기), `docs/plans/2026-10-14-fleet-ledger-size-unit.md`.
 
 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md` 뒤 원장 판정(4,410, 한도 4,560)은 "다음 +150에서 trip 소유자(`trip_*`)를 자기 단위로 낸다"고 적었다. 조정자의 착지 순서(D-760 4단계 `rosy-84`가 먼저, 다음이 이 브랜치)에서 그 4단계가 `trip_progress.py`에 약 15줄을 더한다. 원장은 지금 4,545로 남은 15줄이라 그 착지로 넘는다. 지금 trip 파일을 고치는 다른 브랜치는 없다(조정자 확인). 그래서 이 브랜치에서 그 분리를 한다.
 
