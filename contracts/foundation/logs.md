@@ -732,3 +732,10 @@
 - gate 변화: 없음.
 - 결정: D-763 조각 6, 개정 2 질문 10.
 - 교훈: 없음.
+
+## 2026-10-15 · 868461505 · 작업 읽기 계약 확장 (D-763 조각 4, API v1.235)
+- 변경: `protocol/work.py` `FleetWorkSummary`에 출처 `trip`·`cell_job`, `visible_state`·`wait`(`FleetWorkWait`)·`approval`. `FleetWorkOverview`에 `cell_jobs_available`·`kinds`, 행 최대 400, `truncated_sources` 최대 4. `schemas.py`가 `FleetWorkWait`를 내보낸다.
+- 증거: 원격 225+66 passed(모델 PC, 6ae1df74e), 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4.
+- 교훈: 없음.
