@@ -180,3 +180,49 @@ def test_cell_job_detail_follows_the_list_scope_and_never_shows_the_proposer(tmp
     later = _detail(shared, job, "shared-secret")
     assert later.status_code == 200 and "cell-service" not in later.text
     assert _detail(named, job, "viewer-secret").status_code == 404
+
+
+def _proposal(client, proposal_id, token):
+    return client.get(f"/api/fleet/proposals/{proposal_id}", headers={"Authorization": f"Bearer {token}"})
+
+
+def test_proposal_read_follows_the_cell_job_detail_scope_and_never_shows_the_proposer(tmp_path):
+    """Slice 4 review: the proposal read is a second door to the same Cell Job; same scope, same redaction."""
+    named, _ = _app(tmp_path)
+    job = _resolved(named, "cell-secret", _cell_candidate())
+    unresolved = _post(named, "/api/fleet/proposals", "cell-secret", {
+        "request_key": "req-2", "workcell_id": "omx_01", "instance_id": "omx_01_control",
+        "candidate": _cell_candidate()}).json()["proposal"]["proposal_id"]
+    shared, tasks = _app(tmp_path, named=False, console_token="shared-secret")
+    own = _proposal(named, job, "cell-secret")
+    assert own.status_code == 200 and own.json()["mission"]["proposal_principal_id"] == "cell-service"
+    for proposal_id in (job, unresolved):
+        other = _proposal(named, proposal_id, "op1-secret")
+        assert other.status_code == 200, other.text
+        assert "proposal_principal_id" not in str(other.json()["mission"]) and "cell-service" not in other.text
+        assert _proposal(named, proposal_id, "viewer-secret").status_code == 404
+        assert _proposal(shared, proposal_id, "shared-secret").status_code == 404  # unnamed: not another's PROPOSED
+    assert _proposal(named, job, "op1-secret").json()["mission"]["steps"]
+    assert _post(named, f"/api/fleet/missions/{job}/reject", "op1-secret",
+                 {"expected_generation": _generation(tasks)}).status_code == 200
+    later = _proposal(shared, job, "shared-secret")
+    assert later.status_code == 200 and "cell-service" not in later.text
+    assert _proposal(named, job, "viewer-secret").status_code == 404
+    assert _proposal(shared, unresolved, "shared-secret").status_code == 404
+    mission = _resolved(named, "op1-secret", _er2_candidate(), key="req-3")
+    assert _proposal(named, mission, "op1-secret").status_code == 200
+    assert _proposal(named, mission, "op2-secret").status_code == 404  # a legacy Mission stays owner-only
+
+
+def test_forbidden_reads_look_like_missing_and_a_proposer_event_reads_as_proposer(tmp_path):
+    """Security review: a hidden id answers as a missing one; the proposer's own event never names it."""
+    named, tasks = _app(tmp_path)
+    job = _resolved(named, "cell-secret", _cell_candidate())
+    missing = "00000000-0000-4000-8000-000000000000"
+    for read in (_proposal, _detail):
+        hidden, absent = read(named, job, "viewer-secret"), read(named, missing, "viewer-secret")
+        assert (hidden.status_code, hidden.json()) == (absent.status_code, absent.json())
+    named.app.state.cell_job_store.cancel(job, actor_id="cell-service", decision="WITHDRAWN_BY_PROPOSER",
+                                           expected_generation=_generation(tasks))
+    for body in (_proposal(named, job, "op1-secret").json()["mission"], _detail(named, job, "op1-secret").json()["job"]):
+        assert "proposer" in {event["actor_id"] for event in body["events"]} and "cell-service" not in str(body)
