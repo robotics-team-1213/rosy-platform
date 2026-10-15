@@ -3805,3 +3805,10 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+## 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
+
+- 변경: `server/trips/trip_runner.py` `_send`: `detail.junction_retry` = 코드와 `detail.reason`(예: `INSTRUCTION_STAMP_UNUSABLE no_sample`). 901줄 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.

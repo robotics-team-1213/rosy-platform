@@ -1158,3 +1158,10 @@
 - gate 변화: 없음. 호스트 근거만.
 - 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
 - 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
+## 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
+
+- 변경: `recovery/junction/gate.py` `set_junction`의 stamp 검사를 재전송·굽이 갱신 갈래 뒤로 옮겼다. 둘은 stamp로 재지 않으므로 쓸 수 없는 stamp에도 받는다(되풀이된 거절로 이미 잰 굽이가 만료되던 일).
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 4865e2b0e → 초록): 갱신은 travel을 지키고 받음, `bending` 중 재전송 그대로. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2, 재검토 MEDIUM.
+- 교훈: 없음.
