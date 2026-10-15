@@ -8569,3 +8569,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-15 · 7c1fa973f · feat(omx): follower register inspection
+
+- 변경: `feat/omx-hardware-server`에서 `register_probe.py`를 추가했다. 확인된 by-id 포트를 독점하고 ID 11..16 PING/READ만 송신한다. 초기화 설정·torque·reboot·goal은 없다. README와 `docs/validation/omx-follower-registers-2026-10-15/result.md`에 사용법과 vendor 초기화 충돌을 기록했다.
+- 증거: AI PC 원격 24 passed, known_failures NEW 0. 독립 검토의 포트 open 경쟁 지적을 TIOCEXCL 뒤 자기 PID 재검사로 해결했고 재검토했다. 송신 guard를 메모리에서 제거한 mutation은 forbidden REBOOT 송신 검사에서 RED, 원본은 GREEN이었다. 현장 도구 재실행은 snapshot_complete=true, 6개 torque=0/hardware_error=0이었다. 원문은 비공개 X: 세션의 `logs/register-*`에 있다.
+- gate 변화: 없음. 물리 케이블 역할과 register 관측은 확인했지만 측정 한계·정지·실물 제어 서버·Fleet/Pilot 운용은 미완료다. 기본 launch는 현재 ID 12/13 위치 밖의 한계를 쓰므로 실행하지 않았다.
