@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.240
+**Version:** v1.242
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,16 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
+
+Additive. 새 경로 하나와 Step 원장의 새 종류 하나다. envelope 1.0은 그대로다.
+
+- **`POST /api/fleet/trip-jobs`.** 본문은 `{robot_id, steps: [{to, via[]}]}`이다(단계 1–8개, `via` ≤ 8, 추가 필드 금지). 이름 있는 운영자만 쓴다. `simulation` 배포 프로필이고 Step 원장(`--mission-api`)이 있을 때만 경로가 있다. 다른 프로필에서는 경로가 없고, 이미 열려 있던 `TRIP` 작업은 시작할 때 HOLD(`FLEET_PROFILE_CLOSED`)된다. 등록부 승인 값은 `one_person`이라 만든 사람이 곧 승인한 사람이다. 응답은 `{job}`(Step 원장 행, 단계 종류 `TRIP`, 상태 `READY`)이다.
+- **거절.** 404 `UNKNOWN_ROBOT`. 422 `TRIP_UNKNOWN_PLACE` `{places}`. 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`(D-763 개정 2 질문 10 (a)(b), `hold_job`). 409 `TRIP_ROBOT_BUSY`(이미 움직이거나 다른 작업이 쥔 로봇). 409 `JOB_ESTOP`(lease를 여는 동안 비상 정지가 왔다). 409 `JOB_ROBOT_REFUSED` `{message}`(다른 Task·작업이 robot claim을 쥠, 또는 dispatch 정지 래치). 오류 모양은 trip 경로와 같은 `{"detail": {"code", "detail"}}`이다.
+- **실행.** 작업은 만들 때 그 로봇의 `robot` claim과 CORE trip lease(`job_id`, v1.236)를 잡고 끝까지 쥔다. 단계마다 로봇 카드와 같은 계획 경로와 시작 검사로 trip 하나를 연다. 다음 단계로는 그 trip의 `arrived`만 넘어간다. 다른 끝, 거절된 시작, lease 잃음, 비상 정지, 정지 래치는 작업을 HOLD(사유: trip의 사유나 코드, `JOB_LEASE_LOST`, `JOB_ESTOP`, `FLEET_RESTARTED`)로 두고 lease를 놓는다. claim은 `HELD`로 남는다. HOLD마다 사람 단계 문제 기록(`kind: job_hold`, `/api/fleet/ai/episodes`)이 하나 열린다.
+- **읽기와 회복.** 작업은 `GET /api/fleet/work`에 `source: "cell_job"`, `action_kind: "TRIP"` 행으로, 단계 trip은 `source: "trip"` 행으로 나온다. 재개와 취소는 지금의 `POST /api/fleet/cell-jobs/{mission_id}/resume`·`/cancel`이다. 재개하면 새 lease와 새 trip이 열리고 시작 검사를 다시 거친다. `kinds`에는 아직 `TRIP`이 없다.
+- **trip 사이의 넘겨받기(동작).** 차로 trip이 `arrived`로 끝나면 CORE는 그 `stop`을 쥔 채 남는다. 같은 로봇의 다음 trip은 아직 아무 지시도 보내지 않았고 그 정지가 자기 다음 장소에 있으면, 그 정지(같은 seq와 장소) 하나를 새 지시로 바꿀 수 있다. 멈춤이 보낸 정지와 다른 송신자의 지시는 바꾸지 않는다.
 
 ### v1.240 제안 읽기·결정 응답·자원 claim 읽기는 Cell Job 상세 범위를, 채널 제출·승인은 이름 있는 운영자를 따른다 (D-763 조각 4 리뷰)
 
@@ -3077,6 +3087,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.242 | 2026-10-15 | Additive (D-763 조각 7, feat/fleet-job-trip-steps): `POST /api/fleet/trip-jobs` `{robot_id, steps:[{to, via[]}]}`(1–8), 이름 있는 운영자, `simulation` 프로필이고 Step 원장이 있을 때만. 응답 `{job}`(Step 원장 행, 종류 `TRIP`). 거절: 404 `UNKNOWN_ROBOT`, 422 `TRIP_UNKNOWN_PLACE`, 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`, 409 `TRIP_ROBOT_BUSY`, 409 `JOB_ESTOP`, 409 `JOB_ROBOT_REFUSED`. trip 작업은 `GET /api/fleet/work`에 `cell_job` 행(`action_kind:"TRIP"`)으로 나온다. 재개·취소는 지금의 `/api/fleet/cell-jobs/{id}/resume`·`/cancel`이다. 동작: 차로 `arrived` 뒤 다음 trip이 그 로봇이 쥔 정지 하나를 넘겨받는다. envelope 1.0 변경 없음. |
 | v1.240 | 2026-10-15 | Behaviour (D-763 조각 4 리뷰, fix/fleet-proposal-read-scope; 인증·응답 범위만, 스키마 변화 없음): `GET /api/fleet/proposals/{proposal_id}`는 Cell Job 제안을 `GET /api/fleet/cell-jobs/{mission_id}`와 같은 범위로 읽는다 — 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만, 나머지 404 `PROPOSAL_NOT_FOUND`(없는 id와 같은 본문). 제안자 아닌 독자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`. 레거시 Mission 제안은 제안자만. admit·reject와 Cell Job reconcile·resume·cancel 응답의 Job도 같은 가림. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. `POST /api/fleet/channel-requests/{request_id}/admit`·`/submit`은 이름 있는 운영자(이름 없는 공유 토큰은 403 `OPERATOR_IDENTITY_REQUIRED`). 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` detail은 `job_id` 대신 `{"reason": "job", "owner_kind": "mission"}`. |
 | v1.239 | 2026-10-15 | Behavioural (D-620 노트 2026-10-15, D-760 개정 4, fix/signal-no-fallback-on-trip, Safety-Review 대상): Fleet 통행권 강제 중(trip lease·통행권·`authority_required`) 교차로 무응답 정지 에피소드는 3초 우측 fallback 없이 대기; 교차로 기동·D-520 호 시계는 통행권 `HOLDING` 대기를 상한 없이 더하고 `NONE`·`EXPIRED`·횡단보도 몫은 15 s 상한 유지. 필드 변경 없음. v1.237·v1.238은 다른 작업이 선점했다. |
 | v1.238 | 2026-10-15 | Additive (D-763 10항 (c), feat/regulation-capabilities): 능력 `base_velocity.lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`)·`lane_junction_signal`(`junction_signal_enabled`), 없으면 꺼짐. Fleet trip 시작·바퀴·재계획이 횡단보도·신호 구역을 지나는 lane 경로를 그 능력이 `false`인 로봇에 422 `TRIP_REGULATION_CAPS_MISSING` `{missing}`로 거절, 필드 없는 옛 CORE는 `detail.regulation_caps_unknown` 경고와 함께 시작 |

@@ -18,10 +18,10 @@ from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import step_action_kind, step_grant_digest
-from . import cell_sheet_checkpoints as sheets
+from . import cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 
-_MIGRATION_VERSION = 1
+_MIGRATION_VERSION = 2  # 2: TRIP steps (D-763 7); an older Fleet refuses this ledger, never misreads it
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
@@ -106,26 +106,6 @@ class CellJobStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS fleet_cell_steps (
-                    mission_id TEXT NOT NULL REFERENCES fleet_cell_jobs(mission_id),
-                    step_index INTEGER NOT NULL CHECK(step_index >= 0),
-                    step_id TEXT NOT NULL UNIQUE,
-                    action_kind TEXT NOT NULL CHECK(action_kind='CELL_TRANSFER'),
-                    step_json TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN (
-                        'WAITING', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
-                        'GOAL_CONFIRMED', 'HOLD'
-                    )),
-                    action_id TEXT,
-                    attempt_id TEXT,
-                    request_digest TEXT,
-                    grant_json TEXT,
-                    result_json TEXT,
-                    goal_evidence_json TEXT,
-                    reason TEXT,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY(mission_id, step_index)
-                );
                 CREATE TABLE IF NOT EXISTS fleet_cell_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_key TEXT NOT NULL UNIQUE,
@@ -136,8 +116,6 @@ class CellJobStore:
                     detail_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS fleet_cell_steps_status
-                    ON fleet_cell_steps(status, updated_at);
                 """
             )
             connection.execute(
@@ -149,6 +127,7 @@ class CellJobStore:
             ).fetchone()[0]
             if applied > _MIGRATION_VERSION:
                 raise RuntimeError(f"unsupported Cell Job journal migration version {applied}")
+            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
             sheets.migrate(connection)
             connection.commit()
 
@@ -603,7 +582,8 @@ class CellJobStore:
                 (state, index, control["authority_epoch"], expected_generation, now, mission_id))
             self._event(connection, mission_id, index, "CELL_JOB_RESUMED", actor_id, {
                 "authority_epoch": control["authority_epoch"], "dispatch_generation": expected_generation,
-                "previous_generation": job["dispatch_generation"], "step_status": state})
+                "previous_generation": job["dispatch_generation"], "step_status": state,
+                "approvals": self._approvals(connection, job)})  # a later resume at the same fence is a new event
             result = self._get(connection, mission_id)
             connection.commit()
         return result

@@ -118,12 +118,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                          principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         if body.execute:
             raise not_open
+        return await plan(robot_id, body, principal.principal_id)
+
+    async def plan(robot_id: str, body: TripRequest, principal_id: str) -> dict:
+        """The one trip plan path (D-763 6): robot card, site map and a job's 운행 step (``job_trip_steps``)."""
         plan_id = uuid.uuid4().hex
         active = site_maps.active()
         summary = body.model_dump(mode="json", exclude={"execute"})
 
         def record(result: dict) -> None:
-            site_maps.record_plan(plan_id=plan_id, robot_id=robot_id[:96], principal_id=principal.principal_id,
+            site_maps.record_plan(plan_id=plan_id, robot_id=robot_id[:96], principal_id=principal_id,
                                   map_version=active[0] if active else None, request=summary, result=result)
 
         if robot_id not in console.robot_ids:
@@ -219,6 +223,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s,
                 "plan": body, "context": context})
         return {"plan_id": plan_id, **body, "context": context, "expires_at": time.time() + PLAN_TTL_S}
+
+    app.state.trip_plan = plan
 
     def trip_error(exc: TripError) -> HTTPException:
         return _refuse(exc.code, exc.detail, exc.status)

@@ -114,9 +114,9 @@ def test_cell_job_migration_preserves_existing_pick_place_missions(tmp_path):
     assert missions.get_mission("legacy-mission") == legacy
     with store._connect() as connection:
         migration = connection.execute(
-            "SELECT version FROM fleet_component_migrations WHERE component='cell_jobs'",
+            "SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'",
         ).fetchone()[0]
-    assert migration == 1
+    assert migration == 2
 
 
 def test_cell_job_steps_advance_only_after_matching_goal_confirmation(tmp_path):

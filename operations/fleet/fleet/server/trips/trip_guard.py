@@ -107,6 +107,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) ->
                 await runner.halt_closed(closed)  # every robot at once
             except Exception:
                 _LOG.exception("could not end the trips after the E-stop")
+            for robot_id in list(getattr(getattr(runner, "lease", None), "jobs", {})):  # D-763 7: no next step
+                await end_trip(robot_id, "operator_estop")
 
     console.goal, console.cancel, console.estop_all = guarded_goal, guarded_cancel, guarded_estop_all
     console.formation_start, console.line_follow_mode = guarded_formation_start, guarded_line_follow_mode
