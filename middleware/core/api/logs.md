@@ -1022,3 +1022,11 @@
 - 변경: `api/app.py` 독스트링과 `description`이 v1.236. v1.233–v1.235는 다른 작업이 선점했다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 원격 통과.
 - gate 변화: 없음.
+
+## 2026-10-15 · uncommitted · 계약 버전 v1.239
+
+- 변경: `api/app.py` 독스트링과 `description`이 v1.239(D-620 노트·D-760 개정 4, 동작 변경). v1.237·v1.238은 다른 작업이 선점했다.
+- 증거: `test/test_line_follow_contract_docs.py`, fleet 핀 시험 원격.
+- gate 변화: 없음.
+- 결정: D-620 노트 2026-10-15, D-760 개정 4.
+- 교훈: 없음.

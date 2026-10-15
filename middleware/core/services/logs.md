@@ -1144,3 +1144,11 @@
 - gate 변화: 없음. 크기 단위 `recovery/junction` 1200 → 1208줄(한도 1287).
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
+
+## 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)
+
+- 변경: `line_follow/signal/gate.py` `_signal_gate` — `_authority_on()`(통행권 강제·trip lease)이면 3초 무응답 우측 fallback을 고르지 않고 대기, journal 한 줄. `line_follow/crosswalk/gate.py` `_regulated_wait_share`가 시계 dict를 받아 상한까지 적용: 앞뒤 두 틱이 통행권 `HOLDING`이면 전부, 그 밖(`NONE`·`EXPIRED`·횡단보도)은 15 s. `recovery/junction/gate.py` `_maneuver`와 `arc/lane_arc.py`가 자기 dict를 넘긴다.
+- 증거: `test_junction_signal.py`(trip 무응답 6 s 대기, trip·모드 변경 뒤 fallback 복귀), `test_regulated_wait_clock.py`(FREE↔HOLDING 매 틱 반복은 0, HOLDING 무상한, NONE·EXPIRED 15 s), `test_junction_bend.py`(30 s HOLDING 뒤 굽이 이어 감, NONE은 상한 뒤 abort), `test_lane_arc.py`. 임대 상실 시 차선 추종 정지는 gateway `test_trip_lease.py::test_expiry_halts_a_moving_robot_to_idle`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. `recovery/junction` 단위 1줄 감소.
+- 결정: D-620 노트 2026-10-15, D-760 개정 4.
+- 교훈: 상한 없는 대기 크레딧은 살아 있는 상대가 기다리라고 할 때만 준다. 링크 끊김은 상한으로 닫는다.
