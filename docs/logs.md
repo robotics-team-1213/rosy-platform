@@ -8495,6 +8495,12 @@ osy-d395-s1d\`.
 - Gate: unchanged. The inventory is a source audit, not runtime or physical acceptance.
 - Final evidence: 30b06737a remote regression: 273 passed, terminal exit 0, NEW 0. Earlier broad affected checkpoint: 6278 passed, 330 skipped and 3 format/size failures, all rechecked passing in the final regression. Local lint exit 0, errors 0, drift warnings 29. No whole-platform acceptance claim.
 
+## 2026-10-15 · 39d8e72973 · continue runtime pipeline closure after landing approval
+
+- Change: update the 14-flow inventory and add docs/plans/2026-10-15-pipeline-resource-close.md for complete resource cleanup and measured OMX SIM prerequisites.
+- Evidence: remote RED 2 NEW, corrected source regression 281 passed with terminal exit 0/NEW 0. Existing non-site Docker contexts could not support a run: one daemon permission denial and one missing executable. No Docker install, permission change, daemon start or simulation acceptance was performed.
+- Gate: unchanged. Local landing is authorized; push and runtime activation are separate. Actual reviewed datasets, independent operating acceptance, live SIM and device readback remain required.
+
 ## 2026-10-15 · dbe5db55b · OMX 관측 경로 복구와 운용 경계
 
 - 변경: docs/plans/2026-10-15-omx-camera-recovery.md에 두 카메라 복구·독립 검토·실제 추론·미완료 연결을 기록했다. 오래된 장치 미연결 blocker를 실제 USB 관측과 미수용 항목으로 바로잡았다.
