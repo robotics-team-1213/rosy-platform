@@ -700,3 +700,39 @@ def test_run_on_reruns_only_quarantined_failures_once(tmp_path, monkeypatch, lis
     text = log.read_text(encoding="utf-8")
     assert rp.known_failures.RERUN_MARKER in text
     assert text.endswith(rerun_out or "rerun lost\n")
+
+
+@pytest.mark.parametrize("words,install", [([rp.BROWSER_ENV], True), ([], False)])
+def test_leading_rosy_words_are_the_job_environment_and_browser_jobs_get_chromium(tmp_path, words, install):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    home, env = _job_env(tmp_path, '[ "$2" = playwright ] && echo "$*" > "$HOME/installed"\n'
+                                   'echo "browser=${ROSY_RUN_BROWSER_TESTS:-} args $*"\n')
+    start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, *words, "test/x_browser.py", "-q")
+    assert start.returncode == 0, start.stderr
+    assert _poll_until_done(env) == 0
+    out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
+    assert out.endswith(f"browser={'1' if install else ''} args -m pytest test/x_browser.py -q\n")
+    installed = home / "installed"
+    assert installed.exists() == install
+    assert not install or installed.read_text() == "-m playwright install chromium\n"
+    assert rp.ENV_ARG.match(rp.BROWSER_ENV) and not rp.ENV_ARG.match("PATH=/x") and not rp.ENV_ARG.match("-k=x")
+
+
+def test_browser_reruns_keep_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(rp, "quarantine", lambda repo, sha: {"test/q_browser.py::test_f": "r"})
+    calls = []
+
+    def job(host, name, k, log, job_args, inv, *a):
+        calls.append(inv)
+        log.write_bytes(b"FAILED test/q_browser.py::test_f - boom\n" if k == 0
+                        else b"PASSED test/q_browser.py::test_f\n")
+        return 1 if k == 0 else 0
+
+    monkeypatch.setattr(rp.remote_job, "run", job)
+    inv = [rp.BROWSER_ENV, "test/q_browser.py"]
+    assert rp.run_on("h", [inv], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None) == [0]
+    assert calls[0][:2] == inv and calls[1][:2] == [rp.BROWSER_ENV, "test/q_browser.py::test_f"]
