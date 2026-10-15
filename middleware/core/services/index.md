@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)
+- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+- 2026-10-15 · 9a9ea4554 · 규제 능력 속성 (D-763 10항 (c), API v1.233)
 - 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.231)
 - 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.231)
-- 2026-10-14 · uncommitted · D-760 개정 3 9항: `line_follow.regulation_wait`
-- 2026-10-14 · uncommitted · fix(line_follow): D-758 0단계 독립 안전 검토 1·3항 — 모호한 stamp와 뒤로 간 벽시계에서 거절
-- 2026-10-14 · uncommitted · fix(line_follow,state): D-758 0단계 odom 기록을 발행 stamp로 찾고 line-follow 시계로 잰다, odom epoch

@@ -242,8 +242,9 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             # D-741 7: 끝난 작업·승인 대기는 같은 조회 결과를 상태로 거른다. 걸러진 줄은 있고 나머지는 없어야 한다.
-            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09"},
-                     {**rows[1], "source_id": "wait-1", "status": "PROPOSED", "device_id": "omx_wait"}]
+            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09", "visible_state": "ended"},
+                     {**rows[1], "source_id": "wait-1", "status": "PROPOSED", "device_id": "omx_wait",
+                      "visible_state": "approval_pending"}]
             api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
             for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
                 page.goto(site + "/console?view=work&show=" + show)
@@ -298,5 +299,67 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             page.wait_for_function("() => document.getElementById('work-list').childElementCount === 0")
             assert "조회 실패" in page.locator("#work-state").inner_text()
             assert not posts and not errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
+def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size):
+    """D-763 4 (v1.237): trip and Cell Job rows stand beside Task/Mission with the server's visible state; a wait
+    reads as 대기 and past its bound as a warning, not 개입. 승인 대기·끝난 작업 filter the same answer. Placeholder
+    identities only (rev 2 Q6)."""
+    from playwright.sync_api import sync_playwright
+
+    def row(source, source_id, kind, status, device, visible, **extra):
+        return {"source": source, "source_id": source_id, "action_kind": kind, "status": status, "device_id": device,
+                "workcell_id": extra.pop("workcell_id", None), "reason": extra.pop("reason", None),
+                "updated_at": "2026-10-15T00:00:00+00:00", "visible_state": visible, "approval": None,
+                "wait": None, **extra}
+    wait = {"reason": "signal", "waiting": True, "bound_s": 20.0, "over_bound": False}
+    rows = [row("trip", "t-wait", "trip", "running", "rosy_01", "waiting", wait=wait),
+            row("trip", "t-over", "trip", "running", "rosy_02", "in_progress",
+                wait={**wait, "waiting": False, "over_bound": True}),
+            row("trip", "t-done", "trip", "arrived", "rosy_03", "ended"),
+            row("cell_job", "job-1", "CELL_TRANSFER", "PROPOSED", "omx_control", "approval_pending",
+                workcell_id="packing", approval="two_person"),
+            row("task", "task-1", "navigate", "FAILED", "rosy_04", "intervention")]
+    work = {"rows": rows, "observed_at": "2026-10-15T00:00:01+00:00", "tasks_available": True,
+            "missions_available": True, "cell_jobs_available": True, "truncated_sources": [], "kinds": ["trip"]}
+    api = {**API, "/api/fleet/session": {"principal_id": "operator-1", "role": "operator"}, "/api/fleet/work": work,
+           "/api/fleet/trips/t-done": {**rows[2], "trip_id": "t-done", "state": "arrived"},
+           "/api/fleet/cell-jobs/job-1": {"proposal_id": "job-1", "proposal_state": "RESOLVED",
+                                          "job": {"status": "PROPOSED", "workcell_id": "packing"}}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [], size=size)
+        try:
+            for show, expected in (("pending", ["Cell 적재 · omx_control · 승인 대기"]),
+                                   ("done", ["운행 · rosy_03 · 끝남"])):  # 개입 필요 is not 끝남 (D-763 8)
+                page.goto(site + "/console?view=work&show=" + show)
+                page.clock.run_for(2000)
+                page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count",
+                                       arg=len(expected))
+                assert page.locator("#work-list ui-button").all_inner_texts() == expected, show
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(2000)
+            page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 5")
+            texts = page.locator("#work-list ui-button").all_inner_texts()
+            assert texts[:2] == ["운행 · rosy_01 · 대기 · 신호", "운행 · rosy_02 · 대기 상한 넘음 · 신호"], texts
+            assert "개입" not in texts[1]  # past its bound: a warning (rev 2 Q7)
+            assert "Cell 작업 원장" in page.locator("#work-sources").inner_text()
+            page.locator("#work-filter").select_option("trip")
+            assert page.locator("#work-list ui-button").count() == 3
+            page.locator("#work-list ui-button").filter(has_text="rosy_03").click()
+            page.wait_for_function("() => document.getElementById('work-evidence').textContent.includes('도착')")
+            assert "CORE" in page.locator("#work-detail").inner_text()
+            page.locator("#work-filter").select_option("cell_job")
+            page.locator("#work-list ui-button").click()
+            page.wait_for_function("() => document.getElementById('work-detail').textContent.includes('Cell 적재')")
+            assert "packing" in page.locator("#work-detail").inner_text()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary')?.scrollTo(0, 0)")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and 0 <= stop["y"] and stop["y"] + stop["height"] <= size[1]
+            _shot(page, f"work-sources-{size[0]}.png", full_page=True)
+            assert not errors
         finally:
             browser.close()
