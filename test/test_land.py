@@ -518,3 +518,44 @@ def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, ca
     assert calls == [[["pkg/test"]], [["pkg/test"]]]
     assert "gone here (pkg/big.py): FULL again" in capsys.readouterr().out
     assert "line_0 = -1" in (main / "moved/big.py").read_text()
+
+
+def dated(day: str, who: str) -> str:
+    return ENTRY.replace("2026-10-07", day).format(who=who)
+
+
+def test_logs_md_appends_merge_in_date_order_and_pass_lint():
+    sys.path.insert(0, str(ROOT / "tools/harness"))
+    import rosy_harness
+
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    theirs = base + dated("2026-10-15", "peer")             # main landed the newer entry first
+    ours = base + dated("2026-10-14", "branch") + dated("2026-10-15", "branch2")
+    merged = land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode()
+    assert merged == base + dated("2026-10-14", "branch") + dated("2026-10-15", "peer") + dated("2026-10-15", "branch2")
+    assert rosy_harness.validate_log(merged) == []
+
+
+def test_logs_md_moved_own_entry_then_new_main_entry_lands(repos):
+    """The 2026-10-15 stop: an earlier landing merged main after our older entry; we moved it by hand."""
+    main, wt = repos
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    commit(main, {"docs/logs.md": base}, "base log")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"docs/logs.md": base + dated("2026-10-14", "branch")}, "branch entry")
+    commit(main, {"docs/logs.md": base + dated("2026-10-15", "peer")}, "peer entry")
+    subprocess.run(["git", "-C", str(wt), "merge", "-q", "main"], capture_output=True)  # may conflict
+    # The stopped landing's merge commit: main's entry first, ours after it, out of date order.
+    commit(wt, {"docs/logs.md": base + dated("2026-10-15", "peer") + dated("2026-10-14", "branch")}, "merge")
+    commit(wt, {"docs/logs.md": base + dated("2026-10-14", "branch") + dated("2026-10-15", "peer")}, "move entry")
+    commit(main, {"docs/logs.md": base + dated("2026-10-15", "peer") + dated("2026-10-16", "peer2")}, "peer 2")
+    assert land.main(["--tests", "none"]) == 0
+    assert (main / "docs/logs.md").read_text(encoding="utf-8") == (
+        base + dated("2026-10-14", "branch") + dated("2026-10-15", "peer") + dated("2026-10-16", "peer2"))
+
+
+def test_logs_md_edit_of_an_existing_entry_still_refuses():
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    ours = base + dated("2026-10-14", "branch")
+    theirs = base.replace("- 증거: 없음", "- 증거: 있음") + dated("2026-10-15", "peer")
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
