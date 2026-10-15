@@ -8556,3 +8556,10 @@ osy-d395-s1d\`.
 - 변경: `docs/omx-camera-endurance`에서 종료된 두 수신기의 30분 결과와 graph의 소비 공백을 새 frozen evidence로 기록했다. 기존 30초 기록은 보존했다.
 - 증거: 같은 설정 top/front 각각 9.985 FPS, 최대 간격 0.121/0.113초, 두 프로세스 exit 0. 원문 해시와 계측 범위를 기록했다. 문서 경계 독립 검토에서 중요 문제 없음; 수치는 직접 원문과 대조했다.
 - gate 변화: 없음. 영상 메시지 수신만 확인했으며 실물 제어·보정·운영 소비·재부팅 수용은 미완료다.
+
+## 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
+- 변경: `docs/plans/2026-10-15-main-gateway-handoff.md` 신규. 컴퓨터 이전 전에 D-762/D-761 상태, 2026-11-15 마감, 열린 결정(두 번째 관리자), Dependabot 처리, 이 클론에만 있는 ref의 번들과 복원 명령, 새 컴퓨터 준비(Tailscale 프로필, ssh, 도구), 착지 대기열을 적었다.
+- 증거: 문서만. `rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
