@@ -29,6 +29,7 @@ SIM_FLEETS = {
     "tools/run_fleet_sim.sh": SIM_SITE,  # gz_multi start_camera:=false
     "tools/validation/fleet_gazebo/run.py": SIM_SITE,  # gz_multi
     "tools/sim/d395_s1_bench.py": SIM_SITE,  # gz_multi
+    "tools/sim/fleet_trips.py": SIM_CAMERA_SITE,  # map_v2_fleet_multi_real
     "docs/validation/d407-gazebo-console-rerun-2026-10-02/evidence/console.sh": SIM_CAMERA_SITE,
     "docs/validation/lane-trip-lap-sim-2026-10-08/evidence/lap_fleet.py": SIM_CAMERA_SITE,
     "docs/validation/lane-west-bend-candidate-2026-10-09/evidence/lap_fleet.py": SIM_CAMERA_SITE,
