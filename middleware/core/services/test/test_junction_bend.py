@@ -187,7 +187,7 @@ def test_arc_time_bound():
 
 def _seconds_until_timeout(look, leased=False):
     """A bend commanded but not moving: seconds until 'timeout', with the crosswalk state `look`
-    (leased: under a trip lease with no authority, D-760 2)."""
+    (leased: under a trip lease with no authority, NONE, D-760 2)."""
     rig = armed_rig()
     until(rig, 'bending')
     rig.m.authority_leased = lambda: leased
@@ -202,10 +202,28 @@ def _seconds_until_timeout(look, leased=False):
     raise AssertionError('never timed out')
 
 
-def test_an_authority_hold_stops_the_maneuver_clock_up_to_the_cap_then_it_aborts():
-    """D-760 Open 2, today's behaviour: the authority gate zeroes a junction maneuver's twist; its
-    phase clock stands for at most crosswalk_report_s + crosswalk_clear_s (15 s), then 'timeout'
-    and HOLD junction_aborted until the next instruction."""
+def test_a_30_s_holding_authority_stands_the_bend_clock_and_the_bend_goes_on():
+    """Gazebo m33c: rosy_02 stood mid B_W2 bend behind a parked robot and the bend ended 'timeout' after
+    the 15 s credit. D-760 개정 4: a HOLDING authority (Fleet alive, saying wait) stands the phase clock
+    for as long as it lasts; once FREE the bend goes on and reacquires."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    rig.m._authority_on = lambda: True
+    rig.m._authority_state = lambda now: ('HOLDING', 0., 'authority_end')
+    for _ in range(600):                                                         # 30 s
+        decision, status = site_step(rig)
+        assert status.junction.state == 'bending'
+        assert (decision.linear, decision.angular) == (0., 0.)
+    assert status.regulation_wait == 'authority'
+    del rig.m._authority_on, rig.m._authority_state                              # FREE
+    decision, status = site_step(rig, move=True)
+    assert status.junction.state == 'bending' and decision.linear > 0
+    until(rig, 'reacquiring')
+
+
+def test_a_missing_authority_keeps_the_cap_then_the_bend_aborts():
+    """No authority under a trip lease (NONE; EXPIRED alike): the phase clock stands 15 s at most,
+    then 'timeout' and HOLD junction_aborted, so a stale maneuver never resumes later."""
     assert _seconds_until_timeout(None, leased=True) == pytest.approx(_seconds_until_timeout(None)+15., abs=.3)
 
 

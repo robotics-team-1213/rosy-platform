@@ -917,10 +917,9 @@ view.openFormationWorkspace = () => {
 };
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-763 6·9 — 새 작업의 이동은 로봇 카드의 운행 폼(card-trip.js) 그 자체다: 같은 계획·시작 요청, 같은 거절.
-// 활성 현장 지도에 장소가 없으면 이동은 종류 목록에 없다(꺼진 단추로 보이지 않는다).
+// 이동이 종류 목록에 서는지는 서버의 종류 목록이 정한다(work-view.js showKinds, D-763 9). 꺼진 단추로 보이지 않는다.
 function paintMove() {
   const pick = el("work-move-robot"), box = el("work-move-form"), focused = document.activeElement;
-  el("work-new-move-item").hidden = !view.activeSiteMap?.map?.places?.length || !view.robots.length;
   el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
   const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
   const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js

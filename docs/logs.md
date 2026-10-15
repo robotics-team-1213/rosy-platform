@@ -8525,3 +8525,16 @@ osy-d395-s1d\`.
 - 변경: 폴더 책임 안내의 단계 표를 S1–S10 소스 착지로 고치고, 의미 구조 그림을 robot_ui·site_ui·overhead·front_camera에 맞췄다. 같은 영어 단어 표에 console·fleet·ui를 넣어 Rosy Fleet, 로봇 /console, 서버 콘솔 조립, rosy-app-gateway를 구분했다. Pilot 셸 행은 pilot-device-lobby만 소유한다고 고쳤다. test_app_identity의 robot·console 보류 주석을 현재 폴더로 고쳤다. robot_ui·site_ui 안내 제목을 폴더 이름으로 맞췄다.
 - 증거: 폴더 이동과 패키지 이름 변경은 없다. id console과 경로 /console은 유지한다. 패키지 dashboard와 emotion은 유지한다.
 - gate 변화: 없음. 안내 정합이며 구현, 장치, 현장 수용은 아니다.
+
+## 2026-10-15 · uncommitted · OMX 모방·강화학습과 Web 운용 통합 계획
+
+- 변경: 가벼운 부품 집기·트레이 이송을 첫 과제로 확정하고 기존 D-756 IL 준비와 SIM 계획을 연결하는 통합 설계/실행 계획을 추가했다. 모듈·데이터·독립 평가·정책 원장·Pilot/Fleet/검수 UX·RL 환경·권한·배포/rollback 관문과 병렬 의존성을 기록했다.
+- 검토: 학습·UI·아키텍처를 병렬 조사/검토했다. 반응형 추론을 작업셀 로컬 경로로 정정하고 AI PC/Fleet 후보·admission과 분리했으며, native 수집 T2a와 ROSY 실물 운용 T2b를 나눴다. 없는 action readback을 추정하지 않는다.
+- 증거: 문서 정적/원격 검사는 별도 기록한다. 앞선 연결 시험703 passed·7 skipped·NEW 0은 조작 정책 학습 품질·RL 구현·실물 수용 증거가 아니다.
+- gate 변화: 없음. 신규 holder·API·RL 계약은 제안이고 장치/학습/Spaces를 활성화하지 않는다.
+
+## 2026-10-15 · 731c5ae61 · OMX 실물 제어 완성 목표
+
+- 변경: 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
+- 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
+- gate 변화: 없음. 새 목표의 물리 제어·정지·보정·왕복 수용은 미완료다.

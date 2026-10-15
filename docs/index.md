@@ -320,6 +320,8 @@
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
+- [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
+- [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 
 ## 교훈 (docs/solutions)
 
@@ -334,8 +336,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 731c5ae61 · OMX 실물 제어 완성 목표
+- 2026-10-15 · uncommitted · OMX 모방·강화학습과 Web 운용 통합 계획
 - 2026-10-15 · uncommitted · docs: 화면 폴더 안내를 착지된 경로에 맞춘다
 - 2026-10-15 · 271f923283 · preserve product boundaries in SIM installation closure
 - 2026-10-15 · cbf3ab55bd · native SIM installation and actual acceptance-input search
-- 2026-10-15 · dbe5db55b · OMX 관측 경로 복구와 운용 경계
-- 2026-10-15 · 39d8e72973 · continue runtime pipeline closure after landing approval

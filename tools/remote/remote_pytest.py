@@ -90,11 +90,13 @@ umask 022  # the checkout keeps git modes; 0002 would leave 0664 files for mode-
 mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
-exec 8>"$R/repo.lock"; flock -w 600 8  # concurrent runs fetching into one repo race on ref locks
+# Read the bundle before taking the lock, bounded: a half-open link once left `cat` holding it for hours.
+timeout 600 cat > "$R/runs/$NAME.bundle"
+exec 8>"$R/repo.lock"  # concurrent runs fetching into one repo race on ref locks
+flock -w 600 8 || { echo "[remote] $R/repo.lock still held after 600 s (lsof it)" >&2; exit 1; }
 [ -d "$R/repo/.git" ] || git clone -q --no-checkout "$3" "$R/repo"
 cd "$R/repo"
 git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
-cat > "$R/runs/$NAME.bundle"
 git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
 """ + remote_job.SWEEP + r"""git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked

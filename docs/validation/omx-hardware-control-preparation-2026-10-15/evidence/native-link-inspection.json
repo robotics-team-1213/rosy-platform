@@ -1,0 +1,19 @@
+{
+  "scope": "non_actuating_library_dependency_inspection",
+  "libraries": [
+    {
+      "file": "libjoint_trajectory_controller.so",
+      "sha256": "169260cc3e5355dc467bb3de8e31aa61435a08d0061b78963ca7af8312a1cbab",
+      "ldd_exit": 0,
+      "missing_libraries": []
+    },
+    {
+      "file": "libdynamixel_hardware_interface.so",
+      "sha256": "5077ec4c9462362449b1c5261557543d153b35a2b3078f8b8cfc381a5675bcb9",
+      "ldd_exit": 0,
+      "missing_libraries": []
+    }
+  ],
+  "controllers_activated": false,
+  "commands_sent": false
+}
