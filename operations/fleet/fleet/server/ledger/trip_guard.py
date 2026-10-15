@@ -29,8 +29,13 @@ _LOG = logging.getLogger(__name__)
 GOAL_FRESH_S = 2.0
 
 
-def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
-    console.trip_busy = runner.robot_busy
+def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) -> None:
+    lease = getattr(runner, "lease", None)  # D-763 4: a job holding the robot answers busy like a trip
+    if claims is not None and lease is not None:  # its durable D-330 robot claim too (HOLD, after a restart)
+        lease.claimed = lambda robot_id: next((c["owner_id"] for c in claims(
+            resource_kind="robot", resource_id=robot_id) if c["owner_kind"] == "mission"), None)
+    console.trip_busy = runner.robot_busy if lease is None else (
+        lambda robot_id: runner.robot_busy(robot_id) or lease.job_of(robot_id) is not None)
     console.trip_goal_sent_at = {}
     goal, cancel, estop_all = console.goal, console.cancel, console.estop_all
     formation_start, line_follow_mode = console.formation_start, console.line_follow_mode
@@ -46,6 +51,11 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
             await runner.cancel_robot(robot_id, reason)
         except Exception:
             _LOG.exception("could not end the trip of %s after %s", robot_id, reason)
+        try:  # D-763 6: even when the trip store failed, a job holding the robot HOLDs; no step runs on
+            if hasattr(runner, "stop_job"):
+                await runner.stop_job(robot_id, reason)
+        except Exception:
+            _LOG.exception("could not hold the job of %s after %s", robot_id, reason)
 
     def formation_robots() -> list:
         return [*console._formation_members(), *([console._formation_leader] if console._formation_leader else [])]

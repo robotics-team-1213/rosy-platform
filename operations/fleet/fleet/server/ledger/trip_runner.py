@@ -108,7 +108,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
-        self.traffic.authority_reach, self._unread = self.authority.reach, set()  # D-760 3; D-760 4 state reads
+        self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}  # D-760 3; 4 state reads; 8 read fence
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
         self._refresh_warned_at = -math.inf
@@ -153,7 +153,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- operator actions -------------------------------------------------------------
 
-    async def start(self, plan_id: str, principal_id: str) -> dict:
+    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
@@ -172,6 +172,8 @@ class TripRunner(TripAdmission, TripProgress):
             body = nominal_body_for(caps.kind)
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
+            if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": self.lease.job_of(robot_id)})
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
@@ -182,7 +184,7 @@ class TripRunner(TripAdmission, TripProgress):
                 start_token=start_token)
             self._check_start_token(robot_id, start_token)
             pose_observed_at = self._clock()
-            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
+            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id}, caps)
             try:
                 self._check_start_token(robot_id, start_token)
                 engaged = self._engaged(robot_id)
@@ -455,7 +457,10 @@ class TripRunner(TripAdmission, TripProgress):
             except Exception:
                 _LOG.warning("goal lease renewal for %s failed", robot_id, exc_info=True)
         live.view["detail"].pop("bend_candidate", None)
-        pose = await self.map_pose(robot_id)
+        try:
+            pose = await self.map_pose(robot_id)
+        except RobotApiError as exc:  # D-760 8 review: the robot answered the state read, with an error
+            return await self._stop(live, "failed", exc.code, {"status": exc.status})
         if not live.open:
             return
         live.see(pose)
@@ -468,7 +473,7 @@ class TripRunner(TripAdmission, TripProgress):
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
-                live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
+                live.junction = await self._call(self._junction.junction_state(robot_id, **self._after(self._junction, robot_id))) or {}  # D-760 8: fenced
                 # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
                 sent, arc = live.sent, live.junction.get("arc")
                 arc = arc if isinstance(arc, dict) else {}
@@ -488,6 +493,7 @@ class TripRunner(TripAdmission, TripProgress):
                             "end_place_id": arc.get("end_place_id"), "travelled_m": arc.get("travelled_m")}
             else:  # a free segment: no stale lane ``waiting`` may end it
                 live.junction = {}
+            self._fence(robot_id)  # D-760 8 review: the next step reads after this step's pose and junction read
             if live.view["state"] == "link_wait" and not await self._link_back(live):
                 return
             if not live.open:
@@ -725,6 +731,7 @@ class TripRunner(TripAdmission, TripProgress):
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise
             reply = {"already_done": True}  # CORE R1: this place's action already ran
+        self._fence(live.view["robot_id"])  # D-760 8 review: the next step sees CORE after this send
         live.view["detail"].pop("junction_retry", None)
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
@@ -853,12 +860,11 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def map_pose(self, robot_id: str) -> Optional[MapPose]:
         """The trip map pose (D-494 3) after one forced state read; None when it cannot be read."""
-        refresh = getattr(self._poses, "refresh", None)
         try:
-            if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3)
-                await self._call(refresh(robot_id, force_rest=True))  # past the 1 Hz hub cache
+            if (refresh := getattr(self._poses, "refresh", None)) is not None:  # one forced state/odom read per tick (D-494 3)
+                await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
             self._unread.discard(robot_id)
-        except Exception:  # an unread state leaves the pose to age into DEGRADED/UNKNOWN
+        except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
             self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:
                 self._refresh_warned_at = self._clock()
@@ -866,8 +872,7 @@ class TripRunner(TripAdmission, TripProgress):
         try:
             return await self._call(self._poses.arbitrated_pose(robot_id))
         except Exception:  # a pose that cannot be read is no pose
-            _LOG.exception("map pose for %s failed", robot_id)
-            return None
+            _LOG.exception("map pose for %s failed", robot_id)  # falls through to None
 
     def _lock_for(self, robot_id: str) -> asyncio.Lock:
         return self._locks.setdefault(robot_id, asyncio.Lock())

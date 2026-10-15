@@ -37,6 +37,8 @@ class TripLeaseRequest(BaseModel):
     holder: str
     operator_name: str
     ttl_s: float = TRIP_LEASE_DEFAULT_TTL_S
+    #: D-763 6 (v1.236): a multi-step job's lease; it survives IDLE between the job's steps.
+    job_id: str | None = None
 
 
 class TakeoverRequest(BaseModel):
@@ -74,7 +76,7 @@ def open_trip_lease(body: TripLeaseRequest, request: Request, auth: AuthContext 
         try:
             lease, renewed = svc.trip_lease.open(
                 lease_id=body.lease_id, trip_id=body.trip_id, holder=body.holder,
-                operator_name=body.operator_name, ttl_s=body.ttl_s, owner_id=auth.token_id,
+                operator_name=body.operator_name, ttl_s=body.ttl_s, owner_id=auth.token_id, job_id=body.job_id,
                 origin=request.client.host if request.client else "",
                 refuse=lambda: _refusal(svc))
         except TripLeaseError as exc:

@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · main 병합(c4cd2bf95): D-758 0단계 버전 항목의 마지막 줄 복원
 - 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
 - 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
-- 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.232 → v1.234 (main 병합)
-- 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.231)
-- 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228 → v1.232 (main 병합)
+- 2026-10-15 · 7334f9c40 · 계약 버전 v1.236
+- 2026-10-15 · 84f0c8456 · PUT /trip-lease job_id, 주인 아닌 IDLE은 lease를 끝낸다 (D-763 조각 6, API v1.236)

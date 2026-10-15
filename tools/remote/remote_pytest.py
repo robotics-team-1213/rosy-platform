@@ -44,6 +44,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "test"))
+import known_failures  # noqa: E402
 import lab_hosts  # noqa: E402
 import remote_job  # noqa: E402
 
@@ -395,6 +397,13 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     return [parts[k % n][k // n] for k in range(len(invocations))]
 
 
+def quarantine(repo: Path, sha: str) -> dict[str, str]:
+    """test/flaky_quarantine.txt as committed at sha (D-762 stage 1); empty when absent."""
+    result = subprocess.run(["git", "-C", str(repo), "show", f"{sha}:test/flaky_quarantine.txt"],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return known_failures.load_known(result.stdout) if result.returncode == 0 else {}
+
+
 def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, repo: Path,
            label: str | None) -> list[int]:
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
@@ -422,6 +431,24 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
                 continue
             text = log.read_bytes().decode("utf-8", errors="replace")
             print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
+            failed = known_failures.failed_ids(text)
+            ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if codes[-1] == 1 and failed else []
+            if known_failures.should_rerun(codes[-1], failed, ids):  # D-762 stage 1: once, listed ids only
+                print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
+                rerun = log.with_name(log.stem + "-rerun.txt")
+                try:
+                    rerun_code = remote_job.run(host, name, f"{k}r", rerun, [name, deps_sha, cpu],
+                                                [*ids, "-q", "-rA", "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
+                except remote_job.Lost as error:
+                    lost, rerun_code = str(error), remote_job.LOST_EXIT
+                    print(lost, file=sys.stderr, flush=True)
+                section = rerun.read_bytes() if rerun.is_file() else b"[remote-pytest] rerun lost\n"
+                with log.open("ab") as out:
+                    out.write(f"\n{known_failures.RERUN_MARKER}\n".encode() + section)
+                if known_failures.rerun_passed(codes[-1], failed, ids, rerun_code,
+                                               section.decode("utf-8", errors="replace")):
+                    print(f"[remote-pytest] FLAKY (passed on rerun): {' '.join(ids)}", flush=True)
+                    codes[-1] = 0  # pre-push reads this exit code
         return codes
     finally:
         if lost:  # never kill or clean up a job we cannot see; its own trap drops the lock when it ends

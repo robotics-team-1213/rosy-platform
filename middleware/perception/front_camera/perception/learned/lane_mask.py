@@ -306,6 +306,16 @@ class NoWallClass(ValueError):
     """The floor gate needs a `wall` role class and the model has none."""
 
 
+def floor_gate_role_error(classes, target: str = "lane_marking") -> str | None:
+    """Why the floor gate cannot run on these classes for this paint target, or None (D-588).
+    The lane_marking mask needs a wall class; target drivable may stand on its drivable class
+    instead (it validates its own region, and its lane_marking fallback still needs the wall)."""
+    roles = {c.role for c in classes}
+    if "wall" in roles or (target == "drivable" and "drivable" in roles):
+        return None
+    return "floor gate needs a wall role class" + (" or a drivable one" if target == "drivable" else "")
+
+
 #: Step 2 of on_floor at the model's 240-row input, from the 2026-10-10 SIM replay (D-588): the
 #: band 28e8454d paints below the wall seam sits 2-9 plain floor rows under the foot; the real tape
 #: 7.5 cm off the wall has drivable floor or 13+ rows between.
@@ -353,9 +363,10 @@ def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None 
     lane_index = [c.index for c in classes if c.role == "lane_marking"]
     mask = np.isin(labels, lane_index)
     if floor_gate:
+        error = floor_gate_role_error(classes)
+        if error:
+            raise NoWallClass(error)
         wall_index = [c.index for c in classes if c.role == "wall"]
-        if not wall_index:
-            raise NoWallClass("floor gate needs a wall role class")
         mask &= on_floor(labels, wall_index, lane_index,
                          [c.index for c in classes if c.role == "background"])
     mask = mask.astype(np.uint8)
