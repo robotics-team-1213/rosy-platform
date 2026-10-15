@@ -112,6 +112,9 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert _controls(client)["items"][0]["lane_turn_map_entry"] is False  # line_follow.turn_map_entry_enabled off
     lf._config = dataclasses.replace(lf._config, turn_map_entry_enabled=True)
     assert _controls(client)["items"][0]["lane_turn_map_entry"] is True   # D-759 rev 1: with junction_turn
+    assert _controls(client)["items"][0]["lane_instruction_stamp"] is False  # line_follow.instruction_stamp_enabled off
+    lf._config = dataclasses.replace(lf._config, instruction_stamp_enabled=True)
+    assert _controls(client)["items"][0]["lane_instruction_stamp"] is True   # D-767 A
     assert _controls(client)["items"][0]["lane_bend_next_line"] is True
     lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
     assert _controls(client)["items"][0]["junction_pivot"] is False
@@ -133,7 +136,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["line_follow_advice"] is False
     assert base["line_follow_authority_required"] is False
     assert base["lane_bend"] is False and base["lane_bend_map_entry"] is False and base["lane_bend_next_line"] is False
-    assert base["lane_turn_map_entry"] is False
+    assert base["lane_turn_map_entry"] is False and base["lane_instruction_stamp"] is False
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
 
 
