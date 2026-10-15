@@ -8487,3 +8487,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_known_failures.py test/test_affected_tests.py test/test_ci_dependencies.py test/test_remote_pytest.py test/test_land.py test/test_harness_contracts.py test/architecture`에서 409 passed, NEW 0이었다(`X:\DevTemp\land-recent\stage1\1`). CI 전체 티어가 덮는 등록 시험 파일은 1,388/1,518에서 1,518/1,518로 늘었다. `main`에 `ci.yml`을 여섯 번 dispatch했고 결과는 `docs/validation/ci-flake-rate-2026-10-14/result.md`에 있다. b1e84dd79의 다섯 번 가운데 셋이 적색이었고, 실패한 시험은 셋이며 서로 달랐다.
 - gate 변화: 아직 없다. merge queue와 필수 검사는 단계 3이고 승인되지 않았다. `modules` 러너는 보고만 한다. 격리 목록의 실패는 한 번 다시 돈 뒤 통과하면 CI 잡, pre-push, 착지를 막지 않는다.
 - 결정: 격리 목록에는 증거가 있는 둘(fleet 작업자 유휴 대기)만 넣었다. 비상정지 지연 시험과 수동 조작 중 모드 충돌 시험은 안전 경로라 격리하지 않고 소유자에게 넘겼다. 브라우저 시험 둘은 어떤 실행기도 다시 돌리지 않아 후속 항목으로 남겼다.
+
+
+## 2026-10-15 · uncommitted · docs: 화면 폴더 안내를 착지된 경로에 맞춘다
+
+- 변경: 폴더 책임 안내의 단계 표를 S1–S10 소스 착지로 고치고, 의미 구조 그림을 robot_ui·site_ui·overhead·front_camera에 맞췄다. 같은 영어 단어 표에 console·fleet·ui를 넣어 Rosy Fleet, 로봇 /console, 서버 콘솔 조립, rosy-app-gateway를 구분했다. Pilot 셸 행은 pilot-device-lobby만 소유한다고 고쳤다. test_app_identity의 robot·console 보류 주석을 현재 폴더로 고쳤다. robot_ui·site_ui 안내 제목을 폴더 이름으로 맞췄다.
+- 증거: 폴더 이동과 패키지 이름 변경은 없다. id console과 경로 /console은 유지한다. 패키지 dashboard와 emotion은 유지한다.
+- gate 변화: 없음. 안내 정합이며 구현, 장치, 현장 수용은 아니다.
