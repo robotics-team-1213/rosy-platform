@@ -139,7 +139,7 @@ class TripJobRows:
 
     def cased(self, mission_id: str, held_event_id: int) -> None:
         self._write(mission_id, lambda connection, job: CellJobStore._event(
-            connection, mission_id, job["current_step_index"], "TRIP_JOB_CASE_OPENED", "fleet",
+            connection, mission_id, job["current_step_index"], "JOB_CASE_OPENED", "fleet",
             {"event_id": f"case:{held_event_id}"}))
 
     def hold(self, mission_id: str, reason: str, detail: dict) -> bool:
