@@ -53,7 +53,8 @@ def test_incomplete_or_unsafe_snapshot_never_becomes_joint_feedback(change):
         observer().positions(data, .02)
 
 
-def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch):
+@pytest.mark.parametrize("cleanup_failure", [None, "destroy", "shutdown"])
+def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch, capsys, cleanup_failure):
     module = observer()
     events = []
     @contextmanager
@@ -65,23 +66,29 @@ def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch):
             events.append("close")
     broken = rows()
     broken[2]["hardware_error"] = 4
+    def cleanup(name):
+        events.append(name)
+        if cleanup_failure == name:
+            raise RuntimeError("cleanup failed")
     node = SimpleNamespace(
         create_publisher=lambda *a: SimpleNamespace(publish=lambda m: events.append("publish")),
         get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=lambda: 0)),
-        destroy_node=lambda: events.append("destroy"))
+        destroy_node=lambda: cleanup("destroy"))
     monkeypatch.setitem(sys.modules, "register_probe", SimpleNamespace(
         open_readonly_port=port, read_motors=lambda p: broken))
     def init(**kwargs):
         assert os.environ.get("ROS_STATIC_PEERS", "") == ""
     monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(
         init=init, create_node=lambda n: node, ok=lambda: True,
-        shutdown=lambda: events.append("shutdown")))
+        shutdown=lambda: cleanup("shutdown")))
     monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(
         JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
     monkeypatch.setenv("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST")
     monkeypatch.setenv("ROS_STATIC_PEERS", "remote-peer")
     assert module.main(["--device", "/test", "--domain-id", "13", "--duration", "1"]) == 2
     assert events == ["open", "close", "destroy", "shutdown"]
+    import json
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["exit_code"] == 2
 
 
 @pytest.mark.parametrize("setting", ["CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE",

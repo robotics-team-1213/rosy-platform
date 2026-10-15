@@ -32,6 +32,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 0 <= args.domain_id <= 232 or not math.isfinite(args.duration) or not 1 <= args.duration <= 300:
         parser.error("domain-id must be 0..232 and duration 1..300 seconds")
+    for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE",
+                "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
+        if os.environ.get(key):
+            parser.error(f"External discovery override is not allowed: {key}")
+    if os.environ.get("RMW_IMPLEMENTATION", "rmw_fastrtps_cpp") != "rmw_fastrtps_cpp":
+        parser.error("This commissioning observer is validated only with rmw_fastrtps_cpp")
+    os.environ["RMW_IMPLEMENTATION"] = "rmw_fastrtps_cpp"
+    os.environ["ROS_STATIC_PEERS"] = ""
     os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
     from register_probe import open_readonly_port, read_motors
     import rclpy
