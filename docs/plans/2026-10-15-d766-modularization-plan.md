@@ -88,7 +88,9 @@
 
 ## 열린 항목
 
-- **세지 않는 루트(검토 지적 8, 이번에 고치지 않음).** `operations/site_execution`, `middleware/robot_execution`, `contracts/learning`, `operations/world`, `integrations/robots`의 생산 코드와 `.kt` 파일은 어느 패키지·운영 루트의 셈에도 들지 않는다. 이 루트를 `OPS_ROOTS`나 패키지 보관 자리에 넣고 `.kt`를 코드 유형에 넣는 변경은 넘은 목록을 늘리므로, 따로 날짜 계획과 생성 행으로 한다.
+- **닫음(2026-10-15, D-766 덧붙임 「세지 않던 루트와 `.kt`」).** 아래 루트와 `.kt`를 센다. 처음 잰 것 가운데 넘은 것은 `CameraController.kt` 791줄 하나다.
+- **레인 A 실측(2026-10-15).** 등록 16개, 모두 1,000줄 이상. `fleet` 17,788, `control` 15,931, `site_ui/console` 13,330. `core_common`(4,783)과 `dashboard`(8,098)는 표에서 빠졌다. `perception/map` 스크립트는 하위 패키지도 선언된 보관 자리도 아니라 등록하지 않았다.
+- **(옛) 세지 않는 루트(검토 지적 8, 이번에 고치지 않음).** `operations/site_execution`, `middleware/robot_execution`, `contracts/learning`, `operations/world`, `integrations/robots`의 생산 코드와 `.kt` 파일은 어느 패키지·운영 루트의 셈에도 들지 않는다. 이 루트를 `OPS_ROOTS`나 패키지 보관 자리에 넣고 `.kt`를 코드 유형에 넣는 변경은 넘은 목록을 늘리므로, 따로 날짜 계획과 생성 행으로 한다.
 
 ## 위험
 

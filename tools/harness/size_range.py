@@ -58,6 +58,7 @@ def measure_commit(commit: str, units: list[str]) -> tuple[dict, dict, dict]:
         p.startswith(root + "/") and size_limits.is_prod(PurePosixPath(p[len(root) + 1:]).parts) for root in roots)]
     packages = {ET.fromstring(blob).findtext("name"): str(PurePosixPath(path).parent)
                 for path, blob in _blobs(commit, xmls).items()}
+    packages.update(size_limits.STANDALONE)
     return size_limits.measure(files, packages, roots, units)
 
 
