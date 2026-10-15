@@ -333,8 +333,18 @@ def test_a_lost_job_lease_never_comes_back_without_a_new_approval(tmp_path):
     mid = rig.create()
     rig.ticks()
     rig.arrive("ab:fwd")
-    hold = rig.runner.lease.jobs[R]
-    hold.view["lease"].update(state="lost", reason="renew_timeout")  # lost, and the hook's HOLD has not landed
+    hold, calls = rig.jobs.rows.hold, []
+
+    def failing_once(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise sqlite3.OperationalError("database is locked")   # the hook's HOLD does not land
+        return hold(*args)
+    rig.jobs.rows.hold = failing_once
+    rig.ports.lease.down = True
+    rig.ticks(17, jobs=False)
+    assert rig.job(mid)["status"] == "READY" and rig.runner.lease.jobs[R].view["lease"]["state"] == "lost"
+    rig.ports.lease.down = False
     puts = len(rig.ports.lease.puts)
     rig.ticks(3)
     job = rig.job(mid)

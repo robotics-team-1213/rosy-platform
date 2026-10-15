@@ -31,6 +31,7 @@ class JobTripSteps:
         self.store, self.rows, self.runner, self.period_s = store, TripJobRows(store), runner, period_s
         self.plan, self.caps, self.incident = plan, caps, incident  # (robot, step, who) -> plan_id; (robot); case
         runner.lease.on_job_lost = self._lost
+        self._lost_jobs: set = set()  # lost leases whose HOLD this loop has not seen yet (``_step``)
 
     def recover(self) -> int:
         """D-494 5 at startup: no job step drives again by itself; every open trip job HOLDs (its case: ``tick``)."""
@@ -42,7 +43,6 @@ class JobTripSteps:
             raise ValueError("a trip job needs a one-person kind")
         mission_id = uuid.uuid4().hex
         await self.runner.hold_job(robot_id, mission_id, principal_id, await self.caps(robot_id))
-        self.runner.lease.jobs[robot_id].view["approvals"] = 1  # the lease of this one approval (``_step``)
         try:
             return await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
         except BaseException:
@@ -58,6 +58,8 @@ class JobTripSteps:
         for robot_id, hold in list(self.runner.lease.jobs.items()):  # each HOLD gives the lease up; an end frees it
             try:
                 job = await asyncio.to_thread(self.store.get, hold.view["job_id"])
+                if job is None or job["status"] in ("HOLD", "GOAL_CONFIRMED"):
+                    self._lost_jobs.discard(hold.view["job_id"])  # held (or done): a READY after this is a resume
                 if job is None or job["status"] == "GOAL_CONFIRMED" or job["reason"] == CANCELLED_REASON:
                     self.runner.release_job(robot_id, hold.view["job_id"])
                 elif job["status"] == "HOLD" and hold.view["lease"]["state"] == "held":
@@ -94,17 +96,15 @@ class JobTripSteps:
                 await self._fail(job, view.get("reason") or view["state"], {"trip_id": step["action_id"],
                                                                              "trip_state": view["state"]})
             return
-        admissions = [event for event in job["events"] if event["event_type"] in ADMISSIONS]
-        actor, token = admissions[-1]["actor_id"], self.runner._start_token(robot_id)  # a stop after this refuses it
+        actor = next(event["actor_id"] for event in reversed(job["events"]) if event["event_type"] in ADMISSIONS)
+        token = self.runner._start_token(robot_id)  # a stop after this read refuses the start
         try:
             hold = self.runner.lease.jobs.get(robot_id)
             mine = hold is not None and hold.view["job_id"] == mission_id
-            if not mine or hold.view["lease"]["state"] != "held":  # a lease only for an approval newer than the loss
-                if not (hold.view.get("approvals", 0) < len(admissions) if mine
-                        else job["events"][-1]["event_type"] == "CELL_JOB_RESUMED"):
+            if not mine or hold.view["lease"]["state"] != "held":  # a new lease only after the loss's HOLD + resume
+                if mission_id in self._lost_jobs:
                     raise TripError(409, "JOB_LEASE_LOST", {"robot_state": "unconfirmed"})
                 await self.runner.hold_job(robot_id, mission_id, actor, await self.caps(robot_id))
-                self.runner.lease.jobs[robot_id].view["approvals"] = len(admissions)
             elif self.runner.lease.now() - hold.view["lease"]["renewed_at"] > 2 * self.period_s:
                 return  # no renew confirmed lately: the lease rule decides before a new step starts
             plan_id = await self.plan(robot_id, step["step"], actor)
@@ -122,6 +122,7 @@ class JobTripSteps:
     async def _lost(self, view: dict, detail: dict) -> None:
         """``TripLease.on_job_lost``: declared at ttl after the last confirmed renew, before CORE's own expiry, so
         the robot is never assumed IDLE here (D-763 10); the start checks of a resumed step read it again."""
+        self._lost_jobs.add(view["job_id"])  # before any await: a tick in the gap must not take a new lease
         detail = {**detail, "robot_state": "unconfirmed"}
         await asyncio.to_thread(self.rows.hold, view["job_id"], "JOB_LEASE_LOST", detail)
 
