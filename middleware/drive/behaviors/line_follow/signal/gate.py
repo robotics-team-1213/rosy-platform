@@ -1,4 +1,4 @@
-"""D-620: ask on the paired Fleet API; only three seconds of unanswered waiting selects right."""
+"""D-620: ask on the paired Fleet API; only three seconds of unanswered waiting off a Fleet trip selects right."""
 import logging
 import uuid
 
@@ -76,6 +76,11 @@ class JunctionSignalMixin:
         allowed = (answer is not None and answer.lamp == 'green' and answer.may_enter
                    and 0 <= now-s['answered_at'] <= REPLY_FRESH_S)
         fallback = answer is None and now-s['start'] >= WAIT_S-1e-6
+        if fallback and self._authority_on():  # D-620 1, note 2026-10-15: a Fleet trip's junction is Fleet's
+            fallback = False
+            if not s.get('trip_hold'):
+                s['trip_hold'] = True
+                _LOG.info("junction %s unanswered under Fleet authority: holding, no right fallback", s['id'])
         if answer is not None and now-s['answered_at'] > REPLY_FRESH_S:
             s['state'] = 'unknown'  # an expired reply stays answered; it never becomes silence
         if not (allowed or fallback):

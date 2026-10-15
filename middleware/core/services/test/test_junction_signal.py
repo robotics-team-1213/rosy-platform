@@ -32,6 +32,22 @@ def test_silence_waits_three_seconds_then_arms_one_right_turn():
         assert rig.m.status().junction.seq == seq
 
 
+@pytest.mark.parametrize("trip", ["authority_required", "trip_lease"])
+def test_silence_on_a_fleet_trip_holds_without_the_right_fallback(trip):
+    """Gazebo m32b: on a Fleet trip the junction's decision is Fleet's (D-620 1, note 2026-10-15);
+    an unanswered episode holds at zero past 3 s and never selects the right turn on its own."""
+    rig = Rig(junction_signal_enabled=True, authority_required=trip == "authority_required")
+    rig.m.authority_leased = lambda: trip == "trip_lease"
+    rig.step(junction=True)
+    request = rig.m.junction_signal_request()
+    for _ in range(120):                                  # 6 s, twice the fallback wait
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+        assert status.junction.state == "waiting" and status.junction.pending_action is None
+    assert status.junction.signal_state == "waiting"
+    assert rig.m.junction_signal_request() == request
+
+
 @pytest.mark.parametrize("lamp,may_enter", [("red", False), ("unknown", False), ("green", False)])
 def test_a_reply_never_becomes_silence_even_after_three_seconds(lamp, may_enter):
     rig, request = waiting()
