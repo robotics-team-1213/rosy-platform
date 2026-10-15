@@ -8569,3 +8569,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
+
+- 변경: `docs/solutions/workflow-issues/`에 교훈 네 건(API 번호 경합, 로그 병합 날짜 순서, FULL 전 구조 가드, 감시 없는 착지와 Tailscale 프로필 뒤집힘).
+- 증거: 2026-10-14..15 D-758 0단계 번호 네 번 변경, D-760 4단계 lint out-of-order·재병합 거절, 2c 앵커 누락 FULL 실패, 6시간 무감시 착지 정지.
+- gate 변화: 없음. 도구 개선은 `fix/land-fast-fail-and-log-order`에서 따로 한다.
