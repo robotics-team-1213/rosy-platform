@@ -383,6 +383,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         tether_task = app.state.tether_watch.start()  # D-526
         path_task = asyncio.create_task(app.state.paths.run())  # D-594
+        job_task = asyncio.create_task(app.state.job_trips.run()) if getattr(app.state, "job_trips", None) else None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -420,7 +421,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    goal_evidence_worker, mission_feedback_scheduler,
                                    mission_model_turn_worker_task, localization_task,
                                    signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                                   lease_task, path_task, calibration_drift_task, notification_task)
+                                   lease_task, path_task, calibration_drift_task, notification_task, job_task)
                                if background is not None]
                 for background in backgrounds:
                     background.cancel()
@@ -849,6 +850,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.channel_requests import install_channel_feature
     install_work_routes(app, task_service=task_service, mission_service=mission_service, require_viewer=require_viewer,
                         require_named=(require_operator, require_named_operator), read_guard=read_guard)
+    from fleet.server.trip_job_routes import install_trip_job_routes  # D-763 7: trip steps, SIM profile only
+    install_trip_job_routes(app, store=cell_job_store, runner=trip_runner, console=console,
+                            deployment_profile=deployment_profile, episodes=app.state.ai_episodes,
+                            require_named_operator=require_named_operator, operator_guard=operator_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
     cell_prepare = install_cell_app_routes(
         app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,

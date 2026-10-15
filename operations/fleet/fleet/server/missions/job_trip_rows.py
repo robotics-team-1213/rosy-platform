@@ -1,0 +1,130 @@
+"""D-763 7: the step-ledger rows of a job whose steps are trips (``TRIP``), one SQLite transaction each.
+
+The job lives in the step ledger beside Cell Jobs (``CellJobStore`` tables, fence and durable ``robot`` claim,
+D-420 §4.5): admitted with its claim at creation (one named operator, registry ``one_person``), RUNNING with the
+step's trip id as its attempt, GOAL_CONFIRMED only on that trip's ``arrived``, HOLD (claim HELD) on anything else.
+The Cell identity columns hold the job's own: the robot is its device, the digests are its step list's. Callers
+run these in a worker thread, never on the trip loop's event loop.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from contextlib import closing
+
+from fleet.server.cell_job_store import CellJobStore
+from fleet.server.dispatch_admission import release as release_claims, reserve as reserve_claims
+from fleet.server.mission_store import MissionConflict, _json, _now
+from fleet.server.trip_ports import TripError
+
+KIND = "TRIP"
+ACTIVE = ("READY", "RUNNING", "ACTION_SUCCEEDED")
+
+
+class TripJobRows:
+    def __init__(self, store: CellJobStore) -> None:
+        self.store = store
+
+    def _write(self, mission_id: str, change):
+        with closing(self.store._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            result = change(connection, CellJobStore._require(connection, mission_id))
+            connection.commit()
+            return result
+
+    def ids(self, statuses) -> list:
+        """Trip jobs in ``statuses`` whose current step is a trip, oldest update first."""
+        with closing(self.store._connect()) as connection:
+            return [row[0] for row in connection.execute(
+                f"SELECT j.mission_id FROM fleet_cell_jobs j JOIN fleet_cell_steps s ON s.mission_id=j.mission_id "
+                f"AND s.step_index=j.current_step_index WHERE s.action_kind=? AND j.status IN "
+                f"({', '.join('?' * len(statuses))}) ORDER BY j.updated_at", (KIND, *statuses))]
+
+    def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list) -> dict:
+        body = _json({"robot_id": robot_id, "steps": steps})
+        digest, now = hashlib.sha256(body.encode()).hexdigest(), _now()
+        with closing(self.store._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            control = connection.execute("SELECT authority_epoch, generation, dispatch_enabled FROM "
+                                         "fleet_dispatch_control WHERE control_id=1").fetchone()
+            if control is None or not control["dispatch_enabled"]:
+                raise MissionConflict("dispatch is stopped (site stop latch)")
+            connection.execute(
+                "INSERT INTO fleet_cell_jobs (mission_id, proposal_principal_id, request_key, request_digest, job_id, "
+                "workcell_id, instance_id, recipe_digest, cell_digest, process_artifact_digest, job_json, "
+                "resources_json, ledger_markers_json, status, authority_epoch, dispatch_generation, created_at, "
+                "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 'READY', ?, ?, ?, ?)",
+                (mission_id, principal_id, mission_id, digest, mission_id, robot_id, robot_id, digest, digest, digest,
+                 body, _json([["robot", robot_id]]), control["authority_epoch"], control["generation"], now, now))
+            for index, step in enumerate(steps):
+                connection.execute("INSERT INTO fleet_cell_steps (mission_id, step_index, step_id, action_kind, "
+                                   "step_json, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                   (mission_id, index, f"{mission_id}:step-{index + 1}", KIND, _json(step),
+                                    "WAITING" if index else "READY", now))
+            if not reserve_claims(connection, owner_kind="mission", owner_id=mission_id, phase="CLAIMED",
+                                  generation=control["generation"], resources=[("robot", robot_id)]):
+                raise MissionConflict("another task or job claims this robot")
+            CellJobStore._event(connection, mission_id, None, "CELL_JOB_ADMITTED", principal_id, {
+                "authority_epoch": control["authority_epoch"], "dispatch_generation": control["generation"],
+                "approval": "one_person"})
+            job = CellJobStore._get(connection, mission_id)
+            connection.commit()
+            return job
+
+    def started(self, mission_id: str, index: int, trip_id: str, actor: str) -> bool:
+        def change(connection, job):
+            if job["status"] != "READY" or job["current_step_index"] != index:
+                return False
+            if not CellJobStore._fence_current(connection, job):  # a site stop since approval: no new trip
+                raise TripError(409, "FLEET_FENCE_CHANGED_BEFORE_SUBMISSION")
+            now = _now()
+            connection.execute("UPDATE fleet_cell_steps SET status='RUNNING', action_id=?, attempt_id=?, updated_at=? "
+                               "WHERE mission_id=? AND step_index=?", (trip_id, trip_id, now, mission_id, index))
+            connection.execute("UPDATE fleet_cell_jobs SET status='RUNNING', updated_at=? WHERE mission_id=?",
+                               (now, mission_id))
+            CellJobStore._event(connection, mission_id, index, "CELL_STEP_SUBMITTING", actor,
+                                {"action_id": trip_id, "trip_id": trip_id})
+            return True
+        return self._write(mission_id, change)
+
+    def arrived(self, mission_id: str, index: int, trip_id: str) -> None:
+        """The step's trip arrived (its goal evidence): the next step READY, or the job done and its claim released."""
+        def change(connection, job):
+            step = connection.execute("SELECT action_id FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
+                                      (mission_id, index)).fetchone()
+            if job["status"] != "RUNNING" or job["current_step_index"] != index or step["action_id"] != trip_id:
+                return
+            count = connection.execute("SELECT COUNT(*) FROM fleet_cell_steps WHERE mission_id=?",
+                                       (mission_id,)).fetchone()[0]
+            last, now = index + 1 == count, _now()
+            connection.execute("UPDATE fleet_cell_steps SET status='GOAL_CONFIRMED', goal_evidence_json=?, "
+                               "reason=NULL, updated_at=? WHERE mission_id=? AND step_index=?",
+                               (_json({"trip_id": trip_id, "trip_state": "arrived"}), now, mission_id, index))
+            connection.execute("UPDATE fleet_cell_jobs SET status=?, current_step_index=?, updated_at=? WHERE "
+                               "mission_id=?", ("GOAL_CONFIRMED" if last else "READY", index + 1, now, mission_id))
+            if last:
+                release_claims(connection, owner_kind="mission", owner_id=mission_id)
+            else:
+                connection.execute("UPDATE fleet_cell_steps SET status='READY', updated_at=? WHERE mission_id=? "
+                                   "AND step_index=?", (now, mission_id, index + 1))
+            CellJobStore._event(connection, mission_id, index, "CELL_JOB_GOAL_CONFIRMED" if last
+                                else "CELL_STEP_GOAL_CONFIRMED", "trip", {"trip_id": trip_id})
+            if not last and not CellJobStore._fence_current(connection, job):  # a site stop: no next step
+                self._held(connection, CellJobStore._require(connection, mission_id), "SITE_AUTHORITY_CHANGED", {})
+        self._write(mission_id, change)
+
+    @staticmethod
+    def _held(connection, job, reason: str, detail: dict) -> bool:
+        if job["status"] not in ACTIVE:
+            return False
+        CellJobStore._hold_in_transaction(
+            connection, job, reason=reason[:96], claim_phase="HELD", actor_id="fleet", detail=detail, strict=False,
+            event_key=f"trip-hold:{job['current_step_index']}:{CellJobStore._approvals(connection, job)}")
+        return True
+
+    def hold(self, mission_id: str, reason: str, detail: dict) -> bool:
+        """HOLD an active job (claim HELD, its reason and detail in the event); False when it is not active."""
+        return self._write(mission_id, lambda connection, job: self._held(connection, job, reason, detail))
+
+
+__all__ = ["ACTIVE", "KIND", "TripJobRows"]
