@@ -8666,3 +8666,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land.py`, `test/test_remote_pytest.py` 통과(X:/DevTemp/land-fixes). 착지·푸시 안 함.
 - gate 변화: 가드 실패가 FULL 회차(~25분) 전에 드러난다. 운영자는 lab-hosts.json에 `"tailscale_profile": "665e"`를 넣어야 확인이 켜진다.
 - 결정: 없음.
+
+## 2026-10-16 · uncommitted · docs(learning): drivable 강화학습과 Gazebo Fleet 검증 방향
+
+- 변경: D-769와 ADR Log에 기존 drivable 검수 자료·모델 계보 확인, 영역 주행 연결, 고정 인식 모델의 제한 조향 학습, Gazebo 세 조건 비교와 단계별 Fleet 검증을 기록했다.
+- 증거: 사용자 방향 합의 및 ADR 기록 요청, 기존 검수 자료 확인 기록·Gazebo m30/m31 인계와 현재 drivable 후처리/모델 역할 검사를 대조했다. 새 학습·모델 재추론·Gazebo 실행 증거는 아니다.
+- gate 변화: 없음. Accepted는 방향 결정이며 구현·정책 승격·배포·실물 수용은 별도다. main 착지·push는 하지 않는다.
+- 결정: D-769.
