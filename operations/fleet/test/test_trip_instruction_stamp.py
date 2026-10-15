@@ -81,7 +81,7 @@ def test_an_unusable_stamp_is_sent_again_with_the_next_pose():
     before = lambda runner: (_stamped(STAMP)(runner), setattr(runner._junction, "junction_error", _unusable("no_sample")))
     runner, _, ports, _, _ = _trip(_bend_map(SW_BEND), caps, before=before)
     view = runner.view("p1")
-    assert view["state"] == "running" and ports.sent == [] and view["detail"]["junction_retry"] == "INSTRUCTION_STAMP_UNUSABLE"
+    assert view["state"] == "running" and ports.sent == [] and view["detail"]["junction_retry"] == "INSTRUCTION_STAMP_UNUSABLE no_sample"
     ports.junction_error = None
     ports.pose = dataclasses.replace(ports.pose, odom_stamp=STAMP + 0.5)
     _ticks(runner, ports)

@@ -193,3 +193,24 @@ def test_a_malformed_stamp_is_a_value_error(bad):
     rig = _rig()
     with pytest.raises(ValueError):
         _bend(rig, bad)
+
+
+def test_a_refresh_of_the_armed_bend_ignores_an_unusable_stamp_and_keeps_its_travel():
+    """Re-review MEDIUM: a refresh does not use the stamp, so it is never refused (the bend would expire)."""
+    rig = _rig()
+    assert _bend(rig, _moved(rig)) == (True, 1, 'armed')
+    site_step(rig, dx=.01)
+    travel = rig.m._junction['travel']
+    assert _bend(rig, WALL - 3.) == (True, 1, 'armed')
+    assert rig.m._junction['travel'] == travel and _basis(rig) == ('stamp', None)
+
+
+def test_a_resend_of_the_running_bend_ignores_an_unusable_stamp():
+    rig = _rig()
+    _bend(rig, _moved(rig))
+    for _ in range(400):
+        _, status = site_step(rig, move=True)
+        if status.junction.state == 'bending':
+            break
+    assert _bend(rig, WALL - 3.) == (True, 1, 'bending')
+    assert rig.m.status().junction.state == 'bending'
