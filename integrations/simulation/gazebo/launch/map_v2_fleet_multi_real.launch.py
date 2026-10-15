@@ -76,7 +76,7 @@ def _observers(context, *, control_share, gz_share):
                  name='line_observer_node', output='screen',
                  parameters=[os.path.join(control_share, 'config', 'line_follow.yaml'), {
                      'use_sim_time': True, 'camera_lane_mode': 'keep', 'paint_source': 'learned',
-                     'learned_paint_target': LaunchConfiguration('learned_paint_target'),
+                     'learned_paint_target': LaunchConfiguration('learned_paint_target', default='lane_marking'),
                      'learned_paint_every_n': 1,
                      'ir_calibration_enabled': True, 'ir_black': SIM_IR_CALIBRATION['ir_black'],
                      'ir_white': SIM_IR_CALIBRATION['ir_white'],
