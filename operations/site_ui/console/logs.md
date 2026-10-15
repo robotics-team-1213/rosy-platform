@@ -305,3 +305,9 @@
 - 변경: `work/work-view.js`(6377fe873에서 `work/`로 옮김, 자기 크기 단위)의 `show=pending|done`이 서버의 `visible_state`(`approval_pending`·`ended`)로 거른다. 취소된 Cell Job은 끝난 작업에 있고 실패한 Task는 없다. 6ae1df74e에서 크기를 맞추려고 한 줄에 모은 문장을 파일의 모양으로 되돌렸다. 단위: 콘솔 17,717/17,719, 작업 영역 379/514.
 - 증거: 브라우저(AI PC, e7b196839) `test_work_overview_browser.py`·`test_console_card_trips_browser.py`·`test_cell_app_browser.py` 93 passed, 로그 X: `browser-run/wrs4-b3.txt`.
 - gate 변화: 없음.
+
+## 2026-10-15 · 239d2d607 · D-767 P0 로봇 카드 "예고" 한 줄
+
+- 변경: `shared/site-map-model.js` `trafficCardLine`이 `/traffic` 행의 `preview` 첫 두 사건을 "예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도"로 붙인다. 없거나 만료한 미리보기는 서버가 행에서 빼므로 아무것도 안 보인다. 파일 800/800, 콘솔 단위 17,718/17,719.
+- 증거: `operations/fleet/test/web/traffic-layer.test.mjs`(원격 `test_site_map_api.py` node 시험 포함 fleet 5,290 passed). 브라우저는 확인 못 함.
+- gate 변화: 없음.

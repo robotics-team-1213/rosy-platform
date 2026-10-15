@@ -210,7 +210,7 @@ class LaneComplianceMonitor:
                 **({"turn_spot": True} if back["turn_spot"] else {}),
                 # rev 6: only with guide_context on, so a CORE without the field never sees it.
                 **({"context": back["context"]} if back["context"] is not None else {})}
-        # Crosswalk zones reach CORE only as the D-517 authority crosswalks[] (D-573), not here.
+        # Crosswalk zones never go from Fleet: CORE's own camera finds them (D-491/D-573, no crosswalks[]).
         try:
             reply = await asyncio.wait_for(send(body), PERIOD_S)
         except Exception as exc:  # noqa: BLE001 - one robot's failure never stops the watch

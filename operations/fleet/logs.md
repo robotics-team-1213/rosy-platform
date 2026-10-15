@@ -3874,3 +3874,17 @@
 - 증거: 원격(AI PC, bbfac7c5c) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet6/run-1.txt`. N1은 dd0da079a에서 같은 결과, 로그 X: `proposal-scope/fleet5/run-1.txt`.
 - gate 변화: 없음.
 - 결정: D-763 조각 4 보안 리뷰 후속. API v1.240 안에 든다.
+
+## 2026-10-15 · 279cfdd52 · D-767 P0 경로 미리보기 (Fleet만, 로봇에 보내지 않음)
+
+- 변경: 새 `server/trips/trip_preview.py`(116줄)가 trip 주기마다 블록 표·신호 참고 뒤에 그 단계가 이미 읽은 자세(D-760 8 공유 읽기, 자기 읽기 없음)로 trip 경로 위 2 m 안의 사건 목록을 만든다: `turn`(가로선 `line_before_m`), `bend`(호 시작점, 여러 구간), `arc`(`exit_segment`), `crosswalk`(새 `site_map.crosswalk_spans`가 다각형을 경로에 투영한 앞쪽 경계), `signal`(경로 위 전부, `/traffic` 신호 접근로), `stop`(trip 끝·보류, `hold_back_m`), `authority_end`. `horizon_m = min(2, trip 끝, max(R + d_stop, v × 8 s))`, 8개에서 자름. `/api/fleet/traffic` 로봇 행 `preview`(≤ 2 s, 만료·없음은 행에 없음, `work_read` 아님). 방금 보낸 지시의 앞당김 전 지점과 0.005 m 넘게 다르면 `preview_mismatch{kind}`. 바뀜 = 다리·사건 집합·params·`s_m` 0.01 m. `ROSY_ROUTE_PREVIEW_LOG=<file>`이면 JSON 줄로 남고 `tools/sim/route_preview_accuracy.py`(5fba65e10)가 ADR 7항 기준으로 잰다. `trip_runner.py` 900줄: import·호출 두 줄을 `confirm_replan`의 같은 세 줄 블록 둘을 합쳐 갚았다. 주석 고침 ab922a2f8(`crosswalks[]`는 없다). 단위: trips 2,387/2,388, fleet 31,904/31,930, 콘솔 17,718/17,719.
+- 증거: 원격(모델 PC, 239d2d607) `operations/fleet/test` 5,290 passed, 293 skipped(브라우저 opt-in), `known_failures` 0 new, 로그 X: `route-preview-p0/fleet/run-1.txt`. 원격(5fba65e10) 구조·하네스 계약·채점기·`operations/world/test` 146 passed, 0 new, 로그 X: `route-preview-p0/arch/run-1.txt`. 브라우저 시험은 원격 실행기가 `ROSY_RUN_BROWSER_TESTS`를 넘기지 않아 확인 못 함(카드 문구는 node 시험).
+- gate 변화: 없음. Gazebo 2대 30분·장치 2대 10바퀴 정확도 측정은 남았다(참값 추출 도구 없음).
+- 결정: D-767 B부 P0. 설정 `fleet.trip.route_preview: off|observe`는 만들지 않았다(app.py·TripConfig 동결). 되돌림은 호출 한 줄.
+
+## 2026-10-15 · 512d26a73 · D-767 P0 독립 검토(CONDITIONS) 반영
+
+- 변경: 횡단보도 투영은 `site_map.route_crosswalks`가 경로마다 한 번 계산해 캐시한다(지도 기하는 주기마다 바뀌지 않는다). 다각형 상자와 겹치지 않는 경로 조각은 표본을 뽑지 않고, 2 cm 표본에 교차점만 1 mm까지 이분한다. 한 로봇의 미리보기 실패는 그 로봇의 미리보기만 비우고 trip마다 한 번 ERROR로 남는다(이후 DEBUG). 자세와 앞 끝 사이의 사건은 싣지 않는다(`at_m` ≥ 0, 그 자리에 보낸 지시는 불일치로 세지 않음). `seq`가 바뀜 횟수를 센다(`changes` 필드 대신). 불일치 경고 로그는 줄 수 때문에 뺐고 `/traffic` 행 `preview.mismatch`에만 남는다. 채점기(69f10c23d): `pose_stamp` 없는 행 건너뜀, `--offset-s`(참값 시계 − 예측 시계), 통과에 `leg_id`가 있으면 같은 다리만 맞춤, 기준은 사건마다 |오차| / (a + b·`at_m`)의 p95 ≤ 1(ADR의 p95 ≤ a + b·`at_m`). 단위: trips 2,388/2,388, fleet 31,926/31,930, 콘솔 17,718/17,719.
+- 되돌림: `ROSY_ROUTE_PREVIEW=off`(Fleet 프로세스 환경). `TripConfig` 필드(`fleet.trip.route_preview`)가 허락될 때까지 이것이 D-767 P0의 되돌림이다.
+- 증거: 원격(f4162e635) `operations/fleet/test` 5,294 passed, 293 skipped(브라우저 opt-in), `known_failures` 0 new, 로그 X: `route-preview-p0/r3fleet/run-1.txt`. 구조·하네스·채점기·`operations/world/test` 148 passed, 0 new, 로그 X: `route-preview-p0/r3arch/run-1.txt`. 새 시험: 경로당 한 번 표본(두 번째 주기 0회, 먼 횡단보도 0회, 첫 주기 ≤ 130회), 한 로봇 실패 격리·로그 한 번, 앞 끝 거름, 끄기 스위치, 채점기 시계·다리.
+- gate 변화: 없음.
