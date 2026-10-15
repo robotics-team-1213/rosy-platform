@@ -235,7 +235,7 @@ class TripRunner(TripAdmission, TripProgress):
             if turns:  # D-603: the alignment turns CORE made before this start
                 view["detail"]["aligned"] = turns
             live = LiveTrip(view, graph, request)
-            live.inherited = self.held_stops.pop(robot_id, None)  # D-763 7: the one held stop this trip may replace
+            live.inherited = self.held_stops.pop(robot_id, None) if plan["segments"] else None  # D-763 7
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
             self.halts.restarted = [t for t in self.halts.restarted if t["robot_id"] != robot_id]  # this trip owns it
