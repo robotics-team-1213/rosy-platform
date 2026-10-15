@@ -139,7 +139,7 @@ def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path
     assert size_range.main([grown, "HEAD"]) == 0
     # A merge's base row is the higher parent's: a row the other side already carried is not new or raised.
     git("checkout", "-q", "-b", "side", base)
-    commit({"middleware/pkg/pkg/d.py": "w = 1\n" * 650, s.RATCHET: "# rows\n650 pkg/d.py\n"}, "side row")
+    commit({"middleware/pkg/pkg/d.py": "w = 1\n" * 650, s.RATCHET: "# rows\n650 pkg/pkg/d.py\n"}, "side row")
     git("checkout", "-q", "main")
     git("merge", "-q", "--no-edit", "side")
     assert size_range.check(git("rev-parse", "HEAD")) == []
