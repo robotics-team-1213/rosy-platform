@@ -1144,3 +1144,10 @@
 - gate 변화: 없음. 크기 단위 `recovery/junction` 1200 → 1208줄(한도 1287).
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
+## 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+
+- 변경: `line_follow/recovery/junction/approach.py` `_stamp_odometer`·`supports_lane_instruction_stamp`, `_expect_window`의 기준 인자. `gate.py` `set_junction(pose_stamp=)`: 설정 `instruction_stamp_enabled`(기본 꺼짐)가 켜져 있으면 `_odom_entry`(D-758 0)로 그 stamp에 발행된 표본을 찾고(정확한 표본만), 같은 표본의 교차로 궤적 주행 거리계(`trail.odometer_at`)를 창의 기준으로, 그 뒤 달린 거리(`trail.odometer` − 그 값)를 굽이의 처음 `travel`로 둔다. 통행권 기록의 `path_m`은 쓰지 않는다. 못 쓰면 받은 때 기준, 거절 없음: 상태 `distance_basis`·`distance_basis_reason`(none_sent·disabled·ambiguous·stale·future·no_sample·epoch). `model.py` 설정 한 줄.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 895d7f30b → 초록): stamp 뒤 0.05 m 움직인 굽이는 Fleet 자세에서 `bend_in − tol`에 시작, 창 기준은 stamp 표본의 odometer, 두 기록이 같은 odom 메시지(stamp_ns), 벽시계 ±5 s, 떨어짐 사유 넷, 설정 꺼짐 = 명령이 같음, 거리 없는 지시는 기준 없음, 능력, 잘못된 stamp. 원격(모델 PC, 9639a41b8) `middleware/core/services/test` 통과, `known_failures` 0 new, 로그 X: `instruction-stamp/services/run-1.txt`.
+- gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
+- 결정: D-767 A부 1–3항.
+- 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.

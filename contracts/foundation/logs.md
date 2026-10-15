@@ -739,3 +739,10 @@
 - gate 변화: 없음.
 - 결정: D-763 조각 4.
 - 교훈: 없음.
+## 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
+
+- 변경: `protocol/controls.py` `BaseVelocityControl.lane_instruction_stamp`, `protocol/schemas.py` `LineJunctionStatus.distance_basis`·`distance_basis_reason`, `config/rosy_default.yaml` `line_follow.instruction_stamp_enabled: false`와 설명.
+- 증거: CORE·Fleet 원격 시험 통과(9639a41b8), `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부. 켜는 것은 Safety-Review·SIM 바퀴 뒤 사용자가 정한다.
+- 교훈: 없음.

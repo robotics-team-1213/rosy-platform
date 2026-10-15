@@ -1027,3 +1027,10 @@
 - 변경: `app.py` 계약 버전 표기만 v1.235. 로봇 API는 바뀌지 않았다(v1.233·v1.234는 다른 세션이 잡아 두었다).
 - 증거: `middleware/core/gateway/test/test_protocol_version_alignment.py` 원격 통과(모델 PC, 6ae1df74e), 로그 X: `work-read/b/run-1.txt`.
 - gate 변화: 없음.
+## 2026-10-15 · 1a9960df2 · POST /line-follow/junction 선택 필드 pose_stamp와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+
+- 변경: `api/v1/line_follow.py` `LineJunctionRequest.pose_stamp`(> 0, 유한, 아니면 400)를 `set_junction`에 넘긴다. `api/v1/system.py` 능력 `lane_instruction_stamp`. `app.py` 계약 v1.241(9639a41b8).
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py` `test_d767_pose_stamp_validation_and_record`, `test/test_line_follow_contract_docs.py`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 1·4항. v1.238–v1.240은 다른 작업이 선점했다.
+- 교훈: 없음.

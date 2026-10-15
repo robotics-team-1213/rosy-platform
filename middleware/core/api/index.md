@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 1a9960df2 · POST /line-follow/junction 선택 필드 pose_stamp와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
 - 2026-10-15 · 868461505 · 계약 버전 v1.235 (D-763 조각 4)
 - 2026-10-15 · 7334f9c40 · 계약 버전 v1.236
 - 2026-10-15 · 84f0c8456 · PUT /trip-lease job_id, 주인 아닌 IDLE은 lease를 끝낸다 (D-763 조각 6, API v1.236)
 - 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.232 → v1.234 (main 병합)
-- 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.231)
