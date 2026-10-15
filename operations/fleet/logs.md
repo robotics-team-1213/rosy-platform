@@ -3839,3 +3839,11 @@
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 10 (c).
 - 교훈: 없음.
+
+## 2026-10-15 · d6d84dffd · 크기: `trip_checks`를 두 단위로 — `trip_progress` 보관 자리
+
+- 변경: main 병합 뒤 `trip_checks` 474(한도 422, 이 브랜치의 D-763 10항 (c) +53). 판정 문구대로 수용하지 않고 `trip_progress.py`를 바이트 그대로 새 `server/trip_progress/`(`SERVER_HOLDERS`, 크기 단위, 판정 제안·독립 재판정 필요)로 옮겼다. import는 그대로다. `trip_checks` 338(기준 192, 한도 342), `trip_progress` 136(기준 80, 한도 230).
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: `docs/plans/2026-10-15-fleet-ledger-trips-unit.md` 2026-10-15 부기.
+- 교훈: 없음.

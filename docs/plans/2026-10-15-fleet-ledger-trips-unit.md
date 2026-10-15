@@ -55,9 +55,10 @@ D-757 판정 커밋 `61aa49b32`에서 앞의 계획과 같은 방법(그 커밋�
 
 판정 상태: 독립 재판정 전이다.
 
-## 부기 2026-10-15 — `trip_checks` 재판정 제안(feat/regulation-capabilities)
+## 부기 2026-10-15 — `trip_checks`를 두 단위로 나눈다(feat/regulation-capabilities)
 
-- 무엇: 브랜치 `feat/regulation-capabilities`(D-763 10항 (c), API v1.238)가 main `0cf827362`과 병합한 뒤 `trip_checks`는 474줄(`trip_admission.py` 338, `trip_progress.py` 136)로 한도 422(272+150)를 넘는다. main은 421이었다. 늘어난 53줄은 모두 `trip_admission.py`의 D-763 10항 (c)다: 횡단보도 구간 검사 `crosswalks_on`, 신호 구간 걷기 `signals_on`(`traffic` 단위가 자라지 않게 여기 둔다), `_caps_checks`의 규제 능력 검사와 `regulation_caps_unknown` 경고, 운영자 재계획 확인의 `_admit_replan`.
-- 제안: 판정값을 474로 다시 잡는다. 위 「그대로 두는 것」의 "다음 증가는 두 단위로, 수용으로 넘기지 않는다"와 어긋나므로 독립 재판정이 필요하다. 재판정이 거절하면 이 브랜치는 착지 전에 시작 검사(`trip_admission`)와 진행 판정(`trip_progress`)을 두 단위로 나눈다.
-- 이 브랜치가 앞서 만든 같은 이름의 `server/trip_checks`와 `2026-10-14-fleet-ledger-size-unit.md` 부기는 병합에서 main의 것으로 대체했다(폴더·`SERVER_HOLDERS`·`SIZE_UNITS`·`platform_parts`는 main 그대로).
+- 왜: 브랜치 `feat/regulation-capabilities`(D-763 10항 (c), API v1.238)가 main `0cf827362`과 병합한 뒤 `trip_checks`는 474줄(`trip_admission.py` 338, `trip_progress.py` 136)로 한도 422(272+150)를 넘었다. main은 421이었다. 늘어난 53줄은 모두 `trip_admission.py`의 D-763 10항 (c)다: `crosswalks_on`, `signals_on`(`traffic` 단위가 자라지 않게 여기 둔다), `_caps_checks`의 규제 능력 검사와 `regulation_caps_unknown` 경고, 운영자 재계획 확인의 `_admit_replan`.
+- 무엇: 위 「그대로 두는 것」이 정한 대로 수용하지 않고 나눈다. `trip_progress.py`를 바이트 그대로 새 보관 자리 `operations/fleet/fleet/server/trip_progress/`로 옮기고 `SERVER_HOLDERS`, `platform_parts.yaml`, `FLEET_SERVER_HOLDER_UNITS`, `SIZE_UNITS`, 배포 자원 시험, 신원 경계 시험의 glob에 더한다. import(`fleet.server.trip_progress`)는 그대로다. `trip_checks`는 시작 검사 `trip_admission.py` 하나만 갖는다.
+- 기준선(D-757 판정 커밋 `61aa49b32`에서 잼, 다시 잡지 않음): `trip_checks` 192(지금 338, 한도 342), `trip_progress` 80(지금 136, 한도 230).
+- 다음 증가: `trip_checks`는 규제 검사(`crosswalks_on`, `signals_on`, 10항 (c) 검사)를 자기 단위로, `trip_progress`는 기다림 판정(`_waiting`, `_wait_bound`)을 자기 단위로 낸다. 수용으로 넘기지 않는다.
 - 판정 상태: 독립 재판정 전이다.
