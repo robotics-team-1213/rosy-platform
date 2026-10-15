@@ -28,7 +28,7 @@ ROSY_SIM_HOSTS="rosy@100.98.162.71=model ai@100.108.76.123=ai" \
 
 - 커밋: `6268b8b71`, `5cba01019`, `ca7be811d`, 이 문서. 착지·푸시 안 함.
 - 원격 회귀: 관련 8개 파일 exit 0, `known_failures` NEW 0 (`X:/DevTemp/sim-multi/pytest-2/run-1.txt`, 모델 PC). 첫 실행(`pytest-1`)에서 launch 인자 기본값 누락 NEW 2를 잡아 `5cba01019`로 고쳤다.
-- 실제 Gazebo 실행: 이 문서 커밋 시점에 첫 실행 `run-1`(AI PC, `--render cpu`, remote_sim ai 상한 4 CPU/4 GB)이 진행 중이다. 결과는 `X:/DevTemp/sim-multi/run-1.out`과 `run-1/out/trips/result.json`. 그때까지 두 시험 PC 모두 sim 하한(6 cores/8 GB) 아래였다.
+- 실제 Gazebo 실행 `run-1`(AI PC, ca7be811d, `--render cpu`, ai 상한 4 CPU/4 GB): 빌드·두 CORE 응답·두 로봇 Fleet `LOCALIZED`(D-725 native pose)·두 카메라 front status가 모두 참이었다. 두 계획은 200이었지만 출발이 `422 TRIP_MODE_UNSUPPORTED {reason: LANE_END_NOT_A_PLACE}`로 거절돼 아무도 움직이지 않았다. 차선 trip의 끝은 장소여야 한다. `48b5c9c85`가 trip 끝마다 stop 장소를 site map 1판에 미리 넣는다. 그 커밋으로 다시 도는 `run-2`는 두 시험 PC가 sim 하한(6 cores/8 GB) 아래라 아직 시작하지 못했다. `X:\DevTemp\sim-multi\wait-and-run.sh 2`가 2분마다 확인하다가 자리가 나면 시작한다. 로그는 `X:\DevTemp\sim-multiun-N\out	rips\`.
 
 ## 남은 일
 
