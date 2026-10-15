@@ -583,3 +583,35 @@ def test_guard_round_runs_first_and_stops_on_new(repos, monkeypatch, files, call
     monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
     assert land.main(["--tests", "auto"]) == code
     assert calls == calls_expected
+
+
+def test_logs_md_side_reordering_base_entries_refuses():
+    a, b = dated("2026-10-13", "a"), dated("2026-10-14", "b")
+    base = "# docs logs\n" + a + b
+    ours = base + dated("2026-10-15", "branch")
+    theirs = "# docs logs\n" + b + a  # main's entries swapped: not ours to move
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+def test_logs_md_same_new_entry_on_both_sides_is_written_once():
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    picked = dated("2026-10-14", "picked")
+    ours = base + picked + dated("2026-10-15", "branch")
+    theirs = base + picked
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode() == ours
+
+
+def test_logs_md_both_sides_inserting_mid_file_refuses():
+    a, b = dated("2026-10-13", "a"), dated("2026-10-15", "b")
+    base = "# docs logs\n" + a + b
+    ours = "# docs logs\n" + a + dated("2026-10-14", "x") + b
+    theirs = "# docs logs\n" + a + dated("2026-10-14", "y") + b
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+def test_logs_md_entry_older_than_the_last_base_entry_stays_below_it():
+    base = "# docs logs\n" + dated("2026-10-13", "a") + dated("2026-10-15", "b")
+    theirs = base + dated("2026-10-16", "peer")
+    ours = base + dated("2026-10-14", "late")
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode() == (
+        base + dated("2026-10-14", "late") + dated("2026-10-16", "peer"))
