@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.238
+**Version:** v1.239
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.239 Fleet 통행권 아래의 교차로 무응답은 대기, 통행권 HOLDING 대기는 회전·호 시계를 세운다 (D-620 노트 2026-10-15, D-760 개정 4)
+
+요청·응답·상태 필드 변경 없음. 동작 변경(Behavioural)이다.
+
+- **교차로 신호(§7.3.1).** CORE가 D-517 통행권을 강제하는 동안(`authority_required`, 이 세션에 받은 통행권, 본 trip lease; 모드를 바꿀 때까지 유지) 응답이 한 번도 없는 정지 에피소드는 3초가 지나도 우측을 고르지 않고 0으로 서서 기다린다(`signal_state: waiting`, `regulation_wait`, CORE journal 한 줄). `green && may_enter:true` 2초 이내 답은 그대로 진입을 고른다. trip 밖의 감독 시험은 v1.203 그대로다.
+- **회전·호 시계.** 교차로 기동의 단계 시계와 D-520 호의 기한은 통행권이 `HOLDING`(Fleet이 살아서 기다리라고 함)인 앞뒤 두 틱마다 그 시간을 전부 더한다. `NONE`·`EXPIRED` 통행권과 횡단보도 살핌·기다림·건넘 몫은 지금처럼 한 지시(호)에 `crosswalk_report_s + crosswalk_clear_s`(15 s)까지다. 그 뒤 `timeout`/`lane_arc_timeout`으로 선다.
 
 ### v1.238 규제 능력 `lane_crosswalk_gate`·`lane_junction_signal`과 trip 시작 거절 (D-763 10항 (c))
 
@@ -1195,6 +1202,8 @@ CORE는 `green && may_enter:true`인 수신 후 2초 이내 답을 우측 진입
 적색·미확인·진입 불허·만료 답·잘못된 상관 답·Fleet ERROR·pairing 거부는 대기한다.
 실제 회전 전 적색은 fallback도 취소한다. 이전 ID·OFF·회전 시작 뒤 답은 다음 회전을 만들지 않는다.
 모든 CORE 회전/장애물/횡단보도/통행권/정지 검사는 유지한다. 무응답 fallback은 현장 감독 시험에 한정한다.
+v1.239: Fleet 통행권 아래(`authority_required`, 이 세션의 통행권, 본 trip lease)에서는 무응답이어도 우측을 고르지 않고 대기한다(D-620 노트 2026-10-15).
+v1.239: 교차로 기동·호 시계는 통행권 `HOLDING` 대기를 전부 더하고, `NONE`·`EXPIRED`와 횡단보도 몫은 15 s까지만 더한다(D-760 개정 4).
 
 상태 API의 `line_follow.junction`에 선택 필드 `signal_request_id`와 `signal_state`를 추가한다.
 상태는 `waiting|red|unknown|green|fallback|entered` 또는 `null`이다.
@@ -3059,6 +3068,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.239 | 2026-10-15 | Behavioural (D-620 노트 2026-10-15, D-760 개정 4, fix/signal-no-fallback-on-trip, Safety-Review 대상): Fleet 통행권 강제 중(trip lease·통행권·`authority_required`) 교차로 무응답 정지 에피소드는 3초 우측 fallback 없이 대기; 교차로 기동·D-520 호 시계는 통행권 `HOLDING` 대기를 상한 없이 더하고 `NONE`·`EXPIRED`·횡단보도 몫은 15 s 상한 유지. 필드 변경 없음. v1.237·v1.238은 다른 작업이 선점했다. |
 | v1.238 | 2026-10-15 | Additive (D-763 10항 (c), feat/regulation-capabilities): 능력 `base_velocity.lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`)·`lane_junction_signal`(`junction_signal_enabled`), 없으면 꺼짐. Fleet trip 시작·바퀴·재계획이 횡단보도·신호 구역을 지나는 lane 경로를 그 능력이 `false`인 로봇에 422 `TRIP_REGULATION_CAPS_MISSING` `{missing}`로 거절, 필드 없는 옛 CORE는 `detail.regulation_caps_unknown` 경고와 함께 시작 |
 | v1.237 | 2026-10-15 | Additive (D-763 조각 4, feat/fleet-work-read-sources): `GET /api/fleet/work`에 `trip`·`cell_job` 출처, 행의 `visible_state`·`wait`·`approval`, 응답의 `cell_jobs_available`·`kinds`. 두 사람 승인 `PROPOSED` Cell Job 요약 행은 제안하지 않은 이름 있는 운영자에게 보인다(개정 2 질문 6). 상세·본문 범위, 원장 상태, envelope 1.0 변경 없음. |
 | v1.236 | 2026-10-15 | Additive (D-763 조각 6, feat/fleet-job-holds-lease): `PUT /api/v1/trip-lease` 선택 필드 `job_id` — 작업의 lease는 단계 사이 IDLE에서 끝나지 않는다. 주인 아닌 토큰의 `POST /mode {IDLE}`는 어떤 lease든 끝낸다(`mode_left`). 상태 `trip_lease.job_id`, 능력 `base_velocity.trip_lease_job`. 통행권·목표 임대의 만료는 그대로다. v1.233–v1.237는 다른 작업이 선점했다. envelope 1.0 변경 없음. |
