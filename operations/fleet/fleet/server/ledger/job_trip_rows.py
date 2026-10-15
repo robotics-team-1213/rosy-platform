@@ -12,13 +12,14 @@ from __future__ import annotations
 import hashlib
 from contextlib import closing
 
-from fleet.server.cell_job_store import CellJobStore
+from fleet.server.cell_job_store import CANCELLED_REASON, CellJobStore
 from fleet.server.dispatch_admission import release as release_claims, reserve as reserve_claims
 from fleet.server.mission_store import MissionConflict, _json, _now
 from fleet.server.trip_ports import TripError
 
 KIND = "TRIP"
 ACTIVE = ("READY", "RUNNING", "ACTION_SUCCEEDED")
+ADMISSIONS = ("CELL_JOB_ADMITTED", "CELL_JOB_RESUMED")  # a named operator's approval
 
 
 class TripJobRows:
@@ -122,9 +123,25 @@ class TripJobRows:
             event_key=f"trip-hold:{job['current_step_index']}:{CellJobStore._approvals(connection, job)}")
         return True
 
+    def uncased(self) -> list:
+        """HOLD trip jobs whose newest hold has no case yet (any writer: this loop, the stop latch, a restart)."""
+        with closing(self.store._connect()) as connection:
+            return [dict(row) for row in connection.execute(
+                "SELECT j.mission_id, j.instance_id, j.reason, e.event_id, e.detail_json FROM fleet_cell_jobs j "
+                "JOIN fleet_cell_events e ON e.event_id=(SELECT MAX(event_id) FROM fleet_cell_events WHERE "
+                "mission_id=j.mission_id AND event_type IN ('CELL_JOB_HELD', 'CELL_JOB_STARTUP_HOLD')) "
+                "WHERE j.status='HOLD' AND j.reason!=? AND EXISTS (SELECT 1 FROM fleet_cell_steps s WHERE "
+                "s.mission_id=j.mission_id AND s.action_kind=?) AND NOT EXISTS (SELECT 1 FROM fleet_cell_events c "
+                "WHERE c.event_key=j.mission_id || ':case:' || e.event_id)", (CANCELLED_REASON, KIND))]
+
+    def cased(self, mission_id: str, held_event_id: int) -> None:
+        self._write(mission_id, lambda connection, job: CellJobStore._event(
+            connection, mission_id, job["current_step_index"], "TRIP_JOB_CASE_OPENED", "fleet",
+            {"event_id": f"case:{held_event_id}"}))
+
     def hold(self, mission_id: str, reason: str, detail: dict) -> bool:
         """HOLD an active job (claim HELD, its reason and detail in the event); False when it is not active."""
         return self._write(mission_id, lambda connection, job: self._held(connection, job, reason, detail))
 
 
-__all__ = ["ACTIVE", "KIND", "TripJobRows"]
+__all__ = ["ACTIVE", "ADMISSIONS", "KIND", "TripJobRows"]
