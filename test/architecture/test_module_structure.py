@@ -87,6 +87,7 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md,
 #: docs/plans/2026-10-10-fleet-localization-size-unit.md
 #: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
+#: docs/plans/2026-10-14-fleet-ledger-size-unit.md (incl. its 2026-10-15 trip_checks addendum)
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("drive/behaviors/line_follow",
@@ -126,10 +127,11 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "perception/front_camera/perception/learned",
               "perception/front_camera/perception/drivable",
               "site_ui/console",
-              "fleet/fleet/server/ledger")
+              "fleet/fleet/server/ledger",
+              "fleet/fleet/server/trip_checks")
 
 #: Fleet server source holders (fleet/_source_layout.py SERVER_HOLDERS) registered as size units.
-FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger",)
+FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger", "fleet/fleet/server/trip_checks")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -501,7 +503,21 @@ SIZE_VERDICTS = {
         "Baseline6985 is the ledger measured at the D-757 verdict commit61aa49b32; at branch base06e97383b it "
         "was7006 (+21), now7036 (+51 of +150, not rebaselined). A source holder of fleet.server, counted without "
         "__init__.py. Keep every ledger file verdict and HARD_TIER rule. At the next +150 the Mission "
-        "approval/reject routes and mission_store leave for their own subpackage, not an accept.",
+        "approval/reject routes and mission_store leave for their own subpackage, not an accept. "
+        "2026-10-15 (feat/regulation-capabilities, D-763 10 (c)): the merge with main c4cd2bf95 put the ledger at "
+        "7170 (> 7135); the trip start checks (trip_admission.py 318, trip_progress.py 136) move unchanged to the "
+        "holder unit fleet/fleet/server/trip_checks (plan addendum 2026-10-15), leaving the ledger at 6716. The "
+        "Mission split above is still owed at the next +150. Independent re-judge owed.",
+    ),
+    "fleet/fleet/server/trip_checks": (
+        454,
+        "split: proposed 2026-10-15 on feat/regulation-capabilities (D-763 10 (c)); independent re-judge owed. "
+        "The trip loop's start/lap/replan admission (trip_admission.py) and progress predicates (trip_progress.py), "
+        "mixins of TripRunner named by the trip_runner.py seam verdict, moved unchanged out of "
+        "fleet/fleet/server/ledger as a fleet.server source holder (SERVER_HOLDERS, no __init__.py). Same names, "
+        "same imports (fleet.server.trip_admission), no new owner, transport or robot command path. See "
+        "docs/plans/2026-10-14-fleet-ledger-size-unit.md (2026-10-15 addendum). The same folder name is the one "
+        "feat/fleet-work-read-sources proposes. Re-judge after +150.",
     ),
     "fleet": (
         31_837,

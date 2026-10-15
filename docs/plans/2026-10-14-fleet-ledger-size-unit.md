@@ -56,3 +56,13 @@ D-757 판정 커밋 `61aa49b32`에서 `site_ui/console` 계획과 같은 방법(
 `test/architecture/test_module_structure.py`의 실측(`test_over_budget_code_has_a_recorded_verdict`, `test_size_units_are_real_subpackages_with_a_split_plan`, `test_size_verdicts_are_well_formed_and_current`)을 원격 시험 PC에서 돌린다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
 
 판정 상태: 2026-10-14 독립 재판정 ACCEPT WITH CONDITIONS(기준선 재계산 일치). 조건: 위 한도 문장 정정, 센 접미사 명시, `FLEET_SERVER_HOLDER_UNITS` ⊆ `SERVER_HOLDERS` 시험, 코드 조각이 계획보다 먼저 커밋된 순서의 기록, 서버 단위의 다음 조각 순증 0.
+
+## 부기 2026-10-15 — trip 시작 검사의 단위 `fleet/fleet/server/trip_checks`
+
+- 무엇: `ledger/trip_admission.py`(318줄)와 `ledger/trip_progress.py`(136줄)를 내용 그대로 `operations/fleet/fleet/server/trip_checks/`로 옮기고 `SERVER_HOLDERS`에 `trip_checks`를 더한다. 모듈 이름과 import(`fleet.server.trip_admission`, `fleet.server.trip_progress`)는 그대로다. `__init__.py`는 두지 않는다(위 「무엇을 단위로 하는가」와 같은 이유).
+- 왜: 브랜치 `feat/regulation-capabilities`(D-763 10항 (c))가 main `c4cd2bf95`와 병합한 뒤 원장 단위가 7,170줄로 한도 7,135(6,985+150)를 넘었다. 이 브랜치의 몫은 `trip_admission.py`의 횡단보도·신호 검사다. 두 파일은 `trip_runner.py` 판정이 이미 이름 붙인 경계(시작 검사와 진행 판정, 2026-10-07 seam 계획)이고, `TripRunner`가 섞어 쓰는 mixin이다.
+- 줄 수: 원장 7,170 → 6,716. 새 단위 454(판정값), 한도 604. 서버 `fleet` 단위는 바뀌지 않는다.
+- 위의 Mission 분리 의무(다음 +150에서 Mission 승인·거절 경로와 원장)는 그대로 남는다. 이 부기는 그것을 대신하지 않는다.
+- 같은 폴더 이름(`trip_checks`)을 브랜치 `feat/fleet-work-read-sources`가 제안했다(`2026-10-15-fleet-ledger-trips-unit.md`). 두 브랜치는 같은 파일을 같은 자리로 옮기므로 병합에서 이름 바꾸기가 겹치지 않는다. 판정 문구와 이 부기는 뒤에 착지하는 쪽이 합친다.
+- D-766(줄 수 한도는 넘으면 나눈다)의 시험 조각이 착지하기 전이라 지금 시험(판정값 +150)이 그대로 돈다. 나누기 커밋은 단독으로 크기 검사를 통과한다.
+- 판정 상태: 독립 재판정이 아직 없다(owed).

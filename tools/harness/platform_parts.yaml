@@ -475,6 +475,7 @@ roots:
       fleet/server/auth: fleet.server
       fleet/server/console: fleet.server
       fleet/server/ledger: fleet.server
+      fleet/server/trip_checks: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations
