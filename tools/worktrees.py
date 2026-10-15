@@ -58,7 +58,7 @@ STALE_LOCK = 30 * 60  # seconds after which another run's prune lock is taken ov
 TYPES = ("feat", "fix", "refactor", "docs", "uiux")  # D-372
 # Ignored directories that are rebuilt, not written by hand, at any depth; `*.egg-info` by suffix.
 CACHES = {"__pycache__", ".pytest_cache", "node_modules", ".ruff_cache", ".mypy_cache", ".gradle", ".kotlin",
-          ".cxx", ".venv", "graphify-out"}
+          ".cxx", ".venv", "graphify-out", ".omc"}  # .omc: hook session state, dies with the worktree
 # Caches only at the worktree root or where a marker proves it (see _generated_beside).
 GENERATED = {"build", "install", "log", "dist"}
 BUSY = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
