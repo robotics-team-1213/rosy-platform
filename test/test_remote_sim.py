@@ -153,6 +153,30 @@ def _bash(script, **env):
 
 
 @BASH
+@pytest.mark.parametrize("installer_rc", [0, 7])
+def test_inner_installs_contracts_before_the_bench_and_stops_on_failure(tmp_path, installer_rc):
+    installer = tmp_path / "deploy/robot/pinky_pro/image/install-motion-contracts.sh"
+    installer.parent.mkdir(parents=True)
+    installer.write_text('set -e\nexit_code=${INSTALLER_RC}\n[ "$exit_code" = 0 ] || exit "$exit_code"\n'
+                         'site="$2/lib/python$(python3 -c \'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")\')/site-packages"\n'
+                         'mkdir -p "$site"\necho "READY = True" > "$site/installed_contract_probe.py"\n')
+    roots = tmp_path / "tools/harness/colcon_roots.py"
+    roots.parent.mkdir(parents=True)
+    roots.write_text('print(".")\n')
+    out = tmp_path / "out"
+    out.mkdir()
+    # Substitute only external ROS/build/cache prerequisites; execute the install and bench wiring.
+    script = ('source() { :; }; colcon() { :; }; cd "$WORKSPACE"\n'
+              + rs.INNER.replace(rs.DEPS, "")
+              + '\n')
+    result = _bash(script, WORKSPACE=str(tmp_path), OUT=str(out), PYDEPS=str(tmp_path / "deps"),
+                   CPUS="1", INSTALLER_RC=str(installer_rc),
+                   BENCH_CMD="python3 -c 'import installed_contract_probe as p; assert p.READY; print(\"BENCH_READY\")'")
+    assert result.returncode == installer_rc, result.stderr
+    assert ("BENCH_READY" in result.stdout) == (installer_rc == 0)
+
+
+@BASH
 def test_swarm_bench_waits_for_robots_yaml_instead_of_dying_on_the_first_look(tmp_path):
     """INNER runs benches under `set -eo pipefail`; a failed `ls | head` must not end the wait loop."""
     script = ('set -eo pipefail\nros2() { echo "ros2 $*"; }; sleep() { :; }; seq() { echo 1 2 3; }\n'
