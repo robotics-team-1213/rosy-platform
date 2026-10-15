@@ -299,7 +299,10 @@ def test_resource_claims_show_owners_only_to_who_may_see_them(tmp_path):
         assert response.status_code == 200, response.text
         return {(claim["resource_kind"], claim["resource_id"]): claim for claim in response.json()["claims"]}
 
+    purges = []
+    client.app.state.proposal_store.purge_expired = lambda **kwargs: purges.append(kwargs) or 0
     shown, own, other = claims("viewer-secret"), claims("op1-secret"), claims("op2-secret")
+    assert purges == []  # N1: a poll of three legacy rows takes no write lock
     assert set(shown) == set(own) == set(other) and ("object", "block-1") in shown
     assert all(set(claim) == {"resource_key", "resource_kind", "resource_id", "phase"} for claim in shown.values())
     assert own[("object", "block-1")]["owner_id"] == mission
