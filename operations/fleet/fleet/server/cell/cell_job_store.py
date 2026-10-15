@@ -18,7 +18,7 @@ from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import step_action_kind, step_grant_digest
-from . import cell_sheet_checkpoints as sheets
+from . import cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 
 _MIGRATION_VERSION = 1
@@ -106,26 +106,6 @@ class CellJobStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS fleet_cell_steps (
-                    mission_id TEXT NOT NULL REFERENCES fleet_cell_jobs(mission_id),
-                    step_index INTEGER NOT NULL CHECK(step_index >= 0),
-                    step_id TEXT NOT NULL UNIQUE,
-                    action_kind TEXT NOT NULL CHECK(action_kind='CELL_TRANSFER'),
-                    step_json TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN (
-                        'WAITING', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
-                        'GOAL_CONFIRMED', 'HOLD'
-                    )),
-                    action_id TEXT,
-                    attempt_id TEXT,
-                    request_digest TEXT,
-                    grant_json TEXT,
-                    result_json TEXT,
-                    goal_evidence_json TEXT,
-                    reason TEXT,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY(mission_id, step_index)
-                );
                 CREATE TABLE IF NOT EXISTS fleet_cell_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_key TEXT NOT NULL UNIQUE,
@@ -136,10 +116,9 @@ class CellJobStore:
                     detail_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS fleet_cell_steps_status
-                    ON fleet_cell_steps(status, updated_at);
                 """
             )
+            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
             connection.execute(
                 "INSERT OR IGNORE INTO fleet_component_migrations(component, version, applied_at) "
                 "VALUES ('cell_jobs', ?, ?)", (_MIGRATION_VERSION, _now()),
