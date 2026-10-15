@@ -66,6 +66,16 @@ host paths in private configuration. Stop the previous producer for that exact
 camera before starting the unit, and verify advancing fresh frames and measured
 format after start. Arm drivers and their admission profiles remain separate.
 
+The selected native ROS installation must already provide `rclpy`, `sensor_msgs`,
+`cv_bridge`, and OpenCV's `cv2` (`python3-opencv`); verify those imports with
+`/usr/bin/python3` after sourcing `ROSY_ROS_SETUP`. The optional standalone
+preview is not provisioned by the disabled adapter profile or workstation image.
+For boot activation, enable the user units and verify `loginctl show-user
+<camera-user> -p Linger` reports `Linger=yes`. A unit active during login alone
+does not prove boot activation. Capture buffer size must read back as one;
+host-receive stamps do not measure sensor exposure age. Test actual USB
+unplug/replug and cold boot on site before accepting unattended operation.
+
 ## Build and shell profiles
 
 The hardware profile takes `OMX_ROS_DOMAIN_ID` and
