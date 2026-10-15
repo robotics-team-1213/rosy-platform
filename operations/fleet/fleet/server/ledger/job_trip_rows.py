@@ -118,9 +118,12 @@ class TripJobRows:
     def _held(connection, job, reason: str, detail: dict) -> bool:
         if job["status"] not in ACTIVE:
             return False
+        # Keyed by the count of earlier holds: a resume under an unchanged fence adds no new event to count on.
+        holds = connection.execute("SELECT COUNT(*) FROM fleet_cell_events WHERE mission_id=? AND "
+                                   "event_type='CELL_JOB_HELD'", (job["mission_id"],)).fetchone()[0]
         CellJobStore._hold_in_transaction(
             connection, job, reason=reason[:96], claim_phase="HELD", actor_id="fleet", detail=detail, strict=False,
-            event_key=f"trip-hold:{job['current_step_index']}:{CellJobStore._approvals(connection, job)}")
+            event_key=f"trip-hold:{job['current_step_index']}:{holds}")
         return True
 
     def uncased(self) -> list:
