@@ -8538,3 +8538,10 @@ osy-d395-s1d\`.
 - 변경: 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
 - 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
 - gate 변화: 없음. 새 목표의 물리 제어·정지·보정·왕복 수용은 미완료다.
+
+## 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
+
+- 변경: (1) `tools/land_logs.py`가 logs.md 충돌을 `## ` 항목 단위로 푼다. 머지 base와 항목을 다중집합으로 비교해 base 항목을 고치거나 지운 쪽만 사람에게 넘기고, 한쪽(항목을 끼워 넣거나 옮긴 쪽, 없으면 main)의 순서를 지킨 채 다른 쪽의 새 항목을 날짜 순서로 마지막 base 항목 뒤에 끼운다. 자기 항목을 손으로 옮긴 브랜치도 다음 착지에서 풀린다. (2) `tools/land_guards.py`: `--tests auto` 회차는 `test/architecture`와 `test/test_harness_contracts.py`를 먼저 돌리고 NEW면 긴 회차 전에 멈춘다. 선택이 이미 가드뿐이면 건너뛴다. (3) `remote_pytest.placed_hosts`가 `private/lab-hosts.json`의 `tailscale_profile`과 `tailscale switch --list`의 `*` 행을 비교해 다르면 두 프로필과 `tailscale switch <id>`를 찍고 끝낸다. 자동으로 바꾸지 않는다. 키나 CLI가 없으면 건너뛴다.
+- 증거: 원격 `test/test_land.py`, `test/test_remote_pytest.py` 통과(X:/DevTemp/land-fixes). 착지·푸시 안 함.
+- gate 변화: 가드 실패가 FULL 회차(~25분) 전에 드러난다. 운영자는 lab-hosts.json에 `"tailscale_profile": "665e"`를 넣어야 확인이 켜진다.
+- 결정: 없음.
