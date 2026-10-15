@@ -109,6 +109,12 @@ if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 
 fi
 printf '%s\n' "$SAFETY_OUT"
 
+# D-766 2: every pushed commit passes the size rule on its own (git only, no tests).
+if [ -f tools/harness/size_range.py ]; then
+  echo "[pre-push] size rule per commit on origin/main..${PUSH_SHA:0:10}"
+  "$PY" tools/harness/size_range.py origin/main "$PUSH_SHA" || exit 1
+fi
+
 FAST_SUITES=(
   test/test_harness_contracts.py
   test/architecture/test_module_structure.py

@@ -241,7 +241,7 @@ A grep is a candidate generator only. Applying it and stopping there is what pro
 
 Each cites an in-tree counter-example, because an anti-criterion without one is just an opinion.
 
-- **X1 — line count.** `rosy_core/waypoints/manager.py` is 85 lines and is a package; `rosy_core/docking/manager.py` is 511 lines and is correctly one file. *(D-168 P6: line count alone still justifies nothing, but past the 600-line budget a verdict must be recorded.)*
+- **X1 — line count.** `rosy_core/waypoints/manager.py` is 85 lines and is a package; `rosy_core/docking/manager.py` is 511 lines and is correctly one file. *(D-168 P6: line count alone still justifies nothing, but past the 600-line budget a verdict must be recorded.)* *(2026-10-15, D-766: superseded. Past the limit the file or unit is split; line count decides when, C1/C2/C5/B decide where.)*
 - **X2 — symmetry.** `rosy_core/maps.py` is the last feature that is a top-level module rather than a package. That is an observation, not a defect; it stays a module because B2 is false.
 - **X3 — speculative work.** `deploy/robot/config/capabilities.{core,motor,hardware}.yaml` all say `slam: false` and nothing deployed starts slam_toolbox, so a `mapping/` package would have no runtime to be verified against. Pre-building a home for unscheduled work is how empty packages happen.
 - **X4 — test file size.** `src/rosy_core/test/test_docking.py` is 1157 lines. That is coverage, not debt. Never split production code to shorten a test file.
