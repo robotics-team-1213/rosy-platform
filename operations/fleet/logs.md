@@ -3854,6 +3854,26 @@
 - gate 변화: 없음.
 - 결정: `docs/plans/2026-10-15-fleet-ledger-trips-unit.md` 2026-10-15 부기.
 - 교훈: 없음.
+## 2026-10-15 · 7f3bd72a1 · 제안 읽기는 Cell Job 상세 범위를, 채널 제출·승인은 이름 있는 운영자를 (D-763 조각 4 리뷰)
+
+- 변경: `GET /api/fleet/proposals/{id}`가 Cell Job 제안을 `GET /api/fleet/cell-jobs/{id}`와 같은 범위·가림으로 읽는다(두 경로가 한 도우미 `cell_job_view`를 쓴다). 이전에는 운영자 누구나 남의 Cell Job 제안을 읽었고 응답의 `mission`에 `proposal_principal_id`가 실렸다. 이제 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만 읽고 나머지는 404 `PROPOSAL_NOT_FOUND`다. 레거시 Mission 제안은 그대로 제안자만. `POST /api/fleet/channel-requests/{id}/admit`·`/submit`은 `require_named_operator`다(직접 Mission admit·`/goal`과 같다). API 참조의 세 경로 인증 문구, 버전 머리는 그대로.
+- 증거: 원격(모델 PC, 7f3bd72a1) `operations/fleet/test` exit 0(293 skipped, 브라우저 opt-in), `test/architecture` exit 0, `known_failures` 둘 다 0 new, 로그 X: `proposal-scope/fleet/run-1.txt`, `proposal-scope/arch/run-1.txt`. 고치기 전 빨강 X: `proposal-scope/red/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 리뷰. API 변경 이력 번호는 착지 때 정한다.
+
+## 2026-10-15 · c0c7fb706 · Cell Job 제안자 가림을 모든 응답에, 자원 claim 읽기는 역할별로, API v1.240 (D-763 조각 4 보안 리뷰 L1/L2)
+
+- 변경: 가림을 모듈 수준 `redact_cell_job(job, principal)`로 옮기고 Cell Job을 돌려주는 모든 응답(제안 읽기, Cell Job 상세, Mission admit·reject, Cell Job reconcile·resume·cancel)에 쓴다. 제안자 아닌 호출자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`다. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. API 참조 v1.240(머리, 변경 이력 행, 해당 경로 행), 버전을 고정한 시험 다섯 곳과 `core_api_web` app.py 설명. 시험: 숨긴 id의 404 본문이 없는 id와 같음, 제안자 사건이 두 읽기에서 `proposer`, 실제 `build_role_guards`와 `install_channel_feature`로 이름 없는 운영자의 채널 admit 403, L1/L2.
+- 증거: 원격(AI PC, 2a2c1871a) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet4/run-1.txt`. 원격(165a1d95d) `test/architecture`, `test/test_line_follow_contract_docs.py`, `middleware/core/api/test` exit 0, 0 new, 로그 X: `proposal-scope/arch2/run-1.txt`. 중간 실패 2건(새 시험이 stop generation을 두 번 rearm)은 2a2c1871a에서 시험을 고쳤다, 로그 X: `proposal-scope/fleet2/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰(APPROVE 뒤 L1/L2). API v1.240은 동료와 조율해 받은 번호다.
+
+## 2026-10-15 · bbfac7c5c · claim 읽기는 행마다 쓰지 않고, 채널 submit 배선 시험, 작업이 쥔 로봇의 거절에 mission id 없음 (D-763 조각 4 보안 리뷰 N1·후속)
+
+- 변경: N1(dd0da079a) — `GET /api/fleet/resource-claims`가 레거시 Mission 주인을 기존 `get_in_transaction`으로 한 연결에서 읽는다. 행마다 `get()`이 돌리던 `purge_expired()`(SQLite 쓰기 잠금을 잡는 DELETE)가 없다. 만료 행은 None으로 읽혀 답은 같다. 후속(bbfac7c5c) — 다른 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` 세 곳(trip 시작 `trip_runner`, 작업 단계 admission `trip_admission`, lease 채택 `trip_lease`)이 그 작업의 `job_id`를 실었다. 이제 `{"reason": "job", "owner_kind": "mission"}`이다. `trip_guard.py:35`의 `lease.claimed`는 그 `job_id`의 출처이고 그 자체는 응답에 나가지 않는다. `console_view.trip_refusal`의 문구는 로봇 id만 싣는다. API 참조 v1.240 절과 이력 행에 한 줄. 시험: 실제 `build_role_guards`·`install_channel_feature`로 이름 없는 운영자의 채널 `/submit` 403과 Task 0건, purge 0회, 거절 detail에 mission id 없음. fleet 줄 수 변화 0(31,901/31,930).
+- 증거: 원격(AI PC, bbfac7c5c) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet6/run-1.txt`. N1은 dd0da079a에서 같은 결과, 로그 X: `proposal-scope/fleet5/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰 후속. API v1.240 안에 든다.
 
 ## 2026-10-15 · uncommitted · D-763 조각 7: 작업의 운행 단계가 Step 원장 안의 trip이 된다
 

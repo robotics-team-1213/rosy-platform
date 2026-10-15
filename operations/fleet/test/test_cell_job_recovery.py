@@ -208,6 +208,7 @@ def test_operator_routes_need_a_named_operator(tmp_path):
     assert resumed.status_code == 200 and resumed.json()["job"]["status"] == "READY"
     cancelled = _post(client, f"{base}/cancel", "operator-secret")
     assert cancelled.status_code == 200 and cancelled.json()["job"]["reason"] == "CANCELLED_BY_OPERATOR"
+    assert "cell-service" not in resumed.text + cancelled.text  # L1: the operator is not the proposer
     assert tasks.store.resource_claims(resource_kind="workcell", resource_id="omx_01") == []
 
 
@@ -227,7 +228,7 @@ def test_claims_read_api_names_the_owning_job_status_and_phase(tmp_path):
           {"expected_generation": generation})
     tasks.store.trip_stop_latch(actor_id="operator-1")
 
-    response = client.get("/api/fleet/resource-claims", headers={"Authorization": "Bearer viewer-secret"})
+    response = client.get("/api/fleet/resource-claims", headers={"Authorization": "Bearer operator-secret"})
 
     assert response.status_code == 200
     claims = {claim["resource_key"]: claim for claim in response.json()["claims"]}
@@ -235,6 +236,9 @@ def test_claims_read_api_names_the_owning_job_status_and_phase(tmp_path):
     for claim in claims.values():
         assert claim["owner_kind"] == "mission" and claim["mission_id"] == proposal_id
         assert (claim["job_status"], claim["job_reason"], claim["phase"]) == ("HOLD", "site_stop", "HELD")
+    viewed = client.get("/api/fleet/resource-claims", headers={"Authorization": "Bearer viewer-secret"}).json()
+    assert {tuple(sorted(claim)) for claim in viewed["claims"]} == {
+        ("phase", "resource_id", "resource_key", "resource_kind")}  # D-763 4 review: a viewer sees no owner
     assert client.get("/api/fleet/resource-claims").status_code in {401, 403}
 
 
