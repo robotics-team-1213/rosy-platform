@@ -345,15 +345,19 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
              tags=["fleet-cell-jobs"])
     def fleet_cell_job_read(mission_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
-        proposal = proposal_store.get(mission_id, principal_id=principal.principal_id)
-        if proposal is None and principal.permits_site("fleet.operate", {"operator"}):
-            proposal = proposal_store.get(mission_id)
-        if (proposal is None or proposal["candidate"].get("kind") != "cell_job"
-                or proposal["state"] != "RESOLVED"):
+        proposal = proposal_store.get(mission_id)
+        job = cell_job_store.get(mission_id) if cell_job_store is not None and proposal is not None else None
+        own = job is not None and proposal["principal_id"] == principal.principal_id
+        try:  # D-763 4 / rev 2 Q6: the work list's scope; another's PROPOSED job only to a named operator
+            seen = own or job is not None and principal.permits_site("fleet.operate", {"operator"}) and (
+                job["status"] != "PROPOSED" or bool(require_named_operator(principal)))
+        except HTTPException:
+            seen = False
+        if not seen or proposal["candidate"].get("kind") != "cell_job" or proposal["state"] != "RESOLVED":
             raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
-        job = cell_job_store.get(mission_id) if cell_job_store is not None else None
-        if job is None:
-            raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
+        if not own:  # the proposer's identity never reaches another reader; the plan stays (detail scope)
+            job = {**{key: value for key, value in job.items() if key != "proposal_principal_id"}, "events": [
+                {**e, "actor_id": "proposer"} if e["actor_id"] == job["proposal_principal_id"] else e for e in job["events"]]}
         return {"proposal_id": mission_id, "proposal_state": proposal["state"], "job": job}
 
     @app.get("/api/fleet/missions/{mission_id}", dependencies=read_guard,

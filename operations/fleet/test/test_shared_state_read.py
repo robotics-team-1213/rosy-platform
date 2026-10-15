@@ -307,8 +307,8 @@ def test_every_fleet_loop_together_reads_a_robot_at_most_3_times_a_second(tmp_pa
 # --- guard -------------------------------------------------------------------------------------
 
 #: Fleet's periodic loops (D-760 8). Excluded: swarm/session.py (K3) and one-off command paths.
-PERIODIC = ("server/app.py", "server/map_pose_service.py", "server/ledger/trip_runner.py",
-            "server/ledger/trip_ports.py", "server/lane_compliance_service.py",
+PERIODIC = ("server/app.py", "server/map_pose_service.py", "server/trips/trip_runner.py",
+            "server/trips/trip_ports.py", "server/lane_compliance_service.py",
             "server/localization_service.py", "server/path_history.py", "swarm/anchor.py",
             "server/tether_routes.py", "server/tether_watch.py",
             "server/console/console.py")
