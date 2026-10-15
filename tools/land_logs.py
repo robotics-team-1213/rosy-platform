@@ -37,9 +37,9 @@ def _date(block: bytes) -> bytes | None:
 
 def _new(base: list[bytes], side: list[bytes]) -> tuple[list[bytes], bool] | None:
     """(side's entries the base lacks, whether side kept base's blocks as a prefix), or None
-    when side dropped or rewrote a base entry (compared as multisets: moving is not editing)."""
+    when side dropped, rewrote or reordered a base entry (moving its own new entries is not editing)."""
     pending = Counter(map(_key, base))
-    if pending - Counter(map(_key, side)):
+    if pending - Counter(map(_key, side)) or [k for k in map(_key, side) if k in pending] != list(map(_key, base)):
         return None
     added = []
     for block in side:
@@ -78,6 +78,8 @@ def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     kept = list(keep)
     floor = max((i + 1 for i, x in enumerate(kept) if _key(x) in old), default=0)
     for block in extra:
+        if _key(block) in {_key(x) for x in kept}:
+            continue  # the same entry on both sides (a cherry-pick): keep one
         pos, day = len(kept), _date(block)
         while day and pos > floor and (_date(kept[pos - 1]) or b"") > day:
             pos -= 1
