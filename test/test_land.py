@@ -615,3 +615,20 @@ def test_logs_md_entry_older_than_the_last_base_entry_stays_below_it():
     ours = base + dated("2026-10-14", "late")
     assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode() == (
         base + dated("2026-10-14", "late") + dated("2026-10-16", "peer"))
+
+
+def test_main_moving_during_the_guard_round_skips_to_the_next_round(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"}, "b")
+    real, calls = land.remote_pytest.run, []
+
+    def run(inv, *a, **k):
+        calls.append(inv)
+        if len(calls) == 1:  # a peer lands while the guards run
+            commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return real(inv, *a, **k)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    assert land.main(["--tests", "auto"]) == 0
+    long_round = [["pkg/test", "test/architecture/test_rule.py"]]
+    assert calls == [[["test/architecture"]], [["test/architecture"]], long_round]

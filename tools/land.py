@@ -503,7 +503,10 @@ def land(args) -> int:
                            " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
-        summary += land_guards.first(wt, args, invocations, logdir, round_no, run_tests)  # NEW stops here
+        summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
+        if guarded and out(wt, "rev-parse", "main") != main_sha:
+            print("[land] main moved during the guard round; merging again")
+            continue
         began = time.monotonic()
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
         if note:
