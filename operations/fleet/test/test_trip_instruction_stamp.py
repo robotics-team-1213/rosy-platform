@@ -11,8 +11,9 @@ import fleet.server.trip_ports as trip_ports
 from fleet.server.console_view import trip_caps
 from test_trip_bend import BEND_CAPS, ENTRY_CAPS, SW_BEND, _bend_map, _stamped, _trip
 from test_trip_caps import _caps
-from test_trip_d507 import PIVOT, _sent_at
-from test_trip_runner import _free_map
+from fleet.swarm.transport import RobotApiError
+from test_trip_d507 import PIVOT, _sent_at, _straight_map
+from test_trip_runner import _free_map, _ticks
 
 STAMP = 1790000000.25
 LOW = {"expect_tol_min_m": 0.01}
@@ -61,3 +62,40 @@ def test_without_the_capability_or_an_odom_stamp_the_bend_keeps_its_lead(stamp_c
     fields = _trip(_bend_map(SW_BEND), caps, before=_stamped(stamp))[2].expects[0]
     assert "pose_stamp" not in fields
     assert fields["bend_in_m"] == pytest.approx(0.38, abs=0.005)      # led 0.2 m/s x 0.1 s as before
+
+
+def test_a_junction_without_a_window_carries_no_pose_stamp():
+    caps = dataclasses.replace(PIVOT, lane_instruction_stamp=True)
+    assert _sent_at(_straight_map(), caps, 0.6, pose={"odom_stamp": STAMP}).expects == [
+        {"map_id": "site", "pivot_past_line_m": 0.1}]
+
+
+def _unusable(reason):
+    return RobotApiError("rosy_60", 409, "INSTRUCTION_STAMP_UNUSABLE", f"pose_stamp cannot be used: {reason}",
+                         {"reason": reason})
+
+
+def test_an_unusable_stamp_is_sent_again_with_the_next_pose():
+    """Review: CORE refuses a stamp it cannot use; the next period sends a fresh one."""
+    caps = dataclasses.replace(ENTRY_CAPS, lane_instruction_stamp=True)
+    before = lambda runner: (_stamped(STAMP)(runner), setattr(runner._junction, "junction_error", _unusable("no_sample")))
+    runner, _, ports, _, _ = _trip(_bend_map(SW_BEND), caps, before=before)
+    view = runner.view("p1")
+    assert view["state"] == "running" and ports.sent == [] and view["detail"]["junction_retry"] == "INSTRUCTION_STAMP_UNUSABLE"
+    ports.junction_error = None
+    ports.pose = dataclasses.replace(ports.pose, odom_stamp=STAMP + 0.5)
+    _ticks(runner, ports)
+    assert ports.sent[-1][0] == "bend" and ports.expects[-1]["pose_stamp"] == STAMP + 0.5
+    assert ports.expects[-1]["bend_in_m"] == pytest.approx(0.4, abs=1e-3)
+
+
+def test_a_disabled_stamp_stops_stamping_and_the_bend_is_led_again():
+    """Review MEDIUM-2: CORE's flag is off (capability drift): this trip sends unstamped with the lead."""
+    caps = dataclasses.replace(ENTRY_CAPS, lane_instruction_stamp=True)
+    before = lambda runner: (_stamped(STAMP)(runner), setattr(runner._junction, "junction_error", _unusable("disabled")))
+    runner, _, ports, _, _ = _trip(_bend_map(SW_BEND), caps, before=before)
+    assert ports.sent == [] and runner.view("p1")["caps"]["lane_instruction_stamp"] is False
+    ports.junction_error = None
+    _ticks(runner, ports)
+    assert ports.sent[-1][0] == "bend" and "pose_stamp" not in ports.expects[-1]
+    assert ports.expects[-1]["bend_in_m"] == pytest.approx(0.38, abs=0.005)
