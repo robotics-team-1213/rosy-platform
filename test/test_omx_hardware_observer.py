@@ -6,6 +6,7 @@ import pytest
 from contextlib import contextmanager
 from types import SimpleNamespace
 import sys
+import os
 
 
 def observer():
@@ -70,11 +71,23 @@ def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch):
         destroy_node=lambda: events.append("destroy"))
     monkeypatch.setitem(sys.modules, "register_probe", SimpleNamespace(
         open_readonly_port=port, read_motors=lambda p: broken))
+    def init(**kwargs):
+        assert os.environ.get("ROS_STATIC_PEERS", "") == ""
     monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(
-        init=lambda **k: None, create_node=lambda n: node, ok=lambda: True,
+        init=init, create_node=lambda n: node, ok=lambda: True,
         shutdown=lambda: events.append("shutdown")))
     monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(
         JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
     monkeypatch.setenv("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST")
+    monkeypatch.setenv("ROS_STATIC_PEERS", "remote-peer")
     assert module.main(["--device", "/test", "--domain-id", "13", "--duration", "1"]) == 2
     assert events == ["open", "close", "destroy", "shutdown"]
+
+
+@pytest.mark.parametrize("setting", ["CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE",
+                                     "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"])
+def test_external_discovery_overrides_are_rejected_before_ros_or_serial_import(monkeypatch, setting):
+    monkeypatch.setenv(setting, "external-profile")
+    with pytest.raises(SystemExit) as error:
+        observer().main(["--device", "/test", "--domain-id", "13", "--duration", "1"])
+    assert error.value.code == 2
