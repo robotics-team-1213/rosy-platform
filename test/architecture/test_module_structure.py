@@ -543,7 +543,7 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/server/trip_progress": (
         80,
-        "split: proposed 2026-10-15 on feat/regulation-capabilities, independent re-judge owed. The trip loop's "
+        "split: proposed 2026-10-15 on feat/regulation-capabilities, independently re-judged 2026-10-15 by a read-only critic, AGREE-WITH-CONDITIONS. The trip loop's "
         "progress predicates (trip_progress.py, a TripRunner mixin) moved byte-identical out of "
         "fleet/fleet/server/trip_checks as the two-unit split that unit's verdict named; a fleet.server source "
         "holder (SERVER_HOLDERS, no __init__.py), imports unchanged (fleet.server.trip_progress). Baseline80 = "
@@ -553,13 +553,14 @@ SIZE_VERDICTS = {
     ),
     "fleet/fleet/server/trip_checks": (
         192,
-        "split: proposed 2026-10-15 on feat/regulation-capabilities, independent re-judge owed. The split the "
+        "split: proposed 2026-10-15 on feat/regulation-capabilities, independently re-judged 2026-10-15 by a read-only critic, AGREE-WITH-CONDITIONS. The split the "
         "previous text named is applied: the D-763 10 (c) growth (+53 in trip_admission: crosswalks_on, signals_on, "
         "the regulation capability check, _admit_replan) took the unit to 474 > 272+150, so trip_progress.py moves "
         "byte-identical to its own holder unit fleet/fleet/server/trip_progress and this unit keeps the start "
         "admission only. Baseline192 = trip_admission at the D-757 verdict commit61aa49b32 (measured); now 338. "
-        "Not rebaselined. Next growth past +150: the regulation checks (crosswalks_on, signals_on and the D-763 "
-        "10 (c) check) leave for their own unit, not an accept "
+        "Not rebaselined. 4 lines of room: the next change that grows trip_admission.py first moves crosswalks_on, "
+        "signals_on and the lane_crosswalk_gate/lane_junction_signal block of _caps_checks to their own holder unit "
+        "(server/trip_regulation), not an accept or rebaseline "
         "(docs/plans/2026-10-15-fleet-ledger-trips-unit.md, 2026-10-15 addendum). Previous verdict: "
         "split: D-763 slice 4 registers the trip loop's two named mixins, the start admission (trip_admission) and "
         "the progress predicates (trip_progress), carved out of trip_runner on 2026-10-10 "
