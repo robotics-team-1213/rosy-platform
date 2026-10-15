@@ -67,7 +67,7 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
         except TripError as exc:
             raise HTTPException(exc.status, detail={"code": exc.code, "detail": exc.detail}) from exc
         except MissionConflict as exc:
-            raise HTTPException(409, detail={"code": "TRIP_JOB_REFUSED", "detail": {"message": str(exc)}}) from exc
+            raise HTTPException(409, detail={"code": "JOB_ROBOT_REFUSED", "detail": {"message": str(exc)}}) from exc
     return jobs
 
 
