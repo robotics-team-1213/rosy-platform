@@ -351,10 +351,17 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
             page.locator("#work-list ui-button").filter(has_text="rosy_03").click()
             page.wait_for_function("() => document.getElementById('work-evidence').textContent.includes('도착')")
             assert "CORE" in page.locator("#work-detail").inner_text()
+            # The chosen row is drawn as chosen, with the toggle's existing pressed fill.
+            fills = page.locator("#work-list ui-button").evaluate_all(
+                "nodes => nodes.map(node => [node.getAttribute('aria-pressed'), getComputedStyle(node).backgroundColor])")
+            chosen = {fill for pressed, fill in fills if pressed == "true"}
+            assert len(chosen) == 1 and chosen.isdisjoint(fill for pressed, fill in fills if pressed != "true"), fills
             page.locator("#work-filter").select_option("cell_job")
             page.locator("#work-list ui-button").click()
             page.wait_for_function("() => document.getElementById('work-detail').textContent.includes('Cell 적재')")
             assert "packing" in page.locator("#work-detail").inner_text()
+            assert "승인 조건두 사람" in page.locator("#work-detail").inner_text().replace("
+", "")  # D-763 7, read-only
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary')?.scrollTo(0, 0)")
             stop = page.locator("#estop").bounding_box()
