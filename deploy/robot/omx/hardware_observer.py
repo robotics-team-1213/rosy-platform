@@ -67,14 +67,22 @@ def main(argv=None):
                 print(json.dumps({"sample": count, "captured_at": time.time(),
                                   "motors": rows, "motion_admitted": False}), flush=True)
                 time.sleep(max(0, .1 - (time.monotonic() - started)))
-        result = 0 if count else 2
+        result = 0 if count and time.monotonic() >= deadline else 2
     except (Exception, KeyboardInterrupt) as error:
         print(json.dumps({"error": str(error), "motion_admitted": False}), flush=True)
     finally:
-        if node is not None:
-            node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        try:
+            if node is not None:
+                node.destroy_node()
+        except Exception as error:
+            result = 2
+            print(json.dumps({"cleanup_error": str(error), "motion_admitted": False}), flush=True)
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception as error:
+            result = 2
+            print(json.dumps({"cleanup_error": str(error), "motion_admitted": False}), flush=True)
         print(json.dumps({"samples": count, "exit_code": result, "motion_admitted": False}), flush=True)
     return result
 
