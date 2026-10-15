@@ -1151,3 +1151,10 @@
 - gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
 - 결정: D-767 A부 1–3항.
 - 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.
+## 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
+
+- 변경: `recovery/junction/approach.py` `_stamp_odometer`는 `_odom_at_stamp`의 2 s 나이 상한(D-744 지도 자세용)을 쓰지 않고, 정확한 표본을 교차로 궤적이 가진 동안 쓴다. `gate.py`: 거리(창 또는 굽이) 있는 지시의 `pose_stamp`를 못 쓰면 상태를 바꾸기 전에 `JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', reason=…)`(disabled·ambiguous·future·no_sample·epoch·stale). 받은 때 기준으로 조용히 떨어지지 않는다. `pose_stamp` 없는 지시와 거리 없는 지시는 그대로.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 eb3a3e8b2 → 초록): 2.5 s 묵은 stamp도 기준, 못 쓰는 사유 다섯 × 굽이·창 거절과 상태 그대로, 설정 꺼짐 `disabled`, stamp와 받음 사이 후진이 창의 후퇴로 잡힘(이 시험은 처음부터 초록: 구현이 이미 맞았다). 원격(모델 PC) 통과, `known_failures` 0 new.
+- gate 변화: 없음. 호스트 근거만.
+- 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
+- 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
