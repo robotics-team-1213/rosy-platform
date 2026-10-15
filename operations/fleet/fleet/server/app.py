@@ -19,7 +19,7 @@ import dataclasses
 import hmac
 import logging
 import sqlite3
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
@@ -407,29 +407,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
-            power_display = getattr(app.state, "power_health_display", None)
-            if power_display is not None:
-                await power_display.aclose()
-            for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
-                               goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task, calibration_drift_task, notification_task):
-                if background is not None:
+            async with AsyncExitStack() as cleanup:
+                for resource in (getattr(app.state, "power_health_display", None), notification_http,
+                                 calibration_drift_watch, post_action_observation_source):
+                    close = getattr(resource, "aclose", None)
+                    if callable(close):
+                        cleanup.push_async_callback(close)
+                start_points = getattr(app.state, "start_points", None)
+                if start_points is not None:
+                    cleanup.callback(start_points.close)
+                backgrounds = [background for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
+                                   goal_evidence_worker, mission_feedback_scheduler,
+                                   mission_model_turn_worker_task, localization_task,
+                                   signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
+                                   lease_task, path_task, calibration_drift_task, notification_task)
+                               if background is not None]
+                for background in backgrounds:
                     background.cancel()
-                    try:
-                        await background
-                    except asyncio.CancelledError:
-                        pass
-            if notification_http is not None:
-                await notification_http.aclose()
-            if calibration_drift_watch is not None:
-                await calibration_drift_watch.aclose()
-            close_observation_source = getattr(post_action_observation_source, "aclose", None)
-            if callable(close_observation_source):
-                await close_observation_source()
-            if getattr(app.state, "start_points", None) is not None:
-                app.state.start_points.close()
+                for result in await asyncio.gather(*backgrounds, return_exceptions=True):
+                    if isinstance(result, Exception):
+                        _LOG.error("Fleet background worker failed before shutdown",
+                                   exc_info=(type(result), result, result.__traceback__))
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -619,6 +617,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         execution_pose.bind_active_map(_execution_active_map)
     app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
+    console.read_state = map_pose.state   # D-760 8: one shared REST state read per robot for every loop
     identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
@@ -763,7 +762,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
-                             junction=lane_junction or HttpLaneJunction(console.clients),
+                             junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state, map_pose.read_number),
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),

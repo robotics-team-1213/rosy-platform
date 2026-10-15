@@ -8,7 +8,7 @@ import pytest
 
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_reads
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
@@ -29,8 +29,9 @@ def _client(tmp_path, raise_server_exceptions=True, robot=None):
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
              sha256(b"viewer-token").hexdigest(): {"principal_id": "vic", "role": "viewer"}}
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
-    return TestClient(create_app(console, task_service=tasks, site_users=users, start_task_dispatcher=False),
-                      raise_server_exceptions=raise_server_exceptions)
+    app = create_app(console, task_service=tasks, site_users=users, start_task_dispatcher=False)
+    fresh_reads(app)   # the watch ticks on a fake clock, far faster than the shared read's age
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
 def test_tether_needs_a_named_operator_and_set_is_idempotent(tmp_path):

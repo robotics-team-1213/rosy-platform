@@ -242,7 +242,7 @@ def test_malformed_odom_pose_is_counted():
     assert (pose.odom_refused, pose.odom_refused_reason) == (1, "malformed")
 
 
-def test_refresh_is_coalesced_and_skipped_while_odom_is_fresh():
+def test_refresh_is_coalesced_and_skipped_while_the_last_read_is_fresh():
     wall = Wall()
     calls = []
 
@@ -251,11 +251,12 @@ def test_refresh_is_coalesced_and_skipped_while_odom_is_fresh():
         await asyncio.sleep(0)
         return state(wall.now)
 
-    service = MapPoseService(lambda: ["r1"], wall=wall, gather=gather)
+    # D-760 8: the age is Fleet's monotonic time since the read started (here the same fake clock)
+    service = MapPoseService(lambda: ["r1"], wall=wall, gather=gather, clock=wall)
 
     async def run():
         await asyncio.gather(service.refresh("r1"), service.refresh("r1"))
-        await service.refresh("r1")                              # odom 0 s old: skipped
+        await service.refresh("r1")                              # read 0 s ago: skipped
         wall.now += 0.5
         await service.refresh("r1")
 
