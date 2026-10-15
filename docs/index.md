@@ -336,8 +336,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 7e83db760 · feat(omx): bounded physical joint feedback
 - 2026-10-15 · 7c1fa973f · feat(omx): follower register inspection
 - 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
 - 2026-10-15 · uncommitted · docs(omx): 미완료 범위와 재개 인계
 - 2026-10-15 · uncommitted · docs(omx): 30분 수신과 실제 소비 경로 기록
-- 2026-10-15 · uncommitted · docs(omx): 수신기별 영상 전달 비교
