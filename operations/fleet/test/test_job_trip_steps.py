@@ -427,3 +427,116 @@ def test_a_trip_from_the_stop_its_last_trip_left_held_sends_its_first_instructio
     sent = len(ports.sent)
     _lane_ticks(runner, ports, 3)
     assert ports.sent[sent:] and ports.sent[sent][1] == "SW"   # the next instruction at the held place
+
+
+# ---- final safety review 2026-10-15 --------------------------------------------------------------
+
+def _lane_arrived(place_stop=True):
+    """A lane trip that arrived at SW: CORE keeps holding its stop."""
+    runner, store, ports = _lane_setup()
+    arc = _arc(store, "ring_w:fwd")
+    _plan(store, ports, "ring_w:fwd", 0.1, "SW")
+    asyncio.run(runner.start("p1", "bob"))
+    _lane_ticks(runner, ports)
+    for s in (arc.length_m - 0.55, arc.length_m - 0.3, arc.length_m - 0.05):
+        ports.at(arc, s)
+        _lane_ticks(runner, ports, 2)
+    return runner, store, ports, arc
+
+
+def _next_trip_sends(runner, store, ports, arc) -> list:
+    _plan(store, ports, "ring_w:fwd", arc.length_m - 0.05, "SE", plan_id="p2")
+    asyncio.run(runner.start("p2", "bob"))
+    sent = len(ports.sent)
+    _lane_ticks(runner, ports, 3)
+    return ports.sent[sent:]
+
+
+def test_a_halt_stop_after_a_canceled_trip_is_never_taken_over():
+    """Review 1: Fleet's halt sends ``stop`` at the closed trip's next place; that stop is not a held arrival."""
+    runner, store, ports = _lane_setup()
+    arc = _arc(store, "ring_w:fwd")
+    _plan(store, ports, "ring_w:fwd", arc.length_m - 0.4, "SW")
+    asyncio.run(runner.start("p1", "bob"))
+    _lane_ticks(runner, ports)
+    asyncio.run(runner.cancel("p1", "kim", "operator_cancel"))   # the halt: stop at SW, line OFF
+    ports.core.mode = "CAMERA_LINE"                              # someone turns the line on again
+    ports.at(arc, arc.length_m - 0.05)
+    assert ports.core.status()["state"] == "executing" and _next_trip_sends(runner, store, ports, arc) == []
+
+
+def test_a_held_stop_whose_seq_no_arrived_trip_sent_is_never_taken_over():
+    runner, store, ports, arc = _lane_arrived()
+    ports.core.send("stop", "SW", 0.0, 15, None)                # a stop someone else sent there (a new seq)
+    assert _next_trip_sends(runner, store, ports, arc) == []
+
+
+def test_a_held_stop_at_another_place_is_never_taken_over():
+    runner, store, ports, arc = _lane_arrived()
+    ports.core.j["place_id"] = "NW"                               # CORE holds a stop elsewhere
+    assert _next_trip_sends(runner, store, ports, arc) == []
+
+
+def test_an_estop_while_a_job_tick_runs_holds_the_job_before_any_start(tmp_path):
+    """Review 2: close_all raised the stop epoch; end_trip has not run yet. The next step must not start."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    rig.arrive("ab:fwd")
+    rig.runner.close_all("operator_estop")                      # estop_all I/O still pending, no end_trip yet
+    rig.ticks()
+    job = rig.job(mid)
+    assert job["status"] == "HOLD" and job["reason"] == "JOB_ESTOP" and rig.plans == ["p1"]
+
+
+def test_a_late_lost_lease_after_the_hold_does_not_refuse_the_resume(tmp_path):
+    """Review 4: the hook firing after the job is already HOLD leaves no mark behind."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    rig.do(rig.runner.cancel("p1", "kim", "operator_cancel"))
+    rig.ticks()
+    rig.do(rig.jobs._lost({"job_id": mid, "robot_id": R}, {"lease_reason": "renew_timeout"}))
+    rig.store.resume(mid, actor_id="lee", expected_generation=rig.enabled["generation"])
+    rig.ticks()
+    assert rig.job(mid)["status"] == "RUNNING" and rig.runner.view(rig.plans[-1])["started_by"] == "lee"
+
+
+def test_a_second_resume_by_another_operator_at_the_same_fence_is_recorded(tmp_path):
+    """Review 5: a resume event at the same step and fence by someone else is a new event, not a conflict."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    for who in ("lee", "kim"):
+        rig.do(rig.runner.cancel(rig.plans[-1], who, "operator_cancel"))
+        rig.ticks()
+        rig.store.resume(mid, actor_id=who, expected_generation=rig.enabled["generation"])
+        rig.ticks()
+    resumed = [e["actor_id"] for e in rig.job(mid)["events"] if e["event_type"] == "CELL_JOB_RESUMED"]
+    assert resumed == ["lee", "kim"] and rig.job(mid)["status"] == "RUNNING"
+
+
+def test_a_closed_profile_holds_open_trip_jobs_at_startup(tmp_path):
+    """Review 7: a ledger with open TRIP jobs opened outside the simulation profile parks them."""
+    from types import SimpleNamespace
+    from fleet.server.trip_job_routes import install_trip_job_routes
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    app = SimpleNamespace(state=SimpleNamespace())
+    assert install_trip_job_routes(app, store=rig.store, runner=rig.runner, console=None, episodes=None,
+                                   deployment_profile="production", require_named_operator=None,
+                                   operator_guard=None) is None
+    assert rig.job(mid)["status"] == "HOLD" and rig.job(mid)["reason"] == "FLEET_PROFILE_CLOSED"
+
+
+def test_a_newer_ledger_version_is_refused_before_the_steps_table_is_touched(tmp_path):
+    """Review 3: an older Fleet never rebuilds a ledger a newer one migrated."""
+    path = tmp_path / "fleet.sqlite3"
+    CellJobStore(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute("INSERT INTO fleet_component_migrations VALUES ('cell_jobs', 99, 'now')")
+        connection.execute("DROP TABLE fleet_cell_steps")
+    with pytest.raises(RuntimeError):
+        CellJobStore(path)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT 1 FROM sqlite_master WHERE name='fleet_cell_steps'").fetchone() is None
