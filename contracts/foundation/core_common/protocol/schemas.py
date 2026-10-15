@@ -1004,6 +1004,11 @@ class LineJunctionStatus(BaseModel):
     #: D-759 5: why not (none_sent, disabled, stale, future, no_sample, epoch, carry, heading); None when used,
     #: before the take-over of a placed one, and for every instruction that is not a bend.
     map_entry_reason: Optional[str] = None
+    #: D-767 A: what a window's or bend's distance counts from: stamp (the odom sample at pose_stamp) |
+    #: receipt (as before); None for an instruction without either.
+    distance_basis: Optional[str] = None
+    #: D-767 A: none_sent when receipt (an unusable pose_stamp is refused, 409 INSTRUCTION_STAMP_UNUSABLE).
+    distance_basis_reason: Optional[str] = None
 
 
 class LineFollowStatus(BaseModel):

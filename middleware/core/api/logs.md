@@ -1066,3 +1066,19 @@
 - gate 변화: 없음.
 - 결정: D-620 노트 2026-10-15, D-760 개정 4.
 - 교훈: 없음.
+
+## 2026-10-15 · 1a9960df2 · POST /line-follow/junction 선택 필드 pose_stamp와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+
+- 변경: `api/v1/line_follow.py` `LineJunctionRequest.pose_stamp`(> 0, 유한, 아니면 400)를 `set_junction`에 넘긴다. `api/v1/system.py` 능력 `lane_instruction_stamp`. `app.py` 계약 v1.241(9639a41b8).
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py` `test_d767_pose_stamp_validation_and_record`, `test/test_line_follow_contract_docs.py`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 1·4항. v1.238–v1.240은 다른 작업이 선점했다.
+- 교훈: 없음.
+
+## 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)
+
+- 변경: `api/v1/line_follow.py` `pose_stamp`는 strict(JSON `true`, `"1.5"` 400). `JunctionRefused.reason`이 있으면 `error.detail = {"reason": …}`.
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py` `test_d767_pose_stamp_validation_and_refusal`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.
