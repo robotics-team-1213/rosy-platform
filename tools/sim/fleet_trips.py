@@ -49,9 +49,11 @@ FLEET_PATHS = ('operations/fleet', 'contracts/foundation', 'contracts/learning/s
 ROBOTS = ('rosy_01', 'rosy_02')
 #: (segment, travel direction, start arc length m): straight stretches in the CCW travel direction,
 #: clear of corners, crosswalks and the parking spur (lane_graph.yaml): the east road's south side
-#: eastbound past its crosswalk, the west road's west side southbound before the spur.
+#: eastbound past its crosswalk to the corner, the west road's west side southbound to the spur.
 TRIPS = {'rosy_01': ('east', 'rev', 0.92), 'rosy_02': ('west', 'rev', 1.00)}
-TRIP_M = 0.30
+#: Longer than Fleet's lane pass_window_m (0.3, trip_ports.py): within it Fleet sends the place's stop at
+#: once and counts CORE holding it as arrived (run-2: `arrived` after 0.03 m of a 0.30 m trip).
+TRIP_M = 0.42
 SPEED_CAP = 0.08
 TERMINAL = ('arrived', 'canceled', 'stopped', 'failed')
 #: Marks this run's children so cleanup never touches a parent shell or another run.
@@ -220,15 +222,15 @@ def drive(fleet, operator, trips, budget_s, log):
                 row['states'].append(view.get('state'))
             row['last_view'] = view
             if isinstance(pose.get('x'), (int, float)) and isinstance(pose.get('y'), (int, float)):
-                row.setdefault('first_xy', (pose['x'], pose['y']))
                 row['last_xy'] = (pose['x'], pose['y'])
         return not open_rows()
 
     until(budget_s, poll)
     for row in open_rows():
         row['cancel'] = call(f"{fleet}/trips/{row['trip_id']}/cancel", operator, 'POST', {}, log)
-    for row in rows.values():
-        moved = math.dist(row['first_xy'], row['last_xy']) if 'last_xy' in row else 0.0
+    for ns, row in rows.items():
+        # From the spawn pose: polling starts after both starts, so its first sample can be late.
+        moved = math.dist(trips[ns][0][:2], row['last_xy']) if 'last_xy' in row else 0.0
         row.update(moved_m=round(moved, 3), arrived=row['states'][-1:] == ['arrived'] and moved >= TRIP_M / 2)
     return rows
 
