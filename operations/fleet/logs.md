@@ -3771,3 +3771,23 @@
 - 증거: `test_shared_state_read_fences.py`의 0.43 s 재송신 시험을 SIM 자세 포트로도 돌린다(직진 지시: 지시 앞의 idle 읽기면 다시 보낸다). 수정 전 SIM 경우 실패를 원격에서 확인했다(`X:/DevTemp/shared-state-read/red4/run-1.txt`). 원격 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음.
 - 결정: D-760 4단계 Safety-Review 재검토 MEDIUM.
+## 2026-10-15 · 868461505 · D-763 조각 4: 작업 읽기에 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (API v1.235)
+
+- 변경: `GET /api/fleet/work`가 Task·Mission에 더해 trip(저장된 최근 것 + 열린 것 전부)과 Cell Job을 읽는다. 행마다 `visible_state`(D-763 8), trip 행은 `wait`(v1.232의 네 키, `since` 없음), `PROPOSED` 행은 등록부 `approval`. 응답에 `cell_jobs_available`·`kinds`(`trip`: 활성 지도 장소 + trip 능력을 알리는 로봇, `CELL_TRANSFER`: 단계 하달 열림 + 하달기 + OMX 설정). Cell Job 범위는 서버가 정한다: 제안자, `PROPOSED`가 아닌 행은 운영자(cell-jobs 상세와 같다), `PROPOSED` 행은 이름 있는 운영자(개정 2 질문 6). 제안자 신원은 쿼리 밖으로 나가지 않는다. `work_routes.py`를 같은 종류의 경로가 있는 원장 holder(`ledger/`)로 옮겼다. 크기: 서버 31904→31880(순증 −24), 원장 7036→7123(상한 7135), 기준값은 올리지 않았다.
+- 증거: 원격 시험(모델 PC, 6ae1df74e) fleet 13개 파일 225 passed, 계약·구조 5개 파일 66 passed, `known_failures` 0 new, 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`. 새 시험 `test_work_sources.py`: 출처별 행, viewer·운영자·제안자·다른 운영자·이름 없는 운영자 범위, 원장 미설정, 종류 목록.
+- gate 변화: 없음. 호스트 시험뿐이고 장치·현장 확인은 하지 않았다.
+- 결정: D-763 조각 4. 끝난 작업 필터는 상태 목록 그대로(실패도 끝난 작업)이고 보이는 상태는 줄 글에만 쓴다.
+
+## 2026-10-15 · e7b196839 · D-763 조각 4 검토: Cell Job 상세 범위, 닫힌 trip의 기다림, 루프 밖 읽기, 작업 영역 단위
+
+- 변경: `GET /api/fleet/cell-jobs/{id}`가 작업 목록과 같은 범위다(제안자; `PROPOSED`가 아니면 운영자; 남의 `PROPOSED`는 이름 있는 운영자만, 나머지 404). 제안자 아닌 독자에게 `proposal_principal_id`가 없고 사건의 제안자는 `actor_id: "proposer"`다. trip 행의 `wait`는 열린 trip에만 싣는다. 작업 읽기의 SQLite 읽기는 `asyncio.to_thread` 한 번으로 이벤트 루프 밖에서 한다(33a0b5706). 관제 작업 영역은 자기 크기 단위 `site_ui/console/work`다(6377fe873, 계획 `docs/plans/2026-10-15-fleet-console-work-unit.md`). 원장 단위 7,135/7,135, 다음 원장 증가는 Mission 분리부터.
+- 증거: 원격(모델 PC, e7b196839) fleet 16개 파일 266 passed, 계약·구조 6개 파일 69 passed, `known_failures` 0 new, 로그 X: `work-read/r3a/run-1.txt`, `work-read/r3b/run-1.txt`. 새 시험: 제안자·이름 있는 운영자·공유 토큰·viewer 상세 범위, 닫힌 trip의 남은 `over_bound`, 루프 밖 읽기.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 6. 남의 `PROPOSED` Cell Job 상세는 이전에 운영자 누구나였고 이제 이름 있는 운영자만이다.
+
+## 2026-10-15 · db7b5cf3a · Mission 원장과 작업 읽기를 자기 크기 단위로 (main 머지 ab8ac53f6 뒤, API v1.238)
+
+- 변경: main(조각 6, v1.236) 머지 뒤 원장 단위가 7,215로 한도 7,135를 넘었다. 원장 계획이 이름 붙인 분리로 `mission_*` 여덟 파일을 새 holder `server/missions`(2,575/2,725)로, 그것으로 모자라 작업 읽기(`work_read.py`·`work_routes.py`)를 `server/work`(128/207)로 옮겼다. 모듈 이름은 그대로다(`SERVER_HOLDERS`). 원장 4,545/4,560, 서버 31,846/31,930(같은 경계로 조각 전 31,847). 조각 4는 v1.237(feat/regulation-capabilities 선점) 위의 v1.238이다. 머지의 logs 해소가 main의 마지막 gate 줄을 잘랐던 것을 main 파일 + 이 브랜치의 추가 행으로 고쳤다.
+- 증거: 원격(AI PC, db7b5cf3a) `operations/fleet/test` 전체 5,249 passed, 293 skipped(브라우저 opt-in), 계약·구조 176 passed, `known_failures` 0 new, 로그 X: `work-read/r4a/run-1.txt`, `work-read/r4b/run-1.txt`. 브라우저 3개 파일 93 passed, 로그 X: `browser-run/wrs4-b4.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4, 계획 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`.
