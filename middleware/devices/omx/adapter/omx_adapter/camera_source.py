@@ -8,7 +8,11 @@ import time
 
 def selected_device(value):
     path = Path(value)
-    if path.parent != Path('/dev/v4l/by-id') or not path.is_symlink():
+    if path.parent != Path('/dev/v4l/by-id'):
+        raise ValueError('a persistent /dev/v4l/by-id camera is required')
+    if not path.exists():
+        raise OSError('selected camera is unavailable')
+    if not path.is_symlink():
         raise ValueError('a persistent /dev/v4l/by-id camera is required')
     if not path.is_char_device():
         raise OSError('selected camera is unavailable')
