@@ -668,28 +668,26 @@ def test_a_later_gate_hold_mid_arc_is_not_the_arcs_time(seconds, how):
     assert status.arc.travelled_m >= LENGTH
 
 
-def test_an_arc_held_by_the_authority_gate_past_the_cap_times_out_and_holds():
-    """D-760 rev 2 item 6: the deadline stands under an authority hold for 15 s at most; then
-    lane_arc_timeout and the robot HOLDS (no fall back to lane following) even with authority back."""
-    rig = ArcRig(authority_required=True)
+def test_an_arc_held_by_the_authority_gate_stands_for_as_long_as_it_lasts():
+    """D-760 개정 4: the deadline stands under a non-FREE authority for its whole length (the lease and
+    ttl bound it, Gazebo m33c), so a 30 s hold before the first metre still ends at the arc's end."""
+    rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
-    decision, status = rig.until(lambda d, s: not running(rig), limit=2000)
-    assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051)
-    assert status.arc.travelled_m == pytest.approx(0., abs=1e-6)
-    assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
-    _authority(rig, False)                    # the gate releases
-    decision, status = rig.drive(5)
-    assert (decision.linear, decision.angular) == (0., 0.)
-    assert (status.state, status.reason) == ('HOLD', 'lane_arc_timeout')
+    _held(rig, 30., 'authority')
+    assert running(rig) and rig.m._arc['deadline'] - deadline == pytest.approx(30., abs=.051)
+    decision, status = rig.until(lambda d, s: not running(rig), seen=False)
+    assert (status.arc.state, status.arc.reason) == ('ended', 'lane_arc_end_unarmed')
 
 
-def test_a_20_s_authority_hold_mid_arc_times_out_and_holds():
+@pytest.mark.parametrize('how', ['looking', 'waiting'])
+def test_a_20_s_crosswalk_hold_mid_arc_times_out_and_holds(how):
+    """The crosswalk share keeps its cap: 15 s per arc, then lane_arc_timeout and HOLD."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
     rig.drive(10, seen=False)
-    _held(rig, 20., 'authority')             # 15 s stood; the rest of the margin is gone
+    _held(rig, 20., how)                       # 15 s stood; the rest of the margin is gone
     decision, status = rig.until(lambda d, s: not running(rig), seen=False)
     assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051) and status.arc.travelled_m < LENGTH
     assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
