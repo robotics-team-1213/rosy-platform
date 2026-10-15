@@ -319,7 +319,7 @@ docker run --rm --name rosy-omx-pilot-sim --network bridge `
 - 원본 가져오기: docker cp rosy-omx-pilot-sim:/recordings/<episode-id> X:/DevTemp/rosy-omx-recordings/.
   Windows 자료·export 출력은 X:에 둔다. 컨테이너를 삭제해도 이름 있는 recording volume은 유지된다.
 
-별도 Python 3.12 CPU 환경에 torch 2.7.1+cpu / torchvision 0.22.1+cpu를 공식 CPU wheel index로 먼저 설치하고 requirements-lerobot-export.txt를 설치한다. 실제 검증한 transitive inventory는 검증 문서에 기록한다. ROS 런타임에 LeRobot을 설치하지 않는다.
+별도 Python 3.12 CPU 환경에 torch 2.10.0+cpu / torchvision 0.25.0+cpu를 공식 CPU wheel index로 먼저 설치하고 requirements-lerobot-export.txt를 설치한다. 실제 검증한 transitive inventory는 검증 문서에 기록한다. ROS 런타임에 LeRobot을 설치하지 않는다.
 
 PowerShell 실행 예:
 
