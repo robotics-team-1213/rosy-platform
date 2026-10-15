@@ -356,11 +356,11 @@ def test_real_repo_selector_paths_escalate():
         assert affected.select(repo, [path]).mode == "full", path
 
 
-def test_real_repo_ci_workflow_selects_its_readers_not_full():
-    """D-762 stage 0: ci.yml selects the tests that read it (2026-10-16 land-all escalation)."""
+def test_real_repo_ci_workflow_keeps_full_execution_coverage():
+    """Textual readers do not establish coverage of the jobs a workflow changes."""
     sel = affected.select(affected.Repo.load(ROOT), [".github/workflows/ci.yml"])
-    assert sel.mode == "affected", sel.escalations
-    assert {"test/test_ci_dependencies.py", "test/test_affected_tests.py"} <= set(sel.reasons)
+    assert sel.mode == "full", sel.escalations
+    assert "test" in sel.reasons
 
 
 # --- D-436 4: GitHub runs the full tier as a parallel matrix; local --run does not -------------
