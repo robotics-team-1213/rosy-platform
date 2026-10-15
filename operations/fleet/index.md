@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 39d8e72973 · finish resource cleanup after worker shutdown
 - 2026-10-15 · 0bc2a16c1 · native readback and background shutdown
 - 2026-10-15 · e0febb524 · 잘못된 drive_modes는 leg_unknown, 다리 시험을 반증 가능하게
 - 2026-10-15 · 0b7df2e16 · hold_job의 움직임 한도는 Rule M이 판정한다 (D-760 6, D-763 조각 6)
 - 2026-10-15 · 9f1f7876f · trip 취소가 실패해도 작업은 HOLD
-- 2026-10-15 · d05bccdec · 조각 6 안전 검토 반영

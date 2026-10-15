@@ -38,3 +38,31 @@
 - 검수·운영 승인을 합성하지 않고 모델/물리 동작을 활성화하지 않는다.
   사용자 승인된 로컬 착지는 `python tools/land.py --tests auto`로 처리한다.
   push는 요청되지 않았다.
+
+## 구현과 검증
+
+- `6b2b811f4`의 원격 RED: power async close 실패 시 worker 회수와
+  start-points close가 생략됐고, sync close 실패 방향에서도 power가
+  worker보다 먼저 닫힌 것을 확인했다. 2 NEW이며 기존 실패에 넣지 않았다.
+- `39d8e72973`은 `AsyncExitStack`에 기존 close를 등록하고 모든 worker를
+  회수한 뒤 정리한다. 원격 관련 7개 파일 281 passed, terminal exit 0,
+  known_failures NEW 0이다. worker 오류 로그와 close 오류 전파는 유지한다.
+- 독립 검토에서 critical/important 지적 없음. startup 도중 실패와 취소를
+  무시하는 worker까지 완료했다고 주장하지 않는다.
+- 원시 로그: X: 세션 `2026-10-15--110240--pipeline-resources--0c429d/logs/`.
+- 추가 SIM 읽기: 후보 1은 Docker context 목록을 읽었으나 현재 local Unix
+  context의 daemon 조회가 permission denied로 실패했다. 후보 2는 Docker
+  실행 파일이 없었다. 두 호스트에서 실행 가능한 기존 Docker context는
+  확인하지 못했다. 별도 설치·권한 변경·daemon 시작은 수행하지 않았다.
+  원시 결과는 같은 세션 `evidence/docker-contexts.json`이다.
+
+## 다음 관문
+
+1. 기존 실행 연결과 종료 보완을 사용자 승인 범위의 로컬 main에 착지한다.
+2. OMX는 비현장 시험 PC의 Docker/Compose 준비와 자원 예약 후 기존
+   `compose.pilot-sim.yaml`로 build→ROS terminal→관절·영상 readback을 검증한다.
+   Gazebo 준비 완료와 Isaac controller/camera/task 구현을 구분한다.
+3. 학습/운영은 지정된 실제 검수 자료·평가 lineage·독립 승인 receipt를 공급받아
+   기존 admission으로 검사한다. 이 자료를 임의 생성하거나 승인하지 않는다.
+4. door/arm 범용 AI 개입과 행동 조건부 World prediction은 별도 계약·성공 기준이
+   필요한 확장이다. 기존 CORE/Arm writer 옆에 새 실행 경로를 만들지 않는다.

@@ -69,3 +69,24 @@ SQLite 적용은 await 없는 기존 `BEGIN IMMEDIATE`/원장 재검증 안에�
 해당 실행 owner·입출력·성공 기준을 먼저 확정해야 한다. 이 작업은 미완성 항목을
 숨기거나 PARKED/HOLD gate를 자동 해제하지 않는다. 사용자 지시 전 main 착지와
 push를 하지 않는다.
+
+## 사용자 승인 후 후속 · 2026-10-15
+
+사용자가 로컬 병합과 나머지 작업의 계속 진행을 요청했다. 기존 브랜치의
+착지는 `tools/land.py --tests auto`로 진행하며 push·운영 활성화 요청으로
+확대하지 않는다. 후속 브랜치는 `fix/pipeline-resource-close`다.
+
+- 14번의 추가 누락: async/sync close 실패가 나머지 정리를 막는 것을 원격
+  RED 2건으로 확인했다. 기존 lifespan을 `AsyncExitStack`으로 연결해 worker
+  회수 후 모든 close를 실행하고 오류를 보존한다. 관련 원격 281 passed,
+  exit 0, NEW 0과 독립 검토로 확인했다. 상세는
+  [후속 계획](2026-10-15-pipeline-resource-close.md)을 따른다.
+- 12번의 실제 선행 조건: 비현장 후보 두 대를 읽기 전용으로 확인했다.
+  한 대는 Docker daemon 접근 거절, 다른 한 대는 Docker 미설치였으며
+  현재 확인한 기존 context로 live SIM을 실행할 수 없었다. 배치 검사에서도
+  그 시점 sim 최소 가용 메모리를 충족하지 못했다. source-only를 SIM 통과로
+  올리지 않았고 현장 PC를 대체 simulator로 사용하지 않았다.
+- 10·11번은 검수·평가·독립 수용 자료를 임의로 채울 수 없다. 실제 입력을
+  기존 owner에게 공급하고 readback해야 하는 관문으로 남긴다. 2·9·12번의
+  미래 World/범용 door·arm/Isaac 학습 환경 확장은 기존 실행 연결 결함과
+  구별하며 입출력과 성공 계약 확정 뒤 구현한다.
