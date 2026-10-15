@@ -48,3 +48,19 @@ fleet/fleet/server/work small
 fleet/fleet/server/trips
 fleet/fleet/server/trip_checks small
 fleet/fleet/server/trip_progress small
+foundation/core_common/protocol
+robot_ui/robot/panels
+fleet/fleet/server/auth
+fleet/fleet/server/console
+fleet/fleet/server/cell
+fleet/fleet/swarm
+fleet/fleet/routing
+decision/src/rosy/decision
+drive/tracking/wander
+drive/planning/grid
+perception/sensors/sensing
+drive/motion_limits
+drive/calibration
+drive/recovery
+perception/sensors/line_observation
+site_ui/console/shared
