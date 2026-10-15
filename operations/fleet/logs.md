@@ -3791,3 +3791,10 @@
 - 증거: 원격(AI PC, db7b5cf3a) `operations/fleet/test` 전체 5,249 passed, 293 skipped(브라우저 opt-in), 계약·구조 176 passed, `known_failures` 0 new, 로그 X: `work-read/r4a/run-1.txt`, `work-read/r4b/run-1.txt`. 브라우저 3개 파일 93 passed, 로그 X: `browser-run/wrs4-b4.txt`.
 - gate 변화: 없음.
 - 결정: D-763 조각 4, 계획 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`.
+## 2026-10-15 · 64816ae7e · lane_instruction_stamp 로봇에 pose_stamp, 지연 추정 없음 (D-767 A부, API v1.241)
+
+- 변경: `server/console/console_view.py` `TripCaps.lane_instruction_stamp`. `server/trips/trip_runner.py` trip 능력 보기에 그 키(기존 줄 안, 901줄 그대로). `server/trips/trip_ports.py`: 능력이 참이고 이 걸음의 자세에 odom stamp(`live.at_stamp`)가 있으면 교차로·굽이 필드에 `pose_stamp`(= `map_entry.odom_stamp_s`), 굽이 앞당김 0, `_pose_tol`에서 읽기→전송·`SEND_ALLOWANCE_S` 항 제외(자세 나이·dead reckoning·드리프트는 남음). 600줄 그대로(주석을 줄였다). 능력이 없는 로봇은 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`(빨강 → 초록): 창 허용치 0.095(지연 0.5 s 무시), 능력·stamp 없으면 0.235와 `pose_stamp` 없음, 굽이 0.4 무앞당김과 `pose_stamp` = `map_entry.odom_stamp_s`, 능력 없으면 0.38. 원격(모델 PC, 9639a41b8) `operations/fleet/test` 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 4항. `bend_send_s`는 능력 없는 로봇에 그대로 쓴다.
+- 교훈: 없음.
