@@ -183,7 +183,11 @@ def test_crosswalks_are_sampled_once_per_route_and_far_ones_never(monkeypatch):
     slant = [[0.7, -0.2], [0.9, -0.2], [1.0, 0.2], [0.8, 0.2]]
     far = [[5.9, 4.8], [6.1, 4.8], [6.1, 5.2], [5.9, 5.2]]   # on the lane C -> D, which this trip never drives
     places = [("A", 0, 0), ("B", 2, 0), ("C", 5, 5), ("D", 7, 5)]
-    runner, store, ports, _live = _running(_line(places, [("cw1", slant), ("cw2", far)]), "ab:fwd", 0.3, "B")
+    runner, store, ports = _setup(_line(places, [("cw1", slant), ("cw2", far)]))
+    _plan(store, ports, "ab:fwd", 0.3, "B")
+    run(runner.start("p1", "bob"))
+    calls.clear()                                                                 # the map's own validation
+    _ticks(runner, ports)
     near_calls = [c for c in calls if c == tuple(map(tuple, slant))]
     assert [c for c in calls if c == tuple(map(tuple, far))] == []              # its box misses the route's
     assert 0 < len(near_calls) <= 2.0 / 0.02 + 30                                 # 2 cm steps, bisection at 2 edges
