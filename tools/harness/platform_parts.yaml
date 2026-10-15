@@ -888,6 +888,8 @@ safety_anchors:
   - {symbol: core_features.command.arbitration._ALLOWED}
   - {symbol: core_features.line_follow.body_stop.BodyStopMixin}
   - {symbol: core_features.line_follow.clearance.body_path_gap}
+  - {symbol: core_features.line_follow.authority.AuthorityMixin._authority_gate}  # D-517/D-760 zeroes motion past held authority
+  - {symbol: core.trip_lease.TripLeaseManager.expire_due}  # D-541/D-760 lease expiry ends Fleet-started motion
   - {symbol: core_features.localization.rotate_to.rotate_goal}
   - {symbol: core_features.localization.rotate_to.turn_rate}
   - {symbol: core_api_web.api.v1.safety.safety_release}
