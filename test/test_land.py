@@ -559,3 +559,23 @@ def test_logs_md_edit_of_an_existing_entry_still_refuses():
     ours = base + dated("2026-10-14", "branch")
     theirs = base.replace("- 증거: 없음", "- 증거: 있음") + dated("2026-10-15", "peer")
     assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+@pytest.mark.parametrize("files, calls_expected, code", [
+    # A NEW guard failure stops before the long round (pkg/test never runs).
+    ({"test/architecture/test_rule.py": "def test_rule():\n    assert False\n", "pkg/a.py": "x = 2\n"},
+     [[["test/architecture"]]], 1),
+    # Green guards, then the round as selected.
+    ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"},
+     [[["test/architecture"]], [["pkg/test", "test/architecture/test_rule.py"]]], 0),
+    # The selection already is guards only: no extra round.
+    ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n"},
+     [[["test/architecture/test_rule.py"]]], 0),
+])
+def test_guard_round_runs_first_and_stops_on_new(repos, monkeypatch, files, calls_expected, code):
+    main, wt = repos
+    commit(wt, files, "branch")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
+    assert land.main(["--tests", "auto"]) == code
+    assert calls == calls_expected

@@ -38,6 +38,7 @@ import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these resul
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 from land_logs import append_blocks  # noqa: E402  (logs.md: whole entries, date order)
+import land_guards  # noqa: E402  (structural guards before the long round)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
@@ -497,6 +498,7 @@ def land(args) -> int:
                            " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
+        summary += land_guards.first(wt, args, invocations, logdir, round_no, run_tests)  # NEW stops here
         began = time.monotonic()
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
         if note:
