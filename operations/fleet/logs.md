@@ -3805,3 +3805,10 @@
 - 증거: 원격(AI PC, 2a2c1871a) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet4/run-1.txt`. 원격(165a1d95d) `test/architecture`, `test/test_line_follow_contract_docs.py`, `middleware/core/api/test` exit 0, 0 new, 로그 X: `proposal-scope/arch2/run-1.txt`. 중간 실패 2건(새 시험이 stop generation을 두 번 rearm)은 2a2c1871a에서 시험을 고쳤다, 로그 X: `proposal-scope/fleet2/run-1.txt`.
 - gate 변화: 없음.
 - 결정: D-763 조각 4 보안 리뷰(APPROVE 뒤 L1/L2). API v1.240은 동료와 조율해 받은 번호다.
+
+## 2026-10-15 · bbfac7c5c · claim 읽기는 행마다 쓰지 않고, 채널 submit 배선 시험, 작업이 쥔 로봇의 거절에 mission id 없음 (D-763 조각 4 보안 리뷰 N1·후속)
+
+- 변경: N1(dd0da079a) — `GET /api/fleet/resource-claims`가 레거시 Mission 주인을 기존 `get_in_transaction`으로 한 연결에서 읽는다. 행마다 `get()`이 돌리던 `purge_expired()`(SQLite 쓰기 잠금을 잡는 DELETE)가 없다. 만료 행은 None으로 읽혀 답은 같다. 후속(bbfac7c5c) — 다른 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` 세 곳(trip 시작 `trip_runner`, 작업 단계 admission `trip_admission`, lease 채택 `trip_lease`)이 그 작업의 `job_id`를 실었다. 이제 `{"reason": "job", "owner_kind": "mission"}`이다. `trip_guard.py:35`의 `lease.claimed`는 그 `job_id`의 출처이고 그 자체는 응답에 나가지 않는다. `console_view.trip_refusal`의 문구는 로봇 id만 싣는다. API 참조 v1.240 절과 이력 행에 한 줄. 시험: 실제 `build_role_guards`·`install_channel_feature`로 이름 없는 운영자의 채널 `/submit` 403과 Task 0건, purge 0회, 거절 detail에 mission id 없음. fleet 줄 수 변화 0(31,901/31,930).
+- 증거: 원격(AI PC, bbfac7c5c) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet6/run-1.txt`. N1은 dd0da079a에서 같은 결과, 로그 X: `proposal-scope/fleet5/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰 후속. API v1.240 안에 든다.
