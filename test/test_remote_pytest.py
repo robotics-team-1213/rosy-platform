@@ -748,7 +748,8 @@ def test_tailscale_current_profile_is_the_starred_row():
     assert rp.current_profile(LISTING.replace("*", "")) == []
 
 
-def test_tailscale_profile_mismatch_fails_fast_naming_both():
+def test_tailscale_profile_mismatch_fails_fast_naming_both(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_HOSTS", raising=False)
     listing = subprocess.CompletedProcess([], 0, LISTING, "")
     with pytest.raises(SystemExit) as error:
         rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=lambda *a, **k: listing)
@@ -756,9 +757,11 @@ def test_tailscale_profile_mismatch_fails_fast_naming_both():
     rp.check_tailscale_profile("665e", which=lambda _: "tailscale", run=lambda *a, **k: listing)  # match: passes
 
 
-def test_tailscale_profile_check_skipped_without_cli_or_key():
+def test_tailscale_profile_check_skipped_without_cli_or_key_or_with_explicit_hosts(monkeypatch):
     def never(*a, **k):
         raise AssertionError("tailscale must not be called")
 
     rp.check_tailscale_profile("bc4d", which=lambda _: None, run=never)   # no CLI
     rp.check_tailscale_profile("", which=lambda _: "tailscale", run=never)  # no lab-hosts.json key
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "user@host")
+    rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=never)  # manual host override
