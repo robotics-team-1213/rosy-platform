@@ -7,18 +7,21 @@ same clock as the predictions' ``pose_stamp`` (``--clock t``: Fleet's own ``t``)
 
   {"robot_id": "r1", "t": 12.3, "path_m": 4.567}                          true distance driven so far
   {"robot_id": "r1", "t": 15.0, "pass": {"kind": "turn", "id": "J1"}}     the true front passed it
+                                                       (optional "leg_id": only that leg's predictions match it)
 
 Gazebo: ``path_m`` and ``pass`` from the simulator's true pose and the world file's places, lines,
 crosswalks and arcs. Device: ``path_m`` from odom, ``pass`` from the robot's own camera sightings
 (``junction_ahead_m`` added on), crosswalks at CORE's zone near edge. The ceiling camera is not a truth.
 ``id`` is the event's ``place_id`` (a crosswalk: its ``zone_id``). ``authority_end`` is not scored.
 
-For each predicted event: truth ``at_m`` = path at the first pass after the prediction - path then;
-pass when p95 of |error| / (a + b * at_m) <= 1 (gazebo a 0.03, device a 0.10; b 0.05 = ODOM_DRIFT_PER_M),
+``--offset-s`` is added to every prediction time first (truth clock - prediction clock); a prediction without
+a time (no odom stamp) is skipped. For each predicted event: truth ``at_m`` = path at the first pass after the
+prediction - path then. The gate is the p95 of the per-event ratio |error| / (a + b * at_m) <= 1, the ADR's
+p95 <= a + b * at_m bound (gazebo a 0.03, device a 0.10; b 0.05 = ODOM_DRIFT_PER_M), and
 missed (a pass within the preview's horizon, inside its last listed event, not listed) <= 1% and
 phantom (listed, never passed although the robot drove that far on the same leg) <= 1%.
 
-  python tools/sim/route_preview_accuracy.py PREDICTIONS.jsonl TRUTH.jsonl [--profile device] [--clock t]
+  python tools/sim/route_preview_accuracy.py PREDICTIONS.jsonl TRUTH.jsonl [--profile device] [--clock t] [--offset-s S]
 """
 
 from __future__ import annotations
@@ -50,28 +53,31 @@ def _path(series: list, t: float):
     return p0 + (p1 - p0) * (t - t0) / (t1 - t0)
 
 
-def score(predictions: list, truth: list, profile: str = "gazebo", clock: str = "pose_stamp") -> dict:
+def score(predictions: list, truth: list, profile: str = "gazebo", clock: str = "pose_stamp",
+          offset_s: float = 0.0) -> dict:
     a = PROFILES[profile]
     paths, passes, legs = defaultdict(list), defaultdict(list), defaultdict(float)
     for row in truth:
         if "path_m" in row:
             paths[row["robot_id"]].append((row["t"], row["path_m"]))
         elif "pass" in row:
-            passes[row["robot_id"]].append((row["t"], (row["pass"]["kind"], row["pass"]["id"])))
+            passes[row["robot_id"]].append((row["t"], (row["pass"]["kind"], row["pass"]["id"]), row.get("leg_id")))
     for series in (*paths.values(), *passes.values()):
-        series.sort()
+        series.sort(key=lambda row: row[0])
+    predictions = [{**p, "at": p[clock] + offset_s} for p in predictions if p.get(clock) is not None]
     for p in predictions:
-        legs[p["robot_id"], p["leg_id"]] = max(legs[p["robot_id"], p["leg_id"]], p[clock])
+        legs[p["robot_id"], p["leg_id"]] = max(legs[p["robot_id"], p["leg_id"]], p["at"])
     ratios, errors, matched, missed, phantom, listed = [], [], 0, 0, 0, 0
     for p in predictions:
-        robot, t0 = p["robot_id"], p[clock]
+        robot, t0 = p["robot_id"], p["at"]
+        mine = [(t, k) for t, k, leg in passes[robot] if leg in (None, p["leg_id"])]
         here = _path(paths[robot], t0)
         if here is None:
             continue
         events = [e for e in p["events"] if e["kind"] != "authority_end"]
         listed += len(events)
         for e in events:
-            hit = next((t for t, k in passes[robot] if t > t0 and k == key(e)), None)
+            hit = next((t for t, k in mine if t > t0 and k == key(e)), None)
             there = None if hit is None else _path(paths[robot], hit)
             if there is None:
                 leg_end = _path(paths[robot], legs[robot, p["leg_id"]])
@@ -82,7 +88,7 @@ def score(predictions: list, truth: list, profile: str = "gazebo", clock: str = 
             ratios.append(abs(err) / (a + DRIFT_PER_M * max(0.0, e["at_m"])))
         reach = max((e["at_m"] for e in p["events"]), default=0.0) if len(p["events"]) >= 8 else p["horizon_m"]
         first, seen = {}, {key(e) for e in p["events"]}
-        for t, k in passes[robot]:
+        for t, k in mine:
             if t > t0:
                 first.setdefault(k, t)  # the next pass of each event only
         for k, t in first.items():
@@ -111,8 +117,9 @@ def main(argv=None) -> int:
     parser.add_argument("truth")
     parser.add_argument("--profile", choices=sorted(PROFILES), default="gazebo")
     parser.add_argument("--clock", choices=("pose_stamp", "t"), default="pose_stamp")
+    parser.add_argument("--offset-s", type=float, default=0.0, help="truth clock minus prediction clock")
     args = parser.parse_args(argv)
-    result = score(_lines(args.predictions), _lines(args.truth), args.profile, args.clock)
+    result = score(_lines(args.predictions), _lines(args.truth), args.profile, args.clock, args.offset_s)
     print(json.dumps(result, indent=2))
     return 0 if result["pass"] else 1
 

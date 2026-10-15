@@ -64,3 +64,22 @@ def test_main_reads_json_lines_and_exits_by_the_verdict(tmp_path, capsys):
         (tmp_path / name).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     assert _mod().main([str(tmp_path / "p.jsonl"), str(tmp_path / "t.jsonl"), "--clock", "pose_stamp"]) == 0
     assert json.loads(capsys.readouterr().out)["pass"] is True
+
+
+def test_rows_without_a_stamp_are_skipped_and_an_offset_aligns_the_clocks():
+    mod = _mod()
+    preds, truth = _drive()
+    preds.append({**preds[0], "pose_stamp": None})                  # a pose without an odom stamp
+    shifted = [{**row, "t": row["t"] + 50.0} for row in truth]      # truth on a clock 50 s ahead
+    assert not mod.score(preds, shifted)["pass"]
+    result = mod.score(preds, shifted, offset_s=50.0)
+    assert result["pass"] and result["scored"] == 25
+
+
+def test_a_pass_on_another_leg_does_not_count():
+    preds, truth = _drive()
+    for row in truth:
+        if "pass" in row:
+            row["leg_id"] = "other"                                   # a later lap's or replan's pass
+    result = _mod().score(preds, truth)
+    assert result["scored"] == 0 and not result["pass"]
