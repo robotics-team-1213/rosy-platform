@@ -90,8 +90,9 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
     calls = []
     monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['middleware/core/gateway/test'], [browser_node]]))
     monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
-    monkeypatch.setattr(subprocess, 'run', lambda args, **kwargs:
-                        calls.append((args, kwargs['env'])) or SimpleNamespace(returncode=0))
+    # The matrix step streams each pytest through Popen (D-762 stage 1); a green run prints nothing here.
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(()), wait=lambda: 0))
     with pytest.raises(SystemExit) as ended:
         exec(compile(python, str(WORKFLOW), 'exec'), {})
     assert ended.value.code == 0

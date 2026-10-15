@@ -61,8 +61,9 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     field("작업 식별자", row.source_id);
     // D-741 7 — 막힌 단추에 그 이유를 적는다. 권한은 세션에서, 그 밖의 거절은 서버가 답한 말 그대로다.
     admit.hidden = row.source !== "mission" || row.status !== "PROPOSED";
-    admit.reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
-    admit.disabled = Boolean(admit.reason);
+    const reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
+    if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
+    admit.disabled = Boolean(reason);
   }
   async function select(row) {
     selected = workKey(row); refusal = ""; paint(); showDetail(row);
