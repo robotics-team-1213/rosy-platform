@@ -116,3 +116,18 @@ def test_bump_rewrites_only_live_version_pins(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "already v1.10"
     assert api_reserve.main(["bump", "v1.12"]) == 0
     assert "v1.12 is not reserved here" in capsys.readouterr().err
+
+
+def test_list_survives_a_cp949_console(tmp_path, monkeypatch):
+    import io
+    import sys
+
+    repo = _repo(tmp_path / "c")
+    _commit(repo, {"a": "a\n"}, "base")
+    monkeypatch.chdir(repo)
+    assert api_reserve.main(["next", "drive — hold"]) == 0
+    console = io.TextIOWrapper(io.BytesIO(), encoding="cp949")
+    monkeypatch.setattr(sys, "stdout", console)
+    assert api_reserve.main(["list"]) == 0
+    console.flush()
+    assert "v1.1\t" in console.buffer.getvalue().decode("cp949")
