@@ -762,6 +762,8 @@
 - 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
 ## 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
 
 - 변경: `protocol/controls.py` `BaseVelocityControl.lane_instruction_stamp`, `protocol/schemas.py` `LineJunctionStatus.distance_basis`·`distance_basis_reason`, `config/rosy_default.yaml` `line_follow.instruction_stamp_enabled: false`와 설명.
