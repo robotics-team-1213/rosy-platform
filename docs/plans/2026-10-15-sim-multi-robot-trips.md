@@ -9,7 +9,8 @@
 ```bash
 # 커밋된 HEAD를 보내 빌드하고 두 로봇 + Fleet을 띄워 로봇마다 차선 trip 하나를 보낸다.
 # 역할 이름을 쓰려면 ROSY_SIM_HOSTS에 역할을 붙인다(private/lab-hosts.json에 sim_hosts가 없다).
-ROSY_SIM_HOSTS="rosy@100.98.162.71=model ai@100.108.76.123=ai" \
+# 주소는 private/lab-hosts.json에 있다(공개 저장소에 적지 않는다).
+ROSY_SIM_HOSTS="<모델 PC user@addr>=model <AI PC user@addr>=ai" \
   python tools/remote/remote_sim.py --host model --minutes 60 --log-dir X:/DevTemp/sim-multi/run-N \
   fleet_trips -- --render gpu        # 모델 PC는 GPU 렌더(llvmpipe는 거기서 죽는다)
 # AI PC: --host ai ... -- --render cpu
