@@ -1,8 +1,8 @@
 # ROSY 팀 가이드
 
 - **대상:** `robotics-team-1213` org에 새로 합류한 팀원
-- **갱신:** 2026-10-06 · Tailscale 접속(§1.7), Notion 역할, 로봇 팀 키 추가. §1.1–1.6은 2026-10-05 Windows 새 클론에서 확인함
-- **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다.
+- **갱신:** 2026-10-16 · pre-push 훅이 시험을 실험실 PC로 보내는 것(§1.5, §6)과 `--no-verify` 기준을 [CONTRIBUTING](../../.github/CONTRIBUTING.md)에 맞춤, 장치 경로 정정. 2026-10-06 Tailscale 접속(§1.7), Notion 역할, 로봇 팀 키 추가. §1.1–1.6은 2026-10-05 Windows 새 클론에서 확인함
+- **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다. git 규칙 전체는 [git으로 일하는 법](git-workflow.md), 지금 무엇을 하고 있는지는 [인수인계](handoff.md)다.
 
 이 문서를 위에서 아래로 따라 하면 첫 PR까지 갈 수 있다.
 
@@ -83,7 +83,7 @@ Windows는 **Git Bash**에서, 나머지는 터미널에서:
 bash tools/hooks/install.sh
 ```
 
-`installed .git/hooks/pre-push`가 나오면 끝. 이후 `git push`마다 lint와 빠른 계약 시험(약 3분)이 먼저 돈다. 훅은 venv의 Python을 쓰므로 **push할 때도 venv를 켠 터미널**에서 한다.
+`installed .git/hooks/pre-push`가 나오면 끝. 이후 `git push`마다 lint가 돌고, 시험은 실험실 시험 PC로 보내 돈다(`tools/remote/remote_pytest.py`, 2026-10-08부터). 그래서 Tailscale과 `private/lab-hosts.json`(§1.7)이 없는 clone에서는 훅이 시험 PC를 찾다가 push를 막는다. 그때의 방법은 [git으로 일하는 법](git-workflow.md) §3 표다. 훅은 venv의 Python을 쓰므로 **push할 때도 venv를 켠 터미널**에서 한다.
 
 ### 1.6 설정 확인
 
@@ -247,6 +247,7 @@ git push
 
 | # | 문서 | 얼마나 |
 |---|---|---|
+| 0 | [인수인계](handoff.md) — 목표, 지금 상태, 다음 할 일 · [git으로 일하는 법](git-workflow.md) | 10분, 필수 |
 | 1 | [README](../../README.md) — 「핵심 계약」 | 5분, 필수 |
 | 2 | [CONCEPTS.md](../../CONCEPTS.md) | 10분, 필수 |
 | 3 | [STATUS.md](../../STATUS.md) — 모듈별 게이트 (SOURCE → LOCAL → ROS-SIM → ARTIFACT → DEVICE → FIELD) | 5분, 필수 |
@@ -267,7 +268,7 @@ git push
 | CORE (로봇 게이트웨이) | `middleware/core/` | 외부 API, 유일한 `cmd_vel` 발행, 서비스·이벤트 | 일부 | |
 | 인지·차선 | `middleware/perception/` | 카메라·LiDAR 차선/장애물 증거 | 일부 | |
 | 내비게이션 | `middleware/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
-| 장치·드라이버 | `middleware/apps/device/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
+| 장치·드라이버 | `middleware/devices/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
 | Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | |
 | 현장 비전·앱 | `operations/overhead/`, `operations/site_ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | |
 | 화면 (웹·앱) | `middleware/robot_ui/`, `shared/web/` | 대시보드, Pilot 앱 ([DESIGN.md](../../DESIGN.md)) | 불필요 | |
@@ -299,7 +300,8 @@ git push
 | push할 때 `generated records are regenerated but uncommitted` | `python tools/harness/rosy_harness.py generate`가 바꾼 파일(`STATUS.md`, `docs/index.md` 등)을 커밋 |
 | `main`에 push가 거절됨 | 정상. `main`은 PR로만 → §3.1 |
 | push가 `secret detected`로 거절됨 | 토큰이 커밋에 들어갔다 → 그 커밋에서 빼고 환경변수로 |
-| pre-push가 **내가 건드리지 않은** 시험에서 실패 | `python test/known_failures.py`로 확인. `NEW`인데 내 변경과 무관하면 main이 이미 깨진 것 → Issue로 알리고 리드에게 공유. 우회(`--no-verify`)하지 않는다 |
+| pre-push가 **내가 건드리지 않은** 시험에서 실패 | `python test/known_failures.py`로 확인. `NEW`인데 내 변경과 무관하면 main이 이미 깨진 것 → Issue로 알리고 리드에게 공유. 실패한 시험을 피하려고 `--no-verify`를 쓰지 않는다 |
+| pre-push가 시험 PC에 닿지 못해 멈춤 | 실험실 접근(§1.7)이 있으면 Tailscale을 확인하고 다시. 없으면 lint와 `affected --run`을 손으로 통과시킨 뒤 `git push --no-verify`, PR 「증거」에 결과를 적는다 ([CONTRIBUTING](../../.github/CONTRIBUTING.md) 4번, D-762 단계 4 전까지) |
 | 로봇·관제 PC 주소에 닿지 않음 | Tailscale 앱이 켜져 있는지 → Linux는 `--accept-routes` (§1.7) → 그래도 안 되면 리드에게 (권한 정책) |
 | 로봇 `ssh`가 `Permission denied (publickey)` | 팀 키 묶음 설정이 안 됨, 또는 만료(90일) → 리드에게 새 묶음 요청 |
 | 줄 끝 경고 `LF will be replaced by CRLF` | 무시해도 된다 (`.gitattributes`가 정한다) |

@@ -8673,3 +8673,10 @@ osy-d395-s1d\`.
 - 증거: 사용자 방향 합의 및 ADR 기록 요청, 기존 검수 자료 확인 기록·Gazebo m30/m31 인계와 현재 drivable 후처리/모델 역할 검사를 대조했다. 새 학습·모델 재추론·Gazebo 실행 증거는 아니다.
 - gate 변화: 없음. Accepted는 방향 결정이며 구현·정책 승격·배포·실물 수용은 별도다. main 착지·push는 하지 않는다.
 - 결정: D-769.
+
+## 2026-10-16 · uncommitted · docs(reference): git으로 일하는 법과 인수인계 문서
+
+- 변경: `docs/reference/git-workflow.md`(팀원 PR 길과 실험실 착지 길 비교, `--no-verify` 기준, push 순서, D-762 단계 현황, 사용자가 정할 것)와 `docs/reference/handoff.md`(목표, 증거 기준 현재 상태, 2026-10-15 흐름별 인계 문서 색인, 다음 할 일, 담당, 새 컴퓨터 체크리스트) 신규. README 「시작하기」·문서 지도, CONTRIBUTING, 팀 가이드 읽기 순서에서 링크. 팀 가이드 §1.5·§6의 훅 설명과 `--no-verify` 문구를 CONTRIBUTING(D-584 개정)과 맞추고 `middleware/apps/device/`를 `middleware/devices/`로 정정. shared-checkout·루트 AGENTS·rosy-land-on-main SKILL의 옛 우산 경로(F: 드라이브)를 컴퓨터와 무관한 상위 폴더 표기로.
+- 증거: 새 문서 두 개의 상대 링크를 파일 존재로 확인했다. `rosy_harness.py lint`와 문서 계약 시험은 이 PC에 Python이 없어 돌리지 않았다(미실행).
+- gate 변화: 없음.
+- 결정: 없음. 절차는 바꾸지 않고 기존 ADR과 CONTRIBUTING의 규칙을 모아 적었다.

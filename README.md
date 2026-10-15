@@ -77,8 +77,8 @@ flowchart LR
 
 | 나는 | 여기부터 |
 |---|---|
-| 🆕 새로 합류한 팀원 | **[팀 가이드](docs/reference/team-guide.md)** — 초대 수락부터 첫 PR까지 순서대로 |
-| 🔀 PR을 올리려는 사람 | [기여 안내](.github/CONTRIBUTING.md) |
+| 🆕 새로 합류한 팀원 | **[인수인계](docs/reference/handoff.md)** — 무엇을 만들고, 어디까지 왔고, 다음은 무엇인가 → **[팀 가이드](docs/reference/team-guide.md)** — 초대 수락부터 첫 PR까지 순서대로 |
+| 🔀 PR을 올리려는 사람 | **[git으로 일하는 법](docs/reference/git-workflow.md)** — 브랜치·커밋·PR·push 규칙 한 장 · [기여 안내](.github/CONTRIBUTING.md) |
 | 🛠️ 빌드·시뮬·테스트·배포 | [개발 가이드](docs/reference/developer-guide.md) |
 | 📊 지금 무엇이 되고 안 되나 | [STATUS.md](STATUS.md) — 모듈별 게이트 |
 | 🤖 실험실 PC 공유 체크아웃의 AI 세션 | [같이 하는 깃](docs/reference/shared-checkout.md) · [AGENTS.md](AGENTS.md) |
@@ -101,7 +101,8 @@ flowchart LR
 | 현재 구조 | [전체 폴더 책임](docs/reference/platform-folder-responsibilities.md) · [CORE·Drive 책임](docs/reference/core-drive-responsibilities.md) |
 | 관제 규칙 | [Fleet 통합 규칙집](docs/reference/fleet-rulebook.md) — law · rule · AI 후보 · 실행 허가 · 결과 확인 |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
-| 기록 | [해결 기록](docs/solutions/) · [전체 색인](docs/index.md) |
+| 협업 | [인수인계](docs/reference/handoff.md) · [git으로 일하는 법](docs/reference/git-workflow.md) · [보류 브랜치](docs/reference/held-branches.md) |
+| 기록 | [해결 기록](docs/solutions/) · [docs 모듈 색인](docs/index.md) |
 
 문서끼리 다르면 **SRS · API reference · ADR**이 이긴다.
 
@@ -130,7 +131,7 @@ flowchart LR
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
   시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
   `tools/remote/hosts.example.json`을 복사한다.
-  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내은 해당 모듈의
+  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내는 해당 모듈의
   `docs/` 하나에 둔다.
 
 ## 로봇 실행
