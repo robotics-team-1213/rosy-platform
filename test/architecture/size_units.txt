@@ -47,3 +47,4 @@ fleet/fleet/server/missions
 fleet/fleet/server/work small
 fleet/fleet/server/trips
 fleet/fleet/server/trip_checks small
+fleet/fleet/server/trip_progress small

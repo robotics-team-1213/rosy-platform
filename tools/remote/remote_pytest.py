@@ -24,7 +24,9 @@ the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (def
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
-collected, counts as 0). Standard library only.
+collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
+on the host: ``-- ROSY_RUN_BROWSER_TESTS=1 <paths>`` runs the real-Chromium tests, and the job
+installs Chromium for the venv's playwright first. Standard library only.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ import argparse
 import collections
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -70,6 +73,9 @@ PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
 PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider"]
+# Leading words of an invocation that remote_job.JOB exports instead of passing to pytest.
+ENV_ARG = re.compile(r"^ROSY_[A-Z0-9_]*=")
+BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
 CI = ".github/workflows/ci.yml"
 DEVICE_REQ = "deploy/robot/pinky_pro/image/device-python-requirements.txt"
 CRYPTO_REQ = "deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt"
@@ -90,11 +96,13 @@ umask 022  # the checkout keeps git modes; 0002 would leave 0664 files for mode-
 mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
-exec 8>"$R/repo.lock"; flock -w 600 8  # concurrent runs fetching into one repo race on ref locks
+# Read the bundle before taking the lock, bounded: a half-open link once left `cat` holding it for hours.
+timeout 600 cat > "$R/runs/$NAME.bundle"
+exec 8>"$R/repo.lock"  # concurrent runs fetching into one repo race on ref locks
+flock -w 600 8 || { echo "[remote] $R/repo.lock still held after 600 s (lsof it)" >&2; exit 1; }
 [ -d "$R/repo/.git" ] || git clone -q --no-checkout "$3" "$R/repo"
 cd "$R/repo"
 git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
-cat > "$R/runs/$NAME.bundle"
 git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
 """ + remote_job.SWEEP + r"""git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked
@@ -106,7 +114,7 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # wheels) plus the deploy/site/requirements-fleet.txt pins the device set lacks
 # (cryptography 50: Ubuntu's 41 has no x509.verification) and pip numpy/pillow/
 # opencv-python-headless for CI's apt python3-opencv/python3-pil, and the playwright
-# package (no browser) because *_browser.py modules import it at collection. No system
+# package because *_browser.py modules import it at collection (Chromium: remote_job.JOB). No system
 # site-packages: they leak Ubuntu's old cryptography/Jinja2 and give no rclpy.
 # Each dependency hash has its own venv and lock. Old ~/rosy-test/venv remains for
 # other sessions that use it directly; a new hash never waits for their tests.
@@ -438,7 +446,8 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
                 rerun = log.with_name(log.stem + "-rerun.txt")
                 try:
                     rerun_code = remote_job.run(host, name, f"{k}r", rerun, [name, deps_sha, cpu],
-                                                [*ids, "-q", "-rA", "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
+                                                [*itertools.takewhile(ENV_ARG.match, inv), *ids, "-q", "-rA",
+                                                 "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
                 except remote_job.Lost as error:
                     lost, rerun_code = str(error), remote_job.LOST_EXIT
                     print(lost, file=sys.stderr, flush=True)

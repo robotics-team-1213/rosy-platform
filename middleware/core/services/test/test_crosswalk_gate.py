@@ -703,6 +703,52 @@ def test_a_lane_seen_on_and_off_between_ticks_never_clears_a_person():
     assert None not in reasons
 
 
+def _cross_between_walls(*, seen_while_looking=True, walls=True, person=()):
+    """D-573 개정 5 8항 (Gazebo m34/m35): a zone imaged 0.1 rad off the lane (no edges of its own) on a
+    lane whose walls stand 0.117 m either side. The robot looks (with the lane seen if
+    `seen_while_looking`), then crosses along the lane with no corridor at all (the camera's lane bound
+    above MAX_LATERAL_M); `person` appears once it moves. Returns [(cap, reason, remembered lane yaw)]."""
+    px = 0.30 - 0.035 - B.front_x_m
+    g = CrosswalkGate()
+    zone = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=0.1, near=0.30, far=0.45, margin=0.02, lateral=0.02)
+    geo = Geometry(front_x=B.front_x_m, rear_x=B.rear_x_m, lidar_x=B.lidar_x_m, v_cross=0.04, s_wait=0.04,
+                   slow_from=0.08, lane_half_m=0.10, body_half_m=B.half_width_m + 0.02, strip_m=0.0,
+                   exit_m=0.15, end_margin=0.02)
+    things = [(x / 200, side, 0.002) for x in range(-80, 320) for side in (-0.117, 0.117)] if walls else []
+    out, moving = [], False
+    for i in range(200):
+        t = 1.0 + i * 0.1
+        pose = SimpleNamespace(x=px, y=0.0, yaw=0.0)
+        seen = (pose, 0.079, -0.079, 0.02) if seen_while_looking and not moving else None
+        scan = Scan(rays_at(px, things + (list(person) if moving else []), step_deg=1), 0.05, t)
+        cap, reason = _step(g, zone, geo, pose, t, scan, corridor=seen)
+        out.append((cap, reason, getattr(g, "_lane_yaw", None)))
+        if cap is None and moving:
+            return out                                  # past the zone
+        if cap:
+            moving, px = True, px + cap * 0.1
+    return out
+
+
+def test_a_crossing_that_loses_the_lane_keeps_the_lanes_direction_not_the_zones():
+    out = _cross_between_walls()
+    crossing = out[next(i for i, (cap, _, _) in enumerate(out) if cap):]
+    assert crossing[-1][0] is None, out[-3:]                          # crossed and closed
+    assert all(cap for cap, _, _ in crossing[:-1]), [r for _, r, _ in crossing if r]
+    assert crossing[-2][2] == pytest.approx(0.0) and crossing[-1][2] is None   # forgotten with the zone
+
+
+def test_a_person_in_the_lane_still_holds_a_crossing_that_lost_the_lane():
+    out = _cross_between_walls(person=[(0.40, 0.03, 0.02)])
+    assert out[-1][0] == 0.0 and out[-1][1] == "crosswalk_person_present", out[-3:]
+
+
+def test_a_zone_never_seen_with_a_lane_keeps_its_own_frame():
+    out = _cross_between_walls(seen_while_looking=False, walls=False)
+    assert out[-1][0] is None and all(yaw is None for _, _, yaw in out)
+    assert "crosswalk_person_present" in _look_between_walls(0.03, None)   # with the walls: as before
+
+
 def test_an_armed_zone_the_robot_turned_away_from_disarms_with_a_lane_in_view():
     """Review 2026-10-14: turning the frame to the lane seen now must not hide the turn from
     _on_course (a zone left behind at a junction would ride along the new road)."""

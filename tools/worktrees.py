@@ -106,6 +106,8 @@ def _generated_beside(parent: Path) -> bool:
 def _is_cache(worktree: Path, rel: str) -> bool:
     parts = rel.rstrip("/").split("/")
     dirs = parts if rel.endswith("/") else parts[:-1]
+    if dirs[:2] == [".omc", "state"]:  # hook throttles and session files; notes and handoffs elsewhere in .omc stay
+        return True
     for i, name in enumerate(dirs):
         if name in CACHES or name.endswith(".egg-info"):
             return True
