@@ -151,8 +151,9 @@ class CrosswalkGateMixin:
         gate took. All of it while a non-FREE D-517 authority, a D-573 look/wait or a crossing held by a
         return ahead (look_progress) stands the robot; a crossing's slower share against `speed`. dt
         counts at most stale_after_s, only with a matching previous tick that also lost time. With `clock`
-        (the maneuver or arc, its 'added'): an authority wait on both ticks in full, its lease and ttl
-        bound it (m33c: 30 s behind a parked robot); any other share crosswalk_report_s + clear_s in all. Locked."""
+        (the maneuver or arc, its 'added'): a HOLDING authority on both ticks in full, Fleet's live ttl
+        bounds it (m33c: 30 s behind a parked robot); any other share, NONE/EXPIRED authority included,
+        crosswalk_report_s + clear_s in all. Locked."""
         c = self._config
         wait = self._regulation_wait(now)
         if wait is not None:
@@ -160,7 +161,9 @@ class CrosswalkGateMixin:
         else:
             xw = self._xwalk.status(now) or {}
             lost = max(0.0, 1 - c.crosswalk_cross_speed / speed) if xw.get("state") == CROSSING and speed else 0.0
-        auth, previous = wait == "authority", getattr(self, '_regulated_wait_sample', None)
+        # uncapped only while Fleet is alive and says wait (HOLDING); NONE/EXPIRED keep the cap
+        auth = wait == "authority" and self._authority_state(now)[0] == "HOLDING"
+        previous = getattr(self, '_regulated_wait_sample', None)
         if previous is not None and now == previous[0]:
             self._regulated_wait_sample = (now, min(lost, previous[1]), auth and previous[2])
             return 0.0
