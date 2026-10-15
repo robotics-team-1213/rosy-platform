@@ -23,8 +23,7 @@ setup(
               'develop': packaging['HolderDevelop']},
     package_data={'fleet.server.web': [
         '*.html', '*.css', '*.js',
-        'shared/*.css', 'shared/*.js',
-        'cell/*.html', 'cell/*.css', 'cell/*.js',
+        '*/*.html', '*/*.css', '*/*.js',  # every console subpackage: shared/, cell/, work/
     ]},
     include_package_data=True,
     exclude_package_data={'fleet.server': [
