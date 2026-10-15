@@ -166,7 +166,10 @@ def test_inner_installs_contracts_before_the_bench_and_stops_on_failure(tmp_path
     out = tmp_path / "out"
     out.mkdir()
     # Substitute only external ROS/build/cache prerequisites; execute the install and bench wiring.
-    script = ('source() { :; }; colcon() { :; }; cd "$WORKSPACE"\n'
+    profile = tmp_path / "contracts/foundation/core_common/profile.py"
+    profile.parent.mkdir(parents=True)
+    profile.write_text('DEFAULT_ROBOT = "test_profile"\n')
+    script = ('source() { :; }; colcon() { echo "$*" > "$OUT/build-args.txt"; }; cd "$WORKSPACE"\n'
               + rs.INNER.replace(rs.DEPS, "")
               + '\n')
     result = _bash(script, WORKSPACE=str(tmp_path), OUT=str(out), PYDEPS=str(tmp_path / "deps"),
@@ -174,6 +177,7 @@ def test_inner_installs_contracts_before_the_bench_and_stops_on_failure(tmp_path
                    BENCH_CMD="python3 -c 'import installed_contract_probe as p; assert p.READY; print(\"BENCH_READY\")'")
     assert result.returncode == installer_rc, result.stderr
     assert ("BENCH_READY" in result.stdout) == (installer_rc == 0)
+    assert "--packages-up-to gz_sim test_profile" in (out / "build-args.txt").read_text()
 
 
 @BASH
