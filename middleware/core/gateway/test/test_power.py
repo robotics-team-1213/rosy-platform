@@ -38,6 +38,14 @@ class FakeClock:
         return self.now
 
 
+def _present(manager, clock, range_m, samples=5, period_s=0.1):
+    """A real approach: consecutive valid samples spanning min_presence_s (0.4 s)."""
+    for i in range(samples):
+        if i:
+            clock.advance(period_s)
+        manager.on_range(range_m)
+
+
 @pytest.fixture
 def clock():
     return FakeClock()
@@ -99,10 +107,12 @@ class TestPresenceDetector:
         assert det.update(0.40) == PresenceState.NONE
 
     @pytest.mark.parametrize("bad", [float("nan"), float("inf"), -1.0, 0.0, 5.0])
-    def test_invalid_samples_are_discarded(self, config, bad):
+    def test_invalid_sample_breaks_the_detection_streak(self, config, bad):
+        # D-24 개정 2026-10-04: 무효 표본은 연속을 끊는다(예전에는 보존했다).
         det = PresenceDetector(config.presence)
         det.update(0.20)
-        det.update(bad)                                    # 무시 — 카운터 보존
+        det.update(bad)
+        assert det.update(0.20) == PresenceState.NONE
         assert det.update(0.20) == PresenceState.NEAR
 
     def test_invalid_sample_does_not_release(self, config):
@@ -163,8 +173,7 @@ class TestWake:
         manager.tick()
         assert manager.mode == PowerMode.STANDBY
 
-        manager.on_range(0.20)
-        manager.on_range(0.20)
+        _present(manager, clock, 0.20)
         assert manager.mode == PowerMode.ACTIVE
         assert manager.presence == PresenceState.NEAR
         assert manager.last_wake_reason == "proximity"
@@ -173,21 +182,18 @@ class TestWake:
     def test_contact_reports_its_own_reason(self, manager, clock):
         clock.advance(400.0)
         manager.tick()
-        manager.on_range(0.03)
-        manager.on_range(0.03)
+        _present(manager, clock, 0.03)
         assert manager.last_wake_reason == "contact"
 
     def test_info_window_expires_and_idle_timer_resumes(self, manager, clock):
         clock.advance(400.0)
         manager.tick()
-        manager.on_range(0.20)
-        manager.on_range(0.20)
+        _present(manager, clock, 0.20)
         assert manager.info_visible() is True
 
         clock.advance(16.0)
         manager.on_range(1.50)                             # 사람이 떠남
-        manager.on_range(1.50)
-        manager.on_range(1.50)
+        _present(manager, clock, 1.50)
         manager.tick()
         assert manager.info_visible() is False
         assert manager.presence == PresenceState.NONE
@@ -195,8 +201,7 @@ class TestWake:
     def test_sustained_presence_extends_info_window(self, manager, clock):
         clock.advance(400.0)
         manager.tick()
-        manager.on_range(0.20)
-        manager.on_range(0.20)
+        _present(manager, clock, 0.20)
 
         clock.advance(10.0)
         manager.on_range(0.20)                             # 계속 앞에 있음
@@ -279,8 +284,7 @@ class TestEvents:
     def test_presence_detected_and_cleared(self, manager, clock, bus):
         clock.advance(400.0)
         manager.tick()
-        manager.on_range(0.20)
-        manager.on_range(0.20)
+        _present(manager, clock, 0.20)
         assert "presence.detected" in self._types(bus)
         assert "power.wake" in self._types(bus)
 
@@ -291,17 +295,14 @@ class TestEvents:
     def test_presence_does_not_repeat_while_held(self, manager, clock, bus):
         clock.advance(400.0)
         manager.tick()
-        for _ in range(10):
-            manager.on_range(0.20)
+        _present(manager, clock, 0.20, samples=10)
         assert self._types(bus).count("presence.detected") == 1
 
     def test_escalation_emits_second_detection(self, manager, clock, bus):
         clock.advance(400.0)
         manager.tick()
-        manager.on_range(0.20)
-        manager.on_range(0.20)
-        manager.on_range(0.03)
-        manager.on_range(0.03)
+        _present(manager, clock, 0.20)
+        _present(manager, clock, 0.03)
         assert self._types(bus).count("presence.detected") == 2
 
 
@@ -349,8 +350,7 @@ class TestStatusSnapshot:
     def test_status_reports_full_shape(self, manager, clock):
         clock.advance(400.0)
         manager.tick()
-        manager.on_range(0.20)
-        manager.on_range(0.20)
+        _present(manager, clock, 0.20)
         status = manager.status()
         assert status.mode == PowerMode.ACTIVE
         assert status.presence == PresenceState.NEAR
@@ -428,6 +428,7 @@ class TestLidarStandby:
     def test_wake_restarts_lidar_after_spinup(self, lidar_manager, clock):
         self._to_standby(lidar_manager, clock)
         lidar_manager.wake("api")
+        lidar_manager.report_device_ready("lidar", True)   # 스캔이 다시 들어온다
         assert lidar_manager.lidar_spinning is True
         assert lidar_manager.lidar_ready() is False        # 아직 스핀업 중
 
@@ -436,6 +437,14 @@ class TestLidarStandby:
         clock.advance(0.2)
         assert lidar_manager.lidar_ready() is True
 
+    def test_woken_lidar_without_a_scan_is_never_ready(self, lidar_manager, clock):
+        """D-440 fail safe: 깨우는 명령이 닿지 않았으면 스캔도 없다 — 시간만으로는 준비되지 않는다."""
+        self._to_standby(lidar_manager, clock)
+        lidar_manager.wake("api")
+        clock.advance(60.0)
+        assert lidar_manager.lidar_ready() is False
+        assert lidar_manager.motion_ready() is False
+
     def test_activity_restarts_lidar(self, lidar_manager, clock):
         self._to_standby(lidar_manager, clock)
         lidar_manager.on_activity("cmd_vel")
@@ -443,8 +452,7 @@ class TestLidarStandby:
 
     def test_proximity_restarts_lidar(self, lidar_manager, clock):
         self._to_standby(lidar_manager, clock)
-        lidar_manager.on_range(0.20)
-        lidar_manager.on_range(0.20)
+        _present(lidar_manager, clock, 0.20)
         assert lidar_manager.lidar_spinning is True
 
     def test_non_idle_robot_mode_restarts_lidar(self, lidar_manager, clock):
@@ -462,16 +470,24 @@ class TestLidarStandby:
         """이미 회전 중이면 재기동 취급하지 않는다 — ready가 되돌아가지 않는다."""
         self._to_standby(lidar_manager, clock)
         lidar_manager.wake("api")
+        lidar_manager.report_device_ready("lidar", True)
         clock.advance(3.0)
         assert lidar_manager.lidar_ready() is True
 
         lidar_manager.on_activity("cmd_vel")
         assert lidar_manager.lidar_ready() is True
 
-    def test_startup_lidar_is_ready_without_spinup(self, lidar_manager):
-        """core 기동 시점에 드라이버는 이미 돌고 있다 — 스핀업 페널티 없음."""
+    def test_startup_lidar_waits_for_its_first_scan(self, lidar_manager, clock):
+        """D-440: CORE 가 절전 중에 다시 떴을 수 있다 — 정책이 움직이는 LiDAR 는 첫 스캔으로 확인한다."""
         assert lidar_manager.lidar_spinning is True
+        clock.advance(60.0)
+        assert lidar_manager.lidar_ready() is False
+        lidar_manager.report_device_ready("lidar", True)
         assert lidar_manager.lidar_ready() is True
+
+    def test_startup_lidar_without_the_policy_is_ready(self, manager):
+        """정책이 꺼진 로봇은 기동 시점에 이미 준비돼 있다 — 기존 동작."""
+        assert manager.lidar_ready() is True and manager.motion_ready() is True
 
     # --- 이벤트와 상태 ----------------------------------------------------
 
@@ -504,6 +520,7 @@ class TestLidarStandby:
         assert status.lidar_ready is False
 
         lidar_manager.wake("api")
+        lidar_manager.report_device_ready("lidar", True)
         clock.advance(2.5)
         status = lidar_manager.status()
         assert status.lidar_spinning is True

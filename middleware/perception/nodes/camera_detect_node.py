@@ -28,6 +28,7 @@ from std_msgs.msg import Bool, Float32, String
 from core_common.protocol.recording import ACTIVE_TOPIC
 from . import executor_choice
 from .camera_lock import CameraLockMixin
+from .camera_power import CameraPowerMixin
 from .camera_region_range import RegionRangeMixin
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
@@ -87,7 +88,7 @@ class _OpenCVCamera:
         unfreeze_v4l2_controls(self._capture, self._cv2)
 
 
-class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
+class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node):
     def __init__(self):
         super().__init__('camera_detect_node')
         self.declare_parameter('width', 320)
@@ -255,6 +256,7 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
         self._policy = CameraPolicy(
             hits=int(self.get_parameter('hits').value),
             warmup_frames=int(self.get_parameter('warmup_frames').value))
+        self._start_power_gate(_RECORDER_QOS)
         self._start_cam()
         period = 1.0 / max(1.0, float(self.get_parameter('fps').value))
         self.create_timer(period, self.tick)
@@ -427,6 +429,8 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
         self.get_logger().info(f'camera controls {summary}')
 
     def tick(self):
+        if self._power_held(self._power_gate.plan()):
+            return
         if self._cam is None:
             self.cliff_pub.publish(Bool(data=self._policy.cliff))
             self.block_pub.publish(Bool(data=True))
@@ -464,6 +468,8 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
         cliff, blocked = self._policy.update(res)
         self.cliff_pub.publish(Bool(data=cliff))
         self.block_pub.publish(Bool(data=blocked))
+        if self._camera_ready_reported is False and self._policy.ready:
+            self._report_camera_ready(True)
         if not self._policy.ready:
             return
 

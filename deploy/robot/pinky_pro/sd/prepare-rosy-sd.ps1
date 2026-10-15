@@ -29,6 +29,7 @@ param(
     [string]$PlanPath,
     [string]$OperatorPublicKey,
     [string]$ReprovisionReceipt,
+    [switch]$ReplaceExistingProvision,
     [switch]$SetWifiCredential,
     [switch]$PlanOnly,
     [string]$ProgressPath,
@@ -266,16 +267,34 @@ function Get-CardIdentity([object]$Disk) {
 # finished for some robot, and it is never erased under another plan.
 function Find-ExistingBundle {
     if ($BootMountPath) {
+        if (-not $DiskInventoryJson) {
+            $root = Resolve-BootMount $DiskNumber $BootMountPath $false
+            if ($root.TrimEnd('\') -ne ([IO.Path]::GetPathRoot($root)).TrimEnd('\')) {
+                Fail "inspect the boot volume root, not a subdirectory"
+            }
+        }
         $candidate = Join-Path $BootMountPath "rosy-provision"
-        if (Test-Path -LiteralPath $candidate) { return $candidate }
-        return $null
+        if ($DiskInventoryJson) {
+            if (Test-Path -LiteralPath $candidate) { return $candidate }
+            return $null
+        }
     }
     if ($DiskInventoryJson) { return $null }
-    foreach ($partition in @(Get-Partition -DiskNumber $DiskNumber -ErrorAction SilentlyContinue)) {
-        if ([string]$partition.DriveLetter -notmatch '^[A-Za-z]$') { continue }
+    $bundles = @()
+    foreach ($partition in @(Get-Partition -DiskNumber $DiskNumber -ErrorAction Stop)) {
+        # The provision bundle lives on the boot volume, never the Linux root partition.
+        if ($partition.MbrType -eq 131 -or [string]$partition.GptType -eq '{0fc63daf-8483-4772-8e79-3d69d8477de4}') { continue }
+        if ([string]$partition.DriveLetter -notmatch '^[A-Za-z]$') {
+            Fail "cannot inspect an unmounted card partition; mount its boot volume before erasing"
+        }
+        if (-not (Test-Path -LiteralPath "$($partition.DriveLetter):\" -PathType Container)) {
+            Fail "cannot inspect the card volume before erasing"
+        }
         $candidate = "$($partition.DriveLetter):\rosy-provision"
-        if (Test-Path -LiteralPath $candidate) { return $candidate }
+        if (Test-Path -LiteralPath $candidate) { $bundles += $candidate }
     }
+    if ($bundles.Count -gt 1) { Fail "inspect multiple provisioning bundles before erasing" }
+    if ($bundles.Count -eq 1) { return $bundles[0] }
     return $null
 }
 
@@ -654,7 +673,39 @@ if ($ReprovisionReceipt) {
     }
     $robotNumberSource = "reprovision"
 }
+if ($ReplaceExistingProvision -and $ReprovisionReceipt) {
+    Fail "-ReplaceExistingProvision is for a different robot; a reimage keeps its own identity"
+}
+function Get-PriorConfig([object]$Source, [string]$Section, [string]$Field) {
+    if (-not $Source -or -not $Source.PSObject.Properties[$Section]) { return $null }
+    $part = $Source.$Section
+    if (-not $part -or -not $part.PSObject.Properties[$Field]) { return $null }
+    return (@($part.$Field) -join ",")
+}
 $fleetSource = "operator"
+# D-746: a reimage keeps the robot's deployment config from the receipt unless
+# the operator passes a value; the reviewed plan then pins what was inherited.
+if ($reprovision -and $reprovision.PSObject.Properties["personalization"]) {
+    $previous = $reprovision.personalization
+    $inherited = [ordered]@{
+        Model = Get-PriorConfig $previous "device_identity" "model"
+        Preset = Get-PriorConfig $previous "runtime" "requested_preset"
+        CountryCode = Get-PriorConfig $previous "network" "country_code"
+    }
+    foreach ($name in $inherited.Keys) {
+        if (-not $PSBoundParameters.ContainsKey($name) -and $inherited[$name]) {
+            Set-Variable -Name $name -Value $inherited[$name]
+        }
+    }
+    $priorFleetEndpoint = Get-PriorConfig $previous "fleet" "endpoint"
+    $priorFleetTrust = Get-PriorConfig $previous "fleet" "trust_profile"
+    if (-not $PSBoundParameters.ContainsKey("FleetEndpoint") -and -not $PSBoundParameters.ContainsKey("FleetTrustProfile") -and
+            $priorFleetEndpoint -and $priorFleetTrust) {
+        $FleetEndpoint = $priorFleetEndpoint
+        $FleetTrustProfile = $priorFleetTrust
+        $fleetSource = "reprovision"
+    }
+}
 if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
     Fail "plan already exists and will not be overwritten"
 }
@@ -696,6 +747,12 @@ if ($PlanPath -and -not $PlanOnly) {
     }
     $robotNumberSource = [string]$reviewedPlan.robot_number_source
     $fleetSource = [string]$reviewedPlan.fleet_source
+    if ($planKeys -ccontains "replace_existing_provision") {
+        if ($PSBoundParameters.ContainsKey("ReplaceExistingProvision") -and [bool]$ReplaceExistingProvision -ne [bool]$reviewedPlan.replace_existing_provision) {
+            Fail "-ReplaceExistingProvision contradicts the reviewed plan"
+        }
+        $ReplaceExistingProvision = [bool]$reviewedPlan.replace_existing_provision
+    }
 }
 elseif (-not $PlanOnly -and $robotNumberSource -eq "auto") {
     # A number drawn inside a write would never be shown before the erase.
@@ -802,6 +859,10 @@ if ($OperatorPublicKey) {
     }
     $operatorFingerprint = ([string]$operatorFingerprint).Trim()
 }
+if ($reprovision -and $reprovision.PSObject.Properties["personalization"] -and
+        (Get-PriorConfig $reprovision.personalization "operator" "ssh_key_fingerprints") -and -not $operatorFingerprint) {
+    Fail "the previous card had an operator SSH key; pass -OperatorPublicKey for this reimage"
+}
 
 if (-not $ProgressPath -and -not $PlanOnly) { $ProgressPath = "$ReceiptPath.progress.jsonl" }
 $planFullPath = $(if ($PlanPath -and (Test-Path -LiteralPath $PlanPath -PathType Leaf)) { (Resolve-Path -LiteralPath $PlanPath).ProviderPath } else { "" })
@@ -904,8 +965,40 @@ if ($DiskSerial) {
 $firstDisk = Select-SafeDisk $firstInventory $DiskNumber
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
 $cardIdentity = Get-CardIdentity $firstDisk
+# D-746: the writer erases the whole card, so a provision.json already on it is
+# another robot's identity unless this is that robot's reimage or the operator
+# explicitly replaces it. Only names and a file hash are reported, no secrets.
+$priorProvisionHash = $null
+$priorDeviceName = $null
+$existingBundle = $(if ($ResumeAfterWrite) { $null } else { Find-ExistingBundle })
+$existingProvision = $(if ($existingBundle) { Join-Path $existingBundle "provision.json" } else { $null })
+if ($existingProvision -and (Test-Path -LiteralPath $existingProvision -PathType Leaf)) {
+    try {
+        $priorIdentity = (Get-Content -LiteralPath $existingProvision -Raw -Encoding UTF8 | ConvertFrom-Json).device_identity
+        $priorDeviceName = [string]$priorIdentity.device_name
+        $priorDeviceUid = [string]$priorIdentity.device_uid
+        if (-not $priorDeviceName -or -not $priorDeviceUid) { throw "missing identity" }
+    }
+    catch { Fail "the card's existing provision.json cannot establish its identity; inspect the card before erasing it" }
+    $priorProvisionHash = (Get-FileHash -LiteralPath $existingProvision -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($reprovision) {
+        if ($priorDeviceUid -cne [string]$reprovision.device_uid -or $priorDeviceName -cne [string]$reprovision.device_name) {
+            Fail "the card holds $priorDeviceName, not the reimaged robot $($reprovision.device_name)" "insert that robot's card, or plan a different robot with -ReplaceExistingProvision and no receipt"
+        }
+    }
+    elseif (-not $ReplaceExistingProvision) {
+        Fail "the card already holds provisioning for $priorDeviceName; this plan is for $DeviceName" "use the card's reprovision receipt to reimage $priorDeviceName, or pass -ReplaceExistingProvision to erase it for $DeviceName"
+    }
+}
+if ($reviewedPlan -and $planKeys -ccontains "prior_provision_sha256" -and
+        [string]$reviewedPlan.prior_provision_sha256 -cne [string]$priorProvisionHash -and -not $ResumeAfterWrite) {
+    Fail "the card's prior provisioning changed since the reviewed plan"
+}
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })
+    replace_existing_provision = [bool]$ReplaceExistingProvision
+    prior_provision_sha256 = $priorProvisionHash
+    prior_device_name = $priorDeviceName
     physical_drive = $physicalDrive
     disk_number = [int]$firstDisk.Number
     disk_model = [string]$firstDisk.FriendlyName
@@ -1589,6 +1682,8 @@ $registry | ConvertTo-Json | Set-Content -LiteralPath $registryTemp -Encoding UT
 Move-Item -LiteralPath $registryTemp -Destination $RegistryJson -Force
 
 $receipt = [ordered]@{
+    replace_existing_provision = [bool]$ReplaceExistingProvision
+    prior_device_name = $priorDeviceName
     device_uid = $DeviceUid
     device_name = $DeviceName
     robot_number = $RobotNumber

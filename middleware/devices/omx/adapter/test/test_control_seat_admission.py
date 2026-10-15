@@ -314,12 +314,16 @@ def test_canonical_cli_forwards_exact_terminal_to_shared_pilot(tmp_path, monkeyp
 
 
 @pytest.mark.parametrize("revoke", ["release", "expiry", "live"])
-def test_preload_requires_its_original_live_seat(tmp_path, revoke):
+def test_preload_requires_its_original_live_seat(tmp_path, revoke, monkeypatch):
     from dataclasses import replace
     from uuid import uuid4
     from test_pilot_sim_runtime import Arm, event
     from omx_adapter.pilot_sim_runtime import PilotSimRuntime
     arm = Arm()
+    # This tests seat lifetime; joint freshness has separate runtime tests.
+    runtime_clock = arm.latest_joint_state.received_at
+    monkeypatch.setattr("omx_adapter.pilot_sim_runtime.time",
+                        SimpleNamespace(monotonic=lambda: runtime_clock))
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     clock = [10.0]
     admission = ControlSeatAdmission(arm.owner, ActionStore(tmp_path / "preload.sqlite3"),

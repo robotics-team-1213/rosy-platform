@@ -32,11 +32,13 @@ from std_msgs.msg import Bool, Float32, String
 from std_srvs.srv import Empty, SetBool
 
 from core.bridge import (
+    device_power,
     display,
     docking_mode,
     goal_tracker,
     observation,
     odometry,
+    pilot_recorder_client,
     reconcile,
     save_map,
     traffic_gate,
@@ -150,6 +152,8 @@ class RosBridge:
         node.create_subscription(String, "localization/result", self._on_loc_result, 10)
         # D-411 A: the camera unit's recorder status (1 Hz, latched); the guard judges on it.
         node.create_subscription(String, STATUS_TOPIC, self._on_pilot_recorder_status, _LATCHED)
+        # Per-device power policy: device nodes report readiness after a wake.
+        node.create_subscription(String, device_power.DEVICE_READY_TOPIC, self._on_device_ready, 10)
 
         self.power_mode_pub = node.create_publisher(String, "power/mode", _LATCHED)
         self.display_info_pub = node.create_publisher(String, "display/info", 10)
@@ -170,6 +174,8 @@ class RosBridge:
                 String, "line/route_context", route_qos)
         self._route_context_previous = None
         self._route_context_at = float("-inf")
+        # Per-device power policy: latched level board for topic-driven devices (camera, perception).
+        self.devices_pub = node.create_publisher(String, device_power.DEVICES_TOPIC, _LATCHED)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -178,6 +184,15 @@ class RosBridge:
         self._lidar_stop_client = node.create_client(Empty, "stop_motor")
         self._pilot_recorder_client = node.create_client(SetBool, SET_ACTIVE_SERVICE)  # D-411 A
         self._pilot_recording_start_client = node.create_client(PilotRecordingStart, START_SERVICE)
+        # One DevicePowerPort per declared device. Undeclared devices are never touched.
+        board = device_power.DeviceBoard(lambda data: self.devices_pub.publish(String(data=data)))
+        self._device_ports = {
+            name: (device_power.ServiceDevicePort(name, self._send_lidar)
+                   if name == device_power.LIDAR
+                   else device_power.TopicDevicePort(name, board))
+            for name in services.power.devices}
+        # A managed device may be off if CORE restarted during STANDBY: unknown, so send once.
+        self._device_applied: dict = dict.fromkeys(services.power.managed_devices())
 
         self._cmd_timer = node.create_timer(1.0 / 50.0, self._publish_cmd_vel)
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
@@ -207,8 +222,6 @@ class RosBridge:
             self._slam_client = node.create_client(SaveMap, "slam_toolbox/save_map")
 
         self._published_power_mode: Optional[str] = None
-        # 드라이버는 core보다 먼저 떠서 이미 회전 중이다 — 기동 시 불필요한 호출 방지.
-        self._applied_lidar_spinning = True
         self._info_was_visible = False
         self._applied_led = None
         self._emotion_shown = None
@@ -276,8 +289,11 @@ class RosBridge:
         self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
             String(data=json.dumps(teleop_intent(**fields))))
         guard = self._svc.pilot_recording
-        guard.request_active = self._request_pilot_recording
-        guard.request_start = self._request_pilot_recording_start
+        warn = self._node.get_logger().warn
+        guard.request_active = lambda on, wait: pilot_recorder_client.request_active(
+            self._pilot_recorder_client, on, wait, warn)
+        guard.request_start = lambda mode, wait: pilot_recorder_client.request_start(
+            self._pilot_recording_start_client, mode, wait, warn)
         guard.start_available = self._pilot_recording_start_client.service_is_ready
         guard.publish_fetched = lambda rid: self.pilot_fetched_pub.publish(
             String(data=json.dumps({"id": rid})))
@@ -289,47 +305,6 @@ class RosBridge:
         except (ValueError, TypeError) as exc:
             self._node.get_logger().warn(f"pilot recorder status ignored: {exc}",
                                          throttle_duration_sec=10.0)
-
-    def _request_pilot_recording(self, on: bool, wait: bool) -> tuple[bool, str]:
-        """D-411: ask the camera unit's recorder. wait=False from executor callbacks."""
-        client = self._pilot_recorder_client
-        if not client.service_is_ready():
-            return False, ""
-        request = SetBool.Request()
-        request.data = on
-        future = client.call_async(request)
-        if not wait:
-            # The guard announces nothing until the recorder's status confirms; log a refusal.
-            future.add_done_callback(self._log_pilot_recording_refusal)
-            return True, ""
-        try:
-            response = save_map.await_call(future, timeout=3.0)
-        except RuntimeError:
-            return False, ""
-        return bool(response.success), str(response.message)
-
-    def _request_pilot_recording_start(self, preview_mode: str, wait: bool) -> tuple[bool, str]:
-        client = self._pilot_recording_start_client
-        if not client.service_is_ready():
-            return False, ''
-        request = PilotRecordingStart.Request()
-        request.preview_mode = {'raw': 0, 'annotated': 1}[preview_mode]
-        future = client.call_async(request)
-        if not wait:
-            future.add_done_callback(self._log_pilot_recording_refusal)
-            return True, ''
-        try:
-            response = save_map.await_call(future, timeout=3.0)
-        except RuntimeError:
-            return False, ''
-        return bool(response.success), str(response.message)
-
-    def _log_pilot_recording_refusal(self, future) -> None:
-        response = future.result() if not future.cancelled() and future.exception() is None else None
-        if response is None:
-            self._node.get_logger().warn("pilot recorder did not answer a guard stop")
-        elif not response.success:
-            self._node.get_logger().warn(f"pilot recorder refused a guard stop: {response.message}")
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
@@ -516,7 +491,8 @@ class RosBridge:
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
                       self._readiness, warn=self._node.get_logger().error,
-                      trial_guard=self._bounded_trial_guard)
+                      trial_guard=self._bounded_trial_guard,
+                      motion_ready=self._svc.power.motion_ready)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
@@ -577,6 +553,8 @@ class RosBridge:
         sample = translate.lidar_sample(msg, time.time())
         sample["source_now_ns"] = self._node.get_clock().now().nanoseconds
         self._svc.state.set_sensor("lidar", sample)
+        # A scan that arrives is the LiDAR's own ready report after a power-policy wake.
+        self._svc.power.report_device_ready(device_power.LIDAR, True)
         observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 
     def _on_imu(self, msg: Imu) -> None:
@@ -618,7 +596,10 @@ class RosBridge:
             self._published_power_mode = status.mode.value
             self.power_mode_pub.publish(String(data=status.mode.value.lower()))
 
-        self._reconcile_lidar(status.lidar_spinning)
+        # Devices are already on when CORE starts: nothing is sent until a level changes.
+        device_power.reconcile_devices(self._svc.power.device_levels(), self._device_applied,
+                                       self._device_ports, log=self._node.get_logger().info,
+                                       restarted=self._svc.power.device_restarted)
 
         now = time.monotonic()
         if display.republish_due(status.info_visible, self._info_was_visible,
@@ -746,19 +727,18 @@ class RosBridge:
         self._emotion_client.call_async(request)
         return True
 
-    def _reconcile_lidar(self, spinning: bool) -> None:
-        """LiDAR 는 내비게이션 입력 — 서비스가 늦게 뜨면 latch 없이 다음 틱에 재시도한다."""
-        def send() -> bool:
-            client = self._lidar_start_client if spinning else self._lidar_stop_client
-            if not client.service_is_ready():
-                return False
-            client.call_async(Empty.Request())
-            self._node.get_logger().info(
-                "lidar motor %s requested by power policy" % ("start" if spinning else "stop"))
-            return True
+    def _send_lidar(self, spinning: bool) -> bool:
+        """LiDAR 는 내비게이션 입력 — 서비스가 늦게 뜨면 False, 다음 틱에 재시도한다."""
+        client = self._lidar_start_client if spinning else self._lidar_stop_client
+        if not client.service_is_ready():
+            return False
+        client.call_async(Empty.Request())
+        return True
 
-        _acted, self._applied_lidar_spinning = reconcile.reconcile(
-            spinning, self._applied_lidar_spinning, send, latch_on_skip=False)
+    def _on_device_ready(self, msg: String) -> None:
+        report = device_power.parse_ready_report(msg.data)
+        if report is not None:
+            self._svc.power.report_device_ready(*report)
 
     def _call_led(self, command: str, r: int, g: int, b: int) -> bool:
         """LED는 부가 표시다 — 서비스가 없으면 조용히 건너뛴다."""

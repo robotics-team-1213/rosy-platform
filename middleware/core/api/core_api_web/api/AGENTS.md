@@ -18,6 +18,7 @@ FastAPI surface for ROSY-API-REF-001. Factory builds the app, serves `/dashboard
 | `app.py` | `create_app`; routers; static dashboard; CSP on HTML |
 | `deps.py` | SEC-101 token auth (sha256 at rest, opaque ids); `require_role`; `get_services`; re-exports router-facing `core_features` types so v1 fan-out stops here |
 | `errors.py` | ERR-101 `ApiError` + domain exception mapping |
+| `command_activity.py` | D-24 amendment: `COMMAND_ROUTES` (the one table of what a command is) and the ASGI middleware that calls `PowerManager.on_command` after a 2xx command answer |
 | `ws.py` | `/ws/state` (10 Hz), `/ws/events` glob filters, `/ws/swarm/pose` (SWM-003) and `/ws/swarm/reference` (SWM-007 ingest, operator) |
 
 ## Subdirectories
