@@ -43,15 +43,17 @@ class JobTripSteps:
             raise ValueError("a trip job needs a one-person kind")
         mission_id, epoch = uuid.uuid4().hex, self.runner._start_token(robot_id)[0]  # read before any await
         await self.runner.hold_job(robot_id, mission_id, principal_id, await self.caps(robot_id))
-        self.runner.lease.jobs[robot_id].view["stop_epoch"] = epoch
+        self.runner.lease.jobs[robot_id].view.update(stop_epoch=epoch, creating=True)  # no row yet: the tick waits
         if self.runner._stop_epoch != epoch:  # an E-stop landed while the lease opened: no job
             self.runner.release_job(robot_id, mission_id)
             raise TripError(409, "JOB_ESTOP")
         try:
-            return await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
+            job = await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
         except BaseException:
             self.runner.release_job(robot_id, mission_id)
             raise
+        self.runner.lease.jobs[robot_id].view.pop("creating", None)
+        return job
 
     async def tick(self) -> None:
         for mission_id in await asyncio.to_thread(self.rows.ids, ("READY", "RUNNING")):
@@ -60,6 +62,8 @@ class JobTripSteps:
             except Exception:  # noqa: BLE001 - one job's failure is that job's, never the loop's
                 _LOG.exception("trip step of job %s failed", mission_id)
         for robot_id, hold in list(self.runner.lease.jobs.items()):  # each HOLD gives the lease up; an end frees it
+            if hold.view.get("creating"):
+                continue  # ``create`` writes its row now; it releases the lease itself if that fails
             try:
                 job = await asyncio.to_thread(self.store.get, hold.view["job_id"])
                 if job is None or job["status"] in ("HOLD", "GOAL_CONFIRMED"):
