@@ -321,7 +321,7 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
                          view.get("trip_id"), view["map_version"])
         view["detail"]["junction_fields_dropped"] = "map_version"
         return None
-    fields = {"map_id": active[1].map_id}
+    fields = {"map_id": active[1].map_id, **({"pose_stamp": live.at_stamp} if caps.get("lane_instruction_stamp") and live.at_stamp else {})}
     expect_in = round(remaining, 3)
     window = 0.0 < expect_in <= MAX_EXPECT_IN_M
     if action in (STRAIGHT, LEFT, RIGHT):
@@ -354,12 +354,11 @@ def _pose_tol(live: "LiveTrip", config: TripConfig, travel: float = 0.0, extra: 
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:
         return MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
-    # ponytail: the map pose has no along-path error estimate, so it is odom drift over the
-    # distance dead-reckoned since the last sighting and over the path CORE measures to the
-    # place, plus how far the robot drives at its trip speed over the pose age, the measured
-    # read-to-send time and SEND_ALLOWANCE_S, floored by the site knob ``expect_tol_min_m``;
-    # replace with the provider's own covariance once MapPose reports one.
-    latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
+    # ponytail: no along-path error estimate in the map pose: odom drift over the dead-reckoned
+    # distance and the path CORE measures, plus trip speed x (pose age + read-to-send + SEND_ALLOWANCE_S;
+    # D-767 A: pose age only where CORE measures from pose_stamp), floored by ``expect_tol_min_m``.
+    stamped = caps.get("lane_instruction_stamp") and live.at_stamp
+    latency = age + (0.0 if stamped else (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
     tol = max(config.expect_tol_min_m,
               ODOM_DRIFT_PER_M * (reckoned + travel) + speed * latency + ENDPOINT_TOL_M)
     return round(min(tol + extra, MAX_EXPECT_TOL_M), 3)
@@ -408,8 +407,8 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
     """D-507 bend fields (D-754 next line, D-759 map entry); None outside a straight same-map approach in (0, 2] m."""
     # Lead: top speed x (pose age + read-to-send + site bend_send_s); unled 2 cm late (10-13), +0.2 s 2 cm early (m16/17).
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
-    age, lead = pose.get("age_s"), 0.0
-    if age is not None and live.pose_read_at is not None:
+    age, lead, stamp = pose.get("age_s"), 0.0, live.at_stamp if caps.get("lane_instruction_stamp") else None
+    if age is not None and live.pose_read_at is not None and not stamp:  # D-767 A: CORE counts from the stamp
         lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + config.bend_send_s)
     ahead = bend["s_start"] - s
     bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
@@ -417,7 +416,8 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
             or not straight_approach(live.arc(index), s, bend["s_start"])):
         return None
-    fields = dict(map_id=active[1].map_id, bend_in_m=bend_in, bend_tol_m=_pose_tol(live, config), bend_radius_m=bend["radius_m"])
+    fields = dict(map_id=active[1].map_id, bend_in_m=bend_in, bend_tol_m=_pose_tol(live, config), bend_radius_m=bend["radius_m"],
+                  **({"pose_stamp": stamp} if stamp else {}))
     if caps.get("lane_bend_map_entry") and getattr(located, "odom_stamp", None) is not None:  # D-759 2: lane heading there
         fields["map_entry"] = {"yaw_rad": round(live.arc(live.view["segment_index"]).point_at(bend["s_start"])[2], 4),
                                "pose_yaw_rad": located.yaw, "odom_stamp_s": located.odom_stamp}
