@@ -8538,3 +8538,9 @@ osy-d395-s1d\`.
 - 변경: 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
 - 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
 - gate 변화: 없음. 새 목표의 물리 제어·정지·보정·왕복 수용은 미완료다.
+
+## 2026-10-15 · b5539986f · docs(omx): G3 실측 문서 검사 진행 기록
+
+- 변경: 실행 계획에서 문서 검사와 실제 측정·정지·runtime binding을 구분했다.
+- 증거: `omx_adapter.hardware_profile`의 원격 39 passed·NEW 0 및 독립 재검토.
+- gate 변화: 없음. G3 물리 관문 및 G4–G6는 미완료다.

@@ -148,7 +148,8 @@ def test_another_trip_start_is_refused_before_any_motion():
     _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p1")
     puts = len(ports.lease.puts)
     err = _refused(runner, runner.start("p1", "lee"))
-    assert (err.status, err.code, err.detail) == (409, "TRIP_ROBOT_BUSY", {"job_id": JOB})
+    assert (err.status, err.code, err.detail) == (409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
+    assert JOB not in str(err.detail)  # security review: the holder's mission id is not the trip starter's
     assert len(ports.lease.puts) == puts and ports.goals == [] and ports.line_starts == [] and ports.sent == []
     err = _refused(runner, runner.hold_job(R, "job-4", "lee", CAPS))   # one job per robot
     assert (err.status, err.code) == (409, "TRIP_ROBOT_BUSY")

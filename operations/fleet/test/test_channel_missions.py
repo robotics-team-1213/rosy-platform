@@ -245,3 +245,31 @@ def test_existing_work_result_replies_distinguish_action_and_goal(tmp_path, kind
         (kind.upper() + ':ACTION_SUCCEEDED', 'PENDING'),
         (kind.upper() + ':GOAL_CONFIRMED', 'PENDING'), (kind.upper() + ':HOLD', 'SUPERSEDED')]
     assert 'ACTION_SUCCEEDED' in rows[0][2] and 'GOAL_CONFIRMED' in rows[1][2] and rows[2][2] == ''
+
+
+def test_channel_admit_is_wired_to_the_real_named_operator_guard(tmp_path):
+    """Security review: through install_channel_feature and build_role_guards, an unnamed operator is refused.
+
+    Swapping the admit or submit route back to require_operator turns its 403 into the owner's 404.
+    """
+    from hashlib import sha256
+    from fleet.server.channel_requests import install_channel_feature
+    from fleet.server.site_auth import SitePrincipal, build_role_guards
+    client, tasks, _ = _client(tmp_path)
+    _, require_operator, require_named_operator, _ = build_role_guards(
+        lambda: SitePrincipal("site-console", "operator"), {})  # a shared console token: no named credential
+    install_channel_feature(
+        client.app, config=config(), task_service=tasks, site_logins={},
+        principals={sha256(b"operator-secret").hexdigest(): SitePrincipal("operator-1", "operator")},
+        require_operator=require_operator, require_named_operator=require_named_operator, read_guard=[],
+        console=client.app.state.console, existing_tokens=(), secret_owners=(),
+        proposals=client.app.state.proposal_store, mission_admit=lambda *a, **k: None)
+    receipt = receive(client)
+    refused = client.post(f"/api/fleet/channel-requests/{receipt['request_id']}/admit", json={
+        "expected_hash": receipt["content_hash"], "expected_revision": 1, "expected_generation": 0})
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "OPERATOR_IDENTITY_REQUIRED")
+    submitted = client.post(f"/api/fleet/channel-requests/{receipt['request_id']}/submit", json={
+        "expected_hash": receipt["content_hash"], "expected_revision": 1})
+    assert (submitted.status_code, submitted.json()["detail"]["code"]) == (403, "OPERATOR_IDENTITY_REQUIRED")
+    with closing(tasks.store._connect()) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 0

@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · b5539986f · feat(omx): 실측 문서 검사 CLI
 - 2026-10-15 · dbe5db55b · fix(omx): 지속 USB 카메라 미리보기 복구
 - 2026-10-11 · 1691d395c · refactor: OMX adapter 장치 holder 이전 검증
 - 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
 - 2026-10-05 · uncommitted · test(omx): 좌석 교체 검사 시간 독립화
-- 2026-10-05 · 814e5571e · fix(omx): 단계 상태와 이벤트 ID의 읽기 일관성
