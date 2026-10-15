@@ -3798,3 +3798,10 @@
 - gate 변화: 없음.
 - 결정: D-767 A부 4항. `bend_send_s`는 능력 없는 로봇에 그대로 쓴다.
 - 교훈: 없음.
+## 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)
+
+- 변경: `server/trips/trip_runner.py` `_send`: `INSTRUCTION_STAMP_UNUSABLE`을 `JUNCTION_ODOM_STALE`처럼 다음 주기에 새 자세로 다시 보낸다. `detail.reason`이 `disabled`이면 그 trip의 `caps.lane_instruction_stamp`를 거짓으로 고쳐 다음부터 stamp 없이 앞당김을 넣는다. 901줄 그대로(`_step_free`의 한 번 쓰는 `arc` 지역 변수를 없앴다). `trip_ports.py`: `pose_stamp`는 창 있는 교차로 지시와 굽이에만. 600줄 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`(빨강 → 초록): 창 없는 지시엔 `pose_stamp` 없음, 거절 뒤 새 stamp로 재전송, `disabled` 뒤 stamp 없이 0.38 앞당김. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.

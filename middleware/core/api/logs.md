@@ -1034,3 +1034,10 @@
 - gate 변화: 없음.
 - 결정: D-767 A부 1·4항. v1.238–v1.240은 다른 작업이 선점했다.
 - 교훈: 없음.
+## 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)
+
+- 변경: `api/v1/line_follow.py` `pose_stamp`는 strict(JSON `true`, `"1.5"` 400). `JunctionRefused.reason`이 있으면 `error.detail = {"reason": …}`.
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py` `test_d767_pose_stamp_validation_and_refusal`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.
