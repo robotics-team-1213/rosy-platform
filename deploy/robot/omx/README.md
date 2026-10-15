@@ -97,6 +97,33 @@ does not prove boot activation. Capture buffer size must read back as one;
 host-receive stamps do not measure sensor exposure age. Test actual USB
 unplug/replug and cold boot on site before accepting unattended operation.
 
+### Native preview receiver transport check
+
+Measure advancing frames at the **consumer**, not just the camera unit's active
+state. On the separately observed Lyrical/Fast DDS preview host, a default
+receiver later fell below the earlier 10 Hz result while a concurrent receiver
+with the publisher's transport settings received about 10 Hz from both cameras:
+[receiver comparison](../../../docs/validation/omx-preview-receiver-2026-10-15/result.md).
+For that preview environment only, scope this setting to the receiving process
+or its private service environment **before** it initializes ROS:
+
+```bash
+export FASTDDS_BUILTIN_TRANSPORTS='DEFAULT?max_msg_size=60KB&sockets_size=2MB&non_blocking=true'
+```
+
+Keep the quotes in a shell: `&` belongs to the value. Source the selected ROS
+environment and supply the explicitly selected workcell domain separately.
+This is a measured preview-host configuration, not a global ROS/RMW change or
+a replacement for the pinned Jazzy/CycloneDDS development and actuator contract.
+It is not consumed by CycloneDDS. Do not apply it to unrelated robot services.
+
+Compare the same subscriber workload with and without the setting; record
+duration, received frames/FPS, maximum gaps, nonadvancing/stale stamps, frame
+IDs and formats for **both** cameras. A short successful sample does not prove
+continuous delivery, USB recovery, boot behavior, calibrated exposure timing,
+or AI/Fleet consumption. Complete the long run on the actual consumer before
+calling that consumer ready; transport settings alone grant no arm authority.
+
 ## Build and shell profiles
 
 The hardware profile takes `OMX_ROS_DOMAIN_ID` and
