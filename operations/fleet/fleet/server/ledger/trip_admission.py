@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import asyncio
 import math
+from types import SimpleNamespace
 
+from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
 from rosy.world.state.projections.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
+from fleet.traffic import rule_m
 
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
@@ -26,6 +29,8 @@ ALIGN_TURNS = 2
 ALIGN_WAIT_S = 12.0
 #: ... and this long after it for a camera sighting newer than the turn's end.
 ALIGN_SIGHTING_S = 3.0
+#: D-763 rev 2 Q10 (b): a multi-step job's robot announces these (plus an authority enforced under the lease).
+JOB_CAPS = ("trip_lease", "trip_lease_job", "goal_lease")
 
 
 def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) -> dict:
@@ -44,6 +49,69 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
 
 
 class TripAdmission:
+    async def hold_job(self, robot_id: str, job_id: str, operator: str, capabilities) -> dict:
+        """D-763 6: at approval a multi-step job takes this robot's lease and holds it to its end (``lease.hold``).
+
+        Gate: Rule M's verdict on each leg the robot drives (``reasons``), then rev 2 Q10 (a)(b) (``missing``):
+        site trip lease and authority both on, the lease ttl above the 5 s authority
+        (D-760 1) and the robot's base announcing JOB_CAPS and an authority enforced under the lease, else 422
+        LINK_UNBOUNDED_MOTION (D-760 7). Q10 (c) waits for the crosswalk/signal capability names. Open (D-763
+        open question 1): what a lease expiry stops during an arm step; no arm step may be held until decided.
+        """
+        items = ((capabilities or {}).get("controls") or {}).get("items") or ()
+        base = next((i for i in items if isinstance(i, dict) and i.get("kind") == "base_velocity"), {})
+        # D-760 6: the motion bound of each leg the robot drives is Rule M's own verdict, without the lease
+        # (the job's lease answers who holds the robot, never how far it may move: D-763 4).
+        trip = {"lease": None, "traffic_authority": self.authority.mode(
+            SimpleNamespace(line_follow_authority=base.get("line_follow_authority") is True))}
+        goal = {"goal_lease": "leased" if base.get("goal_lease") is True else None}
+        modes = base.get("drive_modes")  # anything but a list is no modes: leg_unknown, never a 500
+        legs = [leg for leg in (modes if isinstance(modes, (list, tuple)) else ()) if leg in ("lane", "free")] or [None]
+        verdicts = [rule_m.verdict(trip=trip, leg=leg, goal=goal) for leg in legs]
+        reasons = list(dict.fromkeys(v["reason"] for v in verdicts if v["state"] != "bounded"))
+        missing = [name for name in JOB_CAPS if base.get(name) is not True] + [name for name, off in (
+            ("line_follow_authority_under_lease", base.get("line_follow_authority_required") is not True
+             and base.get("line_follow_authority_under_lease") is not True),
+            ("fleet.trip_lease_required", not self.lease.required),
+            ("fleet.traffic.authority", not self.authority.enabled),
+            ("fleet.trip_lease_ttl_s", self.lease.ttl_s <= AUTHORITY_MAX_TTL_S)) if off]
+        if reasons or missing:  # reasons: Rule M's words (hold_back, no_goal_lease, leg_unknown); missing: Q10
+            raise TripError(422, "LINK_UNBOUNDED_MOTION", {"reasons": reasons, "missing": missing})
+        if self.lease.on_job_lost is None:  # rev 2 Q3: no HOLD that reaches no person
+            raise RuntimeError("D-763: wire lease.on_job_lost (incident + HOLD) before a job holds a robot")
+        async with self._lock_for(robot_id):  # a trip start on this robot runs wholly before or after this
+            old = self.lease.jobs.get(robot_id)
+            if old is not None and old.view["job_id"] != job_id:  # one job per robot, no queue (D-763 4)
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": old.view["job_id"]})
+            if old is not None and old.view["lease"]["state"] == "held":
+                return old.view["lease"]
+            busy = ("trip" if self.robot_busy(robot_id) else None) or self._engaged(robot_id)
+            if busy is not None:  # it already moves for someone else (a trip, a console goal, formation ...)
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": busy})
+            self.lease.jobs.pop(robot_id, None)  # a lost one: re-approval opens a new lease (rev 2 Q3)
+            view = {"robot_id": robot_id, "trip_id": job_id, "job_id": job_id, "started_by": operator}
+            view["lease"] = await self.lease.open(robot_id, view, SimpleNamespace(trip_lease=True))
+            self.lease.jobs[robot_id] = SimpleNamespace(open=True, job=True, view=view)
+            return view["lease"]
+
+    def release_job(self, robot_id: str, job_id: str) -> None:
+        """The job ended (done, operator cancel): its lease goes (DELETE). Its step trip ends first."""
+        job = self.lease.jobs.get(robot_id)
+        if job is not None and job.view["job_id"] == job_id:
+            if self.robot_busy(robot_id):  # the step trip shares the lease: never leave it driving lease-less
+                raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
+            del self.lease.jobs[robot_id]
+            self.lease.close(job)
+
+    async def stop_job(self, robot_id: str, reason: str) -> None:
+        """A person's stop sent through Fleet carries the lease owner's token, so CORE keeps the lease: Fleet
+        gives it up itself, and the job HOLDs through the incident path (rev 2 Q3); no step runs on after it."""
+        job = self.lease.jobs.get(robot_id)
+        if job is not None and job.view["lease"]["state"] == "held":
+            lease_id = job.view["lease"]["lease_id"]
+            await self.lease.lose(job, reason)
+            await self.lease.delete(robot_id, lease_id)
+
     def _start_token(self, robot_id):
         return self._stop_epoch, self._start_cancels.get(robot_id, 0)
 

@@ -401,7 +401,8 @@ class LineObserverNode(Node):
             raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
         floor_gate = bool(self.get_parameter('learned_paint_floor_gate').value)
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
-            folder, threads=threads, allow_spinning=False, floor_gate=floor_gate)) if pointer else None
+            folder, threads=threads, allow_spinning=False, floor_gate=floor_gate,
+            paint_target=target)) if pointer else None
         return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
                                   warn=self.get_logger().warning, target=target)
@@ -579,6 +580,8 @@ class LineObserverNode(Node):
                               paint_drivable=(self._paint_worker.used_drivable
                                               if self._paint_worker is not None else None),
                               paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value)
+                                                if self._paint_worker is not None else None),
+                              paint_last_error=(self._paint_worker.last_error
                                                 if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
