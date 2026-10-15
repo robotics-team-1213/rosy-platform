@@ -3,7 +3,7 @@
 Run from a topic worktree (never the shared main checkout)::
 
     python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
-                         [--node] [--browser] [--max-rounds N] [--dry-run] [--prune | --no-prune]
+                         [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune]
 
 Each round merges the current local ``main`` into the branch, auto-resolves the
 append-only/generated conflicts (ADR Log, logs.md, adr_gaps.txt, index.md,
@@ -13,7 +13,8 @@ branch and the rule is inert until then), runs the selected tests, compares them
 commit that was tested. A failing step stops the tool: landing is never chained
 after a failure. Any other conflict aborts the merge and lists the paths.
 pytest runs through ``tools/remote/remote_pytest.py`` (model PC, AI PC or site PC by
-measured headroom, D-568; an unavailable host stops landing). Lint, node and the
+measured headroom, D-568; an unavailable host stops landing); an auto selection adds the
+real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. Never pushes, stashes, resets or cleans. Standard library only.
 """
 
@@ -33,6 +34,7 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site PC, D-568)
+import browser_scope  # noqa: E402  (test/, on sys.path through remote_pytest)
 sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -295,12 +297,18 @@ def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[l
                 # guards alone; not via GitHub, which would publish unpushed main commits.
                 note = "selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): full tier on the lab PCs"
                 print(f"[tests] {note}")
-                return sel["full_invocations"], note
-            return sel["invocations"], None
+                return sel["full_invocations"] + browser_tier(wt, base, head), note
+            return sel["invocations"] + browser_tier(wt, base, head), None
         except (ValueError, KeyError, TypeError) as exc:
             raise Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
     changed = lines(wt, "diff", "--name-only", f"{base}...HEAD")
-    return pack(wt, fallback_targets(wt, changed)), None
+    return pack(wt, fallback_targets(wt, changed)) + browser_tier(wt, base), None
+
+
+def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
+    """The real-Chromium tests for the paths base...head changes, opted in on the test host only."""
+    changed = lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
+    return [[remote_pytest.BROWSER_ENV, *group] for group in pack(wt, browser_scope.targets(changed))]
 
 
 def safety_review(wt: Path, base: str, head: str, python: str) -> None:
@@ -348,9 +356,6 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
-    if args.browser:
-        raise Stop("browser tests need Chromium, which only a test host can supply, and never run on this"
-                   " laptop (D-584); run them on a host and report them as not run here")
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
     codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
@@ -540,7 +545,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--main-checkout", help="path of the worktree that has main checked out")
     parser.add_argument("--tests", default="auto", help='auto | none | "<pytest args>"')
     parser.add_argument("--node", action="store_true", help="also node --test the selected test dirs' web/*.mjs")
-    parser.add_argument("--browser", action="store_true", help="refused: browser tests never run on this laptop (D-584)")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
