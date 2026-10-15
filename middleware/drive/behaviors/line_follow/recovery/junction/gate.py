@@ -194,10 +194,6 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 raise JunctionRefused('JUNCTION_ALREADY_DONE',
                                       f'{action} at {place_id} already ran; send the next place')
             current = self._clock() if now is None else now
-            distance = action == 'bend' or (expect or {}).get('expect_in_m') is not None
-            basis, why = self._stamp_odometer(pose_stamp, current) if pose_stamp is not None and distance else (None, 'none_sent')
-            if why != 'none_sent' and basis is None:  # D-767 A review: never a silent receipt basis; Fleet resends
-                raise JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', f'pose_stamp cannot be used: {why}', why)
             j = self._junction
             if j is not None and j['state'] in MANEUVER:
                 if (j['action'], j['place_id'], j['turn_deg'], j['advance_m']) == (
@@ -215,6 +211,11 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     self._place_map_entry(j, expect.get('map_entry'), current)
                 j['next_line'] = expect.get('next_line_in_m')  # D-754: a replan may move the next place
                 return True, j['seq'], 'armed'
+            distance = action == 'bend' or (expect or {}).get('expect_in_m') is not None
+            basis, why = self._stamp_odometer(pose_stamp, current) if pose_stamp is not None and distance else (None, 'none_sent')
+            if why != 'none_sent' and basis is None:  # D-767 A review: never a silent receipt basis (a resend
+                # or a refresh above does not measure from the stamp, so it is never refused); Fleet resends
+                raise JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', f'pose_stamp cannot be used: {why}', why)
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
             window = self._expect_window(expect, current, basis)

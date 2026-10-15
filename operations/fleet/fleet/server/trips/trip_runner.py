@@ -724,7 +724,7 @@ class TripRunner(TripAdmission, TripProgress):
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **kwargs)) or {}
         except RobotApiError as exc:
             if exc.code in ("JUNCTION_ODOM_STALE", "INSTRUCTION_STAMP_UNUSABLE"):  # D-507 2 / D-767 A: next tick, fresh pose
-                live.view["detail"]["junction_retry"] = exc.code  # D-767 A: CORE's flag off ("disabled"): unstamped, led
+                live.view["detail"]["junction_retry"] = " ".join(filter(None, (exc.code, (exc.detail or {}).get("reason"))))  # D-767 A: + why
                 live.view["caps"]["lane_instruction_stamp"] = live.view["caps"].get("lane_instruction_stamp") and (exc.detail or {}).get("reason") != "disabled"
                 return
             if exc.code != "JUNCTION_ALREADY_DONE":
