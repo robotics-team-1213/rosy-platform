@@ -810,11 +810,6 @@ roots:
     d427_target: docs
     wave: none
     concern: other
-  - path: reference
-    part: docs
-    d427_target: reference
-    wave: none
-    concern: other
 
 # D-430 §1: safety files inside mixed folders, tagged per file so no folder is
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
