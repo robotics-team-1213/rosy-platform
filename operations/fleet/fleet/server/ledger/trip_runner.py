@@ -858,9 +858,8 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def map_pose(self, robot_id: str) -> Optional[MapPose]:
         """The trip map pose (D-494 3) after one forced state read; None when it cannot be read."""
-        refresh = getattr(self._poses, "refresh", None)
         try:
-            if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3), past the hub cache
+            if (refresh := getattr(self._poses, "refresh", None)) is not None:  # one forced state/odom read per tick (D-494 3)
                 await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
             self._unread.discard(robot_id)
         except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
@@ -871,8 +870,7 @@ class TripRunner(TripAdmission, TripProgress):
         try:
             return await self._call(self._poses.arbitrated_pose(robot_id))
         except Exception:  # a pose that cannot be read is no pose
-            _LOG.exception("map pose for %s failed", robot_id)
-            return None
+            _LOG.exception("map pose for %s failed", robot_id)  # falls through to None
 
     def _lock_for(self, robot_id: str) -> asyncio.Lock:
         return self._locks.setdefault(robot_id, asyncio.Lock())
