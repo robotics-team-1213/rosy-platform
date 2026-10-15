@@ -248,9 +248,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .review-stage > .review-editor-canvas, .pixel-editor-column > section { grid-column: 2; grid-row: 1; }
 .review-stage > .review-editor-tools, .pixel-editor-column > .pixel-quick-tools { grid-column: 1; grid-row: 1; }
 .review-editor-canvas > .review-view-bar { margin-bottom: var(--space-2); }
-.review-editor-canvas > .review-view-bar, .pixel-editor-column .review-view-bar { flex-wrap: wrap; }
+.review-editor-canvas > .review-view-bar { flex-wrap: wrap; }
+.pixel-editor-column .review-view-bar { flex-wrap: nowrap; overflow-x: auto; }
 .review-editor-canvas > .review-view-bar > *, .pixel-editor-column .review-view-bar > * { flex: none; }
-#view-status, #pixel-view-status { flex: 1 1 100%; min-width: 0; }  /* its own line: a sideways-scrolling bar cut it at 390px */
+#view-status { flex: 1 1 100%; min-width: 0; }  /* its own line: a sideways-scrolling bar cut it at 390px */
 /* A disabled reason stacks under the label (components.css); give the stack room inside the dashed box. */
 ui-button[reason]:not([reason=""]) { padding-block: var(--space-1); }
 .review-editor-canvas .review-viewport-controls, .pixel-editor-column .review-viewport-controls { margin-inline-start: 0; }
