@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from fakes import FakeClock, FakeRobot
+from fakes import FakeClock, FakeRobot, fresh_reads
 from fleet.traffic import rule_m
 from fleet.traffic.rule_m import verdict
 
@@ -87,6 +87,7 @@ def test_state_row_carries_the_verdict_and_an_offline_row_carries_none():
                            [robot], clock=FakeClock())
     client = TestClient(create_app(console, console_token="viewer", start_task_dispatcher=False))
     client.app.state.fleet_gather.max_age_s = 0.0
+    fresh_reads(client.app)
 
     def row():
         response = client.get("/api/fleet/state", headers={"Authorization": "Bearer viewer"})

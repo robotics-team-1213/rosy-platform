@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_reads
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapError, SiteMapStore
@@ -118,6 +118,7 @@ def _app(tmp_path, *, state=None, imported=True):
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
              sha256(b"viewer-token").hexdigest(): {"principal_id": "vic", "role": "viewer"}}
     app = create_app(console, task_service=tasks, site_users=users, site_maps=store)
+    fresh_reads(app)   # the tests change the fake robot between requests
     return TestClient(app), tasks, store, robot
 
 
