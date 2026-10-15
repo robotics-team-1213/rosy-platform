@@ -51,8 +51,11 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
     async def incident(robot_id, job_id, reason, detail):
         """The case of a held job (rev 2 Q3): a human-tier problem episode the AI PC reads; the work list shows 개입."""
         _LOG.warning("trip job %s on %s holds: %s %s", job_id, robot_id, reason, detail)
+        problem_id = f"job_hold:{job_id}:{detail['held_event']}"  # one per HOLD; a retried case writes no second row
+        if any(row["problem_id"] == problem_id for row in await asyncio.to_thread(episodes.episodes, 50, robot_id)):
+            return
         await asyncio.to_thread(episodes.opened, robot_id=robot_id, kind="job_hold", tier="human",
-                                problem_id=f"job_hold:{job_id}:{detail['held_event']}",  # one per HOLD, retried
+                                problem_id=problem_id,
                                 type_key=f"job_hold:{robot_id}:trip", context={"job_id": job_id, "reason": reason, **detail}, decision=None)
 
     jobs = app.state.job_trips = JobTripSteps(store, runner, plan=plan, caps=console._shown_capabilities,

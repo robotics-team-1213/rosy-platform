@@ -235,7 +235,7 @@ class TripRunner(TripAdmission, TripProgress):
             if turns:  # D-603: the alignment turns CORE made before this start
                 view["detail"]["aligned"] = turns
             live = LiveTrip(view, graph, request)
-            live.inherited = self.held_stops.get(robot_id)  # D-763 7: the one held stop this trip may replace
+            live.inherited = self.held_stops.pop(robot_id, None)  # D-763 7: the one held stop this trip may replace
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
             self.halts.restarted = [t for t in self.halts.restarted if t["robot_id"] != robot_id]  # this trip owns it
@@ -278,6 +278,7 @@ class TripRunner(TripAdmission, TripProgress):
     def close_all(self, reason: str) -> list[LiveTrip]:
         """E-stop (D-517 1): every open trip ends now, before any await, so no step sends after it."""
         self._stop_epoch += 1
+        self.held_stops.clear()  # CORE leaves line following: no arrival stop is held any more
         closed = [live for live in self._live.values() if live.open]
         for live in closed:
             live.view.update(state="canceled", reason=reason)
@@ -833,6 +834,7 @@ class TripRunner(TripAdmission, TripProgress):
                 self._save(live)
 
     async def _halt(self, live: LiveTrip) -> dict:
+        self.held_stops.pop(live.view["robot_id"], None)  # the halt's own stop is never a held arrival
         i = live.view["segment_index"]
         return await self.halts.halt_robot(live.view["robot_id"], live.arc(i).drive_mode == "lane", live.place(i))
 

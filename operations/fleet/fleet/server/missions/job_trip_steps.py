@@ -41,9 +41,12 @@ class JobTripSteps:
         """One named operator approves and starts it (registry ``one_person``); the gate is ``hold_job``'s."""
         if required_approval([KIND] * len(steps)) != "one_person":
             raise ValueError("a trip job needs a one-person kind")
-        mission_id = uuid.uuid4().hex
+        mission_id, epoch = uuid.uuid4().hex, self.runner._start_token(robot_id)[0]  # read before any await
         await self.runner.hold_job(robot_id, mission_id, principal_id, await self.caps(robot_id))
-        self.runner.lease.jobs[robot_id].view["stop_epoch"] = self.runner._stop_epoch  # an E-stop after this: HOLD
+        self.runner.lease.jobs[robot_id].view["stop_epoch"] = epoch
+        if self.runner._stop_epoch != epoch:  # an E-stop landed while the lease opened: no job
+            self.runner.release_job(robot_id, mission_id)
+            raise TripError(409, "JOB_ESTOP")
         try:
             return await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
         except BaseException:
@@ -129,7 +132,9 @@ class JobTripSteps:
         self._lost_jobs.add(view["job_id"])  # before any await: a tick in the gap must not take a new lease
         detail = {**detail, "robot_state": "unconfirmed"}
         if not await asyncio.to_thread(self.rows.hold, view["job_id"], "JOB_LEASE_LOST", detail):
-            self._lost_jobs.discard(view["job_id"])  # it was HOLD already: a resume after this is the operator's
+            job = await asyncio.to_thread(self.store.get, view["job_id"])  # None: its row is not written yet
+            if job is not None and job["status"] == "HOLD":  # HOLD already: a resume after this is the operator's
+                self._lost_jobs.discard(view["job_id"])
 
 
 __all__ = ["KIND", "JobTripSteps"]
