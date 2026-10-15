@@ -6,12 +6,12 @@
 
 ## 실행 조건
 
-- 문서 기준 소스: `fab5adc188d432e6fdc3de03282b12a21f6092a1`.
-  실행된 camera source는 기존 `dbe5db55b7`이며 파일 SHA-256은
-  `caaa439c383eb9ed33ee8dc3dbc3637bbc82b9147b1de5ec8bfdf4c78cbcf1e9`다.
+- 문서 기준 commit: `fab5adc188d432e6fdc3de03282b12a21f6092a1`.
+  실행된 camera source는 기존 `dbe5db55b7`이다.
+  파일 SHA-256: `caaa439c383eb9ed33ee8dc3dbc3637bbc82b9147b1de5ec8bfdf4c78cbcf1e9`.
 - 현장 native ROS Lyrical, `rmw_fastrtps_cpp`, `rclpy 10.0.11`.
   Jazzy/CycloneDDS 실물 제어 수용으로 확장하지 않는다.
-- 같은 workcell domain에서 `/top_camera/image_raw`, `/front_camera/image_raw`의
+- producer와 같은 현장 PC의 workcell domain에서 `/top_camera/image_raw`, `/front_camera/image_raw`의
   `sensor_msgs/msg/Image`를 읽었다. publisher는 best-effort depth 1,
   두 진단 subscriber는 sensor-data QoS depth 5다. 영상은 640×480 `bgr8`이다.
 - 기본 수신기는 `FASTDDS_BUILTIN_TRANSPORTS`가 없는 환경에서 시작했다.
@@ -24,6 +24,7 @@ export FASTDDS_BUILTIN_TRANSPORTS='DEFAULT?max_msg_size=60KB&sockets_size=2MB&no
 producer는 이미 같은 값을 쓰고 있었다. 이번 시험 중 producer 설정·서비스·전역 RMW는
 바꾸지 않았다. 두 시험은 시작 시각이 다르고 대부분의 구간이 겹치는 동시 관측이다.
 단독 부하 시험이나 무작위 교차 시험은 아니다.
+PC 간 영상 전달을 시험한 것은 아니다.
 
 ## 최종 수신 결과
 
@@ -86,6 +87,6 @@ CORE 화면 미리보기는 기존 최대 2 FPS·640 px·최신 1장·인증/lea
 
 원문 파일 SHA-256:
 
-- 기본 수신기 로그: `c11778fec1d7f50d35f336396a5e8adbbcbb3af172832076fca6b583f13840b3`
-- 같은 설정 수신기 로그: `6c1fc138d6f30fd56f4e0f7555df411b842bf044bb2aa89d067224a0b3b25541`
-- 같은 설정 계측 코드: `d19d159eea89f44b8a89ed74b25155d1954d8c8620dad21269206bd1f9fed0d2`
+- 기본 수신기 로그 SHA-256: `c11778fec1d7f50d35f336396a5e8adbbcbb3af172832076fca6b583f13840b3`
+- 같은 설정 수신기 로그 SHA-256: `6c1fc138d6f30fd56f4e0f7555df411b842bf044bb2aa89d067224a0b3b25541`
+- 같은 설정 계측 코드 SHA-256: `d19d159eea89f44b8a89ed74b25155d1954d8c8620dad21269206bd1f9fed0d2`
