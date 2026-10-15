@@ -197,4 +197,14 @@ main `c1def3006`, `_over_budget()` 그대로. 이 62개가 4항의 ratchet 대�
 - **변이 증명(7(a) 6번)은 `test/test_size_limits.py`다.** 새 초과, 묶인 것 1줄 증가, 표 값 올리기, 표가 잰 값보다 높음, 새 행, 바닥 아래 새 단위, 만료된·trailer 없는·+30 넘는 안전 초과, 넘긴 뒤 나눈 커밋 순서가 각각 적색이다.
 - **관문 경로 제안(4항)은 아직이다.** `test_module_structure.py`와 `tools/harness/size_limits.py`를 D-762 단계 3 관문 목록에 더하는 것은 따로 승인받는다.
 
+### 덧붙임 — 세지 않던 루트와 `.kt` (2026-10-15)
+
+modularization 계획의 열린 항목(검토 지적 8)을 닫는다. 결정 1–8항은 그대로다.
+
+- **모든 생산 코드를 센다.** colcon 루트와 운영 루트 아래 추적되는 코드 파일(`.py`/`.cpp`/`.hpp`/`.sh`/`.kt`, `.js`/`.mjs`/`.ts`/`.html`/`.css`)은 패키지, 단위, 운영 루트 가운데 하나가 센다. `test_every_product_code_file_is_measured`가 이것을 보고, 예외는 `SIZE_UNMEASURED`(이유 필수, 오늘 비어 있다)다.
+- **Kotlin은 600줄이다.** 1항의 제품 파일 한도를 그대로 쓴다. `.mjs`/`.ts`는 웹 자산(800줄)이다.
+- **Fleet 보관 자리는 `fleet/_source_layout.py`의 `SOURCE_ROOTS`와 같다.** `operations/situation`(운영 루트에서 옮김)과 `operations/site_execution`을 더했고, 시험이 두 목록이 같은지 본다. 두 폴더는 자기 단위(`situation` 1,446줄, `site_execution` 1,012줄, 바닥 1,000 이상)로 등록해 `fleet` 행(17,788)이 그대로다.
+- **package.xml 없는 루트는 패키지처럼 센다.** `size_limits.STANDALONE`: pyproject 배포 11개(`contracts/learning`·`motion`·`skill`, `integrations/robots/omx`, `middleware/devices/omx/agent`, `middleware/robot_execution/local`, `middleware/skills/api`·`manipulation`, `operations/apps/fleet`, `operations/processes/palletizing`, `operations/world`)와 Gradle 앱 `operations/site_ui/cam`(`rosy-cam` 9,964줄, 95% 선 위라 더하기 전에 나눈다). `operations/signal_observation`(파일 하나)은 운영 루트다. 운영 루트는 웹 자산도 800줄로 잰다(`learning/curation/perception/review_app_web`).
+- **처음 잰 것의 행은 이 변경에서만 새로 생긴다.** 4항의 "새 행 금지"에 대한 한 번의 예외다. 이 변경으로 처음 잰 파일 가운데 한도를 넘은 것은 `site_ui/cam/.../camera/CameraController.kt` 791줄 하나이고, `size_limits.COVERAGE_ROWS`에 그 값으로 적어 새 행을 허용한다. 그 값 위의 새 행은 적색이고, 목록에 더하려면 검사 자체를 바꿔야 한다(4항). 행이 기점에 들어간 뒤에는 보통 행처럼 내려가기만 한다.
+
 **References:** D-168(P6, Alternatives), D-362, D-430(§5 `Safety-Review:`), D-436(`GUARD_SET`, FULL 트리거), D-753, D-762(단계 3 CODEOWNERS, `merge_group`), D-763, [module split criteria](../plans/2026-09-06-module-split-criteria.md), [file size budget](../plans/2026-09-30-file-size-budget-and-refactor-queue.md), `docs/plans/2026-10-14-fleet-console-size-unit.md`, `docs/plans/2026-10-14-fleet-ledger-size-unit.md`, `test/architecture/test_module_structure.py`, `tools/harness/affected_tests.py`, `tools/harness/safety_review.py`.

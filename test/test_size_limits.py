@@ -63,6 +63,20 @@ def test_safety_row_allows_up_to_30_over_until_it_expires():
     assert any("more than 30 over" in p for p in _problems(far, rows, base, {"pkg/a.py": (731, TODAY)}))
 
 
+def test_a_coverage_row_may_be_new_once_at_no_more_than_its_count(monkeypatch):
+    monkeypatch.setattr(s, "COVERAGE_ROWS", {"pkg/a.py": 650})
+    _, over, _ = _over(a=650)
+    assert _problems(over, {"pkg/a.py": 650}, base={}) == []
+    _, over, _ = _over(a=651)
+    assert any("new ratchet row" in p for p in _problems(over, {"pkg/a.py": 651}, base={}))
+
+
+def test_ops_root_files_are_owned_and_held_to_their_own_limit():
+    _, over, owner = s.measure({"tools/a.kt": 601, "tools/b.js": 700, "tools/c.mjs": 801}, {}, ROOTS, [])
+    assert over == {"tools/a.kt": 601, "tools/c.mjs": 801}
+    assert owner == {"tools/a.kt": "tools", "tools/b.js": "tools", "tools/c.mjs": "tools"}
+
+
 def test_units_floor_applies_to_new_units_of_large_parents_only():
     counts = {"pkg": 2500, "pkg/unit": 400}
     owner = {"pkg/unit": "pkg"}

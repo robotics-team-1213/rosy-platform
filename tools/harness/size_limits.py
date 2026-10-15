@@ -1,8 +1,8 @@
 """D-766 size limits: one counting rule for the architecture guard and the per-commit range check.
 
-Absolute limits, no baselines: a production file (``.py``/``.cpp``/``.hpp``/``.sh``) 600
-lines, a web asset (``.js``/``.html``/``.css``) 800, a size unit (a package, or a subpackage
-or holder listed in ``size_units.txt``) 10,000. What is already over is frozen at its
+Absolute limits, no baselines: a production file (``.py``/``.cpp``/``.hpp``/``.sh``/``.kt``) 600
+lines, a web asset (``.js``/``.mjs``/``.ts``/``.html``/``.css``) 800, a size unit (a package, a
+standalone root in ``STANDALONE``, or a subpackage or holder listed in ``size_units.txt``) 10,000. What is already over is frozen at its
 measured count in ``size_ratchet.txt``: the count may fall (and the row falls with it), never
 rise. ``test/architecture/test_module_structure.py`` measures the working tree;
 ``size_range.py`` measures each commit of a range through git. Both call :func:`measure`
@@ -24,19 +24,40 @@ FLOOR_PARENT = 2_000
 SAFETY_MAX_OVER = 30
 SAFETY_MAX_DAYS = 7
 
-CODE_SUFFIXES = {".py", ".cpp", ".hpp", ".sh"}
-WEB_SUFFIXES = {".js", ".html", ".css"}
-OPS_SUFFIXES = {".py", ".sh"}
+CODE_SUFFIXES = {".py", ".cpp", ".hpp", ".sh", ".kt"}
+WEB_SUFFIXES = {".js", ".mjs", ".ts", ".html", ".css"}
+OPS_SUFFIXES = CODE_SUFFIXES | WEB_SUFFIXES
+#: Roots outside every package: each file is held to its file limit, there is no unit total.
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
              "operations/site_devices",  # site device firmware (D-427 wave 3b)
-             "operations/situation")  # D-577 AI PC situation service (outside the fleet package)
+             "operations/signal_observation")  # one-file site service (D-766 coverage addendum)
 #: Source folders outside a package's own directory whose files count toward that package.
+#: fleet: the SOURCE_ROOTS of operations/fleet/fleet/_source_layout.py (a test keeps them equal).
 PACKAGE_HOLDERS = {
     "control": tuple(f"middleware/drive/{holder}" for holder in
                      ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")),
     "core_features": ("middleware/drive/behaviors",),
-    "fleet": ("operations/decision", "operations/site_ui/console", "integrations/messaging/discord"),
+    "fleet": ("operations/decision", "operations/site_ui/console", "operations/situation",
+              "operations/site_execution", "integrations/messaging/discord"),
 }
+#: Product roots without a package.xml (pyproject distributions, the Gradle app), counted like a package.
+STANDALONE = {
+    "rosy-contracts-learning": "contracts/learning",
+    "rosy-contracts-motion": "contracts/motion",
+    "rosy-contracts-skill": "contracts/skill",
+    "rosy-integration-robot-omx": "integrations/robots/omx",
+    "rosy-app-agent": "middleware/devices/omx/agent",
+    "rosy-execution-local": "middleware/robot_execution/local",
+    "rosy-skill-api": "middleware/skills/api",
+    "rosy-skill-manipulation": "middleware/skills/manipulation",
+    "rosy-app-gateway": "operations/apps/fleet",
+    "rosy-palletizing": "operations/processes/palletizing",
+    "rosy-world": "operations/world",
+    "rosy-cam": "operations/site_ui/cam",
+}
+#: D-766 coverage addendum (2026-10-15): files already over their limit when the roots above and
+#: ``.kt`` joined the count. Each may enter the ratchet as a new row once, at no more than this.
+COVERAGE_ROWS = {"site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt": 791}
 
 RATCHET = "test/architecture/size_ratchet.txt"
 UNITS = "test/architecture/size_units.txt"
@@ -90,10 +111,11 @@ def measure(files: dict[str, int], packages: dict[str, str], colcon_roots, units
             if count > limit_for(path):
                 over[rel] = count
     for path, count in files.items():
-        if (any(_under(path, root) for root in OPS_ROOTS) and PurePosixPath(path).suffix in OPS_SUFFIXES
-                and is_prod(PurePosixPath(path).parts) and count > FILE_LIMIT):
-            over[path] = count
-            owner.setdefault(path, path)
+        root = next((root for root in OPS_ROOTS if _under(path, root)), None)
+        if root and PurePosixPath(path).suffix in OPS_SUFFIXES and is_prod(PurePosixPath(path).parts):
+            owner.setdefault(path, root)
+            if count > limit_for(path):
+                over[path] = count
     for unit in units:
         owner[unit] = max((u for u in units if u != unit and _under(unit, u)), key=len,
                           default=package_of.get(unit))
@@ -186,7 +208,8 @@ def ratchet_problems(over: dict[str, int], rows: dict[str, int], safety: dict, b
     for key, ceiling in sorted(rows.items()):
         if key not in over or not wanted(key):
             continue
-        if base_rows is not None and key not in base_rows and key not in renamed:
+        if (base_rows is not None and key not in base_rows and key not in renamed
+                and not ceiling <= COVERAGE_ROWS.get(key, -1)):
             bad.append(f"{key}: new ratchet row; split it instead (only `safety` rows, or a rename whose old"
                        " row goes in the same change, may be added)")
         elif base_rows is not None and key in base_rows and ceiling > base_rows[key]:  # renamed: checked above

@@ -15,9 +15,9 @@ Honest holes, not oversights:
 - Dynamic imports (``importlib.import_module``, entry points) are invisible.
   The one intended case is core loading ``rosy.sensor_provider`` (D-126).
 - P6 limits are absolute (D-766, replacing D-362's 1000-line tier): 600 for production
-  ``.py``/``.cpp``/``.hpp``/``.sh`` across the colcon-root packages and the
-  ``deploy``/``tools``/``learning``/``operations/site_devices``/``operations/situation`` roots, 800 for web assets
-  (``.js``/``.html``/``.css``) inside packages, 10,000 per size unit. What is already over is
+  ``.py``/``.cpp``/``.hpp``/``.sh``/``.kt``, 800 for web assets (``.js``/``.mjs``/``.ts``/``.html``/``.css``),
+  across the colcon-root packages, the ``STANDALONE`` roots and the ``OPS_ROOTS``, 10,000 per size
+  unit. Every tracked code file under those roots is measured (``SIZE_UNMEASURED`` is the exception). What is already over is
   frozen in ``size_ratchet.txt``. Test code and data files are exempt. Line counts are physical
   lines, blank lines and comments included.
 """
@@ -30,7 +30,7 @@ import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 import yaml
@@ -381,7 +381,7 @@ def test_core_chain_stays_one_way():
 
 
 def _measure() -> tuple[dict, dict, dict]:
-    dirs = {name: _relpath(info["dir"]) for name, info in PACKAGES.items()}
+    dirs = {**{name: _relpath(info["dir"]) for name, info in PACKAGES.items()}, **size_limits.STANDALONE}
     files = {}
     for folder in {*dirs.values(), *(h for hs in size_limits.PACKAGE_HOLDERS.values() for h in hs),
                    *size_limits.OPS_ROOTS}:
@@ -458,6 +458,7 @@ def _holders() -> set[str]:
             for item in (value.values() if isinstance(value, dict) else value if isinstance(value, tuple) else (value,)):
                 path = (ROOT / layout).parent / "server" / item if isinstance(item, str) else Path(item)
                 found.add(_relpath(path.resolve()))
+    found.update(h for hs in size_limits.PACKAGE_HOLDERS.values() for h in hs)
     for info in PACKAGES.values():  # CMake install(DIRECTORY ...) folders ship as a unit
         cmake = info["dir"] / "CMakeLists.txt"
         if cmake.is_file():
@@ -480,6 +481,33 @@ def test_size_units_are_real_and_meet_the_floor():
             bad.append(f"{unit}: neither a Python subpackage (__init__.py) nor a declared holder under a colcon root")
     bad += size_limits.unit_problems(counts, owner, SIZE_UNITS, SMALL_UNITS, base_small)
     assert bad == [], bad
+
+
+#: Tracked code under the product roots that no unit, package or ops root measures, with the reason.
+SIZE_UNMEASURED = {}
+
+
+def test_every_product_code_file_is_measured():
+    """D-766 coverage addendum: each tracked code file under a colcon or ops root is counted."""
+    assert {".py", ".js", ".ts", ".mjs", ".html", ".css", ".sh", ".kt"} <= size_limits.CODE_SUFFIXES | size_limits.WEB_SUFFIXES
+    _, _, owner = _measure()
+    roots = (*(_relpath(root) for root in COLCON_ROOTS), *size_limits.OPS_ROOTS)
+    tracked = (_git("ls-files", *roots) or "").splitlines()
+    unmeasured = {path for path in tracked
+                  if PurePosixPath(path).suffix in size_limits.CODE_SUFFIXES | size_limits.WEB_SUFFIXES
+                  and size_limits.is_prod(PurePosixPath(path).parts[1:]) and path not in owner}
+    assert unmeasured == set(SIZE_UNMEASURED), (
+        f"unmeasured (register a unit, STANDALONE or OPS_ROOTS): {sorted(unmeasured - set(SIZE_UNMEASURED))}, "
+        f"stale: {sorted(set(SIZE_UNMEASURED) - unmeasured)}")
+
+
+def test_fleet_holders_are_its_source_roots():
+    """fleet's PACKAGE_HOLDERS are the folders fleet/_source_layout.py loads (SOURCE_ROOTS)."""
+    spec = importlib.util.spec_from_file_location("_fleet_layout", ROOT / "operations/fleet/fleet/_source_layout.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert {_relpath(Path(path).resolve()) for path in module.SOURCE_ROOTS.values()} == set(
+        size_limits.PACKAGE_HOLDERS["fleet"])
 
 
 @pytest.mark.parametrize(

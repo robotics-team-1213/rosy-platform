@@ -14,7 +14,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 
 | File | Description |
 |------|-------------|
-| `test_module_structure.py` | D-168/D-427 package standard: declared roots, owner guides, harness modules and functional tests; package dependencies and import direction; D-766 absolute size limits (600/800/10,000) against `size_ratchet.txt` and `size_units.txt`; the counting rule is `tools/harness/size_limits.py`. Static holder mapping preserves installed package identities |
+| `test_module_structure.py` | D-168/D-427 package standard: declared roots, owner guides, harness modules and functional tests; package dependencies and import direction; D-766 absolute size limits (600/800/10,000) against `size_ratchet.txt` and `size_units.txt`; the counting rule is `tools/harness/size_limits.py`. Every tracked code file under a colcon or ops root must be measured (`SIZE_UNMEASURED` lists exceptions with reasons); fleet holders equal `fleet/_source_layout.py` `SOURCE_ROOTS`. Static holder mapping preserves installed package identities |
 | `size_ratchet.txt` | D-766 4: files and units already over the limit, `<count> <key>`, frozen at the measured count; rows only go down. `safety <count> <key> <YYYY-MM-DD>` rows are the D-766 8 exception. Data: not a FULL trigger |
 | `size_units.txt` | D-766: size units, `<path>` or `<path> small` (grandfathered below the 1,000-line floor). Data: not a FULL trigger |
 | `test_target_layout.py` | D-310 source layout: every package has a declared target path, XML package names are unique, moved packages keep their name, product containers hold only declared packages, retired sketch names (`rosy_pinky_pro`, `rosy_decision`, ...) must not appear |
