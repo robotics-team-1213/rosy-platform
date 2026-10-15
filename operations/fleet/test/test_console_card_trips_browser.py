@@ -40,7 +40,7 @@ API = {
     "/api/fleet/formation": {"active": False, "state": "IDLE", "leader": None, "formation": None, "spacing": None,
                              "assignment": {}, "reason": None, "pending_triggers": [], "stream_evidence": {},
                              "relay": None},
-    # D-763 9 (v1.237): 새 작업 shows only the kinds the server lists
+    # D-763 9 (v1.238): 새 작업 shows only the kinds the server lists
     "/api/fleet/work": {"rows": [], "observed_at": "2026-10-15T00:00:00+00:00", "tasks_available": True,
                         "missions_available": True, "cell_jobs_available": True, "truncated_sources": [],
                         "kinds": ["trip"]},
@@ -646,7 +646,7 @@ def test_a_viewer_switches_robots_in_new_work_and_reads_each_reason(site):  # no
 
 
 def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noqa: F811
-    """D-763 9 (v1.237): 새 작업은 서버의 종류 목록(`kinds`)만 보인다. 목록에 없는 종류는 꺼진 단추도 아니고 없다.
+    """D-763 9 (v1.238): 새 작업은 서버의 종류 목록(`kinds`)만 보인다. 목록에 없는 종류는 꺼진 단추도 아니고 없다.
     Cell 적재는 /console/cell로 간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
     from playwright.sync_api import expect, sync_playwright
 

@@ -9,7 +9,7 @@ _Source = Literal["task", "mission", "trip", "cell_job"]
 
 
 class FleetWorkWait(BaseModel):
-    """D-763 8 (v1.237): the trip read's ``wait`` answer (v1.232); null keys = no answer this tick."""
+    """D-763 8 (v1.238): the trip read's ``wait`` answer (v1.232); null keys = no answer this tick."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -30,7 +30,7 @@ class FleetWorkSummary(BaseModel):
     workcell_id: str | None = None
     reason: str | None = None
     updated_at: str
-    #: D-763 8 (v1.237): read projection only; ledger states are unchanged. null = a status this read does not know.
+    #: D-763 8 (v1.238): read projection only; ledger states are unchanged. null = a status this read does not know.
     visible_state: Literal["approval_pending", "in_progress", "waiting", "intervention", "ended"] | None = None
     wait: FleetWorkWait | None = None
     #: D-763 7: the step-kind registry's approval for a PROPOSED row; null otherwise.
@@ -54,5 +54,5 @@ class FleetWorkOverview(BaseModel):
     missions_available: bool
     cell_jobs_available: bool
     truncated_sources: list[_Source] = Field(max_length=4)
-    #: D-763 9 (v1.237): 새 작업 kinds that can run on this site now (an action_kind of their rows).
+    #: D-763 9 (v1.238): 새 작업 kinds that can run on this site now (an action_kind of their rows).
     kinds: list[Literal["trip", "CELL_TRANSFER"]] = Field(max_length=2)
