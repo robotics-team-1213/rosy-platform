@@ -21,11 +21,12 @@ gates:
     blocker: "No signed/published production artifact digest, complete SBOM, or provider deployment/secret-injection configuration is available. Simulation manifest does not qualify as a releasable runtime artifact."
   DEVICE:
     state: PARKED
-    blocker: "No OMX-AI, leader/follower OpenRB, or workcell camera is connected for physical acceptance"
+    blocker: "2026-10-15: two OpenRB USB entries and two advancing workcell preview cameras observed; no accepted physical joint/gripper profile, CameraInfo/hand-eye/TCP calibration, stop/torque-loss measurements or arm-owner runtime. Preview recovery and one-shot AI descriptions do not establish DEVICE acceptance."
   FIELD:
     state: PARKED
 adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376, D-386, D-390, D-402, D-403, D-411]
 plans:
+  - docs/plans/2026-10-15-omx-camera-recovery.md
   - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
   - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-15-module-harness-design.md

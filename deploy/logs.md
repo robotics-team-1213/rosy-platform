@@ -2796,3 +2796,9 @@
 - 증거: 구현 및 회귀 시험 추가. 원격 실행·브라우저 검증 결과는 후속 기록한다.
 - gate 변화: 없음. 운영 배포·실 모델 품질 수용을 선언하지 않는다.
 - 결정: D-764
+
+## 2026-10-15 · dbe5db55b · fix(omx): 카메라 사용자 서비스 복구
+
+- 변경: 명시한 지속 USB·토픽·frame·ROS 환경으로 실행하는 카메라 전용 user unit과 설치 전제조건을 추가했다. 기존 카메라 producer만 교체하며 팔 서비스·프로필은 변경하지 않는다.
+- 증거: 현장 두 unit enabled/active, Linger=yes, systemd verify 성공. 캡처 SIGSTOP 뒤 watchdog 자동 재시작과 이후 두 영상 readback 성공. 최종 dbe5db55b source SHA-256을 배포본과 대조했다. 실제 기존 ROS 경로는 Lyrical이며 Jazzy 수용 증거로 쓰지 않는다.
+- gate 변화: 없음. 실제 USB 분리/재연결·cold boot·장시간 운용과 팔 수용은 확인하지 않았다. main 착지·push 없음.
