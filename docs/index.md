@@ -336,8 +336,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · docs: remove the retired repo-root reference/ folder
 - 2026-10-15 · b5539986f · docs(omx): G3 실측 문서 검사 진행 기록
 - 2026-10-15 · 731c5ae61 · OMX 실물 제어 완성 목표
 - 2026-10-15 · uncommitted · OMX 모방·강화학습과 Web 운용 통합 계획
 - 2026-10-15 · uncommitted · docs: 화면 폴더 안내를 착지된 경로에 맞춘다
-- 2026-10-15 · 271f923283 · preserve product boundaries in SIM installation closure

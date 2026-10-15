@@ -8544,3 +8544,10 @@ osy-d395-s1d\`.
 - 변경: 실행 계획에서 문서 검사와 실제 측정·정지·runtime binding을 구분했다.
 - 증거: `omx_adapter.hardware_profile`의 원격 39 passed·NEW 0 및 독립 재검토.
 - gate 변화: 없음. G3 물리 관문 및 G4–G6는 미완료다.
+
+## 2026-10-15 · uncommitted · docs: remove the retired repo-root reference/ folder
+- 변경: 사용자 결정(2026-10-15)으로 `reference/AGENTS.md`·`reference/src/AGENTS.md` 삭제를 커밋했다. upstream pinky_pro zip은 이미 디스크에 없고 삭제를 소유한 세션이 없었다. 루트 `AGENTS.md` 표의 행, `docs/AGENTS.md`의 안내 문구, `.gitignore`의 zip 행, `test_folder_layout.py`의 보관 AGENTS 검사를 함께 뺐다. `docs/plans/2026-10-13-folder-responsibility-cleanup.md` 3항에 결정을 적었다.
+- 증거: 원격 pytest `test/architecture/test_folder_layout.py` (아래 착지 기록)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
