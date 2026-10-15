@@ -460,7 +460,9 @@ def test_a_halt_stop_after_a_canceled_trip_is_never_taken_over():
     asyncio.run(runner.start("p1", "bob"))
     _lane_ticks(runner, ports)
     asyncio.run(runner.cancel("p1", "kim", "operator_cancel"))   # the halt: stop at SW, line OFF
+    assert runner.held_stops == {}                               # a canceled trip leaves no held stop to take
     ports.core.mode = "CAMERA_LINE"                              # someone turns the line on again
+    ports.core.send("stop", "SW", 0.0, 15, None)                # CORE holds a stop at SW, as the halt sent it
     ports.at(arc, arc.length_m - 0.05)
     assert ports.core.status()["state"] == "executing" and _next_trip_sends(runner, store, ports, arc) == []
 
