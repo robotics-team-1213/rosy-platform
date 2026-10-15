@@ -8562,3 +8562,10 @@ osy-d395-s1d\`.
 - 변경: `docs/omx-unfinished-handoff`에서 모델 전달·CORE 연결·지속 관측·실물 제어·IL/RL·Web/Android UX·FIELD의 미완료 항목, 담당 역할, 선행 조건과 완료 증거를 정리했다. 실물 제어 실행 계획에서 연결했다.
 - 증거: 당일 runtime 재확인과 기존 검증 기록을 연결했다. 물리 차단과 남은 소프트웨어 구현을 구분했으며 미완료 항목을 완료로 승격하지 않았다.
 - gate 변화: 없음. 사용자 요청은 문서 커밋과 로컬 병합이며 push·활성화·실물 운용은 포함하지 않는다.
+
+## 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
+- 변경: `docs/plans/2026-10-15-main-gateway-handoff.md` 신규. 컴퓨터 이전 전에 D-762/D-761 상태, 2026-11-15 마감, 열린 결정(두 번째 관리자), Dependabot 처리, 이 클론에만 있는 ref의 번들과 복원 명령, 새 컴퓨터 준비(Tailscale 프로필, ssh, 도구), 착지 대기열을 적었다.
+- 증거: 문서만. `rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
