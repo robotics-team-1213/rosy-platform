@@ -11,8 +11,8 @@ harness module that owns it, adds reverse dependents found through
 path, and an always-on guard set. Shared foundations, CI/test configuration,
 source layout and guard rules, committed folder moves and removed modules, and
 files that map to nothing escalate to the full tier: unknown means everything,
-never nothing. A ``contracts/foundation`` module, config file or CI workflow instead selects
-the suites that import or name it when the selector finds any (``affected_narrow.NARROWABLE_TRIGGERS``). ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
+never nothing. Foundation modules may narrow to known test readers; unresolved runtime consumers,
+config files and CI workflows retain FULL (``affected_narrow.NARROWABLE_TRIGGERS``). ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
 locally by default: ``--run`` on a FULL selection runs only the guards and the
 directly affected suites and says so; ``--full`` overrides. Suites whose test files share a basename run as separate pytest
 invocations (gateway and sensing both ship ``test_battery.py``).
