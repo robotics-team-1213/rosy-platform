@@ -70,16 +70,16 @@
     "status": 200,
     "reply": {
       "job": {
-        "mission_id": "d2a8116846724f1f89b08dc0379ffc2c",
+        "mission_id": "<hash:d2a81168>",
         "proposal_principal_id": "d763-sim-operator",
-        "request_key": "d2a8116846724f1f89b08dc0379ffc2c",
-        "request_digest": "48c4a11b55ff0b4012a64bff7ccf0777c91a39b3e64437150b0a5c7e1548611d",
-        "job_id": "d2a8116846724f1f89b08dc0379ffc2c",
+        "request_key": "<hash:d2a81168>",
+        "request_digest": "<hash:48c4a11b>",
+        "job_id": "<hash:d2a81168>",
         "workcell_id": "rosy_02",
         "instance_id": "rosy_02",
-        "recipe_digest": "48c4a11b55ff0b4012a64bff7ccf0777c91a39b3e64437150b0a5c7e1548611d",
-        "cell_digest": "48c4a11b55ff0b4012a64bff7ccf0777c91a39b3e64437150b0a5c7e1548611d",
-        "process_artifact_digest": "48c4a11b55ff0b4012a64bff7ccf0777c91a39b3e64437150b0a5c7e1548611d",
+        "recipe_digest": "<hash:48c4a11b>",
+        "cell_digest": "<hash:48c4a11b>",
+        "process_artifact_digest": "<hash:48c4a11b>",
         "status": "READY",
         "current_step_index": 0,
         "authority_epoch": 1,
@@ -109,9 +109,9 @@
         "ledger_markers": [],
         "steps": [
           {
-            "mission_id": "d2a8116846724f1f89b08dc0379ffc2c",
+            "mission_id": "<hash:d2a81168>",
             "step_index": 0,
-            "step_id": "d2a8116846724f1f89b08dc0379ffc2c:step-1",
+            "step_id": "<hash:d2a81168>:step-1",
             "action_kind": "TRIP",
             "status": "READY",
             "action_id": null,
@@ -128,9 +128,9 @@
             "goal_evidence": null
           },
           {
-            "mission_id": "d2a8116846724f1f89b08dc0379ffc2c",
+            "mission_id": "<hash:d2a81168>",
             "step_index": 1,
-            "step_id": "d2a8116846724f1f89b08dc0379ffc2c:step-2",
+            "step_id": "<hash:d2a81168>:step-2",
             "action_kind": "TRIP",
             "status": "WAITING",
             "action_id": null,
@@ -150,8 +150,8 @@
         "events": [
           {
             "event_id": 1,
-            "event_key": "d2a8116846724f1f89b08dc0379ffc2c:CELL_JOB_ADMITTED:None:f0df54402d57d5de069268eb03fd2f7cf1116551da06c4b33f2417d1fc833831",
-            "mission_id": "d2a8116846724f1f89b08dc0379ffc2c",
+            "event_key": "<hash:d2a81168>:CELL_JOB_ADMITTED:None:<hash:f0df5440>",
+            "mission_id": "<hash:d2a81168>",
             "step_index": null,
             "event_type": "CELL_JOB_ADMITTED",
             "actor_id": "d763-sim-operator",
@@ -172,7 +172,7 @@
       "t": 181.2,
       "job": {
         "source": "cell_job",
-        "source_id": "d2a8116846724f1f89b08dc0379ffc2c",
+        "source_id": "<hash:d2a81168>",
         "action_kind": "TRIP",
         "status": "GOAL_CONFIRMED",
         "device_id": "rosy_02",
@@ -184,11 +184,11 @@
         "approval": null
       },
       "trips": {
-        "8d4925511ecd4bc799b7922f6bd9a7f3": [
+        "<hash:8d492551>": [
           "arrived",
           null
         ],
-        "e99a1c3880894f53ae326945f133b715": [
+        "<hash:e99a1c38>": [
           "arrived",
           null
         ]
@@ -207,7 +207,7 @@
           "turn_deg": null,
           "reason": null,
           "pivot_basis": null,
-          "signal_request_id": "70f360ec7c8c4193a3d211030c964d0b",
+          "signal_request_id": "<hash:70f360ec>",
           "signal_state": "waiting",
           "map_entry_used": false,
           "map_entry_reason": null
@@ -215,7 +215,7 @@
       }
     },
     "trips": {
-      "8d4925511ecd4bc799b7922f6bd9a7f3": {
+      "<hash:8d492551>": {
         "state": "arrived",
         "reason": null,
         "segment_index": 0,
@@ -230,7 +230,7 @@
           "yaw": 0.947
         },
         "lease": {
-          "lease_id": "00af000134754ab1a4d658035304e949",
+          "lease_id": "<hash:00af0001>",
           "renewed_at": 39436.944838954,
           "state": "held"
         },
@@ -239,7 +239,7 @@
         },
         "started_by": "d763-sim-operator"
       },
-      "e99a1c3880894f53ae326945f133b715": {
+      "<hash:e99a1c38>": {
         "state": "arrived",
         "reason": null,
         "segment_index": 4,
@@ -254,7 +254,7 @@
           "anchor_age_s": 0.02719426155090332
         },
         "lease": {
-          "lease_id": "00af000134754ab1a4d658035304e949",
+          "lease_id": "<hash:00af0001>",
           "state": "released",
           "renewed_at": 39530.117427904
         },

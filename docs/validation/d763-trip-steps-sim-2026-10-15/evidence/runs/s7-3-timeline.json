@@ -4,7 +4,7 @@
       "t": 32.6,
       "job": {
         "source": "cell_job",
-        "source_id": "c178649967224044a96ab456ccdc4d1c",
+        "source_id": "<hash:c1786499>",
         "action_kind": "TRIP",
         "status": "READY",
         "device_id": "rosy_02",
@@ -18,13 +18,13 @@
       "trips": {},
       "core_mode": "IDLE",
       "core_lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
-        "trip_id": "c178649967224044a96ab456ccdc4d1c",
+        "lease_id": "<hash:2d27daa1>",
+        "trip_id": "<hash:c1786499>",
         "holder": "rosy-site",
         "operator_name": "d763-sim-operator",
         "since": "2026-10-15T08:03:14+00:00",
         "expires_in_s": 7.9,
-        "job_id": "c178649967224044a96ab456ccdc4d1c"
+        "job_id": "<hash:c1786499>"
       },
       "core_line": {
         "state": "OFF",
@@ -49,7 +49,7 @@
       "t": 33.7,
       "job": {
         "source": "cell_job",
-        "source_id": "c178649967224044a96ab456ccdc4d1c",
+        "source_id": "<hash:c1786499>",
         "action_kind": "TRIP",
         "status": "RUNNING",
         "device_id": "rosy_02",
@@ -61,20 +61,20 @@
         "approval": null
       },
       "trips": {
-        "3f45421c00e84533a1ff930bceeb2652": [
+        "<hash:3f45421c>": [
           "running",
           null
         ]
       },
       "core_mode": "NAVIGATION",
       "core_lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
-        "trip_id": "c178649967224044a96ab456ccdc4d1c",
+        "lease_id": "<hash:2d27daa1>",
+        "trip_id": "<hash:c1786499>",
         "holder": "rosy-site",
         "operator_name": "d763-sim-operator",
         "since": "2026-10-15T08:03:14+00:00",
         "expires_in_s": 7.8,
-        "job_id": "c178649967224044a96ab456ccdc4d1c"
+        "job_id": "<hash:c1786499>"
       },
       "core_line": {
         "state": "HOLD",
@@ -99,7 +99,7 @@
       "t": 98.1,
       "job": {
         "source": "cell_job",
-        "source_id": "c178649967224044a96ab456ccdc4d1c",
+        "source_id": "<hash:c1786499>",
         "action_kind": "TRIP",
         "status": "RUNNING",
         "device_id": "rosy_02",
@@ -111,20 +111,20 @@
         "approval": null
       },
       "trips": {
-        "3f45421c00e84533a1ff930bceeb2652": [
+        "<hash:3f45421c>": [
           "arrived",
           null
         ]
       },
       "core_mode": "NAVIGATION",
       "core_lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
-        "trip_id": "c178649967224044a96ab456ccdc4d1c",
+        "lease_id": "<hash:2d27daa1>",
+        "trip_id": "<hash:c1786499>",
         "holder": "rosy-site",
         "operator_name": "d763-sim-operator",
         "since": "2026-10-15T08:03:14+00:00",
         "expires_in_s": 7.6,
-        "job_id": "c178649967224044a96ab456ccdc4d1c"
+        "job_id": "<hash:c1786499>"
       },
       "core_line": {
         "state": "HOLD",
@@ -149,7 +149,7 @@
       "t": 99.1,
       "job": {
         "source": "cell_job",
-        "source_id": "c178649967224044a96ab456ccdc4d1c",
+        "source_id": "<hash:c1786499>",
         "action_kind": "TRIP",
         "status": "RUNNING",
         "device_id": "rosy_02",
@@ -161,24 +161,24 @@
         "approval": null
       },
       "trips": {
-        "3f45421c00e84533a1ff930bceeb2652": [
+        "<hash:3f45421c>": [
           "arrived",
           null
         ],
-        "9bfcaa0c29eb46d78d4bec8a567b5222": [
+        "<hash:9bfcaa0c>": [
           "started",
           null
         ]
       },
       "core_mode": "NAVIGATION",
       "core_lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
-        "trip_id": "c178649967224044a96ab456ccdc4d1c",
+        "lease_id": "<hash:2d27daa1>",
+        "trip_id": "<hash:c1786499>",
         "holder": "rosy-site",
         "operator_name": "d763-sim-operator",
         "since": "2026-10-15T08:03:14+00:00",
         "expires_in_s": 7.6,
-        "job_id": "c178649967224044a96ab456ccdc4d1c"
+        "job_id": "<hash:c1786499>"
       },
       "core_line": {
         "state": "HOLD",
@@ -203,7 +203,7 @@
       "t": 100.2,
       "job": {
         "source": "cell_job",
-        "source_id": "c178649967224044a96ab456ccdc4d1c",
+        "source_id": "<hash:c1786499>",
         "action_kind": "TRIP",
         "status": "RUNNING",
         "device_id": "rosy_02",
@@ -215,24 +215,24 @@
         "approval": null
       },
       "trips": {
-        "3f45421c00e84533a1ff930bceeb2652": [
+        "<hash:3f45421c>": [
           "arrived",
           null
         ],
-        "9bfcaa0c29eb46d78d4bec8a567b5222": [
+        "<hash:9bfcaa0c>": [
           "running",
           null
         ]
       },
       "core_mode": "NAVIGATION",
       "core_lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
-        "trip_id": "c178649967224044a96ab456ccdc4d1c",
+        "lease_id": "<hash:2d27daa1>",
+        "trip_id": "<hash:c1786499>",
         "holder": "rosy-site",
         "operator_name": "d763-sim-operator",
         "since": "2026-10-15T08:03:14+00:00",
         "expires_in_s": 7.5,
-        "job_id": "c178649967224044a96ab456ccdc4d1c"
+        "job_id": "<hash:c1786499>"
       },
       "core_line": {
         "state": "RECOVERING",
@@ -257,7 +257,7 @@
       "t": 185.6,
       "job": {
         "source": "cell_job",
-        "source_id": "c178649967224044a96ab456ccdc4d1c",
+        "source_id": "<hash:c1786499>",
         "action_kind": "TRIP",
         "status": "GOAL_CONFIRMED",
         "device_id": "rosy_02",
@@ -269,11 +269,11 @@
         "approval": null
       },
       "trips": {
-        "3f45421c00e84533a1ff930bceeb2652": [
+        "<hash:3f45421c>": [
           "arrived",
           null
         ],
-        "9bfcaa0c29eb46d78d4bec8a567b5222": [
+        "<hash:9bfcaa0c>": [
           "arrived",
           null
         ]
@@ -292,7 +292,7 @@
           "turn_deg": null,
           "reason": null,
           "pivot_basis": null,
-          "signal_request_id": "97822a01df574f959ca7a65a529d97ce",
+          "signal_request_id": "<hash:97822a01>",
           "signal_state": "waiting",
           "map_entry_used": false,
           "map_entry_reason": null
@@ -301,7 +301,7 @@
     }
   ],
   "trips": {
-    "3f45421c00e84533a1ff930bceeb2652": {
+    "<hash:3f45421c>": {
       "state": "arrived",
       "reason": null,
       "segment_index": 0,
@@ -316,7 +316,7 @@
         "yaw": 0.936
       },
       "lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
+        "lease_id": "<hash:2d27daa1>",
         "renewed_at": 39785.101614201,
         "state": "held"
       },
@@ -325,7 +325,7 @@
       },
       "started_by": "d763-sim-operator"
     },
-    "9bfcaa0c29eb46d78d4bec8a567b5222": {
+    "<hash:9bfcaa0c>": {
       "state": "arrived",
       "reason": null,
       "segment_index": 4,
@@ -340,7 +340,7 @@
         "anchor_age_s": 0.029375076293945312
       },
       "lease": {
-        "lease_id": "2d27daa163334b4bb7b18a75be56fd85",
+        "lease_id": "<hash:2d27daa1>",
         "state": "released",
         "renewed_at": 39872.258235645
       },
