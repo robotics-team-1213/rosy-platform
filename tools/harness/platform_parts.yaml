@@ -479,6 +479,7 @@ roots:
       fleet/server/work: fleet.server
       fleet/server/trips: fleet.server
       fleet/server/trip_checks: fleet.server
+      fleet/server/trip_progress: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations

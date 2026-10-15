@@ -102,5 +102,5 @@
 - 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
 - 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)
 - 2026-10-15 · 64816ae7e · lane_instruction_stamp 로봇에 pose_stamp, 지연 추정 없음 (D-767 A부, API v1.241)
-- 2026-10-15 · db7b5cf3a · Mission 원장과 작업 읽기를 자기 크기 단위로 (main 머지 ab8ac53f6 뒤, API v1.238)
-- 2026-10-15 · e7b196839 · D-763 조각 4 검토: Cell Job 상세 범위, 닫힌 trip의 기다림, 루프 밖 읽기, 작업 영역 단위
+- 2026-10-15 · d6d84dffd · 크기: `trip_checks`를 두 단위로 — `trip_progress` 보관 자리
+- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)

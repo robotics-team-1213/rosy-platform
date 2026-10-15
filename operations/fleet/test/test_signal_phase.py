@@ -39,6 +39,19 @@ def test_demo_roundabout_entrances_and_check():
     assert check(SignalPlan("s", "east#0", ()), graph, layout) == ["s: east#0 is not a zone"]
 
 
+def test_a_route_through_several_zone_edges_keeps_its_entry_and_enters_on_green():
+    """m33: west:fwd then three ring arcs merged into one span that lost its entry, so no green admitted it."""
+    graph, layout = _demo()
+    spans = layout.route(graph, ["west:fwd", "ring_s:fwd", "ring_e:fwd", "ring_n:fwd"])
+    ring = [s for s in spans if s.unit == "roundabout"]
+    assert [s.entry for s in ring] == ["west:fwd"]
+    robot = Robot("a", spans, ring[0].d0 - 0.1, 0.3, U_DEMO, BODY)
+    on_green = step(layout, [robot], TableState(), 0.0, green={"roundabout": {"west:fwd"}})
+    assert on_green.authority_end["a"] > ring[0].d0 and "signal:roundabout" not in on_green.waiting_for.get("a", ())
+    on_red = step(layout, [robot], TableState(), 0.0, green={"roundabout": {"east:fwd"}})
+    assert on_red.authority_end["a"] <= ring[0].d0 and on_red.waiting_for["a"] == ("signal:roundabout",)
+
+
 def test_the_live_two_way_map_has_four_roundabout_entrances():
     """The historical map without turn bans has four entrances and refuses a two-entrance plan."""
     legacy = from_lane_graph(LANE_GRAPH, map_id="map_v2_fleet").model_copy(update={'turn_bans': []})

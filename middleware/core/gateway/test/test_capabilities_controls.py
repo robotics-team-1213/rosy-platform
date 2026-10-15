@@ -122,6 +122,12 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert _controls(client)["items"][0]["junction_pivot"] is True
     lf.observe_junction("no_boundary", lf._clock() - 3.0, ahead_v=1)  # older than 2 s
     assert _controls(client)["items"][0]["junction_pivot"] is False
+    lf._config = dataclasses.replace(lf._config)  # a copy: the shared default config stays as it was
+    for cap, flag in (("lane_crosswalk_gate", "crosswalk_gate_enabled"),
+                      ("lane_junction_signal", "junction_signal_enabled")):  # D-763 10 (c)
+        assert _controls(client)["items"][0][cap] is getattr(lf._config, flag) is False
+        object.__setattr__(lf._config, flag, True)  # the flag alone; config validation is not under test
+        assert _controls(client)["items"][0][cap] is True
     navigation = svc.capability._data.setdefault("navigation", {})
     navigation["goal_navigation"] = False
     assert _controls(client)["items"][0]["drive_modes"] == ["lane"]
@@ -137,6 +143,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["line_follow_authority_required"] is False
     assert base["lane_bend"] is False and base["lane_bend_map_entry"] is False and base["lane_bend_next_line"] is False
     assert base["lane_turn_map_entry"] is False and base["lane_instruction_stamp"] is False
+    assert base["lane_crosswalk_gate"] is False and base["lane_junction_signal"] is False
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
 
 

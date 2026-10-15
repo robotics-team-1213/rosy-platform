@@ -229,6 +229,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `lane_bend_map_entry` (D-759 2): line_follow.bend_map_entry_enabled (default off) with lane_bend.
     # `lane_turn_map_entry` (D-759 rev 1): line_follow.turn_map_entry_enabled (default off) with junction_turn.
     # `lane_instruction_stamp` (D-767 A): line_follow.instruction_stamp_enabled (default off).
+    # `lane_crosswalk_gate`/`lane_junction_signal` (D-763 10 (c)): line_follow.crosswalk_gate_enabled /
+    # junction_signal_enabled is on; Fleet refuses a route over a crosswalk / signal zone when false.
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
     # `line_follow_authority_shrink` (D-760 3): that authority takes `shrink` and `seq`, `ttl_s` up to 5 s.
@@ -269,6 +271,10 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                           svc.line_follow, "supports_lane_instruction_stamp", False) is True,
                                       lane_bend_next_line=getattr(
                                           svc.line_follow, "supports_lane_bend_next_line", False) is True,
+                                      lane_crosswalk_gate=getattr(
+                                          svc.line_follow, "supports_lane_crosswalk_gate", False) is True,
+                                      lane_junction_signal=getattr(
+                                          svc.line_follow, "supports_lane_junction_signal", False) is True,
                                       route_context=(True if svc.line_follow is not None and
                                                      svc.line_follow.config.route_context_enabled else None),
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
