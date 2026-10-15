@@ -365,3 +365,16 @@ def test_ort_session_options_with_a_fake_onnxruntime(monkeypatch):
     entries.clear()
     default = runner._OrtSession("m.onnx", 2)
     assert entries == {} and default._s.opts.intra_op_num_threads == 2
+def test_a_refused_model_warns_once_and_reaches_the_keep_bundle():
+    warnings = []
+    slot = _Slot(None)
+    slot.last_error = "floor gate needs a wall role class; this model has none"
+    worker = LearnedPaintWorker(slot, warn=warnings.append, start=False)
+    for _ in range(3):
+        worker.submit(np.zeros((240, 320, 3), np.uint8))
+        worker.step()
+    assert warnings == [f"learned paint: no model ({slot.last_error})"]
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
+    assert "paint_last_error=(self._paint_worker.last_error" in src
+    assert "floor_gate=floor_gate," in src and "paint_target=target))" in src

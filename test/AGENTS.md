@@ -38,7 +38,8 @@ ROS-free repository architecture, installation, deployment, motor/network and cr
 | `test_release_updater.py` | Activate/rollback updater |
 | `robot_contracts.py` | Shared ROOT/DEPLOY/compose helpers |
 | `known_failures.txt` | Pre-existing failures on main (node id + reason). Delete a line in the commit that fixes it; never add one to hide your own failure |
-| `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure |
+| `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure. A failure listed in `flaky_quarantine.txt` whose one rerun (appended after `RERUN_MARKER` by `tools/remote/remote_pytest.py`) shows `PASSED` prints `FLAKY`, not `NEW` |
+| `flaky_quarantine.txt` | D-762 stage 1: tests seen flaky on an unchanged sha (node id + `  # ` reason, evidence, "remove when ...", date, owner). Listed failures rerun once in CI and on the lab PCs; fails twice = NEW; unlisted never rerun. Add only with flake evidence, never to hide your own failure; browser follow-ups (not rerun anywhere) are comments in the file |
 | `test_known_failures.py` | The comparison and that every listed id names a real test |
 | `browser_harness.py` | Shared helpers for the optional Chromium regressions (launch/error-collection/confirm-stub/screenshot, D-153 capture tooling); `browser_tests_enabled()` opt-in, `safe_listener()`/`free_port()` never return a Chromium-restricted port |
 | `browser_scope.py` | `SCOPE` map from source path prefix to the browser tests that load those pages; `python test/browser_scope.py <paths>` prints pytest targets |

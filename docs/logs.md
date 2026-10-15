@@ -8480,3 +8480,23 @@ osy-d395-s1d\`.
 - 변경: 없음. D-765 구현 커밋 d685e1351의 시험 기록만 추가한다.
 - 증거: 모델 PC rosy@100.98.162.71에서 d685e1351 원격 pytest 53 passed, known_failures 0 NEW (`X:\DevTemp\hf-repo-manage\run-1.txt`). 시험 PC 셋 모두 여유 메모리 6 GB 아래여서 기준 미달이지만 닿는 호스트로 실행했다.
 - gate 변화: 없음.
+
+## 2026-10-14 · df1b93395 · D-762 단계 1: merge_group 트리거, CI 전체 티어가 모든 모듈 묶음을 덮는다, 불안정 시험 격리
+
+- 변경: `ci.yml`에 `merge_group` 트리거를 넣었다. 전체 티어로 돌고, Safety-Review와 `HARNESS_BASE_REF`의 base는 `merge_group.base_sha`다. `concurrency:`는 넣지 않았다. 선택기(`tools/harness/affected_tests.py`)의 CI 전체 matrix에 `modules` 러너를 더했다. 빠져 있던 등록 모듈 묶음 21개, 시험 파일 130개가 이 러너에서 돌고, 첫 녹색까지는 보고만 한다. `CI_FULL_EXCLUDED`가 사유가 있는 유일한 제외다. `test/flaky_quarantine.txt`를 새로 두었다. 목록에 있는 실패는 CI 시험 단계와 `tools/remote/remote_pytest.py`에서 한 번 다시 돈다. `test/known_failures.py`는 다시 돌아 통과한 실패를 FLAKY로, 두 번 실패한 것을 NEW로 찍는다. 목록에 없는 시험은 다시 돌지 않는다.
+- 증거: 원격 `test/test_known_failures.py test/test_affected_tests.py test/test_ci_dependencies.py test/test_remote_pytest.py test/test_land.py test/test_harness_contracts.py test/architecture`에서 409 passed, NEW 0이었다(`X:\DevTemp\land-recent\stage1\1`). CI 전체 티어가 덮는 등록 시험 파일은 1,388/1,518에서 1,518/1,518로 늘었다. `main`에 `ci.yml`을 여섯 번 dispatch했고 결과는 `docs/validation/ci-flake-rate-2026-10-14/result.md`에 있다. b1e84dd79의 다섯 번 가운데 셋이 적색이었고, 실패한 시험은 셋이며 서로 달랐다.
+- gate 변화: 아직 없다. merge queue와 필수 검사는 단계 3이고 승인되지 않았다. `modules` 러너는 보고만 한다. 격리 목록의 실패는 한 번 다시 돈 뒤 통과하면 CI 잡, pre-push, 착지를 막지 않는다.
+- 결정: 격리 목록에는 증거가 있는 둘(fleet 작업자 유휴 대기)만 넣었다. 비상정지 지연 시험과 수동 조작 중 모드 충돌 시험은 안전 경로라 격리하지 않고 소유자에게 넘겼다. 브라우저 시험 둘은 어떤 실행기도 다시 돌리지 않아 후속 항목으로 남겼다.
+
+## 2026-10-15 · 0bc2a16c1 · runtime connection inventory
+
+- Change: docs/plans/2026-10-15-runtime-pipeline-closure.md maps 14 current flows to source, two fixes and remaining inputs/evidence. Historical Discord/incident plans are distinguished from current implementation.
+- Evidence: 0bc2a16c1 remote regression: 117 passed, terminal exit 0, NEW 0. Live intake, model quality, signed admission, ROS-SIM and device readback remain separate. This branch is separate from shared main.
+- Gate: unchanged. The inventory is a source audit, not runtime or physical acceptance.
+- Final evidence: 30b06737a remote regression: 273 passed, terminal exit 0, NEW 0. Earlier broad affected checkpoint: 6278 passed, 330 skipped and 3 format/size failures, all rechecked passing in the final regression. Local lint exit 0, errors 0, drift warnings 29. No whole-platform acceptance claim.
+
+## 2026-10-15 · 39d8e72973 · continue runtime pipeline closure after landing approval
+
+- Change: update the 14-flow inventory and add docs/plans/2026-10-15-pipeline-resource-close.md for complete resource cleanup and measured OMX SIM prerequisites.
+- Evidence: remote RED 2 NEW, corrected source regression 281 passed with terminal exit 0/NEW 0. Existing non-site Docker contexts could not support a run: one daemon permission denial and one missing executable. No Docker install, permission change, daemon start or simulation acceptance was performed.
+- Gate: unchanged. Local landing is authorized; push and runtime activation are separate. Actual reviewed datasets, independent operating acceptance, live SIM and device readback remain required.

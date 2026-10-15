@@ -484,6 +484,10 @@ Administrator의 `POST /api/v1/safety/release`뿐이다. 전압이 회복되어�
 
 ---
 
+### SAF-007 Fleet trip lease와 작업의 lease (D-541, D-763 조각 6)
+
+Fleet trip lease가 살아 있는 동안 주인 아닌 토큰의 움직임·모드 쓰기는 409 `TRIP_LEASED`이고, 멈춤(E-stop, IDLE, 취소, line-follow OFF)과 넘겨받기는 누구에게나 열려 있다. `job_id`로 연 lease(다단계 작업의 lease)는 그 작업의 단계 사이 IDLE에서 끝나지 않는다. MANUAL·도킹으로 감, 비상 정지, 넘겨받기, 만료, 주인의 해제는 그 lease도 끝내고, 주인 아닌 토큰의 IDLE·취소·line-follow OFF도 끝낸다. lease는 "누가 로봇을 쥐는가"에만 답하고 움직임의 한도(차선 통행권, 목표 임대)를 늘리지 않는다. 계약: API Ref v1.236. 팔 단계 중 만료의 동작은 정하지 않았다(D-763 남은 질문 1).
+
 # 10. Navigation 요구사항
 
 ### NAV-001 Goal Navigation

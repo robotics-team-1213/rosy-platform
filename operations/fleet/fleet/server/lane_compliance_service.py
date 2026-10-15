@@ -2,7 +2,7 @@
 
 Every tick (2 Hz, D-511 2) each roster robot is judged from `MapPoseService.arbitrated_pose`
 against the active site graph. A robot whose odom moved within `max_odom_age_s` (beyond the `moving_min_m` / `moving_min_deg` jitter deadband) gets
-`refresh(force_rest=True)` first, the trip loop's read; a still robot keeps its heartbeat odom.
+`refresh(force_rest=True)` first, the shared REST read no older than 0.45 s (D-760 8); a still robot keeps its heartbeat odom.
 The console raises WARN/ACT only for `moving` robots (D-511 2: the watch is on moving robots).
 When the map pose is not LOCALIZED (a site without corner or robot markers) and an
 `identity` service is wired, the robot's D-472 LED-confirmed track is judged instead (addendum 3:

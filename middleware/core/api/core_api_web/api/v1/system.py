@@ -285,6 +285,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       line_follow_advice=svc.line_follow is not None and getattr(
                                           svc, "line_advice", None) is not None,
                                       trip_lease=getattr(svc, "trip_lease", None) is not None,
+                                      trip_lease_job=getattr(svc, "trip_lease", None) is not None,  # D-763 6
                                       goal_lease=True if "free" in drive_modes else None,
                                       stuck_realign=(("PIVOT", "KTURN") if svc.line_follow is not None and getattr(
                                           svc.line_follow.config, "stuck_realign_enabled", False) is True else None))
