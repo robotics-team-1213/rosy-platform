@@ -29,7 +29,7 @@
    - 목록은 `git for-each-ref refs/wip`다. 되살릴 때는 `git worktree add <경로> <ref>` 또는 작업 트리에서 `git checkout <ref> -- .`를 쓴다.
    - main에 들어가지 않은 브랜치는 지우지 않고 워크트리만 지운다.
 6. **캐시 목록.** gitignore 파일이 다음 디렉터리 안에만 있으면 캐시로 본다. 판정은 디렉터리 이름으로 한다.
-   - 어느 깊이에서나: `__pycache__`, `.pytest_cache`, `node_modules`, `.ruff_cache`, `.mypy_cache`, `.gradle`, `.kotlin`, `.cxx`, `.venv`, `graphify-out`, `*.egg-info`.
+   - 어느 깊이에서나: `__pycache__`, `.pytest_cache`, `node_modules`, `.ruff_cache`, `.mypy_cache`, `.gradle`, `.kotlin`, `.cxx`, `.venv`, `graphify-out`, `.omc`(훅의 세션 상태, 2026-10-15 추가), `*.egg-info`.
    - `build`, `install`, `log`, `dist`는 워크트리 루트에 있을 때, 또는 생성물임을 증명하는 표시가 옆에 있을 때만 캐시다. colcon은 같은 층에 `build/`, `install/`, `log/`가 모두 있고 그 가운데 하나에 `COLCON_IGNORE`가 있거나 `install/setup.*`가 있는 경우다. gradle은 그 디렉터리의 부모에 `build.gradle*`가 있는 경우다. 그 밖의 위치(예: `data/log/run.bag`)는 "holds ignored data"로 남는다.
    - `.omc/`는 캐시가 아니다. 에이전트 상태다.
    - git이 내용 전체가 무시된 디렉터리를 한 줄로 보고하면 도구가 그 안을 걸어서 캐시 밖 파일이 하나라도 있는지 본다.
