@@ -50,6 +50,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/traffic/trip_lease.py` | D-541 7 Fleet trip lease: 현장 설정 `fleet.trip_lease_required`(기본 false)가 참일 때만 연다. trip마다 새 `lease_id`(uuid, 재사용 없음)로 `PUT /trip-lease`, 주기마다 자기 슬롯에서 renew, 끝에서 정지 뒤 `DELETE`. renew가 404·409·`renewed:false`·`ttl_s` 동안 확인 없음이면 trip은 `stopped`/`lease_lost`로 끝나고 다시 열지 않는다. lease 주인은 로봇 REST 토큰이다: Fleet 전용이어야 하고(D-541 1), 관제 토큰과 같으면 app.py가 거절한다 |
 | `fleet/server/trips/trip_laps.py` | D-517 2 반복 운행의 순수 계산: 바퀴 경로(`lap_arcs`), 바퀴 끝 판정(`lap_due`), 실패한 바퀴 검사 재시도(`lap_retry_due`), 다음 바퀴 잇기·지난 바퀴 정리(`carry_on`). 로봇을 부르지 않는다 |
 | `fleet/server/trips/trip_preview.py` | D-767 P0 경로 미리보기: trip 주기마다 표 뒤에 그 단계가 읽은 자세로 2 m 안의 사건(turn·bend·arc·crosswalk·signal·stop·authority_end, ≤ 8)을 만들어 `/api/fleet/traffic` 로봇 행 `preview`에 보인다(≤ 2 s). 로봇에 보내지 않는다. 방금 보낸 지시와 0.005 m 넘게 다르면 `preview_mismatch`. `ROSY_ROUTE_PREVIEW_LOG`로 JSON 줄을 남기고 `tools/sim/route_preview_accuracy.py`가 잰다 |
+| `fleet/server/trips/trip_crosswalks.py` | D-767 P0: 경로가 횡단보도 다각형에 들어가는 곳(CORE의 가까운 가장자리, D-491)과 나오는 곳을 route m로 찾는다. 경로마다 캐시, 상자로 먼저 거른다. `trip_preview.py`만 쓴다 |
 | `fleet/server/trips/trip_halts.py` | D-494/D-517 로봇 정지: `TripHalts.halt_robot`, 재시작 뒤 열려 있던 trip의 로봇 정지(`run_restart`, `halt_restarted`). 교차로·취소 포트만 쓴다 |
 | `test/fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session tests — no network |
 | `test/fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양을 고정 + `FakeObserver`/`observed_body()` (관측 v0.3 본문) |
