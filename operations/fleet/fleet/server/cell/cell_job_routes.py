@@ -8,6 +8,8 @@ and viewers are refused like they are for admit.
 
 from __future__ import annotations
 
+from contextlib import closing
+
 from fastapi import Depends, HTTPException, Request
 
 from .cell_job_store import CellJobStore
@@ -28,21 +30,19 @@ def install_cell_job_routes(app, *, cell_job_store: CellJobStore, proposal_store
 
     @app.get("/api/fleet/resource-claims", dependencies=read_guard, tags=["fleet-cell-jobs"])
     def resource_claims(principal: SitePrincipal = Depends(require_viewer)) -> dict:
-        """Who holds each workcell/pallet/object: a held Job's claims stay visible with their owner.
-
-        Viewers see only which resource is held and its phase. An operator sees a Cell Job claim in full;
-        a legacy Mission or Task owner id only its own proposer sees (D-763 4 review).
-        """
-        operator = principal.permits_site("fleet.operate", {"operator"})
+        """Who holds what: a viewer sees resource and phase, an operator a Cell Job claim in full, and a legacy
+        Mission or Task owner id only that Mission's proposer (D-763 4 review). Expired reads as None: no purge."""
 
         def full(claim: dict) -> bool:
             if claim["job_status"] is not None:
-                return operator
-            owner = proposal_store.get(claim["owner_id"]) if claim["owner_kind"] == "mission" else None
+                return principal.permits_site("fleet.operate", {"operator"})
+            if claim["owner_kind"] != "mission":
+                return False
+            owner = proposal_store.get_in_transaction(connection, claim["owner_id"])
             return owner is not None and owner["principal_id"] == principal.principal_id
-
-        return {"claims": [claim if full(claim) else {key: claim[key] for key in VIEWER_CLAIM_FIELDS}
-                           for claim in cell_job_store.resource_claims()]}
+        with closing(proposal_store._connect()) as connection:  # one read connection, no write per row
+            return {"claims": [claim if full(claim) else {key: claim[key] for key in VIEWER_CLAIM_FIELDS}
+                               for claim in cell_job_store.resource_claims()]}
 
     @app.post("/api/fleet/cell-jobs/{mission_id}/reconcile", dependencies=operator_guard,
               tags=["fleet-cell-jobs"])
