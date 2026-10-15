@@ -8557,6 +8557,12 @@ osy-d395-s1d\`.
 - 증거: 같은 설정 top/front 각각 9.985 FPS, 최대 간격 0.121/0.113초, 두 프로세스 exit 0. 원문 해시와 계측 범위를 기록했다. 문서 경계 독립 검토에서 중요 문제 없음; 수치는 직접 원문과 대조했다.
 - gate 변화: 없음. 영상 메시지 수신만 확인했으며 실물 제어·보정·운영 소비·재부팅 수용은 미완료다.
 
+## 2026-10-15 · uncommitted · docs(omx): 미완료 범위와 재개 인계
+
+- 변경: `docs/omx-unfinished-handoff`에서 모델 전달·CORE 연결·지속 관측·실물 제어·IL/RL·Web/Android UX·FIELD의 미완료 항목, 담당 역할, 선행 조건과 완료 증거를 정리했다. 실물 제어 실행 계획에서 연결했다.
+- 증거: 당일 runtime 재확인과 기존 검증 기록을 연결했다. 물리 차단과 남은 소프트웨어 구현을 구분했으며 미완료 항목을 완료로 승격하지 않았다.
+- gate 변화: 없음. 사용자 요청은 문서 커밋과 로컬 병합이며 push·활성화·실물 운용은 포함하지 않는다.
+
 ## 2026-10-15 · uncommitted · docs: remove the retired repo-root reference/ folder
 - 변경: 사용자 결정(2026-10-15)으로 `reference/AGENTS.md`·`reference/src/AGENTS.md` 삭제를 커밋했다. upstream pinky_pro zip은 이미 디스크에 없고 삭제를 소유한 세션이 없었다. 루트 `AGENTS.md` 표의 행, `docs/AGENTS.md`의 안내 문구, `.gitignore`의 zip 행, `test_folder_layout.py`의 보관 AGENTS 검사를 함께 뺐다. `docs/plans/2026-10-13-folder-responsibility-cleanup.md` 3항에 결정을 적었다.
 - 증거: 원격 pytest `test/architecture/test_folder_layout.py` (아래 착지 기록)
