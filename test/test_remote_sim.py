@@ -169,7 +169,10 @@ def test_inner_installs_contracts_before_the_bench_and_stops_on_failure(tmp_path
     profile = tmp_path / "contracts/foundation/core_common/profile.py"
     profile.parent.mkdir(parents=True)
     profile.write_text('DEFAULT_ROBOT = "test_profile"\n')
-    script = ('source() { :; }\ncolcon() {\n  echo "$*" > "$OUT/build-args.txt"\n}\ncd "$WORKSPACE"\n'
+    script = ('source() { :; }\n'
+              'colcon() {\n'
+              '  echo "$*" > "$OUT/build-args.txt"\n'
+              '}\ncd "$WORKSPACE"\n'
               + rs.INNER.replace(rs.DEPS, "")
               + '\n')
     result = _bash(script, WORKSPACE=str(tmp_path), OUT=str(out), PYDEPS=str(tmp_path / "deps"),
