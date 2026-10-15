@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from types import SimpleNamespace
 
 
 def probe():
@@ -47,3 +48,16 @@ def test_transport_refuses_before_any_bytes_are_written():
     with pytest.raises(ValueError):
         write(bytes([255, 255, 253, 0, 11, 3, 0, 8, 0, 0]))
     assert sent == []
+
+
+@pytest.mark.parametrize("status,owners,allowed", [(0, "123", True), (0, "123 456", False),
+                                                  (1, "", False), (0, "456", False)])
+def test_post_lock_ownership_must_be_exclusively_this_process(monkeypatch, status, owners, allowed):
+    module = probe()
+    monkeypatch.setattr(module.subprocess, "run", lambda *a, **k:
+                        SimpleNamespace(returncode=status, stdout=owners))
+    if allowed:
+        module.check_exclusive_owner("/dev/test", 123)
+    else:
+        with pytest.raises(RuntimeError):
+            module.check_exclusive_owner("/dev/test", 123)
