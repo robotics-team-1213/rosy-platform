@@ -54,6 +54,14 @@ def test_driver_cannot_silently_fall_back_to_raw_usb_bandwidth(camera):
     assert cap.released
 
 
+def test_driver_cannot_keep_a_hidden_frame_backlog(camera):
+    cv, cap = camera
+    cap.get = lambda key: 4 if key == cv.CAP_PROP_BUFFERSIZE else cap.values[key]
+    with pytest.raises(OSError, match="one-frame"):
+        open_capture(cv, "/dev/v4l/by-id/selected-camera")
+    assert cap.released
+
+
 @pytest.mark.parametrize("frame", [None, SimpleNamespace(shape=(720, 1280, 3))])
 def test_disconnected_or_changed_frame_closes_device_for_reopen(camera, frame):
     _, cap = camera
