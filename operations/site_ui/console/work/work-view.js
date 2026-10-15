@@ -1,4 +1,4 @@
-// Source identity stays separate; Mission approval uses the existing server admission route.
+// Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import { tripWaitText } from "/console/assets/site-map-model.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
@@ -11,6 +11,7 @@ const visible = {approval_pending: "승인 대기", in_progress: "진행 중", w
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => ({task: "주행", trip: "운행", cell_job: "Cell 적재"})[row.source] || "팔 작업";
+const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 
 export function createWorkView({scope, call, el, channelRequestView, approveReason}) {
@@ -60,7 +61,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     field("사유", row.reason || "기록된 사유 없음");
     field("작업 식별자", row.source_id);
     // D-741 7 — 막힌 단추에 그 이유를 적는다. 권한은 세션에서, 그 밖의 거절은 서버가 답한 말 그대로다.
-    admit.hidden = row.source !== "mission" || row.status !== "PROPOSED";
+    admit.hidden = !approvable(row);
     const reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
     if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
     admit.disabled = Boolean(reason);
@@ -109,14 +110,15 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   // 승인은 Cell·대화 검토와 같은 원장 경로다: 현재 정지 세대를 읽어 그대로 보내고, 판단은 서버가 한다.
   async function approve() {
     const row = rows.find(row => workKey(row) === selected), life = scope.capture();
-    if (!row || busy || refusal || approveReason() || row.source !== "mission" || row.status !== "PROPOSED") return;
+    if (!row || busy || refusal || approveReason() || !approvable(row)) return;
     busy = true; refusal = ""; showDetail(row);
     try {
       const control = await call("/api/fleet/dispatch-control"); life.check();
       await call(`/api/fleet/missions/${encodeURIComponent(row.source_id)}/admit`, {method: "POST",
         headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_generation: control.generation})});
     } catch (error) {
-      refusal = error.status >= 400 && error.status < 500 ? `승인이 거절됐습니다 · ${error.message}`
+      // a late answer belongs to its own row; a newer selection keeps its own (clear) refusal
+      if (workKey(row) === selected) refusal = error.status >= 400 && error.status < 500 ? `승인이 거절됐습니다 · ${error.message}`
         : "승인 결과 미확인 · 다시 보내지 않았습니다. 원장을 확인하세요.";
     } finally { busy = false; }
     if (!life.current()) return;
