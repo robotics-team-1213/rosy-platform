@@ -131,11 +131,13 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "fleet/fleet/server/missions",
               "fleet/fleet/server/work",
               "fleet/fleet/server/trips",
-              "fleet/fleet/server/trip_checks")
+              "fleet/fleet/server/trip_checks",
+              "fleet/fleet/server/trip_progress")
 
 #: Fleet server source holders (fleet/_source_layout.py SERVER_HOLDERS) registered as size units.
 FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger", "fleet/fleet/server/missions", "fleet/fleet/server/work",
-                             "fleet/fleet/server/trips", "fleet/fleet/server/trip_checks")
+                             "fleet/fleet/server/trips", "fleet/fleet/server/trip_checks",
+                             "fleet/fleet/server/trip_progress")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -539,8 +541,27 @@ SIZE_VERDICTS = {
         "commit61aa49b32 (measured). Keep the trip_runner.py file verdict and every HARD_TIER rule. At the next +150 "
         "the trip ports (trip_ports, the CORE/pose seams) leave for their own unit, not an accept.",
     ),
+    "fleet/fleet/server/trip_progress": (
+        80,
+        "split: proposed 2026-10-15 on feat/regulation-capabilities, independently re-judged 2026-10-15 by a read-only critic, AGREE-WITH-CONDITIONS. The trip loop's "
+        "progress predicates (trip_progress.py, a TripRunner mixin) moved byte-identical out of "
+        "fleet/fleet/server/trip_checks as the two-unit split that unit's verdict named; a fleet.server source "
+        "holder (SERVER_HOLDERS, no __init__.py), imports unchanged (fleet.server.trip_progress). Baseline80 = "
+        "trip_progress at the D-757 verdict commit61aa49b32 (measured); now 136. Not rebaselined. Next growth "
+        "past +150: the wait predicates (_waiting, _wait_bound) leave for their own unit, not an accept "
+        "(docs/plans/2026-10-15-fleet-ledger-trips-unit.md, 2026-10-15 addendum).",
+    ),
     "fleet/fleet/server/trip_checks": (
-        272,
+        192,
+        "split: proposed 2026-10-15 on feat/regulation-capabilities, independently re-judged 2026-10-15 by a read-only critic, AGREE-WITH-CONDITIONS. The split the "
+        "previous text named is applied: the D-763 10 (c) growth (+53 in trip_admission: crosswalks_on, signals_on, "
+        "the regulation capability check, _admit_replan) took the unit to 474 > 272+150, so trip_progress.py moves "
+        "byte-identical to its own holder unit fleet/fleet/server/trip_progress and this unit keeps the start "
+        "admission only. Baseline192 = trip_admission at the D-757 verdict commit61aa49b32 (measured); now 338. "
+        "Not rebaselined. 4 lines of room: the next change that grows trip_admission.py first moves crosswalks_on, "
+        "signals_on and the lane_crosswalk_gate/lane_junction_signal block of _caps_checks to their own holder unit "
+        "(server/trip_regulation), not an accept or rebaseline "
+        "(docs/plans/2026-10-15-fleet-ledger-trips-unit.md, 2026-10-15 addendum). Previous verdict: "
         "split: D-763 slice 4 registers the trip loop's two named mixins, the start admission (trip_admission) and "
         "the progress predicates (trip_progress), carved out of trip_runner on 2026-10-10 "
         "(docs/plans/2026-10-07-fleet-site-map-web-server-seam.md), as their own fleet.server holder unit; see "

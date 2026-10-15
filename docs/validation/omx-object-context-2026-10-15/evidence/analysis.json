@@ -1,0 +1,467 @@
+[
+  {
+    "phase": "structured",
+    "role": "model_pc",
+    "view": "front",
+    "elapsed_s": 2.629,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 0,
+    "provisional_matches": [],
+    "visibility_agreements": 0,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "critique",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 3.598,
+    "status": "missing_requested_fields",
+    "missing": [
+      "agreed_facts"
+    ],
+    "task_assessment": {
+      "source_container_identity": null,
+      "temporary_placement_region": null,
+      "current_task_phase": null,
+      "takeout_verified": false,
+      "return_verified": false,
+      "evidence_gaps": [
+        "No evidence that the strawberry is inside or outside any container.",
+        "No evidence of a temporary placement region.",
+        "No evidence of current task phase.",
+        "No evidence of container contents."
+      ]
+    }
+  },
+  {
+    "phase": "baseline",
+    "role": "model_pc",
+    "view": "front",
+    "elapsed_s": 1.915,
+    "status": "free_text_not_geometry_contract"
+  },
+  {
+    "phase": "context",
+    "role": "model_pc",
+    "view": "front",
+    "elapsed_s": 1.685,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 0,
+    "provisional_matches": [],
+    "visibility_agreements": 0,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "structured",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 16.72,
+    "status": "coordinate_contract_rejected",
+    "error": "Outside requested 640x480 pixel coordinate bounds"
+  },
+  {
+    "phase": "normalized",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 20.576,
+    "status": "invalid_json",
+    "error": "Illegal trailing comma before end of array: line 92 column 12 (char 1918)"
+  },
+  {
+    "phase": "schema",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 22.482,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 9,
+    "provisional_matches": [
+      {
+        "id": 1,
+        "reference_id": "w1",
+        "iou": 0.945,
+        "visibility_agrees": true
+      },
+      {
+        "id": 2,
+        "reference_id": "r1",
+        "iou": 0.919,
+        "visibility_agrees": false
+      },
+      {
+        "id": 3,
+        "reference_id": "c1",
+        "iou": 0.842,
+        "visibility_agrees": true
+      },
+      {
+        "id": 4,
+        "reference_id": "c2",
+        "iou": 0.81,
+        "visibility_agrees": true
+      },
+      {
+        "id": 5,
+        "reference_id": "c3",
+        "iou": 0.774,
+        "visibility_agrees": true
+      },
+      {
+        "id": 6,
+        "reference_id": "c6",
+        "iou": 0.814,
+        "visibility_agrees": true
+      },
+      {
+        "id": 7,
+        "reference_id": "c7",
+        "iou": 0.767,
+        "visibility_agrees": false
+      },
+      {
+        "id": 8,
+        "reference_id": "c4",
+        "iou": 0.618,
+        "visibility_agrees": false
+      },
+      {
+        "id": 9,
+        "reference_id": "c5",
+        "iou": 0.733,
+        "visibility_agrees": false
+      }
+    ],
+    "visibility_agreements": 5,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "baseline",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 9.117,
+    "status": "free_text_not_geometry_contract"
+  },
+  {
+    "phase": "context",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 20.979,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 9,
+    "provisional_matches": [
+      {
+        "id": 1,
+        "reference_id": "w1",
+        "iou": 0.949,
+        "visibility_agrees": true
+      },
+      {
+        "id": 2,
+        "reference_id": "r1",
+        "iou": 0.926,
+        "visibility_agrees": false
+      },
+      {
+        "id": 3,
+        "reference_id": "c1",
+        "iou": 0.842,
+        "visibility_agrees": true
+      },
+      {
+        "id": 4,
+        "reference_id": "c2",
+        "iou": 0.79,
+        "visibility_agrees": true
+      },
+      {
+        "id": 5,
+        "reference_id": "c3",
+        "iou": 0.777,
+        "visibility_agrees": true
+      },
+      {
+        "id": 6,
+        "reference_id": "c6",
+        "iou": 0.772,
+        "visibility_agrees": true
+      },
+      {
+        "id": 7,
+        "reference_id": "c7",
+        "iou": 0.756,
+        "visibility_agrees": false
+      },
+      {
+        "id": 8,
+        "reference_id": "c4",
+        "iou": 0.597,
+        "visibility_agrees": false
+      },
+      {
+        "id": 9,
+        "reference_id": "c5",
+        "iou": 0.733,
+        "visibility_agrees": false
+      }
+    ],
+    "visibility_agreements": 5,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "context",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 19.653,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 9,
+    "provisional_matches": [
+      {
+        "id": 1,
+        "reference_id": "w1",
+        "iou": 0.949,
+        "visibility_agrees": true
+      },
+      {
+        "id": 2,
+        "reference_id": "r1",
+        "iou": 0.926,
+        "visibility_agrees": false
+      },
+      {
+        "id": 3,
+        "reference_id": "c1",
+        "iou": 0.842,
+        "visibility_agrees": true
+      },
+      {
+        "id": 4,
+        "reference_id": "c2",
+        "iou": 0.79,
+        "visibility_agrees": true
+      },
+      {
+        "id": 5,
+        "reference_id": "c3",
+        "iou": 0.777,
+        "visibility_agrees": true
+      },
+      {
+        "id": 6,
+        "reference_id": "c6",
+        "iou": 0.772,
+        "visibility_agrees": true
+      },
+      {
+        "id": 7,
+        "reference_id": "c7",
+        "iou": 0.756,
+        "visibility_agrees": false
+      },
+      {
+        "id": 8,
+        "reference_id": "c4",
+        "iou": 0.597,
+        "visibility_agrees": false
+      },
+      {
+        "id": 9,
+        "reference_id": "c5",
+        "iou": 0.733,
+        "visibility_agrees": false
+      }
+    ],
+    "visibility_agreements": 5,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "normalized",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 19.51,
+    "status": "invalid_json",
+    "error": "Illegal trailing comma before end of array: line 92 column 12 (char 1918)"
+  },
+  {
+    "phase": "baseline",
+    "role": "ai_pc",
+    "view": "front",
+    "elapsed_s": 1.822,
+    "status": "free_text_not_geometry_contract"
+  },
+  {
+    "phase": "structured",
+    "role": "ai_pc",
+    "view": "front",
+    "elapsed_s": 2.555,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 0,
+    "provisional_matches": [],
+    "visibility_agreements": 0,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "baseline",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 2.502,
+    "status": "free_text_not_geometry_contract"
+  },
+  {
+    "phase": "structured",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 15.595,
+    "status": "coordinate_contract_rejected",
+    "error": "Outside requested 640x480 pixel coordinate bounds"
+  },
+  {
+    "phase": "critique",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 3.415,
+    "status": "missing_requested_fields",
+    "missing": [
+      "agreed_facts"
+    ],
+    "task_assessment": {
+      "source_container_identity": null,
+      "temporary_placement_region": null,
+      "current_task_phase": null,
+      "takeout_verified": false,
+      "return_verified": false,
+      "evidence_gaps": [
+        "The task goal is not evidence that the strawberry is inside or outside any container now.",
+        "No visible container or placement region is identified for temporary placement.",
+        "No evidence of task phase or action completion is visible."
+      ]
+    }
+  },
+  {
+    "phase": "schema",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 13.991,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 9,
+    "provisional_matches": [
+      {
+        "id": 1,
+        "reference_id": "w1",
+        "iou": 0.945,
+        "visibility_agrees": true
+      },
+      {
+        "id": 2,
+        "reference_id": "r1",
+        "iou": 0.919,
+        "visibility_agrees": false
+      },
+      {
+        "id": 3,
+        "reference_id": "c1",
+        "iou": 0.842,
+        "visibility_agrees": true
+      },
+      {
+        "id": 4,
+        "reference_id": "c2",
+        "iou": 0.81,
+        "visibility_agrees": true
+      },
+      {
+        "id": 5,
+        "reference_id": "c3",
+        "iou": 0.774,
+        "visibility_agrees": true
+      },
+      {
+        "id": 6,
+        "reference_id": "c6",
+        "iou": 0.814,
+        "visibility_agrees": true
+      },
+      {
+        "id": 7,
+        "reference_id": "c7",
+        "iou": 0.767,
+        "visibility_agrees": false
+      },
+      {
+        "id": 8,
+        "reference_id": "c4",
+        "iou": 0.618,
+        "visibility_agrees": false
+      },
+      {
+        "id": 9,
+        "reference_id": "c5",
+        "iou": 0.733,
+        "visibility_agrees": false
+      }
+    ],
+    "visibility_agreements": 5,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "context",
+    "role": "ai_pc",
+    "view": "front",
+    "elapsed_s": 1.66,
+    "status": "selected_geometry_checks_pass",
+    "target_count": 0,
+    "provisional_matches": [],
+    "visibility_agreements": 0,
+    "note": "Assistant provisional reference; no accuracy or physical acceptance claim"
+  },
+  {
+    "phase": "context_v3_task",
+    "role": "model_pc",
+    "view": "top",
+    "elapsed_s": 9.85,
+    "status": "constrained_task_readback",
+    "parsed": {
+      "source_container_identity": "white circular object in top camera view",
+      "identity_source": "user_statement",
+      "temporary_placement_region": null,
+      "current_task_phase": null,
+      "takeout_verified": false,
+      "return_verified": false,
+      "can_localize_for_grasp": false,
+      "evidence_gaps": [
+        "container_current_contents",
+        "temporary_placement_region",
+        "current_task_phase",
+        "brown_cylinder_roles",
+        "camera_extrinsics",
+        "depth",
+        "physical_target_material"
+      ]
+    },
+    "note": "Schema fixes abstention values; not independent task-state evaluation"
+  },
+  {
+    "phase": "context_v3_task",
+    "role": "ai_pc",
+    "view": "top",
+    "elapsed_s": 2.446,
+    "status": "constrained_task_readback",
+    "parsed": {
+      "source_container_identity": "white circular object in top camera view",
+      "identity_source": "user_statement",
+      "temporary_placement_region": null,
+      "current_task_phase": null,
+      "takeout_verified": false,
+      "return_verified": false,
+      "can_localize_for_grasp": false,
+      "evidence_gaps": [
+        "container_current_contents",
+        "temporary_placement_region",
+        "current_task_phase",
+        "brown_cylinder_roles",
+        "camera_extrinsics",
+        "depth",
+        "physical_target_material"
+      ]
+    },
+    "note": "Schema fixes abstention values; not independent task-state evaluation"
+  }
+]

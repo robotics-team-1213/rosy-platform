@@ -216,10 +216,9 @@ class ArcMixin:
                 or (self._return_evidence.epoch, pose.frame) != a['key']):
             return self._arc_stop('lane_arc_pose_lost')
         # D-760 2b, the D-507 13 rule (crosswalk/gate.py _regulated_wait_share): time a later gate takes
-        # is not the arc's (its deadline and a correction's stand), crosswalk_report_s + clear_s per arc.
-        add = min(self._regulated_wait_share(now, now-a['tick_at'], self._arc_speed()),
-                  cfg.crosswalk_report_s+cfg.crosswalk_clear_s-a['added'])
-        a.update(tick_at=now, added=a['added']+add, deadline=a['deadline']+add)
+        # is not the arc's (its deadline and a correction's stand); the helper caps all but authority per arc.
+        add = self._regulated_wait_share(now, now-a['tick_at'], self._arc_speed(), a)
+        a.update(tick_at=now, deadline=a['deadline']+add)
         if c is not None:
             c['deadline'] += add
         x, y, yaw = a['last']

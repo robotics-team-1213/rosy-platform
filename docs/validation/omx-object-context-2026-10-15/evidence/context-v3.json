@@ -1,0 +1,60 @@
+{
+  "experimental_fixture_only": true,
+  "revision": "strawberry-task-context-v3",
+  "facts": [
+    {
+      "key": "task_goal",
+      "value": "take the strawberry out, place it temporarily, then put it back into its original container",
+      "source": "user_statement",
+      "status": "confirmed_goal_not_observed_state"
+    },
+    {
+      "key": "environment_scope",
+      "value": "limited workbench environment",
+      "source": "user_statement",
+      "status": "confirmed_scope"
+    },
+    {
+      "key": "snapshot_geometry",
+      "value": {
+        "width": 640,
+        "height": 480,
+        "view_aliases": [
+          "top",
+          "front"
+        ]
+      },
+      "source": "capture_metadata",
+      "status": "measured"
+    },
+    {
+      "key": "snapshot_mode",
+      "value": "frozen image, no action sent",
+      "source": "experiment_runner",
+      "status": "verified"
+    },
+    {
+      "key": "source_container_identity",
+      "value": "white circular object in top camera view",
+      "source": "user_statement",
+      "status": "confirmed_role_not_observed_contents"
+    }
+  ],
+  "unknowns": {
+    "temporary_placement_region": null,
+    "container_current_contents": null,
+    "current_task_phase": null,
+    "brown_cylinder_roles": null,
+    "camera_extrinsics": null,
+    "depth": null,
+    "physical_target_material": null
+  },
+  "rules": [
+    "Task goal is not evidence that the strawberry is inside or outside any container now.",
+    "The user identifies the white circular object as the container; its current contents, geometry and material remain unverified.",
+    "Do not infer a broken device from poor camera visibility.",
+    "Keep task target identity separate from all other visible objects and fixtures.",
+    "Unknown container or placement region means the task is not ready for control.",
+    "No metric coordinates, grasp approval or motion commands."
+  ]
+}
