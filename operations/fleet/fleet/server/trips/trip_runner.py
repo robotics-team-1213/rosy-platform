@@ -40,6 +40,7 @@ from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     hold_back_m, lap_due, lap_retry_due, next_lap, stop_points)
 from fleet.server.trip_progress import MANOEUVRE, TripProgress
+from fleet.server.trip_preview import observe
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -313,15 +314,12 @@ class TripRunner(TripAdmission, TripProgress):
             if hold is None:
                 raise TripError(409, "TRIP_NO_REPLAN")
             if hold.get("plan") is None and hold.get("reason") == "lap":  # the operator retries the lap check
-                if await self._retry_lap(live, live.view["segment_index"]):
+                # carried on, or a changed lap (shown first, confirmed next); a failed retry leaves a hold
+                if await self._retry_lap(live, live.view["segment_index"]) or live.view["hold"].get("plan") is not None:
                     self._describe(live)
                     self._save(live)
                     return live.view
                 hold = live.view["hold"]
-                if hold.get("plan") is not None:  # a changed lap: shown first, confirmed next
-                    self._describe(live)
-                    self._save(live)
-                    return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
             await self._admit_replan(live, hold, principal_id)  # D-763 10 (c): checked as at a start
@@ -429,6 +427,7 @@ class TripRunner(TripAdmission, TripProgress):
         settled = [live for r, live in self._live.items() if r not in self._inflight]  # mid-step: none
         self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
+        observe(self._live.values(), self._inflight, self.traffic, self._store, self._routing, self.config, self._clock())
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""

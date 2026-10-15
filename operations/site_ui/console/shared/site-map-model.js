@@ -704,6 +704,7 @@ export function trafficCardLine(traffic, robotId) {
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
   const advice = robot.advice;  // D-551: display-only signal advice to CORE
   if (advice?.signal) parts.push(`신호 참고 전송 · seq ${advice.sent_seq}${advice.accepted ? "" : ` · ${advice.reason || "미수락"}`}`);
+  if (robot.preview?.events?.length) parts.push(`예고: ${robot.preview.events.slice(0, 2).map((e) => `${e.at_m.toFixed(2)} m ${{left: "왼쪽 회전", right: "오른쪽 회전", straight: "교차로 직진", stop: "정지", bend: "굽이", arc: "호", crosswalk: "횡단보도", signal: "신호", authority_end: "통행권 끝"}[e.kind === "turn" ? e.params.action : e.kind] || e.kind}`).join(" · ")}`);  // D-767 P0, display only
   return parts.join(" · ");
 }
 
