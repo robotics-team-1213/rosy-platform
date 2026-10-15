@@ -1,7 +1,7 @@
 # Gazebo default robot profile closure
 
-**Goal:** `colcon build --packages-up-to gz_sim`의 설치 묶음만으로 CORE가 기본
-로봇 프로파일을 읽어 부팅할 수 있게 한다. 기존 구성 패키지 의존성을 고친다.
+**Goal:** remote SIM 실행 구성에 CORE가 선택하는 기본 로봇 프로파일과 공통
+계약 wheel을 포함해 부팅할 수 있게 한다. 로봇 선택은 실행기의 빌드 구성에 둔다.
 
 ## 실제 실패
 
@@ -16,14 +16,16 @@ CORE의 기본 로봇 구성인 `pinky_pro`를 포함하지 않아 colcon closur
 
 ## 최소 수정과 검증
 
-1. 기존 `test_gz_package_contract.py`에서 CORE의 실제 `DEFAULT_ROBOT`이
-   runtime dependency에 포함되는지 검사하고 committed HEAD의 원격 RED를 얻는다.
-2. `integrations/simulation/gazebo/package.xml`에 해당 exec_depend를 선언한다.
-   CORE를 특정 로봇에 묶거나 임의 source fallback을 만들지 않는다.
+1. 실행기의 빌드 선택 회귀가 임의 `DEFAULT_ROBOT`을 가짜 colcon에 전달하는지
+   검사한다. committed HEAD에서 원격 RED 2건을 확인했다.
+2. 빌드 시 checkout의 기존 `core_common.profile.DEFAULT_ROBOT`을 읽어
+   `--packages-up-to gz_sim "$DEFAULT_ROBOT"`에 함께 넣는다. 이 build-time
+   import에만 foundation 경로를 주며 runtime source fallback은 만들지 않는다.
 3. 원격 Gazebo 계약·구조 검사를 실행하고 실제 SIM을 재빌드한다.
    CORE startup 성공과 편대 무장/HOLD 결과는 구분해 기록한다.
-4. package.xml 변경은 FULL 선택 대상이다. 사용자 승인된 main 착지는
-   `tools/land.py --tests auto`의 실험실 FULL과 NEW 0을 통과해야 한다.
+4. 최초 package.xml 수정안은 FULL을 실행했으나 제품 literal 경계 검사에
+   거절됐다. 선언을 원복한 최종 변경은 착지 도구가 다시 선택한 관련 검사와
+   NEW 0을 통과해야 한다. 최초 FULL을 통과한 것으로 처리하지 않는다.
    별도 push/배포/장치 실행은 하지 않는다.
 
 ## 범위
@@ -55,6 +57,18 @@ command writer를 만들지 않는다. map_v2_fleet와 STL lineage를 바꾸지 
 무장을 거절했다. identity 준비만으로 센서/capability 준비를 보장하지 않는다.
 capability readback까지 기다리는 재실행은 당시 두 비현장 시험 PC의 SIM 가용
 자원이 부족해 시작하지 않았다. startup 복구를 편대/HOLD 수용으로 합산하지 않는다.
+
+## 전체 회귀에서 수정한 제품 경계
+
+`93efce1d78`의 최초 FULL 18묶음은 25,944 passed, 1,848 skipped, 1 failed다.
+신규 실패는 `test_robot_literals_stay_in_their_family` 한 건으로, generic Gazebo
+패키지에 새 Pinky 이름을 고정한 점을 거절했다. D-196 §3·§4와 D-310을 다시
+읽고 의존 선택을 remote 실행기로 옮겼다. backlog·known_failures·guard는
+바꾸지 않았다. 독립 검토도 실행 구성에서 동적 선택하는 방식을 권고했다.
+
+최종 `271f923283`의 원격 profile 선택·설치 성공/실패·제품 literal·Gazebo
+계약 회귀는 36 passed, exit 0이다. 각 로그를 known_failures와 비교한다.
+최초 FULL 원시 결과는 같은 X: 세션의 `logs/full-initial`에 보존한다.
 
 ## 검수 자료 검색 · 현재 읽기 전용 확인
 
