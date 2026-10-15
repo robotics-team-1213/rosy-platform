@@ -224,7 +224,9 @@ def test_a_lease_lost_between_steps_holds_the_job_with_one_incident_and_never_dr
     rig.ports.lease.down = True                          # Fleet loses the robot before step 2 is planned
     rig.ticks(18, jobs=False)
     job = rig.job(mid)
-    assert job["status"] == "HOLD" and job["reason"] == "JOB_LEASE_LOST" and rig.incidents == [(mid, "JOB_LEASE_LOST")]
+    assert job["status"] == "HOLD" and job["reason"] == "JOB_LEASE_LOST"
+    rig.ticks()                                          # the case opens on the job loop's next pass
+    assert rig.incidents == [(mid, "JOB_LEASE_LOST")]
     held = [e for e in job["events"] if e["event_type"] == "CELL_JOB_HELD"][-1]["detail"]
     assert held["lease_reason"] == "renew_timeout" and held["robot_state"] == "unconfirmed"   # never assumed IDLE
     rig.ports.lease.down = False                         # the link is back: nothing starts by itself
@@ -264,6 +266,7 @@ def test_after_a_fleet_restart_no_step_drives_by_itself(tmp_path):
     assert again.job(mid)["status"] == "HOLD" and again.job(mid)["reason"] == "FLEET_RESTARTED"
     again.ticks(6)
     assert again.plans == [] and again.ports.lease.puts == [] and again.runner.open_trips() == []
+    assert again.incidents == [(mid, "FLEET_RESTARTED")]             # a restart HOLD reaches a person too
     assert _claim_phases(rig.path) == [(mid, f"robot:{R}", "HELD")]   # the job still holds the robot
 
 
@@ -319,3 +322,77 @@ def test_the_route_exists_only_in_the_simulation_profile(tmp_path, monkeypatch):
     refused = _post(client, "/api/fleet/trip-jobs", "op1-secret", body)      # no active site map here
     assert refused.status_code == 422 and refused.json()["detail"]["code"] == "TRIP_UNKNOWN_PLACE"
     assert _post(client, "/api/fleet/trip-jobs", "op1-secret", {**body, "robot_id": "rosy_99"}).status_code == 404
+
+
+# ---- safety review 2026-10-15 ---------------------------------------------------------------------
+
+def test_a_lost_job_lease_never_comes_back_without_a_new_approval(tmp_path):
+    """Review 1: the loss is marked before the ledger HOLD lands; a tick in that gap must not re-take a lease."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    rig.arrive("ab:fwd")
+    hold = rig.runner.lease.jobs[R]
+    hold.view["lease"].update(state="lost", reason="renew_timeout")  # lost, and the hook's HOLD has not landed
+    puts = len(rig.ports.lease.puts)
+    rig.ticks(3)
+    job = rig.job(mid)
+    assert job["status"] == "HOLD" and job["reason"] == "JOB_LEASE_LOST" and len(rig.ports.lease.puts) == puts
+    assert rig.plans == ["p1"] and rig.incidents == [(mid, "JOB_LEASE_LOST")]
+
+
+def test_a_lease_lost_while_steps_run_on_holds_once_and_never_drives_on(tmp_path):
+    """Review 8: the job loop runs between the trip loop's ticks while the link is gone."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    rig.arrive("ab:fwd")
+    rig.ports.lease.down = True
+    rig.ticks(18)
+    job = rig.job(mid)
+    assert job["status"] == "HOLD" and rig.incidents == [(mid, job["reason"])] and rig.runner.open_trips() == []
+    plans = list(rig.plans)
+    rig.ports.lease.down = False
+    rig.ticks(6)
+    assert rig.plans == plans and rig.job(mid)["status"] == "HOLD"
+
+
+def test_an_estop_between_steps_holds_the_job_and_gives_its_lease_up(tmp_path):
+    """Review 2: the E-stop closes trips; a job between its steps must not start the next one after it."""
+    rig = Rig(tmp_path)
+    console = _Console()
+    install_trip_guard(console, rig.runner)
+    rig.runner.traffic.signals_all_red = lambda: None
+    mid = rig.create()
+    rig.ticks()
+    rig.arrive("ab:fwd")
+    lease = rig.runner.lease.jobs[R].view["lease"]
+    rig.do(console.estop_all())
+    rig.ticks(3)
+    assert lease["state"] == "lost" and rig.job(mid)["status"] == "HOLD" and rig.plans == ["p1"]
+    assert rig.incidents == [(mid, "JOB_LEASE_LOST")]
+
+
+def test_stop_job_ends_an_open_step_trip_first(tmp_path):
+    """Review 5: giving the job lease up while its step trip runs ends that trip too."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    rig.do(rig.runner.stop_job(R, "site_stop"))
+    assert rig.runner.view("p1")["state"] == "canceled" and rig.runner.open_trips() == []
+    rig.ticks()
+    assert rig.job(mid)["status"] == "HOLD"
+
+
+def test_a_site_stop_hold_between_steps_opens_a_case_and_gives_the_lease_up(tmp_path):
+    """Review 4: the stop latch HOLDs a READY job outside this module; a person still hears of it."""
+    rig = Rig(tmp_path)
+    mid = rig.create()
+    rig.ticks()
+    rig.arrive("ab:fwd")
+    rig.tasks.trip_stop_latch(actor_id="operator-1")
+    rig.ticks()
+    assert rig.job(mid)["status"] == "HOLD" and rig.runner.lease.jobs[R].view["lease"]["state"] == "lost"
+    assert rig.incidents == [(mid, rig.job(mid)["reason"])]
+    rig.ticks(3)
+    assert len(rig.incidents) == 1 and rig.plans == ["p1"]
