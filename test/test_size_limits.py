@@ -1,0 +1,159 @@
+"""D-766 size rule (tools/harness/size_limits.py): the mutation proofs of D-766 7(a) 6 on small inputs."""
+
+import datetime as dt
+
+import pytest
+
+import size_limits as s
+
+TODAY = dt.date(2026, 10, 15)
+ROOTS = ("middleware",)
+PACKAGES = {"pkg": "middleware/pkg"}
+
+
+def _over(**files):
+    return s.measure({f"middleware/pkg/{name.replace('__', '/')}.py": n for name, n in files.items()},
+                     PACKAGES, ROOTS, ["pkg/unit"])
+
+
+def _problems(over, rows, base=None, safety=None, commit=(TODAY, True)):
+    return s.ratchet_problems(over, rows, safety or {}, base, TODAY, lambda key: commit)
+
+
+def test_measure_counts_units_innermost_and_keys_files_by_colcon_root():
+    counts, over, owner = s.measure(
+        {"middleware/pkg/a.py": 700, "middleware/pkg/unit/b.py": 50, "middleware/pkg/test/t.py": 900,
+         "middleware/pkg/web/x.js": 801, "tools/run.py": 601, "tools/test/t.py": 999},
+        PACKAGES, ROOTS, ["pkg/unit"])
+    assert counts == {"pkg/unit": 50, "pkg": 1501}
+    assert over == {"pkg/a.py": 700, "pkg/web/x.js": 801, "tools/run.py": 601}
+    assert owner["middleware/pkg/unit/b.py"] == "pkg/unit" and owner["pkg/unit"] == "pkg"
+
+
+def test_a_matching_ratchet_is_green():
+    _, over, _ = _over(a=700)
+    assert _problems(over, {"pkg/a.py": 700}, base={"pkg/a.py": 700}) == []
+
+
+@pytest.mark.parametrize("over_files, rows, base, needle", [
+    ({"a": 601}, {}, {}, "split it below the limit"),                          # new over-limit file
+    ({"a": 701}, {"pkg/a.py": 700}, {"pkg/a.py": 700}, "grew 700 -> 701"),       # frozen file +1 line
+    ({"a": 701}, {"pkg/a.py": 701}, {"pkg/a.py": 700}, "rows only go down"),     # row raised over the base
+    ({"a": 650}, {"pkg/a.py": 700}, {"pkg/a.py": 700}, "lower its ratchet row to 650"),  # row above measured
+    ({"a": 650}, {"pkg/a.py": 650}, {}, "new ratchet row"),                      # row added in the change
+    ({"a": 500}, {"pkg/a.py": 700}, {"pkg/a.py": 700}, "delete its ratchet row"),  # back under the limit
+])
+def test_ratchet_mutations_are_red(over_files, rows, base, needle):
+    _, over, _ = _over(**over_files)
+    assert any(needle in problem for problem in _problems(over, rows, base=base)), _problems(over, rows, base=base)
+
+
+def test_safety_row_allows_up_to_30_over_until_it_expires():
+    _, over, _ = _over(a=720)
+    rows, base = {"pkg/a.py": 700}, {"pkg/a.py": 700}
+    ok = {"pkg/a.py": (720, TODAY + dt.timedelta(days=7))}
+    assert _problems(over, rows, base=base, safety=ok, commit=(TODAY, True)) == []
+    expired = {"pkg/a.py": (720, TODAY - dt.timedelta(days=1))}
+    assert any("expired" in p for p in _problems(over, rows, base, expired, commit=(TODAY - dt.timedelta(days=3), True)))
+    assert any("no `Safety-Review:`" in p for p in _problems(over, rows, base, ok, commit=(TODAY, False)))
+    assert any("not in a commit" in p for p in _problems(over, rows, base, ok, commit=None))
+    late = {"pkg/a.py": (720, TODAY + dt.timedelta(days=8))}
+    assert any("more than 7 days" in p for p in _problems(over, rows, base, late))
+    _, far, _ = _over(a=731)
+    assert any("more than 30 over" in p for p in _problems(far, rows, base, {"pkg/a.py": (731, TODAY)}))
+
+
+def test_units_floor_applies_to_new_units_of_large_parents_only():
+    counts = {"pkg": 2500, "pkg/unit": 400}
+    owner = {"pkg/unit": "pkg"}
+    assert any("below the 1000 floor" in p for p in s.unit_problems(counts, owner, ["pkg/unit"], set(), set()))
+    assert s.unit_problems(counts, owner, ["pkg/unit"], {"pkg/unit"}, {"pkg/unit"}) == []  # grandfathered
+    assert any("new `small` mark" in p for p in s.unit_problems(counts, owner, ["pkg/unit"], {"pkg/unit"}, set()))
+    assert s.unit_problems({"pkg": 1500, "pkg/unit": 400}, owner, ["pkg/unit"], set(), set()) == []  # parent < 2000
+    assert any("no longer small" in p for p in s.unit_problems({"pkg": 9000, "pkg/unit": 1200}, owner,
+                                                                 ["pkg/unit"], {"pkg/unit"}, {"pkg/unit"}))
+
+
+def test_data_file_parsers_reject_malformed_rows():
+    rows, safety = s.parse_ratchet("# c\n700 pkg/a.py\nsafety 720 pkg/a.py 2026-10-20\n")
+    assert rows == {"pkg/a.py": 700} and safety == {"pkg/a.py": (720, dt.date(2026, 10, 20))}
+    assert s.parse_units("a\nb small  # old\n") == (["a", "b"], {"b"})
+    for bad in ("700\n", "x pkg/a.py\n", "700 a\n700 a\n", "safety 1 a\n"):
+        with pytest.raises(ValueError):
+            s.parse_ratchet(bad)
+    with pytest.raises(ValueError):
+        s.parse_units("a big\n")
+
+
+def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path, monkeypatch, capsys):
+    """D-766 2 (bisect): over the limit in one commit, split in the next, is red on the first."""
+    import shutil
+    import subprocess
+
+    import size_range
+
+    if shutil.which("git") is None:
+        pytest.skip("git is required")
+    monkeypatch.chdir(tmp_path)
+    for key in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
+        monkeypatch.setenv(key, "t")
+    for key in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(key, "t@x")
+
+    def git(*args):
+        return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout.strip()
+
+    def commit(files, message):
+        for path, text in files.items():
+            (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / path).write_text(text, encoding="utf-8")
+        git("add", "-A")
+        git("commit", "-q", "--no-verify", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    git("init", "-q", "-b", "main")
+    git("config", "core.autocrlf", "false")
+    base = commit({"middleware/pkg/package.xml": "<package><name>pkg</name></package>\n",
+                   "middleware/pkg/pkg/a.py": "x = 1\n" * 500, s.RATCHET: "# rows\n", s.UNITS: "# units\n"}, "base")
+    grown = commit({"middleware/pkg/pkg/a.py": "x = 1\n" * 601}, "grow a.py past 600")
+    commit({"middleware/pkg/pkg/a.py": "x = 1\n" * 300, "middleware/pkg/pkg/b.py": "y = 1\n" * 301}, "split a.py")
+    assert size_range.check(git("rev-parse", "HEAD")) == []
+    assert any("pkg/pkg/a.py: 601 lines" in p for p in size_range.check(grown))
+    assert size_range.main([base, "HEAD"]) == 1
+    assert "grow a.py past 600" in capsys.readouterr().err
+    assert size_range.main([grown, "HEAD"]) == 0
+
+
+def test_a_row_moves_with_a_pure_move_only_when_the_old_row_goes():
+    _, over, _ = s.measure({"middleware/pkg/new.py": 790}, PACKAGES, ROOTS, [])
+    base = {"pkg/old.py": 797}
+    assert _problems(over, {"pkg/new.py": 790}, base=base) == []  # old row gone, not above it
+    assert any("new ratchet row" in p for p in _problems(over, {"pkg/new.py": 790}, base={"pkg/old.py": 700}))
+    _, both, _ = s.measure({"middleware/pkg/new.py": 790, "middleware/pkg/old.py": 797}, PACKAGES, ROOTS, [])
+    assert any("new ratchet row" in p for p in _problems(both, {"pkg/new.py": 790, "pkg/old.py": 797}, base=base))
+
+
+def test_a_safety_row_from_the_base_is_never_renewed():
+    _, over, _ = _over(a=720)
+    rows = {"pkg/a.py": 700}
+    old = {"pkg/a.py": (720, TODAY)}
+    renewed = {"pkg/a.py": (720, TODAY + dt.timedelta(days=5))}
+    assert s.ratchet_problems(over, rows, old, rows, TODAY, lambda k: (TODAY, True), base_safety=old) == []
+    assert any("never renewed" in p for p in s.ratchet_problems(over, rows, renewed, rows, TODAY,
+                                                                  lambda k: (TODAY, True), base_safety=old))
+
+
+def test_a_safety_row_below_its_ceiling_asks_for_the_lower_row():
+    _, over, _ = _over(a=650)
+    assert any("delete the safety row and lower its ratchet row to 650" in p
+               for p in _problems(over, {"pkg/a.py": 700}, base={"pkg/a.py": 700}, safety={"pkg/a.py": (650, TODAY)}))
+
+
+def test_regenerate_never_raises_a_row_and_keeps_safety_keys():
+    text = "# c\n700 pkg/a.py\n900 pkg/b.py\nsafety 720 pkg/b.py 2026-10-20\n650 pkg/gone.py\n"
+    out = s.regenerate(text, {"pkg/a.py": 710, "pkg/b.py": 720, "pkg/c.py": 601})
+    assert s.parse_ratchet(out)[0] == {"pkg/a.py": 700, "pkg/b.py": 900, "pkg/c.py": 601}
+    assert out.startswith("# c\nsafety 720 pkg/b.py 2026-10-20\n")
+    assert s.parse_ratchet(s.regenerate(text, {"pkg/a.py": 640}))[0] == {"pkg/a.py": 640, "pkg/b.py": 900}
+    with pytest.raises(ValueError):
+        s.parse_ratchet("safety 1 a 2026-10-20\nsafety 2 a 2026-10-21\n")

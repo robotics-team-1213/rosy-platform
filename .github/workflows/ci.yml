@@ -62,6 +62,16 @@ jobs:
           SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
         run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
 
+      # D-766 2: each commit of the same range passes the size rule on its own (bisect stays green).
+      # A new branch or force push (zero or unreachable base) checks the tip alone.
+      - name: Size rule per commit (D-766)
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          SIZE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          if [ -z "$SIZE_BASE" ] || ! git cat-file -e "$SIZE_BASE^{commit}" 2>/dev/null; then SIZE_BASE=HEAD^; fi
+          python3 tools/harness/size_range.py "$SIZE_BASE" HEAD
+
       - name: Test scope (D-436)
         id: scope
         shell: bash
