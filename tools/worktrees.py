@@ -58,7 +58,7 @@ STALE_LOCK = 30 * 60  # seconds after which another run's prune lock is taken ov
 TYPES = ("feat", "fix", "refactor", "docs", "uiux")  # D-372
 # Ignored directories that are rebuilt, not written by hand, at any depth; `*.egg-info` by suffix.
 CACHES = {"__pycache__", ".pytest_cache", "node_modules", ".ruff_cache", ".mypy_cache", ".gradle", ".kotlin",
-          ".cxx", ".venv", "graphify-out", ".omc"}  # .omc: hook session state, dies with the worktree
+          ".cxx", ".venv", "graphify-out"}
 # Caches only at the worktree root or where a marker proves it (see _generated_beside).
 GENERATED = {"build", "install", "log", "dist"}
 BUSY = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
@@ -106,6 +106,8 @@ def _generated_beside(parent: Path) -> bool:
 def _is_cache(worktree: Path, rel: str) -> bool:
     parts = rel.rstrip("/").split("/")
     dirs = parts if rel.endswith("/") else parts[:-1]
+    if dirs[:2] == [".omc", "state"]:  # hook throttles and session files; notes and handoffs elsewhere in .omc stay
+        return True
     for i, name in enumerate(dirs):
         if name in CACHES or name.endswith(".egg-info"):
             return True
