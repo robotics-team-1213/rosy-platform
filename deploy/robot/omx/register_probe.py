@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read six confirmed OMX follower motors without configuring or enabling them."""
 import argparse
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -49,11 +50,12 @@ def check_exclusive_owner(device, pid):
         raise RuntimeError("Serial device has another owner or ownership is unverified")
 
 
-def collect(device):
+@contextmanager
+def open_readonly_port(device):
     import fcntl
     import termios
     import serial
-    from dynamixel_sdk import PortHandler, PacketHandler, COMM_SUCCESS
+    from dynamixel_sdk import PortHandler
 
     path = Path(device)
     if path.parent != Path("/dev/serial/by-id") or not path.is_symlink():
@@ -69,7 +71,6 @@ def collect(device):
     port.ser.dtr = False
     port.ser.rts = False
     port.writePort = readonly_writer(port.ser.write)
-    rows = []
     try:
         port.ser.open()
         fcntl.ioctl(port.ser.fileno(), termios.TIOCEXCL)
@@ -77,20 +78,31 @@ def collect(device):
         check_exclusive_owner(resolved, os.getpid())
         port.is_open = True
         port.tx_time_per_byte = .01
-        packet = PacketHandler(2.0)
-        for motor_id in range(11, 17):
-            model, comm, error = packet.ping(port, motor_id)
-            if comm != COMM_SUCCESS or error:
-                raise RuntimeError(f"Motor {motor_id}: ping failed ({comm}, {error})")
-            if model not in (1060, 1200):
-                raise ValueError(f"Motor {motor_id}: unsupported model {model}")
-            data, comm, error = packet.readTxRx(port, motor_id, 0, 147)
-            if comm != COMM_SUCCESS or error:
-                raise RuntimeError(f"Motor {motor_id}: read failed ({comm}, {error})")
-            rows.append({"id": motor_id, "model_number": model, **decode_registers(model, data)})
-        return rows
+        yield port
     finally:
         port.ser.close()
+
+
+def read_motors(port):
+    from dynamixel_sdk import PacketHandler, COMM_SUCCESS
+    packet = PacketHandler(2.0)
+    rows = []
+    for motor_id in range(11, 17):
+        model, comm, error = packet.ping(port, motor_id)
+        if comm != COMM_SUCCESS or error:
+            raise RuntimeError(f"Motor {motor_id}: ping failed ({comm}, {error})")
+        if model not in (1060, 1200):
+            raise ValueError(f"Motor {motor_id}: unsupported model {model}")
+        data, comm, error = packet.readTxRx(port, motor_id, 0, 147)
+        if comm != COMM_SUCCESS or error:
+            raise RuntimeError(f"Motor {motor_id}: read failed ({comm}, {error})")
+        rows.append({"id": motor_id, "model_number": model, **decode_registers(model, data)})
+    return rows
+
+
+def collect(device):
+    with open_readonly_port(device) as port:
+        return read_motors(port)
 
 
 def main(argv=None):

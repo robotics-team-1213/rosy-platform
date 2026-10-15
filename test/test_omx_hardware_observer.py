@@ -3,6 +3,9 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from contextlib import contextmanager
+from types import SimpleNamespace
+import sys
 
 
 def observer():
@@ -47,3 +50,31 @@ def test_incomplete_or_unsafe_snapshot_never_becomes_joint_feedback(change):
         data[0]["hardware_error"] = 4
     with pytest.raises(ValueError):
         observer().positions(data, .02)
+
+
+def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch):
+    module = observer()
+    events = []
+    @contextmanager
+    def port(device):
+        events.append("open")
+        try:
+            yield object()
+        finally:
+            events.append("close")
+    broken = rows()
+    broken[2]["hardware_error"] = 4
+    node = SimpleNamespace(
+        create_publisher=lambda *a: SimpleNamespace(publish=lambda m: events.append("publish")),
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=lambda: 0)),
+        destroy_node=lambda: events.append("destroy"))
+    monkeypatch.setitem(sys.modules, "register_probe", SimpleNamespace(
+        open_readonly_port=port, read_motors=lambda p: broken))
+    monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(
+        init=lambda **k: None, create_node=lambda n: node, ok=lambda: True,
+        shutdown=lambda: events.append("shutdown")))
+    monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(
+        JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
+    monkeypatch.setenv("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST")
+    assert module.main(["--device", "/test", "--domain-id", "13", "--duration", "1"]) == 2
+    assert events == ["open", "close", "destroy", "shutdown"]
