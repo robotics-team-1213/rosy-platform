@@ -8535,5 +8535,6 @@ osy-d395-s1d\`.
 
 ## 2026-10-15 · 731c5ae61 · OMX 실물 제어 완성 목표
 
-- 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
+- 변경: 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
 - 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
+- gate 변화: 없음. 새 목표의 물리 제어·정지·보정·왕복 수용은 미완료다.

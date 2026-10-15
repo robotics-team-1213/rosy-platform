@@ -2806,5 +2806,5 @@
 ## 2026-10-15 · 731c5ae61 · OMX 실물 제어 준비와 비구동 진단
 
 - 변경: native hardware readiness가 locked distro·package·정확한 cell Action/pub를 확인한다. init/lock/cleanup 실패를 구조화해 거절하고 motion admission은 항상 false다. namespace 혼합·초기화 오류 RED 뒤 관련 원격 60시험 통과·NEW 0.
-- 현장: 별도 prefix에서 고정 vendor 8패키지+adapter build, controller 4deb private extraction, 핵심2라이브러리 ldd 누락0. 기본 ROS/카메라/시스템 service·패키지는 변경하지 않았다. 물리 driver/torque/goal은 실행하지 않았다.
+- 증거: 별도 prefix에서 고정 vendor 8패키지+adapter build, controller 4deb private extraction, 핵심2라이브러리 ldd 누락0. 기본 ROS/카메라/시스템 service·패키지는 변경하지 않았다. 물리 driver/torque/goal은 실행하지 않았다.
 - gate 변화: 없음. 실물 제어·profile/stop·별도 hardware API/owner와 딸기 왕복은 미완료. docs/validation/omx-hardware-control-preparation-2026-10-15/result.md.
