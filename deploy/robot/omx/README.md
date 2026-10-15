@@ -49,6 +49,27 @@ software admission check; only a later, separately validated native control
 runner may consume the returned per-workcell paths. No camera is opened by
 this preflight.
 
+## Native arm software readiness
+
+After sourcing the selected native ROS installation, run:
+
+```bash
+python3 deploy/robot/omx/hardware_readiness.py --domain-id <workcell-domain> --namespace <workcell-namespace>
+```
+
+This read-only probe takes the expected ROS distribution from `stack.lock.yaml`,
+checks required package discovery, and observes typed trajectory actions and
+the selected namespace's `/arm_controller/follow_joint_trajectory` and
+`/joint_states` publisher names for three seconds. Use `--namespace /` for a
+root graph. A different cell's action or publisher cannot supply these checks.
+It opens no serial device,
+starts no controller and sends no goal. Exit 2 means the software path is missing
+or discovery failed; exit 0 means only the observed software prerequisites exist.
+`motion_admitted` is always false. Publisher names, action presence and package
+availability do not establish hardware identity, measured limits or a real stop.
+Use the [hardware control plan](../../../docs/plans/2026-10-15-omx-hardware-control.md)
+for the remaining native runtime and physical acceptance work.
+
 ## Local camera preview recovery
 
 `omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
