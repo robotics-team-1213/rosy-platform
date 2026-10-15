@@ -949,7 +949,7 @@ def test_a_stale_anchor_with_a_usable_map_entry_starts_from_the_body():
         site_step(rig, dx=.01, points=[(.07, 0.)])
     status = _no_anchor_run(rig)
     j = rig.m._junction
-    assert status.junction.state == 'bending' and j['travel'] > BEND['bend_in_m']-bend.BEND_LEAD_M+.02
+    assert status.junction.state == 'bending' and j['anchor'][3]-.02 > bend.BEND_LEAD_M  # 0.02 m was straight
     assert status.junction.map_entry_used is True and j['anchor'][:3] == pytest.approx((rig.x, rig.y, 0.), abs=1e-9)
 
 
