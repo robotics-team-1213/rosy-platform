@@ -723,8 +723,9 @@ class TripRunner(TripAdmission, TripProgress):
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **kwargs)) or {}
         except RobotApiError as exc:
-            if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
-                live.view["detail"]["junction_retry"] = exc.code
+            if exc.code in ("JUNCTION_ODOM_STALE", "INSTRUCTION_STAMP_UNUSABLE"):  # D-507 2 / D-767 A: next tick, fresh pose
+                live.view["detail"]["junction_retry"] = exc.code  # D-767 A: CORE's flag off ("disabled"): unstamped, led
+                live.view["caps"]["lane_instruction_stamp"] = live.view["caps"].get("lane_instruction_stamp") and (exc.detail or {}).get("reason") != "disabled"
                 return
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise
@@ -743,14 +744,13 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
         segment = live.segments[index]
-        arc = live.arc(index)
         if live.view["hold"] is not None:  # hold at the place: the goal is the place itself
-            x, y, yaw = arc.point_at(segment["s_to"])
+            x, y, yaw = live.arc(index).point_at(segment["s_to"])
         elif s + STEP_M > segment["s_to"] and index + 1 < len(live.segments):
             nxt = live.segments[index + 1]
             x, y, yaw = live.arc(index + 1).point_at(min(nxt["s_from"] + s + STEP_M - segment["s_to"], nxt["s_to"]))
         else:
-            x, y, yaw = arc.point_at(min(s + STEP_M, segment["s_to"]))
+            x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment["s_to"]))
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
             return
         if not live.open:

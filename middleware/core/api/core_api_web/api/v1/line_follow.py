@@ -288,8 +288,9 @@ class LineJunctionRequest(BaseModel):
     # or further), sent only to a robot announcing lane_bend_next_line.
     next_line_in_m: Optional[float] = Field(default=None, ge=0, le=2.0, allow_inf_nan=False)
     # D-767 A: the odom stamp (CORE wall clock, snapshot odom_pose.stamp) of the pose expect_in_m /
-    # bend_in_m were measured from, sent only to a robot announcing lane_instruction_stamp.
-    pose_stamp: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+    # bend_in_m were measured from, sent only to a robot announcing lane_instruction_stamp. Strict: no
+    # JSON true and no numeric string (review). Unusable with a distance: 409 INSTRUCTION_STAMP_UNUSABLE.
+    pose_stamp: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False, strict=True)
 
 
 def _expect(body: LineJunctionRequest):
@@ -350,7 +351,7 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
                                                             else body.exit_segment.model_dump(exclude_none=True)),
                                               pose_stamp=body.pose_stamp)
     except JunctionRefused as exc:
-        raise ApiError(exc.code, 409, str(exc)) from exc
+        raise ApiError(exc.code, 409, str(exc), None if exc.reason is None else {"reason": exc.reason}) from exc
     svc.state.set_line_follow(svc.line_follow.status())
     return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
 

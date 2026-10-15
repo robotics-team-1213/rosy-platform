@@ -60,9 +60,9 @@ REKEY_M, REKEY_RAD = .02, .05
 class JunctionRefused(Exception):
     """A junction instruction CORE does not take in the current line-follow mode (409)."""
 
-    def __init__(self, code, message):
+    def __init__(self, code, message, reason=None):
         super().__init__(message)
-        self.code = code
+        self.code, self.reason = code, reason  # reason: D-767 A INSTRUCTION_STAMP_UNUSABLE's why
 
 
 class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixin, JunctionTurnMixin):
@@ -193,6 +193,11 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
             if self._junction_done_place == (place_id, action):
                 raise JunctionRefused('JUNCTION_ALREADY_DONE',
                                       f'{action} at {place_id} already ran; send the next place')
+            current = self._clock() if now is None else now
+            distance = action == 'bend' or (expect or {}).get('expect_in_m') is not None
+            basis, why = self._stamp_odometer(pose_stamp, current) if pose_stamp is not None and distance else (None, 'none_sent')
+            if why != 'none_sent' and basis is None:  # D-767 A review: never a silent receipt basis; Fleet resends
+                raise JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', f'pose_stamp cannot be used: {why}', why)
             j = self._junction
             if j is not None and j['state'] in MANEUVER:
                 if (j['action'], j['place_id'], j['turn_deg'], j['advance_m']) == (
@@ -202,7 +207,6 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 j.update(state='aborted', reason='new_instruction')
                 self._bridge_hint = None
                 return False, j['seq'], 'aborted'
-            current = self._clock() if now is None else now
             if action == 'bend' and j is not None and j['state'] == 'armed' and (
                     j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
                     action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
@@ -213,7 +217,6 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 return True, j['seq'], 'armed'
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
-            basis, why = self._stamp_odometer(pose_stamp, current)  # D-767 A
             window = self._expect_window(expect, current, basis)
             pose = self._fresh_pose(current) if action == 'bend' else None
             if window is False or (action == 'bend' and pose is None):
