@@ -1023,6 +1023,11 @@
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 원격 통과.
 - gate 변화: 없음.
 
+## 2026-10-15 · 868461505 · 계약 버전 v1.235 (D-763 조각 4)
+- 변경: `app.py` 계약 버전 표기만 v1.235. 로봇 API는 바뀌지 않았다(v1.233·v1.234는 다른 세션이 잡아 두었다).
+- 증거: `middleware/core/gateway/test/test_protocol_version_alignment.py` 원격 통과(모델 PC, 6ae1df74e), 로그 X: `work-read/b/run-1.txt`.
+- gate 변화: 없음.
+
 ## 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
 - 변경: `v1/system.py`가 line-follow의 `supports_lane_crosswalk_gate`·`supports_lane_junction_signal`을 `controls`에 싣는다. `app.py` 계약 버전 v1.233.
 - 증거: `middleware/core/gateway/test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
@@ -1045,3 +1050,11 @@
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 10 (c).
 - 교훈: 로그 충돌은 항목 단위로 푼다. 줄 단위 자동 병합이 남의 항목 끝 줄을 옮길 수 있다.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+
+- 변경: main이 v1.237(D-763 조각 4, `feat/fleet-work-read-sources`)을 썼다. 이 브랜치의 위 항목에 적힌 v1.233·v1.237은 v1.238로 읽는다. 시작 검사 파일은 main의 `server/trip_checks/`, trip 루프는 `server/trips/`에 있다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.

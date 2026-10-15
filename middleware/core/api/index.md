@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
 - 2026-10-15 · uncommitted · main 병합(c4cd2bf95): D-758 0단계 버전 항목의 마지막 줄 복원
 - 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
 - 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
-- 2026-10-15 · 7334f9c40 · 계약 버전 v1.236
-- 2026-10-15 · 84f0c8456 · PUT /trip-lease job_id, 주인 아닌 IDLE은 lease를 끝낸다 (D-763 조각 6, API v1.236)
+- 2026-10-15 · 868461505 · 계약 버전 v1.235 (D-763 조각 4)
