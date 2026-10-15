@@ -72,7 +72,13 @@ roots:
 FILES = {
     "tools/harness/harness.yaml": HARNESS_YAML,
     "tools/harness/platform_parts.yaml": PARTS_YAML,
-    "contracts/foundation/core_common/schemas.py": "X = 1\n",
+    "contracts/foundation/core_common/__init__.py": "",
+    "contracts/foundation/core_common/schemas.py": "from .power import P  # re-export\nX = 1\n",
+    "contracts/foundation/core_common/power.py": "P = 1\n",
+    "contracts/foundation/core_common/orphan.py": "Z = 1\n",
+    "contracts/foundation/config/rosy_default.yaml": "a: 1\n",
+    "contracts/foundation/config/rosy_dev_auth.yaml": "b: 1\n",
+    "middleware/core/gateway/test/test_runtime_config.py": "DEFAULTS = 'rosy_default.yaml'\n",
     "contracts/foundation/test/test_schemas.py": "import core_common\n",
     "middleware/perception/control/battery.py": "from core_common import schemas\n",
     "middleware/perception/test/test_battery.py": "from control import battery\n",
@@ -100,6 +106,8 @@ FILES = {
     "test/test_line_follow_contract_docs.py": "DOC = 'docs/reference/line-follow.md'\n",
     "test/test_network_topology_contracts.py": "",
     ".github/workflows/ci.yml": "name: ci\n",
+    ".github/workflows/release.yml": "name: release\n",
+    "test/test_release_workflow.py": "WORKFLOW = '.github/workflows/release.yml'\n",
     **{guard: "" for guard in affected.GUARD_SET},
 }
 
@@ -131,7 +139,28 @@ def _select(sample: Path, *changed: str) -> affected.Selection:
 CASES = [
     ("tools/ssh only -> guards + the tests naming the script",
      ["tools/ssh/rosy_ssh_enroll.py"], "affected", {"test/test_rosy_ssh_enroll.py"}),
-    ("core_common -> full", ["contracts/foundation/core_common/schemas.py"], "full", None),
+    # D-762 stage 0: contracts/foundation and .github/workflows select their real readers.
+    ("core_common module -> foundation suite + importers' suites, not full",
+     ["contracts/foundation/core_common/schemas.py"], "affected",
+     {"contracts/foundation/test", "middleware/perception/test"}),
+    ("core_common module re-exported (relative import) -> the re-exporter's importers too",
+     ["contracts/foundation/core_common/power.py"], "affected",
+     {"contracts/foundation/test", "middleware/perception/test"}),
+    ("core_common module nobody imports -> full (unresolved)", ["contracts/foundation/core_common/orphan.py"],
+     "full", None),
+    ("core_common __init__ exports -> full", ["contracts/foundation/core_common/__init__.py"], "full", None),
+    ("core_common module removed in the working tree -> full", ["contracts/foundation/core_common/gone.py"],
+     "full", None),
+    ("foundation packaging -> full", ["contracts/foundation/setup.py"], "full", None),
+    ("foundation test file -> only that file", ["contracts/foundation/test/test_schemas.py"], "affected",
+     {"contracts/foundation/test/test_schemas.py"}),
+    ("foundation config read by a test -> that test + foundation suite",
+     ["contracts/foundation/config/rosy_default.yaml"], "affected",
+     {"contracts/foundation/test", "middleware/core/gateway/test/test_runtime_config.py"}),
+    ("foundation config no test reads -> full (fallback)", ["contracts/foundation/config/rosy_dev_auth.yaml"],
+     "full", None),
+    ("workflow read by a test -> that test", [".github/workflows/release.yml"], "affected",
+     {"test/test_release_workflow.py"}),
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
@@ -154,7 +183,7 @@ CASES = [
      ["deploy/robot/pinky_pro/compose.yaml"], "full", None),
     ("native unit manifest -> full", ["deploy/robot/pinky_pro/native/rosy-x.service"], "full", None),
     ("conftest -> full", ["middleware/core/gateway/test/conftest.py"], "full", None),
-    ("CI workflow -> full", [".github/workflows/ci.yml"], "full", None),
+    ("workflow no test reads -> full (fallback)", [".github/workflows/ci.yml"], "full", None),
     ("selector config -> full", ["tools/harness/harness.yaml"], "full", None),
     ("requirements pin -> full", ["deploy/robot/device-python-requirements.txt"], "full", None),
     ("nothing changed -> guards only", [], "affected", set()),
@@ -272,7 +301,7 @@ def test_real_repo_wide_ordinary_edits_stay_affected():
 @pytest.mark.parametrize("changed", [
     ["middleware/robot_ui/pilot/package.xml"],        # was: pilot/test ran; must still run
     ["contracts/foundation/core_common/__init__.py"],
-    [".github/workflows/ci.yml"],
+    ["tools/harness/platform_parts.yaml"],
 ])
 def test_real_repo_full_tier_covers_every_module_suite_and_the_local_selection(changed):
     """D-762 stage 0: a FULL landing never runs fewer suites than the old guards + mapped path."""
@@ -305,8 +334,15 @@ def test_real_repo_selector_paths_escalate():
     """The selector's own files and the harness config always escalate."""
     repo = affected.Repo.load(ROOT)
     for path in ("tools/harness/affected_tests.py", "tools/harness/harness.yaml",
-                 "contracts/foundation/core_common/__init__.py", ".github/workflows/ci.yml"):
+                 "contracts/foundation/core_common/__init__.py", "contracts/foundation/setup.py"):
         assert affected.select(repo, [path]).mode == "full", path
+
+
+def test_real_repo_ci_workflow_selects_its_readers_not_full():
+    """D-762 stage 0: ci.yml selects the tests that read it (2026-10-16 land-all escalation)."""
+    sel = affected.select(affected.Repo.load(ROOT), [".github/workflows/ci.yml"])
+    assert sel.mode == "affected", sel.escalations
+    assert {"test/test_ci_dependencies.py", "test/test_affected_tests.py"} <= set(sel.reasons)
 
 
 # --- D-436 4: GitHub runs the full tier as a parallel matrix; local --run does not -------------
@@ -403,7 +439,7 @@ def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):
 
 
 def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample, monkeypatch):
-    sel = _select(sample, "contracts/foundation/core_common/schemas.py", "tools/ssh/rosy_ssh_enroll.py")
+    sel = _select(sample, "contracts/foundation/core_common/orphan.py", "tools/ssh/rosy_ssh_enroll.py")
     assert sel.mode == "full"
     ran = []
 
@@ -425,7 +461,7 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
 
 def test_escalated_paths_are_still_mapped_for_the_local_run(sample):
     """Review fix: a FULL selection runs locally as guards + the escalated module's own suites."""
-    sel = _select(sample, "contracts/foundation/core_common/schemas.py")
+    sel = _select(sample, "contracts/foundation/core_common/orphan.py")
     assert sel.mode == "full"
     local = {p for inv in sel.local_invocations for p in inv}
     assert "contracts/foundation/test" in local, "core_common's own suite must run locally"

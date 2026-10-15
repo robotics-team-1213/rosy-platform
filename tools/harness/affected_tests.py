@@ -11,7 +11,8 @@ harness module that owns it, adds reverse dependents found through
 path, and an always-on guard set. Shared foundations, CI/test configuration,
 source layout and guard rules, committed folder moves and removed modules, and
 files that map to nothing escalate to the full tier: unknown means everything,
-never nothing. ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
+never nothing. A ``contracts/foundation`` module, config file or CI workflow instead selects
+the suites that import or name it when the selector finds any (``affected_narrow.NARROWABLE_TRIGGERS``). ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
 locally by default: ``--run`` on a FULL selection runs only the guards and the
 directly affected suites and says so; ``--full`` overrides. Suites whose test files share a basename run as separate pytest
 invocations (gateway and sensing both ship ``test_battery.py``).
@@ -30,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 import yaml
+import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 
 HARNESS = PurePosixPath("tools/harness")
 
@@ -402,6 +404,8 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
     for path in changed:
         trigger = None if any(_match(path, p) for p in NOT_TRIGGERS) else next(
             (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        if trigger and affected_narrow.add_readers(repo, path, trigger, add):
+            continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
             # these suites (the escalated module's own tests, its referencing tests).
