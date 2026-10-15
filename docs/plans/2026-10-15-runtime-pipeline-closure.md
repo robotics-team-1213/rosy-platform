@@ -73,8 +73,11 @@ push를 하지 않는다.
 ## 사용자 승인 후 후속 · 2026-10-15
 
 사용자가 로컬 병합과 나머지 작업의 계속 진행을 요청했다. 기존 브랜치의
-착지는 `tools/land.py --tests auto`로 진행하며 push·운영 활성화 요청으로
-확대하지 않는다. 후속 브랜치는 `fix/pipeline-resource-close`다.
+착지는 `tools/land.py --tests auto`로 완료했다. `b64314802d`의 원격 착지
+검사는 6,450 passed, 330 skipped, terminal exit 0, NEW 0이며 동일 SHA로
+local main을 fast-forward했다. 로그는 X: `land/fix-runtime-pipelines/run-1-1.txt`다.
+push·운영 활성화 요청으로 확대하지 않는다. 후속 브랜치는
+`fix/pipeline-resource-close`다.
 
 - 14번의 추가 누락: async/sync close 실패가 나머지 정리를 막는 것을 원격
   RED 2건으로 확인했다. 기존 lifespan을 `AsyncExitStack`으로 연결해 worker
