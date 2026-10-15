@@ -96,6 +96,15 @@ def test_failing_test_stops_before_ff(repos):
     assert git(main, "rev-parse", "HEAD") == before
 
 
+def test_local_size_check_failure_stops_before_any_test_host(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {land.SIZE_RANGE: "import sys\nprint('ratchet row too high', file=sys.stderr)\nsys.exit(1)\n"}, "size")
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
 @pytest.mark.parametrize("peer_path, second_round", [
     ("docs/adr/D-9.md", []),             # records only: module suite skipped
     ("lib/util.py", [["pkg/test"]]),     # code the tests may import: full rerun
