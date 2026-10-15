@@ -103,12 +103,28 @@ class TripProgress:
         wait.update(bound_s=bound, over_bound=over, waiting=active and bound is not None and not over)  # v1.231: one write
         return wait["waiting"]
 
+    def _fence(self, robot_id: str) -> None:
+        """D-760 8 review: the trip's next state read starts after every read begun so far (its last step, a
+        junction send, a link loss). The numbers are those of the shared read the junction port reads
+        (``read_number``, app.py: MapPoseService); a junction port without them (a test fake) is not fenced."""
+        number = getattr(getattr(self, "_junction", None), "read_number", None)
+        if number is not None:
+            self._read_after[robot_id] = number(robot_id)
+
+    def _after(self, port, robot_id: str) -> dict:
+        """``{"after": n}`` for a read on ``port`` that is the junction's numbered read, else nothing: the SIM
+        pose port has its own reads, and a read number means nothing to it."""
+        number = getattr(getattr(self, "_junction", None), "read_number", None)
+        same = number is not None and getattr(port, "read_number", None) == number
+        return {"after": self._read_after.get(robot_id, 0)} if same else {}
+
     async def _link_wait(self, live: LiveTrip, kind: str) -> bool:
         """D-760 4: a robot call or state read failed on a trip that holds its lease. The trip stays open in
         ``link_wait`` (no instruction, goal or extended authority; UNKNOWN in the block table, so its blocks stay
         held) until the link returns (``_link_back``) or the lease is lost. False: no lease, the trip ends as before."""
         if not live.open or (live.view.get("lease") or {}).get("state") != "held":
             return False
+        self._fence(live.view["robot_id"])  # D-760 8 review: only a read that starts after the loss brings it back
         live.at, live.at_stamp = None, None
         if (live.view.get("wait") or {}).get("reason") != "link_wait":  # kept until a whole step passes
             live.view["wait"] = {"reason": "link_wait", "since": self._clock(), "lease_at": self.lease.now()}
