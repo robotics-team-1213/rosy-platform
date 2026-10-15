@@ -29,7 +29,7 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 
 | Directory | Purpose |
 |-----------|---------|
-| `panels/` | Role-surface panel modules (see `panels/AGENTS.md`) |
+| `panels/` | Role-surface panel modules (see `panels/AGENTS.md`). CMake `install(DIRECTORY)` holder; D-766 size unit (`test/architecture/size_units.txt`). |
 | `shell/` | Role-surface shell: mounting, store (see `shell/AGENTS.md`) |
 
 ## For AI Agents
