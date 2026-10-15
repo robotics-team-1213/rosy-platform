@@ -2808,3 +2808,9 @@
 - 변경: native hardware readiness가 locked distro·package·정확한 cell Action/pub를 확인한다. init/lock/cleanup 실패를 구조화해 거절하고 motion admission은 항상 false다. namespace 혼합·초기화 오류 RED 뒤 관련 원격 60시험 통과·NEW 0.
 - 증거: 별도 prefix에서 고정 vendor 8패키지+adapter build, controller 4deb private extraction, 핵심2라이브러리 ldd 누락0. 기본 ROS/카메라/시스템 service·패키지는 변경하지 않았다. 물리 driver/torque/goal은 실행하지 않았다.
 - gate 변화: 없음. 실물 제어·profile/stop·별도 hardware API/owner와 딸기 왕복은 미완료. docs/validation/omx-hardware-control-preparation-2026-10-15/result.md.
+
+## 2026-10-15 · uncommitted · docs(omx): native preview 수신기 전송 조건
+
+- 변경: 카메라 서비스 active와 실제 소비자 수신을 구분하고, 현장 preview에서 검증한 프로세스 한정 DDS 설정·비교 절차를 추가했다.
+- 증거: 기본 수신기 저하와 동시 설정 수신기 30초 약 10 FPS를 직접 비교했다. docs/validation/omx-preview-receiver-2026-10-15/result.md.
+- gate 변화: 없음. 장시간 수용은 실행 중이며 Jazzy/CycloneDDS·실물 제어 수용으로 확장하지 않는다.

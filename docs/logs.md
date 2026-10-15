@@ -8545,6 +8545,12 @@ osy-d395-s1d\`.
 - 증거: `omx_adapter.hardware_profile`의 원격 39 passed·NEW 0 및 독립 재검토.
 - gate 변화: 없음. G3 물리 관문 및 G4–G6는 미완료다.
 
+## 2026-10-15 · uncommitted · docs(omx): 수신기별 영상 전달 비교
+
+- 변경: 기존 카메라의 기본/동일 설정 수신기를 동시 비교한 결과와 근거 한계를 기록했다.
+- 증거: 기본 수신기 첫 150초 top 4.913/front 1.913 FPS, 같은 전송 설정 수신기는 30.082초 front 300/top 299장. 최대 간격과 새 시각도 기록했다.
+- gate 변화: 없음. 30분·보정·실물 제어·지속 AI/Fleet 소비 완료를 주장하지 않는다.
+
 ## 2026-10-15 · uncommitted · docs: remove the retired repo-root reference/ folder
 - 변경: 사용자 결정(2026-10-15)으로 `reference/AGENTS.md`·`reference/src/AGENTS.md` 삭제를 커밋했다. upstream pinky_pro zip은 이미 디스크에 없고 삭제를 소유한 세션이 없었다. 루트 `AGENTS.md` 표의 행, `docs/AGENTS.md`의 안내 문구, `.gitignore`의 zip 행, `test_folder_layout.py`의 보관 AGENTS 검사를 함께 뺐다. `docs/plans/2026-10-13-folder-responsibility-cleanup.md` 3항에 결정을 적었다.
 - 증거: 원격 pytest `test/architecture/test_folder_layout.py` (아래 착지 기록)
