@@ -175,7 +175,11 @@ class JunctionBendMixin:
         if self._lost_latched:
             return self._abort(j, 'lane_lost_before_bend', decision)
         anchor = j.get('anchor')
-        if anchor is None or abs(j['travel']-anchor[3]) > BEND_LEAD_M:
+        if anchor is not None and abs(j['travel']-anchor[3]) > BEND_LEAD_M:
+            anchor = None
+        # D-759 note (m35): no straight tick? A usable map heading stands in, judged on the body's yaw.
+        entry = self._map_entry_yaw(j, pose.yaw if anchor is None else anchor[2])
+        if anchor is None and entry is None:
             return self._abort(j, 'no_anchor', decision)
         refusal = self._maneuver_refusal(now)
         if refusal is not None:
@@ -183,8 +187,7 @@ class JunctionBendMixin:
         speed = self._half_trip_speed()
         if speed <= 0:
             return self._abort(j, 'linear_limit_zero', decision)
-        x, y, yaw, travel = anchor
-        entry = self._map_entry_yaw(j, yaw)
+        x, y, yaw, travel = anchor or (pose.x, pose.y, pose.yaw, j['travel'])
         if entry is not None:
             # D-759 4: the lane's heading, from where the body is now. The straight-tick point may
             # be BEND_LEAD_M back and off a line on another heading (0.2 m at 21.6 deg: 7 cm, past

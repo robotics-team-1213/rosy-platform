@@ -882,3 +882,23 @@ def test_a_resend_places_a_heading_the_first_receipt_could_not():
     assert send(rig, map_entry=_entry(rig, lane_yaw=.2)) == (True, 1, 'armed')   # a placed one stays
     assert rig.m._junction['map_entry']['yaw'] == pytest.approx(.1, abs=1e-9)
     assert send(rig) == (True, 1, 'armed') and 'yaw' in rig.m._junction['map_entry']
+
+
+@pytest.mark.parametrize('lane_deg, state, reason', [
+    (None, 'aborted', 'no_anchor'), (29., 'bending', None), (31., 'aborted', 'no_anchor')])
+def test_a_usable_map_entry_stands_in_for_a_missing_straight_anchor(lane_deg, state, reason):
+    """D-759 note (Gazebo m35, B_W4): the follower swung off the NW exit and no tick was straight.
+    A usable map heading, within 30 deg of the body's yaw, starts the pass from the body; else no_anchor."""
+    rig = _wall_rig()
+    send(rig, **({} if lane_deg is None else dict(map_entry=_entry(rig, lane_yaw=math.radians(lane_deg)))))
+    _camera_reads(rig, .2)                                 # tracking, never straight, from receipt on
+    for _ in range(100):
+        _, status = site_step(rig, dx=.01)
+        if status.junction.state != 'armed':
+            break
+    assert (status.junction.state, status.junction.reason) == (state, reason)
+    if state == 'bending':
+        assert status.junction.map_entry_used is True
+        assert rig.m._junction['anchor'][:3] == pytest.approx((rig.x, rig.y, math.radians(29.)), abs=1e-9)
+    else:
+        assert rig.m.status().state == 'HOLD'
