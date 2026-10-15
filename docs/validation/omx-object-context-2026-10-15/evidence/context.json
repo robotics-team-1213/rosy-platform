@@ -1,0 +1,56 @@
+{
+  "experimental_fixture_only": true,
+  "revision": "strawberry-task-context-v2",
+  "facts": [
+    {
+      "key": "task_goal",
+      "value": "take the strawberry out, place it temporarily, then put it back into its original container",
+      "source": "user_statement",
+      "status": "confirmed_goal_not_observed_state"
+    },
+    {
+      "key": "environment_scope",
+      "value": "limited workbench environment",
+      "source": "user_statement",
+      "status": "confirmed_scope"
+    },
+    {
+      "key": "snapshot_geometry",
+      "value": {
+        "width": 640,
+        "height": 480,
+        "view_aliases": [
+          "top",
+          "front"
+        ]
+      },
+      "source": "capture_metadata",
+      "status": "measured"
+    },
+    {
+      "key": "snapshot_mode",
+      "value": "frozen image, no action sent",
+      "source": "experiment_runner",
+      "status": "verified"
+    }
+  ],
+  "unknowns": {
+    "source_container_identity": null,
+    "temporary_placement_region": null,
+    "container_current_contents": null,
+    "current_task_phase": null,
+    "white_round_region_role": null,
+    "brown_cylinder_roles": null,
+    "camera_extrinsics": null,
+    "depth": null,
+    "physical_target_material": null
+  },
+  "rules": [
+    "Task goal is not evidence that the strawberry is inside or outside any container now.",
+    "Do not call the white round region a ball, tray or container without evidence.",
+    "Do not infer a broken device from poor camera visibility.",
+    "Keep task target identity separate from all other visible objects and fixtures.",
+    "Unknown container or placement region means the task is not ready for control.",
+    "No metric coordinates, grasp approval or motion commands."
+  ]
+}

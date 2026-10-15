@@ -60,6 +60,9 @@ class BaseVelocityControl(_Wire):
     (``line_follow.instruction_stamp_enabled``, off by default); Fleet sends ``pose_stamp`` only then.
     ``lane_bend_next_line`` (D-754) is true when CORE takes a bend's ``next_line_in_m``; Fleet
     sends it only then.
+    ``lane_crosswalk_gate`` / ``lane_junction_signal`` (D-763 10 (c)) are true only when
+    ``line_follow.crosswalk_gate_enabled`` / ``junction_signal_enabled`` is on; Fleet refuses a
+    route over a crosswalk / signal zone to a robot announcing it false (absent: a warning).
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
     whose floor was walked; absent = none. Fleet opens lane trips only on that active map.
     """
@@ -84,6 +87,8 @@ class BaseVelocityControl(_Wire):
     lane_turn_map_entry: bool | None = None
     lane_instruction_stamp: bool | None = None
     lane_bend_next_line: bool | None = None
+    lane_crosswalk_gate: bool | None = None
+    lane_junction_signal: bool | None = None
     route_context: bool | None = None
     site_floor_map_id: str | None = Field(None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
@@ -190,6 +195,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    lane_bend_map_entry: bool | None = None, lane_turn_map_entry: bool | None = None,
                    lane_instruction_stamp: bool | None = None,
                    lane_bend_next_line: bool | None = None,
+                   lane_crosswalk_gate: bool | None = None, lane_junction_signal: bool | None = None,
                    route_context: bool | None = None,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
@@ -217,6 +223,8 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          lane_turn_map_entry=lane_turn_map_entry,
                                          lane_instruction_stamp=lane_instruction_stamp,
                                          lane_bend_next_line=lane_bend_next_line,
+                                         lane_crosswalk_gate=lane_crosswalk_gate,
+                                         lane_junction_signal=lane_junction_signal,
                                          route_context=route_context,
                                          site_floor_map_id=site_floor_map_id,
                                          line_follow_authority=line_follow_authority,

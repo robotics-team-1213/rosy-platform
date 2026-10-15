@@ -442,11 +442,10 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     and (j['state'] != 'reacquiring' or j['action'] == 'bend'))):  # bend: own pursuit
             return self._abort(j, reason or 'hold', decision)
         # Time a later gate takes is not the maneuver's (Gazebo lap m4: a D-573 look inside a bend pass
-        # ended it 'timeout'): the share crosswalk/gate.py _regulated_wait_share credits stops the phase
-        # clock, crosswalk_report_s + clear_s in all.
-        c, share = self._config, self._regulated_wait_share(now, now-j.get('tick_at', now), j.get('speed'))
-        add = 0. if j.get('sub') == 'stopping' else min(share, c.crosswalk_report_s+c.crosswalk_clear_s-j.get('added', 0.))
-        j.update(tick_at=now, limit=j['limit']+add, added=j.get('added', 0.)+add)
+        # ended it 'timeout'): the credit crosswalk/gate.py _regulated_wait_share gives stops the phase clock.
+        stopping = j.get('sub') == 'stopping'
+        add = self._regulated_wait_share(now, now-j.get('tick_at', now), j.get('speed'), None if stopping else j)
+        j.update(tick_at=now, limit=j['limit']+(0. if stopping else add))
         if now-j['phase_at'] > j['limit']:
             if j['state'] == 'reacquiring':
                 return self._unresolved(j, decision)

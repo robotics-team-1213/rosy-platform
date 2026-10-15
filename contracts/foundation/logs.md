@@ -739,6 +739,29 @@
 - gate 변화: 없음.
 - 결정: D-763 조각 4.
 - 교훈: 없음.
+
+## 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_crosswalk_gate`·`lane_junction_signal`(없으면 wire에서 빠진다). 설정 기본값은 바꾸지 않았다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`(설정 켬·끔). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+
+- 변경: main이 v1.237(D-763 조각 4, `feat/fleet-work-read-sources`)을 썼다. 이 브랜치의 위 항목에 적힌 v1.233·v1.237은 v1.238로 읽는다. 시작 검사 파일은 main의 `server/trip_checks/`, trip 루프는 `server/trips/`에 있다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
 ## 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
 
 - 변경: `protocol/controls.py` `BaseVelocityControl.lane_instruction_stamp`, `protocol/schemas.py` `LineJunctionStatus.distance_basis`·`distance_basis_reason`, `config/rosy_default.yaml` `line_follow.instruction_stamp_enabled: false`와 설명.

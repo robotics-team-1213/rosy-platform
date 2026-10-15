@@ -641,6 +641,9 @@ def _held(rig, seconds, how):
     """`seconds` of a later gate's hold on a standing robot; then the gate releases."""
     if how == 'authority':
         _authority(rig, True)
+    elif how == 'holding':                    # Fleet alive and saying wait (D-760 rev 4)
+        rig.m._authority_on = lambda: True
+        rig.m._authority_state = lambda now: ('HOLDING', 0., 'authority_end')
     else:
         _crosswalk(rig, how)
     for _ in range(round(seconds/.05)):
@@ -649,6 +652,8 @@ def _held(rig, seconds, how):
             break
     if how == 'authority':
         _authority(rig, False)
+    elif how == 'holding':
+        del rig.m._authority_on, rig.m._authority_state
     else:
         del rig.m._xwalk.status
 
@@ -668,28 +673,27 @@ def test_a_later_gate_hold_mid_arc_is_not_the_arcs_time(seconds, how):
     assert status.arc.travelled_m >= LENGTH
 
 
-def test_an_arc_held_by_the_authority_gate_past_the_cap_times_out_and_holds():
-    """D-760 rev 2 item 6: the deadline stands under an authority hold for 15 s at most; then
-    lane_arc_timeout and the robot HOLDS (no fall back to lane following) even with authority back."""
-    rig = ArcRig(authority_required=True)
+def test_an_arc_held_by_a_holding_authority_stands_for_as_long_as_it_lasts():
+    """D-760 개정 4: the deadline stands under a HOLDING authority for its whole length (Fleet's live
+    ttl bounds it, Gazebo m33c), so a 30 s hold before the first metre still ends at the arc's end."""
+    rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
-    decision, status = rig.until(lambda d, s: not running(rig), limit=2000)
-    assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051)
-    assert status.arc.travelled_m == pytest.approx(0., abs=1e-6)
-    assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
-    _authority(rig, False)                    # the gate releases
-    decision, status = rig.drive(5)
-    assert (decision.linear, decision.angular) == (0., 0.)
-    assert (status.state, status.reason) == ('HOLD', 'lane_arc_timeout')
+    _held(rig, 30., 'holding')
+    assert running(rig) and rig.m._arc['deadline'] - deadline == pytest.approx(30., abs=.051)
+    decision, status = rig.until(lambda d, s: not running(rig), seen=False)
+    assert (status.arc.state, status.arc.reason) == ('ended', 'lane_arc_end_unarmed')
 
 
-def test_a_20_s_authority_hold_mid_arc_times_out_and_holds():
+@pytest.mark.parametrize('how', ['authority', 'looking', 'waiting'])
+def test_a_20_s_capped_hold_mid_arc_times_out_and_holds(how):
+    """A crosswalk share or a missing authority (NONE) keeps the cap: 15 s per arc, then
+    lane_arc_timeout and HOLD."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
     rig.drive(10, seen=False)
-    _held(rig, 20., 'authority')             # 15 s stood; the rest of the margin is gone
+    _held(rig, 20., how)                       # 15 s stood; the rest of the margin is gone
     decision, status = rig.until(lambda d, s: not running(rig), seen=False)
     assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051) and status.arc.travelled_m < LENGTH
     assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
@@ -772,13 +776,14 @@ def test_a_crossing_held_by_a_return_ahead_is_credited_and_a_crossing_takes_its_
 
 
 def test_the_hold_cap_is_per_arc_not_per_hold():
-    """A 10 s hold, then another: 15 s in all, so the arc times out 15 s past its own deadline
-    within the second hold (a cap per hold would let it stand 25 s)."""
+    """A 10 s crosswalk hold, then another: 15 s in all, so the arc times out 15 s past its own deadline
+    within the second hold (a cap per hold would let it stand 25 s). Authority waits are not capped
+    (D-760 개정 4), so both holds here are the crosswalk's."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
     rig.drive(10, seen=False)
-    _held(rig, 10., 'authority')
+    _held(rig, 10., 'looking')
     rig.drive(10, seen=False)
     assert running(rig)
     _held(rig, 20., 'waiting')
