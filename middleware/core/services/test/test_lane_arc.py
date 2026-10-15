@@ -641,6 +641,9 @@ def _held(rig, seconds, how):
     """`seconds` of a later gate's hold on a standing robot; then the gate releases."""
     if how == 'authority':
         _authority(rig, True)
+    elif how == 'holding':                    # Fleet alive and saying wait (D-760 rev 4)
+        rig.m._authority_on = lambda: True
+        rig.m._authority_state = lambda now: ('HOLDING', 0., 'authority_end')
     else:
         _crosswalk(rig, how)
     for _ in range(round(seconds/.05)):
@@ -649,6 +652,8 @@ def _held(rig, seconds, how):
             break
     if how == 'authority':
         _authority(rig, False)
+    elif how == 'holding':
+        del rig.m._authority_on, rig.m._authority_state
     else:
         del rig.m._xwalk.status
 
@@ -668,21 +673,22 @@ def test_a_later_gate_hold_mid_arc_is_not_the_arcs_time(seconds, how):
     assert status.arc.travelled_m >= LENGTH
 
 
-def test_an_arc_held_by_the_authority_gate_stands_for_as_long_as_it_lasts():
-    """D-760 개정 4: the deadline stands under a non-FREE authority for its whole length (the lease and
-    ttl bound it, Gazebo m33c), so a 30 s hold before the first metre still ends at the arc's end."""
+def test_an_arc_held_by_a_holding_authority_stands_for_as_long_as_it_lasts():
+    """D-760 개정 4: the deadline stands under a HOLDING authority for its whole length (Fleet's live
+    ttl bounds it, Gazebo m33c), so a 30 s hold before the first metre still ends at the arc's end."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
-    _held(rig, 30., 'authority')
+    _held(rig, 30., 'holding')
     assert running(rig) and rig.m._arc['deadline'] - deadline == pytest.approx(30., abs=.051)
     decision, status = rig.until(lambda d, s: not running(rig), seen=False)
     assert (status.arc.state, status.arc.reason) == ('ended', 'lane_arc_end_unarmed')
 
 
-@pytest.mark.parametrize('how', ['looking', 'waiting'])
-def test_a_20_s_crosswalk_hold_mid_arc_times_out_and_holds(how):
-    """The crosswalk share keeps its cap: 15 s per arc, then lane_arc_timeout and HOLD."""
+@pytest.mark.parametrize('how', ['authority', 'looking', 'waiting'])
+def test_a_20_s_capped_hold_mid_arc_times_out_and_holds(how):
+    """A crosswalk share or a missing authority (NONE) keeps the cap: 15 s per arc, then
+    lane_arc_timeout and HOLD."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
