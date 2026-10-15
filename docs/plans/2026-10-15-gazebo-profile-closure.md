@@ -28,6 +28,48 @@ CORE의 기본 로봇 구성인 `pinky_pro`를 포함하지 않아 colcon closur
 
 ## 범위
 
-기존 패키지의 누락된 연결 한 줄이다. 새 API·프로파일·시뮬레이터·모델 권한·
+기존 패키지와 설치 도구의 누락된 연결을 고친다. 새 API·프로파일·시뮬레이터·모델 권한·
 command writer를 만들지 않는다. map_v2_fleet와 STL lineage를 바꾸지 않는다.
 이 편대 벤치의 공장 월드 결과를 현장 지도 또는 실물 주행 수용으로 쓰지 않는다.
+
+## 실제 재실행에서 발견한 설치 관문
+
+- `422c7c41e`: 17개 패키지 빌드와 기본 프로파일 로딩은 성공했지만 CORE가
+  `ModuleNotFoundError: rosy.contracts`로 종료됐다. ROS-free wheel은 의도적으로
+  colcon 대상이 아니며, remote SIM이 별도 설치를 빠뜨렸다.
+- 기존 `deploy/robot/pinky_pro/image/install-motion-contracts.sh`를 colcon setup
+  뒤 재사용한다. 실제 wheel을 실행별 install 아래 설치하고 그 site-packages를
+  Python 경로에 넣는다. helper의 충돌 거절과 설치 경로 검증은 그대로 쓴다.
+- wiring 회귀는 원격 RED 2 NEW 뒤 `4548a9d7aa`에서 33 passed, exit 0,
+  NEW 0이다. 설치 실패 시 벤치를 시작하지 않는 경우도 포함한다.
+- 실제 다음 실행은 `bdist_wheel` 부재로 설치 단계에서 거절됐다. 기존 scope 내
+  의존성 캐시에 wheel/setuptools 빌드 도구를 포함하고 요구사항과 설치 recipe를
+  함께 해시한다. 시스템 Python과 공용 pytest 환경에는 설치하지 않는다.
+- 실제 SIM은 실행별 포트 예약과 CORE robot_id readback을 먼저 확인한 뒤에만
+  편대 벤치로 진입한다. 기본 8080대 포트의 다른 서비스 응답을 부팅으로 세지 않는다.
+
+원시 로그는 X: 관리 세션 `2026-10-15--111910--gazebo-profile--7ab1db/logs/`의
+`swarm-hold-fixed`, `swarm-contracts-fixed`, `swarm-build-deps-fixed`에 보존한다.
+`cbf3ab55bd`의 실제 wheel 설치와 helper import smoke가 성공했고, 3개 CORE의
+`robot_id`를 직접 확인했다. 편대 벤치는 이어 `swarm.lead is not advertised`로
+무장을 거절했다. identity 준비만으로 센서/capability 준비를 보장하지 않는다.
+capability readback까지 기다리는 재실행은 당시 두 비현장 시험 PC의 SIM 가용
+자원이 부족해 시작하지 않았다. startup 복구를 편대/HOLD 수용으로 합산하지 않는다.
+
+## 검수 자료 검색 · 현재 읽기 전용 확인
+
+사용자가 기존 검수 자료와 운영 승인 기록을 직접 찾도록 지시했다. 관리 세션과
+가리킨 원격 저장소를 제한 검색했다. 실제 사람 검수 drivable 2,769장의 이미지와
+마스크 총 5,538개 SHA가 모두 일치하며, lane v13 승인 표시 857장도 확인했다.
+이 자료는 차선 내부 연결 바닥 의미이며 `road_surface/1` 독립 정답이 아니다.
+
+현재 운영 review owner는 generation 324, 53프레임 중 excluded 23/pending 30/
+approved 0이다. authority는 정상 갱신 중이며 `no_approved_masks`로 HOLD한다.
+원본 proof는 한 capture group만 확인됐고 eval companion도 아직 없다.
+실제 `ReviewPipeline`·`IndexedReview` 및 incident reasoning loader 소스는 존재한다.
+입력 부재를 구현 누락으로 처리하거나 기존 검수 의미를 바꾸지 않는다.
+
+조사한 실제 store/config/세션에서는 독립 signed 운영 수용 receipt를 찾지 못했다.
+대화 semantic admission, 합성 GPU→READY와 offline export는 다른 증거다.
+검색의 전역 완전성이나 운영 수용을 주장하지 않는다. 원격 경로·해시·현재 시각과
+명령 범위는 X: 같은 관리 세션의 `evidence/acceptance-search.md`에 보존했다.

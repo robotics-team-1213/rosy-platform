@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · cbf3ab55bd · native SIM installation and actual acceptance-input search
 - 2026-10-15 · 39d8e72973 · continue runtime pipeline closure after landing approval
 - 2026-10-15 · 0bc2a16c1 · runtime connection inventory
 - 2026-10-14 · df1b93395 · D-762 단계 1: merge_group 트리거, CI 전체 티어가 모든 모듈 묶음을 덮는다, 불안정 시험 격리
 - 2026-10-14 · d685e1351 · test: Hugging Face 비공개 저장소 관리 원격 시험
-- 2026-10-14 · uncommitted · feat: Hugging Face 연결로 비공개 저장소 관리
