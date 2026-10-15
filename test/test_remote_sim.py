@@ -209,12 +209,17 @@ def test_a_failed_pip_install_is_never_stamped_ok(tmp_path):
     uv.chmod(0o755)
     deps = tmp_path / "deps" / "abc"
     deps.parent.mkdir()
-    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "PYDEPS": str(deps), "REQ": "req.txt"}
+    (tmp_path / "req.txt").write_text("pydantic==2\nPyYAML==6\n")
+    (tmp_path / "fleet.txt").write_text("pydantic==1\npyyaml==5\nzeroconf==1\n")
+    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "PYDEPS": str(deps), "REQ": str(tmp_path / "req.txt"),
+           "FLEET_REQ": str(tmp_path / "fleet.txt"), "LEARNED_REQ": "learned.txt"}
     script = "set -eo pipefail\n" + rs.DEPS + "echo built\n"
     failed = _bash(script, UV_RC="1", **env)
     assert failed.returncode == 1 and "CORE pip deps failed" in failed.stdout and "built" not in failed.stdout
     assert not deps.exists()
     assert _bash(script, **env).stdout == "built\n" and (deps / ".ok").is_file()
+    # One interpreter for CORE and a SIM Fleet: only the Fleet pins CORE's set does not name.
+    assert (deps / "fleet-extra.txt").read_text() == "zeroconf==1\n"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
