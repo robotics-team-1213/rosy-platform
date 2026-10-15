@@ -8580,6 +8580,12 @@ osy-d395-s1d\`.
 - 변경: `feat/omx-hardware-server`에서 `register_probe.py`를 추가했다. 확인된 by-id 포트를 독점하고 ID 11..16 PING/READ만 송신한다. 초기화 설정·torque·reboot·goal은 없다. README와 `docs/validation/omx-follower-registers-2026-10-15/result.md`에 사용법과 vendor 초기화 충돌을 기록했다.
 - 증거: AI PC 원격 24 passed, known_failures NEW 0. 독립 검토의 포트 open 경쟁 지적을 TIOCEXCL 뒤 자기 PID 재검사로 해결했고 재검토했다. 송신 guard를 메모리에서 제거한 mutation은 forbidden REBOOT 송신 검사에서 RED, 원본은 GREEN이었다. 현장 도구 재실행은 snapshot_complete=true, 6개 torque=0/hardware_error=0이었다. 원문은 비공개 X: 세션의 `logs/register-*`에 있다.
 - gate 변화: 없음. 물리 케이블 역할과 register 관측은 확인했지만 측정 한계·정지·실물 제어 서버·Fleet/Pilot 운용은 미완료다. 기본 launch는 현재 ID 12/13 위치 밖의 한계를 쓰므로 실행하지 않았다.
+
+## 2026-10-15 · 7e83db760 · feat(omx): bounded physical joint feedback
+
+- 변경: `fix/omx-native-initialization`에서 읽기 전용 포트 수명을 재사용하도록 분리하고, 1..300초의 실제 관절 관측 프로세스를 추가했다. 운영/가상 joint topic과 분리하고 stale·모터 fault·torque on·외부 discovery override를 거절한다. 측면 카메라 추가를 선행 조건으로 두지 않도록 계획을 갱신했다.
+- 증거: 원격 33 passed, NEW 0, 독립 검토의 discovery/cleanup 보완과 재검토. 현장 120초 1,197 snapshot·exit 0, 별도 ROS 수신 301개·max age 0.020568초·오류 0. 동시 포트 접근 거절·종료 뒤 재접속·선택 설정 전후 일치를 확인했다. `docs/validation/omx-physical-feedback-2026-10-15/result.md`.
+- gate 변화: 물리 관측 경로만 확인. 구동 controller/owner·실측 기구 범위·독립 정지·Fleet/Pilot·딸기 왕복은 미완료이며 자동 명령은 보내지 않았다.
 ## 2026-10-15 · 90734f635 · D-766 7(a): 절대 한도와 내려가기만 하는 천장, 단위 데이터 파일, 이동·범위 검사
 - 변경: `test/architecture/test_module_structure.py`에서 `SIZE_VERDICTS`·`REGROWTH_ALLOWANCE`·`HARD_TIER`·`_allowance()`·`FLEET_SERVER_HOLDER_UNITS`를 지우고(2,422 → 약 530줄) `size_ratchet.txt`(넘은 것 62행)와 `size_units.txt`(단위 38개, `small` 25개)를 둔다. 세는 규칙은 `tools/harness/size_limits.py`, 커밋별 검사 `size_range.py`, 순수 이동 검사 `split_check.py`. 두 데이터 파일은 `affected_tests.py` `NOT_TRIGGERS`. D-362 제목·표·4항, 2026-09-30 예산 계획 표·3항, D-168 P6·Alternatives, 분리 기준 X1, `test/architecture/AGENTS.md`, `tools/harness/AGENTS.md`, D-766 덧붙임, slice (c) 계획 `docs/plans/2026-10-15-d766-modularization-plan.md`
 - 증거: 시험 PC `tools/remote/remote_pytest.py`, 아래 보고의 로그
