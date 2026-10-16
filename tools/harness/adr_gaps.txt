@@ -33,3 +33,9 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
 D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
 D-772 reserved on branch docs/station-charge-lifecycle (refs/adr/D-772), not yet on main; remove when it lands
+
+D-774 reserved in another worktree (refs/adr/D-774), absent from origin/main; remove when its ADR lands
+
+D-775 reserved in another worktree (refs/adr/D-775), absent from origin/main; remove when its ADR lands
+
+D-776 reserved in another worktree (refs/adr/D-776), absent from origin/main; remove when its ADR lands
