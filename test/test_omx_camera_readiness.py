@@ -16,7 +16,8 @@ def load(name):
 
 
 def textured():
-    return np.tile(np.arange(40, 200, dtype=np.uint8), (120, 4, 3)).reshape(120, 640, 3)
+    gradient = np.linspace(40, 200, 640).astype(np.uint8)
+    return np.repeat(np.tile(gradient, (120, 1))[:, :, None], 3, axis=2)
 
 
 def test_a_bright_led_in_an_otherwise_dark_image_is_not_usable():
@@ -137,4 +138,10 @@ def test_durable_baseline_includes_directory_fsync(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime.os, 'fsync', lambda fd: modes.append(runtime.os.fstat(fd).st_mode))
     runtime.save(tmp_path/'baseline.json', {'original': 1}, exclusive=True)
     assert any(stat.S_ISDIR(mode) for mode in modes)
+
+
+def test_sensor_noise_cannot_be_promoted_to_useful_scene_structure():
+    rng = np.random.default_rng(42)
+    noise = rng.integers(0, 150, size=(480, 640, 3), dtype=np.uint8)
+    assert not load('camera_quality').frame_quality(noise)['usable']
 
