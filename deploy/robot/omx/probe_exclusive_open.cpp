@@ -18,6 +18,11 @@
 #include <vector>
 extern char **environ;
 
+extern "C" int rosy_omx_probe_guard_active(const char * port) {
+  const char * expected = getenv("ROSY_OMX_PROBE_PORT");
+  return expected && strcmp(port, expected) == 0 && geteuid() != 0;
+}
+
 static bool sole_owner(const char * path) {
   int output[2];
   if (pipe2(output, O_CLOEXEC) != 0) return false;
