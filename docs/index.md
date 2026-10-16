@@ -235,6 +235,7 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
+| D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
 
 ## 계획·결과 문서
 
@@ -337,8 +338,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · docs: 간결한 문서와 단일 기준을 정하고 협업 안내에 적용
+- 2026-10-16 · uncommitted · docs: 한 명의 게시와 두 에이전트 검토 절차
 - 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
 - 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
 - 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
-- 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
-- 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선

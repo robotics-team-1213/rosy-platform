@@ -8,6 +8,8 @@
 
 ## Purpose
 
+문서 편집은 [D-777](docs/adr/D-777-concise-human-agent-documentation.md)을 따른다. 공유·협업 문서는 독자의 작업 위치와 다음 행동부터 안내하고, 상세 규칙은 해당 기준 문서로 연결한다.
+
 ROSY Platform connects observed world state, site orchestration, device execution, and offline learning/evaluation (ROS 2 Jazzy, first hardware Pinky Pro). This repository contains the platform's source, not only the robot workspace. CORE (`middleware/core/gateway`) owns the external API and final Base command path; OMX retains its joint/action owner. `operations/fleet` owns serving and dispatch transactions; canonical Console assets live in `operations/site_ui/console`, and existing advisory Decision code in `operations/decision/src/rosy/decision` (`rosy.decision`), both installed by the same Fleet distribution; `operations/world` owns the current sighting, operator-pin, and odom MapPose projection. Fleet imports `rosy.world.state.projections.map_pose` directly; the Fleet alias is gone (D-752). `source=bridged` is dead reckoning, not a future rollout. Action-conditioned future World prediction remains planned. The existing ROS `control` distribution remains in `middleware/perception`: sensor and vision implementations live in `sensors/sensing` and `vision/perception`, while Drive algorithms and the Nav2 backend live in `middleware/drive/{planning,tracking,recovery,calibration,safety}`. Legacy node composition remains under `middleware/perception/control`; its legacy final publisher (`control/safety_node.py`) must not run beside CORE. Source mapping preserves `control.*` imports and installed resources. Current source parts and all holder decisions are in `tools/harness/platform_parts.yaml` and [the folder responsibility guide](docs/reference/platform-folder-responsibilities.md). Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
 
 ## Key Files
@@ -66,7 +68,7 @@ ROSY Platform connects observed world state, site orchestration, device executio
 1. **우선순위:** main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
 2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 전문은 아래 「같이 하는 깃」이다. `docs/reference/shared-checkout.md`의 같은 제목 절은 같은 착수 순서를 적는다. 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
 3. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
-4. **push 전 순서:** `git fetch` → `origin/main` 위로 rebase → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
+4. **push 전 순서:** `git fetch` → 아직 게시하지 않은 브랜치는 `origin/main` 위로 rebase, 이미 게시한 브랜치는 `git merge origin/main` → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
 5. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
 
 ### 같이 하는 깃
@@ -89,11 +91,17 @@ python test/known_failures.py X:/DevTemp/<name>/run-1.txt
    exit 1의 `NEW`는 깨끗한 `main` 워크트리에서 달리 확인되기 전에는 그 브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서 뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
 6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본 방법은 워크트리에서 `python tools/land.py --tests auto`다. 이 도구는 아래 두 단계를 main이 멈출 때까지 되풀이하고, 테스트나 lint가 실패하면 착지하지 않으며, 푸시하지 않는다. 착지는 두 단계다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다. `tools/land.py`는 시작할 때 치울 수 있는 끝난 워크트리 개수를 알리기만 한다. `--prune`을 주면 1번의 손실 없는 청소를 하고, `--no-prune`을 주면 알리지도 않는다. 착지한 자신의 워크트리는 그 워크트리에서 나온 뒤 `main` 체크아웃에서 명령 하나 `python tools/worktrees.py prune --apply`로 치운다(남의 것은 72시간 뒤에 지운다). 착지하지 않고 보류하는 브랜치는 커밋해 두면 브랜치가 남는다. 워크트리까지 남기려면 `git worktree lock`으로 잠근다. 푸시는 사용자가 푸시를 말한 뒤에만 한다. 순서는 위의 D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤 `python tools/harness/rosy_harness.py generate`를 하고, 생성 문서가 바뀌면 그 변경을 커밋하고, pre-push 검사(`tools/hooks/pre-push` 목록)를 통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
 
+위 푸시 순서의 rebase는 아직 원격에 게시하지 않은 주제 브랜치에만 적용한다. 이미 게시한 브랜치는 `git merge origin/main`으로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 아래 「GitHub 게시와 두 에이전트 검토」를 따른다.
+
 멈추는 신호는 다음이다. `git add -A`로 다른 파일까지 넣으려 할 때, `test/known_failures.py` 없이 실패를 기존 실패로 부를 때, 조금 전에 비어 보였던 ADR 번호를 다시 보지 않고 쓸 때, 동료의 변경을 stash 했다가 머지 뒤에 되돌리려 할 때, amend가 새 커밋보다 빠르다고 여길 때.
+
+### GitHub 게시와 두 에이전트 검토
+
+공개 `main`은 PR과 squash 병합으로 갱신한다. GitHub 사람 승인 수는 0, 필수 검사는 `ci-result`다(2026-10-16 사용자 결정). 작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, 게시 담당 한 명이 사용자에게 허용받은 범위의 push·PR·병합을 수행한다. 검토 결과·발견 사항 처리·시험 SHA·실제 CI 결과를 PR에 남긴다. 문서·생성물·merge 해결을 포함해 head가 바뀌면 변경 범위의 재검토와 새 SHA 검증이 필요하며 최종 게시 head는 검토 head와 같아야 한다. 절차와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다. 위의 `tools/land.py`는 로컬 착지 도구이며 공개 `main`에 직접 push하는 경로가 아니다.
 
 ### Working In This Directory
 
-- 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 미병합 브랜치는 소유 세션이 최신 `origin/main` 위로 rebase한다.
+- 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 아직 게시하지 않은 브랜치는 소유 세션이 최신 `origin/main` 위로 rebase하고, 이미 공유한 브랜치는 merge로 갱신한다.
 
 - Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`contracts/foundation/core_common/protocol/schemas.py`).
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).

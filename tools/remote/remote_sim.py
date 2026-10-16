@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         bench_cmd, bench_args = " ".join(args.bench_args), []
     else:
         bench_cmd, bench_args = BENCHES[args.bench], args.bench_args
-    base = os.environ.get("ROSY_SIM_LOGS") or ("X:/DevTemp/remote-sim" if os.name == "nt" else "/tmp/remote-sim")
+    base = os.environ.get("ROSY_SIM_LOGS") or rp.log_root("remote-sim")
     log_dir = args.log_dir or Path(base) / sha[:12]
     code = run_sim(host, role, bench_cmd, bench_args, sha, repo, log_dir, args.minutes)
     print(f"[remote-sim] exit {code} on {host} ({log_dir})")
