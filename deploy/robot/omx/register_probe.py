@@ -40,6 +40,14 @@ def decode_registers(model, data):
         "position_raw": value(132, 4, True), "velocity_raw": value(128, 4, True),
         "min_position_raw": value(52, 4), "max_position_raw": value(48, 4),
         "velocity_limit_raw": value(44, 4), "homing_offset_raw": value(20, 4, True),
+        "goal_position_raw": value(116, 4, True),
+        # XL430-W250 (1060) has no Current Limit / Goal Current registers.
+        "goal_current_raw": value(102, 2, True) if model == 1200 else None,
+        "profile_acceleration_raw": value(108, 4), "profile_velocity_raw": value(112, 4),
+        "current_limit_raw": value(38, 2) if model == 1200 else None,
+        "pwm_limit_raw": value(36, 2),
+        "bus_watchdog_raw": value(98, 1, True), "position_p_gain_raw": value(84, 2),
+        "position_i_gain_raw": value(82, 2), "position_d_gain_raw": value(80, 2),
         "voltage_raw": value(144, 2), "temperature": value(146),
     }
 

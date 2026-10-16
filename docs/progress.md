@@ -29,6 +29,7 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-770
 - D-738
 - D-736
 - D-733

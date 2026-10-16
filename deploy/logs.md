@@ -2814,3 +2814,9 @@
 - 변경: 카메라 서비스 active와 실제 소비자 수신을 구분하고, 현장 preview에서 검증한 프로세스 한정 DDS 설정·비교 절차를 추가했다.
 - 증거: 기본 수신기 저하와 동시 설정 수신기 30초 약 10 FPS를 직접 비교했다. docs/validation/omx-preview-receiver-2026-10-15/result.md.
 - gate 변화: 없음. 장시간 수용은 실행 중이며 Jazzy/CycloneDDS·실물 제어 수용으로 확장하지 않는다.
+
+## 2026-10-16 · uncommitted · feat(omx): startup register 읽기와 모델별 미지원 값 보존
+
+- 변경: 기존 READ(0,147) 응답에서 goal position/current, profile, current/PWM limit, watchdog, PID를 해석한다. XL430 current register는 null로 보존한다. 전송 whitelist는 동일하다.
+- 증거: 두 회귀 RED→GREEN, 원격 probe/observer 25개 통과. 실제 follower 두 snapshot torque/error 0·goal=present·설정 동일. 설치 native connect의 configure/finally torque 활성화 source도 읽어 보존했다.
+- gate 변화: 없음. 실물 구동 제한·보정·독립 stop과 자동 시연은 미완료다. D-770, docs/validation/omx-native-startup-2026-10-16.md.
