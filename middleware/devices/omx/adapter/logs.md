@@ -510,3 +510,9 @@
 - 변경: 원본 timestamp 진행·age·관절 배열을 확인하고 전송 지연을 owner snapshot freshness에 반영한다. 거절 packet은 snapshot/watchdog을 갱신하지 않는다.
 - 증거: 실제 Jazzy ROS 회귀에서 재전송 freshness 오류 RED(1실패·7통과), 수정 후 native 8시험·순수 intake10시험 GREEN. 커밋된 원격 runner 안에서 실행했다.
 - gate 변화: 없음. 실제 feedback publisher provenance·hardware owner 조립·독립 stop·실측/실제 시연은 미완료다. D-770; docs/validation/omx-feedback-source-age-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용
+
+- 변경: 생성자를 생략하던 host fixture에 실제 intake와 stamp를 제공하고 native 정책 publisher도 stamp를 기록한다. 원격 native wrapper에 격리 domain199 policy transport를 추가했다.
+- 증거: 확대 착지의 신규3실패를 보완, 정책 host22와 실제 Jazzy runtime8·정책 transport4 통과. 물리 장치를 사용하지 않았다.
+- gate 변화: 없음. D-770의 작은 이동 기반 국소 측정 절차를 구체화하되 초기화 자동복구 쓰기·실제 feedback/stop 수용은 미완료다.

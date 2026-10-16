@@ -8764,3 +8764,10 @@ osy-d395-s1d\`.
 - 증거: 실제 Jazzy RED→GREEN, native ROS8·순수 intake10시험. 취소 호출을 물리 stop으로 집계하지 않는다.
 - gate 변화: 실측/정지/owner 실물 수용과 실제 자동 시연 0회는 유지한다.
 - 결정: D-770 후속; validation/omx-feedback-source-age-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · docs(omx): 작은 이동 기반 측정 순서
+
+- 변경: 사용자 요청에 따라 현재 자세 주변의 encoder·두 영상·명령/종단을 함께 기록하는 국소 식별 절차를 D-770에 추가했다. profile 0·watchdog 의미를 제조사 문서로 확인했다.
+- 증거: 정책 fixture host22, 실제 Jazzy runtime8·정책 transport4 통과. 신규3실패의 원인과 후속 검증을 별도 dated record에 보존했다.
+- gate 변화: 첫 실물 이동 전 초기화 자동 Reboot·read 오류의 기존 state 유지 경로 검증이 남는다. 실제 시연0회 유지.
+- 결정: D-770 후속.
