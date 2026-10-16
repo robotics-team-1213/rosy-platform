@@ -127,6 +127,22 @@ def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, e
     assert calls[0][-2:] == ['-pno:launch_testing', '-pno:launch_ros']
 
 
+def test_no_test_module_defines_a_nose_style_setup_function():
+    # CI's apt pytest 7.4 calls a module-level plain setup()/teardown() once with the module as
+    # its argument (nose compatibility), so a helper by that name gets the module as tmp_path.
+    import ast
+
+    found = []
+    for path in ROOT.rglob('test_*.py'):
+        if any(part in {'.git', '.worktrees', 'build', 'install', 'log', 'node_modules'} for part in path.parts):
+            continue
+        tree = ast.parse(path.read_text(encoding='utf8'))
+        found += [f'{path.relative_to(ROOT).as_posix()}:{node.lineno}' for node in tree.body
+                  if isinstance(node, ast.FunctionDef) and node.name in {'setup', 'teardown'}
+                  and not node.decorator_list]
+    assert found == [], 'rename these helpers (e.g. _setup): ' + ', '.join(found)
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
