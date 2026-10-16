@@ -29,9 +29,11 @@ class MeasuredPreview:
         self.clock, self.boot_id = clock, boot_id or uuid.uuid4().hex
         self._entries, self._generations = {}, itertools.count(1)
         self._consumed_grants = {}
+        self._geometries, self._capture_epochs = {}, {}
 
-    def session_id(self, link):
-        return f'{self.boot_id}:{link}'
+    def session_id(self, link, source=None):
+        base = f'{self.boot_id}:{link}'
+        return f'{base}:{self._capture_epochs.get(source, 0)}' if source is not None else base
 
     def update(self, source, config, map_id):
         config = config if isinstance(config, dict) else {}
@@ -86,7 +88,7 @@ class MeasuredPreview:
                 or claims.get('capture_signature') != record['bundle']['capture']['signature']):
             raise ValueError('session_or_revision_changed')
         key = (session, record['calibration_revision'], json.dumps(geometry, sort_keys=True))
-        if claims.get('confirm_conditions') is True and entry['confirmed'] != key:
+        if claims.get('confirm_conditions') is True:
             grant = claims.get('_grant_id') or json.dumps(claims, sort_keys=True)
             self._consumed_grants = {g: until for g, until in self._consumed_grants.items() if until > self.clock()}
             if grant not in self._consumed_grants and len(self._consumed_grants) < 256:
@@ -100,6 +102,13 @@ class MeasuredPreview:
     def observe(self, source, session, geometry):
         """Receive every accepted frame's geometry, including changes between reads."""
         entry = self._entries.get(source)
+        previous = self._geometries.get(source)
+        self._geometries[source] = deepcopy(geometry)
+        if previous is not None and previous != geometry:
+            self._capture_epochs[source] = self._capture_epochs.get(source, 0)+1
+            if entry:
+                entry.update(confirmed=None, rendered_at=None, frame_seq=None,
+                             generation=next(self._generations))
         if entry and entry['confirmed'] is not None:
             key = (session, entry['record']['calibration_revision'], json.dumps(geometry, sort_keys=True))
             if key != entry['confirmed']:
@@ -162,9 +171,11 @@ def render_plane(jpeg, record):
 
 def context(ingest, source):
     src, frame = ingest._sources.get(source), ingest.latest_frame(source)
-    session = ingest.measured.session_id(getattr(src, 'link', 0))
     geometry = {'image_size': [frame.header.width, frame.header.height] if frame else None,
                 'rotation_deg': frame.header.rotation_deg if frame else None, 'lens': ingest.source_lens(source)}
+    link = getattr(src, 'link', 0)
+    ingest.measured.observe(source, ingest.measured.session_id(link, source), geometry)
+    session = ingest.measured.session_id(link, source)
     fresh = frame is not None and 0 <= time.time()-frame.captured_at <= ingest.preview_max_age_s
     return session, geometry, frame, fresh
 

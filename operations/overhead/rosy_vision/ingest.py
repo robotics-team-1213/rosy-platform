@@ -788,7 +788,7 @@ class IngestServer:
             src.stats.oversize += 1
             return
         captured_at = now - header.age_ms / 1000.0
-        self.measured.observe(src.name, self.measured.session_id(src.link), {
+        self.measured.observe(src.name, self.measured.session_id(src.link, src.name), {
             'image_size': [header.width, header.height], 'rotation_deg': header.rotation_deg, 'lens': src.lens})
         src.latest = LatestFrame(header=header, jpeg=jpeg, captured_at=captured_at, received_at=now)
         src.stats.record_frame(now, len(jpeg), header.age_ms, header.seq)

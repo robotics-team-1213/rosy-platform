@@ -131,7 +131,7 @@ def test_config_change_during_render_does_not_return_old_result(monkeypatch, cha
         assert release.wait(3.)
         return original(*args)
     monkeypatch.setattr(module, 'render_plane', blocked)
-    session = obj.measured.session_id(1)
+    session = obj.measured_status(SOURCE)['session_id']
     token = obj.preview_signer.issue(principal_id='operator', source_id=SOURCE, measured=claims(record, session))
     async def run():
         task = asyncio.create_task(obj._preview_response(f'/api/vision/sources/{SOURCE}/frame', f'Bearer {token}'))
@@ -187,7 +187,7 @@ def test_receiver_invalidates_confirmation_on_unsampled_geometry_round_trip():
     src = _Source(SOURCE, None, lens=record['bundle']['capture']['lens'], link=1)
     obj._sources[SOURCE] = src
     obj._handle_frame(src, pack_header(FrameHeader(1, 0, 640, 360, 0))+raw)
-    session = obj.measured.session_id(1)
+    session = obj.measured_status(SOURCE)['session_id']
     grant = claims(record, session)
     ticket = obj.measured.select(SOURCE, session, geometry(record), grant)
     obj._handle_frame(src, pack_header(FrameHeader(2, 0, 640, 360, 90))+raw)
@@ -208,6 +208,12 @@ def test_unseen_grant_issued_before_geometry_change_cannot_confirm_after_return(
     obj._handle_frame(src, pack_header(FrameHeader(3, 0, 640, 360, 0))+raw)
     result = asyncio.run(obj._preview_response(f'/api/vision/sources/{SOURCE}/frame', f'Bearer {token}'))
     assert result.status_code == 409
+    renewed = obj.measured_status(SOURCE)['session_id']
+    assert renewed != session
+    token = obj.preview_signer.issue(principal_id='operator', source_id=SOURCE, measured=claims(record, renewed))
+    obj._preview_last_sent.clear()
+    result = asyncio.run(obj._preview_response(f'/api/vision/sources/{SOURCE}/frame', f'Bearer {token}'))
+    assert result.status_code == 200
 
 
 def test_advancing_stream_can_finish_a_fresh_frame(monkeypatch):
@@ -217,7 +223,7 @@ def test_advancing_stream_can_finish_a_fresh_frame(monkeypatch):
         obj._sources[SOURCE].latest = LatestFrame(FrameHeader(3, 0, 640, 360, 0), raw, time.time(), time.time())
         return original(*args)
     monkeypatch.setattr(runtime(), 'render_plane', advance)
-    session = obj.measured.session_id(1)
+    session = obj.measured_status(SOURCE)['session_id']
     token = obj.preview_signer.issue(principal_id='operator', source_id=SOURCE, measured=claims(record, session))
     result = asyncio.run(obj._preview_response(f'/api/vision/sources/{SOURCE}/frame', f'Bearer {token}'))
     assert result.status_code == 200
