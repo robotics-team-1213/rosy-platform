@@ -48,14 +48,15 @@ def test_actual_vendor_lifecycle_error_propagation(tmp_path):
         return result
 
     before = execute(original, "upstream")
-    assert before.returncode == 4
+    assert before.returncode == 5
     assert set(line for line in before.stdout.splitlines() if line.startswith("FAIL")) == {
         "FAIL initial_write_failure", "FAIL enable_retry_exhaustion",
-        "FAIL first_stop_group_failure", "FAIL second_stop_group_failure"}
+        "FAIL first_stop_group_failure", "FAIL second_stop_group_failure",
+        "FAIL failed_rollback_stays_error"}
     target = tmp_path / SOURCE
     target.parent.mkdir()
     target.write_text(original)
     subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(PATCH)], cwd=tmp_path, check=True)
     after = execute(target.read_text(), "patched")
     assert after.returncode == 0, after.stdout + after.stderr
-    assert len(after.stdout.splitlines()) == 9
+    assert len(after.stdout.splitlines()) == 10

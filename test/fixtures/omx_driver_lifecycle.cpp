@@ -20,11 +20,18 @@ struct Comm {
   DxlError read_result = DxlError::OK, write_result = DxlError::OK;
   DxlError enable_result = DxlError::OK;
   int enables = 0, writes = 0, disables = 0, failed_disable = 0;
+  bool physical_torque_on = false;
   DxlError ReadMultiDxlData(double) { return read_result; }
   DxlError WriteMultiDxlData() { ++writes; return write_result; }
-  DxlError DynamixelEnable(const Motors &) { ++enables; return enable_result; }
-  DxlError DynamixelDisable(const Motors &) {
-    return ++disables == failed_disable ? DxlError::ERROR : DxlError::OK;
+  DxlError DynamixelEnable(const Motors &) {
+    ++enables; physical_torque_on = true; return enable_result;
+  }
+  DxlError DynamixelDisable(const Motors & motors) {
+    auto result = ++disables == failed_disable ? DxlError::ERROR : DxlError::OK;
+    if (result == DxlError::OK && !motors.empty() && motors.front().second == 11) {
+      physical_torque_on = false;
+    }
+    return result;
   }
 };
 struct DynamixelHardware {
@@ -55,7 +62,14 @@ int main() {
   }
   {
     Comm comm; comm.enable_result = DxlError::ERROR; DynamixelHardware hw(&comm);
-    check(hw.start() == Result::ERROR && comm.enables == 10, "enable_retry_exhaustion");
+    check(hw.start() == Result::ERROR && comm.enables == 10 && comm.disables == 2 &&
+      !comm.physical_torque_on, "enable_retry_exhaustion");
+  }
+  {
+    Comm comm; comm.enable_result = DxlError::ERROR; comm.failed_disable = 1;
+    DynamixelHardware hw(&comm);
+    check(hw.start() == Result::ERROR && comm.disables == 2 && comm.physical_torque_on,
+      "failed_rollback_stays_error");
   }
   {
     Comm comm; DynamixelHardware hw(&comm);
