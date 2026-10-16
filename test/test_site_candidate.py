@@ -7,7 +7,7 @@ import pytest
 from deploy.site.build_candidate import DOC_FILES, DEPLOY_FILES, build_candidate
 from deploy.site.verify_candidate import REQUIRED_DEPLOYMENT_FILES, REQUIRED_DOCUMENT_FILES
 
-COMMIT = "9541086c550c0c1142f7aefecc903987e149f9e2"
+COMMIT = "26f7baa44e55aa62b4c0ddc89b7627bf3a91f42b"
 
 
 def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_path):
