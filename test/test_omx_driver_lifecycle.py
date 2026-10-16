@@ -20,7 +20,11 @@ PATCH = ROOT / "deploy/robot/omx/patches/hardware-lifecycle-errors.patch"
 
 
 def method(source, name):
-    start = source.index(f"hardware_interface::CallbackReturn DynamixelHardware::{name}()")
+    return function(source, f"hardware_interface::CallbackReturn DynamixelHardware::{name}()")
+
+
+def function(source, signature):
+    start = source.index(signature)
     opening = source.index("{", start)
     depth = 0
     for index in range(opening, len(source)):
@@ -82,3 +86,21 @@ def test_vendor_does_not_advertise_owner_bypass_services(tmp_path):
     for name in callbacks:
         assert f"std::bind(&DynamixelHardware::{name}" not in changed
     assert "std::bind(&DynamixelHardware::get_dxl_data_srv_callback" in changed
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_OMX_VENDOR_ROOT"), reason="requires explicit locked vendor source")
+def test_initialization_rejects_fault_without_reboot(tmp_path):
+    configured = Path(os.environ["ROSY_OMX_VENDOR_ROOT"])
+    vendor = configured if configured.is_absolute() else Path.home() / configured
+    assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
+    path = "src/dynamixel/dynamixel.cpp"
+    original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{path}"], text=True)
+    fixture = (ROOT / "test/fixtures/omx_driver_init.cpp").read_text()
+    body = function(original, "DxlError Dynamixel::InitDxlComm(")
+    program, binary = tmp_path / "init.cpp", tmp_path / "init"
+    program.write_text(fixture.replace("// VENDOR_METHOD", body))
+    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                   check=True, timeout=60)
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
