@@ -65,5 +65,7 @@ drive/calibration
 drive/recovery
 perception/sensors/line_observation
 site_ui/console/shared
+site_ui/console/calibration
+fleet/fleet/server/tracking
 situation
 site_execution
