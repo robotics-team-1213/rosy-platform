@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · fix(omx): vendor 시작·정지 결과와 직접 조작 서비스
+- 2026-10-16 · uncommitted · feat(omx): 초기화 description 후보 생성
 - 2026-10-16 · uncommitted · feat(omx): startup register 읽기와 모델별 미지원 값 보존
 - 2026-10-15 · uncommitted · docs(omx): native preview 수신기 전송 조건
 - 2026-10-15 · 731c5ae61 · OMX 실물 제어 준비와 비구동 진단
-- 2026-10-15 · dbe5db55b · fix(omx): 카메라 사용자 서비스 복구
-- 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
