@@ -70,7 +70,7 @@ def plan_limits(rows, limits):
     return operations
 
 
-def one_write_guard(send, operation):
+def one_write_guard(send, operation, *, deadline=None):
     """Allow existing PING/READ packets and exactly one matching unicast write."""
     motor = integer(operation.get("id"), 11, 16, "write motor")
     allowed = {address: (size, maximum) for address, size, maximum in CAPS.values()}
@@ -94,6 +94,8 @@ def one_write_guard(send, operation):
                 or int.from_bytes(packet[5:7], "little") != len(packet) - 7
                 or packet[8:-2] != expected):
             raise ValueError("only one exact planned cap write is permitted")
+        if deadline is not None and time.monotonic() >= deadline:
+            raise RuntimeError("commissioning deadline exceeded at serial write")
         used = True  # A failed/short transport write is still an uncertain attempt.
         return send(packet)
 
@@ -128,8 +130,10 @@ def configure_limits(port, limits, record, *, read=read_motors, write=sdk_write)
                 raise RuntimeError("commissioning deadline exceeded; no further writes")
             validate_motors(latest)
             record(dict(event="write_intent", operation=operation))
+            if time.monotonic() >= deadline:
+                raise RuntimeError("commissioning deadline exceeded after durable intent")
             uncertain = operation
-            port.writePort = one_write_guard(send, operation)
+            port.writePort = one_write_guard(send, operation, deadline=deadline)
             comm, error = write(port, operation["id"], operation["address"],
                                 operation["size"], operation["value"])
             port.writePort = readonly_writer(send)
