@@ -1,0 +1,46 @@
+--- a/src/dynamixel_hardware_interface.cpp
++++ b/src/dynamixel_hardware_interface.cpp
+@@ -572,17 +572,27 @@
+ 
+   CalcJointToTransmission();
+ 
+-  dxl_comm_->WriteMultiDxlData();
++  dxl_comm_err_ = CheckError(dxl_comm_->WriteMultiDxlData());
++  if (dxl_comm_err_ != DxlError::OK) {
++    RCLCPP_ERROR_STREAM(logger_, "Dynamixel Start Fail: initial command write failed");
++    return hardware_interface::CallbackReturn::ERROR;
++  }
+ 
+   if (torque_enabled_comm_id_id_.size() > 0) {
+     RCLCPP_INFO_STREAM(logger_, "Enabling torque for Dynamixels");
++    bool enabled = false;
+     for (int i = 0; i < 10; i++) {
+       if (dxl_comm_->DynamixelEnable(torque_enabled_comm_id_id_) == DxlError::OK) {
++        enabled = true;
+         break;
+       }
+       RCLCPP_ERROR_STREAM(logger_, "Failed to enable torque for Dynamixels, retry...");
+       std::this_thread::sleep_for(std::chrono::milliseconds(100));
+     }
++    if (!enabled) {
++      RCLCPP_ERROR_STREAM(logger_, "Dynamixel Start Fail: torque retries exhausted");
++      return hardware_interface::CallbackReturn::ERROR;
++    }
+   }
+ 
+   RCLCPP_INFO_STREAM(logger_, "Dynamixel Hardware Start!");
+@@ -593,8 +603,12 @@
+ hardware_interface::CallbackReturn DynamixelHardware::stop()
+ {
+   if (dxl_comm_) {
+-    dxl_comm_->DynamixelDisable(dxl_comm_id_id_);
+-    dxl_comm_->DynamixelDisable(virtual_dxl_comm_id_id_);
++    const auto physical_result = dxl_comm_->DynamixelDisable(dxl_comm_id_id_);
++    const auto virtual_result = dxl_comm_->DynamixelDisable(virtual_dxl_comm_id_id_);
++    if (physical_result != DxlError::OK || virtual_result != DxlError::OK) {
++      RCLCPP_ERROR_STREAM(logger_, "Dynamixel Hardware Stop Fail: torque disable failed");
++      return hardware_interface::CallbackReturn::ERROR;
++    }
+   } else {
+     RCLCPP_ERROR_STREAM(logger_, "Dynamixel Hardware Stop Fail : dxl_comm_ is nullptr");
+     return hardware_interface::CallbackReturn::ERROR;
