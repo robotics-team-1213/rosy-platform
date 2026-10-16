@@ -32,7 +32,7 @@ def inputs():
     result.profile = dict(joint_names=['j'+str(i) for i in range(6)], normalization=[[-1.,1.]]*6,
                           camera_shapes={r:[1,2,3] for r in ('top','front')},
                           ros=dict(motor_ids=list(range(11,17)), expected_torque=[True]*6))
-    result.lock, result.rows, result.fault = threading.RLock(), {}, None
+    result.lock, result.rows, result.fault, result.intrinsics = threading.RLock(), {}, None, {}
     from collections import OrderedDict
     result.frames = {r:OrderedDict() for r in ('top','front')}
     return result
@@ -72,6 +72,44 @@ def test_input_snapshot_requires_exact_environment_image_stamp(inputs):
     assert inputs.snapshot(env)['action'] == [0.,0.,0.,0.,0.,50.]
     env['observations']['top']['source_stamp'] = source-1
     with pytest.raises(KeyError): inputs.snapshot(env)
+
+
+def camera_info(width=2, height=1, k=None):
+    return NS(header=NS(frame_id='top_optical'), width=width, height=height, distortion_model='plumb_bob',
+              d=[0.]*5, k=k or [1.,0.,1.,0.,1.,.5,0.,0.,1.], r=[1.,0.,0.,0.,1.,0.,0.,0.,1.],
+              p=[1.,0.,1.,0.,0.,1.,.5,0.,0.,0.,1.,0.], binning_x=0, binning_y=0)
+
+
+def test_configured_camera_info_is_required_shape_checked_and_returned(inputs):
+    now = time.time()
+    inputs.profile['ros']['camera_info_topics'] = {r: f'/{r}/camera_info' for r in ('top','front')}
+    for key in ('joints','reference'):
+        inputs.rows[key] = dict(stamp=now,received=time.monotonic(),values=[0.]*6)
+    inputs.rows['hardware'] = dict(stamp=now,received=time.monotonic())
+    for role in ('top','front'):
+        inputs.image(role, NS(header=header(now),width=2,height=1,step=6,encoding='rgb8',data=bytes(6)))
+    env = dict(observations={r:dict(source_stamp=next(iter(inputs.frames[r]))) for r in ('top','front')})
+    with pytest.raises(ValueError, match='camera_info'):
+        inputs.snapshot(env)
+    with pytest.raises(ValueError, match='layout'):
+        inputs.camera_info('top', camera_info(width=4))
+    with pytest.raises(ValueError, match='layout'):
+        inputs.camera_info('top', camera_info(k=[float('nan')]*9))
+    for role in ('top','front'):
+        inputs.camera_info(role, camera_info())
+    recorded = inputs.snapshot(env)['camera_info']
+    assert set(recorded) == {'top','front'} and recorded['top']['k'][2] == 1. and recorded['top']['frame_id'] == 'top_optical'
+
+
+def test_unconfigured_camera_info_keeps_previous_snapshot_contract(inputs):
+    now = time.time()
+    for key in ('joints','reference'):
+        inputs.rows[key] = dict(stamp=now,received=time.monotonic(),values=[0.]*6)
+    inputs.rows['hardware'] = dict(stamp=now,received=time.monotonic())
+    for role in ('top','front'):
+        inputs.image(role, NS(header=header(now),width=2,height=1,step=6,encoding='rgb8',data=bytes(6)))
+    env = dict(observations={r:dict(source_stamp=next(iter(inputs.frames[r]))) for r in ('top','front')})
+    assert inputs.snapshot(env)['camera_info'] == {}
 
 
 def test_independent_monitor_requests_hold_without_collection_writer():
