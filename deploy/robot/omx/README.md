@@ -571,3 +571,88 @@ explicit source checkout this hardware-free integration check skips. It compiles
 actual vendor method bodies with communication doubles and never opens a device.
 A passing result proves error propagation, not physical stopping or safe load retention.
 See [validation and remaining checks](../../../docs/validation/omx-driver-lifecycle-2026-10-16.md).
+
+`hardware-export-dependencies.patch` also exports the driver's public CMake
+dependencies `std_srvs` and `realtime_tools`, allowing downstream consumers to
+link its installed target. A real ROS initialization probe rejected a fixed
+nonexistent port and destructed normally; it never used a real serial port.
+See [native initialization evidence](../../../docs/validation/omx-native-init-negative-2026-10-16/result.md).
+
+`hardware-init-no-reboot.patch` additionally removes the hidden InitDxlComm fault
+reboot while preserving its error return. GPIO Reboot=0 alone did not cover it.
+The temporary Linux `probe_exclusive_open.cpp` helper checks the literal
+`ROSY_OMX_PROBE_PORT`, independently measured decimal `ROSY_OMX_PROBE_DEVICE_ID`,
+kernel exclusivity and sole fuser ownership before returning the SDK descriptor.
+It requires a non-root account; ordinary file opens use SYS_openat to avoid a
+loader-lock deadlock during ROS library constructors. It is for a bounded native
+probe, with pre/post snapshots and packet evidence, and is not an actuator runtime.
+The loaded driver must be bound to the patched artifact under the actual child
+environment. See [the actual passive-read result and failed attempts](../../../docs/validation/omx-native-passive-read-2026-10-16/result.md).
+
+`hardware-write-errors.patch` rejects unhealthy pre-status and propagates buffered
+or multiwrite failures immediately. `hardware-fault-stop.patch` connects error and
+shutdown callbacks to the existing stop implementation; a fault remains terminal
+even after cleanup succeeds. The installed framework calls on_error directly on
+write failure, so on_deactivate alone did not provide that stop attempt.
+The native consumer probe and inherited-callback negative control are recorded in
+[the write/fault validation](../../../docs/validation/omx-cyclic-write-fault-2026-10-16/result.md).
+These changes establish error propagation and software cleanup attempts; physical
+stopping, load retention and hardware owner admission still require actual evidence.
+
+`hardware-torque-uncertainty.patch` retains uncertain ON/OFF attempts until an
+acknowledged result, so lost enable acknowledgments cannot suppress cleanup.
+`hardware-status-readback.patch` requires exactly one Torque Enable and Hardware
+Error Status state interface per motor before opening the bus. The candidate
+generator adds these read interfaces and rejects ambiguous names. Read failures
+or invalid fields return ERROR immediately; publication uses successful physical
+reads instead of command caches or default zero/off values. Legacy descriptions
+without those fields require migration. Native PTY rejection and torque-off read
+evidence, including an unresolved one-tick goal-register change that failed the
+preservation check, are recorded in [measured-status validation](../../../docs/validation/omx-measured-status-2026-10-16/result.md).
+
+### Torque-off commissioning limits
+
+`commissioning_limits.py` is a separate exclusive configuration procedure. It
+requires the confirmed follower, six known motors, existing modes and torque/error
+zero. An explicit JSON input supplies positive raw PWM/current/profile caps. Only
+non-increasing supported caps may change, with durable original/intent records,
+one exact unicast write, acknowledgment and full readback before each next write.
+It never writes goals, torque, modes or offsets and never retries or rolls back an
+uncertain result. Existing output directories are refused.
+
+PWM and Current Limit writes persist in EEPROM; originals remain in the journal
+and successful lower caps stay installed. RAM profiles require fresh readback
+after restart. The tool does not authorize activation or establish physical limits.
+See [actual configuration, tests and remaining work](../../../docs/validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+A bounded native controller probe additionally loaded the actual state broadcaster
+and six-joint trajectory controller with all torque selections zero. The current
+owner received real encoder states and rejected a stale command into HOLD before
+dispatch. Controller-specific `params_file` forwarding is required on the installed
+framework; generated ROS parameter YAML must avoid aliases. This establishes the
+torque-off feedback path, while operational admission and powered stopping remain
+unaccepted. See [execution and preserved failures](../../../docs/validation/omx-native-controller-feedback-2026-10-16/result.md).
+
+### Stop-only commissioning fallback
+
+`commissioning_stop.py` requires the confirmed by-id path, its expected device
+identity, an explicit subset of follower IDs, and an output directory. The native
+controller must release the serial device first. The helper acquires exclusive
+ownership, checks the opened device identity, and permits only one exact
+Torque Enable=0 write per selected motor. It attempts the remaining selected
+motors after an individual failure, never retries an uncertain write, and then
+reads all six motors. Clean success requires acknowledged writes, selected
+motors OFF/error-free, successful port cleanup, and a durable receipt.
+
+Stop attempts precede output creation so a full filesystem cannot suppress them.
+An existing record is preserved; recording failure makes the invocation fail.
+The helper cannot write ON, goals, modes, offsets, reboot or EEPROM settings.
+`stop_verified` describes the selected motors' electrical readback; it does not
+prove standstill or load support. The tool does not open the operational profile.
+
+An isolated transient systemd probe killed the native main process with all
+torque selections zero. `KillMode=control-group` released the controller's port
+before an independent `ExecStopPost` invoked the helper for the gripper. Actual
+OFF acknowledgment and all-six OFF/error-free readback passed. This verifies
+process-death handover while unpowered; a powered stop remains unverified.
+See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).

@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용
+- 2026-10-16 · uncommitted · fix(omx): feedback 원본 age 보존
 - 2026-10-16 · uncommitted · refactor(omx): commissioning viewer stays with deployment tools
 - 2026-10-16 · uncommitted · feat(omx): read-only commissioning web observations
 - 2026-10-15 · b5539986f · feat(omx): 실측 문서 검사 CLI
-- 2026-10-15 · dbe5db55b · fix(omx): 지속 USB 카메라 미리보기 복구
-- 2026-10-11 · 1691d395c · refactor: OMX adapter 장치 holder 이전 검증

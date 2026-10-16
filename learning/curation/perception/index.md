@@ -26,8 +26,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · Learning 업무 이름과 개발 표면 구분
 - 2026-10-14 · d685e1351 · test: Hugging Face 비공개 저장소 관리 원격 시험
 - 2026-10-14 · uncommitted · feat: Hugging Face 연결로 비공개 저장소 관리
 - 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-14 · d6751f094 · feat: 대용량 가져오기 재개와 실행 복구
-- 2026-10-14 · 7e2ecdaea · feat: 학습 수집 저장 현황과 공간 점검
