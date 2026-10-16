@@ -249,7 +249,8 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
     environment = seal_environment(raw_log, windows, files, rig_revision=baseline['rig_revision'],
                                    calibration_revision=baseline['calibration_revision'])
     report = inspect_dataset(output, repo_id, body_units=baseline['body_units'],
-                             rig_revision=baseline['rig_revision'], calibration_revision=baseline['calibration_revision'],
+                             rig_revision=baseline['rig_revision'],
+                             calibration_revision=baseline['calibration_revision'],
                              source_mode='scripted_teacher', capture_provenance=capture,
                              environment_evidence=environment)
     _require(report['frame_count'] == sum(e['frames'] for _, e in episodes)
