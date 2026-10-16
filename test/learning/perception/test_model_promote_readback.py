@@ -87,9 +87,31 @@ def test_a_failed_or_read_only_command_records_nothing(tmp_path):
     assert _records(tmp_path) == []
 
 
+def test_the_namespace_expands_in_the_root_shell_after_runtime_env():
+    command = promote_readback.status_command("perception/learned/object_det/status")
+    assert command.startswith("sudo -n bash -c '") and command.endswith("'")
+    script = command[len("sudo -n bash -c '"):-1]
+    assert script.index(". /etc/rosy/runtime.env") < script.index("${ROSY_NAMESPACE:+/$ROSY_NAMESPACE}")
+    assert '"$NS/perception/learned/object_det/status" std_msgs/msg/String' in script
+    assert "--full-length" in script and "--qos-durability transient_local" in script
+
+
+def test_a_readback_that_raises_still_records_the_change(tmp_path):
+    def hang(cmd, **kw):
+        if "ros2 topic echo" in cmd[-1] or cmd[-1].startswith("sudo -n cat"):
+            raise TimeoutError("ssh step timed out")
+        return FakeRunner()(cmd, **kw)
+    assert deliver.main(["promote", "robot", "--task", "object_det", "--readback", *SSH], runner=hang) == 0
+    [row] = _records(tmp_path)
+    assert row["readback"] == "unavailable" and row["readback_error"]
+
+
 def test_status_output_parsing():
     assert promote_readback.parse_status(_status("x"))["model_revision"] == "x"
     assert promote_readback.parse_status("not json\n---\n") is None
+    quoted = "'" + json.dumps({"schema": promote_readback.STATUS_SCHEMA, "model_revision": "x",
+                               "last_error": "it's gone"}).replace("'", "''") + "'\n---\n"
+    assert promote_readback.parse_status(quoted)["last_error"] == "it's gone"
     assert promote_readback.parse_status(json.dumps({"schema": "other"})) is None
     assert promote_readback.revision_of("/var/lib/rosy/models/object_det/det-7/\n") == "det-7"
     assert promote_readback.revision_of("") is None

@@ -617,8 +617,8 @@ def main(argv=None, runner=subprocess.run) -> int:
             attempt.interrupted(exc)
             raise
         attempt.finish(code)
-        promote_readback.after_change(args, ssh, runner, code, _audit(args) if hasattr(args, "operator") else {},
-                                      sys.stderr)
+        promote_readback.after_change(args, ssh, runner, code, lambda: _audit(args) if hasattr(args, "operator")
+                                      else {}, sys.stderr)
         return code
     except delivery_journal.JournalError as exc:
         print(str(exc), file=sys.stderr)

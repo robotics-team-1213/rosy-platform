@@ -9,12 +9,15 @@ shadow, lane_seg paint) are recorded as "no_node".
 
 The record is evidence for people, never device acceptance; the exit code of the pointer change
 is unchanged by a readback result, so the site watcher's exit-code contract stays as it was.
+A robot whose learned node is off (ROSY_LEARNED_SHADOW / ROSY_OBJECT_DET default false) records
+"unavailable", not "no_node": no_node means no node exists for that slot at all.
 """
 from __future__ import annotations
 
 import datetime as dt
 import json
 import os
+import shlex
 import time
 from pathlib import Path
 
@@ -39,10 +42,18 @@ def pointer_command(root: str, slot: str) -> str:
 
 
 def status_command(topic: str, timeout_s: int = 5) -> str:
-    """One latched status message; runtime.env is root-only (0600), so it is read under sudo."""
+    """One latched status message; runtime.env is root-only (0600), so it is read under sudo.
+
+    The script is single-quoted so ``$ROSY_NAMESPACE`` expands in the root shell after
+    runtime.env is sourced, not in the login shell ssh starts. The echo form follows
+    docs/deployment/learned-perception-pinky.md (type, transient_local); --full-length keeps
+    the JSON from being cut at 128 characters.
+    """
     inner = ("set -a; . /etc/rosy/runtime.env; set +a; . /opt/ros/jazzy/setup.bash; "
-             f'timeout {int(timeout_s)} ros2 topic echo --once --field data "/$ROSY_NAMESPACE/{topic}"')
-    return "sudo -n bash -c " + json.dumps(inner)
+             'NS="${ROSY_NAMESPACE:+/$ROSY_NAMESPACE}"; '
+             f"timeout {int(timeout_s)} ros2 topic echo --once --full-length --field data "
+             f'--qos-durability transient_local "$NS/{topic}" std_msgs/msg/String')
+    return "sudo -n bash -c " + shlex.quote(inner)
 
 
 def revision_of(pointer_text: str) -> str | None:
@@ -53,7 +64,9 @@ def revision_of(pointer_text: str) -> str | None:
 def parse_status(text: str) -> dict | None:
     """The status JSON from `ros2 topic echo --field data` output, or None."""
     body = (text or "").split("\n---", 1)[0].strip()
-    if body.startswith(("'", '"')) and body.endswith(body[0]):
+    if body.startswith("'") and body.endswith("'"):
+        body = body[1:-1].replace("''", "'")  # YAML single-quoted scalar
+    elif body.startswith('"') and body.endswith('"'):
         body = body[1:-1]
     try:
         doc = json.loads(body)
@@ -105,20 +118,25 @@ def record(journal_dir, row: dict) -> Path:
     return path
 
 
-def after_change(args, ssh, runner, code: int, audit: dict, err) -> None:
-    """Called by deliver.main after a pointer command; never changes its exit code."""
+def after_change(args, ssh, runner, code: int, audit, err) -> None:
+    """Called by deliver.main after a pointer command; never changes its exit code.
+
+    ``audit`` is a callable returning the operator fields; it runs only when a row is written.
+    """
     slot = moved_slot(args)
     if code != 0 or slot is None:
         return
-    try:
-        if getattr(args, "readback", False):
+    seen = {"pointer_revision": getattr(args, "revision", None), "readback": "not_run",
+            "node_revision": None, "signed": None}  # no extra network step: what the command names
+    if getattr(args, "readback", False):
+        try:
             seen = read_back(ssh, f"{args.user}@{args.host}", args.root, args.task, slot, runner,
                              timeout=args.timeout)
-        else:  # no extra network step: record what the command itself names
-            seen = {"pointer_revision": getattr(args, "revision", None), "readback": "not_run",
-                    "node_revision": None, "signed": None}
+        except Exception as exc:  # a failed readback still leaves the pointer change on record
+            seen = {**seen, "readback": "unavailable", "readback_error": type(exc).__name__}
+    try:
         record(args.journal_dir, {"host": args.host, "task": args.task, "action": args.action,
-                                  "slot": slot, **seen, **audit})
+                                  "slot": slot, **seen, **(audit() if callable(audit) else audit)})
     except Exception as exc:  # evidence only: a failed record must not undo a done pointer change
         print(f"pointer change record failed: {type(exc).__name__}: {exc}", file=err)
         return
