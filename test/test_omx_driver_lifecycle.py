@@ -191,13 +191,35 @@ def test_torque_disable_covers_uncertain_activation(tmp_path):
     assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
     path = "src/dynamixel/dynamixel.cpp"
     original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{path}"], text=True)
-    bodies = [function(original, "DxlError Dynamixel::" + name + "(")
-              for name in ["DynamixelEnable", "DynamixelDisable"]]
     fixture = (ROOT / "test/fixtures/omx_driver_torque.cpp").read_text()
-    program, binary = tmp_path / "torque.cpp", tmp_path / "torque"
-    program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
-    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
-                   check=True, timeout=60)
-    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
-    print(result.stdout)
-    assert result.returncode == 0, result.stdout + result.stderr
+
+    def execute(source, name):
+        bodies = [function(source, "DxlError Dynamixel::" + method + "(")
+                  for method in ["DynamixelEnable", "DynamixelDisable"]]
+        program, binary = tmp_path / f"{name}.cpp", tmp_path / name
+        program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
+        subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                       check=True, timeout=60)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+        print(name + "\n" + result.stdout)
+        return result
+
+    before = execute(original, "upstream_torque")
+    assert before.returncode == 6
+    assert set(line for line in before.stdout.splitlines() if line.startswith("FAIL")) == {
+        "FAIL lost_enable_ack_requires_disable", "FAIL partial_enable_ack_requires_all_disable",
+        "FAIL repeated_enable_timeout_never_claims_success", "FAIL undelivered_enable_still_requires_disable",
+        "FAIL explicit_enable_after_uncertain_disable_is_not_skipped", "FAIL uncertain_disable_failure_remains_retryable"}
+    target = tmp_path / path
+    target.parent.mkdir(parents=True)
+    target.write_text(original)
+    header = "include/dynamixel_hardware_interface/dynamixel/dynamixel.hpp"
+    header_target = tmp_path / header
+    header_target.parent.mkdir(parents=True)
+    header_target.write_text(subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{header}"], text=True))
+    for name in ["hardware-init-no-reboot.patch", "hardware-torque-uncertainty.patch"]:
+        subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(PATCH.parent / name)],
+                       cwd=tmp_path, check=True)
+    after = execute(target.read_text(), "patched_torque")
+    assert after.returncode == 0, after.stdout + after.stderr
+    assert len(after.stdout.splitlines()) == 11
