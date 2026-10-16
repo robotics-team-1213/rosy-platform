@@ -44,3 +44,9 @@
 - 변경: `recipe/2`는 `handling: operator`인 palletize만 받는다. 간지는 별도 `OperatorSheetStep`으로 Job에 남기고, PlanBundle에는 상자 transfer만 넣는다. 층 높이에는 실제 간지 두께를 포함하며 간지 station과 held-item hang에는 넣지 않는다. 두꺼운 작업자 간지의 carry 회귀도 RED→GREEN으로 검증했다. 16상자 예제의 확인 경계는 다음 transfer 5/13, 기존 pallet ledger는 8/16이다. 첫 층 간지도 경계 1을 지원한다.
 - 증거: SOURCE 경로로 process/호환성/submission/Fleet compiler/dependency 검사 210 passed; canonical owner/coordinator를 주입한 기존 compiler/runtime replay 검사 9 passed. `recipe/1`의 recipe/cell/Job hash와 checkpoint가 없는 저장 envelope는 이전 값 그대로다. 독립 Fleet guard 후보가 실제 출력의 경계 5/13 및 1/5/9/13과 checkpoint hash를 수락했다. X:에서 빌드·설치한 palletizing/execution wheel의 실제 import 경로를 검증하고 호환성·legacy 검사 169 passed 및 수동 16상자/경계 5/13 컴파일을 확인했다. ROS-SIM은 이번 변경에서 실행하지 않았다.
 - gate 변화: 확인 metadata는 권한을 주지 않는다. Fleet의 durable checkpoint guard가 없으면 새 envelope는 거절된다. 작업자 안전 접근 증명·인증 확인 API·실제 간지 작업 수용은 HOLD이며 전체 목표 완료로 해석하지 않는다.
+
+## 2026-10-17 · fa22f99db · feat(palletizing): recipe/3 혼합 로더와 팔 베이스 둘을 아는 탐욕적 계획기 (D-781)
+
+- 변경: `rosy_cell.recipe/3` 로더(`mixed_recipe.py`)와 Extreme Points 탐욕적 계획기(`mixed_planner.py`, 규칙 `mixed_rules.py`, Step·순서 `mixed_plan.py`, 팔·구역·도달 `mixed_cell.py`)를 더했다. 지지(`support_ratio_v1`), 위 하중, `gap`, 핑거 여유, 주입된 도달 판정, Step마다 `carry_z`를 지키고, `depends_on`은 지지·핑거 여유·같은 팔 순서만 담는다. 집는 자리마다 공급 순서를 낸다. `recipe/1`·`/2` 코드는 바꾸지 않았다.
+- 증거: 원격 pytest(`operations/processes/palletizing/test`, 호환성, legacy Cell, 의존 경계) 228 passed, known_failures 0 new. 독립 검사기가 두 팔·한 팔(3층) 계획의 모든 Step을 확인했다.
+- gate 변화: 없음. Fleet `cell_compiler` 연결, 공유 D-402 IK 도달 판정, 팔별 Action 변환, SIM은 후속이다.
