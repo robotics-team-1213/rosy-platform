@@ -95,7 +95,7 @@ bash tools/hooks/install.sh
 
 시험 PC에 닿지 못하는 **개인 클론**은 §3.1의 수동 검사 후 주제 브랜치에만 훅 예외를 쓴다. 이미 훅이 설치되어 있어도 삭제할 필요는 없다. 실험실 공유 체크아웃에는 이 예외를 적용하지 않는다.
 
-시험 PC에는 닿지만 Windows에 기본 로그 드라이브 `X:`가 없다면 push할 PowerShell에서 `$env:ROSY_TEST_LOGS = Join-Path $env:TEMP 'rosy-tests'`를 설정한다. 시험 로그는 저장소 밖에 둔다.
+Windows에서 로그 위치를 직접 정하려면 push할 PowerShell에서 `$env:ROSY_TEST_LOGS = Join-Path $env:TEMP 'rosy-tests'`를 설정한다. 현재 실행기는 `X:`가 없으면 시스템 임시 폴더를 기본값으로 사용하며, 시험 로그는 저장소 밖에 둔다.
 
 ### 1.6 설정 확인
 
