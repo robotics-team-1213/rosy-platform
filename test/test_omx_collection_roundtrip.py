@@ -78,11 +78,13 @@ for i in range(3):
         actual = reader[i*2+frame]
         assert actual['action'].tolist() == [float(i+1)]*6
         assert actual['observation.state'].tolist() == [0.]*6
-        assert actual['source.capture_time_ns'].tolist() == [100+i*100+frame+1]
+        assert str(actual['source.capture_time_ns'].dtype) == 'torch.int64'
+        assert actual['source.capture_time_ns'].numel() == 1
+        assert actual['source.capture_time_ns'].item() == 100+i*100+frame+1
         for name in ('joint', 'reference', 'top', 'front'):
             value = actual[f'source.{name}_time_ns']
             assert str(value.dtype) == 'torch.int64'
-            assert value.tolist() == [round((1.+i+frame/10)*1e9)]
+            assert value.numel() == 1 and value.item() == round((1.+i+frame/10)*1e9)
 assert all(e['outcome'] == 'unknown' and e['split'] == 'exclude' for e in decisions)
 for decision, split in zip(decisions, ('train','eval','test')):
     decision.update(outcome='success', split=split, reviewer='synthetic test fixture',
