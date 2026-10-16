@@ -458,3 +458,22 @@ service를 진행하지 않는다. 자식에 독립40초 TTL을 두고 소유 pr
 취소·powered stop·독립 물리 정지·운영 owner 재시작 수용을 뜻하지 않는다.
 실제 시연과 IL eligible 데이터는 계속0회다.
 [실제 경로·실패·판정 범위](../validation/omx-native-controller-feedback-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 실제 stationary Action 수용과 cancel terminal
+
+실제 owner와 JTC에 최신 native 관측 위치만 목표로 한 명령1건을 보냈다. 모든
+Torque Enable/Reboot 선택은0이며 여섯 실제 torque/error0과 기존 cap을 유지했다.
+실제 GOAL_ACCEPTED→CANCEL_ACK(true)→TERMINAL_RESULT(CANCELED5)를 durable
+JSONL로 기록했다. owner는 HOLD를 유지하고 재요청을 hold_latched로 거절했다.
+두 controller와 hardware를 비활성화한 뒤 CM은 정상 exit0이었다.
+
+저장 trace172packet 중 cyclic 목표35회는 pre 위치와 최대1틱 차이다. torque/reboot/
+mode/offset 쓰기는 없으며 실제 OFF/error0 상태34개를 확인했다. 목표 차이는 사후
+검사이며 transport guard는 아니다. saved-only 분석의 CRLF 오류는 원본을 남기고
+LF 분석기만 추가해 해결했다. 장치를 재실행하지 않았다.
+
+cancel ACK·CANCELED와 토크 OFF 비활성화는 powered 물리 정지의 증거가 아니다.
+구동 정지·독립 stop·실측 이동·운영 owner 재시작은 계속 검증해야 한다. 실제 시연과
+IL eligible 데이터는0회이며 첫 실데이터 확보 목표를 유지한다.
+[실행·실제 이벤트·송신·해석 한계](../validation/omx-native-action-cancel-2026-10-16/result.md).
