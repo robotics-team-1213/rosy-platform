@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-16 · uncommitted · fix(omx): native driver dependency export
-- 2026-10-16 · uncommitted · fix(omx): vendor 시작·정지 결과와 직접 조작 서비스
-- 2026-10-16 · uncommitted · feat(omx): 초기화 description 후보 생성
-- 2026-10-16 · uncommitted · feat(omx): startup register 읽기와 모델별 미지원 값 보존
-- 2026-10-15 · uncommitted · docs(omx): native preview 수신기 전송 조건
+- 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
+- 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
+- 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
+- 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
+- 2026-10-16 · uncommitted · docs(omx): 실제 토크 OFF 시작 목표 확인

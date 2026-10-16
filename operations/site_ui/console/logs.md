@@ -320,3 +320,10 @@
 - 변경: `shared/site-map-model.js` `trafficCardLine`이 `/traffic` 행의 `preview` 첫 두 사건을 "예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도"로 붙인다. 없거나 만료한 미리보기는 서버가 행에서 빼므로 아무것도 안 보인다. 파일 800/800, 콘솔 단위 17,718/17,719.
 - 증거: `operations/fleet/test/web/traffic-layer.test.mjs`(원격 `test_site_map_api.py` node 시험 포함 fleet 5,290 passed). 브라우저는 확인 못 함.
 - gate 변화: 없음.
+
+
+## 2026-10-16 · uncommitted · 앱별 작업으로 이동하는 로봇 카드
+
+- 변경: 승인 directory에서 Robot/Pilot 링크를 구성하고 주소가 없거나 충돌하면 안내한다. 새 원장·명령·URL 토큰 전달을 추가하지 않는다. 세션·화면 수명 변경에서 캐시를 폐기하는 회귀를 검증한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.

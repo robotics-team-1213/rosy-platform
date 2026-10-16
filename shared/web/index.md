@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
 - 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완
 - 2026-10-14 · 7135ce58a · feat(auth): 공통 계정 프로필
 - 2026-10-13 · 2a7afbd1f · test(web): Rosy Robot이 공용 레일과 하위 탐색 자리를 쓴다 (D-741 6)
 - 2026-10-13 · 9e2d4ef0c · feat(fleet): console app bar registers a 48rem container breakpoint (D-741)
-- 2026-10-13 · 1438d53d1 · feat(web): control line at ink 50% on buttons and fields (D-741)
