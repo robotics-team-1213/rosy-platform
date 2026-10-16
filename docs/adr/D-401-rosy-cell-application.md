@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 구조·계약 결정). ROS-free 코어(`rosy_cell`)의 형식만 정한다. Fleet 제출 구현, 화면, 장치 측 Step API, 셋업·티칭용 OMX 장치 API, 도달성·IK 판정, ROS-SIM·DEVICE·FIELD 수용은 포함하지 않는다.
 
-**부분 대체 제안 (2026-10-17, D-778 Proposed):** [D-778](D-778-bimanual-workcell-foundation.md)이 수용되면 2항의 `cell.yaml` 단일 좌표계와 4항의 Step 목표 "로봇 베이스 좌표"를 대체한다. 작업대는 `arms` 목록(팔 역할과 팔마다 `base_in_cell`)과 공통 `cell` 좌표계를 가진다. 팔이 하나인 작업대는 `arms` 길이 1로 지금 문서를 그대로 읽으며, 해시·레시피 분리·Step 종류는 유지한다.
+**부분 대체 제안 (2026-10-17, D-778 Proposed):** [D-778](D-778-bimanual-workcell-foundation.md)이 수용되면 2항의 `cell.yaml` 단일 좌표계와 4항의 Step 목표 "로봇 베이스 좌표"를 대체한다. 작업대는 `arms` 목록(팔 역할과 팔마다 `base_in_cell`)과 공통 `cell` 좌표계를 가진다. 팔이 하나인 작업대는 `arms` 길이 1로 지금 문서를 그대로 읽으며, 해시·레시피 분리·Step 종류는 유지한다. 혼합 물체 레시피는 새 스키마 `rosy_cell.recipe/3`으로 더하고, 5항의 패턴과 "로봇 베이스에서 먼 것부터" 순서는 그 스키마에서 계획 규칙과 의존 관계로 대체한다([D-781](D-781-mixed-item-recipe-and-two-base-placement-order.md)). `recipe/1`·`/2`는 그대로다.
 
 ## 배경
 

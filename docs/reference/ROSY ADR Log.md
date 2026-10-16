@@ -784,6 +784,7 @@
 | D-778 | 양팔 작업대 기반 — 팔 둘을 한 작업대로 묶고, 권한은 Fleet이 짝으로 주고, 동기는 작업대 조율자가 하고, 역할은 Step마다 정한다(L1만 연다, 실행 계약 변경은 후속 ADR) | Proposed |
 | D-779 | Cell Job 원장을 팔 단위로 나눈다 — 팔별 상태, Step 의존 관계, 팔별 Action, arm·zone claim, 대체 팔로 한 팔 모드 | Proposed |
 | D-780 | 작업대 조율자와 owner의 연결 — 조율자 전용 peer UID와 연산별 권한, COORDINATOR 정지 출처, 이름 붙은 barrier와 PHASE_WAIT, 단단한 결합 구간의 조율자 생존 확인 | Proposed |
+| D-781 | 혼합 레시피 rosy_cell.recipe/3와 팔 베이스 둘을 아는 놓는 순서 — 물체 목록, 계획이 정하는 공급 순서, 컴파일 규칙(지지·핑거 여유·도달성), 의존 관계로 남기는 순서 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

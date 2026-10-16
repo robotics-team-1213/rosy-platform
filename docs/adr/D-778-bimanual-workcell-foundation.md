@@ -194,7 +194,7 @@ fixtures:
 | 선행 조건 | 바뀌는 조항 | 필요한 단계 |
 |---|---|---|
 | 팔별 Job 상태, `arm`·`zone` claim, Step 원장 키 변경 ([D-779](D-779-per-arm-cell-job-ledger-and-arm-zone-claims.md)) | D-403 §4·§5·§8, 1b 보강 | G1 |
-| 혼합 레시피 스키마(`items`)와, 베이스 둘을 아는 놓는 순서 | D-401 §2·§4·§5 | G1 |
+| 혼합 레시피 스키마(`items`)와, 베이스 둘을 아는 놓는 순서 ([D-781](D-781-mixed-item-recipe-and-two-base-placement-order.md)) | D-401 §2·§4·§5 | G1 |
 | 조율자 peer와 `COORDINATOR` 정지 출처 ([D-780](D-780-workcell-coordinator-peer-stop-source-and-named-barriers.md)) | D-336 §2 | G1 |
 | `PHASE_WAIT` 상태와 barrier 해제 UDS 연산 ([D-780](D-780-workcell-coordinator-peer-stop-source-and-named-barriers.md)) | D-376 §7, D-386 | G1 |
 | `handover`용 Action 종류와 phase 집합. 한 Action이 pick+place 한 쌍이라는 규칙의 예외 | D-376 §2, D-327 §5 | G2 |
