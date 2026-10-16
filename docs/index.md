@@ -336,8 +336,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
 - 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
 - 2026-10-15 · uncommitted · docs(omx): 미완료 범위와 재개 인계
 - 2026-10-15 · uncommitted · docs(omx): 30분 수신과 실제 소비 경로 기록
 - 2026-10-15 · uncommitted · docs(omx): 수신기별 영상 전달 비교
-- 2026-10-15 · b5539986f · docs(omx): G3 실측 문서 검사 진행 기록

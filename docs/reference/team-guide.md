@@ -1,15 +1,17 @@
 # ROSY 팀 가이드
 
 - **대상:** `robotics-team-1213` org에 새로 합류한 팀원
-- **갱신:** 2026-10-06 · Tailscale 접속(§1.7), Notion 역할, 로봇 팀 키 추가. §1.1–1.6은 2026-10-05 Windows 새 클론에서 확인함
+- **갱신:** 2026-10-16 · GitHub 설정 재확인, 개인 클론의 훅 예외, 동시 작업·인수인계 절차와 이슈 양식. 환경 설치 명령의 새 클론 확인일은 2026-10-05.
 - **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다.
 
 이 문서를 위에서 아래로 따라 하면 첫 PR까지 갈 수 있다.
 
+**먼저 작업 위치를 고른다.** 이 문서의 브랜치·시험·push 명령은 팀원 **개인 클론**용이다. 실험실 공유 체크아웃에서 일하는 사람·AI 세션은 [같이 하는 깃](shared-checkout.md)과 루트 [AGENTS.md](../../AGENTS.md)를 따른다. 실험실 노트북에서 pytest를 돌리지 않는 규칙은 그대로다(D-762 Decision 4). 현재 머지·훅 절차의 원본은 [기여 안내](../../.github/CONTRIBUTING.md)다.
+
 ```mermaid
 flowchart LR
     subgraph day1["§1 첫날 (30분)"]
-        a1["초대 수락"] --> a2["클론 · 작성자"] --> a3["Python 3.12 venv"] --> a4["pre-push 훅"] --> a5["lint 확인"]
+        a1["초대 수락"] --> a2["클론 · 작성자"] --> a3["Python 3.12 venv"] --> a4["시험 PC 접속 확인 · 훅 선택"] --> a5["lint 확인"]
     end
     subgraph work["§3 매번"]
         b1["이슈"] --> b2["브랜치"] --> b3["작업 · 시험"] --> b4["push"] --> b5["PR · CI"] --> b6["Squash 머지"]
@@ -33,6 +35,8 @@ flowchart LR
 
 메일의 초대 링크, 또는 https://github.com/orgs/robotics-team-1213/invitation 에서 **Join**.
 수락하면 팀 `core`로 `rosy-platform`에 **write** 권한이 생긴다. `main`에는 직접 push할 수 없고 PR로만 들어간다.
+
+초대를 수락해도 브랜치를 올릴 수 없다면 리드에게 팀 소속과 권한을 확인받는다.
 
 ### 1.3 클론과 작성자 설정
 
@@ -58,7 +62,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-`Activate.ps1`이 실행 정책 때문에 막히면 한 번만 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+`Activate.ps1`이 실행 정책 때문에 막히면 활성화 대신 `.\.venv\Scripts\python.exe`로 아래 Python 명령을 실행해도 된다. 조직에서 정한 실행 정책을 먼저 확인한다.
 
 **Linux / WSL / macOS**
 
@@ -75,7 +79,11 @@ python -c "import re; src=open('deploy/robot/pinky_pro/image/device-python-requi
 python -m pip install -c .venv/constraints.txt fastapi uvicorn pydantic starlette websockets pyyaml httpx jsonschema pytest
 ```
 
-### 1.5 pre-push 훅 설치
+### 1.5 시험 PC 접속과 pre-push 훅
+
+현재 훅은 lint·생성 기록·안전 리뷰·공개 범위를 검사하고, **시험은 실험실 시험 PC로 보낸다**. 인터넷만 연결된 개인 클론에서는 시험 단계가 실패할 수 있다. 훅 분리는 D-762 단계 4의 후속 작업이며 아직 적용되지 않았다.
+
+실험실 시험 PC가 설정되어 있고 접속할 수 있다면 훅을 설치한다.
 
 Windows는 **Git Bash**에서, 나머지는 터미널에서:
 
@@ -83,7 +91,9 @@ Windows는 **Git Bash**에서, 나머지는 터미널에서:
 bash tools/hooks/install.sh
 ```
 
-`installed .git/hooks/pre-push`가 나오면 끝. 이후 `git push`마다 lint와 빠른 계약 시험(약 3분)이 먼저 돈다. 훅은 venv의 Python을 쓰므로 **push할 때도 venv를 켠 터미널**에서 한다.
+`installed .../pre-push`가 나오면 설치가 끝난다. 이후 `git push`마다 검사하고, 시험 PC가 없으면 기본적으로 최대 10분 기다린 뒤 실패한다. **push할 때도 venv를 켠 터미널**에서 한다. 장비 설정은 추적되는 [예제](../../tools/remote/hosts.example.json)를 참고해 gitignored `private/lab-hosts.json`에 두며 실제 값은 리드에게 비공개로 받는다.
+
+시험 PC에 닿지 못하는 **개인 클론**은 §3.1의 수동 검사 후 주제 브랜치에만 훅 예외를 쓴다. 이미 훅이 설치되어 있어도 삭제할 필요는 없다. 실험실 공유 체크아웃에는 이 예외를 적용하지 않는다.
 
 ### 1.6 설정 확인
 
@@ -91,11 +101,11 @@ bash tools/hooks/install.sh
 python tools/harness/rosy_harness.py lint
 ```
 
-마지막 줄이 `0 error(s)`면 된다. 경고(warning)는 기존 것이라 무시한다.
+마지막 줄이 `0 error(s)`면 오류 검사를 통과했다. 경고는 내용을 확인하고, 이번 변경에서 새로 생긴 것은 해결하거나 PR에 이유를 적는다.
 
 ### 1.7 실물 장비 접속 — Tailscale
 
-로봇, 관제 PC, 모델 PC는 실험실 LAN에 있다. 팀원은 **Tailscale**로 어디서든 바로 닿는다. 무료 플랜(최대 6명)이다.
+로봇, 관제 PC, 모델 PC는 실험실 LAN에 있다. 장비를 사용할 팀원은 **Tailscale** 초대와 접근 권한을 리드에게 받는다. 계정 정원과 이용 조건은 초대 시 현재 팀 설정을 확인한다. 코드·문서만 기여한다면 장비 접속은 첫 PR의 필수 조건이 아니다.
 
 1. 리드가 보낸 **Tailscale 초대 메일**을 수락한다.
 2. https://tailscale.com/download 에서 앱을 설치하고 그 계정으로 로그인한다.
@@ -116,9 +126,9 @@ python tools/harness/rosy_harness.py lint
 - [ ] org 초대 수락, People에 내 아이디가 보인다
 - [ ] `git config user.email`이 내 GitHub 이메일
 - [ ] venv를 켜면 `python --version`이 3.12.x
-- [ ] `.git/hooks/pre-push`가 있다
+- [ ] 시험 PC 접속 여부에 따라 §1.5의 훅 사용 경로를 정했다
 - [ ] `rosy_harness.py lint`가 `0 error(s)`
-- [ ] Tailscale 로그인, 관제 PC에 `ssh`가 된다
+- [ ] 실물 장비를 사용할 경우 Tailscale·SSH 접속 권한을 확인했다
 - [ ] §4 읽기 순서의 1–3번을 읽었다
 
 ---
@@ -143,7 +153,7 @@ flowchart LR
 | 무엇 | 어디 | 누가 보나 |
 |---|---|---|
 | 코드, ADR, SRS, API reference, 계획·검증 문서 | GitHub `robotics-team-1213/rosy-platform` | **전 세계 공개** |
-| 버그, 할 일, 진행 상황 — **Claude가 갱신하는 것은 여기** | GitHub Issues + Projects, 저장소 문서 | 공개 |
+| 버그, 할 일, 진행 상황 | GitHub Issues, 저장소 문서. Projects는 접근 가능한 보드가 있을 때 연결 | 공개 |
 | 회의록, 일정 — **사람이 쓰는 것** | Notion 팀 페이지 (리드가 게스트로 초대) | 팀 |
 | 현장 주소, 로봇 IP, 장비 이름, 접속 정보 | Notion 비공개 페이지 | 팀 |
 | Notion MCP 연동 키 | 리드가 사람마다 따로 만들어(`rosy-<이름>`) 메신저로 전달. Claude로 Notion을 고칠 사람만 | 본인 |
@@ -175,7 +185,10 @@ flowchart TD
     w --> t{"affected 시험<br/>NEW 실패?"}
     t -- 있음 --> w
     t -- 없음 --> c["내 파일만 add · commit"]
-    c --> p{"push<br/>pre-push 훅 통과?"}
+    c --> h{"실험실 시험 PC<br/>접속 가능?"}
+    h -- 가능 --> p{"push<br/>pre-push 훅 통과?"}
+    h -- 불가 --> manual["개인 클론만<br/>수동 검사 · 훅 예외 기록"]
+    manual --> pr
     p -- 실패 --> w
     p -- 통과 --> pr["PR 열기<br/>템플릿 채우기"]
     pr --> ci{"CI 녹색?"}
@@ -184,13 +197,15 @@ flowchart TD
 ```
 
 ```bash
-# 1) 최신 main에서 브랜치
-git switch main && git pull
-git switch -c feat/<짧은-주제>          # type: feat | fix | refactor | docs | uiux
+# 1) 개인 클론: 미커밋 변경을 확인한 뒤 최신 origin/main에서 브랜치
+git status --short --branch
+git fetch origin
+git switch -c feat/<짧은-주제> origin/main  # type: feat | fix | refactor | docs | uiux
 
 # 2) 작업 — 고칠 경로의 AGENTS.md와 관련 ADR을 먼저 연다
 
-# 3) 바꾼 범위의 시험 (venv 켠 상태)
+# 3) 개인 PC의 정적 검사와 바꾼 범위의 시험 (venv 켠 상태)
+python tools/harness/rosy_harness.py lint
 python tools/harness/rosy_harness.py affected --base origin/main --run
 
 # 4) 커밋 — 내가 바꾼 파일만
@@ -198,13 +213,21 @@ git status --short
 git add <파일> <파일>
 git commit -m "feat(fleet): 한 줄 요약"
 
-# 5) push → 훅이 lint + 빠른 시험을 돌린다
+# 5) 실험실 시험 PC에 접속할 수 있는 clone: 훅 검사 후 push
 git push -u origin feat/<짧은-주제>
 ```
 
-6. GitHub에 뜨는 **Compare & pull request**로 PR을 연다. 템플릿 체크리스트를 채운다.
-7. PR에서 CI(`ci` 워크플로)가 돈다. 빨간불이면 로그를 보고 고친다.
-8. 리뷰가 끝나면 **Squash and merge**. 브랜치는 자동으로 지워진다.
+작업 전에 [작업 이슈 양식](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose)으로 담당 경로와 완료 조건을 남긴다(§3.6). 미커밋 변경이 있으면 먼저 그 작업의 담당과 내용을 확인하고, 정리하려고 지우거나 stash하지 않는다.
+
+시험 PC에 닿지 못하는 개인 클론은 3번의 결과를 보관하고, 생성 기록(`python tools/harness/rosy_harness.py generate`), 변경 diff의 공개 범위, 안전 경로의 독립 리뷰·trailer를 확인해 필요한 변경을 커밋한다. 그 뒤 **주제 브랜치**를 다음과 같이 올린다. 이는 [기여 안내](../../.github/CONTRIBUTING.md)의 이행 예외다. lint·시험 실패를 무시하는 예외가 아니다.
+
+```bash
+git push --no-verify -u origin feat/<짧은-주제>
+```
+
+6. GitHub의 **Compare & pull request**로 PR을 열고 이슈를 연결한다. 맡은 경로, 의존 PR, 검증한 SHA와 결과, 훅 예외 여부를 템플릿에 적는다. 작업 중이면 Draft로 공유한다.
+7. PR 최신 커밋의 CI(`ci` 워크플로)를 확인한다. 빨간불이면 로그를 보고 고친다. 로컬에서 못 돌린 검사는 미실행으로 적으며, CI 통과로 장치 수용까지 주장하지 않는다.
+8. 완료 조건과 리뷰 의견을 확인하고 CI가 녹색일 때 **Squash and merge**한다. 현재 서버는 CI와 리뷰 승인을 강제하지 않으므로 머지하는 사람이 확인한다. 머지 후 원격 브랜치는 자동 삭제되며, 이슈에 후속 작업이 남았는지 확인한다.
 
 ### 3.2 규칙
 
@@ -225,7 +248,9 @@ python -m pytest <경로> -q -rfE -p no:cacheprovider > ../run.txt
 python test/known_failures.py ../run.txt
 ```
 
-`NEW`가 있으면 내 브랜치가 만든 실패다. `known`은 기존 실패라 괜찮다. 호스트 pytest 통과는 장치·ARM64 이미지·현장 수용이 아니다.
+`NEW`는 깨끗한 main 기준선에서 별도로 확인되기 전까지 내 브랜치 실패로 다룬다. `known`은 등록된 기존 실패와 일치한다는 뜻이다. 수집 오류·미실행 검사를 통과로 쓰지 않는다. 호스트 pytest 통과는 장치·ARM64 이미지·현장 수용이 아니다.
+
+이 명령도 개인 PC용이다. 실험실 공유 체크아웃은 먼저 커밋하고 원격 시험 절차를 쓴다. 로그에는 시험한 SHA·명령·환경을 같이 남긴다. `affected`가 FULL을 선택해도 기본 `--run`은 관련 묶음만 실행하므로 전체 통과로 기록하지 않는다. PR의 CI가 전체 범위를 확인한다. 이번 변경에서 생긴 실패를 `known_failures.txt`에 추가해 넘기지 않는다.
 
 ### 3.4 ADR 쓰기
 
@@ -233,12 +258,38 @@ python test/known_failures.py ../run.txt
 2. `docs/adr/D-<번호>-<slug>.md`와 ADR Log 행을 **한 커밋**에.
 3. `python tools/harness/rosy_harness.py lint`
 
+**다른 PC의 클론끼리는 번호 선점이 공유되지 않는다.** 이슈·PR에 사용할 번호를 알리고 열린 ADR PR과 중복을 확인한다. 같은 번호가 생기면 담당자끼리 하나를 다시 선점해 파일·Log 행·참조를 함께 고친다. 로컬 선점 성공을 전역 예약으로 취급하지 않으며, CI의 중복 검사를 확인한다(D-762).
+
 ### 3.5 main이 앞서 나갔을 때
+
+아래는 이미 공유한 개인 주제 브랜치를 갱신하는 방법이다. 실험실 착지·push는 [같이 하는 깃](shared-checkout.md)의 별도 순서를 따른다.
 
 ```bash
 git fetch origin
 git merge origin/main      # 충돌을 고치고 커밋
 git push
+```
+
+충돌은 파일을 맡은 사람과 두 변경의 의도를 확인해 해결한다. API·안전·이어 쓰는 Log의 상대 변경을 통째로 덮지 않는다. 갱신 뒤 관련 시험과 PR 최신 커밋의 CI를 다시 확인한다.
+
+### 3.6 동시 작업과 인수인계
+
+1. **시작 전에 이슈를 맡는다.** [작업 양식](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose)에 담당 GitHub 아이디, 고칠 경로, 완료 조건, 선행 이슈·PR을 적는다. 할당 권한이 없으면 댓글로 담당 의사를 밝힌다. 같은 경로의 열린 이슈·PR과 실험실 워크트리 작업을 확인한다. 각 담당자는 GitHub에 아직 없는 실험실 작업도 요약해 겹침을 알린다.
+2. **경로가 겹치면 순서를 정한다.** 서로 다른 모듈은 각 브랜치에서 진행한다. 같은 파일은 통합 담당자 한 명과 먼저 머지할 PR을 이슈에 적고, 후속 담당자는 그 변경을 받아 시작한다. API reference·ADR Log·공용 계약처럼 소비자가 많은 파일은 계약 변경과 소비자 변경의 순서도 적는다. 로컬 번호 선점은 다른 클론의 충돌을 막지 못한다(§3.4).
+3. **진행 상황은 이슈와 Draft PR에 남긴다.** 상태는 준비 / 진행 / 막힘 / 리뷰 / 완료 중 하나로 제목 아래나 댓글에 적는다. 막힘에는 이유와 풀리는 조건을 적고, Projects 보드가 있으면 같은 상태로 맞춘다. 보드가 없어도 이슈·PR만으로 진행할 수 있다.
+4. **중단·교대할 때 아래 기록을 남긴다.** 공개 범위만 넣고, 비공개 접속 값은 §2의 경로로 전달한다. 에이전트는 사용자가 외부 게시를 요청한 경우에만 GitHub 댓글·이슈·PR을 작성한다. 그렇지 않으면 커밋된 브랜치와 기록을 전달해 사람이 게시할 수 있게 한다.
+5. **끝났는지 결과로 확인한다.** 이슈의 완료 조건, 필요한 리뷰, PR 최신 SHA의 CI를 확인하고 머지한다. 머지된 PR 링크와 남은 후속 이슈를 이슈에 기록한다. 후속 작업까지 끝난 이슈만 닫고, 담당 경로를 해제한다.
+
+```text
+상태: 진행 / 막힘 / 리뷰 / 완료
+이슈 / PR:
+담당자 / 맡은 경로:
+브랜치 / 마지막 커밋 SHA:
+완료한 것:
+검증: SHA, 실행 위치, 명령, 결과 또는 CI 링크
+미실행 검사와 이유:
+막힌 점 / 선행 PR:
+다음 행동 / 다음 담당자:
 ```
 
 ---
@@ -282,8 +333,8 @@ git push
 
 | 일 | 왜 | 영역 |
 |---|---|---|
-| `ci` 워크플로 실패 원인 정리 | 최근 실행의 절반 가까이가 실패. 녹색이 돼야 PR 필수 검사로 걸 수 있다 | CI |
-| `Payload boot smoke (arm64)` 실패 원인 정리 | 최근 10회 중 9회 실패 | CI·배포 |
+| `ci` 워크플로의 현재 실패·불안정 시험 확인 | 최신 실행과 SHA를 확인해 재현 근거가 있는 이슈부터 고친다. 과거 실패율을 현재 상태로 쓰지 않는다 | CI |
+| `Payload boot smoke (arm64)` 최신 실행 확인 | 실패한 실행 링크와 SHA가 있을 때 원인을 조사한다 | CI·배포 |
 | 5MB 넘는 파일 추가를 CI에서 경고 | 큰 바이너리가 이력에 쌓이지 않게 | CI |
 | [STATUS.md](../../STATUS.md)에서 `ROS-SIM`이 `HOLD`인 모듈을 시뮬로 올리기 | 장치 없이 게이트를 한 단계 올린다 | 각 모듈 |
 
@@ -299,7 +350,8 @@ git push
 | push할 때 `generated records are regenerated but uncommitted` | `python tools/harness/rosy_harness.py generate`가 바꾼 파일(`STATUS.md`, `docs/index.md` 등)을 커밋 |
 | `main`에 push가 거절됨 | 정상. `main`은 PR로만 → §3.1 |
 | push가 `secret detected`로 거절됨 | 토큰이 커밋에 들어갔다 → 그 커밋에서 빼고 환경변수로 |
-| pre-push가 **내가 건드리지 않은** 시험에서 실패 | `python test/known_failures.py`로 확인. `NEW`인데 내 변경과 무관하면 main이 이미 깨진 것 → Issue로 알리고 리드에게 공유. 우회(`--no-verify`)하지 않는다 |
+| pre-push가 **내가 건드리지 않은** 시험에서 실패 | `python test/known_failures.py`로 확인. `NEW`는 main 기준선에서 별도로 확인되기 전까지 내 브랜치 실패로 다룬다. 실패를 훅 예외로 넘기지 않는다 |
+| 개인 클론에서 실험실 시험 PC를 찾지 못함 | §1.5와 §3.1의 접속 불가 예외를 따른다. 수동 검사 결과와 예외 이유를 PR에 기록한다. 실험실 세션에는 적용하지 않는다 |
 | 로봇·관제 PC 주소에 닿지 않음 | Tailscale 앱이 켜져 있는지 → Linux는 `--accept-routes` (§1.7) → 그래도 안 되면 리드에게 (권한 정책) |
 | 로봇 `ssh`가 `Permission denied (publickey)` | 팀 키 묶음 설정이 안 됨, 또는 만료(90일) → 리드에게 새 묶음 요청 |
 | 줄 끝 경고 `LF will be replaced by CRLF` | 무시해도 된다 (`.gitattributes`가 정한다) |
@@ -308,7 +360,33 @@ git push
 
 | 용도 | 어디 |
 |---|---|
-| 버그, 할 일, 질문 | GitHub Issues (Projects 보드에서 상태) |
+| 버그, 할 일, 질문 | GitHub Issues (접근 가능한 Projects 보드가 있으면 같은 상태로 연결) |
 | 코드 리뷰 | PR 코멘트 |
 | 회의, 일정, 비공개 자료 | Notion |
 | 결정 | ADR (`docs/adr/`) |
+
+## 8. 협업 설정 확인과 문서 유지
+
+2026-10-16 GitHub API로 확인한 현재 상태다. 방향을 정한 ADR과 실제로 켜진 기능을 구분한다. 원본 결정과 적용 선행 조건은 [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다.
+
+| 항목 | 확인한 상태 | 기여자가 할 일 |
+|---|---|---|
+| 공개 범위·기본 브랜치 | public · `main` | 문서·이슈·PR·로그에서 실제 접속 값 제외 |
+| main ruleset | PR 필요, 삭제·force-push 제한. 관리자 역할은 상시 우회 | 일반 기여는 주제 브랜치와 PR 사용 |
+| CI 필수 검사 | 미설정 | 머지 전에 PR 최신 커밋의 CI 녹색 확인 |
+| 필수 리뷰 | 승인 수 0, code owner 승인 강제 꺼짐 | 필요한 독립 리뷰를 직접 요청하고 근거 확인 |
+| 머지 방식 | squash만 허용, 머지 후 브랜치 자동 삭제 | Squash and merge 사용 |
+| auto-merge·merge queue | auto-merge 꺼짐, ruleset에 queue 없음 | 아직 자동 큐가 있다고 가정하지 않기 |
+| Issues·Projects | Issues 켜짐. 이번 확인 토큰에는 `read:project`가 없어 보드 확인 못 함 | Issues로 작업 추적. 보드는 리드가 접근 확인 후 연결 |
+
+관리자는 설정을 바꿀 때 다음 조회를 다시 하고, [기여 안내](../../.github/CONTRIBUTING.md)와 이 표를 함께 갱신한다. 일반 branch protection이 404여도 ruleset이 없다는 뜻은 아니므로 ruleset의 상세 규칙을 확인한다.
+
+```bash
+gh api repos/robotics-team-1213/rosy-platform
+gh api repos/robotics-team-1213/rosy-platform/rulesets
+gh api repos/robotics-team-1213/rosy-platform/rulesets/<ruleset-id>
+```
+
+다음 적용은 D-762의 선행 조건을 확인한 뒤 별도 승인을 받아 진행한다. 두 번째 관문 code owner 지정, CI 안정성·야간 연속 녹색 기준 확인, 필수 `ci-result`·merge queue·관리자 우회 축소의 묶음 적용이 남아 있다. 그 뒤 훅 분리와 공유 Log 충돌 개선, 로컬 착지의 PR 경로 전환을 순서대로 한다. 이 문서 갱신은 GitHub 권한이나 서버 설정의 적용을 뜻하지 않는다.
+
+이슈 양식은 [GitHub issue forms 문법](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)을 따른다. 양식 파일이 기본 브랜치에 머지된 뒤 [새 이슈 화면](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose)에서 작업·버그 두 선택지가 뜨는지 확인한다. 온보딩 명령이나 훅이 바뀌면 해당 변경 PR에서 이 가이드도 같이 고친다.
