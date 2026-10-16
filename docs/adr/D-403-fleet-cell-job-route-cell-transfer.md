@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 경로·계약 결정; 시뮬레이션 한정 D-330 §2 개방은 사용자 승인 2026-10-01). Mission 하달기는 `simulation` 프로필에서만, 정지 세대 producer/consumer 시험을 통과한 뒤에만 연다. 실물 OMX, 호스트 간 하달, DEVICE/FIELD 수용은 포함하지 않는다. wire 이름·필드는 D-18에 따라 C4에서 API Reference·공유 schema·생산자/소비자 시험과 함께 확정한다.
 
+**부분 대체 제안 (2026-10-17, D-778 Proposed):** [D-778](D-778-bimanual-workcell-foundation.md)이 수용되면 양팔 작업대에 한해 4항(Job 하나에 작업대·인스턴스 하나)과 5항(작업대마다 진행 중인 Action 하나, Step 직렬)을 대체한다. 협조 Step은 팔 역할마다 Action을 최대 하나 내고, 두 팔의 claim은 한 트랜잭션에서 모두 잡거나 하나도 잡지 않으며, 두 grant는 `pair_id`로 짝을 이룬다. 한 팔 작업대의 경로, 정지 세대, 셀 해시 검사, 보강의 claim 유지 규칙은 유지한다.
+
 ## 배경
 
 - **D-401(Proposed) §4.** Job은 Fleet 승인(D-330)을 거쳐 장치로 하달되는 경로로만 실행된다. 이 경로를 막는 보류가 둘이다.
