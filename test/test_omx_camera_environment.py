@@ -122,7 +122,9 @@ def test_temporal_brightness_changes_are_held_without_claiming_flicker_detection
     assert not plan.snapshot()['flicker_verified']
 
 
-def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene(monkeypatch, tmp_path):
+@pytest.mark.parametrize('repeated_frames', [False, True])
+def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene(monkeypatch, tmp_path,
+                                                                              repeated_frames):
     import io
     import json
     from types import SimpleNamespace
@@ -142,12 +144,13 @@ def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene
 
     def response(*args, **kwargs):
         state = {'read_only': True}
+        tick = int(clock[0]/.4)*.4 if repeated_frames else clock[0]
         for role in cameras:
-            bright = clock[0] >= 8
+            bright = tick >= 8
             exposure = current[role]['exposure_time_absolute']
             # Both scenes deliberately remain unacceptable. The best settings differ by scene.
             contrast = (0 if exposure == 800 else 10) if bright else (100 if exposure == 800 else 10)
-            state[role] = dict(fresh=True, source_stamp=1000+clock[0], sequence=int(clock[0]*100)+1,
+            state[role] = dict(fresh=True, source_stamp=1000+tick, sequence=int(tick*100)+1,
                 quality=dict(policy=quality.POLICY, usable=False,
                     condition='OVEREXPOSED' if bright else 'UNDEREXPOSED', mean_intensity=255 if bright else 0,
                     spatial_contrast=contrast, clipped_fraction=.5 if bright else 0))

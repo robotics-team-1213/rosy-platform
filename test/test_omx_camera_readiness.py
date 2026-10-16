@@ -68,6 +68,17 @@ def test_replay_stale_or_missing_quality_cannot_hold_readiness_open():
     assert not gate.update(state)['photometric_ready']
 
 
+def test_polling_the_same_fresh_frame_does_not_count_or_erase_distinct_confirmations():
+    gate = load('camera_quality').Readiness(required=3)
+    for index in range(1, 4):
+        state = {role: sample(100+index/10, index) for role in ['top', 'front']}
+        result = gate.update(state)
+        assert result['photometric_ready'] is (index == 3)
+        repeated = gate.update(state)
+        assert not repeated['photometric_ready']
+        assert repeated['confirmations'] == dict(top=index, front=index)
+
+
 def test_quality_and_jpeg_have_the_same_sample_lifetime():
     store = load('commissioning_view').ObservationStore()
     metrics = dict(usable=False, policy='omx-photometric-v3')
