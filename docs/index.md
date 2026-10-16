@@ -338,7 +338,7 @@
 ## 최근 기록
 
 - 2026-10-16 · uncommitted · fix(omx): 자동 reboot 제거와 실제 native read
+- 2026-10-16 · uncommitted · 앱 책임 실행과 장치 연결 단위 분리
+- 2026-10-16 · uncommitted · 앱 책임 실행: 업무 소유표와 현재 이름 연결
+- 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
 - 2026-10-16 · uncommitted · docs(omx): 작은 이동 기반 측정 순서
-- 2026-10-16 · uncommitted · fix(omx): 실제 ROS feedback replay 오류
-- 2026-10-16 · uncommitted · fix(omx): native 초기화와 dependency export 검증
-- 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배

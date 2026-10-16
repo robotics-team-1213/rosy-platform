@@ -682,7 +682,7 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/robot_ui/robot/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
     ("middleware/robot_ui/robot/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
     ("middleware/robot_ui/robot/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
-    ("operations/site_ui/console/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
+    ("operations/site_ui/console/devices/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
     ("operations/site_ui/console/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
     ("operations/site_ui/console/formation.js", 'el("formation-leader").disabled = status.active;'):

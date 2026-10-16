@@ -3974,3 +3974,28 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+
+
+## 2026-10-16 · uncommitted · Robot/Pilot 진입 JS 설치 closure
+
+- 변경: Fleet 기존 static allowlist와 wheel/sdist 설치 검증에 device-discovery.js를 포함했다. 기존 API·정적 서빙을 유지한다. e596dc451의 최초 checkout 밖 설치·자산 HTTP 검증 55개 시험이 통과했으며, D-766에 따른 devices/ 분리 이후 최종 설치 검증을 다시 한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
+
+- 변경: disabled-feature poller와 scanner lease 경보 시험이 분리된 device-discovery.js를 검증한다. HTTP 자산 응답과 console.js의 import 연결도 확인한다.
+- 증거: main 착지 전체 시험에서 기존 소스 경로를 읽던 2건 실패를 확인했다(5357 passed, 315 skipped). 제품 코드는 변경하지 않았으며 수정 후 원격 검증은 착지 절차에서 수행한다.
+- gate 변화: 없음. 전체 검증 통과 전 main 반영 보류.
+
+## 2026-10-16 · uncommitted · 경로 보기 브라우저의 명시적 탭 클릭
+
+- 변경: 폼 밖 클릭을 패널 중앙 대신 상태 탭으로 지정한다. 앱 링크로 카드 높이가 바뀌자 중앙 좌표가 대형 관리 버튼과 겹쳤고 실제 탭 전환을 일으켰다.
+- 증거: 전체 및 파일 단위 원격 Chromium에서 재현. 위치 없음의 경로 보기 차단과 위치 수신 후 활성화 검증은 유지한다.
+- gate 변화: 없음.
+
+## 2026-10-16 · uncommitted · 최신 크기 규칙 통합
+
+- 변경: D-766 개정 2의 roster.js 제한을 지키도록 앱·지도 기록 링크 생성 코드를 기존 device-discovery.js로 옮겼다. 새 파일이나 권한 경로는 추가하지 않았다.
+- 증거: main 통합 전 원격 FULL은 새 실패 0건이었다. 통합 후에는 크기 검사와 관련 브라우저·설치 검증을 다시 수행한다.
+- gate 변화: 없음.
