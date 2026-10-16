@@ -369,6 +369,17 @@ block poses (helpers in `cell_sim_tools.py`). Do not start `pilot_sim_server` be
 probe refuses to run if one is present. Commands, stand-in flags, sim aid and results:
 [docs/validation/rosy-cell-gazebo-c3-2026-10-02](../../../docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md).
 
+## Instance namespace (simulation)
+
+`run_cell_owner.py`, `g2_owner.py`, `g2_common.py`, `g2_observer.py` and `probe_cell_transfer.py`
+take the arm graph names from `instance_names.py`. `ROSY_OMX_ROS_NAMESPACE` names the instance
+graph (for example `/omx_02`); unset means the root graph `/`, the single-arm default. The joint
+state topic, the `arm_controller` action and the `controller_manager` service are prefixed with it;
+`/clock` stays global. The second-owner refusal now refuses only an owner in the same namespace
+(an owner whose namespace cannot be read counts as the same graph). Two arms on one host still need
+separate graphs, sockets and devices (D-281); this only stops the root names from being hard-coded
+(D-778 §1, D-779).
+
 ## Cell owner Fleet fence configuration (simulation)
 
 `run_cell_owner.py` requires `ROSY_FLEET_FENCE_URL` and `ROSY_FLEET_FENCE_TOKEN`
