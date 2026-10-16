@@ -118,3 +118,20 @@ def test_initialization_rejects_fault_without_reboot(tmp_path):
     after = execute(target.read_text(), "patched_init")
     assert after.returncode == 0, after.stdout + after.stderr
     assert len(after.stdout.splitlines()) == 5
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_OMX_VENDOR_ROOT"), reason="requires explicit locked vendor source")
+def test_normal_write_propagates_faults_without_further_goals(tmp_path):
+    configured = Path(os.environ["ROSY_OMX_VENDOR_ROOT"])
+    vendor = configured if configured.is_absolute() else Path.home() / configured
+    assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
+    original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{SOURCE}"], text=True)
+    fixture = (ROOT / "test/fixtures/omx_driver_write.cpp").read_text()
+    body = function(original, "hardware_interface::return_type DynamixelHardware::write(")
+    program, binary = tmp_path / "write.cpp", tmp_path / "write"
+    program.write_text(fixture.replace("// VENDOR_METHOD", body))
+    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                   check=True, timeout=60)
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
