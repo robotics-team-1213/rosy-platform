@@ -60,6 +60,9 @@ flowchart LR
   control generation, 조건·전이·시각 경계를 넣고 환경/설정 변화를 append-only 기록한다.
 - viewer는 원본 카메라 producer를 대체하지 않는다. profile 변경 시 원본 baseline을
   덮어쓰지 않고 새 state directory로 옮긴다. 단독 장치 소유와 producer identity를 다시 확인한다.
+- 프레임 간격이 불규칙하면 같은 fresh 원본을 재조회할 수 있다. stamp·sequence·원본 품질이
+  모두 같은 재조회는 WAITING_FRAME이며 확인 횟수·시간 이력을 보존하되 READY를 갱신하거나
+  제어를 실행하지 않는다. 실제 만료·역행·상충하는 품질은 STALE로 처리하고 확인을 초기화한다.
 
 ## 데이터와 학습으로 연결할 계약
 
@@ -78,6 +81,7 @@ flowchart LR
 - [x] 어둠/과다 노출/혼합/대비 부족 classifier 원격 회귀.
 - [x] dark→bright→dark, 단발성 오판, stale, cutoff, persistent budget, 느린 적용 cooldown 회귀.
 - [x] 실제 monitor·budget·이력·복구 helper를 사용하는 fake-scene 통합 시험으로 epoch 간 best 격리.
+- [x] 불규칙 프레임 도착·반복 조회 회귀와 실제 fresh/WAITING_FRAME 확인, budget·baseline 보존.
 - [x] 관련 실제 Chromium 실행. 이것은 실물 광학 수용을 뜻하지 않는다.
 - [ ] 실제 강조도·역광·조명 변화·가림·노이즈·지연을 독립 현장 조건으로 수용.
 - [ ] 물체/집게 가시성과 calibration·정지·국소 구동 수용.

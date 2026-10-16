@@ -578,3 +578,17 @@ cycle/session 독립 분할과 환경별 실제 수량·held-out coverage를 보
 실제 시연·IL eligible 데이터는0회이며 첫 실제 데이터셋 완료 기준을 유지한다.
 [환경 범위와 연결 계약](../plans/2026-10-17-omx-environment-readiness.md),
 [source·원격 시험·실제 camera-only 실행과 이전](../validation/omx-environment-readiness-2026-10-17/result.md).
+
+
+### 2026-10-17 불규칙 프레임 도착도 환경 조건으로 처리
+
+암실의 실제 source 간격이 불규칙해 같은 fresh frame을 여러 번 조회하는 경우를 확인했다.
+stamp·sequence·원본 품질이 같은 재조회는 WAITING_FRAME으로 분리한다. 확인/epoch/budget을
+보존하되 READY·시각 이력·best·제어를 갱신하지 않으며, 실제 만료/역행/상충 품질은 계속 거부한다.
+source rate를 poll rate나 설정 예시의10Hz로 가정하지 않는다.
+
+RED→GREEN과 실제 Chromium 포함47개 원격 검사 뒤 source를 이전했다. 기존 profile·baseline·
+rolling budget·환경 ledger를 보존했고 실제24 assessment의 역할48개에서 WAITING_FRAME35건,
+fresh false STALE0건을 확인했다. 첫 helper의 warmup receipt 조회 실패와 자동 원복도 보존했다.
+실제 시연·IL eligible 데이터는0회이며 환경 이력의 episode/학습 binding 등 완료 기준을 유지한다.
+[불규칙 도착·수정·원격 검사·실제 이전](../validation/omx-environment-frame-progress-2026-10-17/result.md).

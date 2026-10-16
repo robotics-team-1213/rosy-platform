@@ -721,6 +721,11 @@ completed binding to collected episodes or training manifests. Preserve the old
 v2 `omx-camera-readiness/` baseline when upgrading to v3's new state directory;
 stop/restore the old tuner before changing the profile, sources or unit.
 
+Repeated polls of the exact same still-fresh frame/quality are `WAITING_FRAME`.
+They preserve distinct-frame confirmations without counting or refreshing READY,
+temporal samples or controls. Real expiry, backwards identity or contradictory
+quality resets confirmation. Poll frequency is not an assumed camera frame rate.
+
 The broader operating envelope, ownership and remaining dataset/evaluation
 contracts are in the [environment plan](../../../docs/plans/2026-10-17-omx-environment-readiness.md).
 
