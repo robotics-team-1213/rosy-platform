@@ -72,6 +72,16 @@ def plan_limits(rows, limits):
 
 def one_write_guard(send, operation):
     """Allow existing PING/READ packets and exactly one matching unicast write."""
+    motor = integer(operation.get("id"), 11, 16, "write motor")
+    allowed = {address: (size, maximum) for address, size, maximum in CAPS.values()}
+    address = operation.get("address")
+    if type(address) is not int or address not in allowed or (address == 38 and motor < 14):
+        raise ValueError("unsupported cap register for this motor")
+    size, maximum = allowed[address]
+    if type(operation.get("size")) is not int or operation["size"] != size:
+        raise ValueError("incorrect cap register width")
+    value = integer(operation.get("value"), 1, maximum, "cap write value")
+    expected = address.to_bytes(2, "little") + value.to_bytes(size, "little")
     used = False
 
     def guarded(data):
@@ -79,11 +89,8 @@ def one_write_guard(send, operation):
         packet = bytes(data)
         if read_packet_allowed(packet):
             return send(packet)
-        size = operation["size"]
-        expected = (operation["address"].to_bytes(2, "little")
-                    + operation["value"].to_bytes(size, "little"))
         if (used or len(packet) != 12 + size or packet[:4] != b"\xff\xff\xfd\x00"
-                or packet[4] != operation["id"] or packet[7] != 3
+                or packet[4] != motor or packet[7] != 3
                 or int.from_bytes(packet[5:7], "little") != len(packet) - 7
                 or packet[8:-2] != expected):
             raise ValueError("only one exact planned cap write is permitted")
