@@ -2,6 +2,7 @@
 
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
 - **팀원 개인 클론이라면** 이 문서 대신 [팀 가이드](team-guide.md)를 따른다.
+- **GitHub 게시·병합:** 로컬 착지와 별도로 [PR 파이프라인](pr-pipeline.md)을 따른다. 작성·독립 검토 두 에이전트가 확인하고 게시 담당 한 명이 올린다.
 - **갱신:** 2026-10-14 — 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
 
 ## 같이 하는 깃
@@ -73,5 +74,7 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `python tools/harness/rosy_harness.py generate`를 하고, pre-push 검사를
    통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이
    `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
+
+위 푸시 순서의 rebase는 아직 원격에 게시하지 않은 주제 브랜치에만 적용한다. 이미 게시한 브랜치는 `git merge origin/main`으로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 [PR 파이프라인](pr-pipeline.md)을 따른다.
 
 착수 다음에 손댈 제품 규칙은 [README 「핵심 계약」](../../README.md#핵심-계약)이다.
