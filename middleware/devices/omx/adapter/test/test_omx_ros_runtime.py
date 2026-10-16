@@ -401,7 +401,7 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         rclpy.shutdown()
 
 
-def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(monkeypatch):
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
     writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
     rclpy.init()
@@ -430,26 +430,17 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(monke
         enabled=True, workcell_id="test_workcell", instance_id="test_instance",
         joint_names=("joint1",), position_limits={"joint1": (-1.0, 1.0)},
         allowed_owners=("moveit",), calibration_revision="cal-test",
-        max_joint_state_age_s=0.2, max_goal_duration_s=2.0, action_timeout_s=4.0,
+        # Cloud publication itself has paused for 0.201 s. Give the fixture scheduling
+        # margin, while blocking feedback for at least 3x this freshness allowance.
+        max_joint_state_age_s=0.5, max_goal_duration_s=2.0, action_timeout_s=6.0,
         max_start_state_tolerances={"joint1": 0.05},
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
     publications = []
-    intake = []
     sink_times = []
-    original_snapshot = runtime._joint_state_intake.snapshot
-
-    def record_snapshot(*args, **kwargs):
-        try:
-            snapshot = original_snapshot(*args, **kwargs)
-        except ValueError as exc:
-            intake.append((time.monotonic(), str(exc)))
-            raise
-        intake.append((time.monotonic(), snapshot.sequence))
-        return snapshot
-
-    monkeypatch.setattr(runtime._joint_state_intake, "snapshot", record_snapshot)
+    sink_entered = threading.Event()
+    release_sink = threading.Event()
     phase_port = RosArmPhaseGoalPort(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
@@ -475,7 +466,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(monke
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
             slow_feedbacks.append(event)
             sink_times.append(time.monotonic())
-            time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+            sink_entered.set()
+            release_sink.wait(5.0)
             sink_times.append(time.monotonic())
         return True
 
@@ -493,26 +485,39 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(monke
             expected_start_state_positions={"joint1": 0.0}, start_state_tolerances={"joint1": 0.01},
         )
         assert phase_port.submit(command, on_goal_event=slow_sink).dispatched is True
-        deadline = time.monotonic() + 6.0
-        while time.monotonic() < deadline and runtime.last_terminal_decision is None:
+        assert sink_entered.wait(3.0), "the server never sent feedback"
+        initial = runtime.owner._joint_state
+        owner_samples = []
+        blocked_until = sink_times[0] + 3 * config.max_joint_state_age_s
+        while time.monotonic() < blocked_until:
+            observed = runtime.owner._joint_state
+            owner_samples.append((time.monotonic(), observed.sequence, observed.received_at))
             time.sleep(0.01)
-        assert slow_feedbacks, "the server never sent feedback"
         now = time.monotonic()
         observed = runtime.owner._joint_state
         evidence = {
             "decision": runtime.last_terminal_decision,
             "published": len(publications),
             "max_publish_gap": max((b - a for a, b in zip(publications, publications[1:])), default=0),
-            "last_publish_age": now - publications[-1] if publications else None,
-            "intake_tail": intake[-10:],
-            "owner_sequence": observed.sequence if observed else None,
-            "owner_age": now - observed.received_at if observed else None,
+            "owner_tail": owner_samples[-10:],
+            "owner_age": now - observed.received_at,
             "slow_sink_times": sink_times,
         }
+        assert len(sink_times) == 1, evidence  # feedback is still blocked
+        assert any(t > sink_times[0] + config.max_joint_state_age_s and seq > initial.sequence
+                   for t, seq, _ in owner_samples), evidence
+        assert now - observed.received_at < config.max_joint_state_age_s, evidence
+        release_sink.set()
+        deadline = time.monotonic() + 6.0
+        while time.monotonic() < deadline and runtime.last_terminal_decision is None:
+            time.sleep(0.01)
+        assert slow_feedbacks, "the server never sent feedback"
+        evidence["decision"] = runtime.last_terminal_decision
         assert runtime.last_terminal_decision is not None, evidence
         assert runtime.last_terminal_decision.reason == "completed", evidence
         assert runtime.owner.state == "ready"
     finally:
+        release_sink.set()
         stop.set()
         publisher.join(timeout=1.0)
         executor.shutdown(timeout_sec=2.0)

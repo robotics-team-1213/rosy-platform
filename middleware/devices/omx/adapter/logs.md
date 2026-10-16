@@ -528,3 +528,7 @@
 - 변경: Fleet ROS fixture가 사용하는 controller_manager_msgs도 CI에 설치한다. 느린 feedback 시험 실패에 발행 간격·intake 결과·owner sequence와 age·느린 sink 시각을 기록해 원인을 구분한다. 0.2초 freshness와 0.6초 느린 callback 조건은 유지한다.
 - 근거: PR #55 CI 38912405039에서 기존 수집 오류가 해소된 뒤 controller_manager_msgs 수집 오류 하나와 joint_state_stale 회귀 하나가 드러났다. 실행 경로와 독립 리뷰만으로는 생산 코드 결함인지 시험 환경인지 판단할 수 없어 진단 정보를 먼저 추가했다.
 - gate 변화: 없음. 실제 로봇을 사용하지 않으며 native ROS fixture는 원격 시험 PC의 localhost에서 검증한다.
+
+## 2026-10-16 - uncommitted - test(ci): repair native ROS fixture inputs and scheduling
+
+- Cloud run 38914855479 exposed preexisting ROS fixture defects after dependency installation: stamp Fleet JointState publications; use a 0.5 s fixture freshness allowance and explicitly hold feedback for 3x that interval while asserting owner state advances and stays fresh. Production validation is unchanged. Native opt-in verification now includes both Fleet parameters.
