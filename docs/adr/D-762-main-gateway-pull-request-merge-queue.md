@@ -128,3 +128,11 @@
 
 - 문서만 바꿨다. `python tools/harness/rosy_harness.py generate` 뒤 `lint`가 오류 0이다.
 - Context의 숫자는 2026-10-13과 10-14에 `git`과 GitHub API로 읽은 값이고 검토 세션이 다시 확인했다. 확인하지 못한 것은 위 목록에 따로 있다.
+
+### 2026-10-16 운영 개정 — 한 명의 GitHub 게시와 두 에이전트 검토
+
+사용자는 GitHub에서는 한 사람이 올리고, 이곳의 작성·독립 검토 두 에이전트가 규칙에 따라 확인하는 운영을 요청했다. 이에 현재 main ruleset의 사람 승인 수를 1에서 0으로 변경했다. 필수 `ci-result`, PR 요구, squash 병합, 대화 해결 요구, 삭제·force-push 제한과 관리자 우회를 PR 경로로 제한하는 설정은 유지했다. 확인한 ruleset은 `main-protection`(24502267)이다.
+
+현재 게시 절차의 정본은 [PR 파이프라인](../reference/pr-pipeline.md)이다. 작성자는 검토 base/head SHA와 실제 시험 결과를 주고, 다른 읽기 전용 에이전트가 검토한다. 수정 후에는 변경 범위를 다시 검토받는다. 게시 담당 한 명이 사용자에게 허용받은 push·PR·병합을 수행하고 최신 SHA의 CI 결과를 확인한다. 에이전트 검토를 GitHub의 다른 사람 승인으로 가장하지 않는다.
+
+이 운영 개정은 위 단계 3 전체를 적용했다는 뜻은 아니다. merge queue·auto-merge와 관문 code owner·에이전트 신원 분리, 단계 4·5의 도구 전환은 후속이다. 기존 날짜의 Context·Consequences는 당시 상태 기록이며, 현재의 사람 승인 수·필수 검사·게시 방식은 이 운영 개정을 따른다. 로컬 `tools/land.py`는 계속 로컬 착지 도구이며 공개 `main`의 직접 push 경로로 쓰지 않는다.
