@@ -234,6 +234,7 @@
 | D-733 | Hourly KST Discord Fleet health subscription |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -339,5 +340,5 @@
 - 2026-10-16 · uncommitted · 앱 책임 실행과 장치 연결 단위 분리
 - 2026-10-16 · uncommitted · 앱 책임 실행: 업무 소유표와 현재 이름 연결
 - 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
-- 2026-10-16 · uncommitted · docs(learning): drivable 강화학습과 Gazebo Fleet 검증 방향
-- 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
+- 2026-10-16 · uncommitted · refactor(omx): 병합용 수집 도구 배치
+- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 실제 native 시작 부작용과 출력 제한 점검

@@ -95,3 +95,73 @@ def test_modified_review_identity_is_rejected(module, recording):
     decisions[0]['content_sha256'] = '0' * 64
     with pytest.raises(ValueError, match='identity'):
         module.reviewed_splits(report, decisions)
+
+
+def test_inspection_does_not_invent_leader_source(module, recording, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    info, rows = recording
+    class Dataset(list):
+        meta = SimpleNamespace(info=info)
+    monkeypatch.setattr(module, 'dataset_files', lambda root: {'meta/info.json': 'a' * 64})
+    monkeypatch.setattr(module, 'load_dataset', lambda *args: Dataset(rows))
+    report = module.inspect_dataset(tmp_path, 'local/data', body_units='normalized_-100_100',
+                                    rig_revision='rig', calibration_revision='cal')
+    assert report['source_mode'] == 'unverified_native'
+
+
+def test_unknown_capture_is_not_eligible_for_reviewed_training(module, recording):
+    report = module.inspect_frames(*recording)
+    report['source_mode'] = 'unverified_native'
+    decisions = copy.deepcopy(report['episodes'])
+    for episode, split in zip(decisions, ('train', 'eval')):
+        episode.update(outcome='success', split=split, reviewer='operator', reason='verified')
+    with pytest.raises(ValueError, match='source'):
+        module.reviewed_splits(report, decisions)
+
+
+def test_collection_session_cannot_cross_reviewed_splits(module, recording):
+    report = module.inspect_frames(*recording)
+    for episode in report['episodes']:
+        episode.update(session_id='same-session', cycle_id=f"cycle-{episode['episode_index']}")
+    decisions = copy.deepcopy(report['episodes'])
+    for episode, split in zip(decisions, ('train', 'eval')):
+        episode.update(outcome='success', split=split, reviewer='operator', reason='verified')
+    with pytest.raises(ValueError, match='session_id'):
+        module.reviewed_splits(report, decisions)
+
+
+def test_optional_final_test_split_stays_separate(module, recording):
+    report = module.inspect_frames(*recording)
+    third = copy.deepcopy(report['episodes'][1])
+    third.update(episode_index=2, content_sha256='c' * 64)
+    report['episodes'].append(third)
+    decisions = copy.deepcopy(report['episodes'])
+    for episode, split in zip(decisions, ('train', 'eval', 'test')):
+        episode.update(outcome='success', split=split, reviewer='operator', reason='verified')
+    assert module.reviewed_splits(report, decisions) == {'train': [0], 'eval': [1], 'test': [2]}
+
+
+def test_source_changed_during_split_cannot_receive_a_success_receipt(module, recording, monkeypatch, tmp_path):
+    import sys
+    from types import SimpleNamespace
+    info, rows = recording
+    report = module.inspect_frames(info, rows)
+    report.update(repo_id='local/source', body_units='normalized_-100_100', rig_revision='rig',
+                  calibration_revision='cal', source_mode='leader_native', files={'meta/info.json': 'a' * 64})
+    decisions = copy.deepcopy(report['episodes'])
+    for decision, name in zip(decisions, ('train', 'eval')):
+        decision.update(split=name, outcome='success', reviewer='operator', reason='checked')
+    source, output = tmp_path/'source', tmp_path/'output'
+    changed = []
+    class Dataset(list):
+        meta = SimpleNamespace(info=info)
+    def split_dataset(*args, **kwargs):
+        changed.append(True)
+        return {name: SimpleNamespace(repo_id=f'local/source_{name}') for name in ('train', 'eval')}
+    monkeypatch.setitem(sys.modules, 'lerobot.datasets.dataset_tools', SimpleNamespace(split_dataset=split_dataset))
+    monkeypatch.setattr(module, 'inspect_dataset', lambda *args, **kwargs: report)
+    monkeypatch.setattr(module, 'load_dataset', lambda *args: Dataset(rows))
+    monkeypatch.setattr(module, 'dataset_files', lambda root: {'meta/info.json': ('b' if changed else 'a') * 64})
+    with pytest.raises(ValueError, match='changed'):
+        module.split_reviewed(source, report, decisions, output)
+    assert not (output/'split-receipt.json').exists()
