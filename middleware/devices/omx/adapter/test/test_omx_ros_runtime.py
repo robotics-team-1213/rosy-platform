@@ -485,6 +485,9 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     runtime.owner.poll = trace_poll
     runtime.owner._fresh_joint_state = trace_fresh
     runtime.owner.observe_joint_state = trace_observe
+    if os.environ.get("ROSY_OMX_DIAG_COLLAPSE_GROUP") == "1":
+        runtime._subscription.callback_group = runtime.action_callback_group
+        runtime.action_callback_group.add_entity(runtime._subscription)
     publications = []
     sink_times = []
     sink_entered = threading.Event()
