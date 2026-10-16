@@ -521,7 +521,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
     # One suite that cannot import (a wheel missing on this host) must not hide
     # the rest of a packed invocation; the collection error still fails the run.
-    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors"]
+    # Same ROS launch_testing block as CI (test/known_failures.py NO_ROS_LAUNCH_PLUGINS).
+    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors",
+            "-pno:launch_testing", "-pno:launch_ros"]
 
 
 def render(sel: Selection) -> str:
