@@ -1,4 +1,4 @@
-## D-773 OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조: 장치 Action 타입 하나, 배포 경로 하나, AI 출력 두 종류
+## D-773 OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조: 장치 Action 타입 하나, 기록되는 산출물 배포, AI 출력 두 종류
 
 **Status:** Proposed
 
@@ -105,7 +105,7 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 | OMX를 CORE 안으로 넣어 장치 게이트웨이 하나로 통합 | CORE는 Pinky 한 프로세스(D-1)이고 OMX는 다른 호스트·제어기다. 단일 writer 경계를 흐리므로 선택하지 않음 |
 | AI 전용 실행기(정책 런타임)를 새 최상위로 추가 | 실행 권한이 둘로 갈라진다. 아키텍처 v0.2 §7.1 "AI는 다른 진입점일 뿐 다른 실행기가 아니다"와 충돌 |
 | 현재 구조를 그대로 두고 장치별로 계속 붙이기 | 단기 비용은 가장 작다. 다만 Fleet의 장치별 분기와 배포 우회가 장치·모델마다 늘어난다 |
-| 포트 하나 + 배포 경로 하나 + AI 출력 두 종류 | 권장. 기존 권한 경계를 유지하면서 OMX·AI 추가 비용을 한 번만 치른다 |
+| Fleet Action 타입 하나 + 기록·readback이 남는 배포 + AI 출력 두 종류 | 권장. 기존 권한 경계를 유지하면서 OMX·AI 추가 비용을 한 번만 치른다 |
 
 ## 기존 결정과 관계
 
@@ -113,8 +113,8 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 |---|---|
 | D-1, D-2 | CORE 단일 프로세스·단일 `cmd_vel` 발행자 유지 |
 | D-55, D-71 | 이동 조작·합성 Asset은 계속 연기 |
-| D-403 | Fleet–OMX owner 같은 호스트 연결 유지. 이 ADR은 타입만 맞춘다 |
-| D-427 | 세 부분(middleware·operations·learning)과 profile·release 전달 경계 유지. §2의 배포 경로를 Perception에도 적용 |
+| D-403 | Fleet–OMX owner 같은 호스트 연결 유지. 전송은 바꾸지 않는다 |
+| D-427 | 세 부분(middleware·operations·learning)과 profile·release 전달 경계 유지. §2의 release 경로는 배포 경로가 아직 없는 ACT·ModelProfile에 적용한다. Perception 모델(§4의 `rosy.perception.model/1`)은 D-356 §3의 데이터 세대 전달을 유지하므로 §2의 예외이며, 그 대가로 승격마다 사이트 기록과 readback을 남긴다. 이 예외는 D-356이 Accepted가 될 때 함께 확정한다 |
 | D-429 | `integrations`는 `api` 모듈만 import. `omx_adapter.api`를 A2에서 둔다 |
 | D-442 | `DeviceControlPort`는 최종 writer 앞 서보 포트로 유지한다. Fleet Action과 섞지 않는다 |
 | D-516, D-527 | 모델 PC 평가, AI PC 추론만, Fleet 판정, 장치 재검사 유지 |
@@ -126,7 +126,7 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 - Fleet은 장치 kind가 늘어도 Action 등록표와 `DeviceActionTransport`로 다룬다. Pinky의 TRIP 폐루프는 별도로 남는다.
 - 모델 교체는 사이트 원장의 기록과 readback 대조로 추적된다. Perception의 빠른 SSH 승격 속도는 그대로다.
 - 학습 정책은 Fleet lease 없이 팔을 움직일 수 없다. A4 전에는 학습 정책을 실물에서 돌리지 않는다.
-- A0는 동작 변화가 없는 정리라 먼저 착지할 수 있다. A1~A5는 각 단계의 증거가 나올 때까지 Proposed로 남는다.
+- A1~A5는 각 단계의 증거가 나올 때까지 Proposed로 남는다.
 - 이 ADR은 main 착지 뒤 공유용이며, 단계별 구현은 각자의 ADR·검증 기록을 따른다.
 
 ### 2026-10-16 정정: A0 범위
@@ -146,16 +146,8 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 
 Fleet의 `sys.path` 주입(`rosy.decision`·`rosy_situation`·discord)을 wheel 의존성으로 바꾸는 안도 검토했다.
 현장 이미지(`deploy/site/Dockerfile.fleet`)와 AI PC 설치 스크립트가 소스 복사 + `PYTHONPATH`로 배포하고,
-Fleet은 `rosy_situation`의 순수 판정 모듈 3개만 쓴다. CI·이미지·AI PC 설치·크기 단위·구조 시험을 함께 바꿔야 하는 데 비해
+Fleet은 `rosy_situation`의 순수 판정 모듈 2개(`assessment`, `snapshot_assessment`)만 쓴다. CI·이미지·AI PC 설치·크기 단위·구조 시험을 함께 바꿔야 하는 데 비해
 얻는 것이 작아 A0 단계를 없앴다. 다음 단계는 A2다.
-
-## References
-
-- [ROSY Platform 통합 아키텍처 설계 v0.2 §7](../reference/ROSY_Platform_Architecture_Design_v0.2.md)
-- [Decision 모델 파이프라인과 실행 구조](../plans/2026-10-08-decision-model-pipeline-design.md)
-- [현재 폴더 책임](../reference/platform-folder-responsibilities.md)
-- [09 Composite Robot](../architecture/09_ROSY_Composite_Robot.md), [11 AI and Physical AI](../architecture/11_ROSY_AI_and_Physical_AI.md)
-- [D-770 OMX 자동 시연 수집과 모방학습](D-770-fleet-omx-autonomous-imitation-pipeline.md)
 
 ### 2026-10-16 정정: 장치 권한 포트의 층
 
@@ -168,6 +160,14 @@ Fleet이 장치 kind로 갈라지는 곳은 약 7곳이며 단계 원장은 이�
 ### 2026-10-17 정정: 배포 경로
 
 처음 판의 결정 3은 Perception ONNX의 SSH 승격까지 release로 흡수하려 했다. 이는 D-356 §3("모델은 데이터 세대로 전달한다")과
-Context 4(데이터 파일 하나에 코드 release는 무겁다)를 뒤집는다. release 코드에는 모델을 다루는 부분이 없고, 흡수하려면 Pinky 설치
+D-356 Context 4(데이터 파일 하나에 코드 release는 무겁다)를 뒤집는다. release 코드에는 모델을 다루는 부분이 없고, 흡수하려면 Pinky 설치
 프로파일·weight 운반·로봇 설치기를 새로 만들어야 한다. 그래서 Perception은 지금 경로에 중앙 기록과 readback 대조만 더하고,
 release 경로는 아직 배포 경로가 없는 ACT·ModelProfile에만 적용한다.
+
+## References
+
+- [ROSY Platform 통합 아키텍처 설계 v0.2 §7](../reference/ROSY_Platform_Architecture_Design_v0.2.md)
+- [Decision 모델 파이프라인과 실행 구조](../plans/2026-10-08-decision-model-pipeline-design.md)
+- [현재 폴더 책임](../reference/platform-folder-responsibilities.md)
+- [09 Composite Robot](../architecture/09_ROSY_Composite_Robot.md), [11 AI and Physical AI](../architecture/11_ROSY_AI_and_Physical_AI.md)
+- [D-770 OMX 자동 시연 수집과 모방학습](D-770-fleet-omx-autonomous-imitation-pipeline.md)
