@@ -4,8 +4,8 @@
     "top": {
       "device": "/dev/v4l/by-id/<top-camera>-video-index0",
       "candidates": [
-        {"auto_exposure": 1, "exposure_time_absolute": 400, "gain": 7, "gamma": 20, "brightness": 0},
-        {"auto_exposure": 1, "exposure_time_absolute": 800, "gain": 7, "gamma": 30, "brightness": 0}
+        {"auto_exposure": 1, "exposure_time_absolute": 400, "gain": 7, "gamma": 10, "brightness": 0},
+        {"auto_exposure": 1, "exposure_time_absolute": 800, "gain": 7, "gamma": 10, "brightness": 0}
       ]
     },
     "front": {

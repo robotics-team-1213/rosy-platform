@@ -130,7 +130,7 @@ async function refresh() {
     for (const key of cameras) {
       const item = state[key];
       document.getElementById(key+"-status").textContent = item.fresh
-        ? `수신 ${item.receipt_age_s.toFixed(2)}초 전 · ${new Date(item.source_stamp*1000).toLocaleTimeString()} · #${item.sequence}`
+        ? `수신 ${item.receipt_age_s.toFixed(2)}초 전 · ${new Date(item.source_stamp*1000).toLocaleTimeString()} · #${item.sequence} · ${item.quality ? (item.quality.usable ? "영상 밝기·대비 조건 충족" : "밝기·대비 부족") : "영상 품질 미확인"}`
         : "최신 영상 없음";
     }
     jointExpires = state.joints.fresh ? expiresAt(state.joints, observedAt) : 0;

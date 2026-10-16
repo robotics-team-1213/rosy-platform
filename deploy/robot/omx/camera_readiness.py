@@ -215,6 +215,9 @@ def run(profile, root, digest, duration):
     levels = dict(top=0, front=0)
     settling = dict(top=0., front=0.)
     previous = dict(top=(0., 0), front=(0., 0))
+    best = {}
+    finalized = set()
+    current = {role: dict(spec['original']) for role, spec in baseline['cameras'].items()}
     changes = []
     began = time.monotonic()
     try:
@@ -242,12 +245,29 @@ def run(profile, root, digest, duration):
                 if not advancing_frame(item, previous[role]):
                     continue
                 previous[role] = (stamp, item['sequence'])
-                if quality['usable'] is not False or levels[role] >= len(spec['candidates']):
+                score = quality.get('spatial_contrast', 0)*(1-quality.get('clipped_fraction', 1))
+                if role not in best or score > best[role]['score']:
+                    best[role] = dict(score=score, controls=dict(current[role]))
+                if quality['usable'] is not False or role in finalized:
                     continue
                 device = spec['device']
                 saved = baseline['cameras'][role]
                 if identity(device) != saved['identity'] or producer(role, device) != saved['producer']:
                     raise RuntimeError('camera producer changed during tuning')
+                if levels[role] >= len(spec['candidates']):
+                    selected = best[role]['controls']
+                    changes.append(dict(role=role, operation='select_best_observed', controls=selected,
+                                        time_ns=time.time_ns()))
+                    save(root/'changes.json', changes)
+                    errors = restore_controls(selected, lambda n, v: write_control(device, n, v))
+                    if errors or get_controls(device, selected) != selected:
+                        raise RuntimeError('best observed settings could not be restored')
+                    current[role] = dict(selected)
+                    finalized.add(role)
+                    settling[role] = time.monotonic()+1.0
+                    gate.counts[role] = 0
+                    assessment['photometric_ready'] = False
+                    continue
                 candidate = spec['candidates'][levels[role]]
                 entry = dict(role=role, candidate=levels[role], requested=candidate, time_ns=time.time_ns())
                 changes.append(entry)
@@ -258,6 +278,7 @@ def run(profile, root, digest, duration):
                 save(root/'changes.json', changes)
                 if actual != candidate:
                     raise RuntimeError('camera control readback differs')
+                current[role].update(candidate)
                 levels[role] += 1
                 settling[role] = time.monotonic()+1.0
                 gate.counts[role] = 0

@@ -22,9 +22,14 @@ def frame_quality(pixels):
     mean = float(gray.mean())
     dark = float((gray < 15).mean())
     clipped = float((gray > 245).mean())
+    tiles = [float(tile.mean()) for row in np.array_split(gray, 4, axis=0)
+             for tile in np.array_split(row, 4, axis=1)]
+    spatial_contrast = float(np.percentile(tiles, 95)-np.percentile(tiles, 5))
     return dict(policy=POLICY, mean_intensity=mean, p5=p5, p95=p95,
                 dark_fraction=dark, clipped_fraction=clipped,
-                usable=mean >= 25 and dark <= .65 and clipped <= .15 and p95-p5 >= 12,
+                spatial_contrast=spatial_contrast,
+                usable=mean >= 25 and dark <= .65 and clipped <= .15 and p95-p5 >= 12
+                and spatial_contrast >= 12,
                 scope='photometric_only_not_visibility_or_motion_acceptance')
 
 
