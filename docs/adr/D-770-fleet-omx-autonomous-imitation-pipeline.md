@@ -534,3 +534,17 @@ producer를 멈추기 전에 독립 복구 unit을 먼저 등록했다. 두 실�
 카메라 진단만 수행했고 robot bus/ON/goal 명령은 없다. 실제 시연·IL eligible 데이터는
 계속0회이며 첫 실제 데이터셋 확보 목표를 유지한다.
 [실제 제어 항목·프레임·복구와 남은 조건](../validation/omx-camera-clearance-2026-10-16/result.md).
+
+
+### 2026-10-16 기존 카메라 저조도 자동화 실행
+
+사용자 요청에 따라 기존 두 camera producer를 유지하며 원본 프레임 품질 측정,
+bounded V4L2 후보 자동 적용, best 설정 선택, 만료되는 readiness와 종료 후 원본 복구를
+연결했다. localhost viewer와 readiness user service를 Fleet PC에 실제 설치·활성화했다.
+두 실제 camera-only 실행과 원본 제어값 복구, 설치 후 fresh·sole producer를 확인했다.
+구형 밝기-only 판단과 uniform noise의 false pass를 회귀로 고치고 policy v2로 분리했다.
+
+자동 조정 후에도 현재 두 영상은 관측 불충분이다. photometric 조건은 물체·파지·jaw
+clearance 판독이나 motion admission이 아니다. source/원격 시험/카메라 제어/장치 구동의
+증거를 구분하며 실제 시연과 IL eligible 데이터는0회다. 실제 수집·학습의 완료 기준은 유지한다.
+[실행·설치·제한](../validation/omx-lowlight-automation-2026-10-16/result.md).

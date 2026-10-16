@@ -656,3 +656,49 @@ before an independent `ExecStopPost` invoked the helper for the gripper. Actual
 OFF acknowledgment and all-six OFF/error-free readback passed. This verifies
 process-death handover while unpowered; a powered stop remains unverified.
 See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).
+## Automatic low-light camera readiness
+
+`rosy-omx-camera-view.service` subscribes to the existing camera topics and serves
+the original frames and their quality on localhost port8767. It opens no camera
+device. `rosy-omx-camera-readiness.service` reads that viewer and adjusts only
+V4L2 controls of the already selected, single-owner camera devices.
+
+Copy `camera-readiness.json.example` to the private
+`~/.config/rosy/omx-camera-readiness.json`, replacing both identities with the
+existing camera configuration's persistent paths. The candidates are examples
+for the measured cameras, not universal camera defaults. The tuner checks the
+actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
+in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
+`commissioning_view.py`, `camera_quality.py`, and `camera_readiness.py` from the
+same revision. Keep the existing two preview environment files and producers.
+
+Install the two user units in `~/.config/systemd/user/`, then run:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now rosy-omx-camera-readiness.service
+```
+
+The readiness unit starts the read-only viewer and its existing preview
+dependencies. It writes baseline, attempted/applied settings and a current
+`readiness.json` under `~/.local/state/rosy/omx-camera-readiness/`. Control writes
+start only after durable originals, measured control-range checks, and fresh
+advancing frames. Candidates settle before assessment. Both cameras require
+three confirmations; the receipt expires after750ms. A consumer must check the
+expiry, profile hash and current policy as well as `photometric_ready`.
+
+The web view shows brightness/contrast status on each frame. Use an SSH localhost
+forward to port8767; do not expose it publicly. An `INSUFFICIENT` assessment is a
+valid automatic outcome, not permission to ignore missing scene information.
+Bright gain noise can still pass a simple photometric screen; independent object,
+jaw clearance, calibration and motion-owner checks remain necessary.
+
+`systemctl --user stop rosy-omx-camera-readiness.service` restores the original
+camera controls. Both process cleanup and independent `ExecStopPost` attempt
+restoration. A changed profile requires a new state directory after confirming
+restoration; never delete a baseline to suppress a mismatch. Failure stops the
+tuner (`Restart=no`); inspect `restoration.json` and device/producer identity
+before restarting. Preview capture remains owned by the original producers.
+
+Actual camera-only execution and deployment evidence:
+[2026-10-16 record](../../../docs/validation/omx-lowlight-automation-2026-10-16/result.md).

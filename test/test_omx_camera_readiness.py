@@ -5,11 +5,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).parents[1] / 'deploy/robot/omx'
+REPO = Path(__file__).parents[1]
+FILES = {
+    'camera_quality': REPO / 'deploy/robot/omx/camera_quality.py',
+    'camera_readiness': REPO / 'deploy/robot/omx/camera_readiness.py',
+    'commissioning_view': REPO / 'deploy/robot/omx/commissioning_view.py',
+}
 
 
 def load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / (name + '.py'))
+    spec = importlib.util.spec_from_file_location(name, FILES[name])
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -150,4 +155,28 @@ def test_older_viewer_brightness_only_decision_is_not_accepted():
     item = sample()
     item['quality'] = dict(policy='omx-photometric-v1', usable=True)
     assert not load('camera_quality').advancing_frame(item, (0, 0))
+
+
+def test_deployment_candidates_match_the_bounded_tuner_contract():
+    import json
+    path = REPO / 'deploy/robot/omx/camera-readiness.json.example'
+    assert load('camera_readiness').validate_profile(json.loads(path.read_text()))
+
+
+def test_service_has_independent_restore_for_the_same_state_directory():
+    import configparser
+    import shlex
+    unit = configparser.ConfigParser(interpolation=None)
+    unit.read(REPO / 'deploy/robot/omx/rosy-omx-camera-readiness.service')
+    start = shlex.split(unit['Service']['ExecStart'])
+    stop = shlex.split(unit['Service']['ExecStopPost'])
+    assert 'restore' in stop
+    assert start[start.index('--state-dir')+1] == stop[stop.index('--state-dir')+1]
+    assert unit['Service']['NoNewPrivileges'] == 'true'
+    assert 'rosy-omx-camera-view.service' in unit['Unit']['Requires']
+    view = configparser.ConfigParser(interpolation=None)
+    view.read(REPO / 'deploy/robot/omx/rosy-omx-camera-view.service')
+    assert 'commissioning_view.py' in view['Service']['ExecStart']
+    assert 'rosy-omx-camera@top.service' in view['Unit']['After']
+    assert 'rosy-omx-camera@front.service' in view['Unit']['After']
 
