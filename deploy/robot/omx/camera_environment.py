@@ -89,6 +89,7 @@ class ExposureRecovery:
         self.generation += 1
         self.settle_until = monotonic+1
         self.source_after = wall+1
+        self.next_change = max(self.next_change, monotonic+5)
         self.intensities.clear()
         self.pending, self.confirmations = None, 0
         self.budget_limited = False

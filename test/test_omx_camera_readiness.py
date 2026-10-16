@@ -127,8 +127,8 @@ def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch,
 
 
 @pytest.mark.parametrize('changes', [dict(source_stamp=float('nan')), dict(sequence=1),
-                                   dict(quality={'policy': 'omx-photometric-v2'}),
-                                   dict(quality={'policy': 'omx-photometric-v2', 'usable': 'false'})])
+                                   dict(quality={'policy': 'omx-photometric-v3'}),
+                                   dict(quality={'policy': 'omx-photometric-v3', 'usable': 'false'})])
 def test_invalid_observation_cannot_trigger_tuning(changes):
     item = sample(101, 2, False)
     item.update(changes)
