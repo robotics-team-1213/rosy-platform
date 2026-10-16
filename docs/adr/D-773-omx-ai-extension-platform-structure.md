@@ -77,8 +77,7 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 ### 5. 폴더는 늘리지 않고 빈 자리를 채운다
 
 - 새로 만드는 것: `omx_adapter.api`, `integrations/models/<provider>`, `integrations/policies/lerobot`.
-- 걷어내는 것: Fleet의 `sys.path` 주입. 주입하던 소스에 wheel manifest를 주고 정식 의존성으로 선언한다. import 이름은 바꾸지 않는다.
-- 그대로 두는 것: `control`·`core_features`의 `_source_layout`. 설치 import 이름을 지키는 장치이며, 없애면 약 600개 파일과 로봇 설치 이름이 바뀐다.
+- 그대로 두는 것: `control`·`core_features`의 `_source_layout`과 Fleet의 `sys.path` 주입. 앞의 것은 설치 import 이름을 지키는 장치이며, 없애면 약 600개 파일과 로봇 설치 이름이 바뀐다. 뒤의 것은 현장 이미지와 AI PC가 소스 복사 + `PYTHONPATH`로 배포되므로 함께 바꿔야 하고, 얻는 것은 시험이 이미 지키는 10줄이다.
 - 방향을 바로잡는 것: agent가 palletizing을 import하던 것을 `contracts/skill` 타입을 거치게 바꾼다.
 
 ### 6. 단계
@@ -87,9 +86,8 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 
 | 단계 | 할 일 | 끝난 기준 | 선행 |
 |---|---|---|---|
-| A0 Fleet 소스 경로 | `rosy.decision`·`rosy_situation`·discord 연동에 wheel manifest를 주고 Fleet `install_requires`에 선언. `fleet/_source_layout.py`의 `sys.path` 주입 제거. import 이름 유지 | Fleet·AI PC 관련 시험 통과, known_failures NEW 0, site 이미지 빌드 | 없음 |
 | A1 OMX 실물 owner | D-770 G0. 실측 하드웨어 profile, 독립 stop, owner 결선 | OMX DEVICE 게이트 BENCH 증거 | 없음 |
-| A2 공통 장치 포트 | `DeviceControlPort` 구현. CORE와 OMX owner가 같은 grant·receipt 타입. `omx_adapter.api` 추가 | Fleet에서 장치별 분기 없이 Pinky·OMX 시뮬 작업 통과 | A0 |
+| A2 공통 장치 포트 | `DeviceControlPort` 구현. CORE와 OMX owner가 같은 grant·receipt 타입. `omx_adapter.api` 추가 | Fleet에서 장치별 분기 없이 Pinky·OMX 시뮬 작업 통과 | 없음 |
 | A3 배포 경로 통합 | installation profile에 PolicyArtifact·ModelProfile pin. release가 설치. SSH promote는 비상 경로로만 | 모델 교체가 release 기록으로만 일어남 | 없음 |
 | A4 학습 정책 admission | Fleet lease로 `OwnerPolicySession` 조립, cell owner의 `learned_policy` 허용 | D-770 G4 실물 비교 평가 | A1, A2, A3 |
 | A5 AI 현장 그림자 | 모델 PC L0를 통과한 ModelProfile만 AI PC에 적재. Fleet은 그림자로만 기록 | 그림자 정답 대조 기록(D-492·D-527 관문) | A3 |
@@ -140,7 +138,11 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 
 `control`·`core_features`의 `_source_layout` 제거도 검토했다. import 이름을 폴더에 맞추면 약 600개 파일(시험 약 400개)과
 로봇 설치 이름이 바뀌고, 폴더를 되돌리면 D-743~D-752의 재배치를 뒤집는다. 그래서 그대로 둔다.
-A0는 import 이름을 바꾸지 않고 끝나는 Fleet의 `sys.path` 주입 정리로 바꿨다.
+
+Fleet의 `sys.path` 주입(`rosy.decision`·`rosy_situation`·discord)을 wheel 의존성으로 바꾸는 안도 검토했다.
+현장 이미지(`deploy/site/Dockerfile.fleet`)와 AI PC 설치 스크립트가 소스 복사 + `PYTHONPATH`로 배포하고,
+Fleet은 `rosy_situation`의 순수 판정 모듈 3개만 쓴다. CI·이미지·AI PC 설치·크기 단위·구조 시험을 함께 바꿔야 하는 데 비해
+얻는 것이 작아 A0 단계를 없앴다. 다음 단계는 A2다.
 
 ## References
 
