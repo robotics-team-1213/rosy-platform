@@ -607,3 +607,25 @@ unrecorded이며 정상 조명으로 채우지 않는다. 프레임 identity·ag
 검증했으나 episode 창을 만들지 않았다. rig/보정/창은 선언이며 진위·물리 수용 증명이 아니다.
 실제 recorder 시간 창 발행·환경 저하 owner stop·강조도 실물 수용·첫 시연과 실데이터 학습은
 여전히 미완료다. [구현과 검증](../validation/omx-environment-lineage-2026-10-17/result.md).
+
+
+### 2026-10-17 다음 날 실물 수집용 전체 경로 연결
+
+기존 native owner를 사용하는 bounded teacher collector와 독립 supervisor를 연결했다.
+원본 RGB·실제 관절/reference·Fleet host clock·환경 receipt·native 목표 수용/결과를 함께 보존하고,
+환경/owner/수용 만료/시간·디스크 제한 실패 때 HOLD/cancel 뒤 미완료 원본을 남긴다.
+단독 ROS 배치와 canonical Action 자원 lock을 확인하며 controller 시작·토크 ON·자동 복귀는 하지 않는다.
+raw intake는 teacher hash와 native ledger를 다시 대조한다. 사람 검토 전에는 unknown/exclude이며
+독립 session/cycle 분할 뒤 Model PC ACT 학습·새 process 재적재로 연결한다.
+
+최종 소스 b88eee5f18 원격28개, intake/학습/전송 묶음48개 통과(선택적 기본 venv 검사1skip)와
+실제 분리 LeRobot의 합성 raw journal→reader→ACT2step→별도 model/pre/post 재적재를 확인했다.
+두 PC에 같은 소스293개를 배치해 각각 모의6개와 실제 runtime import가 통과했다.
+Fleet 수집 unit과 private 예시는 비활성으로 유지했다. 실제 PC 간 strict SSH/scp-3 시험 파일
+hash도 일치했다. native event는 소프트웨어 사실이며 물리 정지/물체 과제 성공 증명이 아니다.
+
+실제 recorder 창·환경 중단·offline 학습 연결의 소프트웨어 구현을 추가한 것이며 실제 시연은0회다.
+내일 실측 제한·집게/시야·작업공간·하중·powered stop을 확인해 acceptance를 채운 뒤 첫 수집을 한다.
+강조도 실물 수용·실데이터 학습·독립 과제 성능과 G4 완료 조건은 유지한다.
+[절차](../plans/2026-10-17-omx-next-day-collection.md) ·
+[고정 증거](../validation/omx-next-day-collection-2026-10-17/result.md).

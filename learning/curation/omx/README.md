@@ -174,3 +174,14 @@ run/profile은 카메라 receipt의 값을 보존한다. rig/보정·창 선언�
 학습 receipt와 offline 평가에도 coverage를 보존한다. 로그는 상태가 바뀔 때만 기록하므로
 연속 readiness·물체 가시성·실제 과제 성공을 입증하지 않는다. 사람 성공 검토와 세션/parent-cycle
 독립 분할은 그대로 적용한다. 환경별 실제 성공률 평가는 별도다.
+
+
+## 자동 교사 raw 수집의 intake와 학습
+
+`collection_pipeline.py prepare <raw-session...> --out <new-dataset> --repo-id <local/id>`는
+실물 CLOSED 원본의 hash·teacher/native 종료·RGB·원본 시각·환경을 재검증하고 실제 LeRobot reader로
+검사한다. `train <dataset> --decisions <human-review.json> --out <new-run>`은 사람 검토와 독립
+session/cycle 분할 뒤 ACT 학습과 별도 process model/pre/post 재적재를 실행한다.
+기본 unknown/exclude는 학습할 수 없다. 실패·중단 원본은 보존하며 `--completed-only`는 명시적으로만 사용한다.
+rehearsal 데이터는 실물 intake가 거부한다. [Fleet 수집·전송·검토·학습 절차](../../../docs/plans/2026-10-17-omx-next-day-collection.md).
+물리 시연 수집과 학습 정책의 실물 평가는 각각 현장 수용 후 진행한다.

@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
 - 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
 - 2026-10-17 · a0a864b6ea · D-775 관련 원격 회귀와 완료 범위 확정
 - 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
 - 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
-- 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구

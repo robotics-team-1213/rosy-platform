@@ -8928,3 +8928,10 @@ osy-d395-s1d\`.
 - 변경: 원본 JSONL·SHA·episode host-clock 창·run/profile·데이터 hash·rig/보정을 bind하고 split/학습/별도 reload에서 재검증한다. 실패/exclude와 미관측을 남기며 sparse 이벤트를 연속 수용으로 해석하지 않는다. legacy 보고서는 명시적 unrecorded로 분할한다.
 - 증거: 경계/영상 metadata RED→GREEN, 7260e1563 관련82개 원격 통과. 0a9954c5f9 Model PC 실제 LeRobot 합성12frame·CLI seal·독립 train/eval/test·ACT2step·별도 model/pre/post reload1개 통과(skip0). 기본 venv 경로의 앞선1skip은 별도 보존. 실제 닫힌 camera-only 원본82015bytes/37event hash와 형식 검증, 원본 불변. 독립 리뷰 P2 두 건 수정 후 남은 material finding 없음.
 - gate 변화: offline 환경 provenance 연결. 실제 recorder 창 발행·환경 저하 owner stop·강조도 현장 수용·실제 시연/학습은 미완료이며 실제 시연0회. docs/validation/omx-environment-lineage-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+
+- 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
+- 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
+- gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.

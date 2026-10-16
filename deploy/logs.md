@@ -2941,6 +2941,13 @@
 - 증거: 반복 frame·확인 보존 RED2건과 상충 품질 RED→GREEN, c6c9366d8 관련47개 원격 통과(실제 Chromium 포함). 실제24 assessment/역할48개에서 WAITING_FRAME35·fresh false STALE0, 동일 profile·baseline·budget·ledger 보존. 첫 helper 실패/자동 원복도 보존.
 - gate 변화: 불규칙 프레임 관측 경로 보완. 강조도 현장 수용·episode 환경 binding·수집 stop·실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-frame-progress-2026-10-17/result.md.
 
+
+## 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+
+- 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
+- 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
+- gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
+
 ## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
 
 - 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
