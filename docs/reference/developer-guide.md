@@ -1,6 +1,6 @@
 # ROSY 개발 가이드 — 구조·빌드·시뮬·테스트·배포
 
-현재 전체 배치와 각 holder의 유지 이유는 [폴더 책임표](platform-folder-responsibilities.md), 실제 이동·설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)를 본다. 모든 pytest는 D-584에 따라 원격 시험 PC 또는 CI에서 실행한다.
+현재 전체 배치와 각 holder의 유지 이유는 [폴더 책임표](platform-folder-responsibilities.md), 실제 이동·설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)를 본다. 실험실 노트북의 pytest는 원격 시험 PC로 보낸다. 개인 클론의 로컬 시험 조건은 [팀 가이드](team-guide.md#33-시험-결과-읽기)를 따른다(D-584, D-762).
 
 - **대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
 - **갱신:** 2026-10-14 (폴더 이름은 [편집 집](platform-folder-responsibilities.md#편집-집). World 자세는 D-752)
@@ -27,6 +27,39 @@
 | `reference/` | 동결된 upstream pinky_pro 사본 |
 
 폴더 이름과 ROS 패키지 이름은 항상 같지 않다(예: `middleware/core/gateway`는 `core`, `middleware/perception`은 `control`). site 앱은 폴더 끝 이름이 `<word>`, 패키지가 `rosy_<word>`다(D-377). Pinky의 최종 `cmd_vel`은 CORE가 발행하고, 제품 adapter는 ROS/vendor 표현 변환만 한다 ([D-317](../adr/D-317-control-and-shared-contract-source-boundaries.md)).
+
+## 인지와 판단
+
+현재 구현과 제안을 구분한다. 점선은 목표 연결이며 운영 연결로 읽지 않는다.
+
+World(`operations/world`, 배포 휠 `rosy-world`)는 별도 PC나 프로세스가 아니다. 현장의 Fleet이 `rosy.world.state.projections.map_pose`를 직접 읽어 현재 자세를 만들고, 그 자세를 미션·대형·차로에 쓴다. 행동 후보로 미래 상태를 예측하는 World model은 후속 계획이다.
+
+시험은 개발 계약 검사(실험실은 원격 시험 PC·CI, 개인 클론은 팀 가이드 조건) → 모델 PC 독립 L0 → AI PC 고정 버전 스모크 → 현장 Fleet/CORE 수용으로 나눈다([D-527](../adr/D-527-decision-test-host-boundaries.md)). 모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](../adr/D-516-offline-decision-model-replay-boundary.md)).
+
+관측 → 현재 자세 → 규칙 → CORE. `world`는 관측과 확정 사건을 대조하는 상태이며 현재 구현은 자세를 제공한다([v0.2 §3.1](../reference/ROSY_Platform_Architecture_Design_v0.2.md), [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)). 생성형 월드 모델은 구현되지 않았다. `age_s`는 그 자세가 얼마나 오래됐는지를 나타낸다.
+
+```mermaid
+flowchart LR
+    sense["Perception<br/>관측"] --> world["World<br/>현재 자세"]
+    world --> fleet["Fleet<br/>원장 · 규칙"]
+    fleet --> core["CORE<br/>재검사 · 최종 명령"]
+    decision["Decision<br/>후보"] -.-> fleet
+    learn["모델 PC"] -.-> ai["AI PC"]
+    ai -.-> decision
+```
+
+| 층 | 자리 | 지금 |
+|---|---|---|
+| **Perception** | `middleware/perception` · `operations/overhead`; 학습은 `learning/{curation,registry,training,evaluation}/perception`, 운영 CLI는 `tools/perception` | 동작. 학습 차선은 섀도 ([D-356](../adr/D-356-perception-learning-loop-and-model-delivery.md) Proposed) |
+| **World** | `operations/world` (`rosy.world.state.projections.map_pose`, `rosy.world.api`) | 받은 sighting·운영자 pin·odom의 현재 자세(`state`, `source`, `age_s`). Fleet이 직접 import. service·trip·swarm·admission은 Fleet ([D-752](../adr/D-752-canonical-world-map-pose-consumers.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)). odom으로 잇는 `source=bridged`는 dead reckoning |
+| **Decision** | `operations/decision/src/rosy/decision` (`rosy.decision`, Fleet 배포에 포함) | 기존 ER2/VLM·후보·도구 요청. 원장·admission·dispatch는 Fleet에 유지 ([D-637](../adr/D-637-remaining-decision-console-learning-folders.md)) |
+| **Supervisor** | Fleet `stuck_resolver` | 막힘 규칙과 사람. 원장·admission은 Fleet |
+| **모델** | 모델 PC 평가 → AI PC 승인 버전 | [D-516](../adr/D-516-offline-decision-model-replay-boundary.md) 경계. 점선은 목표. VLM은 [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md) Proposed |
+| **CORE** | `middleware/core/gateway` | 최종 `/cmd_vel` (D-2) |
+
+`MapPose`는 현재 자세다. `ObservationSnapshot`은 관측 근거 참조이고, 원본 영상 경로나 Fleet 정책이 아니다. `road_region`은 카메라 구역 입력의 시각·프레임·보정·변환·근거를 검사한다. 화소 기하와 주행은 하지 않는다([D-665](../adr/D-665-observed-road-region-and-paired-fitness.md)). 그 타입과 순수 검사의 정본은 `core_common.observation`이고, World import는 같은 객체를 다시보낸다([D-667](../adr/D-667-shared-observation-contract-for-offline-fitness.md)). 여러 소비자를 위한 일반 World State 계약은 아직 없다.
+
+정체(`wall` · `object` · `robot` · `person` · `unknown`)와 텍스트 후보는 별도 작업이다. Perception → World State → Supervisor → Skill → Planner/Control 다섯 층은 [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md)이 문서만으로 제안한다. 그 제안이 적은 World 경로 `fleet/localization/map_pose.py`는 지금 경로가 아니다. 절차는 [파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md).
 
 ## 빌드 및 시뮬레이션
 
