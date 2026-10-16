@@ -81,6 +81,18 @@ def test_complete_session_preserves_unknown_outcome_and_lineage(module, tmp_path
     assert record['manifest_sha256'] == hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
 
 
+def test_recorded_camera_models_are_hash_bound_raw_evidence(module, tmp_path):
+    root = tmp_path / 'raw'
+    manifest = raw_session(root)
+    (root/'camera_info.jsonl').write_text(json.dumps(dict(time_ns=101, cameras={}))+'\n', encoding='utf-8')
+    save_manifest(root, manifest)
+    record = module.validate_session(root)
+    assert 'camera_info.jsonl' in record['blobs']
+    (root/'camera_info.jsonl').write_text('{}\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='hash'):
+        module.validate_session(root)
+
+
 @pytest.mark.parametrize('fault', ['hash', 'unlisted', 'traversal', 'rehearsal', 'incomplete',
                                   'units', 'frame', 'window', 'bounds', 'nan', 'image_size', 'environment', 'open'])
 def test_invalid_sessions_refused_before_output(module, tmp_path, fault):

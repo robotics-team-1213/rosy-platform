@@ -79,6 +79,27 @@ profile와 teacher의 canonical SHA-256은 `collection_profile.digest`로 계산
 | 기존 controller와 독립 watchdog 활성·정지 수용 | 실제 PID/start ticks, controller binary SHA-256 |
 | 기존 topic/server/publisher의 단독 소유 | ROS 배치와 기대 node/namespace |
 | 실제 촬영 주기·누락·reference/관절/카메라 시차 | fps, max_frame_jitter_s, freshness/skew 제한 |
+| 두 카메라가 발행하는 CameraInfo topic (선택) | `ros.camera_info_topics` |
+| 팔 기준 frame에서 두 카메라의 장착 위치·자세와 측정 방법 (선택) | `camera_mounts` |
+
+### World 모델 학습을 위한 기록 (선택 입력)
+
+행동 조건부 World 모델은 아직 구현 대상이 아니다(D-625 §6). 다만 다시 측정할 수 없는 값은
+첫 수집부터 남긴다. 두 입력은 선택이며 없으면 기존 원본 형식과 같다.
+
+- `ros.camera_info_topics`를 선언하면 수집기가 기존 producer의 CameraInfo를 읽기 전용으로 구독한다.
+  두 카메라 모두 수신하기 전에는 `preflight`가 `waiting for camera_info`로 멈춘다. 영상 크기와 다르거나
+  유한하지 않은 K/D/R/P는 센서 이상으로 처리한다. 값은 처음과 바뀐 시점에만 원본 `camera_info.jsonl`에
+  기록되고 manifest 해시와 intake의 `rosy_provenance` 복사에 묶인다. 발행된 모델이며 보정 검증이 아니다.
+  topic이 없으면 이 키를 지우고 진행한다.
+- `camera_mounts`는 top/front 각각 `parent_frame`, `translation_m`(m, 각 축 5 m 이내),
+  `rotation_xyzw`(단위 quaternion), `method`를 적는다. profile 해시와 acceptance에 묶이고 원본
+  `profile.json`으로 보존된다. 측정하지 못했으면 키 전체를 지운다. 추정값을 넣지 않는다.
+
+검토 때 `decisions.json`의 `object_result`에 물체에 일어난 일을 적는다:
+`moved_as_intended`, `grasp_missed`, `dropped`, `displaced`, `untouched`, `unknown`(기본).
+분할 규칙과 성공 판정은 바뀌지 않는다. 실패로 제외한 episode에도 적는다. 중단된 시도는 dataset에
+들어가지 않지만 원본 RGB·관절·명령이 `rosy_provenance/`에 남으므로, 시도별로 물체 결과를 따로 메모한다.
 
 설정 예시10Hz는 측정 결과가 아니다. 허용 주기를 못 지키면 수집을 중단하며 frame 복제나 시간축
 보간으로 수량을 채우지 않는다. 실제 시각은 raw와 native dataset의 `source.*_time_ns`에도 남긴다.
