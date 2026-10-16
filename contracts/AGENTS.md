@@ -25,9 +25,11 @@ Shared ROS-free contracts and the ROS IDL package. Wheel folders carry `COLCON_I
 - A wheel's `pyproject.toml` description is the package name to import. Do not add a `package.xml` so colcon builds it.
 - Where a new contract type goes (D-427 §1, D-442, D-449):
   1. Used by only one part (middleware, operations or learning)? It is not a contract; keep it in the owning module.
+     If an `integrations/*` adapter implements or calls it, put it in that module's `api` root (`api: true`), the only module code integrations may import (D-429 §4).
   2. A CORE or Fleet HTTP/WebSocket wire shape? `foundation/core_common/protocol`, changed together with the API & Protocol Reference (D-18).
   3. Any other cross-part artifact or port type: the matching wheel (`learning`, `motion`, `skill`). A new wheel only with an ADR, when the types have a different lifetime (D-442).
-  ROS dependence is not the criterion: `core_common` imports no ROS either; its `package.xml` only packages it for the CORE image.
+
+  ROS dependence is not the criterion: `core_common` imports no rclpy or message types either (only an optional `ament_index_python` lookup); its `package.xml` is how ROS packages consume it.
 
 ### Testing Requirements
 
