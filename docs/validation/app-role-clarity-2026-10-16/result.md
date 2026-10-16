@@ -93,3 +93,6 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 - 최초 FULL Fleet: 5357 passed, 315 skipped, 2 failed. 두 실패는 discovery 모듈 분리 후 기존 console.js에서 코드를 찾던 계약 시험이다. 새 HTTP 자산·import 연결을 확인하도록 시험을 수정했다.
 - 최초 FULL 공통: 7945 passed, 1055 skipped, 1 failed. 문서의 전체 commit SHA를 secret scanner가 high-entropy token으로 판정했다. 같은 커밋의 짧은 SHA로 표기했고 scanner 규칙은 변경하지 않았다.
 - 제품 동작 변경 없이 시험·증거 표기를 보정했다. 최종 착지 성공 여부는 `land.py` 실행 결과로 확인한다.
+- 공통 UI 검사에서도 이동 전 enrollment/camera-pairing 경로 3건을 수정했고 원격 40개 검사가 통과했다. 앞선 Fleet·release guard 보정의 원격 재검증은 107개 통과했다.
+- Fleet 경로 보기 브라우저 실패는 패널 중앙 클릭이 배치에 따라 대형 관리 버튼을 누르던 시험 문제였다. 폼을 떠나는 동작을 상태 탭 클릭으로 명시했다.
+- Learning 첫 화면 배치 실패는 변경 전 main `436d52a55`의 동일 시험에서도 재현됐다(`/pixels` canvas y=692, 1280×720). `main-browser-baseline/run-1.txt`를 근거로 기존 실패 목록에 기록했다. 같은 실행에서 Fleet 단일 시험은 통과했으나, 작업 브랜치의 파일 전체 실행에서 패널 중앙 클릭 문제는 재현됐다.

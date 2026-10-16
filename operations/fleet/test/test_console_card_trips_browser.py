@@ -104,7 +104,8 @@ def test_unknown_site_pose_blocks_plan_without_hiding_inspection(site):
         assert "위치" in preview.get_attribute("reason")
         api["/api/fleet/guide"]["robots"][0]["pose"] = {
             "state": "LOCALIZED", "x": 0, "y": 0, "yaw": 0, "u_m": 0.12, "source": "operator_pin"}
-        page.locator("#context-status").click()
+        # Blur the form through its tab, rather than clicking a panel centre that can hit an action.
+        page.locator('[data-context-tab="status"]').click()
         page.clock.run_for(1500)
         expect(form.get_by_role("button", name="경로 보기", exact=True)).to_be_enabled()
         assert not posts and not errors
