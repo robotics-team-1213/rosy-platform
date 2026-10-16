@@ -8751,6 +8751,27 @@ osy-d395-s1d\`.
 - gate 변화: 루트 계약 시험 약 8,800개가 다시 main CI의 관문이다. Fleet 가장 느린 조각의 재생 추정은 555초에서 354–408초다.
 - 결정: D-436·D-762 후속. pytest 7.4(CI)와 9.x(시험 PC)의 버전 차이는 다음 개선 항목이다.
 
+## 2026-10-16 · uncommitted · fix(omx): native 초기화와 dependency export 검증
+
+- 변경: 실제 ROS 초기화 실패 경로와 CMake dependency 누락 수정의 재현 source·증거를 기록했다.
+- 증거: 잘못된 고정 포트에서 실제 driver on_init ERROR·소멸·exit 0, export 수정 후 consumer configure/build 성공.
+- gate 변화: 실물 feedback·owner HOLD·허용 범위·독립 정지 수용은 미완료, 실제 시연 0회 유지.
+- 결정: D-770 후속; validation/omx-native-init-negative-2026-10-16/result.md.
+
+## 2026-10-16 · uncommitted · fix(omx): 실제 ROS feedback replay 오류
+
+- 변경: ROS runtime의 재전송 freshness 갱신을 막고 source age와 malformed 배열을 검증했다.
+- 증거: 실제 Jazzy RED→GREEN, native ROS8·순수 intake10시험. 취소 호출을 물리 stop으로 집계하지 않는다.
+- gate 변화: 실측/정지/owner 실물 수용과 실제 자동 시연 0회는 유지한다.
+- 결정: D-770 후속; validation/omx-feedback-source-age-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · docs(omx): 작은 이동 기반 측정 순서
+
+- 변경: 사용자 요청에 따라 현재 자세 주변의 encoder·두 영상·명령/종단을 함께 기록하는 국소 식별 절차를 D-770에 추가했다. profile 0·watchdog 의미를 제조사 문서로 확인했다.
+- 증거: 정책 fixture host22, 실제 Jazzy runtime8·정책 transport4 통과. 신규3실패의 원인과 후속 검증을 별도 dated record에 보존했다.
+- gate 변화: 첫 실물 이동 전 초기화 자동 Reboot·read 오류의 기존 state 유지 경로 검증이 남는다. 실제 시연0회 유지.
+- 결정: D-770 후속.
+
 ## 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
 
 - 변경: `docs/plans/2026-10-16-app-role-clarity-design.md`와 실행 계획에 Fleet 현장 운영, Robot 한 대 관리, Pilot 직접 운전, Cam 송신, Learning 검수의 사용자 작업·소유 경계를 정리했다. 업무 소유 표, 앱 간 이동, 대상별 Robot/Pilot 이행, 결과 표시, 설치·수용의 다섯 Task로 나눴다.

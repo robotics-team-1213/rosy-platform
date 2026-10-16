@@ -164,6 +164,7 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
         publisher = nodes[2].create_publisher(JointState,prefix+'/joints',1)
         def publish():
             message = JointState();message.name = ['joint_1','joint_2'];message.position = [.1,0.]
+            message.header.stamp = nodes[2].get_clock().now().to_msg()
             publisher.publish(message)
         publisher_timer = nodes[2].create_timer(.005,publish)
         own(publisher_timer.cancel)
