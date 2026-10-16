@@ -24,7 +24,7 @@ def profile():
     return dict(schema='rosy.omx-collection-profile.v1', enabled=False, workcell_id='fixture',
                 instance_id='fixture', rig_revision='fixture-rig', calibration_revision='fixture-cal',
                 task='fixture only', fps=10, max_image_age_s=.5, max_sample_gap_s=.3,
-                max_state_age_s=.2, max_reference_age_s=.2, free_disk_bytes=1024,
+                max_state_age_s=.2, max_reference_age_s=.2, free_disk_bytes=1024, max_frame_jitter_s=.2,
                 camera_shapes={r: [2, 2, 3] for r in ('top', 'front')},
                 joint_names=['joint'+str(i) for i in range(6)],
                 normalization=[[-1., 1.]]*6, max_session_s=5.)
@@ -45,6 +45,8 @@ class Backend:
                        confirmations=3, source_after=0., environment_epoch=1, control_generation=0)
                        for r in ('top', 'front')}, observations={})
         for role in ('top', 'front'):
+            if self.fault == 'generation' and self.commands:
+                env['environment'][role]['control_generation'] = 1
             env['observations'][role] = dict(fresh=True, source_stamp=now/1e9, sequence=self.n,
                 source_age_s=0., receipt_age_s=0., quality=dict(policy='omx-photometric-v3',
                 condition=conditions, usable=conditions == 'NORMAL', mean_intensity=90.,
@@ -83,7 +85,7 @@ def test_rehearsal_records_windows_original_images_and_never_claims_hardware(mod
     assert all((tmp_path/'capture'/p).is_file() for p in result['files'])
 
 
-@pytest.mark.parametrize('fault', ['dark', 'reject'])
+@pytest.mark.parametrize('fault', ['dark', 'reject', 'generation'])
 def test_degradation_or_owner_rejection_stops_and_preserves_incomplete_attempt(module, tmp_path, fault):
     backend = Backend(fault)
     result = module.run_session(profile(), teacher(), tmp_path/fault, backend)

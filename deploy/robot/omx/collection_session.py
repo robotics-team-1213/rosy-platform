@@ -15,7 +15,8 @@ def validate_environment(receipt, profile, *, now_ns):
     require(type(stamp) is int and type(expires) is int and 0 < stamp <= now_ns < expires
             and now_ns-stamp <= 750_000_000, 'environment receipt stale/future')
     require(isinstance(receipt.get('run_id'), str) and bool(receipt['run_id'])
-            and isinstance(receipt.get('profile_sha256'), str) and len(receipt['profile_sha256']) == 64,
+            and isinstance(receipt.get('profile_sha256'), str) and len(receipt['profile_sha256']) == 64
+            and all(c in '0123456789abcdef' for c in receipt['profile_sha256']),
             'environment run/profile missing')
     require(receipt.get('motion_admitted') is False and receipt.get('physical_acceptance') is False,
             'camera receipt scope differs')
@@ -24,9 +25,16 @@ def validate_environment(receipt, profile, *, now_ns):
         plan = receipt.get('environment', {}).get(role, {})
         require(advancing_frame(item, (0., 0)) and item['quality'].get('usable') is True
                 and item['quality'].get('condition') == 'NORMAL', role+' image insufficient')
+        quality = item['quality']
+        require(all(number(quality.get(key)) and 0 <= quality[key] <= 255
+                    for key in ('mean_intensity', 'spatial_contrast', 'p5', 'p95'))
+                and all(number(quality.get(key)) and 0 <= quality[key] <= 1
+                        for key in ('dark_fraction', 'clipped_fraction')), role+' invalid quality metrics')
         require(plan.get('state') in ('NORMAL', 'WAITING_FRAME') and plan.get('condition') == 'NORMAL'
                 and plan.get('pending') == 'NORMAL' and type(plan.get('confirmations')) is int
                 and plan['confirmations'] >= 3, role+' environment not stable')
+        require(all(type(plan.get(key)) is int and plan[key] >= 0
+                    for key in ('environment_epoch','control_generation')), role+' environment generation invalid')
         require(number(plan.get('source_after')) and item['source_stamp'] > plan['source_after'],
                 role+' frame predates control settlement')
         require(0 <= now_ns/1e9-item['source_stamp'] <= profile['max_image_age_s']
@@ -85,6 +93,8 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
             append(store.root/'environment.jsonl', sample['environment'])
             last_frame, last_identity = time.monotonic(), None
             identity = (current['run_id'], current['profile_sha256'])
+            generations = {r: (sample['environment']['environment'][r]['environment_epoch'],
+                                sample['environment']['environment'][r]['control_generation']) for r in ('top','front')}
             for ordinal, step in enumerate(teacher['steps']):
                 require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
                 validate_observation(backend.observe(), profile, time.time_ns())
@@ -101,12 +111,18 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                     validate_observation(sample, profile, time.time_ns())
                     env = sample['environment']
                     require((env['run_id'], env['profile_sha256']) == identity, 'environment run/profile changed')
+                    require(all((env['environment'][r]['environment_epoch'], env['environment'][r]['control_generation'])
+                                == generations[r] for r in generations), 'environment/control generation changed')
                     for event in backend.drain_events():
                         append(store.root/'events.jsonl', event)
                     image_identity = tuple(sample['images'][role]['source_stamp'] for role in ('top', 'front'))
                     now = time.monotonic()
                     if last_identity is None or all(a > b for a, b in zip(image_identity, last_identity)):
                         if now-last_frame >= 1/profile['fps'] or last_identity is None:
+                            if last_identity is not None:
+                                expected = 1/profile['fps']
+                                require(abs(now-last_frame-expected) <= profile.get('max_frame_jitter_s', .03),
+                                        'capture cadence exceeds accepted jitter; no frame interpolation')
                             store.sample(current, sample, step['positions'])
                             last_identity, last_frame = image_identity, now
                     require(now-last_frame <= profile['max_sample_gap_s'], 'new synchronized frame deadline exceeded')

@@ -58,7 +58,9 @@ def main(argv=None):
         validate_teacher(teacher, profile)
         if args.command == 'check':
             args.out.mkdir(parents=True)
-            save(args.out/'check.json', dict(config_valid=True, device_connected=False, motion_admitted=False))
+            report = dict(config_valid=True, device_connected=False, motion_admitted=False)
+            save(args.out/'check.json', report)
+            print(json.dumps(report))
             return 0
         # Imports and construction are after static admission; check/rehearsal never import rclpy.
         from collection_ros import RosBackend
@@ -67,14 +69,21 @@ def main(argv=None):
         sample = backend.ready()
         if args.command == 'preflight':
             args.out.mkdir(parents=True)
-            save(args.out/'preflight.json', dict(ready=True, goals_submitted=0, motion_admitted=False,
-                                                environment_run_id=sample['environment']['run_id']))
+            report = dict(ready=True, goals_submitted=0, motion_admitted=False,
+                          environment_run_id=sample['environment']['run_id'])
+            save(args.out/'preflight.json', report)
+            print(json.dumps(report))
             return 0
         result = run_session(profile, teacher, args.out, backend, episodes=args.episodes)
+        print(json.dumps(dict(manifest=str(args.out/'manifest.json'), episodes=result['episodes'],
+                              stop=result['stop'], task_success=None)))
         return 0 if result['episodes'] and all(e['complete'] for e in result['episodes']) else 2
     except (Exception, KeyboardInterrupt) as exc:
-        print(json.dumps(dict(refused=True, error=f'{type(exc).__name__}: {exc}', physical_acceptance=False)),
-              file=sys.stderr)
+        report = dict(refused=True, error=f'{type(exc).__name__}: {exc}', physical_acceptance=False)
+        if not args.out.exists():
+            args.out.mkdir(parents=True)
+            save(args.out/'blocked.json', report)
+        print(json.dumps(report), file=sys.stderr)
         return 2
     finally:
         if backend is not None:

@@ -107,13 +107,20 @@ class RosBackend:
         return sample
 
     def verify_exclusion(self):
-        from rclpy.action.graph import get_action_client_names_and_types_by_node
+        from rclpy.action.graph import (get_action_client_names_and_types_by_node,
+                                       get_action_server_names_and_types_by_node)
+        servers = []
         for name, namespace in self.node.get_node_names_and_namespaces():
+            actions = get_action_server_names_and_types_by_node(self.node, name, namespace)
+            if any(action == self.profile['ros']['trajectory_action'] for action, _ in actions):
+                servers.append((name, namespace))
             if (name, namespace) == (self.node.get_name(), self.node.get_namespace()):
                 continue
             clients = get_action_client_names_and_types_by_node(self.node, name, namespace)
             require(all(action != self.profile['ros']['trajectory_action'] for action, _ in clients),
                     'another action owner/client is present')
+        expected = self.profile['ros']['action_server']
+        require(servers == [(expected['node_name'], expected['node_namespace'])], 'native action server identity differs')
 
     def monitor(self):
         while not self.closed.wait(.05):

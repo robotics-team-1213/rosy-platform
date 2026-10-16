@@ -7,7 +7,7 @@ def profile():
     return dict(schema='rosy.omx-collection-profile.v1', enabled=False, workcell_id='rehearsal',
         instance_id='rehearsal', rig_revision='synthetic-rig', calibration_revision='synthetic-cal',
         task='software fixture only', fps=10, max_image_age_s=.5, max_sample_gap_s=.3,
-        max_state_age_s=.2, max_reference_age_s=.2, max_skew_s=.1, max_session_s=5.,
+        max_state_age_s=.2, max_reference_age_s=.2, max_skew_s=.1, max_session_s=5., max_frame_jitter_s=.2,
         free_disk_bytes=1024*1024, camera_shapes={r: [32, 32, 3] for r in ('top', 'front')},
         joint_names=['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1'],
         normalization=[[-1., 1.] for _ in range(6)])
