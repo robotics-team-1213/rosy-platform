@@ -197,6 +197,19 @@ def test_receiver_invalidates_confirmation_on_unsampled_geometry_round_trip():
         obj.measured.select(SOURCE, session, geometry(record), grant)
 
 
+def test_unseen_grant_issued_before_geometry_change_cannot_confirm_after_return():
+    obj, record, raw = server()
+    src = _Source(SOURCE, None, lens=record['bundle']['capture']['lens'], link=1)
+    obj._sources[SOURCE] = src
+    obj._handle_frame(src, pack_header(FrameHeader(1, 0, 640, 360, 0))+raw)
+    session = obj.measured_status(SOURCE)['session_id']
+    token = obj.preview_signer.issue(principal_id='operator', source_id=SOURCE, measured=claims(record, session))
+    obj._handle_frame(src, pack_header(FrameHeader(2, 0, 640, 360, 90))+raw)
+    obj._handle_frame(src, pack_header(FrameHeader(3, 0, 640, 360, 0))+raw)
+    result = asyncio.run(obj._preview_response(f'/api/vision/sources/{SOURCE}/frame', f'Bearer {token}'))
+    assert result.status_code == 409
+
+
 def test_advancing_stream_can_finish_a_fresh_frame(monkeypatch):
     obj, record, raw = server()
     original = runtime().render_plane
