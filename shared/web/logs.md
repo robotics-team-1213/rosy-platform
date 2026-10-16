@@ -789,3 +789,9 @@
 - 증거: 첫 착지 검사 2725 passed, 270 skipped, canvas 등록 누락 1 failed를 수정. 합성 자료 Chromium 실행·취소·이력 24개·편집 보존 확인. 최종 재시험 결과는 착지 도구 로그에 기록한다.
 - gate 변화: 없음. 실제 GPU 모델과 운영 배포 수용은 미검증.
 - 결정: D-764
+
+## 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
+
+- 변경: enrollment/camera-pairing의 실제 devices 경로를 공통 UI 검사에 반영했다. 비가역 버튼·비활성 이유·항상 살아 있는 정지 검사 조건은 유지한다.
+- 증거: 첫 전체 착지 검사에서 기존 경로 때문에 3 failed, 같은 invocation에서 6252 passed / 63 skipped. 수정 후 원격 검증은 착지 로그에서 확인한다.
+- gate 변화: 없음.
