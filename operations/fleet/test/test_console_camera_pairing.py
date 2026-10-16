@@ -151,7 +151,7 @@ def _page() -> _Ids:
 
 
 def test_every_id_the_module_touches_is_on_the_page_inside_the_camera_section():
-    module = (WEB / "camera-pairing.js").read_text(encoding="utf-8")
+    module = (WEB / "devices" / "camera-pairing.js").read_text(encoding="utf-8")
     page = _page()
     used = set(re.findall(r'el\("([\w-]+)"\)', module))
     assert used, "the scan found no ids"
@@ -178,7 +178,7 @@ def test_the_camera_section_sits_in_device_link_beside_robot_enrollment_with_a_r
 def test_the_shell_wires_the_panel_and_reasks_it_on_every_login():
     # D-410 — 카메라 연결 승인 패널은 설치 화면 엔트리(install.js)가 잇는다.
     shell = (WEB / "install.js").read_text(encoding="utf-8")
-    module = (WEB / "camera-pairing.js").read_text(encoding="utf-8")
+    module = (WEB / "devices" / "camera-pairing.js").read_text(encoding="utf-8")
     assert 'import { createCameraPairingPanel } from "./camera-pairing.js";' in shell
     assert "dialogs: { confirmIrreversible, openLiveDialog }" in shell
     assert "locked: () => auth.locked" in shell

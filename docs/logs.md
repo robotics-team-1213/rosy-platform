@@ -8673,3 +8673,21 @@ osy-d395-s1d\`.
 - 증거: 사용자 방향 합의 및 ADR 기록 요청, 기존 검수 자료 확인 기록·Gazebo m30/m31 인계와 현재 drivable 후처리/모델 역할 검사를 대조했다. 새 학습·모델 재추론·Gazebo 실행 증거는 아니다.
 - gate 변화: 없음. Accepted는 방향 결정이며 구현·정책 승격·배포·실물 수용은 별도다. main 착지·push는 하지 않는다.
 - 결정: D-769.
+
+## 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
+
+- 변경: `docs/plans/2026-10-16-app-role-clarity-design.md`와 실행 계획에 Fleet 현장 운영, Robot 한 대 관리, Pilot 직접 운전, Cam 송신, Learning 검수의 사용자 작업·소유 경계를 정리했다. 업무 소유 표, 앱 간 이동, 대상별 Robot/Pilot 이행, 결과 표시, 설치·수용의 다섯 Task로 나눴다.
+- 근거: D-370·D-377·D-425·D-487·D-741·D-757, 현재 surface registry와 folder responsibility 안내, 기존 Account/SRP 계획을 대조했다. Pilot 2026-10-05 DEVICE GO를 보존하고 대상·릴리스별 전환 증거를 확인하도록 했다.
+- gate 변화: 없음. 검토용 문서 작성이며 제품 코드·브라우저·배포·장치 시험은 실행하지 않았다. main 착지·push는 하지 않는다.
+
+## 2026-10-16 · uncommitted · 앱 책임 실행: 업무 소유표와 현재 이름 연결
+
+- 변경: `reference/app-responsibilities.md`에 전체 표면 분류와 업무별 화면/API/정본/실행/완료 증거·이행 조건을 연결했다. 개발 가이드의 관제 표시 이름을 D-487의 Rosy Fleet으로 맞췄다.
+- 증거: 기준 `d19abd20b` 원격 app roles/실제 owner/Robot 패널/Fleet 문서 import 계약 51 passed, exit 0. 현재 문서 변경은 새 API나 실행 권한을 추가하지 않는다.
+- gate 변화: 없음. 화면 이동·중복 조종·설치 수용은 후속 Task에서 확인한다.
+
+## 2026-10-16 · uncommitted · 앱 책임 실행과 장치 연결 단위 분리
+
+- 변경: 업무 소유표를 개발 가이드에 연결하고 Fleet의 승인된 Robot/Pilot 진입과 Robot의 같은 대상 Pilot 링크를 구현했다. 광고 origin·이전 세션의 cache를 거절한다. D-766에 따라 devices 자원 패키지와 읽기 adapter를 분리하고 기존 root·console.js의 크기 기록을 낮췄다. Learning은 기존 개발 표면 제목 계약을 유지한다.
+- 증거: `validation/app-role-clarity-2026-10-16/result.md`. 독립 리뷰 Important 2건은 재현 후 수정했으며 브라우저 회귀 50개가 통과했다. 분리 뒤 구조·설치 46개와 연결/Node/API 41개가 통과했다. 최종 제출 트리 회귀·생성 문서·커밋 범위 확인은 같은 기록에 추가한다.
+- gate 변화: 없음. Pilot의 기존 DEVICE GO를 보존하고 현재 대상·릴리스별 증거가 없는 중복 조종은 이행 예외로 유지한다. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
