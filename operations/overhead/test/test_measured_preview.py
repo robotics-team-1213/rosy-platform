@@ -89,7 +89,8 @@ def jpeg():
 
 def server():
     record = row()
-    obj = IngestServer({SOURCE: 'phone-token'}, preview_signer=VisionLeaseSigner('p'*32))
+    # Availability integration tolerates loaded runners; exact expiry has its own clock test.
+    obj = IngestServer({SOURCE: 'phone-token'}, preview_signer=VisionLeaseSigner('p'*32), preview_max_age_s=5.)
     raw = jpeg()
     obj._sources[SOURCE] = SimpleNamespace(link=1, lens=record['bundle']['capture']['lens'],
         latest=LatestFrame(FrameHeader(2, 0, 640, 360, 0), raw, time.time(), time.time()))
