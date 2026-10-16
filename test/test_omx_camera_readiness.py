@@ -41,7 +41,9 @@ def test_black_flat_or_clipped_images_do_not_pass(value):
 
 def sample(stamp=100, sequence=1, usable=True):
     return dict(fresh=True, source_stamp=stamp, sequence=sequence,
-                quality=dict(usable=usable, policy='omx-photometric-v2'))
+                quality=dict(usable=usable, policy='omx-photometric-v3',
+                             condition='NORMAL' if usable else 'UNDEREXPOSED',
+                             mean_intensity=100 if usable else 0, spatial_contrast=50, clipped_fraction=0))
 
 
 def test_readiness_requires_both_streams_advancing_and_never_admits_motion():
@@ -68,7 +70,7 @@ def test_replay_stale_or_missing_quality_cannot_hold_readiness_open():
 
 def test_quality_and_jpeg_have_the_same_sample_lifetime():
     store = load('commissioning_view').ObservationStore()
-    metrics = dict(usable=False, policy='omx-photometric-v2')
+    metrics = dict(usable=False, policy='omx-photometric-v3')
     store.put('top', 100, b'jpeg', quality=metrics, received=10, wall=100)
     metrics['usable'] = True
     assert not store.snapshot(now=10.1, wall=100.1)['top']['quality']['usable']
@@ -109,6 +111,11 @@ def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch,
     import sys
     quality = load('camera_quality')
     monkeypatch.setitem(sys.modules, 'camera_quality', quality)
+    spec = importlib.util.spec_from_file_location('camera_environment',
+                                                REPO / 'deploy/robot/omx/camera_environment.py')
+    environment = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(environment)
+    monkeypatch.setitem(sys.modules, 'camera_environment', environment)
     runtime = load('camera_readiness')
     restored = []
     monkeypatch.setattr(runtime, 'prepare', lambda *a: {'cameras': {}})
@@ -120,8 +127,8 @@ def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch,
 
 
 @pytest.mark.parametrize('changes', [dict(source_stamp=float('nan')), dict(sequence=1),
-                                   dict(quality={'policy': 'omx-photometric-v2'}),
-                                   dict(quality={'policy': 'omx-photometric-v2', 'usable': 'false'})])
+                                   dict(quality={'policy': 'omx-photometric-v3'}),
+                                   dict(quality={'policy': 'omx-photometric-v3', 'usable': 'false'})])
 def test_invalid_observation_cannot_trigger_tuning(changes):
     item = sample(101, 2, False)
     item.update(changes)

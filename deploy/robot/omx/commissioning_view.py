@@ -81,6 +81,9 @@ PAGE = '''<!doctype html><html lang="ko"><meta charset="utf-8">
 <script src="/viewer.js"></script></html>'''
 
 SCRIPT = '''const cameras = ["top", "front"];
+const conditions = {NORMAL:"밝기·대비 조건 충족", UNDEREXPOSED:"어두움",
+  OVEREXPOSED:"과다 노출", MIXED_LIGHTING:"명암 불균형", LOW_CONTRAST:"낮은 대비",
+  LOW_SPATIAL_SIGNAL:"장면 구조 부족"};
 const displayed = new Map();
 let jointExpires = 0;
 const expiresAt = (item, observedAt) => observedAt +
@@ -130,7 +133,7 @@ async function refresh() {
     for (const key of cameras) {
       const item = state[key];
       document.getElementById(key+"-status").textContent = item.fresh
-        ? `수신 ${item.receipt_age_s.toFixed(2)}초 전 · ${new Date(item.source_stamp*1000).toLocaleTimeString()} · #${item.sequence} · ${item.quality ? (item.quality.usable ? "영상 밝기·대비 조건 충족" : "밝기·대비 부족") : "영상 품질 미확인"}`
+        ? `수신 ${item.receipt_age_s.toFixed(2)}초 전 · ${new Date(item.source_stamp*1000).toLocaleTimeString()} · #${item.sequence} · ${conditions[item.quality?.condition] || "영상 품질 미확인"}`
         : "최신 영상 없음";
     }
     jointExpires = state.joints.fresh ? expiresAt(state.joints, observedAt) : 0;

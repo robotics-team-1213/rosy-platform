@@ -548,3 +548,33 @@ bounded V4L2 후보 자동 적용, best 설정 선택, 만료되는 readiness와
 clearance 판독이나 motion admission이 아니다. source/원격 시험/카메라 제어/장치 구동의
 증거를 구분하며 실제 시연과 IL eligible 데이터는0회다. 실제 수집·학습의 완료 기준은 유지한다.
 [실행·설치·제한](../validation/omx-lowlight-automation-2026-10-16/result.md).
+
+
+## 2026-10-17 후속: 환경 조건을 선행 계약으로 다루는 구조
+
+사용자는 어두울 때의 보정만이 아니라 밝음·어둠 등 환경을 미리 고려하는 수집/학습 구조를
+요구했다. 지원할 환경 범위·관측 출처·시각·판정 정책·복구 한계·실제 수용 증거를 먼저 정한다.
+알 수 없는 조건을 정상으로 채우지 않으며, RGB 지표를 실제 lux나 물체 성공으로 표시하지 않는다.
+
+환경 관측, 허용 범위 판단, 제한된 복구, 기존 owner admission, 원본/환경 이력,
+에피소드 검토·분할·환경별 평가를 구분한다. 새 환경에 대응할 때 수집기마다 예외를 붙이지 않고
+해당 조건의 관측·정책·복구·수용 시험을 추가한다. 지원 환경과 미검증 환경을 함께 보고한다.
+
+| 기존 결정 | 관계 |
+|---|---|
+| D-427 | 기존 deploy/OMX 안에서 설치·카메라 상태 전이를 분리한다. Fleet/World/Decision/CORE 소유권을 옮기지 않는다. |
+| D-429 | 외부 API/DTO 변경 없이 내부 camera policy v3와 profile hash를 고정한다. 구형 판단을 혼합하지 않는다. |
+| D-430 | 환경 screening은 관절/torque 권한을 주지 않는다. 실물 admission과 stop은 기존 owner 책임이며 camera service가 우회하지 않는다. |
+
+이번 구현은 정적 image condition과 지속적인 환경 전이·양방향 노출 복구를 분리했다.
+dark/bright 후보, entry/exit 확인, 적용 완료 뒤 cooldown·host receive settling, epoch별 best,
+재시작에도 유지되는 분당 attempted batch budget과 환경 이력을 추가했다. 실제 카메라에서
+bounded16초 실행·원본 복구·기존 서비스 재시작 뒤 v3 서비스로 이전했고 원본 baseline은 보존했다.
+
+데이터에는 원본/환경 이력 hash·run/profile/rig/calibration·시간 범위와 실패·개입을 묶고,
+cycle/session 독립 분할과 환경별 실제 수량·held-out coverage를 보고해야 한다. 합성 증강을
+실제 환경 수용으로 취급하지 않는다. 현재 episode/학습 manifest binding과 수집 executor의
+환경 저하 stop 결선은 미완료다. 강조도·역광·가림·움직임·온도 등 미검증 조건은 지원으로 선언하지 않는다.
+실제 시연·IL eligible 데이터는0회이며 첫 실제 데이터셋 완료 기준을 유지한다.
+[환경 범위와 연결 계약](../plans/2026-10-17-omx-environment-readiness.md),
+[source·원격 시험·실제 camera-only 실행과 이전](../validation/omx-environment-readiness-2026-10-17/result.md).
