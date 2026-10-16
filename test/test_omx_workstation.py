@@ -254,3 +254,11 @@ def test_ai_simulation_excludes_direct_leader_trajectory_input():
     assert "apply --check /tmp/omx-ai-sim-action-only.patch" in dockerfile
     assert "install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py" in dockerfile
     assert "-            '-r /arm_controller/joint_trajectory:=/leader/joint_trajectory'," in patch
+
+
+def test_driver_lifecycle_fix_is_applied_before_vendor_compilation():
+    image = (ROOT / "deploy/robot/omx/Dockerfile").read_text()
+    for name in ("hardware-lifecycle-errors.patch", "hardware-owner-command-path.patch"):
+        assert image.index(f"COPY patches/{name}") < image.index("colcon build")
+        assert f"git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/{name}" in image
+        assert f"git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/{name}" in image
