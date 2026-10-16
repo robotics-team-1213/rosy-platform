@@ -14,7 +14,7 @@ from test_review_admission import fixture
 from test_review_dataset import delivery, digest
 
 
-def setup(tmp_path):
+def _setup(tmp_path):
     args, authority, built, trainer = fixture(tmp_path)
     receipt = delivery(authority)
     receipt['revision'] = {k: authority[k] for k in ('workspace_id','generation','decision_sha256')}
@@ -31,7 +31,7 @@ def setup(tmp_path):
 
 
 def test_build_request_and_owner_admission_reach_isolated_trainer_once(tmp_path):
-    args, authority, built, config, owner, current, requests=setup(tmp_path)
+    args, authority, built, config, owner, current, requests=_setup(tmp_path)
     calls=[]
     def train(cfg,out,*,indexed_review):
         dataset=args['store'].dataset_path(*cfg['dataset'].split('@'))
@@ -52,7 +52,7 @@ def test_build_request_and_owner_admission_reach_isolated_trainer_once(tmp_path)
 @pytest.mark.parametrize('age', [2, 20])
 def test_owner_composition_keeps_the_stricter_freshness_before_request_and_training(
         tmp_path, monkeypatch, cycle_ttl, owner_ttl, age):
-    args, authority, built, config, owner, current, requests = setup(tmp_path)
+    args, authority, built, config, owner, current, requests = _setup(tmp_path)
     config['authority']['max_age_s'] = cycle_ttl
     owner = review_pipeline.ReviewPipeline(source_proof_files=args['source_proof_files'],
         staging_parent=args['staging_parent'], dataset_name='indexed',
@@ -86,7 +86,7 @@ def test_owner_composition_keeps_the_stricter_freshness_before_request_and_train
 
 @pytest.mark.parametrize('cycle_ttl,owner_ttl', [(5, 90), (90, 5)])
 def test_slow_build_cannot_widen_pinned_ttl_before_request(tmp_path, monkeypatch, cycle_ttl, owner_ttl):
-    args, authority, built, config, old_owner, current, requests = setup(tmp_path)
+    args, authority, built, config, old_owner, current, requests = _setup(tmp_path)
     config['authority']['max_age_s'] = cycle_ttl
     clock = [100]
     owner = review_pipeline.ReviewPipeline(source_proof_files=args['source_proof_files'],
@@ -108,7 +108,7 @@ def test_slow_build_cannot_widen_pinned_ttl_before_request(tmp_path, monkeypatch
 
 @pytest.mark.parametrize('failure',['expired','workspace','missing_highwater','revoked'])
 def test_current_failure_creates_no_request_or_trainer(tmp_path,failure):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     receipt=json.loads(current.read_text())
     if failure=='expired':receipt['checked_at_unix']=1
     if failure=='workspace':receipt['workspace_id']='different'
@@ -124,14 +124,14 @@ def test_current_failure_creates_no_request_or_trainer(tmp_path,failure):
 
 
 def test_indexed_manual_request_without_owner_cannot_reach_trainer(tmp_path):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     (requests/'manual.json').write_text(json.dumps({'purpose':'research','dataset':'indexed@'+built['dataset_revision']}))
     state=learning_cycle.run_once(config,tmp_path/'cycle',trainer_fn=lambda *a,**kw:pytest.fail('owner missing'))
     assert state['requests'][str(requests/'manual.json')]['status']=='blocked'
 
 
 def test_postbuild_revocation_leaves_content_without_request(tmp_path,monkeypatch):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     original=review_pipeline.build_dataset
     def revoke(*a,**kw):
         result=original(*a,**kw)
@@ -145,7 +145,7 @@ def test_postbuild_revocation_leaves_content_without_request(tmp_path,monkeypatc
 
 
 def test_owner_policy_mutation_denied_before_gpu_or_request(tmp_path):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     owner.dataset_name='modified'
     with pytest.raises(JobError):
         learning_cycle.run_once(config,tmp_path/'cycle',trainer_fn=lambda *a,**kw:pytest.fail('mutated'),review_pipeline=owner)
@@ -154,7 +154,7 @@ def test_owner_policy_mutation_denied_before_gpu_or_request(tmp_path):
 
 @pytest.mark.parametrize('change',['gate','config'])
 def test_build_callback_cannot_lower_gate_or_replace_recipe(tmp_path,monkeypatch,change):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     original=review_pipeline.build_dataset
     def changed(*a,**kw):
         result=original(*a,**kw)
@@ -169,7 +169,7 @@ def test_build_callback_cannot_lower_gate_or_replace_recipe(tmp_path,monkeypatch
 
 
 def test_expiry_during_request_staging_creates_no_request(tmp_path,monkeypatch):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     original=review_pipeline.os.fsync
     def expired(fd):
         original(fd)
@@ -187,7 +187,7 @@ def test_expiry_during_request_staging_creates_no_request(tmp_path,monkeypatch):
 
 
 def test_request_then_current_revocation_blocks_restart_even_with_new_owner(tmp_path):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     learning_cycle.run_once(config,tmp_path/'cycle',trainer_fn=lambda *a,**kw:{},review_pipeline=owner)
     receipt=json.loads(current.read_text());receipt['available']=False
     current.write_text(json.dumps(receipt))
@@ -203,7 +203,7 @@ def test_cycle_real_admission_and_ready_composition_uses_synthetic_stages_only(t
     import train_job
     from job_state import Rejected
     from test_training_job import model
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     artifact=tmp_path/'synthetic-artifact';manifest=model(artifact)
     stages=[]
     class FakeTrainingStages:
@@ -249,7 +249,7 @@ def test_request_is_one_captured_body_not_hash_then_a_different_body(tmp_path,mo
 def test_same_companion_is_required_by_build_and_private_admission(tmp_path):
     from test_review_dataset import attach_build_companion
     import review_dataset
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     companion,_=attach_build_companion(args,tmp_path)
     gate=Path(config['trainer']['gate']);doc=json.loads(gate.read_text())
     doc['eval_set']=str(args['eval_folders'][0]);gate.write_text(json.dumps(doc))
@@ -271,7 +271,7 @@ def test_same_companion_is_required_by_build_and_private_admission(tmp_path):
 def test_generation_only_refresh_never_retrains_or_resets_attempt_budget(tmp_path,outcome):
     from test_review_authority import encoded,reseal
     import hashlib
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     calls=[]
     def train(*a,**kw):
         calls.append(True)
@@ -301,7 +301,7 @@ def test_generation_only_refresh_never_retrains_or_resets_attempt_budget(tmp_pat
 
 def test_no_actual_mask_approval_holds_before_source_or_companion_reads(tmp_path):
     from test_review_authority import current as pending,seal_bundle
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     value=pending();bundle=args['export_root'].parent/'pending';seal_bundle(bundle,value)
     receipt=delivery(value);receipt['revision']={k:value[k] for k in ('workspace_id','generation','decision_sha256')}
     current.write_text(json.dumps(receipt));config['authority']['workspace_id']=value['workspace_id']
@@ -317,7 +317,7 @@ def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypat
     import runpy
     import time
     from test_review_authority import current as pending
-    args, authority, built, config, owner, current, requests = setup(tmp_path)
+    args, authority, built, config, owner, current, requests = _setup(tmp_path)
     value = pending()
     receipt = delivery(value, stamp=time.time())
     receipt['revision'] = {k: value[k] for k in ('workspace_id', 'generation', 'decision_sha256')}
@@ -343,7 +343,7 @@ def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypat
 
 
 def test_build_cannot_change_valid_proof_bytes_under_old_logical_budget(tmp_path,monkeypatch):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     original=review_pipeline.build_dataset
     changed=[False]
     def build(*a,**kw):
@@ -358,7 +358,7 @@ def test_build_cannot_change_valid_proof_bytes_under_old_logical_budget(tmp_path
 
 
 def test_expiry_during_final_logical_recapture_cannot_publish_request(tmp_path,monkeypatch):
-    args,authority,built,config,owner,current,requests=setup(tmp_path)
+    args,authority,built,config,owner,current,requests=_setup(tmp_path)
     clock=[100];owner.now=lambda:clock[0]
     original=owner._logical_key;calls=[0]
     def slow(*a,**kw):
