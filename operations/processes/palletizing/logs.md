@@ -55,4 +55,5 @@
 
 - 변경: `carry_z`는 기준 순서의 앞 Step이 아니라 그 Step을 기다리지 않는 모든 Step(다른 팔이 먼저 끝낼 수 있는 것)의 윗면으로 정한다. 도달 판정은 놓는 자세뿐 아니라 실제 집는 자세(집는 자리 높이 + 물체 높이 - grasp_depth, 놓는 yaw)와 두 자세를 `carry_z`로 올린 자세까지 본다. `alternates`는 `shared_band` Step에만 두고 대체 팔마다 집는 자리를 적는다. `upright_fixed`는 `yaw_deg`에 0이 없으면 로더가 거부한다. `support_ratio_v1`은 "넘게"로 읽는다(정확히 60 %는 불통과). 손으로 계산한 고정 사례(지지 비율, 위 하중, 핑거 띠, 두 층 탑의 `carry_z`)를 더했다.
 - 후속: 팔별 Action 내용(각 팔 `base_in_cell` 좌표로 변환), Fleet `cell_compiler` 연결, 공유 D-402 IK 도달 판정, 팔레트가 여럿일 때 팔레트 사이의 핑거·`gap` 검사, 팔레트 좌표계 회전, `process_artifact_digest`에 계획기 버전 넣기, cell profile에서 핑거 치수 읽기, G1 SIM.
-- gate 변화: 없음. SOURCE 원격 pytest 237 passed, known_failures 0 new.
+- 증거: 원격 pytest(palletizing/test, 호환성, legacy Cell, 의존 경계) 237 passed, known_failures 0 new.
+- gate 변화: 없음.
