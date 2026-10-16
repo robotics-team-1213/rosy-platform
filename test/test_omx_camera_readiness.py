@@ -106,7 +106,7 @@ def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch,
     monkeypatch.setitem(sys.modules, 'camera_quality', quality)
     runtime = load('camera_readiness')
     restored = []
-    monkeypatch.setattr(runtime, 'prepare', lambda *a: {})
+    monkeypatch.setattr(runtime, 'prepare', lambda *a: {'cameras': {}})
     monkeypatch.setattr(runtime, 'save', lambda *a: (_ for _ in ()).throw(OSError('disk full')))
     monkeypatch.setattr(runtime, 'restore', lambda root: restored.append(root))
     with pytest.raises(OSError):
