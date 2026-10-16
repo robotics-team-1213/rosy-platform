@@ -2856,3 +2856,9 @@
 - 변경: ACK 유실 토크 쓰기를 추적해 cleanup 누락을 막고, 실제 cyclic torque/error interface를 통신 전 요구한다. read 실패·잘못된 값은 즉시 ERROR이며 candidate에 필수 읽기를 추가한다.
 - 증거: 실제 SDK11·read/CheckError14경우, 원격39시험 NEW0, 8-patch native build/load와 실제 on_init PTY 비교 통과. 실제 torque-off read3회 fresh 상태를 확인했다.
 - gate 변화: ID14 goal1틱 변화로 실제 전후 보존 검사 실패, 명령 송신105개에 goal/torque/reboot 없음. 원인 미확정·실패 보존·장치 재실행 없음. 실제 시연0회. D-770; docs/validation/omx-measured-status-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): native 부재의 목표 변화 진단
+
+- 증거: 한 독점 handle의 PING/READ-only30회에서 ID14의 목표·현재 위치3195↔3196 전이11회, 여섯 torque0/error0과 mode 유지. 원본·시각·코드 hash 보존.
+- 해석: native 실행 부재에서도 나타남을 확인. firmware 원인·기존 mapping 영향 미확정; 기존 실패 gate 유지. 실제 시연0회. D-770; docs/validation/omx-goal-readonly-2026-10-16.md.
