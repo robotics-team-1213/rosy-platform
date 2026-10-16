@@ -522,3 +522,9 @@
 - 변경: CI 공통 시험 도구에 Playwright SDK와 adapter의 control_msgs 의존성을 추가했다. Chromium 설치와 브라우저 시험 활성화 범위는 기존 전용 단계가 맡는다. geometry 누락 시험은 ament_index_python의 부모와 packages 하위 모듈 캐시를 모두 차단해 설치된 ROS overlay의 geometry를 잘못 찾지 않게 했다.
 - 근거: 문서 병합 b501846ca의 CI 38884946663 modules 잡에 Playwright·control_msgs 수집 오류와 missing geometry 시험 실패가 있었다. 변경 전 main 810ea9bbe의 CI에도 같은 실패가 있다. 시험 결과는 이 수정 브랜치의 원격 로그와 PR CI에서 확인한다.
 - gate 변화: 없음. 실제 장치를 사용하지 않으며 geometry resolver의 제품 동작이나 modules의 gating 설정은 바꾸지 않는다.
+
+## 2026-10-16 · uncommitted · test(ci): 새로 수집된 ROS 시험 실패의 관측 정보
+
+- 변경: Fleet ROS fixture가 사용하는 controller_manager_msgs도 CI에 설치한다. 느린 feedback 시험 실패에 발행 간격·intake 결과·owner sequence와 age·느린 sink 시각을 기록해 원인을 구분한다. 0.2초 freshness와 0.6초 느린 callback 조건은 유지한다.
+- 근거: PR #55 CI 38912405039에서 기존 수집 오류가 해소된 뒤 controller_manager_msgs 수집 오류 하나와 joint_state_stale 회귀 하나가 드러났다. 실행 경로와 독립 리뷰만으로는 생산 코드 결함인지 시험 환경인지 판단할 수 없어 진단 정보를 먼저 추가했다.
+- gate 변화: 없음. 실제 로봇을 사용하지 않으며 native ROS fixture는 원격 시험 PC의 localhost에서 검증한다.

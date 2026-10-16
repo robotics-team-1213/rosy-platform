@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · test(ci): 새로 수집된 ROS 시험 실패의 관측 정보
 - 2026-10-16 · uncommitted · fix(ci): modules 수집 의존성과 기구학 시험 격리
 - 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용
 - 2026-10-16 · uncommitted · fix(omx): feedback 원본 age 보존
 - 2026-10-16 · uncommitted · refactor(omx): commissioning viewer stays with deployment tools
-- 2026-10-16 · uncommitted · feat(omx): read-only commissioning web observations

@@ -401,7 +401,7 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         rclpy.shutdown()
 
 
-def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(monkeypatch):
     """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
     writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
     rclpy.init()
@@ -435,6 +435,21 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
+    publications = []
+    intake = []
+    sink_times = []
+    original_snapshot = runtime._joint_state_intake.snapshot
+
+    def record_snapshot(*args, **kwargs):
+        try:
+            snapshot = original_snapshot(*args, **kwargs)
+        except ValueError as exc:
+            intake.append((time.monotonic(), str(exc)))
+            raise
+        intake.append((time.monotonic(), snapshot.sequence))
+        return snapshot
+
+    monkeypatch.setattr(runtime._joint_state_intake, "snapshot", record_snapshot)
     phase_port = RosArmPhaseGoalPort(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
@@ -450,6 +465,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             message.position = [0.0]
             message.header.stamp = feedback_node.get_clock().now().to_msg()
             state_publisher.publish(message)
+            publications.append(time.monotonic())
             stop.wait(0.01)
 
     publisher = threading.Thread(target=publish_states, daemon=True)
@@ -458,7 +474,9 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
             slow_feedbacks.append(event)
+            sink_times.append(time.monotonic())
             time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+            sink_times.append(time.monotonic())
         return True
 
     try:
@@ -479,7 +497,20 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         while time.monotonic() < deadline and runtime.last_terminal_decision is None:
             time.sleep(0.01)
         assert slow_feedbacks, "the server never sent feedback"
-        assert runtime.last_terminal_decision.reason == "completed", runtime.last_terminal_decision
+        now = time.monotonic()
+        observed = runtime.owner._joint_state
+        evidence = {
+            "decision": runtime.last_terminal_decision,
+            "published": len(publications),
+            "max_publish_gap": max((b - a for a, b in zip(publications, publications[1:])), default=0),
+            "last_publish_age": now - publications[-1] if publications else None,
+            "intake_tail": intake[-10:],
+            "owner_sequence": observed.sequence if observed else None,
+            "owner_age": now - observed.received_at if observed else None,
+            "slow_sink_times": sink_times,
+        }
+        assert runtime.last_terminal_decision is not None, evidence
+        assert runtime.last_terminal_decision.reason == "completed", evidence
         assert runtime.owner.state == "ready"
     finally:
         stop.set()
