@@ -67,7 +67,7 @@ python tools/remote/remote_pytest.py --log-dir X:/DevTemp/tools-check -- test/ar
 
 Shell scripts compute the repo root from their own path. They do not embed a machine-specific absolute path.
 
-Graphify output and Python bytecode caches use the current X: session via process-scoped `GRAPHIFY_OUT` and `PYTHONPYCACHEPREFIX` set before startup. Follow [analysis artifact locations](../docs/reference/analysis-artifact-locations.md); read saved graphs with an explicit `--graph` path. Do not recreate `graphify-out` beside source or change global settings for other projects.
+Use `python tools/graphify_pipeline.py build` for the CORE code-only trial and `query --run <run-path> <symbol>` for freshness-checked reads. Outputs use `DEV_SESSION` when available, otherwise the developer PC's user cache; `--output` overrides the parent outside the repository. The child process receives `GRAPHIFY_OUT` and `PYTHONPYCACHEPREFIX`. Follow [analysis artifact locations](../docs/reference/analysis-artifact-locations.md). Do not recreate `graphify-out` beside source or change global settings for other projects. CLI smoke success does not establish retrieval quality or replace harness test selection.
 
 ## Dependencies
 
