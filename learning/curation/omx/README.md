@@ -1,8 +1,9 @@
 # OMX 실물 모방학습 준비
 
-실행 PC·HF 조직은 아직 미정이다. 이 도구는 host 주소를 고정하지 않고,
-장치를 시작하거나 기존 ROSY 실물 profile을 활성화하지 않는다.
-첫 수집은 공식 LeRobot leader recorder, Pilot 실물 조작은 D-496의 별도 구현·벤치 수용 대상이다.
+수집 대상은 Fleet PC, 학습·독립 평가는 모델 PC다. HF 조직은 미정이며 로컬 수집의 선행 조건이 아니다.
+현재 도구는 host 주소를 고정하지 않고 장치를 시작하거나 기존 ROSY 실물 profile을 활성화하지 않는다.
+첫 수집 목표는 D-770의 제한된 자동 교사다. 공식 LeRobot leader recorder는 사람 시연 경로로 유지한다.
+자동 교사의 실물 실행 owner·정지·수집 연결과 Pilot 실물 조작은 별도 벤치 수용 대상이다.
 
 ## 환경과 녹화
 
@@ -39,13 +40,15 @@ gripper는 0..100이며 ROSY SIM rad와 다르다.
 해당 venv에 LeRobot 0.4.4·PyAV가 필요하다. 장치 identity와 보정값을 추정하지 않는다.
 
 ```text
-python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id local/omx-pick --body-units normalized_-100_100 --rig-revision <rig-revision> --calibration-revision <calibration-revision> --out <new-review-directory>
+python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id local/omx-pick --body-units normalized_-100_100 --rig-revision <rig-revision> --calibration-revision <calibration-revision> --source-mode leader_native --out <new-review-directory>
 ```
 
 `inspection.json`은 원본 파일 hash·관절/카메라·frame/episode 수·실제 reader 결과를 담는다.
 `decisions.json`은 모든 episode를 `outcome=unknown`, `split=exclude`로 시작한다.
 영상을 확인한 사람이 `outcome`을 success/failure/unknown, `split`을 train/eval/exclude로
 기록하고 `reviewer`·`reason`을 채운다. episode identity·hash·frame 수는 고치지 않는다.
+선택적으로 final test를 `split=test`로 분리할 수 있다. 이때 train/eval/test가 모두 비어 있지 않아야 한다.
+출처를 생략한 검사는 `unverified_native`를 기록하며 학습용 분할을 거절한다.
 검토 명령은 body 단위를 변환하지 않는다. 선언한 rig/보정은 실물 검증 증거가 아니다.
 
 ```text
@@ -57,6 +60,44 @@ train/eval에 나뉘면 거부한다. 공식 LeRobot splitter로 각각의 datas
 재독출한다. 원본을 덮어쓰지 않는다. 실패한 출력은 남으며 재시도는 새 출력 디렉터리를 쓴다.
 이 검사는 byte/content 중복을 잡지만 비슷한 장면의 독립성을 판단하지는 못한다. 수집 세션·물체 배치도
 운영자가 나눠야 한다. 실물 과제 성공률은 별도의 독립 시행에서 평가한다.
+
+## 자동 교사 데이터의 출처
+
+자동으로 제출한 동작을 사람 리더 시연으로 기록하지 않는다(D-770).
+자동 수집은 `--source-mode scripted_teacher --capture-provenance <capture.json>`을 지정한다.
+수집기는 종료 시 `rosy.omx-native-capture.v1` manifest에 다음 항목을 보존해야 한다.
+
+- `source_mode=scripted_teacher`, 고정 교사 코드의 `teacher_sha256`.
+- `action_semantics=absolute_joint_position_target_normalized`, body/gripper 단위,
+  `rig_revision`, `calibration_revision`.
+- `files`: 종료된 원본의 `native_review.dataset_files(root)` SHA-256 목록.
+- `episodes`: 실제 순서의 `episode_index`, 수집 `session_id`, 왕복/재시도 전체의 `cycle_id`.
+
+manifest와 실제 bytes·단위·revision·episode 순서가 다르면 검사를 거절한다.
+session/cycle은 inspection에서 검토표로 복사되며 같은 그룹을 여러 split에 넣을 수 없다.
+종료된 분할의 각 출력 hash도 `split-receipt.json`에 보존한다.
+분할 중 원본이 바뀌면 성공 receipt를 만들지 않는다.
+이 metadata 검사는 수집기의 출처 선언을 묶는 검사이며 물리 실행·정지·과제 성공의 독립 검증이 아니다.
+실제 실행 기록이 없는 데이터를 후처리에서 자동 교사로 추정해 채우지 않는다.
+
+## 검토 분할에서 학습·재적재까지 실행
+
+모델 PC의 전용 LeRobot 0.4.4 환경에서 실행한다. 기존 ROS·GPU 작업 환경에 설치하지 않는다.
+
+```text
+python learning/training/omx/native_cycle.py run --splits <reviewed-split-directory> --out <new-run-directory> --steps 100 --batch-size 8 --device cpu
+```
+
+이 명령은 원본 출처·검토·그룹·분할 출력 hash를 다시 검사하고 공식 ACT CLI를 실행한다.
+trainer 종료 뒤 새 Python 프로세스에서 model/preprocessor/postprocessor를 적재하여 eval을 재생한다.
+final test는 학습·eval 지표 계산에서 제외한다. 모델은 예시의 작은 ACT 연결 점검 설정이므로
+이 설정의 성공을 학습 품질 수용으로 해석하지 않는다.
+학습 전후 데이터·모델 hash가 같아야 `cycle-receipt.json`을 발급한다.
+실패한 출력·로그는 보존하며 새 경로로 재시도한다. 예전 receipt에 `outputs` hash가 없으면
+원본을 다시 검증하고 새 디렉터리에 분할해야 한다.
+
+`evaluation.json`은 native 단위의 관절별 MAE와 train 평균 상수 기준선이다.
+실물 과제 성공률은 `null`로 유지한다. 결과는 offline-only이며 장치 실행·승격·업로드를 하지 않는다.
 
 ## 학습과 저장된 모델 확인
 

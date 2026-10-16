@@ -13,7 +13,7 @@ PYTHON = Path(os.environ.get('ROSY_OMX_LEROBOT_PYTHON',
 @pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
 def test_official_config_reader_and_split_roundtrip(tmp_path):
     script = r'''
-import copy, json, subprocess, sys
+import copy, hashlib, json, subprocess, sys
 from pathlib import Path
 import draccus
 import numpy as np
@@ -21,7 +21,7 @@ root, tmp = map(Path, sys.argv[1:])
 sys.path.insert(0, str(root / 'deploy/robot/omx'))
 sys.path.insert(0, str(root / 'learning/curation/omx'))
 from record_config import validate_config
-from native_review import inspect_dataset, split_reviewed, JOINTS
+from native_review import inspect_dataset, split_reviewed, dataset_files, JOINTS
 from lerobot.scripts.lerobot_record import RecordConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 config = json.loads((root / 'deploy/robot/omx/lerobot-record.example.json').read_text())
@@ -40,7 +40,7 @@ source = tmp / 'source'
 writer = LeRobotDataset.create(repo_id='local/native-fixture', root=source, fps=10,
                                robot_type='omx_follower', features=features, use_videos=True,
                                video_backend='pyav', vcodec='h264')
-for episode in range(2):
+for episode in range(3):
     for frame in range(4):
         vector = np.full(6, episode * 20 + frame, dtype=np.float32)
         writer.add_frame({'observation.state':vector, 'action':vector,
@@ -48,31 +48,46 @@ for episode in range(2):
                           'task':'Pick cube'})
     writer.save_episode()
 writer.finalize()
+provenance = dict(schema='rosy.omx-native-capture.v1', source_mode='scripted_teacher',
+                  teacher_sha256=hashlib.sha256(b'synthetic teacher fixture only').hexdigest(),
+                  action_semantics='absolute_joint_position_target_normalized',
+                  body_units='normalized_-100_100', gripper_units='normalized_0_100',
+                  rig_revision='synthetic-rig', calibration_revision='synthetic-calibration',
+                  files=dataset_files(source),
+                  episodes=[dict(episode_index=i, session_id=f'fixture-session-{i}',
+                                 cycle_id=f'fixture-cycle-{i}') for i in range(3)])
 report = inspect_dataset(source, 'local/native-fixture', body_units='normalized_-100_100',
-                         rig_revision='synthetic-rig', calibration_revision='synthetic-calibration')
-assert report['frame_count'] == 8 and report['reader_verified']
+                         rig_revision='synthetic-rig', calibration_revision='synthetic-calibration',
+                         source_mode='scripted_teacher', capture_provenance=provenance)
+assert report['frame_count'] == 12 and report['reader_verified']
+assert report['source_mode'] == 'scripted_teacher'
 decisions = copy.deepcopy(report['episodes'])
-for decision, split in zip(decisions, ('train', 'eval')):
+for decision, split in zip(decisions, ('train', 'eval', 'test')):
     decision.update(outcome='success', split=split, reviewer='synthetic-test', reason='fixture only')
 out = split_reviewed(source, report, decisions, tmp/'splits')
 train = LeRobotDataset('local/native-fixture_train', root=out/'train', video_backend='pyav', download_videos=False)
 assert train.meta.total_episodes == 1
 assert float(train.meta.stats['action']['max'][0]) == 3.0, 'eval data leaked into train stats'
 assert (out/'split-receipt.json').is_file()
+receipt = json.loads((out/'split-receipt.json').read_text())
+assert receipt['source']['capture_provenance'] == provenance
+assert receipt['splits'] == dict(train=[0], eval=[1], test=[2])
+assert receipt['outputs'] == {name:dataset_files(out/name) for name in ('train','eval','test')}
+assert LeRobotDataset('local/native-fixture_test', root=out/'test',
+                     video_backend='pyav', download_videos=False).meta.total_episodes == 1
 from lerobot.policies.act.modeling_act import ACTPolicy
 from lerobot.policies.factory import make_pre_post_processors
 import torch
 torch.set_num_threads(2)
-training = json.loads((root/'learning/training/omx/native-act.example.json').read_text())
-training['dataset'].update(repo_id='local/native-fixture_train', root=str(out/'train'))
-training['output_dir'] = str(tmp/'training')
-training.update(steps=2, save_freq=2, log_freq=1, batch_size=2)
-config_path = tmp/'train.json'
-config_path.write_text(json.dumps(training))
-run = subprocess.run([sys.executable, '-m', 'lerobot.scripts.lerobot_train',
-                      f'--config_path={config_path}'], capture_output=True, text=True, timeout=120)
-assert run.returncode == 0, run.stdout + '\n' + run.stderr
-model = tmp/'training/checkpoints/last/pretrained_model'
+sys.path.insert(0, str(root/'learning/training/omx'))
+from native_cycle import run_cycle
+cycle = run_cycle(out, tmp/'training', steps=2, batch_size=2, device='cpu', timeout=120)
+assert cycle['offline_only'] and cycle['source_mode'] == 'scripted_teacher'
+assert cycle['evaluation']['samples'] == 4
+assert len(cycle['evaluation']['mae_per_joint']) == 6
+assert cycle['evaluation']['physical_task_success'] is None
+assert cycle['split_files'] == receipt['outputs']
+model = tmp/'training/trainer/checkpoints/last/pretrained_model'
 assert (model/'policy_preprocessor.json').is_file()
 assert (model/'policy_postprocessor.json').is_file()
 loaded = ACTPolicy.from_pretrained(model)
