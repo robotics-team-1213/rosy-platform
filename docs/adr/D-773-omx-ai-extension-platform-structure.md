@@ -28,7 +28,7 @@ OMX와 AI는 각자 다른 시점에 다른 방식으로 붙어 왔다. 그 결�
 | 설치 프로파일 | `profiles/installations`에 PolicyArtifact·ModelProfile pin 없음 | `profiles/installations/*.yaml` |
 | AI 출력 | Decision tool catalog는 읽기·후보 쓰기만. `POLICY_DISPATCH_ENABLED = False`. D-610 AI-first는 로봇별 opt-in으로 이동 답(RESUME·YIELD 등)을 보낼 수 있음 | `operations/decision/src/rosy/decision/model_tool_catalog.py`, `operations/fleet/fleet/server/ledger/task_service.py`, `operations/fleet/fleet/stuck/ai_first.py` |
 | 층 역전 | `devices/omx/agent`가 `rosy.processes.palletizing`을 import. `integrations/robots/omx`가 adapter 구현 모듈을 직접 import. `omx_adapter.api` 포트 모듈 없음 | `omx_cell_documents.py`, `integrations/robots/omx/` |
-| 중복·잔재 | `processes/cell`은 palletizing의 re-export facade. 빈 폴더 `operations/fleet/fleet/ai`, `operations/execution`, `middleware/execution`, `src/` 등. `KNOWN_VIOLATIONS`가 옛 경로 `middleware/apps/device/omx`를 가리킴 | `operations/processes/cell/rosy_cell/`, `test/architecture/test_platform_parts.py` |
+| 소스 경로 주입 | Fleet은 manifest가 없는 `rosy.decision`·`rosy_situation`·discord 연동을 빌드 때 `_source_roots/`로 복사하고, 소스 실행 때 `sys.path`에 넣는다. 이미 `install_requires`에 있는 `rosy-execution`도 다시 넣는다 | `operations/fleet/fleet/_source_layout.py`, `operations/fleet/setup.py` |
 | 비어 있는 자리 | `integrations/models/<provider>`, `integrations/policies/lerobot_*` 없음. Fleet capability는 승격 산출물이 아니라 고정 목록 | D-427 §1–3, D-429 §1 |
 
 ## Decision
@@ -77,7 +77,8 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 ### 5. 폴더는 늘리지 않고 빈 자리를 채운다
 
 - 새로 만드는 것: `omx_adapter.api`, `integrations/models/<provider>`, `integrations/policies/lerobot`.
-- 걷어내는 것: `processes/cell` facade(소비자 이전 뒤), 빈 유령 폴더, `KNOWN_VIOLATIONS`의 옛 경로.
+- 걷어내는 것: Fleet의 `sys.path` 주입. 주입하던 소스에 wheel manifest를 주고 정식 의존성으로 선언한다. import 이름은 바꾸지 않는다.
+- 그대로 두는 것: `control`·`core_features`의 `_source_layout`. 설치 import 이름을 지키는 장치이며, 없애면 약 600개 파일과 로봇 설치 이름이 바뀐다.
 - 방향을 바로잡는 것: agent가 palletizing을 import하던 것을 `contracts/skill` 타입을 거치게 바꾼다.
 
 ### 6. 단계
@@ -86,10 +87,10 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 
 | 단계 | 할 일 | 끝난 기준 | 선행 |
 |---|---|---|---|
-| A0 정리 | 유령 폴더·`processes/cell` facade 제거, `KNOWN_VIOLATIONS` 경로 갱신, legacy `safety_node` 설치 제외, systemd `deploy/robot/native` 경로 불일치 확인 | 구조 가드 시험 통과, known_failures NEW 0 | 없음 |
-| A1 OMX 실물 owner | D-770 G0. 실측 하드웨어 profile, 독립 stop, owner 결선 | OMX DEVICE 게이트 BENCH 증거 | A0 |
+| A0 Fleet 소스 경로 | `rosy.decision`·`rosy_situation`·discord 연동에 wheel manifest를 주고 Fleet `install_requires`에 선언. `fleet/_source_layout.py`의 `sys.path` 주입 제거. import 이름 유지 | Fleet·AI PC 관련 시험 통과, known_failures NEW 0, site 이미지 빌드 | 없음 |
+| A1 OMX 실물 owner | D-770 G0. 실측 하드웨어 profile, 독립 stop, owner 결선 | OMX DEVICE 게이트 BENCH 증거 | 없음 |
 | A2 공통 장치 포트 | `DeviceControlPort` 구현. CORE와 OMX owner가 같은 grant·receipt 타입. `omx_adapter.api` 추가 | Fleet에서 장치별 분기 없이 Pinky·OMX 시뮬 작업 통과 | A0 |
-| A3 배포 경로 통합 | installation profile에 PolicyArtifact·ModelProfile pin. release가 설치. SSH promote는 비상 경로로만 | 모델 교체가 release 기록으로만 일어남 | A0 |
+| A3 배포 경로 통합 | installation profile에 PolicyArtifact·ModelProfile pin. release가 설치. SSH promote는 비상 경로로만 | 모델 교체가 release 기록으로만 일어남 | 없음 |
 | A4 학습 정책 admission | Fleet lease로 `OwnerPolicySession` 조립, cell owner의 `learned_policy` 허용 | D-770 G4 실물 비교 평가 | A1, A2, A3 |
 | A5 AI 현장 그림자 | 모델 PC L0를 통과한 ModelProfile만 AI PC에 적재. Fleet은 그림자로만 기록 | 그림자 정답 대조 기록(D-492·D-527 관문) | A3 |
 
@@ -124,6 +125,22 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 - 학습 정책은 Fleet lease 없이 팔을 움직일 수 없다. A4 전에는 학습 정책을 실물에서 돌리지 않는다.
 - A0는 동작 변화가 없는 정리라 먼저 착지할 수 있다. A1~A5는 각 단계의 증거가 나올 때까지 Proposed로 남는다.
 - 이 ADR은 main 착지 뒤 공유용이며, 단계별 구현은 각자의 ADR·검증 기록을 따른다.
+
+### 2026-10-16 정정: A0 범위
+
+처음 판의 A0에는 아래 항목이 있었다. 소스를 다시 확인해 모두 뺐다.
+
+| 처음 판의 항목 | 확인한 사실 |
+|---|---|
+| legacy `safety_node` 설치 제외 | 죽은 코드가 아니다. `motion_limits` adapter가 sensor-only 모드에서 같은 노드 이름으로 돌고, CORE `control_sensor_adapter.py`가 그 파라미터를 읽는다. launch 3개가 쓴다 |
+| systemd `deploy/robot/native` 경로 불일치 | 불일치가 아니다. `build-native-payload.sh`가 `deploy/robot/pinky_pro/native`를 release의 `deploy/robot/native`로 설치한다 |
+| `KNOWN_VIOLATIONS` 옛 경로 갱신 | 키는 경로가 아니라 manifest 소유권 식별자(`d427_target`)다 |
+| 빈 유령 폴더 제거 | git이 추적하지 않는 로컬 디스크 잔재다. 저장소 정리 대상이 아니다 |
+| `processes/cell` facade 제거 | 32줄 호환 facade이고 `test_platform_palletizing_compat.py`가 지킨다. ROS 패키지 `rosy_cell` 제거와 소비자 10여 곳 수정에 비해 얻는 것이 작아 보류한다 |
+
+`control`·`core_features`의 `_source_layout` 제거도 검토했다. import 이름을 폴더에 맞추면 약 600개 파일(시험 약 400개)과
+로봇 설치 이름이 바뀌고, 폴더를 되돌리면 D-743~D-752의 재배치를 뒤집는다. 그래서 그대로 둔다.
+A0는 import 이름을 바꾸지 않고 끝나는 Fleet의 `sys.path` 주입 정리로 바꿨다.
 
 ## References
 
