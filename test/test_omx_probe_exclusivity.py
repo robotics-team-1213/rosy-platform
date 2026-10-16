@@ -51,7 +51,8 @@ def terminal():
 
 
 def environment(guard, path):
-    return {**os.environ, "LD_PRELOAD": str(guard), "ROSY_OMX_PROBE_PORT": path}
+    return {**os.environ, "LD_PRELOAD": str(guard), "ROSY_OMX_PROBE_PORT": path,
+            "ROSY_OMX_PROBE_DEVICE_ID": str(os.stat(path).st_rdev)}
 
 
 def test_unprotected_sdk_style_open_allows_another_opener(binaries, terminal):
@@ -107,3 +108,13 @@ def test_racing_existing_owner_is_rejected_and_its_handle_is_preserved(binaries,
         os.close(reopened)
     finally:
         os.close(existing)
+
+
+def test_changed_device_identity_is_rejected_before_traffic(binaries, terminal):
+    guard, probe = binaries
+    env = environment(guard, terminal)
+    env["ROSY_OMX_PROBE_DEVICE_ID"] = str(os.stat(terminal).st_rdev + 1)
+    result = subprocess.run([str(probe), terminal, "open"], env=env,
+                            input="\n", capture_output=True, text=True, timeout=5)
+    assert result.returncode == 2 and "OPEN_FAILED" in result.stdout
+    assert "OMX_EXCLUSIVE_OPEN" not in result.stderr
