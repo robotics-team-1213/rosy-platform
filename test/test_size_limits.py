@@ -73,9 +73,29 @@ def test_a_coverage_row_may_be_new_once_at_no_more_than_its_count(monkeypatch):
 
 
 def test_ops_root_files_are_owned_and_held_to_their_own_limit():
-    _, over, owner = s.measure({"tools/a.kt": 601, "tools/b.js": 700, "tools/c.mjs": 801}, {}, ROOTS, [])
-    assert over == {"tools/a.kt": 601, "tools/c.mjs": 801}
-    assert owner == {"tools/a.kt": "tools", "tools/b.js": "tools", "tools/c.mjs": "tools"}
+    _, over, owner = s.measure({"tools/a.kt": 601, "tools/b.css": 700, "tools/c.mjs": 601}, {}, ROOTS, [])
+    assert over == {"tools/a.kt": 601, "tools/c.mjs": 601}
+    assert owner == {"tools/a.kt": "tools", "tools/b.css": "tools", "tools/c.mjs": "tools"}
+
+
+def test_revision_2_scripts_take_600_markup_800_and_its_inline_script_600():
+    files = {"middleware/pkg/web/a.js": 601, "middleware/pkg/web/b.css": 799, "middleware/pkg/web/c.html": 700,
+             "middleware/pkg/web/d.html": 700, "middleware/pkg/web/e.ts": 600}
+    _, over, _ = s.measure(files, PACKAGES, ROOTS, [], {"middleware/pkg/web/c.html": 601,
+                                                        "middleware/pkg/web/d.html": 600})
+    assert over == {"pkg/web/a.js": 601, "pkg/web/c.html": 700}
+    page = "<p>x</p>\n<script type=module>\n" + "f();\n" * 3 + "</script>\n<SCRIPT>\ng();\n</SCRIPT>\n"
+    assert s.inline_script_lines(page) == 6
+
+
+def test_revision_2_test_files_are_held_to_1500_wherever_they_live():
+    files = {"test/test_a.py": 1501, "middleware/pkg/test/test_b.py": 1501, "tools/test/test_c.py": 1500,
+             "operations/fleet/test/web/d.test.mjs": 1501, "middleware/pkg/build/test/x.py": 9000}
+    counts, over, _ = s.measure(files, PACKAGES, ROOTS, [])
+    assert over == {"test/test_a.py": 1501, "middleware/pkg/test/test_b.py": 1501,
+                    "operations/fleet/test/web/d.test.mjs": 1501}
+    assert counts == {"pkg": 0}  # test lines never count toward a package or unit
+    assert any("over 1500" in p for p in _problems(over, {}, base={}))
 
 
 def test_units_floor_applies_to_new_units_of_large_parents_only():
