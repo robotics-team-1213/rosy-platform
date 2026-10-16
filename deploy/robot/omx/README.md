@@ -632,3 +632,27 @@ dispatch. Controller-specific `params_file` forwarding is required on the instal
 framework; generated ROS parameter YAML must avoid aliases. This establishes the
 torque-off feedback path, while operational admission and powered stopping remain
 unaccepted. See [execution and preserved failures](../../../docs/validation/omx-native-controller-feedback-2026-10-16/result.md).
+
+### Stop-only commissioning fallback
+
+`commissioning_stop.py` requires the confirmed by-id path, its expected device
+identity, an explicit subset of follower IDs, and an output directory. The native
+controller must release the serial device first. The helper acquires exclusive
+ownership, checks the opened device identity, and permits only one exact
+Torque Enable=0 write per selected motor. It attempts the remaining selected
+motors after an individual failure, never retries an uncertain write, and then
+reads all six motors. Clean success requires acknowledged writes, selected
+motors OFF/error-free, successful port cleanup, and a durable receipt.
+
+Stop attempts precede output creation so a full filesystem cannot suppress them.
+An existing record is preserved; recording failure makes the invocation fail.
+The helper cannot write ON, goals, modes, offsets, reboot or EEPROM settings.
+`stop_verified` describes the selected motors' electrical readback; it does not
+prove standstill or load support. The tool does not open the operational profile.
+
+An isolated transient systemd probe killed the native main process with all
+torque selections zero. `KillMode=control-group` released the controller's port
+before an independent `ExecStopPost` invoked the helper for the gripper. Actual
+OFF acknowledgment and all-six OFF/error-free readback passed. This verifies
+process-death handover while unpowered; a powered stop remains unverified.
+See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).

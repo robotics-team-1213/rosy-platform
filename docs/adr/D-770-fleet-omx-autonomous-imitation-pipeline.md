@@ -477,3 +477,24 @@ cancel ACK·CANCELED와 토크 OFF 비활성화는 powered 물리 정지의 증�
 구동 정지·독립 stop·실측 이동·운영 owner 재시작은 계속 검증해야 한다. 실제 시연과
 IL eligible 데이터는0회이며 첫 실데이터 확보 목표를 유지한다.
 [실행·실제 이벤트·송신·해석 한계](../validation/omx-native-action-cancel-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: stop-only 보조 경로와 native 종료 후 독립 인계
+
+명령 owner의 HOLD/cancel과 별도로 commissioning_stop을 추가했다. 확인된 by-id의
+독점 소유·실제 device identity 아래 명시한 ID에 Torque Enable=0만 한 번씩 전송한다.
+개별 실패 뒤 나머지 OFF를 시도하되 재시도하지 않는다. ACK·실제 readback·cleanup·
+기록 성공을 구분하며, 디스크 오류로 OFF 시도를 생략하지 않는다. 운영 profile을
+활성화하거나 goal/ON/config 쓰기를 제공하지 않는다. 원격 RED→GREEN92시험 NEW0이다.
+
+실제 모든 native torque 선택0에서 unit main을 SIGKILL로 종료하고 systemd의
+control-group 정리 뒤 별도 ExecStopPost가 장치를 인계받게 했다. 실제 ID16 OFF1건의
+ACK와 여섯 OFF/error0·기존 cap 보존을 확인했다. stop helper trace13packet의 CRC와
+완전 송신을 검증했고 ON/goal/mode/offset/reboot/EEPROM 쓰기는 없었다. 기존 unit을
+잘못 cleanup할 수 있는 private supervisor 문제는 fake systemctl로 RED→GREEN 후
+실물 실행했다. 원본·수정본·실제 unit 속성과 강제 종료 결과를 보존했다.
+
+이 결과는 토크 OFF 상태의 독립 process-death 인계다. 실제 ON→OFF 물리 정지·처짐·
+하중·국소 이동 범위·운영 owner 재시작을 수용한 것은 아니다. 다음 작은 단계의 구동
+검증에 이 경로를 연결하며 실제 시연·IL eligible 데이터는 계속0회다.
+[구현·시험·실제 인계·판정 범위](../validation/omx-independent-stop-2026-10-16/result.md).
