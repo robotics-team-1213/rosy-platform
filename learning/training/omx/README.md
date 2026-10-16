@@ -1,5 +1,9 @@
 # OMX ACT 오프라인 학습 연구
 
+공식 native recorder/자동 교사 데이터는 [native 실행 안내](../../curation/omx/README.md)의
+`native_cycle.py` 경로를 사용한다. byte-bound 검토 분할 → 공식 ACT CLI → 별도 프로세스
+model/processor 재적재 → eval 재생을 연결한다. 아래 `act_job.py`의 SIM rad 계약과 혼합하지 않는다.
+
 `act_job.py`는 기존 LeRobot 0.4.4 export의 원본 OMX 시연을 검증하고,
 episode 단위 train/eval → ACT 학습 → weights 저장·재독출 → offline 평가 →
 공통 DatasetManifest/PolicyArtifact까지 연결한다. 분리된 CPU 환경에서 실행하며

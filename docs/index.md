@@ -234,6 +234,7 @@
 | D-733 | Hourly KST Discord Fleet health subscription |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -336,8 +337,8 @@
 
 ## 최근 기록
 
-- 2026-10-16 · uncommitted · docs(learning): drivable 강화학습과 Gazebo Fleet 검증 방향
-- 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
-- 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
-- 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
-- 2026-10-15 · 476fcd17c · D-766 7(a) 독립 검토 반영(REQUEST CHANGES)
+- 2026-10-16 · uncommitted · refactor(omx): 병합용 수집 도구 배치
+- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 실제 native 시작 부작용과 출력 제한 점검
+- 2026-10-16 · uncommitted · feat(fleet-il-readiness): 실제 관측 기록·모델 PC 수신과 OMX 웹 모니터
+- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 모델 PC 진입점 배치와 실물 수집 조건 대조
+- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 최종 회귀와 모델 receipt 대조

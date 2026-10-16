@@ -8673,3 +8673,49 @@ osy-d395-s1d\`.
 - 증거: 사용자 방향 합의 및 ADR 기록 요청, 기존 검수 자료 확인 기록·Gazebo m30/m31 인계와 현재 drivable 후처리/모델 역할 검사를 대조했다. 새 학습·모델 재추론·Gazebo 실행 증거는 아니다.
 - gate 변화: 없음. Accepted는 방향 결정이며 구현·정책 승격·배포·실물 수용은 별도다. main 착지·push는 하지 않는다.
 - 결정: D-769.
+
+## 2026-10-16 · uncommitted · feat(fleet-il-readiness): OMX 자동 시연 수집과 모방학습 목표
+
+- 변경: D-770에 Fleet PC 현장 진단, OMX 우선 자동 교사 수집, 출처 분리, 실제 episode·독립 분할·모델 PC 학습·재적재·실물 평가 완료 조건을 기록했다.
+- 증거: Tailscale 인증 SSH 현장 읽기 진단, 기존 SETUP·pip check·실행 프로세스·장치 점유·G3–G6 계획과 실제 관측 기록을 대조했다. 새 모터 구동이나 실제 학습 데이터 수집은 아직 수행하지 않았다.
+- gate 변화: 없음. 실측 제한·독립 stop·실물 owner 결선은 미완료이며 SOURCE 준비와 실물 완료를 구분한다.
+- 결정: D-770 Proposed.
+## 2026-10-16 · uncommitted · feat(fleet-il-readiness): 접속 복구와 native 자동 출처·학습 사이클
+
+- 변경: 기존 인증을 사용하는 호스트별 SSH ProxyJump로 현장/모델 PC 접속·SCP·원격 시험을 복구했다. native_capture가 자동 교사 출처·원본 bytes·session/cycle을 묶고 native_review가 불명 출처·교차 분할·분할 중 원본 변경을 거절한다. native_cycle은 검토 출력 hash 검증→공식 ACT→새 프로세스 model/pre/postprocessor 재적재·eval을 연결한다. 모델 PC 전용 LeRobot 환경과 환경 lock을 준비했다.
+- 증거: 원격 기존 문서/검토 119개, 신규 관련 45개 통과. 독립 검토의 두 결함을 6개 RED로 재현한 뒤 GREEN과 재검토를 확인했다. 코드 319bbcd38의 모델 PC 실제 LeRobot CPU fixture 통합 1개 통과; raw/splits/trainer/cycle receipt를 모델 PC에 보존했다. 실제 follower 6개 torque/error 0과 기존 보정 파일의 불일치·일치 후보를 읽기 전용 확인했다. 현장 영상은 매우 어둡고 기본 ROS graph에 실제 arm trajectory Action은 없다.
+- gate 변화: 접속과 오프라인 학습 연결 시험은 복구/검증했다. 실제 자동 시연·첫 실물 데이터셋·실데이터 학습·물리 과제 성공은 미완료다. 정책 승격·장치 profile 활성화·main 착지·push·Hub 업로드는 하지 않았다.
+- 결정: D-770 후속 구현·증거와 실행 안내 갱신.
+## 2026-10-16 · uncommitted · docs(fleet-il-readiness): 최종 회귀와 모델 receipt 대조
+
+- 변경: D-770에 f48a7a3b8 최종 회귀, 모델 PC 보존 receipt 및 현장 source staging, 모델 PC 추가 전송 미완료를 기록했다.
+- 증거: 원격 260 passed / 6 skipped, known_failures NEW 0. 모델 PC에서 7 model/processor 파일 hash·새 프로세스 재적재·eval 4 frame·실물 성공률 null을 별도 읽기로 확인했다. AI PC 일시 오프라인 뒤 회귀는 복구 후 완료했고 추가 모델 source 전송은 SSH banner timeout이다.
+- gate 변화: 첫 실물 자동 시연·실물 데이터셋은 미완료로 유지한다. 소프트웨어 시험과 현장 수집 완료를 구분한다.
+- 결정: D-770 증거 보강.
+## 2026-10-16 · uncommitted · docs(fleet-il-readiness): 모델 PC 진입점 배치와 실물 수집 조건 대조
+
+- 변경: 모델 PC의 전용 venv가 사용할 source b7cf77838 스냅샷과 run-native-cycle 진입점 배치를 완료했다. 이전 모델 source 전송 미완료를 해소하고 D-770과 실행 계획에 반영했다.
+- 증거: 전송 archive SHA와 기존 파일 bytes 대조, 모델 PC의 실제 CLI help 종료 0. 기존 현장 보정 폴더·owner units·serial 점유와 최신 영상 밝기를 대조했다. 보정 폴더의 frame metadata는 물리 보정/stop 수용 증거가 아니며 첫 실제 자동 시연은 0회다.
+- gate 변화: 모델 실행 준비는 진행했으나 실물 시연·데이터셋 수집·실데이터 학습은 미완료다. 새 실물 구동이나 모델 학습 재실행은 하지 않았다.
+- 결정: D-770 후속 증거.
+
+## 2026-10-16 · uncommitted · feat(fleet-il-readiness): 실제 관측 기록·모델 PC 수신과 OMX 웹 모니터
+
+- 변경: 밝은 실제 top/front 영상과 읽기 전용 모터 feedback을 MCAP에 기록하고 모델 PC 수신을 검증했다. 기존 stream 구독 방식 localhost 웹 관측 화면을 구현했다.
+- 증거: 14.432초/435메시지, 8파일 260,605,655bytes hash 대조와 모델 PC 실제 reader 재독출. 실물 HTTP 두 영상·6관절, 관측기 중단 후 stale 제거, 실제 Chromium 영상 갱신·모바일 폭 검증.
+- gate 변화: 조명·관측 기록·원본 수신·웹 관측은 확인했다. 명령은 0개, 실제 자동 시연 0회이며 실물 보정/owner/독립 stop과 실제 명령 시연·학습은 미완료다.
+- 결정: D-770 후속. 원본 영상·개인 접속 정보는 공개 source에 넣지 않는다.
+
+## 2026-10-16 · uncommitted · docs(fleet-il-readiness): 실제 native 시작 부작용과 출력 제한 점검
+
+- 변경: 수집 connect가 자동으로 torque를 켜는 설치 source를 확인하고 기존 읽기 전용 probe를 확장했다. 제조사 모델별 current 지원 차이를 반영했다.
+- 증거: 원격 25시험 통과, 실제 두 snapshot goal=present·torque/error 0·설정 동일. profile과 watchdog은 0, gripper current 1750이며 실측 허용값으로 사용하지 않는다.
+- gate 변화: 실제 자동 시연 0회 유지. 관측/모델 수신에 이어 구동 초기화의 구체적 문제를 확인했으나 물리 수용은 미완료다.
+- 결정: D-770 후속 검증 기록.
+
+## 2026-10-16 · uncommitted · refactor(omx): 병합용 수집 도구 배치
+
+- 변경: 기존 feat/fleet-il-readiness의 커밋을 보존하고 병합용 브랜치에 최종 변경을 묶었다. localhost commissioning viewer는 설치 패키지 내부에서 기존 deploy/robot/omx/ 현장 도구 영역으로 옮기고 실행 안내·검사를 갱신했다.
+- 증거: 기존 커밋별 size-range가 adapter 10,000줄 초과를 확인해 배치를 바로잡았다. 모니터 source 동작은 그대로이며 병합용 committed HEAD로 원격 검증한다.
+- gate 변화: 실물 수용·시연은 미완료로 유지한다. 변경 배치는 원격 검증 후 로컬 main에만 병합한다.
+- 결정: D-770 후속; 원래 작업 브랜치는 보존한다.
