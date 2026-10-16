@@ -38,6 +38,9 @@ RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardw
 COPY patches/hardware-torque-uncertainty.patch /tmp/hardware-torque-uncertainty.patch
 RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-torque-uncertainty.patch \
     && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-torque-uncertainty.patch
+COPY patches/hardware-status-readback.patch /tmp/hardware-status-readback.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-status-readback.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-status-readback.patch
 
 COPY patches/omx-f-gazebo-headless.patch /tmp/omx-f-gazebo-headless.patch
 RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-f-gazebo-headless.patch \
