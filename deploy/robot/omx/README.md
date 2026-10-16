@@ -624,3 +624,11 @@ PWM and Current Limit writes persist in EEPROM; originals remain in the journal
 and successful lower caps stay installed. RAM profiles require fresh readback
 after restart. The tool does not authorize activation or establish physical limits.
 See [actual configuration, tests and remaining work](../../../docs/validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+A bounded native controller probe additionally loaded the actual state broadcaster
+and six-joint trajectory controller with all torque selections zero. The current
+owner received real encoder states and rejected a stale command into HOLD before
+dispatch. Controller-specific `params_file` forwarding is required on the installed
+framework; generated ROS parameter YAML must avoid aliases. This establishes the
+torque-off feedback path, while operational admission and powered stopping remain
+unaccepted. See [execution and preserved failures](../../../docs/validation/omx-native-controller-feedback-2026-10-16/result.md).

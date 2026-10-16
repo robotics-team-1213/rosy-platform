@@ -8830,3 +8830,10 @@ osy-d395-s1d\`.
 - 변경: 실물 구동 전 초기 목표의 현재 위치 동기화를 별도 native probe로 확인하고 판정 범위를 기록했다.
 - 증거: 여섯 enable선택0, 실제 on_init/start/소멸 exit0, fresh torque/error0상태3회, cap유지. 송신107개 중 목표SyncWrite1묶음, 초기 위치 대비 최대1틱 차이; torque/reboot/mode/offset쓰기 없음.
 - gate 변화: 송신 후 목표 검사이며 물리 activation·도달·독립 stop·실물 owner 수용은 미완료. 실제 시연0회. D-770; docs/validation/omx-bounded-commissioning-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
+
+- 변경: 고정 driver·실제 JSB/JTC와 현재 owner의 토크 OFF 결선을 검증하고 params_file/alias/추적 종료 문제를 해결해 기록했다.
+- 증거: 실제 encoder상태10개·OFF/error0상태46개, JSB중단 후 stale HOLD·dispatch0. packet196개 중 mapping84·cyclic목표47; CMexit0·cap/mode유지. 실패2회와 저장 분석기 오류를 보존하고 분석만 수정했다.
+- gate 변화: 실제 accepted goal·취소/토크 ON 정지·운영 owner 재시작·시연수집은 미완료, 시연0회. D-770; docs/validation/omx-native-controller-feedback-2026-10-16/result.md.
