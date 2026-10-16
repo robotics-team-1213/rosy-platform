@@ -1,6 +1,6 @@
 """Structure report: where the tree is over its size rule and what to split next (D-773).
 
-python tools/harness/structure_report.py [--json] [--top N]
+python tools/harness/structure_report.py [--json | --issue | --picks-json] [--top N]
 
 Measures the current tree with the same counter as test/architecture/test_module_structure.py
 (``size_limits.measure``), so every number matches the size gate. For each unit or package above
@@ -8,6 +8,13 @@ the 10,000-line unit limit it groups the files the unit still owns directly (not
 registered sub-unit) by folder and file-name prefix and lists the largest groups: those are the
 split candidates. It also counts the frozen exception lists that should only shrink (known import
 violations, known safety violations, Fleet ledger writers). Read-only; it changes nothing.
+
+--issue prints the weekly GitHub issue body (the task issue form's sections) and --picks-json the
+split candidates chosen by fixed rules (``pick``): one per unit, at most three, largest excess
+first; a group must hold several files and at least 1,000 lines (a new unit's floor), touch no
+safety file (``platform_parts.yaml``) and no file whose fate an ADR left open (``PENDING``).
+.github/workflows/structure-report.yml runs both every Monday; whether a group is one
+responsibility stays a person's call when the issue is triaged.
 """
 from __future__ import annotations
 
@@ -30,6 +37,22 @@ FROZEN_LISTS = (
     ("test_fleet_ledger_writers.py", "KNOWN_WRITERS", "modules writing Fleet ledger tables"),
 )
 MIN_GROUP_LINES = 300
+NEW_UNIT_FLOOR = 1000
+MAX_PICKS = 3
+#: files whose move or retirement an ADR left open -> the reason (never picked).
+PENDING = {
+    "operations/fleet/fleet/server/traffic_reservations.py": "D-517: move or retire at the M4 re-judge",
+    "operations/fleet/fleet/server/segment_store.py": "D-517: move or retire at the M4 re-judge",
+}
+#: path prefix -> Jira Epic (team-guide 5.1); first match wins, no match = Epic undecided.
+EPICS = (
+    ("middleware/devices/omx", "KAN-21"), ("integrations/robots/omx", "KAN-21"),
+    ("learning/curation/omx", "KAN-21"), ("learning/training/omx", "KAN-21"),
+    ("operations/fleet", "KAN-19"), ("operations/site_ui/console", "KAN-19"),
+    ("operations/site_devices", "KAN-19"),
+    ("middleware/drive", "KAN-20"), ("middleware/devices/pinky", "KAN-20"),
+    ("middleware/perception/front_camera", "KAN-22"), ("learning", "KAN-22"),
+)
 
 
 def _load(name: str):
@@ -61,14 +84,15 @@ def report(top: int = 5) -> dict:
     for key, lines in sorted(counts.items(), key=lambda item: -item[1]):
         if lines <= size_limits.UNIT_LIMIT:
             continue
-        groups: dict[str, int] = defaultdict(int)
+        groups: dict[str, list[str]] = defaultdict(list)
         for path, unit in owner.items():
             if unit == key and path in files_lines:
-                groups[_group(path)] += files_lines[path]
-        candidates = sorted(((g, n) for g, n in groups.items() if n >= MIN_GROUP_LINES), key=lambda gn: -gn[1])
+                groups[_group(path)].append(path)
+        sized = [(g, sum(files_lines[f] for f in fs), sorted(fs)) for g, fs in groups.items()]
+        candidates = sorted((c for c in sized if c[1] >= MIN_GROUP_LINES), key=lambda c: -c[1])
         units.append({"unit": key, "lines": lines, "limit": size_limits.UNIT_LIMIT,
                       "excess": lines - size_limits.UNIT_LIMIT,
-                      "split_candidates": [{"group": g, "lines": n} for g, n in candidates[:top]]})
+                      "split_candidates": [{"group": g, "lines": n, "files": fs} for g, n, fs in candidates[:top]]})
     over_files = sorted(((k, v) for k, v in over.items() if PurePosixPath(k).suffix), key=lambda kv: -kv[1])
     frozen = []
     for module_name, attribute, meaning in FROZEN_LISTS:
@@ -78,6 +102,66 @@ def report(top: int = 5) -> dict:
                            "entries": len(getattr(module, attribute))})
     return {"units_over_limit": units, "files_over_limit": len(over_files),
             "largest_files": [{"file": k, "lines": v} for k, v in over_files[:top]], "frozen_lists": frozen}
+
+
+def _safety_paths() -> tuple[set[str], tuple[str, ...]]:
+    import yaml
+    parts = yaml.safe_load((ROOT / "tools/harness/platform_parts.yaml").read_text(encoding="utf-8"))
+    roots = tuple(r["path"] for r in parts.get("roots", []) if isinstance(r, dict) and r.get("concern") == "safety")
+    return set(parts.get("safety_modules", [])), roots
+
+
+def epic_for(path: str) -> str | None:
+    return next((epic for prefix, epic in EPICS if path == prefix or path.startswith(prefix + "/")), None)
+
+
+def _skip_reason(files: list[str], lines: int, modules: set[str], roots: tuple[str, ...]) -> str | None:
+    if len(files) < 2:
+        return "one file: split the file, not a holder move"
+    if any(not f.endswith(".py") for f in files):
+        return "not Python: a size unit is a Python subpackage or holder (split by hand)"
+    if lines < NEW_UNIT_FLOOR:
+        return f"under the {NEW_UNIT_FLOOR}-line floor of a new unit"
+    if any(f in modules or any(f == r or f.startswith(r + "/") for r in roots) for f in files):
+        return "touches a safety file (Safety-Review)"
+    return next((PENDING[f] for f in files if f in PENDING), None)
+
+
+def pick(data: dict) -> tuple[list[dict], list[dict]]:
+    """(picks, skipped): the fixed weekly rules; each skip names its reason."""
+    modules, roots = _safety_paths()
+    picks, skipped = [], []
+    for unit in sorted(data["units_over_limit"], key=lambda u: -u["excess"]):
+        if len(picks) == MAX_PICKS:
+            break
+        for cand in unit["split_candidates"]:
+            reason = _skip_reason(cand["files"], cand["lines"], modules, roots)
+            if reason:
+                skipped.append({"unit": unit["unit"], "group": cand["group"], "reason": reason})
+                continue
+            picks.append({"unit": unit["unit"], "group": cand["group"], "lines": cand["lines"],
+                          "files": cand["files"], "epic": epic_for(cand["files"][0])})
+            break
+    return picks, skipped
+
+
+def issue(data: dict) -> str:
+    picks, skipped = pick(data)
+    table = markdown(data).split("\n", 2)[2].strip().replace("\n## ", "\n#### ").replace("## ", "#### ", 1)
+    out = ["### 문제와 원하는 결과", "",
+           f"크기 단위 한도({size_limits.UNIT_LIMIT:,}줄)를 넘은 단위가 {len(data['units_over_limit'])}개입니다. "
+           "아래는 `python tools/harness/structure_report.py`의 측정이며 `size_ratchet.txt`와 같은 counter입니다.",
+           "", table, "", "### 담당자와 수정 경로", "", "담당: 미정(리드 배정, team-guide 5.1)", ""]
+    for p in picks:
+        out.append(f"- `{p['unit']}` / `{p['group']}` {p['lines']}줄, Epic {p['epic'] or '미정'}: "
+                   + ", ".join(f"`{f}`" for f in p["files"]))
+    out += ["", "### 완료 조건과 검증 방법", ""]
+    out += [f"- [ ] `{p['group']}` 분리: import 이름을 바꾸지 않는 순수 이동, 새 단위 등록, `size_ratchet.txt` 행 낮춤, "
+            "경로 문자열 시험·문서 갱신, 고정 깊이 경로(`parents[N]`) 확인, NEW 0, CI 통과" for p in picks]
+    out += ["- [ ] 묶음이 한 책임(같은 ADR·기능)인지 사람이 확인", "", "### 관련 계약과 참고 자료", "",
+            "D-773, D-766, D-750, `docs/reference/platform-folder-responsibilities.md`", ""]
+    out += [f"- 제외 `{s['unit']}` / `{s['group']}`: {s['reason']}" for s in skipped]
+    return "\n".join(out) + "\n"
 
 
 def markdown(data: dict) -> str:
@@ -95,11 +179,20 @@ def markdown(data: dict) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--json", action="store_true", help="machine-readable output")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--json", action="store_true", help="machine-readable output")
+    mode.add_argument("--issue", action="store_true", help="the weekly GitHub issue body")
+    mode.add_argument("--picks-json", action="store_true", help="the chosen split candidates as JSON")
     ap.add_argument("--top", type=int, default=5, help="candidates and files to list per section")
     args = ap.parse_args(argv)
     data = report(max(args.top, 1))
-    sys.stdout.write(json.dumps(data, indent=2) + "\n" if args.json else markdown(data))
+    if args.picks_json:
+        picks, skipped = pick(data)
+        sys.stdout.write(json.dumps({"picks": picks, "skipped": skipped}, indent=2, ensure_ascii=False) + "\n")
+    elif args.issue:
+        sys.stdout.write(issue(data))
+    else:
+        sys.stdout.write(json.dumps(data, indent=2) + "\n" if args.json else markdown(data))
     return 0
 
 
