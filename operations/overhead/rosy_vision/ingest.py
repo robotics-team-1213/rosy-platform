@@ -48,7 +48,7 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
+from rosy_vision.rectify import map_plane_jpeg, rectify_jpeg
 from rosy_vision.stream_demand import StreamDemand
 
 logger = logging.getLogger(__name__)
@@ -242,6 +242,8 @@ class IngestServer:
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
         self._links = itertools.count(1)
+        from rosy_vision.measured_preview import MeasuredPreview
+        self.measured = MeasuredPreview()
         # D-691: authorized preview reads keep the phone sending for a hold.
         self._demand = StreamDemand()
         self._demand_tasks: set[asyncio.Task] = set()
@@ -278,6 +280,13 @@ class IngestServer:
     def source_lens(self, source: str) -> dict | None:
         """The lens ``source`` reported in its hello, or None (older app, or not connected)."""
         return getattr(self._sources.get(source), "lens", None)
+
+    def report_measured_config(self, source, config, map_id):
+        self.measured.update(source, config, map_id)
+
+    def measured_status(self, source):
+        from rosy_vision.measured_preview import current_status
+        return current_status(self, source)
 
     def camera_link(self, source: str) -> tuple[int | None, protocol.CameraState | None]:
         """D-589: (connection number, last valid camera_state) of ``source``; (None, None) when
@@ -369,7 +378,7 @@ class IngestServer:
         """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
         prefix = "/api/vision/sources/"
         source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
-        if (not source or view not in ("frame", "field-proposal", "map-proposal")
+        if (not source or view not in ("frame", "field-proposal", "map-proposal", "measured-status")
                 or self.preview_signer is None):
             return _http_response(404, b"not found\n")
         bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
@@ -379,6 +388,9 @@ class IngestServer:
             return _http_response(401, b"unauthorized\n")
         # A missing, stale, or rate-limited frame is still a request (D-691).
         self._note_stream_request(source)
+        if view == 'measured-status':
+            return _http_response(200, json.dumps(self.measured_status(source)).encode(), extra={
+                'Content-Type': 'application/json', 'Cache-Control': 'no-store'})
         if view == "map-proposal" and self.map_paint is None:
             return _http_response(404, b"site map paint not configured\n")
         if view == "frame":
@@ -398,6 +410,9 @@ class IngestServer:
         if view == "map-proposal":
             return await self._map_proposal_response(source, frame)
         jpeg = frame.jpeg
+        if 'measured' in lease:
+            from rosy_vision.measured_preview import frame_response
+            return await frame_response(self, source, frame, lease)
         rectified_header = "false"
         extra_state: dict[str, str] = {}
         if "rectification" in lease:
@@ -445,55 +460,11 @@ class IngestServer:
             **_lens_header(self.source_lens(source)),
         })
 
-    async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
-                                  lease: Mapping | None = None) -> Response:
-        """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
-
-        The warp runs off the event loop, once per (frame, record revision) for all readers.
-        """
-        reported = self._plane_records.get(source)
-        if reported is None:
-            return _plane_unavailable()
-        record, map_id = reported
-        revision = str(record.get("calibration_revision"))
-        crop_map = lease.get("crop_map") if lease else None
-        if crop_map is not None and (lease.get("crop_map_id") != map_id
-                                     or lease.get("crop_revision") != revision):
-            return _plane_unavailable()
-        cached = self._plane_cache.get(source)
-        if cached is None or cached[0] is not frame or cached[1] != revision:
-            task = asyncio.ensure_future(asyncio.to_thread(
-                map_plane_jpeg, frame.jpeg, record, source_id=source, map_id=map_id,
-                lens=self.source_lens(source)))
-            # Retrieve a failure even when no reader is left to await it (no "never retrieved" log).
-            task.add_done_callback(lambda t: t.cancelled() or t.exception())
-            cached = (frame, revision, task)
-            self._plane_cache[source] = cached
-        plane: MapPlane | None = await asyncio.shield(cached[2])
-        if plane is None:
-            return _plane_unavailable()
-        jpeg, size, bounds, rectified = plane.jpeg, plane.size, plane.bounds_m, "map"
-        if crop_map is not None:
-            cropped = await asyncio.to_thread(crop_map_plane, plane, *crop_map)
-            if cropped is None:
-                return _plane_unavailable()
-            jpeg, size, bounds = cropped
-            rectified = "map-crop"
-        min_x, min_y, max_x, max_y = bounds
-        return _http_response(200, jpeg, extra={
-            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
-            "X-Frame-Seq": str(frame.header.seq),
-            "X-Frame-Age-Ms": str(round(age * 1000)),
-            "X-Frame-Captured-At": str(frame.captured_at),
-            "X-Frame-Width": str(size[0]),
-            "X-Frame-Height": str(size[1]),
-            "X-Frame-Rotation-Deg": "0",
-            "X-Frame-Rectified": rectified,
-            "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
-            "X-Frame-Calibration": plane.revision,
-            "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
-            **_lens_header(self.source_lens(source)),
-        })
+    async def _map_plane_response(self, source, frame, age, lease=None):
+        from rosy_vision.preview_plane import map_plane_response
+        return await map_plane_response(self, source, frame, age, lease,
+                                        unavailable=_plane_unavailable, response=_http_response,
+                                        lens_header=_lens_header, warp=map_plane_jpeg)
 
     def _rate_limited(self, key: tuple[str, ...], interval_s: float) -> Response | None:
         now_mono = time.monotonic()
@@ -817,6 +788,8 @@ class IngestServer:
             src.stats.oversize += 1
             return
         captured_at = now - header.age_ms / 1000.0
+        self.measured.observe(src.name, self.measured.session_id(src.link, src.name), {
+            'image_size': [header.width, header.height], 'rotation_deg': header.rotation_deg, 'lens': src.lens})
         src.latest = LatestFrame(header=header, jpeg=jpeg, captured_at=captured_at, received_at=now)
         src.stats.record_frame(now, len(jpeg), header.age_ms, header.seq)
 

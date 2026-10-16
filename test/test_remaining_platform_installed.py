@@ -52,7 +52,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 88  # Includes the device resource package and its read/navigation adapter.
+    assert len(expected) == 91  # Adds measured view/CSS and the calibration resource package.
+    assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',
+            'calibration/measured-calibration.css'} <= expected.keys()
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
     assert {'accounts.html', 'shared/account-page.js', 'shared/account-permissions.js'} <= expected.keys()
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
@@ -85,7 +87,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
-        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress'):
+        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking'):
             for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):
                 target = 'fleet/server/' + source.name
                 assert names.count(target) == 1

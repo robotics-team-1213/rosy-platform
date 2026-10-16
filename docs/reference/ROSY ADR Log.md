@@ -782,6 +782,8 @@
 | D-769 | 기존 drivable 검수 자료를 활용한 강화학습과 Gazebo Fleet 검증 | Accepted |
 | D-773 | OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조 — 장치 권한 포트 하나, 모델·정책 배포 경로 하나, AI 출력은 사실과 후보 두 종류 | Proposed |
 
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 | Accepted (2026-10-16, 사용자 설계·구현 승인; SOURCE·DEVICE·FIELD 별도) |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).

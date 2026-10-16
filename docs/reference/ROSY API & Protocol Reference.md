@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.244
+**Version:** v1.256
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3117,6 +3117,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.256 | 2026-10-16 | Additive (D-775): preview 목적의 실측 교정 bundle 승인·영속 선택·CAS 철회, source config opt-in·수치 적용 readback, 현재 촬영 session에 결속한 named operator 확인과 signed measured preview. tracking/sighting 승인·주행 권한과 envelope 1.0은 유지한다. |
 | v1.242 | 2026-10-15 | Additive (D-763 조각 7, feat/fleet-job-trip-steps): `POST /api/fleet/trip-jobs` `{robot_id, steps:[{to, via[]}]}`(1–8), 이름 있는 운영자, `simulation` 프로필이고 Step 원장이 있을 때만. 응답 `{job}`(Step 원장 행, 종류 `TRIP`). 거절: 404 `UNKNOWN_ROBOT`, 422 `TRIP_UNKNOWN_PLACE`, 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`, 409 `TRIP_ROBOT_BUSY`, 409 `JOB_ESTOP`, 409 `JOB_ROBOT_REFUSED`. trip 작업은 `GET /api/fleet/work`에 `cell_job` 행(`action_kind:"TRIP"`)으로 나온다. 재개·취소는 지금의 `/api/fleet/cell-jobs/{id}/resume`·`/cancel`이다. 동작: 차로 `arrived` 뒤 다음 trip이 그 로봇이 쥔 정지 하나를 넘겨받는다. envelope 1.0 변경 없음. |
 | v1.241 | 2026-10-15 | Additive (D-767 A부, feat/instruction-pose-stamp, Safety-Review 대상): `POST /api/v1/line-follow/junction` 선택 필드 `pose_stamp`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_instruction_stamp`(설정 `line_follow.instruction_stamp_enabled`, 기본 꺼짐), `line_follow.junction.distance_basis`·`distance_basis_reason`. 거리 있는 지시의 쓸 수 없는 stamp는 409 `INSTRUCTION_STAMP_UNUSABLE`(`detail.reason`)이고 상태는 그대로다. Fleet은 그 능력의 로봇에 `pose_stamp`를 싣고 굽이 앞당김과 전송 지연 허용치를 뺀다. v1.238–v1.240은 다른 작업이 선점했다. Fleet `/api/fleet/*` 변경 없음. envelope 1.0 변경 없음. |
 | v1.240 | 2026-10-15 | Behaviour (D-763 조각 4 리뷰, fix/fleet-proposal-read-scope; 인증·응답 범위만, 스키마 변화 없음): `GET /api/fleet/proposals/{proposal_id}`는 Cell Job 제안을 `GET /api/fleet/cell-jobs/{mission_id}`와 같은 범위로 읽는다 — 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만, 나머지 404 `PROPOSAL_NOT_FOUND`(없는 id와 같은 본문). 제안자 아닌 독자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`. 레거시 Mission 제안은 제안자만. admit·reject와 Cell Job reconcile·resume·cancel 응답의 Job도 같은 가림. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. `POST /api/fleet/channel-requests/{request_id}/admit`·`/submit`은 이름 있는 운영자(이름 없는 공유 토큰은 403 `OPERATOR_IDENTITY_REQUIRED`). 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` detail은 `job_id` 대신 `{"reason": "job", "owner_kind": "mission"}`. |
@@ -3688,3 +3689,38 @@ AI 작업 상태는 queued/running/succeeded/failed/cancelled/stale다. 성공�
 승인·학습 투입이 아니다. 생성 시 stale version은 409, 잘못된 입력·미설정은 400,
 권한 거부는 403이다. 결과 등록 전 요청자의 세션/권한과 입력을 재검사한다.
 재시도는 현재 revision으로 새 POST다. 기존 작업 이력은 유지한다.
+
+
+## 실측 카메라 지도 미리보기 (D-775, v1.256)
+
+기존 tracking 승인·sighting 허용 revision은 유지한다. 실측 묶음 schema는
+`rosy.measured-calibration/1`이며 `core_common.protocol.measured_calibration`이 정본이다.
+source/map/revision, 원본 lens/floor 후보, 서로 다른 training/validation SHA-256 목록,
+독립 survey digest, capture(signature·reported lens·rotation), bounds_m, evidence_kind,
+canonical digest를 보존한다. 원본 후보 revision도 내용·원본 digest로 다시 계산한다.
+`rosy-camera-calibrate bundle --input <bundle-input.json> --output <new-dir>` 입력은
+`{report:<relative-report>, floor:<relative-floor>, context:{map_revision, survey_digest,
+capture, bounds_m, evidence_kind}}`다. 출력은 수치 전용 bundle.json이며 자동 승인하지 않는다.
+
+- POST `/api/fleet/calibrations`: 기존 body는 그대로, 새 body는
+  `{purpose:"preview", kind:"measured", bundle, expected_revision:string|null,
+  limits:{p95_m,max_m}}`. 이름 있는 operator만, measured 근거와 명시적 양수 한도 필수.
+- GET `/api/fleet/calibrations?purpose=preview`: preview 승인 목록·persistent와 적용 readback.
+  목적 생략은 기존 tracking 목록만 반환한다.
+- DELETE `/api/fleet/calibrations/{source_id}?purpose=preview&expected_revision=<revision>`:
+  이름 있는 operator의 원자적 철회. 기대 revision 불일치는 409이며 기존 tracking 기록은 유지한다.
+- GET `/api/fleet/detections/config?include_preview=true`: 해당 source token에만 optional
+  measured_preview를 추가한다. 기본 응답과 기존 calibration 필드는 유지한다.
+- POST `/api/fleet/detections/preview-status`: source token으로 자신의 revision/session/state/reason과
+  frame_seq, optional render_age_s(0 이상 5초 미만)를 보고한다. 추가 필드·영상은 거절한다.
+  readback 신선도는 Fleet 수신 시각과 마지막 render의 나이를 함께 확인한다.
+- POST `/api/fleet/vision/lease`: optional measured 요청은 source/session/revision/capture_signature와
+  confirm_conditions를 결속한다. 확인 권한은 named operator, 일반 viewer는 읽기만 가능하다.
+  서명마다 새 jti를 부여하여 조건 변경 뒤 옛 확인을 재사용하지 않는다.
+- Vision direct GET `/api/vision/sources/{id}/measured-status`는 기존 signed viewer lease로
+  session·입력 조건·적용 상태를 JSON으로 읽는다. frame GET의 signed measured 요청만 새 변환을 사용한다.
+
+저장 승인과 실제 적용은 다르다. Vision은 receiver boot/session과 정확한 입력 조건을 확인하고
+monotonic 기준 최대 5초의 config lease가 만료되면 적용을 중단한다. 갱신 실패는 lease를 연장하지
+않고 remap 뒤에도 generation/session을 다시 검사한다. 원본·기준 지도를 유지하며 미관측은 mask로
+구분한다. 실측 승인·미리보기는 위치 앵커·마커 높이 보정·주행·DEVICE/FIELD 수용을 부여하지 않는다.
