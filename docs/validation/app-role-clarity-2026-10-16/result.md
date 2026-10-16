@@ -98,3 +98,5 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 - Learning 첫 화면 배치 실패는 변경 전 main `436d52a55`의 동일 시험에서도 재현됐다(`/pixels` canvas y=692, 1280×720). `main-browser-baseline/run-1.txt`를 근거로 기존 실패 목록에 기록했다. 같은 실행에서 Fleet 단일 시험은 통과했으나, 작업 브랜치의 파일 전체 실행에서 패널 중앙 클릭 문제는 재현됐다.
 - Fleet 경로 보기 파일 전체 23개는 탭 클릭 수정 후 원격 통과했다(`card-trip-fix/run-1.txt`).
 - 추가 브라우저 실패 4건도 변경 전 main `436d52a55`에서 재현했다. Learning 작은 화면 배치, Robot 만료 토큰 시험의 account/session 요청 순서, shell estop 시험의 CSP string predicate, calibration 시험의 core_api_web import 누락이다. 각각 `main-browser-baseline-2/run-1.txt`, `main-browser-baseline-3/run-1.txt` 근거로 기존 실패 목록에 기록했다. 보안·인증·정지 제품 계약이나 해당 테스트는 완화하지 않았다.
+- 최신 main 통합에서 D-766 개정 2의 크기 기준을 보존했다. 앱·지도 기록 링크 생성은 기존 devices 모듈로 옮겨 roster.js 709줄, console 단위 12,188줄로 낮췄다. 커밋별 크기 검사와 린트 통과 후 최종 원격 FULL을 실행했다.
+- 최종 FULL의 Learning 검색 시험에서 이미지 로딩 표시가 사라져도 좌표 입력이 잠시 disabled인 상태를 관찰했다. 검색 실행 전에 실제 대상 입력이 enabled가 되는 것을 기다리도록 시험을 보정했다. 제품·인간 라벨 데이터는 변경하지 않았다.
