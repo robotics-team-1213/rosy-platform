@@ -60,7 +60,9 @@ UNCONFIGURED로 갈 수 있었다.
 
 native consumer는 [committed fixture](../../../test/fixtures/omx_driver_fault_routing.cpp)의
 5914e45b0 source와 실제 patched write/stop/on_error/on_shutdown 본문을 사용했다.
-bus·기구 계산만 double이고 HardwareComponent lifecycle consumer는 실제 설치본이다.
+bus·기구 계산과 CheckError의 상태 해석·ChangeDxlTorqueState의 torque 요청 처리는
+double이고 HardwareComponent lifecycle consumer는 실제 설치본이다. 이 probe는 실제
+hardware-error register 해석이나 torque 요청의 성공/실패 처리를 검증하지 않는다.
 buffer/multiwrite/HW fault, 두 disable 그룹의 성공·각 실패, 정상 shutdown,
 반복 cleanup과 fault 후 configure/activate/write가 명령을 다시 열지 않는 경우를 확인했다.
 on_error를 실제 상속 기본 구현으로 돌린 negative control은
