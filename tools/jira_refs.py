@@ -142,7 +142,11 @@ def main(argv: list[str] | None = None) -> int:
     reconfigure = getattr(sys.stdout, "reconfigure", None)
     if reconfigure is not None:  # the report is Korean; a Windows console defaults to cp1252
         reconfigure(encoding="utf-8")
-    return args.func(args)
+    try:
+        return args.func(args)
+    except subprocess.CalledProcessError as error:  # bad range, not a repository
+        print(f"jira_refs: git failed: {(error.stderr or '').strip()}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

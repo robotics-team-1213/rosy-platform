@@ -24,7 +24,8 @@ def repo(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
-    for key, value in (("user.name", "t"), ("user.email", "t@t"), ("core.autocrlf", "false")):
+    for key, value in (("user.name", "t"), ("user.email", "t@t"), ("core.autocrlf", "false"),
+                       ("commit.gpgsign", "false")):
         git(repo, "config", key, value)
     (repo / "a.txt").write_text("0\n", encoding="utf-8")
     git(repo, "add", "a.txt")
@@ -79,3 +80,32 @@ def test_report_groups_commits_by_key_and_lists_unkeyed(repo, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert sorted(payload["issues"]) == ["KAN-27", "KAN-28"]
     assert [row["subject"] for row in payload["unkeyed"]] == ["docs: typo"]
+
+
+def test_report_skips_merge_commits(repo, capsys):
+    base = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-b", "feat/kan-29-side")
+    (repo / "b.txt").write_text("b\n", encoding="utf-8")
+    git(repo, "add", "b.txt")
+    git(repo, "commit", "-q", "-m", "feat: side work (KAN-29)")
+    git(repo, "checkout", "-q", "main")
+    commit(repo, "fix: main work (KAN-30)")
+    git(repo, "merge", "-q", "--no-ff", "-m", "Merge branch feat/kan-29-side (KAN-31)", "feat/kan-29-side")
+    assert jira_refs.main(["--repo", str(repo), "report", "--range", f"{base}..HEAD", "--format", "json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert sorted(payload["issues"]) == ["KAN-29", "KAN-30"]
+    assert payload["unkeyed"] == []
+
+
+def test_report_on_an_empty_range(repo, capsys):
+    assert jira_refs.main(["--repo", str(repo), "report", "--range", "HEAD..HEAD"]) == 0
+    out = capsys.readouterr().out
+    assert "이슈 0개 · 키 없는 커밋 0개" in out
+    assert not [line for line in out.splitlines() if line.startswith("| KAN-") or line.startswith("| (없음)")]
+
+
+def test_report_on_a_bad_range_exits_2_without_traceback(repo, capsys):
+    assert jira_refs.main(["--repo", str(repo), "report", "--range", "no-such-ref..HEAD"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("jira_refs: git failed:")
+    assert "Traceback" not in err

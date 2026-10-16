@@ -45,13 +45,7 @@ Atlassian의 **GitHub for Jira** 앱을 연결하면 키가 들어간 브랜치�
 2. 앱 설정에서 GitHub 조직 `robotics-team-1213`을 연결하고, 저장소 접근을 `rosy-platform`으로 제한한다. GitHub 조직 소유자의 승인이 필요하다.
 3. 연결 뒤 기존 기록을 가져오는 백필이 끝나면, 키가 있는 PR 하나를 열어 이슈 화면에 나타나는지 확인한다.
 
-**스마트 커밋**(선택): 앱이 연결되어 있으면 커밋 메시지로 Jira에 댓글을 남길 수 있다. 커밋 작성자의 이메일이 Jira 계정 이메일과 같아야 동작한다.
-
-```text
-feat(fleet): send waypoint goal (KAN-27) KAN-27 #comment 실물 Pinky 5회 중 4회 도착
-```
-
-상태를 바꾸는 `#done`·`#in-progress` 같은 전환 명령은 쓰지 않는다. 완료는 사람이 Jira에서 완료 기준을 확인한 뒤 옮긴다.
+**스마트 커밋은 쓰지 않는다.** 앱의 스마트 커밋(`KAN-27 #comment …`로 Jira 댓글·상태 전환)은 커밋 작성자 이메일이 Jira 계정 이메일과 같아야 동작한다. 이 저장소는 공개라 커밋 이메일은 GitHub noreply 주소나 공개해도 되는 등록 주소를 쓴다([팀 가이드](team-guide.md) §1.3). 그 때문에 개인 Jira 이메일로 맞추지 않는다. 앱의 기본 연결(키가 들어간 브랜치·커밋·PR 표시)은 이메일과 상관없이 동작한다. Jira 댓글이나 상태 변경은 사람이 Jira에서 한다.
 
 ## 4. Confluence에서 보기
 
@@ -60,11 +54,11 @@ feat(fleet): send waypoint goal (KAN-27) KAN-27 #comment 실물 Pinky 5회 중 4
 - 스프린트 리뷰 때 그 주의 커밋을 이슈별로 묶은 표를 만든다. 결과를 리뷰 페이지에 붙여 넣는다.
 
 ```bash
-python tools/jira_refs.py report --range "origin/main@{2026-10-19}..origin/main"
+python tools/jira_refs.py report --range <지난 리뷰 때 적어 둔 origin/main SHA>..origin/main
 python tools/jira_refs.py report --range origin/main..HEAD --format json   # 다른 스크립트용
 ```
 
-표 끝의 `(없음)` 줄은 키가 없는 커밋이다. 개수가 많으면 회고에서 이유를 본다.
+범위의 시작은 지난 리뷰 페이지에 적어 둔 `origin/main` SHA다(`git rev-parse origin/main`). 리뷰가 끝나면 그 주의 SHA를 다음 리뷰를 위해 페이지에 남긴다. 표 끝의 `(없음)` 줄은 키가 없는 커밋이다. 개수가 많으면 회고에서 이유를 본다. 범위를 잘못 적으면 git 오류 문구와 함께 exit 2로 끝난다.
 
 ## 5. 저장소에 두지 않는 것
 
@@ -77,6 +71,5 @@ python tools/jira_refs.py report --range origin/main..HEAD --format json   # 다
 ## 6. 처음 설정 체크리스트
 
 - [ ] Jira 관리자: GitHub for Jira 앱 설치, `rosy-platform` 연결, 백필 확인
-- [ ] 팀원: git `user.email`을 Jira 계정 이메일과 맞춤 (스마트 커밋을 쓸 때만)
 - [ ] 팀원: 첫 브랜치를 `feat/kan-<번호>-<주제>`로 만들고 `python tools/jira_refs.py check` 확인
 - [ ] PM: 스프린트 리뷰 페이지에 `report` 표 붙이는 순서를 리뷰 안건에 넣음
