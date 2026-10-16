@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
 - 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
 - 2026-10-16 · uncommitted · refactor(omx): 병합용 수집 도구 배치
 - 2026-10-16 · uncommitted · docs(fleet-il-readiness): 실제 native 시작 부작용과 출력 제한 점검
 - 2026-10-16 · uncommitted · feat(fleet-il-readiness): 실제 관측 기록·모델 PC 수신과 OMX 웹 모니터
-- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 모델 PC 진입점 배치와 실물 수집 조건 대조
