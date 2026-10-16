@@ -436,6 +436,22 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
         assert any(affected._under(t, suite) for t in ran), suite
 
 
+def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
+    """PR #60 (2026-10-17): one affected runner for all of operations/fleet/test outlasted the 25 min limit."""
+    repo = affected.Repo.load(ROOT)
+    full = [e["invocations"][0] for e in affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+            if e["name"].startswith("fleet-")]
+    sel = affected.Selection("affected", [], invocations=[
+        ["operations/fleet/test", "test/test_land.py"], ["test/test_affected_tests.py"]])
+    matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
+    invocations = [e["invocations"][0] for e in matrix]
+    assert invocations == [["test/test_land.py"], *full, ["test/test_affected_tests.py"]]
+    assert [e["name"] for e in matrix] == [f"affected-{i + 1}" for i in range(len(matrix))]
+    assert all(e["gating"] and e["ros"] == "overlay" for e in matrix)
+    fleet = [p for inv in full for p in inv]
+    assert sorted(fleet) == sorted(p for p in repo.test_files if p.startswith("operations/fleet/test/"))
+
+
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
