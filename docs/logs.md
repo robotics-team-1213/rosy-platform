@@ -8922,3 +8922,9 @@ osy-d395-s1d\`.
 - 변경: 프로젝트 FULL 승격의 관련 local_invocations 3개 모두 exit 0. 20,243 passed / 1,159 skipped, 각 로그 NEW 0. 별도 Chromium 166 passed 및 새 session 확인란 2개 폭의 회귀도 기록했다. skipped를 성공으로 세지 않았다.
 - gate 변화: 사용자가 실제 촬영·측량·odom 자료의 부재를 확인하고 그 의존 작업을 제외하도록 요청했다. D-775 구현·소스 검증과 D-598 선행 입력/소유·소비 계약 준비를 이번 완료로 삼고, 실제 수집·DEVICE/FIELD·D-598 운영 활성화는 후속으로 둔다.
 - 증거: docs/validation/measured-camera-lifecycle-2026-10-16/result.md. 전체 GitHub CI·main 착지·push·배포는 미실행이다.
+
+## 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
+
+- 변경: 원본 JSONL·SHA·episode host-clock 창·run/profile·데이터 hash·rig/보정을 bind하고 split/학습/별도 reload에서 재검증한다. 실패/exclude와 미관측을 남기며 sparse 이벤트를 연속 수용으로 해석하지 않는다. legacy 보고서는 명시적 unrecorded로 분할한다.
+- 증거: 경계/영상 metadata RED→GREEN, 7260e1563 관련82개 원격 통과. 0a9954c5f9 Model PC 실제 LeRobot 합성12frame·CLI seal·독립 train/eval/test·ACT2step·별도 model/pre/post reload1개 통과(skip0). 기본 venv 경로의 앞선1skip은 별도 보존. 실제 닫힌 camera-only 원본82015bytes/37event hash와 형식 검증, 원본 불변. 독립 리뷰 P2 두 건 수정 후 남은 material finding 없음.
+- gate 변화: offline 환경 provenance 연결. 실제 recorder 창 발행·환경 저하 owner stop·강조도 현장 수용·실제 시연/학습은 미완료이며 실제 시연0회. docs/validation/omx-environment-lineage-2026-10-17/result.md.

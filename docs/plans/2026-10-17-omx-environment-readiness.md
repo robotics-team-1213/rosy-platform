@@ -20,9 +20,10 @@ flowchart LR
   G --> H[에피소드 검토·독립 분할·환경별 평가]
 ```
 
-이 그림은 목표 연결이다. 이번 구현은 카메라의 B·D·G와 만료되는 photometric receipt다.
+이 그림은 목표 연결이다. 카메라의 B·D·G와 만료되는 photometric receipt를 구현했다.
 수집 executor가 receipt 만료/품질 저하를 받아 기존 owner로 HOLD/stop을 요청하는 결선과
-에피소드·학습 manifest에 환경 원본을 byte-bound하는 결선은 미완료다. 카메라 service가
+실제 recorder가 episode 시간 창을 발행하는 결선은 미완료다. 오프라인 H는 원본 환경 log와
+선언된 창을 native 검사·분할·학습·재적재에 byte-bound한다(아래 후속 구현). 카메라 service가
 관절 Action이나 torque를 직접 제어하지 않는다. 최종 실물 admission은 기존 owner 책임이다.
 
 ## 환경 범위와 실패를 먼저 정한다
@@ -76,6 +77,19 @@ flowchart LR
 4. 실제 촬영 환경·설정과 학습용 영상 증강을 구분한다. 증강으로 실제 강조도·암실 수용을
    대체하지 않는다. 최종 평가는 환경별 성공 분자/분모·중단·미판정과 데이터 부재를 표시한다.
 
+## 환경 원본을 검토·학습까지 보존하는 후속 구현
+
+`learning/curation/omx/native_environment.py`와 `native_review.py seal-environment`가 닫힌
+v3 log 원본·SHA-256·Fleet host Unix ns episode 창·run/profile·데이터 파일 hash·rig/보정을 묶는다.
+검사·분할·학습·독립 재적재에서 원본과 요약을 재검증하고 split별 영상 조건 이벤트 수·미관측
+episode 수·사람 판정 분포를 보존한다. 실패/exclude도 남는다. 기존 보고서는 unrecorded로 처리한다.
+
+프레임 identity·나이·유한한 v3 품질을 확인하며 같은 원본 재조회나 확인 불가는 UNKNOWN이다.
+부분/변조 log·시각 역행·run/profile 혼입·겹치는 창을 거부한다. log는 sparse transition이므로
+이벤트가 없는 구간의 연속 photometric readiness를 증명하지 않는다. 창/rig/보정은 recorder 선언이며
+서명된 진위나 실제 sensor exposure 동기화 증거가 아니다. 실제 시간 창 발행과 현장 수용은 남는다.
+[사용법](../../learning/curation/omx/README.md#native-환경-이력-연결).
+
 ## 검증과 남은 수용
 
 - [x] 어둠/과다 노출/혼합/대비 부족 classifier 원격 회귀.
@@ -85,7 +99,8 @@ flowchart LR
 - [x] 관련 실제 Chromium 실행. 이것은 실물 광학 수용을 뜻하지 않는다.
 - [ ] 실제 강조도·역광·조명 변화·가림·노이즈·지연을 독립 현장 조건으로 수용.
 - [ ] 물체/집게 가시성과 calibration·정지·국소 구동 수용.
-- [ ] 수집 executor의 환경 저하 중단·개입 결선, 환경 이력의 실제 episode/학습 manifest binding.
+- [x] 선언된 episode 창과 원본 환경 log의 offline 검사·분할·학습·재적재 binding과 미관측 coverage.
+- [ ] 실제 recorder의 episode 시간 창 발행·현장 binding, 수집 executor의 환경 저하 중단·개입 결선.
 - [ ] 실제 시연과 모델 PC 학습·재적재·환경별 독립 실물 평가.
 
 실제 조명이 꺼진 환경의 camera-only 실행과 설정 복구는 별도 검증 기록으로 남긴다.
