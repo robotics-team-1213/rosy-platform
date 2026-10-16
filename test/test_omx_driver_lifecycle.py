@@ -60,3 +60,22 @@ def test_actual_vendor_lifecycle_error_propagation(tmp_path):
     after = execute(target.read_text(), "patched")
     assert after.returncode == 0, after.stdout + after.stderr
     assert len(after.stdout.splitlines()) == 10
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_OMX_VENDOR_ROOT"), reason="requires explicit locked vendor source")
+def test_vendor_does_not_advertise_owner_bypass_services(tmp_path):
+    configured = Path(os.environ["ROSY_OMX_VENDOR_ROOT"])
+    vendor = configured if configured.is_absolute() else Path.home() / configured
+    original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{SOURCE}"], text=True)
+    callbacks = ("set_dxl_data_srv_callback", "reboot_dxl_srv_callback", "set_dxl_torque_srv_callback")
+    for name in callbacks:
+        assert f"std::bind(&DynamixelHardware::{name}" in original
+    target = tmp_path / SOURCE
+    target.parent.mkdir()
+    target.write_text(original)
+    patch = ROOT / "deploy/robot/omx/patches/hardware-owner-command-path.patch"
+    subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(patch)], cwd=tmp_path, check=True)
+    changed = target.read_text()
+    for name in callbacks:
+        assert f"std::bind(&DynamixelHardware::{name}" not in changed
+    assert "std::bind(&DynamixelHardware::get_dxl_data_srv_callback" in changed
