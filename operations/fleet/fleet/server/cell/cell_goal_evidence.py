@@ -30,7 +30,12 @@ def make_cell_job_resolver(compiler, item_pose_tolerance):
         return None
     from rosy.execution.site.cell_submission import compile_cell_submission
 
+    from .cell_mixed_submission import compile_mixed_submission, is_mixed
+
     def resolve(candidate, *, workcell_id, instance_id):
+        if is_mixed(candidate):  # D-781: recipe/3 -> multi-arm Job, no goal predicates yet (per-arm frames)
+            return compile_mixed_submission(candidate, compiler=compiler, workcell_id=workcell_id,
+                                            instance_id=instance_id)
         submission = compile_cell_submission(
             candidate, compiler=compiler, workcell_id=workcell_id, instance_id=instance_id)
         document = submission.as_store_document()
