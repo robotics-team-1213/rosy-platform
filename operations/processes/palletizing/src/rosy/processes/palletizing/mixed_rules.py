@@ -115,7 +115,8 @@ def support_ratio_and_corners(p: Placed, placed: Sequence[Placed]) -> tuple[floa
 
 
 def support_ok(ratio: float, corners: int) -> bool:
-    return any(ratio > need - EPS and corners >= n for need, n in SUPPORT_RATIO_V1)
+    # "more than" the ratio (D-781 §1): exactly 60 % with four corners fails.
+    return any(ratio > need + EPS and corners >= n for need, n in SUPPORT_RATIO_V1)
 
 
 def loads_on_top(placed: Sequence[Placed]) -> dict[int, float]:

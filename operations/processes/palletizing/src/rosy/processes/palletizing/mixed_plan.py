@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from .mixed_cell import CellPose, Workcell
+from .mixed_cell import CellPose, Reach, Workcell
 from .mixed_recipe import MixedRecipe
 from .mixed_rules import Placed, in_approach, supporters
 from .recipe import content_hash
@@ -36,6 +36,13 @@ class Assignment:
     station: str
     pose: CellPose
     arm_distance: float
+    alternate_stations: tuple[str, ...] = ()  # pick station of each alternate, same order
+
+
+def pick_pose(workcell: Workcell, station: str, height: float, grasp_depth: float, yaw: float) -> CellPose:
+    """TCP at pick: the item stands on the station surface; the feeder presents it in the place yaw."""
+    x, y, z = workcell.stations[station]
+    return CellPose(x, y, z + height - grasp_depth, yaw)
 
 
 @dataclass(frozen=True)
@@ -52,9 +59,11 @@ class PlanStep:
     depends_on: tuple[int, ...]
     carry_z: float  # cell-frame height of the horizontal move for this Step (D-402 §6)
     station: str  # where the item is picked
+    pick_cell: CellPose  # TCP at pick
+    alternate_stations: tuple[str, ...] = ()  # pick station of each alternate, same order
 
     def to_dict(self) -> dict:
-        p = self.pose_cell
+        p, q = self.pose_cell, self.pick_cell
         return {
             "index": self.index,
             "role": self.role,
@@ -68,6 +77,8 @@ class PlanStep:
             "depends_on": list(self.depends_on),
             "carry_z": round(self.carry_z, _DIGITS),
             "station": self.station,
+            "pick_cell": {k: round(v, _DIGITS) for k, v in (("x", q.x), ("y", q.y), ("z", q.z), ("yaw", q.yaw))},
+            "alternate_stations": dict(zip(self.alternates, self.alternate_stations)),
         }
 
 
@@ -110,32 +121,57 @@ def dependencies(order: Sequence[Placed], arms: Sequence[str], workcell: Workcel
     return out
 
 
-def carry_heights(order: Sequence[Placed], recipe: MixedRecipe, workcell: Workcell,
-                  stations: Sequence[str]) -> list[float]:
-    """Per Step: highest surface so far (pallet tops, boxes already placed, its pick station)
-    + the held item's hang below the TCP + the approach clearance (D-781 §3 rule 5)."""
+def descendants(deps: Sequence[tuple[int, ...]]) -> list[set[int]]:
+    """For each Step, the Steps that wait for it directly or through others."""
+    out: list[set[int]] = [set() for _ in deps]
+    for j in range(len(deps) - 1, -1, -1):
+        for d in deps[j]:
+            out[d] |= {j} | out[j]
+    return out
+
+
+def carry_heights(order: Sequence[Placed], deps: Sequence[tuple[int, ...]], recipe: MixedRecipe,
+                  workcell: Workcell, stations: Sequence[tuple[str, ...]]) -> list[float]:
+    """Per Step: highest surface that may exist when it runs + the held item's hang below the TCP
+    + the approach clearance (D-781 §3 rule 5).
+
+    Two arms do not keep the reference order between independent Steps, so any Step that does
+    not wait for this one (not a descendant) may already be placed. The surfaces are the pallets,
+    those Steps' tops, and the pick stations this Step may use (its arm's and its alternates').
+    """
     pallet_z = [workcell.pallet_origins[s.id][2] for s in recipe.pallets]
+    after = descendants(deps)
     heights = []
     for j, p in enumerate(order):
-        tops = pallet_z + [workcell.pallet_origins[q.pallet_id][2] + q.top for q in order[:j]]
-        tops.append(workcell.stations[stations[j]][2])
+        tops = pallet_z + [workcell.pallet_origins[q.pallet_id][2] + q.top for k, q in enumerate(order)
+                           if k != j and k not in after[j]]
+        tops += [workcell.stations[name][2] for name in stations[j]]
         hang = max(p.h - p.grasp_depth, workcell.finger.overhang_m)
         heights.append(max(tops) + hang + workcell.approach_clearance_m)
     return heights
 
 
-def build_plan(recipe: MixedRecipe, workcell: Workcell, order: Sequence[Placed],
+def build_plan(recipe: MixedRecipe, workcell: Workcell, reach: Reach, order: Sequence[Placed],
                assignments: Sequence[Assignment], planner_version: str) -> MixedPlan:
     arms = [a.arm for a in assignments]
     deps = dependencies(order, arms, workcell)
-    carry = carry_heights(order, recipe, workcell, [a.station for a in assignments])
-    steps = tuple(
-        PlanStep(j, "place", p.sku, p.pallet_id, a.pose, a.arm, a.alternates, a.zone, "independent",
-                 deps[j], carry[j], a.station)
-        for j, (p, a) in enumerate(zip(order, assignments))
-    )
+    carry = carry_heights(order, deps, recipe, workcell,
+                          [(a.station, *a.alternate_stations) for a in assignments])
+    steps = []
+    problems = []
+    for j, (p, a) in enumerate(zip(order, assignments)):
+        pick = pick_pose(workcell, a.station, p.h, p.grasp_depth, a.pose.yaw)
+        for role, station in ((a.arm, a.station), *zip(a.alternates, a.alternate_stations)):
+            src = pick_pose(workcell, station, p.h, p.grasp_depth, a.pose.yaw)
+            high = (CellPose(src.x, src.y, carry[j], src.yaw), CellPose(a.pose.x, a.pose.y, carry[j], a.pose.yaw))
+            if not all(reach(role, pose) for pose in (src, a.pose, *high)):
+                problems.append(f"step {j}: arm {role} cannot reach its poses at carry_z {carry[j]:.3f}")
+        steps.append(PlanStep(j, "place", p.sku, p.pallet_id, a.pose, a.arm, a.alternates, a.zone, "independent",
+                              deps[j], carry[j], a.station, pick, a.alternate_stations))
+    if problems:
+        raise PlanError(problems)
     feed: dict[str, list[tuple[int, str]]] = {name: [] for name in recipe.pick_stations}
     for s in steps:
         feed[s.station].append((s.index, s.sku))
-    return MixedPlan(recipe.content_hash, planner_version, steps,
+    return MixedPlan(recipe.content_hash, planner_version, tuple(steps),
                      MappingProxyType({k: tuple(v) for k, v in feed.items()}), tuple(order))

@@ -19,7 +19,7 @@ import math
 from collections.abc import Sequence
 
 from .mixed_cell import EPS, SHARED_BAND, CellPose, Reach, Rect, Workcell
-from .mixed_plan import Assignment, MixedPlan, PlanError, build_plan
+from .mixed_plan import Assignment, MixedPlan, PlanError, build_plan, pick_pose
 from .mixed_recipe import Item, MixedRecipe
 from .mixed_rules import (
     Placed,
@@ -57,47 +57,65 @@ class _Search:
         self.order: list[Placed] = []
         self.assignments: list[Assignment] = []
         self.arm_counts = {a.role: 0 for a in cell.arms}
-        self.station_of = {a.role: self._station(a.role) for a in cell.arms}
+        # The highest the travel height can get for any Step: every pallet full to its limit and
+        # every station. The real per-Step carry_z (mixed_plan.carry_heights) is never above this
+        # bound plus the item hang, so the search checks reach at the bound and build_plan checks
+        # it again at the real height.
+        self.surface_bound = max([cell.pallet_origins[s.id][2] + s.pallet.max_stack_height for s in recipe.pallets]
+                                 + [z for _, _, z in cell.stations.values()])
 
-    def _station(self, role: str) -> str | None:
+    def _station(self, role: str, p: Placed, place: CellPose) -> str | None:
+        """Nearest pick station from which this arm can do the whole transfer of p.
+
+        Checked poses: pick (station top surface + item height - grasp_depth, the placement yaw;
+        the feeder presents the item in that yaw), both poses raised to the carry height bound,
+        and the release pose. None if the arm cannot do it from any station.
+        """
+        if not self.reach(role, place):
+            return None
         arm = self.cell.arm(role)
+        carry = self.surface_bound + max(p.h - p.grasp_depth, self.cell.finger.overhang_m)             + self.cell.approach_clearance_m
+        if not self.reach(role, CellPose(place.x, place.y, carry, place.yaw)):
+            return None
         usable = []
         for n, name in enumerate(self.recipe.pick_stations):
             x, y, z = self.cell.stations[name]
-            if self.reach(role, CellPose(x, y, z, 0.0)):
+            pick = pick_pose(self.cell, name, p.h, p.grasp_depth, place.yaw)
+            if self.reach(role, pick) and self.reach(role, CellPose(x, y, carry, place.yaw)):
                 usable.append((round(math.hypot(x - arm.x, y - arm.y), _ROUND), n, name))
         return min(usable)[2] if usable else None
-
-    def _able(self, role: str, pose: CellPose) -> bool:
-        return self.station_of[role] is not None and self.reach(role, pose)
 
     def assign(self, p: Placed) -> Assignment | None:
         ox, oy, oz = self.cell.pallet_origins[p.pallet_id]
         cx, cy = p.centre
         pose = CellPose(ox + cx, oy + cy, oz + p.top - p.grasp_depth, math.radians(p.yaw_deg))
         arms = self.cell.arms
+        stations = {a.role: self._station(a.role, p, pose) for a in arms}
+        alternates: tuple[str, ...] = ()
         if self.cell.zones:
             e = envelope(p, self.cell.finger)
             zone = self.cell.zone_of((e[0] + ox, e[1] + oy, e[2] + ox, e[3] + oy))
             if zone is None:
                 return None
             if zone.zone_id == SHARED_BAND:
-                able = [(self.arm_counts[a.role], n, a) for n, a in enumerate(arms) if self._able(a.role, pose)]
+                able = [(self.arm_counts[a.role], n, a) for n, a in enumerate(arms) if stations[a.role]]
                 if not able:
                     return None
                 primary = min(able, key=lambda t: t[:2])[2]
+                # Only shared-band Steps carry alternates (D-781 §4): a fixed zone belongs to its arm.
+                alternates = tuple(a.role for a in arms if a.role != primary.role and stations[a.role])
             else:
                 primary = next((a for a in arms if a.zone_id == zone.zone_id), None)
-                if primary is None or not self._able(primary.role, pose):
+                if primary is None or not stations[primary.role]:
                     return None
             zone_id: str | None = zone.zone_id
         else:
             primary, zone_id = arms[0], arms[0].zone_id
-            if not self._able(primary.role, pose):
+            if not stations[primary.role]:
                 return None
-        alternates = tuple(a.role for a in arms if a.role != primary.role and self._able(a.role, pose))
         distance = math.hypot(pose.x - primary.x, pose.y - primary.y)
-        return Assignment(primary.role, alternates, zone_id, self.station_of[primary.role], pose, distance)
+        return Assignment(primary.role, alternates, zone_id, stations[primary.role], pose, distance,
+                          tuple(stations[r] for r in alternates))
 
     def _coords(self, slot: PalletSlot, size: float, along_x: bool) -> list[float]:
         limit = (slot.pallet.length if along_x else slot.pallet.width) - size
@@ -198,9 +216,10 @@ def plan_mixed(recipe: MixedRecipe, cell: Workcell, reach: Reach) -> MixedPlan:
     if problems:
         raise PlanError(problems)
     search = _Search(recipe, cell, reach)
-    if all(sta is None for sta in search.station_of.values()):
+    if not any(search.reach(a.role, CellPose(*cell.stations[n], 0.0)) for a in cell.arms
+               for n in recipe.pick_stations):
         raise PlanError(["no arm reaches any pick station"])
     unplaced = [item.sku for item in _units(recipe.items) if not search.place(item)]
     if unplaced:
         raise PlanError([f"no placement satisfies the rules for {sku}" for sku in unplaced])
-    return build_plan(recipe, cell, search.order, search.assignments, PLANNER_VERSION)
+    return build_plan(recipe, cell, reach, search.order, search.assignments, PLANNER_VERSION)
