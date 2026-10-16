@@ -23,8 +23,8 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
     images = {}
     for role in ('top', 'front'):
         relative = f'episodes/000000/{role}.rgb'
-        (root / relative).write_bytes(bytes([100, 110, 120]) * 16)
-        images[role] = dict(path=relative, width=4, height=4, sha256=hashlib.sha256(
+        (root / relative).write_bytes(bytes([100, 110, 120]) * 1024)
+        images[role] = dict(path=relative, width=32, height=32, sha256=hashlib.sha256(
             (root / relative).read_bytes()).hexdigest(), source_stamp=1.)
     row = dict(frame_index=0, time_ns=start+1, joint_source_stamp=1., reference_source_stamp=1.,
                images=images, requested_target_rad=[0.] * 6,
@@ -39,7 +39,7 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
     manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
                     source_mode='scripted_teacher', session_id=session,
                     rig_revision='rig-1', calibration_revision='cal-1', teacher_sha256='b'*64,
-                    fps=10, task='move block', camera_shapes={'top': [4,4,3], 'front': [4,4,3]},
+                    fps=10, task='move block', camera_shapes={'top': [32,32,3], 'front': [32,32,3]},
                     body_units='normalized_-100_100', gripper_units='normalized_0_100',
                     episodes=[dict(episode_index=0, cycle_id=session+'-cycle', start_ns=start,
                                    end_ns=start+10, run_id='run-1', profile_sha256='a'*64,
