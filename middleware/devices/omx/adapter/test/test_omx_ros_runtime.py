@@ -6,6 +6,7 @@ from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 import re
 import os
+import traceback
 
 import pytest
 
@@ -447,6 +448,12 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     original_intake = runtime._joint_state_intake.snapshot
     original_poll = runtime.owner.poll
     original_fresh = runtime.owner._fresh_joint_state
+    original_observe = runtime.owner.observe_joint_state
+
+    def trace_observe(state):
+        accepted = original_observe(state)
+        timeline.append(("owner_observed", time.monotonic(), state.sequence, accepted))
+        return accepted
 
     def trace_fresh(now):
         fresh = original_fresh(now)
@@ -477,13 +484,14 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     runtime._joint_state_intake.snapshot = trace_intake
     runtime.owner.poll = trace_poll
     runtime.owner._fresh_joint_state = trace_fresh
+    runtime.owner.observe_joint_state = trace_observe
     publications = []
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()
     phase_port = RosArmPhaseGoalPort(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
-    separate_server = os.environ.get("ROSY_OMX_DIAG_SEPARATE_SERVER") == "1"
+    separate_server = os.environ.get("ROSY_OMX_DIAG_SEPARATE_SERVER", "1") == "1"
     server_executor = MultiThreadedExecutor(num_threads=2) if separate_server else executor
     if separate_server:
         server_executor.add_node(server_node)
@@ -509,6 +517,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
 
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
+            timeline.append(("sink_origin", time.monotonic(), [frame.name for frame in
+                             traceback.extract_stack() if frame.name in {"_on_feedback", "_on_goal_response"}]))
             slow_feedbacks.append(event)
             sink_times.append(time.monotonic())
             sink_entered.set()
@@ -578,6 +588,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             node.destroy_node()
         rclpy.shutdown()
         os.sched_setaffinity(0, affinity)
+        print({"final_timeline": timeline}, flush=True)
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
