@@ -100,5 +100,13 @@ int main() {
     check(error && enabled && d.DynamixelDisable(one) == DxlError::OK && !d.physical_state[a] && d.writes == 3,
       "explicit_enable_after_uncertain_disable_is_not_skipped");
   }
+  {
+    Dynamixel d; d.acknowledgements = {-1, -1, 0}; d.deliveries = {true, false, true};
+    bool error = d.DynamixelEnable(one) == DxlError::ITEM_WRITE_FAIL;
+    bool cleanup_failed = d.DynamixelDisable(one) == DxlError::ITEM_WRITE_FAIL && d.physical_state[a];
+    bool cleaned = d.DynamixelDisable(one) == DxlError::OK && !d.physical_state[a] && d.writes == 3;
+    check(error && cleanup_failed && cleaned && d.DynamixelDisable(one) == DxlError::OK && d.writes == 3,
+      "uncertain_disable_failure_remains_retryable");
+  }
   return failed;
 }
