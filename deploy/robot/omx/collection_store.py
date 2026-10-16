@@ -37,7 +37,7 @@ class RawCollection:
             raise ValueError('collection output exists; select a new directory')
         self.root.mkdir(parents=True)
         sync_directory(self.root.parent)
-        self._last_environment = None
+        self._last_environment, self._last_camera_info = None, None
         self.manifest = dict(schema='rosy.omx-collection-session.v1', state='RUNNING', mode=mode,
             source_mode='scripted_teacher' if mode == 'hardware' else 'simulation',
             session_id=uuid.uuid4().hex, rig_revision=profile['rig_revision'],
@@ -61,6 +61,16 @@ class RawCollection:
                 raise ValueError('environment time reversed or original receipt changed')
         append(self.root/'environment.jsonl', receipt)
         self._last_environment = (stamp, fingerprint)
+
+    def camera_info(self, intrinsics, time_ns):
+        """Append the published camera models when first seen or changed; absent when not configured."""
+        if not intrinsics:
+            return
+        fingerprint = hashlib.sha256(json.dumps(intrinsics, sort_keys=True, allow_nan=False).encode()).hexdigest()
+        if fingerprint == self._last_camera_info:
+            return
+        append(self.root/'camera_info.jsonl', dict(time_ns=time_ns, cameras=intrinsics))
+        self._last_camera_info = fingerprint
 
     def begin(self, now_ns, environment):
         index = len(self.manifest['episodes'])
