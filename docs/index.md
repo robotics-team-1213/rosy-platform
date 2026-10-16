@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · feat(omx): 로컬 병합 뒤 초기화 후보 구현
 - 2026-10-16 · uncommitted · refactor(omx): 병합용 수집 도구 배치
 - 2026-10-16 · uncommitted · docs(fleet-il-readiness): 실제 native 시작 부작용과 출력 제한 점검
 - 2026-10-16 · uncommitted · feat(fleet-il-readiness): 실제 관측 기록·모델 PC 수신과 OMX 웹 모니터
 - 2026-10-16 · uncommitted · docs(fleet-il-readiness): 모델 PC 진입점 배치와 실물 수집 조건 대조
-- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 최종 회귀와 모델 receipt 대조
