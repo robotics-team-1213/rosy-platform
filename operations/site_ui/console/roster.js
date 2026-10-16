@@ -7,6 +7,7 @@ import { NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { createPowerButton } from "/console/assets/power-action.js";
+import { robotAppLinks } from "/console/assets/device-discovery.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
@@ -333,6 +334,19 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
     node.appendChild(head);
     const context = nodeWithText('div', 'robot-actions');
+    const appLinks = robotAppLinks(robot.robot_id, view.robotPeers);
+    for (const app of appLinks) {
+      const link = nodeWithText('a', '', app.label);
+      link.href = app.href;
+      link.dataset.robotApp = app.app;
+      link.rel = "noreferrer";
+      context.append(link);
+    }
+    if (!appLinks.length) {
+      const guidance = nodeWithText('span', 'hint', '앱을 열려면 설치에서 승인된 로봇 주소를 확인하세요.');
+      guidance.dataset.robotAppGuidance = '';
+      context.append(guidance);
+    }
     const recording = nodeWithText('a', '', '지도 기록');
     recording.href = `/console/site-map?robot=${encodeURIComponent(robot.robot_id)}#teach-heading`;
     recording.dataset.mapRecording = '';

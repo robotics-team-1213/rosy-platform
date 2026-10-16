@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 86  # D-757 adds account administration and permission assets; D-763 4 the work/ package.
+    assert len(expected) == 88  # Includes the device resource package and its read/navigation adapter.
+    assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
     assert {'accounts.html', 'shared/account-page.js', 'shared/account-permissions.js'} <= expected.keys()
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
