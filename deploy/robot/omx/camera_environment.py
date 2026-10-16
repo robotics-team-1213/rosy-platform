@@ -112,7 +112,7 @@ class ExposureRecovery:
 
 
 def monitor(profile, root, digest, duration, io):
-    from camera_quality import Readiness, advancing_frame
+    from camera_quality import Readiness, advancing_frame, same_fresh_frame
     baseline = io.prepare(profile, root, digest)
     gate = Readiness()
     plans = {role: ExposureRecovery(dark_count=len(spec['candidates']),
@@ -140,6 +140,9 @@ def monitor(profile, root, digest, duration, io):
                 plan = plans[role]
                 item = state.get(role, {})
                 quality = item.get('quality') or {}
+                if same_fresh_frame(item, previous[role]):
+                    plan.state = 'WAITING_FRAME'
+                    continue
                 valid = advancing_frame(item, previous[role])
                 stamp = item.get('source_stamp') or 0
                 if valid:
