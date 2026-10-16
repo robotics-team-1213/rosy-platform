@@ -257,3 +257,15 @@ top/front의 어두운 픽셀 비율은 후속 관측에도 약 84.7%/98.4%였�
 XL430 미지원 current 값은 0으로 오해하지 않고 null로 기록한다.
 [실제 source·register·제조사 문서 대조](../validation/omx-native-startup-2026-10-16.md).
 실제 자동 시연은 여전히 0회이고 설정 쓰기·torque 활성화는 실행하지 않았다.
+
+## 2026-10-16 병합과 다음 초기화 단계
+
+기존 준비 변경을 로컬 main `585885428`에 병합했다. 영향 범위 1509 passed/14 skipped,
+구조·문서 247 passed, 브라우저 3 passed, NEW 0이다. 원래 branch의 개별 커밋은 보존했다.
+
+후속에서는 기존 고정 ROS driver도 GPIO 초기화 쓰기와 기본 torque 활성화를 수행함을
+확인했다. 실제 vendor xacro를 확장하고 파일 생성기로 명시적인 register 초기화 59개를
+제거하고 자동 torque 선택을 끈 후보를 생성했다. 원본 불변·6 motor flag·hash를 대조했다.
+파일 생성기 원격 8시험 통과·독립 검토 완료다. 이 후보는 실행용 수용 profile이 아니며,
+driver activation write/service authority·실측 제한·독립 stop·owner binding은 미완료다.
+[후속 구현·실행 증거](../validation/omx-preserved-description-2026-10-16.md).

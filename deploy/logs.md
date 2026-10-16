@@ -2820,3 +2820,9 @@
 - 변경: 기존 READ(0,147) 응답에서 goal position/current, profile, current/PWM limit, watchdog, PID를 해석한다. XL430 current register는 null로 보존한다. 전송 whitelist는 동일하다.
 - 증거: 두 회귀 RED→GREEN, 원격 probe/observer 25개 통과. 실제 follower 두 snapshot torque/error 0·goal=present·설정 동일. 설치 native connect의 configure/finally torque 활성화 source도 읽어 보존했다.
 - gate 변화: 없음. 실물 구동 제한·보정·독립 stop과 자동 시연은 미완료다. D-770, docs/validation/omx-native-startup-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · feat(omx): 초기화 description 후보 생성
+
+- 변경: 실제 vendor GPIO 초기화 쓰기와 implicit torque enable을 확인하고, register 초기화 파라미터를 제거한 별도 XML 후보와 provenance receipt를 만드는 파일 생성기를 구현했다.
+- 증거: 원격 RED→GREEN 8시험, 독립 검토. 실제 현장 확장 description에서 59항목 제거·6 motor flag·원본 불변·hash 대조. driver/controller는 실행하지 않았다.
+- gate 변화: 없음. 후보는 수용된 실물 runtime이 아니며 activation write·service 권한·실측 한계·stop과 실제 자동 시연은 미완료다. D-770.

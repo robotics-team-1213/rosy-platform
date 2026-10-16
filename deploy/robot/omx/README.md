@@ -541,3 +541,16 @@ on the development PC. It subscribes to existing top/front images and the
 commissioning joint topic, opens no devices, and issues no actuator commands.
 Source/receipt age, decoded picture expiry and disconnected joint feedback are
 checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
+
+### Prepare an initialization-description candidate
+
+```bash
+python3 deploy/robot/omx/preserved_description.py expanded.urdf new-candidate-directory
+```
+
+This offline command removes explicit GPIO initialization register parameters,
+sets torque/reboot selection to zero and preserves declared metadata/interfaces.
+It creates a new directory with description.urdf and receipt.json, refusing an
+existing output. It never starts hardware. The pinned driver still has activation
+writes and write services; this candidate does not prove a read-only driver or
+accepted physical runtime. See [evidence and remaining checks](../../../docs/validation/omx-preserved-description-2026-10-16.md).
