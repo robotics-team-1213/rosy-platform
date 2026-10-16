@@ -534,3 +534,9 @@
 - Change: Stamp Fleet JointState publications. Use a 0.5 s fixture freshness allowance and explicitly hold feedback for 3x that interval while asserting owner state advances and stays fresh. Native opt-in verification now includes both Fleet parameters. Correct this unpublished entry's heading and fields after independent review caught its malformed format.
 - Evidence: Cloud run 38914855479 exposed zero-stamped fixture inputs and a 0.200655 s publication gap against a 0.2 s test allowance. Native remote verification at 17a72fb6f passed all three wrapper parameters, including both Fleet cases; final revision verification follows the formatting repair.
 - Gate: No change. Production freshness validation and physical acceptance remain unchanged.
+
+## 2026-10-16 · uncommitted · fix(ci): isolate native ROS fixture processes
+
+- Change: Run the two native ROS action fixture files separately using the existing native wrapper DDS/plugin environment, preserve directory and explicit node selection, and fail on skipped native fixtures. Other module environments are unchanged.
+- Evidence: Run 38916624138 fixed Fleet stamps but showed publication gaps of 0.755 s and owner age of 1.174 s in the combined modules process; native host wrappers passed. Two new selection regressions fail against the old workflow. Isolation is a controlled environment correction, not a proven plugin root cause.
+- Gate: No change; final cloud verification is required. Production timing and safety policy are unchanged.
