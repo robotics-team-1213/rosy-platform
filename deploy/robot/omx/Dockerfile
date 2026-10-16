@@ -29,6 +29,9 @@ RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardw
 COPY patches/hardware-init-no-reboot.patch /tmp/hardware-init-no-reboot.patch
 RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-init-no-reboot.patch \
     && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-init-no-reboot.patch
+COPY patches/hardware-write-errors.patch /tmp/hardware-write-errors.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-write-errors.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-write-errors.patch
 
 COPY patches/omx-f-gazebo-headless.patch /tmp/omx-f-gazebo-headless.patch
 RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-f-gazebo-headless.patch \

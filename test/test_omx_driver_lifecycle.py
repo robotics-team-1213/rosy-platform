@@ -127,11 +127,28 @@ def test_normal_write_propagates_faults_without_further_goals(tmp_path):
     assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
     original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{SOURCE}"], text=True)
     fixture = (ROOT / "test/fixtures/omx_driver_write.cpp").read_text()
-    body = function(original, "hardware_interface::return_type DynamixelHardware::write(")
-    program, binary = tmp_path / "write.cpp", tmp_path / "write"
-    program.write_text(fixture.replace("// VENDOR_METHOD", body))
-    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
-                   check=True, timeout=60)
-    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
-    print(result.stdout)
-    assert result.returncode == 0, result.stdout + result.stderr
+
+    def execute(source, name):
+        body = function(source, "hardware_interface::return_type DynamixelHardware::write(")
+        program, binary = tmp_path / f"{name}.cpp", tmp_path / name
+        program.write_text(fixture.replace("// VENDOR_METHOD", body))
+        subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                       check=True, timeout=60)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+        print(name + "\n" + result.stdout)
+        return result
+
+    before = execute(original, "upstream_write")
+    assert before.returncode == 5
+    assert set(line for line in before.stdout.splitlines() if line.startswith("FAIL")) == {
+        "FAIL buffer_failure_stops_goal", "FAIL goal_failure_is_error",
+        "FAIL hardware_fault_rejects_goal", "FAIL communication_fault_is_immediate", "FAIL rebooting_is_immediate"}
+    target = tmp_path / SOURCE
+    target.parent.mkdir()
+    target.write_text(original)
+    for name in ["hardware-lifecycle-errors.patch", "hardware-owner-command-path.patch", "hardware-write-errors.patch"]:
+        subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(PATCH.parent / name)],
+                       cwd=tmp_path, check=True)
+    after = execute(target.read_text(), "patched_write")
+    assert after.returncode == 0, after.stdout + after.stderr
+    assert len(after.stdout.splitlines()) == 6
