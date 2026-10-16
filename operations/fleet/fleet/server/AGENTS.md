@@ -21,7 +21,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
-| `map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
+| `pose/map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
 | `identity.py` | D-472 `IdentityService` — 움직이는 미확인 로봇 한 대씩 CORE LED 점멸을 요청(≤ 6 s), Vision 판정으로 익명 트랙에 묶고 손실·0.30 m 겹침·revision 변경·`identity_ttl_s`에 풀어 `confirmed_track_pose`(D-511 입력)를 낸다. 지도 자세 중재·trip·명령은 읽지 않는다(`test_boundaries.py`) |
 | `lane_compliance_service.py` | D-511 M0 `LaneComplianceMonitor` — 2 Hz로 움직인 로봇만 refresh 하고 모든 로봇의 차로 여유를 판정해 최신값을 `/api/fleet/state` 행 `lane_compliance`와 `GET /api/fleet/robots/{id}/lane-compliance`로 보여 준다. 지도 자세가 LOCALIZED가 아니면 신선한 D-472 LED 확인 트랙(`identity.confirmed_track_pose`, 같은 lease·map id)을 대신 판정하고 `pose_source`·`heading_source`를 남긴다(yaw 없음: 이동 방향, 정지면 방향 문 없이). 로봇에 아무것도 보내지 않는다. 루프는 `background_workers.lane_compliance_loop` |
 | `tether_routes.py`, `tether_watch.py` | D-512 테더 원(표시·설정, 메모리)과 D-526 `TetherWatch`(safety 태그): 0.5 s마다 지도 자세로 반경+0.15 m·누적 회전 405°·자세 2 s 없음을 재고 기존 로봇 E-Stop을 보낸 뒤 trip을 끝낸다. 래치, 테더 POST가 재무장. 되돌아가기는 하지 않는다 |
@@ -72,4 +72,4 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 
 ## Source responsibility holders (D-750)
 
-`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts. These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.
+`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts; `tracking/` D-457 overhead markerless tracking (display and cross-check only); `pose/` robot pose on the site map (D-395 localization service, D-494 map pose, D-594 path history). These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.

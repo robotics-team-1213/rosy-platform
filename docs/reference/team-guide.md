@@ -194,6 +194,7 @@ git push --no-verify -u origin feat/<짧은-주제>
 | 규칙 | 이유 |
 |---|---|
 | 한 브랜치 = 한 주제, 이름은 `<type>/<topic>` (D-372) | 리뷰와 되돌리기가 쉽다 |
+| Jira 이슈가 있으면 브랜치·커밋·PR 제목에 키(`kan-27`, `(KAN-27)`, `[KAN-27]`)를 넣는다. 권장이며 막지 않는다 | Jira 이슈 화면과 스프린트 리뷰 표가 이 키로 이어진다 ([Jira · Confluence 연결 안내](atlassian-integration.md)) |
 | `git add -A` / `git add .` 대신 파일을 지정 | 의도하지 않은 파일·비밀값이 섞이지 않게 |
 | 외부 API·모드·프로토콜 필드는 SRS·API reference·ADR에 있는 것만 | 로봇·Fleet·앱이 같은 계약을 본다 |
 | 계약·구조를 바꾸는 결정은 ADR (§3.4) | 말로 정한 것은 남지 않는다 |

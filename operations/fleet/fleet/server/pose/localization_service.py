@@ -85,9 +85,9 @@ def load_lane_rules(path: Optional[Path]) -> dict:
 
 def default_lane_rules() -> Optional[Path]:
     """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
-    path = ((Path(__file__).resolve().parents[4] / "middleware") / "perception" / "map" / "map_v2_fleet"
-            / "lane_rules.yaml")
-    return path if path.is_file() else None
+    relative = Path("middleware/perception/map/map_v2_fleet/lane_rules.yaml")
+    # Search upward rather than a fixed depth, so moving this module between holders keeps it.
+    return next((p / relative for p in Path(__file__).resolve().parents if (p / relative).is_file()), None)
 
 
 def build_localization_service(console, sightings, *, enabled: bool = True,

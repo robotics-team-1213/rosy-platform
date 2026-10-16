@@ -480,6 +480,8 @@ roots:
       fleet/server/trips: fleet.server
       fleet/server/trip_checks: fleet.server
       fleet/server/trip_progress: fleet.server
+      fleet/server/tracking: fleet.server
+      fleet/server/pose: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations

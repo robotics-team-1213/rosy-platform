@@ -25,30 +25,26 @@ common: [--task lane_seg|object_det] [--user rosy] [--identity KEY] [--known-hos
 push/rollback: [--operator NAME] (default: the OS user; recorded in history.jsonl)
 status: [--history N] (last N history.jsonl lines, default 5)
 
-Every pointer change (push, rollback, release-hold) runs on the robot as root
-under flock on /var/lib/rosy/models/.lock and appends one JSON line {ts, action,
-revision, previous, operator, host_of_operator, tool_commit} to history.jsonl
-(root:rosy-camera 0640; audit only). A manual push or rollback first writes the
-hold file /var/lib/rosy/models/hold {by, host, ts, action, revision, reason},
-which stops the site watcher (push --unless-held) for that robot until
-release-hold removes it.
+Every pointer change (push, rollback, release-hold) runs on the robot as root under flock on
+/var/lib/rosy/models/.lock and appends one JSON line {ts, action, revision, previous, operator,
+host_of_operator, tool_commit} to history.jsonl (root:rosy-camera 0640; audit only). A manual
+push or rollback first writes the hold file /var/lib/rosy/models/hold {by, host, ts, action,
+revision, reason}, which stops the site watcher (push --unless-held) until release-hold removes it.
+push/rollback/promote: [--readback] also read the node's status (promote_readback.py; D-773 A3).
 
-Exit codes: 0 ok, 1 failed, 2 refused locally, 3 history.jsonl not appendable,
-75 lock busy for 30 s (retry later), 76 held (--unless-held only; nothing changed),
-77 the host name did not resolve (DNS / mDNS), 78 connection refused, timed out or no
-route, 79 host key unknown or changed (strict checking; never auto-accepted). 77-79
-come from ssh's own failure text, with one stderr line "ssh <kind> (exit N): ...".
---host-key-alias NAME: the host key is looked up under NAME (the robot id), not the
-address; the pin survives a renumbered network.
+Exit codes: 0 ok, 1 failed, 2 refused locally, 3 history.jsonl not appendable, 75 lock busy for 30 s
+(retry later), 76 held (--unless-held only; nothing changed), 77 the host name did not resolve (DNS / mDNS),
+78 connection refused, timed out or no route, 79 host key unknown or changed (strict checking; never
+auto-accepted). 77-79 come from ssh's own failure text, with one stderr line "ssh <kind> (exit N): ...".
+--host-key-alias NAME: the host key is looked up under NAME (the robot id), not the address; the pin
+survives a renumbered network. A --readback result never changes these codes.
 
-SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes;
-see operator_ssh.py). /var/lib/rosy/models is root:rosy-camera 0750, so every
-write goes through `sudo -n install` with that owner and mode.
+SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes; see operator_ssh.py).
+/var/lib/rosy/models is root:rosy-camera 0750, so every write goes through `sudo -n install` with that owner and mode.
 
-push: needs a passing intake_report.json whose files (name, sha256) equal the
-manifest's. The folder is scp'd to a mktemp dir under /tmp (the rosy user's),
-checked there, then installed file by file (weights, manifest and report, each
-pinned by sha256) into <rev>.partial, checked again, and moved to <rev>. The
+push: needs a passing intake_report.json whose files (name, sha256) equal the manifest's. The folder
+is scp'd to a mktemp dir under /tmp (the rosy user's), checked there, then installed file by file
+(weights, manifest and report, each pinned by sha256) into <rev>.partial, checked again, and moved to <rev>. The
 pointer is written in the temp dir, installed as shadow.tmp and moved over
 shadow (atomic); the old value is installed as shadow.previous the same way.
 Re-pushing the live revision keeps shadow.previous. An already installed <rev>
@@ -79,6 +75,7 @@ for _p in (ROOT / "middleware" / "perception",
 
 import operator_ssh  # noqa: E402
 import delivery_journal  # noqa: E402
+import promote_readback  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
 from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
@@ -580,6 +577,7 @@ def main(argv=None, runner=subprocess.run) -> int:
         if name in ("push", "rollback", "promote", "release-hold"):
             p.add_argument("--operator", default=getpass.getuser(),
                            help="who is recorded in the robot's history.jsonl")
+            p.add_argument("--readback", action="store_true", help="check the node's loaded revision")
         else:
             p.add_argument("--history", type=int, default=5, help="history lines to show")
         p.add_argument("--timeout", type=float,
@@ -619,6 +617,8 @@ def main(argv=None, runner=subprocess.run) -> int:
             attempt.interrupted(exc)
             raise
         attempt.finish(code)
+        promote_readback.after_change(args, ssh, runner, code, lambda: _audit(args) if hasattr(args, "operator")
+                                      else {}, sys.stderr)
         return code
     except delivery_journal.JournalError as exc:
         print(str(exc), file=sys.stderr)
