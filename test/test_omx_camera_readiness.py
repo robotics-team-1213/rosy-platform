@@ -98,3 +98,17 @@ def test_profile_rejects_camera_identity_guess_and_unbounded_exposure():
     with pytest.raises(ValueError):
         runtime.validate_profile(profile('/dev/v4l/by-id/selected-camera', 400))
 
+
+def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch, tmp_path):
+    import sys
+    quality = load('camera_quality')
+    monkeypatch.setitem(sys.modules, 'camera_quality', quality)
+    runtime = load('camera_readiness')
+    restored = []
+    monkeypatch.setattr(runtime, 'prepare', lambda *a: {})
+    monkeypatch.setattr(runtime, 'save', lambda *a: (_ for _ in ()).throw(OSError('disk full')))
+    monkeypatch.setattr(runtime, 'restore', lambda root: restored.append(root))
+    with pytest.raises(OSError):
+        runtime.run({'cameras': {}}, tmp_path, 'digest', .000000001)
+    assert restored == [tmp_path]
+

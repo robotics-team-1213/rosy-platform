@@ -4,6 +4,7 @@ The viewer supplies quality measured before JPEG encoding. A receipt is a short-
 photometric assessment, never authorization to move or evidence of task success.
 """
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -17,6 +18,25 @@ import urllib.parse
 import urllib.request
 
 CONTROLS = {'auto_exposure', 'exposure_time_absolute', 'gain', 'gamma', 'brightness'}
+
+
+@contextmanager
+def control_locks(cameras):
+    """Serialize tuners across state directories and persistent aliases, without opening a stream."""
+    import fcntl
+    root = Path.home()/'.local/state/rosy/camera-control-locks'
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    streams = []
+    try:
+        for rdev in sorted({identity(spec['device'])['rdev'] for spec in cameras.values()}):
+            fd = os.open(root/str(rdev), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            stream = os.fdopen(fd, 'r+')
+            streams.append(stream)
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+    finally:
+        for stream in reversed(streams):
+            stream.close()
 
 
 def validate_profile(profile):
@@ -225,9 +245,11 @@ def run(profile, root, digest, duration):
             time.sleep(.2)
     finally:
         # Invalidate first, even when the independent systemd cleanup must finish restoration.
-        save(root/'readiness.json', dict(state='STOPPED', photometric_ready=False,
-                                        motion_admitted=False, expires_ns=0))
-        restore(root)
+        try:
+            save(root/'readiness.json', dict(state='STOPPED', photometric_ready=False,
+                                            motion_admitted=False, expires_ns=0))
+        finally:
+            restore(root)
 
 
 def main():
@@ -240,7 +262,10 @@ def main():
     if args.duration < 0 or not args.duration < float('inf'):
         parser.error('duration must be finite and nonnegative')
     if args.operation == 'restore':
-        restore(args.state_dir)
+        path = args.state_dir/'baseline.json'
+        if path.exists():
+            with control_locks(json.loads(path.read_text())['cameras']):
+                restore(args.state_dir)
         return
     if args.profile is None:
         parser.error('--profile required for run')
@@ -250,7 +275,8 @@ def main():
     def terminate(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, terminate)
-    run(profile, args.state_dir, hashlib.sha256(raw).hexdigest(), args.duration)
+    with control_locks(profile['cameras']):
+        run(profile, args.state_dir, hashlib.sha256(raw).hexdigest(), args.duration)
 
 
 if __name__ == '__main__':
