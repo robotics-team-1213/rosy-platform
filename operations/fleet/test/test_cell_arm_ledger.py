@@ -113,7 +113,7 @@ def test_a_version_two_ledger_is_backfilled_on_start(tmp_path):
             connection.execute(f"DROP TRIGGER {trigger}")
         connection.execute("DROP TABLE fleet_cell_step_actions")
         connection.execute("DROP TABLE fleet_cell_job_arms")
-        connection.execute("DELETE FROM fleet_component_migrations WHERE component='cell_jobs' AND version=3")
+        connection.execute("DELETE FROM fleet_component_migrations WHERE component='cell_jobs' AND version>=3")
         connection.commit()
     CellJobStore(path)
     assert _read(path, "cell-1") == expected
@@ -122,7 +122,7 @@ def test_a_version_two_ledger_is_backfilled_on_start(tmp_path):
 def test_an_older_fleet_refuses_a_version_three_ledger(tmp_path, monkeypatch):
     path, _, _ = _ledger(tmp_path)
     monkeypatch.setattr(store_module, "_MIGRATION_VERSION", 2)
-    with pytest.raises(RuntimeError, match="unsupported Cell Job journal migration version 3"):
+    with pytest.raises(RuntimeError, match="unsupported Cell Job journal migration version 4"):
         CellJobStore(path)
 
 

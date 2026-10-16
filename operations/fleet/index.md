@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
+- 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
 - 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
 - 2026-10-16 · uncommitted · 최신 크기 규칙 통합
 - 2026-10-16 · uncommitted · 경로 보기 브라우저의 명시적 탭 클릭
-- 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
-- 2026-10-16 · uncommitted · Robot/Pilot 진입 JS 설치 closure
