@@ -1,4 +1,4 @@
-## D-773 OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조: 장치 권한 포트 하나, 배포 경로 하나, AI 출력 두 종류
+## D-773 OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조: 장치 Action 타입 하나, 배포 경로 하나, AI 출력 두 종류
 
 **Status:** Proposed
 
@@ -21,7 +21,7 @@ OMX와 AI는 각자 다른 시점에 다른 방식으로 붙어 왔다. 그 결�
 | OMX 배치 | Pinky에 얹은 팔이 아니라 고정 작업대. 호스트 하나에 최대 두 대 | `middleware/devices/omx/profile/config/omx.disabled.yaml`, `deploy/robot/omx/README.md` |
 | OMX 작업 사슬 | Cell 문서 → 컴파일 → admit(두 사람 승인) → `StepJobDispatcher` → `FleetCellTransferGrant` → Unix socket → `ActionRunner` → `PickPlaceRunner` → `ArmCommandOwner` → `FollowJointTrajectory` → receipt | `operations/fleet/fleet/server/cell/`, `middleware/devices/omx/adapter/omx_adapter/` |
 | OMX 실물 | 하드웨어 profile 비어 있음. CELL_TRANSFER는 `simulation`에서만 열림. 실물 owner 진입점 없음 | `step_action_kinds.py`, `deploy/robot/omx/run_cell_owner.py` |
-| Pinky와 OMX의 요청 수용 | Pinky는 CORE HTTP API, OMX는 같은 호스트 Unix socket grant. 공통 `DeviceControlPort`는 정의만 있고 구현체가 없음 | `contracts/motion/src/rosy/contracts/motion/types.py`, `operations/fleet/fleet/swarm/transport.py` |
+| Pinky와 OMX의 요청 수용 | Pinky는 CORE HTTP API(타입 없는 dict, 약 45개 메서드), OMX는 같은 호스트 Unix socket으로 `FleetCellTransferGrant`. Fleet 수준 Action 타입(`FleetActionGrant`·`DeviceActionReceipt`)과 Fleet 쪽 `DeviceActionTransport`는 이미 있고 OMX만 쓴다. `DeviceControlPort`는 최종 writer 앞 서보 포트이며 Pinky 구현 `PinkyTwistPort`가 있다 | `contracts/foundation/core_common/protocol/schemas.py`, `operations/fleet/fleet/server/local_action_transport.py`, `operations/fleet/fleet/swarm/transport.py`, `middleware/core/gateway/core/bridge/cmd_vel.py` |
 | 팔 owner를 부르는 길 | legacy PICK_PLACE(닫힘), CELL_TRANSFER, Pilot jog, `OwnerPolicySession` 네 갈래. 각자 lease·seat 로직 | `missions/mission_dispatcher.py`, `step_dispatcher.py`, `pilot_sim_runtime.py`, `middleware/robot_execution/local/` |
 | 학습 정책 | `OwnerPolicySession`은 시험에서만 조립됨. cell owner의 `allowed_owners`에 `learned_policy` 없음. lease 발급자 미정 | `middleware/devices/omx/agent/src/rosy_agent/omx_cell_owner.py`, `middleware/robot_execution/local/README.md` |
 | 모델 배포 | 운영 경로는 Perception ONNX 하나. `deliver.py`가 SSH + sudo로 shadow에 넣고 `promote`로 active 교체. `profiles/`·release를 거치지 않음 | `learning/registry/perception/deliver.py` |
@@ -35,13 +35,15 @@ OMX와 AI는 각자 다른 시점에 다른 방식으로 붙어 왔다. 그 결�
 
 새 최상위 폴더나 새 실행기를 만들지 않는다. OMX와 AI는 아래 다섯 규칙으로 기존 구조에 수렴시킨다.
 
-### 1. 장치 권한은 포트 하나로 받는다
+### 1. 장치 Action은 Fleet의 Action 타입 하나로 다룬다
 
-Pinky CORE와 OMX cell owner는 같은 장치 권한 포트를 구현한다. 포트의 의미는 "grant를 받아 재검사하고
-실행한 뒤 receipt를 돌려준다"이며, 타입의 정본은 `contracts/motion`의 `DeviceControlPort`다.
-Fleet은 장치 종류마다 분기하지 않고 같은 grant·receipt 타입으로 요청하고 기록한다.
+Fleet이 장치에 맡기는 일은 `core_common` Action 스키마(`FleetActionGrant`·`FleetCellTransferGrant` → `DeviceActionReceipt`)와
+Fleet의 `DeviceActionTransport`로 표현한다. 새 장치 kind는 `step_action_kinds` 등록표에 더하고, Fleet 안의 식별 검사는 한 곳에 둔다.
 
-- 전송은 지금처럼 둔다. Pinky는 CORE HTTP, OMX는 같은 호스트 Unix socket이다(D-403). 맞추는 것은 타입과 의미다.
+- `DeviceControlPort`(D-442)는 이 층이 아니다. 최종 writer 바로 앞의 서보 포트로 그대로 두며, OMX 구현은 D-442의 안전 단계를 따른다.
+- Pinky를 같은 receipt로 옮기는 일은 지금 하지 않는다. TRIP은 Fleet 폐루프이고 CORE receipt가 없으며, fence 방향이 OMX와 반대다.
+  타입만 맞춰서는 이 차이가 사라지지 않는다. 세 번째 장치 kind나 D-55 이동 조작이 필요해질 때 다시 판단한다.
+- 전송은 지금처럼 둔다. Pinky는 CORE HTTP, OMX는 같은 호스트 Unix socket이다(D-403).
 - 단일 writer는 그대로다. Base `cmd_vel`은 CORE, 팔 관절은 `ArmCommandOwner`가 쓴다. 두 writer를 합치지 않는다.
 - OMX 쪽에는 `omx_adapter.api` 포트 모듈을 두고, `integrations/robots/omx`는 그 모듈만 import한다(D-429 §4).
 
@@ -87,7 +89,7 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 | 단계 | 할 일 | 끝난 기준 | 선행 |
 |---|---|---|---|
 | A1 OMX 실물 owner | D-770 G0. 실측 하드웨어 profile, 독립 stop, owner 결선 | OMX DEVICE 게이트 BENCH 증거 | 없음 |
-| A2 공통 장치 포트 | `DeviceControlPort` 구현. CORE와 OMX owner가 같은 grant·receipt 타입. `omx_adapter.api` 추가 | Fleet에서 장치별 분기 없이 Pinky·OMX 시뮬 작업 통과 | 없음 |
+| A2 Action 경계 정리 | Fleet의 grant·receipt 식별 검사 3벌을 하나로 합치고 kind별 protocol 버전을 등록표로 옮긴다. `omx_adapter.api`로 integrations 경계를 정리한다 | 중복 1벌, 위반 edge 1개 감소, NEW 0 | 없음 |
 | A3 배포 경로 통합 | installation profile에 PolicyArtifact·ModelProfile pin. release가 설치. SSH promote는 비상 경로로만 | 모델 교체가 release 기록으로만 일어남 | 없음 |
 | A4 학습 정책 admission | Fleet lease로 `OwnerPolicySession` 조립, cell owner의 `learned_policy` 허용 | D-770 G4 실물 비교 평가 | A1, A2, A3 |
 | A5 AI 현장 그림자 | 모델 PC L0를 통과한 ModelProfile만 AI PC에 적재. Fleet은 그림자로만 기록 | 그림자 정답 대조 기록(D-492·D-527 관문) | A3 |
@@ -111,14 +113,15 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 | D-55, D-71 | 이동 조작·합성 Asset은 계속 연기 |
 | D-403 | Fleet–OMX owner 같은 호스트 연결 유지. 이 ADR은 타입만 맞춘다 |
 | D-427 | 세 부분(middleware·operations·learning)과 profile·release 전달 경계 유지. §2의 배포 경로를 Perception에도 적용 |
-| D-429 | `integrations`는 `api` 모듈만 import. `DeviceControlPort` 구현을 단계 A2로 둔다 |
+| D-429 | `integrations`는 `api` 모듈만 import. `omx_adapter.api`를 A2에서 둔다 |
+| D-442 | `DeviceControlPort`는 최종 writer 앞 서보 포트로 유지한다. Fleet Action과 섞지 않는다 |
 | D-516, D-527 | 모델 PC 평가, AI PC 추론만, Fleet 판정, 장치 재검사 유지 |
 | D-492, D-610 | VLM·AI-first 출력을 후보로 다루고 Fleet admission 규칙표를 거치게 한다. D-610의 지위는 바꾸지 않는다 |
 | D-770 | OMX 자동 시연·모방학습의 완료 기준. 이 ADR의 A1·A4가 그 G0·G4에 묶인다 |
 
 ## Consequences
 
-- Fleet은 장치 종류가 늘어도 grant·receipt 한 가지만 다룬다. 장치별 차이는 owner와 profile 안에 머문다.
+- Fleet은 장치 kind가 늘어도 Action 등록표와 `DeviceActionTransport`로 다룬다. Pinky의 TRIP 폐루프는 별도로 남는다.
 - 모델 교체는 release 기록으로 추적된다. 대신 지금의 빠른 SSH 승격보다 한 단계가 늘어난다. 개발 벤치에서는 비상 경로를 쓴다.
 - 학습 정책은 Fleet lease 없이 팔을 움직일 수 없다. A4 전에는 학습 정책을 실물에서 돌리지 않는다.
 - A0는 동작 변화가 없는 정리라 먼저 착지할 수 있다. A1~A5는 각 단계의 증거가 나올 때까지 Proposed로 남는다.
@@ -151,3 +154,11 @@ Fleet은 `rosy_situation`의 순수 판정 모듈 3개만 쓴다. CI·이미지�
 - [현재 폴더 책임](../reference/platform-folder-responsibilities.md)
 - [09 Composite Robot](../architecture/09_ROSY_Composite_Robot.md), [11 AI and Physical AI](../architecture/11_ROSY_AI_and_Physical_AI.md)
 - [D-770 OMX 자동 시연 수집과 모방학습](D-770-fleet-omx-autonomous-imitation-pipeline.md)
+
+### 2026-10-16 정정: 장치 권한 포트의 층
+
+처음 판의 결정 1은 `DeviceControlPort`를 Fleet grant·receipt의 정본으로 적었다. 확인 결과 이 Protocol은 서보 kind
+(`BaseTwist`·`ArmJointTrajectory`·`ArmGripper`)만 받는 50 Hz 최종 writer 앞 포트이며(D-442), Pinky 구현 `PinkyTwistPort`가
+이미 있다. Fleet 수준의 공통 타입은 `core_common`의 Action 스키마와 Fleet의 `DeviceActionTransport`다. 결정 1과 A2를 그에 맞게 고쳤다.
+Fleet이 장치 kind로 갈라지는 곳은 약 7곳이며 단계 원장은 이미 등록표로 움직인다. 완전한 Pinky·OMX 공통 receipt는 CORE 공개 API
+변경이나 Fleet 쪽 가짜 receipt가 필요해 미룬다.
