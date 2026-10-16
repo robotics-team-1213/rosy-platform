@@ -26,6 +26,17 @@ QUARANTINE = Path(__file__).with_name("flaky_quarantine.txt")
 RERUN_MARKER = "=== D-762 flaky quarantine rerun ==="
 SUMMARY = re.compile(r"^(?:FAILED|ERROR) (?P<nodeid>\S.*?)(?: - .*)?$")
 PASSED = re.compile(r"^PASSED (?P<nodeid>\S+)")
+# ROS's launch_testing pytest hook imports each module while collecting and catches only
+# Exception, so one module-level pytest.importorskip (Skipped is a BaseException) skips the
+# whole session: "collected 0 items / 1 skipped", exit 0. No suite here is a launch test.
+# One token each, so callers that read every non-dash word as a path stay right.
+NO_ROS_LAUNCH_PLUGINS = ["-pno:launch_testing", "-pno:launch_ros"]
+NOTHING_COLLECTED = re.compile(r"\bcollected 0 items\b")
+
+
+def collected_nothing(report: str, paths: list[str]) -> bool:
+    """A -v run over several paths that collected no item: the session itself was skipped or emptied."""
+    return len(paths) > 1 and bool(NOTHING_COLLECTED.search(report.split(RERUN_MARKER, 1)[0]))
 
 
 def load_known(text: str) -> dict[str, str]:

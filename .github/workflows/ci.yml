@@ -237,7 +237,7 @@ jobs:
       # 항목의 pytest 호출을 차례로 돈다. 기본 이름이 겹치는 스위트는 이미 다른 호출로
       # 나뉘어 있다(gateway·sensing 의 test_battery.py). ros: none 은 ROS 환경 없이(호스트와
       # 같은 조건), base 는 /opt/ros 만, overlay 는 colcon install 까지 얹는다 — 루트 test/
-      # 배포·릴리스 계약과 gz_sim 은 overlay 다. 5 = 수집 0건은 실패가 아니다.
+      # 배포·릴리스 계약과 gz_sim 은 overlay 다. 5 = 수집 0건은 경로가 하나일 때만 실패가 아니다.
       - name: Test (matrix suite, D-436)
         if: matrix.kind == 'pytest'
         shell: bash
@@ -277,7 +277,7 @@ jobs:
                   continue
               print("::group::pytest " + " ".join(paths), flush=True)
               proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, "-v",
-                                       "--continue-on-collection-errors"],
+                                       "--continue-on-collection-errors", *known_failures.NO_ROS_LAUNCH_PLUGINS],
                                       env={**os.environ, **extra}, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, errors="replace")
               out = []
@@ -289,7 +289,8 @@ jobs:
               ids = known_failures.rerun_ids("".join(out), quarantine)
               if known_failures.should_rerun(code, failed, ids):
                   print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
-                  rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider"],
+                  rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider",
+                                          *known_failures.NO_ROS_LAUNCH_PLUGINS],
                                          env={**os.environ, **extra}, stdout=subprocess.PIPE,
                                          stderr=subprocess.STDOUT, text=True, errors="replace")
                   print(rerun.stdout, flush=True)
@@ -297,7 +298,11 @@ jobs:
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
               print("::endgroup::", flush=True)
-              if code not in (0, 5):
+              # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
+              if known_failures.collected_nothing("".join(out), paths):
+                  print(f"::error::pytest {' '.join(paths)} collected 0 items", flush=True)
+                  status = 1
+              elif code not in (0, 5):
                   print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
                   status = 1
           sys.exit(status)

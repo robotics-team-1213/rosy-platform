@@ -102,6 +102,31 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
     assert calls[1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
 
 
+@pytest.mark.parametrize('paths, expected', [
+    (['test/test_a.py', 'test/test_b.py'], 1),  # root-test-*of3 since 2026-10-11: whole session skipped
+    (['test/test_only_skips.py'], 0),  # one selected module that only skips is not a failure
+])
+def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    out = ['collecting ... collected 0 items / 1 skipped\n', '========== 1 skipped in 0.54s ==========\n']
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([paths]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append(args) or SimpleNamespace(stdout=iter(out), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+    assert ('collected 0 items' in capsys.readouterr().out.split('::endgroup::')[-1]) == bool(expected)
+    # The launch_testing hook is what turns one importorskip into a skipped session.
+    assert calls[0][-2:] == ['-pno:launch_testing', '-pno:launch_ros']
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
