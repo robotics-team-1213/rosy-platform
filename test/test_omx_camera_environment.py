@@ -120,3 +120,59 @@ def test_temporal_brightness_changes_are_held_without_claiming_flicker_detection
         assert action is None
     assert plan.condition == 'TEMPORAL_CHANGE'
     assert not plan.snapshot()['flicker_verified']
+
+
+def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene(monkeypatch, tmp_path):
+    import io
+    import json
+    from types import SimpleNamespace
+    env, runtime, quality = load('camera_environment'), load('camera_readiness'), load('camera_quality')
+    monkeypatch.setitem(sys.modules, 'camera_quality', quality)
+    clock = [0.]
+    monkeypatch.setattr(env, 'time', SimpleNamespace(monotonic=lambda: clock[0],
+        time=lambda: 1000+clock[0], time_ns=lambda: int((1000+clock[0])*1e9),
+        sleep=lambda dt: clock.__setitem__(0, clock[0]+dt)))
+    cameras = {role: dict(device=role, candidates=[dict(auto_exposure=1, exposure_time_absolute=800)],
+                         bright_candidates=[dict(auto_exposure=1, exposure_time_absolute=80)])
+               for role in ['top', 'front']}
+    original = dict(auto_exposure=3, exposure_time_absolute=80)
+    current = {role: dict(original) for role in cameras}
+    baseline = {'cameras': {role: dict(original=dict(original), identity=role, producer={}) for role in cameras}}
+    writes = []
+
+    def response(*args, **kwargs):
+        state = {'read_only': True}
+        for role in cameras:
+            bright = clock[0] >= 8
+            exposure = current[role]['exposure_time_absolute']
+            # Both scenes deliberately remain unacceptable. The best settings differ by scene.
+            contrast = (0 if exposure == 800 else 10) if bright else (100 if exposure == 800 else 10)
+            state[role] = dict(fresh=True, source_stamp=1000+clock[0], sequence=int(clock[0]*100)+1,
+                quality=dict(policy=quality.POLICY, usable=False,
+                    condition='OVEREXPOSED' if bright else 'UNDEREXPOSED', mean_intensity=255 if bright else 0,
+                    spatial_contrast=contrast, clipped_fraction=.5 if bright else 0))
+        return io.BytesIO(json.dumps(state).encode())
+
+    def write(role, name, value):
+        writes.append((clock[0], role, name, value))
+        current[role][name] = value
+
+    def restore(root):
+        for role in cameras:
+            current[role] = dict(original)
+
+    monkeypatch.setattr(env.urllib.request, 'urlopen', response)
+    backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d,
+        producer=lambda *a: {}, get_controls=lambda d, names: {key: current[d][key] for key in names},
+        write_control=write, restore_controls=runtime.restore_controls, apply_candidate=runtime.apply_candidate,
+        save=runtime.save, append_event=runtime.append_event, restore=restore,
+        reserve_budget=lambda root: runtime.reserve_budget(root, now_ns=int((1000+clock[0])*1e9)),
+        BudgetExhausted=runtime.BudgetExhausted)
+    env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 20, backend)
+    assert any(name == 'exposure_time_absolute' and value == 800 for _, _, name, value in writes)
+    assert any(at >= 8 and name == 'exposure_time_absolute' and value == 80 for at, _, name, value in writes)
+    assert not any(at >= 8 and name == 'exposure_time_absolute' and value == 800 for at, _, name, value in writes)
+    events = [json.loads(line) for line in (tmp_path/'environment.jsonl').read_text().splitlines()]
+    assert all(not event['photometric_ready'] for event in events)
+    assert len({event['run_id'] for event in events}) == 1
+    assert all(current[role] == original for role in cameras)
