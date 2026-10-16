@@ -313,7 +313,7 @@ git push
 
 ### 5.1 작업 영역
 
-담당은 팀 리드가 정한다. 빈 칸은 아직 담당자가 없다는 뜻이다.
+담당은 팀 리드가 정한다. 빈 칸은 아직 담당자가 없다는 뜻이다. 담당은 Jira KAN의 역할별 Epic(KAN-19~23)에 assignee가 생기면 이 표와 `.github/CODEOWNERS`에 함께 반영한다.
 
 | 영역 | 경로 | 내용 | 실물 장치 | 담당 |
 |---|---|---|---|---|
@@ -321,7 +321,7 @@ git push
 | 인지·차선 | `middleware/perception/` | 카메라·LiDAR 차선/장애물 증거 | 일부 | |
 | 내비게이션 | `middleware/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
 | 장치·드라이버 | `middleware/apps/device/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
-| Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | |
+| Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | 장원종 (@livsbittt, KAN-19) |
 | 현장 비전·앱 | `operations/overhead/`, `operations/site_ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | |
 | 화면 (웹·앱) | `middleware/robot_ui/`, `shared/web/` | 대시보드, Pilot 앱 ([DESIGN.md](../../DESIGN.md)) | 불필요 | |
 | 시뮬레이션 | `integrations/simulation/` | Gazebo 월드·다로봇 시뮬 | 불필요 | |
