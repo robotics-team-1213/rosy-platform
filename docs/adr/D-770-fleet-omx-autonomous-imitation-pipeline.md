@@ -498,3 +498,24 @@ ACK와 여섯 OFF/error0·기존 cap 보존을 확인했다. stop helper trace13
 하중·국소 이동 범위·운영 owner 재시작을 수용한 것은 아니다. 다음 작은 단계의 구동
 검증에 이 경로를 연결하며 실제 시연·IL eligible 데이터는 계속0회다.
 [구현·시험·실제 인계·판정 범위](../validation/omx-independent-stop-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 독립 watchdog과 powered 시험 전 시야 확인
+
+private powered prototype의 first-ON age 검사는 이후 감독 호출이 지연될 때 ON 기간을
+보장하지 못했다. 실행 전에 발견했고 해당 prototype은 실행하지 않았다. 별도 all-OFF
+fixture에서 실제 Type=notify/300ms manager watchdog과 barrier를 구성했다. 외부
+supervisor가 unit/PID/cgroup/InvocationID와 속성을 대조해 admission한 뒤, native가
+알림/barrier 성공 뒤에만 hardware를 활성화했다. 이후 refresh 없이 실제 watchdog
+SIGKILL과 별도 OFF helper의 ACK·여섯 OFF/error0·기존 cap 보존을 확인했다.
+
+notify→main exit는 약312.4ms, notify→OFF 후처리 process exit는 약969.0ms였다.
+stop 함수만의17.35ms와 전체 인계를 구분한다. 설정300ms나 all-OFF 결과를 powered
+정지 시간·최악 지연 보장으로 쓰지 않는다. source와 D-Bus/trace/CRC 증거를 보존했다.
+
+최신 두 영상과 read-only raw 관절 snapshot으로 vendor nominal mesh/FK를 대조했으나,
+집게 끝과 주변 간격은 아직 확실히 식별하지 못했다. nominal FK는 실제 기계/카메라
+보정이나 clearance 수용을 대신하지 않는다. 사용자에게 손끝 위치 설명 또는 시야
+조정을 요청했다. 그 사실 확인 전 토크를 켜지 않으며 실제 시연·IL eligible 데이터는
+계속0회다. 첫 실제 데이터셋 확보를 완료 조건으로 유지한다.
+[시간 제한·실제 결과·기구 대조·미완료 범위](../validation/omx-watchdog-deadline-2026-10-16/result.md).
