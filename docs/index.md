@@ -342,3 +342,8 @@
 - 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
 - 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
 - 2026-10-16 · uncommitted · docs(omx): 실제 토크 OFF 시작 목표 확인
+- 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
+- 2026-10-16 · uncommitted · fix(omx): native 초기화와 dependency export 검증
+- 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
+- 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
+- 2026-10-16 · uncommitted · fix(omx): 실제 vendor 오류 은폐와 owner 우회 경로 처리
