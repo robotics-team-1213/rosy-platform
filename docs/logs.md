@@ -8758,6 +8758,106 @@ osy-d395-s1d\`.
 - gate 변화: 실물 feedback·owner HOLD·허용 범위·독립 정지 수용은 미완료, 실제 시연 0회 유지.
 - 결정: D-770 후속; validation/omx-native-init-negative-2026-10-16/result.md.
 
+## 2026-10-16 · uncommitted · fix(omx): 실제 ROS feedback replay 오류
+
+- 변경: ROS runtime의 재전송 freshness 갱신을 막고 source age와 malformed 배열을 검증했다.
+- 증거: 실제 Jazzy RED→GREEN, native ROS8·순수 intake10시험. 취소 호출을 물리 stop으로 집계하지 않는다.
+- gate 변화: 실측/정지/owner 실물 수용과 실제 자동 시연 0회는 유지한다.
+- 결정: D-770 후속; validation/omx-feedback-source-age-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · docs(omx): 작은 이동 기반 측정 순서
+
+- 변경: 사용자 요청에 따라 현재 자세 주변의 encoder·두 영상·명령/종단을 함께 기록하는 국소 식별 절차를 D-770에 추가했다. profile 0·watchdog 의미를 제조사 문서로 확인했다.
+- 증거: 정책 fixture host22, 실제 Jazzy runtime8·정책 transport4 통과. 신규3실패의 원인과 후속 검증을 별도 dated record에 보존했다.
+- gate 변화: 첫 실물 이동 전 초기화 자동 Reboot·read 오류의 기존 state 유지 경로 검증이 남는다. 실제 시연0회 유지.
+- 결정: D-770 후속.
+
+## 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
+
+- 변경: `docs/plans/2026-10-16-app-role-clarity-design.md`와 실행 계획에 Fleet 현장 운영, Robot 한 대 관리, Pilot 직접 운전, Cam 송신, Learning 검수의 사용자 작업·소유 경계를 정리했다. 업무 소유 표, 앱 간 이동, 대상별 Robot/Pilot 이행, 결과 표시, 설치·수용의 다섯 Task로 나눴다.
+- 근거: D-370·D-377·D-425·D-487·D-741·D-757, 현재 surface registry와 folder responsibility 안내, 기존 Account/SRP 계획을 대조했다. Pilot 2026-10-05 DEVICE GO를 보존하고 대상·릴리스별 전환 증거를 확인하도록 했다.
+- gate 변화: 없음. 검토용 문서 작성이며 제품 코드·브라우저·배포·장치 시험은 실행하지 않았다. main 착지·push는 하지 않는다.
+
+## 2026-10-16 · uncommitted · 앱 책임 실행: 업무 소유표와 현재 이름 연결
+
+- 변경: `reference/app-responsibilities.md`에 전체 표면 분류와 업무별 화면/API/정본/실행/완료 증거·이행 조건을 연결했다. 개발 가이드의 관제 표시 이름을 D-487의 Rosy Fleet으로 맞췄다.
+- 증거: 기준 `d19abd20b` 원격 app roles/실제 owner/Robot 패널/Fleet 문서 import 계약 51 passed, exit 0. 현재 문서 변경은 새 API나 실행 권한을 추가하지 않는다.
+- gate 변화: 없음. 화면 이동·중복 조종·설치 수용은 후속 Task에서 확인한다.
+
+## 2026-10-16 · uncommitted · 앱 책임 실행과 장치 연결 단위 분리
+
+- 변경: 업무 소유표를 개발 가이드에 연결하고 Fleet의 승인된 Robot/Pilot 진입과 Robot의 같은 대상 Pilot 링크를 구현했다. 광고 origin·이전 세션의 cache를 거절한다. D-766에 따라 devices 자원 패키지와 읽기 adapter를 분리하고 기존 root·console.js의 크기 기록을 낮췄다. Learning은 기존 개발 표면 제목 계약을 유지한다.
+- 증거: `validation/app-role-clarity-2026-10-16/result.md`. 독립 리뷰 Important 2건은 재현 후 수정했으며 브라우저 회귀 50개가 통과했다. 분리 뒤 구조·설치 46개와 연결/Node/API 41개가 통과했다. 최종 제출 트리 회귀·생성 문서·커밋 범위 확인은 같은 기록에 추가한다.
+- gate 변화: 없음. Pilot의 기존 DEVICE GO를 보존하고 현재 대상·릴리스별 증거가 없는 중복 조종은 이행 예외로 유지한다. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-16 · uncommitted · fix(omx): 자동 reboot 제거와 실제 native read
+
+- 변경: vendor InitDxlComm fault의 자동 reboot를 제거하고 임시 probe의 실제 device identity·독점 open을 검사한다. loader 교착을 실제 constructor/worker 회귀로 재현하고 SYS_openat으로 수정했다.
+- 증거: compiled init5·기존 lifecycle10시나리오, Linux PTY/loader6시험 통과. 실제 native on_init/read3/정상 소멸 exit0, 전후 torque/error0·설정 동일, goal/torque/reboot 송신 없음. 앞선 두 실패와 분석기 enum 오류도 보존했다.
+- gate 변화: 실물 구동·보정/stop 수용은 미완료, 실제 시연0회. D-770; docs/validation/omx-native-passive-read-2026-10-16/result.md.
+
+## 2026-10-16 · uncommitted · fix(omx): cyclic write 오류와 fault cleanup
+
+- 변경: 정상 write의 송신 실패를 즉시 ERROR로 전파하고 fault/shutdown callback을 두 그룹 stop에 연결한다. fault cleanup 성공도 자동 복구로 취급하지 않는다.
+- 증거: 고정 메서드 오류5개 RED→GREEN, write6/callback8경우·원격24시험 통과·NEW0. 전체 native plugin build/load, 실제 ROS 객체 97→99 실패 전파, 실제 framework consumer12경우와 기본 callback negative control 확인.
+- gate 변화: 이번 단계 serial port·실물 activation 미사용. 물리 stop·하중·실측 제한·실물 owner 수용 및 시연0회는 유지한다. D-770; docs/validation/omx-cyclic-write-fault-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · fix(omx): 실제 cyclic 상태와 uncertain torque cleanup
+
+- 변경: ACK 유실 토크 쓰기를 추적해 cleanup 누락을 막고, 실제 cyclic torque/error interface를 통신 전 요구한다. read 실패·잘못된 값은 즉시 ERROR이며 candidate에 필수 읽기를 추가한다.
+- 증거: 실제 SDK11·read/CheckError14경우, 원격39시험 NEW0, 8-patch native build/load와 실제 on_init PTY 비교 통과. 실제 torque-off read3회 fresh 상태를 확인했다.
+- gate 변화: ID14 goal1틱 변화로 실제 전후 보존 검사 실패, 명령 송신105개에 goal/torque/reboot 없음. 원인 미확정·실패 보존·장치 재실행 없음. 실제 시연0회. D-770; docs/validation/omx-measured-status-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): native 부재의 목표 변화 진단
+
+- 증거: 한 독점 handle의 PING/READ-only30회에서 ID14의 목표·현재 위치3195↔3196 전이11회, 여섯 torque0/error0과 mode 유지. 원본·시각·코드 hash 보존.
+- 해석: native 실행 부재에서도 나타남을 확인. firmware 원인·기존 mapping 영향 미확정; 기존 실패 gate 유지. 실제 시연0회. D-770; docs/validation/omx-goal-readonly-2026-10-16.md.
+- 변경: 독립 읽기 전용 관찰의 원본 위치와 실제 결과·해석 한계를 추가했다.
+- gate 변화: 없음. 기존 보존 검사 실패와 실물 구동 미수용·실제 시연0회를 유지한다.
+
+
+## 2026-10-16 · uncommitted · feat(omx): 토크 OFF 유한 제한 실제 적용
+
+- 변경: exclusive commissioning 경로에서 finite cap만 낮추고 durable 원본/의도·한 번 송신·ACK·전체 readback·deadline을 검사한다. 오류/불확실성의 자동 재시도·복원은 없다.
+- 증거: 초기40·packet guard4·느린 fsync1 RED 후 관련 원격65시험 NEW0, 독립 검토 수정 완료. 실제 cap21쓰기/264PING·READ, 여섯 torque/error0 및 제한값 일치. 원본·trace·receipt 보존.
+- gate 변화: EEPROM PWM/current 상한은 낮춘 값으로 유지, RAM profile은 재시작 뒤 재검증. 실제 구동·독립 stop·하중·시연0회는 유지한다. D-770; docs/validation/omx-bounded-commissioning-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): 실제 토크 OFF 시작 목표 확인
+
+- 변경: 실물 구동 전 초기 목표의 현재 위치 동기화를 별도 native probe로 확인하고 판정 범위를 기록했다.
+- 증거: 여섯 enable선택0, 실제 on_init/start/소멸 exit0, fresh torque/error0상태3회, cap유지. 송신107개 중 목표SyncWrite1묶음, 초기 위치 대비 최대1틱 차이; torque/reboot/mode/offset쓰기 없음.
+- gate 변화: 송신 후 목표 검사이며 물리 activation·도달·독립 stop·실물 owner 수용은 미완료. 실제 시연0회. D-770; docs/validation/omx-bounded-commissioning-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
+
+- 변경: 고정 driver·실제 JSB/JTC와 현재 owner의 토크 OFF 결선을 검증하고 params_file/alias/추적 종료 문제를 해결해 기록했다.
+- 증거: 실제 encoder상태10개·OFF/error0상태46개, JSB중단 후 stale HOLD·dispatch0. packet196개 중 mapping84·cyclic목표47; CMexit0·cap/mode유지. 실패2회와 저장 분석기 오류를 보존하고 분석만 수정했다.
+- gate 변화: 실제 accepted goal·취소/토크 ON 정지·운영 owner 재시작·시연수집은 미완료, 시연0회. D-770; docs/validation/omx-native-controller-feedback-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
+
+- 변경: 실제 owner→JTC stationary 명령1건의 수용·cancel ACK·CANCELED terminal·HOLD 재요청 거절을 토크 OFF 상태에서 확인하고 기록했다.
+- 증거: native 상태34개 OFF/error0, 실제 event3개 fsync JSONL, 송신172개 중 cyclic 목표35회·최대1틱, torque/mode/offset/reboot 쓰기0; hardware inactive·CM exit0·cap유지. CRLF 분석 실패는 저장 분석기만 수정해 해결했다.
+- gate 변화: 실제 Action 수용/취소 경로 증거 추가. powered stop·독립 정지·실측 범위·시연수집 미완료, 시연0회. D-770; docs/validation/omx-native-action-cancel-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
+
+- 변경: 명시한 follower ID에 OFF만 한 번 전송하고 실제 readback하는 독점 commissioning_stop을 추가했다. 디스크/ACK/cleanup 실패를 구분하고 기존 기록을 보존한다.
+- 증거: 원격 RED→GREEN92시험 NEW0; 실제 all-OFF native main SIGKILL 뒤 독립 ExecStopPost의 ID16 OFF ACK·여섯 OFF/error0·cap보존. stop trace13packet CRC/완전송신 확인; supervisor ownership 경합 RED→GREEN.
+- gate 변화: 별도 OFF 경로·토크 OFF process-death 인계 증거 추가. 실제 ON→OFF·물리 정지·국소 이동·시연수집은 미완료, 시연0회. D-770; docs/validation/omx-independent-stop-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
+
+- 변경: private powered prototype의 age-only 제한 결함을 실행 전에 확인하고 별도 all-OFF native manager watchdog fixture를 검증했다. 최신 영상과 raw snapshot의 nominal FK도 대조했다.
+- 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
+- gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
 ## 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
 
 - 변경: 팀 가이드의 개인 클론·실험실 공유 체크아웃 범위를 구분하고, 기존 기여 안내의 시험 PC 접속 불가 훅 예외를 반영했다. 이슈의 담당 경로·완료 조건·의존 PR, 동시 수정 조율, 교대 기록을 안내하고 작업·버그 이슈 양식을 추가했다. PR 양식은 검증 SHA·실행 위치·미실행 검사·후속 작업을 기록한다. 다른 클론의 ADR 선점이 공유되지 않는 한계도 명시했다.

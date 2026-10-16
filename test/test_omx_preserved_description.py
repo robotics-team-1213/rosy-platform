@@ -78,3 +78,31 @@ def test_artifacts_preserve_input_and_refuse_existing_output(tmp_path):
     assert receipt["runtime_started"] is False
     with pytest.raises(FileExistsError):
         _module.write_candidate(source, output)
+
+
+def test_candidate_adds_cyclic_torque_and_error_reads_without_initialization_writes():
+    root = description()
+    ET.SubElement(root.find(".//gpio"), "state_interface", name="Torque Enable")
+    output, receipt = _module.prepare(ET.tostring(root, encoding="unicode"))
+    for gpio in ET.fromstring(output).findall(".//gpio"):
+        names = [item.attrib["name"] for item in gpio.findall("state_interface")]
+        assert names.count("Torque Enable") == 1 and names.count("Hardware Error Status") == 1
+        assert names.count("Present Position") == 1
+        assert gpio.find("param[@name='Torque Enable']").text == "0"
+    assert receipt["added_state_interfaces"] == 11
+    assert _module.prepare(output)[0] == output
+    assert _module.prepare(output)[1]["added_state_interfaces"] == 0
+
+
+@pytest.mark.parametrize("name", [None, "Present Position", "Torque Enable", "Hardware Error Status"])
+def test_ambiguous_state_interface_names_are_rejected(name):
+    root = description()
+    gpio = root.find(".//gpio")
+    if name is None:
+        ET.SubElement(gpio, "state_interface")
+    else:
+        if name != "Present Position":
+            ET.SubElement(gpio, "state_interface", name=name)
+        ET.SubElement(gpio, "state_interface", name=name)
+    with pytest.raises(ValueError):
+        _module.prepare(ET.tostring(root, encoding="unicode"))
