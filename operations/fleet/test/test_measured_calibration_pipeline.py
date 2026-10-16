@@ -19,6 +19,7 @@ from test_overhead_tracking_api import _client, _auth, OPERATOR_TOKEN, VIEWER_TO
 
 def test_restart_source_sync_actual_render_readback_and_revocation(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]/'overhead'))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]/'operations/apps/games'))
     import cv2
     import numpy as np
     from core_common.protocol.vision_preview import VisionLeaseSigner
