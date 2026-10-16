@@ -17,6 +17,7 @@ from native_environment import _events, seal_environment
 from native_review import JOINTS, dataset_files, inspect_dataset, write_json
 
 SCHEMA = 'rosy.omx-collection-session.v1'
+MAX_TIME_NS = 2**63-1
 
 
 def _require(value, message):
@@ -55,6 +56,13 @@ def _json(raw):
 
 def _number(value):
     return type(value) in (int, float) and math.isfinite(value)
+
+
+def _source_ns(value):
+    _require(_number(value) and 0 < value <= MAX_TIME_NS/1e9, 'source stamp outside int64 clock range')
+    result = round(value*1e9)
+    _require(0 < result <= MAX_TIME_NS, 'source stamp outside int64 clock range')
+    return result
 
 
 def _relative(value):
@@ -132,7 +140,7 @@ def validate_session(root, *, completed_only=False):
         _require(_text(episode.get('cycle_id')) and _text(episode.get('run_id'))
                  and _hash(episode.get('profile_sha256')), 'attempt lineage required')
         start, end = episode.get('start_ns'), episode.get('end_ns')
-        _require(type(start) is int and type(end) is int and 0 < start < end and start >= prior_end,
+        _require(type(start) is int and type(end) is int and 0 < start < end <= MAX_TIME_NS and start >= prior_end,
                  'invalid or overlapping attempt windows')
         prior_end = end
         path = _relative(episode.get('samples_path'))
@@ -152,6 +160,8 @@ def validate_session(root, *, completed_only=False):
             _vector(row.get('requested_target_rad'), normalized=False)
             _require(all(_number(row.get(k)) and row[k] > 0
                          for k in ('joint_source_stamp', 'reference_source_stamp')), 'source stamps required')
+            for key in ('joint_source_stamp', 'reference_source_stamp'):
+                _source_ns(row[key])
             images = row.get('images')
             _require(isinstance(images, dict) and set(images) == set(shapes), 'both sample cameras required')
             for role, shape in shapes.items():
@@ -164,9 +174,10 @@ def validate_session(root, *, completed_only=False):
                          and len(blobs[name]) == math.prod(shape)
                          and _number(image.get('source_stamp')) and image['source_stamp'] > 0,
                          'raw image bytes, shape or source stamp differs')
+                _source_ns(image['source_stamp'])
             rows.append(row)
         _require(len(rows) == episode['frames'], 'attempt frame count differs')
-        _require(not episode['complete'] or bool(rows), 'complete attempt must contain frames')
+        _require(not episode['complete'] or len(rows) >= 2, 'complete attempt must contain at least two frames')
         samples[index] = rows
         windows.append({key: episode[key] for key in ('episode_index', 'start_ns', 'end_ns', 'run_id',
                                                      'profile_sha256')})
@@ -222,6 +233,9 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     features = {key: dict(dtype='float32', shape=(6,), names=JOINTS[:])
                 for key in ('observation.state', 'action')}
+    features['source.capture_time_ns'] = dict(dtype='int64', shape=(1,), names=['fleet_host_unix_ns'])
+    for source in ('joint', 'reference', 'top', 'front'):
+        features[f'source.{source}_time_ns'] = dict(dtype='int64', shape=(1,), names=[source+'_source_unix_ns'])
     features.update({f'observation.images.{role}': dict(dtype='video', shape=tuple(shape),
                      names=['height', 'width', 'channels']) for role, shape in baseline['camera_shapes'].items()})
     dataset = LeRobotDataset.create(repo_id=repo_id, fps=baseline['fps'], root=output,
@@ -231,9 +245,15 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
         for record, episode in episodes:
             for row in record['samples'][episode['episode_index']]:
                 frame = {k: np.array(row[k], dtype=np.float32) for k in ('observation.state', 'action')}
+                frame['source.capture_time_ns'] = np.array([row['time_ns']], dtype=np.int64)
+                for source in ('joint', 'reference'):
+                    frame[f'source.{source}_time_ns'] = np.array(
+                        [_source_ns(row[source+'_source_stamp'])], dtype=np.int64)
                 for role, shape in baseline['camera_shapes'].items():
                     frame[f'observation.images.{role}'] = np.frombuffer(
                         record['blobs'][row['images'][role]['path']], dtype=np.uint8).reshape(shape).copy()
+                    frame[f'source.{role}_time_ns'] = np.array(
+                        [_source_ns(row['images'][role]['source_stamp'])], dtype=np.int64)
                 frame['task'] = baseline['task']
                 dataset.add_frame(frame)
             dataset.save_episode(parallel_encoding=False)
