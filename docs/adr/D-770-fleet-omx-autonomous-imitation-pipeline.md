@@ -384,3 +384,13 @@ candidate로 migrate해야 하며 누락 설정은 실제 bus open 전에 거절
 작은 움직임은 유한 제한·초기 목표·owner/HOLD·정지 관측 연결 뒤 진행한다. 실제
 자동 시연은 0회이며 IL 데이터 수집·실데이터 학습 완료로 기록하지 않는다.
 [원인과 검증 범위](../validation/omx-measured-status-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: native 부재의 목표 레지스터 관찰
+
+보존 검사 실패를 재실행하지 않고 별도 PING/READ-only 관찰30회를 수행했다.
+native driver 없이도 ID14의 목표와 현재 위치가 함께3195↔3196으로 바뀌는 전이가
+11회였다. 여섯 모터 torque0/error0과 mode는 유지됐다. firmware 원인·이전 mapping
+영향을 확정하거나 기존 gate를 통과로 바꾸지 않는다. 첫 활성화의 현재 위치·목표
+보존/readback 설계에 이 실제 변화 특성을 반영한다. 실제 시연은0회다.
+[독립 관찰과 해석 한계](../validation/omx-goal-readonly-2026-10-16.md).
