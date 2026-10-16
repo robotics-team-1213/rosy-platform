@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+- 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
 - 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용
 - 2026-10-16 · uncommitted · fix(omx): feedback 원본 age 보존
 - 2026-10-16 · uncommitted · refactor(omx): commissioning viewer stays with deployment tools
-- 2026-10-16 · uncommitted · feat(omx): read-only commissioning web observations
-- 2026-10-15 · b5539986f · feat(omx): 실측 문서 검사 CLI

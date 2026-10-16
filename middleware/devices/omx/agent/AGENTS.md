@@ -16,6 +16,10 @@ Wheel `rosy-app-agent` 0.1.1. ROSY agent application compositions. It depends on
 | `src/rosy_agent/omx_cell_documents.py` | Cell document reads for the agent |
 | `src/rosy_agent/omx_cell_owner.py` | OMX cell owner composition |
 | `src/rosy_agent/omx_sim.py` | Sim-side composition helper |
+| `src/rosy_agent/barrier_journal.py` | D-780 `PHASE_WAIT`/release/expiry rows in the owner journal (safety-tagged) |
+| `src/rosy_agent/barrier_supervisor.py` | D-780 barrier gate, timeout FAILED/HOLD, coordinator liveness HOLD (safety-tagged) |
+| `src/rosy_agent/coordinator_api.py` | D-780 coordinator peer roles, `GetBarrier`/`ReleaseBarrier` (safety-tagged) |
+| `src/rosy_agent/workcell_coordinator.py` | D-780 two-arm coordinator: barrier release, coupled stop (safety-tagged) |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories
