@@ -28,6 +28,11 @@ def validate_split(root):
         if bound['episodes'] != source['episodes']:
             raise ValueError('capture episode grouping differs from declared provenance')
         selected = native.reviewed_splits(receipt['source'], receipt['decisions'])
+        coverage = native.split_coverage(native.validate_environment(source), receipt['decisions'])
+        if ('environment_summary' in source or 'environment_coverage' in receipt
+                or source.get('environment_evidence') is not None):
+            if receipt.get('environment_coverage') != coverage:
+                raise ValueError('environment coverage differs from original episode evidence')
         if selected != receipt['splits'] or set(receipt['outputs']) != set(selected):
             raise ValueError('split receipt selection differs from reviewed episodes')
         for name in selected:
@@ -141,6 +146,9 @@ def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=
                       split_receipt_sha256=receipt_hash, split_files=receipt['outputs'], artifact_files=before,
                       evaluation=json.loads((output / 'evaluation.json').read_text()),
                       body_units=receipt['source']['body_units'], gripper_units='normalized_0_100',
+                      environment_summary=native.validate_environment(receipt['source']),
+                      environment_coverage=native.split_coverage(
+                          native.validate_environment(receipt['source']), receipt['decisions']),
                       device_execution=False, promotion=False)
         native.write_json(output / 'cycle-receipt.json', result)
         return result
