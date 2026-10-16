@@ -70,7 +70,11 @@ def measure_commit(commit: str, units: list[str], limits=size_limits) -> tuple[d
     packages = {ET.fromstring(blob).findtext("name"): str(PurePosixPath(path).parent)
                 for path, blob in _blobs(commit, xmls).items()}
     packages.update(getattr(limits, "STANDALONE", {}))
-    return limits.measure(files, packages, roots, units)
+    if not hasattr(limits, "inline_script_lines"):  # a commit from before revision 2
+        return limits.measure(files, packages, roots, units)
+    scripts = {path: limits.inline_script_lines(blob.decode("utf-8", "replace"))
+               for path, blob in blobs.items() if path.endswith(".html")}
+    return limits.measure(files, packages, roots, units, scripts)
 
 
 def safety_commit(at: str, key: str, safety: dict) -> tuple[dt.date, bool] | None:

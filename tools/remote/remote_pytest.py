@@ -77,7 +77,7 @@ RESERVE_S = {"pytest": 4500, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
-PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider"]
+PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", *known_failures.NO_ROS_LAUNCH_PLUGINS]
 # Leading words of an invocation that remote_job.JOB exports instead of passing to pytest.
 ENV_ARG = re.compile(r"^ROSY_[A-Z0-9_]*=")
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
