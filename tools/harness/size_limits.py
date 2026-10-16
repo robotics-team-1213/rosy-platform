@@ -1,7 +1,8 @@
 """D-766 size limits: one counting rule for the architecture guard and the per-commit range check.
 
-Absolute limits, no baselines: a production file (``.py``/``.cpp``/``.hpp``/``.sh``/``.kt``) 600
-lines, a web asset (``.js``/``.mjs``/``.ts``/``.html``/``.css``) 800, a size unit (a package, a
+Absolute limits, no baselines: a production file (``.py``/``.cpp``/``.hpp``/``.sh``/``.kt``) and a
+script (``.js``/``.mjs``/``.ts``) 600 lines, markup (``.html``/``.css``) 800 with at most 600 lines of
+inline ``<script>``, a test file 1,500 (revision 2), a size unit (a package, a
 standalone root in ``STANDALONE``, or a subpackage or holder listed in ``size_units.txt``) 10,000. What is already over is frozen at its
 measured count in ``size_ratchet.txt``: the count may fall (and the row falls with it), never
 rise. ``test/architecture/test_module_structure.py`` measures the working tree;
@@ -12,10 +13,17 @@ and :func:`ratchet_problems`, so the two cannot drift. Standard library only.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from pathlib import PurePosixPath
 
 FILE_LIMIT = 600
 FILE_LIMIT_WEB = 800
+#: D-766 revision 2: script assets take the code limit; markup keeps 800, its inline script 600.
+SCRIPT_SUFFIXES = {".js", ".mjs", ".ts"}
+INLINE_SCRIPT_LIMIT = 600
+INLINE_SCRIPT = re.compile(r"<script\b[^>]*>(.*?)</script>", re.S | re.I)
+#: D-766 revision 2: test files (under a test/tests folder), browser tests included.
+TEST_LIMIT = 1_500
 UNIT_LIMIT = 10_000
 #: D-766 3: a new unit is at least UNIT_FLOOR lines when its parent (before the split) is FLOOR_PARENT or more.
 UNIT_FLOOR = 1_000
@@ -57,7 +65,20 @@ STANDALONE = {
 }
 #: D-766 coverage addendum (2026-10-15): files already over their limit when the roots above and
 #: ``.kt`` joined the count. Each may enter the ratchet as a new row once, at no more than this.
-COVERAGE_ROWS = {"site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt": 791}
+#: D-766 revision 2 (2026-10-16): the scripts over 600 and the test files over 1,500 when those limits began.
+COVERAGE_ROWS = {
+    "site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt": 791,
+    "robot_ui/pilot/screens/drive.js": 783, "site_ui/console/line-stuck.js": 756,
+    "site_ui/console/roster.js": 711, "site_ui/console/shared/site-map-model.js": 800,
+    "site_ui/console/shared/vision-view.js": 788, "site_ui/console/site-map.js": 771,
+    "middleware/core/events/test/test_audit.py": 1533,
+    "middleware/robot_ui/pilot/test/test_pilot_browser.py": 3059,
+    "operations/fleet/test/test_trip_runner.py": 1757,
+    "test/learning/perception/test_review_flow_browser.py": 1531,
+    "test/test_dashboard_browser.py": 3049, "test/test_fleet_console_browser.py": 3884,
+    "test/test_rosy_auto_update.py": 2632, "test/test_rosy_face.py": 2484,
+    "test/test_sd_writer_contract.py": 2725,
+}
 
 RATCHET = "test/architecture/size_ratchet.txt"
 UNITS = "test/architecture/size_units.txt"
@@ -72,23 +93,44 @@ def _under(path: str, folder: str) -> bool:
     return path.startswith(folder.rstrip("/") + "/")
 
 
+def is_test(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    return (PurePosixPath(path).suffix in OPS_SUFFIXES and any(p in ("test", "tests") for p in parts)
+            and not any(p in ("build", "install", "log") or p.startswith(".") for p in parts))
+
+
 def limit_for(path: str) -> int:
-    return FILE_LIMIT_WEB if PurePosixPath(path).suffix in WEB_SUFFIXES else FILE_LIMIT
+    if is_test(path):
+        return TEST_LIMIT
+    suffix = PurePosixPath(path).suffix
+    return FILE_LIMIT_WEB if suffix in WEB_SUFFIXES - SCRIPT_SUFFIXES else FILE_LIMIT
+
+
+def inline_script_lines(text: str) -> int:
+    """Lines inside an ``.html`` file's ``<script>`` elements (revision 2: at most INLINE_SCRIPT_LIMIT)."""
+    return sum(match.group(1).count("\n") for match in INLINE_SCRIPT.finditer(text))
+
+
+def _over_limit(path: str, count: int, scripts: dict) -> bool:
+    return count > limit_for(path) or scripts.get(path, 0) > INLINE_SCRIPT_LIMIT
 
 
 def _limit(key: str) -> int:
     return limit_for(key) if PurePosixPath(key).suffix in CODE_SUFFIXES | WEB_SUFFIXES else UNIT_LIMIT
 
 
-def measure(files: dict[str, int], packages: dict[str, str], colcon_roots, units) -> tuple[dict, dict, dict]:
+def measure(files: dict[str, int], packages: dict[str, str], colcon_roots, units,
+            scripts: dict[str, int] | None = None) -> tuple[dict, dict, dict]:
     """Count ``files`` (repo-relative posix path -> lines).
 
     ``packages`` maps a package name to its repo-relative directory. Returns ``(counts,
     over, owner)``: ``counts`` holds every unit and package total, ``over`` every file,
     unit or package above its limit (file keys are colcon-root-relative inside packages,
-    repo-relative in ``OPS_ROOTS``), ``owner`` maps a counted file to the unit or package
+    repo-relative in ``OPS_ROOTS`` and for test files), ``owner`` maps a counted file to the unit or package
     that takes its lines and each unit to its parent (enclosing unit, else package).
+    ``scripts`` maps an ``.html`` path to its inline script lines (``inline_script_lines``).
     """
+    scripts = scripts or {}
     roots = tuple(colcon_roots)
     counts = dict.fromkeys(units, 0)
     over, owner, package_of = {}, {}, {}
@@ -108,14 +150,16 @@ def measure(files: dict[str, int], packages: dict[str, str], colcon_roots, units
             owner[path] = key
             if unit:
                 package_of[unit] = name
-            if count > limit_for(path):
+            if _over_limit(path, count, scripts):
                 over[rel] = count
     for path, count in files.items():
         root = next((root for root in OPS_ROOTS if _under(path, root)), None)
         if root and PurePosixPath(path).suffix in OPS_SUFFIXES and is_prod(PurePosixPath(path).parts):
             owner.setdefault(path, root)
-            if count > limit_for(path):
+            if _over_limit(path, count, scripts):
                 over[path] = count
+        elif is_test(path) and count > TEST_LIMIT:
+            over[path] = count
     for unit in units:
         owner[unit] = max((u for u in units if u != unit and _under(unit, u)), key=len,
                           default=package_of.get(unit))
