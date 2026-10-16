@@ -529,6 +529,8 @@
 - 근거: PR #55 CI 38912405039에서 기존 수집 오류가 해소된 뒤 controller_manager_msgs 수집 오류 하나와 joint_state_stale 회귀 하나가 드러났다. 실행 경로와 독립 리뷰만으로는 생산 코드 결함인지 시험 환경인지 판단할 수 없어 진단 정보를 먼저 추가했다.
 - gate 변화: 없음. 실제 로봇을 사용하지 않으며 native ROS fixture는 원격 시험 PC의 localhost에서 검증한다.
 
-## 2026-10-16 - uncommitted - test(ci): repair native ROS fixture inputs and scheduling
+## 2026-10-16 · uncommitted · test(ci): repair native ROS fixture inputs and scheduling
 
-- Cloud run 38914855479 exposed preexisting ROS fixture defects after dependency installation: stamp Fleet JointState publications; use a 0.5 s fixture freshness allowance and explicitly hold feedback for 3x that interval while asserting owner state advances and stays fresh. Production validation is unchanged. Native opt-in verification now includes both Fleet parameters.
+- Change: Stamp Fleet JointState publications. Use a 0.5 s fixture freshness allowance and explicitly hold feedback for 3x that interval while asserting owner state advances and stays fresh. Native opt-in verification now includes both Fleet parameters. Correct this unpublished entry's heading and fields after independent review caught its malformed format.
+- Evidence: Cloud run 38914855479 exposed zero-stamped fixture inputs and a 0.200655 s publication gap against a 0.2 s test allowance. Native remote verification at 17a72fb6f passed all three wrapper parameters, including both Fleet cases; final revision verification follows the formatting repair.
+- Gate: No change. Production freshness validation and physical acceptance remain unchanged.
