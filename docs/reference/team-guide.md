@@ -267,7 +267,19 @@ git push
 
 ### 5.1 작업 영역
 
-소스 경로와 책임은 [폴더 책임표](platform-folder-responsibilities.md), 소유 영역의 정본은 `tools/harness/platform_parts.yaml`을 본다. 사람 담당은 리드와 정하고 이슈에 남긴다. 이 문서에 별도 담당자·파일 목록을 유지하지 않는다.
+소스 경로와 책임은 [폴더 책임표](platform-folder-responsibilities.md), 소유 영역의 정본은 `tools/harness/platform_parts.yaml`을 본다. 경로별 GitHub 리뷰 담당은 [CODEOWNERS](../../.github/CODEOWNERS), 역할별 사람 담당은 아래 표에서 확인한다.
+
+2026-10-17 [PR #59](https://github.com/robotics-team-1213/rosy-platform/pull/59)에 반영된 배정이다. 담당은 리드가 정하며 Jira 역할별 Epic의 담당이 바뀌면 이 표와 관련 `CODEOWNERS` 항목을 함께 갱신한다. 그 외 영역의 담당은 아직 지정되지 않았다.
+
+| Epic | 역할 | 담당 |
+|---|---|---|
+| KAN-19 | 관제·충전·물류 | 장원종 (@livsbittt) |
+| KAN-20 | Pinky | 노재용, GitHub 계정 확인 필요 |
+| KAN-21 | OMX | 김승용·서정민 공동, GitHub 계정 확인 필요 |
+| KAN-22 | 비전·AI | 윤영민 (@now2466) |
+| KAN-23 | 통합 시나리오·시연·일정 | 민주환 (@WINNAKEN, PM) 조율, 전원 참여 |
+
+KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 노재용·김승용·서정민의 GitHub 계정이 확인되면 `CODEOWNERS`에 장치 경로를 추가한다.
 
 ### 5.2 처음 잡기 좋은 일
 
