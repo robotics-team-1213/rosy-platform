@@ -47,6 +47,8 @@ def verify_tree(root):
         return result
     manifest_path = root/'manifest.json'
     _no_links(manifest_path)
+    if not manifest_path.is_file() or manifest_path.stat().st_nlink != 1:
+        raise ValueError('regular manifest file required')
     raw = manifest_path.read_bytes()
     manifest = json.loads(raw, object_pairs_hook=unique)
     if (not isinstance(manifest, dict) or manifest.get('schema') != 'rosy.omx-collection-session.v1'

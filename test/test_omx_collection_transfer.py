@@ -3,6 +3,8 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+from types import SimpleNamespace
 
 import pytest
 
@@ -89,3 +91,39 @@ def test_source_mutation_never_emits_success_receipt(module, monkeypatch):
     with pytest.raises(ValueError, match='changed'):
         module.transfer('session')
     assert 'finish' not in calls and calls[-1] == 'release'
+
+
+def test_receiver_reserves_exclusively_and_writes_receipt_outside_raw_tree(module, tmp_path, monkeypatch):
+    monkeypatch.setattr(module.Path, 'home', lambda: tmp_path)
+    source = tmp_path/'rosy-test/omx-collections/session'
+    source.parent.mkdir(parents=True)
+    raw(source)
+    original = module.verify_tree(source)
+    token = 'a'*32
+    module._receiver('reserve', 'session', 'received', token)
+    with pytest.raises(FileExistsError):
+        module._receiver('reserve', 'session', 'received', 'b'*32)
+    destination = tmp_path/'rosy-test/omx-il-data/collections/received'
+    shutil.copytree(source, destination)
+    result = module._receiver('finish', 'session', 'received', token, original['manifest_sha256'])
+    assert result['verified']
+    assert module.verify_tree(destination) == original
+    assert (destination.parent.parent/'transfer-receipts/received.json').is_file()
+    module._receiver('release', 'session', 'received', token)
+    with pytest.raises(ValueError, match='exists'):
+        module._receiver('reserve', 'session', 'received', token)
+
+
+def test_copy_uses_direct_new_destination_and_pinned_noninteractive_transport(module, monkeypatch):
+    calls = []
+    def run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return SimpleNamespace(returncode=0, stderr='')
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    module._copy('site@host', 'model@host', 'session', 'received')
+    argv, kwargs = calls[0]
+    assert argv[:4] == ['scp', '-3', '-q', '-r']
+    assert 'BatchMode=yes' in argv and 'StrictHostKeyChecking=yes' in argv
+    assert argv[-2:] == ['site@host:rosy-test/omx-collections/session',
+                         'model@host:rosy-test/omx-il-data/collections/received']
+    assert kwargs['timeout'] == 1800 and 'shell' not in kwargs
