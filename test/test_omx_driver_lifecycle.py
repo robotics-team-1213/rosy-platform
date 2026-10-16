@@ -96,11 +96,25 @@ def test_initialization_rejects_fault_without_reboot(tmp_path):
     path = "src/dynamixel/dynamixel.cpp"
     original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{path}"], text=True)
     fixture = (ROOT / "test/fixtures/omx_driver_init.cpp").read_text()
-    body = function(original, "DxlError Dynamixel::InitDxlComm(")
-    program, binary = tmp_path / "init.cpp", tmp_path / "init"
-    program.write_text(fixture.replace("// VENDOR_METHOD", body))
-    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
-                   check=True, timeout=60)
-    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
-    print(result.stdout)
-    assert result.returncode == 0, result.stdout + result.stderr
+    def execute(source, name):
+        body = function(source, "DxlError Dynamixel::InitDxlComm(")
+        program, binary = tmp_path / f"{name}.cpp", tmp_path / name
+        program.write_text(fixture.replace("// VENDOR_METHOD", body))
+        subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                       check=True, timeout=60)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+        print(name + "\n" + result.stdout)
+        return result
+
+    before = execute(original, "upstream_init")
+    assert before.returncode == 2
+    assert set(line for line in before.stdout.splitlines() if line.startswith("FAIL")) == {
+        "FAIL hardware_alert_no_reboot", "FAIL error_code_no_reboot"}
+    target = tmp_path / path
+    target.parent.mkdir(parents=True)
+    target.write_text(original)
+    patch = ROOT / "deploy/robot/omx/patches/hardware-init-no-reboot.patch"
+    subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(patch)], cwd=tmp_path, check=True)
+    after = execute(target.read_text(), "patched_init")
+    assert after.returncode == 0, after.stdout + after.stderr
+    assert len(after.stdout.splitlines()) == 5
