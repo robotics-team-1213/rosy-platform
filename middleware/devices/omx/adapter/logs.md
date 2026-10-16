@@ -552,3 +552,9 @@
 - Change: Give the synthetic vendor ActionServer its own executor, matching the external vendor boundary. Keep the owner executor at four workers, all callback groups, 40 feedback messages, 0.5 s freshness, at least 1.5 s blocked sink and completed/ready assertions. Remove investigative switches, affinity changes and callback instrumentation.
 - Evidence: CI 38939987985 at 4932c2c177 recorded a 0.5956 s source-publication gap, stale source rejection and owner HOLD at age 0.6059 s. The owner correctly enforced its policy. Native wrappers passed with separated vendor scheduling at 636d102c5c. A callback-group mutation at c282f6729d kept publications advancing (maximum gap 0.2013 s) but stopped owner sequence at 4 and failed freshness at age 1.6698 s, proving the regression still detects excluded intake. Final SHA and cloud results are recorded in PR #69.
 - Gate: No change. This corrects the test boundary; it does not establish a GIL defect, physical stop or hardware acceptance.
+
+## 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
+
+- Change: Use a spawned, localhost-only test peer with its own ROS context for the vendor and 100 Hz state source. Keep owner MTE4, 40 feedback messages, 0.5 s freshness, blocked sink and completion assertions unchanged. Bound peer startup/shutdown and stop it if its parent disappears. Freeze the synthetic readback clock only in the lost-reply admission unit test.
+- Evidence: The separate-executor trial above passed initially but failed again at 275e14dc46, so it is insufficient. The same pre-push run exposed readback expiry during SQLite setup before the lost-reply test could exercise its intended send failure. No production threshold is changed. Final verification is recorded in PR #69.
+- Gate: No change. This remains a hardware-free test correction.

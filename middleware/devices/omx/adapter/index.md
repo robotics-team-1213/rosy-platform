@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
 - 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
 - 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
 - 2026-10-16 · uncommitted · fix(ci): isolate native ROS fixture processes
 - 2026-10-16 · uncommitted · test(ci): repair native ROS fixture inputs and scheduling
-- 2026-10-16 · uncommitted · test(ci): 새로 수집된 ROS 시험 실패의 관측 정보
