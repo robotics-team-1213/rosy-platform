@@ -28,10 +28,11 @@
 
 ## 원격 검증과 착지
 
-- 구현 커밋: `5fb62ada7`. `tools/land.py --tests auto`가 최신 main을 반영한 `7584d2800210637e38eb1dc54669590bff9430a7`을 검증했다.
+- 구현 커밋: `5fb62ada7`. `tools/land.py --tests auto`가 최신 main을 반영한 `7584d2800`을 검증했다.
 - 구조·harness guard: 247 passed, 38 warnings, 39.94초. 변경 영향 범위: 367 passed, 35 warnings, 71.67초. 새 Graphify 회귀 테스트 4개가 영향 범위에 포함됐다. 두 결과 모두 known-failures 비교에서 NEW 0이었다.
 - 안전 리뷰·크기 검사·harness lint를 통과하고 로컬 main에 fast-forward 착지했다. 원격 push와 로봇 배포는 수행하지 않았다.
 - 로그는 실행 PC 사용자 캐시의 `ROSY/analysis/graphify/landing/feat-graphify-tools/{run-g1-1.txt,run-1-1.txt}`, 착지 영수증은 Git common directory의 `rosy-land/7584d2800210637e38eb1dc54669590bff9430a7.json`에 남았다. 이후 재실행 로그와 구분할 때 위 revision의 영수증을 기준으로 삼는다.
+- 결과 기록 문서의 첫 착지 시도에서는 본문의 긴 Git 해시를 비밀값 탐지기가 고엔트로피 토큰으로 분류해 중단했다. 본문 표기를 짧은 commit ID로 고쳤으며 비밀값 검사 규칙은 변경하지 않았다.
 
 ## 작성자 설정 확인
 
