@@ -48,7 +48,9 @@ def test_default_load_uses_ament_share_outside_python_prefix(tmp_path, monkeypat
 def test_missing_geometry_refuses_without_inventing_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(kinematics, "DEFAULT_KINEMATICS_PATH", tmp_path / "missing/source.yaml")
     monkeypatch.setattr(sys, "prefix", str(tmp_path))
+    # A ROS image may already hold the submodule; blocking only the parent would still import it.
     monkeypatch.setitem(sys.modules, "ament_index_python", None)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", None)
     with pytest.raises(FileNotFoundError):
         kinematics.OmxKinematics.load()
 

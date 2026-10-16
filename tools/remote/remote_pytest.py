@@ -23,7 +23,8 @@ hosts (D-553): each host runs one at a time and takes the next when free, larges
 first. Pytest never runs on this machine (D-584): when no host is reachable
 the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
-Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
+Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``, or the system
+temp directory without an ``X:`` drive), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
 collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
 on the host: ``-- ROSY_RUN_BROWSER_TESTS=1 <paths>`` runs the real-Chromium tests, and the job
@@ -45,6 +46,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -532,9 +534,15 @@ def worst(codes: list[int]) -> int:
     return max((0 if c == 5 else 1 if c < 0 else c for c in codes), default=0)
 
 
+def log_root(name: str) -> Path:
+    """X:/DevTemp/<name> where the lab scratch drive exists, else the system temp directory."""
+    if os.name == "nt" and Path("X:/").is_dir():
+        return Path("X:/DevTemp") / name
+    return Path(tempfile.gettempdir()) / name
+
+
 def default_log_dir(sha: str) -> Path:
-    base = os.environ.get("ROSY_TEST_LOGS") or ("X:/DevTemp/remote-pytest" if os.name == "nt"
-                                                 else "/tmp/remote-pytest")
+    base = os.environ.get("ROSY_TEST_LOGS") or log_root("remote-pytest")
     return Path(base) / sha[:12]
 
 
