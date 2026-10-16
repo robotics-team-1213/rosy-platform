@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · docs(omx): 작은 이동 기반 측정 순서
 - 2026-10-16 · uncommitted · fix(omx): 실제 ROS feedback replay 오류
 - 2026-10-16 · uncommitted · fix(omx): native 초기화와 dependency export 검증
 - 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
 - 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
-- 2026-10-16 · uncommitted · fix(omx): 실제 vendor 오류 은폐와 owner 우회 경로 처리

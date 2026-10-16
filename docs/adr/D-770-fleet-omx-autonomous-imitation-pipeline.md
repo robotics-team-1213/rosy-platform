@@ -303,3 +303,30 @@ ERROR를 반환하고 정상 소멸함을 확인했다. 실물 포트·configure
 명령은 기존 stale HOLD/cancel로 들어간다. native ROS 8시험과 순수 intake 10시험을
 원격으로 실행했다. publisher 물리 출처·독립 정지·실측 수용과 실제 시연은 미완료다.
 [원인과 검증 경계](../validation/omx-feedback-source-age-2026-10-16.md).
+
+## 2026-10-16 후속: 작은 이동으로 실측 범위를 식별
+
+사용자 요청대로, 완성된 실측 profile이 이미 있어야만 측정을 시작하는 순환을 피한다.
+현재 자세 주변에서 한 관절씩 작은 이동을 수행하고 원본 encoder·두 카메라·명령/종단을
+같이 기록해 국소 반응을 측정하는 방식을 준비한다. 작은 명령을 보냈다는 사실만으로
+작은 실제 움직임을 가정하지 않는다. 초기 목표/현재 위치·mode·offset 보존과 유한한
+속도/가속/전류 또는 PWM 제한의 실제 적용, 정지 경로 확인이 첫 이동보다 앞선다.
+
+측정은 hard stop까지 관절을 밀어 최대 범위를 찾는 절차가 아니다. 확인된 현재 자세
+주변만 대상으로 하고, 매 step의 실제 도달·정지·영상 유효성을 확인한 뒤 다음 step을
+결정한다. 미확인 종단·관측 지연·오차 증가·통신/모터 오류에서는 자동 재시도/재개하지
+않는다. 확인한 작은 범위를 전체 workspace·부하·그리퍼 jaw 수용으로 확대하지 않는다.
+
+제조사 XL330/XL430 문서에서 velocity-based profile의 0은 무제한을 뜻하고, bus
+watchdog은 모든 instruction packet의 통신 간격을 감시함을 확인했다. 읽기 통신이
+계속되는 owner 고장을 watchdog이 검출한다고 가정하지 않는다.
+[XL330](https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/),
+[XL430](https://emanual.robotis.com/docs/en/dxl/x/xl430-w250/).
+
+토크 off native 초기화/read를 위한 source 검토에서 InitDxlComm 오류 분기의 자동
+Reboot 호출과 read 오류 동안 기존 state 유지 경로를 발견했다. 실물 실행 전에 자동
+복구 쓰기·오래된 feedback의 보고 의미를 확인한다. 이 source 발견을 실물 실행 또는
+정지 성공으로 기록하지 않는다. 실물 시연은 여전히 0회다.
+
+source-age 수정 뒤 정책 fixture의 생성자 생략을 보완하고 host22·실제 ROS policy4와
+runtime8 시험을 통과했다. [후속 검증](../validation/omx-feedback-policy-intake-2026-10-16.md).

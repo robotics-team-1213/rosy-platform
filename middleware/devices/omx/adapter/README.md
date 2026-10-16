@@ -157,5 +157,6 @@ This validates message integrity and age, not publisher identity or physical sto
 
 The optional `test/test_omx_native_ros_runtime.py` check runs the native ROS suite
 inside a committed remote-runner checkout. Select a Jazzy/Python 3.12 lab host and
-pass `ROSY_OMX_NATIVE_RUNTIME_TESTS=1` before that target. Its domain 113 uses
+pass `ROSY_OMX_NATIVE_RUNTIME_TESTS=1` before that target. The adapter suite uses
+domain 113; policy transport/parent-episode tests use domain 199. Both use
 localhost discovery and test ActionServers only. No device or vendor launch runs.
