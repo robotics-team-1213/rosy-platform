@@ -46,6 +46,7 @@ def test_a_new_pick_becomes_an_unassigned_task_under_its_epic():
     assert fields["parent"] == {"key": "KAN-19"} and "assignee" not in fields
     assert fields["summary"] == "[구조] fleet — operations/fleet/fleet/server/tracking* 분리 (1271줄)"
     assert URL in fields["description"] and "tracking_routes.py" in fields["description"]
+    assert "[KAN-<번호>]" in fields["description"]  # KAN-31: the task key goes in the branch and PR title
     assert create[3]["Authorization"].startswith("Basic ")
     assert "created KAN-99" in out.getvalue()
 

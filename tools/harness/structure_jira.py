@@ -33,7 +33,8 @@ def description(pick: dict, issue_url: str) -> str:
               "2. 새 단위를 size_units.txt와 platform_parts.yaml에 등록, size_ratchet.txt 행을 측정값으로 낮춤",
               "3. 경로 문자열을 적은 시험·문서 갱신, 고정 깊이 경로(parents[N]) 확인",
               "4. 관련 시험 known_failures NEW 0, PR CI 통과",
-              "5. 묶음이 한 책임(같은 ADR·기능)인지 담당자가 먼저 확인; 아니면 이 작업을 닫고 이유를 남김"]
+              "5. 묶음이 한 책임(같은 ADR·기능)인지 담당자가 먼저 확인; 아니면 이 작업을 닫고 이유를 남김",
+              "6. 브랜치 refactor/kan-<번호>-<주제>, PR 제목 [KAN-<번호>]로 이 작업 키를 남김 (KAN-31 안내)"]
     return "\n".join(lines)
 
 
