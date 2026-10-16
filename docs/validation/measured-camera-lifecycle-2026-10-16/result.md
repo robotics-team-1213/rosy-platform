@@ -42,6 +42,15 @@ runner가 보고한 커밋·시험 명령·시험 PC 선택·종료 코드를 �
 | `delivery-controls` | `1a9efa0baa` | 변경 session의 확인란·UI 계약·API changelog·wheel/sdist 79 passed |
 | `provenance-green-2` | `b367260187` | 공개 provenance의 exact binding/변조 거절·비밀 guard·실제 통합 128 passed, NEW 0 |
 | `fleet-isolated-green` | `a49062a0ef` | Fleet 단독 수집에서 실제 API→render 통합과 정확한 stylesheet 목록 4 passed |
+| `release-check/run-1` | `a0a864b6ea` | 9,872 passed, 656 skipped, NEW 0 |
+| `release-check/run-2` | `a0a864b6ea` | 4,999 passed, 188 skipped, NEW 0 |
+| `release-check/run-3` | `a0a864b6ea` | Fleet 전체 5,372 passed, 315 skipped, NEW 0 |
+
+최종 관련 원격 회귀는 **20,243 passed / 1,159 skipped**, 세 invocation과 runner 모두 exit 0다.
+skipped는 통과 수에 넣지 않았다. 앞의 opt-in Chromium 166 passed와 새 촬영 session의
+확인란 회귀(79개 묶음에 포함된 2개 화면 폭)는 별도 커밋의 추가 증거이며 합산하지 않는다.
+`release-check/receipt.json`은 실제 실행 커밋, selection/runner/원문 로그 digest와 각 기존 실패
+비교를 결속한다. 최종 코드는 이 검증 뒤 바꾸지 않았고 완료 범위·결과 문서만 정리했다.
 
 최초 합친 광범위 명령은 Fleet/Vision의 동명 `test_led_identity.py` 수집 충돌로 실행되지
 않았다. 이후에는 저장소 affected grouping과 분리된 명령을 사용한다. 수집 실패는 통과로
@@ -137,3 +146,14 @@ D-598 후속 입력과 World/Fleet 소유·CARRIED/BRIDGED/admission/traffic 소
 D-587·D-593·D-596 readback과 실제 로봇별 오차 계수가 없어 운영 위치·신원 연속성 및
 오차 기반 감속 구현은 아직 열지 않았다. 미리보기 SOURCE 통과를 전체 목표 완료로
 바꾸지 않는다.
+
+## 사용자가 확정한 이번 완료 범위
+
+2026-10-17 사용자는 실제 촬영·측량·odom 오차 자료가 아직 없음을 확인하고,
+그 자료가 필요한 작업을 제외해 마무리하도록 지시했다. 따라서 이번 완료는 D-775의
+구현·원격 SOURCE/합성/브라우저 검증, D-598의 현행 소유 경계와 선행 입력·소비 계약 준비다.
+구현 계획 Task 1~5와 Task 6의 독립 검토·증거 정리는 이 범위에서 끝났다.
+
+실제 촬영·측량, 장치 설치·현장 검증, 그 P0에 의존하는 D-598 운영 위치/신원 연결·감속
+활성화는 별도 후속으로 제외했다. 이를 통과·구현 완료로 표시하지 않는다. 전체 GitHub CI와
+main 착지·push는 후속 통합 관문으로 유지하며 이번 작업에서 실행하지 않았다.

@@ -54,10 +54,10 @@
 - `validate_bundle(raw: Mapping) -> MeasuredCalibrationBundle`: extra field, bool/비유한 수, K/D 모양, 특이 행렬, source/lens revision/독립 이미지 계보 불일치와 digest 변조를 거절한다.
 - `export_bundle(report: Mapping, floor: Mapping, context: Mapping) -> dict`: D-636의 출력에서 묶음을 만들고 공유 validator로 재확인한다. CLI는 새 출력 디렉터리만 허용한다.
 
-- [ ] 숫자·계보·공간 혼합·동일 digest 재사용·K/D 변조 거절과 pinhole/fisheye의 실제 기존 fit/floor 출력 왕복 시험을 작성한다. 합성 fixture는 evidence_kind를 synthetic으로 보존한다.
-- [ ] 시험만 커밋하고 원격 RED를 확인한다. import 누락이 아닌 기능 실패인지 기록한다.
-- [ ] validator와 exporter를 구현한다. 기존 `_revision`과 함께 검증할 원본 report digest 목록을 묶음에 보존하고 p95/max 수치만으로 성공을 만들지 않는다.
-- [ ] 원격 GREEN, 기존 `test_camera_calibration.py` 회귀를 확인하고 기능 커밋을 남긴다.
+- [x] 숫자·계보·공간 혼합·동일 digest 재사용·K/D 변조 거절과 pinhole/fisheye의 실제 기존 fit/floor 출력 왕복 시험을 작성한다. 합성 fixture는 evidence_kind를 synthetic으로 보존한다.
+- [x] 시험만 커밋하고 원격 RED를 확인한다. import 누락이 아닌 기능 실패인지 기록한다.
+- [x] validator와 exporter를 구현한다. 기존 `_revision`과 함께 검증할 원본 report digest 목록을 묶음에 보존하고 p95/max 수치만으로 성공을 만들지 않는다.
+- [x] 원격 GREEN, 기존 `test_camera_calibration.py` 회귀를 확인하고 기능 커밋을 남긴다.
 
 ## Task 2: 같은 승인 소유자 안의 영속 preview 기록
 
@@ -69,10 +69,10 @@
 - `get(source_id: str) -> dict | None`, `all() -> list[dict]`, `revoke(source_id, *, expected_revision, principal_id, at) -> dict`.
 - 기록은 source별 단일 preview 선택, 전체 묶음·승인 한도·승인자·시각·고유 승인 revision·persistent·use를 포함한다. 감사 원장에는 승인/교체/철회를 남긴다.
 
-- [ ] SQLite 재시작, 두 store 인스턴스 동시 승인/철회, 오래된 expected_revision, DB 쓰기 실패, 훼손된 row, legacy tracking 보존을 시험한다.
-- [ ] 시험 커밋의 원격 RED를 확인한다.
-- [ ] `BEGIN IMMEDIATE` 안에서 현재 revision을 DB에서 읽고 CAS·선택 변경·감사를 처리한다. 성공 전 메모리를 바꾸지 않는다. 저장 파일을 재검증하고 위조·불완전 기록을 적용하지 않는다.
-- [ ] 원격 GREEN과 기존 `test_overhead_tracking_calibration.py`를 확인한다.
+- [x] SQLite 재시작, 두 store 인스턴스 동시 승인/철회, 오래된 expected_revision, DB 쓰기 실패, 훼손된 row, legacy tracking 보존을 시험한다.
+- [x] 시험 커밋의 원격 RED를 확인한다.
+- [x] `BEGIN IMMEDIATE` 안에서 현재 revision을 DB에서 읽고 CAS·선택 변경·감사를 처리한다. 성공 전 메모리를 바꾸지 않는다. 저장 파일을 재검증하고 위조·불완전 기록을 적용하지 않는다.
+- [x] 원격 GREEN과 기존 `test_overhead_tracking_calibration.py`를 확인한다.
 
 ## Task 3: 기존 API의 목적 구분과 승인·readback
 
@@ -84,10 +84,10 @@
 - GET `/api/fleet/detections/config?include_preview=true`: 인증된 source 자신의 optional `measured_preview`만 추가한다. 기본 응답은 기존 모양을 유지한다.
 - POST `/api/fleet/detections/preview-status`: source token으로 자신의 revision/session/state/reason만 보고한다. GET preview 목록은 신선도에 따라 저장·적용·미적용을 구분한다. 임의 JPEG/추가 필드는 거절한다.
 
-- [ ] 먼저 새 ADR/API 번호를 선점하고 위 계약과 D-427/429/430 관계를 기록한다. 버전 pin은 reservation 도구로 같이 옮긴다.
-- [ ] viewer/source token 쓰기 거절, named operator, 다른 source 읽기/보고 거절, synthetic 승인 거절, 같은 DB 원자성, legacy 응답 보존 시험을 작성한다.
-- [ ] 시험 커밋의 원격 RED 후 API를 구현한다. body·report 크기와 문자열 길이를 제한한다.
-- [ ] 원격 GREEN과 tracking/sightings/start-point 회귀로 preview revision이 sighting admission에 들어가지 않음을 확인한다.
+- [x] 먼저 새 ADR/API 번호를 선점하고 위 계약과 D-427/429/430 관계를 기록한다. 버전 pin은 reservation 도구로 같이 옮긴다.
+- [x] viewer/source token 쓰기 거절, named operator, 다른 source 읽기/보고 거절, synthetic 승인 거절, 같은 DB 원자성, legacy 응답 보존 시험을 작성한다.
+- [x] 시험 커밋의 원격 RED 후 API를 구현한다. body·report 크기와 문자열 길이를 제한한다.
+- [x] 원격 GREEN과 tracking/sightings/start-point 회귀로 preview revision이 sighting admission에 들어가지 않음을 확인한다.
 
 ## Task 4: Vision session 확인·제한된 config lease·실제 render
 
@@ -100,10 +100,10 @@
 - Fleet 기존 `/api/fleet/vision/lease`에 optional measured 요청을 추가한다. 명시적 촬영 조건 확인은 named operator만 서명받을 수 있고 source/session/revision/capture_signature에 결속한다. 일반 viewer는 상태/확인된 영상 읽기만 가능하다.
 - Vision의 기존 frame GET은 signed measured 요청일 때만 측정 plane을 그린다. 실제 JPEG decoded 크기도 검사하고 기존 `plane_image`/valid mask를 사용한다. ingest는 source 상태 callback을 worker의 기존 source-token client로 보고한다.
 
-- [ ] source session 재사용, 다른 lens·resolution/rotation·map, signature 미확인, source 끊김, 5초 lease 경계, config 갱신 실패, remap 중 철회/교체·만료, 오래된 frame cache 재사용을 실패 시험으로 고정한다.
-- [ ] 시험 커밋의 원격 RED 후 구현한다. event loop에서 수치 remap을 돌리지 않고 기존 thread 경로를 사용한다. await 뒤 session·config generation·lease를 다시 검사한다.
-- [ ] 성공 응답은 실제 source/session/revision을 헤더/readback에 보존한다. 원본은 변경하지 않고 불일치에서는 legacy 영상으로 자동 대체하지 않는다.
-- [ ] 실제 Fleet TestClient→source config→Vision ingest→direct preview→상태 report를 연결한 합성 integration과 기존 marker/preview 회귀로 원격 GREEN을 확인한다.
+- [x] source session 재사용, 다른 lens·resolution/rotation·map, signature 미확인, source 끊김, 5초 lease 경계, config 갱신 실패, remap 중 철회/교체·만료, 오래된 frame cache 재사용을 실패 시험으로 고정한다.
+- [x] 시험 커밋의 원격 RED 후 구현한다. event loop에서 수치 remap을 돌리지 않고 기존 thread 경로를 사용한다. await 뒤 session·config generation·lease를 다시 검사한다.
+- [x] 성공 응답은 실제 source/session/revision을 헤더/readback에 보존한다. 원본은 변경하지 않고 불일치에서는 legacy 영상으로 자동 대체하지 않는다.
+- [x] 실제 Fleet TestClient→source config→Vision ingest→direct preview→상태 report를 연결한 합성 integration과 기존 marker/preview 회귀로 원격 GREEN을 확인한다.
 
 ## Task 5: 운영자가 사용할 설치 화면
 
@@ -111,19 +111,29 @@
 
 **Interfaces:** `createMeasuredCalibrationView({scope, root, call, visionView})`는 현재 source, bundle import/수치 검토, 명시적 한도, 승인/철회, session 상태/촬영 조건 확인, direct measured preview를 한 흐름으로 연결한다.
 
-- [ ] 사용자 흐름 시험: bundle JSON import→source/map/오차 확인→한도 입력→named approval→session 확인→적용 readback→철회. 새 source/닫힌 화면의 늦은 응답이 기존 화면에 쓰이지 않는지도 확인한다.
-- [ ] 원격 browser RED 후 설치 화면의 기존 lifecycle와 UI 컴포넌트로 구현한다. 숫자 검증을 서버 권한 대신 사용하지 않는다. 승인 저장과 영상 적용을 다른 문구로 표시한다.
-- [ ] 데스크톱과 390px 화면에서 실제 Chromium으로 확인한다. 기존 signed preview·paint 승인과 회귀를 같이 실행하고 skipped를 통과로 처리하지 않는다.
-- [ ] 문서·모듈 logs/progress를 실제 확인 범위만 갱신하고 기능 커밋을 남긴다.
+- [x] 사용자 흐름 시험: bundle JSON import→source/map/오차 확인→한도 입력→named approval→session 확인→적용 readback→철회. 새 source/닫힌 화면의 늦은 응답이 기존 화면에 쓰이지 않는지도 확인한다.
+- [x] 원격 browser RED 후 설치 화면의 기존 lifecycle와 UI 컴포넌트로 구현한다. 숫자 검증을 서버 권한 대신 사용하지 않는다. 승인 저장과 영상 적용을 다른 문구로 표시한다.
+- [x] 데스크톱과 390px 화면에서 실제 Chromium으로 확인한다. 기존 signed preview·paint 승인과 회귀를 같이 실행하고 skipped를 통과로 처리하지 않는다.
+- [x] 문서·모듈 logs/progress를 실제 확인 범위만 갱신하고 기능 커밋을 남긴다.
 
 ## Task 6: 첫 단위 검증과 D-598 후속 준비
 
-- [ ] 기준 `89d3ba4d1` 대비 affected selection을 검사한다. 공유 계약 변경으로 FULL 승격하면 그 요구를 유지하며 관련 시험만으로 전체 완료를 주장하지 않는다.
-- [ ] 기존 remote runner로 관련 계약·Vision·Fleet·Console/브라우저를 커밋한 revision에서 실행하고 각 로그의 NEW/known/skipped를 기록한다. 현재 외부 로그 위치는 `C:/DevTemp/camera-calibration/`이다.
-- [ ] 실제 producer-consumer 경로의 독립 contract review와 verification evidence review를 받아 지적을 해결한다. safety-tagged 변경은 D-430 독립 검토와 trailer를 충족한다.
-- [ ] [입력 점검](../validation/measured-camera-lifecycle-2026-10-16/evidence-inventory.md)의 실제 촬영·측량·D-587/593/596 현재 readback을 대조한다. 자료가 없으면 정확히 미검증으로 기록한다.
-- [ ] D-598에는 현재 World/Fleet 소유 경계, 오차 계수의 실제 측정, CARRIED/BRIDGED/감속 admission과 traffic 소비 계약을 후속 설계로 확정한다. 첫 단위의 통과를 D-598 완료로 바꾸지 않는다.
+- [x] 기준 `89d3ba4d1` 대비 affected selection을 검사한다. 공유 계약 변경으로 FULL 승격하면 그 요구를 유지하며 관련 시험만으로 전체 완료를 주장하지 않는다.
+- [x] 기존 remote runner로 관련 계약·Vision·Fleet·Console/브라우저를 커밋한 revision에서 실행하고 각 로그의 NEW/known/skipped를 기록한다. 현재 외부 로그 위치는 `C:/DevTemp/camera-calibration/`이다.
+- [x] 실제 producer-consumer 경로의 독립 contract review와 verification evidence review를 받아 지적을 해결한다. safety-tagged 변경은 D-430 독립 검토와 trailer를 충족한다.
+- [x] [입력 점검](../validation/measured-camera-lifecycle-2026-10-16/evidence-inventory.md)의 실제 촬영·측량·D-587/593/596 현재 readback을 대조한다. 자료가 없으면 정확히 미검증으로 기록한다.
+- [x] D-598에는 현재 World/Fleet 소유 경계, 오차 계수의 실제 측정, CARRIED/BRIDGED/감속 admission과 traffic 소비 계약을 후속 설계로 확정한다. 첫 단위의 통과를 D-598 완료로 바꾸지 않는다.
 
 실행 전에 사용자가 이 계획을 검토하고 직접 구현/위임 중 하나를 고른다. 의존하는
 인터페이스가 많으므로 이 세션에서 직접 구현하고 마지막에 독립 검토를 받는 방법을 권한다.
 기준선 시험은 새 구현의 통과 증거가 아니며, 실측 자료가 필요한 전체 목표는 계속 유지한다.
+
+## 실행 결과 (2026-10-17)
+
+D-775 구현과 관련 원격 회귀를 완료했다. 검증 커밋 `a0a864b6ea`에서 3개 invocation 모두
+exit 0, 20,243 passed / 1,159 skipped, NEW 0이다. 구체적인 커밋·브라우저·수정 및 판단의
+비용은 [검증 기록](../validation/measured-camera-lifecycle-2026-10-16/result.md)에 적었다.
+
+사용자는 실제 촬영·측량·odom 자료가 아직 없음을 확인하고, 그 자료가 필요한 작업을
+이번 완료에서 제외하도록 지시했다. 실제 수집·현장 수용과 이에 의존하는 D-598 운영
+활성화는 별도 후속이다. 전체 CI 승격 요구도 후속 통합 관문으로 유지한다.

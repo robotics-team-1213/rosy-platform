@@ -8882,3 +8882,9 @@ osy-d395-s1d\`.
 - 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
 - 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
 - gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · a0a864b6ea · D-775 관련 원격 회귀와 완료 범위 확정
+
+- 결과: 프로젝트 FULL 승격의 관련 local_invocations 3개 모두 exit 0. 20,243 passed / 1,159 skipped, 각 로그 NEW 0. 별도 Chromium 166 passed 및 새 session 확인란 2개 폭의 회귀도 기록했다. skipped를 성공으로 세지 않았다.
+- 범위: 사용자가 실제 촬영·측량·odom 자료의 부재를 확인하고 그 의존 작업을 제외하도록 요청했다. D-775 구현·소스 검증과 D-598 선행 입력/소유·소비 계약 준비를 이번 완료로 삼고, 실제 수집·DEVICE/FIELD·D-598 운영 활성화는 후속으로 둔다.
+- 증거: docs/validation/measured-camera-lifecycle-2026-10-16/result.md. 전체 GitHub CI·main 착지·push·배포는 미실행이다.
