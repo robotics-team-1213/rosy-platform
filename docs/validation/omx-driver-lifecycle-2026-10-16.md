@@ -4,8 +4,8 @@
 
 ## 원인과 수정
 
-고정 `dynamixel_hardware_interface` revision
-`3375b3d0c99c5bcdab11b2dc15c89a2923e2bca2`를 직접 읽고 다음 경로를 확인했다.
+source lock의 `dynamixel_hardware_interface` revision(`3375b3d0`)을
+직접 읽고 다음 경로를 확인했다. 전체 revision은 기존 `stack.lock.yaml`이 정본이다.
 
 | 경로 | 원본 동작 | 수정 |
 |---|---|---|

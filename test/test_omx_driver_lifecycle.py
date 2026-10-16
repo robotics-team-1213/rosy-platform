@@ -9,9 +9,12 @@ import shutil
 import subprocess
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = "3375b3d0c99c5bcdab11b2dc15c89a2923e2bca2"
+_lock = yaml.safe_load((ROOT / "deploy/robot/omx/stack.lock.yaml").read_text())
+PIN = next(item["revision"] for item in _lock["vendor"]["repositories"]
+           if item["name"] == "dynamixel_hardware_interface")
 SOURCE = "src/dynamixel_hardware_interface.cpp"
 PATCH = ROOT / "deploy/robot/omx/patches/hardware-lifecycle-errors.patch"
 
