@@ -974,6 +974,12 @@
 - gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
 - 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
 
+## 2026-10-13 · uncommitted · D-24 웨이크 입력과 D-440 기기별 전원 정책 (feat/device-power-policy에서 옮김)
+
+- 변경: `PresenceDetector`가 정말로 연속된 유효 근접 표본과 `min_presence_s` 0.4 s·`max_gap_s` 1.0 s를 요구한다. `PowerManager.on_command(source)`가 받아들여진 명령으로 깨운다(정보 창 없음). `power/devices.py`(수준·기기 선언·벤치 스위치·엄격한 파서)와 기기별 수준·준비·`motion_ready()`를 더했다. 꺼졌다 켜진 기기는 `wake_ready_s`와 깨운 뒤의 확인 보고가 둘 다 있어야 준비된다. 정책이 움직이는 기기는 CORE 기동 뒤에도 확인을 기다린다.
+- 증거: `test/test_power_wake_inputs.py`, `test/test_power_device_policy.py`. 원격 pytest 결과는 이 브랜치의 착지 보고에 둔다.
+- gate 변화: 없음. 벤치 스위치 `power.device_policy.enabled`는 false다. 실기에서 기기를 재우거나 깨운 증거는 없다.
+- 결정: 브랜치의 배터리 "나빠지는 방향만" 웨이크는 옮기지 않았다(main이 이미 단계 변화에만 깨운다).
 ## 2026-10-13 · 15f4e0932 · D-744 차로 호의 원을 지도에 고정 (API v1.221)
 
 - 변경: `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`를 받은 때 `authority.py::_place_map_anchor`가 odom 기록(`_odom_log`의 CORE 벽시계)에서 그 표본을 찾아 원 중심을 odom으로 옮기고, `lane_arc.py::_open_arc`가 그 원과 그 접선으로 호를 연다. 풀지 못하면(없음·비유한·2 s 초과·기록에 없음·odom epoch/frame 변경·전진 1.5 m 초과·원에서 0.075 m 초과) 오늘의 자세 기준 원이다. 능력 `lane_arc_map_anchor`, 호 기록 `map_anchor_used`. Fleet은 `routing/execute.py::exit_segment(map_pose=)`와 `trip_runner._step_lane`이 능력과 `odom_stamp`가 있을 때만 싣는다.
@@ -1168,3 +1174,24 @@
 - gate 변화: 없음. `recovery/junction` 단위 1줄 감소.
 - 결정: D-620 노트 2026-10-15, D-760 개정 4.
 - 교훈: 상한 없는 대기 크레딧은 살아 있는 상대가 기다리라고 할 때만 준다. 링크 끊김은 상한으로 닫는다.
+## 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+
+- 변경: `line_follow/recovery/junction/approach.py` `_stamp_odometer`·`supports_lane_instruction_stamp`, `_expect_window`의 기준 인자. `gate.py` `set_junction(pose_stamp=)`: 설정 `instruction_stamp_enabled`(기본 꺼짐)가 켜져 있으면 `_odom_entry`(D-758 0)로 그 stamp에 발행된 표본을 찾고(정확한 표본만), 같은 표본의 교차로 궤적 주행 거리계(`trail.odometer_at`)를 창의 기준으로, 그 뒤 달린 거리(`trail.odometer` − 그 값)를 굽이의 처음 `travel`로 둔다. 통행권 기록의 `path_m`은 쓰지 않는다. 못 쓰면 받은 때 기준, 거절 없음: 상태 `distance_basis`·`distance_basis_reason`(none_sent·disabled·ambiguous·stale·future·no_sample·epoch). `model.py` 설정 한 줄.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 895d7f30b → 초록): stamp 뒤 0.05 m 움직인 굽이는 Fleet 자세에서 `bend_in − tol`에 시작, 창 기준은 stamp 표본의 odometer, 두 기록이 같은 odom 메시지(stamp_ns), 벽시계 ±5 s, 떨어짐 사유 넷, 설정 꺼짐 = 명령이 같음, 거리 없는 지시는 기준 없음, 능력, 잘못된 stamp. 원격(모델 PC, 9639a41b8) `middleware/core/services/test` 통과, `known_failures` 0 new, 로그 X: `instruction-stamp/services/run-1.txt`.
+- gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
+- 결정: D-767 A부 1–3항.
+- 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.
+## 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
+
+- 변경: `recovery/junction/approach.py` `_stamp_odometer`는 `_odom_at_stamp`의 2 s 나이 상한(D-744 지도 자세용)을 쓰지 않고, 정확한 표본을 교차로 궤적이 가진 동안 쓴다. `gate.py`: 거리(창 또는 굽이) 있는 지시의 `pose_stamp`를 못 쓰면 상태를 바꾸기 전에 `JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', reason=…)`(disabled·ambiguous·future·no_sample·epoch·stale). 받은 때 기준으로 조용히 떨어지지 않는다. `pose_stamp` 없는 지시와 거리 없는 지시는 그대로.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 eb3a3e8b2 → 초록): 2.5 s 묵은 stamp도 기준, 못 쓰는 사유 다섯 × 굽이·창 거절과 상태 그대로, 설정 꺼짐 `disabled`, stamp와 받음 사이 후진이 창의 후퇴로 잡힘(이 시험은 처음부터 초록: 구현이 이미 맞았다). 원격(모델 PC) 통과, `known_failures` 0 new.
+- gate 변화: 없음. 호스트 근거만.
+- 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
+- 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
+## 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
+
+- 변경: `recovery/junction/gate.py` `set_junction`의 stamp 검사를 재전송·굽이 갱신 갈래 뒤로 옮겼다. 둘은 stamp로 재지 않으므로 쓸 수 없는 stamp에도 받는다(되풀이된 거절로 이미 잰 굽이가 만료되던 일).
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 4865e2b0e → 초록): 갱신은 travel을 지키고 받음, `bending` 중 재전송 그대로. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2, 재검토 MEDIUM.
+- 교훈: 없음.

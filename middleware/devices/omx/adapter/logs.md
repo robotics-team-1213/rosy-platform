@@ -462,6 +462,12 @@
 - 증거: 단독·파일·어댑터 범위 재검사. 제품 제어 경로 변경 없음.
 - gate 변화: 없음.
 
+## 2026-10-05 · uncommitted · fix(test): preload 좌석 시험의 관절 시계 고정
+
+- 변경: 좌석 TTL은 기존 주입 시계로 검증하고, 별도 관절 freshness는 고정된 runtime 시계를 사용한다. 제품의 0.5초 freshness 거부는 유지한다.
+- 증거: 0.6초 지연 주입으로 live 좌석 시험 실패를 재현했다. 수정 후 같은 지연 1 PASS, 좌석·runtime 시험 57 PASS.
+- gate 변화: SOURCE/HOST 시험 결정성만. 실제 arm 제어·DEVICE/FIELD 수용 없음.
+
 ## 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
 
 - 변경: 좌석 설정을 마친 뒤 가짜 관절 상태의 수신 시각을 갱신하고, 이 시험에서만 상태 신선도 한계를 넓혀 호스트 부하가 좌석 판정을 가리지 않게 했다.
@@ -485,3 +491,16 @@
 - 변경: D-496 초안 문서의 필수 값·관절 순서·유한 수치·범위·jaw 기하·중복 YAML 검사와 독립 CLI. `motion_admitted`는 항상 false다.
 - 증거: 리뷰 결함 5개 RED 재현 후 수정, 원격 39 passed·NEW 0, 독립 재검토에서 추가 중대 결함 없음. 최종 영향 시험은 착지 기록으로 확인한다.
 - gate 변화: 없음. 문서 검사는 측정 진위·독립 정지·실물 수용이 아니다. 기존 disabled profile과 SIM runtime은 유지된다.
+
+## 2026-10-16 · uncommitted · feat(omx): read-only commissioning web observations
+
+- 변경: Added localhost-only commissioning viewer over existing top/front ROS images and commissioning joint observations; no serial/device access or command publisher.
+- 증거: Freshness checks cover source/receipt age, replay and future clocks; decoded image expiration is independent of metadata polling. Remote ROS-free and real Chromium checks exercise disconnect and stalled-download behavior.
+- Fleet live HTTP received both 640x480 images and six actual read-only joint values; observer termination invalidated the values. Real Chromium verified advancing camera sequences, no page errors and no mobile overflow.
+- gate 변화: Hardware acceptance remains unchanged. D-770; detailed evidence in docs/validation/omx-observation-web-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · refactor(omx): commissioning viewer stays with deployment tools
+
+- 변경: Moved the read-only commissioning script to deploy/robot/omx/ outside the omx_adapter module; adjusted source-path tests and launch documentation.
+- 증거: Landing size-range rejected four historical package growth commits. Original branch remains intact; the landing branch combines reviewed final behavior with the corrected placement.
+- gate 변화: No physical acceptance or command authority change. Remote landing checks follow.

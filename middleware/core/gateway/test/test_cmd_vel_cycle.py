@@ -16,7 +16,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from core.bridge import cmd_vel as cmd_vel_module
 from core.bridge.cmd_vel import cmd_vel_cycle
+
+
+@pytest.fixture(autouse=True)
+def _fresh_gate_fault_throttle(monkeypatch):
+    monkeypatch.setattr(cmd_vel_module, "_gate_fault_warned_at", float("-inf"))
 
 
 @dataclass
@@ -59,9 +65,9 @@ class Gate:
         return self.ready
 
 
-def run(linear=0.2, angular=0.0, readiness=None) -> Recorder:
+def run(linear=0.2, angular=0.0, readiness=None, motion_ready=None) -> Recorder:
     rec = Recorder(Out(linear, angular))
-    cmd_vel_cycle(rec, rec, rec.send, readiness)
+    cmd_vel_cycle(rec, rec, rec.send, readiness, motion_ready=motion_ready)
     return rec
 
 
@@ -123,6 +129,102 @@ def test_a_hold_sends_zero_instead_of_the_chosen_output():
 
 def test_a_ready_gate_passes_the_chosen_output():
     assert run(0.2, -0.1, readiness=Gate(True)).sent == [(0.2, -0.1)]
+
+
+def test_devices_waking_hold_zero_but_the_cycle_still_publishes_and_announces():
+    """D-440 5: after a wake, motion waits for the required devices (LiDAR spin-up).
+    The gate only presses the value to zero: the 50 Hz publish and the SAF-002
+    announcement still happen, and a held cycle is not activity."""
+    rec = run(0.2, -0.1, motion_ready=lambda: False)
+
+    assert rec.sent == [(0.0, 0.0)]
+    assert rec.log[:2] == ["select", "wheels"]
+    assert "announce" in rec.log
+    assert not [entry for entry in rec.log if entry.startswith("activity")]
+
+
+def test_ready_devices_pass_the_chosen_output():
+    assert run(0.2, -0.1, motion_ready=lambda: True).sent == [(0.2, -0.1)]
+
+
+@pytest.mark.parametrize("answer", [None, 1, "yes", 0])
+def test_only_an_exact_true_counts_as_ready(answer):
+    assert run(0.2, -0.1, motion_ready=lambda: answer).sent == [(0.0, 0.0)]
+
+
+def test_a_zero_choice_reaches_the_wheels_whatever_the_devices_say():
+    """E-stop / watchdog choose zero inside select_output; the gate can never undo that."""
+    for ready in (True, False):
+        assert run(0.0, 0.0, motion_ready=lambda: ready).sent == [(0.0, 0.0)]
+
+
+def test_a_raising_motion_gate_sends_zero_and_keeps_the_cycle_alive():
+    warnings = []
+    rec = Recorder(Out(0.3, 0.0))
+
+    def boom():
+        raise RuntimeError("power gate fault")
+
+    cmd_vel_cycle(rec, rec, rec.send, None, warnings.append, motion_ready=boom)
+
+    assert rec.sent == [(0.0, 0.0)]
+    assert "announce" in rec.log
+    assert warnings and "motion readiness" in warnings[0]
+
+
+def test_a_lasting_gate_fault_warns_once_per_period_and_still_sends_zero_every_cycle(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(cmd_vel_module.time, "monotonic", lambda: now[0])
+    warnings, rec = [], Recorder(Out(0.3, 0.0))
+
+    def boom():
+        raise RuntimeError("power gate fault")
+
+    for _ in range(50):                                   # one second at 50 Hz
+        cmd_vel_cycle(rec, rec, rec.send, None, warnings.append, motion_ready=boom)
+        now[0] += 0.02
+    assert rec.sent == [(0.0, 0.0)] * 50 and len(warnings) == 1
+    now[0] += cmd_vel_module.GATE_FAULT_WARN_PERIOD_S
+    cmd_vel_cycle(rec, rec, rec.send, None, warnings.append, motion_ready=boom)
+    assert len(warnings) == 2
+
+
+def test_a_gate_fault_is_reported_after_the_wheels_are_written():
+    rec = Recorder(Out(0.3, 0.0))
+
+    def boom():
+        raise RuntimeError("power gate fault")
+
+    cmd_vel_cycle(rec, rec, rec.send, None, lambda _msg: rec.log.append("warn"), motion_ready=boom)
+    assert rec.log.index("wheels") < rec.log.index("warn")
+
+
+def test_the_motion_gate_holds_both_ways_with_the_hardware_hold():
+    assert run(0.2, 0.0, readiness=Gate(True), motion_ready=lambda: False).sent == [(0.0, 0.0)]
+    assert run(0.2, 0.0, readiness=Gate(False), motion_ready=lambda: True).sent == [(0.0, 0.0)]
+
+
+def test_the_bridge_passes_the_power_motion_gate_to_the_cycle():
+    """A gate nobody wires is no gate: the one cmd_vel_cycle call carries it."""
+    source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
+        encoding="utf-8")
+    calls = [node for node in ast.walk(ast.parse(source))
+             if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "cmd_vel_cycle"]
+    assert len(calls) == 1
+    gate = {kw.arg: ast.unparse(kw.value) for kw in calls[0].keywords}.get("motion_ready")
+    assert gate == "self._svc.power.motion_ready"
+
+
+def test_power_module_never_imports_the_motion_path():
+    """The power policy is an observer: it must not reach E-stop, watchdog or the mux."""
+    root = Path(__file__).resolve().parents[2] / "services" / "core_features" / "power"
+    files = list(root.glob("*.py"))
+    assert files
+    for path in files:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names = [n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
+        names += [a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names]
+        assert not [n for n in names if "command" in n or "safety" in n], path.name
 
 
 # --- 배선 자체 ----------------------------------------------------------------

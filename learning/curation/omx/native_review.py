@@ -6,8 +6,12 @@ import json
 import math
 import os
 from pathlib import Path
+import sys
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from native_capture import bind_capture, check_capture_groups
 
 JOINTS = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
           'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos']
@@ -86,15 +90,21 @@ def inspect_frames(info, frames):
 
 
 def reviewed_splits(report, decisions):
+    if report.get('source_mode') == 'unverified_native':
+        raise ValueError('capture source must be explicitly declared before training')
     if not isinstance(decisions, list) or len(decisions) != len(report['episodes']):
         raise ValueError('review must cover every episode exactly once')
     splits, content_splits = {'train': [], 'eval': []}, {}
+    if any(decision.get('split') == 'test' for decision in decisions):
+        splits['test'] = []
     for source, decision in zip(report['episodes'], decisions):
-        if any(source[key] != decision.get(key) for key in ('episode_index', 'content_sha256', 'frames')):
+        keys = ('episode_index', 'content_sha256', 'frames',
+                *(key for key in ('session_id', 'cycle_id') if key in source))
+        if any(source[key] != decision.get(key) for key in keys):
             raise ValueError('review identity differs from inspected source')
         split = decision.get('split')
-        if split not in ('train', 'eval', 'exclude'):
-            raise ValueError('split must be train, eval or exclude')
+        if split not in (*splits, 'exclude'):
+            raise ValueError('split must be train, eval, test or exclude')
         if decision.get('outcome') not in ('success', 'failure', 'unknown'):
             raise ValueError('outcome must be success, failure or unknown')
         if split == 'exclude':
@@ -111,6 +121,7 @@ def reviewed_splits(report, decisions):
         splits[split].append(source['episode_index'])
     if not all(splits.values()):
         raise ValueError('nonempty independent train and eval splits are required')
+    check_capture_groups(report['episodes'], decisions)
     return splits
 
 
@@ -141,7 +152,8 @@ def load_dataset(root, repo_id):
     return LeRobotDataset(repo_id=repo_id, root=Path(root), video_backend='pyav', download_videos=False)
 
 
-def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revision):
+def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revision,
+                    source_mode=None, capture_provenance=None):
     root = Path(root).resolve()
     if body_units not in ('degrees', 'normalized_-100_100') or not all(
             isinstance(value, str) and value.strip() for value in (rig_revision, calibration_revision)):
@@ -153,7 +165,10 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
         raise ValueError('dataset changed during inspection')
     report.update(repo_id=repo_id, files=before, body_units=body_units, gripper_units='normalized_0_100',
                   rig_revision=rig_revision, calibration_revision=calibration_revision,
-                  source_mode='leader_native', reader_verified=True)
+                  reader_verified=True)
+    report.update(bind_capture(report['episodes'], before, source_mode=source_mode,
+                               body_units=body_units, rig_revision=rig_revision,
+                               calibration_revision=calibration_revision, provenance=capture_provenance))
     return report
 
 
@@ -177,7 +192,10 @@ def write_json(path, document):
 def split_reviewed(root, report, decisions, output):
     output = _new_output(output, root)
     current = inspect_dataset(root, report['repo_id'], body_units=report['body_units'],
-                              rig_revision=report['rig_revision'], calibration_revision=report['calibration_revision'])
+                              rig_revision=report['rig_revision'],
+                              calibration_revision=report['calibration_revision'],
+                              source_mode=report['source_mode'] if report['source_mode'] != 'unverified_native' else None,
+                              capture_provenance=report.get('capture_provenance'))
     if current != report:
         raise ValueError('inspection report no longer matches source')
     splits = reviewed_splits(current, decisions)
@@ -188,7 +206,10 @@ def split_reviewed(root, report, decisions, output):
         # Upstream split_dataset does not preserve the source video backend.
         child = load_dataset(output / name, child.repo_id)
         inspect_frames(child.meta.info, (child[i] for i in range(len(child))))
+    if dataset_files(root) != report['files']:
+        raise ValueError('source dataset changed during splitting; no success receipt written')
     write_json(output / 'split-receipt.json', dict(source=report, decisions=decisions, splits=splits,
+                                                 outputs={name: dataset_files(output / name) for name in produced},
                                                  reader_verified=True, uploaded=False))
     return output
 
@@ -202,6 +223,9 @@ def main():
     inspect.add_argument('--body-units', choices=('degrees', 'normalized_-100_100'), required=True)
     inspect.add_argument('--rig-revision', required=True)
     inspect.add_argument('--calibration-revision', required=True)
+    inspect.add_argument('--source-mode', choices=('leader_native', 'scripted_teacher'))
+    inspect.add_argument('--capture-provenance', type=Path,
+                         help='byte-bound scripted teacher capture manifest; not device acceptance')
     inspect.add_argument('--out', type=Path, required=True)
     split = commands.add_parser('split')
     split.add_argument('root', type=Path)
@@ -213,7 +237,10 @@ def main():
         if args.command == 'inspect':
             output = _new_output(args.out, args.root)
             report = inspect_dataset(args.root, args.repo_id, body_units=args.body_units,
-                                     rig_revision=args.rig_revision, calibration_revision=args.calibration_revision)
+                                     rig_revision=args.rig_revision, calibration_revision=args.calibration_revision,
+                                     source_mode=args.source_mode,
+                                     capture_provenance=json.loads(args.capture_provenance.read_text(encoding='utf-8'))
+                                     if args.capture_provenance else None)
             write_json(output / 'inspection.json', report)
             write_json(output / 'decisions.json', report['episodes'])
         else:

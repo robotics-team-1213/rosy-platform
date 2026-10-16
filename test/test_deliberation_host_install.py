@@ -8,6 +8,8 @@ import pytest
 from deploy.site.deliberation_install import PROFILE, BWRAP
 
 
+@pytest.mark.skipif(not Path('/sbin/apparmor_parser').exists(),
+                    reason='needs the host AppArmor parser (the CI container and Windows have none)')
 def test_profile_allows_only_dedicated_sandbox_path(tmp_path):
     profile = tmp_path / 'profile'
     profile.write_bytes(PROFILE)

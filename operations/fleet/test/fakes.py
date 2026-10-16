@@ -238,6 +238,10 @@ class FakeRobot:
         self._record("identify_lamp", color)
         return {"accepted": True, "request_id": "fake-led-test", "color": color or "blue"}
 
+    async def power(self, action: str) -> dict:
+        self._record("power", action)
+        return {"mode": "STANDBY" if action == "sleep" else "ACTIVE"}
+
     async def localization_candidates(self):
         self._record("localization_candidates")
         return self.candidates

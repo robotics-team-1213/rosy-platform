@@ -1,23 +1,26 @@
-// Source identity and status stay separate; this view never admits or dispatches work.
+// Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import { tripWaitText } from "/console/assets/site-map-model.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
   CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료",
   started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
+const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 있는 운영자가 승인", proposer_only: "제안한 사람이 승인", one_person: "한 사람 · 이름 있는 운영자"};
 // D-763 8 — 서버가 준 보이는 상태(읽기 투영). 원장 상태는 상세의 「상태」 그대로다.
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => ({task: "주행", trip: "운행", cell_job: "Cell 적재"})[row.source] || "팔 작업";
+const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 
-export function createWorkView({scope, call, el, channelRequestView}) {
+export function createWorkView({scope, call, el, channelRequestView, approveReason}) {
   const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
-  let rows = [], selected = null, inFlight = false, detailVersion = 0;
-  const list = el("work-list"), detail = el("work-detail");
+  let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
+  const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
+  const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
   function showKinds(kinds = []) {
     el("work-new-move-item").hidden = !kinds.includes("trip");
@@ -34,7 +37,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
-    list.replaceChildren(); detail.replaceChildren();
+    list.replaceChildren(); clear();
     el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;
     el("work-state").textContent = message;
@@ -46,18 +49,25 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     detail.append(term, text);
   }
   function showDetail(row) {
-    detail.replaceChildren();
+    clear();
     field("업무", {navigate: "이동", trip: "이동", PICK_PLACE: "파지·배치", CELL_TRANSFER: "Cell 적재"}[row.action_kind] || "기타 작업");
     field("담당 장치", row.device_id);
     field("작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음");
     field("실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔");
     field("상태", workStatus(row.status));
+    // D-763 7 — the step-kind registry's rule on the work read (PROPOSED rows only); read-only, no approve here.
+    if (row.approval) field("승인 조건", approvals[row.approval] || "승인 조건 확인 필요");
     field("최근 원장 갱신", new Date(row.updated_at).toLocaleString());
     field("사유", row.reason || "기록된 사유 없음");
     field("작업 식별자", row.source_id);
+    // D-741 7 — 막힌 단추에 그 이유를 적는다. 권한은 세션에서, 그 밖의 거절은 서버가 답한 말 그대로다.
+    admit.hidden = !approvable(row);
+    const reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
+    if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
+    admit.disabled = Boolean(reason);
   }
   async function select(row) {
-    selected = workKey(row); paint(); showDetail(row);
+    selected = workKey(row); refusal = ""; paint(); showDetail(row);
     const version = ++detailVersion, life = scope.capture();
     el("work-evidence").textContent = "결과 근거 조회 중";
     try {
@@ -78,14 +88,14 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     const filter = el("work-filter").value;
     const selection = rows.find(row => workKey(row) === selected);
     if (selection && filter !== "all" && selection.source !== filter) {
-      selected = null; detailVersion++; detail.replaceChildren();
+      selected = null; detailVersion++; clear();
       el("work-evidence").textContent = "필터에 맞는 작업을 선택하세요.";
     }
     const focused = document.activeElement?.closest('[data-work-key]')?.dataset.workKey;
     list.replaceChildren();
     for (const row of rows.filter(row => filter === "all" || row.source === filter)) {
       const item = document.createElement("li"), button = document.createElement("ui-button");
-      button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
+      button.setAttribute("kind", "toggle"); button.setAttribute("type", "button");  // toggle: aria-pressed draws the selection
       button.dataset.workKey = workKey(row);
       button.setAttribute("data-work-read", "");
       button.setAttribute("aria-pressed", String(selected === workKey(row)));
@@ -96,6 +106,24 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       if (focused === workKey(row)) button.focus({preventScroll: true});
     }
     el("work-empty").hidden = list.childElementCount > 0;
+  }
+  // 승인은 Cell·대화 검토와 같은 원장 경로다: 현재 정지 세대를 읽어 그대로 보내고, 판단은 서버가 한다.
+  async function approve() {
+    const row = rows.find(row => workKey(row) === selected), life = scope.capture();
+    if (!row || busy || refusal || approveReason() || !approvable(row)) return;
+    busy = true; refusal = ""; showDetail(row);
+    try {
+      const control = await call("/api/fleet/dispatch-control"); life.check();
+      await call(`/api/fleet/missions/${encodeURIComponent(row.source_id)}/admit`, {method: "POST",
+        headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_generation: control.generation})});
+    } catch (error) {
+      // a late answer belongs to its own row; a newer selection keeps its own (clear) refusal
+      if (workKey(row) === selected) refusal = error.status >= 400 && error.status < 500 ? `승인이 거절됐습니다 · ${error.message}`
+        : "승인 결과 미확인 · 다시 보내지 않았습니다. 원장을 확인하세요.";
+    } finally { busy = false; }
+    if (!life.current()) return;
+    if (workKey(row) === selected) showDetail(row);
+    await refresh();
   }
   async function refresh() {
     if (!area || inFlight) return;
@@ -117,7 +145,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정",
         result.cell_jobs_available ? "Cell 작업 원장" : "Cell 작업 원장 미설정", "운행 기록"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);
-      if (selected && !current) { selected = null; detailVersion++; detail.replaceChildren(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
+      if (selected && !current) { selected = null; detailVersion++; clear(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
       if (current) showDetail(current);
       paint();
       await refreshRequests(life);
@@ -153,5 +181,6 @@ export function createWorkView({scope, call, el, channelRequestView}) {
   }
   scope.listen(el("work-filter"), "change", paint);
   scope.listen(el("work-refresh"), "click", refresh);
+  scope.listen(admit, "click", approve);
   return {active, refresh, reset};
 }

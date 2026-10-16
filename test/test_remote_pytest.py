@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import shlex
+import threading
 import time
 import shutil
 import sys
@@ -380,32 +381,93 @@ def test_timeout_is_a_failed_step(monkeypatch):
     assert rp.remote("h", "true", timeout=1).returncode == 124
 
 
-def test_several_invocations_spread_over_every_reachable_host(monkeypatch, tmp_path):
+def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
+    """run() over fake hosts: setup succeeds (venv fails on venv_fails), job(host, inv) is one pytest."""
     seen = []
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
-    monkeypatch.setattr(rp, "probe", lambda h: None if h == "down@3" else host())
-    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2 down@3")
-    monkeypatch.setattr(rp, "run_on", lambda host, invs, logs, *rest: [seen.append((host, inv)) or len(inv[0])
-                                                                       for inv in invs])
+    monkeypatch.setattr(rp, "probe", lambda h: None if h.startswith("down") else host())
+    monkeypatch.setenv("ROSY_TEST_HOSTS", " ".join(hosts))
+    monkeypatch.setattr(rp, "ship", lambda *a: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda h, script, *a, **kw: subprocess.CompletedProcess(
+        [], 1 if script == rp.VENV and h in venv_fails else 0, b"", b""))
+
+    def run(h, name, k, log, job_args, inv, *a):
+        seen.append((h, inv[0]))
+        code = job(h, inv[0])
+        log.write_bytes(b"")
+        return code
+    monkeypatch.setattr(rp.remote_job, "run", run)
+    return seen
+
+
+def test_several_invocations_spread_over_every_reachable_host(monkeypatch, tmp_path):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2", "down@3"], lambda h, path: len(path))
     invocations = [["x"], ["yy"], ["zzz"]]
     codes = rp.run(invocations, [tmp_path / f"{i}.txt" for i in range(3)], repo=tmp_path)
     assert codes == [1, 2, 3], "codes come back in invocation order"
-    assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["zzz"]), ("b@2", ["yy"])]
+    assert sorted(p for _, p in seen) == ["x", "yy", "zzz"] and {h for h, _ in seen} <= {"a@1", "b@2"}
 
 
 def test_a_host_that_fails_setup_hands_its_share_to_a_working_host(monkeypatch, tmp_path):
-    seen = []
-    monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
-    monkeypatch.setattr(rp, "probe", lambda h: host())
-    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2")
-
-    def run_on(host, invs, logs, *rest):
-        if host == "b@2":
-            raise SystemExit("venv setup failed")
-        return [seen.append((host, inv)) or 0 for inv in invs]
-    monkeypatch.setattr(rp, "run_on", run_on)
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], lambda h, path: 0, venv_fails={"b@2"})
     assert rp.run([["x"], ["y"]], [tmp_path / "1.txt", tmp_path / "2.txt"], repo=tmp_path) == [0, 0]
-    assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["y"])]
+    assert sorted(seen) == [("a@1", "x"), ("a@1", "y")]
+
+
+def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path):
+    # Fixed k % n gave slow@2 items 1 and 3, so fast@1 could finish only 3 and slow@2 timed out waiting.
+    slow_started, released, fast_done = threading.Event(), threading.Event(), []
+
+    def job(h, path):
+        if h == "slow@2":
+            slow_started.set()
+            assert released.wait(10), "the fast host did not take the rest of the queue"
+        else:
+            assert slow_started.wait(10)
+            fast_done.append(path)
+            if len(fast_done) == 4:
+                released.set()
+        return int(path)
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["fast@1", "slow@2"], job)
+    codes = rp.run([[str(i)] for i in range(5)], [tmp_path / f"{i}.txt" for i in range(5)], repo=tmp_path)
+    assert codes == [0, 1, 2, 3, 4]
+    assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
+
+
+def test_an_invocation_that_fails_mid_run_is_retried_on_another_host_and_a_lost_one_is_not(monkeypatch, tmp_path):
+    failed = []
+
+    def job(h, path):
+        if path == "boom" and not failed:
+            failed.append(h)
+            raise SystemExit("ssh died")  # neither an exit code nor Lost: that host is out
+        if path == "gone":
+            raise rj.Lost("lost contact with " + h)
+        return 0
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], job)
+    order = ["boom", "x", "y", "z"]
+    codes = rp.run([[p] for p in order], [tmp_path / f"{p}.txt" for p in order], repo=tmp_path)
+    assert codes == [0, 0, 0, 0]
+    boom = [h for h, p in seen if p == "boom"]
+    assert len(boom) == 2 and boom[0] == failed[0] != boom[1]  # retried once, on the other host
+    assert sorted(p for _, p in seen if p != "boom") == ["x", "y", "z"]  # nothing dropped or run twice
+    # A lost invocation keeps running on its host: 255, never rerun elsewhere (no double count).
+    seen.clear()
+    codes = rp.run([["gone"], ["x"]], [tmp_path / "g.txt", tmp_path / "x2.txt"], repo=tmp_path)
+    assert codes == [rj.LOST_EXIT, 0] and [p for _, p in seen].count("gone") == 1
+
+
+def test_largest_test_files_are_queued_first(tmp_path):
+    (tmp_path / "big.py").write_text("x" * 100)
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "a.py").write_text("x" * 30)
+    (tmp_path / "d" / "b.py").write_text("x" * 30)
+    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"]) == 100
+    assert rp.cost(tmp_path, ["d"]) == 60 and rp.cost(tmp_path, ["missing.py"]) == 0
 
 
 class FakeJobHost:
@@ -523,6 +585,17 @@ def _wait_for_lock(lock):
     pytest.fail("job never wrote its lock")
 
 
+def _skip_unreaped(pid):
+    # A CI container's PID 1 (`tail -f /dev/null`) never reaps orphans, so the ended job stays a
+    # zombie that `kill -0` reports alive. Lab hosts run systemd, which reaps it.
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except OSError:
+        return
+    if state == "Z":
+        pytest.skip("PID 1 does not reap orphaned jobs here (CI container); covered on the lab hosts")
+
+
 def _poll_until_done(env):
     for _ in range(100):
         code, _, _ = rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)
@@ -547,6 +620,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
     out = (jobs / "0.log").read_bytes()
     assert out.startswith(b"out\nerr\n") and out.endswith(b"args -m pytest test/x.py -q\n")
+    _skip_unreaped(pid)
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, False, out[4:])  # offset 4: after "out\n"
 
 
@@ -615,6 +689,7 @@ def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_fin
             break
         time.sleep(0.1)
     else:
+        _skip_unreaped(pid)
         pytest.fail("POLL still reports the SIGKILLed job alive")
     jobs = home / "rosy-test" / "runs" / "r.jobs"
     (jobs / "0.rc").write_text("0\n")
@@ -736,3 +811,32 @@ def test_browser_reruns_keep_the_environment(tmp_path, monkeypatch):
     inv = [rp.BROWSER_ENV, "test/q_browser.py"]
     assert rp.run_on("h", [inv], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None) == [0]
     assert calls[0][:2] == inv and calls[1][:2] == [rp.BROWSER_ENV, "test/q_browser.py::test_f"]
+
+
+LISTING = ("ID    Tailnet                 Account\n"
+           "665e  team@example.com        team@example.com*\n"
+           "bc4d  other@example.com       other@example.com\n")
+
+
+def test_tailscale_current_profile_is_the_starred_row():
+    assert rp.current_profile(LISTING) == ["665e", "team@example.com", "team@example.com"]
+    assert rp.current_profile(LISTING.replace("*", "")) == []
+
+
+def test_tailscale_profile_mismatch_fails_fast_naming_both(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_HOSTS", raising=False)
+    listing = subprocess.CompletedProcess([], 0, LISTING, "")
+    with pytest.raises(SystemExit) as error:
+        rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=lambda *a, **k: listing)
+    assert "current 665e" in str(error.value) and "tailscale switch bc4d" in str(error.value)
+    rp.check_tailscale_profile("665e", which=lambda _: "tailscale", run=lambda *a, **k: listing)  # match: passes
+
+
+def test_tailscale_profile_check_skipped_without_cli_or_key_or_with_explicit_hosts(monkeypatch):
+    def never(*a, **k):
+        raise AssertionError("tailscale must not be called")
+
+    rp.check_tailscale_profile("bc4d", which=lambda _: None, run=never)   # no CLI
+    rp.check_tailscale_profile("", which=lambda _: "tailscale", run=never)  # no lab-hosts.json key
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "user@host")
+    rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=never)  # manual host override

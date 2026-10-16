@@ -44,7 +44,7 @@
 
 1. `src/runtime/sensing`, `src/site/fleet`, 기존 UI `web` 안내를 찾고 실제 source mapping/serving 소비자를 읽는다. 역사 ADR·날짜 로그·payload 내부 안내는 수정하지 않는다.
 2. 현재 Control은 `middleware/perception`, Fleet은 `operations/fleet`, UI 원본은 `middleware/robot_ui/robot`, `operations/site_ui/console`으로 안내한다. 오래된 계획 링크는 역사로 표시하고 현재 작업 입구는 현행 책임 안내로 연결한다.
-3. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 소유 세션의 의도를 확인한다. 무단 restore나 가짜 zip/holder 생성으로 링크를 맞추지 않는다.
+3. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 소유 세션의 의도를 확인한다. 무단 restore나 가짜 zip/holder 생성으로 링크를 맞추지 않는다. **2026-10-15 사용자 결정: 삭제를 커밋한다.** 소유 세션이 없고 upstream zip도 디스크에 없어, `reference/`와 그 안내 행·`.gitignore` 행·폴더 시험의 보관 AGENTS 검사를 함께 뺐다(`docs/remove-reference-folder`).
 4. `.worktrees/AGENTS.md`, `.worktrees/README.md`가 여전히 없으면 관리 도구 `InitWorktrees`로 안내를 설치한다. tool state와 task checkout 내부 안내를 일괄 갱신하지 않는다.
 5. 수정한 현재 안내의 로컬 링크를 검사하고 아래 문서 시험·lint를 실행한다. 제품 문서만 정확한 파일 목록으로 커밋한다. 우산 변경은 파일 목록·전후 근거를 X:에 기록한다.
 

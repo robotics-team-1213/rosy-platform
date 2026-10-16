@@ -763,3 +763,19 @@
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 10 (c).
 - 교훈: 없음.
+
+## 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
+
+- 변경: `protocol/controls.py` `BaseVelocityControl.lane_instruction_stamp`, `protocol/schemas.py` `LineJunctionStatus.distance_basis`·`distance_basis_reason`, `config/rosy_default.yaml` `line_follow.instruction_stamp_enabled: false`와 설명.
+- 증거: CORE·Fleet 원격 시험 통과(9639a41b8), `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부. 켜는 것은 Safety-Review·SIM 바퀴 뒤 사용자가 정한다.
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
+
+- 변경: `protocol/schemas.py` `MissionProgressEvent.detail_is_bounded_json`이 같은 파일의 `_bounded_finite_json_size`를 쓴다(직렬화 중복 7줄 제거, 16 KiB 한도·필드 그대로). 옮겨 간 모델(`BatteryStatus` 뒤, Swarm 절)이 남긴 빈 줄 12줄 제거. `test/architecture/size_ratchet.txt` 행을 가드 스크립트로 1345로 내림.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
+- 교훈: 없음.

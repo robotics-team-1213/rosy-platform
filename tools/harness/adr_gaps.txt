@@ -12,10 +12,8 @@ D-239 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253
 D-240 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
 D-244 unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245
 D-324 unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324
-D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
-D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
 D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-621 reserved by another active session; ADR not yet landed in this branch
@@ -33,5 +31,3 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 
 
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
-D-746 Reserved by a concurrent local session; ADR not included in this branch as of S2
-D-767 reserved: route preview ADR on branch docs/route-preview-adr (not yet landed; its landing removes this line)

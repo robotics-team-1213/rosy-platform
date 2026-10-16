@@ -39,12 +39,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
+from land_logs import append_blocks  # noqa: E402  (logs.md: whole entries, date order)
+import land_guards  # noqa: E402  (structural guards before the long round)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
+SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
@@ -134,40 +137,6 @@ def clashes_are_insertions(base: bytes, ours: bytes, theirs: bytes) -> bool:
             if op != "insert" and any(i1 <= j2 and j1 <= i2 for _, j1, j2 in against):
                 return False
     return True
-
-
-def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
-    """logs.md: base + theirs' appended block + ours' appended block, each kept whole.
-
-    Line union would fold lines both entries share ("- 결정: 없음"). None unless
-    both sides only appended at the end — or ours appended at the end and theirs
-    only inserted (a peer entry between entries): then theirs verbatim + our block.
-    """
-    if not ours.startswith(base):
-        return None
-    if not theirs.startswith(base):
-        ops = difflib.SequenceMatcher(None, base.splitlines(keepends=True),
-                                      theirs.splitlines(keepends=True), autojunk=False).get_opcodes()
-        if any(op not in ("equal", "insert") for op, *_ in ops):
-            return None
-        mine = ours[len(base):]
-        if not mine:
-            return theirs
-        eol = b"\r\n" if b"\r\n" in ours + theirs else b"\n"
-        head = theirs if theirs.endswith(b"\n") else theirs + eol
-        gap = b"" if head.endswith(eol + eol) or mine.startswith((b"\n", b"\r\n")) else eol
-        return head + gap + mine
-    mine, other = ours[len(base):], theirs[len(base):]
-    if mine == other or not other:
-        return ours
-    if not mine:
-        return theirs
-    # Theirs (main) landed first, so its block goes first: entries stay in date order.
-    eol = b"\r\n" if b"\r\n" in ours + theirs else b"\n"
-    if not other.endswith(b"\n"):
-        other += eol
-    gap = b"" if other.endswith(eol + eol) or mine.startswith((b"\n", b"\r\n")) else eol
-    return base + other + gap + mine
 
 
 def sort_adr_rows(data: bytes) -> bytes:
@@ -340,7 +309,27 @@ def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[l
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
     """The real-Chromium tests for the paths base...head changes, opted in on the test host only."""
     changed = lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
-    return [[remote_pytest.BROWSER_ENV, *group] for group in pack(wt, browser_scope.targets(changed))]
+    return [[remote_pytest.BROWSER_ENV, *chunk] for group in pack(wt, browser_scope.targets(changed))
+            for chunk in balanced(wt, group, BROWSER_CHUNKS)]
+
+
+# remote_pytest.run's hosts take invocations from one queue, but one browser invocation still ran
+# ~30 min on one host after the rest; 4 chunks let both hosts share that tail.
+BROWSER_CHUNKS = 4
+
+
+def balanced(wt: Path, paths: list[str], n: int) -> list[list[str]]:
+    """paths in at most n lists of near-equal total size: largest first, each into the lightest list.
+
+    A sub-list of one pack() group keeps its basenames apart."""
+    # ponytail: file size stands in for run time; use recorded pytest --durations if chunks skew.
+    size = {p: (wt / p).stat().st_size if (wt / p).is_file() else 0 for p in paths}
+    bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(min(n, len(paths)))]
+    for path in sorted(paths, key=lambda p: -size[p]):
+        total, members = min(bins, key=lambda b: b[0][0])
+        total[0] += size[path]
+        members.append(path)
+    return [sorted(members) for _, members in bins]
 
 
 def safety_review(wt: Path, base: str, head: str, python: str) -> None:
@@ -358,6 +347,14 @@ def safety_review(wt: Path, base: str, head: str, python: str) -> None:
                    " tools/harness/safety_review_exempt.json with an independent review (D-430 5)")
 
 
+def size_check(wt: Path, base: str, head: str, python: str) -> None:
+    """D-766: every commit base..head passes the size ratchet, before any test host is touched."""
+    if (wt / SIZE_RANGE).is_file():
+        code, text = step(wt, [python, SIZE_RANGE, base, head], None, "size-range", allow_fail=True)
+        if code:
+            raise Stop(f"{text.strip()}\nsize ratchet fails locally; not landing")
+
+
 def record_only(path: str) -> bool:
     """Records no module test reads. Root test/ guards do read docs, so they rerun anyway."""
     name = PurePosixPath(path).name
@@ -370,8 +367,10 @@ def record_only(path: str) -> bool:
 def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict = ENV,
          allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
+    began = time.monotonic()
     result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
                             errors="replace", env=env)
+    print(f"[{label}] {time.monotonic() - began:.0f}s", flush=True)
     text = result.stdout + result.stderr
     if log:
         log.write_text(text, encoding="utf-8")
@@ -390,7 +389,9 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
+    began = time.monotonic()
     codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+    print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
         # print no FAILED lines, so known_failures would wave them through.
@@ -494,6 +495,7 @@ def land(args) -> int:
                            + (f", auto-resolved {resolved}" if resolved else ""))
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
+        size_check(wt, main_sha, candidate, python)
         note = None
         if args.tests == "none":
             invocations: list[list[str]] = []
@@ -535,6 +537,10 @@ def land(args) -> int:
                            " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
+        summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
+        if guarded and out(wt, "rev-parse", "main") != main_sha:
+            print("[land] main moved during the guard round; merging again")
+            continue
         began = time.monotonic()
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
         if note:

@@ -2814,3 +2814,27 @@
 - 변경: 카메라 서비스 active와 실제 소비자 수신을 구분하고, 현장 preview에서 검증한 프로세스 한정 DDS 설정·비교 절차를 추가했다.
 - 증거: 기본 수신기 저하와 동시 설정 수신기 30초 약 10 FPS를 직접 비교했다. docs/validation/omx-preview-receiver-2026-10-15/result.md.
 - gate 변화: 없음. 장시간 수용은 실행 중이며 Jazzy/CycloneDDS·실물 제어 수용으로 확장하지 않는다.
+
+## 2026-10-16 · uncommitted · feat(omx): startup register 읽기와 모델별 미지원 값 보존
+
+- 변경: 기존 READ(0,147) 응답에서 goal position/current, profile, current/PWM limit, watchdog, PID를 해석한다. XL430 current register는 null로 보존한다. 전송 whitelist는 동일하다.
+- 증거: 두 회귀 RED→GREEN, 원격 probe/observer 25개 통과. 실제 follower 두 snapshot torque/error 0·goal=present·설정 동일. 설치 native connect의 configure/finally torque 활성화 source도 읽어 보존했다.
+- gate 변화: 없음. 실물 구동 제한·보정·독립 stop과 자동 시연은 미완료다. D-770, docs/validation/omx-native-startup-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · feat(omx): 초기화 description 후보 생성
+
+- 변경: 실제 vendor GPIO 초기화 쓰기와 implicit torque enable을 확인하고, register 초기화 파라미터를 제거한 별도 XML 후보와 provenance receipt를 만드는 파일 생성기를 구현했다.
+- 증거: 원격 RED→GREEN 8시험, 독립 검토. 실제 현장 확장 description에서 59항목 제거·6 motor flag·원본 불변·hash 대조. driver/controller는 실행하지 않았다.
+- gate 변화: 없음. 후보는 수용된 실물 runtime이 아니며 activation write·service 권한·실측 한계·stop과 실제 자동 시연은 미완료다. D-770.
+
+## 2026-10-16 · uncommitted · fix(omx): vendor 시작·정지 결과와 직접 조작 서비스
+
+- 변경: 최초 command write/enable retry/disable 실패를 ERROR로 전파하고 부분 활성화 실패에 두 그룹 정리를 시도한다. owner 우회 direct register/reboot/torque 서비스 등록을 제거하고 두 patch를 compile 전에 적용한다.
+- 증거: 고정 원본 메서드 C++ 실행으로 실패를 재현했고 부분 활성화·정리 실패 포함10시나리오 GREEN. 원격 관련pytest22 통과·독립 재검토. 별도 native plugin build/install·ldd·library load 확인.
+- gate 변화: 운영 prefix나 controller는 활성화하지 않았다. 실물 stop·owner HOLD·부하/보정과 실제 시연은 미완료다. D-770.
+
+## 2026-10-16 · uncommitted · fix(omx): native driver dependency export
+
+- 변경: public target의 std_srvs/realtime_tools dependency export 누락을 최소 vendor patch로 수정하고 compile 전에 적용한다.
+- 증거: 실제 consumer configure 실패 재현 → 전체 plugin 재빌드 → 보완 없는 consumer 연결 성공. 실제 ROS 객체의 잘못된 고정 포트 초기화 ERROR·정상 소멸, exit 0.
+- gate 변화: 없음. 실물 포트·activation·goal 미사용. 실제 시연 0회이며 SIM owner를 실물 조립으로 간주하지 않는다. D-770; docs/validation/omx-native-init-negative-2026-10-16/result.md.

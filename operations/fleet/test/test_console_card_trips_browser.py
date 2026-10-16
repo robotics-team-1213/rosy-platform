@@ -665,6 +665,10 @@ def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noq
         expect(cell).to_be_visible()
         assert cell.get_attribute("href") == "/console/cell"
         expect(page.locator("#work-new-move")).to_be_visible()
+        # One row look for every kind: the Cell link once drew as a small underlined box beside a full-width 이동.
+        move_box, cell_box = page.locator("#work-new-move").bounding_box(), cell.bounding_box()
+        assert all(abs(move_box[key] - cell_box[key]) <= 1 for key in ("x", "width", "height")), (move_box, cell_box)
+        assert cell.evaluate("node => getComputedStyle(node).textDecorationLine") == "none"
         page.locator("#work-new-move").click()
         page.locator("#work-move-robot").select_option("rosy_02")
         for width, height in [(1366, 768), (390, 844)]:

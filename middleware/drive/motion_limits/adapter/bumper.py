@@ -1,13 +1,13 @@
-"""Subject: contact sensing. Lidar sectors + US. Publish ranges."""
+"""Subject: contact sensing. Lidar sectors + US. Publish ranges.
+
+ROS-free mixin (D-171): SafetyNode converts stamps (``stamp_time``) and looks up
+the scan mount (``lookup_base_from``). Keep ``import time`` and ``time.monotonic()``
+as written — the sim rig swaps this module's ``time``.
+"""
 import math
 import time
 from ..control.lidar_guard import rotation_scan_observed
 from ..control.footprint_guard import translation_clearance
-
-from sensor_msgs.msg import LaserScan, Range
-from std_msgs.msg import Float32
-from rclpy.time import Time
-from tf2_ros import TransformException
 
 from ..sensing.body import BODY, footprint_bounds, ignore_m, use_radius
 from ..control.lidar_guard import scan_geometry, stale_or_nan
@@ -17,7 +17,7 @@ from ..control.lidar_guard import MAX_LINEAR_MPS, directional_lidar_limits
 from ..sensing.lidar_mount import nose_from_quaternion
 
 
-def parse_us_range(msg: Range, scale: float = 1.0):
+def parse_us_range(msg, scale: float = 1.0):
     """Convert a Range msg to metres, or None to hold the last value.
 
     Vendor formula is (adc/4096) - 0.03, so no-echo is <= 0 and the
@@ -37,7 +37,7 @@ def parse_us_range(msg: Range, scale: float = 1.0):
 
 class Bumper:
 
-    def on_us(self, msg: Range):
+    def on_us(self, msg):
         parsed = parse_us_range(msg, self.us_scale)
         accepted = self.observe('us', msg, valid=parsed is not None)
         if parsed is not None and not accepted:
@@ -52,7 +52,7 @@ class Bumper:
         self._us_invalid = 0
         self.us_front = parsed
 
-    def on_scan(self, msg: LaserScan):
+    def on_scan(self, msg):
         if not is_robot_scan(msg):
             self._scan_drop += 1
             if self._scan_drop in (1, 20) or self._scan_drop % 200 == 0:
@@ -65,8 +65,7 @@ class Bumper:
             try:
                 if not msg.header.frame_id:
                     raise ValueError('Missing scan frame')
-                tf = self.lidar_tf.lookup_transform(
-                    'base_link', msg.header.frame_id, Time.from_msg(msg.header.stamp))
+                tf = self.lookup_base_from(msg.header.frame_id, msg.header.stamp)
                 q = tf.transform.rotation
                 self.lidar_yaw = nose_from_quaternion(q.x, q.y, q.z, q.w)
                 self.lidar_yaw_source = 'tf:' + msg.header.frame_id
@@ -74,7 +73,7 @@ class Bumper:
                 if not all(math.isfinite(v) for v in (mount.x, mount.y, mount.z)):
                     raise ValueError('Nonfinite mount')
                 self.lidar_mount = (mount.x, mount.y)
-            except (TransformException, ValueError) as error:
+            except ValueError as error:  # lookup_base_from raises ValueError for a TF failure
                 self.observe('lidar', valid=False)
                 self.last_scan_time = None
                 self.lidar_mount = None
@@ -91,7 +90,7 @@ class Bumper:
                                                           msg.range_min, msg.range_max))):
             return
         self._scan_ok += 1
-        self.lidar_measurement_time = Time.from_msg(msg.header.stamp)
+        self.lidar_measurement_time = self.stamp_time(msg.header.stamp)
         yaw = self.lidar_yaw
         lo = max(
             float(self.get_parameter('scan_ignore_m').value),

@@ -102,7 +102,7 @@ def test_the_console_palette_is_read_per_theme():
 
 
 def surfaces() -> list[Path]:
-    return [WEB / "shared" / "styles.css", WEB / "console.js", WEB / "device-watch.css"]
+    return [WEB / "shared" / "styles.css", WEB / "console.js", WEB / "device-watch.css", WEB / "work" / "work.css"]
 
 
 @pytest.mark.parametrize("path", surfaces(), ids=lambda p: p.name)

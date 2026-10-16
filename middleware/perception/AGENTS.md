@@ -39,6 +39,20 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 | `web/` | web_node dashboard UI — served from share/control/web (see `web/AGENTS.md`) |
 | `map/` | Gazebo world asset for the desk maze (see `map/AGENTS.md`) |
 
+### Size units (D-766)
+
+Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 lines; the rest stays in `control`). Paths are relative to the colcon root; holders are the `control/_source_layout.py` entries named.
+
+| Unit | Responsibility |
+|------|----------------|
+| `drive/tracking/wander` | `PACKAGE_DIRS` `control.wander`: the wander node's senses, judge, motion and navigator |
+| `drive/planning/grid` | `PACKAGE_DIRS` `control.planning`: map check, point to go, best route, zigzag coverage |
+| `perception/sensors/sensing` | `PACKAGE_DIRS` `control.sensing`: raw sensor data to robot-frame geometry |
+| `drive/motion_limits` | `FLAT_ROOTS`: Drive safety limits that withhold or reduce a candidate, plus `adapter/` (`control.safety`); no final `/cmd_vel` (see its `AGENTS.md`) |
+| `drive/calibration` | `FLAT_ROOTS`: stationary sensor checks and bounded calibration motion (see its `AGENTS.md`) |
+| `drive/recovery` | `FLAT_ROOTS`: bounded recovery proposals (escape, trail retreat, hazard response) (see its `AGENTS.md`) |
+| `perception/sensors/line_observation` | `CONTROL_ROOTS`: line observer node, input validation and composition, IR overlay, route followers |
+
 ## For AI Agents
 
 ### Working In This Directory

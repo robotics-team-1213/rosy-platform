@@ -660,6 +660,7 @@
 - gate 변화: 없음. Robot API·envelope 1.0 변경 없음
 - 결정: 해당 없음
 - 교훈: 없음
+
 ## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.124 (D-507 7)
 - 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.124(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
 - 증거: `python -m pytest middleware/core/gateway/test/test_protocol_version_alignment.py -q` 3 passed.
@@ -724,6 +725,7 @@
 - 변경: `GET /api/v1/navigation/state`에 CORE가 보유한 `mapping_active`를 읽기 전용으로 추가한다. 이는 수락된 세션 플래그이지 slam_toolbox 실행 증명이 아니다.
 - 증거: gateway readiness/API 시험과 로봇 브라우저 시험 12 passed, 계약·패키지 24 passed, [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
 - gate 변화: LOCAL 세션 readback 근거 추가. 실제 SLAM 지도 갱신과 계약 착지 합의는 HOLD.
+
 ## 2026-10-08 · uncommitted · feat(api): `POST /line-follow/junction` action `bend`와 능력 `lane_bend` (v1.137)
 - 변경: `LineJunctionRequest` action `bend`, 선택 필드 `bend_in_m`(0, 2]·`bend_tol_m`(0, 0.30]·`bend_radius_m`(0, 0.5]. `bend`는 `turn_deg`(0 < |θ| ≤ 90)·`map_id`·세 필드가 필수이고 창·pivot·advance와 함께 둘 수 없으며, 세 필드는 다른 action에 둘 수 없다(400). `system.py` 능력 `lane_bend`(line-follow 매니저의 `supports_lane_bend`). API Ref v1.137, `app.py` 버전.
 - 증거: `test_line_junction_api.py::test_d507_bend_fields_validation`, `test_capabilities_controls.py` `lane_bend` 참·line-follow 없으면 거짓. gateway 2266 passed.
@@ -768,6 +770,7 @@
 - 변경: 실제 CORE FastAPI 자산으로 Pilot→Console 같은 탭 이동을 실행하고 인증된 매니페스트 요청·역할·지도 패널을 390×844·1366×768에서 검증한다.
 - 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). TestClient·Chromium 2 passed, 관련 묶음 10 passed, known_failures 0 NEW.
 - gate 변화: LOCAL 브라우저 근거 추가. DEVICE/FIELD 수용 근거는 아님.
+
 ## 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.152)
 - 변경: `straight` + 기대 창일 때만 받는 `lane_turn_deg`(−360…360, 왼쪽 +). 아니면 400 `VALIDATION_ERROR`. `_expect` 로 CORE에 넘긴다
 - 증거: `test_line_junction_api.py::test_lane_turn_deg_belongs_to_a_straight_with_a_window` (모델 PC)
@@ -794,6 +797,7 @@
 - gate 변화: SOURCE 계약 보강. 설치·현장 연속 연결·이동은 별도.
 - 결정: D-533.
 - 교훈: 공개 신원 확인 빈도를 승인 증명 한도로 묶으면 안전한 재확인이 관제 연결을 끊는다.
+
 ## 2026-10-09 · uncommitted · fix(core): LCD hand-over에 CA 확인 값 (D-483 보완)
 - 변경: `approval.json`에 검증된 `tls_ca_sha256`을 함께 쓴다(첫 검증 성공 뒤 캐시). 처음 연결하는 요청 기기는 승인 뒤 이 값을 대조해야 CA를 고정하는데, 화면 코드 경로에는 대조할 화면이 없었다. 코드 행 형식·0640·로그 금지는 그대로다.
 - 증거: `test_peer_pairing.py` 44 passed(새 시험: hand-over에 CA 값).
@@ -818,6 +822,7 @@
 - 변경: 끝난 `lease_id`의 PUT은 새 lease를 열지 않고 404 `NOT_FOUND`+`detail.ended`(넘겨받기 뒤 Fleet renew가 사람의 MANUAL보다 먼저 와도 로봇을 다시 쥐지 못함). `/localization/mission` 409 `TRIP_LEASED`, `/localization/decision`·`suspect` 423 `TRIP_LEASED`. DOCKING에서 lease 열기 409 `MODE_CONFLICT`. halt는 line-follow/nav 정지가 실패해도 IDLE로 간다.
 - 증거: `test_trip_lease.py` 새 시험 10개(수정 전 실패, 모델 PC).
 - gate 변화: SOURCE.
+
 ## 2026-10-09 · uncommitted · feat(core): 장치 개발 모드 표식 (D-548)
 - 변경: `/etc/rosy/dev-mode`가 있는 장치 CORE만 공용 `rosy-dev-*` 토큰을 받는다(`core_common.config.dev_auth_enabled`, `deps._refused_in_device_mode`). 기동 때 `auth.development_mode`. 공용 개발 토큰은 장치에서 `host/ssh/*` 403. API v1.156.
 - 증거: test_auth_pairing.py(표식 유무·이벤트), test_host_ssh.py(셸 거부).
@@ -828,6 +833,7 @@
 - 변경: 설정이 켜진 CORE만 `rosy.controls/1` `base_velocity.route_context: true`를 노출한다. 상태 조회는 CORE의 마지막 발행 문맥과 발행 시각을 읽는다.
 - 증거: api_web 149 passed, 15 skipped, `known_failures.py` 신규 실패 0. 실제 Fleet 소비는 미확인.
 - gate 변화: D-531 P1 SOURCE 후보.
+
 ## 2026-10-09 · uncommitted · feat(core): GET /localization/request, API v1.164 (D-546 5)
 - 변경: `GET /api/v1/localization/request`(`LOCALIZE_ASSIST`, 404 `NO_REQUEST`), 이벤트 `localization.request`·`localization.request_cleared`. API 기준서 v1.164과 버전 고정 테스트 갱신.
 - 증거: `middleware/core/gateway/test/test_localization_api.py`.
@@ -880,6 +886,7 @@
 - 변경: 위 커밋된 제목 오류 기록을 보존하고 정식 후속 기록을 추가했다. API 설명 v1.214 외 동작 변화는 없다.
 - 증거: source193d54401 AI PC 원격 버전·설치·구조·UI 선택군 terminal exit0/NEW0를 확인했다. 독립 source 검토는 버전 문자열을 제외한 AST 동일을 확인했다.
 - gate 변화: 없음. CI·배포·장치 수용을 뜻하지 않는다.
+
 ## 2026-10-12 · d002c579d · D-689 계약 버전 설명 정렬
 
 - 변경: API factory 문서와 FastAPI 설명의 계약 버전을 v1.211에 맞췄다.
@@ -938,6 +945,12 @@
 - 변경: `core_api_web/api/AGENTS.md`의 옛 `../web` 안내를 실제 `middleware/ui/robot`과 설치 `share/dashboard` 우선순위로 정정했다.
 - 증거: `app.py::_dashboard_root`의 설치/source fallback과 source holder를 읽었다. 문서 링크 검사는 X: `folder-guidance-p0` 세션에 기록하고, committed HEAD를 원격 착지 gate에서 검증한다.
 - gate 변화: 없음. API/serving/runtime 코드는 수정하지 않았다.
+
+## 2026-10-13 · uncommitted · 받아들여진 명령이 절전 타이머를 리셋한다 (D-24 개정, feat/device-power-policy에서 옮김)
+
+- 변경: `api/command_activity.py`의 `COMMAND_ROUTES` 표와 ASGI 미들웨어가 2xx로 답한 명령 호출 뒤 `PowerManager.on_command(source)`를 부른다. main의 `POST /api/v1/motion/rotate_to`를 표에 더했다. GET·WS·`/power/*`·Fleet 주기 자문·lease 갱신은 표에 없다.
+- 증거: `middleware/core/gateway/test/test_power_command_routes.py`. 원격 pytest 결과는 착지 보고에 둔다.
+- gate 변화: 없음.
 
 ## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
@@ -1009,6 +1022,7 @@
 - gate 변화: 없음.
 - 결정: D-758 0단계.
 - 교훈: 없음.
+
 ## 2026-10-15 · 84f0c8456 · PUT /trip-lease job_id, 주인 아닌 IDLE은 lease를 끝낸다 (D-763 조각 6, API v1.236)
 
 - 변경: `v1/trip_lease.py` 선택 필드 `job_id`. `v1/common.py` `apply_mode`가 IDLE이면 `stop_ends_trip_lease(halt=False)`: 주인 아닌 토큰의 IDLE이 어떤 lease든 끝낸다(로봇이 이미 IDLE이어도). 사람이 세운 로봇을 Fleet이 주인 토큰으로 다시 움직이지 않게 한다. `v1/system.py` 능력 `trip_lease_job`.
@@ -1065,4 +1079,20 @@
 - 증거: `test/test_line_follow_contract_docs.py`, fleet 핀 시험 원격.
 - gate 변화: 없음.
 - 결정: D-620 노트 2026-10-15, D-760 개정 4.
+- 교훈: 없음.
+
+## 2026-10-15 · 1a9960df2 · POST /line-follow/junction 선택 필드 pose_stamp와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+
+- 변경: `api/v1/line_follow.py` `LineJunctionRequest.pose_stamp`(> 0, 유한, 아니면 400)를 `set_junction`에 넘긴다. `api/v1/system.py` 능력 `lane_instruction_stamp`. `app.py` 계약 v1.241(9639a41b8).
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py` `test_d767_pose_stamp_validation_and_record`, `test/test_line_follow_contract_docs.py`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 1·4항. v1.238–v1.240은 다른 작업이 선점했다.
+- 교훈: 없음.
+
+## 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)
+
+- 변경: `api/v1/line_follow.py` `pose_stamp`는 strict(JSON `true`, `"1.5"` 400). `JunctionRefused.reason`이 있으면 `error.detail = {"reason": …}`.
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py` `test_d767_pose_stamp_validation_and_refusal`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
 - 교훈: 없음.

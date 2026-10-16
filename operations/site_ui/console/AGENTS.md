@@ -17,14 +17,16 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | File | Description |
 |------|-------------|
 | `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
+| `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
+| `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
 | `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
 | `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |
 | `camera-backdrop.js` | D-513 7 / D-515 / D-560 camera picture path: Vision's map plane (`shared/vision-view.js` `createPlaneFeed`) drawn on `toPx`, the D-515 top-down warp (`camera-warp.js` math) only as the fallback, large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
 | `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
-| `work/work-view.js`, `work/channel-request-view.js` | Work area, its own size unit `site_ui/console/work` (docs/plans/2026-10-15-fleet-console-work-unit.md); `channel-request-view.js` is the D-680 대화 요청 review. D-664 source-scoped Task/Mission/trip/Cell Job read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser; D-763 4: rows read the server's `visible_state` and trip wait, `show=new` shows only the server's `kinds`); owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
+| `work/work-view.js`, `work/channel-request-view.js` | Work area, its own size unit `site_ui/console/work` (docs/plans/2026-10-15-fleet-console-work-unit.md); `channel-request-view.js` is the D-680 대화 요청 review. D-664 source-scoped Task/Mission/trip/Cell Job read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser; D-763 4: rows read the server's `visible_state` and trip wait, `show=new` shows only the server's `kinds`); owner scope remains server-side, source status/identity is preserved, no direct dispatch; selected PROPOSED Missions use the existing admit route with named-operator checks and current dispatch generation |
 | `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; at `/console?view=records` (D-741 8) the sub-nav's `show` filters the same answer and the opened incident's handoff and review stand in `#incident-judgment`; session, polling cadence and command authority remain in `console.js` |
 | `formation.js` | Formation panel |
 | `signals.js` | Traffic-signal cards |

@@ -133,6 +133,15 @@ def test_loss_after_contained_following_bridges_slowly_along_the_known_lane():
     assert r.m.apply_if_current(d, lambda decision: None)
 
 
+def test_boundary_conflict_ends_an_active_bridge_without_another_forward_step():
+    r = Rig()  # D-556 rule 3: not a paint gap
+    r.follow()
+    assert r.step(seen=False).linear > 0
+    d = r.step(seen=False, quality='odom_side_conflict')
+    assert (d.linear, d.angular, r.reason) == (0, 0, 'camera_odom_side_conflict')
+    assert r.step(seen=False).linear == 0
+
+
 def test_bridge_steers_back_to_the_lane_centre_line():
     r = Rig()
     r.y = .01  # contained, 1 cm left of the centre line
@@ -141,7 +150,7 @@ def test_bridge_steers_back_to_the_lane_centre_line():
     assert r.reason == 'lane_bridge' and d.linear > 0 and d.angular < 0
 
 
-@pytest.mark.parametrize('case', ['no_follow', 'low_confidence', 'low_light',
+@pytest.mark.parametrize('case', ['no_follow', 'low_confidence', 'low_light', 'odom_side_conflict',
                                   'turn_hint', 'disabled'])
 def test_bridge_entry_requires_confident_following(case):
     config = {}
@@ -152,11 +161,13 @@ def test_bridge_entry_requires_confident_following(case):
         for _ in range(5): r.step()
     if case == 'low_confidence':
         d = r.step(confidence=.1)
-    elif case == 'low_light':
-        d = r.step(seen=False, quality='low_light')
+    elif case in ('low_light', 'odom_side_conflict'):
+        d = r.step(seen=False, quality=case)
     else:
         d = r.step(seen=False)
     assert d.linear <= 0 and r.reason != 'lane_bridge'
+    if case == 'odom_side_conflict':
+        assert (d.linear, d.angular, r.reason) == (0, 0, 'camera_odom_side_conflict')
     # Never entered later in the same loss either.
     for _ in range(5):
         assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'

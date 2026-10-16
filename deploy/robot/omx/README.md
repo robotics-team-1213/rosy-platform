@@ -67,6 +67,57 @@ starts no controller and sends no goal. Exit 2 means the software path is missin
 or discovery failed; exit 0 means only the observed software prerequisites exist.
 `motion_admitted` is always false. Publisher names, action presence and package
 availability do not establish hardware identity, measured limits or a real stop.
+
+### Supervised register inspection
+
+After physically identifying the follower cable, use the pinned DynamixelSDK
+Python package and pyserial on the native host:
+
+```bash
+python3 deploy/robot/omx/register_probe.py --device /dev/serial/by-id/<confirmed-follower>
+```
+
+This opens the confirmed port exclusively at 1 Mbps and permits only PING and
+READ(0,147) packets for IDs 11..16. It rechecks ownership after the exclusive
+lock; run as the device owner without privileged competing serial processes.
+It never configures motors, enables torque or starts the controller. Models
+other than 1060/1200, busy ports, incomplete responses and transport failures
+return exit 2. Exit 0 means a complete snapshot, including any reported motor
+faults or enabled torque; `motion_admitted` remains false. Raw position limits
+are not measured mechanical limits. Keep output private.
+
+The [first follower inspection](../../../docs/validation/omx-follower-registers-2026-10-15/result.md)
+found positions outside the vendor startup limits. Do not start the default
+launch merely to create an Action server: even inactive initialization writes
+configuration. Hardware profile, initialization and physical stop acceptance
+remain prerequisites for control.
+
+### Bounded physical joint observation
+
+```bash
+python3 deploy/robot/omx/hardware_observer.py --device /dev/serial/by-id/<confirmed-follower> --domain-id <workcell-domain> --duration 120
+```
+
+This commissioning process holds the same read-only, exclusive port for at most
+the requested 1..300 seconds. It publishes nominal vendor radians at up to 10 Hz
+on `/omx_commissioning/joint_states`, separate from synthetic `/joint_states`.
+The gripper value is an angle, not a measured jaw width. Homing Offset is already
+included in Present Position and is not applied a second time.
+
+Every published sample requires the six ordered, matching motor models, torque
+off, no hardware errors, and a read window of at most 250 ms. A failed sample
+ends the process without publishing that sample; exit 2 also covers cleanup or
+early ROS termination. Timestamp is the start of the read, not publication time.
+Private JSONL stdout contains the raw snapshots. Normal duration completion is
+exit 0. A controller must not consume this uncalibrated commissioning topic.
+
+The process pins Fast DDS, clears static peers and requests localhost discovery;
+external DDS profiles/discovery-server overrides are rejected. This limits
+discovery, not an authorization boundary against other local or privileged
+processes. It has no Action server, subscription or register-write path, never
+enables torque and never reconnects automatically. Stop it before any subsequent
+accepted controller takes the port. It is physical feedback preparation, not an
+operational arm control server or mechanical calibration acceptance.
 Use the [hardware control plan](../../../docs/plans/2026-10-15-omx-hardware-control.md)
 for the remaining native runtime and physical acceptance work.
 
@@ -295,7 +346,7 @@ docker run --rm --name rosy-omx-pilot-sim --network bridge `
 - 원본 가져오기: docker cp rosy-omx-pilot-sim:/recordings/<episode-id> X:/DevTemp/rosy-omx-recordings/.
   Windows 자료·export 출력은 X:에 둔다. 컨테이너를 삭제해도 이름 있는 recording volume은 유지된다.
 
-별도 Python 3.12 CPU 환경에 torch 2.7.1+cpu / torchvision 0.22.1+cpu를 공식 CPU wheel index로 먼저 설치하고 requirements-lerobot-export.txt를 설치한다. 실제 검증한 transitive inventory는 검증 문서에 기록한다. ROS 런타임에 LeRobot을 설치하지 않는다.
+별도 Python 3.12 CPU 환경에 torch 2.10.0+cpu / torchvision 0.25.0+cpu를 공식 CPU wheel index로 먼저 설치하고 requirements-lerobot-export.txt를 설치한다. 실제 검증한 transitive inventory는 검증 문서에 기록한다. ROS 런타임에 LeRobot을 설치하지 않는다.
 
 PowerShell 실행 예:
 
@@ -466,3 +517,63 @@ export PYTHONPATH="$PWD/middleware/devices/omx/adapter:$PWD/contracts/foundation
 Hub 업로드는 [기존 registry 도구](../../../learning/registry/policy/README.md)의
 검토된 파일·private repo·고정 SHA readback 절차를 따른다. Compose는 upload나
 HF 인증을 하지 않는다. 실제 정책의 Gazebo 집기·실물 운용은 별도 검증이다.
+
+### Read-only startup register review
+
+The same `register_probe.py` READ(0,147) snapshot now includes pending goal
+position/current, profile velocity/acceleration, current/PWM limits, position PID
+and signed bus watchdog state (-1 is the documented watchdog fault).
+XL430 model 1060 has no current-control registers; those fields stay null.
+These are register observations, not accepted mechanical limits or stop evidence.
+
+The inspected Fleet LeRobot `OmxFollower.connect(calibrate=False)` still calls
+`configure()`, whose `torque_disabled()` context enables torque in `finally`.
+Do not use that method as a passive preflight. The installed-source inspection,
+actual torque-off snapshots and remaining initialization requirements are recorded
+in [the startup validation](../../../docs/validation/omx-native-startup-2026-10-16.md).
+
+### Local camera and commissioning feedback viewer
+
+After sourcing the camera ROS environment and selecting its ROS domain, run
+`python3 deploy/robot/omx/commissioning_view.py`. The read-only tool binds to
+`127.0.0.1:8766`; an authenticated SSH forward can expose that same loopback port
+on the development PC. It subscribes to existing top/front images and the
+commissioning joint topic, opens no devices, and issues no actuator commands.
+Source/receipt age, decoded picture expiry and disconnected joint feedback are
+checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
+
+### Prepare an initialization-description candidate
+
+```bash
+python3 deploy/robot/omx/preserved_description.py expanded.urdf new-candidate-directory
+```
+
+This offline command removes explicit GPIO initialization register parameters,
+sets torque/reboot selection to zero and preserves declared metadata/interfaces.
+It creates a new directory with description.urdf and receipt.json, refusing an
+existing output. It never starts hardware. The pinned driver still has activation
+writes and write services; this candidate does not prove a read-only driver or
+accepted physical runtime. See [evidence and remaining checks](../../../docs/validation/omx-preserved-description-2026-10-16.md).
+
+### Driver lifecycle error and owner-boundary patches
+
+The development Dockerfile applies `hardware-lifecycle-errors.patch` and
+`hardware-owner-command-path.patch` to the locked driver before compilation.
+Startup rejects failed initial command writes and exhausted torque enable retries.
+Failed activation attempts disable both motor groups and keep ERROR even if cleanup
+fails. Stop attempts both groups and reports disable failures. Direct register,
+reboot and torque command services are omitted; the read service remains.
+
+The locked-source compiled-method check runs on a lab host with g++ and patch:
+pass `ROSY_OMX_VENDOR_ROOT=<locked-checkout-relative-to-host-home>` before
+`test/test_omx_driver_lifecycle.py` in the remote pytest arguments. Without an
+explicit source checkout this hardware-free integration check skips. It compiles
+actual vendor method bodies with communication doubles and never opens a device.
+A passing result proves error propagation, not physical stopping or safe load retention.
+See [validation and remaining checks](../../../docs/validation/omx-driver-lifecycle-2026-10-16.md).
+
+`hardware-export-dependencies.patch` also exports the driver's public CMake
+dependencies `std_srvs` and `realtime_tools`, allowing downstream consumers to
+link its installed target. A real ROS initialization probe rejected a fixed
+nonexistent port and destructed normally; it never used a real serial port.
+See [native initialization evidence](../../../docs/validation/omx-native-init-negative-2026-10-16/result.md).

@@ -1,10 +1,12 @@
 """CORE power/battery composition; the host unit remains the shutdown authority."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from core_features.power.battery import BatteryConfig, BatteryCurve, BatteryMonitor
+from core_features.power.devices import DevicePolicyConfig, parse_device_policy
 from core_features.power.manager import LidarPolicy, PowerConfig, PowerManager, PresenceConfig
 
 
@@ -55,6 +57,19 @@ def _battery_config(raw: dict[str, Any], data_path: Any = None) -> BatteryConfig
     )
 
 
+def _device_policy(raw: Any) -> DevicePolicyConfig:
+    """A malformed optional block leaves the policy off (every device on) and says so.
+
+    Refusing to boot over it would take the API, E-stop endpoint and battery
+    monitor down with an energy-saving option.
+    """
+    try:
+        return parse_device_policy(raw)
+    except (ValueError, TypeError, AttributeError) as exc:
+        logging.getLogger(__name__).error("power.device_policy ignored, every device stays on: %s", exc)
+        return DevicePolicyConfig()
+
+
 def _power_config(raw: dict[str, Any]) -> PowerConfig:
     """rosy_default.yaml의 power 블록 → PowerConfig (누락 키는 기본값 유지)."""
     presence_raw = raw.get("presence", {}) or {}
@@ -73,6 +88,8 @@ def _power_config(raw: dict[str, Any]) -> PowerConfig:
         release_samples=int(presence_raw.get("release_samples", presence_defaults.release_samples)),
         min_valid_m=float(presence_raw.get("min_valid_m", presence_defaults.min_valid_m)),
         max_valid_m=float(presence_raw.get("max_valid_m", presence_defaults.max_valid_m)),
+        min_presence_s=float(presence_raw.get("min_presence_s", presence_defaults.min_presence_s)),
+        max_gap_s=float(presence_raw.get("max_gap_s", presence_defaults.max_gap_s)),
     )
     return PowerConfig(
         enabled=bool(raw.get("enabled", defaults.enabled)),
@@ -88,6 +105,7 @@ def _power_config(raw: dict[str, Any]) -> PowerConfig:
         standby_rate_hz=float(raw.get("standby_rate_hz", defaults.standby_rate_hz)),
         presence=presence,
         lidar=lidar,
+        device_policy=_device_policy(raw.get("device_policy")),
     )
 
 

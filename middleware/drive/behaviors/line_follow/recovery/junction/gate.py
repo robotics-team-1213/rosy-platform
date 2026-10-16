@@ -60,9 +60,9 @@ REKEY_M, REKEY_RAD = .02, .05
 class JunctionRefused(Exception):
     """A junction instruction CORE does not take in the current line-follow mode (409)."""
 
-    def __init__(self, code, message):
+    def __init__(self, code, message, reason=None):
         super().__init__(message)
-        self.code = code
+        self.code, self.reason = code, reason  # reason: D-767 A INSTRUCTION_STAMP_UNUSABLE's why
 
 
 class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixin, JunctionTurnMixin):
@@ -157,11 +157,12 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                          else None)
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
-                     advance_m=None, now=None, expect=None, exit_segment=None):
+                     advance_m=None, now=None, expect=None, exit_segment=None, pose_stamp=None):
         """Store the next-junction instruction: (accepted, seq, state). Raises JunctionRefused
         unless line-follow is CAMERA_LINE (IR_LINE has no junction detection). During a
         maneuver the same instruction is a no-op; a different one aborts it, unaccepted.
-        D-520: with exit_segment advance_m is ignored; during an arc every instruction is armed."""
+        D-520: with exit_segment advance_m is ignored; during an arc every instruction is armed.
+        D-767 A: expect_in_m / bend_in_m count from the odom sample at ``pose_stamp`` when usable."""
         if action not in JUNCTION_ACTIONS:
             raise ValueError('junction action must be straight, left, right, stop or bend')
         if not (isinstance(expires_s, (int, float)) and 0 < expires_s <= MAX_EXPIRES_S):
@@ -176,6 +177,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         if advance_m is not None and (turn_deg is None or action == 'bend' or not 0 <= advance_m <= MAX_ADVANCE_M):
             raise ValueError('advance_m belongs to a turn and must be in [0, 0.30]')
         check_expect(expect, action, turn_deg)  # D-507 2; None is an old client
+        if pose_stamp is not None and not (type(pose_stamp) in (int, float) and 0 < pose_stamp < math.inf):
+            raise ValueError('pose_stamp must be a finite wall stamp > 0')
         self._check_exit_segment(exit_segment, action, turn_deg, expect)
         advance = (0. if exit_segment is not None else DEFAULT_ADVANCE_M if advance_m is None
                    else float(advance_m))
@@ -190,6 +193,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
             if self._junction_done_place == (place_id, action):
                 raise JunctionRefused('JUNCTION_ALREADY_DONE',
                                       f'{action} at {place_id} already ran; send the next place')
+            current = self._clock() if now is None else now
             j = self._junction
             if j is not None and j['state'] in MANEUVER:
                 if (j['action'], j['place_id'], j['turn_deg'], j['advance_m']) == (
@@ -199,7 +203,6 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 j.update(state='aborted', reason='new_instruction')
                 self._bridge_hint = None
                 return False, j['seq'], 'aborted'
-            current = self._clock() if now is None else now
             if action == 'bend' and j is not None and j['state'] == 'armed' and (
                     j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
                     action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
@@ -208,9 +211,14 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     self._place_map_entry(j, expect.get('map_entry'), current)
                 j['next_line'] = expect.get('next_line_in_m')  # D-754: a replan may move the next place
                 return True, j['seq'], 'armed'
+            distance = action == 'bend' or (expect or {}).get('expect_in_m') is not None
+            basis, why = self._stamp_odometer(pose_stamp, current) if pose_stamp is not None and distance else (None, 'none_sent')
+            if why != 'none_sent' and basis is None:  # D-767 A review: never a silent receipt basis (a resend
+                # or a refresh above does not measure from the stamp, so it is never refused); Fleet resends
+                raise JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', f'pose_stamp cannot be used: {why}', why)
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
-            window = self._expect_window(expect, current)
+            window = self._expect_window(expect, current, basis)
             pose = self._fresh_pose(current) if action == 'bend' else None
             if window is False or (action == 'bend' and pose is None):
                 raise JunctionRefused('JUNCTION_ODOM_STALE', 'no fresh odom to place the expected junction')
@@ -225,10 +233,12 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   window=window, map_id=(expect or {}).get('map_id'),
                                   pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment,
                                   lane_turn=(expect or {}).get('lane_turn_deg'),
+                                  basis=None if not (window or pose) else ('receipt', why) if basis is None else ('stamp', None),
                                   arc_anchor=self._place_map_anchor(exit_segment, current))  # D-744 3
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._place_map_entry(self._junction, expect.get('map_entry'), current)  # D-759 3
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
+                                      travel=0. if basis is None else self._return_evidence.trail.odometer-basis[0],
                                       radius=expect['bend_radius_m'], anchor=None,
                                       next_line=expect.get('next_line_in_m'),  # D-754
                                       key=(self._return_evidence.epoch, pose.frame),
@@ -249,6 +259,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   reason=j.get('reason'), pivot_basis=j.get('pivot_basis'),
                                   map_entry_used=j.get('entry_used') is True,
                                   map_entry_reason=j.get('entry_why'),
+                                  distance_basis=(j.get('basis') or (None, None))[0],
+                                  distance_basis_reason=(j.get('basis') or (None, None))[1],
                                   signal_request_id=(self._junction_signal or {}).get('id'),
                                   signal_state=(self._junction_signal or {}).get('state'))
 

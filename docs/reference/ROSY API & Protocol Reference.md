@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.240
+**Version:** v1.244
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,30 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
+
+Additive. 새 경로 하나와 Step 원장의 새 종류 하나다. envelope 1.0은 그대로다.
+
+- **`POST /api/fleet/trip-jobs`.** 본문은 `{robot_id, steps: [{to, via[]}]}`이다(단계 1–8개, `via` ≤ 8, 추가 필드 금지). 이름 있는 운영자만 쓴다. `simulation` 배포 프로필이고 Step 원장(`--mission-api`)이 있을 때만 경로가 있다. 다른 프로필에서는 경로가 없고, 이미 열려 있던 `TRIP` 작업은 시작할 때 HOLD(`FLEET_PROFILE_CLOSED`)된다. 등록부 승인 값은 `one_person`이라 만든 사람이 곧 승인한 사람이다. 응답은 `{job}`(Step 원장 행, 단계 종류 `TRIP`, 상태 `READY`)이다.
+- **거절.** 404 `UNKNOWN_ROBOT`. 422 `TRIP_UNKNOWN_PLACE` `{places}`. 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`(D-763 개정 2 질문 10 (a)(b), `hold_job`). 409 `TRIP_ROBOT_BUSY`(이미 움직이거나 다른 작업이 쥔 로봇). 409 `JOB_ESTOP`(lease를 여는 동안 비상 정지가 왔다). 409 `JOB_ROBOT_REFUSED` `{message}`(다른 Task·작업이 robot claim을 쥠, 또는 dispatch 정지 래치). 오류 모양은 trip 경로와 같은 `{"detail": {"code", "detail"}}`이다.
+- **실행.** 작업은 만들 때 그 로봇의 `robot` claim과 CORE trip lease(`job_id`, v1.236)를 잡고 끝까지 쥔다. 단계마다 로봇 카드와 같은 계획 경로와 시작 검사로 trip 하나를 연다. 다음 단계로는 그 trip의 `arrived`만 넘어간다. 다른 끝, 거절된 시작, lease 잃음, 비상 정지, 정지 래치는 작업을 HOLD(사유: trip의 사유나 코드, `JOB_LEASE_LOST`, `JOB_ESTOP`, `FLEET_RESTARTED`)로 두고 lease를 놓는다. claim은 `HELD`로 남는다. HOLD마다 사람 단계 문제 기록(`kind: job_hold`, `/api/fleet/ai/episodes`)이 하나 열린다.
+- **읽기와 회복.** 작업은 `GET /api/fleet/work`에 `source: "cell_job"`, `action_kind: "TRIP"` 행으로, 단계 trip은 `source: "trip"` 행으로 나온다. 재개와 취소는 지금의 `POST /api/fleet/cell-jobs/{mission_id}/resume`·`/cancel`이다. 재개하면 새 lease와 새 trip이 열리고 시작 검사를 다시 거친다. `kinds`에는 아직 `TRIP`이 없다.
+- **trip 사이의 넘겨받기(동작).** 차로 trip이 `arrived`로 끝나면 CORE는 그 `stop`을 쥔 채 남는다. 같은 로봇의 다음 trip은 아직 아무 지시도 보내지 않았고 그 정지가 자기 다음 장소에 있으면, 그 정지(같은 seq와 장소) 하나를 새 지시로 바꿀 수 있다. 멈춤이 보낸 정지와 다른 송신자의 지시는 바꾸지 않는다.
+
+### v1.241 교차로·굽이 지시의 거리를 Fleet이 본 odom 표본부터 잰다 (D-767 A부)
+
+`POST /api/v1/line-follow/junction`에 선택 최상위 필드 `pose_stamp`를 더한다(additive). 능력 `base_velocity.lane_instruction_stamp`가 참인 CORE에만 보낸다. 그 능력은 CORE 설정 `line_follow.instruction_stamp_enabled`(bool, 기본 `false`)와 같다.
+
+| 필드 | 형식 | 뜻 |
+| --- | --- | --- |
+| `pose_stamp` | finite number > 0, UTC epoch 초(CORE 벽시계, 스냅숏 `odom_pose.stamp`) | 이 지시의 `expect_in_m`·`bend_in_m`을 잰 Fleet 자세가 묶인 odom 표본의 시각. 같은 주기의 `map_entry.odom_stamp_s`(v1.224)·통행권 `pose_stamp`와 같은 값이다 |
+
+0 이하·무한·숫자 아님(JSON `true`, `"1.5"` 같은 문자열 포함)은 400 `VALIDATION_ERROR`다. 각 거리의 기준점(`expect_in_m`은 로봇의 차로 투영점, `bend_in_m`은 굽이 호 시작점까지)은 그대로이고 시간 기준만 바뀐다. 설정이 켜진 CORE는 받을 때 그 stamp로 발행된 odom 표본을 찾고(v1.234 정확한 표본, "그 시각 이전" 표본은 쓰지 않는다), 같은 표본의 교차로 주행 거리계(trail odometer, 통행권의 경로 길이와 다른 누적기) 값을 교차로 창의 기준으로, 그 뒤 달린 거리를 굽이의 처음 주행 거리로 둔다. 나이 상한은 없다: 교차로 궤적(약 5 s)이 그 표본을 가진 동안 쓴다. 거리(`expect_in_m` 또는 `bend`)가 있는 지시의 `pose_stamp`를 쓸 수 없으면 CORE는 그 지시를 409 `INSTRUCTION_STAMP_UNUSABLE`로 거절하고 지금의 지시 상태를 그대로 둔다. `error.detail`은 `{"reason": <까닭>}`이고 까닭은 `disabled`(설정 꺼짐), `ambiguous`(같은 stamp의 표본 둘), `future`(CORE 기록의 가장 새 표본보다 0.05 s 넘게 앞섬), `no_sample`(그 stamp로 발행된 표본 없음, 신선한 odom 없음), `epoch`(odom 세대·frame이 다름), `stale`(표본이 교차로 궤적에서 빠짐)이다. 거리가 없는 지시의 `pose_stamp`는 쓰지 않고 거절하지도 않는다.
+
+상태 `line_follow.junction`에 두 필드를 더한다. `distance_basis`: `stamp` | `receipt`, 창도 굽이 거리도 없는 지시는 null. `distance_basis_reason`: `receipt`이면 `none_sent`(`pose_stamp` 없음), `stamp`이면 null.
+
+Fleet은 능력이 참이고 자세에 odom stamp가 있는 로봇의 거리 있는 지시에 `pose_stamp`를 싣고, 그 로봇의 `bend_in_m`에서 앞당김(`fleet.trip.bend_send_s`, 읽기→전송 시간)을 빼지 않으며, `expect_tol_m`·`bend_tol_m`에서 읽기→전송과 전송 여유(0.2 s) 항을 뺀다(자세 나이·dead reckoning·드리프트 항은 남는다). `INSTRUCTION_STAMP_UNUSABLE`이면 다음 주기에 새 자세·stamp로 다시 보내고, 까닭이 `disabled`이면 그 trip은 stamp 없이 앞당김을 넣어 보낸다. 능력이 없거나 거짓인 로봇과 설정이 꺼진 CORE의 동작은 v1.240과 같다. Fleet `/api/fleet/*` 변경 없음. envelope 1.0 변경 없음.
 
 ### v1.240 제안 읽기·결정 응답·자원 claim 읽기는 Cell Job 상세 범위를, 채널 제출·승인은 이름 있는 운영자를 따른다 (D-763 조각 4 리뷰)
 
@@ -310,6 +334,16 @@ ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 �
 
 기본값은 false이며 이때 토픽과 능력 필드는 없다. 인식 소비자와 경계 판정은
 별도 단계로 검증한다(D-531 P2/P3).
+
+### D-556 한쪽 경계 odom 충돌 (v1.221)
+
+내부 `line/observation`의 CAMERA_LINE `quality`는 `visible=false`, `confidence=0`일 때만
+`{valid:false, reason:"odom_side_conflict"}`를 추가로 허용한다. CORE는 이 사유를 도색 공백으로
+취급하지 않고 HOLD한다. D-476 bridge와 D-468 로컬 복구는 이 사유로 시작하지 않는다.
+이때 `GET /api/v1/line-follow`의 `reason`은 `camera_odom_side_conflict`이고, `lost_after_s`가 지나면
+저조도와 같이 `nav.lane_lost`의 `reason`에도 같은 값이 실린다. 생산자는 인식 노드의
+`lane_odom_veto_enabled`(기본 false)가 켜졌을 때만 이 사유를 낸다(D-556 Proposed, SOURCE 후보).
+내부 String 토픽의 값 확장이며 REST 경로·스키마와 envelope 1.0은 바뀌지 않는다.
 
 ### D-468 추가 차선 경계 증거 (v1.106)
 
@@ -859,7 +893,11 @@ v1.70 추가 경로(모두 Bearer 인증):
     "last_wake_reason": null,
     "idle_seconds": 412.5,
     "lidar_spinning": false,
-    "lidar_ready": false
+    "lidar_ready": false,
+    "devices": [
+      { "name": "lidar", "level": "off", "ready": false, "managed": true, "required_for_motion": true }
+    ],
+    "motion_ready": false
   },
   "line_follow": {
     "mode": "CAMERA_LINE",
@@ -1388,10 +1426,11 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `slam.started` | info | 로봇 | `{by, reset}` — `reset` 은 재시작일 때만 (NAV-005) |
 | `slam.stopped` | info | 로봇 | `{by}` |
 | `power.mode_changed` | info | 로봇 | `{from, to, reason, sample_rate_hz}` (PWR-001) |
-| `power.wake` | info | 로봇 | `{reason}` — `proximity\|contact\|api\|battery` (PWR-004) |
+| `power.wake` | info | 로봇 | `{reason, source?}` — `proximity\|contact\|api\|battery\|command` (PWR-004). `command` 는 절전 중 받아들여진(2xx) 명령 REST 호출(D-24 개정 2026-10-04)이며 `source` 에 명령 출처(`teleop`·`mode`·`navigation`·`mission`·`docking`·`line_follow`·`fleet_task`·`intent`·`safety`)를 싣는다. GET·텔레메트리·WS 구독·`/power/*` 는 무명령 타이머를 리셋하지 않는다 |
 | `presence.detected` | info | 로봇 | `{state, range}` (PWR-002) |
 | `presence.cleared` | info | 로봇 | `{range}` |
 | `power.lidar_changed` | info | 로봇 | `{spinning, reason, spinup_s}` (PWR-005 STANDBY LiDAR 정지) |
+| `power.device_changed` | info | 로봇 | `{device, from, to, reason, wake_ready_s}` — 기기별 전원 정책(D-440)이 선언된 기기의 수준(`on`·`reduced`·`off`)을 바꿨다. 벤치 스위치 `power.device_policy.enabled`(기본 false)가 꺼진 로봇에서는 나오지 않는다 |
 | `map.saved` | info | 로봇 | `{map_id}` |
 | `localization.initialpose` | info | 로봇 | `{x, y, yaw, source}` — 운영자가 자세를 놓았다. `source` 는 결정 출처로 이 경로에서는 늘 `human`(v1.72). D-395 로봇에서는 `localization/decision` 으로 가 로봇의 3 s 검증을 거친다. 누가 놓았는지는 envelope 의 `source` 에 있다 |
 | `localization.state` | info | 로봇 | `{state, previous, pose_frame, reason, request_id}` — D-395 상태가 바뀌었다(v1.72). `previous` 는 처음이면 `null`. 상태 토픽이 3 s 끊기면 `UNKNOWN`(`reason: state_stale`). `previous: LOCALIZED` 에서 벗어나면 CORE 가 자율 주행을 기존 정지 경로로 멈춘다: swarm follow 취소(`swarm.aborted`, `reason: localization`), 도킹 취소, line-follow OFF, Nav2 취소(`nav.canceled`), NAVIGATION → IDLE. MANUAL(teleop)은 그대로 |
@@ -1535,7 +1574,7 @@ inventory 기술자의 `state`(available/constrained/… presentation 어휘)와
   line-follow 서비스를 가지면 `lane`, 같은 응답의 `navigation.goal_navigation` 이 참이면 `free`(보류 뒤 값)다. 둘 다 없으면
   `[]` 이다. `trip_max_linear`(m/s, ≥0)는 로봇이 trip 에 허용하는 최고 속도로, `safety` 의 `max_linear`·`fleet_linear` 와
   line-follow 가 있을 때 그 `max_linear` 중 가장 작은 값이다. `junction_turn`(bool, D-495)은 CORE line-follow 가 교차로의
-  제한된 회전 동작을 지원할 때 `true` 다(지원하지 않으면 `false`, 없으면 지원하지 않는 것으로 읽는다). 지원은 읽을 때마다 다시 판단한다: keep 모드 교차로 감지 증거와 회전의 운동 근거가 함께 있어야 한다. 운동 근거는 D-400 enforce 바닥 증명이거나, D-498/D-507 6 현장 근거(`line_follow.site_floor_map_id` 선언 + `ir_guard_enabled` 의 신선한 IR 가드 판정(이탈 아님) + `obstacle_mode: path`·URDF 몸 + 신선한 스캔의 D-422 몸체 정지)다 (v1.118, v1.126). `site_floor_map_id`(문자열, D-507 9, v1.126)는 로봇의 현장 바닥 선언, 곧 걸어서 확인한 지도의 `SiteMap.map_id`다. 선언이 없으면(설정 null) 필드가 없다. Fleet 은 이 값이 활성 지도의 `map_id`와 다른 로봇의 `lane` trip 을 열지 않는다. `junction_pivot`(bool, D-507 2항, v1.127)은 CORE 가 `POST /line-follow/junction` 의 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m` 를 받고, 최근 2 s 안에 받은 `line/keep_debug` 프레임이 표지 `junction_ahead_v`(정수 ≥ 1, 인식이 모든 프레임에 싣는다)를 실었을 때만 참이다(`junction_turn` 의 `corner_turning` 과 같은 창). 표지가 끊기면 다시 거짓이다. 없거나 거짓이면 Fleet 은 그 필드를 보내지 않는다. `lane_bend`(bool, D-507 보충, v1.142)는 CORE 가 `POST /line-follow/junction` 의 `action: bend` 와 `bend_in_m`·`bend_tol_m`·`bend_radius_m` 를 받을 때 참이다(D-400 증명이 살아 있으면 그 증명이 구성됐을 때, 아니면 `site_floor_map_id`·`ir_guard_enabled`·`obstacle_mode: path`·URDF 몸이 모두 있을 때). 없거나 거짓이면 Fleet 은 굽이 지시를 보내지 않는다. `lane_bend_next_line`(bool, D-754, v1.225)은 CORE 가 `bend` 의 `next_line_in_m` 을 받을 때 참이고 값은 `lane_bend` 와 같다. 없거나 거짓이면 Fleet 은 그 필드를 보내지 않는다. `lane_bend_map_entry`(bool, D-759 2항, v1.224)는 CORE 가 `bend` 의 `map_entry` 를 받을 때 참이다. `line_follow.bend_map_entry_enabled`(기본 꺼짐)가 켜져 있고 `lane_bend` 가 참일 때다(없으면 받지 않는 것으로 읽는다). `line_follow_authority`(bool, D-517 4, v1.143)는 CORE line-follow 가 `POST /line-follow/authority` 를 받아 강제할 때 `true`(line-follow 가 없으면 `false`)다. 없거나 거짓인 로봇에 Fleet 은 통행권을 보내지 않고 M1 교차로 보류만 쓴다. `line_follow_authority_required`(bool, D-517 4, v1.143)는 설정 `line_follow.authority_required` 가 참이라 CORE 가 첫 통행권 전에도(E-Stop·CORE 재시작 뒤 포함) 통행권 없이는 서는 때 `true`(line-follow 가 없으면 `false`)다. `fleet.traffic.authority: true` 인 Fleet 은 `line_follow_authority` 가 참인데 이 값이 참이 아닌 로봇의 `lane` trip 을 열지 않는다(422 `TRIP_AUTHORITY_NOT_REQUIRED`). `line_follow_authority_shrink`(bool, D-760 3항, v1.226)는 CORE 가 통행권의 `shrink`·`seq` 와 5 s 까지의 `ttl_s` 를 받을 때 참이다. `line_follow_authority_under_lease`(bool, D-760 2항, v1.226)는 이 CORE 가 trip lease 가 열려 있는 동안 통행권을 강제할 때 참이다(둘 다 없으면 거짓으로 읽는다). `lane_arc`(bool, D-520 1항, v1.145)는 CORE 가 `POST /line-follow/junction` 의 `exit_segment` 를 받을 때 참이다. `lane_arc_map_anchor`(bool, D-744 2항, v1.221)는 CORE 가 `exit_segment.map_anchor` 를 받을 때 참이고 `lane_arc` 와 같은 값이다(없으면 받지 않는 것으로 읽는다). v1.154(D-520 개정 2026-10-09)부터 `line_follow.arc_enabled` 는 기본 켬이고, 능력은 그 설정과 현장 바닥 선언 `site_floor_map_id`, `ir_guard_speed_scale` > 0 이 함께 있을 때만 참이다(선언 없는 켬은 시작 거부가 아니라 능력 거짓). 없거나 거짓이면 Fleet 은 `exit_segment` 를 빼고 오늘처럼 보낸다. `trip_lease`(bool, D-541 1, v1.157)는 CORE 가 `PUT/DELETE /api/v1/trip-lease`·`POST /trip-lease/takeover` 를 받고 lease 동안 주인 아닌 움직임을 거절할 때 `true` 다. 없는 로봇은 이전 이미지다. D-494 세 필드 `robot_kind`·`drive_modes`·`trip_max_linear`가 **없는** 로봇은 D-494 이전 이미지다(`junction_turn`도 없다). `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)이 아니면 CORE는 `robot_kind`만 뺀다. Fleet 은 모르는 `drive_modes` 값을 무시한다. Fleet 은 그
+  제한된 회전 동작을 지원할 때 `true` 다(지원하지 않으면 `false`, 없으면 지원하지 않는 것으로 읽는다). 지원은 읽을 때마다 다시 판단한다: keep 모드 교차로 감지 증거와 회전의 운동 근거가 함께 있어야 한다. 운동 근거는 D-400 enforce 바닥 증명이거나, D-498/D-507 6 현장 근거(`line_follow.site_floor_map_id` 선언 + `ir_guard_enabled` 의 신선한 IR 가드 판정(이탈 아님) + `obstacle_mode: path`·URDF 몸 + 신선한 스캔의 D-422 몸체 정지)다 (v1.118, v1.126). `site_floor_map_id`(문자열, D-507 9, v1.126)는 로봇의 현장 바닥 선언, 곧 걸어서 확인한 지도의 `SiteMap.map_id`다. 선언이 없으면(설정 null) 필드가 없다. Fleet 은 이 값이 활성 지도의 `map_id`와 다른 로봇의 `lane` trip 을 열지 않는다. `junction_pivot`(bool, D-507 2항, v1.127)은 CORE 가 `POST /line-follow/junction` 의 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m` 를 받고, 최근 2 s 안에 받은 `line/keep_debug` 프레임이 표지 `junction_ahead_v`(정수 ≥ 1, 인식이 모든 프레임에 싣는다)를 실었을 때만 참이다(`junction_turn` 의 `corner_turning` 과 같은 창). 표지가 끊기면 다시 거짓이다. 없거나 거짓이면 Fleet 은 그 필드를 보내지 않는다. `lane_bend`(bool, D-507 보충, v1.142)는 CORE 가 `POST /line-follow/junction` 의 `action: bend` 와 `bend_in_m`·`bend_tol_m`·`bend_radius_m` 를 받을 때 참이다(D-400 증명이 살아 있으면 그 증명이 구성됐을 때, 아니면 `site_floor_map_id`·`ir_guard_enabled`·`obstacle_mode: path`·URDF 몸이 모두 있을 때). 없거나 거짓이면 Fleet 은 굽이 지시를 보내지 않는다. `lane_bend_next_line`(bool, D-754, v1.225)은 CORE 가 `bend` 의 `next_line_in_m` 을 받을 때 참이고 값은 `lane_bend` 와 같다. 없거나 거짓이면 Fleet 은 그 필드를 보내지 않는다. `lane_bend_map_entry`(bool, D-759 2항, v1.224)는 CORE 가 `bend` 의 `map_entry` 를 받을 때 참이다. `line_follow.bend_map_entry_enabled`(기본 꺼짐)가 켜져 있고 `lane_bend` 가 참일 때다(없으면 받지 않는 것으로 읽는다). `lane_instruction_stamp`(bool, D-767 A부, v1.241)는 CORE 가 `POST /line-follow/junction` 의 `pose_stamp` 를 받아 거리를 그 odom 표본부터 잴 때 참이다. 값은 `line_follow.instruction_stamp_enabled`(기본 꺼짐)다(없으면 받지 않는 것으로 읽는다). `line_follow_authority`(bool, D-517 4, v1.143)는 CORE line-follow 가 `POST /line-follow/authority` 를 받아 강제할 때 `true`(line-follow 가 없으면 `false`)다. 없거나 거짓인 로봇에 Fleet 은 통행권을 보내지 않고 M1 교차로 보류만 쓴다. `line_follow_authority_required`(bool, D-517 4, v1.143)는 설정 `line_follow.authority_required` 가 참이라 CORE 가 첫 통행권 전에도(E-Stop·CORE 재시작 뒤 포함) 통행권 없이는 서는 때 `true`(line-follow 가 없으면 `false`)다. `fleet.traffic.authority: true` 인 Fleet 은 `line_follow_authority` 가 참인데 이 값이 참이 아닌 로봇의 `lane` trip 을 열지 않는다(422 `TRIP_AUTHORITY_NOT_REQUIRED`). `line_follow_authority_shrink`(bool, D-760 3항, v1.226)는 CORE 가 통행권의 `shrink`·`seq` 와 5 s 까지의 `ttl_s` 를 받을 때 참이다. `line_follow_authority_under_lease`(bool, D-760 2항, v1.226)는 이 CORE 가 trip lease 가 열려 있는 동안 통행권을 강제할 때 참이다(둘 다 없으면 거짓으로 읽는다). `lane_arc`(bool, D-520 1항, v1.145)는 CORE 가 `POST /line-follow/junction` 의 `exit_segment` 를 받을 때 참이다. `lane_arc_map_anchor`(bool, D-744 2항, v1.221)는 CORE 가 `exit_segment.map_anchor` 를 받을 때 참이고 `lane_arc` 와 같은 값이다(없으면 받지 않는 것으로 읽는다). v1.154(D-520 개정 2026-10-09)부터 `line_follow.arc_enabled` 는 기본 켬이고, 능력은 그 설정과 현장 바닥 선언 `site_floor_map_id`, `ir_guard_speed_scale` > 0 이 함께 있을 때만 참이다(선언 없는 켬은 시작 거부가 아니라 능력 거짓). 없거나 거짓이면 Fleet 은 `exit_segment` 를 빼고 오늘처럼 보낸다. `trip_lease`(bool, D-541 1, v1.157)는 CORE 가 `PUT/DELETE /api/v1/trip-lease`·`POST /trip-lease/takeover` 를 받고 lease 동안 주인 아닌 움직임을 거절할 때 `true` 다. 없는 로봇은 이전 이미지다. D-494 세 필드 `robot_kind`·`drive_modes`·`trip_max_linear`가 **없는** 로봇은 D-494 이전 이미지다(`junction_turn`도 없다). `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)이 아니면 CORE는 `robot_kind`만 뺀다. Fleet 은 모르는 `drive_modes` 값을 무시한다. Fleet 은 그
   로봇의 계획 미리보기를 지금처럼 허용하고, trip 실행은 열지 않는다(`TRIP_ROBOT_CAPS_UNKNOWN`, D-494 5).
 - `joint_jog`: 요청 한 번은 관절 하나를 `max_step_rad` 이하로 옮긴다. `duration_s` 는 **클라이언트가 각 요청에 보낼 목표
   길이**다. 이전 목표가 끝난 뒤에만 다음 목표를 보낸다(D-390 §2).
@@ -1971,6 +2010,7 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 | POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가. v1.186(D-600): 응답 `{source_id, relearn_seq, occupied, unlocated:[robot_id]}` — 로봇은 그대로 두고, `occupied` 자리는 배우지 않으며, `unlocated` 로봇은 배경이 될 수 있다 |
 | GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
 | POST | `/api/fleet/robots/{robot_id}/identify` | named `operator` (D-540 9, v1.161) | D-472, v1.130; v1.185(D-596). 본문 생략 또는 `{color?:"blue"\|"amber"}`(생략 = 파랑, 파랑이 그 로봇을 보는 source에서 쓰이는 중이면 주황. 주황은 주의(caution) 램프와 같은 점멸이라 자동 요청은 파랑만 쓴다). 자동 요청은 CORE에 `?quiet=true`(호출음 없음, 이전 payload는 이 값을 무시하고 소리를 낸다), 마커가 계속 안 보이는 로봇은 30 s → 2 min → 5 min 간격. Vision의 `matched`는 그 로봇의 예상 자리 안이어야 하고(v1.191: Fleet 지도 자세, 반경 `auto_near_m` + 앵커 뒤 odom 1 m마다 0.15 m·최대 1.0 m; 지도 자세가 없으면 마지막 천장 마커 자리·`auto_near_m`; 아니면 UNKNOWN `far_from_robot`; v1.193부터 파랑 점멸 판정은 예상 자리 밖에서도 받는다, 주황과 정색 표시는 아님), 예상 자리를 모르는 주황 요청은 UNKNOWN `no_prediction`. 신원 미확인 등록 로봇에 서 있든 움직이든(로봇을 움직이지 않는다) CORE `POST /host/lamp/identify`를 전달하고 그 로봇을 보는 Vision source에 6 s 창을 연다. 동시에 source마다 색 하나씩(최대 2대): 같은 로봇이 이미 확인 중이거나 요청한 색이 쓰이는 중이거나 두 색 모두 쓰이는 중이면 창+2 s 동안 409 `IDENTIFY_BUSY`, 확인된 로봇 409 `IDENTIFY_ALREADY_CONFIRMED`, 로봇 거절(또는 쓰이는 색으로 답함) 502 `IDENTIFY_NOT_ACCEPTED`. 로봇이 주의 표시 중(차선 HOLD, 도킹 실패)이면 409 `IDENTIFY_ROBOT_CAUTION`(v1.191, 자동 요청은 묻지 않는다). v1.195: 요청 뒤 창이 열린 동안 Fleet은 로봇 CORE `GET /host/lamp/identify/{request_id}`를 1 s마다 묻고, `refused`면 창을 닫고 UNKNOWN `lamp_refused`(`last.lamp_reason`에 로봇의 이유)로 남긴다; 404(이전 CORE)면 그 요청은 다시 묻지 않는다. `IDENTIFY_NOT_MOVING`은 없어졌다. 응답 `{robot_id, request_id, color, not_after, sources, state:"pending_visual_confirmation", trigger:"operator"}`는 카메라 신원 확정이 아니다. 사이트 YAML `identity.auto_request`(기본 true, v1.185)면 Fleet이 스스로 요청한다: 마커를 본 로봇의 마커가 `auto_marker_missing_s`(3 s) 넘게 안 보이고 마지막 마커 자리(없으면 로봇 지도 자세) `auto_near_m`(0.5 m) 안에 익명 blob이 있을 때(`marker_missing`), 겹침으로 풀린 확인 트랙 근처 blob이 다시 혼자일 때(`split`), 로봇 자세가 odom 원점으로 뛴 뒤 익명 blob이 있을 때(`odom_reset`). 로봇마다 `auto_min_interval_s`(30 s)에 한 번, 상태가 신선하고 `safety.estop`이 정확히 false일 때만 |
+| POST | `/api/fleet/robots/{robot_id}/power` | named `operator` (D-540 9) | D-440 6 (v1.222): `{action: sleep\|wake}`, 다른 값·다른 필드는 422. `sleep` 은 그 로봇의 `POST /api/v1/power/mode {"mode":"STANDBY"}`, `wake` 는 `POST /api/v1/power/wake` 로 로봇 자격으로 그대로 보낸다 — CORE 인터록(IDLE 이 아닌 로봇은 ACTIVE 유지)은 CORE 가 판정하므로, 거절된 절전은 200 과 `result.mode: "ACTIVE"` 로 돌아온다. 200 `{robot_id, actor_id, result}`(`result` 는 CORE 의 `PowerStatus`), 모르는 로봇 404 `UNKNOWN_ROBOT`, 전송 실패 502. 전원 상태는 `GET /api/fleet/state` 행의 `state.power` 그대로다 |
 | POST | `/api/fleet/calibrations` | operator | source_id/map_id, map_to_image(9), image(width,height), track_bounds_m, fit_score, lens 또는 null, frame_seq 또는 null을 승인·영속 기록 |
 | DELETE | `/api/fleet/calibrations/{source_id}` | operator | 승인 기록 철회·감사 |
 | GET | `/api/fleet/start-points` | viewer 이상 | `{start_points, persistent}`. 저장한 무마커 시작 위치·방향, `use: reference-only`; 주행·로봇 위치 증거가 아니다 |
@@ -3077,6 +3117,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.242 | 2026-10-15 | Additive (D-763 조각 7, feat/fleet-job-trip-steps): `POST /api/fleet/trip-jobs` `{robot_id, steps:[{to, via[]}]}`(1–8), 이름 있는 운영자, `simulation` 프로필이고 Step 원장이 있을 때만. 응답 `{job}`(Step 원장 행, 종류 `TRIP`). 거절: 404 `UNKNOWN_ROBOT`, 422 `TRIP_UNKNOWN_PLACE`, 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`, 409 `TRIP_ROBOT_BUSY`, 409 `JOB_ESTOP`, 409 `JOB_ROBOT_REFUSED`. trip 작업은 `GET /api/fleet/work`에 `cell_job` 행(`action_kind:"TRIP"`)으로 나온다. 재개·취소는 지금의 `/api/fleet/cell-jobs/{id}/resume`·`/cancel`이다. 동작: 차로 `arrived` 뒤 다음 trip이 그 로봇이 쥔 정지 하나를 넘겨받는다. envelope 1.0 변경 없음. |
+| v1.241 | 2026-10-15 | Additive (D-767 A부, feat/instruction-pose-stamp, Safety-Review 대상): `POST /api/v1/line-follow/junction` 선택 필드 `pose_stamp`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_instruction_stamp`(설정 `line_follow.instruction_stamp_enabled`, 기본 꺼짐), `line_follow.junction.distance_basis`·`distance_basis_reason`. 거리 있는 지시의 쓸 수 없는 stamp는 409 `INSTRUCTION_STAMP_UNUSABLE`(`detail.reason`)이고 상태는 그대로다. Fleet은 그 능력의 로봇에 `pose_stamp`를 싣고 굽이 앞당김과 전송 지연 허용치를 뺀다. v1.238–v1.240은 다른 작업이 선점했다. Fleet `/api/fleet/*` 변경 없음. envelope 1.0 변경 없음. |
 | v1.240 | 2026-10-15 | Behaviour (D-763 조각 4 리뷰, fix/fleet-proposal-read-scope; 인증·응답 범위만, 스키마 변화 없음): `GET /api/fleet/proposals/{proposal_id}`는 Cell Job 제안을 `GET /api/fleet/cell-jobs/{mission_id}`와 같은 범위로 읽는다 — 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만, 나머지 404 `PROPOSAL_NOT_FOUND`(없는 id와 같은 본문). 제안자 아닌 독자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`. 레거시 Mission 제안은 제안자만. admit·reject와 Cell Job reconcile·resume·cancel 응답의 Job도 같은 가림. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. `POST /api/fleet/channel-requests/{request_id}/admit`·`/submit`은 이름 있는 운영자(이름 없는 공유 토큰은 403 `OPERATOR_IDENTITY_REQUIRED`). 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` detail은 `job_id` 대신 `{"reason": "job", "owner_kind": "mission"}`. |
 | v1.239 | 2026-10-15 | Behavioural (D-620 노트 2026-10-15, D-760 개정 4, fix/signal-no-fallback-on-trip, Safety-Review 대상): Fleet 통행권 강제 중(trip lease·통행권·`authority_required`) 교차로 무응답 정지 에피소드는 3초 우측 fallback 없이 대기; 교차로 기동·D-520 호 시계는 통행권 `HOLDING` 대기를 상한 없이 더하고 `NONE`·`EXPIRED`·횡단보도 몫은 15 s 상한 유지. 필드 변경 없음. v1.237·v1.238은 다른 작업이 선점했다. |
 | v1.238 | 2026-10-15 | Additive (D-763 10항 (c), feat/regulation-capabilities): 능력 `base_velocity.lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`)·`lane_junction_signal`(`junction_signal_enabled`), 없으면 꺼짐. Fleet trip 시작·바퀴·재계획이 횡단보도·신호 구역을 지나는 lane 경로를 그 능력이 `false`인 로봇에 422 `TRIP_REGULATION_CAPS_MISSING` `{missing}`로 거절, 필드 없는 옛 CORE는 `detail.regulation_caps_unknown` 경고와 함께 시작 |
@@ -3093,7 +3135,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.224 | 2026-10-14 | Additive (D-759): `POST /api/v1/line-follow/junction` `action: bend` 선택 객체 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_bend_map_entry`(설정 `line_follow.bend_map_entry_enabled`, 기본 꺼짐), `line_follow.junction.map_entry_used`·`map_entry_reason`. 풀지 못한 방향은 거절이 아니라 v1.223의 로봇 yaw 닻이다. Fleet `/api/fleet/*` 변경 없음. |
 | v1.223 | 2026-10-14 | Behavior + Additive (D-400 4항 구현): `enforce` 에서 `stale_hold_s` 미만의 센서 끊김은 HOLD(명령 0, E-stop 래치 없음, 자동 재개)이고 그 이상은 전과 같이 `control:<사유>` 래치다. 정책 답 시간 상한 10 ms → `/cmd_vel` 한 주기 20 ms. state `safety_policy.hold` `{count, reason}`(`enforce` 에서만). `off`·`shadow` 출력 변화 없음. |
 | v1.222 | 2026-10-14 | Behavior (D-740 개정 3): 교차로 기동 중 운동 증명이 거절된 틱은 HOLD `junction_motion_unconfirmed`(명령 0, 기동 유지)이고, 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 전과 같이 `aborted`·`motion_unconfirmed`다. 필드 변화 없음. |
+| v1.243 | 2026-10-15 | Additive (D-440, D-24 개정; feat/device-power-policy-port): `power.wake` 에 사유 `command` 와 선택 필드 `source` — 무명령 타이머는 받아들여진(2xx) 명령 REST 호출과 0 이 아닌 최종 cmd_vel 이 리셋하고, GET·텔레메트리·WS 구독·`/power/*` 는 리셋하지 않는다. 기기별 전원 정책: `PowerStatus` 에 `devices[]`(`name`·`level`·`ready`·`managed`·`required_for_motion`, 선언된 기기만)와 `motion_ready`(false 면 CORE 최종 cmd_vel 이 0) 추가, 이벤트 `power.device_changed`. 꺼졌다 켜진 기기는 `wake_ready_s` 경과와 깨운 뒤의 확인 보고가 모두 있어야 `ready` 다. 정책은 벤치 스위치 `power.device_policy.enabled`(기본 false) 뒤에 있어 스위치가 꺼진 로봇의 동작은 바뀌지 않는다. Site Fleet 새 경로 `POST /api/fleet/robots/{robot_id}/power`(named operator, `sleep`\|`wake`). 기존 경로·필드 변화 없음. 초안은 v1.91 이었다 |
 | v1.221 | 2026-10-13 | Additive (D-744): `POST /api/v1/line-follow/junction` 선택 객체 `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_arc_map_anchor`, `line_follow.arc.map_anchor_used`·`map_anchor_reason`. 풀지 못한 고정점은 거절이 아니라 v1.220의 자세 기준 원이다. Fleet `/api/fleet/*` 변경 없음. |
+| v1.244 | 2026-10-15 | Additive (D-556 Proposed, fix/lane-odom-cross-veto-port): 내부 CAMERA_LINE `quality.reason=odom_side_conflict`를 불가시·신뢰도 0 증거로 허용; CORE bridge·로컬 복구는 이 사유에서 금지. `GET /api/v1/line-follow` `reason`과 `nav.lane_lost` `reason`에 `camera_odom_side_conflict` 값이 나타날 수 있다(생산자 `lane_odom_veto_enabled` 기본 false). REST 경로·스키마·envelope 1.0 변화 없음 |
 | v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Fleet Task/channel receipts preserve exact operation and separate outcome, safe_released and quiescence evidence. Existing command ownership and envelope 1.0 remain. |
 | v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. envelope 1.0 유지. |
 | v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |

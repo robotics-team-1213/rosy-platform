@@ -17,6 +17,16 @@ WORKDIR /opt/omx_ws
 COPY stack.lock.yaml /opt/omx_ws/stack.lock.yaml
 COPY fetch_sources.py /usr/local/bin/fetch_omx_sources.py
 RUN python3 /usr/local/bin/fetch_omx_sources.py /opt/omx_ws/stack.lock.yaml /opt/omx_ws/src
+COPY patches/hardware-lifecycle-errors.patch /tmp/hardware-lifecycle-errors.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-lifecycle-errors.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-lifecycle-errors.patch
+COPY patches/hardware-owner-command-path.patch /tmp/hardware-owner-command-path.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-owner-command-path.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-owner-command-path.patch
+COPY patches/hardware-export-dependencies.patch /tmp/hardware-export-dependencies.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-export-dependencies.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-export-dependencies.patch
+
 COPY patches/omx-f-gazebo-headless.patch /tmp/omx-f-gazebo-headless.patch
 RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-f-gazebo-headless.patch \
     && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-f-gazebo-headless.patch

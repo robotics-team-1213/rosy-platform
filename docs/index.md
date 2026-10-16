@@ -234,6 +234,7 @@
 | D-733 | Hourly KST Discord Fleet health subscription |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -337,7 +338,7 @@
 ## 최근 기록
 
 - 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
-- 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
-- 2026-10-15 · uncommitted · docs(omx): 미완료 범위와 재개 인계
-- 2026-10-15 · uncommitted · docs(omx): 30분 수신과 실제 소비 경로 기록
-- 2026-10-15 · uncommitted · docs(omx): 수신기별 영상 전달 비교
+- 2026-10-16 · uncommitted · fix(omx): native 초기화와 dependency export 검증
+- 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
+- 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
+- 2026-10-16 · uncommitted · fix(omx): 실제 vendor 오류 은폐와 owner 우회 경로 처리
