@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · docs: 한 명의 게시와 두 에이전트 검토 절차
 - 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
 - 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
 - 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
 - 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
-- 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
