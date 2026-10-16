@@ -22,7 +22,8 @@ repo, work = Path(sys.argv[1]), Path(sys.argv[2])
 sys.path.insert(0, str(repo/'learning/curation/omx'))
 sys.path.insert(0, str(repo/'learning/training/omx'))
 sys.path.insert(0, str(repo/'deploy/robot/omx'))
-from collection_store import RawCollection, append
+from collection_profile import digest
+from collection_store import RawCollection, append, save
 from collection_intake import prepare
 from native_review import load_dataset, split_reviewed
 from native_cycle import run_cycle, validate_split
@@ -33,13 +34,26 @@ for i in range(3):
     profile = dict(rig_revision='synthetic-rig', calibration_revision='synthetic-cal', fps=10,
                    task='synthetic pipeline fixture', camera_shapes={r:[32,32,3] for r in ('top','front')})
     # The journal is exercised directly; this fixture never invokes a motion backend.
-    store = RawCollection(source, profile, 'b'*64, 'hardware')
+    teacher = dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.1)])
+    store = RawCollection(source, profile, digest(teacher), 'hardware')
+    save(source/'teacher.json', teacher)
     event = dict(policy='omx-photometric-v3', run_id=f'synthetic-run-{i}', profile_sha256='a'*64,
                  recorded_ns=start, motion_admitted=False, physical_acceptance=False,
                  photometric_ready=False, observations={}, environment={r:dict(state='OBSERVING',
                      condition=None, environment_epoch=0, control_generation=0) for r in ('top','front')})
     append(source/'environment.jsonl', event)
     episode = store.begin(start, event)
+    command = episode['cycle_id']+'-0'
+    ledger = [dict(kind='INTENT', command_id=command, step=teacher['steps'][0], time_ns=start),
+              dict(kind='SUBMISSION', command_id=command, decision=dict(accepted=True), time_ns=start+1),
+              dict(kind='GOAL_ACCEPTED', command_id=command, goal_id=f'synthetic-goal-{i}', sequence=1,
+                   observed_at_monotonic_s=1.),
+              dict(kind='TERMINAL_RESULT', command_id=command, goal_id=f'synthetic-goal-{i}', sequence=2,
+                   observed_at_monotonic_s=2., status=4, result_code=0),
+              dict(kind='TERMINAL', command_id=command, time_ns=start+3,
+                   result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+    for fact in ledger:
+        append(source/'events.jsonl', fact)
     observation = dict(time_ns=start+1, observation_state=[0.]*6, action=[float(i+1)]*6,
                        joint_source_stamp=1.+i, reference_source_stamp=1.+i,
                        images={r:dict(data=bytes([100,110,120])*1024, width=32, height=32,
@@ -51,7 +65,7 @@ for i in range(3):
             image['source_stamp'] = 1.+i+frame/10
         store.sample(episode, observation, [0.]*6)
     episode.update(complete=True, reason='', end_ns=start+10)
-    store.close(dict(hold_requested=True, physical_stop_verified=False))
+    store.close(dict(hold_requested=True, terminal_observed=True, physical_stop_verified=False))
     sessions.append(source)
 dataset = work/'dataset'
 receipt = prepare(sessions, dataset, 'rosy-fixture/collection')

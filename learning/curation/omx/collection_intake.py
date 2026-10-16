@@ -82,6 +82,78 @@ def _vector(value, *, normalized):
                  'normalized joint value out of bounds')
 
 
+def _teacher_and_ledger(manifest, blobs, completed_only):
+    _require('teacher.json' in blobs and 'events.jsonl' in blobs, 'teacher and native event ledger required')
+    teacher = _json(blobs['teacher.json'])
+    _require(teacher.get('schema') == 'rosy.omx-collection-teacher.v1', 'teacher schema differs')
+    canonical = json.dumps(teacher, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+    _require(hashlib.sha256(canonical).hexdigest() == manifest['teacher_sha256'], 'teacher digest differs')
+    steps = teacher.get('steps')
+    _require(isinstance(steps, list) and 0 < len(steps) <= 100, 'bounded teacher steps required')
+    for step in steps:
+        _require(isinstance(step, dict), 'teacher step object required')
+        _vector(step.get('positions'), normalized=False)
+        _require(_number(step.get('duration_s')) and step['duration_s'] > 0, 'teacher duration differs')
+    raw = blobs['events.jsonl']
+    _require(bool(raw) and raw.endswith(b'\n'), 'complete native event ledger required')
+    events = [_json(line) for line in raw.splitlines()]
+    stop = manifest.get('stop')
+    _require(isinstance(stop, dict) and stop.get('hold_requested') is True
+             and stop.get('terminal_observed') is True, 'confirmed owner HOLD and terminal required')
+    _require(completed_only or 'error' not in manifest, 'session error requires explicit completed-only selection')
+    return steps, events
+
+
+def _completed_attempt(episode, steps, events):
+    """An editable completion flag cannot replace byte-bound producer events."""
+    cycle = episode['cycle_id']
+    expected = [f'{cycle}-{ordinal}' for ordinal in range(len(steps))]
+    selected = [event for event in events if event.get('cycle_id') == cycle
+                or (isinstance(event.get('command_id'), str) and event['command_id'].startswith(cycle+'-'))]
+    _require(episode['reason'] == '' and not any(e.get('kind') == 'ABORT' for e in selected),
+             'completed attempt carries an abort or failure reason')
+    _require(all(e.get('command_id') in expected for e in selected), 'unexpected command in completed cycle')
+    prior_terminal = -1
+    for command, step in zip(expected, steps):
+        command_events = [(index, event) for index, event in enumerate(selected) if event.get('command_id') == command]
+        kinds = {}
+        for index, event in command_events:
+            kinds.setdefault(event.get('kind'), []).append((index, event))
+        required = ('INTENT', 'SUBMISSION', 'GOAL_ACCEPTED', 'TERMINAL_RESULT', 'TERMINAL')
+        _require(all(len(kinds.get(kind, [])) == 1 for kind in required),
+                 'complete attempt requires one durable intent/submission/native goal/result/terminal per step')
+        indexed = [kinds[kind][0] for kind in required]
+        positions = [index for index, _ in indexed]
+        _require(positions == sorted(set(positions)) and positions[0] > prior_terminal,
+                 'teacher command event order differs')
+        prior_terminal = positions[-1]
+        intent, submission, accepted, terminal, outer = [event for _, event in indexed]
+        _require(intent.get('step') == step and isinstance(submission.get('decision'), dict)
+                 and submission['decision'].get('accepted') is True, 'teacher intent or owner submission differs')
+        _require(_text(accepted.get('goal_id')) and terminal.get('goal_id') == accepted['goal_id']
+                 and type(terminal.get('status')) is int and terminal['status'] == 4
+                 and type(terminal.get('result_code')) is int and terminal['result_code'] == 0,
+                 'native goal/result does not establish command success')
+        previous_sequence, previous_stamp = 0, -1.
+        for _, event in command_events:
+            if event.get('kind') in ('INTENT', 'SUBMISSION', 'TERMINAL'):
+                stamp = event.get('time_ns')
+                _require(type(stamp) is int and episode['start_ns'] <= stamp < episode['end_ns'],
+                         'outer command event outside episode window')
+                continue
+            _require(event.get('kind') in ('GOAL_ACCEPTED', 'RUNNING_FEEDBACK', 'TERMINAL_RESULT'),
+                     'failed or unknown native event in completed command')
+            sequence, stamp = event.get('sequence'), event.get('observed_at_monotonic_s')
+            _require(type(sequence) is int and sequence > previous_sequence and _number(stamp)
+                     and stamp >= 0 and stamp >= previous_stamp and event.get('goal_id') == accepted['goal_id'],
+                     'native event sequence, clock or goal differs')
+            previous_sequence, previous_stamp = sequence, stamp
+        result = outer.get('result')
+        _require(isinstance(result, dict) and result.get('succeeded') is True
+                 and result.get('source') == 'native_follow_joint_trajectory',
+                 'native outer terminal success required')
+
+
 def _read_source(root):
     root = Path(root).absolute()
     _require(root.is_dir(), 'session directory required')
@@ -128,6 +200,7 @@ def validate_session(root, *, completed_only=False):
              'raw file hash differs')
     _require('environment.jsonl' in files, 'original environment log required')
     _events(blobs['environment.jsonl'].decode('utf-8'))
+    steps, events = _teacher_and_ledger(manifest, blobs, completed_only)
     attempts = manifest.get('episodes')
     _require(isinstance(attempts, list) and attempts, 'episode attempts required')
     selected, samples, windows, prior_end = [], {}, [], 0
@@ -182,6 +255,7 @@ def validate_session(root, *, completed_only=False):
         windows.append({key: episode[key] for key in ('episode_index', 'start_ns', 'end_ns', 'run_id',
                                                      'profile_sha256')})
         if episode['complete']:
+            _completed_attempt(episode, steps, events)
             selected.append(episode)
         else:
             _require(completed_only, 'incomplete attempt requires explicit completed-only selection')
