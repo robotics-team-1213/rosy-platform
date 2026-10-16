@@ -39,6 +39,7 @@ class RosBackend:
         self.profile, self.acceptance, self.teacher = copy.deepcopy(profile), copy.deepcopy(acceptance), copy.deepcopy(teacher)
         self.lock, self.events = threading.RLock(), queue.Queue(maxsize=1024)
         self.event_lock, self.facts, self.command_id = threading.Lock(), {}, None
+        self.deadline = None
         self.fault, self.closed, self.armed = None, threading.Event(), False
         self.runtime, self.node, self.executor, self.thread, self.supervisor = None, None, None, None, None
         self.rclpy = rclpy
@@ -127,6 +128,7 @@ class RosBackend:
             if not self.armed:
                 continue
             try:
+                require(self.deadline is not None and time.monotonic() < self.deadline, 'session deadline expired')
                 self.verify_processes()
                 self.inputs.verify_publishers()
                 self.verify_exclusion()
@@ -154,6 +156,7 @@ class RosBackend:
     def submit(self, step, command_id):
         from omx_adapter.command_owner import TrajectoryCommand
         with self.lock:
+            require(self.deadline is not None and time.monotonic() < self.deadline, 'session deadline before dispatch')
             self.verify_processes(); self.inputs.verify_publishers(); self.verify_exclusion(); self.observe()
             self.armed = True
             current, config = self.runtime.latest_joint_state, self.runtime.owner.config
@@ -165,7 +168,12 @@ class RosBackend:
                 expected_start_state_positions=dict(current.positions),
                 start_state_tolerances=dict(config.max_start_state_tolerances))
             self.command_id = command_id
+            require(time.monotonic() < self.deadline, 'session deadline before owner submission')
             return asdict(self.runtime.submit(command))
+
+    def set_deadline(self, deadline):
+        with self.lock:
+            self.deadline = deadline if self.deadline is None else min(self.deadline, deadline)
 
     def terminal(self):
         handle = self.runtime.action_port.last_handle

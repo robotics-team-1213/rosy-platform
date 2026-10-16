@@ -70,6 +70,7 @@ def test_independent_monitor_requests_hold_without_collection_writer():
     backend = cls.__new__(cls)
     requests=[]
     backend.closed,backend.armed,backend.fault = threading.Event(),True,None
+    backend.deadline=time.monotonic()+2
     backend.runtime = NS(owner=NS(preempt=requests.append))
     backend.inputs = NS(verify_publishers=lambda:None)
     backend.verify_processes=lambda:None
@@ -110,6 +111,18 @@ def test_expired_acceptance_is_rechecked_by_live_observation():
         profile_sha256=digest(backend.profile),rig_revision=backend.profile['rig_revision'],
         calibration_revision=backend.profile['calibration_revision'],expires_ns=time.time_ns()-1)
     with pytest.raises(ValueError,match='expired'): backend.observe()
+
+
+def test_success_requires_matching_native_current_command_events():
+    module=importlib.import_module('collection_ros')
+    backend=module.RosBackend.__new__(module.RosBackend)
+    backend.runtime=NS(action_port=NS(last_handle=NS(done=lambda:True,succeeded=lambda:True,status=4)))
+    backend.event_lock,backend.command_id=threading.Lock(),'command'
+    backend.facts={'command':{'GOAL_ACCEPTED':dict(goal_id='first'),
+                              'TERMINAL_RESULT':dict(goal_id='other',status=4,result_code=0)}}
+    with pytest.raises(ValueError,match='evidence'): backend.terminal()
+    backend.facts['command']['TERMINAL_RESULT']['goal_id']='first'
+    assert backend.terminal()['succeeded'] is True
 
 
 def test_rehearsal_cli_exercises_success_and_failures_with_no_hardware(tmp_path):

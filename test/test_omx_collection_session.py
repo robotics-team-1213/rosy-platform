@@ -126,3 +126,17 @@ def test_same_fresh_waiting_frame_is_acceptable_without_counting_another_frame(m
     env['photometric_ready'] = False
     for role in ('top', 'front'): env['environment'][role]['state'] = 'WAITING_FRAME'
     module.validate_environment(env, profile(), now_ns=sample['time_ns'])
+
+
+def test_slow_intent_storage_cannot_dispatch_after_session_deadline(module, tmp_path, monkeypatch):
+    config=profile();config['max_session_s']=.05
+    plan=teacher();plan['steps'][0]['duration_s']=.01
+    backend=Backend()
+    original=module.append
+    def slow(path,value):
+        if value.get('kind')=='INTENT': time.sleep(.08)
+        return original(path,value)
+    monkeypatch.setattr(module,'append',slow)
+    result=module.run_session(config,plan,tmp_path/'slow',backend)
+    assert not backend.commands and backend.stops
+    assert not result['episodes'][0]['complete']

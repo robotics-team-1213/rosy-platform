@@ -6,7 +6,7 @@ import time
 
 from camera_quality import advancing_frame
 from collection_profile import digest, number, require, validate_profile, validate_teacher
-from collection_store import RawCollection, append
+from collection_store import RawCollection, append, save
 
 
 def validate_environment(receipt, profile, *, now_ns):
@@ -72,7 +72,13 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
     validate_teacher(teacher, profile)
     require(type(episodes) is int and 1 <= episodes <= 100, 'bounded episode count required')
     store = RawCollection(output, profile, digest(teacher), backend.mode)
+    save(store.root/'teacher.json', teacher)
+    save(store.root/'profile.json', profile)
+    if getattr(backend, 'acceptance', None) is not None:
+        save(store.root/'acceptance.json', backend.acceptance)
     began = time.monotonic()
+    if hasattr(backend, 'set_deadline'):
+        backend.set_deadline(began+profile['max_session_s'])
     current, stop = None, None
     def stop_once(reason):
         try:
@@ -96,11 +102,15 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
             generations = {r: (sample['environment']['environment'][r]['environment_epoch'],
                                 sample['environment']['environment'][r]['control_generation']) for r in ('top','front')}
             for ordinal, step in enumerate(teacher['steps']):
+                command_id = f'{current["cycle_id"]}-{ordinal}'
                 require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
                 validate_observation(backend.observe(), profile, time.time_ns())
-                append(store.root/'events.jsonl', dict(kind='INTENT', step=step, time_ns=time.time_ns()))
-                decision = backend.submit(step, f'{current["cycle_id"]}-{ordinal}')
-                append(store.root/'events.jsonl', dict(kind='SUBMISSION', decision=decision, time_ns=time.time_ns()))
+                append(store.root/'events.jsonl', dict(kind='INTENT', step=step, command_id=command_id,
+                                                       time_ns=time.time_ns()))
+                require(time.monotonic()-began < profile['max_session_s'], 'session deadline before dispatch')
+                decision = backend.submit(step, command_id)
+                append(store.root/'events.jsonl', dict(kind='SUBMISSION', decision=decision,
+                                                       command_id=command_id, time_ns=time.time_ns()))
                 require(decision.get('accepted') is True, 'existing owner rejected teacher command')
                 terminal = None
                 while terminal is None:
@@ -131,7 +141,8 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                         for event in backend.drain_events():
                             append(store.root/'events.jsonl', event)
                         require(terminal.get('succeeded') is True, 'controller terminal was not successful')
-                        append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal, time_ns=time.time_ns()))
+                        append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal,
+                                                               command_id=command_id, time_ns=time.time_ns()))
                     time.sleep(.01)
             require(current['frames'] >= 2, 'insufficient distinct captured frames')
             current.update(complete=True, reason='', end_ns=time.time_ns())
@@ -144,6 +155,11 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
             store.manifest['error'] = reason
         else:
             current.update(complete=False, reason=reason, end_ns=time.time_ns())
+            try:
+                append(store.root/'events.jsonl', dict(kind='ABORT', cycle_id=current['cycle_id'],
+                                                       reason=reason, time_ns=time.time_ns()))
+            except OSError:
+                pass
     finally:
         if stop is None:
             stop = stop_once('collection session finished')
