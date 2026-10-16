@@ -118,3 +118,32 @@ def test_changed_device_identity_is_rejected_before_traffic(binaries, terminal):
                             input="\n", capture_output=True, text=True, timeout=5)
     assert result.returncode == 2 and "OPEN_FAILED" in result.stdout
     assert "OMX_EXCLUSIVE_OPEN" not in result.stderr
+
+
+def test_worker_open_during_library_constructor_does_not_wait_for_loader(binaries, tmp_path):
+    """ROS tracing libraries can open ordinary files from a constructor's worker."""
+    guard, _ = binaries
+    source = tmp_path / "constructor.cpp"
+    source.write_text('''#include <thread>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstdlib>
+__attribute__((constructor)) static void initialize() {
+  std::thread worker([] { int fd = open("/dev/null", O_RDONLY);
+                         if (fd < 0) _exit(7); close(fd); });
+  worker.join();
+}
+''')
+    library = tmp_path / "constructor.so"
+    subprocess.run(["g++", "-shared", "-fPIC", "-pthread", str(source), "-o", str(library)],
+                   check=True, timeout=30)
+    loader = tmp_path / "loader.cpp"
+    loader.write_text('''#include <dlfcn.h>
+int main(int argc, char **argv) { return argc != 2 || !dlopen(argv[1], RTLD_NOW); }
+''')
+    executable = tmp_path / "loader"
+    subprocess.run(["g++", str(loader), "-ldl", "-o", str(executable)], check=True, timeout=30)
+    result = subprocess.run([str(executable), str(library)],
+                            env={**os.environ, "LD_PRELOAD": str(guard)},
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
