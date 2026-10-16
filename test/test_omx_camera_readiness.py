@@ -77,6 +77,17 @@ def test_polling_the_same_fresh_frame_does_not_count_or_erase_distinct_confirmat
         repeated = gate.update(state)
         assert not repeated['photometric_ready']
         assert repeated['confirmations'] == dict(top=index, front=index)
+    state['front']['fresh'] = False
+    assert gate.update(state)['confirmations']['front'] == 0
+
+
+def test_contradictory_quality_for_the_same_frame_is_rejected():
+    gate = load('camera_quality').Readiness(required=3)
+    state = {role: sample() for role in ['top', 'front']}
+    gate.update(state)
+    changed = {role: {**item, 'quality': {**item['quality'], 'mean_intensity': 200}}
+               for role, item in state.items()}
+    assert gate.update(changed)['confirmations'] == dict(top=0, front=0)
 
 
 def test_quality_and_jpeg_have_the_same_sample_lifetime():
