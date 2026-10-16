@@ -21,6 +21,35 @@ from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
 
 
+def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
+    rclpy.init()
+    node = Node("omx_source_replay_test")
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="w", instance_id="i", joint_names=("joint1",),
+        position_limits={"joint1": (-1., 1.)}, allowed_owners=("moveit",),
+        calibration_revision="cal", max_joint_state_age_s=.1,
+        max_goal_duration_s=1., action_timeout_s=2.)
+    runtime = RosArmCommandRuntime(node, config, joint_state_topic="/source_replay/state",
+                                   trajectory_action="/source_replay/action")
+    try:
+        message = JointState()
+        message.name, message.position = ["joint1"], [0.]
+        message.header.stamp = node.get_clock().now().to_msg()
+        runtime._on_joint_state(message)
+        original = runtime.latest_joint_state
+        assert original is not None
+        time.sleep(.12)
+        runtime._on_joint_state(message)
+        assert runtime.latest_joint_state is original, "replayed source refreshed owner state"
+        runtime._watchdog_tick()
+        assert runtime.owner.state == "hold"
+        assert runtime.last_decision.reason == "joint_state_stale"
+    finally:
+        runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
 def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
     """Actual DDS intake can run while a synthetic watchdog is blocked."""
     from omx_adapter.command_owner import CommandDecision
