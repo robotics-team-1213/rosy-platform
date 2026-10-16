@@ -231,13 +231,33 @@ def test_native_status_comes_from_successful_cyclic_register_reads(tmp_path):
     vendor = configured if configured.is_absolute() else Path.home() / configured
     assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
     original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{SOURCE}"], text=True)
-    bodies = [function(original, "hardware_interface::return_type DynamixelHardware::read("),
-              function(original, "DxlError DynamixelHardware::CheckError(")]
     fixture = (ROOT / "test/fixtures/omx_driver_status.cpp").read_text()
-    program, binary = tmp_path / "status.cpp", tmp_path / "status"
-    program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
-    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
-                   check=True, timeout=60)
-    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
-    print(result.stdout)
-    assert result.returncode == 0, result.stdout + result.stderr
+
+    def execute(source, name):
+        bodies = [function(source, "hardware_interface::return_type DynamixelHardware::read("),
+                  function(source, "DxlError DynamixelHardware::CheckError(")]
+        program, binary = tmp_path / f"{name}.cpp", tmp_path / name
+        program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
+        subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                       check=True, timeout=60)
+        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+        print(name + "\n" + result.stdout)
+        return result
+
+    before = execute(original, "upstream_status")
+    assert before.returncode == 14
+    target = tmp_path / SOURCE
+    target.parent.mkdir()
+    target.write_text(original)
+    for name in ["hardware-lifecycle-errors.patch", "hardware-owner-command-path.patch", "hardware-write-errors.patch",
+                 "hardware-fault-stop.patch", "hardware-status-readback.patch"]:
+        if name == "hardware-fault-stop.patch":
+            header = "include/dynamixel_hardware_interface/dynamixel_hardware_interface.hpp"
+            out = tmp_path / header
+            out.parent.mkdir(parents=True)
+            out.write_text(subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{header}"], text=True))
+        subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(PATCH.parent / name)],
+                       cwd=tmp_path, check=True)
+    after = execute(target.read_text(), "patched_status")
+    assert after.returncode == 0, after.stdout + after.stderr
+    assert len(after.stdout.splitlines()) == 14

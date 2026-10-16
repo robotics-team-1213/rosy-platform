@@ -1,7 +1,7 @@
 """Prepare an offline OMX startup-description candidate; never start hardware.
 
-The pinned driver still writes command buffers on activation and exposes write
-services. This transformation does not make the driver read-only or authorize
+The pinned driver still writes command buffers on activation. This transformation
+does not make the driver read-only or authorize
 its deployment. It removes the explicit GPIO initialization register writes and
 the driver's default torque-enabling selection for subsequent runtime review.
 """
@@ -51,6 +51,7 @@ def prepare(text):
     gpios = control.findall("gpio")
     ids = []
     removed = 0
+    added_states = 0
     for gpio in gpios:
         params = parameters(gpio)
         if "ID" not in params or "type" not in params or params["type"].text != "dxl":
@@ -65,6 +66,13 @@ def prepare(text):
             if item is None:
                 item = ET.SubElement(gpio, "param", name=name)
             item.text = "0"
+        states = [item.get("name") for item in gpio.findall("state_interface")]
+        if any(not name for name in states) or len(states) != len(set(states)):
+            raise ValueError("state interfaces need unique explicit names")
+        for name in ("Torque Enable", "Hardware Error Status"):
+            if name not in states:
+                ET.SubElement(gpio, "state_interface", name=name)
+                added_states += 1
     if ids != [str(value) for value in range(11, 17)]:
         raise ValueError("expected ordered, unique follower IDs 11..16")
     output = ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
@@ -73,6 +81,7 @@ def prepare(text):
         "scope": "offline_candidate_not_accepted_runtime",
         "motion_admitted": False, "runtime_started": False,
         "removed_register_parameters": removed,
+        "added_state_interfaces": added_states,
         "unverified": ["driver_activation_writes", "write_service_authority", "ros_compatibility",
                        "physical_limits", "independent_stop", "calibration", "owner_binding"],
     }

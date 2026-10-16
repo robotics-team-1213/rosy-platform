@@ -1,0 +1,153 @@
+--- a/src/dynamixel_hardware_interface.cpp
++++ b/src/dynamixel_hardware_interface.cpp
+@@ -55,9 +55,31 @@
+   }
+ }
+ 
++static bool HasDxlStatusInterfaces(const hardware_interface::HardwareInfo & info)
++{
++  size_t motors = 0;
++  for (const auto & gpio : info.gpios) {
++    auto type = gpio.parameters.find("type");
++    if (type == gpio.parameters.end() || type->second != "dxl") {continue;}
++    ++motors;
++    size_t torque = 0, hardware_error = 0;
++    for (const auto & state : gpio.state_interfaces) {
++      torque += state.name == "Torque Enable";
++      hardware_error += state.name == "Hardware Error Status";
++    }
++    if (torque != 1 || hardware_error != 1) {return false;}
++  }
++  return motors != 0;
++}
++
+ hardware_interface::CallbackReturn DynamixelHardware::on_init(
+   const hardware_interface::HardwareComponentInterfaceParams & params)
+ {
++  if (!HasDxlStatusInterfaces(params.hardware_info)) {
++    RCLCPP_ERROR_STREAM(logger_, "Dynamixel initialization requires cyclic torque/error status interfaces");
++    return hardware_interface::CallbackReturn::ERROR;
++  }
++
+   if (hardware_interface::SystemInterface::on_init(params) !=
+     hardware_interface::CallbackReturn::SUCCESS)
+   {
+@@ -608,61 +630,74 @@
+ hardware_interface::return_type DynamixelHardware::read(
+   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
+ {
+-  double period_ms = period.seconds() * 1000;
+-
+-  if (dxl_status_ == REBOOTING) {
+-    RCLCPP_ERROR_STREAM(logger_, "Dynamixel Read Fail : REBOOTING");
+-    return hardware_interface::return_type::ERROR;
+-  } else if (dxl_status_ == DXL_OK || dxl_status_ == COMM_ERROR || dxl_status_ == HW_ERROR) {
+-    dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(period_ms));
+-    if (dxl_comm_err_ != DxlError::OK && dxl_comm_err_ != DxlError::DXL_HARDWARE_ERROR) {
+-      if (!is_read_in_error_) {
+-        is_read_in_error_ = true;
+-        read_error_duration_ = rclcpp::Duration(0, 0);
+-      }
++  const auto fail = [this, &period](DxlError error) {
++      dxl_comm_err_ = error;
++      if (dxl_status_ != REBOOTING) {dxl_status_ = COMM_ERROR;}
++      is_read_in_error_ = true;
+       read_error_duration_ = read_error_duration_ + period;
+-
+-      RCLCPP_ERROR_STREAM(
+-        logger_,
+-        "Dynamixel Read Fail (Duration: " << read_error_duration_.seconds() * 1000 << "ms/" <<
+-          err_timeout_ms_ << "ms)");
+-
+-      if (read_error_duration_.seconds() * 1000 >= err_timeout_ms_) {
+-        return hardware_interface::return_type::ERROR;
+-      }
+-      return hardware_interface::return_type::OK;
+-    }
+-    is_read_in_error_ = false;
+-    read_error_duration_ = rclcpp::Duration(0, 0);
+-  }
+-
++      RCLCPP_ERROR_STREAM(logger_, "Dynamixel Read Fail: no valid cyclic status");
++      return hardware_interface::return_type::ERROR;
++    };
++  if (dxl_status_ != DXL_OK && dxl_status_ != COMM_ERROR && dxl_status_ != HW_ERROR) {
++    return fail(DxlError::ITEM_READ_FAIL);
++  }
++  const auto result = dxl_comm_->ReadMultiDxlData(period.seconds() * 1000);
++  if (result != DxlError::OK) {return fail(result);}
++  if (hdl_trans_states_.empty() || hdl_trans_states_.size() != num_of_transmissions_) {
++    return fail(DxlError::ITEM_READ_FAIL);
++  }
++
++  std::map<std::pair<uint8_t, uint8_t>, bool> observed_torque;
++  for (const auto & state : hdl_trans_states_) {
++    if (state.interface_name_vec.size() != state.value_ptr_vec.size()) {
++      return fail(DxlError::ITEM_READ_FAIL);
++    }
++    size_t torque_count = 0, error_count = 0;
++    bool torque = false;
++    for (size_t index = 0; index < state.interface_name_vec.size(); ++index) {
++      const auto & name = state.interface_name_vec.at(index);
++      if (name != "Torque Enable" && name != "Hardware Error Status") {continue;}
++      const auto & pointer = state.value_ptr_vec.at(index);
++      if (!pointer || !std::isfinite(*pointer)) {return fail(DxlError::ITEM_READ_FAIL);}
++      const double value = *pointer;
++      if (name == "Torque Enable") {
++        if (++torque_count != 1 || (value != 0.0 && value != 1.0)) {
++          return fail(DxlError::ITEM_READ_FAIL);
++        }
++        torque = value == 1.0;
++      } else if (++error_count != 1 || value < 0.0 || value > 255.0 || std::floor(value) != value) {
++        return fail(DxlError::ITEM_READ_FAIL);
++      }
++    }
++    if (torque_count != 1 || error_count != 1 ||
++      !observed_torque.emplace(std::make_pair(state.comm_id, state.id), torque).second)
++    {
++      return fail(DxlError::ITEM_READ_FAIL);
++    }
++  }
++
++  dxl_comm_err_ = CheckError(DxlError::OK);
++  dxl_torque_state_ = observed_torque;  // Values from this successful bus read, not command caches.
++  is_read_in_error_ = dxl_comm_err_ != DxlError::OK;
++  read_error_duration_ = is_read_in_error_ ? read_error_duration_ + period : rclcpp::Duration(0, 0);
+   CalcTransmissionToJoint();
+-
+-  for (auto sensor : hdl_gpio_sensor_states_) {
+-    ReadSensorData(sensor);
+-  }
+-
++  for (auto sensor : hdl_gpio_sensor_states_) {ReadSensorData(sensor);}
+   dxl_comm_->ReadItemBuf();
+ 
+   size_t index = 0;
+   if (dxl_state_pub_uni_ptr_) {
+     dxl_state_msg_.header.stamp = this->now();
+     dxl_state_msg_.comm_state = dxl_comm_err_;
+-    for (auto it : hdl_trans_states_) {
+-      dxl_state_msg_.id.at(index) = it.id;
+-      dxl_state_msg_.dxl_hw_state.at(index) = dxl_hw_err_[it.id];
+-      auto ts_it = dxl_torque_state_.find({it.comm_id, it.id});
+-      bool ts = (ts_it != dxl_torque_state_.end()) ? ts_it->second : false;
+-      dxl_state_msg_.torque_state.at(index) = ts;
+-      index++;
++    for (const auto & state : hdl_trans_states_) {
++      dxl_state_msg_.id.at(index) = state.id;
++      dxl_state_msg_.dxl_hw_state.at(index) = dxl_hw_err_.at(state.id);
++      dxl_state_msg_.torque_state.at(index) = dxl_torque_state_.at({state.comm_id, state.id});
++      ++index;
+     }
+     dxl_state_pub_uni_ptr_->try_publish(dxl_state_msg_);
+   }
+-
+-  if (rclcpp::ok()) {
+-    rclcpp::spin_some(this->get_node_base_interface());
+-  }
+-  return hardware_interface::return_type::OK;
++  if (rclcpp::ok()) {rclcpp::spin_some(this->get_node_base_interface());}
++  return dxl_comm_err_ == DxlError::OK ? hardware_interface::return_type::OK : hardware_interface::return_type::ERROR;
+ }
+ hardware_interface::return_type DynamixelHardware::write(
+   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
