@@ -609,3 +609,18 @@ reads instead of command caches or default zero/off values. Legacy descriptions
 without those fields require migration. Native PTY rejection and torque-off read
 evidence, including an unresolved one-tick goal-register change that failed the
 preservation check, are recorded in [measured-status validation](../../../docs/validation/omx-measured-status-2026-10-16/result.md).
+
+### Torque-off commissioning limits
+
+`commissioning_limits.py` is a separate exclusive configuration procedure. It
+requires the confirmed follower, six known motors, existing modes and torque/error
+zero. An explicit JSON input supplies positive raw PWM/current/profile caps. Only
+non-increasing supported caps may change, with durable original/intent records,
+one exact unicast write, acknowledgment and full readback before each next write.
+It never writes goals, torque, modes or offsets and never retries or rolls back an
+uncertain result. Existing output directories are refused.
+
+PWM and Current Limit writes persist in EEPROM; originals remain in the journal
+and successful lower caps stay installed. RAM profiles require fresh readback
+after restart. The tool does not authorize activation or establish physical limits.
+See [actual configuration, tests and remaining work](../../../docs/validation/omx-bounded-commissioning-2026-10-16/result.md).

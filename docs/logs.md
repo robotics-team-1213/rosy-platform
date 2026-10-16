@@ -8816,3 +8816,17 @@ osy-d395-s1d\`.
 - 해석: native 실행 부재에서도 나타남을 확인. firmware 원인·기존 mapping 영향 미확정; 기존 실패 gate 유지. 실제 시연0회. D-770; docs/validation/omx-goal-readonly-2026-10-16.md.
 - 변경: 독립 읽기 전용 관찰의 원본 위치와 실제 결과·해석 한계를 추가했다.
 - gate 변화: 없음. 기존 보존 검사 실패와 실물 구동 미수용·실제 시연0회를 유지한다.
+
+
+## 2026-10-16 · uncommitted · feat(omx): 토크 OFF 유한 제한 실제 적용
+
+- 변경: exclusive commissioning 경로에서 finite cap만 낮추고 durable 원본/의도·한 번 송신·ACK·전체 readback·deadline을 검사한다. 오류/불확실성의 자동 재시도·복원은 없다.
+- 증거: 초기40·packet guard4·느린 fsync1 RED 후 관련 원격65시험 NEW0, 독립 검토 수정 완료. 실제 cap21쓰기/264PING·READ, 여섯 torque/error0 및 제한값 일치. 원본·trace·receipt 보존.
+- gate 변화: EEPROM PWM/current 상한은 낮춘 값으로 유지, RAM profile은 재시작 뒤 재검증. 실제 구동·독립 stop·하중·시연0회는 유지한다. D-770; docs/validation/omx-bounded-commissioning-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): 실제 토크 OFF 시작 목표 확인
+
+- 변경: 실물 구동 전 초기 목표의 현재 위치 동기화를 별도 native probe로 확인하고 판정 범위를 기록했다.
+- 증거: 여섯 enable선택0, 실제 on_init/start/소멸 exit0, fresh torque/error0상태3회, cap유지. 송신107개 중 목표SyncWrite1묶음, 초기 위치 대비 최대1틱 차이; torque/reboot/mode/offset쓰기 없음.
+- gate 변화: 송신 후 목표 검사이며 물리 activation·도달·독립 stop·실물 owner 수용은 미완료. 실제 시연0회. D-770; docs/validation/omx-bounded-commissioning-2026-10-16/result.md.
