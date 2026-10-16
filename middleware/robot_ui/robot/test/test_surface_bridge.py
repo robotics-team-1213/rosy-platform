@@ -14,7 +14,8 @@ from threading import Thread
 
 import pytest
 from browser_harness import browser_tests_enabled, safe_http_server
-from playwright.sync_api import sync_playwright
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import sync_playwright  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parents[2]

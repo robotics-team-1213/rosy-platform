@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 from browser_harness import browser_tests_enabled
-from playwright.sync_api import sync_playwright
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import sync_playwright  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]

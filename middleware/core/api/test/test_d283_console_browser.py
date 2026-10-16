@@ -10,8 +10,9 @@ from urllib.parse import urlsplit
 
 import pytest
 from browser_harness import browser_tests_enabled
-from playwright.sync_api import sync_playwright
-import yaml
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import sync_playwright  # noqa: E402
+import yaml  # noqa: E402
 
 
 pytestmark = pytest.mark.skipif(

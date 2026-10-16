@@ -8,7 +8,8 @@ from threading import Thread
 
 import pytest
 from browser_harness import browser_tests_enabled, safe_http_server
-from playwright.sync_api import expect, sync_playwright
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import expect, sync_playwright  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),

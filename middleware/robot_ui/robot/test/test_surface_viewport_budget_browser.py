@@ -16,9 +16,10 @@ from urllib.parse import urlsplit
 
 import pytest
 from browser_harness import browser_tests_enabled
-from playwright.sync_api import sync_playwright
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import sync_playwright  # noqa: E402
 
-from test_role_g2_browser import TOKENS, _core_client, _response
+from test_role_g2_browser import TOKENS, _core_client, _response  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(),

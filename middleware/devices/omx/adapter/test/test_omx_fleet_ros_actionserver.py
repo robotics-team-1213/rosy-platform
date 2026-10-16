@@ -20,6 +20,8 @@ for entry in (str(FLEET_ROOT), str(FLEET_TEST_ROOT)):
     if entry not in sys.path:
         sys.path.insert(0, entry)
 
+pytest.importorskip("control_msgs", reason="ros-jazzy-control-msgs 없음")
+pytest.importorskip("controller_manager_msgs", reason="ros-jazzy-controller-manager-msgs 없음")
 from action_msgs.msg import GoalStatus  # noqa: E402
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
 from controller_manager_msgs.srv import ListControllers  # noqa: E402

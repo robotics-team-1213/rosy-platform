@@ -8,7 +8,8 @@ from urllib.parse import urlparse
 
 import pytest
 from browser_harness import browser_tests_enabled
-from playwright.sync_api import expect, sync_playwright
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import expect, sync_playwright  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='optional Chromium')

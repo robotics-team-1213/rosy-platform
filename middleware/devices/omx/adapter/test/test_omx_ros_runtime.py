@@ -10,6 +10,7 @@ import pytest
 
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
+pytest.importorskip("control_msgs", reason="ros-jazzy-control-msgs 없음")
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
 from rclpy.action import ActionServer, CancelResponse  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402

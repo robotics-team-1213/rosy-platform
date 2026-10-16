@@ -1,6 +1,9 @@
 """Procedure results and confirmation targets survive live readbacks."""
-from test_panel_copy_evidence_browser import panel, pytestmark
-from playwright.sync_api import expect
+import pytest
+from test_panel_copy_evidence_browser import panel, pytestmark  # noqa: F401
+
+pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
+from playwright.sync_api import expect  # noqa: E402
 
 
 def test_localization_results_have_independent_owners(panel):
