@@ -59,7 +59,7 @@ int main(int argc, char **argv) try {
   using State = lifecycle_msgs::msg::State;
   using Result = hardware_interface::return_type;
   int cases = 0;
-  for (int failure : {0, 1, 2, 3}) {
+  for (int failure : {1, 2, 3, 0}) {
     for (int failed_group : {0, 11, 12}) {
       Counts counts; counts.failed_disable_group = failed_group;
       auto driver = std::make_unique<DynamixelHardware>(counts);
@@ -83,8 +83,8 @@ int main(int argc, char **argv) try {
         require(counts.disables >= 2, "shutdown did not attempt both groups");
       } else {
         require(result == Result::ERROR, "fault did not propagate");
-        require(component.get_lifecycle_id() == State::PRIMARY_STATE_FINALIZED, "fault was recoverable");
         require(counts.disables == 2, "write error did not route to stop");
+        require(component.get_lifecycle_id() == State::PRIMARY_STATE_FINALIZED, "fault was recoverable");
         require(counts.goals == (failure == 2 ? 1 : 0), "unexpected goal after fault");
         int goals = counts.goals;
         component.write(clock->now(), rclcpp::Duration::from_seconds(.01));
