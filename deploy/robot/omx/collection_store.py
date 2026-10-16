@@ -6,6 +6,14 @@ from pathlib import Path
 import uuid
 
 
+def sync_directory(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def save(path, value):
     path = Path(path)
     temporary = path.with_name(path.name+'.pending')
@@ -13,6 +21,7 @@ def save(path, value):
         json.dump(value, stream, allow_nan=False, indent=2)
         stream.write('\n'); stream.flush(); os.fsync(stream.fileno())
     temporary.replace(path)
+    sync_directory(path.parent)
 
 
 def append(path, value):
@@ -27,6 +36,7 @@ class RawCollection:
         if self.root.exists():
             raise ValueError('collection output exists; select a new directory')
         self.root.mkdir(parents=True)
+        sync_directory(self.root.parent)
         self.manifest = dict(schema='rosy.omx-collection-session.v1', state='RUNNING', mode=mode,
             source_mode='scripted_teacher' if mode == 'hardware' else 'simulation',
             session_id=uuid.uuid4().hex, rig_revision=profile['rig_revision'],
@@ -68,6 +78,8 @@ class RawCollection:
         episode['frames'] += 1
 
     def close(self, stop):
+        for directory in sorted((p for p in self.root.rglob('*') if p.is_dir()), reverse=True):
+            sync_directory(directory)
         self.manifest.update(state='CLOSED', stop=stop)
         self.manifest['files'] = {p.relative_to(self.root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                   for p in sorted(self.root.rglob('*')) if p.is_file() and p.name != 'manifest.json'}

@@ -74,6 +74,12 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
     try:
         for _ in range(episodes):
             sample = backend.observe()
+            previous_end = store.manifest['episodes'][-1]['end_ns'] if store.manifest['episodes'] else 0
+            window_deadline = time.monotonic()+profile['max_sample_gap_s']
+            while sample['environment']['recorded_ns'] <= previous_end:
+                require(time.monotonic() < window_deadline, 'new episode environment window unavailable')
+                time.sleep(.01)
+                sample = backend.observe()
             validate_observation(sample, profile, time.time_ns())
             current = store.begin(min(sample['time_ns'], sample['environment']['recorded_ns']), sample['environment'])
             append(store.root/'environment.jsonl', sample['environment'])
@@ -106,6 +112,8 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                     require(now-last_frame <= profile['max_sample_gap_s'], 'new synchronized frame deadline exceeded')
                     terminal = backend.terminal()
                     if terminal is not None:
+                        for event in backend.drain_events():
+                            append(store.root/'events.jsonl', event)
                         require(terminal.get('succeeded') is True, 'controller terminal was not successful')
                         append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal, time_ns=time.time_ns()))
                     time.sleep(.01)
@@ -123,4 +131,9 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
     finally:
         if stop is None:
             stop = stop_once('collection session finished')
+    for event in backend.drain_events():
+        append(store.root/'events.jsonl', event)
+    if stop.get('hold_requested') is not True or stop.get('terminal_observed') is False:
+        for episode in store.manifest['episodes']:
+            episode.update(complete=False, reason='owner HOLD/terminal could not be confirmed')
     return store.close(stop)

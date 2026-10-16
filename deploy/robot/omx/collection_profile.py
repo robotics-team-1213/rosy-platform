@@ -55,6 +55,19 @@ def validate_profile(profile, *, mode, acceptance=None, teacher=None):
             require(acceptance.get(key) is True, 'field acceptance missing '+key)
         if teacher is not None:
             require(acceptance.get('teacher_sha256') == digest(teacher), 'field acceptance teacher differs')
+        ros = profile.get('ros')
+        require(isinstance(ros, dict), 'native ROS placement required')
+        for key in ('namespace', 'joint_state_topic', 'reference_topic', 'hardware_topic',
+                    'trajectory_action', 'environment_state'):
+            require(isinstance(ros.get(key), str) and ros[key].startswith('/') and '<' not in ros[key],
+                    'explicit ROS '+key+' required')
+        require(isinstance(ros.get('owner_config'), dict)
+                and ros['owner_config'].get('enabled') is True, 'accepted owner config required')
+        require(ros.get('motor_ids') == list(range(11,17)) and isinstance(ros.get('expected_torque'), list)
+                and ros['expected_torque'] == [True]*6, 'confirmed powered follower status required')
+        require(set(ros.get('image_topics', {})) == {'top', 'front'}
+                and set(ros.get('publishers', {})) == {'top','front','joints','reference','hardware'},
+                'explicit original producer identities required')
     return profile
 
 

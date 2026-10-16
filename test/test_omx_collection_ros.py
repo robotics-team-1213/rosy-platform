@@ -73,6 +73,7 @@ def test_independent_monitor_requests_hold_without_collection_writer():
     backend.runtime = NS(owner=NS(preempt=requests.append))
     backend.inputs = NS(verify_publishers=lambda:None)
     backend.verify_processes=lambda:None
+    backend.verify_exclusion=lambda:None
     backend.observe=lambda: (_ for _ in ()).throw(ValueError('expired environment'))
     thread=threading.Thread(target=backend.monitor);thread.start();thread.join(timeout=1)
     assert not thread.is_alive() and requests and backend.fault
@@ -81,11 +82,34 @@ def test_independent_monitor_requests_hold_without_collection_writer():
 def test_queue_overflow_revokes_collection_without_waiting_for_storage():
     cls = importlib.import_module('collection_ros').RosBackend
     backend=cls.__new__(cls);backend.events=queue.Queue(maxsize=1);backend.fault=None
+    backend.event_lock,backend.facts=threading.Lock(),{}
     @dataclass
     class Event:
         kind:str='fixture'
+        command_id:str='fixture-command'
     backend.on_event(Event());backend.on_event(Event())
     assert backend.fault and backend.events.qsize()==1
+
+
+def test_resource_lock_identity_depends_on_action_and_domain_not_profile_lock_paths():
+    module=importlib.import_module('collection_ros')
+    assert module.resource_key('/cell/arm/follow_joint_trajectory','42') == module.resource_key(
+        '/cell/arm/follow_joint_trajectory','042')
+    assert module.resource_key('/cell/arm/follow_joint_trajectory','42') != module.resource_key(
+        '/other/arm/follow_joint_trajectory','42')
+    with pytest.raises(ValueError): module.resource_key('//cell/arm','42')
+
+
+def test_expired_acceptance_is_rechecked_by_live_observation():
+    module=importlib.import_module('collection_ros')
+    from collection_rehearsal import profile,teacher
+    from collection_profile import digest
+    backend=module.RosBackend.__new__(module.RosBackend)
+    backend.profile=profile();backend.profile['enabled']=True;backend.teacher=teacher()
+    backend.acceptance=dict(schema='rosy.omx-collection-acceptance.v1',
+        profile_sha256=digest(backend.profile),rig_revision=backend.profile['rig_revision'],
+        calibration_revision=backend.profile['calibration_revision'],expires_ns=time.time_ns()-1)
+    with pytest.raises(ValueError,match='expired'): backend.observe()
 
 
 def test_rehearsal_cli_exercises_success_and_failures_with_no_hardware(tmp_path):
