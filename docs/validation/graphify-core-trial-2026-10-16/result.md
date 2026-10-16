@@ -24,7 +24,18 @@
 
 `tools/graphify_pipeline.py build --scope middleware/core/events`를 실행해 노드 248개·관계 595개를 생성했다. 끊어진 참조와 자기참조는 0개였고 HTML·보고서·주요 노드 조회가 모두 성공했다. `query ... EventBus` 실행과 저장소 내부 출력 거절을 확인했다. 이 결과는 파이프라인 실행 확인이며 CORE 전체의 품질 평가를 대신하지 않는다.
 
-리뷰에서 상위 `.graphifyignore` 변경을 소스 해시가 놓치는 문제가 발견됐다. 상위 ignore 파일과 Git의 저장소·사용자 제외 규칙을 snapshot에 포함하도록 수정하고, 규칙 변경·소스 변경·오래된 그래프 거절·내부 출력 거절을 검사하는 `test/test_graphify_pipeline.py`를 추가했다. pytest와 착지 결과는 실제 원격 실행 뒤 기록한다.
+리뷰에서 상위 `.graphifyignore` 변경을 소스 해시가 놓치는 문제가 발견됐다. 상위 ignore 파일과 Git의 저장소·사용자 제외 규칙을 snapshot에 포함하도록 수정하고, 규칙 변경·소스 변경·오래된 그래프 거절·내부 출력 거절을 검사하는 `test/test_graphify_pipeline.py`를 추가했다.
+
+## 원격 검증과 착지
+
+- 구현 커밋: `5fb62ada7`. `tools/land.py --tests auto`가 최신 main을 반영한 `7584d2800210637e38eb1dc54669590bff9430a7`을 검증했다.
+- 구조·harness guard: 247 passed, 38 warnings, 39.94초. 변경 영향 범위: 367 passed, 35 warnings, 71.67초. 새 Graphify 회귀 테스트 4개가 영향 범위에 포함됐다. 두 결과 모두 known-failures 비교에서 NEW 0이었다.
+- 안전 리뷰·크기 검사·harness lint를 통과하고 로컬 main에 fast-forward 착지했다. 원격 push와 로봇 배포는 수행하지 않았다.
+- 로그는 실행 PC 사용자 캐시의 `ROSY/analysis/graphify/landing/feat-graphify-tools/{run-g1-1.txt,run-1-1.txt}`, 착지 영수증은 Git common directory의 `rosy-land/7584d2800210637e38eb1dc54669590bff9430a7.json`에 남았다. 이후 재실행 로그와 구분할 때 위 revision의 영수증을 기준으로 삼는다.
+
+## 작성자 설정 확인
+
+GitHub 인증 계정과 최근 커밋 작성자가 `livsbittt`임을 확인하고 이 저장소의 Git `user.name`과 GitHub noreply 이메일을 같은 계정으로 설정했다. 확인 시점의 추적 파일 전체와 `git log --all`의 작성자·커미터 기록에서 `livsb3`는 발견되지 않았다. 따라서 과거 커밋 재작성이나 근거 없는 mailmap은 추가하지 않았다. 이 확인은 로컬 저장소에 있는 refs를 대상으로 하며 다른 clone의 기록까지 확인한 것은 아니다.
 
 ## 남은 검증
 
