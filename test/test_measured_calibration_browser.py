@@ -32,7 +32,8 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         return {'source_id': source, 'session_id': state['session'],
                 'calibration_revision': row['calibration_revision'] if row else None,
                 'state': ('applied' if state['applied'] else 'confirmation_required') if row else 'waiting',
-                'reason': 'ok' if row else 'not_approved', 'frame_seq': 2 if state['applied'] else None,
+                'reason': ('ok' if state['applied'] else 'confirmation_required') if row else 'not_approved',
+                'frame_seq': 2 if state['applied'] else None,
                 'geometry': {'image_size': [640, 360], 'rotation_deg': 0, 'lens': bundle['capture']['lens']}}
 
     def serve(route):
