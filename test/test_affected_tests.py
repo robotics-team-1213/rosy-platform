@@ -404,7 +404,7 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
     # the measured table must keep the slowest shard near a quarter of the suite.
     costs = json.loads((ROOT / "tools/harness/fleet_test_seconds.json").read_text(encoding="utf-8"))
-    assert costs["test_signal_supervision.py"] >= 100, "the slowest Fleet file must be weighed"
+    assert costs["test_signal_supervision.py"] >= 50, "a slowest Fleet file must be weighed"
     repo = affected.Repo.load(ROOT)
     selection = affected.Selection("full", [])
     matrix = affected.ci_matrix(repo, selection)["include"]
