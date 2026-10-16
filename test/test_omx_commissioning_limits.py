@@ -231,3 +231,21 @@ def test_cli_refuses_existing_output_before_any_port_open(tmp_path, monkeypatch)
     monkeypatch.setattr(m, "open_readonly_port", lambda device: pytest.fail("port opened"))
     with pytest.raises(FileExistsError):
         m.main(["--device", "/dev/serial/by-id/test", "--limits", str(request), "--output", str(output)])
+
+
+def test_slow_durable_intent_cannot_send_after_deadline(monkeypatch):
+    m = module()
+    now = [0]
+    monkeypatch.setattr(m.time, "monotonic", lambda: now[0])
+    bus = FakeBus()
+    events = []
+
+    def record(event):
+        events.append(copy.deepcopy(event))
+        if event["event"] == "write_intent":
+            now[0] = 16
+
+    with pytest.raises(RuntimeError, match="deadline"):
+        m.configure_limits(bus, limits(), record, read=bus.read, write=bus.write)
+    assert bus.sent == []
+    assert events[-1]["event"] == "failed" and events[-1]["uncertain_write"] is None
