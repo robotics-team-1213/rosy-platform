@@ -25,8 +25,12 @@ def _receipt(grant, *, state="SUCCEEDED", phases=None, **changes):
     return DeviceActionReceipt.model_validate({**document, "state": state, **changes})
 
 
-def _changed(value):
-    return value + 1 if isinstance(value, int) else value + "-other"
+def _changed(field, value):
+    if isinstance(value, int):
+        return value + 1
+    if field == "request_digest":
+        return "f" * 64 if value != "f" * 64 else "e" * 64
+    return value + "-other"
 
 
 def test_identity_is_every_echoed_grant_field():
@@ -37,7 +41,7 @@ def test_identity_is_every_echoed_grant_field():
 @pytest.mark.parametrize("field", RECEIPT_IDENTITY)
 def test_every_path_refuses_a_receipt_that_differs_in_one_identity_field(tmp_path, field):
     grant = _grant()
-    wrong = _receipt(grant, **{field: _changed(getattr(grant, field))})
+    wrong = _receipt(grant, **{field: _changed(field, getattr(grant, field))})
     assert not receipt_matches_grant(grant, wrong)
     with pytest.raises(ValueError, match="does not match"):
         verify_phase_receipt(grant, wrong)
