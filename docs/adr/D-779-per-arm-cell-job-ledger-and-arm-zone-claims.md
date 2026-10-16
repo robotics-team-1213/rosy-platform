@@ -1,6 +1,6 @@
 ## D-779 Cell Job 원장을 팔 단위로 나눈다: 팔별 상태, Step 의존 관계, 팔·구역 claim
 
-**Status:** Proposed
+**Status:** Accepted (2026-10-17, 사용자 승인; 원장·claim·grant 필드의 모양만 수용했다. 구현, 원장 버전 3 마이그레이션, API reference 개정, 장치 수용은 아직이다. 기반 방향인 D-778은 Proposed다)
 
 이 ADR은 D-778 §9의 첫 선행 조건, 즉 Cell Job의 원장과 claim을 팔 단위로 나누는 모양을 정한다. 코드 변경, 공개 API 경로, 장치 수용을 뜻하지 않는다. 폴더나 패키지 구조는 바꾸지 않으므로 D-427·D-429·D-430의 소스 배치와 관계없다.
 
