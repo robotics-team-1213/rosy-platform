@@ -5,13 +5,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <dlfcn.h>
 #include <fcntl.h>
 #include <spawn.h>
 #include <sstream>
 #include <string>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
@@ -82,23 +82,23 @@ static int checked(const char * path, int fd) {
   return fd;
 }
 
-static int delegated(const char * symbol, const char * path, int flags, mode_t mode, bool has_mode) {
-  using Open = int (*)(const char *, int, ...);
-  auto real = reinterpret_cast<Open>(dlsym(RTLD_NEXT, symbol));
-  if (!real) { errno = ENOSYS; return -1; }
-  return checked(path, has_mode ? real(path, flags, mode) : real(path, flags));
+static int delegated(const char * path, int flags, mode_t mode) {
+  // A constructor can wait for a worker that opens a file. Resolving libc with
+  // dlsym here would make that worker wait for the constructor's loader lock.
+  // This Linux-only temporary probe uses the kernel openat entry directly.
+  return checked(path, static_cast<int>(syscall(SYS_openat, AT_FDCWD, path, flags, mode)));
 }
 
 extern "C" int open(const char * path, int flags, ...) {
   bool has_mode = (flags & O_CREAT) || ((flags & O_TMPFILE) == O_TMPFILE);
   mode_t mode = 0;
   if (has_mode) { va_list args; va_start(args, flags); mode = va_arg(args, mode_t); va_end(args); }
-  return delegated("open", path, flags, mode, has_mode);
+  return delegated(path, flags, mode);
 }
 
 extern "C" int open64(const char * path, int flags, ...) {
   bool has_mode = (flags & O_CREAT) || ((flags & O_TMPFILE) == O_TMPFILE);
   mode_t mode = 0;
   if (has_mode) { va_list args; va_start(args, flags); mode = va_arg(args, mode_t); va_end(args); }
-  return delegated("open64", path, flags, mode, has_mode);
+  return delegated(path, flags, mode);
 }
