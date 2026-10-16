@@ -564,3 +564,9 @@
 - Change: Remove the two-line callback-group mutation; retain the spawned vendor peer.
 - Evidence: Native, admission and secret guards passed 105 at 91536e1588. Mutation 0e518ae7ba failed the intended owner-sequence assertion with 165 publications and a maximum 0.01096 s gap, while owner sequence remained 2. The other seven native runtime tests passed.
 - Gate: No change. Final native, pre-push and cloud results belong to the restored commit in PR #69.
+
+## 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
+
+- Change: Reuse the spawned vendor peer for the timeout regression, including its original 30 ms state period and 1.2 s delayed result. A second peer worker handles cancel requests; the synthetic peer yields between readiness checks. Owner timing, HOLD latch, cancel ACK and terminal CANCELED assertions are unchanged.
+- Evidence: CI 38944470403 passed slow-feedback but the timeout fixture reached joint_state_stale before action_timeout. Its state source still shared the owner interpreter. This extends the same external-input boundary to that fixture; final verification is recorded in PR #69.
+- Gate: No change. No production executor or safety threshold changes.

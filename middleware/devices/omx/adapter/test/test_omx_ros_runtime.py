@@ -11,7 +11,7 @@ import pytest
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
-from rclpy.action import ActionServer, CancelResponse  # noqa: E402
+from rclpy.action import ActionServer  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
@@ -19,12 +19,18 @@ from sensor_msgs.msg import JointState  # noqa: E402
 from omx_adapter.command_owner import ArmCommandConfig, TrajectoryCommand  # noqa: E402
 from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
-from ros_feedback_peer import external_feedback_vendor  # noqa: E402
+from ros_feedback_peer import external_feedback_vendor, external_timeout_vendor  # noqa: E402
 
 
 @pytest.fixture
 def slow_feedback_peer():
     with external_feedback_vendor() as peer:
+        yield peer
+
+
+@pytest.fixture
+def timeout_peer():
+    with external_timeout_vendor() as peer:
         yield peer
 
 
@@ -278,36 +284,11 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
         rclpy.shutdown()
 
 
-def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_owner():
+def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_owner(timeout_peer):
     rclpy.init()
-    server_node = Node("omx_test_timeout_server")
-    feedback_node = Node("omx_test_timeout_feedback")
     owner_node = Node("omx_test_timeout_owner")
-    server_goal_received = threading.Event()
-    server_cancelled = threading.Event()
+    action_name, feedback_topic, _, server_goal_received, server_cancelled = timeout_peer
     goal_events = []
-
-    def execute(goal_handle):
-        server_goal_received.set()
-        # Keep the accepted ROS goal alive past the local owner's deadline.
-        time.sleep(1.2)
-        if goal_handle.is_cancel_requested:
-            server_cancelled.set()
-            goal_handle.canceled()
-        else:
-            goal_handle.succeed()
-        result = FollowJointTrajectory.Result()
-        result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
-        return result
-
-    action_name = "/test/omx/timeout/arm_controller/follow_joint_trajectory"
-    action_server = ActionServer(
-        server_node, FollowJointTrajectory, action_name,
-        execute_callback=execute,
-        cancel_callback=lambda _goal_handle: CancelResponse.ACCEPT,
-    )
-    feedback_topic = "/test/omx/timeout/joint_states"
-    feedback_publisher = feedback_node.create_publisher(JointState, feedback_topic, 1)
     config = ArmCommandConfig(
         enabled=True,
         workcell_id="test_workcell",
@@ -328,23 +309,9 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         on_goal_event=goal_events.append,
     )
     executor = MultiThreadedExecutor(num_threads=4)
-    for node in (server_node, feedback_node, owner_node):
-        executor.add_node(node)
+    executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
-    publisher_stop = threading.Event()
-
-    def publish_fresh_state():
-        while not publisher_stop.is_set():
-            message = JointState()
-            message.name = ["joint1"]
-            message.position = [0.0]
-            message.header.stamp = feedback_node.get_clock().now().to_msg()
-            feedback_publisher.publish(message)
-            publisher_stop.wait(0.03)
-
-    publisher = threading.Thread(target=publish_fresh_state, daemon=True)
-    publisher.start()
     try:
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
@@ -397,14 +364,11 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         assert runtime.submit(command).reason == "hold_latched"
         assert [event.kind for event in goal_events].count("TERMINAL_RESULT") == 1
     finally:
-        publisher_stop.set()
-        publisher.join(timeout=1.0)
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
+        spinner.shutdown(wait=True)
         runtime.destroy()
-        action_server.destroy()
-        for node in (server_node, feedback_node, owner_node):
-            node.destroy_node()
+        owner_node.destroy_node()
         rclpy.shutdown()
 
 
