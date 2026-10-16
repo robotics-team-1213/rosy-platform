@@ -182,3 +182,22 @@ def test_fault_callbacks_attempt_stop_and_propagate_disable_failure(tmp_path):
     print(result.stdout)
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(result.stdout.splitlines()) == 8
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_OMX_VENDOR_ROOT"), reason="requires explicit locked vendor source")
+def test_torque_disable_covers_uncertain_activation(tmp_path):
+    configured = Path(os.environ["ROSY_OMX_VENDOR_ROOT"])
+    vendor = configured if configured.is_absolute() else Path.home() / configured
+    assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
+    path = "src/dynamixel/dynamixel.cpp"
+    original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{path}"], text=True)
+    bodies = [function(original, "DxlError Dynamixel::" + name + "(")
+              for name in ["DynamixelEnable", "DynamixelDisable"]]
+    fixture = (ROOT / "test/fixtures/omx_driver_torque.cpp").read_text()
+    program, binary = tmp_path / "torque.cpp", tmp_path / "torque"
+    program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
+    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                   check=True, timeout=60)
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
