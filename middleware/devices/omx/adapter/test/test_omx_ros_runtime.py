@@ -5,6 +5,7 @@ import time
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 import re
+import os
 
 import pytest
 
@@ -404,6 +405,9 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
 def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
     writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
+    affinity = os.sched_getaffinity(0)
+    if os.environ.get("ROSY_OMX_DIAG_CPU"):
+        os.sched_setaffinity(0, sorted(affinity)[:int(os.environ["ROSY_OMX_DIAG_CPU"])])
     rclpy.init()
     server_node = Node("omx_test_flood_server")
     feedback_node = Node("omx_test_flood_state")
@@ -442,6 +446,14 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
                                    trajectory_action=action_name, poll_period_s=0.01)
     original_intake = runtime._joint_state_intake.snapshot
     original_poll = runtime.owner.poll
+    original_fresh = runtime.owner._fresh_joint_state
+
+    def trace_fresh(now):
+        fresh = original_fresh(now)
+        if not fresh:
+            state = runtime.owner._joint_state
+            timeline.append(("stale_under_owner_lock", now, state.sequence, state.received_at))
+        return fresh
 
     def trace_intake(*args, **kwargs):
         entered = time.monotonic()
@@ -464,16 +476,22 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
 
     runtime._joint_state_intake.snapshot = trace_intake
     runtime.owner.poll = trace_poll
+    runtime.owner._fresh_joint_state = trace_fresh
     publications = []
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()
     phase_port = RosArmPhaseGoalPort(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
-    for node in (server_node, feedback_node, owner_node):
+    separate_server = os.environ.get("ROSY_OMX_DIAG_SEPARATE_SERVER") == "1"
+    server_executor = MultiThreadedExecutor(num_threads=2) if separate_server else executor
+    if separate_server:
+        server_executor.add_node(server_node)
+    for node in ((feedback_node, owner_node) if separate_server else (server_node, feedback_node, owner_node)):
         executor.add_node(node)
-    spinner = ThreadPoolExecutor(max_workers=1)
+    spinner = ThreadPoolExecutor(max_workers=2)
     spinning = spinner.submit(executor.spin)
+    server_spinning = spinner.submit(server_executor.spin) if separate_server else None
     stop = threading.Event()
 
     def publish_states():
@@ -551,11 +569,15 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         publisher.join(timeout=1.0)
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
+        if server_spinning is not None:
+            server_executor.shutdown(timeout_sec=2.0)
+            server_spinning.result(timeout=3.0)
         runtime.destroy()
         action_server.destroy()
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
+        os.sched_setaffinity(0, affinity)
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
