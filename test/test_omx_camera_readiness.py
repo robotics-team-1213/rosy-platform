@@ -112,3 +112,29 @@ def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch,
         runtime.run({'cameras': {}}, tmp_path, 'digest', .000000001)
     assert restored == [tmp_path]
 
+
+@pytest.mark.parametrize('changes', [dict(source_stamp=float('nan')), dict(sequence=1),
+                                   dict(quality={'policy': 'omx-photometric-v1'}),
+                                   dict(quality={'policy': 'omx-photometric-v1', 'usable': 'false'})])
+def test_invalid_observation_cannot_trigger_tuning(changes):
+    item = sample(101, 2, False)
+    item.update(changes)
+    assert not load('camera_quality').advancing_frame(item, (100, 1))
+
+
+def test_manual_exposure_is_enabled_before_dependent_controls():
+    calls = []
+    load('camera_readiness').apply_candidate(
+        dict(exposure_time_absolute=400, gain=50, auto_exposure=1),
+        lambda name, value: calls.append((name, value)))
+    assert calls[0] == ('auto_exposure', 1)
+
+
+def test_durable_baseline_includes_directory_fsync(monkeypatch, tmp_path):
+    import stat
+    runtime = load('camera_readiness')
+    modes = []
+    monkeypatch.setattr(runtime.os, 'fsync', lambda fd: modes.append(runtime.os.fstat(fd).st_mode))
+    runtime.save(tmp_path/'baseline.json', {'original': 1}, exclusive=True)
+    assert any(stat.S_ISDIR(mode) for mode in modes)
+
