@@ -120,7 +120,7 @@ def main(argv=None):
     except Exception as failure:
         report["record_error"] = repr(failure)
     print(json.dumps(report, allow_nan=False))
-    return 0 if report["stop_verified"] and "record_error" not in report else 2
+    return 0 if report["stop_verified"] and "error" not in report and "record_error" not in report else 2
 
 
 if __name__ == "__main__":
