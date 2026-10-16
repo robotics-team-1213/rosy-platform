@@ -169,6 +169,19 @@ def test_old_confirmation_cannot_be_replayed_after_geometry_changed():
         engine.select(SOURCE, 'boot-1:1', geometry(record), grant)
 
 
+def test_additional_confirmation_grant_is_consumed_even_when_already_confirmed():
+    record = row()
+    engine = runtime().MeasuredPreview()
+    engine.update(SOURCE, config(record), record['map_id'])
+    first = {**claims(record), '_grant_id': 'first'}
+    second = {**claims(record), '_grant_id': 'second'}
+    engine.select(SOURCE, 'boot-1:1', geometry(record), first)
+    engine.select(SOURCE, 'boot-1:1', geometry(record), second)
+    engine.observe(SOURCE, 'boot-1:1', {**geometry(record), 'rotation_deg': 90})
+    with pytest.raises(ValueError, match='confirmation_required'):
+        engine.select(SOURCE, 'boot-1:1', geometry(record), second)
+
+
 def test_receiver_invalidates_confirmation_on_unsampled_geometry_round_trip():
     obj, record, raw = server()
     src = _Source(SOURCE, None, lens=record['bundle']['capture']['lens'], link=1)
