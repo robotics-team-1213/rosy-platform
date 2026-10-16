@@ -5,8 +5,6 @@ import time
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 import re
-import os
-import traceback
 
 import pytest
 
@@ -406,25 +404,19 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
 def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
     writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
-    affinity = os.sched_getaffinity(0)
-    if os.environ.get("ROSY_OMX_DIAG_CPU"):
-        os.sched_setaffinity(0, sorted(affinity)[:int(os.environ["ROSY_OMX_DIAG_CPU"])])
     rclpy.init()
     server_node = Node("omx_test_flood_server")
     feedback_node = Node("omx_test_flood_state")
     owner_node = Node("omx_test_flood_owner")
     slow_feedbacks = []
-    timeline = []
 
     def execute(goal_handle):
-        timeline.append(("server_start", time.monotonic()))
         for _ in range(40):  # 40 feedback messages over ~0.8 s
             feedback = FollowJointTrajectory.Feedback()
             feedback.joint_names = ["joint1"]
             goal_handle.publish_feedback(feedback)
             time.sleep(0.02)
         goal_handle.succeed()
-        timeline.append(("server_succeeded", time.monotonic()))
         result = FollowJointTrajectory.Result()
         result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
         return result
@@ -445,64 +437,21 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
-    original_intake = runtime._joint_state_intake.snapshot
-    original_poll = runtime.owner.poll
-    original_fresh = runtime.owner._fresh_joint_state
-    original_observe = runtime.owner.observe_joint_state
-
-    def trace_observe(state):
-        accepted = original_observe(state)
-        timeline.append(("owner_observed", time.monotonic(), state.sequence, accepted))
-        return accepted
-
-    def trace_fresh(now):
-        fresh = original_fresh(now)
-        if not fresh:
-            state = runtime.owner._joint_state
-            timeline.append(("stale_under_owner_lock", now, state.sequence, state.received_at))
-        return fresh
-
-    def trace_intake(*args, **kwargs):
-        entered = time.monotonic()
-        try:
-            state = original_intake(*args, **kwargs)
-        except ValueError as error:
-            timeline.append(("intake_rejected", entered, str(error)))
-            raise
-        timeline.append(("intake_accepted", entered, state.sequence, state.received_at))
-        return state
-
-    def trace_poll():
-        entered = time.monotonic()
-        decision = original_poll()
-        if decision.state == "hold" and not any(row[0] == "first_hold" for row in timeline):
-            state = runtime.owner._joint_state
-            timeline.append(("first_hold", entered, time.monotonic(), decision.reason,
-                             state.sequence, state.received_at))
-        return decision
-
-    runtime._joint_state_intake.snapshot = trace_intake
-    runtime.owner.poll = trace_poll
-    runtime.owner._fresh_joint_state = trace_fresh
-    runtime.owner.observe_joint_state = trace_observe
-    if os.environ.get("ROSY_OMX_DIAG_COLLAPSE_GROUP") == "1":
-        runtime._subscription.callback_group = runtime.action_callback_group
-        runtime.action_callback_group.add_entity(runtime._subscription)
     publications = []
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()
     phase_port = RosArmPhaseGoalPort(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
-    separate_server = os.environ.get("ROSY_OMX_DIAG_SEPARATE_SERVER", "1") == "1"
-    server_executor = MultiThreadedExecutor(num_threads=2) if separate_server else executor
-    if separate_server:
-        server_executor.add_node(server_node)
-    for node in ((feedback_node, owner_node) if separate_server else (server_node, feedback_node, owner_node)):
+    # The real vendor runs outside the owner executor. Keep its synthetic workload
+    # separate so this regression measures owner callback isolation.
+    server_executor = MultiThreadedExecutor(num_threads=2)
+    server_executor.add_node(server_node)
+    for node in (feedback_node, owner_node):
         executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=2)
     spinning = spinner.submit(executor.spin)
-    server_spinning = spinner.submit(server_executor.spin) if separate_server else None
+    server_spinning = spinner.submit(server_executor.spin)
     stop = threading.Event()
 
     def publish_states():
@@ -520,8 +469,6 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
 
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
-            timeline.append(("sink_origin", time.monotonic(), [frame.name for frame in
-                             traceback.extract_stack() if frame.name in {"_on_feedback", "_on_goal_response"}]))
             slow_feedbacks.append(event)
             sink_times.append(time.monotonic())
             sink_entered.set()
@@ -560,9 +507,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             "owner_tail": owner_samples[-10:],
             "owner_age": now - observed.received_at,
             "slow_sink_times": sink_times,
-            "timeline": timeline,
         }
-        print(evidence, flush=True)
         assert len(sink_times) == 1, evidence  # feedback is still blocked
         assert any(t > sink_times[0] + config.max_joint_state_age_s and seq > initial.sequence
                    for t, seq, _ in owner_samples), evidence
@@ -582,16 +527,14 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         publisher.join(timeout=1.0)
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
-        if server_spinning is not None:
-            server_executor.shutdown(timeout_sec=2.0)
-            server_spinning.result(timeout=3.0)
+        server_executor.shutdown(timeout_sec=2.0)
+        server_spinning.result(timeout=3.0)
+        spinner.shutdown(wait=True)
         runtime.destroy()
         action_server.destroy()
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
-        os.sched_setaffinity(0, affinity)
-        print({"final_timeline": timeline}, flush=True)
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():

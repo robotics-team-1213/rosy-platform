@@ -546,3 +546,9 @@
 - Change: Record accepted/rejected intake, vendor execution boundaries and the first owner HOLD before terminal-event delivery can block its observation.
 - Evidence: Issue #68 records two main CI failures of the same native regression. This diagnostic revision keeps the existing executor, 0.5 s freshness allowance and 1.5 s blocked feedback interval to distinguish source scheduling from intake/owner delay.
 - Gate: No change. No physical devices or production policy changes.
+
+## 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
+
+- Change: Give the synthetic vendor ActionServer its own executor, matching the external vendor boundary. Keep the owner executor at four workers, all callback groups, 40 feedback messages, 0.5 s freshness, at least 1.5 s blocked sink and completed/ready assertions. Remove investigative switches, affinity changes and callback instrumentation.
+- Evidence: CI 38939987985 at 4932c2c177 recorded a 0.5956 s source-publication gap, stale source rejection and owner HOLD at age 0.6059 s. The owner correctly enforced its policy. Native wrappers passed with separated vendor scheduling at 636d102c5c. A callback-group mutation at c282f6729d kept publications advancing (maximum gap 0.2013 s) but stopped owner sequence at 4 and failed freshness at age 1.6698 s, proving the regression still detects excluded intake. Final SHA and cloud results are recorded in PR #69.
+- Gate: No change. This corrects the test boundary; it does not establish a GIL defect, physical stop or hardware acceptance.
