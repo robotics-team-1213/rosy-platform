@@ -8870,3 +8870,9 @@ osy-d395-s1d\`.
 - 변경: D-636 합성 결과, D-587 과거 현장 sighting, D-593 핀 계약 시험, D-596 구현·재생 근거를 구분했다. 로컬 데이터·private·device-evidence·외부 scratch의 제한된 calibration 자료 inventory를 기록했다.
 - 증거: docs/validation/measured-camera-lifecycle-2026-10-16/evidence-inventory.md; 조사 revision a1a183379. 읽기 전용 Python inventory 2회 exit 0. 현재 조사 범위에서 실제 training/validation 원본과 연결된 교정 묶음을 확보하지 못했다.
 - gate 변화: 없음. 원격 장치 접근·새 pytest·교정 승인·설정 변경 없음. 사용자 설계 검토는 아직 필요하며 과거 현장 기록을 현재 설치 수용으로 바꾸지 않았다.
+
+## 2026-10-16 · uncommitted · docs(vision): 실측 교정 실행 계획과 변경 전 원격 기준선
+
+- 변경: 사용자 재개 요청 뒤 승인된 설계를 계약 묶음·영속 store·API·Vision session/lease·설치 UI·통합 검증의 6개 작업으로 구체화했다. 실행 계획 검토 및 직접 구현/위임 선택은 별도로 요청했다.
+- 증거: docs/plans/2026-10-16-measured-camera-lifecycle.md; docs/validation/measured-camera-lifecycle-2026-10-16/baseline.md. 기존 revision 89d3ba4d10의 AI 시험 PC 원격 53 passed, terminal exit 0, known_failures NEW 0.
+- gate 변화: 없음. 제품 구현은 계획 검토 전이며 기준선은 새 기능이나 브라우저·장치·현장 수용을 증명하지 않는다. 원시 로그 C:/DevTemp/camera-calibration/baseline/run-1.txt.
