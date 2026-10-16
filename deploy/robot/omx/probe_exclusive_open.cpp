@@ -65,7 +65,9 @@ static int checked(const char * path, int fd) {
   const char * expected = getenv("ROSY_OMX_PROBE_PORT");
   if (fd < 0 || !expected || strcmp(path, expected) != 0) return fd;
   struct stat info;
-  if (geteuid() == 0 || fstat(fd, &info) != 0 || !S_ISCHR(info.st_mode)) {
+  const char * device_id = getenv("ROSY_OMX_PROBE_DEVICE_ID");
+  if (geteuid() == 0 || fstat(fd, &info) != 0 || !S_ISCHR(info.st_mode) || !device_id ||
+      std::to_string(static_cast<unsigned long long>(info.st_rdev)) != device_id) {
     close(fd); errno = EPERM; return -1;
   }
   if (ioctl(fd, TIOCEXCL) != 0) {
