@@ -6,7 +6,7 @@ import pytest
 import rosy_harness as harness
 
 REPO = Path(__file__).resolve().parents[1]
-# Original deploy/logs.md entry at 429e13b8313484a25751a7c7896fe1b7aca41b92.
+# Original deploy/logs.md entry at commit 429e13b8313484a25751a7c7896fe1b7aca41b92.
 # Keep the reviewed bytes in-tree: a fresh clone cannot read the rewritten history.
 SOURCE_ENTRY = REPO / 'test/fixtures/journal-encoding/sim-aid-original.txt'
 # The earlier UNKNOWN audit is historical; preserve the reviewed upstream repair.
