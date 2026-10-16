@@ -8680,18 +8680,21 @@ osy-d395-s1d\`.
 - 증거: Tailscale 인증 SSH 현장 읽기 진단, 기존 SETUP·pip check·실행 프로세스·장치 점유·G3–G6 계획과 실제 관측 기록을 대조했다. 새 모터 구동이나 실제 학습 데이터 수집은 아직 수행하지 않았다.
 - gate 변화: 없음. 실측 제한·독립 stop·실물 owner 결선은 미완료이며 SOURCE 준비와 실물 완료를 구분한다.
 - 결정: D-770 Proposed.
+
 ## 2026-10-16 · uncommitted · feat(fleet-il-readiness): 접속 복구와 native 자동 출처·학습 사이클
 
 - 변경: 기존 인증을 사용하는 호스트별 SSH ProxyJump로 현장/모델 PC 접속·SCP·원격 시험을 복구했다. native_capture가 자동 교사 출처·원본 bytes·session/cycle을 묶고 native_review가 불명 출처·교차 분할·분할 중 원본 변경을 거절한다. native_cycle은 검토 출력 hash 검증→공식 ACT→새 프로세스 model/pre/postprocessor 재적재·eval을 연결한다. 모델 PC 전용 LeRobot 환경과 환경 lock을 준비했다.
 - 증거: 원격 기존 문서/검토 119개, 신규 관련 45개 통과. 독립 검토의 두 결함을 6개 RED로 재현한 뒤 GREEN과 재검토를 확인했다. 코드 319bbcd38의 모델 PC 실제 LeRobot CPU fixture 통합 1개 통과; raw/splits/trainer/cycle receipt를 모델 PC에 보존했다. 실제 follower 6개 torque/error 0과 기존 보정 파일의 불일치·일치 후보를 읽기 전용 확인했다. 현장 영상은 매우 어둡고 기본 ROS graph에 실제 arm trajectory Action은 없다.
 - gate 변화: 접속과 오프라인 학습 연결 시험은 복구/검증했다. 실제 자동 시연·첫 실물 데이터셋·실데이터 학습·물리 과제 성공은 미완료다. 정책 승격·장치 profile 활성화·main 착지·push·Hub 업로드는 하지 않았다.
 - 결정: D-770 후속 구현·증거와 실행 안내 갱신.
+
 ## 2026-10-16 · uncommitted · docs(fleet-il-readiness): 최종 회귀와 모델 receipt 대조
 
 - 변경: D-770에 f48a7a3b8 최종 회귀, 모델 PC 보존 receipt 및 현장 source staging, 모델 PC 추가 전송 미완료를 기록했다.
 - 증거: 원격 260 passed / 6 skipped, known_failures NEW 0. 모델 PC에서 7 model/processor 파일 hash·새 프로세스 재적재·eval 4 frame·실물 성공률 null을 별도 읽기로 확인했다. AI PC 일시 오프라인 뒤 회귀는 복구 후 완료했고 추가 모델 source 전송은 SSH banner timeout이다.
 - gate 변화: 첫 실물 자동 시연·실물 데이터셋은 미완료로 유지한다. 소프트웨어 시험과 현장 수집 완료를 구분한다.
 - 결정: D-770 증거 보강.
+
 ## 2026-10-16 · uncommitted · docs(fleet-il-readiness): 모델 PC 진입점 배치와 실물 수집 조건 대조
 
 - 변경: 모델 PC의 전용 venv가 사용할 source b7cf77838 스냅샷과 run-native-cycle 진입점 배치를 완료했다. 이전 모델 source 전송 미완료를 해소하고 D-770과 실행 계획에 반영했다.
@@ -8719,6 +8722,20 @@ osy-d395-s1d\`.
 - 증거: 기존 커밋별 size-range가 adapter 10,000줄 초과를 확인해 배치를 바로잡았다. 모니터 source 동작은 그대로이며 병합용 committed HEAD로 원격 검증한다.
 - gate 변화: 실물 수용·시연은 미완료로 유지한다. 변경 배치는 원격 검증 후 로컬 main에만 병합한다.
 - 결정: D-770 후속; 원래 작업 브랜치는 보존한다.
+
+## 2026-10-16 · uncommitted · feat(omx): 로컬 병합 뒤 초기화 후보 구현
+
+- 변경: 기존 준비 변경을 main 585885428에 병합하고 다음 단계로 실제 ROS driver의 시작 부작용을 확인했다. 설정 파라미터 보존을 위한 description 후보 생성기를 구현했다.
+- 증거: 병합 영향 1509 passed/14 skipped·guard247·browser3·NEW0. 새 생성기 원격 8시험과 독립 검토, 현장 실제 description에서 59개 register 초기화 항목 제거·원본/hash 대조.
+- gate 변화: 실제 시연은 0회 유지. 초기화 후보 생성은 확인했으나 driver 실행·구동 수용은 미완료다.
+- 결정: D-770 후속.
+
+## 2026-10-16 · uncommitted · fix(omx): 실제 vendor 오류 은폐와 owner 우회 경로 처리
+
+- 변경: driver startup/stop의 성공 오보고와 direct command 서비스 우회를 수정했다. 부분 활성화 정리 실패도 ERROR로 유지한다.
+- 증거: actual pinned method C++ 경계 시험10시나리오, 원격 관련pytest22 통과와 독립 검토. 두 patch를 합친 전체 native plugin compile/link/load 확인, private receipt 보존.
+- gate 변화: 실물 driver 활성화·물리 stop 검증·실제 자동 시연은 미완료. 소프트웨어 실패 전파를 실물 성공으로 집계하지 않는다.
+- 결정: D-770 후속.
 
 ## 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
 

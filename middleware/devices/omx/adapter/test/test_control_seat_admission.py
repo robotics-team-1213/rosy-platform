@@ -10,7 +10,7 @@ from omx_adapter.action_store import ActionStore
 from omx_adapter.control_seat_admission import ControlSeatAdmission
 
 
-def setup(tmp_path):
+def _setup(tmp_path):
     owner = SimpleNamespace(session_id="session-a", config=SimpleNamespace(
         workcell_id="cell", instance_id="instance"), state="ready")
     clock = [10.0]
@@ -52,11 +52,11 @@ def journal(store):
 
 
 def test_unresolved_prepared_action_blocks_seat_and_seat_blocks_journal(tmp_path):
-    _, store, admission, _ = setup(tmp_path)
+    _, store, admission, _ = _setup(tmp_path)
     admission.run_action_admission(lambda: journal(store))
     with pytest.raises(PermissionError, match="unresolved"):
         admission.acquire("token", "seat", ttl_s=10)
-    _, other, admission, _ = setup(tmp_path / "other")
+    _, other, admission, _ = _setup(tmp_path / "other")
     admission.acquire("token", "seat", ttl_s=10)
     with pytest.raises(PermissionError, match="seat"):
         admission.run_action_admission(lambda: journal(other))
@@ -64,7 +64,7 @@ def test_unresolved_prepared_action_blocks_seat_and_seat_blocks_journal(tmp_path
 
 
 def test_acquire_and_journal_race_have_exactly_one_winner(tmp_path):
-    _, store, admission, _ = setup(tmp_path)
+    _, store, admission, _ = _setup(tmp_path)
     barrier = Barrier(2)
     def compete(operation):
         barrier.wait(timeout=3)
@@ -80,7 +80,7 @@ def test_acquire_and_journal_race_have_exactly_one_winner(tmp_path):
 
 
 def test_cancel_request_and_wrong_goal_cannot_release_revoked_seat(tmp_path):
-    owner, store, admission, _ = setup(tmp_path)
+    owner, store, admission, _ = _setup(tmp_path)
     admission.acquire("token", "seat", ttl_s=10)
     admission.reserve_pilot("seat", "goal")
     admission.note_goal("goal", "GOAL_ACCEPTED", "ros-goal")
@@ -98,7 +98,7 @@ def test_cancel_request_and_wrong_goal_cannot_release_revoked_seat(tmp_path):
 
 
 def test_expiry_revokes_queued_pilot_and_owner_restart_does_not_clear_it(tmp_path):
-    owner, store, admission, clock = setup(tmp_path)
+    owner, store, admission, clock = _setup(tmp_path)
     admission.acquire("token", "seat", ttl_s=10)
     admission.reserve_pilot("seat", "goal")
     clock[0] = 20.0
@@ -123,7 +123,7 @@ def test_cell_runner_without_shared_admission_fails_before_journaling(tmp_path):
 def test_http_sessions_claim_and_revoke_shared_admission(tmp_path):
     from fastapi import HTTPException
     from omx_adapter.pilot_sim_api import _Sessions
-    _, store, admission, clock = setup(tmp_path)
+    _, store, admission, clock = _setup(tmp_path)
     sessions = _Sessions("operator-code", clock=lambda: clock[0], control_admission=admission)
     token = sessions.pair("operator-code")
     seat = sessions.acquire(token)
@@ -142,7 +142,7 @@ def test_pilot_runtime_reserves_before_send_and_revoked_seat_sends_nothing(tmp_p
     from test_pilot_sim_runtime import Arm, jog
     from omx_adapter.pilot_sim_runtime import PilotSimRuntime
     arm = Arm()
-    _, store, admission, _ = setup(tmp_path)
+    _, store, admission, _ = _setup(tmp_path)
     arm.control_admission = admission
     admission.owner = arm.owner
     admission.session_id = arm.owner.session_id
@@ -156,7 +156,7 @@ def test_pilot_runtime_reserves_before_send_and_revoked_seat_sends_nothing(tmp_p
 
 
 def test_process_restart_retains_pending_pilot_fence(tmp_path):
-    owner, store, admission, _ = setup(tmp_path)
+    owner, store, admission, _ = _setup(tmp_path)
     admission.acquire("token", "seat", ttl_s=10)
     admission.reserve_pilot("seat", "pending-before-send")
     owner.session_id = "new-process"
@@ -201,7 +201,7 @@ def test_release_does_not_wait_on_blocking_ros_send_or_unfence_cell(tmp_path):
 
 
 def test_expired_seat_exact_terminal_and_ready_allow_reacquire(tmp_path):
-    owner, store, admission, clock = setup(tmp_path)
+    owner, store, admission, clock = _setup(tmp_path)
     admission.acquire("token", "seat", ttl_s=10)
     admission.reserve_pilot("seat", "goal")
     admission.note_goal("goal", "GOAL_ACCEPTED", "ros-goal")
@@ -274,7 +274,7 @@ def test_unknown_send_persists_pending_and_preload_cannot_follow_release(tmp_pat
 
 @pytest.mark.parametrize("bad_clock", [float("nan"), float("inf"), 9.0])
 def test_clock_failure_cannot_extend_or_dispatch_seat(tmp_path, bad_clock):
-    _, _, admission, clock = setup(tmp_path)
+    _, _, admission, clock = _setup(tmp_path)
     admission.acquire("token", "seat", ttl_s=10)
     clock[0] = bad_clock
     with pytest.raises(PermissionError, match="clock"):
@@ -358,7 +358,7 @@ def test_preload_requires_its_original_live_seat(tmp_path, revoke, monkeypatch):
 
 def test_wall_expiry_revokes_queued_goal_while_owner_clock_is_paused(tmp_path):
     from omx_adapter.pilot_sim_api import _Sessions
-    owner, _, admission, owner_clock = setup(tmp_path)
+    owner, _, admission, owner_clock = _setup(tmp_path)
     wall_clock = [100.0]
     sessions = _Sessions("operator-code", clock=lambda: wall_clock[0], control_admission=admission)
     token = sessions.pair("operator-code")

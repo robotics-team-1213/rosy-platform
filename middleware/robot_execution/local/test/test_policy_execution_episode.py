@@ -13,7 +13,7 @@ from omx_adapter.journal_identity import journal_identity
 from omx_adapter.ros_goal_contract import RosGoalEvent
 
 
-def setup(tmp_path):
+def _setup(tmp_path):
     runner, grant, journal, commands, goal, runtime, _ = setup_parent(tmp_path)
     parent = mint(runner, grant)
     identity = journal_identity(runner.store.path)  # Actual owner setup, not verifier.
@@ -27,7 +27,7 @@ def setup(tmp_path):
 
 
 def produce(tmp_path):
-    parent, api, journal, command, goal, identity = setup(tmp_path)
+    parent, api, journal, command, goal, identity = _setup(tmp_path)
     module = importlib.import_module('rosy.execution.local.policy_episode')
     doc = module.publish(parent, api, journal, command, tmp_path/'episode')
     return doc, tmp_path/'episode', goal, identity
@@ -50,7 +50,7 @@ def test_original_native_execution_to_episode_to_fleet(tmp_path):
 
 
 def test_full_profile_validation_once_after_all_pending_writes(tmp_path,monkeypatch):
-    parent,api,journal,command,_,_=setup(tmp_path)
+    parent,api,journal,command,_,_=_setup(tmp_path)
     module=importlib.import_module('rosy.execution.local.policy_episode')
     original=module.validate_profile
     calls=[]
@@ -66,7 +66,7 @@ def test_full_profile_validation_once_after_all_pending_writes(tmp_path,monkeypa
 
 
 def test_publication_reuses_the_verified_capture_before_writing(tmp_path,monkeypatch):
-    parent,api,journal,command,_,_=setup(tmp_path)
+    parent,api,journal,command,_,_=_setup(tmp_path)
     counts=dict(parent=0,native=0,source=0)
     for instance,name,key in [(parent,'snapshot','parent'),
                               (journal,'read','native'),
@@ -86,7 +86,7 @@ def test_publication_reuses_the_verified_capture_before_writing(tmp_path,monkeyp
 
 @pytest.mark.parametrize('mutation', ['missing', 'api_id', 'database_id', 'other_runner'])
 def test_actual_owner_api_requires_existing_same_journal(tmp_path, mutation):
-    parent, api, journal, command, _, _ = setup(tmp_path)
+    parent, api, journal, command, _, _ = _setup(tmp_path)
     runner = api.runner
     if mutation == 'missing':
         with runner.store._connect() as db:
@@ -105,7 +105,7 @@ def test_actual_owner_api_requires_existing_same_journal(tmp_path, mutation):
 
 
 def test_publication_never_replaces_complete_or_incomplete_output(tmp_path):
-    parent,api,journal,command,_,_ = setup(tmp_path)
+    parent,api,journal,command,_,_ = _setup(tmp_path)
     from rosy.execution.local.policy_episode import publish
     output = tmp_path/'episode'
     original = publish(parent,api,journal,command,output)
@@ -117,7 +117,7 @@ def test_publication_never_replaces_complete_or_incomplete_output(tmp_path):
 
 @pytest.mark.parametrize('mutation', ['expiry', 'source', 'api_identity', 'native'])
 def test_final_manifest_io_cannot_hide_current_change(tmp_path,monkeypatch,mutation):
-    parent,api,journal,command,_,_ = setup(tmp_path)
+    parent,api,journal,command,_,_ = _setup(tmp_path)
     from rosy.execution.local.policy_episode import publish
     from datetime import timedelta
     old = Path.open
