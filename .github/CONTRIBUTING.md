@@ -5,14 +5,14 @@
 ## 지금 main에 들어가는 길 (2026-10-16 GitHub 설정 확인)
 
 - **팀원.** `main`에서 브랜치를 내고 PR을 연다. `main`에는 직접 push할 수 없다. 머지는 **Squash and merge**다. 저장소 설정이 지금 squash만 허용한다.
-- **실험실 PC의 에이전트 세션.** 공유 체크아웃의 로컬 `main`에 `tools/land.py`로 착지하고(lint, 변경 범위 시험, `--ff-only`), 관리자 계정이 그 `main`을 origin에 push한다. 이것은 이행 경로이고 목적지가 아니다. 절차는 [같이 하는 깃](../docs/reference/shared-checkout.md)이다.
-- **서버는 아직 CI 통과를 요구하지 않는다.** PR과 `main` push마다 `ci` 워크플로가 돌지만 필수 검사로 걸려 있지 않아서, 적색인 PR도 머지할 수 있다. 녹색을 확인하고 머지하는 것은 지금은 머지하는 사람의 일이다.
+- **실험실 PC의 에이전트 세션.** [공유 체크아웃 절차](../docs/reference/shared-checkout.md)로 작업을 분리한다. `tools/land.py`는 로컬 착지용이며, GitHub 게시는 [PR 파이프라인](../docs/reference/pr-pipeline.md)에 따라 주제 브랜치와 PR을 사용한다.
+- **서버는 `ci-result` 성공을 요구한다.** GitHub 사람 승인 수는 0이다. 작성·독립 검토 두 에이전트의 확인을 거친 뒤 게시 담당 한 명이 PR을 올리고 병합한다. 검토한 SHA와 실제 검증 근거를 PR에 남긴다.
 
 현재 필수 승인 수는 0이고 code owner 승인도 필수가 아니다. `.github/CODEOWNERS`의 리뷰 요청과 서버의 승인 강제는 다르다. merge queue와 auto-merge는 아직 적용되지 않았다. 설정 확인 방법과 후속 항목은 [팀 가이드 §8](../docs/reference/team-guide.md#8-협업-설정-확인과-문서-유지)에 있다.
 
 ## 정해진 방향
 
-모든 변경이 PR로 들어가 merge queue와 auto-merge를 거치고, 공유 로컬 `main`은 없어진다. 여섯 단계(0–5)로 적용한다. 필수 검사, merge queue, 관문 경로의 code owner 승인, 병합 방식 변경은 단계 3이고 아직 적용되지 않았다. 단계와 이유는 [D-762](../docs/adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다. 단계가 적용되면 이 문서를 그때 고친다.
+향후 merge queue와 auto-merge, 로컬 착지 도구 전환의 방향은 [D-762](../docs/adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다. 현재 적용 상태는 2026-10-16 운영 개정과 [팀 가이드 §8](../docs/reference/team-guide.md#8-협업-설정-확인과-문서-유지)을 따른다. 필수 `ci-result`와 한 명의 게시, 두 에이전트 검토는 현재 기준이며 merge queue·auto-merge는 아직 적용되지 않았다.
 
 ## 실험실 PC 없이 오늘 하는 일
 

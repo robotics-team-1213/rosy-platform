@@ -95,6 +95,8 @@ bash tools/hooks/install.sh
 
 시험 PC에 닿지 못하는 **개인 클론**은 §3.1의 수동 검사 후 주제 브랜치에만 훅 예외를 쓴다. 이미 훅이 설치되어 있어도 삭제할 필요는 없다. 실험실 공유 체크아웃에는 이 예외를 적용하지 않는다.
 
+Windows에서 로그 위치를 직접 정하려면 push할 PowerShell에서 `$env:ROSY_TEST_LOGS = Join-Path $env:TEMP 'rosy-tests'`를 설정한다. 현재 실행기는 `X:`가 없으면 시스템 임시 폴더를 기본값으로 사용하며, 시험 로그는 저장소 밖에 둔다.
+
 ### 1.6 설정 확인
 
 ```bash
@@ -227,7 +229,7 @@ git push --no-verify -u origin feat/<짧은-주제>
 
 6. GitHub의 **Compare & pull request**로 PR을 열고 이슈를 연결한다. 맡은 경로, 의존 PR, 검증한 SHA와 결과, 훅 예외 여부를 템플릿에 적는다. 작업 중이면 Draft로 공유한다.
 7. PR 최신 커밋의 CI(`ci` 워크플로)를 확인한다. 빨간불이면 로그를 보고 고친다. 로컬에서 못 돌린 검사는 미실행으로 적으며, CI 통과로 장치 수용까지 주장하지 않는다.
-8. 완료 조건과 리뷰 의견을 확인하고 CI가 녹색일 때 **Squash and merge**한다. 현재 서버는 CI와 리뷰 승인을 강제하지 않으므로 머지하는 사람이 확인한다. 머지 후 원격 브랜치는 자동 삭제되며, 이슈에 후속 작업이 남았는지 확인한다.
+8. 완료 조건과 리뷰 의견을 확인하고 최신 SHA의 `ci-result`가 성공했을 때 **Squash and merge**한다. 서버는 `ci-result`를 요구하며 GitHub 사람 승인 수는 0이다. 에이전트 작업의 두 역할 검토와 한 명의 게시는 [PR 파이프라인](pr-pipeline.md)을 따른다. 머지 후 원격 브랜치는 자동 삭제되며, 이슈에 후속 작업이 남았는지 확인한다.
 
 ### 3.2 규칙
 
@@ -372,9 +374,9 @@ git push
 | 항목 | 확인한 상태 | 기여자가 할 일 |
 |---|---|---|
 | 공개 범위·기본 브랜치 | public · `main` | 문서·이슈·PR·로그에서 실제 접속 값 제외 |
-| main ruleset | PR 필요, 삭제·force-push 제한. 관리자 역할은 상시 우회 | 일반 기여는 주제 브랜치와 PR 사용 |
-| CI 필수 검사 | 미설정 | 머지 전에 PR 최신 커밋의 CI 녹색 확인 |
-| 필수 리뷰 | 승인 수 0, code owner 승인 강제 꺼짐 | 필요한 독립 리뷰를 직접 요청하고 근거 확인 |
+| main ruleset | PR 필요, 삭제·force-push 제한. 관리자 우회도 PR 경로로 제한 | 주제 브랜치와 PR 사용 |
+| CI 필수 검사 | `ci-result` 필수 | PR 최신 SHA와 종합 판정 확인, 비게이팅 실패도 별도 확인 |
+| 필수 리뷰 | GitHub 사람 승인 수 0, code owner 승인 강제 꺼짐 | 작성·독립 검토 두 에이전트의 근거를 남기고 게시 담당 한 명이 게시·병합 |
 | 머지 방식 | squash만 허용, 머지 후 브랜치 자동 삭제 | Squash and merge 사용 |
 | auto-merge·merge queue | auto-merge 꺼짐, ruleset에 queue 없음 | 아직 자동 큐가 있다고 가정하지 않기 |
 | Issues·Projects | Issues 켜짐. 이번 확인 토큰에는 `read:project`가 없어 보드 확인 못 함 | Issues로 작업 추적. 보드는 리드가 접근 확인 후 연결 |
@@ -387,6 +389,6 @@ gh api repos/robotics-team-1213/rosy-platform/rulesets
 gh api repos/robotics-team-1213/rosy-platform/rulesets/<ruleset-id>
 ```
 
-다음 적용은 D-762의 선행 조건을 확인한 뒤 별도 승인을 받아 진행한다. 두 번째 관문 code owner 지정, CI 안정성·야간 연속 녹색 기준 확인, 필수 `ci-result`·merge queue·관리자 우회 축소의 묶음 적용이 남아 있다. 그 뒤 훅 분리와 공유 Log 충돌 개선, 로컬 착지의 PR 경로 전환을 순서대로 한다. 이 문서 갱신은 GitHub 권한이나 서버 설정의 적용을 뜻하지 않는다.
+2026-10-16 사용자 요청으로 사람 승인 수를 1에서 0으로 바꿨다. 현재 필수 `ci-result`와 관리자 우회의 PR 제한은 적용된 상태다. 작성·독립 검토·한 명의 게시 절차는 [PR 파이프라인](pr-pipeline.md)이 소유한다. merge queue·auto-merge, 관문 code owner와 에이전트 신원 분리, 훅 분리·공유 Log 개선·로컬 착지 도구의 PR 전환은 후속 적용이며 D-762의 선행 조건과 별도 적용 절차를 따른다.
 
 이슈 양식은 [GitHub issue forms 문법](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)을 따른다. 양식 파일이 기본 브랜치에 머지된 뒤 [새 이슈 화면](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose)에서 작업·버그 두 선택지가 뜨는지 확인한다. 온보딩 명령이나 훅이 바뀌면 해당 변경 PR에서 이 가이드도 같이 고친다.
