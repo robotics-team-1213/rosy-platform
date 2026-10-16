@@ -8878,3 +8878,10 @@ osy-d395-s1d\`.
 - 변경: 기존 producer 위에 원본 프레임 photometric 검사·bounded 제어 후보·best 선택·웹 표시·독립 복구를 연결하고 Fleet user service로 설치했다.
 - 증거: RED→GREEN 및6596cf3f6 관련 원격88개 통과(실제 Chromium 포함), 실제 두 camera-only 실행·원본값 readback 복구·enabled/active·fresh·sole producer. 독립 source 리뷰 완료.
 - gate 변화: 자동 카메라 관측 경로 설치. 현재 암실은 INSUFFICIENT이며 motion admission·집게 clearance·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-lowlight-automation-2026-10-16/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
+
+- 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
+- 증거: 초기 환경 회귀 RED→GREEN, 느린 적용 cooldown RED→GREEN, d9d06a48d 관련103개(실제 Chromium 포함)·62f94db6b 통합 묶음34개 원격 통과. 실제 bounded16초·assessment60개·원본 복구·기존 서비스 재시작·v3 설치/활성화·sole producer 확인, 독립 리뷰.
+- gate 변화: 지속적인 카메라 환경 관측/복구 설치. 암실 pair readiness0회이며 강조도/역광 실물 수용·실제 episode 환경 binding·수집 stop 결선·시연/실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-readiness-2026-10-17/result.md.
