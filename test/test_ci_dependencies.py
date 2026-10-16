@@ -14,6 +14,44 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
+@pytest.mark.parametrize("selection", [
+    ["middleware/devices/omx/adapter/test"],
+    ["middleware/devices/omx/adapter/test/test_omx_ros_runtime.py::test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state"],
+])
+def test_native_omx_ros_selection_runs_in_isolated_processes(monkeypatch, selection):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    runtime = "middleware/devices/omx/adapter/test/test_omx_ros_runtime.py"
+    fleet = "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py"
+    step = next(s for s in yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+                if s["name"] == "Test (matrix suite, D-436)")
+    script = step["run"].split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    calls = []
+    monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([selection]))
+    monkeypatch.setenv("ROS_DISCOVERY_SERVER", "inherited-server-must-not-leak")
+    monkeypatch.setattr(subprocess, "Popen", lambda args, **kwargs:
+                        calls.append((args, kwargs["env"])) or
+                        SimpleNamespace(stdout=iter(()), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(script, str(WORKFLOW), "exec"), {})
+    assert ended.value.code == 0
+    expected = [runtime, fleet] if selection[0].endswith("/test") else selection
+    for target in expected:
+        isolated = [(args, env) for args, env in calls if args[3] == target]
+        assert len(isolated) == 1, calls
+        args, env = isolated[0]
+        assert env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
+        assert env["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"
+        assert env["RMW_IMPLEMENTATION"] == "rmw_fastrtps_cpp"
+        assert "ROS_DISCOVERY_SERVER" not in env
+    if selection[0].endswith("/test"):
+        residual = next(args for args, _ in calls if args[3] == selection[0])
+        assert all("--ignore=" + target in residual for target in expected)
+        assert len({env["ROS_DOMAIN_ID"] for args, env in calls if args[3] in expected}) == 2
+
+
 def test_ci_local_execution_wheel_pin_matches_package_metadata():
     project = tomllib.loads((ROOT / 'middleware/robot_execution/local/pyproject.toml').read_text(encoding='utf8'))
     assert f"{project['project']['name']}=={project['project']['version']}" in WORKFLOW.read_text(encoding='utf8')
