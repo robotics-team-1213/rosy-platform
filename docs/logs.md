@@ -8726,3 +8726,10 @@ osy-d395-s1d\`.
 - 증거: 2026-10-16 분포(제품 600 초과 50개, 500이면 116개, 400이면 212개). 엄격·실용 두 세션이 한 번씩 반박하는 토론을 했다. 이 PC에서 `test/test_size_limits.py`와 `test/architecture/test_module_structure.py` 60개가 통과했고 lint 오류는 0이다.
 - gate 변화: 묶인 15개 파일은 자라기 전에 나눠야 한다. 1,000–1,500줄의 시험 18개는 자랄 수 있다.
 - 결정: D-766 개정 2. 「커밋마다 녹색」(개정 1 조건 5)을 브랜치 끝 기준으로 바꾸는 일은 열린 질문으로 남긴다.
+
+## 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
+
+- 변경: ROS launch_testing pytest 훅을 모든 CI·lab·affected 호출에서 끈다(`-pno:launch_testing -pno:launch_ros`). 경로가 여럿인 호출이 0건 수집이면 적색이다. Fleet 조각 가중치는 실측 세 번의 평균(`tools/harness/fleet_test_seconds.json`)이다. 잡마다 시간 제한을 둔다. 다시 돌기 시작하면서 드러난 89개 실패를 고쳤다. 모듈 수준 `setup()` 5개는 `_setup`으로 바꿨다(CI의 apt pytest 7.4가 nose setup으로 불렀다). 가짜 `core_common`에는 `__init__.py`를 넣었다. 컨테이너에 없는 AppArmor·systemd user manager, 회수되지 않는 좀비는 명시적으로 건너뛴다.
+- 증거: 10-11(`e9e0f7edb`)부터 root-test 세 조각이 "collected 0 items / 1 skipped"로 1–4초 만에 성공했다. 고친 뒤 분기 CI 38830518002에서 약 8,800개가 돌았다. origin/main에 고침만 얹은 38843367280에서 같은 89개가 실패했으므로 모두 원래 있던 실패였고, 152개 로컬 커밋이 만든 것은 없다. 고친 파일은 시험 PC에서 183개와 89개가 통과했다.
+- gate 변화: 루트 계약 시험 약 8,800개가 다시 main CI의 관문이다. Fleet 가장 느린 조각의 재생 추정은 555초에서 354–408초다.
+- 결정: D-436·D-762 후속. pytest 7.4(CI)와 9.x(시험 PC)의 버전 차이는 다음 개선 항목이다.
