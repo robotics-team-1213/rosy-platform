@@ -504,3 +504,9 @@
 - 변경: Moved the read-only commissioning script to deploy/robot/omx/ outside the omx_adapter module; adjusted source-path tests and launch documentation.
 - 증거: Landing size-range rejected four historical package growth commits. Original branch remains intact; the landing branch combines reviewed final behavior with the corrected placement.
 - gate 변화: No physical acceptance or command authority change. Remote landing checks follow.
+
+## 2026-10-16 · uncommitted · fix(omx): feedback 원본 age 보존
+
+- 변경: 원본 timestamp 진행·age·관절 배열을 확인하고 전송 지연을 owner snapshot freshness에 반영한다. 거절 packet은 snapshot/watchdog을 갱신하지 않는다.
+- 증거: 실제 Jazzy ROS 회귀에서 재전송 freshness 오류 RED(1실패·7통과), 수정 후 native 8시험·순수 intake10시험 GREEN. 커밋된 원격 runner 안에서 실행했다.
+- gate 변화: 없음. 실제 feedback publisher provenance·hardware owner 조립·독립 stop·실측/실제 시연은 미완료다. D-770; docs/validation/omx-feedback-source-age-2026-10-16.md.
