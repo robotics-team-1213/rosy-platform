@@ -8864,3 +8864,9 @@ osy-d395-s1d\`.
 - 변경: D-633·D-636의 실제 후보 생성, Fleet 승인 SQLite, Vision 소비, sighting admission과 World MapPose 경계를 대조하고 첫 구현 단위의 설계를 기록했다. preview 목적의 영속 승인·기대 revision·촬영 session 확인·철회 readback을 기존 tracking 승인과 구분한다.
 - 증거: docs/plans/2026-10-16-measured-camera-lifecycle-design.md. 조사 기준 cd50cde54; 브랜치 docs/camera-calibration-lifecycle. 현재는 사용자 검토용 설계이며 제품 코드·API 계약·장치 설정을 변경하지 않았다.
 - gate 변화: 없음. 실측 자료·현장 수용을 만들지 않았으며 D-598 구현은 마커·지도 핀·LED 현장 확인과 측정 오차 근거 뒤의 후속 단위다. 구현 계획과 실행은 설계 검토 뒤 진행한다.
+
+## 2026-10-16 · uncommitted · docs(vision): 실측 입력과 기존 현장 근거의 범위 점검
+
+- 변경: D-636 합성 결과, D-587 과거 현장 sighting, D-593 핀 계약 시험, D-596 구현·재생 근거를 구분했다. 로컬 데이터·private·device-evidence·외부 scratch의 제한된 calibration 자료 inventory를 기록했다.
+- 증거: docs/validation/measured-camera-lifecycle-2026-10-16/evidence-inventory.md; 조사 revision a1a183379. 읽기 전용 Python inventory 2회 exit 0. 현재 조사 범위에서 실제 training/validation 원본과 연결된 교정 묶음을 확보하지 못했다.
+- gate 변화: 없음. 원격 장치 접근·새 pytest·교정 승인·설정 변경 없음. 사용자 설계 검토는 아직 필요하며 과거 현장 기록을 현재 설치 수용으로 바꾸지 않았다.

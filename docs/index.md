@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · docs(vision): 실측 입력과 기존 현장 근거의 범위 점검
 - 2026-10-16 · uncommitted · docs(vision): 실측 교정의 승인·미리보기·무효화 설계
 - 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
 - 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
 - 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
-- 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
