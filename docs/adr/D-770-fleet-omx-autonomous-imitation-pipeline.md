@@ -285,3 +285,12 @@ D-336의 단일 owner 경계를 위해 vendor direct register/reboot/torque 서�
 새 private prefix에서 전체 native plugin build/install·ldd·library load를 확인했다.
 실물 controller·ROS node는 시작하지 않았다. 실물 정지·owner HOLD·부하/보정 수용과
 자동 시연은 미완료다. [원인·수정·실행 증거](../validation/omx-driver-lifecycle-2026-10-16.md).
+
+## 2026-10-16 후속: native ROS 초기화 실패 경로
+
+외부 consumer 연결에서 누락된 CMake export dependency 두 개를 발견하고 vendor patch로
+수정했다. 실제 Fleet ROS 환경에서 전체 plugin 재빌드 뒤 잘못된 고정 포트의 on_init이
+ERROR를 반환하고 정상 소멸함을 확인했다. 실물 포트·configure/activate/goal은 사용하지
+않았다. 현재 cell owner는 SIM metadata와 gripper 관측에 고정돼 있어 실물 조립과
+실제 feedback·HOLD 연결은 별도 수용이 필요하다. 실물 시연 0회와 미완료 조건을 유지한다.
+[재현 source와 실행 증거](../validation/omx-native-init-negative-2026-10-16/result.md).

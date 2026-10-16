@@ -8733,3 +8733,10 @@ osy-d395-s1d\`.
 - 증거: actual pinned method C++ 경계 시험10시나리오, 원격 관련pytest22 통과와 독립 검토. 두 patch를 합친 전체 native plugin compile/link/load 확인, private receipt 보존.
 - gate 변화: 실물 driver 활성화·물리 stop 검증·실제 자동 시연은 미완료. 소프트웨어 실패 전파를 실물 성공으로 집계하지 않는다.
 - 결정: D-770 후속.
+
+## 2026-10-16 · uncommitted · fix(omx): native 초기화와 dependency export 검증
+
+- 변경: 실제 ROS 초기화 실패 경로와 CMake dependency 누락 수정의 재현 source·증거를 기록했다.
+- 증거: 잘못된 고정 포트에서 실제 driver on_init ERROR·소멸·exit 0, export 수정 후 consumer configure/build 성공.
+- gate 변화: 실물 feedback·owner HOLD·허용 범위·독립 정지 수용은 미완료, 실제 시연 0회 유지.
+- 결정: D-770 후속; validation/omx-native-init-negative-2026-10-16/result.md.
