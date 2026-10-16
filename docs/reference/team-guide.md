@@ -313,21 +313,23 @@ git push
 
 ### 5.1 작업 영역
 
-담당은 팀 리드가 정한다. 빈 칸은 아직 담당자가 없다는 뜻이다.
+담당은 팀 리드가 정한다. 빈 칸은 아직 담당자가 없다는 뜻이다. 담당은 Jira KAN의 역할별 Epic(KAN-19~23)에 assignee가 생기면 이 표와 `.github/CODEOWNERS`에 함께 반영한다.
 
 | 영역 | 경로 | 내용 | 실물 장치 | 담당 |
 |---|---|---|---|---|
 | CORE (로봇 게이트웨이) | `middleware/core/` | 외부 API, 유일한 `cmd_vel` 발행, 서비스·이벤트 | 일부 | |
 | 인지·차선 | `middleware/perception/` | 카메라·LiDAR 차선/장애물 증거 | 일부 | |
 | 내비게이션 | `middleware/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
-| 장치·드라이버 | `middleware/apps/device/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
-| Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | |
-| 현장 비전·앱 | `operations/overhead/`, `operations/site_ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | |
+| 장치·드라이버 | `middleware/devices/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | Pinky 노재용 (KAN-20) · OMX 김승용, 서정민 (KAN-21) |
+| Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | 장원종 (@livsbittt, KAN-19) |
+| 현장 비전·앱 | `operations/overhead/`, `operations/site_ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | 윤영민 (@now2466, KAN-22) |
 | 화면 (웹·앱) | `middleware/robot_ui/`, `shared/web/` | 대시보드, Pilot 앱 ([DESIGN.md](../../DESIGN.md)) | 불필요 | |
 | 시뮬레이션 | `integrations/simulation/` | Gazebo 월드·다로봇 시뮬 | 불필요 | |
 | 학습 | `learning/` | 데이터셋, 학습, 모델 배달 | 불필요 | |
 | 배포·릴리스·CI | `deploy/`, `.github/workflows/`, `tools/` | 이미지·payload 빌드, CI | 일부 | |
 | 문서·거버넌스 | `docs/` | ADR, SRS, 검증 기록 | 불필요 | |
+
+통합 시나리오·시연과 일정(KAN-23)은 민주환(@WINNAKEN, PM)이 조율하고 전원이 참여한다. 특정 경로의 담당은 아니다. 노재용·김승용·서정민의 GitHub 계정이 확인되면 `.github/CODEOWNERS`에 장치 경로를 추가한다.
 
 ### 5.2 처음 잡기 좋은 일
 
