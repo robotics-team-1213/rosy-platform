@@ -13,6 +13,7 @@
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
 | D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 | Proposed |
 | D-1 | 단일 프로세스 (rclpy + uvicorn 스레드) | Accepted |
 | D-2 | 자체 cmd_vel 멀렉서 (Nav2 출력 remap) | Accepted |
 | D-3 | Flask 완전 대체 — FastAPI 전면 이관 | Accepted |

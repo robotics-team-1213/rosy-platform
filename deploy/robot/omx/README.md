@@ -517,3 +517,27 @@ export PYTHONPATH="$PWD/middleware/devices/omx/adapter:$PWD/contracts/foundation
 Hub 업로드는 [기존 registry 도구](../../../learning/registry/policy/README.md)의
 검토된 파일·private repo·고정 SHA readback 절차를 따른다. Compose는 upload나
 HF 인증을 하지 않는다. 실제 정책의 Gazebo 집기·실물 운용은 별도 검증이다.
+
+### Read-only startup register review
+
+The same `register_probe.py` READ(0,147) snapshot now includes pending goal
+position/current, profile velocity/acceleration, current/PWM limits, position PID
+and signed bus watchdog state (-1 is the documented watchdog fault).
+XL430 model 1060 has no current-control registers; those fields stay null.
+These are register observations, not accepted mechanical limits or stop evidence.
+
+The inspected Fleet LeRobot `OmxFollower.connect(calibrate=False)` still calls
+`configure()`, whose `torque_disabled()` context enables torque in `finally`.
+Do not use that method as a passive preflight. The installed-source inspection,
+actual torque-off snapshots and remaining initialization requirements are recorded
+in [the startup validation](../../../docs/validation/omx-native-startup-2026-10-16.md).
+
+### Local camera and commissioning feedback viewer
+
+After sourcing the camera ROS environment and selecting its ROS domain, run
+`python3 deploy/robot/omx/commissioning_view.py`. The read-only tool binds to
+`127.0.0.1:8766`; an authenticated SSH forward can expose that same loopback port
+on the development PC. It subscribes to existing top/front images and the
+commissioning joint topic, opens no devices, and issues no actuator commands.
+Source/receipt age, decoded picture expiry and disconnected joint feedback are
+checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
