@@ -8719,3 +8719,17 @@ osy-d395-s1d\`.
 - 증거: 기존 커밋별 size-range가 adapter 10,000줄 초과를 확인해 배치를 바로잡았다. 모니터 source 동작은 그대로이며 병합용 committed HEAD로 원격 검증한다.
 - gate 변화: 실물 수용·시연은 미완료로 유지한다. 변경 배치는 원격 검증 후 로컬 main에만 병합한다.
 - 결정: D-770 후속; 원래 작업 브랜치는 보존한다.
+
+## 2026-10-16 · uncommitted · feat(omx): 로컬 병합 뒤 초기화 후보 구현
+
+- 변경: 기존 준비 변경을 main 585885428에 병합하고 다음 단계로 실제 ROS driver의 시작 부작용을 확인했다. 설정 파라미터 보존을 위한 description 후보 생성기를 구현했다.
+- 증거: 병합 영향 1509 passed/14 skipped·guard247·browser3·NEW0. 새 생성기 원격 8시험과 독립 검토, 현장 실제 description에서 59개 register 초기화 항목 제거·원본/hash 대조.
+- gate 변화: 실제 시연은 0회 유지. 초기화 후보 생성은 확인했으나 driver 실행·구동 수용은 미완료다.
+- 결정: D-770 후속.
+
+## 2026-10-16 · uncommitted · fix(omx): 실제 vendor 오류 은폐와 owner 우회 경로 처리
+
+- 변경: driver startup/stop의 성공 오보고와 direct command 서비스 우회를 수정했다. 부분 활성화 정리 실패도 ERROR로 유지한다.
+- 증거: actual pinned method C++ 경계 시험10시나리오, 원격 관련pytest22 통과와 독립 검토. 두 patch를 합친 전체 native plugin compile/link/load 확인, private receipt 보존.
+- gate 변화: 실물 driver 활성화·물리 stop 검증·실제 자동 시연은 미완료. 소프트웨어 실패 전파를 실물 성공으로 집계하지 않는다.
+- 결정: D-770 후속.
