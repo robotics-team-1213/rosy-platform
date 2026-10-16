@@ -17,6 +17,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 @pytest.mark.parametrize("selection", [
     ["middleware/devices/omx/adapter/test"],
     ["middleware/devices/omx/adapter/test/test_omx_ros_runtime.py::test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state"],
+    ["middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py"],
 ])
 def test_native_omx_ros_selection_runs_in_isolated_processes(monkeypatch, selection):
     import json
@@ -50,6 +51,24 @@ def test_native_omx_ros_selection_runs_in_isolated_processes(monkeypatch, select
         residual = next(args for args, _ in calls if args[3] == selection[0])
         assert all("--ignore=" + target in residual for target in expected)
         assert len({env["ROS_DOMAIN_ID"] for args, env in calls if args[3] in expected}) == 2
+
+
+@pytest.mark.parametrize("code,output", [(0, "1 skipped"), (5, "no tests ran"), (1, "1 failed")])
+def test_native_omx_ros_skips_empty_collection_and_failures_block_ci(monkeypatch, code, output):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    target = "middleware/devices/omx/adapter/test/test_omx_ros_runtime.py"
+    step = next(s for s in yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+                if s["name"] == "Test (matrix suite, D-436)")
+    script = step["run"].split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([[target]]))
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs:
+                        SimpleNamespace(stdout=iter([output]), wait=lambda: code))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(script, str(WORKFLOW), "exec"), {})
+    assert ended.value.code == 1
 
 
 def test_ci_local_execution_wheel_pin_matches_package_metadata():
