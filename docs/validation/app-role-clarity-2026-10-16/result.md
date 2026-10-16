@@ -63,7 +63,7 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 
 ## 최종 판정
 
-- 최종 제품 코드 SHA: `bdce6a9e403126c5696dd69b88fcd023b773ff84` (`feat/app-role-clarity`). 후속 receipt 커밋은 문서만 갱신한다. TDD 체크포인트는 `docs/app-role-clarity`의 `3fa99097d`까지 그대로 남겼다. 두 최종 트리는 제품 코드가 같다.
+- 최종 제품 코드 SHA: `bdce6a9e4` (`feat/app-role-clarity`). 후속 receipt 커밋은 문서만 갱신한다. TDD 체크포인트는 `docs/app-role-clarity`의 `3fa99097d`까지 그대로 남겼다. 두 최종 트리는 제품 코드가 같다.
 - 최종 원격 invocation: `ROSY_RUN_BROWSER_TESTS=1`을 켜고 Fleet workflow/Robot panel, 실제 API owner, Node·연결·주소·dialog, 제목·모듈 구조, 설치, 문서·harness의 16개 시험 모듈을 실행했다. 305 passed / 0 failed / 0 skipped, exit 0이다.
 - `known_failures.py final-validation/run-1.txt`: `0 new, 0 known, 0 flaky`.
 - `rosy_harness.py generate` 후 `lint`: 오류 0, 기존 검증 기록 노후 경고 30개. 이 경고를 해결했다고 주장하지 않는다.
@@ -86,3 +86,10 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 - 기존 PeerCatalogue가 mDNS 관측으로 등록 directory 행을 대체하면 승인 origin을 이 응답에서 확인할 수 없다. 이 경우 앱 링크를 만들지 않고 연결 안내를 표시한다. 광고를 신뢰하거나 새로운 API를 임의로 추가하지 않는다.
 - 새 DEVICE/FIELD·서명 릴리스 설치·실제 사용자 계정 전환은 NOT RUN이다.
 - 작업 브랜치를 main에 반영하거나 장치에 배포하지 않았다.
+
+## main 착지 추가 검증
+
+- `land.py --tests auto`가 파일 이동을 감지하여 원격 FULL 및 브라우저 검증을 선택했다. 선행 구조·harness 247개 통과.
+- 최초 FULL Fleet: 5357 passed, 315 skipped, 2 failed. 두 실패는 discovery 모듈 분리 후 기존 console.js에서 코드를 찾던 계약 시험이다. 새 HTTP 자산·import 연결을 확인하도록 시험을 수정했다.
+- 최초 FULL 공통: 7945 passed, 1055 skipped, 1 failed. 문서의 전체 commit SHA를 secret scanner가 high-entropy token으로 판정했다. 같은 커밋의 짧은 SHA로 표기했고 scanner 규칙은 변경하지 않았다.
+- 제품 동작 변경 없이 시험·증거 표기를 보정했다. 최종 착지 성공 여부는 `land.py` 실행 결과로 확인한다.

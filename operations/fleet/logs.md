@@ -3981,3 +3981,9 @@
 - 변경: Fleet 기존 static allowlist와 wheel/sdist 설치 검증에 device-discovery.js를 포함했다. 기존 API·정적 서빙을 유지한다. e596dc451의 최초 checkout 밖 설치·자산 HTTP 검증 55개 시험이 통과했으며, D-766에 따른 devices/ 분리 이후 최종 설치 검증을 다시 한다.
 - 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
 - gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
+
+- 변경: disabled-feature poller와 scanner lease 경보 시험이 분리된 device-discovery.js를 검증한다. HTTP 자산 응답과 console.js의 import 연결도 확인한다.
+- 증거: main 착지 전체 시험에서 기존 소스 경로를 읽던 2건 실패를 확인했다(5357 passed, 315 skipped). 제품 코드는 변경하지 않았으며 수정 후 원격 검증은 착지 절차에서 수행한다.
+- gate 변화: 없음. 전체 검증 통과 전 main 반영 보류.
