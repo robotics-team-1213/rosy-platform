@@ -8892,3 +8892,10 @@ osy-d395-s1d\`.
 - 변경: 실제 암실의 불규칙 source 간격을 확인하고 같은 원본의 fresh 재조회를 WAITING_FRAME으로 분리했다. 확인/epoch/budget 보존과 READY/제어 갱신 거부를 함께 유지했다.
 - 증거: 반복 frame·확인 보존 RED2건과 상충 품질 RED→GREEN, c6c9366d8 관련47개 원격 통과(실제 Chromium 포함). 실제24 assessment/역할48개에서 WAITING_FRAME35·fresh false STALE0, 동일 profile·baseline·budget·ledger 보존. 첫 helper 실패/자동 원복도 보존.
 - gate 변화: 불규칙 프레임 관측 경로 보완. 강조도 현장 수용·episode 환경 binding·수집 stop·실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-frame-progress-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
+
+- 변경: 원본 JSONL·SHA·episode host-clock 창·run/profile·데이터 hash·rig/보정을 bind하고 split/학습/별도 reload에서 재검증한다. 실패/exclude와 미관측을 남기며 sparse 이벤트를 연속 수용으로 해석하지 않는다. legacy 보고서는 명시적 unrecorded로 분할한다.
+- 증거: 경계/영상 metadata RED→GREEN, 7260e1563 관련82개 원격 통과. 0a9954c5f9 Model PC 실제 LeRobot 합성12frame·CLI seal·독립 train/eval/test·ACT2step·별도 model/pre/post reload1개 통과(skip0). 기본 venv 경로의 앞선1skip은 별도 보존. 실제 닫힌 camera-only 원본82015bytes/37event hash와 형식 검증, 원본 불변. 독립 리뷰 P2 두 건 수정 후 남은 material finding 없음.
+- gate 변화: offline 환경 provenance 연결. 실제 recorder 창 발행·환경 저하 owner stop·강조도 현장 수용·실제 시연/학습은 미완료이며 실제 시연0회. docs/validation/omx-environment-lineage-2026-10-17/result.md.

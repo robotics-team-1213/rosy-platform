@@ -592,3 +592,18 @@ rolling budget·환경 ledger를 보존했고 실제24 assessment의 역할48개
 fresh false STALE0건을 확인했다. 첫 helper의 warmup receipt 조회 실패와 자동 원복도 보존했다.
 실제 시연·IL eligible 데이터는0회이며 환경 이력의 episode/학습 binding 등 완료 기준을 유지한다.
 [불규칙 도착·수정·원격 검사·실제 이전](../validation/omx-environment-frame-progress-2026-10-17/result.md).
+
+
+### 2026-10-17 환경 원본의 native 검토·학습 연결
+
+native 환경 원본 log와 recorder가 선언한 Fleet host Unix ns episode 창을 데이터 파일 hash·
+run/profile·rig/보정에 묶는다. 검사·분할·학습·별도 재적재에서 원본과 요약을 다시 검증하고
+실패/exclude·미관측 episode·split별 영상 조건 이벤트 수를 보존한다. 기존 기록의 환경은
+unrecorded이며 정상 조명으로 채우지 않는다. 프레임 identity·age·v3 수치가 확인된 새로운
+관측만 알려진 영상 조건으로 집계하며 sparse transition이 연속 readiness를 입증하지 않는다.
+
+관련82개 원격 검사와 Model PC의 실제 LeRobot 합성3episode/12frame·독립 분할·ACT2step·
+별도 model/pre/post 재적재가 통과했다. 실제 닫힌 camera-only 원본37event의 형식/hash도
+검증했으나 episode 창을 만들지 않았다. rig/보정/창은 선언이며 진위·물리 수용 증명이 아니다.
+실제 recorder 시간 창 발행·환경 저하 owner stop·강조도 실물 수용·첫 시연과 실데이터 학습은
+여전히 미완료다. [구현과 검증](../validation/omx-environment-lineage-2026-10-17/result.md).

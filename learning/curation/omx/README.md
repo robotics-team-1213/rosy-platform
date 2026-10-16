@@ -141,3 +141,36 @@ Pilot 실물 driver/API와 native owner 전환은 아직 없으며 SIM 화면을
 검증 현황은 [실행 기록](../../../docs/plans/2026-10-14-omx-imitation-preparation.md)의 구현 상태를 본다.
 공식 학습 CLI의 합성 데이터 2 step과 model/preprocessor/postprocessor 재적재까지 원격 검증했다.
 실물·실계정 작업의 보류 사유와 재개 조건은 [D-756](../../../docs/adr/D-756-omx-imitation-preparation-and-resumption-gates.md)을 따른다.
+
+## Native 환경 이력 연결
+
+`native_environment.py`는 닫힌 v3 `environment.jsonl` 원본과 수집기가 기록한 episode별
+Fleet host Unix ns 시간 창을 데이터 파일 hash·rig·calibration에 묶는다. 별도 출력에 원본
+UTF-8 문자열과 SHA-256을 함께 보존하며 원본 데이터와 카메라 서비스를 수정하지 않는다.
+
+```text
+python learning/curation/omx/native_review.py seal-environment <dataset-root> --log <closed-environment.jsonl> --windows <episode-windows.json> --rig-revision <rig> --calibration-revision <calibration> --out <new-evidence-directory>
+python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id <repo-id> --body-units normalized_-100_100 --rig-revision <rig> --calibration-revision <calibration> --source-mode scripted_teacher --capture-provenance <capture.json> --environment-evidence <new-evidence-directory>/environment.json --out <new-review-directory>
+```
+
+`episode-windows.json`은 episode 순서의 배열이다. 각 항목은 `episode_index`, `start_ns`,
+`end_ns`(미포함), `run_id`, `profile_sha256`을 가진다. 시간 창은 양수이며 순서대로 겹치지
+않아야 하고 해당 run/profile의 기록과 일치해야 한다. 상대 dataset timestamp나 bag 시각을
+host 시각으로 추측해 채우지 않는다. 실제 수집기가 이 시간 창을 발행하는 결선은 아직 없다.
+run/profile은 카메라 receipt의 값을 보존한다. rig/보정·창 선언은 독립적인 진위 증명이 아니다.
+
+부분 JSONL·중복 JSON 키·비유한 수치·host 시각 역행·다른 run/profile 혼입·파일/rig/보정 불일치를
+거부한다. 원본 log는 최대8MiB이며 더 큰 기록은 수집 시 episode 창을 포함하는 닫힌 snapshot을
+별도로 보존한다. 기존 파일을 잘라 덮어쓰지 않는다. 실제 reader 검사는 기존 inspect에서 수행한다.
+
+`inspection.json`의 `environment_summary`와 split receipt의 `environment_coverage`를
+검토한다. 영상 시각·순번·나이·v3 품질 수치가 확인된 새로운 프레임만 알려진 영상 조건으로
+집계한다. 재조회·만료·확인 불가 영상은 UNKNOWN, 창 안에 기록이 없으면 unobserved다.
+환경 이력이 없는 기존 보고서는 unrecorded로 분할할 수 있으며 정상 조명으로 간주하지 않는다.
+실패/미판정/exclude 시도도 coverage에 남는다. 조건별 수량은 **변경 이벤트 수**로,
+프레임 수·시간 비율·에피소드 전체 환경 수용률이 아니다.
+
+분할과 학습 시작·별도 모델 재적재에서 원본 log/hash/요약/coverage를 다시 검증한다.
+학습 receipt와 offline 평가에도 coverage를 보존한다. 로그는 상태가 바뀔 때만 기록하므로
+연속 readiness·물체 가시성·실제 과제 성공을 입증하지 않는다. 사람 성공 검토와 세션/parent-cycle
+독립 분할은 그대로 적용한다. 환경별 실제 성공률 평가는 별도다.

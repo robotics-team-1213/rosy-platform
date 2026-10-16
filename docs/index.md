@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
 - 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
 - 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 - 2026-10-16 · uncommitted · feat(omx): 기존 카메라 저조도 자동 조정과 품질 관측
 - 2026-10-16 · uncommitted · docs(omx): 고해상도 시야와 원본 preview 복구 검증
-- 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
