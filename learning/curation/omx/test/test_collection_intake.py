@@ -150,7 +150,8 @@ def test_single_frame_complete_attempt_is_not_training_input(module, tmp_path):
 
 
 @pytest.mark.parametrize('fault', ['flipped_complete', 'teacher', 'submission', 'native_goal', 'native_result',
-                                  'wrong_goal', 'sequence', 'clock', 'outer_terminal', 'stop', 'error', 'extra_command'])
+                                  'wrong_goal', 'sequence', 'clock', 'outer_terminal', 'stop', 'error',
+                                  'extra_command'])
 def test_manifest_completion_cannot_upgrade_unverified_native_attempt(module, tmp_path, fault):
     root = tmp_path/'raw'
     manifest = raw_session(root)
