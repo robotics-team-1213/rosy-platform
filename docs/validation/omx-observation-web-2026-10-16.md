@@ -34,17 +34,9 @@
 기본 `/joint_states`의 synthetic publisher를 실제 피드백으로 사용하지 않았다.
 
 모델 PC는 전송 전후의 파일 집합·크기·해시를 확인하고, 실제 reader 실행 후 다시 대조했다.
-manifest 자체의 SHA256은 다음과 같다.
-
-```
-15bec14b3ef70b0502e27c9c3d43c317b630a153e8c8d8c9d647ba27c8de3008
-```
-
-MCAP 원본 SHA256은 다음과 같다.
-
-```
-e7ccb97b4cdd72184427ef8ca8be9543b7b4dee907c71071e2c8df8f9112bb56
-```
+전체 checksum은 원본 `transfer-manifest.json`과 모델 PC 수신 receipt의
+`source_manifest_sha256`에 보존했다. MCAP의 전체 SHA256도 해당 manifest에 있다.
+공개 문서에는 긴 임의 문자열을 복제하지 않고 실제 대조한 receipt를 정본으로 둔다.
 
 처음 SIGINT timeout으로 종료한 두 기록은 최종 metadata가 없어 미완료로 보존했다.
 설치된 ros2bag recorder의 SIGTERM 종료 경로를 확인한 뒤 TERM과 종료 대기를 사용했고,
