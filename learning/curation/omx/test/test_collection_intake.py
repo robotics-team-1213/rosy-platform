@@ -29,7 +29,8 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
     row = dict(frame_index=0, time_ns=start+1, joint_source_stamp=1., reference_source_stamp=1.,
                images=images, requested_target_rad=[0.] * 6,
                **{'observation.state': [0.] * 6, 'action': [0.] * 6})
-    (episode / 'samples.jsonl').write_text(json.dumps(row)+'\n', encoding='utf-8')
+    second = dict(row, frame_index=1, time_ns=start+2, joint_source_stamp=1.1, reference_source_stamp=1.1)
+    (episode / 'samples.jsonl').write_text(json.dumps(row)+'\n'+json.dumps(second)+'\n', encoding='utf-8')
     event = dict(policy='omx-photometric-v3', run_id='run-1', profile_sha256='a'*64,
                  recorded_ns=start, motion_admitted=False, physical_acceptance=False,
                  photometric_ready=False, observations={}, environment={
@@ -43,7 +44,7 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
                     body_units='normalized_-100_100', gripper_units='normalized_0_100',
                     episodes=[dict(episode_index=0, cycle_id=session+'-cycle', start_ns=start,
                                    end_ns=start+10, run_id='run-1', profile_sha256='a'*64,
-                                   complete=complete, frames=1, samples_path='episodes/000000/samples.jsonl',
+                                   complete=complete, frames=2, samples_path='episodes/000000/samples.jsonl',
                                    reason='', outcome='unknown')])
     save_manifest(root, manifest)
     return manifest
@@ -80,12 +81,13 @@ def test_invalid_sessions_refused_before_output(module, tmp_path, fault):
     elif fault == 'environment': (root/'environment.jsonl').write_text('{}\n')
     elif fault == 'image_size': (root/'episodes/000000/top.rgb').write_bytes(b'x')
     else:
-        row = json.loads(sample.read_text())
+        lines = sample.read_text().splitlines()
+        row = json.loads(lines[0])
         if fault == 'frame': row['frame_index'] = 1
         if fault == 'window': row['time_ns'] = 110
         if fault == 'bounds': row['action'][5] = -1
         if fault == 'nan': row['requested_target_rad'][0] = float('nan')
-        sample.write_text(json.dumps(row)+'\n')
+        sample.write_text(json.dumps(row)+'\n'+lines[1]+'\n')
     if fault not in ('hash', 'unlisted'): save_manifest(root, manifest)
     with pytest.raises(ValueError):
         module.prepare([root], output, 'test/omx')
@@ -113,6 +115,17 @@ def test_aggregate_overlap_and_incompatible_teacher_refused(module, tmp_path):
     manifest = raw_session(two, session='session-2')
     with pytest.raises(ValueError, match='overlap'):
         module.prepare([one, two], tmp_path/'out', 'test/omx')
+
+
+def test_single_frame_complete_attempt_is_not_training_input(module, tmp_path):
+    root = tmp_path/'raw'
+    manifest = raw_session(root)
+    sample = root/'episodes/000000/samples.jsonl'
+    sample.write_text(sample.read_text().splitlines()[0]+'\n')
+    manifest['episodes'][0]['frames'] = 1
+    save_manifest(root, manifest)
+    with pytest.raises(ValueError, match='two frames'):
+        module.validate_session(root)
     manifest['episodes'][0].update(start_ns=200, end_ns=210)
     manifest['teacher_sha256'] = 'c'*64
     save_manifest(two, manifest)
@@ -131,7 +144,7 @@ def test_real_lerobot_roundtrip_keeps_independent_capture_groups(module, tmp_pat
     assert receipt['reader_verified'] is True
     assert receipt['episodes'] == [dict(episode_index=i, session_id=f'session-{i+1}',
                                        attempt_index=0, cycle_id=f'session-{i+1}-cycle') for i in range(2)]
-    assert report['frame_count'] == 2
+    assert report['frame_count'] == 4
     assert report['reader_verified'] is True
     assert report['source_mode'] == 'scripted_teacher'
     assert report['environment_summary']['physical_acceptance'] is False

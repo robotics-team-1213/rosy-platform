@@ -44,7 +44,12 @@ for i in range(3):
                        joint_source_stamp=1.+i, reference_source_stamp=1.+i,
                        images={r:dict(data=bytes([100,110,120])*1024, width=32, height=32,
                                       source_stamp=1.+i) for r in ('top','front')})
-    store.sample(episode, observation, [0.]*6)
+    for frame in range(2):
+        observation.update(time_ns=start+frame+1, joint_source_stamp=1.+i+frame/10,
+                           reference_source_stamp=1.+i+frame/10)
+        for image in observation['images'].values():
+            image['source_stamp'] = 1.+i+frame/10
+        store.sample(episode, observation, [0.]*6)
     episode.update(complete=True, reason='', end_ns=start+10)
     store.close(dict(hold_requested=True, physical_stop_verified=False))
     sessions.append(source)
@@ -52,11 +57,18 @@ dataset = work/'dataset'
 receipt = prepare(sessions, dataset, 'rosy-fixture/collection')
 report = json.loads((dataset/'inspection.json').read_text())
 decisions = json.loads((dataset/'decisions.json').read_text())
-assert report['reader_verified'] and report['frame_count'] == 3
+assert report['reader_verified'] and report['frame_count'] == 6
 reader = load_dataset(dataset, 'rosy-fixture/collection')
 for i in range(3):
-    assert reader[i]['action'].tolist() == [float(i+1)]*6
-    assert reader[i]['observation.state'].tolist() == [0.]*6
+    for frame in range(2):
+        actual = reader[i*2+frame]
+        assert actual['action'].tolist() == [float(i+1)]*6
+        assert actual['observation.state'].tolist() == [0.]*6
+        assert actual['source.capture_time_ns'].tolist() == [100+i*100+frame+1]
+        for name in ('joint', 'reference', 'top', 'front'):
+            value = actual[f'source.{name}_time_ns']
+            assert str(value.dtype) == 'torch.int64'
+            assert value.tolist() == [round((1.+i+frame/10)*1e9)]
 assert all(e['outcome'] == 'unknown' and e['split'] == 'exclude' for e in decisions)
 for decision, split in zip(decisions, ('train','eval','test')):
     decision.update(outcome='success', split=split, reviewer='synthetic test fixture',
