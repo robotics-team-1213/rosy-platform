@@ -347,3 +347,20 @@ indirect mapping SRAM write72개가 있다. goal/torque/reboot는 관측되지 �
 유한 제한 적용·초기 목표 보존·normal write 오류 전파·실물 owner/HOLD와 정지 경로를
 계속 연결한다. 실제 자동 시연은 0회다.
 [실행·실패·분석의 분리 증거](../validation/omx-native-passive-read-2026-10-16/result.md).
+
+## 2026-10-16 후속: 정상 write 실패와 framework 오류 정지
+
+정상 write가 buffered/multiwrite 실패를 버리고 HW_ERROR에도 목표를 송신하는 것을
+고정 실제 메서드 실행의 5실패로 재현했다. 실패를 즉시 ERROR로 전파하고 정상 상태가
+아니면 추가 쓰기를 거절한다. write6·오류 callback8시나리오와 원격 관련24시험이 통과했다.
+
+설치 ros2_control은 write ERROR에서 on_deactivate가 아니라 on_error를 직접 호출한다.
+vendor의 기본 on_error/on_shutdown은 stop 없이 SUCCESS였다. 두 callback을 stop에
+연결하고 on_error는 cleanup 후에도 ERROR로 fault를 FINALIZED에 남긴다. 실제 native
+객체의 통신 객체 부재 실패 전파, 전체 plugin 빌드, 실제 HardwareComponent consumer의
+12경우 및 상속 기본 callback의 negative control을 확인했다. bus 경계는 double이며
+실물 정지·부하·구동을 실행한 것은 아니다. 운영 prefix/service는 유지했다.
+
+유한 제한·초기 목표 보존·실제 상태 출처·owner/HOLD·정지 관측을 이어서 연결한다.
+실제 시연은 계속 0회다.
+[원인·caller 경로·수정·실행 범위](../validation/omx-cyclic-write-fault-2026-10-16/result.md).

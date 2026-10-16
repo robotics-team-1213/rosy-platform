@@ -588,3 +588,13 @@ loader-lock deadlock during ROS library constructors. It is for a bounded native
 probe, with pre/post snapshots and packet evidence, and is not an actuator runtime.
 The loaded driver must be bound to the patched artifact under the actual child
 environment. See [the actual passive-read result and failed attempts](../../../docs/validation/omx-native-passive-read-2026-10-16/result.md).
+
+`hardware-write-errors.patch` rejects unhealthy pre-status and propagates buffered
+or multiwrite failures immediately. `hardware-fault-stop.patch` connects error and
+shutdown callbacks to the existing stop implementation; a fault remains terminal
+even after cleanup succeeds. The installed framework calls on_error directly on
+write failure, so on_deactivate alone did not provide that stop attempt.
+The native consumer probe and inherited-callback negative control are recorded in
+[the write/fault validation](../../../docs/validation/omx-cyclic-write-fault-2026-10-16/result.md).
+These changes establish error propagation and software cleanup attempts; physical
+stopping, load retention and hardware owner admission still require actual evidence.
