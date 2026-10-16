@@ -1,6 +1,6 @@
 """ROS message binding and independent stop path, without hardware or ROS middleware."""
 from dataclasses import dataclass
-import importlib
+import importlib.util
 import json
 from pathlib import Path
 import queue
@@ -16,9 +16,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'deploy/robot/omx'))
 
 
+def _module(name):
+    paths = {'collection_ros': ROOT/'deploy/robot/omx/collection_ros.py',
+             'collection_ros_inputs': ROOT/'deploy/robot/omx/collection_ros_inputs.py'}
+    spec=importlib.util.spec_from_file_location(name,paths[name])
+    result=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+
 @pytest.fixture
 def inputs():
-    module = importlib.import_module('collection_ros_inputs')
+    module = _module('collection_ros_inputs')
     result = module.RosInputs.__new__(module.RosInputs)
     result.profile = dict(joint_names=['j'+str(i) for i in range(6)], normalization=[[-1.,1.]]*6,
                           camera_shapes={r:[1,2,3] for r in ('top','front')},
@@ -66,7 +75,7 @@ def test_input_snapshot_requires_exact_environment_image_stamp(inputs):
 
 
 def test_independent_monitor_requests_hold_without_collection_writer():
-    cls = importlib.import_module('collection_ros').RosBackend
+    cls = _module('collection_ros').RosBackend
     backend = cls.__new__(cls)
     requests=[]
     backend.closed,backend.armed,backend.fault = threading.Event(),True,None
@@ -81,7 +90,7 @@ def test_independent_monitor_requests_hold_without_collection_writer():
 
 
 def test_queue_overflow_revokes_collection_without_waiting_for_storage():
-    cls = importlib.import_module('collection_ros').RosBackend
+    cls = _module('collection_ros').RosBackend
     backend=cls.__new__(cls);backend.events=queue.Queue(maxsize=1);backend.fault=None
     backend.event_lock,backend.facts=threading.Lock(),{}
     @dataclass
@@ -93,7 +102,7 @@ def test_queue_overflow_revokes_collection_without_waiting_for_storage():
 
 
 def test_resource_lock_identity_depends_on_action_and_domain_not_profile_lock_paths():
-    module=importlib.import_module('collection_ros')
+    module=_module('collection_ros')
     assert module.resource_key('/cell/arm/follow_joint_trajectory','42') == module.resource_key(
         '/cell/arm/follow_joint_trajectory','042')
     assert module.resource_key('/cell/arm/follow_joint_trajectory','42') != module.resource_key(
@@ -102,7 +111,7 @@ def test_resource_lock_identity_depends_on_action_and_domain_not_profile_lock_pa
 
 
 def test_expired_acceptance_is_rechecked_by_live_observation():
-    module=importlib.import_module('collection_ros')
+    module=_module('collection_ros')
     from collection_rehearsal import profile,teacher
     from collection_profile import digest
     backend=module.RosBackend.__new__(module.RosBackend)
@@ -114,15 +123,22 @@ def test_expired_acceptance_is_rechecked_by_live_observation():
 
 
 def test_success_requires_matching_native_current_command_events():
-    module=importlib.import_module('collection_ros')
+    module=_module('collection_ros')
     backend=module.RosBackend.__new__(module.RosBackend)
     backend.runtime=NS(action_port=NS(last_handle=NS(done=lambda:True,succeeded=lambda:True,status=4)))
+    class Owner:
+        state='active'
+        def poll(self):
+            self.state='ready'
+            return NS(accepted=True)
+    backend.runtime.owner=Owner()
     backend.event_lock,backend.command_id=threading.Lock(),'command'
     backend.facts={'command':{'GOAL_ACCEPTED':dict(goal_id='first'),
                               'TERMINAL_RESULT':dict(goal_id='other',status=4,result_code=0)}}
     with pytest.raises(ValueError,match='evidence'): backend.terminal()
     backend.facts['command']['TERMINAL_RESULT']['goal_id']='first'
     assert backend.terminal()['succeeded'] is True
+    assert backend.runtime.owner.state=='ready'
 
 
 def test_rehearsal_cli_exercises_success_and_failures_with_no_hardware(tmp_path):

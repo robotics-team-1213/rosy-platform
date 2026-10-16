@@ -1,6 +1,4 @@
 """Bounded collection orchestration; uses the existing command owner, never powers hardware."""
-import json
-from pathlib import Path
 import shutil
 import time
 
@@ -96,7 +94,7 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                 sample = backend.observe()
             validate_observation(sample, profile, time.time_ns())
             current = store.begin(min(sample['time_ns'], sample['environment']['recorded_ns']), sample['environment'])
-            append(store.root/'environment.jsonl', sample['environment'])
+            store.environment(sample['environment'])
             last_frame, last_identity = time.monotonic(), None
             identity = (current['run_id'], current['profile_sha256'])
             generations = {r: (sample['environment']['environment'][r]['environment_epoch'],
@@ -117,11 +115,12 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                     require(time.monotonic()-began < profile['max_session_s'], 'session deadline exceeded')
                     require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
                     sample = backend.observe()
-                    append(store.root/'environment.jsonl', sample['environment'])
+                    store.environment(sample['environment'])
                     validate_observation(sample, profile, time.time_ns())
                     env = sample['environment']
                     require((env['run_id'], env['profile_sha256']) == identity, 'environment run/profile changed')
-                    require(all((env['environment'][r]['environment_epoch'], env['environment'][r]['control_generation'])
+                    require(all((env['environment'][r]['environment_epoch'],
+                                 env['environment'][r]['control_generation'])
                                 == generations[r] for r in generations), 'environment/control generation changed')
                     for event in backend.drain_events():
                         append(store.root/'events.jsonl', event)

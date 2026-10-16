@@ -64,7 +64,9 @@ def main(argv=None):
             return 0
         # Imports and construction are after static admission; check/rehearsal never import rclpy.
         from collection_ros import RosBackend
-        signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+        def interrupt(*_):
+            raise KeyboardInterrupt()
+        signal.signal(signal.SIGTERM, interrupt)
         backend = RosBackend(profile, acceptance, teacher)
         sample = backend.ready()
         if args.command == 'preflight':

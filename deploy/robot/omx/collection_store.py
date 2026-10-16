@@ -37,6 +37,7 @@ class RawCollection:
             raise ValueError('collection output exists; select a new directory')
         self.root.mkdir(parents=True)
         sync_directory(self.root.parent)
+        self._last_environment = None
         self.manifest = dict(schema='rosy.omx-collection-session.v1', state='RUNNING', mode=mode,
             source_mode='scripted_teacher' if mode == 'hardware' else 'simulation',
             session_id=uuid.uuid4().hex, rig_revision=profile['rig_revision'],
@@ -46,6 +47,20 @@ class RawCollection:
         save(self.root/'manifest.json', self.manifest)
         for name in ('environment.jsonl', 'events.jsonl'):
             (self.root/name).touch(exist_ok=False)
+
+    def environment(self, receipt):
+        stamp = receipt.get('recorded_ns')
+        if type(stamp) is not int or stamp <= 0:
+            raise ValueError('invalid original environment time')
+        fingerprint = hashlib.sha256(json.dumps(receipt, sort_keys=True, allow_nan=False).encode()).hexdigest()
+        if self._last_environment is not None:
+            previous, digest = self._last_environment
+            if stamp == previous and fingerprint == digest:
+                return
+            if stamp <= previous:
+                raise ValueError('environment time reversed or original receipt changed')
+        append(self.root/'environment.jsonl', receipt)
+        self._last_environment = (stamp, fingerprint)
 
     def begin(self, now_ns, environment):
         index = len(self.manifest['episodes'])

@@ -1,7 +1,6 @@
 """Tomorrow's collection path must fail closed before and during a trajectory."""
 import copy
 import importlib.util
-import json
 from pathlib import Path
 import sys
 import time
@@ -140,3 +139,12 @@ def test_slow_intent_storage_cannot_dispatch_after_session_deadline(module, tmp_
     result=module.run_session(config,plan,tmp_path/'slow',backend)
     assert not backend.commands and backend.stops
     assert not result['episodes'][0]['complete']
+
+
+def test_repolling_original_environment_does_not_inflate_raw_log(module,tmp_path):
+    store=module.RawCollection(tmp_path/'log',profile(),'a'*64,'rehearsal')
+    env=Backend().observe()['environment']
+    store.environment(env);store.environment(copy.deepcopy(env))
+    assert len((store.root/'environment.jsonl').read_text().splitlines())==1
+    changed=copy.deepcopy(env);changed['photometric_ready']=False
+    with pytest.raises(ValueError,match='changed'): store.environment(changed)

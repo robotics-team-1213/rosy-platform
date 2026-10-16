@@ -66,17 +66,20 @@ class RosInputs:
     def hardware(self, message):
         require(list(message.id) == self.profile['ros']['motor_ids'] and message.comm_state == 0
                 and list(message.dxl_hw_state) == [0]*6
-                and list(message.torque_state) == self.profile['ros']['expected_torque'], 'hardware fault/torque differs')
+                and list(message.torque_state) == self.profile['ros']['expected_torque'],
+                'hardware fault/torque differs')
         source = stamp(message)
         with self.lock:
-            require(number(source) and source > self.rows.get('hardware', {}).get('stamp', 0), 'hardware clock reversed')
+            require(number(source) and source > self.rows.get('hardware', {}).get('stamp', 0),
+                    'hardware clock reversed')
             self.rows['hardware'] = dict(stamp=source, received=time.monotonic())
 
     def snapshot(self, environment):
         now, wall = time.monotonic(), time.time_ns()
         with self.lock:
             require(self.fault is None, 'sensor fault: '+str(self.fault))
-            require(all(key in self.rows for key in ('joints', 'reference', 'hardware')), 'waiting for native telemetry')
+            require(all(key in self.rows for key in ('joints', 'reference', 'hardware')),
+                    'waiting for native telemetry')
             joints, reference, hardware = (dict(self.rows[key]) for key in ('joints', 'reference', 'hardware'))
             maximum = self.profile['ros'].get('max_hardware_age_s', .25)
             require(0 <= now-hardware['received'] <= maximum and 0 <= wall/1e9-hardware['stamp'] <= maximum,

@@ -55,6 +55,10 @@ def validate_profile(profile, *, mode, acceptance=None, teacher=None):
             require(acceptance.get(key) is True, 'field acceptance missing '+key)
         if teacher is not None:
             require(acceptance.get('teacher_sha256') == digest(teacher), 'field acceptance teacher differs')
+        require(number(profile.get('max_skew_s')) and 0 < profile['max_skew_s'] <= 2,
+                'measured capture/reference skew bound required')
+        require(number(profile.get('max_frame_jitter_s'))
+                and 0 <= profile['max_frame_jitter_s'] <= 1/profile['fps'], 'measured frame cadence bound required')
         ros = profile.get('ros')
         require(isinstance(ros, dict), 'native ROS placement required')
         for key in ('namespace', 'joint_state_topic', 'reference_topic', 'hardware_topic',

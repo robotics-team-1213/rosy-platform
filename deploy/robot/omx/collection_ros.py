@@ -36,7 +36,8 @@ class RosBackend:
         from omx_adapter.command_owner import ArmCommandConfig
         from omx_adapter.ros_runtime import RosArmCommandRuntime
         from collection_ros_inputs import RosInputs
-        self.profile, self.acceptance, self.teacher = copy.deepcopy(profile), copy.deepcopy(acceptance), copy.deepcopy(teacher)
+        self.profile = copy.deepcopy(profile)
+        self.acceptance, self.teacher = copy.deepcopy(acceptance), copy.deepcopy(teacher)
         self.lock, self.events = threading.RLock(), queue.Queue(maxsize=1024)
         self.event_lock, self.facts, self.command_id = threading.Lock(), {}, None
         self.deadline = None
@@ -62,7 +63,8 @@ class RosBackend:
             for key in ('joint_names', 'allowed_owners'):
                 config[key] = tuple(config[key])
             owner = ArmCommandConfig(**config)
-            require(owner.joint_names == tuple(profile['joint_names']) and owner.calibration_revision == profile['calibration_revision']
+            require(owner.joint_names == tuple(profile['joint_names'])
+                    and owner.calibration_revision == profile['calibration_revision']
                     and owner.workcell_id == profile['workcell_id'] and owner.instance_id == profile['instance_id']
                     and owner.allowed_owners == ('rule_based',), 'collection/owner identity differs')
             self.runtime = RosArmCommandRuntime(self.node, owner,
@@ -121,7 +123,8 @@ class RosBackend:
             require(all(action != self.profile['ros']['trajectory_action'] for action, _ in clients),
                     'another action owner/client is present')
         expected = self.profile['ros']['action_server']
-        require(servers == [(expected['node_name'], expected['node_namespace'])], 'native action server identity differs')
+        require(servers == [(expected['node_name'], expected['node_namespace'])],
+                'native action server identity differs')
 
     def monitor(self):
         while not self.closed.wait(.05):
@@ -186,6 +189,9 @@ class RosBackend:
             require(accepted is not None and terminal is not None
                     and accepted['goal_id'] == terminal['goal_id'] and terminal['status'] == 4
                     and terminal['result_code'] == 0, 'missing native current-command terminal evidence')
+            decision = self.runtime.owner.poll()
+            require(decision.accepted and self.runtime.owner.state == 'ready',
+                    'owner did not complete its normal READY transition')
         return dict(succeeded=handle.succeeded(), status=handle.status, source='native_follow_joint_trajectory')
 
     def drain_events(self):
