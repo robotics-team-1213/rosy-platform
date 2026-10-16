@@ -13,8 +13,6 @@ def test_collection_intake_real_native_split_roundtrip(tmp_path):
     assert Path(python).is_file(), 'configured LeRobot interpreter is missing'
     root = Path(__file__).resolve().parents[1]
     script = r'''
-import ast
-import hashlib
 import importlib.metadata
 import json
 from pathlib import Path
@@ -23,23 +21,32 @@ assert importlib.metadata.version('lerobot') == '0.4.4'
 repo, work = Path(sys.argv[1]), Path(sys.argv[2])
 sys.path.insert(0, str(repo/'learning/curation/omx'))
 sys.path.insert(0, str(repo/'learning/training/omx'))
+sys.path.insert(0, str(repo/'deploy/robot/omx'))
+from collection_store import RawCollection, append
 from collection_intake import prepare
 from native_review import load_dataset, split_reviewed
 from native_cycle import run_cycle, validate_split
-source = ast.parse((repo/'learning/curation/omx/test/test_collection_intake.py').read_text())
-helpers = ast.Module(body=[node for node in source.body if isinstance(node, ast.FunctionDef)
-                          and node.name in ('raw_session', 'save_manifest')], type_ignores=[])
-fixture = dict(json=json, hashlib=hashlib)
-exec(compile(helpers, '<synthetic intake fixture>', 'exec'), fixture)
 sessions = []
 for i in range(3):
     source = work/f'raw-{i}'
-    manifest = fixture['raw_session'](source, session=f'synthetic-session-{i}', start=100+i*100)
-    sample = source/'episodes/000000/samples.jsonl'
-    row = json.loads(sample.read_text())
-    row['action'] = [float(i+1)]*6
-    sample.write_text(json.dumps(row)+'\n')
-    fixture['save_manifest'](source, manifest)
+    start = 100+i*100
+    profile = dict(rig_revision='synthetic-rig', calibration_revision='synthetic-cal', fps=10,
+                   task='synthetic pipeline fixture', camera_shapes={r:[32,32,3] for r in ('top','front')})
+    # The journal is exercised directly; this fixture never invokes a motion backend.
+    store = RawCollection(source, profile, 'b'*64, 'hardware')
+    event = dict(policy='omx-photometric-v3', run_id=f'synthetic-run-{i}', profile_sha256='a'*64,
+                 recorded_ns=start, motion_admitted=False, physical_acceptance=False,
+                 photometric_ready=False, observations={}, environment={r:dict(state='OBSERVING',
+                     condition=None, environment_epoch=0, control_generation=0) for r in ('top','front')})
+    append(source/'environment.jsonl', event)
+    episode = store.begin(start, event)
+    observation = dict(time_ns=start+1, observation_state=[0.]*6, action=[float(i+1)]*6,
+                       joint_source_stamp=1.+i, reference_source_stamp=1.+i,
+                       images={r:dict(data=bytes([100,110,120])*1024, width=32, height=32,
+                                      source_stamp=1.+i) for r in ('top','front')})
+    store.sample(episode, observation, [0.]*6)
+    episode.update(complete=True, reason='', end_ns=start+10)
+    store.close(dict(hold_requested=True, physical_stop_verified=False))
     sessions.append(source)
 dataset = work/'dataset'
 receipt = prepare(sessions, dataset, 'rosy-fixture/collection')
