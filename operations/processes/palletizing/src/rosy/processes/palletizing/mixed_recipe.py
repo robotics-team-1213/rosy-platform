@@ -58,8 +58,8 @@ class Item:
     max_load_on_top_kg: float
 
     def yaws_deg(self, allowed: tuple[int, ...]) -> tuple[int, ...]:
-        # upright_fixed keeps the taught yaw; yaw_only may also turn 90 deg about the vertical.
-        return (0,) if self.orientation == "upright_fixed" else allowed
+        # upright_fixed keeps the taught yaw 0; yaw_only may use every yaw the planner allows.
+        return tuple(y for y in allowed if y == 0) if self.orientation == "upright_fixed" else allowed
 
 
 @dataclass(frozen=True)
@@ -198,6 +198,9 @@ def load_mixed_recipe(text: str, *, grip_range: GripRange = DEFAULT_GRIP_RANGE) 
     gap = read("gap", fields.non_negative)
     planner = read("planner", _planner)
 
+    if planner is not None:
+        problems += [f"item {i.sku} is upright_fixed (yaw 0) but planner.yaw_deg has no 0" for i in items
+                     if i.orientation == "upright_fixed" and 0 not in planner.yaw_deg]
     if "schema" in data and data["schema"] != SCHEMA_RECIPE_MIXED:
         problems.append(f"schema must be {SCHEMA_RECIPE_MIXED}")
     if mode == "depalletize":

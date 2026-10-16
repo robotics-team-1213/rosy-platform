@@ -171,15 +171,23 @@ def check_plan(recipe, cell, reach, plan):
             a_low = a["z1"] - a["item"].grasp_depth - finger.overhang_m
             if any(_area(b, r) > 0 and b["z1"] > a_low + TOL for r in _strips(a, finger)):
                 assert a["i"] in anc[j], f"step {j} sits in finger room of {a['i']} without waiting"
-        # rule 4: reach, zone, alternates, station
-        assert reach(step.arm, step.pose_cell)
-        for role in step.alternates:
-            assert reach(role, step.pose_cell)
-        others = {a.role for a in cell.arms} - {step.arm} - set(step.alternates)
-        stations_of = {r: [n for n in recipe.pick_stations if reach(r, CellPose(*cell.stations[n], 0.0))]
-                       for r in {a.role for a in cell.arms}}
-        assert not any(reach(r, step.pose_cell) and stations_of[r] for r in others)
-        assert step.station in stations_of[step.arm]
+        # rule 4: reach at pick, release and both carry poses; zone; alternates only in the shared band
+        assert (step.zone == "shared_band") or step.alternates == ()
+        assert len(step.alternate_stations) == len(step.alternates)
+        for role, station in ((step.arm, step.station), *zip(step.alternates, step.alternate_stations)):
+            sx, sy, sz = cell.stations[station]
+            pick = CellPose(sx, sy, sz + it.height - it.grasp_depth, step.pose_cell.yaw)
+            place = step.pose_cell
+            for pose in (pick, place, CellPose(pick.x, pick.y, step.carry_z, pick.yaw),
+                         CellPose(place.x, place.y, step.carry_z, place.yaw)):
+                assert reach(role, pose), f"step {j}: {role} cannot reach {pose}"
+        assert step.pick_cell == CellPose(*cell.stations[step.station][:2],
+                                          cell.stations[step.station][2] + it.height - it.grasp_depth,
+                                          step.pose_cell.yaw)
+        if step.zone == "shared_band":
+            others = {a.role for a in cell.arms} - {step.arm} - set(step.alternates)
+            assert not any(reach(r, step.pose_cell) for r in others if any(
+                reach(r, CellPose(*cell.stations[n], 0.0)) for n in recipe.pick_stations))
         if cell.zones:
             zone = next(z for z in cell.zones if z.zone_id == step.zone)
             ox, oy, _ = cell.pallet_origins[b["pallet"]]
@@ -189,9 +197,12 @@ def check_plan(recipe, cell, reach, plan):
             if step.zone != "shared_band":
                 assert cell.arm(step.arm).zone_id == step.zone
         assert step.role == "place" and step.coupling == "independent"
-        # rule 5: carry height clears everything placed so far plus the held item
-        oz = cell.pallet_origins[b["pallet"]][2]
-        tops = [cell.pallet_origins[a["pallet"]][2] + a["z1"] for a in boxes[:j]] + [oz]
+        # rule 5: carry height clears every box that may already stand when this Step runs, i.e.
+        # every other Step that does not (transitively) wait for it, plus the held item
+        tops = [cell.pallet_origins[p_.id][2] for p_ in recipe.pallets]
+        tops += [cell.pallet_origins[a["pallet"]][2] + a["z1"] for a in boxes
+                 if a["i"] != j and j not in anc[a["i"]]]
+        tops += [cell.stations[n][2] for n in (step.station, *step.alternate_stations)]
         hang = max(it.height - it.grasp_depth, finger.overhang_m)
         assert step.carry_z >= max(tops) + hang + cell.approach_clearance_m - TOL
     # load on top: every box carries no more than its limit (area-proportional share downwards)
@@ -255,6 +266,31 @@ def test_two_arm_plan_has_concurrent_steps_in_different_zones():
             assert s.arm == "left"
         if s.zone == "right_half":
             assert s.arm == "right"
+
+
+def test_carry_z_covers_steps_another_arm_may_finish_first():
+    _, _, _, plan = two_arm_plan()
+    anc = _ancestors(plan.steps)
+    first = plan.steps[0]
+    independent = [s for s in plan.steps[1:] if 0 not in anc[s.index]]
+    assert independent, "fixture should have Steps that do not wait for step 0"
+    assert first.carry_z >= max(s.pose_cell.z for s in independent)
+
+
+def test_shared_band_steps_get_alternates_with_stations():
+    zones = [{"zone_id": "left_half", "x_min": -0.2, "y_min": -0.2, "x_max": 0.06, "y_max": 0.2},
+             {"zone_id": "shared_band", "x_min": 0.06, "y_min": -0.2, "x_max": 0.27, "y_max": 0.2},
+             {"zone_id": "right_half", "x_min": 0.27, "y_min": -0.2, "x_max": 0.5, "y_max": 0.2}]
+    cell = workcell_from_dict(dict(TWO_ARMS, zones=zones))
+    reach = annulus_reach(cell, 0.05, 0.30)
+    recipe = load_mixed_recipe(recipe_text(MIXED))
+    plan = plan_mixed(recipe, cell, reach)
+    check_plan(recipe, cell, reach, plan)
+    assert all(s.zone == "shared_band" for s in plan.steps)
+    assert {s.arm for s in plan.steps} == {"left", "right"}
+    for s in plan.steps:
+        assert s.alternates == tuple({"left", "right"} - {s.arm})
+        assert s.alternate_stations == (("infeed_right",) if s.arm == "left" else ("infeed_left",))
 
 
 def test_same_arm_steps_keep_reference_order():
@@ -358,5 +394,5 @@ def test_step_dict_shape():
     d = plan.to_dict()
     assert set(d) == {"recipe_hash", "planner_version", "steps", "feed_order"}
     assert set(d["steps"][0]) == {"index", "role", "sku", "pallet_id", "pose_cell", "arm", "alternates", "zone",
-                                  "coupling", "depends_on", "carry_z", "station"}
+                                  "coupling", "depends_on", "carry_z", "station", "pick_cell", "alternate_stations"}
     assert set(d["steps"][0]["pose_cell"]) == {"x", "y", "z", "yaw"}
