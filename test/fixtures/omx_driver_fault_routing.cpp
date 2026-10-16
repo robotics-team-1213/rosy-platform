@@ -1,5 +1,6 @@
 // Native ROS consumer probe. Insert the actual pinned, patched vendor methods.
-// Only communication/kinematic boundaries are doubled; HardwareComponent is real.
+// Communication, status, torque-request and kinematic helpers are doubled.
+// HardwareComponent is the actual installed ROS consumer.
 #include <iostream>
 #include <memory>
 #include <stdexcept>
