@@ -145,3 +145,9 @@ def test_sensor_noise_cannot_be_promoted_to_useful_scene_structure():
     noise = rng.integers(0, 150, size=(480, 640, 3), dtype=np.uint8)
     assert not load('camera_quality').frame_quality(noise)['usable']
 
+
+def test_older_viewer_brightness_only_decision_is_not_accepted():
+    item = sample()
+    item['quality'] = dict(policy='omx-photometric-v1', usable=True)
+    assert not load('camera_quality').advancing_frame(item, (0, 0))
+
