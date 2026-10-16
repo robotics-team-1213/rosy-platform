@@ -152,3 +152,33 @@ def test_normal_write_propagates_faults_without_further_goals(tmp_path):
     after = execute(target.read_text(), "patched_write")
     assert after.returncode == 0, after.stdout + after.stderr
     assert len(after.stdout.splitlines()) == 6
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_OMX_VENDOR_ROOT"), reason="requires explicit locked vendor source")
+def test_fault_callbacks_attempt_stop_and_propagate_disable_failure(tmp_path):
+    configured = Path(os.environ["ROSY_OMX_VENDOR_ROOT"])
+    vendor = configured if configured.is_absolute() else Path.home() / configured
+    assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
+    header = "include/dynamixel_hardware_interface/dynamixel_hardware_interface.hpp"
+    for path in [SOURCE, header]:
+        original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{path}"], text=True)
+        assert "DynamixelHardware::on_error(" not in original
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(original)
+    for name in ["hardware-lifecycle-errors.patch", "hardware-fault-stop.patch"]:
+        subprocess.run(["patch", "--batch", "--forward", "-p1", "-i", str(PATCH.parent / name)],
+                       cwd=tmp_path, check=True)
+    source = (tmp_path / SOURCE).read_text()
+    bodies = [method(source, "stop")]
+    bodies.extend(function(source, f"hardware_interface::CallbackReturn DynamixelHardware::{name}(")
+                  for name in ["on_error", "on_shutdown"])
+    fixture = (ROOT / "test/fixtures/omx_driver_fault_callbacks.cpp").read_text()
+    program, binary = tmp_path / "callbacks.cpp", tmp_path / "callbacks"
+    program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
+    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                   check=True, timeout=60)
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(result.stdout.splitlines()) == 8
