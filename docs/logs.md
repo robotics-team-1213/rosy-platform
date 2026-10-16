@@ -8757,3 +8757,10 @@ osy-d395-s1d\`.
 - 증거: 잘못된 고정 포트에서 실제 driver on_init ERROR·소멸·exit 0, export 수정 후 consumer configure/build 성공.
 - gate 변화: 실물 feedback·owner HOLD·허용 범위·독립 정지 수용은 미완료, 실제 시연 0회 유지.
 - 결정: D-770 후속; validation/omx-native-init-negative-2026-10-16/result.md.
+
+## 2026-10-16 · uncommitted · fix(omx): 실제 ROS feedback replay 오류
+
+- 변경: ROS runtime의 재전송 freshness 갱신을 막고 source age와 malformed 배열을 검증했다.
+- 증거: 실제 Jazzy RED→GREEN, native ROS8·순수 intake10시험. 취소 호출을 물리 stop으로 집계하지 않는다.
+- gate 변화: 실측/정지/owner 실물 수용과 실제 자동 시연 0회는 유지한다.
+- 결정: D-770 후속; validation/omx-feedback-source-age-2026-10-16.md.

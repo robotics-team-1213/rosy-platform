@@ -294,3 +294,12 @@ ERROR를 반환하고 정상 소멸함을 확인했다. 실물 포트·configure
 않았다. 현재 cell owner는 SIM metadata와 gripper 관측에 고정돼 있어 실물 조립과
 실제 feedback·HOLD 연결은 별도 수용이 필요하다. 실물 시연 0회와 미완료 조건을 유지한다.
 [재현 source와 실행 증거](../validation/omx-native-init-negative-2026-10-16/result.md).
+
+## 2026-10-16 후속: feedback 원본 시각과 HOLD
+
+실물 feedback 연결 준비 중 기존 ROS intake가 같은 원본 message를 매번 새로운 상태로
+취급하는 것을 실제 Jazzy 회귀로 재현했다. 원본 시각 진행·age·배열 검사를 넣고 전송
+지연을 owner freshness에 반영했다. 거절 message는 watchdog을 갱신하지 않으며 활성
+명령은 기존 stale HOLD/cancel로 들어간다. native ROS 8시험과 순수 intake 10시험을
+원격으로 실행했다. publisher 물리 출처·독립 정지·실측 수용과 실제 시연은 미완료다.
+[원인과 검증 경계](../validation/omx-feedback-source-age-2026-10-16.md).

@@ -1,6 +1,4 @@
 """Source age must survive transport; malformed/replayed data gives no new credit."""
-from dataclasses import replace
-
 import pytest
 
 from omx_adapter.command_owner import ArmCommandConfig
