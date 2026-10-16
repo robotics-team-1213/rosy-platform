@@ -2832,3 +2832,9 @@
 - 변경: 최초 command write/enable retry/disable 실패를 ERROR로 전파하고 부분 활성화 실패에 두 그룹 정리를 시도한다. owner 우회 direct register/reboot/torque 서비스 등록을 제거하고 두 patch를 compile 전에 적용한다.
 - 증거: 고정 원본 메서드 C++ 실행으로 실패를 재현했고 부분 활성화·정리 실패 포함10시나리오 GREEN. 원격 관련pytest22 통과·독립 재검토. 별도 native plugin build/install·ldd·library load 확인.
 - gate 변화: 운영 prefix나 controller는 활성화하지 않았다. 실물 stop·owner HOLD·부하/보정과 실제 시연은 미완료다. D-770.
+
+## 2026-10-16 · uncommitted · fix(omx): native driver dependency export
+
+- 변경: public target의 std_srvs/realtime_tools dependency export 누락을 최소 vendor patch로 수정하고 compile 전에 적용한다.
+- 증거: 실제 consumer configure 실패 재현 → 전체 plugin 재빌드 → 보완 없는 consumer 연결 성공. 실제 ROS 객체의 잘못된 고정 포트 초기화 ERROR·정상 소멸, exit 0.
+- gate 변화: 없음. 실물 포트·activation·goal 미사용. 실제 시연 0회이며 SIM owner를 실물 조립으로 간주하지 않는다. D-770; docs/validation/omx-native-init-negative-2026-10-16/result.md.

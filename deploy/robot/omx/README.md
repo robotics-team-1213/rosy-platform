@@ -571,3 +571,9 @@ explicit source checkout this hardware-free integration check skips. It compiles
 actual vendor method bodies with communication doubles and never opens a device.
 A passing result proves error propagation, not physical stopping or safe load retention.
 See [validation and remaining checks](../../../docs/validation/omx-driver-lifecycle-2026-10-16.md).
+
+`hardware-export-dependencies.patch` also exports the driver's public CMake
+dependencies `std_srvs` and `realtime_tools`, allowing downstream consumers to
+link its installed target. A real ROS initialization probe rejected a fixed
+nonexistent port and destructed normally; it never used a real serial port.
+See [native initialization evidence](../../../docs/validation/omx-native-init-negative-2026-10-16/result.md).
