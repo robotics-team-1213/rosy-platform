@@ -8858,3 +8858,9 @@ osy-d395-s1d\`.
 - 변경: private powered prototype의 age-only 제한 결함을 실행 전에 확인하고 별도 all-OFF native manager watchdog fixture를 검증했다. 최신 영상과 raw snapshot의 nominal FK도 대조했다.
 - 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
 - gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
+
+## 2026-10-16 · uncommitted · docs(vision): 실측 교정의 승인·미리보기·무효화 설계
+
+- 변경: D-633·D-636의 실제 후보 생성, Fleet 승인 SQLite, Vision 소비, sighting admission과 World MapPose 경계를 대조하고 첫 구현 단위의 설계를 기록했다. preview 목적의 영속 승인·기대 revision·촬영 session 확인·철회 readback을 기존 tracking 승인과 구분한다.
+- 증거: docs/plans/2026-10-16-measured-camera-lifecycle-design.md. 조사 기준 cd50cde54; 브랜치 docs/camera-calibration-lifecycle. 현재는 사용자 검토용 설계이며 제품 코드·API 계약·장치 설정을 변경하지 않았다.
+- gate 변화: 없음. 실측 자료·현장 수용을 만들지 않았으며 D-598 구현은 마커·지도 핀·LED 현장 확인과 측정 오차 근거 뒤의 후속 단위다. 구현 계획과 실행은 설계 검토 뒤 진행한다.
