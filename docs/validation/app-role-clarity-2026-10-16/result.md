@@ -96,3 +96,5 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 - 공통 UI 검사에서도 이동 전 enrollment/camera-pairing 경로 3건을 수정했고 원격 40개 검사가 통과했다. 앞선 Fleet·release guard 보정의 원격 재검증은 107개 통과했다.
 - Fleet 경로 보기 브라우저 실패는 패널 중앙 클릭이 배치에 따라 대형 관리 버튼을 누르던 시험 문제였다. 폼을 떠나는 동작을 상태 탭 클릭으로 명시했다.
 - Learning 첫 화면 배치 실패는 변경 전 main `436d52a55`의 동일 시험에서도 재현됐다(`/pixels` canvas y=692, 1280×720). `main-browser-baseline/run-1.txt`를 근거로 기존 실패 목록에 기록했다. 같은 실행에서 Fleet 단일 시험은 통과했으나, 작업 브랜치의 파일 전체 실행에서 패널 중앙 클릭 문제는 재현됐다.
+- Fleet 경로 보기 파일 전체 23개는 탭 클릭 수정 후 원격 통과했다(`card-trip-fix/run-1.txt`).
+- 추가 브라우저 실패 4건도 변경 전 main `436d52a55`에서 재현했다. Learning 작은 화면 배치, Robot 만료 토큰 시험의 account/session 요청 순서, shell estop 시험의 CSP string predicate, calibration 시험의 core_api_web import 누락이다. 각각 `main-browser-baseline-2/run-1.txt`, `main-browser-baseline-3/run-1.txt` 근거로 기존 실패 목록에 기록했다. 보안·인증·정지 제품 계약이나 해당 테스트는 완화하지 않았다.
