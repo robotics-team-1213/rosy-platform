@@ -1,6 +1,6 @@
 ## D-766 줄 수 한도는 넘으면 나눈다 — 파일 600줄(웹 800), 크기 단위 10,000줄, 다시 자랄 허용(+150)은 없다
 
-**Status:** Accepted (2026-10-15, 사용자가 "몇 줄을 넘으면 나누는 것으로 기준을 잡아라"라고 지시했고, 세 세션 검토를 반영한 개정 1이 그 기준이다). 이 ADR은 D-168 P6의 판정(`split:`/`accept:`)과 +150 재판정, D-362의 1,000줄 등급을 대체한다. 시험과 문서 변경은 7항의 조각마다 따로 착지하고, 그 전까지 지금 시험이 그대로 돈다. 개정 1은 토론 참여 세션 셋의 검토를 넣은 것이다. 바뀐 자리는 맨 끝 「개정 1」 표에 있다.
+**Status:** Accepted (2026-10-15, 사용자가 "몇 줄을 넘으면 나누는 것으로 기준을 잡아라"라고 지시했고, 세 세션 검토를 반영한 개정 1이 그 기준이다). 이 ADR은 D-168 P6의 판정(`split:`/`accept:`)과 +150 재판정, D-362의 1,000줄 등급을 대체한다. 시험과 문서 변경은 7항의 조각마다 따로 착지하고, 그 전까지 지금 시험이 그대로 돈다. 개정 1은 토론 참여 세션 셋의 검토를 넣은 것이다. 바뀐 자리는 맨 끝 「개정 1」 표에 있다. 개정 2(2026-10-16, 사용자 지시)는 스크립트 `.js`/`.mjs`/`.ts`를 600줄로, 시험 파일을 1,500줄로 한다(「개정 2」).
 
 ### Context
 
@@ -206,5 +206,25 @@ modularization 계획의 열린 항목(검토 지적 8)을 닫는다. 결정 1�
 - **Fleet 보관 자리는 `fleet/_source_layout.py`의 `SOURCE_ROOTS`와 같다.** `operations/situation`(운영 루트에서 옮김)과 `operations/site_execution`을 더했고, 시험이 두 목록이 같은지 본다. 두 폴더는 자기 단위(`situation` 1,446줄, `site_execution` 1,012줄, 바닥 1,000 이상)로 등록해 `fleet` 행(17,788)이 그대로다.
 - **package.xml 없는 루트는 패키지처럼 센다.** `size_limits.STANDALONE`: pyproject 배포 11개(`contracts/learning`·`motion`·`skill`, `integrations/robots/omx`, `middleware/devices/omx/agent`, `middleware/robot_execution/local`, `middleware/skills/api`·`manipulation`, `operations/apps/fleet`, `operations/processes/palletizing`, `operations/world`)와 Gradle 앱 `operations/site_ui/cam`(`rosy-cam` 9,964줄, 95% 선 위라 더하기 전에 나눈다). `operations/signal_observation`(파일 하나)은 운영 루트다. 운영 루트는 웹 자산도 800줄로 잰다(`learning/curation/perception/review_app_web`).
 - **처음 잰 것의 행은 이 변경에서만 새로 생긴다.** 4항의 "새 행 금지"에 대한 한 번의 예외다. 이 변경으로 처음 잰 파일 가운데 한도를 넘은 것은 `site_ui/cam/.../camera/CameraController.kt` 791줄 하나이고, `size_limits.COVERAGE_ROWS`에 그 값으로 적어 새 행을 허용한다. 그 값 위의 새 행은 적색이고, 목록에 더하려면 검사 자체를 바꿔야 한다(4항). 행이 기점에 들어간 뒤에는 보통 행처럼 내려가기만 한다.
+
+### 개정 2 — 스크립트 600, 시험 파일 1,500 (2026-10-16)
+
+사용자가 "800줄은 너무 긴 것 같다. 600줄이나 몇백 줄로 하면 얼마나 더 리팩토링해야 하는지 보고, 과하지 않은 수준으로 규칙으로 처리하자"고 지시했다. 엄격 측과 실용 측 두 세션이 한 번씩 반박하는 토론을 했고, 조정자가 남은 쟁점 하나를 정했다. 1–8항의 나머지는 그대로다(커밋마다 녹색 2항 포함).
+
+| 대상 | 개정 전 | 개정 2 | 새로 묶인 것 |
+|---|---|---|---|
+| 제품 코드 `.py`/`.cpp`/`.hpp`/`.sh`/`.kt` | 600 | 600 | 없음 |
+| 스크립트 `.js`/`.mjs`/`.ts` | 800 | **600** | 6개 |
+| 마크업 `.html`/`.css` | 800 | 800, `.html` 안 `<script>` 합계는 **600** | 없음(`diagnostic.html` 1,857줄 가운데 스크립트 1,289줄, 이미 묶임) |
+| 시험 파일(`test`/`tests` 폴더 아래, 브라우저 시험 포함) | 세지 않음(5항 X4 면제) | **1,500** | 9개 |
+| 경고(400줄 등) | 없음 | 두지 않는다 | — |
+
+- **값의 근거.** 2026-10-16 `git ls-files` 기준이다. 제품 코드를 500으로 내리면 116개, 400으로 내리면 212개가 묶인다. 300–600줄 파일의 10-01 이후 커밋 수 중앙값은 2이고 300줄 아래는 1이다. 그래서 더 내릴 근거가 없다. 600 아래로 내리면 이미 2항이 금지한 압축(`3c3ff0bc2` "one split literal joined", `6d3d5fc1c` "net zero")만 늘린다. 600–800줄 웹 파일 8개 가운데 6개가 JS 로직이다. CSS는 1개뿐이고 결합된 제어 흐름이 없다. 시험 파일은 1,000줄 이상 27개가 10-01 이후 평균 20.1번 바뀌었다(300줄 아래는 3.4번). 그러나 그 27개를 묶으면 회귀 시험 하나를 더할 때마다 먼저 나눠야 한다. 이 27개는 14일 동안 559번 바뀌었다. 1,500은 가장 큰 9개(3,884·3,059·3,049줄 포함)만 묶고 1,000–1,500줄의 18개는 둔다.
+- **경고는 두지 않는다.** 400줄을 넘는 제품 파일이 이미 212개라 거의 모든 변경에 경고가 뜬다. 나누기 전 확인은 95% 선(2항)이 맡는다. 스크립트 570, 시험 1,425다.
+- **큰 표는 데이터 파일로 옮긴다.** 면제하지 않는다. `SIZE_VERDICTS`(2,422줄 → 약 530줄)와 `tools/harness/fleet_test_seconds.json`이 그 예다. 검토가 본다.
+- **처음 묶이는 15개 행.** 이 변경에서만 새 행이 된다. `size_limits.COVERAGE_ROWS`에 그 값으로 적었다(덧붙임 「세지 않던 루트」와 같은 길). 시험 파일 키는 저장소 기준 경로다. 시험 줄은 패키지·단위 합계에 들지 않는다.
+- **실제로 나눠야 하는가.** 묶인 파일 72개의 한도 위 줄은 모두 24,155줄이다(제품 코드 11,191, 시험 9,154, 스크립트 2,342, 마크업 1,468). 한 번에 다 나누지 않는다. 묶인 파일 72개를 14일 커밋 수로 셋으로 나눴다(`docs/plans/2026-10-16-size-split-need.md`). A는 곧 나눈다(20회 이상, 14개. `fleet/server/app.py` 205회, `test_fleet_console_browser.py` 121회 등). B는 자랄 때 나눈다(5–19회, 19개). C는 나누지 않는다(4회 이하, 39개. 천장이 자라는 것을 막는다). 2026-11-16에 다시 재고, 그때 시험 한도를 1,000으로 내릴지 정한다.
+- **열린 질문(정하지 않음).** 2항 「커밋마다 녹색」의 비용이 토론에서 드러났다. `97d4eee71`은 포트 커밋들이 각자 행을 넘어서 브랜치 18개를 한 커밋으로 합쳤고, 그 결과 bisect 단위를 잃었다. 2026-10-16에는 602줄 중간 커밋 하나 때문에 착지를 다시 짰다. 브랜치 끝 기준으로 바꿀지는 이 개정에 넣지 않는다. 개정 1의 조건 5를 뒤집는 일이라 사용자가 따로 정한다.
+- **구현.** `tools/harness/size_limits.py`(`SCRIPT_SUFFIXES`, `INLINE_SCRIPT_LIMIT`, `TEST_LIMIT`, `is_test`, `inline_script_lines`)를 바꿨다. `size_range.py`는 커밋의 규칙이 개정 2 이전이면 옛 호출을 쓴다. 시험 구조 검사는 루트 `test/`도 잰다. 변이 증명은 `test/test_size_limits.py`의 두 시험이다.
 
 **References:** D-168(P6, Alternatives), D-362, D-430(§5 `Safety-Review:`), D-436(`GUARD_SET`, FULL 트리거), D-753, D-762(단계 3 CODEOWNERS, `merge_group`), D-763, [module split criteria](../plans/2026-09-06-module-split-criteria.md), [file size budget](../plans/2026-09-30-file-size-budget-and-refactor-queue.md), `docs/plans/2026-10-14-fleet-console-size-unit.md`, `docs/plans/2026-10-14-fleet-ledger-size-unit.md`, `test/architecture/test_module_structure.py`, `tools/harness/affected_tests.py`, `tools/harness/safety_review.py`.

@@ -7,7 +7,7 @@ import { NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { createPowerButton } from "/console/assets/power-action.js";
-import { robotAppLinks } from "/console/assets/device-discovery.js";
+import { createRobotAppActions } from "/console/assets/device-discovery.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
@@ -333,27 +333,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     node.appendChild(head);
-    const context = nodeWithText('div', 'robot-actions');
-    const appLinks = robotAppLinks(robot.robot_id, view.robotPeers);
-    for (const app of appLinks) {
-      const link = nodeWithText('a', '', app.label);
-      link.href = app.href;
-      link.dataset.robotApp = app.app;
-      link.rel = "noreferrer";
-      context.append(link);
-    }
-    if (!appLinks.length) {
-      const guidance = nodeWithText('span', 'hint', '앱을 열려면 설치에서 승인된 로봇 주소를 확인하세요.');
-      guidance.dataset.robotAppGuidance = '';
-      context.append(guidance);
-    }
-    const recording = nodeWithText('a', '', '지도 기록');
-    recording.href = `/console/site-map?robot=${encodeURIComponent(robot.robot_id)}#teach-heading`;
-    recording.dataset.mapRecording = '';
+    const context = createRobotAppActions(robot.robot_id, view.robotPeers, nodeWithText);
     const group = nodeWithText('ui-button', '', '대형·대열 관리');
     group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
     group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
-    context.append(recording, group); node.appendChild(context);
+    context.append(group); node.appendChild(context);
     if (role) node.appendChild(nodeWithText('p', 'hint',
       `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).

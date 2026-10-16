@@ -158,7 +158,6 @@
 - 변경: `fleet/swarm/session.py` `TRIGGERS` 위에 주석 — CORE 는 `nav.blocked` 를 발행하지 않는다(API 참조 v1.13 §8 "미구현"). 막힌 주행은 NAV-006 `nav.stuck` 으로 온다. 트리거 집합은 그대로 둔다.
 - 증거: 주석만 변경. `src/site/fleet/test` 영향 없음.
 - gate 변화: 없음.
-- 결정: 구현되면 바로 트리거가 되도록 항목을 지우지 않는다.
 
 ## 2026-09-22 · uncommitted · fleet(console): ADR-1000 자동 감속 no-op 수정 (T7)
 - 변경: `server/console.py` `_manage_swarm_speed` — formation 식별을 `spec.name`(존재하지 않는 속성, AttributeError 가 except 로 삼켜져 자동 감속이 한 번도 살지 못함)에서 `spec.formation` 으로 수정, `except Exception: pass` 를 logger.warning 으로 교체(모듀로 logger fleet.console 신규). 시험 3건: 저하 멤버 → reform 실제 호출(적색→초록), 건강 시 무호출, reform 실패 시 로그·생존.
@@ -3993,3 +3992,10 @@
 - 변경: 폼 밖 클릭을 패널 중앙 대신 상태 탭으로 지정한다. 앱 링크로 카드 높이가 바뀌자 중앙 좌표가 대형 관리 버튼과 겹쳤고 실제 탭 전환을 일으켰다.
 - 증거: 전체 및 파일 단위 원격 Chromium에서 재현. 위치 없음의 경로 보기 차단과 위치 수신 후 활성화 검증은 유지한다.
 - gate 변화: 없음.
+## 2026-10-16 · uncommitted · 최신 크기 규칙 통합
+
+- 변경: D-766 개정 2의 roster.js 제한을 지키도록 앱·지도 기록 링크 생성 코드를 기존 device-discovery.js로 옮겼다. 새 파일이나 권한 경로는 추가하지 않았다.
+- 증거: main 통합 전 원격 FULL은 새 실패 0건이었다. 통합 후에는 크기 검사와 관련 브라우저·설치 검증을 다시 수행한다.
+- gate 변화: 없음.
+- 결정: 구현되면 바로 트리거가 되도록 항목을 지우지 않는다.
+
