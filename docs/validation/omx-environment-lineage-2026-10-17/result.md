@@ -34,10 +34,10 @@ train/eval/test를 episode·session·cycle별로 나누고 train 통계가 eval�
 ## 실제 camera-only 원본의 형식 검증
 
 별도로 Fleet에서 기존 닫힌 camera probe의 원본 `environment.jsonl`을 읽었다.
-source는 `0a9954c5f9`의 pure offline `native_environment.py`이며 SHA-256은
-`f4abb1fab447cb59d5c61a68c24e278912f97a4ff23c30b313606f70abf0f03f`다.
-원본82015bytes,37event, SHA-256
-`303ca702973cc2880271f3a71709f50c2ace44eb709abd4028a619598a1834cb`를 검증했고 읽기 후 그대로였다.
+source는 `0a9954c5f9`의 pure offline `native_environment.py`다.
+Source SHA-256: `f4abb1fab447cb59d5c61a68c24e278912f97a4ff23c30b313606f70abf0f03f`.
+원본82015bytes,37event를 검증했고 읽기 후 그대로였다.
+Original log SHA-256: `303ca702973cc2880271f3a71709f50c2ace44eb709abd4028a619598a1834cb`.
 
 | 역할 | 확인된 새로운 영상 조건 이벤트 | 확인 불가/중복 |
 |---|---|---|
