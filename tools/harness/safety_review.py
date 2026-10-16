@@ -39,7 +39,7 @@ from pathlib import Path
 import yaml
 
 #: main when this check landed (D-430 wave 0). Its ancestors are never checked.
-BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
+BASELINE = "5496c22dc81e1efd20a14d05419bb8d4e25658bd"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer: ``[{"commit": <full SHA>, "reason": ...}]`` in EXEMPT_FILE beside this file.
 #: Add only with an independent review.

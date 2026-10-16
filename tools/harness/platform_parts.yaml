@@ -838,6 +838,7 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
   - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
   - operations/fleet/fleet/server/dispatch_admission.py
+  - operations/fleet/fleet/server/ledger/action_claims.py  # D-779 per-Action arm/zone claim release
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
@@ -902,6 +903,7 @@ safety_anchors:
   - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
   - {symbol: fleet.server.dispatch_admission.release, public: true}
+  - {symbol: fleet.server.action_claims.release_keys, public: true}  # D-779 per-Action arm/zone release
   - {symbol: fleet.server.cancel_all.cancel_all_driving, public: true}
   - {symbol: fleet.server.cancel_all.DriveCancelFence, public: true}
   - {symbol: fleet.server.cancel_all.DispatchCanceled, public: true}
