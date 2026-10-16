@@ -17,7 +17,8 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `ROSY API & Protocol Reference.md` | ROSY-API-REF-001 — only shared robot/fleet/SDK interface; `/api/v1`, envelope, events |
 | `ROSY ADR Log.md` | ROSY-ADR-001 — append-only index of every ADR. Do not rewrite an old row. The file is the list |
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
-| `team-guide.md` | 새 팀원 안내: 첫날 설정(클론·작성자·venv·훅), 공유 범위, 이슈에서 머지까지의 명령, 작업 영역, 막혔을 때. 규칙 원본은 README·AGENTS·ADR |
+| `team-guide.md` | 개인 클론 설정·훅 예외·공유 범위·작업 분담·인수인계. 게시 조건은 `pr-pipeline.md`로 연결 |
+| `pr-pipeline.md` | 작성·독립 검토·게시·CI·병합의 기준과 확인일을 붙인 GitHub 설정 |
 | `atlassian-integration.md` | Jira·Confluence 연결 안내: 이슈 키를 적는 자리(브랜치·커밋·PR), GitHub for Jira 앱, 스프린트 리뷰 표(`tools/jira_refs.py`), 공개 저장소에 두지 않는 것(사이트 주소·토큰, D-437 secret 금지). 팀 관례이며 저장소 규칙이 아니다 |
 | `shared-checkout.md` | 「같이 하는 깃」: 실험실 PC 공유 체크아웃의 착수 순서(README에서 옮김, `test/test_readme_agent_start.py`가 고정). 명령 전문은 루트 `AGENTS.md` |
 | `held-branches.md` | 2026-10-13/14 정리의 결과: 보류한 브랜치 5개와 풀리는 조건, 보관 태그(`archive/<날짜>/<브랜치>`) 목록·되살리기 명령. 태그와 wip 스냅샷은 실험실 clone에만 있고 wip은 공개 원격에 push하지 않는다 (D-172, D-762) |
