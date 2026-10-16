@@ -600,7 +600,7 @@ def test_logs_only_reconcile_exact_unrecoverable_g2_record(mutation):
 - gate ??: SOURCE/LOCAL?. box16 ?? ???fault matrix??? ??????? ??? ?? HOLD/NOT_RUN, full_g2=false?. ?? ?? ??? ???? ? ????? ?????."""
     new = """## 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
 
-- Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
+- Change: Replace the corrupted journal entry introduced in commit 9259275979e191fc20cacb186af46d6c6d58e974. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
 - Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
 - Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry."""
     baseline = GOOD_LOG + "\n\n" + old
@@ -627,7 +627,7 @@ def test_logs_only_reconcile_exact_unrecoverable_aid_record(mutation):
 - gate ??: SOURCE/LOCAL deadline ?? RED?GREEN? ??. ?? 16? ???fault matrix??? checkpoint??? ??? HOLD/NOT_RUN?? full_g2=false. ?? ??? ??? ??? ???? ? ???????? ????."""
     new = """## 2026-10-04 · 429e13b83 · docs: record unrecoverable G2 aid journal corruption
 
-- Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
+- Change: Replace only the corrupted journal entry introduced in commit dd111029617fc08784710c546cf469c7f9f2d3a8. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
 - Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
 - Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry."""
     baseline = GOOD_LOG + "\n\n" + old
