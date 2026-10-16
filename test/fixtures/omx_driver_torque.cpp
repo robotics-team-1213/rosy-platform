@@ -92,5 +92,13 @@ int main() {
     check(error && d.DynamixelDisable(one) == DxlError::OK && !d.physical_state[a] && d.writes == 2,
       "undelivered_enable_still_requires_disable");
   }
+  {
+    Dynamixel d; d.torque_state_[a] = true; d.physical_state[a] = true;
+    d.acknowledgements = {-1, 0, 0};
+    bool error = d.DynamixelDisable(one) == DxlError::ITEM_WRITE_FAIL;
+    bool enabled = d.DynamixelEnable(one) == DxlError::OK && d.physical_state[a];
+    check(error && enabled && d.DynamixelDisable(one) == DxlError::OK && !d.physical_state[a] && d.writes == 3,
+      "explicit_enable_after_uncertain_disable_is_not_skipped");
+  }
   return failed;
 }
