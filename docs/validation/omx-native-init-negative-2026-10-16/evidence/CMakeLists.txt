@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(omx_native_negative_probe)
+set(CMAKE_CXX_STANDARD 17)
+find_package(rclcpp REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(dynamixel_hardware_interface REQUIRED)
+add_executable(probe probe.cpp)
+target_link_libraries(probe PRIVATE dynamixel_hardware_interface::dynamixel_hardware_interface rclcpp::rclcpp ${hardware_interface_TARGETS})
