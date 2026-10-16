@@ -540,3 +540,9 @@
 - Change: Run the two native ROS action fixture files separately using the existing native wrapper DDS/plugin environment, preserve directory and explicit node selection, and fail on skipped native fixtures. Other module environments are unchanged.
 - Evidence: Run 38916624138 fixed Fleet stamps but showed publication gaps of 0.755 s and owner age of 1.174 s in the combined modules process; native host wrappers passed. Two new selection regressions fail against the old workflow. Isolation is a controlled environment correction, not a proven plugin root cause.
 - Gate: No change; final cloud verification is required. Production timing and safety policy are unchanged.
+
+## 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
+
+- Change: Record accepted/rejected intake, vendor execution boundaries and the first owner HOLD before terminal-event delivery can block its observation.
+- Evidence: Issue #68 records two main CI failures of the same native regression. This diagnostic revision keeps the existing executor, 0.5 s freshness allowance and 1.5 s blocked feedback interval to distinguish source scheduling from intake/owner delay.
+- Gate: No change. No physical devices or production policy changes.

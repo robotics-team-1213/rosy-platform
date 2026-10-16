@@ -409,14 +409,17 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     feedback_node = Node("omx_test_flood_state")
     owner_node = Node("omx_test_flood_owner")
     slow_feedbacks = []
+    timeline = []
 
     def execute(goal_handle):
+        timeline.append(("server_start", time.monotonic()))
         for _ in range(40):  # 40 feedback messages over ~0.8 s
             feedback = FollowJointTrajectory.Feedback()
             feedback.joint_names = ["joint1"]
             goal_handle.publish_feedback(feedback)
             time.sleep(0.02)
         goal_handle.succeed()
+        timeline.append(("server_succeeded", time.monotonic()))
         result = FollowJointTrajectory.Result()
         result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
         return result
@@ -437,6 +440,30 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
+    original_intake = runtime._joint_state_intake.snapshot
+    original_poll = runtime.owner.poll
+
+    def trace_intake(*args, **kwargs):
+        entered = time.monotonic()
+        try:
+            state = original_intake(*args, **kwargs)
+        except ValueError as error:
+            timeline.append(("intake_rejected", entered, str(error)))
+            raise
+        timeline.append(("intake_accepted", entered, state.sequence, state.received_at))
+        return state
+
+    def trace_poll():
+        entered = time.monotonic()
+        decision = original_poll()
+        if decision.state == "hold" and not any(row[0] == "first_hold" for row in timeline):
+            state = runtime.owner._joint_state
+            timeline.append(("first_hold", entered, time.monotonic(), decision.reason,
+                             state.sequence, state.received_at))
+        return decision
+
+    runtime._joint_state_intake.snapshot = trace_intake
+    runtime.owner.poll = trace_poll
     publications = []
     sink_times = []
     sink_entered = threading.Event()
@@ -502,7 +529,9 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             "owner_tail": owner_samples[-10:],
             "owner_age": now - observed.received_at,
             "slow_sink_times": sink_times,
+            "timeline": timeline,
         }
+        print(evidence, flush=True)
         assert len(sink_times) == 1, evidence  # feedback is still blocked
         assert any(t > sink_times[0] + config.max_joint_state_age_s and seq > initial.sequence
                    for t, seq, _ in owner_samples), evidence
