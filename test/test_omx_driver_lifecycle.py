@@ -223,3 +223,21 @@ def test_torque_disable_covers_uncertain_activation(tmp_path):
     after = execute(target.read_text(), "patched_torque")
     assert after.returncode == 0, after.stdout + after.stderr
     assert len(after.stdout.splitlines()) == 11
+
+
+@pytest.mark.skipif(not os.environ.get("ROSY_OMX_VENDOR_ROOT"), reason="requires explicit locked vendor source")
+def test_native_status_comes_from_successful_cyclic_register_reads(tmp_path):
+    configured = Path(os.environ["ROSY_OMX_VENDOR_ROOT"])
+    vendor = configured if configured.is_absolute() else Path.home() / configured
+    assert subprocess.check_output(["git", "-C", str(vendor), "rev-parse", "HEAD"], text=True).strip() == PIN
+    original = subprocess.check_output(["git", "-C", str(vendor), "show", f"{PIN}:{SOURCE}"], text=True)
+    bodies = [function(original, "hardware_interface::return_type DynamixelHardware::read("),
+              function(original, "DxlError DynamixelHardware::CheckError(")]
+    fixture = (ROOT / "test/fixtures/omx_driver_status.cpp").read_text()
+    program, binary = tmp_path / "status.cpp", tmp_path / "status"
+    program.write_text(fixture.replace("// VENDOR_METHODS", "\n".join(bodies)))
+    subprocess.run(["g++", "-std=c++14", "-Wall", "-Wextra", str(program), "-o", str(binary)],
+                   check=True, timeout=60)
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
