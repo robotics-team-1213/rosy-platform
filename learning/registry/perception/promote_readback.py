@@ -1,7 +1,7 @@
 """Record every pointer change and, on request, read back what the robot's node loaded (D-773 A3).
 
 After a successful push, rollback or promote, deliver.py appends one line to
-<journal-dir>/pointer_changes.jsonl, adding no network step. With --readback it reads the moved
+<journal-dir>/pointer-changes/pointer_changes.jsonl, adding no network step. With --readback it reads the moved
 pointer again and the node's latched status topic (perception/learned/status for lane_seg shadow,
 perception/learned/object_det/status for object_det active; D-423 §3.6) a few times and
 records whether the node's model_revision equals the pointer. Slots no node reads (object_det
@@ -24,7 +24,7 @@ STATUS_TOPICS = {
     ("object_det", "active"): "perception/learned/object_det/status",
 }
 POINTER_ACTIONS = ("push", "rollback", "promote")
-RECORD_NAME = "pointer_changes.jsonl"
+RECORD_NAME = "pointer-changes/pointer_changes.jsonl"  # outside the one-file-per-attempt folder
 STATUS_SCHEMA = "rosy.perception.learned_status/1"
 
 
