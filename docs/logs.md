@@ -8859,6 +8859,12 @@ osy-d395-s1d\`.
 - 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
 - gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
 
+## 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
+
+- 변경: 팀 가이드의 개인 클론·실험실 공유 체크아웃 범위를 구분하고, 기존 기여 안내의 시험 PC 접속 불가 훅 예외를 반영했다. 이슈의 담당 경로·완료 조건·의존 PR, 동시 수정 조율, 교대 기록을 안내하고 작업·버그 이슈 양식을 추가했다. PR 양식은 검증 SHA·실행 위치·미실행 검사·후속 작업을 기록한다. 다른 클론의 ADR 선점이 공유되지 않는 한계도 명시했다.
+- 근거: GitHub API에서 public/main, squash만 허용, auto-merge 꺼짐, main ruleset의 PR 요구·관리자 우회·필수 검사 없음·승인 수 0을 확인했다. Projects는 토큰에 read:project 권한이 없어 확인하지 못했다. 오래된 CI 실패율을 현재 상태로 설명하던 문구를 제거했다.
+- 검증: 문서 링크·양식 구조·harness 검사와 커밋 후 원격 문서 계약 시험의 실제 결과는 이 브랜치의 인수인계에 기록한다. 장치·현장 수용을 주장하지 않는다.
+- gate 변화: 없음. D-762의 방향을 안내에 반영했으며 GitHub 설정·권한·훅 구현은 변경하지 않았다. 이슈 양식의 GitHub 표시 확인은 기본 브랜치 반영 후 수행한다.
 
 ## 2026-10-16 · uncommitted · docs(omx): 고해상도 시야와 원본 preview 복구 검증
 
