@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · docs(omx): 고해상도 시야와 원본 preview 복구 검증
 - 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
 - 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
 - 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
 - 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
-- 2026-10-16 · uncommitted · docs(omx): 실제 토크 OFF 시작 목표 확인
