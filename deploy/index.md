@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
 - 2026-10-16 · uncommitted · docs(omx): 실제 stationary Action 수용과 취소 검증
 - 2026-10-16 · uncommitted · docs(omx): 실제 controller와 owner 피드백 결선
 - 2026-10-16 · uncommitted · docs(omx): 실제 토크 OFF 시작 목표 확인
 - 2026-10-16 · uncommitted · feat(omx): 토크 OFF 유한 제한 실제 적용
-- 2026-10-16 · uncommitted · docs(omx): native 부재의 목표 변화 진단
