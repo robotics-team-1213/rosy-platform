@@ -4017,3 +4017,9 @@
 - 변경: 팔마다 owner 작업대(`arms[].workcell_id`)를 Job에 적고, 그 작업대를 Job 단위 claim으로 승인부터 끝까지 잡는다. 같은 owner를 쓰는 한 팔 Job이나 다른 팔 여러 개 Job은 승인에서 거절된다. 설정이 그 인스턴스를 다른 작업대로 매핑하면 그 팔은 NOT_CONFIGURED다. 짝 Action은 두 번째 송신 전에 fence를 다시 읽고, 바뀌었으면 남은 팔을 미송신 HOLD로 두고 받은 팔을 취소한다. 짝의 틱당 I/O는 팔당 2와 취소 1이다. 취소는 팔·Action 표시까지 한 트랜잭션이다. Cell 원장 버전은 4다(1단계 Fleet는 거부).
 - 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 남은 일: 팔 여러 개 Job은 아직 끝까지 갈 수 없다. Cell 목표 증거 ingress(`cell_goal_evidence_service`)와 성공 hook이 팔 여러 개 Step을 모르고, `ArmJobStore.confirm_step_goal`만 GOAL_CONFIRMED를 쓴다(닫힌 쪽으로 실패). D-781 컴파일러 출력, API reference의 팔 단위 재개 경로, D-780 barrier가 든 짝 grant도 남았다.
+
+## 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
+
+- 변경: 레시피 스키마가 `rosy_cell.recipe/3`인 Cell 후보는 `cell_mixed_submission.compile_mixed_submission`으로 간다. `PalletizingCellJobCompiler.compile_mixed`가 혼합 계획기로 다시 컴파일하고, 후보 Job과 바이트 비교, recipe·cell digest 비교, 64 KiB 한도를 한 팔 경로와 같게 지킨다. 팔 목록은 cell/3 문서의 `arms`, claim은 작업대·팔 owner 작업대·팔레트다. 제안의 `instance_id`는 작업대 팔 가운데 하나여야 한다. recipe/1·/2 경로와 그 Job id는 바뀌지 않았다(26a148117 기준 고정값 시험). palletizing을 import하는 Fleet 모듈은 여전히 `cell_compiler.py` 하나다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 후속: 팔별 좌표의 item_at_pose 목표 술어, Cell 앱 미리보기(`/cell-app/compile`)의 recipe/3, 한 팔 recipe/3.
