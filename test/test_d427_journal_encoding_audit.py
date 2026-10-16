@@ -7,7 +7,8 @@ import pytest
 import rosy_harness as harness
 
 REPO = Path(__file__).resolve().parents[1]
-SOURCE_COMMIT = '429e13b8313484a25751a7c7896fe1b7aca41b92'
+# Same journal bytes after the repository history rewrite; OLD_SHA256 stays pinned.
+SOURCE_COMMIT = '4a11f1ba08b928108ef4db8aa050f8c1496adc62'
 HEADING = (
     '## 2026-10-04 ? uncommitted ? fix(g2): preserve the total SIM AI'
     'D deadline while allowing RPC acknowledgement'
