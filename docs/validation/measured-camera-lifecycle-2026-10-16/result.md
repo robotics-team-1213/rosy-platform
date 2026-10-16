@@ -157,3 +157,15 @@ D-587·D-593·D-596 readback과 실제 로봇별 오차 계수가 없어 운영 
 실제 촬영·측량, 장치 설치·현장 검증, 그 P0에 의존하는 D-598 운영 위치/신원 연결·감속
 활성화는 별도 후속으로 제외했다. 이를 통과·구현 완료로 표시하지 않는다. 전체 GitHub CI와
 main 착지·push는 후속 통합 관문으로 유지하며 이번 작업에서 실행하지 않았다.
+
+## 사용자 승인 후 병합 검증
+
+사용자가 커밋·병합을 요청해 2026-10-17부터 `tools/land.py --tests auto`를 실행했다.
+main `c9258138e8`과 통합한 `ea71743778`의 전체 lab tier에서 기존 등록 브라우저 실패
+4건과 새 실패 `test_camera_rectification_direct_manipulation` 1건이 확인돼 착지하지 않았다.
+새 패널로 화면 길이가 늘어난 설치 화면에서 기존 모서리 손잡이가 고정 상단 바 뒤로
+스크롤되는 문제였다. `8c6692128`이 공용 토큰 기반 스크롤 여백을 적용했으며,
+같은 드래그와 실측 교정 두 폭의 원격 브라우저 검사는 3 passed, NEW 0이다.
+첫 착지 로그는 저장소 밖 `C:/DevTemp/camera-calibration/land/`에,
+수정 검증은 `C:/DevTemp/camera-calibration/landing-handle-fix/`에 보관한다.
+수정본·최신 main의 최종 착지 결과는 별도 landing receipt로 확인한다. push·배포는 승인받지 않았다.
