@@ -56,7 +56,10 @@ def validate_profile(profile):
         candidates = spec['candidates']
         if not isinstance(candidates, list) or not 1 <= len(candidates) <= 3:
             raise ValueError('one to three bounded candidates required')
-        for candidate in candidates:
+        bright = spec.get('bright_candidates', [])
+        if not isinstance(bright, list) or len(bright) > 3:
+            raise ValueError('up to three bounded bright candidates required')
+        for candidate in candidates+bright:
             if (not isinstance(candidate, dict) or not set(candidate) <= CONTROLS
                     or candidate.get('auto_exposure') != 1
                     or not all(type(value) is int for value in candidate.values())
@@ -126,6 +129,35 @@ def ensure_directory(path):
         sync_directory(current.parent)
 
 
+class BudgetExhausted(RuntimeError):
+    """Recovery waits for its rolling window; final baseline restoration is exempt."""
+
+
+def reserve_budget(root, *, now_ns=None):
+    now_ns = time.time_ns() if now_ns is None else now_ns
+    path = root/'recovery-budget.json'
+    entries = json.loads(path.read_text()) if path.exists() else []
+    if (not isinstance(entries, list) or any(type(t) is not int or t <= 0 for t in entries)
+            or entries != sorted(entries) or any(t > now_ns for t in entries)):
+        raise RuntimeError('invalid budget or wall clock rollback; recovery is not admitted')
+    entries = [t for t in entries if t > now_ns-60_000_000_000]
+    if len(entries) >= 6:
+        raise BudgetExhausted('six setting batches per minute exhausted')
+    save(path, entries+[now_ns])  # reserve before attempted or partial control writes
+
+
+def append_event(path, value):
+    with path.open('a+b') as stream:
+        if stream.tell():
+            stream.seek(-1, os.SEEK_END)
+            if stream.read(1) != b'\n':
+                raise RuntimeError('preserve interrupted environment ledger; do not append')
+        stream.write((json.dumps(value, allow_nan=False)+'\n').encode())
+        stream.flush()
+        os.fsync(stream.fileno())
+    sync_directory(path.parent)
+
+
 def apply_candidate(candidate, write):
     write('auto_exposure', 1)
     for name, value in candidate.items():
@@ -167,11 +199,12 @@ def prepare(profile, root, digest):
     cameras = {}
     for role, spec in profile['cameras'].items():
         device = spec['device']
-        names = {'auto_exposure'} | set().union(*(set(c) for c in spec['candidates']))
+        candidates = spec['candidates']+spec.get('bright_candidates', [])
+        names = {'auto_exposure'} | set().union(*(set(c) for c in candidates))
         metadata = command(['v4l2-ctl', '--device='+device, '--list-ctrls-menus'])
         ranges = {name: (int(lo), int(hi), int(step)) for name, lo, hi, step in re.findall(
             r'^\s*(\w+)\s+0x\w+.*?min=(-?\d+) max=(-?\d+) step=(\d+)', metadata, re.M)}
-        for candidate in spec['candidates']:
+        for candidate in candidates:
             for name, value in candidate.items():
                 if name == 'auto_exposure':
                     continue
@@ -209,93 +242,11 @@ def restore(root):
 
 
 def run(profile, root, digest, duration):
-    from camera_quality import Readiness, advancing_frame
-    baseline = prepare(profile, root, digest)
-    gate = Readiness()
-    levels = dict(top=0, front=0)
-    settling = dict(top=0., front=0.)
-    previous = dict(top=(0., 0), front=(0., 0))
-    best = {}
-    finalized = set()
-    current = {role: dict(spec['original']) for role, spec in baseline['cameras'].items()}
-    changes = []
-    began = time.monotonic()
-    try:
-        while duration == 0 or time.monotonic()-began < duration:
-            now = time.monotonic()
-            try:
-                with urllib.request.urlopen(profile['viewer_url']+'/state.json', timeout=2) as response:
-                    state = json.load(response)
-                if state.get('read_only') is not True:
-                    raise ValueError('read-only observation viewer required')
-            except Exception as exc:
-                state = {}
-                observation_error = repr(exc)
-            else:
-                observation_error = None
-            assessment = gate.update(state)
-            for role, spec in profile['cameras'].items():
-                item = state.get(role, {})
-                stamp = item.get('source_stamp') or 0
-                quality = item.get('quality') or {}
-                if now < settling[role]:
-                    gate.counts[role] = 0
-                    assessment['photometric_ready'] = False
-                    continue
-                if not advancing_frame(item, previous[role]):
-                    continue
-                previous[role] = (stamp, item['sequence'])
-                score = quality.get('spatial_contrast', 0)*(1-quality.get('clipped_fraction', 1))
-                if role not in best or score > best[role]['score']:
-                    best[role] = dict(score=score, controls=dict(current[role]))
-                if quality['usable'] is not False or role in finalized:
-                    continue
-                device = spec['device']
-                saved = baseline['cameras'][role]
-                if identity(device) != saved['identity'] or producer(role, device) != saved['producer']:
-                    raise RuntimeError('camera producer changed during tuning')
-                if levels[role] >= len(spec['candidates']):
-                    selected = best[role]['controls']
-                    changes.append(dict(role=role, operation='select_best_observed', controls=selected,
-                                        time_ns=time.time_ns()))
-                    save(root/'changes.json', changes)
-                    errors = restore_controls(selected, lambda n, v: write_control(device, n, v))
-                    if errors or get_controls(device, selected) != selected:
-                        raise RuntimeError('best observed settings could not be restored')
-                    current[role] = dict(selected)
-                    finalized.add(role)
-                    settling[role] = time.monotonic()+1.0
-                    gate.counts[role] = 0
-                    assessment['photometric_ready'] = False
-                    continue
-                candidate = spec['candidates'][levels[role]]
-                entry = dict(role=role, candidate=levels[role], requested=candidate, time_ns=time.time_ns())
-                changes.append(entry)
-                save(root/'changes.json', changes)  # preserve attempted write even on failure
-                apply_candidate(candidate, lambda n, v: write_control(device, n, v))
-                actual = get_controls(device, candidate)
-                entry['actual'] = actual
-                save(root/'changes.json', changes)
-                if actual != candidate:
-                    raise RuntimeError('camera control readback differs')
-                current[role].update(candidate)
-                levels[role] += 1
-                settling[role] = time.monotonic()+1.0
-                gate.counts[role] = 0
-                assessment['photometric_ready'] = False
-            assessment.update(state='READY' if assessment['photometric_ready'] else 'INSUFFICIENT',
-                              recorded_ns=time.time_ns(), expires_ns=time.time_ns()+750_000_000,
-                              profile_sha256=digest, applied_levels=dict(levels),
-                              observations=state, observation_error=observation_error)
-            save(root/'readiness.json', assessment)
-            time.sleep(.2)
-    finally:
-        # Invalidate first, even when the independent systemd cleanup must finish restoration.
-        try:
-            save(root/'readiness.json', dict(state='STOPPED', photometric_ready=False,
-                                            motion_admitted=False, expires_ns=0))
-        finally:
-            restore(root)
+    from camera_environment import monitor
+    from types import SimpleNamespace
+    names = ('prepare', 'identity', 'producer', 'get_controls', 'write_control', 'apply_candidate',
+             'restore_controls', 'save', 'restore', 'reserve_budget', 'BudgetExhausted', 'append_event')
+    return monitor(profile, root, digest, duration, SimpleNamespace(**{name: globals()[name] for name in names}))
 
 
 def main():
