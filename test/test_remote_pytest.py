@@ -585,6 +585,17 @@ def _wait_for_lock(lock):
     pytest.fail("job never wrote its lock")
 
 
+def _skip_unreaped(pid):
+    # A CI container's PID 1 (`tail -f /dev/null`) never reaps orphans, so the ended job stays a
+    # zombie that `kill -0` reports alive. Lab hosts run systemd, which reaps it.
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except OSError:
+        return
+    if state == "Z":
+        pytest.skip("PID 1 does not reap orphaned jobs here (CI container); covered on the lab hosts")
+
+
 def _poll_until_done(env):
     for _ in range(100):
         code, _, _ = rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)
@@ -609,6 +620,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
     out = (jobs / "0.log").read_bytes()
     assert out.startswith(b"out\nerr\n") and out.endswith(b"args -m pytest test/x.py -q\n")
+    _skip_unreaped(pid)
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, False, out[4:])  # offset 4: after "out\n"
 
 
@@ -677,6 +689,7 @@ def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_fin
             break
         time.sleep(0.1)
     else:
+        _skip_unreaped(pid)
         pytest.fail("POLL still reports the SIGKILLed job alive")
     jobs = home / "rosy-test" / "runs" / "r.jobs"
     (jobs / "0.rc").write_text("0\n")

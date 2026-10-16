@@ -29,6 +29,28 @@ export function robotAppLinks(robotId, peers = []) {
   ];
 }
 
+export function createRobotAppActions(robotId, peers, nodeWithText) {
+  const context = nodeWithText('div', 'robot-actions');
+  const appLinks = robotAppLinks(robotId, peers);
+  for (const app of appLinks) {
+    const link = nodeWithText('a', '', app.label);
+    link.href = app.href;
+    link.dataset.robotApp = app.app;
+    link.rel = "noreferrer";
+    context.append(link);
+  }
+  if (!appLinks.length) {
+    const guidance = nodeWithText('span', 'hint', '앱을 열려면 설치에서 승인된 로봇 주소를 확인하세요.');
+    guidance.dataset.robotAppGuidance = '';
+    context.append(guidance);
+  }
+  const recording = nodeWithText('a', '', '지도 기록');
+  recording.href = `/console/site-map?robot=${encodeURIComponent(robotId)}#teach-heading`;
+  recording.dataset.mapRecording = '';
+  context.append(recording);
+  return context;
+}
+
 export function createDeviceDiscovery({pageScope, auth, discoveryGate, view, call, render, incidents, el, log}) {
   let scannerLost = false;
 

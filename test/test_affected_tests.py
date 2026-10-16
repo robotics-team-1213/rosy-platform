@@ -401,16 +401,10 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
 
 
 def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
-    # Successful main CI 38056130519: round-robin took 307/107/313 seconds.
-    costs = {
-        "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
-        "test_blocks.py": 89, "test_start_point_browser.py": 45,
-        "test_console_roles_browser.py": 28, "test_password_session.py": 28,
-        "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
-        "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
-        "test_signal_phase.py": 13, "test_trip_runner.py": 11,
-        "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
-    }
+    # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
+    # the measured table must keep the slowest shard near a quarter of the suite.
+    costs = json.loads((ROOT / "tools/harness/fleet_test_seconds.json").read_text(encoding="utf-8"))
+    assert costs["test_signal_supervision.py"] >= 50, "a slowest Fleet file must be weighed"
     repo = affected.Repo.load(ROOT)
     selection = affected.Selection("full", [])
     matrix = affected.ci_matrix(repo, selection)["include"]
@@ -420,7 +414,7 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert sorted(paths) == expected
     loads = [sum(costs.get(PurePosixPath(p).name, 1) for inv in e["invocations"] for p in inv)
              for e in shards]
-    assert max(loads) <= 210, loads
+    assert max(loads) <= 1.1 * sum(loads) / len(loads), loads
     assert all(e["gating"] and e["ros"] == "none" for e in shards)
     repo.test_files.reverse()
     assert affected.ci_matrix(repo, selection)["include"] == matrix

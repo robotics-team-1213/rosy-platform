@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · 최신 크기 규칙 통합
 - 2026-10-16 · uncommitted · 경로 보기 브라우저의 명시적 탭 클릭
 - 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
 - 2026-10-16 · uncommitted · Robot/Pilot 진입 JS 설치 closure
 - 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
-- 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)

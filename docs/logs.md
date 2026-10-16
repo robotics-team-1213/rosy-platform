@@ -8723,6 +8723,34 @@ osy-d395-s1d\`.
 - gate 변화: 실물 수용·시연은 미완료로 유지한다. 변경 배치는 원격 검증 후 로컬 main에만 병합한다.
 - 결정: D-770 후속; 원래 작업 브랜치는 보존한다.
 
+## 2026-10-16 · uncommitted · feat(omx): 로컬 병합 뒤 초기화 후보 구현
+
+- 변경: 기존 준비 변경을 main 585885428에 병합하고 다음 단계로 실제 ROS driver의 시작 부작용을 확인했다. 설정 파라미터 보존을 위한 description 후보 생성기를 구현했다.
+- 증거: 병합 영향 1509 passed/14 skipped·guard247·browser3·NEW0. 새 생성기 원격 8시험과 독립 검토, 현장 실제 description에서 59개 register 초기화 항목 제거·원본/hash 대조.
+- gate 변화: 실제 시연은 0회 유지. 초기화 후보 생성은 확인했으나 driver 실행·구동 수용은 미완료다.
+- 결정: D-770 후속.
+
+## 2026-10-16 · uncommitted · fix(omx): 실제 vendor 오류 은폐와 owner 우회 경로 처리
+
+- 변경: driver startup/stop의 성공 오보고와 direct command 서비스 우회를 수정했다. 부분 활성화 정리 실패도 ERROR로 유지한다.
+- 증거: actual pinned method C++ 경계 시험10시나리오, 원격 관련pytest22 통과와 독립 검토. 두 patch를 합친 전체 native plugin compile/link/load 확인, private receipt 보존.
+- gate 변화: 실물 driver 활성화·물리 stop 검증·실제 자동 시연은 미완료. 소프트웨어 실패 전파를 실물 성공으로 집계하지 않는다.
+- 결정: D-770 후속.
+
+## 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
+
+- 변경: `.js`/`.mjs`/`.ts`는 600줄, `.html`/`.css`는 800줄(`.html` 안의 `<script>`는 합계 600줄), 시험 파일(브라우저 시험 포함)은 1,500줄이다. 경고 단계는 두지 않는다. 처음 묶이는 15개 행(JS 6개, 시험 9개)은 `COVERAGE_ROWS`에 적었다. 시험 구조 검사는 루트 `test/`도 잰다.
+- 증거: 2026-10-16 분포(제품 600 초과 50개, 500이면 116개, 400이면 212개). 엄격·실용 두 세션이 한 번씩 반박하는 토론을 했다. 이 PC에서 `test/test_size_limits.py`와 `test/architecture/test_module_structure.py` 60개가 통과했고 lint 오류는 0이다.
+- gate 변화: 묶인 15개 파일은 자라기 전에 나눠야 한다. 1,000–1,500줄의 시험 18개는 자랄 수 있다.
+- 결정: D-766 개정 2. 「커밋마다 녹색」(개정 1 조건 5)을 브랜치 끝 기준으로 바꾸는 일은 열린 질문으로 남긴다.
+
+## 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
+
+- 변경: ROS launch_testing pytest 훅을 모든 CI·lab·affected 호출에서 끈다(`-pno:launch_testing -pno:launch_ros`). 경로가 여럿인 호출이 0건 수집이면 적색이다. Fleet 조각 가중치는 실측 세 번의 평균(`tools/harness/fleet_test_seconds.json`)이다. 잡마다 시간 제한을 둔다. 다시 돌기 시작하면서 드러난 89개 실패를 고쳤다. 모듈 수준 `setup()` 5개는 `_setup`으로 바꿨다(CI의 apt pytest 7.4가 nose setup으로 불렀다). 가짜 `core_common`에는 `__init__.py`를 넣었다. 컨테이너에 없는 AppArmor·systemd user manager, 회수되지 않는 좀비는 명시적으로 건너뛴다.
+- 증거: 10-11(`e9e0f7edb`)부터 root-test 세 조각이 "collected 0 items / 1 skipped"로 1–4초 만에 성공했다. 고친 뒤 분기 CI 38830518002에서 약 8,800개가 돌았다. origin/main에 고침만 얹은 38843367280에서 같은 89개가 실패했으므로 모두 원래 있던 실패였고, 152개 로컬 커밋이 만든 것은 없다. 고친 파일은 시험 PC에서 183개와 89개가 통과했다.
+- gate 변화: 루트 계약 시험 약 8,800개가 다시 main CI의 관문이다. Fleet 가장 느린 조각의 재생 추정은 555초에서 354–408초다.
+- 결정: D-436·D-762 후속. pytest 7.4(CI)와 9.x(시험 PC)의 버전 차이는 다음 개선 항목이다.
+
 ## 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
 
 - 변경: `docs/plans/2026-10-16-app-role-clarity-design.md`와 실행 계획에 Fleet 현장 운영, Robot 한 대 관리, Pilot 직접 운전, Cam 송신, Learning 검수의 사용자 작업·소유 경계를 정리했다. 업무 소유 표, 앱 간 이동, 대상별 Robot/Pilot 이행, 결과 표시, 설치·수용의 다섯 Task로 나눴다.

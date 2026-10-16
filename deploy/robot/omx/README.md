@@ -541,3 +541,33 @@ on the development PC. It subscribes to existing top/front images and the
 commissioning joint topic, opens no devices, and issues no actuator commands.
 Source/receipt age, decoded picture expiry and disconnected joint feedback are
 checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
+
+### Prepare an initialization-description candidate
+
+```bash
+python3 deploy/robot/omx/preserved_description.py expanded.urdf new-candidate-directory
+```
+
+This offline command removes explicit GPIO initialization register parameters,
+sets torque/reboot selection to zero and preserves declared metadata/interfaces.
+It creates a new directory with description.urdf and receipt.json, refusing an
+existing output. It never starts hardware. The pinned driver still has activation
+writes and write services; this candidate does not prove a read-only driver or
+accepted physical runtime. See [evidence and remaining checks](../../../docs/validation/omx-preserved-description-2026-10-16.md).
+
+### Driver lifecycle error and owner-boundary patches
+
+The development Dockerfile applies `hardware-lifecycle-errors.patch` and
+`hardware-owner-command-path.patch` to the locked driver before compilation.
+Startup rejects failed initial command writes and exhausted torque enable retries.
+Failed activation attempts disable both motor groups and keep ERROR even if cleanup
+fails. Stop attempts both groups and reports disable failures. Direct register,
+reboot and torque command services are omitted; the read service remains.
+
+The locked-source compiled-method check runs on a lab host with g++ and patch:
+pass `ROSY_OMX_VENDOR_ROOT=<locked-checkout-relative-to-host-home>` before
+`test/test_omx_driver_lifecycle.py` in the remote pytest arguments. Without an
+explicit source checkout this hardware-free integration check skips. It compiles
+actual vendor method bodies with communication doubles and never opens a device.
+A passing result proves error propagation, not physical stopping or safe load retention.
+See [validation and remaining checks](../../../docs/validation/omx-driver-lifecycle-2026-10-16.md).

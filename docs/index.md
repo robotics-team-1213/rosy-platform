@@ -340,5 +340,5 @@
 - 2026-10-16 · uncommitted · 앱 책임 실행과 장치 연결 단위 분리
 - 2026-10-16 · uncommitted · 앱 책임 실행: 업무 소유표와 현재 이름 연결
 - 2026-10-16 · uncommitted · 앱별 작업 책임 정리 설계와 실행 계획
-- 2026-10-16 · uncommitted · refactor(omx): 병합용 수집 도구 배치
-- 2026-10-16 · uncommitted · docs(fleet-il-readiness): 실제 native 시작 부작용과 출력 제한 점검
+- 2026-10-16 · uncommitted · fix(ci): 루트 test/ 묶음이 다시 돈다, Fleet 조각 재분배
+- 2026-10-16 · uncommitted · feat(size): D-766 개정 2, 스크립트 600줄·시험 파일 1,500줄
