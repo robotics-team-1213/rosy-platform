@@ -25,11 +25,11 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
     image = BytesIO()
     Image.new('RGB', (640, 360), (100, 110, 120)).save(image, format='JPEG')
     state = {'row': None, 'applied': False, 'hold': False, 'pending': [], 'approvals': [], 'revoked': False,
-             'hold_frame': False, 'pending_frames': []}
+             'hold_frame': False, 'pending_frames': [], 'session': 'receiver:1'}
 
     def status(source):
         row = state['row'] if source == 'ceiling_north' else None
-        return {'source_id': source, 'session_id': 'receiver:1',
+        return {'source_id': source, 'session_id': state['session'],
                 'calibration_revision': row['calibration_revision'] if row else None,
                 'state': ('applied' if state['applied'] else 'confirmation_required') if row else 'waiting',
                 'reason': 'ok' if row else 'not_approved', 'frame_seq': 2 if state['applied'] else None,
@@ -75,7 +75,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
             headers = {'X-Frame-Seq': '2', 'X-Frame-Age-Ms': '50', 'X-Frame-Width': '640',
                        'X-Frame-Height': '360', 'X-Frame-Rotation-Deg': '0',
                        'X-Frame-Rectified': 'measured-map' if measured else 'false',
-                       'X-Frame-Calibration': 'measured-browser', 'X-Frame-Session': 'receiver:1',
+                       'X-Frame-Calibration': 'measured-browser', 'X-Frame-Session': state['session'],
                        'X-Frame-Observed-Fraction': '0.8'}
             if measured and state['hold_frame']:
                 state['pending_frames'].append((route, headers))
@@ -113,6 +113,15 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         assert state['approvals'][0]['purpose'] == 'preview'
         assert state['approvals'][0]['limits'] == {'p95_m': .01, 'max_m': .02}
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        state.update(session='receiver:2', applied=False)
+        with page.expect_request('**/measured-status'):
+            page.locator('#measured-refresh').click()
+        page.wait_for_function("document.querySelector('#measured-state').textContent.includes('촬영 조건 확인 필요')")
+        assert not page.locator('#measured-conditions').is_checked()
+        assert page.locator('#measured-confirm').is_disabled()
+        page.locator('#measured-conditions').check()
+        page.locator('#measured-confirm').click()
+        page.locator('#measured-image').wait_for(state='visible')
         state['hold_frame'] = True
         with page.expect_request(lambda r: r.url.endswith('/frame') and r.headers.get('authorization') == 'Bearer measured'):
             page.locator('#measured-read').click()
