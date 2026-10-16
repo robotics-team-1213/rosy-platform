@@ -127,7 +127,7 @@ jobs:
           # python3-opencv: the lane live viewer (integrations/simulation/gazebo/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
@@ -144,7 +144,9 @@ jobs:
           # name==version 줄만 뽑는다.
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
-            flake8 httpx pyyaml jsonschema ext4
+            flake8 httpx pyyaml jsonschema ext4 playwright
+          # Browser modules import the SDK during collection, even with browser tests disabled.
+          # Chromium stays scoped to the browser verification step below.
 
       - name: Install receiver TLS verification runtime
         run: |
@@ -172,7 +174,6 @@ jobs:
       - name: Install Fleet browser verification tools
         if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
         run: |
-          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt playwright
           python3 -m playwright install --with-deps chromium
 
       - name: Install Pinky raw verification tools

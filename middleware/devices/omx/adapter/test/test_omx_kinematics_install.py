@@ -49,6 +49,7 @@ def test_missing_geometry_refuses_without_inventing_defaults(tmp_path, monkeypat
     monkeypatch.setattr(kinematics, "DEFAULT_KINEMATICS_PATH", tmp_path / "missing/source.yaml")
     monkeypatch.setattr(sys, "prefix", str(tmp_path))
     monkeypatch.setitem(sys.modules, "ament_index_python", None)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", None)
     with pytest.raises(FileNotFoundError):
         kinematics.OmxKinematics.load()
 

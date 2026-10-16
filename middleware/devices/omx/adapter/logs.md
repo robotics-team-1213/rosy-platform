@@ -516,3 +516,9 @@
 - 변경: 생성자를 생략하던 host fixture에 실제 intake와 stamp를 제공하고 native 정책 publisher도 stamp를 기록한다. 원격 native wrapper에 격리 domain199 policy transport를 추가했다.
 - 증거: 확대 착지의 신규3실패를 보완, 정책 host22와 실제 Jazzy runtime8·정책 transport4 통과. 물리 장치를 사용하지 않았다.
 - gate 변화: 없음. D-770의 작은 이동 기반 국소 측정 절차를 구체화하되 초기화 자동복구 쓰기·실제 feedback/stop 수용은 미완료다.
+
+## 2026-10-16 · uncommitted · fix(ci): modules 수집 의존성과 기구학 시험 격리
+
+- 변경: CI 공통 시험 도구에 Playwright SDK와 adapter의 control_msgs 의존성을 추가했다. Chromium 설치와 브라우저 시험 활성화 범위는 기존 전용 단계가 맡는다. geometry 누락 시험은 ament_index_python의 부모와 packages 하위 모듈 캐시를 모두 차단해 설치된 ROS overlay의 geometry를 잘못 찾지 않게 했다.
+- 근거: 문서 병합 b501846ca의 CI 38884946663 modules 잡에 Playwright·control_msgs 수집 오류와 missing geometry 시험 실패가 있었다. 변경 전 main 810ea9bbe의 CI에도 같은 실패가 있다. 시험 결과는 이 수정 브랜치의 원격 로그와 PR CI에서 확인한다.
+- gate 변화: 없음. 실제 장치를 사용하지 않으며 geometry resolver의 제품 동작이나 modules의 gating 설정은 바꾸지 않는다.
