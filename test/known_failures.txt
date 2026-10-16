@@ -6,3 +6,4 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
+test/learning/perception/test_review_flow_browser.py::test_review_photo_and_result_are_in_first_view  # 2026-10-16: reproduced on main 436d52a55; /pixels canvas y=692 at 1280x720; app-role-clarity main-browser-baseline/run-1.txt
