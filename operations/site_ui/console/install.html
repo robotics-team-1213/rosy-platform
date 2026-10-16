@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
+  <link rel="stylesheet" href="/console/assets/measured-calibration.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/install.js"></script>
 
@@ -278,6 +279,28 @@
             <ui-status id="tracking-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
           </div>
           <p class="hint tracking-state" id="tracking-relearn-state" role="status"></p>
+        </section>
+        <section id="measured-calibration" class="install-step measured-calibration" aria-labelledby="measured-heading">
+          <h3 id="measured-heading">실측 카메라 교정</h3>
+          <p class="hint">촬영·독립 측량 결과를 확인해 지도 미리보기에 적용합니다. 승인 저장과 영상 적용 상태를 따로 확인하세요.</p>
+          <label>교정 묶음 <input id="measured-bundle" type="file" accept="application/json,.json" disabled></label>
+          <p id="measured-summary" class="hint"></p>
+          <div class="measured-limits">
+            <label>허용 p95 오차 (m) <input class="ui-field" id="measured-p95" type="number" min="0" step="0.001" required disabled></label>
+            <label>허용 최대 오차 (m) <input class="ui-field" id="measured-max" type="number" min="0" step="0.001" required disabled></label>
+          </div>
+          <ui-actions>
+            <ui-button id="measured-approve" kind="primary" disabled>실측 교정 승인 저장</ui-button>
+            <ui-button id="measured-revoke" kind="quiet" disabled>승인 철회</ui-button>
+            <ui-button id="measured-refresh" kind="quiet" disabled>적용 상태 확인</ui-button>
+          </ui-actions>
+          <label><input id="measured-conditions" type="checkbox" disabled>현재 렌즈·초점·줌·영상 크롭 조건이 이 교정의 촬영 조건과 같음을 확인했습니다.</label>
+          <ui-actions>
+            <ui-button id="measured-confirm" kind="primary" disabled>현재 조건 확인 후 미리보기</ui-button>
+            <ui-button id="measured-read" kind="quiet" disabled>확인된 미리보기 읽기</ui-button>
+          </ui-actions>
+          <p id="measured-state" class="hint" role="status">저장 기록 확인 중</p>
+          <img id="measured-image" alt="실측 교정 지도 미리보기" hidden>
         </section>
         <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
           <summary class="ui-disclosure-row">왜곡 및 사각 보정</summary>

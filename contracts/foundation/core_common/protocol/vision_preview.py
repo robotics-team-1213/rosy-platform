@@ -9,6 +9,7 @@ import json
 import math
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -128,7 +129,8 @@ class VisionLeaseSigner:
               ttl_s: int = 60,
               rectification: Mapping[str, object] | None = None,
               crop_map: tuple[float, float, float] | None = None,
-              crop_map_id: str | None = None, crop_revision: str | None = None) -> str:
+              crop_map_id: str | None = None, crop_revision: str | None = None,
+              measured: Mapping[str, object] | None = None) -> str:
         current = int(time.time()) if now is None else now
         if not isinstance(principal_id, str) or not principal_id or len(principal_id) > 96:
             raise ValueError("invalid preview principal")
@@ -138,6 +140,11 @@ class VisionLeaseSigner:
             raise ValueError("preview lease TTL must be between 1 and 120 seconds")
         payload = {"v": 1, "sub": principal_id, "source": source_id,
                    "scope": "frame:read", "iat": current, "exp": current + ttl_s}
+        if measured is not None:
+            if rectification is not None or crop_map is not None:
+                raise ValueError('measured preview cannot mix legacy transforms')
+            payload['measured'] = validate_measured_request(measured)
+            payload['jti'] = uuid.uuid4().hex
         if rectification is not None:
             payload["rectification"] = PreviewRectification.from_mapping(rectification).as_dict()
         if crop_map is not None:
@@ -177,6 +184,14 @@ class VisionLeaseSigner:
                 PreviewRectification.from_mapping(payload["rectification"])
             except (TypeError, ValueError) as exc:
                 raise VisionLeaseError("invalid rectification settings") from exc
+        if 'measured' in payload:
+            try:
+                validate_measured_request(payload['measured'])
+                if ('rectification' in payload or 'crop_map' in payload
+                        or not isinstance(payload.get('jti'), str) or len(payload['jti']) != 32):
+                    raise ValueError('invalid measured grant')
+            except (TypeError, ValueError) as exc:
+                raise VisionLeaseError('invalid measured preview') from exc
         if "crop_map" in payload:
             try:
                 if payload.get("rectification", {}).get("mode") != "map":
@@ -186,6 +201,18 @@ class VisionLeaseSigner:
             except (TypeError, ValueError) as exc:
                 raise VisionLeaseError("invalid map crop") from exc
         return payload
+
+
+def validate_measured_request(raw):
+    keys = {'calibration_revision', 'session_id', 'capture_signature', 'confirm_conditions'}
+    if not isinstance(raw, Mapping) or set(raw) != keys or type(raw['confirm_conditions']) is not bool:
+        raise ValueError('explicit measured session request required')
+    for key in keys-{'confirm_conditions'}:
+        value = raw[key]
+        if (not isinstance(value, str) or not 1 <= len(value) <= (200 if key == 'capture_signature' else 160)
+                or any(ord(c) < 32 for c in value)):
+            raise ValueError('invalid measured session identity')
+    return dict(raw)
 
 
 def _valid_crop_map(value: object) -> list[float]:
