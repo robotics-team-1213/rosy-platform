@@ -113,3 +113,24 @@ def test_sealing_and_binding_do_not_mutate_source(module, inputs):
     bound['episodes'][0]['roles']['top']['image_conditions'].clear()
     assert inputs == previous
     assert bind(module, inputs, evidence)['episodes'][0]['event_count'] == 2
+
+
+def test_excluded_failures_and_missing_environment_stay_visible_in_coverage(module, inputs):
+    summary = bind(module, inputs, seal(module, inputs))
+    decisions = [dict(split=name, outcome=outcome) for name, outcome in
+                 (('train', 'success'), ('exclude', 'failure'), ('eval', 'success'))]
+    coverage = module.split_coverage(summary, decisions)
+    assert coverage['exclude']['outcomes'] == {'failure': 1}
+    assert coverage['exclude']['roles']['top'] == {'OVEREXPOSED': 1}
+    assert coverage['eval']['unobserved_episodes'] == 1
+
+
+@pytest.mark.parametrize('fault', ['reversed_clock', 'duplicate_key', 'condition_type', 'run_type'])
+def test_malformed_logs_and_windows_fail_as_value_errors(module, inputs, fault):
+    raw, windows, files = inputs
+    if fault == 'reversed_clock': raw = raw.replace(b'"recorded_ns": 150', b'"recorded_ns": 99')
+    if fault == 'duplicate_key': raw = raw.replace(b'"recorded_ns": 100', b'"recorded_ns": 90, "recorded_ns": 100')
+    if fault == 'condition_type': raw = raw.replace(b'"condition": "NORMAL"', b'"condition": []')
+    if fault == 'run_type': windows[0]['run_id'] = []
+    with pytest.raises(ValueError, match='environment'):
+        module.seal_environment(raw, windows, files, rig_revision='rig', calibration_revision='cal')
