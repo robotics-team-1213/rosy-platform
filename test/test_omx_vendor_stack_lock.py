@@ -20,3 +20,12 @@ def test_omx_ai_vendor_sources_are_pinned_to_immutable_revisions():
     for dependency in lock["vendor"]["repositories"]:
         assert len(dependency["revision"]) == 40
         assert set(dependency["revision"]) <= set("0123456789abcdef")
+def test_driver_lifecycle_fix_is_applied_before_vendor_compilation():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    image = (root / "deploy/robot/omx/Dockerfile").read_text()
+    name = "hardware-lifecycle-errors.patch"
+    assert image.index(f"COPY patches/{name}") < image.index("colcon build")
+    assert f"git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/{name}" in image
+    assert f"git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/{name}" in image
+
