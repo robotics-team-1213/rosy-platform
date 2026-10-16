@@ -173,3 +173,61 @@ def test_recording_failure_prevents_device_write():
     with pytest.raises(OSError):
         module().configure_limits(bus, limits(), record, read=bus.read, write=bus.write)
     assert bus.sent == []
+
+
+@pytest.mark.parametrize("address,size,value", [(64, 1, 1), (116, 4, 2048), (11, 1, 3), (36, 2, 0)])
+def test_transport_independently_rejects_non_cap_or_unbounded_plan(address, size, value):
+    sent = []
+    with pytest.raises(ValueError):
+        module().one_write_guard(sent.append, dict(id=11, address=address, size=size, value=value))
+    assert sent == []
+
+
+@pytest.mark.parametrize("field", ["profile_velocity_raw", "profile_acceleration_raw"])
+def test_previously_finite_profiles_cannot_be_increased(field):
+    rows = motors()
+    rows[0][field] = 1
+    request = limits()
+    request[field] = 2
+    with pytest.raises(ValueError):
+        module().plan_limits(rows, request)
+
+
+def test_post_write_torque_or_unrelated_register_change_stops_next_write():
+    for field, value in [("torque_enabled", 1), ("homing_offset_raw", 99)]:
+        bus = FakeBus()
+        original = bus.write
+
+        def mutate(*args):
+            result = original(*args)
+            bus.rows[-1][field] = value
+            return result
+
+        with pytest.raises((ValueError, RuntimeError)):
+            module().configure_limits(bus, limits(), lambda event: None, read=bus.read, write=mutate)
+        assert len(bus.sent) == 1
+
+
+def test_durable_verified_record_failure_stops_next_write():
+    bus = FakeBus()
+
+    def record(event):
+        if event["event"] == "verified":
+            raise OSError("journal fsync failed")
+
+    with pytest.raises(OSError):
+        module().configure_limits(bus, limits(), record, read=bus.read, write=bus.write)
+    assert len(bus.sent) == 1
+
+
+def test_cli_refuses_existing_output_before_any_port_open(tmp_path, monkeypatch):
+    m = module()
+    import json
+    request = tmp_path / "limits.json"
+    request.write_text(json.dumps(limits()))
+    output = tmp_path / "existing"
+    output.mkdir()
+    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(m, "open_readonly_port", lambda device: pytest.fail("port opened"))
+    with pytest.raises(FileExistsError):
+        m.main(["--device", "/dev/serial/by-id/test", "--limits", str(request), "--output", str(output)])
