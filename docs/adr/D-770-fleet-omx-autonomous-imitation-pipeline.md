@@ -394,3 +394,41 @@ native driver 없이도 ID14의 목표와 현재 위치가 함께3195↔3196으�
 영향을 확정하거나 기존 gate를 통과로 바꾸지 않는다. 첫 활성화의 현재 위치·목표
 보존/readback 설계에 이 실제 변화 특성을 반영한다. 실제 시연은0회다.
 [독립 관찰과 해석 한계](../validation/omx-goal-readonly-2026-10-16.md).
+
+
+## 2026-10-16 후속: 측정 시작용 유한 제한의 실제 적용
+
+전체 작업 범위 검수를 먼저 요구하지 않고, 사용자 요청의 작은 단계 측정에 필요한
+제한을 토크 OFF 상태에서 먼저 적용했다. 임의의 넓은 workspace나 하중 수용값은
+만들지 않는다. 설정 절차와 운영 명령 owner를 구분하고 기존 owner를 우회하는
+trajectory 실행기를 만들지 않는다.
+
+commissioning_limits는 알려진 여섯 모터·mode·torque/error0과 독점 소유를 확인한 뒤
+명시적인 유한 상한만 낮춘다. 각 쓰기의 원본·의도를 durable 기록하고 정확히 한 번
+송신한다. ACK와 전체 모터 readback 뒤에만 다음 쓰기를 허용한다. 오류·불일치·기록
+실패·deadline 초과는 중단하며 자동 재시도/복원/resume은 없다. 실제 송신 경계에서도
+허용 주소·ID·폭·값·deadline을 검사한다.
+
+원격65시험 NEW0과 독립 검토 후 실제 Fleet에서 cap21쓰기를 완료했다. 여섯 PWM
+raw20·profile velocity/acceleration각1, XL330 current raw50을 실제 readback했다.
+모든 torque/error0이며 goal/torque/mode/offset/reboot 쓰기는 없었다. EEPROM 상한은
+낮은 값으로 유지하고 원본을 보존했다. RAM profile은 재시작 뒤 다시 읽어야 한다.
+이는 측정 시작용 설계값이며 물리 안전·부하 유지·작업 범위의 실측값이 아니다.
+
+초기 목표의 현재 위치 동기화와 실제 owner/HOLD/정지 관측을 계속 연결한다.
+실제 자동 시연과 IL eligible 데이터는 아직0회다.
+[설정·RED/GREEN·실제 송신과 readback](../validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 토크 OFF 시작 목표의 실제 송신
+
+실제 native driver에서 모든 Torque Enable/Reboot 선택을0으로 고정하고 fresh torque0/
+error0 read 뒤 on_activate/start를 한 번 호출했다. enable list는 비어 있고 현재 위치
+동기화 목표만 송신했다. 전후 fresh 상태3회와 raw snapshot은 torque/error0·기존 cap을
+유지했다. 실제 초기 목표6개의 nominal raw 위치와의 최대 차이는1틱이다.
+
+송신107개 중 목표 SyncWrite는 주소224/폭4의 IDs11..16 한 묶음이다. torque/reboot/
+mode/offset 쓰기는 없다. 목표 차이는 송신 후 검증이며 사전 transport guard가 아니다.
+SyncWrite 성공은 모터 ACK·물리 도달·독립 stop·실물 owner 수용을 뜻하지 않는다.
+운영 controller·trajectory는 기동하지 않았다. 실제 움직임과 시연은 계속0회다.
+[실제 시작 목표와 검증의 한계](../validation/omx-bounded-commissioning-2026-10-16/result.md).
