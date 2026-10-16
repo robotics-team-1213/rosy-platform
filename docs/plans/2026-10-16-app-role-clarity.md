@@ -136,4 +136,4 @@ python tools/harness/rosy_harness.py lint
 
 - 앱 이름·현재 source holder·기존 Account/셸/펜스 작업과 충돌하지 않는지 확인한다.
 - Task 1의 소유 표 → Task 2의 이동 → Task 3의 이행 조건 → Task 4의 결과 표시 → Task 5의 설치·수용을 연결한다.
-- 검토 때 합의할 구체 결과는 Robot 중복 운전의 링크 전환 범위와 미수용 대상의 예외다. 제품 실행은 아직 시작하지 않는다.
+- 실행 결과: 원격 최종 검사 305개 통과. Robot 중복 운전의 전체 제거는 대상별 실기 증거 예외로 남겼고 같은 로봇의 Pilot 진입을 제공했다. main 반영·장치 배포·새 실기 수용은 별도다.

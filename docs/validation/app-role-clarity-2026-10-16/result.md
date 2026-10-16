@@ -39,6 +39,7 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 | `18941a87b` | `installed-final` | 리뷰 수정 소스의 기존 계약 + standalone wheel/sdist 설치 55 passed |
 | `674e2d274` | `split-guards-green` | 분리 후 제목/전체 구조/Fleet 문서 import/실제 wheel·sdist 설치 46 passed, exit 0 |
 | `ee963467e` | `device-js-green` | 연결·주소 이동·dialog/API 41 passed, exit 0. Node 하위 회귀는 전체 console web specs를 실행 |
+| `bdce6a9e4` | `final-validation` | 최종 제출 트리에서 Chromium/실제 API owner/연결·Node/제목/전체 구조/standalone wheel·sdist/문서·harness **305 passed, exit 0**. 진행 결과 305개 전부 pass, skip 없음 |
 
 추가 계정 전환 시험의 초기 실패는 링크 잔존이 아니라 계정 재접속 때 기존 선택 카드가 해제되는 것을 시험이 반영하지 않은 문제였다. 새 세션에서 대상을 다시 선택하도록 시험을 정리했다. 정지/읽기 동작 자체를 바꿔 이 시험을 맞추지 않았다.
 
@@ -59,6 +60,25 @@ pytest와 Chromium은 원격 시험 PC에서 committed SHA로 실행했다. 노�
 - 생성 문서와 작업 로그를 정리하고 회귀·설치·구조 검사를 다시 실행한다.
 
 최종 제출 브랜치는 D-766의 커밋별 검사에 맞게 최종 트리를 하나의 변경으로 구성한다. 실패를 확인한 TDD 체크포인트의 브랜치와 SHA는 보존하며, main 또는 다른 세션의 브랜치는 다시 쓰지 않는다. 최종 SHA·생성 문서·커밋 범위 검사는 마지막 확인 후 추가한다.
+
+## 최종 판정
+
+- 최종 제품 코드 SHA: `bdce6a9e403126c5696dd69b88fcd023b773ff84` (`feat/app-role-clarity`). 후속 receipt 커밋은 문서만 갱신한다. TDD 체크포인트는 `docs/app-role-clarity`의 `3fa99097d`까지 그대로 남겼다. 두 최종 트리는 제품 코드가 같다.
+- 최종 원격 invocation: `ROSY_RUN_BROWSER_TESTS=1`을 켜고 Fleet workflow/Robot panel, 실제 API owner, Node·연결·주소·dialog, 제목·모듈 구조, 설치, 문서·harness의 16개 시험 모듈을 실행했다. 305 passed / 0 failed / 0 skipped, exit 0이다.
+- `known_failures.py final-validation/run-1.txt`: `0 new, 0 known, 0 flaky`.
+- `rosy_harness.py generate` 후 `lint`: 오류 0, 기존 검증 기록 노후 경고 30개. 이 경고를 해결했다고 주장하지 않는다.
+- `size_range.py 436d52a55 HEAD`: 최종 제품 변경 1개 커밋 통과. 처음부터 증가 제한을 지키는 제출 이력을 만들었으며 다른 세션의 history/branch는 수정하지 않았다.
+- 독립 행동 리뷰 Important 2건과 분리 경계 리뷰의 최소 파일 크기 지적을 해결했다. 미룬 Minor 항목은 없다.
+- 기존 큰 단위의 감소와 승인된 경우의 앱 이동까지 완료했다. 대상별 실기 이행 예외, directory origin이 없는 경우의 안내, CI/배포/새 DEVICE/FIELD 미실행 범위는 그대로다.
+
+## 실행 중 선택한 사항
+
+1. 이 환경에 X 드라이브가 없어 원시 로그·진행 원장은 Windows TEMP에 뒀다. 실험실 기본 경로와 다르며 공유할 때 원시 파일을 별도로 옮겨야 한다.
+2. Robot의 기존 저속 조종은 대상별 실기 증거가 채워질 때까지 유지했다. 일시적인 두 조작 경로가 남지만 기존 Pilot DEVICE GO를 전체 대상의 수용으로 확대하지 않았다.
+3. Git 작성자 설정이 없어 커밋은 명령별 `Codex <codex@openai.com>`으로 만들었다. 사용자 전역 설정은 바꾸지 않았고 사용자 명의의 커밋으로 가장하지 않았다.
+4. 링크는 approved directory origin에만 허용했다. 광고가 directory 행을 대체하면 일부 로봇은 앱 링크 대신 안내를 보며, 이 범위를 넓히는 API 계약은 별도 작업이다.
+5. Learning 제목은 독립 앱 이름으로 바꾸지 않고 기존 개발 범위 규칙을 보존했다. 탭에는 개발 범위가 남고 화면 안에는 기존 Learning 브랜드를 유지한다.
+6. TDD 이력은 원래 브랜치에 보존하고 최종 트리를 새 feature 브랜치의 하나의 커밋으로 구성했다. 로컬 브랜치가 두 개 남지만 크기 검사의 제출 범위에 실패 체크포인트를 포함하지 않는다.
 
 ## 운영 수용의 경계
 
