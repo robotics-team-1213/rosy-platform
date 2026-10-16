@@ -1,6 +1,6 @@
 --- a/src/dynamixel_hardware_interface.cpp
 +++ b/src/dynamixel_hardware_interface.cpp
-@@ -572,17 +572,27 @@
+@@ -572,17 +572,30 @@
  
    CalcJointToTransmission();
  
@@ -24,12 +24,15 @@
      }
 +    if (!enabled) {
 +      RCLCPP_ERROR_STREAM(logger_, "Dynamixel Start Fail: torque retries exhausted");
++      if (stop() != hardware_interface::CallbackReturn::SUCCESS) {
++        RCLCPP_ERROR_STREAM(logger_, "Dynamixel Start rollback failed; stop remains unverified");
++      }
 +      return hardware_interface::CallbackReturn::ERROR;
 +    }
    }
  
    RCLCPP_INFO_STREAM(logger_, "Dynamixel Hardware Start!");
-@@ -593,8 +603,12 @@
+@@ -593,8 +606,12 @@
  hardware_interface::CallbackReturn DynamixelHardware::stop()
  {
    if (dxl_comm_) {
