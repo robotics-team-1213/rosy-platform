@@ -43,6 +43,146 @@ def choose(page, title):
         page.get_by_role('combobox', name='작업 선택').select_option(label=title)
 
 
+def _approved_robot_peer(**changes):
+    return dict({'peer_id': 'rosy_01', 'name': 'robot-one', 'role': 'robot',
+                 'transport': 'https', 'hostname': 'robot-one.local', 'address': None,
+                 'port': 8443, 'approval': 'approved', 'provenance': 'approved-directory',
+                 'freshness': 'unavailable', 'readiness': 'unknown'}, **changes)
+
+
+@pytest.mark.parametrize('viewport', [(390, 844), (1200, 800), (1366, 768)])
+def test_robot_app_links_preserve_approved_target_without_dispatch(console_url, viewport):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/peers': {'peers': [_approved_robot_peer()]}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({'width': viewport[0], 'height': viewport[1]})
+        writes = []
+        page.on('request', lambda request: writes.append(request.url)
+                if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') else None)
+        page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
+        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        expect(card.get_by_role('link', name='Rosy Robot · 한 대 관리')).to_have_attribute(
+            'href', 'https://robot-one.local:8443/console')
+        pilot = card.get_by_role('link', name='Rosy Pilot · 직접 운전')
+        expect(pilot).to_have_attribute('href', 'https://robot-one.local:8443/pilot')
+        expect(pilot).to_be_visible()
+        expect(page.locator('#estop')).to_be_visible()
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        # Switching apps is ordinary navigation; the target handles its own login/admission.
+        page.route('https://robot-one.local:8443/pilot', lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<h1>Pilot target</h1>'))
+        pilot.click()
+        expect(page).to_have_url('https://robot-one.local:8443/pilot')
+        assert not [url for url in writes if '/teleop' in url or '/mission' in url or '/goal' in url]
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize('changes', [
+    {'approval': 'unapproved'}, {'freshness': 'conflict'}, {'freshness': 'expired'},
+    {'peer_id': 'rosy_02'}, {'transport': 'javascript'},
+    {'provenance': 'mdns', 'freshness': 'fresh', 'transport': 'http', 'port': 9999},
+    {'hostname': 'user@evil.example'}, {'hostname': 'evil.example/path'},
+])
+def test_untrusted_robot_target_has_guidance_instead_of_app_links(console_url, changes):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/peers': {'peers': [_approved_robot_peer(**changes)]}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
+        card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
+        expect(card.locator('[data-robot-app-guidance]')).to_contain_text('승인된 로봇 주소')
+        expect(card.locator('[data-robot-app]')).to_have_count(0)
+        assert not errors
+        browser.close()
+
+
+def test_robot_app_links_clear_when_directory_becomes_unavailable(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/peers': {'peers': [_approved_robot_peer()]}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
+        links = page.locator('#robot-workspace [data-robot-app]')
+        expect(links).to_have_count(2)
+        api['/api/fleet/peers'] = (503, {'detail': 'directory unavailable'})
+        expect(links).to_have_count(0, timeout=12_000)
+        expect(page.locator('[data-robot-app-guidance]')).to_be_visible()
+        assert not errors
+        browser.close()
+
+
+def test_robot_app_links_drop_previous_users_directory_before_new_response(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/peers': {'peers': [_approved_robot_peer()]}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
+        links = page.locator('#robot-workspace [data-robot-app]')
+        expect(links).to_have_count(2)
+        # Hold the next user's directory response: old links must disappear immediately.
+        waiting = []
+        page.route('**/api/fleet/peers', lambda route: waiting.append(route))
+        _open_token_access(page)
+        page.locator('#console-token').fill('next-user-token')
+        with page.expect_request('**/api/fleet/peers'):
+            page.locator('#token-save').click()
+        expect(links).to_have_count(0)
+        page.locator('#robot-choice').select_option('rosy_01')
+        expect(page.locator('[data-robot-app-guidance]')).to_be_visible()
+        for route in waiting:
+            route.fulfill(json={'peers': []})
+        assert not errors
+        browser.close()
+
+
+def test_bfcache_return_clears_app_directory_before_session_is_revalidated(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/peers': {'peers': [_approved_robot_peer()]}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
+        links = page.locator('#robot-workspace [data-robot-app]')
+        expect(links).to_have_count(2)
+        waiting = []
+        page.route('**/api/fleet/session', lambda route: waiting.append(route))
+        page.evaluate('''() => {
+          dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}));
+          dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+        }''')
+        # Existing page cleanup drops selection; reselecting must not revive the old directory.
+        page.locator('#robot-choice').select_option('rosy_01')
+        expect(links).to_have_count(0)
+        for route in waiting:
+            route.fulfill(status=401, json={'detail': {'code': 'TOKEN_REQUIRED'}})
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize('peers', [
+    [None],
+    [_approved_robot_peer(), _approved_robot_peer(hostname='other.local')],
+    [_approved_robot_peer(), _approved_robot_peer(freshness='conflict')],
+])
+def test_malformed_or_ambiguous_directory_never_selects_a_robot_app(console_url, peers):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/peers': {'peers': peers}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url + '?robot=rosy_01', wait_until='networkidle')
+        expect(page.locator('[data-robot-app-guidance]')).to_be_visible()
+        expect(page.locator('[data-robot-app]')).to_have_count(0)
+        assert not errors
+        browser.close()
+
+
 def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
     from playwright.sync_api import sync_playwright, expect
 
