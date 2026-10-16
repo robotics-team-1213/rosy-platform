@@ -6,6 +6,7 @@ Source stamps describe host capture/read time, not synchronized exposure time.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import threading
@@ -20,7 +21,7 @@ class ObservationStore:
         self._lock = threading.Lock()
         self._samples = {}
 
-    def put(self, source, stamp, value, *, received=None, wall=None):
+    def put(self, source, stamp, value, *, received=None, wall=None, quality=None):
         if source not in ("top", "front", "joints"):
             raise ValueError("unknown source")
         if not math.isfinite(stamp) or stamp <= 0:
@@ -33,19 +34,20 @@ class ObservationStore:
                 return False
             sequence = previous[3] + 1 if previous else 1
             self._samples[source] = (stamp, time.monotonic() if received is None else received,
-                                     value, sequence)
+                                     value, sequence, copy.deepcopy(quality))
         return True
 
     @staticmethod
     def _metadata(sample, now, wall):
         if sample is None:
             return {"fresh": False, "source_stamp": None, "sequence": 0}
-        stamp, receipt, _, sequence = sample
+        stamp, receipt, _, sequence, quality = sample
         age = now - receipt
         source_age = wall - stamp
         return {"fresh": 0 <= age <= 2 and -0.25 <= source_age <= 2,
                 "source_stamp": stamp, "receipt_age_s": age,
-                "source_age_s": source_age, "sequence": sequence}
+                "source_age_s": source_age, "sequence": sequence,
+                "quality": copy.deepcopy(quality) if 0 <= age <= 2 and -0.25 <= source_age <= 2 else None}
 
     def snapshot(self, *, now=None, wall=None):
         now = time.monotonic() if now is None else now
@@ -196,6 +198,7 @@ def main():
     parser.add_argument("--port", type=int, default=8766)
     args = parser.parse_args()
     import cv2
+    from camera_quality import frame_quality
     import numpy as np
     import rclpy
     from rclpy.qos import qos_profile_sensor_data
@@ -220,7 +223,7 @@ def main():
                 pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR)
             ok, encoded = cv2.imencode(".jpg", pixels, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if ok:
-                store.put(source, stamp(message), encoded.tobytes())
+                store.put(source, stamp(message), encoded.tobytes(), quality=frame_quality(pixels))
         except (ValueError, TypeError, cv2.error) as exc:
             node.get_logger().warning(str(exc))
 
