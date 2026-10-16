@@ -8795,3 +8795,9 @@ osy-d395-s1d\`.
 - 변경: vendor InitDxlComm fault의 자동 reboot를 제거하고 임시 probe의 실제 device identity·독점 open을 검사한다. loader 교착을 실제 constructor/worker 회귀로 재현하고 SYS_openat으로 수정했다.
 - 증거: compiled init5·기존 lifecycle10시나리오, Linux PTY/loader6시험 통과. 실제 native on_init/read3/정상 소멸 exit0, 전후 torque/error0·설정 동일, goal/torque/reboot 송신 없음. 앞선 두 실패와 분석기 enum 오류도 보존했다.
 - gate 변화: 실물 구동·보정/stop 수용은 미완료, 실제 시연0회. D-770; docs/validation/omx-native-passive-read-2026-10-16/result.md.
+
+## 2026-10-16 · uncommitted · fix(omx): cyclic write 오류와 fault cleanup
+
+- 변경: 정상 write의 송신 실패를 즉시 ERROR로 전파하고 fault/shutdown callback을 두 그룹 stop에 연결한다. fault cleanup 성공도 자동 복구로 취급하지 않는다.
+- 증거: 고정 메서드 오류5개 RED→GREEN, write6/callback8경우·원격24시험 통과·NEW0. 전체 native plugin build/load, 실제 ROS 객체 97→99 실패 전파, 실제 framework consumer12경우와 기본 callback negative control 확인.
+- gate 변화: 이번 단계 serial port·실물 activation 미사용. 물리 stop·하중·실측 제한·실물 owner 수용 및 시연0회는 유지한다. D-770; docs/validation/omx-cyclic-write-fault-2026-10-16/result.md.

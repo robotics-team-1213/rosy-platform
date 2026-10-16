@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-16 · uncommitted · fix(omx): cyclic write 오류와 fault cleanup
 - 2026-10-16 · uncommitted · fix(omx): 자동 reboot 제거와 실제 native read
 - 2026-10-16 · uncommitted · fix(omx): native driver dependency export
 - 2026-10-16 · uncommitted · fix(omx): vendor 시작·정지 결과와 직접 조작 서비스
 - 2026-10-16 · uncommitted · feat(omx): 초기화 description 후보 생성
-- 2026-10-16 · uncommitted · feat(omx): startup register 읽기와 모델별 미지원 값 보존
