@@ -4,6 +4,15 @@ import math
 POLICY = 'omx-photometric-v1'
 
 
+def advancing_frame(item, previous):
+    stamp, seq = item.get('source_stamp'), item.get('sequence')
+    quality = item.get('quality') or {}
+    return (type(stamp) in (int, float) and math.isfinite(stamp)
+            and type(seq) is int and stamp > previous[0] and seq > previous[1]
+            and item.get('fresh') is True and quality.get('policy') == POLICY
+            and type(quality.get('usable')) is bool)
+
+
 def frame_quality(pixels):
     import numpy as np
     if pixels.dtype != np.uint8 or pixels.ndim != 3 or pixels.shape[2] != 3:
@@ -33,8 +42,7 @@ class Readiness:
             item = state.get(role, {})
             stamp, seq = item.get('source_stamp'), item.get('sequence')
             previous = self.previous.get(role, (0, 0))
-            valid = (type(stamp) in (int, float) and math.isfinite(stamp)
-                     and type(seq) is int and stamp > previous[0] and seq > previous[1])
+            valid = advancing_frame(item, previous)
             quality = item.get('quality') or {}
             good = (valid and item.get('fresh') is True and quality.get('usable') is True
                     and quality.get('policy') == POLICY)

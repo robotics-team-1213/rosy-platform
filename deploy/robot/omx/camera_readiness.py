@@ -104,6 +104,33 @@ def save(path, value, *, exclusive=False):
         os.fsync(stream.fileno())
     if not exclusive:
         temporary.replace(path)
+    sync_directory(path.parent)
+
+
+def sync_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def ensure_directory(path):
+    missing = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        current = current.parent
+    for current in reversed(missing):
+        current.mkdir(mode=0o700)
+        sync_directory(current.parent)
+
+
+def apply_candidate(candidate, write):
+    write('auto_exposure', 1)
+    for name, value in candidate.items():
+        if name != 'auto_exposure':
+            write(name, value)
 
 
 def identity(device):
@@ -182,12 +209,12 @@ def restore(root):
 
 
 def run(profile, root, digest, duration):
-    from camera_quality import Readiness
+    from camera_quality import Readiness, advancing_frame
     baseline = prepare(profile, root, digest)
     gate = Readiness()
     levels = dict(top=0, front=0)
     settling = dict(top=0., front=0.)
-    last_stamp = dict(top=0., front=0.)
+    previous = dict(top=(0., 0), front=(0., 0))
     changes = []
     began = time.monotonic()
     try:
@@ -212,11 +239,10 @@ def run(profile, root, digest, duration):
                     gate.counts[role] = 0
                     assessment['photometric_ready'] = False
                     continue
-                if (item.get('fresh') is not True or quality.get('policy') != 'omx-photometric-v1'
-                        or stamp <= last_stamp[role]):
+                if not advancing_frame(item, previous[role]):
                     continue
-                last_stamp[role] = stamp
-                if quality.get('usable') is True or levels[role] >= len(spec['candidates']):
+                previous[role] = (stamp, item['sequence'])
+                if quality['usable'] is not False or levels[role] >= len(spec['candidates']):
                     continue
                 device = spec['device']
                 saved = baseline['cameras'][role]
@@ -226,8 +252,7 @@ def run(profile, root, digest, duration):
                 entry = dict(role=role, candidate=levels[role], requested=candidate, time_ns=time.time_ns())
                 changes.append(entry)
                 save(root/'changes.json', changes)  # preserve attempted write even on failure
-                for name, value in candidate.items():
-                    write_control(device, name, value)
+                apply_candidate(candidate, lambda n, v: write_control(device, n, v))
                 actual = get_controls(device, candidate)
                 entry['actual'] = actual
                 save(root/'changes.json', changes)
@@ -271,7 +296,7 @@ def main():
         parser.error('--profile required for run')
     raw = args.profile.read_bytes()
     profile = validate_profile(json.loads(raw))
-    args.state_dir.mkdir(parents=True, exist_ok=True)
+    ensure_directory(args.state_dir)
     def terminate(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, terminate)
