@@ -143,3 +143,20 @@ def test_device_identity_mismatch_prevents_any_off_write(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "disable_torque", lambda *args: pytest.fail("wrong device written"))
     assert m.main(["--device", "/dev/serial/by-id/confirmed", "--expected-device-id", "123",
                    "--ids", "16", "--output", str(tmp_path / "record")]) == 2
+
+
+def test_serial_cleanup_failure_after_verified_off_is_not_clean_exit(monkeypatch, tmp_path, capsys):
+    m = module()
+    from contextlib import contextmanager
+    @contextmanager
+    def open_port(device):
+        yield SimpleNamespace(ser=SimpleNamespace(fileno=lambda: 42))
+        raise OSError("serial close failed")
+    monkeypatch.setattr(m, "open_readonly_port", open_port)
+    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(m.os, "fstat", lambda fd: SimpleNamespace(st_rdev=123))
+    monkeypatch.setattr(m, "disable_torque", lambda port, ids: dict(stop_verified=True))
+    result = m.main(["--device", "/dev/serial/by-id/confirmed", "--expected-device-id", "123",
+                     "--ids", "16", "--output", str(tmp_path / "record")])
+    assert result == 2
+    assert 'serial close failed' in capsys.readouterr().out
