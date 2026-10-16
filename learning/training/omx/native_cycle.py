@@ -69,6 +69,9 @@ def _invoke(command, output, environment, timeout):
 
 def _evaluate(model, splits, repo_id, output):
     # This function runs only in a fresh child process after the official trainer exited.
+    receipt = validate_split(splits)
+    if receipt['source']['repo_id'] != repo_id:
+        raise ValueError('evaluation repo identity differs from reviewed source')
     import torch
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
@@ -99,7 +102,9 @@ def _evaluate(model, splits, repo_id, output):
     native.write_json(output, dict(samples=samples, split='eval', model_reloaded_in_new_process=True,
                                    mae_per_joint=(error / samples).tolist(),
                                    train_mean_baseline_mae_per_joint=(baseline / samples).tolist(),
-                                   joint_names=native.JOINTS, physical_task_success=None))
+                                   joint_names=native.JOINTS, physical_task_success=None,
+                                   environment_coverage=native.split_coverage(
+                                       native.validate_environment(receipt['source']), receipt['decisions'])))
 
 
 def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=5400):

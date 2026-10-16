@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import math
 import re
 from collections import Counter
 
@@ -41,14 +42,43 @@ def _constant(value):
     raise ValueError('environment: nonfinite JSON constant ' + value)
 
 
+def _float(value):
+    result = float(value)
+    _require(math.isfinite(result), 'nonfinite JSON number')
+    return result
+
+
+def _number(value):
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def _image_condition(item, stamp_ns, previous):
+    quality = item.get('quality') or {}
+    stamp, seq = item.get('source_stamp'), item.get('sequence')
+    if not (_number(stamp) and stamp > 0 and type(seq) is int and seq > 0
+            and stamp > previous[0] and seq > previous[1] and item.get('fresh') is True
+            and -.25 <= stamp_ns/1e9-stamp <= 2
+            and _number(item.get('receipt_age_s')) and 0 <= item['receipt_age_s'] <= 2
+            and _number(item.get('source_age_s')) and -.25 <= item['source_age_s'] <= 2
+            and quality.get('policy') == POLICY
+            and type(quality.get('usable')) is bool
+            and quality['usable'] == (quality.get('condition') == 'NORMAL')
+            and all(_number(quality.get(key)) and 0 <= quality[key] <= 255
+                    for key in ('mean_intensity', 'spatial_contrast', 'p5', 'p95'))
+            and all(_number(quality.get(key)) and 0 <= quality[key] <= 1
+                    for key in ('dark_fraction', 'clipped_fraction'))):
+        return 'UNKNOWN', previous
+    return quality['condition'], (stamp, seq)
+
+
 def _events(raw):
     _require(isinstance(raw, str), 'UTF-8 log required')
     encoded = raw.encode('utf-8')
     _require(0 < len(encoded) <= MAX_LOG_BYTES and raw.endswith('\n'), 'empty, oversized or partial log')
-    result, previous = [], 0
+    result, previous, frames = [], 0, {}
     for line in raw.splitlines():
         try:
-            event = json.loads(line, object_pairs_hook=_object, parse_constant=_constant)
+            event = json.loads(line, object_pairs_hook=_object, parse_constant=_constant, parse_float=_float)
         except (ValueError, TypeError) as exc:
             raise ValueError('environment: invalid log JSON') from exc
         _require(isinstance(event, dict), 'event object required')
@@ -63,10 +93,13 @@ def _events(raw):
         plans, observations = event.get('environment'), event.get('observations')
         _require(isinstance(plans, dict) and set(plans) == set(ROLES)
                  and isinstance(observations, dict), 'both camera roles required')
+        event['_image_conditions'] = {}
         for role in ROLES:
             plan = plans[role]
-            _require(isinstance(plan, dict) and plan.get('state') in STATES
-                     and plan.get('condition') in CONDITIONS | {'TEMPORAL_CHANGE', None}, 'invalid recovery state')
+            _require(isinstance(plan, dict) and isinstance(plan.get('state'), str)
+                     and plan['state'] in STATES
+                     and (plan.get('condition') is None or isinstance(plan.get('condition'), str)
+                          and plan['condition'] in CONDITIONS | {'TEMPORAL_CHANGE'}), 'invalid recovery state')
             _require(all(type(plan.get(key)) is int and plan[key] >= 0
                          for key in ('environment_epoch', 'control_generation')), 'invalid epoch/generation')
             item = observations.get(role, {})
@@ -74,7 +107,12 @@ def _events(raw):
             quality = item.get('quality')
             if quality is not None:
                 _require(isinstance(quality, dict) and quality.get('policy') == POLICY
-                         and quality.get('condition') in CONDITIONS, 'invalid image policy/condition')
+                         and isinstance(quality.get('condition'), str)
+                         and quality['condition'] in CONDITIONS, 'invalid image policy/condition')
+            key = (event['run_id'], role)
+            condition, frame = _image_condition(item, stamp, frames.get(key, (0., 0)))
+            frames[key] = frame
+            event['_image_conditions'][role] = condition
         result.append(event)
     return result
 
@@ -136,9 +174,7 @@ def bind_environment(episodes, files, *, rig_revision, calibration_revision, evi
         for role in ROLES:
             conditions, states = Counter(), Counter()
             for event in selected:
-                item = event['observations'].get(role, {})
-                quality = item.get('quality') or {}
-                conditions[quality.get('condition', 'UNKNOWN') if item.get('fresh') is True else 'UNKNOWN'] += 1
+                conditions[event['_image_conditions'][role]] += 1
                 states[event['environment'][role]['state']] += 1
             roles[role] = dict(image_conditions=dict(conditions), recovery_states=dict(states))
         summary['episodes'].append(dict(episode_index=source['episode_index'],

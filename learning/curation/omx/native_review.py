@@ -1,5 +1,6 @@
 """Offline native OMX dataset inspection and reviewed episode splits; no robot or upload."""
 import argparse
+import copy
 import hashlib
 import importlib.metadata
 import json
@@ -176,7 +177,6 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
         report['episodes'], before, rig_revision=rig_revision,
         calibration_revision=calibration_revision, evidence=environment_evidence)
     if environment_evidence is not None:
-        import copy
         report['environment_evidence'] = copy.deepcopy(environment_evidence)
     return report
 
@@ -206,7 +206,12 @@ def split_reviewed(root, report, decisions, output):
                               source_mode=report['source_mode'] if report['source_mode'] != 'unverified_native' else None,
                               capture_provenance=report.get('capture_provenance'),
                               environment_evidence=report.get('environment_evidence'))
-    if current != report:
+    current = copy.deepcopy(current)
+    current.setdefault('environment_summary', validate_environment(current))
+    expected = copy.deepcopy(report)
+    if 'environment_summary' not in expected and expected.get('environment_evidence') is None:
+        expected['environment_summary'] = validate_environment(expected)
+    if current != expected:
         raise ValueError('inspection report no longer matches source')
     splits = reviewed_splits(current, decisions)
     from lerobot.datasets.dataset_tools import split_dataset
@@ -218,7 +223,7 @@ def split_reviewed(root, report, decisions, output):
         inspect_frames(child.meta.info, (child[i] for i in range(len(child))))
     if dataset_files(root) != report['files']:
         raise ValueError('source dataset changed during splitting; no success receipt written')
-    write_json(output / 'split-receipt.json', dict(source=report, decisions=decisions, splits=splits,
+    write_json(output / 'split-receipt.json', dict(source=current, decisions=decisions, splits=splits,
                                                  outputs={name: dataset_files(output / name) for name in produced},
                                                  environment_coverage=split_coverage(
                                                      validate_environment(current), decisions),
