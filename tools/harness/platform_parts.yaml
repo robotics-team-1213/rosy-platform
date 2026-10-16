@@ -845,6 +845,7 @@ safety_modules:
   - middleware/devices/omx/agent/src/rosy_agent/workcell_coordinator.py  # D-780 coupled stop, barrier release
   - operations/fleet/fleet/server/dispatch_admission.py
   - operations/fleet/fleet/server/ledger/action_claims.py  # D-779 per-Action arm/zone claim release
+  - operations/fleet/fleet/server/cell/cell_arm_claims.py  # D-779 §5/§6 multi-arm arm/zone claim phases
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
@@ -915,6 +916,18 @@ safety_anchors:
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
   - {symbol: fleet.server.dispatch_admission.release, public: true}
   - {symbol: fleet.server.action_claims.release_keys, public: true}  # D-779 per-Action arm/zone release
+  - {symbol: fleet.server.action_claims.release_held_keys, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.reserve_step, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.set_phase, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.release_succeeded, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.release_for_resume, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.action_resources, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.arm_key, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.held_anywhere, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.job_claims_runnable, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.park_job_claims, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.phases, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.resource_keys, public: true}  # D-779 §5/§6
   - {symbol: fleet.server.cancel_all.cancel_all_driving, public: true}
   - {symbol: fleet.server.cancel_all.DriveCancelFence, public: true}
   - {symbol: fleet.server.cancel_all.DispatchCanceled, public: true}

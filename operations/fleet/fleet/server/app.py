@@ -44,7 +44,7 @@ from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
-from fleet.server.step_dispatcher import StepJobDispatcher
+from fleet.server.cell_arm_dispatcher import CellJobDispatcher  # D-779: single-arm + multi-arm Cell Jobs
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.incidents.automation.runtime import install_incident_runtime
@@ -262,7 +262,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return None
 
     cell_job_dispatcher = (
-        StepJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
+        CellJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
                           omx_cell_grant_revisions or {}, deployment_profile=deployment_profile,
                           on_step_action_succeeded=on_step_action_succeeded)
         if enable_mission_dispatcher else None
@@ -977,7 +977,7 @@ async def _mission_model_turn_worker_loop(worker) -> None:
         await asyncio.sleep(0.25)
 
 
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher | StepJobDispatcher) -> None:
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher | CellJobDispatcher) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
         try:
