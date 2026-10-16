@@ -5,6 +5,7 @@ import time
 import urllib.request
 import json
 import uuid
+import copy
 
 CONDITIONS = {'NORMAL', 'UNDEREXPOSED', 'OVEREXPOSED', 'MIXED_LIGHTING',
               'LOW_CONTRAST', 'LOW_SPATIAL_SIGNAL', 'TEMPORAL_CHANGE'}
@@ -112,7 +113,7 @@ class ExposureRecovery:
 
 
 def monitor(profile, root, digest, duration, io):
-    from camera_quality import Readiness, advancing_frame
+    from camera_quality import Readiness, advancing_frame, same_fresh_frame
     baseline = io.prepare(profile, root, digest)
     gate = Readiness()
     plans = {role: ExposureRecovery(dark_count=len(spec['candidates']),
@@ -120,6 +121,7 @@ def monitor(profile, root, digest, duration, io):
              for role, spec in profile['cameras'].items()}
     current = {role: dict(spec['original']) for role, spec in baseline['cameras'].items()}
     previous = dict(top=(0., 0), front=(0., 0))
+    previous_quality = {}
     best, epochs = {}, {}
     changes = []
     run_id = uuid.uuid4().hex
@@ -140,10 +142,14 @@ def monitor(profile, root, digest, duration, io):
                 plan = plans[role]
                 item = state.get(role, {})
                 quality = item.get('quality') or {}
+                if same_fresh_frame(item, previous[role], previous_quality.get(role)):
+                    plan.state = 'WAITING_FRAME'
+                    continue
                 valid = advancing_frame(item, previous[role])
                 stamp = item.get('source_stamp') or 0
                 if valid:
                     previous[role] = (stamp, item['sequence'])
+                    previous_quality[role] = copy.deepcopy(quality)
                 action = plan.observe(quality.get('condition') if valid else None, time.monotonic(),
                                       source_stamp=stamp, intensity=quality.get('mean_intensity') if valid else None)
                 if epochs.get(role) != plan.epoch:

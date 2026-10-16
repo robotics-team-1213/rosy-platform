@@ -8880,8 +8880,58 @@ osy-d395-s1d\`.
 - gate 변화: 자동 카메라 관측 경로 설치. 현재 암실은 INSUFFICIENT이며 motion admission·집게 clearance·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-lowlight-automation-2026-10-16/result.md.
 
 
+## 2026-10-16 · uncommitted · docs(vision): 실측 교정의 승인·미리보기·무효화 설계
+
+- 변경: D-633·D-636의 실제 후보 생성, Fleet 승인 SQLite, Vision 소비, sighting admission과 World MapPose 경계를 대조하고 첫 구현 단위의 설계를 기록했다. preview 목적의 영속 승인·기대 revision·촬영 session 확인·철회 readback을 기존 tracking 승인과 구분한다.
+- 증거: docs/plans/2026-10-16-measured-camera-lifecycle-design.md. 조사 기준 cd50cde54; 브랜치 docs/camera-calibration-lifecycle. 현재는 사용자 검토용 설계이며 제품 코드·API 계약·장치 설정을 변경하지 않았다.
+- gate 변화: 없음. 실측 자료·현장 수용을 만들지 않았으며 D-598 구현은 마커·지도 핀·LED 현장 확인과 측정 오차 근거 뒤의 후속 단위다. 구현 계획과 실행은 설계 검토 뒤 진행한다.
+
+## 2026-10-16 · uncommitted · docs(vision): 실측 입력과 기존 현장 근거의 범위 점검
+
+- 변경: D-636 합성 결과, D-587 과거 현장 sighting, D-593 핀 계약 시험, D-596 구현·재생 근거를 구분했다. 로컬 데이터·private·device-evidence·외부 scratch의 제한된 calibration 자료 inventory를 기록했다.
+- 증거: docs/validation/measured-camera-lifecycle-2026-10-16/evidence-inventory.md; 조사 revision a1a183379. 읽기 전용 Python inventory 2회 exit 0. 현재 조사 범위에서 실제 training/validation 원본과 연결된 교정 묶음을 확보하지 못했다.
+- gate 변화: 없음. 원격 장치 접근·새 pytest·교정 승인·설정 변경 없음. 사용자 설계 검토는 아직 필요하며 과거 현장 기록을 현재 설치 수용으로 바꾸지 않았다.
+
+## 2026-10-16 · uncommitted · docs(vision): 실측 교정 실행 계획과 변경 전 원격 기준선
+
+- 변경: 사용자 재개 요청 뒤 승인된 설계를 계약 묶음·영속 store·API·Vision session/lease·설치 UI·통합 검증의 6개 작업으로 구체화했다. 실행 계획 검토 및 직접 구현/위임 선택은 별도로 요청했다.
+- 증거: docs/plans/2026-10-16-measured-camera-lifecycle.md; docs/validation/measured-camera-lifecycle-2026-10-16/baseline.md. 기존 revision 89d3ba4d10의 AI 시험 PC 원격 53 passed, terminal exit 0, known_failures NEW 0.
+- gate 변화: 없음. 제품 구현은 계획 검토 전이며 기준선은 새 기능이나 브라우저·장치·현장 수용을 증명하지 않는다. 원시 로그 C:/DevTemp/camera-calibration/baseline/run-1.txt.
+
 ## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 
 - 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
 - 증거: 초기 환경 회귀 RED→GREEN, 느린 적용 cooldown RED→GREEN, d9d06a48d 관련103개(실제 Chromium 포함)·62f94db6b 통합 묶음34개 원격 통과. 실제 bounded16초·assessment60개·원본 복구·기존 서비스 재시작·v3 설치/활성화·sole producer 확인, 독립 리뷰.
 - gate 변화: 지속적인 카메라 환경 관측/복구 설치. 암실 pair readiness0회이며 강조도/역광 실물 수용·실제 episode 환경 binding·수집 stop 결선·시연/실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-readiness-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
+
+- 변경: 실제 암실의 불규칙 source 간격을 확인하고 같은 원본의 fresh 재조회를 WAITING_FRAME으로 분리했다. 확인/epoch/budget 보존과 READY/제어 갱신 거부를 함께 유지했다.
+- 증거: 반복 frame·확인 보존 RED2건과 상충 품질 RED→GREEN, c6c9366d8 관련47개 원격 통과(실제 Chromium 포함). 실제24 assessment/역할48개에서 WAITING_FRAME35·fresh false STALE0, 동일 profile·baseline·budget·ledger 보존. 첫 helper 실패/자동 원복도 보존.
+- gate 변화: 불규칙 프레임 관측 경로 보완. 강조도 현장 수용·episode 환경 binding·수집 stop·실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-frame-progress-2026-10-17/result.md.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · a0a864b6ea · D-775 관련 원격 회귀와 완료 범위 확정
+
+- 변경: 프로젝트 FULL 승격의 관련 local_invocations 3개 모두 exit 0. 20,243 passed / 1,159 skipped, 각 로그 NEW 0. 별도 Chromium 166 passed 및 새 session 확인란 2개 폭의 회귀도 기록했다. skipped를 성공으로 세지 않았다.
+- gate 변화: 사용자가 실제 촬영·측량·odom 자료의 부재를 확인하고 그 의존 작업을 제외하도록 요청했다. D-775 구현·소스 검증과 D-598 선행 입력/소유·소비 계약 준비를 이번 완료로 삼고, 실제 수집·DEVICE/FIELD·D-598 운영 활성화는 후속으로 둔다.
+- 증거: docs/validation/measured-camera-lifecycle-2026-10-16/result.md. 전체 GitHub CI·main 착지·push·배포는 미실행이다.
+
+## 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
+
+- 변경: 원본 JSONL·SHA·episode host-clock 창·run/profile·데이터 hash·rig/보정을 bind하고 split/학습/별도 reload에서 재검증한다. 실패/exclude와 미관측을 남기며 sparse 이벤트를 연속 수용으로 해석하지 않는다. legacy 보고서는 명시적 unrecorded로 분할한다.
+- 증거: 경계/영상 metadata RED→GREEN, 7260e1563 관련82개 원격 통과. 0a9954c5f9 Model PC 실제 LeRobot 합성12frame·CLI seal·독립 train/eval/test·ACT2step·별도 model/pre/post reload1개 통과(skip0). 기본 venv 경로의 앞선1skip은 별도 보존. 실제 닫힌 camera-only 원본82015bytes/37event hash와 형식 검증, 원본 불변. 독립 리뷰 P2 두 건 수정 후 남은 material finding 없음.
+- gate 변화: offline 환경 provenance 연결. 실제 recorder 창 발행·환경 저하 owner stop·강조도 현장 수용·실제 시연/학습은 미완료이며 실제 시연0회. docs/validation/omx-environment-lineage-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+
+- 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
+- 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
+- gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.

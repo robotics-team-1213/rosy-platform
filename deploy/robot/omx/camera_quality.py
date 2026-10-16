@@ -1,5 +1,6 @@
 """Photometric screening of original frames; never a mechanical or task-success gate."""
 import math
+import copy
 
 POLICY = 'omx-photometric-v3'
 
@@ -15,6 +16,12 @@ def advancing_frame(item, previous):
                                            'MIXED_LIGHTING', 'LOW_CONTRAST', 'LOW_SPATIAL_SIGNAL'}
             and all(type(quality.get(key)) in (int, float) and math.isfinite(quality[key])
                     for key in ['mean_intensity', 'spatial_contrast', 'clipped_fraction']))
+
+
+def same_fresh_frame(item, previous, previous_quality):
+    return (advancing_frame(item, (0, 0))
+            and (item.get('source_stamp'), item.get('sequence')) == previous
+            and item.get('quality') == previous_quality)
 
 
 def frame_quality(pixels):
@@ -55,9 +62,11 @@ class Readiness:
             raise ValueError('positive confirmation count required')
         self.required = required
         self.previous = {}
+        self.previous_quality = {}
         self.counts = dict(top=0, front=0)
 
     def update(self, state):
+        all_advanced = True
         for role in self.counts:
             item = state.get(role, {})
             stamp, seq = item.get('source_stamp'), item.get('sequence')
@@ -66,9 +75,13 @@ class Readiness:
             quality = item.get('quality') or {}
             good = (valid and item.get('fresh') is True and quality.get('usable') is True
                     and quality.get('condition') == 'NORMAL' and quality.get('policy') == POLICY)
-            self.counts[role] = self.counts[role]+1 if good else 0
+            repeated = same_fresh_frame(item, previous, self.previous_quality.get(role))
+            if not repeated:
+                self.counts[role] = self.counts[role]+1 if good else 0
+            all_advanced = all_advanced and good
             if valid:
                 self.previous[role] = (stamp, seq)
-        return dict(photometric_ready=all(n >= self.required for n in self.counts.values()),
+                self.previous_quality[role] = copy.deepcopy(quality)
+        return dict(photometric_ready=all_advanced and all(n >= self.required for n in self.counts.values()),
                     confirmations=dict(self.counts), motion_admitted=False,
                     physical_acceptance=False, policy=POLICY)

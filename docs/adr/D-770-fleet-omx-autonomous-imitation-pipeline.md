@@ -578,3 +578,54 @@ cycle/session 독립 분할과 환경별 실제 수량·held-out coverage를 보
 실제 시연·IL eligible 데이터는0회이며 첫 실제 데이터셋 완료 기준을 유지한다.
 [환경 범위와 연결 계약](../plans/2026-10-17-omx-environment-readiness.md),
 [source·원격 시험·실제 camera-only 실행과 이전](../validation/omx-environment-readiness-2026-10-17/result.md).
+
+
+### 2026-10-17 불규칙 프레임 도착도 환경 조건으로 처리
+
+암실의 실제 source 간격이 불규칙해 같은 fresh frame을 여러 번 조회하는 경우를 확인했다.
+stamp·sequence·원본 품질이 같은 재조회는 WAITING_FRAME으로 분리한다. 확인/epoch/budget을
+보존하되 READY·시각 이력·best·제어를 갱신하지 않으며, 실제 만료/역행/상충 품질은 계속 거부한다.
+source rate를 poll rate나 설정 예시의10Hz로 가정하지 않는다.
+
+RED→GREEN과 실제 Chromium 포함47개 원격 검사 뒤 source를 이전했다. 기존 profile·baseline·
+rolling budget·환경 ledger를 보존했고 실제24 assessment의 역할48개에서 WAITING_FRAME35건,
+fresh false STALE0건을 확인했다. 첫 helper의 warmup receipt 조회 실패와 자동 원복도 보존했다.
+실제 시연·IL eligible 데이터는0회이며 환경 이력의 episode/학습 binding 등 완료 기준을 유지한다.
+[불규칙 도착·수정·원격 검사·실제 이전](../validation/omx-environment-frame-progress-2026-10-17/result.md).
+
+
+### 2026-10-17 환경 원본의 native 검토·학습 연결
+
+native 환경 원본 log와 recorder가 선언한 Fleet host Unix ns episode 창을 데이터 파일 hash·
+run/profile·rig/보정에 묶는다. 검사·분할·학습·별도 재적재에서 원본과 요약을 다시 검증하고
+실패/exclude·미관측 episode·split별 영상 조건 이벤트 수를 보존한다. 기존 기록의 환경은
+unrecorded이며 정상 조명으로 채우지 않는다. 프레임 identity·age·v3 수치가 확인된 새로운
+관측만 알려진 영상 조건으로 집계하며 sparse transition이 연속 readiness를 입증하지 않는다.
+
+관련82개 원격 검사와 Model PC의 실제 LeRobot 합성3episode/12frame·독립 분할·ACT2step·
+별도 model/pre/post 재적재가 통과했다. 실제 닫힌 camera-only 원본37event의 형식/hash도
+검증했으나 episode 창을 만들지 않았다. rig/보정/창은 선언이며 진위·물리 수용 증명이 아니다.
+실제 recorder 시간 창 발행·환경 저하 owner stop·강조도 실물 수용·첫 시연과 실데이터 학습은
+여전히 미완료다. [구현과 검증](../validation/omx-environment-lineage-2026-10-17/result.md).
+
+
+### 2026-10-17 다음 날 실물 수집용 전체 경로 연결
+
+기존 native owner를 사용하는 bounded teacher collector와 독립 supervisor를 연결했다.
+원본 RGB·실제 관절/reference·Fleet host clock·환경 receipt·native 목표 수용/결과를 함께 보존하고,
+환경/owner/수용 만료/시간·디스크 제한 실패 때 HOLD/cancel 뒤 미완료 원본을 남긴다.
+단독 ROS 배치와 canonical Action 자원 lock을 확인하며 controller 시작·토크 ON·자동 복귀는 하지 않는다.
+raw intake는 teacher hash와 native ledger를 다시 대조한다. 사람 검토 전에는 unknown/exclude이며
+독립 session/cycle 분할 뒤 Model PC ACT 학습·새 process 재적재로 연결한다.
+
+최종 소스 b88eee5f18 원격28개, intake/학습/전송 묶음48개 통과(선택적 기본 venv 검사1skip)와
+실제 분리 LeRobot의 합성 raw journal→reader→ACT2step→별도 model/pre/post 재적재를 확인했다.
+두 PC에 같은 소스293개를 배치해 각각 모의6개와 실제 runtime import가 통과했다.
+Fleet 수집 unit과 private 예시는 비활성으로 유지했다. 실제 PC 간 strict SSH/scp-3 시험 파일
+hash도 일치했다. native event는 소프트웨어 사실이며 물리 정지/물체 과제 성공 증명이 아니다.
+
+실제 recorder 창·환경 중단·offline 학습 연결의 소프트웨어 구현을 추가한 것이며 실제 시연은0회다.
+내일 실측 제한·집게/시야·작업공간·하중·powered stop을 확인해 acceptance를 채운 뒤 첫 수집을 한다.
+강조도 실물 수용·실데이터 학습·독립 과제 성능과 G4 완료 조건은 유지한다.
+[절차](../plans/2026-10-17-omx-next-day-collection.md) ·
+[고정 증거](../validation/omx-next-day-collection-2026-10-17/result.md).

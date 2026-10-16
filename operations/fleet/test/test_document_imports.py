@@ -75,6 +75,7 @@ OWN = {
         "field-view.js",
         "field-layers.js",
         "map-fit-view.js",
+        "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
         "start-point-layer.js",
@@ -102,7 +103,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices"):
+    for folder in ("shared", "cell", "work", "devices", "calibration"):
         path = WEB / folder / name
         if path.is_file():
             return path

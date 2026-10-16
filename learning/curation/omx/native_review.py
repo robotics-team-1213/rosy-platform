@@ -1,5 +1,6 @@
 """Offline native OMX dataset inspection and reviewed episode splits; no robot or upload."""
 import argparse
+import copy
 import hashlib
 import importlib.metadata
 import json
@@ -12,9 +13,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_capture import bind_capture, check_capture_groups
+from native_environment import bind_environment, seal_environment, split_coverage, validate_environment
 
 JOINTS = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
           'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos']
+OBJECT_RESULTS = ('moved_as_intended', 'grasp_missed', 'dropped', 'displaced', 'untouched', 'unknown')
 
 
 def _integer(value, name):
@@ -47,7 +50,7 @@ def inspect_frames(info, frames):
             if episodes:
                 episodes[-1]['content_sha256'] = digest.hexdigest()
             episodes.append(dict(episode_index=episode, frames=0, outcome='unknown',
-                                 split='exclude', reviewer='', reason=''))
+                                 object_result='unknown', split='exclude', reviewer='', reason=''))
             digest, previous_time = hashlib.sha256(), None
         if frame != episodes[-1]['frames']:
             raise ValueError('missing or duplicate frame index')
@@ -107,6 +110,9 @@ def reviewed_splits(report, decisions):
             raise ValueError('split must be train, eval, test or exclude')
         if decision.get('outcome') not in ('success', 'failure', 'unknown'):
             raise ValueError('outcome must be success, failure or unknown')
+        # Human-observed object effect, kept for action-outcome (world model) labels; not a split rule.
+        if decision.get('object_result', 'unknown') not in OBJECT_RESULTS:
+            raise ValueError('object_result must be one of ' + ', '.join(OBJECT_RESULTS))
         if split == 'exclude':
             continue
         if decision['outcome'] != 'success':
@@ -122,6 +128,8 @@ def reviewed_splits(report, decisions):
     if not all(splits.values()):
         raise ValueError('nonempty independent train and eval splits are required')
     check_capture_groups(report['episodes'], decisions)
+    if 'files' in report:
+        validate_environment(report)
     return splits
 
 
@@ -153,7 +161,7 @@ def load_dataset(root, repo_id):
 
 
 def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revision,
-                    source_mode=None, capture_provenance=None):
+                    source_mode=None, capture_provenance=None, environment_evidence=None):
     root = Path(root).resolve()
     if body_units not in ('degrees', 'normalized_-100_100') or not all(
             isinstance(value, str) and value.strip() for value in (rig_revision, calibration_revision)):
@@ -169,6 +177,11 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
     report.update(bind_capture(report['episodes'], before, source_mode=source_mode,
                                body_units=body_units, rig_revision=rig_revision,
                                calibration_revision=calibration_revision, provenance=capture_provenance))
+    report['environment_summary'] = bind_environment(
+        report['episodes'], before, rig_revision=rig_revision,
+        calibration_revision=calibration_revision, evidence=environment_evidence)
+    if environment_evidence is not None:
+        report['environment_evidence'] = copy.deepcopy(environment_evidence)
     return report
 
 
@@ -195,8 +208,14 @@ def split_reviewed(root, report, decisions, output):
                               rig_revision=report['rig_revision'],
                               calibration_revision=report['calibration_revision'],
                               source_mode=report['source_mode'] if report['source_mode'] != 'unverified_native' else None,
-                              capture_provenance=report.get('capture_provenance'))
-    if current != report:
+                              capture_provenance=report.get('capture_provenance'),
+                              environment_evidence=report.get('environment_evidence'))
+    current = copy.deepcopy(current)
+    current.setdefault('environment_summary', validate_environment(current))
+    expected = copy.deepcopy(report)
+    if 'environment_summary' not in expected and expected.get('environment_evidence') is None:
+        expected['environment_summary'] = validate_environment(expected)
+    if current != expected:
         raise ValueError('inspection report no longer matches source')
     splits = reviewed_splits(current, decisions)
     from lerobot.datasets.dataset_tools import split_dataset
@@ -208,8 +227,10 @@ def split_reviewed(root, report, decisions, output):
         inspect_frames(child.meta.info, (child[i] for i in range(len(child))))
     if dataset_files(root) != report['files']:
         raise ValueError('source dataset changed during splitting; no success receipt written')
-    write_json(output / 'split-receipt.json', dict(source=report, decisions=decisions, splits=splits,
+    write_json(output / 'split-receipt.json', dict(source=current, decisions=decisions, splits=splits,
                                                  outputs={name: dataset_files(output / name) for name in produced},
+                                                 environment_coverage=split_coverage(
+                                                     validate_environment(current), decisions),
                                                  reader_verified=True, uploaded=False))
     return output
 
@@ -226,21 +247,41 @@ def main():
     inspect.add_argument('--source-mode', choices=('leader_native', 'scripted_teacher'))
     inspect.add_argument('--capture-provenance', type=Path,
                          help='byte-bound scripted teacher capture manifest; not device acceptance')
+    inspect.add_argument('--environment-evidence', type=Path,
+                         help='sealed original environment log and host-clock episode windows')
     inspect.add_argument('--out', type=Path, required=True)
     split = commands.add_parser('split')
     split.add_argument('root', type=Path)
     split.add_argument('--report', type=Path, required=True)
     split.add_argument('--decisions', type=Path, required=True)
     split.add_argument('--out', type=Path, required=True)
+    seal = commands.add_parser('seal-environment', help='bind closed log and recorder-declared episode windows')
+    seal.add_argument('root', type=Path)
+    seal.add_argument('--log', type=Path, required=True)
+    seal.add_argument('--windows', type=Path, required=True)
+    seal.add_argument('--rig-revision', required=True)
+    seal.add_argument('--calibration-revision', required=True)
+    seal.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     try:
-        if args.command == 'inspect':
+        if args.command == 'seal-environment':
+            output = _new_output(args.out, args.root)
+            before = dataset_files(args.root)
+            evidence = seal_environment(args.log.read_bytes(), json.loads(args.windows.read_text(encoding='utf-8')),
+                                        before, rig_revision=args.rig_revision,
+                                        calibration_revision=args.calibration_revision)
+            if dataset_files(args.root) != before:
+                raise ValueError('environment: dataset changed during sealing')
+            write_json(output / 'environment.json', evidence)
+        elif args.command == 'inspect':
             output = _new_output(args.out, args.root)
             report = inspect_dataset(args.root, args.repo_id, body_units=args.body_units,
                                      rig_revision=args.rig_revision, calibration_revision=args.calibration_revision,
                                      source_mode=args.source_mode,
                                      capture_provenance=json.loads(args.capture_provenance.read_text(encoding='utf-8'))
-                                     if args.capture_provenance else None)
+                                     if args.capture_provenance else None,
+                                     environment_evidence=json.loads(args.environment_evidence.read_text(encoding='utf-8'))
+                                     if args.environment_evidence else None)
             write_json(output / 'inspection.json', report)
             write_json(output / 'decisions.json', report['episodes'])
         else:

@@ -75,6 +75,20 @@ def test_reviewed_splits_require_success_and_independent_content(module, recordi
         module.reviewed_splits(report, decisions)
 
 
+def test_object_result_is_a_bounded_label_and_not_a_split_rule(module, recording):
+    report = module.inspect_frames(*recording)
+    assert all(e['object_result'] == 'unknown' for e in report['episodes'])
+    decisions = copy.deepcopy(report['episodes'])
+    for episode, split in zip(decisions, ('train', 'eval')):
+        episode.update(outcome='success', split=split, reviewer='operator', reason='verified')
+    decisions[0]['object_result'] = 'moved_as_intended'
+    del decisions[1]['object_result']
+    assert module.reviewed_splits(report, decisions) == {'train': [0], 'eval': [1]}
+    decisions[1]['object_result'] = 'slipped a bit'
+    with pytest.raises(ValueError, match='object_result'):
+        module.reviewed_splits(report, decisions)
+
+
 def test_duplicate_episode_content_cannot_cross_splits(module, recording):
     info, rows = recording
     rows[2]['action'] = rows[0]['action'][:]
@@ -165,3 +179,29 @@ def test_source_changed_during_split_cannot_receive_a_success_receipt(module, re
     with pytest.raises(ValueError, match='changed'):
         module.split_reviewed(source, report, decisions, output)
     assert not (output/'split-receipt.json').exists()
+
+
+def test_legacy_inspection_can_split_with_explicit_unknown_environment(module, recording, monkeypatch, tmp_path):
+    import json
+    import sys
+    from types import SimpleNamespace
+    info, rows = recording
+    class Dataset(list):
+        meta = SimpleNamespace(info=info)
+    monkeypatch.setattr(module, 'load_dataset', lambda *args: Dataset(rows))
+    monkeypatch.setattr(module, 'dataset_files', lambda root: {'meta/info.json': 'a'*64})
+    source, output = tmp_path/'source', tmp_path/'output'
+    report = module.inspect_dataset(source, 'local/source', body_units='normalized_-100_100',
+                                    rig_revision='rig', calibration_revision='cal', source_mode='leader_native')
+    del report['environment_summary']  # Report produced before environment binding existed.
+    decisions = copy.deepcopy(report['episodes'])
+    for decision, name in zip(decisions, ('train', 'eval')):
+        decision.update(split=name, outcome='success', reviewer='operator', reason='checked')
+    def splitter(*args, **kwargs):
+        return {name: SimpleNamespace(repo_id=f'local/source_{name}') for name in ('train', 'eval')}
+    monkeypatch.setitem(sys.modules, 'lerobot.datasets.dataset_tools', SimpleNamespace(split_dataset=splitter))
+    module.split_reviewed(source, report, decisions, output)
+    receipt = json.loads((output/'split-receipt.json').read_text())
+    assert receipt['source']['environment_summary']['status'] == 'unrecorded'
+    assert receipt['environment_coverage']['eval']['unobserved_episodes'] == 1
+    assert 'environment_summary' not in report

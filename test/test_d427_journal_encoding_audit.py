@@ -7,7 +7,7 @@ import pytest
 import rosy_harness as harness
 
 REPO = Path(__file__).resolve().parents[1]
-SOURCE_COMMIT = '429e13b8313484a25751a7c7896fe1b7aca41b92'
+SOURCE_COMMIT = 'dd111029617fc08784710c546cf469c7f9f2d3a8'
 HEADING = (
     '## 2026-10-04 ? uncommitted ? fix(g2): preserve the total SIM AI'
     'D deadline while allowing RPC acknowledgement'

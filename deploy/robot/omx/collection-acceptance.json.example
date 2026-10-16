@@ -1,0 +1,14 @@
+{
+  "schema": "rosy.omx-collection-acceptance.v1",
+  "profile_sha256": "",
+  "teacher_sha256": "",
+  "rig_revision": "<measured-rig-revision>",
+  "calibration_revision": "<verified-native-normalization-revision>",
+  "expires_ns": 0,
+  "physical_stop_verified": false,
+  "workspace_verified": false,
+  "gripper_verified": false,
+  "load_support_verified": false,
+  "camera_visibility_verified": false,
+  "independent_watchdog_verified": false
+}

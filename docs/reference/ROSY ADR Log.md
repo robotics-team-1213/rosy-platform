@@ -786,6 +786,8 @@
 | D-780 | 작업대 조율자와 owner의 연결 — 조율자 전용 peer UID와 연산별 권한, COORDINATOR 정지 출처, 이름 붙은 barrier와 PHASE_WAIT, 단단한 결합 구간의 조율자 생존 확인 | Proposed |
 | D-781 | 혼합 레시피 rosy_cell.recipe/3와 팔 베이스 둘을 아는 놓는 순서 — 물체 목록, 계획이 정하는 공급 순서, 컴파일 규칙(지지·핑거 여유·도달성), 의존 관계로 남기는 순서 | Proposed |
 
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 | Accepted (2026-10-16, 사용자 설계·구현 승인; SOURCE·DEVICE·FIELD 별도) |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
