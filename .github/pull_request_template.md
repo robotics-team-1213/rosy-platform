@@ -3,6 +3,7 @@
 <!-- 문제와 변경 뒤 동작을 한두 줄로 적는다. 관련 ADR: D-nnn -->
 
 연결 이슈: <!-- #123. 이 PR이 머지되면 끝나는 이슈만 Closes #123 -->
+Jira: <!-- KAN-27처럼 키만. 없으면 없음. PR 제목 앞에도 [KAN-27] (docs/reference/atlassian-integration.md) -->
 
 ## 작업 범위와 의존성
 

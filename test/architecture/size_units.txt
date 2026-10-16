@@ -49,6 +49,8 @@ fleet/fleet/server/work small
 fleet/fleet/server/trips
 fleet/fleet/server/trip_checks small
 fleet/fleet/server/trip_progress small
+fleet/fleet/server/tracking
+fleet/fleet/server/pose
 foundation/core_common/protocol
 robot_ui/robot/panels
 fleet/fleet/server/auth
