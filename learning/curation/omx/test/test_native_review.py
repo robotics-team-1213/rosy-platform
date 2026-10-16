@@ -75,6 +75,20 @@ def test_reviewed_splits_require_success_and_independent_content(module, recordi
         module.reviewed_splits(report, decisions)
 
 
+def test_object_result_is_a_bounded_label_and_not_a_split_rule(module, recording):
+    report = module.inspect_frames(*recording)
+    assert all(e['object_result'] == 'unknown' for e in report['episodes'])
+    decisions = copy.deepcopy(report['episodes'])
+    for episode, split in zip(decisions, ('train', 'eval')):
+        episode.update(outcome='success', split=split, reviewer='operator', reason='verified')
+    decisions[0]['object_result'] = 'moved_as_intended'
+    del decisions[1]['object_result']
+    assert module.reviewed_splits(report, decisions) == {'train': [0], 'eval': [1]}
+    decisions[1]['object_result'] = 'slipped a bit'
+    with pytest.raises(ValueError, match='object_result'):
+        module.reviewed_splits(report, decisions)
+
+
 def test_duplicate_episode_content_cannot_cross_splits(module, recording):
     info, rows = recording
     rows[2]['action'] = rows[0]['action'][:]

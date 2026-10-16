@@ -40,6 +40,8 @@ def validate_profile(profile, *, mode, acceptance=None, teacher=None):
     require(isinstance(shapes, dict) and set(shapes) == {'top', 'front'} and all(
         isinstance(s, list) and len(s) == 3 and s[2] == 3
         and all(type(v) is int and 0 < v <= 4096 for v in s) for s in shapes.values()), 'two RGB shapes required')
+    if 'camera_mounts' in profile:
+        validate_camera_mounts(profile['camera_mounts'])
     if mode == 'hardware':
         require(profile.get('enabled') is True, 'hardware collection profile is disabled')
         require(isinstance(acceptance, dict), 'field acceptance receipt required')
@@ -72,7 +74,28 @@ def validate_profile(profile, *, mode, acceptance=None, teacher=None):
         require(set(ros.get('image_topics', {})) == {'top', 'front'}
                 and set(ros.get('publishers', {})) == {'top','front','joints','reference','hardware'},
                 'explicit original producer identities required')
+        if 'camera_info_topics' in ros:
+            topics = ros['camera_info_topics']
+            require(isinstance(topics, dict) and set(topics) == {'top', 'front'} and all(
+                isinstance(t, str) and t.startswith('/') and '<' not in t for t in topics.values()),
+                'explicit camera_info topics for both cameras required')
     return profile
+
+
+def validate_camera_mounts(mounts):
+    """Declared camera-to-arm placement. A measurement record, not a calibration proof."""
+    require(isinstance(mounts, dict) and set(mounts) == {'top', 'front'}, 'camera mounts for both cameras required')
+    for role, mount in mounts.items():
+        require(isinstance(mount, dict) and set(mount) == {'parent_frame', 'translation_m', 'rotation_xyzw',
+                                                           'method'}, role+' camera mount fields differ')
+        require(all(isinstance(mount[k], str) and mount[k].strip() and '<' not in mount[k]
+                    for k in ('parent_frame', 'method')), role+' camera mount frame and method required')
+        translation, rotation = mount['translation_m'], mount['rotation_xyzw']
+        require(isinstance(translation, list) and len(translation) == 3 and all(
+            number(v) and abs(v) <= 5 for v in translation), role+' camera translation must be three metres')
+        require(isinstance(rotation, list) and len(rotation) == 4 and all(number(v) for v in rotation)
+                and abs(math.sqrt(sum(v*v for v in rotation))-1) <= 1e-3, role+' camera rotation must be unit xyzw')
+    return mounts
 
 
 def validate_teacher(teacher, profile):
