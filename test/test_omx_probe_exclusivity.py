@@ -5,11 +5,13 @@ from pathlib import Path
 import selectors
 import shutil
 import subprocess
+import sys
 
 import pytest
 
-pytestmark = pytest.mark.skipif(os.name != "posix" or not shutil.which("g++") or not shutil.which("fuser"),
-                                reason="requires Linux compiler and fuser")
+pytestmark = pytest.mark.skipif(sys.platform != "linux" or os.geteuid() == 0
+                                or not shutil.which("g++") or not shutil.which("fuser"),
+                                reason="requires unprivileged Linux, compiler and fuser")
 ROOT = Path(__file__).resolve().parents[1]
 
 
