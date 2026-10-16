@@ -598,3 +598,14 @@ The native consumer probe and inherited-callback negative control are recorded i
 [the write/fault validation](../../../docs/validation/omx-cyclic-write-fault-2026-10-16/result.md).
 These changes establish error propagation and software cleanup attempts; physical
 stopping, load retention and hardware owner admission still require actual evidence.
+
+`hardware-torque-uncertainty.patch` retains uncertain ON/OFF attempts until an
+acknowledged result, so lost enable acknowledgments cannot suppress cleanup.
+`hardware-status-readback.patch` requires exactly one Torque Enable and Hardware
+Error Status state interface per motor before opening the bus. The candidate
+generator adds these read interfaces and rejects ambiguous names. Read failures
+or invalid fields return ERROR immediately; publication uses successful physical
+reads instead of command caches or default zero/off values. Legacy descriptions
+without those fields require migration. Native PTY rejection and torque-off read
+evidence, including an unresolved one-tick goal-register change that failed the
+preservation check, are recorded in [measured-status validation](../../../docs/validation/omx-measured-status-2026-10-16/result.md).

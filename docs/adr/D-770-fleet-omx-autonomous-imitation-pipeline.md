@@ -364,3 +364,23 @@ vendor의 기본 on_error/on_shutdown은 stop 없이 SUCCESS였다. 두 callback
 유한 제한·초기 목표 보존·실제 상태 출처·owner/HOLD·정지 관측을 이어서 연결한다.
 실제 시연은 계속 0회다.
 [원인·caller 경로·수정·실행 범위](../validation/omx-cyclic-write-fault-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 실제 torque/error 출처와 작은 측정의 전제
+
+사용자의 현재 위치 주변 작은 단계 측정 요청에 따라 전체 범위 선행 측정 없이 좁은
+범위를 확인하는 결정을 유지한다. 실제 feedback의 출처부터 연결했다. SDK enable ACK
+유실 뒤 cache OFF로 cleanup을 생략하는 결함과 native torque/error 기본값 게시를
+고정 실제 메서드로 재현했다. 불확실한 토크 쓰기를 ACK까지 추적하고 실제 cyclic
+Torque Enable/Hardware Error Status를 요구·검증·게시한다. 기존 description은 새
+candidate로 migrate해야 하며 누락 설정은 실제 bus open 전에 거절한다.
+
+원격39시험 NEW0, 8-patch native 빌드와 old/new 실제 on_init PTY 비교를 통과했다.
+실제 torque-off read3회는 fresh 실제 torque0/error0을 확인했으나 ID14 목표 레지스터
+1틱 변화로 전후 보존 검사는 실패했다. 송신105개에 goal/torque/reboot는 없었다.
+원인은 미확정이며 원본 실패·별도 저장 자료 분석을 남기고 장치를 재실행하지 않았다.
+기존 passive read의 native 기본값 검사를 실제 register 검증으로 확대하지 않는다.
+
+작은 움직임은 유한 제한·초기 목표·owner/HOLD·정지 관측 연결 뒤 진행한다. 실제
+자동 시연은 0회이며 IL 데이터 수집·실데이터 학습 완료로 기록하지 않는다.
+[원인과 검증 범위](../validation/omx-measured-status-2026-10-16/result.md).
