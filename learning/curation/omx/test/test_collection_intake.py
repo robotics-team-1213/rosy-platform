@@ -36,7 +36,7 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
                      role: dict(state='OBSERVING', condition=None, environment_epoch=0,
                                 control_generation=0) for role in ('top', 'front')})
     (root / 'environment.jsonl').write_text(json.dumps(event)+'\n', encoding='utf-8')
-    manifest = dict(schema='rosy.omx-collection-session.v1', mode='hardware',
+    manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
                     source_mode='scripted_teacher', session_id=session,
                     rig_revision='rig-1', calibration_revision='cal-1', teacher_sha256='b'*64,
                     fps=10, task='move block', camera_shapes={'top': [4,4,3], 'front': [4,4,3]},
@@ -65,7 +65,7 @@ def test_complete_session_preserves_unknown_outcome_and_lineage(module, tmp_path
 
 
 @pytest.mark.parametrize('fault', ['hash', 'unlisted', 'traversal', 'rehearsal', 'incomplete',
-                                  'units', 'frame', 'window', 'bounds', 'nan', 'image_size', 'environment'])
+                                  'units', 'frame', 'window', 'bounds', 'nan', 'image_size', 'environment', 'open'])
 def test_invalid_sessions_refused_before_output(module, tmp_path, fault):
     root, output = tmp_path/'raw', tmp_path/'output'
     manifest = raw_session(root)
@@ -76,6 +76,7 @@ def test_invalid_sessions_refused_before_output(module, tmp_path, fault):
     elif fault == 'rehearsal': manifest.update(mode='rehearsal', source_mode='simulation')
     elif fault == 'incomplete': manifest['episodes'][0]['complete'] = False
     elif fault == 'units': manifest['body_units'] = 'radians'
+    elif fault == 'open': manifest['state'] = 'RUNNING'
     elif fault == 'environment': (root/'environment.jsonl').write_text('{}\n')
     elif fault == 'image_size': (root/'episodes/000000/top.rgb').write_bytes(b'x')
     else:
@@ -117,3 +118,25 @@ def test_aggregate_overlap_and_incompatible_teacher_refused(module, tmp_path):
     save_manifest(two, manifest)
     with pytest.raises(ValueError):
         module.prepare([one, two], tmp_path/'out', 'test/omx')
+
+
+def test_real_lerobot_roundtrip_keeps_independent_capture_groups(module, tmp_path):
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    one, two, output = tmp_path/'one', tmp_path/'two', tmp_path/'dataset'
+    raw_session(one)
+    raw_session(two, session='session-2', start=200)
+    receipt = module.prepare([two, one], output, 'rosy-test/intake')
+    report = json.loads((output/'inspection.json').read_text())
+    decisions = json.loads((output/'decisions.json').read_text())
+    assert receipt['reader_verified'] is True
+    assert receipt['episodes'] == [dict(episode_index=i, session_id=f'session-{i+1}',
+                                       attempt_index=0, cycle_id=f'session-{i+1}-cycle') for i in range(2)]
+    assert report['frame_count'] == 2
+    assert report['reader_verified'] is True
+    assert report['source_mode'] == 'scripted_teacher'
+    assert report['environment_summary']['physical_acceptance'] is False
+    assert all(e['outcome'] == 'unknown' and e['split'] == 'exclude' for e in decisions)
+    assert (output/'rosy_provenance/session-000000/manifest.json').read_bytes() == (one/'manifest.json').read_bytes()
+    from native_review import reviewed_splits
+    with pytest.raises(ValueError, match='nonempty'):
+        reviewed_splits(report, decisions)
