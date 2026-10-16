@@ -17,6 +17,7 @@ source /opt/ros/jazzy/setup.bash
 test "$ROS_DISTRO" = jazzy
 export ROS_DOMAIN_ID=113 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_STATIC_PEERS=''
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 unset CYCLONEDDS_URI FASTDDS_DEFAULT_PROFILES_FILE FASTRTPS_DEFAULT_PROFILES_FILE ROS_DISCOVERY_SERVER
 exec "$1" -m pytest middleware/devices/omx/adapter/test/test_omx_ros_runtime.py -q -rA
 '''
