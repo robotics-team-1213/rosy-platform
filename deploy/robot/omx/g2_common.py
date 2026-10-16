@@ -115,10 +115,12 @@ def controller_readiness(timeout_s=60):
         progress.observe(stamp)
         latest["clock"] = (time.monotonic(), stamp)
 
-    node.create_subscription(JointState, "/joint_states", joints, qos_profile_sensor_data)
+    from instance_names import names_from_environment
+    names = names_from_environment()
+    node.create_subscription(JointState, names.joint_state_topic, joints, qos_profile_sensor_data)
     node.create_subscription(Clock, "/clock", clocks, qos_profile_sensor_data)
-    client = node.create_client(ListControllers, "/controller_manager/list_controllers")
-    action = ActionClient(node, FollowJointTrajectory, "/arm_controller/follow_joint_trajectory")
+    client = node.create_client(ListControllers, names.list_controllers_service)
+    action = ActionClient(node, FollowJointTrajectory, names.trajectory_action)
     deadline, active, future = time.monotonic()+timeout_s, set(), None
     try:
         while time.monotonic() < deadline:
