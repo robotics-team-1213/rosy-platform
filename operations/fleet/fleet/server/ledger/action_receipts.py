@@ -4,30 +4,32 @@ from typing import Mapping
 
 from core_common.protocol.schemas import DeviceActionReceipt, FleetActionGrant, FleetCellTransferGrant
 
+#: The fields a device receipt must echo from its Fleet grant. The one rule for every caller.
+RECEIPT_IDENTITY = ("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id",
+                    "request_digest", "authority_epoch", "dispatch_generation")
 
-def verify_phase_receipt(grant: FleetActionGrant | FleetCellTransferGrant,
-                         response: object) -> DeviceActionReceipt:
+
+def receipt_matches_grant(grant: FleetActionGrant | FleetCellTransferGrant,
+                          receipt: DeviceActionReceipt) -> bool:
+    return all(getattr(receipt, name) == getattr(grant, name) for name in RECEIPT_IDENTITY)
+
+
+def verify_phase_receipt(grant: FleetActionGrant | FleetCellTransferGrant, response: object, *,
+                         phase_ids: tuple[str, ...] | None = None) -> DeviceActionReceipt:
+    """``phase_ids`` names the ordered phases a success must report; without it, ordinals 0-3."""
     raw = response
     if isinstance(response, Mapping) and "receipt" in response:
         raw = response["receipt"]
     receipt = (raw if isinstance(raw, DeviceActionReceipt)
                else DeviceActionReceipt.model_validate(raw))
-    expected = (
-        grant.mission_id, grant.step_id, grant.action_id, grant.attempt_id,
-        grant.workcell_id, grant.instance_id, grant.request_digest,
-        grant.authority_epoch, grant.dispatch_generation,
-    )
-    actual = (
-        receipt.mission_id, receipt.step_id, receipt.action_id, receipt.attempt_id,
-        receipt.workcell_id, receipt.instance_id, receipt.request_digest,
-        receipt.authority_epoch, receipt.dispatch_generation,
-    )
-    if actual != expected:
+    if not receipt_matches_grant(grant, receipt):
         raise ValueError("local Action receipt does not match its Fleet grant")
     if receipt.phase_summaries is None:
         raise ValueError("v2 phased Action receipt is missing phase summaries")
+    reported = tuple(phase.phase_id if phase_ids is not None else phase.ordinal
+                     for phase in receipt.phase_summaries)
     if receipt.state.value == "SUCCEEDED" and (
-            [phase.ordinal for phase in receipt.phase_summaries] != [0, 1, 2, 3]
+            reported != (phase_ids if phase_ids is not None else (0, 1, 2, 3))
             or any(phase.state != "SUCCEEDED" for phase in receipt.phase_summaries)):
-        raise ValueError("successful phased Action receipt requires four successful phases")
+        raise ValueError("a successful receipt requires every phase to succeed in order")
     return receipt

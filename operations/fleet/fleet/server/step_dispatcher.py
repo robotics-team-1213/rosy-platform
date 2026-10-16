@@ -19,6 +19,7 @@ from typing import Any, Callable, Mapping
 
 from core_common.protocol.schemas import DeviceActionReceipt
 
+from .action_receipts import verify_phase_receipt
 from .cell_job_store import CellJobStore
 from .local_action_transport import DeviceActionTransport, LocalActionRejected
 from .mission_store import MissionConflict
@@ -303,20 +304,7 @@ class StepJobDispatcher:
 
     @staticmethod
     def _verified(grant, receipt: object) -> DeviceActionReceipt:
-        verified = receipt if isinstance(receipt, DeviceActionReceipt) else DeviceActionReceipt.model_validate(
-            receipt["receipt"] if isinstance(receipt, Mapping) and "receipt" in receipt else receipt)
-        identity = ("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id",
-                    "request_digest", "authority_epoch", "dispatch_generation")
-        if any(getattr(verified, name) != getattr(grant, name) for name in identity):
-            raise ValueError("local Action receipt does not match its Fleet grant")
-        if verified.phase_summaries is None:
-            raise ValueError("step-ledger receipts must carry phase summaries")
-        phases = step_action_kind(grant.action_kind).phase_ids
-        if verified.state.value == "SUCCEEDED" and (
-                tuple(phase.phase_id for phase in verified.phase_summaries) != phases
-                or any(phase.state != "SUCCEEDED" for phase in verified.phase_summaries)):
-            raise ValueError("a successful receipt requires every phase to succeed in order")
-        return verified
+        return verify_phase_receipt(grant, receipt, phase_ids=step_action_kind(grant.action_kind).phase_ids)
 
     def _outcome(self, job: Mapping[str, Any], index: int, grant, outcome: str, reason: str | None,
                  result: Mapping[str, Any], *, event_id: str | None = None) -> dict[str, Any]:
