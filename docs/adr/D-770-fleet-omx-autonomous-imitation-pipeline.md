@@ -269,3 +269,19 @@ XL430 미지원 current 값은 0으로 오해하지 않고 null로 기록한다.
 파일 생성기 원격 8시험 통과·독립 검토 완료다. 이 후보는 실행용 수용 profile이 아니며,
 driver activation write/service authority·실측 제한·독립 stop·owner binding은 미완료다.
 [후속 구현·실행 증거](../validation/omx-preserved-description-2026-10-16.md).
+
+## 2026-10-16 후속: driver lifecycle 결과와 owner 우회 경로 수정
+
+고정 vendor의 start가 초기 command write 실패와 torque enable retry 소진을 무시하고,
+stop도 disable 실패를 무시해 SUCCESS를 반환함을 실제 메서드 실행으로 재현했다.
+실패를 ERROR로 전파하고 부분 활성화 후 두 그룹 정리를 시도하도록 수정했다.
+cleanup 실패를 포함한 10개 compiled-method 시나리오가 모두 통과했다.
+
+D-336의 단일 owner 경계를 위해 vendor direct register/reboot/torque 서비스 등록을
+제거했다. read 서비스와 기존 controller/lifecycle 경로는 유지한다. 현재 ROSY source에
+세 direct 서비스 caller는 발견되지 않았다. source lock과 Fleet/Pilot 공유 API는 유지하고
+두 vendor patch를 compile 전에 적용한다. 원격 관련 pytest22 통과·독립 재검토 완료다.
+
+새 private prefix에서 전체 native plugin build/install·ldd·library load를 확인했다.
+실물 controller·ROS node는 시작하지 않았다. 실물 정지·owner HOLD·부하/보정 수용과
+자동 시연은 미완료다. [원인·수정·실행 증거](../validation/omx-driver-lifecycle-2026-10-16.md).

@@ -2826,3 +2826,9 @@
 - 변경: 실제 vendor GPIO 초기화 쓰기와 implicit torque enable을 확인하고, register 초기화 파라미터를 제거한 별도 XML 후보와 provenance receipt를 만드는 파일 생성기를 구현했다.
 - 증거: 원격 RED→GREEN 8시험, 독립 검토. 실제 현장 확장 description에서 59항목 제거·6 motor flag·원본 불변·hash 대조. driver/controller는 실행하지 않았다.
 - gate 변화: 없음. 후보는 수용된 실물 runtime이 아니며 activation write·service 권한·실측 한계·stop과 실제 자동 시연은 미완료다. D-770.
+
+## 2026-10-16 · uncommitted · fix(omx): vendor 시작·정지 결과와 직접 조작 서비스
+
+- 변경: 최초 command write/enable retry/disable 실패를 ERROR로 전파하고 부분 활성화 실패에 두 그룹 정리를 시도한다. owner 우회 direct register/reboot/torque 서비스 등록을 제거하고 두 patch를 compile 전에 적용한다.
+- 증거: 고정 원본 메서드 C++ 실행으로 실패를 재현했고 부분 활성화·정리 실패 포함10시나리오 GREEN. 원격 관련pytest22 통과·독립 재검토. 별도 native plugin build/install·ldd·library load 확인.
+- gate 변화: 운영 prefix나 controller는 활성화하지 않았다. 실물 stop·owner HOLD·부하/보정과 실제 시연은 미완료다. D-770.
