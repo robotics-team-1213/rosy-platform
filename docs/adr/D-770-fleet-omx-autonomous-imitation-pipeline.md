@@ -432,3 +432,29 @@ mode/offset 쓰기는 없다. 목표 차이는 송신 후 검증이며 사전 tr
 SyncWrite 성공은 모터 ACK·물리 도달·독립 stop·실물 owner 수용을 뜻하지 않는다.
 운영 controller·trajectory는 기동하지 않았다. 실제 움직임과 시연은 계속0회다.
 [실제 시작 목표와 검증의 한계](../validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 실제 controller·owner 피드백과 stale HOLD
+
+기존 patched native driver와 실제 controller manager·상태 발행기·6관절 trajectory
+controller를 별도 domain/namespace에서 연결했다. 모든 Torque Enable/Reboot 선택은
+0이며 unconfigured 시작·loaded library·독점 by-id·기존 유한 cap을 확인했다.
+현재 committed adapter/core_common source를 그대로 사용했고 stub 피드백은 없다.
+
+실제 관절 상태10개를 owner가 받았으며 JSB를 중단한 뒤 joint_state_stale로 명령을
+거절하고 HOLD로 전환했다. Action 전송을 막는 최종 차단 장치까지의 dispatch 시도는
+0이었다. 실제 native torque/error 상태46개는 여섯 OFF/error0이고 source stamp가
+진행했다. 송신196개 중 cyclic 현재 위치 유지 SyncWrite47회는 별도 집계했다.
+Action goal0과 native register 목표 쓰기를 혼동하지 않는다.
+
+설치 ROS parser의 YAML alias 거절과 controller별 params_file 전달 누락을 실제로
+해결했다. 앞선 실패와 process137을 보존했다. 성공 실행은 실제 CM exit_group0,
+강제 종료 없음·전후 cap/mode/torque/error0 동일이다. 저장 trace 분석의 중첩 char FD
+표기 문제는 분석기만 고쳐 해결했고 장치를 재실행하지 않았다.
+
+최신 OFF/error-free 상태가 없거나 fault/deadline이 있으면 controller 활성화·다음
+service를 진행하지 않는다. 자식에 독립40초 TTL을 두고 소유 process group을 정리한다.
+이 결과는 토크 OFF feedback 결선과 stale admission 거절이며, 실제 accepted goal/
+취소·powered stop·독립 물리 정지·운영 owner 재시작 수용을 뜻하지 않는다.
+실제 시연과 IL eligible 데이터는 계속0회다.
+[실제 경로·실패·판정 범위](../validation/omx-native-controller-feedback-2026-10-16/result.md).
