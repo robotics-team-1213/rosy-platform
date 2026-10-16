@@ -119,7 +119,7 @@ fixtures:
 
 조율자의 권한은 두 가지뿐이다.
 
-- **barrier 해제:** 협조 Step은 역할 짝마다 이름 붙은 barrier 지점을 가진다. 예를 들면 `handover`의 `both_grasped`, `place`+`push`의 `placed_before_push`다. 각 owner는 그 지점에서 `PHASE_WAIT`로 멈추고, 조율자가 두 팔의 도착을 확인하면 `release_phase`로 풀어 준다. 조율자는 owner의 lock 안에서 기다리지 않는다(D-386). 이 상태와 연산은 D-376 §7의 UDS 연산 목록에 더하는 후속 ADR로 정한다(§9).
+- **barrier 해제:** 협조 Step은 역할 짝마다 이름 붙은 barrier 지점을 가진다. 예를 들면 `handover`의 `both_grasped`, `place`+`push`의 `placed_before_push`다. 각 owner는 그 지점에서 `PHASE_WAIT`로 멈추고, 조율자가 두 팔의 도착을 확인하면 barrier 해제 연산으로 풀어 준다. 조율자는 owner의 lock 안에서 기다리지 않는다(D-386). 이 상태와 연산은 D-376 §7의 UDS 연산 목록에 더하는 후속 ADR로 정한다(§9).
 - **결합 정지:** 조율자는 owner에게 HOLD를 보낼 수 있다. owner는 이 요청을 새 정지 출처 `COORDINATOR`로 기록하고, 조율자의 peer UID를 Fleet과 별도로 허용한다. 조율자는 grant를 보내거나 `preempt`를 쓸 수 없다.
 
 **결합 정지의 범위:**
@@ -195,8 +195,8 @@ fixtures:
 |---|---|---|
 | 팔별 Job 상태, `arm`·`zone` claim, Step 원장 키 변경 ([D-779](D-779-per-arm-cell-job-ledger-and-arm-zone-claims.md)) | D-403 §4·§5·§8, 1b 보강 | G1 |
 | 혼합 레시피 스키마(`items`)와, 베이스 둘을 아는 놓는 순서 | D-401 §2·§4·§5 | G1 |
-| 조율자 peer와 `COORDINATOR` 정지 출처 | D-336 §2 | G1 |
-| `PHASE_WAIT` 상태와 `release_phase` UDS 연산 | D-376 §7, D-386 | G1 |
+| 조율자 peer와 `COORDINATOR` 정지 출처 ([D-780](D-780-workcell-coordinator-peer-stop-source-and-named-barriers.md)) | D-336 §2 | G1 |
+| `PHASE_WAIT` 상태와 barrier 해제 UDS 연산 ([D-780](D-780-workcell-coordinator-peer-stop-source-and-named-barriers.md)) | D-376 §7, D-386 | G1 |
 | `handover`용 Action 종류와 phase 집합. 한 Action이 pick+place 한 쌍이라는 규칙의 예외 | D-376 §2, D-327 §5 | G2 |
 | `push`용 Action 종류(`CELL_PUSH`), 낮은 높이의 수평 이동, 접촉 이동 | D-402 §6, D-376 §2 | G2.5 |
 | 관절 부하·전류 상태 인터페이스와, 운영자 확인 없는 `FAILED` 멈춤 결과 | D-386, `preserved_description.py` 패치 | G2.5 |
