@@ -285,3 +285,237 @@ D-336의 단일 owner 경계를 위해 vendor direct register/reboot/torque 서�
 새 private prefix에서 전체 native plugin build/install·ldd·library load를 확인했다.
 실물 controller·ROS node는 시작하지 않았다. 실물 정지·owner HOLD·부하/보정 수용과
 자동 시연은 미완료다. [원인·수정·실행 증거](../validation/omx-driver-lifecycle-2026-10-16.md).
+
+## 2026-10-16 후속: native ROS 초기화 실패 경로
+
+외부 consumer 연결에서 누락된 CMake export dependency 두 개를 발견하고 vendor patch로
+수정했다. 실제 Fleet ROS 환경에서 전체 plugin 재빌드 뒤 잘못된 고정 포트의 on_init이
+ERROR를 반환하고 정상 소멸함을 확인했다. 실물 포트·configure/activate/goal은 사용하지
+않았다. 현재 cell owner는 SIM metadata와 gripper 관측에 고정돼 있어 실물 조립과
+실제 feedback·HOLD 연결은 별도 수용이 필요하다. 실물 시연 0회와 미완료 조건을 유지한다.
+[재현 source와 실행 증거](../validation/omx-native-init-negative-2026-10-16/result.md).
+
+## 2026-10-16 후속: feedback 원본 시각과 HOLD
+
+실물 feedback 연결 준비 중 기존 ROS intake가 같은 원본 message를 매번 새로운 상태로
+취급하는 것을 실제 Jazzy 회귀로 재현했다. 원본 시각 진행·age·배열 검사를 넣고 전송
+지연을 owner freshness에 반영했다. 거절 message는 watchdog을 갱신하지 않으며 활성
+명령은 기존 stale HOLD/cancel로 들어간다. native ROS 8시험과 순수 intake 10시험을
+원격으로 실행했다. publisher 물리 출처·독립 정지·실측 수용과 실제 시연은 미완료다.
+[원인과 검증 경계](../validation/omx-feedback-source-age-2026-10-16.md).
+
+## 2026-10-16 후속: 작은 이동으로 실측 범위를 식별
+
+사용자 요청대로, 완성된 실측 profile이 이미 있어야만 측정을 시작하는 순환을 피한다.
+현재 자세 주변에서 한 관절씩 작은 이동을 수행하고 원본 encoder·두 카메라·명령/종단을
+같이 기록해 국소 반응을 측정하는 방식을 준비한다. 작은 명령을 보냈다는 사실만으로
+작은 실제 움직임을 가정하지 않는다. 초기 목표/현재 위치·mode·offset 보존과 유한한
+속도/가속/전류 또는 PWM 제한의 실제 적용, 정지 경로 확인이 첫 이동보다 앞선다.
+
+측정은 hard stop까지 관절을 밀어 최대 범위를 찾는 절차가 아니다. 확인된 현재 자세
+주변만 대상으로 하고, 매 step의 실제 도달·정지·영상 유효성을 확인한 뒤 다음 step을
+결정한다. 미확인 종단·관측 지연·오차 증가·통신/모터 오류에서는 자동 재시도/재개하지
+않는다. 확인한 작은 범위를 전체 workspace·부하·그리퍼 jaw 수용으로 확대하지 않는다.
+
+제조사 XL330/XL430 문서에서 velocity-based profile의 0은 무제한을 뜻하고, bus
+watchdog은 모든 instruction packet의 통신 간격을 감시함을 확인했다. 읽기 통신이
+계속되는 owner 고장을 watchdog이 검출한다고 가정하지 않는다.
+[XL330](https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/),
+[XL430](https://emanual.robotis.com/docs/en/dxl/x/xl430-w250/).
+
+토크 off native 초기화/read를 위한 source 검토에서 InitDxlComm 오류 분기의 자동
+Reboot 호출과 read 오류 동안 기존 state 유지 경로를 발견했다. 실물 실행 전에 자동
+복구 쓰기·오래된 feedback의 보고 의미를 확인한다. 이 source 발견을 실물 실행 또는
+정지 성공으로 기록하지 않는다. 실물 시연은 여전히 0회다.
+
+source-age 수정 뒤 정책 fixture의 생성자 생략을 보완하고 host22·실제 ROS policy4와
+runtime8 시험을 통과했다. [후속 검증](../validation/omx-feedback-policy-intake-2026-10-16.md).
+## 2026-10-16 후속: 실제 native 초기화·토크 off read
+
+InitDxlComm의 숨은 자동 Reboot를 제거하고 오류 반환은 유지했다. 고정 실제 메서드의
+두 fault 분기 재현 뒤 5시나리오가 통과했다. SDK open 직후 device identity·독점 소유를
+검사하는 임시 helper를 추가했고 실제 Linux PTY/loader 교착 회귀 6시험을 통과했다.
+
+실제 Fleet에서 constructor 교착과 XML parser dependency 누락을 각각 해결했다.
+두 실패의 native serial 송신은 0이며 모든 원본을 보존했다. 세 번째 실행은 실제
+on_init·read3회·정상 소멸 exit0이다. 전후 torque/error0·설정 동일이며 송신93개 중
+indirect mapping SRAM write72개가 있다. goal/torque/reboot는 관측되지 않았다.
+분석기의 SUCCESS 숫자 가정 오류는 설치 enum97u와 원본 로그를 대조해 별도 receipt로
+해결했고 장치를 재실행하지 않았다. 실제 원본 시각 진행과 encoder nominal 변환을 확인했다.
+
+이 결과는 물리 보정·독립 stop·구동 또는 시연 수용이 아니다. 첫 작은 이동을 위해
+유한 제한 적용·초기 목표 보존·normal write 오류 전파·실물 owner/HOLD와 정지 경로를
+계속 연결한다. 실제 자동 시연은 0회다.
+[실행·실패·분석의 분리 증거](../validation/omx-native-passive-read-2026-10-16/result.md).
+
+## 2026-10-16 후속: 정상 write 실패와 framework 오류 정지
+
+정상 write가 buffered/multiwrite 실패를 버리고 HW_ERROR에도 목표를 송신하는 것을
+고정 실제 메서드 실행의 5실패로 재현했다. 실패를 즉시 ERROR로 전파하고 정상 상태가
+아니면 추가 쓰기를 거절한다. write6·오류 callback8시나리오와 원격 관련24시험이 통과했다.
+
+설치 ros2_control은 write ERROR에서 on_deactivate가 아니라 on_error를 직접 호출한다.
+vendor의 기본 on_error/on_shutdown은 stop 없이 SUCCESS였다. 두 callback을 stop에
+연결하고 on_error는 cleanup 후에도 ERROR로 fault를 FINALIZED에 남긴다. 실제 native
+객체의 통신 객체 부재 실패 전파, 전체 plugin 빌드, 실제 HardwareComponent consumer의
+12경우 및 상속 기본 callback의 negative control을 확인했다. bus 경계는 double이며
+실물 정지·부하·구동을 실행한 것은 아니다. 운영 prefix/service는 유지했다.
+
+유한 제한·초기 목표 보존·실제 상태 출처·owner/HOLD·정지 관측을 이어서 연결한다.
+실제 시연은 계속 0회다.
+[원인·caller 경로·수정·실행 범위](../validation/omx-cyclic-write-fault-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 실제 torque/error 출처와 작은 측정의 전제
+
+사용자의 현재 위치 주변 작은 단계 측정 요청에 따라 전체 범위 선행 측정 없이 좁은
+범위를 확인하는 결정을 유지한다. 실제 feedback의 출처부터 연결했다. SDK enable ACK
+유실 뒤 cache OFF로 cleanup을 생략하는 결함과 native torque/error 기본값 게시를
+고정 실제 메서드로 재현했다. 불확실한 토크 쓰기를 ACK까지 추적하고 실제 cyclic
+Torque Enable/Hardware Error Status를 요구·검증·게시한다. 기존 description은 새
+candidate로 migrate해야 하며 누락 설정은 실제 bus open 전에 거절한다.
+
+원격39시험 NEW0, 8-patch native 빌드와 old/new 실제 on_init PTY 비교를 통과했다.
+실제 torque-off read3회는 fresh 실제 torque0/error0을 확인했으나 ID14 목표 레지스터
+1틱 변화로 전후 보존 검사는 실패했다. 송신105개에 goal/torque/reboot는 없었다.
+원인은 미확정이며 원본 실패·별도 저장 자료 분석을 남기고 장치를 재실행하지 않았다.
+기존 passive read의 native 기본값 검사를 실제 register 검증으로 확대하지 않는다.
+
+작은 움직임은 유한 제한·초기 목표·owner/HOLD·정지 관측 연결 뒤 진행한다. 실제
+자동 시연은 0회이며 IL 데이터 수집·실데이터 학습 완료로 기록하지 않는다.
+[원인과 검증 범위](../validation/omx-measured-status-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: native 부재의 목표 레지스터 관찰
+
+보존 검사 실패를 재실행하지 않고 별도 PING/READ-only 관찰30회를 수행했다.
+native driver 없이도 ID14의 목표와 현재 위치가 함께3195↔3196으로 바뀌는 전이가
+11회였다. 여섯 모터 torque0/error0과 mode는 유지됐다. firmware 원인·이전 mapping
+영향을 확정하거나 기존 gate를 통과로 바꾸지 않는다. 첫 활성화의 현재 위치·목표
+보존/readback 설계에 이 실제 변화 특성을 반영한다. 실제 시연은0회다.
+[독립 관찰과 해석 한계](../validation/omx-goal-readonly-2026-10-16.md).
+
+
+## 2026-10-16 후속: 측정 시작용 유한 제한의 실제 적용
+
+전체 작업 범위 검수를 먼저 요구하지 않고, 사용자 요청의 작은 단계 측정에 필요한
+제한을 토크 OFF 상태에서 먼저 적용했다. 임의의 넓은 workspace나 하중 수용값은
+만들지 않는다. 설정 절차와 운영 명령 owner를 구분하고 기존 owner를 우회하는
+trajectory 실행기를 만들지 않는다.
+
+commissioning_limits는 알려진 여섯 모터·mode·torque/error0과 독점 소유를 확인한 뒤
+명시적인 유한 상한만 낮춘다. 각 쓰기의 원본·의도를 durable 기록하고 정확히 한 번
+송신한다. ACK와 전체 모터 readback 뒤에만 다음 쓰기를 허용한다. 오류·불일치·기록
+실패·deadline 초과는 중단하며 자동 재시도/복원/resume은 없다. 실제 송신 경계에서도
+허용 주소·ID·폭·값·deadline을 검사한다.
+
+원격65시험 NEW0과 독립 검토 후 실제 Fleet에서 cap21쓰기를 완료했다. 여섯 PWM
+raw20·profile velocity/acceleration각1, XL330 current raw50을 실제 readback했다.
+모든 torque/error0이며 goal/torque/mode/offset/reboot 쓰기는 없었다. EEPROM 상한은
+낮은 값으로 유지하고 원본을 보존했다. RAM profile은 재시작 뒤 다시 읽어야 한다.
+이는 측정 시작용 설계값이며 물리 안전·부하 유지·작업 범위의 실측값이 아니다.
+
+초기 목표의 현재 위치 동기화와 실제 owner/HOLD/정지 관측을 계속 연결한다.
+실제 자동 시연과 IL eligible 데이터는 아직0회다.
+[설정·RED/GREEN·실제 송신과 readback](../validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 토크 OFF 시작 목표의 실제 송신
+
+실제 native driver에서 모든 Torque Enable/Reboot 선택을0으로 고정하고 fresh torque0/
+error0 read 뒤 on_activate/start를 한 번 호출했다. enable list는 비어 있고 현재 위치
+동기화 목표만 송신했다. 전후 fresh 상태3회와 raw snapshot은 torque/error0·기존 cap을
+유지했다. 실제 초기 목표6개의 nominal raw 위치와의 최대 차이는1틱이다.
+
+송신107개 중 목표 SyncWrite는 주소224/폭4의 IDs11..16 한 묶음이다. torque/reboot/
+mode/offset 쓰기는 없다. 목표 차이는 송신 후 검증이며 사전 transport guard가 아니다.
+SyncWrite 성공은 모터 ACK·물리 도달·독립 stop·실물 owner 수용을 뜻하지 않는다.
+운영 controller·trajectory는 기동하지 않았다. 실제 움직임과 시연은 계속0회다.
+[실제 시작 목표와 검증의 한계](../validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 실제 controller·owner 피드백과 stale HOLD
+
+기존 patched native driver와 실제 controller manager·상태 발행기·6관절 trajectory
+controller를 별도 domain/namespace에서 연결했다. 모든 Torque Enable/Reboot 선택은
+0이며 unconfigured 시작·loaded library·독점 by-id·기존 유한 cap을 확인했다.
+현재 committed adapter/core_common source를 그대로 사용했고 stub 피드백은 없다.
+
+실제 관절 상태10개를 owner가 받았으며 JSB를 중단한 뒤 joint_state_stale로 명령을
+거절하고 HOLD로 전환했다. Action 전송을 막는 최종 차단 장치까지의 dispatch 시도는
+0이었다. 실제 native torque/error 상태46개는 여섯 OFF/error0이고 source stamp가
+진행했다. 송신196개 중 cyclic 현재 위치 유지 SyncWrite47회는 별도 집계했다.
+Action goal0과 native register 목표 쓰기를 혼동하지 않는다.
+
+설치 ROS parser의 YAML alias 거절과 controller별 params_file 전달 누락을 실제로
+해결했다. 앞선 실패와 process137을 보존했다. 성공 실행은 실제 CM exit_group0,
+강제 종료 없음·전후 cap/mode/torque/error0 동일이다. 저장 trace 분석의 중첩 char FD
+표기 문제는 분석기만 고쳐 해결했고 장치를 재실행하지 않았다.
+
+최신 OFF/error-free 상태가 없거나 fault/deadline이 있으면 controller 활성화·다음
+service를 진행하지 않는다. 자식에 독립40초 TTL을 두고 소유 process group을 정리한다.
+이 결과는 토크 OFF feedback 결선과 stale admission 거절이며, 실제 accepted goal/
+취소·powered stop·독립 물리 정지·운영 owner 재시작 수용을 뜻하지 않는다.
+실제 시연과 IL eligible 데이터는 계속0회다.
+[실제 경로·실패·판정 범위](../validation/omx-native-controller-feedback-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 실제 stationary Action 수용과 cancel terminal
+
+실제 owner와 JTC에 최신 native 관측 위치만 목표로 한 명령1건을 보냈다. 모든
+Torque Enable/Reboot 선택은0이며 여섯 실제 torque/error0과 기존 cap을 유지했다.
+실제 GOAL_ACCEPTED→CANCEL_ACK(true)→TERMINAL_RESULT(CANCELED5)를 durable
+JSONL로 기록했다. owner는 HOLD를 유지하고 재요청을 hold_latched로 거절했다.
+두 controller와 hardware를 비활성화한 뒤 CM은 정상 exit0이었다.
+
+저장 trace172packet 중 cyclic 목표35회는 pre 위치와 최대1틱 차이다. torque/reboot/
+mode/offset 쓰기는 없으며 실제 OFF/error0 상태34개를 확인했다. 목표 차이는 사후
+검사이며 transport guard는 아니다. saved-only 분석의 CRLF 오류는 원본을 남기고
+LF 분석기만 추가해 해결했다. 장치를 재실행하지 않았다.
+
+cancel ACK·CANCELED와 토크 OFF 비활성화는 powered 물리 정지의 증거가 아니다.
+구동 정지·독립 stop·실측 이동·운영 owner 재시작은 계속 검증해야 한다. 실제 시연과
+IL eligible 데이터는0회이며 첫 실데이터 확보 목표를 유지한다.
+[실행·실제 이벤트·송신·해석 한계](../validation/omx-native-action-cancel-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: stop-only 보조 경로와 native 종료 후 독립 인계
+
+명령 owner의 HOLD/cancel과 별도로 commissioning_stop을 추가했다. 확인된 by-id의
+독점 소유·실제 device identity 아래 명시한 ID에 Torque Enable=0만 한 번씩 전송한다.
+개별 실패 뒤 나머지 OFF를 시도하되 재시도하지 않는다. ACK·실제 readback·cleanup·
+기록 성공을 구분하며, 디스크 오류로 OFF 시도를 생략하지 않는다. 운영 profile을
+활성화하거나 goal/ON/config 쓰기를 제공하지 않는다. 원격 RED→GREEN92시험 NEW0이다.
+
+실제 모든 native torque 선택0에서 unit main을 SIGKILL로 종료하고 systemd의
+control-group 정리 뒤 별도 ExecStopPost가 장치를 인계받게 했다. 실제 ID16 OFF1건의
+ACK와 여섯 OFF/error0·기존 cap 보존을 확인했다. stop helper trace13packet의 CRC와
+완전 송신을 검증했고 ON/goal/mode/offset/reboot/EEPROM 쓰기는 없었다. 기존 unit을
+잘못 cleanup할 수 있는 private supervisor 문제는 fake systemctl로 RED→GREEN 후
+실물 실행했다. 원본·수정본·실제 unit 속성과 강제 종료 결과를 보존했다.
+
+이 결과는 토크 OFF 상태의 독립 process-death 인계다. 실제 ON→OFF 물리 정지·처짐·
+하중·국소 이동 범위·운영 owner 재시작을 수용한 것은 아니다. 다음 작은 단계의 구동
+검증에 이 경로를 연결하며 실제 시연·IL eligible 데이터는 계속0회다.
+[구현·시험·실제 인계·판정 범위](../validation/omx-independent-stop-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 독립 watchdog과 powered 시험 전 시야 확인
+
+private powered prototype의 first-ON age 검사는 이후 감독 호출이 지연될 때 ON 기간을
+보장하지 못했다. 실행 전에 발견했고 해당 prototype은 실행하지 않았다. 별도 all-OFF
+fixture에서 실제 Type=notify/300ms manager watchdog과 barrier를 구성했다. 외부
+supervisor가 unit/PID/cgroup/InvocationID와 속성을 대조해 admission한 뒤, native가
+알림/barrier 성공 뒤에만 hardware를 활성화했다. 이후 refresh 없이 실제 watchdog
+SIGKILL과 별도 OFF helper의 ACK·여섯 OFF/error0·기존 cap 보존을 확인했다.
+
+notify→main exit는 약312.4ms, notify→OFF 후처리 process exit는 약969.0ms였다.
+stop 함수만의17.35ms와 전체 인계를 구분한다. 설정300ms나 all-OFF 결과를 powered
+정지 시간·최악 지연 보장으로 쓰지 않는다. source와 D-Bus/trace/CRC 증거를 보존했다.
+
+최신 두 영상과 read-only raw 관절 snapshot으로 vendor nominal mesh/FK를 대조했으나,
+집게 끝과 주변 간격은 아직 확실히 식별하지 못했다. nominal FK는 실제 기계/카메라
+보정이나 clearance 수용을 대신하지 않는다. 사용자에게 손끝 위치 설명 또는 시야
+조정을 요청했다. 그 사실 확인 전 토크를 켜지 않으며 실제 시연·IL eligible 데이터는
+계속0회다. 첫 실제 데이터셋 확보를 완료 조건으로 유지한다.
+[시간 제한·실제 결과·기구 대조·미완료 범위](../validation/omx-watchdog-deadline-2026-10-16/result.md).

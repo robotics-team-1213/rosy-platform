@@ -149,7 +149,7 @@ def test_command_search_refreshes_functions_that_finish_loading(browser_workspac
     search.fill('박스 1 x0')
     expect(page.locator('#review-command-results ui-button')).to_have_count(0)
     pending[0].continue_()
-    expect(page.locator('#image-message')).to_be_hidden()
+    expect(page.get_by_role('spinbutton', name='박스 1 x0', exact=True)).to_be_enabled()
     search.fill(''); search.fill('박스 1 x0')
     page.keyboard.press('Enter')
     expect(page.get_by_role('spinbutton', name='박스 1 x0', exact=True)).to_be_focused()

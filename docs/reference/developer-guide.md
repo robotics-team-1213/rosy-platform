@@ -109,8 +109,10 @@ CI(`.github/workflows/ci.yml`)는 `ros:jazzy-ros-base` 이미지에서 colcon �
 현장 Ubuntu PC가 Fleet·Vision·Caddy 서비스를 실행하고, 관제 PC는 HTTPS로 Fleet의
 `/console`을 여는 브라우저 단말이다. 두 역할은 한 물리 PC에 함께 놓을 수도 있다.
 Pinky의 화면과 최종 주행·정지 판단은 각 로봇의 CORE에 남는다. OMX-AI 작업대 제어는
-별도 로컬 인스턴스의 수용 절차가 필요하다. 현재 화면은 Fleet 콘솔이며,
-`ROSY Console`은 사람의 화면·대화 접점에 쓰는 제품 이름이다. 자연어 명령과
+별도 로컬 인스턴스의 수용 절차가 필요하다. 관제 화면의 현재 표시 이름은
+`Rosy Fleet`이다(D-487). 현장 운영은 Fleet, 한 대 관리는 Robot, 직접 운전은
+Pilot이 맡는다. [앱별 작업과 책임](app-responsibilities.md)에서 API·정본·실행 권한과
+앱 간 이동 및 이행 조건을 확인한다. 자연어 명령과
 OMX 원격 작업은 아직 수용된 기능이 아니다.
 
 배치 결정은 [D-275](../adr/D-275-web-surface-and-video-runtime-ownership.md)와

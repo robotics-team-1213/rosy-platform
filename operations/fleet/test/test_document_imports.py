@@ -46,6 +46,7 @@ OWN = {
         "formation.js",
         "map-view.js",
         "roster.js",
+        "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
@@ -101,7 +102,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work"):
+    for folder in ("shared", "cell", "work", "devices"):
         path = WEB / folder / name
         if path.is_file():
             return path

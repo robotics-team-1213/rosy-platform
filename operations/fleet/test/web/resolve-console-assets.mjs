@@ -11,7 +11,7 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith(PREFIX)) {
     const name = specifier.slice(PREFIX.length);
     if (/^[\w.-]+\.(?:js|css)$/.test(name)) {
-      for (const url of [new URL(`shared/${name}`, WEB), new URL(`cell/${name}`, WEB), new URL(`work/${name}`, WEB),
+      for (const url of [new URL(`shared/${name}`, WEB), new URL(`cell/${name}`, WEB), new URL(`work/${name}`, WEB), new URL(`devices/${name}`, WEB),
                          new URL(name, WEB)]) {
         if (existsSync(fileURLToPath(url))) {
           return { url: url.href, shortCircuit: true };

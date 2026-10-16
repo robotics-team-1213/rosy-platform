@@ -85,3 +85,10 @@
 - 변경: 없음. D-765 구현 커밋 d685e1351의 시험 기록만 추가한다.
 - 증거: 모델 PC rosy@100.98.162.71에서 d685e1351 원격 pytest 53 passed, known_failures 0 NEW (`X:\DevTemp\hf-repo-manage\run-1.txt`). 시험 PC 셋 모두 여유 메모리 6 GB 아래여서 기준 미달이지만 닿는 호스트로 실행했다.
 - gate 변화: 없음.
+
+
+## 2026-10-16 · uncommitted · Learning 업무 이름과 개발 표면 구분
+
+- 변경: Learning의 검수 업무·표시 이름과 개발 표면의 제목 범위 규칙을 대조했다. 독립 앱 등록 없이 D-339의 개발 범위 제목을 유지한다. 검수·승인·export·학습 owner의 실행 의미도 유지한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
