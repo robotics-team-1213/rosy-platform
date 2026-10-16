@@ -16,8 +16,9 @@ URL = "https://github.com/robotics-team-1213/rosy-platform/issues/1"
 
 
 class FakeJira:
-    def __init__(self, existing=None, fail=False):
+    def __init__(self, existing=None, fail=False, summary=None, done=False):
         self.calls, self.existing, self.fail = [], existing, fail
+        self.summary, self.done = summary or structure_jira.summary(PICK), done
 
     def __call__(self, request, timeout):
         body = json.loads(request.data.decode())
@@ -25,7 +26,9 @@ class FakeJira:
         if self.fail:
             raise structure_jira.urllib.error.URLError("down")
         if request.full_url.endswith("/search/jql"):
-            reply = {"issues": [{"key": self.existing}] if self.existing else []}
+            status = {"statusCategory": {"key": "done" if self.done else "indeterminate"}}
+            reply = {"issues": [{"key": self.existing, "fields": {"summary": self.summary, "status": status}}]
+                     if self.existing else []}
         elif request.full_url.endswith("/issue"):
             reply = {"key": "KAN-99"}
         else:
@@ -56,6 +59,28 @@ def test_an_open_task_for_the_same_group_only_gets_a_comment():
     assert structure_jira.run([PICK], URL, _jira(fake), "KAN", "Task", out=io.StringIO()) == 0
     assert [c[1].rsplit("/", 2)[-2:] for c in fake.calls][-1] == ["KAN-50", "comment"]
     assert not any(c[1].endswith("/issue") for c in fake.calls)
+
+
+def test_a_closed_task_for_the_same_group_is_never_recreated():
+    fake, out = FakeJira(existing="KAN-51", done=True), io.StringIO()
+    assert structure_jira.run([PICK], URL, _jira(fake), "KAN", "Task", out=out) == 0
+    assert len(fake.calls) == 1 and "skipped KAN-51" in out.getvalue()
+
+
+def test_a_text_match_on_another_group_is_not_taken_for_this_one():
+    other = structure_jira.summary({**PICK, "group": "operations/fleet/fleet/server/tracking/x*"})
+    fake, out = FakeJira(existing="KAN-52", summary=other), io.StringIO()
+    structure_jira.run([PICK], URL, _jira(fake), "KAN", "Task", out=out)
+    assert "created KAN-99" in out.getvalue()
+
+
+def test_an_http_refusal_names_jiras_reason():
+    def refuse(request, timeout):
+        raise structure_jira.urllib.error.HTTPError(request.full_url, 400, "Bad Request", {},
+                                                    io.BytesIO(b'{"errors":{"issuetype":"invalid"}}'))
+    out = io.StringIO()
+    assert structure_jira.run([PICK], URL, _jira(refuse), "KAN", "Task", out=out) == 1
+    assert "HTTP 400" in out.getvalue() and "issuetype" in out.getvalue()
 
 
 def test_a_pick_without_an_epic_is_marked_for_the_lead():

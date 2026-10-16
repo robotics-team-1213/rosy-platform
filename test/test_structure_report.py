@@ -13,22 +13,37 @@ import structure_report  # noqa: E402
 
 def test_units_over_the_limit_match_the_frozen_ratchet_rows():
     data = structure_report.report()
-    rows, _ = size_limits.parse_ratchet((ROOT / "test/architecture/size_ratchet.txt").read_text(encoding="utf-8"))
+    rows, safety = size_limits.parse_ratchet(
+        (ROOT / "test/architecture/size_ratchet.txt").read_text(encoding="utf-8"))
     for unit in data["units_over_limit"]:
         assert unit["lines"] > size_limits.UNIT_LIMIT
-        assert rows.get(unit["unit"]) == unit["lines"], unit["unit"]  # the gate keeps these equal
+        frozen = safety[unit["unit"]][0] if unit["unit"] in safety else rows.get(unit["unit"])
+        assert frozen == unit["lines"], unit["unit"]  # the gate keeps the measured count on its row
         assert sum(c["lines"] for c in unit["split_candidates"]) <= unit["lines"]
         assert all(c["lines"] >= structure_report.MIN_GROUP_LINES for c in unit["split_candidates"])
 
 
-def test_frozen_lists_are_counted():
-    names = {f["list"].split("::")[1]: f["entries"] for f in structure_report.report()["frozen_lists"]}
-    assert names["KNOWN_VIOLATIONS"] >= 0 and names["KNOWN_SAFETY_VIOLATIONS"] >= 0
+def test_frozen_lists_are_counted_or_named_missing():
+    lists = {f["list"].split("::")[1]: f for f in structure_report.report()["frozen_lists"]}
+    assert set(lists) == {attr for _, attr, _ in structure_report.FROZEN_LISTS}
+    assert lists["KNOWN_VIOLATIONS"]["entries"] >= 0 and lists["KNOWN_SAFETY_VIOLATIONS"]["entries"] >= 0
+    writers = ROOT / "test/architecture/test_fleet_ledger_writers.py"
+    assert (lists["KNOWN_WRITERS"]["entries"] is None) is (not writers.is_file())
 
 
 def _unit(name, excess, *cands):
     return {"unit": name, "lines": 10_000 + excess, "excess": excess, "limit": 10_000,
             "split_candidates": [{"group": g, "lines": n, "files": fs} for g, n, fs in cands]}
+
+
+def test_pick_looks_past_the_displayed_top(monkeypatch):
+    monkeypatch.setattr(structure_report, "_safety_paths", lambda: (set(), ()))
+    shown = [("a/one*", 2000, ["a/one.py"])]
+    unit = _unit("u", 5, *shown)
+    unit["all_candidates"] = unit["split_candidates"] + [
+        {"group": "a/two*", "lines": 1200, "files": ["a/two.py", "a/two_b.py"]}]
+    picks, _ = structure_report.pick({"units_over_limit": [unit]})
+    assert [p["group"] for p in picks] == ["a/two*"]
 
 
 def test_pick_rules_skip_with_reasons_and_take_one_per_unit(monkeypatch):

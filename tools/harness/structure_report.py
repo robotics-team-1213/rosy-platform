@@ -79,7 +79,7 @@ def report(top: int = 5) -> dict:
     for path in owner:
         full = ROOT / path
         if full.is_file():
-            files_lines[path] = sum(1 for _ in full.open(encoding="utf-8", errors="replace"))
+            files_lines[path] = structure._lines(full)  # the gate's own count (bytes, not text)
     units = []
     for key, lines in sorted(counts.items(), key=lambda item: -item[1]):
         if lines <= size_limits.UNIT_LIMIT:
@@ -90,16 +90,17 @@ def report(top: int = 5) -> dict:
                 groups[_group(path)].append(path)
         sized = [(g, sum(files_lines[f] for f in fs), sorted(fs)) for g, fs in groups.items()]
         candidates = sorted((c for c in sized if c[1] >= MIN_GROUP_LINES), key=lambda c: -c[1])
+        every = [{"group": g, "lines": n, "files": fs} for g, n, fs in candidates]
         units.append({"unit": key, "lines": lines, "limit": size_limits.UNIT_LIMIT,
                       "excess": lines - size_limits.UNIT_LIMIT,
-                      "split_candidates": [{"group": g, "lines": n, "files": fs} for g, n, fs in candidates[:top]]})
+                      "split_candidates": every[:top], "all_candidates": every})
     over_files = sorted(((k, v) for k, v in over.items() if PurePosixPath(k).suffix), key=lambda kv: -kv[1])
     frozen = []
     for module_name, attribute, meaning in FROZEN_LISTS:
         module = _load(module_name)
-        if module is not None and hasattr(module, attribute):
-            frozen.append({"list": f"{module_name}::{attribute}", "meaning": meaning,
-                           "entries": len(getattr(module, attribute))})
+        found = module is not None and hasattr(module, attribute)
+        frozen.append({"list": f"{module_name}::{attribute}", "meaning": meaning,
+                       "entries": len(getattr(module, attribute)) if found else None})
     return {"units_over_limit": units, "files_over_limit": len(over_files),
             "largest_files": [{"file": k, "lines": v} for k, v in over_files[:top]], "frozen_lists": frozen}
 
@@ -134,7 +135,7 @@ def pick(data: dict) -> tuple[list[dict], list[dict]]:
     for unit in sorted(data["units_over_limit"], key=lambda u: -u["excess"]):
         if len(picks) == MAX_PICKS:
             break
-        for cand in unit["split_candidates"]:
+        for cand in unit.get("all_candidates", unit["split_candidates"]):
             reason = _skip_reason(cand["files"], cand["lines"], modules, roots)
             if reason:
                 skipped.append({"unit": unit["unit"], "group": cand["group"], "reason": reason})
@@ -173,7 +174,8 @@ def markdown(data: dict) -> str:
     out += ["", f"## Files over their limit: {data['files_over_limit']}", ""]
     out += [f"- `{f['file']}` {f['lines']}" for f in data["largest_files"]]
     out += ["", "## Frozen lists (only shrink)", "", "| list | entries | what |", "|---|---|---|"]
-    out += [f"| `{f['list']}` | {f['entries']} | {f['meaning']} |" for f in data["frozen_lists"]]
+    out += [f"| `{f['list']}` | {'not on this branch' if f['entries'] is None else f['entries']} | {f['meaning']} |"
+            for f in data["frozen_lists"]]
     return "\n".join(out) + "\n"
 
 

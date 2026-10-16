@@ -2,9 +2,9 @@
 
 python tools/harness/structure_jira.py PICKS_JSON GITHUB_ISSUE_URL
 
-PICKS_JSON is ``structure_report.py --picks-json`` output. For each pick it looks for an open
-task whose summary already names the same group; if found it only comments the new issue link,
-otherwise it creates a task under the pick's Epic (none: "[Epic 미정]" and "리드 배정 필요"),
+PICKS_JSON is ``structure_report.py --picks-json`` output. For each pick it looks for a task this
+tool made for the same group: open, it only comments the new issue link; closed, it skips (a person
+already decided, e.g. "not one responsibility"); none, it creates a task under the pick's Epic (none: "[Epic 미정]" and "리드 배정 필요"),
 unassigned (team-guide 5.1: the lead assigns). Environment: JIRA_BASE_URL, JIRA_EMAIL,
 JIRA_API_TOKEN (an Atlassian API token), JIRA_PROJECT (default KAN), JIRA_ISSUE_TYPE (default Task).
 Exit 0 when every pick was created or commented; 1 when any Jira call failed.
@@ -52,12 +52,18 @@ class Jira:
             text = response.read().decode() or "{}"
         return json.loads(text)
 
-    def open_task(self, project: str, pick: dict) -> str | None:
-        group = pick["group"].rstrip("*").replace('"', "")  # "*" would be a JQL wildcard
-        jql = f'project = {project} AND summary ~ "\\"{group}\\"" AND statusCategory != Done'
-        found = self.call("POST", "/rest/api/3/search/jql", {"jql": jql, "fields": ["key"], "maxResults": 1})
-        issues = found.get("issues") or []
-        return issues[0]["key"] if issues else None
+    def existing(self, project: str, pick: dict) -> tuple[str, bool] | None:
+        """(key, is_done) of a task already made for this exact group, open or closed."""
+        phrase = pick["group"].rstrip("*").replace('"', "")  # "*" would be a JQL wildcard
+        jql = f'project = {project} AND summary ~ "\\"{phrase}\\"" ORDER BY created DESC'
+        found = self.call("POST", "/rest/api/3/search/jql",
+                          {"jql": jql, "fields": ["summary", "status"], "maxResults": 50})
+        marker = f"— {pick['group']} 분리"  # text search stems words; confirm our own summary exactly
+        for issue in found.get("issues") or []:
+            fields = issue.get("fields") or {}
+            if marker in (fields.get("summary") or ""):
+                category = ((fields.get("status") or {}).get("statusCategory") or {}).get("key")
+                return issue["key"], category == "done"
 
     def comment(self, key: str, text: str) -> None:
         self.call("POST", f"/rest/api/2/issue/{key}/comment", {"body": text})
@@ -74,12 +80,18 @@ def run(picks: list[dict], issue_url: str, jira: Jira, project: str, issue_type:
     failed = 0
     for pick in picks:
         try:
-            key = jira.open_task(project, pick)
-            if key:
-                jira.comment(key, f"이번 주 구조 리포트에도 같은 후보가 나왔습니다: {issue_url}")
-                print(f"commented {key}: {pick['group']}", file=out)
+            found = jira.existing(project, pick)
+            if found and found[1]:
+                print(f"skipped {found[0]} (closed before; a person decided): {pick['group']}", file=out)
+            elif found:
+                jira.comment(found[0], f"이번 주 구조 리포트에도 같은 후보가 나왔습니다: {issue_url}")
+                print(f"commented {found[0]}: {pick['group']}", file=out)
             else:
                 print(f"created {jira.create(project, issue_type, pick, issue_url)}: {pick['group']}", file=out)
+        except urllib.error.HTTPError as exc:  # 5: say why Jira refused (issue type, parent, permissions)
+            failed += 1
+            detail = exc.read().decode("utf-8", "replace")[:300]
+            print(f"failed {pick['group']}: HTTP {exc.code}: {detail}", file=out)
         except (urllib.error.URLError, KeyError, ValueError) as exc:
             failed += 1
             print(f"failed {pick['group']}: {type(exc).__name__}: {exc}", file=out)
