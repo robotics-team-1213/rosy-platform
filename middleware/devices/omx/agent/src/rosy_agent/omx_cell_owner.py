@@ -39,6 +39,9 @@ from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.pose_plan import AnalyticCellTransferPlanner, CellPlanningProfile
 from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
 
+from .barrier_journal import BarrierJournal
+from .barrier_supervisor import BarrierSupervisor, make_coordinator_hold
+from .coordinator_api import CoordinatorPeerApi
 from .omx_cell_documents import PalletizingCellDocumentValidator
 
 ALLOWED_OWNERS = ("pilot_sim", "rule_based")
@@ -57,6 +60,9 @@ class CellOwnerSettings:
     calibration_revision: str
     transform_revision: str
     stack_tol_m: float
+    # D-780 1, 4: a two-arm workcell names its coordinator UIDs; a one-arm workcell leaves them empty.
+    coordinator_peer_uids: frozenset[int] = frozenset()
+    coordinator_liveness_s: float = 2.0
 
 
 @dataclass
@@ -74,6 +80,7 @@ class CellOwner:
     http_app: Any
     _executions: dict = field(default_factory=dict, repr=False)
     _execution_lock: Any = field(default_factory=threading.RLock, repr=False)
+    barriers: Any = None  # BarrierSupervisor only with coordinator peers (D-780)
 
     def advance_pending(self) -> None:
         """One local workflow tick; only live in-memory attempts may progress."""
@@ -85,7 +92,20 @@ class CellOwner:
                 with self._execution_lock:
                     self._executions.pop(action_id, None)
                 continue
-            if action["state"] == "SUBMITTING":
+            start_first = False
+            if self.barriers is not None:
+                try:
+                    ended = self.barriers.tick(grant) is not None  # barrier timeout or coordinator loss
+                except Exception:
+                    _LOG.exception("Barrier supervision failed for %s; not advancing it", action_id)
+                    continue
+                if ended:
+                    with self._execution_lock:
+                        self._executions.pop(action_id, None)
+                    continue
+                # The before-first-phase barrier was released: submit the first phase now.
+                start_first = action["state"] == "SUBMITTING" and self.barriers.first_phase_released(grant)
+            if action["state"] == "SUBMITTING" and not start_first:
                 continue
             try:
                 self.stop.run_if_open(
@@ -94,9 +114,14 @@ class CellOwner:
                         grant.authority_epoch, grant.dispatch_generation), operation=lambda: None)
                 # Phase submission retains its own final fence; never hold the stop lock
                 # while workflow progression can wait on a ROS callback's event lock.
-                execution.advance()
+                execution.start() if start_first else execution.advance()
             except Exception:
                 _LOG.exception("Cell workflow advancement failed for %s", action_id)
+                if start_first:  # a released first phase that failed to start is never left SUBMITTING
+                    try:
+                        self.store.hold_action(action_id, grant.attempt_id, reason="PHASE_RUNNER_START_UNKNOWN")
+                    except Exception:
+                        _LOG.exception("Cell first-phase hold failed for %s", action_id)
                 try:
                     execution.cancel_current()
                 except Exception:
@@ -173,13 +198,26 @@ def build_cell_owner(settings: CellOwnerSettings, *,
             trajectory_points=phase.points, phase_id=phase.phase_id)
 
     executions, execution_lock = {}, threading.RLock()
+    fleet_uid = settings.fleet_peer_uid
+    barriers = coordinator_api = None
+    if settings.coordinator_peer_uids:
+        barriers, coordinator_api = _build_coordination(
+            settings, store, stop, current_fence,
+            cancel_active=lambda: cancel_active(fleet_uid))
+    if barriers is None:
+        # One-arm owner: today's always-allow gate. ActionApi already refuses pair/barrier grants
+        # (BARRIERS_UNSUPPORTED) before journaling; this deny is defense in depth.
+        def phase_gate(accepted, phase):
+            return not accepted.cell_transfer.barriers
+    else:
+        phase_gate = barriers.phase_gate
 
     def phase_factory(grant, recorder):
         factory = create_omx_cell_transfer_phase_factory(
             profile=profile, planner=planner, execution_state=execution_state,
             accepted_item_geometry=acceptance.accepted_item_geometry,
             command_for_phase=command_for_phase, goal_port=goal_port_factory(runtime),
-            submission_fence=stop, phase_gate=lambda accepted, phase: True,
+            submission_fence=stop, phase_gate=phase_gate,
             current_fence=current_fence, gripper_readback=lambda: gripper_readback(grant),
             monotonic=runtime.monotonic, gripper_sensor_revision=GRIPPER_SENSOR_REVISION)
         execution = factory(grant, recorder)
@@ -192,19 +230,51 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         current_fence=current_fence, capability_current=acceptance.capability_current,
         submission_fence=stop, phase_runner_factories={"CELL_TRANSFER": phase_factory},
         control_admission=admission, enabled=True)
-    stop_api = LocalStopApi(stop, source_by_peer_uid={settings.fleet_peer_uid: StopRequestSource.FLEET},
-                            cancel_active=lambda uid: runner.cancel_unresolved(peer_uid=uid),
+    sources = {settings.fleet_peer_uid: StopRequestSource.FLEET}
+    sources.update({uid: StopRequestSource.COORDINATOR for uid in settings.coordinator_peer_uids})
+    # A coordinator stop cancels the Fleet principal's Actions; the Fleet path is unchanged.
+    def cancel_active(uid):
+        if barriers is not None:
+            # A wait at a barrier has no goal to cancel: end it first, with its own reason (D-780 3).
+            # A failing sweep never skips the goal cancel fanout below, and vice versa.
+            try:
+                barriers.end_fenced_waits()
+            except Exception:
+                _LOG.exception("Barrier wait sweep failed after a local stop")
+        return runner.cancel_unresolved(
+            peer_uid=fleet_uid if uid in settings.coordinator_peer_uids else uid)
+    stop_api = LocalStopApi(stop, source_by_peer_uid=sources, cancel_active=cancel_active,
                             fleet_fence_current=fleet_fence_current)
     recovery_api = OwnerRecoveryApi(runtime.owner, stop, store,
                                     allowed_peer_uids={settings.fleet_peer_uid},
-                                    current_fence=current_fence)
+                                    current_fence=current_fence,
+                                    read_peer_uids=settings.coordinator_peer_uids)
+    if coordinator_api is not None:
+        coordinator_api.read_receipt = runner.read_receipt
     action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api, identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
-        "simulation": True, "profile": "omx-cell-sim", "journal_id": journal_identity(store.path)})
+        "simulation": True, "profile": "omx-cell-sim", "journal_id": journal_identity(store.path)},
+        coordinator_api=coordinator_api)
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
     return CellOwner(settings, profile, runtime, store, stop, acceptance, planner, runner,
-                     action_api, uds_server, http_app_factory(runtime), executions, execution_lock)
+                     action_api, uds_server, http_app_factory(runtime), executions, execution_lock,
+                     barriers=barriers)
+
+
+def _build_coordination(settings: CellOwnerSettings, store: ActionStore, stop: LocalStopController,
+                        current_fence: Callable[[int, int], bool], *, cancel_active: Callable[[], object]):
+    """Barrier journal, supervisor and coordinator peer API for a two-arm workcell (D-780)."""
+    journal = BarrierJournal(store.path)
+    supervisor = BarrierSupervisor(
+        journal, store, coordinator_liveness_s=settings.coordinator_liveness_s,
+        hold_owner=make_coordinator_hold(stop, store, cancel_active=cancel_active), fence_current=current_fence)
+    api = CoordinatorPeerApi(
+        store, journal, supervisor, workcell_id=settings.workcell_id,
+        coordinator_peer_uids=set(settings.coordinator_peer_uids),
+        fleet_peer_uids={settings.fleet_peer_uid}, read_receipt=lambda _action_id: None,
+        fence_current=current_fence)
+    return supervisor, api
 
 
 def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> GripperObservation:
