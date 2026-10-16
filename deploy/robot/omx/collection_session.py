@@ -1,0 +1,126 @@
+"""Bounded collection orchestration; uses the existing command owner, never powers hardware."""
+import json
+from pathlib import Path
+import shutil
+import time
+
+from camera_quality import advancing_frame
+from collection_profile import digest, number, require, validate_profile, validate_teacher
+from collection_store import RawCollection, append
+
+
+def validate_environment(receipt, profile, *, now_ns):
+    require(isinstance(receipt, dict) and receipt.get('policy') == 'omx-photometric-v3', 'environment policy differs')
+    stamp, expires = receipt.get('recorded_ns'), receipt.get('expires_ns')
+    require(type(stamp) is int and type(expires) is int and 0 < stamp <= now_ns < expires
+            and now_ns-stamp <= 750_000_000, 'environment receipt stale/future')
+    require(isinstance(receipt.get('run_id'), str) and bool(receipt['run_id'])
+            and isinstance(receipt.get('profile_sha256'), str) and len(receipt['profile_sha256']) == 64,
+            'environment run/profile missing')
+    require(receipt.get('motion_admitted') is False and receipt.get('physical_acceptance') is False,
+            'camera receipt scope differs')
+    for role in ('top', 'front'):
+        item = receipt.get('observations', {}).get(role, {})
+        plan = receipt.get('environment', {}).get(role, {})
+        require(advancing_frame(item, (0., 0)) and item['quality'].get('usable') is True
+                and item['quality'].get('condition') == 'NORMAL', role+' image insufficient')
+        require(plan.get('state') in ('NORMAL', 'WAITING_FRAME') and plan.get('condition') == 'NORMAL'
+                and plan.get('pending') == 'NORMAL' and type(plan.get('confirmations')) is int
+                and plan['confirmations'] >= 3, role+' environment not stable')
+        require(number(plan.get('source_after')) and item['source_stamp'] > plan['source_after'],
+                role+' frame predates control settlement')
+        require(0 <= now_ns/1e9-item['source_stamp'] <= profile['max_image_age_s']
+                and number(item.get('receipt_age_s')) and 0 <= item['receipt_age_s'] <= profile['max_image_age_s'],
+                role+' image stale')
+    return receipt
+
+
+def validate_observation(sample, profile, now_ns):
+    validate_environment(sample['environment'], profile, now_ns=now_ns)
+    require(type(sample.get('time_ns')) is int and 0 <= now_ns-sample['time_ns'] <= 100_000_000,
+            'observation clock stale/future')
+    for key, maximum in (('state_age_s', 'max_state_age_s'), ('reference_age_s', 'max_reference_age_s')):
+        require(number(sample.get(key)) and 0 <= sample[key] <= profile[maximum], key+' stale')
+    for key in ('observation_state', 'action'):
+        values = sample.get(key)
+        require(isinstance(values, list) and len(values) == 6 and all(number(v) for v in values)
+                and all(-100 <= v <= 100 for v in values[:5]) and 0 <= values[5] <= 100, key+' invalid')
+    stamps = [sample.get('joint_source_stamp'), sample.get('reference_source_stamp')]
+    require(set(sample['images']) == {'top', 'front'}, 'two original images required')
+    for role, image in sample['images'].items():
+        height, width, _ = profile['camera_shapes'][role]
+        require(image['width'] == width and image['height'] == height
+                and isinstance(image['data'], bytes) and len(image['data']) == height*width*3, role+' RGB differs')
+        stamps.append(image['source_stamp'])
+        require(image['source_stamp'] == sample['environment']['observations'][role]['source_stamp'],
+                role+' environment is not bound to this original frame')
+    require(all(number(stamp) and 0 <= now_ns/1e9-stamp <= profile['max_image_age_s'] for stamp in stamps),
+            'source clock stale/future')
+    require(max(stamps)-min(stamps) <= profile.get('max_skew_s', .2), 'sensor/reference skew exceeds envelope')
+
+
+def run_session(profile, teacher, output, backend, *, episodes=1):
+    validate_profile(profile, mode=backend.mode, acceptance=getattr(backend, 'acceptance', None), teacher=teacher)
+    validate_teacher(teacher, profile)
+    require(type(episodes) is int and 1 <= episodes <= 100, 'bounded episode count required')
+    store = RawCollection(output, profile, digest(teacher), backend.mode)
+    began = time.monotonic()
+    current, stop = None, None
+    def stop_once(reason):
+        try:
+            return backend.stop(reason[:100])
+        except Exception as exc:
+            return dict(hold_requested=False, physical_stop_verified=False, error=repr(exc))
+    try:
+        for _ in range(episodes):
+            sample = backend.observe()
+            validate_observation(sample, profile, time.time_ns())
+            current = store.begin(min(sample['time_ns'], sample['environment']['recorded_ns']), sample['environment'])
+            append(store.root/'environment.jsonl', sample['environment'])
+            last_frame, last_identity = time.monotonic(), None
+            identity = (current['run_id'], current['profile_sha256'])
+            for ordinal, step in enumerate(teacher['steps']):
+                require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
+                validate_observation(backend.observe(), profile, time.time_ns())
+                append(store.root/'events.jsonl', dict(kind='INTENT', step=step, time_ns=time.time_ns()))
+                decision = backend.submit(step, f'{current["cycle_id"]}-{ordinal}')
+                append(store.root/'events.jsonl', dict(kind='SUBMISSION', decision=decision, time_ns=time.time_ns()))
+                require(decision.get('accepted') is True, 'existing owner rejected teacher command')
+                terminal = None
+                while terminal is None:
+                    require(time.monotonic()-began < profile['max_session_s'], 'session deadline exceeded')
+                    require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
+                    sample = backend.observe()
+                    append(store.root/'environment.jsonl', sample['environment'])
+                    validate_observation(sample, profile, time.time_ns())
+                    env = sample['environment']
+                    require((env['run_id'], env['profile_sha256']) == identity, 'environment run/profile changed')
+                    for event in backend.drain_events():
+                        append(store.root/'events.jsonl', event)
+                    image_identity = tuple(sample['images'][role]['source_stamp'] for role in ('top', 'front'))
+                    now = time.monotonic()
+                    if last_identity is None or all(a > b for a, b in zip(image_identity, last_identity)):
+                        if now-last_frame >= 1/profile['fps'] or last_identity is None:
+                            store.sample(current, sample, step['positions'])
+                            last_identity, last_frame = image_identity, now
+                    require(now-last_frame <= profile['max_sample_gap_s'], 'new synchronized frame deadline exceeded')
+                    terminal = backend.terminal()
+                    if terminal is not None:
+                        require(terminal.get('succeeded') is True, 'controller terminal was not successful')
+                        append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal, time_ns=time.time_ns()))
+                    time.sleep(.01)
+            require(current['frames'] >= 2, 'insufficient distinct captured frames')
+            current.update(complete=True, reason='', end_ns=time.time_ns())
+            current = None
+    except (Exception, KeyboardInterrupt) as exc:
+        reason = f'{type(exc).__name__}: {exc}'
+        # Stop is attempted before evidence writes, including full/unwritable disks.
+        stop = stop_once(reason)
+        if current is None:
+            store.manifest['error'] = reason
+        else:
+            current.update(complete=False, reason=reason, end_ns=time.time_ns())
+    finally:
+        if stop is None:
+            stop = stop_once('collection session finished')
+    return store.close(stop)
