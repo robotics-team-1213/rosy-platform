@@ -1,8 +1,50 @@
 # 분석 생성물의 작업 위치
 
-소스·Git worktree는 F:, 분석 결과·캐시·로그는 X: 세션에 둔다. 작업 등록/재개는 `X:\DevTemp\_management\workspace.ps1`의 `New`/`Resume`를 사용한다. 원칙은 `F:\AGENTS.md`, 실제 처리 기록은 [P1 결과](../validation/folder-artifacts-p1-2026-10-13/result.md)다.
+실험실 PC의 소스·Git worktree는 F:, 분석 결과·캐시·로그는 X: 세션에 둔다. 작업 등록/재개는 `X:\DevTemp\_management\workspace.ps1`의 `New`/`Resume`를 사용한다. 원칙은 `F:\AGENTS.md`, 실제 처리 기록은 [P1 결과](../validation/folder-artifacts-p1-2026-10-13/result.md)다. 다른 개발 PC의 Graphify 출력은 아래 공용 도구가 사용자 캐시 경로에 둔다. 드라이브 문자를 복제하거나 전역 환경 변수를 바꾸지 않는다.
 
 ## Graphify와 Python 캐시
+
+### 팀 공용 파이프라인
+
+Python 3.10+와 Git이 있는 개발 PC에서 실행한다. 로봇 런타임 의존성이나 배포 항목은 아니다. Graphify 0.9.91로 확인했으며 다른 버전은 다시 검증한다.
+
+```powershell
+python -m pip install --user uv
+python -m uv tool install graphifyy==0.9.91
+python -m uv tool update-shell
+# 새 셸에서 Codex용 스킬을 등록한다.
+graphify install --platform codex
+
+# 저장소 루트 또는 작업 worktree에서 실행한다.
+python tools/graphify_pipeline.py build
+# 작은 범위의 실행 확인:
+python tools/graphify_pipeline.py build --scope middleware/core/events
+# 출력된 Run 경로를 명시한다. 경로에 공백이 있으면 따옴표로 감싼다.
+python tools/graphify_pipeline.py query --run "<run-path>" "CommandManager"
+```
+
+`build`의 기본 범위는 `middleware/core`이며 그 하위 폴더만 허용한다. 문서·ADR 의미 분석, Fleet·World 확대는 별도 검증 후 진행한다. 코드와 테스트를 함께 색인하며 `package.xml` 등 미지원 파일은 extract 로그에 남는다.
+
+출력 부모는 `--output` → `DEV_SESSION/scratch/graphify` → Windows의 `%LOCALAPPDATA%/ROSY/analysis/graphify`, 그 외 운영체제의 `$XDG_CACHE_HOME/ROSY/analysis/graphify` 또는 `~/.cache/ROSY/analysis/graphify` 순서로 고른다. 실제 결과는 그 아래 고유한 실행 폴더에 둔다. 저장소와 worktree 내부 출력은 거절한다.
+
+1. 범위의 Git revision과 추적·미추적 비무시 파일의 SHA-256을 기록한다. 상위 `.gitignore`·`.graphifyignore`, Git의 저장소·사용자 제외 규칙도 기록해 분석 대상 변경을 감지한다.
+2. `--code-only`로 코드 관계를 추출한다. 출력·Python 캐시 설정은 자식 프로세스에만 적용한다.
+3. API 호출 없이 커뮤니티와 보고서를 생성한다. 1,500개가 넘는 노드는 HTML에서 커뮤니티로 요약하고 JSON에는 전체를 보존한다.
+4. 빈 그래프·끊어진 참조는 실패 처리하고 자기참조 개수는 `health.json`에 남긴다. 주요 노드 조회도 실행한다.
+5. 소스 revision과 파일 해시가 그대로인지 확인한 뒤에만 `provenance.json`을 `verified`로 기록한다. 실패 로그와 `failed` 상태는 보존한다.
+6. 조회할 때도 소스·그래프 해시를 확인한다. 변경됐으면 새로 생성한다. `--run` 없이 다른 세션의 그래프를 추정하지 않는다.
+
+생성물은 `graphify-out/{graph.json,graph.html,GRAPH_REPORT.md}`, 실행 근거는 `provenance.json`, `health.json`, 단계별 `*.log`다. Git에 넣지 않는다. 명령 성공은 종료 코드로 판단하므로 PowerShell에서 stderr 경고가 작업을 잘못 중단하지 않는다.
+
+`verified`는 생성물 무결성과 CLI 실행 확인을 뜻한다. 검색 정확도·완전성이나 로봇 동작 검증을 뜻하지 않는다. 그래프의 추출 관계와 추론 관계를 구분하고 답의 원본 위치를 확인한다. 현재 그래프는 무방향일 수 있어 `affected` 결과로 실제 의존 방향이나 테스트 생략을 결정하지 않는다. 테스트 선택은 기존 harness를 따른다.
+
+조회는 코드 심볼 이름으로 시작한다. 한국어 질문을 입력한다고 동의어나 번역이 자동 처리되지 않는다. 출력이 토큰 예산으로 잘리면 질문을 좁히거나 `--budget`을 늘린다.
+
+### 채택 판단과 후속 검증
+
+상태는 **Trial**이다. [최초 실행 기록](../validation/graphify-core-trial-2026-10-16/result.md)의 CLI 확인과 검색 품질 비교를 구분한다. 다음 비교에서는 같은 소스 snapshot에 대해 실제 질문 5~10개의 정답 파일·심볼을 먼저 고정한다. 기존 `rg`+원문 확인과 그래프 조회 각각의 누락·오탐, 원문 확인까지 걸린 시간, 생성·갱신 시간을 기록한다. 품질 저하 없이 반복 탐색 비용이 줄어든다는 증거를 얻은 뒤 Fleet·World 확대를 판단한다. 결과가 부족하면 기존 검색을 유지한다.
+
+### 기존 수동 실행과 이관 기록
 
 설치된 Graphify는 `GRAPHIFY_OUT`에 절대 경로를 지정할 수 있다. 값은 모듈 import 때 읽으므로 **프로세스를 시작하기 전에**, 해당 세션의 셸에서 설정한다. 사용자/시스템 전역 환경 변수는 바꾸지 않는다. Python 개발 도구의 새 bytecode 캐시도 같은 방식으로 세션 scratch에 둔다.
 
