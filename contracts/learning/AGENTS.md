@@ -14,6 +14,7 @@ Wheel `rosy-contracts-learning` (D-449). ROS-free, torch-free, LeRobot-free chec
 | `README.md` | Wire rules, camera fingerprint notes, and what 0.1.x does not prove |
 | `pyproject.toml` | Package `rosy-contracts-learning` |
 | `src/` | Import root `rosy.contracts.learning` |
+| `src/rosy/contracts/learning/prediction.py` | D-782 PredictionRequest/Result, the M1 artifact schema and its single `forward` rule; a result may only support REJECT or HOLD |
 
 ## Subdirectories
 

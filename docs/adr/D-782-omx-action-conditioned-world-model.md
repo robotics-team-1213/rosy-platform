@@ -49,7 +49,7 @@ W2에서 `contracts/learning`에 ROS-free 타입으로 둔다. 그 전까지는 
 | 출력 | `object_result` | `native_review.OBJECT_RESULTS` 각 값의 확률 |
 | 출력 | `uncertainty` | step별 분산 또는 ensemble 불일치 |
 | 출력 | `abstain` / `abstain_reason` | 입력 분포 밖, 입력 만료, 보정 revision 불일치 |
-| 출력 | `verdict` | `NO_OBJECTION` / `HOLD` / `REJECT`와 근거 |
+| 출력 | `verdict` | `NO_OBJECTION` / `HOLD` / `REJECT` / `ABSTAIN`과 근거. `ABSTAIN`은 예측값을 담지 않는다 |
 | 계보 | `model_digest`, `dataset_manifest_sha256`, `produced_at_ns`, `expires_at_ns` | 승인 버전 대조와 만료 |
 
 입력 관측이 만료됐거나 rig·calibration revision이 학습 데이터와 다르면 예측하지 않고 기권한다.
@@ -68,7 +68,7 @@ W2에서 `contracts/learning`에 ROS-free 타입으로 둔다. 그 전까지는 
 
 | 단계 | 모델 | 입력 | 연산 | 여는 조건 |
 |---|---|---|---|---|
-| M1 | 저차원 동역학 ensemble | 관절·집게 상태 + 행동 묶음 | CPU | W1 데이터 기준 충족 |
+| M1 | 저차원 동역학 ensemble(첫 구현: bootstrap ridge) | 관절·집게 상태 + 행동 묶음 | CPU | W1 데이터 기준 충족 |
 | M2 | M1 + 물체 결과 분류 | M1 + top/front RGB | CPU 또는 GPU | M1 수용, `object_result` 라벨 충분 |
 | M3 | 사전학습 영상·latent World 모델 fine-tune | RGB + 행동 | GPU | M2 수용, GPU 결정, 라이선스 검토 |
 
@@ -98,13 +98,17 @@ W2에서 `contracts/learning`에 ROS-free 타입으로 둔다. 그 전까지는 
 
 D-773 §5대로 빈 폴더를 미리 만들지 않는다. 각 단계는 한 브랜치로 착지한다.
 
-| 단계 | 할 일 | 새 위치 | 끝난 기준 | 선행 |
-|---|---|---|---|---|
-| W0 기록 | 카메라 모델·장착 위치·물체 결과 기록 | 없음(기존 수집기) | `664b101fa` 착지 | 없음 |
-| W1 데이터 | 중단 시도 포함 World 모델 dataset builder, session 분할, 기준선 평가 스크립트 | `learning/curation/omx` 안 | 실물 session으로 builder·기준선 보고 | D-770 G1 |
-| W2 M1 학습 | Prediction 계약, M1 학습 job, 오프라인 평가 | `contracts/learning`, `learning/training/world_model`, `learning/evaluation/world_model` | §6 오프라인 기준 통과 | W1 |
-| W3 그림자 | 승인 버전 추론, verdict 기록만 | `operations/prediction/world_model` | 그림자 대조 기록 | W2, D-773 A3 |
-| W4 veto | owner 재검사 또는 Fleet admission에서 REJECT/HOLD 근거로 사용 | 기존 owner·admission 안 | 사용자 승인, D-430 Safety 리뷰 | W3, D-773 A4 |
+2026-10-17 사용자 요청으로 W1~W3의 **코드 기반**을 먼저 만들었다. 각 위치에는 구현과 시험이 있고 빈 폴더는 없다.
+실물 데이터가 없으므로 끝난 기준(실물 session 보고, 오프라인 기준 통과, 그림자 대조)은 아직 충족하지 않았다.
+W4 결선은 하지 않았다. 아래 `현재` 열이 그 상태다.
+
+| 단계 | 할 일 | 새 위치 | 끝난 기준 | 선행 | 현재 |
+|---|---|---|---|---|---|
+| W0 기록 | 카메라 모델·장착 위치·물체 결과 기록 | 없음(기존 수집기) | `664b101fa` 착지 | 없음 | 완료 |
+| W1 데이터 | 중단 시도 포함 World 모델 dataset builder, session 분할, 기준선 평가 스크립트 | `learning/curation/omx` 안 | 실물 session으로 builder·기준선 보고 | D-770 G1 | 코드·합성 시험 |
+| W2 M1 학습 | Prediction 계약, M1 학습 job, 오프라인 평가 | `contracts/learning`, `learning/training/world_model`, `learning/evaluation/world_model` | §6 오프라인 기준 통과 | W1 | 코드·합성 시험 |
+| W3 그림자 | 승인 버전 추론, verdict 기록만 | `operations/prediction/world_model` | 그림자 대조 기록 | W2, D-773 A3 | 검사기·기록·오프라인 재생. 실물 결선 없음 |
+| W4 veto | owner 재검사 또는 Fleet admission에서 REJECT/HOLD 근거로 사용 | 기존 owner·admission 안 | 사용자 승인, D-430 Safety 리뷰 | W3, D-773 A4 | 미결선 |
 
 ## Alternatives
 
