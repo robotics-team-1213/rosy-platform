@@ -21,7 +21,7 @@ from .step_action_kinds import step_action_kind, step_grant_digest
 from . import cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 
-_MIGRATION_VERSION = 2  # 2: TRIP steps (D-763 7); an older Fleet refuses this ledger, never misreads it
+_MIGRATION_VERSION = 3  # 2: TRIP steps (D-763 7); 3: per-arm tables (D-779); an older Fleet refuses
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
