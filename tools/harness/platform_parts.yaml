@@ -80,6 +80,20 @@ roots:
     import_prefix: []
     concern: learning
     note: D-449 offline ACT study; no deployment or execution authority.
+  - path: learning/training/world_model
+    part: learning
+    d427_target: learning/training/world_model
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-782 M1 world-model training; no promotion, deployment or execution authority.
+  - path: learning/evaluation/world_model
+    part: learning
+    d427_target: learning/evaluation/world_model
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-782 offline acceptance against hold and reach baselines; no promotion or admission.
   - path: contracts/learning
     part: contracts
     d427_target: contracts/learning
@@ -538,6 +552,13 @@ roots:
     wave: "3b"
     import_prefix: [rosy_cell]
     concern: other
+  - path: operations/prediction
+    part: operations
+    d427_target: operations/prediction
+    wave: none
+    import_prefix: []
+    concern: other
+    note: D-782 pre-execution checker and shadow recorder; predictions support REJECT/HOLD only and are not wired to admission or an owner.
   - path: operations/situation
     part: operations
     d427_target: operations/situation
