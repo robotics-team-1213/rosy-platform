@@ -38,12 +38,22 @@ def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
         runtime._on_joint_state(message)
         original = runtime.latest_joint_state
         assert original is not None
+        from types import SimpleNamespace
+        cancellations = []
+        pending = SimpleNamespace(cancel=lambda: cancellations.append(True), done=lambda: False)
+        runtime.owner._action_port = SimpleNamespace(send_goal=lambda command: pending)
+        command = TrajectoryCommand(
+            workcell_id="w", instance_id="i", command_id="c", owner="moveit",
+            session_id=runtime.owner.session_id, positions={"joint1": .1}, duration_s=.5,
+            source_state_sequence=original.sequence, calibration_revision="cal")
+        assert runtime.submit(command).reason == "submitted"
         time.sleep(.12)
         runtime._on_joint_state(message)
         assert runtime.latest_joint_state is original, "replayed source refreshed owner state"
         runtime._watchdog_tick()
         assert runtime.owner.state == "hold"
         assert runtime.last_decision.reason == "joint_state_stale"
+        assert cancellations == [True]
     finally:
         runtime.destroy()
         node.destroy_node()
@@ -94,6 +104,7 @@ def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
         deadline = time.monotonic() + 2
         while not observed.is_set() and time.monotonic() < deadline:
             message = JointState(); message.name = ['joint1']; message.position = [0.]
+            message.header.stamp = source_node.get_clock().now().to_msg()
             publisher.publish(message)
             observed.wait(.01)
         assert observed.is_set(), 'joint snapshot not delivered while watchdog blocked'
@@ -184,6 +195,7 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
                 message = JointState()
                 message.name = ["joint1", "joint2", "gripper_joint_1"]
                 message.position = [0.0, 0.1, 0.0]
+                message.header.stamp = feedback_node.get_clock().now().to_msg()
                 feedback_publisher.publish(message)
                 if runtime.latest_joint_state is not None:
                     break
@@ -320,6 +332,7 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
             message = JointState()
             message.name = ["joint1"]
             message.position = [0.0]
+            message.header.stamp = feedback_node.get_clock().now().to_msg()
             feedback_publisher.publish(message)
             publisher_stop.wait(0.03)
 
@@ -435,6 +448,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             message = JointState()
             message.name = ["joint1"]
             message.position = [0.0]
+            message.header.stamp = feedback_node.get_clock().now().to_msg()
             state_publisher.publish(message)
             stop.wait(0.01)
 
