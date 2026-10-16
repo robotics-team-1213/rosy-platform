@@ -1,9 +1,10 @@
-"""Who may write Fleet's core ledger tables (D-773 2순위, D-750).
+"""Who may write Fleet's core ledger tables (D-750: one SQLite file, one transaction owner per change).
 
 The task, history, robot reservation and Action claim tables share one SQLite file, and claims
 are reserved inside each caller's own transaction (``dispatch_admission``). A new module that
 writes one of these tables is a new ledger writer: it fails here until it is added below, so a
-reviewer sees it. A listed module that stops writing fails too, so the list only shrinks.
+reviewer sees it. A listed module that stops writing fails too, so the list never goes stale; it
+grows only through a reviewed change to KNOWN_WRITERS.
 
 Honest holes: only literal SQL is seen (``INSERT``/``REPLACE``/``UPDATE``/``DELETE`` followed by a
 listed table name). A table name built at runtime (``f"UPDATE {table} ..."``) is not seen; today
