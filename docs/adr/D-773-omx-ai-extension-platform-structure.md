@@ -55,15 +55,17 @@ ACT 같은 `learned_policy`는 별도 실행기가 아니다. owner를 부르는
 - Pilot jog, Skill 단계, 학습 정책은 같은 seat·lease 규칙을 쓴다. 클라이언트마다 따로 만든 admission은 하나로 모은다.
 - cell owner가 `learned_policy`를 허용하는 것은 D-770 G4 실물 비교 평가를 통과한 정책에 한한다.
 
-### 3. 모델과 정책의 배포 경로는 하나다
+### 3. 모델과 정책의 배포는 기록과 readback을 남긴다
 
-Perception ONNX, OMX ACT 정책, Decision ModelProfile은 모두 같은 길로 장치나 AI PC에 들어간다.
+배포 경로가 아직 없는 산출물(OMX ACT 정책, Decision ModelProfile)은 처음부터 D-427 §2의 길로 들어간다.
 
 ```text
 학습·독립 평가(모델 PC) → registry 승격 기록 → profiles/installations pin → release → 장치·AI PC 설치 → readback
 ```
 
-- `deliver.py promote`의 SSH 직접 승격은 이 경로로 흡수한다. 흡수 뒤 SSH 경로는 개발 벤치와 사고 대응에만 남긴다.
+- Perception ONNX는 D-356 §3대로 데이터 세대(SSH 전달과 pointer 교체)를 유지한다. 코드 release로 흡수하지 않는다.
+  로봇에는 이미 append-only `history.jsonl`, hold 파일, manifest 서명이 있다. 빠진 것은 사이트 쪽 중앙 기록과
+  "승격 뒤 노드가 그 revision을 실제로 적재했는지"의 readback 대조이며, 이 둘을 `deliver.py`에 더한다.
 - AI PC는 승인된 pin과 실제 적재 digest가 같을 때만 결과를 낸다(D-516, D-527).
 - Fleet capability는 장기적으로 설치된 산출물의 readback에서 만든다(D-427 §3).
 
@@ -90,7 +92,7 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 |---|---|---|---|
 | A1 OMX 실물 owner | D-770 G0. 실측 하드웨어 profile, 독립 stop, owner 결선 | OMX DEVICE 게이트 BENCH 증거 | 없음 |
 | A2 Action 경계 정리 | Fleet의 grant·receipt 식별 검사 3벌을 하나로 합치고 kind별 protocol 버전을 등록표로 옮긴다. `omx_adapter.api`로 integrations 경계를 정리한다 | 중복 1벌, 위반 edge 1개 감소, NEW 0 | 없음 |
-| A3 배포 경로 통합 | installation profile에 PolicyArtifact·ModelProfile pin. release가 설치. SSH promote는 비상 경로로만 | 모델 교체가 release 기록으로만 일어남 | 없음 |
+| A3 배포 기록 | Perception: `deliver.py` push·promote·rollback 뒤 노드 status의 revision을 readback해 대조하고 사이트 원장에 한 줄 기록. ACT·ModelProfile: 첫 설치 경로를 profiles pin과 release로 만든다 | 모든 승격에 readback 결과가 기록됨. 새 산출물은 pin 없이 설치되지 않음 | 없음 |
 | A4 학습 정책 admission | Fleet lease로 `OwnerPolicySession` 조립, cell owner의 `learned_policy` 허용 | D-770 G4 실물 비교 평가 | A1, A2, A3 |
 | A5 AI 현장 그림자 | 모델 PC L0를 통과한 ModelProfile만 AI PC에 적재. Fleet은 그림자로만 기록 | 그림자 정답 대조 기록(D-492·D-527 관문) | A3 |
 
@@ -122,7 +124,7 @@ AI가 내는 것은 사실(정체·관측)과 후보(미션·복구 제안)뿐�
 ## Consequences
 
 - Fleet은 장치 kind가 늘어도 Action 등록표와 `DeviceActionTransport`로 다룬다. Pinky의 TRIP 폐루프는 별도로 남는다.
-- 모델 교체는 release 기록으로 추적된다. 대신 지금의 빠른 SSH 승격보다 한 단계가 늘어난다. 개발 벤치에서는 비상 경로를 쓴다.
+- 모델 교체는 사이트 원장의 기록과 readback 대조로 추적된다. Perception의 빠른 SSH 승격 속도는 그대로다.
 - 학습 정책은 Fleet lease 없이 팔을 움직일 수 없다. A4 전에는 학습 정책을 실물에서 돌리지 않는다.
 - A0는 동작 변화가 없는 정리라 먼저 착지할 수 있다. A1~A5는 각 단계의 증거가 나올 때까지 Proposed로 남는다.
 - 이 ADR은 main 착지 뒤 공유용이며, 단계별 구현은 각자의 ADR·검증 기록을 따른다.
@@ -162,3 +164,10 @@ Fleet은 `rosy_situation`의 순수 판정 모듈 3개만 쓴다. CI·이미지�
 이미 있다. Fleet 수준의 공통 타입은 `core_common`의 Action 스키마와 Fleet의 `DeviceActionTransport`다. 결정 1과 A2를 그에 맞게 고쳤다.
 Fleet이 장치 kind로 갈라지는 곳은 약 7곳이며 단계 원장은 이미 등록표로 움직인다. 완전한 Pinky·OMX 공통 receipt는 CORE 공개 API
 변경이나 Fleet 쪽 가짜 receipt가 필요해 미룬다.
+
+### 2026-10-17 정정: 배포 경로
+
+처음 판의 결정 3은 Perception ONNX의 SSH 승격까지 release로 흡수하려 했다. 이는 D-356 §3("모델은 데이터 세대로 전달한다")과
+Context 4(데이터 파일 하나에 코드 release는 무겁다)를 뒤집는다. release 코드에는 모델을 다루는 부분이 없고, 흡수하려면 Pinky 설치
+프로파일·weight 운반·로봇 설치기를 새로 만들어야 한다. 그래서 Perception은 지금 경로에 중앙 기록과 readback 대조만 더하고,
+release 경로는 아직 배포 경로가 없는 ACT·ModelProfile에만 적용한다.
