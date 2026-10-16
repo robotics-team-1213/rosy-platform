@@ -173,13 +173,14 @@ git status --short
 git add <파일> <파일>
 git commit -m "feat(fleet): 한 줄 요약"
 
-# 5) 실험실 시험 PC에 접속할 수 있는 clone: 훅 검사 후 push
+# 5) 에이전트 작업은 최종 SHA 독립 검토 후 실행한다 (pr-pipeline.md).
+# 실험실 시험 PC에 접속할 수 있는 clone: 훅 검사 후 push
 git push -u origin feat/<짧은-주제>
 ```
 
 작업 전에 [작업 이슈 양식](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose)으로 담당 경로와 완료 조건을 남긴다(§3.6). 미커밋 변경이 있으면 먼저 그 작업의 담당과 내용을 확인하고, 정리하려고 지우거나 stash하지 않는다.
 
-시험 PC에 닿지 못하는 개인 클론은 3번의 결과를 보관하고, 생성 기록(`python tools/harness/rosy_harness.py generate`), 변경 diff의 공개 범위, 안전 경로의 독립 리뷰·trailer를 확인해 필요한 변경을 커밋한다. 그 뒤 **주제 브랜치**를 다음과 같이 올린다. 예외는 시험 PC에 닿지 못하는 개인 클론의 주제 브랜치 push에만 적용한다. lint·시험 실패에는 적용하지 않는다.
+시험 PC에 닿지 못하는 개인 클론은 3번의 결과를 보관하고, 생성 기록(`python tools/harness/rosy_harness.py generate`), 변경 diff의 공개 범위, 안전 경로의 독립 리뷰·trailer를 확인해 필요한 변경을 커밋한다. 에이전트 작업은 [PR 파이프라인](pr-pipeline.md)의 최종 SHA 독립 검토까지 마친 뒤 다음 push를 실행한다. 예외는 시험 PC에 닿지 못하는 개인 클론의 주제 브랜치 push에만 적용한다. lint·시험 실패에는 적용하지 않는다.
 
 ```bash
 git push --no-verify -u origin feat/<짧은-주제>
