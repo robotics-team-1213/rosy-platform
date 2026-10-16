@@ -27,8 +27,7 @@ static bool sole_owner(const char * path) {
   posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
   posix_spawn_file_actions_addclose(&actions, output[0]);
   posix_spawn_file_actions_addclose(&actions, output[1]);
-  char * argv[]{const_cast<char *>("/usr/bin/fuser"), const_cast<char *>("--"),
-                const_cast<char *>(path), nullptr};
+  char * argv[]{const_cast<char *>("/usr/bin/fuser"), const_cast<char *>(path), nullptr};
   std::vector<char *> env;
   for (auto item = environ; *item; ++item) {
     if (strncmp(*item, "LD_PRELOAD=", 11) != 0) env.push_back(*item);

@@ -52,6 +52,26 @@ def environment(guard, path):
     return {**os.environ, "LD_PRELOAD": str(guard), "ROSY_OMX_PROBE_PORT": path}
 
 
+def test_unprotected_sdk_style_open_allows_another_opener(binaries, terminal):
+    """Negative control: the ordinary SDK-style open leaves the race present."""
+    _, probe = binaries
+    env = {key: value for key, value in os.environ.items() if key != "LD_PRELOAD"}
+    child = subprocess.Popen([str(probe), terminal, "open"], env=env,
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        with selectors.DefaultSelector() as ready:
+            ready.register(child.stdout, selectors.EVENT_READ)
+            assert ready.select(5)
+        assert child.stdout.readline().strip() == "OPEN_OK"
+        second = os.open(terminal, os.O_RDWR | os.O_NOCTTY)
+        os.close(second)
+        child.communicate("\n", timeout=5)
+        assert child.returncode == 0
+    finally:
+        if child.poll() is None:
+            child.kill(); child.communicate()
+
+
 @pytest.mark.parametrize("symbol", ["open", "64"])
 def test_kernel_blocks_another_opener_until_probe_closes(binaries, terminal, symbol):
     guard, probe = binaries
