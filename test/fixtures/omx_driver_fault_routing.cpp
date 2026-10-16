@@ -43,6 +43,9 @@ struct DynamixelHardware : hardware_interface::SystemInterface {
   hardware_interface::CallbackReturn stop();
   hardware_interface::CallbackReturn on_error(const rclcpp_lifecycle::State &) override;
   hardware_interface::CallbackReturn on_shutdown(const rclcpp_lifecycle::State &) override;
+  hardware_interface::return_type read(const rclcpp::Time &, const rclcpp::Duration &) override {
+    return hardware_interface::return_type::ERROR;  // This probe supplies no sensor data.
+  }
   hardware_interface::return_type write(const rclcpp::Time &, const rclcpp::Duration &) override;
 };
 // VENDOR_METHODS
@@ -88,7 +91,7 @@ int main(int argc, char **argv) try {
         component.configure(); component.activate();
         require(counts.goals == goals && component.get_lifecycle_id() == State::PRIMARY_STATE_FINALIZED,
                 "fault reopened commands");
-        require(raw->on_error({}) == hardware_interface::CallbackReturn::ERROR && counts.disables == 4,
+        require(raw->on_error(rclcpp_lifecycle::State()) == hardware_interface::CallbackReturn::ERROR && counts.disables == 4,
                 "repeated cleanup did not retain fault");
       }
       std::cout << "PASS routing failure=" << failure << " disable_group=" << failed_group << std::endl;
