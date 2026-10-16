@@ -426,8 +426,6 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
-    runtime._subscription.callback_group = runtime.action_callback_group
-    runtime.action_callback_group.add_entity(runtime._subscription)
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()

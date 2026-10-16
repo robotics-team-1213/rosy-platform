@@ -558,3 +558,9 @@
 - Change: Use a spawned, localhost-only test peer with its own ROS context for the vendor and 100 Hz state source. Keep owner MTE4, 40 feedback messages, 0.5 s freshness, blocked sink and completion assertions unchanged. Bound peer startup/shutdown and stop it if its parent disappears. Freeze the synthetic readback clock only in the lost-reply admission unit test.
 - Evidence: The separate-executor trial above passed initially but failed again at 275e14dc46, so it is insufficient. The same pre-push run exposed readback expiry during SQLite setup before the lost-reply test could exercise its intended send failure. No production threshold is changed. Final verification is recorded in PR #69.
 - Gate: No change. This remains a hardware-free test correction.
+
+## 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
+
+- Change: Remove the two-line callback-group mutation; retain the spawned vendor peer.
+- Evidence: Native, admission and secret guards passed 105 at 91536e1588. Mutation 0e518ae7ba failed the intended owner-sequence assertion with 165 publications and a maximum 0.01096 s gap, while owner sequence remained 2. The other seven native runtime tests passed.
+- Gate: No change. Final native, pre-push and cloud results belong to the restored commit in PR #69.
