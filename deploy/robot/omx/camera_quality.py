@@ -1,7 +1,7 @@
 """Photometric screening of original frames; never a mechanical or task-success gate."""
 import math
 
-POLICY = 'omx-photometric-v1'
+POLICY = 'omx-photometric-v2'
 
 
 def advancing_frame(item, previous):
