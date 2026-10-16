@@ -91,7 +91,9 @@ profile와 teacher의 canonical SHA-256은 `collection_profile.digest`로 계산
   두 카메라 모두 수신하기 전에는 `preflight`가 `waiting for camera_info`로 멈춘다. 영상 크기와 다르거나
   유한하지 않은 K/D/R/P는 센서 이상으로 처리한다. 값은 처음과 바뀐 시점에만 원본 `camera_info.jsonl`에
   기록되고 manifest 해시와 intake의 `rosy_provenance` 복사에 묶인다. 발행된 모델이며 보정 검증이 아니다.
-  topic이 없으면 이 키를 지우고 진행한다.
+  topic이 없으면 이 키를 지우고 진행한다. 2026-10-17 확인 기준 현장 Fleet PC의 top/front 카메라
+  publisher(`rosy-omx-camera@`)는 Image만 발행하고 CameraInfo는 발행하지 않는다(calibration unverified).
+  따라서 첫 수집에서는 이 키를 넣지 않는다. intrinsic은 체커보드 보정과 CameraInfo 발행을 별도로 수용한 뒤 켠다.
 - `camera_mounts`는 top/front 각각 `parent_frame`, `translation_m`(m, 각 축 5 m 이내),
   `rotation_xyzw`(단위 quaternion), `method`를 적는다. profile 해시와 acceptance에 묶이고 원본
   `profile.json`으로 보존된다. 측정하지 못했으면 키 전체를 지운다. 추정값을 넣지 않는다.
