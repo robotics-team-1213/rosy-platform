@@ -2838,3 +2838,8 @@
 - 변경: public target의 std_srvs/realtime_tools dependency export 누락을 최소 vendor patch로 수정하고 compile 전에 적용한다.
 - 증거: 실제 consumer configure 실패 재현 → 전체 plugin 재빌드 → 보완 없는 consumer 연결 성공. 실제 ROS 객체의 잘못된 고정 포트 초기화 ERROR·정상 소멸, exit 0.
 - gate 변화: 없음. 실물 포트·activation·goal 미사용. 실제 시연 0회이며 SIM owner를 실물 조립으로 간주하지 않는다. D-770; docs/validation/omx-native-init-negative-2026-10-16/result.md.
+## 2026-10-16 · uncommitted · fix(omx): 자동 reboot 제거와 실제 native read
+
+- 변경: vendor InitDxlComm fault의 자동 reboot를 제거하고 임시 probe의 실제 device identity·독점 open을 검사한다. loader 교착을 실제 constructor/worker 회귀로 재현하고 SYS_openat으로 수정했다.
+- 증거: compiled init5·기존 lifecycle10시나리오, Linux PTY/loader6시험 통과. 실제 native on_init/read3/정상 소멸 exit0, 전후 torque/error0·설정 동일, goal/torque/reboot 송신 없음. 앞선 두 실패와 분석기 enum 오류도 보존했다.
+- gate 변화: 실물 구동·보정/stop 수용은 미완료, 실제 시연0회. D-770; docs/validation/omx-native-passive-read-2026-10-16/result.md.

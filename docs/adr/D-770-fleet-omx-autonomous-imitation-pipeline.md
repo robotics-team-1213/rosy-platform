@@ -330,3 +330,20 @@ Reboot 호출과 read 오류 동안 기존 state 유지 경로를 발견했다. 
 
 source-age 수정 뒤 정책 fixture의 생성자 생략을 보완하고 host22·실제 ROS policy4와
 runtime8 시험을 통과했다. [후속 검증](../validation/omx-feedback-policy-intake-2026-10-16.md).
+## 2026-10-16 후속: 실제 native 초기화·토크 off read
+
+InitDxlComm의 숨은 자동 Reboot를 제거하고 오류 반환은 유지했다. 고정 실제 메서드의
+두 fault 분기 재현 뒤 5시나리오가 통과했다. SDK open 직후 device identity·독점 소유를
+검사하는 임시 helper를 추가했고 실제 Linux PTY/loader 교착 회귀 6시험을 통과했다.
+
+실제 Fleet에서 constructor 교착과 XML parser dependency 누락을 각각 해결했다.
+두 실패의 native serial 송신은 0이며 모든 원본을 보존했다. 세 번째 실행은 실제
+on_init·read3회·정상 소멸 exit0이다. 전후 torque/error0·설정 동일이며 송신93개 중
+indirect mapping SRAM write72개가 있다. goal/torque/reboot는 관측되지 않았다.
+분석기의 SUCCESS 숫자 가정 오류는 설치 enum97u와 원본 로그를 대조해 별도 receipt로
+해결했고 장치를 재실행하지 않았다. 실제 원본 시각 진행과 encoder nominal 변환을 확인했다.
+
+이 결과는 물리 보정·독립 stop·구동 또는 시연 수용이 아니다. 첫 작은 이동을 위해
+유한 제한 적용·초기 목표 보존·normal write 오류 전파·실물 owner/HOLD와 정지 경로를
+계속 연결한다. 실제 자동 시연은 0회다.
+[실행·실패·분석의 분리 증거](../validation/omx-native-passive-read-2026-10-16/result.md).

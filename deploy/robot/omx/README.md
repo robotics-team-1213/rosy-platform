@@ -577,3 +577,14 @@ dependencies `std_srvs` and `realtime_tools`, allowing downstream consumers to
 link its installed target. A real ROS initialization probe rejected a fixed
 nonexistent port and destructed normally; it never used a real serial port.
 See [native initialization evidence](../../../docs/validation/omx-native-init-negative-2026-10-16/result.md).
+
+`hardware-init-no-reboot.patch` additionally removes the hidden InitDxlComm fault
+reboot while preserving its error return. GPIO Reboot=0 alone did not cover it.
+The temporary Linux `probe_exclusive_open.cpp` helper checks the literal
+`ROSY_OMX_PROBE_PORT`, independently measured decimal `ROSY_OMX_PROBE_DEVICE_ID`,
+kernel exclusivity and sole fuser ownership before returning the SDK descriptor.
+It requires a non-root account; ordinary file opens use SYS_openat to avoid a
+loader-lock deadlock during ROS library constructors. It is for a bounded native
+probe, with pre/post snapshots and packet evidence, and is not an actuator runtime.
+The loaded driver must be bound to the patched artifact under the actual child
+environment. See [the actual passive-read result and failed attempts](../../../docs/validation/omx-native-passive-read-2026-10-16/result.md).

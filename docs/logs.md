@@ -8771,3 +8771,8 @@ osy-d395-s1d\`.
 - 증거: 정책 fixture host22, 실제 Jazzy runtime8·정책 transport4 통과. 신규3실패의 원인과 후속 검증을 별도 dated record에 보존했다.
 - gate 변화: 첫 실물 이동 전 초기화 자동 Reboot·read 오류의 기존 state 유지 경로 검증이 남는다. 실제 시연0회 유지.
 - 결정: D-770 후속.
+## 2026-10-16 · uncommitted · fix(omx): 자동 reboot 제거와 실제 native read
+
+- 변경: vendor InitDxlComm fault의 자동 reboot를 제거하고 임시 probe의 실제 device identity·독점 open을 검사한다. loader 교착을 실제 constructor/worker 회귀로 재현하고 SYS_openat으로 수정했다.
+- 증거: compiled init5·기존 lifecycle10시나리오, Linux PTY/loader6시험 통과. 실제 native on_init/read3/정상 소멸 exit0, 전후 torque/error0·설정 동일, goal/torque/reboot 송신 없음. 앞선 두 실패와 분석기 enum 오류도 보존했다.
+- gate 변화: 실물 구동·보정/stop 수용은 미완료, 실제 시연0회. D-770; docs/validation/omx-native-passive-read-2026-10-16/result.md.
