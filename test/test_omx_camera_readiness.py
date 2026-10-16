@@ -174,7 +174,8 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert start[start.index('--state-dir')+1] == stop[stop.index('--state-dir')+1]
     assert unit['Service']['NoNewPrivileges'] == 'true'
     assert 'rosy-omx-camera-view.service' in unit['Unit']['Requires']
-    view = configparser.ConfigParser(interpolation=None)
+    # systemd permits repeated EnvironmentFile entries; ConfigParser defaults do not.
+    view = configparser.ConfigParser(interpolation=None, strict=False)
     view.read(REPO / 'deploy/robot/omx/rosy-omx-camera-view.service')
     assert 'commissioning_view.py' in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
