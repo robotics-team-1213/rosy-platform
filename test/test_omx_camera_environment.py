@@ -102,3 +102,21 @@ def test_clock_rollback_cannot_reopen_the_write_budget(tmp_path):
     runtime.reserve_budget(tmp_path, now_ns=5_000_000_000)
     with pytest.raises(RuntimeError):
         runtime.reserve_budget(tmp_path, now_ns=4_000_000_000)
+
+
+def test_slow_application_does_not_consume_the_post_readback_cooldown():
+    plan = load('camera_environment').ExposureRecovery(dark_count=1, bright_count=1)
+    observe_many(plan, 'UNDEREXPOSED', 0)
+    plan.applied(monotonic=10, wall=1010)
+    assert observe_many(plan, 'UNDEREXPOSED', 12) is None
+    assert plan.state == 'COOLDOWN'
+
+
+def test_temporal_brightness_changes_are_held_without_claiming_flicker_detection():
+    plan = load('camera_environment').ExposureRecovery(dark_count=1, bright_count=1)
+    for index in range(8):
+        action = plan.observe('NORMAL', index/10, source_stamp=1000+index/10,
+                              intensity=50 if index % 2 else 150)
+        assert action is None
+    assert plan.condition == 'TEMPORAL_CHANGE'
+    assert not plan.snapshot()['flicker_verified']
