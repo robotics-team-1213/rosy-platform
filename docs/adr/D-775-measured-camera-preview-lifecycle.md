@@ -20,7 +20,7 @@ D-598 마커 공백 대응을 진행하도록 요청하고 설계·실행 계획
 3. 기존 calibrations 경로는 목적을 명시한 요청만 preview 기록을 다룬다. source-token
    config는 opt-in한 소비자에게 자기 preview 기록만 준다. Vision의 수치 상태 보고도
    source token에 결속한다. Fleet으로 영상·자격·파일 경로를 보내지 않는다.
-4. Vision이 현재 연결 session을 소유한다. receiver boot와 재접속을 구분하고,
+4. Vision이 현재 촬영 session을 소유한다. receiver boot·재접속·관찰한 촬영 geometry epoch를 구분하고,
    operator가 source/session/revision/촬영 조건을 명시적으로 확인한 signed lease로만
    측정 미리보기를 연다. 일반 viewer는 상태·확인된 결과만 읽는다.
 5. source/map/lens/JPEG 크기·회전이 일치해야 한다. 확인 불가능한 초점·zoom·ISP 조건은

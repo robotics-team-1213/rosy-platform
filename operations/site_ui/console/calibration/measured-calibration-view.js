@@ -53,17 +53,28 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const a = p95.valueAsNumber, b = maximum.valueAsNumber;
     return Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a ? {p95_m:a,max_m:b} : null;
   }
+  function setEnabled(control, enabled, reason) {
+    control.disabled = !enabled;
+    control.setAttribute('reason', enabled ? '' : reason);
+    control.setAttribute('title', enabled ? '' : reason);
+    control.setAttribute('aria-description', enabled ? '' : reason);
+  }
   function render() {
     const editable = operator() && !busy;
-    file.disabled = p95.disabled = maximum.disabled = !editable;
-    conditions.disabled = !editable || !record;
-    buttons.approve.disabled = !editable || !candidate || candidate.evidence_kind !== 'measured'
-      || !limits() || candidate.source_id !== source;
-    buttons.revoke.disabled = !editable || !record;
+    const editReason = busy ? '요청을 처리 중입니다.' : '이름 있는 운영자 권한이 필요합니다.';
+    for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
+    setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
+    setEnabled(buttons.approve,editable && !!candidate && candidate.evidence_kind === 'measured'
+      && !!limits() && candidate.source_id === source,
+      !editable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
+    setEnabled(buttons.revoke,editable && !!record,!editable ? editReason : '철회할 승인 기록이 없습니다.');
     const current = record && status?.calibration_revision === record.calibration_revision && status.state !== 'invalid';
-    buttons.confirm.disabled = !editable || !current || !conditions.checked;
-    buttons.read.disabled = busy || !current || auth.locked;
-    buttons.refresh.disabled = busy || !source || auth.locked;
+    setEnabled(buttons.confirm,editable && !!current && conditions.checked,
+      !editable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
+    setEnabled(buttons.read,!busy && !!current && !auth.locked,
+      auth.locked ? '먼저 로그인하세요.' : busy ? '요청을 처리 중입니다.' : '현재 교정·촬영 상태를 먼저 확인하세요.');
+    setEnabled(buttons.refresh,!busy && !!source && !auth.locked,
+      auth.locked ? '먼저 로그인하세요.' : busy ? '요청을 처리 중입니다.' : '카메라를 먼저 선택하세요.');
     const b = candidate || record?.bundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
   }
@@ -85,6 +96,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     if (body.use !== 'preview-only') throw new Error('이 서버는 실측 교정 미리보기를 지원하지 않습니다.');
     const next = body.calibrations?.find(row => row.source_id === t.source) || null;
     if (next?.calibration_revision !== record?.calibration_revision) { clearImage(); conditions.checked = false; }
+    const previousSession = status?.session_id;
     record = next; status = null;
     if (record) {
       const lease = await grant(t);
@@ -94,7 +106,8 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
       const result = await response.json(); t.check();
       if (result.source_id !== t.source) throw new Error('카메라 상태의 출처가 다릅니다.');
       status = result;
-      if (status.state === 'invalid' || status.calibration_revision !== record.calibration_revision) {
+      if (status.session_id !== previousSession || status.state === 'invalid'
+        || status.calibration_revision !== record.calibration_revision) {
         clearImage(); conditions.checked = false;
       }
     } else { clearImage(); conditions.checked = false; }
