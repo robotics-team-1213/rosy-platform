@@ -339,6 +339,6 @@
 
 - 2026-10-17 · a0a864b6ea · D-775 관련 원격 회귀와 완료 범위 확정
 - 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+- 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
+- 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 - 2026-10-16 · uncommitted · docs(vision): 실측 교정 실행 계획과 변경 전 원격 기준선
-- 2026-10-16 · uncommitted · docs(vision): 실측 입력과 기존 현장 근거의 범위 점검
-- 2026-10-16 · uncommitted · docs(vision): 실측 교정의 승인·미리보기·무효화 설계

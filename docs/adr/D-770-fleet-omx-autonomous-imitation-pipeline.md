@@ -519,3 +519,76 @@ stop 함수만의17.35ms와 전체 인계를 구분한다. 설정300ms나 all-OF
 조정을 요청했다. 그 사실 확인 전 토크를 켜지 않으며 실제 시연·IL eligible 데이터는
 계속0회다. 첫 실제 데이터셋 확보를 완료 조건으로 유지한다.
 [시간 제한·실제 결과·기구 대조·미완료 범위](../validation/omx-watchdog-deadline-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 카메라 제어 항목과 고해상도 시야 조사
+
+현재 두 V4L2 장치에는 pan/tilt/zoom control이 노출되지 않는다. 지원되는1280×720
+진단 프레임을 한 카메라씩 확보해 손끝 식별을 보완했다. 중복 capture를 막고 원본
+producer를 멈추기 전에 독립 복구 unit을 먼저 등록했다. 두 실제 촬영 뒤 원본 명령·
+환경·640×480 형식·장치별 sole producer와 ROS 소비자의 fresh frame 수신을 확인했다.
+
+영상은 넓어졌으나 집게 양쪽 tip/face와 매트·본체 사이 간격은 여전히 확정하지
+못했다. 보이는 중앙에 손/물체가 없다는 사실이나 nominal FK로 clearance를 수용하지
+않는다. 요청한 손끝 위치 설명 또는 시야 조정 확인은 아직 대기 중이다. 이번 회차는
+카메라 진단만 수행했고 robot bus/ON/goal 명령은 없다. 실제 시연·IL eligible 데이터는
+계속0회이며 첫 실제 데이터셋 확보 목표를 유지한다.
+[실제 제어 항목·프레임·복구와 남은 조건](../validation/omx-camera-clearance-2026-10-16/result.md).
+
+
+### 2026-10-16 기존 카메라 저조도 자동화 실행
+
+사용자 요청에 따라 기존 두 camera producer를 유지하며 원본 프레임 품질 측정,
+bounded V4L2 후보 자동 적용, best 설정 선택, 만료되는 readiness와 종료 후 원본 복구를
+연결했다. localhost viewer와 readiness user service를 Fleet PC에 실제 설치·활성화했다.
+두 실제 camera-only 실행과 원본 제어값 복구, 설치 후 fresh·sole producer를 확인했다.
+구형 밝기-only 판단과 uniform noise의 false pass를 회귀로 고치고 policy v2로 분리했다.
+
+자동 조정 후에도 현재 두 영상은 관측 불충분이다. photometric 조건은 물체·파지·jaw
+clearance 판독이나 motion admission이 아니다. source/원격 시험/카메라 제어/장치 구동의
+증거를 구분하며 실제 시연과 IL eligible 데이터는0회다. 실제 수집·학습의 완료 기준은 유지한다.
+[실행·설치·제한](../validation/omx-lowlight-automation-2026-10-16/result.md).
+
+
+## 2026-10-17 후속: 환경 조건을 선행 계약으로 다루는 구조
+
+사용자는 어두울 때의 보정만이 아니라 밝음·어둠 등 환경을 미리 고려하는 수집/학습 구조를
+요구했다. 지원할 환경 범위·관측 출처·시각·판정 정책·복구 한계·실제 수용 증거를 먼저 정한다.
+알 수 없는 조건을 정상으로 채우지 않으며, RGB 지표를 실제 lux나 물체 성공으로 표시하지 않는다.
+
+환경 관측, 허용 범위 판단, 제한된 복구, 기존 owner admission, 원본/환경 이력,
+에피소드 검토·분할·환경별 평가를 구분한다. 새 환경에 대응할 때 수집기마다 예외를 붙이지 않고
+해당 조건의 관측·정책·복구·수용 시험을 추가한다. 지원 환경과 미검증 환경을 함께 보고한다.
+
+| 기존 결정 | 관계 |
+|---|---|
+| D-427 | 기존 deploy/OMX 안에서 설치·카메라 상태 전이를 분리한다. Fleet/World/Decision/CORE 소유권을 옮기지 않는다. |
+| D-429 | 외부 API/DTO 변경 없이 내부 camera policy v3와 profile hash를 고정한다. 구형 판단을 혼합하지 않는다. |
+| D-430 | 환경 screening은 관절/torque 권한을 주지 않는다. 실물 admission과 stop은 기존 owner 책임이며 camera service가 우회하지 않는다. |
+
+이번 구현은 정적 image condition과 지속적인 환경 전이·양방향 노출 복구를 분리했다.
+dark/bright 후보, entry/exit 확인, 적용 완료 뒤 cooldown·host receive settling, epoch별 best,
+재시작에도 유지되는 분당 attempted batch budget과 환경 이력을 추가했다. 실제 카메라에서
+bounded16초 실행·원본 복구·기존 서비스 재시작 뒤 v3 서비스로 이전했고 원본 baseline은 보존했다.
+
+데이터에는 원본/환경 이력 hash·run/profile/rig/calibration·시간 범위와 실패·개입을 묶고,
+cycle/session 독립 분할과 환경별 실제 수량·held-out coverage를 보고해야 한다. 합성 증강을
+실제 환경 수용으로 취급하지 않는다. 현재 episode/학습 manifest binding과 수집 executor의
+환경 저하 stop 결선은 미완료다. 강조도·역광·가림·움직임·온도 등 미검증 조건은 지원으로 선언하지 않는다.
+실제 시연·IL eligible 데이터는0회이며 첫 실제 데이터셋 완료 기준을 유지한다.
+[환경 범위와 연결 계약](../plans/2026-10-17-omx-environment-readiness.md),
+[source·원격 시험·실제 camera-only 실행과 이전](../validation/omx-environment-readiness-2026-10-17/result.md).
+
+
+### 2026-10-17 불규칙 프레임 도착도 환경 조건으로 처리
+
+암실의 실제 source 간격이 불규칙해 같은 fresh frame을 여러 번 조회하는 경우를 확인했다.
+stamp·sequence·원본 품질이 같은 재조회는 WAITING_FRAME으로 분리한다. 확인/epoch/budget을
+보존하되 READY·시각 이력·best·제어를 갱신하지 않으며, 실제 만료/역행/상충 품질은 계속 거부한다.
+source rate를 poll rate나 설정 예시의10Hz로 가정하지 않는다.
+
+RED→GREEN과 실제 Chromium 포함47개 원격 검사 뒤 source를 이전했다. 기존 profile·baseline·
+rolling budget·환경 ledger를 보존했고 실제24 assessment의 역할48개에서 WAITING_FRAME35건,
+fresh false STALE0건을 확인했다. 첫 helper의 warmup receipt 조회 실패와 자동 원복도 보존했다.
+실제 시연·IL eligible 데이터는0회이며 환경 이력의 episode/학습 binding 등 완료 기준을 유지한다.
+[불규칙 도착·수정·원격 검사·실제 이전](../validation/omx-environment-frame-progress-2026-10-17/result.md).
