@@ -13,10 +13,11 @@ def test_collection_intake_real_native_split_roundtrip(tmp_path):
     assert Path(python).is_file(), 'configured LeRobot interpreter is missing'
     root = Path(__file__).resolve().parents[1]
     script = r'''
+import ast
+import hashlib
 import importlib.metadata
 import json
 from pathlib import Path
-import runpy
 import sys
 assert importlib.metadata.version('lerobot') == '0.4.4'
 repo, work = Path(sys.argv[1]), Path(sys.argv[2])
@@ -25,7 +26,11 @@ sys.path.insert(0, str(repo/'learning/training/omx'))
 from collection_intake import prepare
 from native_review import load_dataset, split_reviewed
 from native_cycle import run_cycle, validate_split
-fixture = runpy.run_path(str(repo/'learning/curation/omx/test/test_collection_intake.py'))
+source = ast.parse((repo/'learning/curation/omx/test/test_collection_intake.py').read_text())
+helpers = ast.Module(body=[node for node in source.body if isinstance(node, ast.FunctionDef)
+                          and node.name in ('raw_session', 'save_manifest')], type_ignores=[])
+fixture = dict(json=json, hashlib=hashlib)
+exec(compile(helpers, '<synthetic intake fixture>', 'exec'), fixture)
 sessions = []
 for i in range(3):
     source = work/f'raw-{i}'
