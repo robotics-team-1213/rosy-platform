@@ -27,8 +27,11 @@ def inputs():
                            environment={r: dict(condition=condition, state='OBSERVING',
                                                 environment_epoch=1, control_generation=0)
                                         for r in ('top', 'front')},
-                           observations={r: dict(fresh=True, quality=dict(
-                               policy='omx-photometric-v3', condition=condition)) for r in ('top', 'front')}))
+                           observations={r: dict(fresh=True, source_stamp=stamp/1e9, sequence=stamp,
+                                                  receipt_age_s=0., source_age_s=0., quality=dict(
+                               policy='omx-photometric-v3', condition=condition, usable=condition == 'NORMAL',
+                               mean_intensity=100., spatial_contrast=20., p5=20., p95=180.,
+                               dark_fraction=.1, clipped_fraction=.01)) for r in ('top', 'front')}))
     raw = ''.join(json.dumps(event) + '\n' for event in events).encode()
     windows = [dict(episode_index=i, start_ns=start, end_ns=end, run_id='run-1', profile_sha256='a' * 64)
                for i, (start, end) in enumerate(((90, 200), (290, 350), (400, 450)))]
@@ -132,5 +135,27 @@ def test_malformed_logs_and_windows_fail_as_value_errors(module, inputs, fault):
     if fault == 'duplicate_key': raw = raw.replace(b'"recorded_ns": 100', b'"recorded_ns": 90, "recorded_ns": 100')
     if fault == 'condition_type': raw = raw.replace(b'"condition": "NORMAL"', b'"condition": []')
     if fault == 'run_type': windows[0]['run_id'] = []
+    with pytest.raises(ValueError, match='environment'):
+        module.seal_environment(raw, windows, files, rig_revision='rig', calibration_revision='cal')
+
+
+@pytest.mark.parametrize('fault', ['missing_identity', 'bad_age', 'replayed', 'missing_metrics', 'future_stamp'])
+def test_unverifiable_fresh_flags_cannot_claim_a_known_condition(module, inputs, fault):
+    raw, windows, files = inputs
+    events = [json.loads(line) for line in raw.splitlines()]
+    item = events[1]['observations']['top']
+    if fault == 'missing_identity': del item['source_stamp']
+    if fault == 'bad_age': item['source_age_s'] = 3
+    if fault == 'replayed': item.update(source_stamp=events[0]['observations']['top']['source_stamp'], sequence=100)
+    if fault == 'missing_metrics': del item['quality']['spatial_contrast']
+    if fault == 'future_stamp': item['source_stamp'] = 10.
+    evidence = seal(module, (''.join(json.dumps(e)+'\n' for e in events).encode(), windows, files))
+    summary = bind(module, inputs, evidence)
+    assert summary['episodes'][0]['roles']['top']['image_conditions'] == {'UNDEREXPOSED': 1, 'UNKNOWN': 1}
+
+
+def test_numeric_overflow_is_not_silently_accepted_in_log(module, inputs):
+    raw, windows, files = inputs
+    raw = raw.replace(b'"mean_intensity": 100.0', b'"mean_intensity": 1e309')
     with pytest.raises(ValueError, match='environment'):
         module.seal_environment(raw, windows, files, rig_revision='rig', calibration_revision='cal')
