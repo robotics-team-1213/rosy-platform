@@ -49,7 +49,7 @@ struct DynamixelHardware : hardware_interface::SystemInterface {
 static void require(bool value, const char * message) {
   if (!value) throw std::runtime_error(message);
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv) try {
   rclcpp::init(argc, argv);
   auto executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   auto clock = std::make_shared<rclcpp::Clock>(RCL_SYSTEM_TIME);
@@ -97,4 +97,8 @@ int main(int argc, char **argv) {
   }
   rclcpp::shutdown();
   return cases == 12 ? 0 : 1;
+} catch (const std::exception & error) {
+  std::cerr << "FAIL " << error.what() << std::endl;
+  rclcpp::shutdown();
+  return 2;
 }
