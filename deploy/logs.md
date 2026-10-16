@@ -2899,3 +2899,10 @@
 - 변경: 명시한 follower ID에 OFF만 한 번 전송하고 실제 readback하는 독점 commissioning_stop을 추가했다. 디스크/ACK/cleanup 실패를 구분하고 기존 기록을 보존한다.
 - 증거: 원격 RED→GREEN92시험 NEW0; 실제 all-OFF native main SIGKILL 뒤 독립 ExecStopPost의 ID16 OFF ACK·여섯 OFF/error0·cap보존. stop trace13packet CRC/완전송신 확인; supervisor ownership 경합 RED→GREEN.
 - gate 변화: 별도 OFF 경로·토크 OFF process-death 인계 증거 추가. 실제 ON→OFF·물리 정지·국소 이동·시연수집은 미완료, 시연0회. D-770; docs/validation/omx-independent-stop-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
+
+- 변경: private powered prototype의 age-only 제한 결함을 실행 전에 확인하고 별도 all-OFF native manager watchdog fixture를 검증했다. 최신 영상과 raw snapshot의 nominal FK도 대조했다.
+- 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
+- gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
