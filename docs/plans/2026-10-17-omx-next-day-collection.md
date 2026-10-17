@@ -79,6 +79,29 @@ profile와 teacher의 canonical SHA-256은 `collection_profile.digest`로 계산
 | 기존 controller와 독립 watchdog 활성·정지 수용 | 실제 PID/start ticks, controller binary SHA-256 |
 | 기존 topic/server/publisher의 단독 소유 | ROS 배치와 기대 node/namespace |
 | 실제 촬영 주기·누락·reference/관절/카메라 시차 | fps, max_frame_jitter_s, freshness/skew 제한 |
+| 두 카메라가 발행하는 CameraInfo topic (선택) | `ros.camera_info_topics` |
+| 팔 기준 frame에서 두 카메라의 장착 위치·자세와 측정 방법 (선택) | `camera_mounts` |
+
+### World 모델 학습을 위한 기록 (선택 입력)
+
+행동 조건부 World 모델은 아직 구현 대상이 아니다(D-625 §6). 다만 다시 측정할 수 없는 값은
+첫 수집부터 남긴다. 두 입력은 선택이며 없으면 기존 원본 형식과 같다.
+
+- `ros.camera_info_topics`를 선언하면 수집기가 기존 producer의 CameraInfo를 읽기 전용으로 구독한다.
+  두 카메라 모두 수신하기 전에는 `preflight`가 `waiting for camera_info`로 멈춘다. 영상 크기와 다르거나
+  유한하지 않은 K/D/R/P는 센서 이상으로 처리한다. 값은 처음과 바뀐 시점에만 원본 `camera_info.jsonl`에
+  기록되고 manifest 해시와 intake의 `rosy_provenance` 복사에 묶인다. 발행된 모델이며 보정 검증이 아니다.
+  topic이 없으면 이 키를 지우고 진행한다. 2026-10-17 확인 기준 현장 Fleet PC의 top/front 카메라
+  publisher(`rosy-omx-camera@`)는 Image만 발행하고 CameraInfo는 발행하지 않는다(calibration unverified).
+  따라서 첫 수집에서는 이 키를 넣지 않는다. intrinsic은 체커보드 보정과 CameraInfo 발행을 별도로 수용한 뒤 켠다.
+- `camera_mounts`는 top/front 각각 `parent_frame`, `translation_m`(m, 각 축 5 m 이내),
+  `rotation_xyzw`(단위 quaternion), `method`를 적는다. profile 해시와 acceptance에 묶이고 원본
+  `profile.json`으로 보존된다. 측정하지 못했으면 키 전체를 지운다. 추정값을 넣지 않는다.
+
+검토 때 `decisions.json`의 `object_result`에 물체에 일어난 일을 적는다:
+`moved_as_intended`, `grasp_missed`, `dropped`, `displaced`, `untouched`, `unknown`(기본).
+분할 규칙과 성공 판정은 바뀌지 않는다. 실패로 제외한 episode에도 적는다. 중단된 시도는 dataset에
+들어가지 않지만 원본 RGB·관절·명령이 `rosy_provenance/`에 남으므로, 시도별로 물체 결과를 따로 메모한다.
 
 설정 예시10Hz는 측정 결과가 아니다. 허용 주기를 못 지키면 수집을 중단하며 frame 복제나 시간축
 보간으로 수량을 채우지 않는다. 실제 시각은 raw와 native dataset의 `source.*_time_ns`에도 남긴다.
@@ -175,3 +198,19 @@ python tools/remote/omx_collection_transfer.py --session <session>
 원본·사람 검토·분할·학습·processor와 모델 재적재를 각각 해시로 연결한다. 기본 첫 smoke는2step으로
 줄여 연결을 확인할 수 있으나 성능 수용은 아니다. 학습된 정책의 실물 실행은 별도 승인 모델/owner
 수용과 독립 과제 평가를 거친다. 오늘의 소프트웨어 연결과 내일의 첫 수집으로 G4를 완료하지 않는다.
+
+## World 모델 데이터·학습·평가 (D-782)
+
+BC 학습과 별도로, 실패·중단 시도를 포함한 World 모델 경로를 같은 원본에서 돌릴 수 있다. 모델 PC의 기존 분리 환경을 쓴다.
+session마다 split을 하나씩 지정하고, 같은 session을 나누지 않는다. 라벨 파일은 선택이다.
+
+```text
+<python> learning/curation/omx/world_model_dataset.py <raw-session-1> <raw-session-2> <raw-session-3> --out <새-wm-dataset> --horizon 4 --split <id1>=train --split <id2>=eval --split <id3>=test [--labels <labels.json>]
+<python> learning/training/world_model/m1_job.py <wm-dataset> --out <새-wm-run>
+<python> learning/evaluation/world_model/m1_eval.py <wm-dataset> --artifact <wm-run>/artifact.json --out <새-wm-eval>
+<python> operations/prediction/world_model/shadow.py <wm-dataset> --artifact <wm-run>/artifact.json --digest <artifact digest> --out <새-replay>
+```
+
+라벨 파일 형식은 `{"labels": [{"session_id", "cycle_id", "outcome", "object_result", "reviewer", "reason"}]}`이다.
+첫 1~5회 데이터로는 수용 기준(두 기준선 모두 승리)을 기대하지 않는다. 파이프라인이 실물 원본을 받는지 확인하는 단계다.
+검사기 판정은 기록만 하며 owner·Fleet admission에 연결되어 있지 않다.

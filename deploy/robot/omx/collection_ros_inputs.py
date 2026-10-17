@@ -12,19 +12,21 @@ def stamp(message):
 
 class RosInputs:
     def __init__(self, node, profile):
-        from sensor_msgs.msg import Image, JointState
+        from sensor_msgs.msg import CameraInfo, Image, JointState
         from control_msgs.msg import JointTrajectoryControllerState
         from dynamixel_interfaces.msg import DynamixelState
         from rclpy.qos import qos_profile_sensor_data
         self.node, self.profile = node, profile
         self.lock = threading.RLock()
         self.frames = {r: OrderedDict() for r in ('top', 'front')}
-        self.rows, self.fault, self.subscriptions = {}, None, []
+        self.rows, self.fault, self.subscriptions, self.intrinsics = {}, None, [], {}
         ros = profile['ros']
         specs = [(JointState, ros['joint_state_topic'], lambda m: self.positions('joints', m)),
                  (JointTrajectoryControllerState, ros['reference_topic'], lambda m: self.positions('reference', m)),
                  (DynamixelState, ros['hardware_topic'], self.hardware)]
         specs += [(Image, topic, lambda m, r=role: self.image(r, m)) for role, topic in ros['image_topics'].items()]
+        specs += [(CameraInfo, topic, lambda m, r=role: self.camera_info(r, m))
+                  for role, topic in ros.get('camera_info_topics', {}).items()]
         for kind, topic, callback in specs:
             def guarded(message, handler=callback):
                 try:
@@ -63,6 +65,17 @@ class RosInputs:
             while len(buffer) > 16:
                 buffer.popitem(last=False)
 
+    def camera_info(self, role, message):
+        # Recorded as published by the existing producer; a declared model, not a verified calibration.
+        height, width, _ = self.profile['camera_shapes'][role]
+        k, d, r, p = (list(message.k), list(message.d), list(message.r), list(message.p))
+        require(message.width == width and message.height == height and len(k) == 9 and len(r) == 9
+                and len(p) == 12 and all(number(v) for v in k+d+r+p), role+' camera_info layout differs')
+        with self.lock:
+            self.intrinsics[role] = dict(frame_id=message.header.frame_id, width=width, height=height,
+                                         distortion_model=message.distortion_model, d=d, k=k, r=r, p=p,
+                                         binning=[message.binning_x, message.binning_y])
+
     def hardware(self, message):
         require(list(message.id) == self.profile['ros']['motor_ids'] and message.comm_state == 0
                 and list(message.dxl_hw_state) == [0]*6
@@ -85,7 +98,10 @@ class RosInputs:
             require(0 <= now-hardware['received'] <= maximum and 0 <= wall/1e9-hardware['stamp'] <= maximum,
                     'hardware status stale/future')
             images = {r: dict(self.frames[r][environment['observations'][r]['source_stamp']]) for r in ('top', 'front')}
-        return dict(time_ns=wall, environment=environment, images=images,
+            configured = set(self.profile['ros'].get('camera_info_topics', {}))
+            require(configured <= set(self.intrinsics), 'waiting for camera_info')
+            intrinsics = {r: dict(self.intrinsics[r]) for r in sorted(configured)}
+        return dict(time_ns=wall, environment=environment, images=images, camera_info=intrinsics,
                     observation_state=normalize(joints['values'], self.profile),
                     action=normalize(reference['values'], self.profile),
                     joint_source_stamp=joints['stamp'], reference_source_stamp=reference['stamp'],

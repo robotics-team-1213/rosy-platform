@@ -12,12 +12,13 @@ Host-side replay evaluation for the learning part. The implementation is `percep
 | Directory | Purpose |
 |-----------|---------|
 | `perception/` | Road replay, fitness, and line-stop checkers (see `perception/AGENTS.md`) |
+| `world_model/` | D-782 offline acceptance of M1 world-model artifacts against hold and reach baselines (see `world_model/AGENTS.md`) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Do not add a second evaluation package beside `perception/`.
+- Do not add evaluation packages beyond `perception/` and the D-782 `world_model/`.
 - A report stays diagnostic until the child module's lineage, coverage, and device evidence say otherwise.
 - Datasets and weights stay out of this public tree.
 

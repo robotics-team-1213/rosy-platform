@@ -18,6 +18,10 @@
   "joint_names": ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"],
   "normalization": [],
   "camera_shapes": {"top": [480, 640, 3], "front": [480, 640, 3]},
+  "camera_mounts": {
+    "top": {"parent_frame": "<measured-arm-base-frame>", "translation_m": [0, 0, 0], "rotation_xyzw": [0, 0, 0, 1], "method": "<how-measured>"},
+    "front": {"parent_frame": "<measured-arm-base-frame>", "translation_m": [0, 0, 0], "rotation_xyzw": [0, 0, 0, 1], "method": "<how-measured>"}
+  },
   "ros": {
     "namespace": "/<accepted-namespace>",
     "joint_state_topic": "/<accepted-joint-state-topic>",
@@ -34,6 +38,7 @@
     "expected_torque": [true, true, true, true, true, true],
     "max_hardware_age_s": 0.25,
     "image_topics": {"top": "/top_camera/image_raw", "front": "/front_camera/image_raw"},
+    "camera_info_topics": {"top": "/top_camera/camera_info", "front": "/front_camera/camera_info"},
     "publishers": {
       "top": {"node_name": "<existing-top-producer>", "node_namespace": "/"},
       "front": {"node_name": "<existing-front-producer>", "node_namespace": "/"},
