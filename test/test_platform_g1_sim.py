@@ -168,7 +168,8 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path, monkeypatc
     assert all(index not in _owner_steps(arm) for arm in rig.arms.values())
     pair_actions = [a for a in rig.job()["step_actions"] if a["step_index"] == index]
     assert {a["status"] for a in pair_actions} <= {"WAITING", "READY"}
-    assert all(a[key] is None for a in pair_actions for key in ("action_id", "attempt_id", "grant", "claims"))
+    assert all(a[key] is None for a in pair_actions for key in ("action_id", "attempt_id", "grant"))
+    assert all(a["claims"] == [] for a in pair_actions)
     with closing(sqlite3.connect(rig.path)) as connection:
         assert connection.execute(
             "SELECT owner_id, phase, generation FROM fleet_action_claims WHERE resource_key=?",
