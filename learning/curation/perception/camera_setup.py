@@ -15,7 +15,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
 from rosy.contracts.learning.artifacts import seal
-from rosy.contracts.learning.camera_setup import MIN_MARKERS, MIN_MATCHES, MOUNT, judge, validate_reference
+from rosy.contracts.learning.camera_setup import (MIN_MARKERS, MIN_MATCHES, MOUNT, judge, pose_error,
+                                                  validate_reference)
 
 DICTIONARY = 'DICT_4X4_50'
 FEATURES = 3000
@@ -128,7 +129,7 @@ def estimate_mount(found, layout, intrinsics):
 
 
 def make_reference(frame, *, camera_role, camera_identity, fps, intrinsics, measured, guides,
-                   reference_still, created_at, created_by, method='features', layout=()):
+                   reference_still, created_at, created_by, method='features', layout=(), check_pose=None):
     """A sealed, validated reference from one frame (with every layout marker visible for ``markers``)."""
     height, width = frame.shape[:2]
     markers, estimated = [], None
@@ -153,32 +154,38 @@ def make_reference(frame, *, camera_role, camera_identity, fps, intrinsics, meas
         'width': width, 'height': height, 'fps': fps, 'intrinsics': intrinsics, 'method': method,
         'marker_dictionary': DICTIONARY if method == 'markers' else None, 'markers': markers,
         'mount': {'measured': {key: measured.get(key) for key in MOUNT}, 'estimated': estimated},
+        'check_pose': check_pose,
         'reference_still': reference_still, 'guides': guides,
         'created_at': created_at, 'created_by': created_by,
     }))
 
 
-def _unmeasurable(method, matches):
-    return {'method': method, 'matches': matches, 'px_mean': None, 'px_max': None,
+def _unmeasurable(method, matches, pose=None):
+    return {'method': method, 'matches': matches, 'pose_error_rad': pose, 'px_mean': None, 'px_max': None,
             **{key: None for key in ('d_pan_deg', 'd_tilt_deg', 'd_roll_deg', 'd_scale_pct',
                                      'd_height_cm', 'd_distance_cm')}, 'verdict': 'unmeasurable'}
 
 
-def measure(frame, reference, camera_info_sha256, still=None):
+def measure(frame, reference, camera_info_sha256, still=None, joints=None):
     """(setup check record, overlay). The overlay is ``{'homography': 3x3}`` for features or
-    ``{'detected': {id: corners}}`` for markers, for drawing only; it is not part of the record."""
+    ``{'detected': {id: corners}}`` for markers, for drawing only; it is not part of the record.
+    ``joints`` (name -> rad) is required when the reference has a check pose (wrist camera)."""
     height, width = frame.shape[:2]
     method = reference['method']
+    pose = pose_error(reference, joints)
+    if pose is not None:
+        pose = round(pose, 5)
     if (camera_info_sha256 != reference['intrinsics']['camera_info_sha256']
-            or (width, height) != (reference['width'], reference['height'])):
-        return _unmeasurable(method, 0), {}
+            or (width, height) != (reference['width'], reference['height'])
+            or (pose is not None and pose > reference['check_pose']['tolerance_rad'])):
+        return _unmeasurable(method, 0, pose), {}
     if method == 'features':
         if still is None or still.shape[:2] != frame.shape[:2]:
             raise ValueError('features check needs the reference still at the frame size')
         metrics, h = match_features(still, frame, reference['intrinsics'])
         if metrics is None:
-            return _unmeasurable(method, h), {}
-        record = {'method': method, **metrics, 'd_height_cm': None, 'd_distance_cm': None}
+            return _unmeasurable(method, h, pose), {}
+        record = {'method': method, **metrics, 'pose_error_rad': pose, 'd_height_cm': None, 'd_distance_cm': None}
         record['verdict'] = judge(record, width, height)
         return record, {'homography': np.round(h, 8).tolist()}
     found = detect(frame)
@@ -186,18 +193,18 @@ def measure(frame, reference, camera_info_sha256, still=None):
     current = estimate_mount(found, layout, reference['intrinsics'])
     overlay = {'detected': {str(i): np.round(c, 2).tolist() for i, c in found.items()}}
     if current is None:
-        return _unmeasurable(method, len(layout)), overlay
+        return _unmeasurable(method, len(layout), pose), overlay
     errors = np.concatenate([np.linalg.norm(found[m['id']] - np.array(m['corners_px']), axis=1) for m in layout])
     estimated = reference['mount']['estimated']
     delta = {key: current[key] - estimated[key] for key in MOUNT}
     delta['pan_deg'] = (delta['pan_deg'] + 180) % 360 - 180
-    record = {'method': method, 'matches': len(layout), 'px_mean': round(float(errors.mean()), 3),
+    record = {'method': method, 'matches': len(layout), 'pose_error_rad': pose, 'px_mean': round(float(errors.mean()), 3),
               'px_max': round(float(errors.max()), 3), 'd_scale_pct': None,
               **{'d_' + key: round(v, 3) for key, v in delta.items()}}
     record['verdict'] = judge(record, width, height)
     return record, overlay
 
 
-def check(frame, reference, camera_info_sha256, still=None):
-    """One setup check record (``rosy`` Episode ``provenance.camera.setup.before``/``after`` shape)."""
-    return measure(frame, reference, camera_info_sha256, still)[0]
+def check(frame, reference, camera_info_sha256, still=None, joints=None):
+    """One setup check record (Episode ``provenance.camera.setup.before``/``after`` shape)."""
+    return measure(frame, reference, camera_info_sha256, still, joints)[0]

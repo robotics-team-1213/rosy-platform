@@ -60,7 +60,7 @@ def still(state, revision):
 
 
 def create(state, body, actor):
-    _fields(body, 'image_jpeg camera_role camera_identity fps intrinsics method layout measured guides')
+    _fields(body, 'image_jpeg camera_role camera_identity fps intrinsics method layout measured guides check_pose')
     if body['method'] not in ('features', 'markers'):
         raise ValueError('method must be features or markers')
     if not isinstance(body['measured'], dict) or not set(body['measured']) <= set(MOUNT):
@@ -69,7 +69,7 @@ def create(state, body, actor):
     doc = camera_setup.make_reference(
         frame, camera_role=body['camera_role'], camera_identity=body['camera_identity'], fps=body['fps'],
         intrinsics=body['intrinsics'], method=body['method'], layout=body['layout'], measured=body['measured'],
-        guides=body['guides'],
+        guides=body['guides'], check_pose=body['check_pose'],
         reference_still=hashlib.sha256(raw).hexdigest(),
         created_at=datetime.now(timezone.utc).isoformat(timespec='seconds'), created_by=actor or 'local-unidentified')
     root = _root(state)
@@ -82,11 +82,11 @@ def create(state, body, actor):
 
 
 def check(state, body):
-    _fields(body, 'reference_revision image_jpeg camera_info_sha256')
+    _fields(body, 'reference_revision image_jpeg camera_info_sha256 joints')
     reference = load(state, body['reference_revision'])
     _, frame = _image(body)
     reference_still = cv2.imdecode(np.frombuffer(still(state, reference['revision']), np.uint8), cv2.IMREAD_COLOR)
-    record, overlay = camera_setup.measure(frame, reference, body['camera_info_sha256'], reference_still)
+    record, overlay = camera_setup.measure(frame, reference, body['camera_info_sha256'], reference_still, body['joints'])
     return {'check': record, **overlay}
 
 

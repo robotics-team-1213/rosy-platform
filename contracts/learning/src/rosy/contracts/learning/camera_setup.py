@@ -2,6 +2,8 @@
 
 Two methods: ``features`` (default, no markers: static scene features of the reference still)
 and ``markers`` (optional DICT_4X4_50 work-surface markers, adds height and distance in cm).
+An arm-mounted camera (the OMX wrist camera) moves with the arm, so its reference carries a
+``check_pose`` and a check is measured only with the arm back at that pose.
 """
 import math
 
@@ -20,8 +22,10 @@ PX_MEAN, PX_MAX, DEG, CM, SCALE_PCT = 3.0, 6.0, 1.0, 0.5, 1.0
 # Tape and inclinometer against marker estimate; a larger gap means the layout or the tape is wrong.
 AGREE_CM, AGREE_DEG = 2.0, 3.0
 _DIAGONAL = math.hypot(640, 480)
-CHECK = ("method", "matches", "px_mean", "px_max", "d_pan_deg", "d_tilt_deg", "d_roll_deg",
+CHECK = ("method", "matches", "pose_error_rad", "px_mean", "px_max", "d_pan_deg", "d_tilt_deg", "d_roll_deg",
          "d_scale_pct", "d_height_cm", "d_distance_cm", "verdict")
+# 0.01 rad at a 0.2 m lever is 2 mm at the wrist, below the 3 px screen-shift limit at wrist range.
+POSE_TOLERANCE = (0.001, 0.05)
 
 
 def _num(value, low=-math.inf, high=math.inf):
@@ -68,7 +72,7 @@ def validate_reference(doc):
     """Verify one sealed ``rosy.camera-setup-reference/1`` and return it."""
     value = _base(doc, "rosy.camera-setup-reference/1",
                   "camera_role camera_identity width height fps intrinsics method marker_dictionary "
-                  "markers mount reference_still guides created_at created_by")
+                  "markers mount check_pose reference_still guides created_at created_by")
     for key in ("camera_role", "camera_identity", "created_at", "created_by"):
         _text(value[key])
     width, height = value["width"], value["height"]
@@ -109,6 +113,19 @@ def validate_reference(doc):
                 raise ValueError(f"measured {key} disagrees with the marker estimate")
     elif value["marker_dictionary"] is not None or markers or mount["estimated"] is not None:
         raise ValueError("a features reference carries no markers and no estimated mount")
+    pose = value["check_pose"]
+    if pose is not None:
+        _fields(pose, "joint_names positions_rad tolerance_rad")
+        names, positions = pose["joint_names"], pose["positions_rad"]
+        if not isinstance(names, list) or not names or len(names) != len(set(names)):
+            raise ValueError("check pose needs unique joint names")
+        for name in names:
+            _text(name)
+        if not isinstance(positions, list) or len(positions) != len(names):
+            raise ValueError("check pose needs one position per joint")
+        for v in positions:
+            _num(v, -2 * math.pi, 2 * math.pi)
+        _num(pose["tolerance_rad"], *POSE_TOLERANCE)
     _hash(value["reference_still"])
     if not isinstance(value["guides"], list):
         raise ValueError("guides must be a list")
@@ -151,7 +168,9 @@ def _check(value):
         raise ValueError("matches must be a nonnegative integer")
     if value["verdict"] not in VERDICTS:
         raise ValueError("unknown setup verdict")
-    numbers = [key for key in CHECK if key not in ("method", "matches", "verdict")]
+    if value["pose_error_rad"] is not None:
+        _num(value["pose_error_rad"], 0)
+    numbers = [key for key in CHECK if key not in ("method", "matches", "pose_error_rad", "verdict")]
     if value["verdict"] == "unmeasurable":
         if any(value[key] is not None for key in numbers):
             raise ValueError("an unmeasurable check carries no measurements")
@@ -177,3 +196,18 @@ def validate_setup(value):
     if value["mode"] == "enforce" and value["before"]["verdict"] != "ok":
         raise ValueError("enforce mode cannot record an Episode started without an ok check")
     return value
+
+
+def pose_error(reference, joints):
+    """Largest joint difference from the reference check pose in rad; None for a fixed camera.
+
+    ``joints`` maps joint name to the current readback in rad. A missing joint raises: an
+    arm-mounted check without the arm's own readback cannot say where the camera looked."""
+    pose = reference["check_pose"]
+    if pose is None:
+        return None
+    if not isinstance(joints, dict) or any(name not in joints for name in pose["joint_names"]):
+        raise ValueError("arm-mounted camera check needs the current joint readback")
+    for name in pose["joint_names"]:
+        _num(joints[name])
+    return max(abs(joints[n] - p) for n, p in zip(pose["joint_names"], pose["positions_rad"]))

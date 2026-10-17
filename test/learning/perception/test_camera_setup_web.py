@@ -20,7 +20,7 @@ def _jpeg(frame):
 
 def body(image, method='features', layout=(), **extra):
     return {'image_jpeg': image, 'camera_role': 'front', 'camera_identity': 'omx-front-usb-1', 'fps': 30,
-            'intrinsics': K, 'method': method, 'layout': list(layout), 'measured': {}, 'guides': [], **extra}
+            'intrinsics': K, 'method': method, 'layout': list(layout), 'measured': {}, 'guides': [], 'check_pose': None, **extra}
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_features_reference_check_and_still_round_trip(app):
 
     def check(frame):
         return call('/api/learning/camera/check', {'reference_revision': doc['revision'], 'image_jpeg': _jpeg(frame),
-                                                   'camera_info_sha256': K['camera_info_sha256']})
+                                                   'camera_info_sha256': K['camera_info_sha256'], 'joints': None})
     same = check(scene())
     assert same['check']['verdict'] == 'ok' and len(same['homography']) == 3
     moved = check(rotate(scene(), pan=1.0))
@@ -81,7 +81,7 @@ def test_markers_reference_reports_centimetres(app):
     assert doc['mount']['estimated']['height_cm'] == pytest.approx(45.0, abs=0.5)
     lower = _jpeg(_render(centre=[0.0, -40.0, 43.0], target=[0.0, 15.0, 0.0]))
     moved = call('/api/learning/camera/check', {'reference_revision': doc['revision'], 'image_jpeg': lower,
-                                                'camera_info_sha256': K['camera_info_sha256']})
+                                                'camera_info_sha256': K['camera_info_sha256'], 'joints': None})
     assert moved['check']['verdict'] == 'adjust' and sorted(moved['detected']) == ['0', '1', '2', '3']
     assert moved['check']['d_height_cm'] < -1
 

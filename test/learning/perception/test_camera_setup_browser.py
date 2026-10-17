@@ -48,7 +48,7 @@ def test_camera_page_checks_a_photo_against_the_reference(tmp_path, width, heigh
                 page.locator('#check-form button[type=submit]').click()
                 expect(page.locator('#verdict')).to_contain_text('맞음', timeout=15000)
                 expect(page.locator('#verdict')).to_have_attribute('state', 'ready')
-                expect(page.locator('#numbers dt')).to_have_count(9)
+                expect(page.locator('#numbers dt')).to_have_count(10)
 
                 page.set_input_files('#check-photo', str(moved))
                 page.locator('#check-form button[type=submit]').click()

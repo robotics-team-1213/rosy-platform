@@ -366,8 +366,8 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 |---|---|---|
 | GET | `/api/learning/camera/references` | `references`: 최신순 촬영 기준 전체 |
 | GET | `/api/learning/camera/stills/<revision>` | 기준 사진 JPEG |
-| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `method`(`features`·`markers`), `layout`(`features`는 `[]`), `measured`, `guides`; 협업 모드는 다른 `/api/learning/` 쓰기와 같이 `manage` 권한 |
-| POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256` → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `features`는 `homography`(기준→지금 3×3), `markers`는 `detected`(마커 ID별 꼭짓점 픽셀) |
+| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `method`(`features`·`markers`), `layout`(`features`는 `[]`), `measured`, `guides`, `check_pose`(손목 카메라만, 나머지는 null); 협업 모드는 다른 `/api/learning/` 쓰기와 같이 `manage` 권한 |
+| POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256`, `joints`(기준에 확인 자세가 있으면 관절 이름→rad, 아니면 null) → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `features`는 `homography`(기준→지금 3×3), `markers`는 `detected`(마커 ID별 꼭짓점 픽셀) |
 
 화면은 기준의 안쪽 틀·가이드·마커를 점선으로, 같은 윤곽의 지금 위치(호모그래피로 옮긴 것 또는 검출한 마커)를 실선으로 그리고 기준에서 현재로 가는 화살표를 그린다. 맞춘 특징점이 150개 미만이면 측정 불가다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.
 

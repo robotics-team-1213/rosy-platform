@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contracts/learning/src"))
 from rosy.contracts.learning.artifacts import seal
-from rosy.contracts.learning.camera_setup import judge, validate_reference, validate_setup
+from rosy.contracts.learning.camera_setup import judge, pose_error, validate_reference, validate_setup
 
 MOUNT = {"height_cm": 45.0, "distance_cm": 40.0, "tilt_deg": 39.3, "pan_deg": 90.0, "roll_deg": 0.0}
 MARKERS = [{"id": i, "size_cm": 6.0, "center_cm": [x, 0.0],
@@ -24,6 +24,7 @@ def reference(method="markers", **measured):
         "method": method, "marker_dictionary": "DICT_4X4_50" if markers else None,
         "markers": MARKERS if markers else [],
         "mount": {"measured": {**dict.fromkeys(MOUNT), **measured}, "estimated": MOUNT if markers else None},
+        "check_pose": None,
         "reference_still": "d" * 64,
         "guides": [{"kind": "edge", "label": "table front", "points": [[0, 400], [640, 400]], "closed": False}],
         "created_at": "2026-10-18T09:00:00+09:00", "created_by": "operator",
@@ -37,7 +38,7 @@ def check(verdict="ok", method="features", **values):
                "d_distance_cm": None if method == "features" else 0.0}
     if verdict == "unmeasurable":
         numbers = dict.fromkeys(numbers)
-    return {"method": method, "matches": 400, **numbers, **values, "verdict": verdict}
+    return {"method": method, "matches": 400, "pose_error_rad": None, **numbers, **values, "verdict": verdict}
 
 
 def test_sealed_references_round_trip_and_tampering_fails():
@@ -63,7 +64,8 @@ def test_measured_mount_must_agree_with_the_marker_estimate():
 
 
 def test_judge_thresholds_scale_with_resolution_and_skip_unmeasured():
-    ok = {k: v for k, v in check().items() if k not in ("method", "matches", "verdict")} | {"px_mean": 2.5, "px_max": 5.0}
+    ok = {k: v for k, v in check().items() if k not in ("method", "matches", "pose_error_rad", "verdict")} | {
+        "px_mean": 2.5, "px_max": 5.0}
     assert judge(ok, 640, 480) == "ok"
     assert judge(ok, 320, 240) == "adjust"  # the same pixels are twice as large at half resolution
     assert judge(ok, 1280, 960) == "ok"
@@ -88,3 +90,20 @@ def test_episode_setup_record():
         validate_setup({**record, "before": check("ok", "markers", d_scale_pct=0.0)})
     with pytest.raises(ValueError, match="enforce mode"):
         validate_setup({**record, "before": check("adjust"), "mode": "enforce"})
+
+
+def test_wrist_reference_has_a_bounded_check_pose():
+    pose = {"joint_names": ["joint1", "joint2"], "positions_rad": [0.1, -0.4], "tolerance_rad": 0.01}
+    doc = seal({**reference("features"), "camera_role": "front", "check_pose": pose})
+    assert validate_reference(doc) == doc
+    assert pose_error(doc, {"joint1": 0.1, "joint2": -0.43, "joint3": 9.0}) == pytest.approx(0.03)
+    assert pose_error(reference("features"), None) is None
+    with pytest.raises(ValueError, match="joint readback"):
+        pose_error(doc, {"joint1": 0.1})
+    for bad, message in [({**pose, "tolerance_rad": 0.2}, "finite number"),
+                         ({**pose, "positions_rad": [0.1]}, "one position per joint"),
+                         ({**pose, "joint_names": ["joint1", "joint1"]}, "unique joint names")]:
+        with pytest.raises(ValueError, match=message):
+            validate_reference(seal({**doc, "check_pose": bad}))
+    record = {"reference_revision": "a" * 64, "before": check(pose_error_rad=0.004), "after": None, "mode": "shadow"}
+    assert validate_setup(record) == record

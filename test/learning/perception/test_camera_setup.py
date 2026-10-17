@@ -178,3 +178,19 @@ def test_reference_refuses_a_hidden_layout_marker():
     frame[:, :200] = 255
     with pytest.raises(ValueError, match='does not show markers'):
         camera_setup.make_reference(frame, method='markers', layout=LAYOUT, measured={}, **COMMON)
+
+
+WRIST_POSE = {'joint_names': ['joint1', 'joint2', 'joint3', 'joint4', 'joint5'],
+              'positions_rad': [0.0, -0.6, 0.3, 1.2, 0.0], 'tolerance_rad': 0.01}
+
+
+def test_wrist_camera_is_checked_only_at_its_check_pose():
+    ref = camera_setup.make_reference(scene(), measured={}, check_pose=WRIST_POSE, **{**COMMON, 'camera_role': 'front'})
+    at_pose = dict(zip(WRIST_POSE['joint_names'], WRIST_POSE['positions_rad']))
+    result = camera_setup.check(scene(), ref, 'c' * 64, scene(), at_pose)
+    assert result['verdict'] == 'ok' and result['pose_error_rad'] == 0
+    # Same picture, arm elsewhere: the comparison would be meaningless, so it is not made.
+    result = camera_setup.check(scene(), ref, 'c' * 64, scene(), {**at_pose, 'joint4': 1.25})
+    assert result['verdict'] == 'unmeasurable' and result['pose_error_rad'] == pytest.approx(0.05)
+    with pytest.raises(ValueError, match='joint readback'):
+        camera_setup.check(scene(), ref, 'c' * 64, scene())

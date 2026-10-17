@@ -50,6 +50,7 @@ ACT 같은 모방학습 정책은 학습 때 본 카메라 시점에 강하게 �
 | 식별 | `camera_role`, `camera_identity`, `width`, `height`, `fps` | 녹화 장치. Episode `provenance.camera`와 같은 값 |
 | 내부 교정 | `intrinsics`(`camera_info_sha256`, `revision`, `k`, `dist`) | 측정 교정 소유자(D-633·D-775). 이 ADR은 값을 만들지 않고 복사해 지문으로 묶는다. `features`도 각도 환산에 `k`를 쓴다 |
 | 방식 | `method`: `features`(기본) 또는 `markers` | 기준을 만드는 사람 |
+| 확인 자세 | `check_pose`: 팔에 달린 카메라(OMX `front` 손목)만, 관절 이름·각도(rad)·허용치. 고정 카메라는 null | 기준 사진을 찍을 때의 관절 readback |
 | 실측 장착 | `mount.measured`: `height_cm`(작업면에서 렌즈 중심까지), `distance_cm`(작업대 원점에서 렌즈까지 수평), `tilt_deg`, `pan_deg`, `roll_deg`. 모르는 값은 null | 사람이 줄자·수평계로 잰 값 |
 | 추정 장착 | `mount.estimated`: 같은 다섯 값. `features`는 null | `markers`만 기준 마커로 계산한다(solvePnP) |
 | 기준 화면 | `reference_still`(JPEG 한 장의 SHA-256), `marker_dictionary`·`markers`(`markers`만, ID별 네 꼭짓점 픽셀), `guides`(작업면 가장자리·작업 구역 다각형·물체 윤곽선, 픽셀 좌표) | 기준을 만들 때 찍은 한 장과 사람이 확인한 윤곽. 물체 윤곽은 픽셀 검수 마스크에서 가져오거나 손으로 그린다 |
@@ -58,6 +59,7 @@ ACT 같은 모방학습 정책은 학습 때 본 카메라 시점에 강하게 �
 - `features` 기준 사진은 특징점이 500개 이상이어야 한다. 비어 있거나 어두운 사진으로 만든 기준은 이후 모든 판정을 `측정 불가`로 만들기 때문이다. 기준은 조명이 켜진 조건에서 만든다.
 - `markers`는 실측과 추정을 둘 다 남긴다. 차이가 2 cm·3°를 넘으면 줄자 기록이나 마커 배치 중 하나가 틀린 것이므로 기준을 거절한다. OpenCV 4.6 ArUco 파라미터 segfault(`docs/solutions/runtime-errors/opencv-4-6-aruco-detector-parameters-segfault-2026-09-24.md`)를 피하는 기존 방식을 따른다.
 - 카메라를 일부러 옮기면 새 기준을 만든다. 이전 기준은 지우지 않는다.
+- **팔에 달린 카메라는 확인 자세에서만 판정한다.** 2026-10-16 보존 프레임(`~/rosy-test/omx-camera-hires-033ab57d1/` on Fleet)으로 확인하면 OMX `top`은 두 팔과 매트 전체를 보는 작업대 고정 카메라이고, `front`는 그리퍼 바로 위에서 매트를 내려다보는 손목 카메라다(양쪽 집게 손가락이 화면에 보인다). 손목 카메라는 팔 자세가 바뀌면 화면 전체가 바뀌므로 그대로 비교하면 의미가 없다. 그래서 팔에 달린 카메라의 기준은 `check_pose`(`joint_names`, `positions_rad`, `tolerance_rad` 0.001–0.05, 기본 0.01)를 가진다. 판정은 지금 관절 readback을 함께 받고, 가장 큰 관절 차이가 허용치를 넘으면 사진을 비교하지 않고 `측정 불가`로 두며 그 차이를 `pose_error_rad`에 남긴다. readback이 없으면 판정을 거절한다. 0.01 rad는 0.2 m 팔 길이에서 손목 2 mm이며 화면 이동 기준보다 작다. 이것이 보는 것은 브래킷이 그리퍼에 같은 자리로 붙어 있는지다. 고정 카메라는 `check_pose`가 null이다.
 
 ### 3. 카메라 맞춤 화면: 점선 가이드
 
@@ -100,7 +102,7 @@ ACT 같은 모방학습 정책은 학습 때 본 카메라 시점에 강하게 �
 ```json
 {
   "reference_revision": "<sha256>",
-  "before": {"method": "features", "matches": 1584, "px_mean": 2.1, "px_max": 3.4,
+  "before": {"method": "features", "matches": 1584, "pose_error_rad": null, "px_mean": 2.1, "px_max": 3.4,
              "d_pan_deg": 0.1, "d_tilt_deg": 0.6, "d_roll_deg": -0.2, "d_scale_pct": 0.3,
              "d_height_cm": null, "d_distance_cm": null, "verdict": "ok"},
   "after": {"...": "같은 모양"},
