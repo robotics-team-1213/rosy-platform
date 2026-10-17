@@ -108,7 +108,8 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-approve').click()
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('저장')")
         assert page.locator('#measured-confirm').is_disabled()
-        page.locator('#measured-conditions').check()
+        page.locator('#measured-conditions').hover()
+        page.mouse.down()
         state['hold'] = True
         with page.expect_request('**/measured-status'):
             pass  # Hold the scheduled read without racing its disabled refresh button.
@@ -116,6 +117,9 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         expect(page.locator('#measured-read')).to_be_disabled()
         expect(page.locator('#measured-revoke')).to_be_disabled()
         assert state['pending']
+        page.mouse.up()
+        expect(page.locator('#measured-conditions')).to_be_checked()
+        expect(page.locator('#measured-conditions')).to_be_enabled()
         state['hold'] = False
         for pending in state['pending']:
             pending.fulfill(status=200, json=status('ceiling_north'))
