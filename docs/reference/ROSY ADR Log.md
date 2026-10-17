@@ -791,6 +791,7 @@
 | D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
 | D-792 | Rosy Learning(학습 관리 센터) 이름과 모방학습 화면 — 카메라 촬영 기준을 점선 가이드로 재현하고 녹화 전에 확인한다 | Proposed |
 | D-794 | OMX 카메라 역할 — top은 작업대 고정, front는 손목; wrist 이름으로 단계 이행하고 학습은 두 카메라를 쓴다 | Proposed |
+| D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
