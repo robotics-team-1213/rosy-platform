@@ -8858,6 +8858,7 @@ osy-d395-s1d\`.
 - 변경: private powered prototype의 age-only 제한 결함을 실행 전에 확인하고 별도 all-OFF native manager watchdog fixture를 검증했다. 최신 영상과 raw snapshot의 nominal FK도 대조했다.
 - 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
 - gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
+
 ## 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
 
 - 변경: 팀 가이드의 개인 클론·실험실 공유 체크아웃 범위를 구분하고, 기존 기여 안내의 시험 PC 접속 불가 훅 예외를 반영했다. 이슈의 담당 경로·완료 조건·의존 PR, 동시 수정 조율, 교대 기록을 안내하고 작업·버그 이슈 양식을 추가했다. PR 양식은 검증 SHA·실행 위치·미실행 검사·후속 작업을 기록한다. 다른 클론의 ADR 선점이 공유되지 않는 한계도 명시했다.
@@ -8871,6 +8872,20 @@ osy-d395-s1d\`.
 - 근거: main-protection ruleset 24502267의 갱신 응답에서 사람 승인 0, 필수 ci-result, PR 요구와 관리자 우회의 PR 제한을 확인했다. 검토 에이전트를 GitHub의 다른 사람 승인으로 가장하지 않는다.
 - 검증: 문서·규칙 일치와 독립 검토, 커밋된 문서 계약 시험 결과는 이 브랜치의 PR에 기록한다. 진행 중인 기존 modules CI 실패 수정은 PR #55가 맡는다.
 - gate 변화: 운영 절차와 현재 서버 설정을 일치시켰다. merge queue·auto-merge·로컬 착지 도구의 PR 전환은 미적용이다.
+
+## 2026-10-16 · uncommitted · docs(omx): 고해상도 시야와 원본 preview 복구 검증
+
+- 변경: 실제 camera controls/formats를 조사하고 두1280×720 진단 프레임으로 손끝 시야를 보완했다. 독립 복구를 먼저 등록한 단일 capture 절차를 사용했다.
+- 증거: 두 역할 실제 촬영·원본 unit 명령/환경 유지·MJPEG640×480 복구·장치별 sole producer·소비자 fresh frame. 실제 장치에 PTZ control 없음. private 복구 순서 검사 RED→GREEN.
+- gate 변화: 고해상도에서도 jaw clearance는 미확정이며 위치/시야 확인 응답 대기. robot bus/ON/goal 실행 없음, 실제 시연0회. D-770; docs/validation/omx-camera-clearance-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · feat(omx): 기존 카메라 저조도 자동 조정과 품질 관측
+
+- 변경: 기존 producer 위에 원본 프레임 photometric 검사·bounded 제어 후보·best 선택·웹 표시·독립 복구를 연결하고 Fleet user service로 설치했다.
+- 증거: RED→GREEN 및6596cf3f6 관련 원격88개 통과(실제 Chromium 포함), 실제 두 camera-only 실행·원본값 readback 복구·enabled/active·fresh·sole producer. 독립 source 리뷰 완료.
+- gate 변화: 자동 카메라 관측 경로 설치. 현재 암실은 INSUFFICIENT이며 motion admission·집게 clearance·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-lowlight-automation-2026-10-16/result.md.
+
 
 ## 2026-10-17 · uncommitted · docs: 간결한 문서와 단일 기준을 정하고 협업 안내에 적용
 
@@ -8927,3 +8942,43 @@ osy-d395-s1d\`.
 - 변경: PR #81의 squash 커밋 하나만 원본 검토 head와 연결하는 이력 예외를 추가했다. 제품 코드·안전 분류·검사 조건은 바꾸지 않았다.
 - 증거: /root/review_safety_merge 독립 읽기 전용 검토에서 안전 경로 10개가 원본 head와 동일하고 원본 안전 커밋 3개의 검토 trailer가 존재함을 확인했다. 기존 실패 범위의 safety-review 정적 재현 후 수정 결과와 GitHub CI를 확인한다. 원격 시험 PC는 사용자 지시에 따라 생략한다.
 - gate 변화: 없음. 안전 검토 출처 메타데이터만 복구하며 ROS-SIM·DEVICE·FIELD 수용을 새로 인정하지 않는다.
+## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
+
+- 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
+- 증거: 초기 환경 회귀 RED→GREEN, 느린 적용 cooldown RED→GREEN, d9d06a48d 관련103개(실제 Chromium 포함)·62f94db6b 통합 묶음34개 원격 통과. 실제 bounded16초·assessment60개·원본 복구·기존 서비스 재시작·v3 설치/활성화·sole producer 확인, 독립 리뷰.
+- gate 변화: 지속적인 카메라 환경 관측/복구 설치. 암실 pair readiness0회이며 강조도/역광 실물 수용·실제 episode 환경 binding·수집 stop 결선·시연/실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-readiness-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
+
+- 변경: 실제 암실의 불규칙 source 간격을 확인하고 같은 원본의 fresh 재조회를 WAITING_FRAME으로 분리했다. 확인/epoch/budget 보존과 READY/제어 갱신 거부를 함께 유지했다.
+- 증거: 반복 frame·확인 보존 RED2건과 상충 품질 RED→GREEN, c6c9366d8 관련47개 원격 통과(실제 Chromium 포함). 실제24 assessment/역할48개에서 WAITING_FRAME35·fresh false STALE0, 동일 profile·baseline·budget·ledger 보존. 첫 helper 실패/자동 원복도 보존.
+- gate 변화: 불규칙 프레임 관측 경로 보완. 강조도 현장 수용·episode 환경 binding·수집 stop·실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-frame-progress-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
+
+- 변경: 원본 JSONL·SHA·episode host-clock 창·run/profile·데이터 hash·rig/보정을 bind하고 split/학습/별도 reload에서 재검증한다. 실패/exclude와 미관측을 남기며 sparse 이벤트를 연속 수용으로 해석하지 않는다. legacy 보고서는 명시적 unrecorded로 분할한다.
+- 증거: 경계/영상 metadata RED→GREEN, 7260e1563 관련82개 원격 통과. 0a9954c5f9 Model PC 실제 LeRobot 합성12frame·CLI seal·독립 train/eval/test·ACT2step·별도 model/pre/post reload1개 통과(skip0). 기본 venv 경로의 앞선1skip은 별도 보존. 실제 닫힌 camera-only 원본82015bytes/37event hash와 형식 검증, 원본 불변. 독립 리뷰 P2 두 건 수정 후 남은 material finding 없음.
+- gate 변화: offline 환경 provenance 연결. 실제 recorder 창 발행·환경 저하 owner stop·강조도 현장 수용·실제 시연/학습은 미완료이며 실제 시연0회. docs/validation/omx-environment-lineage-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+
+- 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
+- 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
+- gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
+
+
+## 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
+
+- 변경: 필수 실행 env·ROS setup/domain·새 OUTPUT 규칙과 첫 현장 기록지를 준비했다. gitignored private 재개 묶음은 수집 비활성 상태의 환경 준비/고립 거부 검사, passive 카메라/ROS 진단과 모델 진입점/공간 점검을 제공한다.
+- 증거: Bash/Python 문법 검사 통과. Fleet/모델 SSH banner 시간 초과, AI 직접 TCP 시간 초과, 모델/AI Tailscale offline. Fleet 직접 접속도 완료되지 않음. 원격 준비 미실행이며 기존 배치 성공과 구분한다. docs/validation/omx-remaining-preparation-2026-10-17/result.md.
+- gate 변화: 없음. 신규 원격 실행 검증·실물 구동/측정·실제 시연/학습은 미완료, 실제 시연0회. D-770 Proposed 유지.
+
+
+## 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
+
+- 변경: 최초 실패 이후 원격 재시도 성공을 별도 follow-up에 기록하고 실행 안내의 현재 상태를 갱신했다. Fleet 실제 collection env 설치·고립 비활성 launcher 거부·inactive, 모델 help/소스 무결성/수신 경로·free195672408064bytes 확인.
+- 증거: 양쪽 준비 묶음 exit0. 원격 문서 계약142pass, 기존 camera source7pass, NEW0. 모델 helper source 검증 순서·고정 로그 경로를 수정하고 최종 독립 리뷰 material finding0건. docs/validation/omx-remaining-preparation-2026-10-17/follow-up.md.
+- gate 변화: 구동 없는 실행 환경 준비 완료. 두 외장 camera stable by-id 장치 부재, 신규 영상0frame/STALE로 수집 차단. 실제 재연결·실측/물리 정지·시야/하중 수용·시연/실데이터 학습은 미완료, 실제 시연0회. D-770 Proposed 유지.

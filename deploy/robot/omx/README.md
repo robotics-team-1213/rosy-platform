@@ -667,3 +667,91 @@ before an independent `ExecStopPost` invoked the helper for the gripper. Actual
 OFF acknowledgment and all-six OFF/error-free readback passed. This verifies
 process-death handover while unpowered; a powered stop remains unverified.
 See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).
+## Environment-aware camera readiness
+
+`rosy-omx-camera-view.service` subscribes to the existing camera topics and serves
+the original frames and their quality on localhost port8767. It opens no camera
+device. `rosy-omx-camera-readiness.service` reads that viewer and adjusts only
+V4L2 controls of the already selected, single-owner camera devices.
+
+Copy `camera-readiness.json.example` to the private
+`~/.config/rosy/omx-camera-readiness.json`, replacing both identities with the
+existing camera configuration's persistent paths. The candidates are examples
+for the measured cameras, not universal camera defaults. The tuner checks the
+actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
+in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
+`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, and `camera_readiness.py` from the
+same revision. Keep the existing two preview environment files and producers.
+
+Install the two user units in `~/.config/systemd/user/`, then run:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now rosy-omx-camera-readiness.service
+```
+
+The readiness unit starts the read-only viewer and its existing preview
+dependencies. It writes baseline, attempted/applied settings and a current
+`readiness.json` under `~/.local/state/rosy/omx-camera-environment/`. Control writes
+start only after durable originals, measured control-range checks, and fresh
+advancing frames. Candidates settle before assessment. Both cameras require
+three confirmations; the receipt expires after750ms. A consumer must check the
+expiry, profile hash and current policy as well as `photometric_ready`.
+
+The web view shows brightness/contrast status on each frame. Use an SSH localhost
+forward to port8767; do not expose it publicly. An `INSUFFICIENT` assessment is a
+valid automatic outcome, not permission to ignore missing scene information.
+Bright gain noise can still pass a simple photometric screen; independent object,
+jaw clearance, calibration and motion-owner checks remain necessary.
+
+`systemctl --user stop rosy-omx-camera-readiness.service` restores the original
+camera controls. Both process cleanup and independent `ExecStopPost` attempt
+restoration. A changed profile requires a new state directory after confirming
+restoration; never delete a baseline to suppress a mismatch. Failure stops the
+tuner (`Restart=no`); inspect `restoration.json` and device/producer identity
+before restarting. Preview capture remains owned by the original producers.
+
+Policy v3 distinguishes normal, underexposed, overexposed, mixed lighting,
+low contrast and low spatial signal. The recovery state machine debounces both
+entry and exit over three advancing samples. Separate `candidates` (dark) and
+`bright_candidates` (overexposure) allow sustained dark-to-bright-to-dark recovery.
+Mixed lighting and missing structure do not trigger blind gain increases.
+Temporal brightness changes hold recovery; this is not a power-frequency flicker detector.
+
+Each confirmed condition starts an environment epoch. Best controls and exhausted
+candidates belong to that epoch. Settings require readback, a1s host-receive
+settling boundary, and5s cooldown measured after application completes. This
+does not establish sensor exposure synchronization. Recovery attempts, including
+partial failures and best selection, reserve a persistent budget before writes:
+six batches per minute across the two cameras. Budget exhaustion waits; clock
+rollback or invalid records stop recovery. Final baseline restoration is exempt.
+
+`environment.jsonl` retains state transitions with run/profile identity,
+environment epoch and control generation. This is an observation history, not a
+completed binding to collected episodes or training manifests. Preserve the old
+v2 `omx-camera-readiness/` baseline when upgrading to v3's new state directory;
+stop/restore the old tuner before changing the profile, sources or unit.
+
+Repeated polls of the exact same still-fresh frame/quality are `WAITING_FRAME`.
+They preserve distinct-frame confirmations without counting or refreshing READY,
+temporal samples or controls. Real expiry, backwards identity or contradictory
+quality resets confirmation. Poll frequency is not an assumed camera frame rate.
+
+The broader operating envelope, ownership and remaining dataset/evaluation
+contracts are in the [environment plan](../../../docs/plans/2026-10-17-omx-environment-readiness.md).
+
+Actual camera-only execution and deployment evidence:
+[2026-10-16 record](../../../docs/validation/omx-lowlight-automation-2026-10-16/result.md).
+Environment v3 execution and migration:
+[2026-10-17 record](../../../docs/validation/omx-environment-readiness-2026-10-17/result.md).
+
+
+## 다음 날 실물 수집 준비
+
+`collection_cli.py`가 기존 native ROS owner를 사용하는 bounded teacher 수집과
+장치에 연결하지 않는6개 `rehearsal-suite`를 제공한다. disabled profile/teacher/acceptance 예시,
+독립 환경·owner 감시, 원본 시각·RGB·reference·native event 보존과 비활성 systemd unit을 포함한다.
+실측 수용 뒤 check→preflight→첫1회 수집→검증 전송→사람 검토→모델 PC 학습을 진행한다.
+[실행 절차](../../../docs/plans/2026-10-17-omx-next-day-collection.md)와
+[소프트웨어 검증·양쪽 PC 배치](../../../docs/validation/omx-next-day-collection-2026-10-17/result.md)를 따른다.
+예시 값과 모의 실행은 물리 수용이나 실제 데이터가 아니다.
