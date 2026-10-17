@@ -264,3 +264,11 @@ def test_owner_unit_runs_the_no_goal_entrypoint_without_device_access():
     assert "run_hardware_owner.py" in unit and "NoNewPrivileges=true" in unit
     for forbidden in ("/dev/", "torque", "ros2 control", "ros2 launch", "--approve"):
         assert forbidden not in unit.split("[Service]", 1)[1].split("ExecStart=", 1)[1].splitlines()[0]
+
+
+def test_loader_accepts_a_final_state_policy():
+    owner_config = dict(_document()["owner_config"], max_final_state_errors={
+        **{name: 0.02 for name in JOINTS[:-1]}, "gripper_joint_1": None})
+    _, config, _ = _load(_document(owner_config=owner_config))
+    assert config.max_final_state_errors["joint1"] == 0.02
+    assert config.max_final_state_errors["gripper_joint_1"] is None
