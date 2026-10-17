@@ -8963,6 +8963,12 @@ osy-d395-s1d\`.
 - 증거: docs/validation/omx-native-startup-2026-10-17/result.md. 원격 최종 집중 66 passed, 독립 리뷰 material finding 0건. action_api listener 수명 조회 8줄의 별도 Safety-Review를 결속했다.
 - gate 변화: 소프트웨어 검증만 기록한다. Docker 없는 native discovery와 G2 격리/task를 구분하며, 관리자 namespace 실행 전까지 G2 runtime과 실제 데이터 학습을 완료로 표시하지 않는다.
 
+## 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
+
+- 변경: D-778/D-779/D-780/D-781 G1을 ROS 없이 옮겼다. `mixed_reach.py`(D-402 IK reach, `mixed_cell.Reach` 모양), `test/g1_layout.py`(IK 감사, capsule 휩쓸림 간격, 일정 모델), `test/g1_sim_harness.py`(Fleet multi-arm dispatcher → 실제 cell owner 두 개 + 조율자, 대체한 부분은 파일 머리), G1 작업대(home x 0.08 m)와 4종 레시피 fixture, 배치·끝까지·장애·시간 시험 3개.
+- 증거: `python test/g1_layout.py`(노트북 순수 계산): 도달성 105/105·140/140 자세, 한 팔 84·98 자세 실패 0; 간격 G1 작업대 +2.2~+2.5 mm, pilot home 0.12 m −31.8 mm, base 0.30 m −8.8 mm; 일정 모델 한 팔 대비 ×1.57·×1.72; 정적 규칙 위반 0. pytest 미실행(실험실 시험 PC 모두 닿지 않음). docs/validation/bimanual-g1-sim-2026-10-17/README.md.
+- gate 변화: 없음. ROS-SIM HOLD, DEVICE PARKED. 제안 값 coordinator_liveness_s 1.0 s, 주기 0.1 s, max_wait_s 10/45/85 s는 측정 전 제안이다.
+
 ## 2026-10-17 · eab1d0fb1 · 남은 브라우저 회귀 수정 준비
 
 - 변경: 픽셀 사진을 AI 참고 패널보다 먼저 두고, 만료 토큰·CSP·단독 import 경로 시험을 현재 계약에 맞췄다.
