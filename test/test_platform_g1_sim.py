@@ -94,7 +94,7 @@ def test_two_arm_mixed_job_runs_to_goal_confirmed_with_concurrent_zones_and_one_
         "rtt_s": rig.rtt.summary()})
 
 
-def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path):
+def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path, monkeypatch):
     recipe_doc, cell_doc = read_documents(RECIPE_2, G1_CELL)
     index = _first_two_arm_root(compile_submission(recipe_doc, cell_doc))
     rig = _rig(tmp_path, pair=(index, "independent"))
@@ -116,6 +116,23 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path):
     # the dispatcher never starts it either, while the left arm works its own chain
     left_chain = [i for i, p in enumerate(rig.submission["steps"]) if p["placement"]["arm"] == "left" and i < index]
     assert rig.run(lambda r: all(r.job()["steps"][i]["status"] == "GOAL_CONFIRMED" for i in left_chain), timeout_s=60)
+    left = rig.by_role["left"]
+    submit = left.port.submit
+    held = []
+
+    def hold_unrelated_shared_goal(command, *, on_goal_event):
+        dispatched = submit(command, on_goal_event=on_goal_event)
+        row = left.action(command.command_id.rsplit("-", 1)[0])
+        step_index = row["request"]["payload"]["cell_transfer"]["step_index"]
+        zone = next(p["zone_id"] for p in rig.job()["placements"] if p["step_index"] == step_index)
+        if step_index != index and zone == SHARED:
+            goal = next(g for g in left.port.pending if g.command.command_id == command.command_id)
+            goal.due = float("inf")
+            held.append(step_index)
+        return dispatched
+
+    monkeypatch.setattr(left.port, "submit", hold_unrelated_shared_goal)
+    assert rig.run(lambda r: bool(held), timeout_s=60), _claims(rig)
     for _ in range(20):
         rig.tick()
     assert all(index not in _owner_steps(arm) for arm in rig.arms.values())
