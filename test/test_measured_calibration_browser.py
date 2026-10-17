@@ -115,6 +115,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         expect(page.locator('#measured-confirm')).to_be_disabled()
         expect(page.locator('#measured-read')).to_be_disabled()
         expect(page.locator('#measured-revoke')).to_be_disabled()
+        assert state['pending']
         state['hold'] = False
         for pending in state['pending']:
             pending.fulfill(status=200, json=status('ceiling_north'))
@@ -133,9 +134,14 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-conditions').check()
         page.locator('#measured-confirm').click()
         page.locator('#measured-image').wait_for(state='visible')
+        with page.expect_response(lambda r: r.url.endswith('/frame')
+                                  and r.request.headers.get('authorization') == 'Bearer measured'):
+            page.locator('#measured-read').click()
         state['hold_frame'] = True
         with page.expect_request(lambda r: r.url.endswith('/frame') and r.headers.get('authorization') == 'Bearer measured'):
             pass  # The scheduled read refreshes the visible image.
+        expect(page.locator('#measured-read')).to_be_disabled()
+        assert state['pending_frames']
         if width < 700:
             page.get_by_role('combobox', name='작업 선택').select_option('hosts')
         else:
@@ -152,6 +158,8 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         state['hold'] = True
         with page.expect_request('**/measured-status'):
             pass
+        expect(page.locator('#measured-confirm')).to_be_disabled()
+        assert state['pending']
         page.locator('#vision-source').select_option('ceiling_south')
         state['hold'] = False
         for pending in state['pending']:
