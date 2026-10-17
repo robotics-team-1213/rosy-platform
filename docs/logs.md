@@ -8975,3 +8975,9 @@ osy-d395-s1d\`.
 - 변경: 연결 복구 뒤 실제 실패를 확인해 동적 AI 실행 패널과 픽셀 검수 주체 정보의 위치를 추가 수정했다. 다섯 기존 실패 해제와 독립 안전 검토를 진행한다.
 - 증거: 커밋된 소스에서 원격 Chromium 19 passed 및 단독 보정 표시 1 passed, skip 0, 각 로그 NEW 0. 최종 합성 화면 세 폭을 직접 확인했다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
 - gate 변화: 없음. FULL 착지 검증은 후속이며 실측·DEVICE/FIELD·push·배포 수용을 올리지 않는다.
+
+## 2026-10-17 · uncommitted · 검증 기록의 공개 commit 표기 교정
+
+- 변경: 첫 FULL 시도의 비밀정보 검사가 검증 기록의 공개 40자리 commit 두 곳을 토큰으로 탐지했다. 기존 스캐너가 인정하는 commit 문맥을 명시했다. 검증 SHA·명령·결과·원본 해시는 바꾸지 않는 표기 교정이며, 스캐너·허용 목록·실패 목록은 바꾸지 않는다.
+- 증거: `2ed11f74a3` 첫 FULL의 root 묶음은 8,249 passed / 1 NEW / 1,071 skipped였다. 정적 메모리 내 검사로 교정 전 2건·교정 후 0건을 확인했다. 해당 후보의 남은 실행은 중단했고 원격 비밀정보 검사와 FULL을 새 커밋에서 다시 수행한다.
+- gate 변화: 없음. 첫 FULL은 성공이 아니며 원본 로그는 `C:/DevTemp/browser-regressions/recheck-20261017T051307Z/land/`에 보존한다.

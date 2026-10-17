@@ -3,7 +3,7 @@
 2026-10-17. [앞선 접속 실패 기록](../remaining-browser-regressions-2026-10-17/remote-unavailable.md)에 이어
 시험 PC 연결 복구 뒤 수행한 검증이다. 앞선 미실행 결과를 변경하지 않는다.
 
-검증한 최종 소스는 `0e8ba728329a33b4adc47a01368a42b81a011bec`이다.
+검증한 최종 commit은 `0e8ba728329a33b4adc47a01368a42b81a011bec`이다.
 `tools/remote/remote_pytest.py`가 모델 PC와 AI PC에서 해당 커밋을 실행했다.
 코드 검토자는 `camera_contract_review`이며 실제 실행 결과와 별도로 소스를 검토했다.
 
@@ -14,7 +14,7 @@
 `verified-runner.txt`와 `verified-exit.json`에 있다. 호출은 다음과 같다.
 
 ```text
-python -X utf8 tools/remote/remote_pytest.py --sha 0e8ba728329a33b4adc47a01368a42b81a011bec --log-dir C:/DevTemp/browser-regressions/recheck-20261017T051307Z/verified --affected-json C:/DevTemp/browser-regressions/recheck-20261017T051307Z/verified-selection.json
+python -X utf8 tools/remote/remote_pytest.py --sha 0e8ba728329a33b4adc47a01368a42b81a011bec --log-dir C:/DevTemp/browser-regressions/recheck-20261017T051307Z/verified --affected-json C:/DevTemp/browser-regressions/recheck-20261017T051307Z/verified-selection.json  # commit pin
 ```
 
 각 invocation에는 `ROSY_RUN_BROWSER_TESTS=1`이 있다. 보정 표시는 별도 invocation으로
