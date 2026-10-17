@@ -6,7 +6,8 @@ the arm owner's own workcell) and gives every step a
 that may run the step instead (D-779 §4), its ``zone``, its ``coupling``, its ``depends_on`` and the
 compiled ``pallet.transfer`` inputs of each primary and alternate arm (``actions``, each already in
 that arm's base frame). The placement lives in ``fleet_cell_step_placements``; ``step_json`` keeps
-the single-arm shape (the primary arm's inputs), and a row in ``fleet_cell_arm_jobs`` marks the Job
+the single-arm shape (the primary arm's inputs) plus the optional per-arm ``goal_predicates``
+(each arm's item_at_pose predicate in its own frame), and a row in ``fleet_cell_arm_jobs`` marks the Job
 so the stage-1 mirror leaves it alone. Single-arm Jobs never reach this module except through the
 stop hooks, which select them exactly as before.
 
@@ -106,7 +107,8 @@ def _payload(submission: Mapping[str, Any], index: int, inputs: object) -> None:
 
 def _placement(submission: Mapping[str, Any], roles: set[str], index: int,
                step: object) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(step, Mapping) or set(step) - {"goal_predicate"} != {"skill_id", "version", "placement"}:
+    if (not isinstance(step, Mapping)
+            or set(step) - {"goal_predicate", "goal_predicates"} != {"skill_id", "version", "placement"}):
         raise ValueError("multi-arm Cell Job step has an invalid execution shape")
     if step["skill_id"] != "pallet.transfer" or step["version"] != "1.0.0":
         raise ValueError("Cell Job steps must use pallet.transfer/1.0.0")
@@ -140,8 +142,16 @@ def _placement(submission: Mapping[str, Any], roles: set[str], index: int,
         raise ValueError(f"step {index} needs compiled inputs for exactly its primary and alternate arms")
     for role in sorted(actions):
         _payload(submission, index, actions[role])
+    predicates = step.get("goal_predicates")
+    if predicates is not None and (
+            not isinstance(predicates, Mapping) or set(predicates) != set(actions)
+            or any(not isinstance(value, Mapping) or value.get("frame") != "robot_base"
+                   for value in predicates.values())):
+        raise ValueError(f"step {index} needs one robot_base goal predicate per primary and alternate arm")
     step_json = {"skill_id": step["skill_id"], "version": step["version"], "inputs": dict(actions[primary[0]]),
-                 **({"goal_predicate": step["goal_predicate"]} if "goal_predicate" in step else {})}
+                 **({"goal_predicate": step["goal_predicate"]} if "goal_predicate" in step else {}),
+                 **({"goal_predicates": {role: dict(predicates[role]) for role in sorted(predicates)}}
+                    if predicates is not None else {})}
     return step_json, {"arms": primary, "alternates": alternates, "zone_id": zone, "coupling": coupling,
                        "depends_on": dependencies, "payloads": {role: dict(actions[role]) for role in actions},
                        "assigned": primary}

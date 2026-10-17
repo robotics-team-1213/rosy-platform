@@ -4017,3 +4017,9 @@
 - 변경: 레시피 스키마가 `rosy_cell.recipe/3`인 Cell 후보는 `cell_mixed_submission.compile_mixed_submission`으로 간다. `PalletizingCellJobCompiler.compile_mixed`가 혼합 계획기로 다시 컴파일하고, 후보 Job과 바이트 비교, recipe·cell digest 비교, 64 KiB 한도를 한 팔 경로와 같게 지킨다. 팔 목록은 cell/3 문서의 `arms`, claim은 작업대·팔 owner 작업대·팔레트다. 제안의 `instance_id`는 작업대 팔 가운데 하나여야 한다. recipe/1·/2 경로와 그 Job id는 바뀌지 않았다(26a148117 기준 고정값 시험). palletizing을 import하는 Fleet 모듈은 여전히 `cell_compiler.py` 하나다.
 - 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 후속: 팔별 좌표의 item_at_pose 목표 술어, Cell 앱 미리보기(`/cell-app/compile`)의 recipe/3, 한 팔 recipe/3.
+
+## 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.264)
+
+- 변경: 목표 허용오차가 설정되면 resolver가 recipe/3 Step마다 `goal_predicates`를 고정한다. 술어는 주 팔과 대체 팔마다 하나씩, 그 팔 입력과 sku 형상으로 계산된 그 팔 `robot_base` 좌표다. `cell_arm_jobs`는 그 키가 Step의 팔과 같은지 확인하고 `step_json`에 둔다. 목표 증거 서비스의 술어 팔은 배정된 첫 팔(첫 주 팔 또는 Step을 넘겨받은 대체 팔)이다. 대체 팔 Step은 그 팔 술어로 판정하고, 술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`으로 거절한다. 첫 주 팔 좌표의 단일 `goal_predicate`는 대체 팔에 쓰지 않는다. `step_action_kinds`는 입력의 `sku`를 CELL_TRANSFER 본문에 옮긴다. sku가 없으면 본문은 같다. `/api/fleet/cell-app/compile`은 recipe/3를 `compile_mixed`로 미리 보고 `summary.multi_arm`(팔, Step별 sku·팔·대체 팔·구역·결합·depends_on)을 더한다. recipe/1·/2 응답은 그대로다.
+- 증거: 원격 pytest를 돌리지 못했다. 이 시점에 실험실 시험 호스트에 하나도 닿지 않았다. 시험은 썼지만 실행하지 않았다.
+- gate 변화: 없음. 남은 일(ADR 필요): 한 팔 recipe/3 Job, 짝 Step 부분 성공 회복, owner의 cell/3 승인.

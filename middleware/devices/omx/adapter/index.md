@@ -52,3 +52,8 @@
 - 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
 - 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
 - 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
+- 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+- 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+- 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
+- 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용
+- 2026-10-16 · uncommitted · fix(omx): feedback 원본 age 보존

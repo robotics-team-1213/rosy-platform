@@ -613,3 +613,8 @@
 - 변경: 액션 노드의 고정 이름·namespace를 수집 경로에 제공하고 실제 소유한 client만 허용한다. 임시 trace를 제거하되 freshness·watchdog 완료·HOLD 검사는 유지했다. 수정 대상인 OMX timeout quarantine 한 항목만 제거해 자동 재시도 없이 검증한다.
 - 증거: 후보 commit `09c2451ac3e432f8e7aea8e20fbd68d326c31df0`의 run39014273721은 native 18 passed, Fleet native 2 passed, browser 9 passed. host는 의도한 수집 identity RED 한 건만 실패했다(1 failed / 1564 passed / 17 skipped). 후속 최종 head 검토와 CI는 PR #83에 기록한다.
 - gate 변화: 없음. stock MTE1·실물 정지·vendor Gazebo·staging 배포는 미검증이다. 별도 Fleet quarantine은 유지한다.
+## 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+
+- 변경: `capability_current`, `transfer_provider` 계획기 요청, SIM 그리퍼 판정이 grant의 `item_key`로 승인된 형상을 찾는다. sku가 없으면 키는 지금처럼 `box`다. `PalletizingCellDocumentValidator`는 recipe/3를 cell/3 문서에 대해 혼합 컴파일러로 검증하고, sku마다 `box:<sku>` 형상(잡는 폭 = `width`)을 낸다. owner는 아직 cell/3를 승인하지 않는다(`validate_cell`은 cell/1 로더다). 그래서 실제 owner에서 recipe/3 승인은 거절된다. 이 승인에는 ADR이 필요하다. safety 모듈은 건드리지 않았다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.

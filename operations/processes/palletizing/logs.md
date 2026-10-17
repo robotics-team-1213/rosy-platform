@@ -63,3 +63,9 @@
 - 변경: `mixed_submission.py`가 계획의 Step마다 주 팔과 대체 팔 각각의 `pallet.transfer/1.0.0` 입력을 그 팔의 베이스 좌표로 낸다(베이스 x·y만큼 옮기고 -yaw 회전, yaw는 cell yaw - 베이스 yaw를 (-pi, pi]로, z는 그대로, 9자리 반올림). 대체 팔은 자기 집는 자리에서 집는다. approach 높이는 한 팔 컴파일러처럼 윗면 + `approach_clearance_m`이고 그 Step의 `carry_z`로 자른다. `layer_index`는 지지 단계(팔레트 위 0, 그 위 1 + 받치는 상자의 최대 단계)다. `item`은 계약이 `box`·`slip_sheet`만 받으므로 `box`이고 sku는 Job 문서에 있다. Job 문서에 계획기 버전, 계획 digest, 변환 버전을 넣었다. `mixed_cell_doc.py`가 잠정 `rosy_cell.cell/3`(D-778 §1의 `arms[{role, instance_id, workcell_id, base_in_cell{calibration_revision, x, y, yaw}, zone_id, home}]`, 직사각형 `zones`, `pallet_frames`, `stations`, annulus `reach`)을 읽는다.
 - 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 후속: owner의 sku별 승인 형상과 계약의 sku item, 공유 D-402 IK 도달 판정, 팔레트 좌표계 회전, D-778 G0 cell 스키마 확정(변환 행렬, 다각형 구역, fixtures), 한 팔 recipe/3 Job.
+
+## 2026-10-17 · uncommitted · feat(palletizing): recipe/3 Step 입력에 sku (D-781 §2)
+
+- 변경: `mixed_submission.transfer_inputs`가 팔마다의 입력에 Step의 `sku`를 넣는다. `SUBMISSION_VERSION`을 `/2`로 올렸으므로 recipe/3 Job id가 바뀐다. recipe/3 로더는 sku를 grant 식별자 규칙(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`)으로 받는다. recipe/1·/2는 바뀌지 않았다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
