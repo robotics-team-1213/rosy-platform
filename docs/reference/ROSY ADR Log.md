@@ -789,6 +789,8 @@
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 | Accepted (2026-10-16, 사용자 설계·구현 승인; SOURCE·DEVICE·FIELD 별도) |
 | D-782 | OMX 행동 조건부 World 모델 도입 — 실행 전 검사기부터, 예측은 거절·보류 근거로만, 폴더는 실제 소비자가 생길 때 | Proposed |
 | D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
+| D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 | Accepted (2026-10-17, 사용자 결정; 구현·장치·현장 미확인) |
+| D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 | Accepted (2026-10-17, D-789 구현 소유권; 장치·현장 미확인) |
 | D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
 

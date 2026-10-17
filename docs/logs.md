@@ -9011,3 +9011,17 @@ osy-d395-s1d\`.
 - 변경: 잔여 다섯 실패 해제와 보정 화면·원격 실행기 경합 수정, G1 검사 교정을 새 FULL로 확인하고 로컬 main에 병합했다. 집중 검증 기록은 보존하고 `validation/remaining-browser-regressions-verified-2026-10-17/landing.md`에 최종 커밋·계수·원본 해시와 앞선 실패를 추가했다.
 - 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
 - gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.
+
+## 2026-10-17 · uncommitted · D-789 6대 카메라 WebRTC 전환 결정과 실행 계획
+
+- 사용자 요청: WebRTC 전환을 ADR로 결정하고 바로 구현에 착수할 계획을 작성한다.
+- 변경: 로봇 단일 H.264/WHIP 송출 → 별도 사이트 MediaMTX → WHEP 브라우저 분배를 D-789로 결정했다. CORE 위임 인증, Fleet 비중계, 6대 영상 예산·혼잡 강등·단계적 기본값 전환을 명시했다.
+- 산출물: `docs/adr/D-789-six-robot-webrtc-camera-transport.md`, `docs/plans/2026-10-17-webrtc-camera-migration.md`. 브랜치 `docs/webrtc-camera-migration`.
+- 검증: lint·링크·원격 문서 계약 검사를 수행한다. 구현·ARM64 산출물·장치 설치·6대 FIELD 검증은 이번 문서 작업에서 수행하지 않았다. 기존 gate 변화 없음.
+- gate 변화: 없음. WebRTC 구현·장치·현장 수용은 T1~T6의 후속 증거로 판정한다.
+
+## 2026-10-17 · uncommitted · D-791 미디어 프로세스의 독립 배포 소유권
+
+- 변경: D-789 발행자 구현은 독립 `middleware/media` wheel, 사이트 권한 구현은 독립 `operations/site_ui/media` wheel로 등록했다. 기존 인식 패키지와 frozen size ratchet을 키우지 않는다.
+- 증거: 원격 구조 검사에서 기존 perception·schema의 ratchet 증가와 새 사이트 모듈의 미계측을 발견했다. receipt DTO를 공통 계약으로 옮기고 실제 독립 wheel을 크기 단위로 등록하여 재검증한다.
+- gate 변화: 없음. 전송·권한·예산 수용 계약은 D-789를 유지하고 구현 내부의 소스 경로만 D-791로 보완한다.
