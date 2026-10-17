@@ -8968,3 +8968,46 @@ osy-d395-s1d\`.
 - 변경: D-778/D-779/D-780/D-781 G1을 ROS 없이 옮겼다. `mixed_reach.py`(D-402 IK reach, `mixed_cell.Reach` 모양), `test/g1_layout.py`(IK 감사, capsule 휩쓸림 간격, 일정 모델), `test/g1_sim_harness.py`(Fleet multi-arm dispatcher → 실제 cell owner 두 개 + 조율자, 대체한 부분은 파일 머리), G1 작업대(home x 0.08 m)와 4종 레시피 fixture, 배치·끝까지·장애·시간 시험 3개.
 - 증거: `python test/g1_layout.py`(노트북 순수 계산): 도달성 105/105·140/140 자세, 한 팔 84·98 자세 실패 0; 간격 G1 작업대 +2.2~+2.5 mm, pilot home 0.12 m −31.8 mm, base 0.30 m −8.8 mm; 일정 모델 한 팔 대비 ×1.57·×1.72; 정적 규칙 위반 0. pytest 미실행(실험실 시험 PC 모두 닿지 않음). docs/validation/bimanual-g1-sim-2026-10-17/README.md.
 - gate 변화: 없음. ROS-SIM HOLD, DEVICE PARKED. 제안 값 coordinator_liveness_s 1.0 s, 주기 0.1 s, max_wait_s 10/45/85 s는 측정 전 제안이다.
+
+## 2026-10-17 · eab1d0fb1 · 남은 브라우저 회귀 수정 준비
+
+- 변경: 픽셀 사진을 AI 참고 패널보다 먼저 두고, 만료 토큰·CSP·단독 import 경로 시험을 현재 계약에 맞췄다.
+- 증거: 구문·공백·safety 검사와 독립 검토 통과. 원격 시험은 세 시험 PC의 SSH 시간 초과로 대기 중이며, 실패 목록은 유지한다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
+- gate 변화: 없음. 성공 검증·main 착지·push·배포·DEVICE/FIELD 수용으로 표시하지 않는다.
+
+
+## 2026-10-17 · a1372f7e7 · 잔여 브라우저 수정의 원격 검증 미실행
+
+- 변경: 최종 전달 브랜치 fix/browser-regressions-ready에 수정안을 보존했다. 초기 검토 이력은 별도 브랜치에 남겼다.
+- 증거: 최종 커밋의 구문·린트·크기·safety·독립 검토 통과. 기준 및 최종 커밋의 원격 요청은 시험 PC 접속 실패로 각각 600초 뒤 종료했고 pytest는 실행되지 않았다. docs/validation/remaining-browser-regressions-2026-10-17/remote-unavailable.md.
+- gate 변화: 없음. 다섯 실패 항목·후속 수정의 main 착지를 보류했다. 실제 브라우저 검증·push·배포·DEVICE/FIELD 성공으로 표시하지 않는다.
+
+## 2026-10-17 · 0e8ba72832 · 잔여 브라우저 다섯 실패의 원격 확인
+
+- 변경: 연결 복구 뒤 실제 실패를 확인해 동적 AI 실행 패널과 픽셀 검수 주체 정보의 위치를 추가 수정했다. 다섯 기존 실패 해제와 독립 안전 검토를 진행한다.
+- 증거: 커밋된 소스에서 원격 Chromium 19 passed 및 단독 보정 표시 1 passed, skip 0, 각 로그 NEW 0. 최종 합성 화면 세 폭을 직접 확인했다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
+- gate 변화: 없음. FULL 착지 검증은 후속이며 실측·DEVICE/FIELD·push·배포 수용을 올리지 않는다.
+
+## 2026-10-17 · uncommitted · 검증 기록의 공개 commit 표기 교정
+
+- 변경: 첫 FULL 시도의 비밀정보 검사가 검증 기록의 공개 40자리 commit 두 곳을 토큰으로 탐지했다. 기존 스캐너가 인정하는 commit 문맥을 명시했다. 검증 SHA·명령·결과·원본 해시는 바꾸지 않는 표기 교정이며, 스캐너·허용 목록·실패 목록은 바꾸지 않는다.
+- 증거: `2ed11f74a3` 첫 FULL의 root 묶음은 8,249 passed / 1 NEW / 1,071 skipped였다. 정적 메모리 내 검사로 교정 전 2건·교정 후 0건을 확인했다. 해당 후보의 남은 실행은 중단했고 원격 비밀정보 검사와 FULL을 새 커밋에서 다시 수행한다.
+- gate 변화: 없음. 첫 FULL은 성공이 아니며 원본 로그는 `C:/DevTemp/browser-regressions/recheck-20261017T051307Z/land/`에 보존한다.
+
+## 2026-10-17 · uncommitted · 원격 시험 완료 공개와 잠금 정리의 순서
+
+- 변경: 원격 시험 EXIT trap은 자신의 잠금을 해제한 뒤 임시 종료 코드 파일을 최종 이름으로 원자 공개한다. 완료를 읽은 실행기가 다음 작업을 시작하기 전에 정리가 끝나며, START의 작업별 pid 확인과 종료값·로그 전달·취소 방식은 유지한다.
+- 증거: commit `3883bf782f`의 FULL root 묶음은 원격 작업 취소 검사 1건이 종료값 143과 남은 잠금을 함께 읽어 실패했다. commit `a5c5884dd`에서 실제 mv 이후를 보류한 재현 검사가 같은 불일치로 실패했다. 실패/격리 목록은 바꾸지 않았으며 수정본 검증은 후속이다.
+- gate 변화: 없음. 앞선 FULL 시도는 미착지이며 원본은 외부 `input-unlock-full/`과 `remote-completion-red/`에 보존한다. 호스트 시험 도구 수정은 장치·현장 수용이 아니다.
+
+## 2026-10-17 · uncommitted · G1 쌍 거부 검사와 다른 작업의 정상 구역 점유 구분
+
+- 변경: 새 main을 병합한 FULL에서 드러난 G1 검사의 전역 구역 부재 단언을 작업별 점유·세대·배치 상관관계로 교정했다. 실패한 쌍의 시작 전후 SQLite 전체 원장이 같은지, 실행 식별자·grant·점유가 비어 있는지, 실제 owner 제출이 없는지 확인한다. 오른팔 충돌과 구역 충돌을 모두 검사하며, 다른 정상 왼팔의 공유 구역 사용은 fake goal 종료를 보류해 결정적으로 유지한다.
+- 증거: `completion-publish-full/`의 첫 FULL은 commit `3627db4dc8`에서 28,149 passed / 1,909 skipped 및 브라우저 opt-in 928 passed / skip 0이었다. 이후 최신 main 병합 후보 commit `214cc6eadc`의 root 묶음은 G1 검사 1 failed / 8,355 passed / 1,069 skipped로 끝나 전체 native 종료값 1, 미착지다. commit `2144b6400`의 제어된 재현은 정상 왼팔 Step 6의 RUNNING 점유를 구분하지 못해 다섯 번 모두 실패했다. 보강 중 빈 점유 목록을 null로 가정한 단언을 실제 빈 목록에 맞춘 commit `17722ea12`는 두 충돌 경우를 다섯 번 반복해 총 10 passed / skip 0 / NEW 0이었다. commit `c3588a4dd`에서 별도 orphan 구역 점유를 주입하자 상관관계 단언이 정확히 실패했고, 해당 변형은 제거했다.
+- gate 변화: 없음. 실제 Fleet 점유·해제 경로와 실패·격리 목록은 바꾸지 않았다. 원본은 `C:/DevTemp/browser-regressions/recheck-20261017T051307Z/`의 `g1-claim-*`에 보존한다. 더 넓은 집중 검증과 새 FULL 착지는 후속이며 합성 G1 검사는 ROS-SIM·DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-17 · a9a061446c · 잔여 브라우저 FULL 검증과 로컬 main 착지
+
+- 변경: 잔여 다섯 실패 해제와 보정 화면·원격 실행기 경합 수정, G1 검사 교정을 새 FULL로 확인하고 로컬 main에 병합했다. 집중 검증 기록은 보존하고 `validation/remaining-browser-regressions-verified-2026-10-17/landing.md`에 최종 커밋·계수·원본 해시와 앞선 실패를 추가했다.
+- 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
+- gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.

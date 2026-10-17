@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
-- 2026-10-17 · 9108fd4d8e · docs(omx): native startup 취소와 실행 권한 검증 범위 기록
-- 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
-- 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
-- 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
+- 2026-10-17 · a9a061446c · 잔여 브라우저 FULL 검증과 로컬 main 착지
+- 2026-10-17 · uncommitted · G1 쌍 거부 검사와 다른 작업의 정상 구역 점유 구분
+- 2026-10-17 · uncommitted · 원격 시험 완료 공개와 잠금 정리의 순서
+- 2026-10-17 · uncommitted · 검증 기록의 공개 commit 표기 교정
+- 2026-10-17 · 0e8ba72832 · 잔여 브라우저 다섯 실패의 원격 확인
