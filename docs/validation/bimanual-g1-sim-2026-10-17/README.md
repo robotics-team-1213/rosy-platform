@@ -108,7 +108,7 @@ G1 작업대: base 0.33 m, 마주 봄, 0.20×0.15 m 팔레트 중심 (0.165, 0),
 
 ## 시험이 확인하도록 만든 것 (실행 전)
 
-- `test_platform_g1_sim.py`: 2종·4종 Job이 Fleet 컴파일 → 두 owner → goal 증거로 모든 Step GOAL_CONFIRMED; 다른 구역 Step의 시간 겹침이 있음; 공유 띠 Step 구간이 겹치지 않고 표본마다 공유 띠에 움직이는 팔이 하나 이하; makespan < 직렬 합. 장애: 짝 Step의 claim 한쪽 실패 → CLAIM_BUSY, arm/zone claim 0개, Action 0개(D-778 G1, D-779 4); 짝 grant 한쪽 거부 → 받은 쪽에 `PAIR_PARTNER_NOT_ACCEPTED` 취소, 그 팔 approach goal 취소(D-778 §4); 독립 Step 실패 → 그 팔·구역만 HELD/UNKNOWN, 다른 팔의 독립 Step 전부 확인(D-779 3); tight 짝 실패 → 두 팔 HOLD(`TIGHT_PARTNER_HELD`), 새 Step 없음; 오른팔 OFFLINE → 공유 띠 Step을 왼팔이 자기 base로 계획해 성공, `CELL_STEP_ALTERNATE_ARM` 기록, 그 팔 좌표의 predicate로 GOAL_CONFIRMED(D-779 5, D-781 §5).
+- `test_platform_g1_sim.py`: 2종·4종 Job이 Fleet 컴파일 → 두 owner → goal 증거로 모든 Step GOAL_CONFIRMED; 다른 구역 Step의 시간 겹침이 있음; 공유 띠 Step 구간이 겹치지 않고 표본마다 공유 띠에 움직이는 팔이 하나 이하; makespan과 직렬 합은 기록만 한다(goal이 수 ms라 부하가 큰 호스트에서는 Step 사이 dispatch 시간이 겹침 이득보다 클 수 있다). 장애: 짝 Step의 claim 한쪽 실패 → CLAIM_BUSY, arm/zone claim 0개, Action 0개(D-778 G1, D-779 4); 짝 grant 한쪽 거부 → 받은 쪽에 `PAIR_PARTNER_NOT_ACCEPTED` 취소, 그 팔 approach goal 취소(D-778 §4); 독립 Step 실패 → 그 팔·구역만 HELD/UNKNOWN, 다른 팔의 독립 Step 전부 확인(D-779 3); tight 짝 실패 → 두 팔 HOLD(`TIGHT_PARTNER_HELD`), 새 Step 없음; 오른팔 OFFLINE → 공유 띠 Step을 왼팔이 자기 base로 계획해 성공, `CELL_STEP_ALTERNATE_ARM` 기록, 그 팔 좌표의 predicate로 GOAL_CONFIRMED(D-779 5, D-781 §5).
 - `test_platform_g1_timing.py`: 두 barrier 짝 실행과 대기·연락 간격·RTT 기록(연락 간격 p99 < liveness/2, RTT p99 < 0.25 s); tight 구간에서 조율자를 멈추면 두 팔 모두 `COORDINATOR`/`PARTNER_LINK_LOST`로 HOLD, 걸린 시간 ∈ [liveness − 주기 − 0.05, liveness + 0.25]; 한 팔 transfer 실패 → 짝이 `COORDINATOR` 정지로 HOLD, 실패한 팔은 결합 정지를 받지 않음; Linux에서 실제 UDS로 GetOwnerIdentity·SubmitAction·GetAction RTT.
 
 ## 한계와 열린 일
