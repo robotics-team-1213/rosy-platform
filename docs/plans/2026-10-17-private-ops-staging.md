@@ -32,6 +32,7 @@
 
 **Interfaces:** `check_config(config: dict, require_ready: bool = False) -> list[str]`. `python tools/check_staging.py [--require-ready]`는 고정 staging 경로를 읽고 오류가 있으면 exit 1, 없으면 exit 0이다. 일반 검사는 명시적 `HOLD`를 허용하며 준비 완료 검사는 `READY`와 모든 필수 근거를 요구한다. 어느 모드도 배포하지 않는다.
 
+- [ ] 로컬 준비 위치는 제품 저장소와 분리한 `C:/Dev/Robot/rosy-ops`를 사용한다. 초기 README·AGENTS와 CI·시험 초안을 독립 검토한 뒤 조직에 private 저장소를 생성한다. main에는 안내부터 게시하고 기능 branch의 Draft PR에서 아래 실패→성공 검증을 진행한다. 기존 경로·저장소가 있으면 먼저 확인하며 덮어쓰지 않는다.
 - [ ] 설정 형식을 정한다: `schema_version: 1`, `environment: staging`, `state: HOLD|READY`; `source: {repository, commit}`; `artifact: {reference, sha256}`; `target: {host, owner, access_scope, isolation_receipt}`; `previous_release`, `validation_receipt`. 초기값은 공개 저장소 이름과 HOLD 외에 null로 둔다.
 - [ ] `tests/test_check_staging.py`에 HOLD 일반 검사 통과/준비 검사 실패, 모든 근거가 있는 합성 READY 통과, 필수 필드 누락·알 수 없는 필드·비밀 필드·가변 ref·잘못된 hash·누락된 target/receipt 거절을 고정한다. GitHub CI에서 구현 전 실패를 확인한다.
 - [ ] `check_config`를 구현한다. source commit은 40자리 hex, artifact sha256은 64자리 hex, artifact reference는 digest 고정 OCI 참조 또는 가변 별칭이 없는 HTTPS 산출물 URL만 허용한다. target/rollback/receipt는 준비 완료 모드에서 빈 값과 예시 placeholder를 거절한다. 이전 배포가 없는 첫 실행은 `previous_release: bootstrap`을 명시하고 staging 폐기·재생성 절차를 문서화한다.
@@ -41,7 +42,7 @@
 ## Task 2: 비공개 게시와 검토
 
 - [ ] 로컬 초기 변경을 독립 검토하고 발견 사항을 고친다. 기존 저장소가 생겼으면 먼저 확인하며 덮어쓰지 않는다.
-- [ ] 조직에 `rosy-ops`를 private로 생성하고 초기 커밋을 게시한다. 기능 branch/PR에서 설정과 CI를 검증한다. 최신 head의 개별 잡 성공과 private 상태를 확인하고 같은 SHA를 병합한다.
+- [ ] 기능 branch/PR에서 설정과 CI를 검증한다. 최신 head의 개별 잡 성공과 private 상태를 확인하고 같은 SHA를 병합한다.
 - [ ] 이슈·위키·병합 방식 등은 필요한 범위만 설정한다. 새 유료 기능이나 저장소·환경 secret은 만들지 않는다. 실제 접근 강제 규칙이 지원되지 않으면 문서상 규칙과 구분해 기록한다.
 
 ## Task 3: 공개 문서 연결

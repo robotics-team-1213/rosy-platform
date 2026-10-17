@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · docs: 비공개 운영 저장소 구현 계획과 검증 경로
 - 2026-10-17 · uncommitted · docs: 공개 소스와 비공개 운영 설정 및 staging 경계 제안
 - 2026-10-17 · uncommitted · docs: affected 선택기와 원격 실행을 명령에서 구분
 - 2026-10-17 · uncommitted · docs: 개발·배포 안내의 중복과 오래된 상태 정리
 - 2026-10-17 · uncommitted · docs: 간결한 문서와 단일 기준을 정하고 협업 안내에 적용
-- 2026-10-16 · uncommitted · docs: 한 명의 게시와 두 에이전트 검토 절차
