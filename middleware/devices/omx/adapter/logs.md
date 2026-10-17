@@ -570,3 +570,16 @@
 - Change: Reuse the spawned vendor peer for the timeout regression, including its original 30 ms state period and 1.2 s delayed result. A second peer worker handles cancel requests; the synthetic peer yields between readiness checks. Owner timing, HOLD latch, cancel ACK and terminal CANCELED assertions are unchanged.
 - Evidence: CI 38944470403 passed slow-feedback but the timeout fixture reached joint_state_stale before action_timeout. Its state source still shared the owner interpreter. This extends the same external-input boundary to that fixture; final verification is recorded in PR #69.
 - Gate: No change. No production executor or safety threshold changes.
+
+## 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
+
+- 변경: `PickPlaceRunner`의 phase gate가 세 값(허용, `PHASE_WAIT`, 거부)을 받는다. `PHASE_WAIT`이면 phase를 내지 않고 돌아간다(`omx_adapter/phase_gate.py`). `ActionApi`는 선택 `coordinator_api`로 연산별 peer 역할을 나누고, `LocalStopApi`는 조율자 정지 이유 4종만 받으며, 정지 래치 표의 출처 CHECK에 `coordinator`를 더해 기존 표를 한 번 옮긴다. barrier 기록·감독·UDS 연산은 `rosy_agent`(owner 조립)에 둔다. 조율자 UID가 없는 owner는 지금 경로 그대로다.
+- 증거: 원격 pytest(owner barrier·조율자·계약·기존 adapter/agent 시험). 물리 장치·ROS-SIM·G1 두 팔 시뮬레이션은 하지 않았다.
+- gate 변화: 없음. `max_wait_s`와 `coordinator_liveness_s` 시작 값, 실제 서비스 UID는 G1·DEVICE에서 정한다.
+
+## 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+
+- 변경: 조율자는 두 owner가 모두 도착하고 `fence_open`일 때만 barrier를 풀고, 한쪽만 풀린 채 다른 쪽이 거절되면 단단한 결합 구간의 팔을 곧바로 정지한다. 정지 래치나 fence가 닫히면 barrier에서 기다리던 Action은 곧바로 FAILED(움직임 없음) 또는 HOLD로 끝난다(`STOP_FENCED_AT_BARRIER`). 조율자가 없는 owner는 짝·barrier grant를 journal 전에 409 `BARRIERS_UNSUPPORTED`로 거절한다. 끝난 짝(SUCCEEDED 포함)은 짝별로 기억해 거짓 결합 정지를 막는다. barrier 만료와 움직임 없는 FAILED는 한 트랜잭션이고 실패하면 HOLD로 내려간다. 해제는 더 움직일 수 없는 Action과 이전 boot의 도착을 거절하고, 조율자 주체 `coordinator-uid-<uid>`를 기록한다.
+- 증거: 원격 pytest(조율자 부분 해제·끝난 짝·owner fence 종료·boot·해제 거절·BARRIERS_UNSUPPORTED 시험 추가). 물리 장치·ROS-SIM은 하지 않았다.
+- 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
+- gate 변화: 없음.

@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+- 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
 - 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
 - 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
 - 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
-- 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
-- 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD

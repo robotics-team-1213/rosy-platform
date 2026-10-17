@@ -3999,3 +3999,15 @@
 - 변경: D-766 개정 2의 roster.js 제한을 지키도록 앱·지도 기록 링크 생성 코드를 기존 device-discovery.js로 옮겼다. 새 파일이나 권한 경로는 추가하지 않았다.
 - 증거: main 통합 전 원격 FULL은 새 실패 0건이었다. 통합 후에는 크기 검사와 관련 브라우저·설치 검증을 다시 수행한다.
 - gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
+
+- 변경: `arms: [{role, instance_id}]`와 Step별 `placement`(주 팔·대체 팔·구역·결합·depends_on·팔별 Action 내용)를 받는 팔 여러 개 Job을 만든다. 배치는 `fleet_cell_step_placements`, 표시는 `fleet_cell_arm_jobs`에 두고 1단계 거울 트리거와 backfill은 표시된 Job을 건너뛴다. 한 팔 디스패처 조회(`jobs_by_status`, `unresolved_jobs`)는 그 Job을 돌려주지 않는다. `cell_arm_dispatcher`가 팔별 준비 집합(의존 GOAL_CONFIRMED, 팔 READY, 팔·구역 claim 비어 있음)으로 Action을 내고, 결과는 그 팔과 그 claim만 HOLD한다(`tight`면 짝도). 대체 팔 한 팔 모드, 팔 단위·Job 단위 재개, 취소, 사이트 정지 래치와 시작 복구를 팔 단위로 처리한다. claim 단계 전환은 safety 태그 `cell/cell_arm_claims.py`와 `ledger/action_claims.release_held_keys`에 있다. app.py는 같은 자리에서 `CellJobDispatcher`를 만들고, 팔 여러 개 Job이 없으면 틱은 한 팔 틱과 같다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다. 장치·ARM64·현장 수용 없음.
+- gate 변화: 없음(SIM 코드만). 착지·push 없음. 팔 여러 개 Job의 목표 증거 경로와 API reference 개정은 남았다.
+
+## 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
+
+- 변경: 팔마다 owner 작업대(`arms[].workcell_id`)를 Job에 적고, 그 작업대를 Job 단위 claim으로 승인부터 끝까지 잡는다. 같은 owner를 쓰는 한 팔 Job이나 다른 팔 여러 개 Job은 승인에서 거절된다. 설정이 그 인스턴스를 다른 작업대로 매핑하면 그 팔은 NOT_CONFIGURED다. 짝 Action은 두 번째 송신 전에 fence를 다시 읽고, 바뀌었으면 남은 팔을 미송신 HOLD로 두고 받은 팔을 취소한다. 짝의 틱당 I/O는 팔당 2와 취소 1이다. 취소는 팔·Action 표시까지 한 트랜잭션이다. Cell 원장 버전은 4다(1단계 Fleet는 거부).
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 남은 일: 팔 여러 개 Job은 아직 끝까지 갈 수 없다. Cell 목표 증거 ingress(`cell_goal_evidence_service`)와 성공 hook이 팔 여러 개 Step을 모르고, `ArmJobStore.confirm_step_goal`만 GOAL_CONFIRMED를 쓴다(닫힌 쪽으로 실패). D-781 컴파일러 출력, API reference의 팔 단위 재개 경로, D-780 barrier가 든 짝 grant도 남았다.

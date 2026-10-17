@@ -29,6 +29,9 @@ KNOWN_WRITERS = {
     "server/cancel_all_store.py": {"fleet_tasks", "fleet_task_history", "fleet_robot_reservations"},
     "server/missions/mission_store.py": {"fleet_action_claims"},
     "server/cell/cell_job_store.py": {"fleet_action_claims"},
+    "server/cell/cell_arm_claims.py": {"fleet_action_claims"},   # D-779 arm/zone claims, caller's transaction
+    "server/cell/cell_arm_jobs.py": {"fleet_action_claims"},     # D-779 DISPATCHING claims to UNKNOWN on authority change
+    "server/ledger/action_claims.py": {"fleet_action_claims"},   # D-779 per-Action arm/zone claim release
     "server/cell/cell_sheet_checkpoints.py": {"fleet_action_claims"},
     "server/channel/execution/journal.py": {"fleet_action_claims"},
     "server/channel/execution/outcomes/reconcile.py": {"fleet_tasks", "fleet_robot_reservations",

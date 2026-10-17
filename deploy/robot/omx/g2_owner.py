@@ -18,7 +18,9 @@ def main():
     configure_imports()
     from cell_sim_tools import refuse_second_owner
     from g2_aid import OneShotSimAid
-    refuse_second_owner()
+    from instance_names import names_from_environment
+    names = names_from_environment()
+    refuse_second_owner(namespace=names.namespace)
     refuse_g2_owner()
     # Exclusive run lock complements the canonical scan for older owner entrypoints.
     lock = (args.run / "owner.lock").open("x")
@@ -86,8 +88,8 @@ def main():
         ROOT / "deploy/robot/omx/sim/cell_profile.yaml", "omx-f-gazebo-only-v1",
         "gz-world-is-link0-v1", 0.001),
         runtime_factory=lambda config: RosArmCommandRuntime(node, config,
-                                                            joint_state_topic="/joint_states",
-                                                            trajectory_action="/arm_controller/follow_joint_trajectory",
+                                                            joint_state_topic=names.joint_state_topic,
+                                                            trajectory_action=names.trajectory_action,
                                                             owner_clock="sim", on_goal_event=on_goal_event),
         goal_port_factory=lambda runtime: SimAidGoalPort(RosArmPhaseGoalPort(runtime), before=before),
         http_app_factory=http_app_factory,
