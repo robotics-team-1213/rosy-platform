@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
+- 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
+- 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
 - 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
 - 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
-- 2026-10-17 · a0a864b6ea · D-775 관련 원격 회귀와 완료 범위 확정
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
-- 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분

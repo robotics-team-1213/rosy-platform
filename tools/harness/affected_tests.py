@@ -84,6 +84,9 @@ FULL_SUITES = (
     "learning/training/pinky/test",
     "learning/registry/policy/test",
     "learning/training/omx/test",
+    "learning/training/world_model/test",
+    "learning/evaluation/world_model/test",
+    "operations/prediction/world_model/test",
     "learning/curation/omx/test",
     "learning/curation/pinky/test",
     "middleware/core/events/test",
@@ -109,7 +112,9 @@ FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.jso
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
-        ["learning/curation/omx/test"], ["learning/curation/pinky/test"]], "ros": "none"},
+        ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
+        ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
+        ["operations/prediction/world_model/test"]], "ros": "none"},
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",

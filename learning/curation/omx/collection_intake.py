@@ -173,8 +173,11 @@ def _read_source(root):
     return root.resolve(), blobs
 
 
-def validate_session(root, *, completed_only=False):
-    """Validate every attempt and every raw byte before selecting complete episodes."""
+def validate_session(root, *, completed_only=False, require_complete=True):
+    """Validate every attempt and every raw byte before selecting complete episodes.
+
+    require_complete=False lets a world-model builder read a session whose attempts all failed (D-782 §5).
+    Behaviour-cloning intake keeps the default."""
     root, blobs = _read_source(root)
     manifest = _json(blobs['manifest.json'])
     _require(manifest.get('schema') == SCHEMA and manifest.get('state') == 'CLOSED'
@@ -261,7 +264,7 @@ def validate_session(root, *, completed_only=False):
             _require(completed_only, 'incomplete attempt requires explicit completed-only selection')
     seal_environment(blobs['environment.jsonl'], windows, files, rig_revision=manifest['rig_revision'],
                      calibration_revision=manifest['calibration_revision'])
-    _require(bool(selected), 'no complete episodes selected')
+    _require(bool(selected) or not require_complete, 'no complete episodes selected')
     return dict(root=root, manifest=manifest, blobs=blobs, samples=samples, selected=selected,
                 manifest_sha256=hashlib.sha256(blobs['manifest.json']).hexdigest())
 

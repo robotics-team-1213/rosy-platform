@@ -49,7 +49,7 @@ stop 요청을 먼저 한다. 취소 응답·terminal·HOLD는 물리 정지 또
 `source.json`에 검증 결과와 파일 hash가 있다. 양쪽6개 모의 시나리오가 통과했고 모터 목표는0개다.
 Fleet의 실제 ROS import와 모델 PC의 LeRobot0.4.4 import도 통과했다.
 Fleet private 예시는 `~/.config/rosy/omx-collection/`에 있으며 `source-root`가 배치 경로를 가리킨다.
-수집 systemd unit은 설치 후 inactive로 확인했다. 실행 env와 실측 수용 입력은 아직 채우지 않았다.
+수집 systemd unit은 설치 후 inactive로 확인했다. 후속 점검에서 실행 env도 설치했으며 실측 수용 입력은 미작성이다.
 모델 PC 진입점은 `~/rosy-test/omx-collection-b88eee5f18/model-il`이다.
 strict SSH/scp-3로 양쪽 PC 사이52byte 시험 파일의 hash 일치도 확인했다. 실제 collection 전송은
 첫 수집 뒤에 검증한다. [고정 검증 기록](../validation/omx-next-day-collection-2026-10-17/result.md).
@@ -125,6 +125,52 @@ python3 <source-root>/deploy/robot/omx/collection_cli.py collect --profile <prof
 중단도 남긴다. systemd 사용 시 `run_collection.sh`와 `rosy-omx-collection.service`를 사용한다.
 필수 env가 없으면 ROS setup 전에 실패하며 Restart=no, SIGINT, 최대120초다. 자동 enable/start하지 않는다.
 
+### 실행 환경과 남은 점검의 재개
+
+추가 준비 묶음은 개발 PC의 gitignored `private/omx-next-day-preparation-20261017/`에 보존한다.
+`manifest.json`이 묶음의 파일 hash를 확인하며 기존 `private/lab-hosts.json`만 사용한다.
+실물 구동 없이 준비를 재개하는 명령은 다음과 같다.
+
+```text
+python private/omx-next-day-preparation-20261017/run-preparation.py --role fleet
+python private/omx-next-day-preparation-20261017/run-preparation.py --role model
+```
+
+Fleet 단계는 기존 카메라 env의 ROS domain과 실제 setup을 사용해6초간 원본 영상 metadata와
+ROS graph만 관측한다. 임의의 관절/Action 배치를 추정하거나 controller를 시작하지 않는다.
+수집용 env가 없을 때만 `~/.config/rosy/omx-collection.env`를 만들고 기존 파일은 보존한다.
+비활성 설정의 고립된 사본으로 launcher 거부를 검사하며 수집 unit은 inactive인지 확인한다.
+모델 단계는 기존 `model-il`의 prepare/train 도움말, 원본 소스 hash, 저장 공간과 수신 경로를 점검한다.
+두 단계 모두 과제 목표·실측 범위·acceptance를 채우지 않는다. 연결 실패 시 attempt별 원본 로그를 보존한다.
+
+2026-10-17 최초 추가 시도는 SSH banner 시간 초과로 원격 실행 전 실패했다.
+후속 재시도에서는 AI/Fleet 접속이 복구돼 Fleet env 설치·고립 launcher 거부·inactive 확인까지 통과했다.
+두 카메라 producer는 실행 중이나 설정한 외장 USB 장치가 없어 새 frame은0개였다.
+모델 PC도 이후 재접속돼 prepare/train 진입점·소스 무결성·저장 공간 점검을 마쳤다.
+네트워크 복구 원인은 미확정이며 원격 설정을 바꾸지는 않았다. 최초 실패와 후속 성공을 구분한다.
+[최초 접속 진단](../validation/omx-remaining-preparation-2026-10-17/result.md) ·
+[양쪽 준비 완료·카메라 연결 부재·모델 재시도](../validation/omx-remaining-preparation-2026-10-17/follow-up.md).
+
+service env에 필요한 필드는 다음과 같다. 실제 파일은 remote 준비 후 값을 확인한다.
+systemd EnvironmentFile은 `$HOME`을 확장하지 않으므로 각 경로에 실제 절대 경로를 사용한다.
+
+```text
+ROSY_OMX_COLLECTION_ROOT=<immutable-source-root>
+ROSY_ROS_SETUP=<existing-ros-setup.bash>
+ROSY_OMX_OVERLAY_SETUP=<existing-verified-native-overlay>/install/setup.bash
+ROS_DOMAIN_ID=<existing-camera-workcell-domain>
+ROSY_COLLECTION_PROFILE=<private-profile.json>
+ROSY_COLLECTION_TEACHER=<private-teacher.json>
+ROSY_COLLECTION_ACCEPTANCE=<private-acceptance.json>
+ROSY_COLLECTION_OUTPUT=<new-absolute-session-directory>
+ROSY_COLLECTION_EPISODES=1
+```
+
+직접 CLI preflight/collect를 실행하는 shell에서도 위 ROS setup과 overlay를 먼저 source하고
+같은 ROS_DOMAIN_ID를 export한다. `check`는 ROS를 불러오지 않는 정적 검사다.
+중단되거나 끝난 session 경로를 재사용하지 않으며 다음 실행마다 OUTPUT을 새 경로로 바꾼다.
+실물 확인 결과는 [첫 현장 시험 기록지](2026-10-17-omx-first-field-test.md)에 남긴다.
+
 ## 전송·검토·학습
 
 개발 PC에서 private host 설정의 Fleet→모델 PC로 복사한다. source/destination은 고정된 collection
@@ -152,3 +198,19 @@ python tools/remote/omx_collection_transfer.py --session <session>
 원본·사람 검토·분할·학습·processor와 모델 재적재를 각각 해시로 연결한다. 기본 첫 smoke는2step으로
 줄여 연결을 확인할 수 있으나 성능 수용은 아니다. 학습된 정책의 실물 실행은 별도 승인 모델/owner
 수용과 독립 과제 평가를 거친다. 오늘의 소프트웨어 연결과 내일의 첫 수집으로 G4를 완료하지 않는다.
+
+## World 모델 데이터·학습·평가 (D-782)
+
+BC 학습과 별도로, 실패·중단 시도를 포함한 World 모델 경로를 같은 원본에서 돌릴 수 있다. 모델 PC의 기존 분리 환경을 쓴다.
+session마다 split을 하나씩 지정하고, 같은 session을 나누지 않는다. 라벨 파일은 선택이다.
+
+```text
+<python> learning/curation/omx/world_model_dataset.py <raw-session-1> <raw-session-2> <raw-session-3> --out <새-wm-dataset> --horizon 4 --split <id1>=train --split <id2>=eval --split <id3>=test [--labels <labels.json>]
+<python> learning/training/world_model/m1_job.py <wm-dataset> --out <새-wm-run>
+<python> learning/evaluation/world_model/m1_eval.py <wm-dataset> --artifact <wm-run>/artifact.json --out <새-wm-eval>
+<python> operations/prediction/world_model/shadow.py <wm-dataset> --artifact <wm-run>/artifact.json --digest <artifact digest> --out <새-replay>
+```
+
+라벨 파일 형식은 `{"labels": [{"session_id", "cycle_id", "outcome", "object_result", "reviewer", "reason"}]}`이다.
+첫 1~5회 데이터로는 수용 기준(두 기준선 모두 승리)을 기대하지 않는다. 파이프라인이 실물 원본을 받는지 확인하는 단계다.
+검사기 판정은 기록만 하며 owner·Fleet admission에 연결되어 있지 않다.
