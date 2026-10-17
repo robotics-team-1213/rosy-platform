@@ -162,6 +162,12 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path, monkeypatc
 
         monkeypatch.setattr(left.port, "submit", hold_unrelated_shared_goal)
         assert rig.run(lambda r: bool(held), timeout_s=60), _claims(rig)
+    # Controlled mutation: the invariant must reject a claim with no unfinished Action.
+    with closing(sqlite3.connect(rig.path)) as connection:
+        assert reserve(connection, owner_kind="mission", owner_id=MISSION,
+                       generation=job["dispatch_generation"], resources=[("zone", f"{CELL}.orphan")],
+                       phase="DISPATCHING")
+        connection.commit()
     for _ in range(20):
         rig.tick()
         _assert_claims_belong_to_unfinished_actions(rig)
