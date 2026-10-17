@@ -49,7 +49,7 @@ import yaml
 
 from core_common.protocol.localization import (CHECKING, DecisionSource, LocalizationDecision,
                                                LocState)
-from fleet.localization import cues, pose_request, service_logic, trust
+from fleet.localization import cues, pose_request, read_spread, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
 from fleet.swarm.transport import RobotApiError, RobotClient
@@ -99,7 +99,7 @@ def build_localization_service(console, sightings, *, enabled: bool = True,
     slots, squares = service_logic.parse_reference_squares(
         load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
     return LocalizationService(console.clients, slots=slots, squares=squares,
-                               read_state=lambda robot_id: console.read_state(robot_id, POLL_S),  # D-760 8
+                               read_state=read_spread.spread(lambda rid: console.read_state(rid, POLL_S), POLL_S / 2),  # D-760 8
                                sightings=sightings, overhead_cue=bool(overhead_cue),
                                pose_request_overhead=bool(pose_request_overhead),
                                traffic_hold=getattr(console, "hold_for_localization", None))
