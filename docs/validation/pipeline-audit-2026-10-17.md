@@ -4,7 +4,7 @@
 
 ## 범위와 근거
 
-공개 소스 `e7720e29363d1cff49e44196a5c0870d23281b8e`와 비공개 운영 설정 `249861b7c1d37da8033dd01a710569178fdb3513`을 읽었다. GitHub API로 저장소 설정·ruleset 상세·Actions 기본 권한·환경·변수 이름·실행 결과를 조회했다. 비밀값은 조회하지 않았고 호스트에 접속하거나 빌드·릴리스·배포 워크플로를 새로 실행하지 않았다.
+공개 소스 SHA `e7720e29363d1cff49e44196a5c0870d23281b8e`와 비공개 운영 설정 SHA `249861b7c1d37da8033dd01a710569178fdb3513`을 읽었다. GitHub API로 저장소 설정·ruleset 상세·Actions 기본 권한·환경·변수 이름·실행 결과를 조회했다. 비밀값은 조회하지 않았고 호스트에 접속하거나 빌드·릴리스·배포 워크플로를 새로 실행하지 않았다.
 
 | 확인 대상 | 관찰 |
 |---|---|
@@ -19,10 +19,10 @@
 
 | 증거 | 실제 결과 |
 |---|---|
-| 공개 [PR #74 CI](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38995804135) · head `4d9e0dd9b4af685fbc59e1e736b04280b7abede8` | 개별 4개 잡 성공, affected 508 passed. 로그의 기존 실패 비교 0 NEW |
-| 공개 [main CI](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38996176789) · `e7720e29363d1cff49e44196a5c0870d23281b8e` | 보고용 modules 포함 개별 18개 잡 성공. colcon 26 packages, boot smoke·SaveMap guard 성공 |
+| 공개 [PR #74 CI](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38995804135) · SHA `4d9e0dd9b4af685fbc59e1e736b04280b7abede8` | 개별 4개 잡 성공, affected 508 passed. 로그의 기존 실패 비교 0 NEW |
+| 공개 [main CI](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38996176789) · SHA `e7720e29363d1cff49e44196a5c0870d23281b8e` | 보고용 modules 포함 개별 18개 잡 성공. colcon 26 packages, boot smoke·SaveMap guard 성공 |
 | 같은 main 실행의 skip 예 | CORE 6,255 passed / 63 skipped, Gazebo 343 passed / 13 skipped. 전체 잡 성공을 모든 시험·시뮬·브라우저 실행으로 해석하지 않음 |
-| 비공개 [main CI](https://github.com/robotics-team-1213/rosy-ops/actions/runs/38995663882) · `249861b7c1d37da8033dd01a710569178fdb3513` | 15개 시험과 HOLD 구조 검사 성공. 실제 설정의 소스·산출물·대상·검증 기록은 null |
+| 비공개 [main CI](https://github.com/robotics-team-1213/rosy-ops/actions/runs/38995663882) · SHA `249861b7c1d37da8033dd01a710569178fdb3513` | 15개 시험과 HOLD 구조 검사 성공. 실제 설정의 소스·산출물·대상·검증 기록은 null |
 
 공개 main 실행은 scope 시작부터 ci-result 종료까지 약 11분 17초였다. 가장 긴 `fleet-1of4` 잡은 준비를 포함해 약 10분 34초였다. 한 실행의 관찰값이며 후속 실행 시간의 보장이 아니다.
 
