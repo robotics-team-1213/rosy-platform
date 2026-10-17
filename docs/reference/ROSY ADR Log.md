@@ -782,7 +782,7 @@
 | D-769 | 기존 drivable 검수 자료를 활용한 강화학습과 Gazebo Fleet 검증 | Accepted |
 | D-773 | OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조 — 장치 Action 타입 하나, 기록·readback이 남는 모델·정책 배포, AI 출력은 사실과 후보 두 종류 | Proposed |
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
-| D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Proposed |
+| D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

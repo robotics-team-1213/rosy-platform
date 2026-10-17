@@ -131,6 +131,8 @@ python tools/harness/rosy_harness.py lint
 | 무엇 | 어디 | 누가 보나 |
 |---|---|---|
 | 코드, ADR, SRS, API reference, 계획·검증 문서 | GitHub `robotics-team-1213/rosy-platform` | **전 세계 공개** |
+| 환경 설정, 내부 운영 절차, 고정 버전·배포·복구 기록 | [비공개 `rosy-ops`](https://github.com/robotics-team-1213/rosy-ops) | 저장소 접근 권한이 있는 팀원 |
+| 원본 영상·MCAP·운영 DB | 접근 제한 자료 저장소 | 자료별 허용 대상 |
 | 버그, 할 일, 진행 상황 | GitHub Issues, 저장소 문서. Projects는 접근 가능한 보드가 있을 때 연결 | 공개 |
 | 회의록, 일정 — **사람이 쓰는 것** | Notion 팀 페이지 (리드가 게스트로 초대) | 팀 |
 | 현장 주소, 로봇 IP, 장비 이름, 접속 정보 | Notion 비공개 페이지 | 팀 |
@@ -138,6 +140,8 @@ python tools/harness/rosy_harness.py lint
 | 로봇 SSH 팀 키 묶음 + passphrase | 리드가 zip과 passphrase를 **서로 다른 경로**로 전달. 만료 90일 | 팀 |
 
 Notion 연동 키는 팀 페이지에만 연결된다. 비공개 페이지(주소·접속 정보)에는 어떤 연동도 연결하지 않는다. 팀원이 빠지면 그 사람의 연동 키와 Tailscale 계정을 지운다.
+
+`rosy-ops`의 첫 범위는 Fleet·웹·시뮬레이션 staging 설정과 검사 CI다([D-784](../adr/D-784-public-source-private-ops-staging.md)). 현재 설정은 `HOLD`이며 실제 호스트는 배포하지 않았다. 후속 담당자는 비공개 저장소의 `docs/staging.md`에서 대상·담당자·접속 범위·격리 근거를 확인한다. 제품 코드는 공개 저장소에서만 관리하고 토큰·비밀번호·개인키는 두 Git 저장소 모두에 넣지 않는다.
 
 **저장소에 절대 올리지 않는 것.** 공개 저장소라 한 번 push하면 회수할 수 없다.
 
