@@ -69,6 +69,7 @@ def test_missing_selected_overlay_never_launches_simulator(tmp_path):
 def test_site_host_marker_refuses_simulation_before_launch(tmp_path):
     result, capture = launch(tmp_path, site=True)
     assert result.returncode != 0
+    assert "site host" in result.stderr
     assert not capture.exists()
 
 
