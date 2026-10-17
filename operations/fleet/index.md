@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · 분리된 영상 보정 구현의 계약 검사 경로
 - 2026-10-17 · uncommitted · exact charge stop before journal contention
 - 2026-10-17 · uncommitted · measured health operational admission
 - 2026-10-17 · 79226ce97 · SIM 초기 CORE 틱의 원본 이동 계측 보존
 - 2026-10-17 · e801f1e01 · 원본 전송과 boot 대조를 결속한 충전 World pose reader
-- 2026-10-17 · 1eeaeb653 · World source-scope ingestion fences

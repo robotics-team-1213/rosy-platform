@@ -4153,3 +4153,9 @@
 - 변경: DB journal보다 cache의 정확한 정지를 먼저 시도하고, 정지 시작 시 로컬 session admission을 닫는다. journal은 제어 event loop 밖에서 실행하고 취소 시 정지/쓰기와 호출자 cleanup을 끝까지 drain한다. STOP port 자체 취소도 journal 후 전달하며 자원 claim은 해제하지 않는다.
 - 증거: 실제 SQLite BEGIN IMMEDIATE 반례가 원격 3c2f8ac6e에서 STOP 지연을 재현했다(1 FAIL). 9fe2e83cbd는 잠금·취소·쓰기 실패 후 admission 반례 3 FAIL. source와 motion/service/departure 호출 경계는 독립 scoped static 안전 검토 PASS. 수정 SHA의 GREEN은 커밋 후 수행한다.
 - gate 변화: 없음. 정지 ACK를 물리 정지나 claim 해제로 승격하지 않는다. 실제 장치·서명 배포·FULL 검증은 별도다.
+
+## 2026-10-17 · uncommitted · 분리된 영상 보정 구현의 계약 검사 경로
+
+- 변경: 기존 D-318 계약 검사가 ingest_preview의 실제 보정 구현과 ingest의 위임 연결을 함께 확인하도록 경로를 맞췄다. 인증·수치 보정·preview/sightings 분리 검사는 유지하고 제품 코드는 바꾸지 않았다.
+- 증거: 7fa484c528 원격 Fleet 묶음은 5903 passed, 이 경로 검사 1 failed, 316 skipped였다. known_failures 비교에서 NEW 1이며 기존 실패로 등록하지 않았다. 수정은 독립 scoped 검토 PASS, 최신 SHA 원격 검증은 커밋 후 수행한다.
+- gate 변화: 없음. 건너뛴 브라우저·실물 장치 시험을 통과로 주장하지 않는다.
