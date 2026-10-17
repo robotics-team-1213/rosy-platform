@@ -6,7 +6,8 @@ the arm owner's own workcell) and gives every step a
 that may run the step instead (D-779 §4), its ``zone``, its ``coupling``, its ``depends_on`` and the
 compiled ``pallet.transfer`` inputs of each primary and alternate arm (``actions``, each already in
 that arm's base frame). The placement lives in ``fleet_cell_step_placements``; ``step_json`` keeps
-the single-arm shape (the primary arm's inputs), and a row in ``fleet_cell_arm_jobs`` marks the Job
+the single-arm shape (the primary arm's inputs) plus the optional per-arm ``goal_predicates``
+(each arm's item_at_pose predicate in its own frame), and a row in ``fleet_cell_arm_jobs`` marks the Job
 so the stage-1 mirror leaves it alone. Single-arm Jobs never reach this module except through the
 stop hooks, which select them exactly as before.
 
@@ -41,6 +42,7 @@ COUPLINGS = ("independent", "loose", "tight")  # D-780 §5
 MAX_ARMS = 4
 CANCELLED_REASON = "CANCELLED_BY_OPERATOR"  # cell_job_store.CANCELLED_REASON (a test pins them equal)
 TIGHT_PARTNER_REASON = "TIGHT_PARTNER_HELD"  # an arm held because its tight partner failed (D-779 §6)
+PAIR_PARTIAL_REASON = "PAIR_PARTIALLY_SUCCEEDED"  # a coordinated step one arm finished: never rerun alone
 _HASHES = ("recipe_digest", "cell_digest", "process_artifact_digest")
 _SUBMISSION = {"job_id", "workcell_id", "arms", "recipe_digest", "cell_digest", "process_artifact_digest",
                "job", "steps", "resources", "ledger_markers"}
@@ -105,7 +107,8 @@ def _payload(submission: Mapping[str, Any], index: int, inputs: object) -> None:
 
 def _placement(submission: Mapping[str, Any], roles: set[str], index: int,
                step: object) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(step, Mapping) or set(step) - {"goal_predicate"} != {"skill_id", "version", "placement"}:
+    if (not isinstance(step, Mapping)
+            or set(step) - {"goal_predicate", "goal_predicates"} != {"skill_id", "version", "placement"}):
         raise ValueError("multi-arm Cell Job step has an invalid execution shape")
     if step["skill_id"] != "pallet.transfer" or step["version"] != "1.0.0":
         raise ValueError("Cell Job steps must use pallet.transfer/1.0.0")
@@ -139,8 +142,16 @@ def _placement(submission: Mapping[str, Any], roles: set[str], index: int,
         raise ValueError(f"step {index} needs compiled inputs for exactly its primary and alternate arms")
     for role in sorted(actions):
         _payload(submission, index, actions[role])
+    predicates = step.get("goal_predicates")
+    if predicates is not None and (
+            not isinstance(predicates, Mapping) or set(predicates) != set(actions)
+            or any(not isinstance(value, Mapping) or value.get("frame") != "robot_base"
+                   for value in predicates.values())):
+        raise ValueError(f"step {index} needs one robot_base goal predicate per primary and alternate arm")
     step_json = {"skill_id": step["skill_id"], "version": step["version"], "inputs": dict(actions[primary[0]]),
-                 **({"goal_predicate": step["goal_predicate"]} if "goal_predicate" in step else {})}
+                 **({"goal_predicate": step["goal_predicate"]} if "goal_predicate" in step else {}),
+                 **({"goal_predicates": {role: dict(predicates[role]) for role in sorted(predicates)}}
+                    if predicates is not None else {})}
     return step_json, {"arms": primary, "alternates": alternates, "zone_id": zone, "coupling": coupling,
                        "depends_on": dependencies, "payloads": {role: dict(actions[role]) for role in actions},
                        "assigned": primary}
@@ -266,6 +277,8 @@ def refresh_steps(connection: sqlite3.Connection, mission_id: str, now: str) -> 
             status, reason = "RUNNING", None
         elif mine and statuses == {"ACTION_SUCCEEDED"}:
             status, reason = "ACTION_SUCCEEDED", None
+        elif len(placement["assigned"]) > 1 and "ACTION_SUCCEEDED" in statuses:
+            status, reason = "HOLD", PAIR_PARTIAL_REASON  # shown to the operator; only cancel ends it
         else:
             status, reason = ("READY" if ready else "WAITING"), None
         if (steps[index]["status"], steps[index]["reason"]) != (status, reason):
@@ -378,6 +391,6 @@ def recover(connection: sqlite3.Connection, now: str, control: Mapping[str, Any]
     return len(rows)
 
 
-__all__ = ["ARM_ROLE", "CANCELLED_REASON", "COUPLINGS", "TIGHT_PARTNER_REASON", "actions", "arm_owners",
-           "attach", "create", "event", "hold_arms", "insert_action", "is_multi_arm", "marked", "placements",
-           "recover", "refresh_steps", "single_arm_jobs", "site_stop", "summarize"]
+__all__ = ["ARM_ROLE", "CANCELLED_REASON", "COUPLINGS", "PAIR_PARTIAL_REASON", "TIGHT_PARTNER_REASON", "actions",
+           "arm_owners", "attach", "create", "event", "hold_arms", "insert_action", "is_multi_arm", "marked",
+           "placements", "recover", "refresh_steps", "single_arm_jobs", "site_stop", "summarize"]

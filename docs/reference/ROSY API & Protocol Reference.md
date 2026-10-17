@@ -177,7 +177,7 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.260
+**Version:** v1.264
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -186,6 +186,18 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.264 두 팔 제안 경로와 팔별 목표 술어 (D-781 §2·§5)
+
+Additive. recipe/3 Step은 팔마다 `goal_predicates`(그 팔 `robot_base`)를 저장하고, 목표 증거는 Step을 실제로 실행한 팔(첫 주 배정 팔 또는 대체 팔)의 술어로 판정한다. 그 팔 술어가 없으면 409 `CELL_GOAL_PREDICATE_MISSING`. `cell_transfer.sku`는 선택 필드이고 없으면 recipe/1·2 grant 직렬화와 digest가 이전과 같다. `POST /api/fleet/cell-app/compile`은 recipe/3를 `summary.multi_arm`으로 미리 본다. 자세한 내용은 변경 이력 v1.264 행.
+
+### v1.263 두 팔 Cell Job의 Step 목표 증거와 팔 하나 재개 (D-779 §3·§6)
+
+Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 판정이다. envelope 1.0과 한 팔 Job의 동작은 그대로다.
+
+- **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
+- **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 없으면 거절한다(fail closed). v1.264부터 술어는 팔마다(`goal_predicates`) 저장되고 대체 팔 Step도 그 팔 술어로 판정한다. 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
+- **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
 
 ### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
 
@@ -2736,6 +2748,14 @@ A barrier list requires a pair grant, and `coupling` must equal the strongest
 Absent fields are omitted from serialization, so a single-arm grant serializes and
 digests exactly as before; when present, the digest covers them.
 
+D-781 §2 (v1.264) adds the optional `cell_transfer.sku` (`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`,
+only with `item: "box"`): the recipe/3 item this step expects. It is omitted when absent,
+so recipe/1-2 grants keep their bytes and digest. The owner looks up the accepted grasp
+geometry (`grasp_width_m`, `grasp_depth_m`, `height_m`) by the payload's `item_key`:
+`item` without a sku, `box:<sku>` with one. A recipe/3 recipe accepted by an owner holds
+one geometry entry per sku under that key. The `pallet.transfer` Skill input keeps
+`item: "box"`; the sku is a grant field only.
+
 `DeviceActionState` is the durable local Action journal state: `PREPARED`,
 `SUBMITTING`, `ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`, `UNKNOWN`, `SUCCEEDED`,
 `FAILED`, or `HOLD`. A successful transport response or `SUCCEEDED` Action
@@ -2829,6 +2849,7 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 | GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. v1.237 (D-763 4): the same scope as the work list — the proposer; any operator for a Job that is not `PROPOSED`; only a named operator for another principal's `PROPOSED` Job (others 404 `CELL_JOB_NOT_FOUND`). A reader who is not the proposer gets no `proposal_principal_id` and sees the proposer as `actor_id: "proposer"` in events. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/reconcile` | Named Operator | Read the current step back from the OMX owner now (GetAction), ignoring the readback backoff. 503 when the dispatcher is disabled. v1.240 (D-763 4 review): the returned Cell Job is redacted for a caller who is not its proposer, as in `GET /api/fleet/cell-jobs/{mission_id}` (no `proposal_principal_id`; the proposer's events read `actor_id: "proposer"`). |
 | POST | `/api/fleet/cell-jobs/{mission_id}/resume` | Named Operator | Body `{expected_generation}`. Re-approve a HOLD Job under the current fence: the first unconfirmed step becomes READY (or ACTION_SUCCEEDED if its last device outcome was a success; it is never resent), claims are re-taken at the new generation. Refused (409) while a claim is DISPATCHING or UNKNOWN, or for a cancelled Job. v1.240 (D-763 4 review): the returned Cell Job is redacted for a caller who is not its proposer, as in `GET /api/fleet/cell-jobs/{mission_id}` (no `proposal_principal_id`; the proposer's events read `actor_id: "proposer"`). |
+| POST | `/api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` | Named Operator | v1.263 (D-779 §6). Body `{expected_generation}`. Multi-arm Job only: return one `HOLD`/`OFFLINE` arm to `READY` under the current fence and release its `HELD` arm and zone claims; its Action whose last device outcome was a success stays `ACTION_SUCCEEDED` and is never resent. Refused (409 `CELL_JOB_RECOVERY_REFUSED`) for a single-arm Job, an unknown or unheld arm, a cancelled Job, a changed stop generation or authority (resume the whole Job), a `DISPATCHING`/`UNKNOWN` claim of that arm, and an arm held `TIGHT_PARTNER_HELD` while its tight partner is still `HOLD`/`OFFLINE`. The returned Cell Job is redacted as for `/resume`. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/cancel` | Named Operator | End the Job: status HOLD with reason `CANCELLED_BY_OPERATOR` (terminal; no CANCELLED status until the D-420 v2 schema) and its claims released in the same transaction. Refused while a claim is DISPATCHING or UNKNOWN. v1.240 (D-763 4 review): the returned Cell Job is redacted for a caller who is not its proposer, as in `GET /api/fleet/cell-jobs/{mission_id}` (no `proposal_principal_id`; the proposer's events read `actor_id: "proposer"`). |
 | GET | `/api/fleet/resource-claims` | Viewer | `{claims: [{resource_key, resource_kind, resource_id, owner_kind, owner_id, generation, phase, mission_id, job_status, job_reason}]}`; `mission_id`/`job_status`/`job_reason` are set when a Cell Job owns the claim, otherwise null. `phase` is CLAIMED, DISPATCHING, UNKNOWN or HELD (a held Cell Job; the stop latch keeps it, rearm ignores it). v1.240 (D-763 4 review): a viewer gets only `{resource_key, resource_kind, resource_id, phase}` per claim. An operator gets the full row for a Cell Job claim (`job_status` not null). Any other claim (legacy Mission, Task, direct action) is full only to the proposer of the legacy Mission that owns it, and reduced to the viewer fields for everyone else. |
 
@@ -2838,12 +2859,44 @@ The Cell Job candidate contains `recipe`, `cell`, `recipe_sha256`,
 `cell_sha256`, and submitted compiled `job`; its metadata limit is 64 KiB
 (ER 2 remains 32 KiB). Fleet recompiles with the injected process compiler and
 rejects a Job or digest mismatch. Recipe/Cell calculations remain outside
-Fleet. Its authenticated owner and request scope are
+Fleet. Multi-arm proposals are described below. Its authenticated owner and request scope are
 stored by Fleet; duplicate same-content requests return the existing proposal,
 while reuse with a changed candidate or workcell/instance returns `409
 REQUEST_CONFLICT`. The API does not call ER 2. Candidate records allow only
 selector/provenance metadata and reject principal, credential, and image-payload
 fields.
+
+**Multi-arm proposal path (recipe/3, D-781 §5, D-779 stages 2-4; v1.264).** A
+`cell_job` candidate whose `recipe.schema` is `rosy_cell.recipe/3` has the same envelope
+`{kind, recipe, cell, recipe_sha256, cell_sha256, job}`. Its `cell` is the provisional
+`rosy_cell.cell/3` document with `arms[{role, instance_id, workcell_id, base_in_cell, zone_id,
+home}]`. Its `job` is `{recipe_hash, cell_hash, planner_version, plan_digest,
+submission_version, plan}`, where `plan.steps[]` carry `sku`, `arm`, `alternates`, `zone`,
+`coupling`, `depends_on`, `pose_cell` and `carry_z`, and `plan.feed_order` gives the order
+per pick station. Resolve runs the process compiler's `compile_mixed` and refuses a Job
+or digest mismatch as for recipe/1-2. It also refuses a cell with fewer than two arms (a
+one-arm recipe/3 Job is not defined yet) and an `instance_id` that is not one of the cell's
+arm instances. The proposal's `workcell_id` is the cell's own workcell. The resolved
+multi-arm submission is:
+
+- `job_id`: SHA-256 over canonical `{recipe_sha256, cell_sha256, job}`, as for a single-arm Job.
+- `arms`: `[{role, instance_id, workcell_id}]` in cell order (2-4 arms; roles, instances and
+  owner workcells are distinct).
+- `steps`: one per plan step, `{skill_id: "pallet.transfer", version: "1.0.0", placement,
+  goal_predicates?}`. `placement` is `{arm, alternates, zone, coupling, depends_on, actions}`.
+  `actions` maps every primary and alternate role to its `pallet.transfer` inputs in that
+  arm's base frame, with `sku`. A coordinated step (`arm` is a list of two roles) has no
+  alternates. `goal_predicates` maps the same roles to the `item_at_pose` predicate in that
+  arm's frame; it is present when a goal tolerance is configured.
+- `resources`: `["workcell", <cell>]`, `["workcell", <each arm owner>]` and
+  `["pallet", <id>]` per filled pallet. Arm and zone claims are taken per Action (D-779 §5).
+- `ledger_markers` (one per pallet, after its last step), `recipe_digest`, `cell_digest`
+  and `process_artifact_digest`.
+
+The Job is stored `PROPOSED` with per-arm rows. A read adds `arms`, `placements` (with
+`assigned`, the arm(s) that run the step) and `step_actions`. Admission, two-person
+approval and dispatch are unchanged. A held single-arm step may go to a `READY`
+alternate (`CELL_STEP_ALTERNATE_ARM` event), whose own payload and predicate are then used.
 
 ER 2 feedback candidates use the same proposal read/resolve routes. Their
 response adds `source_mission_id`, `source_action_id`, `source_attempt_id`,
@@ -3099,6 +3152,24 @@ their basis) and confirms the step only when it is met, after the step's durable
 device `SUCCEEDED` for the same attempt. A submission carrying `satisfied` is
 rejected (422).
 
+v1.263 (D-779 §3): for a multi-arm Cell Job the evidence names the Action of the
+arm the step's predicate was compiled for (the placement's first primary arm), the
+producer is registered for the Job's cell `workcell_id` and that arm's
+`instance_id`, and the step is judged on its own (not by `current_step_index`). A
+coordinated step is confirmed only when every assigned arm Action's latest device
+outcome is its attempt's `SUCCEEDED`; the final observations follow the last of
+those successes and the initial one follows every arm's grant and precedes the
+first success. A step run by an alternate arm was refused
+(`EVIDENCE_SCOPE_MISMATCH`) until a per-arm predicate existed; superseded by v1.264 below.
+
+v1.264 (D-781 §5): the predicate arm is the step's first assigned arm. That is the first
+primary arm, or the alternate that took the step. The step is judged against the
+predicate stored for that arm (`goal_predicates[arm_role]`, in that arm's `robot_base`).
+The producer must be registered for that arm's `instance_id`. A step run by an alternate
+arm is accepted when its predicate exists. Without it the step is refused with
+`CELL_GOAL_PREDICATE_MISSING` (409). A single `goal_predicate` is in the first primary
+arm's frame and never judges an alternate.
+
 Both poses require finite `x_m`, `y_m`, `z_m`, `roll_rad`, `pitch_rad`, `yaw_rad`.
 Observation timestamps are nonnegative epoch seconds. The read-only YAML registry
 pins producer/workcell/instance/recipe/cell/evaluator identities, `max_age_s`
@@ -3138,7 +3209,7 @@ and field acceptance require their own evidence.
 | `GET /api/fleet/cell-app/documents` | 기존 viewer | `{documents:[{kind,id,digest,updated_at}]}` |
 | `GET /api/fleet/cell-app/documents/{kind}/{identifier}` | 기존 viewer | `{kind,id,digest,document,updated_at}` |
 | `POST /api/fleet/cell-app/documents/{kind}/{identifier}` | named operator | `CellAppDocumentSaveRequest`: `{document,expected_digest:null 또는 sha256}` → 저장 문서. 생성은 null, 수정은 현재 digest가 필요 |
-| `POST /api/fleet/cell-app/compile` | named operator | `CellAppCompileRequest`: `{recipe_id,recipe_digest,cell_id,cell_digest}` → `{candidate,process_artifact_digest,summary:{transfer_count,pallet_markers}}`. 실행·제안·승인 부작용 없음 |
+| `POST /api/fleet/cell-app/compile` | named operator | `CellAppCompileRequest`: `{recipe_id,recipe_digest,cell_id,cell_digest}` → `{candidate,process_artifact_digest,summary:{transfer_count,pallet_markers}}`. recipe/3는 `compile_mixed`로 보고 `summary.multi_arm:{arms,steps:[{index,sku,arm,alternates,zone,coupling,depends_on}]}`를 더한다(v1.264). 실행·제안·승인 부작용 없음 |
 | `POST /api/fleet/cell-app/proposals` | named operator | `CellAppProposalRequest`: compile 참조 + `{request_key,workcell_id,instance_id}` → 기존 proposal resolve 응답. 구성된 service principal이 제안·resolve하며 admit하지 않음 |
 
 `kind`는 `recipe|cell`, 문서 ID는 `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`, digest는 소문자 sha256다. 문서는 finite JSON object, canonical JSON UTF-8 64 KiB 이하. 동일 DB의 문서 revision은 트랜잭션에서 비교한다. `request_key`는 160자 이하, `workcell_id`/`instance_id`는 96자 이하이며 공백 trim·제어문자 없는 기존 proposal 식별자 규칙을 따른다. 미리보기 candidate는 기존 `{kind:"cell_job",recipe,cell,recipe_sha256,cell_sha256,job}` 계약 그대로다. 저장 revision digest와 process의 recipe/cell hash는 각각 해당 canonical 표현의 해시다.
@@ -3319,6 +3390,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.264 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |
+| v1.263 | 2026-10-17 | Additive (D-779 §3·§6, feat/multi-arm-goal-evidence): `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` `{expected_generation}`(이름 있는 운영자, 두 팔 Job의 팔 하나, 단단한 결합 짝이 잡혀 있으면 409), `POST /api/fleet/cell-goal-evidence`의 두 팔 Job Step 단위 판정(술어 팔의 Action, 그 팔 instance의 producer, 협조 Step은 모든 팔 성공 뒤, 대체 팔 Step 거절). 한 팔 Job과 envelope 1.0 변경 없음. |
 | v1.260 | 2026-10-17 | Additive (D-780, D-779 §7, feat/omx-coordinator-barriers): `StopRequestSource.coordinator`와 조율자 정지 이유 4종, `FleetCellTransferGrant`의 선택 필드 `arm_role`·`pair_id`·`partner_instance_id`·`coupling`과 `cell_transfer.barriers`(없으면 직렬화와 digest가 이전과 같다), OMX owner UDS `GetBarrier`·`ReleaseBarrier`(version 2, 조율자 UID만)와 연산별 peer 역할, `PHASE_WAIT`, barrier 시간 초과(FAILED 또는 HOLD), 단단한 결합 구간의 조율자 생존 HOLD. 조율자 peer가 없는 owner와 barrier 없는 grant는 바뀌지 않는다. Fleet `/api/fleet/*`와 envelope 1.0 변경 없음. |
 | v1.242 | 2026-10-15 | Additive (D-763 조각 7, feat/fleet-job-trip-steps): `POST /api/fleet/trip-jobs` `{robot_id, steps:[{to, via[]}]}`(1–8), 이름 있는 운영자, `simulation` 프로필이고 Step 원장이 있을 때만. 응답 `{job}`(Step 원장 행, 종류 `TRIP`). 거절: 404 `UNKNOWN_ROBOT`, 422 `TRIP_UNKNOWN_PLACE`, 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`, 409 `TRIP_ROBOT_BUSY`, 409 `JOB_ESTOP`, 409 `JOB_ROBOT_REFUSED`. trip 작업은 `GET /api/fleet/work`에 `cell_job` 행(`action_kind:"TRIP"`)으로 나온다. 재개·취소는 지금의 `/api/fleet/cell-jobs/{id}/resume`·`/cancel`이다. 동작: 차로 `arrived` 뒤 다음 trip이 그 로봇이 쥔 정지 하나를 넘겨받는다. envelope 1.0 변경 없음. |
 | v1.241 | 2026-10-15 | Additive (D-767 A부, feat/instruction-pose-stamp, Safety-Review 대상): `POST /api/v1/line-follow/junction` 선택 필드 `pose_stamp`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_instruction_stamp`(설정 `line_follow.instruction_stamp_enabled`, 기본 꺼짐), `line_follow.junction.distance_basis`·`distance_basis_reason`. 거리 있는 지시의 쓸 수 없는 stamp는 409 `INSTRUCTION_STAMP_UNUSABLE`(`detail.reason`)이고 상태는 그대로다. Fleet은 그 능력의 로봇에 `pose_stamp`를 싣고 굽이 앞당김과 전송 지연 허용치를 뺀다. v1.238–v1.240은 다른 작업이 선점했다. Fleet `/api/fleet/*` 변경 없음. envelope 1.0 변경 없음. |

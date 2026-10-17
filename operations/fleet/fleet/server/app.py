@@ -243,11 +243,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_goal_evidence_service = CellGoalEvidenceService(cell_job_store, cell_goal_registry, GoalEvidenceStore(
             mission_service.store.path))
 
-    def on_step_action_succeeded(job, _index):
+    def on_step_action_succeeded(job, index):
         if cell_goal_evidence_service is None:
             return None
         try:  # a goal-processing failure never rewrites the recorded device success
-            return cell_goal_evidence_service.on_action_terminal(job["mission_id"])
+            return cell_goal_evidence_service.on_action_terminal(job["mission_id"], index)
         except Exception:
             _LOG.exception("stored Cell goal evidence could not be applied for %s", job["mission_id"])
             return None
