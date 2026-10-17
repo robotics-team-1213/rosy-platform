@@ -42,7 +42,8 @@ openssl pkey -in rosy-release-2026-01.key -pubout -out rosy-release-2026-01.pem
 - `.pem`이 공개키다. 장비의 `/etc/rosy/trusted-release-keys/<key-id>.pem`에 들어간다.
   승인된 공개키만 `deploy/robot/pinky_pro/release/public-keys/`에 커밋한다.
   `test_only_public_release_key_pems_are_tracked_in_the_repository`가 경로와
-  Ed25519 공개키 형식을 검사한다. 개인키는 예외 없이 저장소 밖에 둔다.
+  공개키 표시와 개인키 표시 부재를 검사한다. 사용할 키는 Ed25519여야 하며,
+  이 파일 경계 검사만으로 알고리즘 검증을 대신하지 않는다. 개인키는 저장소 밖에 둔다.
 - key id(`rosy-release-2026-01`)는 manifest의 `signing_key_id`와 장비의
   `/etc/rosy/trusted-release-keys/` 파일명에 함께 쓰인다. 소문자·숫자·하이픈만
   허용된다(`deploy/robot/pinky_pro/release/manifest.py`의 `_KEY_ID`).
@@ -63,7 +64,7 @@ openssl pkey -in rosy-release-2026-01.key -pubout -out rosy-release-2026-01.pem
 | 금지 | 강제 수단 |
 |---|---|
 | 저장소에 개인키를 커밋하는 것 | `test_only_public_release_key_pems_are_tracked_in_the_repository` + `secret_scan` |
-| 개인키 파일이나 승인된 공개키 경로 밖의 PEM을 추적하는 것 | 같은 테스트. 승인 경로의 Ed25519 공개키만 허용 |
+| 개인키 파일이나 승인된 공개키 경로 밖의 PEM을 추적하는 것 | 같은 테스트가 경로·확장자·공개키/개인키 표시를 확인. Ed25519 선택·서명 검증은 별도 |
 | 컨테이너·SD 이미지에 개인키를 넣는 것 | **CI 밖.** WP-6의 이미지 검사가 마운트된 트리에 `secret_scan`을 돌려야 확인된다 |
 | 빌드 호스트에 개인키를 두는 것 | **CI 밖.** 서명 환경 분리라는 운영 규율로만 보장된다 |
 
