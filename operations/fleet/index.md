@@ -100,7 +100,7 @@
 
 ## 최근 기록
 
-- 2026-10-17 · c241a9e65 · 주제와 등록 Cell 작업의 연결 클라이언트
+- 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
 - 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
 - 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
 - 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행

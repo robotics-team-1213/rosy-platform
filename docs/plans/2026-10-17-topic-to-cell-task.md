@@ -27,10 +27,10 @@ GOAL_CONFIRMED에서만 task_success=true다. 통신 불명·타임아웃은 작
 
 ## 실행·검증 순서
 
-- [ ] 실제 Fleet 앱을 사용하는 테스트: compile→proposal→PROPOSED, 문서 변경 차단,
+- [x] 실제 Fleet 앱을 사용하는 테스트: compile→proposal→PROPOSED, 문서 변경 차단,
   불명 제출 재전송 금지, 실제 상태 조회와 독립 goal 결과 구분, 원본 보존.
-- [ ] 커밋된 RED를 모델/AI PC에서 확인한다. 노트북 pytest는 실행하지 않는다.
-- [ ] 최소 HTTP client와 CLI를 구현하고 같은 원격 테스트와 기존 Cell API 회귀를 확인한다.
+- [x] 커밋된 RED를 모델/AI PC에서 확인한다. 노트북 pytest는 실행하지 않는다.
+- [x] 최소 HTTP client와 CLI를 구현하고 같은 원격 테스트와 기존 Cell API 회귀를 확인한다.
 - [ ] 독립 계약 리뷰 후 로컬 착지한다. 실제 사이트 활성화·구동 수용은 별도 증거다.
 - [ ] 비현장 PC의 Gazebo 자원이 확보되면 기존 G2 Fleet→UDS→OMX owner→Gazebo→
   독립 goal evidence 경로를 실행한다. 모의 API 시험으로 Gazebo 성공을 대신하지 않는다.

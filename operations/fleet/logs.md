@@ -4023,11 +4023,9 @@
 - 변경: 레시피 스키마가 `rosy_cell.recipe/3`인 Cell 후보는 `cell_mixed_submission.compile_mixed_submission`으로 간다. `PalletizingCellJobCompiler.compile_mixed`가 혼합 계획기로 다시 컴파일하고, 후보 Job과 바이트 비교, recipe·cell digest 비교, 64 KiB 한도를 한 팔 경로와 같게 지킨다. 팔 목록은 cell/3 문서의 `arms`, claim은 작업대·팔 owner 작업대·팔레트다. 제안의 `instance_id`는 작업대 팔 가운데 하나여야 한다. recipe/1·/2 경로와 그 Job id는 바뀌지 않았다(26a148117 기준 고정값 시험). palletizing을 import하는 Fleet 모듈은 여전히 `cell_compiler.py` 하나다.
 - 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 후속: 팔별 좌표의 item_at_pose 목표 술어, Cell 앱 미리보기(`/cell-app/compile`)의 recipe/3, 한 팔 recipe/3.
-## 2026-10-17 · c241a9e65 · 주제와 등록 Cell 작업의 연결 클라이언트
 
-에이전트가 고른 topic·레시피/셀 digest·instance를 기존 compile/proposal API로 연결하는
-`fleet/server/work/cell_task_client.py`를 추가했다. 원본·제출 intent·Fleet 응답을 보존하고 자동 재전송/승인 없이
-기존 Cell Job 원장을 조회한다. ACTION_SUCCEEDED를 과제 성공으로 표시하지 않는다.
-별도 명시적 admit는 저장된 요청과 현재 제안·문서/instance를 대조하고 기존 Fleet generation·
-named operator 검사로 위임한다. dispatch를 자동으로 재무장하지 않는다.
-자유문장 해석기·실물 활성화·Gazebo 실행 완료는 이 변경의 증거가 아니다.
+## 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+
+- 변경: 에이전트가 고른 topic·레시피/셀 digest·instance를 기존 compile/proposal API로 연결하는 `fleet/server/work/cell_task_client.py`를 추가했다. 원본·제출 intent·Fleet 응답을 보존하고 기존 Cell Job 원장을 조회한다. 별도 명시적 admit는 저장된 요청과 현재 제안을 대조하고 기존 named operator·generation 검사로 위임한다. 자동 재전송·dispatch 재무장은 없다.
+- 증거: bbaf06bbe 원격 pytest 30 passed, known failures NEW 0. 실제 Cell compiler·API와 새 프로세스 CLI import를 검사했다. 독립 계약 리뷰에서 추가 material finding 없음.
+- gate 변화: 없음. 자유문장 해석기·Gazebo 실행·실물 구동·실제 모방학습 완료의 증거는 아니다. ACTION_SUCCEEDED와 독립 GOAL_CONFIRMED를 구분한다.
