@@ -192,6 +192,7 @@ class ArmJobStore:
                 (mission_id, step_index)).fetchall()
             if (any(row is None or row["status"] not in {"WAITING", "READY"} for row in rows.values())
                     or any(other[0] in {"RUNNING", "HOLD"} for other in others)
+                    or (len(placement["assigned"]) > 1 and roles != sorted(placement["assigned"]))
                     or any(self._arm(connection, mission_id, role)["status"] != "READY" for role in roles)):
                 raise MissionConflict("only READY arms may start a step that has not started")
             kind, owners = step_action_kind(step["action_kind"]), arm_jobs.arm_owners(connection, mission_id)
@@ -452,11 +453,24 @@ class ArmJobStore:
                 self._set_action(connection, row, now, status="READY", reason=None, action_id=None, attempt_id=None,
                                  request_digest=None, grant_json=None, claims_json="[]")
 
+    @staticmethod
+    def _held_tight_partners(connection, mission_id, role) -> list[str]:
+        """The still held or offline partners of ``role`` on its unconfirmed tight steps."""
+        confirmed = {row[0] for row in connection.execute(
+            "SELECT step_index FROM fleet_cell_steps WHERE mission_id=? AND status='GOAL_CONFIRMED'", (mission_id,))}
+        partners = {other for item in arm_jobs.placements(connection, mission_id)
+                    if item["coupling"] == "tight" and item["step_index"] not in confirmed and role in item["assigned"]
+                    for other in item["assigned"] if other != role}
+        return sorted(other for other in partners
+                      if ArmJobStore._arm(connection, mission_id, other)["status"] in {"HOLD", "OFFLINE"})
+
     def resume_arm(self, mission_id: str, *, arm_role: str, actor_id: str, expected_generation: int) -> dict[str, Any]:
         """Operator resume of one arm under the current fence (D-779 §6): its HELD claims are released.
 
         Refused while one of its claims is DISPATCHING or UNKNOWN (readback first), for a cancelled
-        Job, and after a stop or authority change (the Job's claims are parked: resume the Job).
+        Job, and after a stop or authority change (the Job's claims are parked: resume the Job). An
+        arm held because its tight partner failed (``TIGHT_PARTNER_HELD``) resumes only after that
+        partner, or with it through the whole-Job resume.
         """
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         with self._tx(mission_id) as (connection, job):
@@ -470,6 +484,11 @@ class ArmJobStore:
                 raise MissionConflict("the stop generation or authority changed: resume the whole Job")
             rows = connection.execute("SELECT * FROM fleet_cell_step_actions WHERE mission_id=? AND arm_role=? "
                                       "AND status='HOLD'", (mission_id, arm_role)).fetchall()
+            if TIGHT_PARTNER_REASON in {arm["reason"], *(row["reason"] for row in rows)}:
+                held = self._held_tight_partners(connection, mission_id, arm_role)
+                if held:
+                    raise MissionConflict(f"arm {arm_role} was held with its tight partner: resume "
+                                          f"{', '.join(held)} first, or the whole Job")
             keys = sorted({key for row in rows for key in json.loads(row["claims_json"])})
             if phases(connection, mission_id, keys) & _UNRESOLVED:
                 raise MissionConflict("resume is refused while an arm claim is DISPATCHING or UNKNOWN")

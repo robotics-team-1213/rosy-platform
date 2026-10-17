@@ -26,6 +26,7 @@ budget and alternate which goes first.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from typing import Any, Mapping
@@ -39,6 +40,7 @@ from .step_dispatcher import _IN_FLIGHT, _SKIPPED, MAX_IO_PER_TICK, StepJobDispa
 
 _ARM_SKIPPED = _SKIPPED | {"CLAIM_BUSY"}
 PAIR_REASON = "PAIR_PARTNER_NOT_ACCEPTED"  # D-778 §4: one arm of a pair refused, the step does not run
+_LOG = logging.getLogger(__name__)
 
 
 def pair_fields(grant_model: type, *, role: str, partner_instance: str | None, pair_id: str | None,
@@ -68,6 +70,17 @@ class ArmJobDispatcher(StepJobDispatcher):
         self._owner_workcell = {instance: workcell for workcell, instance in self.omx_instances.items()}
         self._arm_cursor: tuple = ()
         self.io_floor = 0  # I/O the single-arm pass already spent this tick
+        self.goal_hook = None  # (job, step_index) after an arm Action's recorded success: stored goal evidence
+
+    def _outcome(self, job, index, grant, outcome, reason, result, *, event_id=None) -> dict[str, Any]:
+        """The shared recording path, then the goal hook; the reported state stays the arm Action's own."""
+        view = super()._outcome(job, index, grant, outcome, reason, result, event_id=event_id)
+        if outcome == "SUCCEEDED" and self.goal_hook is not None and view["state"] == "ACTION_SUCCEEDED":
+            try:  # goal processing never rewrites the recorded device success (main 3ef12ca3e)
+                self.goal_hook(job, index)
+            except Exception:
+                _LOG.exception("Cell arm step success callback failed for %s", job["mission_id"])
+        return view
 
     # Arm views handed to the shared StepJobDispatcher helpers -----------------------------------
     def _arm_job(self, job: Mapping[str, Any], action: Mapping[str, Any], inputs=None) -> dict[str, Any]:
@@ -118,9 +131,9 @@ class ArmJobDispatcher(StepJobDispatcher):
                     or any(action["status"] in {"RUNNING", "HOLD"} for action in actions)):
                 continue
             roles = sorted(action["arm_role"] for action in actions if action["status"] in {"WAITING", "READY"})
-            if not roles:
-                continue
             assigned = placement["assigned"]
+            if not roles or (len(assigned) > 1 and roles != sorted(assigned)):
+                continue  # a coordinated step starts every arm together or not at all (D-778 §4)
             if len(assigned) == 1 and arms[assigned[0]]["status"] in {"HOLD", "OFFLINE"}:
                 alternate = next((role for role in placement["alternates"]
                                   if arms[role]["status"] == "READY" and role not in busy), None)
@@ -250,50 +263,76 @@ class ArmJobDispatcher(StepJobDispatcher):
             except Exception:
                 self._forget_identity(other.instance_id)
 
+    def _hold_rest(self, mission_id: str, action_ids: list[str], reason: str) -> None:
+        for action_id in action_ids:  # one by one: a partner already held must not keep the rest RUNNING
+            try:
+                self.store.hold_unsent(mission_id, action_ids=[action_id], reason=reason)
+            except MissionConflict:
+                pass  # already held with its tight partner
+
     def _send(self, job, index: int, roles: list[str], grants) -> dict[str, Any]:
         """Send each arm's grant; if one is refused or unknown, nothing more of the step is sent, the
-        unsent arms are held unsent and the accepted ones are cancelled (D-778 §4 pair rule)."""
-        results, accepted = [], []
-        for position, role in enumerate(roles):
-            grant = grants[role]
-            action = next(item for item in job["step_actions"]
-                          if item["step_index"] == index and item["arm_role"] == role)
-            arm_view = self._arm_job(job, action)
-            if position and not self._fence_open(grant):
-                # A stop or authority change landed between two sends of a pair (1d item 1, per arm).
-                self.store.hold_unsent(job["mission_id"], action_ids=[grants[other].action_id for other in
-                                                                    roles[position:]],
-                                       reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT")
-                self._cancel(accepted)
-                break
-            self._io += 1
-            failure = None
-            try:
-                receipt = self.transport.submit(grant)
-            except LocalActionRejected as exc:
-                failure = ("REJECTED", rejection_reason(grant.action_kind, str(exc).split(":", 1)[0]),
-                           {"detail": str(exc)[:256]})
-            except Exception:
-                self._forget_identity(grant.instance_id)
-                failure = ("UNKNOWN", "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", {})
-            if failure is None:
-                result = self._apply(arm_view, index, grant, receipt)
-                results.append(result)
-                if result["state"] in _IN_FLIGHT:
-                    accepted.append(grant)
-                    continue
-                if result["state"] == "ACTION_SUCCEEDED":
-                    continue
-            # This arm did not start (refused, unknown, or ended at once): the pair stops here.
-            for other in roles[position + 1:]:
+        unsent arms are held unsent and the accepted ones are cancelled (D-778 §4 pair rule).
+
+        When the step did not start on every arm (a refusal, an unknown or held outcome, a fence
+        change between two sends, or an exception out of this loop, after which the unsent arms are
+        held too), every sent arm that may still run is cancelled: one whose device accepted it, whose
+        submit outcome is unknown, or whose receipt did not end it in success. Only an arm refused
+        outright or already succeeded is left alone. A step whose loop finished with every arm
+        accepted or succeeded is never cancelled here; an exception after the last send may still
+        cancel it (readback settles that)."""
+        results, accepted, pending, started = [], [], list(roles), False
+        try:
+            for position, role in enumerate(roles):
+                grant = grants[role]
+                action = next(item for item in job["step_actions"]
+                              if item["step_index"] == index and item["arm_role"] == role)
+                arm_view = self._arm_job(job, action)
+                if position and not self._fence_open(grant):
+                    # A stop or authority change landed between two sends of a pair (1d item 1, per arm).
+                    self._hold_rest(job["mission_id"], [grants[other].action_id for other in pending],
+                                    "FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT")
+                    break
+                pending.remove(role)
+                self._io += 1
+                failure = None
                 try:
-                    self.store.hold_unsent(job["mission_id"], action_ids=[grants[other].action_id], reason=PAIR_REASON)
-                except MissionConflict:
-                    pass  # already held with its tight partner
-            self._cancel(accepted)
-            if failure is not None:
-                results.append(self._outcome(arm_view, index, grant, *failure))
-            break
+                    receipt = self.transport.submit(grant)
+                except LocalActionRejected as exc:
+                    failure = ("REJECTED", rejection_reason(grant.action_kind, str(exc).split(":", 1)[0]),
+                               {"detail": str(exc)[:256]})
+                except Exception:
+                    self._forget_identity(grant.instance_id)
+                    failure = ("UNKNOWN", "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", {})
+                    accepted.append(grant)  # it may have reached the owner and be running
+                if failure is None:
+                    accepted.append(grant)  # until its receipt says it ended in success
+                    result = self._apply(arm_view, index, grant, receipt)
+                    results.append(result)
+                    if result["state"] in _IN_FLIGHT:
+                        continue
+                    if result["state"] == "ACTION_SUCCEEDED":
+                        accepted.remove(grant)
+                        continue
+                # This arm did not start (refused, unknown, or ended at once): the pair stops here.
+                self._hold_rest(job["mission_id"], [grants[other].action_id for other in pending], PAIR_REASON)
+                if failure is not None:
+                    results.append(self._outcome(arm_view, index, grant, *failure))
+                break
+            else:
+                started = True
+        except Exception:
+            # Unexpected error: nothing more is sent, the arms never sent are parked and the sent
+            # ones still in flight are cancelled below (readback settles them).
+            try:
+                self._hold_rest(job["mission_id"], [grants[other].action_id for other in pending],
+                                PAIR_REASON)
+            except Exception:
+                _LOG.exception("unsent arm Actions of %s step %s could not be held", job["mission_id"], index)
+            raise
+        finally:
+            if not started:
+                self._cancel(accepted)
         return {**results[-1], "results": results} if len(results) > 1 else results[0]
 
 
@@ -320,10 +359,10 @@ class CellJobDispatcher(StepJobDispatcher):
         super().__init__(store, task_store, transport, omx_instances, grant_revisions,
                          deployment_profile=deployment_profile, now=now, grant_ttl_s=grant_ttl_s,
                          on_step_action_succeeded=on_step_action_succeeded, monotonic=monotonic)
-        # No goal hook for arm steps yet: Cell goal ingress is single-arm (D-779 open item).
         self.arms = ArmJobDispatcher(ArmJobStore(store), task_store, transport, omx_instances, grant_revisions,
                                      deployment_profile=deployment_profile, now=self.now,
                                      grant_ttl_s=grant_ttl_s, monotonic=monotonic)
+        self.arms.goal_hook = on_step_action_succeeded  # per-step goal evidence (D-779 §3)
         self.arms._identity = self._identity  # one owner identity cache for both passes
         self._arms_first = False
 
