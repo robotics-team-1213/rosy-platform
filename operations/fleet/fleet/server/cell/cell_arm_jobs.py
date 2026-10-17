@@ -41,6 +41,7 @@ COUPLINGS = ("independent", "loose", "tight")  # D-780 §5
 MAX_ARMS = 4
 CANCELLED_REASON = "CANCELLED_BY_OPERATOR"  # cell_job_store.CANCELLED_REASON (a test pins them equal)
 TIGHT_PARTNER_REASON = "TIGHT_PARTNER_HELD"  # an arm held because its tight partner failed (D-779 §6)
+PAIR_PARTIAL_REASON = "PAIR_PARTIALLY_SUCCEEDED"  # a coordinated step one arm finished: never rerun alone
 _HASHES = ("recipe_digest", "cell_digest", "process_artifact_digest")
 _SUBMISSION = {"job_id", "workcell_id", "arms", "recipe_digest", "cell_digest", "process_artifact_digest",
                "job", "steps", "resources", "ledger_markers"}
@@ -266,6 +267,8 @@ def refresh_steps(connection: sqlite3.Connection, mission_id: str, now: str) -> 
             status, reason = "RUNNING", None
         elif mine and statuses == {"ACTION_SUCCEEDED"}:
             status, reason = "ACTION_SUCCEEDED", None
+        elif len(placement["assigned"]) > 1 and "ACTION_SUCCEEDED" in statuses:
+            status, reason = "HOLD", PAIR_PARTIAL_REASON  # shown to the operator; only cancel ends it
         else:
             status, reason = ("READY" if ready else "WAITING"), None
         if (steps[index]["status"], steps[index]["reason"]) != (status, reason):
@@ -378,6 +381,6 @@ def recover(connection: sqlite3.Connection, now: str, control: Mapping[str, Any]
     return len(rows)
 
 
-__all__ = ["ARM_ROLE", "CANCELLED_REASON", "COUPLINGS", "TIGHT_PARTNER_REASON", "actions", "arm_owners",
-           "attach", "create", "event", "hold_arms", "insert_action", "is_multi_arm", "marked", "placements",
-           "recover", "refresh_steps", "single_arm_jobs", "site_stop", "summarize"]
+__all__ = ["ARM_ROLE", "CANCELLED_REASON", "COUPLINGS", "PAIR_PARTIAL_REASON", "TIGHT_PARTNER_REASON", "actions",
+           "arm_owners", "attach", "create", "event", "hold_arms", "insert_action", "is_multi_arm", "marked",
+           "placements", "recover", "refresh_steps", "single_arm_jobs", "site_stop", "summarize"]

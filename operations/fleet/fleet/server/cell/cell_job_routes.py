@@ -5,6 +5,7 @@ under the current fence; cancel ends it and releases its claims in one transacti
 cancel need a named operator (the D-276 site principal model); the Rosy Cell service principal
 and viewers are refused like they are for admit. A multi-arm Job (D-779) resumes every arm and
 cancels as a whole through the same routes; reconcile reads back every arm Action in flight.
+``/arms/{arm_role}/resume`` resumes one held arm of a multi-arm Job (D-779 §6).
 """
 
 from __future__ import annotations
@@ -72,6 +73,20 @@ def install_cell_job_routes(app, *, cell_job_store: CellJobStore, proposal_store
         try:
             job = store_for(mission_id).resume(mission_id, actor_id=principal.principal_id,
                                                expected_generation=body.expected_generation)
+        except (KeyError, MissionConflict, ValueError) as exc:
+            raise refused(exc) from exc
+        return {"job": redact_cell_job(job, principal)}
+
+    @app.post("/api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume", dependencies=operator_guard,
+              tags=["fleet-cell-jobs"])
+    def cell_job_arm_resume(mission_id: str, arm_role: str, body: MissionAdmitRequest,
+                            principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """One held arm of a multi-arm Job (D-779 §6); a single-arm Job or another arm is refused."""
+        if cell_job_store.get(mission_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
+        try:
+            job = arm_jobs.resume_arm(mission_id, arm_role=arm_role, actor_id=principal.principal_id,
+                                      expected_generation=body.expected_generation)
         except (KeyError, MissionConflict, ValueError) as exc:
             raise refused(exc) from exc
         return {"job": redact_cell_job(job, principal)}
