@@ -13,6 +13,7 @@ Offline training jobs and their input/output contracts. Each job uses its declar
 |-----------|---------|
 | `perception/` | Actual trainer, recording/training jobs, review admission composition and notebook recipes (see `perception/AGENTS.md`) |
 | `omx/` | OMX ACT research on existing LeRobot exports (see `omx/AGENTS.md`) |
+| `world_model/` | D-782 M1 action-conditioned dynamics ensemble on world-model datasets (see `world_model/AGENTS.md`) |
 | `pinky/` | Pinky recording speed-model comparison against recorded CORE output (see `pinky/AGENTS.md`) |
 
 ## For AI Agents

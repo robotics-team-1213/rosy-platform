@@ -51,7 +51,9 @@ gh pr view <PR번호> --json headRefOid,statusCheckRollup,mergeable
 gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
 ```
 
-안전 경로를 바꾼 PR은 **최종 squash 본문에도** 실제 독립 검토의 `Safety-Review: <검토자> <근거>` 줄을 남긴다. 원본 커밋에 trailer가 있어도 PR 본문만 사용하는 squash 설정에서 유실될 수 있다. 검토 base/head와 근거를 적은 저장소 밖 본문 파일을 `gh pr merge ... --body-file <본문파일>`로 전달하고, 병합 후 `git show -s --format=%B <병합-SHA>`로 실제 trailer를 확인한다. 검토 전의 빈 양식을 승인 근거로 사용하지 않는다.
+squash 메시지는 PR 제목·본문을 사용한다(설정 `PR_TITLE`/`PR_BODY`). 안전 경로 PR은 본문에서 줄 맨 앞에 실제 독립 검토의 `Safety-Review: <검토자/레인> <증거>`를 남긴다. 원본 커밋 trailer가 유실되면 main scope가 실패한다(#81→#82, #78→#86).
+
+검토 base/head와 근거를 담은 저장소 밖 파일을 `gh pr merge ... --body-file <본문파일>`로 전달하고, 병합 후 `git show -s --format=%B <병합-SHA>`로 실제 trailer를 확인한다. 빈 양식을 승인 근거로 쓰지 않는다. 유실 이력 복구는 독립 검토 후 `tools/harness/safety_review_exempt.json`에서 정확한 squash SHA를 원본 head와 연결한다.
 
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 

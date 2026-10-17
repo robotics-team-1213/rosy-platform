@@ -95,6 +95,7 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
             validate_observation(sample, profile, time.time_ns())
             current = store.begin(min(sample['time_ns'], sample['environment']['recorded_ns']), sample['environment'])
             store.environment(sample['environment'])
+            store.camera_info(sample.get('camera_info'), sample['time_ns'])
             last_frame, last_identity = time.monotonic(), None
             identity = (current['run_id'], current['profile_sha256'])
             generations = {r: (sample['environment']['environment'][r]['environment_epoch'],
@@ -116,6 +117,7 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                     require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
                     sample = backend.observe()
                     store.environment(sample['environment'])
+                    store.camera_info(sample.get('camera_info'), sample['time_ns'])
                     validate_observation(sample, profile, time.time_ns())
                     env = sample['environment']
                     require((env['run_id'], env['profile_sha256']) == identity, 'environment run/profile changed')

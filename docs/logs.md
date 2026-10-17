@@ -8942,6 +8942,12 @@ osy-d395-s1d\`.
 - 변경: PR #81의 squash 커밋 하나만 원본 검토 head와 연결하는 이력 예외를 추가했다. 제품 코드·안전 분류·검사 조건은 바꾸지 않았다.
 - 증거: /root/review_safety_merge 독립 읽기 전용 검토에서 안전 경로 10개가 원본 head와 동일하고 원본 안전 커밋 3개의 검토 trailer가 존재함을 확인했다. 기존 실패 범위의 safety-review 정적 재현 후 수정 결과와 GitHub CI를 확인한다. 원격 시험 PC는 사용자 지시에 따라 생략한다.
 - gate 변화: 없음. 안전 검토 출처 메타데이터만 복구하며 ROS-SIM·DEVICE·FIELD 수용을 새로 인정하지 않는다.
+
+## 2026-10-17 · uncommitted · fix: PR #78 squash로 유실된 안전 검토 이력 연결
+
+- 변경: PR #78의 squash 커밋 `e0d77bcff` 하나만 원본 검토 head `8158a0a685`와 연결하는 이력 예외를 추가했다. 제품 코드·안전 분류·검사 조건은 바꾸지 않았다.
+- 증거: squash patch-id가 검토한 head와 같다(`fc6879003987`). 원본은 독립 읽기 전용 에이전트 검토 두 차례(1차 지적 3건 반영, 2차 지적 없음)를 거쳤다. main run 39006153102의 scope 실패를 `tools/harness/safety_review.py e0d77bcff~1 e0d77bcff`로 재현하고 예외 추가 뒤 통과를 확인했다.
+- gate 변화: 없음. 안전 검토 출처 메타데이터만 복구한다.
 ## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 
 - 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
@@ -8983,6 +8989,12 @@ osy-d395-s1d\`.
 - 증거: 양쪽 준비 묶음 exit0. 원격 문서 계약142pass, 기존 camera source7pass, NEW0. 모델 helper source 검증 순서·고정 로그 경로를 수정하고 최종 독립 리뷰 material finding0건. docs/validation/omx-remaining-preparation-2026-10-17/follow-up.md.
 - gate 변화: 구동 없는 실행 환경 준비 완료. 두 외장 camera stable by-id 장치 부재, 신규 영상0frame/STALE로 수집 차단. 실제 재연결·실측/물리 정지·시야/하중 수용·시연/실데이터 학습은 미완료, 실제 시연0회. D-770 Proposed 유지.
 
+
+## 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
+
+- 변경: learning-policy full matrix의 정확한 suite 집합에 이미 등록된 world-model training/evaluation/prediction 세 경로를 기존 계약 시험의 기대값에도 포함했다. 정확한 일치·ROS-free·FULL_SUITES 포함 검사는 유지한다.
+- 증거: OMX 준비 브랜치 착지 검사에서 재현된 실패를 unchanged main f4b0caa69e의 동일 단일 시험에서 원격 재현했다. 외부 scratch main-world-model-matrix-red/run-1.txt. 새 실패를 known_failures에 추가하거나 검사 범위를 줄이지 않았다.
+- gate 변화: runtime/실물/학습 변화 없음. 추가 준비와 camera 연결 부재 기록은 validation/omx-remaining-preparation-2026-10-17/follow-up.md. 실제 시연0회.
 
 ## 2026-10-17 · uncommitted · docs: 기존 파일럿 키의 릴리스 승인 환경 구성과 안내 정정
 

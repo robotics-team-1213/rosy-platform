@@ -17,6 +17,7 @@ from native_environment import bind_environment, seal_environment, split_coverag
 
 JOINTS = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
           'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos']
+OBJECT_RESULTS = ('moved_as_intended', 'grasp_missed', 'dropped', 'displaced', 'untouched', 'unknown')
 
 
 def _integer(value, name):
@@ -49,7 +50,7 @@ def inspect_frames(info, frames):
             if episodes:
                 episodes[-1]['content_sha256'] = digest.hexdigest()
             episodes.append(dict(episode_index=episode, frames=0, outcome='unknown',
-                                 split='exclude', reviewer='', reason=''))
+                                 object_result='unknown', split='exclude', reviewer='', reason=''))
             digest, previous_time = hashlib.sha256(), None
         if frame != episodes[-1]['frames']:
             raise ValueError('missing or duplicate frame index')
@@ -109,6 +110,9 @@ def reviewed_splits(report, decisions):
             raise ValueError('split must be train, eval, test or exclude')
         if decision.get('outcome') not in ('success', 'failure', 'unknown'):
             raise ValueError('outcome must be success, failure or unknown')
+        # Human-observed object effect, kept for action-outcome (world model) labels; not a split rule.
+        if decision.get('object_result', 'unknown') not in OBJECT_RESULTS:
+            raise ValueError('object_result must be one of ' + ', '.join(OBJECT_RESULTS))
         if split == 'exclude':
             continue
         if decision['outcome'] != 'success':
