@@ -216,6 +216,11 @@ class RosyCoreNode(Node):
         if self._api_server is not None:
             self._api_server.should_exit = True
         self.core.events.publish("system.shutdown", severity="warning", source="core")
+        if self.core.station_docking is not None:
+            try:
+                self.core.station_docking.close()
+            except Exception as exc:
+                self.get_logger().warning(f'station shutdown failed: {exc}')
         self.control_adapter.close()
         self.get_logger().info("core shutting down")
         if self._api_thread is not None:

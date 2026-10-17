@@ -30,4 +30,4 @@ def console_root():
     return PACKAGE_ROOT / 'fleet/server/web'
 
 
-SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking', 'pose')
+SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking', 'pose', 'site_observation')

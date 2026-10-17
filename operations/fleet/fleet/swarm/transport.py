@@ -19,6 +19,8 @@ from pydantic import ValidationError
 from core_common.protocol.localization import CandidateReport, LocalizationDecision
 from core_common.protocol.schemas import LineStuckPrecondition, SwarmFollowParams
 from fleet.swarm.robots import RobotEndpoint, ws_url
+from fleet.swarm.station_transport import StationTransport
+from fleet.swarm.navigation_transport import NavigationTransport
 
 log = logging.getLogger(__name__)
 # websockets dumps every frame at DEBUG, including the first-frame auth token.
@@ -208,7 +210,7 @@ class _WebsocketSink:
         await self._ws.close()
 
 
-class HttpRobotClient:
+class HttpRobotClient(StationTransport, NavigationTransport):
     def __init__(self, endpoint: RobotEndpoint, *, http: Optional[httpx.AsyncClient] = None,
                  timeout_s: float = 5.0) -> None:
         self.robot_id = endpoint.robot_id
@@ -253,16 +255,15 @@ class HttpRobotClient:
     async def _get(self, path: str) -> dict:
         return self._check(await self._http.get(path, headers=self._headers()))
 
-    async def _post(self, path: str, body: Optional[dict[str, Any]] = None) -> dict:
+    async def _mutate(self, path: str, body: Optional[dict[str, Any]] = None, *, method='POST') -> dict:
         from fleet.swarm.dispatch_guard import check_dispatch
         check_dispatch(path=path)
-        return self._check(await self._http.post(path, json=body, headers=self._headers()))
+        return self._check(await self._http.request(method, path, json=body, headers=self._headers()))
+
+    _post = _mutate  # Existing callers retain the guarded POST boundary.
 
     async def state(self) -> dict:
         return await self._get("/api/v1/robot/state")
-
-    async def power_health(self) -> dict:
-        return await self._get("/api/v1/power/health")
 
     async def capabilities(self) -> dict:
         return await self._get("/api/v1/system/capabilities")
@@ -279,34 +280,6 @@ class HttpRobotClient:
 
     async def swarm_cancel(self) -> dict:
         return await self._post("/api/v1/swarm/cancel")
-
-    async def navigation_cancel(self) -> dict:
-        return await self._post("/api/v1/navigation/cancel")
-
-    async def navigation_path(self) -> dict:
-        """현재 계획 경로(map 프레임 폴리라인). Fleet 이 교행을 미리 보는 유일한 재료다."""
-        return await self._get("/api/v1/navigation/path")
-
-    async def navigation_goal(self, x: float, y: float, yaw: float, *,
-                              correlation_id: str | None = None,
-                              lease_ttl_s: float | None = None,
-                              expected_boot_id: str | None = None,
-                              expected_owner_generation: int | None = None) -> dict:
-        body = {"x": x, "y": y, "yaw": yaw}
-        if correlation_id is not None:
-            body["correlation_id"] = correlation_id
-        if lease_ttl_s is not None:  # D-550 10: only to a robot that advertises goal_lease
-            body["lease_ttl_s"] = lease_ttl_s
-        if expected_boot_id is not None or expected_owner_generation is not None:
-            if expected_boot_id is None or expected_owner_generation is None:
-                raise ValueError('NATIVE_OWNER_EPOCH_PAIR_REQUIRED')
-            body.update(expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation)
-        return await self._post("/api/v1/navigation/goal", body)
-
-    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:
-        """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not active."""
-        return await self._post("/api/v1/navigation/goal/lease",
-                                {"correlation_id": correlation_id, "ttl_s": ttl_s})
 
     async def line_follow_mode(self, mode: str) -> dict:
         if mode not in {"IR_LINE", "OFF"}:

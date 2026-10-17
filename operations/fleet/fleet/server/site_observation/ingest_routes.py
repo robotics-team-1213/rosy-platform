@@ -130,7 +130,11 @@ def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
 
 def install_ingest_routes(app, *, console, console_token, hub, sightings,
                           policy_evidence, principals, require_viewer, read_guard,
-                          map_pose=None) -> None:
+                          map_pose=None, station_ingress=None) -> None:
+    if station_ingress is not None:
+        from fleet.server.station_ingress_routes import install_station_ingress_routes
+        station_ingress.assert_isolated(console, console_token, principals)
+        install_station_ingress_routes(app, ingress=station_ingress, require_viewer=require_viewer)
     if sightings is not None and sightings.enabled:
         if console_token is not None and sightings.uses_token(console_token):
             raise ValueError("sighting source credentials must differ from the console token")

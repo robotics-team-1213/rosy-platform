@@ -6,7 +6,8 @@
 # test/architecture/test_module_structure.py; how-to in test/architecture/AGENTS.md.
 drive/behaviors/line_follow
 foundation/core_common/protocol/native small
-drive/behaviors/navigation small
+drive/behaviors/navigation
+drive/behaviors/docking
 drive/behaviors/line_follow/recovery
 drive/behaviors/line_follow/recovery/junction
 drive/behaviors/line_follow/recovery/stuck
@@ -56,6 +57,7 @@ robot_ui/robot/panels
 fleet/fleet/server/auth
 fleet/fleet/server/console
 fleet/fleet/server/cell
+fleet/fleet/server/site_observation
 fleet/fleet/swarm
 fleet/fleet/routing
 decision/src/rosy/decision

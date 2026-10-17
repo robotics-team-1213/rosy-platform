@@ -22,6 +22,8 @@ _WRITE = re.compile(r"\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|D
 
 #: module (relative to operations/fleet/fleet) -> the ledger tables it writes, measured 2026-10-17.
 KNOWN_WRITERS = {
+    "server/ledger/charge_store.py": {"fleet_action_claims"},  # D-772 phase/claim transaction and UNKNOWN hold
+    "server/ledger/task_schema.py": {"fleet_action_claims"},   # D-772 reservation migration on TaskStore connection
     "server/ledger/task_store.py": {"fleet_tasks", "fleet_task_history", "fleet_robot_reservations",
                                     "fleet_action_claims"},
     "server/ledger/task_results.py": {"fleet_tasks", "fleet_robot_reservations"},

@@ -236,6 +236,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
+| D-783 | Native adopted-map readback with finite parent evidence |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
 
 ## 계획·결과 문서
@@ -325,6 +326,7 @@
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
+- [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -339,8 +341,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
-- 2026-10-17 · uncommitted · docs: OMX 스케줄링 관측과 수집 통합 결과 연결
-- 2026-10-17 · uncommitted · docs: OMX feedback 수정 근거와 staging 준비 결과 연결
-- 2026-10-17 · uncommitted · docs: 기존 파일럿 키의 릴리스 승인 환경 구성과 안내 정정
-- 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
+- 2026-10-17 · uncommitted · 원격 main 기준 충전 배포 통합 검사 보완
+- 2026-10-17 · uncommitted · reviewed final station deployment source
+- 2026-10-17 · uncommitted · deployment safety gap remediation
+- 2026-10-17 · uncommitted · station deployment main integration
+- 2026-10-17 · uncommitted · measured charge admission verified

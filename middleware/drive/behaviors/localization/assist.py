@@ -52,6 +52,10 @@ MAX_RAW_BYTES = 64 * 1024
 _log = logging.getLogger(__name__)
 
 
+def _localized_map(status: LocalizationStatus) -> bool:
+    return status.state is LocState.LOCALIZED and status.pose_frame is PoseFrame.MAP
+
+
 def _load(raw: str) -> Optional[dict]:
     if not isinstance(raw, str) or len(raw) > MAX_RAW_BYTES or len(raw.encode("utf-8")) > MAX_RAW_BYTES:
         return None
@@ -99,14 +103,14 @@ class LocalizationAssist:
         self.publish_suspect: Optional[Callable[[dict], None]] = None
         #: CORE's navigation cancel path, run on LOCALIZED (D-395 §7).
         self.on_localized = on_localized
-        #: CORE's stop paths, run when the state leaves LOCALIZED (D-395 §2: autonomy only there).
+        #: CORE's stop paths when the effective LOCALIZED/map condition is lost.
         self.on_lost = on_lost
         #: D-546 5: the open "where am I" request Fleet reads (`GET /localization/request`).
         self.pose_requests = PoseRequests(events, robot_id)
         #: Run when an accepted result closes an open pose request (line follow resumes).
         self.on_pose_answered: Optional[Callable[[], None]] = None
         self._lock = threading.Lock()
-        #: Orders the leave-LOCALIZED halt against every motion start: a start holds
+        #: Orders the localization-loss halt against every motion start: a start holds
         #: it from its LOCALIZED check to its dispatch; a state change holds it while
         #: it lands and runs the halt. Taken before any manager lock.
         self.gate = threading.RLock()
@@ -115,6 +119,7 @@ class LocalizationAssist:
         self._odom_owns_pose = False
         self._report: Optional[CandidateReport] = None
         self._emitted: Optional[LocState] = None
+        self._emitted_allowed: Optional[bool] = None
         self._decisions: "OrderedDict[str, tuple[str, list[str]]]" = OrderedDict()
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
@@ -153,8 +158,7 @@ class LocalizationAssist:
     def autonomy_allowed(self) -> bool:
         """D-395: LOCALIZED with a map-frame pose, or a robot that predates D-395."""
         status = self.status()
-        return status is None or (status.state is LocState.LOCALIZED
-                                  and status.pose_frame is PoseFrame.MAP)
+        return status is None or _localized_map(status)
 
     def candidates(self) -> Optional[CandidateReport]:
         """The latest report, only while it answers the robot's open request."""
@@ -213,20 +217,31 @@ class LocalizationAssist:
     def _after_change(self) -> None:
         with self._lock:
             status, previous = self._effective(), self._emitted
-            if status is None or status.state is previous:
+            if status is None:
                 return
+            allowed = _localized_map(status)
+            state_changed = status.state is not previous
+            allowed_changed = allowed is not self._emitted_allowed
+            if not state_changed and not allowed_changed:
+                return
+            self._emitted_allowed = allowed
             self._emitted = status.state
-        self._events.publish("localization.state", source="localization", data={
-            "state": status.state.value,
-            "previous": previous.value if previous is not None else None,
-            "pose_frame": status.pose_frame.value,
-            "reason": status.reason,
-            "request_id": status.request_id,
-        })
-        if status.state is LocState.LOCALIZED:
+        # Public state events stay state-only; motion follows the same effective
+        # LOCALIZED/map predicate as admission, including a first invalid report.
+        if state_changed:
+            self._events.publish("localization.state", source="localization", data={
+                "state": status.state.value,
+                "previous": previous.value if previous is not None else None,
+                "pose_frame": status.pose_frame.value,
+                "reason": status.reason,
+                "request_id": status.request_id,
+            })
+        if not allowed_changed:
+            return
+        if allowed:
             self._cancel_navigation()
-        elif previous is LocState.LOCALIZED:
-            self._run(self.on_lost, "autonomy stop on leaving LOCALIZED")
+        else:
+            self._run(self.on_lost, "autonomy stop after effective localization loss")
 
     def on_candidates(self, raw: str) -> None:
         data = _load(raw)

@@ -21,6 +21,7 @@ gates:
   FIELD:
     state: PARKED
 adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655]
+adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655, D-772, D-774]
 plans:
   - docs/plans/2026-09-30-app-identity-rename-plan.md
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
@@ -51,3 +52,7 @@ D-636의 소형 AprilGrid 렌즈·바닥 측정 워크숍, 유효 픽셀 mask와
 사용 절차는 [compact-camera-calibration.md](docs/compact-camera-calibration.md), 검증 범위는
 [result.md](../../docs/validation/compact-camera-calibration-2026-10-11/result.md)에 기록한다.
 운영 교정 자동 교체·모델 자동 호출·현장 오차 수용은 포함하지 않는다. 기존 DEVICE/FIELD gate는 유지한다.
+
+## 2026-10-16 스테이션 측정 설치 실행
+
+D-774의 전용 명령과 strict JSON 프로필은 상대/지도 worker를 기존 수신기·source-only HTTP client에 조립한다. [설치 안내](docs/station-vision.md)를 따른다. 0b816554c의 원격 전체 overhead·구조/안전 시험은 781 PASS/0 skip/NEW 0이며 실제 WebSocket demand·JPEG 전송·취소/오류 종료를 포함한다. 일반 preview의 인증/30초 유지 규칙도 회귀했다. 이 기록은 실물 카메라 결속·capture 고정·광학 측정이나 Fleet/CORE 전체 장애 수용을 입증하지 않는다. 기존 DEVICE/FIELD 상태는 유지한다.

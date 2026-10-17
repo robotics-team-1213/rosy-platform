@@ -71,7 +71,6 @@
 - 증거: 새 경로 RED 3 FAIL 뒤 6 PASS. 넓은 회귀 158 PASS/2 fixture FAIL은 목표 미지원 fake를 누른 시험이어서 지원하는 운행 폼으로 수정했다. 기록 대상 RED 뒤 최종 자원 기준 통과 AI PC 역할/배정/대형/대상/지도/구조 30 PASS/111 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/selected-context-acceptance/run-1.txt`). 독립 소스 검토 수용.
 - gate 변화: source/remote 진입·대상 유지 범위. Task 5 충돌 및 지도 활성화 busy 보강, main 통합·CI·배포·실제 사이트·실물 수용은 남아 있다.
 
-
 ## 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 
 - 변경: trip뿐 아니라 진행 중 대형과 지도 기록에서도 활성화를 거절한다. 일반 기록 시작·pose 장소 저장은 위치 조회 전후 map_id·전체 조사 기준·활성 버전을 비교해 이전 위치의 새 지도 저장을 막는다. 팔로워 목표와 참여자 개별 운행, 진행 중 trip의 개별 목표를 기존 admission에 맞춰 설명하며 확인 직전 재검사한다. 충돌 작업을 자동 해제하거나 이동 명령을 추가하지 않는다. 재개·후진 수락과 실제 로봇 진행을 구분한다.
@@ -157,7 +156,6 @@
 - 변경: 초기 쿠키는 첫 비밀번호 변경에만 사용하고 네 운용 문서의 조작을 잠근다. 우상단 계정에서 본인 표시 이름/현재 비밀번호 확인 변경/읽기 전용 ID·이메일·권한을 관리한다. Map/Cell은 새 탭과 초안을 보존한다. 비밀번호/표시 이름 결과를 서버 재조회하며 만료·계정 전환은 비밀 삭제/제출 중단/명시적 재조회로 처리한다.
 - 증거: 서버 73b23b956 원격 선택 173 PASS와 70e970acb Unicode 수정 20 PASS, 각각 NEW 0. UI/권한/소스의 독립 검토에서 찾은 오류를 수정했고 현재 통합 브라우저 시험은 별도 진행 중이다. 상세는 전체 UI 검증 결과 문서에 SHA/범위별로 기록한다.
 - gate 변화: 최신 영향 gate·main 착지·push·CI·서명·설치·팀원 발급과 실제 첫 변경은 미확인이다. 기존 서비스 자격과 CORE 최종 명령 권한을 유지한다.
-
 
 ## 2026-10-12 · d002c579d · D-689 계정 화면 용어 정렬
 
@@ -321,9 +319,20 @@
 - 증거: `operations/fleet/test/web/traffic-layer.test.mjs`(원격 `test_site_map_api.py` node 시험 포함 fleet 5,290 passed). 브라우저는 확인 못 함.
 - gate 변화: 없음.
 
-
 ## 2026-10-16 · uncommitted · 앱별 작업으로 이동하는 로봇 카드
 
 - 변경: 승인 directory에서 Robot/Pilot 링크를 구성하고 주소가 없거나 충돌하면 안내한다. 새 원장·명령·URL 토큰 전달을 추가하지 않는다. 세션·화면 수명 변경에서 캐시를 폐기하는 회귀를 검증한다.
 - 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
 - gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-16 · 39f94f151 · 충전 운행 주체 오류 안내와 Console 회귀
+
+- 변경: TRIP_OWNER_KIND_INVALID에 운영자 안내를 추가했다. 오류 표의 같은 줄 객체 항목도 검사하도록 정적 label 검사를 바로잡았다. 기존 800줄 상한과 화면 경로·배치를 유지한다.
+- 증거: 5a33eabd4의 영향 범위 22개 파일을 ROSY_RUN_BROWSER_TESTS=1로 실행해 실제 Chromium 457개가 통과했고 skip은 0이다(task-7-charge-owner-label-browser/run-1.txt). 같은 명령에 추가한 비브라우저 label 검사 1개는 당시의 줄 시작만 보는 parser로 실패해 명령 종료 코드는 1이다. 이 parser를 8ddf4981f에서 수정했고 39f94f151의 최종 계약/회귀 486개에 해당 검사가 포함되어 통과했다(NEW 0/skip 0). UI source는 browser 실행 이후 바뀌지 않았다. 혼합 명령 전체를 GREEN으로 기록하지 않는다.
+- gate 변화: 관련 UI 회귀 근거를 추가한다. 충전 운영 화면의 전체 상태·주기 정책·이안/재투입과 실기 수용은 미완료다.
+
+## 2026-10-17 · 8c6692128 · 설치 보정 손잡이의 상단 바 가림 수정
+
+- 변경: 실측 교정 패널로 늘어난 화면에서 기존 사각 보정 손잡이를 스크롤하면 고정 상단 바에 가려졌다. 손잡이의 스크롤 시작 여백에 공용 앱 바 높이와 간격 토큰을 적용했다.
+- 증거: 병합 전 전체 원격 검사 ea71743778의 `test_camera_rectification_direct_manipulation`이 실제 hit test에서 실패했다. 8c6692128의 같은 드래그 검사와 실측 교정 브라우저 두 폭은 3 passed, NEW 0이다. 원본 로그는 저장소 밖 `C:/DevTemp/camera-calibration/landing-handle-fix/`에 있다.
+- gate 변화: 없음. 수정본과 최신 main의 전체 병합 검증은 별도 수행한다.

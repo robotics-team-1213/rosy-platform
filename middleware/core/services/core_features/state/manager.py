@@ -81,11 +81,14 @@ class StateManager:
         #: D-559: "odom" while the bridge's map TF is stale and odom writes the pose; None before
         #: any pose arrived (the zero pose is no place).
         self._pose_frame: Optional[str] = None
+        self._map_pose_key = None
+        self._map_pose_times = None
         self._odom_pose: Optional[OdomPose] = None
         self._odom_mono: Optional[float] = None  # D-581: receipt on the monotonic clock (age)
         self._odom_rejected_logged = False
         self._odom_epoch = 0  # D-758 0: odom discontinuities since start
         self._odom_source: tuple = (None, None)  # (frame, source stamp ns) last given
+        self._odom_write_token = object()  # Private original-source scope, including rejected writes.
         self._velocity = Velocity()
         self._battery = Battery()
         self._battery_status = BatteryStatus()
@@ -161,6 +164,38 @@ class StateManager:
             age = float("inf") if at is None else self._monotonic() - at
             return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame, age
 
+    def _record_map_pose(self, x, y, yaw, *, source_key, age_at_commit):
+        """Capture state clocks before waiting; recheck original source age at commit.
+
+        The bridge holds its TF lease lock. The synchronous age reader only
+        reads clocks; it must not call state or acquire another manager lock.
+        """
+        if type(source_key) is not object:
+            raise ValueError('invalid original map pose source')
+        pose = Pose(x=x, y=y, yaw=yaw)
+        wall, mono = self._clock(), self._monotonic()
+        if not math.isfinite(wall) or not math.isfinite(mono):
+            raise ValueError('invalid state clock')
+        with self._lock:
+            age_s = age_at_commit()
+            if type(age_s) not in (int, float) or not math.isfinite(age_s) or age_s < 0:
+                raise ValueError('invalid original map pose age')
+            times = math.nextafter(wall-age_s, -math.inf), math.nextafter(mono-age_s, -math.inf)
+            if not all(math.isfinite(v) for v in times):
+                raise ValueError('unrepresentable original map pose capture')
+            if source_key is self._map_pose_key:
+                times = tuple(min(a, b) for a, b in zip(times, self._map_pose_times))
+            self._map_pose_key, self._map_pose_times = source_key, times
+            self._pose, self._pose_frame = pose, 'map'
+            self._received['pose'], self._received_mono['pose'] = times
+
+    def expire_pose(self, *, frame):
+        """Keep last display coordinates, but remove invalid source freshness."""
+        with self._lock:
+            if self._pose_frame == frame:
+                self._received.pop('pose', None)
+                self._received_mono.pop('pose', None)
+
     def odom_sample(self) -> Optional[tuple[float, float, float, float]]:
         """D-581: (x, y, yaw, age_s) of the odom-frame pose; None before the first one."""
         with self._lock:
@@ -170,10 +205,27 @@ class StateManager:
             # Age on the monotonic clock: a backward wall-clock step must not make it look fresh.
             return odom.x, odom.y, odom.yaw, self._monotonic() - self._odom_mono
 
+    def station_scope(self, *, max_age_s: float, wait: bool = False) -> Optional[dict]:
+        """Identity/map/odom scope; the final publisher never waits for a state writer."""
+        if not self._lock.acquire(blocking=wait):
+            return None
+        try:
+            age = None if self._odom_mono is None else self._monotonic()-self._odom_mono
+            return dict(robot_id=self._robot_id, map_id=self._map_id, odom_epoch=str(self._odom_epoch),
+                        odom_fresh=self._odom_pose is not None and age is not None and 0 <= age <= max_age_s)
+        finally:
+            self._lock.release()
+
     def set_odom_pose(self, x: float, y: float, yaw: float, frame: Optional[str] = None,
                       source_stamp_ns: Optional[int] = None) -> Optional[float]:
+        """Compatibility wall stamp; the private receipt also binds this write's epoch."""
+        receipt = self._record_odom_pose(x, y, yaw, frame=frame, source_stamp_ns=source_stamp_ns)
+        return None if receipt is None else receipt[0]
+
+    def _record_odom_pose(self, x: float, y: float, yaw: float, frame: Optional[str] = None,
+                          source_stamp_ns: Optional[int] = None) -> Optional[tuple]:
         """D-494 2: odom-frame pose, stamped with the wall clock at receipt; returns that
-        stamp (the one the snapshot publishes) or None when the sample is dropped.
+        stamp and this exact write's epoch, or None when the sample is dropped.
 
         A non-finite sample is dropped and the previous pose kept (logged once),
         so one bad odom message never fails the state snapshot. D-758 0: the odom
@@ -182,6 +234,7 @@ class StateManager:
         when given both times). Driving through the origin is no reset.
         """
         with self._lock:
+            self._odom_write_token = object()
             stamp, mono = self._clock(), self._monotonic()
             if not all(math.isfinite(v) for v in (x, y, yaw, stamp)):
                 if not self._odom_rejected_logged:
@@ -198,7 +251,18 @@ class StateManager:
                                  prev_ns if source_stamp_ns is None else source_stamp_ns)
             self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=stamp, epoch=self._odom_epoch, mono_s=mono)
             self._odom_mono = mono
-            return stamp
+            return stamp, str(self._odom_epoch), self._odom_write_token, self._robot_id, self._map_id
+
+    def _original_odom_scope(self, token):
+        """Nonblocking same-write check; never derives a new source from cached pose."""
+        if not self._lock.acquire(blocking=False):
+            return None
+        try:
+            if token is not self._odom_write_token:
+                return False
+            return self._robot_id, self._map_id, str(self._odom_epoch)
+        finally:
+            self._lock.release()
 
     def set_velocity(self, linear: float, angular: float) -> None:
         with self._lock:
@@ -222,7 +286,10 @@ class StateManager:
 
     def set_map_id(self, map_id) -> None:
         with self._lock:
-            self._map_id = _as_map_id(map_id)
+            normalised = _as_map_id(map_id)
+            if normalised != self._map_id:
+                self._odom_write_token = object()
+            self._map_id = normalised
 
     @property
     def map_id(self) -> Optional[str]:

@@ -2,16 +2,16 @@
 module: interfaces
 logical_modules: [M02]
 owner: 장치
-last_verified: { commit: "dc89264", date: 2026-09-17 }
+last_verified: { commit: "8058c3676", date: 2026-10-17 }
 gates:
   SOURCE:
     state: GO
-    evidence: "test_srv_surface 2 passed — srv 파일과 필드 (2026-09-17 Windows)"
-    cmd: "python -m pytest src/interfaces/test/test_srv_surface.py -q"
+    evidence: "f6ae71b14 원격 surface 6 PASS/0 SKIP/NEW 0. native adoption 아님; station-native-map-wire-2026-10-17/result.md"
+    cmd: "python tools/remote/remote_pytest.py --sha f6ae71b14 --log-dir C:/DevTemp/station-charge/native-map-contract-green -- contracts/ros_idl/test/test_srv_surface.py -q"
   LOCAL:
     state: GO
-    evidence: "동일. rosidl 생성은 colcon/ARTIFACT"
-    cmd: "python -m pytest src/interfaces/test/test_srv_surface.py -q"
+    evidence: "8058c3676 AI 시험 PC: 같은 SHA rosidl 생성/provenance, Python 직렬화, C++ compile/link 및 CTest 1 PASS/0 SKIP. ARM64/장치 미검증"
+    cmd: "python tools/remote/remote_sim.py --sha 8058c3676 --minutes 45 --log-dir C:/DevTemp/station-charge/native-map-wire-green cmd -- bash contracts/ros_idl/test/validate_map_adoption.sh"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -22,8 +22,9 @@ gates:
     blocker: "Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음"
   FIELD:
     state: PARKED
-adrs: []
+adrs: [D-783]
 plans:
+  - docs/plans/2026-10-17-native-map-adoption.md
   - docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md
   - docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md
   - docs/plans/2026-09-15-module-harness-design.md
@@ -31,13 +32,13 @@ plans:
 ## 지금 상태
 
 - LED·lamp·brightness·LCD emotion용 custom ROS 2 서비스(rosidl 패키지): `Emotion.srv`, `SetLed.srv`, `SetBrightness.srv`, `SetLamp.srv`. `.srv` 변경 후 `colcon build --packages-select interfaces`와 의존 패키지 재빌드가 필요하다.
-- 모듈 경로는 clean이지만 ARTIFACT 판정 근거인 `deploy/robot/pinky_pro/image/ 빌더`에 미커밋 WIP가 있어 `last_verified`는 `uncommitted`다.
+- 내부 읽기 전용 `MapAdoption.srv`를 추가했다(D-783). [검증 기록](../../docs/validation/station-native-map-wire-2026-10-17/result.md)은 surface/실제 생성·직렬화와 미구현 native producer·CORE admission을 구분한다. 시험 PC의 생성은 ARM64/장치 설치 증거가 아니다.
 - REST/Fleet 계약은 여기 없다 — pydantic 스키마는 `core.protocol.schemas`가 유일 소스다(AGENTS.md).
 - `deploy/robot/pinky_pro/image/ 빌더`의 io-build 단계가 `interfaces`를 복사·빌드한다. 이 모듈은 device에 실제로 배포된다.
 
 ## 다음 gate
 
-1. CI `Build (colcon)` 단계가 이미 `src` 전체(interfaces 포함)를 빌드한다. 초록 CI run의 `cd src && colcon build --packages-select interfaces` 결과를 LOCAL/SOURCE 증거로 기록하거나, srv 필드·타입을 고정하는 host 계약 시험을 추가한다.
+1. 실제 AMCL/전역 StaticLayer producer와 CORE consumer를 같은 SHA의 생성 interface에 연결하고 native 적용·수명·거절 반례를 검증한다. interfaces 변경의 FULL CI는 별도로 남아 있다.
 2. 서명된 native ARM64 artifact 발행 후 Pi readback(ARTIFACT → DEVICE), deploy/core와 동일 체인.
 
 ## 현재 유효한 금지사항

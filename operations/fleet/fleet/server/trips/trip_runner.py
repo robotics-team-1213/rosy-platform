@@ -25,7 +25,6 @@ import httpx
 
 from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
-from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
@@ -35,7 +34,7 @@ from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
 from fleet.traffic.trip_lease import TripLease
-from fleet.server.trip_admission import LINE_MODES, LOCALIZED, TripAdmission  # noqa: F401
+from fleet.server.trip_admission import LINE_MODES, LOCALIZED, TripAdmission, _GoalRefused  # noqa: F401
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     hold_back_m, lap_due, lap_retry_due, next_lap, stop_points)
@@ -62,10 +61,6 @@ _ROBOT_ERRORS = (RobotApiError, HubError, OSError, RuntimeError, ValueError, htt
 
 async def _maybe(value):
     return await value if inspect.isawaitable(value) else value
-
-
-class _GoalRefused(RuntimeError):
-    """The console did not send the trip's goal (queued behind traffic, yielding, untrusted)."""
 
 
 class _JunctionAborted(RuntimeError):
@@ -104,6 +99,7 @@ class TripRunner(TripAdmission, TripProgress):
         self._start_cancels: dict[str, int] = {}
         self.autonomous_robots: frozenset[str] = frozenset()
         self._locks: dict[str, asyncio.Lock] = {}
+        self.charge_goal_ready = None  # Explicit charge-only native-readiness dependency.
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
@@ -155,7 +151,8 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- operator actions -------------------------------------------------------------
 
-    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None) -> dict:
+    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None,
+                    start_guard=None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
@@ -176,22 +173,18 @@ class TripRunner(TripAdmission, TripProgress):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
-            engaged = self._engaged(robot_id)
-            if engaged is not None:
-                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
-            self._check_start_token(robot_id, start_token)
+            self._check_engaged(robot_id)
+            await self._guard_start(robot_id, start_token, start_guard)
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps,
-                start_token=start_token)
-            self._check_start_token(robot_id, start_token)
+                start_token=start_token, start_guard=start_guard)
+            await self._guard_start(robot_id, start_token, start_guard)
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id}, caps)
             try:
                 self._check_start_token(robot_id, start_token)
-                engaged = self._engaged(robot_id)
-                if engaged is not None:
-                    raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
+                self._check_engaged(robot_id)
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
@@ -738,25 +731,6 @@ class TripRunner(TripAdmission, TripProgress):
                      "done": bool(reply.get("already_done")), "arc_before": arc_before}
         if live.first_seq is None:
             live.first_seq, live.arc_base = (seq if isinstance(seq, int) else 0), arc_before
-
-    async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
-        segment = live.segments[index]
-        if live.view["hold"] is not None:  # hold at the place: the goal is the place itself
-            x, y, yaw = live.arc(index).point_at(segment["s_to"])
-        elif s + STEP_M > segment["s_to"] and index + 1 < len(live.segments):
-            nxt = live.segments[index + 1]
-            x, y, yaw = live.arc(index + 1).point_at(min(nxt["s_from"] + s + STEP_M - segment["s_to"], nxt["s_to"]))
-        else:
-            x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment["s_to"]))
-        if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
-            return
-        if not live.open:
-            return
-        reply = await self._call(self._goal(live.view["robot_id"], x, y, yaw)) or {}
-        live.last_goal = (x, y)
-        await self._after_send(live)
-        if reply.get("accepted") is False or reply.get("queued"):
-            raise _GoalRefused(reply.get("reason") or "")
 
     async def _retry_lap(self, live: LiveTrip, index: int) -> bool:
         """Plan the failed lap again; True when it carries on (the held stop at the place may be replaced)."""

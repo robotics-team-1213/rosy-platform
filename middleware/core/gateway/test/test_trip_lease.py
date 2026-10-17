@@ -191,6 +191,8 @@ FENCED = [
     ("post", "/api/v1/mode", {"mode": "NAVIGATION"}),
     ("post", "/api/v1/teleop", {"linear": 0.1, "angular": 0.0}),
     ("post", "/api/v1/navigation/goal", {"x": 1.0, "y": 0.0}),
+    ('post', '/api/v1/navigation/handover', dict(expected_boot_id='00000000-0000-0000-0000-000000000001',
+        run_id='00000000-0000-0000-0000-000000000001', expected_owner_generation=0, correlation_id='work-attempt')),
     ("post", "/api/v1/navigation/home", None),
     ("post", "/api/v1/localization/initialpose", {"x": 0.0, "y": 0.0, "yaw": 0.0}),
     ("post", "/api/v1/motion/rotate_to", {"delta_deg": 30.0, "operator_name": "lee"}),  # D-603
@@ -220,6 +222,18 @@ FENCED = [
 _GATES = ("require_calibration_owner", "enter_navigation_mode", "apply_mode", "_calibration_fence",
           " _lease(svc", "trip_lease.blocking")
 
+# Fixed-principal station writes have their own configured fixture and test for
+# every row in test_station_return_authority; the generic robot disables this profile.
+STATION_FENCED = [
+    ('put', '/api/v1/docking/station-target'),
+    ('post', '/api/v1/docking/station-dock'),
+    ('put', '/api/v1/docking/station-return'),
+    ('post', '/api/v1/docking/station-return/finish'),
+    ('post', '/api/v1/docking/station-undock'),
+    ('put', '/api/v1/docking/station-departure'),
+    ('post', '/api/v1/docking/station-departure/finish'),
+]
+
 
 def test_the_fenced_table_covers_every_gated_route(core_client):
     """A new drive route that calls the gate must be added to FENCED (and is fenced by the gate)."""
@@ -240,7 +254,7 @@ def test_the_fenced_table_covers_every_gated_route(core_client):
         if any(g in inspect.getsource(route.endpoint) for g in _GATES):
             for method in route.methods:
                 gated.add((method.lower(), route.path))
-    tabled = {(method, path) for method, path, _ in FENCED}
+    tabled = {(method, path) for method, path, _ in FENCED} | set(STATION_FENCED)
     # /do runs the routes above (each of them fenced); /mode IDLE stays open (apply_mode).
     # The D-395 localization writes have their own tests below (423 / lowercase-code conventions).
     localization = {("post", "/api/v1/localization/decision"), ("post", "/api/v1/localization/suspect"),

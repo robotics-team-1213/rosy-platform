@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.264)
-- 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
-- 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
-- 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
-- 2026-10-16 · uncommitted · 최신 크기 규칙 통합
+- 2026-10-17 · uncommitted · 분리된 영상 보정 구현의 계약 검사 경로
+- 2026-10-17 · uncommitted · exact charge stop before journal contention
+- 2026-10-17 · uncommitted · measured health operational admission
+- 2026-10-17 · 79226ce97 · SIM 초기 CORE 틱의 원본 이동 계측 보존
+- 2026-10-17 · e801f1e01 · 원본 전송과 boot 대조를 결속한 충전 World pose reader
