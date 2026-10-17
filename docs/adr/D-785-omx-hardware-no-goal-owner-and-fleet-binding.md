@@ -88,7 +88,7 @@ owner의 RearmLocal·복구는 `rosy_agent.fleet_fence`로 Fleet fence를 다시
 - (a) Fleet 컨테이너가 host loopback에 읽기 전용 평문 dispatch-control endpoint를 따로 연다.
 - (b) fence readback이 site CA를 고정한 HTTPS loopback을 지원한다.
 
-이번 변경은 이 결정을 내리지 않는다.
+2026-10-17 사용자 지시("지금 할 수 있는 걸로 구현")에 따라 **(b)를 택한다.** `HttpsFleetFenceReadback`은 literal IP로만 TCP를 열고, 고정한 site CA 파일만 신뢰하며(시스템 trust store 미사용), SNI·hostname 검증은 `ROSY_FLEET_FENCE_TLS_NAME`으로 한다. 프록시·리다이렉트를 따르지 않고 200이 아니면 닫힘으로 읽는다. `ROSY_FLEET_FENCE_URL`이 `https://`일 때만 이 경로를 쓰고, 평문 loopback 규칙은 그대로다. Fleet·proxy 코드는 바꾸지 않는다. 현장 활성화 전에 독립 safety 리뷰와 실제 호스트 readback이 남는다.
 
 ## Alternatives
 
