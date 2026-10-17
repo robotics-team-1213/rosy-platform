@@ -119,7 +119,13 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path):
     for _ in range(20):
         rig.tick()
     assert all(index not in _owner_steps(arm) for arm in rig.arms.values())
-    assert f"zone:{CELL}.{SHARED}" not in _claims(rig)
+    claims = _claims(rig)
+    active = [(a["step_index"], a["arm_role"], a["status"], a["claims"])
+              for a in rig.job()["step_actions"] if a["status"] in {"RUNNING", "HOLD"}]
+    assert f"zone:{CELL}.{SHARED}" not in claims, {
+        "arm_zone_claims": {key: phase for key, phase in claims.items() if key.startswith(("arm:", "zone:"))},
+        "active_actions": active,
+    }
 
 
 def test_a_rejected_pair_grant_cancels_the_accepted_partner(tmp_path):
