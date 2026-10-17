@@ -629,3 +629,30 @@ hash도 일치했다. native event는 소프트웨어 사실이며 물리 정지
 강조도 실물 수용·실데이터 학습·독립 과제 성능과 G4 완료 조건은 유지한다.
 [절차](../plans/2026-10-17-omx-next-day-collection.md) ·
 [고정 증거](../validation/omx-next-day-collection-2026-10-17/result.md).
+
+
+### 2026-10-17 남은 실행 환경·현장 기록 준비
+
+수집 service의 필수 env와 직접 CLI의 ROS setup/domain 절차, 새 session 규칙을 실행 안내에 추가했다.
+실물 식별·지지/정지·시야·범위·정규화·주기·원본·전송·사람 검토·학습을 실제 근거로 채우는
+첫 현장 기록지를 준비했다. private 재개 묶음은 기존 source/host 설정으로 passive 진단과
+비활성 env 준비, 고립 사본의 launcher 거부 검사, 모델 진입점/공간 점검을 수행하도록 작성했다.
+
+이번 SSH는 Fleet/모델 모두 banner exchange에서 실패했고 AI 경유지와 모델 PC는 offline으로
+표시됐다. Tailscale 로컬 backend는 정상이며 Fleet 직접 접속도 완료되지 않았다. 현재 전원/망 원인은
+미확정이다. 준비 묶음은 문법만 검증했으며 원격 설치/실행 성공으로 기록하지 않는다.
+기존 양쪽 배치 성공과 이번 현재 가용성을 구분한다. 실제 시연0회, 내일의 실물 수용 조건은 유지한다.
+[재개 준비·접속 증거](../validation/omx-remaining-preparation-2026-10-17/result.md).
+
+
+### 2026-10-17 추가 준비 재시도 완료와 실제 카메라 연결 부재
+
+후속 재시도에서 AI/Fleet와 모델 PC가 복구돼 양쪽 준비 묶음이 실제 exit0이었다. Fleet 실행 env 설치,
+비활성 고립 사본의 실제 launcher 거부, collection unit inactive와 원본 소스 무결성을 확인했다.
+모델의 prepare/train 진입점·소스 무결성·수신 경로/저장 공간 점검도 통과했다. 네트워크 복구 원인은 미확정이다.
+
+추가 passive 관측은 양쪽 영상0frame, 환경 STALE/INSUFFICIENT였다. 두 camera producer는 실행 중이나
+각 stable by-id 외장 장치가 OS에 없어 재연결을 대기한다. 설치된 producer source가 검증 소스와 같고
+관련 원격7개 통과를 확인했지만 실제 USB 재연결 회복은 미시험이다. 문서 계약 원격142개도 통과했다.
+최초 실패 기록은 보존한다. 실제 시연0회와 내일의 실측·정지/시야/하중 수용 조건은 유지한다.
+[양쪽 실행·실제 센서 부재·검증](../validation/omx-remaining-preparation-2026-10-17/follow-up.md).

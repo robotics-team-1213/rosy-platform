@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-29, SOURCE/LOCAL 연결 경계만). 실제 호스트 배치, 설치 서비스, OMX capability, 원격 장치 API, ROS graph 연결, 물리 정지·DEVICE/FIELD 수용을 승인하지 않는다.
 
+**부분 보강 제안 (2026-10-17, D-778 Proposed):** [D-778](D-778-bimanual-workcell-foundation.md)이 수용되면 2항의 peer 허용 목록에 양팔 작업대 조율자의 UID를 Fleet과 별도로 더한다. 조율자는 HOLD와 barrier 해제만 보낼 수 있고, owner는 그 정지 출처를 `COORDINATOR`로 기록한다. grant는 계속 Fleet만 보낸다.
+
 **부분 개정 (D-403, 2026-10-01, 시뮬레이션 한정):** [D-403](D-403-fleet-cell-job-route-cell-transfer.md)(Proposed, 사용자 승인) §8은 `simulation` 프로필에서만 §1·§3의 native systemd 서비스 인스턴스 전제에서 벗어난다. owner를 `rosy-omx-workstation` 컨테이너에서 실행하고, socket을 bind-mount로 노출한다. 다음은 그대로다: 같은 Linux 커널, `SO_PEERCRED` UID allowlist(owner 쪽에서 관측한 UID), 64 KiB framing, §4–§5(호스트 간 HOLD). 이 개정은 D-403이 Accepted가 되면 효력이 생긴다. 그 전에는 원문이 그대로 적용된다.
 
 ### Context
