@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · docs: OMX feedback 수정 근거와 staging 준비 결과 연결
 - 2026-10-17 · uncommitted · docs: 기존 파일럿 키의 릴리스 승인 환경 구성과 안내 정정
 - 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
 - 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
 - 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
-- 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결

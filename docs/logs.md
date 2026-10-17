@@ -8989,3 +8989,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 요청에 따라 공개 release 환경에 기존 게시 담당 승인·main 제한·관리자 우회 금지·파일럿 키 ID 변수를 설정하고 재조회했다. 키 운용 안내의 빈 디렉터리·PEM 전면 금지 설명을 실제 승인 공개키 예외와 현재 파일럿 상태로 고쳤다.
 - 증거: /root/review_private_ops 독립 읽기 전용 계약 검토. 환경·브랜치 정책·변수·secret 목록 재조회로 승인 사용자·main 규칙 한 개·can_admins_bypass false·기존 키 ID·secret 0개를 확인했다. 개인키 조회·생성·이전과 실제 게시 실행은 없었다.
 - gate 변화: 없음. 승인 환경 설정만 준비했으며 프로덕션 키 소유권·실제 서명·게시·호스트·장치 수용은 별도다. 비공개 staging은 HOLD를 유지한다.
+
+## 2026-10-17 · uncommitted · docs: OMX feedback 수정 근거와 staging 준비 결과 연결
+
+- 변경: 기존 실패 기록을 보존하고 executor 분리·timeout 기록 경로·직렬/4-worker 검증 범위를 새 validation에 정리했다. 비공개 구현 계획에는 실제 PR·main CI 결과와 현재 단일 게시 담당·staging HOLD를 덧붙였다.
+- 증거: RED 39010304643과 timeout RED 39011139939, 고정 SHA의 독립 계약 검토. 새로 관찰한 MTE1 실패는 미해결로 보존하고 직렬 ST 선택의 공식 근거를 연결했다. 최종 개별 CI 결과는 PR #83과 validation 기록에서 확인한다.
+- gate 변화: 없음. 과거 성공·실패를 다시 쓰지 않으며 실제 호스트·장치·서명·배포 수용은 미실행이다.

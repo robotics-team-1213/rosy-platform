@@ -85,7 +85,7 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 
 이후 공개 `release` 승인 환경과 기존 파일럿 키 ID를 구성했다. 현재 설정과 실제 게시 전 조건은 [릴리스 키 운용 §7.0](../deployment/release-signing-key.md#70-파일럿-키와-게시-승인)을 따른다.
 
-병합 후 `modules` 잡의 OMX ROS 시험에서 새 실패를 관찰했다. [실패 기록과 후속 조건](../validation/pipeline-modules-2026-10-17.md)을 확인하며, 기존 실패나 해결 완료로 분류하지 않는다.
+병합 후 `modules` 잡의 OMX ROS 시험에서 새 실패를 관찰했다. [당시 실패 기록](../validation/pipeline-modules-2026-10-17.md)은 보존하고, 이후 조사는 [feedback 격리와 검증 범위](../validation/omx-feedback-executor-2026-10-17.md)에서 확인한다. 판단할 때는 최신 head의 개별 잡과 미검증 조건을 함께 읽는다.
 
 ## GitHub 설정
 
