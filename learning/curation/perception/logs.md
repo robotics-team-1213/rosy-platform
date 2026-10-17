@@ -92,3 +92,9 @@
 - 변경: Learning의 검수 업무·표시 이름과 개발 표면의 제목 범위 규칙을 대조했다. 독립 앱 등록 없이 D-339의 개발 범위 제목을 유지한다. 검수·승인·export·학습 owner의 실행 의미도 유지한다.
 - 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
 - gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-17 · eab1d0fb1 · 픽셀 사진을 AI 참고 패널보다 먼저 배치
+
+- 변경: AI 참고 패널을 사진 위로 재이동하던 한 줄을 제거해 원래 사진 아래 배치를 유지했다. 라벨·마스크·승인 쓰기 경로는 유지한다.
+- 증거: JavaScript 구문·차이 공백 검사와 독립 계약 검토 통과. 현재 시험 PC의 SSH 연결 시간 초과로 원격 브라우저 검증은 대기 중이다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
+- gate 변화: 없음. 기존 실패 항목 유지. 실제 원본·사람 라벨·DEVICE/FIELD 수용은 이번 수정으로 증명하지 않는다.

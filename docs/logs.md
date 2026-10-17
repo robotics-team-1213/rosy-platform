@@ -8935,3 +8935,10 @@ osy-d395-s1d\`.
 - 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
 - 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
 - gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
+
+
+## 2026-10-17 · eab1d0fb1 · 남은 브라우저 회귀 수정 준비
+
+- 변경: 픽셀 사진을 AI 참고 패널보다 먼저 두고, 만료 토큰·CSP·단독 import 경로 시험을 현재 계약에 맞췄다.
+- 증거: 구문·공백·safety 검사와 독립 검토 통과. 원격 시험은 세 시험 PC의 SSH 시간 초과로 대기 중이며, 실패 목록은 유지한다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
+- gate 변화: 없음. 성공 검증·main 착지·push·배포·DEVICE/FIELD 수용으로 표시하지 않는다.
