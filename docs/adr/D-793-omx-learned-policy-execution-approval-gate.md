@@ -20,7 +20,7 @@ D-770은 실물 데이터 수집과 ACT 학습의 완료 기준을 정했지만,
 | `OwnerPolicySession` (`middleware/robot_execution/local/.../omx_policy.py`) | 기본 `enabled=False`, 설치 lease 상한 기본 1초, 매 동작과 `renew`마다 lease·authority·정지 fence를 확인하고 실패하면 cancel+HOLD | 장치 쪽 확인은 있다. lease 발급기와 승인 API는 없다 (D-773 A4) |
 | 모델 승격 | `learning/registry/policy/registry.py`와 `validate_promotion`이 L0→L3을 한 단계씩만 올린다 | 승격은 메타데이터이고 owner 실행 권한과 연결되지 않는다 |
 | 사람 승인 API | `POST /api/fleet/missions/{id}/admit`(two_person에서 제안자≠승인자), `POST /api/fleet/workcells/{id}/owner/recover`(operator_confirmed) | 정책 승인에 그대로 쓸 패턴 |
-| 오프라인 평가 | `act_inference.py`가 `environment=='sim'`만 받는다 | 실물 데이터로 학습한 모델은 오프라인 평가도 거부된다 |
+| 오프라인 평가 | 실물 학습 `native_cycle.py`는 eval MAE와 별도 프로세스 재적재를 이미 한다. 실시간 추론기 `act_inference.py`는 `environment=='sim'`, 카메라 1대만 받는다 | 오프라인 평가는 있다. 실물 학습 결과의 정책 artifact 등록과 카메라 2대 추론이 없다 |
 | 실시간 shadow | 없다 | 실물 관측으로 추론만 하고 명령을 보내지 않는 실행기가 필요하다 |
 | 파손 기록 | 저장소·private 기록에서 OMX·Pinky 하드웨어 파손 기록을 찾지 못했다 | 사고 처리 절차를 미리 정한다 |
 
@@ -93,7 +93,7 @@ L2 shadow는 명령을 보내지 않으므로 실행 lease가 없고, 승인 창
 |---|---|---|
 | A | `run_hardware_owner.py`가 설정에 `learned_policy`가 있으면 기동을 거부한다. 수집 단계 판정에 "실제 위치가 목표 허용차에 들었는가"를 기록하고, 들지 않으면 HOLD한다 | 첫 수집 전. D-430 Safety-Review 필요 |
 | B | 첫 수집 (D-770 G1). scripted teacher(`rule_based`)만 움직인다 | D를 기다리지 않는다 |
-| C | 학습 결과는 L0 등록만 한다. `act_inference.py`가 실물 학습 모델을 오프라인 평가용으로 받게 한다 | 실행 권한은 그대로 없다 |
+| C | 학습 결과는 L0 등록만 한다. 실물 학습 결과를 정책 artifact로 등록하고 카메라 2대 추론을 지원한다 (shadow의 전제) | 실행 권한은 그대로 없다 |
 | D | 확인 요청 항목과 해결 API, 승인 API(`promote`, 승인 창), 실행 lease 발급기, 실시간 shadow 실행기, `learned_policy` 수집 출처 | 외부 API는 API Reference·schema와 함께 별도 버전으로 정한다 |
 | E | L3 입회 시험과 G4 판정 | |
 
