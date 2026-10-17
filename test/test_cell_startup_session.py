@@ -1,6 +1,5 @@
 """Exercise the real UDS server while startup authorizes and settles."""
 import json
-import os
 from pathlib import Path
 import socket
 import sys
@@ -39,7 +38,7 @@ def build(tmp_path):
 
 
 def test_uds_is_reachable_before_goal_and_through_startup_settling(tmp_path):
-    from g2_startup_session import serve_startup
+    from g2_startup_session import serve_startup, publish_json
     owner, runtime = build(tmp_path)
     run = tmp_path / "evidence"; run.mkdir()
     target = {"joint1": .2, "gripper": 1.}
@@ -78,8 +77,8 @@ def test_uds_is_reachable_before_goal_and_through_startup_settling(tmp_path):
         challenge = json.loads(challenge_path.read_text())
         assert owner.runner.enabled is False
         assert request_identity(owner.uds_server.socket_path)["status"] == 200
-        (run / "startup-request.json").write_text(json.dumps({**challenge, "actor_id": "g2-sim-approver",
-                                                             "authority_epoch": 3, "dispatch_generation": 8}))
+        publish_json(run / "startup-request.json", {**challenge, "actor_id": "g2-sim-approver",
+                                                    "authority_epoch": 3, "dispatch_generation": 8})
         worker.join(timeout=5)
         assert not worker.is_alive() and not errors, errors
         assert json.loads((run / "startup-home-ready.json").read_text())["result"] == "READY"
