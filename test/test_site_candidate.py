@@ -71,7 +71,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert manifest["source_commit"] == COMMIT
     assert manifest["image_tag"] == COMMIT
     assert manifest["platform"] == "linux/amd64"
-    assert len(manifest["images"]) == 3
+    assert len(manifest["images"]) == 4
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
@@ -233,7 +233,8 @@ def test_site_candidate_syft_sbom_keeps_the_scout_file_layout(tmp_path):
 
     syft_calls = [call for call in calls if call[0] == "syft"]
     assert [call[2] for call in syft_calls] == [
-        f"docker:rosy-site-{service}:{COMMIT}" for service in ("fleet", "vision", "proxy")]
+        f"docker:rosy-site-{service}:{COMMIT}"
+        for service in ("fleet", "vision", "proxy", "postgres")]
     assert not any(call[1:2] == ["scout"] for call in calls)
     for service, row in manifest["images"].items():
         assert row["sbom"] == f"sbom/{service}.spdx"

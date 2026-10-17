@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from fleet.server.deliberation_journal import DeliberationJournal
+from fleet.server.ledger.deliberation_journal import DeliberationJournal
 from rosy.decision.deliberation import Supervisor
 from test_deliberation import Provider, problem
 

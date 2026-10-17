@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.server.ledger.context_options import activate_from_args, add_cli_arguments
+from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -152,6 +154,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
+    add_cli_arguments(console)
     console.add_argument("--robot-credential-key-file", default=None, type=Path,
                          help="base64 AES key sealing enrolled robot tokens (D-361); needs --tasks-db")
     console.add_argument("--mission-api", action="store_true",
@@ -672,6 +675,7 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
+    activate_from_args(args)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
@@ -743,40 +747,6 @@ def _goal_lease_ttl_s(args) -> float:
             value == 0 or floor <= value <= 5):
         sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
-
-
-def _ai_first(args):
-    """D-610 3: ``fleet.ai_first`` of ``--site-config`` (robots default empty, keep_gates default trip_wait_only)."""
-    import yaml
-
-    from fleet.stuck.ai_first import AiFirst
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return AiFirst.from_config((site_config.get("fleet") or {}).get("ai_first"))
-    except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
-        sys.exit(f"ai_first config: {exc}")
-
-
-def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
-    """``fleet.stuck_resolver.<key>`` of ``--site-config``, a robot id list. ``enrolled_robots``: enrolled
-    robots (D-361) the resolver answers with Fleet's enrolled CORE credential. ``ai_facts_acting``: robots
-    whose acting AI facts may stop a resolver back-off (D-577 7). Empty (default) = none."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
-        ids = section.get(key) or []
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"stuck resolver config: {exc}")
-    if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
-        sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
-    return frozenset(ids)
 
 
 def _realign_config(args):

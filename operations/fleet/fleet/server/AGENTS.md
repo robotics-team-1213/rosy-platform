@@ -16,7 +16,8 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | File | Description |
 |---|---|
 | `model_feedback_dispatch.py` | Fleet-owned allowlist, trusted turn scope and existing Mission/Proposal transaction adapters. Decision owns model contracts/catalog only |
-| `deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
+| `ledger/deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
+| `ledger/context_log.py`, `ledger/context_options.py` | D-796 site-host Postgres mirror of terminal advisory runs (`ContextLog`, `rosy_deliberation_run`) and its `--context-db-*` console surface (`add_cli_arguments`/`activate_from_args` → the process-wide active sink the journal defaults to). Best-effort only; a failure is a warning and never touches the SQLite ledger |
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
 | `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
