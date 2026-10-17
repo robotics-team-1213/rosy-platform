@@ -40,3 +40,7 @@ plans:
 
 
 - 2026-10-11 D-623: fresh lane boundary revision and current inquiry implemented; independent source review approved, remote regression and DEVICE/FIELD pending.
+
+- 2026-10-16 D-772: NavigationManager의 기존 readback 계약을 보존해 native_handover로 분리하고 terminal/quiescence를 같은 owner lock에서 검증한 인계만 허용한다. 새 정지 source-time cutoff로 인계 전 표본을 배제한다. 50a6ef719 원격 35개 통과, NEW 0. 실제 backend/계측·이안/재투입·DEVICE/FIELD 수용은 미완료다.
+
+- 2026-10-16 D-772: 같은 버전의 새 global capture를 기존 binding에 반영하되 expired/HOLD·source replay·foreign native·stale/future permission을 거절한다. feed/착좌/충전 완료 수명은 갱신하지 않는다. 1f45569ca 원격 CORE/HTTP 190개, 741c9b95f 지속 충전/완료 수명/영상/sensor 134개 통과, 각 NEW 0/skip 0. 실행/계측은 명시적 SIM이며 이안·재투입·DEVICE/FIELD는 미완료다.

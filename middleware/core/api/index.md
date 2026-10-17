@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)
-- 2026-10-15 · 1a9960df2 · POST /line-follow/junction 선택 필드 pose_stamp와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
-- 2026-10-15 · uncommitted · 계약 버전 v1.239
-- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
-- 2026-10-15 · uncommitted · main 병합(c4cd2bf95): D-758 0단계 버전 항목의 마지막 줄 복원
+- 2026-10-16 · 560a2ff27 · v1.255 정확한 항법 인계와 경합 회귀 검증
+- 2026-10-16 · uncommitted · 정확한 완료 항법의 수동적 IDLE 인계
+- 2026-10-16 · 1216b3f7b · 이안 계약과 실제 native API 최종 회귀
+- 2026-10-16 · 8674f07fd · D-772 scoped 이안 API 연결
+- 2026-10-16 · 741c9b95f · D-772 원래 위치 수명을 넘기는 충전 세션

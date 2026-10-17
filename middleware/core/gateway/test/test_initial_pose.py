@@ -34,15 +34,28 @@ def test_ros_bridge_publishes_amcl_covariance():
     assert "msg.pose.covariance" in text
 
 
-def test_ros_bridge_stamps_occupancy_id_only_when_map_id_is_unset():
-    text = (
-        Path(__file__).resolve().parents[1]
-        / "core"
-        / "bridge"
-        / "ros_bridge.py"
-    ).read_text(encoding="utf-8")
-    assert "occupancy_map_id" in text
-    assert 'startswith("occupancy:")' in text
+def test_map_callback_preserves_saved_id_and_refreshes_unsaved_id(core_client):
+    from types import SimpleNamespace as NS
+    from core.bridge.map_observation import receive_map
+    for initial in (None, 'occupancy:old', 'saved-map'):
+        _, svc = core_client()
+        svc.state.set_map_id(initial)
+        msg = NS(info=NS(width=2, height=2, resolution=.05,
+            origin=NS(position=NS(x=-1., y=-.5), orientation=NS(x=0., y=0., z=0., w=1.))),
+            data=list(GRID['data']))
+        assert receive_map(NS(_svc=svc), msg, warn=lambda _: None)
+        assert svc.state.map_id == ('saved-map' if initial == 'saved-map' else occupancy_map_id(GRID))
+
+
+def test_ros_map_and_lifecycle_callbacks_delegate_to_the_observed_source_adapter():
+    import ast
+    tree = ast.parse((Path(__file__).parents[1] / 'core/bridge/ros_bridge.py').read_text(encoding='utf-8'))
+    methods = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    for method, target in (('_on_map', 'map_observation.receive_map'),
+                           ('_on_map_server_transition', 'map_observation.lifecycle'),
+                           ('_on_slam_transition', 'map_observation.lifecycle')):
+        assert any(isinstance(node, ast.Call) and ast.unparse(node.func) == target
+                   for node in ast.walk(methods[method]))
 
 
 def test_occupancy_map_id_changes_with_grid_content():

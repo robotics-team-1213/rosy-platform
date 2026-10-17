@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
-- 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
-- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
-- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
-- 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
+- 2026-10-16 · c6abafd83 · v1.254 이안 허가와 실측 결과 readback
+- 2026-10-16 · 1216b3f7b · 이안 계약과 실제 native API 최종 회귀
+- 2026-10-16 · 7d3f6418d · D-772 이안 허가와 원본 실측 계약 추가
+- 2026-10-16 · 39f94f151 · envelope 버전 규칙과 API 이력 정합성
+- 2026-10-16 · d5c1a61e4 · D-772 복귀 허가 계약과 현재 수명

@@ -14,5 +14,5 @@ def test_every_trip_code_has_console_text():
     raised = set()
     for path in FLEET.rglob("*.py"):
         raised |= set(re.findall(r"""["'](TRIP_[A-Z_]+)["']""", path.read_text(encoding="utf-8")))
-    labelled = set(re.findall(r"^\s*(TRIP_[A-Z_]+):", MODEL.read_text(encoding="utf-8"), re.M))
+    labelled = set(re.findall(r"(?:^|,)\s*(TRIP_[A-Z_]+):", MODEL.read_text(encoding="utf-8"), re.M))
     assert raised - labelled == set()

@@ -33,3 +33,7 @@ plans:
 ---
 
 Existing implementation holder; shared regression suite as registered in harness.yaml.
+
+## 2026-10-16 충전 운행 주체 오류 안내
+
+TRIP_OWNER_KIND_INVALID의 안내를 추가했다. 영향 Console Chromium 457개가 통과했으며 UI source는 이후 바뀌지 않았다. 혼합 실행에 포함된 비브라우저 label 검사 1개는 당시 parser 문제로 실패했고, 수정 후 39f94f151의 계약/회귀 486개에 포함되어 통과했다. 원 실행 종료 코드는 1이며 browser 결과와 구분한다. 운영 충전 화면 전체와 현장 수용을 뜻하지 않는다.

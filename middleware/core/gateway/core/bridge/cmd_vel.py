@@ -20,7 +20,8 @@ from threading import RLock
 import time
 from typing import Any, Callable, Optional, Protocol
 
-from core_features.command.manager import ZERO, Twist
+from core_features.command.manager import ZERO, Twist, CommandManager
+from core_features.command._execution_fence import CONTEXT_CHANGED
 from rosy.contracts.motion import (BaseTwist, EstopStatus, GuardedMotion, MotionKind,
                                    PortCapabilities, PortDecision, PortState)
 
@@ -127,7 +128,33 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
                   readiness: Optional[_Readiness] = None,
                   warn: Optional[Callable[[str], None]] = None,
                   *, trial_guard=None, now=None,
-                  motion_ready: Optional[Callable[[], bool]] = None) -> None:
+                  motion_ready: Optional[Callable[[], bool]] = None,
+                  notify_written: Optional[Callable[[Twist], None]] = None) -> None:
+    """Serialize every actual manager cycle, including all ZERO/exception paths.
+
+    An overlapping/reentrant cycle cannot add a second writer. With a private
+    restriction it requests STOP; it does not assert a physical stop happened.
+    Sticky start also prevents installing a restriction over an in-flight legacy
+    selection. Protocol-only test doubles keep their existing uninstalled path.
+    """
+    actual = isinstance(command, CommandManager)
+    if actual:
+        if not command._cycle_lock.acquire(blocking=False):
+            if command._execution_fence is not None:
+                command._execution_fence.request_stop()
+            return
+        command._cycle_started = True
+    try:
+        _cmd_vel_cycle(command, power, send, readiness, warn, trial_guard=trial_guard,
+                       now=now, motion_ready=motion_ready, notify_written=notify_written,
+                       execution_fence=command._execution_fence if actual else None)
+    finally:
+        if actual:
+            command._cycle_lock.release()
+
+
+def _cmd_vel_cycle(command, power, send, readiness, warn, *, trial_guard,
+                   now, motion_ready, notify_written, execution_fence):
     """값을 고르고, 바퀴로 내보내고, 그 뒤에 알린다.
 
     `readiness` 가 HOLD 이면 고른 값 대신 0 을 내보낸다 — 최종 발행자는
@@ -143,26 +170,57 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
     `send` 에는 고른 값을 **통째로** 넘긴다. `(linear, angular)` 두 개를
     자리로 넘기면 받는 쪽에서 둘을 바꿔 적어도 타입은 맞고, 그것은
     전진 명령을 제자리 회전으로 바꾼다.
+
+    `notify_written` observes successful host writes after submission locks and
+    the cycle port close, before power/events. It is not a physical wheel ACK.
+    Observer failures never retry motion or turn a successful write into an
+    unknown delivery. Unknown writes receive no success notification.
     """
+    def notify(out):
+        if notify_written is not None:
+            try:
+                notify_written(out)
+            except Exception as exc:
+                if warn is not None:
+                    warn(f"cmd_vel write observation failed: {exc}")
+
+    def zero():
+        send(ZERO)
+        notify(Twist())
+
+    receipt = None
     try:
         out = command.select_output()
+        if execution_fence is not None:
+            receipt = execution_fence.receipt_for(out)
     except Exception as exc:
         # 고르기가 예외를 내면 (안전 정책 평가 등) 0 을 내보낸다. 예외가 rclpy
         # 타이머 밖으로 새면 50 Hz 최종 발행자가 멈추고, 바퀴는 마지막 값을 쥔다.
         if trial_guard is not None:
             try:trial_guard.stop('selection_failed')
             except Exception:pass
-        send(ZERO)
+        zero()
         if warn is not None:
             warn(f"cmd_vel output failed: {exc}")
         return
-    if readiness is not None and not readiness.is_ready():
-        out = ZERO
     gate_fault = None
+    if readiness is not None:
+        try:
+            ready = readiness.is_ready()
+        except Exception as exc:
+            if execution_fence is None:
+                raise
+            if receipt is not None:
+                execution_fence.request_stop(receipt.context.parent)
+            ready, gate_fault = False, exc
+        if not ready:
+            out = ZERO
     if motion_ready is not None:
         try:
             ready = motion_ready() is True
         except Exception as exc:
+            if execution_fence is not None and receipt is not None:
+                execution_fence.request_stop(receipt.context.parent)
             ready, gate_fault = False, exc   # warned after the wheels, like every other cost
         if not ready:
             out = ZERO
@@ -174,45 +232,64 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
     except Exception as exc:
         if port is not None:
             port.close()
+        if execution_fence is not None and receipt is not None:
+            execution_fence.request_stop(receipt.context.parent)
         if trial_guard is not None:
             try:trial_guard.stop('port_binding_failed')
             except Exception:pass
-        send(ZERO)
+        zero()
         if warn is not None:
             warn(f"cmd_vel guard failed: {exc}")
         return
+    submission_error = None
+    def submit():
+        if execution_fence is None:
+            return port.submit(guarded)
+        decision = execution_fence.submit(
+            receipt, out, (guarded.payload.linear_mps, guarded.payload.angular_radps),
+            lambda: port.submit(guarded))
+        return (PortDecision(False, "hold", "execution_context_changed")
+                if decision is CONTEXT_CHANGED else decision)
     try:
         try:
             if trial_guard is None:
-                decision = port.submit(guarded)
+                decision = submit()
             else:
                 from core_features.command.bounded_trial import BoundedTrial
                 if type(trial_guard) is not BoundedTrial:
                     raise ValueError('exact bounded trial owner required')
                 decision = trial_guard.submit_fenced(
                     guarded.payload.linear_mps,guarded.payload.angular_radps,
-                    lambda:port.submit(guarded),now=now)
-                if decision is None:
-                    send(ZERO)
-                    return
+                    submit,now=now)
         except Exception as exc:
-            if trial_guard is None:raise
-            try:trial_guard.stop('submission_unknown')
-            except Exception:pass
-            try:send(ZERO)
-            except Exception:pass  # Physical stop remains UNKNOWN, never retry motion.
-            if warn is not None:warn(f'bounded trial delivery unknown: {exc}')
-            return
-        if not decision.accepted:
+            if trial_guard is None and execution_fence is None:raise
+            if execution_fence is not None and receipt is not None:
+                execution_fence.request_stop(receipt.context.parent)
             if trial_guard is not None:
-                try:trial_guard.stop('submission_rejected')
+                try:trial_guard.stop('submission_unknown')
                 except Exception:pass
-            send(ZERO)
-            if warn is not None:
-                warn(f"cmd_vel guard refused: {decision.reason}")
-            return
+            submission_error = exc
     finally:
         port.close()
+    if submission_error is not None:
+        try:zero()
+        except Exception:pass  # Physical stop remains UNKNOWN, never retry motion.
+        if warn is not None:warn(f'cmd_vel delivery unknown: {submission_error}')
+        return
+    if decision is None:
+        if execution_fence is not None and receipt is not None:
+            execution_fence.request_stop(receipt.context.parent)
+        zero()
+        return
+    if not decision.accepted:
+        if trial_guard is not None:
+            try:trial_guard.stop('submission_rejected')
+            except Exception:pass
+        zero()
+        if warn is not None:
+            warn(f"cmd_vel guard refused: {decision.reason}")
+        return
+    notify(Twist(guarded.payload.linear_mps, guarded.payload.angular_radps))
     if guarded.payload.linear_mps != 0.0 or guarded.payload.angular_radps != 0.0:
         power.on_activity("cmd_vel")
     command.announce_pending()

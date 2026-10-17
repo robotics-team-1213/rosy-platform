@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
-- 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
-- 2026-10-16 · uncommitted · 최신 크기 규칙 통합
-- 2026-10-16 · uncommitted · 경로 보기 브라우저의 명시적 탭 클릭
-- 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
+- 2026-10-17 · uncommitted · exact charge stop before journal contention
+- 2026-10-17 · uncommitted · measured health operational admission
+- 2026-10-17 · 79226ce97 · SIM 초기 CORE 틱의 원본 이동 계측 보존
+- 2026-10-17 · e801f1e01 · 원본 전송과 boot 대조를 결속한 충전 World pose reader
+- 2026-10-17 · 1eeaeb653 · World source-scope ingestion fences

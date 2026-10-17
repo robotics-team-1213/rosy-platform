@@ -1,0 +1,6 @@
+// Copyright 2026 ROSY contributors
+// SPDX-License-Identifier: Apache-2.0
+#ifndef ROSY_NATIVE_MAP__BUILD_ID_HPP_
+#define ROSY_NATIVE_MAP__BUILD_ID_HPP_
+namespace rosy_native_map {constexpr char kBuildId[] = "@native_build_id@";}
+#endif  // ROSY_NATIVE_MAP__BUILD_ID_HPP_

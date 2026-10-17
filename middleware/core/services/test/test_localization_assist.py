@@ -292,6 +292,36 @@ def test_a_stale_state_topic_halts_with_its_reason(lost):
     assert lost.events.named("localization.state")[-1]["reason"] == "state_stale"
 
 
+@pytest.mark.parametrize('source', ['tick', 'state'])
+def test_effective_frame_loss_halts_once_even_when_state_stays_localized(lost, source):
+    lost.on_state(_state('LOCALIZED'))
+    assert lost.autonomy_allowed()
+    for _ in range(2):
+        if source == 'tick':
+            lost.tick(odom_owns_pose=True)
+        else:
+            lost.on_state(_state('LOCALIZED', frame='odom'))
+    assert not lost.autonomy_allowed() and lost.status().state is LocState.LOCALIZED
+    assert lost.lost_calls == ['halt'] and lost.cancels == ['cancel']
+    # Public state-change event semantics remain state-only.
+    assert len(lost.events.named('localization.state')) == 1
+    lost.on_state(_state('SUSPECT'))
+    assert lost.lost_calls == ['halt']
+
+
+def test_localized_without_a_map_frame_does_not_signal_acquisition(lost):
+    lost.on_state(_state('LOCALIZED', frame='odom'))
+    assert not lost.autonomy_allowed() and lost.cancels == []
+    assert lost.lost_calls == ['halt']  # First reported invalid pose also closes legacy autonomy.
+    lost.on_state(_state('LOCALIZED', frame='map'))
+    assert lost.autonomy_allowed() and lost.cancels == ['cancel']
+    lost.tick(True)
+    assert lost.lost_calls == ['halt', 'halt']
+    lost.tick(False)
+    lost.tick(False)
+    assert lost.autonomy_allowed() and lost.cancels == ['cancel', 'cancel']
+
+
 # --- D-395 S1 finding 6: the stale window runs on the robot node's clock -----------
 
 
@@ -334,11 +364,14 @@ def test_a_real_silence_is_still_stale_on_the_bound_clock(lost):
     assert lost.lost_calls == ["halt"]
 
 
-def test_states_that_were_never_localized_do_not_halt(lost):
+def test_first_invalid_report_halts_once_and_later_invalid_states_do_not_repeat_it(lost):
+    lost.tick(odom_owns_pose=True)
+    assert lost.autonomy_allowed() and lost.lost_calls == []  # No-report legacy scope.
     lost.on_state(_state("UNKNOWN"))
+    assert lost.lost_calls == ['halt']
     lost.on_state(_state("CANDIDATES", request_id="req-1"))
     lost.on_state(_state("SUSPECT"))
-    assert lost.lost_calls == []
+    assert lost.lost_calls == ['halt']
 
 
 # --- review: result hardening, payload cap, autonomy predicate ---------------------
