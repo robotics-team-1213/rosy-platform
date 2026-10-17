@@ -20,7 +20,7 @@
 698 deploy/site/rosy_model_code.py
 616 deploy/site/rosy_site_autoupdate.py
 1141 devices/omx/adapter/omx_adapter/action_store.py
-696 devices/omx/adapter/omx_adapter/command_owner.py
+695 devices/omx/adapter/omx_adapter/command_owner.py
 728 devices/omx/adapter/omx_adapter/pose_plan.py
 788 drive/behaviors/docking/manager.py
 822 drive/behaviors/line_follow/manager.py
