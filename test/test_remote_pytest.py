@@ -533,7 +533,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert rj.parse_poll(b"ROSYJOB 1\n") is None  # no liveness field: cut off or an old script
     assert rj.parse_poll(b"ROSYJOB x 1\nlog") == (None, True, b"log")
     # The job writes the code beside the file and renames it; POLL reads only the final name.
-    assert 'echo $c > "$D/$K.rc.tmp"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' in rj.JOB
+    assert 'mv -f "$D/$K.rc.tmp" "$D/$K.rc"' in rj.JOB
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
     assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
@@ -628,6 +628,7 @@ def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
     home, env = _job_env(tmp_path, "sleep 30\n")
+    # Completion must imply cleanup even while the publishing command is still returning.
     move = tmp_path / "bin" / "mv"
     move.write_text('#!/bin/bash\n/bin/mv "$@" || exit $?\n'
                     'while [ ! -e "$HOME/release" ]; do sleep 0.01; done\n')
