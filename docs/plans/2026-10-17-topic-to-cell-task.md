@@ -31,7 +31,8 @@ GOAL_CONFIRMED에서만 task_success=true다. 통신 불명·타임아웃은 작
   불명 제출 재전송 금지, 실제 상태 조회와 독립 goal 결과 구분, 원본 보존.
 - [x] 커밋된 RED를 모델/AI PC에서 확인한다. 노트북 pytest는 실행하지 않는다.
 - [x] 최소 HTTP client와 CLI를 구현하고 같은 원격 테스트와 기존 Cell API 회귀를 확인한다.
-- [ ] 독립 계약 리뷰 후 로컬 착지한다. 실제 사이트 활성화·구동 수용은 별도 증거다.
+- [x] 독립 계약 리뷰에서 남은 material finding이 없음을 확인했다.
+- [ ] 최신 main 통합 검증 후 로컬 착지한다. 실제 사이트 활성화·구동 수용은 별도 증거다.
 - [ ] 비현장 PC의 Gazebo 자원이 확보되면 기존 G2 Fleet→UDS→OMX owner→Gazebo→
   독립 goal evidence 경로를 실행한다. 모의 API 시험으로 Gazebo 성공을 대신하지 않는다.
 - [ ] 기존 collection raw→검토→LeRobot reader→ACT→새 process 재적재를 연결한다.
@@ -55,3 +56,16 @@ python -m fleet.server.cell_task_client --fleet-url https://<fleet-host>:<port> 
 
 인증정보는 인자 문자열이나 영수증에 넣지 않는다. 제출 후 기존 Fleet 승인 경로를 사용한다.
 status는 현재 원장 조회이며 폴링·정지·재무장 권한을 새로 만들지 않는다.
+
+## 통합 회귀 후속
+
+2026-10-17 통합 후보 `9ed706dd42`의 원격 묶음은 6,635 passed / 354 skipped / 1 failed였다.
+실패한 G1 rollback 검사는 두 팔 step 2의 취소 후, 별개 왼팔 step 6이 정상 사용한
+shared zone까지 비어 있어야 한다고 판단했다. 20 tick의 wall 시간에 따라 달라졌으며
+동일 커밋의 단독 재실행은 통과했다. 독립 producer-consumer 검토에서 원인을 확인했다.
+
+커밋 `a3bd16c251`은 즉시 rollback 시의 전체 arm/zone claim 부재 검사와 owner 미제출
+검사를 유지하고, 이후 검사는 해당 두 팔 action의 action_id/claims로 한정한다.
+생산 dispatcher·claim 트랜잭션은 바꾸지 않았다. 원격 G1 SIM·timing 12 passed,
+known-failure 비교 새 실패 0개다. 실패한 후보의 남은 병합 검사는 중단했으며 그 후보나
+이전 회차의 browser 통과를 수정 후 최종 병합 증거로 표시하지 않는다.

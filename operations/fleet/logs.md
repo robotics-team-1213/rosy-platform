@@ -4035,3 +4035,10 @@
 - 변경: 에이전트가 고른 topic·레시피/셀 digest·instance를 기존 compile/proposal API로 연결하는 `fleet/server/work/cell_task_client.py`를 추가했다. 원본·제출 intent·Fleet 응답을 보존하고 기존 Cell Job 원장을 조회한다. 별도 명시적 admit는 저장된 요청과 현재 제안을 대조하고 기존 named operator·generation 검사로 위임한다. 자동 재전송·dispatch 재무장은 없다.
 - 증거: bbaf06bbe 원격 pytest 30 passed, known failures NEW 0. 실제 Cell compiler·API와 새 프로세스 CLI import를 검사했다. 독립 계약 리뷰에서 추가 material finding 없음.
 - gate 변화: 없음. 자유문장 해석기·Gazebo 실행·실물 구동·실제 모방학습 완료의 증거는 아니다. ACTION_SUCCEEDED와 독립 GOAL_CONFIRMED를 구분한다.
+
+## 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+
+- 변경: 한쪽 claim 거절의 즉시 rollback 검사는 유지하고 이후 독립 왼팔 작업이 점유한 정상 shared zone을 실패한 pair의 누수로 판단하지 않게 했다. 최종 action_id와 claims를 대상 pair에 결속한다.
+- 증거: 통합 후보의 1 failed / 6635 passed / 354 skipped와 동일 후보 단독 통과로 타이밍 의존을 확인했다. 독립 producer-consumer 분석 후 수정 커밋 원격 G1 SIM·timing 12 passed, 새 실패 0개.
+- gate 변화: 생산 제어·claim 권한 변경 없음. 중단된 후보의 병합 검사와 실제 G2·실물 수용을 완료로 표시하지 않는다.
+
