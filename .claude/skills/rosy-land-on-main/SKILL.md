@@ -31,7 +31,7 @@ python tools/worktrees.py status                              # every worktree w
   removes dirty or unmerged worktrees too, the caller's own unless `--all`: only a person or the dispatcher runs it.
   `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 
-- `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `X:\DevTemp`.
+- `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `$ROSY_SCRATCH` (unset: the system temp directory; lab PCs set `ROSY_SCRATCH=X:\DevTemp`).
 - Check `ListAgents` (when available) for peers and what they own.
 - Background executors: commit after every step, and the dispatcher runs a commit monitor
   — 40 minutes without a new commit on the branch is a warning to check on the executor.
@@ -58,8 +58,8 @@ Run the relevant suites in your worktree, then compare against the list of failu
 already exist on main:
 
 ```bash
-python -m pytest <paths> -q -rfE -p no:cacheprovider > X:/DevTemp/<name>/run.txt
-python test/known_failures.py X:/DevTemp/<name>/run.txt     # exit 1 = a NEW failure
+python -m pytest <paths> -q -rfE -p no:cacheprovider > $ROSY_SCRATCH/<name>/run.txt
+python test/known_failures.py $ROSY_SCRATCH/<name>/run.txt     # exit 1 = a NEW failure
 ```
 
 A `NEW` line is yours until proven otherwise (check it on a clean `main` worktree). If

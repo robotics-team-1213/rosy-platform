@@ -443,7 +443,7 @@ def on_main(main_co: Path) -> None:
 
 
 def tmp_dir(branch: str) -> Path:
-    base = os.environ.get("ROSY_LAND_TMP") or ("X:/DevTemp/land" if os.name == "nt" else "/tmp/rosy-land")
+    base = os.environ.get("ROSY_LAND_TMP") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-land"
     path = Path(base) / branch.replace("/", "-")
     path.mkdir(parents=True, exist_ok=True)
     return path

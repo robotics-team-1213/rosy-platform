@@ -322,7 +322,7 @@ def main():
     parser.add_argument('--publish', action='store_true')
     parser.add_argument('--target', choices=('pixels', 'objects'), default='pixels')
     parser.add_argument('--name')
-    parser.add_argument('--scratch', default='X:/DevTemp')
+    parser.add_argument('--scratch', default=str(Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir())))
     args = parser.parse_args()
     if args.ready and args.publish:
         parser.error('choose --ready or --publish')

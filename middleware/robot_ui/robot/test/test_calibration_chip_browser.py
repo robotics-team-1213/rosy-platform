@@ -7,6 +7,7 @@ opens the lease through the API, so the chip proves the whole path CORE → scre
 from __future__ import annotations
 
 import os
+import tempfile
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -27,7 +28,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 OPERATOR = "rosy-dev-operator"
-SHOTS = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/calibration-mode"))
+SHOTS = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "calibration-mode")
 
 
 def _core_client(tmp_path):

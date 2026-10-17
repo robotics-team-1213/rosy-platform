@@ -1708,7 +1708,7 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
               at: (dot.left + dot.width / 2 - track.left) / track.width,
               inside: strip.left >= Math.max(view.left, picL) - 1 && strip.right <= Math.min(view.right, picR) + 1 && strip.bottom <= view.bottom + 1};
     })()""")
-    page.screenshot(path=str(Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp")) / "pilot-intent-tracking.png"))
+    page.screenshot(path=str(Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp")) / "pilot-intent-tracking.png"))
     assert got["steer"] == "오른쪽 18°/s ▶" and got["state"] == "tracking"
     assert abs(got["at"] - 0.70) < 0.03 and got["inside"], got
     script({"state": "HOLD", "error": None, "linear": 0.0, "angular": 0.0, "reason": "obstacle_ahead"})
@@ -1963,7 +1963,7 @@ def _calibrating(owner_id: str) -> dict:
 def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_page):
     """D-321 부록: 보정 중이면 띠가 뜨고, 남의 보정이면 주행 조작이 사유와 함께 잠긴다."""
     base_url, page, errors = tablet_page
-    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/calibration-mode"))
+    shots = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp") / "calibration-mode")
     shots.mkdir(parents=True, exist_ok=True)
     log = f"{base_url}/__test__/teleop"
     _enter_drive(page, base_url)
@@ -2730,7 +2730,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
 @pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
-    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+    shots = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp") / "d411-c")
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -2893,7 +2893,7 @@ def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_ur
             if viewport[0] < 600:
                 assert top["clamped"], top           # phone: unclamped, the ring would leave the column
             if viewport[0] < 600:
-                shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+                shots = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp") / "d411-c")
                 if shots.drive and Path(shots.drive + "/").exists():
                     shots.mkdir(parents=True, exist_ok=True)
                     page.screenshot(path=str(shots / f"pilot-drive-zone-top-{viewport[0]}x{viewport[1]}.png"))

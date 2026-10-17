@@ -31,7 +31,7 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    디스패처만 돌린다. 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. 공유
    `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지
    않은 변경을 남기면 다른 세션의 fast-forward가 거절된다. 스크래치, 로그,
-   pytest 출력은 저장소 밖에 둔다. 실험실 PC에서는 `X:\DevTemp`다.
+   pytest 출력은 저장소 밖 `$ROSY_SCRATCH`에 둔다(없으면 시스템 임시 폴더. 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`).
 2. **자기 경로만 스테이징한다.** `git add`에는 이번 작업에서 자신이 만든 경로만
    적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 인덱스
    하나가 모든 세션의 것이라 넓은 add 한 번이 다른 세션의 파일을 커밋에 넣는다.
@@ -53,11 +53,11 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
    밖의 `run-1.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`가 모델 PC(OMEN),
-   AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와
+   AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `$ROSY_SCRATCH\<이름>\`로 가져온다. pre-push와
    `tools/land.py`가 이를 쓴다. 시험 PC가 하나도 닿지 않으면 노트북으로 넘어가지 않고 10분 동안 30초마다 다시 시도한 뒤 실패로 끝낸다(D-584). 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. `--local`과 `ROSY_TEST_LOCAL`은 오류로 거절한다. 커밋된
    HEAD만 보내므로 먼저 커밋한다. Gazebo는 노트북에서 돌리지 않고
    `python tools/remote/remote_pytest.py --pick sim`이 고른 PC에서 돌린다.
-   실험실 PC의 경로는 `X:\DevTemp\<이름>\run-1.txt`다. exit 1의 `NEW`는 그
+   로그 경로는 `$ROSY_SCRATCH\<이름>\run-1.txt`다. exit 1의 `NEW`는 그
    브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서
    뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는
    장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
