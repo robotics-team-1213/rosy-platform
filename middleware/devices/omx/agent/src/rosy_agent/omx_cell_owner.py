@@ -281,7 +281,7 @@ def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> Gripper
     """SIM GRIPPER SENSOR (labelled, as in the C3b probe): finger angle against the width of the
     item in the recipe the grant names (1b C2), never another accepted recipe."""
     transfer = grant.cell_transfer
-    geometry = owner.acceptance.accepted_item_geometry(transfer.recipe_sha256, transfer.item)
+    geometry = owner.acceptance.accepted_item_geometry(transfer.recipe_sha256, transfer.item_key)
     if geometry is None:
         raise RuntimeError("the grant's recipe/item is not accepted on this owner")
     width = geometry["grasp_width_m"]

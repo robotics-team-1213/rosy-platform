@@ -7,6 +7,7 @@ recipe/1 and /2 are untouched: they keep their own loader in recipe.py.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -27,6 +28,8 @@ _REFUSED = {
 _ITEM = ("sku", "length", "width", "height", "mass_kg", "quantity", "orientation", "max_load_on_top_kg")
 _ITEM_OPTIONAL = ("grasp_depth",)
 ORIENTATIONS = ("yaw_only", "upright_fixed")
+# The sku travels in the CELL_TRANSFER grant (D-781 §2), so it is a trimmed identifier like there.
+_SKU = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$")
 STABILITY_RULES = ("support_ratio_v1",)
 CANDIDATE_METHODS = ("extreme_points",)
 YAWS_DEG = (0, 90)
@@ -111,8 +114,11 @@ def _item(raw: object, f: str, grip: GripRange, ratio: float | None) -> Item:
     if ratio is not None and box.height > ratio * min(box.length, box.width) + 1e-12:
         raise FieldError(f"{f}.height {box.height:.4f} m exceeds max_height_to_base_ratio {ratio} "
                          f"times the short base side {min(box.length, box.width):.4f} m")
+    sku = fields.text(d["sku"], f"{f}.sku")
+    if not _SKU.fullmatch(sku):
+        raise FieldError(f"{f}.sku must be 1-96 letters, digits, '_', '.', ':' or '-', got {sku!r}")
     return Item(
-        sku=fields.text(d["sku"], f"{f}.sku"),
+        sku=sku,
         length=box.length,
         width=box.width,
         height=box.height,

@@ -1,6 +1,6 @@
-"""D-779 §3/§6 for multi-arm Cell Jobs: per-step goal evidence, per-arm resume (store and route),
-the tight-partner resume rule and the pair send rule (an accepted arm is cancelled only when its
-step did not start on every arm)."""
+"""D-779 §3/§6 for multi-arm Cell Jobs: per-step goal evidence (per-arm predicates, D-781 §5),
+per-arm resume (store and route), the tight-partner resume rule and the pair send rule (an
+accepted arm is cancelled only when its step did not start on every arm)."""
 
 import copy
 import sqlite3
@@ -45,10 +45,22 @@ def with_predicates(steps):
     return steps
 
 
-def goal_setup(tmp_path, steps):
+def with_arm_predicates(steps):
+    """Per-arm predicates (D-781 §5): one for every primary and alternate arm, from its own inputs."""
+    steps = copy.deepcopy(steps)
+    for step in steps:
+        actions = step["placement"]["actions"]
+        document = {"steps": [{"inputs": actions[role]} for role in sorted(actions)]}
+        attach_goal_predicates(document, GEOMETRY, _tolerance())
+        step["goal_predicates"] = {role: item["goal_predicate"]
+                                   for role, item in zip(sorted(actions), document["steps"])}
+    return steps
+
+
+def goal_setup(tmp_path, steps, *, predicates=with_predicates):
     holder = {}
     path, cells, tasks, transport, dispatcher = _setup(
-        tmp_path, steps=with_predicates(steps),
+        tmp_path, steps=predicates(steps),
         on_step_action_succeeded=lambda job, index: (
             holder["service"].on_action_terminal(job["mission_id"]) if "service" in holder else None))
     producers = tuple(CellGoalProducer(
@@ -101,8 +113,9 @@ def claims(path):
 
 
 # Goal evidence (D-779 §3) -------------------------------------------------------------------------
-def test_goal_evidence_confirms_a_step_and_opens_its_dependents(tmp_path):
-    path, cells, _, transport, dispatcher, service, clock = goal_setup(tmp_path, four_steps())
+@pytest.mark.parametrize("predicates", [with_predicates, with_arm_predicates])
+def test_goal_evidence_confirms_a_step_and_opens_its_dependents(tmp_path, predicates):
+    path, cells, _, transport, dispatcher, service, clock = goal_setup(tmp_path, four_steps(), predicates=predicates)
     dispatcher.dispatch_next()
     transport.answer(LEFT, "SUCCEEDED")
     dispatcher.dispatch_next()
@@ -197,18 +210,61 @@ def test_invalid_multi_arm_evidence_changes_nothing(tmp_path, mutation):
     assert service.store.get("goal-bad") is None
 
 
-def test_an_alternate_arm_step_is_refused_until_a_per_arm_predicate_exists(tmp_path):
-    steps = [arm_step(0, "left", "left_half", [], alternates=["right"])]
-    path, cells, _, transport, dispatcher, service, clock = goal_setup(tmp_path, steps)
+def _alternate_run(tmp_path, predicates, primary_shift_m=0.0):
+    """Step 0 belongs to the left arm with the right arm as alternate; the left arm is taken out,
+    so the right arm runs it. ``primary_shift_m`` moves only the LEFT arm's place pose."""
+    step = arm_step(0, "left", "left_half", [], alternates=["right"])
+    step["placement"]["actions"]["left"]["destination_pose_base"]["x_m"] += primary_shift_m
+    setup = goal_setup(tmp_path, [step], predicates=predicates)
+    _, cells, _, transport, dispatcher, _, _ = setup
     ArmJobStore(cells).set_arm_offline("arm-job-1", arm_role="left", actor_id="operator-2", reason="OWNER_REAPPROVAL")
     dispatcher.dispatch_next()
     transport.answer(RIGHT, "SUCCEEDED")
     dispatcher.dispatch_next()
+    assert cells.get("arm-job-1")["placements"][0]["assigned"] == ["right"]
     assert cells.get("arm-job-1")["steps"][0]["status"] == "ACTION_SUCCEEDED"
+    return setup
+
+
+def test_an_alternate_arm_step_is_judged_with_the_alternate_arms_predicate(tmp_path):
+    # The left (primary) predicate is 0.1 m off the observed pose; only the right arm's own matches.
+    path, cells, _, transport, dispatcher, service, clock = _alternate_run(tmp_path, with_arm_predicates, 0.1)
+    job = cells.get("arm-job-1")
+    stored = job["steps"][0]["step"]["goal_predicates"]
+    assert stored["left"]["target"]["x"] == pytest.approx(stored["right"]["target"]["x"] + 0.1)
+    with pytest.raises(GoalEvidenceSubmissionError) as refused:  # the primary arm's producer is not in scope
+        submit(service, clock, cells, 0, "right", "goal-alt-left", token_role="left")
+    assert refused.value.code == "PRODUCER_SCOPE_MISMATCH"
+    result = submit(service, clock, cells, 0, "right", "goal-alt")
+    assert result["state"] == "GOAL_CONFIRMED"
+    job = cells.get("arm-job-1")
+    assert job["steps"][0]["status"] == "GOAL_CONFIRMED"
+    assert job["steps"][0]["goal_evidence"]["predicate"]["target"]["x"] == pytest.approx(stored["right"]["target"]["x"])
+
+
+def test_an_alternate_arm_step_off_its_own_pose_is_not_confirmed(tmp_path):
+    # Mirror of the above: the alternate's own predicate is off, the primary's would match.
+    step = arm_step(0, "left", "left_half", [], alternates=["right"])
+    step["placement"]["actions"]["right"]["destination_pose_base"]["x_m"] += 0.1
+    path, cells, _, transport, dispatcher, service, clock = goal_setup(tmp_path, [step], predicates=with_arm_predicates)
+    ArmJobStore(cells).set_arm_offline("arm-job-1", arm_role="left", actor_id="operator-2", reason="OWNER_REAPPROVAL")
+    dispatcher.dispatch_next()
+    transport.answer(RIGHT, "SUCCEEDED")
+    dispatcher.dispatch_next()
     with pytest.raises(GoalEvidenceSubmissionError) as refused:
         submit(service, clock, cells, 0, "right", "goal-alt")
-    assert refused.value.code == "EVIDENCE_SCOPE_MISMATCH"
+    assert refused.value.code == "CELL_GOAL_NOT_AT_POSE"
     assert cells.get("arm-job-1")["steps"][0]["status"] == "ACTION_SUCCEEDED"
+
+
+def test_an_alternate_arm_step_without_a_predicate_in_its_frame_is_refused(tmp_path):
+    # Only the legacy single predicate (the primary arm's frame) is stored: it never judges an alternate.
+    path, cells, _, transport, dispatcher, service, clock = _alternate_run(tmp_path, with_predicates)
+    with pytest.raises(GoalEvidenceSubmissionError) as refused:
+        submit(service, clock, cells, 0, "right", "goal-alt")
+    assert refused.value.code == "CELL_GOAL_PREDICATE_MISSING"
+    assert cells.get("arm-job-1")["steps"][0]["status"] == "ACTION_SUCCEEDED"
+    assert service.store.get("goal-alt") is None
 
 
 # Per-arm resume (D-779 §6) ------------------------------------------------------------------------
