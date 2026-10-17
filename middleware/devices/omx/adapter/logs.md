@@ -601,3 +601,9 @@
 - 변경: 실제 handle 메서드를 추출하는 policy event-order 시험이 새 소스 파일을 읽도록 고쳤다. native feedback 회귀에는 제한된 poll·intake·cancel 기록과 timeout 중 thread stack·설치된 MTE 구현을 실패 때만 출력하는 진단을 추가했다.
 - 증거: run39012627359에서 host 3 failed / 1546 passed / 17 skipped, native 2 failed / 13 passed, Fleet native 2 passed. host 실패는 이동 전 AST 경로였다. native에서는 기존 cancel 관측과 추가 4-worker timeout freshness 실패를 관찰했으며 원인은 아직 확정하지 않았다.
 - gate 변화: 없음. 제품 코드·0.5s 기준·시험 포함 범위는 그대로 두고 다음 GitHub 실행에서 실제 대기 위치를 확인한다. GREEN·staging·장치 수용을 주장하지 않는다.
+
+## 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
+
+- 변경: OMX 전용 MTE subclass가 부모 spin hook의 인자·반환·예외를 유지하고 성공한 회차 뒤 sleep(0)으로 실행 기회를 넘긴다. 실제 owner 진입점·정책/시뮬/Fleet 회귀가 같은 helper를 쓰며 worker 수·poll 주기·0.5s 기준은 유지한다. spin·spin_once·future 대기와 종료 검증을 추가했다.
+- 증거: 진단 run39013248730은 host 1549 passed / 17 skipped, native 1 failed / 14 passed, Fleet native 2 passed. rclpy7.1.12에는 명시적 yield가 없었다. poll 사이 약0.577s 공백과 idle worker를 관찰했고 cancel은 약0.165ms에 반환했다. GIL 원인을 확정하지 않고 scheduling 보완의 효과를 같은 회귀로 검증한다.
+- gate 변화: 없음. 분리된 액션 노드가 새 collection의 단일 client 검사에 걸리는 경로도 확인해 exact owned identity의 RED 계약을 추가했다. 해당 통합 수정과 최종 GREEN 전에는 병합하지 않는다. 장치·실제 배포는 미실행이다.

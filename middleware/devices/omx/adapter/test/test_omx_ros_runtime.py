@@ -12,7 +12,8 @@ rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
 from rclpy.action import ActionServer  # noqa: E402
-from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor  # noqa: E402
+from rclpy.executors import SingleThreadedExecutor  # noqa: E402
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
 
@@ -106,7 +107,7 @@ def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
             observed.set()
     runtime._policy_binding = SlowBinding()
     publisher = source_node.create_publisher(JointState, topic, 1)
-    executor = MultiThreadedExecutor(num_threads=3)
+    executor = OwnerMultiThreadedExecutor(num_threads=3)
     executor.add_node(owner_node); executor.add_node(source_node)
     spinner = threading.Thread(target=executor.spin, daemon=True)
     spinner.start()
@@ -197,7 +198,7 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
         on_goal_event=goal_events.append,
     )
     phase_port = RosArmPhaseGoalPort(runtime)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
         executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=1)
@@ -309,7 +310,7 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         poll_period_s=0.01,
         on_goal_event=goal_events.append,
     )
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
@@ -413,7 +414,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
     # Jazzy explicitly recommends SingleThreadedExecutor instead of a one-worker
     # MTE. Keep the original four-worker production regression as well.
     executor = (SingleThreadedExecutor() if owner_threads == 1
-                else MultiThreadedExecutor(num_threads=owner_threads))
+                else OwnerMultiThreadedExecutor(num_threads=owner_threads))
     executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
@@ -536,6 +537,43 @@ def test_timeout_never_falls_back_to_the_owner_thread_sink(scheduler_stopped):
     if queued:
         queued.pop()()
         assert [event.kind for event in events] == ["GOAL_ACCEPTANCE_UNKNOWN"]
+
+
+@pytest.mark.parametrize("mode", ["spin", "spin_once", "future"])
+def test_owner_executor_schedules_callbacks_and_shuts_down(mode):
+    rclpy.init()
+    node = Node("omx_executor_modes")
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+    completed = executor.create_future()
+
+    def tick():
+        if not completed.done():
+            completed.set_result("observed")
+
+    node.create_timer(0.01, tick)
+    spinner = ThreadPoolExecutor(max_workers=1)
+    spinning = None
+    try:
+        deadline = time.monotonic() + 3.0
+        if mode == "spin":
+            spinning = spinner.submit(executor.spin)
+            while not completed.done() and time.monotonic() < deadline:
+                time.sleep(0.01)
+        elif mode == "spin_once":
+            while not completed.done() and time.monotonic() < deadline:
+                executor.spin_once(timeout_sec=0.05)
+        else:
+            executor.spin_until_future_complete(completed, timeout_sec=3.0)
+        assert completed.done() and completed.result() == "observed"
+    finally:
+        stopped = executor.shutdown(timeout_sec=2.0)
+        if spinning is not None:
+            spinning.result(timeout=3.0)
+        spinner.shutdown(wait=True)
+        node.destroy_node()
+        rclpy.shutdown()
+    assert stopped
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():

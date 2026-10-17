@@ -32,7 +32,7 @@ class RosBackend:
     def __init__(self, profile, acceptance, teacher):
         validate_profile(profile, mode='hardware', acceptance=acceptance, teacher=teacher)
         import rclpy
-        from rclpy.executors import MultiThreadedExecutor
+        from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
         from omx_adapter.command_owner import ArmCommandConfig
         from omx_adapter.ros_runtime import RosArmCommandRuntime
         from collection_ros_inputs import RosInputs
@@ -70,7 +70,7 @@ class RosBackend:
             self.runtime = RosArmCommandRuntime(self.node, owner,
                 joint_state_topic=profile['ros']['joint_state_topic'],
                 trajectory_action=profile['ros']['trajectory_action'], on_goal_event=self.on_event)
-            self.executor = MultiThreadedExecutor(num_threads=4)
+            self.executor = OwnerMultiThreadedExecutor(num_threads=4)
             self.executor.add_node(self.node)
             self.thread = threading.Thread(target=self.executor.spin, daemon=True)
             self.thread.start()

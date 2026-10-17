@@ -27,7 +27,7 @@ def main():
     lock.write(str(os.getpid()))
     lock.flush()
     import rclpy
-    from rclpy.executors import MultiThreadedExecutor
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
     from core_common.protocol.schemas import FleetCellTransferGrant
@@ -104,7 +104,7 @@ def main():
     accepted_recipe = owner.acceptance.accept_recipe(json.loads((run / "recipe.json").read_text()),
                                                      actor_id="g2-sim-acceptor")
     write_json(run / "owner-acceptance.json", {"cell": accepted_cell, "recipe": accepted_recipe})
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     try:

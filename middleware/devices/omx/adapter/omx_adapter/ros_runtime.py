@@ -1,8 +1,4 @@
-"""Optional ROS 2 Jazzy bindings for the disabled-by-default OMX policy.
-
-Import this module only in a ROS 2 environment. The package's profile and
-command-policy modules remain usable on hosts without rclpy.
-"""
+"""ROS-only Jazzy bindings; profile/policy modules remain usable without rclpy."""
 
 from __future__ import annotations
 
@@ -33,19 +29,11 @@ from .ros_trajectory_action import (
 
 
 class RosArmCommandRuntime:
-    """Bind one policy instance to joint-state input and a steady-time watchdog.
-
-    This exposes an in-process submit API. It deliberately does not create a
-    remote action/service endpoint or claim DDS access control. Deployment must
-    admit exactly one local command source and isolate the vendor action graph.
-
-    Joint-state intake and the watchdog use separate mutually exclusive groups.
-    The action client owns a separate single-threaded executor: slow synchronous
-    event sinks cannot occupy the owner's executor or its ready-action waitset.
-    Durable event order and terminal completion remain synchronous on that action
-    executor. Owner/session locks still serialize accepted state and control;
-    isolation does not waive freshness or stop checks. Use a MultiThreadedExecutor
-    for the owner when policy guard I/O can block a watchdog or state callback.
+    """Bind intake/watchdog groups to a local-only policy API; no DDS access control.
+    Deployment admits one command source and isolates the vendor graph. A separate
+    action executor serializes durable events; owner locks, freshness and stop
+    checks remain authoritative. Use ros_owner_executor.OwnerMultiThreadedExecutor
+    when policy I/O can block owner callbacks (observed rclpy 7.1.12 scheduling gaps).
     """
 
     def __init__(
@@ -131,8 +119,7 @@ class RosArmCommandRuntime:
                 stamp_ns=message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec,
                 source_now_ns=self._node.get_clock().now().nanoseconds, received_at=self.monotonic())
         except (TypeError, ValueError, OverflowError):
-            # Rejected packets cannot refresh the state or watchdog. Loss of valid
-            # feedback reaches the existing stale-state HOLD and cancel path.
+            # Invalid feedback never refreshes the existing stale-state HOLD timer.
             return
         self.latest_joint_state = snapshot
         def deliver_owner(state):
@@ -201,8 +188,7 @@ class RosArmCommandRuntime:
                 self.unregister_phase_event_sink(event.command_id)
 
     def _watchdog_tick(self) -> None:
-        # Steady-clock timer: it keeps polling (and the wall bound keeps working) when sim
-        # time is frozen.
+        # Steady time preserves polling and the wall bound when sim time is frozen.
         self.last_decision = (self.owner.poll() if self._policy_binding is None else self._policy_binding.poll())
         if self.last_decision.reason in {"action_timeout", "joint_state_stale",
                                          "action_wall_timeout", "joint_state_stale_wall_clock"}:

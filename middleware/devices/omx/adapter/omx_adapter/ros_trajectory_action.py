@@ -71,8 +71,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         future.add_done_callback(self._on_goal_response)
 
     def _emit(self, kind: str, *, goal_id: str | None = None, **facts: Any) -> bool:
-        # Sequence allocation, timestamp and durable delivery form one ordered
-        # stream. Do not hold the general handle state lock through a sink.
+        # Serialize sequence/timestamp/delivery without the general handle lock.
         with self._event_delivery_lock:
             return self._emit_serialized(kind, goal_id=goal_id, **facts)
 
@@ -110,10 +109,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         with self._lock:
             goal_id = self._goal_id
             if goal_id is None or not self._acceptance_emitted:
-                # rclpy may run feedback (action-client callback group) before the send-goal
-                # future's done callback has recorded the goal id AND emitted GOAL_ACCEPTED.
-                # Count it and replay one RUNNING_FEEDBACK after GOAL_ACCEPTED; never fail the
-                # observation for it (review B1, re-review N1). No lock is held while emitting.
+                # Replay pre-acceptance feedback once after GOAL_ACCEPTED, outside this lock.
                 self._early_feedback += 1
                 return
             self._feedback_sequence += 1
@@ -171,8 +167,6 @@ class RosTrajectoryActionHandle(ActionHandle):
             self._goal_id = goal_id
             cancel_pending = self._cancel_requested
         self._emit("GOAL_ACCEPTED", goal_id=goal_id)
-        # One step with _on_feedback: feedback counted up to here is replayed once; feedback
-        # after this point is emitted live, so none can precede GOAL_ACCEPTED (N1).
         with self._lock:
             self._acceptance_emitted = True
             early_cancel_acks, self._pending_cancel_acks = self._pending_cancel_acks, []
@@ -208,9 +202,7 @@ class RosTrajectoryActionHandle(ActionHandle):
             success = False
         with self._lock:
             goal_id = self._goal_id
-            # The ROS status is a fact as soon as the result resolves; record it before the
-            # sinks journal it, so a reader that sees the journal also sees the status (WSL
-            # loop: journal SUCCEEDED while status was still None). done/succeeded stay last.
+            # Publish status before the sink; completion waits for durable delivery.
             self._status = status
             self._result_observed = True
         if status is None or goal_id is None:
@@ -260,8 +252,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         try:
             self._defer_owner_event(callback)
         except Exception:
-            # A stopped executor cannot journal safely. Never fall back to a
-            # synchronous sink on the owner's watchdog or state thread.
+            # No synchronous owner-thread fallback when the event executor stops.
             with self._lock:
                 self._observation_failed = True
 
@@ -291,8 +282,7 @@ class RosTrajectoryActionHandle(ActionHandle):
 
     def _emit_timeout(self) -> None:
         with self._lock:
-            # Executor task order is not contractual. A definitive result may
-            # have been durably delivered before this deferred timeout record.
+            # Task order is unspecified; do not append unknown after an observed result.
             if self._result_observed:
                 return
             goal_id = self._goal_id
@@ -317,8 +307,7 @@ class RosTrajectoryActionPort:
         self._event_sink = event_sink
         self.last_handle: RosTrajectoryActionHandle | None = None
         self._destroyed = False
-        # Resolve against the owner before using a different node: relative/private
-        # names and owner remaps must still select exactly the same vendor action.
+        # Preserve the owner's relative/private names and remaps on the new node.
         resolved_action = node.resolve_topic_name(action_name)
         self._event_node = Node(
             "omx_action_events_" + uuid4().hex[:12], context=node.context,
