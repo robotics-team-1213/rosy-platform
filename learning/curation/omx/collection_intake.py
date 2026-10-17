@@ -119,15 +119,19 @@ def _completed_attempt(episode, steps, events):
         kinds = {}
         for index, event in command_events:
             kinds.setdefault(event.get('kind'), []).append((index, event))
-        required = ('INTENT', 'SUBMISSION', 'GOAL_ACCEPTED', 'TERMINAL_RESULT', 'TERMINAL')
+        required = ('INTENT', 'SUBMISSION', 'GOAL_ACCEPTED', 'TERMINAL_RESULT', 'TERMINAL', 'REACHED')
         _require(all(len(kinds.get(kind, [])) == 1 for kind in required),
-                 'complete attempt requires one durable intent/submission/native goal/result/terminal per step')
+                 'complete attempt requires one durable intent/submission/native goal/result/terminal/reach per step')
         indexed = [kinds[kind][0] for kind in required]
         positions = [index for index, _ in indexed]
         _require(positions == sorted(set(positions)) and positions[0] > prior_terminal,
                  'teacher command event order differs')
         prior_terminal = positions[-1]
-        intent, submission, accepted, terminal, outer = [event for _, event in indexed]
+        intent, submission, accepted, terminal, outer, reached = [event for _, event in indexed]
+        errors, tolerance = reached.get('errors_rad'), reached.get('tolerance_rad')
+        _require(isinstance(errors, list) and isinstance(tolerance, list) and len(errors) == len(tolerance) == 6
+                 and all(_number(e) and _number(t) and 0 <= e <= t for e, t in zip(errors, tolerance)),
+                 'measured joints did not reach the teacher target')
         _require(intent.get('step') == step and isinstance(submission.get('decision'), dict)
                  and submission['decision'].get('accepted') is True, 'teacher intent or owner submission differs')
         _require(_text(accepted.get('goal_id')) and terminal.get('goal_id') == accepted['goal_id']
@@ -136,7 +140,7 @@ def _completed_attempt(episode, steps, events):
                  'native goal/result does not establish command success')
         previous_sequence, previous_stamp = 0, -1.
         for _, event in command_events:
-            if event.get('kind') in ('INTENT', 'SUBMISSION', 'TERMINAL'):
+            if event.get('kind') in ('INTENT', 'SUBMISSION', 'TERMINAL', 'REACHED'):
                 stamp = event.get('time_ns')
                 _require(type(stamp) is int and episode['start_ns'] <= stamp < episode['end_ns'],
                          'outer command event outside episode window')

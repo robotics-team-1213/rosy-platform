@@ -49,7 +49,9 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
               dict(kind='TERMINAL_RESULT', command_id=command, goal_id='synthetic-goal', sequence=2,
                    observed_at_monotonic_s=2., status=4, result_code=0),
               dict(kind='TERMINAL', command_id=command, cycle_id=cycle, time_ns=start+3,
-                   result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+                   result=dict(succeeded=True, source='native_follow_joint_trajectory')),
+              dict(kind='REACHED', command_id=command, cycle_id=cycle, time_ns=start+4,
+                   errors_rad=[0.]*6, tolerance_rad=[.01]*6)]
     (root/'events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in events))
     manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
                     source_mode='scripted_teacher', session_id=session,
@@ -163,7 +165,7 @@ def test_single_frame_complete_attempt_is_not_training_input(module, tmp_path):
 
 @pytest.mark.parametrize('fault', ['flipped_complete', 'teacher', 'submission', 'native_goal', 'native_result',
                                   'wrong_goal', 'sequence', 'clock', 'outer_terminal', 'stop', 'error',
-                                  'extra_command'])
+                                  'extra_command', 'not_reached', 'no_reach'])
 def test_manifest_completion_cannot_upgrade_unverified_native_attempt(module, tmp_path, fault):
     root = tmp_path/'raw'
     manifest = raw_session(root)
@@ -179,7 +181,9 @@ def test_manifest_completion_cannot_upgrade_unverified_native_attempt(module, tm
     if fault == 'wrong_goal': events[3]['goal_id'] = 'different-goal'
     if fault == 'sequence': events[3]['sequence'] = 1
     if fault == 'clock': events[3]['observed_at_monotonic_s'] = float('inf')
-    if fault == 'outer_terminal': events[-1]['result']['source'] = 'synthetic-unverified'
+    if fault == 'outer_terminal': events[4]['result']['source'] = 'synthetic-unverified'
+    if fault == 'not_reached': events[5]['errors_rad'][5] = .02
+    if fault == 'no_reach': events.pop(5)
     if fault == 'stop': manifest['stop']['terminal_observed'] = False
     if fault == 'error': manifest['error'] = 'session fault'
     if fault == 'extra_command':
