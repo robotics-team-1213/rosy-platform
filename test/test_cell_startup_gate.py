@@ -1,6 +1,7 @@
 """Startup must use the canonical stop latch and retain exact cancellation identity."""
 from datetime import datetime, timezone
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -120,6 +121,30 @@ def test_completion_rechecks_live_fence_before_releasing_admission(tmp_path):
     f.gate.authorize(f.request)
     f.gate.submit(f.command)
     assert f.gate.complete(lambda: "settled-and-reconciled") == "settled-and-reconciled"
+
+
+def test_blocked_diagnostic_recording_cannot_delay_any_stop_cancel(tmp_path):
+    f = fixture(tmp_path)
+    f.gate.authorize(f.request)
+    f.gate.submit(f.command)
+    entered, release = threading.Event(), threading.Event()
+    original_record = f.gate.record
+    def record(name, value):
+        if name.startswith("startup-cancel"):
+            entered.set()
+            assert release.wait(timeout=3)
+        original_record(name, value)
+    f.gate.record = record
+    stopped = threading.Thread(target=f.stop)
+    stopped.start()
+    try:
+        assert entered.wait(timeout=2)
+        assert ("cancel", {"command_id": "startup-1", "owner": "pilot_sim"}) in f.calls
+        assert any(row[0] == "fleet_cancel" for row in f.calls)
+    finally:
+        release.set()
+        stopped.join(timeout=3)
+    assert not stopped.is_alive()
 
 
 def test_prepare_home_without_explicit_gate_refuses_before_seat_or_goal():
