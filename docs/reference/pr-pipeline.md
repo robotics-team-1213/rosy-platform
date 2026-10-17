@@ -51,6 +51,8 @@ gh pr view <PR번호> --json headRefOid,statusCheckRollup,mergeable
 gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
 ```
 
+squash 커밋 메시지는 PR 제목과 **PR 본문**으로 만들어진다(저장소 설정 `PR_TITLE`/`PR_BODY`). 브랜치 커밋의 trailer는 남지 않는다. 안전 경로 PR은 본문에 줄 맨 앞에서 시작하는 `Safety-Review: <검토자/레인> <증거>` 줄을 두어야 한다. 빠뜨리면 main의 scope 잡이 실패하고, `tools/harness/safety_review_exempt.json`에 squash SHA를 원본 head와 이어 주는 항목을 나중에 추가해야 한다(#81→#82, #78).
+
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 
 ## 검사·산출물·staging
