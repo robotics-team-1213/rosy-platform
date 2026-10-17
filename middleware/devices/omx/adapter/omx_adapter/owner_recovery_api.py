@@ -7,20 +7,23 @@ from .local_stop import LocalStopBlocked
 
 
 class OwnerRecoveryApi:
-    def __init__(self, owner, stop, store, *, allowed_peer_uids, current_fence):
+    def __init__(self, owner, stop, store, *, allowed_peer_uids, current_fence, read_peer_uids=()):
         self.owner, self.stop, self.store = owner, stop, store
         self.allowed_peer_uids = frozenset(allowed_peer_uids)
+        # D-780 1: read-only peers (the workcell coordinator) may read GetOwnerState, never recover.
+        self.read_peer_uids = frozenset(read_peer_uids)
         self.current_fence = current_fence
 
     def dispatch(self, request, *, peer_uid):
         def error(status, code):
             return {"version": 1, "status": status, "error": {"code": code}}
 
-        if type(peer_uid) is not int or peer_uid not in self.allowed_peer_uids:
+        operation = request.get("operation")
+        readers = self.read_peer_uids if operation == "GetOwnerState" else frozenset()
+        if type(peer_uid) is not int or peer_uid not in self.allowed_peer_uids | readers:
             return error(403, "PEER_NOT_ALLOWED")
         config = self.owner.config
         base = {"version", "operation", "workcell_id", "instance_id"}
-        operation = request.get("operation")
         expected = base if operation == "GetOwnerState" else base | {
             "authority_epoch", "dispatch_generation", "operator_confirmed", "observed_sequence", "actor_id"}
         if (type(request.get("version")) is not int or request["version"] != 1
