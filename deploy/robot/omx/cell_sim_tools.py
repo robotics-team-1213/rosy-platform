@@ -24,7 +24,7 @@ from pathlib import Path
 WORLD = "omx_cell_workcell"
 
 
-_ARM_OWNERS = ("pilot_sim_server", "probe_cell_transfer", "run_cell_owner")
+_ARM_OWNERS = ("pilot_sim_server", "probe_cell_transfer", "run_cell_owner", "run_hardware_owner")
 
 
 def _process_namespace(proc: Path) -> str | None:
