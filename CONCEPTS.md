@@ -213,9 +213,9 @@ Its budgets and deadline count per chain of stucks on the same robot rather than
 
 ## Learning
 
-### Rosy Learn
+### Rosy Learning
 
-The model-PC web app for review and learning, also called 학습 관리 센터. It is one app: object review, pixel review, catalog, the learning work list, camera setup, and imitation learning are its screens (D-792). Its code still runs as `review_app.py` under `rosy-review-v13.service` (D-545). It calls existing curation and training jobs and does not hold its own training logic.
+The model-PC web app for review and learning, also called 학습 관리 센터; the display name already set by D-461. It is one app: object review, pixel review, catalog, the learning work list, camera setup, and imitation learning are its screens (D-792). Browser titles keep the dev-surface prefix "Rosy 개발 — ". Its code still runs as `review_app.py` under `rosy-review-v13.service` (D-545). It calls existing curation and training jobs and does not hold its own training logic.
 
 ### Camera setup reference
 
@@ -232,5 +232,5 @@ The result of comparing one camera frame against a camera setup reference: marke
 - "Profile" still means Compose service grouping or hardware YAML; Runtime mode is the staged install preset (core, then motor, then hardware). D-62 slices are the install units. None of these is a Capability, and they are not interchangeable even where they share names.
 - "Node" in this glossary is the computer running CORE (`RuntimeNode`), not an rclpy node.
 - "Task" here is an atomic REST action; Fleet missions and concept 08 workflows are a different object (D-12).
-- "Studio" is the review workbench of D-538 only; the whole model-PC app is Rosy Learn (D-792).
+- "Studio" is the review workbench of D-538 only; the whole model-PC app is Rosy Learning (D-792).
 - A camera setup reference is not a camera profile: the profile (D-199, D-423) carries calibration and mount values a node uses at run time, while the setup reference is learning-side evidence that recordings share one viewpoint.

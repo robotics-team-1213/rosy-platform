@@ -27,12 +27,11 @@ import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web
 import review_versions
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
 from learning_control import Control, ControlConflict
-import camera_setup_web
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[3] / 'shared/web'
@@ -414,7 +413,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if collaboration and collaboration.get(self, path, token):
+                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -554,13 +553,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path.startswith('/api/view-images/'):
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
-                if path == '/api/learning/camera/references':
-                    return self.send({'references': camera_setup_web.references(store.state)})
-                if path.startswith('/api/learning/camera/stills/'):
-                    return self.send(camera_setup_web.still(store.state, path.rsplit('/', 1)[1]),
-                                     mime='image/jpeg', cache='no-cache')
-                files = {'/learning/camera': 'camera.html', '/camera.js': 'camera.js',
-                         '/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
+                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
@@ -618,7 +611,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI request accepts only action and version')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
-                if collaboration and collaboration.post(self, path, body, token):
+                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
                 if path.startswith('/api/review-ai/'):
@@ -652,12 +645,6 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     if not storage:
                         raise ValueError('storage is not configured')
                     return self.send(storage.preflight(body))
-                if path == '/api/learning/camera/reference':
-                    if collaboration:
-                        accounts.require(self.learning_principal, 'edit')
-                    return self.send(camera_setup_web.create(store.state, body, actor))
-                if path == '/api/learning/camera/check':
-                    return self.send(camera_setup_web.check(store.state, body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
                 if path == '/api/import':

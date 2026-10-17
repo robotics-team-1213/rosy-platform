@@ -366,7 +366,7 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 |---|---|---|
 | GET | `/api/learning/camera/references` | `references`: 최신순 촬영 기준 전체 |
 | GET | `/api/learning/camera/stills/<revision>` | 기준 사진 JPEG |
-| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `layout`, `measured`, `guides`; 협업 모드는 `edit` 권한 |
+| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `layout`, `measured`, `guides`; 협업 모드는 다른 `/api/learning/` 쓰기와 같이 `manage` 권한 |
 | POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256` → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `detected`(마커 ID별 꼭짓점 픽셀) |
 
 화면은 기준 마커·가이드를 점선, 지금 사진에서 찾은 마커를 실선으로 그리고 마커마다 기준에서 현재로 가는 화살표를 그린다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.

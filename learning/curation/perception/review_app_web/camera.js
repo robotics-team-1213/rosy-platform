@@ -1,6 +1,6 @@
 // D-792 S2: one photo against one camera setup reference. Dashed = reference, solid = this photo.
 import {accountFetch} from '/account-session.js';
-import '/common/ui.js';
+import {cssColor, clearPalette} from '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
 const MOUNT=[['height_cm','높이','cm'],['distance_cm','거리','cm'],['tilt_deg','tilt','°'],['pan_deg','pan','°'],['roll_deg','roll','°']];
@@ -9,11 +9,10 @@ const VERDICT={ok:['ready','맞음 — 이 위치로 녹화할 수 있습니다.
 let token, references=[], still=null, photo=null, result=null;
 
 $('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));draw();};
+$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} clearPalette();document.dispatchEvent(new CustomEvent('rosy:theme'));draw();};
 $('intrinsics').value=JSON.stringify({camera_info_sha256:'',revision:'',k:[600,600,320,240],dist:[0,0,0,0,0]});
 $('layout').value=JSON.stringify([[-20,0],[20,0],[-20,30],[20,30]].map((c,id)=>({id,size_cm:6,center_cm:c})));
 
-function color(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()||'#fb0';}
 function fail(error){$('camera-error').hidden=false;$('camera-error').textContent=error.message||String(error);}
 async function request(path,body){
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify(body)}:{});
@@ -54,12 +53,12 @@ function draw(){
   if(still?.complete&&still.naturalWidth){ctx.globalAlpha=photo?$('onion').value/100:1;ctx.drawImage(still,0,0);ctx.globalAlpha=1;}
   if(!ref)return;
   const width=Math.max(2,canvas.width/320);
-  ctx.lineWidth=width;ctx.strokeStyle=color('--status-warn');ctx.setLineDash([4*width,3*width]);
+  ctx.lineWidth=width;ctx.strokeStyle=cssColor('--status-warn');ctx.setLineDash([4*width,3*width]);
   ref.markers.forEach(m=>poly(ctx,m.corners_px,true));
   ref.guides.forEach(g=>poly(ctx,g.points,g.closed));
   ctx.setLineDash([]);
   if(!result)return;
-  ctx.strokeStyle=color('--status-good');
+  ctx.strokeStyle=cssColor('--status-good');
   for(const m of ref.markers){
     const now=result.detected[String(m.id)];if(!now)continue;
     poly(ctx,now,true);

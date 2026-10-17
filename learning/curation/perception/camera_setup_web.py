@@ -85,3 +85,33 @@ def check(state, body):
     found = camera_setup.detect(frame)
     return {'check': camera_setup.check(frame, reference, body['camera_info_sha256']),
             'detected': {str(i): np.round(c, 2).tolist() for i, c in found.items()}}
+
+
+STATIC = Path(__file__).with_name('review_app_web')
+PAGES = {'/learning/camera': ('camera.html', 'text/html; charset=utf-8'),
+         '/camera.js': ('camera.js', 'text/javascript; charset=utf-8')}
+
+
+def get(handler, path, state):
+    """Serve the camera page and its reads; False leaves the path to review_app."""
+    if path in PAGES:
+        name, mime = PAGES[path]
+        handler.send((STATIC / name).read_bytes(), mime=mime)
+    elif path == '/api/learning/camera/references':
+        handler.send({'references': references(state)})
+    elif path.startswith('/api/learning/camera/stills/'):
+        handler.send(still(state, path.rsplit('/', 1)[1]), mime='image/jpeg', cache='no-cache')
+    else:
+        return False
+    return True
+
+
+def post(handler, path, body, state, collaboration):
+    """Camera writes after review_app's token, origin and (collaboration) manage checks; False passes on."""
+    if path == '/api/learning/camera/reference':
+        handler.send(create(state, body, handler.learning_principal['user_id'] if collaboration else None))
+    elif path == '/api/learning/camera/check':
+        handler.send(check(state, body))
+    else:
+        return False
+    return True

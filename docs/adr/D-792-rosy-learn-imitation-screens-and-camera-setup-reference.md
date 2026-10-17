@@ -1,4 +1,4 @@
-## D-792 Rosy Learn(학습 관리 센터) 이름과 모방학습 화면 — 카메라 촬영 기준을 점선 가이드로 재현하고 녹화 전에 확인한다
+## D-792 Rosy Learning(학습 관리 센터) 이름과 모방학습 화면 — 카메라 촬영 기준을 점선 가이드로 재현하고 녹화 전에 확인한다
 
 **Status:** Proposed
 
@@ -21,9 +21,9 @@ ACT 같은 모방학습 정책은 학습 때 본 카메라 시점에 강하게 �
 
 ## Decision
 
-### 1. 앱 하나, 이름은 Rosy Learn(학습 관리 센터)
+### 1. 앱 하나, 이름은 Rosy Learning(학습 관리 센터)
 
-1. 모델 PC의 학습·검수 웹앱 전체를 **Rosy Learn**(한국어 표기 **학습 관리 센터**)이라 부른다. 화면 제목의 "Rosy 개발"은 "Rosy Learn"으로 바꾼다.
+1. 모델 PC의 학습·검수 웹앱 전체를 **Rosy Learning**(한국어 표기 **학습 관리 센터**)이라 부른다. 이 이름은 이미 D-461의 작업 화면 표시 이름이고 D-377 이름 규칙(Rosy + 영어 한 단어)에 맞으므로 새 이름을 만들지 않는다. 브라우저 제목은 개발 도구 표면 규칙(`shared/web/surfaces.yaml`의 `surface: dev`)대로 "Rosy 개발 — <화면>"을 유지하고, 별도 런처·PWA 등록도 하지 않는다(D-461).
 2. 앱을 둘로 나누지 않는다. 비디오 탐지·분할(객체 검수·픽셀 검수)과 모방학습은 같은 앱의 화면이다. 서비스, 릴리스(D-545), 계정, 통합 셸(D-741), `shared/web`을 그대로 쓴다.
 3. 실행 파일·서비스·폴더 이름(`review_app.py`, `review_app_web/`, `rosy-review-v13.service`)은 이 ADR에서 바꾸지 않는다. 진행 중인 `learning-plan`·`learning-delivery` 작업과 배포 경로를 깨지 않기 위해서다. 이름 변경은 별도 ADR에서 한 번에 한다.
 4. 화면 이름은 다음으로 고정한다.
@@ -125,7 +125,7 @@ Pinky 행동 학습도 같은 순서를 쓰되, 화면은 OMX가 끝까지 한 �
 |---|---|---|
 | S0 | 이 ADR, `CONCEPTS.md` 용어, ADR Log 행 | lint 통과 |
 | S1 | `rosy.camera-setup-reference/1` 검증기와 `check()` 순수 함수 | 합성 마커 사진으로 이동·기울기를 넣었을 때 판정이 바뀌는 시험 |
-| S2 | `/learning/camera` 정지 사진 판정과 점선 가이드, 화면 제목 Rosy Learn | 화면 스모크(`learning/curation/perception/tools/review_app_smoke.py` 방식) |
+| S2 | `/learning/camera` 정지 사진 판정과 점선 가이드, 다섯 화면 레일에 카메라 칸 | 화면 스모크(`learning/curation/perception/tools/review_app_smoke.py` 방식) |
 | S3 | OMX 녹화가 `provenance.camera.setup`을 shadow로 기록, manifest의 revision 섞임 거절 | `contracts/learning` 시험, 수집 파이프라인 시험 |
 | S4 | `/learning/omx` 화면(Episode 검수·내보내기·학습·승격) | 실제 Episode 몇 개로 끝까지 한 번 |
 | S5 | shadow 기록과 정책 평가를 대조해 판정 기준을 고정, enforce로 전환 | 기준값 근거를 이 ADR의 후속 ADR에 기록 |
@@ -141,6 +141,7 @@ S1과 S2는 실시간 스트림이 없어도 된다. 사진 한 장으로 판정
 | D-430 | safety 경로를 바꾸지 않는다. enforce는 녹화 시작만 막으며 로봇 동작 권한과 무관하다. |
 | D-299 | 시연 수집은 LeRobot 실험 경로(native)를 그대로 쓰고 운영 팔 제어권과 분리한다. |
 | D-449 | 촬영 기준과 판정 기록을 학습 산출물의 출처 계약에 더한다. |
+| D-377·D-461 | 앱 이름은 기존 표시 이름 Rosy Learning을 정식화한다. 브라우저 제목·앱 등록 규칙은 바꾸지 않는다. |
 | D-538 | 점선은 참고, 실선은 현재라는 표시 규칙을 이어 쓴다. Studio라는 이름은 검수 작업대에 남긴다. |
 | D-545 | 화면 추가는 같은 릴리스 경로로 모델 PC에 간다. |
 | D-633·D-636·D-775 | 내부 교정 값은 이 ADR이 만들지 않는다. 기준은 교정 지문만 묶고, 교정이 바뀌면 기준도 새로 만든다. |
@@ -162,4 +163,4 @@ S1과 S2는 실시간 스트림이 없어도 된다. 사진 한 장으로 판정
 
 ## References
 
-D-100, D-199, D-299, D-423, D-427, D-429, D-430, D-449, D-465, D-538, D-545, D-633, D-636, D-741, D-745, D-775, D-787
+D-100, D-199, D-377, D-461, D-299, D-423, D-427, D-429, D-430, D-449, D-465, D-538, D-545, D-633, D-636, D-741, D-745, D-775, D-787
