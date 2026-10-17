@@ -50,6 +50,7 @@ PILOT_MIME = {
     "screens/drive.js": "application/javascript",
     "screens/drive-auto.js": "application/javascript",
     "screens/drive-view.js": "application/javascript",
+    "screens/drive-video.js": "application/javascript",
     "screens/inputs.js": "application/javascript",
     "screens/robot-recording.js": "application/javascript",
     "screens/arm.js": "application/javascript",
