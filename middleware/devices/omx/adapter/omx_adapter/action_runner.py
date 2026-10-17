@@ -355,6 +355,11 @@ class ActionRunner:
             raise PermissionError("peer UID does not own this Action")
         return self._receipt(action, created=False)
 
+    def read_receipt(self, action_id: str) -> dict[str, object] | None:
+        """Principal-free read for an already-authenticated read-only peer (D-780 1)."""
+        action = self.store.get_action(action_id)
+        return None if action is None else self._receipt(action, created=False)
+
     def cancel(self, action_id: str, attempt_id: str, *, peer_uid: int) -> dict[str, object]:
         principal_id = self._principal(peer_uid)
         action = self.store.get_action(action_id)
