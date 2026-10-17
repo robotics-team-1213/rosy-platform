@@ -70,6 +70,7 @@ def test_input_snapshot_requires_exact_environment_image_stamp(inputs):
     source = next(iter(inputs.frames['top']))
     env = dict(observations={r:dict(source_stamp=source) for r in ('top','front')})
     assert inputs.snapshot(env)['action'] == [0.,0.,0.,0.,0.,50.]
+    assert inputs.snapshot(env)['joint_positions'] == [0.]*6
     env['observations']['top']['source_stamp'] = source-1
     with pytest.raises(KeyError): inputs.snapshot(env)
 
@@ -217,5 +218,5 @@ def test_rehearsal_cli_exercises_success_and_failures_with_no_hardware(tmp_path)
                            'rehearsal-suite','--out',str(tmp_path/'suite')],capture_output=True,text=True,timeout=15)
     assert result.returncode==0,result.stderr
     report=json.loads(result.stdout)
-    assert report['passed'] and len(report['checks'])==6 and report['real_demonstrations']==0
+    assert report['passed'] and len(report['checks'])==7 and report['real_demonstrations']==0
     assert all(row['hardware_connections']==0 for row in report['checks'])

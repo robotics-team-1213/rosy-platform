@@ -36,6 +36,9 @@ def validate_profile(profile, *, mode, acceptance=None, teacher=None):
     require(isinstance(ranges, list) and len(ranges) == 6 and all(
         isinstance(pair, list) and len(pair) == 2 and all(number(v) for v in pair) and pair[0] < pair[1]
         for pair in ranges), 'measured native-radian normalization endpoints required')
+    reach = profile.get('reach_tolerance_rad')
+    require(isinstance(reach, list) and len(reach) == 6 and all(number(v) and 0 < v <= .2 for v in reach),
+            'measured per-joint reach tolerance required; Action success is not motion (D-793)')
     shapes = profile.get('camera_shapes')
     require(isinstance(shapes, dict) and set(shapes) == {'top', 'front'} and all(
         isinstance(s, list) and len(s) == 3 and s[2] == 3

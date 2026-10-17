@@ -51,7 +51,9 @@ for i in range(3):
               dict(kind='TERMINAL_RESULT', command_id=command, goal_id=f'synthetic-goal-{i}', sequence=2,
                    observed_at_monotonic_s=2., status=4, result_code=0),
               dict(kind='TERMINAL', command_id=command, time_ns=start+3,
-                   result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+                   result=dict(succeeded=True, source='native_follow_joint_trajectory')),
+              dict(kind='REACHED', command_id=command, time_ns=start+4, errors_rad=[0.]*6,
+                   tolerance_rad=[.01]*6)]
     for fact in ledger:
         append(source/'events.jsonl', fact)
     observation = dict(time_ns=start+1, observation_state=[0.]*6, action=[float(i+1)]*6,

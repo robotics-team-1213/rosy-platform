@@ -39,7 +39,7 @@ def main(argv=None):
             from collection_rehearsal import profile, teacher, RehearsalBackend
             args.out.mkdir(parents=True)
             rows = []
-            for fault in ('none', 'dark', 'disconnect', 'stale_reference', 'reject', 'terminal_failure'):
+            for fault in ('none', 'dark', 'disconnect', 'stale_reference', 'reject', 'terminal_failure', 'no_motion'):
                 fake = RehearsalBackend(profile(), fault=fault)
                 result = run_session(profile(), teacher(), args.out/fault, fake)
                 complete = bool(result['episodes']) and result['episodes'][0]['complete']
