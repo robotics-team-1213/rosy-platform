@@ -62,17 +62,18 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   function render() {
     const pending = busy || reading;
     const pendingReason = reading ? '적용 상태를 확인 중입니다.' : '요청을 처리 중입니다.';
-    const editable = operator() && !pending;
+    const editable = operator() && !busy;
+    const operable = editable && !reading;
     const editReason = pending ? pendingReason : '이름 있는 운영자 권한이 필요합니다.';
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
-    setEnabled(buttons.approve,editable && !!candidate && candidate.evidence_kind === 'measured'
+    setEnabled(buttons.approve,operable && !!candidate && candidate.evidence_kind === 'measured'
       && !!limits() && candidate.source_id === source,
-      !editable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
-    setEnabled(buttons.revoke,editable && !!record,!editable ? editReason : '철회할 승인 기록이 없습니다.');
+      !operable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
+    setEnabled(buttons.revoke,operable && !!record,!operable ? editReason : '철회할 승인 기록이 없습니다.');
     const current = record && status?.calibration_revision === record.calibration_revision && status.state !== 'invalid';
-    setEnabled(buttons.confirm,editable && !!current && conditions.checked,
-      !editable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
+    setEnabled(buttons.confirm,operable && !!current && conditions.checked,
+      !operable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
     setEnabled(buttons.read,!pending && !!current && !auth.locked,
       auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '현재 교정·촬영 상태를 먼저 확인하세요.');
     setEnabled(buttons.refresh,!pending && !!source && !auth.locked,
