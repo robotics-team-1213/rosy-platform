@@ -81,17 +81,10 @@ NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
 # registered module `tests`; the printed full tier is their union.
 FULL_SUITES = (
-    "learning/training/pinky/test",
-    "learning/registry/policy/test",
-    "learning/training/omx/test",
-    "learning/training/world_model/test",
-    "learning/evaluation/world_model/test",
-    "operations/prediction/world_model/test",
-    "learning/curation/omx/test",
-    "learning/curation/pinky/test",
-    "middleware/core/events/test",
-    "middleware/core/services/test",
-    "shared/web/test",
+    "learning/training/pinky/test", "learning/registry/policy/test", "learning/training/omx/test",
+    "learning/training/world_model/test", "learning/evaluation/world_model/test",
+    "operations/prediction/world_model/test", "learning/curation/omx/test", "learning/curation/pinky/test",
+    "middleware/core/events/test", "middleware/core/services/test", "shared/web/test",
     "contracts/foundation/test",
 )
 
