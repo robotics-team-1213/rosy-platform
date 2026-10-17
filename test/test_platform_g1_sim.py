@@ -119,7 +119,9 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path):
     for _ in range(20):
         rig.tick()
     assert all(index not in _owner_steps(arm) for arm in rig.arms.values())
-    assert f"zone:{CELL}.{SHARED}" not in _claims(rig)
+    # Later left-arm steps may legitimately hold the shared zone; inspect this blocked pair.
+    pair_actions = [a for a in rig.job()["step_actions"] if a["step_index"] == index]
+    assert all(a["action_id"] is None and not a["claims"] for a in pair_actions)
 
 
 def test_a_rejected_pair_grant_cancels_the_accepted_partner(tmp_path):
