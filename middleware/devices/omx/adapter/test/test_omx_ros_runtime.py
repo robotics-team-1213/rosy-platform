@@ -372,7 +372,8 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         rclpy.shutdown()
 
 
-def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_feedback_peer):
+@pytest.mark.parametrize("owner_threads", [1, 4])
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_feedback_peer, owner_threads):
     """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
     writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
     rclpy.init()
@@ -390,11 +391,19 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
+    watchdog_ticks = []
+    original_poll = runtime.owner.poll
+
+    def observed_poll():
+        watchdog_ticks.append(time.monotonic())
+        return original_poll()
+
+    runtime.owner.poll = observed_poll
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()
     phase_port = RosArmPhaseGoalPort(runtime)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = MultiThreadedExecutor(num_threads=owner_threads)
     executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
@@ -446,6 +455,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
         assert any(t > sink_times[0] + config.max_joint_state_age_s and seq > initial.sequence
                    for t, seq, _ in owner_samples), evidence
         assert now - observed.received_at < config.max_joint_state_age_s, evidence
+        assert any(t > sink_times[0] + config.max_joint_state_age_s for t in watchdog_ticks), evidence
         release_sink.set()
         deadline = time.monotonic() + 6.0
         while time.monotonic() < deadline and runtime.last_terminal_decision is None:
