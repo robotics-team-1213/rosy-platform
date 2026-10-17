@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
-- 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
-- 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
-- 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)
-- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+- 2026-10-17 · uncommitted · non-simulation station source evidence
+- 2026-10-17 · uncommitted · private energy handover naming
+- 2026-10-17 · uncommitted · original pack energy restriction implementation
+- 2026-10-17 · uncommitted · original energy remote verification not run
+- 2026-10-17 · uncommitted · new energy log formatting correction

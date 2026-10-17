@@ -148,12 +148,14 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
     adr = (ROOT / "docs/adr/D-318-site-camera-preview-rectification.md").read_text(
         encoding="utf-8")
     vision = (ROOT / "operations/overhead/rosy_vision/ingest.py").read_text(encoding="utf-8")
+    preview = (ROOT / "operations/overhead/rosy_vision/ingest_preview.py").read_text(encoding="utf-8")
     ui = (ROOT / "operations/site_ui/console/install.html").read_text(encoding="utf-8")
 
     assert "## D-318 Site Fleet camera preview supports measured lens and plane rectification" in adr
     assert "### 10.6.1 Site Fleet camera preview and rectification (D-318 Accepted)" in reference
     assert "`X-Frame-Rectified`" in reference
-    assert "rectification" in vision and "rectify_jpeg(frame.jpeg, settings)" in vision
+    assert "_preview_response = ingest_preview._preview_response" in vision
+    assert "rectification" in preview and "rectify_jpeg(frame.jpeg, settings)" in preview
     assert "Fleet does not relay image" in reference and "for the original" in reference
     assert "sightings" in adr and "cmd_vel" in adr
     assert 'id="vision-adjustments"' in ui

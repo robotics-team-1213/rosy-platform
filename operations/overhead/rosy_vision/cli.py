@@ -456,6 +456,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="PEM the proxy serves (site-fullchain.crt); must carry the CA above the leaf",
     )
 
+    station = sub.add_parser('station-vision', help='run installed station measurement cameras')
+    station.add_argument('--config', required=True, type=Path, help='approved station installation JSON')
+    station.add_argument('--host', default='0.0.0.0')
+    station.add_argument('--port', type=int, default=8095)
+    station.add_argument('--tls-cert', type=Path, default=None)
+    station.add_argument('--tls-key', type=Path, default=None)
+
     return parser.parse_args(argv)
 
 
@@ -475,6 +482,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "pair-link":
         return _pair_link(args)
+    if args.command == 'station-vision':
+        from .station_vision import run_station_vision
+        try:
+            asyncio.run(run_station_vision(args))
+        except KeyboardInterrupt:
+            pass
+        except (ValueError, OSError, RuntimeError):
+            print('station-vision: installation or listener unavailable', file=sys.stderr)
+            return 2
+        return 0
     print(f"unknown command {args.command!r}", file=sys.stderr)
     return 2
 

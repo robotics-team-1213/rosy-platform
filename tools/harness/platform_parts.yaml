@@ -228,6 +228,13 @@ roots:
     wave: "4c"
     import_prefix: [navigation]
     concern: control
+  - path: middleware/drive/planning/nav2/native_map
+    layout_target: middleware/drive/planning/nav2/native_map
+    part: middleware
+    d427_target: middleware/drive/planning/nav2/native_map
+    wave: "4c"
+    concern: safety
+    note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
     d427_target: middleware/perception
@@ -489,6 +496,7 @@ roots:
       fleet/server/auth: fleet.server
       fleet/server/console: fleet.server
       fleet/server/ledger: fleet.server
+      fleet/server/site_observation: fleet.server
       fleet/server/missions: fleet.server
       fleet/server/work: fleet.server
       fleet/server/trips: fleet.server
@@ -838,21 +846,93 @@ roots:
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
+  - operations/fleet/fleet/server/channel/execution/outcomes/handover.py
+  - operations/fleet/fleet/server/channel/execution/outcomes/evidence.py
+  - operations/fleet/fleet/swarm/dispatch_guard.py
   - middleware/core/gateway/core/drive/traffic.py  # D-628 traffic admission composition
   - middleware/core/gateway/core/system/power.py  # D-628 battery shutdown configuration
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
+  - middleware/core/gateway/core/drive/execution.py  # D-776 private native owner/final restriction binding
+  - middleware/core/gateway/core/drive/execution_source.py  # Original pre-parent odometry receipt retention
+  - middleware/core/gateway/core/bridge/pack_energy.py  # Original pack ingestion, ordered CORE publication
+  - middleware/core/services/core_features/power/execution_energy.py  # Calibrated original energy facts
+  - middleware/core/services/core_features/command/_execution_energy.py  # Whole-window reserve and exact-parent STOP
+  - middleware/core/gateway/core/bridge/map_observation.py  # Original grid and lifecycle to exact execution parent
+  - middleware/core/gateway/core/bridge/map_pose.py  # Original dynamic TF and state freshness
+  - middleware/drive/behaviors/navigation/map_evidence.py  # Original map identity, not consumer adoption
+  - middleware/drive/behaviors/navigation/native_map_adoption.py  # D-783 finite sampled native consumer evidence
+  - middleware/drive/behaviors/navigation/native_map_reply.py  # Bounded native wire/config identity
+  - middleware/core/gateway/core/bridge/native_map_adoption.py  # D-783 asynchronous typed native readbacks
   - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
   - middleware/core/services/core_features/command/arbitration.py
+  - middleware/core/services/core_features/command/_execution_budget.py
+  - middleware/core/services/core_features/command/_execution_ledger.py
+  - middleware/core/services/core_features/command/_execution_fence.py
+  - middleware/core/services/core_features/state/manager.py  # D-776 atomic original odometry epoch receipt
   - middleware/drive/behaviors/docking/charging.py
+  - middleware/core/gateway/core/drive/station_docking.py  # D-772 explicit station profile composition
+  - middleware/core/gateway/core/bridge/docking_mode.py
+  - middleware/core/gateway/core/bridge/odometry.py
+  - middleware/core/api/core_api_web/api/v1/station_docking.py  # D-772 authenticated session handover
+  - middleware/drive/behaviors/docking/manager.py  # D-772 native admission and no-motion binding fence
+  - middleware/drive/behaviors/docking/admission.py
+  - middleware/drive/behaviors/docking/agent.py
+  - middleware/drive/behaviors/docking/native_status.py
+  - middleware/drive/behaviors/docking/station_owner.py
+  - middleware/drive/behaviors/docking/station_rebind.py
+  - middleware/drive/behaviors/docking/station_return.py
+  - middleware/drive/behaviors/docking/station_departure.py
+  - middleware/drive/behaviors/docking/station_departure_control.py
+  - middleware/drive/behaviors/docking/station_readback.py
+  - middleware/drive/behaviors/navigation/native_handover.py
+  - middleware/core/api/core_api_web/api/v1/navigation_handover.py
+  - middleware/drive/behaviors/docking/station_feed.py
+  - middleware/drive/behaviors/docking/station_motion.py
+  - middleware/drive/behaviors/docking/station_sensors.py
+  - middleware/drive/behaviors/docking/completion.py
+  - operations/site_execution/src/rosy/execution/site/charge_policy.py
+  - operations/fleet/fleet/server/ledger/charge_motion.py
+  - operations/fleet/fleet/server/ledger/charge_service.py
+  - operations/fleet/fleet/server/ledger/charge_policy_admission.py
+  - operations/fleet/fleet/server/ledger/charge_source.py
+  - operations/fleet/fleet/server/ledger/charge_work_selection.py
+  - operations/fleet/fleet/server/site_observation/map_pose_scope.py
+  - operations/fleet/fleet/server/site_observation/map_state_read.py
+  - operations/fleet/fleet/server/ledger/charge_world_pose.py
+  - operations/fleet/fleet/server/ledger/charge_runtime.py
+  - operations/fleet/fleet/server/ledger/charge_bootstrap.py
+  - operations/fleet/fleet/server/ledger/charge_work_handover.py
+  - operations/fleet/fleet/server/ledger/charge_store.py
+  - operations/fleet/fleet/server/ledger/charge_departure_store.py
+  - operations/fleet/fleet/server/ledger/charge_departure.py
+  - operations/fleet/fleet/server/ledger/charge_departure_http.py
+  - operations/fleet/fleet/server/ledger/charge_trip_port.py
+  - operations/fleet/fleet/server/ledger/station_return_http.py
+  - operations/fleet/fleet/server/ledger/charge_robot_http.py
+  - operations/fleet/fleet/server/ledger/charge_goal_gate.py
+  - operations/fleet/fleet/server/site_observation/station_ingress.py
+  - operations/fleet/fleet/server/site_observation/station_ingress_routes.py
+  - operations/fleet/fleet/swarm/station_transport.py
+  - operations/fleet/fleet/swarm/navigation_transport.py
+  - operations/overhead/rosy_vision/station_worker.py
+  - operations/overhead/rosy_vision/station_observation.py
+  - operations/overhead/rosy_vision/station_marker.py
+  - operations/overhead/rosy_vision/station_map_worker.py
+  - operations/overhead/rosy_vision/station_lens.py
+  - operations/overhead/rosy_vision/station_installation.py
+  - operations/overhead/rosy_vision/station_vision.py
+  - operations/overhead/rosy_vision/ingest.py
+  - operations/overhead/rosy_vision/ingest_preview.py
   - middleware/drive/behaviors/line_follow/body_stop.py
   - middleware/drive/behaviors/line_follow/clearance.py
   - middleware/drive/behaviors/line_follow/authority.py  # D-517/D-760 movement authority under the trip lease
   - middleware/core/gateway/core/trip_lease.py  # D-541/D-760 trip lease ends Fleet-started motion
   - middleware/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
+  - middleware/drive/behaviors/localization/assist.py  # D-395 effective map-frame autonomy loss
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py
@@ -873,7 +953,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/console/console.py
-  - operations/fleet/fleet/server/goal_lease.py
+  - operations/fleet/fleet/server/ledger/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
@@ -885,6 +965,10 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: core_features.command._execution_fence.Fence}
+  - {symbol: core_features.command._execution_fence.install}
+  - {symbol: core_features.command._execution_ledger.Ledger}
+  - {symbol: core_features.command._execution_budget.Budget}
   - {symbol: core.drive.traffic.build_traffic}
   - {symbol: core.system.power.build_power_and_battery}
   - {symbol: control.control.command_gate.CommandPolicy}
@@ -893,6 +977,90 @@ safety_anchors:
   - {symbol: core.drive.line_follow.bind_stuck_recovery}
   - {symbol: core.drive.line_follow.bind_lane_return_motion}
   - {symbol: core.drive.docking.build_docking_and_swarm}
+  - {symbol: core.drive.execution.install_native_execution}
+  - {symbol: core.drive.execution_source.OriginalOdometrySource}
+  - {symbol: core.bridge.pack_energy.PackEnergyIngress}
+  - {symbol: core_features.power.execution_energy.PackEnergySource}
+  - {symbol: core_features.command._execution_energy.EnergyContext}
+  - {symbol: core_features.navigation.map_evidence.MapEvidence}
+  - {symbol: core_features.navigation.native_map_adoption.NativeMapEvidence}
+  - {symbol: core_features.navigation.native_map_reply.NativeReply}
+  - {symbol: core_features.navigation.native_map_reply.Consumer}
+  - {symbol: core.bridge.native_map_adoption.NativeMapClients}
+  - {symbol: core.bridge.map_observation.receive_map}
+  - {symbol: core.bridge.map_pose.receive_map_pose}
+  - {symbol: core.drive.station_docking.build_station_owner}
+  - {symbol: core.bridge.docking_mode.motion_ready}
+  - {symbol: core.bridge.odometry.observe_station_motion}
+  - {symbol: core.bridge.odometry.receive_odom}
+  - {symbol: core_features.state.manager.StateManager._record_odom_pose}
+  - {symbol: core_features.state.manager.StateManager, public: true}  # Existing CORE DI import; receipt remains private.
+  - {symbol: core_api_web.api.v1.station_docking.station_dock}
+  - {symbol: core_features.docking.manager.DockingManager}
+  - {symbol: core_features.docking.admission.dock_target}
+  - {symbol: core_features.docking.agent.DockAgent}
+  - {symbol: core_features.docking.native_status.readback}
+  - {symbol: core_features.docking.native_status.owner_snapshot}
+  - {symbol: core_features.docking.station_owner.StationDockingOwner}
+  - {symbol: core_features.docking.station_rebind.StationRebindBoundary}
+  - {symbol: core_features.docking.station_return.StationReturnAuthority}
+  - {symbol: core_features.docking.station_departure.StationDepartureFeed}
+  - {symbol: core_features.docking.station_departure_control.StationDepartureController}
+  - {symbol: core_features.docking.station_readback.station_readback}
+  - {symbol: core.trip_lease.TripLeaseManager.matches_nowait}
+  - {symbol: core_features.docking.station_feed.StationObservationFeed}
+  - {symbol: core_features.docking.station_motion.StationMotionFeed}
+  - {symbol: core_features.docking.station_sensors.StationSensorReader}
+  - {symbol: core_features.docking.completion.SeatingGate}
+  - {symbol: rosy.execution.site.charge_policy.evaluate_charge_policy}
+  - {symbol: fleet.server.charge_motion.ChargeMotion}
+  - {symbol: fleet.server.charge_service.ChargeService}
+  - {symbol: fleet.server.charge_policy_admission.ChargePolicyAdmission}
+  - {symbol: fleet.server.charge_runtime.ChargeRuntime}
+  - {symbol: fleet.server.charge_source.ChargeFactSource}
+  - {symbol: fleet.server.charge_work_selection.ChargeWorkSelector}
+  - {symbol: fleet.server.map_pose_scope.MapPoseScopes, public: true}
+  - {symbol: fleet.server.map_state_read.StateSourceRead, public: true}
+  - {symbol: fleet.server.charge_world_pose.ChargeWorldPoseSource}
+  - {symbol: fleet.server.charge_runtime.ChargeRuntime.work_admission, public: true}
+  - {symbol: fleet.server.charge_bootstrap.install_charge_runtime, public: true}
+  - {symbol: fleet.server.charge_work_handover.CompletedWorkHandover}
+  - {symbol: fleet.server.charge_store.ChargeStore}
+  - {symbol: fleet.server.charge_departure_store.ChargeDepartureStore}
+  - {symbol: fleet.server.charge_departure.ChargeDeparture}
+  - {symbol: fleet.server.charge_departure_http.ChargeDepartureHttp}
+  - {symbol: fleet.server.charge_store.retain_charge_claims_for_stop, public: true}
+  - {symbol: fleet.server.charge_trip_port.ChargeReturnTrip}
+  - {symbol: fleet.server.station_return_http.StationReturnHttp}
+  - {symbol: fleet.server.charge_robot_http.ChargeRobotHttp, public: true}
+  - {symbol: fleet.swarm.navigation_transport.NavigationTransport, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.handover.handover_completed_navigation, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.evidence.PATHS, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.evidence.KINDS, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.evidence.epoch, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.evidence.exact_operation, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.evidence.safe_proof, public: true}
+  - {symbol: fleet.server.channel.execution.outcomes.evidence.terminal_event, public: true}
+  - {symbol: fleet.swarm.dispatch_guard.dispatch_guard, public: true}
+  - {symbol: fleet.swarm.dispatch_guard.check_dispatch, public: true}
+  - {symbol: fleet.server.charge_goal_gate.ready_free_goal, public: true}
+  - {symbol: core_features.navigation.native_handover.with_terminal_navigation}
+  - {symbol: core_api_web.api.v1.navigation_handover.navigation_handover}
+  - {symbol: core_features.navigation.native_handover.native_readback}
+  - {symbol: fleet.server.station_ingress.StationIngress, public: true}
+  - {symbol: fleet.server.station_ingress_routes.install_station_ingress_routes, public: true}
+  - {symbol: fleet.server.station_ingress_routes.install_station_routes, public: true}
+  - {symbol: fleet.swarm.station_transport.StationTransport, public: true}
+  - {symbol: rosy_vision.station_worker.StationFrameProcessor}
+  - {symbol: rosy_vision.station_observation.observe_jpeg}
+  - {symbol: rosy_vision.station_marker.marker_pose}
+  - {symbol: rosy_vision.station_map_worker.StationMapFrameProcessor}
+  - {symbol: rosy_vision.station_installation.InstalledCameraSource}
+  - {symbol: rosy_vision.station_lens.StationLensCalibration}
+  - {symbol: rosy_vision.station_vision.StationVisionServer}
+  - {symbol: rosy_vision.ingest.IngestServer._send_demand}
+  - {symbol: rosy_vision.ingest.IngestServer.stop_measurements}
+  - {symbol: rosy_vision.ingest_preview._preview_response}
   - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
   - {symbol: core_features.safety.manager.SafetyManager}
   - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
@@ -916,6 +1084,7 @@ safety_anchors:
   - {symbol: core.trip_lease.TripLeaseManager.expire_due}  # D-541/D-760 lease expiry ends Fleet-started motion
   - {symbol: core_features.localization.rotate_to.rotate_goal}
   - {symbol: core_features.localization.rotate_to.turn_rate}
+  - {symbol: core_features.localization.assist.LocalizationAssist}
   - {symbol: core_api_web.api.v1.safety.safety_release}
   - {symbol: core_api_web.api.v1.safety.safety_limits}
   - {symbol: core_common.robot_body.RobotBody}

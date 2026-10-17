@@ -36,6 +36,8 @@ from core.bridge import (
     display,
     docking_mode,
     goal_tracker,
+    map_observation,
+    map_pose,
     observation,
     odometry,
     pilot_recorder_client,
@@ -48,11 +50,9 @@ from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core.bridge.route_context import publication as route_context_publication
-from core_features.maps import occupancy_map_id
 from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import Emotion, SetLed, PilotRecordingStart
-import tf2_ros
 from tf2_ros import Buffer, TransformListener
 
 from core_features.command.emotion_map import emotion_for
@@ -243,6 +243,7 @@ class RosBridge:
         #: odom 이 화면에 무엇이라도 띄우는 폴백이 된다.
         #: On the line clock (D-395 S1 finding 6): sim time starts near 0, so "never" is -inf.
         self._map_pose_ts: float = float('-inf')
+        self._map_pose_lease = map_pose.MapPoseLease()
 
         self._setup_diagnostics()
         # D-137 T4: 자문 피드의 시계를 노드 시계로 맞춘다. 패킷의 observed_at은
@@ -308,8 +309,7 @@ class RosBridge:
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
-        sample = translate.odom_sample(msg)
-        odometry.observe_odom(self, msg, sample)  # D-758 0: snapshot stamp keys the line-follow odom log
+        sample = odometry.receive_odom(self, msg, station=self._svc.station_docking)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
@@ -463,10 +463,12 @@ class RosBridge:
             self._readiness.observe("amcl", self._lifecycle_active(msg))
 
     def _on_map_server_transition(self, msg: TransitionEvent) -> None:
+        map_observation.lifecycle(self, self._lifecycle_active(msg))
         if self._readiness is not None:
             self._readiness.observe("map_server", self._lifecycle_active(msg))
 
     def _on_slam_transition(self, msg: TransitionEvent) -> None:
+        map_observation.lifecycle(self, self._lifecycle_active(msg))
         if self._readiness is not None:
             self._readiness.observe("slam_toolbox", self._lifecycle_active(msg))
 
@@ -487,21 +489,21 @@ class RosBridge:
             self._readiness.observe("motor_adapter", bool(msg.data), lease=True)
 
     def _publish_cmd_vel(self) -> None:
-        # 순서(고르기 → HOLD 면 0 → 바퀴 → 절전 관측·SAF-002 알림)는
-        # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
+        # ROS-free cycle owns write-before-observation ordering.
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
                       self._readiness, warn=self._node.get_logger().error,
                       trial_guard=self._bounded_trial_guard,
-                      motion_ready=self._svc.power.motion_ready)
+                      motion_ready=lambda: docking_mode.motion_ready(self._svc),
+                      notify_written=self._note_wheels)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
         msg.linear.x = out.linear
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
-        # D-422: line follow's near-point memory integrates exactly what reached the wheels.
-        # wheels_sent never raises; a failure erases the memory and holds line follow until
-        # its next scan, and is warned at most every 5 s here.
+
+    def _note_wheels(self, out: CoreTwist) -> None:
+        # D-422: update near-point memory after host publish, outside submission locks.
         problem = observation.wheels_sent(self._svc, out)
         if problem is not None:
             now = time.monotonic()
@@ -510,16 +512,8 @@ class RosBridge:
                 self._node.get_logger().warning(problem)
 
     def _tick_state(self) -> None:
-        try:
-            tf = self.tf_buffer.lookup_transform(
-                self._map_frame, self._base_frame, rclpy.time.Time())
-            t = tf.transform.translation
-            q = tf.transform.rotation
-            yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y ** 2 + q.z ** 2))
-            self._svc.state.set_pose(t.x, t.y, yaw)
-            self._map_pose_ts = self._line_clock()
-        except tf2_ros.TransformException:
-            pass
+        map_pose.receive_map_pose(self, lambda: self.tf_buffer.lookup_transform(
+            self._map_frame, self._base_frame, rclpy.time.Time()))
         # D-395 P2-1: the frame flag follows the same freshness rule as `_on_odom`.
         self._svc.localization.tick(odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()))
         snapshot = self._svc.state.snapshot()
@@ -527,15 +521,7 @@ class RosBridge:
         self._svc.power.on_robot_mode(snapshot.mode)
 
     def _on_map(self, msg: OccupancyGrid) -> None:
-        try:
-            grid = translate.grid_from_occupancy(msg)
-            current = self._svc.state.map_id
-            map_id = occupancy_map_id(grid) if current is None or str(current).startswith("occupancy:") else current
-            self._svc.maps.set_map(grid, map_id=map_id)
-            if map_id != current:
-                self._svc.state.set_map_id(map_id)
-        except ValueError as exc:
-            self._node.get_logger().warning(f"ignored occupancy map: {exc}")
+        map_observation.receive_map(self, msg, warn=self._node.get_logger().warning)
 
     def _on_plan(self, msg: Path) -> None:
         observation.nav_path(self._svc, msg,
@@ -796,7 +782,7 @@ class RosBridge:
         self._dock_ticks += 1
         if not docking_mode.due(self._dock_ticks, docking.fast_tick):
             return
-        docking_mode.tick(self._svc, self._node.get_logger().warning)
+        docking_mode.tick(self._svc, self._node.get_logger().warning, station=self._svc.station_docking)
 
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 

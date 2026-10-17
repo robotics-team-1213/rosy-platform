@@ -181,25 +181,30 @@ def test_replacing_bounds_after_binding_cannot_widen_trial(tmp_path):
 def actual_publish_method():
     # Execute only the real ROS-free delegate method, not a stub ROS runtime.
     import ast
+    from core.bridge import docking_mode
     from pathlib import Path
     source=Path(__file__).parents[1]/'core/bridge/ros_bridge.py'
     tree=ast.parse(source.read_text(encoding='utf-8'))
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='RosBridge')
     method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='_publish_cmd_vel')
-    scope={'cmd_vel_cycle':lambda *args,**kwargs:cmd_vel_cycle(*args,**kwargs,now=10.)}
+    scope={'cmd_vel_cycle':lambda *args,**kwargs:cmd_vel_cycle(*args,**kwargs,now=10.),
+           'docking_mode':docking_mode}
     exec(compile(ast.Module(body=[method],type_ignores=[]),str(source),'exec'),scope)
     return scope['_publish_cmd_vel']
 
 
 def test_actual_bridge_requires_declared_trial_binding_before_writer(tmp_path):
-    sent=[]
+    from core_api_web.api.deps import Mode
+    sent=[];noted=[]
     bridge=SimpleNamespace(_svc=SimpleNamespace(
         command=SimpleNamespace(select_output=lambda:Twist(.04,0),announce_pending=lambda:None),
-        power=SimpleNamespace(on_activity=lambda _:None,motion_ready=lambda:True)),_send_twist=sent.append,
-        _readiness=None,_node=SimpleNamespace(get_logger=lambda:SimpleNamespace(error=lambda _:None)))
+        power=SimpleNamespace(on_activity=lambda _:None,motion_ready=lambda:True),
+        station_docking=None, modes=SimpleNamespace(mode=Mode.IDLE)),_send_twist=sent.append,
+        _readiness=None,_note_wheels=noted.append,
+        _node=SimpleNamespace(get_logger=lambda:SimpleNamespace(error=lambda _:None)))
     publish=actual_publish_method()
     with pytest.raises(AttributeError):publish(bridge)
-    assert sent==[]
+    assert sent==noted==[]
     bridge._bounded_trial_guard=None
     publish(bridge)
     assert sent==[Twist(.04,0)]
@@ -209,6 +214,7 @@ def test_actual_bridge_requires_declared_trial_binding_before_writer(tmp_path):
     g.stop('owner_stop')
     publish(bridge)
     assert sent[-1]==Twist()
+    assert noted==sent
 
 
 def test_odometry_requires_declared_trial_binding_but_none_remains_inactive():

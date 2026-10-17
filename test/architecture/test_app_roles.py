@@ -35,7 +35,7 @@ VISION_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
     "cmd_vel": re.compile(r"cmd_vel"),
     "Fleet route other than sightings or detections": re.compile(
-        r"/api/fleet/(?!sightings\b)(?!detections\b)(?!place-markers\b)(?!pairing/v1/credentials\b)"),
+        r'''/api/fleet/(?!sightings\b)(?!detections\b)(?!place-markers\b)(?!pairing/v1/credentials\b)(?!station-observations(?:["']|$))(?!station-poses(?:["']|$))(?!station-observation-scope/(?:["']|$))'''),
 }
 # 3. Fleet vision routes pass the video-route regex of test_no_video_relay because they
 #    only issue a lease; the browser fetches frames from Vision directly (D-318).
@@ -148,6 +148,17 @@ def test_vision_has_no_robot_command_and_writes_only_sightings_and_detections_to
     assert "/api/fleet/sightings" in (VISION / "publish.py").read_text(encoding="utf-8")
     assert "/api/fleet/place-markers" in (VISION / "publish.py").read_text(encoding="utf-8")  # D-564
     assert "/api/fleet/detections" in (VISION / "track" / "fleet_client.py").read_text(encoding="utf-8")
+
+
+def test_station_vision_exception_keeps_commands_and_other_routes_forbidden():
+    rule = VISION_FORBIDDEN['Fleet route other than sightings or detections']
+    for route in ('station-observations', 'station-poses', 'station-observation-scope/'):
+        assert rule.search('/api/fleet/'+route) is None
+        assert rule.search("'/api/fleet/"+route+"'") is None
+    for route in ('station-dock', 'station-return', 'tasks', 'robots/robot/route',
+                  'station-observations-extra', 'station-observations/dock',
+                  'station-poses/confirm', 'station-observation-scope/../tasks'):
+        assert rule.search('/api/fleet/'+route), route
 
 
 def test_fleet_vision_routes_only_issue_leases_without_bytes():

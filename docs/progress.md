@@ -29,6 +29,7 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-783
 - D-770
 - D-738
 - D-736
@@ -258,6 +259,7 @@ adrs:
 - D-777
 - D-784
 plans:
+- docs/plans/2026-10-17-native-map-adoption.md
 - docs/plans/2026-10-15-omx-learning-operations-design.md
 - docs/plans/2026-10-15-omx-learning-operations.md
 - docs/plans/2026-10-11-core-drive-composition-first.md

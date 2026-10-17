@@ -18,6 +18,7 @@
 | D-144 | 하드웨어 맵 생성은 runtime mode가 아니라 검증된 navigation backend다 |
 | D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
+| D-783 | Native adopted-map readback with finite parent evidence |
 
 ## 계획·결과 문서
 
@@ -25,6 +26,7 @@
 - [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-21-hardware-mapping-g5-design.md](../../../../docs/plans/2026-09-21-hardware-mapping-g5-design.md)
 - [2026-09-21-hardware-mapping-g5.md](../../../../docs/plans/2026-09-21-hardware-mapping-g5.md)
+- [2026-10-17-native-map-adoption.md](../../../../docs/plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -40,8 +42,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 291d03a9f · refactor: Nav2 Drive planning holder 이전
-- 2026-10-01 · uncommitted · feat(launch): hardware.launch.py에 D-395 loc_assist 옵트인 (P2-3)
-- 2026-09-29 · uncommitted · feat(launch): Flask 시대 web_* 진입점 4종 삭제 (스코어카드 §6 과제 3)
-- 2026-09-27 · 804dda61 · fix(mapping): scope the occupancy map to the robot namespace
-- 2026-09-25 · uncommitted · refactor(runtime): move navigation under src/runtime (D-231)
+- 2026-10-17 · uncommitted · 실제 static14건과 같은 SHA native30건 수용 기록
+- 2026-10-17 · uncommitted · rejected configure 시험의 실제 TF callback 시작 동기화
+- 2026-10-17 · uncommitted · 거절된 native configure의 fixture 자원 정리
+- 2026-10-17 · uncommitted · 첫 원본 지도의 실제 static application 소유자 구현
+- 2026-10-17 · uncommitted · 실제 global StaticLayer application RED 준비

@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · 61e95e784 · 공개 진단 도구 hash의 정확한 provenance 등록
 - 2026-10-17 · uncommitted · fix: OMX 수집의 내부 액션 client 검사 연결
 - 2026-10-17 · uncommitted · fix: OMX 시뮬레이션 owner 종료 자원 정리
 - 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
 - 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
-- 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
