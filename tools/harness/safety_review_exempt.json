@@ -473,5 +473,9 @@
     "commit": "5ee7a103b3314e2e2dafbf934e286c1988ecc4e0",
     "original_commit": "1a9960df2c2d6123e88d9bb61ea827706d428fda",
     "reason": "Independent read-only critic (opus), 2026-10-15, D-767 Part A instruction pose_stamp: CONDITIONS (HIGH stale fallback worse than before) then CONDITIONS MET after fail-closed refusal INSTRUCTION_STAMP_UNUSABLE, no 2 s age cut for counting travel, Fleet stamps only instructions with a distance; MEDIUM stamp-check ordering fixed (armed-bend refresh / running-maneuver resend unaffected). Flag default off; remote services/gateway/fleet/guards exit 0, known_failures 0 new; no device acceptance."
+  },
+  {
+    "commit": "fdd01f8fbbfd9b97959ee7fdea74477b98fd727f",
+    "reason": "PR #81 squash merge dropped the Safety-Review trailers of its three safety commits. Independent read-only reviewer agents, 2026-10-17: D-779 stage 1 (local 5dc16a76a) APPROVE - release_keys frees only arm/zone claims at one generation in CLAIMED/DISPATCHING; claim exclusivity, fencing, stop latch and cancel unchanged. D-780 (local 4d1482bb4) APPROVE WITH NOTES after one REQUEST CHANGES round - coordinator peer matrix, atomic stop-latch migration, no arm released alone in a tight segment; notes fixed with tests. D-779 stages 2-4 (local 0a9a17e2c) APPROVE WITH NOTES after one REQUEST CHANGES round - arm-owner workcells claimed and fenced, per-send pair fence, atomic cancel, D-403 1b/1c/1d preserved. PR #81 head 995890b6f re-reviewed: no changes needed; PR CI run 39008808271 all 18 jobs green. No device run."
   }
 ]
