@@ -780,17 +780,6 @@
 - 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
 - 교훈: 없음.
 
-## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
-
-- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
-- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
-- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
-
-## 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.264)
-
-- 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
-- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
-- gate 변화: 없음.
 ## 2026-10-16 · uncommitted · feat(contracts): 스테이션 설치 위치와 충전 근거 분리 (D-772)
 
 - 변경: station_charging DTO에 지도/위치/교정/충전 session/boot/odom 세대를 분리하고, 제어 입력 문맥·유효기간·유한 수·미측정 건강도·정상 충전 종단을 검증한다. canonical schema export와 API v1.245 기록을 함께 추가했다. REST·실기 capability는 아직 열지 않았다.
@@ -826,3 +815,9 @@
 - 변경: StationTargetStatus의 선택 departure_permit/departure_receipt가 현재 상태·session/boot/battery/correlation·원본 evidence 수명과 결속된다. Permit은 실제 binding/ACK와 설치 revision을, Receipt는 실제 operation을 요구한다. readback이 기존 착좌/충전 완료 flags를 빌려 이탈을 증명하지 못한다. 미착지 v1.254 범위의 연속 구현이며 envelope 1.0은 유지한다.
 - 증거: c6abafd83 task-8-departure-readback-green 원격 407개, aff57b47a 실제 transport/native 갱신 원격 208개, 9286f5f77 실제 runtime HTTP 원격 253개 통과. 각각 NEW 0/skip 0, exit 0이며 겹치는 범위를 합산하지 않는다. scoped 독립 안전 리뷰 PASS.
 - gate 변화: 계약과 SIM 회귀 근거. 운영 배포·설치 producer·실기 정밀도·전체 lifecycle/DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.264)
+
+- 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
