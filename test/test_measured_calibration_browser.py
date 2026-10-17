@@ -113,6 +113,8 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         with page.expect_request('**/measured-status'):
             page.locator('#measured-refresh').click()
         expect(page.locator('#measured-confirm')).to_be_disabled()
+        expect(page.locator('#measured-read')).to_be_disabled()
+        expect(page.locator('#measured-revoke')).to_be_disabled()
         state['hold'] = False
         for pending in state['pending']:
             pending.fulfill(status=200, json=status('ceiling_north'))
