@@ -1,4 +1,5 @@
 from test_cell_job_api import _setup, _post, _candidate
+import json
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,7 @@ def test_real_compiler_round_trip_and_separate_admission(tmp_path):
     preview = _post(client, "/api/fleet/cell-app/compile", "operator-secret", refs)
     assert preview.status_code == 200, preview.text
     assert preview.json()["summary"]["transfer_count"] == 18
+    assert set(preview.json()["summary"]) == {"transfer_count", "pallet_markers"}  # recipe/1-2: no multi_arm
     assert preview.json()["candidate"]["job"]["recipe_hash"] == preview.json()["candidate"]["recipe_sha256"]
     proposal = _post(client, "/api/fleet/cell-app/proposals", "operator-secret", {
         **refs, "request_key": "canonical-1", "workcell_id": "omx_sim", "instance_id": "omx_sim_01"})
@@ -99,3 +101,50 @@ def test_real_compiler_round_trip_and_separate_admission(tmp_path):
 def test_service_composition_refuses_missing_or_wrong_role(tmp_path, service):
     with pytest.raises(ValueError, match="configured service principal"):
         _setup(tmp_path, cell_app_service_id=service)
+
+
+def _save_folder(client, folder):
+    refs = {}
+    for kind in ("recipe", "cell"):
+        document = yaml.safe_load((folder / f"{kind}.yaml").read_text(encoding="utf-8"))
+        result = _save(client, kind, "mixed", document)
+        assert result.status_code == 200, result.text
+        refs[f"{kind}_id"] = "mixed"
+        refs[f"{kind}_digest"] = result.json()["digest"]
+    return refs
+
+
+def test_recipe3_previews_as_a_multi_arm_job_and_proposes_without_admission(tmp_path):
+    """D-781 §5: a recipe/3 preview goes through compile_mixed; the proposal resolves a multi-arm Job."""
+    mixed = Path(__file__).resolve().parents[3] / "operations/processes/palletizing/test/fixtures/mixed_two_arm"
+    compiler = PalletizingCellJobCompiler(tol_m=0.001)
+    client, tasks, _ = _setup(tmp_path, compiler=compiler, cell_app_service_id="cell-service")
+    refs = _save_folder(client, mixed)
+    preview = _post(client, "/api/fleet/cell-app/compile", "operator-secret", refs)
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    compiled = compiler.compile_mixed(yaml.safe_load((mixed / "recipe.yaml").read_text(encoding="utf-8")),
+                                      yaml.safe_load((mixed / "cell.yaml").read_text(encoding="utf-8")))
+    assert body["candidate"]["job"] == json.loads(json.dumps(compiled.job))
+    assert (body["candidate"]["recipe_sha256"], body["candidate"]["cell_sha256"]) == (
+        compiled.recipe_digest, compiled.cell_digest)
+    assert body["process_artifact_digest"] == compiler.process_artifact_digest
+    summary = body["summary"]
+    assert summary["transfer_count"] == 12
+    assert summary["pallet_markers"] == [{"after_step_ordinal": 12, "pallet_id": "A"}]
+    assert summary["multi_arm"]["arms"] == [
+        {"role": "left", "instance_id": "omx_01_control", "workcell_id": "omx_01"},
+        {"role": "right", "instance_id": "omx_02_control", "workcell_id": "omx_02"}]
+    plan = compiled.job["plan"]["steps"]
+    assert summary["multi_arm"]["steps"] == [
+        {"index": i, "sku": plan[i]["sku"], "arm": plan[i]["arm"], "alternates": plan[i]["alternates"],
+         "zone": plan[i]["zone"], "coupling": plan[i]["coupling"], "depends_on": plan[i]["depends_on"]}
+        for i in range(12)]
+    assert any(step["alternates"] for step in summary["multi_arm"]["steps"])
+    proposal = _post(client, "/api/fleet/cell-app/proposals", "operator-secret", {
+        **refs, "request_key": "mixed-1", "workcell_id": "bench_01", "instance_id": "omx_01_control"})
+    assert proposal.status_code == 200, proposal.text
+    mission = proposal.json()["mission"]
+    assert mission["status"] == "PROPOSED"
+    job = client.app.state.cell_job_store.get(mission["mission_id"])
+    assert [arm["arm_role"] for arm in job["arms"]] == ["left", "right"] and len(job["placements"]) == 12

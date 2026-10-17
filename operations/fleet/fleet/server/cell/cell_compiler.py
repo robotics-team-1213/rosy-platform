@@ -23,7 +23,7 @@ from rosy.processes.palletizing.mixed_submission import compile_mixed_cell_job
 from rosy.processes.palletizing.plan_bundle import compile_plan_bundle
 from rosy.processes.palletizing.recipe import load_recipe
 
-from .cell_mixed_submission import MixedCellCompilation
+from .cell_mixed_submission import MIXED_RECIPE_SCHEMA, MixedCellCompilation
 
 
 def _process_source_digest() -> str:
@@ -47,7 +47,11 @@ class PalletizingCellJobCompiler:
 
     def item_geometry(self, recipe: Mapping) -> dict[str, dict[str, float]]:
         """Grasp depth and height per item, read from the validated Recipe (1c P3): the box depth
-        default lives only in the palletizing Box; a slip sheet is taken at its top face."""
+        default lives only in the palletizing Box; a slip sheet is taken at its top face. A
+        recipe/3 is keyed by sku (its steps' inputs name the sku, D-781 §2)."""
+        if recipe.get("schema") == MIXED_RECIPE_SCHEMA:
+            mixed = load_mixed_recipe(json.dumps(recipe, allow_nan=False))
+            return {item.sku: {"grasp_depth_m": item.grasp_depth, "height_m": item.height} for item in mixed.items}
         parsed = load_recipe(json.dumps(recipe, allow_nan=False))
         geometry = {"box": {"grasp_depth_m": parsed.box.grasp_depth, "height_m": parsed.box.height}}
         if parsed.slip_sheet_thickness is not None:

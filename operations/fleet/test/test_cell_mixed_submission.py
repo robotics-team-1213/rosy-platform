@@ -26,6 +26,11 @@ from rosy.processes.palletizing.compiler import compile_job, job_document  # noq
 from rosy.processes.palletizing.mixed_planner import PLANNER_VERSION  # noqa: E402
 from rosy.processes.palletizing.recipe import load_recipe  # noqa: E402
 
+from core_common.protocol.schemas import CellTransferPayload  # noqa: E402
+from fleet.server.step_action_kinds import step_action_kind  # noqa: E402
+from rosy.execution.site.item_pose import centre_above_tcp_m, step_goal_predicate  # noqa: E402
+
+from test_cell_goal_evidence_service import _tolerance  # noqa: E402
 from test_cell_job_store import _stores  # noqa: E402
 
 MIXED = ROOT / "operations/processes/palletizing/test/fixtures/mixed_two_arm"
@@ -82,6 +87,48 @@ def test_recipe3_submission_is_accepted_into_the_ledger(tmp_path, adapter):
     # the stored single-arm step shape carries the primary arm's inputs
     assert job["steps"][0]["step"]["inputs"] == submission["steps"][0]["placement"]["actions"][
         submission["steps"][0]["placement"]["arm"]]
+
+
+def test_recipe3_steps_carry_their_sku_on_the_wire(adapter):
+    """D-781 §2: every arm's inputs name the step's sku; the CELL_TRANSFER body carries it."""
+    submission = compile_mixed_submission(mixed_candidate(adapter), compiler=adapter, workcell_id=CELL,
+                                          instance_id="omx_01_control")
+    plan = submission["job"]["plan"]["steps"]
+    job = {"job_id": submission["job_id"], "recipe_digest": submission["recipe_digest"],
+           "cell_digest": submission["cell_digest"]}
+    assert {step["sku"] for step in plan} == {"foam_40x30x30", "foam_30x20x20"}
+    for index, step in enumerate(submission["steps"]):
+        for inputs in step["placement"]["actions"].values():
+            payload = CellTransferPayload.model_validate(step_action_kind("CELL_TRANSFER").body(job, index, inputs))
+            assert (payload.item, payload.sku) == ("box", plan[index]["sku"])
+            assert payload.item_key == "box:" + plan[index]["sku"]
+
+
+def test_the_resolver_fixes_one_predicate_per_arm_in_that_arms_frame(tmp_path, adapter):
+    """D-781 §5: a predicate for the primary and every alternate arm, each from its own inputs."""
+    tolerance = _tolerance()
+    submission = make_cell_job_resolver(adapter, tolerance)(mixed_candidate(adapter), workcell_id=CELL,
+                                                            instance_id="omx_01_control")
+    geometry = adapter.item_geometry(_yaml(MIXED, "recipe.yaml"))
+    assert geometry == {"foam_40x30x30": {"grasp_depth_m": 0.015, "height_m": 0.03},
+                        "foam_30x20x20": {"grasp_depth_m": 0.01, "height_m": 0.02}}
+    shared = 0
+    for step in submission["steps"]:
+        actions = step["placement"]["actions"]
+        assert "goal_predicate" not in step and set(step["goal_predicates"]) == set(actions)
+        for role, inputs in actions.items():
+            offset = centre_above_tcp_m(**geometry[inputs["sku"]])
+            assert step["goal_predicates"][role] == step_goal_predicate(inputs, tolerance, offset)
+        if step["placement"]["alternates"]:
+            shared += 1
+            targets = [predicate["target"] for predicate in step["goal_predicates"].values()]
+            assert targets[0] != targets[1]  # the same cell pose seen from two bases
+    assert shared
+    path, _, _, _ = _stores(tmp_path)
+    job = CellJobStore(path).create(mission_id="mixed-1", proposal_principal_id="cell-service",
+                                    request_key="rk-mixed-1", request_digest="d" * 64, submission=submission)
+    assert [step["step"]["goal_predicates"] for step in job["steps"]] == [
+        step["goal_predicates"] for step in submission["steps"]]
 
 
 def test_same_documents_give_the_same_job_id(adapter):
