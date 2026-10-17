@@ -9011,3 +9011,9 @@ osy-d395-s1d\`.
 - 변경: 잔여 다섯 실패 해제와 보정 화면·원격 실행기 경합 수정, G1 검사 교정을 새 FULL로 확인하고 로컬 main에 병합했다. 집중 검증 기록은 보존하고 `validation/remaining-browser-regressions-verified-2026-10-17/landing.md`에 최종 커밋·계수·원본 해시와 앞선 실패를 추가했다.
 - 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
 - gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.
+
+## 2026-10-17 · uncommitted · 기기·실행 호스트·담당 Fleet 분리 목표와 설계
+
+- 변경: 기존 기기 등록을 재사용하고 PC 배치와 별도로 담당 Fleet을 지정하는 목표를 `plans/2026-10-17-fleet-device-authority-design.md`에 정리했다. 장치 측 담당 지정 정본, 기존 dispatch fence와 별도의 지정 버전, 명시적 인계, 같은 호스트 UDS와 원격 gateway 경계, 양팔 구성 및 세 가지 PC 배치의 완료 조건을 정의했다.
+- 근거: `SiteRoster`·`CentralRegistry`·peer directory는 목록/읽기이며, OMX owner는 현재 같은 호스트 UID/UDS를 사용한다. 기존 등록·허브 페어링을 독점 명령 권한으로 간주하지 않고 D-246·D-281·D-302·D-336·D-555·D-773·D-778~D-780·D-785와의 관계를 기록했다.
+- gate 변화: 없음. 설계 검토 대기이며 제품 코드·API 계약·실물 설정은 변경하지 않았다. 원격 pytest·ROS-SIM·장치·현장 검증은 실행하지 않았고 착지·push·배포도 수행하지 않았다.
