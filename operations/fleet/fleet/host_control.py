@@ -28,9 +28,6 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
         unit: RESTART_OR_STOP for unit in (
             "pinky-backend.service",
             "pinky-frontend.service",
-            "pinky-nav2.service",
-            "pinky-rosbridge-d12.service",
-            "pinky-rosbridge-d13.service",
             "pinky-r2-watch.service",
         )
     },
