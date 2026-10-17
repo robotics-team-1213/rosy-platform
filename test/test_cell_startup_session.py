@@ -37,7 +37,8 @@ def build(tmp_path):
     return owner, runtime
 
 
-def test_uds_is_reachable_before_goal_and_through_startup_settling(tmp_path):
+@pytest.mark.parametrize("lose_server", [False, True])
+def test_uds_is_reachable_before_goal_and_through_startup_settling(tmp_path, lose_server):
     from g2_startup_session import serve_startup, publish_json
     owner, runtime = build(tmp_path)
     run = tmp_path / "evidence"; run.mkdir()
@@ -46,6 +47,8 @@ def test_uds_is_reachable_before_goal_and_through_startup_settling(tmp_path):
 
     def submit(command):
         assert request_identity(owner.uds_server.socket_path)["status"] == 200
+        if lose_server:
+            owner.uds_server.stop()
         return original_submit(command)
 
     runtime.submit = submit
@@ -81,9 +84,14 @@ def test_uds_is_reachable_before_goal_and_through_startup_settling(tmp_path):
                                                     "authority_epoch": 3, "dispatch_generation": 8})
         worker.join(timeout=5)
         assert not worker.is_alive() and not errors, errors
-        assert json.loads((run / "startup-home-ready.json").read_text())["result"] == "READY"
-        assert owner.runner.enabled is True
-        assert request_identity(owner.uds_server.socket_path)["status"] == 200
+        if lose_server:
+            assert not (run / "startup-home-ready.json").exists()
+            assert json.loads((run / "startup-home-failure.json").read_text())["result"] == "HOLD"
+            assert owner.runner.enabled is False
+        else:
+            assert json.loads((run / "startup-home-ready.json").read_text())["result"] == "READY"
+            assert owner.runner.enabled is True
+            assert request_identity(owner.uds_server.socket_path)["status"] == 200
     finally:
         owner.uds_server.stop()
         worker.join(timeout=5)
