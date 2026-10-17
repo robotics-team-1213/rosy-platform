@@ -260,7 +260,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
              else "current" if row["path"].resolve() == here
              else "on main" if row["branch"] == "main"
              else "stale-history" if stale
-             else "active" if now - row["last"] < row["wait_h"] * 3600
+             else "active" if row["wait_h"] and now - row["last"] < row["wait_h"] * 3600
              else "in-progress operation" if any((row["git_dir"] / name).exists() for name in BUSY)
              else "needs snapshot" if lossless and not row["merged"] else None)
     if cheap is None or full:
@@ -333,7 +333,7 @@ def _remove(root: Path, row: dict, day: str, now: float, say=print) -> str:
     # The scan may be minutes old: the row must still be the same commit, branch and lock, and still idle.
     fresh = next((r for r in scan(root)[1] if r["path"].resolve() == path.resolve()), None)
     if (not fresh or fresh["orphan"] or any(fresh[k] != row[k] for k in ("sha", "branch", "locked"))
-            or now - fresh["last"] < row["wait_h"] * 3600):
+            or (row["wait_h"] and now - fresh["last"] < row["wait_h"] * 3600)):
         raise RuntimeError("changed since the scan; kept")
     note, force = "", []
     if row["changed"]:
