@@ -198,7 +198,35 @@ def verify_previous(job, observer, run, ordinal):
         raise RuntimeError("an earlier measured placement was disturbed")
 
 
-def execute(run, recipe, cell, profile, children):
+def authorize_startup(run, client, control, *, approved):
+    from g2_startup_session import publish_json
+    if approved is not True:
+        raise PermissionError("explicit SIM startup home approval is required")
+    if control.get("dispatch_enabled") is not False:
+        raise RuntimeError("startup requires the fresh simulator Fleet to begin closed")
+    challenge_path = run / "startup-awaiting-authorization.json"
+    if challenge_path.stat().st_size > 4096:
+        raise ValueError("startup challenge exceeds bounded frame")
+    challenge = json.loads(challenge_path.read_text())
+    # Once rearm may have been sent, preserve intent and reconcile; never replay this directory.
+    write_json(run / "startup-rearm-intent.json", {"expected_generation": control["generation"],
+        "owner_challenge": challenge, "actor_id": client.credentials["site"]["approver"]["principal_id"]})
+    rearmed = client.request("POST", "/api/fleet/dispatch/rearm", {"expected_generation": control["generation"]})
+    current = client.request("GET", "/api/fleet/dispatch-control")
+    write_json(run / "startup-rearm-result.json", {"rearm": rearmed, "readback": current})
+    if (rearmed.get("dispatch_enabled") is not True or current.get("dispatch_enabled") is not True
+            or current.get("generation") != rearmed.get("generation")
+            or current.get("authority_epoch") != rearmed.get("authority_epoch")):
+        raise RuntimeError("startup rearm readback changed; no startup request published")
+    publish_json(run / "startup-request.json", {**challenge,
+        "actor_id": client.credentials["site"]["approver"]["principal_id"],
+        "authority_epoch": current["authority_epoch"], "dispatch_generation": current["generation"]})
+    return current
+
+
+def execute(run, recipe, cell, profile, children, *, startup_approved=False):
+    if startup_approved is not True:
+        raise PermissionError("explicit SIM startup home approval is required")
     credentials = {"site": {name: {"principal_id": principal, "role": role,
                                    "token": secrets.token_urlsafe(32)} for name, principal, role in (
         ("service", "g2-cell-service", "service"), ("proposer", "g2-sim-proposer", "operator"),
@@ -227,7 +255,7 @@ def execute(run, recipe, cell, profile, children):
                              "--run", str(run)], env=env)
     children.start("fleet", [sys.executable, str(Path(__file__).with_name("g2_fleet.py")),
                              "--run", str(run)], env=env)
-    # Includes the owner's bounded, durable Pilot-seat startup homing and measured settling.
+    # UDS starts in HOLD, serving StopLocal before the separate startup authorization.
     deadline = time.monotonic()+300
     client = FleetClient(run, credentials)
     while True:
@@ -236,7 +264,8 @@ def execute(run, recipe, cell, profile, children):
             raise RuntimeError("SIM startup is HOLD; no automatic homing or dispatch rearm")
         if time.monotonic() > deadline:
             raise RuntimeError("Fleet/UDS readiness timed out")
-        if (run / "uds/omx_cell_sim_01/control.sock").exists():
+        if ((run / "uds/omx_cell_sim_01/control.sock").exists()
+                and (run / "startup-awaiting-authorization.json").exists()):
             try:
                 control = client.request("GET", "/api/fleet/dispatch-control")
                 break
@@ -245,6 +274,12 @@ def execute(run, recipe, cell, profile, children):
         time.sleep(0.2)
     if control["dispatch_enabled"] is not False:
         raise RuntimeError("Fleet must start with dispatch closed")
+    control = authorize_startup(run, client, control, approved=startup_approved)
+    while not (run / "startup-home-ready.json").exists():
+        children.assert_alive()
+        if (run / "startup-home-failure.json").exists() or time.monotonic() > deadline:
+            raise RuntimeError("explicit SIM startup failed; preserve HOLD and receipts")
+        time.sleep(0.2)
     refs = {}
     for kind, document in (("recipe", recipe), ("cell", cell)):
         saved = client.request("POST", f"/api/fleet/cell-app/documents/{kind}/g2-{kind}",
@@ -257,7 +292,6 @@ def execute(run, recipe, cell, profile, children):
         **refs, "request_key": "g2-"+uuid.uuid4().hex,
         "workcell_id": "omx_cell_sim", "instance_id": "omx_cell_sim_01"}, role="proposer")
     mission_id = proposal["proposal"]["proposal_id"]
-    client.request("POST", "/api/fleet/dispatch/rearm", {"expected_generation": control["generation"]})
     control = client.request("GET", "/api/fleet/dispatch-control")
     client.request("POST", f"/api/fleet/missions/{mission_id}/admit",
                    {"expected_generation": control["generation"]})
@@ -300,9 +334,12 @@ def main():
     parser.add_argument("--mode", choices=("host-preflight", "preflight", "run"), required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--approve-isolated-simulation", action="store_true")
+    parser.add_argument("--approve-startup-home", action="store_true")
     args = parser.parse_args()
     if args.mode == "run" and not args.approve_isolated_simulation:
         parser.error("run requires explicit --approve-isolated-simulation")
+    if args.mode == "run" and not args.approve_startup_home:
+        parser.error("run requires separate explicit --approve-startup-home")
     if args.mode != "host-preflight":
         isolation_guard(ROOT)
     run = fresh_evidence(args.evidence)
@@ -311,7 +348,7 @@ def main():
     try:
         recipe, cell, profile = preflight(run, sdk=args.mode != "host-preflight")
         if args.mode == "run":
-            execute(run, recipe, cell, profile, children)
+            execute(run, recipe, cell, profile, children, startup_approved=args.approve_startup_home)
         outcome = "PREFLIGHT_PASS" if args.mode != "run" else "HAPPY_PATH_PASS"
     except Exception as exc:
         error = type(exc).__name__+": "+str(exc)

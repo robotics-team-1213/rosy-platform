@@ -83,6 +83,8 @@ def main():
         if pilot is not None:
             pilot.on_goal_event(event)
 
+    fleet_fence = HttpFleetFenceReadback("http://127.0.0.1:8090/api/fleet/dispatch-control",
+                                        credentials["site"]["viewer"]["token"], timeout_s=0.25)
     owner = build_cell_owner(CellOwnerSettings(
         "omx_cell_sim", "omx_cell_sim_01", run / "owner.sqlite3", run / "uds", os.getuid(),
         ROOT / "deploy/robot/omx/sim/cell_profile.yaml", "omx-f-gazebo-only-v1",
@@ -96,26 +98,33 @@ def main():
         refuse_second_owner=lambda: None,
         gripper_readback=lambda grant: sim_gripper_observation(
             holder["owner"], holder["owner"].runtime.latest_joint_state, grant),
-        fleet_fence_current=HttpFleetFenceReadback("http://127.0.0.1:8090/api/fleet/dispatch-control",
-                                                   credentials["site"]["viewer"]["token"], timeout_s=0.25))
+        fleet_fence_current=fleet_fence)
     holder["owner"] = owner
     accepted_cell = owner.acceptance.accept_cell(json.loads((run / "cell.json").read_text()),
                                                  actor_id="g2-sim-acceptor")
     accepted_recipe = owner.acceptance.accept_recipe(json.loads((run / "recipe.json").read_text()),
                                                      actor_id="g2-sim-acceptor")
     write_json(run / "owner-acceptance.json", {"cell": accepted_cell, "recipe": accepted_recipe})
+    from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
+    home = json.loads((run / "cell.json").read_text())["home"]
+    solution = OmxKinematics.load().solve_top_down(TopDownPose(**home), owner.profile.ik_limits())
+    if not solution.ok:
+        raise RuntimeError("simulation startup home is outside the reviewed IK profile")
+    target = dict(zip(ARM_JOINTS, solution.joints))
+    target[owner.profile.gripper_joint] = owner.profile.gripper_open
+    # Reuse the canonical composition's workflow tick; callbacks alone do not advance phases.
+    workflow_timer = node.create_timer(0.05, owner.advance_pending)
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     try:
-        # Publish no positive command until startup has a reviewed stop-fenced path.
-        # Existing StopLocal and readback operations stay reachable; SubmitAction
-        # remains disabled even if an operator later rearms the local stop latch.
-        from g2_startup import hold_startup
-        write_json(run / "startup-home-failure.json", hold_startup(owner))
-        owner.uds_server.serve_forever()
+        from g2_startup_session import serve_startup
+        server = serve_startup(owner, run, target=target,
+            expected_actor=credentials["site"]["approver"]["principal_id"], fleet_fence_current=fleet_fence)
+        server.join()
     finally:
         owner.uds_server.stop()
+        node.destroy_timer(workflow_timer)
         executor.shutdown(timeout_sec=5)
         node.destroy_node()
         rclpy.shutdown()

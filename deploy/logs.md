@@ -2959,3 +2959,9 @@
 - 변경: 기존 follower simulation launcher가 명시적 native ROS setup·사용자 overlay, checkout 기준 world, 원격 실행기가 할당한 ROS domain을 받는다. site marker는 setup 전에 거부하고 log directory를 만든다. 기존 OCI 기본 overlay도 유지한다.
 - 증거: 75632f0aac 원격 RED 2 failed/2 passed에서 누락 overlay 선택을 확인한 뒤 52062796dd 원격 launcher·workstation·vendor lock 24 passed. 별도 리뷰 material finding 0건. 실제 Bash argv/env·실패 전파를 검사했고 site guard 제거 mutation이 실제 fake launch에 도달하여 같은 테스트가 실패한 뒤 원본 재실행은 통과했다.
 - gate 변화: native launcher 소스·원격 계약 검증. Gazebo 실제 기동·Fleet task·G2 격리·startup 이동·실물·학습 수용 증거는 아니다. G2 guard와 startup HOLD는 유지하며 Docker 권한·설치는 요구하지 않는다.
+
+## 2026-10-17 · 9108fd4d8e · fix(omx): 명시적 startup을 기존 정지·취소 경로에 연결
+
+- 변경: UDS를 먼저 열고 owner session·nonce·profile·target·현재 Fleet 세대를 결속한 별도 시작 허가만 받는다. durable command intent 뒤 최종 LocalStop/Fleet fence로 한 번 제출하며, pending 수락도 기존 runtime의 정확한 command ID로 취소한다. 기존 Fleet 취소 fanout도 진단 I/O보다 먼저 실행한다. G2 owner에 기존 workflow tick을 연결하고 기본 HOLD와 격리 검사는 유지한다.
+- 증거: 커밋 기반 원격 RED→GREEN, 최종 session/request/gate/기존 startup/owner workflow/phase 66 passed. blocked recording과 UDS 상실 회귀를 실제로 재현했다. 독립 최종 리뷰 material finding 0건. docs/validation/omx-native-startup-2026-10-17/result.md.
+- gate 변화: SOURCE/호스트 orchestration 범위. AI PC SDK import·box-only16 compile·module origin PASS. native 격리는 OS namespace 권한 및 sudo 인증에 막혀 미실행이며, 기존 G2 guard를 완화하지 않았다. 관리자 실행용 bounded native command·PowerShell은 private에 준비했다. 실제 task·실물·실데이터 학습 미검증, 실제 episode 0개.
