@@ -16,7 +16,7 @@ from test_charge_store import store, session
 from test_station_pose_service import service, stable
 
 
-def setup(tmp_path, handler=None):
+def _setup(tmp_path, handler=None):
     name = 'fleet.server.station_ingress'
     assert importlib.util.find_spec(name) is not None, 'authenticated station ingress is missing'
     module = importlib.import_module(name)
@@ -48,7 +48,7 @@ def setup(tmp_path, handler=None):
 
 
 def test_registered_source_forwards_once_with_robot_credential_and_never_moves_robot(tmp_path):
-    ingress, source, robot, requests, seen, _, _ = setup(tmp_path)
+    ingress, source, robot, requests, seen, _, _ = _setup(tmp_path)
     assert asyncio.run(ingress.observation('Bearer '+source, seen)) == {'accepted': True}
     assert len(requests) == 1
     assert requests[0].url.path == '/api/v1/docking/station-observation'
@@ -63,14 +63,14 @@ def test_registered_source_forwards_once_with_robot_credential_and_never_moves_r
     dict(boot_id='old'), dict(session_id='old'), dict(pose_revision=2), dict(map_revision='old'),
     dict(source_epoch='old'), dict(calibration_revision='old'), dict(captured_at=100., valid_until=100.2)])
 def test_out_of_scope_or_stale_observation_never_reaches_core(tmp_path, change):
-    ingress, token, _, requests, seen, _, _ = setup(tmp_path)
+    ingress, token, _, requests, seen, _, _ = _setup(tmp_path)
     with pytest.raises(ValueError):
         asyncio.run(ingress.observation('Bearer '+token, seen.model_copy(update=change)))
     assert requests == []
 
 
 def test_human_or_robot_token_cannot_upload_camera_evidence_and_hold_blocks_forwarding(tmp_path):
-    ingress, source, robot, requests, seen, _, charges = setup(tmp_path)
+    ingress, source, robot, requests, seen, _, charges = _setup(tmp_path)
     for token in (robot, secrets.token_urlsafe(32)):
         with pytest.raises(PermissionError):
             asyncio.run(ingress.observation('Bearer '+token, seen))
@@ -85,7 +85,7 @@ def test_normal_fleet_app_installs_ingress_only_when_explicitly_configured(tmp_p
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
     from test_sightings_api import OPERATOR_TOKEN
-    ingress, source, robot, _, seen, _, _ = setup(tmp_path)
+    ingress, source, robot, _, seen, _, _ = _setup(tmp_path)
     console = FleetConsole([RobotEndpoint('robot-1', 'http://robot', robot)], list(ingress.clients().values()))
     client = TestClient(create_app(console, console_token=OPERATOR_TOKEN, station_ingress=ingress))
     response = client.post('/api/fleet/station-observations', json=seen.model_dump(),
@@ -98,7 +98,7 @@ def test_normal_fleet_app_installs_ingress_only_when_explicitly_configured(tmp_p
 
 
 def test_current_session_and_admission_are_read_as_one_snapshot(tmp_path):
-    ingress, _, _, _, _, _, charges = setup(tmp_path)
+    ingress, _, _, _, _, _, charges = _setup(tmp_path)
     assert hasattr(charges, 'admitted_session'), 'atomic admitted-session readback is missing'
     assert charges.admitted_session('charge-1', states=('RETURN_RESERVED',)).session_id == 'charge-1'
     charges.transition('charge-1', expected_state='RETURN_RESERVED', next_state='HOLD',
@@ -108,7 +108,7 @@ def test_current_session_and_admission_are_read_as_one_snapshot(tmp_path):
 
 
 def test_cached_pre_hold_session_cannot_be_combined_with_retained_claims(tmp_path):
-    ingress, source, _, requests, seen, _, charges = setup(tmp_path)
+    ingress, source, _, requests, seen, _, charges = _setup(tmp_path)
     old = charges.get('charge-1')
     charges.transition('charge-1', expected_state='RETURN_RESERVED', next_state='HOLD',
                        attempt_id='attempt-1', now=101., reason='STOP')
@@ -122,7 +122,7 @@ def test_cached_pre_hold_session_cannot_be_combined_with_retained_claims(tmp_pat
 def test_database_contention_in_every_forwarding_fence_keeps_async_heartbeat_alive(tmp_path):
     import queue
     import threading
-    ingress, source, _, requests, seen, _, _ = setup(tmp_path)
+    ingress, source, _, requests, seen, _, _ = _setup(tmp_path)
     read = ingress._current
     pending, starved = queue.Queue(), []
 

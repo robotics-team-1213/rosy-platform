@@ -1547,7 +1547,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `auth.development_mode` | warning | 로봇 | `{marker}` — 장치 모드인데 개발 모드 표식이 있어 공용 개발 토큰을 받는다(D-548) |
 | `fleet.link_provisioned` | warning | 로봇 | `{by, expected_hostname}` — D-555 (v1.163). `by` = 호출 토큰 id. 토큰은 싣지 않는다 |
 | `fleet.link_cleared` | warning | 로봇 | `{by, removed}` — D-555 (v1.163) |
-| `mode.changed` | info | 로봇 | `{from, to, by}` |
+| `mode.changed` | info | 로봇 | `{from, to, by, run_id?, boot_id?}` |
 | `trip_lease.opened` | info | 로봇 | `{lease_id, trip_id, holder, operator_name, ttl_s}` — D-541 (v1.157) |
 | `trip_lease.renewed` | info | 로봇 | `{lease_id, trip_id, ttl_s}` — renew 는 0.5 s 마다 오므로 lease 하나에 30 s 에 한 번만 낸다 (v1.157) |
 | `trip_lease.ended` | info, warning | 로봇 | `{lease_id, trip_id, holder, operator_name, reason, by, note}` — `reason` `released` 는 info, 그 밖(`mode_left`·`estop`·`taken_over`·`expired`)은 warning. `note` 는 넘겨받기 `reason`(없으면 빈 문자열) (v1.157) |

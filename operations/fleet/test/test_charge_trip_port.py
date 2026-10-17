@@ -42,7 +42,7 @@ class Robot(Ports):
         return {}
 
 
-def setup(tmp_path):
+def _setup(tmp_path):
     name = 'fleet.server.charge_trip_port'
     assert importlib.util.find_spec(name) is not None, 'real charge return trip adapter is missing'
     module = importlib.import_module(name)
@@ -114,7 +114,7 @@ def setup(tmp_path):
 
 
 async def started(tmp_path):
-    adapter, runner, plans, robot, ledger, tasks, session, target, events, losses = setup(tmp_path)
+    adapter, runner, plans, robot, ledger, tasks, session, target, events, losses = _setup(tmp_path)
     operation = await adapter.start_return(session, target, correlation_id='return-1')
     assert operation == 'return-plan'
     session = ledger.acknowledge_operation(session.session_id, correlation_id='return-1',
@@ -215,7 +215,7 @@ def test_repeated_standstill_refusal_shares_the_arrival_deadline(tmp_path):
 @pytest.mark.parametrize('change', ['energy', 'principal', 'map', 'goal', 'robot', 'endpoint'])
 def test_invalid_admission_never_opens_lease_or_grants_motion(tmp_path, change):
     async def run():
-        adapter, runner, plans, robot, ledger, _, session, target, events, _ = setup(tmp_path)
+        adapter, runner, plans, robot, ledger, _, session, target, events, _ = _setup(tmp_path)
         if change == 'energy':
             adapter.admit_return = lambda *_: ChargeDecision(decision='WAIT', reason='UNKNOWN',
                 profile_revision='sim-1', capacity_revision=None)
@@ -242,7 +242,7 @@ def test_invalid_admission_never_opens_lease_or_grants_motion(tmp_path, change):
 
 def test_cancel_during_caps_fetch_cannot_start_late(tmp_path):
     async def run():
-        adapter, runner, _, robot, _, _, session, target, events, _ = setup(tmp_path)
+        adapter, runner, _, robot, _, _, session, target, events, _ = _setup(tmp_path)
         entered, resume = asyncio.Event(), asyncio.Event()
         async def caps(_):
             entered.set()
@@ -308,7 +308,7 @@ def test_stop_attempts_core_trip_and_exact_lease_cleanup_even_when_database_fail
 
 def test_stop_fences_pending_start_before_a_blocked_journal_read(tmp_path):
     async def run():
-        adapter, runner, _, robot, ledger, _, session, target, events, _ = setup(tmp_path)
+        adapter, runner, _, robot, ledger, _, session, target, events, _ = _setup(tmp_path)
         entered, resume = asyncio.Event(), asyncio.Event()
         async def caps(_):
             entered.set()
@@ -399,7 +399,7 @@ def test_relocation_cancels_only_persisted_return_and_never_restarts(tmp_path):
 
 def test_context_is_durable_before_first_lease_packet_and_cannot_be_rebound(tmp_path):
     async def run():
-        adapter, _, _, robot, ledger, _, session, target, _, _ = setup(tmp_path)
+        adapter, _, _, robot, ledger, _, session, target, _, _ = _setup(tmp_path)
         original = robot.trip_lease
         async def opening(robot_id, body):
             context = ledger.return_context('charge-1')

@@ -1,949 +1,129 @@
-{
-  "schema": "rosy.public-provenance/1",
-  "records": [
-    {
-      "path": "docs/logs.md",
-      "line_sha256": "2811485881951a84c651e2e0ed32aca80f7171bc425a76377a66157974148cda",
-      "values": [
-        "e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/logs.md",
-      "line_sha256": "7820b017741114a3074b26b9e8e02713f9d0cada83c94e216b2cf9f3e242240f",
-      "values": [
-        "4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/plans/2026-10-04-learning-pipeline-closure.md",
-      "line_sha256": "7f2a6fe13bf71a3943162f2c21f85483bd74b45835f41ce48aeabb2f05e187e0",
-      "values": [
-        "443f63fd4a5f6a4929775cecbda01c7b0a4557fe"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-inference-binding-2026-10-04.md",
-      "line_sha256": "9bc84b9fa5481a4810214545e52c34d1c1c421ee9aa6e9c31a5a12d9ef32d592",
-      "values": [
-        "ede80a29f56e210bf814a4e888d931ed1462c2dc42eb374dfb0c611b0aa6dca9"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-inference-binding-2026-10-04.md",
-      "line_sha256": "6a86676e8ce6e12b504e9bc7be6573376a1593c5bd0ff29abd90b14099a63c90",
-      "values": [
-        "4f5f3d148681483a05971a180ffb4d5d501b21adf7f2b5c6e479c88f74c5ff23"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-inference-binding-2026-10-04.md",
-      "line_sha256": "2d6b54a15ca2d5b714b94b2454031f01bf18c0059a260645bd8e2eb2f231f03b",
-      "values": [
-        "4232ddc5fff8d505f18f07f41adfd1f0c44b087fbcebf2ae96fcf5deb70f2f93"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-inference-binding-2026-10-04.md",
-      "line_sha256": "cf56883fb88d8a8a6087362509614664d1d591fe5ca87227a36be22c27d31622",
-      "values": [
-        "99aad120127dd01275ac5b317839fa5f954fe84c302b8beca47407ad8036651e"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-training-length-study-2026-10-04.md",
-      "line_sha256": "2d6e7cb7a05bb573cd44ccf882361dfd45579883bff8f5c7c3152d92672973e9",
-      "values": [
-        "89f95cd03bdb03c2e566dbf275faf76285dafd63"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-training-length-study-2026-10-04.md",
-      "line_sha256": "3aada9594fb6cae8eef744a288a7ee5a5820d627e9b88ddde4fad696dd55718f",
-      "values": [
-        "6a2fc05eadfd09832dc45ef78b047c088ce5d5c529ba788985463106776e0371"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-training-length-study-2026-10-04.md",
-      "line_sha256": "086aaa38fde6ed92f50505efe76e5184b1323437f56f37b4529a533497ec8792",
-      "values": [
-        "2c62b9841883c08625cd55c480c3681612dc9fbaed74a59c619b341093a44bbf"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/act-training-length-study-2026-10-04.md",
-      "line_sha256": "467df03bb1b175e3fce58bdae52b167df68ce3acf28b50f93a0cf15e674478e8",
-      "values": [
-        "b64e626b6eccaf0299bcf835399a372586459a7166b641ce8df67a0e0c450a8a"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/edge-candidate-review-intake-2026-10-04.md",
-      "line_sha256": "d43aa122c60dfa630b0b379fadd883954395ef1605a5ee38dd2208eb5f871980",
-      "values": [
-        "0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-contracts-2026-10-04.md",
-      "line_sha256": "27e323076a4778cad81e0902eea43fd28d76cc2fb8c0e83a5542bc23f2f30f98",
-      "values": [
-        "3eb8dfcb3a4bd44934ff8327fde6045d5f175b83399b12c8536dfa2a66c4d5a9"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-contracts-2026-10-04.md",
-      "line_sha256": "8b1a4d92af97780da5e92ef70b87495f8b53e7a9ac5ba32bb983264f3c5c5e6b",
-      "values": [
-        "bc7dbcbe97dae9823b3a62e0ef37b05fb99ad2030ff0fa06a9dccac5a2532775"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-fleet-export-2026-10-04.md",
-      "line_sha256": "c605c62740c52588f1dcf2320c1dbdb3d04eb520dab6fbdc070f791bb3713d8b",
-      "values": [
-        "d3213121cf15c030aec9c23c7cfb01a9fc4c72a360bfe3d3b81e8e780f3cb047"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-gpu-2026-10-04.md",
-      "line_sha256": "b36c645323debaa8b4b22ad30d2739ed3e8bebc301855b56553c99248fa5686a",
-      "values": [
-        "d78be83391dccee338c966b1b18e47e4509a9c18"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-gpu-2026-10-04.md",
-      "line_sha256": "add88f739bc95ffc60c69c76735402f2627cb73d1efd38cd6e974667d7e0d9e1",
-      "values": [
-        "6f2698c14a9f1e7429965f523c93d32189b1c06f1703e667fca150fdedf49f7d"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-gpu-2026-10-04.md",
-      "line_sha256": "5b613ed767950c9d6fc1cceb5d683381349cc4853b323af70d654f9f5966e45c",
-      "values": [
-        "a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-gpu-2026-10-04.md",
-      "line_sha256": "7570bde27a1758127fca775d125a73210a754ff803237a158a2abdbcdd7ff2b5",
-      "values": [
-        "0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-pipeline-2026-10-04/result.md",
-      "line_sha256": "dfd3ca425069ff4a1afb5cfee9fdd56d5cd7a2ae5539652a934790d6d3079d10",
-      "values": [
-        "d78be83391dccee338c966b1b18e47e4509a9c18"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-pipeline-2026-10-04/result.md",
-      "line_sha256": "5b858f7b4f21a79836b2827c69108e49e3b84ae28282f08624b3f14e63e00dc0",
-      "values": [
-        "35eb8bccd7d5fc5dc42dc0498a4638df355a887d4a5562edfc416edeb4158bf7"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-pipeline-2026-10-04/result.md",
-      "line_sha256": "ee952ead10a2a9c4a1f13e2e307b09e55811df0d0ccad8751b478ea54e448fb7",
-      "values": [
-        "0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/learning-pipeline-2026-10-04/result.md",
-      "line_sha256": "471c1c94bd8c503b91d3dc7d2a7d1e0d7416a6deaddbbdef0aee2775f6e780bb",
-      "values": [
-        "779ce0747918a216de0caf2431a3a2578d52acd037706bcab1ce67b29873be3f"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/model-delivery-attempt-journal-2026-10-04.md",
-      "line_sha256": "8c91e570000794afebd276c82fd015401f134cb037222b62aa85414dc0d8ffd2",
-      "values": [
-        "0148a90b1f0b60304cb200bf1ba19cc357e8fda409d8e1da8cfe1949f3b2705f"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/model-pc-watch-ready-acceptance-2026-10-04.md",
-      "line_sha256": "b54a11b6a8d9d363b168c837ac305880ca1a741fbd4e0030624c74c7c0934a51",
-      "values": [
-        "55dd32b799d67a644e6ffb3948751322833d7593c7c921dffe1a469aff4fa692"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/model-pc-watch-ready-acceptance-2026-10-04.md",
-      "line_sha256": "625855d48ff57e19c32ead011b8ba8c294bda4c9cfa49529bff1b17fb0ba9c21",
-      "values": [
-        "a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/model-pc-watch-ready-acceptance-2026-10-04.md",
-      "line_sha256": "ecada7910dc1a4cc8dff57c0668b388fec0ef1b698b00f7d1e98d9147602d665",
-      "values": [
-        "0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-act-offline-2026-10-04.md",
-      "line_sha256": "a0962481b7273b0123bd68ecde30711ecdbbc1f559917e37ceb374a1d1154e6e",
-      "values": [
-        "2bc20ec0eef2cda4680cf97991a55f81b1d4a61b96bceba7ccccdb0557b36aa6"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-act-offline-2026-10-04.md",
-      "line_sha256": "ab811d3f042b6a0313bb3b5c7a77a324b1756587a23e792c1f08522756a1c499",
-      "values": [
-        "0fddcf970a3d0b9bcfb72e12293a272c9e7f9227ead95e4e45c1421ac8edb0da"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-act-offline-2026-10-04.md",
-      "line_sha256": "4f972fd63d361f866e4533178f3214af61e4d8ec9e5aed3fad49b913b3aa0b2b",
-      "values": [
-        "a471a20a22e6e92d0e7e53c6f8cfe0ff9b4f13d69c366b7d446692ee6270d990"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-act-offline-2026-10-04.md",
-      "line_sha256": "0a3e0bb93cc4313b29a665f71b2c286996a12c783e454b6a70976d144d2784f5",
-      "values": [
-        "9631bbb0bb936b3e509571a0a9feccc15d5ef0c55a69c3b692ad4175f090647d"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-act-offline-2026-10-04.md",
-      "line_sha256": "60f8a97f0b2aabf733b7cf4e73bee1b57de0c55f5d74db97d787e8b19eb7c398",
-      "values": [
-        "8e66c2d60af15df61e4306e8cb48d899765672ea218f82821d3c87e4fab77eea"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-act-offline-2026-10-04.md",
-      "line_sha256": "11836489313009ae6851ed2eaa75f4e2fa7a42015ef775e28b56976a18d0cc98",
-      "values": [
-        "f38632e5e62515d0be8c1194ecf63ff7765a76b907ce8f6c8dcc8b58ddaa87bf"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-diverse-sim-act-2026-10-04.md",
-      "line_sha256": "dd223ed66ceb43f784b770eb0b7e23e15f6dff67c5cc2fbbee06c0a482d978a0",
-      "values": [
-        "faeb86d666c6848ec61478a72087f7cadfc55d6b23e54dff891202b21029efb2"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-diverse-sim-act-2026-10-04.md",
-      "line_sha256": "abfbb9f8dcdfcc681010aa3fc7c89ad96935ee0d89944a7dc58dda0f2c7d71f5",
-      "values": [
-        "669960441ec6e4d254230b822d5d8cf21999c71a068af7b27e43cea84b690c32"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-diverse-sim-act-2026-10-04.md",
-      "line_sha256": "5b6e6334c88467c704a6652153c94a933a976e0ebfe0f918c1f31860b19c468f",
-      "values": [
-        "3cf7a3df5e7ddc609ee6536cac62af3ae992bdd047f294f4cb59be1829b85bc3"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-diverse-sim-act-2026-10-04.md",
-      "line_sha256": "3a16cb0aedeae11c2d6ad38f54db1a2bfed640f6ddccbba0ac93d97af7d6684c",
-      "values": [
-        "9e376a60a320ce5425423017debb805312e98eaff1842525ca0c65e0bf7ebe09"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-diverse-sim-act-2026-10-04.md",
-      "line_sha256": "1972a1b705fd99f4b8728baf6935aefa682228f22d712667073b90f513ffd450",
-      "values": [
-        "9e5cc5bfa203a9e25ab03a8e922b9154cea98eb211fc9894c1d687327b546b6a"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-diverse-sim-act-2026-10-04.md",
-      "line_sha256": "7e78082a90e7764029f9adbc1ce6534f1cbd107f58efaadea30fa7e6115163c3",
-      "values": [
-        "4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-live-camera-timing-2026-10-04.md",
-      "line_sha256": "cc45f1d49b5678a74f444b717af866d178ec307ceef3adcd6ded67d729da583d",
-      "values": [
-        "4f5f3d148681483a05971a180ffb4d5d501b21adf7f2b5c6e479c88f74c5ff23"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-live-camera-timing-2026-10-04.md",
-      "line_sha256": "f7d0d583b2565755175e4b01f349f7ba966cefc333ce336122adadeeaad30838",
-      "values": [
-        "3cf7a3df5e7ddc609ee6536cac62af3ae992bdd047f294f4cb59be1829b85bc3"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-live-camera-timing-2026-10-04.md",
-      "line_sha256": "52886509e85163e089897ba524ef111aa077834bfddcffb027bf864e06cfafeb",
-      "values": [
-        "d1b538c8a736b665e05433276033d8722519e8ff1533310f8d6ede6ae8ce00bc"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-owner-receipt-provenance-2026-10-04.md",
-      "line_sha256": "fd71ffa8ab9213bea7ebe4386ed1e8ca16c1b78a40d83b50dd3f51dfb6c476c0",
-      "values": [
-        "6e279edccb7ab1640b64c5a00270dd11fd0b4a9b"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-owner-receipt-provenance-2026-10-04.md",
-      "line_sha256": "4499ec292049e9df0a294bc91c733ca64aa19e629b5ee483c1b2d5b573b1a023",
-      "values": [
-        "4aef5f36107d128ccf85ab2f2fd4f4701f9f815cbe7e29afff8f13f1f76b100b"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-owner-receipt-provenance-2026-10-04.md",
-      "line_sha256": "ac498bc08921deabbda7b68a73023ead8d477d3ab3535d6896e58f66b9e66ea6",
-      "values": [
-        "324faaf53a986c56d1511854b4bc8a910ddc23e2fdd546ffed0c09c36989a99c"
-      ],
-      "reason": "Episode revision; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-owner-receipt-provenance-2026-10-04.md",
-      "line_sha256": "51eddb98c56bc94a309bbb417814cb9a6596cc317bb2cf17593cfaa5552a2af6",
-      "values": [
-        "7a989c6051db091d80b720c1bf0604fb1512bfb0db7504c2bb8cede6f14094ee"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/omx-profile-validation-2026-10-04.md",
-      "line_sha256": "0886f25350429f07fde773dc3a3789240c19aee3db3527d99816db5a7627a618",
-      "values": [
-        "8dda786b742bebbd5eae5453f2db60534a22984c5e1943a99de92bb7f0b608bf"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/owner-policy-install-binding-2026-10-04.md",
-      "line_sha256": "42ad771fc41306ef6048a3080b6fa67ad3d3f1e0a689eceff2eb9e02d2b5d3bc",
-      "values": [
-        "3f1b6a0fb046615dde65fae3e1fb4fc6db8f5191fb48dc25a7e018eb48b20e33"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/owner-policy-install-binding-2026-10-04.md",
-      "line_sha256": "f0388efae768e8fe701a11ab55eacdcc214c065ddec22e28a4e1f8bf549cad1c",
-      "values": [
-        "63f84f596ab5b668e1cbc6ee1a755dff4050b7ede6ad0cd38ea8e7738a880229"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/perception-model-comparison-2026-10-04.md",
-      "line_sha256": "6ab0651016c397ccf4320e71e67995787b998f497f54c13c735b74ceb488f3d0",
-      "values": [
-        "a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/perception-model-comparison-2026-10-04.md",
-      "line_sha256": "3091d35efd344f0cd41a3b9e24f3c79f72a02378581b6c4a02086b68a8371692",
-      "values": [
-        "0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"
-      ],
-      "reason": "model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-behavior-comparison-2026-10-04.md",
-      "line_sha256": "f3a04970f041933d6456bf446067a28bfc5457cb3ba71eb561d4ee0156206332",
-      "values": [
-        "5348e98bb7ab58d5fc638fb82bf5f66574ba9087a019e9b9ce417ad9efe14dc5"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-behavior-comparison-2026-10-04.md",
-      "line_sha256": "d5e60e52d94c439f72ef5a924d96fef7232d206c034b0a57d48bd3cabaedf43a",
-      "values": [
-        "ec59a9d7dd1e5aa224580d4ecefb08a959f977a85dbffcac474d805ee4aa9aac"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-behavior-comparison-2026-10-04.md",
-      "line_sha256": "e4c5e52341ca8bd803838aaa4cd8c7de2a34e85cc9d52f4e70889614ebfbadee",
-      "values": [
-        "caf2018eef21ad47cf2c651bbe9b232cd27ee6db4e57fc9c610a1d8de8a80162"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-common-episode-2026-10-04.md",
-      "line_sha256": "2eb25f6e5887cf6a6b4796554b490689ec8871b8786d289078d85444064b64b6",
-      "values": [
-        "b8e76abb3e5fe9a5c4a3b490f40c99f274c407152fcc142f01d559a552cdb873"
-      ],
-      "reason": "Episode revision; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-common-episode-2026-10-04.md",
-      "line_sha256": "815d425a57093dcefbbce206fb41f60143cd94e0a92a205da8b9684f330eaabe",
-      "values": [
-        "ec59a9d7dd1e5aa224580d4ecefb08a959f977a85dbffcac474d805ee4aa9aac"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-policy-artifact-2026-10-04.md",
-      "line_sha256": "53bfad727d0972dc1c2d8a712f05bd20358e306a5e47a9deeac8a403c2e5a1ed",
-      "values": [
-        "fb4fec28bc87b99641e86c8275fd1a9be9859912b165bef9fae649e0528fd7fe"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-policy-artifact-2026-10-04.md",
-      "line_sha256": "885b942382a693269cb0790efe0b2753247064cba0866e8395db5fc45aebaaa5",
-      "values": [
-        "7b8e7e19439c904d8d080e4975f7e0cf279dfb9b07bc1def8ceb375839e70091"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-raw-derivation-2026-10-04.md",
-      "line_sha256": "0640bf9c1b565301795a1fadcfc95926309a2ad6bc4f266a3bdd7b910ebdc0da",
-      "values": [
-        "ec59a9d7dd1e5aa224580d4ecefb08a959f977a85dbffcac474d805ee4aa9aac"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-raw-derivation-2026-10-04.md",
-      "line_sha256": "c6391bca50093d7b62d05f8c59af04d007a775d0bbe106ec0bae4cd66a0128c4",
-      "values": [
-        "b8e76abb3e5fe9a5c4a3b490f40c99f274c407152fcc142f01d559a552cdb873"
-      ],
-      "reason": "Episode revision; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/pinky-raw-derivation-2026-10-04.md",
-      "line_sha256": "7534b17685212c51414c418f8e553c643282d25a27ad4e21ae0c74ab0cbb8bff",
-      "values": [
-        "7a2335943ff3da17aad8f7ceeadad5ba659d8ce79976c5be5e150d5f660f38c1"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-camera-source-binding-2026-10-04.md",
-      "line_sha256": "4c9ba890258effacf9d107b9e4e63079cab2f23cd4f41ab38f8fee71795b9b7a",
-      "values": [
-        "f75bfe08c3110ba2f3fbae3e2093def7a0e7e7fbd45c38c56e6da0963ee2d12c"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-camera-source-binding-2026-10-04.md",
-      "line_sha256": "e83b4e04a3d6727ead1e7eaaee4d60a583072915772bf0c1cd902913fe916d1a",
-      "values": [
-        "bb087a99a83f6a9575ef27e00b529eeec42a1b103a8f80855b3c92e1f2c292bd"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-dataset-closure-2026-10-04.md",
-      "line_sha256": "182d85c421a311c8349350b3a243ddee021964325f33ed36f0d85617fb928816",
-      "values": [
-        "8dda786b742bebbd5eae5453f2db60534a22984c5e1943a99de92bb7f0b608bf"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-dataset-closure-2026-10-04.md",
-      "line_sha256": "0a6d79b6c114919fa109a8b876dc71dc9fd7961cf504f9138d78340f0c6f7a17",
-      "values": [
-        "ede80a29f56e210bf814a4e888d931ed1462c2dc42eb374dfb0c611b0aa6dca9"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-dataset-closure-2026-10-04.md",
-      "line_sha256": "eb0cd064ba45d0000bed1eb03ced9471af9187beaf018eea543c69155e357512",
-      "values": [
-        "d52e8c17a99343d4d5747c60db2cc359dc2cd00ad2e9d94e6d4072dcb4da6d1c"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-dataset-closure-2026-10-04.md",
-      "line_sha256": "064704ac18035f20085228c7ebdddf1974c601cff0386e2f49b107ad878a747b",
-      "values": [
-        "3407ce54f71c31c757e8e65fd5b84a404b019d0ca2222cb42e405fc7acb8d601"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-dataset-closure-2026-10-04.md",
-      "line_sha256": "874a3559749c5c96e819b3b9f305b6e73a29f9d8d66d121006ec67421bb1331c",
-      "values": [
-        "f530825c415711a66af730ab62e7927259128a784764e06f8e912ec07d3bb29f"
-      ],
-      "reason": "dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "f783ffcd2693b6eb5972dbb007325410685d3df91c3dced30c9f6d8f4dc0c898",
-      "values": [
-        "ede80a29f56e210bf814a4e888d931ed1462c2dc42eb374dfb0c611b0aa6dca9"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "172da49d3a8e84f2aa20f1fbc0e04c14304cbff096366a364a0775b476f97ab4",
-      "values": [
-        "9e376a60a320ce5425423017debb805312e98eaff1842525ca0c65e0bf7ebe09"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "24ad8a9c8b4ee3043db1bf2016e9677dcb7c61aa292fad0eac2249b030e00c49",
-      "values": [
-        "ecd20fd1fdebc88b62b8159fae6a376b630884100403f523f93bd52d77367b67"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "0512f18f56f292ada4d33e3c7919555a2c293131fe9da4d9ca5f93d2774a783c",
-      "values": [
-        "488757da92ec75226c0c0555188028ba2d978a4e09fda4895266f9129d21b055"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "659181fe701181eaa310fcee4dc869fe6c73746841b25463ae0fb451f6bcd91b",
-      "values": [
-        "e971d8562b3bfc7a4c213282e31efd6aa908ba607268d945c9efe942237a4c47"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "4d0b4f635b9b0060645c296e8b11812498e1cc434f676a41c4fbf1e29a09bd8a",
-      "values": [
-        "ba614878aba3e88a9c3664874b50a17f46f224d2ff44ed7c83260625c35a8973"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "db3f5174981780836e8eadb4a04f42f191abd54f201f815783eaf9769cbeae9b",
-      "values": [
-        "d1164a672d43cc6697950bbac5e888021b706f59d5b9f7ac94994cbd15c543a3"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/policy-registry-2026-10-04.md",
-      "line_sha256": "edc649585caffdb8db9b5ec259141ca25055c00584e50a23712250797e3b9038",
-      "values": [
-        "c2182e5c9d91eb4df4d695ae6fa4f732d623a8366b12507b74772a109304f68f"
-      ],
-      "reason": "policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/recorded-video-review-2026-10-04.md",
-      "line_sha256": "ac177c03d61caedc90dff033c39c4aacd073146b8b5fb0d64f8de167f2666d14",
-      "values": [
-        "e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365"
-      ],
-      "reason": "source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/recording-job-2026-10-04.md",
-      "line_sha256": "ac57f0c337bb4cc07aed5799306231f9cff0b2118f4a8e9e232a52234e1e719d",
-      "values": [
-        "8fe61cfa4c82686cadc681a5b700c3c621be26ffe7d63f4359d577cbec4b5d57"
-      ],
-      "reason": "recording bundle digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/recording-job-2026-10-04.md",
-      "line_sha256": "a799f22f954bf31b3ec0b2429be257e0f1491806e6eb326ac1b4f67076ea004c",
-      "values": [
-        "15c6bd04ebaeedced2822769eda800e4281107ef215d66ddf91598185a7f402c"
-      ],
-      "reason": "recording bundle digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "43454e6ed148953603ff08bdabbc75ec4729191e16bb3ceb9812ffeca0f94b77",
-      "values": [
-        "a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "696bfa1e5a0ef115e5171cf23d9595a03125f468d4fec4fcc365ab994e937d01",
-      "values": [
-        "0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "1d128baa53c9e25477ca6ca7d34f867761dc444c51d1c493b22963e71080f038",
-      "values": [
-        "bfdee3b35d527713ac6c5ef6309a48e517bc73bf116ecfa8fbaa0a9f7aa3f344"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "6d2c5f5724159ea7f011c404012b10c8502fc2474d21975dc88eaa0495229611",
-      "values": [
-        "20381e3550f69bb2540475b47cb4b3a69979f1dd75fc479e8e788317c0d95c7b"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "0f1d9f995813b2720dd64704fb95a0b54d0864451f2811192931f5dec15c8e80",
-      "values": [
-        "ed0f9e71e8eb800ef8312643a2c955fcd58da8c6ae4654b2386e7e0da50994db"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "2a619e22b4f2d61d329df4c49454876ba48ffe793fb01033a349169148b14a49",
-      "values": [
-        "25a6bf5e2a83c01c5142b7410f8184228cf5d292ee035aa2c385ad59dfc64e8b"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/training-job-2026-10-04.md",
-      "line_sha256": "a9b6d9b766a37d22d65b0cd0cf7162624e0050ca9cbe677bd7b96a2af2c95640",
-      "values": [
-        "cefeeebca6882857ed2df01517d4fd6f636a632a4b4437fc8b2d89d5194b86c4"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "learning/training/perception/README.md",
-      "line_sha256": "26fabe5f4bbb48bc1c470fd00c109e23eb17511d7b13ba5d3cd14bebc9dfca8d",
-      "values": [
-        "443f63fd4a5f6a4929775cecbda01c7b0a4557fe"
-      ],
-      "reason": "training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"
-    },
-    {
-      "path": "docs/validation/cell-isaac-2026-10-04/cell-app-and-g2-candidate.md",
-      "line_sha256": "0c57ab4d71d4a0839e53e24345709127a495c370a48a7db28c51f325a4846810",
-      "values": [
-        "4941cfb4f995e894ba33717306ad9c790483ae06"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md",
-      "line_sha256": "10adcbc250f85eb02b3a77865b9b2a7186b10fd93ba6ced39d51fabf9740a925",
-      "values": [
-        "4941cfb4f995e894ba33717306ad9c790483ae06"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md",
-      "line_sha256": "19e517c5a1159d3e830cacc6674ea11da840a091c236d4fd169578dcea84e4df",
-      "values": [
-        "59f716387960fe6b37adfaf934ad65b8c66ce43c"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md",
-      "line_sha256": "f49abba943eb2739bc59b35f1725f8d4701a4b682507e7ae20f07b1c56566828",
-      "values": [
-        "5fa31ad82212f2981af0f5a08877c1f24852bb2c"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "docs/validation/web-artifact-observation-2026-10-04/README.md",
-      "line_sha256": "5eb0f952315cd8734909dd26f21855f0edb14f4cc8895a5bb602b5fdcc596094",
-      "values": [
-        "af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3",
-        "dd159ab3361739e41c105dcef533bd0e1fd8f614"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "docs/validation/web-artifact-observation-2026-10-04/README.md",
-      "line_sha256": "3105cf662ca03808c8cdd693819140f2acd6beb2b433f45c8b5a675f55bb82c2",
-      "values": [
-        "af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "middleware/robot_ui/pilot/progress.md",
-      "line_sha256": "1fb43b9784db342452c11a9036bebf2825b0bcb04924b1d4f947b24bd13be23f",
-      "values": [
-        "af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "middleware/robot_ui/pilot/progress.md",
-      "line_sha256": "dcfee8f448fb36d4245aa7e2dc6e083caf84a7e9734d54e267518eba0b70778e",
-      "values": [
-        "af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3",
-        "dd159ab3361739e41c105dcef533bd0e1fd8f614"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "middleware/robot_ui/robot/progress.md",
-      "line_sha256": "1fb43b9784db342452c11a9036bebf2825b0bcb04924b1d4f947b24bd13be23f",
-      "values": [
-        "af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "middleware/robot_ui/robot/progress.md",
-      "line_sha256": "3d79f60e82dd9291f7917b8881631eb38d920ca30429a326a9548e9f5c5cc43e",
-      "values": [
-        "af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3",
-        "dd159ab3361739e41c105dcef533bd0e1fd8f614"
-      ],
-      "reason": "Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."
-    },
-    {
-      "path": "tools/harness/log_repairs.yaml",
-      "line_sha256": "e890d71dbc199a4f93a17c090e1a7a2783b9f6c168a57e259ce1ef940cd31683",
-      "values": [
-        "ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973",
-        "95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d"
-      ],
-      "reason": "Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."
-    },
-    {
-      "path": "tools/harness/log_repairs.yaml",
-      "line_sha256": "f8ac438b34f58fc0a585d28a50a1660c88b23efc62d51eda0d4e60913a18d099",
-      "values": [
-        "a982ed57cb8e69bbc509ba636d3c5e3cf96d441c23c010304ffbc18ab67a4b19",
-        "33858a56f2c9d58edbcae2370a6898b0989ad525e9d49214ee6846d182bfbdf5"
-      ],
-      "reason": "Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."
-    },
-    {
-      "path": "tools/harness/log_repairs.yaml",
-      "line_sha256": "a3a76dafc2ba57dae5ac1e3adb39103afdd3db321b33e1034984c450b5e34ed9",
-      "values": [
-        "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d",
-        "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556"
-      ],
-      "reason": "Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."
-    },
-    {
-      "path": "tools/harness/log_repairs.yaml",
-      "line_sha256": "c9ed539d86e8d327fbb5be86d99f9f3b17f55db2698196114f0ad39b4ca9d711",
-      "values": [
-        "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49",
-        "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a"
-      ],
-      "reason": "Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."
-    },
-    {
-      "path": "tools/harness/log_repairs.yaml",
-      "line_sha256": "e0d8cd9c0d3ea15a805f748068860e581f46b06dd4042da01f0d7a4b3237ccd3",
-      "values": [
-        "d26462be1800f9a02bb83365b65ef6a12406016d14272d38f1cb21b3e8e8b98c",
-        "a8406fbbd05fc883d02e2a527decef8314bf9eb851ab7a89934c40ef73fd0d7b"
-      ],
-      "reason": "Exact normalized journal block SHA256 pair (D-502 heading repair, commit eee9d5bdc); publicly reviewed immutable git provenance continuing the prior pairs; not credentials."
-    },
-    {
-      "path": "docs/validation/uiux-fleet-marker-scale-2026-10-09/result.md",
-      "line_sha256": "9ba432a4fed10116374e4e3bf276f074f55516735a20b442c5859c3cf5f99319",
-      "values": [
-        "ecd340ec577d7acef6ff6bc1dcac280c6e23fb75674246673cf830ececd82921"
-      ],
-      "reason": "Public screenshot SHA-256 digest verified against the named 1920x1080 image on 2026-10-09; not a credential."
-    },
-    {
-      "path": "docs/validation/uiux-fleet-marker-scale-2026-10-09/result.md",
-      "line_sha256": "471acf2c8d147339e5fe9b156d61add807ba066a084c77b800fb3a584344a633",
-      "values": [
-        "aac04c2bc86404d7245da3d516d5fcf32b3764ad12911fee4cfecf41c637064f"
-      ],
-      "reason": "Public screenshot SHA-256 digest verified against the named 320x568 image on 2026-10-09; not a credential."
-    },
-    {
-      "path": "learning/envs/isaac/logs.md",
-      "line_sha256": "6742fd3676682057cd5fc9f3a545426cb5e2964a7d1d315cea2b1e06a6620530",
-      "values": [
-        "2492e21e54187bd0369009339c4b65be43583cb3b91ec6b3d020f721dc84b3c5"
-      ],
-      "reason": "Frozen simulation Q-policy SHA256, independently matched to the archived policy.json; not credentials. Independently reviewed by Codex /root/rl_safety_review on 2026-10-12."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "9e470efbb58b85ed4269ebbc026daf956b5e7c6eb1a533953b3cc89c2288954c",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000001"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "3dea7b474c903b55326eceae183b8dfec9bd108e981ff7c53972586416147761",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000002"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "5bdad4f46145350865924bd0d10785ed34dcb392722dcb0a2b8824bfb6e15a18",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000003"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "c1dde544c8aaa2ddc57f5b3c2a94cced99c215fd053f54942bb3f5937d4013e8",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000004"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "53f5d8d35bf6c8949f85eb51a3782572104f7a7067f636f0c282670ac3111627",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000005"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "fca745366f37707608991d981c36af08f1f41461c0269254fa48b0ede41ffe06",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000006"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "0fdbf98b96c5067f860e317e6dd41b1f17d13f0601c39c9e333d66ab647eaaf7",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000007"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "3e27682955f5054df67d0e5adfada979d354ea1e68cacdc5da96f7276a1bcfc4",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000008"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "e8af76568b078019e9533c3e35b164c4e821c085daa6f6ba050aba723a110842",
-      "values": [
-        "0000000000000000000000000000000000000000000000000000000000000009"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "test/fixtures/protocol/measured-calibration.v1.json",
-      "line_sha256": "7b6ba9203a7e1f3e0fe3290261b71d350d21922ff3254ffb2812a61400b32b33",
-      "values": [
-        "000000000000000000000000000000000000000000000000000000000000000a"
-      ],
-      "reason": "Public synthetic calibration integrity placeholder, ordinal 1..10, not an image hash or credential; independently reviewed by Codex /root/camera_contract_review at a4b4baf309 on 2026-10-17."
-    },
-    {
-      "path": "docs/validation/station-existing-hardware-2026-10-17/result.md",
-      "line_sha256": "13e2666fe843bb6d156fc9163c6dcb3cb258f8f4717361a6b31d3f434a1abe1c",
-      "values": [
-        "4231823a939dc90b04cfe5d22d2222b27d9719aac42b40946f4f04b45fc9edd0"
-      ],
-      "reason": "Public read-only OMX diagnostic tool SHA-256, matched to tracked source bytes (hardware_observer LF, register_probe CRLF); independently reviewed by station_safety_review on 2026-10-17. Not a credential."
-    },
-    {
-      "path": "docs/validation/station-existing-hardware-2026-10-17/result.md",
-      "line_sha256": "91c73c709eeaec03f6d7a394add58876fba1d6ea78cb6261799b5af87fec9c8b",
-      "values": [
-        "a9fd080addf0bd1ed12aa54cb873a32b7472b748e498ddd92484271cb9357110"
-      ],
-      "reason": "Public read-only OMX diagnostic tool SHA-256, matched to tracked source bytes (hardware_observer LF, register_probe CRLF); independently reviewed by station_safety_review on 2026-10-17. Not a credential."
-    }
-  ]
-}
+{"schema":"rosy.public-provenance/1","records":[
+{"path":"docs/logs.md","line_sha256":"2811485881951a84c651e2e0ed32aca80f7171bc425a76377a66157974148cda","values":["e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/logs.md","line_sha256":"7820b017741114a3074b26b9e8e02713f9d0cada83c94e216b2cf9f3e242240f","values":["4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/plans/2026-10-04-learning-pipeline-closure.md","line_sha256":"7f2a6fe13bf71a3943162f2c21f85483bd74b45835f41ce48aeabb2f05e187e0","values":["443f63fd4a5f6a4929775cecbda01c7b0a4557fe"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-inference-binding-2026-10-04.md","line_sha256":"9bc84b9fa5481a4810214545e52c34d1c1c421ee9aa6e9c31a5a12d9ef32d592","values":["ede80a29f56e210bf814a4e888d931ed1462c2dc42eb374dfb0c611b0aa6dca9"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-inference-binding-2026-10-04.md","line_sha256":"6a86676e8ce6e12b504e9bc7be6573376a1593c5bd0ff29abd90b14099a63c90","values":["4f5f3d148681483a05971a180ffb4d5d501b21adf7f2b5c6e479c88f74c5ff23"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-inference-binding-2026-10-04.md","line_sha256":"2d6b54a15ca2d5b714b94b2454031f01bf18c0059a260645bd8e2eb2f231f03b","values":["4232ddc5fff8d505f18f07f41adfd1f0c44b087fbcebf2ae96fcf5deb70f2f93"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-inference-binding-2026-10-04.md","line_sha256":"cf56883fb88d8a8a6087362509614664d1d591fe5ca87227a36be22c27d31622","values":["99aad120127dd01275ac5b317839fa5f954fe84c302b8beca47407ad8036651e"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-training-length-study-2026-10-04.md","line_sha256":"2d6e7cb7a05bb573cd44ccf882361dfd45579883bff8f5c7c3152d92672973e9","values":["89f95cd03bdb03c2e566dbf275faf76285dafd63"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-training-length-study-2026-10-04.md","line_sha256":"3aada9594fb6cae8eef744a288a7ee5a5820d627e9b88ddde4fad696dd55718f","values":["6a2fc05eadfd09832dc45ef78b047c088ce5d5c529ba788985463106776e0371"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-training-length-study-2026-10-04.md","line_sha256":"086aaa38fde6ed92f50505efe76e5184b1323437f56f37b4529a533497ec8792","values":["2c62b9841883c08625cd55c480c3681612dc9fbaed74a59c619b341093a44bbf"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/act-training-length-study-2026-10-04.md","line_sha256":"467df03bb1b175e3fce58bdae52b167df68ce3acf28b50f93a0cf15e674478e8","values":["b64e626b6eccaf0299bcf835399a372586459a7166b641ce8df67a0e0c450a8a"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/edge-candidate-review-intake-2026-10-04.md","line_sha256":"d43aa122c60dfa630b0b379fadd883954395ef1605a5ee38dd2208eb5f871980","values":["0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-contracts-2026-10-04.md","line_sha256":"27e323076a4778cad81e0902eea43fd28d76cc2fb8c0e83a5542bc23f2f30f98","values":["3eb8dfcb3a4bd44934ff8327fde6045d5f175b83399b12c8536dfa2a66c4d5a9"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-contracts-2026-10-04.md","line_sha256":"8b1a4d92af97780da5e92ef70b87495f8b53e7a9ac5ba32bb983264f3c5c5e6b","values":["bc7dbcbe97dae9823b3a62e0ef37b05fb99ad2030ff0fa06a9dccac5a2532775"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-fleet-export-2026-10-04.md","line_sha256":"c605c62740c52588f1dcf2320c1dbdb3d04eb520dab6fbdc070f791bb3713d8b","values":["d3213121cf15c030aec9c23c7cfb01a9fc4c72a360bfe3d3b81e8e780f3cb047"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-gpu-2026-10-04.md","line_sha256":"b36c645323debaa8b4b22ad30d2739ed3e8bebc301855b56553c99248fa5686a","values":["d78be83391dccee338c966b1b18e47e4509a9c18"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-gpu-2026-10-04.md","line_sha256":"add88f739bc95ffc60c69c76735402f2627cb73d1efd38cd6e974667d7e0d9e1","values":["6f2698c14a9f1e7429965f523c93d32189b1c06f1703e667fca150fdedf49f7d"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-gpu-2026-10-04.md","line_sha256":"5b613ed767950c9d6fc1cceb5d683381349cc4853b323af70d654f9f5966e45c","values":["a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-gpu-2026-10-04.md","line_sha256":"7570bde27a1758127fca775d125a73210a754ff803237a158a2abdbcdd7ff2b5","values":["0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-pipeline-2026-10-04/result.md","line_sha256":"dfd3ca425069ff4a1afb5cfee9fdd56d5cd7a2ae5539652a934790d6d3079d10","values":["d78be83391dccee338c966b1b18e47e4509a9c18"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-pipeline-2026-10-04/result.md","line_sha256":"5b858f7b4f21a79836b2827c69108e49e3b84ae28282f08624b3f14e63e00dc0","values":["35eb8bccd7d5fc5dc42dc0498a4638df355a887d4a5562edfc416edeb4158bf7"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-pipeline-2026-10-04/result.md","line_sha256":"ee952ead10a2a9c4a1f13e2e307b09e55811df0d0ccad8751b478ea54e448fb7","values":["0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/learning-pipeline-2026-10-04/result.md","line_sha256":"471c1c94bd8c503b91d3dc7d2a7d1e0d7416a6deaddbbdef0aee2775f6e780bb","values":["779ce0747918a216de0caf2431a3a2578d52acd037706bcab1ce67b29873be3f"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/model-delivery-attempt-journal-2026-10-04.md","line_sha256":"8c91e570000794afebd276c82fd015401f134cb037222b62aa85414dc0d8ffd2","values":["0148a90b1f0b60304cb200bf1ba19cc357e8fda409d8e1da8cfe1949f3b2705f"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/model-pc-watch-ready-acceptance-2026-10-04.md","line_sha256":"b54a11b6a8d9d363b168c837ac305880ca1a741fbd4e0030624c74c7c0934a51","values":["55dd32b799d67a644e6ffb3948751322833d7593c7c921dffe1a469aff4fa692"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/model-pc-watch-ready-acceptance-2026-10-04.md","line_sha256":"625855d48ff57e19c32ead011b8ba8c294bda4c9cfa49529bff1b17fb0ba9c21","values":["a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/model-pc-watch-ready-acceptance-2026-10-04.md","line_sha256":"ecada7910dc1a4cc8dff57c0668b388fec0ef1b698b00f7d1e98d9147602d665","values":["0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-act-offline-2026-10-04.md","line_sha256":"a0962481b7273b0123bd68ecde30711ecdbbc1f559917e37ceb374a1d1154e6e","values":["2bc20ec0eef2cda4680cf97991a55f81b1d4a61b96bceba7ccccdb0557b36aa6"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-act-offline-2026-10-04.md","line_sha256":"ab811d3f042b6a0313bb3b5c7a77a324b1756587a23e792c1f08522756a1c499","values":["0fddcf970a3d0b9bcfb72e12293a272c9e7f9227ead95e4e45c1421ac8edb0da"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-act-offline-2026-10-04.md","line_sha256":"4f972fd63d361f866e4533178f3214af61e4d8ec9e5aed3fad49b913b3aa0b2b","values":["a471a20a22e6e92d0e7e53c6f8cfe0ff9b4f13d69c366b7d446692ee6270d990"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-act-offline-2026-10-04.md","line_sha256":"0a3e0bb93cc4313b29a665f71b2c286996a12c783e454b6a70976d144d2784f5","values":["9631bbb0bb936b3e509571a0a9feccc15d5ef0c55a69c3b692ad4175f090647d"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-act-offline-2026-10-04.md","line_sha256":"60f8a97f0b2aabf733b7cf4e73bee1b57de0c55f5d74db97d787e8b19eb7c398","values":["8e66c2d60af15df61e4306e8cb48d899765672ea218f82821d3c87e4fab77eea"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-act-offline-2026-10-04.md","line_sha256":"11836489313009ae6851ed2eaa75f4e2fa7a42015ef775e28b56976a18d0cc98","values":["f38632e5e62515d0be8c1194ecf63ff7765a76b907ce8f6c8dcc8b58ddaa87bf"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-diverse-sim-act-2026-10-04.md","line_sha256":"dd223ed66ceb43f784b770eb0b7e23e15f6dff67c5cc2fbbee06c0a482d978a0","values":["faeb86d666c6848ec61478a72087f7cadfc55d6b23e54dff891202b21029efb2"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-diverse-sim-act-2026-10-04.md","line_sha256":"abfbb9f8dcdfcc681010aa3fc7c89ad96935ee0d89944a7dc58dda0f2c7d71f5","values":["669960441ec6e4d254230b822d5d8cf21999c71a068af7b27e43cea84b690c32"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-diverse-sim-act-2026-10-04.md","line_sha256":"5b6e6334c88467c704a6652153c94a933a976e0ebfe0f918c1f31860b19c468f","values":["3cf7a3df5e7ddc609ee6536cac62af3ae992bdd047f294f4cb59be1829b85bc3"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-diverse-sim-act-2026-10-04.md","line_sha256":"3a16cb0aedeae11c2d6ad38f54db1a2bfed640f6ddccbba0ac93d97af7d6684c","values":["9e376a60a320ce5425423017debb805312e98eaff1842525ca0c65e0bf7ebe09"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-diverse-sim-act-2026-10-04.md","line_sha256":"1972a1b705fd99f4b8728baf6935aefa682228f22d712667073b90f513ffd450","values":["9e5cc5bfa203a9e25ab03a8e922b9154cea98eb211fc9894c1d687327b546b6a"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-diverse-sim-act-2026-10-04.md","line_sha256":"7e78082a90e7764029f9adbc1ce6534f1cbd107f58efaadea30fa7e6115163c3","values":["4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-live-camera-timing-2026-10-04.md","line_sha256":"cc45f1d49b5678a74f444b717af866d178ec307ceef3adcd6ded67d729da583d","values":["4f5f3d148681483a05971a180ffb4d5d501b21adf7f2b5c6e479c88f74c5ff23"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-live-camera-timing-2026-10-04.md","line_sha256":"f7d0d583b2565755175e4b01f349f7ba966cefc333ce336122adadeeaad30838","values":["3cf7a3df5e7ddc609ee6536cac62af3ae992bdd047f294f4cb59be1829b85bc3"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-live-camera-timing-2026-10-04.md","line_sha256":"52886509e85163e089897ba524ef111aa077834bfddcffb027bf864e06cfafeb","values":["d1b538c8a736b665e05433276033d8722519e8ff1533310f8d6ede6ae8ce00bc"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-owner-receipt-provenance-2026-10-04.md","line_sha256":"fd71ffa8ab9213bea7ebe4386ed1e8ca16c1b78a40d83b50dd3f51dfb6c476c0","values":["6e279edccb7ab1640b64c5a00270dd11fd0b4a9b"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-owner-receipt-provenance-2026-10-04.md","line_sha256":"4499ec292049e9df0a294bc91c733ca64aa19e629b5ee483c1b2d5b573b1a023","values":["4aef5f36107d128ccf85ab2f2fd4f4701f9f815cbe7e29afff8f13f1f76b100b"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-owner-receipt-provenance-2026-10-04.md","line_sha256":"ac498bc08921deabbda7b68a73023ead8d477d3ab3535d6896e58f66b9e66ea6","values":["324faaf53a986c56d1511854b4bc8a910ddc23e2fdd546ffed0c09c36989a99c"],"reason":"Episode revision; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-owner-receipt-provenance-2026-10-04.md","line_sha256":"51eddb98c56bc94a309bbb417814cb9a6596cc317bb2cf17593cfaa5552a2af6","values":["7a989c6051db091d80b720c1bf0604fb1512bfb0db7504c2bb8cede6f14094ee"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/omx-profile-validation-2026-10-04.md","line_sha256":"0886f25350429f07fde773dc3a3789240c19aee3db3527d99816db5a7627a618","values":["8dda786b742bebbd5eae5453f2db60534a22984c5e1943a99de92bb7f0b608bf"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/owner-policy-install-binding-2026-10-04.md","line_sha256":"42ad771fc41306ef6048a3080b6fa67ad3d3f1e0a689eceff2eb9e02d2b5d3bc","values":["3f1b6a0fb046615dde65fae3e1fb4fc6db8f5191fb48dc25a7e018eb48b20e33"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/owner-policy-install-binding-2026-10-04.md","line_sha256":"f0388efae768e8fe701a11ab55eacdcc214c065ddec22e28a4e1f8bf549cad1c","values":["63f84f596ab5b668e1cbc6ee1a755dff4050b7ede6ad0cd38ea8e7738a880229"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/perception-model-comparison-2026-10-04.md","line_sha256":"6ab0651016c397ccf4320e71e67995787b998f497f54c13c735b74ceb488f3d0","values":["a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/perception-model-comparison-2026-10-04.md","line_sha256":"3091d35efd344f0cd41a3b9e24f3c79f72a02378581b6c4a02086b68a8371692","values":["0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"],"reason":"model artifact digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-behavior-comparison-2026-10-04.md","line_sha256":"f3a04970f041933d6456bf446067a28bfc5457cb3ba71eb561d4ee0156206332","values":["5348e98bb7ab58d5fc638fb82bf5f66574ba9087a019e9b9ce417ad9efe14dc5"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-behavior-comparison-2026-10-04.md","line_sha256":"d5e60e52d94c439f72ef5a924d96fef7232d206c034b0a57d48bd3cabaedf43a","values":["ec59a9d7dd1e5aa224580d4ecefb08a959f977a85dbffcac474d805ee4aa9aac"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-behavior-comparison-2026-10-04.md","line_sha256":"e4c5e52341ca8bd803838aaa4cd8c7de2a34e85cc9d52f4e70889614ebfbadee","values":["caf2018eef21ad47cf2c651bbe9b232cd27ee6db4e57fc9c610a1d8de8a80162"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-common-episode-2026-10-04.md","line_sha256":"2eb25f6e5887cf6a6b4796554b490689ec8871b8786d289078d85444064b64b6","values":["b8e76abb3e5fe9a5c4a3b490f40c99f274c407152fcc142f01d559a552cdb873"],"reason":"Episode revision; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-common-episode-2026-10-04.md","line_sha256":"815d425a57093dcefbbce206fb41f60143cd94e0a92a205da8b9684f330eaabe","values":["ec59a9d7dd1e5aa224580d4ecefb08a959f977a85dbffcac474d805ee4aa9aac"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-policy-artifact-2026-10-04.md","line_sha256":"53bfad727d0972dc1c2d8a712f05bd20358e306a5e47a9deeac8a403c2e5a1ed","values":["fb4fec28bc87b99641e86c8275fd1a9be9859912b165bef9fae649e0528fd7fe"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-policy-artifact-2026-10-04.md","line_sha256":"885b942382a693269cb0790efe0b2753247064cba0866e8395db5fc45aebaaa5","values":["7b8e7e19439c904d8d080e4975f7e0cf279dfb9b07bc1def8ceb375839e70091"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-raw-derivation-2026-10-04.md","line_sha256":"0640bf9c1b565301795a1fadcfc95926309a2ad6bc4f266a3bdd7b910ebdc0da","values":["ec59a9d7dd1e5aa224580d4ecefb08a959f977a85dbffcac474d805ee4aa9aac"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-raw-derivation-2026-10-04.md","line_sha256":"c6391bca50093d7b62d05f8c59af04d007a775d0bbe106ec0bae4cd66a0128c4","values":["b8e76abb3e5fe9a5c4a3b490f40c99f274c407152fcc142f01d559a552cdb873"],"reason":"Episode revision; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/pinky-raw-derivation-2026-10-04.md","line_sha256":"7534b17685212c51414c418f8e553c643282d25a27ad4e21ae0c74ab0cbb8bff","values":["7a2335943ff3da17aad8f7ceeadad5ba659d8ce79976c5be5e150d5f660f38c1"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-camera-source-binding-2026-10-04.md","line_sha256":"4c9ba890258effacf9d107b9e4e63079cab2f23cd4f41ab38f8fee71795b9b7a","values":["f75bfe08c3110ba2f3fbae3e2093def7a0e7e7fbd45c38c56e6da0963ee2d12c"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-camera-source-binding-2026-10-04.md","line_sha256":"e83b4e04a3d6727ead1e7eaaee4d60a583072915772bf0c1cd902913fe916d1a","values":["bb087a99a83f6a9575ef27e00b529eeec42a1b103a8f80855b3c92e1f2c292bd"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-dataset-closure-2026-10-04.md","line_sha256":"182d85c421a311c8349350b3a243ddee021964325f33ed36f0d85617fb928816","values":["8dda786b742bebbd5eae5453f2db60534a22984c5e1943a99de92bb7f0b608bf"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-dataset-closure-2026-10-04.md","line_sha256":"0a6d79b6c114919fa109a8b876dc71dc9fd7961cf504f9138d78340f0c6f7a17","values":["ede80a29f56e210bf814a4e888d931ed1462c2dc42eb374dfb0c611b0aa6dca9"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-dataset-closure-2026-10-04.md","line_sha256":"eb0cd064ba45d0000bed1eb03ced9471af9187beaf018eea543c69155e357512","values":["d52e8c17a99343d4d5747c60db2cc359dc2cd00ad2e9d94e6d4072dcb4da6d1c"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-dataset-closure-2026-10-04.md","line_sha256":"064704ac18035f20085228c7ebdddf1974c601cff0386e2f49b107ad878a747b","values":["3407ce54f71c31c757e8e65fd5b84a404b019d0ca2222cb42e405fc7acb8d601"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-dataset-closure-2026-10-04.md","line_sha256":"874a3559749c5c96e819b3b9f305b6e73a29f9d8d66d121006ec67421bb1331c","values":["f530825c415711a66af730ab62e7927259128a784764e06f8e912ec07d3bb29f"],"reason":"dataset content digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"f783ffcd2693b6eb5972dbb007325410685d3df91c3dced30c9f6d8f4dc0c898","values":["ede80a29f56e210bf814a4e888d931ed1462c2dc42eb374dfb0c611b0aa6dca9"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"172da49d3a8e84f2aa20f1fbc0e04c14304cbff096366a364a0775b476f97ab4","values":["9e376a60a320ce5425423017debb805312e98eaff1842525ca0c65e0bf7ebe09"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"24ad8a9c8b4ee3043db1bf2016e9677dcb7c61aa292fad0eac2249b030e00c49","values":["ecd20fd1fdebc88b62b8159fae6a376b630884100403f523f93bd52d77367b67"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"0512f18f56f292ada4d33e3c7919555a2c293131fe9da4d9ca5f93d2774a783c","values":["488757da92ec75226c0c0555188028ba2d978a4e09fda4895266f9129d21b055"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"659181fe701181eaa310fcee4dc869fe6c73746841b25463ae0fb451f6bcd91b","values":["e971d8562b3bfc7a4c213282e31efd6aa908ba607268d945c9efe942237a4c47"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"4d0b4f635b9b0060645c296e8b11812498e1cc434f676a41c4fbf1e29a09bd8a","values":["ba614878aba3e88a9c3664874b50a17f46f224d2ff44ed7c83260625c35a8973"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"db3f5174981780836e8eadb4a04f42f191abd54f201f815783eaf9769cbeae9b","values":["d1164a672d43cc6697950bbac5e888021b706f59d5b9f7ac94994cbd15c543a3"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/policy-registry-2026-10-04.md","line_sha256":"edc649585caffdb8db9b5ec259141ca25055c00584e50a23712250797e3b9038","values":["c2182e5c9d91eb4df4d695ae6fa4f732d623a8366b12507b74772a109304f68f"],"reason":"policy artifact or binding digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/recorded-video-review-2026-10-04.md","line_sha256":"ac177c03d61caedc90dff033c39c4aacd073146b8b5fb0d64f8de167f2666d14","values":["e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365"],"reason":"source or replay integrity digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/recording-job-2026-10-04.md","line_sha256":"ac57f0c337bb4cc07aed5799306231f9cff0b2118f4a8e9e232a52234e1e719d","values":["8fe61cfa4c82686cadc681a5b700c3c621be26ffe7d63f4359d577cbec4b5d57"],"reason":"recording bundle digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/recording-job-2026-10-04.md","line_sha256":"a799f22f954bf31b3ec0b2429be257e0f1491806e6eb326ac1b4f67076ea004c","values":["15c6bd04ebaeedced2822769eda800e4281107ef215d66ddf91598185a7f402c"],"reason":"recording bundle digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"43454e6ed148953603ff08bdabbc75ec4729191e16bb3ceb9812ffeca0f94b77","values":["a302ec2d53b248c32b60a8cc8c2ce9ec40080cb1b264c1324d6205efcf9abc79"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"696bfa1e5a0ef115e5171cf23d9595a03125f468d4fec4fcc365ab994e937d01","values":["0260507375e43354aadbdded329c8b5bd21e12fcbd3c4035e97ee3745b389094"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"1d128baa53c9e25477ca6ca7d34f867761dc444c51d1c493b22963e71080f038","values":["bfdee3b35d527713ac6c5ef6309a48e517bc73bf116ecfa8fbaa0a9f7aa3f344"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"6d2c5f5724159ea7f011c404012b10c8502fc2474d21975dc88eaa0495229611","values":["20381e3550f69bb2540475b47cb4b3a69979f1dd75fc479e8e788317c0d95c7b"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"0f1d9f995813b2720dd64704fb95a0b54d0864451f2811192931f5dec15c8e80","values":["ed0f9e71e8eb800ef8312643a2c955fcd58da8c6ae4654b2386e7e0da50994db"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"2a619e22b4f2d61d329df4c49454876ba48ffe793fb01033a349169148b14a49","values":["25a6bf5e2a83c01c5142b7410f8184228cf5d292ee035aa2c385ad59dfc64e8b"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/training-job-2026-10-04.md","line_sha256":"a9b6d9b766a37d22d65b0cd0cf7162624e0050ca9cbe677bd7b96a2af2c95640","values":["cefeeebca6882857ed2df01517d4fd6f636a632a4b4437fc8b2d89d5194b86c4"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"learning/training/perception/README.md","line_sha256":"26fabe5f4bbb48bc1c470fd00c109e23eb17511d7b13ba5d3cd14bebc9dfca8d","values":["443f63fd4a5f6a4929775cecbda01c7b0a4557fe"],"reason":"training artifact/source digest; independently reviewed by policy_registry_review on 2026-10-04"},
+{"path":"docs/validation/cell-isaac-2026-10-04/cell-app-and-g2-candidate.md","line_sha256":"0c57ab4d71d4a0839e53e24345709127a495c370a48a7db28c51f325a4846810","values":["4941cfb4f995e894ba33717306ad9c790483ae06"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md","line_sha256":"10adcbc250f85eb02b3a77865b9b2a7186b10fd93ba6ced39d51fabf9740a925","values":["4941cfb4f995e894ba33717306ad9c790483ae06"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md","line_sha256":"19e517c5a1159d3e830cacc6674ea11da840a091c236d4fd169578dcea84e4df","values":["59f716387960fe6b37adfaf934ad65b8c66ce43c"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md","line_sha256":"f49abba943eb2739bc59b35f1725f8d4701a4b682507e7ae20f07b1c56566828","values":["5fa31ad82212f2981af0f5a08877c1f24852bb2c"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"docs/validation/web-artifact-observation-2026-10-04/README.md","line_sha256":"5eb0f952315cd8734909dd26f21855f0edb14f4cc8895a5bb602b5fdcc596094","values":["af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3","dd159ab3361739e41c105dcef533bd0e1fd8f614"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"docs/validation/web-artifact-observation-2026-10-04/README.md","line_sha256":"3105cf662ca03808c8cdd693819140f2acd6beb2b433f45c8b5a675f55bb82c2","values":["af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"middleware/robot_ui/pilot/progress.md","line_sha256":"1fb43b9784db342452c11a9036bebf2825b0bcb04924b1d4f947b24bd13be23f","values":["af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"middleware/robot_ui/pilot/progress.md","line_sha256":"dcfee8f448fb36d4245aa7e2dc6e083caf84a7e9734d54e267518eba0b70778e","values":["af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3","dd159ab3361739e41c105dcef533bd0e1fd8f614"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"middleware/robot_ui/robot/progress.md","line_sha256":"1fb43b9784db342452c11a9036bebf2825b0bcb04924b1d4f947b24bd13be23f","values":["af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"middleware/robot_ui/robot/progress.md","line_sha256":"3d79f60e82dd9291f7917b8881631eb38d920ca30429a326a9548e9f5c5cc43e","values":["af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3","dd159ab3361739e41c105dcef533bd0e1fd8f614"],"reason":"Public git source/tree identity or exact normalized journal integrity digest; bounded source integration provenance, not a credential."},
+{"path":"tools/harness/log_repairs.yaml","line_sha256":"e890d71dbc199a4f93a17c090e1a7a2783b9f6c168a57e259ce1ef940cd31683","values":["ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973","95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d"],"reason":"Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."},
+{"path":"tools/harness/log_repairs.yaml","line_sha256":"f8ac438b34f58fc0a585d28a50a1660c88b23efc62d51eda0d4e60913a18d099","values":["a982ed57cb8e69bbc509ba636d3c5e3cf96d441c23c010304ffbc18ab67a4b19","33858a56f2c9d58edbcae2370a6898b0989ad525e9d49214ee6846d182bfbdf5"],"reason":"Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."},
+{"path":"tools/harness/log_repairs.yaml","line_sha256":"a3a76dafc2ba57dae5ac1e3adb39103afdd3db321b33e1034984c450b5e34ed9","values":["e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d","d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556"],"reason":"Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."},
+{"path":"tools/harness/log_repairs.yaml","line_sha256":"c9ed539d86e8d327fbb5be86d99f9f3b17f55db2698196114f0ad39b4ca9d711","values":["a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49","4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a"],"reason":"Exact normalized journal block SHA256 pair; publicly reviewed immutable git provenance. Preserves prior public pair digests and the independently reviewed four-pair table; not credentials."},
+{"path":"tools/harness/log_repairs.yaml","line_sha256":"e0d8cd9c0d3ea15a805f748068860e581f46b06dd4042da01f0d7a4b3237ccd3","values":["d26462be1800f9a02bb83365b65ef6a12406016d14272d38f1cb21b3e8e8b98c","a8406fbbd05fc883d02e2a527decef8314bf9eb851ab7a89934c40ef73fd0d7b"],"reason":"Exact normalized journal block SHA256 pair (D-502 heading repair, commit eee9d5bdc); publicly reviewed immutable git provenance continuing the prior pairs; not credentials."},
+{"path":"docs/validation/uiux-fleet-marker-scale-2026-10-09/result.md","line_sha256":"9ba432a4fed10116374e4e3bf276f074f55516735a20b442c5859c3cf5f99319","values":["ecd340ec577d7acef6ff6bc1dcac280c6e23fb75674246673cf830ececd82921"],"reason":"Public screenshot SHA-256 digest verified against the named 1920x1080 image on 2026-10-09; not a credential."},
+{"path":"docs/validation/uiux-fleet-marker-scale-2026-10-09/result.md","line_sha256":"471acf2c8d147339e5fe9b156d61add807ba066a084c77b800fb3a584344a633","values":["aac04c2bc86404d7245da3d516d5fcf32b3764ad12911fee4cfecf41c637064f"],"reason":"Public screenshot SHA-256 digest verified against the named 320x568 image on 2026-10-09; not a credential."},
+{"path":"learning/envs/isaac/logs.md","line_sha256":"6742fd3676682057cd5fc9f3a545426cb5e2964a7d1d315cea2b1e06a6620530","values":["2492e21e54187bd0369009339c4b65be43583cb3b91ec6b3d020f721dc84b3c5"],"reason":"Frozen simulation Q-policy SHA256, independently matched to the archived policy.json; not credentials. Independently reviewed by Codex /root/rl_safety_review on 2026-10-12."},
+{"path":"docs/validation/station-existing-hardware-2026-10-17/result.md","line_sha256":"13e2666fe843bb6d156fc9163c6dcb3cb258f8f4717361a6b31d3f434a1abe1c","values":["4231823a939dc90b04cfe5d22d2222b27d9719aac42b40946f4f04b45fc9edd0"],"reason":"Public read-only OMX diagnostic tool SHA-256, matched to tracked source bytes (hardware_observer LF, register_probe CRLF); independently reviewed by station_safety_review on 2026-10-17. Not a credential."},
+{"path":"docs/validation/station-existing-hardware-2026-10-17/result.md","line_sha256":"91c73c709eeaec03f6d7a394add58876fba1d6ea78cb6261799b5af87fec9c8b","values":["a9fd080addf0bd1ed12aa54cb873a32b7472b748e498ddd92484271cb9357110"],"reason":"Public read-only OMX diagnostic tool SHA-256, matched to tracked source bytes (hardware_observer LF, register_probe CRLF); independently reviewed by station_safety_review on 2026-10-17. Not a credential."},
+{"path":"docs/plans/2026-10-17-station-hardware-integration-design.md","line_sha256":"b774c083b0ab293ac02fe7deac59ef9c376a6305d2d0d476717d33afdc42fe5a","values":["ee0153823ab8b4b464cb2ceb33929af71da642ac"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/plans/2026-10-17-station-operating-policy-design.md","line_sha256":"9cca7748ef42669a9cb640322baeff6b8e22b07c8d7fc4d35607e289a65b88c1","values":["ee0153823ab8b4b464cb2ceb33929af71da642ac"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-measured-health-2026-10-17/result.md","line_sha256":"c41270a70df9ffdf5f6ec20a071d7893e879ec2593484133addbd36defede142","values":["ee0153823ab8b4b464cb2ceb33929af71da642ac"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-clients-2026-10-17/result.md","line_sha256":"2e6d6a5890eae24808c5ea8822e723358a898d404c56619dbaca536b49bf183c","values":["d0d536545ae5ed9246b7cc598fe50e0e03695593"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-clients-2026-10-17/result.md","line_sha256":"59e437895a4c32b6a30d7e33b9bceac6f6d2bfd21957c8beccb06877fa3555d4","values":["2fd55d947bd4f39602c6f0ccd757619f0f1c5128"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-clients-2026-10-17/result.md","line_sha256":"88fbb53c06b46fcef170cf588d74f7af4ee57048c8cbc98b8fc000396d3691ea","values":["2fd55d947bd4f39602c6f0ccd757619f0f1c5128"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-owner-2026-10-17/result.md","line_sha256":"df4a2ae969dfededf995bc6d6f187093abd77a6365ed73dac703b0387b0d6b7a","values":["64accf7fe99ce5a93af1a8e143f8ec60d11b462b"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-static-2026-10-17/result.md","line_sha256":"bba6380508172a73b9cc305b1a95762db6d339e4452841c1518327644e3a9826","values":["83db3b1da4ef17ee493fa9849c4a1b87277dd7f5"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-wire-2026-10-17/result.md","line_sha256":"fe4b64a7c1f08f9ef48c917602d12ceacaca0b0c2a7acd1e77c2b29431652790","values":["8058c3676e63d10a16618a83c25b997b85b55f65"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-native-map-writer-2026-10-17/result.md","line_sha256":"ae13533533a41dd6423ea92baf484ed669cb4b6ac39e11f9d25624229c920d05","values":["1144e9e4e08e41c9f3b469f5df56134e1b4f451b"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-pack-energy-source-2026-10-17/result.md","line_sha256":"e245d90deb293739a4ca1981689c833f983f48073bf57b7487c12fcf2068db16","values":["04ffe7aff7a49032bec28289bab80f28f9294c5c"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"docs/validation/station-pack-energy-source-2026-10-17/result.md","line_sha256":"639e1192e5d900244ea6ea3eff92f6e31fc022e43d477fc782f6205c02d3b6e7","values":["04ffe7aff7a49032bec28289bab80f28f9294c5c"],"reason":"Public Git source commit object; exact document line independently reviewed by station_safety_review on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/CMakeLists.txt","line_sha256":"0ae7835a7039e5fb16c7d8ab2d7cb35334ad384a568ed9fdfd3e31e77f68d643","values":["1afedba75bee4f1c0e9bc7a9a4d08d459b3304a3d402c747f5db731fc39fc348"],"reason":"Public SDK header checksum; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/CMakeLists.txt","line_sha256":"dbe8f79627200d34f4250e4c978cb0668397a2e2ebe6143121ea6672cab5050b","values":["0cf2a51566af02c7f423b213dd4f73f4e5f1ee642042aa66f84050d5f0b68de5"],"reason":"Public SDK header checksum; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/CMakeLists.txt","line_sha256":"018d07f0c5772393453ec74c74451c5320c1b43ad3d965daaa804d57ba833770","values":["0c55e2a92389c188187628fa16f509febdb38f054d27d5527944d83e81b0572a"],"reason":"Public SDK header checksum; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/CMakeLists.txt","line_sha256":"f0fd75e49894893db96cd2f3efd309d234409651f047848b667727f6b4f83feb","values":["8c3d4a637f143b815c56bd389b70351e8c2c89a57d64a2df31f3c4d4cd15f33a"],"reason":"Public SDK header checksum; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/CMakeLists.txt","line_sha256":"6644ba484e87f9b0d5ca4ac13abd88942b14884182a7316c293e984d9182d0b0","values":["ce986454969419119b7e9a89d746655ed67d2008983087f5b4958657fb5c6703"],"reason":"Public SDK header checksum; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/CMakeLists.txt","line_sha256":"da68906fdc4002b6415d46c02de6f925d725fcac99e21c1209d97274d92c5a9f","values":["1fedfbcc5d0555eee474f94f342bfa8c53517a59f0021f98c274610a2c7f43b3"],"reason":"Public SDK header checksum; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/amcl.cpp","line_sha256":"76f16ba9a50ead21860894cdd2124cec5c2756e19afcbc92a81a0935d785a2d1","values":["f4108e5b1c2bce804a1aa0c7be6673a8eb4a1501"],"reason":"Public upstream Nav2 source attribution commit; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"},
+{"path":"middleware/drive/planning/nav2/native_map/static_layer.cpp","line_sha256":"2ba36bc3e403c093a72662fedd44118d9180affd730e6fe2735ffd84d3c4c640","values":["f4108e5b1c2bce804a1aa0c7be6673a8eb4a1501"],"reason":"Public upstream Nav2 source attribution commit; exact source line independently reviewed by native_map_plan_critic on 2026-10-17"}
+]}

@@ -7,7 +7,7 @@ from fleet.server.map_pose_service import MapPoseService
 from test_map_pose_service import Wall, T0, state, row
 
 
-def setup():
+def _setup():
     wall, active = Wall(), ['floor']
     poses = MapPoseService(lambda: ['r1'], wall=wall, map_id=lambda: active[0])
     assert hasattr(poses, 'begin_source_scope'), 'World ingestion has no native provenance fence'
@@ -35,7 +35,7 @@ def localize(poses, wall, ticket):
 
 
 def test_scope_requires_new_original_odom_and_camera_anchor():
-    poses, wall, _ = setup()
+    poses, wall, _ = _setup()
     ticket = begin(poses)
     poses.observe_state('r1', measured(wall.now))
     poses.observe_sighting(row(wall.now-.1) | {'map_id': 'floor'})
@@ -46,7 +46,7 @@ def test_scope_requires_new_original_odom_and_camera_anchor():
 
 @pytest.mark.parametrize('change', ['boot', 'client', 'epoch', 'map'])
 def test_identity_change_retires_previous_anchor_and_ticket(change):
-    poses, wall, active = setup()
+    poses, wall, active = _setup()
     client = object()
     ticket = begin(poses, client)
     localize(poses, wall, ticket)
@@ -61,7 +61,7 @@ def test_identity_change_retires_previous_anchor_and_ticket(change):
 
 @pytest.mark.parametrize('fault', ['epoch', 'missing_epoch', 'robot', 'map', 'future', 'old'])
 def test_unqualified_original_state_cannot_keep_previous_pose_live(fault):
-    poses, wall, _ = setup()
+    poses, wall, _ = _setup()
     ticket = begin(poses)
     localize(poses, wall, ticket)
     body = measured(wall.now+.01)
@@ -79,7 +79,7 @@ def test_unqualified_original_state_cannot_keep_previous_pose_live(fault):
 
 
 def test_unqualified_sink_cannot_replace_scoped_odom_and_pin_is_not_camera_proof():
-    poses, wall, _ = setup()
+    poses, wall, _ = _setup()
     ticket = begin(poses)
     localize(poses, wall, ticket)
     accepted = poses.qualified_pose(ticket)
@@ -93,7 +93,7 @@ def test_unqualified_sink_cannot_replace_scoped_odom_and_pin_is_not_camera_proof
 @pytest.mark.parametrize('force_rest', [True, False])
 def test_late_read_from_before_fence_cannot_populate_tracker_or_cache(force_rest):
     async def run():
-        poses, wall, _ = setup()
+        poses, wall, _ = _setup()
         started, release = asyncio.Event(), asyncio.Event()
         async def gather(robot):
             started.set()
@@ -112,7 +112,7 @@ def test_late_read_from_before_fence_cannot_populate_tracker_or_cache(force_rest
 
 
 def test_observed_map_change_cannot_revive_old_scope_when_map_returns():
-    poses, wall, active = setup()
+    poses, wall, active = _setup()
     client = object()
     ticket = begin(poses, client)
     localize(poses, wall, ticket)
@@ -124,7 +124,7 @@ def test_observed_map_change_cannot_revive_old_scope_when_map_returns():
 
 
 def test_same_identity_does_not_refresh_cutoff_and_original_samples_expire():
-    poses, wall, _ = setup()
+    poses, wall, _ = _setup()
     client = object()
     ticket = begin(poses, client)
     localize(poses, wall, ticket)
@@ -137,7 +137,7 @@ def test_same_identity_does_not_refresh_cutoff_and_original_samples_expire():
 
 
 def test_roster_removal_retires_ticket_even_if_same_id_returns():
-    poses, wall, _ = setup()
+    poses, wall, _ = _setup()
     ticket = begin(poses)
     localize(poses, wall, ticket)
     poses._robot_ids = lambda: []
@@ -148,7 +148,7 @@ def test_roster_removal_retires_ticket_even_if_same_id_returns():
 
 @pytest.mark.parametrize('clock_change', ['expiry', 'rollback'])
 def test_world_accessor_cannot_return_pose_after_expiry_or_clock_reversal(clock_change):
-    poses, wall, _ = setup()
+    poses, wall, _ = _setup()
     ticket = begin(poses)
     localize(poses, wall, ticket)
     anchor = poses.odom_to_map

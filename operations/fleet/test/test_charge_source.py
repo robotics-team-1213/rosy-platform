@@ -18,7 +18,7 @@ def module():
     return importlib.import_module(name)
 
 
-def setup(tmp_path):
+def _setup(tmp_path):
     api = module()
     _, tasks = store(tmp_path)
     tmp_path.chmod(0o700)
@@ -50,7 +50,7 @@ def read(source):
 
 
 def test_source_preserves_original_age_and_derives_only_a_measured_boundary(tmp_path):
-    _, source, body, _, _, now, mono, _ = setup(tmp_path)
+    _, source, body, _, _, now, mono, _ = _setup(tmp_path)
     first = read(source)
     assert first['captured_at'] == 100. and first['valid_until'] == 102.
     assert first['battery_energy'] == body['battery_energy']
@@ -63,7 +63,7 @@ def test_source_preserves_original_age_and_derives_only_a_measured_boundary(tmp_
     dict(still_since=None), dict(still_since=99.5), dict(measured_linear_m_s=.02),
     dict(measured_angular_rad_s=.03)])
 def test_unmeasured_or_moving_boundary_never_becomes_safe(tmp_path, change):
-    _, source, body, publish, *_ = setup(tmp_path)
+    _, source, body, publish, *_ = _setup(tmp_path)
     publish(body | change)
     assert read(source)['safe_work_boundary'] is False
 
@@ -74,7 +74,7 @@ def test_unmeasured_or_moving_boundary_never_becomes_safe(tmp_path, change):
     dict(still_since=100.1), dict(mode='FLYING'), dict(measured_linear_m_s=float('nan')),
     dict(charge_budget={}), dict(command='move'), dict(sequence=True)])
 def test_unapproved_scope_time_commands_or_nonfinite_fields_are_unavailable(tmp_path, change):
-    _, source, body, publish, *_ = setup(tmp_path)
+    _, source, body, publish, *_ = _setup(tmp_path)
     publish(body | change)
     with pytest.raises(ValueError, match='CHARGE_SOURCE_UNAVAILABLE'):
         read(source)
@@ -82,7 +82,7 @@ def test_unapproved_scope_time_commands_or_nonfinite_fields_are_unavailable(tmp_
 
 @pytest.mark.parametrize('mutation', ['value', 'expiry', 'battery_expiry', 'sequence_backwards'])
 def test_same_capture_payload_changes_and_sequence_replay_are_rejected(tmp_path, mutation):
-    _, source, body, publish, _, now, mono, _ = setup(tmp_path)
+    _, source, body, publish, _, now, mono, _ = _setup(tmp_path)
     read(source)
     now[0], mono[0] = 100.1, 10.1
     body = json.loads(json.dumps(body))
@@ -101,7 +101,7 @@ def test_same_capture_payload_changes_and_sequence_replay_are_rejected(tmp_path,
 
 
 def test_monotonic_expiry_cannot_be_renewed_by_repeated_reads_or_utc_lag(tmp_path):
-    _, source, _, _, _, now, mono, _ = setup(tmp_path)
+    _, source, _, _, _, now, mono, _ = _setup(tmp_path)
     read(source)
     now[0], mono[0] = 100.1, 12.1
     with pytest.raises(ValueError, match='CHARGE_SOURCE_UNAVAILABLE'):
@@ -109,7 +109,7 @@ def test_monotonic_expiry_cannot_be_renewed_by_repeated_reads_or_utc_lag(tmp_pat
 
 
 def test_exported_snapshot_cannot_outlive_original_monotonic_lease(tmp_path):
-    _, source, _, _, _, now, mono, _ = setup(tmp_path)
+    _, source, _, _, _, now, mono, _ = _setup(tmp_path)
     read(source)
     now[0], mono[0] = 100.1, 11.9
     value = read(source)
@@ -118,7 +118,7 @@ def test_exported_snapshot_cannot_outlive_original_monotonic_lease(tmp_path):
 
 
 def test_clock_read_gaps_never_add_lifetime_with_independent_epochs(tmp_path):
-    _, source, body, publish, _, now, mono, _ = setup(tmp_path)
+    _, source, body, publish, _, now, mono, _ = _setup(tmp_path)
     now[0], mono[0] = 1_700_000_000., 900_000.
     body.update(captured_at=now[0], valid_until=now[0]+2., still_since=now[0]-2.)
     body['battery_energy'].update(captured_at=now[0], valid_until=now[0]+2.)
@@ -133,7 +133,7 @@ def test_clock_read_gaps_never_add_lifetime_with_independent_epochs(tmp_path):
 
 
 def test_new_motion_envelope_cannot_renew_unchanged_battery_lease(tmp_path):
-    _, source, body, publish, _, now, mono, _ = setup(tmp_path)
+    _, source, body, publish, _, now, mono, _ = _setup(tmp_path)
     read(source)
     now[0], mono[0] = 100.1, 11.9
     body.update(sequence=2, captured_at=100.1, valid_until=102.1)
@@ -151,7 +151,7 @@ def test_new_motion_envelope_cannot_renew_unchanged_battery_lease(tmp_path):
 
 @pytest.mark.parametrize('which', ['utc', 'monotonic'])
 def test_clock_reversal_latches_old_source_unavailable(tmp_path, which):
-    _, source, _, _, _, now, mono, _ = setup(tmp_path)
+    _, source, _, _, _, now, mono, _ = _setup(tmp_path)
     read(source)
     (now if which == 'utc' else mono)[0] -= .1
     with pytest.raises(ValueError, match='CHARGE_SOURCE_UNAVAILABLE'):
@@ -162,7 +162,7 @@ def test_clock_reversal_latches_old_source_unavailable(tmp_path, which):
 
 
 def test_restart_requires_new_motion_and_battery_capture_before_use(tmp_path):
-    factory, source, body, publish, _, now, mono, _ = setup(tmp_path)
+    factory, source, body, publish, _, now, mono, _ = _setup(tmp_path)
     read(source)
     fresh = factory()
     with pytest.raises(ValueError, match='CHARGE_SOURCE_UNAVAILABLE'):
@@ -178,7 +178,7 @@ def test_restart_requires_new_motion_and_battery_capture_before_use(tmp_path):
 
 
 def test_observed_expired_or_broken_file_needs_new_publication(tmp_path):
-    _, source, body, publish, path, now, mono, _ = setup(tmp_path)
+    _, source, body, publish, path, now, mono, _ = _setup(tmp_path)
     read(source)
     path.write_text('{', encoding='utf-8')
     with pytest.raises(ValueError, match='CHARGE_SOURCE_UNAVAILABLE'):
@@ -194,7 +194,7 @@ def test_observed_expired_or_broken_file_needs_new_publication(tmp_path):
 
 
 def test_reconfiguring_age_or_file_path_cannot_reset_source_watermark(tmp_path):
-    _, source, _, _, path, now, mono, tasks = setup(tmp_path)
+    _, source, _, _, path, now, mono, tasks = _setup(tmp_path)
     read(source)
     moved = tmp_path/'moved.json'
     path.replace(moved)
@@ -206,7 +206,7 @@ def test_reconfiguring_age_or_file_path_cannot_reset_source_watermark(tmp_path):
 
 
 def test_observed_utc_expiry_requires_new_original_measurements(tmp_path):
-    _, source, body, publish, _, now, mono, _ = setup(tmp_path)
+    _, source, body, publish, _, now, mono, _ = _setup(tmp_path)
     read(source)
     now[0], mono[0] = 102.1, 12.1
     with pytest.raises(ValueError, match='CHARGE_SOURCE_UNAVAILABLE'):
@@ -223,7 +223,7 @@ def test_observed_utc_expiry_requires_new_original_measurements(tmp_path):
 
 
 def test_inplace_write_during_read_never_returns_partial_measurements(tmp_path, monkeypatch):
-    _, source, _, _, path, *_ = setup(tmp_path)
+    _, source, _, _, path, *_ = _setup(tmp_path)
     original_read = os.read
     def concurrent_write(fd, length):
         payload = original_read(fd, length)
@@ -236,7 +236,7 @@ def test_inplace_write_during_read_never_returns_partial_measurements(tmp_path, 
 
 @pytest.mark.parametrize('fault', ['duplicate', 'oversize', 'symlink', 'file_mode', 'directory_mode', 'writer_uid'])
 def test_file_integrity_and_approved_writer_directory_are_required(tmp_path, fault):
-    _, source, body, _, path, *_ = setup(tmp_path)
+    _, source, body, _, path, *_ = _setup(tmp_path)
     if fault == 'duplicate':
         path.write_text(json.dumps(body)[:-1]+',"sequence":1}', encoding='utf-8')
     elif fault == 'oversize':
@@ -256,7 +256,7 @@ def test_file_integrity_and_approved_writer_directory_are_required(tmp_path, fau
 
 
 def test_watermark_storage_failure_never_returns_measurements(tmp_path, monkeypatch):
-    _, source, _, _, _, _, _, tasks = setup(tmp_path)
+    _, source, _, _, _, _, _, tasks = _setup(tmp_path)
     def unavailable():
         raise sqlite3.OperationalError('SIM disk failure')
     monkeypatch.setattr(tasks, '_connect', unavailable)

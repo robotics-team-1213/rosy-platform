@@ -8,11 +8,11 @@ from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
 from fleet.swarm.robots import RobotEndpoint
 from test_charge_policy import profile
-from test_station_ingress import setup
+from test_station_ingress import _setup
 
 
 def parts(tmp_path):
-    ingress, _, robot, _, _, _, charges = setup(tmp_path)
+    ingress, _, robot, _, _, _, charges = _setup(tmp_path)
     console = FleetConsole([RobotEndpoint('robot-1', 'http://robot', robot)], list(ingress.clients().values()))
     tasks = FleetTaskService(charges.tasks, robot_ids={'robot-1'}, clock=ingress.clock)
     return ingress, console, tasks

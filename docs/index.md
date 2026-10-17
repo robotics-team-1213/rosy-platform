@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · 원격 main 기준 충전 배포 통합 검사 보완
 - 2026-10-17 · uncommitted · reviewed final station deployment source
 - 2026-10-17 · uncommitted · deployment safety gap remediation
 - 2026-10-17 · uncommitted · station deployment main integration
 - 2026-10-17 · uncommitted · measured charge admission verified
-- 2026-10-17 · uncommitted · measured charge admission counterexamples

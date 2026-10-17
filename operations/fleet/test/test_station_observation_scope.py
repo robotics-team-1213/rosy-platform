@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from core_common.protocol.station_charging import StationObservation
-from test_station_ingress import setup
+from test_station_ingress import _setup
 
 
 def status(ingress, seen, **changes):
@@ -24,7 +24,7 @@ def scoped(tmp_path, **changes):
         assert request.method == 'GET'
         assert request.headers['Authorization'] == 'Bearer '+values['robot_token']
         return httpx.Response(200, json=values['status'] if request.url.path.endswith('station-target') else state)
-    ingress, token, robot, requests, seen, now, charges = setup(tmp_path, handler)
+    ingress, token, robot, requests, seen, now, charges = _setup(tmp_path, handler)
     values.update(status=status(ingress, seen), robot_token=robot)
     for key, value in changes.items():
         if key == 'odom_pose':

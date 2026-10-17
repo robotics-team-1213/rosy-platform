@@ -269,10 +269,11 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
             ingress = StationIngress(stations=stations, sessions=charges, sources=[source, global_source],
                 clients=lambda: {robot_id: robot}, clock=lambda: now[0])
             if full_return:
-                from fleet.server.charge_policy_admission import ChargePolicyAdmission
+                from fleet.server.charge_policy_admission import MeasuredChargePolicyAdmission
                 from fleet.server.charge_runtime import ChargeRuntime
                 from test_charge_policy import profile
-                policy = ChargePolicyAdmission(profiles={robot_id: profile()}, clock=lambda: now[0],
+                policy = MeasuredChargePolicyAdmission(profiles={robot_id: profile()}, clock=lambda: now[0],
+                    measured_sources={robot_id: ('fuel_gauge', 'capacity-3')},
                     budget_source=('SIM-route-budget', 'SIM-budget-boot', 'SIM-cost-1'), max_age_s=.2)
                 monitor.admit_return = policy
                 runtime = ChargeRuntime(monitor, robot_id=robot_id, station_id='charger-1',

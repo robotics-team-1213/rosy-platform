@@ -9290,3 +9290,10 @@ osy-d395-s1d\`.
 - 변경: 공식 통합 도구가 안내하는 새 브랜치 재구성 경로를 사용했다. 기존 docs/station-charge-lifecycle의 87e51739ff 이력은 그대로 보존하고, feat/station-charge-deploy에는 main 기준 최종 수정 상태만 모았다. 과거 결함/크기 실패를 exemption으로 덮거나 기존 커밋을 수정하지 않았다.
 - 증거: 최종 staged tree와 보존된 원본 tip의 tree 일치를 확인한 뒤 Fleet/station/Vision 및 CORE/native-map 영역의 독립 정적 안전 검토가 각각 PASS했다. 실제 DB lock·취소 수정의 원격 GREEN은 87e51739ff 127 PASS/0 skip/NEW 0이며, 원본의 반복 취소 반례는 4 FAIL/1 PASS였다. 새 배포 commit의 FULL·원격 최신 main 적용 검증은 이어서 수행한다.
 - gate 변화: 없음. 서명/설치·실기 수용을 주장하지 않는다. 사용자의 배포 승인을 유지한다.
+
+## 2026-10-17 · uncommitted · 원격 main 기준 충전 배포 통합 검사 보완
+
+- 변경: 공유 main의 미게시 이력은 보존하고 원격 main c80ac69a5b 위로 배포 소스를 분리했다. 실제 pose holder와 영상 라우트 연결을 유지하며 앱 상한과 Fleet 크기 기준을 실제 감소량으로 낮췄다. 새 계약·구조 검사에 맞춰 측정 정책/TF 시험 fixture, helper 이름, 이벤트 문서, 검토된 writer·부분 빌드 목록과 native component의 소유 대상을 보완했다.
+- 증거: 7fa484c528의 공식 원격 pre-push는 네 묶음 모두 종료했다. 각각 517 pass/2 fail, 11180 pass/12 fail/523 skip, 5610 pass/1 fail/157 skip, 5903 pass/1 fail/316 skip이며 전부 NEW로 처리했다. 이벤트 검사는 두 묶음에 중복된다. 검사 기준 완화나 known_failures 추가 없이 원인별 수정 후 새 SHA를 재검증한다.
+- 보안: provenance JSON의 원래 줄 형식을 복원하고 이 브랜치에 없는 peer fixture의 정확한 10개 기록만 제거한다. 추가 공개 source/SDK 값은 기존 path·원본 줄 SHA256·정확한 값 결속 방식으로 독립 검토하며 scanner 규칙을 바꾸지 않는다.
+- gate 변화: 없음. 이 검사와 수동적인 소프트웨어 배포는 실제 자동 충전·이안·암 작업 활성화나 현장 수용이 아니다.

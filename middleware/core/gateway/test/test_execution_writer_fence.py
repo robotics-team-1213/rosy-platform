@@ -17,7 +17,7 @@ from core_features.command._execution_ledger import Ledger, ExecutionIdentity, C
 from core_features.safety.manager import SafetyManager, SpeedLimits, BatteryPolicy
 
 
-def setup(*, admit=True, duration=10.):
+def _setup(*, admit=True, duration=10.):
     clock = [10.]
     modes = ModeMachine()
     command = CommandManager(SourceRegistry(), modes, SafetyManager(SpeedLimits(), BatteryPolicy()))
@@ -50,9 +50,9 @@ def cycle(s, **kwargs):
 
 
 def test_installed_restriction_waits_for_parent_and_child_on_actual_cycle():
-    s = setup(admit=False)
+    s = _setup(admit=False)
     assert cycle(s) == [Twist()]
-    s = setup()
+    s = _setup()
     assert cycle(s) == [Twist(.1, -.1)]
     assert s.fence.revoke(s.parent, s.child)
     assert cycle(s) == [Twist()]
@@ -60,7 +60,7 @@ def test_installed_restriction_waits_for_parent_and_child_on_actual_cycle():
 
 @pytest.mark.parametrize('change', ['clear', 'mode', 'child', 'parent', 'payload'])
 def test_original_selection_cannot_be_relabelled_after_readiness_callback(change):
-    s = setup()
+    s = _setup()
 
     def changed():
         if change == 'clear':
@@ -79,13 +79,13 @@ def test_original_selection_cannot_be_relabelled_after_readiness_callback(change
 
 
 def new_budget():
-    s = setup(admit=False)
+    s = _setup(admit=False)
     return s.budget
 
 
 @pytest.mark.parametrize('change', ['child', 'parent'])
 def test_policy_cannot_stamp_old_output_with_replacement_execution(change):
-    s = setup()
+    s = _setup()
 
     def policy(*args, **kwargs):
         if change == 'child':
@@ -101,7 +101,7 @@ def test_policy_cannot_stamp_old_output_with_replacement_execution(change):
 
 def test_slow_existing_trial_rechecks_budget_inside_actual_submission(tmp_path, monkeypatch):
     from core_features.command.bounded_trial import BoundedTrial, Bounds
-    s = setup(duration=.95)
+    s = _setup(duration=.95)
     trial = BoundedTrial(tmp_path / 'trial.db', trial_id='one', robot_id='synthetic',
                          boot_id='boot', frame_id='odom',
                          bounds=Bounds(.2, .5, 1., .01, .1, .2, .001, 1., 5., 'a' * 64), now=10.)
@@ -121,7 +121,7 @@ def test_slow_existing_trial_rechecks_budget_inside_actual_submission(tmp_path, 
 
 @pytest.mark.parametrize('which', ['mode', 'ledger'])
 def test_final_lock_contention_writes_zero_without_waiting_and_consumes_parent(which):
-    s = setup()
+    s = _setup()
     held, release = Event(), Event()
     owners = []
     lock = s.modes._lock if which == 'mode' else s.ledger._lock
@@ -147,7 +147,7 @@ def test_final_lock_contention_writes_zero_without_waiting_and_consumes_parent(w
 
 
 def test_unknown_delivery_consumes_receipt_and_parent_without_motion_retry():
-    s = setup(); sent = []
+    s = _setup(); sent = []
 
     def unknown(out):
         sent.append(out)
@@ -160,7 +160,7 @@ def test_unknown_delivery_consumes_receipt_and_parent_without_motion_retry():
 
 
 def test_writer_reentry_cannot_emit_an_extra_zero_or_motion():
-    s = setup(); sent = []
+    s = _setup(); sent = []
 
     def writer(out):
         sent.append(out)
@@ -171,7 +171,7 @@ def test_writer_reentry_cannot_emit_an_extra_zero_or_motion():
 
 
 def test_manual_takeover_consumes_parent_without_losing_manual_authority(monkeypatch):
-    s = setup()
+    s = _setup()
     assert s.modes.transition(Mode.MANUAL)[0]
     monkeypatch.setattr('core_features.command.manager.time.monotonic', lambda: s.clock[0])
     assert s.command.teleop(.1, 0.)[0]
@@ -183,7 +183,7 @@ def test_manual_takeover_consumes_parent_without_losing_manual_authority(monkeyp
 
 
 def test_installation_is_once_before_first_cycle_including_legacy_zero():
-    s = setup()
+    s = _setup()
     assert s.command._install_execution_restriction(s.ledger) is None
     modes = ModeMachine()
     command = CommandManager(SourceRegistry(), modes, SafetyManager(SpeedLimits(), BatteryPolicy()))
@@ -194,7 +194,7 @@ def test_installation_is_once_before_first_cycle_including_legacy_zero():
 
 
 def test_installed_ledger_and_budget_reject_mutation_through_old_metadata_references():
-    s = setup()
+    s = _setup()
     assert not s.ledger.advance(s.parent, s.child, replace(s.child, generation=2))
     assert not s.ledger.stop(s.parent, 'bypass')
     assert not s.budget.stop('bypass')
@@ -205,7 +205,7 @@ def test_installed_ledger_and_budget_reject_mutation_through_old_metadata_refere
 
 
 def test_late_fault_for_old_parent_does_not_stop_replacement():
-    s = setup()
+    s = _setup()
     assert s.fence.stop(s.parent, 'replace') and s.fence.retire(s.parent)
     parent = s.fence.admit(replace(s.identity, parent_id=uuid4()), new_budget())
     assert parent is not None
@@ -215,7 +215,7 @@ def test_late_fault_for_old_parent_does_not_stop_replacement():
 
 
 def test_simultaneous_cycle_does_not_issue_a_second_write():
-    s = setup(); entered, release = Event(), Event(); sent = []
+    s = _setup(); entered, release = Event(), Event(); sent = []
 
     def writer(out):
         sent.append(out)
@@ -267,7 +267,7 @@ def test_installation_cannot_overtake_an_inflight_legacy_selection():
 
 
 def test_budget_claim_cannot_overtake_an_old_operation_inflight(monkeypatch):
-    s = setup(admit=False)
+    s = _setup(admit=False)
     entered, release = Event(), Event()
     original = s.budget._clock
 
@@ -292,7 +292,7 @@ def test_budget_claim_cannot_overtake_an_old_operation_inflight(monkeypatch):
 
 
 def test_source_read_window_can_span_a_final_output_check():
-    s = setup()
+    s = _setup()
     s.clock[0] = 10.1
     first = replace(s.pose, stamp_ns=1100000000, source_now_ns=1100000000)
     assert s.fence.observe(s.parent, first, before_mono=10.09, after_mono=10.1)
@@ -307,7 +307,7 @@ def test_source_read_window_can_span_a_final_output_check():
 
 
 def test_budget_and_input_final_checks_use_the_same_latest_sampled_clock(monkeypatch):
-    s = setup(duration=.95)
+    s = _setup(duration=.95)
     budget_times, written = [], []
     remaining = s.budget.remaining
 
@@ -332,7 +332,7 @@ def test_budget_and_input_final_checks_use_the_same_latest_sampled_clock(monkeyp
 
 
 def test_manual_watchdog_is_rechecked_after_readiness_callback(monkeypatch):
-    s = setup()
+    s = _setup()
     monkeypatch.setattr('core_features.command.manager.time.monotonic', lambda: s.clock[0])
     assert s.modes.transition(Mode.MANUAL)[0] and s.command.teleop(.1, 0.)[0]
 
@@ -345,7 +345,7 @@ def test_manual_watchdog_is_rechecked_after_readiness_callback(monkeypatch):
 
 
 def test_candidate_ttl_expires_even_when_budget_pose_is_refreshed():
-    s = setup()
+    s = _setup()
     first = replace(s.pose, stamp_ns=1300000000, source_now_ns=1300000000)
     s.clock[0] = 10.3
     assert s.fence.observe(s.parent, first, before_mono=10.3, after_mono=10.3)
@@ -361,7 +361,7 @@ def test_candidate_ttl_expires_even_when_budget_pose_is_refreshed():
 
 
 def test_docking_mode_requires_its_own_typed_child():
-    s = setup()
+    s = _setup()
     assert s.modes.transition(Mode.IDLE)[0] and s.modes.transition(Mode.DOCKING)[0]
     s.command.set_docking_twist(Twist(.1, -.1), now=10.)
     assert cycle(s) == [Twist()]
@@ -371,7 +371,7 @@ def test_docking_mode_requires_its_own_typed_child():
 
 
 def test_observer_runs_outside_new_mode_ledger_and_budget_locks():
-    s = setup(); errors = []
+    s = _setup(); errors = []
 
     def inspect():
         for lock in (s.modes._lock, s.ledger._lock, s.budget._lock):
@@ -391,7 +391,7 @@ def test_observer_runs_outside_new_mode_ledger_and_budget_locks():
 @pytest.mark.parametrize('fault', ['selection', 'binding', 'hardware', 'devices', 'trial'])
 def test_fault_paths_write_zero_consume_parent_and_release_cycle_lock(monkeypatch, fault):
     from core.bridge import cmd_vel as module
-    s = setup()
+    s = _setup()
 
     def fail(*args, **kwargs):
         raise RuntimeError('fault')
@@ -424,7 +424,7 @@ def test_install_rejects_unaccepted_python_runtime(monkeypatch):
 
 
 def test_budget_lock_contention_stays_requested_until_stop_can_commit():
-    s = setup(); held, release = Event(), Event()
+    s = _setup(); held, release = Event(), Event()
 
     def owner():
         with s.budget._lock:
@@ -447,7 +447,7 @@ def test_budget_lock_contention_stays_requested_until_stop_can_commit():
 
 @pytest.mark.parametrize('mode', [Mode.MANUAL, Mode.EMERGENCY])
 def test_takeover_consumes_parent_even_when_no_writer_tick_observes_it(mode):
-    s = setup()
+    s = _setup()
     assert s.modes.transition(mode)[0]
     assert (s.modes.release_emergency() if mode is Mode.EMERGENCY else
             s.modes.transition(Mode.IDLE))[0]
@@ -459,7 +459,7 @@ def test_takeover_consumes_parent_even_when_no_writer_tick_observes_it(mode):
 
 @pytest.mark.parametrize('fault', ['hardware', 'devices'])
 def test_callback_fault_targets_old_receipt_after_parent_replacement(fault):
-    s = setup(); replacement = []
+    s = _setup(); replacement = []
 
     def replace_then_fail():
         assert s.fence.stop(s.parent, 'replace') and s.fence.retire(s.parent)
@@ -477,7 +477,7 @@ def test_callback_fault_targets_old_receipt_after_parent_replacement(fault):
 
 
 def test_receipt_is_consumed_before_raw_writer_can_attempt_replay():
-    s = setup(); saved = []; sent = []; replays = []
+    s = _setup(); saved = []; sent = []; replays = []
 
     def capture():
         saved.append(s.fence._receipt)
@@ -497,7 +497,7 @@ def test_receipt_is_consumed_before_raw_writer_can_attempt_replay():
 @pytest.mark.parametrize('clone', [copy.copy, replace])
 @pytest.mark.parametrize('operation', ['stop', 'request'])
 def test_copied_parent_handle_cannot_request_stop_for_real_parent(clone, operation):
-    s = setup()
+    s = _setup()
     copied = clone(s.parent)
     assert copied is not s.parent
     if operation == 'stop':
@@ -511,7 +511,7 @@ def test_copied_parent_handle_cannot_request_stop_for_real_parent(clone, operati
 @pytest.mark.parametrize('boundary', ['policy', 'writer'])
 @pytest.mark.parametrize('refresh', ['input', 'generation'])
 def test_clean_refresh_drops_old_output_without_consuming_lifecycle_budget(boundary, refresh):
-    s = setup()
+    s = _setup()
     before = s.ledger.read().remaining
     policy = s.command._safety.evaluate_candidate
 
@@ -547,7 +547,7 @@ def test_clean_refresh_drops_old_output_without_consuming_lifecycle_budget(bound
 
 @pytest.mark.parametrize('fault', ['payload', 'stop', 'ttl', 'budget', 'clock', 'limit', 'replay'])
 def test_refresh_cannot_hide_original_receipt_or_budget_fault(fault):
-    s = setup(duration=.95 if fault == 'budget' else 10.)
+    s = _setup(duration=.95 if fault == 'budget' else 10.)
     if fault == 'ttl':
         s.clock[0] = 10.3
         assert s.fence.observe(s.parent, replace(s.pose, stamp_ns=1300000000,

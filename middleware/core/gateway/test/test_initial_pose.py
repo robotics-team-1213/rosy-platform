@@ -43,7 +43,7 @@ def test_map_callback_preserves_saved_id_and_refreshes_unsaved_id(core_client):
         msg = NS(info=NS(width=2, height=2, resolution=.05,
             origin=NS(position=NS(x=-1., y=-.5), orientation=NS(x=0., y=0., z=0., w=1.))),
             data=list(GRID['data']))
-        assert receive_map(NS(_svc=svc), msg, warn=lambda _: None)
+        assert receive_map(NS(_svc=svc, _map_pose_lease=None), msg, warn=lambda _: None)
         assert svc.state.map_id == ('saved-map' if initial == 'saved-map' else occupancy_map_id(GRID))
 
 

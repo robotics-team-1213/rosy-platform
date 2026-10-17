@@ -231,9 +231,10 @@ roots:
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
     part: middleware
-    d427_target: middleware/core/navigation
+    d427_target: middleware/drive/planning/nav2/native_map
     wave: "4c"
     concern: safety
+    note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
     d427_target: middleware/perception
