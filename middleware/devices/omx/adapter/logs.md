@@ -595,3 +595,9 @@
 - 변경: timeout의 실패 상태와 owner HOLD는 즉시 적용하고 미확정 기록만 전용 executor에서 전달한다. cancel 호출 예외 통지도 같은 경로를 쓰며 예약 실패에 owner 스레드 sink 호출로 대체하지 않는다. 이미 결과를 관측했다면 뒤늦은 미확정 기록을 덧붙이지 않는다. 600행 제한에 맞춰 액션 전달은 ros_trajectory_action.py로 분리하고 기존 import 경로를 유지한다.
 - 증거: RED run39011139939의 native 묶음은 3 failed / 10 passed. 4-worker timeout은 fresh 상태에서도 last_terminal_decision 게시가 지연됐다. 추가한 1-worker MTE는 freshness·admission도 실패했으며 원인을 확정하지 않았다. Jazzy의 권고에 따라 직렬 회귀는 SingleThreadedExecutor로 구성하고 기존 4-worker MTE와 0.5s 기준을 보존한다. MTE1 해결을 주장하지 않는다.
 - gate 변화: 없음. 늦은 SUCCEEDED 뒤에도 owner HOLD·새 명령 거절과 순차 이벤트 전달을 검증한다. 최종 SHA 독립 검토와 GitHub CI는 PR #83에 남기며 장치 정지·복구 수용을 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
+
+- 변경: 실제 handle 메서드를 추출하는 policy event-order 시험이 새 소스 파일을 읽도록 고쳤다. native feedback 회귀에는 제한된 poll·intake·cancel 기록과 timeout 중 thread stack·설치된 MTE 구현을 실패 때만 출력하는 진단을 추가했다.
+- 증거: run39012627359에서 host 3 failed / 1546 passed / 17 skipped, native 2 failed / 13 passed, Fleet native 2 passed. host 실패는 이동 전 AST 경로였다. native에서는 기존 cancel 관측과 추가 4-worker timeout freshness 실패를 관찰했으며 원인은 아직 확정하지 않았다.
+- gate 변화: 없음. 제품 코드·0.5s 기준·시험 포함 범위는 그대로 두고 다음 GitHub 실행에서 실제 대기 위치를 확인한다. GREEN·staging·장치 수용을 주장하지 않는다.

@@ -20,6 +20,7 @@ from omx_adapter.command_owner import ArmCommandConfig, TrajectoryCommand  # noq
 from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
 from ros_feedback_peer import external_feedback_vendor, external_timeout_vendor  # noqa: E402
+from ros_feedback_trace import OwnerProgressTrace  # noqa: E402
 
 
 @pytest.fixture
@@ -404,6 +405,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         return decision
 
     runtime.owner.poll = observed_poll
+    trace = OwnerProgressTrace(runtime)
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()
@@ -440,6 +442,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         )
         assert phase_port.submit(command, on_goal_event=slow_sink).dispatched is True
         assert sink_entered.wait(3.0), "the server never sent feedback"
+        trace.arm()
         initial = runtime.owner._joint_state
         owner_samples = []
         blocked_until = sink_times[0] + 3 * config.max_joint_state_age_s
@@ -492,7 +495,11 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
             assert [event.kind for event in delivered_events].count("TERMINAL_RESULT") == 1
             assert [event.sequence for event in delivered_events] == list(range(1, len(delivered_events) + 1))
         assert runtime.owner.state == ("hold" if timeout_while_blocked else "ready")
+    except Exception:
+        trace.dump()
+        raise
     finally:
+        trace.close()
         release_sink.set()
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
