@@ -519,3 +519,140 @@ stop 함수만의17.35ms와 전체 인계를 구분한다. 설정300ms나 all-OF
 조정을 요청했다. 그 사실 확인 전 토크를 켜지 않으며 실제 시연·IL eligible 데이터는
 계속0회다. 첫 실제 데이터셋 확보를 완료 조건으로 유지한다.
 [시간 제한·실제 결과·기구 대조·미완료 범위](../validation/omx-watchdog-deadline-2026-10-16/result.md).
+
+
+## 2026-10-16 후속: 카메라 제어 항목과 고해상도 시야 조사
+
+현재 두 V4L2 장치에는 pan/tilt/zoom control이 노출되지 않는다. 지원되는1280×720
+진단 프레임을 한 카메라씩 확보해 손끝 식별을 보완했다. 중복 capture를 막고 원본
+producer를 멈추기 전에 독립 복구 unit을 먼저 등록했다. 두 실제 촬영 뒤 원본 명령·
+환경·640×480 형식·장치별 sole producer와 ROS 소비자의 fresh frame 수신을 확인했다.
+
+영상은 넓어졌으나 집게 양쪽 tip/face와 매트·본체 사이 간격은 여전히 확정하지
+못했다. 보이는 중앙에 손/물체가 없다는 사실이나 nominal FK로 clearance를 수용하지
+않는다. 요청한 손끝 위치 설명 또는 시야 조정 확인은 아직 대기 중이다. 이번 회차는
+카메라 진단만 수행했고 robot bus/ON/goal 명령은 없다. 실제 시연·IL eligible 데이터는
+계속0회이며 첫 실제 데이터셋 확보 목표를 유지한다.
+[실제 제어 항목·프레임·복구와 남은 조건](../validation/omx-camera-clearance-2026-10-16/result.md).
+
+
+### 2026-10-16 기존 카메라 저조도 자동화 실행
+
+사용자 요청에 따라 기존 두 camera producer를 유지하며 원본 프레임 품질 측정,
+bounded V4L2 후보 자동 적용, best 설정 선택, 만료되는 readiness와 종료 후 원본 복구를
+연결했다. localhost viewer와 readiness user service를 Fleet PC에 실제 설치·활성화했다.
+두 실제 camera-only 실행과 원본 제어값 복구, 설치 후 fresh·sole producer를 확인했다.
+구형 밝기-only 판단과 uniform noise의 false pass를 회귀로 고치고 policy v2로 분리했다.
+
+자동 조정 후에도 현재 두 영상은 관측 불충분이다. photometric 조건은 물체·파지·jaw
+clearance 판독이나 motion admission이 아니다. source/원격 시험/카메라 제어/장치 구동의
+증거를 구분하며 실제 시연과 IL eligible 데이터는0회다. 실제 수집·학습의 완료 기준은 유지한다.
+[실행·설치·제한](../validation/omx-lowlight-automation-2026-10-16/result.md).
+
+
+## 2026-10-17 후속: 환경 조건을 선행 계약으로 다루는 구조
+
+사용자는 어두울 때의 보정만이 아니라 밝음·어둠 등 환경을 미리 고려하는 수집/학습 구조를
+요구했다. 지원할 환경 범위·관측 출처·시각·판정 정책·복구 한계·실제 수용 증거를 먼저 정한다.
+알 수 없는 조건을 정상으로 채우지 않으며, RGB 지표를 실제 lux나 물체 성공으로 표시하지 않는다.
+
+환경 관측, 허용 범위 판단, 제한된 복구, 기존 owner admission, 원본/환경 이력,
+에피소드 검토·분할·환경별 평가를 구분한다. 새 환경에 대응할 때 수집기마다 예외를 붙이지 않고
+해당 조건의 관측·정책·복구·수용 시험을 추가한다. 지원 환경과 미검증 환경을 함께 보고한다.
+
+| 기존 결정 | 관계 |
+|---|---|
+| D-427 | 기존 deploy/OMX 안에서 설치·카메라 상태 전이를 분리한다. Fleet/World/Decision/CORE 소유권을 옮기지 않는다. |
+| D-429 | 외부 API/DTO 변경 없이 내부 camera policy v3와 profile hash를 고정한다. 구형 판단을 혼합하지 않는다. |
+| D-430 | 환경 screening은 관절/torque 권한을 주지 않는다. 실물 admission과 stop은 기존 owner 책임이며 camera service가 우회하지 않는다. |
+
+이번 구현은 정적 image condition과 지속적인 환경 전이·양방향 노출 복구를 분리했다.
+dark/bright 후보, entry/exit 확인, 적용 완료 뒤 cooldown·host receive settling, epoch별 best,
+재시작에도 유지되는 분당 attempted batch budget과 환경 이력을 추가했다. 실제 카메라에서
+bounded16초 실행·원본 복구·기존 서비스 재시작 뒤 v3 서비스로 이전했고 원본 baseline은 보존했다.
+
+데이터에는 원본/환경 이력 hash·run/profile/rig/calibration·시간 범위와 실패·개입을 묶고,
+cycle/session 독립 분할과 환경별 실제 수량·held-out coverage를 보고해야 한다. 합성 증강을
+실제 환경 수용으로 취급하지 않는다. 현재 episode/학습 manifest binding과 수집 executor의
+환경 저하 stop 결선은 미완료다. 강조도·역광·가림·움직임·온도 등 미검증 조건은 지원으로 선언하지 않는다.
+실제 시연·IL eligible 데이터는0회이며 첫 실제 데이터셋 완료 기준을 유지한다.
+[환경 범위와 연결 계약](../plans/2026-10-17-omx-environment-readiness.md),
+[source·원격 시험·실제 camera-only 실행과 이전](../validation/omx-environment-readiness-2026-10-17/result.md).
+
+
+### 2026-10-17 불규칙 프레임 도착도 환경 조건으로 처리
+
+암실의 실제 source 간격이 불규칙해 같은 fresh frame을 여러 번 조회하는 경우를 확인했다.
+stamp·sequence·원본 품질이 같은 재조회는 WAITING_FRAME으로 분리한다. 확인/epoch/budget을
+보존하되 READY·시각 이력·best·제어를 갱신하지 않으며, 실제 만료/역행/상충 품질은 계속 거부한다.
+source rate를 poll rate나 설정 예시의10Hz로 가정하지 않는다.
+
+RED→GREEN과 실제 Chromium 포함47개 원격 검사 뒤 source를 이전했다. 기존 profile·baseline·
+rolling budget·환경 ledger를 보존했고 실제24 assessment의 역할48개에서 WAITING_FRAME35건,
+fresh false STALE0건을 확인했다. 첫 helper의 warmup receipt 조회 실패와 자동 원복도 보존했다.
+실제 시연·IL eligible 데이터는0회이며 환경 이력의 episode/학습 binding 등 완료 기준을 유지한다.
+[불규칙 도착·수정·원격 검사·실제 이전](../validation/omx-environment-frame-progress-2026-10-17/result.md).
+
+
+### 2026-10-17 환경 원본의 native 검토·학습 연결
+
+native 환경 원본 log와 recorder가 선언한 Fleet host Unix ns episode 창을 데이터 파일 hash·
+run/profile·rig/보정에 묶는다. 검사·분할·학습·별도 재적재에서 원본과 요약을 다시 검증하고
+실패/exclude·미관측 episode·split별 영상 조건 이벤트 수를 보존한다. 기존 기록의 환경은
+unrecorded이며 정상 조명으로 채우지 않는다. 프레임 identity·age·v3 수치가 확인된 새로운
+관측만 알려진 영상 조건으로 집계하며 sparse transition이 연속 readiness를 입증하지 않는다.
+
+관련82개 원격 검사와 Model PC의 실제 LeRobot 합성3episode/12frame·독립 분할·ACT2step·
+별도 model/pre/post 재적재가 통과했다. 실제 닫힌 camera-only 원본37event의 형식/hash도
+검증했으나 episode 창을 만들지 않았다. rig/보정/창은 선언이며 진위·물리 수용 증명이 아니다.
+실제 recorder 시간 창 발행·환경 저하 owner stop·강조도 실물 수용·첫 시연과 실데이터 학습은
+여전히 미완료다. [구현과 검증](../validation/omx-environment-lineage-2026-10-17/result.md).
+
+
+### 2026-10-17 다음 날 실물 수집용 전체 경로 연결
+
+기존 native owner를 사용하는 bounded teacher collector와 독립 supervisor를 연결했다.
+원본 RGB·실제 관절/reference·Fleet host clock·환경 receipt·native 목표 수용/결과를 함께 보존하고,
+환경/owner/수용 만료/시간·디스크 제한 실패 때 HOLD/cancel 뒤 미완료 원본을 남긴다.
+단독 ROS 배치와 canonical Action 자원 lock을 확인하며 controller 시작·토크 ON·자동 복귀는 하지 않는다.
+raw intake는 teacher hash와 native ledger를 다시 대조한다. 사람 검토 전에는 unknown/exclude이며
+독립 session/cycle 분할 뒤 Model PC ACT 학습·새 process 재적재로 연결한다.
+
+최종 소스 b88eee5f18 원격28개, intake/학습/전송 묶음48개 통과(선택적 기본 venv 검사1skip)와
+실제 분리 LeRobot의 합성 raw journal→reader→ACT2step→별도 model/pre/post 재적재를 확인했다.
+두 PC에 같은 소스293개를 배치해 각각 모의6개와 실제 runtime import가 통과했다.
+Fleet 수집 unit과 private 예시는 비활성으로 유지했다. 실제 PC 간 strict SSH/scp-3 시험 파일
+hash도 일치했다. native event는 소프트웨어 사실이며 물리 정지/물체 과제 성공 증명이 아니다.
+
+실제 recorder 창·환경 중단·offline 학습 연결의 소프트웨어 구현을 추가한 것이며 실제 시연은0회다.
+내일 실측 제한·집게/시야·작업공간·하중·powered stop을 확인해 acceptance를 채운 뒤 첫 수집을 한다.
+강조도 실물 수용·실데이터 학습·독립 과제 성능과 G4 완료 조건은 유지한다.
+[절차](../plans/2026-10-17-omx-next-day-collection.md) ·
+[고정 증거](../validation/omx-next-day-collection-2026-10-17/result.md).
+
+
+### 2026-10-17 남은 실행 환경·현장 기록 준비
+
+수집 service의 필수 env와 직접 CLI의 ROS setup/domain 절차, 새 session 규칙을 실행 안내에 추가했다.
+실물 식별·지지/정지·시야·범위·정규화·주기·원본·전송·사람 검토·학습을 실제 근거로 채우는
+첫 현장 기록지를 준비했다. private 재개 묶음은 기존 source/host 설정으로 passive 진단과
+비활성 env 준비, 고립 사본의 launcher 거부 검사, 모델 진입점/공간 점검을 수행하도록 작성했다.
+
+이번 SSH는 Fleet/모델 모두 banner exchange에서 실패했고 AI 경유지와 모델 PC는 offline으로
+표시됐다. Tailscale 로컬 backend는 정상이며 Fleet 직접 접속도 완료되지 않았다. 현재 전원/망 원인은
+미확정이다. 준비 묶음은 문법만 검증했으며 원격 설치/실행 성공으로 기록하지 않는다.
+기존 양쪽 배치 성공과 이번 현재 가용성을 구분한다. 실제 시연0회, 내일의 실물 수용 조건은 유지한다.
+[재개 준비·접속 증거](../validation/omx-remaining-preparation-2026-10-17/result.md).
+
+
+### 2026-10-17 추가 준비 재시도 완료와 실제 카메라 연결 부재
+
+후속 재시도에서 AI/Fleet와 모델 PC가 복구돼 양쪽 준비 묶음이 실제 exit0이었다. Fleet 실행 env 설치,
+비활성 고립 사본의 실제 launcher 거부, collection unit inactive와 원본 소스 무결성을 확인했다.
+모델의 prepare/train 진입점·소스 무결성·수신 경로/저장 공간 점검도 통과했다. 네트워크 복구 원인은 미확정이다.
+
+추가 passive 관측은 양쪽 영상0frame, 환경 STALE/INSUFFICIENT였다. 두 camera producer는 실행 중이나
+각 stable by-id 외장 장치가 OS에 없어 재연결을 대기한다. 설치된 producer source가 검증 소스와 같고
+관련 원격7개 통과를 확인했지만 실제 USB 재연결 회복은 미시험이다. 문서 계약 원격142개도 통과했다.
+최초 실패 기록은 보존한다. 실제 시연0회와 내일의 실측·정지/시야/하중 수용 조건은 유지한다.
+[양쪽 실행·실제 센서 부재·검증](../validation/omx-remaining-preparation-2026-10-17/follow-up.md).

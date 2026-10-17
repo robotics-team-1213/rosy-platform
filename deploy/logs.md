@@ -2513,11 +2513,13 @@
 - Change: allow60 seconds only for Git Bash startup on Windows in the Android fake-Java launcher test; Linux remains10 seconds, and all jar/project/build/Kotlin/unit-task assertions remain intact. Retain main independently-reviewed ACT helper, Fleet cell/stop header assertions and local review-tool classification. Production workflows, updater restart limits and robot authority are unchanged.
 - Evidence: preceding hook had3238 passes/259 skips and exactly2 Windows10-second subprocess timeouts. Same environment reproduced1 pass/1 timeout; corrected launcher2 passed, with independent2-pass verification and approval. Final normal hook and exact CI follow.
 - gate 변화: host test reliability repair only; no production acceptance claim.
+
 ## 2026-10-05 · uncommitted · feat(pairing): 서명 payload의 수신 암호화와 TLS 유지보수
 
 - 변경: D-456 CORE 수신 승인에 필요한 hash-locked 암호화 wheel을 서명 release의 읽기 전용 보조 경로에 설치한다. 기존 base Python pins는 유지한다. root 전용 TLS 도구는 검증된 현재 release·유효한 유지보수 claim·정지된 runtime에서만 기존 설정을 보존하며 실행한다.
 - 증거: TLS 도구 Linux 검사 30 PASS·DrvFS 권한 검사 1 SKIP, 최종 hostname 보완 검사 3 PASS. native 패키징 관련 263 PASS·1 SKIP 뒤 읽기 경로 분류와 새 스크립트 실행 비트 누락을 수정하고 실패 두 건을 재검사해 2 PASS. 실 POSIX 소유권·ARM 빌드·장치 TLS 설치는 아직 확인하지 않았다.
 - gate 변화: 이번 변경의 SOURCE/LOCAL 증거만 추가한다. 서명 배포와 실제 LAN 접속은 미완료다.
+
 ## 2026-10-05 · uncommitted · fix(pairing): 실제 자격 검사를 유지하는 source 분류 보완
 
 - 변경: 닫힌 숫자 인자의 코드 호출은 따옴표 없는 참조만 인정한다. Kotlin nullable String 선언의 실제 기본값을 검사하며 camel/snake 슬롯은 정확한 이름만 허용한다. 공개 P256 시험 벡터는 한 경로·필드·정확한 값의 entropy 토큰만 예외로 두고 자격·개인키 검사는 유지한다.
@@ -2598,6 +2600,7 @@
 - gate 변화: 없음
 - 결정: 해당 없음
 - 교훈: 없음
+
 ## 2026-10-07 · uncommitted · fix(release): push 게이트 해제 — D-502 수선 쌍 provenance 등록과 line-follow 핀 갱신
 - 변경: 두 push 게이트 실패를 해제했다. (1) `tools/harness/log_repairs.yaml`에 오늘 `eee9d5bdc`(D-502)가 추가한 저널 블록 쌍이 공개 출처 목록에 미등록이라 high-entropy-token 오탐으로 push를 막았다 — `public_provenance.json` records에 해당 줄 sha256(`e0d8cd9c…`)과 두 값을 기존 네 쌍과 같은 reason 양식으로 등록했다. (2) 동료의 API Ref v1.120 반영에 line-follow 문서 핀이 v1.119으로 남아 `test_api_reference_documents_line_follow_endpoints_and_snapshot`이 실패했다 — 핀을 v1.120으로 올렸다(PRT-006 "같은 변경에서 핀 갱신" 절차의 사후 보강).
 - 증거: `test_no_secrets_in_tracked_files`·`test_secret_public_provenance.py` 전체·`test_line_follow_contract_docs.py` 전체 **18 passed**, `known_failures.py` 0 NEW. provenance JSON 재파싱 확인(records 102, 마지막이 새 레코드).
@@ -2639,14 +2642,17 @@
 - 변경: D-545에 따라 모델 PC 검수 앱에 불변 코드 릴리스, current 링크, DB 외부 경로, 서비스 재시작 후 HTTP 확인과 실패 복구 절차를 추가했다.
 - 증거: 모델 PC Linux 설치기 시험 2 passed; 실제 기존 코드에서 state/를 제외해 studio-d538-20261009 릴리스로 전환; rosy-review-v13.service active, ExecStart는 current 경유, /api/workspace와 /pixels 응답. 실제 브라우저에서 객체 43장 목록과 픽셀 검수·제외 상태를 읽었다. 사람 승인 동작은 실행하지 않았다.
 - gate 변화: 없음. 새 코드의 자동 전송과 검수 승인·학습 반영은 별도 검증이다.
+
 ## 2026-10-09 · uncommitted · feat(face): 개발 모드 로봇은 LCD에 DEV (D-548)
 - 변경: `rosy-face`가 `/etc/rosy/dev-mode`를 보면 얼굴 띠 앞에 `DEV `(띠가 없으면 `DEV MODE`), 상태 카드 줄 앞에 `DEV `.
 - 증거: test/test_rosy_face.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
 ## 2026-10-09 · uncommitted · fix(site): 비밀을 설정 디렉터리 밖으로, Vision은 카메라 파일만 (D-524 보안 검토)
 - 변경: Vision이 `/etc/rosy/site` 전체 대신 `site-cameras.yaml`만 마운트. 기본 비밀 경로 `/etc/rosy/site-secrets`(.env.example, mdns-bridge·model-watch 유닛, preflight, functional setup, rosy_ml). `migrate-site-secrets.sh`. D-524 결정 11, README.
 - 증거: test_host_control.py::test_vision_cannot_reach_fleet_secrets (원격 pytest 결과는 커밋 메시지·보고).
 - gate 변화: SOURCE. 실제 사이트 PC는 건드리지 않았다. 현장 이전(스크립트 실행·재시작)은 열림.
+
 ## 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
 - 변경: `prepare-rosy-sd.ps1` 자동 번호가 1–61 무작위 대신 레지스트리의 40–49 가장 작은 빈 번호를 고르고, 다 차면 거절한다. 운영자가 적는 번호는 1–61 검사 그대로. 예시 `site-cameras.yaml.example`·`robots.yaml.example`은 `rosy_40`/마커 40.
 - 증거: test/test_sd_writer_contract.py(가장 작은 빈 번호 42, 40–49 가득 → 거절). 레지스트리는 PC별이라 사이트 전체 중복은 여전히 Fleet `robot_id_conflict`가 막는다.
@@ -2838,6 +2844,7 @@
 - 변경: public target의 std_srvs/realtime_tools dependency export 누락을 최소 vendor patch로 수정하고 compile 전에 적용한다.
 - 증거: 실제 consumer configure 실패 재현 → 전체 plugin 재빌드 → 보완 없는 consumer 연결 성공. 실제 ROS 객체의 잘못된 고정 포트 초기화 ERROR·정상 소멸, exit 0.
 - gate 변화: 없음. 실물 포트·activation·goal 미사용. 실제 시연 0회이며 SIM owner를 실물 조립으로 간주하지 않는다. D-770; docs/validation/omx-native-init-negative-2026-10-16/result.md.
+
 ## 2026-10-16 · uncommitted · fix(omx): 자동 reboot 제거와 실제 native read
 
 - 변경: vendor InitDxlComm fault의 자동 reboot를 제거하고 임시 probe의 실제 device identity·독점 open을 검사한다. loader 교착을 실제 constructor/worker 회귀로 재현하고 SYS_openat으로 수정했다.
@@ -2906,6 +2913,40 @@
 - 변경: private powered prototype의 age-only 제한 결함을 실행 전에 확인하고 별도 all-OFF native manager watchdog fixture를 검증했다. 최신 영상과 raw snapshot의 nominal FK도 대조했다.
 - 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
 - gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
+
+## 2026-10-16 · uncommitted · docs(omx): 고해상도 시야와 원본 preview 복구 검증
+
+- 변경: 실제 camera controls/formats를 조사하고 두1280×720 진단 프레임으로 손끝 시야를 보완했다. 독립 복구를 먼저 등록한 단일 capture 절차를 사용했다.
+- 증거: 두 역할 실제 촬영·원본 unit 명령/환경 유지·MJPEG640×480 복구·장치별 sole producer·소비자 fresh frame. 실제 장치에 PTZ control 없음. private 복구 순서 검사 RED→GREEN.
+- gate 변화: 고해상도에서도 jaw clearance는 미확정이며 위치/시야 확인 응답 대기. robot bus/ON/goal 실행 없음, 실제 시연0회. D-770; docs/validation/omx-camera-clearance-2026-10-16/result.md.
+
+
+## 2026-10-16 · uncommitted · feat(omx): 기존 카메라 저조도 자동 조정과 품질 관측
+
+- 변경: 기존 producer 위에 원본 프레임 photometric 검사·bounded 제어 후보·best 선택·웹 표시·독립 복구를 연결하고 Fleet user service로 설치했다.
+- 증거: RED→GREEN 및6596cf3f6 관련 원격88개 통과(실제 Chromium 포함), 실제 두 camera-only 실행·원본값 readback 복구·enabled/active·fresh·sole producer. 독립 source 리뷰 완료.
+- gate 변화: 자동 카메라 관측 경로 설치. 현재 암실은 INSUFFICIENT이며 motion admission·집게 clearance·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-lowlight-automation-2026-10-16/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
+
+- 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
+- 증거: 초기 환경 회귀 RED→GREEN, 느린 적용 cooldown RED→GREEN, d9d06a48d 관련103개(실제 Chromium 포함)·62f94db6b 통합 묶음34개 원격 통과. 실제 bounded16초·assessment60개·원본 복구·기존 서비스 재시작·v3 설치/활성화·sole producer 확인, 독립 리뷰.
+- gate 변화: 지속적인 카메라 환경 관측/복구 설치. 암실 pair readiness0회이며 강조도/역광 실물 수용·실제 episode 환경 binding·수집 stop 결선·시연/실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-readiness-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
+
+- 변경: 실제 암실의 불규칙 source 간격을 확인하고 같은 원본의 fresh 재조회를 WAITING_FRAME으로 분리했다. 확인/epoch/budget 보존과 READY/제어 갱신 거부를 함께 유지했다.
+- 증거: 반복 frame·확인 보존 RED2건과 상충 품질 RED→GREEN, c6c9366d8 관련47개 원격 통과(실제 Chromium 포함). 실제24 assessment/역할48개에서 WAITING_FRAME35·fresh false STALE0, 동일 profile·baseline·budget·ledger 보존. 첫 helper 실패/자동 원복도 보존.
+- gate 변화: 불규칙 프레임 관측 경로 보완. 강조도 현장 수용·episode 환경 binding·수집 stop·실데이터 학습은 미완료, 시연0회. docs/validation/omx-environment-frame-progress-2026-10-17/result.md.
+
+
+## 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+
+- 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
+- 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
+- gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
 
 ## 2026-10-17 · uncommitted · fix: OMX 시뮬레이션 owner 종료 자원 정리
 

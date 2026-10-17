@@ -92,3 +92,52 @@ def test_trainer_revalidates_capture_provenance_even_with_unchanged_split_bytes(
     (root/'split-receipt.json').write_text(json.dumps(receipt))
     with pytest.raises(ValueError, match='capture'):
         module.validate_split(root)
+
+
+def environment_receipt(module, receipt):
+    import native_environment as env
+    events, windows = [], []
+    for i in range(3):
+        stamp = 100+i*100
+        events.append(dict(policy='omx-photometric-v3', run_id=f'run-{i}', profile_sha256='d'*64,
+                           recorded_ns=stamp, physical_acceptance=False, motion_admitted=False,
+                           photometric_ready=False, observations={}, environment={r: dict(
+                               condition=None, state='STALE', environment_epoch=0, control_generation=0)
+                               for r in ('top', 'front')}))
+        windows.append(dict(episode_index=i, start_ns=stamp, end_ns=stamp+50,
+                            run_id=f'run-{i}', profile_sha256='d'*64))
+    source = receipt['source']
+    source['environment_evidence'] = env.seal_environment(
+        ''.join(json.dumps(e)+'\n' for e in events).encode(), windows,
+        source['files'], rig_revision='rig', calibration_revision='cal')
+    source['environment_summary'] = env.bind_environment(
+        source['episodes'], source['files'], rig_revision='rig', calibration_revision='cal',
+        evidence=source['environment_evidence'])
+    receipt['environment_coverage'] = env.split_coverage(source['environment_summary'], receipt['decisions'])
+
+
+@pytest.mark.parametrize('fault', [None, 'bytes', 'summary', 'coverage', 'missing_evidence', 'missing_summary'])
+def test_trainer_checks_original_environment_even_when_split_bytes_are_unchanged(module, splits, fault):
+    root, receipt = splits
+    environment_receipt(module, receipt)
+    if fault == 'bytes': receipt['source']['environment_evidence']['log_utf8'] += ' '
+    if fault == 'summary': receipt['source']['environment_summary']['status'] = 'normal'
+    if fault == 'coverage': receipt['environment_coverage']['train']['unobserved_episodes'] = 99
+    if fault == 'missing_evidence': del receipt['source']['environment_evidence']
+    if fault == 'missing_summary': del receipt['source']['environment_summary']
+    (root/'split-receipt.json').write_text(json.dumps(receipt))
+    if fault is None:
+        assert module.validate_split(root) == receipt
+    else:
+        with pytest.raises(ValueError, match='environment'):
+            module.validate_split(root)
+
+
+def test_verify_entrypoint_refuses_tampered_environment_before_loading_model(module, splits, tmp_path):
+    root, receipt = splits
+    environment_receipt(module, receipt)
+    receipt['source']['environment_evidence']['log_sha256'] = 'f'*64
+    (root/'split-receipt.json').write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match='environment'):
+        module._evaluate(tmp_path/'no-model', root, 'local/source', tmp_path/'evaluation.json')
+    assert not (tmp_path/'evaluation.json').exists()

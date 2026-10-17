@@ -28,6 +28,11 @@ def validate_split(root):
         if bound['episodes'] != source['episodes']:
             raise ValueError('capture episode grouping differs from declared provenance')
         selected = native.reviewed_splits(receipt['source'], receipt['decisions'])
+        coverage = native.split_coverage(native.validate_environment(source), receipt['decisions'])
+        if ('environment_summary' in source or 'environment_coverage' in receipt
+                or source.get('environment_evidence') is not None):
+            if receipt.get('environment_coverage') != coverage:
+                raise ValueError('environment coverage differs from original episode evidence')
         if selected != receipt['splits'] or set(receipt['outputs']) != set(selected):
             raise ValueError('split receipt selection differs from reviewed episodes')
         for name in selected:
@@ -64,6 +69,9 @@ def _invoke(command, output, environment, timeout):
 
 def _evaluate(model, splits, repo_id, output):
     # This function runs only in a fresh child process after the official trainer exited.
+    receipt = validate_split(splits)
+    if receipt['source']['repo_id'] != repo_id:
+        raise ValueError('evaluation repo identity differs from reviewed source')
     import torch
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
@@ -94,7 +102,9 @@ def _evaluate(model, splits, repo_id, output):
     native.write_json(output, dict(samples=samples, split='eval', model_reloaded_in_new_process=True,
                                    mae_per_joint=(error / samples).tolist(),
                                    train_mean_baseline_mae_per_joint=(baseline / samples).tolist(),
-                                   joint_names=native.JOINTS, physical_task_success=None))
+                                   joint_names=native.JOINTS, physical_task_success=None,
+                                   environment_coverage=native.split_coverage(
+                                       native.validate_environment(receipt['source']), receipt['decisions'])))
 
 
 def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=5400):
@@ -141,6 +151,9 @@ def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=
                       split_receipt_sha256=receipt_hash, split_files=receipt['outputs'], artifact_files=before,
                       evaluation=json.loads((output / 'evaluation.json').read_text()),
                       body_units=receipt['source']['body_units'], gripper_units='normalized_0_100',
+                      environment_summary=native.validate_environment(receipt['source']),
+                      environment_coverage=native.split_coverage(
+                          native.validate_environment(receipt['source']), receipt['decisions']),
                       device_execution=False, promotion=False)
         native.write_json(output / 'cycle-receipt.json', result)
         return result
