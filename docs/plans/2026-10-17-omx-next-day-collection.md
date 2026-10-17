@@ -152,3 +152,19 @@ python tools/remote/omx_collection_transfer.py --session <session>
 원본·사람 검토·분할·학습·processor와 모델 재적재를 각각 해시로 연결한다. 기본 첫 smoke는2step으로
 줄여 연결을 확인할 수 있으나 성능 수용은 아니다. 학습된 정책의 실물 실행은 별도 승인 모델/owner
 수용과 독립 과제 평가를 거친다. 오늘의 소프트웨어 연결과 내일의 첫 수집으로 G4를 완료하지 않는다.
+
+## World 모델 데이터·학습·평가 (D-782)
+
+BC 학습과 별도로, 실패·중단 시도를 포함한 World 모델 경로를 같은 원본에서 돌릴 수 있다. 모델 PC의 기존 분리 환경을 쓴다.
+session마다 split을 하나씩 지정하고, 같은 session을 나누지 않는다. 라벨 파일은 선택이다.
+
+```text
+<python> learning/curation/omx/world_model_dataset.py <raw-session-1> <raw-session-2> <raw-session-3> --out <새-wm-dataset> --horizon 4 --split <id1>=train --split <id2>=eval --split <id3>=test [--labels <labels.json>]
+<python> learning/training/world_model/m1_job.py <wm-dataset> --out <새-wm-run>
+<python> learning/evaluation/world_model/m1_eval.py <wm-dataset> --artifact <wm-run>/artifact.json --out <새-wm-eval>
+<python> operations/prediction/world_model/shadow.py <wm-dataset> --artifact <wm-run>/artifact.json --digest <artifact digest> --out <새-replay>
+```
+
+라벨 파일 형식은 `{"labels": [{"session_id", "cycle_id", "outcome", "object_result", "reviewer", "reason"}]}`이다.
+첫 1~5회 데이터로는 수용 기준(두 기준선 모두 승리)을 기대하지 않는다. 파이프라인이 실물 원본을 받는지 확인하는 단계다.
+검사기 판정은 기록만 하며 owner·Fleet admission에 연결되어 있지 않다.

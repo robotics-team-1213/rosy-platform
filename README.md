@@ -8,7 +8,7 @@
 > 어떤 로봇이든 웹·표준 API로 제어하고, 현장 Fleet이 여러 대에 미션을 나눠 주는 로봇 플랫폼.
 > 첫 하드웨어는 **Pinky Pro** (Raspberry Pi 5). [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다.
 
-ROSY Platform은 관측한 세계 상태, 현장 작업 조정, 장치별 안전한 실행, 오프라인 학습·평가를 연결한다. 현재 World(`operations/world`, 휠 `rosy-world`)는 받은 관측·운영자 pin·odom으로 지금 자세를 만든다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽고, 서비스·원장·admission은 Fleet에 남긴다([D-752](docs/adr/D-752-canonical-world-map-pose-consumers.md)). 행동 후보로 미래 상태를 예측하는 World model은 후속 계획이다. 폴더 배치는 [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md), CORE·Drive의 주행 권한은 [CORE·Drive 구조](docs/reference/core-drive-responsibilities.md)를 본다.
+ROSY Platform은 관측한 세계 상태, 현장 작업 조정, 장치별 안전한 실행, 오프라인 학습·평가를 연결한다. 현재 World(`operations/world`, 휠 `rosy-world`)는 받은 관측·운영자 pin·odom으로 지금 자세를 만든다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽고, 서비스·원장·admission은 Fleet에 남긴다([D-752](docs/adr/D-752-canonical-world-map-pose-consumers.md)). 행동 후보로 미래 상태를 예측하는 World model은 [D-782](docs/adr/D-782-omx-action-conditioned-world-model.md)의 OMX 실행 전 검사기로 기반(데이터·학습·평가·그림자)만 있고 실행 경로에는 연결하지 않았다. 폴더 배치는 [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md), CORE·Drive의 주행 권한은 [CORE·Drive 구조](docs/reference/core-drive-responsibilities.md)를 본다.
 
 ## 한눈에 보기
 
