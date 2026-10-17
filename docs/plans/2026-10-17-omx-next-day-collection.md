@@ -49,7 +49,7 @@ stop 요청을 먼저 한다. 취소 응답·terminal·HOLD는 물리 정지 또
 `source.json`에 검증 결과와 파일 hash가 있다. 양쪽6개 모의 시나리오가 통과했고 모터 목표는0개다.
 Fleet의 실제 ROS import와 모델 PC의 LeRobot0.4.4 import도 통과했다.
 Fleet private 예시는 `~/.config/rosy/omx-collection/`에 있으며 `source-root`가 배치 경로를 가리킨다.
-수집 systemd unit은 설치 후 inactive로 확인했다. 실행 env와 실측 수용 입력은 아직 채우지 않았다.
+수집 systemd unit은 설치 후 inactive로 확인했다. 후속 점검에서 실행 env도 설치했으며 실측 수용 입력은 미작성이다.
 모델 PC 진입점은 `~/rosy-test/omx-collection-b88eee5f18/model-il`이다.
 strict SSH/scp-3로 양쪽 PC 사이52byte 시험 파일의 hash 일치도 확인했다. 실제 collection 전송은
 첫 수집 뒤에 검증한다. [고정 검증 기록](../validation/omx-next-day-collection-2026-10-17/result.md).
@@ -120,9 +120,13 @@ ROS graph만 관측한다. 임의의 관절/Action 배치를 추정하거나 con
 모델 단계는 기존 `model-il`의 prepare/train 도움말, 원본 소스 hash, 저장 공간과 수신 경로를 점검한다.
 두 단계 모두 과제 목표·실측 범위·acceptance를 채우지 않는다. 연결 실패 시 attempt별 원본 로그를 보존한다.
 
-2026-10-17 추가 시도는 SSH banner 시간 초과로 원격 실행 전 실패했다. 위 묶음은 Bash/Python 문법만
-확인했으며 원격 설치/동작 검증은 보류다. 이전 양쪽 배치 성공 기록과 구분한다.
-[추가 준비·접속 진단](../validation/omx-remaining-preparation-2026-10-17/result.md).
+2026-10-17 최초 추가 시도는 SSH banner 시간 초과로 원격 실행 전 실패했다.
+후속 재시도에서는 AI/Fleet 접속이 복구돼 Fleet env 설치·고립 launcher 거부·inactive 확인까지 통과했다.
+두 카메라 producer는 실행 중이나 설정한 외장 USB 장치가 없어 새 frame은0개였다.
+모델 PC도 이후 재접속돼 prepare/train 진입점·소스 무결성·저장 공간 점검을 마쳤다.
+네트워크 복구 원인은 미확정이며 원격 설정을 바꾸지는 않았다. 최초 실패와 후속 성공을 구분한다.
+[최초 접속 진단](../validation/omx-remaining-preparation-2026-10-17/result.md) ·
+[양쪽 준비 완료·카메라 연결 부재·모델 재시도](../validation/omx-remaining-preparation-2026-10-17/follow-up.md).
 
 service env에 필요한 필드는 다음과 같다. 실제 파일은 remote 준비 후 값을 확인한다.
 systemd EnvironmentFile은 `$HOME`을 확장하지 않으므로 각 경로에 실제 절대 경로를 사용한다.
