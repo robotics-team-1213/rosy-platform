@@ -37,6 +37,8 @@ ROS-free repository architecture, installation, deployment, motor/network and cr
 | `test_release_storage.py` | Release store / retention |
 | `test_release_updater.py` | Activate/rollback updater |
 | `robot_contracts.py` | Shared ROOT/DEPLOY/compose helpers |
+| `g1_layout.py`, `g1_sim_harness.py` | D-778/D-781 G1 SIM support: IK reach audit, capsule swept separation, schedule model; Fleet multi-arm dispatcher to two real OMX cell owners and the coordinator in one process (bridges listed in its header). `python test/g1_layout.py` prints the layout report |
+| `test_platform_g1_layout.py`, `test_platform_g1_sim.py`, `test_platform_g1_timing.py` | G1 SIM layout, end-to-end/fault and timing tests (`ROSY_G1_EVIDENCE_DIR` writes run evidence); record in `docs/validation/bimanual-g1-sim-2026-10-17` |
 | `known_failures.txt` | Pre-existing failures on main (node id + reason). Delete a line in the commit that fixes it; never add one to hide your own failure |
 | `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure. A failure listed in `flaky_quarantine.txt` whose one rerun (appended after `RERUN_MARKER` by `tools/remote/remote_pytest.py`) shows `PASSED` prints `FLAKY`, not `NEW` |
 | `flaky_quarantine.txt` | D-762 stage 1: tests seen flaky on an unchanged sha (node id + `  # ` reason, evidence, "remove when ...", date, owner). Listed failures rerun once in CI and on the lab PCs; fails twice = NEW; unlisted never rerun. Add only with flake evidence, never to hide your own failure; browser follow-ups (not rerun anywhere) are comments in the file |

@@ -15,3 +15,11 @@ existing device-side planner/runtime types in the ROS workspace; CI builds and
 installs this integration wheel alongside the manipulation Skill wheel before
 consumer tests. The integration does not establish independent destination
 pose evidence or ROS-SIM acceptance by itself.
+
+`mixed_reach.py` answers the mixed palletizing planner's injected reach question
+(`mixed_cell.Reach`, D-781 §3 rule 4) with the same analytic top-down IK and a
+planning profile's limits, per arm base (`IkReach`, `ik_reach_from_profile`). It
+checks single poses only (no segments, timing or collisions) and uses the
+simulation profile's nominal limits. The palletizing process does not import it;
+a composition passes it in. G1 SIM use and findings:
+`docs/validation/bimanual-g1-sim-2026-10-17/README.md`.
