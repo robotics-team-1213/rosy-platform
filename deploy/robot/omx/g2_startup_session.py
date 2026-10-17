@@ -29,21 +29,24 @@ def serve_startup(owner, run, *, target, expected_actor, fleet_fence_current,
     run = Path(run)
     hold_startup(owner)
     gate = StartupCommandGate(owner, target=target, expected_actor=expected_actor,
-        fleet_fence_current=fleet_fence_current,
+        fleet_fence_current=lambda epoch, generation: (
+            owner.uds_server.is_serving and fleet_fence_current(epoch, generation)),
         record=lambda name, value: write_json(run / (name + ".json"), value))
     server = threading.Thread(target=owner.uds_server.serve_forever, daemon=True)
     server.start()
     deadline = wall_clock() + timeout_s
 
     def wait_until(condition):
-        while not condition():
+        while True:
             if not server.is_alive() or wall_clock() >= deadline:
                 raise RuntimeError("explicit SIM startup authorization/readiness timed out")
+            if condition():
+                return
             sleep(.05)
 
     try:
         # Do not publish the challenge until the StopLocal server is listening.
-        wait_until(lambda: owner.uds_server.socket_path.exists())
+        wait_until(lambda: owner.uds_server.is_serving)
         publish_json(run / "startup-awaiting-authorization.json", gate.challenge)
         request = run / "startup-request.json"
         wait_until(request.exists)

@@ -30,10 +30,12 @@ class StartupCommandGate:
 
         def cancel_active(uid):
             # A failed startup cancel must never skip the existing Fleet cancel fanout.
+            outcome = None
             try:
-                self.cancel()
+                outcome = self._cancel_exact()
             finally:
                 results = previous(uid) if previous is not None else []
+            self._record_cancel(outcome)
             return results
 
         owner.action_api.stop_api.cancel_active = cancel_active
@@ -101,17 +103,22 @@ class StartupCommandGate:
         """Seat release and runner enable each retain the same final stop/generation fence."""
         return self._fenced(operation)
 
-    def cancel(self):
+    def _cancel_exact(self):
         with self._lock:
             self._stopped = True
             if self._command_id is None or self._cancel_sent:
                 return
             command_id, self._cancel_sent = self._command_id, True
-        # A recording failure cannot prevent the cancellation attempt.
-        try:
-            self.record("startup-cancel-intent", {"command_id": command_id, "owner": "pilot_sim"})
-        finally:
-            result = self.owner.runtime.cancel(command_id=command_id, owner="pilot_sim")
-        self.record("startup-cancel-result", {"command_id": command_id,
+        # The submit identity and stop latch are already durable. No diagnostic I/O
+        # may delay this request or the existing Fleet cancellation fanout.
+        result = self.owner.runtime.cancel(command_id=command_id, owner="pilot_sim")
+        return {"command_id": command_id,
             "reason": result.reason, "cancel_outcome": result.cancel_outcome,
-            "terminal_or_standstill_proven": False})
+            "terminal_or_standstill_proven": False}
+
+    def _record_cancel(self, outcome):
+        if outcome is not None:
+            self.record("startup-cancel-result", outcome)
+
+    def cancel(self):
+        self._record_cancel(self._cancel_exact())
