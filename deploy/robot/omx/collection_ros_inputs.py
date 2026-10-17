@@ -103,6 +103,7 @@ class RosInputs:
             intrinsics = {r: dict(self.intrinsics[r]) for r in sorted(configured)}
         return dict(time_ns=wall, environment=environment, images=images, camera_info=intrinsics,
                     observation_state=normalize(joints['values'], self.profile),
+                    joint_positions=list(joints['values']),
                     action=normalize(reference['values'], self.profile),
                     joint_source_stamp=joints['stamp'], reference_source_stamp=reference['stamp'],
                     state_age_s=now-joints['received'], reference_age_s=now-reference['received'])

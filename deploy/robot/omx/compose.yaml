@@ -7,7 +7,11 @@ services:
     environment:
       ROS_DOMAIN_ID: "${OMX_ROS_DOMAIN_ID:-30}"
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
-      ROS_AUTOMATIC_DISCOVERY_RANGE: "${OMX_ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}"
+      # No-cross-host DDS: the graph stays on this host; reuse Pinky's lo-only Cyclone profile.
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+      CYCLONEDDS_URI: file:///etc/rosy/cyclonedds.xml
+    volumes:
+      - "../../../middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml:/etc/rosy/cyclonedds.xml:ro"
     stdin_open: true
     tty: true
     devices:
