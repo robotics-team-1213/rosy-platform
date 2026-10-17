@@ -37,7 +37,9 @@ def validate_profile(profile, *, mode, acceptance=None, teacher=None):
         isinstance(pair, list) and len(pair) == 2 and all(number(v) for v in pair) and pair[0] < pair[1]
         for pair in ranges), 'measured native-radian normalization endpoints required')
     reach = profile.get('reach_tolerance_rad')
-    require(isinstance(reach, list) and len(reach) == 6 and all(number(v) and 0 < v <= .2 for v in reach),
+    # Bounded by 0.2 rad and a tenth of each joint's measured span, so a narrow gripper range stays meaningful.
+    require(isinstance(reach, list) and len(reach) == 6 and all(
+        number(v) and 0 < v <= min(.2, (high-low)/10) for v, (low, high) in zip(reach, ranges)),
             'measured per-joint reach tolerance required; Action success is not motion (D-793)')
     shapes = profile.get('camera_shapes')
     require(isinstance(shapes, dict) and set(shapes) == {'top', 'front'} and all(

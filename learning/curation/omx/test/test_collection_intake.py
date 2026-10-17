@@ -39,6 +39,7 @@ def raw_session(root, *, session='session-1', start=100, complete=True):
     (root / 'environment.jsonl').write_text(json.dumps(event)+'\n', encoding='utf-8')
     teacher = dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.1)])
     (root/'teacher.json').write_text(json.dumps(teacher)+'\n')
+    (root/'profile.json').write_text(json.dumps(dict(reach_tolerance_rad=[.01]*6))+'\n')
     cycle = session+'-cycle'
     command = cycle+'-0'
     events = [dict(kind='INTENT', command_id=command, cycle_id=cycle, step=teacher['steps'][0], time_ns=start),
@@ -165,7 +166,7 @@ def test_single_frame_complete_attempt_is_not_training_input(module, tmp_path):
 
 @pytest.mark.parametrize('fault', ['flipped_complete', 'teacher', 'submission', 'native_goal', 'native_result',
                                   'wrong_goal', 'sequence', 'clock', 'outer_terminal', 'stop', 'error',
-                                  'extra_command', 'not_reached', 'no_reach'])
+                                  'extra_command', 'not_reached', 'no_reach', 'loosened_tolerance'])
 def test_manifest_completion_cannot_upgrade_unverified_native_attempt(module, tmp_path, fault):
     root = tmp_path/'raw'
     manifest = raw_session(root)
@@ -184,6 +185,7 @@ def test_manifest_completion_cannot_upgrade_unverified_native_attempt(module, tm
     if fault == 'outer_terminal': events[4]['result']['source'] = 'synthetic-unverified'
     if fault == 'not_reached': events[5]['errors_rad'][5] = .02
     if fault == 'no_reach': events.pop(5)
+    if fault == 'loosened_tolerance': events[5].update(errors_rad=[.1]*6, tolerance_rad=[.2]*6)
     if fault == 'stop': manifest['stop']['terminal_observed'] = False
     if fault == 'error': manifest['error'] = 'session fault'
     if fault == 'extra_command':

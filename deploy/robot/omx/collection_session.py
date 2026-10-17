@@ -68,9 +68,15 @@ def validate_observation(sample, profile, now_ns):
     require(max(stamps)-min(stamps) <= profile.get('max_skew_s', .2), 'sensor/reference skew exceeds envelope')
 
 
-def require_reached(backend, step, profile):
+def require_provable_motion(start, step, profile):
+    """A step whose every joint stays within tolerance of its start could 'reach' without moving (D-793)."""
+    require(any(abs(t-s) > tol for s, t, tol in zip(start, step['positions'], profile['reach_tolerance_rad'])),
+            'teacher step moves no joint beyond its reach tolerance; motion would be unprovable')
+
+
+def require_reached(backend, step, profile, session_end):
     """A successful terminal is not motion: the measured joints must settle at the step target (D-793)."""
-    deadline = time.monotonic()+profile['max_sample_gap_s']
+    deadline = min(time.monotonic()+profile['max_sample_gap_s'], session_end)
     while True:
         sample = backend.observe()
         validate_observation(sample, profile, time.time_ns())
@@ -119,7 +125,10 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
             for ordinal, step in enumerate(teacher['steps']):
                 command_id = f'{current["cycle_id"]}-{ordinal}'
                 require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
-                validate_observation(backend.observe(), profile, time.time_ns())
+                before = backend.observe()
+                validate_observation(before, profile, time.time_ns())
+                start = before['joint_positions']
+                require_provable_motion(start, step, profile)
                 append(store.root/'events.jsonl', dict(kind='INTENT', step=step, command_id=command_id,
                                                        time_ns=time.time_ns()))
                 require(time.monotonic()-began < profile['max_session_s'], 'session deadline before dispatch')
@@ -161,8 +170,9 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                         append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal,
                                                                command_id=command_id, time_ns=time.time_ns()))
                     time.sleep(.01)
-                errors = require_reached(backend, step, profile)
+                errors = require_reached(backend, step, profile, began+profile['max_session_s'])
                 append(store.root/'events.jsonl', dict(kind='REACHED', command_id=command_id, errors_rad=errors,
+                                                       start_rad=list(start),
                                                        tolerance_rad=list(profile['reach_tolerance_rad']),
                                                        time_ns=time.time_ns()))
             require(current['frames'] >= 2, 'insufficient distinct captured frames')

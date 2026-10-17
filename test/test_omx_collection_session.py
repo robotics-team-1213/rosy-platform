@@ -50,8 +50,8 @@ class Backend:
                 source_age_s=0., receipt_age_s=0., quality=dict(policy='omx-photometric-v3',
                 condition=conditions, usable=conditions == 'NORMAL', mean_intensity=90.,
                 spatial_contrast=20., p5=10., p95=150., dark_fraction=.1, clipped_fraction=.01))
-        # no_motion: the controller reports success while the joints stay away from the target.
-        joints = [.5]*6 if self.fault == 'no_motion' and self.commands else [0.]*6
+        # no_motion: the controller reports success while the joints stay where they started.
+        joints = [.1]*6 if self.commands and self.fault != 'no_motion' else [0.]*6
         return dict(environment=env, time_ns=now, observation_state=[0.]*6, action=[0.]*6, joint_positions=joints,
                     joint_source_stamp=now/1e9, reference_source_stamp=now/1e9,
                     state_age_s=0., reference_age_s=0.,
@@ -70,7 +70,7 @@ class Backend:
 
 
 def teacher():
-    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.2)])
+    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.2)])
 
 
 def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path):
@@ -119,6 +119,22 @@ def test_profile_requires_a_measured_reach_tolerance(module, reach):
         del value['reach_tolerance_rad']
     else:
         value['reach_tolerance_rad'] = reach
+    with pytest.raises(ValueError, match='reach tolerance'):
+        module.validate_profile(value, mode='rehearsal')
+
+
+def test_step_smaller_than_its_tolerance_is_refused_before_dispatch(module, tmp_path):
+    backend = Backend()
+    small = dict(teacher(), steps=[dict(positions=[.005]*6, duration_s=.2)])
+    result = module.run_session(profile(), small, tmp_path/'small', backend)
+    assert result['episodes'][0]['complete'] is False and 'unprovable' in result['episodes'][0]['reason']
+    assert backend.commands == [] and backend.stops
+
+
+def test_reach_tolerance_is_bounded_by_the_joint_span(module):
+    value = profile()
+    value['normalization'] = [[-1., 1.]]*5+[[0., .5]]
+    value['reach_tolerance_rad'] = [.01]*5+[.06]
     with pytest.raises(ValueError, match='reach tolerance'):
         module.validate_profile(value, mode='rehearsal')
 
