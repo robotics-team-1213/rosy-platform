@@ -789,6 +789,7 @@
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 | Accepted (2026-10-16, 사용자 설계·구현 승인; SOURCE·DEVICE·FIELD 별도) |
 | D-782 | OMX 행동 조건부 World 모델 도입 — 실행 전 검사기부터, 예측은 거절·보류 근거로만, 폴더는 실제 소비자가 생길 때 | Proposed |
 | D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
+| D-787 | OMX 시뮬레이션 모방학습 폐루프 — 고정 목표 도달 과제, 시뮬레이션 전용 lease와 reset, 실물 차단, 모델 PC native Gazebo | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
