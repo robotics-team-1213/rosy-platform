@@ -395,8 +395,9 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
     original_poll = runtime.owner.poll
 
     def observed_poll():
+        decision = original_poll()
         watchdog_ticks.append(time.monotonic())
-        return original_poll()
+        return decision
 
     runtime.owner.poll = observed_poll
     sink_times = []
