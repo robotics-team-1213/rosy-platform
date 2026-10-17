@@ -1,0 +1,6 @@
+/* D-793 /console/policy layout. Paint comes from shared tokens and components. */
+.policy-main { box-sizing: border-box; width: min(100%, 56rem); margin: var(--space-5) auto; padding: var(--space-3); }
+.policy-main section { margin-top: var(--space-5); }
+.policy-list { display: grid; gap: var(--space-3); padding-inline-start: 0; list-style: none; }
+.policy-list > li { overflow-wrap: anywhere; }
+.policy-evidence { max-height: 12rem; overflow: auto; white-space: pre-wrap; }
