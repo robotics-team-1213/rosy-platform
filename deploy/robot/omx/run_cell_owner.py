@@ -104,6 +104,7 @@ def main() -> None:
         owner.uds_server.stop()
         node.destroy_timer(workflow_timer)
         executor.shutdown()
+        owner.runtime.destroy()
         node.destroy_node()
         rclpy.shutdown()
 

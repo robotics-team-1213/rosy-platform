@@ -10,6 +10,7 @@ import math
 import threading
 import time
 from typing import Any, Callable
+from uuid import uuid4
 
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory
@@ -17,6 +18,8 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.clock import Clock, ClockType
 from rclpy.duration import Duration
+from rclpy.executors import SingleThreadedExecutor
+from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectoryPoint
@@ -294,7 +297,7 @@ class RosTrajectoryActionHandle(ActionHandle):
 
 
 class RosTrajectoryActionPort:
-    """Single rclpy action client used exclusively by one ArmCommandOwner."""
+    """One owner's action client, with sink delivery outside its critical executor."""
 
     def __init__(
         self,
@@ -305,13 +308,36 @@ class RosTrajectoryActionPort:
     ) -> None:
         if not isinstance(action_name, str) or not action_name.strip():
             raise ValueError("action_name must be non-empty")
-        self._client = ActionClient(node, FollowJointTrajectory, action_name,
-                                    callback_group=callback_group)
         self._event_sink = event_sink
         self.last_handle: RosTrajectoryActionHandle | None = None
+        self._destroyed = False
+        # Resolve against the owner before using a different node: relative/private
+        # names and owner remaps must still select exactly the same vendor action.
+        resolved_action = node.resolve_topic_name(action_name)
+        self._event_node = Node(
+            "omx_action_events_" + uuid4().hex[:12], context=node.context,
+            namespace=node.get_namespace(), use_global_arguments=False,
+            enable_rosout=False, start_parameter_services=False,
+        )
+        try:
+            self._executor = SingleThreadedExecutor(context=node.context)
+            self._client = ActionClient(self._event_node, FollowJointTrajectory, resolved_action,
+                                        callback_group=callback_group)
+            self._executor.add_node(self._event_node)
+            self._thread = threading.Thread(
+                target=self._executor.spin, name=self._event_node.get_name(), daemon=True,
+            )
+            self._thread.start()
+        except Exception:
+            if hasattr(self, "_executor"):
+                self._executor.shutdown(timeout_sec=0)
+            if hasattr(self, "_client"):
+                self._client.destroy()
+            self._event_node.destroy_node()
+            raise
 
     def server_is_ready(self) -> bool:
-        return self._client.server_is_ready()
+        return not self._destroyed and self._thread.is_alive() and self._client.server_is_ready()
 
     def send_goal(self, command: TrajectoryCommand) -> RosTrajectoryActionHandle:
         if not self.server_is_ready():
@@ -321,7 +347,16 @@ class RosTrajectoryActionPort:
         return handle
 
     def destroy(self) -> None:
+        if self._destroyed:
+            return
+        stopped = self._executor.shutdown(timeout_sec=2.0)
+        self._thread.join(timeout=2.0)
+        if not stopped or self._thread.is_alive():
+            raise RuntimeError("action event executor did not stop; resources remain owned")
         self._client.destroy()
+        self._executor.remove_node(self._event_node)
+        self._event_node.destroy_node()
+        self._destroyed = True
 
 
 class RosArmCommandRuntime:
@@ -331,11 +366,13 @@ class RosArmCommandRuntime:
     remote action/service endpoint or claim DDS access control. Deployment must
     admit exactly one local command source and isolate the vendor action graph.
 
-    Joint-state intake, the watchdog and the action client each use a separate
-    mutually exclusive callback group. Slow policy guard I/O must not exclude
-    joint callback entry. Owner/session locks still serialize accepted state and
-    control; separate groups do not waive freshness or stop checks. Use a
-    MultiThreadedExecutor; three workers permit all three groups to make progress.
+    Joint-state intake and the watchdog use separate mutually exclusive groups.
+    The action client owns a separate single-threaded executor: slow synchronous
+    event sinks cannot occupy the owner's executor or its ready-action waitset.
+    Durable event order and terminal completion remain synchronous on that action
+    executor. Owner/session locks still serialize accepted state and control;
+    isolation does not waive freshness or stop checks. Use a MultiThreadedExecutor
+    for the owner when policy guard I/O can block a watchdog or state callback.
     """
 
     def __init__(
@@ -359,6 +396,13 @@ class RosArmCommandRuntime:
             raise ValueError("poll_period_s must be at most half of state age and action timeout")
         if not joint_state_topic.strip() or not trajectory_action.strip():
             raise ValueError("joint-state topic and trajectory action must be explicit")
+        node.resolve_topic_name(joint_state_topic)
+        node.resolve_topic_name(trajectory_action)
+        if owner_clock == "sim":
+            if node.get_parameter("use_sim_time").value is not True:
+                raise ValueError("owner_clock 'sim' requires use_sim_time")
+            if config.wall_clock_bound_factor is None:
+                raise ValueError("owner_clock 'sim' requires config.wall_clock_bound_factor")
 
         self._node = node
         self.owner_clock = owner_clock
@@ -382,10 +426,6 @@ class RosArmCommandRuntime:
         # deadlines run on the trajectory's time base; the steady clock then bounds them at
         # config.wall_clock_bound_factor. "steady" (default, Pilot): steady time only.
         if owner_clock == "sim":
-            if node.get_parameter("use_sim_time").value is not True:
-                raise ValueError("owner_clock 'sim' requires use_sim_time")
-            if config.wall_clock_bound_factor is None:
-                raise ValueError("owner_clock 'sim' requires config.wall_clock_bound_factor")
             node_clock = node.get_clock()
             self.monotonic: Callable[[], float] = lambda: node_clock.now().nanoseconds / 1e9
             self.owner = ArmCommandOwner(config, self.action_port, monotonic=self.monotonic,
@@ -395,20 +435,21 @@ class RosArmCommandRuntime:
             self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
         self.last_decision = CommandDecision(True, "ready", "ready")
         self.last_terminal_decision: CommandDecision | None = None
-        self._subscription = node.create_subscription(
-            JointState,
-            joint_state_topic,
-            self._on_joint_state,
-            qos_profile_sensor_data,
-            callback_group=self.state_callback_group,
-        )
-        self._steady_clock = Clock(clock_type=ClockType.STEADY_TIME)
-        self._timer = node.create_timer(
-            poll_period_s,
-            self._watchdog_tick,
-            clock=self._steady_clock,
-            callback_group=self.watchdog_callback_group,
-        )
+        try:
+            self._subscription = node.create_subscription(
+                JointState, joint_state_topic, self._on_joint_state,
+                qos_profile_sensor_data, callback_group=self.state_callback_group,
+            )
+            self._steady_clock = Clock(clock_type=ClockType.STEADY_TIME)
+            self._timer = node.create_timer(
+                poll_period_s, self._watchdog_tick, clock=self._steady_clock,
+                callback_group=self.watchdog_callback_group,
+            )
+        except Exception:
+            if hasattr(self, "_subscription"):
+                node.destroy_subscription(self._subscription)
+            self.action_port.destroy()
+            raise
 
     def _on_joint_state(self, message: JointState) -> None:
         try:

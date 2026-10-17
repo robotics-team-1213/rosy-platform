@@ -2906,3 +2906,9 @@
 - 변경: private powered prototype의 age-only 제한 결함을 실행 전에 확인하고 별도 all-OFF native manager watchdog fixture를 검증했다. 최신 영상과 raw snapshot의 nominal FK도 대조했다.
 - 증거: 실제300ms watchdog 종료·OFF helper ACK·여섯 OFF/error0·cap보존, stop trace13packet CRC/완전송신. notify→main exit312.4ms·후처리 exit969.0ms, stop함수17.35ms를 구분했다.
 - gate 변화: 독립 시간 제한의 all-OFF 실행 증거 추가. 손끝 clearance 확인 요청 중이며 ON→OFF·국소 이동·시연/실데이터 학습은 미완료, 시연0회. D-770; docs/validation/omx-watchdog-deadline-2026-10-16/result.md.
+
+## 2026-10-17 · uncommitted · fix: OMX 시뮬레이션 owner 종료 자원 정리
+
+- 변경: run_cell_owner와 g2_owner가 owner executor 종료 후 runtime.destroy를 호출해 분리된 액션 executor·노드도 정리하게 했다. 기동 승인·HOLD·장치 격리 조건은 유지한다.
+- 증거: 실제 caller의 생성·종료 경로를 확인했다. 액션 분리의 native 회귀·독립 검토·최종 GitHub CI는 PR #83에 기록하며 실제 호스트나 시뮬레이션 컨테이너를 기동하지 않는다.
+- gate 변화: 없음. 배포·서명·장치 수용은 미실행이다.

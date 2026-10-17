@@ -512,6 +512,39 @@ def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
         rclpy.shutdown()
 
 
+@pytest.mark.parametrize("action_name", ["relative_arm", "~/private_arm"])
+def test_action_isolation_preserves_owner_namespace_and_remapping(action_name):
+    rclpy.init()
+    node = Node("omx_action_scope", namespace="/test_action_scope", use_global_arguments=False,
+                cli_args=["--ros-args", "-r", "relative_arm:=/test_remapped_arm"])
+    peer = Node("omx_scoped_vendor", use_global_arguments=False)
+    server = ActionServer(peer, FollowJointTrajectory, node.resolve_topic_name(action_name),
+                          execute_callback=lambda _: FollowJointTrajectory.Result())
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="w", instance_id="i", joint_names=("joint1",),
+        position_limits={"joint1": (-1.0, 1.0)}, allowed_owners=("moveit",),
+        calibration_revision="cal",
+    )
+    runtime = None
+    try:
+        runtime = RosArmCommandRuntime(node, config, joint_state_topic="~/joint_states",
+                                       trajectory_action=action_name)
+        deadline = time.monotonic() + 5.0
+        while not runtime.action_port.server_is_ready() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert runtime.action_port.server_is_ready()
+        runtime.destroy()
+        runtime.destroy()  # repeated cleanup leaves the stopped action executor alone
+        runtime = None
+    finally:
+        if runtime is not None:
+            runtime.destroy()
+        server.destroy()
+        peer.destroy_node()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
 def test_feedback_before_the_goal_response_does_not_fail_the_goal():
     """Review B1: with the action client in its own callback group, rclpy may run the
     feedback callback before the send-goal future's done callback. That feedback has no

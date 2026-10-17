@@ -583,3 +583,9 @@
 - 증거: 원격 pytest(조율자 부분 해제·끝난 짝·owner fence 종료·boot·해제 거절·BARRIERS_UNSUPPORTED 시험 추가). 물리 장치·ROS-SIM은 하지 않았다.
 - 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
 - gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
+
+- 변경: 같은 context·namespace와 owner에서 해석한 액션 이름으로 전용 SingleThreadedExecutor를 구성했다. handle의 동기식 이벤트 순서·durable terminal 처리와 단일 owner·freshness·HOLD 기준은 유지한다. 생성 실패와 종료 시 전용 executor·스레드·노드를 정리하며 종료 실패를 성공으로 숨기지 않는다.
+- 증거: GitHub RED run39010304643에서 owner1/4 worker 조건 모두 실패했고 해당 native 묶음은 2 failed / 7 passed였다. 외부 발행 간격 약10ms에 owner age는 약1.51s/1.05s로0.5s 기준을 넘었다. 완료된 watchdog poll 관측을 추가했고 상대·private 액션 이름과 remap·반복 종료도 검증한다. 최종 head의 독립 검토와 GitHub GREEN은 PR #83에 기록한다.
+- gate 변화: 없음. 노트북 pytest·원격 시험 PC·vendor Gazebo·실물 장치·DEVICE/FIELD는 미실행이다. 실제 owner 정책·stop/cancel 수용을 이 호스트 시험으로 대신하지 않는다.

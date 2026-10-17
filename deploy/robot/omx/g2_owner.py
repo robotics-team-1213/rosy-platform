@@ -117,6 +117,7 @@ def main():
     finally:
         owner.uds_server.stop()
         executor.shutdown(timeout_sec=5)
+        owner.runtime.destroy()
         node.destroy_node()
         rclpy.shutdown()
         lock.close()
