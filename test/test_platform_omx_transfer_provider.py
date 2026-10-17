@@ -34,7 +34,7 @@ from rosy.skills.manipulation.transfer import PlannedTransfer, TransferSkill  # 
 NOW = datetime(2026, 10, 2, tzinfo=timezone.utc)
 
 
-def _grant():
+def _grant(**transfer_changes):
     return FleetCellTransferGrant.model_validate({
         "mission_id": "mission-1", "step_id": "step-1", "action_id": "action-1",
         "attempt_id": "attempt-1", "request_digest": "a" * 64,
@@ -46,7 +46,7 @@ def _grant():
             "home": {"x": 0.1, "y": 0.0, "z": 0.2, "yaw": 0.0},
             "pick": {"x": 0.2, "y": 0.0, "z": 0.04, "yaw": 0.0},
             "place": {"x": 0.3, "y": 0.0, "z": 0.04, "yaw": 0.0},
-            "pick_approach_z": 0.12, "place_approach_z": 0.12, "carry_z": 0.18,
+            "pick_approach_z": 0.12, "place_approach_z": 0.12, "carry_z": 0.18, **transfer_changes,
         },
         "capability_revision": "cap-1", "config_revision": "cfg-1",
         "authority_epoch": 4, "dispatch_generation": 9,
@@ -147,6 +147,24 @@ def test_omx_planner_uses_grant_hashes_and_accepted_recipe_geometry():
     assert (request.home.x, request.pick.x, request.place.x) == (0.1, 0.2, 0.3)
     assert (used_profile, used_state) == (profile, state)
     assert geometry_calls == [("b" * 64, "box")]
+
+
+def test_a_recipe3_grant_plans_with_its_skus_accepted_geometry():
+    """D-781 §2: the geometry is looked up by the grant's item_key (box:<sku>); the Skill input stays box."""
+    grant = _grant(sku="foam_30x20x20")
+    calls, geometry_calls = [], []
+    adapter = OMXAnalyticTransferPlanner(
+        grant, profile=CellPlanningProfile.load(ROOT / "deploy/robot/omx/sim/cell_profile.yaml"),
+        planner=SimpleNamespace(plan_transfer=lambda request, profile, state: calls.append(request) or "plan"),
+        execution_state=lambda: object(),
+        accepted_item_geometry=lambda recipe, item: geometry_calls.append((recipe, item)) or {
+            "grasp_width_m": 0.02, "grasp_depth_m": 0.01, "height_m": 0.02},
+    )
+    invocation = cell_transfer_invocation(grant)
+    assert invocation.inputs["item"] == "box" and "sku" not in invocation.inputs
+    assert adapter.plan(invocation) == "plan"
+    assert geometry_calls == [("b" * 64, "box:foam_30x20x20")]
+    assert (calls[0].item, calls[0].grasp_width_m) == ("box:foam_30x20x20", 0.02)
 
 
 def test_provider_rejects_invocation_or_invalid_accepted_geometry_before_planning():

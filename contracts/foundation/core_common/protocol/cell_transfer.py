@@ -1,8 +1,10 @@
 """Fixed-cell transfer grant (D-403) with the optional pair and barrier fields (D-779 §7, D-780).
 
 Split from ``schemas.py``, which has no size room; ``schemas.py`` re-exports every name here.
-A grant without the pair fields and a payload without ``barriers`` serialize exactly as before
-those fields existed, so the request digest of a single-arm grant does not change.
+A grant without the pair fields and a payload without ``barriers`` or ``sku`` serialize exactly as
+before those fields existed, so the request digest of a single-arm grant does not change. ``sku``
+(D-781 §2) names which recipe/3 item a ``box`` step expects; the owner looks its geometry up by
+``item_key`` (``box:<sku>``), so a recipe/1-2 ``box`` and a recipe/3 sku never share a key.
 """
 
 from __future__ import annotations
@@ -23,6 +25,12 @@ COUPLINGS = ("independent", "loose", "tight")
 Coupling = Literal["independent", "loose", "tight"]
 #: Longest local wait at one barrier; the compiler picks the real bound per Step (D-780 §3).
 MAX_BARRIER_WAIT_S = 600.0
+_SKU = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$")
+
+
+def item_geometry_key(item: str, sku: str | None = None) -> str:
+    """The accepted-recipe geometry key of a transfer: the item, or ``<item>:<sku>`` (D-781 §2)."""
+    return item if sku is None else f"{item}:{sku}"
 
 
 def _omit_absent(handler, model, optional: tuple[str, ...]) -> dict:
@@ -99,6 +107,8 @@ class CellTransferPayload(BaseModel):
     pick_approach_z: float = Field(strict=True, allow_inf_nan=False)
     place_approach_z: float = Field(strict=True, allow_inf_nan=False)
     carry_z: float = Field(strict=True, allow_inf_nan=False)
+    # D-781 §2: the recipe/3 sku this box step expects; absent for recipe/1-2.
+    sku: Optional[str] = Field(default=None, min_length=1, max_length=96)
     # D-780 §3: absent means no barrier; an empty list is not a distinct value.
     barriers: Optional[tuple[CellTransferBarrier, ...]] = Field(default=None, min_length=1, max_length=4)
 
@@ -109,11 +119,20 @@ class CellTransferPayload(BaseModel):
             raise ValueError("Cell Transfer identity must be a trimmed identifier")
         return value
 
+    @field_validator("sku")
+    @classmethod
+    def _sku_identifier(cls, value: str | None) -> str | None:
+        if value is not None and not _SKU.fullmatch(value):
+            raise ValueError("sku must be a trimmed identifier")
+        return value
+
     @model_validator(mode="after")
     def _approaches_are_carried(self):
         if (self.pick_approach_z < self.pick.z or self.place_approach_z < self.place.z
                 or self.carry_z < max(self.pick_approach_z, self.place_approach_z)):
             raise ValueError("carry_z must cover both target approach heights")
+        if self.sku is not None and self.item != "box":
+            raise ValueError("only a box step names a sku")
         if self.barriers is not None:
             if len({barrier.barrier_id for barrier in self.barriers}) != len(self.barriers):
                 raise ValueError("barrier ids must be unique within one Action")
@@ -124,7 +143,12 @@ class CellTransferPayload(BaseModel):
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler):
-        return _omit_absent(handler, self, ("barriers",))
+        return _omit_absent(handler, self, ("sku", "barriers"))
+
+    @property
+    def item_key(self) -> str:
+        """Key of this step's item in the owner's accepted recipe geometry."""
+        return item_geometry_key(self.item, self.sku)
 
     def strongest_coupling(self) -> str:
         if not self.barriers:
@@ -194,5 +218,5 @@ class FleetCellTransferGrant(BaseModel):
 
 __all__ = [
     "CELL_TRANSFER_PHASES", "COUPLINGS", "CellTransferBarrier", "CellTransferPayload",
-    "CellTransferPose", "Coupling", "FleetCellTransferGrant", "MAX_BARRIER_WAIT_S",
+    "CellTransferPose", "Coupling", "FleetCellTransferGrant", "MAX_BARRIER_WAIT_S", "item_geometry_key",
 ]

@@ -243,6 +243,20 @@ def test_an_alternate_arm_takes_a_held_arms_step_in_one_arm_mode(tmp_path):
     assert cells.get("arm-job-1")["placements"][0]["assigned"] == ["right"]  # never reverted
 
 
+def test_a_recipe3_step_sends_its_sku_and_a_recipe1_step_sends_none(tmp_path):
+    # D-781 §2: the grant body carries the step's sku, so the owner looks up box:<sku>.
+    with_sku = arm_step(0, "left", "left_half", [])
+    with_sku["placement"]["actions"]["left"]["sku"] = "foam_40x30x30"
+    steps = [with_sku, arm_step(1, "right", "right_half", [])]
+    path, cells, tasks, transport, dispatcher = _setup(tmp_path, steps=steps)
+    dispatcher.dispatch_next()
+    sent = {g.instance_id: g.cell_transfer for g in transport.submissions}
+    assert (sent[LEFT].sku, sent[LEFT].item_key) == ("foam_40x30x30", "box:foam_40x30x30")
+    assert sent[LEFT].model_dump(mode="json")["sku"] == "foam_40x30x30"
+    assert sent[RIGHT].sku is None and "sku" not in sent[RIGHT].model_dump(mode="json")
+    assert sent[RIGHT].item_key == "box"
+
+
 def test_a_pair_where_one_owner_refuses_cancels_the_other(tmp_path):
     pair = arm_step(0, ["left", "right"], "shared_band", [], coupling="independent")
     path, cells, _, transport, dispatcher = _setup(tmp_path, steps=[pair])

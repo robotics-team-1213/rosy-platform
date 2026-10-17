@@ -216,8 +216,10 @@ def plan_mixed(recipe: MixedRecipe, cell: Workcell, reach: Reach) -> MixedPlan:
     if problems:
         raise PlanError(problems)
     search = _Search(recipe, cell, reach)
-    if not any(search.reach(a.role, CellPose(*cell.stations[n], 0.0)) for a in cell.arms
-               for n in recipe.pick_stations):
+    # The real pick TCP (station top + item height - grasp_depth), not the station surface: an IK
+    # reach refuses z = 0, which sits below the arm's floor.
+    if not any(search.reach(a.role, pick_pose(cell, n, i.height, i.grasp_depth, 0.0)) for a in cell.arms
+               for n in recipe.pick_stations for i in recipe.items):
         raise PlanError(["no arm reaches any pick station"])
     unplaced = [item.sku for item in _units(recipe.items) if not search.place(item)]
     if unplaced:

@@ -51,6 +51,39 @@ this preflight.
 
 ## Native arm software readiness
 
+### Docker-free Gazebo launch
+
+`run_cell_sim.sh` also runs on a native ROS 2 Jazzy simulation host. Build the
+locked `open_manipulator_description` and `open_manipulator_bringup` packages
+into a user prefix after applying `omx-f-gazebo-headless`, `omx-ai-sim-gates`
+and `omx-ai-sim-action-only` from `patches/`, in that order. Use the system
+Python matching ROS when building; do not change the host's default Python.
+No Docker installation or Docker group membership is needed.
+
+Select a non-site host through `tools/remote/remote_pytest.py --pick sim`
+and hold its simulation resource lock for the run, as described in
+`tools/remote/AGENTS.md`. Launch inside a bounded user systemd scope with
+its own `GZ_PARTITION`, loopback `GZ_IP`, and allocated `ROS_DOMAIN_ID`:
+
+```bash
+export OMX_CELL_OVERLAY="$HOME/rosy-test/<prepared-build>/install"
+export OMX_CELL_LOG_DIR="$HOME/rosy-test/<run>/logs"
+bash deploy/robot/omx/run_cell_sim.sh
+```
+
+The overlay must contain `setup.bash`; the compatibility default is
+`/opt/omx_ws/install`. `OMX_CELL_ROS_SETUP` optionally selects the ROS setup
+script (default `/opt/ros/jazzy/setup.bash`). These are trusted shell inputs.
+`OMX_CELL_WORLD` selects a world path without `.sdf`; otherwise the world is
+resolved from this checkout. `OMX_CELL_DOMAIN_ID` overrides an inherited
+`ROS_DOMAIN_ID`; absent both, the compatibility domain is 77. Discovery stays
+localhost-only. A host carrying `~/rosy-jobs/site` is refused before setup.
+
+This starts the Gazebo follower only, with no ROSY command owner or task
+admission. Native process/resource separation does not satisfy G2's stronger
+network/device/read-only filesystem isolation guard. Keep that guard and
+startup HOLD intact; launching Gazebo is not Fleet task or hardware acceptance.
+
 After sourcing the selected native ROS installation, run:
 
 ```bash
