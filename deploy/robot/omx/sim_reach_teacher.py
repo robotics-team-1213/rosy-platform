@@ -199,9 +199,10 @@ def run(probe: Probe, task: dict, *, episodes: int, first_index: int, out: Path,
                 return 2
         return 0
     except RuntimeError as exc:   # RunAborted, or an unready owner / HTTP error outside a goal
-        results["aborted"] = str(exc)
+        reason = f"seat renewal failed: {renewal_errors[0]}" if renewal_errors else str(exc)
+        results["aborted"] = reason
         if teacher.current is not None and teacher.current not in results["episodes"]:
-            teacher.current["reason"] = teacher.current["reason"] or f"aborted: {exc}"
+            teacher.current["reason"] = teacher.current["reason"] or f"aborted: {reason}"
             results["episodes"].append(teacher.current)   # never success: no outcome was sent
         return 2
     finally:
@@ -217,12 +218,24 @@ def main(argv: list[str] | None = None, *, base: str = BASE, code: str | None = 
     parser.add_argument("--episodes", type=int, required=True)
     parser.add_argument("--first-index", type=int, default=0, help="episode index k (seed = task seed + k)")
     parser.add_argument("--out", type=Path, required=True, help="teacher results JSON (new or overwritten)")
+    parser.add_argument("--port", type=int, help="Pilot HTTP port on 127.0.0.1 (OMX_PILOT_PORT; default 8088)")
     args = parser.parse_args(argv)
+    if args.port is not None:
+        base = f"http://127.0.0.1:{args.port}/api/v1/sim/omx"
     if not 1 <= args.episodes <= 1000 or args.first_index < 0:
         parser.error("--episodes must be 1..1000 and --first-index >= 0")
     task = sim_reach_task.load_task(args.task)
     container = "--inside" if args.inside else args.container
-    code = code or pairing_code(container, time.monotonic() + 600)
+    deadline = time.monotonic() + 600
+    code = code or pairing_code(container, deadline)
+    while True:   # a freshly (re)started server writes the code before it serves HTTP
+        try:
+            request("/target", base=base)
+            break
+        except OSError:
+            if time.monotonic() > deadline:
+                raise RuntimeError("Pilot HTTP target did not become available") from None
+            time.sleep(1)
     token = request("/pair", method="POST", body={"code": code}, base=base)["token"]
     code = None
     seat = request("/seat", method="POST", token=token, base=base)["seat_id"]
