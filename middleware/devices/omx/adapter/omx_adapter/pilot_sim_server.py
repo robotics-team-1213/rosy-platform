@@ -11,7 +11,7 @@ from pathlib import Path
 
 import rclpy
 import uvicorn
-from rclpy.executors import MultiThreadedExecutor
+from .ros_owner_executor import OwnerMultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 import yaml
@@ -95,7 +95,7 @@ def main() -> None:
         facade, record_root, source, sim_time_ns=lambda: node.get_clock().now().nanoseconds)
     camera = PilotSimCamera(node, facade.capture, source["world_sha256"])
     facade.camera_available = True
-    executor = MultiThreadedExecutor(num_threads=3)
+    executor = OwnerMultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinner.submit(executor.spin)

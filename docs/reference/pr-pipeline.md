@@ -51,7 +51,9 @@ gh pr view <PR번호> --json headRefOid,statusCheckRollup,mergeable
 gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
 ```
 
-squash 커밋 메시지는 PR 제목과 **PR 본문**으로 만들어진다(저장소 설정 `PR_TITLE`/`PR_BODY`). 브랜치 커밋의 trailer는 남지 않는다. 안전 경로 PR은 본문에 줄 맨 앞에서 시작하는 `Safety-Review: <검토자/레인> <증거>` 줄을 두어야 한다. 빠뜨리면 main의 scope 잡이 실패하고, `tools/harness/safety_review_exempt.json`에 squash SHA를 원본 head와 이어 주는 항목을 나중에 추가해야 한다(#81→#82, #78).
+squash 메시지는 PR 제목·본문을 사용한다(설정 `PR_TITLE`/`PR_BODY`). 안전 경로 PR은 본문에서 줄 맨 앞에 실제 독립 검토의 `Safety-Review: <검토자/레인> <증거>`를 남긴다. 원본 커밋 trailer가 유실되면 main scope가 실패한다(#81→#82, #78→#86).
+
+검토 base/head와 근거를 담은 저장소 밖 파일을 `gh pr merge ... --body-file <본문파일>`로 전달하고, 병합 후 `git show -s --format=%B <병합-SHA>`로 실제 trailer를 확인한다. 빈 양식을 승인 근거로 쓰지 않는다. 유실 이력 복구는 독립 검토 후 `tools/harness/safety_review_exempt.json`에서 정확한 squash SHA를 원본 head와 연결한다.
 
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 
@@ -83,7 +85,9 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 
 [2026-10-17 점검 기록](../validation/pipeline-audit-2026-10-17.md)에 실제 설정·CI 근거와 후속 조건을 남겼다. 당시 staging은 `HOLD`였고, 릴리스 게시의 `release` 환경과 필수 변수는 미구성이었다. 릴리스 실행 전에는 현재 설정을 다시 확인한다.
 
-병합 후 `modules` 잡의 OMX ROS 시험에서 새 실패를 관찰했다. [실패 기록과 후속 조건](../validation/pipeline-modules-2026-10-17.md)을 확인하며, 기존 실패나 해결 완료로 분류하지 않는다.
+이후 공개 `release` 승인 환경과 기존 파일럿 키 ID를 구성했다. 현재 설정과 실제 게시 전 조건은 [릴리스 키 운용 §7.0](../deployment/release-signing-key.md#70-파일럿-키와-게시-승인)을 따른다.
+
+병합 후 `modules` 잡의 OMX ROS 시험에서 새 실패를 관찰했다. [당시 실패 기록](../validation/pipeline-modules-2026-10-17.md)은 보존하고, 이후 조사는 [owner 스케줄링과 검증 범위](../validation/omx-owner-scheduling-2026-10-17.md)에서 확인한다. 판단할 때는 최신 head의 개별 잡과 미검증 조건을 함께 읽는다.
 
 ## GitHub 설정
 

@@ -8995,3 +8995,21 @@ osy-d395-s1d\`.
 - 변경: learning-policy full matrix의 정확한 suite 집합에 이미 등록된 world-model training/evaluation/prediction 세 경로를 기존 계약 시험의 기대값에도 포함했다. 정확한 일치·ROS-free·FULL_SUITES 포함 검사는 유지한다.
 - 증거: OMX 준비 브랜치 착지 검사에서 재현된 실패를 unchanged main f4b0caa69e의 동일 단일 시험에서 원격 재현했다. 외부 scratch main-world-model-matrix-red/run-1.txt. 새 실패를 known_failures에 추가하거나 검사 범위를 줄이지 않았다.
 - gate 변화: runtime/실물/학습 변화 없음. 추가 준비와 camera 연결 부재 기록은 validation/omx-remaining-preparation-2026-10-17/follow-up.md. 실제 시연0회.
+
+## 2026-10-17 · uncommitted · docs: 기존 파일럿 키의 릴리스 승인 환경 구성과 안내 정정
+
+- 변경: 사용자 요청에 따라 공개 release 환경에 기존 게시 담당 승인·main 제한·관리자 우회 금지·파일럿 키 ID 변수를 설정하고 재조회했다. 키 운용 안내의 빈 디렉터리·PEM 전면 금지 설명을 실제 승인 공개키 예외와 현재 파일럿 상태로 고쳤다.
+- 증거: /root/review_private_ops 독립 읽기 전용 계약 검토. 환경·브랜치 정책·변수·secret 목록 재조회로 승인 사용자·main 규칙 한 개·can_admins_bypass false·기존 키 ID·secret 0개를 확인했다. 개인키 조회·생성·이전과 실제 게시 실행은 없었다.
+- gate 변화: 없음. 승인 환경 설정만 준비했으며 프로덕션 키 소유권·실제 서명·게시·호스트·장치 수용은 별도다. 비공개 staging은 HOLD를 유지한다.
+
+## 2026-10-17 · uncommitted · docs: OMX feedback 수정 근거와 staging 준비 결과 연결
+
+- 변경: 기존 실패 기록을 보존하고 executor 분리·timeout 기록 경로·직렬/4-worker 검증 범위를 새 validation에 정리했다. 비공개 구현 계획에는 실제 PR·main CI 결과와 현재 단일 게시 담당·staging HOLD를 덧붙였다.
+- 증거: RED 39010304643과 timeout RED 39011139939, 고정 SHA의 독립 계약 검토. 새로 관찰한 MTE1 실패는 미해결로 보존하고 직렬 ST 선택의 공식 근거를 연결했다. 최종 개별 CI 결과는 PR #83과 validation 기록에서 확인한다.
+- gate 변화: 없음. 과거 성공·실패를 다시 쓰지 않으며 실제 호스트·장치·서명·배포 수용은 미실행이다.
+
+## 2026-10-17 · uncommitted · docs: OMX 스케줄링 관측과 수집 통합 결과 연결
+
+- 변경: 진단 관측·보호된 executor hook의 검증 범위·수집 identity RED와 수정 조건을 후속 기록에 모으고 PR 절차의 최신 링크를 갱신했다. 기존 실패 기록은 보존한다.
+- 증거: run39013248730과 run39014273721의 실제 개별 결과를 대조했다. /root/review_private_ops 읽기 전용 초안 검토에서 지적 없음. 최종 head의 독립 검토·계측 없는 CI·병합 후 전체 CI는 PR #83에 기록한다.
+- gate 변화: 없음. 한 명의 게시 담당과 자동 검사로 운영하며 staging 호스트·접속 범위가 정해질 때까지 HOLD를 유지한다.

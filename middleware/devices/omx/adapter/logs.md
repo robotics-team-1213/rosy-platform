@@ -583,3 +583,33 @@
 - 증거: 원격 pytest(조율자 부분 해제·끝난 짝·owner fence 종료·boot·해제 거절·BARRIERS_UNSUPPORTED 시험 추가). 물리 장치·ROS-SIM은 하지 않았다.
 - 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
 - gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
+
+- 변경: 같은 context·namespace와 owner에서 해석한 액션 이름으로 전용 SingleThreadedExecutor를 구성했다. handle의 동기식 이벤트 순서·durable terminal 처리와 단일 owner·freshness·HOLD 기준은 유지한다. 생성 실패와 종료 시 전용 executor·스레드·노드를 정리하며 종료 실패를 성공으로 숨기지 않는다.
+- 증거: GitHub RED run39010304643에서 owner1/4 worker 조건 모두 실패했고 해당 native 묶음은 2 failed / 7 passed였다. 외부 발행 간격 약10ms에 owner age는 약1.51s/1.05s로0.5s 기준을 넘었다. 완료된 watchdog poll 관측을 추가했고 상대·private 액션 이름과 remap·반복 종료도 검증한다. 최종 head의 독립 검토와 GitHub GREEN은 PR #83에 기록한다.
+- gate 변화: 없음. 노트북 pytest·원격 시험 PC·vendor Gazebo·실물 장치·DEVICE/FIELD는 미실행이다. 실제 owner 정책·stop/cancel 수용을 이 호스트 시험으로 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
+
+- 변경: timeout의 실패 상태와 owner HOLD는 즉시 적용하고 미확정 기록만 전용 executor에서 전달한다. cancel 호출 예외 통지도 같은 경로를 쓰며 예약 실패에 owner 스레드 sink 호출로 대체하지 않는다. 이미 결과를 관측했다면 뒤늦은 미확정 기록을 덧붙이지 않는다. 600행 제한에 맞춰 액션 전달은 ros_trajectory_action.py로 분리하고 기존 import 경로를 유지한다.
+- 증거: RED run39011139939의 native 묶음은 3 failed / 10 passed. 4-worker timeout은 fresh 상태에서도 last_terminal_decision 게시가 지연됐다. 추가한 1-worker MTE는 freshness·admission도 실패했으며 원인을 확정하지 않았다. Jazzy의 권고에 따라 직렬 회귀는 SingleThreadedExecutor로 구성하고 기존 4-worker MTE와 0.5s 기준을 보존한다. MTE1 해결을 주장하지 않는다.
+- gate 변화: 없음. 늦은 SUCCEEDED 뒤에도 owner HOLD·새 명령 거절과 순차 이벤트 전달을 검증한다. 최종 SHA 독립 검토와 GitHub CI는 PR #83에 남기며 장치 정지·복구 수용을 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
+
+- 변경: 실제 handle 메서드를 추출하는 policy event-order 시험이 새 소스 파일을 읽도록 고쳤다. native feedback 회귀에는 제한된 poll·intake·cancel 기록과 timeout 중 thread stack·설치된 MTE 구현을 실패 때만 출력하는 진단을 추가했다.
+- 증거: run39012627359에서 host 3 failed / 1546 passed / 17 skipped, native 2 failed / 13 passed, Fleet native 2 passed. host 실패는 이동 전 AST 경로였다. native에서는 기존 cancel 관측과 추가 4-worker timeout freshness 실패를 관찰했으며 원인은 아직 확정하지 않았다.
+- gate 변화: 없음. 제품 코드·0.5s 기준·시험 포함 범위는 그대로 두고 다음 GitHub 실행에서 실제 대기 위치를 확인한다. GREEN·staging·장치 수용을 주장하지 않는다.
+
+## 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
+
+- 변경: OMX 전용 MTE subclass가 부모 spin hook의 인자·반환·예외를 유지하고 성공한 회차 뒤 sleep(0)으로 실행 기회를 넘긴다. 실제 owner 진입점·정책/시뮬/Fleet 회귀가 같은 helper를 쓰며 worker 수·poll 주기·0.5s 기준은 유지한다. spin·spin_once·future 대기와 종료 검증을 추가했다.
+- 증거: 진단 run39013248730은 host 1549 passed / 17 skipped, native 1 failed / 14 passed, Fleet native 2 passed. rclpy7.1.12에는 명시적 yield가 없었다. poll 사이 약0.577s 공백과 idle worker를 관찰했고 cancel은 약0.165ms에 반환했다. GIL 원인을 확정하지 않고 scheduling 보완의 효과를 같은 회귀로 검증한다.
+- gate 변화: 없음. 분리된 액션 노드가 새 collection의 단일 client 검사에 걸리는 경로도 확인해 exact owned identity의 RED 계약을 추가했다. 해당 통합 수정과 최종 GREEN 전에는 병합하지 않는다. 장치·실제 배포는 미실행이다.
+
+## 2026-10-17 · uncommitted · fix: 수집 client 식별 연결과 계측 없는 최종 회귀
+
+- 변경: 액션 노드의 고정 이름·namespace를 수집 경로에 제공하고 실제 소유한 client만 허용한다. 임시 trace를 제거하되 freshness·watchdog 완료·HOLD 검사는 유지했다. 수정 대상인 OMX timeout quarantine 한 항목만 제거해 자동 재시도 없이 검증한다.
+- 증거: 후보 commit `09c2451ac3e432f8e7aea8e20fbd68d326c31df0`의 run39014273721은 native 18 passed, Fleet native 2 passed, browser 9 passed. host는 의도한 수집 identity RED 한 건만 실패했다(1 failed / 1564 passed / 17 skipped). 후속 최종 head 검토와 CI는 PR #83에 기록한다.
+- gate 변화: 없음. stock MTE1·실물 정지·vendor Gazebo·staging 배포는 미검증이다. 별도 Fleet quarantine은 유지한다.
