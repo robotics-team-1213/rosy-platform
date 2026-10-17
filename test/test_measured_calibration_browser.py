@@ -111,7 +111,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-conditions').check()
         state['hold'] = True
         with page.expect_request('**/measured-status'):
-            page.locator('#measured-refresh').click()
+            pass  # Hold the scheduled read without racing its disabled refresh button.
         expect(page.locator('#measured-confirm')).to_be_disabled()
         expect(page.locator('#measured-read')).to_be_disabled()
         expect(page.locator('#measured-revoke')).to_be_disabled()
@@ -135,7 +135,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-image').wait_for(state='visible')
         state['hold_frame'] = True
         with page.expect_request(lambda r: r.url.endswith('/frame') and r.headers.get('authorization') == 'Bearer measured'):
-            page.locator('#measured-read').click()
+            pass  # The scheduled read refreshes the visible image.
         if width < 700:
             page.get_by_role('combobox', name='작업 선택').select_option('hosts')
         else:
@@ -151,7 +151,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
             page.get_by_role('tab', name='카메라 설치·보정').click()
         state['hold'] = True
         with page.expect_request('**/measured-status'):
-            page.locator('#measured-refresh').click()
+            pass
         page.locator('#vision-source').select_option('ceiling_south')
         state['hold'] = False
         for pending in state['pending']:
