@@ -51,6 +51,8 @@ gh pr view <PR번호> --json headRefOid,statusCheckRollup,mergeable
 gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
 ```
 
+안전 경로를 바꾼 PR은 **최종 squash 본문에도** 실제 독립 검토의 `Safety-Review: <검토자> <근거>` 줄을 남긴다. 원본 커밋에 trailer가 있어도 PR 본문만 사용하는 squash 설정에서 유실될 수 있다. 검토 base/head와 근거를 적은 저장소 밖 본문 파일을 `gh pr merge ... --body-file <본문파일>`로 전달하고, 병합 후 `git show -s --format=%B <병합-SHA>`로 실제 trailer를 확인한다. 검토 전의 빈 양식을 승인 근거로 사용하지 않는다.
+
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 
 ## 검사·산출물·staging
