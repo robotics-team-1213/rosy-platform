@@ -789,6 +789,7 @@
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 | Accepted (2026-10-16, 사용자 설계·구현 승인; SOURCE·DEVICE·FIELD 별도) |
 | D-782 | OMX 행동 조건부 World 모델 도입 — 실행 전 검사기부터, 예측은 거절·보류 근거로만, 폴더는 실제 소비자가 생길 때 | Proposed |
 | D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
+| D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
