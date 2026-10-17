@@ -117,6 +117,13 @@ def _broken(change):
     lambda s: s["arms"][1].update(workcell_id="omx_01"),
     lambda s: s.update(operator_checkpoints=[]),
     lambda s: s.update(instance_id="omx_01_control"),
+    # D-781 §5 per-arm predicates: exactly the step's primary and alternate arms, in robot_base
+    lambda s: s["steps"][0].update(goal_predicates={"left": {"frame": "robot_base"}, "right": {"frame": "robot_base"}}),
+    lambda s: s["steps"][0].update(goal_predicates={"left": {"frame": "cell"}}),
+    lambda s: s["steps"][0].update(goal_predicates=[{"frame": "robot_base"}]),
+    # D-781 §2 sku on the wire: an identifier, and only on a box step
+    lambda s: s["steps"][0]["placement"]["actions"]["left"].update(sku="bad sku"),
+    lambda s: s["steps"][0]["placement"]["actions"]["left"].update(item="slip_sheet", sku="foam"),
 ])
 def test_invalid_multi_arm_submissions_are_refused_and_write_nothing(tmp_path, change):
     path, _, _, _ = _stores(tmp_path)
@@ -126,6 +133,22 @@ def test_invalid_multi_arm_submissions_are_refused_and_write_nothing(tmp_path, c
                      request_digest="d" * 64, submission=_broken(change))
     assert cells.get("arm-job-1") is None
     assert rows(path, "SELECT * FROM fleet_cell_arm_jobs") == []
+
+
+def test_per_arm_goal_predicates_and_sku_are_stored_with_the_step(tmp_path):
+    path, _, _, _ = _stores(tmp_path)
+    cells = CellJobStore(path)
+    step = arm_step(0, "left", "left_half", [], alternates=["right"])
+    for role, x in (("left", 0.4), ("right", 0.2)):
+        step["placement"]["actions"][role]["sku"] = "foam_40x30x30"
+        step["goal_predicates"] = {**step.get("goal_predicates", {}),
+                                   role: {"condition": "item_at_pose", "frame": "robot_base", "target": {"x": x}}}
+    job = create_arm_job(cells, steps=[step])
+    stored = job["steps"][0]["step"]
+    assert set(stored) == {"skill_id", "version", "inputs", "goal_predicates"}
+    assert stored["goal_predicates"] == step["goal_predicates"]
+    assert stored["inputs"]["sku"] == "foam_40x30x30"
+    assert job["placements"][0]["payloads"]["right"]["sku"] == "foam_40x30x30"
 
 
 def test_a_coordinated_step_pairs_two_arms_without_alternates(tmp_path):

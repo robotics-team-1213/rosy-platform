@@ -39,7 +39,7 @@ _LEGACY_APPROVALS = {"PICK_PLACE": "proposer_only"}  # no step-ledger dispatch r
 
 def _cell_transfer_body(job: Mapping[str, Any], step_index: int,
                         inputs: Mapping[str, Any]) -> dict[str, Any]:
-    """The persisted pallet.transfer/1.0.0 inputs as the D-403 §2 ``cell_transfer`` body."""
+    """pallet.transfer/1.0.0 inputs as the D-403 §2 ``cell_transfer`` body; a recipe/3 ``sku`` is copied (D-781 §2)."""
     def pose(value: Mapping[str, Any]) -> dict[str, float]:
         return {"x": value["x_m"], "y": value["y_m"], "z": value["z_m"], "yaw": value["yaw_rad"]}
 
@@ -53,7 +53,7 @@ def _cell_transfer_body(job: Mapping[str, Any], step_index: int,
         "place": pose(inputs["destination_pose_base"]),
         "pick_approach_z": inputs["source_approach_z_base_m"],
         "place_approach_z": inputs["destination_approach_z_base_m"],
-        "carry_z": inputs["carry_z_base_m"],
+        "carry_z": inputs["carry_z_base_m"], **({"sku": inputs["sku"]} if "sku" in inputs else {}),
     }
 
 

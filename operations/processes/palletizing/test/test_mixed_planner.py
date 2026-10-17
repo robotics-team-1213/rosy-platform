@@ -363,6 +363,15 @@ def test_input_problems_are_reported():
         plan_mixed(recipe, workcell_from_dict(ONE_ARM), lambda role, pose: False)
 
 
+def test_station_check_uses_the_pick_pose_not_the_station_surface():
+    # An IK reach refuses a TCP at the station surface (z = 0, below the arm floor); real picks reach.
+    recipe = load_mixed_recipe(recipe_text(MIXED))
+    cell = workcell_from_dict(TWO_ARMS)
+    annulus = annulus_reach(cell, 0.05, 0.25)
+    floored = lambda role, pose: pose.z > 0.005 and annulus(role, pose)  # noqa: E731
+    check_plan(recipe, cell, floored, plan_mixed(recipe, cell, floored))
+
+
 def test_workcell_validation():
     with pytest.raises(WorkcellError, match="needs zones"):
         workcell_from_dict(dict(TWO_ARMS, zones=[]))

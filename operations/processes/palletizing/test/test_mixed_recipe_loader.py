@@ -125,6 +125,9 @@ def test_gripper_range_is_injected():
     ({"max_load_on_top_kg": -1}, "max_load_on_top_kg must be non-negative"),
     ({"colour": "red"}, "items[0].colour is not a known field"),
     ({"height": 0.05}, "exceeds max_height_to_base_ratio"),
+    ({"sku": "foam 40"}, "items[0].sku must be 1-96 letters"),  # the sku goes on the wire (D-781 §2)
+    ({"sku": ""}, "items[0].sku must be 1-96 letters"),
+    ({"sku": "x" * 97}, "items[0].sku must be 1-96 letters"),
 ])
 def test_bad_item_fields(changes, needle):
     assert needle in problems(doc(items=[item(**changes)]))
