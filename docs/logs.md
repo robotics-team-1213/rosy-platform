@@ -9017,3 +9017,9 @@ osy-d395-s1d\`.
 - 변경: 기존 기기 등록을 재사용하고 PC 배치와 별도로 담당 Fleet을 지정하는 목표를 `plans/2026-10-17-fleet-device-authority-design.md`에 정리했다. 장치 측 담당 지정 정본, 기존 dispatch fence와 별도의 지정 버전, 명시적 인계, 같은 호스트 UDS와 원격 gateway 경계, 양팔 구성 및 세 가지 PC 배치의 완료 조건을 정의했다.
 - 근거: `SiteRoster`·`CentralRegistry`·peer directory는 목록/읽기이며, OMX owner는 현재 같은 호스트 UID/UDS를 사용한다. 기존 등록·허브 페어링을 독점 명령 권한으로 간주하지 않고 D-246·D-281·D-302·D-336·D-555·D-773·D-778~D-780·D-785와의 관계를 기록했다.
 - gate 변화: 없음. 설계 검토 대기이며 제품 코드·API 계약·실물 설정은 변경하지 않았다. 원격 pytest·ROS-SIM·장치·현장 검증은 실행하지 않았고 착지·push·배포도 수행하지 않았다.
+
+## 2026-10-17 · uncommitted · Fleet 담당 지정 설계와 기존 설치·실행 경계 대조
+
+- 변경: 기존 OMX host inventory를 재사용 출처로 명시하고, 한 팔을 가리키는 기존 Workcell 행과 협업 작업대 그룹을 구별했다. 담당 회수와 driver 제출을 같은 stop fence 경계로 직렬화하는 조건 및 인계 경합 검증을 추가했다. 동일 Fleet ID/등록 자격의 중복 실행 방지와 활성 세션 비밀 탈취의 신뢰 한계도 구별했다.
+- 근거: `deploy/robot/omx/host_inventory.py`는 host/instance와 장치 선택을 검증하고, `action_runner.py`는 journal 준비 뒤 `_fenced_submission`에서 권한을 재검사한 후 driver 제출과 수락 기록을 stop fence 안에 둔다. 기존 grant는 Fleet 논리 신원이나 담당 지정 버전을 담지 않는다.
+- gate 변화: 없음. 설계의 코드 대조 보완이며 구현 승인·제품 변경·실물 제어권 변경이 아니다. 원격 pytest·ROS-SIM·DEVICE/FIELD는 실행하지 않았다.
