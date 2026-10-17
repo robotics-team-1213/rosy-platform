@@ -1,4 +1,9 @@
-"""Cell workspace composition: documents and canonical preview, never admission."""
+"""Cell workspace composition: documents and canonical preview, never admission.
+
+A recipe/3 document previews through ``compile_mixed`` (D-781 §5): the candidate envelope is the
+same, and ``summary.multi_arm`` lists the arms and each step's placement. recipe/1-2 previews have
+no ``multi_arm`` key and are unchanged.
+"""
 
 from fastapi import Depends, HTTPException
 
@@ -6,7 +11,26 @@ from core_common.protocol.schemas import (
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest,
 )
 from fleet.server.cell_app_store import CellAppStore, DocumentChanged
+from fleet.server.cell_mixed_submission import MixedCellCompilation, is_mixed
 from fleet.server.mission_routes import MissionCandidateRequest
+
+
+def mixed_preview(compiler, recipe, cell):
+    """recipe/3 (D-781): the same candidate envelope, previewed as a multi-arm Job (arms and each
+    step's sku, arm, alternates, zone, coupling and depends_on). No ledger, claim or grant."""
+    if not callable(getattr(compiler, "compile_mixed", None)):
+        raise ValueError("the process compiler does not compile recipe/3")
+    compiled = compiler.compile_mixed(recipe, cell)
+    if not isinstance(compiled, MixedCellCompilation):
+        raise ValueError("process compiler returned an unsupported mixed compilation")
+    skus = [step["sku"] for step in compiled.job["plan"]["steps"]]
+    steps = [{"index": index, "sku": skus[index], **{key: step["placement"][key] for key in (
+        "arm", "alternates", "zone", "coupling", "depends_on")}} for index, step in enumerate(compiled.steps)]
+    candidate = {"kind": "cell_job", "recipe": recipe, "cell": cell, "recipe_sha256": compiled.recipe_digest,
+                 "cell_sha256": compiled.cell_digest, "job": dict(compiled.job)}
+    return {"candidate": candidate, "process_artifact_digest": compiled.process_artifact_digest,
+            "summary": {"transfer_count": len(steps), "pallet_markers": [dict(m) for m in compiled.ledger_markers],
+                        "multi_arm": {"arms": [dict(arm) for arm in compiled.arms], "steps": steps}}}
 
 
 def install_cell_app_routes(app, *, mission_service, compiler, service_id, principals,
@@ -39,6 +63,8 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
         recipe = read("recipe", body.recipe_id, body.recipe_digest)["document"]
         cell = read("cell", body.cell_id, body.cell_digest)["document"]
         try:
+            if is_mixed({"recipe": recipe}):
+                return mixed_preview(compiler, recipe, cell)
             compilation = compiler.compile(recipe, cell)
         except (ValueError, KeyError, TypeError) as exc:
             raise HTTPException(422, detail={"code": "CELL_APP_COMPILE_INVALID", "message": str(exc),

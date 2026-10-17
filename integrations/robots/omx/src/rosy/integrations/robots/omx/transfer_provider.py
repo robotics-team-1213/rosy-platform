@@ -139,7 +139,7 @@ class OMXAnalyticTransferPlanner(TransferPlanner):
         if invocation != cell_transfer_invocation(self.grant):
             raise ValueError("Skill invocation does not match the Fleet CELL_TRANSFER grant")
         transfer = self.grant.cell_transfer
-        geometry = self.accepted_item_geometry(transfer.recipe_sha256, transfer.item)
+        geometry = self.accepted_item_geometry(transfer.recipe_sha256, transfer.item_key)
         if not isinstance(geometry, Mapping):
             raise ValueError("accepted recipe geometry is unavailable for this item")
         try:
@@ -156,7 +156,7 @@ class OMXAnalyticTransferPlanner(TransferPlanner):
             recipe_sha256=transfer.recipe_sha256,
             cell_sha256=transfer.cell_sha256,
             step_index=transfer.step_index,
-            item=transfer.item,
+            item=transfer.item_key,  # the planner looks the accepted geometry up by this key (D-781 §2)
             home=TopDownPose(**transfer.home.model_dump()),
             pick=TopDownPose(**transfer.pick.model_dump()),
             place=TopDownPose(**transfer.place.model_dump()),

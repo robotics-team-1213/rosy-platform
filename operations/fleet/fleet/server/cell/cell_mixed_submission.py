@@ -10,8 +10,8 @@ not import the palletizing process (D-413): ``cell_compiler`` stays the only mod
 The Job claims the cell's workcell, every arm owner's workcell (from the cell document's arms)
 and every pallet it fills; arm and zone claims are taken per Action (D-779 §5). The job_id is
 the same digest as a single-arm Job's: recipe and cell digests plus the canonical Job.
-Per-step item_at_pose goal predicates are not attached yet: an alternate arm has its own base
-frame, so the predicate must be fixed per arm (follow-up).
+The resolver (cell_goal_evidence) then fixes one item_at_pose predicate per arm of each step,
+each in that arm's base frame (``goal_predicates``), when a goal tolerance is configured.
 """
 
 from __future__ import annotations
