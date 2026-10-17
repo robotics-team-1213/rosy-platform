@@ -14,8 +14,8 @@ function overview() {
   let node=document.getElementById('review-people-summary');
   if(!node){
     node=document.createElement('p');node.id='review-people-summary';node.className='review-people-summary';node.setAttribute('role','status');
-    const anchor=document.getElementById('pixel-result') || document.getElementById('frame-title');
-    anchor.after(node);
+    const pixelHistory=document.querySelector('.pixel-review-column > .review-history');
+    if(pixelHistory)pixelHistory.before(node);else document.getElementById('frame-title').after(node);
     const link=document.createElement('a');link.href='#review-history-events';link.textContent='검수 이력 보기';link.className='review-history-link';
     link.onclick=()=>{const details=document.querySelector('.review-history');details.open=true;document.getElementById('review-history-events').focus();};
     node.after(link);document.getElementById('review-history-events').tabIndex=-1;
