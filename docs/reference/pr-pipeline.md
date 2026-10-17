@@ -53,6 +53,34 @@ gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
 
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 
+## 검사·산출물·staging
+
+주 CI, 사이트 후보 빌드, 비공개 설정 검사는 별도 워크플로다. 성공 표시를 연결해 자동 배포가 된다고 판단하지 않는다.
+
+```mermaid
+flowchart LR
+    pr["공개 PR"] --> scope["scope: affected 또는 full"]
+    scope --> checks["개별 잡 확인 → ci-result → 병합"]
+    checks --> main["main 전체 CI"]
+    checks -->|해당 경로 변경| candidate["별도 빌드: 미서명 사이트 후보"]
+    ops["비공개 PR·main"] --> config["config: 시험 + HOLD 구조 검사"]
+    main --> evidence["동일 SHA·digest·서명·실제 근거 대조"]
+    candidate --> evidence
+    config --> evidence
+    evidence -->|대상·격리·기능·복구 확인 후 별도 진행| staging["staging 배포"]
+```
+
+| 경로 | 실행과 확인 범위 |
+|---|---|
+| 공개 `ci.yml` | PR은 selector 결과, main·야간·수동·merge group은 full. `modules`는 보고용이므로 개별 결과를 확인한다 |
+| `build-site-candidate.yml` | 해당 main 경로 변경 또는 수동 실행. 주 CI와 독립적으로 미서명 prerelease를 만들므로 빌드 성공만으로 배포하지 않는다 |
+| Pinky 산출물·릴리스 | [산출물 선택](../deployment/pinky-release-artifact-selection.md)에서 시작한다. ARM64 빌드·호스트 부팅 관찰·오프라인 서명·게시·장치 수용은 각각 확인한다 |
+| 비공개 `check.yml` | PR·main push·수동 실행에서 `config` 확인. 일반 검사는 HOLD를 허용하고 `--require-ready`는 초기 HOLD에서 실패하는 것이 정상이다 |
+
+Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 활성화 범위가 아니다. Gazebo 잡에도 건너뛴 시험이 있을 수 있다. 잡 성공과 실제 화면·시뮬 실행을 구분하고 로그의 수집·실행·skip 수를 남긴다. 설정 CI는 산출물 내용·호스트 격리·기능·복구를 확인하지 않는다.
+
+[2026-10-17 점검 기록](../validation/pipeline-audit-2026-10-17.md)에 실제 설정·CI 근거와 후속 조건을 남겼다. 당시 staging은 `HOLD`였고, 릴리스 게시의 `release` 환경과 필수 변수는 미구성이었다. 릴리스 실행 전에는 현재 설정을 다시 확인한다.
+
 ## GitHub 설정
 
 아래 표는 공개 `rosy-platform`의 설정이다. 2026-10-17 GitHub API로 확인했다. 설정을 바꾸는 담당자는 이 표를 같은 PR에서 갱신한다. 운영 결정과 후속 전환 조건은 [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다.
