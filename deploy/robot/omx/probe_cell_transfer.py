@@ -50,6 +50,7 @@ OPEN_TOL_RAD = 0.05
 # block top within 2 mm of the expected top.
 PLACE_TOL = {"xy_m": 0.005, "yaw_rad": 0.05, "top_z_m": 0.002, "tilt_rad": 0.05}
 
+from instance_names import names_from_environment  # noqa: E402
 from cell_sim_tools import (  # noqa: E402
     SimAid, model_pose, refuse_second_owner, sha256_lf, spawn_infeed_block,
 )
@@ -133,7 +134,8 @@ def main() -> int:
         raise RuntimeError("C3 probe requires localhost-only ROS discovery")
     if Path("/dev/serial/by-id").exists() or list(Path("/dev").glob("video*")):
         raise RuntimeError("C3 probe refuses hardware device grants")
-    refuse_second_owner()
+    names = names_from_environment()
+    refuse_second_owner(namespace=names.namespace)
 
     import rclpy
     from rclpy.callback_groups import ReentrantCallbackGroup
@@ -220,8 +222,8 @@ def main() -> int:
     config = profile.arm_command_config(workcell_id=WORKCELL_ID, instance_id=INSTANCE_ID,
                                         calibration_revision=CALIBRATION)
     runtime = RosArmCommandRuntime(
-        node, config, joint_state_topic="/joint_states",
-        trajectory_action="/arm_controller/follow_joint_trajectory", owner_clock="sim",
+        node, config, joint_state_topic=names.joint_state_topic,
+        trajectory_action=names.trajectory_action, owner_clock="sim",
         on_goal_event=lambda event: (event.kind == "RUNNING_FEEDBACK") or log(
             "ros_goal_event", event=event.kind, command=event.command_id, phase=event.phase_id,
             status=event.status, result_code=event.result_code),
@@ -229,7 +231,7 @@ def main() -> int:
     clock = runtime.monotonic  # sim time, the owner's clock
     raw: dict = {}
     # Observation only (velocities for settling); the owner has its own subscription.
-    node.create_subscription(JointState, "/joint_states", lambda m: raw.update(msg=m),
+    node.create_subscription(JointState, names.joint_state_topic, lambda m: raw.update(msg=m),
                              qos_profile_sensor_data, callback_group=ReentrantCallbackGroup())
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)

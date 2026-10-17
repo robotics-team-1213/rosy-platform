@@ -226,7 +226,7 @@ def create_omx_cell_transfer_phase_factory(
     command_for_phase: Callable[[FleetCellTransferGrant, PlannedMotionPhase], TrajectoryCommand],
     goal_port: PhaseGoalPort,
     submission_fence: StopFence,
-    phase_gate: Callable[[FleetCellTransferGrant, str], bool],
+    phase_gate: Callable[[FleetCellTransferGrant, str], object],  # True, PHASE_WAIT or deny
     current_fence: Callable[[int, int], bool],
     gripper_readback: Callable[[], GripperObservation],
     monotonic: Callable[[], float],
@@ -251,12 +251,18 @@ def create_omx_cell_transfer_phase_factory(
 
     def executor_for_grant(grant: FleetCellTransferGrant, recorder: object,
                            planned: PlannedTransfer, workflow=None, readback=None) -> PickPlaceRunner:
+        def gate(phase: str):
+            # The semantic workflow may only deny. The owner gate is tri-state (D-780): its
+            # PHASE_WAIT passes through untouched, never through a boolean `and`.
+            if workflow is not None and workflow.phase_gate(phase) is not True:
+                return False
+            return phase_gate(grant, phase)
+
         return PickPlaceRunner(
             recorder, grant, planned.plan,
             command_for_phase=lambda phase: command_for_phase(grant, phase),
             goal_port=goal_port, submission_fence=submission_fence,
-            phase_gate=lambda phase: phase_gate(grant, phase) and (
-                workflow is None or workflow.phase_gate(phase)), current_fence=current_fence,
+            phase_gate=gate, current_fence=current_fence,
             current_execution_state=execution_state,
             start_state_tolerances=profile.start_state_tolerances(),
             max_joint_state_age_s=profile.max_joint_state_age_s,

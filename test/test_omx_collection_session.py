@@ -148,3 +148,42 @@ def test_repolling_original_environment_does_not_inflate_raw_log(module,tmp_path
     assert len((store.root/'environment.jsonl').read_text().splitlines())==1
     changed=copy.deepcopy(env);changed['photometric_ready']=False
     with pytest.raises(ValueError,match='changed'): store.environment(changed)
+
+
+class IntrinsicsBackend(Backend):
+    def observe(self):
+        sample = super().observe()
+        k = [1., 0., 1., 0., 1., 1., 0., 0., 1.] if self.n < 8 else [2., 0., 1., 0., 2., 1., 0., 0., 1.]
+        sample['camera_info'] = {r: dict(frame_id=r, width=2, height=2, distortion_model='plumb_bob', d=[0.]*5,
+                                         k=k, r=[1., 0., 0., 0., 1., 0., 0., 0., 1.], p=[0.]*12, binning=[0, 0])
+                                 for r in ('top', 'front')}
+        return sample
+
+
+def test_published_camera_models_are_hashed_raw_evidence_only_when_changed(module, tmp_path):
+    import json
+    result = module.run_session(profile(), teacher(), tmp_path/'capture', IntrinsicsBackend())
+    assert result['episodes'][0]['complete'] is True and 'camera_info.jsonl' in result['files']
+    rows = [json.loads(line) for line in (tmp_path/'capture/camera_info.jsonl').read_text().splitlines()]
+    assert [row['cameras']['top']['k'][0] for row in rows] == [1., 2.]
+    assert all(type(row['time_ns']) is int for row in rows)
+
+
+def test_sessions_without_camera_info_keep_previous_raw_layout(module, tmp_path):
+    result = module.run_session(profile(), teacher(), tmp_path/'capture', Backend())
+    assert 'camera_info.jsonl' not in result['files']
+
+
+@pytest.mark.parametrize('fault', ['missing', 'placeholder', 'rotation', 'far'])
+def test_declared_camera_mounts_are_explicit_metres_and_unit_quaternions(module, fault):
+    mount = dict(parent_frame='link0', translation_m=[.3, 0., .5], rotation_xyzw=[0., 0., 0., 1.],
+                 method='tape measure from base origin')
+    document = profile()
+    document['camera_mounts'] = {r: dict(mount) for r in ('top', 'front')}
+    module.validate_profile(document, mode='rehearsal')
+    if fault == 'missing': del document['camera_mounts']['front']
+    if fault == 'placeholder': document['camera_mounts']['top']['parent_frame'] = '<frame>'
+    if fault == 'rotation': document['camera_mounts']['top']['rotation_xyzw'] = [0., 0., 0., 2.]
+    if fault == 'far': document['camera_mounts']['top']['translation_m'] = [30., 0., 0.]
+    with pytest.raises(ValueError, match='camera'):
+        module.validate_profile(document, mode='rehearsal')

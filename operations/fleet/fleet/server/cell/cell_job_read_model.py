@@ -1,7 +1,13 @@
-"""Read-only Cell Job projections; callers retain ownership of their SQLite transaction."""
+"""Read-only Cell Job projections; callers retain ownership of their SQLite transaction.
+
+The single-arm dispatcher's queries (``jobs_by_status``, ``unresolved_jobs``) never return a
+multi-arm Job (D-779 stages 2-4): ``cell_arm_dispatcher`` drives those.
+"""
 
 import json
-from . import cell_sheet_checkpoints as sheets
+from . import cell_arm_jobs, cell_sheet_checkpoints as sheets
+
+_SINGLE_ARM = "mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)"
 
 
 def read_cell_job(connection, mission_id):
@@ -30,12 +36,13 @@ def read_cell_job(connection, mission_id):
     checkpoints = sheets.read(connection, mission_id)
     if checkpoints:
         job["operator_checkpoints"] = checkpoints
+    cell_arm_jobs.attach(connection, job)
     return job
 
 
 def jobs_by_status(connection, status):
-    rows = connection.execute("SELECT mission_id FROM fleet_cell_jobs WHERE status=? ORDER BY updated_at, mission_id",
-                              (status,)).fetchall()
+    rows = connection.execute(f"SELECT mission_id FROM fleet_cell_jobs WHERE status=? AND {_SINGLE_ARM} "
+                              "ORDER BY updated_at, mission_id", (status,)).fetchall()
     return [read_cell_job(connection, row["mission_id"]) for row in rows]
 
 
@@ -43,6 +50,6 @@ def unresolved_jobs(connection):
     rows = connection.execute(
         "SELECT DISTINCT j.mission_id FROM fleet_cell_jobs j JOIN fleet_action_claims c "
         "ON c.owner_kind='mission' AND c.owner_id=j.mission_id AND c.generation=j.dispatch_generation "
-        "WHERE j.status='HOLD' AND c.phase IN ('UNKNOWN', 'DISPATCHING') "
+        f"WHERE j.status='HOLD' AND c.phase IN ('UNKNOWN', 'DISPATCHING') AND j.{_SINGLE_ARM} "
         "ORDER BY j.updated_at, j.mission_id").fetchall()
     return [read_cell_job(connection, row["mission_id"]) for row in rows]

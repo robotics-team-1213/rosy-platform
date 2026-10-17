@@ -497,3 +497,9 @@
 - 변경: frame, field-proposal, map-proposal의 인증된 읽기가 source의 영상을 요청한다. 401과 잘못된 경로는 요청이 아니다. 프레임이 없거나 오래됐거나 429여도 요청이다. 마지막 읽기부터 30초 동안 demand.wanted를 true로 보내고, 그 시각을 포함하면 false다. 연결이 잠깐 끊겨도 유지는 남는다. Vision 내부 추적은 센서를 깨우지 않는다.
 - 증거: 원격 AI PC ai@100.108.76.123, 커밋 d780942b9, Vision·버전 핀 294 passed, exit 0, known_failures NEW 0. 로그 X:/DevTemp/cam-standby/pytest/run-1.txt.
 - gate 변화: SOURCE/원격. 실기 대기 전류와 첫 프레임 지연은 측정하지 않았다.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.

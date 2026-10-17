@@ -64,21 +64,21 @@ class _SlowRobot(FakeRobot):
         return await super().state()
 
 
-def _client(tmp_path, *, clock=None, delay_s=0.0):
+def _client(tmp_path, *, clock=None, delay_s=0.0, app_options=None, calibration_path=None):
     clock = clock or _Clock()
     robot = _SlowRobot("rosy_01", state={"robot_id": "rosy_01", "map_id": "map_v2_fleet",
                                          "pose": {"x": 1.2, "y": 0.4, "yaw": 0.0}},
                        clock=clock, delay_s=delay_s)
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-rest")], [robot])
     sightings = SightingService([_source()], known_robot_ids=console.robot_ids, clock=clock)
-    tracking = TrackingService(sightings.sources, calibrations=TrackingCalibrationStore(), clock=clock)
+    tracking = TrackingService(sightings.sources, calibrations=TrackingCalibrationStore(calibration_path), clock=clock)
     task_service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
     users = {
         sha256(OPERATOR_TOKEN.encode()).hexdigest(): {"principal_id": "operator-1", "role": "operator"},
         sha256(VIEWER_TOKEN.encode()).hexdigest(): {"principal_id": "viewer-1", "role": "viewer"},
     }
     app = create_app(console, sightings=sightings, tracking=tracking, task_service=task_service,
-                     start_task_dispatcher=False, site_users=users)
+                     start_task_dispatcher=False, site_users=users, **(app_options or {}))
     return TestClient(app)
 
 
@@ -225,7 +225,8 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
     assert ours == {"/api/fleet/detections", "/api/fleet/detections/config", "/api/fleet/tracking",
                     "/api/fleet/tracking/relearn", "/api/fleet/calibrations",
                     "/api/fleet/calibrations/{source_id}",
-                    "/api/fleet/detections/identity", "/api/fleet/tracking/identity"}  # D-472
+                    "/api/fleet/detections/identity", "/api/fleet/tracking/identity",
+                    "/api/fleet/detections/preview-status"}  # D-472, D-775 numeric readback
 
 
 def test_tracking_needs_the_sighting_sources():

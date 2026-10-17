@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from fleet.server.cancel_all import DriveCancelFence
@@ -44,7 +43,7 @@ from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
-from fleet.server.step_dispatcher import StepJobDispatcher
+from fleet.server.cell_arm_dispatcher import CellJobDispatcher  # D-779: single-arm + multi-arm Cell Jobs
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.incidents.automation.runtime import install_incident_runtime
@@ -88,20 +87,6 @@ from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재�
 _LOG = logging.getLogger(__name__)
 _goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
-
-
-class VisionLeaseRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    source_id: str
-    rectification: Optional[dict[str, object]] = None
-
-    @field_validator("rectification")
-    @classmethod
-    def _valid_rectification(cls, value):
-        if value is None:
-            return None
-        from core_common.protocol.vision_preview import PreviewRectification
-        return PreviewRectification.from_mapping(value).as_dict()
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
@@ -262,7 +247,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return None
 
     cell_job_dispatcher = (
-        StepJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
+        CellJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
                           omx_cell_grant_revisions or {}, deployment_profile=deployment_profile,
                           on_step_action_succeeded=on_step_action_succeeded)
         if enable_mission_dispatcher else None
@@ -665,9 +650,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.ai_episodes = ProblemLog(task_service.store.path if task_service else None)   # D-610 9
     app.state.ai_first.human_classes = app.state.ai_episodes.active
     if tracking is not None and tracking.enabled:
+        from fleet.server.measured_calibration import active_map_revision
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
-                                read_guard=read_guard, operator_guard=operator_guard)
+                                read_guard=read_guard, operator_guard=operator_guard,
+                                require_named_operator=require_named_operator,
+                                map_revision=partial(active_map_revision, site_maps))
         from fleet.server.start_points import StartPointService
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
@@ -886,25 +874,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               cancel_pending_task_queue, task_service, console))
     install_conversation(app,conversation_config,site_maps,task_service=task_service)
 
-    @app.get("/api/fleet/vision/sources", tags=["vision-preview"])
-    def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
-        if vision_signer is None:
-            raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
-        return {"sources": list(vision_sources)}
-
-    @app.post("/api/fleet/vision/lease", tags=["vision-preview"])
-    def vision_preview_lease(body: VisionLeaseRequest,
-                             principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
-        if vision_signer is None:
-            raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
-        if body.source_id not in vision_sources:
-            raise HTTPException(status_code=404, detail={"code": "UNKNOWN_VISION_SOURCE"})
-        token = vision_signer.issue(principal_id=principal.principal_id,
-                                    source_id=body.source_id, ttl_s=60,
-                                    rectification=body.rectification)
-        return {"source_id": body.source_id, "lease": token,
-                "frame_path": f"/api/vision/sources/{body.source_id}/frame",
-                "expires_in_s": 60}
+    from fleet.server.vision_preview_routes import install_vision_preview_routes
+    install_vision_preview_routes(app, signer=vision_signer, sources=vision_sources,
+                                  require_camera_viewer=require_camera_viewer,
+                                  require_named_operator=require_named_operator)
 
     from fleet.host_control import UnavailableHostHelper, helper_from_config
     from fleet.server.host_control_routes import install_host_control_routes
@@ -977,7 +950,7 @@ async def _mission_model_turn_worker_loop(worker) -> None:
         await asyncio.sleep(0.25)
 
 
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher | StepJobDispatcher) -> None:
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher | CellJobDispatcher) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
         try:

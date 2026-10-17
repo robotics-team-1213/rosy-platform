@@ -1,0 +1,116 @@
+{
+  "schema": "rosy.measured-calibration/1",
+  "source_id": "ceiling_north",
+  "map_id": "map_v2_fleet",
+  "map_revision": "site-map-5",
+  "lens": {
+    "status": "candidate",
+    "applied": false,
+    "model": "pinhole",
+    "K": [
+      [
+        500.0,
+        0.0,
+        320.0
+      ],
+      [
+        0.0,
+        500.0,
+        180.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "D": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "image_size": [
+      640,
+      360
+    ],
+    "source_id": "ceiling_north",
+    "capture_signature": "fixed-jpeg-640x360",
+    "training_rms_px": 0.02,
+    "tilt_span": 0.4,
+    "validation": {
+      "p95_px": 0.03,
+      "max_px": 0.05,
+      "rms_px": 0.02
+    },
+    "revision": "c1e15f944778fa96c0b08c43"
+  },
+  "floor": {
+    "status": "candidate",
+    "applied": false,
+    "map_id": "map_v2_fleet",
+    "pixel_space": "undistorted",
+    "lens_revision": "c1e15f944778fa96c0b08c43",
+    "source_id": "ceiling_north",
+    "undistorted_to_map": [
+      [
+        0.01,
+        0.0,
+        -3.2
+      ],
+      [
+        0.0,
+        -0.01,
+        1.8
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "reference_pixel": [
+      320.0,
+      180.0
+    ],
+    "inliers": 6,
+    "validation": {
+      "p95_m": 0.003,
+      "max_m": 0.005
+    },
+    "revision": "275d618b3a897ed65ed3af4e"
+  },
+  "training_digests": [
+    "0000000000000000000000000000000000000000000000000000000000000001",
+    "0000000000000000000000000000000000000000000000000000000000000002",
+    "0000000000000000000000000000000000000000000000000000000000000003",
+    "0000000000000000000000000000000000000000000000000000000000000004",
+    "0000000000000000000000000000000000000000000000000000000000000005",
+    "0000000000000000000000000000000000000000000000000000000000000006",
+    "0000000000000000000000000000000000000000000000000000000000000007",
+    "0000000000000000000000000000000000000000000000000000000000000008"
+  ],
+  "validation_digests": [
+    "0000000000000000000000000000000000000000000000000000000000000009",
+    "000000000000000000000000000000000000000000000000000000000000000a"
+  ],
+  "survey_digest": "be57b404bc7cf333467a76cfaa234290d0afee0031b40daaa03231a46f447703",
+  "capture": {
+    "signature": "fixed-jpeg-640x360",
+    "lens": {
+      "kind": "standard",
+      "focal_mm": 4.0,
+      "hfov_deg": 67.8
+    },
+    "rotation_deg": 0
+  },
+  "bounds_m": [
+    -3.0,
+    -1.5,
+    3.0,
+    1.5
+  ],
+  "evidence_kind": "synthetic",
+  "digest": "bf89cf478bcbba8be7f0ce66bd2bafc6a8ab9b1af4103f666a702d82fb10d82d"
+}
