@@ -32,6 +32,7 @@ import review_versions
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
 from learning_control import Control, ControlConflict
+import camera_setup_web
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[3] / 'shared/web'
@@ -553,7 +554,13 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path.startswith('/api/view-images/'):
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
-                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
+                if path == '/api/learning/camera/references':
+                    return self.send({'references': camera_setup_web.references(store.state)})
+                if path.startswith('/api/learning/camera/stills/'):
+                    return self.send(camera_setup_web.still(store.state, path.rsplit('/', 1)[1]),
+                                     mime='image/jpeg', cache='no-cache')
+                files = {'/learning/camera': 'camera.html', '/camera.js': 'camera.js',
+                         '/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
@@ -645,6 +652,12 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     if not storage:
                         raise ValueError('storage is not configured')
                     return self.send(storage.preflight(body))
+                if path == '/api/learning/camera/reference':
+                    if collaboration:
+                        accounts.require(self.learning_principal, 'edit')
+                    return self.send(camera_setup_web.create(store.state, body, actor))
+                if path == '/api/learning/camera/check':
+                    return self.send(camera_setup_web.check(store.state, body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
                 if path == '/api/import':

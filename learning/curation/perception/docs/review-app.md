@@ -358,6 +358,19 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 공간 사전 점검은 목적지 ID와 다운로드·임시 복사·변환 추가 공간·업로드 예상 크기를 받는다. 로컬 세 항목은 같은 목적지 볼륨에 존재하는 사본으로 합산하고 reserve_bytes를 더한다. 공간을 예약하거나 전송하지 않는다. 실제 작업 시작 시 자원 재검사가 필요하다. 웹 경로 입력, 삭제, 외부 게시와 유료 증설을 제공하지 않는다.
 
 원격 quota는 미확인이 기본이다. 공식 quota API를 호출하지 않는다. 관리자가 수동 확인한 경우에만 remote_quota에 remaining_bytes, source(공개해도 되는 근거 설명), measured_at, expires_at(UTC epoch 초 정수)을 기록한다. 측정 전/만료 후에는 보류한다. 한 설정의 한 대상 quota이며 여러 계정 용량을 더하지 않는다. 업로드 요구량이 0이면 원격 quota는 점검하지 않는다. 최신 상태는 HTTP 401/403·오류가 발생하면 화면에서 지우고 재시도를 제공한다.
+### 카메라 맞춤 (D-792)
+
+`/learning/camera`는 모방학습 녹화 전에 카메라를 같은 자리로 되돌리는 화면이다. 작업면 마커(ArUco `DICT_4X4_50`)가 모두 보이는 사진 한 장, 내부 교정 값, 마커 배치(작업대 원점 기준 cm), 선택 실측값으로 촬영 기준(`rosy.camera-setup-reference/1`)을 만든다. 기준은 `<state>/camera-setup/<revision>.json`과 같은 이름의 `.jpg`로 저장하고 덮어쓰지 않는다. 읽을 때마다 봉인 revision과 사진 SHA-256을 다시 검사하며, 어긋나면 400이다. 판정은 녹화를 막지 않는 조언이다(shadow).
+
+| 방법 | 경로 | 내용 |
+|---|---|---|
+| GET | `/api/learning/camera/references` | `references`: 최신순 촬영 기준 전체 |
+| GET | `/api/learning/camera/stills/<revision>` | 기준 사진 JPEG |
+| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `layout`, `measured`, `guides`; 협업 모드는 `edit` 권한 |
+| POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256` → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `detected`(마커 ID별 꼭짓점 픽셀) |
+
+화면은 기준 마커·가이드를 점선, 지금 사진에서 찾은 마커를 실선으로 그리고 마커마다 기준에서 현재로 가는 화살표를 그린다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.
+
 # AI 실행과 저장 버전 조회 (D-764)
 
 객체/픽셀 화면의 **AI 초안과 확인**에서 저장된 사진 revision으로 새 초안을 요청한다.
