@@ -216,7 +216,7 @@ def test_formation_refuses_unsupported_member_before_any_stream_opens(member, fl
     assert not any(c[0] == 'follow' for c in follower.calls)
 
 
-def test_a_display_past_max_age_answers_at_once_instead_of_waiting():
+def test_a_display_past_max_age_waits_once_per_refresh_not_per_request():
     """Network load: an unreachable robot's power read must not add wait_s to every state request."""
     from fleet.server.console_view import CapabilityDisplay
 
@@ -235,9 +235,10 @@ def test_a_display_past_max_age_answers_at_once_instead_of_waiting():
         assert await display.shown("one", wait_s=0.5) == {"battery": 1}
         robot.gate = asyncio.Event()                     # the robot stops answering
         clock.advance(6)
+        assert await display.shown("one", wait_s=0.05) is None     # this request started the refresh
         loop = asyncio.get_running_loop()
         started = loop.time()
-        assert await display.shown("one", wait_s=0.5) is None
+        assert await display.shown("one", wait_s=0.5) is None      # the refresh is still pending
         assert loop.time() - started < 0.2
         await display.aclose()
     asyncio.run(exercise())
