@@ -187,7 +187,8 @@ def test_an_offline_arms_shared_band_step_goes_to_the_alternate_arm(tmp_path):
     moved = [p["step_index"] for p in rig.job()["placements"] if p["assigned"] == ["right"] and p["alternates"]]
     assert moved
     first = moved[0]
-    assert rig.run(lambda r: first in r.evidence_refused, timeout_s=240), _arms(rig.job())
+    assert rig.run(lambda r: r.job()["steps"][first]["status"] == "GOAL_CONFIRMED" or first in r.evidence_refused,
+                   timeout_s=240), _arms(rig.job())
     job = rig.job()
     placement = next(p for p in job["placements"] if p["step_index"] == first)
     assert placement["assigned"] == ["left"]
@@ -195,10 +196,9 @@ def test_an_offline_arms_shared_band_step_goes_to_the_alternate_arm(tmp_path):
     assert event["detail"]["primary_arm"] == "right" and event["detail"]["primary_status"] == "OFFLINE"
     assert _owner_steps(rig.by_role["left"])[first]["state"] == "SUCCEEDED"  # planned from the left base
     assert rig.by_role["right"].port.submissions == []
-    # Open question D-779: the stored predicate is in the primary arm's frame, so goal evidence for an
-    # alternate-arm run is refused (fail closed) and the Step stays ACTION_SUCCEEDED.
-    assert rig.evidence_refused[first] == "EVIDENCE_SCOPE_MISMATCH"
-    assert job["steps"][first]["status"] == "ACTION_SUCCEEDED"
+    # The Step stores one predicate per arm (D-781 §5), so the alternate's evidence is judged in its own frame.
+    assert first not in rig.evidence_refused
+    assert job["steps"][first]["status"] == "GOAL_CONFIRMED"
 
 
 def test_quantiles_report_the_samples():
