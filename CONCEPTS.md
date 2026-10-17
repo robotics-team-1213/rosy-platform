@@ -211,6 +211,20 @@ The site-side answerer for lane stucks: deterministic rules answer first, then (
 
 Its budgets and deadline count per chain of stucks on the same robot rather than per stuck, so a robot that keeps re-sticking reaches a person instead of looping; it can never choose manual control, release an emergency stop, or widen the robot's own recovery limits.
 
+## Learning
+
+### Rosy Learn
+
+The model-PC web app for review and learning, also called 학습 관리 센터. It is one app: object review, pixel review, catalog, the learning work list, camera setup, and imitation learning are its screens (D-792). Its code still runs as `review_app.py` under `rosy-review-v13.service` (D-545). It calls existing curation and training jobs and does not hold its own training logic.
+
+### Camera setup reference
+
+The immutable record of where one camera role stood when a dataset was recorded: intrinsics fingerprint, measured and marker-estimated height, distance, tilt, pan and roll, and one reference still with marker corners and guide outlines (`rosy.camera-setup-reference/1`, D-792). Moving the camera on purpose makes a new reference; the old one stays.
+
+### Setup check
+
+The result of comparing one camera frame against a camera setup reference: marker reprojection error, mount differences, and a verdict of ok, adjust, or unmeasurable. The camera setup screen draws the reference dashed and the current frame solid. A check runs before and after each recorded Episode and is stored in its camera provenance; it records only (shadow) until its thresholds are confirmed, then blocks recording (enforce).
+
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.
@@ -218,3 +232,5 @@ Its budgets and deadline count per chain of stucks on the same robot rather than
 - "Profile" still means Compose service grouping or hardware YAML; Runtime mode is the staged install preset (core, then motor, then hardware). D-62 slices are the install units. None of these is a Capability, and they are not interchangeable even where they share names.
 - "Node" in this glossary is the computer running CORE (`RuntimeNode`), not an rclpy node.
 - "Task" here is an atomic REST action; Fleet missions and concept 08 workflows are a different object (D-12).
+- "Studio" is the review workbench of D-538 only; the whole model-PC app is Rosy Learn (D-792).
+- A camera setup reference is not a camera profile: the profile (D-199, D-423) carries calibration and mount values a node uses at run time, while the setup reference is learning-side evidence that recordings share one viewpoint.
