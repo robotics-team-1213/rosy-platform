@@ -315,6 +315,7 @@ class RosTrajectoryActionPort:
             enable_rosout=False, start_parameter_services=False,
         )
         try:
+            self._client_node_identity = (self._event_node.get_name(), self._event_node.get_namespace())
             self._executor = SingleThreadedExecutor(context=node.context)
             self._client = ActionClient(self._event_node, FollowJointTrajectory, resolved_action,
                                         callback_group=callback_group)
@@ -330,6 +331,10 @@ class RosTrajectoryActionPort:
                 self._client.destroy()
             self._event_node.destroy_node()
             raise
+
+    @property
+    def client_node_identity(self) -> tuple[str, str]:
+        return self._client_node_identity
 
     def server_is_ready(self) -> bool:
         return not self._destroyed and self._thread.is_alive() and self._client.server_is_ready()

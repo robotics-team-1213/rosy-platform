@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · docs: OMX 스케줄링 관측과 수집 통합 결과 연결
 - 2026-10-17 · uncommitted · docs: OMX feedback 수정 근거와 staging 준비 결과 연결
 - 2026-10-17 · uncommitted · docs: 기존 파일럿 키의 릴리스 승인 환경 구성과 안내 정정
 - 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
 - 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
-- 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단

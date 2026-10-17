@@ -2953,3 +2953,9 @@
 - 변경: run_cell_owner와 g2_owner가 owner executor 종료 후 runtime.destroy를 호출해 분리된 액션 executor·노드도 정리하게 했다. 기동 승인·HOLD·장치 격리 조건은 유지한다.
 - 증거: 실제 caller의 생성·종료 경로를 확인했다. 액션 분리의 native 회귀·독립 검토·최종 GitHub CI는 PR #83에 기록하며 실제 호스트나 시뮬레이션 컨테이너를 기동하지 않는다.
 - gate 변화: 없음. 배포·서명·장치 수용은 미실행이다.
+
+## 2026-10-17 · uncommitted · fix: OMX 수집의 내부 액션 client 검사 연결
+
+- 변경: collector가 parent와 runtime의 실제 액션 노드 identity만 자기 client로 취급한다. 다른 이름·namespace의 client 거절과 정확한 vendor server 검사는 유지한다.
+- 증거: run39014273721에서 새 내부 client를 외부로 오인하는 RED 한 건을 재현했다. 정확한 소유 tuple 허용·다른 client 거절 시험과 native 회귀의 최종 결과는 PR #83에 기록한다.
+- gate 변화: 없음. 수집 서비스·실제 장치·staging 배포는 실행하지 않았다.

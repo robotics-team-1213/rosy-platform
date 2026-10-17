@@ -113,11 +113,13 @@ class RosBackend:
         from rclpy.action.graph import (get_action_client_names_and_types_by_node,
                                        get_action_server_names_and_types_by_node)
         servers = []
+        owned_clients = {(self.node.get_name(), self.node.get_namespace()),
+                         self.runtime.action_port.client_node_identity}
         for name, namespace in self.node.get_node_names_and_namespaces():
             actions = get_action_server_names_and_types_by_node(self.node, name, namespace)
             if any(action == self.profile['ros']['trajectory_action'] for action, _ in actions):
                 servers.append((name, namespace))
-            if (name, namespace) == (self.node.get_name(), self.node.get_namespace()):
+            if (name, namespace) in owned_clients:
                 continue
             clients = get_action_client_names_and_types_by_node(self.node, name, namespace)
             require(all(action != self.profile['ros']['trajectory_action'] for action, _ in clients),

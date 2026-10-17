@@ -607,3 +607,9 @@
 - 변경: OMX 전용 MTE subclass가 부모 spin hook의 인자·반환·예외를 유지하고 성공한 회차 뒤 sleep(0)으로 실행 기회를 넘긴다. 실제 owner 진입점·정책/시뮬/Fleet 회귀가 같은 helper를 쓰며 worker 수·poll 주기·0.5s 기준은 유지한다. spin·spin_once·future 대기와 종료 검증을 추가했다.
 - 증거: 진단 run39013248730은 host 1549 passed / 17 skipped, native 1 failed / 14 passed, Fleet native 2 passed. rclpy7.1.12에는 명시적 yield가 없었다. poll 사이 약0.577s 공백과 idle worker를 관찰했고 cancel은 약0.165ms에 반환했다. GIL 원인을 확정하지 않고 scheduling 보완의 효과를 같은 회귀로 검증한다.
 - gate 변화: 없음. 분리된 액션 노드가 새 collection의 단일 client 검사에 걸리는 경로도 확인해 exact owned identity의 RED 계약을 추가했다. 해당 통합 수정과 최종 GREEN 전에는 병합하지 않는다. 장치·실제 배포는 미실행이다.
+
+## 2026-10-17 · uncommitted · fix: 수집 client 식별 연결과 계측 없는 최종 회귀
+
+- 변경: 액션 노드의 고정 이름·namespace를 수집 경로에 제공하고 실제 소유한 client만 허용한다. 임시 trace를 제거하되 freshness·watchdog 완료·HOLD 검사는 유지했다. 수정 대상인 OMX timeout quarantine 한 항목만 제거해 자동 재시도 없이 검증한다.
+- 증거: 후보 commit `09c2451ac3e432f8e7aea8e20fbd68d326c31df0`의 run39014273721은 native 18 passed, Fleet native 2 passed, browser 9 passed. host는 의도한 수집 identity RED 한 건만 실패했다(1 failed / 1564 passed / 17 skipped). 후속 최종 head 검토와 CI는 PR #83에 기록한다.
+- gate 변화: 없음. stock MTE1·실물 정지·vendor Gazebo·staging 배포는 미검증이다. 별도 Fleet quarantine은 유지한다.
