@@ -98,3 +98,9 @@
 - 변경: AI 참고 패널을 사진 위로 재이동하던 한 줄을 제거해 원래 사진 아래 배치를 유지했다. 라벨·마스크·승인 쓰기 경로는 유지한다.
 - 증거: JavaScript 구문·차이 공백 검사와 독립 계약 검토 통과. 현재 시험 PC의 SSH 연결 시간 초과로 원격 브라우저 검증은 대기 중이다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
 - gate 변화: 없음. 기존 실패 항목 유지. 실제 원본·사람 라벨·DEVICE/FIELD 수용은 이번 수정으로 증명하지 않는다.
+
+## 2026-10-17 · uncommitted · 픽셀 AI 실행 패널을 사진 아래로 이동
+
+- 변경: 원격 재검증에서 사진 두 항목이 여전히 실패했고 canvas y=539.98을 확인했다. 동적으로 생성되는 AI 실행 패널도 상태줄 다음에 붙고 있어, 사진 아래 AI 참고 패널 다음으로 옮겼다.
+- 증거: `fcf3499fc7` 원격 focused 10 passed / 2 known failed 및 단독 보정 표시 1 passed, skip 없음. 수정 뒤 브라우저 검증은 다음 커밋에서 재실행한다. `C:/DevTemp/browser-regressions/recheck-20261017T051307Z/`.
+- gate 변화: 없음. 라벨·초안·승인 동작은 유지하며 기존 실패 항목은 실제 green 전까지 남긴다.
