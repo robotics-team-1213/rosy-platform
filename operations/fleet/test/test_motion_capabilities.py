@@ -218,7 +218,7 @@ def test_formation_refuses_unsupported_member_before_any_stream_opens(member, fl
 
 def test_a_display_past_max_age_answers_at_once_instead_of_waiting():
     """Network load: an unreachable robot's power read must not add wait_s to every state request."""
-    from fleet.server.console.console_view import CapabilityDisplay
+    from fleet.server.console_view import CapabilityDisplay
 
     class Slow:
         gate = None
