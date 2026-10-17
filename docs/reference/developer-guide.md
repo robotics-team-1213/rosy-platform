@@ -50,6 +50,46 @@ bash tools/run_fleet_sim.sh
 메모와 주행 세션은 소스나 설치물이 아니라 `data/teleop` 및 `data/drive`에 둔다.
 세션 파일은 커밋하지 않으며, 예외는 `data/README.md`를 따른다.
 
+### 로그 레벨과 디버거
+
+core 로그를 자세히 보려면 `log_level`을 준다. core 로거에만 적용되고 rcl/DDS 로그는 그대로다.
+
+```bash
+ros2 launch core rosy_core.launch.py log_level:=debug
+```
+
+중단점이 필요하면 debugpy로 띄우고 VS Code에서 붙는다. debugpy는 개발 PC에만 설치하고 payload에는 넣지 않는다.
+
+```bash
+python3 -m pip install --user debugpy
+# 클라이언트가 붙을 때까지 기다린다. 127.0.0.1에만 연다
+ros2 run --prefix 'python3 -m debugpy --listen 127.0.0.1:5678 --wait-for-client' core core
+```
+
+다른 PC(시뮬 PC 등)에서 띄웠다면 포트를 밖으로 열지 말고 SSH 터널로 가져온다: `ssh -N -L 5678:127.0.0.1:5678 <host>`.
+
+`.vscode/`는 gitignore 대상이라 설정은 각자 둔다. 개인 `.vscode/launch.json` 예:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "core attach (debugpy)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "justMyCode": false,
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}", "remoteRoot": "<원격 PC의 rosy-platform 경로>" }
+      ]
+    }
+  ]
+}
+```
+
+같은 PC에서 `--symlink-install`로 빌드했다면 `pathMappings`는 필요 없다. 원격이면 `remoteRoot`를 그 PC의 checkout 경로로 바꾼다.
+
 ## 테스트와 CI
 
 테스트는 세 단계다 ([D-436](../adr/D-436-change-scoped-test-tiers.md)).

@@ -8957,6 +8957,12 @@ osy-d395-s1d\`.
 - 증거: OMX 준비 브랜치 착지 검사에서 재현된 실패를 unchanged main f4b0caa69e의 동일 단일 시험에서 원격 재현했다. 외부 scratch main-world-model-matrix-red/run-1.txt. 새 실패를 known_failures에 추가하거나 검사 범위를 줄이지 않았다.
 - gate 변화: runtime/실물/학습 변화 없음. 추가 준비와 camera 연결 부재 기록은 validation/omx-remaining-preparation-2026-10-17/follow-up.md. 실제 시연0회.
 
+## 2026-10-17 · 9108fd4d8e · docs(omx): native startup 취소와 실행 권한 검증 범위 기록
+
+- 변경: startup의 별도 허가·현재 세대·정지 전달·UDS 상실과 실제 G2/실물 수용을 구분한 검증 기록을 추가했다.
+- 증거: docs/validation/omx-native-startup-2026-10-17/result.md. 원격 최종 집중 66 passed, 독립 리뷰 material finding 0건. action_api listener 수명 조회 8줄의 별도 Safety-Review를 결속했다.
+- gate 변화: 소프트웨어 검증만 기록한다. Docker 없는 native discovery와 G2 격리/task를 구분하며, 관리자 namespace 실행 전까지 G2 runtime과 실제 데이터 학습을 완료로 표시하지 않는다.
+
 ## 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
 
 - 변경: D-778/D-779/D-780/D-781 G1을 ROS 없이 옮겼다. `mixed_reach.py`(D-402 IK reach, `mixed_cell.Reach` 모양), `test/g1_layout.py`(IK 감사, capsule 휩쓸림 간격, 일정 모델), `test/g1_sim_harness.py`(Fleet multi-arm dispatcher → 실제 cell owner 두 개 + 조율자, 대체한 부분은 파일 머리), G1 작업대(home x 0.08 m)와 4종 레시피 fixture, 배치·끝까지·장애·시간 시험 3개.

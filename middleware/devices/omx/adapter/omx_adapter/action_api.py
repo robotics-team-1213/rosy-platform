@@ -315,7 +315,13 @@ class UnixActionServer:
             raise ValueError("UDS socket mode is fixed at 0660")
         self.socket_mode = socket_mode
         self._stop = threading.Event()
+        self._serving = threading.Event()
         self._socket: socket.socket | None = None
+
+    @property
+    def is_serving(self) -> bool:
+        """A requested stop closes readiness before the accept thread finishes."""
+        return self._serving.is_set() and not self._stop.is_set()
 
     def serve_forever(self) -> None:
         if not hasattr(socket, "SO_PEERCRED"):
@@ -333,6 +339,7 @@ class UnixActionServer:
             os.chmod(self.socket_path, self.socket_mode)
             listener.listen(8)
             listener.settimeout(0.5)
+            self._serving.set()
             while not self._stop.is_set():
                 try:
                     connection, _ = listener.accept()
@@ -351,6 +358,7 @@ class UnixActionServer:
                         # Keep the owner and journal alive; never replay the request.
                         continue
         finally:
+            self._serving.clear()
             listener.close()
             self._socket = None
             if self.socket_path.exists() and self.socket_path.is_socket():
