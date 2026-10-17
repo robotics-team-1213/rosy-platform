@@ -15,9 +15,9 @@ The other inputs mirror the single-arm compiler (compiler.py ``_transfer``, plan
   its own top face, so the cap keeps carry >= approach. The cap only lowers a point on the
   vertical line, never the horizontal move.
 - ``home_pose_base`` is the arm's taught home from the cell document.
-- ``item`` is ``box``: the CELL_TRANSFER contract accepts only box or slip_sheet. The sku is in
-  the Job document (``plan.steps[].sku``); a per-sku item on the wire needs the contract and the
-  owner's accepted item geometry to know several skus (D-781 §2, follow-up).
+- ``item`` is ``box`` and ``sku`` is the Step's sku (D-781 §2): the CELL_TRANSFER body carries it,
+  and the owner looks the grasp geometry up by ``box:<sku>`` in the accepted recipe. The plan
+  (``plan.steps[].sku``) and these inputs agree by construction.
 - ``layer_index`` is the support level: 0 on the pallet, else 1 + the highest level of the boxes
   it rests on. A mixed stack has no layers; this number only names the height band.
 
@@ -38,7 +38,7 @@ from .mixed_planner import plan_mixed
 from .mixed_recipe import MixedRecipe
 from .mixed_rules import supporters
 
-SUBMISSION_VERSION = "rosy.palletizing.mixed_submission/1"
+SUBMISSION_VERSION = "rosy.palletizing.mixed_submission/2"  # /2: inputs carry sku
 SKILL_ID, SKILL_VERSION = "pallet.transfer", "1.0.0"
 ITEM = "box"
 _DIGITS = 9
@@ -82,6 +82,7 @@ def transfer_inputs(step: PlanStep, role: str, station: str, *, recipe: MixedRec
     hx, hy, hz, hyaw = home
     return {
         "item": ITEM,
+        "sku": step.sku,
         "pallet_id": step.pallet_id,
         "layer_index": layer_index,
         "home_pose_base": {"x_m": hx, "y_m": hy, "z_m": hz, "yaw_rad": hyaw},

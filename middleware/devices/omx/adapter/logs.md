@@ -529,3 +529,9 @@
 - 증거: 원격 pytest(조율자 부분 해제·끝난 짝·owner fence 종료·boot·해제 거절·BARRIERS_UNSUPPORTED 시험 추가). 물리 장치·ROS-SIM은 하지 않았다.
 - 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
 - gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+
+- 변경: `capability_current`, `transfer_provider` 계획기 요청, SIM 그리퍼 판정이 grant의 `item_key`로 승인된 형상을 찾는다. sku가 없으면 키는 지금처럼 `box`다. `PalletizingCellDocumentValidator`는 recipe/3를 cell/3 문서에 대해 혼합 컴파일러로 검증하고, sku마다 `box:<sku>` 형상(잡는 폭 = `width`)을 낸다. owner는 아직 cell/3를 승인하지 않는다(`validate_cell`은 cell/1 로더다). 그래서 실제 owner에서 recipe/3 승인은 거절된다. 이 승인에는 ADR이 필요하다. safety 모듈은 건드리지 않았다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.

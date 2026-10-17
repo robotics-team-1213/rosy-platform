@@ -8,11 +8,13 @@ cannot assert satisfaction (the wire model has no ``satisfied`` field). Evidence
 before the terminal success is stored and applied when the dispatcher records that success.
 
 A multi-arm Job (D-779 §3) is judged per step, not by ``current_step_index``: the evidence names
-the Action of the arm the stored predicate was compiled for (the placement's first primary arm),
-the producer is registered for the Job's cell and that arm's instance, and the step is confirmed
-only after every assigned arm Action's durable success, observed after the last of them. A step
-run by an alternate arm has no predicate in its frame yet and is refused (fail closed, D-779 open
-question on alternate-arm goal tolerance).
+the Action of the step's predicate arm (the first assigned arm: the first primary arm, or the
+alternate that took the step, D-779 §4), the producer is registered for the Job's cell and that
+arm's instance, and the step is confirmed only after every assigned arm Action's durable success,
+observed after the last of them. The predicate is the one stored for that arm, in its own base
+frame (``goal_predicates``, D-781 §5). The legacy single ``goal_predicate`` is in the first primary
+arm's frame, so it never judges an alternate: a step taken by an alternate without a stored
+predicate for that arm is refused (CELL_GOAL_PREDICATE_MISSING, fail closed).
 """
 
 from __future__ import annotations
@@ -44,11 +46,12 @@ class CellGoalEvidenceService:
     def _arm_step(job, step, action_id):
         """Multi-arm: the step seen through the predicate arm's Action that the evidence names."""
         placement = next(item for item in job["placements"] if item["step_index"] == step["step_index"])
-        frame_arm = placement["arms"][0]
+        frame_arm = placement["assigned"][0]
         mine = [action for action in job["step_actions"] if action["step_index"] == step["step_index"]]
         action = next((item for item in mine if item["action_id"] == action_id), None)
         peers = [item for item in mine if item["arm_role"] in placement["assigned"]]
-        if (action is None or action["arm_role"] != frame_arm or frame_arm not in placement["assigned"]
+        if (action is None or action["arm_role"] != frame_arm
+                or frame_arm not in (*placement["arms"], *placement["alternates"])
                 or sorted(item["arm_role"] for item in peers) != sorted(placement["assigned"])
                 or any(item["grant"] is None for item in peers)):
             raise GoalEvidenceSubmissionError("EVIDENCE_SCOPE_MISMATCH",
@@ -56,7 +59,20 @@ class CellGoalEvidenceService:
         instance = next(arm["instance_id"] for arm in job["arms"] if arm["arm_role"] == frame_arm)
         return {**step, "action_id": action["action_id"], "attempt_id": action["attempt_id"],
                 "request_digest": action["request_digest"], "grant": action["grant"],
-                "instance_id": instance, "peers": peers}
+                "instance_id": instance, "peers": peers, "frame_arm": frame_arm,
+                "first_primary": placement["arms"][0]}
+
+    @staticmethod
+    def _predicate(step):
+        """The stored predicate in the frame of the arm that ran the step, else None."""
+        stored = step["step"]
+        if "frame_arm" not in step:
+            return stored.get("goal_predicate")
+        per_arm = stored.get("goal_predicates")
+        if per_arm is not None:
+            return per_arm.get(step["frame_arm"])
+        # Only the first primary arm's frame has a legacy single predicate; an alternate never uses it.
+        return stored.get("goal_predicate") if step["frame_arm"] == step["first_primary"] else None
 
     def _validate(self, producer, job, raw, now):
         try:
@@ -93,7 +109,7 @@ class CellGoalEvidenceService:
                        for observed in (evidence.observed_at, evidence.gripper_observed_at))):
             raise GoalEvidenceSubmissionError("CELL_GOAL_EVIDENCE_INVALID",
                                               "Cell observations are stale or out of order")
-        if step["step"].get("goal_predicate") is None:
+        if self._predicate(step) is None:
             raise GoalEvidenceSubmissionError("CELL_GOAL_PREDICATE_MISSING",
                                               "the step has no stored item_at_pose predicate")
         return evidence, step
@@ -143,7 +159,7 @@ class CellGoalEvidenceService:
             "attempt_id": evidence.attempt_id, "gripper_state": evidence.gripper_state,
             "gripper_evidence_id": evidence.gripper_evidence_id,
         })
-        predicate = item_pose_predicate(job["mission_id"], step["step_index"], step["step"]["goal_predicate"])
+        predicate = item_pose_predicate(job["mission_id"], step["step_index"], self._predicate(step))
         return predicate, verify_item_at_pose(predicate, observed, now=now, max_age_s=producer.max_age_s)
 
     def on_action_terminal(self, mission_id, step_index=None):
@@ -171,7 +187,7 @@ class CellGoalEvidenceService:
                 continue
             placement = next(item for item in job["placements"] if item["step_index"] == index)
             action = next((item for item in job["step_actions"] if item["step_index"] == index
-                           and item["arm_role"] == placement["arms"][0] and item["action_id"] is not None), None)
+                           and item["arm_role"] == placement["assigned"][0] and item["action_id"] is not None), None)
             stored = action and self.store.latest_for_attempt(
                 mission_id=job["mission_id"], action_id=action["action_id"], attempt_id=action["attempt_id"])
             if not stored:

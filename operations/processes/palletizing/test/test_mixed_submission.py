@@ -106,7 +106,7 @@ def test_two_arm_fixture_compiles_every_arm_in_its_own_frame():
         item = items[step.sku]
         for role, inputs in placement["actions"].items():
             base = bases[role]
-            assert inputs["item"] == "box" and inputs["pallet_id"] == "A"
+            assert inputs["item"] == "box" and inputs["pallet_id"] == "A" and inputs["sku"] == step.sku
             assert inputs["home_pose_base"] == {"x_m": 0.12, "y_m": 0.0, "z_m": 0.12, "yaw_rad": 0.0}
             place = to_cell(base, inputs["destination_pose_base"])
             assert place[:3] == pytest.approx((step.pose_cell.x, step.pose_cell.y, step.pose_cell.z), abs=1e-8)

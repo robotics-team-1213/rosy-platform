@@ -16,6 +16,7 @@ D-667: observation types and pure input validity are implemented once in `core_c
 | `pyproject.toml` | Package `rosy-world` |
 | `src/rosy/world/api/` | Immutable observation/evidence references |
 | `src/rosy/world/state/projections/map_pose.py` | Existing MapPose tracker: sightings, operator pins and odom bridging; stdlib only |
+| `src/rosy/world/state/projections/arm_state.py` | D-782 §3 current OMX arm state from owner observations: normalized joints, freshness, monotonic clock; object state stays `unobserved` |
 | `src/rosy/world/state/projections/road_region.py` | D-665 camera-local region input validity: timestamps, frame, calibration, transform and evidence binding; offline evaluation consumer, no image geometry or driving |
 | `test/` | Canonical Fleet consumers and independent wheel installation |
 | `COLCON_IGNORE` | Not a colcon package |

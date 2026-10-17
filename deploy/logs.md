@@ -2953,3 +2953,9 @@
 - 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
 - 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
 - gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · 52062796dd · feat(omx): Docker 없는 native Gazebo 실행 경로
+
+- 변경: 기존 follower simulation launcher가 명시적 native ROS setup·사용자 overlay, checkout 기준 world, 원격 실행기가 할당한 ROS domain을 받는다. site marker는 setup 전에 거부하고 log directory를 만든다. 기존 OCI 기본 overlay도 유지한다.
+- 증거: 75632f0aac 원격 RED 2 failed/2 passed에서 누락 overlay 선택을 확인한 뒤 52062796dd 원격 launcher·workstation·vendor lock 24 passed. 별도 리뷰 material finding 0건. 실제 Bash argv/env·실패 전파를 검사했고 site guard 제거 mutation이 실제 fake launch에 도달하여 같은 테스트가 실패한 뒤 원본 재실행은 통과했다.
+- gate 변화: native launcher 소스·원격 계약 검증. Gazebo 실제 기동·Fleet task·G2 격리·startup 이동·실물·학습 수용 증거는 아니다. G2 guard와 startup HOLD는 유지하며 Docker 권한·설치는 요구하지 않는다.
