@@ -39,10 +39,11 @@ openssl pkey -in rosy-release-2026-01.key -pubout -out rosy-release-2026-01.pem
 ```
 
 - `.key`가 개인키다. 이 파일은 서명 환경을 절대 떠나지 않는다.
-- `.pem`이 공개키다. 이것은 **이미지에** 들어간다 — 장비의
-  `/etc/rosy/trusted-release-keys/<key-id>.pem`. 저장소에는 커밋하지 않는다:
-  `test_no_private_key_is_tracked_in_the_repository`가 확장자만 보고 거부하며,
-  공개키 예외를 두면 개인키가 섞여 들어와도 알아채지 못한다.
+- `.pem`이 공개키다. 장비의 `/etc/rosy/trusted-release-keys/<key-id>.pem`에 들어간다.
+  승인된 공개키만 `deploy/robot/pinky_pro/release/public-keys/`에 커밋한다.
+  `test_only_public_release_key_pems_are_tracked_in_the_repository`가 경로와
+  공개키 표시와 개인키 표시 부재를 검사한다. 사용할 키는 Ed25519여야 하며,
+  이 파일 경계 검사만으로 알고리즘 검증을 대신하지 않는다. 개인키는 저장소 밖에 둔다.
 - key id(`rosy-release-2026-01`)는 manifest의 `signing_key_id`와 장비의
   `/etc/rosy/trusted-release-keys/` 파일명에 함께 쓰인다. 소문자·숫자·하이픈만
   허용된다(`deploy/robot/pinky_pro/release/manifest.py`의 `_KEY_ID`).
@@ -62,8 +63,8 @@ openssl pkey -in rosy-release-2026-01.key -pubout -out rosy-release-2026-01.pem
 
 | 금지 | 강제 수단 |
 |---|---|
-| 저장소에 개인키를 커밋하는 것 | `test_no_private_key_is_tracked_in_the_repository` + `secret_scan` |
-| `.key` / `.pem` / `id_ed25519` 형태의 파일을 추적 대상에 넣는 것 | 같은 테스트 |
+| 저장소에 개인키를 커밋하는 것 | `test_only_public_release_key_pems_are_tracked_in_the_repository` + `secret_scan` |
+| 개인키 파일이나 승인된 공개키 경로 밖의 PEM을 추적하는 것 | 같은 테스트가 경로·확장자·공개키/개인키 표시를 확인. Ed25519 선택·서명 검증은 별도 |
 | 컨테이너·SD 이미지에 개인키를 넣는 것 | **CI 밖.** WP-6의 이미지 검사가 마운트된 트리에 `secret_scan`을 돌려야 확인된다 |
 | 빌드 호스트에 개인키를 두는 것 | **CI 밖.** 서명 환경 분리라는 운영 규율로만 보장된다 |
 
@@ -100,13 +101,21 @@ v1의 온라인 키 rotation은 비범위다. 교체 경로는 하나뿐이다.
 `manifest.json`에 `release_id: 2026.09.21-001`, full 40-hex `git_revision`,
 `signing_key_id: rosy-release-2026-01`이 기입된 payload다.
 
-### 7.0 키가 아직 없다
+### 7.0 파일럿 키와 게시 승인
 
-`deploy/robot/pinky_pro/release/public-keys/`는 비어 있다(README: "No production key exists
-yet"). 가장 먼저 §3대로 **서명 전용 환경에서** 키를 생성하고 §5대로 백업한다.
-개발 PC·CI·로봇에서 키를 만들지 않는다. 키 소유권이 정해지면 공개키만
-`deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem`으로 커밋하고, GitHub
-`release` 환경의 `ROSY_RELEASE_KEY_ID`에 같은 key id를 승인 필수로 등록한다.
+현재 파일럿 공개키는 `public-keys/rosy-release-2026-01.pem`이다([키 상태](../../deploy/robot/pinky_pro/release/public-keys/README.md)). 개인키는 운영자의 보호된 오프라인 서명 환경에만 있으며 이 작업에서 조회하거나 생성하지 않았다. 프로덕션 키 소유권과 교체는 별도 릴리스 결정이다.
+
+2026-10-17에 공개 저장소의 `release` 환경을 구성하고 API로 재확인했다.
+
+| 항목 | 설정 |
+|---|---|
+| 승인 담당 | 기존 게시 담당 `livsbittt`. 단일 게시 담당이 자신의 실행도 승인할 수 있으며 두 사람 승인을 뜻하지 않음 |
+| 실행 ref | `main` 브랜치만 허용. 입력한 릴리스 태그의 승인·서명 검증은 별도 |
+| 관리자 우회 | 꺼짐 |
+| 환경 변수 | `ROSY_RELEASE_KEY_ID=rosy-release-2026-01` |
+| 환경 secret | 없음. 개인키를 GitHub로 전달하지 않음 |
+
+실제 게이트 구성 근거는 [환경 검증 기록](../validation/release-environment-2026-10-17.md)을 본다. 이 설정 확인은 게시 시험이 아니다. 승인된 draft·태그·소스 SHA·외부 서명 산출물을 확보한 뒤 기존 검증 절차로 게시한다.
 
 ### 7.1 서명 환경(오프라인)에서 — package_release
 

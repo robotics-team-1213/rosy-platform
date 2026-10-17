@@ -32,7 +32,7 @@ class RosBackend:
     def __init__(self, profile, acceptance, teacher):
         validate_profile(profile, mode='hardware', acceptance=acceptance, teacher=teacher)
         import rclpy
-        from rclpy.executors import MultiThreadedExecutor
+        from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
         from omx_adapter.command_owner import ArmCommandConfig
         from omx_adapter.ros_runtime import RosArmCommandRuntime
         from collection_ros_inputs import RosInputs
@@ -70,7 +70,7 @@ class RosBackend:
             self.runtime = RosArmCommandRuntime(self.node, owner,
                 joint_state_topic=profile['ros']['joint_state_topic'],
                 trajectory_action=profile['ros']['trajectory_action'], on_goal_event=self.on_event)
-            self.executor = MultiThreadedExecutor(num_threads=4)
+            self.executor = OwnerMultiThreadedExecutor(num_threads=4)
             self.executor.add_node(self.node)
             self.thread = threading.Thread(target=self.executor.spin, daemon=True)
             self.thread.start()
@@ -113,11 +113,13 @@ class RosBackend:
         from rclpy.action.graph import (get_action_client_names_and_types_by_node,
                                        get_action_server_names_and_types_by_node)
         servers = []
+        owned_clients = {(self.node.get_name(), self.node.get_namespace()),
+                         self.runtime.action_port.client_node_identity}
         for name, namespace in self.node.get_node_names_and_namespaces():
             actions = get_action_server_names_and_types_by_node(self.node, name, namespace)
             if any(action == self.profile['ros']['trajectory_action'] for action, _ in actions):
                 servers.append((name, namespace))
-            if (name, namespace) == (self.node.get_name(), self.node.get_namespace()):
+            if (name, namespace) in owned_clients:
                 continue
             clients = get_action_client_names_and_types_by_node(self.node, name, namespace)
             require(all(action != self.profile['ros']['trajectory_action'] for action, _ in clients),

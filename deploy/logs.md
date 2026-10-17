@@ -2947,3 +2947,15 @@
 - 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
 - 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
 - gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
+
+## 2026-10-17 · uncommitted · fix: OMX 시뮬레이션 owner 종료 자원 정리
+
+- 변경: run_cell_owner와 g2_owner가 owner executor 종료 후 runtime.destroy를 호출해 분리된 액션 executor·노드도 정리하게 했다. 기동 승인·HOLD·장치 격리 조건은 유지한다.
+- 증거: 실제 caller의 생성·종료 경로를 확인했다. 액션 분리의 native 회귀·독립 검토·최종 GitHub CI는 PR #83에 기록하며 실제 호스트나 시뮬레이션 컨테이너를 기동하지 않는다.
+- gate 변화: 없음. 배포·서명·장치 수용은 미실행이다.
+
+## 2026-10-17 · uncommitted · fix: OMX 수집의 내부 액션 client 검사 연결
+
+- 변경: collector가 parent와 runtime의 실제 액션 노드 identity만 자기 client로 취급한다. 다른 이름·namespace의 client 거절과 정확한 vendor server 검사는 유지한다.
+- 증거: run39014273721에서 새 내부 client를 외부로 오인하는 RED 한 건을 재현했다. 정확한 소유 tuple 허용·다른 client 거절 시험과 native 회귀의 최종 결과는 PR #83에 기록한다.
+- gate 변화: 없음. 수집 서비스·실제 장치·staging 배포는 실행하지 않았다.

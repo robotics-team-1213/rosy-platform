@@ -21,8 +21,9 @@ def test_node_uses_assembled_core_services_for_startup_and_shutdown(
 
     events = SimpleNamespace(subscribe=Mock(), publish=Mock())
     state = SimpleNamespace(set_map_id=Mock(), set_safety_policy_provider=Mock())
-    line_follow = SimpleNamespace(config=SimpleNamespace(lidar_forward_deg=180.0),
-                                  use_lidar_forward=Mock())
+    line_follow = SimpleNamespace(config=SimpleNamespace(lidar_forward_deg=180.0, bridge_enabled=False,
+                                                         site_floor_map_id=None),
+                                  use_lidar_forward=Mock(), bind_return_motion=Mock())
     limits = SimpleNamespace(max_linear=0.3, max_angular=1.0, manual_linear=0.2,
                              manual_angular=0.8, fleet_linear=0.25, fleet_angular=0.9)
     runtime_probe = SimpleNamespace(attach_ros_graph_provider=Mock())
