@@ -628,11 +628,18 @@ def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
     home, env = _job_env(tmp_path, "sleep 30\n")
-    assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
-    lock = home / "rosy-jobs" / "r.lock"
-    _wait_for_lock(lock)
-    _sh(rj.KILL, env, "r")
-    assert _poll_until_done(env) == 143 and not lock.exists()
+    move = tmp_path / "bin" / "mv"
+    move.write_text('#!/bin/bash\n/bin/mv "$@" || exit $?\n'
+                    'while [ ! -e "$HOME/release" ]; do sleep 0.01; done\n')
+    move.chmod(0o755)
+    try:
+        assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
+        lock = home / "rosy-jobs" / "r.lock"
+        _wait_for_lock(lock)
+        _sh(rj.KILL, env, "r")
+        assert _poll_until_done(env) == 143 and not lock.exists()
+    finally:
+        (home / "release").touch()
 
 
 def test_ctrl_c_during_the_start_backoff_still_kills_the_job(tmp_path):
