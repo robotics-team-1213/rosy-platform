@@ -1,0 +1,108 @@
+"""Real LeRobot export environment smoke; synthetic records never assert field acceptance."""
+import os
+from pathlib import Path
+import subprocess
+
+import pytest
+
+
+def test_collection_intake_real_native_split_roundtrip(tmp_path):
+    python = os.environ.get('ROSY_OMX_LEROBOT_PYTHON')
+    if not python:
+        pytest.skip('set ROSY_OMX_LEROBOT_PYTHON to the pinned LeRobot 0.4.4 export environment')
+    assert Path(python).is_file(), 'configured LeRobot interpreter is missing'
+    root = Path(__file__).resolve().parents[1]
+    script = r'''
+import importlib.metadata
+import json
+from pathlib import Path
+import sys
+assert importlib.metadata.version('lerobot') == '0.4.4'
+repo, work = Path(sys.argv[1]), Path(sys.argv[2])
+sys.path.insert(0, str(repo/'learning/curation/omx'))
+sys.path.insert(0, str(repo/'learning/training/omx'))
+sys.path.insert(0, str(repo/'deploy/robot/omx'))
+from collection_profile import digest
+from collection_store import RawCollection, append, save
+from collection_intake import prepare
+from native_review import load_dataset, split_reviewed
+from native_cycle import run_cycle, validate_split
+sessions = []
+for i in range(3):
+    source = work/f'raw-{i}'
+    start = 100+i*100
+    profile = dict(rig_revision='synthetic-rig', calibration_revision='synthetic-cal', fps=10,
+                   task='synthetic pipeline fixture', camera_shapes={r:[32,32,3] for r in ('top','front')})
+    # The journal is exercised directly; this fixture never invokes a motion backend.
+    teacher = dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.1)])
+    store = RawCollection(source, profile, digest(teacher), 'hardware')
+    save(source/'teacher.json', teacher)
+    event = dict(policy='omx-photometric-v3', run_id=f'synthetic-run-{i}', profile_sha256='a'*64,
+                 recorded_ns=start, motion_admitted=False, physical_acceptance=False,
+                 photometric_ready=False, observations={}, environment={r:dict(state='OBSERVING',
+                     condition=None, environment_epoch=0, control_generation=0) for r in ('top','front')})
+    append(source/'environment.jsonl', event)
+    episode = store.begin(start, event)
+    command = episode['cycle_id']+'-0'
+    ledger = [dict(kind='INTENT', command_id=command, step=teacher['steps'][0], time_ns=start),
+              dict(kind='SUBMISSION', command_id=command, decision=dict(accepted=True), time_ns=start+1),
+              dict(kind='GOAL_ACCEPTED', command_id=command, goal_id=f'synthetic-goal-{i}', sequence=1,
+                   observed_at_monotonic_s=1.),
+              dict(kind='TERMINAL_RESULT', command_id=command, goal_id=f'synthetic-goal-{i}', sequence=2,
+                   observed_at_monotonic_s=2., status=4, result_code=0),
+              dict(kind='TERMINAL', command_id=command, time_ns=start+3,
+                   result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+    for fact in ledger:
+        append(source/'events.jsonl', fact)
+    observation = dict(time_ns=start+1, observation_state=[0.]*6, action=[float(i+1)]*6,
+                       joint_source_stamp=1.+i, reference_source_stamp=1.+i,
+                       images={r:dict(data=bytes([100,110,120])*1024, width=32, height=32,
+                                      source_stamp=1.+i) for r in ('top','front')})
+    for frame in range(2):
+        observation.update(time_ns=start+frame+1, joint_source_stamp=1.+i+frame/10,
+                           reference_source_stamp=1.+i+frame/10)
+        for image in observation['images'].values():
+            image['source_stamp'] = 1.+i+frame/10
+        store.sample(episode, observation, [0.]*6)
+    episode.update(complete=True, reason='', end_ns=start+10)
+    store.close(dict(hold_requested=True, terminal_observed=True, physical_stop_verified=False))
+    sessions.append(source)
+dataset = work/'dataset'
+receipt = prepare(sessions, dataset, 'rosy-fixture/collection')
+report = json.loads((dataset/'inspection.json').read_text())
+decisions = json.loads((dataset/'decisions.json').read_text())
+assert report['reader_verified'] and report['frame_count'] == 6
+reader = load_dataset(dataset, 'rosy-fixture/collection')
+for i in range(3):
+    for frame in range(2):
+        actual = reader[i*2+frame]
+        assert actual['action'].tolist() == [float(i+1)]*6
+        assert actual['observation.state'].tolist() == [0.]*6
+        assert str(actual['source.capture_time_ns'].dtype) == 'torch.int64'
+        assert actual['source.capture_time_ns'].numel() == 1
+        assert actual['source.capture_time_ns'].item() == 100+i*100+frame+1
+        for name in ('joint', 'reference', 'top', 'front'):
+            value = actual[f'source.{name}_time_ns']
+            assert str(value.dtype) == 'torch.int64'
+            assert value.numel() == 1 and value.item() == round((1.+i+frame/10)*1e9)
+assert all(e['outcome'] == 'unknown' and e['split'] == 'exclude' for e in decisions)
+for decision, split in zip(decisions, ('train','eval','test')):
+    decision.update(outcome='success', split=split, reviewer='synthetic test fixture',
+                    reason='synthetic labels for byte and pipeline compatibility only')
+splits = work/'splits'
+split_reviewed(dataset, report, decisions, splits)
+bound = validate_split(splits)
+assert bound['splits'] == dict(train=[0], eval=[1], test=[2])
+assert all(bound['environment_coverage'][name]['episodes'] == 1 for name in ('train','eval','test'))
+assert bound['source']['environment_summary']['physical_acceptance'] is False
+assert receipt['sessions'][0]['manifest_sha256']
+assert not receipt['uploaded']
+cycle = run_cycle(splits, work/'act-cycle', steps=2, batch_size=1, device='cpu', timeout=240)
+assert (work/'act-cycle').is_dir()
+print('verified synthetic closed-record intake -> LeRobot reader -> independent reviewed splits -> trainer input')
+'''
+    result = subprocess.run([python, '-c', script, str(root), str(tmp_path)],
+                            env={**os.environ, 'HF_HUB_OFFLINE': '1', 'HF_DATASETS_OFFLINE': '1'},
+                            capture_output=True, text=True, timeout=600)
+    assert result.returncode == 0, result.stdout+'\n'+result.stderr
+    assert 'verified synthetic closed-record intake' in result.stdout

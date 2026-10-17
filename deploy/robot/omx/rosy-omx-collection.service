@@ -1,0 +1,15 @@
+[Unit]
+Description=Bounded OMX collection through the existing native command owner
+
+[Service]
+Type=exec
+EnvironmentFile=%h/.config/rosy/omx-collection.env
+ExecStart=/usr/bin/bash ${ROSY_OMX_COLLECTION_ROOT}/deploy/robot/omx/run_collection.sh
+Restart=no
+KillSignal=SIGINT
+TimeoutStopSec=5
+RuntimeMaxSec=120
+UMask=0077
+NoNewPrivileges=yes
+MemoryMax=2G
+LimitCORE=0
