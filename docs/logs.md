@@ -8937,6 +8937,26 @@ osy-d395-s1d\`.
 - gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
 
 
+## 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
+
+- 변경: 필수 실행 env·ROS setup/domain·새 OUTPUT 규칙과 첫 현장 기록지를 준비했다. gitignored private 재개 묶음은 수집 비활성 상태의 환경 준비/고립 거부 검사, passive 카메라/ROS 진단과 모델 진입점/공간 점검을 제공한다.
+- 증거: Bash/Python 문법 검사 통과. Fleet/모델 SSH banner 시간 초과, AI 직접 TCP 시간 초과, 모델/AI Tailscale offline. Fleet 직접 접속도 완료되지 않음. 원격 준비 미실행이며 기존 배치 성공과 구분한다. docs/validation/omx-remaining-preparation-2026-10-17/result.md.
+- gate 변화: 없음. 신규 원격 실행 검증·실물 구동/측정·실제 시연/학습은 미완료, 실제 시연0회. D-770 Proposed 유지.
+
+
+## 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
+
+- 변경: 최초 실패 이후 원격 재시도 성공을 별도 follow-up에 기록하고 실행 안내의 현재 상태를 갱신했다. Fleet 실제 collection env 설치·고립 비활성 launcher 거부·inactive, 모델 help/소스 무결성/수신 경로·free195672408064bytes 확인.
+- 증거: 양쪽 준비 묶음 exit0. 원격 문서 계약142pass, 기존 camera source7pass, NEW0. 모델 helper source 검증 순서·고정 로그 경로를 수정하고 최종 독립 리뷰 material finding0건. docs/validation/omx-remaining-preparation-2026-10-17/follow-up.md.
+- gate 변화: 구동 없는 실행 환경 준비 완료. 두 외장 camera stable by-id 장치 부재, 신규 영상0frame/STALE로 수집 차단. 실제 재연결·실측/물리 정지·시야/하중 수용·시연/실데이터 학습은 미완료, 실제 시연0회. D-770 Proposed 유지.
+
+
+## 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
+
+- 변경: learning-policy full matrix의 정확한 suite 집합에 이미 등록된 world-model training/evaluation/prediction 세 경로를 기존 계약 시험의 기대값에도 포함했다. 정확한 일치·ROS-free·FULL_SUITES 포함 검사는 유지한다.
+- 증거: OMX 준비 브랜치 착지 검사에서 재현된 실패를 unchanged main f4b0caa69e의 동일 단일 시험에서 원격 재현했다. 외부 scratch main-world-model-matrix-red/run-1.txt. 새 실패를 known_failures에 추가하거나 검사 범위를 줄이지 않았다.
+- gate 변화: runtime/실물/학습 변화 없음. 추가 준비와 camera 연결 부재 기록은 validation/omx-remaining-preparation-2026-10-17/follow-up.md. 실제 시연0회.
+
 ## 2026-10-17 · eab1d0fb1 · 남은 브라우저 회귀 수정 준비
 
 - 변경: 픽셀 사진을 AI 참고 패널보다 먼저 두고, 만료 토큰·CSP·단독 import 경로 시험을 현재 계약에 맞췄다.

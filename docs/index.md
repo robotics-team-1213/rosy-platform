@@ -340,5 +340,5 @@
 - 2026-10-17 · 0e8ba72832 · 잔여 브라우저 다섯 실패의 원격 확인
 - 2026-10-17 · a1372f7e7 · 잔여 브라우저 수정의 원격 검증 미실행
 - 2026-10-17 · eab1d0fb1 · 남은 브라우저 회귀 수정 준비
-- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
-- 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
+- 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
+- 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
