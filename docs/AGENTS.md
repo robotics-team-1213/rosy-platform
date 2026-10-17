@@ -43,7 +43,7 @@ Content lives in the subdirectories below; at this root only the harness records
 - 문서 내용·구조·표현은 [D-777](adr/D-777-concise-human-agent-documentation.md)을 따른다. 기준 문서의 책임과 기존 링크를 확인한 뒤 편집한다.
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
-- Do not put implementation code here. Specs constrain `src/`; deployment docs constrain `deploy/`.
+- Do not put implementation code here. Specs constrain the source roots in `tools/harness/platform_parts.yaml`; deployment docs constrain `deploy/`.
 - Changing API paths or envelope fields requires updating `reference/ROSY API & Protocol Reference.md` **and** `core_common/protocol/schemas.py` together (D-18).
 - ADRs are append-only: mark old ones `Superseded`, add a new ID. Do not silently rewrite D-n.
 - Dated files in `plans/` are the working design trail; `plans/ROSY Implementation Plan.md` is the (historical) WBS tracker.

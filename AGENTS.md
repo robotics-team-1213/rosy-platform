@@ -121,6 +121,8 @@ Tiers (D-436). **This machine requests affected and pre-push pytest through `too
 
 GitHub results (the full tier is never re-run locally to "check"):
 
+The selector's `affected --run` calls pytest on the invoking host; it does not send work to a test PC. Never use it on this laptop. Print the selection or pass its JSON to the remote runner as shown below.
+
 ```bash
 gh run list --branch <branch> -L 3                      # find the run for your push / PR
 gh run watch <run-id> --exit-status                     # wait; non-zero exit when it fails
@@ -136,8 +138,11 @@ The direct pytest examples below are for CI or the selected Linux test PC. From 
 # Affected tier (D-436): tests of the touched modules + reverse dependents + tests naming the
 # changed paths + the guard set; prints why each suite runs and when it escalates to FULL.
 # Suites sharing a test basename (gateway vs sensing test_battery.py) come out as separate runs.
-python tools/harness/rosy_harness.py affected --base main          # print the selection
-python tools/harness/rosy_harness.py affected --base main --run    # run it
+python tools/harness/rosy_harness.py affected --base origin/main --print
+python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir <external-log-dir>
+
+# Compare every run-N.txt printed by the remote runner, not only run-1.txt.
+# For each log: python test/known_failures.py <external-log-dir>/run-N.txt
 
 # Quick tier (D-346): the pre-commit/push gate (~3 min).
 # Same suite as the pre-push hook (tools/hooks/install.sh). 2026-10-01: dashboard
