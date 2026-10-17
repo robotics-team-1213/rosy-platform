@@ -564,6 +564,17 @@ def test_pairing_overlay_from_the_candidate_is_allowed(host):
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
 
 
+@pytest.mark.parametrize("overlay", [
+    "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
+])
+def test_omx_overlay_from_the_candidate_is_allowed(host, overlay):
+    with host.paths.site_env.open("a", encoding="utf-8") as stream:
+        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
 def test_real_candidate_directory_is_migrated_once_to_a_symlink(host):
     host.paths.link.unlink()
     old = host.paths.candidates / OLD
