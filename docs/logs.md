@@ -8942,6 +8942,12 @@ osy-d395-s1d\`.
 - 변경: PR #81의 squash 커밋 하나만 원본 검토 head와 연결하는 이력 예외를 추가했다. 제품 코드·안전 분류·검사 조건은 바꾸지 않았다.
 - 증거: /root/review_safety_merge 독립 읽기 전용 검토에서 안전 경로 10개가 원본 head와 동일하고 원본 안전 커밋 3개의 검토 trailer가 존재함을 확인했다. 기존 실패 범위의 safety-review 정적 재현 후 수정 결과와 GitHub CI를 확인한다. 원격 시험 PC는 사용자 지시에 따라 생략한다.
 - gate 변화: 없음. 안전 검토 출처 메타데이터만 복구하며 ROS-SIM·DEVICE·FIELD 수용을 새로 인정하지 않는다.
+
+## 2026-10-17 · uncommitted · fix: PR #78 squash로 유실된 안전 검토 이력 연결
+
+- 변경: PR #78의 squash 커밋 `e0d77bcff` 하나만 원본 검토 head `8158a0a685`와 연결하는 이력 예외를 추가했다. 제품 코드·안전 분류·검사 조건은 바꾸지 않았다.
+- 증거: squash patch-id가 검토한 head와 같다(`fc6879003987`). 원본은 독립 읽기 전용 에이전트 검토 두 차례(1차 지적 3건 반영, 2차 지적 없음)를 거쳤다. main run 39006153102의 scope 실패를 `tools/harness/safety_review.py e0d77bcff~1 e0d77bcff`로 재현하고 예외 추가 뒤 통과를 확인했다.
+- gate 변화: 없음. 안전 검토 출처 메타데이터만 복구한다.
 ## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 
 - 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
