@@ -14,8 +14,8 @@ bridge (1) the UDS: ``InProcessTransport`` is ``UnixLocalActionTransport`` with 
        seconds and sets the joint state to the goal's last point; the gripper readback is the labelled
        sim rule of test_platform_cell_owner_barriers (CLOSED with the item until release).
        (3) owner acceptance of recipe/3 + cell/3: the owner's real validator knows recipe/1 only, so
-       ``MixedDocumentValidator`` replaces it; the wire item is ``box`` (mixed_submission: per-sku items on
-       the wire are a follow-up), so every sku is planned with the first sku's grasp geometry.
+       ``MixedDocumentValidator`` replaces it; it accepts one geometry per sku under the grant's
+       ``item_key`` (``box:<sku>``, D-781 §2), as the owner's own recipe/3 validator does.
        (4) goal evidence: ``EvidenceProducer`` reports the item where the arm's own transfer goal left the
        TCP (FK of the goal's last point + the sku's centre offset) in the predicate arm's base frame.
        (5) Fleet goal predicates are attached here per sku; the mixed resolver attaches none yet.
@@ -42,6 +42,7 @@ for _relative in ("contracts/skill/src", "middleware/devices/omx/agent/src", "op
     if str(ROOT / _relative) not in sys.path:
         sys.path.insert(0, str(ROOT / _relative))
 
+from core_common.protocol.cell_transfer import item_geometry_key  # noqa: E402
 from core_common.protocol.schemas import FleetCellTransferGrant  # noqa: E402
 from fleet.server.cell_arm_dispatcher import CellJobDispatcher  # noqa: E402
 from fleet.server.cell_compiler import PalletizingCellJobCompiler  # noqa: E402
@@ -65,6 +66,7 @@ from omx_adapter.ros_goal_contract import RosGoalEvent  # noqa: E402
 from rosy.execution.site.item_pose import ItemPoseTolerance, centre_above_tcp_m, step_goal_predicate  # noqa: E402
 from rosy.processes.palletizing.mixed_cell_doc import load_mixed_cell  # noqa: E402
 from rosy.processes.palletizing.mixed_recipe import load_mixed_recipe  # noqa: E402
+from rosy.processes.palletizing.mixed_submission import ITEM  # noqa: E402
 from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner  # noqa: E402
 from rosy_agent.workcell_coordinator import OwnerUnavailable, WorkcellCoordinator  # noqa: E402
 
@@ -94,9 +96,9 @@ class MixedDocumentValidator:
     def validate_recipe(self, recipe, cell) -> ValidatedRecipe:
         parsed = load_mixed_recipe(json.dumps(recipe))
         load_mixed_cell(json.dumps(cell)).workcell(parsed)  # the recipe's pallets exist in this cell
-        first = parsed.items[0]
-        return ValidatedRecipe(sha256=parsed.content_hash, items={"box": {
-            "grasp_width_m": first.width, "grasp_depth_m": first.grasp_depth, "height_m": first.height}})
+        return ValidatedRecipe(sha256=parsed.content_hash, items={
+            item_geometry_key(ITEM, item.sku): {"grasp_width_m": item.width, "grasp_depth_m": item.grasp_depth,
+                                                "height_m": item.height} for item in parsed.items})
 
 
 class FakeRuntime:
