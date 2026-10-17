@@ -8949,3 +8949,9 @@ osy-d395-s1d\`.
 - 변경: 최종 전달 브랜치 fix/browser-regressions-ready에 수정안을 보존했다. 초기 검토 이력은 별도 브랜치에 남겼다.
 - 증거: 최종 커밋의 구문·린트·크기·safety·독립 검토 통과. 기준 및 최종 커밋의 원격 요청은 시험 PC 접속 실패로 각각 600초 뒤 종료했고 pytest는 실행되지 않았다. docs/validation/remaining-browser-regressions-2026-10-17/remote-unavailable.md.
 - gate 변화: 없음. 다섯 실패 항목·후속 수정의 main 착지를 보류했다. 실제 브라우저 검증·push·배포·DEVICE/FIELD 성공으로 표시하지 않는다.
+
+## 2026-10-17 · 0e8ba72832 · 잔여 브라우저 다섯 실패의 원격 확인
+
+- 변경: 연결 복구 뒤 실제 실패를 확인해 동적 AI 실행 패널과 픽셀 검수 주체 정보의 위치를 추가 수정했다. 다섯 기존 실패 해제와 독립 안전 검토를 진행한다.
+- 증거: 커밋된 소스에서 원격 Chromium 19 passed 및 단독 보정 표시 1 passed, skip 0, 각 로그 NEW 0. 최종 합성 화면 세 폭을 직접 확인했다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
+- gate 변화: 없음. FULL 착지 검증은 후속이며 실측·DEVICE/FIELD·push·배포 수용을 올리지 않는다.
