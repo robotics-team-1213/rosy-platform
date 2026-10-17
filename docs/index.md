@@ -340,7 +340,7 @@
 ## 최근 기록
 
 - 2026-10-17 · uncommitted · docs: 기존 파일럿 키의 릴리스 승인 환경 구성과 안내 정정
+- 2026-10-17 · uncommitted · fix: squash로 유실된 안전 검토 이력을 정확한 SHA로 연결
 - 2026-10-17 · uncommitted · docs: 파이프라인의 보고용 OMX 실패를 별도 기록
 - 2026-10-17 · uncommitted · docs: 공개·비공개 파이프라인 점검과 실행 경계 기록
 - 2026-10-17 · uncommitted · docs: 비공개 운영 저장소와 staging 준비 상태 연결
-- 2026-10-17 · uncommitted · docs: 비공개 운영 저장소 구현 계획과 검증 경로
