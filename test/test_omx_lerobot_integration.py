@@ -56,9 +56,34 @@ provenance = dict(schema='rosy.omx-native-capture.v1', source_mode='scripted_tea
                   files=dataset_files(source),
                   episodes=[dict(episode_index=i, session_id=f'fixture-session-{i}',
                                  cycle_id=f'fixture-cycle-{i}') for i in range(3)])
+events, windows = [], []
+for i, condition in enumerate(('UNDEREXPOSED', 'OVEREXPOSED', 'MIXED_LIGHTING')):
+    stamp = (i+1)*10**9
+    events.append(dict(policy='omx-photometric-v3', run_id=f'synthetic-run-{i}',
+                       profile_sha256='d'*64, recorded_ns=stamp, expires_ns=stamp+750_000_000,
+                       motion_admitted=False, physical_acceptance=False, photometric_ready=False,
+                       environment={r: dict(condition=condition, state='OBSERVING',
+                                            environment_epoch=1, control_generation=0) for r in ('top', 'front')},
+                       observations={r: dict(fresh=True, source_stamp=i+1., sequence=1,
+                           receipt_age_s=0., source_age_s=0., quality=dict(policy='omx-photometric-v3',
+                           condition=condition, usable=False, mean_intensity=100., spatial_contrast=20.,
+                           p5=20., p95=180., dark_fraction=.1, clipped_fraction=.01)) for r in ('top', 'front')}))
+    windows.append(dict(episode_index=i, start_ns=stamp, end_ns=stamp+500_000_000,
+                        run_id=f'synthetic-run-{i}', profile_sha256='d'*64))
+log, window_file = tmp/'synthetic-environment.jsonl', tmp/'synthetic-windows.json'
+log.write_text(''.join(json.dumps(e)+'\n' for e in events))
+window_file.write_text(json.dumps(windows))
+sealed = tmp/'sealed'
+subprocess.run([sys.executable, str(root/'learning/curation/omx/native_review.py'), 'seal-environment',
+                str(source), '--log', str(log), '--windows', str(window_file),
+                '--rig-revision', 'synthetic-rig', '--calibration-revision', 'synthetic-calibration',
+                '--out', str(sealed)], check=True)
+environment = json.loads((sealed/'environment.json').read_text())
+assert environment['log_sha256'] == hashlib.sha256(log.read_bytes()).hexdigest()
 report = inspect_dataset(source, 'local/native-fixture', body_units='normalized_-100_100',
                          rig_revision='synthetic-rig', calibration_revision='synthetic-calibration',
-                         source_mode='scripted_teacher', capture_provenance=provenance)
+                         source_mode='scripted_teacher', capture_provenance=provenance,
+                         environment_evidence=environment)
 assert report['frame_count'] == 12 and report['reader_verified']
 assert report['source_mode'] == 'scripted_teacher'
 decisions = copy.deepcopy(report['episodes'])
@@ -71,6 +96,8 @@ assert float(train.meta.stats['action']['max'][0]) == 3.0, 'eval data leaked int
 assert (out/'split-receipt.json').is_file()
 receipt = json.loads((out/'split-receipt.json').read_text())
 assert receipt['source']['capture_provenance'] == provenance
+assert receipt['source']['environment_evidence'] == environment
+assert receipt['environment_coverage']['eval']['roles']['front'] == {'OVEREXPOSED': 1}
 assert receipt['splits'] == dict(train=[0], eval=[1], test=[2])
 assert receipt['outputs'] == {name:dataset_files(out/name) for name in ('train','eval','test')}
 assert LeRobotDataset('local/native-fixture_test', root=out/'test',
@@ -87,6 +114,9 @@ assert cycle['evaluation']['samples'] == 4
 assert len(cycle['evaluation']['mae_per_joint']) == 6
 assert cycle['evaluation']['physical_task_success'] is None
 assert cycle['split_files'] == receipt['outputs']
+assert cycle['environment_coverage'] == receipt['environment_coverage']
+assert cycle['evaluation']['environment_coverage'] == receipt['environment_coverage']
+assert cycle['environment_summary']['photometric_continuity_verified'] is False
 model = tmp/'training/trainer/checkpoints/last/pretrained_model'
 assert (model/'policy_preprocessor.json').is_file()
 assert (model/'policy_postprocessor.json').is_file()

@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · fix: squash로 유실된 안전 검토 이력을 정확한 SHA로 연결
-- 2026-10-17 · uncommitted · docs: 파이프라인의 보고용 OMX 실패를 별도 기록
-- 2026-10-17 · uncommitted · docs: 공개·비공개 파이프라인 점검과 실행 경계 기록
-- 2026-10-17 · uncommitted · docs: 비공개 운영 저장소와 staging 준비 상태 연결
-- 2026-10-17 · uncommitted · docs: 비공개 운영 저장소 구현 계획과 검증 경로
+- 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
+- 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
+- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+- 2026-10-17 · uncommitted · feat(omx): 환경 원본을 native 검토·학습·재적재에 연결
+- 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
