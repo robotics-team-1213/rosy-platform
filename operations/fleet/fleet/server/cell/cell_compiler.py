@@ -17,8 +17,13 @@ from rosy.execution.site.cell_submission import CellJobCompilation
 from rosy.processes import palletizing
 from rosy.processes.palletizing import compiler as process_compiler
 from rosy.processes.palletizing.cell import load_cell
+from rosy.processes.palletizing.mixed_cell_doc import load_mixed_cell
+from rosy.processes.palletizing.mixed_recipe import load_mixed_recipe
+from rosy.processes.palletizing.mixed_submission import compile_mixed_cell_job
 from rosy.processes.palletizing.plan_bundle import compile_plan_bundle
 from rosy.processes.palletizing.recipe import load_recipe
+
+from .cell_mixed_submission import MixedCellCompilation
 
 
 def _process_source_digest() -> str:
@@ -30,7 +35,8 @@ def _process_source_digest() -> str:
 
 
 class PalletizingCellJobCompiler:
-    """``compile(recipe, cell)`` for ``compile_cell_submission``; documents are canonical JSON."""
+    """``compile(recipe, cell)`` for ``compile_cell_submission`` and ``compile_mixed(recipe, cell)`` for a
+    recipe/3 multi-arm submission (cell_mixed_submission); documents are canonical JSON."""
 
     def __init__(self, *, tol_m: float) -> None:
         if (isinstance(tol_m, bool) or not isinstance(tol_m, (int, float))
@@ -64,6 +70,16 @@ class PalletizingCellJobCompiler:
                                   "pallet_id": marker.pallet_id} for marker in plan.ledger_markers),
             operator_checkpoints=tuple(checkpoint.as_dict() for checkpoint in plan.operator_checkpoints),
         )
+
+    def compile_mixed(self, recipe: Mapping, cell: Mapping) -> MixedCellCompilation:
+        """recipe/3 + cell/3 -> the mixed plan compiled for every arm (D-781 §5). The planner and
+        submission versions are in the Job; the process sources are in process_artifact_digest."""
+        compiled = compile_mixed_cell_job(load_mixed_recipe(json.dumps(recipe, allow_nan=False)),
+                                          load_mixed_cell(json.dumps(cell, allow_nan=False)))
+        return MixedCellCompilation(
+            job=compiled.job, arms=compiled.arms, steps=compiled.steps, ledger_markers=compiled.ledger_markers,
+            pallet_ids=compiled.pallet_ids, recipe_digest=compiled.recipe_digest, cell_digest=compiled.cell_digest,
+            process_artifact_digest=self.process_artifact_digest)
 
 
 __all__ = ["PalletizingCellJobCompiler"]
