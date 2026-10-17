@@ -1,6 +1,6 @@
 ## D-784 공개 소스·비공개 운영 설정과 staging 경계
 
-**Status:** Proposed (2026-10-17, Fleet·웹·시뮬레이션부터 적용하는 설계 초안)
+**Status:** Accepted (2026-10-17, 사용자 설계·구현 계획 승인. 실제 호스트 배포는 별도)
 
 ## 배경
 
@@ -62,3 +62,11 @@ flowchart LR
 - [공개키·서명·장치 수용을 구분하는 제품 산출물 선택](../deployment/pinky-release-artifact-selection.md)
 
 이 기록은 설계 초안이다. 비공개 저장소 생성·자료 이전·staging 배포·로봇 시험은 아직 수행하지 않았다.
+
+## 2026-10-17 승인과 구현 상태
+
+위 초안 작성 시점의 사실을 보존한다. 사용자가 설계와 구현 계획을 승인해 이 결정을 채택했다. 비공개 [`rosy-ops`](https://github.com/robotics-team-1213/rosy-ops)를 생성했고, [PR #1](https://github.com/robotics-team-1213/rosy-ops/pull/1)에 HOLD 설정·운영 안내·읽기 전용 구성 검사 CI를 병합했다. 제품 코드와 기존 자료는 옮기지 않았다.
+
+검토 head `ab39d553fe118c36a13f9f448e09f47d8fdda2c7`의 GitHub CI에서 15개 시험과 HOLD 구조 검사가 통과했다. 병합 커밋 `249861b7c1d37da8033dd01a710569178fdb3513`의 [main CI](https://github.com/robotics-team-1213/rosy-ops/actions/runs/38995663882)도 통과했다. 검사는 필드·참조 형식을 확인하며 산출물 내용·격리·기능·복구를 검증하지 않는다.
+
+실제 대상·담당자·접속 범위·격리 근거가 없으므로 실행 환경은 미배포이고 설정은 `HOLD`다. 사용자 지시에 따라 접속할 수 없는 원격 시험 PC는 건너뛰었으며 노트북 시험·로봇·DEVICE/FIELD 수용은 수행하지 않았다. Accepted는 설계 채택을 뜻하며 staging 실행 완료를 뜻하지 않는다.

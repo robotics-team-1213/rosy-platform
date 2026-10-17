@@ -55,7 +55,7 @@ gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
 
 ## GitHub 설정
 
-2026-10-17 GitHub API로 확인했다. 설정을 바꾸는 담당자는 이 표를 같은 PR에서 갱신한다. 운영 결정과 후속 전환 조건은 [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다.
+아래 표는 공개 `rosy-platform`의 설정이다. 2026-10-17 GitHub API로 확인했다. 설정을 바꾸는 담당자는 이 표를 같은 PR에서 갱신한다. 운영 결정과 후속 전환 조건은 [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)에 있다.
 
 | 항목 | 현재 설정 |
 |---|---|
@@ -73,3 +73,5 @@ gh api repos/robotics-team-1213/rosy-platform/rulesets/<ruleset-id>
 ```
 
 일반 branch protection 조회의 404만으로 보호 규칙이 없다고 판단하지 않는다. ruleset 상세 규칙도 확인한다. merge queue·auto-merge, 관문 code owner·에이전트 신원 분리, 훅 분리·공유 Log 개선·로컬 착지 도구의 PR 전환은 D-762의 선행 조건에 따라 별도 적용한다.
+
+비공개 [`rosy-ops`](https://github.com/robotics-team-1213/rosy-ops)는 해당 저장소의 `AGENTS.md`를 따른다. 게시 담당은 독립 검토한 head와 `config` 잡의 성공을 확인해 같은 SHA를 squash 병합한다. 이 확인은 팀의 수동 절차이며 서버의 승인 강제와 구분한다. 설정 CI는 배포·호스트 격리·기능 수용을 증명하지 않는다.
