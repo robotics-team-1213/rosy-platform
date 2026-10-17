@@ -32,7 +32,9 @@ def _events(cycle, start, end, complete):
                  dict(kind='TERMINAL_RESULT', command_id=command, goal_id=cycle+'-goal', sequence=2,
                       observed_at_monotonic_s=2., status=4, result_code=0),
                  dict(kind='TERMINAL', command_id=command, cycle_id=cycle, time_ns=end-1,
-                      result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+                      result=dict(succeeded=True, source='native_follow_joint_trajectory')),
+                 dict(kind='REACHED', command_id=command, cycle_id=cycle, time_ns=end-1,
+                      errors_rad=[0.]*6, tolerance_rad=[.01]*6)]
     else:
         rows.append(dict(kind='ABORT', cycle_id=cycle, reason='synthetic stop', time_ns=end-1))
     return rows
@@ -72,6 +74,7 @@ def session(root, *, session_id, start, attempts=(True,), frames=8, gain=.5, see
                                             control_generation=0) for r in ('top', 'front')})
     (root/'environment.jsonl').write_text(json.dumps(environment)+'\n', encoding='utf-8')
     (root/'teacher.json').write_text(json.dumps(TEACHER)+'\n')
+    (root/'profile.json').write_text(json.dumps(dict(reach_tolerance_rad=[.01]*6))+'\n')
     (root/'events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in events))
     manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
                     source_mode='scripted_teacher', session_id=session_id, rig_revision='rig-1',
