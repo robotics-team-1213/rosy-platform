@@ -8942,3 +8942,10 @@ osy-d395-s1d\`.
 - 변경: 픽셀 사진을 AI 참고 패널보다 먼저 두고, 만료 토큰·CSP·단독 import 경로 시험을 현재 계약에 맞췄다.
 - 증거: 구문·공백·safety 검사와 독립 검토 통과. 원격 시험은 세 시험 PC의 SSH 시간 초과로 대기 중이며, 실패 목록은 유지한다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
 - gate 변화: 없음. 성공 검증·main 착지·push·배포·DEVICE/FIELD 수용으로 표시하지 않는다.
+
+
+## 2026-10-17 · a1372f7e7 · 잔여 브라우저 수정의 원격 검증 미실행
+
+- 변경: 최종 전달 브랜치 fix/browser-regressions-ready에 수정안을 보존했다. 초기 검토 이력은 별도 브랜치에 남겼다.
+- 증거: 최종 커밋의 구문·린트·크기·safety·독립 검토 통과. 기준 및 최종 커밋의 원격 요청은 시험 PC 접속 실패로 각각 600초 뒤 종료했고 pytest는 실행되지 않았다. docs/validation/remaining-browser-regressions-2026-10-17/remote-unavailable.md.
+- gate 변화: 없음. 다섯 실패 항목·후속 수정의 main 착지를 보류했다. 실제 브라우저 검증·push·배포·DEVICE/FIELD 성공으로 표시하지 않는다.
