@@ -1,0 +1,21 @@
+# D-785 OMX owner binding overlay. Off unless the stack is started with it:
+#   docker compose ... -f compose.yaml [-f compose.pairing.yaml] -f compose.omx.yaml
+# rosy-site-stack.service adds it from ROSY_SITE_PAIRING_COMPOSE in site.env (README, OMX owner binding).
+# Fleet then reaches each native OMX hardware owner's UDS (<instance>/control.sock) for local stop
+# fanout, rearm and owner readback. It never opens Action dispatch: the hardware owner refuses
+# SubmitAction and reports simulation=false, which the Cell dispatcher also refuses.
+# No image, command or port changes here, so it composes with compose.pairing.yaml.
+services:
+  fleet:
+    environment:
+      # WORKCELL=INSTANCE[,WORKCELL=INSTANCE]; read by fleet.cli (_omx_instances).
+      ROSY_FLEET_OMX_INSTANCES: "${ROSY_FLEET_OMX_INSTANCES:?set ROSY_FLEET_OMX_INSTANCES}"
+    volumes:
+      # The parent directory, so an owner restart (new socket) stays visible. Provisioned by
+      # deploy/robot/omx/rosy-omx-owner.tmpfiles.conf; absent means the stack refuses to start.
+      - type: bind
+        source: /run/rosy/omx
+        target: /run/rosy/omx
+        read_only: true
+        bind:
+          create_host_path: false

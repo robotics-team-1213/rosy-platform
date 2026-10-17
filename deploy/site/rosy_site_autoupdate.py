@@ -168,10 +168,10 @@ class SiteUpdater:
     def check_overrides(self, env: dict[str, str], commit: str) -> None:
         """Refuse when anything could pin a site image other than the candidate's."""
         link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
-        allowed_pairing = ([], ["-f", "/opt/rosy/candidate/deploy/site/compose.pairing.yaml"])
-        if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed_pairing:
+        pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
+        if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in ([], pairing, omx, pairing + omx):  # D-785
             raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                          "the candidate's compose.pairing.yaml")
+                          "the candidate's compose.pairing.yaml and compose.omx.yaml")
         if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
             raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
         unit = self._run(["systemctl", "cat", STACK_UNIT]).stdout
