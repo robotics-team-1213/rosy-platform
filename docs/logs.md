@@ -9013,3 +9013,8 @@ osy-d395-s1d\`.
 - 변경: 진단 관측·보호된 executor hook의 검증 범위·수집 identity RED와 수정 조건을 후속 기록에 모으고 PR 절차의 최신 링크를 갱신했다. 기존 실패 기록은 보존한다.
 - 증거: run39013248730과 run39014273721의 실제 개별 결과를 대조했다. /root/review_private_ops 읽기 전용 초안 검토에서 지적 없음. 최종 head의 독립 검토·계측 없는 CI·병합 후 전체 CI는 PR #83에 기록한다.
 - gate 변화: 없음. 한 명의 게시 담당과 자동 검사로 운영하며 staging 호스트·접속 범위가 정해질 때까지 HOLD를 유지한다.
+## 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
+
+- 변경: D-778/D-779/D-780/D-781 G1을 ROS 없이 옮겼다. `mixed_reach.py`(D-402 IK reach, `mixed_cell.Reach` 모양), `test/g1_layout.py`(IK 감사, capsule 휩쓸림 간격, 일정 모델), `test/g1_sim_harness.py`(Fleet multi-arm dispatcher → 실제 cell owner 두 개 + 조율자, 대체한 부분은 파일 머리), G1 작업대(home x 0.08 m)와 4종 레시피 fixture, 배치·끝까지·장애·시간 시험 3개.
+- 증거: `python test/g1_layout.py`(노트북 순수 계산): 도달성 105/105·140/140 자세, 한 팔 84·98 자세 실패 0; 간격 G1 작업대 +2.2~+2.5 mm, pilot home 0.12 m −31.8 mm, base 0.30 m −8.8 mm; 일정 모델 한 팔 대비 ×1.57·×1.72; 정적 규칙 위반 0. pytest 미실행(실험실 시험 PC 모두 닿지 않음). docs/validation/bimanual-g1-sim-2026-10-17/README.md.
+- gate 변화: 없음. ROS-SIM HOLD, DEVICE PARKED. 제안 값 coordinator_liveness_s 1.0 s, 주기 0.1 s, max_wait_s 10/45/85 s는 측정 전 제안이다.
