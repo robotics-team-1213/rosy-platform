@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RU
 
 @pytest.mark.parametrize('width', [1440, 390])
 def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url, width):  # noqa: F811
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
     from PIL import Image
     bundle = json.loads((Path(__file__).parent/'fixtures/protocol/measured-calibration.v1.json').read_text())
     bundle['evidence_kind'] = 'measured'  # Simulated operator claim in a mocked API.
@@ -109,6 +109,14 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('저장')")
         assert page.locator('#measured-confirm').is_disabled()
         page.locator('#measured-conditions').check()
+        state['hold'] = True
+        with page.expect_request('**/measured-status'):
+            page.locator('#measured-refresh').click()
+        expect(page.locator('#measured-confirm')).to_be_disabled()
+        state['hold'] = False
+        for pending in state['pending']:
+            pending.fulfill(status=200, json=status('ceiling_north'))
+        state['pending'].clear()
         page.locator('#measured-confirm').click()
         page.locator('#measured-image').wait_for(state='visible')
         assert state['approvals'][0]['purpose'] == 'preview'
