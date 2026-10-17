@@ -256,6 +256,7 @@ adrs:
 - D-453
 - D-455
 - D-777
+- D-784
 plans:
 - docs/plans/2026-10-15-omx-learning-operations-design.md
 - docs/plans/2026-10-15-omx-learning-operations.md
