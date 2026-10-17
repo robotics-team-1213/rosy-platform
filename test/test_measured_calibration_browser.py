@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RU
 
 @pytest.mark.parametrize('width', [1440, 390])
 def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url, width):  # noqa: F811
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
     from PIL import Image
     bundle = json.loads((Path(__file__).parent/'fixtures/protocol/measured-calibration.v1.json').read_text())
     bundle['evidence_kind'] = 'measured'  # Simulated operator claim in a mocked API.
@@ -108,7 +108,22 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-approve').click()
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('저장')")
         assert page.locator('#measured-confirm').is_disabled()
-        page.locator('#measured-conditions').check()
+        page.locator('#measured-conditions').hover()
+        page.mouse.down()
+        state['hold'] = True
+        with page.expect_request('**/measured-status'):
+            pass  # Hold the scheduled read without racing its disabled refresh button.
+        expect(page.locator('#measured-confirm')).to_be_disabled()
+        expect(page.locator('#measured-read')).to_be_disabled()
+        expect(page.locator('#measured-revoke')).to_be_disabled()
+        assert state['pending']
+        page.mouse.up()
+        expect(page.locator('#measured-conditions')).to_be_checked()
+        expect(page.locator('#measured-conditions')).to_be_enabled()
+        state['hold'] = False
+        for pending in state['pending']:
+            pending.fulfill(status=200, json=status('ceiling_north'))
+        state['pending'].clear()
         page.locator('#measured-confirm').click()
         page.locator('#measured-image').wait_for(state='visible')
         assert state['approvals'][0]['purpose'] == 'preview'
@@ -123,9 +138,14 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         page.locator('#measured-conditions').check()
         page.locator('#measured-confirm').click()
         page.locator('#measured-image').wait_for(state='visible')
+        with page.expect_response(lambda r: r.url.endswith('/frame')
+                                  and r.request.headers.get('authorization') == 'Bearer measured'):
+            page.locator('#measured-read').click()
         state['hold_frame'] = True
         with page.expect_request(lambda r: r.url.endswith('/frame') and r.headers.get('authorization') == 'Bearer measured'):
-            page.locator('#measured-read').click()
+            pass  # The scheduled read refreshes the visible image.
+        expect(page.locator('#measured-read')).to_be_disabled()
+        assert state['pending_frames']
         if width < 700:
             page.get_by_role('combobox', name='작업 선택').select_option('hosts')
         else:
@@ -141,7 +161,9 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
             page.get_by_role('tab', name='카메라 설치·보정').click()
         state['hold'] = True
         with page.expect_request('**/measured-status'):
-            page.locator('#measured-refresh').click()
+            pass
+        expect(page.locator('#measured-confirm')).to_be_disabled()
+        assert state['pending']
         page.locator('#vision-source').select_option('ceiling_south')
         state['hold'] = False
         for pending in state['pending']:
