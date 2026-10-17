@@ -1,17 +1,27 @@
-"""D-792 camera setup reference and setup check; a verdict never admits a recording by itself."""
+"""D-792 camera setup reference and setup check; a verdict never admits a recording by itself.
+
+Two methods: ``features`` (default, no markers: static scene features of the reference still)
+and ``markers`` (optional DICT_4X4_50 work-surface markers, adds height and distance in cm).
+"""
 import math
 
 from .artifacts import _base, _fields, _hash, _text
 
 MOUNT = ("height_cm", "distance_cm", "tilt_deg", "pan_deg", "roll_deg")
+ANGLES = ("pan_deg", "tilt_deg", "roll_deg")
+METHODS = ("features", "markers")
 VERDICTS = ("ok", "adjust", "unmeasurable")
 MODES = ("shadow", "enforce")
 MIN_MARKERS = 3
+# Real ceiling-camera frames kept >= 295 inliers down to 10% light; near-dark (5%) fell to 38.
+MIN_MATCHES = 150
 # shortcut: D-792 starting thresholds without field evidence; S5 replaces them from shadow records.
-PX_MEAN, PX_MAX, DEG, CM = 3.0, 6.0, 1.0, 0.5
+PX_MEAN, PX_MAX, DEG, CM, SCALE_PCT = 3.0, 6.0, 1.0, 0.5, 1.0
 # Tape and inclinometer against marker estimate; a larger gap means the layout or the tape is wrong.
 AGREE_CM, AGREE_DEG = 2.0, 3.0
 _DIAGONAL = math.hypot(640, 480)
+CHECK = ("method", "matches", "px_mean", "px_max", "d_pan_deg", "d_tilt_deg", "d_roll_deg",
+         "d_scale_pct", "d_height_cm", "d_distance_cm", "verdict")
 
 
 def _num(value, low=-math.inf, high=math.inf):
@@ -34,12 +44,32 @@ def _mount(value, nullable):
         _num(value[key], 0 if key.endswith("_cm") else -180, 1000 if key.endswith("_cm") else 180)
 
 
+def _markers(value, width, height):
+    ids = []
+    for marker in value:
+        _fields(marker, "id size_cm center_cm corners_px")
+        if type(marker["id"]) is not int or marker["id"] < 0:
+            raise ValueError("marker id must be a nonnegative integer")
+        ids.append(marker["id"])
+        _num(marker["size_cm"], 0.5, 100)
+        if not isinstance(marker["center_cm"], list) or len(marker["center_cm"]) != 2:
+            raise ValueError("marker center_cm [x, y] required")
+        for v in marker["center_cm"]:
+            _num(v, -1000, 1000)
+        if not isinstance(marker["corners_px"], list) or len(marker["corners_px"]) != 4:
+            raise ValueError("four marker corners required")
+        for corner in marker["corners_px"]:
+            _point(corner, width, height)
+    if len(ids) != len(set(ids)):
+        raise ValueError("unique marker ids required")
+
+
 def validate_reference(doc):
     """Verify one sealed ``rosy.camera-setup-reference/1`` and return it."""
     value = _base(doc, "rosy.camera-setup-reference/1",
-                  "camera_role camera_identity width height fps intrinsics marker_dictionary "
+                  "camera_role camera_identity width height fps intrinsics method marker_dictionary "
                   "markers mount reference_still guides created_at created_by")
-    for key in ("camera_role", "camera_identity", "marker_dictionary", "created_at", "created_by"):
+    for key in ("camera_role", "camera_identity", "created_at", "created_by"):
         _text(value[key])
     width, height = value["width"], value["height"]
     if any(type(v) is not int or not 1 <= v <= 1920 for v in (width, height)):
@@ -58,35 +88,27 @@ def validate_reference(doc):
         raise ValueError("distortion must have 4, 5 or 8 coefficients")
     for v in intrinsics["dist"]:
         _num(v)
-    markers = value["markers"]
-    if not isinstance(markers, list) or len(markers) < MIN_MARKERS:
-        raise ValueError(f"at least {MIN_MARKERS} reference markers required")
-    ids = []
-    for marker in markers:
-        _fields(marker, "id size_cm center_cm corners_px")
-        if type(marker["id"]) is not int or marker["id"] < 0:
-            raise ValueError("marker id must be a nonnegative integer")
-        ids.append(marker["id"])
-        _num(marker["size_cm"], 0.5, 100)
-        if not isinstance(marker["center_cm"], list) or len(marker["center_cm"]) != 2:
-            raise ValueError("marker center_cm [x, y] required")
-        for v in marker["center_cm"]:
-            _num(v, -1000, 1000)
-        if not isinstance(marker["corners_px"], list) or len(marker["corners_px"]) != 4:
-            raise ValueError("four marker corners required")
-        for corner in marker["corners_px"]:
-            _point(corner, width, height)
-    if len(ids) != len(set(ids)):
-        raise ValueError("unique marker ids required")
+    method, markers = value["method"], value["markers"]
+    if method not in METHODS:
+        raise ValueError("setup method must be features or markers")
+    if not isinstance(markers, list):
+        raise ValueError("markers must be a list")
     mount = value["mount"]
     _fields(mount, "measured estimated")
     _mount(mount["measured"], nullable=True)
-    _mount(mount["estimated"], nullable=False)
-    for key in MOUNT:
-        measured = mount["measured"][key]
-        limit = AGREE_CM if key.endswith("_cm") else AGREE_DEG
-        if measured is not None and abs(measured - mount["estimated"][key]) > limit:
-            raise ValueError(f"measured {key} disagrees with the marker estimate")
+    if method == "markers":
+        _text(value["marker_dictionary"])
+        if len(markers) < MIN_MARKERS:
+            raise ValueError(f"at least {MIN_MARKERS} reference markers required")
+        _markers(markers, width, height)
+        _mount(mount["estimated"], nullable=False)
+        for key in MOUNT:
+            measured = mount["measured"][key]
+            limit = AGREE_CM if key.endswith("_cm") else AGREE_DEG
+            if measured is not None and abs(measured - mount["estimated"][key]) > limit:
+                raise ValueError(f"measured {key} disagrees with the marker estimate")
+    elif value["marker_dictionary"] is not None or markers or mount["estimated"] is not None:
+        raise ValueError("a features reference carries no markers and no estimated mount")
     _hash(value["reference_still"])
     if not isinstance(value["guides"], list):
         raise ValueError("guides must be a list")
@@ -105,32 +127,42 @@ def validate_reference(doc):
 
 
 def judge(metrics, width, height):
-    """Verdict for one measured comparison; ``None`` metrics mean the frame could not be measured."""
+    """Verdict for one measured comparison; ``None`` metrics mean the frame could not be measured.
+
+    Pixel limits are for 640x480 and scale with the image diagonal. ``None`` deltas are not
+    measured by the method (cm without markers) and do not count."""
     if metrics is None:
         return "unmeasurable"
     scale = _DIAGONAL / math.hypot(width, height)
-    if metrics["marker_px_mean"] * scale > PX_MEAN or metrics["marker_px_max"] * scale > PX_MAX:
+    if metrics["px_mean"] * scale > PX_MEAN or metrics["px_max"] * scale > PX_MAX:
         return "adjust"
-    for key in MOUNT:
-        if abs(metrics["d_" + key]) > (CM if key.endswith("_cm") else DEG):
-            return "adjust"
+    limits = {"d_pan_deg": DEG, "d_tilt_deg": DEG, "d_roll_deg": DEG, "d_scale_pct": SCALE_PCT,
+              "d_height_cm": CM, "d_distance_cm": CM}
+    if any(metrics[key] is not None and abs(metrics[key]) > limit for key, limit in limits.items()):
+        return "adjust"
     return "ok"
 
 
 def _check(value):
-    fields = "markers_seen marker_px_mean marker_px_max verdict " + " ".join("d_" + k for k in MOUNT)
-    _fields(value, fields)
-    if type(value["markers_seen"]) is not int or value["markers_seen"] < 0:
-        raise ValueError("markers_seen must be a nonnegative integer")
+    _fields(value, " ".join(CHECK))
+    if value["method"] not in METHODS:
+        raise ValueError("setup method must be features or markers")
+    if type(value["matches"]) is not int or value["matches"] < 0:
+        raise ValueError("matches must be a nonnegative integer")
     if value["verdict"] not in VERDICTS:
         raise ValueError("unknown setup verdict")
-    numbers = [value[k] for k in fields.split() if k not in ("markers_seen", "verdict")]
+    numbers = [key for key in CHECK if key not in ("method", "matches", "verdict")]
     if value["verdict"] == "unmeasurable":
-        if any(v is not None for v in numbers):
+        if any(value[key] is not None for key in numbers):
             raise ValueError("an unmeasurable check carries no measurements")
         return
-    for v in numbers:
-        _num(v)
+    for key in numbers:
+        unmeasured = ("d_height_cm", "d_distance_cm") if value["method"] == "features" else ("d_scale_pct",)
+        if key in unmeasured:
+            if value[key] is not None:
+                raise ValueError(f"a {value['method']} check does not measure {key}")
+            continue
+        _num(value[key])
 
 
 def validate_setup(value):

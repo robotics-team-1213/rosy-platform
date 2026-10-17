@@ -7,7 +7,7 @@ import pytest
 from browser_harness import browser_tests_enabled, free_port
 
 from review_app import ReviewStore, make_server
-from test_camera_setup import HOME, K, LAYOUT, _render
+from test_camera_setup import K, rotate, scene
 from test_review_return import fixture_inputs
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
@@ -18,9 +18,9 @@ def test_camera_page_checks_a_photo_against_the_reference(tmp_path, width, heigh
     playwright = pytest.importorskip('playwright.sync_api')
     source, human, images = fixture_inputs(tmp_path)
     store = ReviewStore(tmp_path / 'state', source, human, images)
-    home, lower = tmp_path / 'home.jpg', tmp_path / 'lower.jpg'
-    cv2.imwrite(str(home), _render(**HOME), [cv2.IMWRITE_JPEG_QUALITY, 95])
-    cv2.imwrite(str(lower), _render(centre=[0.0, -40.0, 43.0], target=[0.0, 15.0, 0.0]), [cv2.IMWRITE_JPEG_QUALITY, 95])
+    home, moved = tmp_path / 'home.jpg', tmp_path / 'lower.jpg'
+    cv2.imwrite(str(home), scene(), [cv2.IMWRITE_JPEG_QUALITY, 95])
+    cv2.imwrite(str(moved), rotate(scene(), pan=1.5), [cv2.IMWRITE_JPEG_QUALITY, 95])
     server = make_server(store, free_port())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -37,10 +37,10 @@ def test_camera_page_checks_a_photo_against_the_reference(tmp_path, width, heigh
                 page.locator('details summary').click()
                 page.set_input_files('#reference-photo', str(home))
                 page.fill('#camera-identity', 'omx-front-usb-1')
-                page.fill('#m-height_cm', '45')
                 page.fill('#intrinsics', json.dumps(K))
                 page.locator('#reference-form button[type=submit]').click()
-                expect(page.locator('#reference-result')).to_contain_text('추정 높이 4', timeout=15000)
+                expect(page.locator('#reference-result')).to_contain_text('마커 없이', timeout=15000)
+                expect(page.locator('#layout-field')).to_be_hidden()
                 assert len(list((store.state / 'camera-setup').glob('*.json'))) == 1
                 expect(page.locator('#fingerprint')).to_have_value(K['camera_info_sha256'])
 
@@ -48,12 +48,12 @@ def test_camera_page_checks_a_photo_against_the_reference(tmp_path, width, heigh
                 page.locator('#check-form button[type=submit]').click()
                 expect(page.locator('#verdict')).to_contain_text('맞음', timeout=15000)
                 expect(page.locator('#verdict')).to_have_attribute('state', 'ready')
-                expect(page.locator('#numbers dt')).to_have_count(8)
+                expect(page.locator('#numbers dt')).to_have_count(9)
 
-                page.set_input_files('#check-photo', str(lower))
+                page.set_input_files('#check-photo', str(moved))
                 page.locator('#check-form button[type=submit]').click()
                 expect(page.locator('#verdict')).to_contain_text('조정 필요', timeout=15000)
-                expect(page.locator('#numbers')).to_contain_text('높이 차이')
+                expect(page.locator('#numbers')).to_contain_text('pan 차이')
                 assert page.evaluate("document.getElementById('view').width") == 640
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'no horizontal scroll'
                 assert not errors

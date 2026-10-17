@@ -219,11 +219,11 @@ The model-PC web app for review and learning, also called 학습 관리 센터; 
 
 ### Camera setup reference
 
-The immutable record of where one camera role stood when a dataset was recorded: intrinsics fingerprint, measured and marker-estimated height, distance, tilt, pan and roll, and one reference still with marker corners and guide outlines (`rosy.camera-setup-reference/1`, D-792). Moving the camera on purpose makes a new reference; the old one stays.
+The immutable record of where one camera role stood when a dataset was recorded: intrinsics, one reference still with guide outlines, and optional tape-measured height, distance, tilt, pan and roll (`rosy.camera-setup-reference/1`, D-792). The default method `features` needs no markers and matches the still's static background; the optional `markers` method adds work-surface markers and marker-estimated centimetres. Moving the camera on purpose makes a new reference; the old one stays.
 
 ### Setup check
 
-The result of comparing one camera frame against a camera setup reference: marker reprojection error, mount differences, and a verdict of ok, adjust, or unmeasurable. The camera setup screen draws the reference dashed and the current frame solid. A check runs before and after each recorded Episode and is stored in its camera provenance; it records only (shadow) until its thresholds are confirmed, then blocks recording (enforce).
+The result of comparing one camera frame against a camera setup reference: matched features or seen markers, screen shift in pixels, pan, tilt and roll differences, scale (features) or height and distance (markers), and a verdict of ok, adjust, or unmeasurable. The camera setup screen draws the reference dashed and the current frame solid. A check runs before and after each recorded Episode and is stored in its camera provenance; it records only (shadow) until its thresholds are confirmed, then blocks recording (enforce).
 
 ## Flagged ambiguities
 

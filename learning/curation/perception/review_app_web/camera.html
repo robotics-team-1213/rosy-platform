@@ -24,9 +24,10 @@
 <canvas id="view" class="camera-view" width="640" height="480" role="img" aria-label="기준 점선과 지금 사진"></canvas>
 <dl id="numbers" class="camera-numbers"></dl></section>
 <details class="learning-section"><summary>새 촬영 기준 만들기</summary>
-<p class="quiet">작업면 마커(DICT_4X4_50)가 모두 보이는 사진 한 장으로 만듭니다. 기준은 고칠 수 없고, 카메라를 일부러 옮기면 새 기준을 만듭니다.</p>
+<p class="quiet">움직이지 않는 배경(작업대 가장자리·벽·팔 베이스)이 밝게 보이는 사진 한 장으로 만듭니다. 마커는 필요 없습니다. 작업면 마커(DICT_4X4_50)를 두면 높이·거리도 cm로 봅니다. 기준은 고칠 수 없고, 카메라를 일부러 옮기면 새 기준을 만듭니다.</p>
 <form id="reference-form" class="ui-form learning-form">
 <label class="ui-field-label">기준 사진 <input id="reference-photo" class="ui-field" type="file" accept="image/*" required></label>
+<label class="ui-field-label">맞추는 방식 <select id="method" class="ui-field"><option value="features">마커 없음 — 배경 특징점</option><option value="markers">작업면 마커 — cm까지</option></select></label>
 <label class="ui-field-label">카메라 역할 <select id="camera-role" class="ui-field"><option value="front">front</option><option value="top">top</option></select></label>
 <label class="ui-field-label">카메라 식별자 <input id="camera-identity" class="ui-field" required placeholder="예: omx-front-usb-1"></label>
 <label class="ui-field-label">fps <input id="fps" class="ui-field" type="number" min="1" max="30" value="30" required></label>
@@ -37,7 +38,7 @@
 <label class="ui-field-label">pan ° <input id="m-pan_deg" class="ui-field" type="number" step="any"></label>
 <label class="ui-field-label">roll ° <input id="m-roll_deg" class="ui-field" type="number" step="any"></label></fieldset>
 <label class="ui-field-label">내부 교정 JSON <textarea id="intrinsics" class="ui-field" rows="4" required></textarea></label>
-<label class="ui-field-label">마커 배치 JSON (작업대 원점 기준 cm) <textarea id="layout" class="ui-field" rows="5" required></textarea></label>
+<label id="layout-field" class="ui-field-label">마커 배치 JSON (작업대 원점 기준 cm) <textarea id="layout" class="ui-field" rows="5"></textarea></label>
 <label class="ui-field-label">가이드 JSON (작업면 가장자리·구역·물체 윤곽, 픽셀) <textarea id="guides" class="ui-field" rows="4" required>[]</textarea></label>
 <button class="ui-field" type="submit">기준 만들기</button></form>
 <p id="reference-result" role="status"></p></details>
