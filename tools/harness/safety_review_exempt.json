@@ -473,5 +473,10 @@
     "commit": "5ee7a103b3314e2e2dafbf934e286c1988ecc4e0",
     "original_commit": "1a9960df2c2d6123e88d9bb61ea827706d428fda",
     "reason": "Independent read-only critic (opus), 2026-10-15, D-767 Part A instruction pose_stamp: CONDITIONS (HIGH stale fallback worse than before) then CONDITIONS MET after fail-closed refusal INSTRUCTION_STAMP_UNUSABLE, no 2 s age cut for counting travel, Fleet stamps only instructions with a distance; MEDIUM stamp-check ordering fixed (armed-bend refresh / running-maneuver resend unaffected). Flag default off; remote services/gateway/fleet/guards exit 0, known_failures 0 new; no device acceptance."
+  },
+  {
+    "commit": "fdd01f8fbbfd9b97959ee7fdea74477b98fd727f",
+    "original_commit": "995890b6f1c569603ae996b2e16d10f2b79bcfd4",
+    "reason": "PR #81 squash lost source Safety-Review trailers from 4f840a94, a892d160 and e77d8ada. Independent read-only /root/review_safety_merge, 2026-10-17: all 10 safety-classified paths byte-identical to the independently reviewed PR source head; no safety untagging; remaining tree differences are PR #80 ADR/research/gaps only. Scoped producer/consumer review found no additional contract violation. Exact squash provenance retention only, not new ROS-SIM, DEVICE or FIELD acceptance; existing source test evidence was not rerun by this reviewer."
   }
 ]
