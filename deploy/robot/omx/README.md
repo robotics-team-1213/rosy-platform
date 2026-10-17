@@ -157,8 +157,8 @@ for the remaining native runtime and physical acceptance work.
 ## Local camera preview recovery
 
 `omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
-camera through V4L2 MJPEG at 640×480, publishing at most 10 Hz with a one-image
-queue. It refuses raw-format fallback, reopens failed capture, and notifies the
+camera through V4L2 MJPEG at 640×480, publishing at most `--max-fps` (default
+10 Hz, `ROSY_CAMERA_MAX_FPS` in the unit env) with a one-image queue. It refuses raw-format fallback, reopens failed capture, and notifies the
 `rosy-omx-camera@.service` watchdog so a blocked driver read is restarted.
 It publishes host-receive timestamps and no CameraInfo or calibrated target;
 these previews do not admit an arm operation.
@@ -166,7 +166,12 @@ these previews do not admit an arm operation.
 Install the reviewed source snapshot and user unit on the camera host. Each
 `~/.config/rosy/omx-camera-<name>.env` binds `ROSY_ROS_SETUP`, `ROSY_CAMERA_SOURCE`,
 `ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC`, `ROSY_CAMERA_FRAME`, and `ROS_DOMAIN_ID`
-to that host's accepted runtime and selected camera. Keep device identities and
+to that host's accepted runtime and selected camera. The camera, viewer and
+collection units force `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` with no static
+peers (D-795): raw Image topics never cross machines. Every DDS consumer of these
+frames (`commissioning_view.py`, collection, the pilot simulation) runs on the
+camera host; another machine reads `commissioning_view.py`'s loopback HTTP/JPEG
+through an SSH localhost forward, or the WebRTC media path once it lands. Keep device identities and
 host paths in private configuration. Stop the previous producer for that exact
 camera before starting the unit, and verify advancing fresh frames and measured
 format after start. Arm drivers and their admission profiles remain separate.
@@ -210,10 +215,11 @@ calling that consumer ready; transport settings alone grant no arm authority.
 
 ## Build and shell profiles
 
-The hardware profile takes `OMX_ROS_DOMAIN_ID` and
-`OMX_ROS_AUTOMATIC_DISCOVERY_RANGE` from the Compose environment; defaults are
-domain 30 and `SUBNET`. Copy `.env.example` to `.env` beside this README to set
-them, then pass it with `--env-file deploy/robot/omx/.env` when running Compose from
+The hardware profile takes `OMX_ROS_DOMAIN_ID` from the Compose environment
+(default 30). Discovery is fixed to `LOCALHOST` and the container mounts Pinky's
+loopback-only Cyclone profile as `/etc/rosy/cyclonedds.xml`: no DDS traffic leaves
+this host (D-795). Copy `.env.example` to `.env` beside this README to set the
+domain, then pass it with `--env-file deploy/robot/omx/.env` when running Compose from
 the repository root. RMW is fixed to `rmw_cyclonedds_cpp` by D-117. The
 simulation profile uses a separate configurable domain (default 31) and forces
 `LOCALHOST` discovery.

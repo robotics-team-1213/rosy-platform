@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(shutil.which("sh") is None or os.name == "nt", r
 
 HEALTHY = "60 5 1.2 24 7200 -"
 LOW_MEMORY = "2 95 3.0 24 7200 -"
-UNIT_DOWN = "60 5 1.2 24 7200 pinky-nav2.service"
+UNIT_DOWN = "60 5 1.2 24 7200 pinky-backend.service"
 
 
 def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-06:20\n", now="12:00",
@@ -72,8 +72,8 @@ def test_three_bad_answers_without_a_down_unit_reboot_once(tmp_path):
 
 def test_a_down_unit_is_restarted_first_then_the_pc_is_rebooted(tmp_path):
     calls = _guard(tmp_path, UNIT_DOWN, runs=6)
-    assert calls == ["health"] * 3 + ["restart pinky-nav2.service"] + ["health"] * 3 + ["reboot"]
-    assert _actions(tmp_path) == ["restart pinky-nav2.service", "reboot"]
+    assert calls == ["health"] * 3 + ["restart pinky-backend.service"] + ["health"] * 3 + ["reboot"]
+    assert _actions(tmp_path) == ["restart pinky-backend.service", "reboot"]
 
 
 def test_a_recovered_pc_resets_the_ladder(tmp_path):
@@ -88,7 +88,7 @@ def test_high_load_alone_is_reported_never_acted_on(tmp_path):
 
 
 def test_high_load_with_a_down_unit_still_counts(tmp_path):
-    assert _guard(tmp_path, "50 10 120.0 24 7200 pinky-nav2.service", runs=3)[-1] == "restart pinky-nav2.service"
+    assert _guard(tmp_path, "50 10 120.0 24 7200 pinky-backend.service", runs=3)[-1] == "restart pinky-backend.service"
 
 
 def _status(tmp_path):
@@ -121,8 +121,8 @@ def test_a_refused_reboot_is_logged_truthfully_and_the_ladder_does_not_reset(tmp
 def test_a_refused_restart_falls_through_to_a_reboot(tmp_path):
     env = {"GUARD_REBOOT_MIN_GAP_S": "0"}
     calls = _guard(tmp_path, UNIT_DOWN, runs=3, action_rc=2, env_extra=env)
-    assert calls == ["health"] * 3 + ["restart pinky-nav2.service", "reboot"]
-    assert _actions(tmp_path) == ["restart pinky-nav2.service refused", "reboot refused"]
+    assert calls == ["health"] * 3 + ["restart pinky-backend.service", "reboot"]
+    assert _actions(tmp_path) == ["restart pinky-backend.service refused", "reboot refused"]
 
 
 @pytest.mark.parametrize("reply", ["garbage", "60 5 1.2", "x 5 1.2 24 7200 -"])
@@ -167,7 +167,7 @@ def test_robots_are_probed_and_never_recovered(tmp_path):
     assert _actions(tmp_path) == []
 
 
-def _remote(tmp_path, command, units="pinky-nav2.service\n", role=None):
+def _remote(tmp_path, command, units="pinky-backend.service\n", role=None):
     bin_dir = tmp_path / "rbin"
     bin_dir.mkdir(exist_ok=True)
     for name, body in {"systemctl": 'echo "$*" >> "$CALLS"; case "$*" in *is-active*) exit 3;; esac',
@@ -188,7 +188,7 @@ def test_the_forced_command_reports_down_units_in_health(tmp_path):
     result, _ = _remote(tmp_path, "health")
     fields = result.stdout.split()
     assert result.returncode == 0 and len(fields) == 6
-    assert all(f.replace(".", "").isdigit() for f in fields[:5]) and fields[5] == "pinky-nav2.service"
+    assert all(f.replace(".", "").isdigit() for f in fields[:5]) and fields[5] == "pinky-backend.service"
 
 
 def test_the_site_role_checks_system_units_and_others_user_units(tmp_path):
@@ -201,10 +201,10 @@ def test_the_site_role_checks_system_units_and_others_user_units(tmp_path):
 
 
 def test_the_forced_command_restarts_only_listed_user_units(tmp_path):
-    result, calls = _remote(tmp_path, "restart pinky-nav2.service")
+    result, calls = _remote(tmp_path, "restart pinky-backend.service")
     assert result.returncode == 0
-    assert calls == ["sudo -n /usr/local/sbin/rosy-host-control restart-unit pinky-nav2.service"]
-    for i, bad in enumerate(("restart ssh.service", "restart pinky-nav2.service extra", "restart *", "rm -rf /",
+    assert calls == ["sudo -n /usr/local/sbin/rosy-host-control restart-unit pinky-backend.service"]
+    for i, bad in enumerate(("restart ssh.service", "restart pinky-backend.service extra", "restart *", "rm -rf /",
                              "reboot now", "health; reboot")):
         (tmp_path / str(i)).mkdir()
         result, calls = _remote(tmp_path / str(i), bad)

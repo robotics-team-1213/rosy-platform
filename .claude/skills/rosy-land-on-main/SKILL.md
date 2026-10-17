@@ -25,9 +25,13 @@ python tools/worktrees.py status                              # every worktree w
 
 - `new` (D-761, Proposed) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`) and removes nothing:
   it reports how many finished worktrees `python tools/worktrees.py prune --apply` would remove (any owner's:
-  clean, merged into `main`, not locked, no ignored data, idle 72 h, so nothing is left to lose; your own landed worktree, with a commit of its own on its branch, needs no wait);
-  `new --prune` applies that first. It refuses at 60 directories under `.worktrees/` and counts removable
-  worktrees per owner; `status` shows each row's owner and whether you may remove it. `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
+  clean, merged into `main`, not locked, no ignored data, idle 1 h when its branch landed a commit of its own
+  and 72 h otherwise (D-790), so nothing is left to lose; your own landed worktree needs no wait; orphan directories
+  idle 1 h, their files zipped to `$ROSY_SCRATCH/worktree-orphans/` and verified first);
+  `new --prune` applies that first. It refuses at 60 directories under `.worktrees/` and names each worktree
+  removable now and by whom; `status` shows each row's owner (`unknown` when none; `new --owner "<who>"` sets it)
+  and whether you may remove it. `landed-dirty` = the branch is in `main` but files are uncommitted: move the
+  work to a new worktree. `stale-history` = a pre-rewrite branch: never merge or land it (`new --from` refuses it). `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
   removes dirty or unmerged worktrees too, the caller's own unless `--all`: only a person or the dispatcher runs it.
   `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 
@@ -117,7 +121,11 @@ digraph land {
    Report the refusal. Do not stash, checkout, or delete it, and do not clean the file and retry.
 4. `tools/land.py` only reports finished worktrees when it starts (`--prune` removes them, `--no-prune`
    is silent). Remove your landed worktree after leaving it, in the main checkout, with one command:
-   `python tools/worktrees.py prune --apply` (your own landed worktree goes at once, others' after 72 h). A branch
+   `python tools/worktrees.py prune --apply` (your own landed worktree goes at once, others' landed ones after 1 h).
+   Do not keep working in a landed worktree. `land.py` refuses a `stale-history` branch, checks D-766 sizes
+   before any remote test (`python tools/harness/size_range.py main HEAD` shows it first), and reruns 1-5 NEW ids
+   alone once: all pass -> `LOAD-FLAKY`, landing continues, ids go to `<git-common-dir>/rosy-flaky-candidates.txt`
+   for a person to review (never auto-quarantined); any fails again -> stop. A branch
    you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
 5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
    Local main ahead of `origin/main` has no CI evidence.

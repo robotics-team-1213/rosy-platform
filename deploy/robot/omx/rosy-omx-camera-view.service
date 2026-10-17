@@ -8,7 +8,7 @@ Type=simple
 EnvironmentFile=%h/.config/rosy/omx-camera-top.env
 EnvironmentFile=%h/.config/rosy/omx-camera-readiness.env
 Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_STATIC_PEERS=
-ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; unset CYCLONEDDS_URI FASTDDS_DEFAULT_PROFILES_FILE FASTRTPS_DEFAULT_PROFILES_FILE ROS_DISCOVERY_SERVER; exec /usr/bin/python3 "$ROSY_CAMERA_PIPELINE_ROOT/commissioning_view.py" --port 8767'
+ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_STATIC_PEERS=; unset CYCLONEDDS_URI FASTDDS_DEFAULT_PROFILES_FILE FASTRTPS_DEFAULT_PROFILES_FILE ROS_DISCOVERY_SERVER; exec /usr/bin/python3 "$ROSY_CAMERA_PIPELINE_ROOT/commissioning_view.py" --port 8767'
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=5
