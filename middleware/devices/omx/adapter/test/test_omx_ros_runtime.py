@@ -12,7 +12,7 @@ rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
 from rclpy.action import ActionServer  # noqa: E402
-from rclpy.executors import MultiThreadedExecutor  # noqa: E402
+from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
 
@@ -376,8 +376,7 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
 @pytest.mark.parametrize("timeout_while_blocked", [False, True])
 def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         slow_feedback_peer, owner_threads, timeout_while_blocked):
-    """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
-    writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
+    """Slow durable feedback must not occupy serial or production owner callbacks."""
     rclpy.init()
     owner_node = Node("omx_test_flood_owner")
     slow_feedbacks = []
@@ -392,8 +391,10 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         action_timeout_s=1.2 if timeout_while_blocked else 6.0,
         max_start_state_tolerances={"joint1": 0.05},
     )
+    goal_events = []
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
-                                   trajectory_action=action_name, poll_period_s=0.01)
+                                   trajectory_action=action_name, poll_period_s=0.01,
+                                   on_goal_event=goal_events.append)
     watchdog_ticks = []
     original_poll = runtime.owner.poll
 
@@ -407,7 +408,10 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
     sink_entered = threading.Event()
     release_sink = threading.Event()
     phase_port = RosArmPhaseGoalPort(runtime)
-    executor = MultiThreadedExecutor(num_threads=owner_threads)
+    # Jazzy explicitly recommends SingleThreadedExecutor instead of a one-worker
+    # MTE. Keep the original four-worker production regression as well.
+    executor = (SingleThreadedExecutor() if owner_threads == 1
+                else MultiThreadedExecutor(num_threads=owner_threads))
     executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
@@ -475,6 +479,17 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         assert runtime.last_terminal_decision is not None, evidence
         assert runtime.last_terminal_decision.reason == (
             "action_timeout" if timeout_while_blocked else "completed"), evidence
+        if timeout_while_blocked:
+            handle = runtime.action_port.last_handle
+            deadline = time.monotonic() + 5.0
+            while (time.monotonic() < deadline and (handle.status is None or not any(
+                    event.kind == "TERMINAL_RESULT" for event in goal_events))):
+                time.sleep(0.01)
+            assert handle.status == 4, evidence  # late SUCCEEDED is not permission to recover
+            assert runtime.owner.poll().reason == "action_timeout"
+            assert runtime.submit(command).reason == "hold_latched"
+            assert [event.kind for event in goal_events].count("TERMINAL_RESULT") == 1
+            assert [event.sequence for event in goal_events] == list(range(1, len(goal_events) + 1))
         assert runtime.owner.state == ("hold" if timeout_while_blocked else "ready")
     finally:
         release_sink.set()
@@ -484,6 +499,35 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         runtime.destroy()
         owner_node.destroy_node()
         rclpy.shutdown()
+
+
+@pytest.mark.parametrize("scheduler_stopped", [False, True])
+def test_timeout_never_falls_back_to_the_owner_thread_sink(scheduler_stopped):
+    from types import SimpleNamespace
+    from omx_adapter.ros_runtime import RosTrajectoryActionHandle
+
+    queued, events = [], []
+
+    def schedule(callback):
+        if scheduler_stopped:
+            raise RuntimeError("executor stopped")
+        queued.append(callback)
+
+    client = SimpleNamespace(send_goal_async=lambda *a, **kw: SimpleNamespace(
+        add_done_callback=lambda callback: None))
+    command = TrajectoryCommand(
+        workcell_id="w", instance_id="i", command_id="timeout", session_id="s", owner="moveit",
+        positions={"joint1": 0.1}, duration_s=0.5, source_state_sequence=1, calibration_revision="cal",
+    )
+    handle = RosTrajectoryActionHandle(client, command, events.append, defer_owner_event=schedule)
+    handle.mark_timeout()
+    handle.mark_timeout()  # repeated watchdog ticks must not accumulate delivery tasks
+    assert handle.done() and not handle.succeeded()
+    assert events == []
+    assert len(queued) == (0 if scheduler_stopped else 1)
+    if queued:
+        queued.pop()()
+        assert [event.kind for event in events] == ["GOAL_ACCEPTANCE_UNKNOWN"]
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():

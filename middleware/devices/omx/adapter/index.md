@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
 - 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
 - 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
 - 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
 - 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
-- 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control

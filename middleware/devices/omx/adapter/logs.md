@@ -589,3 +589,9 @@
 - 변경: 같은 context·namespace와 owner에서 해석한 액션 이름으로 전용 SingleThreadedExecutor를 구성했다. handle의 동기식 이벤트 순서·durable terminal 처리와 단일 owner·freshness·HOLD 기준은 유지한다. 생성 실패와 종료 시 전용 executor·스레드·노드를 정리하며 종료 실패를 성공으로 숨기지 않는다.
 - 증거: GitHub RED run39010304643에서 owner1/4 worker 조건 모두 실패했고 해당 native 묶음은 2 failed / 7 passed였다. 외부 발행 간격 약10ms에 owner age는 약1.51s/1.05s로0.5s 기준을 넘었다. 완료된 watchdog poll 관측을 추가했고 상대·private 액션 이름과 remap·반복 종료도 검증한다. 최종 head의 독립 검토와 GitHub GREEN은 PR #83에 기록한다.
 - gate 변화: 없음. 노트북 pytest·원격 시험 PC·vendor Gazebo·실물 장치·DEVICE/FIELD는 미실행이다. 실제 owner 정책·stop/cancel 수용을 이 호스트 시험으로 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
+
+- 변경: timeout의 실패 상태와 owner HOLD는 즉시 적용하고 미확정 기록만 전용 executor에서 전달한다. cancel 호출 예외 통지도 같은 경로를 쓰며 예약 실패에 owner 스레드 sink 호출로 대체하지 않는다. 이미 결과를 관측했다면 뒤늦은 미확정 기록을 덧붙이지 않는다. 600행 제한에 맞춰 액션 전달은 ros_trajectory_action.py로 분리하고 기존 import 경로를 유지한다.
+- 증거: RED run39011139939의 native 묶음은 3 failed / 10 passed. 4-worker timeout은 fresh 상태에서도 last_terminal_decision 게시가 지연됐다. 추가한 1-worker MTE는 freshness·admission도 실패했으며 원인을 확정하지 않았다. Jazzy의 권고에 따라 직렬 회귀는 SingleThreadedExecutor로 구성하고 기존 4-worker MTE와 0.5s 기준을 보존한다. MTE1 해결을 주장하지 않는다.
+- gate 변화: 없음. 늦은 SUCCEEDED 뒤에도 owner HOLD·새 명령 거절과 순차 이벤트 전달을 검증한다. 최종 SHA 독립 검토와 GitHub CI는 PR #83에 남기며 장치 정지·복구 수용을 대신하지 않는다.
