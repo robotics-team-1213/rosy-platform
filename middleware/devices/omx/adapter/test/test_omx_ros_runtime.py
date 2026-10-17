@@ -373,7 +373,9 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
 
 
 @pytest.mark.parametrize("owner_threads", [1, 4])
-def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_feedback_peer, owner_threads):
+@pytest.mark.parametrize("timeout_while_blocked", [False, True])
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
+        slow_feedback_peer, owner_threads, timeout_while_blocked):
     """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
     writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
     rclpy.init()
@@ -386,7 +388,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
         allowed_owners=("moveit",), calibration_revision="cal-test",
         # Cloud publication itself has paused for 0.201 s. Give the fixture scheduling
         # margin, while blocking feedback for at least 3x this freshness allowance.
-        max_joint_state_age_s=0.5, max_goal_duration_s=2.0, action_timeout_s=6.0,
+        max_joint_state_age_s=0.5, max_goal_duration_s=1.0,
+        action_timeout_s=1.2 if timeout_while_blocked else 6.0,
         max_start_state_tolerances={"joint1": 0.05},
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
@@ -457,6 +460,12 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
                    for t, seq, _ in owner_samples), evidence
         assert now - observed.received_at < config.max_joint_state_age_s, evidence
         assert any(t > sink_times[0] + config.max_joint_state_age_s for t in watchdog_ticks), evidence
+        if timeout_while_blocked:
+            assert runtime.owner.state == "hold", evidence
+            assert runtime.last_terminal_decision is not None, evidence
+            assert runtime.last_terminal_decision.reason == "action_timeout", evidence
+            assert any(t > sink_times[0] + config.action_timeout_s for t in watchdog_ticks), evidence
+            assert runtime.submit(command).reason == "hold_latched"
         release_sink.set()
         deadline = time.monotonic() + 6.0
         while time.monotonic() < deadline and runtime.last_terminal_decision is None:
@@ -464,8 +473,9 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(slow_
         assert slow_feedbacks, "the server never sent feedback"
         evidence["decision"] = runtime.last_terminal_decision
         assert runtime.last_terminal_decision is not None, evidence
-        assert runtime.last_terminal_decision.reason == "completed", evidence
-        assert runtime.owner.state == "ready"
+        assert runtime.last_terminal_decision.reason == (
+            "action_timeout" if timeout_while_blocked else "completed"), evidence
+        assert runtime.owner.state == ("hold" if timeout_while_blocked else "ready")
     finally:
         release_sink.set()
         executor.shutdown(timeout_sec=2.0)
