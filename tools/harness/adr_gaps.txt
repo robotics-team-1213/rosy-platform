@@ -34,3 +34,5 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
 D-772 reserved on branch docs/station-charge-lifecycle (refs/adr/D-772), not yet on main; remove when it lands
 D-774 reserved in another in-flight branch (refs/adr/D-774); remove when its ADR lands
+D-776 reserved on branch docs/station-charge-lifecycle (refs/adr/D-776), not yet on main; remove when it lands
+D-777 landed on origin/main (303d7d66d, #64), not yet on local main; remove when it lands
