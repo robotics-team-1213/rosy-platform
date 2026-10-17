@@ -629,3 +629,17 @@ hash도 일치했다. native event는 소프트웨어 사실이며 물리 정지
 강조도 실물 수용·실데이터 학습·독립 과제 성능과 G4 완료 조건은 유지한다.
 [절차](../plans/2026-10-17-omx-next-day-collection.md) ·
 [고정 증거](../validation/omx-next-day-collection-2026-10-17/result.md).
+
+
+### 2026-10-17 남은 실행 환경·현장 기록 준비
+
+수집 service의 필수 env와 직접 CLI의 ROS setup/domain 절차, 새 session 규칙을 실행 안내에 추가했다.
+실물 식별·지지/정지·시야·범위·정규화·주기·원본·전송·사람 검토·학습을 실제 근거로 채우는
+첫 현장 기록지를 준비했다. private 재개 묶음은 기존 source/host 설정으로 passive 진단과
+비활성 env 준비, 고립 사본의 launcher 거부 검사, 모델 진입점/공간 점검을 수행하도록 작성했다.
+
+이번 SSH는 Fleet/모델 모두 banner exchange에서 실패했고 AI 경유지와 모델 PC는 offline으로
+표시됐다. Tailscale 로컬 backend는 정상이며 Fleet 직접 접속도 완료되지 않았다. 현재 전원/망 원인은
+미확정이다. 준비 묶음은 문법만 검증했으며 원격 설치/실행 성공으로 기록하지 않는다.
+기존 양쪽 배치 성공과 이번 현재 가용성을 구분한다. 실제 시연0회, 내일의 실물 수용 조건은 유지한다.
+[재개 준비·접속 증거](../validation/omx-remaining-preparation-2026-10-17/result.md).

@@ -102,6 +102,48 @@ python3 <source-root>/deploy/robot/omx/collection_cli.py collect --profile <prof
 중단도 남긴다. systemd 사용 시 `run_collection.sh`와 `rosy-omx-collection.service`를 사용한다.
 필수 env가 없으면 ROS setup 전에 실패하며 Restart=no, SIGINT, 최대120초다. 자동 enable/start하지 않는다.
 
+### 실행 환경과 남은 점검의 재개
+
+추가 준비 묶음은 개발 PC의 gitignored `private/omx-next-day-preparation-20261017/`에 보존한다.
+`manifest.json`이 묶음의 파일 hash를 확인하며 기존 `private/lab-hosts.json`만 사용한다.
+실물 구동 없이 준비를 재개하는 명령은 다음과 같다.
+
+```text
+python private/omx-next-day-preparation-20261017/run-preparation.py --role fleet
+python private/omx-next-day-preparation-20261017/run-preparation.py --role model
+```
+
+Fleet 단계는 기존 카메라 env의 ROS domain과 실제 setup을 사용해6초간 원본 영상 metadata와
+ROS graph만 관측한다. 임의의 관절/Action 배치를 추정하거나 controller를 시작하지 않는다.
+수집용 env가 없을 때만 `~/.config/rosy/omx-collection.env`를 만들고 기존 파일은 보존한다.
+비활성 설정의 고립된 사본으로 launcher 거부를 검사하며 수집 unit은 inactive인지 확인한다.
+모델 단계는 기존 `model-il`의 prepare/train 도움말, 원본 소스 hash, 저장 공간과 수신 경로를 점검한다.
+두 단계 모두 과제 목표·실측 범위·acceptance를 채우지 않는다. 연결 실패 시 attempt별 원본 로그를 보존한다.
+
+2026-10-17 추가 시도는 SSH banner 시간 초과로 원격 실행 전 실패했다. 위 묶음은 Bash/Python 문법만
+확인했으며 원격 설치/동작 검증은 보류다. 이전 양쪽 배치 성공 기록과 구분한다.
+[추가 준비·접속 진단](../validation/omx-remaining-preparation-2026-10-17/result.md).
+
+service env에 필요한 필드는 다음과 같다. 실제 파일은 remote 준비 후 값을 확인한다.
+systemd EnvironmentFile은 `$HOME`을 확장하지 않으므로 각 경로에 실제 절대 경로를 사용한다.
+
+```text
+ROSY_OMX_COLLECTION_ROOT=<immutable-source-root>
+ROSY_ROS_SETUP=<existing-ros-setup.bash>
+ROSY_OMX_OVERLAY_SETUP=<existing-verified-native-overlay>/install/setup.bash
+ROS_DOMAIN_ID=<existing-camera-workcell-domain>
+ROSY_COLLECTION_PROFILE=<private-profile.json>
+ROSY_COLLECTION_TEACHER=<private-teacher.json>
+ROSY_COLLECTION_ACCEPTANCE=<private-acceptance.json>
+ROSY_COLLECTION_OUTPUT=<new-absolute-session-directory>
+ROSY_COLLECTION_EPISODES=1
+```
+
+직접 CLI preflight/collect를 실행하는 shell에서도 위 ROS setup과 overlay를 먼저 source하고
+같은 ROS_DOMAIN_ID를 export한다. `check`는 ROS를 불러오지 않는 정적 검사다.
+중단되거나 끝난 session 경로를 재사용하지 않으며 다음 실행마다 OUTPUT을 새 경로로 바꾼다.
+실물 확인 결과는 [첫 현장 시험 기록지](2026-10-17-omx-first-field-test.md)에 남긴다.
+
 ## 전송·검토·학습
 
 개발 PC에서 private host 설정의 Fleet→모델 PC로 복사한다. source/destination은 고정된 collection
