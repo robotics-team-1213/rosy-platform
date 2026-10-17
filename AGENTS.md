@@ -141,6 +141,9 @@ The direct pytest examples below are for CI or the selected Linux test PC. From 
 python tools/harness/rosy_harness.py affected --base origin/main --print
 python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir <external-log-dir>
 
+# Compare every run-N.txt printed by the remote runner, not only run-1.txt.
+# For each log: python test/known_failures.py <external-log-dir>/run-N.txt
+
 # Quick tier (D-346): the pre-commit/push gate (~3 min).
 # Same suite as the pre-push hook (tools/hooks/install.sh). 2026-10-01: dashboard
 # contract + root contract suites added after the D-362 split and secret-scan/

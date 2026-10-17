@@ -94,6 +94,8 @@ python tools/harness/rosy_harness.py affected --base origin/main --json | python
 python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
 ```
 
+여러 시험 묶음이 선택되면 `run-2.txt`, `run-3.txt`도 생긴다. 실행기가 출력한 모든 `run-N.txt`를 위 비교 명령에 각각 넘기고, 각 로그의 실행·건너뜀 수와 `NEW`를 확인한다. 첫 로그만으로 전체 통과를 판단하지 않는다.
+
 quick 시험 목록은 [`tools/hooks/pre-push`](../../tools/hooks/pre-push)가 관리한다. 실패한 묶음을 재현할 때는 훅에 출력된 명령을 원격 실행기로 요청한다. GitHub의 `ci-result`와 개별 잡, 건너뛴 검사는 [PR 파이프라인](pr-pipeline.md#ci와-병합)에 따라 확인한다.
 
 ### 브라우저 시험 (Chromium)
