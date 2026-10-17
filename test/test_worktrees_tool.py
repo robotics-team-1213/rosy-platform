@@ -1,4 +1,4 @@
-"""tools/worktrees.py against throwaway git repos: a main checkout and worktrees under .worktrees/."""
+"""tools/worktrees.py and tools/worktree_rules.py against throwaway git repos: a main checkout and worktrees under .worktrees/."""
 
 from __future__ import annotations
 
