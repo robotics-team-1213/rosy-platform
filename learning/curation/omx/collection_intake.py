@@ -84,6 +84,10 @@ def _vector(value, *, normalized):
 
 def _teacher_and_ledger(manifest, blobs, completed_only):
     _require('teacher.json' in blobs and 'events.jsonl' in blobs, 'teacher and native event ledger required')
+    _require('profile.json' in blobs, 'collection profile required')
+    reach = _json(blobs['profile.json']).get('reach_tolerance_rad')
+    _require(isinstance(reach, list) and len(reach) == 6 and all(_number(v) and 0 < v <= .2 for v in reach),
+             'profile reach tolerance required')
     teacher = _json(blobs['teacher.json'])
     _require(teacher.get('schema') == 'rosy.omx-collection-teacher.v1', 'teacher schema differs')
     canonical = json.dumps(teacher, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
@@ -101,10 +105,10 @@ def _teacher_and_ledger(manifest, blobs, completed_only):
     _require(isinstance(stop, dict) and stop.get('hold_requested') is True
              and stop.get('terminal_observed') is True, 'confirmed owner HOLD and terminal required')
     _require(completed_only or 'error' not in manifest, 'session error requires explicit completed-only selection')
-    return steps, events
+    return steps, events, reach
 
 
-def _completed_attempt(episode, steps, events):
+def _completed_attempt(episode, steps, events, reach):
     """An editable completion flag cannot replace byte-bound producer events."""
     cycle = episode['cycle_id']
     expected = [f'{cycle}-{ordinal}' for ordinal in range(len(steps))]
@@ -129,8 +133,8 @@ def _completed_attempt(episode, steps, events):
         prior_terminal = positions[-1]
         intent, submission, accepted, terminal, outer, reached = [event for _, event in indexed]
         errors, tolerance = reached.get('errors_rad'), reached.get('tolerance_rad')
-        _require(isinstance(errors, list) and isinstance(tolerance, list) and len(errors) == len(tolerance) == 6
-                 and all(_number(e) and _number(t) and 0 <= e <= t for e, t in zip(errors, tolerance)),
+        _require(tolerance == reach and isinstance(errors, list) and len(errors) == 6
+                 and all(_number(e) and 0 <= e <= t for e, t in zip(errors, reach)),
                  'measured joints did not reach the teacher target')
         _require(intent.get('step') == step and isinstance(submission.get('decision'), dict)
                  and submission['decision'].get('accepted') is True, 'teacher intent or owner submission differs')
@@ -207,7 +211,7 @@ def validate_session(root, *, completed_only=False, require_complete=True):
              'raw file hash differs')
     _require('environment.jsonl' in files, 'original environment log required')
     _events(blobs['environment.jsonl'].decode('utf-8'))
-    steps, events = _teacher_and_ledger(manifest, blobs, completed_only)
+    steps, events, reach = _teacher_and_ledger(manifest, blobs, completed_only)
     attempts = manifest.get('episodes')
     _require(isinstance(attempts, list) and attempts, 'episode attempts required')
     selected, samples, windows, prior_end = [], {}, [], 0
@@ -262,7 +266,7 @@ def validate_session(root, *, completed_only=False, require_complete=True):
         windows.append({key: episode[key] for key in ('episode_index', 'start_ns', 'end_ns', 'run_id',
                                                      'profile_sha256')})
         if episode['complete']:
-            _completed_attempt(episode, steps, events)
+            _completed_attempt(episode, steps, events, reach)
             selected.append(episode)
         else:
             _require(completed_only, 'incomplete attempt requires explicit completed-only selection')

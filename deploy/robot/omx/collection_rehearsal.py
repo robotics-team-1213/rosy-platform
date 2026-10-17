@@ -14,7 +14,7 @@ def profile():
 
 
 def teacher():
-    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.35)])
+    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.35)])
 
 
 class RehearsalBackend:
@@ -43,8 +43,8 @@ class RehearsalBackend:
                 usable=condition == 'NORMAL', mean_intensity=90., spatial_contrast=20., p5=10., p95=180.,
                 dark_fraction=.1, clipped_fraction=.01))
         values = normalize(self.target, self.profile)
-        # no_motion: the controller reports success while the joints stay away from the target.
-        joints = [v+.5 for v in self.target] if bad and self.fault == 'no_motion' else list(self.target)
+        # no_motion: the controller reports success while the joints stay where they started.
+        joints = [0.]*6 if self.fault == 'no_motion' else list(self.target)
         return dict(time_ns=now, environment=env, observation_state=values, action=values, joint_positions=joints,
             joint_source_stamp=now/1e9, reference_source_stamp=now/1e9, state_age_s=0., reference_age_s=state_age,
             images={r: dict(data=bytes([self.sequence % 255])*32*32*3, width=32, height=32,
