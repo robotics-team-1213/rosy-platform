@@ -83,14 +83,14 @@ flowchart LR
 
 | 단계 | 언제 | 명령 |
 |---|---|---|
-| affected | 작업하는 동안 | `python tools/harness/rosy_harness.py affected --base origin/main --run` — 바꾼 파일에 연결된 시험과 가드만 |
+| affected | 작업하는 동안 | `python tools/harness/rosy_harness.py affected --base origin/main --print`로 선택을 확인하고 아래 원격 실행기로 요청 |
 | quick + affected (pre-push) | push 직전, 훅이 자동 실행 | `bash tools/hooks/install.sh`로 설치한 `pre-push` |
 | GitHub CI | PR은 selector 결과, main·야간·수동 실행은 full | `.github/workflows/ci.yml`. 릴리스 빌드는 별도 검증 관문을 따른다 |
 
-결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
+실험실에서는 먼저 자기 변경을 커밋한 뒤 선택 결과를 원격 실행기에 보낸다. `affected --run`은 현재 PC에서 pytest를 직접 호출하므로 이 노트북에서는 쓰지 않는다. 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- <paths> -q
+python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir X:/DevTemp/<이름>
 python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
 ```
 

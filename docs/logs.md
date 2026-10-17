@@ -8885,3 +8885,9 @@ osy-d395-s1d\`.
 - 근거: 현재 ADR 파일·Log 색인, contracts/foundation의 protocol schema, pre-push와 ci.yml. GitHub 컨테이너 번들 안내에는 개발·호환 범위를 먼저 표시하고 네이티브 제품 배포 시작점을 연결했다. 번들의 설치 전 staging과 개발 검증 환경을 구분한다.
 - 검증: 생성 기록·링크·기존 문서 계약 시험과 독립 검토 결과를 PR에 남긴다. 새 staging 환경 구축·배포·서명·장치 수용은 수행하지 않았다.
 - gate 변화: 없음. 기존 ADR·날짜별 검증·이전 Log는 보존하며, 현재 안내와 상태표만 갱신했다.
+
+## 2026-10-17 · uncommitted · docs: affected 선택기와 원격 실행을 명령에서 구분
+
+- 변경: 루트 에이전트 안내와 개발 가이드의 실험실 명령을 affected JSON → remote_pytest로 연결했다. affected --run은 호출한 PC의 pytest를 직접 실행한다는 기존 구현을 명시했다.
+- 근거: affected_tests.run의 subprocess 호출과 remote_pytest의 --affected-json 입력. 안내를 따라 실행한 로컬 호출은 즉시 중단했으며 검증 근거로 사용하지 않는다. 최종 커밋은 원격 실행기로 검증한다.
+- gate 변화: 없음. 노트북 pytest 금지와 커밋 SHA 원격 검증 조건은 유지한다.

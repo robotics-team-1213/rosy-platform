@@ -338,8 +338,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · docs: affected 선택기와 원격 실행을 명령에서 구분
 - 2026-10-17 · uncommitted · docs: 개발·배포 안내의 중복과 오래된 상태 정리
 - 2026-10-17 · uncommitted · docs: 간결한 문서와 단일 기준을 정하고 협업 안내에 적용
 - 2026-10-16 · uncommitted · docs: 한 명의 게시와 두 에이전트 검토 절차
 - 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
-- 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
