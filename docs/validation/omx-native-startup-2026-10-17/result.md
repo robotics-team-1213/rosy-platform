@@ -1,6 +1,6 @@
 # OMX native task 시작·정지 연결 검증
 
-2026-10-17. 검증 소스 `9108fd4d8e82aad8a1f31437bf1e30c83baa38aa`.
+2026-10-17. 검증 소스 commit `9108fd4d8e82aad8a1f31437bf1e30c83baa38aa`.
 
 ## 소프트웨어 결과
 
