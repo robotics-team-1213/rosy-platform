@@ -9005,3 +9005,9 @@ osy-d395-s1d\`.
 - 변경: 새 main을 병합한 FULL에서 드러난 G1 검사의 전역 구역 부재 단언을 작업별 점유·세대·배치 상관관계로 교정했다. 실패한 쌍의 시작 전후 SQLite 전체 원장이 같은지, 실행 식별자·grant·점유가 비어 있는지, 실제 owner 제출이 없는지 확인한다. 오른팔 충돌과 구역 충돌을 모두 검사하며, 다른 정상 왼팔의 공유 구역 사용은 fake goal 종료를 보류해 결정적으로 유지한다.
 - 증거: `completion-publish-full/`의 첫 FULL은 commit `3627db4dc8`에서 28,149 passed / 1,909 skipped 및 브라우저 opt-in 928 passed / skip 0이었다. 이후 최신 main 병합 후보 commit `214cc6eadc`의 root 묶음은 G1 검사 1 failed / 8,355 passed / 1,069 skipped로 끝나 전체 native 종료값 1, 미착지다. commit `2144b6400`의 제어된 재현은 정상 왼팔 Step 6의 RUNNING 점유를 구분하지 못해 다섯 번 모두 실패했다. 보강 중 빈 점유 목록을 null로 가정한 단언을 실제 빈 목록에 맞춘 commit `17722ea12`는 두 충돌 경우를 다섯 번 반복해 총 10 passed / skip 0 / NEW 0이었다. commit `c3588a4dd`에서 별도 orphan 구역 점유를 주입하자 상관관계 단언이 정확히 실패했고, 해당 변형은 제거했다.
 - gate 변화: 없음. 실제 Fleet 점유·해제 경로와 실패·격리 목록은 바꾸지 않았다. 원본은 `C:/DevTemp/browser-regressions/recheck-20261017T051307Z/`의 `g1-claim-*`에 보존한다. 더 넓은 집중 검증과 새 FULL 착지는 후속이며 합성 G1 검사는 ROS-SIM·DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-17 · a9a061446c · 잔여 브라우저 FULL 검증과 로컬 main 착지
+
+- 변경: 잔여 다섯 실패 해제와 보정 화면·원격 실행기 경합 수정, G1 검사 교정을 새 FULL로 확인하고 로컬 main에 병합했다. 집중 검증 기록은 보존하고 `validation/remaining-browser-regressions-verified-2026-10-17/landing.md`에 최종 커밋·계수·원본 해시와 앞선 실패를 추가했다.
+- 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
+- gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.
