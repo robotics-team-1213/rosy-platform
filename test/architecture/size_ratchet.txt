@@ -5,7 +5,7 @@
 # in a commit with a Safety-Review: trailer, expiring at most 7 days after that commit (D-766 8).
 # Keys: package names, units, and files relative to the colcon root (repo root for deploy/tools/
 # learning). Regenerate the measured rows: python test/architecture/test_module_structure.py
-15918 control
+15915 control
 748 core/events/core_events/events/audit.py
 888 core/gateway/core/bridge/ros_bridge.py
 817 deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py
