@@ -32,7 +32,9 @@ def _events(cycle, start, end, complete):
                  dict(kind='TERMINAL_RESULT', command_id=command, goal_id=cycle+'-goal', sequence=2,
                       observed_at_monotonic_s=2., status=4, result_code=0),
                  dict(kind='TERMINAL', command_id=command, cycle_id=cycle, time_ns=end-1,
-                      result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+                      result=dict(succeeded=True, source='native_follow_joint_trajectory')),
+                 dict(kind='REACHED', command_id=command, cycle_id=cycle, time_ns=end-1,
+                      errors_rad=[0.]*6, tolerance_rad=[.01]*6)]
     else:
         rows.append(dict(kind='ABORT', cycle_id=cycle, reason='synthetic stop', time_ns=end-1))
     return rows
