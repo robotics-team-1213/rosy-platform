@@ -8935,3 +8935,9 @@ osy-d395-s1d\`.
 - 변경: 기존 native owner와 독립 환경/프로세스 supervisor, 원본 RGB·실제 reference/관절·native event journal, strict intake·사람 검토·독립 분할·ACT/reload, 검증 전송과 비활성 service를 연결했다. 실행 순서와 실측 입력은 docs/plans/2026-10-17-omx-next-day-collection.md에 기록했다.
 - 증거: b88eee5f18 원격28pass, 595016f52e intake/pipeline/전송/실제 LeRobot 합성 왕복48pass/1optional skip. 두 PC 동일 소스293file hash·각6개 모의 검사·실제 ROS/LeRobot import pass. strict SSH/scp-3 시험 파일52byte hash 일치. 독립 최종 계약 리뷰 material finding0건. docs/validation/omx-next-day-collection-2026-10-17/result.md.
 - gate 변화: 수집부터 offline 학습까지 소프트웨어 연결·양쪽 배치 추가. collection service inactive, enabled=false. 실물 구동0·실제 시연0회. 실측/물리 정지·시야·하중 수용·실데이터 학습과 정책의 물리 평가는 미완료. D-770 Proposed 유지.
+
+## 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
+
+- 변경: D-778/D-779/D-780/D-781 G1을 ROS 없이 옮겼다. `mixed_reach.py`(D-402 IK reach, `mixed_cell.Reach` 모양), `test/g1_layout.py`(IK 감사, capsule 휩쓸림 간격, 일정 모델), `test/g1_sim_harness.py`(Fleet multi-arm dispatcher → 실제 cell owner 두 개 + 조율자, 대체한 부분은 파일 머리), G1 작업대(home x 0.08 m)와 4종 레시피 fixture, 배치·끝까지·장애·시간 시험 3개.
+- 증거: `python test/g1_layout.py`(노트북 순수 계산): 도달성 105/105·140/140 자세, 한 팔 84·98 자세 실패 0; 간격 G1 작업대 +2.2~+2.5 mm, pilot home 0.12 m −31.8 mm, base 0.30 m −8.8 mm; 일정 모델 한 팔 대비 ×1.57·×1.72; 정적 규칙 위반 0. pytest 미실행(실험실 시험 PC 모두 닿지 않음). docs/validation/bimanual-g1-sim-2026-10-17/README.md.
+- gate 변화: 없음. ROS-SIM HOLD, DEVICE PARKED. 제안 값 coordinator_liveness_s 1.0 s, 주기 0.1 s, max_wait_s 10/45/85 s는 측정 전 제안이다.
