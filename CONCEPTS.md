@@ -225,6 +225,10 @@ The immutable record of where one camera role stood when a dataset was recorded:
 
 The result of comparing one camera frame against a camera setup reference: matched features or seen markers, screen shift in pixels, pan, tilt and roll differences, scale (features) or height and distance (markers), and a verdict of ok, adjust, or unmeasurable. The camera setup screen draws the reference dashed and the current frame solid. A check runs before and after each recorded Episode and is stored in its camera provenance; it records only (shadow) until its thresholds are confirmed, then blocks recording (enforce).
 
+### OMX cameras
+
+`top` is the camera fixed above the workcell: it sees both arms, the mat and where objects lie. `front` is the wrist camera on the follower gripper: it moves with the arm and sees the grasp up close (D-794). `front` is being renamed `wrist` in stages; until then readers treat the two names as the same wrist role. A wrist camera is checked against its camera setup reference only at the reference's check pose (D-792).
+
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.
@@ -232,5 +236,6 @@ The result of comparing one camera frame against a camera setup reference: match
 - "Profile" still means Compose service grouping or hardware YAML; Runtime mode is the staged install preset (core, then motor, then hardware). D-62 slices are the install units. None of these is a Capability, and they are not interchangeable even where they share names.
 - "Node" in this glossary is the computer running CORE (`RuntimeNode`), not an rclpy node.
 - "Task" here is an atomic REST action; Fleet missions and concept 08 workflows are a different object (D-12).
+- "front" on the OMX is the wrist camera, not a fixed front view; on Pinky it is the forward camera (D-601). They share the word only (D-794).
 - "Studio" is the review workbench of D-538 only; the whole model-PC app is Rosy Learning (D-792).
 - A camera setup reference is not a camera profile: the profile (D-199, D-423) carries calibration and mount values a node uses at run time, while the setup reference is learning-side evidence that recordings share one viewpoint.

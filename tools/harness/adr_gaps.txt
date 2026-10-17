@@ -44,3 +44,4 @@ D-788 reserved on branch feat/omx-native-auto-deploy (refs/adr/D-788), not yet o
 D-789 reserved on branch feat/webrtc-camera-migration (refs/adr/D-789), not yet on main; remove when it lands
 D-790 reserved on branch refactor/worktree-rules (refs/adr/D-790), not yet on main; remove when it lands
 D-791 reserved on branch feat/webrtc-camera-migration (refs/adr/D-791), not yet on main; remove when it lands
+D-793 reserved on branch docs/omx-learned-policy-gate (refs/adr/D-793), not yet on main; remove when it lands
