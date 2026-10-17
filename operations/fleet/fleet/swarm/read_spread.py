@@ -1,4 +1,4 @@
-"""Network load: spread the localization service's per-tick robot state reads.
+"""Network load (bounded robot reads): spread the localization service's per-tick robot state reads.
 
 The service reads every robot each 0.5 s tick. Without this, N robots are asked at the same
 instant. ``spread`` wraps the read so each robot starts at its own stable offset in

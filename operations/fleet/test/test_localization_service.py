@@ -1134,7 +1134,7 @@ def test_a_busy_rung_is_not_retried_while_the_robot_checks():
 
 def test_spread_reads_cap_in_flight_and_start_each_robot_at_its_own_offset():
     """Network load: N robots are not read at the same instant; at most max_reads at once."""
-    from fleet.localization import read_spread
+    from fleet.swarm import read_spread
     in_flight, peak = 0, 0
 
     async def read(rid):
