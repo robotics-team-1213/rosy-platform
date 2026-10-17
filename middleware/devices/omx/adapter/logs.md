@@ -529,3 +529,9 @@
 - 증거: 원격 pytest(조율자 부분 해제·끝난 짝·owner fence 종료·boot·해제 거절·BARRIERS_UNSUPPORTED 시험 추가). 물리 장치·ROS-SIM은 하지 않았다.
 - 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
 - gate 변화: 없음.
+
+## 2026-10-17 · 9108fd4d8e · fix(omx): Unix Action listener 수명 조회
+
+- 변경: UnixActionServer가 listen 성공 뒤와 teardown 때 serving Event를 관리하고, 기존 stop Event가 설정되면 즉시 false인 read-only is_serving을 제공한다. 인증·socket 권한·Action admission·취소 계약은 유지한다.
+- 증거: 실제 UDS를 포함한 startup 통합과 정지 중 listener 상실을 재현한 원격 집중 묶음 66 passed. 독립 Safety-Review APPROVE는 docs/validation/omx-native-startup-2026-10-17/safety-review.md.
+- gate 변화: 소스·호스트 검증. 이 값은 listener 수명이며 요청 응답성·물리 정지·장치 수용 증거가 아니다.
