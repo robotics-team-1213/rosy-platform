@@ -90,6 +90,21 @@ owner의 RearmLocal·복구는 `rosy_agent.fleet_fence`로 Fleet fence를 다시
 
 2026-10-17 사용자 지시("지금 할 수 있는 걸로 구현")에 따라 **(b)를 택한다.** `HttpsFleetFenceReadback`은 literal IP로만 TCP를 열고, 고정한 site CA 파일만 신뢰하며(시스템 trust store 미사용), SNI·hostname 검증은 `ROSY_FLEET_FENCE_TLS_NAME`으로 한다. 프록시·리다이렉트를 따르지 않고 200이 아니면 닫힘으로 읽는다. `ROSY_FLEET_FENCE_URL`이 `https://`일 때만 이 경로를 쓰고, 평문 loopback 규칙은 그대로다. Fleet·proxy 코드는 바꾸지 않는다. 현장 활성화 전에 독립 safety 리뷰와 실제 호스트 readback이 남는다.
 
+### 5. SUCCEEDED만으로 완료로 보지 않는다
+
+2026-10-17 micro-step 분석에서 다음 두 가지가 확인됐다.
+
+- 드라이버는 목표를 실제로 썼다(raw 2023→2025). 하지만 8회 중 7회는 torque OFF였고, 이때 motor가 Goal을 Present로 되돌렸다.
+- native `hardware_controller_manager.yaml`에는 goal constraints가 없어서, 실제 이동이 없어도 JTC가 SUCCEEDED를 낸다.
+
+그래서 `ArmCommandConfig.max_final_state_errors`(관절별, `None`은 확인 안 함)를 둔다. 설정하면 owner `poll()`은 최근 수락한 관절 상태가 명령한 최종 위치의 허용오차 안에 있을 때만 `completed`로 본다. 아니면 HOLD `goal_not_reached`로 남긴다. 설정하지 않으면 기존 동작과 같다.
+
+- 그리퍼는 물체에 막혀 멈추는 것이 정상이므로 `None`으로 둔다.
+- 허용오차 값은 G3 실측으로 정하고, 가장 작은 명령 이동량보다 작아야 한다.
+- phase runner·pilot_sim의 receipt에는 ROS 결과(SUCCEEDED)가 그대로 남는다. 다만 owner가 HOLD를 걸면 다음 submit은 거부되므로 안전 쪽으로 동작한다. owner 판정을 phase receipt에 싣는 일은 후속이다.
+
+벤더 JTC에 native constraints를 넣는 패치는 실측값 없이 정하지 않는다. 정지 도구(`commissioning_stop.py`)는 바꾸지 않는다. torque OFF 전에 레지스터를 읽으면 전기적 정지가 늦어지기 때문이다.
+
 ## Alternatives
 
 - **`run_cell_owner.py` 재사용**: SIM gripper·sim clock·SIM profile이 묶여 있어 기각했다.
