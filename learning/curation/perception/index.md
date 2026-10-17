@@ -26,8 +26,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · 픽셀 검수 주체 요약을 현재 결과에 연결
 - 2026-10-17 · uncommitted · 픽셀 AI 실행 패널을 사진 아래로 이동
 - 2026-10-17 · eab1d0fb1 · 픽셀 사진을 AI 참고 패널보다 먼저 배치
 - 2026-10-16 · uncommitted · Learning 업무 이름과 개발 표면 구분
 - 2026-10-14 · d685e1351 · test: Hugging Face 비공개 저장소 관리 원격 시험
-- 2026-10-14 · uncommitted · feat: Hugging Face 연결로 비공개 저장소 관리
