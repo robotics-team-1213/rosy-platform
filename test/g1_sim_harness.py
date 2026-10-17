@@ -18,7 +18,8 @@ bridge (1) the UDS: ``InProcessTransport`` is ``UnixLocalActionTransport`` with 
        ``item_key`` (``box:<sku>``, D-781 §2), as the owner's own recipe/3 validator does.
        (4) goal evidence: ``EvidenceProducer`` reports the item where the arm's own transfer goal left the
        TCP (FK of the goal's last point + the sku's centre offset) in the predicate arm's base frame.
-       (5) Fleet goal predicates are attached here per sku; the mixed resolver attaches none yet.
+       (5) Fleet goal predicates are attached here per sku: the legacy single predicate in the first
+       primary arm's frame and, as the recipe/3 resolver does, one per arm that may run the Step.
 """
 
 from __future__ import annotations
@@ -319,7 +320,8 @@ def compile_submission(recipe_doc: dict, cell_doc: dict) -> dict:
 
 
 def attach_predicates(submission: dict, recipe_doc: dict) -> dict:
-    """Bridge (5): each Step's item_at_pose predicate in its first primary arm's frame, per sku."""
+    """Bridge (5): each Step's item_at_pose predicate per sku, in the first primary arm's frame
+    (``goal_predicate``) and in every arm's own frame (``goal_predicates``, D-781 §5)."""
     import yaml
     out = _json(submission)
     tolerance = ItemPoseTolerance.from_mapping(yaml.safe_load(TOLERANCE_PATH.read_text(encoding="utf-8")))
@@ -330,6 +332,8 @@ def attach_predicates(submission: dict, recipe_doc: dict) -> dict:
         frame = placement["arm"] if isinstance(placement["arm"], str) else placement["arm"][0]
         offset = centre_above_tcp_m(grasp_depth_m=item.get("grasp_depth", 0.0), height_m=item["height"])
         step["goal_predicate"] = step_goal_predicate(placement["actions"][frame], tolerance, offset)
+        step["goal_predicates"] = {role: step_goal_predicate(inputs, tolerance, offset)
+                                   for role, inputs in sorted(placement["actions"].items())}
     return out
 
 
