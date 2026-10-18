@@ -3,6 +3,8 @@ Description=Apply approved model-PC code when jobs and GPU are idle (D-446)
 
 [Service]
 Type=oneshot
+# D-805: skipped while updates are frozen
+ExecCondition=/usr/local/bin/rosy-update-gate
 ExecStart=/usr/bin/python3 -I %h/.local/lib/rosy-model-code/rosy_model_code.py --config %h/.config/rosy/model-code.json run
 TimeoutStartSec=5min
 NoNewPrivileges=yes

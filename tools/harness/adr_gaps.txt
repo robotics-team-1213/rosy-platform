@@ -36,3 +36,23 @@ D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet
 
 
 D-775 reserved in another worktree (refs/adr/D-775), absent from origin/main; remove when its ADR lands
+D-785 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-786 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-787 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-788 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-789 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-790 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-791 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-792 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-793 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-794 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-795 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-796 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-797 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-798 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-799 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-800 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-801 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-802 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-803 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-804 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands

@@ -4,6 +4,8 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# D-805: skipped while updates are frozen
+ExecCondition=/usr/local/bin/rosy-update-gate
 ExecStart=/usr/bin/python3 %h/rosy-omx/current/deploy/robot/omx/omx_autoupdate.py --config %h/.config/rosy/omx-autoupdate.json run
 TimeoutStartSec=3600
 Nice=10
