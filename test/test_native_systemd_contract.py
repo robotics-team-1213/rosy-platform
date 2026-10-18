@@ -146,6 +146,8 @@ def test_native_recovery_is_a_required_fail_closed_boot_gate():
         "DefaultDependencies=no", "After=local-fs.target", "Before=rosy-core.service rosy-runtime.target",
         "Type=oneshot", "RemainAfterExit=yes",
         "ExecStart=/opt/rosy/native-runtime/recover-release.sh",
+        # D-798: reconcile a cut-off image-layer sync; "-" so it never fails the gate.
+        "ExecStartPost=-+/usr/bin/python3 -I -B /opt/rosy/native-runtime/image-layer-reconcile.py",
     ):
         assert directive in unit
     assert "Restart=" not in unit
