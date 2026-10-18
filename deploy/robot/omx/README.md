@@ -568,6 +568,54 @@ Hub 업로드는 [기존 registry 도구](../../../learning/registry/policy/READ
 검토된 파일·private repo·고정 SHA readback 절차를 따른다. Compose는 upload나
 HF 인증을 하지 않는다. 실제 정책의 Gazebo 집기·실물 운용은 별도 검증이다.
 
+## SIM 도달 과제: 자동 교사 → batch export → ACT
+
+과제 파일 `rosy.omx-sim-reach-task.v1`(JSON, 검증기 `sim_reach_task.py`, 예시
+`sim/reach_task.example.json`)은 "seed로 뽑은 임의 시작 자세에서 고정 목표 관절 자세 도달"이다.
+물체 없음, 그리퍼는 검사·명령하지 않는다(`tolerance_rad`/`target_positions`/범위가 null).
+필드: `schema`, `task_id`, `joint_names`(녹화 순서), `target_positions`, `tolerance_rad`,
+`start_sampling{seed, ranges}`(episode k = seed + k), `max_steps`, `jog_step_rad`(≤0.05),
+`jog_duration_s`(하나의 값, act_job.py의 단일 duration 조건). 목표·범위는 cell profile 한계를
+`start_state_tolerance_rad`만큼 줄인 Pilot 제공 범위 안이어야 한다. 예시는 spawn 자세 근처
+(joint2 뒤로, TCP 높이 전 범위 ≥0.08 m, 반경 ≥0.175 m, FK 격자 검사)이며 Gazebo 충돌 검사는
+아직 하지 않았다.
+
+`sim_reach_teacher.py`는 Pilot HTTP만 쓴다(ROS import 없음, 코드·토큰 미출력). episode마다
+녹화 없이 시작 자세로 reset → 녹화 시작 → 오차/허용오차가 가장 큰 관절을 `jog_step_rad` 이하로
+greedy jog(각 goal SUCCEEDED + readback 0.01 rad 확인) → 10 frame 꼬리 → 최종 joint readback과
+목표 비교로 `task_outcome` success/failure(judge `sim_joint_readback`)를 보내 녹화를 닫는다.
+실패한 goal은 재시도하지 않고 failure로 닫은 뒤 실행을 끝낸다(exit 2). 조종권은 0.8 s마다
+갱신하고, 갱신 오류는 결과를 보내기 전에 실행을 끝낸다. 결과 파일
+`rosy.omx-sim-reach-teacher-results.v1`(episode별 seed, 시작 목표/readback, 최종 관절, 오차,
+success, 녹화 id/status/issues)은 evaluator의 teacher baseline이다.
+
+위 Pilot 컨테이너가 준비된 SIM 호스트의 두 번째 터미널에서(새 서버, 사용하지 않은 pairing code):
+
+```bash
+python3 deploy/robot/omx/sim_reach_teacher.py "$omx_container" \
+  --task deploy/robot/omx/sim/reach_task.example.json --episodes 12 \
+  --out "$omx_out/teacher-results.json" --port "$OMX_PILOT_PORT"
+docker cp "$omx_container:/recordings/." "$omx_out/recordings"
+"$LEROBOT_PYTHON" learning/curation/omx/sim_batch_export.py \
+  --results "$omx_out/teacher-results.json" --recordings "$omx_out/recordings" \
+  --out "$omx_out/batch" --python "$LEROBOT_PYTHON"
+"$LEROBOT_PYTHON" learning/training/omx/act_job.py \
+  $(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1]))["act_job_args"]))' \
+    "$omx_out/batch/batch-manifest.json") --out "$omx_out/act" --steps 400
+```
+
+batch export는 teacher success이면서 녹화 complete·issues 없음·`task_outcome=success`·과제
+관절 순서·모든 행 `jog_duration_s`·같은 world/calibration/camera/fps/limits인 episode만
+`lerobot_export.py` CLI로 하나씩 export하고, 나머지는 `refused`에 이유와 함께 남긴다
+(frame_gap/skew로 incomplete가 된 녹화 포함; 보간·재라벨 없음). eval은 export된 episode 중 seed가
+가장 큰 것, 나머지가 train이다. train 2개 + eval 1개 미만이면 `status=insufficient`, exit 2.
+
+한 번에: `python3 tools/sim/run_sim_reach_pipeline.py --task deploy/robot/omx/sim/reach_task.example.json
+--episodes 12 --run "$omx_out/run" --container "$omx_container" --lerobot-python "$LEROBOT_PYTHON"
+--steps 400` (`--dry-run`으로 명령만 출력, `--from-stage`로 재개). train 뒤 서버를 restart하고
+`learning/evaluation/omx/sim_closed_loop.py`(held-out episode index N부터)와 `sim_reach_eval.py`를
+경로로 부른다. 없으면 skip 메시지를 출력한다. 이 모두는 SIM 연구 증거이며 승격·실물 근거가 아니다.
+
 ### Read-only startup register review
 
 The same `register_probe.py` READ(0,147) snapshot now includes pending goal

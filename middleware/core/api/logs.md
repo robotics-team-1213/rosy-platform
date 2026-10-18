@@ -1119,3 +1119,9 @@
 - 변경: 코드 wheel·출처·체크섬 빌드 workflow와 GET-only CORE 점검을 추가했다. 배포 대상·승인 정책이 없다는 사용자 답변에 따라 실물 target은 기존 runtime·lease·D-793 관문을 차단 사유로 남긴다.
 - 증거: 독립 소스 리뷰 완료. 원격 CORE/native ROS/실제 SDK 22 passed. wheel 빌드 시험의 Python PATH 전달 누락은 fixture에서 보완하며 최종 결과는 후속 검증 기록에 남긴다.
 - gate 변화: 없음. 실제 설치·승인·lease 발급·동작·정지 요청은 이 점검의 기능이 아니다.
+
+## 2026-10-19 · bfe4e1f601 · docs(api): stuck evidence 문서 버전 pin 정렬
+
+- 변경: 이미 구현된 JPEG 응답을 설명하는 API reference v1.273과 app metadata·계약 시험의 버전 pin을 맞췄다. 새 라우터·명령·권한 변경은 없다.
+- 증거: 독립 소스 검토 완료. 통합 커밋의 원격 영향·브라우저 시험은 착지 관문에서 확인할 예정이다.
+- gate 변화: 없음. 호스트 시험이나 소스 검토를 실물 수용으로 기록하지 않는다.
