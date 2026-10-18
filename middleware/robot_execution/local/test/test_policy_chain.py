@@ -32,7 +32,8 @@ def chain_setup(tmp_path, *, enabled=True):
             return CameraSnapshot('front','cam-front','a'*64,(3,2,2), int(clock[0]*1e9), sha256(rgb).hexdigest())
         options = dict(policy=policy, runtime=runtime, fence=seed.fence, consumer=consumer,
             journal=PolicyExecutionJournal(tmp_path/'execution.sqlite3'), owner_identity=seed._identity,
-            camera_current=lambda:(camera(),), capture=lambda:(rgb,camera()), principal='sim-sdk', enabled=enabled)
+            camera_current=lambda:(camera(),), capture=lambda:(rgb,camera()), principal='sim-sdk',
+            installed_rig_revision='sim-rig', enabled=enabled)
         if not enabled:
             yield options, fleet
         else:
@@ -82,11 +83,12 @@ def test_real_fleet_renewal_then_stop_cancels_exact_session_goal(tmp_path, fault
         assert not chain.consumer.authority(renewed)
 
 
-def test_chain_refuses_owner_scope_substitution(tmp_path):
+@pytest.mark.parametrize('field', ['owner_session_id', 'rig_revision', 'calibration_revision'])
+def test_chain_refuses_installed_scope_substitution_before_issuance(tmp_path, field):
     with chain_setup(tmp_path, enabled=False) as (options, fleet):
         options['enabled'] = True
         scope = options['consumer'].scope
-        options['consumer'] = FleetLeaseConsumer(replace(scope, owner_session_id='foreign-owner'),
+        options['consumer'] = FleetLeaseConsumer(replace(scope, **{field:'foreign-binding'}),
             request=fleet.device, monotonic=options['runtime'].monotonic)
         with pytest.raises(ValueError): SimPolicyChain(**options)
         with sqlite3.connect(fleet.db) as db:
@@ -132,3 +134,41 @@ def test_close_reaches_owner_while_refresh_network_is_blocked(tmp_path):
                 closer.join(3)
                 assert not closer.is_alive()
         assert not chain.consumer.authority(chain.session.lease)
+
+
+def test_close_persists_fence_before_waiting_on_trusted_identity_provider(tmp_path):
+    with chain_setup(tmp_path) as (chain, fleet, runtime, driver, clock):
+        entered, release = threading.Event(), threading.Event()
+        identity = chain.session._identity
+        def blocked_identity():
+            entered.set()
+            assert release.wait(3)
+            return identity()
+        chain.session._identity = blocked_identity
+        def poll():
+            try:
+                chain.session.poll()
+            except PermissionError:
+                pass
+        poller = threading.Thread(target=poll)
+        closer = None
+        poller.start()
+        try:
+            assert entered.wait(1)
+            closer = threading.Thread(target=chain.close)
+            closer.start()
+            scope = chain.session.lease.identity
+            deadline = time.monotonic()+.5
+            while chain.session.fence.is_open(authority_epoch=scope.authority_epoch,
+                    dispatch_generation=scope.dispatch_generation) and time.monotonic() < deadline:
+                time.sleep(.005)
+            assert not chain.session.fence.is_open(authority_epoch=scope.authority_epoch,
+                                                   dispatch_generation=scope.dispatch_generation)
+            assert not release.is_set()
+        finally:
+            release.set()
+            poller.join(3)
+            if closer is not None:
+                closer.join(3)
+                assert not closer.is_alive()
+            assert not poller.is_alive()
