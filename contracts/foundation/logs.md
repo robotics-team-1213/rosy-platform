@@ -810,3 +810,9 @@
 - 변경: `refactor/schemas-ratchet-offset`을 최신 main과 통합했다. 유한 JSON 크기 계산 재사용은 이미 main과 같아 코드 변경을 남기지 않고, main의 1234줄 기준을 그대로 보존했다.
 - 증거: 원본 변경과 main의 validator 구현이 같고, 통합 후 schemas.py와 size_ratchet.txt의 main 대비 차이가 없음을 확인한다. 원격 검증은 착지 기록에 남긴다.
 - gate 변화: 없음. 크기 제한을 높이지 않는다.
+
+## 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
+
+- 변경: 기존 Account 작업의 receiver 재생성 후 회수 큐 복구 검사를 foundation 전용 브랜치로 분리했다. 제품 AccountClient는 변경하지 않았다.
+- 증거: 원래 c22ee485ad의 지정 원격 suite15개 PASS, NEW0. 이 브랜치는 최신 main 위에서 착지 관문을 다시 실행한다. 원래 결과는 최신 main 병합 시험을 대신하지 않는다.
+- gate 변화: 없음. 운영 인증·서비스·장치 수용은 이 검사와 별도다.

@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
 - 2026-10-18 · uncommitted · schemas 크기 정리의 기존 반영 확인
 - 2026-10-18 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769) (이식, 원래 2026-10-16)
 - 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 - 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.259)
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결

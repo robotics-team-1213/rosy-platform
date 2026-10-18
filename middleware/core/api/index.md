@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · bfe4e1f601 · docs(api): stuck evidence 문서 버전 pin 정렬
 - 2026-10-18 · abca483966 · OMX 배포 준비 점검 연결
 - 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
 - 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
 - 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
-- 2026-10-16 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769)

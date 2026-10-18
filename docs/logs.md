@@ -9168,6 +9168,12 @@ osy-d395-s1d\`.
 - 증거: 사용자 승인된 비밀정보 없는 JSON 구성과 기존 작성기의 종료 표식·영수증·등록부 경로에 맞춰 작성했다. 카드가 없는 설정 준비와 실제 매체 수용을 구분한다.
 - gate 변화: 없음. 실제 SD 기록·부팅·현장 수용은 미수행이다.
 
+## 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
+
+- 변경: 기존 `Accept: image/jpeg` 응답의 JPEG 본문·`X-Stuck-Evidence` 메타데이터·JSON 오류를 API reference v1.273에 기록하고 버전 pin을 맞췄다. 원래 예약 사유와 최신 main 내용을 보존하며 새 경로·권한·동작은 추가하지 않았다.
+- 증거: 독립 소스 검토에서 Fleet 응답·공유 소비자·기존 JPEG/JSON 시험과 문서의 일치를 확인했다. 통합 커밋의 원격 착지 시험은 대기 중이며 소스 검토를 실행 증거로 대신하지 않는다.
+- gate 변화: 없음. 실물 카메라·배포 수용은 실행하지 않았다.
+
 ## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
 
 - 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
