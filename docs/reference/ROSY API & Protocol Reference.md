@@ -3276,6 +3276,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
 | v1.259 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |
 | v1.258 | 2026-10-17 | Additive (D-779 §3·§6, feat/multi-arm-goal-evidence): `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` `{expected_generation}`(이름 있는 운영자, 두 팔 Job의 팔 하나, 단단한 결합 짝이 잡혀 있으면 409), `POST /api/fleet/cell-goal-evidence`의 두 팔 Job Step 단위 판정(술어 팔의 Action, 그 팔 instance의 producer, 협조 Step은 모든 팔 성공 뒤, 대체 팔 Step 거절). 한 팔 Job과 envelope 1.0 변경 없음. |
