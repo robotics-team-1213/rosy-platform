@@ -347,6 +347,8 @@ def prove(out, runtime, camera, controllers, calibration):
 def main():
     out = Path(os.environ['OUT']).resolve()
     assert out.is_dir() and os.environ.get('ROS_AUTOMATIC_DISCOVERY_RANGE') == 'LOCALHOST'
+    thread_limits = {key:'1' for key in ('LP_NUM_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}
+    os.environ.update(thread_limits)
     original = ROOT/'integrations/simulation/gazebo/worlds/omx_pilot_workcell.sdf'
     world = ET.fromstring(original.read_bytes())
     world.find('./world/physics/max_step_size').text = '0.002'
@@ -357,7 +359,8 @@ def main():
     calibration = hashlib.sha256(world_file.read_bytes()).hexdigest()
     (out/'world-source.json').write_text(json.dumps(dict(
         source_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),variant_sha256=calibration,
-        camera_shape=SHAPE,physics_step_s=.002,scope='explicit low-resolution SIM recording variant')))
+        camera_shape=SHAPE,physics_step_s=.002,thread_limits=thread_limits,
+        scope='explicit low-resolution SIM recording variant')))
     env = dict(os.environ,OMX_CELL_WORLD=str(world_file.with_suffix('')),OMX_CELL_LOG_DIR=str(out),
                OMX_CELL_DOMAIN_ID=os.environ['ROS_DOMAIN_ID'])
     with ExitStack() as stack:
