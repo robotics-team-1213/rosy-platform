@@ -155,7 +155,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
 def test_raw_and_annotated_api_are_same_capture_and_admitted_once_each(core_client, monkeypatch):
     client, services = core_client()
     from core.bridge.observation import camera_preview
-    from core_features.preview import store as preview_store
+    from core_features.vision import store as preview_store
     from types import SimpleNamespace
     clock = iter((20.0, 20.0))
     monkeypatch.setattr(preview_store, 'time', SimpleNamespace(monotonic=lambda: next(clock, 23.0)))
