@@ -791,6 +791,9 @@
 | D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
 | D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 | Accepted (2026-10-17, 사용자 결정; 구현·장치·현장 미확인) |
 | D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 | Accepted (2026-10-17, D-789 구현 소유권; 장치·현장 미확인) |
+| D-792 | Rosy Learning(학습 관리 센터) 이름과 모방학습 화면 — 카메라 촬영 기준을 점선 가이드로 재현하고 녹화 전에 확인한다 | Proposed |
+| D-794 | OMX 카메라 역할 — top은 작업대 고정, front는 손목; wrist 이름으로 단계 이행하고 학습은 두 카메라를 쓴다 | Proposed |
+| D-793 | OMX 학습 정책의 실물 실행 승인 관문 — 학습은 실행 권한을 바꾸지 않고, 위험하면 멈춘 뒤 API로 확인받는다 | Proposed |
 | D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
 

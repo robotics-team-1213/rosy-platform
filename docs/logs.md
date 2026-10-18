@@ -9025,3 +9025,15 @@ osy-d395-s1d\`.
 - 변경: D-789 발행자 구현은 독립 `middleware/media` wheel, 사이트 권한 구현은 독립 `operations/site_ui/media` wheel로 등록했다. 기존 인식 패키지와 frozen size ratchet을 키우지 않는다.
 - 증거: 원격 구조 검사에서 기존 perception·schema의 ratchet 증가와 새 사이트 모듈의 미계측을 발견했다. receipt DTO를 공통 계약으로 옮기고 실제 독립 wheel을 크기 단위로 등록하여 재검증한다.
 - gate 변화: 없음. 전송·권한·예산 수용 계약은 D-789를 유지하고 구현 내부의 소스 경로만 D-791로 보완한다.
+
+## 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
+
+- 변경: 학습 산출물은 L0 등록만 하고 L1–L3·제한 사용은 Fleet API의 사람 승인으로만 연다는 ADR D-793(Proposed)을 추가했다. 승인 창(L3 15분/상한 30분, 제한 사용 8시간)과 실행 lease(기본 1초/상한 2초)를 나누고, 위험 상황은 HOLD 뒤 확인 요청으로 남겨 API로만 푼다. 실물 owner의 private 설정 `learned_policy` 기동 거부와 실제 도달 확인을 첫 구현 순서로 정했다.
+- 증거: 저장소 조사(owner 허용 목록, `OwnerPolicySession` lease 상한 1초, registry 승격, mission admit·owner recover 패턴)와 비공개 2026-10-18 micro-step 기록 대조. 코드·장치 변경 없음.
+- gate 변화: 없음. 구현·Safety review·실물 수용은 후속이다.
+
+## 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
+
+- 변경: `run_hardware_owner.py --check`가 조립 단계와 같이 `rule_based` 외 owner(`learned_policy` 포함)를 거부한다. 수집기는 성공 terminal 뒤 실제 native 관절이 profile `reach_tolerance_rad` 안에 들어와야 `REACHED`를 남기고 다음 단계로 간다. 들지 않으면 ABORT·HOLD하며 intake는 단계마다 허용차 안의 `REACHED`를 요구한다. rehearsal에 `no_motion` 시나리오를 더했다.
+- 증거: 2026-10-18 비공개 micro-step 기록에서 토크 ON 그리퍼가 목표 2틱 송신 뒤에도 움직이지 않았는데 Action은 SUCCEEDED였다. 원격 시험 결과는 커밋 메시지·후속 행에 남긴다.
+- gate 변화: 없음. 실물 수집·Safety review 수용은 후속이며 실제 시연은 0회다.

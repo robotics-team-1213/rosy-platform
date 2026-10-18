@@ -37,6 +37,7 @@ for i in range(3):
     teacher = dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.1)])
     store = RawCollection(source, profile, digest(teacher), 'hardware')
     save(source/'teacher.json', teacher)
+    save(source/'profile.json', dict(reach_tolerance_rad=[.01]*6))
     event = dict(policy='omx-photometric-v3', run_id=f'synthetic-run-{i}', profile_sha256='a'*64,
                  recorded_ns=start, motion_admitted=False, physical_acceptance=False,
                  photometric_ready=False, observations={}, environment={r:dict(state='OBSERVING',
@@ -51,7 +52,9 @@ for i in range(3):
               dict(kind='TERMINAL_RESULT', command_id=command, goal_id=f'synthetic-goal-{i}', sequence=2,
                    observed_at_monotonic_s=2., status=4, result_code=0),
               dict(kind='TERMINAL', command_id=command, time_ns=start+3,
-                   result=dict(succeeded=True, source='native_follow_joint_trajectory'))]
+                   result=dict(succeeded=True, source='native_follow_joint_trajectory')),
+              dict(kind='REACHED', command_id=command, time_ns=start+4, errors_rad=[0.]*6,
+                   tolerance_rad=[.01]*6)]
     for fact in ledger:
         append(source/'events.jsonl', fact)
     observation = dict(time_ns=start+1, observation_state=[0.]*6, action=[float(i+1)]*6,
