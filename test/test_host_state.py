@@ -424,6 +424,27 @@ def test_uv_installs_only_with_its_approval_hash_checked_and_linked(tmp_path):
     assert not [item for item in status["awaiting_approval"] if "uv" in item]
 
 
+@pytest.mark.parametrize("stale", [False, True], ids=["missing", "stale"])
+def test_uvx_link_drift_is_reported_and_repaired_only_with_approval(tmp_path, stale):
+    fake, bin_dir = _apt_fakes(tmp_path, ["python3-pip"])
+    _pip_fake(bin_dir)
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    link = tmp_path / "host/usr/local/bin/uvx"
+    expected = Path(os.readlink(link))
+    link.unlink()
+    if stale:
+        link.symlink_to(expected.with_name("old-uvx"))
+
+    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert any("uvx" in item for item in status["awaiting_approval"])
+    assert not link.exists()
+
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    assert link.is_symlink() and Path(os.readlink(link)) == expected
+    assert len([c for c in _calls(fake) if c.startswith("python3")]) == 1
+
+
 def test_a_wheel_tool_line_without_an_approval_policy_is_refused(tmp_path):
     fake, bin_dir = _apt_fakes(tmp_path, [])
     _lib(tmp_path, "safe wheel-tool uv 0.12.22 " + "ab" * 32 + "\n", "", {})
