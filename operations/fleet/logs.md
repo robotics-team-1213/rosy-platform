@@ -4042,3 +4042,8 @@
 - 증거: 통합 후보의 1 failed / 6635 passed / 354 skipped와 동일 후보 단독 통과로 타이밍 의존을 확인했다. 독립 producer-consumer 분석 후 수정 커밋 원격 G1 SIM·timing 12 passed, 새 실패 0개.
 - gate 변화: 생산 제어·claim 권한 변경 없음. 중단된 후보의 병합 검사와 실제 G2·실물 수용을 완료로 표시하지 않는다.
 
+## 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
+
+- 변경: `tracking/robot_media_routes.py`가 fleet.read 주체에게 로봇별 READ 위임을 발급·갱신·종료하고 `fleet_media_audit`에 남기며 미디어 권한 서비스의 재확인에 답한다. 콘솔 CSP는 설정된 media origin만 추가한다.
+- 증거: 원격 시험 결과는 착지 기록에 남긴다. 장치·현장 측정은 2026-10-18 사용자 결정으로 생략했다.
+- gate 변화: 없음. 모자이크(MCU)는 후속 feat/site-video-mosaic이다.
