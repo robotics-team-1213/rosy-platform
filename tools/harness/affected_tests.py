@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 import yaml
-import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
+import affected_narrow, affected_ros  # D-762 stage 0 FULL-trigger narrowing; PR #96 per-path ROS env
 
 HARNESS = PurePosixPath("tools/harness")
 
@@ -515,7 +515,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
             out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
-        entries = [{"name": f"affected-{i + 1}", "invocations": [inv]} for i, inv in enumerate(out)]
+        entries = affected_ros.entries(out, CI_FULL_MATRIX)
     entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")

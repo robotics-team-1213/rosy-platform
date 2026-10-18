@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+import affected_ros
 import affected_tests as affected
 import rosy_harness as harness
 
@@ -447,9 +448,23 @@ def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
     invocations = [e["invocations"][0] for e in matrix]
     assert invocations == [["test/test_land.py"], *full, ["test/test_affected_tests.py"]]
     assert [e["name"] for e in matrix] == [f"affected-{i + 1}" for i in range(len(matrix))]
-    assert all(e["gating"] and e["ros"] == "overlay" for e in matrix)
+    assert all(e["gating"] for e in matrix)
+    assert [e["ros"] for e in matrix] == ["overlay", *["none"] * len(full), "overlay"]
     fleet = [p for inv in full for p in inv]
     assert sorted(fleet) == sorted(p for p in repo.test_files if p.startswith("operations/fleet/test/"))
+
+
+def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
+    """PR #96 (2026-10-18): gateway rclpy tests that main runs under ros: none ran under overlay on a PR."""
+    repo = affected.Repo.load(ROOT)
+    sel = affected.Selection("affected", [], invocations=[
+        ["middleware/core/gateway/test/test_node_wiring.py", "test/test_land.py", "--ignore=x"]])
+    matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
+    assert [(e["ros"], e["invocations"][0]) for e in matrix] == [
+        ("none", ["middleware/core/gateway/test/test_node_wiring.py", "--ignore=x"]),
+        ("overlay", ["test/test_land.py", "--ignore=x"])]
+    assert affected_ros.full_tier_ros("integrations/simulation/gazebo/test/test_x.py", affected.CI_FULL_MATRIX) == "overlay"
+    assert affected_ros.full_tier_ros("middleware/devices/pinky/bringup/test/test_y.py", affected.CI_FULL_MATRIX) == "base"
 
 
 @pytest.mark.parametrize("flags", [[], ["--ignore=test/test_host_recovery.py"]])
@@ -462,7 +477,8 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
     sel = affected.Selection("affected", [], invocations=[["test", other, *flags]])
     matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
     assert [e["invocations"][0] for e in matrix] == [[other, *flags], *[group + flags for group in full]]
-    assert all(e["gating"] and e["ros"] == "overlay" for e in matrix)
+    assert all(e["gating"] for e in matrix)
+    assert [e["ros"] for e in matrix] == ["none", *["overlay"] * len(full)]
     assert sorted(p for group in full for p in group) == sorted(p for p in repo.test_files if p.startswith("test/"))
 
 
@@ -470,7 +486,9 @@ def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
-    assert [e["invocations"][0] for e in pytest_entries] == sel.invocations
+    # Each invocation becomes one runner per ROS environment; every selected path runs exactly once.
+    assert sorted(p for e in pytest_entries for p in e["invocations"][0]) == sorted(p for inv in sel.invocations for p in inv)
+    assert all(len({affected_ros.full_tier_ros(p, affected.CI_FULL_MATRIX) for p in e["invocations"][0]}) == 1 for e in pytest_entries)
 
 
 def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):

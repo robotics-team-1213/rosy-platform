@@ -27,6 +27,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     el("work-new-cell-item").hidden = !kinds.includes("CELL_TRANSFER");
   }
   el("work-overview").hidden = !active;
+  // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
+  if (active && !document.getElementById("work-policy-link")) {
+    el("work-overview").prepend(Object.assign(document.createElement("a"),
+      {id: "work-policy-link", href: "/console/policy", textContent: "학습 정책 승인 — 단계·승인 창·확인 요청"}));
+  }
   el("work-new").hidden = !fresh;
   if (area) {
     document.querySelector('[aria-labelledby="map-heading"]').hidden = true;
