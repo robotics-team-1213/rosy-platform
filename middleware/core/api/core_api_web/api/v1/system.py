@@ -281,6 +281,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                           svc.line_follow.config, "site_floor_map_id", None)),
                                       line_follow_authority=authority,
                                       line_follow_authority_shrink=authority,
+                                      line_follow_route_guide=authority and svc.line_follow.config.route_guide_enabled,
                                       line_follow_authority_under_lease=authority and getattr(
                                           svc, "trip_lease", None) is not None,
                                       line_follow_authority_required=svc.line_follow is not None and getattr(

@@ -61,6 +61,22 @@ def test_right_branch_starts_on_the_road_under_the_robot():
     assert branches == 1 and way[12, 15:25].all() and not way[:, 0:5].any()
 
 
+
+def test_off_the_route_the_way_starts_from_the_run_on_the_routes_side():
+    """D-769 rev 2 (v2 lap r36): a line under the robot splits the bottom row. The nearest run is the
+    strip beyond the lane's line; off the route to its left, the run on the right (the lane) is kept."""
+    region = np.zeros((20, 40), bool)
+    region[:, 8:19] = True                                   # strip beyond the line, reaching the centre
+    region[:, 21:32] = True                                  # the lane, just right of the line at 19..20
+    assert right_branch(region)[0][19, 8:19].all()           # default: the run nearest the centre column
+    way = right_branch(region, prefer="right")[0]
+    assert way[19, 21:32].all() and not way[19, 8:19].any()
+    assert right_branch(region, prefer="left")[0][19, 8:19].all()
+    far = np.zeros((20, 40), bool)
+    far[:, 8:21] = True
+    far[:, 34:40] = True                                     # a run far off to the right is no lane under the body
+    assert right_branch(far, prefer="right")[0][19, 8:21].all()
+
 def test_a_t_junction_opening_sideways_is_two_exits_and_the_right_one_is_kept():
     # Replay 2026-10-10 (docs/validation/drivable-branch-replay-2026-10-10.md): at a T the crossbar
     # opens to both frame sides and no row splits, so the row scan sees one branch and goes straight.

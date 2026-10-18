@@ -29,6 +29,7 @@ GAZEBO_DETECTOR_LATERAL_PX = 2.0
 #: The receiver extrapolates a boundary this far past its observed support
 #: (core_features.line_follow.recovery.lane_return_evidence.LaneReturnEvidence.MAX_EXTRAPOLATION_M).
 RECEIVER_EXTRAPOLATION_M = 0.3
+MIN_CORRIDOR_M = 0.06   # narrowest edge pair at x 0 sent as a corridor (~half the 0.11 m body; lane 0.185 m)
 #: Roll levels sampled across +-its bound (odd, so 0 is one). The re-review's 41-201 level
 #: scan found the worst roll interior, at most 0.3 % above the corners-and-centre value.
 ROLL_LEVELS = 7
@@ -209,7 +210,7 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
             continue
         boundaries.append(dict(side=edge["side"], slope=slope, intercept_m=intercept,
             observed_x_min_m=min(float(first[0]), float(last[0])),
-            observed_x_max_m=max(float(first[0]), float(last[0]))))
+            observed_x_max_m=max(float(first[0]), float(last[0])), _paint=not edge.get("edge_m")))  # edge_m: drivable_keep
         sds = (edge.get("slope_sd"), edge.get("offset_sd"))
         lever = abs(dx)+RECEIVER_EXTRAPOLATION_M
         slope_error = (max(slope_error, SLOPE_SIGMAS*(float(sds[0])*lever+float(sds[1])))
@@ -224,12 +225,11 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
         segments = [tuple((x-camera_x, b["slope"]*x+b["intercept_m"])
                           for x in (b["observed_x_min_m"], b["observed_x_max_m"])) for b in boundaries]
         uncertainty = min(projection_uncertainty_m(ground, error, segments)+slope_error, 1.0)
-    # The imaged paint segments above set the uncertainty; the corridor edge is the paint's
-    # inner side: half the paint width inward, perpendicular to the line.
-    for b in boundaries:
-        b["intercept_m"] -= (1 if b["side"] == "left" else -1)*paint_half_width_m*math.hypot(1, b["slope"])
+    # The imaged paint sets the uncertainty; the corridor edge is the paint's inner side (half its width inward).
+    for b in boundaries:   # a drivable way's edge (edge_m) is already the corridor edge
+        b["intercept_m"] -= b.pop("_paint")*(1 if b["side"] == "left" else -1)*paint_half_width_m*math.hypot(1, b["slope"])
     edges = {b["side"]: b["intercept_m"] for b in boundaries}
-    if len(edges) == 2 and edges["left"] <= edges["right"]:
+    if len(edges) == 2 and edges["left"] - edges["right"] < MIN_CORRIDOR_M:   # a bend's inner line read as an edge (r27)
         boundaries = []
     payload = dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
                    uncertainty_m=uncertainty, boundaries=boundaries)

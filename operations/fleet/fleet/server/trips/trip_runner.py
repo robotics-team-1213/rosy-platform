@@ -30,8 +30,9 @@ from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
-                                     pose_diagnostics, pose_view, record_bend_candidate)
+                                     pose_diagnostics, pose_view)
 from fleet.traffic.lane_traffic import TrafficService
+from fleet.traffic.route_guide import route_guided
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
 from fleet.traffic.trip_lease import TripLease
@@ -108,7 +109,7 @@ class TripRunner(TripAdmission, TripProgress):
         self._inflight: dict[str, asyncio.Future] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
-        self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
+        self.authority = AuthoritySender(junction, authority, config.port_timeout_s, clock=clock)  # D-517 4 (M2)
         self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}  # D-760 3; 4 state reads; 8 read fence
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
@@ -197,7 +198,7 @@ class TripRunner(TripAdmission, TripProgress):
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink
-                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False), "lane_instruction_stamp": getattr(caps, "lane_instruction_stamp", False),
+                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False), "lane_instruction_stamp": getattr(caps, "lane_instruction_stamp", False), "line_follow_route_guide": getattr(caps, "line_follow_route_guide", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False), "lane_turn_map_entry": getattr(caps, "lane_turn_map_entry", False),
                              "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False), "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
@@ -463,13 +464,13 @@ class TripRunner(TripAdmission, TripProgress):
             return await self._stop(live, "failed", exc.code, {"status": exc.status})
         if not live.open:
             return
-        live.see(pose)
-        live.view["pose_observed_at"] = self._clock()
+        live.see(pose); live.view["pose_observed_at"] = self._clock()
         if robot_id in self._unread and await self._link_wait(live, "state_unread"):
             return  # D-760 4: no state read, so nothing new goes out
         if pose is None or pose.state != LOCALIZED:
-            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
-                                                       **pose_diagnostics(pose)}, halt_free=False)
+            if getattr(pose, "source", None) == "native_gazebo_sim" and await self._link_wait(live, "pose_stale"):
+                return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
+            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=False)
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
@@ -519,7 +520,7 @@ class TripRunner(TripAdmission, TripProgress):
             if index != live.view["segment_index"]:
                 live.view["segment_index"] = index
                 live.last_goal = None
-            record_bend_candidate(live, pose, self._store.active(), index, s)
+            self.authority.record_guidance(live, pose, self._store.active(), index, s, self._clock())
             self._describe(live)
             last = index == len(live.segments) - 1
             resolver = (live.traffic or {}).get("resolver") or {}
@@ -601,15 +602,14 @@ class TripRunner(TripAdmission, TripProgress):
                 and arc.get("end_place_id") == sent["place"] != live.place(index)
                 and (j.get("state"), j.get("place_id"), j.get("seq")) == ("armed", sent["place"], sent["seq"])):
             return  # map pose can cross the boundary before CORE odom ends its arc: keep the armed end-place instruction
-        if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining, pose):
+        if not route_guided(live) and await self._step_bend(live, index, live.segments[index]["s_to"] - remaining, pose):
             return  # D-507 addendum: a bend ahead on this lane comes before its place
         place = live.place(index)
         if place is None or remaining > self.config.arm_distance_m:
             return
-        action = (STOP if live.view["hold"] is not None
-                  else lane_action(live.graph, live.segments, index, self._routing))
-        if action != STOP and self.traffic.holds(live, index):
-            return  # D-517 3 (M1): nothing tells the robot to drive into a refused block
+        action = STOP if live.view["hold"] is not None else lane_action(live.graph, live.segments, index, self._routing)
+        if action != STOP and (route_guided(live) or self.traffic.holds(live, index)):
+            return  # route-guided: stops only; D-517 3 (M1): nothing tells the robot to drive into a refused block
         state, sent, now = live.junction.get("state"), live.sent, self._clock()
         same = sent is not None and (sent["index"], sent["action"], sent["place"]) == (index, action, place)
         if self._core_busy(live):
