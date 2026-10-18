@@ -278,8 +278,10 @@ def validate_session(root, *, completed_only=False, require_complete=True):
                 manifest_sha256=hashlib.sha256(blobs['manifest.json']).hexdigest())
 
 
-def prepare(sessions, output, repo_id, *, completed_only=False):
-    """Produce a new, locally read-back dataset; leave all decisions unknown/exclude."""
+def prepare(sessions, output, repo_id, *, completed_only=False, camera_references=None):
+    """Produce a new, locally read-back dataset; leave all decisions unknown/exclude.
+
+    ``camera_references`` (role -> reference JSON path) adds D-792 shadow checks as camera-setup.json."""
     records = [validate_session(path, completed_only=completed_only) for path in sessions]
     _require(bool(records), 'at least one session required')
     output = Path(output).absolute()
@@ -377,11 +379,25 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
                    episodes=[dict(episode_index=i, session_id=r['manifest']['session_id'],
                                   attempt_index=e['episode_index'], cycle_id=e['cycle_id'])
                              for i, (r, e) in enumerate(episodes)])
-    for name, document in (('capture.json', capture), ('environment.json', environment),
-                           ('inspection.json', report), ('decisions.json', report['episodes']),
-                           ('intake-receipt.json', receipt)):
+    documents = [('capture.json', capture), ('environment.json', environment),
+                 ('inspection.json', report), ('decisions.json', report['episodes'])]
+    if camera_references:
+        import camera_setup_intake
+        references = {role: camera_setup_intake.load_reference(path) for role, path in camera_references.items()}
+        documents.append(('camera-setup.json', camera_setup_intake.report(records, episodes, references)))
+    for name, document in (*documents, ('intake-receipt.json', receipt)):
         write_json(output / name, document)
     return receipt
+
+
+def camera_references(pairs):
+    """``ROLE=PATH`` options as a role -> path map; one reference per role."""
+    result = {}
+    for pair in pairs:
+        role, sep, path = pair.partition('=')
+        _require(sep and role and path and role not in result, 'camera reference must be ROLE=PATH once per role')
+        result[role] = Path(path)
+    return result
 
 
 def main():
@@ -392,9 +408,12 @@ def main():
     command.add_argument('--out', type=Path, required=True)
     command.add_argument('--repo-id', required=True)
     command.add_argument('--completed-only', action='store_true')
+    command.add_argument('--camera-reference', action='append', default=[], metavar='ROLE=PATH',
+                         help='D-792 camera setup reference JSON per camera role; adds shadow checks')
     args = parser.parse_args()
     try:
-        prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only)
+        prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
+                camera_references=camera_references(args.camera_reference))
     except (ValueError, OSError, ImportError) as exc:
         parser.exit(2, f'refused: {exc}\n')
     print(f'Written: {args.out}; review required, no upload or device action performed.')
