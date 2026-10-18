@@ -9093,3 +9093,9 @@ osy-d395-s1d\`.
 - 변경: `plans/2026-10-17-fleet-device-authority-design.md`의 기준 해시 앞에 SHA를 명시해 공개 커밋 참조임을 표시했다. 설계 내용과 비밀정보 검사 규칙은 유지한다.
 - 증거: 원격 회귀에서 `test_no_secrets_in_tracked_files`가 해당 기준 줄의 해시를 high-entropy-token으로 보고했다. 명시적 SHA 코드 표기는 기존 검사 회귀가 허용하는 커밋 인용 형식이다. 수정 커밋의 원격 재검증은 착지 기록에 남긴다.
 - gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · 로컬 착지를 GitHub PR 경로로 옮기는 계획
+
+- 변경: `plans/2026-10-18-github-pr-landing-path.md`를 추가했다. 이 노트북에서 막힌 원인, 공개키 등록과 origin SSH 전환 절차, 로컬 `main`에만 있는 320개 커밋의 주제별 묶음과 PR 게시 순서, squash 사본 충돌 재발 방지, 이후 PR·`ci.yml` 병렬 흐름을 정리했다.
+- 증거: 이 노트북에서 HTTPS `curl`은 10초 시간 초과(000)였다. SSH는 `Permission denied (publickey)`(키 `SHA256:mybrpgxI…` 미등록)였고 origin은 HTTPS다. `gh` 2.102.0의 auth 확인은 시간 초과였다. `origin/main..main` 320개(merge 64), 반대 방향 32개였다. 밀린 커밋 중 `Safety-Review:` trailer 11개, trailer 없는 안전 경로 커밋 2개(`safety_review.py --warn-only`)를 확인했다.
+- gate 변화: 없음. push·PR·remote 변경·로컬 `main` reset은 하지 않았고 사용자 결정으로 남겼다.
