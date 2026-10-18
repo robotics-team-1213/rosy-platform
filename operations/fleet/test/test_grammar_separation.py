@@ -39,7 +39,7 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         "index.html": [*shared_sheets, "/common/app-shell.css", "/console/assets/styles.css", "/console/assets/doc-tabs.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                        "/console/assets/device-watch.css", "/console/assets/work.css"],
-        "install.html": [*shared_sheets, "/common/task-chooser.css",
+        "installation/install.html": [*shared_sheets, "/common/task-chooser.css",
                          "/console/assets/styles.css", "/console/assets/doc-tabs.css",
                          "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                          "/console/assets/measured-calibration.css"],

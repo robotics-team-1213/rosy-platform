@@ -35,7 +35,7 @@ def test_the_fleet_selector_uses_one_cycle_button_and_the_single_source():
     assert 'data-theme-choice=' not in html
     assert 'window.RosyTheme' in source and 'theme.choices' in source
     assert 'theme.get()' in source and 'theme.set(next().value)' in source
-    for name in ("console.js", "install.js"):
+    for name in ("console.js", "installation/install.js"):
         assert ':not([data-theme-cycle])' in (FLEET_HTML.parent / name).read_text(encoding="utf-8")
 
 

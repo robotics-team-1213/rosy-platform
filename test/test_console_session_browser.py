@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import pytest
 
 from browser_harness import browser_tests_enabled, open_page, open_token_access
+from fleet.server.static_routes import CONSOLE_ASSETS
 from test_fleet_console_browser import API, WEB, console_url  # noqa: F401 - shared HTTP fixture
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
@@ -45,7 +46,7 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
         page.route("**/api/**", serve_api)
         page.goto(f"{base}/{first}", wait_until="domcontentloaded")
         asset = first.replace(".html", ".js").replace("index.js", "console.js")
-        assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / asset).read_bytes()
+        assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / CONSOLE_ASSETS[asset][0]).read_bytes()
         page.wait_for_function("document.querySelector('#user-role').textContent === '인증 필요'")
         open_token_access(page)  # D-519 6 / D-658 6: the token field stays inside the 토큰으로 접속 fold
         page.fill("#console-token", accepted_token)
@@ -53,7 +54,7 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
         page.wait_for_function("document.querySelector('#user-role').title === 'local-operator · operator'")
         page.goto(f"{base}/{second}", wait_until="domcontentloaded")
         asset = second.replace(".html", ".js").replace("index.js", "console.js")
-        assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / asset).read_bytes()
+        assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / CONSOLE_ASSETS[asset][0]).read_bytes()
         page.wait_for_function("document.querySelector('#user-role').title === 'local-operator · operator'")
         assert page.input_value("#console-token") == accepted_token
         assert page.evaluate("localStorage.getItem('rosy-console-token')") is None
