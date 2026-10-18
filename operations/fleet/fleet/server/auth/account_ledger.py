@@ -106,7 +106,8 @@ class AccountLedger:
                 account_id = secrets.token_urlsafe(24)
                 db.execute("INSERT INTO rosy_accounts VALUES (?,?,?,?,?,?,?,?,?,?)", (
                     account_id, login, source["principal_id"], source["role"], encoded,
-                    int(verify_password(login, encoded)), 1, 1, profile[0] if profile else login,
+                    int(verify_password(login, encoded) or verify_password(login + "!", encoded)),
+                    1, 1, profile[0] if profile else login,
                     validate_grants(grants)))
             actor = db.execute("SELECT account_id FROM rosy_accounts WHERE login=?", (admin_login,)).fetchone()[0]
             for row in db.execute("SELECT account_id FROM rosy_accounts").fetchall():
@@ -339,7 +340,8 @@ class AccountLedger:
         try:
             if current_password is not None and not verify_password(current_password, snapshot["password_scrypt"]):
                 raise CurrentPasswordIncorrect()
-            if (not isinstance(password, str) or not 8 <= len(password) <= 1024 or password == snapshot["login"]
+            if (not isinstance(password, str) or not 8 <= len(password) <= 1024
+                    or password in (snapshot["login"], snapshot["login"] + "!")
                     or verify_password(password, snapshot["password_scrypt"])):
                 raise ValueError("invalid new password")
             encoded = hash_password(password)
