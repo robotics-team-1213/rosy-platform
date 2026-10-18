@@ -1,0 +1,25 @@
+# D-789 staging configuration. No public signaling before the authority/supervisor
+# is present. Loopback HTTP is terminated by the authenticated TLS media gateway.
+logLevel: warn
+authMethod: http
+authHTTPAddress: http://127.0.0.1:9121/auth
+authHTTPExclude: []
+api: true
+apiAddress: 127.0.0.1:9997
+metrics: false
+pprof: false
+playback: false
+rtsp: false
+rtmp: false
+hls: false
+srt: false
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ''
+webrtcAdditionalHosts: []
+webrtcICEServers2: []
+pathDefaults:
+  record: false
+  overridePublisher: false
+paths: {}

@@ -1,0 +1,32 @@
+# cell/3 for the G1 SIM run (D-778 §2, D-778/D-781 G1). Same as
+# operations/processes/palletizing/test/fixtures/mixed_two_arm/cell.yaml (bases 0.33 m apart, facing,
+# 0.20 x 0.15 m pallet centred, shared band 0.08 m) except the taught home: x 0.08 m in each arm's base
+# frame instead of 0.12 m. At 0.12 m an arm at home or passing through it sits about 3 cm inside the
+# other arm's swept volume while that arm works in the shared band (test/g1_layout.py capsule check,
+# docs/validation/bimanual-g1-sim-2026-10-17/README.md); at 0.08 m every concurrent pair is separated.
+schema: rosy_cell.cell/3
+cell_frame: cell
+arms:
+  - role: left
+    instance_id: omx_01_control
+    workcell_id: omx_01
+    base_in_cell: {calibration_revision: sim-2026-10-17, x: 0.0, y: 0.0, yaw: 0.0}
+    zone_id: left_half
+    home: {x: 0.08, y: 0.0, z: 0.12, yaw: 0.0}
+  - role: right
+    instance_id: omx_02_control
+    workcell_id: omx_02
+    base_in_cell: {calibration_revision: sim-2026-10-17, x: 0.33, y: 0.0, yaw: 3.141592653589793}
+    zone_id: right_half
+    home: {x: 0.08, y: 0.0, z: 0.12, yaw: 0.0}
+zones:
+  - {zone_id: left_half, x_min: -0.2, y_min: -0.2, x_max: 0.125, y_max: 0.2}
+  - {zone_id: shared_band, x_min: 0.125, y_min: -0.2, x_max: 0.205, y_max: 0.2}
+  - {zone_id: right_half, x_min: 0.205, y_min: -0.2, x_max: 0.5, y_max: 0.2}
+pallet_frames:
+  pallet_a: {x: 0.065, y: -0.075, z: 0.0}
+stations:
+  infeed_left: {x: 0.0, y: 0.16, z: 0.0}
+  infeed_right: {x: 0.33, y: 0.16, z: 0.0}
+approach_clearance_m: 0.02
+reach: {model: annulus, r_min_m: 0.05, r_max_m: 0.30}

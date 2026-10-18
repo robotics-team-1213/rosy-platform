@@ -1,11 +1,19 @@
-"""D-676: two camera robots, one selected map world, independent COREs; no motion request."""
+"""D-676: two camera robots, one selected map world, independent COREs; no motion request.
+
+Each robot also gets the Gazebo IR floor rays (scripts/sim_ir_floor.py) and the line observer
+the matching SIM IR calibration (gz_multi_parts.SIM_IR_CALIBRATION), so a CORE with
+ir_guard_enabled sees fresh calibrated IR instead of holding lane_guard_stale.
+Learned paint needs learned_lane_pointer (a model folder on the sim host) and onnxruntime from
+the robot image's learned-perception-requirements.txt on ROSY_LEARNED_SITE (D-373);
+without a pointer the observers run their denoise paint and the run is not a learned-paint run.
+"""
 import os
 import sys
 
 _LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
-from gz_multi_parts import load_run_spec, observer_steering_law, run_spec_overlay
+from gz_multi_parts import SIM_IR_CALIBRATION, load_run_spec, observer_steering_law, run_spec_overlay
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -16,13 +24,20 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 
+IR_CHANNELS = ('left', 'mid', 'right')
+
+
 def generate_launch_description():
     gz_share = get_package_share_directory('gz_sim')
     control_share = get_package_share_directory('control')
     actions = [
         DeclareLaunchArgument('map_variant', default_value='training-curved', choices=['.', 'training-curved']),
         DeclareLaunchArgument('run_spec', description='Runner-owned two-robot reservations and CORE overlays'),
-        DeclareLaunchArgument('learned_lane_pointer', description='Pinned existing segmentation model pointer'),
+        DeclareLaunchArgument('learned_lane_pointer', default_value='',
+                              description='Pinned segmentation model pointer; empty: denoise paint only'),
+        # D-597: drivable needs a model with a drivable class and a line/lane_guide producer.
+        DeclareLaunchArgument('learned_paint_target', default_value='lane_marking',
+                              choices=['lane_marking', 'drivable']),
         DeclareLaunchArgument('spawn_poses', default_value='-1.26955,0.24255,-1.570796;-1.26955,0.64,-1.570796'),
     ]
     actions.append(OpaqueFunction(function=_observers, kwargs={'control_share': control_share, 'gz_share': gz_share}))
@@ -46,6 +61,13 @@ def _observers(context, *, control_share, gz_share):
     ]
     for ns in ('rosy_01', 'rosy_02'):
         actions.extend([
+            # The URDF IR floor rays (gz /<ns>/ir/<channel>) to device-shaped ir_sensor/range.
+            Node(package='ros_gz_bridge', executable='parameter_bridge', namespace=ns,
+                 name='floor_ray_bridge', output='screen',
+                 arguments=[f'/{ns}/ir/{c}@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan' for c in IR_CHANNELS]),
+            Node(package='gz_sim', executable='sim_ir_floor.py', namespace=ns, name='sim_ir_floor',
+                 output='screen', parameters=[{'use_sim_time': True}],
+                 remappings=[(f'ir_sim/{c}', f'/{ns}/ir/{c}') for c in IR_CHANNELS]),
             # D-118: dedicated local camera transport; never in gz_multi's parameter bridge.
             Node(package='ros_gz_image', executable='image_bridge', namespace=ns,
                  name='front_image_bridge', arguments=[f'/{ns}/camera/image_raw'],
@@ -54,7 +76,10 @@ def _observers(context, *, control_share, gz_share):
                  name='line_observer_node', output='screen',
                  parameters=[os.path.join(control_share, 'config', 'line_follow.yaml'), {
                      'use_sim_time': True, 'camera_lane_mode': 'keep', 'paint_source': 'learned',
-                     'learned_paint_target': 'drivable', 'learned_paint_every_n': 1,
+                     'learned_paint_target': LaunchConfiguration('learned_paint_target', default='lane_marking'),
+                     'learned_paint_every_n': 1,
+                     'ir_calibration_enabled': True, 'ir_black': SIM_IR_CALIBRATION['ir_black'],
+                     'ir_white': SIM_IR_CALIBRATION['ir_white'],
                      'crosswalk_uncertainty_enabled': True,
                      'learned_lane_pointer': ParameterValue(LaunchConfiguration('learned_lane_pointer'), value_type=str),
                      'require_camera_controls_stable': False,

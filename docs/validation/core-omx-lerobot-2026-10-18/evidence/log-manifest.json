@@ -1,0 +1,217 @@
+{
+  "log_root": "%LOCALAPPDATA%/Temp/rosy-omx-core-lerobot",
+  "scope": "Remote committed-revision pytest logs. Full tier uses two SHAs and retains the anchor failure, resolved separately by anchor-final. Invocation totals are not unique cases.",
+  "full_tier": {
+    "invocations": 22,
+    "passed": 27638,
+    "skipped": 1916,
+    "failed": 1
+  },
+  "resolved_failure": {
+    "nodeid": "test/architecture/test_safety_separation.py::test_safety_anchors_live_in_safety_tagged_files",
+    "fix_commit": "8beeb47ef26b1eb15ed530e589af87861041a40c",
+    "verification": "anchor-final/run-1.txt"
+  },
+  "logs": [
+    {
+      "log": "full-partitioned/run-1.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "88622de35fc41d1f84c816a3724b6bfae1b83ea5784f40740b16ba9e2233cc42",
+      "summary": "106 passed in 7.31s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-2.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "fb148a3827d3cbaada73befc0dc1449065f0e52b407bda1881f06e33fb07e114",
+      "summary": "66 passed, 5 skipped in 1.37s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-3.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "2f86befad20014a712697f37d18566a4adfe1cfa501e42ab297228b1b77d4265",
+      "summary": "6 passed, 6 skipped in 0.70s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-4.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "2017e501703d945c4994700c6721e8df3cd579e5c169b65d56e5c4a5a016eeb7",
+      "summary": "147 passed, 2 skipped in 1.95s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-5.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "3255114867b5d1023457f2538a9a1bd0d7efdab5806c59527cc463014ea22e58",
+      "summary": "21 passed, 28 skipped in 5.12s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-6.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "f5aab43e509b7fff016e95e624da6235a18ad1fa37a90094151935748355af71",
+      "summary": "3 passed in 0.29s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-7.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "f299cb0ffb4580215f4b9643a2f31cdf09e6c57c46f955b1d1c6a26a088f6fb3",
+      "summary": "4 passed in 0.30s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-partitioned/run-8.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "c16c68f86ee0c4e8cfd0af3f76078be45441ee151395fbde5800145c08e189b5",
+      "summary": "12 passed in 0.15s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-1.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "a09b3bf1e99749f7c1663716245338c53d2066e41da6b9c29018c825dafc6876",
+      "summary": "6306 passed, 63 skipped, 2 warnings, 5 subtests passed in 243.18s (0:04:03)",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-2.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "04efaf2ace52c1ae2e0918579c7aeae8d266b955570e795a51541f161c377440",
+      "summary": "1 passed, 1 skipped, 2 warnings in 9.27s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-3.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "abb01bfa4a67f5c06bddc2b2f7c657f100d671c30e24523b2a073acfaaa3e240",
+      "summary": "3320 passed, 113 skipped, 62 subtests passed in 183.71s (0:03:03)",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-4.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "a3e87e0a49c0848ff4623bdb44fa8b3eb067a197247f9ed018078dbff0f4c235",
+      "summary": "5508 passed, 315 skipped, 2 warnings in 662.78s (0:11:02)",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-5.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "d78a16ce172951aa976793ede734ed55ca7e9d255807f192e5b30421a979b9bf",
+      "summary": "646 passed in 56.10s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-6.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "64be78a04162881fb4d7b6fc114719b626f5ab6077819153ca51b3119c8e26f2",
+      "summary": "155 passed in 0.44s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-7.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "de7525911ad1327642a1a907beea0db3162ea7a83495da1155c506a38066b536",
+      "summary": "120 passed, 2 warnings in 4.46s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-8.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "451ed81d445e0c39f36e21e641330e30c78d4e25c03b95f11a8d6da162554ee0",
+      "summary": "9 passed in 1.79s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-9.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "28e6195af57c465836b79448a5210e752d4321f0743aef6d8d01482f3749c49d",
+      "summary": "25 passed in 1.01s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-10.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "a2ff8cbeab93b52368357f409e2cdf4cabeefa031a2dbd1af61e9b52945de1cb",
+      "summary": "327 passed, 4 skipped in 12.28s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-11.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "3d54cf302175342c5e3cb058456c04276ca5711b57af877d02a33962ac46b306",
+      "summary": "473 passed in 0.74s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-12.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "eeaa67c36172e7c69537724dde9f4f8cade3351495bc1e2878d02a83082d503a",
+      "summary": "1 failed, 8420 passed, 1074 skipped, 53 warnings in 708.36s (0:11:48)",
+      "known_failures_exit": 1,
+      "known_failures_output": "NEW       test/architecture/test_safety_separation.py::test_safety_anchors_live_in_safety_tagged_files\n1 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-13.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "ca5c0d6d3bafb9eb55656f505fd143b434d82c997003c108e916c2d99225f5b1",
+      "summary": "1776 passed, 292 skipped, 2 warnings in 38.81s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "full-final/run-14.txt",
+      "commit": "7d8a61e58febe8c620416c3f68dbfd875fb00fdc",
+      "sha256": "fe8c449497494cdefe56ec604b5e6fe6b43d0eadd0794ce2f33850f8b7d961d9",
+      "summary": "187 passed, 13 skipped, 2 warnings, 25 subtests passed in 8.90s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "source-final/run-1.txt",
+      "commit": "5e3af70e6d824d1f6333a46c954393c011c06dfa",
+      "sha256": "c1c55d49856b15d1c094820233f807aaf4d96c103a6590a568b2808bec17e30a",
+      "summary": "22 passed, 2 warnings in 27.44s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "browser/run-1.txt",
+      "commit": "9bbf3cdc80512409fcda35421002e22020356075",
+      "sha256": "5a02247d4cf0eedcf1c1e673ebf692c3e2a0fe17f01bb1e9e57750340f20d229",
+      "summary": "45 passed, 2 warnings in 263.14s (0:04:23)",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    },
+    {
+      "log": "anchor-final/run-1.txt",
+      "commit": "8beeb47ef26b1eb15ed530e589af87861041a40c",
+      "sha256": "16832dff8c27f20fadb4f47211ea067dbcba8342d9a358faa7ca83a701c8dddb",
+      "summary": "170 passed, 36 warnings in 20.78s",
+      "known_failures_exit": 0,
+      "known_failures_output": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+    }
+  ]
+}

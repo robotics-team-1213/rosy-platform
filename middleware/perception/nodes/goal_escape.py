@@ -1,10 +1,13 @@
-"""Simulation-only fixed-heading escape transport around the circle planner."""
+"""Simulation-only fixed-heading escape transport around the circle planner.
+
+ROS-free mixin (D-171): GoalNode owns the topics and ``publish_escape``; handlers
+read only ``msg.data``.
+"""
 import json
 import math
 import os
 import time
 import uuid
-from std_msgs.msg import String
 from .planning.straight_escape import straight_escape
 from .control.escape_budget import EscapeBudget
 
@@ -16,9 +19,6 @@ class GoalEscape:
         self.escape_intent=None
         self.escape_used=False
         self.escape_budget=EscapeBudget()
-        self.escape_pub=self.create_publisher(String,'goal/straight_escape',10)
-        self.create_subscription(String,'safety/motion_limits',self.on_escape_limits,1)  # latest only (D-185 R2)
-        self.create_subscription(String,'goal/straight_escape_result',self.on_escape_result,10)
 
     def on_escape_result(self,msg):
         try:
@@ -40,9 +40,6 @@ class GoalEscape:
             self.escape_seen=time.monotonic()
         except (TypeError,ValueError):
             self.escape_limits=None
-
-    def publish_escape(self,intent):
-        self.escape_pub.publish(String(data=json.dumps(intent)))
 
     def escape_plan(self,m,pose,status=None):
         """Return true when a separate straight intent owns this planning tick."""

@@ -8,8 +8,10 @@ CI 적신이 이 가드의 명세다).
 
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -117,10 +119,59 @@ def test_pytest_runs_through_the_remote_runner_on_the_pushed_commit():
     assert pushed.stdout.strip() == "1" * 40, pushed.stderr
 
 
-def test_safety_warning_checks_tip_while_ci_checks_full_range():
-    text = SCRIPT.read_text(encoding="utf-8")
-    assert 'safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only' in text
-    assert "git merge-base HEAD origin/main" not in text.split("Safety-Review trailer on pushed tip")[1].split("FAST_SUITES", 1)[0]
+def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: safety\n"):
+    """A throwaway clone layout: the real safety_review.py (BASELINE = its root commit) and a safety root."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def commit(files, message):
+        for name, data in files.items():
+            (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / name).write_bytes(data if isinstance(data, bytes) else data.encode())
+        git("add", "--", *files)
+        git("commit", "-q", "--no-verify", "-m", message)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.name", "Peer Author")
+    git("config", "user.email", "p@example.invalid")
+    commit({"README": "x\n"}, "root")
+    rule = re.sub(r'BASELINE = "[0-9a-f]{40}"', f'BASELINE = "{git("rev-parse", "HEAD")}"',
+                  (ROOT / "tools/harness/safety_review.py").read_text(encoding="utf-8"), count=1)
+    files = {"tools/harness/safety_review.py": rule, "tools/harness/platform_parts.yaml": manifest,
+             "safe/stop.py": "LIMIT = 1\n"}
+    for data in sorted((ROOT / "tools/harness").glob("safety_review_*")):
+        files[f"tools/harness/{data.name}"] = data.read_bytes()
+    commit(files, "rule\n\nSafety-Review: t unit")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    return git, commit
+
+
+def _run_safety_step(repo):
+    """The hook's Safety-Review step, exactly as written, in `repo`."""
+    step = (SCRIPT.read_text(encoding="utf-8").split("# No origin/main would narrow", 1)[1]
+            .split("\n", 1)[1].split("FAST_SUITES=(", 1)[0])
+    head = 'set -euo pipefail\nPUSH_SHA="$(git rev-parse HEAD)"\n'
+    return subprocess.run([BASH, "-c", head + step], cwd=repo, capture_output=True, text=True,
+                          env={**os.environ, "PY": sys.executable})
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+@pytest.mark.parametrize("case", ["trailer", "missing", "no-origin", "crash"])
+def test_safety_step_refuses_the_range_ci_checks(tmp_path, case):
+    """D-762 stage 0: origin/main..tip, the range a push to main makes CI check, refused not warned."""
+    manifest = "roots: [unclosed\n" if case == "crash" else "roots:\n  - path: safe\n    concern: safety\n"
+    git, commit = _safety_step_repo(tmp_path, manifest)
+    commit({"safe/stop.py": "LIMIT = 2\n"}, "loosen" + ("\n\nSafety-Review: t unit" if case == "trailer" else ""))
+    if case == "no-origin":
+        git("update-ref", "-d", "refs/remotes/origin/main")
+    result = _run_safety_step(tmp_path)
+    assert result.returncode == (0 if case == "trailer" else 1), result.stderr
+    assert ("safety_review_exempt.json" in result.stderr) == (case == "missing")
+    if case == "missing":
+        assert "Peer Author" in result.stderr and "loosen" in result.stderr
+    if case == "no-origin":
+        assert "no origin/main ref" in result.stderr
 
 
 INSTALLER = ROOT / "tools" / "hooks" / "install.sh"

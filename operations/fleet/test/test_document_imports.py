@@ -28,6 +28,8 @@ SHARED = {
     "map-fit.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
+    "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
+    "area-nav.js",  # D-741 6·7: the address view picks the area (rail and sub-nav state)
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
@@ -44,9 +46,11 @@ OWN = {
         "formation.js",
         "map-view.js",
         "roster.js",
+        "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
+        "stuck-evidence.js",  # network load: the stuck picture as raw JPEG (line-stuck.js)
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
@@ -72,11 +76,13 @@ OWN = {
         "field-view.js",
         "field-layers.js",
         "map-fit-view.js",
+        "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
         "start-point-layer.js",
         "tracking-relearn.js",  # D-540 5 / D-539: 배경 다시 학습
         "host-services.js",  # D-524 / D-530: 호스트 여유와 닫힌 서비스 제어
+        "host-health.js",  # D-530: 읽기 전용 PC 상태 판정
     },
     "cell.js": {
         "cell-document-editor.js",
@@ -99,7 +105,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell"):
+    for folder in ("shared", "cell", "work", "devices", "calibration"):
         path = WEB / folder / name
         if path.is_file():
             return path

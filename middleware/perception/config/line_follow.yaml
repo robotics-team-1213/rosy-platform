@@ -45,6 +45,9 @@
     # The same flag also turns on the lane-mode corner tracker and the edge_left
     # corner handoff (both odometry-bounded).
     lane_corner_turning: true
+    # D-556 candidate (SOURCE only, no field promotion): fresh odometry vetoes a carried
+    # one-sided boundary and latches HOLD until the node restarts. Keep false on robots.
+    lane_odom_veto_enabled: false
     # Lens offset ahead of base_link: the URDF nominal of the Pinky Pro front camera,
     # copied from middleware/devices/pinky/profile/config/camera_nominal.yaml
     # x_offset_m (geometry.yaml camera.*, cam_tilt_deg 8; drift-tested). Corner and

@@ -18,11 +18,16 @@ pytestmark = pytest.mark.skipif(shutil.which("sh") is None or os.name == "nt", r
 
 HEALTHY = "60 5 1.2 24 7200 -"
 LOW_MEMORY = "2 95 3.0 24 7200 -"
-UNIT_DOWN = "60 5 1.2 24 7200 pinky-nav2.service"
+UNIT_DOWN = "60 5 1.2 24 7200 pinky-backend.service"
+
+
+def _recovery(role):
+    return {"role": role, "time": 123, "state": "ok", "resources": {}, "issues": [],
+            **{name: {"state": "ok"} for name in ("watchdog", "kernel", "ssh", "swap")}}
 
 
 def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-06:20\n", now="12:00",
-           action_rc=0, env_extra=None):
+           action_rc=0, env_extra=None, recovery_answer="null"):
     """Run the guard with a stub ssh that answers ``health`` and records every remote command.
 
     Any other command exits ``action_rc`` (a nonzero one also writes a refusal to stderr)."""
@@ -32,15 +37,17 @@ def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-0
     (bin_dir / "ssh").write_text(
         "#!/bin/sh\n"
         f'eval "last=\\${{$#}}"; echo "$last" >> {calls}\n'
+        f"[ \"$last\" != recovery ] || {{ echo '{recovery_answer}'; exit 0; }}\n"
         f'[ "$last" = health ] || {{ [ {action_rc} = 0 ] || echo "refused: $last" >&2; exit {action_rc}; }}\n'
         f"echo '{answer}'; exit {exit_code}\n")
     (bin_dir / "ssh").chmod(0o755)
     (tmp_path / "hosts.conf").write_text(conf)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "GUARD_STATE": str(tmp_path / "state"),
-           "GUARD_CONFIG": str(tmp_path / "hosts.conf"), "GUARD_NOW": now, **(env_extra or {})}
+           "GUARD_CONFIG": str(tmp_path / "hosts.conf"), "GUARD_NOW": now,
+           "GUARD_LOCAL_STATUS": str(tmp_path / "local-status.json"), **(env_extra or {})}
     for _ in range(runs):
         subprocess.run([sys.executable, str(GUARD)], env=env, check=True, capture_output=True, timeout=60)
-    return calls.read_text().splitlines() if calls.exists() else []
+    return [line for line in calls.read_text().splitlines() if line != "recovery"] if calls.exists() else []
 
 
 def _actions(tmp_path):
@@ -72,8 +79,8 @@ def test_three_bad_answers_without_a_down_unit_reboot_once(tmp_path):
 
 def test_a_down_unit_is_restarted_first_then_the_pc_is_rebooted(tmp_path):
     calls = _guard(tmp_path, UNIT_DOWN, runs=6)
-    assert calls == ["health"] * 3 + ["restart pinky-nav2.service"] + ["health"] * 3 + ["reboot"]
-    assert _actions(tmp_path) == ["restart pinky-nav2.service", "reboot"]
+    assert calls == ["health"] * 3 + ["restart pinky-backend.service"] + ["health"] * 3 + ["reboot"]
+    assert _actions(tmp_path) == ["restart pinky-backend.service", "reboot"]
 
 
 def test_a_recovered_pc_resets_the_ladder(tmp_path):
@@ -88,7 +95,7 @@ def test_high_load_alone_is_reported_never_acted_on(tmp_path):
 
 
 def test_high_load_with_a_down_unit_still_counts(tmp_path):
-    assert _guard(tmp_path, "50 10 120.0 24 7200 pinky-nav2.service", runs=3)[-1] == "restart pinky-nav2.service"
+    assert _guard(tmp_path, "50 10 120.0 24 7200 pinky-backend.service", runs=3)[-1] == "restart pinky-backend.service"
 
 
 def _status(tmp_path):
@@ -121,8 +128,8 @@ def test_a_refused_reboot_is_logged_truthfully_and_the_ladder_does_not_reset(tmp
 def test_a_refused_restart_falls_through_to_a_reboot(tmp_path):
     env = {"GUARD_REBOOT_MIN_GAP_S": "0"}
     calls = _guard(tmp_path, UNIT_DOWN, runs=3, action_rc=2, env_extra=env)
-    assert calls == ["health"] * 3 + ["restart pinky-nav2.service", "reboot"]
-    assert _actions(tmp_path) == ["restart pinky-nav2.service refused", "reboot refused"]
+    assert calls == ["health"] * 3 + ["restart pinky-backend.service", "reboot"]
+    assert _actions(tmp_path) == ["restart pinky-backend.service refused", "reboot refused"]
 
 
 @pytest.mark.parametrize("reply", ["garbage", "60 5 1.2", "x 5 1.2 24 7200 -"])
@@ -167,7 +174,7 @@ def test_robots_are_probed_and_never_recovered(tmp_path):
     assert _actions(tmp_path) == []
 
 
-def _remote(tmp_path, command, units="pinky-nav2.service\n", role=None):
+def _remote(tmp_path, command, units="pinky-backend.service\n", role=None):
     bin_dir = tmp_path / "rbin"
     bin_dir.mkdir(exist_ok=True)
     for name, body in {"systemctl": 'echo "$*" >> "$CALLS"; case "$*" in *is-active*) exit 3;; esac',
@@ -178,7 +185,8 @@ def _remote(tmp_path, command, units="pinky-nav2.service\n", role=None):
     if role:
         (tmp_path / "role").write_text(role + "\n")
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SSH_ORIGINAL_COMMAND": command,
-           "GUARD_UNITS": str(tmp_path / "units"), "GUARD_ROLE_FILE": str(tmp_path / "role"), "CALLS": str(tmp_path / "rcalls")}
+           "GUARD_UNITS": str(tmp_path / "units"), "GUARD_ROLE_FILE": str(tmp_path / "role"),
+           "GUARD_RECOVERY_STATUS": str(tmp_path / "recovery-status.json"), "CALLS": str(tmp_path / "rcalls")}
     result = subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, text=True, timeout=10)
     calls = (tmp_path / "rcalls").read_text().splitlines() if (tmp_path / "rcalls").exists() else []
     return result, calls
@@ -188,7 +196,7 @@ def test_the_forced_command_reports_down_units_in_health(tmp_path):
     result, _ = _remote(tmp_path, "health")
     fields = result.stdout.split()
     assert result.returncode == 0 and len(fields) == 6
-    assert all(f.replace(".", "").isdigit() for f in fields[:5]) and fields[5] == "pinky-nav2.service"
+    assert all(f.replace(".", "").isdigit() for f in fields[:5]) and fields[5] == "pinky-backend.service"
 
 
 def test_the_site_role_checks_system_units_and_others_user_units(tmp_path):
@@ -201,10 +209,10 @@ def test_the_site_role_checks_system_units_and_others_user_units(tmp_path):
 
 
 def test_the_forced_command_restarts_only_listed_user_units(tmp_path):
-    result, calls = _remote(tmp_path, "restart pinky-nav2.service")
+    result, calls = _remote(tmp_path, "restart pinky-backend.service")
     assert result.returncode == 0
-    assert calls == ["sudo -n /usr/local/sbin/rosy-host-control restart-unit pinky-nav2.service"]
-    for i, bad in enumerate(("restart ssh.service", "restart pinky-nav2.service extra", "restart *", "rm -rf /",
+    assert calls == ["sudo -n /usr/local/sbin/rosy-host-control restart-unit pinky-backend.service"]
+    for i, bad in enumerate(("restart ssh.service", "restart pinky-backend.service extra", "restart *", "rm -rf /",
                              "reboot now", "health; reboot")):
         (tmp_path / str(i)).mkdir()
         result, calls = _remote(tmp_path / str(i), bad)
@@ -215,3 +223,47 @@ def test_the_forced_command_restarts_only_listed_user_units(tmp_path):
 def test_the_forced_command_reboots_only_through_the_d524_helper(tmp_path):
     result, calls = _remote(tmp_path, "reboot")
     assert result.returncode == 0 and calls == ["sudo -n /usr/local/sbin/rosy-host-control reboot"]
+
+
+def test_recovery_is_read_only_and_does_not_expose_the_rest_of_the_report(tmp_path):
+    recovery = {"time": 123, "role": "ai", "state": "degraded"}
+    (tmp_path / "recovery-status.json").write_text(json.dumps({"recovery": recovery, "errors": ["private path"]}))
+    result, calls = _remote(tmp_path, "recovery")
+    assert result.returncode == 0 and json.loads(result.stdout) == recovery
+    assert calls == []
+    result, calls = _remote(tmp_path, "recovery extra")
+    assert result.returncode == 2 and calls == []
+
+
+@pytest.mark.parametrize("reply", ["null", "[]", "not-json", '{"role":"ai","state":"degraded"}'])
+def test_recovery_collection_never_advances_the_reboot_ladder(tmp_path, reply):
+    assert _guard(tmp_path, HEALTHY, recovery_answer=reply, runs=4) == ["health"] * 4
+    assert _actions(tmp_path) == []
+    assert _status(tmp_path)["pc1"]["state"] == "ok"
+
+
+def test_unreachable_recovery_drops_previous_snapshot(tmp_path):
+    report = json.dumps(_recovery("model"))
+    _guard(tmp_path, HEALTHY, recovery_answer=report)
+    assert _status(tmp_path)["pc1"]["recovery"]["role"] == "model"
+    _guard(tmp_path, "", exit_code=255)
+    assert _status(tmp_path)["pc1"]["recovery"] is None
+
+
+def test_guard_collects_its_own_pc_and_removes_a_missing_local_report(tmp_path):
+    report = {**_recovery("site"), "state": "degraded", "resources": {"load": 2}}
+    path = tmp_path / "local-status.json"
+    path.write_text(json.dumps({"recovery": report}))
+    _guard(tmp_path, HEALTHY)
+    assert _status(tmp_path)["site"]["recovery"] == report
+    assert _status(tmp_path)["site"]["time"] == 123  # never renew the age of a cached result
+    path.unlink()
+    _guard(tmp_path, HEALTHY)
+    assert "site" not in _status(tmp_path)
+
+
+@pytest.mark.parametrize("change", [{"role": "ai"}, {"time": "now"}, {"watchdog": None}])
+def test_misidentified_or_malformed_recovery_is_unavailable(tmp_path, change):
+    report = json.dumps({**_recovery("model"), **change})
+    _guard(tmp_path, HEALTHY, conf="model pc op@model -\n", recovery_answer=report)
+    assert _status(tmp_path)["model"]["recovery"] is None

@@ -16,6 +16,24 @@
     <h1>계정 관리</h1>
     <ui-status id="account-status" state="pending" role="status">관리 권한을 확인하고 있습니다.</ui-status>
     <a id="account-login" href="/console/login?return=%2Fconsole%2Faccounts" hidden>로그인</a>
+    <section id="account-setup" hidden aria-labelledby="account-setup-heading">
+      <h2 id="account-setup-heading">통합 로그인과 앱 연결</h2>
+      <p id="account-setup-state" role="status"></p>
+      <ul id="account-clients" aria-label="등록된 앱"></ul>
+      <p>앱 등록은 로그인 성공을 뜻하지 않습니다. 각 앱에서 로그인한 뒤 표시 이름 변경과 권한 회수가 반영되는지 확인하세요.</p>
+      <details>
+        <summary>최초 설정과 앱 추가 방법</summary>
+        <ol>
+          <li>서버 관리자가 기존 계정 정보와 권한 DB를 백업하고, 공통 HTTPS 주소와 인증서를 준비합니다. 모바일 앱은 신뢰할 수 있는 인증서와 443 포트가 필요합니다.</li>
+          <li>기존 로그인 ID를 첫 계정 관리자로 지정하고, 앱별 복귀 주소와 현장·로봇·프로젝트 자원을 등록합니다. 기존 사용자를 새로 만들거나 비밀번호를 초기화하지 않습니다.</li>
+          <li>서버의 보호된 계정 설정과 서명 키를 설치하고 서명된 배포 경로로 활성화합니다. 앱에도 같은 인증 주소와 신뢰 키를 설정합니다.</li>
+          <li>이 화면에서 등록을 확인하고 아래에서 사용자별 자원 권한을 부여합니다. Android 앱은 설치된 앱의 서명과 로그인 복귀 연결도 확인합니다.</li>
+        </ol>
+        <p>서버 작업에는 서버 관리자 권한이 필요합니다. 비밀번호와 서명 키는 이 화면에 입력하지 않습니다.</p>
+        <a href="https://github.com/robotics-team-1213/rosy-platform/blob/main/deploy/site/README.md#rosy-account-activation-d-757" target="_blank" rel="noopener noreferrer">서버 설치 안내</a>
+      </details>
+      <ui-button id="account-setup-reload" kind="quiet">연결 설정 다시 조회</ui-button>
+    </section>
     <div id="account-content" hidden>
       <p>변경은 즉시 적용되며 대상 계정의 기존 로그인 세션이 종료됩니다. 마지막 관리자는 정지하거나 관리 권한을 제거할 수 없습니다.</p>
       <ui-button id="account-reload" kind="quiet">현재 상태 다시 조회</ui-button>

@@ -1,7 +1,7 @@
 """Signed delta payload for a change that only edits files the payload ships verbatim (D-553 addendum 3).
 
-    python tools/release/make_delta_release.py --base-dir X:/DevTemp/rosy-release-<base>/x/<base> \
-        --base-tarball X:/DevTemp/rosy-release-<base>/<base>.tar.gz --release-id <new-id>
+    python tools/release/make_delta_release.py --base-dir $ROSY_SCRATCH/rosy-release-<base>/x/<base> \
+        --base-tarball $ROSY_SCRATCH/rosy-release-<base>/<base>.tar.gz --release-id <new-id>
 
 The base is a signed release this PC prepared earlier and the robots already hold. The
 tool rebuilds the complete new release locally (base files + the changed files from
@@ -40,6 +40,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -208,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--revision", default="HEAD", help="commit to ship (default HEAD)")
     parser.add_argument("--source-ref", default="", help="ref the revision came from (default: current branch)")
     parser.add_argument("--not-shipped", action="append", default=[], help="path prefix that never reaches a robot")
-    parser.add_argument("--out-dir", type=Path, help=r"default X:\DevTemp\rosy-release-<id>")
+    parser.add_argument("--out-dir", type=Path, help=r"default $ROSY_SCRATCH\rosy-release-<id> (else the system temp directory)")
     parser.add_argument("--key-name", default="rosy-release-2026-01")
     args = parser.parse_args(argv)
     started = time.monotonic()
@@ -248,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
 
         replace, ignored = plan_delta(base_files, changed_paths(base_rev, rev), blob, args.not_shipped, twins)
 
-        out_dir = args.out_dir or Path("X:/DevTemp") / f"rosy-release-{args.release_id}"
+        out_dir = args.out_dir or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / f"rosy-release-{args.release_id}"
         release_dir = out_dir / "x" / args.release_id
         tarball = out_dir / f"{args.release_id}.tar.gz"
         if release_dir.exists() or tarball.exists():

@@ -31,11 +31,11 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
-    "compose.pairing.yaml", "pairing-sync-token.template.txt",
+    "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
-SERVICES = ("fleet", "vision", "proxy")
+SERVICES = ("fleet", "vision", "proxy", "postgres")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -130,7 +130,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
 
     images = manifest.get("images")
     if not isinstance(images, dict) or set(images) != set(SERVICES):
-        raise CandidateVerificationError("candidate must contain Fleet, Vision, and proxy images")
+        raise CandidateVerificationError("candidate must contain Fleet, Vision, proxy and Postgres images")
     image_ids: dict[str, str] = {}
     for service in SERVICES:
         row = images[service]

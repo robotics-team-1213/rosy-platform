@@ -1,7 +1,7 @@
 # operations
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-11
+**Generated:** 2026-10-07 · **Updated:** 2026-10-14
 
 ## Purpose
 
@@ -20,7 +20,8 @@ D-427 operations part and a `colcon_roots` entry. Site orchestration and ledgers
 | `site_ui/` | Console source `site_ui/console` and Rosy Cam Android app (see `site_ui/AGENTS.md`) |
 | `site_devices/` | Dock and signal firmware (see `site_devices/AGENTS.md`) |
 | `site_execution/` | Wheel `rosy-execution`: PlanBundle and authority projections (see `site_execution/AGENTS.md`) |
-| `world/` | Wheel `rosy-world`: observation/evidence API and current-state MapPose projection; Fleet keeps service/transaction consumers (see `world/AGENTS.md`, D-630) |
+| `world/` | Wheel `rosy-world`: observation/evidence API and current MapPose. Fleet imports `rosy.world.state.projections.map_pose` directly (D-752) and keeps the service and the ledger (see `world/AGENTS.md`) |
+| `prediction/` | D-782 action-conditioned prediction: OMX pre-execution checker and shadow recording; no command or admission authority (see `prediction/AGENTS.md`) |
 | `situation/` | Fact-only situation service: `rosy_situation/analyzers` and `incidents`; old module identities remain aliases (see `situation/AGENTS.md`, D-630) |
 
 ## For AI Agents
@@ -32,8 +33,8 @@ D-427 operations part and a `colcon_roots` entry. Site orchestration and ledgers
 - Console source is `operations/site_ui/console`; backend source is `operations/fleet/fleet/server`. Installed resources remain `fleet/server/web`; URL, CSP and API authority stay unchanged.
 - `site_execution/` here is `rosy-execution`. The local policy loader is `middleware/robot_execution/local/` (`rosy-execution-local`). Do not merge them.
 - Site vision sends derived sighting JSON. It does not send JPEG to Fleet and it does not publish `/cmd_vel`.
-- World owns `src/rosy/world/state/projections/map_pose.py`; `rosy.world.state.projections.map_pose` is its identity facade. The odom `predicted` state is current-state dead reckoning, not future action-conditioned rollout.
-- The complete current manifest-root guide is [platform-folder-responsibilities.md](../docs/reference/platform-folder-responsibilities.md). Decision and Console now have actual source holders (D-637). Action-conditioned future prediction remains planned; do not create empty folders without implementation, contracts and consumers.
+- World owns `src/rosy/world/state/projections/map_pose.py`. Consumers import `rosy.world.state.projections.map_pose` directly. There is no Fleet alias (D-752). `source=bridged` is odom dead reckoning after the last sighting or operator pin, not an action-conditioned future rollout.
+- The complete current manifest-root guide is [platform-folder-responsibilities.md](../docs/reference/platform-folder-responsibilities.md). Decision and Console now have actual source holders (D-637). Action-conditioned prediction lives in `prediction/` (D-782) as a checker and shadow recorder; it is not wired to admission or an owner. Do not create empty folders without implementation, contracts and consumers.
 
 ### Testing Requirements
 

@@ -234,6 +234,9 @@
 | D-733 | Hourly KST Discord Fleet health subscription |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
+| D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
+| D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
 
 ## 계획·결과 문서
 
@@ -320,6 +323,8 @@
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
+- [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
+- [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 
 ## 교훈 (docs/solutions)
 
@@ -334,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · 1432230ad · 사람-AI 검수 화면의 출처와 상태 표시
-- 2026-10-14 · uncommitted · 워크트리 청소의 자기 워크트리 빠른 길 (D-761 Proposed)
-- 2026-10-14 · 4bb927152 · docs: D-762 main 관문(PR·merge queue 단계), D-584 개정, 보류·보관 브랜치 목록
-- 2026-10-14 · 43c9e729f · 소유자 확인은 `--snapshot`에만 둔다 (D-761 Proposed)
-- 2026-10-14 · ffb2a9f80 · 워크트리 청소의 소유자 범위와 상한 60 (D-761 Proposed)
+- 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
+- 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
+- 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
+- 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+- 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존

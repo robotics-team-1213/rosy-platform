@@ -53,12 +53,16 @@ _HOLD_REASON = {'waiting': 'junction_waiting', 'unresolved': 'junction_unresolve
 
 
 
+#: After an odom gap the trail starts a new epoch (D-468: > 0.5 s); a maneuver held at zero through it
+#: keeps its place when the body is still within the trail's own jump floor and a small turn.
+REKEY_M, REKEY_RAD = .02, .05
+
 class JunctionRefused(Exception):
     """A junction instruction CORE does not take in the current line-follow mode (409)."""
 
-    def __init__(self, code, message):
+    def __init__(self, code, message, reason=None):
         super().__init__(message)
-        self.code = code
+        self.code, self.reason = code, reason  # reason: D-767 A INSTRUCTION_STAMP_UNUSABLE's why
 
 
 class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixin, JunctionTurnMixin):
@@ -153,11 +157,12 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                          else None)
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
-                     advance_m=None, now=None, expect=None, exit_segment=None):
+                     advance_m=None, now=None, expect=None, exit_segment=None, pose_stamp=None):
         """Store the next-junction instruction: (accepted, seq, state). Raises JunctionRefused
         unless line-follow is CAMERA_LINE (IR_LINE has no junction detection). During a
         maneuver the same instruction is a no-op; a different one aborts it, unaccepted.
-        D-520: with exit_segment advance_m is ignored; during an arc every instruction is armed."""
+        D-520: with exit_segment advance_m is ignored; during an arc every instruction is armed.
+        D-767 A: expect_in_m / bend_in_m count from the odom sample at ``pose_stamp`` when usable."""
         if action not in JUNCTION_ACTIONS:
             raise ValueError('junction action must be straight, left, right, stop or bend')
         if not (isinstance(expires_s, (int, float)) and 0 < expires_s <= MAX_EXPIRES_S):
@@ -172,6 +177,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         if advance_m is not None and (turn_deg is None or action == 'bend' or not 0 <= advance_m <= MAX_ADVANCE_M):
             raise ValueError('advance_m belongs to a turn and must be in [0, 0.30]')
         check_expect(expect, action, turn_deg)  # D-507 2; None is an old client
+        if pose_stamp is not None and not (type(pose_stamp) in (int, float) and 0 < pose_stamp < math.inf):
+            raise ValueError('pose_stamp must be a finite wall stamp > 0')
         self._check_exit_segment(exit_segment, action, turn_deg, expect)
         advance = (0. if exit_segment is not None else DEFAULT_ADVANCE_M if advance_m is None
                    else float(advance_m))
@@ -186,6 +193,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
             if self._junction_done_place == (place_id, action):
                 raise JunctionRefused('JUNCTION_ALREADY_DONE',
                                       f'{action} at {place_id} already ran; send the next place')
+            current = self._clock() if now is None else now
             j = self._junction
             if j is not None and j['state'] in MANEUVER:
                 if (j['action'], j['place_id'], j['turn_deg'], j['advance_m']) == (
@@ -195,7 +203,6 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 j.update(state='aborted', reason='new_instruction')
                 self._bridge_hint = None
                 return False, j['seq'], 'aborted'
-            current = self._clock() if now is None else now
             if action == 'bend' and j is not None and j['state'] == 'armed' and (
                     j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
                     action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
@@ -204,9 +211,14 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     self._place_map_entry(j, expect.get('map_entry'), current)
                 j['next_line'] = expect.get('next_line_in_m')  # D-754: a replan may move the next place
                 return True, j['seq'], 'armed'
+            distance = action == 'bend' or (expect or {}).get('expect_in_m') is not None
+            basis, why = self._stamp_odometer(pose_stamp, current) if pose_stamp is not None and distance else (None, 'none_sent')
+            if why != 'none_sent' and basis is None:  # D-767 A review: never a silent receipt basis (a resend
+                # or a refresh above does not measure from the stamp, so it is never refused); Fleet resends
+                raise JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', f'pose_stamp cannot be used: {why}', why)
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
-            window = self._expect_window(expect, current)
+            window = self._expect_window(expect, current, basis)
             pose = self._fresh_pose(current) if action == 'bend' else None
             if window is False or (action == 'bend' and pose is None):
                 raise JunctionRefused('JUNCTION_ODOM_STALE', 'no fresh odom to place the expected junction')
@@ -221,14 +233,18 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   window=window, map_id=(expect or {}).get('map_id'),
                                   pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment,
                                   lane_turn=(expect or {}).get('lane_turn_deg'),
+                                  basis=None if not (window or pose) else ('receipt', why) if basis is None else ('stamp', None),
                                   arc_anchor=self._place_map_anchor(exit_segment, current))  # D-744 3
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._place_map_entry(self._junction, expect.get('map_entry'), current)  # D-759 3
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
+                                      travel=0. if basis is None else self._return_evidence.trail.odometer-basis[0],
                                       radius=expect['bend_radius_m'], anchor=None,
                                       next_line=expect.get('next_line_in_m'),  # D-754
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
+            elif turn_deg is not None:  # D-759 rev 1: a turn's exit heading, placed at receipt too
+                self._place_map_entry(self._junction, (expect or {}).get('map_entry'), current)
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as
             # without an instruction (SIM: a left/right hint stopped it bridging the corner before
             # the bend), and a bridge tick in the lead window hands over (CAMERA_HOLDS).
@@ -243,6 +259,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   reason=j.get('reason'), pivot_basis=j.get('pivot_basis'),
                                   map_entry_used=j.get('entry_used') is True,
                                   map_entry_reason=j.get('entry_why'),
+                                  distance_basis=(j.get('basis') or (None, None))[0],
+                                  distance_basis_reason=(j.get('basis') or (None, None))[1],
                                   signal_request_id=(self._junction_signal or {}).get('id'),
                                   signal_state=(self._junction_signal or {}).get('state'))
 
@@ -395,8 +413,19 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
 
     def _maneuver(self, j, now, decision):
         pose = self._fresh_pose(now)
-        if pose is None or (self._return_evidence.epoch, pose.frame) != j['key']:
+        if pose is None and now - j.setdefault('gap_at', now) <= self._config.lost_after_s:
+            # an odom gap (SIM m27: 0.6 s) holds and the phase clock stands, up to the camera-loss bound
+            j['limit'] += now - j.get('gap_tick', now)
+            j['gap_tick'] = j['tick_at'] = now  # review: the gap is not also a regulated wait
+            return self._junction_hold('junction_pose_gap', decision)
+        key, seen, gapped = pose and (self._return_evidence.epoch, pose.frame), j.get('seen'), j.pop('gap_at', None)
+        j.pop('gap_tick', None)
+        if gapped is not None and key and seen and key != j['key'] and key[1] == j['key'][1] and math.hypot(
+                pose.x-seen[0], pose.y-seen[1]) <= REKEY_M and abs(math.remainder(pose.yaw-seen[2], math.tau)) <= REKEY_RAD:
+            j.update(key=key, last=None)  # a gap > 0.5 s splits the trail (D-468); held at zero it is the same place
+        if pose is None or key != j['key']:
             return self._abort(j, 'odom', decision)
+        j['seen'] = (pose.x, pose.y, pose.yaw)
         refusal = self._maneuver_refusal(now)
         if refusal == 'stuck' and j['state'] == 'reacquiring':
             # The lane stayed out of view past lost_after_s: D-407 asks the console. That is a
@@ -413,14 +442,10 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     and (j['state'] != 'reacquiring' or j['action'] == 'bend'))):  # bend: own pursuit
             return self._abort(j, reason or 'hold', decision)
         # Time a later gate takes is not the maneuver's (Gazebo lap m4: a D-573 look inside a bend pass
-        # ended it 'timeout'): looking/waiting or a non-FREE D-517 authority stop the phase clock, a
-        # crossing slower than the maneuver takes its lost share; crosswalk_report_s + clear_s in all.
-        c, auth = self._config, (self._config.authority_required or self._authority_seen) and self._authority_state(now)
-        xw, dt = (self._xwalk.status(now) or {}).get('state'), now-j.get('tick_at', now)
-        lost = (1. if (auth and auth[0] != 'FREE') or xw in ('looking', 'waiting') else
-                max(0., 1-c.crosswalk_cross_speed/j['speed']) if xw == 'crossing' and j.get('speed') else 0.)
-        add = 0. if j.get('sub') == 'stopping' else min(dt*lost, c.crosswalk_report_s+c.crosswalk_clear_s-j.get('added', 0.))
-        j.update(tick_at=now, limit=j['limit']+add, added=j.get('added', 0.)+add)
+        # ended it 'timeout'): the credit crosswalk/gate.py _regulated_wait_share gives stops the phase clock.
+        stopping = j.get('sub') == 'stopping'
+        add = self._regulated_wait_share(now, now-j.get('tick_at', now), j.get('speed'), None if stopping else j)
+        j.update(tick_at=now, limit=j['limit']+(0. if stopping else add))
         if now-j['phase_at'] > j['limit']:
             if j['state'] == 'reacquiring':
                 return self._unresolved(j, decision)

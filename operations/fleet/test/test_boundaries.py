@@ -97,8 +97,9 @@ def test_localization_arbiter_modules_import_no_transport(module):
 #: D-457 5: overhead tracking is display only. Besides its own modules, only the app wiring,
 #: the console state route (which hands it robot states) and the CLI may name it.
 #: tracking_drift.py is one of its own modules (the server-side calibration-drift watch).
-TRACKING_IMPORTERS = {"server/app.py", "server/console/console_routes.py", "server/tracking.py",
-                      "server/tracking_routes.py", "server/tracking_drift.py", "cli.py"}
+TRACKING_IMPORTERS = {"server/app.py", "server/console/console_routes.py", "server/tracking/tracking.py",
+                      "server/tracking/tracking_routes.py", "server/tracking/tracking_drift.py",
+                      "server/tracking/measured_calibration.py", "cli.py"}
 
 
 def _server_imports(source: str, stem: str) -> list[str]:
@@ -155,10 +156,10 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
 #: Map pose arbitration, trips, initialpose, routes, bays, formations and commands never read it,
 #: neither by import nor through the wiring attributes ``tracking.identity`` / ``app.state.identity``.
 IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server/identity.py",
-                    "server/tracking.py", "server/tracking_routes.py", "server/sightings_config.py",
+                    "server/tracking/tracking.py", "server/tracking/tracking_routes.py", "server/sightings_config.py",
                     "server/lane_compliance_service.py"}
 #: Never on that list: the D-494 map pose arbitration and the trip loop (addendum 3).
-IDENTITY_NEVER = ("server/map_pose_service.py", "server/ledger/trip_*.py",
+IDENTITY_NEVER = ("server/map_pose_service.py", "server/trips/trip_*.py", "server/trip_checks/trip_*.py", "server/trip_progress/trip_*.py",
                   "routing/execute.py")
 
 

@@ -19,6 +19,130 @@ def test_ci_local_execution_wheel_pin_matches_package_metadata():
     assert f"{project['project']['name']}=={project['project']['version']}" in WORKFLOW.read_text(encoding='utf8')
 
 
+def test_core_wheel_dependencies_are_available_before_offline_install():
+    import ast
+    import re
+    import yaml
+    from packaging.requirements import Requirement
+
+    tree = ast.parse((ROOT / 'contracts/foundation/setup.py').read_text(encoding='utf8'))
+    requirements = next(ast.literal_eval(keyword.value) for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) for keyword in node.keywords
+                        if keyword.arg == 'install_requires')
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    wheel_index = next(i for i, step in enumerate(steps)
+                       if step['name'] == 'Build and install ROS-free platform API wheels')
+    commands = '\n'.join(step.get('run', '') for step in steps[:wheel_index] if not step.get('if'))
+    tokens = shlex.split(commands.replace('\\\n', ' '), comments=True)
+    providers = dict(re.findall(r'^([A-Za-z0-9._-]+)==([^\s\\]+)',
+                               (ROOT / 'deploy/robot/pinky_pro/image/device-python-requirements.txt')
+                               .read_text(), re.MULTILINE))
+    providers.update(token.split('==', 1) for token in tokens
+                     if re.fullmatch(r'[A-Za-z0-9._-]+==[0-9.]+', token))
+    for value in requirements:
+        requirement = Requirement(value)
+        if requirement.name == 'setuptools':  # ROS/colcon's apt build bootstrap.
+            continue
+        assert requirement.name in providers, f'CI offline wheel install lacks {value}'
+        assert providers[requirement.name] in requirement.specifier
+
+
+def test_ci_provides_the_site_account_oauth_runtime():
+    import re
+    import yaml
+
+    site_requirements = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
+    oauth_pin = re.search(r'^oauthlib==[^\s]+', site_requirements, re.MULTILINE).group()
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    test_index = next(i for i, step in enumerate(steps) if step['name'] == 'Test (matrix suite, D-436)')
+    tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
+                                  if not step.get('if')).replace('\\\n', ' '), comments=True)
+    assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
+
+
+def test_fleet_account_oauth_pin_matches_site_runtime():
+    import ast
+    import re
+
+    site = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
+    pin = re.search(r'^oauthlib==[^\s]+', site, re.MULTILINE).group()
+    tree = ast.parse((ROOT / 'operations/fleet/setup.py').read_text(encoding='utf8'))
+    requirements = next(ast.literal_eval(keyword.value) for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) for keyword in node.keywords
+                        if keyword.arg == 'install_requires')
+    assert pin in requirements, 'Fleet wheel and site account runtime must agree'
+
+
+def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkeypatch):
+    import json
+    import yaml
+    from types import SimpleNamespace
+    from tools.harness.affected_tests import CI_FULL_MATRIX
+
+    browser_node = 'middleware/core/gateway/test/test_account_pipeline.py'
+    core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
+    assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    assert 'test_account_pipeline.py' in install['if']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['middleware/core/gateway/test'], [browser_node]]))
+    monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
+    # The matrix step streams each pytest through Popen (D-762 stage 1); a green run prints nothing here.
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(()), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == 0
+    assert len(calls) == 2
+    assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
+    assert browser_node in calls[1][0]
+    assert calls[1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+
+
+@pytest.mark.parametrize('paths, expected', [
+    (['test/test_a.py', 'test/test_b.py'], 1),  # root-test-*of3 since 2026-10-11: whole session skipped
+    (['test/test_only_skips.py'], 0),  # one selected module that only skips is not a failure
+])
+def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    out = ['collecting ... collected 0 items / 1 skipped\n', '========== 1 skipped in 0.54s ==========\n']
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([paths]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append(args) or SimpleNamespace(stdout=iter(out), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+    assert ('collected 0 items' in capsys.readouterr().out.split('::endgroup::')[-1]) == bool(expected)
+    # The launch_testing hook is what turns one importorskip into a skipped session.
+    assert calls[0][-2:] == ['-pno:launch_testing', '-pno:launch_ros']
+
+
+def test_no_test_module_defines_a_nose_style_setup_function():
+    # CI's apt pytest 7.4 calls a module-level plain setup()/teardown() once with the module as
+    # its argument (nose compatibility), so a helper by that name gets the module as tmp_path.
+    import ast
+
+    found = []
+    for path in ROOT.rglob('test_*.py'):
+        if any(part in {'.git', '.worktrees', 'build', 'install', 'log', 'node_modules'} for part in path.parts):
+            continue
+        tree = ast.parse(path.read_text(encoding='utf8'))
+        found += [f'{path.relative_to(ROOT).as_posix()}:{node.lineno}' for node in tree.body
+                  if isinstance(node, ast.FunctionDef) and node.name in {'setup', 'teardown'}
+                  and not node.decorator_list]
+    assert found == [], 'rename these helpers (e.g. _setup): ' + ', '.join(found)
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
@@ -173,3 +297,33 @@ def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
     assert 'cryptography.__version__ == "50.0.0"' in script
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")
+
+
+def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
+    """A lost runner held run 38588670328 for 45 min; without a bound it can hold a run for 6 h."""
+    import yaml
+
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    for name, job in jobs.items():
+        assert 0 < int(job.get("timeout-minutes", 0)) <= 30, name
+
+
+def test_merge_group_runs_the_full_tier_against_the_group_base():
+    """D-762 stage 1: a merge queue group is a full-tier event and checks its own base..head."""
+    import yaml
+
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    triggers = doc.get("on", doc.get(True))  # PyYAML reads the bare key `on` as True
+    assert "merge_group" in triggers
+    assert "concurrency" not in doc, "a concurrency group could cancel a queue or main push run"
+    scope = {s["name"]: s for s in doc["jobs"]["scope"]["steps"]}
+    safety = scope["Safety-Review trailer (D-430)"]
+    assert "github.event_name == 'merge_group'" in safety["if"]
+    assert "github.event_name == 'merge_group' && github.event.merge_group.base_sha" in safety["env"]["SAFETY_BASE"]
+    tier = scope["Test scope (D-436)"]["run"]
+    # Only pull_request takes the affected tier; every other event (merge_group included) is full.
+    assert '"${{ github.event_name }}" = "pull_request"' in tier and "--full --ci-matrix" in tier
+    assert "merge_group" not in tier
+    test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
+    assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
+    assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]

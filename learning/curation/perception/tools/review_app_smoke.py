@@ -3,7 +3,7 @@
 It never touches the given state: with --state it serves a fresh copy under --out, because
 app startup may migrate the schema or bind pixel classes. The browser sends GET requests only.
 
-    python learning/curation/perception/tools/review_app_smoke.py --state X:/DevTemp/pinky-review-run/state
+    python learning/curation/perception/tools/review_app_smoke.py --state $ROSY_SCRATCH/pinky-review-run/state
     python learning/curation/perception/tools/review_app_smoke.py --base-url http://127.0.0.1:8767
 
 With --state it copies the state, starts the app on a free loopback port and stops it afterwards.
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from pathlib import Path
 import socket
@@ -90,7 +91,7 @@ def main() -> int:
     where = parser.add_mutually_exclusive_group(required=True)
     where.add_argument('--state', type=Path, help='existing review state to serve on a free port')
     where.add_argument('--base-url', help='an already running review app')
-    parser.add_argument('--out', type=Path, default=Path('X:/DevTemp/pinky-review-smoke'))
+    parser.add_argument('--out', type=Path, default=Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir()) / 'pinky-review-smoke')
     args = parser.parse_args()
     server = None
     base = (args.base_url or '').rstrip('/')

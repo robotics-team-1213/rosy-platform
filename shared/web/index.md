@@ -27,6 +27,7 @@
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 | D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 | D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 |
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 
 ## 계획·결과 문서
 
@@ -47,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+- 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
+- 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완
 - 2026-10-14 · 7135ce58a · feat(auth): 공통 계정 프로필
 - 2026-10-13 · 2a7afbd1f · test(web): Rosy Robot이 공용 레일과 하위 탐색 자리를 쓴다 (D-741 6)
-- 2026-10-13 · 9e2d4ef0c · feat(fleet): console app bar registers a 48rem container breakpoint (D-741)
-- 2026-10-13 · 1438d53d1 · feat(web): control line at ink 50% on buttons and fields (D-741)
-- 2026-10-13 · 039a9efe8 · feat(web): shared app shell seats (D-741)

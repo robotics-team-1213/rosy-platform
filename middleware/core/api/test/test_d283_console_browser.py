@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -12,6 +13,8 @@ import pytest
 from browser_harness import browser_tests_enabled
 from playwright.sync_api import sync_playwright
 import yaml
+
+SCRATCH = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir())
 
 
 pytestmark = pytest.mark.skipif(
@@ -135,7 +138,7 @@ def _capture(page, path: Path, token: str, width: int, height: int):
 
 def test_real_core_console_fits_desktop_and_mobile_for_operator_and_administrator(tmp_path):
     client = _core_client(tmp_path)
-    capture_dir = Path("X:/DevTemp/d283-console-core-browser")
+    capture_dir = SCRATCH / "d283-console-core-browser"
     browser_errors: list[str] = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -184,7 +187,7 @@ def test_real_core_console_fits_desktop_and_mobile_for_operator_and_administrato
 def test_current_role_console_names_each_nonfresh_readout_state(tmp_path, evidence, label, width, height):
     client = _core_client(tmp_path)
     token = TOKENS["operator"]
-    capture_dir = Path("X:/DevTemp/rosy-uiux-evidence-matrix")
+    capture_dir = SCRATCH / "rosy-uiux-evidence-matrix"
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": width, "height": height})
@@ -237,7 +240,7 @@ def test_current_role_console_names_each_nonfresh_readout_state(tmp_path, eviden
 @pytest.mark.parametrize("width,height", [(1366, 768), (390, 844)])
 def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, height):
     client = _core_client(tmp_path)
-    capture_dir = Path("X:/DevTemp/rosy-uiux-current-surfaces")
+    capture_dir = SCRATCH / "rosy-uiux-current-surfaces"
     token = TOKENS["administrator"]
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)

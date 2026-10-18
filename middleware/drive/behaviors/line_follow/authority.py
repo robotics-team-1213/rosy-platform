@@ -1,6 +1,7 @@
-"""D-517 4 (M2): Fleet movement authority, enforced with config ``authority_required`` or, for the rest
-of a line-follow session, once Fleet sent one. ``until_m`` counts from the odom sample at ``pose_stamp``
-(CORE wall clock, as snapshot ``odom_pose.stamp``); travel since is the odom path length (unsigned:
+"""D-517 4 (M2): Fleet movement authority, enforced with config ``authority_required``, while CORE's trip lease
+is open (D-760 2) or, for the rest of a session, once Fleet sent one. ``until_m`` counts from the odom sample at ``pose_stamp``
+(CORE wall clock, as snapshot ``odom_pose.stamp``; D-758 0: the sample published with that stamp, else the
+one logged at or before it); travel since is the odom path length (unsigned:
 reversing never adds room). The gate only zeroes a tick's decision, so the body stop (D-422), IR guard
 (D-491) and E-stop, which zero it first, always win. Manager lock throughout; a mode change resets it."""
 import logging
@@ -25,16 +26,28 @@ ARC_ANCHOR_MAX_RADIAL_M = .045
 #: D-744 5: the heading may be this far off the placed circle's tangent at the opening: above the
 #: 10 deg pivot error measured in Gazebo (2026-10-13); more is a wrong map yaw, not a pivot error.
 ARC_ANCHOR_MAX_HEADING_RAD = math.radians(25.)
+#: D-760 3: legs whose newest ``seq`` is remembered at once. A leg is forgotten only when it was last seen
+#: before the oldest sample of the odom log: a late request for it carries an older pose_stamp and is refused
+#: (AUTHORITY_POSE_STALE, the robot stands). A new leg beyond this many live ones is refused (seq_legs_full).
+SEQ_LEGS = 8
 ARC_ANCHOR_FIELDS = ('centre_x_m', 'centre_y_m', 'pose_x_m', 'pose_y_m', 'pose_yaw_rad', 'odom_stamp_s')
+#: D-758 0: an echoed stamp this close to a logged one is that sample (Fleet returns the snapshot's float
+#: through JSON unchanged; a wall stamp near 1.8e9 s resolves to 2.4e-7 s).
+STAMP_MATCH_S = 1e-6
 
 
 class AuthorityMixin:
     _wall = staticmethod(time.time)  # CORE wall clock, the one odom_pose.stamp is on
+    authority_leased = staticmethod(lambda: False)  # D-760 2: CORE binds "a trip lease is open" (core/trip_lease.py)
+    _authority_seq = {}  # D-760 3: leg_id -> (newest seq seen, line clock); replaced, never mutated; outlives modes
 
-    def _init_authority(self):  # odom log: (wall, (epoch, frame), stamp_ns, path_m, x, y), >= 4 s at 50 Hz
-        self._odom_log, self._authority, self._authority_seen, self._authority_held = deque(maxlen=200), None, False, False
+    # odom log: (published wall stamp, (epoch, frame), stamp_ns, path_m, x, y, line clock), >= 4 s at 50 Hz
+    def _init_authority(self):
+        self._odom_log, self._authority, self._authority_held = deque(maxlen=200), None, False
+        self._authority_seen = bool(self.authority_leased())  # D-760 2: a lease open at the mode change latches too
 
-    def observe_return_pose(self, **sample):
+    def observe_return_pose(self, wall=None, **sample):
+        """``wall``: the stamp the state snapshot published for this sample (D-758 0); None: CORE's wall now."""
         accepted = super().observe_return_pose(**sample)
         with self._lock:
             ev, log = self._return_evidence, self._odom_log
@@ -45,34 +58,67 @@ class AuthorityMixin:
             if not (log and log[-1][1] == key):
                 log.clear()  # a new odom run: travel across the gap is unknown
             path = log[-1][3]+math.hypot(p.x-log[-1][4], p.y-log[-1][5]) if log else 0.
-            log.append((self._wall(), key, p.stamp_ns, path, p.x, p.y))
+            log.append((self._wall() if wall is None else wall, key, p.stamp_ns, path, p.x, p.y, p.received_at))
         return accepted
 
-    def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None):
-        """Store Fleet's authority. ``AuthorityRefused`` drops the held one too (the robot stands)."""
+    def _odom_entry(self, stamp):
+        """D-758 0: (entry, exact). The one entry published at ``stamp`` (a wall step cannot move it), else
+        (an older Fleet's or a computed stamp) the one logged at or before it on the wall clock, as before.
+        (None, True) refuses: two entries share the stamp (review 1: the newer counts less travel, more room),
+        or no entry does while the log's wall stamps step back (review 3: "at or before" lands after the step)."""
+        log = self._odom_log
+        hits = [e for e in log if abs(e[0]-stamp) <= STAMP_MATCH_S]
+        if hits:
+            return (hits[0] if len(hits) == 1 else None), True
+        if any(a[0] > b[0] for a, b in zip(log, list(log)[1:])):
+            return None, True
+        return next((e for e in reversed(log) if e[0] <= stamp), None), False
+
+    def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None, shrink=False, seq=None):
+        """Store Fleet's authority. ``AuthorityRefused`` drops the held one too (the robot stands). D-760 3:
+        ``seq`` at or below the newest seen on the leg is ignored, as is a request without ``seq`` on a leg that
+        has one; ``shrink`` takes min(held end, this end) and never grants: with nothing live to shrink, none is held."""
         with self._lock:
             if self._mode.value == 'OFF':
                 raise AuthorityRefused('LINE_FOLLOW_NOT_ACTIVE', 'line-follow is OFF')
             now, log, ev = self._clock() if now is None else now, self._odom_log, self._return_evidence
             self._authority_seen, pose = True, self._fresh_pose(now)
+            seqs = {k: v for k, v in self._authority_seq.items() if k == leg_id or not log or v[1] >= log[0][6]}
+            ignored = ((None if leg_id not in seqs else 'seq_required') if seq is None else
+                       'stale_seq' if seq <= seqs.get(leg_id, (-1,))[0] else
+                       'seq_legs_full' if leg_id not in seqs and len(seqs) >= SEQ_LEGS else None)
+            if ignored:  # the held end and its ttl stay as they are
+                return dict(accepted=False, reason=ignored, authority=self.authority_status(now))
+            if seq is not None:  # seen before any refusal: a refused shrink still outranks an older extend
+                self._authority_seq = {**seqs, leg_id: (seq, now)}
             fresh = pose is not None and bool(log) and log[-1][1] == (ev.epoch, pose.frame)
             # The sample at or before pose_stamp: never less travel than since the pose.
-            base = next((e for e in reversed(log) if e[0] <= pose_stamp), None) if fresh else None
+            base, exact = self._odom_entry(pose_stamp) if fresh else (None, False)
             refusal = (('AUTHORITY_ODOM_STALE', 'no fresh odom to measure travel') if not fresh else
                        ('AUTHORITY_POSE_FUTURE', 'pose_stamp is newer than CORE odom')
-                       if pose_stamp > log[-1][0]+STAMP_TOL_S else
+                       if not exact and pose_stamp > log[-1][0]+STAMP_TOL_S else
                        ('AUTHORITY_POSE_STALE', 'pose_stamp is older than CORE odom history') if base is None else None)
             if refusal is not None:
                 self._authority = None
                 raise AuthorityRefused(*refusal)
             end, a = base[3]+until_m, self._authority
-            if a is not None and (a['leg_id'], a['key']) == (leg_id, base[1]) and now <= a['expires_at']:
-                if end < a['end']-SHRINK_TOL_M:  # never shrinks: ignored, so it expires unless extended
+            live = a is not None and (a['leg_id'], a['key']) == (leg_id, base[1]) and now <= a['expires_at']
+            if shrink and not live:  # a shrink never grants: Fleet wants less, so whatever is held goes too
+                self._authority = None
+                return dict(accepted=False, reason='shrink_none_held', authority=self.authority_status(now))
+            if live:
+                if end < a['end']-SHRINK_TOL_M and not shrink:  # never shrinks unasked: ignored, so it expires
                     logging.getLogger(__name__).info('authority %s on leg %s ignored: %.3f m short', authority_id, leg_id, a['end']-end)
                     return dict(accepted=False, reason='shrink', authority=self.authority_status(now))
-                end = max(end, a['end'])
+                end = min(end, a['end']) if shrink else max(end, a['end'])
             self._authority = dict(authority_id=authority_id, leg_id=leg_id, end=end, key=base[1], expires_at=now+ttl_s)
             return dict(accepted=True, reason=None, authority=self.authority_status(now))
+
+    def _authority_on(self):
+        """Enforced: by config, by a request this session, or once a trip lease was seen open (D-760 2: latched
+        until the mode changes, so a lease that ends before the first authority frees nothing). Locked."""
+        self._authority_seen = self._authority_seen or bool(self.authority_leased())
+        return self._config.authority_required or self._authority_seen
 
     def _authority_state(self, now):
         """(state, remaining_m, reason); HOLDING latches with the D-422 stop gap + hysteresis. Locked."""
@@ -88,7 +134,7 @@ class AuthorityMixin:
     def authority_status(self, now=None):
         """GET /line-follow ``authority`` while enforced, else None (the response stays as before)."""
         with self._lock:
-            if not (self._config.authority_required or self._authority_seen):
+            if not self._authority_on():
                 return None
             now = self._clock() if now is None else now
             (state, remaining, reason), a = self._authority_state(now), self._authority or {}
@@ -97,7 +143,7 @@ class AuthorityMixin:
                 expires_in_s=None if not a else round(max(0., a['expires_at']-now), 3)).model_dump()
 
     def _authority_gate(self, now, decision):
-        state = (self._config.authority_required or self._authority_seen) and self._authority_state(now)
+        state = self._authority_on() and self._authority_state(now)
         if not state or state[0] == 'FREE' or not (decision.linear or decision.angular):
             return decision
         if self._status.state not in ('LOST', 'OFF'):
@@ -133,13 +179,15 @@ class AuthorityMixin:
 
     def _odom_at_stamp(self, stamp, now):
         """D-744 3 (D-759 3 too): (CORE's odom pose logged at `stamp`, the odom key, the path length
-        now), or why a map pose computed for that stamp cannot be paired with CORE's odom."""
-        age = self._wall()-stamp
+        now), or why a map pose computed for that stamp cannot be paired with CORE's odom. D-758 0: a
+        published stamp is aged on the line clock; any other on the wall clock, as before."""
+        base, exact = self._odom_entry(stamp)  # the sample the map pose was computed for
+        if exact and base is None:
+            return 'no_sample'
+        age = now-base[6] if exact else self._wall()-stamp
         if not -STAMP_TOL_S <= age <= ARC_ANCHOR_MAX_AGE_S:
             return 'stale' if age > 0 else 'future'
         pose, ev, log = self._fresh_pose(now), self._return_evidence, self._odom_log
-        # the odom sample the map pose was computed for: the one logged at or just before the stamp
-        base = next((e for e in reversed(log) if e[0] <= stamp), None)
         if pose is None or base is None or stamp-base[0] > STAMP_TOL_S:
             return 'no_sample'
         key = (ev.epoch, pose.frame)

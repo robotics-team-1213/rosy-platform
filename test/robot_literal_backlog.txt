@@ -17,7 +17,7 @@ middleware/perception/config/robot.yaml
 middleware/perception/nodes/calibration_relocation.py
 middleware/perception/nodes/dock_observer_node.py
 middleware/perception/sensors/line_observation/ir_overlay.py
-middleware/perception/nodes/line_observer_overrides.py
+middleware/perception/sensors/line_observation/line_observer_overrides.py
 middleware/perception/nodes/goal_escape.py
 middleware/perception/nodes/ir_adc_node.py
 middleware/perception/sensors/line_observation/line_observer_node.py

@@ -2466,8 +2466,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
-        # D-540 (d): goal, trip, cancel, LED and map pin wrap whole, never wider than the row.
-        assert len(action_widths) == 5 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        # D-540 (d), D-440 6: goal, trip, cancel, LED, map pin and sleep/wake wrap whole, never wider than the row.
+        assert len(action_widths) == 6 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
         assert all(w <= actions_width + 1 for w in action_widths), action_widths
         _open_cards(page)
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")

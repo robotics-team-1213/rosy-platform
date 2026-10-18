@@ -13,6 +13,7 @@
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
 | D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 | Proposed |
 | D-1 | 단일 프로세스 (rclpy + uvicorn 스레드) | Accepted |
 | D-2 | 자체 cmd_vel 멀렉서 (Nav2 출력 remap) | Accepted |
 | D-3 | Flask 완전 대체 — FastAPI 전면 이관 | Accepted |
@@ -362,7 +363,7 @@
 | D-359 | 테마는 팔레트 한 블록만 바꾼다 — 토큰을 팔레트·파생·역할로 나누고, 공용 부품이 표면별 사본을 대체하며, 반응형은 세 단 어휘를 쓴다 | Accepted (2026-09-30, 웹 토큰 구조·공용 부품·반응형·계약 시험; D-345의 라이트 팔레트 금지 문장 대체; 네이티브·LCD는 dark 고정) |
 | D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 | Proposed (검출 위치·제안 API·불일치 표시·레이어 토글; 사이트 설정·sighting 반영 미결정) |
 | D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 | Proposed (등록 흐름·자격·결속·저장·수명 결정만; 구현·CORE 이미지·TLS·DEVICE/FIELD 수용 아님) |
-| D-362 | 파일 크기 예산은 코드 유형별 단일 게이트가 지킨다 — 생산 `.py`/`.cpp`/`.hpp`/`.sh` 600줄, 웹 자산 `.js`/`.html`/`.css` 800줄, 1000줄 초과 파일은 성장 허용량 0; 게이트는 `src/` 패키지와 `deploy/`·`tools/`·`firmware/`까지 본다. 줄 수는 분할 근거가 아니라 `split`/`accept` 판정 의무의 트리거다 (X1 계승, D-168 P6 확장) | Accepted (2026-09-30, 정책·게이트 범위만; 시험 코드·데이터 파일 면제, 분할 실행은 계획 `2026-09-30-file-size-budget-and-refactor-queue.md`의 P0–P2 대기열) |
+| D-362 | 파일 크기 예산은 코드 유형별 단일 게이트가 지킨다 — 생산 `.py`/`.cpp`/`.hpp`/`.sh` 600줄, 웹 자산 `.js`/`.html`/`.css` 800줄; 게이트는 `src/` 패키지와 `deploy/`·`tools/`·`firmware/`까지 본다. 줄 수는 분할 근거가 아니라 `split`/`accept` 판정 의무의 트리거다 (X1 계승, D-168 P6 확장) | Superseded by D-766 (2026-10-15; 원래 Accepted 2026-09-30, 정책·게이트 범위만; 시험 코드·데이터 파일 면제, 분할 실행은 계획 `2026-09-30-file-size-budget-and-refactor-queue.md`의 P0–P2 대기열) |
 | D-363 | 주행 화면의 카메라는 원본 비율 그대로 잘림 없이 보이고, 조작부·HUD 는 영상을 가리지 않으며, 현장 운용은 설치 앱으로 연다 | Accepted (2026-09-29 화면; D-323 §5.2 풀블리드 변경; 운전자 배율 확대 보강) |
 | D-364 | 차선 자동은 선을 따라가는 것이 아니라 차로 안을 지키는 것이며, 인식은 녹화 재생 벤치와 헤드리스 가제보에서 먼저 통과한다 | Accepted (2026-09-30 설계; 실물은 로봇 복귀 뒤 승인 핫픽스) |
 | D-365 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 | Accepted (설치 형식 결정; 구현·장치·현장 수용 별도 HOLD) |
@@ -441,6 +442,7 @@
 | D-437 | 공개 저장소의 빌드는 GitHub Actions hosted runner에서 하고, 서명만 로컬 오프라인 키로 한다 | Accepted (2026-10-03, 사용자 결정; 사이트 후보 workflow 첫 실행은 push 승인 뒤, 사이트 키 미준비) |
 | D-438 | 막힌 로봇의 판단은 Fleet 판단기가 규칙 → 비전 모델 → 사람 순으로 내린다 | Accepted (2026-10-03, 사용자 승인; D-407 §2 의 답하는 주체와 Fleet 쪽 영상 해석을 고침, 사전 주의점은 다음 ADR, 문서만) |
 | D-439 | 웹 앱은 공용 디자인과 작업 중심 정보 위계로 순차 개선한다 | Accepted (2026-10-03) |
+| D-440 | 기기별 전원 정책 — 제품이 기기를 선언하고, 한 벤치 스위치 뒤에서 모드별로 끄거나 줄인다 | Proposed (2026-10-04 사용자 요청, 2026-10-13 main에 옮김; 벤치 스위치 `power.device_policy.enabled` 기본 false, 깨운 기기는 확인 보고 뒤에만 준비, 토크 해제는 후속 ADR; 호스트 pytest만) |
 | D-441 | 사이트 스택 자동 업데이트: main push 빌드 → 서명 PC 자동 서명 → 사이트 호스트 자동 설치·롤백 | Accepted (2026-10-04, 사용자 결정; D-437 수동 실행·손 서명과 D-301 운영자 승인 개정, workflow push 실행·서명 PC 예약 작업·호스트 설치와 첫 자동 갱신은 미검증, 사이트 키 미준비) |
 | D-442 | 로봇 움직임 요청은 ROS 무의존 Motion Intent(`contracts/motion`, 목표형 `base.pose_goal`·`base.path_follow`·`arm.tcp_pose`와 서보형 `base.twist`·`arm.joint_trajectory`·`arm.gripper`; SI 단위·frame·출처·등록표가 정하는 우선순위 등급·`attempt_id`·`envelope_ref`·유효 기간·정지 의미)로, 장치 출력은 장치당 binding 하나인 DeviceControlPort(`capabilities`·`submit(GuardedMotion)`·`cancel`·`state`·`estop_status`, writer만 쥐고 Arbiter→Safety Guard 뒤; Pinky `/cmd_vel` Twist, OMX `ActionPort`)로; OMX 우선순위표(EMERGENCY>SAFETY>MANUAL>SKILL>POLICY)와 HOLD를 거치는 MANUAL 선점; 행동 불변 이행 a→b→c→d | Accepted (2026-10-04, 사용자 수용; D-429 후속 1·D-399 후속 5; 문서만, 요청 번호 D-439는 다른 브랜치에서 사용 중; 리뷰 REVISE 반영과 사용자 결정 U1–U3 — 자율 출처는 활성 MANUAL을 빼앗지 못함(Pinky 주행 목표 409, 착지 전까지 알려진 예외), `PinkyTwistPort`는 publish를 옮기지 않는 얇은 래퍼, OMX는 Arbiter 전용 `preempt(reason)`→owner HOLD; 이전 직후 첫 안전 작업) |
 | D-443 | `rosy.site-device/1` — 사이트 장치(신호등·도크, 나중에 컨베이어·문·PLC)의 공통 호스트 타입 계약: 식별·자격증명, measured/claimed를 가른 상태, heartbeat·`last_seq`, kind별 semantic 동사, ack와 관측된 효과의 분리, 버전; 지금 신호등·도크 HTTP는 wire 변경 없이 `signal/1`·`dock/1` profile; 장치별 단일 감독자(신호등은 Fleet), 로봇은 읽기만, ER2는 후보만, 장치 로컬 failsafe(신호 10 s 적색 점멸, 도크 0 V), 안전 회로 쓰기 금지; PLC/Modbus 어댑터 `integrations/fieldbus/modbus` 레지스터 맵·범위 단위 안전 주소 거부(시험은 D-430 소유)·변하는 watchdog·연결당 어댑터 하나; 재단언은 감독 연속성과 의도 나이 안에서만(현재 코드 위반, 이행 (b2)), seq 재동기화와 안전 방향 1회 재시도, non-agree 열거와 admission 술어; 동작 변경 없는 이행 (a)–(d); Fleet 상시 감독과 운영자 presence 동안만 수동 점등(떠나면 failsafe); Q1–Q10 결정(Q5·Q8·Q9 사용자 결정, 나머지 권고안; 2026-10-04); 코드 결함은 이전 직후 첫 안전 작업 | Accepted (2026-10-04, 사용자 수용; D-429 후속 2; 리뷰 1차 반영; 문서만, 코드·펌웨어·wire 변경 없음) |
@@ -556,6 +558,7 @@
 | D-554 | `v13-drivable` 학습 라벨은 사람 검수 차선 마스크(AI PC `data-v13`)의 좌·우 선 사이 배경을 drivable로 유도하고, 선 바깥은 255, 벽만 음성; 9항 선 바깥 띠(0.5·도로 폭) 음성; 10항 가까운 행 경계 연장·경계=흰 선 가운데(소비자가 선 안쪽 절반 포함); 판정자(카나리아 90% 이상 검출 필수, Qwen3-VL 8B는 0/17로 탈락)는 `concern` 프레임만 제외; `annotation_origin: derived_from_reviewed_lanes`로 사람 승인과 구분, 평가 정답 아님; provisional 카메라 출처는 이 shadow candidate에만 허용(`camera_provenance: provisional` 표시); shadow intake는 재생·지연·부모 차선 동등성 게이트(heldout drivable 정의 불일치로 고정 평가 제외); 결과는 candidate이며 lane_seg shadow 슬롯까지만, 조향 권한 없음 | Accepted (2026-10-09, 사용자 결정; 학습·shadow 주행 별도 증거) |
 | D-557 | 링 주행의 다음은 새 제어가 아니라 모델 PC에서 D-520 호 한 바퀴다 | Accepted (2026-10-09, 사용자 요청으로 순서를 기록. 시뮬 실행·바닥 이동·코드 변경은 이 기록이 하지 않음) |
 | D-555 | 콘솔 등록 로봇의 허브 페어링 — Fleet이 로봇마다 허브 자격을 만들어 digest만 남기고, TLS로 묶인 등록으로만 로봇에 보낸다 | Accepted (2026-10-09, 사용자 설계 승인 Q1 TLS 신원에 묶인 관리자급 자리·Q2 TLS 등록만; 보안 검토·Safety-Review 대상, SOURCE·호스트 테스트만) |
+| D-556 | 신선한 odom과 영상이 기억한 한쪽 경계의 차체 횡단에 동의하면 HOLD한다 | Proposed (2026-10-09, SOURCE 후보; 2026-10-13 main 포팅, 기본 꺼짐; 실영상 검수·SIM·DEVICE·FIELD 별도) |
 | D-563 | drivable이 로봇 앞 도로를 "못 간다"로 배운 문제(아래 40% 라벨 64%가 255, 양쪽 선이 화면 밖) → 보이는 선 아래 연장(D-554 10항, v13.1.00), 경계=흰 선 가운데(소비자가 안쪽 절반 포함), 다음은 녹화에 지도 자세 저장 후 지도 도로 형상 투영 라벨(`map_projected`, 자세 1차 출처=천장 BEV ArUco + 오도메트리, 첫 후보 v13.3.00), 평가에 앞길 drivable 비율 추가 | Accepted (2026-10-09, 사용자 결정; 3항 세부 계약은 구현 전 추가) |
 | D-558 | drivable 모델은 불변 revision(D-532) 옆에 `model_version` `v<major>.<minor>.<patch:2자리>`를 붙인다: major=학습 계열(원본 자료 세대·부모 차선 모델), minor=라벨·출력·게이트 규칙, patch=같은 규칙의 재학습; 한 버전에 revision 하나, 원장 `drivable_versions.yaml`, intake가 형식·major·중복을 확인; 982b09a9=`v13.0.00`(rejected), D-554 9항 첫 후보=`v13.1.00` | Accepted (2026-10-09, 사용자 결정) |
 | D-566 | `v13.1.00`(4e60dac5)은 val IoU 0.901이나 선 바깥 오탐 0.496 → shadow 게이트에 `val_outside_band_fp ≤ 0.15`와 앞길 drivable 비율(라벨의 0.8배 이상) 추가, `v13.1.01`은 클래스 균형 가중치와 오탐 반영 epoch 선택으로 재학습; 모델 PC 긴 작업은 `systemd-run --user` MemoryMax(60%)·swap 0·gpu_lease, 포그라운드 SSH 금지(intake 중 OMEN 정지 사건); `v13.1.01`도 오탐 약 0.46 → 소비자·평가에 차선 경계 flood fill 후처리(4항), 헤드 문맥 확대 실험 병행(5항, v13.2.xx) | Accepted (2026-10-09, 사용자 결정) |
@@ -769,6 +772,35 @@
 
 | D-760 | Fleet이 시작한 움직임의 한도 — 끊김은 5초 버티고, 거리 끝에서 서고, 한도는 기본으로 켠다 | Accepted |
 | D-763 | Fleet 새 작업의 종류 — 단계의 조합으로 만들고, 작업마다 주인은 하나이며, 승인은 위험으로 정한다 | Accepted |
+| D-764 | 사람·AI 검수 실행과 저장 버전 조회 | Accepted |
+
+| D-765 | Hugging Face 연결로 비공개 데이터셋과 모델 저장소를 관리 | Accepted |
+| D-766 | 줄 수 한도는 넘으면 나눈다 — 파일 600줄(웹 800), 크기 단위 10,000줄, 다시 자랄 허용(+150) 없음, 이미 넘은 것은 지금 줄 수로 묶음(ratchet), 개정 1, 개정 2(스크립트 600, 시험 파일 1,500) | Accepted |
+| D-767 | 앞 사건을 미리 안다 — 교차로·굽이 지시의 거리는 Fleet이 본 odom 표본에서 재고, 경로 미리보기는 Fleet이 먼저 만들어 보이고 재며, 로봇에는 사용자가 원할 때만 차로 신호에 실어 보낸다 | Accepted |
+| D-768 | 순간적인 차로 상실과 카메라 조향 튐에서 가던 경로를 짧게 유지한다 — 튄 프레임은 없는 프레임으로 보고 D-476 이어 가기로 넘긴다(SIM 먼저, 장치는 별도 결정) | Proposed |
+| D-746 | SD 카드의 기존 robot identity를 덮어쓰지 않고, 재이미징은 배포 설정을 유지한다 | Proposed |
+| D-769 | 기존 drivable 검수 자료를 활용한 강화학습과 Gazebo Fleet 검증 | Accepted |
+| D-773 | OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조 — 장치 권한 포트 하나, 모델·정책 배포 경로 하나, AI 출력은 사실과 후보 두 종류 | Proposed |
+| D-778 | 양팔 작업대 기반 — 팔 둘을 한 작업대로 묶고, 권한은 Fleet이 짝으로 주고, 동기는 작업대 조율자가 하고, 역할은 Step마다 정한다(L1만 연다, 실행 계약 변경은 후속 ADR) | Proposed |
+| D-779 | Cell Job 원장을 팔 단위로 나눈다 — 팔별 상태, Step 의존 관계, 팔별 Action, arm·zone claim, 대체 팔로 한 팔 모드 | Accepted |
+| D-780 | 작업대 조율자와 owner의 연결 — 조율자 전용 peer UID와 연산별 권한, COORDINATOR 정지 출처, 이름 붙은 barrier와 PHASE_WAIT, 단단한 결합 구간의 조율자 생존 확인 | Proposed |
+| D-781 | 혼합 레시피 rosy_cell.recipe/3와 팔 베이스 둘을 아는 놓는 순서 — 물체 목록, 계획이 정하는 공급 순서, 컴파일 규칙(지지·핑거 여유·도달성), 의존 관계로 남기는 순서 | Proposed |
+
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 | Accepted (2026-10-16, 사용자 설계·구현 승인; SOURCE·DEVICE·FIELD 별도) |
+| D-782 | OMX 행동 조건부 World 모델 도입 — 실행 전 검사기부터, 예측은 거절·보류 근거로만, 폴더는 실제 소비자가 생길 때 | Proposed |
+| D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
+| D-787 | OMX 시뮬레이션 모방학습 폐루프 — 고정 목표 도달 과제, 시뮬레이션 전용 lease와 reset, 실물 차단, 모델 PC native Gazebo | Proposed |
+| D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 | Accepted (2026-10-17, 사용자 결정; 구현·장치·현장 미확인) |
+| D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 | Accepted (2026-10-17, D-789 구현 소유권; 장치·현장 미확인) |
+| D-792 | Rosy Learning(학습 관리 센터) 이름과 모방학습 화면 — 카메라 촬영 기준을 점선 가이드로 재현하고 녹화 전에 확인한다 | Proposed |
+| D-794 | OMX 카메라 역할 — top은 작업대 고정, front는 손목; wrist 이름으로 단계 이행하고 학습은 두 카메라를 쓴다 | Proposed |
+| D-793 | OMX 학습 정책의 실물 실행 승인 관문 — 학습은 실행 권한을 바꾸지 않고, 위험하면 멈춘 뒤 API로 확인받는다 | Proposed |
+| D-800 | CORE-mediated OMX LeRobot observation and action requests | Proposed |
+| D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
+| D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
+| D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
+| D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
+| D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Accepted (2026-10-18, 사용자 결정) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

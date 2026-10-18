@@ -1,0 +1,7 @@
+# D-785 socket directories for native OMX hardware owners. Copy to /etc/tmpfiles.d/rosy-omx-owner.conf,
+# replace <owner-user> and <instance>, then run: systemd-tmpfiles --create /etc/tmpfiles.d/rosy-omx-owner.conf
+# GID 10001 is the Fleet container runtime group (deploy/site/secret_exec.py ROSY_RUN_GID). The setgid
+# instance directory makes the owner's 0660 control.sock group-owned by it, so only Fleet can connect.
+d /run/rosy 0755 root root -
+d /run/rosy/omx 0755 root root -
+d /run/rosy/omx/<instance> 2750 <owner-user> 10001 -

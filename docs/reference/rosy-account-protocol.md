@@ -81,6 +81,18 @@ capability는 서로 상속하지 않는다. UI는 관련 읽기 권한도 함�
 
 ## 중앙 계정 관리
 
+### Fleet 설정 안내와 앱 등록 조회
+
+`GET /api/fleet/auth/setup`은 same-origin 사람 쿠키만 허용한다. 활성 계정은 현재
+site의 `accounts.manage`, 전환 전 계정은 `policy-admin` 역할을 요구한다. 첫 비밀번호
+변경이 필요한 세션은 거절한다. 응답은 no-store이며 `configured`, `issuer`, `clients`
+(`client_id`, `redirect_uris`, `resources`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
+`configured`는 현재 프로세스의 Authority 설정 적용 여부이고 HTTPS·앱 로그인 수용 증거가 아니다.
+
+Fleet `/console/accounts`에 설정 상태·앱 등록·최초 설치 안내를 함께 둔다. 계정·권한 변경은
+아래 기존 API를 유지한다. HTTPS, 보호 키 설치, 앱 등록 변경은 기존 관리자 배포 경로가
+수행하며 Fleet에 호스트 root 권한이나 비밀 업로드 API를 추가하지 않는다.
+
 모든 경로는 유효한 변경 완료 사람 쿠키와 해당 site의 `accounts.manage`를 요구한다.
 unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail `{code,message}`를 쓴다.
 
@@ -219,6 +231,8 @@ generation을 승인한 중앙 subject와 session에 결속하며 매 사용/wor
 `learning.import`와 `learning.manage`를 다시 확인한다. 기존 공유 연결은 소유자가
 한 번 다시 연결해야 한다. 승인 세션의 로그아웃·회수·만료 후에는 공유도 중단된다.
 개인 세션과 무관한 무인 프로젝트 위임을 자동 생성하지 않는다.
+
+비공개 데이터셋·모델 저장소의 목록·생성·삭제는 `learning.publish`와 연결에 기록된 저장소 범위가 있을 때만 한다. `learning.import`와 `learning.manage`는 그 경로를 대신하지 않는다. 개인 연결의 생성 네임스페이스는 그 Hugging Face 사용자 이름이고, 프로젝트 연결은 허용 목록의 데이터셋·모델만 다룬다.
 
 참고: [OAuthlib 서버](https://oauthlib.readthedocs.io/en/latest/oauth2/server.html),
 [joserfc JWT](https://jose.authlib.org/en/guide/jwt/).

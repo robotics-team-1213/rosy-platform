@@ -15,7 +15,8 @@ def fake_gate():
     return SimpleNamespace(estop=False, last_cmd=command, last_cmd_time=object(),
         localization_status={'ready': True, 'stamp_ns': 1000000000},
         get_parameter=lambda _: SimpleNamespace(value=True),
-        now=lambda: SimpleNamespace(nanoseconds=1200000000), _publish_zero=lambda: None)
+        now=lambda: SimpleNamespace(nanoseconds=1200000000), _publish_zero=lambda: None,
+        zero_twist=Twist)
 
 
 def test_queued_loss_and_recovery_cannot_replay_pre_loss_command():

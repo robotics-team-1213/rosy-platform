@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import random
 import threading
 import time
 from typing import Callable, Optional
@@ -256,7 +257,11 @@ class SignalObserverMonitor:
         return bool(self._thread and self._thread.is_alive())
 
     def _run(self) -> None:
-        while not self._stop.wait(self.poller.config.poll_interval_s):
+        interval = self.poller.config.poll_interval_s
+        # Network load: robots sharing one observer start at random offsets, not in lockstep.
+        if self._stop.wait(random.random() * interval):
+            return
+        while not self._stop.wait(interval):
             try:
                 self.tick()
             except Exception:  # noqa: BLE001 — one tick never kills the loop

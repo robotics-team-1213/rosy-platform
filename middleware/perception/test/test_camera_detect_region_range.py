@@ -73,6 +73,7 @@ def test_invalid_exposure_tick_keeps_raw_frame_and_evidence_fresh(node_module, m
         _cam=types.SimpleNamespace(capture_array=lambda _: pixels),
         _worker=CameraPreprocessWorker(CameraPreprocessProfile(rotate_deg=0)),
         _frame_id=0, _maybe_lock=lambda: None, _watch_exposure=lambda _frame: None,
+        _power_gate=types.SimpleNamespace(plan=lambda: 'run'), _power_held=lambda plan: plan != 'run',
         get_clock=lambda: types.SimpleNamespace(now=lambda: types.SimpleNamespace(nanoseconds=1_000_000_000)),
         _line_controls_stable=lambda: True,
         _publish_front=lambda frame, stamp: raw.append((frame, stamp)),

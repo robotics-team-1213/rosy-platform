@@ -66,7 +66,9 @@ def _api():
     r2["line_stuck"] = STUCK
     r2["state"]["line_follow"] = {"mode": "CAMERA_LINE", "state": "HOLD", "stuck": STUCK}
     r3 = tv._robot("rosy_03", 0.0, 1.2, 3.14)
-    r3.update(online=False, error="robot unreachable: ConnectError", power_health=None, power_health_age_s=None)
+    # The shape console_view._error_of sends; a bare string drew "닿지 않음: undefined" on the card.
+    r3.update(online=False, error={"reachable": False, "code": "ConnectError", "message": "ConnectError"},
+              power_health=None, power_health_age_s=None)
     api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 2, "total": 3}, "ts": 0.0, "robots": [r1, r2, r3]}
     return api
 
@@ -133,6 +135,9 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             if name == "console":
                 count = page.locator('main [aria-labelledby="map-heading"] #online-pill')
                 expect(count).to_have_text("2/3", timeout=15000)
+                offline = page.locator('article.robot-summary[data-robot-id="rosy_03"]').first
+                expect(offline).to_contain_text("닿지 않음: 접속 실패")
+                assert "undefined" not in page.locator("main").inner_text(), name
             else:
                 expect(page.locator("#online-pill")).to_have_count(0)
             expect(page.locator("#estop")).to_be_enabled()

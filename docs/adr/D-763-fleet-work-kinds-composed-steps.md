@@ -19,9 +19,9 @@ D-741 7항은 Fleet의 "로봇에게 시키는 일"을 `작업` 영역 하나에
 
    | D-760 단계 | 상태 | 저장소에서 확인한 것 |
    |---|---|---|
-   | 1 규칙 M 판정과 경고 | 검토 승인, origin 미착지 | `fleet/traffic/rule_m.py`가 로컬 `main`(`41a19818e`, `da6ed28eb`)에 있고 `origin/main`에는 없다 |
-   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.225 | 구현됨, 재검토 중, 미착지 | 이 워크트리의 `MAX_TTL_S`는 아직 2.0이다(`line_authority.py`). 브랜치 내용은 확인 못 함 |
-   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 시작 안 함 | 코드에 없다(이름 검색) |
+   | 1 규칙 M 판정과 경고 | 로컬 `main`에 착지, origin 미착지 | `fleet/traffic/rule_m.py` |
+   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.226 | 로컬 `main`에 착지(2026-10-14), origin 미착지 | `MAX_TTL_S = 5.0`(`line_authority.py`), 능력 `line_follow_authority_under_lease`·`line_follow_authority_shrink`(`core_common/protocol/controls.py`) |
+   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 로컬 `main`에 착지(2026-10-14), origin 미착지 | `link_wait`가 `ledger/trip_admission.py`·`trip_ports.py`·`trip_progress.py`에 있다 |
    | 6 `LINK_UNBOUNDED_MOTION` 거절, 기본값 켜기 | Gazebo·장치 끊김 시험 뒤 | 코드에 없다 |
 
    trip 밖에서 Fleet이 차선 주행을 켜는 길(`console.line_follow_mode`)은 아직 있고 D-760 7항이 6단계에서 닫는다.
@@ -268,7 +268,7 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 1. **팔 단계 중 lease가 만료하면 CORE와 팔은 무엇을 하는가(팔이 서는가, 든 물체는 어떻게 되는가).** 조각 6의 Safety-Review가 정한다. 정하기 전에는 팔 단계가 든 종류를 열지 않는다.
 2. **가져오기를 여는 조각의 검토.** 개정 2 질문 1은 첫 대상을 고정 팔 인계로 정했지만 근거가 약하다. 가져오기를 여는 조각은 D-55·D-664의 팔 문구를 읽은 따로의 검토를 받는다.
 3. **기다림 사유의 번호 붙은 목록과 상한.** 차로 규제 작업이 D-573 개정 5 착지 뒤 D-573·D-525 개정에 싣는다. 8항의 초안 표는 그때까지 참고다.
-4. **능력 이름의 확정.** 개정 2 질문 10 (b)·(c)의 이름 가운데 `line_follow_authority_under_lease`(D-760 2단계 브랜치)와 횡단보도 게이트·교차로 신호 능력은 이 브랜치의 `core_common/protocol/controls.py`에 없다. 제안이고 해당 조각에서 확정한다.
+4. **능력 이름의 확정.** 개정 2 질문 10 (b)의 `line_follow_authority_under_lease`는 확정이다(D-760 2단계, API v1.226, `core_common/protocol/controls.py`). (c)의 횡단보도 게이트·교차로 신호 능력은 차선·규제 작업이 `lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`가 켜졌을 때만 참)와 `lane_junction_signal`(`junction_signal_enabled`가 켜졌을 때만 참)로 정했고, 아직 코드에 없다. API 버전을 올리는 그 작업의 브랜치에서 확정한다.
 
 ### 근거의 경계
 
@@ -308,7 +308,7 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 | 7 실패 횟수 | 작업 층은 실패 한 번이면 사람이다. "두 번"은 막힘 해결기 안(D-622)에만 둔다. 규제 대기(횡단보도 보는 중·기다림, 신호 빨강, 통행권 FREE 아님)는 실패가 아니라 기다림이다. 기다림이 상한을 넘으면 먼저 막힘 해결기로 가고, 해결기가 사람에게 넘긴 것만 작업의 실패 한 번으로 센다. 차로 규제 세션의 SIM 보고: 지금 `crosswalk_blocked`는 곧바로 콘솔로 가 trip을 정체로 끝냈다(같은 횡단보도에서 두 번). 밖의 조각 A가 고친다 | 3 / 0 / 0 | 3·8항 |
 | 8 Task navigate와 `/route` | 남기고 새 작업에 올리지 않는다. D-760 6단계 **전에** 다시 본다(정정 의견 채택): 6단계 뒤에는 임대 있는 목표(`dispatch` 출처, correlation id)를 보낼 때만 동작한다 | 2 + 정정 찬성 1 / 0 / 0 | 6항 |
 | 9 기다림 사유와 상한의 소유 | 차로 규제 작업. 초안 상한 표는 참고로 남고, 번호 붙은 목록은 D-573 개정 5 착지 뒤 온다 | 3 / 0 / 0 | 8항, 남은 질문 3 |
-| 10 다단계 종류의 조건 | (a) 현장 설정: trip lease와 통행권(`fleet.traffic.authority`) 둘 다 켜짐. (b) 로봇 능력: `trip_lease`, `goal_lease`, 그리고 `line_follow_authority_required` 또는 `line_follow_authority_under_lease`(D-760 2단계, API v1.225)를 알린다. 옛 릴리스에는 다단계 종류를 내놓지 않는다. (c) 단계의 경로가 횡단보도나 신호 장소를 지나면 그 로봇의 CORE 능력에 횡단보도 게이트와 교차로 신호가 켜져 있어야 하고, 아니면 Fleet이 그 단계를 거절한다(규제 규칙이 조용히 빠지지 않게). 앞의 셋(`trip_lease`, `goal_lease`, `line_follow_authority_required`)은 `controls.py`에 있다. 나머지 이름은 제안이고 해당 조각에서 확정한다 | 2 + 추가 2 / 0 / 0 | 5항, 남은 질문 4 |
+| 10 다단계 종류의 조건 | (a) 현장 설정: trip lease와 통행권(`fleet.traffic.authority`) 둘 다 켜짐. (b) 로봇 능력: `trip_lease`, `goal_lease`, 그리고 `line_follow_authority_required` 또는 `line_follow_authority_under_lease`(D-760 2단계, API v1.226)를 알린다. 옛 릴리스에는 다단계 종류를 내놓지 않는다. (c) 단계의 경로가 횡단보도나 신호 장소를 지나면 그 로봇의 CORE 능력에 횡단보도 게이트와 교차로 신호가 켜져 있어야 하고, 아니면 Fleet이 그 단계를 거절한다(규제 규칙이 조용히 빠지지 않게). 앞의 셋(`trip_lease`, `goal_lease`, `line_follow_authority_required`)은 `controls.py`에 있다. 나머지 이름은 제안이고 해당 조각에서 확정한다 | 2 + 추가 2 / 0 / 0 | 5항, 남은 질문 4 |
 
 **승인 자리 구현 시도에서 나온 것(같은 개정).** 주차된 브랜치 `feat/fleet-work-approval-seat`의 시도가 찾은 사실을 저장소에서 확인했다. (1) 기다리는 작업을 거절하는 서버 경로가 없다 → 조각 5b. (2) Cell Job은 `/api/fleet/work`에 나오지 않고 Cell 제안은 서비스 계정만 한다 → Context 2와 같은 빈틈, 조각 4가 메우고 승인 자리(5c)는 그것을 기다린다. (3) 팔 Mission의 승인은 제안자만 한다(다른 사람에게 404) → 7항과 질문 5 결정 그대로. (4) 승인 대기의 승인은 확인을 한 번 묻는다 → 9항. (5) 대화 요청에 연결된 작업은 승인 대기에서 요청 검토로 보낸다 → 9항, 위험 표.
 
@@ -318,3 +318,47 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 
 **다른 기록에 남길 가리킴.** 이 개정은 다른 기록의 파일을 고치지 않는다. D-741, D-664, D-403의 해당 항과 D-420, D-541, D-494, D-573에는 착지 뒤 "D-763이 이 항을 바꾼다"는 한 줄을 따로 더한다.
 
+> 2026-10-14 부기(조각 1·3 착지): 조각 1의 "주인이 있는가" 함수는 `trip_guard.py`가 아니라 `operations/fleet/fleet/server/console/console_view.py`의 `trip_refusal()`이다. trip 감시가 설치되지 않은 콘솔에서도 답하고, 안전 경로 파일에 새 import가 필요 없어서다. `trip_runner.py`의 시작 거절(콘솔이 이미 움직이는 로봇)은 반대 질문이라 합치지 않았다. 조각 3은 브라우저 콘솔을 별도 크기 단위 `site_ui/console`로 등록한 뒤 들어갔다([계획](../plans/2026-10-14-fleet-console-size-unit.md)).
+
+> 2026-10-14 부기(조각 2): 기다림 사유와 상한은 `operations/fleet/fleet/server/ledger/trip_progress.py` `_wait_bound`에 있다(`link_wait`·`authority` = lease ttl, `signal` = `stall_s`, 횡단보도 `crosswalk_look`·`crosswalk_wait`·`crosswalk_held` = 15 s `CROSSWALK_WAIT_S`). CORE는 사유를 `line_follow.regulation_wait`(v1.227)로 알린다. 조각 2는 trip 읽기에 `waiting`·`bound_s`·`over_bound`를 낸다(v1.232). 상한을 넘으면 관제는 개입이 아니라 주의 "대기 상한 넘음 · <사유>"를 보인다(개정 2 질문 7).
+
+> 2026-10-15 부기(조각 6, 브랜치 `feat/fleet-job-holds-lease`, 미착지): CORE는 `PUT /trip-lease`의 `job_id`(v1.236)로 연 lease를 단계 사이 IDLE에서 끝내지 않는다(`middleware/core/gateway/core/trip_lease.py` `end_on_mode`). 주인 아닌 토큰의 IDLE·취소·line-follow OFF, MANUAL·도킹, 비상 정지, 넘겨받기, 만료, 주인 해제는 그 lease도 끝낸다. 단계 사이 lease를 갱신하는 주인은 Fleet `traffic/trip_lease.py` `TripLease.period` 하나이고 `/trip-lease`만 보낸다. 통행권은 `AuthoritySender`(열린 trip만), 목표 임대는 trip 루프의 갱신기만 늘린다. 작업의 승인 관문(개정 2 질문 10 (a)(b))과 hold는 `ledger/trip_admission.py` `hold_job`이다(조각 표의 `dispatch_admission.py`가 아니다: claim은 원장이 잡고 Fleet 입구는 `trip_guard`가 내구 `mission` robot claim을 읽는다). Fleet이 보낸 사람의 멈춤은 lease 주인 토큰이라 CORE가 lease를 두므로 Fleet이 `stop_job`으로 놓고 작업을 HOLD로 둔다. 질문 3의 사건 열기는 `TripLease.on_job_lost` hook이고 `hold_job`은 hook 없이 거절한다. hook을 사건·HOLD에 연결하는 것은 작업 원장에 운행 단계가 들어가는 조각 7이다. 질문 10 (c)는 능력 이름이 확정될 때까지 비어 있다. 남은 질문 1(팔 단계 중 만료)은 정하지 않았다: 팔 단계를 가진 종류는 hold하지 않는다. SIM과 장치는 하지 않았다.
+
+> 2026-10-14 부기(개정 2 질문 10 (c), 남은 질문 4): 능력 이름을 `lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`가 켜졌을 때만 참)와 `lane_junction_signal`(`line_follow.junction_signal_enabled`가 켜졌을 때만 참)로 확정했다(API v1.238, `core_common/protocol/controls.py`, 설정 기본값은 그대로 꺼짐). Fleet은 trip 시작·다음 바퀴·재계획의 능력 검사(`trip_checks/trip_admission.py` `_caps_checks`)에서 lane 간선이 있는 경로가 현장 지도 횡단보도 다각형(D-573 1)에 들어가거나 신호 구역(D-525 `fleet.traffic.signals`)을 지나는데 로봇이 맞는 능력을 `false`로 알리면 422 `TRIP_REGULATION_CAPS_MISSING` `{missing: {능력: [횡단보도 또는 신호 id]}}`로 거절한다. 작업의 이동 단계는 같은 trip 경로를 타므로 같은 검사를 받는다. 이 필드가 없는 옛 릴리스(능력을 알리지 않음)는 거절하지 않고 경고한다(사용자 결정 2026-10-15): trip detail에 `regulation_caps_unknown {능력: [id]}`를 남기고 Fleet 로그에 경고 한 줄을 쓴 뒤 시작한다. 새 릴리스가 모든 로봇에 깔리면 옛 릴리스도 `false`처럼 거절하도록 좁힌다. 횡단보도도 신호 구역도 지나지 않는 경로는 능력과 상관없이 시작한다. 새 릴리스에서 `junction_signal_enabled`는 기본 꺼짐이므로 신호 구역이 있는 현장은 그것을 켜야 그 구역을 지나는 운행이 열린다.
+
+> 2026-10-15 부기(조각 7, 브랜치 `feat/fleet-job-trip-steps`, 미착지). **사용자 결정: 작게 풀고 진행.** 하지 않는 것 7의 Step 원장 `CHECK(action_kind='CELL_TRANSFER')`를 등록부(`step_action_kinds.py`)의 종류만 받는 `CHECK(action_kind IN (...))`로 바꾼다. 이 기록은 그 CHECK만 푼다. D-420 §3 S1–S12는 맡지 않는다. 같은 원장에 다른 종류 CHECK는 없다(`fleet_cell_jobs`에는 없다). 레거시 `fleet_missions`의 `CHECK(action_kind='PICK_PLACE')`는 Step 원장이 아니라 그대로 둔다. 표 정의는 `cell/cell_job_store.py`에서 `work/step_ledger_schema.py`로 옮겼다. 이미 있는 DB는 store를 열 때 savepoint 하나 안에서 표를 다시 만들고 행을 모두 옮긴다. 이관 버전은 2다. 그래서 옛 Fleet은 이관된 원장을 열지 않고 거절한다. 옛 장치 하달기는 `TRIP` 행을 잘못 읽을 수 있기 때문이다.
+>
+> 등록부에 `TRIP`(한 사람 승인, `simulation` 프로필만, grant 모델 없음)을 더했다. 장치 하달기(`StepJobDispatcher`)는 grant 모델이 없는 단계를 건드리지 않는다. 운행 단계는 trip 하나이고 따로 움직임 기록을 두지 않는다. 코드는 크기 단위마다 나눠 두었다: 루프 `missions/job_trip_steps.py`, 원장 행 `ledger/job_trip_rows.py`, 입구 `trips/trip_job_routes.py`.
+>
+> 단계마다 로봇의 지금 자세에서 로봇 카드와 같은 계획 경로(`trip_routes`의 `plan`)로 계획하고, `TripRunner.start(job_id=, start_token=)`로 시작한다. 그래서 시작 검사가 같다. 목표는 `trip` 출처이고 `operator` 출처가 아니다. 규칙 M은 그 단계를 열린 trip으로 본다. 작업은 만들 때 `robot` claim을 잡고(D-420 §4.5), 끝(마지막 단계의 `arrived`, 운영자 취소)까지 쥔다.
+>
+> 다음 단계로 넘어가는 것은 `arrived` 하나뿐이다. 다른 끝, 거절된 시작, 작업 lease 잃음, 비상 정지, 정지 래치는 작업을 HOLD로 두고 claim을 `HELD`로 두며 lease를 놓는다. lease를 놓을 때 열려 있는 단계 trip은 먼저 끝낸다(`stop_job`). `TripLease.on_job_lost`는 연결돼 있다. lease를 잃으면 그 작업은 HOLD가 원장에 닿기 전에도 표시되고, 루프가 그 HOLD를 본 뒤에야 재개로 새 lease를 받을 수 있다. 로봇이 IDLE이라고 가정하지 않는다(`robot_state: unconfirmed`).
+>
+> 누가 쓴 HOLD든(정지 래치, 재시작, 이 루프) 사건이 하나 열린다(원장 이벤트 `TRIP_JOB_CASE_OPENED`). 사건은 사람 단계의 문제 기록(`fleet_problem_episodes`, kind `job_hold`, AI PC가 `/api/fleet/ai/episodes`로 읽는다)과 작업 목록의 `개입 필요`다. CORE 막힘 사건의 알림 outbox는 아니다.
+>
+> 재개는 지금의 `POST /api/fleet/cell-jobs/{id}/resume`(이름 있는 운영자)이다. 재개한 뒤 다음 tick이 새 lease를 받는다(`hold_job`, 질문 10 (a)(b) 관문). 그리고 새로 계획하고, 출발 검사를 거쳐 새 trip을 연다. renew가 두 주기 안에 확인되지 않은 lease로는 새 단계를 시작하지 않는다. 자동 재시도와 다시 열기는 없다. Fleet이 재시작하면 열린 trip 작업은 모두 `FLEET_RESTARTED`로 HOLD된다.
+>
+> 입구는 `POST /api/fleet/trip-jobs` `{robot_id, steps:[{to, via}]}`이다. 이름 있는 운영자만 쓰고, `simulation` 프로필이며 Step 원장이 있을 때만 있다. `GET /api/fleet/work`의 `kinds`에는 아직 `TRIP`이 없다. 계약의 Literal이 두 값이고 화면 폼도 없다.
+>
+> **SIM에서 찾아 고친 것: trip 사이의 넘겨받기.** 차로 trip이 `arrived`로 끝나도 CORE는 그 trip의 `stop`을 쥔 채(`executing`) 차선 추종에 남는다. 그 자리에서 시작한 다음 trip(작업의 다음 단계, 운영자의 다음 trip)은 `_core_busy`가 남의 seq를 보고 첫 지시를 보내지 않았다. 그래서 `stall`로 끝났다(AI PC Gazebo r4, main `ccb1a2ae0`). 이것은 SIM 고유가 아니라 Fleet의 trip 사이 넘겨받기 결함이다. 이제 아무 지시도 보내지 않은 trip은 그 로봇의 직전 차로 `arrived`가 남긴 정지 하나만 바꿀 수 있다. 그 정지는 seq와 장소로 기록되고(`TripRunner.held_stops`), 다음 trip이 시작할 때 한 번 쓰이며, 멈춤이나 비상 정지가 오면 지워진다. 그리고 trip의 다음 장소에 있어야 한다(`trip_progress.inherited_stop`). 멈춤이 보낸 정지와 다른 송신자의 지시는 seq가 달라 그대로 기다린다. 저장소에서 CORE `POST /line-follow/junction`을 보내는 곳은 Fleet trip과 Fleet 멈춤뿐이다.
+>
+> 이 고침 뒤 AI PC Gazebo(2대, `map_v2_fleet`, 조정자 rig의 launch overlay)에서 Fleet API로 두 단계 작업(SW, SE)을 돌렸다. 두 단계 모두 실제로 달려 `arrived`가 되었다. 2단계는 SW의 쥔 정지를 `right` 지시로 바꿔 출발했다. SE는 원형교차로 구역 안이라 D-517 3에 따라 정지가 SW로 옮겨졌다. 작업은 `GOAL_CONFIRMED`가 되었고 CORE lease는 풀렸다(`X:/DevTemp/job-trip-steps/sim/s7-1`). 검토 반영 뒤 HEAD에서 다시 돌렸고 같은 결과였다(s7-2, s7-3). 2단계는 쥔 `stop` seq 5를 `right` seq 6으로 바꿔 출발했다.
+>
+> 독립 안전 검토를 네 번 받았다. 모두 PASS WITH CONDITIONS였고, 지적은 모두 이 브랜치에서 고쳤다. 비상 정지와 lease 잃음 사이의 경합, 모든 HOLD에 사건 하나, 정지를 넘겨받는 소유 확인, 이관 버전, 재개 이벤트의 중복 지움이다. Cell Job의 재개도 같은 fence에서 두 번째 이벤트가 지워지던 결함을 함께 고쳤다(`approvals`).
+>
+> 고치지 않고 알린 것: 새 차선 세션(`WAITING no_observation`)에 바로 보낸 bend 지시를 CORE가 `aborted/no_anchor`로 거절하면 trip은 1 s 안에 `junction`으로 끝난다(r3·r5). 이것은 작업과 상관없는 trip 시작 문제다. 장치 시험은 하지 않았다.
+>
+> **남은 일(조각 7, 2026-10-15, 다른 PC에서 이어 갈 사람에게).** 착지와 푸시는 하지 않았다.
+>
+> - **한 것.** 위 부기의 코드와 시험. 독립 안전 검토 네 번(모두 PASS WITH CONDITIONS)의 지적을 모두 고쳤다. 마지막 검토의 LOW 셋도 고쳤다: 행을 쓰는 중인 lease는 tick이 건드리지 않는다, 구간이 없는 trip은 쥔 정지를 쓰지 않는다, 사건 중복 방지의 한계를 적었다. Gazebo s7-1·s7-2·s7-3은 모두 통과했다(s7-3은 HEAD `7116504e4`, pop 변경 뒤). 기록은 `docs/validation/d763-trip-steps-sim-2026-10-15/evidence/runs/`에 있다.
+> - **남은 것.**
+>   1. `7116504e4`의 전체 fleet 원격 실행에서 `test_trip_turn_map_entry.py::test_a_turn_to_a_lane_turn_map_entry_robot_carries_the_exit_lanes_heading_and_the_yaw_pair`가 NEW로 한 번 실패했다. 현장 PC(`robttt`)에서였고, 차이는 `expect_tol_m` 0.128 대 0.129다. 같은 파일이 HEAD `53c056f85`에서 모델 PC·AI PC로 두 번, base `ccb1a2ae0`에서 한 번 통과했다. 이 브랜치는 그 junction `expect` 계산을 바꾸지 않았다. 그래서 호스트에 따라 갈리는 값으로 보고 `known_failures`에는 넣지 않았다. 현장 PC에서 다시 나면 그 시험의 시계·반올림을 본다.
+>   2. 끝 커밋에서 `operations/fleet/test/`, `test/architecture/`, `middleware/core/gateway/test/`를 원격으로 다시 돌리고 `test/known_failures.py`와 비교한다.
+>   3. `Safety-Review:` trailer는 이 부기 커밋에 달았다. 착지 도구가 다른 커밋을 요구하면 같은 판정을 옮긴다. 마지막 판정은 "PASS WITH CONDITIONS — no regressions that could cause unsafe motion"이고, 조건(s7-3, LOW 셋)은 채웠다. `tools/harness/safety_review.py`는 이 브랜치가 safety 태그 경로를 건드리지 않는다고 본다.
+>   4. API 버전은 v1.242다(조정자가 동료 세션과 정했다). API Reference의 절과 변경 이력 행, 버전을 고정한 시험을 같이 바꿨다.
+> - **SIM 확인 실행법.** AI PC(`ai@100.108.76.123`)의 `~/rosy-test/d763-sim`을 쓴다. 조정자 rig(`setup.sh`로 main 빌드와 venv를 만든다)에 `docs/validation/d763-trip-steps-sim-2026-10-15/evidence/rig/`의 s7 파일을 놓는다. 이 브랜치를 `source-s7`에 checkout하고(`git fetch <bundle> HEAD && git checkout FETCH_HEAD`), `setsid nohup bash run-s7.sh <label> &`로 돌린다. 결과는 `artifacts/<label>/S7-timeline.json`과 `probe-result.json`이다. CORE는 main 빌드를 그대로 쓰고 Fleet만 이 브랜치다. 커밋된 `map_v2_fleet_multi_real.launch.py`로는 trip이 모두 stall한다(관측기에 IR 보정이 없다). 그래서 `evidence/rig/multi_real.overlay.launch.py`를 쓴다.
+> - **열린 질문.**
+>   1. 새 차선 세션(`WAITING no_observation`)에 바로 보낸 bend를 CORE가 `aborted/no_anchor`로 거절해 trip이 1 s 안에 끝난다(조정자 r3·r5). trip 시작 문제이고 이 조각 밖이다.
+>   2. 사건은 문제 기록과 작업 목록의 `개입 필요`다. 팀 알림 outbox로도 보낼지는 정하지 않았다.
+>   3. `GET /api/fleet/work`의 `kinds`에 `TRIP`을 더하는 일(계약 Literal, 화면 폼)이 남았다.
+>   4. Cell Job 재개 이벤트에 `approvals`를 더했다. 같은 fence에서 두 번째 재개가 지워지던 결함의 수정이고, Cell 쪽 소유자에게 알릴 일이다.

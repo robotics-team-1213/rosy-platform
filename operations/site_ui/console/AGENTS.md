@@ -17,14 +17,17 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | File | Description |
 |------|-------------|
 | `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
+| `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
+| `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
 | `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
 | `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |
 | `camera-backdrop.js` | D-513 7 / D-515 / D-560 camera picture path: Vision's map plane (`shared/vision-view.js` `createPlaneFeed`) drawn on `toPx`, the D-515 top-down warp (`camera-warp.js` math) only as the fallback, large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
 | `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
+| `devices/` | Device connection/approval UI and read-only discovery/address/app-directory adapters. Own size unit (D-766); enrollment and camera pairing keep their existing public asset URLs and API owners. `device-discovery.js` consumes injected Fleet reads and lifetime; it does not import registration writes. |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
-| `work-view.js` | D-664 source-scoped Task/Mission read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser); owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
+| `work/work-view.js`, `work/channel-request-view.js` | Work area, its own size unit `site_ui/console/work` (docs/plans/2026-10-15-fleet-console-work-unit.md); `channel-request-view.js` is the D-680 대화 요청 review. D-664 source-scoped Task/Mission/trip/Cell Job read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser; D-763 4: rows read the server's `visible_state` and trip wait, `show=new` shows only the server's `kinds`); owner scope remains server-side, source status/identity is preserved, no direct dispatch; selected PROPOSED Missions use the existing admit route with named-operator checks and current dispatch generation |
 | `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; at `/console?view=records` (D-741 8) the sub-nav's `show` filters the same answer and the opened incident's handoff and review stand in `#incident-judgment`; session, polling cadence and command authority remain in `console.js` |
 | `formation.js` | Formation panel |
 | `signals.js` | Traffic-signal cards |
@@ -38,6 +41,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-519 인증 API·HttpOnly 쿠키를 유지하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 토큰 접속과 화면 표시는 계정 단추 아래에 둔다(D-741) |
 | `shared/fleet-header.js`, `shared/fleet-header.css` | D-540 2 / D-741 3 공통 앱 바 — 네 문서가 같은 `<ui-topbar>` 마크업(`test_fleet_header.py`가 글자 그대로 고정)을 쓰고 연결 글(`실시간`·`지연`·`연결 끊김`)·시계·알림 수·계정 단추의 역할 글·개발 배지·계정 칸 접힘·비상 정지 규칙(401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름은 눌림)을 이 모듈 하나로 그린다. 한 줄이고 셸 칸(`.fleet-shell`)의 폭으로 접힌다. 로봇 연결 수는 관제 문서의 지도 머리에 있다. 문서 시트는 머리를 칠하지 않는다 |
 | `package.json` | `{"type": "module"}` so node can run the tests |
+| `calibration/` | Camera field/map proposal views, layer calculations and measured-preview approval view. D-766 size unit. Existing public `/console/assets/<basename>` URLs are preserved by the explicit static map |
 
 ## For AI Agents
 

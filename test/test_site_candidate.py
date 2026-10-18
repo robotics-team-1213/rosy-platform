@@ -7,7 +7,7 @@ import pytest
 from deploy.site.build_candidate import DOC_FILES, DEPLOY_FILES, build_candidate
 from deploy.site.verify_candidate import REQUIRED_DEPLOYMENT_FILES, REQUIRED_DOCUMENT_FILES
 
-COMMIT = "9541086c550c0c1142f7aefecc903987e149f9e2"
+COMMIT = "26f7baa44e55aa62b4c0ddc89b7627bf3a91f42b"
 
 
 def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_path):
@@ -29,7 +29,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
-                 "compose.pairing.yaml", "pairing-sync-token.template.txt"):
+                 "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
         "Requires=docker.service\n"
@@ -71,7 +71,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert manifest["source_commit"] == COMMIT
     assert manifest["image_tag"] == COMMIT
     assert manifest["platform"] == "linux/amd64"
-    assert len(manifest["images"]) == 3
+    assert len(manifest["images"]) == 4
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
@@ -99,7 +99,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py",
-                 "compose.pairing.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
         encoding="utf-8")
@@ -150,7 +150,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
-                 "compose.pairing.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
@@ -233,7 +233,8 @@ def test_site_candidate_syft_sbom_keeps_the_scout_file_layout(tmp_path):
 
     syft_calls = [call for call in calls if call[0] == "syft"]
     assert [call[2] for call in syft_calls] == [
-        f"docker:rosy-site-{service}:{COMMIT}" for service in ("fleet", "vision", "proxy")]
+        f"docker:rosy-site-{service}:{COMMIT}"
+        for service in ("fleet", "vision", "proxy", "postgres")]
     assert not any(call[1:2] == ["scout"] for call in calls)
     for service, row in manifest["images"].items():
         assert row["sbom"] == f"sbom/{service}.spdx"
