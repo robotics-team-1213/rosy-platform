@@ -143,7 +143,7 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
     pages = {
         "operations/site_ui/console/index.html": "console",
-        "operations/site_ui/console/install.html": "console",
+        "operations/site_ui/console/installation/install.html": "console",
         "operations/site_ui/console/cell/cell.html": "console",
         "middleware/robot_ui/robot/index.html": "robot",
         "middleware/robot_ui/robot/surface.html": "robot",

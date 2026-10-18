@@ -288,9 +288,9 @@ def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_pa
 
 def test_install_task_shows_host_headroom_and_has_no_process_kill():
     web = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
-    page = (web / "install.html").read_text(encoding="utf-8")
-    script = (web / "host-services.js").read_text(encoding="utf-8")
-    install = (web / "install.js").read_text(encoding="utf-8")
+    page = (web / "installation" / "install.html").read_text(encoding="utf-8")
+    script = (web / "installation" / "host-services.js").read_text(encoding="utf-8")
+    install = (web / "installation" / "install.js").read_text(encoding="utf-8")
     backend = Path(__file__).resolve().parents[1] / "fleet" / "server"
     assets = (backend / "console" / "static_routes.py").read_text(encoding="utf-8")
     assert 'id="host-services"' in page and "호스트 서비스" in page

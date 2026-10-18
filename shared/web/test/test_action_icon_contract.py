@@ -26,7 +26,7 @@ def test_action_icon_names_cover_fleet_chrome_and_keep_screen_reader_text():
 
 
 def test_fleet_documents_share_the_stop_and_chrome_icons():
-    for name in ("index.html", "install.html"):
+    for name in ("index.html", "installation/install.html"):
         page = (FLEET / name).read_text(encoding="utf-8")
         assert 'data-action-icon="estop"' in page
         assert ">비상 정지</span>" in page

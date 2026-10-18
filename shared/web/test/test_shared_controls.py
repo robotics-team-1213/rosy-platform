@@ -769,7 +769,7 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock
     # D-410 — 운용 문서(대형 잠금)와 설치 문서(카메라·보정 잠금)가 각각 자기 잠금 안내를 둔다.
-    for page_name in ("index.html", "install.html"):
+    for page_name in ("index.html", "installation/install.html"):
         page = (fleet / page_name).read_text(encoding="utf-8")
         assert page.count("data-role-lock") == page.count('class="role-lock-note"') >= 1
         assert page.count("운영자 권한이 필요합니다</ui-status>")  # D-501 wording == page.count('class="role-lock-note"')
