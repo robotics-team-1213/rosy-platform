@@ -5,7 +5,7 @@ WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 
 
 def test_dispatch_control_status_and_operator_rearm_are_wired():
-    source = (WEB / "console.js").read_text(encoding="utf-8")
+    source = (WEB / "console-refresh.js").read_text(encoding="utf-8")  # D-798 3.2: dispatch band moved here
     index = (WEB / "index.html").read_text(encoding="utf-8")
     assert 'id="dispatch-control-title"' in index
     assert 'id="dispatch-control-detail"' in index

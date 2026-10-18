@@ -48,7 +48,7 @@ import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
-from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, plan,  # noqa: E402,F401  (conflict auto-resolve)
+from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
@@ -379,6 +379,13 @@ def land(args) -> int:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
+            gaps, dropped = landed_gaps(wt) if not args.dry_run else (b"", [])
+            if dropped:  # merge=union brought back lines main removed when those ADRs landed
+                (wt / ADR_GAPS).write_bytes(gaps)
+                git(wt, "add", "--", ADR_GAPS)
+                git(wt, "commit", "-m", f"chore(adr): drop adr_gaps lines of landed {', '.join(dropped)}")
+                print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
+                summary.append(f"round {round_no}: dropped landed ADR gap(s) {dropped} from {ADR_GAPS}")
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
         size_check(wt, main_sha, candidate, python)
