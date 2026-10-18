@@ -172,7 +172,11 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
         tool = folder / "bin" / args[0]
         if not tool.is_file():
             return f"{args[0]} {args[1]} not installed in {folder}"
-        return None if link.is_symlink() and Path(os.readlink(link)) == tool else f"{link} is not {args[0]} {args[1]}"
+        for tool in sorted((folder / "bin").iterdir()):
+            target = link.with_name(tool.name)
+            if not target.is_symlink() or Path(os.readlink(target)) != tool:
+                return f"{target} is not {args[0]} {args[1]}"
+        return None
     raise SystemExit(f"unknown kind: {kind}")
 
 
