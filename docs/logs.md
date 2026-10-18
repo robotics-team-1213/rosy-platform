@@ -9024,6 +9024,12 @@ osy-d395-s1d\`.
 - 증거: 2026-10-18 비공개 micro-step 기록에서 토크 ON 그리퍼가 목표 2틱 송신 뒤에도 움직이지 않았는데 Action은 SUCCEEDED였다. 원격 시험 결과는 커밋 메시지·후속 행에 남긴다.
 - gate 변화: 없음. 실물 수집·Safety review 수용은 후속이며 실제 시연은 0회다.
 
+## 2026-10-18 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
+
+- 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
+- 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
 ## 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
 
 - 변경: 사이트 Compose에 네 번째 서비스 `postgres`를 파생 문맥·로그 저장소로 추가한다(원장 `fleet.sqlite3`는 그대로 SQLite 하나, D-750). 미러 대상은 D-640 숙고 저널의 터미널 run이다. sink와 그 CLI 표면은 `operations/fleet/fleet/server/ledger/`(등록 유닛)에 둔다: `context_log.py`의 `ContextLog`가 `rosy_deliberation_run`에 best-effort로 기록하고(SQLite 커밋 뒤에만 호출, 실패는 경고와 `False`, 원장 트랜잭션 불변), `context_options.py`가 `--context-db-*`(기본 포트 5432)와 `activate_from_args`를 들며, `deliberation_journal.py`(같은 홀더로 이동, 신원 `fleet.server.ledger.deliberation_journal`)가 `context_log` 파라미터와 `_mirror`를 갖고 프로세스 활성 sink(`set_active`/`active`)를 기본값으로 집는다. `cli.py`는 `add_cli_arguments`·`activate_from_args`를 한 줄씩만 부르고(`app.py`는 손대지 않는다 — D-766 동결 파일), 동결을 맞추려 `_ai_first`·`_stuck_resolver_enrolled`를 `fleet/stuck/cli_config.py`로 옮긴다. `deploy/site/compose.yaml`에 postgres(read_only·tmpfs, `cap_drop: [ALL]`, healthcheck `pg_isready`, `pg_data` 볼륨, `postgres_password` secret)와 Fleet의 `depends_on`·secret·`--context-db-*`를 추가하고, `.env.example`에 `ROSY_SITE_PG_MAX_CONNECTIONS`, `requirements-fleet.txt`에 `psycopg[binary]==3.2.3`을 넣는다. 서명 candidate는 `build_candidate.py`의 `MIRRORED_IMAGES`(postgres:16-alpine, 해석한 digest를 manifest에 기록)로 네 이미지를 포함하고, `verify_candidate.py`·`site_update_io.py`·`rosy_site_autoupdate.py`·`site_functional_setup.py`의 4-이미지 목록과 prune 정규식을 넓힌다. ADR [D-796](../adr/D-796-site-context-log-store-postgres-mirror.md) 파일과 Log 행, `platform-folder-responsibilities.md`의 D-750 예외 한 줄, `deploy/site/README.md`를 함께 남긴다.
