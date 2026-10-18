@@ -1198,3 +1198,9 @@
 - 변경: Parse false-default route_guide_enabled and expose line_follow_route_guide only when authority and the deployment setting are enabled. CORE publishes clear while disabled. Learned-drivable Fleet SIM overlays explicitly enable the setting; other overlays retain the default. API reference and advertised version advance together to v1.247.
 - 증거: Remote integration suite passed 186 tests, including capability opt-in, protocol alignment, bridge registration and both SIM overlay settings. Private evidence: rosy-d769-audit/fleet-route-integrated/run-1.txt. Independent safety review approved the false default and explicit opt-in; the commit carries its Safety-Review trailer. Size and safety guards passed.
 - gate 변화: None. Capability reflects deployment configuration, not consumer health attestation. Gazebo acceptance remains pending.
+
+## 2026-10-19 · 212a8b51b2 · Account CORE HTTP·browser 회귀를 앱 착지 단위로 재적용
+
+- 변경: 실제 Authority fixture의 HTTP 로그아웃 pending·쿠키 제거·lifespan 재시도·strict media 재검증·새 family 분리를 최신 main 위에 재적용했다. CORE 제품 인증 코드는 변경하지 않았다.
+- 증거: 원래 d58258fee6의 공통/CORE/Pilot 실제 Chromium/proxy 묶음35개 PASS, skip0·NEW0. 이번 착지 SHA의 검증은 별도 실행한다. 이전 SHA 결과를 최신 main 수용으로 대신하지 않는다.
+- gate 변화: 없음. 실제 미디어 종료·운영 배포·사용자 수용은 미확인이다.

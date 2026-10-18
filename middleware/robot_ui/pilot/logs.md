@@ -924,3 +924,9 @@
 - 변경: Account 로그아웃 동작을 조종 차단/준비 화면에서 재사용하고, 중앙 계정 사용자에게 의미 없는 로컬 토큰 초기화를 숨겼다. 조작 권한·gate는 유지한다.
 - 증거: 실제 HTTPS Authority→Pilot browser 회귀의 pending-revocation 사례가 기존 차단 화면의 로그아웃 버튼 부재로 실패했다. 같은 회귀를 수정 SHA로 원격 재실행한다.
 - gate 변화: 없음. 제품 배포·실제 단말은 미확인이다.
+
+## 2026-10-19 · 212a8b51b2 · Account 앱 변경을 독립 착지 단위로 재적용
+
+- 변경: 조회 전용 로그아웃·PWA 캐시·원격 SDK 전달·native CSP mock 수정을 최신 main 기반 앱 브랜치로 모았다. foundation 회귀는 별도 브랜치에서 먼저 착지한다.
+- 증거: 기존30acdffbfb의 Pilot JVM111 tests 중 skip1·실패0·APK1과 실제 proxy Chromium 결과는 기존 기록에 남긴다. 최신 main 착지 검사는 따로 수행하며 설치·실물 수용을 뜻하지 않는다.
+- gate 변화: 없음. 운영 배포와 실제 사용자·단말 수용은 미확인이다.
