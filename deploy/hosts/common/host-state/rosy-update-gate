@@ -44,7 +44,7 @@ def tag_over_https() -> tuple[int, str]:
             body = answer.read(8 << 20)
     except Exception as exc:
         return 1, f"skip: freeze tag not checkable over HTTPS ({type(exc).__name__}); failing closed"
-    if not body.startswith(b"001e# service=git-upload-pack\n"):
+    if not (body.startswith(b"001e# service=git-upload-pack\n") and body.endswith(b"0000")):  # whole list only
         return 1, "skip: unexpected ref list; failing closed"
     if re.search(rb"[0-9a-f]{40} " + TAG.encode() + rb"[\x00\n^]", body):
         return 1, "frozen by tag ops-update-freeze"
