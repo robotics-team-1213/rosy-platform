@@ -1,9 +1,9 @@
 # CORE 경유 OMX–LeRobot 연동 검증
 
 날짜: 2026-10-18. 작업 브랜치 `feat/omx-core-lerobot`, 기준
-`8be38f1b94c937c9864fb26488cd2b8549fc06b2`.
-최종 코드 검증 커밋: `5e3af70e6d824d1f6333a46c954393c011c06dfa`.
-안전 symbol 등록 보완: `8beeb47ef26b1eb15ed530e589af87861041a40c`(실행 코드 변화 없음).
+commit `8be38f1b94c937c9864fb26488cd2b8549fc06b2`.
+최종 코드 검증 commit: `5e3af70e6d824d1f6333a46c954393c011c06dfa`.
+안전 symbol 등록 보완 commit: `8beeb47ef26b1eb15ed530e589af87861041a40c`(실행 코드 변화 없음).
 이 기록을 추가하는 커밋은 문서만 변경한다. main 병합·push·배포는 하지 않았다.
 
 ## 구현한 경로
@@ -44,7 +44,8 @@ ACT `n_action_steps=1`, temporal ensemble 없음이다.
 
 ```text
 python tools/remote/remote_pytest.py --log-dir <external>/source-final -- ROSY_OMX_NATIVE_RUNTIME_TESTS=1 middleware/core/api/test/test_arm_policy_api.py test/test_omx_native_ros_runtime.py test/test_omx_lerobot_integration.py
-python tools/remote/remote_pytest.py --sha 9bbf3cdc80 --log-dir <external>/browser -- ROSY_RUN_BROWSER_TESTS=1 middleware/core/api/test/test_d283_console_browser.py
+# The saved browser log has 45 passing cases; its complete original invocation was not retained here.
+# See ../core-omx-deployment-2026-10-18/landing.md for the later explicit mapped-browser verification.
 python tools/remote/remote_pytest.py --sha 8beeb47ef2 --log-dir <external>/anchor-final -- test/architecture/test_safety_separation.py test/architecture/test_platform_parts.py test/architecture/test_document_placement.py test/architecture/test_folder_layout.py test/test_network_topology_contracts.py test/test_harness_contracts.py
 ```
 

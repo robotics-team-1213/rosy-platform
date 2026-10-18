@@ -9,7 +9,7 @@
   },
   "resolved_failure": {
     "nodeid": "test/architecture/test_safety_separation.py::test_safety_anchors_live_in_safety_tagged_files",
-    "fix": "8beeb47ef26b1eb15ed530e589af87861041a40c",
+    "fix_commit": "8beeb47ef26b1eb15ed530e589af87861041a40c",
     "verification": "anchor-final/run-1.txt"
   },
   "logs": [

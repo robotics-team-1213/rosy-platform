@@ -30,7 +30,7 @@
 | 커밋 | 실행 | 결과 |
 |---|---|---|
 | `ff74b5b0ab` | SDK 계약 RED | 새 deployment 모듈 부재로 1 expected failed |
-| `abca4839667bdc9f2f57db93eb57e38e944acf11` | CORE API·native ROS·SDK·wheel | 22 passed, wheel fixture의 PATH 누락 1 failed |
+| commit `abca4839667bdc9f2f57db93eb57e38e944acf11` | CORE API·native ROS·SDK·wheel | 22 passed, wheel fixture의 PATH 누락 1 failed |
 | `f6050b86a7` | 실제 workflow build shell·오프라인 설치 | 1 passed, 0 skipped, NEW 0 |
 
 두 번째 실행의 22개 통과에는 실제 SDK의 recorder loop, 합성 데이터 학습·추론,
@@ -53,7 +53,7 @@ python tools/remote/remote_pytest.py --log-dir <external>/wheel-final -- test/te
 바꾸지 않는 데서 발생했다. fixture가 setup-python과 같이 선택된 Python 경로를
 하위 셸에 전달하도록 고쳤다. 제품 빌드 명령이나 의존성 검증을 생략하지 않았다.
 
-독립 `core_arm_review`가 `abca4839667bdc9f2f57db93eb57e38e944acf11`과
+독립 `core_arm_review`가 commit `abca4839667bdc9f2f57db93eb57e38e944acf11`과
 main 통합 결과를 읽고 추가 권한·안전 계약 위반을 발견하지 않았다.
 이 리뷰는 소스 검토이며 원격 시험 재실행이나 실물 수용이 아니다.
 
