@@ -1096,6 +1096,13 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+
+## 2026-10-16 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769)
+
+- 변경: Added optional typed route_guide to the existing authority API (reference v1.246). CORE binds it only on acceptance with sequence and exact echoed odom sample. The source lifetime is capped by max_age_s <= 1 and authority TTL; clears and same-source republication do not replenish the budget. Shrink/no-guide/mode reset/expiry/unavailable odom expose no prior. Existing movement-authority acceptance and distance gate semantics remain. No publisher, producer or deployed capability was enabled.
+- 증거: 79 remote tests passed for authority-route binding, existing authority behavior, actual API and protocol version alignment. Ten new tests first failed on the missing route_guide argument. Independent safety review caught and verified the sub-ULP source-lifetime fix: optional binding completes before authority replacement and unrepresentable deadlines drop the guide. Logs: private rosy-d769-audit/authority-route-red and authority-route-green. Per-commit size and safety-review checks passed for all three commits in this slice.
+- gate 변화: None. CORE ROS publication, Fleet selected-route production, Gazebo learned driving and constrained learned-policy acceptance remain pending.
+
 ## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 
 - 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.

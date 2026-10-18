@@ -368,7 +368,7 @@ def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(o
     require_calibration_owner(svc, auth, "line-follow authority")
     try:
         result = svc.line_follow.set_authority(body.authority_id, body.leg_id, body.pose_stamp,
-                                               body.until_m, body.ttl_s, shrink=body.shrink, seq=body.seq)
+                                               body.until_m, body.ttl_s, shrink=body.shrink, seq=body.seq, route_guide=body.route_guide)
     except AuthorityRefused as exc:
         raise ApiError(exc.code, 409, exc.args[1]) from exc
     return result
