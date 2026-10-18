@@ -2,6 +2,7 @@
 from contextlib import contextmanager, ExitStack
 from functools import partial
 from hashlib import sha256
+import json
 from pathlib import Path
 import secrets
 import socket
@@ -84,7 +85,30 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         task_service=FleetTaskService(FleetTaskStore(db), robot_ids=()),
         mission_service=MissionService(MissionStore(db)), proposal_store=ProposalStore(db),
         omx_instances={workcell_id:instance_id}, start_task_dispatcher=False)
-    with HttpServer(app) as server, ExitStack() as connections:
+    timings = []
+    run = app.state.policy_governance._run
+    def measured_run(fn):
+        began, cpu = time.monotonic(), time.thread_time()
+        try:
+            return run(fn)
+        finally:
+            timings.append(dict(kind='store_transaction',started_s=began,
+                elapsed_s=time.monotonic()-began,cpu_s=time.thread_time()-cpu))
+    app.state.policy_governance._run = measured_run
+    async def measured_app(scope, receive, send):
+        began = time.monotonic()
+        row = dict(kind=scope['type'],method=scope.get('method'),path=scope.get('path'),started_s=began)
+        async def delivered(message):
+            if message['type'] == 'http.response.start':
+                row['status'] = message['status']
+                row['response_start_s'] = time.monotonic()
+            await send(message)
+        try:
+            await app(scope,receive,delivered)
+        finally:
+            row['elapsed_s'] = time.monotonic()-began
+            timings.append(row)
+    with HttpServer(measured_app) as server, ExitStack() as connections:
         clients = {}
         for name, token in credentials.items():
             path = tmp_path/(name+'.private')
@@ -109,7 +133,10 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         window = admin('POST', base+'/windows', dict(operator_confirmed=True,
             policy_revision=policy_revision, kind='supervised', scope='SIM fixed reach', minutes=1, **revisions))
         window = second('POST', base+'/windows/'+window['window_id']+'/approve', dict(operator_confirmed=True))
-        yield SimpleNamespace(server=server, admin=admin, operator=clients['sim-operator'],
-            device=clients['sim-device'], window=window,
-            db=db, base=base, rig_revision=rig_revision, calibration_revision=calibration_revision,
-            credentials=credentials, scope='SIM fixed reach')
+        try:
+            yield SimpleNamespace(server=server, admin=admin, operator=clients['sim-operator'],
+                device=clients['sim-device'], window=window,
+                db=db, base=base, rig_revision=rig_revision, calibration_revision=calibration_revision,
+                credentials=credentials, scope='SIM fixed reach')
+        finally:
+            (tmp_path/'server-timing.json').write_text(json.dumps(timings,indent=2))
