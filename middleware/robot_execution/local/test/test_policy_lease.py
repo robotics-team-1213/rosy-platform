@@ -182,7 +182,13 @@ def test_fleet_transport_never_uses_environment_proxy(tmp_path, monkeypatch):
     token.write_text('test-only')
     client = FleetPolicyHttp(f'http://127.0.0.1:{server.server_port}', token, loopback_sim=True)
     try:
-        assert client('GET', '/api/fleet/workcells/cell/policy') == {}
+        with client:
+            child = client._process
+            assert client('GET', '/api/fleet/workcells/cell/policy') == {}
+            assert client('GET', '/api/fleet/workcells/cell/policy') == {}
+            assert client._process is child and child.poll() is None
+        assert child.poll() is not None
+        with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
     finally:
         server.shutdown()
         worker.join(2)
@@ -214,11 +220,56 @@ def test_fleet_transport_has_total_deadline_for_dripping_body(tmp_path):
     token.write_text('test-only')
     client = FleetPolicyHttp(f'http://127.0.0.1:{server.server_port}', token, loopback_sim=True)
     try:
-        started = time.monotonic()
-        with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
-        assert time.monotonic()-started < .5
+        with client:
+            child = client._process
+            started = time.monotonic()
+            with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
+            assert time.monotonic()-started < .5
+            assert child.poll() is not None
+            with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
     finally:
         stopped.set()
         server.shutdown()
         worker.join(2)
+        server.server_close()
+
+
+def test_fleet_context_close_interrupts_own_pending_request(tmp_path):
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import threading
+    entered, release = threading.Event(), threading.Event()
+    errors = []
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args): pass
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-Length', '2')
+            self.end_headers()
+            entered.set()
+            release.wait(2)
+            try: self.wfile.write(b'{}')
+            except (BrokenPipeError, ConnectionResetError): pass
+    server = HTTPServer(('127.0.0.1', 0), Handler)
+    serving = threading.Thread(target=server.serve_forever)
+    serving.start()
+    token = tmp_path/'token'
+    token.write_text('test-only')
+    caller = None
+    try:
+        with FleetPolicyHttp(f'http://127.0.0.1:{server.server_port}', token, loopback_sim=True) as client:
+            def call():
+                try: client('GET', '/api/fleet/workcells/cell/policy')
+                except PermissionError: errors.append('closed')
+            caller = threading.Thread(target=call)
+            caller.start()
+            assert entered.wait(1)
+            client.close()
+            caller.join(1)
+            assert not caller.is_alive() and errors == ['closed']
+            assert client._process.poll() is not None
+    finally:
+        release.set()
+        if caller is not None: caller.join(2)
+        server.shutdown()
+        serving.join(2)
         server.server_close()
