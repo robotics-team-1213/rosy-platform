@@ -31,6 +31,7 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from controller_manager_msgs.srv import ListControllers
 from core_api_web.api.app import create_app
@@ -125,7 +126,7 @@ class Camera:
         self.node, self.clock, self.calibration = node, monotonic, calibration
         self._lock, self._latest, self._stamp = threading.Lock(), None, -1
         self.accepted, self.rejected, self.captures = 0, 0, []
-        self.subscription = node.create_subscription(Image, '/workcell_camera/image', self.receive, 10)
+        self.subscription = node.create_subscription(Image, '/workcell_camera/image', self.receive, qos_profile_sensor_data)
 
     def receive(self, message):
         stamp = message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec
