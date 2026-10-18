@@ -43,7 +43,7 @@ def test_registered_intake_folders_are_listed_read_only(tmp_path):
         with urllib.request.urlopen(url + '/learning/omx') as page:
             assert b'omx.js' in page.read()
         raw = urllib.request.urlopen(url + '/api/learning/omx').read().decode()
-        assert str(tmp_path) not in raw and str(tmp_path).replace('\', '\\') not in raw
+        assert str(tmp_path) not in raw and json.dumps(str(tmp_path))[1:-1] not in raw
         sets = json.loads(raw)['sets']
         assert [s['name'] for s in sets] == ['day 1']  # the ACT run folder is not a prepared intake folder
         day = sets[0]
