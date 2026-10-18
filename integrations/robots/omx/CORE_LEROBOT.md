@@ -91,6 +91,10 @@ the existing independently authorized recovery procedure.
 Host tests use synthetic RGB/model/authority and fake action transport. The
 native ROS check verifies CORE HTTP admission to real ROS Action acceptance,
 terminal result and revocation/cancel against an isolated test action server.
+Its socket test runs the actual LeRobot plugin in a separate process against a
+loopback uvicorn CORE app, checks exact RGB and joint targets at the ROS server,
+then verifies disconnect latches the stop fence. Authentication uses a synthetic
+principal override; the target is scripted and does not come from a trained model.
 Neither is Gazebo task-success or physical-robot evidence.
 
 ## Deployment preparation pipeline
