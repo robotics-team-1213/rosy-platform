@@ -80,6 +80,8 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                     expect(bob_page).to_have_url(origin + "/console/profile")
                 finally:
                     bob_page.close()
+                page.locator("#account-reload").click()
+                expect(page.locator("#account-heading")).to_have_text("새 계정")
                 page.get_by_role("button", name="bob · 사용 중", exact=True).click()
                 page.locator("#account-revoke").click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
