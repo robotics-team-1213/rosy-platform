@@ -9,6 +9,9 @@ import {MEDIA_GRANT_PATH, openCamera, requestMediaGrant} from "/common/webrtc.js
 import {el} from "./drive-view.js";
 
 export const WEBRTC_RETRY_MS = 15000;
+// 계속 실패하면(예: 웹뷰 정책 거절) 15s→30s→…→5분으로 늦춰 권한 발급·회수 반복을 줄인다.
+// 화면이 한 번 뜨거나, 네트워크가 바뀌거나(online), 사용자가 보기 방식을 바꾸면 처음 주기로 돌아간다.
+export const WEBRTC_RETRY_MAX_MS = 300000;
 const HIDDEN_GIVE_UP_MS = 5000;     // 2초 넘게 숨긴 영상이 5초 더 안 돌아오면 폴링으로 내린다
 
 export function mountDriveVideo({root, element, capture, vision, acceptPreview}) {
@@ -19,9 +22,12 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
   element.frame.after(video);     // styles.css가 이미지 프레임과 같은 자리·비율로 그린다
 
   let alive = true, legacy = false, streaming = false;
-  let camera = null, opening = false, robotId = null, retry = null, hiddenAt = null, grabbedAt = 0;
+  let camera = null, opening = false, robotId = null, retry = null, hiddenAt = null, grabbedAt = 0, failures = 0;
   const later = (fn, ms) => { clearTimeout(retry); if (alive) retry = setTimeout(fn, ms); };
   const raw = () => capture.state().previewMode === "raw";
+  const retryLater = () => later(tryWebrtc, Math.min(WEBRTC_RETRY_MS * 2 ** failures++, WEBRTC_RETRY_MAX_MS));
+  const online = () => { failures = 0; if (!legacy && !camera && raw()) later(tryWebrtc, 500); };
+  globalThis.addEventListener?.("online", online);
 
   function poll(text, reason = "") {
     video.hidden = true;
@@ -72,6 +78,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
   function onState(state) {
     if (state.state === "live" || state.state === "stale") {
       hiddenAt = null;
+      failures = 0;
       video.hidden = false;
       element.frame.hidden = true;
       element.empty.hidden = true;
@@ -94,7 +101,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
       hiddenAt = null;
       if (!alive || state.reason === "stopped") return;
       poll("영상 폴링", `webrtc-${state.reason}`);
-      if (raw()) later(tryWebrtc, WEBRTC_RETRY_MS);
+      if (raw() && !opening) retryLater();     // 여는 중의 실패는 tryWebrtc의 catch가 한 번만 센다
     }
   }
 
@@ -121,7 +128,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
     } catch (_error) {
       camera = null;
       if (alive) poll("영상 폴링", "webrtc-failed");
-      if (raw()) later(tryWebrtc, WEBRTC_RETRY_MS);
+      if (raw()) retryLater();
     } finally {
       opening = false;
     }
@@ -132,6 +139,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
     // 주석 쌍(annotated)은 원본 짝이 필요해 폴링만 섬긴다. raw로 돌아오면 원래 전송을 다시 시도한다.
     previewModeChanged(mode) {
       clearTimeout(retry);
+      failures = 0;
       camera?.close("stopped");
       camera = null;
       streaming = false;
@@ -143,6 +151,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
     stop() {
       alive = false;
       clearTimeout(retry);
+      globalThis.removeEventListener?.("online", online);
       camera?.close("stopped");
       stream.stop();
       video.remove();

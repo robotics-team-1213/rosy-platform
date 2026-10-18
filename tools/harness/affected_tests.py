@@ -32,6 +32,8 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
+from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
+                         ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
 
 HARNESS = PurePosixPath("tools/harness")
 
@@ -77,73 +79,6 @@ FULL_TRIGGERS = (
 # D-766 4: lowering a ratchet row or registering a size unit is data; test_module_structure still runs.
 NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
                 "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
-
-# Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
-# registered module `tests`; the printed full tier is their union.
-FULL_SUITES = (
-    "learning/training/pinky/test",
-    "learning/registry/policy/test",
-    "learning/training/omx/test",
-    "learning/training/world_model/test",
-    "learning/evaluation/world_model/test",
-    "operations/prediction/world_model/test",
-    "learning/curation/omx/test",
-    "learning/curation/pinky/test",
-    "middleware/core/events/test",
-    "middleware/core/services/test",
-    "shared/web/test",
-    "contracts/foundation/test",
-)
-
-# D-436 4: the GitHub full run as parallel matrix entries. Each entry is one
-# runner; its `invocations` run in order (suites sharing a test basename stay in
-# separate invocations: gateway and sensing both ship test_battery.py, vision and
-# games test_preview.py). `ros`: none (host conditions), base (/opt/ros) or
-# overlay (+ colcon install, which also builds). `gating: False` reports only.
-ROOT_SHARDS = 3
-# D-553 1: the slowest suites split by test file, like the root shards. fleet
-# alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 4, "sensing": 2}
-# Seconds per Fleet file of 5 s or more, the mean of CI 38807338775, 38711952782 and 38830518002
-# (2026-10-15/16, timestamps of the -v result lines); others weigh 1. These only choose runners;
-# every discovered test still runs exactly once.
-# shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
-FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
-CI_FULL_MATRIX = (
-    {"name": "learning-policy", "invocations": [
-        ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
-        ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
-        ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
-        ["operations/prediction/world_model/test"]], "ros": "none"},
-    {"name": "core-domain", "invocations": [[
-        "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
-        "shared/web/test", "contracts/foundation/test",
-        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"], [
-        "middleware/core/gateway/test/test_account_pipeline.py"
-    ]], "ros": "none"},
-    # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
-    {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
-    {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
-    {"name": "site-vision-cell", "invocations": [
-        ["operations/overhead/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
-        ["operations/world/test"],
-        ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
-         "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
-    {"name": "gz-sim", "invocations": [["integrations/simulation/gazebo/test"]], "ros": "overlay"},
-    {"name": "hardware-safety", "invocations": [[
-        "middleware/devices/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
-        "middleware/perception/test/test_ir_adc_lock.py",
-        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
-        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
-        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
-)
-# D-762 stage 1: the only registered test files CI's full tier skips, each with its reason.
-# Every other registered module suite CI_FULL_MATRIX does not name runs on the `modules` runner.
-CI_FULL_EXCLUDED = {
-    f"middleware/devices/pinky/bringup/test/test_{name}.py":
-        "ament lint template, not a product contract; CI never ran it and the lab full tier --ignores it too"
-    for name in ("flake8", "pep257", "copyright")
-}
 
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
@@ -482,46 +417,6 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
         sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
-
-
-def ci_matrix(repo: Repo, sel: Selection) -> dict:
-    """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
-    if sel.mode == "full":
-        root_tests = sorted(t for t in repo.test_files if _under(t, "test"))
-        entries = []
-        for entry in CI_FULL_MATRIX:
-            n = SUITE_SHARDS.get(entry["name"], 1)
-            files = sorted(t for t in repo.test_files if _under(t, entry["invocations"][0][0])) if n > 1 else []
-            if len(files) < n or n == 1:
-                entries.append(dict(entry))
-                continue
-            groups = [files[i::n] for i in range(n)]
-            if entry["name"] == "fleet":
-                groups, loads = [[] for _ in range(n)], [0] * n
-                for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)):
-                    i = min(range(n), key=lambda i: (loads[i], i))
-                    groups[i].append(path)
-                    loads[i] += FLEET_TEST_SECONDS.get(PurePosixPath(path).name, 1)
-                groups = [sorted(group) for group in groups]
-            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{n}", invocations=[groups[i]])
-                        for i in range(n)]
-        for i in range(ROOT_SHARDS):
-            entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
-                            "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
-        # D-762 stage 1: every other registered module suite, so CI's full tier is the lab full tier.
-        # Never ran in the CI container before; reports (like sensing) until its first green run.
-        modules = pack(repo, _outside_ci_matrix(_full_paths(repo)))
-        if modules:
-            entries.append({"name": "modules", "invocations": modules, "ros": "overlay", "gating": False})
-    else:
-        entries = [{"name": f"affected-{i + 1}", "invocations": [inv]}
-                   for i, inv in enumerate(sel.invocations)]
-    entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
-    for entry in entries:
-        entry.setdefault("kind", "pytest")
-        entry.setdefault("gating", True)
-        entry.setdefault("ros", "overlay")
-    return {"include": entries}
 
 
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
