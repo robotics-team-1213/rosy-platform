@@ -1101,3 +1101,9 @@
 - 변경: 기본 미결선 arm policy 포트, 인증된 관측·후보·정지 API, 원 관측 단일 사용과 CORE E-stop 전파. 관절 writer는 기존 OMX owner다.
 - 증거: 원격 AI PC 041591d44e의 명시적 native ROS/LeRobot/CORE 시험 21 passed, skipped 0, known_failures NEW 0. 합성 관측·정책·권한과 격리 Action 서버이며 실물·학습 과제 성공 증거가 아니다.
 - gate 변화: SOURCE/HOST 및 격리 ROS transport 연결. 기본 실물 profile·정책 승인·배포·Fleet lease 전달은 활성화하지 않았다. D-800과 docs/plans/2026-10-18-core-omx-lerobot.md 참조.
+
+## 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
+
+- 변경: RGB capture 대기로 stop이 막히던 경로를 기존 persistent fence에 직접 연결했다. 실제 LeRobot recorder의 remote camera 계약과 native fixture의 최초 capture 순서를 보완했다.
+- 증거: 최종 코드 원격 집중 검증 22 passed/0 skipped, 브라우저 45 passed/0 skipped, 양쪽 known_failures NEW 0. 독립 core_arm_review 최종 소스 검토 완료. 이전 21-pass 기록 이후 stop 회귀를 추가한 결과다.
+- gate 변화: 실물·배포 승격 없음. 전체 검증 출처와 한계는 docs/validation/core-omx-lerobot-2026-10-18/result.md 참조.
