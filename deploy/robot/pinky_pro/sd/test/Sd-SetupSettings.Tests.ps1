@@ -146,7 +146,7 @@ foreach ($failure in @("writer", "readback", "identity", "registry")) {
     Assert ($plans.Count -eq 1) "$failure must stop before planning card two"
 }
 Write-Output "PASS: writer, readback, identity and registry failures stop before the next card"
-foreach ($bad in @(@{password="fixture forbidden"}, @{card_count=2.5}, @{card_count=0}, @{schema_version=2})) {
+foreach ($bad in @(@{password="<fixture-secret-not-allowed>"}, @{card_count=2.5}, @{card_count=0}, @{schema_version=2})) {
     Reset-Fixture
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     foreach ($key in $bad.Keys) { $config | Add-Member -NotePropertyName $key -NotePropertyValue $bad[$key] -Force }
@@ -154,7 +154,7 @@ foreach ($bad in @(@{password="fixture forbidden"}, @{card_count=2.5}, @{card_co
     $result = Run-Fixture
     Assert ($result.Code -ne 0) "invalid or secret-bearing settings must be rejected"
     Assert (-not ((Get-Content -LiteralPath $env:SD_EVENTS) -match '^disk$')) "invalid settings must fail before disk discovery"
-    Assert ($result.Text -notmatch "fixture forbidden") "settings rejection must not echo a secret value"
+    Assert ($result.Text -notmatch "<fixture-secret-not-allowed>") "settings rejection must not echo a secret value"
 }
 Write-Output "PASS: secret fields, invalid counts and unknown schemas fail before disk discovery"
 Reset-Fixture
