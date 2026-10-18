@@ -50,22 +50,24 @@ PINNED_CONFIRMS = {
     "middleware/robot_ui/robot/settings.js": 2,
     "middleware/robot_ui/robot/telemetry.js": 1,
     "operations/site_ui/console/devices/camera-pairing.js": 2,
-    "operations/site_ui/console/camera-peer.js": 2,
+    "operations/site_ui/console/installation/camera-peer.js": 2,
     "operations/site_ui/console/cell/cell.js": 1,
     "operations/site_ui/console/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
     "operations/site_ui/console/work/policy-page.js": 1,  # D-793 incident lock release
     "operations/site_ui/console/confirmed-action.js": 1,
     "operations/site_ui/console/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
-    # D-593 console pin asks first; 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision).
-    "operations/site_ui/console/console.js": 4,  # includes the channel review bridge to the same confirmedAction owner
+    # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
+    "operations/site_ui/console/console.js": 1,  # the channel review bridge to the same confirmedAction owner
+    "operations/site_ui/console/console-goal.js": 2,  # map goal send; D-593 operator pin asks first
+    "operations/site_ui/console/console-refresh.js": 1,  # dispatch rearm
     "operations/site_ui/console/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
-    "operations/site_ui/console/host-services.js": 1,  # named operator host control, shared confirmation
+    "operations/site_ui/console/installation/host-services.js": 1,  # named operator host control, shared confirmation
     "operations/site_ui/console/roster.js": 1,
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
-    "operations/site_ui/console/site-map.js": 2,
-    "operations/site_ui/console/site-map-camera.js": 1,
-    "operations/site_ui/console/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
-    "operations/site_ui/console/tracking-relearn.js": 1,
+    "operations/site_ui/console/sitemap/site-map.js": 2,
+    "operations/site_ui/console/sitemap/site-map-camera.js": 1,
+    "operations/site_ui/console/sitemap/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
+    "operations/site_ui/console/installation/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

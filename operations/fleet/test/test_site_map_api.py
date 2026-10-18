@@ -257,7 +257,9 @@ def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose(
     client = _client([_source()])
 
     layer = client.get("/console/assets/site-layer.js")
-    map_view = client.get("/console/assets/map-view.js").text
+    # D-798 3.2: map-view.js draws; its overlays and pollers live in map-overlays.js and map-polling.js.
+    map_view = "".join(client.get(f"/console/assets/{name}").text
+                       for name in ("map-view.js", "map-overlays.js", "map-polling.js"))
     shell = client.get("/console/assets/console.js").text
     page = client.get("/console").text
 
@@ -278,7 +280,9 @@ def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
 
     client = _client([_source()], web_common=(Path(__file__).resolve().parents[3] / "shared") / "web")
 
-    map_view = client.get("/console/assets/map-view.js").text
+    # D-798 3.2: map-view.js draws; its overlays and pollers live in map-overlays.js and map-polling.js.
+    map_view = "".join(client.get(f"/console/assets/{name}").text
+                       for name in ("map-view.js", "map-overlays.js", "map-polling.js"))
     shell = client.get("/console/assets/console.js").text
 
     # The sightings route is only registered with a sightings config; no site map → no polling.
