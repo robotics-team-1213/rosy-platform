@@ -1114,3 +1114,8 @@
 - 증거: 최종 코드 원격 집중 검증 22 passed/0 skipped, 브라우저 45 passed/0 skipped, 양쪽 known_failures NEW 0. 독립 core_arm_review 최종 소스 검토 완료. 이전 21-pass 기록 이후 stop 회귀를 추가한 결과다.
 - gate 변화: 실물·배포 승격 없음. 전체 검증 출처와 한계는 docs/validation/core-omx-lerobot-2026-10-18/result.md 참조.
 
+## 2026-10-18 · abca483966 · OMX 배포 준비 점검 연결
+
+- 변경: 코드 wheel·출처·체크섬 빌드 workflow와 GET-only CORE 점검을 추가했다. 배포 대상·승인 정책이 없다는 사용자 답변에 따라 실물 target은 기존 runtime·lease·D-793 관문을 차단 사유로 남긴다.
+- 증거: 독립 소스 리뷰 완료. 원격 CORE/native ROS/실제 SDK 22 passed. wheel 빌드 시험의 Python PATH 전달 누락은 fixture에서 보완하며 최종 결과는 후속 검증 기록에 남긴다.
+- gate 변화: 없음. 실제 설치·승인·lease 발급·동작·정지 요청은 이 점검의 기능이 아니다.

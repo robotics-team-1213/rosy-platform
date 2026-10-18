@@ -16,7 +16,9 @@ def test_omx_client_workflow_build_and_offline_install(tmp_path):
                  if step.get('name') == 'Build client wheels')
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     result = subprocess.run(['bash', '-c', build], cwd=ROOT, capture_output=True, text=True,
-                            env={**os.environ, 'RUNNER_TEMP': str(tmp_path), 'GITHUB_SHA': revision}, timeout=120)
+                            env={**os.environ, 'RUNNER_TEMP': str(tmp_path), 'GITHUB_SHA': revision,
+                                 'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ.get('PATH', '')},
+                            timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
     stage = tmp_path/'omx-client'
     assert (stage/'source-sha.txt').read_text().strip() == revision
