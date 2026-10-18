@@ -1,0 +1,75 @@
+# OMX SIM Fleet → CORE → LeRobot → Gazebo integration
+
+2026-10-19. 사용자는 학습 checkpoint가 없으며 고정 SIM 정책으로 전체 경로부터
+검증하도록 선택했다. 실물 배포 대상과 승인된 정책 revision도 없다.
+
+## 구현과 권한
+
+기존 Fleet의 인증된 policy state/lease HTTP를 장치 consumer가 읽고, 기존 CORE
+arm port와 dedicated steady-clock OMX owner에 결속한다. SDK는 관측·목표·정지만
+요청한다. 설치 pin, local AttemptIdentity, window, rig, calibration, episode와
+owner session은 SDK 입력에서 받지 않는다. ROS callback은 검증된 local cache만 읽는다.
+
+기본값은 비활성이며 SIM 설치만 허용한다. 최대 1초 lease에서 요청·readback 시간을
+차감한다. 각 HTTP 교환은 소유한 격리 subprocess에서 0.2초 timeout으로 실행하고,
+timeout 시 kill/reap한다. 프로세스 생성·OS scheduling의 실시간 보장은 아니다.
+인증값은 stdin으로 전달하고 환경 proxy와 redirect는 차단한다. fault는 영구 폐쇄하며
+stop fence를 기록한 뒤 worker 종료를 기다린다. 재접속은 rearm하지 않는다.
+
+Fleet의 `device_delivery=not_connected`는 서버가 delivery ACK를 갖지 않는 기존 의미다.
+별도의 SIM receipt가 로컬 수신을 기록한다. local SIM identity는 Fleet Mission/Action
+admission이 아니며, 이 시험으로 Fleet 작업 완료를 선언하지 않는다.
+
+## 원격 회귀 근거
+
+로그 root: `C:/Users/SERIGGG/AppData/Local/Temp/rosy-omx-policy-chain/`.
+로컬 pytest는 실행하지 않았다. 아래 pytest는 committed revision을 원격 runner로 보냈다.
+
+| Revision | 로그 | 결과 |
+|---|---|---|
+| `e63904a09` | `red-reviewed-boundaries/run-1.txt` | 만료·미래 lease, 발급 후 confirmation/incident와 proxy 검사의 5 failed / 23 passed |
+| `59ff40a342` | `green-reviewed-lease/run-1.txt` | 28 passed |
+| `e622829278` | `green-chain-preparation/run-1.txt` | 실제 Fleet HTTP와 기존 session/runtime 회귀 134 passed |
+| `39a42e94d5` | `red-total-deadline/run-1.txt` | drip 응답 timeout 실패 재현. 카메라는 잘못된 fixture digest로 실패하여 source-age RED로 사용하지 않음 |
+| `87abee0f43` | `green-total-final/run-1.txt` | 136 passed / 13.30s, known-failures NEW 0 |
+
+최종 GREEN의 runner 인자:
+
+```text
+python tools/remote/remote_pytest.py --log-dir <root>/green-total-final --
+ middleware/robot_execution/local/test/test_policy_lease.py
+ middleware/robot_execution/local/test/test_policy_camera.py
+ middleware/robot_execution/local/test/test_policy_chain.py
+ middleware/robot_execution/local/test/test_omx_policy_session.py
+ middleware/robot_execution/local/test/test_policy_runtime_binding.py
+```
+
+원시 최종 로그 SHA256:
+`3beb7ef5521add3d99488d2f8c87a3e9a05f7e93f28461f55c6277dd2a6f81c3`.
+독립 reviewer는 이 원시 로그의 136 passed와 hash를 확인했다. 실행 SHA·선택은
+runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 출력만으로 식별하지 않는다.
+이후 `d7ee20bfc`는 문서와 fixture credential의 0600 생성만 추가했다.
+
+## Gazebo 실행 상태
+
+`policy_chain_gazebo.py`는 `remote_sim.py`를 통해서만 실행한다. 원본 world의
+hash와 32×24 RGB/10Hz, physics step 0.002초인 명시적 시험 variant의 hash를 기록한다.
+이미지 크기를 provider에서 숨겨 변환하지 않는다. 실제 LeRobot 0.4.4 별도 프로세스,
+Fleet/CORE HTTP 인증, 원본 Gazebo 카메라, 기존 OMX owner와 vendor controller를 사용한다.
+
+- `28cb02e233`, `gazebo-chain-run/run.txt`: Fleet의 World source import 누락으로
+  ROS/로봇 명령 전에 중단. source 경로를 보완했다.
+- `87abee0f43`, `gazebo-chain-age-run/run.txt`: 카메라·컨트롤러 준비 뒤 chain admission이
+  거절됐다. 목표는 보내지 않았다. teardown에서 Destroyable 경고도 발생했다.
+- `ebcb62f4d`: 다음 실행에서 admission의 owner state/reason과 조건을 기록하도록
+  진단을 추가했다. 최종 Gazebo 통과 결과는 아직 없다.
+
+probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixture의 설치 binding은
+선언한 시험 설정에서 구성하며, 외부에서 승인된 학습 release의 설치를 검증하지 않는다.
+실제 학습 모델의 추론·정확도, 실제 운영자의 승인, Mission admission, 물리 로봇 이동과
+물리 정지 수용은 이 검증의 범위 밖이다.
+
+## 착지
+
+안전 분류 prerequisite는 별도 FULL 검사 중이다. 제품 branch의 최종 affected 검사와
+로컬 main 착지는 아직 완료하지 않았다. GitHub push와 실물 활성화는 수행하지 않았다.
