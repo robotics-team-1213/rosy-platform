@@ -88,6 +88,7 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         clients = {}
         for name, token in credentials.items():
             path = tmp_path/(name+'.private')
+            path.touch(mode=0o600, exist_ok=False)
             path.write_text(token)
             if name == 'sim-device':
                 clients[name] = FleetPolicyHttp(server.url, path, loopback_sim=True)

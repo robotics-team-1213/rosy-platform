@@ -143,3 +143,45 @@ identities, enable `learned_policy`, or auto-approve a window. The existing hard
 owner remains `rule_based` only. Completing D-793 C/D, live owner composition,
 two-person L3 approval and physical acceptance remains necessary before learned
 motion; G4 is additionally required for LIMITED use.
+
+## Explicit SIM Fleet lease composition (D-804)
+
+`rosy.execution.local.policy_lease` consumes the existing Fleet policy-state and
+lease HTTP endpoints. `FleetPolicyHttp` uses a fixed authenticated TLS origin;
+plain HTTP requires explicit loopback SIM configuration. It disables redirects
+and environment proxies. Its token comes from a private file. Each exchange runs
+in an owned isolated subprocess with a 0.2-second exchange timeout and kill/reap
+on expiry; process creation and OS scheduling are not real-time guarantees.
+Credentials travel through stdin rather than command arguments.
+
+Create `LeaseScope` from the trusted local SIM execution configuration: exact
+AttemptIdentity, episode, installed policy revision, owner session, approved window,
+rig, calibration and approval scope. The SDK cannot supply these values. The
+consumer verifies the window and policy stage before and after issuance, charges
+all network time to the local monotonic deadline, and accepts only advancing
+renewals of that same lease. Expiry, denial and transport failure permanently
+close that consumer. Its authority callback performs no network I/O.
+
+`SimPolicyChain` takes the already verified `InstalledPolicy`, dedicated ready
+steady-clock runtime, stop fence, consumer, execution journal, trusted identity
+and RGB providers, CORE principal ID and independently installed rig revision.
+It checks the rig and actual owner calibration before requesting a lease.
+`enabled` defaults to false. Its context manager starts the bounded renewal worker;
+assign `chain.port` to `services.arm_policy` before creating the CORE app. On exit,
+it closes authority and persists the existing stop fence before waiting for the
+worker. Neither reconnect nor a late HTTP response can rearm the session.
+
+The Fleet response's `device_delivery="not_connected"` remains the server's lack
+of a delivery acknowledgement. The separate SIM consumer receipt records local
+receipt and execution; it does not change that wire field. Its local SIM attempt
+is not Fleet Mission/Action admission and cannot establish task completion.
+
+The committed `middleware/robot_execution/local/test/policy_chain_gazebo.py` probe
+runs only through `tools/remote/remote_sim.py`. It uses synthetic SIM approvals and
+an explicitly scripted policy, real Fleet and CORE HTTP authentication, the
+actual LeRobot plugin process, original Gazebo camera frames, the existing owner
+and vendor controller. It checks joint movement, same-lease renewal, in-motion
+approval withdrawal, CANCELED/HOLD and reconnect refusal. Run results and limits
+belong in the dated validation record; the probe's existence is not a passing result.
+The probe constructs its installation binding from declared fixture configuration;
+it does not validate an externally accepted trained-policy release.

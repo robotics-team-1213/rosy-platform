@@ -22,19 +22,19 @@
 
 Files: `middleware/robot_execution/local/src/rosy/execution/local/policy_lease.py`, `middleware/robot_execution/local/test/test_policy_lease.py`.
 
-- [ ] 기존 API 입력·출력과 session authority/renew 요구를 독립 검토로 확정한다.
-- [ ] scope·clock·RTT·재정렬·expired renewal·network failure의 실패 시험을 먼저 커밋하고 원격 RED를 확인한다.
-- [ ] 최소 HTTP client와 검증된 local lease cache를 구현한다. callback에는 network가 없다.
-- [ ] 원격 GREEN 및 기존 session 회귀를 확인하고 독립 안전 리뷰를 받는다.
+- [x] 기존 API 입력·출력과 session authority/renew 요구를 독립 검토로 확정한다.
+- [x] scope·clock·RTT·재정렬·expired renewal·network failure의 실패 시험을 먼저 커밋하고 원격 RED를 확인한다.
+- [x] 최소 HTTP client와 검증된 local lease cache를 구현한다. callback에는 network가 없다.
+- [x] 원격 GREEN 및 기존 session 회귀를 확인하고 독립 안전 리뷰를 받는다.
 
 ## 2. 명시적 SIM composition과 실제 Fleet 경계
 
 Files: `middleware/robot_execution/local/src/rosy/execution/local/policy_chain.py`, `middleware/robot_execution/local/test/test_policy_chain.py`, 필요한 기존 CORE/LeRobot 안내.
 
-- [ ] 실제 Fleet app/auth/SQLite 승인 창을 사용한 bootstrap·renewal·창 폐쇄·연결 단절 통합 시험을 먼저 작성해 원격 RED를 확인한다.
-- [ ] trusted installation/identity/camera/fence/journal/runtime를 받는 기본 비활성 composition을 구현한다.
-- [ ] 명시적 context 종료는 worker를 회수하고 session을 닫는다. 정지는 늦은 HTTP에 막히지 않는다.
-- [ ] 원격 GREEN 및 affected selection, independent review를 확인한다.
+- [x] 실제 Fleet app/auth/SQLite 승인 창을 사용한 bootstrap·renewal·창 폐쇄·연결 단절 통합 시험을 먼저 작성해 원격 RED를 확인한다.
+- [x] trusted installation/identity/camera/fence/journal/runtime를 받는 기본 비활성 composition을 구현한다.
+- [x] 명시적 context 종료는 worker를 회수하고 session을 닫는다. 정지는 늦은 HTTP에 막히지 않는다.
+- [x] 원격 GREEN과 independent review를 확인한다. 착지 affected selection은 최종 단계에서 수행한다.
 
 ## 3. 전체 vendor Gazebo 시험과 착지
 
@@ -45,3 +45,13 @@ Files: 소유 모듈 시험용 SIM probe, `docs/validation/omx-policy-chain-2026
 - [ ] 이동 완료, lease 갱신, 이동 중 창 폐쇄→renew 거절→CANCELED/HOLD, 재연결 거절을 측정한다.
 - [ ] teardown 문제도 보존하고 scope를 명확히 기록한다. 실물/학습 정확도/작업 성공은 별도다.
 - [ ] committed revision의 원격 affected·native·browser 필요 검사를 비교해 NEW 0을 확인하고 `tools/land.py --tests auto`로 로컬 main에 착지한다.
+
+## 실행 기록
+
+- Ruling: 생성 상수와 비공개 anchor를 포함한 safety manifest 분류는 별도 `refactor/omx-policy-safety`로 먼저 착지한다. 제품 source에 분류를 빠뜨리거나 FULL을 축소하지 않기 위한 분리다.
+- Ruling: 실제 checkpoint가 없어 사용자 선택대로 고정 SIM 정책을 사용한다. 훈련·학습 정확도와 물리 구동은 검증하지 않는다.
+- 소비기 첫 RED는 module 부재, 후속 리뷰 RED는 만료/미래 응답·proxy·발급 후 차단 근거에 대해 5 failed/23 passed였다. 수정 뒤 28 passed.
+- 실제 Fleet 통합과 기존 session/runtime 회귀는 commit `e622829278`에서 134 passed. 관리자와 운영자의 권한을 분리했고, 실행 전 승인 준비의 HTTP deadline은 실행 중 장치 lease budget과 구분했다. 장치 runtime의 0.2s 전송·1s lease·기존 freshness는 유지했다.
+- Ruling: 초기 소비기 source commit에 Safety-Review trailer가 없으므로 원래 branch를 보존하고 `feat/omx-policy-chain-reviewed`에서 RED 시험과 최종 리뷰된 소비기 source를 손실 없이 다시 커밋했다. 중간의 검토 전 구현은 착지 이력에 넣지 않는다. 재구성 완료 tree는 commit `28cb02e233`과 동일했다.
+- commit `39a42e94d5`에서 drip HTTP deadline 회귀는 실패를 재현했다. 같은 실행의 카메라 시험은 잘못된 calibration digest로 실패했으므로 source-age RED의 증거로 사용하지 않는다. digest와 시험 source path를 수정했다.
+- commit `87abee0f43`에서 원격 136 passed, known-failures NEW 0. 실제 HTTP body drip의 전체 교환 timeout, 환경 proxy 차단, 실제 Camera 클래스의 source-age 차감과 기존 Fleet/session/runtime 회귀를 포함한다. 독립 소스 리뷰는 통과했으며 Gazebo 결과는 별도로 기록한다.

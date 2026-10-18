@@ -223,6 +223,7 @@ def prove(out, runtime, camera, controllers, calibration):
         initial_wire = consumer._wire
         credential = secrets.token_urlsafe(32)
         token_file = out/'sdk.private'
+        token_file.touch(mode=0o600, exist_ok=False)
         token_file.write_text(credential)
         config = dict(auth=dict(tokens=[dict(id='sim-sdk',role='operator',sha256=hashlib.sha256(credential.encode()).hexdigest())]))
         services = SimpleNamespace(config=config,arm_policy=chain.port,safety=SimpleNamespace(estop=False,estop_listeners=[]))
