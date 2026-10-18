@@ -9141,5 +9141,5 @@ osy-d395-s1d\`.
 ## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
 
 - 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
-- 증거: 소비기·통합 회귀 136 passed, 관절 intake 수정 후 기존 owner와 함께 215 passed, 원격 known-failures NEW 0. 실제 Gazebo는 owner_clock_jumped_back을 계측해 원인을 좁혔으며 최신 수정의 전체 동작 확인은 진행 중이다. `docs/validation/omx-policy-chain-2026-10-19/result.md`에 revision·명령·원시 로그 hash와 실패도 보존한다.
+- 증거: 준비된 HTTP helper와 기존 owner·session·Fleet 회귀 222 passed, 별도 Fleet 프로세스와 연결 단절 통합 12 passed. 실제 Gazebo에서 관절 이동 SUCCESS와 갱신·이동 중 철회·cancel ACK/CANCELED·HOLD를 확인했으나 마지막 정지 관측 assertion은 실패해 원시 샘플을 계측 중이다. 전체 동작 통과·착지는 아직 선언하지 않는다. `docs/validation/omx-policy-chain-2026-10-19/result.md`에 revision·명령·원시 로그 hash와 실패도 보존한다.
 - gate 변화: 없음. 고정 SIM 정책과 합성 승인·설치 fixture이며, 학습 모델·Mission admission·물리 구동·실물 배포 승인을 입증하지 않는다.

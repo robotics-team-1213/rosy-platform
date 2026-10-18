@@ -193,7 +193,8 @@ The committed `middleware/robot_execution/local/test/policy_chain_gazebo.py` pro
 runs only through `tools/remote/remote_sim.py`. It uses synthetic SIM approvals and
 an explicitly scripted policy, real Fleet and CORE HTTP authentication, the
 actual LeRobot plugin process, original Gazebo camera frames, the existing owner
-and vendor controller. It checks joint movement, same-lease renewal, in-motion
+and vendor controller. Fleet runs in a separate process; CORE HTTP and ROS share
+the device process. It checks joint movement, same-lease renewal, in-motion
 approval withdrawal, CANCELED/HOLD and reconnect refusal. Run results and limits
 belong in the dated validation record; the probe's existence is not a passing result.
 The probe constructs its installation binding from declared fixture configuration;
