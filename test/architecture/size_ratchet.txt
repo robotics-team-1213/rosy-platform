@@ -12,7 +12,6 @@
 1273 deploy/robot/pinky_pro/native/rosy-face.py
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
-1590 deploy/robot/pinky_pro/native/rosy_auto_update.py
 1023 deploy/robot/pinky_pro/native/sync-image-layer.py
 815 deploy/robot/pinky_pro/release/secret_scan.py
 686 deploy/robot/pinky_pro/release/updater.py
@@ -27,15 +26,14 @@
 691 drive/behaviors/swarm/manager.py
 630 drive/behaviors/traffic_policy/manager.py
 842 drive/motion_limits/adapter/node.py
-16376 fleet
 893 fleet/fleet/cli.py
 962 fleet/fleet/server/app.py
 847 fleet/fleet/server/auth/enrollment.py
 943 fleet/fleet/server/cell/cell_job_store.py
 1325 fleet/fleet/server/console/console.py
+797 fleet/fleet/server/evidence/proposal_store.py
 1014 fleet/fleet/server/ledger/task_store.py
 936 fleet/fleet/server/missions/mission_store.py
-797 fleet/fleet/server/proposal_store.py
 899 fleet/fleet/server/trips/trip_runner.py
 628 fleet/fleet/swarm/session.py
 1234 foundation/core_common/protocol/schemas.py
@@ -71,7 +69,6 @@
 1531 test/learning/perception/test_review_flow_browser.py
 3049 test/test_dashboard_browser.py
 3884 test/test_fleet_console_browser.py
-2632 test/test_rosy_auto_update.py
 2484 test/test_rosy_face.py
 2725 test/test_sd_writer_contract.py
 609 tools/device_test/run.py

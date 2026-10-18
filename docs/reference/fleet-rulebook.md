@@ -81,7 +81,7 @@ law는 후보의 우선순위보다 먼저 적용하며 실행 직전에도 적�
 | FR-STALL | AI-first 대상, 라인 모드 켜짐, stuck 없음, 20 s 동안 정지·이동 < 0.05 m | 허용 선택 WAIT/LINE_OFF/STOP. 최종 condition·law 검사 뒤 기존 CORE API. trip은 WAIT만 | `ProblemWatch`; D-610 |
 | FR-POSE | AI-first 대상, 지도 자세 DEGRADED/UNKNOWN | WAIT/IDENTIFY/STOP. 현재 자세가 회복됐으면 `problem_changed`로 미전송 | `ProblemWatch`; D-395/D-610 |
 | FR-NECESSITY | 동일 사건·revision·유효 근거의 정상/막힘/부족 상태 | DO_NOT_INTERVENE / INTERVENE / ABSTAIN. 실행 권한 아님 | Situation `assessment.py`, `snapshot_assessment.py`; D-652 |
-| FR-DELIBERATION | 현재 CORE blocked 사건에서 유효한 INTERVENE | reobserve/human 후보 토론만. 항상 `action_admissible=False`; 공개 자동 호출 없음 | `server/incident_deliberation.py`, Decision supervisor; D-672 |
+| FR-DELIBERATION | 현재 CORE blocked 사건에서 유효한 INTERVENE | reobserve/human 후보 토론만. 항상 `action_admissible=False`; 공개 자동 호출 없음 | `server/evidence/incident_deliberation.py`, Decision supervisor; D-672 |
 
 ## 4. AI가 파이프라인에 들어오는 위치
 
