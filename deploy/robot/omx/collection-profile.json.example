@@ -17,6 +17,7 @@
   "free_disk_bytes": 1073741824,
   "joint_names": ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"],
   "normalization": [],
+  "reach_tolerance_rad": [],
   "camera_shapes": {"top": [480, 640, 3], "front": [480, 640, 3]},
   "camera_mounts": {
     "top": {"parent_frame": "<measured-arm-base-frame>", "translation_m": [0, 0, 0], "rotation_xyzw": [0, 0, 0, 1], "method": "<how-measured>"},

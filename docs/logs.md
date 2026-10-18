@@ -9012,6 +9012,18 @@ osy-d395-s1d\`.
 - 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
 - gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.
 
+## 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
+
+- 변경: 학습 산출물은 L0 등록만 하고 L1–L3·제한 사용은 Fleet API의 사람 승인으로만 연다는 ADR D-793(Proposed)을 추가했다. 승인 창(L3 15분/상한 30분, 제한 사용 8시간)과 실행 lease(기본 1초/상한 2초)를 나누고, 위험 상황은 HOLD 뒤 확인 요청으로 남겨 API로만 푼다. 실물 owner의 private 설정 `learned_policy` 기동 거부와 실제 도달 확인을 첫 구현 순서로 정했다.
+- 증거: 저장소 조사(owner 허용 목록, `OwnerPolicySession` lease 상한 1초, registry 승격, mission admit·owner recover 패턴)와 비공개 2026-10-18 micro-step 기록 대조. 코드·장치 변경 없음.
+- gate 변화: 없음. 구현·Safety review·실물 수용은 후속이다.
+
+## 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
+
+- 변경: `run_hardware_owner.py --check`가 조립 단계와 같이 `rule_based` 외 owner(`learned_policy` 포함)를 거부한다. 수집기는 성공 terminal 뒤 실제 native 관절이 profile `reach_tolerance_rad` 안에 들어와야 `REACHED`를 남기고 다음 단계로 간다. 들지 않으면 ABORT·HOLD하며 intake는 단계마다 허용차 안의 `REACHED`를 요구한다. rehearsal에 `no_motion` 시나리오를 더했다.
+- 증거: 2026-10-18 비공개 micro-step 기록에서 토크 ON 그리퍼가 목표 2틱 송신 뒤에도 움직이지 않았는데 Action은 SUCCEEDED였다. 원격 시험 결과는 커밋 메시지·후속 행에 남긴다.
+- gate 변화: 없음. 실물 수집·Safety review 수용은 후속이며 실제 시연은 0회다.
+
 ## 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
 
 - 변경: 사이트 Compose에 네 번째 서비스 `postgres`를 파생 문맥·로그 저장소로 추가한다(원장 `fleet.sqlite3`는 그대로 SQLite 하나, D-750). 미러 대상은 D-640 숙고 저널의 터미널 run이다. sink와 그 CLI 표면은 `operations/fleet/fleet/server/ledger/`(등록 유닛)에 둔다: `context_log.py`의 `ContextLog`가 `rosy_deliberation_run`에 best-effort로 기록하고(SQLite 커밋 뒤에만 호출, 실패는 경고와 `False`, 원장 트랜잭션 불변), `context_options.py`가 `--context-db-*`(기본 포트 5432)와 `activate_from_args`를 들며, `deliberation_journal.py`(같은 홀더로 이동, 신원 `fleet.server.ledger.deliberation_journal`)가 `context_log` 파라미터와 `_mirror`를 갖고 프로세스 활성 sink(`set_active`/`active`)를 기본값으로 집는다. `cli.py`는 `add_cli_arguments`·`activate_from_args`를 한 줄씩만 부르고(`app.py`는 손대지 않는다 — D-766 동결 파일), 동결을 맞추려 `_ai_first`·`_stuck_resolver_enrolled`를 `fleet/stuck/cli_config.py`로 옮긴다. `deploy/site/compose.yaml`에 postgres(read_only·tmpfs, `cap_drop: [ALL]`, healthcheck `pg_isready`, `pg_data` 볼륨, `postgres_password` secret)와 Fleet의 `depends_on`·secret·`--context-db-*`를 추가하고, `.env.example`에 `ROSY_SITE_PG_MAX_CONNECTIONS`, `requirements-fleet.txt`에 `psycopg[binary]==3.2.3`을 넣는다. 서명 candidate는 `build_candidate.py`의 `MIRRORED_IMAGES`(postgres:16-alpine, 해석한 digest를 manifest에 기록)로 네 이미지를 포함하고, `verify_candidate.py`·`site_update_io.py`·`rosy_site_autoupdate.py`·`site_functional_setup.py`의 4-이미지 목록과 prune 정규식을 넓힌다. ADR [D-796](../adr/D-796-site-context-log-store-postgres-mirror.md) 파일과 Log 행, `platform-folder-responsibilities.md`의 D-750 예외 한 줄, `deploy/site/README.md`를 함께 남긴다.

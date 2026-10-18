@@ -51,6 +51,9 @@ def validate_observation(sample, profile, now_ns):
         values = sample.get(key)
         require(isinstance(values, list) and len(values) == 6 and all(number(v) for v in values)
                 and all(-100 <= v <= 100 for v in values[:5]) and 0 <= values[5] <= 100, key+' invalid')
+    positions = sample.get('joint_positions')
+    require(isinstance(positions, list) and len(positions) == 6 and all(number(v) for v in positions),
+            'native joint positions invalid')
     stamps = [sample.get('joint_source_stamp'), sample.get('reference_source_stamp')]
     require(set(sample['images']) == {'top', 'front'}, 'two original images required')
     for role, image in sample['images'].items():
@@ -63,6 +66,25 @@ def validate_observation(sample, profile, now_ns):
     require(all(number(stamp) and 0 <= now_ns/1e9-stamp <= profile['max_image_age_s'] for stamp in stamps),
             'source clock stale/future')
     require(max(stamps)-min(stamps) <= profile.get('max_skew_s', .2), 'sensor/reference skew exceeds envelope')
+
+
+def require_provable_motion(start, step, profile):
+    """A step whose every joint stays within tolerance of its start could 'reach' without moving (D-793)."""
+    require(any(abs(t-s) > tol for s, t, tol in zip(start, step['positions'], profile['reach_tolerance_rad'])),
+            'teacher step moves no joint beyond its reach tolerance; motion would be unprovable')
+
+
+def require_reached(backend, step, profile, session_end):
+    """A successful terminal is not motion: the measured joints must settle at the step target (D-793)."""
+    deadline = min(time.monotonic()+profile['max_sample_gap_s'], session_end)
+    while True:
+        sample = backend.observe()
+        validate_observation(sample, profile, time.time_ns())
+        errors = [abs(a-b) for a, b in zip(sample['joint_positions'], step['positions'])]
+        if all(e <= t for e, t in zip(errors, profile['reach_tolerance_rad'])):
+            return errors
+        require(time.monotonic() < deadline, 'joints did not reach the teacher target after a successful terminal')
+        time.sleep(.01)
 
 
 def run_session(profile, teacher, output, backend, *, episodes=1):
@@ -103,7 +125,10 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
             for ordinal, step in enumerate(teacher['steps']):
                 command_id = f'{current["cycle_id"]}-{ordinal}'
                 require(shutil.disk_usage(store.root).free >= profile['free_disk_bytes'], 'disk reserve exhausted')
-                validate_observation(backend.observe(), profile, time.time_ns())
+                before = backend.observe()
+                validate_observation(before, profile, time.time_ns())
+                start = before['joint_positions']
+                require_provable_motion(start, step, profile)
                 append(store.root/'events.jsonl', dict(kind='INTENT', step=step, command_id=command_id,
                                                        time_ns=time.time_ns()))
                 require(time.monotonic()-began < profile['max_session_s'], 'session deadline before dispatch')
@@ -145,6 +170,11 @@ def run_session(profile, teacher, output, backend, *, episodes=1):
                         append(store.root/'events.jsonl', dict(kind='TERMINAL', result=terminal,
                                                                command_id=command_id, time_ns=time.time_ns()))
                     time.sleep(.01)
+                errors = require_reached(backend, step, profile, began+profile['max_session_s'])
+                append(store.root/'events.jsonl', dict(kind='REACHED', command_id=command_id, errors_rad=errors,
+                                                       start_rad=list(start),
+                                                       tolerance_rad=list(profile['reach_tolerance_rad']),
+                                                       time_ns=time.time_ns()))
             require(current['frames'] >= 2, 'insufficient distinct captured frames')
             current.update(complete=True, reason='', end_ns=time.time_ns())
             current = None
