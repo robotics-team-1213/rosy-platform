@@ -216,6 +216,15 @@ def prove(out, runtime, camera, controllers, calibration):
             fleet.window['window_id'],'sim-rig-32x24',cfg.calibration_revision,fleet.scope)
         consumer = FleetLeaseConsumer(scope,request=fleet.device,monotonic=runtime.monotonic)
         journal = PolicyExecutionJournal(out/'execution.sqlite3')
+        admission = dict(owner=runtime.owner.recovery_state(), environment=policy.recheck()['environment'],
+            camera_count=len(policy.recheck()['cameras']), owner_clock=runtime.owner_clock,
+            same_clock=runtime.monotonic is consumer.monotonic, allowed_owners=cfg.allowed_owners,
+            policy_matches=policy.recheck()['revision'] == scope.policy_revision,
+            owner_matches=scope.owner_session_id == runtime.owner.session_id,
+            calibration_matches=scope.calibration_revision == cfg.calibration_revision,
+            binding_present=runtime._policy_binding is not None)
+        (out/'admission.json').write_text(json.dumps(admission,indent=2))
+        print('OMX_POLICY_CHAIN_ADMISSION='+json.dumps(admission),flush=True)
         chain = stack.enter_context(SimPolicyChain(policy=policy,runtime=runtime,fence=fence,consumer=consumer,
             journal=journal,owner_identity=lambda:dict(simulation=True,workcell_id=cfg.workcell_id,
                 instance_id=cfg.instance_id,profile='sim-omx-chain-1'),camera_current=camera.current,
