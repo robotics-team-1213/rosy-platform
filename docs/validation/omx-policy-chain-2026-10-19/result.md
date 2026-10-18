@@ -11,7 +11,7 @@ arm port와 dedicated steady-clock OMX owner에 결속한다. SDK는 관측·목
 owner session은 SDK 입력에서 받지 않는다. ROS callback은 검증된 local cache만 읽는다.
 
 기본값은 비활성이며 SIM 설치만 허용한다. 최대 1초 lease에서 요청·readback 시간을
-차감한다. 각 HTTP 교환은 소유한 격리 subprocess에서 0.2초 timeout으로 실행하고,
+차감한다. lease 전에 준비한 소유 격리 subprocess를 재사용해 각 HTTP 교환을 0.2초 timeout으로 실행하고,
 timeout 시 kill/reap한다. 프로세스 생성·OS scheduling의 실시간 보장은 아니다.
 인증값은 stdin으로 전달하고 환경 proxy와 redirect는 차단한다. fault는 영구 폐쇄하며
 stop fence를 기록한 뒤 worker 종료를 기다린다. 재접속은 rearm하지 않는다.
@@ -36,8 +36,17 @@ admission이 아니며, 이 시험으로 Fleet 작업 완료를 선언하지 않
 | `302614ef41` | `green-intake-final/run-1.txt` | 역행 관측 거부와 기존 owner·session·Fleet 회귀 215 passed / 26.44s |
 | `004350acdf` | `red-renewal-budget/run-1.txt` | 실제 관측한 교환 지연과 고정 대기에서 1.13초에 갱신하는 실패 재현 |
 | `c7792975d0` | `green-renewal-budget/run-1.txt` | 남은 예산에 따른 갱신과 만료된 old authority 거부 포함 217 passed / 13.90s |
+| `d1e938320f` | `red-pinned-capture/run-1.txt` | capture context·프레임 pin·정지 접근성의 3 failed / 1 passed |
+| `d10eb9e4ae` | `green-pinned-capture/run-1.txt` | 257 passed / 1 skipped / 28.69s, runner exit 0, known-failures NEW 0 |
 
-최종 GREEN의 runner 인자:
+`d10eb9e4ae`의 9개 선택은 기존 owner/intake·lease·camera·chain·session·runtime binding에
+`middleware/core/api/test/test_arm_policy_api.py`와
+`learning/training/omx/test/test_act_owner_capture.py`를 더한 것이다.
+마지막 파일의 `test_actual_cpu_model_composition_is_numeric_only`는 torch/LeRobot
+의존성이 없는 HOST 환경에서 건너뛰었다. 실제 모델 실행의 통과 근거로 세지 않는다.
+로그 SHA256: `af988977d7c7d7565f4c99bddb3a637f085b7e2cc1b1a4e34aaf0210ffdbe8d0`.
+
+앞선 136개 회귀의 runner 인자:
 
 ```text
 python tools/remote/remote_pytest.py --log-dir <root>/green-total-final --
@@ -122,6 +131,16 @@ Fleet/CORE HTTP 인증, 원본 Gazebo 카메라, 기존 OMX owner와 vendor cont
   assertion 전에 저장되지 않았으므로 샘플 부족과 계속된 움직임을 구분할 수 없다.
   전체 PASS와 재연결 거부는 확인하지 못했다. `d5cfb0ccc`는 정지 관측을 assertion
   전에 `stop-readback.json`에 보존한다. 수용 기준은 완화하지 않았다.
+- `6e17064cbc`: 원본 RGB capture A 이후 새 프레임 B가 도착해 CORE의 exact-frame
+  검사가 거절했다. `9478923c8`에서 capture context가 원본을 검증·복사까지 pin한다.
+  watchdog의 current 읽기는 immutable snapshot을 잠금 없이 한 번 읽는다.
+  lock 대기 전 수신 anchor를 보존하며 대기 후에도 원래 freshness를 검사한다.
+  기존 exact-frame/hash/lease 검사는 유지했다. 독립 리뷰의 timestamp 지적을 수정했다.
+- `d10eb9e4ae`: 실제 Gazebo는 첫 SDK policy 요청에서 `policy_observation_stale`로
+  중단됐다. 카메라와 Fleet 갱신은 유효했다. `62971299f`는 CORE import/schema/HTTP
+  준비를 lease 전에 수행하고, 최종 앱은 기존 services-bound E-stop 결선으로 생성한다.
+  준비 시간과 원래 joint intake의 source/receipt·거부 이유를 제한된 trace에 남긴다.
+  cold startup이 원인인지는 아직 확정하지 않는다.
 
 probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixture의 설치 binding은
 선언한 시험 설정에서 구성하며, 외부에서 승인된 학습 release의 설치를 검증하지 않는다.
@@ -130,5 +149,9 @@ probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixt
 
 ## 착지
 
-안전 분류 prerequisite는 별도 FULL 검사 중이다. 제품 branch의 최종 affected 검사와
-로컬 main 착지는 아직 완료하지 않았다. GitHub push와 실물 활성화는 수행하지 않았다.
+안전 분류 prerequisite는 로컬 main `3c9254a52676cfcafaaa764c8eabcae5efa9692b`에 착지했다.
+가장 최근 FULL candidate는 `4ee3f3aaa9b3445f063427a76bd70e0f68e30850`, 그 아래 main은
+`7b11775712834f2f1dfcad68ac35e844bc12125d`였다. 외부 `safety-registration-resume/rosy-land/`
+아래 22개 FULL 로그와 main 차이의 guard·affected 로그를 NEW 0으로 확인했다.
+최신 main을 병합한 제품 selection은 `affected`이며, 최종 검사와 착지는 아직 진행 중이다.
+GitHub push와 실물 활성화는 수행하지 않았다.
