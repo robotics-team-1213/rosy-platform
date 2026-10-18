@@ -91,3 +91,17 @@ def test_annotated_mode_closes_webrtc_and_polls_pairs():
     assert result["closed"] == ["stopped"]
     assert result["log"] == ["poll:stop", "webrtc:open", "poll:start"]
     assert "mjpeg:start" not in result["log"]
+
+
+def test_repeated_webrtc_failure_backs_off_to_five_minutes_and_online_resets():
+    setup = ('openResult = "fail"; const timers = [], bus = new EventTarget();'
+             'globalThis.addEventListener = bus.addEventListener.bind(bus);'
+             'globalThis.removeEventListener = bus.removeEventListener.bind(bus);'
+             'globalThis.dispatchEvent = bus.dispatchEvent.bind(bus);'
+             'globalThis.setTimeout = (fn, ms) => { timers.push(fn); log.push(`retry:${ms}`); return timers.length; };'
+             'globalThis.clearTimeout = () => {};')
+    body = ("for (let i = 0; i < 6; i += 1) { timers.at(-1)(); await settle(); }"
+            "globalThis.dispatchEvent(new Event('online')); await settle();")
+    result = run_js(body, setup=setup)
+    delays = [int(item.split(":")[1]) for item in result["log"] if item.startswith("retry:")]
+    assert delays == [15000, 30000, 60000, 120000, 240000, 300000, 300000, 500]

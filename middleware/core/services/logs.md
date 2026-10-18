@@ -808,6 +808,7 @@
 - 변경: `MapSnapshotStore`는 경로 점과 함께 수신 때 map ID·frame ID·monotonic 시각을 보관하고 마지막 수신 나이를 원자적으로 읽는다. 기존 `get_path()` 점 목록 계약은 유지한다.
 - 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
 - gate 변화: LOCAL 경로 출처 근거 추가. 실기 메시지 readback은 HOLD.
+
 ## 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
 - 변경: `recovery/junction_bend.py`(새 mixin) — `bend` 지시는 `armed` 동안 카메라 추종을 그대로 두고 받은 뒤 odom 이동 거리를 센다. 곧은 확신 추종 틱이 닻(몸이 따라온 선)을 남긴다. 호 시작점 `bend_tol_m` + 0.25 m 앞부터 곧은 확신이 아닌 첫 틱(또는 호 시작점 `bend_tol_m` 앞)에서 `bending`: 닻 직선 + 반지름 `bend_radius_m` 호 + 나가는 직선을 pure pursuit로 좇고, `reacquiring`은 나가는 직선을 0.20 m·5 s 안에서 좇으며 D-495 재획득이나 다음 교차로 감지로 끝, 아니면 `unresolved`. 매 틱 D-495 기동 twist(D-422 몸 sweep, enforce 증명)와 `motion_admitted(..., 'bend', map_id)`(IR `clear`만). 거리(odom × 1.08 > 남은 경로 + 0.05)·시간 상한, 근거 상실 `bend_basis_lost`. `junction.py`는 action·검증·`MANEUVER`·운동 근거 종류만 고쳤고, D-495 재획득 상수는 `junction_approach.py`로 옮겼다(값 그대로).
 - 증거: `test_junction_bend.py` 26건(지시 없음과 비트 같음, 카메라 추종 뒤 호와 재획득, lead 창 안 손실로 넘겨받기, 장애물 HOLD에서는 넘겨받지 않음, 닻 없음, 창 밖 감지 unexpected, IR·스캔 stale 근거 상실, IR centre, D-422 막힘 HOLD·재개·오래 막히면 끝, 거리·시간 상한, unresolved, 다음 교차로 감지로 끝, 재전송이 거리 유지, 필드 검증). services 전체 1310 passed(첫 커밋 기준).
@@ -898,6 +899,7 @@
 - 변경: `exit_segment`가 있는 접근 지시를 `junction`으로 내고 실제 호가 running일 때만 `ring` 곡률을 낸다. 독립 검토에서 발견한 접근 차로 오거부 위험을 막는다.
 - 증거: `test_route_context.py` 6 passed(호 시작 전 사례 포함).
 - gate 변화: P1 SOURCE 후보.
+
 ## 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
 - 변경: `localization/pose_request.py`(`PoseRequests`: 사유당 하나, `ttl_s` 30 s, 같은 사유는 id 유지), `recovery/lane_return_pose_request.py`(`fleet` 단계 또는 1 s 넘은 `pose_stale`에서 열고 그 밖의 틱·리셋에서 닫음, `resume_after_pose`는 수락된 결정 뒤 D-407 RESUME). `LocalizationAssist.on_result accepted`가 요청을 닫는다.
 - 증거: `middleware/core/services/test/test_lane_return_pose_request.py`.
@@ -943,6 +945,7 @@
 - Change: Current inquiry carries pose-aligned lane boundary revision after three consistent new observations; stale data and camera motion do not advance the revision.
 - Evidence: Independent source review approved; remote regression pending.
 - Gate: SOURCE only; CORE motion authority and safety checks unchanged; DEVICE/FIELD pending.
+
 ## 2026-10-11 · 1691d395c · refactor: Drive 조립 위치와 feature 책임 구분
 
 - 변경: 알고리즘과 최종 권한은 기존 feature에 두고 CORE 조립을 gateway/core/drive로 분리했다. stuck provider 안내 경로만 정렬했다.
@@ -967,6 +970,7 @@
 - 변경: navigation·docking·swarm·command owner가 각자의 기존 native lock을 쓰는 capture_native_operation을 제공한다. 동일 ledger helper를 쓰며 실행·취소·readback 상태 전이는 바꾸지 않는다.
 - 증거: 실제 네 owner 잠금을 점유한 정지 latch 시험과 정지 후 잠금 경합 시험의 RED 5건 후 원격 safety/native owner·구조·설치 패키지 exit 0/NEW 0. navigation 600줄, swarm 단위 949줄, docking 788줄로 기존 예산을 유지한다.
 - gate 변화: SOURCE 회귀 근거 추가. CORE 단일 writer와 현장 수용 gate는 그대로다.
+
 ## 2026-10-13 · 4d20dbc0d · 안전 정책 최초 실패를 출력 이후 기록
 
 - 변경: SDK None의 정확한 평가 window와 실제 evaluator traceback을 구분한다. CORE는 첫 실패만 보관하고 기존 단일 writer 이후 announce_pending에서 기록한다. 로그 실패도 후속 알림·zero·E-stop을 방해하지 않는다.
@@ -980,6 +984,7 @@
 - 증거: `test/test_power_wake_inputs.py`, `test/test_power_device_policy.py`. 원격 pytest 결과는 이 브랜치의 착지 보고에 둔다.
 - gate 변화: 없음. 벤치 스위치 `power.device_policy.enabled`는 false다. 실기에서 기기를 재우거나 깨운 증거는 없다.
 - 결정: 브랜치의 배터리 "나빠지는 방향만" 웨이크는 옮기지 않았다(main이 이미 단계 변화에만 깨운다).
+
 ## 2026-10-13 · 15f4e0932 · D-744 차로 호의 원을 지도에 고정 (API v1.221)
 
 - 변경: `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`를 받은 때 `authority.py::_place_map_anchor`가 odom 기록(`_odom_log`의 CORE 벽시계)에서 그 표본을 찾아 원 중심을 odom으로 옮기고, `lane_arc.py::_open_arc`가 그 원과 그 접선으로 호를 연다. 풀지 못하면(없음·비유한·2 s 초과·기록에 없음·odom epoch/frame 변경·전진 1.5 m 초과·원에서 0.075 m 초과) 오늘의 자세 기준 원이다. 능력 `lane_arc_map_anchor`, 호 기록 `map_anchor_used`. Fleet은 `routing/execute.py::exit_segment(map_pose=)`와 `trip_runner._step_lane`이 능력과 `odom_stamp`가 있을 때만 싣는다.
@@ -1059,6 +1064,7 @@
 - Change: junction gate grew to 602 lines after both optional bend fields were preserved. Its existing split obligation is applied: unchanged standing-still, start-turn and turn-step methods move to JunctionTurnMixin in turn.py. Constants and yaw wrapper retain gate import identities; one manager state/lock/generation and CORE final writer remain.
 - Evidence: first remote affected group at 7f5e596614 had 10014 passed, 538 skipped and one NEW architecture failure (gate602/trip_ports606). Independent integration_review confirmed all moved and remaining methods' AST identity and source/wheel/sdist closure. Final remote gate is pending.
 - Gate: SOURCE review only; no Gazebo, device, ARM64 or physical acceptance.
+
 ## 2026-10-14 · 75d15d3f4 · 횡단보도 게이트·보고·구역을 `line_follow/crosswalk` 크기 단위로 옮김 (동작 변경 없음)
 
 - 변경: `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py`를 `git mv`로 `line_follow/crosswalk/`의 `gate.py`, `report.py`, `zone.py`로 옮겼다. 바뀐 내용은 import 줄뿐이다. 옛 import 경로는 3줄짜리 호환 재수출 모듈로 남는다. 제품 코드는 새 경로를 import한다. `SIZE_UNITS`에 `drive/behaviors/line_follow/crosswalk`를 더했다.
@@ -1066,6 +1072,7 @@
 - gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
 - 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
 - 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
+
 ## 2026-10-14 · 1ee33639c · D-760 2단계: 통행권 줄이기·순서, trip 임대 중 강제 (API v1.225)
 
 - 변경: `line_follow/authority.py` — `set_authority(..., shrink=False, seq=None)`. `seq`가 같은 `leg_id`에서 마지막으로 본 값 이하면 `accepted: false`, `reason: stale_seq`로 무시하고 쥔 끝과 만료를 건드리지 않는다. `seq`는 거절 판정 전에 기억한다(거절된 줄이기보다 먼저 보낸 늘리기가 늦게 닿아도 받지 않게). 기억 `_authority_seq`는 `leg_id` 하나에 대한 것이고 모드 변경에도 남는다(모드를 껐다 켠 사이에 늦게 닿은 옛 요청이 새 통행권이 되지 않게). `shrink: true`면 끝 = `min(쥔 끝, 요청 끝)`이고 만료를 갱신한다. 강제 조건은 `_authority_on()` 한 곳이다: 설정 `authority_required`, 이 세션의 요청, 또는 `authority_leased()`(CORE가 trip 임대를 묶는다, 기본 거짓). `recovery/junction/gate.py`의 기동 시계 멈춤도 같은 조건을 쓴다(줄 수 변화 없음, 600줄).
@@ -1174,6 +1181,7 @@
 - gate 변화: 없음. `recovery/junction` 단위 1줄 감소.
 - 결정: D-620 노트 2026-10-15, D-760 개정 4.
 - 교훈: 상한 없는 대기 크레딧은 살아 있는 상대가 기다리라고 할 때만 준다. 링크 끊김은 상한으로 닫는다.
+
 ## 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
 
 - 변경: `line_follow/recovery/junction/approach.py` `_stamp_odometer`·`supports_lane_instruction_stamp`, `_expect_window`의 기준 인자. `gate.py` `set_junction(pose_stamp=)`: 설정 `instruction_stamp_enabled`(기본 꺼짐)가 켜져 있으면 `_odom_entry`(D-758 0)로 그 stamp에 발행된 표본을 찾고(정확한 표본만), 같은 표본의 교차로 궤적 주행 거리계(`trail.odometer_at`)를 창의 기준으로, 그 뒤 달린 거리(`trail.odometer` − 그 값)를 굽이의 처음 `travel`로 둔다. 통행권 기록의 `path_m`은 쓰지 않는다. 못 쓰면 받은 때 기준, 거절 없음: 상태 `distance_basis`·`distance_basis_reason`(none_sent·disabled·ambiguous·stale·future·no_sample·epoch). `model.py` 설정 한 줄.
@@ -1181,6 +1189,7 @@
 - gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
 - 결정: D-767 A부 1–3항.
 - 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.
+
 ## 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
 
 - 변경: `recovery/junction/approach.py` `_stamp_odometer`는 `_odom_at_stamp`의 2 s 나이 상한(D-744 지도 자세용)을 쓰지 않고, 정확한 표본을 교차로 궤적이 가진 동안 쓴다. `gate.py`: 거리(창 또는 굽이) 있는 지시의 `pose_stamp`를 못 쓰면 상태를 바꾸기 전에 `JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', reason=…)`(disabled·ambiguous·future·no_sample·epoch·stale). 받은 때 기준으로 조용히 떨어지지 않는다. `pose_stamp` 없는 지시와 거리 없는 지시는 그대로.
@@ -1188,6 +1197,7 @@
 - gate 변화: 없음. 호스트 근거만.
 - 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
 - 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
+
 ## 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
 
 - 변경: `recovery/junction/gate.py` `set_junction`의 stamp 검사를 재전송·굽이 갱신 갈래 뒤로 옮겼다. 둘은 stamp로 재지 않으므로 쓸 수 없는 stamp에도 받는다(되풀이된 거절로 이미 잰 굽이가 만료되던 일).
@@ -1195,6 +1205,12 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2, 재검토 MEDIUM.
 - 교훈: 없음.
+
+## 2026-10-16 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769)
+
+- 변경: Added optional typed route_guide to the existing authority API (reference v1.246). CORE binds it only on acceptance with sequence and exact echoed odom sample. The source lifetime is capped by max_age_s <= 1 and authority TTL; clears and same-source republication do not replenish the budget. Shrink/no-guide/mode reset/expiry/unavailable odom expose no prior. Existing movement-authority acceptance and distance gate semantics remain. No publisher, producer or deployed capability was enabled.
+- 증거: 79 remote tests passed for authority-route binding, existing authority behavior, actual API and protocol version alignment. Ten new tests first failed on the missing route_guide argument. Independent safety review caught and verified the sub-ULP source-lifetime fix: optional binding completes before authority replacement and unrepresentable deadlines drop the guide. Logs: private rosy-d769-audit/authority-route-red and authority-route-green. Per-commit size and safety-review checks passed for all three commits in this slice.
+- gate 변화: None. CORE ROS publication, Fleet selected-route production, Gazebo learned driving and constrained learned-policy acceptance remain pending.
 
 ## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 

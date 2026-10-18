@@ -92,7 +92,7 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
         self._inflight: dict[str, asyncio.Future] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
-        self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
+        self.authority = AuthoritySender(junction, authority, config.port_timeout_s, clock=clock)  # D-517 4 (M2)
         self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}  # D-760 3; 4 state reads; 8 read fence
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
@@ -181,7 +181,7 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink
-                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False), "lane_instruction_stamp": getattr(caps, "lane_instruction_stamp", False),
+                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False), "lane_instruction_stamp": getattr(caps, "lane_instruction_stamp", False), "line_follow_route_guide": getattr(caps, "line_follow_route_guide", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False), "lane_turn_map_entry": getattr(caps, "lane_turn_map_entry", False),
                              "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False), "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone

@@ -30,6 +30,9 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     val origin get() = "http://127.0.0.1:$listeningPort"
     private val client = connection.client()
     @Volatile private var identityVerified = false
+    /** D-789 site media origin, read once from CORE's /pilot policy; null keeps the bundled screens on JPEG. */
+    @Volatile var mediaOrigin: String? = null
+        private set
     /** 한 번 실패를 알렸으면 다음 성공 응답에서 회복을 알린다 — 오류 문구가 회복 뒤에도 남지 않게. */
     @Volatile private var failureReported = false
     private val sockets = ConcurrentHashMap.newKeySet<Relay>()
@@ -156,7 +159,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         status(code), mime, bytes.inputStream(), bytes.size.toLong()))
     private fun secure(response: Response): Response = response.apply {
         addHeader("Cache-Control", "no-store")
-        addHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        addHeader("Content-Security-Policy", PilotCsp.header(mediaOrigin))
         addHeader("X-Content-Type-Options", "nosniff")
         addHeader("Referrer-Policy", "no-referrer")
     }
@@ -170,6 +173,11 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             check(JSONObject(bytes.toString(Charsets.UTF_8)).optString("robot_id") == target.id) { "robot identity mismatch" }
             identityVerified = true
         }
+        // CORE names its site media origin only in its own /pilot CSP; an older CORE or any failure leaves JPEG.
+        mediaOrigin = runCatching {
+            client.newCall(Request.Builder().url("$scheme://${target.host}:${target.port}/pilot").build()).execute()
+                .use { if (it.isSuccessful) PilotCsp.mediaOrigin(it.header("Content-Security-Policy")) else null }
+        }.getOrNull()
     }
     fun disconnect() { sockets.toList().forEach { it.disconnect() }; sockets.clear(); client.dispatcher.cancelAll(); client.connectionPool.evictAll() }
     /** Best-effort zero before cancel: bounded and off-main; CORE deadman covers an unreachable robot. */

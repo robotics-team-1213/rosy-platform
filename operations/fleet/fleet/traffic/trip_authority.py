@@ -23,6 +23,7 @@ from typing import Iterable
 
 from core_common.protocol.line_authority import LEGACY_TTL_S, MAX_TTL_S, MAX_UNTIL_M
 from fleet.traffic.trip_advice import FLEET_EPOCH
+from fleet.traffic.route_guide import guide_for_authority, record_trip_guidance
 
 _LOG = logging.getLogger(__name__)
 CORE, HOLD_BACK = "core", "hold_back"
@@ -31,6 +32,8 @@ QUARANTINE_S = MAX_TTL_S
 
 
 class AuthoritySender:
+    record_guidance = staticmethod(record_trip_guidance)
+
     def __init__(self, port, enabled: bool = False, timeout_s: float = 1.5, clock=time.monotonic) -> None:
         self._port, self.enabled, self._timeout_s, self._clock = port, enabled, timeout_s, clock
         self.quiet_until = clock() + QUARANTINE_S
@@ -86,7 +89,9 @@ class AuthoritySender:
         until = round(min(MAX_UNTIL_M, max(0.0, absolute - live.trim_m - front)), 3)
         self._held[robot_id] = {"leg": leg, "stamp": stamp, "until_m": until, "shrunk": False, "sent_at": self._clock()}
         shrinks = (live.view.get("caps") or {}).get("line_follow_authority_shrink") is True
-        return self._request(live, leg, pose_stamp=stamp, until_m=until, ttl_s=MAX_TTL_S if shrinks else LEGACY_TTL_S)
+        guide = guide_for_authority(live, stamp, self._clock())
+        return self._request(live, leg, pose_stamp=stamp, until_m=until, ttl_s=MAX_TTL_S if shrinks else LEGACY_TTL_S,
+                             **({'route_guide': guide} if guide is not None else {}))
 
     def shrink(self, live) -> dict | None:
         """D-760 3: stand here, to a shrink-capable robot holding an extend not yet confirmed shrunk; the newest

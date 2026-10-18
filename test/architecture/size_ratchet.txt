@@ -7,7 +7,7 @@
 # learning). Regenerate the measured rows: python test/architecture/test_module_structure.py
 15915 control
 748 core/events/core_events/events/audit.py
-888 core/gateway/core/bridge/ros_bridge.py
+887 core/gateway/core/bridge/ros_bridge.py
 817 deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py
 1273 deploy/robot/pinky_pro/native/rosy-face.py
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
