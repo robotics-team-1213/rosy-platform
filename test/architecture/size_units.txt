@@ -16,6 +16,7 @@ drive/behaviors/line_follow/cue small
 drive/behaviors/line_follow/crosswalk small
 drive/behaviors/line_follow/signal small
 drive/behaviors/localization
+drive/behaviors/docking
 drive/behaviors/swarm small
 fleet/fleet/traffic
 fleet/fleet/observe small
