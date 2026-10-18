@@ -69,6 +69,14 @@ def test_boundaries_are_the_paint_inner_edge_moved_inward_by_half_the_paint():
     assert [b["intercept_m"] for b in wide] == pytest.approx([.0725, -.0725])
 
 
+def test_a_drivable_way_edge_is_already_the_corridor_edge():
+    keeper = {"boundaries": [dict(selected=True, side=side, edge_m=True, ends_m=[[.15, y], [.27, y]])
+                             for side, y in (("left", .08), ("right", -.08))]}
+    edges = containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033)["boundaries"]
+    assert [b["intercept_m"] for b in edges] == pytest.approx([.08, -.08])
+    assert all("edge_m" not in b for b in edges)   # the contract carries no producer detail
+
+
 def test_paint_shift_does_not_change_the_projection_uncertainty():
     keeper = {"boundaries": [dict(selected=True, side="left", slope_sd=0., offset_sd=0., ends_m=[[.1, .0925], [.3, .0925]])]}
     u = [containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033,
@@ -82,6 +90,17 @@ def test_paint_edges_that_cross_send_no_corridor():
     keeper = {"boundaries": [dict(selected=True, side=side, ends_m=[[.1, y], [.3, y]])
                              for side, y in (("left", .01), ("right", -.01))]}
     assert containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033)["boundaries"] == []
+
+
+def test_a_bend_inner_line_that_narrows_the_corridor_at_the_body_sends_none():
+    # v2 lap r27 at the west road's SW: the spoke's inner line read as the left edge, 0.015 m from
+    # the right edge at x 0, put the body over it and CORE into a lane return on an open lane.
+    keeper = {"boundaries": [dict(selected=True, side="left", edge_m=True, ends_m=[[.144, .027], [.261, .119]]),
+                             dict(selected=True, side="right", edge_m=True, ends_m=[[.165, -.08], [.258, -.068]])]}
+    assert containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033)["boundaries"] == []
+    lane = {"boundaries": [dict(selected=True, side="left", edge_m=True, ends_m=[[.15, .11], [.25, .11]]),
+                           dict(selected=True, side="right", edge_m=True, ends_m=[[.15, -.07], [.25, -.07]])]}
+    assert len(containment_payload(lane, ground(), stamp=1., source="GAZEBO", camera_x=.033)["boundaries"]) == 2
 
 
 def _paint_runs_mm(x_m):

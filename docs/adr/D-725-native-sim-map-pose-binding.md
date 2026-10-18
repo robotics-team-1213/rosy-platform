@@ -43,4 +43,23 @@ baseline에서 operator pin anchor가 10초를 넘어 DEGRADED가 되어 Fleet t
 
 회귀는 adapter SOURCE 근거다. 실제 Gazebo는 exact source/map/model/run binding, live clock/native stamp/UTC authority, active map, actual trip/lease/grant, arrival 또는 실패, 최종 OFF/rest/cleanup로 따로 확인한다. native SIM ground truth 기반 Fleet arrived는 Vision/AMCL/실물 localization 수용이 아니다. 0.25초 native freshness 창과 실제 CORE 시각 쌍의 수용은 runtime에서 확인해야 한다.
 
+### 개정 1 (2026-10-18) — 오래된 입력은 그동안만 UNKNOWN, 재설정·재생·모순만 고정한다
+
+drivable v2 Gazebo 한 바퀴(`feat/v2-sim-lap`, r21–r32)에서 3항의 "stale 입력은 UNKNOWN을 latch한다"가 주행과 무관한 한 번의 지연으로 run 전체를 끝냈다. 원인은 `fleet_trips.py`가 종료 때 남기는 위치 진단으로 확인했다.
+
+- r24: CORE가 아직 odom 없는 첫 snapshot → `core_snapshot_invalid_or_stale`, 두 대 모두 출발 못 함.
+- r26: 로봇 생성 중 `/clock`이 멈췄다 다시 시작 → `clock_reset_or_replay`, 출발 못 함.
+- r22: 주행 중 CORE 상태 읽기 한 번 실패 → `core_read_failed`, 1.25 m에서 정지.
+- r32: 모델 PC 부하 24(다른 세션의 시험)에서 native·CORE 쌍이 잠시 오래됨 → `native_or_core_stale_or_contradictory`, 0.7 m에서 정지.
+
+결정:
+
+1. 오래된 입력(늦은 `/clock`, 늦은 수신·native sample, sample 사이 간격, `max_pair_s`·`max_odom_age_s`·`max_interp_gap_s`를 넘은 쌍)은 그 sample을 버리고 그동안 UNKNOWN을 낸다. 새 sample과 새 CORE snapshot이 맞으면 다시 LOCALIZED다.
+2. 고정(latch)은 재설정·재생·모순에만 남는다: `/clock` 또는 wall/monotonic 역행, 수신 순서 역행, foreign binding, 무효 sample, 로봇이 움직일 수 없는 속도의 위치 점프(간격이 있어도 stamp 차이로 판정), native와 CORE 위치·방향 모순, active map 변경.
+3. 시작 시 아직 odom이 없는 CORE snapshot, 첫 위치 전의 `/clock` 멈춤·재시작은 취소할 위치가 없으므로 다시 읽는다. CORE 읽기 실패 한 번은 마지막 snapshot을 유지하고, 그것이 `max_odom_age_s`를 넘으면 1항대로 UNKNOWN이다.
+
+안전 영향: UNKNOWN 동안 Fleet은 지금처럼 trip을 시작하지 않고(`TRIP_POSE_UNTRUSTED`) 진행 판정에 쓰지 않는다. CORE의 정지·스캔·IR·몸 정지는 바뀌지 않는다. 이 port는 `deployment_profile: simulation`에서만 쓰이고 실물 localization 주장을 하지 않는다.
+
+확인: `test/test_native_gazebo_map_pose.py` — 늦은 시계는 UNKNOWN 뒤 새 sample로 회복, 시계 역행은 run 동안 고정, 간격 뒤 정지 sample은 수용·간격을 건넌 점프는 고정, odom 없는 시작 snapshot은 대기, 첫 위치 전 시계 멈춤은 재기준, CORE 읽기 실패는 snapshot 만료까지 유지. SIM 결과는 주행 일지에 적는다.
+
 **Related:** D-494, D-511, D-517, D-541, D-676, D-427, D-429, D-430.
