@@ -102,10 +102,13 @@ class Host:
         """Restart the service units and report whether all are still active after `settle` seconds."""
         if not units:
             return True
-        if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
+        try:
+            if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
+                return False
+            time.sleep(self.cfg.get("settle", 10))
+            return subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30).returncode == 0
+        except subprocess.TimeoutExpired:
             return False
-        time.sleep(self.cfg.get("settle", 10))
-        return subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30).returncode == 0
 
     def archive(self, sha: str, paths, target: Path) -> None:
         mirror = Path(self.cfg["root"]) / "mirror.git"
@@ -292,15 +295,20 @@ class Updater:
             log(step="would_switch", release=name)
             return "would_switch"
         previous, previous_env = state["current"], state.get("env")
+        # A first install may replace a hand-made `current` (deploy-situation.sh); put it back on failure.
+        before = {link: os.readlink(self.root / link) for link in ("current", "current-env")
+                  if (self.root / link).is_symlink()}
         self.link(name, env)
         units = self.cfg.get("units", [])
         if not (self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python")
                 and self.host.restart(units)):
             if previous:
                 self.link(previous, previous_env)
-                self.host.restart(units)
-            else:  # first install: leave no current pointing at a broken release
+            else:  # first install: what was there before, or no current pointing at a broken release
                 self.unlink()
+                for link, target in before.items():
+                    (self.root / link).symlink_to(target)
+            self.host.restart(units)
             log(step="rolled_back", release=name, to=previous)
             state["failed"] = name  # do not retry it every run until main moves on
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})

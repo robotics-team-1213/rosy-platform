@@ -275,6 +275,16 @@ def test_a_service_that_does_not_stay_active_is_rolled_back_and_restarted_on_the
     assert u.run() == "known_bad"
 
 
+def test_a_failed_first_service_install_puts_back_the_hand_deployed_current(tmp_path):
+    (tmp_path / "abc123").mkdir()
+    (tmp_path / "current").symlink_to(tmp_path / "abc123")
+    host = FakeHost()
+    host.healthy = False
+    assert updater(tmp_path, host, **SERVICE).run() == "rolled_back"
+    assert current(tmp_path) == str(tmp_path / "abc123") and not (tmp_path / "current-env").is_symlink()
+    assert host.restarts == [["rosy-situation.service"]] * 2  # restarted again on the old code
+
+
 def test_a_service_config_names_its_paths_smoke_units_and_root(tmp_path, monkeypatch):
     monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "home"))
     path = tmp_path / "cfg.json"
