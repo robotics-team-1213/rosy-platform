@@ -9343,3 +9343,9 @@ osy-d395-s1d\`.
 - 변경: `native_cycle.py`의 cycle receipt에 `policy_revision`(모델 파일 목록 해시)·rig/보정 revision을 남기고, `register_policy.py`가 그 영수증 해시를 근거로 Fleet에 L0 제안을 올린다(`--dry-run`/`--confirm`, 토큰은 `ROSY_FLEET_TOKEN`만). 오프라인·미승격 영수증만 받는다.
 - 증거: 원격 pytest(등록 본문·거절 조건·HTTP 경로·CLI). 실제 학습 산출물 등록은 첫 실물 학습 뒤다.
 - gate 변화: 없음. L0은 실행 권한이 아니다.
+
+## 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치
+
+- 변경: 승인 API가 Mission 경로 설치에 묶여 있어, `--mission-api` 없이 도는 현장 Fleet(e88bb79023)에서 `/api/fleet/workcells/{id}/policy/*`가 404였다. 작업 기록부(`--tasks-db`)만 있으면 작업 화면 경로와 함께 설치한다.
+- 증거: 현장 컨테이너 안에서 `/console/policy` 200, 작업셀 목록 API 404 확인. Mission 없는 앱 시험을 추가했다.
+- gate 변화: 없음. 현장 작업셀 설정과 `policy_admin` 표시는 후속이다.
