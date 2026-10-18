@@ -9143,3 +9143,9 @@ osy-d395-s1d\`.
 - 변경: `tools/land.py`가 시험 회차 전에 `<git-common-dir>/rosy-land-queue/`에서 FIFO 표를 받고(`tools/land_queue.py`), 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린 뒤 `main`을 한 번 병합하고 시험한다. 기다리기 전에 D-430 5·D-766 검사를 먼저 한다. `--queue-timeout`(기본 180분), 사고 대응용 `--no-queue`. 표는 `main()`의 `finally`와 `atexit`가 풀고, 같은 호스트에서 pid가 없거나 3시간 동안 새로 고쳐지지 않은 표는 다음 세션이 지운다. `AGENTS.md`·`docs/reference/shared-checkout.md`·스킬 카드·`tools/AGENTS.md`·2026-10-18 착지 교훈 노트를 같이 고쳤다. 동료가 선점한 D-801, D-802를 `adr_gaps.txt`에 적었다.
 - 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
 - gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
+
+- 변경: 첫 장치 런북에 sd-setup.local.json, 설정 전용 Configure, Wi-Fi 보안 저장과 등록부 초기화 선택, 카드 교체·완료 확인 순서를 기록했다.
+- 증거: 사용자 승인된 비밀정보 없는 JSON 구성과 기존 작성기의 종료 표식·영수증·등록부 경로에 맞춰 작성했다. 카드가 없는 설정 준비와 실제 매체 수용을 구분한다.
+- gate 변화: 없음. 실제 SD 기록·부팅·현장 수용은 미수행이다.
