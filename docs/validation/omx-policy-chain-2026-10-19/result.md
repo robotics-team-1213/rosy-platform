@@ -183,6 +183,13 @@ probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixt
 
 ## 착지
 
+첫 제품 착지 candidate `faa12fcdcc`의 guard는 246 passed/1 failed였다.
+`test_moved_roots_leave_nothing_behind`가 fixture의 서로 다른 검색 경로 문자열
+`operations/processes/palletizing/src`, `contracts/foundation`을 옛 경로 join으로
+읽었다. 단독 재실행도 실패했고 같은 검사는 main `9acdf6685c`에서 통과했다.
+foundation 경로를 목록 앞에 두어 문자열 인접성을 없앴다. 실제 검색 경로 집합과
+fixture의 HTTP·승인·실행 검증은 유지하며, 수정된 커밋으로 검사를 다시 요청한다.
+
 안전 분류 prerequisite는 로컬 main `3c9254a52676cfcafaaa764c8eabcae5efa9692b`에 착지했다.
 가장 최근 FULL candidate는 `4ee3f3aaa9b3445f063427a76bd70e0f68e30850`, 그 아래 main은
 `7b11775712834f2f1dfcad68ac35e844bc12125d`였다. 외부 `safety-registration-resume/rosy-land/`

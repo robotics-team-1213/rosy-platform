@@ -19,9 +19,9 @@ import httpx
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
                str(ROOT/'middleware/robot_execution/local/src'), str(ROOT/'operations/fleet'),
-               *[str(ROOT/path) for path in ('operations/world/src', 'operations/decision/src',
+               *[str(ROOT/path) for path in ('contracts/foundation', 'operations/world/src', 'operations/decision/src',
                    'operations/site_execution/src', 'operations/processes/palletizing/src',
-                   'contracts/foundation', 'middleware/core/services')]]
+                   'middleware/core/services')]]
 sys.path[:0] = [str(ROOT/'contracts/skill/src'),str(ROOT/'contracts/learning/src')]
 from rosy.execution.local.policy_lease import FleetPolicyHttp
 from fleet.server.app import create_app
