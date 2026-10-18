@@ -37,6 +37,7 @@ class RosyOmx(Robot):
     def __init__(self, config):
         super().__init__(config)
         self.config, self._client = config, None
+        self.cameras = {config.camera_name: None}  # Recorder counts streams; CORE supplies the pixels.
 
     @property
     def action_features(self):
