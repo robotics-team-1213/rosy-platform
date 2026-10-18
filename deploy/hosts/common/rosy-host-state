@@ -272,6 +272,7 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
                 shutil.rmtree(folder, ignore_errors=True)
                 raise RuntimeError(f"pip install {name}=={version}: {result.stderr.strip()[-400:]}")
         done = []
+        link.parent.mkdir(parents=True, exist_ok=True)
         for tool in sorted((folder / "bin").iterdir()):   # uv ships uv and uvx
             target = link.with_name(tool.name)
             tmp = target.with_name(target.name + ".rosy-tmp")
