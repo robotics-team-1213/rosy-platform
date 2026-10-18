@@ -2,7 +2,7 @@
 """Update gate (D-805): an updater may start only while nothing freezes updates. ExecCondition= hook.
 
 Every unit that changes code, images, models, the engine or reboots the host runs this first
-(`ExecCondition=/usr/local/bin/rosy-update-gate`, via a host-state drop-in or in the unit itself).
+(`ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'`, via a host-state drop-in or in the unit itself).
 Exit 0 lets the unit run; exit 1 makes systemd skip it (logged as a condition, not a failure). It
 never exits 255, so the unit is never marked failed by the gate.
 

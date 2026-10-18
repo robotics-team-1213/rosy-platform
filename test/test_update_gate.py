@@ -7,7 +7,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-GATE = ROOT / "deploy/hosts/common/rosy-update-gate"
+GATE = ROOT / "deploy/hosts/common/host-state/rosy-update-gate"
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell fake git")
 
 
@@ -57,11 +57,11 @@ def test_a_local_freeze_file_wins_without_asking_the_network(tmp_path, where):
 
 
 def test_every_gated_unit_and_drop_in_points_at_the_installed_gate():
-    dropin = (ROOT / "deploy/hosts/common/10-update-gate.conf").read_text()
-    assert "ExecCondition=/usr/local/bin/rosy-update-gate" in dropin
+    dropin = (ROOT / "deploy/hosts/common/host-state/10-update-gate.conf").read_text()
+    assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in dropin
     for unit in ("deploy/robot/omx/rosy-omx-autoupdate.service", "deploy/model_pc/rosy-review-release-update.service",
                  "deploy/site/rosy-model-code-update.service"):
-        assert "ExecCondition=/usr/local/bin/rosy-update-gate" in (ROOT / unit).read_text(), unit
+        assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in (ROOT / unit).read_text(), unit
     common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text()
     assert "safe file /usr/local/bin/rosy-update-gate common/rosy-update-gate 0755" in common
     for manifest, units in (("site", ("rosy-site-autoupdate", "rosy-docker-upgrade", "rosy-nightly-reboot")),
