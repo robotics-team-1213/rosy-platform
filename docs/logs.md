@@ -8898,6 +8898,13 @@ osy-d395-s1d\`.
 - 증거: docs/plans/2026-10-16-measured-camera-lifecycle.md; docs/validation/measured-camera-lifecycle-2026-10-16/baseline.md. 기존 revision 89d3ba4d10의 AI 시험 PC 원격 53 passed, terminal exit 0, known_failures NEW 0.
 - gate 변화: 없음. 제품 구현은 계획 검토 전이며 기준선은 새 기능이나 브라우저·장치·현장 수용을 증명하지 않는다. 원시 로그 C:/DevTemp/camera-calibration/baseline/run-1.txt.
 
+## 2026-10-16 · uncommitted · docs(reference): git으로 일하는 법과 인수인계 문서
+
+- 변경: `docs/reference/git-workflow.md`(팀원 PR 길과 실험실 착지 길 비교, `--no-verify` 기준, push 순서, D-762 단계 현황, 사용자가 정할 것)와 `docs/reference/handoff.md`(목표, 증거 기준 현재 상태, 2026-10-15 흐름별 인계 문서 색인, 다음 할 일, 담당, 새 컴퓨터 체크리스트) 신규. README 「시작하기」·문서 지도, CONTRIBUTING, 팀 가이드 읽기 순서에서 링크. 팀 가이드 §1.5·§6의 훅 설명과 `--no-verify` 문구를 CONTRIBUTING(D-584 개정)과 맞추고 `middleware/apps/device/`를 `middleware/devices/`로 정정. shared-checkout·루트 AGENTS·rosy-land-on-main SKILL의 옛 우산 경로(F: 드라이브)를 컴퓨터와 무관한 상위 폴더 표기로.
+- 증거: 새 문서 두 개의 상대 링크를 파일 존재로 확인했다. `rosy_harness.py lint`와 문서 계약 시험은 이 PC에 Python이 없어 돌리지 않았다(미실행).
+- gate 변화: 없음.
+- 결정: 없음. 절차는 바꾸지 않고 기존 ADR과 CONTRIBUTING의 규칙을 모아 적었다.
+
 ## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 
 - 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
@@ -9099,6 +9106,12 @@ osy-d395-s1d\`.
 - 변경: `plans/2026-10-18-github-pr-landing-path.md`를 추가했다. 이 노트북에서 막힌 원인, 공개키 등록과 origin SSH 전환 절차, 로컬 `main`에만 있는 320개 커밋의 주제별 묶음과 PR 게시 순서, squash 사본 충돌 재발 방지, 이후 PR·`ci.yml` 병렬 흐름을 정리했다.
 - 증거: 이 노트북에서 HTTPS `curl`은 10초 시간 초과(000)였다. SSH는 `Permission denied (publickey)`(키 `SHA256:mybrpgxI…` 미등록)였고 origin은 HTTPS다. `gh` 2.102.0의 auth 확인은 시간 초과였다. `origin/main..main` 320개(merge 64), 반대 방향 32개였다. 밀린 커밋 중 `Safety-Review:` trailer 11개, trailer 없는 안전 경로 커밋 2개(`safety_review.py --warn-only`)를 확인했다.
 - gate 변화: 없음. push·PR·remote 변경·로컬 `main` reset은 하지 않았고 사용자 결정으로 남겼다.
+
+## 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존
+
+- 변경: git 안내·날짜별 인수인계 문서를 최신 main과 합쳤다. README의 동시 작업 링크, 팀 가이드의 개인 클론 훅 예외, main 기준선에서 NEW를 재현하는 절차를 보존했다. 새 git 안내의 오래된 FULL 착지 안내는 최신 공유 체크아웃 절차로 연결했다.
+- 증거: 수동 충돌을 해결하면서 main의 규칙을 유지했고 원래 문서 추가·링크 변경만 남겼다. 문서 상대 링크와 lint·원격 회귀 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. push·배포·실물 시험은 하지 않는다.
 
 ## 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
 
