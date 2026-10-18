@@ -42,4 +42,20 @@ class GroupCommandFanoutTest {
             assertEquals(listOf("{\"linear\":0.08,\"angular\":0.0}", "{\"linear\":0,\"angular\":0}"), b)
         } finally { workers.shutdownNow() }
     }
+
+    @Test fun releasedStickSendsAFewZerosThenGoesSilentUntilTheNextMotion() {
+        val workers = Executors.newFixedThreadPool(2)
+        try {
+            val a = mutableListOf<String>(); val b = mutableListOf<String>()
+            val fanout = GroupCommandFanout(workers, { body -> synchronized(a) { a.add(body) }; 200 },
+                { body -> synchronized(b) { b.add(body) }; 200 })
+            assertTrue(fanout.send(0.08, 0.0))
+            repeat(10) { assertTrue(fanout.send(0.0, -0.0)) }
+            assertEquals(1 + IDLE_ZERO_REPEATS, a.size)
+            assertTrue(fanout.send(0.05, 0.0))
+            repeat(10) { fanout.send(0.0, 0.0) }
+            assertEquals(2 + 2 * IDLE_ZERO_REPEATS, a.size)
+            assertEquals(a, b)
+        } finally { workers.shutdownNow() }
+    }
 }
