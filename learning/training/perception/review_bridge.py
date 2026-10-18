@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/
 from job_state import Job, JobError, receipt
 from learning_cycle import verified_export
 
+#: Network load: the export archive scp is capped at this many kbit/s (config "limit_kbps"; 0 = unlimited).
+DEFAULT_LIMIT_KBPS = 2000
 SSH_OPTIONS = ["-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o",
                "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=5"]
 
@@ -112,8 +114,12 @@ def publish(folder, digest, config, out):
             tar.add(folder / name, arcname=name, recursive=False)
     remote_archive = target + "/.incoming-" + digest + ".tar"
     # The remote root is provisioned by the producer; no root command or secret copy.
-    subprocess.run(["scp", *SSH_OPTIONS, str(archive), peer + ":" + remote_archive],
-                   check=True, capture_output=True, timeout=60)
+    limit = int(config.get("limit_kbps", DEFAULT_LIMIT_KBPS))
+    cap = ["-l", str(limit)] if limit > 0 else []
+    # The capped copy may take longer than the old 60 s: allow twice its paced time.
+    timeout = max(60, 2 * archive.stat().st_size * 8 / (limit * 1000) + 30) if limit > 0 else 60
+    subprocess.run(["scp", *SSH_OPTIONS, *cap, str(archive), peer + ":" + remote_archive],
+                   check=True, capture_output=True, timeout=timeout)
     script = r'''
 import hashlib,json,pathlib,tarfile
 root=pathlib.Path(ROOT);archive=root/('.incoming-'+DIGEST+'.tar')

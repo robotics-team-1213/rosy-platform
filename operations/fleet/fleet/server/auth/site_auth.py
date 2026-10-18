@@ -38,7 +38,13 @@ class SitePrincipal:
     def permits_site(self, capability: str, legacy_roles=None) -> bool:
         if self.account_id:
             return bool(self.site_resource) and self.permits(self.site_resource, capability)
-        return legacy_roles is None or self.role in legacy_roles
+        # D-793: a users-file grant (policy_admin) adds a capability beside the single legacy role.
+        return (legacy_roles is None or self.role in legacy_roles
+                or any(scope == "legacy" and capability in caps for scope, caps in self.grants))
+
+
+def legacy_grants(details: Mapping) -> tuple:
+    return (("legacy", ("fleet.policy",)),) if details.get("policy_admin") is True else ()
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
@@ -62,7 +68,7 @@ def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
                 or principal_id in seen_principal_ids
                 or role not in {"viewer", "operator", "policy-admin", "service", "ai_observer"}):
             raise ValueError("site user credentials require a token, principal_id, and known role")
-        principals[token] = SitePrincipal(principal_id, role)
+        principals[token] = SitePrincipal(principal_id, role, grants=legacy_grants(details))
         seen_principal_ids.add(principal_id)
     if not principals:
         raise ValueError("site user credentials cannot be empty")

@@ -1,6 +1,6 @@
 ## D-798 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선, 상속된 초과 커밋의 재적층
 
-**Status:** Proposed (2026-10-18). D-766을 약하게 하지 않는다. 한도, ratchet, 커밋마다 녹색 규칙은 그대로다. 이 ADR은 그 규칙 아래에서 막힌 단위에 실제 여유를 만드는 분할 지도와 순서를 제안한다. 분할 자체는 사용자 승인 뒤에 한다. fleet와 console에는 지금 다른 세션이 착지하고 있다.
+**Status:** Accepted (2026-10-18, 사용자 결정: 분할을 실행한다). D-766을 약하게 하지 않는다. 한도, ratchet, 커밋마다 녹색 규칙은 그대로다. 이 ADR은 그 규칙 아래에서 막힌 단위에 실제 여유를 만드는 분할 지도와 순서를 정한다. 각 분할은 4항의 순서대로 한 단계 한 브랜치로 착지한다.
 
 ### Context
 
@@ -40,8 +40,10 @@
       - `auto_update_apply.py`(약 335): systemctl부터 settle, 되돌리기, native 복구, prune, `apply`, `_core_down`.
       - `rosy_auto_update.py`(약 390): `Updater` 본체와 경로, resume, 잠금, `run`, `main`.
       - 고칠 것: `test/test_native_systemd_contract.py`의 유닛 파일 목록, 시험의 monkeypatch 대상 셋(`upd.Host`, `upd.API_BASE`, `upd.HISTORY_MAX_BYTES`). 열린 질문: `sync-image-layer.py`가 native-runtime 파일을 한 번에 바꾸는지 확인한다. 아니면 동기화 중 꺼진 로봇에 서로 다른 판의 모듈이 남을 수 있다. 실기 확인이 필요해 맨 뒤에 한다.
+        - 답(2026-10-19): 한 번에 바꾸지 않는다. 파일마다 `os.replace`하고(`_install`), manifest의 `files_applied`로 기록해 다음 sync의 `reconcile()`이 마무리하거나 되돌린다. 그 다음 sync는 보통 이 updater가 부르므로, 섞인 형제 때문에 import가 실패하면 아무도 고치지 못한다. 그래서 `rosy_auto_update.py`는 `/opt/rosy/native-runtime`에서 실행될 때 import 실패를 받으면 활성 릴리스의 `sync-image-layer.py`를 한 번 돌리고 다시 실행한다(`ROSY_AUTO_UPDATE_RESYNCED`로 한 번만, `test/test_rosy_auto_update_resync.py`). import는 되지만 판이 섞인 경우는 막지 못한다. 실기 전원 차단 확인은 아직 하지 않았다.
    4. **`test/test_rosy_auto_update.py` 2,632.** 가짜와 fixture는 `test/auto_update_fakes.py`(약 380, `test/fake_core_ssh.py`와 같은 방식). 시험은 3.3의 경계대로 `_check`(설정·GitHub·stage·gate·네트워크, 약 420), `_eligibility`(약 500), `_apply`(기록·유닛·prune·D-433 표시, 약 615), `_resume`(resume·core-down 면제·되돌리기 검토, 약 650)로 나눈다. `COVERAGE_ROWS`의 행을 지운다.
    5. **trip 파일.** `trip_ports.py`(600)에는 port, `HttpLaneJunction`, `TripConfig`, `TripError`(약 225줄, 39개 파일이 import)를 남기고 굽은 길·교차로 기하는 `trip_geometry.py`로, `LiveTrip`은 `trip_live.py`로 옮긴다(약 10개 import 수정). `trip_runner.py`(899)는 이미 mixin(`TripAdmission`, `TripProgress`)을 쓴다. `_step`부터 `_step_free`까지(약 310줄)를 `TripSteps` mixin으로, 재계획·AI 확인·바퀴 수 부분을 `TripReplan`으로 옮겨 약 470줄을 남긴다.
+   6. **`core_features` 단위(후보).** 2026-10-18 main 머지 뒤 10,000/10,000줄로 한도에 딱 닿았다(`docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 5절). 다음 순증은 어디서든 나누기가 먼저다. 분할 지도는 아직 없다. 이 단위에 더할 일이 생기면 그 세션이 먼저 지도를 이 절에 적고, 나누기 브랜치를 따로 착지한다. 이 후보는 4항 순서의 (1)~(5) 뒤가 아니라 필요해지는 때에 한다.
 4. **순서.** (1) fleet holder 1→5. 기계적인 이동이고 import 수정이 없다. (2) console `sitemap/`, `install/`, `map/`. (3) `trip_ports`, 다음 `trip_runner`. (4) console의 넘은 파일. (5) `rosy_auto_update`와 그 시험(실기 확인). 단계마다 ratchet 행을 잰 값으로 고치고, 옮긴 파일의 행은 새 키로 옮기며(D-766의 rename 규칙), 한도 아래가 된 행은 지운다. 한 단계가 한 브랜치다. 한 단계 브랜치는 이동만 하고 동작을 바꾸지 않는다(D-766 3항의 순수 이동 검토).
 5. **상속된 초과 커밋의 재적층.** `size_range.py main HEAD`가 이 브랜치에 앞 세션에서 이어받은 커밋을 적색으로 찍으면, 그 브랜치의 나중 커밋으로는 고칠 수 없다. 공유 체크아웃에서 rebase나 amend는 하지 않는다(「같이 하는 깃」 2항). 절차는 다음이다.
    1. `python tools/harness/size_range.py main HEAD`로 적색 커밋과 단위를 확인한다.

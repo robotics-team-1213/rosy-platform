@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-18 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
-- 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
-- 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
-- 2026-10-17 · uncommitted · D-791 미디어 프로세스의 독립 배포 소유권
-- 2026-10-17 · uncommitted · D-789 6대 카메라 WebRTC 전환 결정과 실행 계획
+- 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
+- 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
+- 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
+- 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+- 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존

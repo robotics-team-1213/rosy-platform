@@ -41,6 +41,9 @@ MAX_PENDING_FIRST_MESSAGE = 64
 _pending_by_ip: collections.Counter[str] = collections.Counter()
 #: D-193 보안 리뷰 L2: 열린 소켓의 토큰을 이 주기로 다시 본다. 회수·만료·로그아웃이면 4401.
 REVALIDATE_S = 30.0
+#: Network load: /ws/state sockets one robot serves at once (config `state.max_clients`).
+#: One more is closed with 1013 and a reason; every open socket shares one serialized frame per tick.
+MAX_STATE_CLIENTS = 4
 ACCOUNT_REVALIDATE_S = 5.0
 
 
@@ -101,20 +104,39 @@ async def ws_state(websocket: WebSocket):
     if svc is None:
         return
     token_id = websocket.state.token_id
-    rate = float(svc.config.get("state", {}).get("rate_hz", 10.0))
+    config = svc.config.get("state", {})
+    rate = float(config.get("rate_hz", 10.0))
+    limit = int(config.get("max_clients", MAX_STATE_CLIENTS))
+    app_state = websocket.app.state
+    open_now = getattr(app_state, "ws_state_clients", 0)
+    if open_now >= limit:
+        await websocket.close(code=1013, reason=f"state stream full: {limit} clients already connected")
+        return
+    app_state.ws_state_clients = open_now + 1
     try:
         svc.pilot_recording.link_opened(token_id)     # D-411: the Pilot link for recording ownership
         origin = websocket.client.host if websocket.client else ""
         while True:
             svc.trip_lease.note_use(token_id, origin, "ws_state")   # D-541 1: shared owner token
-            await websocket.send_json(svc.state.snapshot().model_dump())
+            await websocket.send_text(_state_frame(app_state, svc, 0.5 / rate))
             await asyncio.sleep(1.0 / rate)
     except WebSocketDisconnect:
         return
     except Exception:
         return
     finally:
+        app_state.ws_state_clients -= 1
         svc.pilot_recording.link_closed(token_id)
+
+
+def _state_frame(app_state, svc, max_age_s: float) -> str:
+    """The state snapshot serialized once per tick for every /ws/state socket (send_json's encoding)."""
+    now = asyncio.get_running_loop().time()
+    cached = getattr(app_state, "ws_state_frame", None)
+    if cached is None or now - cached[0] >= max_age_s:
+        text = json.dumps(svc.state.snapshot().model_dump(), separators=(",", ":"), ensure_ascii=False)
+        cached = app_state.ws_state_frame = (now, text)
+    return cached[1]
 
 
 @ws_router.websocket("/ws/events")

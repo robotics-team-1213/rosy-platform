@@ -31,6 +31,44 @@ Messages before startup or an unrecoverable session gap require manual readback
 and resubmission; an unresolved journal delivery stops reception on session loss.
 Resume the updater only after the configuration and running identities agree.
 
+## Context/log mirror store (D-796)
+
+The stack has a fourth service, `postgres`, as a derived context/log store. It is
+not the Fleet ledger: Fleet's task/ledger SQLite (`fleet.sqlite3`) stays the only
+source of truth (D-750), and the database here only mirrors the terminal runs of
+the D-640 deliberation journal. Fleet writes it best-effort after the SQLite
+commit; a missing or failing store never blocks a decision and never changes a
+ledger transaction.
+
+The console activates that sink through its `--context-db-*` flags (host, port, name,
+user, and the password file secret); without `--context-db-host` the mirror stays off
+and the process is SQLite-only.
+
+`postgres` joins only the internal Compose network. Do not publish its port and
+do not let robots, AI PCs, or model PCs connect to it directly — they reach Fleet
+over HTTPS/WSS as before. Fleet is the only client, over `postgres:5432`.
+
+Prepare the password before the first start, outside the checkout:
+
+```bash
+umask 077
+tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 > "$ROSY_SITE_SECRETS_DIR/postgres_password"
+chown root:10001 "$ROSY_SITE_SECRETS_DIR/postgres_password"
+chmod 0440 "$ROSY_SITE_SECRETS_DIR/postgres_password"
+```
+
+Compose mounts it as the `postgres_password` secret into both `postgres`
+(`POSTGRES_PASSWORD_FILE`) and Fleet (psycopg `password_file`); the value never
+appears in `site.env`, argv, or logs. Keep the data in the named `pg_data`
+volume. `ROSY_SITE_PG_MAX_CONNECTIONS` bounds Fleet's connections. The service
+uses the repo image `rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}`, built or
+mirrored from `postgres:16-alpine` by the candidate build. Because it is stock
+upstream, its hardening is weaker than Fleet/Vision; `read_only` with a tmpfs,
+dropped capabilities, `no-new-privileges`, and an internal-only network are the
+bounds. The signed candidate covers four images (Fleet, Vision, proxy,
+Postgres), and the updater checks the compose-config image pins, container
+health, and drift for all four.
+
 ## Where the control console runs
 
 ### Rosy Account activation (D-757)
@@ -722,8 +760,13 @@ it in YAML, `.env`, command arguments, images, or logs. Rotate or revoke a user
 by replacing or removing their digest and restarting Fleet. The API hashes the
 presented bearer token and compares it against the configured digests. A viewer
 can read Fleet state and task history. An operator can request, cancel, and stop
-work. `policy-admin` is reserved for future policy endpoints; no policy mutation
-route is exposed yet. All roles remain subject to CORE's local safety checks.
+work. `policy-admin` approves learned-policy stages, approval windows and incident
+clearing on `/console/policy` (D-793). An operator who also approves policies keeps
+the `operator` role and gets `policy_admin: true` through `python3 deploy/site/site_users.py
+set-policy-admin /etc/rosy/site/site-users.yaml --principal <id> [--principal <id> ...]`
+(`--off` revokes); several people change in one write, so Fleet restarts once.
+Deploy a Fleet that knows `policy_admin` before setting it: an older Fleet refuses the
+key at startup. All roles remain subject to CORE's local safety checks.
 
 Maintain `site-users.yaml` with `deploy/site/site_users.py` instead of an
 editor: `python3 deploy/site/site_users.py add /etc/rosy/site/site-users.yaml

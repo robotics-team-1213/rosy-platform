@@ -440,7 +440,7 @@ class SiteUpdater:
                 return
             kept_commits.add(commit)
         for reference in listed.split():
-            match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy):([0-9a-f]{40})", reference)
+            match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy|postgres):([0-9a-f]{40})", reference)
             if match and match.group(1) not in kept_commits and reference not in used:
                 self._run(["docker", "image", "rm", reference], check=False)
                 log("pruned-image", image=reference)
