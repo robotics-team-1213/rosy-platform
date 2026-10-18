@@ -89,6 +89,8 @@ AI 시험 PC에 `joint_trajectory_controller/JointTrajectoryController` plugin�
 
 도중 `affected --run`이 노트북 pytest를 직접 시작하는 것을 확인하고 중단했다. 그 불완전한 실행은 증거에서 제외했고, 위 결과는 `remote_pytest.py --affected-json -`로 별도 실행한 원격 결과다.
 
+기록 추가 뒤 commit `94071ba816`의 원격 문서 배치·harness·release secret·robot literal guards는 `final-record-labeled/run-1.txt`에서 202 passed, 36 warnings, NEW 0이었다. 최초 기록의 main revision이 secret scanner에서 고엔트로피 토큰으로 분류돼 명시적인 `commit:` 표기를 붙인 뒤 이 묶음이 통과했다. 그 이후 추가한 Gazebo 취소 기록도 같은 scanner로 직접 검사해 finding 0건을 확인했다. Harness lint는 0 errors, 33 warnings였고 `size_range.py main HEAD`도 통과했다.
+
 별도 `feat/omx-core-runtime`의 native socket 검증은 LeRobot 별도 subprocess→실제 loopback CORE HTTP→합성 SIM policy binding→native ROS fixture→disconnect fence를 다룬다. 그 증거와 이번 Gazebo 이동은 서로 다른 실행이며 이어 붙여 하나의 종단간 학습 정책 시험으로 취급하지 않는다.
 
 이전 MAIN-RED의 간헐 stale-feedback 원인은 확정되지 않았다. 진단 branch와 CORE socket branch는 그 차단을 해제한 생산 수정으로 표현하지 않으며, 검증 기록을 커밋해 보존한다. 실물 구동·배포, 학습 정책 평가, Fleet→장치 lease 전달, GitHub CI·push는 수행하지 않았다.
