@@ -126,6 +126,15 @@ took hours to land. Four separate things blocked it.
   merges `main` once and tests. The ticket is released on every exit, Ctrl-C included; a dead holder's ticket (PID
   gone on this host, or not refreshed for 3 h) is reclaimed. `--no-queue` is the incident escape hatch. Tests:
   `test/test_land_queue.py`, `test/test_land.py::test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout`.
+- **Delta rerun across runs (implemented, D-803 6).** Within one run, D-762 stage 0 already reran only main's
+  delta selection after a green FULL tier. A fresh run (after a lost host, Ctrl-C or the round cap) started with
+  FULL again: `refactor/land-split` itself hit "main kept moving: gave up after 5 rounds" on 2026-10-18 and its
+  rerun paid a second FULL tier. `tools/land_full.py` now keeps the FULL pass in `<git-common-dir>/rosy-land-full/`
+  and a later run reuses it while the branch added nothing but merges of main. Not done: uniting main's delta with
+  the branch's own mapped suites. The FULL tier already passed those with the branch's code, and the delta selection
+  takes direct reverse dependents of what main changed, so the union would rerun suites that passed on the same
+  branch code. A narrow (non-FULL) branch still reruns its own affected tier each round, as before.
+  Tests: `test/test_land.py::test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass` and the two after it.
 
 The candidates as first written:
 

@@ -9143,3 +9143,9 @@ osy-d395-s1d\`.
 - 변경: `tools/land.py`가 시험 회차 전에 `<git-common-dir>/rosy-land-queue/`에서 FIFO 표를 받고(`tools/land_queue.py`), 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린 뒤 `main`을 한 번 병합하고 시험한다. 기다리기 전에 D-430 5·D-766 검사를 먼저 한다. `--queue-timeout`(기본 180분), 사고 대응용 `--no-queue`. 표는 `main()`의 `finally`와 `atexit`가 풀고, 같은 호스트에서 pid가 없거나 3시간 동안 새로 고쳐지지 않은 표는 다음 세션이 지운다. `AGENTS.md`·`docs/reference/shared-checkout.md`·스킬 카드·`tools/AGENTS.md`·2026-10-18 착지 교훈 노트를 같이 고쳤다. 동료가 선점한 D-801, D-802를 `adr_gaps.txt`에 적었다.
 - 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
 - gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
+
+- 변경: `tools/land_full.py`가 FULL 티어를 통과한 후보와 `main`을 `<git-common-dir>/rosy-land-full/<브랜치>.json`에 적는다. 다음 `land.py` 실행은 후보가 HEAD에 있고, 적힌 `main`이 `main`에 있고, 그 뒤 브랜치에 `main` 병합(git 자체 병합과 같거나 자동 해결 기록만 다른 것)만 더해졌을 때 그 `main`부터의 변경분 선택만 돈다. 자기 커밋이 더해지면 FULL을 다시 돈다. 착지하면 기록을 지운다. 변경분과 브랜치 자신의 대응 묶음의 합집합은 넣지 않았다(이유는 2026-10-18 착지 교훈 노트).
+- 증거: `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 깨끗한 병합 → 복원, 수정 커밋 → 복원 안 함을 손으로 확인했다.
+- gate 변화: 없음.
