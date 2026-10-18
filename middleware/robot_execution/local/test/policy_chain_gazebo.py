@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from types import SimpleNamespace
 from uuid import uuid4
 import xml.etree.ElementTree as ET
@@ -357,12 +358,26 @@ def main():
                 executor.spin_once(timeout_sec=.1)  # CORE ROS executor stays on the main thread.
             worker.join()
         finally:
-            assert executor.shutdown(timeout_sec=5), 'own executor did not drain'
+            runtime._timer.cancel()
+            stopped = executor.shutdown(timeout_sec=5)
+            drained = threading.Event()
+            def drain():
+                executor._executor.shutdown(wait=True)  # Existing native fixture pattern, pinned Jazzy only.
+                drained.set()
+            drainer = threading.Thread(target=drain,daemon=True)
+            drainer.start()
+            workers_stopped = drained.wait(5)
+            (out/'teardown.json').write_text(json.dumps(dict(executor_stopped=stopped,
+                workers_stopped=workers_stopped, primary_error=repr(errors[0]) if errors else None,
+                remaining_thread_stacks={} if workers_stopped else {
+                    str(ident):traceback.format_stack(frame) for ident,frame in sys._current_frames().items()}),indent=2))
+            assert stopped and workers_stopped, 'own executor/workers did not drain; do not destroy live entities'
             runtime.destroy()
             node.destroy_node()
             rclpy.try_shutdown()
         if errors:
             raise errors[0]
+        print('OMX_POLICY_CHAIN_EXIT_OK',flush=True)
 
 
 if __name__ == '__main__':
