@@ -219,3 +219,8 @@ def test_the_task_card_is_embedded_verbatim_with_its_hash(tmp_path):
     record = s.execute(config(tmp_path), CAPS, teleop_only=True, task_card=card)
     assert record["task_card"]["sha256"] == hashlib.sha256(card.read_bytes()).hexdigest()
     assert "strawberry-out-and-back" in record["task_card"]["text"]
+
+
+def test_the_repository_example_task_card_stays_valid():
+    card = m.load_task_card(DIRECTORY / "task-card.example.yaml")
+    assert card["schema"] == m.CARD_SCHEMA and card["record"]["episode_time_s"] > 0
