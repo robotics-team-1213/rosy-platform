@@ -9100,6 +9100,12 @@ osy-d395-s1d\`.
 - 증거: 이 노트북에서 HTTPS `curl`은 10초 시간 초과(000)였다. SSH는 `Permission denied (publickey)`(키 `SHA256:mybrpgxI…` 미등록)였고 origin은 HTTPS다. `gh` 2.102.0의 auth 확인은 시간 초과였다. `origin/main..main` 320개(merge 64), 반대 방향 32개였다. 밀린 커밋 중 `Safety-Review:` trailer 11개, trailer 없는 안전 경로 커밋 2개(`safety_review.py --warn-only`)를 확인했다.
 - gate 변화: 없음. push·PR·remote 변경·로컬 `main` reset은 하지 않았고 사용자 결정으로 남겼다.
 
+## 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+
+- 변경: `plans/2026-10-18-pinky-sd-ready.md`에 단일 명령의 새 카드 준비, 기존 작성기 재사용, 첫 부팅·자동 업데이트 검증 순서를 기록했다. 첫 장치 런북에 준비물, Wi-Fi 보안 입력, 등록부 복원, 기록 로그·receipt 완료 판정과 읽기 전용 상태 확인을 추가했다.
+- 증거: 기존 SD·first-boot·D-412 코드 확인 및 네이티브 PowerShell fixture 검증 6개 PASS. 최신 이미지 성공 실행의 현재 Actions artifacts와 조회한 release의 `.img.xz` 목록은 비어 있어, 이미지 확보를 미완료 단계로 남겼다.
+- gate 변화: 없음. 빌드 성공, 서명 이미지, 매체 readback, 실기 부팅·자동 업데이트를 서로 대체하지 않는다.
+
 ## 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
 
 - 변경: 기존 native session fixture에 시험용 client 교환 지점만 추가하고, 실제 LeRobot 0.4.4 별도 프로세스가 loopback uvicorn CORE를 통해 RGB·관절 관측, 목표 송신, ROS 결과 대기, disconnect 정지까지 수행하는 opt-in 회귀를 추가했다. ROS 서버에 도착한 목표도 비교한다. 생산 기본값·owner 허용 목록·lease 발급·승인·실물 배포는 바꾸지 않았다.
