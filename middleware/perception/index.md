@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · uncommitted · docs: CLAUDE.md를 AGENTS.md로 합치고 지운다
 - 2026-10-14 · 09e54097a · 거절된 학습 모델 이유를 경고 한 번과 keep 묶음으로 낸다 (D-588)
 - 2026-10-14 · 9406dc248 · 바닥 게이트가 못 쓰는 학습 모델을 열 때 거절한다 (D-588)
 - 2026-10-13 · uncommitted · 전원 게이트를 노드 옆으로 옮김
 - 2026-10-13 · uncommitted · D-440 카메라 전원 파일을 main의 새 폴더로 맞춤
-- 2026-10-13 · uncommitted · D-747 S2 functional judgment holders
