@@ -20,6 +20,7 @@ import sys
 from urllib import error, parse, request
 
 _ID = re.compile(r'^[A-Za-z0-9._:@/-]{1,128}$')
+_WORKCELL = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 
 
 def proposal(cycle_dir):
@@ -43,7 +44,7 @@ def proposal(cycle_dir):
 
 
 def submit(fleet, workcell, body, token, *, ca=None, opener=request.urlopen):
-    if not _ID.fullmatch(workcell):
+    if not _WORKCELL.fullmatch(workcell):
         raise ValueError('invalid workcell id')
     url = f"{fleet.rstrip('/')}/api/fleet/workcells/{parse.quote(workcell, safe='')}/policy/proposals"
     if parse.urlsplit(url).scheme not in ('https', 'http'):
