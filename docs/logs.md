@@ -9151,3 +9151,9 @@ osy-d395-s1d\`.
 - 증거: 계약·운영 증거 검토로 핵심 로그인·refresh 회전·회수 대기열·CORE 재시도·미디어 strict online이 이미 있음을 확인했다. 구현 결함은 확정하지 않았고 재현한 누락만 수정하도록 정했다. 새 IdP·설정 생성 CLI는 추가하지 않는다.
 - 상태: 사용자에게 작성된 계획 확인과 현재 세션의 직접 구현·검증 진행 승인을 받았다. 계획 작성 시점 운영 설정·배포·실사용 수용은 미수행이다. 지속 목표는 active이며 설치·실사용 증거 없이 완료로 바꾸지 않는다.
 - gate 변화: 없음. D-807 Proposed와 기존 원격 문서 검증 상태를 유지한다.
+
+## 2026-10-19 · 30acdffbfb · D-807 승인과 Account 앱별 검증 기록
+
+- 변경: 사용자 계획 승인에 따라 D-807을 Accepted로 기록하고 조회 전용 Pilot 로그아웃 누락을 수정했다. 기존 인증 서비스를 재사용하며 앱별 여섯 관문·전환 절차·남은 운영 입력을 기록했다.
+- 증거: 공통·CORE·Fleet·Learning·Games 실제 browser와 native JVM/proxy/debug APK의 SHA·실행/skip/실패 이력을 docs/validation/account-service-2026-10-19/results.md에 고정했다. 마지막 독립 계약 리뷰에 근거 있는 finding은 없었다. docs 관문은 별도 원격 실행으로 기록한다.
+- gate 변화: 운영 gate 변화 없음. 실제 보호 설정 경로/접근 확인과 운영 설정 포함 native 빌드·설치·실사용·격리 복구는 남아 있으며 지속 목표는 active다. main 착지·push·전체 CI는 미수행이다.

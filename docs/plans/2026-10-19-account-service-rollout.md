@@ -51,10 +51,10 @@
 
 **Interfaces:** 기존 `AccountClient.logout(cookie)`, `retry_revocations()`, 같은 session DB·암호화 키로 receiver 재생성. 새 public API 없음.
 
-- [ ] 기존 `test_logout_retries_revocation_after_outage`와 fixture를 읽는다. `test_pending_revocation_survives_receiver_reopen`을 추가한다: 중앙 중단→logout이 AccountUnavailable→로컬 resolve 거부→receiver 재생성→중앙 복구→기존 큐 재시도→family inactive·대기열 소진을 assert한다.
-- [ ] 커밋 후 아래 원격 명령으로 실행한다. 기존 구현이 이미 통과하면 검증 보강으로 기록하고 억지로 실패를 만들지 않는다. 실패하면 원인과 모든 호출자를 추적한 뒤 공통 코드만 최소 수정하고 같은 시험을 재실행한다.
-- [ ] 기존 refresh replay·revision·계정 정지 시험은 `operations/fleet/test/test_account_authority.py`, `test_account_ledger.py`를 Task 3에서 재사용한다.
-- [ ] 독립 리뷰 후 이 task의 SHA·실행/skip/NEW·로그를 결과표에 기록한다. foundation 변경이 FULL로 분류되면 현행 CI/착지 범위를 축소하지 않는다.
+- [x] 기존 `test_logout_retries_revocation_after_outage`와 fixture를 읽고 `test_pending_revocation_survives_receiver_reopen`을 추가했다: 중앙 중단→로컬 거부→receiver 재생성→중앙 복구→회수·큐 소진 확인.
+- [x] `c22ee485ad`의 원격 suite 15개 통과, skip 0, NEW 0. 기존 구현은 수정하지 않았다.
+- [x] 기존 refresh replay·revision·계정 정지 시험은 Task 3에서 재사용해 통과했다.
+- [x] 최종 독립 리뷰와 SHA·실행/skip/NEW·로그를 [결과표](../validation/account-service-2026-10-19/results.md)에 기록했다. foundation 변경의 FULL CI/착지 범위는 축소하지 않는다.
 
 ## Task 2: CORE HTTP·미디어·브라우저 연결 검증
 
@@ -62,11 +62,11 @@
 
 **Interfaces:** 기존 `/api/account/logout`, `/api/account/session`, media issue/validate/renew endpoint 및 lifespan. 경로·응답 필드는 Account protocol과 기존 API만 사용한다.
 
-- [ ] `test_logout_outage_returns_pending_and_clears_cookie` 추가: 실제 pipeline에서 중앙 revoke 실패→503·authenticated false·revocation_pending true·쿠키 삭제·기존 자격 접근 거부.
-- [ ] `test_core_lifespan_retries_pending_revocation` 추가: 기존 20초 scheduler의 callback을 제어해 실제 중앙 복구 뒤 큐가 소진되는지 확인한다. 20초 벽시계 sleep 대신 기존 monkeypatch/async fixture를 사용한다.
-- [ ] `test_account_media_revalidation_denies_authority_outage_and_revocation` 추가: 일반 요청의 아직 유효한 캐시와 달리 미디어 재검증/갱신이 중앙 장애·inactive에서 허용되지 않음을 실제 endpoint로 확인한다.
-- [ ] 기존 HTTPS browser fixture로 `test_browser_logout_reports_pending_revocation` 추가: 회수 미완료 안내·이전 사용자 표시 제거·로그인 상태 해제 확인. 실제 browser opt-in이 skip이면 완료로 세지 않는다.
-- [ ] 테스트로 확인된 결함만 고치고 같은 커밋 SHA로 관련 단위·브라우저 회귀를 원격 실행한다. 안전 태그 경로 수정 시 독립 안전 리뷰와 trailer 규칙을 적용한다.
+- [x] `test_logout_outage_returns_pending_and_clears_cookie`: 실제 중앙 실패의 503/pending·쿠키 삭제·접근 거부 확인.
+- [x] `test_core_lifespan_retries_pending_revocation`: 실제 lifespan 시작이 영속 큐를 재시도하는지 Event로 확인했다. 수동 retry 호출이나 20초 sleep으로 대신하지 않았다.
+- [x] `test_account_media_revalidation_denies_authority_outage_and_revocation`: 실제 pipeline에서 일반 캐시와 미디어 strict online 차이를 확인했다. 기존 Authority fixture가 있는 `test_account_pipeline.py`에 두었다.
+- [x] 기존 HTTPS browser 시험을 정상/회수 대기 매개변수로 확장했다. 실제 Chromium에서 미완료 안내·프로필 제거·세션 해제를 확인했다.
+- [x] 조회 전용 Pilot 차단 화면에 로그아웃이 없음을 RED로 재현하고 수정했다. `41e03f029e`에서 pipeline/media 14개 통과, skip 0, NEW 0. PWA 캐시도 갱신했다.
 
 ## Task 3: 앱별 기존 통합 회귀와 결과표
 
@@ -74,11 +74,11 @@
 
 **Interfaces:** `shared/web/surfaces.yaml` 적용 목록과 기존 권한/세션 계약. 결과표는 표면별 `SOURCE / REMOTE TEST / CI / INSTALLED / RUNTIME / USER ACCEPTANCE` 여섯 칸과 명령·host 역할·SHA·로그·skip/NEW를 가진다.
 
-- [ ] Fleet: `operations/fleet/test/test_account_authority.py`, `test_account_ledger.py`, `test_account_deployment.py`, `test_account_setup.py`와 관리자/로그인 browser suite를 기존 runner로 검증한다.
-- [ ] CORE: Task 1·2 결과와 `test_account_sessions.py`, `test_account_pipeline.py`로 타 resource 거부·권한 비상속·WS 회수를 확인한다.
-- [ ] Games: `operations/apps/games/test/test_preview.py`와 기존 browser suite에서 Origin·games.operate·로그아웃 회수 재시도를 확인한다. Learning: `test/learning/perception/test_rosy_accounts.py`, `test_learning_accounts.py`, `test_learning_cycle_authority.py`, `test_review_bridge_authority.py` 및 browser suite로 subject·provider·worker 경계를 확인한다.
-- [ ] native: 기존 Pilot/Cam AccountSession 시험·설정 검증·APK 빌드 절차를 각 모듈 문서대로 실행한다. `-Prosy.accountConfig=<protected-public-config>`를 쓰고 실제 서명/단말 검증과 구분한다. 기존 빌드 환경이 없으면 결과표에 미실행 사유와 다음 실행 주체를 남긴다.
-- [ ] 결과표에서 미실행을 통과로 채우지 않는다. 한 앱의 성공으로 전 앱 완료를 선언하지 않는다. 결함 수정은 별도 모듈 주제 브랜치로 나누고 기존 변경을 되돌리지 않는다.
+- [x] Fleet: 명시한 단위/원장/설정/관리자·프로필 Chromium 시험을 `41e03f029e`에서 검증했다.
+- [x] CORE: Task 1·2와 `test_account_sessions.py`로 자원·권한·WS 경계를 검증했다.
+- [x] Games의 기존 preview/권한 시험과 Learning의 명시한 연결/worker·browser 시험을 실행했다. Fleet·Learning·Games·Access 묶음 170개 통과, skip 0, NEW 0. 실제 설치 인수는 별도다.
+- [ ] native: 기본 debug 설정으로 Cam JVM 440개·APK, Pilot JVM 111개 중 skip 1개·실패 0·APK를 확인했다. opt-in proxy/Chromium은 별도 실행 통과다. 기존 native fixture 결함 3개를 같은 호스트 기준선에서 재현하고 별도 브랜치로 수정했다. 보호 운영 설정을 포함한 `-Prosy.accountConfig=<protected-public-config>` 빌드·서명·단말 인수는 입력 확인 뒤 Task 4–5에서 수행한다.
+- [x] 결과표에 앱별 여섯 관문과 미실행을 구분했다. 한 앱의 성공으로 전 앱 완료를 선언하지 않는다. 기존 변경을 되돌리지 않았다.
 
 ## Task 4: 설치 입력과 전환 절차 준비
 
@@ -87,7 +87,7 @@
 **Interfaces:** Authority는 기존 `--account-config`, site `ROSY_ACCOUNT_CONFIG`; CORE는 `auth.account_client_file`; Review는 `account_client_file/account_subjects`; Games는 `--preview-account-config`.
 
 - [ ] issuer/TLS 이름·기존 bootstrap 계정·영속 DB·기계 자격·정확한 client/callback/resource·receiver 공개키·세션 암호화 키의 비밀 비노출 설치 목록을 준비한다. 실제 값이 없는 항목은 임의 생성하지 않는다.
-- [ ] 기존 `load_account_config`와 `load_account_client`의 시작 시 검증을 재사용한다. site_preflight는 현재 Account 일관성을 검사하지 않는다고 명시하고 기존 TLS 검사 통과를 Account 활성화로 표시하지 않는다. 새 validator/생성 CLI는 이번 작업에 추가하지 않는다.
+- [x] 기존 `load_account_config`와 `load_account_client`의 시작 시 검증을 재사용하도록 설치 절차에 기록했다. site_preflight는 Account 일관성을 검사하지 않는다고 명시했다. 새 validator/생성 CLI는 추가하지 않았다.
 - [ ] 동일 시점 DB/설정 백업과 현재 비밀번호·프로필 보존을 준비하고 verifier 호환 배포→authority→앱 receiver→기존 사람 경로 종료 순서로 전환안을 만든다.
 - [ ] 기존 서명 candidate·서비스 관문에 넣을 구체적 변경·readback·복구 절차가 준비된 뒤에만 운영 전환을 수행한다. source 검증만으로 운영 재시작을 실행하지 않는다.
 
@@ -127,5 +127,5 @@ Task 1의 owned paths는 `contracts/foundation/test/test_account_client.py`, Tas
 - [x] 지속 목표 등록, D-807·기존 코드·적용 목록 조사.
 - [x] 계약 검토와 운영 증거 검토 의견을 반영해 실행 계획 작성.
 - [x] 작성된 계획 검토 및 실행 방식 확정: 사용자 승인, 현재 세션 직접 실행.
-- [ ] Task 1–3 소스/원격 시험과 독립 리뷰.
+- [ ] Task 1–3 소스/원격 시험과 독립 리뷰는 기록했다. 운영 설정 포함 native 빌드는 입력 확인 대기다.
 - [ ] Task 4–5 설치·전환·실사용 수용. 실제 배포 입력과 운영 권한이 필요한 부분은 별도 증거로 추적.

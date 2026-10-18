@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · D-807 receiver 재개 후 회수 대기열 검증
 - 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 - 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.259)
 - 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
 - 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
-- 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)

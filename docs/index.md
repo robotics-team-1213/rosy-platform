@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · 30acdffbfb · D-807 승인과 Account 앱별 검증 기록
 - 2026-10-19 · uncommitted · Account 서비스 앱 적용 목표와 실행 계획
 - 2026-10-19 · uncommitted · D-807 Account 서비스의 자격 책임과 운영 완료 기준 제안
 - 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
 - 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
-- 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다

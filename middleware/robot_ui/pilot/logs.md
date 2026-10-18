@@ -924,3 +924,9 @@
 - 변경: Account 로그아웃 동작을 조종 차단/준비 화면에서 재사용하고, 중앙 계정 사용자에게 의미 없는 로컬 토큰 초기화를 숨겼다. 조작 권한·gate는 유지한다.
 - 증거: 실제 HTTPS Authority→Pilot browser 회귀의 pending-revocation 사례가 기존 차단 화면의 로그아웃 버튼 부재로 실패했다. 같은 회귀를 수정 SHA로 원격 재실행한다.
 - gate 변화: 없음. 제품 배포·실제 단말은 미확인이다.
+
+## 2026-10-19 · 30acdffbfb · Account 로그아웃과 native fixture 원격 검증
+
+- 변경: PWA 캐시 갱신, 원격 시험의 기존 SDK 전달과 고정 의존성 해석을 허용했다. native mock의 identity 뒤 `/pilot` CSP 응답 누락은 별도 fix/pilot-native-fixtures에서 두 시험만 수정해 반영했다. 제품 stop 경로는 바꾸지 않았다.
+- 증거: 최종 보안/실제 Chromium/proxy 묶음 d58258fee6에서 35 passed, skip 0, NEW 0. 같은 모델 PC의 기존 main에서 native 3개 실패 재현 후 30acdffbfb 전체 JVM 111 tests, failures/errors 0, skipped 1, debug APK 1. skip된 opt-in proxy는 앞의 실제 browser 묶음에서 통과했다. 상세 SHA·로그·한계는 docs/validation/account-service-2026-10-19/results.md.
+- gate 변화: 없음. 기본 debug 빌드이며 운영 Account 설정 포함 서명·실물 callback/Keystore·설치는 미확인이다.

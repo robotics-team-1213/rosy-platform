@@ -3001,3 +3001,9 @@
 - 변경: teacher/task와 batch export를 파이프라인으로 연결한다. --inside의 기본 녹화 경로를 /recordings로 고쳤고 명시 경로 우선권을 유지한다. held-out은 seed/episode 기준이며 반올림된 자세 비중복이나 자세 일반화를 보장하지 않는다고 명시했다.
 - 증거: 시험 전용 커밋 7de87d49cd의 원격 실행에서 기본 경로 오류를 재현했다. 수정 73f8a5f6a8의 pipeline/teacher/batch 3개 시험 파일은 원격 exit 0, 독립 검토 새 결함 없음. main 통합 뒤 영향 시험은 별도 수행한다.
 - gate 변화: 없음. 누락된 폐루프·평가기 단계는 계속 명시적으로 생략하며 Gazebo·학습·실물 수용은 미검증이다.
+
+## 2026-10-19 · uncommitted · D-807 Account 앱별 설치 입력과 인수 절차
+
+- 변경: 기존 site README에 Authority·CORE·Learning·Games·native의 기존 설정 진입점과 호환 receiver→authority→앱 전환·회수·격리 복구 인수 순서를 보충했다. 기존 site preflight가 Account 설정 검증은 하지 않는다는 한계를 명시했다.
+- 증거: 기존 Account protocol·배포 경로와 대조했다. 보호 설정 파일 생성·서비스 재시작·운영 계정 변경·배포는 수행하지 않았다.
+- gate 변화: 없음. 승인된 실제 issuer/callback·보호 설정 입력과 사용자/단말 수용이 남아 있다.

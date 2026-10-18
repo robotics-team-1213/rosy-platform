@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · D-807 Account 앱별 설치 입력과 인수 절차
 - 2026-10-19 · uncommitted · SIM reach 수집 파이프라인 통합
 - 2026-10-19 · uncommitted · 이미지 마운트 정리 실패 보존
 - 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
 - 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
-- 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)

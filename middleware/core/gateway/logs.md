@@ -1186,3 +1186,9 @@
 - gate 변화: 없음.
 - 결정: D-767 A부 4항.
 - 교훈: 없음.
+
+## 2026-10-19 · uncommitted · Account 장애·재시도·미디어의 실제 연결 검증
+
+- 변경: 실제 Fleet Authority와 CORE receiver를 사용하는 HTTP 로그아웃 실패, lifespan 회수 재시도, 미디어 strict online 검증을 추가했다. HTTPS Chromium의 정상/회수 대기 로그아웃을 함께 검사한다.
+- 증거: `41e03f029e`의 원격 모델 PC에서 pipeline/media 14개 통과, skip 0, NEW 0. 첫 browser 실패는 조회 전용 Pilot 차단 화면의 로그아웃 부재를 재현했고 Pilot 수정 뒤 같은 검증이 통과했다. 로그는 외부 scratch의 `rosy-account-rollout-20261019/task2-fixed/run-1.txt`다.
+- gate 변화: 없음. 실제 운영 계정·배포·단말·MediaMTX 연결 종료를 이 시험으로 수용하지 않는다.
