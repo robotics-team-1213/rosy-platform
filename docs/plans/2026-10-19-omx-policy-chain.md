@@ -41,8 +41,8 @@ Files: `middleware/robot_execution/local/src/rosy/execution/local/policy_chain.p
 Files: 소유 모듈 시험용 SIM probe, `docs/validation/omx-policy-chain-2026-10-19/result.md`, 관련 module logs/index.
 
 - [x] 실제 Fleet HTTP·장치 worker·CORE HTTP·실제 LeRobot subprocess·vendor ActionServer를 같은 execution에서 연결한다.
-- [ ] camera source, command ID, native goal UUID, window/lease/episode, joint readback을 연계한 receipt를 기록한다.
-- [ ] 이동 완료, lease 갱신, 이동 중 창 폐쇄→renew 거절→CANCELED/HOLD, 재연결 거절을 측정한다.
+- [x] camera source, command ID, native goal UUID, window/lease/episode, joint readback을 연계한 receipt를 기록한다.
+- [x] 이동 완료, lease 갱신, 이동 중 창 폐쇄→renew 거절→CANCELED/HOLD, 재연결 거절을 측정한다.
 - [x] teardown 문제도 보존하고 scope를 명확히 기록한다. 실물/학습 정확도/작업 성공은 별도다.
 - [ ] committed revision의 원격 affected·native·browser 필요 검사를 비교해 NEW 0을 확인하고 `tools/land.py --tests auto`로 로컬 main에 착지한다.
 

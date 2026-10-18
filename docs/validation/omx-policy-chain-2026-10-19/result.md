@@ -63,7 +63,39 @@ python tools/remote/remote_pytest.py --log-dir <root>/green-total-final --
 runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 출력만으로 식별하지 않는다.
 이후 `d7ee20bfc`는 문서와 fixture credential의 0600 생성만 추가했다.
 
-## Gazebo 실행 상태
+## Gazebo 실행 결과
+
+`62971299f71b97fed94681f4b749ece3dd946796`를 AI 시험 PC의 `remote_sim.py`로 실행해
+`OMX_POLICY_CHAIN_GAZEBO_PASS`, teardown 뒤 `OMX_POLICY_CHAIN_EXIT_OK`, runner exit 0을 확인했다.
+[수신·실행 receipt](native-receipt.json)는 외부 `chain-result.json`과 같은 JSON 값이다.
+
+- 첫 목표 +0.01rad: 원래 관절 위치 0.0000000181752rad에서 0.0100000146776rad로 이동했고,
+  native goal `238735d4-8be7-4da7-808a-96228e26f113`의 SUCCESS를 확인했다.
+- 실제 RGB 바이트와 SDK 수신 hash가 일치했고, SDK 프로세스는 ROS를 import하지 않았다.
+  같은 lease의 실제 발급 시각 갱신과 SQLite 원장을 함께 확인했다.
+- 두 번째 목표 이동 중 승인 창을 닫았다. 폐쇄 HTTP 응답 후 0.295306초에 해당 goal의
+  cancel ACK와 CANCELED를 관측했고 owner는 HOLD였다. 마지막 0.3초의 서로 다른
+  14개 관측에서 위치 spread는 0rad였다. 이는 SIM의 표본 기반 확인이며 물리 정지 인증은 아니다.
+- SDK 재접속이 거부됐고 stop fence는 닫혔다. executor·worker 종료는 true, primary error는 null,
+  잔여 thread stack은 없었다. 다만 종료 후 `cannot use Destroyable because destruction was requested`
+  미회수 예외 경고 1건이 남아 warning-free shutdown으로 표시하지 않는다.
+
+사전 CORE 준비 0.415948초, 실제 port가 연결된 앱 생성 0.164944초, 실제 HTTP 시작
+0.095807초였다. intake 기록은 644개 중 601개 수용, 43개 거부였으며 수용 source age의
+최댓값은 0.05초였다. 이전 실패의 원인을 이 한 실행으로 모두 확정하지 않는다.
+특히 `1d1faf1fc2`의 정지 assertion 실패는 당시 표본 누락으로 원인이 미확정이다.
+
+외부 근거 root는 `gazebo-chain-prepared-core/`다. SHA256:
+
+| Artifact | SHA256 |
+|---|---|
+| `run.txt` | `8c5371795b11d2d41c1c92be47d2b441a7fe1e0be0815be4fb6ea365ae484a97` |
+| `chain-result.json` | `cb2fb5e6dfb50cb5ed67b61a6fba8ca1fe54522b0b9b87abb2036194211ec92b` |
+| `stop-readback.json` | `c680e1b5343658bfac8b1b2bab62665f3a5afdc1f4aa4c04e633dc98ecf9ac79` |
+| `teardown.json` | `cc2ef9a254ba7b587cd326c0581d0523aeb2daa8b36bf2f92307a732c39c4fd1` |
+| `joint-intake.json` | `47dc88d274d2165be20f8184c076a59dbfb89249ffb5f27fdf4bd8d7d86d6887` |
+
+### 진행 중 보존한 회귀·실패
 
 준비된 통신 helper의 최종 원격 회귀는 `85dfae7860`에서 **222 passed in
 23.32s**, runner exit 0이다. 위 선택의 7개 파일을 동일하게 실행했으며,
