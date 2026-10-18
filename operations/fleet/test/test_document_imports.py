@@ -45,6 +45,11 @@ OWN = {
         "connection-view.js",
         "formation.js",
         "map-view.js",
+        "map-overlays.js",  # D-798 3.2: map-view.js overlay drawing
+        "map-polling.js",  # D-798 3.2: map-view.js polling
+        "console-auth.js",  # D-798 3.2: console.js lock, session and token handling
+        "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
+        "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
@@ -105,7 +110,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices", "calibration"):
+    for folder in ("shared", "cell", "work", "devices", "calibration", "sitemap", "installation", "map"):
         path = WEB / folder / name
         if path.is_file():
             return path

@@ -18,7 +18,9 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
     relearn = client.get("/console/assets/tracking-relearn.js")
     install = client.get("/console/assets/install.js").text
     shell = client.get("/console/assets/console.js").text
-    map_view = client.get("/console/assets/map-view.js").text
+    # D-798 3.2: map-view.js draws; its overlays and pollers live in map-overlays.js and map-polling.js.
+    map_view = "".join(client.get(f"/console/assets/{name}").text
+                       for name in ("map-view.js", "map-overlays.js", "map-polling.js"))
     fit_view = client.get("/console/assets/map-fit-view.js").text
     vision_view = client.get("/console/assets/vision-view.js").text
 

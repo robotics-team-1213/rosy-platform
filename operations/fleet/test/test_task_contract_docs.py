@@ -19,7 +19,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
         encoding="utf-8")
     execution = (ROOT / "operations/fleet/fleet/server/intent_execution.py").read_text(encoding="utf-8")
     web_root = ROOT / "operations/site_ui/console"
-    web = (web_root / "console.js").read_text(encoding="utf-8")
+    web = (web_root / "console-goal.js").read_text(encoding="utf-8")  # D-798 3.2: goal commit moved here
     roster = (web_root / "roster.js").read_text(encoding="utf-8")
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
@@ -148,7 +148,7 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
     adr = (ROOT / "docs/adr/D-318-site-camera-preview-rectification.md").read_text(
         encoding="utf-8")
     vision = (ROOT / "operations/overhead/rosy_vision/ingest.py").read_text(encoding="utf-8")
-    ui = (ROOT / "operations/site_ui/console/install.html").read_text(encoding="utf-8")
+    ui = (ROOT / "operations/site_ui/console/installation/install.html").read_text(encoding="utf-8")
 
     assert "## D-318 Site Fleet camera preview supports measured lens and plane rectification" in adr
     assert "### 10.6.1 Site Fleet camera preview and rectification (D-318 Accepted)" in reference
