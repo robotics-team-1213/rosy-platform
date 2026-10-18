@@ -5,6 +5,8 @@ import io
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -96,6 +98,32 @@ def test_core_estop_stops_arm_without_another_client_request(tmp_path):
         listener()
     assert session.hold_reason and driver.handles[0].cancel_calls == 1
     assert not session.fence.is_open(authority_epoch=2, dispatch_generation=7)
+
+
+def test_stop_does_not_wait_for_blocked_rgb_capture(tmp_path):
+    client, session, driver, *_ = setup_api(tmp_path)
+    port = client.app.state.core.arm_policy
+    capture = port.capture
+    entered, release = threading.Event(), threading.Event()
+
+    def blocked_capture():
+        entered.set()
+        assert release.wait(5)
+        return capture()
+
+    port.capture = blocked_capture
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        reading = pool.submit(client.post, '/api/v1/arm/observations',
+                              json={'policy_revision': session.lease.policy_revision})
+        assert entered.wait(2)
+        stopping = pool.submit(client.post, '/api/v1/arm/stop')
+        try:
+            assert stopping.result(timeout=0.5).status_code == 200
+            assert not session.fence.is_open(authority_epoch=2, dispatch_generation=7)
+        finally:
+            release.set()
+        assert reading.result(timeout=2).status_code == 403
+    assert not driver.commands
 
 
 def test_stop_latches_existing_fence_and_cancels_own_goal(tmp_path):
