@@ -32,7 +32,7 @@ CORE는 외부 접점이며 OMX owner가 최종 관절 writer다. 둘을 합치�
 7. 자기 HTTP 서버·SDK subprocess·ROS executor를 닫는다.
 
 cold SDK 적재를 lease 발급 전에 끝낸다. 이미 소비한 관측이나 lease의 시각을
-새 시각으로 바꾸거나 정책 신선도 기준을 늘리지 않는다. SDK stdout에는 socket
+새 시각으로 바꾸거나 정책 신선도 기준을 늘리지 않는다. pytest stdout에는 socket
 receipt를 남기며 fixture credential은 출력하지 않는다.
 
 ## 실행 근거

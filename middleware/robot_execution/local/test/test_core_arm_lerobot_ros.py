@@ -113,12 +113,17 @@ def test_real_plugin_socket_to_native_ros_and_stop(tmp_path):
                         assert read_message(child) == {'disconnected': True}
                         assert child.wait(timeout=10) == 0
                         assert session.hold_reason
+                        identity = session.lease.identity
+                        fence_open = session.fence.is_open(authority_epoch=identity.authority_epoch,
+                            dispatch_generation=identity.dispatch_generation)
+                        assert not fence_open
                         assert requests == [('GET', '/api/v1/arm/policy'),
                             ('POST', '/api/v1/arm/observations'), ('POST', '/api/v1/arm/actions'),
                             ('POST', '/api/v1/arm/stop')]
                         (tmp_path/'socket-receipt.json').write_text(json.dumps(dict(
                             requests=requests, sdk=response, command_id=commands[0],
                             terminal_status=record['events'][-1]['status'], hold=session.hold_reason,
+                            local_stop_open=fence_open,
                             auth_scope='synthetic principal override; no Fleet/device authority',
                             physical_motion_verified=False), indent=2))
                         print((tmp_path/'socket-receipt.json').read_text(), flush=True)
