@@ -541,3 +541,9 @@
 - 변경: UnixActionServer가 listen 성공 뒤와 teardown 때 serving Event를 관리하고, 기존 stop Event가 설정되면 즉시 false인 read-only is_serving을 제공한다. 인증·socket 권한·Action admission·취소 계약은 유지한다.
 - 증거: 실제 UDS를 포함한 startup 통합과 정지 중 listener 상실을 재현한 원격 집중 묶음 66 passed. 독립 Safety-Review APPROVE는 docs/validation/omx-native-startup-2026-10-17/safety-review.md.
 - gate 변화: 소스·호스트 검증. 이 값은 listener 수명이며 요청 응답성·물리 정지·장치 수용 증거가 아니다.
+
+## 2026-10-18 · 4b97b23ac7 · test(omx): native feedback 진단과 Gazebo 이동 검증
+
+- 변경: 시험 전용 선택적 intake·owner lock·최초 HOLD trace와 고정 5회 native 표본을 추가했다. 생산 안전 기준과 freshness·timeout·executor 설정은 유지했다.
+- 증거: 계측 단독 5회·계측 전체 suite 5회·계측 없는 전체 suite 5회·수정하지 않은 main 전체 suite 별도 5회 통과. 원격 affected 1281 passed, 22 skipped, NEW 0. 독립 리뷰는 진단 전용 변경으로 적절하다고 판정했다. 사용자 승인 controller 패키지 설치 후 Gazebo 목표 0.01rad에 관측 이동량 0.008547rad·오차 0.001453rad. 상세 범위와 로그 해시는 docs/validation/omx-feedback-verification-2026-10-18/result.md.
+- gate 변화: 없음. 간헐 stale-feedback 원인은 미확정이며 Fleet→장치 lease 전달·학습 정책 종단간·실물 수용 증거는 없다.

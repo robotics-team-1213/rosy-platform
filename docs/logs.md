@@ -8898,6 +8898,13 @@ osy-d395-s1d\`.
 - 증거: docs/plans/2026-10-16-measured-camera-lifecycle.md; docs/validation/measured-camera-lifecycle-2026-10-16/baseline.md. 기존 revision 89d3ba4d10의 AI 시험 PC 원격 53 passed, terminal exit 0, known_failures NEW 0.
 - gate 변화: 없음. 제품 구현은 계획 검토 전이며 기준선은 새 기능이나 브라우저·장치·현장 수용을 증명하지 않는다. 원시 로그 C:/DevTemp/camera-calibration/baseline/run-1.txt.
 
+## 2026-10-16 · uncommitted · docs(reference): git으로 일하는 법과 인수인계 문서
+
+- 변경: `docs/reference/git-workflow.md`(팀원 PR 길과 실험실 착지 길 비교, `--no-verify` 기준, push 순서, D-762 단계 현황, 사용자가 정할 것)와 `docs/reference/handoff.md`(목표, 증거 기준 현재 상태, 2026-10-15 흐름별 인계 문서 색인, 다음 할 일, 담당, 새 컴퓨터 체크리스트) 신규. README 「시작하기」·문서 지도, CONTRIBUTING, 팀 가이드 읽기 순서에서 링크. 팀 가이드 §1.5·§6의 훅 설명과 `--no-verify` 문구를 CONTRIBUTING(D-584 개정)과 맞추고 `middleware/apps/device/`를 `middleware/devices/`로 정정. shared-checkout·루트 AGENTS·rosy-land-on-main SKILL의 옛 우산 경로(F: 드라이브)를 컴퓨터와 무관한 상위 폴더 표기로.
+- 증거: 새 문서 두 개의 상대 링크를 파일 존재로 확인했다. `rosy_harness.py lint`와 문서 계약 시험은 이 PC에 Python이 없어 돌리지 않았다(미실행).
+- gate 변화: 없음.
+- 결정: 없음. 절차는 바꾸지 않고 기존 ADR과 CONTRIBUTING의 규칙을 모아 적었다.
+
 ## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 
 - 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
@@ -9012,6 +9019,32 @@ osy-d395-s1d\`.
 - 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
 - gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.
 
+## 2026-10-17 · uncommitted · D-789 6대 카메라 WebRTC 전환 결정과 실행 계획
+
+- 사용자 요청: WebRTC 전환을 ADR로 결정하고 바로 구현에 착수할 계획을 작성한다.
+- 변경: 로봇 단일 H.264/WHIP 송출 → 별도 사이트 MediaMTX → WHEP 브라우저 분배를 D-789로 결정했다. CORE 위임 인증, Fleet 비중계, 6대 영상 예산·혼잡 강등·단계적 기본값 전환을 명시했다.
+- 산출물: `docs/adr/D-789-six-robot-webrtc-camera-transport.md`, `docs/plans/2026-10-17-webrtc-camera-migration.md`. 브랜치 `docs/webrtc-camera-migration`.
+- 검증: lint·링크·원격 문서 계약 검사를 수행한다. 구현·ARM64 산출물·장치 설치·6대 FIELD 검증은 이번 문서 작업에서 수행하지 않았다. 기존 gate 변화 없음.
+- gate 변화: 없음. WebRTC 구현·장치·현장 수용은 T1~T6의 후속 증거로 판정한다.
+
+## 2026-10-17 · uncommitted · D-791 미디어 프로세스의 독립 배포 소유권
+
+- 변경: D-789 발행자 구현은 독립 `middleware/media` wheel, 사이트 권한 구현은 독립 `operations/site_ui/media` wheel로 등록했다. 기존 인식 패키지와 frozen size ratchet을 키우지 않는다.
+- 증거: 원격 구조 검사에서 기존 perception·schema의 ratchet 증가와 새 사이트 모듈의 미계측을 발견했다. receipt DTO를 공통 계약으로 옮기고 실제 독립 wheel을 크기 단위로 등록하여 재검증한다.
+- gate 변화: 없음. 전송·권한·예산 수용 계약은 D-789를 유지하고 구현 내부의 소스 경로만 D-791로 보완한다.
+
+## 2026-10-17 · uncommitted · 기기·실행 호스트·담당 Fleet 분리 목표와 설계
+
+- 변경: 기존 기기 등록을 재사용하고 PC 배치와 별도로 담당 Fleet을 지정하는 목표를 `plans/2026-10-17-fleet-device-authority-design.md`에 정리했다. 장치 측 담당 지정 정본, 기존 dispatch fence와 별도의 지정 버전, 명시적 인계, 같은 호스트 UDS와 원격 gateway 경계, 양팔 구성 및 세 가지 PC 배치의 완료 조건을 정의했다.
+- 근거: `SiteRoster`·`CentralRegistry`·peer directory는 목록/읽기이며, OMX owner는 현재 같은 호스트 UID/UDS를 사용한다. 기존 등록·허브 페어링을 독점 명령 권한으로 간주하지 않고 D-246·D-281·D-302·D-336·D-555·D-773·D-778~D-780·D-785와의 관계를 기록했다.
+- gate 변화: 없음. 설계 검토 대기이며 제품 코드·API 계약·실물 설정은 변경하지 않았다. 원격 pytest·ROS-SIM·장치·현장 검증은 실행하지 않았고 착지·push·배포도 수행하지 않았다.
+
+## 2026-10-17 · uncommitted · Fleet 담당 지정 설계와 기존 설치·실행 경계 대조
+
+- 변경: 기존 OMX host inventory를 재사용 출처로 명시하고, 한 팔을 가리키는 기존 Workcell 행과 협업 작업대 그룹을 구별했다. 담당 회수와 driver 제출을 같은 stop fence 경계로 직렬화하는 조건 및 인계 경합 검증을 추가했다. 동일 Fleet ID/등록 자격의 중복 실행 방지와 활성 세션 비밀 탈취의 신뢰 한계도 구별했다.
+- 근거: `deploy/robot/omx/host_inventory.py`는 host/instance와 장치 선택을 검증하고, `action_runner.py`는 journal 준비 뒤 `_fenced_submission`에서 권한을 재검사한 후 driver 제출과 수락 기록을 stop fence 안에 둔다. 기존 grant는 Fleet 논리 신원이나 담당 지정 버전을 담지 않는다.
+- gate 변화: 없음. 설계의 코드 대조 보완이며 구현 승인·제품 변경·실물 제어권 변경이 아니다. 원격 pytest·ROS-SIM·DEVICE/FIELD는 실행하지 않았다.
+
 ## 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
 
 - 변경: 학습 산출물은 L0 등록만 하고 L1–L3·제한 사용은 Fleet API의 사람 승인으로만 연다는 ADR D-793(Proposed)을 추가했다. 승인 창(L3 15분/상한 30분, 제한 사용 8시간)과 실행 lease(기본 1초/상한 2초)를 나누고, 위험 상황은 HOLD 뒤 확인 요청으로 남겨 API로만 푼다. 실물 owner의 private 설정 `learned_policy` 기동 거부와 실제 도달 확인을 첫 구현 순서로 정했다.
@@ -9029,3 +9062,78 @@ osy-d395-s1d\`.
 - 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
 - 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
 - gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-18 · 5e3af70e6d · D-800 CORE 경유 OMX–LeRobot 연동
+
+- 변경: 기존 OMX owner와 watchdog을 유지하는 선택적 CORE arm 관측·후보·정지 API(v1.271), HTTP 전용 LeRobot Robot 및 공식 recorder 진입점을 추가했다. 설치 절차와 검증 기록을 연결했다.
+- 증거: 최종 코드의 원격 CORE/native ROS/실제 SDK 22 passed/0 skipped, 기존 UI 브라우저 45 passed/0 skipped. 독립 소스 리뷰와 안전 trailer·크기 검사 통과. 상세 출처는 validation/core-omx-lerobot-2026-10-18/result.md.
+- 추가 검증: 전체 영향 범위 22개 분할에서 27,638 passed/1,916 skipped와 safety symbol anchor 누락 1건을 확인했다. 8beeb47ef2에서 등록 보완 후 관련 계약 170 passed/0 skipped, NEW 0. 원래 실패 기록도 보존했다.
+- gate 변화: SIM 연동만 검증했다. 실물 정책 승인·Fleet lease 전달·설치 profile·작업 성공·배포 수용을 승격하지 않았다.
+
+## 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
+
+- 변경: 사용자 커밋·머지 요청에 따라 main을 통합하고, 출처·체크섬을 포함하는 client wheel workflow와 GET-only preflight를 추가했다. 사용자가 실물 대상·승인 정책이 없다고 답했으므로 실물 target의 차단 결과를 유지했다.
+- 증거: CORE/native ROS/실제 SDK 22 passed, 실제 workflow build·오프라인 wheel 설치 보완 후 1 passed/0 skipped/NEW 0. 독립 계약 소스 리뷰 완료. validation/core-omx-deployment-2026-10-18/result.md 참조.
+- gate 변화: 배포 준비 코드·시험이며 장치 설치·승인·실물 구동·GitHub CI 수용은 아니다. 로컬 착지는 tools/land.py 검증을 따르고 push는 하지 않는다.
+
+## 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
+
+- 변경: 현장 `site-users.yaml`의 사람 계정은 모두 operator 하나뿐이라 정책 승인을 할 수 없었다. operator 항목의 `policy_admin: true`가 역할을 유지한 채 `fleet.policy`를 더하고, 세션 응답이 이를 알린다. `site_users.py set-policy-admin`과 `/console/policy`의 로그인 링크를 더했다.
+- 증거: 원격 pytest와 실제 Chromium 세 사람 시나리오. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. 현장 배포와 계정 표시는 후속 행에 기록한다.
+
+## 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
+
+- 변경: 사이트 Compose에 네 번째 서비스 `postgres`를 파생 문맥·로그 저장소로 추가한다(원장 `fleet.sqlite3`는 그대로 SQLite 하나, D-750). 미러 대상은 D-640 숙고 저널의 터미널 run이다. sink와 그 CLI 표면은 `operations/fleet/fleet/server/ledger/`(등록 유닛)에 둔다: `context_log.py`의 `ContextLog`가 `rosy_deliberation_run`에 best-effort로 기록하고(SQLite 커밋 뒤에만 호출, 실패는 경고와 `False`, 원장 트랜잭션 불변), `context_options.py`가 `--context-db-*`(기본 포트 5432)와 `activate_from_args`를 들며, `deliberation_journal.py`(같은 홀더로 이동, 신원 `fleet.server.ledger.deliberation_journal`)가 `context_log` 파라미터와 `_mirror`를 갖고 프로세스 활성 sink(`set_active`/`active`)를 기본값으로 집는다. `cli.py`는 `add_cli_arguments`·`activate_from_args`를 한 줄씩만 부르고(`app.py`는 손대지 않는다 — D-766 동결 파일), 동결을 맞추려 `_ai_first`·`_stuck_resolver_enrolled`를 `fleet/stuck/cli_config.py`로 옮긴다. `deploy/site/compose.yaml`에 postgres(read_only·tmpfs, `cap_drop: [ALL]`, healthcheck `pg_isready`, `pg_data` 볼륨, `postgres_password` secret)와 Fleet의 `depends_on`·secret·`--context-db-*`를 추가하고, `.env.example`에 `ROSY_SITE_PG_MAX_CONNECTIONS`, `requirements-fleet.txt`에 `psycopg[binary]==3.2.3`을 넣는다. 서명 candidate는 `build_candidate.py`의 `MIRRORED_IMAGES`(postgres:16-alpine, 해석한 digest를 manifest에 기록)로 네 이미지를 포함하고, `verify_candidate.py`·`site_update_io.py`·`rosy_site_autoupdate.py`·`site_functional_setup.py`의 4-이미지 목록과 prune 정규식을 넓힌다. ADR [D-796](../adr/D-796-site-context-log-store-postgres-mirror.md) 파일과 Log 행, `platform-folder-responsibilities.md`의 D-750 예외 한 줄, `deploy/site/README.md`를 함께 남긴다.
+- 증거: 신규 `operations/fleet/test/test_context_log.py`(가짜 커넥션: 인자 검증, password_file 시점 읽기, 스키마 1회 생성과 INSERT 파라미터, 실패 시 `False`·rollback, 터미널 run만 미러, 깨진 미러에도 run 생존, sink 없으면 `_mirror`가 `None`, `--context-db-*`가 활성 sink를 켜면 저널이 그것을 집음). `test/test_site_candidate.py`(images 4, syft 목록), `test/test_site_candidate_signing.py`, `test/test_site_candidate_verifier.py`(SERVICES 4), `test/test_site_autoupdate.py`(`upd.SERVICES` 사용), `test/test_site_functional_setup.py`, `test_deliberation_journal.py`, `test_incident_deliberation.py`, `test_remaining_platform_installed.py`(이동한 모듈 신원), `test_stuck_no_motion_fleet.py`(`fleet.stuck.cli_config`). `python tools/harness/size_range.py main HEAD`가 fleet·`cli.py`·`app.py`를 모두 한도 아래로 본다. 로컬 pytest는 금지(D-584)라 원격 pytest·Docker 이미지 빌드·현장 수용은 NOT RUN이다.
+- gate 변화: 없음. SOURCE 수준이며 LOCAL 이상은 원격 시험, Docker 빌드, 현장 PC가 필요하다.
+
+## 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
+
+- 정정: 위 D-796 항목의 `deliberation_journal.py` 신원 표기(`fleet.server.ledger.deliberation_journal`)는 설치 import 이름이 아니다. 서버 홀더는 빌드할 때 `fleet.server.*`로 평탄화되므로(`tools/packaging/fleet_sources.py`의 `HolderDevelop.find_package_modules`), 소스트리와 설치본 모두 평탄한 `fleet.server.deliberation_journal`·`fleet.server.context_log`·`fleet.server.context_options`를 쓴다. 설치본에는 `fleet.server.ledger`가 없어 홀더를 거치는 이름은 런타임에 죽는다(`fleet console`의 import). ADR D-796의 열린 항목도 같은 문장으로 고치고, 설치 모듈 목록 시험이 세 평탄 이름을 고정한다.
+- 변경: `cli.py`의 홀더 import와 `ledger/`의 상호 참조, 세 시험 파일의 import를 평탄 이름으로 바꾼다. `context_log.py`는 비밀번호 파일 경로를 그대로 보관하고 `_dsn`에서 dict 순서(host·port·dbname·user·connect_timeout·password)로 DSN을 조립한다 — 값은 파일에서 읽은 뒤에만 문자열에 들어가고, `deploy/robot/pinky_pro/release/secret_scan.py`의 assignment 규칙을 우회하지 않는다. `context_options.py`는 `args.context_db_password_file`을 그대로 읽는다. `compose.pairing.yaml`의 fleet `command`는 base를 통째로 반복해야 하므로(`test_site_pairing_deploy.py`), D-796 `--context-db-*` 네 플래그를 base와 같은 순서로 넣는다.
+- 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
+- gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · Fleet 담당 지정 설계의 기준 커밋 표기
+
+- 변경: `plans/2026-10-17-fleet-device-authority-design.md`의 기준 해시 앞에 SHA를 명시해 공개 커밋 참조임을 표시했다. 설계 내용과 비밀정보 검사 규칙은 유지한다.
+- 증거: 원격 회귀에서 `test_no_secrets_in_tracked_files`가 해당 기준 줄의 해시를 high-entropy-token으로 보고했다. 명시적 SHA 코드 표기는 기존 검사 회귀가 허용하는 커밋 인용 형식이다. 수정 커밋의 원격 재검증은 착지 기록에 남긴다.
+- gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · 로컬 착지를 GitHub PR 경로로 옮기는 계획
+
+- 변경: `plans/2026-10-18-github-pr-landing-path.md`를 추가했다. 이 노트북에서 막힌 원인, 공개키 등록과 origin SSH 전환 절차, 로컬 `main`에만 있는 320개 커밋의 주제별 묶음과 PR 게시 순서, squash 사본 충돌 재발 방지, 이후 PR·`ci.yml` 병렬 흐름을 정리했다.
+- 증거: 이 노트북에서 HTTPS `curl`은 10초 시간 초과(000)였다. SSH는 `Permission denied (publickey)`(키 `SHA256:mybrpgxI…` 미등록)였고 origin은 HTTPS다. `gh` 2.102.0의 auth 확인은 시간 초과였다. `origin/main..main` 320개(merge 64), 반대 방향 32개였다. 밀린 커밋 중 `Safety-Review:` trailer 11개, trailer 없는 안전 경로 커밋 2개(`safety_review.py --warn-only`)를 확인했다.
+- gate 변화: 없음. push·PR·remote 변경·로컬 `main` reset은 하지 않았고 사용자 결정으로 남겼다.
+
+## 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존
+
+- 변경: git 안내·날짜별 인수인계 문서를 최신 main과 합쳤다. README의 동시 작업 링크, 팀 가이드의 개인 클론 훅 예외, main 기준선에서 NEW를 재현하는 절차를 보존했다. 새 git 안내의 오래된 FULL 착지 안내는 최신 공유 체크아웃 절차로 연결했다.
+- 증거: 수동 충돌을 해결하면서 main의 규칙을 유지했고 원래 문서 추가·링크 변경만 남겼다. 문서 상대 링크와 lint·원격 회귀 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. push·배포·실물 시험은 하지 않는다.
+
+## 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+
+- 변경: `plans/2026-10-18-pinky-sd-ready.md`에 단일 명령의 새 카드 준비, 기존 작성기 재사용, 첫 부팅·자동 업데이트 검증 순서를 기록했다. 첫 장치 런북에 준비물, Wi-Fi 보안 입력, 등록부 복원, 기록 로그·receipt 완료 판정과 읽기 전용 상태 확인을 추가했다.
+- 증거: 기존 SD·first-boot·D-412 코드 확인 및 네이티브 PowerShell fixture 검증 6개 PASS. 최신 이미지 성공 실행의 현재 Actions artifacts와 조회한 release의 `.img.xz` 목록은 비어 있어, 이미지 확보를 미완료 단계로 남겼다.
+- gate 변화: 없음. 빌드 성공, 서명 이미지, 매체 readback, 실기 부팅·자동 업데이트를 서로 대체하지 않는다.
+
+## 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
+
+- 변경: 기존 native session fixture에 시험용 client 교환 지점만 추가하고, 실제 LeRobot 0.4.4 별도 프로세스가 loopback uvicorn CORE를 통해 RGB·관절 관측, 목표 송신, ROS 결과 대기, disconnect 정지까지 수행하는 opt-in 회귀를 추가했다. ROS 서버에 도착한 목표도 비교한다. 생산 기본값·owner 허용 목록·lease 발급·승인·실물 배포는 바꾸지 않았다.
+- 증거: `2fd2b168e8` RED, `e81c3f1a4` 원격 socket 1 passed/0 skipped/NEW 0. 최종 목표 비교 보강은 후속 opt-in native 검증 대상이다. `docs/validation/core-omx-runtime-2026-10-18/result.md`.
+- 정정: Fleet lease 발급기는 이미 있으며 `device_delivery=not_connected`다. 빠진 것은 장치 clock/session에 대한 신뢰된 전달·검증·갱신·폐기와 운영 조립이다. 합성 인증·고정 목표의 시험을 학습 정책·Gazebo/실물 이동으로 주장하지 않는다.
+- gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
+
+- 변경: D-787 시뮬레이션 모방학습 제안과 ADR Log를 합치면서 main에서 들어온 D-787 미작성 예약 행 두 개만 제거했다. 다른 ADR 예약은 보존한다.
+- 증거: 착지 lint가 이미 존재하는 D-787 파일을 gap으로도 선언했다고 거절했다. ADR 번호와 Proposed 상태는 유지하며 현재 커밋으로 원격 검증한다.
+- gate 변화: 없음. 시뮬레이션 실행·실물 정책 활성화·장치 수용을 선언하지 않는다.
+
+## 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
+
+- 변경: 실물 하달 개방에 필요한 운행·팔의 장치 증거, 관측·인계 장벽 조건을 Proposed ADR로 통합한다. 해당 문서가 없다고 선언한 D-797 예약 두 행만 제거하고 다른 예약은 보존한다.
+- 증거: ADR 본문과 Log의 Proposed 상태, 코드·설치 profile 변경이 없는 범위를 확인했다. 현재 커밋의 원격 검증은 착지 기록에 남긴다.
+- gate 변화: 없음. 실물 운행·팔 실행·device_trial 활성화·장치 수용을 승인하거나 실행하지 않는다.

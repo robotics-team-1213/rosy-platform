@@ -135,9 +135,10 @@ def test_vision_cannot_reach_fleet_secrets():
             assert item["source"].endswith("/site-cameras.yaml") and item["read_only"], item
     mounted = str(services["vision"]["volumes"])
     assert "SECRETS_DIR" not in mounted and "host-control" not in mounted
+    # D-796: the fleet service also reads the site context-log store's password.
     own = {"fleet": {"registry_token", "fleet_sighting_token", "discovery_token",
                      "vision_preview_secret", "robot_credential_key", "site_cert", "site_key",
-                     "site_ca"},
+                     "site_ca", "postgres_password"},
            "vision": {"phone_ingress_token", "fleet_sighting_token", "vision_preview_secret",
                       "site_cert", "site_key", "site_ca"},
            "proxy": {"site_cert", "site_key", "site_ca"}}

@@ -403,3 +403,13 @@ def test_manifest_schema_matches_the_robot_contract():
     from core_common.protocol.recording import MANIFEST_SCHEMA, RECORDING_ID, TELEOP_INTENT_TOPIC
     assert fetch_http.MANIFEST_SCHEMA == MANIFEST_SCHEMA and fetch_http.INTENT_TOPIC == TELEOP_INTENT_TOPIC
     assert fetch_http.RECORDING_ID.pattern == RECORDING_ID.pattern
+
+
+def test_download_pacing_sleeps_down_to_the_limit(monkeypatch):
+    """Network load: 250 kB at 2 Mbit/s takes 1 s; 0 means unlimited."""
+    slept = []
+    monkeypatch.setattr(fetch_http.time, "monotonic", lambda: 10.0)
+    monkeypatch.setattr(fetch_http.time, "sleep", slept.append)
+    fetch_http._pace(10.0, 250_000, 2e6)
+    fetch_http._pace(10.0, 250_000, 0)
+    assert slept == [1.0] and fetch_http.DEFAULT_LIMIT_MBPS == 2.0
