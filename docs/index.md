@@ -345,4 +345,4 @@
 - 2026-10-18 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
 - 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
 - 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
-- 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
