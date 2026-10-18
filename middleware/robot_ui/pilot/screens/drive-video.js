@@ -23,9 +23,10 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
   const later = (fn, ms) => { clearTimeout(retry); if (alive) retry = setTimeout(fn, ms); };
   const raw = () => capture.state().previewMode === "raw";
 
-  function poll(text) {
+  function poll(text, reason = "") {
     video.hidden = true;
     fact.textContent = text;
+    fact.dataset.reason = reason;      // HUD text stays short; the cause is an attribute
     fact.dataset.stale = "false";
     vision.start();     // 이미 돌면 아무것도 하지 않는다
   }
@@ -92,7 +93,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
       camera = null;
       hiddenAt = null;
       if (!alive || state.reason === "stopped") return;
-      poll(`영상 폴링 · WebRTC ${state.reason === "revoked" ? "권한 종료" : "끊김"}`);
+      poll("영상 폴링", `webrtc-${state.reason}`);
       if (raw()) later(tryWebrtc, WEBRTC_RETRY_MS);
     }
   }
@@ -119,7 +120,7 @@ export function mountDriveVideo({root, element, capture, vision, acceptPreview})
       if (!alive || !raw()) camera.close("stopped");
     } catch (_error) {
       camera = null;
-      if (alive) poll("영상 폴링 · WebRTC 실패");
+      if (alive) poll("영상 폴링", "webrtc-failed");
       if (raw()) later(tryWebrtc, WEBRTC_RETRY_MS);
     } finally {
       opening = false;

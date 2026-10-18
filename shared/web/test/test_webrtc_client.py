@@ -104,11 +104,12 @@ def test_watermark_matches_the_robot_encoder_and_rejects_corruption():
 def test_grant_request_keeps_jpeg_for_robots_without_site_media():
     result = run_js("""
     const post = (status) => async () => ({status, body: {grant_id: "x"}});
-    const out = [await media.requestMediaGrant(post(201), "rosy_01"), await media.requestMediaGrant(post(503), "rosy_01")];
+    const out = [await media.requestMediaGrant(post(201), "rosy_01"), await media.requestMediaGrant(post(503), "rosy_01"),
+                 await media.requestMediaGrant(post(404), "rosy_01")];
     try { await media.requestMediaGrant(post(403), "rosy_01"); } catch (e) { out.push(e.status); }
     console.log(JSON.stringify(out));
     """)
-    assert result == [{"grant_id": "x"}, None, 403]
+    assert result == [{"grant_id": "x"}, None, None, 403]
 
 
 def test_open_waits_for_publisher_and_sends_token_only_in_header():

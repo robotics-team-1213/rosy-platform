@@ -57,9 +57,9 @@ def site(tmp_path):
     class Core(BaseHTTPRequestHandler):
         def do_POST(self):
             self.rfile.read(int(self.headers.get('Content-Length', 0)))
-            bearer = self.headers.get('Authorization', '')[7:]
+            presented = self.headers.get('Authorization', '')[7:]
             state['validated'].append(self.path)
-            claims = verify_media(bearer, {'media-1': public.read_bytes()}, robot_id='rosy_01',
+            claims = verify_media(presented, {'media-1': public.read_bytes()}, robot_id='rosy_01',
                                   audience='site:lab', now=state['now'])
             data = json.dumps(dict(active=state['online'], grant_id=claims.jti, robot_id='rosy_01',
                                    path=claims.path, action=claims.action, audience=claims.aud,

@@ -59,11 +59,12 @@ function canvasReader() {
   };
 }
 
-// → grant receipt, or null when this robot has no site media (503 MEDIA_UNAVAILABLE): stay on JPEG.
+// → grant receipt, or null when this robot has no site media (503 MEDIA_UNAVAILABLE, or 404 from a CORE
+// without the route): stay on JPEG.
 export async function requestMediaGrant(postJson, robotId) {
   const result = await postJson(MEDIA_GRANT_PATH, {robot_id: robotId});
   if (result.status === 201) return result.body;
-  if (result.status === 503) return null;
+  if (result.status === 503 || result.status === 404) return null;
   throw Object.assign(new Error(`영상 권한 거절 (${result.status})`), {status: result.status});
 }
 

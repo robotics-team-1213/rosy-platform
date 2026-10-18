@@ -1,7 +1,7 @@
 """D-789 robot media runtime: camera mailbox -> H.264 -> WHIP, only while a viewer demands it.
 
 Runs as the optional native ``rosy-media.service`` (its own cgroup); it never opens the
-camera. Config is one JSON file (template deploy/robot/pinky_pro/native/rosy-media.example.json).
+camera. Config is one JSON file (template rosy-media.example.json beside the native units).
 """
 
 import json

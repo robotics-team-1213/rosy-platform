@@ -17,16 +17,18 @@
 서로 겹치는 회귀 묶음이 있으므로 아래 계수를 합산해 고유 시험 수라고 부르지 않는다.
 중간 RED·환경 실패는 같은 외부 scratch의 별도 폴더에 보존했다. NEW baseline은 변경하지 않았다.
 
-| Revision | Log (external scratch relative path) | SHA256 | Result |
-|---|---|---|---|
-| `75600d7705` | `t1-green/run-1.txt` | `c2bef97bba749be939967eca38b25a9661103c70b40ccf12c5cc8874e1a4b69f` | 5 passed; runtime inventory, no native acceptance |
-| `34cee8b1cc` | `watermark-green/run-1.txt` | `fac8aaadc73a18f429accef33900b10cfd78bd95c7687ad6e7c91bc437aa1b8d` | 6 passed; capture identity primitives |
-| `c2fe2e5d4b` | `whip-green/run-1.txt` | `eb424d03a6e8a28df8058a414a85ccc113fad4e3e9a9650f5e4ba782b64120f6` | 13 passed; WHIP signaling and watermark, overlaps prior watermark suite |
-| `c2fe2e5d4b` | `loopback-offer/run-1.txt` | `3fe0ca1a3bcfbb02039f34d09f0949793feffefadbbc669beca463d1af85ccce` | 1 passed; real synthetic H.264/WHIP/MediaMTX/WHEP/Chromium rendering |
-| `0d80797f10` | `grants-green/run-1.txt` | `bef8623b25b25ab880ba85efeef2d92c7d65627f885fe3b9c983593ce2c4795b` | 6 passed; original CORE authority and scoped grants |
-| `1d5230667e` | `media-config-green/run-1.txt` | `0309c4821cf9ccfe1398c7609543fd16e3a3227ff91a033a1802fc304ce1eddf` | 16 passed; media API plus existing import/MJPEG regression |
-| `77ccc7ed02` | `account-media-green/run-1.txt` | `8b031ea2020cb0faeb68e774f5aef7ef8c834c93991117711f8578201cecfe91` | 14 passed; Account client suite including strict media revalidation |
-| `683d93218b` | `media-server-green/run-1.txt` | `ab95a4bdf6fddbe85369ddc477acaa47c954fd24fd4d2c6f3056eecc430e7cc7` | 13 passed; media lease, HTTP and process ownership |
+Log SHA256 values: [webrtc-source-2026-10-17.sha256](webrtc-source-2026-10-17.sha256) (sha256sum format).
+
+| Revision | Log (external scratch relative path) | Result |
+|---|---|---|
+| `75600d7705` | `t1-green/run-1.txt` | 5 passed; runtime inventory, no native acceptance |
+| `34cee8b1cc` | `watermark-green/run-1.txt` | 6 passed; capture identity primitives |
+| `c2fe2e5d4b` | `whip-green/run-1.txt` | 13 passed; WHIP signaling and watermark, overlaps prior watermark suite |
+| `c2fe2e5d4b` | `loopback-offer/run-1.txt` | 1 passed; real synthetic H.264/WHIP/MediaMTX/WHEP/Chromium rendering |
+| `0d80797f10` | `grants-green/run-1.txt` | 6 passed; original CORE authority and scoped grants |
+| `1d5230667e` | `media-config-green/run-1.txt` | 16 passed; media API plus existing import/MJPEG regression |
+| `77ccc7ed02` | `account-media-green/run-1.txt` | 14 passed; Account client suite including strict media revalidation |
+| `683d93218b` | `media-server-green/run-1.txt` | 13 passed; media lease, HTTP and process ownership |
 
 ## 미확인·진행 중
 
