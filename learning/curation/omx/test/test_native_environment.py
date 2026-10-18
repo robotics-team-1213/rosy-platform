@@ -168,7 +168,6 @@ def test_a_recorder_that_names_the_wrist_camera_wrist_reads_the_same(module, inp
     assert renamed != raw
     legacy, current = seal(module, inputs), seal(module, (renamed, windows, files))
     assert bind(module, (renamed, windows, files), current)['episodes'] == bind(module, inputs, legacy)['episodes']
-    both = b''.join(line.replace(b'"top"', b'"wrist"') + b'
-' for line in raw.splitlines())
+    both = raw.replace(b'"top"', b'"wrist"')
     with pytest.raises(ValueError, match='both camera roles'):
         seal(module, (both, windows, files))
