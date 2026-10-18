@@ -95,7 +95,7 @@ def match_features(still, frame, intrinsics):
             'd_pan_deg': round(math.degrees(math.atan2(r[0, 2], r[2, 2])), 3),
             'd_tilt_deg': round(math.degrees(math.asin(max(-1.0, min(1.0, -r[1, 2])))), 3),
             'd_roll_deg': round(math.degrees(math.atan2(r[1, 0], r[0, 0])), 3),
-            'd_scale_pct': round((math.sqrt(s[0] * s[1]) / s[2] - 1) * 100, 3)}, h
+            'd_scale_pct': round((math.sqrt(float(s[0] * s[1])) / float(s[2]) - 1) * 100, 3)}, h
 
 
 def marker_world(marker):
