@@ -9163,3 +9163,9 @@ osy-d395-s1d\`.
 - 변경: 후속 문서 시험과 현장 읽기 전용 확인을 별도 고정 기록에 남겼다. 앞선 결과를 덮어쓰지 않았다.
 - 증거: 모델 PC 문서/배치 계약 142 passed, skip 0, NEW 0. 실행 Fleet의 빈 Account 설정·비어 있는 Account 디렉터리·기존 사용자 후보 정확히 1개·현재 .local TLS/8443·tailnet serve 미설정을 확인했다. 상세 SHA와 한계는 docs/validation/account-service-2026-10-19/governance-and-site-readback.md.
 - gate 변화: 없음. 운영 설정 변경·우회 권한 사용·배포·실사용 수용은 미수행이다. 기존 tailnet issuer 후보의 신뢰된 TLS/443 구성과 운영 관리 권한이 필요하다.
+
+## 2026-10-19 · 8d05ced7b · Account 전환 선행 조건 재확인
+
+- 변경: 활성화 선행 조건의 후속 readback을 별도 고정 기록에 남겼다. 제품 소스 변경은 없다.
+- 증거: 실행 Fleet/proxy healthy와 배포 이미지 tag를 확인했다. 후보 issuer 443의 실제 연결은 거부됐으며 TLS/callback은 검증하지 못했다. 상세 범위는 docs/validation/account-service-2026-10-19/activation-prerequisite-readback.md.
+- gate 변화: 없음. 운영 관리 권한·신뢰된 HTTPS issuer·등록 receiver/native signer가 필요하다. 설치·실사용·격리 복구는 미완료이며 지속 목표는 active다.
