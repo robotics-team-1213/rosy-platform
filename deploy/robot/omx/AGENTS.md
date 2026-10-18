@@ -23,6 +23,8 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `preflight.py` | Multi-workcell preflight over the host inventory |
 | `run_pilot_sim.sh`, `probe_*.py`, `probe_*.sh` | Simulation and pilot probes (vendor owner, Fleet ROS vendor sim, pilot HTTP, pilot recording) |
 | `requirements-lerobot-export.txt` | Python deps for demonstration export |
+| `sim_reach_task.py`, `sim/reach_task.example.json` | `rosy.omx-sim-reach-task.v1` reach-task validator, seeded start sampling, greedy jog plan and readback judge (stdlib; shared with batch export and the evaluator) |
+| `sim_reach_teacher.py` | Scripted SIM teacher over Pilot HTTP: unrecorded reset, recorded greedy jogs, automatic `task_outcome` from joint readback, lease renewal, no goal retry; writes `rosy.omx-sim-reach-teacher-results.v1`. Test `test/test_omx_sim_reach_teacher.py` |
 
 ## Subdirectories
 
