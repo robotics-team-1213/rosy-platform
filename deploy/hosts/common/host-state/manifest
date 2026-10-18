@@ -35,3 +35,5 @@ approval=recovery file /etc/systemd/system/rosy-watchdog-load.service common/ros
 approval=recovery enabled rosy-watchdog-load.service
 approval=recovery file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
 approval=recovery file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf
+# D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
+safe file /usr/local/bin/rosy-update-gate common/rosy-update-gate 0755

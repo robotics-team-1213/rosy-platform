@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Update gate (D-805): an updater may start only while nothing freezes updates. ExecCondition= hook.
+
+Every unit that changes code, images, models, the engine or reboots the host runs this first
+(`ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'`, via a host-state drop-in or in the unit itself).
+Exit 0 lets the unit run; exit 1 makes systemd skip it (logged as a condition, not a failure). It
+never exits 255, so the unit is never marked failed by the gate.
+
+Frozen when any of these holds:
+  - /etc/rosy/update-freeze exists (this host, any unit), or ~/.config/rosy/update-freeze (this user);
+  - the tag `ops-update-freeze` exists in the code repository (every site; its message says who, why
+    and the intended thaw date).
+Fail closed: if the tag cannot be checked (no git, DNS, timeout, error), the unit is skipped too. The
+only "run" answer is a successful `git ls-remote` that lists no such tag.
+
+  freeze (seconds, no push hooks; the annotated tag message says who, why and the thaw date):
+    sha=$(gh api repos/robotics-team-1213/rosy-platform/git/ref/heads/main --jq .object.sha)
+    tag=$(gh api repos/robotics-team-1213/rosy-platform/git/tags -f tag=ops-update-freeze -f type=commit -f object=$sha           -f message="<who>: <why>, thaw <date>" --jq .sha)
+    gh api repos/robotics-team-1213/rosy-platform/git/refs -f ref=refs/tags/ops-update-freeze -f sha=$tag
+  thaw:
+    gh api -X DELETE repos/robotics-team-1213/rosy-platform/git/refs/tags/ops-update-freeze
+After freezing, wait until no updater unit is active (systemctl list-units 'rosy-*') before relying on it:
+a freeze stops new runs, not one already running.
+"""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = os.environ.get("ROSY_UPDATE_REPO", "https://github.com/robotics-team-1213/rosy-platform.git")
+TAG = "refs/tags/ops-update-freeze"
+ROOT = os.environ.get("ROSY_HOST_STATE_ROOT", "")  # tests prefix absolute paths, like rosy-host-state
+
+
+def decide() -> tuple[int, str]:
+    for path in (Path(ROOT + "/etc/rosy/update-freeze"), Path.home() / ".config/rosy/update-freeze"):
+        if path.exists():
+            return 1, f"frozen by {path}"
+    try:
+        done = subprocess.run([os.environ.get("ROSY_UPDATE_GATE_GIT", "git"), "ls-remote", "--tags", REPO, TAG],
+                              capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return 1, f"skip: freeze tag not checkable ({type(exc).__name__}); failing closed"
+    if done.returncode != 0:
+        return 1, f"skip: freeze tag not checkable (git exit {done.returncode}); failing closed"
+    if done.stdout.strip():
+        return 1, "frozen by tag ops-update-freeze"
+    return 0, "run: no freeze"
+
+
+def main() -> int:
+    try:
+        code, reason = decide()
+    except Exception as exc:  # a bug in the gate is a skip with its reason, never a silent one
+        code, reason = 1, f"skip: gate error {type(exc).__name__}: {exc}"
+    print(f"rosy-update-gate: {reason}", flush=True)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
