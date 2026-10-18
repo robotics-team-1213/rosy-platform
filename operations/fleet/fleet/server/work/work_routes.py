@@ -41,6 +41,15 @@ def _trip_row(view: dict) -> dict:
 
 
 def install_work_routes(app, *, task_service, mission_service, require_viewer, require_named, read_guard):
+    if task_service is not None:
+        # D-793: learned-policy governance needs only the task ledger, not the Mission API.
+        from fleet.server.policy_governance import PolicyGovernanceStore
+        from fleet.server.policy_governance_routes import install_policy_governance_routes
+        app.state.policy_governance = PolicyGovernanceStore(task_service.store.path)
+        install_policy_governance_routes(app, store=app.state.policy_governance, configured_omx=app.state.omx_instances,
+                                         stop_transport=app.state.omx_stop_transport, require_viewer=require_viewer,
+                                         require_named_operator=require_named[1])
+
     def named(principal) -> bool:
         try:
             require_named[1](require_named[0](principal))
