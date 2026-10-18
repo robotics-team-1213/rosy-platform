@@ -53,6 +53,6 @@ def test_increasing_clocks_with_variable_delay_cannot_deliver_regressed_receipt(
     # Both clocks/stamps advance, but subtracting the larger source age goes backward.
     with pytest.raises(ValueError):
         sample(reader, stamp_ns=1_100_000_000, source_now_ns=1_400_000_000, received_at=10.05)
-    current = sample(reader, stamp_ns=1_200_000_000, source_now_ns=1_300_000_000, received_at=10.1)
+    current = sample(reader, stamp_ns=1_100_000_000, source_now_ns=1_200_000_000, received_at=10.1)
     assert current.sequence == first.sequence+1
     assert current.received_at == pytest.approx(10.)
