@@ -1,5 +1,4 @@
-﻿# Batch progression requires the existing writer's exit, readback and registry evidence.
-function Wait-SdCardCompletion([string]$LogPath, [string]$ReceiptPath, [object]$Plan, [string]$RegistryJson) {
+﻿function Wait-SdCardCompletion([string]$LogPath, [string]$ReceiptPath, [object]$Plan, [string]$RegistryJson) {
     $exitMarker = "$LogPath.exit"
     while (-not (Test-Path -LiteralPath $exitMarker -PathType Leaf)) {
         $output = Invoke-ChildPowerShell @("-File", (Join-Path $PSScriptRoot "card-write-status.ps1"), "-LogPath", $LogPath, "-Json")
