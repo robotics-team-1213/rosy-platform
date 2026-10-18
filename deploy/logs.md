@@ -2965,3 +2965,9 @@
 - 변경: UDS를 먼저 열고 owner session·nonce·profile·target·현재 Fleet 세대를 결속한 별도 시작 허가만 받는다. durable command intent 뒤 최종 LocalStop/Fleet fence로 한 번 제출하며, pending 수락도 기존 runtime의 정확한 command ID로 취소한다. 기존 Fleet 취소 fanout도 진단 I/O보다 먼저 실행한다. G2 owner에 기존 workflow tick을 연결하고 기본 HOLD와 격리 검사는 유지한다.
 - 증거: 커밋 기반 원격 RED→GREEN, 최종 session/request/gate/기존 startup/owner workflow/phase 66 passed. blocked recording과 UDS 상실 회귀를 실제로 재현했다. 독립 최종 리뷰 material finding 0건. docs/validation/omx-native-startup-2026-10-17/result.md.
 - gate 변화: SOURCE/호스트 orchestration 범위. AI PC SDK import·box-only16 compile·module origin PASS. native 격리는 OS namespace 권한 및 sudo 인증에 막혀 미실행이며, 기존 G2 guard를 완화하지 않았다. 관리자 실행용 bounded native command·PowerShell은 private에 준비했다. 실제 task·실물·실데이터 학습 미검증, 실제 episode 0개.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.

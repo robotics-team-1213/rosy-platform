@@ -73,7 +73,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 5 | `middleware/robot_ui`, `operations/site_ui` | 검증 기록 S5. 설치 이름은 `dashboard`, `emotion`, `fleet.server.web`, Rosy Cam |
 | 6 | `operations/overhead`, `operations/signal_observation`, `middleware/perception/front_camera` | D-748. 검증 기록 S6. 패키지 `rosy_vision` |
 | 7 | `action_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 facade | D-749. 검증 기록 S7. 폴더 이름 `lane_rules`는 쓰지 않는다 |
-| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나 |
+| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나. 사이트 문맥·로그 미러(D-796)는 원장 밖 파생 저장소다 |
 | 9 | 호스트 도구를 `tools/sim`, `tools/calibration`, `tools/validation`로 | D-751. 검증 기록 S9. `middleware/perception/tools/device`의 hotpath·IR 측정은 그 자리에 남긴다 |
 | 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | D-752. 검증 기록 S10. 소비자는 `rosy.world.state.projections.map_pose`를 직접 import |
 
