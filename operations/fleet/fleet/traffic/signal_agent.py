@@ -28,6 +28,7 @@ import json
 import logging
 import math
 import os
+import random
 import ssl
 import time
 import urllib.error
@@ -119,6 +120,7 @@ class Fleet:
 def run(fleet: Fleet, clock=time.monotonic, sleep=time.sleep, polls: Optional[int] = None) -> None:
     memory: dict = {}
     logged: Optional[list] = None
+    sleep(random.random() * PERIOD_S)   # network load: start off the beat of other 0.5 s pollers
     while polls is None or polls > 0:
         start = clock()
         try:

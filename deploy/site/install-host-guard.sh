@@ -27,7 +27,9 @@ run() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || { echo "run with sudo (or --dry-run)" >&2; exit 1; }
 
 id rosy-host-guard >/dev/null 2>&1 || run useradd --system --home /var/lib/rosy-host-guard --shell /usr/sbin/nologin rosy-host-guard
-run install -d -m 0750 -o rosy-host-guard -g rosy-host-guard "$DIR" /var/lib/rosy-host-guard
+run install -d -m 0750 -o rosy-host-guard -g rosy-host-guard "$DIR"
+# Fleet reads the non-secret report as uid 10001; SSH keys stay in the private config directory.
+run install -d -m 0751 -o rosy-host-guard -g rosy-host-guard /var/lib/rosy-host-guard
 if [ ! -f "$DIR/id_ed25519" ]; then
   run ssh-keygen -q -t ed25519 -N "" -C rosy-host-guard -f "$DIR/id_ed25519"
   run chown rosy-host-guard:rosy-host-guard "$DIR/id_ed25519" "$DIR/id_ed25519.pub"

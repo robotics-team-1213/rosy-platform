@@ -203,3 +203,22 @@ def test_raw_frame_request_does_not_substitute_an_annotated_image():
         base_url=endpoint.base_url))
     with pytest.raises(RobotApiError, match="raw front frame unavailable"):
         asyncio.run(client.front_frame(overlay=False))
+
+
+def test_accept_jpeg_serves_raw_jpeg_with_metadata_in_a_header(tmp_path):
+    """Network load: the console's 2 s live poll gets raw JPEG, not base64 in JSON."""
+    import json
+    robot = FramedRobot("rosy_01", state=_state())
+    client = _client(robot, tmp_path)
+    _gather(client)
+    for query in ("", "&live=true"):
+        shown = client.get(f"/api/fleet/robots/rosy_01/line-stuck/evidence?stuck_id=stuck-abc{query}",
+                           headers={"Authorization": f"Bearer {VIEWER}", "Accept": "image/jpeg"})
+        assert shown.status_code == 200, shown.text
+        assert shown.headers["content-type"] == "image/jpeg" and shown.content == JPEG
+        assert shown.headers["cache-control"] == "no-store"
+        meta = json.loads(shown.headers["x-stuck-evidence"])
+        assert meta["sequence"] == 812 and meta.get("live", False) is bool(query) and "jpeg_base64" not in meta
+    closed = client.get("/api/fleet/robots/rosy_01/line-stuck/evidence?stuck_id=other",
+                        headers={"Authorization": f"Bearer {VIEWER}", "Accept": "image/jpeg"})
+    assert closed.status_code == 404

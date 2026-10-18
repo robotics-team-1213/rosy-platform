@@ -763,7 +763,8 @@ can read Fleet state and task history. An operator can request, cancel, and stop
 work. `policy-admin` approves learned-policy stages, approval windows and incident
 clearing on `/console/policy` (D-793). An operator who also approves policies keeps
 the `operator` role and gets `policy_admin: true` through `python3 deploy/site/site_users.py
-set-policy-admin /etc/rosy/site/site-users.yaml --principal <id>` (`--off` revokes).
+set-policy-admin /etc/rosy/site/site-users.yaml --principal <id> [--principal <id> ...]`
+(`--off` revokes); several people change in one write, so Fleet restarts once.
 Deploy a Fleet that knows `policy_admin` before setting it: an older Fleet refuses the
 key at startup. All roles remain subject to CORE's local safety checks.
 

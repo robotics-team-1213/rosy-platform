@@ -14,6 +14,7 @@ symptoms:
   - "NEW shared/web/test/test_shared_controls.py::test_measure_comes_from_the_scale on branches that never touched it (main was red after D-792)"
   - "two sessions landed the same main fix in parallel (f376f8cbba, 44a24983da)"
   - "land runs took 30-90+ minutes with ~10 sessions on the test PCs; one run lost to 'no test host reachable' after 600 s"
+  - "fix/fleet-network-load-v2 needed 4 land.py rounds (~2.5 h): each passed, but main moved and forced a full-tier rerun; one merge put core_features at 10,001 / 10,000"
 applies_when:
   - "a land.py run stops on a D-766 size verdict, or a NEW failure in a file the branch did not change"
   - "planning a change inside fleet, site_ui/console, rosy_auto_update.py, trip_runner.py or trip_ports.py"
@@ -71,6 +72,22 @@ took hours to land. Four separate things blocked it.
   round, and one failure anywhere sent the whole bundle back. Splitting into smaller branches is
   what finally landed it.
 
+### 5. Main moved during every round (observed later the same day)
+
+- **Symptom:** `fix/fleet-network-load-v2` needed four `land.py` rounds. Every round passed, but
+  each time another session had landed on `main` meanwhile, so `land.py` merged the new `main` and
+  reran the full-tier tests: about 30-60 minutes per round, about 2.5 hours in total.
+- **Symptom (size):** after one of those merges, `main`'s growth plus the branch put the
+  `core_features` unit at 10,001 lines (limit 10,000). The size refusal came from the merge, not
+  from the branch alone. `core_features` now sits exactly at its limit, so the next addition
+  anywhere in it needs a split first; it is a [D-798](../../adr/D-798-size-headroom-splits-and-restack.md)
+  split candidate next to `fleet` and `site_ui/console`.
+- **Symptom (infra):** two runs lost host contact for more than 600 s (exit 255).
+  `test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds`
+  was flagged LOAD-FLAKY twice under load.
+- **Root cause:** there is no landing order or queue. A wide branch selects the full tier, so every
+  move of `main` during a round costs a full rerun.
+
 ## What worked
 
 - **Re-stack, do not patch on top.** Make a new worktree from `main`, cherry-pick the needed commits,
@@ -100,6 +117,15 @@ took hours to land. Four separate things blocked it.
   one landable concern and one module family per branch. Over about 15 changed files, or a FULL
   plan from `land.py --dry-run`, split first. FULL-trigger and `shared/web` parts land first, on
   their own branch.
+
+## Prevention candidates for 5 (Proposed, not implemented; for the user to decide)
+
+1. **Landing queue or lock.** Sessions land in order; the next one merges or rebases onto `main`
+   once, after the one ahead of it has landed, instead of chasing a moving `main`.
+2. **Rerun only the delta when `main` moves.** When `main` moves during a round, rerun the tests
+   affected by `main`'s delta united with the branch's affected set, not the whole tier.
+3. **Keep branches narrow.** The existing rule in `AGENTS.md` 「같이 하는 깃」 1 (one landable concern
+   per branch, about 15 changed files at most) keeps branches in narrow tiers, so a rerun is cheap.
 
 ## Not fixed here
 

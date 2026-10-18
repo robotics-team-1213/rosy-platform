@@ -340,7 +340,7 @@
 ## 최근 기록
 
 - 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
+- 2026-10-18 · uncommitted · 로컬 착지를 GitHub PR 경로로 옮기는 계획
+- 2026-10-18 · uncommitted · Fleet 담당 지정 설계의 기준 커밋 표기
 - 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
 - 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
-- 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
-- 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
