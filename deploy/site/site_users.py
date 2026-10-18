@@ -255,9 +255,11 @@ def set_policy_admin(path: Path | str, principal: str, enabled: bool, *, dry_run
         raise SiteUsersError("policy_admin is only for operator principals")
     changed = []
     for user in users:
-        row = {key: value for key, value in user.items() if key != "policy_admin"}
-        if user["principal_id"] == principal and enabled:
-            row["policy_admin"] = True
+        row = dict(user)
+        if user["principal_id"] == principal:  # only the named principal changes
+            row.pop("policy_admin", None)
+            if enabled:
+                row["policy_admin"] = True
         changed.append(row)
     document = {"users": changed}
     validate_users_document(document)
