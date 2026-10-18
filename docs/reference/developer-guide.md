@@ -106,16 +106,17 @@ flowchart LR
 | full | GitHub CI (main push, PR, 야간, 릴리스) | 로컬에서 돌리지 않는다 (Windows 40–60분, 일부 wheel 없음) |
 
 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
+로그·증거·빌드 산출물 같은 저장소 밖 파일은 `ROSY_SCRATCH`에 둔다. 설정하지 않으면 시스템 임시 폴더를 쓰고, 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`로 둔다.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- <paths> -q
-python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
+python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/<이름> -- <paths> -q
+python test/known_failures.py $ROSY_SCRATCH/<이름>/run-1.txt
 ```
 
 pre-push가 돌리는 quick 묶음을 손으로 돌릴 때:
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/quick-check -- test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
+python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/quick-check -- test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
 python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 ```
 
@@ -126,8 +127,8 @@ python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only�
 바꾼 경로에 걸린 브라우저 시험만 시험 PC에서 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다. `tools/land.py --tests auto`는 고른 시험 묶음 뒤에 이 브라우저 시험을 `ROSY_RUN_BROWSER_TESTS=1` 묶음으로 더 돌린다. 손으로 돌릴 때는 `tools/remote/remote_pytest.py`의 `--` 뒤 맨 앞에 `ROSY_RUN_BROWSER_TESTS=1`을 둔다. 앞에 오는 `ROSY_*=값` 단어는 시험 PC 작업의 환경 변수가 되고 pytest 인자가 아니다. 그 작업은 먼저 venv의 playwright에 맞는 Chromium을 그 PC의 `~/.cache/ms-playwright`에 설치한다(있으면 그대로 둔다).
 
 ```bash
-t=$(python test/browser_scope.py <바꾼 경로...>) && python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- ROSY_RUN_BROWSER_TESTS=1 $t
-python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
+t=$(python test/browser_scope.py <바꾼 경로...>) && python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/<이름> -- ROSY_RUN_BROWSER_TESTS=1 $t
+python test/known_failures.py $ROSY_SCRATCH/<이름>/run-1.txt
 ```
 
 전체 브라우저 묶음은 개발 노트북에서 돌리지 않는다. 2026-10-07 이 노트북에서 34분–2시간 26분이 걸렸고 MemoryError와 `Page.goto` 타임아웃 플레이크가 났다. Gazebo처럼 현장 PC(robttt)나 모델 PC(OMEN)의 그 PC 체크아웃에서 돌린다.

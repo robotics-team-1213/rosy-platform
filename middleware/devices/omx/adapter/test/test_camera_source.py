@@ -81,3 +81,12 @@ def test_unplugged_persistent_device_is_retryable(monkeypatch):
     monkeypatch.setattr("omx_adapter.camera_source.Path.exists", lambda path: False)
     with pytest.raises(OSError, match="unavailable"):
         selected_device("/dev/v4l/by-id/unplugged-camera")
+
+
+@pytest.mark.parametrize("fps", ["0", "-1", "31"])
+def test_frame_rate_cap_is_bounded_before_ros_starts(monkeypatch, fps):
+    from omx_adapter import camera_source
+    monkeypatch.setattr("sys.argv", ["camera_source", "--device", "/dev/v4l/by-id/cam",
+                                     "--topic", "/omx/top", "--frame-id", "top", "--max-fps", fps])
+    with pytest.raises(SystemExit):
+        camera_source.main()

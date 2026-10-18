@@ -1289,3 +1289,15 @@
 - 변경: 상태 패널에 same-origin /pilot 진입을 추가했다. 기존 조작·정지 계약은 유지하고 중복 저속 조종 제거는 대상·릴리스별 실기 증거 예외로 남긴다.
 - 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
 - gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-17 · eab1d0fb1 · 남은 대시보드 브라우저 검사의 현재 계약 반영
+
+- 변경: 만료 토큰 시험에 익명 계정 세션 조회를 반영하고, 셸 정지 대기식을 CSP에 맞는 함수로 고쳤다. 보정 표시 시험은 현재 소스 경로로 단독 import하도록 고쳤다. 토큰 삭제·서랍·실제 CORE 정지 및 보정 lease 검사를 유지한다.
+- 증거: Python 시험 세 파일의 구문 검사·차이 공백 검사·수정 커밋 safety 검사·독립 계약 검토 통과. 원격 시험 PC의 SSH 연결 시간 초과로 실행 결과는 대기 중이다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
+- gate 변화: 없음. 기존 실패 목록·장치 수용은 유지하며 main 착지·push·배포하지 않았다.
+
+## 2026-10-17 · 0e8ba72832 · 인증·정지·단독 보정 표시 브라우저 확인
+
+- 변경: 기존 만료 토큰·CSP 정지·보정 표시 실패의 실제 원격 성공을 확보해 목록 해제를 진행한다.
+- 증거: focused 19 passed 중 토큰 삭제·익명 조회·실제 CORE 정지 상태를 확인했고 보정 표시는 별도 invocation 1 passed, skip 0, 각 로그 NEW 0이다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
+- gate 변화: 없음. 호스트 모의 CORE·합성 lease 검사이며 물리 정지·실측·DEVICE/FIELD 수용이 아니다.

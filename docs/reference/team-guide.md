@@ -2,7 +2,7 @@
 
 - **대상:** `robotics-team-1213` org에 새로 합류한 팀원
 - **갱신:** 2026-10-16 · GitHub 설정 재확인, 개인 클론의 훅 예외, 동시 작업·인수인계 절차와 이슈 양식. 환경 설치 명령의 새 클론 확인일은 2026-10-05.
-- **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다.
+- **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다. git 규칙 전체는 [git으로 일하는 법](git-workflow.md), 날짜별 작업 현황은 [인수인계](handoff.md)다.
 
 이 문서를 위에서 아래로 따라 하면 첫 PR까지 갈 수 있다.
 
@@ -298,6 +298,7 @@ git push
 
 | # | 문서 | 얼마나 |
 |---|---|---|
+| 0 | [인수인계](handoff.md) — 목표, 지금 상태, 다음 할 일 · [git으로 일하는 법](git-workflow.md) | 10분, 필수 |
 | 1 | [README](../../README.md) — 「핵심 계약」 | 5분, 필수 |
 | 2 | [CONCEPTS.md](../../CONCEPTS.md) | 10분, 필수 |
 | 3 | [STATUS.md](../../STATUS.md) — 모듈별 게이트 (SOURCE → LOCAL → ROS-SIM → ARTIFACT → DEVICE → FIELD) | 5분, 필수 |
@@ -318,7 +319,7 @@ git push
 | CORE (로봇 게이트웨이) | `middleware/core/` | 외부 API, 유일한 `cmd_vel` 발행, 서비스·이벤트 | 일부 | |
 | 인지·차선 | `middleware/perception/` | 카메라·LiDAR 차선/장애물 증거 | 일부 | |
 | 내비게이션 | `middleware/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
-| 장치·드라이버 | `middleware/apps/device/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
+| 장치·드라이버 | `middleware/devices/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
 | Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | |
 | 현장 비전·앱 | `operations/overhead/`, `operations/site_ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | |
 | 화면 (웹·앱) | `middleware/robot_ui/`, `shared/web/` | 대시보드, Pilot 앱 ([DESIGN.md](../../DESIGN.md)) | 불필요 | |

@@ -1,6 +1,6 @@
 ﻿[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$RobotAddress,
+    [ValidateNotNullOrEmpty()][string]$RobotAddress,
     [string]$ReleaseDir,
     [string]$WifiProfile,
     [string]$RpiImager = "C:\Program Files\Raspberry Pi Ltd\Imager\rpi-imager.exe",
@@ -8,7 +8,9 @@ param(
     [switch]$PrepareOnly
 )
 
-# Guided, fail-closed path for a moved SD card. This creates a fresh card plan
+# Guided, fail-closed path for a new SD card, also used after moving a card.
+# Omit RobotAddress for a new card; supply it to check a moved-card SETUP page.
+# This creates a fresh card plan
 # and delegates all writes to the reviewed SD writer; it never edits the robot.
 
 Set-StrictMode -Version Latest
@@ -31,7 +33,7 @@ function Select-ReleaseDirectory {
 
 function Select-WifiProfile([string[]]$Names) {
     if (-not $Names -or $Names.Count -eq 0) {
-        Stop-Setup "저장된 ROSY Wi-Fi 프로필이 없습니다. 먼저 현장 프로필을 저장하세요."
+        Stop-Setup "저장된 ROSY Wi-Fi 프로필이 없습니다. 먼저 .\deploy\robot\pinky_pro\sd\prepare-rosy-sd.ps1 -SetWifiCredential -WifiProfile <profile> -WifiSsid <ssid> 로 현장 프로필을 저장한 뒤 다시 실행하세요. 비밀번호는 보안 입력창에서만 입력합니다."
     }
     if ($Names.Count -eq 1) {
         Write-Host ("저장된 Wi-Fi 프로필 사용: " + $Names[0])
@@ -162,17 +164,22 @@ function Add-SshAlias([string]$DeviceName, [string]$PrivateKeyPath) {
 }
 
 try {
-    $parsedAddress = $null
-    if (-not [System.Net.IPAddress]::TryParse($RobotAddress, [ref]$parsedAddress) -or
-        $parsedAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
-        Stop-Setup "RobotAddress에는 192.0.2.10 형식의 IPv4 주소를 입력하세요. 변경된 항목은 없습니다."
+    if ($PSBoundParameters.ContainsKey("RobotAddress")) {
+        $parsedAddress = $null
+        if (-not [System.Net.IPAddress]::TryParse($RobotAddress, [ref]$parsedAddress) -or
+            $parsedAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+            Stop-Setup "RobotAddress에는 192.0.2.10 형식의 IPv4 주소를 입력하세요. 변경된 항목은 없습니다."
+        }
+        Write-Host "1/4: 로봇의 SETUP 화면을 확인합니다..."
+        $page = Get-SetupPage $RobotAddress
+        if ($page -notmatch "New device registration pending|새 로봇 등록이 필요합니다") {
+            Stop-Setup "페이지에는 연결됐지만 새 장치 SETUP 상태가 아닙니다. 변경된 항목은 없습니다."
+        }
+        Write-Host ("  {0}에서 새 장치 SETUP을 확인했습니다. SSH 키와 장치 설정은 변경하지 않았습니다." -f $RobotAddress)
     }
-    Write-Host "1/4: 로봇의 SETUP 화면을 확인합니다..."
-    $page = Get-SetupPage $RobotAddress
-    if ($page -notmatch "New device registration pending|새 로봇 등록이 필요합니다") {
-        Stop-Setup "페이지에는 연결됐지만 새 장치 SETUP 상태가 아닙니다. 변경된 항목은 없습니다."
+    else {
+        Write-Host "1/4: 새 SD 카드를 준비합니다. 로봇 연결 없이 서명된 이미지와 현장 설정을 선택합니다."
     }
-    Write-Host ("  {0}에서 새 장치 SETUP을 확인했습니다. SSH 키와 장치 설정은 변경하지 않았습니다." -f $RobotAddress)
 
     if (-not $ReleaseDir) { $ReleaseDir = Select-ReleaseDirectory }
     $ReleaseDir = (Resolve-Path -LiteralPath $ReleaseDir -ErrorAction Stop).ProviderPath
@@ -216,15 +223,16 @@ try {
     if (-not (Test-Path -LiteralPath $registry -PathType Leaf)) {
         Stop-Setup "로컬 장치 등록부가 없습니다. 새 번호를 만들기 전에 현장 등록부를 복원하세요."
     }
-    if (-not (Test-Path -LiteralPath "X:\DevTemp" -PathType Container)) {
-        Stop-Setup "X:\DevTemp를 사용할 수 없습니다. 운영용 임시 드라이브를 연결한 뒤 다시 시도하세요. 변경된 항목은 없습니다."
+    $scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
+    if (-not (Test-Path -LiteralPath $scratchRoot -PathType Container)) {
+        Stop-Setup "임시 폴더 $scratchRoot 를 사용할 수 없습니다. ROSY_SCRATCH를 확인한 뒤 다시 시도하세요. 변경된 항목은 없습니다."
     }
     if (-not $PSBoundParameters.ContainsKey("DiskNumber")) { $DiskNumber = Select-DiskNumber (Get-UsbDisks) }
     $disk = @(Get-UsbDisks | Where-Object { [int]$_.Number -eq $DiskNumber })
     if ($disk.Count -ne 1) { Stop-Setup "선택한 디스크가 바뀌었거나 더 이상 사용할 수 없습니다. 변경된 항목은 없습니다. 카드를 다시 연결한 뒤 시도하세요." }
 
     $sessionName = "rosy-device-setup-{0}" -f (Get-Date -Format "yyyyMMddTHHmmssfff")
-    $session = Join-Path "X:\DevTemp" $sessionName
+    $session = Join-Path $scratchRoot $sessionName
     New-Item -ItemType Directory -Path $session -ErrorAction Stop | Out-Null
     $planPath = Join-Path $session "plan.json"
     $receiptPath = Join-Path $session "receipt.json"
@@ -274,14 +282,14 @@ try {
         CardSizeGiB = [math]::Round([double]$plan.disk_size / 1GB, 1)
         Plan = $planPath
     } | Format-List | Out-Host
-    Write-Host "표시된 Wi-Fi 이름이 이 로봇이 현재 사용하는 현장 네트워크와 같은지 확인하세요."
+    Write-Host "표시된 Wi-Fi 이름이 로봇을 설치할 현장의 네트워크와 같은지 확인하세요."
     if ($PrepareOnly) {
         Write-Host "계획을 저장했습니다. PrepareOnly가 지정되어 카드는 기록하지 않았습니다."
         exit 0
     }
     $confirmation = Read-Host ("계속하려면 REGISTER {0} 을 입력하세요" -f $plan.robot_number)
     if ($confirmation -cne ("REGISTER {0}" -f $plan.robot_number)) {
-        Write-Host "중단했습니다. 카드에 기록하지 않았습니다. 계획은 X:\DevTemp에 보관했습니다."
+        Write-Host "중단했습니다. 카드에 기록하지 않았습니다. 계획은 $session 에 보관했습니다."
         exit 0
     }
 
@@ -323,11 +331,16 @@ try {
         Write-Host "SSH 별칭은 만들지 않았습니다. 키를 준비한 뒤 카드를 다시 등록해야 SSH 키 로그인이 가능합니다."
     }
     Write-Host "카드 기록 성공은 장치 승인과 다릅니다. 전체 readback 성공 후 같은 Pi에 넣고 첫 부팅과 대시보드의 새 장치 정보를 확인하세요."
+    Write-Host ("첫 부팅 후 대시보드: http://{0}.local:8080/dashboard" -f $plan.device_name)
+    Write-Host "자동 업데이트가 포함된 이미지에서는 timer가 기본 활성화됩니다. 신뢰 등록된 SSH로 접속한 뒤 다음 읽기 전용 명령으로 실제 상태를 확인하세요:"
+    Write-Host "  systemctl is-active rosy-core.service rosy-auto-update.timer"
+    Write-Host "  sudo python3 -I -B /opt/rosy/native-runtime/rosy_auto_update.py status --json"
     if ((Test-Path -LiteralPath $operatorKey -PathType Leaf) -and
         (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $operatorKey) "rosy-operator-ed25519") -PathType Leaf)) {
         Write-Host "첫 SSH 접속에서는 실물 장치의 호스트 키 지문을 확인해 신뢰 등록해야 합니다. 이미 검증한 다른 별칭은 -SshHost로 지정할 수 있습니다."
         Write-Host "첫 부팅 후 현장 담당자가 로봇과 전원 차단 경로를 확인하면 모터 점검과 E-Stop 상태의 구동 준비를 한 번에 진행할 수 있습니다:"
-        Write-Host ("  .\deploy\robot\pinky_pro\sd\enable-motor-commissioning.ps1 -DeviceName {0} -RobotAddress {1} -OperatorPresent -PowerCutReady" -f $plan.device_name, $RobotAddress)
+        $commissionAddress = if ($RobotAddress) { $RobotAddress } else { "<robot-ip>" }
+        Write-Host ("  .\deploy\robot\pinky_pro\sd\enable-motor-commissioning.ps1 -DeviceName {0} -RobotAddress {1} -OperatorPresent -PowerCutReady" -f $plan.device_name, $commissionAddress)
         Write-Host "이 단계는 주행 명령이나 G4 승인을 만들지 않습니다. 현장 주행 시험과 실측 기록은 별도로 수행합니다."
     }
 }

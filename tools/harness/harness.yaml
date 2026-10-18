@@ -47,6 +47,16 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: media
+    path: operations/site_ui/media
+    tests: [operations/site_ui/media/test]
+    functional_kind: pytest
+    functional: [operations/site_ui/media/test]
+  - name: media_edge
+    path: middleware/media
+    tests: [middleware/media/test]
+    functional_kind: pytest
+    functional: [middleware/media/test]
   - name: console_source
     path: operations/site_ui/console
     tests: [operations/fleet/test, test/test_remaining_platform_installed.py]

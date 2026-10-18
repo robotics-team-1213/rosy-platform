@@ -361,3 +361,51 @@ def test_ownership_failure_preserves_original_registry(tmp_path, monkeypatch):
         add_user(path, "human-2", "operator", "new-token")
     assert path.read_bytes() == original
     _no_temp_files_left(tmp_path)
+
+
+def test_set_policy_admin_keeps_the_operator_role_and_loads_in_fleet(tmp_path):
+    """D-793: an operator gains fleet.policy without losing operate; --off removes it."""
+    from fleet.server.site_auth import parse_site_principals
+    from fleet.server.site_users import load_site_users
+
+    class Console:
+        def user_credential_overlaps_robot_secret(self, digests):
+            return False
+
+    path = tmp_path / "site-users.yaml"
+    _seed(path, _entry(), _entry("viewer-1", "viewer", "tok-2"))
+    site_users.set_policy_admin(path, "operator-1", True)
+    principal = next(iter(parse_site_principals(load_site_users(path), Console()).values()))
+    assert principal.role == "operator"
+    assert principal.permits_site("fleet.operate", {"operator"})
+    assert principal.permits_site("fleet.policy", {"policy-admin"})
+    with pytest.raises(SiteUsersError, match="operator"):
+        site_users.set_policy_admin(path, "viewer-1", True)
+    site_users.set_policy_admin(path, "operator-1", False)
+    assert "policy_admin" not in list_users(path)[0]
+
+
+def test_set_policy_admin_one_at_a_time_keeps_everyone_elses_flag(tmp_path):
+    path = tmp_path / "site-users.yaml"
+    _seed(path, _entry("a"), _entry("b", token="tok-2"), _entry("c", token="tok-3"))
+    for principal in ("a", "b", "c"):
+        site_users.set_policy_admin(path, principal, True)
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, True, True]
+    site_users.set_policy_admin(path, "b", False)
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, None, True]
+
+
+def test_set_policy_admin_writes_several_people_once(tmp_path, monkeypatch):
+    path = tmp_path / "site-users.yaml"
+    _seed(path, _entry("a"), _entry("b", token="tok-2"), _entry("v", "viewer", "tok-3"))
+    writes = []
+    publish = site_users._publish
+    monkeypatch.setattr(site_users, "_publish", lambda *args: (writes.append(1), publish(*args)))
+    assert main(["set-policy-admin", str(path), "--principal", "a", "--principal", "b"]) == 0
+    assert len(writes) == 1
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, True, None]
+    with pytest.raises(SystemExit):
+        main(["set-policy-admin", str(path), "--principal", "a", "--principal", "v"])
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, True, None]
+    with pytest.raises(SiteUsersError, match="policy_admin"):
+        validate_users_document({"users": [{**_entry(), "policy_admin": "yes"}]})

@@ -2,7 +2,7 @@
 
 Takes the signed tarball prepare_payload_release.py made and does what the robots' updater reads:
 
-    python tools/release/publish_payload_release.py --tarball X:/DevTemp/rosy-release-<id>/<id>.tar.gz --canary <robot-ip>
+    python tools/release/publish_payload_release.py --tarball $ROSY_SCRATCH/rosy-release-<id>/<id>.tar.gz --canary <robot-ip>
     python tools/release/publish_payload_release.py --release-id <id> --canary <robot-ip> --resume
     python tools/release/publish_payload_release.py --release-id <id> --withdraw --reason "canary drove badly"
 
@@ -60,7 +60,7 @@ STATUS_COMMAND = "sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py s
 POLL_S = 30
 #: Robot and PC clocks are NTP-synced; allow this much when comparing a robot's result time to published_at.
 CLOCK_SKEW_S = 120
-DEFAULT_EVIDENCE = Path("X:/DevTemp/rosy-rollout-evidence")
+DEFAULT_EVIDENCE = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-rollout-evidence"
 SCRIPT = r"python tools\release\publish_payload_release.py"
 
 Runner = Callable[[list[str]], tuple[int, str, str]]
@@ -553,7 +553,7 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--tarball", type=Path, help="the signed <id>.tar.gz from prepare_payload_release.py")
     source.add_argument("--release-id", help="YYYY.MM.DD-NNN; the tarball is <out-dir>/<id>.tar.gz")
-    parser.add_argument("--out-dir", type=Path, help=r"prepare's work folder (default X:\DevTemp\rosy-release-<id>)")
+    parser.add_argument("--out-dir", type=Path, help=r"prepare's work folder (default $ROSY_SCRATCH\rosy-release-<id>, else the system temp directory)")
     parser.add_argument("--canary", help="IP or host of the canary robot")
     parser.add_argument("--robot", action="append", default=[], help="other robots, only shown after canary_ok")
     parser.add_argument("--resume", action="store_true", help="re-attach to an existing release")

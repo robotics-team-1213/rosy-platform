@@ -235,6 +235,8 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
+| D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
+| D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
 
 ## 계획·결과 문서
 
@@ -337,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · feat(bimanual): G1 SIM 배치·도달성·프로세스 안 끝까지 실행과 시작 값
-- 2026-10-17 · 9108fd4d8e · docs(omx): native startup 취소와 실행 권한 검증 범위 기록
-- 2026-10-17 · uncommitted · test: D-782 world-model full matrix의 기존 계약 기대값 동기화
-- 2026-10-17 · uncommitted · docs(omx): 양쪽 실행 환경 준비 완료와 USB 카메라 부재 확인
-- 2026-10-17 · uncommitted · docs(omx): 남은 환경 준비·현장 시험 기록지와 접속 진단
+- 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+- 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존
+- 2026-10-18 · uncommitted · 로컬 착지를 GitHub PR 경로로 옮기는 계획
+- 2026-10-18 · uncommitted · Fleet 담당 지정 설계의 기준 커밋 표기
+- 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다

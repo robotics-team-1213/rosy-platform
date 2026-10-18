@@ -49,6 +49,28 @@ def _claims(rig):
                                        (MISSION,)).fetchall())
 
 
+def _assert_claims_belong_to_unfinished_actions(rig):
+    job = rig.job()
+    placements = {p["step_index"]: p for p in job["placements"]}
+    actions = [a for a in job["step_actions"]
+               if a["status"] in {"RUNNING", "HOLD"} and a["action_id"] is not None]
+    expected = set()
+    for action in actions:
+        assert action["attempt_id"] is not None and action["grant"] is not None
+        assert action["grant"]["dispatch_generation"] == job["dispatch_generation"]
+        assert action["grant"]["cell_transfer"]["step_index"] == action["step_index"]
+        keys = {f"arm:{CELL}.{action['arm_role']}",
+                f"zone:{CELL}.{placements[action['step_index']]['zone_id']}"}
+        assert set(action["claims"]) == keys
+        expected.update(keys)
+    with closing(sqlite3.connect(rig.path)) as connection:
+        rows = connection.execute(
+            "SELECT resource_key, generation FROM fleet_action_claims WHERE owner_kind='mission' "
+            "AND owner_id=? AND resource_kind IN ('arm', 'zone')", (MISSION,)).fetchall()
+    assert {key for key, _ in rows} == expected, {"claims": rows, "actions": actions}
+    assert all(generation == job["dispatch_generation"] for _, generation in rows)
+
+
 def _first_two_arm_root(submission):
     """The first Step compiled for both arms that depends on nothing (a shared-band Step)."""
     return next(i for i, step in enumerate(submission["steps"])
@@ -94,21 +116,27 @@ def test_two_arm_mixed_job_runs_to_goal_confirmed_with_concurrent_zones_and_one_
         "rtt_s": rig.rtt.summary()})
 
 
-def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path):
+@pytest.mark.parametrize("contention", [("arm", f"{CELL}.right"), ("zone", f"{CELL}.{SHARED}")],
+                         ids=["right-arm", "shared-zone"])
+def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path, monkeypatch, contention):
     recipe_doc, cell_doc = read_documents(RECIPE_2, G1_CELL)
     index = _first_two_arm_root(compile_submission(recipe_doc, cell_doc))
     rig = _rig(tmp_path, pair=(index, "independent"))
     job = rig.job()
-    with closing(sqlite3.connect(rig.path)) as connection:  # another owner holds the right arm
+    with closing(sqlite3.connect(rig.path)) as connection:
         assert reserve(connection, owner_kind="mission", owner_id="other-job", generation=job["dispatch_generation"],
-                       resources=[("arm", f"{CELL}.right")], phase="CLAIMED")
+                       resources=[contention], phase="CLAIMED")
         connection.commit()
     placement = next(p for p in job["placements"] if p["step_index"] == index)
     grants = {role: rig.dispatcher.arms._arm_grant(job, index, role, ["left", "right"], placement, "pair-x")
               for role in ("left", "right")}
+    with closing(sqlite3.connect(rig.path)) as connection:
+        before = tuple(connection.iterdump())
     started = ArmJobStore(rig.cells).start_actions(
         MISSION, step_index=index, grants={role: g.model_dump(mode="json") for role, g in grants.items()})
     assert started["state"] == "CLAIM_BUSY"
+    with closing(sqlite3.connect(rig.path)) as connection:
+        assert tuple(connection.iterdump()) == before
     after = rig.job()
     assert not any(key.startswith(("arm:", "zone:")) for key in _claims(rig))
     assert {a["status"] for a in after["step_actions"] if a["step_index"] == index} <= {"WAITING", "READY"}
@@ -116,10 +144,37 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path):
     # the dispatcher never starts it either, while the left arm works its own chain
     left_chain = [i for i, p in enumerate(rig.submission["steps"]) if p["placement"]["arm"] == "left" and i < index]
     assert rig.run(lambda r: all(r.job()["steps"][i]["status"] == "GOAL_CONFIRMED" for i in left_chain), timeout_s=60)
+    if contention[0] == "arm":
+        left = rig.by_role["left"]
+        submit = left.port.submit
+        held = []
+
+        def hold_unrelated_shared_goal(command, *, on_goal_event):
+            dispatched = submit(command, on_goal_event=on_goal_event)
+            row = left.action(command.command_id.rsplit("-", 1)[0])
+            step_index = row["request"]["payload"]["cell_transfer"]["step_index"]
+            zone = next(p["zone_id"] for p in rig.job()["placements"] if p["step_index"] == step_index)
+            if step_index != index and zone == SHARED:
+                goal = next(g for g in left.port.pending if g.command.command_id == command.command_id)
+                goal.due = float("inf")
+                held.append(step_index)
+            return dispatched
+
+        monkeypatch.setattr(left.port, "submit", hold_unrelated_shared_goal)
+        assert rig.run(lambda r: bool(held), timeout_s=60), _claims(rig)
     for _ in range(20):
         rig.tick()
+        _assert_claims_belong_to_unfinished_actions(rig)
     assert all(index not in _owner_steps(arm) for arm in rig.arms.values())
-    assert f"zone:{CELL}.{SHARED}" not in _claims(rig)
+    # Later left-arm steps may legitimately hold the shared zone; inspect this blocked pair.
+    pair_actions = [a for a in rig.job()["step_actions"] if a["step_index"] == index]
+    assert {a["status"] for a in pair_actions} <= {"WAITING", "READY"}
+    assert all(a[key] is None for a in pair_actions for key in ("action_id", "attempt_id", "grant"))
+    assert all(a["claims"] == [] for a in pair_actions)
+    with closing(sqlite3.connect(rig.path)) as connection:
+        assert connection.execute(
+            "SELECT owner_id, phase, generation FROM fleet_action_claims WHERE resource_key=?",
+            (f"{contention[0]}:{contention[1]}",)).fetchone() == ("other-job", "CLAIMED", job["dispatch_generation"])
 
 
 def test_a_rejected_pair_grant_cancels_the_accepted_partner(tmp_path):

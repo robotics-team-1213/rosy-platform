@@ -15,7 +15,7 @@ export function showAI(lane,index,request,context,results){
   resetAI();const ticket=generation,panel=element('section'),title=element('h3','AI 초안과 확인'),controls=element('div'),message=element('p'),jobs=element('ul');
   panel.id='review-ai-jobs';panel.className='review-history';panel.setAttribute('aria-label','AI 실행');controls.className='review-ai-actions';message.setAttribute('role','status');
   panel.append(title,element('p','저장된 버전으로 요청합니다. 결과는 후보·참고 의견이며 사람이 확인한 뒤 적용·승인합니다.'),controls,message,jobs);
-  document.querySelector(lane==='object'?'#save-status':'#pixel-status').after(panel);
+  document.querySelector(lane==='object'?'#save-status':'.pixel-vlm-feedback').after(panel);
   const allowed=lane==='object'?['object_draft']:['pixel_draft','mask_check'],buttons=[];
   let status=null,pending=false;
   for(const action of allowed){const button=element('ui-button',actions[action]);button.id=`review-ai-${action}`;controls.append(button);buttons.push([button,action]);button.onclick=()=>run(action);}

@@ -60,7 +60,11 @@ def main():
     parser.add_argument('--device', required=True)
     parser.add_argument('--topic', required=True)
     parser.add_argument('--frame-id', required=True)
+    # Raw 640x480 bgr8 is ~0.9 MB/frame; the cap bounds same-host DDS load.
+    parser.add_argument('--max-fps', type=float, default=10.0)
     args = parser.parse_args()
+    if not 0 < args.max_fps <= 30:
+        parser.error('--max-fps must be in (0, 30]')
     if (not args.topic.startswith('/') or any(c.isspace() for c in args.topic)
             or not args.frame_id or any(c.isspace() for c in args.frame_id)):
         parser.error('explicit image topic and frame id are required')
@@ -97,7 +101,7 @@ def main():
                 capture = None
                 node.get_logger().warning(str(error))
                 time.sleep(1)
-            time.sleep(max(0, .1-(time.monotonic()-started)))
+            time.sleep(max(0, 1/args.max_fps-(time.monotonic()-started)))
     except KeyboardInterrupt:
         pass
     finally:

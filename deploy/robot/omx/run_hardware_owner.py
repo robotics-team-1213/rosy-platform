@@ -51,7 +51,7 @@ def _reject_constant(value):
 def load_config(path: Path | str, environ=None, *, read=_private_file):
     """Return (HardwareOwnerSettings, ArmCommandConfig, InstanceNames) from a private config."""
     from omx_adapter.command_owner import ArmCommandConfig
-    from rosy_agent.omx_hardware_owner import HardwareOwnerSettings
+    from rosy_agent.omx_hardware_owner import ALLOWED_OWNERS, HardwareOwnerSettings
     from instance_names import InstanceNames, namespace_from_environment
 
     environ = os.environ if environ is None else environ
@@ -76,6 +76,9 @@ def load_config(path: Path | str, environ=None, *, read=_private_file):
     if "position_limits" in raw and isinstance(raw["position_limits"], dict):
         raw["position_limits"] = {name: tuple(bounds) for name, bounds in raw["position_limits"].items()}
     config = ArmCommandConfig(**raw)
+    # Checked here too so --check refuses what the owner assembly refuses (D-793: no learned_policy).
+    if tuple(config.allowed_owners) != ALLOWED_OWNERS:
+        raise ValueError("hardware owner admits only the rule_based owner")
     settings = HardwareOwnerSettings(
         workcell_id=document["workcell_id"], instance_id=document["instance_id"],
         journal_path=Path(document["journal_path"]), socket_root=Path(document["socket_root"]),

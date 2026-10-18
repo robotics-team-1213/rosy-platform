@@ -84,6 +84,10 @@ def _vector(value, *, normalized):
 
 def _teacher_and_ledger(manifest, blobs, completed_only):
     _require('teacher.json' in blobs and 'events.jsonl' in blobs, 'teacher and native event ledger required')
+    _require('profile.json' in blobs, 'collection profile required')
+    reach = _json(blobs['profile.json']).get('reach_tolerance_rad')
+    _require(isinstance(reach, list) and len(reach) == 6 and all(_number(v) and 0 < v <= .2 for v in reach),
+             'profile reach tolerance required')
     teacher = _json(blobs['teacher.json'])
     _require(teacher.get('schema') == 'rosy.omx-collection-teacher.v1', 'teacher schema differs')
     canonical = json.dumps(teacher, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
@@ -101,10 +105,10 @@ def _teacher_and_ledger(manifest, blobs, completed_only):
     _require(isinstance(stop, dict) and stop.get('hold_requested') is True
              and stop.get('terminal_observed') is True, 'confirmed owner HOLD and terminal required')
     _require(completed_only or 'error' not in manifest, 'session error requires explicit completed-only selection')
-    return steps, events
+    return steps, events, reach
 
 
-def _completed_attempt(episode, steps, events):
+def _completed_attempt(episode, steps, events, reach):
     """An editable completion flag cannot replace byte-bound producer events."""
     cycle = episode['cycle_id']
     expected = [f'{cycle}-{ordinal}' for ordinal in range(len(steps))]
@@ -119,15 +123,19 @@ def _completed_attempt(episode, steps, events):
         kinds = {}
         for index, event in command_events:
             kinds.setdefault(event.get('kind'), []).append((index, event))
-        required = ('INTENT', 'SUBMISSION', 'GOAL_ACCEPTED', 'TERMINAL_RESULT', 'TERMINAL')
+        required = ('INTENT', 'SUBMISSION', 'GOAL_ACCEPTED', 'TERMINAL_RESULT', 'TERMINAL', 'REACHED')
         _require(all(len(kinds.get(kind, [])) == 1 for kind in required),
-                 'complete attempt requires one durable intent/submission/native goal/result/terminal per step')
+                 'complete attempt requires one durable intent/submission/native goal/result/terminal/reach per step')
         indexed = [kinds[kind][0] for kind in required]
         positions = [index for index, _ in indexed]
         _require(positions == sorted(set(positions)) and positions[0] > prior_terminal,
                  'teacher command event order differs')
         prior_terminal = positions[-1]
-        intent, submission, accepted, terminal, outer = [event for _, event in indexed]
+        intent, submission, accepted, terminal, outer, reached = [event for _, event in indexed]
+        errors, tolerance = reached.get('errors_rad'), reached.get('tolerance_rad')
+        _require(tolerance == reach and isinstance(errors, list) and len(errors) == 6
+                 and all(_number(e) and 0 <= e <= t for e, t in zip(errors, reach)),
+                 'measured joints did not reach the teacher target')
         _require(intent.get('step') == step and isinstance(submission.get('decision'), dict)
                  and submission['decision'].get('accepted') is True, 'teacher intent or owner submission differs')
         _require(_text(accepted.get('goal_id')) and terminal.get('goal_id') == accepted['goal_id']
@@ -136,7 +144,7 @@ def _completed_attempt(episode, steps, events):
                  'native goal/result does not establish command success')
         previous_sequence, previous_stamp = 0, -1.
         for _, event in command_events:
-            if event.get('kind') in ('INTENT', 'SUBMISSION', 'TERMINAL'):
+            if event.get('kind') in ('INTENT', 'SUBMISSION', 'TERMINAL', 'REACHED'):
                 stamp = event.get('time_ns')
                 _require(type(stamp) is int and episode['start_ns'] <= stamp < episode['end_ns'],
                          'outer command event outside episode window')
@@ -203,7 +211,7 @@ def validate_session(root, *, completed_only=False, require_complete=True):
              'raw file hash differs')
     _require('environment.jsonl' in files, 'original environment log required')
     _events(blobs['environment.jsonl'].decode('utf-8'))
-    steps, events = _teacher_and_ledger(manifest, blobs, completed_only)
+    steps, events, reach = _teacher_and_ledger(manifest, blobs, completed_only)
     attempts = manifest.get('episodes')
     _require(isinstance(attempts, list) and attempts, 'episode attempts required')
     selected, samples, windows, prior_end = [], {}, [], 0
@@ -258,7 +266,7 @@ def validate_session(root, *, completed_only=False, require_complete=True):
         windows.append({key: episode[key] for key in ('episode_index', 'start_ns', 'end_ns', 'run_id',
                                                      'profile_sha256')})
         if episode['complete']:
-            _completed_attempt(episode, steps, events)
+            _completed_attempt(episode, steps, events, reach)
             selected.append(episode)
         else:
             _require(completed_only, 'incomplete attempt requires explicit completed-only selection')

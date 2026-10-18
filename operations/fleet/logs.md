@@ -4029,3 +4029,16 @@
 - 변경: 목표 허용오차가 설정되면 resolver가 recipe/3 Step마다 `goal_predicates`를 고정한다. 술어는 주 팔과 대체 팔마다 하나씩, 그 팔 입력과 sku 형상으로 계산된 그 팔 `robot_base` 좌표다. `cell_arm_jobs`는 그 키가 Step의 팔과 같은지 확인하고 `step_json`에 둔다. 목표 증거 서비스의 술어 팔은 배정된 첫 팔(첫 주 팔 또는 Step을 넘겨받은 대체 팔)이다. 대체 팔 Step은 그 팔 술어로 판정하고, 술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`으로 거절한다. 첫 주 팔 좌표의 단일 `goal_predicate`는 대체 팔에 쓰지 않는다. `step_action_kinds`는 입력의 `sku`를 CELL_TRANSFER 본문에 옮긴다. sku가 없으면 본문은 같다. `/api/fleet/cell-app/compile`은 recipe/3를 `compile_mixed`로 미리 보고 `summary.multi_arm`(팔, Step별 sku·팔·대체 팔·구역·결합·depends_on)을 더한다. recipe/1·/2 응답은 그대로다.
 - 증거: 원격 pytest를 돌리지 못했다. 이 시점에 실험실 시험 호스트에 하나도 닿지 않았다. 시험은 썼지만 실행하지 않았다.
 - gate 변화: 없음. 남은 일(ADR 필요): 한 팔 recipe/3 Job, 짝 Step 부분 성공 회복, owner의 cell/3 승인.
+
+## 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+
+- 변경: 에이전트가 고른 topic·레시피/셀 digest·instance를 기존 compile/proposal API로 연결하는 `fleet/server/work/cell_task_client.py`를 추가했다. 원본·제출 intent·Fleet 응답을 보존하고 기존 Cell Job 원장을 조회한다. 별도 명시적 admit는 저장된 요청과 현재 제안을 대조하고 기존 named operator·generation 검사로 위임한다. 자동 재전송·dispatch 재무장은 없다.
+- 증거: bbaf06bbe 원격 pytest 30 passed, known failures NEW 0. 실제 Cell compiler·API와 새 프로세스 CLI import를 검사했다. 독립 계약 리뷰에서 추가 material finding 없음.
+- gate 변화: 없음. 자유문장 해석기·Gazebo 실행·실물 구동·실제 모방학습 완료의 증거는 아니다. ACTION_SUCCEEDED와 독립 GOAL_CONFIRMED를 구분한다.
+
+## 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+
+- 변경: 한쪽 claim 거절의 즉시 rollback 검사는 유지하고 이후 독립 왼팔 작업이 점유한 정상 shared zone을 실패한 pair의 누수로 판단하지 않게 했다. 최종 action_id와 claims를 대상 pair에 결속한다.
+- 증거: 통합 후보의 1 failed / 6635 passed / 354 skipped와 동일 후보 단독 통과로 타이밍 의존을 확인했다. 독립 producer-consumer 분석 후 수정 커밋 원격 G1 SIM·timing 12 passed, 새 실패 0개.
+- gate 변화: 생산 제어·claim 권한 변경 없음. 중단된 후보의 병합 검사와 실제 G2·실물 수용을 완료로 표시하지 않는다.
+

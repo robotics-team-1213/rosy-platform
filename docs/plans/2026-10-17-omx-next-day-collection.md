@@ -74,6 +74,7 @@ profile와 teacher의 canonical SHA-256은 `collection_profile.digest`로 계산
 | 실물에서 확인할 항목 | 반영할 입력 |
 |---|---|
 | 국소 관절/집게 범위·속도·가속도·시작 허용차 | owner_config의 실측 제한, native rad teacher 단계 |
+| 단계 종료 뒤 실제 관절이 목표에 들어온 오차 (관절별, 0 초과, 0.2 rad와 normalization 폭의 1/10 이하) | profile `reach_tolerance_rad`. 성공 terminal 뒤에도 `max_sample_gap_s` 안에 들지 않으면 HOLD. 어느 관절도 허용차보다 크게 움직이지 않는 teacher 단계는 송신 전에 거부 (D-793) |
 | native 좌표와 기존 normalized 단위의 대응 | 여섯 normalization endpoint와 calibration_revision |
 | 실제 물체/집게 시야·작업공간·하중·전원 차단/정지 | acceptance의 해당 검수 사실과 rig_revision |
 | 기존 controller와 독립 watchdog 활성·정지 수용 | 실제 PID/start ticks, controller binary SHA-256 |

@@ -495,4 +495,14 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
         return {"proposal": _mission_candidate_result(proposal, rejected)["proposal"],
                 "mission": redact_cell_job(rejected, principal) if cell else rejected, "decision": decision}
 
+    task_service = getattr(app.state, "task_service", None)
+    if task_service is not None and require_named_operator is not None:
+        # D-793: learned-policy stages, approval windows, confirmations, incidents and leases.
+        from fleet.server.policy_governance import PolicyGovernanceStore
+        from fleet.server.policy_governance_routes import install_policy_governance_routes
+        app.state.policy_governance = PolicyGovernanceStore(task_service.store.path)
+        install_policy_governance_routes(app, store=app.state.policy_governance,
+                                         configured_omx=app.state.omx_instances,
+                                         stop_transport=app.state.omx_stop_transport,
+                                         require_viewer=require_viewer, require_named_operator=require_named_operator)
     return fleet_proposal_create, fleet_proposal_resolve, fleet_mission_admit
