@@ -16,6 +16,7 @@ Offline ACT research on existing LeRobot 0.4.4 OMX demonstrations. `act_job.py` 
 | `act_inference.py` | Offline inference helper |
 | `act_inference_replay.py` | Replay path for a saved run |
 | `act_owner_capture.py` | Capture helper for owner-side observations |
+| `register_policy.py` | D-793: proposes a finished `native_cycle.py` run as an L0 policy on Fleet (receipt hash, rig/calibration revision); grants no execution |
 | `test/` | Host tests for the job |
 
 ## Subdirectories
