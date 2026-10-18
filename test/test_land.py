@@ -823,8 +823,9 @@ def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
 def test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass(repos, monkeypatch):
     main, wt = repos
     calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    peer_main = git(main, "rev-parse", "HEAD")
     assert land.main(["--tests", "auto"]) == 0
-    assert calls == [git(main, "rev-parse", "HEAD")], "delta selection only, no FULL tier"
+    assert calls == [peer_main], "delta selection only, no FULL tier"
     assert not list((main / ".git" / land.land_full.RECORDS).glob("*")), "the record goes once landed"
 
 
