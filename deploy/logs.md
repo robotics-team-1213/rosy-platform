@@ -2963,3 +2963,9 @@
 - 증거: 네이티브 PowerShell fixture self-check 6개 PASS, AI PC 커밋 기반 원격 관련 6개 파일 366 passed·30 skipped·기존 SyntaxWarning 2건. known_failures 비교 0 NEW·0 known·0 flaky. 독립 리뷰 material finding 0건. 전체 suite와 영향 선택 전체 25경로 실행은 미수행이다.
 - 이미지: 로컬 `2026.09.22-001`은 공식 verifier의 서명·checksum 검증 PASS이나 D-412 도입 전 source이므로 최신 자동 업데이트 배포 이미지로 선택하지 않는다. 새 이미지 빌드·서명 또는 최신 보관 이미지 확보가 남았다.
 - gate 변화: 없음. 실제 카드·로봇·릴리스 발행은 변경하지 않았다.
+
+## 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
+
+- 변경: 사용자 반영·push·이미지 빌드 승인 후 이번 작업만 원격 main 위로 재적용했다. 안내 도구의 기존 `X:\DevTemp` 필수 경로를 `ROSY_SCRATCH` 또는 시스템 임시 폴더로 바꿔 별도 드라이브 없는 PC에서도 준비할 수 있게 했다. 동료의 로컬 main 이력은 보존한다.
+- 증거: 원격 기준에서 고정 경로 때문에 실패하는 네이티브 회귀를 확인하고, 수정 후 fixture self-check 6개 PASS. 재적용 후 원격·CI 검증과 이미지 빌드는 별도 단계다.
+- gate 변화: 없음. 기록 충돌은 원격 기록과 이번 작업 행만 보존하고 생성 index를 재생성했다. 실제 카드와 장치는 변경하지 않았다.

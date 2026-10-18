@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
 - 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
 - 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)
 - 2026-10-17 · 61e95e784 · 공개 진단 도구 hash의 정확한 provenance 등록
 - 2026-10-17 · uncommitted · fix: OMX 수집의 내부 액션 client 검사 연결
-- 2026-10-17 · uncommitted · fix: OMX 시뮬레이션 owner 종료 자원 정리

@@ -162,6 +162,7 @@ Wi-Fi 프로필이 없다면 먼저 다음 명령으로 한 번 저장한다. �
 안내에 따라 이미지 폴더, Wi-Fi 프로필, USB 카드를 선택한다. `REGISTER <number>`로
 계획을 확인하면 기존 작성기가 별도 창에서 UAC와 `ERASE SERIAL <serial> <name>`을
 요청한다. 안내 도구가 종료돼도 기록은 계속된다. 출력된 로그 경로로 상태를 확인한다.
+계획과 기록은 `ROSY_SCRATCH`가 지정한 폴더, 미지정이면 Windows 임시 폴더에 보관한다.
 
 ```powershell
 .\deploy\robot\pinky_pro\sd\card-write-status.ps1 -LogPath '<write-log>'

@@ -223,15 +223,16 @@ try {
     if (-not (Test-Path -LiteralPath $registry -PathType Leaf)) {
         Stop-Setup "로컬 장치 등록부가 없습니다. 새 번호를 만들기 전에 현장 등록부를 복원하세요."
     }
-    if (-not (Test-Path -LiteralPath "X:\DevTemp" -PathType Container)) {
-        Stop-Setup "X:\DevTemp를 사용할 수 없습니다. 운영용 임시 드라이브를 연결한 뒤 다시 시도하세요. 변경된 항목은 없습니다."
+    $scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
+    if (-not (Test-Path -LiteralPath $scratchRoot -PathType Container)) {
+        Stop-Setup "임시 폴더 $scratchRoot 를 사용할 수 없습니다. ROSY_SCRATCH를 확인한 뒤 다시 시도하세요. 변경된 항목은 없습니다."
     }
     if (-not $PSBoundParameters.ContainsKey("DiskNumber")) { $DiskNumber = Select-DiskNumber (Get-UsbDisks) }
     $disk = @(Get-UsbDisks | Where-Object { [int]$_.Number -eq $DiskNumber })
     if ($disk.Count -ne 1) { Stop-Setup "선택한 디스크가 바뀌었거나 더 이상 사용할 수 없습니다. 변경된 항목은 없습니다. 카드를 다시 연결한 뒤 시도하세요." }
 
     $sessionName = "rosy-device-setup-{0}" -f (Get-Date -Format "yyyyMMddTHHmmssfff")
-    $session = Join-Path "X:\DevTemp" $sessionName
+    $session = Join-Path $scratchRoot $sessionName
     New-Item -ItemType Directory -Path $session -ErrorAction Stop | Out-Null
     $planPath = Join-Path $session "plan.json"
     $receiptPath = Join-Path $session "receipt.json"
@@ -288,7 +289,7 @@ try {
     }
     $confirmation = Read-Host ("계속하려면 REGISTER {0} 을 입력하세요" -f $plan.robot_number)
     if ($confirmation -cne ("REGISTER {0}" -f $plan.robot_number)) {
-        Write-Host "중단했습니다. 카드에 기록하지 않았습니다. 계획은 X:\DevTemp에 보관했습니다."
+        Write-Host "중단했습니다. 카드에 기록하지 않았습니다. 계획은 $session 에 보관했습니다."
         exit 0
     }
 
