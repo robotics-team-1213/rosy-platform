@@ -78,15 +78,15 @@ class CapabilityDisplay:
             return None
         cached = self.cache.get(robot_id)
         if cached is None or self.clock() - cached[0] >= self.refresh_s:
-            task = self.pending.get(robot_id)
+            task, started = self.pending.get(robot_id), False
             if task is None or task.done() or task.get_loop() is not asyncio.get_running_loop():
-                task = asyncio.create_task(self._refresh(robot_id, client))
+                task, started = asyncio.create_task(self._refresh(robot_id, client)), True
                 self.pending[robot_id] = task
-            # Only a robot never read (or whose kept value outlived max_age_s) waits; otherwise
-            # the request answers the kept value now.
+            # Only a robot never read (or whose kept value outlived max_age_s) waits, and only the
+            # request that started the refresh: a slow robot does not add wait_s to every request.
             expired = (cached is None or cached[1] is not None and self.max_age_s is not None
                        and self.clock() - cached[0] > self.max_age_s)
-            await asyncio.wait({task}, timeout=wait_s if expired else 0)
+            await asyncio.wait({task}, timeout=wait_s if expired and started else 0)
         return self._kept(robot_id, client)
 
     def _kept(self, robot_id, client):

@@ -3676,6 +3676,7 @@ context는 request, receiver-challenge, session-request로 분리한다. 공개 
 `OPERATOR_IDENTITY_REQUIRED`이고, site-users와 로그인이 둘 다 없으면 Fleet은 도우미를 만들지 않는다.
 `host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, stoppable_units, reboot_delay_min}`이다.
 GET 본문은 그 목록과 함께 읽기 전용 `guard`(관제 PC `/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `/var/lib/rosy-host-state/status.json`)를 붙인다(D-530). 파일이 없거나 객체가 아니면 그 필드는 null이고, 수치를 만들지 않는다. PC 가드 항목의 `resources`는 `{avail_pct, swap_pct, load, cores, uptime_s, down}`이다.
+PC별 `guard[host].recovery`와 관제 PC `drift.recovery`는 D-530의 2026-10-18 실행값 감시 보고다(`time`, `role`, `state`, `issues`, `resources`, `watchdog`, `kernel`, `ssh`, `swap`). 구버전·접속 불가·해석 실패는 null/부재이며 정상으로 추정하지 않는다. 가드 자신의 행은 `source=local`이고 원래 보고 시각을 유지한다. 화면은 원격 호스트 보고 15분, 로컬/복구 보고 35분 초과를 점검 지연으로 표시한다. 새 제어 동작이나 설치 API는 추가하지 않는다.
 POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`,
 `cancel-reboot`, `restart-unit`, `stop-unit`만이다. `pkill`, 시그널, 셸, 프로세스 이름은 400
 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용 목록에 있고 그 동작이 허용될 때만 받는다(사이트 유닛은
