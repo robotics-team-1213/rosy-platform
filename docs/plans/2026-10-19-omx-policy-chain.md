@@ -44,7 +44,7 @@ Files: 소유 모듈 시험용 SIM probe, `docs/validation/omx-policy-chain-2026
 - [x] camera source, command ID, native goal UUID, window/lease/episode, joint readback을 연계한 receipt를 기록한다.
 - [x] 이동 완료, lease 갱신, 이동 중 창 폐쇄→renew 거절→CANCELED/HOLD, 재연결 거절을 측정한다.
 - [x] teardown 문제도 보존하고 scope를 명확히 기록한다. 실물/학습 정확도/작업 성공은 별도다.
-- [ ] committed revision의 원격 affected·native·browser 필요 검사를 비교해 NEW 0을 확인하고 `tools/land.py --tests auto`로 로컬 main에 착지한다.
+- 최종 착지는 committed revision의 원격 affected·native·browser 필요 검사와 NEW 0을 확인하는 `tools/land.py --tests auto`로 수행한다. 해당 runner의 완료 출력과 git main 포함 여부를 착지 결과의 정본으로 사용한다.
 
 ## 실행 기록
 

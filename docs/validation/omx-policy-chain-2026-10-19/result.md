@@ -68,6 +68,8 @@ runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 �
 `62971299f71b97fed94681f4b749ece3dd946796`를 AI 시험 PC의 `remote_sim.py`로 실행해
 `OMX_POLICY_CHAIN_GAZEBO_PASS`, teardown 뒤 `OMX_POLICY_CHAIN_EXIT_OK`, runner exit 0을 확인했다.
 [수신·실행 receipt](native-receipt.json)는 외부 `chain-result.json`과 같은 JSON 값이다.
+[runner 완료 기록](runner-receipt.json)은 요청한 전체 SHA·명령과 도구의 exit 0을 연결한다.
+원시 `run.txt` 자체는 전체 SHA와 원격 exit code를 담지 않으므로 이 기록과 함께 사용한다.
 
 - 첫 목표 +0.01rad: 원래 관절 위치 0.0000000181752rad에서 0.0100000146776rad로 이동했고,
   native goal `238735d4-8be7-4da7-808a-96228e26f113`의 SUCCESS를 확인했다.
@@ -185,5 +187,7 @@ probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixt
 가장 최근 FULL candidate는 `4ee3f3aaa9b3445f063427a76bd70e0f68e30850`, 그 아래 main은
 `7b11775712834f2f1dfcad68ac35e844bc12125d`였다. 외부 `safety-registration-resume/rosy-land/`
 아래 22개 FULL 로그와 main 차이의 guard·affected 로그를 NEW 0으로 확인했다.
-최신 main을 병합한 제품 selection은 `affected`이며, 최종 검사와 착지는 아직 진행 중이다.
+최신 main을 병합한 제품 selection은 `affected`다. 제품 착지는
+`python tools/land.py --tests auto --no-prune`의 같은 candidate 검사·NEW 0과
+ff-only 완료 출력으로 확인한다. 그 착지 로그와 git의 main 포함 여부가 착지 결과의 정본이다.
 GitHub push와 실물 활성화는 수행하지 않았다.
