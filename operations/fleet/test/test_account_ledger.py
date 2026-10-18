@@ -6,6 +6,7 @@ from hashlib import sha256
 import pytest
 
 from fleet.server.password_session import PasswordSessions, SessionStorageUnavailable, StalePasswordCheck
+from fleet.server.site_users import hash_password
 from test_password_session import _accounts, _app, _client, _login, TYPED, ORIGIN
 
 
@@ -37,6 +38,31 @@ def test_activation_preserves_effective_password_profile_and_identity(tmp_path):
     assert active.profile(value)["display_name"] == "Alice Example"
     restarted = PasswordSessions(path, {})
     assert restarted.account_context(value)["account_id"] == context["account_id"]
+
+
+def test_activation_requires_change_for_id_bang_password_and_keeps_new_password(tmp_path):
+    path = tmp_path / "accounts.sqlite3"
+    sessions = PasswordSessions(path, _accounts(password_scrypt=hash_password("alice!")))
+    sessions.bootstrap_accounts("alice", "test-site")
+    value = cookie(sessions, typed="alice!")
+    assert sessions.principal(value)[0].password_change_required
+    value, _ = sessions.change_password(value, TYPED)
+    assert not sessions.principal(value)[0].password_change_required
+    reopened = PasswordSessions(path, {})
+    assert reopened.check("local", "alice", "alice!") is None
+    assert reopened.check("local", "alice", TYPED) is not None
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_profile_cannot_restore_id_bang_as_permanent_password(tmp_path, active):
+    login = "longername"
+    sessions = PasswordSessions(tmp_path / "accounts.sqlite3", {login: _accounts()["alice"]})
+    if active:
+        sessions.bootstrap_accounts(login, "test-site")
+    value = cookie(sessions, login=login)
+    with pytest.raises(ValueError, match="invalid new password"):
+        sessions.change_password(value, login + "!", current_password=TYPED)
+    assert sessions.principal(value) is not None
 
 
 def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
