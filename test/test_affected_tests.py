@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+import affected_ros
 import affected_tests as affected
 import rosy_harness as harness
 
@@ -462,8 +463,8 @@ def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
     assert [(e["ros"], e["invocations"][0]) for e in matrix] == [
         ("none", ["middleware/core/gateway/test/test_node_wiring.py", "--ignore=x"]),
         ("overlay", ["test/test_land.py", "--ignore=x"])]
-    assert affected._full_tier_ros("integrations/simulation/gazebo/test/test_x.py") == "overlay"
-    assert affected._full_tier_ros("middleware/devices/pinky/bringup/test/test_y.py") == "base"
+    assert affected_ros.full_tier_ros("integrations/simulation/gazebo/test/test_x.py", affected.CI_FULL_MATRIX) == "overlay"
+    assert affected_ros.full_tier_ros("middleware/devices/pinky/bringup/test/test_y.py", affected.CI_FULL_MATRIX) == "base"
 
 
 @pytest.mark.parametrize("flags", [[], ["--ignore=test/test_host_recovery.py"]])
@@ -487,7 +488,7 @@ def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
     # Each invocation becomes one runner per ROS environment; every selected path runs exactly once.
     assert sorted(p for e in pytest_entries for p in e["invocations"][0]) == sorted(p for inv in sel.invocations for p in inv)
-    assert all(len({affected._full_tier_ros(p) for p in e["invocations"][0]}) == 1 for e in pytest_entries)
+    assert all(len({affected_ros.full_tier_ros(p, affected.CI_FULL_MATRIX) for p in e["invocations"][0]}) == 1 for e in pytest_entries)
 
 
 def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):

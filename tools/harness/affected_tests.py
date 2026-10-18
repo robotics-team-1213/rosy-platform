@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 import yaml
-import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
+import affected_narrow, affected_ros  # D-762 stage 0 FULL-trigger narrowing; PR #96 per-path ROS env
 
 HARNESS = PurePosixPath("tools/harness")
 
@@ -490,18 +490,6 @@ def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
     return [sorted(group) for group in groups] if n > 1 and len(files) >= n else []
 
 
-def _full_tier_ros(path: str) -> str:
-    """The ROS environment the full tier gives this path; paths outside CI_FULL_MATRIX keep overlay."""
-    if _under(path, "test"):
-        return "overlay"  # the full tier's root shards run every root test/ file under overlay
-    best = ("", "overlay")
-    for entry in CI_FULL_MATRIX:
-        for prefix in (p for inv in entry["invocations"] for p in inv if not p.startswith("-")):
-            if _under(path, prefix) and len(prefix) > len(best[0]):
-                best = (prefix, entry["ros"])
-    return best[1]
-
-
 def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     if sel.mode == "full":
@@ -527,16 +515,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
             out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
-        # A PR runs each path in the ROS environment the full tier uses for it, or main's skips
-        # (gateway rclpy tests under ros: none) would run under overlay only on PRs.
-        by_ros = []
-        for inv in out:
-            flags, groups = [p for p in inv if p.startswith("-")], {}
-            for path in (p for p in inv if not p.startswith("-")):
-                groups.setdefault(_full_tier_ros(path), []).append(path)
-            by_ros += [(ros, [*paths, *flags]) for ros, paths in groups.items()] or [("overlay", inv)]
-        entries = [{"name": f"affected-{i + 1}", "invocations": [inv], "ros": ros}
-                   for i, (ros, inv) in enumerate(by_ros)]
+        entries = affected_ros.entries(out, CI_FULL_MATRIX)
     entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
