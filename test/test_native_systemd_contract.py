@@ -146,6 +146,8 @@ def test_native_recovery_is_a_required_fail_closed_boot_gate():
         "DefaultDependencies=no", "After=local-fs.target", "Before=rosy-core.service rosy-runtime.target",
         "Type=oneshot", "RemainAfterExit=yes",
         "ExecStart=/opt/rosy/native-runtime/recover-release.sh",
+        # D-798: reconcile a cut-off image-layer sync; "-" so it never fails the gate.
+        "ExecStartPost=-+/usr/bin/python3 -I -B /opt/rosy/native-runtime/image-layer-reconcile.py",
     ):
         assert directive in unit
     assert "Restart=" not in unit
@@ -570,6 +572,10 @@ PROGRAM_SOURCES = {
     "rosy-tailscale-join.service": ["deploy/robot/pinky_pro/native/rosy-tailscale-join.py"],
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_host.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_records.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_stage.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_apply.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",
                                  "deploy/robot/pinky_pro/native/rosy_transfer.py",
                                  "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",

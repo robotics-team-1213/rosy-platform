@@ -71,7 +71,7 @@ ROSY Platform connects observed world state, site orchestration, device executio
 
 ### 같이 하는 깃
 
-여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `docs/reference/shared-checkout.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 `docs/reference/shared-checkout.md`의 그 절을 한 커밋에서 같이 고친다. 실험실 PC 우산 `F:\Dev\Control\Robot\Rosy\Agents.md`도 같은 절차를 적는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
+여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `docs/reference/shared-checkout.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 `docs/reference/shared-checkout.md`의 그 절을 한 커밋에서 같이 고친다. 실험실 PC에서 이 저장소의 상위 폴더에 있는 우산 `..\AGENTS.md`(git 밖)도 같은 절차를 적는다. 사람용 요약과 팀원의 PR 길은 `docs/reference/git-workflow.md`다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
 

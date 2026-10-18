@@ -30,6 +30,7 @@ session, CLI, hub, and the import-boundary check. No ROS. Fakes only — no netw
 | `test_cli.py` | CLI parsing and wiring |
 | `test_boundaries.py` | Package-wide `rclpy` ban; hub may import `core_common.protocol.schemas` only |
 | `test_hub.py` | SiteHub gather/scatter and role-violation tests (D-59) |
+| `test_server_holder_imports.py` | D-798: every `SERVER_HOLDERS` file still resolves as `fleet.server.<name>` |
 
 ## Subdirectories
 

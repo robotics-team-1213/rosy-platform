@@ -1,7 +1,7 @@
 # 같이 하는 깃 — 공유 체크아웃 착수 순서
 
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
-- **팀원 개인 클론이라면** 이 문서 대신 [팀 가이드](team-guide.md)를 따른다.
+- **팀원 개인 클론이라면** 이 문서 대신 [git으로 일하는 법](git-workflow.md)과 [팀 가이드](team-guide.md)를 따른다. 두 길의 비교도 [git으로 일하는 법](git-workflow.md) §1에 있다.
 - **갱신:** 2026-10-18 — 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
 
 ## 같이 하는 깃
@@ -9,7 +9,7 @@
 여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다.
 GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규칙의 명령 전문은
 `AGENTS.md`의 「같이 하는 깃」에 적는다. 문구를 바꿀 때는 두 절을 한 커밋에서
-같이 고친다. 실험실 PC의 우산 문서 `F:\Dev\Control\Robot\Rosy\Agents.md`도
+같이 고친다. 실험실 PC에서 이 저장소의 상위 폴더에 있는 우산 문서 `..\AGENTS.md`(git 밖)도
 같은 절차를 적는다. 명령 카드는
 [`.claude/skills/rosy-land-on-main/SKILL.md`](../../.claude/skills/rosy-land-on-main/SKILL.md)다.
 브랜치 이름과, 남의 미커밋을 지우지 않는 이유는
