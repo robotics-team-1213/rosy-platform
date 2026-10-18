@@ -16,6 +16,28 @@ from rosy.execution.local.policy_lease import FleetLeaseConsumer, LeaseScope
 from rosy.execution.local.policy_chain import SimPolicyChain
 
 
+def test_worker_renews_before_round_trip_cost_exhausts_current_lease():
+    from types import SimpleNamespace
+    clock, completed, waits = [.34], [], []
+    class Stop:
+        def is_set(self): return False
+        def set(self): pass
+        def wait(self, delay):
+            waits.append(delay)
+            clock[0] += delay
+            return len(waits) > 1
+    def renew(session):
+        clock[0] += .54
+        completed.append(clock[0])
+    chain = object.__new__(SimPolicyChain)
+    chain.session = SimpleNamespace(lease=SimpleNamespace(expires_at_ns=1_000_000_000),hold_reason='')
+    chain.consumer = SimpleNamespace(max_duration_ns=1_000_000_000,monotonic=lambda:clock[0],
+                                     renew=renew,close=lambda:None)
+    chain._stop, chain._hold = Stop(), lambda:None
+    chain._run()
+    assert completed and completed[0] < 1., 'renewal must finish within the original one-second lease'
+
+
 @contextmanager
 def chain_setup(tmp_path, *, enabled=True):
     seed, driver, clock, _, _ = setup_session(tmp_path, camera=True)
