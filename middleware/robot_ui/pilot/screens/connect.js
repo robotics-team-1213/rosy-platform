@@ -29,10 +29,10 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp, postJson} from "../client.js";
 import {account, authenticated, restoreAccount, accountLogout} from '../client.js';
 import {driverFor} from "../drivers/registry.js";
-import {createVisionPreview} from "../vision.js";
+import {createVisionPreview, createWhepView} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
 import {HeadlessState, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
@@ -535,13 +535,22 @@ function showCamera(root, onBack) {
     },
     onUnavailable: (message) => { frame.hidden = true; empty.hidden = false; empty.textContent = message; },
   });
-  const visibility = () => { document.hidden ? preview.stop() : preview.start(); };
+  const video = el("video", null, {"data-drive-video": "", hidden: ""});
+  Object.assign(video, {muted: true, autoplay: true, playsInline: true});
+  frame.after(video);
+  const live = createWhepView({video, jpeg: preview, postJson, api, robotId: async () => (await connectionOffer())?.robotId,
+    onState: ({state, fps}) => {
+      if (state === "live" || state === "stale") {
+        frame.hidden = true; empty.hidden = true; description.textContent = `카메라 · WebRTC ${fps}fps · 조종하지 않는 보기`;
+      } else if (state === "hidden") { empty.hidden = false; empty.textContent = "영상 지연 · 2초 넘게 새 화면 없음"; }
+    }});
+  const visibility = () => { document.hidden ? live.stop() : live.start(); };
   document.addEventListener("visibilitychange", visibility);
   root.__pilotPreviewClose = () => {
-    preview.stop(); layout.close(); document.removeEventListener("visibilitychange", visibility);
+    live.stop(); video.remove(); layout.close(); document.removeEventListener("visibilitychange", visibility);
     document.body.dataset.pilotScreen = "connect"; delete root.__pilotPreviewClose;
   };
-  preview.start();
+  live.start();
 }
 
 export async function mountConnect(root, {onReady, onEnter} = {}) {
