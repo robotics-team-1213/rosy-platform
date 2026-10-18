@@ -1,5 +1,11 @@
 # Local execution evidence and policy installation checks
 
+`core_arm_policy.CoreArmPolicyPort` exposes one explicitly installed,
+watchdog-bound `OwnerPolicySession` to CORE's authenticated HTTP app. It preserves
+single-use observation provenance and delegates final admission to the same owner.
+See [LeRobot through CORE](../../../integrations/robots/omx/CORE_LEROBOT.md).
+It adds no physical policy activation, issuer, model loader or recovery authority.
+
 `rosy-execution-local` 0.1.4 depends on the ROS-free skill0.1.0 and learning0.1.6
 contracts wheels. The policy installation loader imports no learning registry,
 inference framework, ROS node, device driver, or network client.

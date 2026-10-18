@@ -15,6 +15,30 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
+### v1.271 CORE OMX policy I/O (D-800)
+
+Additive, operator-authenticated `/api/v1/arm/*`. No new TaskKind or Fleet grant.
+Unbound `CoreServices.arm_policy` returns 503 `ARM_POLICY_UNAVAILABLE`. The current
+port supports an explicitly installed SIM session only.
+
+| Method/path | Request | Response |
+|---|---|---|
+| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `camera: {name, shape}` (CHW) |
+| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `camera: {name, shape, rgb_base64}`; bytes are interleaved RGB uint8 HWC |
+| `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
+| `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
+
+The first three paths require the session's installed authenticated token ID.
+Stop is open to every operator. Revision: 64 lowercase hex characters; targets:
+finite JSON numbers (no bool/string), 1–8 exact installed joints. Request objects
+forbid extras. No client timestamp, lease or reset is accepted.
+Wrong principal/failed owner authority: 403 `ARM_POLICY_FORBIDDEN`; mismatched,
+consumed or replaced source: 409 `ARM_POLICY_CONFLICT`; prior goal active:
+409 `ARM_POLICY_BUSY`; schema errors: 400 (CORE ERR-101). Never retry an uncertain action.
+Capture time conservatively anchors action age; the owner rechecks source,
+lease, stop and envelope before submission. Clients wait for a fresh observation
+after completion. Observation data alone is not training ground truth.
+
 ### v1.266 학습 정책 승인 관문: 단계·승인 창·확인 요청·사고 잠금·실행 lease (D-793)
 
 Additive. 새 Fleet 경로 묶음 `/api/fleet/workcells/{workcell_id}/policy/*`와 콘솔 화면 `/console/policy`다. 기존 경로·envelope 1.0 변경 없음. 장치 명령을 보내는 경로는 없다.
@@ -3253,6 +3277,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.272 | 2026-10-18 | Additive (D-801, feat/site-console-video): Fleet `POST /api/fleet/robots/{robot_id}/media-grant`·`/renew`·`DELETE`와 미디어 권한 서비스용 `POST /api/fleet/media/validate`. 사이트 로그인 주체(fleet.read)의 로봇별 READ 전용 영상 위임. 상세는 v1.272 절 |
+| v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
 | v1.265 | 2026-10-18 | Additive (D-789, feat/webrtc-camera-land): `/api/v1/vision/media/grants`·`/renew`·`DELETE`·`/source-grant`·`/validate` 영상 위임과 사이트 media origin의 `/v1/*` 경로. `vision.media.site_url`이 있으면 기본 활성, `enabled: false`로 끔. 상세는 v1.265 절 |
 | v1.259 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |
