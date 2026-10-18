@@ -4,6 +4,10 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 
 ## Platform and execution roles
 
+### App names and supporting surfaces
+
+Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device live in the separate `rosy-vault` repository. Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
+
 ### ROSY Platform
 
 The whole product: device-local execution, site coordination, observation, human interfaces, and future AI/data/deployment roles. It is not one operating-system replacement or one process. `ROSY OS` remains a historical repository and artifact name (D-290, D-296).
@@ -24,7 +28,7 @@ A Fleet Mission owns site order, priority, handoffs and result history. Its Miss
 
 ### Workcell, Process and Rosy Cell
 
-A Workcell is a configured work space and shared-resource context: frames, calibration, equipment and access regions. It is not the arm Device. A Process describes work such as palletizing; its Recipe/compiler produces a proposed plan, not device authority. The current Rosy Cell app and `rosy_cell.cell/2` configuration are specialized palletizing interfaces and are not a general Workcell registry. A mobile base and a fixed arm can participate in one future site Mission; an arm mounted on a base additionally needs the separately accepted D-55 local composite transaction (D-664).
+A Workcell is a configured work space and shared-resource context: frames, calibration, equipment and access regions. It is not the arm Device. A Process describes work such as palletizing; its Recipe/compiler produces a proposed plan, not device authority. Rosy Cell is the palletizing preparation application, presented inside Rosy Fleet at `/console/cell` rather than as a separate launcher (D-806). Its recipe/compiler prepares a plan candidate for Fleet proposal and separate admission; Fleet owns the ledger and dispatch, and device owners retain execution authority. The `rosy_cell.cell/2` configuration is a specialized palletizing interface, not a general Workcell registry. A mobile base and a fixed arm can participate in one future site Mission; an arm mounted on a base additionally needs the separately accepted D-55 local composite transaction (D-664).
 
 ### Action identity and message identity
 
@@ -211,6 +215,11 @@ The site-side answerer for lane stucks: deterministic rules answer first, then (
 
 Its budgets and deadline count per chain of stucks on the same robot rather than per stuck, so a robot that keeps re-sticking reaches a person instead of looping; it can never choose manual control, release an emergency stop, or widen the robot's own recovery limits.
 
+## Learning
+
+### Rosy Learning
+
+The model-PC web app for object and pixel review, catalog, and learning work, also called 학습 관리 센터 (D-461). Browser titles use "Rosy Learning — <screen>" (D-806). Its code runs as `review_app.py` under `rosy-review-v13.service` (D-545). It calls existing curation and training jobs and does not hold its own training logic.
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.
