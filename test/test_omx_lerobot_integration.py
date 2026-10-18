@@ -98,6 +98,40 @@ assert 'PHYSICAL_POLICY_RUNTIME_CLOSED' in physical['blockers']
 assert physical['policy_revision'] == 'a'*64
 assert probes == ['GET policy', 'GET policy']
 assert 'private-fixture-token' not in str(physical)
+from rosy.integrations.robots.omx.deployment import main as preflight_main
+from lerobot.scripts.lerobot_record import DatasetRecordConfig, RecordConfig
+from lerobot.policies.act.configuration_act import ACTConfig
+import hashlib, json
+checkpoint = Path(sys.argv[2])/'checkpoint'
+checkpoint.mkdir()
+(checkpoint/'model.safetensors').write_bytes(b'synthetic hash fixture, not a usable model')
+(checkpoint/'config.json').write_text('{}')
+record_cfg = RecordConfig(robot=probe_config.robot,
+    dataset=DatasetRecordConfig(repo_id='local/preflight', single_task='fixture', push_to_hub=False),
+    policy=ACTConfig(n_action_steps=1, pretrained_path=checkpoint))
+private_config = Path(sys.argv[2])/'preflight-config.json'
+private_config.write_text(json.dumps(draccus.encode(record_cfg)))
+report_file = Path(sys.argv[2])/'preflight-result.json'
+assert preflight_main(['--target','real','--config',str(private_config),'--out',str(report_file)]) == 3
+report = json.loads(report_file.read_text())
+assert report['checkpoint_sha256']['model.safetensors'] == hashlib.sha256(
+    (checkpoint/'model.safetensors').read_bytes()).hexdigest()
+assert report['ready'] is False and report['deployment'] is False
+original = report_file.read_bytes()
+try:
+    preflight_main(['--target','sim','--config',str(private_config),'--out',str(report_file)])
+except SystemExit as error:
+    assert error.code == 2
+else:
+    raise AssertionError('an existing deployment record must not be replaced')
+assert report_file.read_bytes() == original
+class UnavailableClient(ReadOnlyClient):
+    def connect(self):
+        raise RuntimeError('private fixture error must not escape into the report')
+lerobot_robot_rosy_omx.CoreArmClient = UnavailableClient
+blocked = deployment_report(probe_config, target='sim')
+assert blocked['ready'] is False and blocked['core_ready'] is False
+assert blocked['blockers'] == ['CORE_ARM_UNAVAILABLE_OR_INCOMPATIBLE']
 print('ROSY_OMX_PLUGIN_PASS')
 '''
     result = subprocess.run([str(PYTHON), '-c', script, str(ROOT), str(tmp_path)],

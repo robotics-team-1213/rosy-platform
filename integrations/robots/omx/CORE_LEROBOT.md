@@ -62,7 +62,8 @@ For policy rollout, use an independently evaluated ACT checkpoint with
 `n_action_steps=1`, no temporal ensemble and matching normalization, joints and
 camera. The launcher refuses queued ACT configurations and other policy types;
 it does not silently modify or qualify an existing artifact. The same official
-recorder records the rollout when `policy.path` is present in its configuration.
+recorder records the rollout with a policy configuration and local
+`policy.pretrained_path` (or the official launcher's `--policy.path` argument).
 For teleoperation, the leader must already emit the same absolute radian targets;
 the adapter does not normalize a stock OMX leader's `-100..100` output.
 
@@ -91,3 +92,50 @@ Host tests use synthetic RGB/model/authority and fake action transport. The
 native ROS check verifies CORE HTTP admission to real ROS Action acceptance,
 terminal result and revocation/cancel against an isolated test action server.
 Neither is Gazebo task-success or physical-robot evidence.
+
+## Deployment preparation pipeline
+
+The manual `Build OMX LeRobot client` workflow builds the integration and its
+three internal dependency wheels. Its artifact includes the source SHA and
+`SHA256SUMS`. It contains client code only; it does not include ROS, torch,
+credentials, a model, or an activated robot profile. The workflow neither
+publishes a release nor accesses a device. It can run after this workflow is
+available on the remote repository; local merge alone does not run GitHub CI.
+
+Install those wheels into the dedicated LeRobot 0.4.4 environment after checking
+the artifact checksum and source revision:
+
+```sh
+cd <downloaded-client-artifact>
+sha256sum -c SHA256SUMS
+python -m pip install --no-index --find-links . rosy-integration-robot-omx==0.1.0
+```
+
+Copy `core-record.json.example` to approved private storage and replace every
+placeholder, joint name and camera size with the installed values. For JSON
+files use the full policy configuration, including `policy.pretrained_path`;
+`policy.path` is a special official command-line argument, not a JSON field.
+
+```sh
+rosy-omx-preflight --target sim --config <private-record-config.json> --out <new-private-report.json>
+rosy-omx-preflight --target real --config <private-record-config.json> --out <new-private-report.json>
+```
+
+Preflight checks the actual SDK version, synchronous ACT configuration, a local
+checkpoint's file hashes, and the installed CORE policy/joints/RGB dimensions.
+It performs only `GET /api/v1/arm/policy`; it does not consume an observation,
+submit a target, or call disconnect/stop against a shared session. Reports do not
+contain bearer tokens or original exception messages and existing reports are
+never replaced. Exit 0 means **SIM configuration/I/O readiness**, 3 means blocked,
+and 2 means invalid input or a failed report write. Hashing checkpoint bytes does
+not qualify its behavior or bind its model to CORE's authorized manifest.
+
+The real target always reports the current closed physical policy runtime,
+unconnected Fleet-to-device policy lease, and missing D-793 physical admission.
+No CLI switch or copied approval file can open these gates. This is an executable
+deployment preparation path, not a working physical policy rollout. With no
+assigned workcell/instance or approved policy revision, do not create substitute
+identities, enable `learned_policy`, or auto-approve a window. The existing hardware
+owner remains `rule_based` only. Completing D-793 C/D, live owner composition,
+two-person L3 approval and physical acceptance remains necessary before learned
+motion; G4 is additionally required for LIMITED use.

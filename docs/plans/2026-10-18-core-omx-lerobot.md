@@ -58,3 +58,22 @@ reject stale/reused/revoked requests before driver submission. Optional native
 ROS evidence must be described separately from fake transport, trained-model
 quality, Gazebo task success and physical acceptance. Do not land, push, deploy
 or operate hardware as part of this branch.
+
+## Deployment preparation follow-up
+
+The user subsequently authorized deployment/physical-readiness pipeline work and
+local commit/merge. They confirmed no target workcell/instance or approved policy
+revision exists. Push and live device activation were not requested.
+
+Ruling: prepare a repeatable client-wheel artifact and executable preflight, while
+retaining the existing D-793 physical refusal. An invented target, approval, lease
+or successful physical test would misrepresent the system's current capabilities.
+
+1. Merge current main into this task worktree, preserving both append-only logs
+   and regenerating indexes. Remove ADR gap rows for decisions now present.
+2. Add a manual client-wheel workflow with source SHA/checksums and complete
+   internal wheel dependency closure. Add preflight with SDK/config/checkpoint
+   checks and GET-only CORE inspection. A real target must remain blocked.
+3. Verify actual wheel build/offline install and actual SDK command/report behavior
+   remotely; independently review the final producer/consumer boundaries. Run
+   `tools/land.py --tests auto` for the authorized local merge. Do not push.
