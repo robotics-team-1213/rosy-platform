@@ -31,7 +31,7 @@ def _gradle(probe: Path, log: Path) -> tuple[subprocess.Popen[str], object]:
         f"-Prosy.pilot.page.dir={probe.as_posix()}",
         ":app:testDebugUnitTest",
         "--tests", "io.github.livsbittt.rosy.pilot.ShellPageProbe",
-        "--offline", "--no-daemon",
+        "--no-daemon",
     ]
     if os.name != "nt":
         command.insert(0, "bash")
@@ -46,7 +46,7 @@ def _gradle(probe: Path, log: Path) -> tuple[subprocess.Popen[str], object]:
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_bundled_page_uses_the_app_proxy(tmp_path):
     """Chromium loads the assets and session the Pilot app proxy actually serves."""
-    # The selected test host supplies Java/SDK and a warmed Gradle dependency cache.
+    # The selected test host supplies Java/SDK.
     PROBE = tmp_path / "page-probe"
     PROBE.mkdir()
     gradle_log = PROBE / "gradle.txt"
