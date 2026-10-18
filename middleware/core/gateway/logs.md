@@ -1186,3 +1186,8 @@
 - gate 변화: 없음.
 - 결정: D-767 A부 4항.
 - 교훈: 없음.
+## 2026-10-19 · uncommitted · preview API 짝 시험의 시간 의존성 제거
+
+- 변경: raw/annotated API의 신선한 짝을 검증하는 시험에서 canonical core_features.vision.store에만 고정 clock을 주입한다. 운영 TTL과 pairing·rate 제한은 변경하지 않는다.
+- 증거: 693dae79b4의 원격 시험에서 두 publish 후 clock을 20→23초로 이동하면 기존 raw_available 단언이 실패함을 재현했다. 수정 뒤 preview API 및 explicit-clock frame pair·만료 시험과 전체 영향 시험은 별도 실행한다.
+- gate 변화: 없음. 실제 카메라·ROS·장치 수용은 검증하지 않음.
