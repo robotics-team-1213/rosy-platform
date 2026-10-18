@@ -46,3 +46,5 @@ D-799 reserved in another worktree (refs/adr/D-799), absent from this branch; re
 D-801 reserved in another worktree (refs/adr/D-801), absent from this branch; remove when its ADR lands
 D-802 reserved in another worktree (refs/adr/D-802), absent from this branch; remove when its ADR lands
 D-803 reserved in another worktree (refs/adr/D-803), absent from this branch; remove when its ADR lands
+D-801 reserved in another worktree (refs/adr/D-801), absent from local main; remove when its ADR lands
+D-802 reserved in another worktree (refs/adr/D-802), absent from local main; remove when its ADR lands

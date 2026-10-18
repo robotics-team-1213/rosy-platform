@@ -9138,6 +9138,12 @@ osy-d395-s1d\`.
 - 증거: ADR 본문과 Log의 Proposed 상태, 코드·설치 profile 변경이 없는 범위를 확인했다. 현재 커밋의 원격 검증은 착지 기록에 남긴다.
 - gate 변화: 없음. 실물 운행·팔 실행·device_trial 활성화·장치 수용을 승인하거나 실행하지 않는다.
 
+## 2026-10-18 · uncommitted · tools: 착지 대기열 D-803
+
+- 변경: `tools/land.py`가 시험 회차 전에 `<git-common-dir>/rosy-land-queue/`에서 FIFO 표를 받고(`tools/land_queue.py`), 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린 뒤 `main`을 한 번 병합하고 시험한다. 기다리기 전에 D-430 5·D-766 검사를 먼저 한다. `--queue-timeout`(기본 180분), 사고 대응용 `--no-queue`. 표는 `main()`의 `finally`와 `atexit`가 풀고, 같은 호스트에서 pid가 없거나 3시간 동안 새로 고쳐지지 않은 표는 다음 세션이 지운다. `AGENTS.md`·`docs/reference/shared-checkout.md`·스킬 카드·`tools/AGENTS.md`·2026-10-18 착지 교훈 노트를 같이 고쳤다. 동료가 선점한 D-801, D-802를 `adr_gaps.txt`에 적었다.
+- 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
+- gate 변화: 없음.
+
 ## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
 
 - 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
