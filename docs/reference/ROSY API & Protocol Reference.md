@@ -68,6 +68,84 @@ Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 
 - **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 아직 없어 거절한다(D-779 열린 질문, fail closed). 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
 - **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
 
+### v1.247 D-769 selected-route production capability
+
+The base control descriptor adds `line_follow_route_guide` (absent/false means unsupported).
+CORE advertises it only when `line_follow.route_guide_enabled` is explicitly true; the
+flag defaults false and also gates active ROS guide publication. Enable it only with the
+source-expiring camera inbox deployed. The isolated learned-drivable Gazebo runner opts in;
+this does not activate a physical robot.
+Fleet captures geometry from its selected directed plan and the unrounded localized pose
+used to locate trip progress. The map id must match the active map. Before attaching it to
+the existing authority request, Fleet checks the exact echoed pose stamp, map/route revision,
+plan segment signature, lap trim, selected station and remaining source-age budget (<=1 s).
+Holds, old poses, changed plans and shrink requests carry no guide. Stored segment endpoints
+are normalized only within their existing four-decimal serialization precision.
+
+### v1.246 D-769 route geometry attached to accepted authority
+
+`POST /api/v1/line-follow/authority` adds optional `route_guide` (`AuthorityRouteGuide`).
+It carries `map_id`, integer `map_revision`, finite `heading_here_deg`/`heading_ahead_deg`
+in [-180,180], `ahead_m` in (0,2], nonnegative `s_m`/`off_route_m`, and `max_age_s` in (0,1].
+Extra fields are rejected. Leg, sequence and pose come only from the enclosing authority.
+CORE binds geometry only after authority acceptance, with a sequence and an exact echoed
+`pose_stamp` match. It converts that sample's ROS stamp to `source_stamp_s` and caps the
+prior by source age and authority TTL. Reusing a source cannot extend its previous budget.
+Accepted requests without geometry, shrink requests, mode reset, expiry or unavailable
+odometry expose no prior. Ignored stale requests cannot replace or refresh the current prior.
+The prior selects among observed floor directions; it grants no movement or pivot authority.
+CORE now publishes through its existing line-follow timer. Fleet production and explicit capability opt-in are implemented by v1.247; Gazebo acceptance remains pending.
+REST remains additive; Fleet envelope protocol 1.0 is unchanged.
+
+### v1.245 D-769 selected-route prior transport (internal, producer not enabled)
+
+`core_common.protocol.lane_route_guide.LaneRouteGuide` defines the version 1 CORE-to-camera
+message for the single CORE `line/lane_guide` publisher. The camera observer now routes
+this subscription through the ordered inbox and checks each frame before keep-mode use.
+Authority attachment is available through v1.246; Fleet production requires the v1.247 capability.
+CORE emits an ordered clear before its first active message and after a source-clock rewind.
+Publication has a separate monotonic source budget that survives publication-epoch resets;
+the wire deadline is capped by the remaining budget. The receiver also applies its own
+remaining-budget clock. This describes validity at publication/receipt: elapsed wall time
+during transport while ROS time is paused is not encoded in the message.
+Inactive line following, E-stop or unavailable authority produce clears. Unversioned diagnostic
+messages are rejected by this runtime subscription; the legacy pure replay parser remains.
+
+- Envelope: `v=1`, nonempty `publisher_epoch`, nonnegative integer publication `seq`, and
+  `guide`. `guide=null` explicitly clears the cached prior. Publication sequence increases
+  across active and clear messages within one CORE process; it is separate from authority sequence.
+- Active guide: `leg_id`, `authority_seq`, `map_id`, immutable integer `map_revision`,
+  `source_stamp_s`, `valid_until_s`, `heading_here_deg`, `heading_ahead_deg`, `ahead_m`,
+  `s_m`, `off_route_m`, and `pivot_ok=false`. Extra fields are refused. All numeric geometry
+  is finite; headings are degrees left-positive relative to the source body's yaw, bounded
+  to [-180,180]. `ahead_m` is actual positive preview distance at most 2 m; zero preview
+  produces a clear. `s_m` starts at the selected plan origin, not the current arc origin;
+  `off_route_m` is nonnegative distance to that selected route.
+- Source and deadline use the camera/ROS source clock, never another process's monotonic
+  clock. The deadline is strictly after source and at most one source second later; CORE
+  must additionally cap it at accepted authority expiry. Republishing cannot renew it.
+  Producer mapping must identify the exact odometry sample used for Fleet's relative headings.
+- The inbox rejects future, expired, malformed and reordered messages. A higher-sequence
+  clear prevents queued lower-sequence active messages from reviving the prior. A different
+  publisher epoch requires a clear before active messages; retired epochs remain rejected.
+  It retains at most 64 retired epochs and refuses further switches until inbox restart.
+  Camera clock rewind clears the current prior; epoch ordering is not reset by that event.
+
+  The inbox also enforces the remaining source budget on its own monotonic clock. A repeated
+  source sample cannot renew that local deadline, including across clears or expiry. Older
+  source samples are refused within an epoch. The typed result retains actual `ahead_m`.
+  Keep-mode direction use requires its full 0.25 m preview; shorter previews do not
+  select steering direction, while fresh scalar off-route evidence still causes HOLD.
+
+  The inbox also enforces the remaining source budget on its own monotonic clock. A repeated
+  source sample cannot renew that local deadline, including across clears or expiry. Older
+  source samples are refused within an epoch. The typed result retains actual `ahead_m`.
+- Producer integration must clear atomically on accepted authority without a guide, shrink,
+  revocation, mode/trajectory change and expiry. Rejected authority cannot install or renew
+  a guide. Capability opt-in must cover the deployed consumer's deadline/invalidation
+  behavior, not just request schema support. Legacy unversioned diagnostic input is not
+  evidence of this capability. Direction never establishes visible floor or pivot permission.
+
 ### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
 
 Additive. 새 경로 하나와 Step 원장의 새 종류 하나다. envelope 1.0은 그대로다.
@@ -3307,6 +3385,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.222 | 2026-10-14 | Behavior (D-740 개정 3): 교차로 기동 중 운동 증명이 거절된 틱은 HOLD `junction_motion_unconfirmed`(명령 0, 기동 유지)이고, 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 전과 같이 `aborted`·`motion_unconfirmed`다. 필드 변화 없음. |
 | v1.243 | 2026-10-15 | Additive (D-440, D-24 개정; feat/device-power-policy-port): `power.wake` 에 사유 `command` 와 선택 필드 `source` — 무명령 타이머는 받아들여진(2xx) 명령 REST 호출과 0 이 아닌 최종 cmd_vel 이 리셋하고, GET·텔레메트리·WS 구독·`/power/*` 는 리셋하지 않는다. 기기별 전원 정책: `PowerStatus` 에 `devices[]`(`name`·`level`·`ready`·`managed`·`required_for_motion`, 선언된 기기만)와 `motion_ready`(false 면 CORE 최종 cmd_vel 이 0) 추가, 이벤트 `power.device_changed`. 꺼졌다 켜진 기기는 `wake_ready_s` 경과와 깨운 뒤의 확인 보고가 모두 있어야 `ready` 다. 정책은 벤치 스위치 `power.device_policy.enabled`(기본 false) 뒤에 있어 스위치가 꺼진 로봇의 동작은 바뀌지 않는다. Site Fleet 새 경로 `POST /api/fleet/robots/{robot_id}/power`(named operator, `sleep`\|`wake`). 기존 경로·필드 변화 없음. 초안은 v1.91 이었다 |
 | v1.221 | 2026-10-13 | Additive (D-744): `POST /api/v1/line-follow/junction` 선택 객체 `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_arc_map_anchor`, `line_follow.arc.map_anchor_used`·`map_anchor_reason`. 풀지 못한 고정점은 거절이 아니라 v1.220의 자세 기준 원이다. Fleet `/api/fleet/*` 변경 없음. |
+| v1.247 | 2026-10-16 | Add explicit route-guide capability and pose-bound selected-plan producer; learned-drivable SIM opts in |
+| v1.246 | 2026-10-16 | Add optional authority-bound selected-route geometry with exact source pose and bounded lifetime; producer/publication pending |
+| v1.245 | 2026-10-16 | Additive D-769 internal selected-route prior schema and ordered expiring inbox; producer/subscription not enabled. REST and envelope 1.0 unchanged |
 | v1.244 | 2026-10-15 | Additive (D-556 Proposed, fix/lane-odom-cross-veto-port): 내부 CAMERA_LINE `quality.reason=odom_side_conflict`를 불가시·신뢰도 0 증거로 허용; CORE bridge·로컬 복구는 이 사유에서 금지. `GET /api/v1/line-follow` `reason`과 `nav.lane_lost` `reason`에 `camera_odom_side_conflict` 값이 나타날 수 있다(생산자 `lane_odom_veto_enabled` 기본 false). REST 경로·스키마·envelope 1.0 변화 없음 |
 | v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Fleet Task/channel receipts preserve exact operation and separate outcome, safe_released and quiescence evidence. Existing command ownership and envelope 1.0 remain. |
 | v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. envelope 1.0 유지. |

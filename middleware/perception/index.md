@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · 6ec7681069 · Add an ordered source-expiring route-prior inbox (D-769) (이식, 원래 2026-10-16)
+- 2026-10-18 · a473a5093 · Align route-prior angles with the consuming camera pose (D-769) (이식, 원래 2026-10-16)
+- 2026-10-18 · dca38984c · Isolate the remaining startup target error (D-769) (이식, 원래 2026-10-16)
+- 2026-10-18 · 7e49afe20a · Bound drivable tangent estimation by metric support (D-769) (이식, 원래 2026-10-16)
 - 2026-10-18 · uncommitted · docs: CLAUDE.md를 AGENTS.md로 합치고 지운다
-- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
-- 2026-10-14 · 09e54097a · 거절된 학습 모델 이유를 경고 한 번과 keep 묶음으로 낸다 (D-588)
-- 2026-10-14 · 9406dc248 · 바닥 게이트가 못 쓰는 학습 모델을 열 때 거절한다 (D-588)
-- 2026-10-13 · uncommitted · 전원 게이트를 노드 옆으로 옮김
