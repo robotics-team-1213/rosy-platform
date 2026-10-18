@@ -799,6 +799,7 @@
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
 | D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Accepted (2026-10-18, 사용자 결정) |
+| D-803 | 착지는 줄을 선다 — 클론 하나의 착지 대기열(FIFO 표), 변경분 재시험보다 먼저 | Accepted (2026-10-18, 사용자 결정) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

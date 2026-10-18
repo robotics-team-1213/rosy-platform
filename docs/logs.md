@@ -9075,3 +9075,9 @@ osy-d395-s1d\`.
 - 변경: `cli.py`의 홀더 import와 `ledger/`의 상호 참조, 세 시험 파일의 import를 평탄 이름으로 바꾼다. `context_log.py`는 비밀번호 파일 경로를 그대로 보관하고 `_dsn`에서 dict 순서(host·port·dbname·user·connect_timeout·password)로 DSN을 조립한다 — 값은 파일에서 읽은 뒤에만 문자열에 들어가고, `deploy/robot/pinky_pro/release/secret_scan.py`의 assignment 규칙을 우회하지 않는다. `context_options.py`는 `args.context_db_password_file`을 그대로 읽는다. `compose.pairing.yaml`의 fleet `command`는 base를 통째로 반복해야 하므로(`test_site_pairing_deploy.py`), D-796 `--context-db-*` 네 플래그를 base와 같은 순서로 넣는다.
 - 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
 - gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · tools: 착지 대기열 D-803
+
+- 변경: `tools/land.py`가 시험 회차 전에 `<git-common-dir>/rosy-land-queue/`에서 FIFO 표를 받고(`tools/land_queue.py`), 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린 뒤 `main`을 한 번 병합하고 시험한다. 기다리기 전에 D-430 5·D-766 검사를 먼저 한다. `--queue-timeout`(기본 180분), 사고 대응용 `--no-queue`. 표는 `main()`의 `finally`와 `atexit`가 풀고, 같은 호스트에서 pid가 없거나 3시간 동안 새로 고쳐지지 않은 표는 다음 세션이 지운다. `AGENTS.md`·`docs/reference/shared-checkout.md`·스킬 카드·`tools/AGENTS.md`·2026-10-18 착지 교훈 노트를 같이 고쳤다. 동료가 선점한 D-801, D-802를 `adr_gaps.txt`에 적었다.
+- 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
+- gate 변화: 없음.

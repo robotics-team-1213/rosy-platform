@@ -118,7 +118,17 @@ took hours to land. Four separate things blocked it.
   plan from `land.py --dry-run`, split first. FULL-trigger and `shared/web` parts land first, on
   their own branch.
 
-## Prevention candidates for 5 (Proposed, not implemented; for the user to decide)
+## Prevention for 5 (user decision 2026-10-18: "improve further if possible")
+
+- **Landing queue (implemented, [D-803](../../adr/D-803-landing-queue-before-delta-rerun.md)).** `tools/land.py`
+  takes a FIFO ticket in `<git-common-dir>/rosy-land-queue/` (`tools/land_queue.py`) before its test rounds,
+  prints its position and who is ahead, and waits (`--queue-timeout`, default 180 min) until it is first; then it
+  merges `main` once and tests. The ticket is released on every exit, Ctrl-C included; a dead holder's ticket (PID
+  gone on this host, or not refreshed for 3 h) is reclaimed. `--no-queue` is the incident escape hatch. Tests:
+  `test/test_land_queue.py`, `test/test_land.py::test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout`.
+
+The candidates as first written:
+
 
 1. **Landing queue or lock.** Sessions land in order; the next one merges or rebases onto `main`
    once, after the one ahead of it has landed, instead of chasing a moving `main`.
