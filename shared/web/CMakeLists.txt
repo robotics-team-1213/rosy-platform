@@ -21,6 +21,7 @@ install(FILES
   task-chooser.css
   theme.js
   evidence.js
+  webrtc.js
   request.js
   scope.js
   fleet-client.js
