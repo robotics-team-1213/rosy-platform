@@ -118,7 +118,26 @@ took hours to land. Four separate things blocked it.
   plan from `land.py --dry-run`, split first. FULL-trigger and `shared/web` parts land first, on
   their own branch.
 
-## Prevention candidates for 5 (Proposed, not implemented; for the user to decide)
+## Prevention for 5 (user decision 2026-10-18: "improve further if possible")
+
+- **Landing queue (implemented, [D-803](../../adr/D-803-landing-queue-before-delta-rerun.md)).** `tools/land.py`
+  takes a FIFO ticket in `<git-common-dir>/rosy-land-queue/` (`tools/land_queue.py`) before its test rounds,
+  prints its position and who is ahead, and waits (`--queue-timeout`, default 180 min) until it is first; then it
+  merges `main` once and tests. The ticket is released on every exit, Ctrl-C included; a dead holder's ticket (PID
+  gone on this host, or not refreshed for 3 h) is reclaimed. `--no-queue` is the incident escape hatch. Tests:
+  `test/test_land_queue.py`, `test/test_land.py::test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout`.
+- **Delta rerun across runs (implemented, D-803 6).** Within one run, D-762 stage 0 already reran only main's
+  delta selection after a green FULL tier. A fresh run (after a lost host, Ctrl-C or the round cap) started with
+  FULL again: `refactor/land-split` itself hit "main kept moving: gave up after 5 rounds" on 2026-10-18 and its
+  rerun paid a second FULL tier. `tools/land_full.py` now keeps the FULL pass in `<git-common-dir>/rosy-land-full/`
+  and a later run reuses it while the branch added nothing but merges of main. Not done: uniting main's delta with
+  the branch's own mapped suites. The FULL tier already passed those with the branch's code, and the delta selection
+  takes direct reverse dependents of what main changed, so the union would rerun suites that passed on the same
+  branch code. A narrow (non-FULL) branch still reruns its own affected tier each round, as before.
+  Tests: `test/test_land.py::test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass` and the two after it.
+
+The candidates as first written:
+
 
 1. **Landing queue or lock.** Sessions land in order; the next one merges or rebases onto `main`
    once, after the one ahead of it has landed, instead of chasing a moving `main`.
@@ -132,9 +151,10 @@ took hours to land. Four separate things blocked it.
 - Test PC placement still uses hosts below the memory floor when nothing else is free (D-568), and
   an agent that dies mid-land leaves no resumable state. Run long lands as a watched background task
   ([landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md](landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md)).
-- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) are themselves at or above 95%
-  of the 600-line limit. These fixes left their line counts unchanged. The next change there needs
-  a split first.
+- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) were at or above 95% of the
+  600-line limit. `refactor/land-split` moved the CI full-run matrix to `tools/harness/affected_ci.py`
+  (`affected_tests.py` 495) and the conflict auto-resolution to `tools/land_merge.py` (`land.py` 472),
+  pure moves with the old names re-exported.
 
 ## Related
 
