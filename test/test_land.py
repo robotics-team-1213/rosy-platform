@@ -1,4 +1,4 @@
-"""tools/land.py with land_checks.py, land_queue.py and land_full.py, against throwaway repos: main plus a worktree."""
+"""tools/land.py (+ land_checks.py, land_queue.py, land_full.py, land_merge.py) on throwaway repos: main and a worktree."""
 
 from __future__ import annotations
 
@@ -844,3 +844,14 @@ def test_a_merge_that_changed_more_than_main_voids_the_full_pass(repos, monkeypa
     subprocess.run(["git", "-C", str(wt), "merge", "--no-commit", "--no-ff", "main"], check=True, capture_output=True)
     commit(wt, {"pkg/a.py": "x = 4\n"}, "merge main, with an edit of its own")
     assert land.land_full.restore(wt, "feat/x") is None
+
+
+def test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge(repos, capsys):
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {gaps: "D-3 reserved in another worktree\nD-4 reserved in another worktree\n"}, "declare peers' gaps")
+    commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
+    assert land.main(["--tests", "none"]) == 0
+    assert (main / gaps).read_text() == "D-4 reserved in another worktree\n"
+    assert "drop adr_gaps lines of landed D-3" in git(main, "log", "-1", "--format=%s")
+    assert "dropped ['D-3']" in capsys.readouterr().out

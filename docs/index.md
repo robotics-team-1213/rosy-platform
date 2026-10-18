@@ -340,7 +340,7 @@
 ## 최근 기록
 
 - 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
+- 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
+- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
 - 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
 - 2026-10-18 · 6ec7681069 · Specify internal selected-route prior transport v1.245 (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · edae42db99 · docs: 굽이 영상 재생과 경로 방향 입력 누락 (이식, 원래 2026-10-16)
-- 2026-10-18 · uncommitted · tools: 착지 대기열 D-803
