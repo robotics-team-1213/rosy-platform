@@ -76,7 +76,7 @@
 ## 최근 기록
 
 - 2026-10-19 · 212a8b51b2 · Account CORE HTTP·browser 회귀를 앱 착지 단위로 재적용
+- 2026-10-19 · uncommitted · preview API 짝 시험의 시간 의존성 제거
 - 2026-10-16 · c11a34f64b · Explicit deployment opt-in for route guidance (D-769)
 - 2026-10-16 · ddd1b70f4 · Publish authority-bound route priors through CORE (D-769)
 - 2026-10-15 · 1a9960df2 · line_follow.instruction_stamp_enabled 설정 읽기와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
-- 2026-10-15 · 84f0c8456 · 작업의 trip lease는 단계 사이 IDLE에서 끝나지 않는다 (D-763 조각 6, API v1.236)

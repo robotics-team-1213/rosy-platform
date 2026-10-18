@@ -15,8 +15,9 @@ Manifest line: <policy> <kind> <args>. Kinds: file <path> <role/x|common/x|deplo
 ending in .in gets @LOGIN@ replaced; sudoers files must pass visudo -c), enabled <unit>,
 disabled <unit>, masked <unit>, linger, wifi-allow, apt <package>... (approval policy only; checked with
 dpkg-query; only the missing names are installed, with --no-upgrade --no-remove; D-571 keeps these on
-approval=sim). ROSY_HOST_STATE_ROOT prefixes every absolute
-path (tests).
+approval=sim), wheel-tool <name> <version> <sha256> (approval policy only, D-802: one pinned PyPI wheel
+installed hash-checked into /usr/local/lib/rosy-tools/<name>-<version> and linked from /usr/local/bin;
+needs python3-pip, an earlier apt line). ROSY_HOST_STATE_ROOT prefixes every absolute path (tests).
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ LIB = "/usr/local/lib/rosy-host-state"
 STATUS = "/var/lib/rosy-host-state/status.json"
 WIFI_ALLOW = "/etc/rosy/host-state/wifi-allow"
 BACKUP = "/var/lib/rosy-host-state/backup"
+TOOLS = "/usr/local/lib/rosy-tools"
 
 
 def host(path: str) -> Path:
@@ -55,8 +57,8 @@ def read_manifest(dirs: dict[str, Path]) -> list[tuple[str, str, list[str]]]:
             if raw:
                 if raw[0] not in ("safe", "report", "approval") and not raw[0].startswith("approval="):
                     raise SystemExit(f"bad policy: {raw}")
-                if raw[1:2] == ["apt"] and not raw[0].startswith("approval"):
-                    raise SystemExit(f"apt needs an approval policy (D-571): {raw}")
+                if raw[1:2] in (["apt"], ["wheel-tool"]) and not raw[0].startswith("approval"):
+                    raise SystemExit(f"{raw[1]} needs an approval policy (D-571, D-802): {raw}")
                 lines.append((raw[0], raw[1], raw[2:]))
     return lines
 
@@ -114,6 +116,12 @@ def apt_missing(names: list[str]) -> list[str]:
     return [name for name in names if name not in have]
 
 
+def wheel_tool(args: list[str]) -> tuple[Path, Path]:
+    """(the versioned install folder, the /usr/local/bin link) of a wheel-tool line."""
+    name, version = args[0], args[1]
+    return host(f"{TOOLS}/{name}-{version}"), host(f"/usr/local/bin/{name}")
+
+
 def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
     """Return a one-line description of the drift, or None when the host matches."""
     if kind == "file":
@@ -159,6 +167,16 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
     if kind == "apt":
         missing = apt_missing(args)
         return f"apt packages missing: {' '.join(missing)} ({' '.join(APT_INSTALL)})" if missing else None
+    if kind == "wheel-tool":
+        folder, link = wheel_tool(args)
+        tool = folder / "bin" / args[0]
+        if not tool.is_file():
+            return f"{args[0]} {args[1]} not installed in {folder}"
+        for tool in sorted((folder / "bin").iterdir()):
+            target = link.with_name(tool.name)
+            if not target.is_symlink() or Path(os.readlink(target)) != tool:
+                return f"{target} is not {args[0]} {args[1]}"
+        return None
     raise SystemExit(f"unknown kind: {kind}")
 
 
@@ -248,6 +266,30 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
             if result.returncode != 0:
                 raise RuntimeError(f"{' '.join(cmd[:2])}: {result.stderr.strip()[-400:]}")
         return f"installed {' '.join(missing)}"
+    if kind == "wheel-tool":
+        name, version, sha = args
+        folder, link = wheel_tool(args)
+        if not (folder / "bin" / name).is_file():
+            req = folder.with_name(folder.name + ".req")
+            req.parent.mkdir(parents=True, exist_ok=True)
+            req.write_text(f"{name}=={version} --hash=sha256:{sha}\n", encoding="utf-8")
+            result = subprocess.run(["python3", "-m", "pip", "install", "-q", "--no-deps", "--only-binary=:all:",
+                                     "--require-hashes", "--target", str(folder), "-r", str(req)],
+                                    capture_output=True, text=True, timeout=600)
+            req.unlink()
+            if result.returncode != 0:
+                shutil.rmtree(folder, ignore_errors=True)
+                raise RuntimeError(f"pip install {name}=={version}: {result.stderr.strip()[-400:]}")
+        done = []
+        link.parent.mkdir(parents=True, exist_ok=True)
+        for tool in sorted((folder / "bin").iterdir()):   # uv ships uv and uvx
+            target = link.with_name(tool.name)
+            tmp = target.with_name(target.name + ".rosy-tmp")
+            tmp.unlink(missing_ok=True)
+            tmp.symlink_to(tool)
+            os.replace(tmp, target)
+            done.append(target.name)
+        return f"{name} {version} at {folder}, linked {', '.join(done)}"
     raise SystemExit(f"unknown kind: {kind}")
 
 
@@ -258,6 +300,9 @@ def line_id(kind: str, args: list[str]) -> str:
 def repo_dirs(role: str) -> dict[str, Path]:
     if role not in ROLE_DIRS:
         raise SystemExit(f"role must be one of {', '.join(ROLE_DIRS)}")
+    if not (HERE / "host-state").is_dir():   # the /usr/local/sbin copy only checks; install reads the repo
+        raise SystemExit("install reads the repo: cd <checkout> && sudo python3 deploy/hosts/common/rosy-host-state "
+                         f"install {role} [--approve ...]")
     deploy = HERE.parent.parent
     return {"common": HERE / "host-state", "role": deploy / ROLE_DIRS[role] / "host-state", "deploy": deploy}
 

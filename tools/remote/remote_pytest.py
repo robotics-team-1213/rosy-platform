@@ -134,9 +134,10 @@ echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
 # The site PC (Ubuntu 26.04) has no system 3.12; `uv python install 3.12` puts one in ~/.local/bin.
 PY=/usr/bin/python3; "$PY" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null || PY=~/.local/bin/python3.12
+# D-802: uv is the one installer on every lab PC (host-state deploys it); no pip/venv fallback that differs per PC.
 UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-if [ -n "$UV" ]; then "$UV" venv -q --seed -p "$PY" "$N"
-else "$PY" -m venv "$N"; fi
+[ -n "$UV" ] || { echo "[remote] uv missing (D-802): sudo python3 deploy/hosts/common/rosy-host-state install <role> --approve uv"; exit 1; }
+"$UV" venv -q --seed -p "$PY" "$N"
 P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
