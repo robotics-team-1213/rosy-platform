@@ -1,4 +1,4 @@
-"""tools/land.py (with land_checks.py, land_queue.py) against throwaway git repos: a main checkout and a worktree."""
+"""tools/land.py with land_checks.py, land_queue.py and land_full.py, against throwaway repos: main plus a worktree."""
 
 from __future__ import annotations
 
