@@ -20,6 +20,8 @@ GRADLEW = ROOT / 'operations' / 'site_ui' / "cam" / ("gradlew.bat" if os.name ==
 
 def _gradle(probe: Path, log: Path) -> tuple[subprocess.Popen[str], object]:
     env = os.environ.copy()
+    if env.get('ROSY_ANDROID_HOME'):
+        env['ANDROID_HOME'] = env['ROSY_ANDROID_HOME']
     command = [
         str(GRADLEW), "-p", ".",
         "--project-cache-dir", str(probe.parent / "project-cache"),
