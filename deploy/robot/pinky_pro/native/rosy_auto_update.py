@@ -64,6 +64,7 @@ if RELEASE_TOOLS.is_dir() and str(RELEASE_TOOLS) not in sys.path:
     sys.path.append(str(RELEASE_TOOLS))
 
 import rosy_claim  # noqa: E402
+import rosy_transfer  # noqa: E402  (network load: paced tarball download)
 from signing import verify_signature  # noqa: E402
 
 
@@ -362,14 +363,12 @@ class Http:
         """Stream to ``destination``; return the sha256 of what was written."""
         response = self._open(url, {"Accept": "application/octet-stream"}, timeout)
         digest = hashlib.sha256()
-        size = 0
         try:
             with response, destination.open("wb") as handle:
                 status = getattr(response, "status", None) or response.code
                 if status != 200:
                     raise UpdateError(f"DOWNLOAD_HTTP: {status} for {url}")
-                while chunk := response.read(1024 * 1024):
-                    size += len(chunk)
+                for size, chunk in rosy_transfer.paced(response):
                     if size > limit:
                         raise UpdateError(f"DOWNLOAD_TOO_LARGE: {url}")
                     digest.update(chunk)

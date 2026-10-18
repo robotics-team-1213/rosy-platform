@@ -48,7 +48,7 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import map_plane_jpeg, rectify_jpeg
+from rosy_vision.preview_plane import map_plane_response, rectified_jpeg
 from rosy_vision.stream_demand import StreamDemand
 
 logger = logging.getLogger(__name__)
@@ -443,7 +443,7 @@ class IngestServer:
                 elif not settings.is_identity:
                     rectified_header = "true"
                 if rectified_header != "false":
-                    jpeg = rectify_jpeg(frame.jpeg, settings)
+                    jpeg = await rectified_jpeg(self, source, frame, settings)
             except (TypeError, ValueError, cv2.error):
                 return _http_response(422, b"rectification failed\n",
                                       extra={"X-Frame-State": "rectification-error"})
@@ -461,10 +461,9 @@ class IngestServer:
         })
 
     async def _map_plane_response(self, source, frame, age, lease=None):
-        from rosy_vision.preview_plane import map_plane_response
         return await map_plane_response(self, source, frame, age, lease,
                                         unavailable=_plane_unavailable, response=_http_response,
-                                        lens_header=_lens_header, warp=map_plane_jpeg)
+                                        lens_header=_lens_header)
 
     def _rate_limited(self, key: tuple[str, ...], interval_s: float) -> Response | None:
         now_mono = time.monotonic()
