@@ -9029,3 +9029,9 @@ osy-d395-s1d\`.
 - 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
 - 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
 - gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-18 · uncommitted · D-799 원격 pytest의 호스트 안 병렬(pytest-xdist)과 가벼운 호스트
+
+- 변경: 원격 venv에 `pytest-xdist==3.8.0`을 넣고, `tools/remote/xdist_plan.py`가 invocation마다 `-n W --dist loadfile` 또는 직렬을 고른다. 직렬 목록은 `tools/remote/serial_suites.txt`(rclpy·ROS_DOMAIN_ID·고정 포트·playwright·git·홈 디렉터리를 쓰는 묶음)와 브라우저·node id·경로 없음 규칙이다. job 잠금은 실제 워커 수를 적는다. 여유 메모리 4~6 GB인 pytest 호스트는 가벼운 호스트로, 하한을 넘는 호스트 뒤에서 큐의 작은 invocation을 직렬로, 자기 여유 GB의 `MemoryMax`로 돈다. 현장 PC는 그대로 맨 뒤다.
+- 증거: 노트북에서 `test/test_remote_pytest.py`·`test/test_known_failures.py`와 관련 시험(사용자 지시로 로컬 실행). xdist 3.8.0 실제 출력으로 known_failures 파싱을 확인했다. 시험 PC 측정은 아직 없다.
+- gate 변화: 없음. 시험 PC에서 7,151개 묶음의 직렬 대 `-n` 비교가 남았다.
