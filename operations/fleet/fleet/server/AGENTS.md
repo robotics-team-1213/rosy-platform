@@ -74,4 +74,4 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 
 ## Source responsibility holders (D-750)
 
-`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts. These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.
+`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts; D-798 `evidence/` proposals and evidence, `sitemap/` site map and teaching, `pose/` map pose and lane compliance, `recognition/` identity, sightings and roster, `rightofway/` signals, traffic and bays. These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.
