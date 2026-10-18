@@ -240,9 +240,20 @@ def prove(out, runtime, camera, controllers, calibration):
         app = create_app(config,services)
         commands, observations = [], []
         async def traced(scope, receive, send):
+            status = None
             async def delivered(message):
+                nonlocal status
+                if message['type'] == 'http.response.start':
+                    status = message['status']
                 if message['type'] == 'http.response.body' and message.get('body'):
                     body = json.loads(message['body'])
+                    if status is not None and status >= 400:
+                        diagnostic = dict(path=scope.get('path'),status=status,response=body,
+                            hold_reason=chain.session.hold_reason, owner=runtime.owner.recovery_state(),
+                            camera_accepted=camera.accepted,camera_rejected=camera.rejected,
+                            camera_age_ns=int(runtime.monotonic()*1e9)-camera.current()[0].received_at_ns)
+                        (out/'core-refusal.json').write_text(json.dumps(diagnostic,indent=2))
+                        print('OMX_POLICY_CHAIN_CORE_REFUSAL='+json.dumps(diagnostic),flush=True)
                     if scope.get('path') == '/api/v1/arm/actions' and body.get('accepted') is True:
                         commands.append(body['command_id'])
                     elif scope.get('path') == '/api/v1/arm/observations' and 'observation_id' in body:
