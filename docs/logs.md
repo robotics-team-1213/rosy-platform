@@ -9044,6 +9044,19 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
 - gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
 
+## 2026-10-18 · 5e3af70e6d · D-800 CORE 경유 OMX–LeRobot 연동
+
+- 변경: 기존 OMX owner와 watchdog을 유지하는 선택적 CORE arm 관측·후보·정지 API(v1.271), HTTP 전용 LeRobot Robot 및 공식 recorder 진입점을 추가했다. 설치 절차와 검증 기록을 연결했다.
+- 증거: 최종 코드의 원격 CORE/native ROS/실제 SDK 22 passed/0 skipped, 기존 UI 브라우저 45 passed/0 skipped. 독립 소스 리뷰와 안전 trailer·크기 검사 통과. 상세 출처는 validation/core-omx-lerobot-2026-10-18/result.md.
+- 추가 검증: 전체 영향 범위 22개 분할에서 27,638 passed/1,916 skipped와 safety symbol anchor 누락 1건을 확인했다. 8beeb47ef2에서 등록 보완 후 관련 계약 170 passed/0 skipped, NEW 0. 원래 실패 기록도 보존했다.
+- gate 변화: SIM 연동만 검증했다. 실물 정책 승인·Fleet lease 전달·설치 profile·작업 성공·배포 수용을 승격하지 않았다.
+
+## 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
+
+- 변경: 사용자 커밋·머지 요청에 따라 main을 통합하고, 출처·체크섬을 포함하는 client wheel workflow와 GET-only preflight를 추가했다. 사용자가 실물 대상·승인 정책이 없다고 답했으므로 실물 target의 차단 결과를 유지했다.
+- 증거: CORE/native ROS/실제 SDK 22 passed, 실제 workflow build·오프라인 wheel 설치 보완 후 1 passed/0 skipped/NEW 0. 독립 계약 소스 리뷰 완료. validation/core-omx-deployment-2026-10-18/result.md 참조.
+- gate 변화: 배포 준비 코드·시험이며 장치 설치·승인·실물 구동·GitHub CI 수용은 아니다. 로컬 착지는 tools/land.py 검증을 따르고 push는 하지 않는다.
+
 ## 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
 
 - 변경: 사이트 Compose에 네 번째 서비스 `postgres`를 파생 문맥·로그 저장소로 추가한다(원장 `fleet.sqlite3`는 그대로 SQLite 하나, D-750). 미러 대상은 D-640 숙고 저널의 터미널 run이다. sink와 그 CLI 표면은 `operations/fleet/fleet/server/ledger/`(등록 유닛)에 둔다: `context_log.py`의 `ContextLog`가 `rosy_deliberation_run`에 best-effort로 기록하고(SQLite 커밋 뒤에만 호출, 실패는 경고와 `False`, 원장 트랜잭션 불변), `context_options.py`가 `--context-db-*`(기본 포트 5432)와 `activate_from_args`를 들며, `deliberation_journal.py`(같은 홀더로 이동, 신원 `fleet.server.ledger.deliberation_journal`)가 `context_log` 파라미터와 `_mirror`를 갖고 프로세스 활성 sink(`set_active`/`active`)를 기본값으로 집는다. `cli.py`는 `add_cli_arguments`·`activate_from_args`를 한 줄씩만 부르고(`app.py`는 손대지 않는다 — D-766 동결 파일), 동결을 맞추려 `_ai_first`·`_stuck_resolver_enrolled`를 `fleet/stuck/cli_config.py`로 옮긴다. `deploy/site/compose.yaml`에 postgres(read_only·tmpfs, `cap_drop: [ALL]`, healthcheck `pg_isready`, `pg_data` 볼륨, `postgres_password` secret)와 Fleet의 `depends_on`·secret·`--context-db-*`를 추가하고, `.env.example`에 `ROSY_SITE_PG_MAX_CONNECTIONS`, `requirements-fleet.txt`에 `psycopg[binary]==3.2.3`을 넣는다. 서명 candidate는 `build_candidate.py`의 `MIRRORED_IMAGES`(postgres:16-alpine, 해석한 digest를 manifest에 기록)로 네 이미지를 포함하고, `verify_candidate.py`·`site_update_io.py`·`rosy_site_autoupdate.py`·`site_functional_setup.py`의 4-이미지 목록과 prune 정규식을 넓힌다. ADR [D-796](../adr/D-796-site-context-log-store-postgres-mirror.md) 파일과 Log 행, `platform-folder-responsibilities.md`의 D-750 예외 한 줄, `deploy/site/README.md`를 함께 남긴다.

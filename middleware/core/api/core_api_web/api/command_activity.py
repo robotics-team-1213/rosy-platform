@@ -22,6 +22,7 @@ _log = logging.getLogger(__name__)
 
 #: (method, path regex, source). Source names land in `power.wake` events.
 COMMAND_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("POST", r"/api/v1/arm/(actions|stop)", "arm"),
     ("POST", r"/api/v1/teleop", "teleop"),
     ("POST", r"/api/v1/mode", "mode"),
     ("POST", r"/api/v1/navigation/(goal|home|cancel)", "navigation"),
