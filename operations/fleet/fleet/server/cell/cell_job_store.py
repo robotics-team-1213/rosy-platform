@@ -18,10 +18,10 @@ from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import step_action_kind, step_grant_digest
-from . import cell_sheet_checkpoints as sheets, step_ledger_schema
+from . import cell_arm_jobs as arm_jobs, cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 
-_MIGRATION_VERSION = 2  # 2: TRIP steps (D-763 7); an older Fleet refuses this ledger, never misreads it
+_MIGRATION_VERSION = 4  # 2: TRIP (D-763 7); 3: per-arm tables; 4: multi-arm marker/placement (D-779 2-4)
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
@@ -55,11 +55,11 @@ def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason:
     if hold_reason is not None:
         generation = connection.execute(
             "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()[0]
-        for job in connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE status IN ('READY', 'ACTION_SUCCEEDED')").fetchall():
+        for job in arm_jobs.single_arm_jobs(connection, "READY", "ACTION_SUCCEEDED"):
             CellJobStore._hold_in_transaction(
                 connection, job, reason=hold_reason, claim_phase="HELD", actor_id="site-stop",
                 event_key=f"site-stop:{generation}", detail={}, now=now, strict=False)
+        arm_jobs.site_stop(connection, now=now, hold_reason=hold_reason)  # D-779 §5: per arm
     connection.execute(
         "UPDATE fleet_action_claims SET phase='HELD', lease_until=NULL WHERE owner_kind='mission' "
         "AND phase='CLAIMED' AND owner_id IN (SELECT mission_id FROM fleet_cell_jobs)")
@@ -155,17 +155,17 @@ class CellJobStore:
                               request_digest: str, submission: Mapping[str, Any]) -> dict[str, Any]:
         """Insert a fully recompiled proposal and its ordered steps in caller's transaction."""
         mission_id = _nonempty("mission_id", mission_id)
-        proposal_principal_id = _nonempty(
-            "proposal_principal_id", proposal_principal_id, limit=96,
-        )
+        proposal_principal_id = _nonempty("proposal_principal_id", proposal_principal_id, limit=96)
         request_key = _nonempty("request_key", request_key, limit=160)
         if (not isinstance(request_digest, str) or len(request_digest) != 64
                 or any(char not in "0123456789abcdef" for char in request_digest)):
             raise ValueError("request_digest must be lowercase SHA-256")
-        if connection.execute(
-                "SELECT 1 FROM fleet_missions WHERE mission_id=?", (mission_id,),
-        ).fetchone() is not None:
+        if connection.execute("SELECT 1 FROM fleet_missions WHERE mission_id=?", (mission_id,)).fetchone() is not None:
             raise ValueError("Cell Job mission_id is already used by the legacy Mission journal")
+        if "arms" in submission:  # D-779 stages 2-4: a multi-arm Job keeps placement in its own tables
+            arm_jobs.create(connection, mission_id=mission_id, proposal_principal_id=proposal_principal_id,
+                            request_key=request_key, request_digest=request_digest, submission=submission)
+            return CellJobStore._get(connection, mission_id)
         required = {
             "job_id", "workcell_id", "instance_id", "recipe_digest", "cell_digest",
             "process_artifact_digest", "job", "steps", "resources", "ledger_markers",
@@ -240,9 +240,9 @@ class CellJobStore:
             rows = connection.execute(
                 """SELECT mission_id, current_step_index, authority_epoch, dispatch_generation
                    FROM fleet_cell_jobs WHERE status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
-                     AND (authority_epoch != ? OR dispatch_generation != ?)""",
-                (control["authority_epoch"], control["generation"]),
-            ).fetchall()
+                     AND (authority_epoch != ? OR dispatch_generation != ?)
+                     AND mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)""",
+                (control["authority_epoch"], control["generation"])).fetchall()
             for job in rows:
                 # 1c N1: an Action that was in flight across the restart has an unknown outcome;
                 # UNKNOWN claims put it on the readback path (and block rearm until resolved).
@@ -267,9 +267,9 @@ class CellJobStore:
                                 "authority_epoch": control["authority_epoch"],
                                 "dispatch_generation": control["generation"],
                             })
-            checkpoint_holds = sheets.recover_ready(connection, now, self._event)
+            held = sheets.recover_ready(connection, now, self._event) + arm_jobs.recover(connection, now, control)
             connection.commit()
-        return len(rows) + checkpoint_holds
+        return len(rows) + held
 
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)

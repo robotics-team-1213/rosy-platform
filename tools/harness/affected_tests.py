@@ -11,7 +11,8 @@ harness module that owns it, adds reverse dependents found through
 path, and an always-on guard set. Shared foundations, CI/test configuration,
 source layout and guard rules, committed folder moves and removed modules, and
 files that map to nothing escalate to the full tier: unknown means everything,
-never nothing. ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
+never nothing. Foundation modules may narrow to known test readers; unresolved runtime consumers,
+config files and CI workflows retain FULL (``affected_narrow.NARROWABLE_TRIGGERS``). ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
 locally by default: ``--run`` on a FULL selection runs only the guards and the
 directly affected suites and says so; ``--full`` overrides. Suites whose test files share a basename run as separate pytest
 invocations (gateway and sensing both ship ``test_battery.py``).
@@ -30,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 import yaml
+import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 
 HARNESS = PurePosixPath("tools/harness")
 
@@ -82,6 +84,9 @@ FULL_SUITES = (
     "learning/training/pinky/test",
     "learning/registry/policy/test",
     "learning/training/omx/test",
+    "learning/training/world_model/test",
+    "learning/evaluation/world_model/test",
+    "operations/prediction/world_model/test",
     "learning/curation/omx/test",
     "learning/curation/pinky/test",
     "middleware/core/events/test",
@@ -99,26 +104,23 @@ ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
 SUITE_SHARDS = {"fleet": 4, "sensing": 2}
-# Main CI 38056130519 (2026-10-10), seconds per slow Fleet file. These only
-# choose runners; every discovered test still runs exactly once.
+# Seconds per Fleet file of 5 s or more, the mean of CI 38807338775, 38711952782 and 38830518002
+# (2026-10-15/16, timestamps of the -v result lines); others weigh 1. These only choose runners;
+# every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
-FLEET_TEST_SECONDS = {
-    "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
-    "test_blocks.py": 89, "test_start_point_browser.py": 45,
-    "test_console_roles_browser.py": 28, "test_password_session.py": 28,
-    "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
-    "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
-    "test_signal_phase.py": 13, "test_trip_runner.py": 11,
-    "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
-}
+FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
-        ["learning/curation/omx/test"], ["learning/curation/pinky/test"]], "ros": "none"},
+        ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
+        ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
+        ["operations/prediction/world_model/test"]], "ros": "none"},
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
-        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"]], "ros": "none"},
+        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"], [
+        "middleware/core/gateway/test/test_account_pipeline.py"
+    ]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
@@ -400,6 +402,8 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
     for path in changed:
         trigger = None if any(_match(path, p) for p in NOT_TRIGGERS) else next(
             (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        if trigger and affected_narrow.add_readers(repo, path, trigger, add):
+            continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
             # these suites (the escalated module's own tests, its referencing tests).
@@ -409,7 +413,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
                 add(path, f"changed test file {path}")
             continue
         module = repo.module_for(path)
-        referencing = repo.referencing_tests(path)
+        referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
         for test in referencing:
             add(test, f"references {path}")
         if module:
@@ -523,7 +527,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
     # One suite that cannot import (a wheel missing on this host) must not hide
     # the rest of a packed invocation; the collection error still fails the run.
-    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors"]
+    # Same ROS launch_testing block as CI (test/known_failures.py NO_ROS_LAUNCH_PLUGINS).
+    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors",
+            "-pno:launch_testing", "-pno:launch_ros"]
 
 
 def render(sel: Selection) -> str:

@@ -20,10 +20,12 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_measured_calibration_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",
     "test/test_fleet_workflows_browser.py",
+    "test/test_host_recovery_browser.py",
     "test/test_overhead_tracking_browser.py",
     "test/test_peer_picker_browser.py",
     "operations/fleet/test/*_browser.py",

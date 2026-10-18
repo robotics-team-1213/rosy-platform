@@ -3,7 +3,9 @@
 reconcile reads the current step back from the device owner now; resume re-approves a HOLD Job
 under the current fence; cancel ends it and releases its claims in one transaction. Resume and
 cancel need a named operator (the D-276 site principal model); the Rosy Cell service principal
-and viewers are refused like they are for admit.
+and viewers are refused like they are for admit. A multi-arm Job (D-779) resumes every arm and
+cancels as a whole through the same routes; reconcile reads back every arm Action in flight.
+``/arms/{arm_role}/resume`` resumes one held arm of a multi-arm Job (D-779 §6).
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from contextlib import closing
 
 from fastapi import Depends, HTTPException, Request
 
+from .cell_arm_store import ArmJobStore
 from .cell_job_store import CellJobStore
 from .mission_routes import MissionAdmitRequest, redact_cell_job
 from .mission_store import MissionConflict
@@ -27,6 +30,12 @@ def install_cell_job_routes(app, *, cell_job_store: CellJobStore, proposal_store
             return HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
         return HTTPException(status_code=409, detail={"code": "CELL_JOB_RECOVERY_REFUSED",
                                                       "message": str(exc)})
+
+    arm_jobs = ArmJobStore(cell_job_store)
+
+    def store_for(mission_id: str):
+        job = cell_job_store.get(mission_id)
+        return arm_jobs if job is not None and "arms" in job else cell_job_store
 
     @app.get("/api/fleet/resource-claims", dependencies=read_guard, tags=["fleet-cell-jobs"])
     def resource_claims(principal: SitePrincipal = Depends(require_viewer)) -> dict:
@@ -62,8 +71,22 @@ def install_cell_job_routes(app, *, cell_job_store: CellJobStore, proposal_store
     def cell_job_resume(mission_id: str, body: MissionAdmitRequest,
                         principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
-            job = cell_job_store.resume(mission_id, actor_id=principal.principal_id,
-                                        expected_generation=body.expected_generation)
+            job = store_for(mission_id).resume(mission_id, actor_id=principal.principal_id,
+                                               expected_generation=body.expected_generation)
+        except (KeyError, MissionConflict, ValueError) as exc:
+            raise refused(exc) from exc
+        return {"job": redact_cell_job(job, principal)}
+
+    @app.post("/api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume", dependencies=operator_guard,
+              tags=["fleet-cell-jobs"])
+    def cell_job_arm_resume(mission_id: str, arm_role: str, body: MissionAdmitRequest,
+                            principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """One held arm of a multi-arm Job (D-779 §6); a single-arm Job or another arm is refused."""
+        if cell_job_store.get(mission_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
+        try:
+            job = arm_jobs.resume_arm(mission_id, arm_role=arm_role, actor_id=principal.principal_id,
+                                      expected_generation=body.expected_generation)
         except (KeyError, MissionConflict, ValueError) as exc:
             raise refused(exc) from exc
         return {"job": redact_cell_job(job, principal)}
@@ -73,7 +96,7 @@ def install_cell_job_routes(app, *, cell_job_store: CellJobStore, proposal_store
     def cell_job_cancel(mission_id: str,
                         principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
-            job = cell_job_store.cancel(mission_id, actor_id=principal.principal_id)
+            job = store_for(mission_id).cancel(mission_id, actor_id=principal.principal_id)
         except (KeyError, MissionConflict, ValueError) as exc:
             raise refused(exc) from exc
         return {"job": redact_cell_job(job, principal)}

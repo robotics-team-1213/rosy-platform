@@ -22,7 +22,8 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `crosswalk/report.py` | D-573 6 개정 `line_follow.crosswalk` view, gate on or off: own per-epoch camera zone list (dropped only when the back-off reach is past), watched-ground run with blind-gap restart; `null` / `inside` / `ahead` / `unknown` |
 | `crosswalk/zone.py` | D-491 camera crosswalk zones the IR lane guard may rest in, anchored in odom at the image pose |
 | `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py` | Compatibility exports of the old import paths (moved 2026-10-14); new code imports `core_features.line_follow.crosswalk.*` |
-| `model.py` | Modes, observations, config (incl. D-407 `recovery_*`, URDF `body_*`), decisions |
+| `model.py` | Config (incl. D-407 `recovery_*`, URDF `body_*`) and decisions; re-exports the names of `observation.py` |
+| `observation.py` | `LineFollowMode`, the `LineObservation` record and its validation, `_finite` (split from `model.py`, D-766) |
 | `recovery/stuck/stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
 | `recovery/stuck/stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
 | `recovery/stuck/progress_watch.py`, `trail.py` | ForwardTrail (issued twists, D-407 rear blind zone) and D-407 개정 / D-607 ROS-free odom-vs-issued-twist watch (off: `progress_watch_enabled`, creep: `no_progress_creep_enabled`, both default false): `no_progress` / `dithering` while commanded but still (half URDF body length, `no_progress_yaw_deg`, restuck drift); intentional gate holds reset it |

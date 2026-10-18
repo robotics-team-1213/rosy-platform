@@ -29,12 +29,17 @@ CONSOLE_ASSETS = {
     "console.js": ("console.js", "application/javascript"),
     "inbox.js": ("inbox.js", "application/javascript"),
     "work-view.js": ("work/work-view.js", "application/javascript"),
+    "work.css": ("work/work.css", "text/css"),
     "channel-request-view.js": ("work/channel-request-view.js", "application/javascript"),
     "incident-view.js": ("incident-view.js", "application/javascript"),
     "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
     "install.js": ("install.js", "application/javascript"),
+    "measured-calibration-view.js": ("calibration/measured-calibration-view.js", "application/javascript"),
+    "measured-calibration.css": ("calibration/measured-calibration.css", "text/css"),
     "host-services.js": ("host-services.js", "application/javascript"),
+    "host-health.js": ("shared/host-health.js", "application/javascript"),
     "peer-picker.js": ("peer-picker.js", "application/javascript"),
+    "device-discovery.js": ("devices/device-discovery.js", "application/javascript"),
     "address-drift.js": ("shared/address-drift.js", "application/javascript"),
     "state-age.js": ("state-age.js", "application/javascript"),
     "authorization.js": ("shared/authorization.js", "application/javascript"),
@@ -43,17 +48,21 @@ CONSOLE_ASSETS = {
     "login-page.js": ("shared/login-page.js", "application/javascript"),
     "profile-page.js": ("shared/profile-page.js", "application/javascript"),
     "account-page.js": ("shared/account-page.js", "application/javascript"),
+    "policy-page.js": ("work/policy-page.js", "application/javascript"),
+    "policy-model.js": ("work/policy-model.js", "application/javascript"),
+    "policy.css": ("work/policy.css", "text/css"),
     "account-permissions.js": ("shared/account-permissions.js", "application/javascript"),
     "login-return.js": ("shared/login-return.js", "application/javascript"),
     "password-login.css": ("shared/password-login.css", "text/css"),
-    "camera-pairing.js": ("camera-pairing.js", "application/javascript"),
+    "camera-pairing.js": ("devices/camera-pairing.js", "application/javascript"),
     "camera-peer.js": ("camera-peer.js", "application/javascript"),
-    "field-layers.js": ("field-layers.js", "application/javascript"),
-    "field-view.js": ("field-view.js", "application/javascript"),
+    "field-layers.js": ("calibration/field-layers.js", "application/javascript"),
+    "field-view.js": ("calibration/field-view.js", "application/javascript"),
     "field-warp.js": ("shared/field-warp.js", "application/javascript"),
     "formation.js": ("formation.js", "application/javascript"),
     "motion-readiness.js": ("motion-readiness.js", "application/javascript"),
     "line-stuck.js": ("line-stuck.js", "application/javascript"),
+    "stuck-evidence.js": ("shared/stuck-evidence.js", "application/javascript"),
     "trip-replan.js": ("trip-replan.js", "application/javascript"),
     "link-tag.js": ("link-tag.js", "application/javascript"),
     "site-path.js": ("site-path.js", "application/javascript"),
@@ -61,7 +70,7 @@ CONSOLE_ASSETS = {
     "camera-warp.js": ("camera-warp.js", "application/javascript"),
     "camera-backdrop.js": ("camera-backdrop.js", "application/javascript"),
     "map-fit.js": ("shared/map-fit.js", "application/javascript"),
-    "map-fit-view.js": ("map-fit-view.js", "application/javascript"),
+    "map-fit-view.js": ("calibration/map-fit-view.js", "application/javascript"),
     "map-view.js": ("map-view.js", "application/javascript"),
     "map-datum.js": ("map-datum.js", "application/javascript"),
     "poll-gate.js": ("shared/poll-gate.js", "application/javascript"),
@@ -69,7 +78,7 @@ CONSOLE_ASSETS = {
     "queues.js": ("queues.js", "application/javascript"),
     "card-trip.js": ("card-trip.js", "application/javascript"),
     "power-health-view.js": ("power-health-view.js", "application/javascript"),
-    "enrollment.js": ("enrollment.js", "application/javascript"),
+    "enrollment.js": ("devices/enrollment.js", "application/javascript"),
     "signals.js": ("signals.js", "application/javascript"),
     "site-map.css": ("site-map.css", "text/css"),
     "site-map.js": ("site-map.js", "application/javascript"),
@@ -91,6 +100,8 @@ CONSOLE_ASSETS = {
     "device-watch.js": ("device-watch.js", "application/javascript"),
     "device-watch.css": ("device-watch.css", "text/css"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
+    "power-action.js": ("shared/power-action.js", "application/javascript"),
+    "area-nav.js": ("shared/area-nav.js", "application/javascript"),
 }
 
 CONSOLE_CSP = (
@@ -114,6 +125,11 @@ def install_static_routes(app: FastAPI) -> None:
     @app.get("/console/accounts", include_in_schema=False)
     def console_accounts_page():
         return FileResponse(WEB_ROOT / "accounts.html", media_type="text/html",
+                            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
+
+    @app.get("/console/policy", include_in_schema=False)
+    def console_policy_page():
+        return FileResponse(WEB_ROOT / "work/policy.html", media_type="text/html",
                             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
 
     @app.get("/console/profile", include_in_schema=False)

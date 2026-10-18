@@ -60,6 +60,89 @@ def test_ci_provides_the_site_account_oauth_runtime():
     assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
 
 
+def test_fleet_account_oauth_pin_matches_site_runtime():
+    import ast
+    import re
+
+    site = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
+    pin = re.search(r'^oauthlib==[^\s]+', site, re.MULTILINE).group()
+    tree = ast.parse((ROOT / 'operations/fleet/setup.py').read_text(encoding='utf8'))
+    requirements = next(ast.literal_eval(keyword.value) for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) for keyword in node.keywords
+                        if keyword.arg == 'install_requires')
+    assert pin in requirements, 'Fleet wheel and site account runtime must agree'
+
+
+def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkeypatch):
+    import json
+    import yaml
+    from types import SimpleNamespace
+    from tools.harness.affected_tests import CI_FULL_MATRIX
+
+    browser_node = 'middleware/core/gateway/test/test_account_pipeline.py'
+    core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
+    assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    assert 'test_account_pipeline.py' in install['if']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['middleware/core/gateway/test'], [browser_node]]))
+    monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
+    # The matrix step streams each pytest through Popen (D-762 stage 1); a green run prints nothing here.
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(()), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == 0
+    assert len(calls) == 2
+    assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
+    assert browser_node in calls[1][0]
+    assert calls[1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+
+
+@pytest.mark.parametrize('paths, expected', [
+    (['test/test_a.py', 'test/test_b.py'], 1),  # root-test-*of3 since 2026-10-11: whole session skipped
+    (['test/test_only_skips.py'], 0),  # one selected module that only skips is not a failure
+])
+def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    out = ['collecting ... collected 0 items / 1 skipped\n', '========== 1 skipped in 0.54s ==========\n']
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([paths]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append(args) or SimpleNamespace(stdout=iter(out), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+    assert ('collected 0 items' in capsys.readouterr().out.split('::endgroup::')[-1]) == bool(expected)
+    # The launch_testing hook is what turns one importorskip into a skipped session.
+    assert calls[0][-2:] == ['-pno:launch_testing', '-pno:launch_ros']
+
+
+def test_no_test_module_defines_a_nose_style_setup_function():
+    # CI's apt pytest 7.4 calls a module-level plain setup()/teardown() once with the module as
+    # its argument (nose compatibility), so a helper by that name gets the module as tmp_path.
+    import ast
+
+    found = []
+    for path in ROOT.rglob('test_*.py'):
+        if any(part in {'.git', '.worktrees', 'build', 'install', 'log', 'node_modules'} for part in path.parts):
+            continue
+        tree = ast.parse(path.read_text(encoding='utf8'))
+        found += [f'{path.relative_to(ROOT).as_posix()}:{node.lineno}' for node in tree.body
+                  if isinstance(node, ast.FunctionDef) and node.name in {'setup', 'teardown'}
+                  and not node.decorator_list]
+    assert found == [], 'rename these helpers (e.g. _setup): ' + ', '.join(found)
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
@@ -214,6 +297,15 @@ def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
     assert 'cryptography.__version__ == "50.0.0"' in script
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")
+
+
+def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
+    """A lost runner held run 38588670328 for 45 min; without a bound it can hold a run for 6 h."""
+    import yaml
+
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    for name, job in jobs.items():
+        assert 0 < int(job.get("timeout-minutes", 0)) <= 30, name
 
 
 def test_merge_group_runs_the_full_tier_against_the_group_base():

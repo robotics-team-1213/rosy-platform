@@ -50,24 +50,26 @@ def narrow_clearance(corridor, radius):
 
 
 class Scale:
-    """Mixin. Call _scale_update(left, right) after filtered L/R."""
+    """Mixin. Call _scale_update(left, right) after filtered L/R.
+
+    ROS-free (D-171): the node's ``publish_float`` builds each Float32.
+    """
 
     def _scale_update(self, left, right):
-        from std_msgs.msg import Float32
         if not bool(self.get_parameter('auto_map').value):
-            self.map_pub.publish(Float32(data=float(self.map_range)))
-            self.open_max_pub.publish(Float32(data=float(self.open_max)))
-            self.corr_pub.publish(Float32(data=-1.0))
-            self.narrow_pub.publish(Float32(data=-1.0))
+            self.publish_float(self.map_pub, float(self.map_range))
+            self.publish_float(self.open_max_pub, float(self.open_max))
+            self.publish_float(self.corr_pub, -1.0)
+            self.publish_float(self.narrow_pub, -1.0)
             return
         w = corridor_width(left, right)
         if w is None:
-            self.map_pub.publish(Float32(data=float(self.map_range)))
-            self.open_max_pub.publish(Float32(data=float(self.open_max)))
+            self.publish_float(self.map_pub, float(self.map_range))
+            self.publish_float(self.open_max_pub, float(self.open_max))
             # Finite far walls mean open; missing walls mean unknown, not fast.
             known_open = (_finite(left, .05, 12.) and _finite(right, .05, 12.)
                           and left+right > .70 and min(left, right) > self.profile.turn_clear)
-            self.narrow_pub.publish(Float32(data=-1.0 if known_open else 0.0))
+            self.publish_float(self.narrow_pub, -1.0 if known_open else 0.0)
             self._corr_buf.clear()
             return
         generation = self.observations.generation('lidar')
@@ -77,7 +79,7 @@ class Scale:
         if len(self._corr_buf) > 40:
             del self._corr_buf[0]
         if len(self._corr_buf) < 8:
-            self.narrow_pub.publish(Float32(data=0.0))
+            self.publish_float(self.narrow_pub, 0.0)
             return
         s = sorted(self._corr_buf)
         med = s[len(s) // 2]
@@ -85,17 +87,17 @@ class Scale:
         hi_m = float(self.get_parameter('map_range_max').value)
         map_r = fit_map(med, lo=lo_m, hi=hi_m)
         open_m = fit_open_max(med, lo=max(0.16, lo_m), hi=min(0.55, hi_m + 0.10))
-        self.corr_pub.publish(Float32(data=float(med)))
+        self.publish_float(self.corr_pub, float(med))
         clear = narrow_clearance(med, self.robot_r)
-        self.narrow_pub.publish(Float32(data=float(clear)))
+        self.publish_float(self.narrow_pub, float(clear))
         changed = (
             abs(map_r - self.map_range) >= 0.02
             or abs(open_m - self.open_max) >= 0.03
         )
         self.map_range = map_r
         self.open_max = open_m
-        self.map_pub.publish(Float32(data=float(map_r)))
-        self.open_max_pub.publish(Float32(data=float(open_m)))
+        self.publish_float(self.map_pub, float(map_r))
+        self.publish_float(self.open_max_pub, float(open_m))
         if changed:
             self.get_logger().info(
                 f'auto map corridor={med*100:.0f}cm → map={map_r*100:.0f}cm '

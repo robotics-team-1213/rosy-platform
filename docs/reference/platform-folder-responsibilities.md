@@ -56,7 +56,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | ui | 로봇 쪽 화면 집 | 1 | `middleware/robot_ui`. 권한은 자식 `robot`, `pilot`, `face`에 있다. 각각 Rosy Robot, Rosy Pilot, 얼굴 LCD |
 | ui | 현장 화면 집 | 11 | `operations/site_ui`. 권한은 자식 `console`, `cam`에 있다. 각각 Rosy Fleet 원본과 Rosy Cam |
 
-`middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
+`middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측은 D-782 기반 위치(`operations/prediction`, `learning/{training,evaluation}/world_model`)에만 둔다.
 
 ## 폴더 이름과 묶음
 
@@ -73,7 +73,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 5 | `middleware/robot_ui`, `operations/site_ui` | 검증 기록 S5. 설치 이름은 `dashboard`, `emotion`, `fleet.server.web`, Rosy Cam |
 | 6 | `operations/overhead`, `operations/signal_observation`, `middleware/perception/front_camera` | D-748. 검증 기록 S6. 패키지 `rosy_vision` |
 | 7 | `action_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 facade | D-749. 검증 기록 S7. 폴더 이름 `lane_rules`는 쓰지 않는다 |
-| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나 |
+| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나. 사이트 문맥·로그 미러(D-796)는 원장 밖 파생 저장소다 |
 | 9 | 호스트 도구를 `tools/sim`, `tools/calibration`, `tools/validation`로 | D-751. 검증 기록 S9. `middleware/perception/tools/device`의 hotpath·IR 측정은 그 자리에 남긴다 |
 | 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | D-752. 검증 기록 S10. 소비자는 `rosy.world.state.projections.map_pose`를 직접 import |
 
@@ -258,7 +258,7 @@ D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제
 
 현재 World 구현은 `ObservationSnapshot`과 관측·운영자 pin·odom을 합성하는 `MapPoseTracker`다. Fleet의 `MapPoseService`, trip admission/progress/ports, swarm anchor, lane compliance, path history가 `rosy.world.state.projections.map_pose`를 직접 소비한다. `source=bridged`는 마지막 관측에서 odom으로 잇는 dead reckoning이며, 행동 후보를 넣고 미래 상태·불확실성을 내는 action-conditioned rollout이 아니다. `road_region`은 카메라 구역 입력의 시각·프레임·보정·근거 검사이고 주행이 아니다(D-665). 관측 타입의 정본은 `core_common.observation`이다(D-667). Situation은 현재 stuck/traffic/incident 사실과 일부 analyzer의 제한된 WAIT/BACK_AND_RETRY 제안을 별도로 출력한다. 기존 제안 출력을 모두 사실 또는 새 공통 assessment로 집계하지 않는다.
 
-행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
+행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. D-782(Proposed)가 그 항목을 OMX 팔 기준으로 정했고, 사용자 요청(2026-10-17)으로 기반을 만들었다. `contracts/learning`의 `prediction.py`(요청·결과·M1 artifact·단일 forward), `learning/curation/omx/world_model_dataset.py`(W1), `learning/training/world_model`(M1), `learning/evaluation/world_model`(두 기준선 수용), `operations/prediction/world_model`(검사기·그림자 기록)이다. 예측은 REJECT·HOLD 근거로만 쓰며 Fleet admission·owner에 결선하지 않았다(W4는 사용자 승인·D-430 Safety 리뷰·D-773 A4 뒤). `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
 
 이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 90개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 추적 파일이 없는 `middleware/ui`, `middleware/execution`, `operations/execution`, `operations/vision`, `middleware/perception/vision`도 소유자가 아니다. 현재 경로는 `robot_ui`, `robot_execution`, `site_execution`, `overhead`, `front_camera`다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Decision/Console source 분리는 완료했고 기존 Fleet 배포·transaction·serving을 유지한다. 별도 배포 패키지 생성과 행동 조건부 World model은 이번 범위가 아니다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 확인한다.
 

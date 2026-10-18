@@ -17,6 +17,7 @@ from core_common.protocol.schemas import (
     LocalStopRequest,
     StopRequestSource,
 )
+from core_common.protocol.workcell_barrier import CoordinatorStopReason
 
 from .action_runner import ActionRunner, action_grant_digest, parse_action_grant
 from .local_stop import LocalStopBlocked, LocalStopController
@@ -34,10 +35,13 @@ class ActionApi:
 
     def __init__(self, runner: ActionRunner, *, stop_api: Any | None = None,
                  recovery_api: Any | None = None,
-                 identity: Mapping[str, Any] | None = None) -> None:
+                 identity: Mapping[str, Any] | None = None,
+                 coordinator_api: Any | None = None) -> None:
         self.runner = runner
         self.stop_api = stop_api
         self.recovery_api = recovery_api
+        # D-780 1: per-operation coordinator peer roles; None keeps every Fleet-only path as before.
+        self.coordinator_api = coordinator_api
         # Read-only owner identity (D-390 §5): the simulation composition reports simulation=True;
         # an owner without one answers UNKNOWN_OPERATION, so Fleet never opens dispatch to it.
         self.identity = dict(identity) if identity is not None else None
@@ -76,11 +80,21 @@ class ActionApi:
         if not isinstance(version, int) or isinstance(version, bool) or version not in {1, 2}:
             return self._error("UNSUPPORTED_VERSION", "version must equal 1 or 2", status=400)
         operation = request.get("operation")
+        if self.coordinator_api is not None:
+            routed = self.coordinator_api.route(self, request, peer_uid=peer_uid, version=version)
+            if routed is not None:
+                return routed
         try:
             if operation == "SubmitAction":
                 if set(request) != {"version", "operation", "grant"}:
                     raise ValueError("SubmitAction contains unsupported fields")
                 grant = parse_action_grant(request["grant"])
+                if self.coordinator_api is None and (
+                        getattr(grant, "pair_id", None) is not None
+                        or getattr(getattr(grant, "cell_transfer", None), "barriers", None)):
+                    # D-780: pair and barrier plans need a coordinator peer; refuse before any journal row.
+                    return self._error("BARRIERS_UNSUPPORTED", "this owner has no workcell coordinator",
+                                       status=409, version=version)
                 if version < MIN_SUBMIT_VERSION_BY_KIND.get(grant.action_kind, 1):
                     return self._error("UNSUPPORTED_VERSION",
                                        f"{grant.action_kind} requires protocol version 2",
@@ -218,6 +232,9 @@ class LocalStopApi:
                 stop_request = LocalStopRequest.model_validate({
                     key: request[key] for key in expected - {"version", "operation"}
                 })
+                if (source is StopRequestSource.COORDINATOR
+                        and stop_request.reason not in {item.value for item in CoordinatorStopReason}):
+                    raise ValueError("coordinator stop reason must be a CoordinatorStopReason code")
                 cancellations = []
                 callback = None
                 if self.cancel_active is not None:
@@ -298,7 +315,13 @@ class UnixActionServer:
             raise ValueError("UDS socket mode is fixed at 0660")
         self.socket_mode = socket_mode
         self._stop = threading.Event()
+        self._serving = threading.Event()
         self._socket: socket.socket | None = None
+
+    @property
+    def is_serving(self) -> bool:
+        """A requested stop closes readiness before the accept thread finishes."""
+        return self._serving.is_set() and not self._stop.is_set()
 
     def serve_forever(self) -> None:
         if not hasattr(socket, "SO_PEERCRED"):
@@ -316,6 +339,7 @@ class UnixActionServer:
             os.chmod(self.socket_path, self.socket_mode)
             listener.listen(8)
             listener.settimeout(0.5)
+            self._serving.set()
             while not self._stop.is_set():
                 try:
                     connection, _ = listener.accept()
@@ -334,6 +358,7 @@ class UnixActionServer:
                         # Keep the owner and journal alive; never replay the request.
                         continue
         finally:
+            self._serving.clear()
             listener.close()
             self._socket = None
             if self.socket_path.exists() and self.socket_path.is_socket():

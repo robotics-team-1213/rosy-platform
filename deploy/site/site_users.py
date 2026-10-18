@@ -78,7 +78,8 @@ def validate_users_document(document: object) -> list[dict[str, str]]:
     for entry in entries:
         keys = set(entry) if isinstance(entry, Mapping) else set()
         if (not {"principal_id", "role"} <= keys
-                or not keys <= {"principal_id", "role", "token_sha256", "login", "password_scrypt"}
+                or not keys <= {"principal_id", "role", "token_sha256", "login", "password_scrypt",
+                                "policy_admin"}
                 or ("login" in keys) != ("password_scrypt" in keys)
                 or not keys & {"token_sha256", "login"}):
             raise SiteUsersError("each site user requires principal_id, role, and a token or login")
@@ -90,6 +91,8 @@ def validate_users_document(document: object) -> list[dict[str, str]]:
             raise SiteUsersError("site user role must be a string")
         if role not in FILE_ROLES:
             raise SiteUsersError("site user role is unknown")
+        if "policy_admin" in keys and (entry["policy_admin"] is not True or role != "operator"):
+            raise SiteUsersError("policy_admin must be true on an operator, or absent (D-793)")
         principal_id = principal_id.strip()
         if principal_id in principals:
             raise SiteUsersError("site principal_id values must be unique")
@@ -241,6 +244,34 @@ def remove_user(path: Path | str, principal: str, *, dry_run: bool = False) -> d
     return {"action": "remove", "principal_id": principal}
 
 
+def set_policy_admin(path: Path | str, principal, enabled: bool, *, dry_run: bool = False) -> dict[str, object]:
+    """D-793: give operators fleet.policy (or take it away) without changing the role.
+
+    Several principals change in one write, so the config watcher restarts Fleet once."""
+    path = Path(path)
+    names = [principal] if isinstance(principal, str) else list(principal)
+    original_text, users = read_valid_users(path)
+    roles = {user["principal_id"]: user["role"] for user in users}
+    for name in names:
+        if name not in roles:
+            raise SiteUsersError(f"principal {name} is not registered")
+        if roles[name] != "operator":
+            raise SiteUsersError("policy_admin is only for operator principals")
+    changed = []
+    for user in users:
+        row = dict(user)
+        if user["principal_id"] in names:  # only the named principals change
+            row.pop("policy_admin", None)
+            if enabled:
+                row["policy_admin"] = True
+        changed.append(row)
+    document = {"users": changed}
+    validate_users_document(document)
+    if not dry_run:
+        _write_users(path, original_text, document)
+    return {"dry_run": dry_run, "action": "set-policy-admin", "principal_ids": names, "policy_admin": enabled}
+
+
 def validate_file(path: Path | str, *, expected_gid: int = FLEET_GID) -> dict[str, object]:
     """Restart gate for config watchers: content shape plus permission bits.
 
@@ -293,6 +324,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     removing.add_argument("file", type=Path)
     removing.add_argument("--principal", required=True)
     removing.add_argument("--dry-run", action="store_true")
+    policy = commands.add_parser("set-policy-admin", help="D-793: grant or revoke fleet.policy on an operator")
+    policy.add_argument("file", type=Path)
+    policy.add_argument("--principal", required=True, action="append", help="repeat for several people")
+    policy.add_argument("--off", action="store_true", help="revoke instead of grant")
+    policy.add_argument("--dry-run", action="store_true")
     checking = commands.add_parser("validate", help="restart gate: content plus ownership bits")
     checking.add_argument("file", type=Path)
     checking.add_argument("--gid", type=int, default=FLEET_GID,
@@ -308,6 +344,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "add-login":
             result = add_login(args.file, args.principal, args.role, args.login,
                                _read_token(sys.stdin), dry_run=args.dry_run)
+        elif args.command == "set-policy-admin":
+            result = set_policy_admin(args.file, args.principal, not args.off, dry_run=args.dry_run)
         elif args.command == "add":
             result = add_user(args.file, args.principal, args.role, _read_token(sys.stdin),
                               dry_run=args.dry_run)

@@ -21,7 +21,7 @@ def module():
     return mod
 
 
-def setup(transform=(0., 0., 0.)):
+def _setup(transform=(0., 0., 0.)):
     m = module()
     clocks = dict(wall=1000., mono=10.)
     binding = m.NativeGazeboBinding(
@@ -50,7 +50,7 @@ def feed(port, sample, clock_ns=2_010_000_000):
 
 @pytest.mark.parametrize('delay', [.03, .2])
 def test_buffered_join_preserves_receipt_without_counting_delay_twice(delay):
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     clocks['wall'] += delay
     clocks['mono'] += delay
     assert port.observe_clock(2_000_000_000 + round(delay * 1e9))
@@ -74,14 +74,14 @@ def test_buffered_join_preserves_receipt_without_counting_delay_twice(delay):
     (999.74, 10.), (1000., 9.74),
 ])
 def test_original_receipt_malformed_future_or_stale_latches_unknown(wall, mono):
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     assert port.observe_clock(2_010_000_000)
     assert not port.observe(sample, received_wall=wall, received_monotonic=mono)
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
 
 
 def test_original_receipt_cannot_reverse_previous_receipt():
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert feed(port, sample)
     clocks['wall'] += .05
     clocks['mono'] += .05
@@ -91,7 +91,7 @@ def test_original_receipt_cannot_reverse_previous_receipt():
 
 
 def test_buffered_receipt_does_not_refresh_independent_clock_age():
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert port.observe_clock(2_010_000_000)
     clocks['wall'] += .26
     clocks['mono'] += .26
@@ -99,7 +99,7 @@ def test_buffered_receipt_does_not_refresh_independent_clock_age():
 
 
 def test_native_pose_preserves_real_core_utc_stamp_and_declares_sim_source():
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     assert feed(port, sample)
     asyncio.run(port.refresh('rosy_02', force_rest=True))
     pose = port.arbitrated_pose('rosy_02')
@@ -111,7 +111,7 @@ def test_native_pose_preserves_real_core_utc_stamp_and_declares_sim_source():
 
 
 def test_declared_world_to_map_transform_is_applied():
-    _, port, sample, _, _ = setup((10., -2., math.pi / 2))
+    _, port, sample, _, _ = _setup((10., -2., math.pi / 2))
     assert feed(port, sample)
     asyncio.run(port.refresh('rosy_02'))
     pose = port.arbitrated_pose('rosy_02')
@@ -126,7 +126,7 @@ def test_declared_world_to_map_transform_is_applied():
     ('partition', 'foreign'), ('map_from_world', (1., 0., 0.)),
 ])
 def test_foreign_binding_latches_unknown(field, value):
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     foreign = replace(sample, binding=replace(sample.binding, **{field: value}))
     assert not feed(port, foreign)
     assert not feed(port, sample)
@@ -143,30 +143,30 @@ def test_foreign_binding_latches_unknown(field, value):
     ({}, 1_999_000_000), ({}, 3_000_000_000),
 ])
 def test_invalid_or_future_or_stale_native_sample_never_localizes(changes, clock):
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     assert not feed(port, replace(sample, **changes), clock)
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
 
 
 def test_replayed_sample_and_clock_reset_do_not_automatically_recover():
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     assert feed(port, sample)
     assert not feed(port, sample)
     assert not feed(port, replace(sample, stamp_ns=2_020_000_000), 2_030_000_000)
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
-    _, fresh, sample, _, _ = setup()
+    _, fresh, sample, _, _ = _setup()
     assert feed(fresh, sample)
     assert not feed(fresh, replace(sample, stamp_ns=1_000_000_000), 1_010_000_000)
     assert fresh.arbitrated_pose('rosy_02').state == 'UNKNOWN'
 
 
 def test_receipt_staleness_and_wall_rollback_fail_closed():
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert feed(port, sample)
     asyncio.run(port.refresh('rosy_02'))
     clocks['mono'] += 1.
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert feed(port, sample)
     asyncio.run(port.refresh('rosy_02'))
     clocks['wall'] -= 1.
@@ -174,7 +174,7 @@ def test_receipt_staleness_and_wall_rollback_fail_closed():
 
 
 def test_core_stamp_is_validated_not_synthesized_or_replaced_by_native_time():
-    _, port, sample, clocks, core = setup()
+    _, port, sample, clocks, core = _setup()
     assert feed(port, sample)
     core['odom_pose']['stamp'] = 2.
     asyncio.run(port.refresh('rosy_02'))
@@ -185,7 +185,7 @@ def test_core_stamp_is_validated_not_synthesized_or_replaced_by_native_time():
 
 
 def test_unknown_robot_and_motion_deadband_do_not_invent_poses():
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     assert port.arbitrated_pose('unknown') is None
     assert not port.knows('unknown') and port.knows('rosy_02')
     assert not port.moved('rosy_02', .005, 1.)
@@ -200,13 +200,13 @@ def test_unknown_robot_and_motion_deadband_do_not_invent_poses():
     {'epoch': 0}, {'map_revision': 0}, {'map_from_world': (0., 0., float('nan'))},
 ])
 def test_binding_rejects_unscoped_or_physical_identity(changes):
-    m, _, sample, _, _ = setup()
+    m, _, sample, _, _ = _setup()
     with pytest.raises(ValueError):
         m.NativeGazeboMapPosePort(replace(sample.binding, **changes), gather_core=lambda _: None)
 
 
 def test_sample_cannot_refresh_a_stopped_clock_or_hide_delayed_receipt():
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert feed(port, sample)
     clocks['mono'] += .3
     clocks['wall'] += .3
@@ -216,7 +216,7 @@ def test_sample_cannot_refresh_a_stopped_clock_or_hide_delayed_receipt():
 
 
 def test_core_pose_contradiction_and_native_reset_never_recover_in_same_run():
-    _, port, sample, _, core = setup()
+    _, port, sample, _, core = _setup()
     assert feed(port, sample)
     core['odom_pose']['x'] = 2.
     asyncio.run(port.refresh('rosy_02'))
@@ -228,7 +228,7 @@ def test_core_pose_contradiction_and_native_reset_never_recover_in_same_run():
 
 def test_runner_manifest_must_match_provider_binding():
     from dataclasses import asdict
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     port.validate_simulation_binding(asdict(sample.binding))
     with pytest.raises(ValueError):
         port.validate_simulation_binding({**asdict(sample.binding), 'epoch': 2})
@@ -262,7 +262,7 @@ def app_with_port(tmp_path, port, *, profile='simulation', expected=None):
 
 
 def test_sim_execution_consumers_share_provider_while_teach_and_ingest_keep_original(tmp_path):
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     assert feed(port, sample)
     app, client = app_with_port(tmp_path, port)
     result = client.get('/api/fleet/robots/rosy_02/map-pose', headers={'Authorization': 'Bearer console-secret'})
@@ -278,7 +278,7 @@ def test_sim_execution_consumers_share_provider_while_teach_and_ingest_keep_orig
 
 def test_sim_provider_is_refused_in_production_or_with_foreign_runner_manifest(tmp_path):
     from dataclasses import asdict
-    _, port, _, _, _ = setup()
+    _, port, _, _, _ = _setup()
     with pytest.raises(ValueError, match='simulation deployment'):
         app_with_port(tmp_path, port, profile='production')
     with pytest.raises(ValueError, match='explicit runner binding'):
@@ -286,7 +286,7 @@ def test_sim_provider_is_refused_in_production_or_with_foreign_runner_manifest(t
 
 
 def test_changed_active_map_revokes_provider_without_recovery():
-    _, port, sample, _, _ = setup()
+    _, port, sample, _, _ = _setup()
     revision = ['map_v2_fleet', 1]
     port.bind_active_map(lambda: tuple(revision))
     assert feed(port, sample)
@@ -299,7 +299,7 @@ def test_changed_active_map_revokes_provider_without_recovery():
 
 
 def test_motion_deadband_uses_recent_window_and_expires_after_stillness():
-    _, port, sample, clocks, core = setup()
+    _, port, sample, clocks, core = _setup()
     assert feed(port, sample)
     stamp = sample.stamp_ns
     for i in range(1, 6):
@@ -316,7 +316,7 @@ def test_motion_deadband_uses_recent_window_and_expires_after_stillness():
 
 
 def test_same_core_stamp_cannot_describe_a_different_pose():
-    _, port, sample, _, core = setup()
+    _, port, sample, _, core = _setup()
     assert feed(port, sample)
     asyncio.run(port.refresh('rosy_02'))
     core['odom_pose']['x'] = 1.01
@@ -325,7 +325,7 @@ def test_same_core_stamp_cannot_describe_a_different_pose():
 
 
 def test_clock_gap_is_revoked_even_without_an_intermediate_pose_read():
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert feed(port, sample)
     clocks['mono'] += .3; clocks['wall'] += .3
     assert not port.observe_clock(2_310_000_000)
@@ -333,7 +333,7 @@ def test_clock_gap_is_revoked_even_without_an_intermediate_pose_read():
 
 
 def test_native_gap_is_revoked_even_while_clock_keeps_advancing():
-    _, port, sample, clocks, _ = setup()
+    _, port, sample, clocks, _ = _setup()
     assert feed(port, sample)
     for i in range(1, 7):
         clocks['mono'] += .05; clocks['wall'] += .05
@@ -343,7 +343,7 @@ def test_native_gap_is_revoked_even_while_clock_keeps_advancing():
 
 
 def test_immutable_run_binding_refuses_mutable_robot_collections():
-    m, _, sample, _, _ = setup()
+    m, _, sample, _, _ = _setup()
     with pytest.raises(ValueError):
         m.NativeGazeboMapPosePort(replace(sample.binding, robots=list(sample.binding.robots)),
                                  gather_core=lambda _: None)

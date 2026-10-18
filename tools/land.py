@@ -15,7 +15,9 @@ after a failure. Any other conflict aborts the merge and lists the paths.
 pytest runs through ``tools/remote/remote_pytest.py`` (model PC, AI PC or site PC by
 measured headroom, D-568; an unavailable host stops landing); an auto selection adds the
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
-known_failures comparison stay here. Never pushes, stashes, resets or cleans. Standard library only.
+known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
+that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
+stashes, resets or cleans. Standard library only.
 """
 
 from __future__ import annotations
@@ -41,12 +43,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 from land_logs import append_blocks  # noqa: E402  (logs.md: whole entries, date order)
 import land_guards  # noqa: E402  (structural guards before the long round)
+import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
+from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
+import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
+SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
@@ -308,7 +314,27 @@ def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[l
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
     """The real-Chromium tests for the paths base...head changes, opted in on the test host only."""
     changed = lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
-    return [[remote_pytest.BROWSER_ENV, *group] for group in pack(wt, browser_scope.targets(changed))]
+    return [[remote_pytest.BROWSER_ENV, *chunk] for group in pack(wt, browser_scope.targets(changed))
+            for chunk in balanced(wt, group, BROWSER_CHUNKS)]
+
+
+# remote_pytest.run's hosts take invocations from one queue, but one browser invocation still ran
+# ~30 min on one host after the rest; 4 chunks let both hosts share that tail.
+BROWSER_CHUNKS = 4
+
+
+def balanced(wt: Path, paths: list[str], n: int) -> list[list[str]]:
+    """paths in at most n lists of near-equal total size: largest first, each into the lightest list.
+
+    A sub-list of one pack() group keeps its basenames apart."""
+    # ponytail: file size stands in for run time; use recorded pytest --durations if chunks skew.
+    size = {p: (wt / p).stat().st_size if (wt / p).is_file() else 0 for p in paths}
+    bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(min(n, len(paths)))]
+    for path in sorted(paths, key=lambda p: -size[p]):
+        total, members = min(bins, key=lambda b: b[0][0])
+        total[0] += size[path]
+        members.append(path)
+    return [sorted(members) for _, members in bins]
 
 
 def safety_review(wt: Path, base: str, head: str, python: str) -> None:
@@ -326,6 +352,16 @@ def safety_review(wt: Path, base: str, head: str, python: str) -> None:
                    " tools/harness/safety_review_exempt.json with an independent review (D-430 5)")
 
 
+def size_check(wt: Path, base: str, head: str, python: str) -> None:
+    """D-766: every commit base..head passes the size ratchet, before any test host is touched."""
+    if (wt / SIZE_RANGE).is_file():
+        code, text = step(wt, [python, SIZE_RANGE, base, head], None, "size-range", allow_fail=True)
+        if code:  # D-766: the row is the measured count and never rises; split instead (size_ratchet.txt header)
+            raise Stop(f"{text.strip()}\nsize ratchet fails locally; not landing. Fix on the branch: bring each file"
+                       f" named above under its limit (move code to a new module) or back to its ratchet row; never"
+                       f" raise a row. Check with: python {SIZE_RANGE} main HEAD")
+
+
 def record_only(path: str) -> bool:
     """Records no module test reads. Root test/ guards do read docs, so they rerun anyway."""
     name = PurePosixPath(path).name
@@ -338,8 +374,10 @@ def record_only(path: str) -> bool:
 def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict = ENV,
          allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
+    began = time.monotonic()
     result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
                             errors="replace", env=env)
+    print(f"[{label}] {time.monotonic() - began:.0f}s", flush=True)
     text = result.stdout + result.stderr
     if log:
         log.write_text(text, encoding="utf-8")
@@ -358,7 +396,9 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
+    began = time.monotonic()
     codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+    print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
         # print no FAILED lines, so known_failures would wave them through.
@@ -373,9 +413,11 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
-        if check.returncode != 0:
-            raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); not landing")
-        done.append(f"pytest {' '.join(inv)} ok ({log.name})")
+        flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
+            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run)
+        if check.returncode != 0 and not flaky:
+            raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+        done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
     if args.node:
         mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
                      if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))
@@ -409,25 +451,6 @@ def on_main(main_co: Path) -> None:
         raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
 
 
-def tmp_dir(branch: str) -> Path:
-    base = os.environ.get("ROSY_LAND_TMP") or ("X:/DevTemp/land" if os.name == "nt" else "/tmp/rosy-land")
-    path = Path(base) / branch.replace("/", "-")
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def ahead_of_origin(wt: Path, landed: str) -> str:
-    """D-762 open item 4 (cap not decided, reported only): unpushed commits and the oldest one's age.
-
-    Local refs only, no fetch."""
-    stamps = git(wt, "log", "--format=%ct", f"origin/main..{landed}", check=False)
-    if stamps.returncode:
-        return "local main vs origin/main: no origin/main ref here"
-    times = [int(t) for t in stamps.stdout.split()]
-    hours = (time.time() - min(times)) / 3600 if times else 0.0
-    return f"local main is {len(times)} commits / {hours:.1f} hours ahead of origin/main"
-
-
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -440,6 +463,10 @@ def land(args) -> int:
     dirty = git(wt, "status", "--porcelain").stdout.strip()
     if dirty:
         raise Stop(f"worktree is dirty; commit or remove first:\n{dirty}")
+    stale = worktree_rules.stale_history(wt, "HEAD")
+    if stale:
+        raise Stop(f"{branch}: {stale}; landing it would bring that history back. Rebuild on a new branch from"
+                   " main (python tools/worktrees.py new ..., D-172)")
     if not (args.no_prune or args.dry_run):
         try:  # one report line; --prune applies the lossless sweep. A failure must not stop a landing
             worktrees.sweep(wt, apply=args.prune)
@@ -462,6 +489,7 @@ def land(args) -> int:
                            + (f", auto-resolved {resolved}" if resolved else ""))
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
+        size_check(wt, main_sha, candidate, python)
         note = None
         if args.tests == "none":
             invocations: list[list[str]] = []
@@ -508,7 +536,9 @@ def land(args) -> int:
             print("[land] main moved during the guard round; merging again")
             continue
         began = time.monotonic()
-        summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
+        tested = run_tests(wt, args, invocations, logdir, round_no)
+        reusable = reusable and not any("LOAD-FLAKY" in line for line in tested)  # pre-push reruns its gate
+        summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")

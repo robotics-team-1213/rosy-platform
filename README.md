@@ -8,7 +8,7 @@
 > 어떤 로봇이든 웹·표준 API로 제어하고, 현장 Fleet이 여러 대에 미션을 나눠 주는 로봇 플랫폼.
 > 첫 하드웨어는 **Pinky Pro** (Raspberry Pi 5). [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다.
 
-ROSY Platform은 관측한 세계 상태, 현장 작업 조정, 장치별 안전한 실행, 오프라인 학습·평가를 연결한다. 현재 World(`operations/world`, 휠 `rosy-world`)는 받은 관측·운영자 pin·odom으로 지금 자세를 만든다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽고, 서비스·원장·admission은 Fleet에 남긴다([D-752](docs/adr/D-752-canonical-world-map-pose-consumers.md)). 행동 후보로 미래 상태를 예측하는 World model은 후속 계획이다. 폴더 배치는 [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md), CORE·Drive의 주행 권한은 [CORE·Drive 구조](docs/reference/core-drive-responsibilities.md)를 본다.
+ROSY Platform은 관측한 세계 상태, 현장 작업 조정, 장치별 안전한 실행, 오프라인 학습·평가를 연결한다. 현재 World(`operations/world`, 휠 `rosy-world`)는 받은 관측·운영자 pin·odom으로 지금 자세를 만든다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽고, 서비스·원장·admission은 Fleet에 남긴다([D-752](docs/adr/D-752-canonical-world-map-pose-consumers.md)). 행동 후보로 미래 상태를 예측하는 World model은 [D-782](docs/adr/D-782-omx-action-conditioned-world-model.md)의 OMX 실행 전 검사기로 기반(데이터·학습·평가·그림자)만 있고 실행 경로에는 연결하지 않았다. 폴더 배치는 [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md), CORE·Drive의 주행 권한은 [CORE·Drive 구조](docs/reference/core-drive-responsibilities.md)를 본다.
 
 ## 한눈에 보기
 
@@ -77,8 +77,9 @@ flowchart LR
 
 | 나는 | 여기부터 |
 |---|---|
-| 🆕 새로 합류한 팀원 | **[팀 가이드](docs/reference/team-guide.md)** — 초대 수락부터 첫 PR까지 순서대로 |
-| 🔀 PR을 올리려는 사람 | [기여 안내](.github/CONTRIBUTING.md) |
+| 🆕 새로 합류한 팀원 | **[인수인계](docs/reference/handoff.md)** — 무엇을 만들고, 어디까지 왔고, 다음은 무엇인가 → **[팀 가이드](docs/reference/team-guide.md)** — 초대 수락부터 첫 PR까지 순서대로 |
+| 🔀 PR을 올리려는 사람 | **[git으로 일하는 법](docs/reference/git-workflow.md)** — 브랜치·커밋·PR·push 규칙 한 장 · [기여 안내](.github/CONTRIBUTING.md) |
+| 👥 함께 작업하거나 교대하는 사람 | [동시 작업·인수인계](docs/reference/team-guide.md#36-동시-작업과-인수인계) · [작업·버그 이슈 양식](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose) |
 | 🛠️ 빌드·시뮬·테스트·배포 | [개발 가이드](docs/reference/developer-guide.md) |
 | 📊 지금 무엇이 되고 안 되나 | [STATUS.md](STATUS.md) — 모듈별 게이트 |
 | 🤖 실험실 PC 공유 체크아웃의 AI 세션 | [같이 하는 깃](docs/reference/shared-checkout.md) · [AGENTS.md](AGENTS.md) |
@@ -101,7 +102,8 @@ flowchart LR
 | 현재 구조 | [전체 폴더 책임](docs/reference/platform-folder-responsibilities.md) · [CORE·Drive 책임](docs/reference/core-drive-responsibilities.md) |
 | 관제 규칙 | [Fleet 통합 규칙집](docs/reference/fleet-rulebook.md) — law · rule · AI 후보 · 실행 허가 · 결과 확인 |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
-| 기록 | [해결 기록](docs/solutions/) · [전체 색인](docs/index.md) |
+| 협업 | [인수인계](docs/reference/handoff.md) · [git으로 일하는 법](docs/reference/git-workflow.md) · [보류 브랜치](docs/reference/held-branches.md) |
+| 기록 | [해결 기록](docs/solutions/) · [docs 모듈 색인](docs/index.md) |
 
 문서끼리 다르면 **SRS · API reference · ADR**이 이긴다.
 
@@ -130,7 +132,7 @@ flowchart LR
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
   시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
   `tools/remote/hosts.example.json`을 복사한다.
-  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내은 해당 모듈의
+  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내는 해당 모듈의
   `docs/` 하나에 둔다.
 
 ## 로봇 실행

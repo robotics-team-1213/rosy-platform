@@ -62,6 +62,7 @@
 | D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 
 ## 계획·결과 문서
 
@@ -99,8 +100,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
-- 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)
-- 2026-10-15 · 64816ae7e · lane_instruction_stamp 로봇에 pose_stamp, 지연 추정 없음 (D-767 A부, API v1.241)
-- 2026-10-15 · 512d26a73 · D-767 P0 독립 검토(CONDITIONS) 반영
-- 2026-10-15 · 279cfdd52 · D-767 P0 경로 미리보기 (Fleet만, 로봇에 보내지 않음)
+- 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+- 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+- 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
+- 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
+- 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영

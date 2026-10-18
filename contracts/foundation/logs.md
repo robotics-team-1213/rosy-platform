@@ -582,6 +582,7 @@
 - 변경: foundation 계약 시험 파일을 	est_route_context_contract.py로 바꿔 core services의 동명 시험과 pytest 수집 충돌을 해소했다.
 - 증거: GitHub CI 37914451689 core-domain의 import file mismatch; 시험 본문 5125 passed, 수집 1 error.
 - gate 변화: CI 동일 묶음 재검증 대기.
+
 ## 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
 - 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
 - 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
@@ -779,3 +780,27 @@
 - gate 변화: 없음.
 - 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
 - 교훈: 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.259)
+
+- 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.
+
+## 2026-10-18 · uncommitted · schemas 크기 정리의 기존 반영 확인
+
+- 변경: `refactor/schemas-ratchet-offset`을 최신 main과 통합했다. 유한 JSON 크기 계산 재사용은 이미 main과 같아 코드 변경을 남기지 않고, main의 1234줄 기준을 그대로 보존했다.
+- 증거: 원본 변경과 main의 validator 구현이 같고, 통합 후 schemas.py와 size_ratchet.txt의 main 대비 차이가 없음을 확인한다. 원격 검증은 착지 기록에 남긴다.
+- gate 변화: 없음. 크기 제한을 높이지 않는다.

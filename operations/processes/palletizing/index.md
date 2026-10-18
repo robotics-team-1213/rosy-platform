@@ -25,13 +25,14 @@
 
 ## 시험
 
+- `operations/processes/palletizing/test`
 - `test/test_platform_palletizing_compat.py`
 - `test/architecture/test_platform_dependency_boundaries.py`
 
 ## 최근 기록
 
+- 2026-10-17 · uncommitted · feat(palletizing): recipe/3 Step 입력에 sku (D-781 §2)
+- 2026-10-17 · uncommitted · feat(palletizing): recipe/3 팔별 Action 변환과 cell/3 작업대 문서 (D-781 §5)
+- 2026-10-17 · f5ce2625a · fix(palletizing): recipe/3 carry_z와 도달 판정 보강 (D-781)
+- 2026-10-17 · fa22f99db · feat(palletizing): recipe/3 혼합 로더와 팔 베이스 둘을 아는 탐욕적 계획기 (D-781)
 - 2026-10-04 · uncommitted · feat(palletizing): 작업자 수동 간지 checkpoint
-- 2026-10-04 · uncommitted · docs(palletizing): 앱 완료 목표를 현재 구현과 대조
-- 2026-10-02 · uncommitted · feat(palletizing): `job_document(job)` (C4b G5)
-- 2026-10-02 · c07896af · feat(palletizing): port C3b grasp depth and tool fingertip overhang (merge)
-- 2026-10-02 · uncommitted · feat(process): include taught home pose in transfer plan

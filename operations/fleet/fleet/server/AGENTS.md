@@ -16,7 +16,8 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | File | Description |
 |---|---|
 | `model_feedback_dispatch.py` | Fleet-owned allowlist, trusted turn scope and existing Mission/Proposal transaction adapters. Decision owns model contracts/catalog only |
-| `deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
+| `ledger/deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
+| `ledger/context_log.py`, `ledger/context_options.py` | D-796 site-host Postgres mirror of terminal advisory runs (`ContextLog`, `rosy_deliberation_run`) and its `--context-db-*` console surface (`add_cli_arguments`/`activate_from_args` → the process-wide active sink the journal defaults to). Best-effort only; a failure is a warning and never touches the SQLite ledger |
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
 | `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
@@ -30,6 +31,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `password_session.py` | D-519 관제 콘솔 아이디·비밀번호 로그인 — `PasswordSessions`(tasks DB `fleet_console_sessions`, 쿠키 SHA-256만, 유휴 12 h·기억 30 d·절대 30 d, 계정 변경 시 무효), `/api/fleet/auth/login`·`logout`·`session`. 계정과 scrypt 해시는 `site_users.py` |
 | `host_control_routes.py` | D-524 Service Control(서비스 제어) — `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host}/control`. GET은 목록에 더해 가드 `status.json`(`guard`)과 관제 PC 드리프트(`drift`)를 읽기만 한다. 없거나 깨지면 null이다. POST는 이름 있는 운영자만. 재부팅은 10분 예약이고, 유닛 정지·재시작은 허용 목록만(사이트 유닛은 재시작만). 세 호스트 모두 강제 명령 SSH 키(Fleet 전용 마운트 `/run/rosy-fleet-host-control/`)로 부른다. 프로세스 이름과 셸은 받지 않는다. 설정이 없거나 site-users·로그인이 없으면 POST는 503 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
+| `tracking/` | Tracking and purpose-specific calibration holder; existing `fleet.server.tracking*`, `measured_calibration*`, `vision_preview_routes` imports remain stable through `SERVER_HOLDERS`. Preview approval does not change sighting admission |
 | `model_feedback_dispatch.py` | D-657 원장 결속 모델 도구 어댑터. 기존 scope·journal·stop/fence 재검사를 보존하며 Decision 계약/후보를 소비 |
 | `goal_evidence_service.py`, `mission_service.py`, `mission_progress.py` | producer 인증·새 post-action frame/attempt·원장/clock 소비는 Fleet 소유. 순수 목표 검증과 전체 progress 계산은 `rosy.execution.site.{goal_evidence,workflow}` 소비 |
 | `operations/site_ui/console` | 관제 UI 원본 ([안내](../../../site_ui/console/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |

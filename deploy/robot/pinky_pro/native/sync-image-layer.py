@@ -91,7 +91,7 @@ UNITS = (
     "rosy-runtime.target",
     "rosy-io.service",
     "rosy-camera.service",
-    "rosy-camera-healthy.service", "rosy-camera-healthy.timer",
+    "rosy-camera-healthy.service", "rosy-camera-healthy.timer", "rosy-media.service",  # D-789
     "rosy-navigation.service",
     "rosy-boot-status.service", "rosy-boot-status.timer",
     "rosy-boot-status-ready.service",

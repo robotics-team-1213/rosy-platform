@@ -169,6 +169,8 @@ def test_inner_installs_contracts_before_the_bench_and_stops_on_failure(tmp_path
     profile = tmp_path / "contracts/foundation/core_common/profile.py"
     profile.parent.mkdir(parents=True)
     profile.write_text('DEFAULT_ROBOT = "test_profile"\n')
+    # A regular package: as a namespace package it loses to an installed core_common wheel (CI).
+    (profile.parent / "__init__.py").write_text("")
     script = ('source() { :; }\n'
               'colcon() {\n'
               '  echo "$*" > "$OUT/build-args.txt"\n'

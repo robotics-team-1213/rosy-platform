@@ -237,7 +237,7 @@ ui-shell[grammar="focal"] ui-topbar {
 }
 
 /* D-741 3 — 나: 계정 링크는 앱 바의 로그인·로그아웃 옆에 선다(본문 위 기본 파란 링크가 아니다). */
-ui-topbar :is(#account-login, [data-account-profile]) {
+:is(#account-login, [data-account-profile]) {
   align-self: center;
   color: var(--text-primary);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);

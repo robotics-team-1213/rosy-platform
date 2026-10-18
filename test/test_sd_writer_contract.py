@@ -2635,3 +2635,91 @@ def test_an_emergency_resume_refuses_when_a_listed_log_is_gone(writer_case, tmp_
     assert completed.returncode != 0
     assert "an attempt log listed in the index is missing" in _err(completed)
     assert not writer_case["receipt"].exists()
+
+def _card_with_provision(tmp_path, name="rosy-pinky-zzzz", uid="0a1b2c3d-1111-4222-8333-444455556666"):
+    boot = tmp_path / "boot"
+    (boot / "rosy-provision").mkdir(parents=True)
+    (boot / "rosy-provision" / "provision.json").write_text(
+        json.dumps({"device_identity": {"device_name": name, "device_uid": uid}}), encoding="utf-8")
+    return boot
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_card_holding_another_robots_provision_is_refused(writer_case, tmp_path):
+    # D-746: the writer erases the card, so a foreign identity needs an explicit switch.
+    boot = _card_with_provision(tmp_path)
+    plan_path = tmp_path / "plan.json"
+
+    completed = _run(writer_case, "-BootMountPath", boot, "-PlanPath", plan_path)
+
+    assert completed.returncode != 0
+    assert "rosy-pinky-zzzz" in completed.stderr and "rosy-pinky-k7m4" in completed.stderr
+    assert "-ReplaceExistingProvision" in completed.stderr
+    assert not plan_path.exists()
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_replacing_a_foreign_provision_is_explicit_and_pinned_by_the_plan(writer_case, tmp_path):
+    boot = _card_with_provision(tmp_path)
+    plan_path = tmp_path / "plan.json"
+
+    planned = _run(writer_case, "-BootMountPath", boot, "-PlanPath", plan_path,
+                   switches=("-ReplaceExistingProvision",))
+
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    assert plan["replace_existing_provision"] is True
+    assert plan["prior_device_name"] == "rosy-pinky-zzzz"
+    # The card changed after review: the plan no longer matches it.
+    (boot / "rosy-provision" / "provision.json").write_text(json.dumps(
+        {"device_identity": {"device_name": "rosy-pinky-yyyy", "device_uid": "x"}}), encoding="utf-8")
+    changed = _run(writer_case, *WRITE_CONFIRMATION, "-BootMountPath", boot, "-PlanPath", plan_path,
+                   plan_only=False)
+    assert changed.returncode != 0
+    assert "changed since the reviewed plan" in changed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reimage_refuses_a_card_that_holds_another_robot(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+    boot = _card_with_provision(tmp_path)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior, "-BootMountPath", boot)
+
+    assert completed.returncode != 0
+    assert "rosy-pinky-zzzz" in completed.stderr and "rosy-pinky-k7m4" in completed.stderr
+    refused_override = _run(writer_case, "-ReprovisionReceipt", prior, "-BootMountPath", boot,
+                            switches=("-ReplaceExistingProvision",))
+    assert refused_override.returncode != 0
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_same_robot_reimage_keeps_its_deployment_config(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _prior_receipt(
+        tmp_path,
+        personalization={
+            "device_identity": {"model": "pinky_pro"},
+            "runtime": {"requested_preset": "core"},
+            "network": {"country_code": "US"},
+            "fleet": {"endpoint": "https://kept.fixture.invalid", "trust_profile": "kept-ca"},
+        },
+    )
+    boot = _card_with_provision(tmp_path, "rosy-pinky-k7m4", "9d40feaa-871f-4fd3-975a-a704e82d3af9")
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior, "-BootMountPath", boot,
+                     omit=("-Preset", "-FleetEndpoint", "-FleetTrustProfile"))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert plan["requested_preset"] == "core"
+    assert plan["country_code"] == "US"
+    assert (plan["fleet_endpoint"], plan["fleet_trust_profile"]) == ("https://kept.fixture.invalid", "kept-ca")
+    assert plan["replace_existing_provision"] is False
+    # An explicit value still wins over the receipt.
+    explicit = _run(writer_case, "-ReprovisionReceipt", prior, "-BootMountPath", boot, "-CountryCode", "KR",
+                    omit=("-Preset", "-FleetEndpoint", "-FleetTrustProfile"))
+    assert json.loads(explicit.stdout)["country_code"] == "KR"

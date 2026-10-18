@@ -41,9 +41,10 @@ from .hazard import Hazard
 from .scale import Scale
 from .obstacles import Obstacles
 from .evidence import Evidence
+from .ros_edges import RosEdges
 
 
-class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
+class SafetyNode(RosEdges, Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
 
     @classmethod
     def from_calibration(cls, snapshot, *, sensor_only=False):
@@ -106,6 +107,8 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
                 raise ValueError('accept_simulation_scans needs use_sim_time')
             enable_simulation_scans(True)
         self.init_obstacles()
+        self.create_subscription(String, 'obstacles/tracks', self.on_obstacle_tracks, 10)  # D-171: node edge
+        self.create_subscription(String, 'camera/observation', self.on_camera_observation, 10)
         self.declare_parameter('scan_topic', 'scan')
         self.declare_parameter('us_topic', 'us_sensor/range')
         self.declare_parameter('ir_topic', 'ir_sensor/range')
@@ -325,14 +328,6 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             self.engage_estop('startup')
         else:
             self.estop_pub.publish(Bool(data=False))
-
-    def now(self):
-        return self.get_clock().now()
-
-    def age(self, stamp):
-        if stamp is None:
-            return 1e9
-        return (self.now() - stamp).nanoseconds / 1e9
 
     def tick(self):
         self.sensor_state = None

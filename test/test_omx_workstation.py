@@ -171,7 +171,7 @@ def test_simulation_build_patches_vendor_launch_to_use_gazebo_server_only():
     assert "omx_f_gazebo.launch.py" in patch
 
 
-def test_omx_runtime_domain_is_configurable_but_simulation_discovery_stays_local():
+def test_omx_runtime_domain_is_configurable_but_discovery_stays_local():
     import yaml
 
     compose = yaml.safe_load((OMX / "compose.yaml").read_text(encoding="utf-8"))
@@ -181,8 +181,11 @@ def test_omx_runtime_domain_is_configurable_but_simulation_discovery_stays_local
     assert hardware == {
         "ROS_DOMAIN_ID": "${OMX_ROS_DOMAIN_ID:-30}",
         "RMW_IMPLEMENTATION": "rmw_cyclonedds_cpp",
-        "ROS_AUTOMATIC_DISCOVERY_RANGE": "${OMX_ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}",
+        "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
+        "CYCLONEDDS_URI": "file:///etc/rosy/cyclonedds.xml",
     }
+    assert compose["services"]["omx-hardware-shell"]["volumes"] == [
+        "../../../middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml:/etc/rosy/cyclonedds.xml:ro"]
     assert simulation["ROS_DOMAIN_ID"] == "${OMX_SIM_DOMAIN_ID:-31}"
     assert simulation["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"
     assert simulation["RMW_IMPLEMENTATION"] == "rmw_cyclonedds_cpp"
@@ -254,3 +257,13 @@ def test_ai_simulation_excludes_direct_leader_trajectory_input():
     assert "apply --check /tmp/omx-ai-sim-action-only.patch" in dockerfile
     assert "install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py" in dockerfile
     assert "-            '-r /arm_controller/joint_trajectory:=/leader/joint_trajectory'," in patch
+
+
+def test_driver_lifecycle_fix_is_applied_before_vendor_compilation():
+    image = (ROOT / "deploy/robot/omx/Dockerfile").read_text()
+    for name in ("hardware-lifecycle-errors.patch", "hardware-owner-command-path.patch",
+                 "hardware-export-dependencies.patch", "hardware-init-no-reboot.patch", "hardware-write-errors.patch",
+                 "hardware-fault-stop.patch", "hardware-torque-uncertainty.patch", "hardware-status-readback.patch"):
+        assert image.index(f"COPY patches/{name}") < image.index("colcon build")
+        assert f"git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/{name}" in image
+        assert f"git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/{name}" in image

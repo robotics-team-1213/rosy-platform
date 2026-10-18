@@ -1,0 +1,17 @@
+[Unit]
+Description=ROSY OMX automatic camera tuning and photometric readiness
+Requires=rosy-omx-camera-view.service
+After=rosy-omx-camera-view.service
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/rosy/omx-camera-readiness.env
+ExecStart=/usr/bin/python3 ${ROSY_CAMERA_PIPELINE_ROOT}/camera_readiness.py run --profile %h/.config/rosy/omx-camera-readiness.json --state-dir %h/.local/state/rosy/omx-camera-environment
+ExecStopPost=/usr/bin/python3 ${ROSY_CAMERA_PIPELINE_ROOT}/camera_readiness.py restore --state-dir %h/.local/state/rosy/omx-camera-environment
+Restart=no
+TimeoutStopSec=20
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

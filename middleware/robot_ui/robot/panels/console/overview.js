@@ -91,6 +91,10 @@ export function mount(el, ctx) {
     status.setAttribute("state", "error");
     status.hidden = false;
   }
-  el.append(head, status, summary);
+  const apps = createNode("ui-actions");
+  const pilot = createNode("a", "", "Rosy Pilot · 직접 운전");
+  pilot.href = "/pilot";
+  apps.append(pilot);
+  el.append(head, status, summary, apps);
   return ctx.store.state(render, fail);
 }

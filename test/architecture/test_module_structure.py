@@ -382,13 +382,16 @@ def test_core_chain_stays_one_way():
 
 def _measure() -> tuple[dict, dict, dict]:
     dirs = {**{name: _relpath(info["dir"]) for name, info in PACKAGES.items()}, **size_limits.STANDALONE}
-    files = {}
+    files, scripts = {}, {}
     for folder in {*dirs.values(), *(h for hs in size_limits.PACKAGE_HOLDERS.values() for h in hs),
-                   *size_limits.OPS_ROOTS}:
+                   *size_limits.OPS_ROOTS, "test"}:  # test: the root suite (revision 2 test limit)
         for path in (ROOT / folder).rglob("*"):
             if path.is_file() and path.suffix in size_limits.CODE_SUFFIXES | size_limits.WEB_SUFFIXES:
                 files[_relpath(path)] = _lines(path)
-    return size_limits.measure(files, dirs, [_relpath(root) for root in COLCON_ROOTS], SIZE_UNITS)
+                if path.suffix == ".html":
+                    scripts[_relpath(path)] = size_limits.inline_script_lines(
+                        path.read_text(encoding="utf-8", errors="replace"))
+    return size_limits.measure(files, dirs, [_relpath(root) for root in COLCON_ROOTS], SIZE_UNITS, scripts)
 
 
 def _relpath(path: Path) -> str:

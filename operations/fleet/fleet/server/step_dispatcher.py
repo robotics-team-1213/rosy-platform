@@ -92,7 +92,7 @@ class StepJobDispatcher:
         unresolved Job under its own backoff and submit each actionable READY Job, in round-robin
         order from the last Job visited, stopping at MAX_IO_PER_TICK device exchanges. No Job
         blocks another; a READY Job on an unconfigured instance or a closed kind is skipped."""
-        self._io = 0
+        self._io = getattr(self, "_io_floor", 0)  # D-779: a multi-arm pass may have spent some
         work = [("readback", job) for job in self.store.jobs("RUNNING") + self.store.next_unresolved()]
         work += [("submit", job) for job in self.store.jobs("READY")]
         work = [(kind, job) for kind, job in work  # D-763 7: a TRIP step is the trip loop's, not a device Action
