@@ -56,7 +56,7 @@ def test_absorbed_metadata_and_device_guide_keep_core_command_authority() -> Non
 
 
 def test_absorbed_guides_use_the_rosy_os_device_path() -> None:
-    for name in ("CLAUDE.md", "STEPS.txt"):
+    for name in ("AGENTS.md", "STEPS.txt"):
         guide = (PACKAGE / name).read_text(encoding="utf-8")
         assert "install-pi.sh" in guide
         assert "verify-pi.sh" in guide
