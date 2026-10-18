@@ -56,6 +56,13 @@ runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 �
 
 ## Gazebo 실행 상태
 
+준비된 통신 helper의 최종 원격 회귀는 `85dfae7860`에서 **222 passed in
+23.32s**, runner exit 0이다. 위 선택의 7개 파일을 동일하게 실행했으며,
+helper 재사용·drip 응답의 전체 deadline·진행 중 종료·잘못된 framing과
+descriptor 유지 및 종료 후 응답 거부를 포함한다. 외부 로그는
+`green-prepared-transport/run-1.txt`, SHA256은
+`dea1512a82a430f3f9c3242292b69d851c97b3d627fd30a049d1bf2ca543d96d`이다.
+
 `policy_chain_gazebo.py`는 `remote_sim.py`를 통해서만 실행한다. 원본 world의
 hash와 32×24 RGB/10Hz, physics step 0.002초인 명시적 시험 variant의 hash를 기록한다.
 이미지 크기를 provider에서 숨겨 변환하지 않는다. 실제 LeRobot 0.4.4 별도 프로세스,
@@ -85,6 +92,16 @@ Fleet/CORE HTTP 인증, 원본 Gazebo 카메라, 기존 OMX owner와 vendor cont
   제거했다. 1초 lease·기본 HTTP timeout 0.2초·freshness와 만료 방어는 유지한다.
   두 번의 교환이 1초 안에 들어오지 않는 지속 지연에서는 여전히 HOLD가 올바르다.
   이 revision의 최종 Gazebo 통과 결과는 아직 없다.
+- `80f82b11dd`: stdlib 프로세스 시작 0.0759초, 준비된 Fleet 조회 0.0297초를
+  측정했다. 요청마다 새 프로세스를 시작하는 비용 때문에 갱신이 기존 lease
+  기한을 넘겼다. 시험 thread 수를 제한한 실행에서도 timeout이 발생했으며,
+  해당 구간의 CPU throttling count는 증가하지 않았다.
+- `85dfae7860`: lease 발급 전에 명시적 POSIX context에서 stdlib helper 하나를
+  준비한다. 준비 단계는 HTTP 요청을 보내지 않는다. 각 요청의 0.2초 deadline,
+  전체 왕복 시간을 차감하는 1초 lease, framing 제한과 실패 시 영구 폐쇄는 유지한다.
+  close는 helper를 먼저 종료하고 진행 중 I/O가 끝난 뒤 descriptor를 닫으며,
+  최종 응답도 폐쇄 상태와 동기화한다. 독립 소스 리뷰의 동시성 지적 두 건을 수정했다.
+  이 revision의 Gazebo 실행은 자원 기준을 충족하는 host를 기다리고 있다.
 
 probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixture의 설치 binding은
 선언한 시험 설정에서 구성하며, 외부에서 승인된 학습 release의 설치를 검증하지 않는다.
