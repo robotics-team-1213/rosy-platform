@@ -2950,3 +2950,9 @@
 - 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.
 - 증거: 첫 확장 시험의 release scan FAIL을 재현했고 독립 hash 검토 후 관련 원격 745 PASS/0 skip/NEW 0으로 통과했다. provenance의 stale/변경·비밀 탐지 회귀를 포함한다.
 - gate 변화: 저장소 검사 보완이며 배포·장치 실행·FIELD 수용을 수행하지 않았다.
+
+## 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)
+
+- 변경: `sd/setup-moved-device.ps1`에서 로봇 주소를 생략하면 새 SD 준비로 시작한다. 주소를 명시한 이동 카드의 SETUP 검사, core 계획, 기존 분리 작성기와 삭제·readback 절차는 유지한다. Wi-Fi 프로필 준비와 첫 부팅 뒤 자동 업데이트 timer/status 확인을 안내한다.
+- 증거: Windows PowerShell 네이티브 self-check 6개 PASS. 주소 필수로 새 SD 준비가 막히는 실패를 먼저 재현했다. fixture만 사용해 PrepareOnly·잘못된 주소·등록부/Wi-Fi 누락·이동 카드 SETUP 게이트·기존 작성기 위임을 확인했다. 원격 pytest는 커밋 뒤 별도로 기록한다.
+- gate 변화: 없음. 현재 서명 이미지 확보, SD 기록/readback, 실제 Pinky 첫 부팅·자동 업데이트는 미수행이다. 실행 계획은 `docs/plans/2026-10-18-pinky-sd-ready.md`다.
