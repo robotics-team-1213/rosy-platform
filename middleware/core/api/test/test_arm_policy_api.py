@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from contextlib import contextmanager, nullcontext
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +27,7 @@ def setup_api(tmp_path):
                             10_000_000_000, hashlib.sha256(rgb).hexdigest())
     session._cameras = lambda: (camera,)
     from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
-    port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera), principal='operator-a')
+    port = CoreArmPolicyPort(session, capture=lambda: nullcontext((rgb, camera)), principal='operator-a')
     app = create_app({}, SimpleNamespace(arm_policy=port,
         safety=SimpleNamespace(estop=False, estop_listeners=[])))
     auth = SimpleNamespace(token_id='operator-a', role='operator')
@@ -106,10 +107,12 @@ def test_stop_does_not_wait_for_blocked_rgb_capture(tmp_path):
     capture = port.capture
     entered, release = threading.Event(), threading.Event()
 
+    @contextmanager
     def blocked_capture():
-        entered.set()
-        assert release.wait(5)
-        return capture()
+        with capture() as frame:
+            entered.set()
+            assert release.wait(5)
+            yield frame
 
     port.capture = blocked_capture
     with ThreadPoolExecutor(max_workers=2) as pool:

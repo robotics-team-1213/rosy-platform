@@ -1,5 +1,5 @@
 """Actual Fleet HTTP governance -> SIM session; owner transport/RGB remain HOST fixtures."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from hashlib import sha256
 import sqlite3
@@ -54,7 +54,7 @@ def chain_setup(tmp_path, *, enabled=True):
             return CameraSnapshot('front','cam-front','a'*64,(3,2,2), int(clock[0]*1e9), sha256(rgb).hexdigest())
         options = dict(policy=policy, runtime=runtime, fence=seed.fence, consumer=consumer,
             journal=PolicyExecutionJournal(tmp_path/'execution.sqlite3'), owner_identity=seed._identity,
-            camera_current=lambda:(camera(),), capture=lambda:(rgb,camera()), principal='sim-sdk',
+            camera_current=lambda:(camera(),), capture=lambda:nullcontext((rgb,camera())), principal='sim-sdk',
             installed_rig_revision='sim-rig', enabled=enabled)
         if not enabled:
             yield options, fleet
