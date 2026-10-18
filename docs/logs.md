@@ -9144,6 +9144,12 @@ osy-d395-s1d\`.
 - 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
 - gate 변화: 없음.
 
+## 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
+
+- 변경: `tools/land_full.py`가 FULL 티어를 통과한 후보와 `main`을 `<git-common-dir>/rosy-land-full/<브랜치>.json`에 적는다. 다음 `land.py` 실행은 후보가 HEAD에 있고, 적힌 `main`이 `main`에 있고, 그 뒤 브랜치에 `main` 병합(git 자체 병합과 같거나 자동 해결 기록만 다른 것)만 더해졌을 때 그 `main`부터의 변경분 선택만 돈다. 자기 커밋이 더해지면 FULL을 다시 돈다. 착지하면 기록을 지운다. 변경분과 브랜치 자신의 대응 묶음의 합집합은 넣지 않았다(이유는 2026-10-18 착지 교훈 노트).
+- 증거: `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 깨끗한 병합 → 복원, 수정 커밋 → 복원 안 함을 손으로 확인했다.
+- gate 변화: 없음.
+
 ## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
 
 - 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
