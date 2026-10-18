@@ -60,4 +60,6 @@ sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 
 원본은 각 PC의 `/var/lib/rosy-host-state/status.json`과 관제 PC의
 `/var/lib/rosy-host-guard/status.json`이다. 가드가 멈추면 파일의 시각으로 지연을 표시한다.
+가드의 상태 디렉터리는 `0751`, 비밀 없는 JSON은 `0644`로 Fleet 컨테이너의 UID 10001이 읽는다.
+SSH 키가 있는 `/etc/rosy/host-guard`는 `0750`을 유지한다.
 Fleet 자체가 중단되면 이 화면도 사용할 수 없으며, 외부 가용성 감시는 별도다.
