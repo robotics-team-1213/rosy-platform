@@ -8898,6 +8898,13 @@ osy-d395-s1d\`.
 - 증거: docs/plans/2026-10-16-measured-camera-lifecycle.md; docs/validation/measured-camera-lifecycle-2026-10-16/baseline.md. 기존 revision 89d3ba4d10의 AI 시험 PC 원격 53 passed, terminal exit 0, known_failures NEW 0.
 - gate 변화: 없음. 제품 구현은 계획 검토 전이며 기준선은 새 기능이나 브라우저·장치·현장 수용을 증명하지 않는다. 원시 로그 C:/DevTemp/camera-calibration/baseline/run-1.txt.
 
+## 2026-10-16 · uncommitted · docs(reference): git으로 일하는 법과 인수인계 문서
+
+- 변경: `docs/reference/git-workflow.md`(팀원 PR 길과 실험실 착지 길 비교, `--no-verify` 기준, push 순서, D-762 단계 현황, 사용자가 정할 것)와 `docs/reference/handoff.md`(목표, 증거 기준 현재 상태, 2026-10-15 흐름별 인계 문서 색인, 다음 할 일, 담당, 새 컴퓨터 체크리스트) 신규. README 「시작하기」·문서 지도, CONTRIBUTING, 팀 가이드 읽기 순서에서 링크. 팀 가이드 §1.5·§6의 훅 설명과 `--no-verify` 문구를 CONTRIBUTING(D-584 개정)과 맞추고 `middleware/apps/device/`를 `middleware/devices/`로 정정. shared-checkout·루트 AGENTS·rosy-land-on-main SKILL의 옛 우산 경로(F: 드라이브)를 컴퓨터와 무관한 상위 폴더 표기로.
+- 증거: 새 문서 두 개의 상대 링크를 파일 존재로 확인했다. `rosy_harness.py lint`와 문서 계약 시험은 이 PC에 Python이 없어 돌리지 않았다(미실행).
+- gate 변화: 없음.
+- 결정: 없음. 절차는 바꾸지 않고 기존 ADR과 CONTRIBUTING의 규칙을 모아 적었다.
+
 ## 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
 
 - 변경: 정적 이미지 조건·시간 상태 전이·dark/bright 복구를 분리하고 epoch별 best·재시작에도 유지되는 write budget·환경 이력을 연결했다. 지원/미검증 환경과 수집/학습 계약을 D-770에 추가했다.
@@ -9093,3 +9100,40 @@ osy-d395-s1d\`.
 - 변경: `plans/2026-10-17-fleet-device-authority-design.md`의 기준 해시 앞에 SHA를 명시해 공개 커밋 참조임을 표시했다. 설계 내용과 비밀정보 검사 규칙은 유지한다.
 - 증거: 원격 회귀에서 `test_no_secrets_in_tracked_files`가 해당 기준 줄의 해시를 high-entropy-token으로 보고했다. 명시적 SHA 코드 표기는 기존 검사 회귀가 허용하는 커밋 인용 형식이다. 수정 커밋의 원격 재검증은 착지 기록에 남긴다.
 - gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · 로컬 착지를 GitHub PR 경로로 옮기는 계획
+
+- 변경: `plans/2026-10-18-github-pr-landing-path.md`를 추가했다. 이 노트북에서 막힌 원인, 공개키 등록과 origin SSH 전환 절차, 로컬 `main`에만 있는 320개 커밋의 주제별 묶음과 PR 게시 순서, squash 사본 충돌 재발 방지, 이후 PR·`ci.yml` 병렬 흐름을 정리했다.
+- 증거: 이 노트북에서 HTTPS `curl`은 10초 시간 초과(000)였다. SSH는 `Permission denied (publickey)`(키 `SHA256:mybrpgxI…` 미등록)였고 origin은 HTTPS다. `gh` 2.102.0의 auth 확인은 시간 초과였다. `origin/main..main` 320개(merge 64), 반대 방향 32개였다. 밀린 커밋 중 `Safety-Review:` trailer 11개, trailer 없는 안전 경로 커밋 2개(`safety_review.py --warn-only`)를 확인했다.
+- gate 변화: 없음. push·PR·remote 변경·로컬 `main` reset은 하지 않았고 사용자 결정으로 남겼다.
+
+## 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존
+
+- 변경: git 안내·날짜별 인수인계 문서를 최신 main과 합쳤다. README의 동시 작업 링크, 팀 가이드의 개인 클론 훅 예외, main 기준선에서 NEW를 재현하는 절차를 보존했다. 새 git 안내의 오래된 FULL 착지 안내는 최신 공유 체크아웃 절차로 연결했다.
+- 증거: 수동 충돌을 해결하면서 main의 규칙을 유지했고 원래 문서 추가·링크 변경만 남겼다. 문서 상대 링크와 lint·원격 회귀 결과는 착지 기록에 남긴다.
+- gate 변화: 없음. push·배포·실물 시험은 하지 않는다.
+
+## 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+
+- 변경: `plans/2026-10-18-pinky-sd-ready.md`에 단일 명령의 새 카드 준비, 기존 작성기 재사용, 첫 부팅·자동 업데이트 검증 순서를 기록했다. 첫 장치 런북에 준비물, Wi-Fi 보안 입력, 등록부 복원, 기록 로그·receipt 완료 판정과 읽기 전용 상태 확인을 추가했다.
+- 증거: 기존 SD·first-boot·D-412 코드 확인 및 네이티브 PowerShell fixture 검증 6개 PASS. 최신 이미지 성공 실행의 현재 Actions artifacts와 조회한 release의 `.img.xz` 목록은 비어 있어, 이미지 확보를 미완료 단계로 남겼다.
+- gate 변화: 없음. 빌드 성공, 서명 이미지, 매체 readback, 실기 부팅·자동 업데이트를 서로 대체하지 않는다.
+
+## 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
+
+- 변경: 기존 native session fixture에 시험용 client 교환 지점만 추가하고, 실제 LeRobot 0.4.4 별도 프로세스가 loopback uvicorn CORE를 통해 RGB·관절 관측, 목표 송신, ROS 결과 대기, disconnect 정지까지 수행하는 opt-in 회귀를 추가했다. ROS 서버에 도착한 목표도 비교한다. 생산 기본값·owner 허용 목록·lease 발급·승인·실물 배포는 바꾸지 않았다.
+- 증거: `2fd2b168e8` RED, `e81c3f1a4` 원격 socket 1 passed/0 skipped/NEW 0. 최종 목표 비교 보강은 후속 opt-in native 검증 대상이다. `docs/validation/core-omx-runtime-2026-10-18/result.md`.
+- 정정: Fleet lease 발급기는 이미 있으며 `device_delivery=not_connected`다. 빠진 것은 장치 clock/session에 대한 신뢰된 전달·검증·갱신·폐기와 운영 조립이다. 합성 인증·고정 목표의 시험을 학습 정책·Gazebo/실물 이동으로 주장하지 않는다.
+- gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
+
+- 변경: D-787 시뮬레이션 모방학습 제안과 ADR Log를 합치면서 main에서 들어온 D-787 미작성 예약 행 두 개만 제거했다. 다른 ADR 예약은 보존한다.
+- 증거: 착지 lint가 이미 존재하는 D-787 파일을 gap으로도 선언했다고 거절했다. ADR 번호와 Proposed 상태는 유지하며 현재 커밋으로 원격 검증한다.
+- gate 변화: 없음. 시뮬레이션 실행·실물 정책 활성화·장치 수용을 선언하지 않는다.
+
+## 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
+
+- 변경: 실물 하달 개방에 필요한 운행·팔의 장치 증거, 관측·인계 장벽 조건을 Proposed ADR로 통합한다. 해당 문서가 없다고 선언한 D-797 예약 두 행만 제거하고 다른 예약은 보존한다.
+- 증거: ADR 본문과 Log의 Proposed 상태, 코드·설치 profile 변경이 없는 범위를 확인했다. 현재 커밋의 원격 검증은 착지 기록에 남긴다.
+- gate 변화: 없음. 실물 운행·팔 실행·device_trial 활성화·장치 수용을 승인하거나 실행하지 않는다.

@@ -36,13 +36,13 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/cli.py` | `fleet relay ...` / `formation ...` / `console ...` |
 | `fleet/incidents/handoff.py`, `incidents/notifications.py` | D-661 named human ownership and team notification journal/worker; separate from stuck resolver and final device authority |
 | `fleet/server/console/console.py` | `FleetConsole`: N대 상태 gather + goal/cancel/e-stop scatter. 하달한 목표를 기억하는 곳(D-12) |
-| `fleet/server/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
-| `fleet/server/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
+| `fleet/server/rightofway/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
+| `fleet/server/rightofway/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
 | `fleet/server/app.py` | FastAPI 표면 — `/api/fleet/*` 와 `/console` UI |
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
 | `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지·D-573 횡단보도 구역)와 `lane_graph.yaml` 가져오기. 순수 |
 | `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`)와 호출자에게 넘길 사실 묶음(`brief`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
-| `fleet/server/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
+| `fleet/server/sitemap/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
 | `fleet/server/trips/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
 | `fleet/traffic/lane_traffic.py` | D-517 3 (M1) `TrafficService`: 열린 trip 전부를 `fleet/traffic/blocks.py` 고정 블록 표로 계산해 `GET /api/fleet/traffic`에 보인다. 로봇에 보내지 않는다(M2). trip 루프의 교차로 보류(`holds`)와 고정 점유 갱신도 여기서 한다. 운행 블록 허가를 쓰는 곳은 이 모듈 하나다 |
 | `fleet/traffic/rule_m.py` | D-550 8 / D-760 3 1단계 규칙 M 판정(순수): 로봇마다 Fleet이 시작한 움직임을 `bounded`·`unbounded`·`idle`로 본다. Fleet이 쥔 TTL(통행권·trip 임대·목표 임대)만 센다. `/api/fleet/state` 행 `rule_m`으로만 쓰인다. 경고만이고 거절하지 않는다 |
@@ -86,6 +86,11 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 | `fleet/fleet/swarm` | Formation session: robots, transport, relay, arming, anchor (see `fleet/swarm/AGENTS.md`) |
 | `fleet/fleet/routing` | D-489/D-490 route planning on the D-488 site map, standard library only |
 | `fleet/fleet/server/tracking` | Existing tracking service, purpose-specific calibration stores/routes and signed Vision preview grants. Static holder preserves `fleet.server.*` imports and resource identity |
+| `fleet/fleet/server/evidence` | D-798 server holder: model proposals and feedback dispatch, goal and policy evidence, learning bundle/receiver, incident deliberation |
+| `fleet/fleet/server/sitemap` | D-798 server holder: site map store/routes, drive teaching, site lanes, lane routes, path history, start points |
+| `fleet/fleet/server/pose` | D-798 server holder: localization service, D-494 `MapPoseService`, D-511 lane compliance monitor |
+| `fleet/fleet/server/recognition` | D-798 server holder: D-472 identity and triggers, sightings and their store/config, ingest routes, discovery, address drift, `SiteRoster` |
+| `fleet/fleet/server/rightofway` | D-798 server holder: signal client/config/routes, junction signal, traffic and reservations, segment store, bays |
 | `decision/src/rosy/decision` | Holder `operations/decision`: proposal-only model adapters (`rosy.decision`) outside its own deliberation/conversation units |
 | `situation` | Holder `operations/situation` (`SOURCE_ROOTS['assessment']`): the D-577 AI PC situation service `rosy_situation` (see its `AGENTS.md`) |
 | `site_execution` | Holder `operations/site_execution` (`SOURCE_ROOTS['execution']`): `rosy.execution.api`/`site` PlanBundle and cell workflow projections (see its `AGENTS.md`) |
