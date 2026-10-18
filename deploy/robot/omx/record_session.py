@@ -296,7 +296,8 @@ def main(argv=None):
         print(json.dumps(row, default=str), flush=True)
 
     def systemctl(verb, unit):
-        done = subprocess.run(["systemctl", "--user", verb, unit], capture_output=True, text=True, timeout=30)
+        # bounded so a stuck unit cannot stretch the cleanup (torque OFF already ran before the restarts)
+        done = subprocess.run(["systemctl", "--user", verb, unit], capture_output=True, text=True, timeout=10)
         return done.stdout.strip()
 
     def run(command):
