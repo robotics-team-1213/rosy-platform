@@ -114,13 +114,16 @@ class Host:
                     except OSError:  # an older release (rollback target) may lack one: keep going, still restart
                         complete = False
                         log(step="unit_file_missing", file=name)
-                subprocess.run(["systemctl", "--user", "daemon-reload"], timeout=60)
+                try:
+                    subprocess.run(["systemctl", "--user", "daemon-reload"], timeout=60)
+                except subprocess.SubprocessError:  # still restart on what systemd has
+                    complete = False
             if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             time.sleep(self.cfg.get("settle", 10))
             active = subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30)
             return complete and active.returncode == 0  # forward: a release missing its unit file fails
-        except subprocess.SubprocessError:  # a timeout
+        except (OSError, subprocess.SubprocessError):  # systemctl missing or timed out
             return False
 
     def archive(self, sha: str, paths, target: Path) -> None:

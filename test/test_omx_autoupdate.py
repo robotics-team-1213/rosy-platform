@@ -322,3 +322,11 @@ def test_the_real_restart_installs_the_live_units_reloads_and_checks_they_stay_a
     assert not host.restart(["svc.service"])  # a release without its unit file is a failed switch ...
     assert calls.read_text().splitlines() == ["--user daemon-reload", "--user restart svc.service",
                                                "--user is-active --quiet svc.service"]  # ... yet still restarted
+    calls.write_text("")
+    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\n[ "$2" = daemon-reload ] && sleep 120\nexit 0\n' % calls)
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: real_run(args, **{**kw, "timeout": 2}))
+    assert not host.restart(["svc.service"])  # a hung reload fails the switch but the restart still happens
+    assert "--user restart svc.service" in calls.read_text().splitlines()
+
+
+real_run = m.subprocess.run
