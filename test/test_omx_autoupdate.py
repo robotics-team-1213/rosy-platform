@@ -296,3 +296,26 @@ def test_a_service_config_names_its_paths_smoke_units_and_root(tmp_path, monkeyp
                     "\"root\": \"%s\"}" % (base, tmp_path / "situation"))
     cfg = m.load_config(path)  # no devices, and a root other than the cell's session.lock root
     assert cfg["lock"] is None and cfg["root"] == str(tmp_path / "situation")
+
+
+def test_the_real_restart_installs_the_live_units_reloads_and_checks_they_stay_active(tmp_path, monkeypatch):
+    (tmp_path / "bin").mkdir()
+    calls = tmp_path / "calls"
+    fake = tmp_path / "bin" / "systemctl"
+    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\n[ "$3" != bad.service ]\n' % calls)
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    release = tmp_path / "root/releases/r1/deploy/ai_pc"
+    release.mkdir(parents=True)
+    (release / "svc.service").write_text("[Service]\nExecStart=/bin/true\n")
+    (tmp_path / "root/current").symlink_to("releases/r1")
+    (tmp_path / "units").mkdir()
+    host = m.Host({"root": str(tmp_path / "root"), "settle": 0, "unit_dir": str(tmp_path / "units"),
+                   "unit_files": ["deploy/ai_pc/svc.service"]})
+    assert host.restart(["svc.service"])
+    assert (tmp_path / "units/svc.service").read_text().startswith("[Service]")
+    assert calls.read_text().splitlines() == ["--user daemon-reload", "--user restart svc.service",
+                                               "--user is-active --quiet svc.service"]
+    assert not host.restart(["bad.service"])  # the restart failed
+    host.cfg["unit_files"] = ["deploy/ai_pc/missing.service"]
+    assert not host.restart(["svc.service"])  # a release without its unit file is a failed switch

@@ -2,6 +2,7 @@
 from pathlib import Path
 import http.server
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -61,11 +62,25 @@ ADVERT = b"001e# service=git-upload-pack\n0000"
     (ADVERT + b"0048" + b"c" * 40 + b" refs/tags/ops-update-freeze\x00caps\n0000", 1),
     (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n004b" + b"d" * 40 + b" refs/tags/ops-update-freeze^{}\n0000",
      1),
-    (ADVERT + b"0048" + b"e" * 40 + b" refs/tags/ops-update-freeze-old\n0000", 0),
+    (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n0048" + b"e" * 40 + b" refs/tags/ops-update-freeze-old\n0000",
+     0),
     (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n", 1),  # cut off before the tags: not a "run"
+    (ADVERT, 1),  # an empty list proves nothing
     (b"<html>rate limited</html>", 1),
 ])
 def test_robots_without_git_read_the_ref_list_over_https(tmp_path, body, expected):
+    code, out = served_gate(tmp_path, body)
+    assert code == expected, out
+    assert ("run: no freeze" in out) if expected == 0 else ("frozen by tag" in out or "failing closed" in out)
+
+
+def test_the_twins_local_ref_list_lets_its_updater_run(tmp_path):
+    script = (ROOT / "tools/device_twin/image/install_twin.sh").read_text()
+    body = re.search(r"printf '(001e[^']*)' > /etc/rosy-twin-refs", script).group(1)
+    assert served_gate(tmp_path, body.replace("\\n", "\n").encode()) == (0, "rosy-update-gate: run: no freeze\n")
+
+
+def served_gate(tmp_path, body):
     class Refs(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
@@ -78,11 +93,9 @@ def test_robots_without_git_read_the_ref_list_over_https(tmp_path, body, expecte
     server = http.server.HTTPServer(("127.0.0.1", 0), Refs)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        code, out = gate(tmp_path, refs_url=f"http://127.0.0.1:{server.server_port}/info/refs")
+        return gate(tmp_path, refs_url=f"http://127.0.0.1:{server.server_port}/info/refs")
     finally:
         server.shutdown()
-    assert code == expected, out
-    assert ("run: no freeze" in out) if expected == 0 else ("frozen by tag" in out or "failing closed" in out)
 
 
 def test_the_robot_updater_ships_and_checks_the_same_gate():
