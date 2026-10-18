@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 - 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
 - 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
+- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 - 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)
 - 2026-10-15 · 1a9960df2 · POST /line-follow/junction 선택 필드 pose_stamp와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
