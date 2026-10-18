@@ -101,8 +101,9 @@ export function mountRobotVideoPanel({doc = document} = {}) {
   if (!anchor || doc.getElementById("robot-video")) return null;
   const link = el(doc, "link", null, {rel: "stylesheet", href: "/console/assets/robot-video.css"});
   doc.head.append(link);
-  const panel = el(doc, "section", null, {class: "panel robot-video", id: "robot-video", "aria-labelledby": "robot-video-heading"});
-  const heading = el(doc, "h2", "로봇 실시간 영상", {id: "robot-video-heading"});
+  // 접힌 채 시작한다: 펼치기 전에는 Fleet에 아무것도 묻지 않고(상태 폴링에 요청을 더하지 않는다) 영상도 열지 않는다.
+  const panel = el(doc, "details", null, {class: "panel robot-video", id: "robot-video"});
+  const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading"});
   const picker = el(doc, "fieldset", null, {"data-robot-video-picker": ""});
   picker.append(el(doc, "legend", `로봇 선택(최대 ${MAX_TILES}대)`));
   const show = el(doc, "button", "영상 보기", {type: "button", "data-robot-video-start": ""});
@@ -143,7 +144,7 @@ export function mountRobotVideoPanel({doc = document} = {}) {
     await video.start(stage, robots);
   });
   stopButton.addEventListener("click", () => { video.stop(); status.textContent = "영상을 닫았습니다."; });
-  loadRobots();
+  panel.addEventListener("toggle", () => { if (panel.open) loadRobots(); else video.stop(); });
   return {panel, video};
 }
 

@@ -117,6 +117,9 @@ def _run(origin, robots, *, grant_status=201, steps):
             page.route("**/api/fleet/**", fleet)
             page.route("https://media.site.example/**", media)
             page.goto(origin + "/")
+            page.wait_for_selector("#robot-video")
+            assert not any(url.endswith("/api/fleet/state") for _, url, _ in calls)  # collapsed: no request
+            page.click("#robot-video-heading")
             page.wait_for_selector("[data-robot-video-choice]")
             result = steps(page, calls)
         finally:
