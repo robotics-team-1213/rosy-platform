@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "release_dir": "",
+  "wifi_profile": "site",
+  "wifi_ssid": "site-network",
+  "registry_path": "%LOCALAPPDATA%\\Rosy\\device-registry.json",
+  "rpi_imager": "C:\\Program Files\\Raspberry Pi Ltd\\Imager\\rpi-imager.exe",
+  "card_count": 1
+}

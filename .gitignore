@@ -145,3 +145,7 @@ Thumbs.db
 # Runtime config locks written next to the config file (filelock), never tracked.
 contracts/foundation/config/*.lock
 .kotlin/
+
+# SD operator preferences contain local paths; credentials remain in DPAPI.
+/sd-setup.local.json
+/sd-setup.local.json.tmp-*
