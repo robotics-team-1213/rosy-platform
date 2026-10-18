@@ -13,8 +13,12 @@ Frozen when any of these holds:
 Fail closed: if the tag cannot be checked (no git, DNS, timeout, error), the unit is skipped too. The
 only "run" answer is a successful `git ls-remote` that lists no such tag.
 
-  freeze:  git tag -a ops-update-freeze -m "<who>: <why>, thaw <date>" && git push origin ops-update-freeze
-  thaw:    git push origin :refs/tags/ops-update-freeze && git tag -d ops-update-freeze
+  freeze (seconds, no push hooks; the annotated tag message says who, why and the thaw date):
+    sha=$(gh api repos/robotics-team-1213/rosy-platform/git/ref/heads/main --jq .object.sha)
+    tag=$(gh api repos/robotics-team-1213/rosy-platform/git/tags -f tag=ops-update-freeze -f type=commit -f object=$sha           -f message="<who>: <why>, thaw <date>" --jq .sha)
+    gh api repos/robotics-team-1213/rosy-platform/git/refs -f ref=refs/tags/ops-update-freeze -f sha=$tag
+  thaw:
+    gh api -X DELETE repos/robotics-team-1213/rosy-platform/git/refs/tags/ops-update-freeze
 After freezing, wait until no updater unit is active (systemctl list-units 'rosy-*') before relying on it:
 a freeze stops new runs, not one already running.
 """
