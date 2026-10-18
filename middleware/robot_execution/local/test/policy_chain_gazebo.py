@@ -131,19 +131,22 @@ class Camera:
 
     def receive(self, message):
         stamp = message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec
+        received_at_ns = int(self.clock()*1e9)
         now = self.node.get_clock().now().nanoseconds
         raw = bytes(message.data)
         with self._lock:
             if (message.encoding != 'rgb8' or (message.height,message.width) != SHAPE[1:]
                     or message.step != SHAPE[2]*3 or len(raw) != SHAPE[1]*SHAPE[2]*3
-                    or stamp <= self._stamp or not 0 <= now-stamp <= TIMING['max_observation_age_ns']):
+                    or stamp <= self._stamp or not 0 <= now-stamp <= TIMING['max_observation_age_ns']
+                    or not 0 <= int(self.clock()*1e9)-received_at_ns+now-stamp <= TIMING['max_observation_age_ns']):
                 self.rejected += 1
                 return
             camera = CameraSnapshot('front','sim-workcell-camera',self.calibration,SHAPE,
-                int(self.clock()*1e9)-(now-stamp),hashlib.sha256(raw).hexdigest())
+                received_at_ns-(now-stamp),hashlib.sha256(raw).hexdigest())
             self._latest, self._stamp = (raw,camera), stamp
             self.accepted += 1
 
+    @contextmanager
     def capture(self):
         with self._lock:
             if self._latest is None:
@@ -151,11 +154,12 @@ class Camera:
             raw, camera = self._latest
             self.captures.append(dict(frame_sha256=camera.frame_sha256, received_at_ns=camera.received_at_ns,
                                       source_stamp_ns=self._stamp, shape=SHAPE))
-            return raw, camera
+            yield raw, camera
 
     def current(self):
-        with self._lock:
-            return () if self._latest is None else (self._latest[1],)
+        # A watchdog holding the session lock must not wait for the capture lock.
+        latest = self._latest
+        return () if latest is None else (latest[1],)
 
 
 def installation(out, runtime, calibration):

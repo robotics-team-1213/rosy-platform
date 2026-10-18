@@ -13,7 +13,7 @@ sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
 from rosy.execution.local.omx_policy import CameraSnapshot
 
 
-def provider():
+def provider(clock=lambda:100.0):
     tree = ast.parse(Path(__file__).with_name('policy_chain_gazebo.py').read_text())
     camera = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'Camera')
     scope = dict(threading=threading, hashlib=hashlib, CameraSnapshot=CameraSnapshot, contextmanager=contextmanager,
@@ -22,7 +22,7 @@ def provider():
     exec(compile(ast.Module(body=[camera], type_ignores=[]), '<actual Camera provider>', 'exec'), scope)
     node = NS(create_subscription=lambda *args: None,
               get_clock=lambda: NS(now=lambda: NS(nanoseconds=20_000_000_000)))
-    return scope['Camera'](node, lambda: 100.0, 'a'*64)
+    return scope['Camera'](node, clock, 'a'*64)
 
 
 def test_camera_preserves_source_age():
@@ -33,7 +33,13 @@ def test_camera_preserves_source_age():
 
 
 def test_capture_pins_original_without_blocking_watchdog_current():
-    camera = provider()
+    now, anchored = [100.0], threading.Event()
+    owner_thread = threading.current_thread()
+    def clock():
+        value = now[0]
+        if threading.current_thread() is not owner_thread: anchored.set()
+        return value
+    camera = provider(clock)
     def frame(stamp, value):
         return NS(header=NS(stamp=NS(sec=19,nanosec=stamp)),encoding='rgb8',
                   height=24,width=32,step=96,data=bytes([value])*2304)
@@ -49,7 +55,7 @@ def test_capture_pins_original_without_blocking_watchdog_current():
             writer = threading.Thread(target=update)
             workers.append(writer)
             writer.start()
-            assert attempted.wait(1) and not updated.wait(.05)
+            assert attempted.wait(1) and anchored.wait(1) and not updated.wait(.05)
             reader = threading.Thread(target=lambda:readings.append(camera.current()))
             workers.append(reader)
             reader.start()
@@ -58,7 +64,9 @@ def test_capture_pins_original_without_blocking_watchdog_current():
             assert readings == [(original,)]
             assert original.received_at_ns == 99_900_000_000
             assert hashlib.sha256(raw).hexdigest() == original.frame_sha256
+            now[0] += .3
     finally:
         for worker in workers: worker.join(2)
     assert updated.is_set() and not any(worker.is_alive() for worker in workers)
     assert camera.current()[0] != original
+    assert camera.current()[0].received_at_ns == 99_990_000_000

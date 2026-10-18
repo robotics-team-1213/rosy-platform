@@ -43,8 +43,8 @@ class CoreArmPolicyPort:
             self.session.poll()
             if self.session.owner.state != 'ready':
                 raise BlockingIOError('previous arm goal is still active')
-            rgb, camera = self.capture()
-            source = self.session.capture_inference_input(rgb, camera)
+            with self.capture() as (rgb, camera):
+                source = self.session.capture_inference_input(rgb, camera)
             observation_id = secrets.token_urlsafe(24)
             self._pending = (observation_id, source, policy_revision)
             return dict(observation_id=observation_id, policy_revision=policy_revision,

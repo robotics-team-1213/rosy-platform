@@ -15,7 +15,7 @@ from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
 
 services.arm_policy = CoreArmPolicyPort(
     session,                         # existing authorized OwnerPolicySession
-    capture=trusted_rgb_capture,     # returns (immutable RGB bytes, CameraSnapshot)
+    capture=trusted_rgb_capture,     # context pins (immutable RGB bytes, CameraSnapshot)
     principal=installed_token_id,    # opaque auth token ID, never a bearer secret
 )
 app = create_app(config, services)
@@ -199,3 +199,10 @@ approval withdrawal, CANCELED/HOLD and reconnect refusal. Run results and limits
 belong in the dated validation record; the probe's existence is not a passing result.
 The probe constructs its installation binding from declared fixture configuration;
 it does not validate an externally accepted trained-policy release.
+
+The trusted RGB callback yields its original frame in a context that prevents
+replacement until CORE has copied and validated it. Concurrent providers must
+expose an immutable `camera_current` snapshot without waiting for that capture
+lock, so watchdogs and stop remain available. Static sources can return
+`contextlib.nullcontext((rgb_bytes, camera_snapshot))`. Pinning preserves original
+timestamps and all existing freshness, authority and exact-frame checks.
