@@ -27,7 +27,7 @@ import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web
 import review_versions
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
@@ -413,7 +413,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if collaboration and collaboration.get(self, path, token):
+                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -611,7 +611,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI request accepts only action and version')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
-                if collaboration and collaboration.post(self, path, body, token):
+                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
                 if path.startswith('/api/review-ai/'):
