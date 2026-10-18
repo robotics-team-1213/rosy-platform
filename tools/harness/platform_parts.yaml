@@ -860,6 +860,8 @@ safety_modules:
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
   - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
   - middleware/robot_execution/local/src/rosy/execution/local/core_arm_policy.py
+  - middleware/robot_execution/local/src/rosy/execution/local/policy_lease.py
+  - middleware/robot_execution/local/src/rosy/execution/local/policy_chain.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
@@ -912,6 +914,8 @@ safety_anchors:
   - {symbol: core.drive.docking.build_docking_and_swarm}
   - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
   - {symbol: rosy.execution.local.core_arm_policy.CoreArmPolicyPort}
+  - {symbol: rosy.execution.local.policy_lease.MAX_LEASE_DURATION_NS}
+  - {symbol: rosy.execution.local.policy_chain.SIM_POLICY_ENVIRONMENT}
   - {symbol: core_features.safety.manager.SafetyManager}
   - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
   - {symbol: core_features.safety.manager.SafetyManager.release, public: true}
