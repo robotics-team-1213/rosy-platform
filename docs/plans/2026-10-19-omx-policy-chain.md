@@ -49,6 +49,7 @@ Files: 소유 모듈 시험용 SIM probe, `docs/validation/omx-policy-chain-2026
 ## 실행 기록
 
 - Ruling: 생성 상수와 비공개 anchor를 포함한 safety manifest 분류는 별도 `refactor/omx-policy-safety`로 먼저 착지한다. 제품 source에 분류를 빠뜨리거나 FULL을 축소하지 않기 위한 분리다.
+- Ruling: 제품 변경은 15개 파일을 넘지만, 단일 OMX 관측·권한·실행 경로와 그 호출자·시험·증거가 한 단위다. 공유 safety manifest는 별도 착지했고, 카메라 pin 계약의 CORE·ROS·SIM 호출자 수정을 따로 착지하면 중간 상태가 깨지므로 함께 유지한다.
 - Ruling: 실제 checkpoint가 없어 사용자 선택대로 고정 SIM 정책을 사용한다. 훈련·학습 정확도와 물리 구동은 검증하지 않는다.
 - 소비기 첫 RED는 module 부재, 후속 리뷰 RED는 만료/미래 응답·proxy·발급 후 차단 근거에 대해 5 failed/23 passed였다. 수정 뒤 28 passed.
 - 실제 Fleet 통합과 기존 session/runtime 회귀는 commit `e622829278`에서 134 passed. 관리자와 운영자의 권한을 분리했고, 실행 전 승인 준비의 HTTP deadline은 실행 중 장치 lease budget과 구분했다. 장치 runtime의 0.2s 전송·1s lease·기존 freshness는 유지했다.
