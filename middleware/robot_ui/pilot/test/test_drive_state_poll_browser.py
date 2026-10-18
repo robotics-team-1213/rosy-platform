@@ -30,15 +30,19 @@ def test_drive_skips_rest_state_poll_while_state_socket_is_live(base_url):  # no
             page.route_web_socket("**/ws/state", status_socket)
             _enter_drive(page, base_url)
             page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'OPEN'")
+            # drive-auto.js reads /robot/state once a second on its own; only drive.js's 500 ms poll is judged.
             for _ in range(3):
                 sockets[-1].send(json.dumps(frame))
                 page.wait_for_timeout(100)
             before = len(polls)
-            for _ in range(20):                     # 2 s of a live 10 Hz socket: four 500 ms poll ticks
+            for _ in range(20):                     # 2 s of a live 10 Hz socket
                 sockets[-1].send(json.dumps(frame))
                 page.wait_for_timeout(100)
-            assert len(polls) == before
-            page.wait_for_timeout(1600)             # socket silent > 1 s: the REST fallback resumes
-            assert len(polls) > before
+            live = len(polls) - before
+            assert live <= 3, live                  # drive-auto's ~2; drive.js's four 500 ms ticks would make ~6
+            page.wait_for_timeout(1200)             # socket silent > 1 s: the drive.js REST fallback resumes
+            mark = len(polls)
+            page.wait_for_timeout(2000)
+            assert len(polls) - mark >= live + 2, (live, len(polls) - mark)
         finally:
             browser.close()
