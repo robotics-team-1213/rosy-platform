@@ -1,3 +1,4 @@
+import '/common/account-profile.js';
 // Load only the route's owner. A full navigation separates operational listeners.
 function compatibilityRoute() {
   const modes = new URLSearchParams(window.location.search).getAll("view");

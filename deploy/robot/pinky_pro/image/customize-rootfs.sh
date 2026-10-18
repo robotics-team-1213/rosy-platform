@@ -123,10 +123,12 @@ ROS_SOURCE_TMP=""
 WIRINGPI_TMP=""
 WS281X_TMP=""
 cleanup() {
+    local status=$?
     local index
+    trap - EXIT
     set +e
     for ((index=${#MOUNTS[@]}-1; index>=0; index--)); do
-        umount -- "${MOUNTS[$index]}"
+        umount --recursive -- "${MOUNTS[$index]}" || { (( status )) || status=1; }
     done
     rm -f -- "$ROOT/tmp/ros2-apt-source.deb"
     rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
@@ -137,6 +139,7 @@ cleanup() {
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
     [[ -z "$WS281X_TMP" ]] || rm -f -- "$WS281X_TMP"
+    exit "$status"
 }
 trap cleanup EXIT
 
@@ -146,6 +149,7 @@ for pair in "/dev:$ROOT/dev" "/dev/pts:$ROOT/dev/pts" "/proc:$ROOT/proc" "/sys:$
     target_path="${pair#*:}"
     mount --bind "$source_path" "$target_path"
     MOUNTS+=("$target_path")
+    mount --make-rslave "$target_path"
 done
 
 cp --remove-destination /etc/resolv.conf "$ROOT/etc/resolv.conf"

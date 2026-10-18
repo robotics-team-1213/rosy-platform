@@ -4,7 +4,7 @@ One command for the hand steps between "the runner built the payload" and the pu
 (skill rosy-release-push, steps 3-5):
 
     python tools/release/prepare_payload_release.py --run 36865620181 --robot <robot-ip>
-    python tools/release/prepare_payload_release.py --artifact-dir X:/DevTemp/a --release-id 2026.10.01-021 --skip-abi
+    python tools/release/prepare_payload_release.py --artifact-dir $ROSY_SCRATCH/a --release-id 2026.10.01-021 --skip-abi
 
 1. download: the run's `rosy-native-payload-unsigned-<id>-<sha>` artifact through
    download_artifact.py (parallel ranges, CRC check), then `<id>.unsigned.tar.gz` from it.
@@ -274,7 +274,7 @@ def download_unsigned(run: int, release_id: str | None, out_dir: Path | None, re
 
 
 def default_out_dir(release_id: str) -> Path:
-    return Path("X:/DevTemp") / f"rosy-release-{release_id}"
+    return Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / f"rosy-release-{release_id}"
 
 
 # --- sign, pack, print -----------------------------------------------------
@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None, *, ssh_runner: SshRunner = run_ssh,
     source.add_argument("--run", type=int, help="workflow run id of build-native-payload.yml")
     source.add_argument("--artifact-dir", type=Path, help="an already downloaded artifact folder (skips the download)")
     parser.add_argument("--release-id", help="YYYY.MM.DD-NNN (default: from the artifact name or folder)")
-    parser.add_argument("--out-dir", type=Path, help=r"work folder (default X:\DevTemp\rosy-release-<id>)")
+    parser.add_argument("--out-dir", type=Path, help=r"work folder (default $ROSY_SCRATCH\rosy-release-<id>, else the system temp directory)")
     parser.add_argument("--robot", action="append", default=[], help="robot host for the ABI check (repeatable)")
     parser.add_argument("--key-name", default="rosy-release-2026-01")
     parser.add_argument("--skip-abi", action="store_true", help="skip the robot ROS ABI check")

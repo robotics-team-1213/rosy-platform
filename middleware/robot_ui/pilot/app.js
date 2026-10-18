@@ -1,3 +1,4 @@
+import '/common/account-profile.js';
 // Rosy Pilot 부트스트랩(D-323). 게이트 → 주행 화면 전환.
 // 입력 조정(T8)은 주행 화면 위 칩에서 연다.
 

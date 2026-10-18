@@ -9,10 +9,14 @@ description = "OMX binding for the ROSY pallet transfer Skill and local Action o
 requires-python = ">=3.12"
 dependencies = ["rosy-contracts-skill==0.1.0", "rosy-skill-manipulation==0.1.0"]
 
+[project.scripts]
+rosy-omx-record = "lerobot_robot_rosy_omx:record"
+rosy-omx-preflight = "rosy.integrations.robots.omx.deployment:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["rosy.integrations.robots.omx*"]
+include = ["rosy.integrations.robots.omx*", "lerobot_robot_rosy_omx*"]
 namespaces = true

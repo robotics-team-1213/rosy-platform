@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 from typing import AsyncIterator, Optional, Sequence
 
 from core_common.protocol.schemas import SwarmFollowParams
@@ -32,6 +33,13 @@ class FakeClock:
         # round() 는 반복적인 0.1 더하기가 뜬셈 오차를 쌓아 age_s 비교를 미세하게
         # 어긋나게 하는 것을 막는다 — 실제 시계라면 없는, 가짜 시계만의 문제다.
         self.now = round(self.now + s, 9)
+
+
+def fresh_reads(app) -> None:
+    """D-760 8: no shared robot state read is ever young enough to share (each clock call is 1e6 s on),
+    like ``fleet_gather.max_age_s = 0``: a test that changes a fake robot between two requests
+    milliseconds apart sees the change. Reads in flight are still joined."""
+    app.state.map_pose._clock = itertools.count(1e12, 1e6).__next__   # past any read kept on time.monotonic
 
 
 async def settle(rounds: int = 20) -> None:
@@ -229,6 +237,10 @@ class FakeRobot:
     async def identify_lamp(self, color=None, quiet=False) -> dict:
         self._record("identify_lamp", color)
         return {"accepted": True, "request_id": "fake-led-test", "color": color or "blue"}
+
+    async def power(self, action: str) -> dict:
+        self._record("power", action)
+        return {"mode": "STANDBY" if action == "sleep" else "ACTIVE"}
 
     async def localization_candidates(self):
         self._record("localization_candidates")

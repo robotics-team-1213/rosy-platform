@@ -1,0 +1,62 @@
+--- a/src/dynamixel_hardware_interface.cpp
++++ b/src/dynamixel_hardware_interface.cpp
+@@ -667,32 +667,34 @@
+ hardware_interface::return_type DynamixelHardware::write(
+   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
+ {
+-  if (dxl_status_ == DXL_OK || dxl_status_ == HW_ERROR) {
+-    dxl_comm_->WriteItemBuf();
+-
+-    ChangeDxlTorqueState();
+-
+-    CalcJointToTransmission();
+-
+-    dxl_comm_->WriteMultiDxlData();
+-
+-    is_write_in_error_ = false;
+-    write_error_duration_ = rclcpp::Duration(0, 0);
+-
+-    return hardware_interface::return_type::OK;
+-  } else {
+-    write_error_duration_ = write_error_duration_ + period;
+-
+-    RCLCPP_ERROR_STREAM(
+-      logger_,
+-      "Dynamixel Write Fail (Duration: " << write_error_duration_.seconds() * 1000 << "ms/" <<
+-        err_timeout_ms_ << "ms)");
+-
+-    if (write_error_duration_.seconds() * 1000 >= err_timeout_ms_) {
++  const auto fail = [this, &period]() {
++      is_write_in_error_ = true;
++      write_error_duration_ = write_error_duration_ + period;
++      RCLCPP_ERROR_STREAM(logger_, "Dynamixel Write Fail: rejecting further commands");
+       return hardware_interface::return_type::ERROR;
+-    }
+-    return hardware_interface::return_type::OK;
+-  }
++    };
++
++  if (dxl_status_ != DXL_OK) {
++    return fail();
++  }
++
++  dxl_comm_err_ = CheckError(dxl_comm_->WriteItemBuf());
++  if (dxl_comm_err_ != DxlError::OK) {
++    return fail();
++  }
++
++  ChangeDxlTorqueState();
++
++  CalcJointToTransmission();
++
++  dxl_comm_err_ = CheckError(dxl_comm_->WriteMultiDxlData());
++  if (dxl_comm_err_ != DxlError::OK) {
++    return fail();
++  }
++
++  is_write_in_error_ = false;
++  write_error_duration_ = rclcpp::Duration(0, 0);
++  return hardware_interface::return_type::OK;
+ }
+ 
+ DxlError DynamixelHardware::CheckError(DxlError dxl_comm_err)

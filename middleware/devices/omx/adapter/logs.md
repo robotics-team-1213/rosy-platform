@@ -462,6 +462,12 @@
 - 증거: 단독·파일·어댑터 범위 재검사. 제품 제어 경로 변경 없음.
 - gate 변화: 없음.
 
+## 2026-10-05 · uncommitted · fix(test): preload 좌석 시험의 관절 시계 고정
+
+- 변경: 좌석 TTL은 기존 주입 시계로 검증하고, 별도 관절 freshness는 고정된 runtime 시계를 사용한다. 제품의 0.5초 freshness 거부는 유지한다.
+- 증거: 0.6초 지연 주입으로 live 좌석 시험 실패를 재현했다. 수정 후 같은 지연 1 PASS, 좌석·runtime 시험 57 PASS.
+- gate 변화: SOURCE/HOST 시험 결정성만. 실제 arm 제어·DEVICE/FIELD 수용 없음.
+
 ## 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
 
 - 변경: 좌석 설정을 마친 뒤 가짜 관절 상태의 수신 시각을 갱신하고, 이 시험에서만 상태 신선도 한계를 넓혀 호스트 부하가 좌석 판정을 가리지 않게 했다.
@@ -473,3 +479,71 @@
 - 변경: D-626 devices/omx/adapter으로 이동. Safety 구현 5개와 arm owner/stop/HOLD 유지. caller PYTHONPATH·root 계산·manifest·Docker 소스와 물리 package 표를 정렬했다.
 - 증거: 원격 adapter/profile 및 owner/fence/G2 caller 532 성공·3 skip, 실제 Linux wheel/entrypoint/kinematics config/ament share 설치 확인. 독립 Safety source 승인과 known_failures 0 NEW/0 known.
 - gate 변화: 없음. ROS/vendor/실물 stop/rearm/현장 수용은 별도.
+
+## 2026-10-15 · dbe5db55b · fix(omx): 지속 USB 카메라 미리보기 복구
+
+- 변경: USB 대역폭 부족의 raw 캡처를 MJPEG 640×480으로 고정하고 실제 형식·한 장 버퍼를 확인한다. USB 부재·빈 프레임은 다시 열고 막힌 캡처는 watchdog으로 재시작한다. 호스트 수신 시각의 미리보기만 발행하며 CameraInfo·보정·팔 권한은 만들지 않는다.
+- 증거: 원격 RED 재현 뒤 adapter/배치 526 passed·7 skipped, Fleet OMX UDS/dispatch/observation 37 passed, 각각 NEW 0. 두 실제 카메라의 증가하는 영상과 단일 JPEG AI 추론을 확인했다. 독립 재검토에서 추가 중대 결함 없음.
+- gate 변화: 없음. 실물 프로필·보정·정지 수용과 지속 camera→AI→Fleet 연결은 미완료다. 실제 장치 식별자·로그는 비공개 X: 세션에 보존했다.
+
+## 2026-10-15 · b5539986f · feat(omx): 실측 문서 검사 CLI
+
+- 변경: D-496 초안 문서의 필수 값·관절 순서·유한 수치·범위·jaw 기하·중복 YAML 검사와 독립 CLI. `motion_admitted`는 항상 false다.
+- 증거: 리뷰 결함 5개 RED 재현 후 수정, 원격 39 passed·NEW 0, 독립 재검토에서 추가 중대 결함 없음. 최종 영향 시험은 착지 기록으로 확인한다.
+- gate 변화: 없음. 문서 검사는 측정 진위·독립 정지·실물 수용이 아니다. 기존 disabled profile과 SIM runtime은 유지된다.
+
+## 2026-10-16 · uncommitted · feat(omx): read-only commissioning web observations
+
+- 변경: Added localhost-only commissioning viewer over existing top/front ROS images and commissioning joint observations; no serial/device access or command publisher.
+- 증거: Freshness checks cover source/receipt age, replay and future clocks; decoded image expiration is independent of metadata polling. Remote ROS-free and real Chromium checks exercise disconnect and stalled-download behavior.
+- Fleet live HTTP received both 640x480 images and six actual read-only joint values; observer termination invalidated the values. Real Chromium verified advancing camera sequences, no page errors and no mobile overflow.
+- gate 변화: Hardware acceptance remains unchanged. D-770; detailed evidence in docs/validation/omx-observation-web-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · refactor(omx): commissioning viewer stays with deployment tools
+
+- 변경: Moved the read-only commissioning script to deploy/robot/omx/ outside the omx_adapter module; adjusted source-path tests and launch documentation.
+- 증거: Landing size-range rejected four historical package growth commits. Original branch remains intact; the landing branch combines reviewed final behavior with the corrected placement.
+- gate 변화: No physical acceptance or command authority change. Remote landing checks follow.
+
+## 2026-10-16 · uncommitted · fix(omx): feedback 원본 age 보존
+
+- 변경: 원본 timestamp 진행·age·관절 배열을 확인하고 전송 지연을 owner snapshot freshness에 반영한다. 거절 packet은 snapshot/watchdog을 갱신하지 않는다.
+- 증거: 실제 Jazzy ROS 회귀에서 재전송 freshness 오류 RED(1실패·7통과), 수정 후 native 8시험·순수 intake10시험 GREEN. 커밋된 원격 runner 안에서 실행했다.
+- gate 변화: 없음. 실제 feedback publisher provenance·hardware owner 조립·독립 stop·실측/실제 시연은 미완료다. D-770; docs/validation/omx-feedback-source-age-2026-10-16.md.
+
+## 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용
+
+- 변경: 생성자를 생략하던 host fixture에 실제 intake와 stamp를 제공하고 native 정책 publisher도 stamp를 기록한다. 원격 native wrapper에 격리 domain199 policy transport를 추가했다.
+- 증거: 확대 착지의 신규3실패를 보완, 정책 host22와 실제 Jazzy runtime8·정책 transport4 통과. 물리 장치를 사용하지 않았다.
+- gate 변화: 없음. D-770의 작은 이동 기반 국소 측정 절차를 구체화하되 초기화 자동복구 쓰기·실제 feedback/stop 수용은 미완료다.
+
+## 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
+
+- 변경: `PickPlaceRunner`의 phase gate가 세 값(허용, `PHASE_WAIT`, 거부)을 받는다. `PHASE_WAIT`이면 phase를 내지 않고 돌아간다(`omx_adapter/phase_gate.py`). `ActionApi`는 선택 `coordinator_api`로 연산별 peer 역할을 나누고, `LocalStopApi`는 조율자 정지 이유 4종만 받으며, 정지 래치 표의 출처 CHECK에 `coordinator`를 더해 기존 표를 한 번 옮긴다. barrier 기록·감독·UDS 연산은 `rosy_agent`(owner 조립)에 둔다. 조율자 UID가 없는 owner는 지금 경로 그대로다.
+- 증거: 원격 pytest(owner barrier·조율자·계약·기존 adapter/agent 시험). 물리 장치·ROS-SIM·G1 두 팔 시뮬레이션은 하지 않았다.
+- gate 변화: 없음. `max_wait_s`와 `coordinator_liveness_s` 시작 값, 실제 서비스 UID는 G1·DEVICE에서 정한다.
+
+## 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+
+- 변경: 조율자는 두 owner가 모두 도착하고 `fence_open`일 때만 barrier를 풀고, 한쪽만 풀린 채 다른 쪽이 거절되면 단단한 결합 구간의 팔을 곧바로 정지한다. 정지 래치나 fence가 닫히면 barrier에서 기다리던 Action은 곧바로 FAILED(움직임 없음) 또는 HOLD로 끝난다(`STOP_FENCED_AT_BARRIER`). 조율자가 없는 owner는 짝·barrier grant를 journal 전에 409 `BARRIERS_UNSUPPORTED`로 거절한다. 끝난 짝(SUCCEEDED 포함)은 짝별로 기억해 거짓 결합 정지를 막는다. barrier 만료와 움직임 없는 FAILED는 한 트랜잭션이고 실패하면 HOLD로 내려간다. 해제는 더 움직일 수 없는 Action과 이전 boot의 도착을 거절하고, 조율자 주체 `coordinator-uid-<uid>`를 기록한다.
+- 증거: 원격 pytest(조율자 부분 해제·끝난 짝·owner fence 종료·boot·해제 거절·BARRIERS_UNSUPPORTED 시험 추가). 물리 장치·ROS-SIM은 하지 않았다.
+- 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
+- gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+
+- 변경: `capability_current`, `transfer_provider` 계획기 요청, SIM 그리퍼 판정이 grant의 `item_key`로 승인된 형상을 찾는다. sku가 없으면 키는 지금처럼 `box`다. `PalletizingCellDocumentValidator`는 recipe/3를 cell/3 문서에 대해 혼합 컴파일러로 검증하고, sku마다 `box:<sku>` 형상(잡는 폭 = `width`)을 낸다. owner는 아직 cell/3를 승인하지 않는다(`validate_cell`은 cell/1 로더다). 그래서 실제 owner에서 recipe/3 승인은 거절된다. 이 승인에는 ADR이 필요하다. safety 모듈은 건드리지 않았다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
+
+## 2026-10-17 · 9108fd4d8e · fix(omx): Unix Action listener 수명 조회
+
+- 변경: UnixActionServer가 listen 성공 뒤와 teardown 때 serving Event를 관리하고, 기존 stop Event가 설정되면 즉시 false인 read-only is_serving을 제공한다. 인증·socket 권한·Action admission·취소 계약은 유지한다.
+- 증거: 실제 UDS를 포함한 startup 통합과 정지 중 listener 상실을 재현한 원격 집중 묶음 66 passed. 독립 Safety-Review APPROVE는 docs/validation/omx-native-startup-2026-10-17/safety-review.md.
+- gate 변화: 소스·호스트 검증. 이 값은 listener 수명이며 요청 응답성·물리 정지·장치 수용 증거가 아니다.
+
+## 2026-10-18 · 4b97b23ac7 · test(omx): native feedback 진단과 Gazebo 이동 검증
+
+- 변경: 시험 전용 선택적 intake·owner lock·최초 HOLD trace와 고정 5회 native 표본을 추가했다. 생산 안전 기준과 freshness·timeout·executor 설정은 유지했다.
+- 증거: 계측 단독 5회·계측 전체 suite 5회·계측 없는 전체 suite 5회·수정하지 않은 main 전체 suite 별도 5회 통과. 원격 affected 1281 passed, 22 skipped, NEW 0. 독립 리뷰는 진단 전용 변경으로 적절하다고 판정했다. 사용자 승인 controller 패키지 설치 후 Gazebo 목표 0.01rad에 관측 이동량 0.008547rad·오차 0.001453rad. 상세 범위와 로그 해시는 docs/validation/omx-feedback-verification-2026-10-18/result.md.
+- gate 변화: 없음. 간헐 stale-feedback 원인은 미확정이며 Fleet→장치 lease 전달·학습 정책 종단간·실물 수용 증거는 없다.

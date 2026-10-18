@@ -59,7 +59,8 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
                                     "state": "unresolved", "seq": 2, "turn_deg": None,
                                     "reason": None, "pivot_basis": None,
                                     "signal_request_id": None, "signal_state": None,
-                                    "map_entry_used": False, "map_entry_reason": None}
+                                    "map_entry_used": False, "map_entry_reason": None,
+                                    "distance_basis": None, "distance_basis_reason": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
@@ -166,9 +167,13 @@ def test_refused_while_manual_control_is_active(core_client):
     """Review L6: the same manual-released rule as the other motion endpoints."""
     client, services = core_client()
     services.state.set_velocity(0.0, 0.0)
+    # The 500 ms teleop watchdog runs on the wall clock; a slow CI runner between the two
+    # requests expires the session (= no manual control), so pin it. Expiry has its own test.
+    services.command.watchdog.timeout_ms = 60_000
     assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
     assert client.post("/api/v1/teleop", json={"linear": 0.05, "angular": 0.0},
                        headers=OPERATOR).status_code == 200
+    assert services.command.manual_active
     refused = client.post(URL, json=BODY, headers=OPERATOR)
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "MODE_CONFLICT"
 
@@ -302,6 +307,26 @@ def test_d759_bend_map_entry_validation_and_record(core_client):
     assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "none_sent")
 
 
+def test_d759_rev1_turn_map_entry_validation_and_record(core_client):
+    client, services, clock = _active(core_client)
+    turn = {**BODY, "action": "right", "turn_deg": -108.1}
+    for bad in ({**BODY, "action": "stop"}, {**BODY, "action": "left"}):  # no turn_deg: no exit heading
+        assert client.post(URL, json={**bad, "map_entry": ENTRY}, headers=OPERATOR).status_code == 400, bad
+    assert client.post(URL, json={**turn, "map_entry": {**ENTRY, "yaw_rad": 7.0}}, headers=OPERATOR).status_code == 400
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).turn_map_entry_enabled is False       # off by default
+    assert _line_follow_config({"turn_map_entry_enabled": True}).turn_map_entry_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"turn_map_entry_enabled": "true"})
+    assert client.post(URL, json={**turn, "map_entry": ENTRY}, headers=OPERATOR).json()["state"] == "armed"
+    assert lf._junction["map_entry"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, turn_map_entry_enabled=True)
+    client.post(URL, json={**turn, "place_id": "J3", "map_entry": ENTRY}, headers=OPERATOR)
+    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "stale")  # a stamp of 1970
+
+
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
     _, services, clock = _active(core_client)
     raw = json.dumps({"reason": "junction_transverse", "stamp": clock["t"], "junction_ahead_m": 0.25})
@@ -316,3 +341,26 @@ def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
         raw = json.dumps({"reason": "no_boundary", "stamp": clock["t"], "junction_ahead_v": marker})
         observation.keep_junction(services, raw, source_now=clock["t"], received_at=clock["t"])
         assert services.line_follow.supports_junction_pivot is on, marker
+
+
+def test_d767_pose_stamp_validation_and_refusal(core_client):
+    client, services, clock = _active(core_client)
+    for bad in (0, -1.0, "now", "1.5", True, [1.0]):  # review: strict, no JSON true or numeric string
+        assert client.post(URL, json={**BEND, "pose_stamp": bad}, headers=OPERATOR).status_code == 400, bad
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).instruction_stamp_enabled is False       # off by default
+    assert _line_follow_config({"instruction_stamp_enabled": True}).instruction_stamp_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"instruction_stamp_enabled": "true"})
+    response = client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INSTRUCTION_STAMP_UNUSABLE"
+    assert response.json()["error"]["detail"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, instruction_stamp_enabled=True)
+    response = client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR)  # a stamp of 1970
+    assert (response.status_code, response.json()["error"]["detail"]) == (409, {"reason": "no_sample"})
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["state"] == "idle"
+    assert client.post(URL, json=BEND, headers=OPERATOR).json()["state"] == "armed"
+    junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
+    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "none_sent")

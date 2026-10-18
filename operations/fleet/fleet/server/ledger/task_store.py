@@ -870,35 +870,6 @@ class FleetTaskStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def recover_interrupted_requests(self) -> int:
-        """Fail closed after process restart; never infer that an unsent request is safe to retry."""
-        now = _now()
-        reason = "PROCESS_RESTARTED_WITH_REQUESTED_TASK"
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            rows = connection.execute(
-                "SELECT task_id FROM fleet_tasks WHERE status = 'REQUESTED'"
-            ).fetchall()
-            recovered = 0
-            for row in rows:
-                task_id = row["task_id"]
-                connection.execute(
-                    "UPDATE fleet_tasks SET status = 'UNKNOWN', reason = ?, updated_at = ? "
-                    "WHERE task_id = ? AND status = 'REQUESTED'",
-                    (reason, now, task_id),
-                )
-                if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                    continue
-                connection.execute(
-                    """INSERT INTO fleet_task_history
-                       (task_id, status, source, actor_id, reason, created_at)
-                       VALUES (?, 'UNKNOWN', 'system', 'fleet-recovery', ?, ?)""",
-                    (task_id, reason, now),
-                )
-                recovered += 1
-            connection.commit()
-        return recovered
-
     @staticmethod
     def _task_dict(row) -> dict:
         return {

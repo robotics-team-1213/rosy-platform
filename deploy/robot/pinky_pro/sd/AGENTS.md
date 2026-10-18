@@ -56,6 +56,11 @@ one-time per-card provisioning bundle.
   registered robot: the receipt must prove a verified earlier write (writer exit 0,
   readback verified) of exactly that number, name and UID, which it supplies when
   omitted. The new receipt records `supersedes`; registry entries stay unique.
+  A reimage also keeps the receipt's Model, Preset, CountryCode and Fleet values
+  unless overridden, and requires `-OperatorPublicKey` again if the old card had one (D-746).
+- A card that already holds another robot's `rosy-provision/provision.json` is refused
+  at plan and write time (both names reported, no secrets); `-ReplaceExistingProvision`
+  (plan time, pinned by the reviewed plan) is the explicit override (D-746).
 - `-OperatorPublicKey <file.pub>` (D-174 F3) adds one ed25519/ecdsa public key to the
   bundle; first boot creates a key-only `rosy` account (journal groups, NOPASSWD sudo).
   The plan and receipt carry only the `SHA256:` fingerprint, and a write with a

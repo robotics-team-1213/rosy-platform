@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import sqlite3
+import threading
 import time
 from hashlib import sha256
 
@@ -197,14 +198,17 @@ def test_the_stuck_row_carries_the_ai_chip_and_live_facts_for_its_robot(tmp_path
 
 
 def test_a_stalled_fact_write_does_not_delay_the_emergency_stop(tmp_path, monkeypatch):
+    # Deterministic, no stop-watch: the fact write is parked on an Event until the stop has answered.
+    # If the write ran on the event loop (or held anything the stop needs) the stop could not
+    # return while it is parked: the park times out first and the facts post is already done.
     app, robot, _ = _app(tmp_path)
-    original = ai_facts.AiFactLog.append
+    entered, release, parked_out = threading.Event(), threading.Event(), []
 
-    def slow_append(self, *args, **kwargs):
-        time.sleep(1.0)
-        return original(self, *args, **kwargs)
+    def parked_append(self, *args, **kwargs):
+        entered.set()
+        parked_out.append(not release.wait(5.0))   # True: nobody released it, the stop was stuck behind it
 
-    monkeypatch.setattr(ai_facts.AiFactLog, "append", slow_append)
+    monkeypatch.setattr(ai_facts.AiFactLog, "append", parked_append)
 
     async def main():
         transport = httpx.ASGITransport(app=app)
@@ -213,15 +217,21 @@ def test_a_stalled_fact_write_does_not_delay_the_emergency_stop(tmp_path, monkey
                 "service_version": "0.1.0", "model_profiles": [], "owner_mode": "shared"})
             facts = asyncio.create_task(client.post("/api/fleet/ai/facts", headers=_auth(AI),
                                                     json={"facts": [_fact()]}))
-            await asyncio.sleep(0.05)
-            started = time.monotonic()
-            stop = await client.post("/api/fleet/estop", headers=_auth(OPERATOR))
-            elapsed = time.monotonic() - started
+            for _ in range(500):                       # the write is in flight before the stop is sent
+                if entered.is_set():
+                    break
+                await asyncio.sleep(0.01)
+            assert entered.is_set()
+            stop = await asyncio.wait_for(client.post("/api/fleet/estop", headers=_auth(OPERATOR)), 30.0)
+            still_parked = not facts.done() and not parked_out
+            release.set()
             assert (await facts).status_code == 200
-            return stop.status_code, elapsed
+            return stop.status_code, still_parked
 
-    status, elapsed = asyncio.run(main())
-    assert status == 200 and elapsed < 0.5, elapsed
+    status, still_parked = asyncio.run(main())
+    assert status == 200
+    assert still_parked, "the emergency stop only answered after the fact write ended"
+    assert parked_out == [False]
     assert ("estop",) in robot.calls
 
 

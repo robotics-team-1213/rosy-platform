@@ -2,7 +2,7 @@
 
     python tools/remote/remote_sim.py --check
     python tools/remote/remote_sim.py [--host HOST|ROLE] [--sha REV] [--log-dir DIR] [--minutes N]
-                                      swarm_bench|map_v2_runner [-- <bench args>]
+                                      swarm_bench|map_v2_runner|fleet_trips [-- <bench args>]
     python tools/remote/remote_sim.py [...] cmd -- <shell command>
 
 Hosts: ``ROSY_SIM_HOSTS`` (space separated ``user@addr[=role]``), else ``sim_hosts`` in the
@@ -17,7 +17,7 @@ host, the ``sim`` floor (6 free cores, 8 GB) after ``~/rosy-jobs`` locks and res
 ``remote_pytest.py`` (git bundle into ``~/rosy-test``); the run builds ``gz_sim`` with colcon,
 then runs the bench headless under ``systemd-run --user --scope`` (MemoryMax, CPUQuota, nice).
 The remote shell stops that scope and frees the lock when it ends; then the outputs are fetched.
-Logs and bench outputs land in ``--log-dir`` (default ``X:/DevTemp/remote-sim/<sha>``); the
+Logs and bench outputs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-sim/<sha>``, else the system temp directory); the
 run's files are removed after a good fetch and kept on the host when the fetch fails. Never run on the operator laptop (D-584).
 Standard library only.
 """
@@ -43,14 +43,21 @@ PRODUCTION_REFUSAL = "production only, excluded from simulation (D-571)"
 # gets the shared-PC ("ai") caps.
 PROFILES = {"model": {"mem_gb": 6, "cpus": 8}, "ai": {"mem_gb": 4, "cpus": 4}}
 
-# CORE's pip pins, built once per requirements hash. Every step is chained: a failed install is never
-# stamped .ok. Runs inside the scope (INNER), so the caps and the wall limit cover it.
+# CORE's pip pins, the Fleet pins CORE's set lacks (one interpreter runs CORE and a SIM Fleet; CORE's
+# pins win, as remote_pytest.py VENV does with the device set), wheel build tools, and the D-373
+# learned-perception lock in its own prefix (ROSY_LEARNED_SITE, as on the robot). Cached by those
+# files and the install recipe. A failed install is never stamped .ok. Runs inside the scope (INNER),
+# so the caps and the wall limit cover it.
 DEPS = r"""( flock -w 600 9 || exit 1
   [ -f "$PYDEPS/.ok" ] && exit 0
-  rm -rf "$PYDEPS.new"
+  rm -rf "$PYDEPS.new"; mkdir -p "$PYDEPS.new"
+  grep -viEf <(sed -n 's/^\([A-Za-z0-9._-]*\)==.*/^\1==/p' "$REQ") "$FLEET_REQ" > "$PYDEPS.new/fleet-extra.txt" \
+    || [ $? = 1 ]
   UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-  if [ -n "$UV" ]; then "$UV" pip install -q --python /usr/bin/python3 --target "$PYDEPS.new" -r "$REQ" httpx
-  else /usr/bin/python3 -m pip install -q --target "$PYDEPS.new" -r "$REQ" httpx; fi \
+  if [ -n "$UV" ]; then PIP() { "$UV" pip install -q --python /usr/bin/python3 "$@"; }
+  else PIP() { /usr/bin/python3 -m pip install -q "$@"; }; fi
+  PIP --target "$PYDEPS.new" -r "$REQ" -r "$PYDEPS.new/fleet-extra.txt" httpx 'setuptools>=68' wheel \
+    && PIP --target "$PYDEPS.new/learned" --require-hashes --no-deps --only-binary :all: -r "$LEARNED_REQ" \
     && touch "$PYDEPS.new/.ok" && rm -rf "$PYDEPS" && mv "$PYDEPS.new" "$PYDEPS"
 ) 9>"${PYDEPS%/*}/.lock" || { echo "[remote-sim] CORE pip deps failed"; exit 1; }
 """
@@ -59,12 +66,16 @@ DEPS = r"""( flock -w 600 9 || exit 1
 INNER = r"""set -eo pipefail
 export PATH=/usr/bin:/bin:$PATH  # ~/.local/bin may hold another python3 (Isaac's 3.11 on the model PC)
 """ + DEPS + r"""source /opt/ros/jazzy/setup.bash
-export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}" ROSY_LEARNED_SITE="$PYDEPS/learned"
 COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
-colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim \
+DEFAULT_ROBOT="$(PYTHONPATH="contracts/foundation:$PYTHONPATH" python3 -c 'from core_common.profile import DEFAULT_ROBOT; print(DEFAULT_ROBOT)')"
+colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim "$DEFAULT_ROBOT" \
   --parallel-workers "$CPUS" --build-base "$OUT/build" --install-base "$OUT/install" \
   > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
 source "$OUT/install/setup.bash"
+bash deploy/robot/pinky_pro/image/install-motion-contracts.sh "$PWD" "$OUT/install"
+CONTRACT_SITE="$OUT/install/lib/python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages"
+export PYTHONPATH="$CONTRACT_SITE:$PYTHONPATH"
 eval "$BENCH_CMD"
 """
 
@@ -87,7 +98,8 @@ mkdir -p "$OUT/tmp" "$R/sim-pydeps"; printf '%s' "$INNER" > "$OUT/inner.sh"; cd 
 mkdir -p ~/rosy-jobs; echo "$$ sim $CPUS ${MEM%G}" > ~/rosy-jobs/"$NAME".lock; rm -f ~/rosy-jobs/"$NAME".resv
 export GZ_PARTITION=$NAME GZ_IP=127.0.0.1 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_DOMAIN_ID=$((1 + RANDOM % 19))
 export REQ=deploy/robot/pinky_pro/requirements-core.txt OUT TMPDIR=$OUT/tmp ROS_LOG_DIR=$OUT/ros-log
-export PYDEPS=$R/sim-pydeps/$(sha256sum "$REQ" | cut -c1-12)
+export FLEET_REQ=deploy/site/requirements-fleet.txt LEARNED_REQ=deploy/robot/pinky_pro/image/learned-perception-requirements.txt
+export PYDEPS=$R/sim-pydeps/$( { sha256sum "$REQ" "$FLEET_REQ" "$LEARNED_REQ"; printf '%s' "$INNER"; } | sha256sum | cut -c1-12)
 timeout -k 30 "$SECS" systemd-run --user --scope -q --unit "rosy-sim-$NAME" \
   -p MemoryMax="$MEM" -p CPUQuota="$((CPUS * 100))%" nice -n 10 bash "$OUT/inner.sh" "$@" &
 wait $!
@@ -114,6 +126,9 @@ ros2 run gz_sim swarm_bench.py --robots "$Y" --out "$OUT/swarm_bench.csv" "$@"
 """,
     # The acceptance launch starts Gazebo, CORE and map_v2_runner; extra args are launch args.
     "map_v2_runner": r"""ros2 launch gz_sim pinky_integrated_acceptance.launch.py gazebo_gui:=false "$@" 2>&1 | tee "$OUT/launch.txt"
+""",
+    # Two robots + Fleet on map_v2_fleet, one lane trip each; exit 0 only when both arrive.
+    "fleet_trips": r"""python3 tools/sim/fleet_trips.py --out "$OUT/trips" "$@"
 """,
 }
 
@@ -205,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         bench_cmd, bench_args = " ".join(args.bench_args), []
     else:
         bench_cmd, bench_args = BENCHES[args.bench], args.bench_args
-    base = os.environ.get("ROSY_SIM_LOGS") or ("X:/DevTemp/remote-sim" if os.name == "nt" else "/tmp/remote-sim")
+    base = os.environ.get("ROSY_SIM_LOGS") or rp.log_root("remote-sim")
     log_dir = args.log_dir or Path(base) / sha[:12]
     code = run_sim(host, role, bench_cmd, bench_args, sha, repo, log_dir, args.minutes)
     print(f"[remote-sim] exit {code} on {host} ({log_dir})")

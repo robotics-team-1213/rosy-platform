@@ -205,6 +205,86 @@ def test_steep_far_line_is_sided_while_a_corner_is_latched():
     assert not [c for c in keeper.last["candidates"] if c["reason"] == "steep_far"]
 
 
+def _roundabout_exit(straight=(0.196, 0.32), sign=-1.0, x0=0.289):
+    """Gazebo map_v2_fleet m20, NW roundabout exit, robot on the exit lane's centre: the
+    right edge straight at y -0.10 from x 0.196 to 0.32, then the corner's outer line
+    at 59.7 deg through (x0, -0.129) up to y 0.031. sign=+1 mirrors it left."""
+    image = _render([])
+    floor, y = np.isfinite(X), -sign * Y
+    steep = floor & (np.abs(X - (x0 + (y + 0.129) / np.tan(np.radians(59.7)))) <= TAPE_HALF)
+    image[steep & (y > -0.10) & (y < 0.031)] = 195
+    if straight:
+        image[floor & (np.abs(y + 0.10) <= TAPE_HALF) & (X >= straight[0]) & (X <= straight[1])] = 195
+    return image
+
+
+def _near(image, corner_turning=True, **kw):
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=corner_turning)
+    return keeper.update(image, GROUND, lane_half_width_m=HALF, **kw), keeper
+
+
+def _near_runs(last):
+    return [b for b in last["boundaries"] if b.get("near_run")]
+
+
+@pytest.mark.parametrize("sign, x0, bend_expected", [(-1.0, 0.289, False), (1.0, 0.30, False), (-1.0, 0.289, True)])
+def test_straight_near_run_before_a_steep_line_is_the_boundary(sign, x0, bend_expected):
+    # m20: the steep line was rejected as steep_crossing and the frame held (no_boundary)
+    # although ~20 paint points of the straight right edge lay nearer the robot. With
+    # bend_expected the near run is sided after the nearest-first lines it joins. The left
+    # mirror sits 1 cm further: at 0.289 its steep line extrapolates to 0.182 at SIDE_X_M,
+    # inside the steep rule's lane width, and is kept as the boundary (as on main).
+    obs, keeper = _near(_roundabout_exit(sign=sign, x0=x0, straight=(0.196, x0 + 0.031)), bend_expected=bend_expected)
+    last, side = keeper.last, "left" if sign > 0 else "right"
+    assert obs is not None and last["strategy"] == f"{side}_only"
+    edge = next(b for b in last["boundaries"] if b["selected"])
+    assert edge["side"] == side and edge["near_run"] and edge["y_at_side_x_m"] == pytest.approx(0.10 * sign, abs=0.015)
+    # The refit band takes a few cells where the curve leaves the edge: it leans <= ~15 deg
+    # toward the curve, but the target stays on the lane centre.
+    assert abs(edge["heading_deg"]) < 15.0 and abs(last["target_m"][1]) < 0.02 and abs(obs.error) < 0.15
+    assert [c for c in last["candidates"] if c["reason"] == "steep_crossing" and c["rejected"]]
+    # Corner seeding (and the junction rules) see fitted lines only.
+    assert not any(r.get("near_run") for frame in keeper._seeds for r in frame)
+
+
+def test_near_run_is_off_without_corner_turning():
+    # Device default (corner_turning False) behaves as main: m20 still holds.
+    obs, keeper = _near(_roundabout_exit(), corner_turning=False)
+    assert obs is None and keeper.last["reason"] == "no_boundary" and not _near_runs(keeper.last)
+
+
+@pytest.mark.parametrize("extra", ["none", "wall", "bars", "short", "next_lane"])
+def test_steep_line_without_a_straight_lane_edge_still_holds(extra):
+    straight = (0.27, 0.32) if extra == "short" else (0.36, 0.48) if extra == "next_lane" else None
+    image = _roundabout_exit(straight=straight)
+    if extra == "next_lane":  # the next lane's line, beyond the steep line's near end
+        image = _roundabout_exit(straight=None)
+        image[np.isfinite(X) & (np.abs(Y + 0.23) <= TAPE_HALF) & (X >= 0.36) & (X <= 0.48)] = 195
+    if extra == "wall":
+        image[np.isfinite(X) & (Y < -0.16)] = 225
+    if extra == "bars":  # crosswalk bars parallel to travel on the steep line's side
+        for centre in (-0.06, -0.12, -0.18):
+            image[np.isfinite(X) & (X > 0.18) & (X < 0.30) & (np.abs(Y - centre) <= 0.02)] = 195
+    obs, keeper = _near(image)
+    assert not _near_runs(keeper.last)
+    if extra in ("none", "short", "next_lane"):
+        assert obs is None and keeper.last["reason"] == "no_boundary"
+    if extra == "none":
+        assert [c for c in keeper.last["candidates"] if c["reason"] == "steep_crossing" and c["rejected"]]
+
+
+def test_near_run_needs_no_long_line_on_its_side_and_is_taken_once():
+    from control.sensing.perception.lane_keep_bend import near_run
+    run = {"centre": np.array([0.2, -0.10]), "direction": np.array([1.0, 0.0]), "along": (0.0, 0.12)}
+    ends, limits = [np.array([0.289, -0.129]), np.array([0.383, 0.031])], (math.radians(45.0), 0.03, 0.08)
+    assert near_run([run], ends, HALF, [], [], limits) == [run] and run["near_run"]
+    assert near_run([run], ends, HALF, [(-0.10, 0.15, 0.25)], [], limits) == []  # 9380a6ddc parallel guard
+    assert near_run([run], ends, HALF, [(0.10, 0.15, 0.25)], [], limits) == [run]  # the other side's line
+    assert near_run([run], ends, HALF, [], [run], limits) == []  # a second steep line: one run per side
+    steep_own = dict(run, direction=np.array([0.5, -0.866]))
+    assert near_run([steep_own], ends, HALF, [], [], limits) == []
+
+
 def test_white_wall_is_not_a_boundary():
     obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], wall_y=-0.16))
     assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15

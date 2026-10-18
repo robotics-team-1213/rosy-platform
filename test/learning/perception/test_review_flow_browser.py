@@ -149,7 +149,7 @@ def test_command_search_refreshes_functions_that_finish_loading(browser_workspac
     search.fill('박스 1 x0')
     expect(page.locator('#review-command-results ui-button')).to_have_count(0)
     pending[0].continue_()
-    expect(page.locator('#image-message')).to_be_hidden()
+    expect(page.get_by_role('spinbutton', name='박스 1 x0', exact=True)).to_be_enabled()
     search.fill(''); search.fill('박스 1 x0')
     page.keyboard.press('Enter')
     expect(page.get_by_role('spinbutton', name='박스 1 x0', exact=True)).to_be_focused()
@@ -188,6 +188,27 @@ def test_review_studio_help_stays_inside_narrow_viewport(browser_workspace):
         page.locator(f'#{help_id} summary').click()
         box = page.locator(f'#{help_id} p').bounding_box()
         assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 390
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_disabled_ai_draft_and_photo_caption_keep_their_words_in_their_boxes(browser_workspace, width):
+    """2026-10-15 screenshots: the disabled AI draft button's label sat on its dashed edge (no room for the reason
+    under it) and the photo caption was cut at the edge of a sideways-scrolling bar at 390px."""
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.reload(wait_until='networkidle')
+    button = page.locator('#review-ai-object_draft')
+    expect(button).to_have_attribute('reason', re.compile('.'))
+    fit = page.evaluate("""() => {
+      const button = document.getElementById('review-ai-object_draft'), box = button.getBoundingClientRect();
+      const range = document.createRange(); range.selectNodeContents(button);
+      const words = range.getBoundingClientRect(), caption = document.getElementById('view-status');
+      const cut = caption.getBoundingClientRect();
+      return {top: words.top - box.top, bottom: box.bottom - words.bottom, captionRight: cut.right, width: innerWidth,
+        captionCut: caption.scrollWidth - caption.clientWidth};
+    }""")
+    assert fit['top'] >= 2 and fit['bottom'] >= 2, fit
+    assert fit['captionRight'] <= fit['width'] and fit['captionCut'] <= 0, fit
 
 
 def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace):
@@ -678,7 +699,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
 
 
-@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
+@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels', '/learning/camera'])
 @pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
 def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
     page, _, _ = browser_workspace
@@ -686,14 +707,14 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     topbar = page.locator('ui-topbar').bounding_box()
     assert topbar['height'] <= height * 0.2, (route, topbar, height)
-    # D-741: the app bar is one row (app, theme); the heading and the four screens left it.
+    # D-741: the app bar is one row (app, theme); the heading and the five screens (D-792 camera) left it.
     assert page.locator('ui-topbar h1, ui-topbar nav').count() == 0
     brand = page.locator('ui-topbar ui-brand').bounding_box()
     theme = page.locator('ui-topbar .theme-label select').bounding_box()
     assert brand['x'] + brand['width'] <= theme['x'], (route, brand, theme)
     rail = page.locator('.ui-rail').bounding_box()
     assert rail['y'] == topbar['y'] + topbar['height'], (route, rail, topbar)
-    assert page.locator('.workspace-tabs a').count() == 4
+    assert page.locator('.workspace-tabs a').count() == 5
     assert page.locator('.workspace-tabs a[aria-current="page"]').count() == 1
     for link in page.locator('.workspace-tabs a').all():
         bounds = link.bounding_box()

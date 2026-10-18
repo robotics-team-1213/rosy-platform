@@ -81,7 +81,9 @@ def main():
     rclpy.init()
     node = rclpy.create_node("rosy_g2_independent_observer")
     observations = Observations(open_position=args.open_position)
-    node.create_subscription(JointState, "/joint_states", observations.joints, qos_profile_sensor_data)
+    from instance_names import names_from_environment
+    names = names_from_environment()
+    node.create_subscription(JointState, names.joint_state_topic, observations.joints, qos_profile_sensor_data)
     node.create_subscription(Clock, "/clock", observations.clocks, qos_profile_sensor_data)
     gz = GzNode()
     if not gz.subscribe(Pose_V, "/world/omx_cell_workcell/pose/info", observations.pose):

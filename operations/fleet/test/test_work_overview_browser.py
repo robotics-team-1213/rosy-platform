@@ -242,8 +242,9 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             # D-741 7: 끝난 작업·승인 대기는 같은 조회 결과를 상태로 거른다. 걸러진 줄은 있고 나머지는 없어야 한다.
-            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09"},
-                     {**rows[1], "source_id": "wait-1", "status": "PROPOSED", "device_id": "omx_wait"}]
+            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09", "visible_state": "ended"},
+                     {**rows[1], "source_id": "wait-1", "visible_state": "approval_pending", "status": "PROPOSED", "device_id": "omx_wait",
+                      "visible_state": "approval_pending"}]
             api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
             for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
                 page.goto(site + "/console?view=work&show=" + show)
@@ -267,7 +268,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             screens = page.get_by_role("navigation", name="작업 화면", exact=True)
             assert screens.locator("a").all_inner_texts() == ["전체 작업", "승인 대기", "끝난 작업", "새 작업"]
             assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
-            assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console/cell"
+            assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
             seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
             if size[0] >= 1024:
                 assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)
@@ -302,23 +303,128 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             browser.close()
 
 
+@pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
+def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size):
+    """D-763 4 (v1.237): trip and Cell Job rows stand beside Task/Mission with the server's visible state; a wait
+    reads as 대기 and past its bound as a warning, not 개입. 승인 대기·끝난 작업 filter the same answer. Placeholder
+    identities only (rev 2 Q6)."""
+    from playwright.sync_api import sync_playwright
+
+    def row(source, source_id, kind, status, device, visible, **extra):
+        return {"source": source, "source_id": source_id, "action_kind": kind, "status": status, "device_id": device,
+                "workcell_id": extra.pop("workcell_id", None), "reason": extra.pop("reason", None),
+                "updated_at": "2026-10-15T00:00:00+00:00", "visible_state": visible, "approval": None,
+                "wait": None, **extra}
+    wait = {"reason": "signal", "waiting": True, "bound_s": 20.0, "over_bound": False}
+    rows = [row("trip", "t-wait", "trip", "running", "rosy_01", "waiting", wait=wait),
+            row("trip", "t-over", "trip", "running", "rosy_02", "in_progress",
+                wait={**wait, "waiting": False, "over_bound": True}),
+            row("trip", "t-done", "trip", "arrived", "rosy_03", "ended"),
+            row("cell_job", "job-1", "CELL_TRANSFER", "PROPOSED", "omx_control", "approval_pending",
+                workcell_id="packing", approval="two_person"),
+            row("task", "task-1", "navigate", "FAILED", "rosy_04", "intervention")]
+    work = {"rows": rows, "observed_at": "2026-10-15T00:00:01+00:00", "tasks_available": True,
+            "missions_available": True, "cell_jobs_available": True, "truncated_sources": [], "kinds": ["trip"]}
+    api = {**API, "/api/fleet/session": {"principal_id": "operator-1", "role": "operator"}, "/api/fleet/work": work,
+           "/api/fleet/trips/t-done": {**rows[2], "trip_id": "t-done", "state": "arrived"},
+           "/api/fleet/cell-jobs/job-1": {"proposal_id": "job-1", "proposal_state": "RESOLVED",
+                                          "job": {"status": "PROPOSED", "workcell_id": "packing"}}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [], size=size)
+        try:
+            for show, expected in (("pending", ["Cell 적재 · omx_control · 승인 대기"]),
+                                   ("done", ["운행 · rosy_03 · 끝남"])):  # 개입 필요 is not 끝남 (D-763 8)
+                page.goto(site + "/console?view=work&show=" + show)
+                page.clock.run_for(2000)
+                page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count",
+                                       arg=len(expected))
+                assert page.locator("#work-list ui-button").all_inner_texts() == expected, show
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(2000)
+            page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 5")
+            texts = page.locator("#work-list ui-button").all_inner_texts()
+            assert texts[:2] == ["운행 · rosy_01 · 대기 · 신호", "운행 · rosy_02 · 대기 상한 넘음 · 신호"], texts
+            assert "개입" not in texts[1]  # past its bound: a warning (rev 2 Q7)
+            assert "Cell 작업 원장" in page.locator("#work-sources").inner_text()
+            page.locator("#work-filter").select_option("trip")
+            assert page.locator("#work-list ui-button").count() == 3
+            page.locator("#work-list ui-button").filter(has_text="rosy_03").click()
+            page.wait_for_function("() => document.getElementById('work-evidence').textContent.includes('도착')")
+            assert "CORE" in page.locator("#work-detail").inner_text()
+            # The chosen row is drawn as chosen, with the toggle's existing pressed fill.
+            fills = page.locator("#work-list ui-button").evaluate_all(
+                "nodes => nodes.map(node => [node.getAttribute('aria-pressed'), getComputedStyle(node).backgroundColor])")
+            chosen = {fill for pressed, fill in fills if pressed == "true"}
+            assert len(chosen) == 1 and chosen.isdisjoint(fill for pressed, fill in fills if pressed != "true"), fills
+            page.locator("#work-filter").select_option("cell_job")
+            page.locator("#work-list ui-button").click()
+            page.wait_for_function("() => document.getElementById('work-detail').textContent.includes('Cell 적재')")
+            assert "packing" in page.locator("#work-detail").inner_text()
+            terms = page.locator("#work-detail dt").all_inner_texts()  # D-763 7: the rule is shown, read-only
+            assert page.locator("#work-detail dd").nth(terms.index("승인 조건")).inner_text().startswith("두 사람"), terms
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary')?.scrollTo(0, 0)")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and 0 <= stop["y"] and stop["y"] + stop["height"] <= size[1]
+            _shot(page, f"work-sources-{size[0]}.png", full_page=True)
+            assert not errors
+        finally:
+            browser.close()
+
+
 NAMED = "이름 있는 운영자 로그인이 필요합니다"
+
+
+def test_late_approval_failure_does_not_disable_a_new_selection(site):
+    from playwright.sync_api import expect, sync_playwright
+    rows = [{"source": "mission", "source_id": key, "visible_state": "approval_pending",
+             "action_kind": "PICK_PLACE", "status": "PROPOSED", "device_id": key,
+             "workcell_id": "packing", "reason": None, "updated_at": "2026-10-15T00:00:00+00:00"}
+            for key in ("first", "second")]
+    work = {"rows": rows, "observed_at": rows[0]["updated_at"], "tasks_available": True,
+            "missions_available": True, "truncated_sources": []}
+    api = {**API, "/api/fleet/session": {"principal_id": "bob", "role": "operator"},
+           "/api/fleet/work": work, "/api/fleet/dispatch-control": {"dispatch_enabled": True, "generation": 7},
+           **{f'/api/fleet/missions/{row["source_id"]}': {"mission": row, "history": []} for row in rows}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [], size=(1366, 768))
+        pending = []
+        try:
+            page.route("**/api/fleet/missions/first/admit", lambda route: pending.append(route))
+            page.goto(site + "/console?view=work&show=pending")
+            page.clock.run_for(2000)
+            page.locator("#work-list ui-button").filter(has_text="first").click()
+            page.locator("#work-admit").click()
+            for _ in range(50):
+                page.wait_for_timeout(100)
+                if pending:
+                    break
+            assert pending, "approval request was not issued"
+            page.locator("#work-list ui-button").filter(has_text="second").click()
+            pending[0].fulfill(status=409, json={"detail": {"code": "FIRST_ONLY"}})
+            expect(page.locator("#work-admit")).to_be_enabled()
+            expect(page.locator("#work-admit")).not_to_have_attribute("reason", "FIRST_ONLY")
+            assert not errors
+        finally:
+            browser.close()
 
 
 @pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
 @pytest.mark.parametrize("case", ["approve", "viewer", "shared-token", "refused", "unknown"])
-def test_pending_seat_approves_through_the_existing_admit_route(site, size, case):
+@pytest.mark.parametrize("source", ["mission", "cell_job"])
+def test_pending_seat_approves_through_the_existing_admit_route(site, size, case, source):
     """D-741 7: 승인 대기에서 고른 팔 작업은 오른쪽 칸에서 기존 admit 경로로 승인한다. 막힌 단추는 이유를 적는다."""
     from playwright.sync_api import expect, sync_playwright
 
     width, height = size
-    row = {"source": "mission", "source_id": "wait-1", "action_kind": "PICK_PLACE", "status": "PROPOSED",
+    row = {"source": source, "source_id": "wait-1", "visible_state": "approval_pending", "action_kind": "PICK_PLACE", "status": "PROPOSED",
            "device_id": "omx_wait", "workcell_id": "packing", "reason": None, "updated_at": "2026-10-14T01:00:00+00:00"}
     work = {"rows": [row], "observed_at": "2026-10-14T01:00:01+00:00", "tasks_available": True,
             "missions_available": True, "truncated_sources": []}
     session = {"viewer": ("eve", "viewer"), "shared-token": ("site-console", "operator")}.get(case, ("bob", "operator"))
     api = {**API, "/api/fleet/session": {"principal_id": session[0], "role": session[1]}, "/api/fleet/work": work,
            "/api/fleet/missions/wait-1": {"mission": row, "history": []},
+           "/api/fleet/cell-jobs/wait-1": {"job": row, "history": []},
            "/api/fleet/dispatch-control": {"dispatch_enabled": True, "generation": 7}}
     answer = {"approve": (200, {"mission": {**row, "status": "READY"}}),
               "refused": (403, {"detail": {"code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"}}),

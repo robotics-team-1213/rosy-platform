@@ -36,6 +36,7 @@ CONFIG = Path(os.environ.get("GUARD_CONFIG", "/etc/rosy/host-guard/hosts.conf"))
 STATE = Path(os.environ.get("GUARD_STATE", "/var/lib/rosy-host-guard"))
 KEY = os.environ.get("GUARD_KEY", "/etc/rosy/host-guard/id_ed25519")
 KNOWN = os.environ.get("GUARD_KNOWN_HOSTS", "/etc/rosy/host-guard/known_hosts")
+LOCAL_STATUS = Path(os.environ.get("GUARD_LOCAL_STATUS", "/var/lib/rosy-host-state/status.json"))
 BAD_CHECKS = int(os.environ.get("GUARD_BAD_CHECKS", "3"))          # 3 x 10 min
 MIN_AVAIL_PCT = int(os.environ.get("GUARD_MIN_AVAIL_PCT", "3"))
 MAX_SWAP_PCT = int(os.environ.get("GUARD_MAX_SWAP_PCT", "80"))
@@ -102,7 +103,26 @@ def plus_minutes(hhmm: str, minutes: int) -> str:
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
+def recovery_report(value):
+    """An old, incomplete or corrupt cache is unavailable evidence, never a healthy report."""
+    if not isinstance(value, dict) or value.get("role") not in ("site", "model", "ai"):
+        return None
+    stamp = value.get("time")
+    if type(stamp) not in (int, float) or not 0 < stamp < float("inf"):
+        return None
+    if value.get("state") not in ("ok", "degraded") or not isinstance(value.get("resources"), dict):
+        return None
+    if not isinstance(value.get("issues"), list):
+        return None
+    for name in ("watchdog", "kernel", "ssh", "swap"):
+        detail = value.get(name)
+        if not isinstance(detail, dict) or detail.get("state") not in ("ok", "degraded", "unknown", "missing", "unsupported"):
+            return None
+    return value
+
+
 def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
+    entry["recovery"] = None
     answer = ssh(target, "health")
     if answer is None:
         entry["state"] = "unreachable"
@@ -116,6 +136,12 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
         "avail_pct": avail, "swap_pct": swap, "load": load,
         "cores": cores, "uptime_s": uptime, "down": down,
     }
+    try:
+        recovery = recovery_report(json.loads(ssh(target, "recovery") or "null"))
+        if recovery and (name not in ("site", "model", "ai") or recovery["role"] == name):
+            entry["recovery"] = recovery
+    except (ValueError, TypeError):
+        pass  # Older hosts may not provide recovery yet; resource recovery keeps its existing policy.
     reasons = []
     if avail < MIN_AVAIL_PCT and swap > MAX_SWAP_PCT:
         reasons.append(f"memory avail {avail}% swap {swap}%")
@@ -167,12 +193,15 @@ def main() -> int:
         # reboot cap restarts too, but the 1 h gap is re-learned from the next reboot.
         print(f"rosy-host-guard: unreadable {status_file} ({exc}); starting from empty state", file=sys.stderr)
         status = {}
+    status = {name: row for name, row in status.items()
+              if isinstance(row, dict) and row.get("source") != "local"}
     now = now_hhmm()
     for raw in CONFIG.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].split()
         if not line:
             continue
         entry = status.setdefault(line[0], {})
+        entry["recovery"] = None
         try:
             name, kind = line[0], line[1]
             if kind == "robot":
@@ -180,6 +209,7 @@ def main() -> int:
             elif kind == "pc":
                 if in_quiet(line[3], now):
                     entry["state"] = "quiet"
+                    entry["resources"] = None
                 else:
                     check_pc(name, line[2], line[3], entry)
             else:
@@ -190,6 +220,16 @@ def main() -> int:
             entry["resources"] = None
             print(f"{line[0]}: check failed: {exc!r}", flush=True)
         entry["time"] = int(time.time())
+    try:
+        recovery = recovery_report(json.loads(LOCAL_STATUS.read_text(encoding="utf-8")).get("recovery"))
+        if recovery:
+            status[recovery["role"]] = {
+                "source": "local",
+                "time": recovery.get("time"), "state": recovery.get("state", "error"),
+                "resources": recovery.get("resources"), "recovery": recovery,
+            }
+    except (OSError, ValueError, AttributeError):
+        pass  # A missing local report is shown as unverified by Fleet, never synthesized as healthy.
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, status_file)

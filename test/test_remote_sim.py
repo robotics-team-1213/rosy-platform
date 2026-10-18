@@ -153,6 +153,39 @@ def _bash(script, **env):
 
 
 @BASH
+@pytest.mark.parametrize("installer_rc", [0, 7])
+def test_inner_installs_contracts_before_the_bench_and_stops_on_failure(tmp_path, installer_rc):
+    installer = tmp_path / "deploy/robot/pinky_pro/image/install-motion-contracts.sh"
+    installer.parent.mkdir(parents=True)
+    installer.write_text('set -e\nexit_code=${INSTALLER_RC}\n[ "$exit_code" = 0 ] || exit "$exit_code"\n'
+                         'site="$2/lib/python$(python3 -c \'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")\')/site-packages"\n'
+                         'mkdir -p "$site"\necho "READY = True" > "$site/installed_contract_probe.py"\n')
+    roots = tmp_path / "tools/harness/colcon_roots.py"
+    roots.parent.mkdir(parents=True)
+    roots.write_text('print(".")\n')
+    out = tmp_path / "out"
+    out.mkdir()
+    # Substitute only external ROS/build/cache prerequisites; execute the install and bench wiring.
+    profile = tmp_path / "contracts/foundation/core_common/profile.py"
+    profile.parent.mkdir(parents=True)
+    profile.write_text('DEFAULT_ROBOT = "test_profile"\n')
+    # A regular package: as a namespace package it loses to an installed core_common wheel (CI).
+    (profile.parent / "__init__.py").write_text("")
+    script = ('source() { :; }\n'
+              'colcon() {\n'
+              '  echo "$*" > "$OUT/build-args.txt"\n'
+              '}\ncd "$WORKSPACE"\n'
+              + rs.INNER.replace(rs.DEPS, "")
+              + '\n')
+    result = _bash(script, WORKSPACE=str(tmp_path), OUT=str(out), PYDEPS=str(tmp_path / "deps"),
+                   CPUS="1", INSTALLER_RC=str(installer_rc),
+                   BENCH_CMD="python3 -c 'import installed_contract_probe as p; assert p.READY; print(\"BENCH_READY\")'")
+    assert result.returncode == installer_rc, result.stderr
+    assert ("BENCH_READY" in result.stdout) == (installer_rc == 0)
+    assert "--packages-up-to gz_sim test_profile" in (out / "build-args.txt").read_text()
+
+
+@BASH
 def test_swarm_bench_waits_for_robots_yaml_instead_of_dying_on_the_first_look(tmp_path):
     """INNER runs benches under `set -eo pipefail`; a failed `ls | head` must not end the wait loop."""
     script = ('set -eo pipefail\nros2() { echo "ros2 $*"; }; sleep() { :; }; seq() { echo 1 2 3; }\n'
@@ -178,12 +211,17 @@ def test_a_failed_pip_install_is_never_stamped_ok(tmp_path):
     uv.chmod(0o755)
     deps = tmp_path / "deps" / "abc"
     deps.parent.mkdir()
-    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "PYDEPS": str(deps), "REQ": "req.txt"}
+    (tmp_path / "req.txt").write_text("pydantic==2\nPyYAML==6\n")
+    (tmp_path / "fleet.txt").write_text("pydantic==1\npyyaml==5\nzeroconf==1\n")
+    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "PYDEPS": str(deps), "REQ": str(tmp_path / "req.txt"),
+           "FLEET_REQ": str(tmp_path / "fleet.txt"), "LEARNED_REQ": "learned.txt"}
     script = "set -eo pipefail\n" + rs.DEPS + "echo built\n"
     failed = _bash(script, UV_RC="1", **env)
     assert failed.returncode == 1 and "CORE pip deps failed" in failed.stdout and "built" not in failed.stdout
     assert not deps.exists()
     assert _bash(script, **env).stdout == "built\n" and (deps / ".ok").is_file()
+    # One interpreter for CORE and a SIM Fleet: only the Fleet pins CORE's set does not name.
+    assert (deps / "fleet-extra.txt").read_text() == "zeroconf==1\n"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")

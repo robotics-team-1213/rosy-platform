@@ -74,6 +74,10 @@ class GoalNode(Node, GoalEscape):
         self.declare_parameter('start_escape_distance_m', .08)
         self.declare_parameter('robot_radius', URDF_RADIUS)
         self.init_escape()
+        # Escape transport topics live at the node edge (D-171); the mixin keeps the logic.
+        self.escape_pub = self.create_publisher(String, 'goal/straight_escape', 10)
+        self.create_subscription(String, 'safety/motion_limits', self.on_escape_limits, 1)  # latest only (D-185 R2)
+        self.create_subscription(String, 'goal/straight_escape_result', self.on_escape_result, 10)
         self.navigation_profile = None
         self.navigation_profile_received = None
         self.create_subscription(String, 'calibration/status', self.on_calibration_profile, 10)
@@ -158,6 +162,8 @@ class GoalNode(Node, GoalEscape):
             f'goal_node ready | mode={self.mode} '
             f'min_size={self.brain.min_size}')
 
+    def publish_escape(self, intent):
+        self.escape_pub.publish(String(data=json.dumps(intent)))
 
     def on_calibration_profile(self, msg):
         self.navigation_profile = None

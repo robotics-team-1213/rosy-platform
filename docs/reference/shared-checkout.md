@@ -1,15 +1,15 @@
 # 같이 하는 깃 — 공유 체크아웃 착수 순서
 
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
-- **팀원 개인 클론이라면** 이 문서 대신 [팀 가이드](team-guide.md)를 따른다.
-- **갱신:** 2026-10-14 — 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
+- **팀원 개인 클론이라면** 이 문서 대신 [git으로 일하는 법](git-workflow.md)과 [팀 가이드](team-guide.md)를 따른다. 두 길의 비교도 [git으로 일하는 법](git-workflow.md) §1에 있다.
+- **갱신:** 2026-10-18 — 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
 
 ## 같이 하는 깃
 
 여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다.
 GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규칙의 명령 전문은
 `AGENTS.md`의 「같이 하는 깃」에 적는다. 문구를 바꿀 때는 두 절을 한 커밋에서
-같이 고친다. 실험실 PC의 우산 문서 `F:\Dev\Control\Robot\Rosy\Agents.md`도
+같이 고친다. 실험실 PC에서 이 저장소의 상위 폴더에 있는 우산 문서 `..\AGENTS.md`(git 밖)도
 같은 절차를 적는다. 명령 카드는
 [`.claude/skills/rosy-land-on-main/SKILL.md`](../../.claude/skills/rosy-land-on-main/SKILL.md)다.
 브랜치 이름과, 남의 미커밋을 지우지 않는 이유는
@@ -22,16 +22,22 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `git worktree list`를 본 다음
    `python tools/worktrees.py new <짧은이름> <type>/<topic>`
    을 실행한다. 맨손 `git worktree add`는 쓰지 않는다. `<type>`은 내용과 맞는
-   `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 이 도구는
+   `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 한 브랜치에는 한 주제만 둔다.
+   착지 단위로 나눈다: 한 브랜치는 따로 착지할 수 있는 관심사 하나와 한 모듈 계열이고, 바뀐 파일이 15개를 넘거나 `tools/land.py --dry-run`이 FULL을 찍으면 먼저 나눌 수 있는지 본다(FULL 한 라운드는 시험 PC에서 30~90분이다). FULL 트리거(`tools/harness/**`, `contracts/foundation/**`)나 공유 자산(`shared/web`)을 바꾸는 부분은 제품 변경과 다른 브랜치로 먼저 착지한다. D-766 한도의 95% 이상인 파일·단위에 더할 일은 그 나누기 브랜치를 먼저 착지한다. 배경은 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md`다.
+   이 도구는
    아무것도 지우지 않고, 치울 수 있는 끝난 워크트리 개수와
    `python tools/worktrees.py prune --apply`를 알린다(D-761, Proposed). 그 명령은
-   누가 만들었든 깨끗하고, `main`에 들어갔고, 잠기지 않았고, 72시간 넘게 쉰 것만
-   지운다. 자신이 만든 것(소유자 기록이 같고 세션 id까지 같은 것)은 깨끗하고 `main`에 들어갔고 그 브랜치에 자기 커밋이 있으면 바로 지운다. 더럽거나 `main`에 안 들어간 것은 `--snapshot`의 몫이고 소유자를 가린다.
+   누가 만들었든 깨끗하고, `main`에 들어갔고, 잠기지 않았고, 충분히 쉰 것만
+   지운다. 충분히는 브랜치에 자기 커밋이 있고 `main`에 들어간(착지한) 것이면 1시간, 그 밖의 것은 72시간이다(D-790, Proposed).
+   git이 더는 모르는 `.worktrees/` 아래 디렉터리(orphan)도 1시간 쉬면 지운다. 캐시와 `.omc/state` 밖의 파일이 있으면
+   먼저 `$ROSY_SCRATCH/worktree-orphans/<이름>-<날짜>.zip`에 보관하고 그 보관 파일을 다시 열어 확인한 뒤에만 지운다.
+   `status`의 `landed-dirty`(착지한 브랜치의 워크트리에 미커밋 파일)는 새 워크트리로 옮기고, `stale-history`(이력 재작성 이전 줄기)는
+   병합·착지하지 않는다. 자신이 만든 것(소유자 기록이 같고 세션 id까지 같은 것)은 깨끗하고 `main`에 들어갔고 그 브랜치에 자기 커밋이 있으면 바로 지운다. 더럽거나 `main`에 안 들어간 것은 `--snapshot`의 몫이고 소유자를 가린다.
    `.worktrees/` 아래가 60개 이상이면 만들지 않는다. `prune --snapshot`은 사람이나
    디스패처만 돌린다. 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. 공유
    `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지
    않은 변경을 남기면 다른 세션의 fast-forward가 거절된다. 스크래치, 로그,
-   pytest 출력은 저장소 밖에 둔다. 실험실 PC에서는 `X:\DevTemp`다.
+   pytest 출력은 저장소 밖 `$ROSY_SCRATCH`에 둔다(없으면 시스템 임시 폴더. 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`).
 2. **자기 경로만 스테이징한다.** `git add`에는 이번 작업에서 자신이 만든 경로만
    적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 인덱스
    하나가 모든 세션의 것이라 넓은 add 한 번이 다른 세션의 파일을 커밋에 넣는다.
@@ -49,15 +55,15 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    한 세션만 만들 수 있다(D-510). 그 ADR이 브랜치와 같이 착지하지 않거나 충돌로
    못 쓰게 되면 `tools/harness/adr_gaps.txt`에 `D-nnn 이유` 한 줄을 넣는다.
    ADR 파일과 Log 행은 한 커밋이다. 자세한 내용은 `AGENTS.md`의 「같이 하는 깃」
-   4번에 적혀 있다.
+   4번에 적혀 있다. API reference 버전(`**Version:** v1.NNN`)도 같은 방식으로 `python tools/harness/api_reserve.py next "<주제>"`가 `refs/api/v1.NNN`을 선점하고, 번호를 바꿀 때는 `python tools/harness/api_reserve.py bump v1.NNN` 한 번이 헤더·테스트·`app.py`의 고정값만 옮긴다(자신의 changelog 행 제목은 손으로 고친다).
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
    밖의 `run-1.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`가 모델 PC(OMEN),
-   AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와
+   AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `$ROSY_SCRATCH\<이름>\`로 가져온다. pre-push와
    `tools/land.py`가 이를 쓴다. 시험 PC가 하나도 닿지 않으면 노트북으로 넘어가지 않고 10분 동안 30초마다 다시 시도한 뒤 실패로 끝낸다(D-584). 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. `--local`과 `ROSY_TEST_LOCAL`은 오류로 거절한다. 커밋된
    HEAD만 보내므로 먼저 커밋한다. Gazebo는 노트북에서 돌리지 않고
    `python tools/remote/remote_pytest.py --pick sim`이 고른 PC에서 돌린다.
-   실험실 PC의 경로는 `X:\DevTemp\<이름>\run-1.txt`다. exit 1의 `NEW`는 그
+   로그 경로는 `$ROSY_SCRATCH\<이름>\run-1.txt`다. exit 1의 `NEW`는 그
    브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서
    뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는
    장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
@@ -65,7 +71,7 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `python tools/land.py --tests auto`다. 손으로 할 때 착지는 워크트리에서 `git merge main`을
    하고 관련 테스트를 다시 돌린 다음, `main` 체크아웃에서
    `git merge --ff-only <브랜치>`를 한다. `--ff-only`가 거절되면 그 문구를
-   알리고, 다른 세션 파일을 치운 뒤 다시 시도하지 않는다. `tools/land.py`는 치울 수 있는
+   알리고, 다른 세션 파일을 치운 뒤 다시 시도하지 않는다. 멈춘 라운드의 NEW id는 `main`에서 한 번 더 돌린다. 거기서도 실패하는 id는 `MAIN-RED`로 찍히고 멈춤 문구가 main이 깨졌다고 적는다. 그때는 자기 브랜치를 고치지 말고, 동료가 이미 고치는지 본 다음 main만 고치는 작은 `fix/` 브랜치를 먼저 착지한다. `tools/land.py`는 치울 수 있는
    끝난 워크트리 개수를 알리기만 한다(`--prune`을 주면 치운다). 착지한 자신의 워크트리는
    `main` 체크아웃에서 명령 하나 `python tools/worktrees.py prune --apply`로 치운다. 보류하는 브랜치는 커밋해 두면 남고, 워크트리까지 남기려면
    `git worktree lock`으로 잠근다. 푸시 순서는 `AGENTS.md`의

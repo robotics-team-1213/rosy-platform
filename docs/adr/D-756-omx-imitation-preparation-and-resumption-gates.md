@@ -102,3 +102,18 @@ closed-loop 과제 성공을 준비 완료로 주장하지 않는다.
 변경하지 않았으며 비현장 build 환경·사용 가능한 Docker context도 재개 입력에
 포함한다. 서비스의 `cpus`/`mem_limit`은 build 제한이 아니므로 이미지 build는
 전체 자원을 독점 예약한 비현장 build host에서 별도로 준비한다.
+
+## 2026-10-15 부록: 후속 재확인
+
+미공개 World 안내는 실제 canonical 소비자와 일치하는지 검토했다.
+Fleet 패키지의 계정 dependency pin은 사이트·CI와 맞추고, Dashboard에서 Pilot로
+돌아오는 기존 계정 SSO 브라우저 시험을 full CI에서 명시적으로 실행하도록 준비했다.
+guard 통과는 브라우저 실행·실물 조작이나 학습 수용 증거를 대신하지 않는다.
+
+비현장 SIM PC는 예약 반영 여유가 여전히 SIM 기준 아래였고, 모델 PC의 Docker
+daemon 접근 거부와 AI PC 기본 PATH의 Docker CLI 부재도 남아 있었다. 설치·권한을 바꾸거나 현장
+PC로 우회하지 않는다. 전용 build 환경, 접근 가능한 Docker context와 이미지,
+8 CPU/8 GiB SIM 예약이 준비돼야 실제 조작·녹화·reader 검증을 재개한다.
+미정인 HF 계정·조직, 실물 host와 보정 입력은 기존 표를 그대로 따른다.
+재확인 범위와 source guard 결과는
+[후속 증거](../validation/omx-followup-2026-10-15/result.md)에 기록한다.

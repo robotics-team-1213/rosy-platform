@@ -1,0 +1,24 @@
+[Unit]
+Description=ROSY OMX %i hardware owner (no-goal: local stop and readback only, D-785)
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+# User unit beside the native controller graph. It never opens serial, enables torque or
+# starts controllers; the controller graph is a separate, already-reviewed unit.
+Type=exec
+EnvironmentFile=%h/.config/rosy/omx-owner-%i.env
+ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; exec /usr/bin/python3 "$ROSY_OMX_REPO/deploy/robot/omx/run_hardware_owner.py" --config "%h/.config/rosy/omx-owner-%i.json"'
+# A restart comes back with the local stop latch closed (LocalStopController starts closed).
+# A stale control.sock after a crash refuses start until an operator reviews and removes it.
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=5
+NoNewPrivileges=true
+UMask=0077
+LimitCORE=0
+MemoryMax=1G
+
+[Install]
+WantedBy=default.target

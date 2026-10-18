@@ -32,6 +32,45 @@ def test_silence_waits_three_seconds_then_arms_one_right_turn():
         assert rig.m.status().junction.seq == seq
 
 
+@pytest.mark.parametrize("trip", ["authority_required", "trip_lease"])
+def test_silence_on_a_fleet_trip_holds_without_the_right_fallback(trip):
+    """Gazebo m32b: on a Fleet trip the junction's decision is Fleet's (D-620 1, note 2026-10-15);
+    an unanswered episode holds at zero past 3 s and never selects the right turn on its own."""
+    rig = Rig(junction_signal_enabled=True, authority_required=trip == "authority_required")
+    rig.m.authority_leased = lambda: trip == "trip_lease"
+    rig.step(junction=True)
+    request = rig.m.junction_signal_request()
+    for _ in range(120):                                  # 6 s, twice the fallback wait
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0
+        assert status.junction.state == "waiting" and status.junction.pending_action is None
+    assert status.junction.signal_state == "waiting"
+    assert rig.m.junction_signal_request() == request
+
+
+def test_after_the_trip_ends_and_the_mode_changes_the_fallback_works_again():
+    """The trip hold latches with the authority (D-760 rev 2 1) until the mode changes; then an
+    off-trip episode takes D-620 4's three-second right again."""
+    from test_line_junction import CAMERA
+    leased = [True]
+    rig = Rig(junction_signal_enabled=True)
+    rig.m.authority_leased = lambda: leased[0]
+    rig.step(junction=True)
+    for _ in range(80):
+        rig.step(junction=True)
+    assert rig.m.status().junction.pending_action is None
+    leased[0] = False
+    rig.m.stop()
+    rig.m.set_mode(CAMERA)
+    rig.step(junction=True)
+    for _ in range(59):
+        decision, status = rig.step(junction=True)
+        assert decision.linear == decision.angular == 0 and status.junction.state == "waiting"
+    _, status = rig.step(junction=True)
+    assert status.junction.pending_action == "right"
+    assert status.junction.signal_state in ("fallback", "entered")
+
+
 @pytest.mark.parametrize("lamp,may_enter", [("red", False), ("unknown", False), ("green", False)])
 def test_a_reply_never_becomes_silence_even_after_three_seconds(lamp, may_enter):
     rig, request = waiting()

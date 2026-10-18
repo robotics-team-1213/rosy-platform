@@ -2,6 +2,10 @@
 
 **Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 경로·계약 결정; 시뮬레이션 한정 D-330 §2 개방은 사용자 승인 2026-10-01). Mission 하달기는 `simulation` 프로필에서만, 정지 세대 producer/consumer 시험을 통과한 뒤에만 연다. 실물 OMX, 호스트 간 하달, DEVICE/FIELD 수용은 포함하지 않는다. wire 이름·필드는 D-18에 따라 C4에서 API Reference·공유 schema·생산자/소비자 시험과 함께 확정한다.
 
+**부분 대체 제안 (2026-10-17, D-778 Proposed):** [D-778](D-778-bimanual-workcell-foundation.md)이 수용되면 4항(Job 하나에 작업대·인스턴스 하나), 5항(작업대마다 진행 중인 Action 하나, Step 직렬), 8항(작업대마다 owner 프로세스 하나), 1b 보강의 "실패·UNKNOWN은 Job 전체 HOLD"를 대체한다. Job은 팔마다 진행 상태를 갖고, claim에 `arm`·`zone` 종류를 더하며, 한 팔의 실패는 그 팔과 구역만 HOLD한다. 협조 Step은 팔마다 Action을 하나씩 내고, 두 grant는 Fleet이 `pair_id`로 짝지어 직접 보낸다. 한 팔 작업대의 경로, 정지 세대, 셀 해시 검사, claim을 타임아웃으로 풀지 않는 규칙은 유지한다.
+
+**부분 대체 (2026-10-17, D-779 Accepted):** [D-779](D-779-per-arm-cell-job-ledger-and-arm-zone-claims.md)가 4항·5항·8항과 1b 보강 가운데 원장 모양을 대체한다. Job은 팔별 상태(`fleet_cell_job_arms`)와 팔별 Action(`fleet_cell_step_actions`)을 갖고, Step 순서는 `depends_on`으로 정하며, claim에 `arm`·`zone`을 더한다. 실패·UNKNOWN의 HOLD 범위는 Job 전체가 아니라 그 팔과 구역이고, `tight` Step만 짝 팔도 멈춘다. 구현 전까지 지금 원장이 그대로 동작한다.
+
 ## 배경
 
 - **D-401(Proposed) §4.** Job은 Fleet 승인(D-330)을 거쳐 장치로 하달되는 경로로만 실행된다. 이 경로를 막는 보류가 둘이다.
@@ -136,3 +140,5 @@
 - **GetAction 404는 기본이 UNKNOWN이다.** owner가 `ACTION_NOT_FOUND`라고 답하고, grant 만료 시각에 허용 지연(5 s)을 더한 시각이 지났고, 그 시도에 대해 장치 receipt를 한 번도 기록한 적이 없을 때만 "실행되지 않음"(HELD)으로 본다. 그 밖의 404와 다른 principal의 Action은 오류다. owner journal 식별은 아직 없다.
 - **한계(후속):** UNKNOWN은 장치 journal을 읽어야만 풀린다. owner를 영구히 잃으면 운영자가 증언하는 해결 경로가 생길 때까지 rearm이 막힌다(계획됨).
 - **(2026-10-03, C4b 1d)** Fleet은 `start_step` 뒤 전송 직전에 정지 세대를 다시 읽고, 바뀌었으면 보내지 않은 Step을 HOLD로 두고 claim을 `HELD`로 옮긴다. owner는 journal을 만들 때 임의 식별자(`journal_id`)를 한 번 만들어 receipt·GetAction·GetOwnerIdentity에 싣고, Fleet은 제출 때 그것을 기록한다. 404를 "실행되지 않음"으로 보려면 위 조건에 더해 owner의 현재 `journal_id`가 기록한 값과 같아야 하며, 다르거나 모르면 UNKNOWN이다.
+
+> 2026-10-14 부기(D-763): "승인자는 제안자와 달라야 한다"는 [D-763](D-763-fleet-work-kinds-composed-steps.md)(Accepted)에서 등록부의 "두 사람" 값을 가진 모든 작업 종류의 규칙이 된다. Cell Job의 동작은 바뀌지 않는다. 해당 조각(D-763 5)이 착지할 때 적용된다.

@@ -12,6 +12,7 @@ Wheel that binds the ROS-free `pallet.transfer` Skill to the OMX analytic cell p
 | File | Description |
 |------|-------------|
 | `README.md` | Grant projection, grasp resolution, and what this wheel does not prove |
+| `src/rosy/integrations/robots/omx/mixed_reach.py` | D-402 IK reach in the `mixed_cell.Reach` shape for the mixed planner (per arm base, profile limits, single poses only) |
 | `pyproject.toml` | Integration wheel metadata |
 | `COLCON_IGNORE` | Keeps colcon from building this folder |
 

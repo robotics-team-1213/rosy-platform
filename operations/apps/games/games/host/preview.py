@@ -196,7 +196,8 @@ class _Handler(BaseHTTPRequestHandler):
             asset = path.removeprefix("/common/")
             media = COMMON_ASSETS.get(asset)
             file = COMMON / asset
-            if media is None or "/" in asset or not file.is_file():
+            # The manifest is the allowlist (brand/mark.svg has a folder); no other name reaches the disk.
+            if media is None or not file.is_file():
                 self._send(404, "text/plain; charset=utf-8", b"not found")
                 return
             self._send(200, f"{media}; charset=utf-8", file.read_bytes())

@@ -777,3 +777,27 @@
 - 변경: 공용 시트와 토큰은 그대로다. `test_chrome_layout.py`는 Robot 머리의 격자를 한 줄(`"brand role estop"`)로, 작업 목록을 `.ui-subnav` 자리로 고정한다. `test_palette_gates.py`는 현재 위치의 장미색 표식을 `app-shell.css`의 `.ui-rail-item[aria-current="page"]`에서 본다.
 - 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0(2a7afbd1f). 브라우저 측정은 없다.
 - gate 변화: 없음.
+
+## 2026-10-14 · 7135ce58a · feat(auth): 공통 계정 프로필
+- 변경: 수신 서비스가 검증한 계정 ID에 프로필 이름을 묶고 중앙 HTTPS 프로필로 연결하는 공통 표시 모듈 추가. 조회 실패·로그아웃은 이전 이름을 지운다.
+- 증거: Node 표시·URL·계정 불일치·로그아웃 시험 통과. 통합 원격 브라우저 시험은 계정 통합 계획에 기록한다.
+- gate 변화: 운영 배포·실기기 수용은 미확인.
+
+## 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완
+
+- 변경: 검수 버전 비교 canvas를 palette 계약에 등록하고 공용 cssColor를 사용한다.
+- 증거: 첫 착지 검사 2725 passed, 270 skipped, canvas 등록 누락 1 failed를 수정. 합성 자료 Chromium 실행·취소·이력 24개·편집 보존 확인. 최종 재시험 결과는 착지 도구 로그에 기록한다.
+- gate 변화: 없음. 실제 GPU 모델과 운영 배포 수용은 미검증.
+- 결정: D-764
+
+## 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
+
+- 변경: enrollment/camera-pairing의 실제 devices 경로를 공통 UI 검사에 반영했다. 비가역 버튼·비활성 이유·항상 살아 있는 정지 검사 조건은 유지한다.
+- 증거: 첫 전체 착지 검사에서 기존 경로 때문에 3 failed, 같은 invocation에서 6252 passed / 63 skipped. 수정 후 원격 검증은 착지 로그에서 확인한다.
+- gate 변화: 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.

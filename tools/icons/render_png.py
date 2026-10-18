@@ -9,7 +9,7 @@ needs one. Exception: the Rosy Pilot PWA icons (middleware/robot_ui/pilot/icons/
 icon-512.png, icon-192-maskable.png) are committed renders of pilot.svg because the
 manifest serves them; middleware/robot_ui/pilot/test/test_pwa_icons.py keeps them equal to this output.
 
-    python tools/icons/render_png.py shared/web/icons/pilot.svg X:/DevTemp/pilot.png
+    python tools/icons/render_png.py shared/web/icons/pilot.svg $ROSY_SCRATCH/pilot.png
     python tools/icons/render_png.py <svg> <png> --size 48 --mono
 """
 

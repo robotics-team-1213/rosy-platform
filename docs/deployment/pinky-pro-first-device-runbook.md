@@ -132,6 +132,62 @@ EVIDENCE="${SESSION%.json}.evidence"
 mkdir -m 0750 "$EVIDENCE"
 ```
 
+### 새 SD 카드 안내 실행 (Windows)
+
+새 Pinky의 SD를 준비할 때는 저장소 루트에서 다음 명령 하나로 시작한다.
+기존 이동 카드 복구 도구를 재사용하며, 로봇을 먼저 연결할 필요가 없다.
+
+```powershell
+.\deploy\robot\pinky_pro\sd\setup-moved-device.ps1
+```
+
+준비물은 Raspberry Pi Imager, Python, **서명된 flashable-image 릴리스 폴더**,
+현장의 저장된 Wi-Fi 프로필, `%LOCALAPPDATA%\Rosy\device-registry.json` 등록부다.
+이미지 폴더에는 일치하는 `.img.xz`, `manifest.json`, `SHA256SUMS`, `SHA256SUMS.sig`가
+필요하다. Actions의 빌드 성공이나 unsigned artifact만으로는 서명된 이미지가 아니다.
+이미지는 [산출물 선택 절차](pinky-release-artifact-selection.md)에 따라 고르고,
+설치할 source revision과 release ID를 확인한다.
+
+Wi-Fi 프로필이 없다면 먼저 다음 명령으로 한 번 저장한다. 비밀번호는 보안 프롬프트에
+입력하며 명령 인수에 넣지 않는다. 다른 운영 PC의 DPAPI 프로필을 복사하지 않는다.
+
+```powershell
+.\deploy\robot\pinky_pro\sd\prepare-rosy-sd.ps1 -SetWifiCredential -WifiProfile site -WifiSsid '<site-ssid>'
+```
+
+등록부가 없으면 현장의 등록부를 복원한다. 기존 장치가 있는 현장에서 임의의 빈
+등록부를 만들어 번호를 다시 할당하지 않는다. SSH도 준비하려면 운영자 키 쌍
+`%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519[.pub]`를 먼저 준비한다.
+
+안내에 따라 이미지 폴더, Wi-Fi 프로필, USB 카드를 선택한다. `REGISTER <number>`로
+계획을 확인하면 기존 작성기가 별도 창에서 UAC와 `ERASE SERIAL <serial> <name>`을
+요청한다. 안내 도구가 종료돼도 기록은 계속된다. 출력된 로그 경로로 상태를 확인한다.
+
+```powershell
+.\deploy\robot\pinky_pro\sd\card-write-status.ps1 -LogPath '<write-log>'
+```
+
+**완료 판정:** 작성기의 종료 코드 0, 최종 `card_state=complete`, receipt의
+`media_readback.verified=true`를 확인한 뒤 카드를 Pinky에 넣고 부팅한다.
+`-PrepareOnly`를 주면 계획만 만들고 작성기를 시작하지 않는다. 서명·시리얼·삭제
+확인·전체 readback은 기존 표준 절차와 같다.
+
+첫 부팅은 장치별 설정을 적용하고 `core` 모드로 시작한다. 대시보드는
+`http://<device-name>.local:8080/dashboard`에서 확인한다. 호스트 키를 검증한 SSH에서
+다음 읽기 전용 명령으로 CORE와 자동 업데이트의 실제 상태를 확인한다.
+
+```bash
+systemctl is-active rosy-core.service rosy-auto-update.timer
+sudo python3 -I -B /opt/rosy/native-runtime/rosy_auto_update.py status --json
+```
+
+자동 업데이트가 포함된 이미지는 timer가 기본 활성화되고 서명된 payload를 확인한다.
+적용은 rollout과 유휴·정지·배터리 등의 조건을 만족할 때만 한다. timer가 없거나
+inactive이면 배포가 끝났다고 보지 말고 이미지 revision과 unit 상태를 확인한다.
+이 안내 도구는 오래된 이미지를 최신으로 바꾸거나 모터·주행 승인을 만들지 않는다.
+이미 다른 Pi로 옮겨 `NEW_DEVICE_SETUP` 화면이 뜬 카드는 아래 이동 카드 절차처럼
+`-RobotAddress <robot-ip>`를 지정해야 해당 화면 확인도 거친다.
+
 ### 표준 카드 쓰기 (Standard card write)
 
 기본 절차다. 언제나 이것부터 쓴다. 서명 검증, 시리얼 선택, plan 대조, ERASE 확인, Imager 쓰기, 그리고 카드 전체를 이미지와
@@ -170,6 +226,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\
 빈 줄을 입력하면 `no console input: re-run and type exactly: ...`로 멈추고 카드는 그대로다. 문구를 다시 입력해 재실행한다.
 처음 쓸 때 준 `-OperatorPublicKey`·`-ReprovisionReceipt`는 여기에도 같이 준다. 끝나면 창에 `EXIT_CODE=`가 남고,
 로그 옆에 `.exit` 표지가 생긴다. 창은 결과를 보인 채 열려 있다.
+카드에 다른 robot의 `provision.json`이 이미 있으면 계획 단계에서 두 이름을 대며 거절한다. 일부러 바꿀 때만 `-ReplaceExistingProvision`을 plan에 준다. 같은 robot 재이미징은 영수증의 모델·preset·국가·Fleet 값을 이어 쓴다(D-746).
 UAC 창에서 "아니요"를 눌렀거나 시간이 지났으면 launcher가 `failed`/`untouched`와 `next:`를 진행 파일에 남기고 실패한다.
 카드는 건드리지 않았으니 다시 띄운다.
 

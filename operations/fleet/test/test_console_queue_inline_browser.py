@@ -5,6 +5,7 @@ stuck and asks, rosy_02's trip waits at a place for a changed route, rosy_03 is 
 No robot moves. ROSY_SHOT_DIR keeps the screenshots.
 """
 
+import base64
 import json
 import os
 import threading
@@ -566,6 +567,11 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
             posts.append((path, request.post_data))
             status, body = (answers or {}).get(path, (404, {"detail": "no such api"}))
             route.fulfill(status=status, json=body)
+        elif isinstance(api.get(path), tuple):   # binary evidence (Accept: image/jpeg): (meta, jpeg)
+            assert request.headers.get("accept", "").startswith("image/jpeg")
+            meta, jpeg = api[path]
+            route.fulfill(body=jpeg, content_type="image/jpeg",
+                          headers={"X-Stuck-Evidence": json.dumps(meta), "Cache-Control": "no-store"})
         elif path in api:
             route.fulfill(json=api[path])
         else:
@@ -694,11 +700,11 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
     api = {**API}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [], size=(1024, 768))
-        preview["jpeg_base64"] = page.evaluate("""() => {
+        jpeg = base64.b64decode(page.evaluate("""() => {
           const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 48;
           return canvas.toDataURL('image/jpeg').split(',')[1];
-        }""")
-        api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = preview
+        }"""))
+        api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = (preview, jpeg)
         page.reload()
         page.clock.run_for(1500)
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
@@ -706,7 +712,7 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
         page.wait_for_function("""() => {
           const img = document.querySelector('.stuck-evidence img'); return img?.complete && img.naturalWidth > 0;
         }""")
-        assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
+        assert image.get_attribute("src").startswith("blob:")
         slot.locator('[data-focus-key="evidence-summary"]').click()
         assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
         for decision in DECISIONS:

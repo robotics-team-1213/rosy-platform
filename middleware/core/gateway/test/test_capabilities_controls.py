@@ -90,6 +90,8 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["junction_pivot"] is False             # D-507 2: no keep_debug junction_ahead_m yet
     assert base["line_follow_authority"] is True       # D-517 4: the manager enforces an authority
     assert base["line_follow_authority_required"] is False  # config line_follow.authority_required off
+    assert base["line_follow_authority_shrink"] is True  # D-760 3: shrink, seq and ttl_s up to 5 s
+    assert base["line_follow_authority_under_lease"] is True  # D-760 2: this CORE holds the trip lease
     assert base["line_follow_advice"] is True          # D-525: advice stored and shown, display only
     lf = svc.line_follow
     lf._config = dataclasses.replace(lf._config, authority_required=True)
@@ -107,6 +109,12 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert _controls(client)["items"][0]["lane_bend_map_entry"] is False  # line_follow.bend_map_entry_enabled off
     lf._config = dataclasses.replace(lf._config, bend_map_entry_enabled=True)
     assert _controls(client)["items"][0]["lane_bend_map_entry"] is True
+    assert _controls(client)["items"][0]["lane_turn_map_entry"] is False  # line_follow.turn_map_entry_enabled off
+    lf._config = dataclasses.replace(lf._config, turn_map_entry_enabled=True)
+    assert _controls(client)["items"][0]["lane_turn_map_entry"] is True   # D-759 rev 1: with junction_turn
+    assert _controls(client)["items"][0]["lane_instruction_stamp"] is False  # line_follow.instruction_stamp_enabled off
+    lf._config = dataclasses.replace(lf._config, instruction_stamp_enabled=True)
+    assert _controls(client)["items"][0]["lane_instruction_stamp"] is True   # D-767 A
     assert _controls(client)["items"][0]["lane_bend_next_line"] is True
     lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
     assert _controls(client)["items"][0]["junction_pivot"] is False
@@ -114,6 +122,12 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert _controls(client)["items"][0]["junction_pivot"] is True
     lf.observe_junction("no_boundary", lf._clock() - 3.0, ahead_v=1)  # older than 2 s
     assert _controls(client)["items"][0]["junction_pivot"] is False
+    lf._config = dataclasses.replace(lf._config)  # a copy: the shared default config stays as it was
+    for cap, flag in (("lane_crosswalk_gate", "crosswalk_gate_enabled"),
+                      ("lane_junction_signal", "junction_signal_enabled")):  # D-763 10 (c)
+        assert _controls(client)["items"][0][cap] is getattr(lf._config, flag) is False
+        object.__setattr__(lf._config, flag, True)  # the flag alone; config validation is not under test
+        assert _controls(client)["items"][0][cap] is True
     navigation = svc.capability._data.setdefault("navigation", {})
     navigation["goal_navigation"] = False
     assert _controls(client)["items"][0]["drive_modes"] == ["lane"]
@@ -123,9 +137,13 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["robot_kind"] == "other_base" and base["drive_modes"] == []
     assert base["junction_turn"] is False and base["junction_pivot"] is False
     assert base["line_follow_authority"] is False
+    assert base["line_follow_authority_shrink"] is False
+    assert base["line_follow_authority_under_lease"] is False
     assert base["line_follow_advice"] is False
     assert base["line_follow_authority_required"] is False
     assert base["lane_bend"] is False and base["lane_bend_map_entry"] is False and base["lane_bend_next_line"] is False
+    assert base["lane_turn_map_entry"] is False and base["lane_instruction_stamp"] is False
+    assert base["lane_crosswalk_gate"] is False and base["lane_junction_signal"] is False
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
 
 

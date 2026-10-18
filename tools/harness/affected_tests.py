@@ -8,9 +8,11 @@ Usage (from the repository root)::
 Maps every changed file (``git diff base...HEAD`` plus the working tree) to the
 harness module that owns it, adds reverse dependents found through
 ``platform_parts.yaml`` ``import_prefix`` imports, tests that name the changed
-path, and an always-on guard set. Shared foundations, CI/test configuration and
+path, and an always-on guard set. Shared foundations, CI/test configuration,
+source layout and guard rules, committed folder moves and removed modules, and
 files that map to nothing escalate to the full tier: unknown means everything,
-never nothing. The full tier runs on GitHub Actions runners (ci.yml), never
+never nothing. Foundation modules may narrow to known test readers; unresolved runtime consumers,
+config files and CI workflows retain FULL (``affected_narrow.NARROWABLE_TRIGGERS``). ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
 locally by default: ``--run`` on a FULL selection runs only the guards and the
 directly affected suites and says so; ``--full`` overrides. Suites whose test files share a basename run as separate pytest
 invocations (gateway and sensing both ship ``test_battery.py``).
@@ -29,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 import yaml
+import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 
 HARNESS = PurePosixPath("tools/harness")
 
@@ -41,6 +44,8 @@ GUARD_SET = (
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
     "test/architecture/test_platform_parts.py",
+    # D-762 stage 0: Markdown under a FULL trigger is not FULL; placement still runs.
+    "test/architecture/test_document_placement.py",
 )
 
 # D-436 §2: a change here can break any suite, so the full tier runs.
@@ -62,7 +67,16 @@ FULL_TRIGGERS = (
     *((f"deploy/robot/*/{area}/*.{suffix}", f"{area} manifest")
       for area in ("image", "native")
       for suffix in ("service", "timer", "path", "target", "conf", "env", "txt", "json", "yaml", "list")),
+    # D-762 stage 0: source layout and guard rules.
+    ("**/package.xml", "packaging"),
+    ("**/_source_layout.py", "source layout"),
+    ("test/architecture/**", "architecture guard rules"),
+    ("test/known_failures.txt", "known failures list"),
 )
+# D-762 stage 0: records under a trigger change no rule, import or layout; the guards still run.
+# D-766 4: lowering a ratchet row or registering a size unit is data; test_module_structure still runs.
+NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
+                "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
 
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
 # registered module `tests`; the printed full tier is their union.
@@ -70,6 +84,9 @@ FULL_SUITES = (
     "learning/training/pinky/test",
     "learning/registry/policy/test",
     "learning/training/omx/test",
+    "learning/training/world_model/test",
+    "learning/evaluation/world_model/test",
+    "operations/prediction/world_model/test",
     "learning/curation/omx/test",
     "learning/curation/pinky/test",
     "middleware/core/events/test",
@@ -87,26 +104,23 @@ ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
 SUITE_SHARDS = {"fleet": 4, "sensing": 2}
-# Main CI 38056130519 (2026-10-10), seconds per slow Fleet file. These only
-# choose runners; every discovered test still runs exactly once.
+# Seconds per Fleet file of 5 s or more, the mean of CI 38807338775, 38711952782 and 38830518002
+# (2026-10-15/16, timestamps of the -v result lines); others weigh 1. These only choose runners;
+# every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
-FLEET_TEST_SECONDS = {
-    "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
-    "test_blocks.py": 89, "test_start_point_browser.py": 45,
-    "test_console_roles_browser.py": 28, "test_password_session.py": 28,
-    "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
-    "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
-    "test_signal_phase.py": 13, "test_trip_runner.py": 11,
-    "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
-}
+FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
-        ["learning/curation/omx/test"], ["learning/curation/pinky/test"]], "ros": "none"},
+        ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
+        ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
+        ["operations/prediction/world_model/test"]], "ros": "none"},
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
-        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"]], "ros": "none"},
+        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"], [
+        "middleware/core/gateway/test/test_account_pipeline.py"
+    ]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
@@ -123,6 +137,13 @@ CI_FULL_MATRIX = (
         "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
         "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
 )
+# D-762 stage 1: the only registered test files CI's full tier skips, each with its reason.
+# Every other registered module suite CI_FULL_MATRIX does not name runs on the `modules` runner.
+CI_FULL_EXCLUDED = {
+    f"middleware/devices/pinky/bringup/test/test_{name}.py":
+        "ament lint template, not a product contract; CI never ran it and the lab full tier --ignores it too"
+    for name in ("flake8", "pep257", "copyright")
+}
 
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
@@ -149,11 +170,14 @@ class Selection:
     invocations: list[list[str]] = field(default_factory=list)
     #: What runs locally when the selection escalated: guards + directly affected suites.
     local_invocations: list[list[str]] = field(default_factory=list)
+    #: FULL only: what tools/land.py runs on the lab PCs (D-762 stage 0).
+    full_invocations: list[list[str]] = field(default_factory=list)
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
                 "reasons": self.reasons, "invocations": self.invocations,
-                "local_invocations": self.local_invocations}
+                "local_invocations": self.local_invocations,
+                "full_invocations": self.full_invocations}
 
 
 def _match(path: str, pattern: str) -> bool:
@@ -186,6 +210,22 @@ def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
         names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
         names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
     return sorted(n.strip() for n in names if n.strip())
+
+
+def moves(repo: Path, base: str, head: str | None = None) -> list[str]:
+    """D-762 stage 0: committed layout changes in ``base...head`` as escalations.
+
+    A rename across directories or a removed non-test Python module changes import
+    and path layout that the one-level selector cannot follow.
+    """
+    found = []
+    for line in _git(repo, "diff", "--name-status", "-M", f"{base}...{head or 'HEAD'}").splitlines():
+        status, *paths = line.split("\t")
+        if status.startswith("R") and PurePosixPath(paths[0]).parent != PurePosixPath(paths[1]).parent:
+            found.append(f"{paths[0]} -> {paths[1]}: folder move")
+        elif status == "D" and paths[0].endswith(".py") and not TEST_FILE.search(paths[0]):
+            found.append(f"{paths[0]}: Python module removed")
+    return found
 
 
 @dataclass
@@ -310,6 +350,23 @@ def _full_paths(repo: Repo) -> list[str]:
     return [p for p in dict.fromkeys(paths) if repo.exists(p)]
 
 
+def lab_full_invocations(repo: Repo, local: list[list[str]] = ()) -> list[list[str]]:
+    """D-762 stage 0: the full tier on the lab PCs, never fewer suites than the local selection.
+
+    CI's full matrix (suites unsharded, root test/ whole), then every registered module
+    suite (`_full_paths`) and every `local` path none of those already covers.
+    """
+    ci = [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
+    return ci + pack(repo, _outside_ci_matrix([*_full_paths(repo), *(p for inv in local for p in inv)]))
+
+
+def _outside_ci_matrix(paths: list[str]) -> list[str]:
+    """Paths no CI_FULL_MATRIX suite or the root test/ shards already run."""
+    covered = [p for entry in CI_FULL_MATRIX for inv in entry["invocations"] for p in inv
+               if not p.startswith("-")] + ["test"]
+    return [p for p in dict.fromkeys(paths) if not any(_under(p, c) for c in covered)]
+
+
 def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
     """Group tests without duplicate basenames or oversized remote commands."""
     kept = [p for p in paths if not any(o != p and _under(p, o) for o in paths)]
@@ -328,8 +385,8 @@ def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
     return [members for members, _ in groups]
 
 
-def select(repo: Repo, changed: list[str]) -> Selection:
-    sel = Selection(mode="affected", changed=changed)
+def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
+    sel = Selection(mode="affected", changed=changed, escalations=list(moved))
 
     def add(path: str, why: str) -> None:
         if repo.exists(path):
@@ -343,7 +400,10 @@ def select(repo: Repo, changed: list[str]) -> Selection:
     touched_modules: dict[str, dict] = {}
     broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
-        trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        trigger = None if any(_match(path, p) for p in NOT_TRIGGERS) else next(
+            (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        if trigger and affected_narrow.add_readers(repo, path, trigger, add):
+            continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
             # these suites (the escalated module's own tests, its referencing tests).
@@ -353,7 +413,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
                 add(path, f"changed test file {path}")
             continue
         module = repo.module_for(path)
-        referencing = repo.referencing_tests(path)
+        referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
         for test in referencing:
             add(test, f"references {path}")
         if module:
@@ -378,8 +438,11 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             add(test, f"imports {'/'.join(prefixes)} ({path})")
         if referencing or importing or trigger:
             continue
-        if path.endswith(".md"):
-            continue  # D-436 2: a Markdown note outside every module runs the guards only.
+        if path.endswith((".md", ".test.mjs")):
+            # D-436 2: a Markdown note outside every module runs the guards only. No runner runs the three
+            # test/learning/perception *.test.mjs today (web/account-session.test.mjs included: CI has no
+            # node step and land.py --node only globs test/web), so FULL would add nothing.
+            continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
 
     # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
@@ -416,6 +479,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
     sel.local_invocations = pack(repo, sorted(sel.reasons))
     if sel.mode == "full":
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
 
@@ -444,6 +508,11 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
                             "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
+        # D-762 stage 1: every other registered module suite, so CI's full tier is the lab full tier.
+        # Never ran in the CI container before; reports (like sensing) until its first green run.
+        modules = pack(repo, _outside_ci_matrix(_full_paths(repo)))
+        if modules:
+            entries.append({"name": "modules", "invocations": modules, "ros": "overlay", "gating": False})
     else:
         entries = [{"name": f"affected-{i + 1}", "invocations": [inv]}
                    for i, inv in enumerate(sel.invocations)]
@@ -458,7 +527,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
     # One suite that cannot import (a wheel missing on this host) must not hide
     # the rest of a packed invocation; the collection error still fails the run.
-    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors"]
+    # Same ROS launch_testing block as CI (test/known_failures.py NO_ROS_LAUNCH_PLUGINS).
+    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors",
+            "-pno:launch_testing", "-pno:launch_ros"]
 
 
 def render(sel: Selection) -> str:
@@ -507,12 +578,13 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
     repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base, head)
-        sel = select(repo, changed)
+        sel = select(repo, changed, moves(repo_root, base, head))
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
         sel.invocations = pack(repo, sorted(sel.reasons))
         sel.local_invocations = [list(GUARD_SET)]
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     if matrix and allow_full and sel.mode != "full":
         sel.mode = "full"
         sel.escalations.append("forced (--full): CI event other than pull_request")

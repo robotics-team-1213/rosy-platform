@@ -16,6 +16,7 @@ Own the ROS-free recipe, taught-cell, placement, stack, ordering, and Job compil
 - Keep D-18 wire schemas unchanged here. Fleet owns the `pallet_done` ledger and execution sequencing.
 - `operations/processes/cell/rosy_cell` is a one-way compatibility facade. Do not restore process algorithms there.
 - Before mapping a Job, `compile_plan_bundle` recompiles from the supplied Recipe and Cell and rejects changed steps, carry height, or source hashes.
+- `rosy_cell.recipe/3` (D-781, Proposed) has its own loader `mixed_recipe.py` and planner `mixed_planner.py` (rules `mixed_rules.py`, Steps and order `mixed_plan.py`, arms/zones/reach `mixed_cell.py`). Reach is an injected predicate; do not import device IK here. recipe/1 and /2 loaders, patterns and Jobs must stay byte-identical.
 
 ## Validation
 
@@ -24,6 +25,7 @@ The installed wheel is required by both the compatibility test and the legacy Ce
 ```bash
 python -m pytest test/test_platform_palletizing_compat.py -q
 python -m pytest operations/processes/cell/test -q
+python -m pytest operations/processes/palletizing/test -q   # recipe/3 loader and mixed planner, from source
 ```
 
 Read [progress.md](progress.md) for current gates and append results to [logs.md](logs.md). Regenerate the module index and repository STATUS with `python tools/harness/rosy_harness.py generate`.

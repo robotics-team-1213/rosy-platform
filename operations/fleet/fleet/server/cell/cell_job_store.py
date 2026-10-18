@@ -15,13 +15,13 @@ from core_common.protocol.schemas import FleetCellTransferGrant
 from .dispatch_admission import release as release_claims
 from .dispatch_admission import reserve as reserve_claims
 from .dispatch_admission import normalize_resources
-from .mission_store import MissionConflict, _nonempty, _now
+from .mission_store import MissionConflict, _json, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import step_action_kind, step_grant_digest
-from . import cell_sheet_checkpoints as sheets
+from . import cell_arm_jobs as arm_jobs, cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 
-_MIGRATION_VERSION = 1
+_MIGRATION_VERSION = 4  # 2: TRIP (D-763 7); 3: per-arm tables; 4: multi-arm marker/placement (D-779 2-4)
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
@@ -42,13 +42,6 @@ CANCELLED_REASON = "CANCELLED_BY_OPERATOR"
 _HOLDABLE = frozenset({"READY", "RUNNING", "ACTION_SUCCEEDED"})
 
 
-def _json(value: object) -> str:
-    try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Cell Job data must be finite JSON") from exc
-
-
 def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason: str | None) -> None:
     """Called inside the stop/startup latch transaction, before it drops CLAIMED claims.
 
@@ -62,11 +55,11 @@ def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason:
     if hold_reason is not None:
         generation = connection.execute(
             "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()[0]
-        for job in connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE status IN ('READY', 'ACTION_SUCCEEDED')").fetchall():
+        for job in arm_jobs.single_arm_jobs(connection, "READY", "ACTION_SUCCEEDED"):
             CellJobStore._hold_in_transaction(
                 connection, job, reason=hold_reason, claim_phase="HELD", actor_id="site-stop",
                 event_key=f"site-stop:{generation}", detail={}, now=now, strict=False)
+        arm_jobs.site_stop(connection, now=now, hold_reason=hold_reason)  # D-779 §5: per arm
     connection.execute(
         "UPDATE fleet_action_claims SET phase='HELD', lease_until=NULL WHERE owner_kind='mission' "
         "AND phase='CLAIMED' AND owner_id IN (SELECT mission_id FROM fleet_cell_jobs)")
@@ -113,26 +106,6 @@ class CellJobStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS fleet_cell_steps (
-                    mission_id TEXT NOT NULL REFERENCES fleet_cell_jobs(mission_id),
-                    step_index INTEGER NOT NULL CHECK(step_index >= 0),
-                    step_id TEXT NOT NULL UNIQUE,
-                    action_kind TEXT NOT NULL CHECK(action_kind='CELL_TRANSFER'),
-                    step_json TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN (
-                        'WAITING', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
-                        'GOAL_CONFIRMED', 'HOLD'
-                    )),
-                    action_id TEXT,
-                    attempt_id TEXT,
-                    request_digest TEXT,
-                    grant_json TEXT,
-                    result_json TEXT,
-                    goal_evidence_json TEXT,
-                    reason TEXT,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY(mission_id, step_index)
-                );
                 CREATE TABLE IF NOT EXISTS fleet_cell_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_key TEXT NOT NULL UNIQUE,
@@ -143,8 +116,6 @@ class CellJobStore:
                     detail_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS fleet_cell_steps_status
-                    ON fleet_cell_steps(status, updated_at);
                 """
             )
             connection.execute(
@@ -156,6 +127,7 @@ class CellJobStore:
             ).fetchone()[0]
             if applied > _MIGRATION_VERSION:
                 raise RuntimeError(f"unsupported Cell Job journal migration version {applied}")
+            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
             sheets.migrate(connection)
             connection.commit()
 
@@ -183,17 +155,17 @@ class CellJobStore:
                               request_digest: str, submission: Mapping[str, Any]) -> dict[str, Any]:
         """Insert a fully recompiled proposal and its ordered steps in caller's transaction."""
         mission_id = _nonempty("mission_id", mission_id)
-        proposal_principal_id = _nonempty(
-            "proposal_principal_id", proposal_principal_id, limit=96,
-        )
+        proposal_principal_id = _nonempty("proposal_principal_id", proposal_principal_id, limit=96)
         request_key = _nonempty("request_key", request_key, limit=160)
         if (not isinstance(request_digest, str) or len(request_digest) != 64
                 or any(char not in "0123456789abcdef" for char in request_digest)):
             raise ValueError("request_digest must be lowercase SHA-256")
-        if connection.execute(
-                "SELECT 1 FROM fleet_missions WHERE mission_id=?", (mission_id,),
-        ).fetchone() is not None:
+        if connection.execute("SELECT 1 FROM fleet_missions WHERE mission_id=?", (mission_id,)).fetchone() is not None:
             raise ValueError("Cell Job mission_id is already used by the legacy Mission journal")
+        if "arms" in submission:  # D-779 stages 2-4: a multi-arm Job keeps placement in its own tables
+            arm_jobs.create(connection, mission_id=mission_id, proposal_principal_id=proposal_principal_id,
+                            request_key=request_key, request_digest=request_digest, submission=submission)
+            return CellJobStore._get(connection, mission_id)
         required = {
             "job_id", "workcell_id", "instance_id", "recipe_digest", "cell_digest",
             "process_artifact_digest", "job", "steps", "resources", "ledger_markers",
@@ -268,9 +240,9 @@ class CellJobStore:
             rows = connection.execute(
                 """SELECT mission_id, current_step_index, authority_epoch, dispatch_generation
                    FROM fleet_cell_jobs WHERE status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
-                     AND (authority_epoch != ? OR dispatch_generation != ?)""",
-                (control["authority_epoch"], control["generation"]),
-            ).fetchall()
+                     AND (authority_epoch != ? OR dispatch_generation != ?)
+                     AND mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)""",
+                (control["authority_epoch"], control["generation"])).fetchall()
             for job in rows:
                 # 1c N1: an Action that was in flight across the restart has an unknown outcome;
                 # UNKNOWN claims put it on the readback path (and block rearm until resolved).
@@ -295,9 +267,9 @@ class CellJobStore:
                                 "authority_epoch": control["authority_epoch"],
                                 "dispatch_generation": control["generation"],
                             })
-            checkpoint_holds = sheets.recover_ready(connection, now, self._event)
+            held = sheets.recover_ready(connection, now, self._event) + arm_jobs.recover(connection, now, control)
             connection.commit()
-        return len(rows) + checkpoint_holds
+        return len(rows) + held
 
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)
@@ -610,18 +582,28 @@ class CellJobStore:
                 (state, index, control["authority_epoch"], expected_generation, now, mission_id))
             self._event(connection, mission_id, index, "CELL_JOB_RESUMED", actor_id, {
                 "authority_epoch": control["authority_epoch"], "dispatch_generation": expected_generation,
-                "previous_generation": job["dispatch_generation"], "step_status": state})
+                "previous_generation": job["dispatch_generation"], "step_status": state,
+                "approvals": self._approvals(connection, job)})  # a later resume at the same fence is a new event
             result = self._get(connection, mission_id)
             connection.commit()
         return result
 
-    def cancel(self, mission_id: str, *, actor_id: str) -> dict[str, Any]:
-        """Operator abort: terminal, and the claims are released in the same transaction."""
+    def cancel(self, mission_id: str, *, actor_id: str, decision: str | None = None,
+               expected_generation: int | None = None) -> dict[str, Any]:
+        """Operator abort: terminal, and the claims are released in the same transaction.
+
+        With ``decision`` (D-763 5b reject) only a PROPOSED Job at ``expected_generation`` ends.
+        """
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = self._require(connection, mission_id)
-            if job["status"] in {"PROPOSED", "GOAL_CONFIRMED", "RUNNING"} or job["reason"] == CANCELLED_REASON:
+            control = connection.execute("SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            if decision is not None and (job["status"] != "PROPOSED" or control is None
+                                         or control[0] != expected_generation):
+                raise MissionConflict("only a PROPOSED Cell Job at the current stop generation can be rejected")
+            if decision is None and (job["status"] in {"PROPOSED", "GOAL_CONFIRMED", "RUNNING"}
+                                     or job["reason"] == CANCELLED_REASON):
                 raise MissionConflict(f"a {job['status']} Cell Job cannot be cancelled")
             if self._claim_phases(connection, job) & {"DISPATCHING", "UNKNOWN"}:
                 raise MissionConflict("cancel is refused while a claim is DISPATCHING or UNKNOWN")
@@ -632,8 +614,10 @@ class CellJobStore:
             connection.execute("UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
                                (CANCELLED_REASON, now, mission_id))
             release_claims(connection, owner_kind="mission", owner_id=mission_id)
-            self._event(connection, mission_id, job["current_step_index"], "CELL_JOB_CANCELLED", actor_id,
-                        {"previous_status": job["status"], "previous_reason": job["reason"]})
+            self._event(connection, mission_id, job["current_step_index"],
+                        "CELL_JOB_REJECTED" if decision else "CELL_JOB_CANCELLED", actor_id,
+                        {"previous_status": job["status"], "previous_reason": job["reason"],
+                         **({"decision": decision} if decision else {})})
             result = self._get(connection, mission_id)
             connection.commit()
         return result

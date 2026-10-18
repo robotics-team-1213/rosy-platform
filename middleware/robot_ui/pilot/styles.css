@@ -147,7 +147,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   overflow: hidden;
 }
 
-[data-drive-frame] {
+[data-drive-frame], [data-drive-video] {
   display: block;
   transform-origin: 50% 50%;
   width: 100%;
@@ -173,7 +173,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   -webkit-user-select: none;
   user-select: none;
 }
-[data-drive-frame] { pointer-events: none; -webkit-user-drag: none; }
+[data-drive-frame], [data-drive-video] { pointer-events: none; -webkit-user-drag: none; }
 [data-drive-frame]:not([src]) { opacity: 0; }
 
 [data-drive-stage] ui-empty {
@@ -600,7 +600,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 .pilot-drive[data-view-mode="full"] [data-drive-view] {
   grid-row: 1 / span 2;
 }
-.pilot-drive[data-view-mode="full"] [data-drive-frame] {
+.pilot-drive[data-view-mode="full"] :is([data-drive-frame], [data-drive-video]) {
   object-fit: cover;
   transform: none;
 }
@@ -827,6 +827,11 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 }
 /* 태블릿 가로: 왼쪽 작업 공간(영상·readback), 오른쪽 조작부 — 컨트롤러처럼 한 화면에 */
 @media (width >= 64rem) {
+  /* D-741 3: 한 줄. 64rem 아래 두 줄 격자는 2026-10-14 부기. 긴 글은 알림·이름이 말줄임으로 받고 정지·지도는 줄지 않는다. */
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] ui-topbar { align-items: center; min-height: var(--appbar-height); padding-block: var(--space-1); }
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] ui-topbar :is([data-estop], [data-goto]) { flex: none; }
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand, ui-brand a, ui-brand small, #pilot-notice) { min-width: 0; }
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand small, #pilot-notice) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body[data-pilot-screen="arm"] .pilot-main { max-width: 120rem; }
   [data-screen="arm"] { max-width: 120rem; }
   .arm-console {

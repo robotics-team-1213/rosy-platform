@@ -145,6 +145,7 @@ class RobotClient(Protocol):
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
+    async def power(self, action: str) -> dict: ...
     async def identify_lamp_result(self, request_id: str) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
@@ -447,6 +448,10 @@ class HttpRobotClient:
     async def identify_lamp_result(self, request_id: str) -> dict:
         """D-596 rev 2026-10-10: ``{state: pending|shown|refused|expired, reason}``; an older CORE answers 404."""
         return await self._get(f"/api/v1/host/lamp/identify/{request_id}")
+
+    async def power(self, action: str) -> dict:  # D-440 6: CORE's own power API; it keeps the interlock
+        return await self._post(*{"sleep": ("/api/v1/power/mode", {"mode": "STANDBY"}),
+                                  "wake": ("/api/v1/power/wake",)}[action])
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

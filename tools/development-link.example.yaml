@@ -4,5 +4,5 @@ site: bench-a
 robots:
   - rosy_01=robot-a.local
 lifetime_hours: 24
-# Select a new private output directory. On the Windows operator PC use X:/DevTemp/.
+# Select a new private output directory. Use $ROSY_SCRATCH (lab PCs: X:/DevTemp/), or the system temp directory.
 runtime_root: /etc/rosy/development

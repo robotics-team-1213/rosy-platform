@@ -87,7 +87,7 @@ class AccountClient:
                           headers={'Content-Type': 'application/x-www-form-urlencoded',
                                    'Accept': 'application/json'})
         try:
-            with build_opener(_NoRedirect()).open(request, timeout=3) as response:
+            with build_opener(_NoRedirect()).open(request, timeout=1 if endpoint == 'userinfo' else 3) as response:
                 body = response.read(65537)
                 if len(body) > 65536:
                     raise AccountDenied('Oversized Account response')
@@ -184,6 +184,24 @@ class AccountClient:
             return None
         return self.resolve_session_id(_digest(cookie))
 
+    def media_session_active(self, session_id):
+        """Strict online D-789 check; no cached/offline authority for live media."""
+        if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
+            return False
+        try:
+            with self.transaction() as db:
+                row = db.execute('SELECT * FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+                if row is None or row['expires'] <= self.clock():
+                    return False
+                tokens = json.loads(self.cipher.decrypt(row['tokens']))
+                claims = self._claims(tokens['access_token'])
+                if not claims.permits(self.resource, 'robot.read'):
+                    return False
+                self._active(tokens['access_token'])
+                return True
+        except (ValueError, InvalidToken, KeyError, AccountUnavailable):
+            return False
+
     def resolve_session_id(self, session_id):
         if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
             return None
@@ -231,6 +249,44 @@ class AccountClient:
             except (ValueError, InvalidToken, KeyError, TypeError):
                 db.execute('DELETE FROM app_account_sessions WHERE id=?', (row['id'],))
                 return None
+
+    @property
+    def profile_url(self):
+        return self.issuer + '/console/profile'
+
+    def profile(self, cookie):
+        if not isinstance(cookie, str) or not 1 <= len(cookie) <= 128:
+            return None
+        return self.profile_session_id(_digest(cookie))
+
+    def profile_session_id(self, session_id):
+        """Read fresh display metadata without caching or changing authorization on failure."""
+        if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
+            return None
+        try:
+            with self.transaction() as db:
+                row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+            if row is None or row['expires'] <= self.clock():
+                return None
+            encrypted = row['tokens']
+            tokens = json.loads(self.cipher.decrypt(encrypted))
+            current = self._claims(tokens['access_token'])
+            if (current.sub, current.sid) != (tokens.get('_account_sub'), tokens.get('_account_sid')):
+                return None
+            profile = self.post('userinfo', {'token': tokens['access_token']})
+            fields = {'account_id', 'login', 'display_name'}
+            if (not isinstance(profile, dict) or set(profile) != fields
+                    or profile['account_id'] != current.sub
+                    or any(not isinstance(profile[key], str) or not 1 <= len(profile[key]) <= 128 for key in fields)):
+                return None
+            # Logout or renewal while userinfo was in flight must not resurrect an old name.
+            with self.transaction() as db:
+                row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+            if row is None or row['tokens'] != encrypted or row['expires'] <= self.clock() or current.exp <= self.clock():
+                return None
+            return {key: profile[key] for key in fields}
+        except (AccountUnavailable, ValueError, InvalidToken, KeyError, TypeError):
+            return None
 
     def logout(self, cookie):
         if not isinstance(cookie, str) or len(cookie) > 128:

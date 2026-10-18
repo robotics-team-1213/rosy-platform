@@ -6,6 +6,8 @@ import hmac
 import threading
 from urllib.parse import parse_qs, urlparse
 
+from learning_repos import create_private, delete_private, list_repos
+
 
 COOKIE = 'rosy_learning_session'
 BINDING = 'rosy_learning_oauth'
@@ -20,8 +22,8 @@ def cookie(handler, name):
 
 
 class Collaboration:
-    def __init__(self, accounts, store, *, oauth=None, imports=None):
-        self.accounts, self.oauth, self.imports = accounts, oauth, imports
+    def __init__(self, accounts, store, *, oauth=None, imports=None, repos=None):
+        self.accounts, self.oauth, self.imports, self.repos = accounts, oauth, imports, repos
         self.receiver = getattr(accounts, 'receiver', None)
         self.unavailable = ()
         if self.receiver:
@@ -143,10 +145,22 @@ class Collaboration:
             public = {key: principal[key] for key in ('user_id', 'project_id', 'capabilities')}
             if self.receiver:
                 public['account_session'] = principal['_session_id']
+                public['account_id'] = principal['account_id']
+                profile = self.receiver.profile_session_id(principal['_session_id'])
+                public['profile'] = profile if profile and profile['account_id'] == principal['account_id'] else None
+                public['profile_url'] = self.receiver.profile_url
             handler.send(dict(public, token=token, connections=self.accounts.connections(principal)))
             return True
         if path == '/api/learning/imports':
             handler.send({'jobs': self.imports.list(principal, self.accounts.project_id) if self.imports else []})
+            return True
+        if path == '/api/accounts/repos':
+            query = parse_qs(urlparse(handler.path).query, strict_parsing=True, keep_blank_values=True)
+            if (set(query) != {'connection_id', 'repo_type'}
+                    or any(len(values) != 1 or not values[0] for values in query.values())):
+                raise ValueError('저장소 목록 요청이 올바르지 않습니다.')
+            handler.send(list_repos(self.accounts, principal, query['connection_id'][0], query['repo_type'][0],
+                                    transport=self.repos))
             return True
         return False
 
@@ -154,7 +168,9 @@ class Collaboration:
         principal = self.identity(handler)
         if path in ('/api/import', '/api/cad', '/api/learning/register'):
             raise PermissionError('project users cannot import arbitrary server filesystem paths')
-        if path.startswith(('/api/frames/', '/api/masks/', '/api/mask-preview/')):
+        if path.startswith(('/api/review-ai/', '/api/review-ai-cancel/')):
+            capability = 'edit'
+        elif path.startswith(('/api/frames/', '/api/masks/', '/api/mask-preview/')):
             capability = 'approve' if body.get('action') == 'approve' else 'edit'
         elif path == '/api/prepare':
             capability = 'approve'
@@ -239,9 +255,10 @@ class Collaboration:
             self.set_cookie(handler, COOKIE, '', clear=True)
             handler.send({'ok': True})
         elif path == '/api/accounts/oauth':
-            if not self.oauth or body.get('purpose') != 'link':
+            purpose = body.get('purpose')
+            if not self.oauth or purpose not in ('link', 'manage'):
                 raise ValueError('Hugging Face account linking is unavailable')
-            url, binding = self.oauth.begin('link', session=cookie(handler, COOKIE))
+            url, binding = self.oauth.begin(purpose, session=cookie(handler, COOKIE))
             self.set_cookie(handler, BINDING, binding)
             handler.send({'url': url})
         elif path == '/api/accounts/connect':
@@ -250,6 +267,16 @@ class Collaboration:
         elif path == '/api/accounts/disconnect':
             self.accounts.disconnect(principal, body.get('connection_id'))
             handler.send({'ok': True})
+        elif path == '/api/accounts/repos/create':
+            if set(body) != {'connection_id', 'repo_type', 'repo_id'}:
+                raise ValueError('저장소 만들기 요청이 올바르지 않습니다.')
+            handler.send(create_private(self.accounts, principal, body['connection_id'], body['repo_type'],
+                                        body['repo_id'], transport=self.repos))
+        elif path == '/api/accounts/repos/delete':
+            if set(body) != {'connection_id', 'repo_type', 'repo_id', 'confirm'}:
+                raise ValueError('저장소 삭제 요청이 올바르지 않습니다.')
+            handler.send(delete_private(self.accounts, principal, body['connection_id'], body['repo_type'],
+                                        body['repo_id'], body['confirm'], transport=self.repos))
         elif path.startswith('/api/learning/imports/'):
             if not self.imports:
                 raise ValueError('자료 가져오기가 설정되지 않았습니다.')

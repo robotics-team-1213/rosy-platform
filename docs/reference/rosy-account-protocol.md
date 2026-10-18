@@ -47,6 +47,25 @@ UI 표시 조건은 동일 site의 `accounts.manage`이며 서버가 매 요청 
 
 ## 신원과 자원 권한
 
+### 공통 프로필 표시 (2026-10-14 보완)
+
+프로필 편집 정본은 Fleet의 `/console/profile` 하나다. 앱별 프로필 저장소를 만들지 않는다.
+`POST /api/fleet/auth/userinfo`는 기존 form 경계로 `token` 하나를 받고, 현재 유효한
+access token의 계정만 조회한다. 성공 응답은 `account_id`, `login`, `display_name`이며
+정지·회수·만료·revision 불일치는 401, 원장 장애는 503이다. grant와 다른 계정 정보는
+이 응답으로 확장하지 않는다. 응답은 no-store이며 표시 이름은 권한 판단에 사용하지 않는다.
+
+수신 앱의 기존 session 응답은 `profile`(위 세 필드 또는 null)과 `profile_url`을 추가한다.
+URL은 신뢰 설정의 issuer에 `/console/profile`을 붙여 생성하며 서버 응답이나 사용자 입력으로
+외부 목적지를 바꾸지 않는다. 프로필 응답의 account_id는 검증한 세션 subject와 같아야 한다.
+프로필만 조회 실패하면 이전 사람의 이름을 유지하지 않고 확인 불가로 표시하며,
+기존 인증·회수 검사는 그대로 유지한다. 네이티브도 동일 계약을 쓰고 네트워크 조회를
+조작·정지 전송 경로에 추가하지 않는다. 표시 이름은 기존 세션 상태 갱신 주기로 다시 읽는다.
+
+Fleet 내 계정의 관리형 프로필 응답은 `grants`를 함께 제공한다. UI는 기존 role을
+역할로 표시하고 자원별 실제 capability를 별도 읽기 전용 목록으로 보여준다.
+권한 변경은 기존 `accounts.manage` 경로에서만 처리한다.
+
 Account identity는 불변 opaque `account_id`다. login/email은 identity가 아니다.
 권한은 `{resource, capabilities}` 목록이다. resource는 `site:<id>`, `robot:<id>`,
 `project:<id>` 중 하나이며 wildcard가 없다. id는 영숫자·점·밑줄·하이픈 1~96자다.
@@ -61,6 +80,18 @@ capability는 서로 상속하지 않는다. UI는 관련 읽기 권한도 함�
 서버는 요청에 필요한 정확한 권한을 검사한다. 기존 기계/복구 자격의 역할 계약은 유지한다.
 
 ## 중앙 계정 관리
+
+### Fleet 설정 안내와 앱 등록 조회
+
+`GET /api/fleet/auth/setup`은 same-origin 사람 쿠키만 허용한다. 활성 계정은 현재
+site의 `accounts.manage`, 전환 전 계정은 `policy-admin` 역할을 요구한다. 첫 비밀번호
+변경이 필요한 세션은 거절한다. 응답은 no-store이며 `configured`, `issuer`, `clients`
+(`client_id`, `redirect_uris`, `resources`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
+`configured`는 현재 프로세스의 Authority 설정 적용 여부이고 HTTPS·앱 로그인 수용 증거가 아니다.
+
+Fleet `/console/accounts`에 설정 상태·앱 등록·최초 설치 안내를 함께 둔다. 계정·권한 변경은
+아래 기존 API를 유지한다. HTTPS, 보호 키 설치, 앱 등록 변경은 기존 관리자 배포 경로가
+수행하며 Fleet에 호스트 root 권한이나 비밀 업로드 API를 추가하지 않는다.
 
 모든 경로는 유효한 변경 완료 사람 쿠키와 해당 site의 `accounts.manage`를 요구한다.
 unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail `{code,message}`를 쓴다.
@@ -200,6 +231,8 @@ generation을 승인한 중앙 subject와 session에 결속하며 매 사용/wor
 `learning.import`와 `learning.manage`를 다시 확인한다. 기존 공유 연결은 소유자가
 한 번 다시 연결해야 한다. 승인 세션의 로그아웃·회수·만료 후에는 공유도 중단된다.
 개인 세션과 무관한 무인 프로젝트 위임을 자동 생성하지 않는다.
+
+비공개 데이터셋·모델 저장소의 목록·생성·삭제는 `learning.publish`와 연결에 기록된 저장소 범위가 있을 때만 한다. `learning.import`와 `learning.manage`는 그 경로를 대신하지 않는다. 개인 연결의 생성 네임스페이스는 그 Hugging Face 사용자 이름이고, 프로젝트 연결은 허용 목록의 데이터셋·모델만 다룬다.
 
 참고: [OAuthlib 서버](https://oauthlib.readthedocs.io/en/latest/oauth2/server.html),
 [joserfc JWT](https://jose.authlib.org/en/guide/jwt/).
