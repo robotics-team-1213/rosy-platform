@@ -3,9 +3,10 @@ from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
+import subprocess
+import sys
 import threading
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener
 
 from rosy.contracts.skill import AttemptIdentity
 from .omx_policy import PolicyLease
@@ -34,9 +35,25 @@ class LeaseScope:
                 raise ValueError('explicit pinned SIM lease scope required')
 
 
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
+_HTTP_EXCHANGE = '''
+import json, sys
+from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs): return None
+try:
+    call = json.load(sys.stdin)
+    payload = None if call['body'] is None else json.dumps(call['body'], allow_nan=False).encode()
+    request = Request(call['url'], payload, method=call['method'],
+        headers={'Authorization': 'Bearer '+call['token'], 'Content-Type': 'application/json'})
+    with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=call['timeout']) as response:
+        raw = response.read(1024*1024+1)
+        if response.status != 200 or len(raw) > 1024*1024: raise ValueError()
+        value = json.loads(raw)
+        if not isinstance(value, dict): raise ValueError()
+    print(json.dumps(value, allow_nan=False))
+except Exception:
+    sys.exit(1)
+'''
 
 
 class FleetPolicyHttp:
@@ -54,7 +71,6 @@ class FleetPolicyHttp:
         parsed.port  # Validate the port before using any credential.
         self.origin, self.token_file = origin.rstrip('/'), Path(token_file)
         self.timeout_s = timeout_s
-        self._opener = build_opener(ProxyHandler({}), _NoRedirect())
 
     def __call__(self, method, path, body=None):
         if method not in ('GET', 'POST') or not path.startswith('/api/fleet/workcells/'):
@@ -63,14 +79,12 @@ class FleetPolicyHttp:
             token = self.token_file.read_text(encoding='ascii').strip()
             if not token or len(token) > 8192 or any(c.isspace() for c in token):
                 raise ValueError('invalid credential file')
-            payload = None if body is None else json.dumps(body, allow_nan=False).encode()
-            request = Request(self.origin+path, payload, method=method,
-                headers={'Authorization': 'Bearer '+token, 'Content-Type': 'application/json'})
-            with self._opener.open(request, timeout=self.timeout_s) as response:
-                raw = response.read(1024*1024+1)
-                if response.status != 200 or len(raw) > 1024*1024:
-                    raise ValueError('invalid Fleet response')
-                result = json.loads(raw)
+            call = dict(url=self.origin+path, method=method, body=body, token=token, timeout=self.timeout_s)
+            # Kill and reap our exchange process on a total deadline, including DNS and a dripping response.
+            exchange = subprocess.run([sys.executable, '-I', '-c', _HTTP_EXCHANGE],
+                input=json.dumps(call, allow_nan=False), capture_output=True, text=True,
+                timeout=self.timeout_s, check=True)
+            result = json.loads(exchange.stdout)
             if not isinstance(result, dict):
                 raise ValueError('Fleet object response required')
             return result
@@ -119,7 +133,8 @@ class FleetLeaseConsumer:
                 if self._current is None or not self._current.issued_at_ns <= now < self._current.expires_at_ns:
                     self.close()
                     return False
-                return (lease == self._current or lease == self._pending) and lease.issued_at_ns <= now < lease.expires_at_ns
+                return ((lease == self._current or lease == self._pending)
+                        and lease.issued_at_ns <= now < lease.expires_at_ns)
             except Exception:
                 self.close()
                 return False

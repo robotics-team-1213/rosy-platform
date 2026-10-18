@@ -4,7 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 from types import SimpleNamespace
-from urllib.request import ProxyHandler
 
 import pytest
 
@@ -153,9 +152,28 @@ def test_post_issue_governance_stop_closes_authority(wire, key, row):
 
 
 def test_fleet_transport_never_uses_environment_proxy(tmp_path, monkeypatch):
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import threading
     monkeypatch.setenv('http_proxy', 'http://proxy.invalid:8888')
-    client = FleetPolicyHttp('http://127.0.0.1:1234', tmp_path/'token', loopback_sim=True)
-    assert not any(isinstance(handler, ProxyHandler) and handler.proxies for handler in client._opener.handlers)
+    monkeypatch.setenv('no_proxy', '')
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args): pass
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{}')
+    server = HTTPServer(('127.0.0.1', 0), Handler)
+    worker = threading.Thread(target=server.serve_forever)
+    worker.start()
+    token = tmp_path/'token'
+    token.write_text('test-only')
+    client = FleetPolicyHttp(f'http://127.0.0.1:{server.server_port}', token, loopback_sim=True)
+    try:
+        assert client('GET', '/api/fleet/workcells/cell/policy') == {}
+    finally:
+        server.shutdown()
+        worker.join(2)
+        server.server_close()
 
 
 def test_fleet_transport_has_total_deadline_for_dripping_body(tmp_path):

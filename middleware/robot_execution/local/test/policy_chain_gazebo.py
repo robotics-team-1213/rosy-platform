@@ -139,7 +139,7 @@ class Camera:
                 self.rejected += 1
                 return
             camera = CameraSnapshot('front','sim-workcell-camera',self.calibration,SHAPE,
-                int(self.clock()*1e9),hashlib.sha256(raw).hexdigest())
+                int(self.clock()*1e9)-(now-stamp),hashlib.sha256(raw).hexdigest())
             self._latest, self._stamp = (raw,camera), stamp
             self.accepted += 1
 

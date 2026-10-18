@@ -2,9 +2,13 @@
 import ast
 import hashlib
 from pathlib import Path
+import sys
 import threading
 from types import SimpleNamespace as NS
 
+ROOT = Path(__file__).resolve().parents[4]
+sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
+               str(ROOT/'middleware/robot_execution/local/src')]
 from rosy.execution.local.omx_policy import CameraSnapshot
 
 
