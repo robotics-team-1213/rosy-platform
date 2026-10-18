@@ -23,7 +23,7 @@ function permits(session, capability, legacyRoles) {
     return (session.grants || []).some(grant => grant.resource === session.site_resource
       && (grant.capabilities || []).includes(capability));
   }
-  return legacyRoles.includes(session.role);
+  return legacyRoles.includes(session.role) || (capability === 'fleet.policy' && session.policy_admin === true);
 }
 
 export function roles(session) {

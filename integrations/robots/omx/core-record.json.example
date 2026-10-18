@@ -1,0 +1,24 @@
+{
+  "robot": {
+    "type": "rosy_omx",
+    "url": "http://127.0.0.1:8080",
+    "token_file": "<private-core-token-file>",
+    "policy_revision": "<installed-policy-sha256>",
+    "joint_names": ["joint1", "joint2"],
+    "camera_name": "front",
+    "camera_height": 480,
+    "camera_width": 640
+  },
+  "dataset": {
+    "repo_id": "local/core-policy-rollout",
+    "single_task": "<explicit-approved-task>",
+    "root": "<new-private-dataset-path>",
+    "push_to_hub": false
+  },
+  "policy": {
+    "type": "act",
+    "pretrained_path": "<local-act-checkpoint-directory>",
+    "n_action_steps": 1,
+    "temporal_ensemble_coeff": null
+  }
+}

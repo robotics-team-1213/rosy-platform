@@ -322,6 +322,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'fleet.server.context_log', 'fleet.server.context_options',
                'rosy.decision.deliberation.profiles', 'rosy.decision.deliberation.judgment',
                'rosy.decision.deliberation.calibration', 'rosy.decision.deliberation.versioned_request',
                'rosy.decision.deliberation.versioned_cli', 'rosy.decision.deliberation.local',

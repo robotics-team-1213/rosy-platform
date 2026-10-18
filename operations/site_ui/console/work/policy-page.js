@@ -190,6 +190,9 @@ async function start() {
     if (!workcells.length) { $('policy-verdict').textContent = '설정된 OMX 작업셀이 없습니다.'; return; }
     await refresh();
     setInterval(refresh, 2000);
-  } catch (error) { $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable'); }
+  } catch (error) {
+    $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
+    $('policy-login').hidden = error.status !== 401;
+  }
 }
 start();
