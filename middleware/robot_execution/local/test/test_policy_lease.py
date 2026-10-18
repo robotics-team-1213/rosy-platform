@@ -2,11 +2,12 @@
 import copy
 from dataclasses import replace
 from types import SimpleNamespace
+from urllib.request import ProxyHandler
 
 import pytest
 
 from rosy.contracts.skill import AttemptIdentity
-from rosy.execution.local.policy_lease import FleetLeaseConsumer, LeaseScope
+from rosy.execution.local.policy_lease import FleetLeaseConsumer, FleetPolicyHttp, LeaseScope
 
 
 @pytest.fixture
@@ -16,6 +17,7 @@ def wire():
     scope = LeaseScope(identity, 'episode', 'policy-pin', 'owner-session', 'window', 'rig', 'cal', 'sim reach')
     state = dict(workcell_id='cell', now_ns=1_000_000_000_000,
         policies=[dict(policy_revision='policy-pin', rig_revision='rig', calibration_revision='cal', stage='L3')],
+        confirmations=[], incidents=[],
         windows=[dict(window_id='window', policy_revision='policy-pin', kind='supervised', scope='sim reach',
             active=True, approved_by='second-sim-admin', closed_ns=None, expires_ns=2_000_000_000_000)])
     calls = []
@@ -25,6 +27,7 @@ def wire():
     def request(method, path, body=None):
         calls.append((method, path, body))
         clock[0] += .05
+        state['now_ns'] = 1_000_000_000_000+int((clock[0]-100)*1e9)
         return copy.deepcopy(state if method == 'GET' else response)
     consumer = FleetLeaseConsumer(scope, request=request, monotonic=lambda: clock[0])
     return SimpleNamespace(clock=clock, scope=scope, state=state, calls=calls, response=response,
@@ -123,3 +126,27 @@ def test_close_during_transport_rejects_late_success(wire):
 def test_unissued_identity_alias_is_never_authority(wire):
     lease = wire.consumer.acquire()
     assert not wire.consumer.authority(replace(lease, owner_session_id='another-owner'))
+
+
+@pytest.mark.parametrize('issued,expires', [(998_000_000_000,999_000_000_000),
+    (1_000_500_000_000,1_001_500_000_000)])
+def test_expired_or_future_fleet_response_is_not_reanchored(wire, issued, expires):
+    wire.response.update(issued_ns=issued, expires_ns=expires)
+    with pytest.raises(PermissionError): wire.consumer.acquire()
+
+
+@pytest.mark.parametrize('key,row', [('confirmations',dict(resolution=None)),
+                                     ('incidents',dict(cleared_ns=None))])
+def test_post_issue_governance_stop_closes_authority(wire, key, row):
+    def request(method, path, body=None):
+        result = wire.request(method, path, body)
+        if method == 'POST': wire.state[key].append(row)
+        return result
+    consumer = FleetLeaseConsumer(wire.scope, request=request, monotonic=lambda: wire.clock[0])
+    with pytest.raises(PermissionError): consumer.acquire()
+
+
+def test_fleet_transport_never_uses_environment_proxy(tmp_path, monkeypatch):
+    monkeypatch.setenv('http_proxy', 'http://proxy.invalid:8888')
+    client = FleetPolicyHttp('http://127.0.0.1:1234', tmp_path/'token', loopback_sim=True)
+    assert not any(isinstance(handler, ProxyHandler) and handler.proxies for handler in client._opener.handlers)
