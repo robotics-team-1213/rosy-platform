@@ -155,7 +155,10 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
 def test_raw_and_annotated_api_are_same_capture_and_admitted_once_each(core_client, monkeypatch):
     client, services = core_client()
     from core.bridge.observation import camera_preview
+    from core_features.vision import store as preview_store
     from types import SimpleNamespace
+    # Keep fresh-pair assertions independent of scheduler delay; expiry has explicit-clock coverage.
+    monkeypatch.setattr(preview_store, 'time', SimpleNamespace(monotonic=lambda: 20.0))
     stamp = SimpleNamespace(sec=42, nanosec=250000000)
     header = SimpleNamespace(stamp=stamp, frame_id='front_camera_link')
     warnings = []

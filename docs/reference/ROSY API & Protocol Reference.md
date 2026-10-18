@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.271
+**Version:** v1.273
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.273 Stuck evidence as a raw JPEG for `Accept: image/jpeg`
+
+Additive, documents shipped behaviour. `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` answers a request
+whose `Accept` starts with `image/jpeg` with the JPEG bytes (`Content-Type: image/jpeg`, `Cache-Control: no-store`)
+and puts the remaining fields (`robot_id`, `stuck_id`, `sequence`, `source`, `media_type`, `age_s`, and for
+`live=true` also `live`, `captured_at`) in the `X-Stuck-Evidence` header as compact JSON. Other clients keep the
+JSON body with `jpeg_base64`. Errors stay JSON. This drops the base64 overhead (+33 %) from the console's 2 s poll.
 
 ### v1.271 CORE OMX policy I/O (D-800)
 
@@ -67,6 +75,84 @@ Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 
 - **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
 - **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 아직 없어 거절한다(D-779 열린 질문, fail closed). 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
 - **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
+
+### v1.247 D-769 selected-route production capability
+
+The base control descriptor adds `line_follow_route_guide` (absent/false means unsupported).
+CORE advertises it only when `line_follow.route_guide_enabled` is explicitly true; the
+flag defaults false and also gates active ROS guide publication. Enable it only with the
+source-expiring camera inbox deployed. The isolated learned-drivable Gazebo runner opts in;
+this does not activate a physical robot.
+Fleet captures geometry from its selected directed plan and the unrounded localized pose
+used to locate trip progress. The map id must match the active map. Before attaching it to
+the existing authority request, Fleet checks the exact echoed pose stamp, map/route revision,
+plan segment signature, lap trim, selected station and remaining source-age budget (<=1 s).
+Holds, old poses, changed plans and shrink requests carry no guide. Stored segment endpoints
+are normalized only within their existing four-decimal serialization precision.
+
+### v1.246 D-769 route geometry attached to accepted authority
+
+`POST /api/v1/line-follow/authority` adds optional `route_guide` (`AuthorityRouteGuide`).
+It carries `map_id`, integer `map_revision`, finite `heading_here_deg`/`heading_ahead_deg`
+in [-180,180], `ahead_m` in (0,2], nonnegative `s_m`/`off_route_m`, and `max_age_s` in (0,1].
+Extra fields are rejected. Leg, sequence and pose come only from the enclosing authority.
+CORE binds geometry only after authority acceptance, with a sequence and an exact echoed
+`pose_stamp` match. It converts that sample's ROS stamp to `source_stamp_s` and caps the
+prior by source age and authority TTL. Reusing a source cannot extend its previous budget.
+Accepted requests without geometry, shrink requests, mode reset, expiry or unavailable
+odometry expose no prior. Ignored stale requests cannot replace or refresh the current prior.
+The prior selects among observed floor directions; it grants no movement or pivot authority.
+CORE now publishes through its existing line-follow timer. Fleet production and explicit capability opt-in are implemented by v1.247; Gazebo acceptance remains pending.
+REST remains additive; Fleet envelope protocol 1.0 is unchanged.
+
+### v1.245 D-769 selected-route prior transport (internal, producer not enabled)
+
+`core_common.protocol.lane_route_guide.LaneRouteGuide` defines the version 1 CORE-to-camera
+message for the single CORE `line/lane_guide` publisher. The camera observer now routes
+this subscription through the ordered inbox and checks each frame before keep-mode use.
+Authority attachment is available through v1.246; Fleet production requires the v1.247 capability.
+CORE emits an ordered clear before its first active message and after a source-clock rewind.
+Publication has a separate monotonic source budget that survives publication-epoch resets;
+the wire deadline is capped by the remaining budget. The receiver also applies its own
+remaining-budget clock. This describes validity at publication/receipt: elapsed wall time
+during transport while ROS time is paused is not encoded in the message.
+Inactive line following, E-stop or unavailable authority produce clears. Unversioned diagnostic
+messages are rejected by this runtime subscription; the legacy pure replay parser remains.
+
+- Envelope: `v=1`, nonempty `publisher_epoch`, nonnegative integer publication `seq`, and
+  `guide`. `guide=null` explicitly clears the cached prior. Publication sequence increases
+  across active and clear messages within one CORE process; it is separate from authority sequence.
+- Active guide: `leg_id`, `authority_seq`, `map_id`, immutable integer `map_revision`,
+  `source_stamp_s`, `valid_until_s`, `heading_here_deg`, `heading_ahead_deg`, `ahead_m`,
+  `s_m`, `off_route_m`, and `pivot_ok=false`. Extra fields are refused. All numeric geometry
+  is finite; headings are degrees left-positive relative to the source body's yaw, bounded
+  to [-180,180]. `ahead_m` is actual positive preview distance at most 2 m; zero preview
+  produces a clear. `s_m` starts at the selected plan origin, not the current arc origin;
+  `off_route_m` is nonnegative distance to that selected route.
+- Source and deadline use the camera/ROS source clock, never another process's monotonic
+  clock. The deadline is strictly after source and at most one source second later; CORE
+  must additionally cap it at accepted authority expiry. Republishing cannot renew it.
+  Producer mapping must identify the exact odometry sample used for Fleet's relative headings.
+- The inbox rejects future, expired, malformed and reordered messages. A higher-sequence
+  clear prevents queued lower-sequence active messages from reviving the prior. A different
+  publisher epoch requires a clear before active messages; retired epochs remain rejected.
+  It retains at most 64 retired epochs and refuses further switches until inbox restart.
+  Camera clock rewind clears the current prior; epoch ordering is not reset by that event.
+
+  The inbox also enforces the remaining source budget on its own monotonic clock. A repeated
+  source sample cannot renew that local deadline, including across clears or expiry. Older
+  source samples are refused within an epoch. The typed result retains actual `ahead_m`.
+  Keep-mode direction use requires its full 0.25 m preview; shorter previews do not
+  select steering direction, while fresh scalar off-route evidence still causes HOLD.
+
+  The inbox also enforces the remaining source budget on its own monotonic clock. A repeated
+  source sample cannot renew that local deadline, including across clears or expiry. Older
+  source samples are refused within an epoch. The typed result retains actual `ahead_m`.
+- Producer integration must clear atomically on accepted authority without a guide, shrink,
+  revocation, mode/trajectory change and expiry. Rejected authority cannot install or renew
+  a guide. Capability opt-in must cover the deployed consumer's deadline/invalidation
+  behavior, not just request schema support. Legacy unversioned diagnostic input is not
+  evidence of this capability. Direction never establishes visible floor or pivot permission.
 
 ### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
 
@@ -2227,7 +2313,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/tasks/{task_id}/cancel` | `operator` bearer | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
 | POST | `/api/fleet/cancel-all` | `operator` bearer | D-421 (v1.81): non-latching site-wide driving cancel. In order: queued tasks of every robot become `CANCELED` with reason `FLEET_CANCEL_ALL` and the operator as actor (dispatch latch and generation unchanged); an open formation is stopped; then per robot, concurrently, `POST /api/v1/swarm/cancel`, `POST /api/v1/navigation/cancel`, `PUT /api/v1/line-follow/mode {mode: OFF}`, each attempted even when an earlier one failed. It never calls `safety/stop`/`safety/release`, `/mode`, signals or OMX stop. Each request writes a durable record in the task journal database (`fleet_cancel_all`: id, principal, opened/closed times, robot ids, canceled queued task ids, robots whose navigation cancel was answered; closed records older than 30 days are pruned when a window opens) and tags the in-flight dispatch attempts of those robots by `(task_id, attempt_id)` (`ACCEPTED`, `RUNNING`, mid-dispatch `QUEUED`, and `UNKNOWN` changed since the window opened or not already canceled). Dispatched tasks are not rewritten by Fleet: a correlated CORE `nav.canceled` (evidence that a cancel was issued, not of standstill, D-298) moves a tagged task to `HOLD` with reason `FLEET_CANCEL_ALL`, which releases its robot claim, so in-flight robots become dispatchable once CORE confirms the cancel. The event must match the tagged attempt, its `data.source` (when present) must be `api:*`, and the window must be open, or closed at most 30 s ago with that robot's navigation cancel answered or a fence re-cancel; other later cancels stay `UNKNOWN`. A dispatch started inside the window is tagged before its CORE goal call, and tagging settles an attempt whose `nav.canceled` already arrived during the window. Correlated events and dispatch receipts arriving after `HOLD(FLEET_CANCEL_ALL)` are logged, not applied. If the record cannot be written the fanout continues and the response carries `record_error: "CANCEL_ALL_RECORD_UNAVAILABLE"`; without that event the task stays as it was (`ACCEPTED`/`UNKNOWN`), the robot stays claimed and the task needs reconciliation (no operator reconcile route exists yet). An untagged `nav.canceled` still yields `UNKNOWN`/`CORE_CANCEL_RESULT_PENDING`. `tasks.awaiting_core_result` lists per robot the `ACCEPTED`/`RUNNING` tasks plus `UNKNOWN` tasks changed since the window opened. A dispatcher CORE goal call that overlaps the request (including a task submitted and dispatched inside the window) is inspected when it ends: an explicit CORE reject stays `FAILED`/`COMMAND_REJECTED`; a dispatch left in Fleet's own traffic queue with no live CORE goal becomes `CANCELED`/`FLEET_CANCEL_ALL`; otherwise the task is tagged, Fleet sends `navigation/cancel` to the robot and to any robot it sent to a bay for it, and the task becomes `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH` (no retry); a goal call that raised is re-canceled the same way and keeps its existing classification. 200 even on partial failure: `{cancel_all_id, record_error, cancelled, total, evidence: "CORE_REPLY_ONLY", robots[{robot_id, result: cancelled\|failed\|unreachable, steps{swarm, navigation, line_follow: {ok, error?{reachable, sent?, code, message}}}, tasks{awaiting_core_result[]}}], formation{stopped, state, error?}, tasks{canceled[], error}}`; `sent: false` marks a step Fleet's D-361 address gate refused locally (`ADDRESS_UNVERIFIED`; `line-follow/mode` is not a stop path because a path-level gate would also allow turning it on). `cancelled` = all three CORE calls replied 2xx; `unreachable` = no call got a reply; otherwise `failed`. A reply is not physical stop evidence (D-298). Repeating the request is safe. Normal audit gate applies (`503 AUDIT_STORAGE_UNAVAILABLE`); the D-330 audit exception stays with `/api/fleet/estop`. |
 | GET | `/api/fleet/line-stuck` | any configured user bearer | D-407 (v1.77): returns the board as of the last shared gather (it does not contact the robots) as `{pending[], answers[], observed_age_s}`; `observed_age_s` is null before the first gather. D-438 (v1.91): one shared gather feeds both `GET /api/fleet/state` and the stuck resolver loop and is reused for up to 1 s, so with the resolver running the board is at most about 1 s old even when no console is open. `pending` has one row per robot whose CORE `line_follow.stuck` is open: the CORE `LineStuckStatus` fields plus `robot_id`, `front_clearance_m`, `rear_clearance_m`, `turn_clearance_m`, `rear_blind_m`, `preview_seq` (from the `nav.line_stuck_opened` FleetAgent event, `null` when not received; `opened_event` says which), `robot_online` (false = last value kept while the robot is unreachable), `observed_age_s`, `fleet_answer` (the last forwarded answer for this stuck id; `ESCALATE` rows are not answers and are skipped) and `resolver` (D-438, see `.../line-stuck/claim`). `answers` is the recent forwarded-answer record `{robot_id, stuck_id, decision, principal_id, accepted, outcome, code, message, audit_id, tier, rule, escalated, at}` (`accepted` null = outcome unknown). The same row appears as `line_stuck` on each robot of `GET /api/fleet/state`. D-517 5 M4 (v1.149): the resolver also answers a robot on an open Fleet trip, with the stopping `WAIT` only (rule `R1`, a peer in the front band); any other rule (back-off, yield, resume) escalates that stuck to a human (`escalated: no_rule`), as D-494 14 refuses moving decisions on a trip. |
-| GET | `/api/fleet/robots/{robot_id}/line-stuck/evidence?stuck_id=` | any configured user bearer | D-577 8 (v1.182): the open stuck's one evidence picture, `{robot_id, stuck_id, sequence, source, media_type: image/jpeg, age_s, jpeg_base64}`; `age_s` is the frame's age (CORE `age_ms` at the read plus the time since). The first read asks the robot (`GET /api/v1/vision/front/status`, then `/front/frame?sequence=` with Fleet's robot credential, 3 s limit); Fleet keeps that one frame in memory only while the stuck is open (never disk, bus or event; dropped when the stuck closes or is replaced) and later reads serve it without asking the robot again. 404 `STUCK_NOT_OPEN` (no open stuck with that id on the board, or it closed during the read), 404 `STUCK_PREVIEW_UNAVAILABLE` (`message` = the robot's code, e.g. `CAMERA_FRAME_UNAVAILABLE`; a failure is not kept, the next read asks again). The picture is display evidence only; nothing reads it as a rule input. One still per stuck, not a relay: D-136 T1 (no video or preview relay routes in Fleet) stays. |
+| GET | `/api/fleet/robots/{robot_id}/line-stuck/evidence?stuck_id=` | any configured user bearer | D-577 8 (v1.182): the open stuck's one evidence picture, `{robot_id, stuck_id, sequence, source, media_type: image/jpeg, age_s, jpeg_base64}`; `age_s` is the frame's age (CORE `age_ms` at the read plus the time since). The first read asks the robot (`GET /api/v1/vision/front/status`, then `/front/frame?sequence=` with Fleet's robot credential, 3 s limit); Fleet keeps that one frame in memory only while the stuck is open (never disk, bus or event; dropped when the stuck closes or is replaced) and later reads serve it without asking the robot again. 404 `STUCK_NOT_OPEN` (no open stuck with that id on the board, or it closed during the read), 404 `STUCK_PREVIEW_UNAVAILABLE` (`message` = the robot's code, e.g. `CAMERA_FRAME_UNAVAILABLE`; a failure is not kept, the next read asks again). The picture is display evidence only; nothing reads it as a rule input. One still per stuck, not a relay: D-136 T1 (no video or preview relay routes in Fleet) stays. v1.273: a request with `Accept: image/jpeg` (the console's 2 s live poll) gets the same picture as the raw body, `Content-Type: image/jpeg`, `Cache-Control: no-store`, and the other fields as compact JSON in the `X-Stuck-Evidence` header (no `jpeg_base64`); any other `Accept` gets the JSON body above. Same route, permissions, errors (JSON) and D-136 exception, also with `live=true`. |
 | GET | `/api/fleet/line-stuck/episodes` | any configured user bearer | D-407 (v1.121): durable stuck episodes, newest first, `?limit=` 1-1000 (default 100), as `{episodes[]}`; empty when Fleet runs without `--tasks-db`. One row per `(robot_id, stuck_id)` from the same board transitions (no extra robot calls): `source` (`fleet_poll`, so times are poll resolution, about 1 s, and a stuck shorter than one poll can be missed), `cause`, `phase_at_open`, `local_enabled_at_open`, `trip_busy_at_open` (null before the trip runner is wired), `peer_ahead_at_open` (the D-438 R1 band test; null = no own pose), `opened_at`, `closed_at` (UTC ISO), `held_s_max`, `attempts_max` (CORE `held_s` is the duration of record), `close_reason` `cleared`\|`replaced`\|`left_roster`\|`fleet_restart` (an episode still open at start-up; the same `stuck_id` seen again reopens the row and keeps the first `opened_at`), `resolved_by` from the last non-`ESCALATE` answer (`human`\|`rule` when accepted, `<tier>_unconfirmed` when the outcome is unknown, null when only refused or unanswered), `resolved_principal`, `last_answer_tier`, `escalation_code` (the last `ESCALATE` row's `escalated`), and `pose_x`, `pose_y`, `pose_yaw`, `pose_state`, `pose_age_s` (Fleet map pose at open, null without the map pose service). An unreachable robot's episode stays open. |
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/decision` | `operator` bearer for `WAIT`·`ABORT`; named `operator` (D-540 9, v1.161) for `RESUME`·`BACK_AND_RETRY`·`MANUAL` | D-407 (v1.77): `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT}`; permission by value (D-540 9, v1.161): WAIT and ABORT stay open to any `operator` like the CORE route; RESUME, BACK_AND_RETRY, MANUAL and YIELD need a named operator (403 `OPERATOR_IDENTITY_REQUIRED`), and on a robot under a D-541 trip lease CORE answers the moving values from a non-owner token with 409 `TRIP_LEASED`; `stuck_id` 1-64 chars of `[A-Za-z0-9_.:-]` (CORE ids are `stuck-<12 hex>`), extra fields 422. Forwarded unchanged to that robot's `POST /api/v1/line-follow/stuck/decision` with the robot credential; Fleet never refuses on CORE's behalf. 200 `{robot_id, actor_id, answer, result}` (`result` is CORE's body incl. `outcome`). A CORE 409 (`STUCK_ID_MISMATCH`, `STUCK_DECISION_REFUSED` with its reason, `EMERGENCY_ACTIVE`, `CALIBRATION_ACTIVE`) is returned as 409 `{code, message, robot_id, robot_status}` with CORE's code and message verbatim; other robot error statuses are 502 with the same body, unknown robot 404. A transport failure is 502 `{code, message, robot_id, transport}`: `ROBOT_UNREACHABLE` when the connection was never made (not delivered), `STUCK_DECISION_OUTCOME_UNKNOWN` on a timeout or a dropped reply (CORE may have applied the answer; re-read the stuck before answering again). Every forwarded answer is recorded with the site principal in memory and, with durable task storage, in the `fleet_line_stuck_answers` table of the Fleet journal database, keyed by the API audit `request_id` (§10.10). D-438 (v1.91) nullable columns: `tier` (`human` for this route, `rule` for a resolver answer), `rule` (`R1`–`R3`, resolver only), `escalated` (hand-off reason). Every resolver hand-off to a human is its own row with `decision: "ESCALATE"`, `accepted` null, `tier: "human"`, `escalated` = the reason and `principal_id: "fleet-resolver"`. A database created before v1.91 gains the three columns when Fleet opens it (rows written before stay null). |
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/claim` | `operator` bearer (D-540 9: open, the console claims before an `ABORT` confirm) | D-438 (v1.91): `{stuck_id}` — 사람이 그 막힘을 맡는다. 판단기는 맡은 막힘에 답하지 않고 `human_claimed` 로 올린다. 200 `{robot_id, stuck_id, claimed_by}`, 모르는 로봇 404 `UNKNOWN_ROBOT`. `.../line-stuck/decision` 도 404 확인 뒤 먼저 맡고, CORE 전달이 실패해도 맡음을 유지한다. 로봇 행 `line_stuck.resolver` = `{tier, rule, decision, escalated, at, age_s}` 또는 null(escalated 사유: `no_rule`, `rule_budget`, `deadline`, `restuck_after_resume`, `estop`, `calibration`, `no_resolver_token`, `human_claimed`, `core:<CODE>`, D-577 `lane_lost_hold:<peer_behind|peer_unknown|attempts|local_disabled|crosswalk|crosswalk_unknown|pose|refused|rule_budget>`, v1.187 같은 이유의 `no_motion_hold:<…>`). 2026-10-10 (v1.187): CORE `no_motion` 막힘은 `lane_lost` 와 같은 조건으로 R6 `BACK_AND_RETRY`(조건이 모두 참) 또는 R5 `WAIT` + 사람(`no_motion_hold:<이유>`)이고 `RESUME`·`YIELD` 는 나가지 않는다. 뒤 띠는 `localization` 을 보고하는 신뢰 지도 자세로만 잰다: 동료가 온라인인데 자신이나 동료가 LEGACY(odom)이면 `peer_unknown`(D-577 남은 항목 1). 현장 설정 `fleet.stuck_resolver.enrolled_robots`(로봇 id 목록, `--site-config`)에 적은 등록(D-361) 로봇은 판단기가 Fleet 의 등록 CORE 자격(operator, `STUCK_DECIDE` 포함)으로 답한다. 기본은 빈 목록이다. D-577 1 (v1.173): `lane_lost` 막힘에 R3 `BACK_AND_RETRY`는 로컬 복구 켜짐·시도 남음·규칙 예산 남음·R3 거절 없음·CORE 상태의 `line_follow.crosswalk`가 `null`(키가 없으면 지금의 모든 CORE처럼 보고 안 함 → `crosswalk_unknown`, 객체면 `crosswalk`; D-573 구현은 구역 밖에서 `null`을 낸다)·Fleet 지도 자세가 `LOCALIZED`이고 `age_s` ≤ 2 s이거나 그 로봇의 목격 출처가 한 번도 없어 `UNKNOWN`(출처가 있었는데 `UNKNOWN`이면 `pose`)·뒤 띠(R1 띠의 반대쪽, D-395 신뢰 지도 자세로만 잼)에 동료 없음일 때만이다. 다른 로봇이 온라인인데 자신이나 그 로봇의 신뢰 자세가 없으면 `peer_unknown`. 아니면 R5가 `WAIT`을 보내고 같은 주기에 `lane_lost_hold:<이유>`로 사람에게 올린다(`tier: human`, `rule: R5`, `decision: WAIT`; CORE가 `WAIT`을 거절해도 올리고, 전송 실패면 `WAIT`을 한 번 다시 보낸 뒤 올린다). R5는 막힘마다 한 번이고 규칙 예산을 쓰지 않는다. `lane_lost`에 `RESUME`·`YIELD`는 어떤 경로로도 나가지 않는다. `age_s`는 그 메모 뒤 초이고, 콘솔은 30 s 넘게 답이 없는 올림 행을 큐 맨 위로 올린다(콘솔만, 로봇은 계속 HOLD). 판단기 답은 `principal_id: "fleet-resolver"` 로 기록하고, 전송 실패는 `ROBOT_UNREACHABLE` 이면 `accepted=false`, 아니면 null. 설정: `robots.yaml` 의 `resolver_token`(비어 있지 않은 따옴표 문자열, `token`·`fleet_pairing_token` 과 달라야 함). D-577 2 (v1.173): `fleet console` 은 판단기를 기본으로 돌리고 `--no-stuck-resolver` 로 끈다(`--stuck-resolver` 는 호환용, 효과 없음). 시작할 때 판단기가 답할 로봇(`resolver_token` 있음)을 stderr 에 적는다. 자격(`resolver_token`)이 없는 로봇의 막힘은 지금처럼 `no_resolver_token` 으로 사람에게 간다. `robots.yaml` 로봇만 판단기 클라이언트를 가진다(등록 D-361 로봇은 아직 없음) |
@@ -3279,6 +3365,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.273 | 2026-10-19 | Additive (docs/stuck-evidence-jpeg-api): `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` with `Accept: image/jpeg` returns the raw JPEG and its metadata in `X-Stuck-Evidence`; the JSON body is unchanged for other clients. Documents the behaviour shipped in fix(fleet) 0659636cff. |
 | v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
 | v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
@@ -3307,6 +3394,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.222 | 2026-10-14 | Behavior (D-740 개정 3): 교차로 기동 중 운동 증명이 거절된 틱은 HOLD `junction_motion_unconfirmed`(명령 0, 기동 유지)이고, 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 전과 같이 `aborted`·`motion_unconfirmed`다. 필드 변화 없음. |
 | v1.243 | 2026-10-15 | Additive (D-440, D-24 개정; feat/device-power-policy-port): `power.wake` 에 사유 `command` 와 선택 필드 `source` — 무명령 타이머는 받아들여진(2xx) 명령 REST 호출과 0 이 아닌 최종 cmd_vel 이 리셋하고, GET·텔레메트리·WS 구독·`/power/*` 는 리셋하지 않는다. 기기별 전원 정책: `PowerStatus` 에 `devices[]`(`name`·`level`·`ready`·`managed`·`required_for_motion`, 선언된 기기만)와 `motion_ready`(false 면 CORE 최종 cmd_vel 이 0) 추가, 이벤트 `power.device_changed`. 꺼졌다 켜진 기기는 `wake_ready_s` 경과와 깨운 뒤의 확인 보고가 모두 있어야 `ready` 다. 정책은 벤치 스위치 `power.device_policy.enabled`(기본 false) 뒤에 있어 스위치가 꺼진 로봇의 동작은 바뀌지 않는다. Site Fleet 새 경로 `POST /api/fleet/robots/{robot_id}/power`(named operator, `sleep`\|`wake`). 기존 경로·필드 변화 없음. 초안은 v1.91 이었다 |
 | v1.221 | 2026-10-13 | Additive (D-744): `POST /api/v1/line-follow/junction` 선택 객체 `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_arc_map_anchor`, `line_follow.arc.map_anchor_used`·`map_anchor_reason`. 풀지 못한 고정점은 거절이 아니라 v1.220의 자세 기준 원이다. Fleet `/api/fleet/*` 변경 없음. |
+| v1.247 | 2026-10-16 | Add explicit route-guide capability and pose-bound selected-plan producer; learned-drivable SIM opts in |
+| v1.246 | 2026-10-16 | Add optional authority-bound selected-route geometry with exact source pose and bounded lifetime; producer/publication pending |
+| v1.245 | 2026-10-16 | Additive D-769 internal selected-route prior schema and ordered expiring inbox; producer/subscription not enabled. REST and envelope 1.0 unchanged |
 | v1.244 | 2026-10-15 | Additive (D-556 Proposed, fix/lane-odom-cross-veto-port): 내부 CAMERA_LINE `quality.reason=odom_side_conflict`를 불가시·신뢰도 0 증거로 허용; CORE bridge·로컬 복구는 이 사유에서 금지. `GET /api/v1/line-follow` `reason`과 `nav.lane_lost` `reason`에 `camera_odom_side_conflict` 값이 나타날 수 있다(생산자 `lane_odom_veto_enabled` 기본 false). REST 경로·스키마·envelope 1.0 변화 없음 |
 | v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Fleet Task/channel receipts preserve exact operation and separate outcome, safe_released and quiescence evidence. Existing command ownership and envelope 1.0 remain. |
 | v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. envelope 1.0 유지. |
