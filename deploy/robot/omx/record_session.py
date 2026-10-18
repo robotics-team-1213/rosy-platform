@@ -19,14 +19,19 @@ No independent stop exists while LeRobot holds the bus: keep a hand on the follo
   record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
 caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs)
-A task card (the layout, phases, success and failure labels decided before recording) is copied
-verbatim with its sha256 into session.json, so review knows which design an episode was recorded under.
+Tasks plug in and out: the record config holds only what does not change with the task (devices,
+cameras, fps); a task card (tasks/<task>.yaml, schema rosy.omx-task-card.v1) holds the task text,
+episode timing, dataset name and its design (layout, phases, success and failure labels). With
+--task-card the card's `record` block fills the dataset section, the dataset root becomes a new
+`<root_prefix>/<task_id>-r<revision>-<stamp>`, and the card is copied verbatim with its sha256 into
+session.json, so review knows which design an episode was recorded under.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import time
@@ -57,6 +62,43 @@ def load_caps(path: Path) -> dict:
             raise SystemExit(f"motor {motor}: current 1..{CURRENT_MAX}")
     names = {"pwm": "pwm_limit", "current": "current_limit"}  # caps-file keys -> register names
     return {motor: {names[key]: value for key, value in cap.items()} for motor, cap in caps.items()}
+
+
+CARD_SCHEMA = "rosy.omx-task-card.v1"
+
+
+def load_task_card(path: Path) -> dict:
+    import yaml
+
+    card = yaml.safe_load(path.read_text(encoding="utf-8"))
+    record = card.get("record") if isinstance(card, dict) else None
+    if not isinstance(card, dict) or card.get("schema") != CARD_SCHEMA or not isinstance(record, dict):
+        raise SystemExit(f"task card needs schema {CARD_SCHEMA} and a record block")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(card.get("task_id", ""))):
+        raise SystemExit("task_id must be a lowercase slug")
+    if type(card.get("revision")) is not int or card["revision"] < 1:
+        raise SystemExit("revision must be a positive integer")
+    if not isinstance(card.get("single_task"), str) or not card["single_task"].strip():
+        raise SystemExit("single_task text is required")
+    if not str(record.get("root_prefix", "")).startswith("/"):
+        raise SystemExit("record.root_prefix must be an absolute path")
+    for key in ("episode_time_s", "reset_time_s", "num_episodes"):
+        value = record.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+            raise SystemExit(f"record.{key} must be positive")
+    return card
+
+
+def compose(config: dict, card: dict, *, stamp: str) -> dict:
+    """The device config with the card's task plugged into its dataset section (config is not changed)."""
+    record = card["record"]
+    dataset = {**config["dataset"], "single_task": card["single_task"],
+               "episode_time_s": record["episode_time_s"], "reset_time_s": record["reset_time_s"],
+               "num_episodes": record["num_episodes"],
+               "root": f"{record['root_prefix'].rstrip('/')}/{card['task_id']}-r{card['revision']}-{stamp}"}
+    if "repo_id" in record:
+        dataset["repo_id"] = record["repo_id"]
+    return {**config, "dataset": dataset}
 
 
 class Session:
@@ -179,6 +221,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     caps = load_caps(args.caps)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    if args.task_card is not None:
+        card = load_task_card(args.task_card)
+        config = compose(config, card, stamp=time.strftime("%Y%m%d-%H%M%S"))
+        args.config = args.config.with_name(f"{args.config.stem}.{card['task_id']}.json")
+        args.config.write_text(json.dumps(config, indent=2))
     ports = {"follower": config["robot"]["port"], "leader": config["teleop"]["port"]}
     out = Path("session.jsonl")
 

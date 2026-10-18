@@ -169,12 +169,51 @@ def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
         m.load_caps(path)
 
 
+CARD = """schema: rosy.omx-task-card.v1
+task_id: strawberry-out-and-back
+revision: 2
+single_task: Take the strawberry out and put it back.
+record:
+  repo_id: local/omx-strawberry-out-and-back
+  root_prefix: /tmp/rosy-data/omx-leader
+  episode_time_s: 40
+  reset_time_s: 10
+  num_episodes: 5
+success: {end_state: strawberry in the bowl}
+"""
+
+
+def test_a_task_card_plugs_its_task_into_the_device_config(tmp_path):
+    card = tmp_path / "card.yaml"
+    card.write_text(CARD, encoding="utf-8")
+    base = json.loads(config(tmp_path).read_text())
+    effective = m.compose(base, m.load_task_card(card), stamp="20261019-070000")
+    dataset = effective["dataset"]
+    assert dataset["single_task"] == "Take the strawberry out and put it back."
+    assert (dataset["episode_time_s"], dataset["reset_time_s"], dataset["num_episodes"]) == (40, 10, 5)
+    assert dataset["root"] == "/tmp/rosy-data/omx-leader/strawberry-out-and-back-r2-20261019-070000"
+    assert effective["robot"] == base["robot"] and effective["teleop"] == base["teleop"]  # devices untouched
+    assert base["dataset"]["single_task"] == "t"  # the base config is not mutated
+
+
+@pytest.mark.parametrize("change", [
+    ("schema: rosy.omx-task-card.v1", "schema: other"),
+    ("task_id: strawberry-out-and-back", "task_id: ../escape"),
+    ("revision: 2", "revision: two"),
+    ("  root_prefix: /tmp/rosy-data/omx-leader", "  root_prefix: relative/dir"),
+    ("  episode_time_s: 40", "  episode_time_s: 0"),
+])
+def test_a_malformed_task_card_is_refused(tmp_path, change):
+    card = tmp_path / "card.yaml"
+    card.write_text(CARD.replace(*change), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        m.load_task_card(card)
+
+
 def test_the_task_card_is_embedded_verbatim_with_its_hash(tmp_path):
     import hashlib
-    card = tmp_path / "task-card.yaml"
-    card.write_text("task_id: strawberry-out-and-back
-revision: 1
-", encoding="utf-8")
+    card = tmp_path / "card.yaml"
+    card.write_text(CARD, encoding="utf-8")
     arm, leader = follower(), leader_arm()
     s, _ = session(arm, leader)
     record = s.execute(config(tmp_path), CAPS, teleop_only=True, task_card=card)
