@@ -7,15 +7,19 @@ from dataclasses import asdict
 from pathlib import Path
 
 from rosy.decision.deliberation import canonical
-from .sqlite_policy import configure_connection
+from fleet.server.context_log import active
+from fleet.server.sqlite_policy import configure_connection
 
 
 class DeliberationJournal:
-    def __init__(self, path, *, max_rows=1000):
+    def __init__(self, path, *, max_rows=1000, context_log=None):
         if type(max_rows) is not int or not 1 <= max_rows <= 10000:
             raise ValueError('invalid finite journal capacity')
         self.max_rows = max_rows
         self.path = Path(path)
+        # D-796: an injected sink wins; otherwise the console-configured one (if any). Never
+        # the source of truth: a mirror failure is swallowed and the ledger stays unchanged.
+        self.context_log = context_log if context_log is not None else active()
         with closing(self._connect()) as conn, conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS fleet_deliberation_runs (
                 subject_id TEXT NOT NULL, case_id TEXT NOT NULL, generation TEXT NOT NULL,
@@ -62,6 +66,16 @@ class DeliberationJournal:
                          'WHERE subject_id=? AND case_id=? AND generation=? AND terminal=0',
                          (canonical(result), int(terminal), problem.subject_id, problem.case_id, problem.generation))
 
+    def _mirror(self, problem, result):
+        # D-796: mirror only the terminal run this process produced; ContextLog
+        # swallows its own failures so the ledger transaction is never affected.
+        if self.context_log is None:
+            return
+        self.context_log.record_run(
+            subject_id=problem.subject_id, case_id=problem.case_id,
+            generation=problem.generation, policy_id=result.get('policy_id', 'deliberation-v1'),
+            result=result)
+
     async def run(self, problem, supervisor, providers, *, current):
         policy_id = getattr(supervisor, 'policy_id', 'deliberation-v1')
         if policy_id not in ('deliberation-v1', 'conditional-review-v1'):
@@ -90,4 +104,5 @@ class DeliberationJournal:
             result = stale(result)
         result = {**result, 'policy_id': policy_id}
         await asyncio.to_thread(self.write, problem, result, True)
+        await asyncio.to_thread(self._mirror, problem, result)
         return result if fresh() else stale(result)
