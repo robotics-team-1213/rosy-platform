@@ -9157,3 +9157,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 계획 승인에 따라 D-807을 Accepted로 기록하고 조회 전용 Pilot 로그아웃 누락을 수정했다. 기존 인증 서비스를 재사용하며 앱별 여섯 관문·전환 절차·남은 운영 입력을 기록했다.
 - 증거: 공통·CORE·Fleet·Learning·Games 실제 browser와 native JVM/proxy/debug APK의 SHA·실행/skip/실패 이력을 docs/validation/account-service-2026-10-19/results.md에 고정했다. 마지막 독립 계약 리뷰에 근거 있는 finding은 없었다. docs 관문은 별도 원격 실행으로 기록한다.
 - gate 변화: 운영 gate 변화 없음. 실제 보호 설정 경로/접근 확인과 운영 설정 포함 native 빌드·설치·실사용·격리 복구는 남아 있으며 지속 목표는 active다. main 착지·push·전체 CI는 미수행이다.
+
+## 2026-10-19 · 6a80a63e55 · Account 문서 관문과 운영 비활성 readback
+
+- 변경: 후속 문서 시험과 현장 읽기 전용 확인을 별도 고정 기록에 남겼다. 앞선 결과를 덮어쓰지 않았다.
+- 증거: 모델 PC 문서/배치 계약 142 passed, skip 0, NEW 0. 실행 Fleet의 빈 Account 설정·비어 있는 Account 디렉터리·기존 사용자 후보 정확히 1개·현재 .local TLS/8443·tailnet serve 미설정을 확인했다. 상세 SHA와 한계는 docs/validation/account-service-2026-10-19/governance-and-site-readback.md.
+- gate 변화: 없음. 운영 설정 변경·우회 권한 사용·배포·실사용 수용은 미수행이다. 기존 tailnet issuer 후보의 신뢰된 TLS/443 구성과 운영 관리 권한이 필요하다.
