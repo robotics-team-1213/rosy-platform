@@ -23,12 +23,15 @@ anchor is the CORE capture time, conservatively including inference and transpor
 client clocks cannot freshen it. The session still checks stop, authority, source
 age, calibration, camera, envelope and owner binding immediately before submission.
 One outstanding observation per bound session is enough for synchronous ACT;
-another capture invalidates the prior ID. No observation or model queue is relabelled.
+another capture invalidates the prior ID. CORE preserves source metadata; the
+supported launcher requires ACT n_action_steps=1 without temporal ensemble.
+The authenticated proposal channel is not proof of a remote model's actual inputs.
 
 An explicit stop trips the existing persistent local stop fence, then polls the
 session to cancel its exact active command. It returns cancellation/latch evidence,
 never physical stopped proof. Runtime watchdog scheduling remains owned by the
-existing bound ROS runtime, independent of HTTP clients.
+existing bound ROS runtime, independent of HTTP clients. CORE E-stop also trips
+the arm stop fence, including when already active at app creation.
 
 The optional LeRobot `rosy_omx` Robot implementation uses a standard-library HTTP
 client. It pins the policy revision, preserves joint names in radians, decodes the

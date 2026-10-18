@@ -23,3 +23,8 @@ checks single poses only (no segments, timing or collisions) and uses the
 simulation profile's nominal limits. The palletizing process does not import it;
 a composition passes it in. G1 SIM use and findings:
 `docs/validation/bimanual-g1-sim-2026-10-17/README.md`.
+# CORE and LeRobot
+
+The optional HTTP-only `rosy_omx` Robot adapter connects LeRobot recording and
+inference to CORE's installed OMX policy session. See [setup and limits](CORE_LEROBOT.md).
+

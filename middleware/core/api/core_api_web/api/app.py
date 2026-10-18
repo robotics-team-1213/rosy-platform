@@ -22,6 +22,7 @@ from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.auth import PairingState
 from core_api_web.api.v1.connection import connection_router
 from core_api_web.api.v1.routes import (
+    arm_router,
     auth_router,
     calibration_router,
     control_router,
@@ -114,7 +115,6 @@ def _pilot_root() -> Path:
 
 
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
-    from core_api_web.api.v1.routes import arm_router
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",

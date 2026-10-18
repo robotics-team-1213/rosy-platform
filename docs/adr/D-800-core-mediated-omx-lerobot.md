@@ -27,12 +27,16 @@ the previous goal remains active. No old source is relabelled as a new observati
 Any authenticated operator can request stop. The persistent local stop fence
 latches before cancellation of the session's exact command. The response does
 not assert physical standstill. Watchdog polling stays in the bound ROS runtime.
+CORE E-stop also trips this arm stop listener; CORE release does not rearm it.
 
 The optional LeRobot `rosy_omx` Robot plugin exchanges only HTTP with CORE. It
 opens no serial port, camera device or ROS publisher. The existing OMX integration
 wheel carries it; CORE has no LeRobot, torch or model-loading dependency.
 The current session is SIM-only. Physical policy admission remains closed until
 D-770/D-773/D-793 evidence and authorized composition exist.
+The supported recorder launcher requires single-action ACT without temporal
+ensemble. The authenticated proposal channel does not prove remote model loading
+or actual pixel consumption; no such inference attestation is added here.
 
 ## Existing decisions
 

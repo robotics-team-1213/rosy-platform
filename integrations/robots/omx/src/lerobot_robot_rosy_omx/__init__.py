@@ -1,6 +1,8 @@
 """Optional LeRobot 0.4.4 Robot: observation and actions go exclusively through CORE."""
 import base64
 from dataclasses import dataclass
+import math
+from numbers import Real
 from pathlib import Path
 
 import numpy as np
@@ -89,6 +91,9 @@ class RosyOmx(Robot):
     def send_action(self, action):
         if not self.is_connected or set(action) != set(self.action_features):
             raise ValueError('connected CORE and exact installed joint action features required')
+        if any(isinstance(v, (bool, np.bool_)) or not isinstance(v, Real) or not math.isfinite(v)
+               for v in action.values()):
+            raise ValueError('finite numeric joint targets required')
         positions = {name: float(action[name + '.pos']) for name in self.config.joint_names}
         sent = self._client.send_action(positions)
         return {name + '.pos': value for name, value in sent.items()}
@@ -98,7 +103,20 @@ class RosyOmx(Robot):
             self._client.disconnect()
 
 
+def validate_record_config(cfg):
+    if cfg.policy is not None and (cfg.policy.type != 'act' or cfg.policy.n_action_steps != 1
+                                  or cfg.policy.temporal_ensemble_coeff is not None):
+        raise ValueError('CORE synchronous inference requires ACT n_action_steps=1 without temporal ensemble')
+
+
 def record():
-    """Register this Robot before invoking the unchanged official recorder CLI."""
-    from lerobot.scripts.lerobot_record import main
-    main()
+    """Register this Robot and validate source semantics before the official recorder."""
+    from lerobot.configs import parser
+    from lerobot.scripts.lerobot_record import RecordConfig, record as official_record
+
+    @parser.wrap()
+    def run(cfg: RecordConfig):
+        validate_record_config(cfg)
+        return official_record(cfg)
+
+    run()
