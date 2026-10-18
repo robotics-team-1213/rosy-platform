@@ -3,6 +3,8 @@ from contextlib import contextmanager
 from dataclasses import replace
 from hashlib import sha256
 import sqlite3
+import threading
+import time
 
 import pytest
 
@@ -89,3 +91,44 @@ def test_chain_refuses_owner_scope_substitution(tmp_path):
         with pytest.raises(ValueError): SimPolicyChain(**options)
         with sqlite3.connect(fleet.db) as db:
             assert db.execute('SELECT count(*) FROM fleet_policy_lease').fetchone()[0] == 0
+
+
+def test_worker_closes_authority_after_actual_fleet_window_revoke(tmp_path):
+    with chain_setup(tmp_path) as (chain, fleet, runtime, driver, clock):
+        fleet.admin('POST', fleet.base+'/windows/'+fleet.window['window_id']+'/close',
+                    dict(operator_confirmed=True, reason='SIM worker revoke'))
+        chain.start()
+        deadline = time.monotonic()+3
+        while not chain.session.hold_reason and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert chain.session.hold_reason and chain.session.owner.state == 'hold'
+
+
+def test_close_reaches_owner_while_refresh_network_is_blocked(tmp_path):
+    with chain_setup(tmp_path) as (chain, fleet, runtime, driver, clock):
+        source = chain.port.observation('sim-sdk', chain.session.lease.policy_revision)
+        assert chain.port.submit('sim-sdk', observation_id=source['observation_id'],
+            policy_revision=source['policy_revision'], positions={'joint_1':.101,'joint_2':.001})['accepted']
+        entered, release = threading.Event(), threading.Event()
+        request = chain.consumer.request
+        def stalled(*args):
+            entered.set()
+            assert release.wait(3), 'test did not release its own network fixture'
+            return request(*args)
+        chain.consumer.request = stalled
+        chain.start()
+        closer = None
+        try:
+            assert entered.wait(2)
+            closer = threading.Thread(target=chain.close)
+            closer.start()
+            deadline = time.monotonic()+.5
+            while not driver.handles[-1].cancel_calls and time.monotonic() < deadline:
+                time.sleep(.005)
+            assert driver.handles[-1].cancel_calls == 1 and not release.is_set()
+        finally:
+            release.set()
+            if closer is not None:
+                closer.join(3)
+                assert not closer.is_alive()
+        assert not chain.consumer.authority(chain.session.lease)
