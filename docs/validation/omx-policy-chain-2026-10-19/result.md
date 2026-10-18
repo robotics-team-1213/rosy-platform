@@ -34,6 +34,8 @@ admission이 아니며, 이 시험으로 Fleet 작업 완료를 선언하지 않
 | `87abee0f43` | `green-total-final/run-1.txt` | 136 passed / 13.30s, known-failures NEW 0 |
 | `345a36df09` | `red-intake-order/run-1.txt` | source stamp·로컬 monotonic이 증가해도 source-age receipt가 역행하는 회귀 1 failed / 10 passed |
 | `302614ef41` | `green-intake-final/run-1.txt` | 역행 관측 거부와 기존 owner·session·Fleet 회귀 215 passed / 26.44s |
+| `004350acdf` | `red-renewal-budget/run-1.txt` | 실제 관측한 교환 지연과 고정 대기에서 1.13초에 갱신하는 실패 재현 |
+| `c7792975d0` | `green-renewal-budget/run-1.txt` | 남은 예산에 따른 갱신과 만료된 old authority 거부 포함 217 passed / 13.90s |
 
 최종 GREEN의 runner 인자:
 
@@ -70,6 +72,18 @@ Fleet/CORE HTTP 인증, 원본 Gazebo 카메라, 기존 OMX owner와 vendor cont
   commit 전에 차단한다. 기존 freshness·clock·HOLD 규칙과 recovery는 변경하지 않았다.
 - `8f9a3fb97`: 기존 native fixture의 worker drain 패턴을 재사용해 ROS entity 파괴 전에
   executor와 worker 종료를 확인한다. `teardown.json`으로 실패와 잔여 thread를 보존한다.
+  실제 owner ready는 확인했으나 SDK policy 요청은 403으로 거절됐다.
+- `375f18c27`: 다음 실행은 lease 획득에서 fail-closed로 중단됐다. 별도 시험 준비를
+  중단하며 남았던 본 세션의 예약 2개는 job 상태와 dependency build lock이 없음을
+  확인한 후 해당 `.resv` 파일만 정리했다. 다른 작업·venv·서비스는 변경하지 않았다.
+- `24d412a706`: SDK connect 이후 첫 observation의 403 사유는
+  `policy_lease_expired_or_invalid`였다. 카메라 age 0.125초는 한도 안이었다.
+  초기 HTTP 3회 합계 0.341초, 고정 대기 0.25초, 갱신 HTTP 3회 합계 0.542초로
+  원래 1초 기한을 넘겼다. `exchanges.json`, `core-refusal.json`, `session-close.json`에 보존했다.
+- `c7792975d0`: 현재 lease의 남은 시간에서 HTTP 최대 0.25초 × 3회 예산을 먼저
+  남기고 대기한다. 격리 stdlib 프로세스에 `-S`를 추가해 불필요한 site 초기화를
+  제거했다. 1초 lease·기본 HTTP timeout 0.2초·freshness와 만료 방어는 유지한다.
+  두 번의 교환이 1초 안에 들어오지 않는 지속 지연에서는 여전히 HOLD가 올바르다.
   이 revision의 최종 Gazebo 통과 결과는 아직 없다.
 
 probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixture의 설치 binding은

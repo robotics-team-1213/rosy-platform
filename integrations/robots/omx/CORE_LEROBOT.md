@@ -161,6 +161,9 @@ consumer verifies the window and policy stage before and after issuance, charges
 all network time to the local monotonic deadline, and accepts only advancing
 renewals of that same lease. Expiry, denial and transport failure permanently
 close that consumer. Its authority callback performs no network I/O.
+The worker reserves the three HTTP exchanges' maximum timeout budget from the
+current lease's remaining time before waiting. Insufficient sustained network
+performance still closes authority; scheduling cannot extend the lease.
 
 `SimPolicyChain` takes the already verified `InstalledPolicy`, dedicated ready
 steady-clock runtime, stop fence, consumer, execution journal, trusted identity
