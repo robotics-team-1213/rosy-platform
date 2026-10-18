@@ -795,6 +795,7 @@
 | D-794 | OMX 카메라 역할 — top은 작업대 고정, front는 손목; wrist 이름으로 단계 이행하고 학습은 두 카메라를 쓴다 | Proposed |
 | D-793 | OMX 학습 정책의 실물 실행 승인 관문 — 학습은 실행 권한을 바꾸지 않고, 위험하면 멈춘 뒤 API로 확인받는다 | Proposed |
 | D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
+| D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) | Accepted (2026-10-18, 사용자 결정; 모자이크 구현은 후속, 장치·현장 미확인) |
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
