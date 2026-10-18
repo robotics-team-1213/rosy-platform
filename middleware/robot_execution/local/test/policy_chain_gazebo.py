@@ -215,7 +215,22 @@ def prove(out, runtime, camera, controllers, calibration):
             rig_revision='sim-rig-32x24',calibration_revision=cfg.calibration_revision))
         scope = LeaseScope(identity,'sim-episode',policy.recheck()['revision'],runtime.owner.session_id,
             fleet.window['window_id'],'sim-rig-32x24',cfg.calibration_revision,fleet.scope)
-        consumer = FleetLeaseConsumer(scope,request=fleet.device,monotonic=runtime.monotonic)
+        exchanges = []
+        def request(method, path, body=None):
+            began = runtime.monotonic()
+            row = dict(method=method,path=path)
+            try:
+                value = fleet.device(method,path,body)
+                row['times'] = {key:value[key] for key in ('now_ns','issued_ns','expires_ns') if key in value}
+                return value
+            except Exception as error:
+                row['error_type'] = type(error).__name__
+                raise
+            finally:
+                row['elapsed_s'] = runtime.monotonic()-began
+                exchanges.append(row)
+                (out/'exchanges.json').write_text(json.dumps(exchanges,indent=2))
+        consumer = FleetLeaseConsumer(scope,request=request,monotonic=runtime.monotonic)
         journal = PolicyExecutionJournal(out/'execution.sqlite3')
         admission = dict(owner=runtime.owner.recovery_state(), environment=policy.recheck()['environment'],
             camera_count=len(policy.recheck()['cameras']), owner_clock=runtime.owner_clock,
@@ -230,6 +245,11 @@ def prove(out, runtime, camera, controllers, calibration):
             journal=journal,owner_identity=lambda:dict(simulation=True,workcell_id=cfg.workcell_id,
                 instance_id=cfg.instance_id,profile='sim-omx-chain-1'),camera_current=camera.current,
             capture=camera.capture,principal='sim-sdk',installed_rig_revision='sim-rig-32x24',enabled=True))
+        def remember_session():
+            (out/'session-close.json').write_text(json.dumps(dict(hold_reason=chain.session.hold_reason,
+                owner=runtime.owner.recovery_state(),camera_accepted=camera.accepted,
+                camera_age_ns=int(runtime.monotonic()*1e9)-camera.current()[0].received_at_ns),indent=2))
+        stack.callback(remember_session)
         initial_wire = consumer._wire
         credential = secrets.token_urlsafe(32)
         token_file = out/'sdk.private'
