@@ -131,11 +131,11 @@ def test_a_failed_or_interrupted_recording_still_restores_the_cell(tmp_path, out
         return 1
 
     s, calls = session(arm, leader, run=run)
-    if outcome == "raises":
-        with pytest.raises(KeyboardInterrupt):
-            s.execute(config(tmp_path), CAPS, teleop_only=False)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    if outcome == "raises":  # an interrupt is a normal end: the record comes back for session.json
+        assert record["interrupted"] is True and record["safe_end"] is True
     else:
-        assert s.execute(config(tmp_path), CAPS, teleop_only=False)["exit_code"] == 1
+        assert record["exit_code"] == 1
     assert_restored(arm, leader)
     assert ("start", "rosy-omx-camera@top.service") in calls
 

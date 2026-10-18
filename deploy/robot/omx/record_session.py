@@ -55,6 +55,14 @@ PWM_MAX = CURRENT_MAX = CAP_MAX  # first sessions stay well below the hardware m
 TORQUE_OFF_DEADLINE_S = 30.0
 
 
+def interrupt_on_parent_death() -> None:
+    """In the recorder (Linux): SIGINT when this wrapper dies, so it never runs on unsupervised."""
+    import ctypes
+
+    PR_SET_PDEATHSIG = 1
+    ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGINT)
+
+
 def load_caps(path: Path) -> dict:
     raw = json.loads(path.read_text(encoding="utf-8"))
     caps = {int(k): v for k, v in raw.items()}
@@ -152,8 +160,9 @@ class Session:
                 raise SystemExit(f"follower {motor} not idle: model/mode {(model, mode)}, torque {torque}, error {error}")
             caps = {name: bus.read(name) for name in self._cap_registers(motor)}
             if any(caps[name] != BASELINE[name] for name in caps):
-                raise SystemExit(f"follower {motor} caps {caps} are not the commissioning baseline; "
-                                 "an earlier session did not restore them - restore before recording")
+                raise SystemExit(f"follower {motor} caps {caps} are not the commissioning baseline; an earlier "
+                                 "session did not restore them - lower them with commissioning_limits.py "
+                                 "(torque OFF) before recording")
 
     def baseline(self) -> dict:
         return {motor: {name: BASELINE[name] for name in self._cap_registers(motor)} for motor in FOLLOWER}
@@ -226,7 +235,10 @@ class Session:
             record["stopped_services"] = stopped
             command = self.command(config_path, teleop_only)
             self.log(step="run", command=command)
-            record["exit_code"] = self.run_command(command)
+            try:
+                record["exit_code"] = self.run_command(command)
+            except KeyboardInterrupt:  # Ctrl-C/SIGTERM/SIGHUP: the normal end of a teleop-only session
+                record["interrupted"] = True
         finally:
             with no_interrupts():
                 self.finish(record, stopped)
@@ -290,7 +302,7 @@ def main(argv=None):
     def run(command):
         """The recorder in its own session: our Ctrl-C/SIGTERM/SIGHUP reaches it only as one SIGINT,
         with 10 s to save the episode, then it is killed."""
-        child = subprocess.Popen(command, start_new_session=True)
+        child = subprocess.Popen(command, start_new_session=True, preexec_fn=interrupt_on_parent_death)
         try:
             return child.wait()
         except KeyboardInterrupt:

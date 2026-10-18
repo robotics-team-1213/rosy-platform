@@ -196,8 +196,8 @@ class Run:
         limits = ("pwm_limit", "current_limit") if self.xl330 else ("pwm_limit",)
         found = {name: self.bus.read(name) for name in limits}
         if any(found[name] != BASELINE[name] for name in limits):
-            raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; "
-                             "an earlier run did not restore them - restore before tuning")
+            raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
+                             "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
             for name, value in (("pwm_limit", args.pwm),
@@ -247,11 +247,15 @@ class Run:
     def finish(self, restore: dict) -> None:
         """Torque OFF, then every changed register back; each step is tried even if another failed."""
         failures = []
-        try:
-            self.bus.write("torque", 0)
-            self.log(step="after", motor=self.motor, **self.state())
-        except Exception as exc:
-            failures.append(f"torque OFF: {exc}")
+        for attempt in range(5):  # a USB hiccup: try again for a few seconds before declaring it unsafe
+            try:
+                self.bus.write("torque", 0)
+                self.log(step="after", motor=self.motor, **self.state())
+                break
+            except Exception as exc:
+                if attempt == 4:
+                    failures.append(f"torque OFF: {exc}")
+                self.sleep(0.5)
         self.grab("after")
         for name, value in restore.items():  # torque is OFF, so EEPROM may be written
             try:

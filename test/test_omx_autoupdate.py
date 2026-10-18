@@ -220,7 +220,8 @@ def test_a_manual_rollback_needs_an_idle_cell_and_restores_the_environment(tmp_p
     assert current(tmp_path, "current-env") == first_env
 
 
-def test_the_config_needs_its_sources_and_two_kept_releases(tmp_path):
+def test_the_config_needs_its_sources_and_two_kept_releases(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "home"))
     path = tmp_path / "cfg.json"
     path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"], '
                     '"follower_device": "d", "keep": 1}')
@@ -230,7 +231,11 @@ def test_the_config_needs_its_sources_and_two_kept_releases(tmp_path):
     with pytest.raises(SystemExit):  # the follower device for the torque probe must be named
         m.load_config(path)
     path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"], '
-                    '"follower_device": "d"}')
+                    '"follower_device": "d", "root": "elsewhere"}')
+    with pytest.raises(SystemExit, match="session.lock"):  # a root the sessions do not lock
+        m.load_config(path)
+    path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"], '
+                    '"follower_device": "d", "root": "%s"}' % (tmp_path / "home"))
     assert m.load_config(path)["required_checks"] == ["ci-result"]
 
 

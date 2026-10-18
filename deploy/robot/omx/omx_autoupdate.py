@@ -335,9 +335,9 @@ def load_config(path: Path) -> dict:
     missing = [k for k in ("repo_url", "github_repo", "base_python", "devices", "follower_device") if not cfg.get(k)]
     if missing or not cfg["required_checks"] or cfg["keep"] < 2:
         raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
-    home = os.environ.get("ROSY_OMX_HOME")
-    if home and os.path.realpath(os.path.expanduser(home)) != os.path.realpath(cfg["root"]):
-        raise SystemExit("root must be the ROSY_OMX_HOME the sessions lock (one session.lock for the cell)")
+    sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
+    if os.path.realpath(os.path.expanduser(sessions)) != os.path.realpath(cfg["root"]):  # == joint_tune.lock_root()
+        raise SystemExit(f"root must be {sessions}, where joint_tune and record_session take session.lock")
     return cfg
 
 
