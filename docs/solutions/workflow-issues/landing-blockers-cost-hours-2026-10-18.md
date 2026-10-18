@@ -1,0 +1,121 @@
+---
+title: Four landing blockers cost hours on one day; size-locked units, a red main, a crowded test queue and oversized branches
+date: 2026-10-18
+category: workflow-issues
+module: tools/land.py, tools/land_checks.py, tools/harness/size_range.py, tools/harness/affected_tests.py, tools/harness/affected_narrow.py, shared/web/surfaces.yaml
+problem_type: workflow_issue
+component: development_workflow
+severity: high
+root_cause: missing_tooling
+resolution_type: tooling_addition
+symptoms:
+  - "size_range.py refused a branch for a commit inherited from an earlier session; later commits on the branch could not fix it"
+  - "fleet 16,499 / site_ui/console 11,317 / rosy_auto_update.py 1,591 / trip_ports.py 600 accepted no net growth; a partial split lowered the ceiling by the lines moved"
+  - "NEW shared/web/test/test_shared_controls.py::test_measure_comes_from_the_scale on branches that never touched it (main was red after D-792)"
+  - "two sessions landed the same main fix in parallel (f376f8cbba, 44a24983da)"
+  - "land runs took 30-90+ minutes with ~10 sessions on the test PCs; one run lost to 'no test host reachable' after 600 s"
+applies_when:
+  - "a land.py run stops on a D-766 size verdict, or a NEW failure in a file the branch did not change"
+  - "planning a change inside fleet, site_ui/console, rosy_auto_update.py, trip_runner.py or trip_ports.py"
+  - "a branch bundles several tasks (WebRTC T2-T5 + console + topology) into one landing"
+tags: [land-py, d-766, size-ratchet, restack, main-red, affected-tier, surfaces-yaml, test-queue, branch-size]
+---
+
+# Four landing blockers cost hours on one day; size-locked units, a red main, a crowded test queue and oversized branches
+
+## Context
+
+On 2026-10-18 the network-load and WebRTC work (T2-T5, console, topology) was ready in code but
+took hours to land. Four separate things blocked it.
+
+### 1. D-766 size check
+
+- **Symptom (a):** `tools/land.py` runs `tools/harness/size_range.py main HEAD` before any remote
+  test. It refused the branch for a commit inherited from an earlier session's branch that had
+  grown a unit over its limit. Later commits that shrank the unit did not help.
+- **Root cause (a):** `size_range.py` checks every commit on its own so bisect never meets a size
+  red (D-766 2). "Grow, then split in a later commit" is red on the growing commit by design.
+- **Symptom (b):** units already over their limit took no net growth at all: the `fleet` package
+  (16,499 lines vs 10,000), `site_ui/console` (11,317), `rosy_auto_update.py` (1,591 vs 600),
+  `test/test_rosy_auto_update.py` (2,632 vs 1,500), `trip_runner.py` (899), and `trip_ports.py`
+  (exactly 600). A fix had to be bent into new modules, and a planned jitter change was dropped.
+- **Root cause (b):** the ratchet row must equal the measured count (D-766 4). A partial,
+  behaviour-preserving split lowers the ceiling by the lines it moves, so it frees no room. Room
+  appears only when the unit drops below its absolute limit and its row is deleted.
+
+### 2. Main went red and blocked everyone
+
+- **Symptom:** the D-792 camera page in `learning/curation/perception/review_app_web` landed with
+  `test_shared_controls.py::test_measure_comes_from_the_scale`,
+  `::test_product_fields_carry_the_shared_field_class` and
+  `test_ui_token_contracts.py::test_no_raw_colour_outside_the_token_file[pinky-review]` failing.
+  Every later branch that touched `shared/web` was refused with those as NEW. Two sessions then
+  fixed it at the same time (f376f8cbba, 44a24983da).
+- **Root cause:** those suites scan every tree listed in `shared/web/surfaces.yaml` through
+  `surface_registry`. They never name `review_app_web`, so the D-436 affected selector, which
+  matches by module, import and path name, did not pick them for that landing. `land.py` also had
+  no way to say "this NEW failure fails on main too", so each blocked session debugged it as its own.
+
+### 3. Test PC queue
+
+- **Symptom:** each land run took 30-90+ minutes with about ten sessions sharing the hosts, and
+  hosts below the memory floor were used anyway. One run was lost when the API/network dropped:
+  every host was unreachable for 600 s (the D-584 wait) and the agent died mid-land.
+- **Root cause:** cost per landing is set by the selection size (a FULL round runs every suite) and
+  by the number of sessions landing at once. Nothing in the workflow made a session weigh the land
+  cost before bundling.
+
+### 4. Big bundles
+
+- **Symptom:** WebRTC T2-T5, console and topology rode on one branch. Each attempt paid a full
+  round, and one failure anywhere sent the whole bundle back. Splitting into smaller branches is
+  what finally landed it.
+
+## What worked
+
+- **Re-stack, do not patch on top.** Make a new worktree from `main`, cherry-pick the needed commits,
+  and fold each grow-then-split pair into one commit (`git cherry-pick -n`, then add the split).
+  Steps are in [D-798](../../adr/D-798-size-headroom-splits-and-restack.md) Decision 5.
+- **Put new code in modules that are under their limit,** each with one responsibility. Do not
+  squeeze a locked file.
+- **Fix main first, in a small branch** that changes only the broken tests' cause, then rerun the
+  blocked landings. Check whether a peer is already on it before starting (see the duplicate commits).
+- **Split the bundle** into one landable concern per branch.
+
+## Prevention (landed with this note)
+
+- **Affected selection reads the registry.** `tools/harness/affected_narrow.py` `registry_readers`:
+  a change under any tree listed in `shared/web/surfaces.yaml` now selects every test that imports
+  `surface_registry` (14 suites, including the two above). Test:
+  `test/test_affected_tests.py::test_a_surface_tree_change_selects_the_registry_contract_suites`.
+- **MAIN-RED.** When a land round stops on NEW failures, `tools/land_checks.py` reruns those ids
+  once on `main`. Ids red there too print as `MAIN-RED`, and the stop message says main is broken
+  and to fix it in a small branch first. The landing is still refused. Test:
+  `test/test_land.py::test_new_failure_that_also_fails_on_main_is_named_main_red`.
+- **Size headroom plan.** [D-798](../../adr/D-798-size-headroom-splits-and-restack.md) (Proposed)
+  maps the splits that take `fleet` to about 7,960 lines and `site_ui/console` to about 6,460, and
+  splits `rosy_auto_update.py`, its test file and the trip files. It also sets the rule "at 95% of
+  a limit, land the split branch before the feature". D-766 itself is unchanged.
+- **Branch size rule.** `AGENTS.md` 「같이 하는 깃」 1 and `docs/reference/shared-checkout.md`:
+  one landable concern and one module family per branch. Over about 15 changed files, or a FULL
+  plan from `land.py --dry-run`, split first. FULL-trigger and `shared/web` parts land first, on
+  their own branch.
+
+## Not fixed here
+
+- Test PC placement still uses hosts below the memory floor when nothing else is free (D-568), and
+  an agent that dies mid-land leaves no resumable state. Run long lands as a watched background task
+  ([landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md](landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md)).
+- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) are themselves at or above 95%
+  of the 600-line limit. These fixes left their line counts unchanged. The next change there needs
+  a split first.
+
+## Related
+
+- [D-766](../../adr/D-766-size-limits-split-on-exceed.md) size limits, [D-436](../../adr/D-436-change-scoped-test-tiers.md)
+  affected tiers, [D-584](../../adr/D-584-tests-never-run-on-operator-laptop.md) remote-only tests,
+  [D-790](../../adr/D-790-worktree-rules-landed-orphan-stale-flaky.md) LOAD-FLAKY rerun.
+- [adr-numbers-collide-between-concurrent-sessions-2026-09-25.md](adr-numbers-collide-between-concurrent-sessions-2026-09-25.md)
+- [prepush-gate-red-from-other-sessions-unpushed-commits-2026-10-10.md](prepush-gate-red-from-other-sessions-unpushed-commits-2026-10-10.md)
+- [structural-guards-should-fail-before-the-full-land-round-2026-10-15.md](structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)
+- [full-host-suite-per-branch-cost-hours-while-failures-sat-in-the-guard-set-2026-10-04.md](full-host-suite-per-branch-cost-hours-while-failures-sat-in-the-guard-set-2026-10-04.md)
