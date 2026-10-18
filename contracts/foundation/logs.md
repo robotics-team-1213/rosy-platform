@@ -791,3 +791,9 @@
 - 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
 - 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
 - gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.

@@ -42,6 +42,10 @@ from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfi
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import (
     freeze_v4l2_controls, unfreeze_v4l2_controls)
+try:  # D-789 T3: optional 640x480 media branch from this single camera owner
+    from rosy_media_edge.camera_tap import media_camera
+except ImportError:
+    media_camera = None
 
 # D-411: the Pilot recorder's latched active flag (pilot_recorder_node).
 _RECORDER_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -340,7 +344,7 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
                 self.get_logger().error('picamera2 missing; camera detection off')
             return
         try:
-            cam = Picamera2()
+            cam = media_camera(Picamera2(), self) if media_camera else Picamera2()
             w = int(self.get_parameter('width').value)
             h = int(self.get_parameter('height').value)
             cfg = cam.create_preview_configuration(
@@ -481,18 +485,11 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
             ground_source=self._ground_mode.upper() if self._ground is not None else None))))
         cols = res['cols']
         mcols = res.get('mid_cols', cols)
-        self.dbg_pub.publish(
-            String(
-                data=(
-                    f'cliff={int(cliff)} block={int(blocked)} '
-                    f'side={res["side"]:.0f} mid_obst={res["mid_obst"]:.2f} '
-                    f'L o={mcols[0]["obst"]:.2f} C o={mcols[1]["obst"]:.2f} '
-                    f'R o={mcols[2]["obst"]:.2f} '
-                    f'near L={cols[0]["obst"]:.2f} C={cols[1]["obst"]:.2f} '
-                    f'R={cols[2]["obst"]:.2f}'
-                )
-            )
-        )
+        self.dbg_pub.publish(String(data=(
+            f'cliff={int(cliff)} block={int(blocked)} '
+            f'side={res["side"]:.0f} mid_obst={res["mid_obst"]:.2f} '
+            f'L o={mcols[0]["obst"]:.2f} C o={mcols[1]["obst"]:.2f} R o={mcols[2]["obst"]:.2f} '
+            f'near L={cols[0]["obst"]:.2f} C={cols[1]["obst"]:.2f} R={cols[2]["obst"]:.2f}')))
 
     def _classify_frame(self, bgr, *, floor_hsv):
         return classify_frame(
