@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
 - 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)
 - 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 - 2026-10-17 · 9108fd4d8e · fix(omx): 명시적 startup을 기존 정지·취소 경로에 연결
 - 2026-10-17 · 52062796dd · feat(omx): Docker 없는 native Gazebo 실행 경로
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결

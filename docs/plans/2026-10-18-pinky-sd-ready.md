@@ -27,7 +27,7 @@ PowerShell 명령 한 번으로 기존 도구의 이미지·Wi-Fi·카드 선택
 - [x] 주소 생략 경로, 잘못된 명시 주소 차단, 업데이트 상태 안내 구현.
 - [x] 실제 카드 대신 fixture를 사용하는 네이티브 PowerShell self-check 추가.
 - [x] 운영 런북에 단일 시작 명령, 준비물, 로그·receipt·첫 부팅·업데이트 확인 추가.
-- [ ] 최종 네이티브 self-check, 커밋 후 원격 관련 pytest, known_failures 비교.
+- [x] 최종 네이티브 self-check, 커밋 후 원격 관련 pytest, known_failures 비교.
 - [ ] 서명된 현재 이미지 확보 및 source revision 확인.
 - [ ] 지정한 실제 SD 기록/readback, Pinky 첫 부팅 및 자동 업데이트 상태 확인.
 
@@ -42,6 +42,24 @@ PowerShell 명령 한 번으로 기존 도구의 이미지·Wi-Fi·카드 선택
 - 원격 검증은 커밋된 HEAD만 사용한다. Windows PowerShell이 없는 호스트의 skip은
   통과로 세지 않고 네이티브 self-check 결과와 구분한다. 노트북 pytest는 실행하지 않는다.
 
+### 실행 결과
+
+- 제품 코드 커밋: `efa12a92be` (`feat/pinky-sd-ready`). 작업 시작 기준선은
+  `34e4ca99339bbbaf491fb9278bd313134ea6fdbb`이며 변경은 9개 파일이다.
+- Windows PowerShell 네이티브 self-check: 6개 PASS. 작성기와 디스크는 fixture다.
+- AI PC 원격: `test_sd_guided_setup`, `test_new_device_setup`,
+  `test_sd_write_card_entrypoint`, `test_sd_personalization`, `test_rosy_auto_update`,
+  `test_image_layer_sync`의 6개 파일에서 **366 passed, 30 skipped**, 137.95초.
+  Windows PowerShell 전용 회귀는 원격 Linux에서 건너뛰므로 네이티브 결과와 구분한다.
+- `test/known_failures.py`: **0 new, 0 known, 0 flaky**.
+  로그는 저장소 밖 `%TEMP%\rosy-pinky-sd-ready\run-1.txt`에 보존했다.
+- 기존 `rosy-new-device-setup.py` HTML 문자열의 `\d` SyntaxWarning 2건은 남아 있다.
+  해당 런타임 파일은 이번 작업에서 변경하지 않았다.
+- 독립 전체 변경 리뷰: material finding 0건. 리뷰어는 시험을 재실행하지 않았다.
+- harness generate 실행, lint **0 errors**(기존 상태 노후화 등 33 warnings),
+  size-range 및 diff whitespace 검사 통과. 영향 선택은 `affected`, FULL 승격 없음.
+  영향 선택의 전체 25개 경로 시험이나 전체 저장소 suite는 이번에 실행하지 않았다.
+
 ## 확인한 배포 제약
 
 2026-10-18 GitHub 조회에서 최신 flashable-image 성공 실행은 `37854726829`,
@@ -51,6 +69,14 @@ source revision `5a3f6ad6e543d843fd1816366aa510584d2d6369`,
 payload release `payload-2026.10.10-164`는 tarball과 rollout 서명 asset을 제공하지만,
 그것은 새 SD에 기록할 전체 이미지가 아니다. 보관된 서명 이미지를 검증하거나
 별도의 이미지 빌드·서명이 필요하다. 빌드 성공 이력을 서명·실기 수용으로 취급하지 않는다.
+
+로컬 작업 폴더·Downloads·임시 폴더에서 찾은 실물 크기의 전체 이미지는
+`Rosy/artifacts/2026.09.22-001-58c9e8ad/`의 `2026.09.22-001`이다.
+공식 `verify-image-release.py`로 공개키 서명과 전체 파일 checksum 검증을 통과했다.
+기록된 source revision은 `58c9e8ad7016e0cac8a346e1f78f3c49d75bda66`으로
+D-412 자동 업데이트 도입 전의 기준선이다. 이를 최신 자동 업데이트 이미지로
+선택하지 않는다. 새 배포 이미지를 빌드·서명하거나, 다른 보관 위치의 최신 서명
+이미지를 제공받아 검증하는 것이 다음 단계다.
 
 병합·푸시·릴리스 공개는 수행하지 않는다. 대상 카드와 장치가 정해지기 전에는
 물리 디스크를 지우지 않는다. 코드·호스트 시험, SD readback, 첫 부팅, 실제 자동
