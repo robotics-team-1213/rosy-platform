@@ -1,10 +1,16 @@
 """SIM lease receipt, conservative clocks, renewal handoff and permanent closure."""
 import copy
 from dataclasses import replace
+from pathlib import Path
+import sys
 from types import SimpleNamespace
 from urllib.request import ProxyHandler
 
 import pytest
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
+               str(ROOT/'middleware/robot_execution/local/src')]
 
 from rosy.contracts.skill import AttemptIdentity
 from rosy.execution.local.policy_lease import FleetLeaseConsumer, FleetPolicyHttp, LeaseScope
