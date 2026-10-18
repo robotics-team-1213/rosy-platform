@@ -5,7 +5,9 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import secrets
+import select
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -20,6 +22,7 @@ sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
                *[str(ROOT/path) for path in ('operations/world/src', 'operations/decision/src',
                    'operations/site_execution/src', 'operations/processes/palletizing/src',
                    'contracts/foundation', 'middleware/core/services')]]
+sys.path.insert(0, str(ROOT/'contracts/skill/src'))
 from rosy.execution.local.policy_lease import FleetPolicyHttp
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -71,21 +74,11 @@ def _operator_request(client, method, path, body=None):
     return response.json()
 
 
-@contextmanager
-def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
-                   rig_revision='sim-rig', calibration_revision='cal-7'):
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    db = tmp_path/'fleet.sqlite3'
-    names = {'sim-admin-a':'policy-admin', 'sim-admin-b':'policy-admin',
-             'sim-operator':'operator', 'sim-device':'service'}
-    credentials = {name: secrets.token_urlsafe(32) for name in names}
-    users = {sha256(credentials[name].encode()).hexdigest():dict(principal_id=name, role=role)
-             for name, role in names.items()}
+def _fleet_app(db, users, workcell_id, instance_id, timings):
     app = create_app(FleetConsole([], []), site_users=users,
         task_service=FleetTaskService(FleetTaskStore(db), robot_ids=()),
         mission_service=MissionService(MissionStore(db)), proposal_store=ProposalStore(db),
         omx_instances={workcell_id:instance_id}, start_task_dispatcher=False)
-    timings = []
     run = app.state.policy_governance._run
     def measured_run(fn):
         began, cpu = time.monotonic(), time.thread_time()
@@ -108,7 +101,42 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         finally:
             row['elapsed_s'] = time.monotonic()-began
             timings.append(row)
-    with HttpServer(measured_app) as server, ExitStack() as connections:
+    return measured_app
+
+
+@contextmanager
+def _fleet_server(db, users, workcell_id, instance_id):
+    child = subprocess.Popen([sys.executable,'-u',str(Path(__file__).resolve())],
+        stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+    try:
+        child.stdin.write(json.dumps(dict(db=str(db),users=users,
+            workcell_id=workcell_id,instance_id=instance_id))+'\n')
+        child.stdin.flush()
+        assert select.select([child.stdout],[],[],15)[0], 'Fleet process preparation timeout'
+        server = SimpleNamespace(url=json.loads(child.stdout.readline())['url'])
+        yield server
+    finally:
+        child.stdin.close()
+        try:
+            code = child.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=2)
+            raise AssertionError('own Fleet process did not exit') from None
+        assert code == 0, 'own Fleet process failed'
+
+
+@contextmanager
+def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
+                   rig_revision='sim-rig', calibration_revision='cal-7'):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    db = tmp_path/'fleet.sqlite3'
+    names = {'sim-admin-a':'policy-admin', 'sim-admin-b':'policy-admin',
+             'sim-operator':'operator', 'sim-device':'service'}
+    credentials = {name: secrets.token_urlsafe(32) for name in names}
+    users = {sha256(credentials[name].encode()).hexdigest():dict(principal_id=name, role=role)
+             for name, role in names.items()}
+    with _fleet_server(db,users,workcell_id,instance_id) as server, ExitStack() as connections:
         clients = {}
         for name, token in credentials.items():
             path = tmp_path/(name+'.private')
@@ -133,10 +161,18 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         window = admin('POST', base+'/windows', dict(operator_confirmed=True,
             policy_revision=policy_revision, kind='supervised', scope='SIM fixed reach', minutes=1, **revisions))
         window = second('POST', base+'/windows/'+window['window_id']+'/approve', dict(operator_confirmed=True))
-        try:
-            yield SimpleNamespace(server=server, admin=admin, operator=clients['sim-operator'],
-                device=clients['sim-device'], window=window,
-                db=db, base=base, rig_revision=rig_revision, calibration_revision=calibration_revision,
-                credentials=credentials, scope='SIM fixed reach')
-        finally:
-            (tmp_path/'server-timing.json').write_text(json.dumps(timings,indent=2))
+        yield SimpleNamespace(server=server, admin=admin, operator=clients['sim-operator'],
+            device=clients['sim-device'], window=window,
+            db=db, base=base, rig_revision=rig_revision, calibration_revision=calibration_revision,
+            credentials=credentials, scope='SIM fixed reach')
+
+
+if __name__ == '__main__':
+    settings = json.loads(sys.stdin.readline())
+    timings = []
+    try:
+        with HttpServer(_fleet_app(**settings,timings=timings)) as server:
+            print(json.dumps(dict(url=server.url)),flush=True)
+            sys.stdin.readline()
+    finally:
+        Path(settings['db']).with_name('server-timing.json').write_text(json.dumps(timings,indent=2))
