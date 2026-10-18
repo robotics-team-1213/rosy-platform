@@ -25,15 +25,15 @@ CANVAS_FILES = [
     DASHBOARD / "map.js",
     # camera-capture.js는 재수출만 한다 — 본체는 web_common evidence.js(D-323 T9).
     COMMON / "evidence.js",
-    FLEET / "map-view.js",
-    FLEET / "map-datum.js",
-    FLEET / "trail-view.js",
-    FLEET / "camera-backdrop.js",
-    FLEET / "traffic-view.js",
+    FLEET / "map" / "map-view.js",
+    FLEET / "map" / "map-datum.js",
+    FLEET / "map" / "trail-view.js",
+    FLEET / "map" / "camera-backdrop.js",
+    FLEET / "map" / "traffic-view.js",
     FLEET / "calibration" / "field-view.js",
     FLEET / "calibration" / "map-fit-view.js",
     FLEET / "shared" / "field-warp.js",
-    FLEET / "site-map.js",
+    FLEET / "sitemap" / "site-map.js",
     FLEET / "console.js",
     GAMES / "board.js",
     SRC.parent / "learning/curation/perception/review_app_web/app.js",
@@ -97,7 +97,7 @@ def test_games_pitch_colours_live_in_its_stylesheet():
 
 
 def test_fleet_terrain_and_legend_use_the_raster_tokens():
-    view = (FLEET / "map-view.js").read_text(encoding="utf-8")
+    view = (FLEET / "map" / "map-view.js").read_text(encoding="utf-8")
     legend = (COMMON / "components.css").read_text(encoding="utf-8")
     html = (FLEET / "index.html").read_text(encoding="utf-8")
     for kind in ("unknown", "free", "uncertain", "occupied"):

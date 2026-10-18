@@ -6,17 +6,28 @@ import { fileURLToPath } from "node:url";
 
 const WEB = new URL("../../../site_ui/console/", import.meta.url);
 const PREFIX = "/console/assets/";
+const FOLDERS = ["shared/", "cell/", "work/", "devices/", "sitemap/", "installation/", "map/", ""];
+
+function asset(name) {
+  if (!/^[\w.-]+\.(?:js|css)$/.test(name)) return null;
+  for (const url of FOLDERS.map((folder) => new URL(`${folder}${name}`, WEB))) {
+    if (existsSync(fileURLToPath(url))) return { url: url.href, shortCircuit: true };
+  }
+  return null;
+}
 
 export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith(PREFIX)) {
-    const name = specifier.slice(PREFIX.length);
-    if (/^[\w.-]+\.(?:js|css)$/.test(name)) {
-      for (const url of [new URL(`shared/${name}`, WEB), new URL(`cell/${name}`, WEB), new URL(`work/${name}`, WEB), new URL(`devices/${name}`, WEB),
-                         new URL(name, WEB)]) {
-        if (existsSync(fileURLToPath(url))) {
-          return { url: url.href, shortCircuit: true };
-        }
-      }
+    const found = asset(specifier.slice(PREFIX.length));
+    if (found) return found;
+  }
+  // D-798: 브라우저는 콘솔 문서의 "./x.js"를 공개 URL /console/assets/에 맞춰 푼다. 하위 폴더로 옮긴
+  // 파일끼리 디스크 경로가 달라도 같은 이름으로 찾게 한다.
+  if (specifier.startsWith("./") && context.parentURL?.startsWith(WEB.href)) {
+    const local = new URL(specifier, context.parentURL);
+    if (!existsSync(fileURLToPath(local))) {
+      const found = asset(specifier.slice(2));
+      if (found) return found;
     }
   }
   return nextResolve(specifier, context);

@@ -105,7 +105,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices", "calibration"):
+    for folder in ("shared", "cell", "work", "devices", "calibration", "sitemap", "installation", "map"):
         path = WEB / folder / name
         if path.is_file():
             return path
