@@ -333,9 +333,9 @@ def prove(out, runtime, camera, controllers, calibration):
         while time.monotonic() < deadline:
             state = runtime.latest_joint_state
             if not samples or samples[-1][0] != state.sequence:
-                samples.append((state.sequence,state.positions['joint1'],time.monotonic()))
+                samples.append((state.sequence,state.positions['joint1'],time.monotonic(),state.received_at))
             time.sleep(.01)
-        window = [p for _,p,t in samples if t >= deadline-.3]
+        window = [p for _,p,t,_ in samples if t >= deadline-.3]
         (out/'stop-readback.json').write_text(json.dumps(dict(samples=samples,deadline_s=deadline,
             window_count=len(window),spread_rad=max(window)-min(window) if window else None,
             first_sdk=first,first_readback_rad=measured,second_sdk=second,
