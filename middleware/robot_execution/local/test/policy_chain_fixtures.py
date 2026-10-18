@@ -108,14 +108,7 @@ def _fleet_app(db, users, workcell_id, instance_id, timings):
 def _fleet_server(db, users, workcell_id, instance_id):
     child = subprocess.Popen([sys.executable,'-u',str(Path(__file__).resolve())],
         stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
-    try:
-        child.stdin.write(json.dumps(dict(db=str(db),users=users,
-            workcell_id=workcell_id,instance_id=instance_id))+'\n')
-        child.stdin.flush()
-        assert select.select([child.stdout],[],[],15)[0], 'Fleet process preparation timeout'
-        server = SimpleNamespace(url=json.loads(child.stdout.readline())['url'])
-        yield server
-    finally:
+    def close():
         child.stdin.close()
         try:
             code = child.wait(timeout=8)
@@ -124,6 +117,15 @@ def _fleet_server(db, users, workcell_id, instance_id):
             child.wait(timeout=2)
             raise AssertionError('own Fleet process did not exit') from None
         assert code == 0, 'own Fleet process failed'
+    try:
+        child.stdin.write(json.dumps(dict(db=str(db),users=users,
+            workcell_id=workcell_id,instance_id=instance_id))+'\n')
+        child.stdin.flush()
+        assert select.select([child.stdout],[],[],15)[0], 'Fleet process preparation timeout'
+        server = SimpleNamespace(url=json.loads(child.stdout.readline())['url'],close=close)
+        yield server
+    finally:
+        close()
 
 
 @contextmanager
