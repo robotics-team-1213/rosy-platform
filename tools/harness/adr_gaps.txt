@@ -46,3 +46,6 @@ D-787 reserved in another worktree (refs/adr/D-787), absent from local main; rem
 D-788 reserved in another worktree (refs/adr/D-788), absent from local main; remove when its ADR lands
 D-796 reserved in another worktree (refs/adr/D-796), absent from local main; remove when its ADR lands
 D-797 reserved in another worktree (refs/adr/D-797), absent from local main; remove when its ADR lands
+D-799 reserved in another worktree (refs/adr/D-799), absent from local main; remove when its ADR lands
+D-800 reserved in another worktree (refs/adr/D-800), absent from local main; remove when its ADR lands
+D-801 reserved in another worktree (refs/adr/D-801), absent from local main; remove when its ADR lands
