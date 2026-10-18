@@ -6,3 +6,6 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
+shared/web/test/test_shared_controls.py::test_measure_comes_from_the_scale  # failing on clean main b0a6662caa (2026-10-18, remote run): D-792 review_app_web camera page; remove when its owner fixes it
+shared/web/test/test_shared_controls.py::test_product_fields_carry_the_shared_field_class  # failing on clean main b0a6662caa (2026-10-18, remote run): D-792 review_app_web camera page; remove when its owner fixes it
+shared/web/test/test_ui_token_contracts.py::test_no_raw_colour_outside_the_token_file[pinky-review]  # failing on clean main b0a6662caa (2026-10-18, remote run): D-792 review_app_web camera page; remove when its owner fixes it
