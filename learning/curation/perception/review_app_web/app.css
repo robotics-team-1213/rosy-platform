@@ -329,3 +329,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 /* D-792 camera setup */
 .camera-view{display:block;max-width:100%;height:auto;margin-block:var(--space-3);background:var(--surface-recessed)}
 .camera-numbers{display:grid;grid-template-columns:max-content 1fr;gap:var(--space-1) var(--space-4);font-variant-numeric:tabular-nums}
+/* D-792 S4 OMX imitation sets */
+.omx-table-wrap{overflow-x:auto;max-width:100%}
+.omx-episodes{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.omx-episodes th,.omx-episodes td{padding:var(--space-1,4px) var(--space-2,8px);text-align:left;white-space:nowrap}
