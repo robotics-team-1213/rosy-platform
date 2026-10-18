@@ -51,15 +51,44 @@ RELEASE_TOOLS = SCRIPT_DIR.parent / "release"
 if RELEASE_TOOLS.is_dir() and str(RELEASE_TOOLS) not in sys.path:
     sys.path.append(str(RELEASE_TOOLS))
 
-import rosy_claim  # noqa: E402
-from auto_update_host import (API_BASE, APPLY_MAX_TRANSIENT, CLAIM_HOLDER, CLAIM_TTL_S, CORE_DOWN_NOTE,
-    Definitive, ESCALATED_REASON, Host, Http, NATIVE_RUNTIME, parse_z, PRECHECK_BUSY_EXIT, _read_json,
-    RELEASES, RunBusy, RUNTIME_ENV, STUCK_AFTER_S, STUCK_REASON, UpdateError, UPDATES, _z)  # noqa: E402
-# Re-exported: tests and tools read these as rosy_auto_update.<name>.
-from auto_update_host import (FACE_UNIT, HEALTH_UNITS, PHASES, RETIRED_DISPLAY_UNIT, UPDATE_DISPLAY)  # noqa: E402,F401
-from auto_update_apply import UpdaterApply  # noqa: E402
-from auto_update_records import UpdaterRecords  # noqa: E402
-from auto_update_stage import UpdaterStage  # noqa: E402
+RESYNCED_ENV = "ROSY_AUTO_UPDATE_RESYNCED"
+
+
+def _resync_and_rerun(error: ImportError) -> None:
+    """Resync the image layer from the active release once, then run again (D-798).
+
+    sync-image-layer.py replaces native-runtime files one at a time under a journal, not as a
+    set: a power loss mid-sync leaves this folder with files from two releases until the next
+    sync reconciles them, and that next sync normally comes from this updater. Only the
+    image-layer copy run as a program does this; an import (tests) or another copy re-raises.
+    """
+    root = SCRIPT_DIR.parents[2]
+    sync = root / "opt/rosy/current/deploy/robot/native/sync-image-layer.py"
+    if (__name__ != "__main__" or os.environ.get(RESYNCED_ENV)
+            or SCRIPT_DIR != root / "opt/rosy/native-runtime" or not sync.is_file()):
+        raise error
+    import subprocess
+    # 600 s: SYNC_TIMEOUT_S, which lives in the sibling that may be the broken one.
+    synced = subprocess.run([sys.executable, "-B", str(sync)], capture_output=True, text=True, timeout=600)
+    if synced.returncode != 0:
+        raise ImportError(f"{error}; image-layer resync failed: {synced.stderr.strip()[-300:]}") from error
+    rerun = [sys.executable, "-I", "-B", str(Path(__file__).resolve()), *sys.argv[1:]]
+    raise SystemExit(subprocess.call(rerun, env={**os.environ, RESYNCED_ENV: "1"}))
+
+
+try:
+    import rosy_claim  # noqa: E402
+    from auto_update_host import (API_BASE, APPLY_MAX_TRANSIENT, CLAIM_HOLDER, CLAIM_TTL_S, CORE_DOWN_NOTE,
+        Definitive, ESCALATED_REASON, Host, Http, NATIVE_RUNTIME, parse_z, PRECHECK_BUSY_EXIT, _read_json,
+        RELEASES, RunBusy, RUNTIME_ENV, STUCK_AFTER_S, STUCK_REASON, UpdateError, UPDATES, _z)  # noqa: E402
+    # Re-exported: tests and tools read these as rosy_auto_update.<name>.
+    from auto_update_host import (FACE_UNIT, HEALTH_UNITS, PHASES, RETIRED_DISPLAY_UNIT,  # noqa: E402,F401
+        UPDATE_DISPLAY)
+    from auto_update_apply import UpdaterApply  # noqa: E402
+    from auto_update_records import UpdaterRecords  # noqa: E402
+    from auto_update_stage import UpdaterStage  # noqa: E402
+except ImportError as error:  # siblings from two releases after an interrupted image-layer sync
+    _resync_and_rerun(error)
 
 
 # --- the updater ----------------------------------------------------------------------
