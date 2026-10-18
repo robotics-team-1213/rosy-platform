@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -252,7 +253,7 @@ def test_map_uses_remaining_desktop_observe_height_and_stays_within_mobile_width
               viewportHeight: innerHeight,
             })""")
             if visible:
-                screenshot_dir = Path(os.environ.get("ROSY_SCREENSHOT_DIR", r"X:\DevTemp\rosy-uiux-followup"))
+                screenshot_dir = Path(os.environ.get("ROSY_SCREENSHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-uiux-followup")
                 screenshot_dir.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(screenshot_dir / f"console-map-{width}x{height}.png"), full_page=True)
                 page.wait_for_timeout(1500)

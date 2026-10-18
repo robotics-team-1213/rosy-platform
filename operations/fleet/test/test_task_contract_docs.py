@@ -24,7 +24,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.234" in reference
+    assert "**Version:** v1.271" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -91,7 +91,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.234" in reference
+    assert "**Version:** v1.271" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (
@@ -153,7 +153,9 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
     assert "## D-318 Site Fleet camera preview supports measured lens and plane rectification" in adr
     assert "### 10.6.1 Site Fleet camera preview and rectification (D-318 Accepted)" in reference
     assert "`X-Frame-Rectified`" in reference
-    assert "rectification" in vision and "rectify_jpeg(frame.jpeg, settings)" in vision
+    plane = (ROOT / "operations/overhead/rosy_vision/preview_plane.py").read_text(encoding="utf-8")
+    assert "rectification" in vision and "rectified_jpeg(self, source, frame, settings)" in vision
+    assert "asyncio.to_thread(rectify_jpeg, frame.jpeg, settings)" in plane
     assert "Fleet does not relay image" in reference and "for the original" in reference
     assert "sightings" in adr and "cmd_vel" in adr
     assert 'id="vision-adjustments"' in ui
@@ -167,7 +169,7 @@ def test_policy_evidence_contract_is_governed_together():
         encoding="utf-8")
     task_service = (ROOT / "operations/fleet/fleet/server/ledger/task_service.py").read_text(
         encoding="utf-8")
-    store = (ROOT / "operations/fleet/fleet/server/policy_evidence.py").read_text(
+    store = (ROOT / "operations/fleet/fleet/server/evidence/policy_evidence.py").read_text(
         encoding="utf-8")
 
     assert "### 10.6.2 Site Fleet policy-eligible evidence" in reference or (

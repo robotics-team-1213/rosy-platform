@@ -80,6 +80,20 @@ roots:
     import_prefix: []
     concern: learning
     note: D-449 offline ACT study; no deployment or execution authority.
+  - path: learning/training/world_model
+    part: learning
+    d427_target: learning/training/world_model
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-782 M1 world-model training; no promotion, deployment or execution authority.
+  - path: learning/evaluation/world_model
+    part: learning
+    d427_target: learning/evaluation/world_model
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-782 offline acceptance against hold and reach baselines; no promotion or admission.
   - path: contracts/learning
     part: contracts
     d427_target: contracts/learning
@@ -475,6 +489,16 @@ roots:
       fleet/server/auth: fleet.server
       fleet/server/console: fleet.server
       fleet/server/ledger: fleet.server
+      fleet/server/missions: fleet.server
+      fleet/server/work: fleet.server
+      fleet/server/trips: fleet.server
+      fleet/server/trip_checks: fleet.server
+      fleet/server/trip_progress: fleet.server
+      fleet/server/evidence: fleet.server
+      fleet/server/sitemap: fleet.server
+      fleet/server/pose: fleet.server
+      fleet/server/recognition: fleet.server
+      fleet/server/rightofway: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations
@@ -510,6 +534,24 @@ roots:
     wave: "3a"
     import_prefix: [rosy_gateway]
     concern: other
+  - path: operations/site_ui/media
+    layout_target: operations/site_ui/media
+    part: operations
+    d427_target: operations/site_ui/media
+    wave: none
+    import_prefix: [rosy_media]
+    source_packages: {src/rosy_media: rosy_media}
+    note: D-789 standalone media authorization and supervision; never Fleet video relay or robot command authority.
+    concern: other
+  - path: middleware/media
+    layout_target: middleware/media
+    part: middleware
+    d427_target: middleware/media
+    wave: none
+    import_prefix: [rosy_media_edge]
+    source_packages: {src/rosy_media_edge: rosy_media_edge}
+    note: D-791 optional native media process, no camera ownership or robot command authority.
+    concern: other
   - path: operations/world
     part: operations
     d427_target: operations/world
@@ -531,6 +573,13 @@ roots:
     wave: "3b"
     import_prefix: [rosy_cell]
     concern: other
+  - path: operations/prediction
+    part: operations
+    d427_target: operations/prediction
+    wave: none
+    import_prefix: []
+    concern: other
+    note: D-782 pre-execution checker and shadow recorder; predictions support REJECT/HOLD only and are not wired to admission or an owner.
   - path: operations/situation
     part: operations
     d427_target: operations/situation
@@ -649,7 +698,7 @@ roots:
     integration: robots
     d427_target: integrations/robots/omx
     wave: none
-    import_prefix: [rosy.integrations.robots.omx]
+    import_prefix: [rosy.integrations.robots.omx, lerobot_robot_rosy_omx]
     concern: control
   - path: integrations/simulation/gazebo
     part: integrations
@@ -794,14 +843,15 @@ roots:
     d427_target: test
     wave: none
     concern: other
+  - path: test/flaky_quarantine.txt
+    part: test
+    d427_target: test/flaky_quarantine.txt
+    wave: none
+    concern: safety
+    note: D-762 stage 1. A listed failure passes after one rerun, so adding an id needs a Safety-Review trailer.
   - path: docs
     part: docs
     d427_target: docs
-    wave: none
-    concern: other
-  - path: reference
-    part: docs
-    d427_target: reference
     wave: none
     concern: other
 
@@ -814,6 +864,7 @@ safety_modules:
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
   - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
+  - middleware/robot_execution/local/src/rosy/execution/local/core_arm_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
@@ -821,6 +872,8 @@ safety_modules:
   - middleware/drive/behaviors/docking/charging.py
   - middleware/drive/behaviors/line_follow/body_stop.py
   - middleware/drive/behaviors/line_follow/clearance.py
+  - middleware/drive/behaviors/line_follow/authority.py  # D-517/D-760 movement authority under the trip lease
+  - middleware/core/gateway/core/trip_lease.py  # D-541/D-760 trip lease ends Fleet-started motion
   - middleware/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
@@ -829,7 +882,13 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/action_api.py
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
   - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
+  - middleware/devices/omx/agent/src/rosy_agent/barrier_supervisor.py  # D-780 barrier timeout, coordinator liveness HOLD
+  - middleware/devices/omx/agent/src/rosy_agent/barrier_journal.py  # D-780 PHASE_WAIT/release journal
+  - middleware/devices/omx/agent/src/rosy_agent/coordinator_api.py  # D-780 coordinator peer roles, ReleaseBarrier
+  - middleware/devices/omx/agent/src/rosy_agent/workcell_coordinator.py  # D-780 coupled stop, barrier release
   - operations/fleet/fleet/server/dispatch_admission.py
+  - operations/fleet/fleet/server/ledger/action_claims.py  # D-779 per-Action arm/zone claim release
+  - operations/fleet/fleet/server/cell/cell_arm_claims.py  # D-779 §5/§6 multi-arm arm/zone claim phases
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
@@ -857,6 +916,7 @@ safety_anchors:
   - {symbol: core.drive.line_follow.bind_lane_return_motion}
   - {symbol: core.drive.docking.build_docking_and_swarm}
   - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
+  - {symbol: rosy.execution.local.core_arm_policy.CoreArmPolicyPort}
   - {symbol: core_features.safety.manager.SafetyManager}
   - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
   - {symbol: core_features.safety.manager.SafetyManager.release, public: true}
@@ -875,6 +935,8 @@ safety_anchors:
   - {symbol: core_features.command.arbitration._ALLOWED}
   - {symbol: core_features.line_follow.body_stop.BodyStopMixin}
   - {symbol: core_features.line_follow.clearance.body_path_gap}
+  - {symbol: core_features.line_follow.authority.AuthorityMixin._authority_gate}  # D-517/D-760 zeroes motion past held authority
+  - {symbol: core.trip_lease.TripLeaseManager.expire_due}  # D-541/D-760 lease expiry ends Fleet-started motion
   - {symbol: core_features.localization.rotate_to.rotate_goal}
   - {symbol: core_features.localization.rotate_to.turn_rate}
   - {symbol: core_api_web.api.v1.safety.safety_release}
@@ -888,10 +950,28 @@ safety_anchors:
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
   - {symbol: omx_adapter.owner_recovery_api.OwnerRecoveryApi.dispatch}
   - {symbol: omx_adapter.action_store_readback.ActionStoreReadback.run_if_no_unresolved}
+  - {symbol: rosy_agent.barrier_supervisor.BarrierSupervisor.tick}  # D-780 3/4 timeout FAILED/HOLD, liveness HOLD
+  - {symbol: rosy_agent.barrier_supervisor.make_coordinator_hold}
+  - {symbol: rosy_agent.barrier_journal.BarrierJournal.release}
+  - {symbol: rosy_agent.coordinator_api.CoordinatorPeerApi.route}  # D-780 1 per-operation peer matrix
+  - {symbol: rosy_agent.workcell_coordinator.WorkcellCoordinator._coordinate}
   - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
   - {symbol: fleet.server.dispatch_admission.release, public: true}
+  - {symbol: fleet.server.action_claims.release_keys, public: true}  # D-779 per-Action arm/zone release
+  - {symbol: fleet.server.action_claims.release_held_keys, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.reserve_step, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.set_phase, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.release_succeeded, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.release_for_resume, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.action_resources, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.arm_key, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.held_anywhere, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.job_claims_runnable, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.park_job_claims, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.phases, public: true}  # D-779 §5/§6
+  - {symbol: fleet.server.cell_arm_claims.resource_keys, public: true}  # D-779 §5/§6
   - {symbol: fleet.server.cancel_all.cancel_all_driving, public: true}
   - {symbol: fleet.server.cancel_all.DriveCancelFence, public: true}
   - {symbol: fleet.server.cancel_all.DispatchCanceled, public: true}

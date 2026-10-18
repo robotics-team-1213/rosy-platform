@@ -19,6 +19,47 @@ from core_common.protocol.schemas import (
 
 T = TypeVar("T")
 
+# D-780 2 adds 'coordinator'. A latch table created before it keeps the old CHECK and is
+# rebuilt once, inside one transaction, with every row copied unchanged.
+_STOP_TABLE = """
+CREATE TABLE IF NOT EXISTS {name} (
+    workcell_id TEXT NOT NULL,
+    instance_id TEXT NOT NULL,
+    authority_epoch INTEGER NOT NULL,
+    dispatch_generation INTEGER NOT NULL,
+    state TEXT NOT NULL CHECK(state IN
+        ('OPEN', 'REQUESTED', 'LOCAL_LATCHED', 'UNKNOWN')),
+    source TEXT NOT NULL CHECK(source IN ('fleet', 'operator_local', 'coordinator')),
+    dispatch_enabled INTEGER NOT NULL CHECK(dispatch_enabled IN (0, 1)),
+    observed_at TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    PRIMARY KEY(workcell_id, instance_id)
+)
+"""
+
+
+def _migrate_stop_sources(connection: sqlite3.Connection) -> None:
+    """Rebuild a pre-D-780 latch table once. Rollback note: an older build reading a migrated
+    table still parses it, but a row whose source is 'coordinator' fails its StopRequestSource
+    parse, so its stop snapshot answers 503 and dispatch stays closed (fail closed)."""
+    def legacy() -> bool:
+        found = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='omx_local_stop'").fetchone()
+        return found is not None and "'coordinator'" not in found[0]
+    if not legacy():
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    if not legacy():  # another process migrated it between the read and the write lock
+        connection.rollback()
+        return
+    connection.execute(_STOP_TABLE.format(name="omx_local_stop_d780"))
+    connection.execute("INSERT INTO omx_local_stop_d780 SELECT workcell_id, instance_id, authority_epoch, "
+                       "dispatch_generation, state, source, dispatch_enabled, observed_at, reason "
+                       "FROM omx_local_stop")
+    connection.execute("DROP TABLE omx_local_stop")
+    connection.execute("ALTER TABLE omx_local_stop_d780 RENAME TO omx_local_stop")
+    connection.commit()
+
 
 class LocalStopBlocked(PermissionError):
     """A latch or generation fence prevents a local driver submission."""
@@ -42,23 +83,8 @@ class LocalStopController:
         self._lock = threading.RLock()
         self._forced_closed = True
         with closing(self._connect()) as connection:
-            connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS omx_local_stop (
-                    workcell_id TEXT NOT NULL,
-                    instance_id TEXT NOT NULL,
-                    authority_epoch INTEGER NOT NULL,
-                    dispatch_generation INTEGER NOT NULL,
-                    state TEXT NOT NULL CHECK(state IN
-                        ('OPEN', 'REQUESTED', 'LOCAL_LATCHED', 'UNKNOWN')),
-                    source TEXT NOT NULL CHECK(source IN ('fleet', 'operator_local')),
-                    dispatch_enabled INTEGER NOT NULL CHECK(dispatch_enabled IN (0, 1)),
-                    observed_at TEXT NOT NULL,
-                    reason TEXT NOT NULL,
-                    PRIMARY KEY(workcell_id, instance_id)
-                )
-                """
-            )
+            _migrate_stop_sources(connection)
+            connection.executescript(_STOP_TABLE.format(name="omx_local_stop"))
             connection.execute(
                 """INSERT OR IGNORE INTO omx_local_stop
                    (workcell_id, instance_id, authority_epoch, dispatch_generation,

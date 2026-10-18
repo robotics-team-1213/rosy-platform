@@ -154,9 +154,10 @@ async def reconcile_tasks(service, console):
             ORDER BY (task_id>?) DESC,task_id LIMIT 20''', (getattr(service, '_native_cursor', ''),)).fetchall()
     if rows:
         service._native_cursor = rows[-1]['task_id']
-    for row in rows:
+    async def reconcile(row):
         try:
             task = service.store.get_task(row['task_id'])
             await task_result(service.store, console._client(task['robot_id']), task, events=service.core_events)
         except Exception:
-            continue
+            return
+    await asyncio.gather(*(reconcile(row) for row in rows))

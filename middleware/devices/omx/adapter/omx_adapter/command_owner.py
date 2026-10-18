@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable, Mapping, Protocol
 
+from .final_state import final_state_reason, normalize_final_state_errors
 from .manipulation_plan import JointTrajectoryPoint
 
 
@@ -52,6 +53,7 @@ class ArmCommandConfig:
     velocity_limits: Mapping[str, float] | None = None
     acceleration_limits: Mapping[str, float] | None = None
     max_start_state_tolerances: Mapping[str, float] | None = None
+    max_final_state_errors: Mapping[str, float | None] | None = None  # D-785, final_state.py
     allowed_owners: tuple[str, ...] = ()
     calibration_revision: str = ""
     max_joint_state_age_s: float = 0.5
@@ -127,15 +129,10 @@ class ArmCommandConfig:
         if not owners or len(set(owners)) != len(owners) or not set(owners) <= KNOWN_OWNERS:
             raise ValueError("allowed_owners must be a non-empty unique subset of known owners")
         object.__setattr__(self, "allowed_owners", owners)
-        object.__setattr__(self, "max_joint_state_age_s", _positive_finite(
-            "max_joint_state_age_s", self.max_joint_state_age_s
-        ))
-        object.__setattr__(self, "max_goal_duration_s", _positive_finite(
-            "max_goal_duration_s", self.max_goal_duration_s
-        ))
-        object.__setattr__(self, "action_timeout_s", _positive_finite(
-            "action_timeout_s", self.action_timeout_s
-        ))
+        final_errors = normalize_final_state_errors(names, self.max_final_state_errors)
+        object.__setattr__(self, "max_final_state_errors", final_errors)
+        for limit in ("max_joint_state_age_s", "max_goal_duration_s", "action_timeout_s"):
+            object.__setattr__(self, limit, _positive_finite(limit, getattr(self, limit)))
         if self.action_timeout_s < self.max_goal_duration_s:
             raise ValueError("action_timeout_s must be at least max_goal_duration_s")
         if self.wall_clock_bound_factor is not None:
@@ -618,11 +615,13 @@ class ArmCommandOwner:
                 succeeded = False
             self._active = None
             self._active_wall = None
-            if succeeded:
+            reason = (final_state_reason(self.config.max_final_state_errors, command, self._joint_state)
+                      if succeeded else "action_failed")
+            if reason is None:
                 self._state = "ready"
                 return self._decision(True, "completed", command.command_id)
-            self._enter_hold("action_failed")
-            return self._decision(False, "action_failed", command.command_id)
+            self._enter_hold(reason)
+            return self._decision(False, reason, command.command_id)
 
     def preempt(self, reason: str) -> CommandDecision:
         """Arbiter-only cross-owner stop (D-442 U3); never dispatch a new goal.

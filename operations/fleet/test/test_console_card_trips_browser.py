@@ -40,6 +40,10 @@ API = {
     "/api/fleet/formation": {"active": False, "state": "IDLE", "leader": None, "formation": None, "spacing": None,
                              "assignment": {}, "reason": None, "pending_triggers": [], "stream_evidence": {},
                              "relay": None},
+    # D-763 9 (v1.237): 새 작업 shows only the kinds the server lists
+    "/api/fleet/work": {"rows": [], "observed_at": "2026-10-15T00:00:00+00:00", "tasks_available": True,
+                        "missions_available": True, "cell_jobs_available": True, "truncated_sources": [],
+                        "kinds": ["trip"]},
 }
 PLAN = {"segments": [{"edge_id": "e1"}], "places": [], "actions": [], "length_m": 2.1, "eta_s": 14,
         "map_version": 4, "expires_at": 4e9}
@@ -100,7 +104,8 @@ def test_unknown_site_pose_blocks_plan_without_hiding_inspection(site):
         assert "위치" in preview.get_attribute("reason")
         api["/api/fleet/guide"]["robots"][0]["pose"] = {
             "state": "LOCALIZED", "x": 0, "y": 0, "yaw": 0, "u_m": 0.12, "source": "operator_pin"}
-        page.locator("#context-status").click()
+        # Blur the form through its tab, rather than clicking a panel centre that can hit an action.
+        page.locator('[data-context-tab="status"]').click()
         page.clock.run_for(1500)
         expect(form.get_by_role("button", name="경로 보기", exact=True)).to_be_enabled()
         assert not posts and not errors
@@ -642,25 +647,29 @@ def test_a_viewer_switches_robots_in_new_work_and_reads_each_reason(site):  # no
 
 
 def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noqa: F811
-    """D-763 9: 이동은 활성 현장 지도에 장소가 있을 때만 종류로 선다(꺼진 단추가 아니다). Cell 적재는 /console/cell로
-    간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
+    """D-763 9 (v1.237): 새 작업은 서버의 종류 목록(`kinds`)만 보인다. 목록에 없는 종류는 꺼진 단추도 아니고 없다.
+    Cell 적재는 /console/cell로 간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
     from playwright.sync_api import expect, sync_playwright
 
-    bare = {**ACTIVE, "version": 3, "map": {**ACTIVE["map"], "places": []}}
-    api = {**API, "/api/fleet/site-map/active": bare}
+    api = {**API, "/api/fleet/work": {**API["/api/fleet/work"], "kinds": []}}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [])
         page.goto(site + "/console?view=work&show=new")
         page.clock.run_for(2500)
         kinds = page.get_by_role("list", name="새 작업 종류", exact=True)
         cell = kinds.get_by_role("link", name="Cell 적재", exact=True)
+        assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
+        assert page.locator("#work-new-cell-item").is_hidden()  # places and robots in the browser do not decide
+        assert not page.locator("#work-list").is_visible() and not page.locator("#work-context").is_visible()
+        api["/api/fleet/work"] = {**API["/api/fleet/work"], "kinds": ["trip", "CELL_TRANSFER"]}
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
         expect(cell).to_be_visible()
         assert cell.get_attribute("href") == "/console/cell"
-        assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
-        assert not page.locator("#work-list").is_visible() and not page.locator("#work-context").is_visible()
-        api["/api/fleet/site-map/active"] = ACTIVE  # traffic names map v4, so the console rereads the active map
-        page.clock.run_for(1500)
         expect(page.locator("#work-new-move")).to_be_visible()
+        # One row look for every kind: the Cell link once drew as a small underlined box beside a full-width 이동.
+        move_box, cell_box = page.locator("#work-new-move").bounding_box(), cell.bounding_box()
+        assert all(abs(move_box[key] - cell_box[key]) <= 1 for key in ("x", "width", "height")), (move_box, cell_box)
+        assert cell.evaluate("node => getComputedStyle(node).textDecorationLine") == "none"
         page.locator("#work-new-move").click()
         page.locator("#work-move-robot").select_option("rosy_02")
         for width, height in [(1366, 768), (390, 844)]:
@@ -679,6 +688,14 @@ def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noq
             _shot(page, f"work-new-move-{width}x{height}.png")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary').scrollTop = 0")
         page.set_viewport_size({"width": 1366, "height": 768})
+        api["/api/fleet/work"] = {**API["/api/fleet/work"], "kinds": ["CELL_TRANSFER"]}
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
+        assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
+        page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
+        assert page.locator("#work-new-cell-item").is_hidden()  # no answer: no kind
+        page.unroute("**/api/fleet/work")
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
         cell.click()
         page.wait_for_url("**/console/cell")
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)

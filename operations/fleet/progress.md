@@ -52,6 +52,7 @@ gates:
   FIELD:
     state: PARKED
 adrs:
+- D-775
 - D-693
 - D-687
 - D-679
@@ -172,3 +173,10 @@ SOURCE implemented; remote verification pending. No Fleet REALIGN activation or 
 ### 2026-10-12 D-685 최소 사람 개입과 학습 원본
 
 승인된 autonomous_robots의 WAIT/완료 YIELD 재관측, 같은 사건 예산 유지, UNKNOWN durable freeze와 정확한 CORE 사건 종료 확인, 범위 내 검증된 trip 재계획을 구현했다. SharedGather refresh의 센서/state 원장을 bounded durable 저장하고 read_guard 조회와 hash export로 AI 학습 원본을 준비한다. labels/model activation은 자동 생성하지 않는다. 7c0e4f049 원격 238 pass/NEW 0 및 Node 52 pass; 최종 최신 main 착지 gate 별도. SOURCE 증거이며 설치·실기·FIELD gate는 유지한다.
+
+## 2026-10-17 · D-775 실측 교정 운영 연결
+
+실측 수치 묶음의 목적별 승인·영속 저장·현재 촬영 session 확인·미리보기·철회 경로를 추가했다.
+기존 tracking/sighting 승인과 World/CORE 권한은 유지한다. 원격 시험의 커밋·실행·실패 수정·skipped와
+실측 근거의 한계는 [구현 검증 기록](../../docs/validation/measured-camera-lifecycle-2026-10-16/result.md)에 모은다. 기존 모듈 gate의 물리 수용 범위를
+넓히지 않는다. D-598의 현재 현장 readback·로봇별 오차 계수는 아직 확보하지 못했다.

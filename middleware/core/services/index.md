@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.231)
-- 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.231)
-- 2026-10-14 · uncommitted · D-760 개정 3 9항: `line_follow.regulation_wait`
-- 2026-10-14 · uncommitted · fix(line_follow): D-758 0단계 독립 안전 검토 1·3항 — 모호한 stamp와 뒤로 간 벽시계에서 거절
-- 2026-10-14 · uncommitted · fix(line_follow,state): D-758 0단계 odom 기록을 발행 stamp로 찾고 line-follow 시계로 잰다, odom epoch
+- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+- 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
+- 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
+- 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+- 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)

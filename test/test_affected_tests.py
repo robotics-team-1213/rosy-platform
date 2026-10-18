@@ -32,6 +32,15 @@ def test_external_drive_holders_select_their_installing_distribution():
     assert 'middleware/core/services/test' in selection.reasons
     assert 'middleware/core/gateway/test' in selection.reasons
 
+@pytest.mark.parametrize("changed", ["learning/curation/perception/review_app_web/camera.html",
+                                     "operations/site_ui/console/console.js"])
+def test_a_surface_tree_change_selects_the_registry_contract_suites(changed):
+    # 2026-10-18: the D-792 camera page landed red because these suites never name review_app_web.
+    selection = affected.select(affected.Repo.load(ROOT), [changed])
+    assert {"shared/web/test/test_ui_token_contracts.py", "shared/web/test/test_shared_controls.py"} <= set(
+        selection.reasons)
+
+
 HARNESS_YAML = """\
 modules:
   - name: core
@@ -72,7 +81,13 @@ roots:
 FILES = {
     "tools/harness/harness.yaml": HARNESS_YAML,
     "tools/harness/platform_parts.yaml": PARTS_YAML,
-    "contracts/foundation/core_common/schemas.py": "X = 1\n",
+    "contracts/foundation/core_common/__init__.py": "",
+    "contracts/foundation/core_common/schemas.py": "from .power import P  # re-export\nX = 1\n",
+    "contracts/foundation/core_common/power.py": "P = 1\n",
+    "contracts/foundation/core_common/orphan.py": "Z = 1\n",
+    "contracts/foundation/config/rosy_default.yaml": "a: 1\n",
+    "contracts/foundation/config/rosy_dev_auth.yaml": "b: 1\n",
+    "middleware/core/gateway/test/test_runtime_config.py": "DEFAULTS = 'rosy_default.yaml'\n",
     "contracts/foundation/test/test_schemas.py": "import core_common\n",
     "middleware/perception/control/battery.py": "from core_common import schemas\n",
     "middleware/perception/test/test_battery.py": "from control import battery\n",
@@ -100,6 +115,8 @@ FILES = {
     "test/test_line_follow_contract_docs.py": "DOC = 'docs/reference/line-follow.md'\n",
     "test/test_network_topology_contracts.py": "",
     ".github/workflows/ci.yml": "name: ci\n",
+    ".github/workflows/release.yml": "name: release\n",
+    "test/test_release_workflow.py": "WORKFLOW = '.github/workflows/release.yml'\n",
     **{guard: "" for guard in affected.GUARD_SET},
 }
 
@@ -127,11 +144,50 @@ def _select(sample: Path, *changed: str) -> affected.Selection:
     return affected.select(affected.Repo.load(sample), list(changed))
 
 
+@pytest.mark.parametrize("consumer", ["package_export", "transitive_runtime", "broad_owner"])
+def test_foundation_indirect_runtime_consumers_keep_full(sample, consumer):
+    repo = affected.Repo.load(sample)
+    power = "contracts/foundation/core_common/power.py"
+    repo._texts["contracts/foundation/core_common/schemas.py"] = "X = 1\n"
+    repo._texts["middleware/perception/control/battery.py"] = "X = 1\n"
+    if consumer == "package_export":
+        repo._texts["contracts/foundation/core_common/__init__.py"] = "from .power import P\n"
+        repo._texts["middleware/core/gateway/core/node.py"] = "from core_common import P\n"
+    elif consumer == "transitive_runtime":
+        repo._texts["middleware/perception/control/battery.py"] = "from core_common.power import P\n"
+    else:
+        runtime = "deploy/robot/runtime.py"
+        repo.tracked.append(runtime)
+        repo._texts[runtime] = "from core_common.power import P\n"
+    selection = affected.select(repo, [power])
+    assert selection.mode == "full", "unresolved runtime consumers must not narrow the foundation gate"
+    selected = {path for invocation in selection.invocations for path in invocation}
+    assert {"middleware/core/gateway/test", "middleware/core/api/test", "test"} <= selected
+
+
 # (case, changed files, expected mode, expected selection beyond the guard set)
 CASES = [
     ("tools/ssh only -> guards + the tests naming the script",
      ["tools/ssh/rosy_ssh_enroll.py"], "affected", {"test/test_rosy_ssh_enroll.py"}),
-    ("core_common -> full", ["contracts/foundation/core_common/schemas.py"], "full", None),
+    # D-762 stage 0: contracts/foundation and .github/workflows select their real readers.
+    ("core_common runtime consumer -> full until downstream coverage is resolved",
+     ["contracts/foundation/core_common/schemas.py"], "full", None),
+    ("core_common module re-exported (relative import) -> the re-exporter's importers too",
+     ["contracts/foundation/core_common/power.py"], "full", None),
+    ("core_common module nobody imports -> full (unresolved)", ["contracts/foundation/core_common/orphan.py"],
+     "full", None),
+    ("core_common __init__ exports -> full", ["contracts/foundation/core_common/__init__.py"], "full", None),
+    ("core_common module removed in the working tree -> full", ["contracts/foundation/core_common/gone.py"],
+     "full", None),
+    ("foundation packaging -> full", ["contracts/foundation/setup.py"], "full", None),
+    ("foundation test file -> only that file", ["contracts/foundation/test/test_schemas.py"], "affected",
+     {"contracts/foundation/test/test_schemas.py"}),
+    ("foundation config textual reader does not establish all runtime consumers",
+     ["contracts/foundation/config/rosy_default.yaml"], "full", None),
+    ("foundation config no test reads -> full (fallback)", ["contracts/foundation/config/rosy_dev_auth.yaml"],
+     "full", None),
+    ("workflow textual reader does not establish execution coverage",
+     [".github/workflows/release.yml"], "full", None),
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
@@ -154,7 +210,7 @@ CASES = [
      ["deploy/robot/pinky_pro/compose.yaml"], "full", None),
     ("native unit manifest -> full", ["deploy/robot/pinky_pro/native/rosy-x.service"], "full", None),
     ("conftest -> full", ["middleware/core/gateway/test/conftest.py"], "full", None),
-    ("CI workflow -> full", [".github/workflows/ci.yml"], "full", None),
+    ("workflow no test reads -> full (fallback)", [".github/workflows/ci.yml"], "full", None),
     ("selector config -> full", ["tools/harness/harness.yaml"], "full", None),
     ("requirements pin -> full", ["deploy/robot/device-python-requirements.txt"], "full", None),
     ("nothing changed -> guards only", [], "affected", set()),
@@ -258,12 +314,13 @@ def test_committed_folder_moves_escalate(sample, capsys, change, mode):
 
 
 def test_real_repo_wide_ordinary_edits_stay_affected():
-    """D-762 stage 0: an API version bump (its pin files) and ADR-gap records are not FULL."""
+    """D-762 stage 0: an API version bump (its pin files), ADR-gap records and D-766 size data are not FULL."""
     repo = affected.Repo.load(ROOT)
     pins = ["middleware/core/api/core_api_web/api/app.py", "docs/reference/ROSY API & Protocol Reference.md",
             "operations/fleet/test/test_lane_route.py", "operations/fleet/test/test_mission_progress.py",
             "test/test_line_follow_contract_docs.py"]
-    for changed in (pins, ["tools/harness/adr_gaps.txt"]):
+    for changed in (pins, ["tools/harness/adr_gaps.txt"], ["test/architecture/size_ratchet.txt"],
+                    ["test/architecture/size_units.txt"]):  # D-766 4: ratchet rows and units are data
         sel = affected.select(repo, changed)
         assert sel.mode == "affected", sel.escalations
 
@@ -271,7 +328,7 @@ def test_real_repo_wide_ordinary_edits_stay_affected():
 @pytest.mark.parametrize("changed", [
     ["middleware/robot_ui/pilot/package.xml"],        # was: pilot/test ran; must still run
     ["contracts/foundation/core_common/__init__.py"],
-    [".github/workflows/ci.yml"],
+    ["tools/harness/platform_parts.yaml"],
 ])
 def test_real_repo_full_tier_covers_every_module_suite_and_the_local_selection(changed):
     """D-762 stage 0: a FULL landing never runs fewer suites than the old guards + mapped path."""
@@ -304,8 +361,15 @@ def test_real_repo_selector_paths_escalate():
     """The selector's own files and the harness config always escalate."""
     repo = affected.Repo.load(ROOT)
     for path in ("tools/harness/affected_tests.py", "tools/harness/harness.yaml",
-                 "contracts/foundation/core_common/__init__.py", ".github/workflows/ci.yml"):
+                 "contracts/foundation/core_common/__init__.py", "contracts/foundation/setup.py"):
         assert affected.select(repo, [path]).mode == "full", path
+
+
+def test_real_repo_ci_workflow_keeps_full_execution_coverage():
+    """Textual readers do not establish coverage of the jobs a workflow changes."""
+    sel = affected.select(affected.Repo.load(ROOT), [".github/workflows/ci.yml"])
+    assert sel.mode == "full", sel.escalations
+    assert "test" in sel.reasons
 
 
 # --- D-436 4: GitHub runs the full tier as a parallel matrix; local --run does not -------------
@@ -346,16 +410,10 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
 
 
 def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
-    # Successful main CI 38056130519: round-robin took 307/107/313 seconds.
-    costs = {
-        "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
-        "test_blocks.py": 89, "test_start_point_browser.py": 45,
-        "test_console_roles_browser.py": 28, "test_password_session.py": 28,
-        "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
-        "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
-        "test_signal_phase.py": 13, "test_trip_runner.py": 11,
-        "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
-    }
+    # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
+    # the measured table must keep the slowest shard near a quarter of the suite.
+    costs = json.loads((ROOT / "tools/harness/fleet_test_seconds.json").read_text(encoding="utf-8"))
+    assert costs["test_signal_supervision.py"] >= 50, "a slowest Fleet file must be weighed"
     repo = affected.Repo.load(ROOT)
     selection = affected.Selection("full", [])
     matrix = affected.ci_matrix(repo, selection)["include"]
@@ -365,10 +423,26 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert sorted(paths) == expected
     loads = [sum(costs.get(PurePosixPath(p).name, 1) for inv in e["invocations"] for p in inv)
              for e in shards]
-    assert max(loads) <= 210, loads
+    assert max(loads) <= 1.1 * sum(loads) / len(loads), loads
     assert all(e["gating"] and e["ros"] == "none" for e in shards)
     repo.test_files.reverse()
     assert affected.ci_matrix(repo, selection)["include"] == matrix
+
+
+def test_ci_full_matrix_reaches_every_registered_module_suite():
+    """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    args = [p for e in matrix for inv in e["invocations"] for p in inv]
+    ignored = {p.removeprefix("--ignore=") for p in args if p.startswith("--ignore=")}
+    assert ignored == set(affected.CI_FULL_EXCLUDED), "every --ignore needs a CI_FULL_EXCLUDED reason"
+    assert all(affected.CI_FULL_EXCLUDED.values())
+    ran = {t for p in args if not p.startswith("-") for t in repo.test_files_under(p)} - ignored
+    registered = {t for p in affected._full_paths(repo) for t in repo.test_files_under(p)}
+    missing = sorted(registered - ran - set(affected.CI_FULL_EXCLUDED))
+    assert not missing, f"registered suites CI's full tier never runs: {missing}"
+    for suite in ("middleware/core/api/test", "middleware/robot_ui/pilot/test", "operations/apps/games/test"):
+        assert any(affected._under(t, suite) for t in ran), suite
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
@@ -386,7 +460,7 @@ def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):
 
 
 def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample, monkeypatch):
-    sel = _select(sample, "contracts/foundation/core_common/schemas.py", "tools/ssh/rosy_ssh_enroll.py")
+    sel = _select(sample, "contracts/foundation/core_common/orphan.py", "tools/ssh/rosy_ssh_enroll.py")
     assert sel.mode == "full"
     ran = []
 
@@ -408,7 +482,7 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
 
 def test_escalated_paths_are_still_mapped_for_the_local_run(sample):
     """Review fix: a FULL selection runs locally as guards + the escalated module's own suites."""
-    sel = _select(sample, "contracts/foundation/core_common/schemas.py")
+    sel = _select(sample, "contracts/foundation/core_common/orphan.py")
     assert sel.mode == "full"
     local = {p for inv in sel.local_invocations for p in inv}
     assert "contracts/foundation/test" in local, "core_common's own suite must run locally"
@@ -437,9 +511,24 @@ def test_skip_drops_paths_the_caller_already_ran(sample, monkeypatch):
 
 def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     suites = {'learning/registry/policy/test', 'learning/training/omx/test', 'learning/curation/omx/test',
-              'learning/curation/pinky/test', 'learning/training/pinky/test'}
+              'learning/curation/pinky/test', 'learning/training/pinky/test',
+              'learning/training/world_model/test', 'learning/evaluation/world_model/test',
+              'operations/prediction/world_model/test'}
     entries = [e for e in affected.CI_FULL_MATRIX if e['name'] == 'learning-policy']
     assert len(entries) == 1
     assert {p for inv in entries[0]['invocations'] for p in inv} == suites
     assert entries[0]['ros'] == 'none'
     assert suites <= set(affected.FULL_SUITES)
+
+
+def test_modules_runner_gates_by_2026_11_15():
+    """D-762 stage 1: `modules` reports only until its first green run; it may not stay non-gating."""
+    import datetime
+
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    reporting = sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing"))
+    if datetime.date.today() > datetime.date(2026, 11, 15):
+        assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
+    else:
+        assert reporting in ([], ["modules"]), reporting

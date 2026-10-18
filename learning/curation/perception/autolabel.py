@@ -1,7 +1,7 @@
 """D-379: automatic labels for a recorded session (LiDAR walls, driven floor).
 
     autolabel.py <session_dir> [--out data/perception/labels/<session>]
-                 [--overlays X:/DevTemp/d379-labels/<session>] [--keep-v2 DIR]
+                 [--overlays $ROSY_SCRATCH/d379-labels/<session>] [--keep-v2 DIR]
     autolabel.py --video teleop_x.mp4 [--sidecar teleop_x.jsonl] ...
 
 <session_dir> is a D-356 recording (session.json + bag/*.mcap). A teleop video

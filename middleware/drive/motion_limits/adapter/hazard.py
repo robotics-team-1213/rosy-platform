@@ -1,9 +1,9 @@
-"""Subject: hazard. ESTOP / CLIFF / TILT / PICK."""
-import math
+"""Subject: hazard. ESTOP / CLIFF / TILT / PICK.
 
-from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Imu
-from std_msgs.msg import Bool, String, UInt16MultiArray
+ROS-free mixin (D-171): SafetyNode builds each message (``zero_twist``,
+``publish_text``, ``publish_bool``); handlers read message fields only.
+"""
+import math
 
 from ..sensing.lidar import wrap_pi
 
@@ -19,13 +19,13 @@ def roll_pitch(q):
 
 class Hazard:
 
-    def on_estop(self, msg: Bool):
+    def on_estop(self, msg):
         if msg.data:
             self.engage_estop('topic')
         else:
             self.release_estop()
 
-    def on_estop_cmd(self, msg: String):
+    def on_estop_cmd(self, msg):
         cmd = msg.data.strip().lower()
         if cmd in ('stop', 'estop', 'e-stop', 'emergency', 'kill', 'halt', 'on', '1', 'true'):
             self.engage_estop(cmd)
@@ -38,38 +38,38 @@ class Hazard:
         if not self.estop:
             self.get_logger().error(f'EMERGENCY STOP {why}'.strip())
         self.estop = True
-        self.last_cmd = Twist()
-        self.wander_cmd.publish(String(data='stop'))
-        self.calib_step.publish(String(data='abort'))
-        self.raw_zero_pub.publish(Twist())
+        self.last_cmd = self.zero_twist()
+        self.publish_text(self.wander_cmd, 'stop')
+        self.publish_text(self.calib_step, 'abort')
+        self.raw_zero_pub.publish(self.zero_twist())
         self._publish_zero()
-        self.estop_pub.publish(Bool(data=True))
+        self.publish_bool(self.estop_pub, True)
 
     def release_estop(self):
         if self.estop:
             self.get_logger().warn('E-STOP released — motors stay 0 until a new command')
         self.estop = False
-        self.last_cmd = Twist()
+        self.last_cmd = self.zero_twist()
         self.last_cmd_time = None
         self._publish_zero()
-        self.estop_pub.publish(Bool(data=False))
+        self.publish_bool(self.estop_pub, False)
 
-    def on_ir(self, msg: UInt16MultiArray):
+    def on_ir(self, msg):
         self.ir_raw = tuple(int(v) for v in msg.data[:3])
         self.observe('ir', valid=len(self.ir_raw) == 3 and all(0 < v < 4000 for v in self.ir_raw))
         self.last_ir_time = self.now()
 
-    def on_cam_cliff(self, msg: Bool):
+    def on_cam_cliff(self, msg):
         self.observe('camera_cliff')
         self.cam_cliff = bool(msg.data)
         self.last_cam_time = self.now()
 
-    def on_cam_block(self, msg: Bool):
+    def on_cam_block(self, msg):
         self.observe('camera_block')
         self.cam_block = bool(msg.data)
         self.last_cam_time = self.now()
 
-    def on_imu(self, msg: Imu):
+    def on_imu(self, msg):
         unit = self.get_parameter('imu_angular_velocity_unit').value
         vals = (msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z,
                 msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z,

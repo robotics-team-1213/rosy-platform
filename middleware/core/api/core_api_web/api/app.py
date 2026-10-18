@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.234."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.271."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.responses import HTMLResponse
 from core_api_web.api.ui_registry import load_registry
+from core_api_web.api.command_activity import CommandActivityMiddleware
 
 from core_api_web.api.deps import CoreServicesLike, device_mode, refused_token_count
 from core_common.config import DEV_MODE_MARKER, dev_auth_enabled
@@ -21,6 +22,7 @@ from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.auth import PairingState
 from core_api_web.api.v1.connection import connection_router
 from core_api_web.api.v1.routes import (
+    arm_router,
     auth_router,
     calibration_router,
     control_router,
@@ -116,9 +118,14 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.234)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.271)",
     )
     app.state.core = services
+    arm_policy = getattr(services, 'arm_policy', None)
+    if arm_policy is not None:
+        services.safety.estop_listeners.append(arm_policy.stop)
+        if services.safety.estop:
+            arm_policy.stop()
     from .account_sessions import install_account_sessions
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')
@@ -126,6 +133,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     if app.state.account_client and app.state.account_client.resource != 'robot:' + services.identity.robot_id:
         raise ValueError('Account resource does not match robot identity')
     install_account_sessions(app)
+    from .media_binding import install_media
+    install_media(app, config, services)
     agent = getattr(services, "fleet_agent", None)
     if agent is not None and hasattr(agent, "start_on_loop"):
         # The FleetAgent needs a running loop; uvicorn's is the one CORE runs (thread in
@@ -156,6 +165,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     # gzip 뒤에는 29 KB다 — 첫 로드에서 93 KB가 줄어든다. 별도 런타임도,
     # 빌드 산출물도 늘리지 않으므로 D-23의 최소 표면 원칙을 지킨다.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # D-24 (2026-10-04): an accepted command resets the power inactivity timer.
+    app.add_middleware(CommandActivityMiddleware, power=lambda: getattr(services, "power", None))
     register_exception_handlers(app)
 
     web_root = _dashboard_root()
@@ -201,6 +212,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(system_router)
     app.include_router(robot_router)
     app.include_router(control_router)
+    app.include_router(arm_router)
     app.include_router(calibration_router)
     app.include_router(trip_lease_router)
     app.include_router(fleet_link_router)
@@ -278,6 +290,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "screens/drive.js": "application/javascript",
         "screens/drive-auto.js": "application/javascript",
         "screens/drive-view.js": "application/javascript",
+        "screens/drive-video.js": "application/javascript",
         "screens/inputs.js": "application/javascript",
         "screens/robot-recording.js": "application/javascript",
         "screens/arm.js": "application/javascript",
@@ -294,6 +307,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "icons/icon-512.png": "image/png",
     }
 
+    # D-789: WHEP signaling goes to the configured site media origin, and only there.
+    media_origin = f" {app.state.media_site_url}" if app.state.media_site_url else ""
+
     @app.get("/pilot", include_in_schema=False)
     def pilot():
         return FileResponse(
@@ -302,7 +318,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             headers={
                 "Cache-Control": "no-cache",
                 "Content-Security-Policy": (
-                    "default-src 'self'; connect-src 'self' ws: wss:; "
+                    f"default-src 'self'; connect-src 'self' ws: wss:{media_origin}; "
                     "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
                     "frame-ancestors 'none'; base-uri 'self'"
                 ),

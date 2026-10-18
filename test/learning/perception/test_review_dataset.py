@@ -450,7 +450,7 @@ def test_windows_outside_scratch_root_holds(tmp_path):
     assert not forbidden.exists()
     args['staging_parent'] = forbidden
     result = target.build_dataset(**args)
-    assert result['status'] == 'HOLD' and 'within X:/DevTemp' in result['blockers'][0]
+    assert result['status'] == 'HOLD' and 'within ROSY_SCRATCH' in result['blockers'][0]
     assert not forbidden.exists() and not args['store'].datasets_dir.exists()
 
 

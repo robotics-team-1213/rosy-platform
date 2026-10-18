@@ -2,10 +2,10 @@
 
 Examples (the token file holds one API or paired token; keep it outside the repo):
 
-    python tools/dashboard_drive.py --base-url http://<robot-ip>:8080 --token-file X:/DevTemp/rosy.token status
+    python tools/dashboard_drive.py --base-url http://<robot-ip>:8080 --token-file $ROSY_SCRATCH/rosy.token status
     python tools/dashboard_drive.py ... mode MANUAL
     python tools/dashboard_drive.py ... teleop --direction forward --seconds 1.0
-    python tools/dashboard_drive.py ... screenshot --view inspect --out X:/DevTemp/inspect.png
+    python tools/dashboard_drive.py ... screenshot --view inspect --out $ROSY_SCRATCH/inspect.png
 
 `teleop` moves a real robot. It prints the measured stop latency: the time
 from releasing the button until `/api/v1/robot/state` reports zero velocity.

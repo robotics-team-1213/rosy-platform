@@ -109,7 +109,7 @@ from hashlib import sha256
 
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_reads
 from fleet.localization.pose_request import overhead_decision
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -128,6 +128,7 @@ def _app(tmp_path):
              sha256(VIEWER.encode()).hexdigest(): {"principal_id": "viewer-1", "role": "viewer"}}
     app = create_app(console, console_token=OPERATOR, task_service=task_service,
                      start_task_dispatcher=False, site_users=users)
+    fresh_reads(app)   # the tests change the fake robot between requests
     return app, robot
 
 

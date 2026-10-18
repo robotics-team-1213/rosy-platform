@@ -22,7 +22,7 @@ from core_common.protocol.schemas import FleetCellTransferGrant
 class StepActionKind:
     action_kind: str
     open_profiles: frozenset[str]
-    grant_model: type[BaseModel]
+    grant_model: type[BaseModel] | None  # None: not a device Action (TRIP runs as a Fleet trip)
     body_field: str
     body: Callable[[Mapping[str, Any], int, Mapping[str, Any]], dict[str, Any]]
     phase_ids: tuple[str, ...]
@@ -32,14 +32,14 @@ class StepActionKind:
 
 #: D-763 item 7, strictest first: two_person (a named operator other than the proposer; every arm
 #: step), proposer_only (legacy PICK_PLACE until the slice connecting its dispatch, D-763 rev 2 Q5),
-#: one_person (one named operator; motion-only kinds, none registered yet).
+#: one_person (one named operator; motion-only kinds: TRIP).
 APPROVALS = ("two_person", "proposer_only", "one_person")
 _LEGACY_APPROVALS = {"PICK_PLACE": "proposer_only"}  # no step-ledger dispatch rules, so not in _KINDS
 
 
 def _cell_transfer_body(job: Mapping[str, Any], step_index: int,
                         inputs: Mapping[str, Any]) -> dict[str, Any]:
-    """The persisted pallet.transfer/1.0.0 inputs as the D-403 §2 ``cell_transfer`` body."""
+    """pallet.transfer/1.0.0 inputs as the D-403 §2 ``cell_transfer`` body; a recipe/3 ``sku`` is copied (D-781 §2)."""
     def pose(value: Mapping[str, Any]) -> dict[str, float]:
         return {"x": value["x_m"], "y": value["y_m"], "z": value["z_m"], "yaw": value["yaw_rad"]}
 
@@ -53,7 +53,7 @@ def _cell_transfer_body(job: Mapping[str, Any], step_index: int,
         "place": pose(inputs["destination_pose_base"]),
         "pick_approach_z": inputs["source_approach_z_base_m"],
         "place_approach_z": inputs["destination_approach_z_base_m"],
-        "carry_z": inputs["carry_z_base_m"],
+        "carry_z": inputs["carry_z_base_m"], **({"sku": inputs["sku"]} if "sku" in inputs else {}),
     }
 
 
@@ -71,6 +71,9 @@ _KINDS = {
                            "UNSUPPORTED_VERSION": "LOCAL_ACTION_PROTOCOL_MISMATCH"},
         approval="two_person",
     ),
+    # D-763 7: a 운행 step is a Fleet trip (``job_trip_steps``), never a device Action; SIM until device proof.
+    "TRIP": StepActionKind(action_kind="TRIP", open_profiles=frozenset({"simulation"}), grant_model=None,
+                           body_field="trip", body=None, phase_ids=(), rejection_reasons={}, approval="one_person"),
 }
 
 

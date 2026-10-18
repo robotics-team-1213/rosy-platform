@@ -76,7 +76,8 @@ class OutputGraphTests(unittest.TestCase):
             [Parameter('use_sim_time', value=True)] if control_actuation else []))
         observed = []
         node.create_subscription(Twist, 'cmd_vel', lambda msg: observed.append(msg), 10)
-        bridge = SimpleNamespace(_svc=SimpleNamespace(command=command, power=Mock()),
+        bridge = SimpleNamespace(_svc=SimpleNamespace(command=command,
+                                                      power=Mock(motion_ready=lambda: True)),
                                  _readiness=None,
                                  _bounded_trial_guard=None,
                                  cmd_vel_pub=node.create_publisher(Twist, 'cmd_vel', 10))

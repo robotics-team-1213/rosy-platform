@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.server.context_options import activate_from_args, add_cli_arguments
+from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -68,16 +70,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console = sub.add_parser("console", help="사이트 관제 서버 (웹 UI + 로봇별 미션 하달)")
     console.add_argument("--robots", default=None, type=Path,
                          help="robots.yaml — optional with --robot-credential-key-file")
-    console.add_argument("--signals", default=None, type=Path,
-                         help="signals.yaml — 없으면 신호등 기능은 비어 있는 채로 뜬다")
+    console.add_argument("--signals", default=None, type=Path, help="signals.yaml — 없으면 신호등 기능은 비어 있는 채로 뜬다")
     console.add_argument("--host", default="127.0.0.1")
     console.add_argument("--port", type=int, default=8090)
     console.add_argument("--web-common", default=default_web_common(), type=Path,
                          help="공용 L1 웹 자산 디렉터리 — /common 아래로 서빙한다(D-157)")
-    console.add_argument("--token", default=None,
-                         help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
-    console.add_argument("--token-env", default=None,
-                         help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
+    console.add_argument("--token", default=None, help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
+    console.add_argument("--token-env", default=None, help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
     console.add_argument("--discovery-token-env", default=None,
                          help="host mDNS scanner credential environment variable")
     console.add_argument("--approved-peer-directory-file", default=None, type=Path,
@@ -99,8 +98,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                               "source (0 disables; default 60)")
     console.add_argument("--lan-camera-proxy", action="store_true",
                          help="trust the site Caddy proxy's LAN camera header for preview only")
-    console.add_argument("--users-file", default=None, type=Path,
-                         help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
+    console.add_argument("--users-file", default=None, type=Path, help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--account-config", default=os.environ.get('ROSY_ACCOUNT_CONFIG') or None, type=Path,
                          help="protected Rosy Account authority JSON; requires --tasks-db")
     console.add_argument('--conversation-config-optional',default=None,type=Path,
@@ -115,13 +113,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--stuck-resolver", action="store_true",
                          help="D-577 2: accepted for compatibility; the resolver is on by default")
     console.add_argument("--no-stuck-resolver", action="store_false", dest="stuck_resolver_on",
-                         help="D-438/D-577 2: turn off the Fleet stuck resolver (on by default; it "
-                              "answers only robots with a resolver_token in robots.yaml, others go "
-                              "to the console)")
+                         help="D-438/D-577 2: turn off the Fleet stuck resolver (on by default; it answers only "
+                              "robots with a resolver_token in robots.yaml, others go to the console)")
     console.add_argument("--tls-cert", default=None, type=Path,
                          help="HTTPS server certificate chain; pair with --tls-key")
-    console.add_argument("--tls-key", default=None, type=Path,
-                         help="HTTPS private key; mount as a runtime secret")
+    console.add_argument("--tls-key", default=None, type=Path, help="HTTPS private key; mount as a runtime secret")
     console.add_argument("--sightings-config", default=None, type=Path,
                          help="source/map/calibration sighting config (secret values stay in env)")
     console.add_argument("--site-lane-graph", action="append", default=None, metavar="[MAP_ID=]PATH",
@@ -158,6 +154,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
+    add_cli_arguments(console)
     console.add_argument("--robot-credential-key-file", default=None, type=Path,
                          help="base64 AES key sealing enrolled robot tokens (D-361); needs --tasks-db")
     console.add_argument("--mission-api", action="store_true",
@@ -678,6 +675,7 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
+    activate_from_args(args)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
@@ -686,15 +684,13 @@ def run_console(args: argparse.Namespace) -> None:
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, site_logins=site_logins, discovery=discovery,
-                     account_config=account_config,
-                     discovery_token=discovery_token,
+                     account_config=account_config, discovery_token=discovery_token,
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources,
                      lan_camera_proxy=getattr(args, "lan_camera_proxy", False),
-                     enrollment=enrollment,
-                     robot_credential_key=robot_key_text, site_lanes=site_lanes,
+                     enrollment=enrollment, robot_credential_key=robot_key_text, site_lanes=site_lanes,
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
@@ -713,7 +709,7 @@ def run_console(args: argparse.Namespace) -> None:
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config,
                      channel_config=channel_config,channel_model_config=model_config,
-                     conversation_config=conversation_config)
+                     conversation_config=conversation_config, omx_instances=_omx_instances())
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -721,6 +717,14 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _omx_instances() -> dict[str, str]:
+    """D-785: unique WORKCELL=INSTANCE pairs from ROSY_FLEET_OMX_INSTANCES (compose.omx.yaml); unset = none."""
+    pairs = [tuple(v.split("=")) for v in os.environ.get("ROSY_FLEET_OMX_INSTANCES", "").split(",") if v]
+    if any(len(p) != 2 or not all(x and x == x.strip() for x in p) for p in pairs) or len(dict(pairs)) != len(pairs):
+        raise SystemExit(f"ROSY_FLEET_OMX_INSTANCES needs unique WORKCELL=INSTANCE pairs, got {pairs}")
+    return dict(pairs)
 
 
 def _goal_lease_ttl_s(args) -> float:
@@ -743,40 +747,6 @@ def _goal_lease_ttl_s(args) -> float:
             value == 0 or floor <= value <= 5):
         sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
-
-
-def _ai_first(args):
-    """D-610 3: ``fleet.ai_first`` of ``--site-config`` (robots default empty, keep_gates default trip_wait_only)."""
-    import yaml
-
-    from fleet.stuck.ai_first import AiFirst
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return AiFirst.from_config((site_config.get("fleet") or {}).get("ai_first"))
-    except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
-        sys.exit(f"ai_first config: {exc}")
-
-
-def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
-    """``fleet.stuck_resolver.<key>`` of ``--site-config``, a robot id list. ``enrolled_robots``: enrolled
-    robots (D-361) the resolver answers with Fleet's enrolled CORE credential. ``ai_facts_acting``: robots
-    whose acting AI facts may stop a resolver back-off (D-577 7). Empty (default) = none."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
-        ids = section.get(key) or []
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"stuck resolver config: {exc}")
-    if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
-        sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
-    return frozenset(ids)
 
 
 def _realign_config(args):

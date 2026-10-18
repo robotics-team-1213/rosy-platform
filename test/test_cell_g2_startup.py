@@ -31,6 +31,8 @@ class Fixture:
                           home_joint_tolerance_rad=.02, start_state_tolerance_rad=.02,
                           gripper_joint="gripper", max_joint_state_age_s=.5,
                           action_timeout_s=1., wall_clock_bound_factor=4.)
+        self.gate = NS(submit=self.submit, assert_current=lambda: None,
+                       complete=lambda operation: operation(), cancel=lambda: None)
 
     def monotonic(self):
         return self.t
@@ -63,7 +65,7 @@ class Fixture:
 
     def run(self):
         return prepare_home(self, self.profile, {"joint1": .2, "gripper": 1.},
-                            wall_clock=self.monotonic, sleep=self.sleep)
+                            startup_gate=self.gate, wall_clock=self.monotonic, sleep=self.sleep)
 
 
 def test_startup_waits_for_fresh_settled_readback_then_retires_seat():

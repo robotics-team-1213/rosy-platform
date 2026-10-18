@@ -56,6 +56,38 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def test_robot_overview_opens_same_core_pilot_without_starting_motion():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844)
+        _route_panel_test(page)
+        def serve_asset(body):
+            def deliver(route):
+                route.fulfill(status=200, content_type='application/javascript', body=body)
+            return deliver
+        for asset in ('panels/console/overview.js', 'dom.js'):
+            source = (WEB / asset).read_text(encoding='utf-8')
+            page.route('http://rosy.test/assets/' + asset, serve_asset(source))
+        page.goto('http://rosy.test/panel-test')
+        page.evaluate('''async () => {
+          const {mount} = await import('/assets/panels/console/overview.js');
+          const root = document.createElement('main'); document.body.append(root);
+          window.writes = [];
+          mount(root, {role: 'viewer', store: {state: () => () => {}},
+            api: async (...args) => window.writes.push(args)});
+        }''')
+        pilot = page.get_by_role('link', name='Rosy Pilot · 직접 운전')
+        expect(pilot).to_have_attribute('href', '/pilot')
+        assert page.evaluate('window.writes') == []
+        page.route('http://rosy.test/pilot', lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<h1>Pilot</h1>'))
+        pilot.click()
+        expect(page).to_have_url('http://rosy.test/pilot')
+        assert not errors
+        browser.close()
+
+
 def test_setup_localization_fails_closed_when_capabilities_are_missing():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

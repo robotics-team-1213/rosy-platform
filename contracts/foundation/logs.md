@@ -724,3 +724,76 @@
 - gate 변화: 없음.
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 없음.
+
+## 2026-10-15 · 84f0c8456 · trip lease 상태 job_id와 능력 trip_lease_job (D-763 조각 6, API v1.236)
+
+- 변경: `protocol/trip_lease.py` `TripLeaseStatus.job_id`(선택, 기본 None). `protocol/controls.py` `BaseVelocityControl`·`pinky_controls`에 `trip_lease_job`(없으면 wire에서 빠진다).
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`(상태·능력), `test_protocol_schemas.py` 원격 통과(7334f9c40).
+- gate 변화: 없음.
+- 결정: D-763 조각 6, 개정 2 질문 10.
+- 교훈: 없음.
+
+## 2026-10-15 · 868461505 · 작업 읽기 계약 확장 (D-763 조각 4, API v1.235)
+- 변경: `protocol/work.py` `FleetWorkSummary`에 출처 `trip`·`cell_job`, `visible_state`·`wait`(`FleetWorkWait`)·`approval`. `FleetWorkOverview`에 `cell_jobs_available`·`kinds`, 행 최대 400, `truncated_sources` 최대 4. `schemas.py`가 `FleetWorkWait`를 내보낸다.
+- 증거: 원격 225+66 passed(모델 PC, 6ae1df74e), 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4.
+- 교훈: 없음.
+
+## 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_crosswalk_gate`·`lane_junction_signal`(없으면 wire에서 빠진다). 설정 기본값은 바꾸지 않았다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`(설정 켬·끔). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+
+- 변경: main이 v1.237(D-763 조각 4, `feat/fleet-work-read-sources`)을 썼다. 이 브랜치의 위 항목에 적힌 v1.233·v1.237은 v1.238로 읽는다. 시작 검사 파일은 main의 `server/trip_checks/`, trip 루프는 `server/trips/`에 있다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
+
+- 변경: `protocol/controls.py` `BaseVelocityControl.lane_instruction_stamp`, `protocol/schemas.py` `LineJunctionStatus.distance_basis`·`distance_basis_reason`, `config/rosy_default.yaml` `line_follow.instruction_stamp_enabled: false`와 설명.
+- 증거: CORE·Fleet 원격 시험 통과(9639a41b8), `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부. 켜는 것은 Safety-Review·SIM 바퀴 뒤 사용자가 정한다.
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
+
+- 변경: `protocol/schemas.py` `MissionProgressEvent.detail_is_bounded_json`이 같은 파일의 `_bounded_finite_json_size`를 쓴다(직렬화 중복 7줄 제거, 16 KiB 한도·필드 그대로). 옮겨 간 모델(`BatteryStatus` 뒤, Swarm 절)이 남긴 빈 줄 12줄 제거. `test/architecture/size_ratchet.txt` 행을 가드 스크립트로 1345로 내림.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
+- 교훈: 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.259)
+
+- 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.

@@ -201,7 +201,10 @@ class LearnedPaintWorker:
         submitted_at, frame, tag, stamp, generation = pending
         model = self._slot.poll() if self._slot is not None else None
         if model is None:
-            self.last_error = f"no model ({getattr(self._slot, 'last_error', None)})"
+            error = f"no model ({getattr(self._slot, 'last_error', None)})"
+            if error != self.last_error:   # once per reason, not per frame (a refused model, D-588)
+                self._warn(f"learned paint: {error}")
+            self.last_error = error
             return
         try:
             if self.target == "drivable":

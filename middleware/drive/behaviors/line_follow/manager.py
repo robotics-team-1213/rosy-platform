@@ -499,7 +499,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                     # no junction gate); D-517 4 and D-573 only ever lower it
                     return self._crosswalk_gate(current, self._authority_gate(current, decision))
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
-                        and self._observation.quality_reason in ('low_light', 'overexposed')):
+                        and self._observation.quality_reason in ('low_light', 'overexposed', 'odom_side_conflict')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     self._end_bridge()  # D-476: invalid vision ends a bridge for good
                     # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
@@ -555,7 +555,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             # 차선 자동은 수동 한도 L1 이상에서만(D-344 §13, 사용자 결정).
             return self._stop_decision("HOLD", "limit_level_too_low")
         if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
-                and self._observation.quality_reason in ('low_light', 'overexposed')):
+                and self._observation.quality_reason in ('low_light', 'overexposed', 'odom_side_conflict')):
             # Invalid vision cannot authorize obstacle back-off or remembered steering.
             age = None if self._received_at is None else current - self._received_at
             if self._lost_latched:

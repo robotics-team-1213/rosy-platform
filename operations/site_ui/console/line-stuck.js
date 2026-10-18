@@ -5,6 +5,7 @@
 // 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
 
 import { primaryButton, quietButton, setReason, stuckOverdue } from "./queues.js";
+import { loadEvidence, PreviewMap } from "/console/assets/stuck-evidence.js";
 
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
@@ -428,7 +429,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
   const confirming = new Map();
   const alerted = new Map();
   // D-577 8: robot_id -> { stuck_id, state: loading|ok|none, preview, at } — one picture per stuck.
-  const previews = new Map();
+  const previews = new PreviewMap();
   const results = new Map();
   const busy = new Set();
   const signatures = new Map();
@@ -492,9 +493,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     previews.set(robotId, pending);
     let entry;
     try {
-      const preview = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/evidence`
-        + `?stuck_id=${encodeURIComponent(stuckId)}&live=true`);
-      entry = { stuck_id: stuckId, state: "ok", preview, at: pending.at };
+      entry = { stuck_id: stuckId, state: "ok", preview: await loadEvidence(call, robotId, stuckId), at: pending.at };
     } catch (err) {
       if (err.name === "AbortError") return;
       entry = { stuck_id: stuckId, state: "none", at: Date.now() };
@@ -511,7 +510,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     const caption = document.createElement("figcaption");
     if (entry?.state === "ok" && previewFresh(entry.preview, (Date.now() - entry.at) / 1000)) {
       const img = document.createElement("img");
-      img.src = `data:${entry.preview.media_type};base64,${entry.preview.jpeg_base64}`;
+      img.src = entry.preview.url;
       img.alt = `${robotId} 현재 앞 카메라 영상`;
       figure.append(img);
     }

@@ -28,6 +28,7 @@ from std_msgs.msg import Bool, Float32, String
 from core_common.protocol.recording import ACTIVE_TOPIC
 from . import executor_choice
 from .camera_lock import CameraLockMixin
+from .camera_power import CameraPowerMixin
 from .camera_region_range import RegionRangeMixin
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
@@ -41,6 +42,10 @@ from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfi
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import (
     freeze_v4l2_controls, unfreeze_v4l2_controls)
+try:  # D-789 T3: optional 640x480 media branch from this single camera owner
+    from rosy_media_edge.camera_tap import media_camera
+except ImportError:
+    media_camera = None
 
 # D-411: the Pilot recorder's latched active flag (pilot_recorder_node).
 _RECORDER_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -87,7 +92,7 @@ class _OpenCVCamera:
         unfreeze_v4l2_controls(self._capture, self._cv2)
 
 
-class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
+class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node):
     def __init__(self):
         super().__init__('camera_detect_node')
         self.declare_parameter('width', 320)
@@ -255,6 +260,7 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
         self._policy = CameraPolicy(
             hits=int(self.get_parameter('hits').value),
             warmup_frames=int(self.get_parameter('warmup_frames').value))
+        self._start_power_gate(_RECORDER_QOS)
         self._start_cam()
         period = 1.0 / max(1.0, float(self.get_parameter('fps').value))
         self.create_timer(period, self.tick)
@@ -338,7 +344,7 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
                 self.get_logger().error('picamera2 missing; camera detection off')
             return
         try:
-            cam = Picamera2()
+            cam = media_camera(Picamera2(), self) if media_camera else Picamera2()
             w = int(self.get_parameter('width').value)
             h = int(self.get_parameter('height').value)
             cfg = cam.create_preview_configuration(
@@ -427,6 +433,8 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
         self.get_logger().info(f'camera controls {summary}')
 
     def tick(self):
+        if self._power_held(self._power_gate.plan()):
+            return
         if self._cam is None:
             self.cliff_pub.publish(Bool(data=self._policy.cliff))
             self.block_pub.publish(Bool(data=True))
@@ -464,6 +472,8 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
         cliff, blocked = self._policy.update(res)
         self.cliff_pub.publish(Bool(data=cliff))
         self.block_pub.publish(Bool(data=blocked))
+        if self._camera_ready_reported is False and self._policy.ready:
+            self._report_camera_ready(True)
         if not self._policy.ready:
             return
 
@@ -475,18 +485,11 @@ class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
             ground_source=self._ground_mode.upper() if self._ground is not None else None))))
         cols = res['cols']
         mcols = res.get('mid_cols', cols)
-        self.dbg_pub.publish(
-            String(
-                data=(
-                    f'cliff={int(cliff)} block={int(blocked)} '
-                    f'side={res["side"]:.0f} mid_obst={res["mid_obst"]:.2f} '
-                    f'L o={mcols[0]["obst"]:.2f} C o={mcols[1]["obst"]:.2f} '
-                    f'R o={mcols[2]["obst"]:.2f} '
-                    f'near L={cols[0]["obst"]:.2f} C={cols[1]["obst"]:.2f} '
-                    f'R={cols[2]["obst"]:.2f}'
-                )
-            )
-        )
+        self.dbg_pub.publish(String(data=(
+            f'cliff={int(cliff)} block={int(blocked)} '
+            f'side={res["side"]:.0f} mid_obst={res["mid_obst"]:.2f} '
+            f'L o={mcols[0]["obst"]:.2f} C o={mcols[1]["obst"]:.2f} R o={mcols[2]["obst"]:.2f} '
+            f'near L={cols[0]["obst"]:.2f} C={cols[1]["obst"]:.2f} R={cols[2]["obst"]:.2f}')))
 
     def _classify_frame(self, bgr, *, floor_hsv):
         return classify_frame(

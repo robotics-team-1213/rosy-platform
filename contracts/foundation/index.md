@@ -18,6 +18,7 @@
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 
 ## 계획·결과 문서
 
@@ -37,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · 775b1f3f6 · 능력 lane_turn_map_entry와 설정 turn_map_entry_enabled (D-759 개정 1, API v1.231)
-- 2026-10-14 · uncommitted · core_common(protocol): LineFollowStatus.regulation_wait (D-760 개정 3 9항)
-- 2026-10-14 · uncommitted · feat(protocol): D-758 0단계 `OdomPose.epoch`·`mono_s` (v1.228 additive)
-- 2026-10-14 · 8a73125e6 · 통행권 응답 사유 seq_required·seq_legs_full·shrink_none_held (D-760 2단계 안전 검토, API v1.225)
-- 2026-10-14 · 5264ef279 · 통행권 상한 5 s는 CORE 통행권에만 (D-760 2단계)
+- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+- 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.259)
+- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+- 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
+- 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)

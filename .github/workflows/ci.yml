@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # D-762 stage 1: a merge queue group runs the full tier against its base (no effect until the
+  # queue is turned on, stage 3). No `concurrency:` group: cancelling a queue or main push run hides
+  # its failure, and a workflow-level group would also bind ubuntu-26.04-rehearsal.yml's call.
+  merge_group:
   # D-436: PR 은 affected 티어, main push·야간·수동 실행은 풀 티어를 GitHub 러너에서
   # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
   schedule:
@@ -19,7 +23,7 @@ on:
 jobs:
   # D-436: 시험 범위와 병렬 matrix 를 정한다. pull_request 는 변경 범위(affected) 티어 —
   # 선택기가 공용 기반·CI/시험 설정·미분류 파일 때문에 FULL 로 올리면 풀 matrix 다.
-  # main push·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
+  # main push·merge_group·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
   # D-430 Safety-Review 도 여기서 한 번만 돈다(전체 이력이 필요한 유일한 선행 검사).
   scope:
     # D-135 전환 (2026-09-20): ubuntu-26.04 리허설 연속 녹색 후 게이팅 러너를
@@ -27,6 +31,9 @@ jobs:
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container: ros:jazzy-ros-base
+    # A lost runner otherwise holds the run for the 6 h default (run 38588670328 sat 45 min in an
+    # install step). Measured scope: ~35 s.
+    timeout-minutes: 10
     outputs:
       mode: ${{ steps.scope.outputs.mode }}
       matrix: ${{ steps.scope.outputs.matrix }}
@@ -49,14 +56,24 @@ jobs:
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
       # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
       # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
-      # commits, or a push's before..after (the tip alone for a new branch or a
-      # force push). Scheduled/called runs skip it, so one old commit cannot keep CI
-      # red. Relies on the full-history checkout above (fetch-depth: 0).
+      # commits, a merge group's base_sha..head (D-762), or a push's before..after (the
+      # tip alone for a new branch or a force push). Scheduled/called runs skip it, so one
+      # old commit cannot keep CI red. Relies on the full-history checkout above (fetch-depth: 0).
       - name: Safety-Review trailer (D-430)
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
-          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
         run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
+
+      # D-766 2: each commit of the same range passes the size rule on its own (bisect stays green).
+      # A new branch or force push (zero or unreachable base) checks the tip alone.
+      - name: Size rule per commit (D-766)
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          SIZE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          if [ -z "$SIZE_BASE" ] || ! git cat-file -e "$SIZE_BASE^{commit}" 2>/dev/null; then SIZE_BASE=HEAD^; fi
+          python3 tools/harness/size_range.py "$SIZE_BASE" HEAD
 
       - name: Test scope (D-436)
         id: scope
@@ -85,6 +102,8 @@ jobs:
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container: ros:jazzy-ros-base
+    # Longest entry on 2026-10-16: fleet-2of4, 751 s. A timeout is a failure, so ci-result fails.
+    timeout-minutes: 25
     continue-on-error: ${{ !matrix.gating }}
     strategy:
       fail-fast: false
@@ -218,13 +237,13 @@ jobs:
       # 항목의 pytest 호출을 차례로 돈다. 기본 이름이 겹치는 스위트는 이미 다른 호출로
       # 나뉘어 있다(gateway·sensing 의 test_battery.py). ros: none 은 ROS 환경 없이(호스트와
       # 같은 조건), base 는 /opt/ros 만, overlay 는 colcon install 까지 얹는다 — 루트 test/
-      # 배포·릴리스 계약과 gz_sim 은 overlay 다. 5 = 수집 0건은 실패가 아니다.
+      # 배포·릴리스 계약과 gz_sim 은 overlay 다. 5 = 수집 0건은 경로가 하나일 때만 실패가 아니다.
       - name: Test (matrix suite, D-436)
         if: matrix.kind == 'pytest'
         shell: bash
         env:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
-          HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           ROSY_ROS: ${{ matrix.ros }}
           ROSY_INVOCATIONS: ${{ toJSON(matrix.invocations) }}
         run: |
@@ -247,16 +266,43 @@ jobs:
               browser = [p for p in paths if p.startswith("operations/fleet/test") or p == account_browser]
               rest = [p for p in paths if p not in browser]
               runs += [(rest, {}), (browser, {"ROSY_RUN_BROWSER_TESTS": "1"})]
+          # D-762 stage 1: when every failure is listed in test/flaky_quarantine.txt, those ids
+          # rerun once here; all passing makes the invocation green (FLAKY). Unlisted: no rerun.
+          sys.path.append("test")
+          import known_failures
+          quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
           status = 0
           for paths, extra in runs:
               if not paths:
                   continue
               print("::group::pytest " + " ".join(paths), flush=True)
-              code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v",
-                                     "--continue-on-collection-errors"],
-                                    env={**os.environ, **extra}).returncode
+              proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, "-v",
+                                       "--continue-on-collection-errors", *known_failures.NO_ROS_LAUNCH_PLUGINS],
+                                      env={**os.environ, **extra}, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, text=True, errors="replace")
+              out = []
+              for line in proc.stdout:
+                  sys.stdout.write(line)
+                  out.append(line)
+              code = proc.wait()
+              failed = known_failures.failed_ids("".join(out))
+              ids = known_failures.rerun_ids("".join(out), quarantine)
+              if known_failures.should_rerun(code, failed, ids):
+                  print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
+                  rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider",
+                                          *known_failures.NO_ROS_LAUNCH_PLUGINS],
+                                         env={**os.environ, **extra}, stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT, text=True, errors="replace")
+                  print(rerun.stdout, flush=True)
+                  if known_failures.rerun_passed(code, failed, ids, rerun.returncode, rerun.stdout):
+                      print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
+                      code = 0
               print("::endgroup::", flush=True)
-              if code not in (0, 5):
+              # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
+              if known_failures.collected_nothing("".join(out), paths):
+                  print(f"::error::pytest {' '.join(paths)} collected 0 items", flush=True)
+                  status = 1
+              elif code not in (0, 5):
                   print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
                   status = 1
           sys.exit(status)
@@ -333,6 +379,7 @@ jobs:
     needs: [scope, test]
     if: always()
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     steps:
       - name: All gating jobs passed
         env:

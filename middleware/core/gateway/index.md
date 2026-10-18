@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 1a9960df2 · line_follow.instruction_stamp_enabled 설정 읽기와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+- 2026-10-15 · 84f0c8456 · 작업의 trip lease는 단계 사이 IDLE에서 끝나지 않는다 (D-763 조각 6, API v1.236)
 - 2026-10-14 · uncommitted · test: 수동 거절 시험을 벽시계 워치독에서 떼어 낸다
 - 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
 - 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로
-- 2026-10-14 · uncommitted · fix(bridge): D-758 0단계 odom 스냅숏 stamp를 line-follow odom 기록에 넘긴다
-- 2026-10-14 · 8a73125e6 · 임대가 첫 통행권 전에 끝나도 로봇은 서 있다 (D-760 2단계 안전 검토 M1, API v1.225)

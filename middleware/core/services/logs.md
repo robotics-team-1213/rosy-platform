@@ -974,6 +974,12 @@
 - gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
 - 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
 
+## 2026-10-13 · uncommitted · D-24 웨이크 입력과 D-440 기기별 전원 정책 (feat/device-power-policy에서 옮김)
+
+- 변경: `PresenceDetector`가 정말로 연속된 유효 근접 표본과 `min_presence_s` 0.4 s·`max_gap_s` 1.0 s를 요구한다. `PowerManager.on_command(source)`가 받아들여진 명령으로 깨운다(정보 창 없음). `power/devices.py`(수준·기기 선언·벤치 스위치·엄격한 파서)와 기기별 수준·준비·`motion_ready()`를 더했다. 꺼졌다 켜진 기기는 `wake_ready_s`와 깨운 뒤의 확인 보고가 둘 다 있어야 준비된다. 정책이 움직이는 기기는 CORE 기동 뒤에도 확인을 기다린다.
+- 증거: `test/test_power_wake_inputs.py`, `test/test_power_device_policy.py`. 원격 pytest 결과는 이 브랜치의 착지 보고에 둔다.
+- gate 변화: 없음. 벤치 스위치 `power.device_policy.enabled`는 false다. 실기에서 기기를 재우거나 깨운 증거는 없다.
+- 결정: 브랜치의 배터리 "나빠지는 방향만" 웨이크는 옮기지 않았다(main이 이미 단계 변화에만 깨운다).
 ## 2026-10-13 · 15f4e0932 · D-744 차로 호의 원을 지도에 고정 (API v1.221)
 
 - 변경: `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`를 받은 때 `authority.py::_place_map_anchor`가 odom 기록(`_odom_log`의 CORE 벽시계)에서 그 표본을 찾아 원 중심을 odom으로 옮기고, `lane_arc.py::_open_arc`가 그 원과 그 접선으로 호를 연다. 풀지 못하면(없음·비유한·2 s 초과·기록에 없음·odom epoch/frame 변경·전진 1.5 m 초과·원에서 0.075 m 초과) 오늘의 자세 기준 원이다. 능력 `lane_arc_map_anchor`, 호 기록 `map_anchor_used`. Fleet은 `routing/execute.py::exit_segment(map_pose=)`와 `trip_runner._step_lane`이 능력과 `odom_stamp`가 있을 때만 싣는다.
@@ -1144,3 +1150,54 @@
 - gate 변화: 없음. 크기 단위 `recovery/junction` 1200 → 1208줄(한도 1287).
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
+
+## 2026-10-15 · 9a9ea4554 · 규제 능력 속성 (D-763 10항 (c), API v1.233)
+
+- 변경: `line_follow/crosswalk/gate.py`에 `supports_lane_crosswalk_gate`(= `crosswalk_gate_enabled`), `line_follow/signal/gate.py`에 `supports_lane_junction_signal`(= `junction_signal_enabled`). 동작은 바뀌지 않는다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`.
+- gate 변화: 없음. 크기 단위 `crosswalk`·`signal` 각 +4줄.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)
+
+- 변경: `line_follow/signal/gate.py` `_signal_gate` — `_authority_on()`(통행권 강제·trip lease)이면 3초 무응답 우측 fallback을 고르지 않고 대기, journal 한 줄. `line_follow/crosswalk/gate.py` `_regulated_wait_share`가 시계 dict를 받아 상한까지 적용: 앞뒤 두 틱이 통행권 `HOLDING`이면 전부, 그 밖(`NONE`·`EXPIRED`·횡단보도)은 15 s. `recovery/junction/gate.py` `_maneuver`와 `arc/lane_arc.py`가 자기 dict를 넘긴다.
+- 증거: `test_junction_signal.py`(trip 무응답 6 s 대기, trip·모드 변경 뒤 fallback 복귀), `test_regulated_wait_clock.py`(FREE↔HOLDING 매 틱 반복은 0, HOLDING 무상한, NONE·EXPIRED 15 s), `test_junction_bend.py`(30 s HOLDING 뒤 굽이 이어 감, NONE은 상한 뒤 abort), `test_lane_arc.py`. 임대 상실 시 차선 추종 정지는 gateway `test_trip_lease.py::test_expiry_halts_a_moving_robot_to_idle`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. `recovery/junction` 단위 1줄 감소.
+- 결정: D-620 노트 2026-10-15, D-760 개정 4.
+- 교훈: 상한 없는 대기 크레딧은 살아 있는 상대가 기다리라고 할 때만 준다. 링크 끊김은 상한으로 닫는다.
+## 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+
+- 변경: `line_follow/recovery/junction/approach.py` `_stamp_odometer`·`supports_lane_instruction_stamp`, `_expect_window`의 기준 인자. `gate.py` `set_junction(pose_stamp=)`: 설정 `instruction_stamp_enabled`(기본 꺼짐)가 켜져 있으면 `_odom_entry`(D-758 0)로 그 stamp에 발행된 표본을 찾고(정확한 표본만), 같은 표본의 교차로 궤적 주행 거리계(`trail.odometer_at`)를 창의 기준으로, 그 뒤 달린 거리(`trail.odometer` − 그 값)를 굽이의 처음 `travel`로 둔다. 통행권 기록의 `path_m`은 쓰지 않는다. 못 쓰면 받은 때 기준, 거절 없음: 상태 `distance_basis`·`distance_basis_reason`(none_sent·disabled·ambiguous·stale·future·no_sample·epoch). `model.py` 설정 한 줄.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 895d7f30b → 초록): stamp 뒤 0.05 m 움직인 굽이는 Fleet 자세에서 `bend_in − tol`에 시작, 창 기준은 stamp 표본의 odometer, 두 기록이 같은 odom 메시지(stamp_ns), 벽시계 ±5 s, 떨어짐 사유 넷, 설정 꺼짐 = 명령이 같음, 거리 없는 지시는 기준 없음, 능력, 잘못된 stamp. 원격(모델 PC, 9639a41b8) `middleware/core/services/test` 통과, `known_failures` 0 new, 로그 X: `instruction-stamp/services/run-1.txt`.
+- gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
+- 결정: D-767 A부 1–3항.
+- 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.
+## 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
+
+- 변경: `recovery/junction/approach.py` `_stamp_odometer`는 `_odom_at_stamp`의 2 s 나이 상한(D-744 지도 자세용)을 쓰지 않고, 정확한 표본을 교차로 궤적이 가진 동안 쓴다. `gate.py`: 거리(창 또는 굽이) 있는 지시의 `pose_stamp`를 못 쓰면 상태를 바꾸기 전에 `JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', reason=…)`(disabled·ambiguous·future·no_sample·epoch·stale). 받은 때 기준으로 조용히 떨어지지 않는다. `pose_stamp` 없는 지시와 거리 없는 지시는 그대로.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 eb3a3e8b2 → 초록): 2.5 s 묵은 stamp도 기준, 못 쓰는 사유 다섯 × 굽이·창 거절과 상태 그대로, 설정 꺼짐 `disabled`, stamp와 받음 사이 후진이 창의 후퇴로 잡힘(이 시험은 처음부터 초록: 구현이 이미 맞았다). 원격(모델 PC) 통과, `known_failures` 0 new.
+- gate 변화: 없음. 호스트 근거만.
+- 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
+- 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
+## 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
+
+- 변경: `recovery/junction/gate.py` `set_junction`의 stamp 검사를 재전송·굽이 갱신 갈래 뒤로 옮겼다. 둘은 stamp로 재지 않으므로 쓸 수 없는 stamp에도 받는다(되풀이된 거절로 이미 잰 굽이가 만료되던 일).
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 4865e2b0e → 초록): 갱신은 travel을 지키고 받음, `bending` 중 재전송 그대로. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2, 재검토 MEDIUM.
+- 교훈: 없음.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.

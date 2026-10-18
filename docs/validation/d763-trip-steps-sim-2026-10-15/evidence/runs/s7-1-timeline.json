@@ -1,0 +1,297 @@
+{
+  "timeline": [
+    {
+      "t": 34.3,
+      "job": {
+        "source": "cell_job",
+        "source_id": "<hash:89f2cf7b>",
+        "action_kind": "TRIP",
+        "status": "READY",
+        "device_id": "rosy_02",
+        "workcell_id": "rosy_02",
+        "reason": null,
+        "updated_at": "2026-10-15T07:41:08.953303+00:00",
+        "visible_state": "in_progress",
+        "wait": null,
+        "approval": null
+      },
+      "trips": {},
+      "core_mode": "IDLE",
+      "core_lease": {
+        "lease_id": "<hash:e6e748d0>",
+        "trip_id": "<hash:89f2cf7b>",
+        "holder": "rosy-site",
+        "operator_name": "d763-sim-operator",
+        "since": "2026-10-15T07:41:08+00:00",
+        "expires_in_s": 7.9,
+        "job_id": "<hash:89f2cf7b>"
+      },
+      "core_line": {
+        "state": "OFF",
+        "reason": "mode_off",
+        "mode": "OFF",
+        "junction": {
+          "pending_action": null,
+          "place_id": null,
+          "state": "idle",
+          "seq": 0,
+          "turn_deg": null,
+          "reason": null,
+          "pivot_basis": null,
+          "signal_request_id": null,
+          "signal_state": null,
+          "map_entry_used": false,
+          "map_entry_reason": null
+        }
+      }
+    },
+    {
+      "t": 35.4,
+      "job": {
+        "source": "cell_job",
+        "source_id": "<hash:89f2cf7b>",
+        "action_kind": "TRIP",
+        "status": "RUNNING",
+        "device_id": "rosy_02",
+        "workcell_id": "rosy_02",
+        "reason": null,
+        "updated_at": "2026-10-15T07:41:08.995319+00:00",
+        "visible_state": "in_progress",
+        "wait": null,
+        "approval": null
+      },
+      "trips": {
+        "<hash:72689379>": [
+          "running",
+          null
+        ]
+      },
+      "core_mode": "NAVIGATION",
+      "core_lease": {
+        "lease_id": "<hash:e6e748d0>",
+        "trip_id": "<hash:89f2cf7b>",
+        "holder": "rosy-site",
+        "operator_name": "d763-sim-operator",
+        "since": "2026-10-15T07:41:08+00:00",
+        "expires_in_s": 7.7,
+        "job_id": "<hash:89f2cf7b>"
+      },
+      "core_line": {
+        "state": "TRACKING",
+        "reason": "tracking",
+        "mode": "CAMERA_LINE",
+        "junction": {
+          "pending_action": "bend",
+          "place_id": "B_W4",
+          "state": "armed",
+          "seq": 1,
+          "turn_deg": 63.6,
+          "reason": null,
+          "pivot_basis": null,
+          "signal_request_id": null,
+          "signal_state": null,
+          "map_entry_used": false,
+          "map_entry_reason": null
+        }
+      }
+    },
+    {
+      "t": 89.2,
+      "job": {
+        "source": "cell_job",
+        "source_id": "<hash:89f2cf7b>",
+        "action_kind": "TRIP",
+        "status": "RUNNING",
+        "device_id": "rosy_02",
+        "workcell_id": "rosy_02",
+        "reason": null,
+        "updated_at": "2026-10-15T07:41:08.995319+00:00",
+        "visible_state": "in_progress",
+        "wait": null,
+        "approval": null
+      },
+      "trips": {
+        "<hash:72689379>": [
+          "arrived",
+          null
+        ]
+      },
+      "core_mode": "NAVIGATION",
+      "core_lease": {
+        "lease_id": "<hash:e6e748d0>",
+        "trip_id": "<hash:89f2cf7b>",
+        "holder": "rosy-site",
+        "operator_name": "d763-sim-operator",
+        "since": "2026-10-15T07:41:08+00:00",
+        "expires_in_s": 8.0,
+        "job_id": "<hash:89f2cf7b>"
+      },
+      "core_line": {
+        "state": "HOLD",
+        "reason": "junction_stop",
+        "mode": "CAMERA_LINE",
+        "junction": {
+          "pending_action": "stop",
+          "place_id": "SW",
+          "state": "executing",
+          "seq": 5,
+          "turn_deg": null,
+          "reason": null,
+          "pivot_basis": null,
+          "signal_request_id": "<hash:459707d2>",
+          "signal_state": "waiting",
+          "map_entry_used": false,
+          "map_entry_reason": null
+        }
+      }
+    },
+    {
+      "t": 90.2,
+      "job": {
+        "source": "cell_job",
+        "source_id": "<hash:89f2cf7b>",
+        "action_kind": "TRIP",
+        "status": "RUNNING",
+        "device_id": "rosy_02",
+        "workcell_id": "rosy_02",
+        "reason": null,
+        "updated_at": "2026-10-15T07:42:04.418446+00:00",
+        "visible_state": "in_progress",
+        "wait": null,
+        "approval": null
+      },
+      "trips": {
+        "<hash:72689379>": [
+          "arrived",
+          null
+        ],
+        "<hash:5331fe40>": [
+          "running",
+          null
+        ]
+      },
+      "core_mode": "NAVIGATION",
+      "core_lease": {
+        "lease_id": "<hash:e6e748d0>",
+        "trip_id": "<hash:89f2cf7b>",
+        "holder": "rosy-site",
+        "operator_name": "d763-sim-operator",
+        "since": "2026-10-15T07:41:08+00:00",
+        "expires_in_s": 7.9,
+        "job_id": "<hash:89f2cf7b>"
+      },
+      "core_line": {
+        "state": "HOLD",
+        "reason": "junction_stop",
+        "mode": "CAMERA_LINE",
+        "junction": {
+          "pending_action": "right",
+          "place_id": "SW",
+          "state": "armed",
+          "seq": 6,
+          "turn_deg": -104.7,
+          "reason": null,
+          "pivot_basis": null,
+          "signal_request_id": "<hash:459707d2>",
+          "signal_state": "waiting",
+          "map_entry_used": false,
+          "map_entry_reason": null
+        }
+      }
+    },
+    {
+      "t": 176.7,
+      "job": {
+        "source": "cell_job",
+        "source_id": "<hash:89f2cf7b>",
+        "action_kind": "TRIP",
+        "status": "GOAL_CONFIRMED",
+        "device_id": "rosy_02",
+        "workcell_id": "rosy_02",
+        "reason": null,
+        "updated_at": "2026-10-15T07:43:30.941181+00:00",
+        "visible_state": "ended",
+        "wait": null,
+        "approval": null
+      },
+      "trips": {
+        "<hash:72689379>": [
+          "arrived",
+          null
+        ],
+        "<hash:5331fe40>": [
+          "arrived",
+          null
+        ]
+      },
+      "core_mode": "NAVIGATION",
+      "core_lease": null,
+      "core_line": {
+        "state": "HOLD",
+        "reason": "junction_stop",
+        "mode": "CAMERA_LINE",
+        "junction": {
+          "pending_action": "stop",
+          "place_id": "SW",
+          "state": "executing",
+          "seq": 14,
+          "turn_deg": null,
+          "reason": null,
+          "pivot_basis": null,
+          "signal_request_id": "<hash:6a710141>",
+          "signal_state": "waiting",
+          "map_entry_used": false,
+          "map_entry_reason": null
+        }
+      }
+    }
+  ],
+  "trips": {
+    "<hash:72689379>": {
+      "state": "arrived",
+      "reason": null,
+      "segment_index": 0,
+      "pose": {
+        "age_s": 0.04,
+        "anchor_age_s": 0.03527235984802246,
+        "dead_reckon_m": 0.0,
+        "source": "native_gazebo_sim",
+        "state": "LOCALIZED",
+        "x": -0.646,
+        "y": -0.43,
+        "yaw": 0.964
+      },
+      "lease": {
+        "lease_id": "<hash:e6e748d0>",
+        "renewed_at": 38448.931493979,
+        "state": "held"
+      },
+      "detail": {
+        "line_follow_started": true
+      },
+      "started_by": "d763-sim-operator"
+    },
+    "<hash:5331fe40>": {
+      "state": "arrived",
+      "reason": null,
+      "segment_index": 4,
+      "pose": {
+        "x": -0.646,
+        "y": -0.432,
+        "yaw": 0.95,
+        "state": "LOCALIZED",
+        "source": "native_gazebo_sim",
+        "dead_reckon_m": 0.0,
+        "age_s": 0.03,
+        "anchor_age_s": 0.02853083610534668
+      },
+      "lease": {
+        "lease_id": "<hash:e6e748d0>",
+        "state": "released",
+        "renewed_at": 38536.093915248
+      },
+      "detail": {},
+      "started_by": "d763-sim-operator"
+    }
+  }
+}

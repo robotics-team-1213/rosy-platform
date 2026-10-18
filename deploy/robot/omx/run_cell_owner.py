@@ -23,6 +23,7 @@ for _part in ("contracts/foundation", "contracts/skill/src", "middleware/devices
     sys.path.append(str(REPO / _part))
 
 from cell_sim_tools import refuse_second_owner  # noqa: E402
+from instance_names import names_from_environment  # noqa: E402
 
 WORKCELL_ID, INSTANCE_ID = "omx_cell_sim", "omx_cell_sim_01"
 
@@ -42,7 +43,8 @@ def main() -> None:
     fleet_uid = int(os.environ["ROSY_FLEET_PEER_UID"])
     from rosy_agent.fleet_fence import fleet_fence_from_environment
     fleet_fence = fleet_fence_from_environment()
-    refuse_second_owner()
+    names = names_from_environment()
+    refuse_second_owner(namespace=names.namespace)
 
     import rclpy
     import uvicorn
@@ -60,8 +62,8 @@ def main() -> None:
     holder: dict = {}
 
     def runtime_factory(config):
-        return RosArmCommandRuntime(node, config, joint_state_topic="/joint_states",
-                                    trajectory_action="/arm_controller/follow_joint_trajectory",
+        return RosArmCommandRuntime(node, config, joint_state_topic=names.joint_state_topic,
+                                    trajectory_action=names.trajectory_action,
                                     owner_clock="sim", on_goal_event=lambda event: forward_pilot_event(holder, event))
 
     def http_app_factory(runtime):

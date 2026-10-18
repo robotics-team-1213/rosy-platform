@@ -4,8 +4,8 @@
 the unexpired one as ``lane_cue``. Fleet judges it from the ceiling camera (Rosy Cam) map pose and
 the site map; it is a hint, never a permission: CORE reads it only while its own CAMERA_LINE keep
 drives (``fleet_lane_cue_enabled``) and the IR guard, the body stop and the D-573 crosswalk gate
-still win. Crosswalk zones do not travel here: they reach CORE as the D-517 authority
-``crosswalks[]`` (D-573). Angles in degrees, robot frame left +.
+still win. Crosswalk zones do not travel here or anywhere from Fleet: CORE finds them with its own
+camera (D-491/D-573; no authority ``crosswalks[]``). Angles in degrees, robot frame left +.
 """
 from __future__ import annotations
 

@@ -44,3 +44,28 @@
 - 변경: `recipe/2`는 `handling: operator`인 palletize만 받는다. 간지는 별도 `OperatorSheetStep`으로 Job에 남기고, PlanBundle에는 상자 transfer만 넣는다. 층 높이에는 실제 간지 두께를 포함하며 간지 station과 held-item hang에는 넣지 않는다. 두꺼운 작업자 간지의 carry 회귀도 RED→GREEN으로 검증했다. 16상자 예제의 확인 경계는 다음 transfer 5/13, 기존 pallet ledger는 8/16이다. 첫 층 간지도 경계 1을 지원한다.
 - 증거: SOURCE 경로로 process/호환성/submission/Fleet compiler/dependency 검사 210 passed; canonical owner/coordinator를 주입한 기존 compiler/runtime replay 검사 9 passed. `recipe/1`의 recipe/cell/Job hash와 checkpoint가 없는 저장 envelope는 이전 값 그대로다. 독립 Fleet guard 후보가 실제 출력의 경계 5/13 및 1/5/9/13과 checkpoint hash를 수락했다. X:에서 빌드·설치한 palletizing/execution wheel의 실제 import 경로를 검증하고 호환성·legacy 검사 169 passed 및 수동 16상자/경계 5/13 컴파일을 확인했다. ROS-SIM은 이번 변경에서 실행하지 않았다.
 - gate 변화: 확인 metadata는 권한을 주지 않는다. Fleet의 durable checkpoint guard가 없으면 새 envelope는 거절된다. 작업자 안전 접근 증명·인증 확인 API·실제 간지 작업 수용은 HOLD이며 전체 목표 완료로 해석하지 않는다.
+
+## 2026-10-17 · fa22f99db · feat(palletizing): recipe/3 혼합 로더와 팔 베이스 둘을 아는 탐욕적 계획기 (D-781)
+
+- 변경: `rosy_cell.recipe/3` 로더(`mixed_recipe.py`)와 Extreme Points 탐욕적 계획기(`mixed_planner.py`, 규칙 `mixed_rules.py`, Step·순서 `mixed_plan.py`, 팔·구역·도달 `mixed_cell.py`)를 더했다. 지지(`support_ratio_v1`), 위 하중, `gap`, 핑거 여유, 주입된 도달 판정, Step마다 `carry_z`를 지키고, `depends_on`은 지지·핑거 여유·같은 팔 순서만 담는다. 집는 자리마다 공급 순서를 낸다. `recipe/1`·`/2` 코드는 바꾸지 않았다.
+- 증거: 원격 pytest(`operations/processes/palletizing/test`, 호환성, legacy Cell, 의존 경계) 228 passed, known_failures 0 new. 독립 검사기가 두 팔·한 팔(3층) 계획의 모든 Step을 확인했다.
+- gate 변화: 없음. Fleet `cell_compiler` 연결, 공유 D-402 IK 도달 판정, 팔별 Action 변환, SIM은 후속이다.
+
+## 2026-10-17 · f5ce2625a · fix(palletizing): recipe/3 carry_z와 도달 판정 보강 (D-781)
+
+- 변경: `carry_z`는 기준 순서의 앞 Step이 아니라 그 Step을 기다리지 않는 모든 Step(다른 팔이 먼저 끝낼 수 있는 것)의 윗면으로 정한다. 도달 판정은 놓는 자세뿐 아니라 실제 집는 자세(집는 자리 높이 + 물체 높이 - grasp_depth, 놓는 yaw)와 두 자세를 `carry_z`로 올린 자세까지 본다. `alternates`는 `shared_band` Step에만 두고 대체 팔마다 집는 자리를 적는다. `upright_fixed`는 `yaw_deg`에 0이 없으면 로더가 거부한다. `support_ratio_v1`은 "넘게"로 읽는다(정확히 60 %는 불통과). 손으로 계산한 고정 사례(지지 비율, 위 하중, 핑거 띠, 두 층 탑의 `carry_z`)를 더했다.
+- 후속: 팔별 Action 내용(각 팔 `base_in_cell` 좌표로 변환), Fleet `cell_compiler` 연결, 공유 D-402 IK 도달 판정, 팔레트가 여럿일 때 팔레트 사이의 핑거·`gap` 검사, 팔레트 좌표계 회전, `process_artifact_digest`에 계획기 버전 넣기, cell profile에서 핑거 치수 읽기, G1 SIM.
+- 증거: 원격 pytest(palletizing/test, 호환성, legacy Cell, 의존 경계) 237 passed, known_failures 0 new.
+- gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · feat(palletizing): recipe/3 팔별 Action 변환과 cell/3 작업대 문서 (D-781 §5)
+
+- 변경: `mixed_submission.py`가 계획의 Step마다 주 팔과 대체 팔 각각의 `pallet.transfer/1.0.0` 입력을 그 팔의 베이스 좌표로 낸다(베이스 x·y만큼 옮기고 -yaw 회전, yaw는 cell yaw - 베이스 yaw를 (-pi, pi]로, z는 그대로, 9자리 반올림). 대체 팔은 자기 집는 자리에서 집는다. approach 높이는 한 팔 컴파일러처럼 윗면 + `approach_clearance_m`이고 그 Step의 `carry_z`로 자른다. `layer_index`는 지지 단계(팔레트 위 0, 그 위 1 + 받치는 상자의 최대 단계)다. `item`은 계약이 `box`·`slip_sheet`만 받으므로 `box`이고 sku는 Job 문서에 있다. Job 문서에 계획기 버전, 계획 digest, 변환 버전을 넣었다. `mixed_cell_doc.py`가 잠정 `rosy_cell.cell/3`(D-778 §1의 `arms[{role, instance_id, workcell_id, base_in_cell{calibration_revision, x, y, yaw}, zone_id, home}]`, 직사각형 `zones`, `pallet_frames`, `stations`, annulus `reach`)을 읽는다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 후속: owner의 sku별 승인 형상과 계약의 sku item, 공유 D-402 IK 도달 판정, 팔레트 좌표계 회전, D-778 G0 cell 스키마 확정(변환 행렬, 다각형 구역, fixtures), 한 팔 recipe/3 Job.
+
+## 2026-10-17 · uncommitted · feat(palletizing): recipe/3 Step 입력에 sku (D-781 §2)
+
+- 변경: `mixed_submission.transfer_inputs`가 팔마다의 입력에 Step의 `sku`를 넣는다. `SUBMISSION_VERSION`을 `/2`로 올렸으므로 recipe/3 Job id가 바뀐다. recipe/3 로더는 sku를 grant 식별자 규칙(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`)으로 받는다. recipe/1·/2는 바뀌지 않았다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.

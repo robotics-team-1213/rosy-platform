@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <link rel="stylesheet" href="/console/assets/device-watch.css">
+  <link rel="stylesheet" href="/console/assets/work.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
 </head>
@@ -105,7 +106,7 @@
       </div>
       <label class="sr-only" for="work-filter">업무 종류</label>
       <select id="work-filter" class="ui-field" data-work-read="" aria-label="업무 종류">
-        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option>
+        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">Cell 적재</option>
       </select>
       <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
       <p id="work-sources" class="hint"></p>
@@ -159,7 +160,7 @@
       <h2 id="work-new-heading">새 작업</h2>
       <ul class="work-list" aria-label="새 작업 종류">
         <li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move" type="button" data-work-read="" aria-pressed="false" aria-expanded="false" aria-controls="work-move">이동</ui-button></li>
-        <li><a class="ui-disclosure-row" href="/console/cell">Cell 적재</a></li>
+        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">Cell 적재</a></li>
       </ul>
     </section>
     <section class="panel" aria-labelledby="map-heading">
@@ -297,6 +298,7 @@
       <section class="panel" id="work-context" aria-labelledby="work-detail-heading" hidden>
         <h2 id="work-detail-heading">작업 상세</h2>
         <dl id="work-detail" class="work-detail"></dl>
+        <ui-button kind="primary" id="work-admit" type="button" hidden>실행 승인</ui-button>
         <p id="work-evidence" class="hint" role="status">작업을 선택하세요.</p>
       </section>
       <section class="panel" id="work-move" aria-labelledby="work-move-heading" hidden>
