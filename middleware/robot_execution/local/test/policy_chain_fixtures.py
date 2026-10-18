@@ -1,5 +1,6 @@
 """Actual loopback Fleet HTTP/auth/SQLite with explicitly synthetic SIM approvals."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 import secrets
@@ -10,6 +11,7 @@ import time
 from types import SimpleNamespace
 
 import uvicorn
+import httpx
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
@@ -59,6 +61,12 @@ class HttpServer:
         self.close()
 
 
+def _operator_request(client, method, path, body=None):
+    response = client.request(method, path, json=body)
+    response.raise_for_status()
+    return response.json()
+
+
 @contextmanager
 def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
                    rig_revision='sim-rig', calibration_revision='cal-7'):
@@ -73,12 +81,18 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         task_service=FleetTaskService(FleetTaskStore(db), robot_ids=()),
         mission_service=MissionService(MissionStore(db)), proposal_store=ProposalStore(db),
         omx_instances={workcell_id:instance_id}, start_task_dispatcher=False)
-    with HttpServer(app) as server:
+    with HttpServer(app) as server, ExitStack() as connections:
         clients = {}
         for name, token in credentials.items():
             path = tmp_path/(name+'.private')
             path.write_text(token)
-            clients[name] = FleetPolicyHttp(server.url, path, loopback_sim=True)
+            if name == 'sim-device':
+                clients[name] = FleetPolicyHttp(server.url, path, loopback_sim=True)
+            else:
+                # Approval preparation precedes execution; the device's 0.2s transport budget is unchanged.
+                client = connections.enter_context(httpx.Client(base_url=server.url, timeout=2,
+                    trust_env=False, follow_redirects=False, headers={'Authorization':'Bearer '+token}))
+                clients[name] = partial(_operator_request, client)
         base = '/api/fleet/workcells/'+workcell_id+'/policy'
         admin, second = clients['sim-admin-a'], clients['sim-admin-b']
         revisions = dict(rig_revision=rig_revision, calibration_revision=calibration_revision)

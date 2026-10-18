@@ -103,6 +103,7 @@ def test_worker_closes_authority_after_actual_fleet_window_revoke(tmp_path):
         deadline = time.monotonic()+3
         while not chain.session.hold_reason and time.monotonic() < deadline:
             time.sleep(.01)
+        runtime._watchdog_tick()  # This HOST fixture has no ROS executor to drive its original timer.
         assert chain.session.hold_reason and chain.session.owner.state == 'hold'
 
 
