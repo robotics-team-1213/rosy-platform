@@ -4,6 +4,18 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ## 공유 인터페이스 계약서
 
+### v1.268 운영자의 정책 승인 표시와 세션의 `policy_admin` (D-793)
+
+Additive. 예전 방식 `site-users.yaml` 항목에 선택 필드 `policy_admin: true`(operator에만)를 더한다. 그 사람은 operator 역할을 유지하면서 `fleet.policy` 판단(§10.18)을 할 수 있다. 통합 계정(Rosy Account) 세션은 기존처럼 자원 권한으로 판단한다. `GET /api/fleet/auth/session`은 통합 계정이 아니고 `fleet.policy`가 있을 때만 `policy_admin: true`를 더 돌려준다(없으면 필드가 없다). 표시는 `deploy/site/site_users.py set-policy-admin`으로 켜고 끈다. 이 필드를 모르는 이전 Fleet은 파일을 거부하므로 Fleet을 먼저 배포한다. envelope 1.0 변경 없음.
+
+### v1.266 학습 정책 승인 관문: 단계·승인 창·확인 요청·사고 잠금·실행 lease (D-793)
+
+Additive. 새 Fleet 경로 묶음 `/api/fleet/workcells/{workcell_id}/policy/*`와 콘솔 화면 `/console/policy`다. 기존 경로·envelope 1.0 변경 없음. 장치 명령을 보내는 경로는 없다.
+
+- 학습 결과는 L0으로만 등록되고 단계는 `fleet.policy`(레거시 `policy-admin`) 승인으로 하나씩 오른다. L3·LIMITED는 제안자와 다른 사람이 승인한다.
+- 승인 창(shadow 8시간, 입회 시험 기본 15분·최대 30분, 제한 사용 8시간)과 실행 lease(기본 1초·최대 2초, 승인 창을 넘지 않음)를 분리한다. lease는 아직 장치에 전달되지 않는다(`device_delivery: "not_connected"`).
+- 열린 확인 요청이나 사고 잠금은 새 lease를 거절한다. 사고 신고는 이름 있는 운영자 누구나, 해제는 신고자와 다른 관리자가 한다.
+
 ### v1.255 완료된 native 항법의 수동적 IDLE 인계 (D-772)
 
 2026-10-17 Corrective(API-002): `mode.changed` 표의 기존 `{from, to, by}`를
@@ -177,7 +189,7 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.264
+**Version:** v1.268
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3386,10 +3398,32 @@ build/import, signed delivery, Native Pilot coupled client, 실제 두 화면 �
 Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 주장하지 않는다.
 
 
+## 10.18 Learned-policy governance (D-793)
+
+학습 정책이 실물을 움직이기 전의 사람 승인 기록이다. 규칙은 Fleet 서버가 판단하고 콘솔 `/console/policy`는 서버가 거절할 조작을 사유와 함께 미리 잠근다. 이 절의 어떤 경로도 장치에 명령을 보내지 않는다. 오류는 `{"detail": {"code": "UPPER_SNAKE"}}`다.
+
+| 경로 | 권한 | 설명 |
+|---|---|---|
+| `GET /api/fleet/policy-governance/workcells` | `fleet.read` | 설정된 OMX 작업셀 id 목록 |
+| `GET /api/fleet/workcells/{id}/policy` | `fleet.read` | `policies`(단계), `proposals`, `windows`(`active` 포함), `confirmations`, `incidents`, `now_ns`, `rules` |
+| `POST .../policy/proposals` | `fleet.policy` | `{operator_confirmed, policy_revision, to_stage, rig_revision, calibration_revision, evidence_sha256, note}`. 다음 단계만 허용(`STAGE_SKIP_REFUSED`), 첫 단계는 L0 |
+| `POST .../policy/proposals/{proposal_id}/decision` | `fleet.policy` | `{operator_confirmed, approve}`. L3·LIMITED 승인은 제안자와 다른 사람(`APPROVER_MUST_DIFFER_FROM_PROPOSER`, 403) |
+| `POST .../policy/windows` | `fleet.policy` | `{operator_confirmed, policy_revision, kind: shadow\|supervised\|limited, minutes?, scope, rig_revision, calibration_revision}`. 최소 단계 L2·L3·LIMITED. revision이 단계 기록과 다르면 `REVISION_CHANGED_REAPPROVAL_REQUIRED` |
+| `POST .../policy/windows/{window_id}/approve` | `fleet.policy` | `{operator_confirmed}`. supervised·limited는 요청자와 다른 사람. 작업셀당 열린 창 하나(`ANOTHER_WINDOW_ACTIVE`) |
+| `POST .../policy/windows/{window_id}/close` | 이름 있는 운영자 | `{operator_confirmed, reason}`. 멈춤은 더 강한 권한이 필요 없다 |
+| `POST .../policy/lease` | `fleet.operate`(operator·service) | `{episode_id, owner_session_id, duration_ms?(1..2000, 기본 1000), lease_id?}`. 열린 supervised·limited 창에서만, 확인 요청·사고가 없을 때만. 만료는 창 만료를 넘지 않는다. `lease_id`를 주면 같은 창·episode·owner session의 더 늦은 만료로 갱신. 응답의 `clock: "fleet_wall_ns"`, `device_delivery: "not_connected"` |
+| `POST .../policy/confirmations` | 이름 있는 운영자 | `{operator_confirmed, reason, policy_revision?, evidence(≤8 KiB)}`. reason은 `rules.reasons` |
+| `POST .../policy/confirmations/sync-owner` | 이름 있는 운영자 | owner readback이 `hold`이면 같은 HOLD당 한 건을 연다. `{owner, created}` |
+| `POST .../policy/confirmations/{confirmation_id}/resolve` | `fleet.policy` | `{operator_confirmed, resolution: resume\|abort\|send_to_learning, note, demote_to?}`. abort·send_to_learning은 창을 닫고, send_to_learning은 단계를 낮춘다(기본 L1). resume은 owner HOLD를 풀지 않는다(§10.12 owner recover) |
+| `POST .../policy/incidents` | 이름 있는 운영자 | `{operator_confirmed, description}`. 작업셀의 모든 창을 닫고 L3·LIMITED 승인과 새 창을 막는다 |
+| `POST .../policy/incidents/{incident_id}/clear` | `fleet.policy` | `{operator_confirmed, note}`. 신고자와 다른 사람 |
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
+| v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
 | v1.264 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |
 | v1.263 | 2026-10-17 | Additive (D-779 §3·§6, feat/multi-arm-goal-evidence): `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` `{expected_generation}`(이름 있는 운영자, 두 팔 Job의 팔 하나, 단단한 결합 짝이 잡혀 있으면 409), `POST /api/fleet/cell-goal-evidence`의 두 팔 Job Step 단위 판정(술어 팔의 Action, 그 팔 instance의 producer, 협조 Step은 모든 팔 성공 뒤, 대체 팔 Step 거절). 한 팔 Job과 envelope 1.0 변경 없음. |
 | v1.260 | 2026-10-17 | Additive (D-780, D-779 §7, feat/omx-coordinator-barriers): `StopRequestSource.coordinator`와 조율자 정지 이유 4종, `FleetCellTransferGrant`의 선택 필드 `arm_role`·`pair_id`·`partner_instance_id`·`coupling`과 `cell_transfer.barriers`(없으면 직렬화와 digest가 이전과 같다), OMX owner UDS `GetBarrier`·`ReleaseBarrier`(version 2, 조율자 UID만)와 연산별 peer 역할, `PHASE_WAIT`, barrier 시간 초과(FAILED 또는 HOLD), 단단한 결합 구간의 조율자 생존 HOLD. 조율자 peer가 없는 owner와 barrier 없는 grant는 바뀌지 않는다. Fleet `/api/fleet/*`와 envelope 1.0 변경 없음. |

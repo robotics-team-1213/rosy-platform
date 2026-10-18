@@ -9313,3 +9313,27 @@ osy-d395-s1d\`.
 - 변경: 첫 장치 런북에 sd-setup.local.json, 설정 전용 Configure, Wi-Fi 보안 저장과 등록부 초기화 선택, 카드 교체·완료 확인 순서를 기록했다.
 - 증거: 사용자 승인된 비밀정보 없는 JSON 구성과 기존 작성기의 종료 표식·영수증·등록부 경로에 맞춰 작성했다. 카드가 없는 설정 준비와 실제 매체 수용을 구분한다.
 - gate 변화: 없음. 실제 SD 기록·부팅·현장 수용은 미수행이다.
+
+
+## 2026-10-19 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
+
+- 변경: 학습 산출물은 L0 등록만 하고 L1–L3·제한 사용은 Fleet API의 사람 승인으로만 연다는 ADR D-793(Proposed)을 추가했다. 승인 창(L3 15분/상한 30분, 제한 사용 8시간)과 실행 lease(기본 1초/상한 2초)를 나누고, 위험 상황은 HOLD 뒤 확인 요청으로 남겨 API로만 푼다. 실물 owner의 private 설정 `learned_policy` 기동 거부와 실제 도달 확인을 첫 구현 순서로 정했다.
+- 증거: 저장소 조사(owner 허용 목록, `OwnerPolicySession` lease 상한 1초, registry 승격, mission admit·owner recover 패턴)와 비공개 2026-10-18 micro-step 기록 대조. 코드·장치 변경 없음.
+- gate 변화: 없음. 구현·Safety review·실물 수용은 후속이다.
+## 2026-10-19 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
+
+- 변경: `run_hardware_owner.py --check`가 조립 단계와 같이 `rule_based` 외 owner(`learned_policy` 포함)를 거부한다. 수집기는 성공 terminal 뒤 실제 native 관절이 profile `reach_tolerance_rad` 안에 들어와야 `REACHED`를 남기고 다음 단계로 간다. 들지 않으면 ABORT·HOLD하며 intake는 단계마다 허용차 안의 `REACHED`를 요구한다. rehearsal에 `no_motion` 시나리오를 더했다.
+- 증거: 2026-10-18 비공개 micro-step 기록에서 토크 ON 그리퍼가 목표 2틱 송신 뒤에도 움직이지 않았는데 Action은 SUCCEEDED였다. 원격 시험 결과는 커밋 메시지·후속 행에 남긴다.
+- gate 변화: 없음. 실물 수집·Safety review 수용은 후속이며 실제 시연은 0회다.
+
+## 2026-10-19 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
+
+- 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
+- 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-19 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
+
+- 변경: 현장 `site-users.yaml`의 사람 계정은 모두 operator 하나뿐이라 정책 승인을 할 수 없었다. operator 항목의 `policy_admin: true`가 역할을 유지한 채 `fleet.policy`를 더하고, 세션 응답이 이를 알린다. `site_users.py set-policy-admin`과 `/console/policy`의 로그인 링크를 더했다.
+- 증거: 원격 pytest와 실제 Chromium 세 사람 시나리오. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. 현장 배포와 계정 표시는 후속 행에 기록한다.

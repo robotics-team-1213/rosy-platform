@@ -46,6 +46,9 @@ CONSOLE_ASSETS = {
     "login-page.js": ("shared/login-page.js", "application/javascript"),
     "profile-page.js": ("shared/profile-page.js", "application/javascript"),
     "account-page.js": ("shared/account-page.js", "application/javascript"),
+    "policy-page.js": ("work/policy-page.js", "application/javascript"),
+    "policy-model.js": ("work/policy-model.js", "application/javascript"),
+    "policy.css": ("work/policy.css", "text/css"),
     "account-permissions.js": ("shared/account-permissions.js", "application/javascript"),
     "login-return.js": ("shared/login-return.js", "application/javascript"),
     "password-login.css": ("shared/password-login.css", "text/css"),
@@ -119,6 +122,11 @@ def install_static_routes(app: FastAPI) -> None:
     @app.get("/console/accounts", include_in_schema=False)
     def console_accounts_page():
         return FileResponse(WEB_ROOT / "accounts.html", media_type="text/html",
+                            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
+
+    @app.get("/console/policy", include_in_schema=False)
+    def console_policy_page():
+        return FileResponse(WEB_ROOT / "work/policy.html", media_type="text/html",
                             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
 
     @app.get("/console/profile", include_in_schema=False)
