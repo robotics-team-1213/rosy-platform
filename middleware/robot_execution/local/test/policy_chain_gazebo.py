@@ -336,6 +336,13 @@ def prove(out, runtime, camera, controllers, calibration):
                 samples.append((state.sequence,state.positions['joint1'],time.monotonic()))
             time.sleep(.01)
         window = [p for _,p,t in samples if t >= deadline-.3]
+        (out/'stop-readback.json').write_text(json.dumps(dict(samples=samples,deadline_s=deadline,
+            window_count=len(window),spread_rad=max(window)-min(window) if window else None,
+            first_sdk=first,first_readback_rad=measured,second_sdk=second,
+            first_command_id=commands[0],cancel_command_id=commands[1],cancel_goal_id=record['driver_goal_id'],
+            cancel_status=handle.status,cancel_ack=handle.cancel_acknowledged,
+            cancellation_observed_after_revoke_s=cancelled_at-revoked_at,
+            owner=runtime.owner.recovery_state()),indent=2))
         assert len(window) >= 3 and max(window)-min(window) < .001
         sdk_send(child,dict(op='reconnect'))
         reconnect = sdk_message(child)
