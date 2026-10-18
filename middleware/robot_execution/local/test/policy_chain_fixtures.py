@@ -22,7 +22,7 @@ sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
                *[str(ROOT/path) for path in ('operations/world/src', 'operations/decision/src',
                    'operations/site_execution/src', 'operations/processes/palletizing/src',
                    'contracts/foundation', 'middleware/core/services')]]
-sys.path.insert(0, str(ROOT/'contracts/skill/src'))
+sys.path[:0] = [str(ROOT/'contracts/skill/src'),str(ROOT/'contracts/learning/src')]
 from rosy.execution.local.policy_lease import FleetPolicyHttp
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
