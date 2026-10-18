@@ -20,10 +20,12 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
 | `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
-| `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
-| `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |
+| `console.js` | Shell: auth state, `call()`, render, polling cadence; composes the modules below |
+| `console-auth.js`, `console-goal.js`, `console-refresh.js` | D-798 3.2 splits of `console.js`: lock/unlock, session, token and password login, development mode; roster keys, click-to-goal and the operator pin; dispatch band and rearm, site path, state poll, cancel-all |
+| `map-view.js` | Site map grid, coordinate transforms, robots, goals, draw order |
+| `map-overlays.js`, `map-polling.js` | D-798 3.2 splits of `map-view.js`: chips, formation, mediation, sightings, camera tracking and site overlays; site-map, grid, traffic, guide and sightings polling and the traffic toggle |
 | `camera-backdrop.js` | D-513 7 / D-515 / D-560 camera picture path: Vision's map plane (`shared/vision-view.js` `createPlaneFeed`) drawn on `toPx`, the D-515 top-down warp (`camera-warp.js` math) only as the fallback, large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
-| `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
+| `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle live in `map-polling.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
 | `devices/` | Device connection/approval UI and read-only discovery/address/app-directory adapters. Own size unit (D-766); enrollment and camera pairing keep their existing public asset URLs and API owners. `device-discovery.js` consumes injected Fleet reads and lifetime; it does not import registration writes. |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |

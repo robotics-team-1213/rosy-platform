@@ -26,6 +26,8 @@ CANVAS_FILES = [
     # camera-capture.js는 재수출만 한다 — 본체는 web_common evidence.js(D-323 T9).
     COMMON / "evidence.js",
     FLEET / "map" / "map-view.js",
+    FLEET / "map" / "map-overlays.js",  # D-798 3.2: chips and overlays out of map-view.js
+    FLEET / "map" / "map-polling.js",  # D-798 3.2: clears the canvas when no map answers
     FLEET / "map" / "map-datum.js",
     FLEET / "map" / "trail-view.js",
     FLEET / "map" / "camera-backdrop.js",
@@ -35,6 +37,7 @@ CANVAS_FILES = [
     FLEET / "shared" / "field-warp.js",
     FLEET / "sitemap" / "site-map.js",
     FLEET / "console.js",
+    FLEET / "console-auth.js",  # D-798 3.2: clears the map canvas on lock
     GAMES / "board.js",
     SRC.parent / "learning/curation/perception/review_app_web/app.js",
     SRC.parent / "learning/curation/perception/review_app_web/pixels.js",
