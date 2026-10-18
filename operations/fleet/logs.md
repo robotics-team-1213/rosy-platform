@@ -3974,3 +3974,71 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+
+
+## 2026-10-16 · uncommitted · Robot/Pilot 진입 JS 설치 closure
+
+- 변경: Fleet 기존 static allowlist와 wheel/sdist 설치 검증에 device-discovery.js를 포함했다. 기존 API·정적 서빙을 유지한다. e596dc451의 최초 checkout 밖 설치·자산 HTTP 검증 55개 시험이 통과했으며, D-766에 따른 devices/ 분리 이후 최종 설치 검증을 다시 한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
+
+- 변경: disabled-feature poller와 scanner lease 경보 시험이 분리된 device-discovery.js를 검증한다. HTTP 자산 응답과 console.js의 import 연결도 확인한다.
+- 증거: main 착지 전체 시험에서 기존 소스 경로를 읽던 2건 실패를 확인했다(5357 passed, 315 skipped). 제품 코드는 변경하지 않았으며 수정 후 원격 검증은 착지 절차에서 수행한다.
+- gate 변화: 없음. 전체 검증 통과 전 main 반영 보류.
+
+## 2026-10-16 · uncommitted · 경로 보기 브라우저의 명시적 탭 클릭
+
+- 변경: 폼 밖 클릭을 패널 중앙 대신 상태 탭으로 지정한다. 앱 링크로 카드 높이가 바뀌자 중앙 좌표가 대형 관리 버튼과 겹쳤고 실제 탭 전환을 일으켰다.
+- 증거: 전체 및 파일 단위 원격 Chromium에서 재현. 위치 없음의 경로 보기 차단과 위치 수신 후 활성화 검증은 유지한다.
+- gate 변화: 없음.
+
+## 2026-10-16 · uncommitted · 최신 크기 규칙 통합
+
+- 변경: D-766 개정 2의 roster.js 제한을 지키도록 앱·지도 기록 링크 생성 코드를 기존 device-discovery.js로 옮겼다. 새 파일이나 권한 경로는 추가하지 않았다.
+- 증거: main 통합 전 원격 FULL은 새 실패 0건이었다. 통합 후에는 크기 검사와 관련 브라우저·설치 검증을 다시 수행한다.
+- gate 변화: 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
+
+- 변경: `arms: [{role, instance_id}]`와 Step별 `placement`(주 팔·대체 팔·구역·결합·depends_on·팔별 Action 내용)를 받는 팔 여러 개 Job을 만든다. 배치는 `fleet_cell_step_placements`, 표시는 `fleet_cell_arm_jobs`에 두고 1단계 거울 트리거와 backfill은 표시된 Job을 건너뛴다. 한 팔 디스패처 조회(`jobs_by_status`, `unresolved_jobs`)는 그 Job을 돌려주지 않는다. `cell_arm_dispatcher`가 팔별 준비 집합(의존 GOAL_CONFIRMED, 팔 READY, 팔·구역 claim 비어 있음)으로 Action을 내고, 결과는 그 팔과 그 claim만 HOLD한다(`tight`면 짝도). 대체 팔 한 팔 모드, 팔 단위·Job 단위 재개, 취소, 사이트 정지 래치와 시작 복구를 팔 단위로 처리한다. claim 단계 전환은 safety 태그 `cell/cell_arm_claims.py`와 `ledger/action_claims.release_held_keys`에 있다. app.py는 같은 자리에서 `CellJobDispatcher`를 만들고, 팔 여러 개 Job이 없으면 틱은 한 팔 틱과 같다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다. 장치·ARM64·현장 수용 없음.
+- gate 변화: 없음(SIM 코드만). 착지·push 없음. 팔 여러 개 Job의 목표 증거 경로와 API reference 개정은 남았다.
+
+## 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
+
+- 변경: 팔마다 owner 작업대(`arms[].workcell_id`)를 Job에 적고, 그 작업대를 Job 단위 claim으로 승인부터 끝까지 잡는다. 같은 owner를 쓰는 한 팔 Job이나 다른 팔 여러 개 Job은 승인에서 거절된다. 설정이 그 인스턴스를 다른 작업대로 매핑하면 그 팔은 NOT_CONFIGURED다. 짝 Action은 두 번째 송신 전에 fence를 다시 읽고, 바뀌었으면 남은 팔을 미송신 HOLD로 두고 받은 팔을 취소한다. 짝의 틱당 I/O는 팔당 2와 취소 1이다. 취소는 팔·Action 표시까지 한 트랜잭션이다. Cell 원장 버전은 4다(1단계 Fleet는 거부).
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 남은 일: 팔 여러 개 Job은 아직 끝까지 갈 수 없다. Cell 목표 증거 ingress(`cell_goal_evidence_service`)와 성공 hook이 팔 여러 개 Step을 모르고, `ArmJobStore.confirm_step_goal`만 GOAL_CONFIRMED를 쓴다(닫힌 쪽으로 실패). D-781 컴파일러 출력, API reference의 팔 단위 재개 경로, D-780 barrier가 든 짝 grant도 남았다.
+
+## 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
+
+- 변경: 레시피 스키마가 `rosy_cell.recipe/3`인 Cell 후보는 `cell_mixed_submission.compile_mixed_submission`으로 간다. `PalletizingCellJobCompiler.compile_mixed`가 혼합 계획기로 다시 컴파일하고, 후보 Job과 바이트 비교, recipe·cell digest 비교, 64 KiB 한도를 한 팔 경로와 같게 지킨다. 팔 목록은 cell/3 문서의 `arms`, claim은 작업대·팔 owner 작업대·팔레트다. 제안의 `instance_id`는 작업대 팔 가운데 하나여야 한다. recipe/1·/2 경로와 그 Job id는 바뀌지 않았다(26a148117 기준 고정값 시험). palletizing을 import하는 Fleet 모듈은 여전히 `cell_compiler.py` 하나다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 후속: 팔별 좌표의 item_at_pose 목표 술어, Cell 앱 미리보기(`/cell-app/compile`)의 recipe/3, 한 팔 recipe/3.
+
+## 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
+
+- 변경: 목표 허용오차가 설정되면 resolver가 recipe/3 Step마다 `goal_predicates`를 고정한다. 술어는 주 팔과 대체 팔마다 하나씩, 그 팔 입력과 sku 형상으로 계산된 그 팔 `robot_base` 좌표다. `cell_arm_jobs`는 그 키가 Step의 팔과 같은지 확인하고 `step_json`에 둔다. 목표 증거 서비스의 술어 팔은 배정된 첫 팔(첫 주 팔 또는 Step을 넘겨받은 대체 팔)이다. 대체 팔 Step은 그 팔 술어로 판정하고, 술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`으로 거절한다. 첫 주 팔 좌표의 단일 `goal_predicate`는 대체 팔에 쓰지 않는다. `step_action_kinds`는 입력의 `sku`를 CELL_TRANSFER 본문에 옮긴다. sku가 없으면 본문은 같다. `/api/fleet/cell-app/compile`은 recipe/3를 `compile_mixed`로 미리 보고 `summary.multi_arm`(팔, Step별 sku·팔·대체 팔·구역·결합·depends_on)을 더한다. recipe/1·/2 응답은 그대로다.
+- 증거: 원격 pytest를 돌리지 못했다. 이 시점에 실험실 시험 호스트에 하나도 닿지 않았다. 시험은 썼지만 실행하지 않았다.
+- gate 변화: 없음. 남은 일(ADR 필요): 한 팔 recipe/3 Job, 짝 Step 부분 성공 회복, owner의 cell/3 승인.
+
+## 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+
+- 변경: 에이전트가 고른 topic·레시피/셀 digest·instance를 기존 compile/proposal API로 연결하는 `fleet/server/work/cell_task_client.py`를 추가했다. 원본·제출 intent·Fleet 응답을 보존하고 기존 Cell Job 원장을 조회한다. 별도 명시적 admit는 저장된 요청과 현재 제안을 대조하고 기존 named operator·generation 검사로 위임한다. 자동 재전송·dispatch 재무장은 없다.
+- 증거: bbaf06bbe 원격 pytest 30 passed, known failures NEW 0. 실제 Cell compiler·API와 새 프로세스 CLI import를 검사했다. 독립 계약 리뷰에서 추가 material finding 없음.
+- gate 변화: 없음. 자유문장 해석기·Gazebo 실행·실물 구동·실제 모방학습 완료의 증거는 아니다. ACTION_SUCCEEDED와 독립 GOAL_CONFIRMED를 구분한다.
+
+## 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+
+- 변경: 한쪽 claim 거절의 즉시 rollback 검사는 유지하고 이후 독립 왼팔 작업이 점유한 정상 shared zone을 실패한 pair의 누수로 판단하지 않게 했다. 최종 action_id와 claims를 대상 pair에 결속한다.
+- 증거: 통합 후보의 1 failed / 6635 passed / 354 skipped와 동일 후보 단독 통과로 타이밍 의존을 확인했다. 독립 producer-consumer 분석 후 수정 커밋 원격 G1 SIM·timing 12 passed, 새 실패 0개.
+- gate 변화: 생산 제어·claim 권한 변경 없음. 중단된 후보의 병합 검사와 실제 G2·실물 수용을 완료로 표시하지 않는다.
+

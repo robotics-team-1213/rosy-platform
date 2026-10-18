@@ -87,7 +87,7 @@ git push -u origin fix/<짧은-주제>
 2. **자기 경로만 `git add`.** `git add -A`·`.`·디렉터리 add 금지. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash` 금지. 남의 미커밋은 지우지도 치우지도 않는다.
 3. **ADR·API 버전 번호는 도구로 선점한다** — `python tools/harness/adr_reserve.py next "<주제>"`, `python tools/harness/api_reserve.py next "<주제>"`.
 4. **시험은 기존 실패와 비교한다** — `tools/remote/remote_pytest.py` → `python test/known_failures.py <run.txt>`. `NEW`는 그 브랜치의 실패다.
-5. **착지는 사용자가 말한 뒤** `python tools/land.py --tests auto`. FULL 착지(약 25–30분)는 동료 세션에 착지 멈춤을 알리고 시작한다.
+5. **착지는 사용자가 말한 뒤** `python tools/land.py --tests auto`. 15파일 초과 또는 FULL이면 먼저 분할 가능성을 검토한다. 세부 절차와 `MAIN-RED` 처리는 최신 [공유 체크아웃 절차](shared-checkout.md)를 따른다.
 6. **push는 사용자가 말한 뒤** §5 순서대로.
 
 ## 5. push와 `origin` 동기화
@@ -153,7 +153,7 @@ gh run view <run-id> --log-failed
 | pre-push가 `no python interpreter with PyYAML` | venv 꺼진 터미널 → venv 켜고 다시. Python이 없으면 [팀 가이드](team-guide.md) §1.4 |
 | pre-push가 시험 PC에 닿지 못해 10분 뒤 실패 | Tailscale 로그인·프로필 확인. 실험실 밖이면 §3 표의 둘째 줄 |
 | `generated records are regenerated but uncommitted` | `rosy_harness.py generate`가 바꾼 파일을 커밋 |
-| 내가 안 건드린 시험이 실패 | `python test/known_failures.py`. `NEW`인데 무관하면 `main`이 이미 깨진 것 → Issue로 알린다 |
+| 내가 안 건드린 시험이 실패 | `python test/known_failures.py`. `NEW`는 main에서 별도로 재현하기 전까지 브랜치 실패로 다룬다. main에서도 재현되면 `MAIN-RED`로 기록하고 별도 수정한다 |
 | `--ff-only` 착지가 동료의 미커밋 파일 때문에 거절 | 그 파일을 그대로 두고 거절 문구를 사용자에게 알린다. stash·삭제로 치우지 않는다 |
 | ADR 번호 충돌 | 손으로 고른 번호. `adr_reserve.py next`로 다시 받고, 버린 번호는 `tools/harness/adr_gaps.txt`에 |
 | `user.email ... is not yours` | `git config user.email`을 내 GitHub 계정 이메일로 |

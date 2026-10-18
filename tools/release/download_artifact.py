@@ -4,8 +4,8 @@
 over ten minutes without a line of output (2026-09-30, release 009); eight range
 workers finished in about 18 minutes. This tool makes that the repo way:
 
-    python tools/release/download_artifact.py --run 123 --name rosy-os-image --out X:/DevTemp/a.zip
-    python tools/release/download_artifact.py --artifact-id 456 --out X:/DevTemp/a.zip --extract X:/DevTemp/rel
+    python tools/release/download_artifact.py --run 123 --name rosy-os-image --out $ROSY_SCRATCH/a.zip
+    python tools/release/download_artifact.py --artifact-id 456 --out $ROSY_SCRATCH/a.zip --extract $ROSY_SCRATCH/rel
 
 The size comes from the API, the token from GH_TOKEN or `gh auth token`, and the
 short-lived signed download URL from the API redirect. Neither the token nor the

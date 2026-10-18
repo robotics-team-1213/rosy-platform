@@ -2,6 +2,8 @@
 
 **Status:** Proposed (2026-10-03, 기존 ADR 책임 모델의 재검토 초안). 아직 수용되지 않았으며 기존 Accepted 계약은 계속 유효하다. 역할·용어의 목표 경계를 제안한다. 코드·폴더·패키지·공개 API·DB·실행 밸브·배포·장치 gate를 변경하지 않는다.
 
+**부분 결정 제안 (2026-10-17, D-778 Proposed):** [D-778](D-778-bimanual-workcell-foundation.md)이 수용되면 「현재 미결정」의 "복수 Action/병렬 Step" 가운데 같은 양팔 작업대 안의 협조 Step을 결정한다. 협조 Step은 팔 역할마다 Action을 최대 하나 낸다. 한 팔 작업대와 작업대 사이의 Step에는 "1 Step → 1 Action" 제약을 유지하며, 서로 다른 작업대에 걸친 병렬 Step은 계속 미결정이다.
+
 ### Context
 
 D-12는 초기 Mission DSL을 Fleet 서비스에 두었다. D-21은 Fleet을 formation 오케스트레이터로, D-296은 사이트 Mission·인계·이력의 소유자로 부른다. D-290 §2는 고정 OMX까지 조정할 때 Fleet 확장과 범용 작업 운영으로의 단일 이행 중 하나를 결정하도록 남겼다. D-413과 설계 v0.2는 execution/site와 execution/local을 구분하지만 기존 Fleet 역할 이름도 유지한다. D-427/D-429는 폴더 책임을 정리하면서 이 넓은 Fleet 정의를 계승했다.

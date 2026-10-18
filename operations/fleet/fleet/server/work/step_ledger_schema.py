@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
+from . import cell_arm_ledger
 from .step_action_kinds import _KINDS
 
 
@@ -55,6 +56,7 @@ def ensure(connection: sqlite3.Connection) -> None:
         connection.execute("ALTER TABLE fleet_cell_steps_migrating RENAME TO fleet_cell_steps")
         connection.execute("RELEASE step_ledger_kinds")
     connection.execute("CREATE INDEX IF NOT EXISTS fleet_cell_steps_status ON fleet_cell_steps(status, updated_at)")
+    cell_arm_ledger.ensure(connection)  # D-779 stage 1: after any rebuild, which drops the mirror triggers
 
 
 __all__ = ["ensure", "kinds_check"]

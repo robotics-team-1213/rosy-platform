@@ -234,6 +234,9 @@
 | D-733 | Hourly KST Discord Fleet health subscription |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
+| D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
+| D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
+| D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
 
 ## 계획·결과 문서
 
@@ -336,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-16 · uncommitted · docs(reference): git으로 일하는 법과 인수인계 문서
-- 2026-10-16 · uncommitted · docs(learning): drivable 강화학습과 Gazebo Fleet 검증 방향
-- 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
-- 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
-- 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
+- 2026-10-18 · uncommitted · git 안내의 최신 공유 체크아웃 절차 보존
+- 2026-10-18 · uncommitted · 로컬 착지를 GitHub PR 경로로 옮기는 계획
+- 2026-10-18 · uncommitted · Fleet 담당 지정 설계의 기준 커밋 표기
+- 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
+- 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796

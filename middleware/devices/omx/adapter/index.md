@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · b5539986f · feat(omx): 실측 문서 검사 CLI
-- 2026-10-15 · dbe5db55b · fix(omx): 지속 USB 카메라 미리보기 복구
-- 2026-10-11 · 1691d395c · refactor: OMX adapter 장치 holder 이전 검증
-- 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
-- 2026-10-05 · uncommitted · fix(test): preload 좌석 시험의 관절 시계 고정
+- 2026-10-17 · 9108fd4d8e · fix(omx): Unix Action listener 수명 조회
+- 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+- 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+- 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
+- 2026-10-16 · uncommitted · test(omx): 원본 stamp를 정책 연결 fixture까지 적용

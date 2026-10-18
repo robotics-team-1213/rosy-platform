@@ -15,9 +15,7 @@ approval=firewall enabled rosy-site-stack.service
 approval=wifi wifi-allow
 safe file /etc/systemd/system/rosy-host-guard.service role/rosy-host-guard.service
 safe file /etc/systemd/system/rosy-host-guard.timer role/rosy-host-guard.timer
+safe file /usr/local/bin/rosy-host-guard deploy/site/rosy-host-guard 0755
 report enabled rosy-host-guard.timer
 approval disabled rosy-site-update.timer
-approval file /etc/systemd/system/rosy-watchdog-load.service common/rosy-watchdog-load.service
-approval enabled rosy-watchdog-load.service
-approval file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
-approval file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf
+# PC recovery is shared: install with --approve recovery (common/manifest).

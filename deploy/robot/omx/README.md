@@ -51,6 +51,39 @@ this preflight.
 
 ## Native arm software readiness
 
+### Docker-free Gazebo launch
+
+`run_cell_sim.sh` also runs on a native ROS 2 Jazzy simulation host. Build the
+locked `open_manipulator_description` and `open_manipulator_bringup` packages
+into a user prefix after applying `omx-f-gazebo-headless`, `omx-ai-sim-gates`
+and `omx-ai-sim-action-only` from `patches/`, in that order. Use the system
+Python matching ROS when building; do not change the host's default Python.
+No Docker installation or Docker group membership is needed.
+
+Select a non-site host through `tools/remote/remote_pytest.py --pick sim`
+and hold its simulation resource lock for the run, as described in
+`tools/remote/AGENTS.md`. Launch inside a bounded user systemd scope with
+its own `GZ_PARTITION`, loopback `GZ_IP`, and allocated `ROS_DOMAIN_ID`:
+
+```bash
+export OMX_CELL_OVERLAY="$HOME/rosy-test/<prepared-build>/install"
+export OMX_CELL_LOG_DIR="$HOME/rosy-test/<run>/logs"
+bash deploy/robot/omx/run_cell_sim.sh
+```
+
+The overlay must contain `setup.bash`; the compatibility default is
+`/opt/omx_ws/install`. `OMX_CELL_ROS_SETUP` optionally selects the ROS setup
+script (default `/opt/ros/jazzy/setup.bash`). These are trusted shell inputs.
+`OMX_CELL_WORLD` selects a world path without `.sdf`; otherwise the world is
+resolved from this checkout. `OMX_CELL_DOMAIN_ID` overrides an inherited
+`ROS_DOMAIN_ID`; absent both, the compatibility domain is 77. Discovery stays
+localhost-only. A host carrying `~/rosy-jobs/site` is refused before setup.
+
+This starts the Gazebo follower only, with no ROSY command owner or task
+admission. Native process/resource separation does not satisfy G2's stronger
+network/device/read-only filesystem isolation guard. Keep that guard and
+startup HOLD intact; launching Gazebo is not Fleet task or hardware acceptance.
+
 After sourcing the selected native ROS installation, run:
 
 ```bash
@@ -124,8 +157,8 @@ for the remaining native runtime and physical acceptance work.
 ## Local camera preview recovery
 
 `omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
-camera through V4L2 MJPEG at 640×480, publishing at most 10 Hz with a one-image
-queue. It refuses raw-format fallback, reopens failed capture, and notifies the
+camera through V4L2 MJPEG at 640×480, publishing at most `--max-fps` (default
+10 Hz, `ROSY_CAMERA_MAX_FPS` in the unit env) with a one-image queue. It refuses raw-format fallback, reopens failed capture, and notifies the
 `rosy-omx-camera@.service` watchdog so a blocked driver read is restarted.
 It publishes host-receive timestamps and no CameraInfo or calibrated target;
 these previews do not admit an arm operation.
@@ -133,7 +166,12 @@ these previews do not admit an arm operation.
 Install the reviewed source snapshot and user unit on the camera host. Each
 `~/.config/rosy/omx-camera-<name>.env` binds `ROSY_ROS_SETUP`, `ROSY_CAMERA_SOURCE`,
 `ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC`, `ROSY_CAMERA_FRAME`, and `ROS_DOMAIN_ID`
-to that host's accepted runtime and selected camera. Keep device identities and
+to that host's accepted runtime and selected camera. The camera, viewer and
+collection units force `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` with no static
+peers (D-795): raw Image topics never cross machines. Every DDS consumer of these
+frames (`commissioning_view.py`, collection, the pilot simulation) runs on the
+camera host; another machine reads `commissioning_view.py`'s loopback HTTP/JPEG
+through an SSH localhost forward, or the WebRTC media path once it lands. Keep device identities and
 host paths in private configuration. Stop the previous producer for that exact
 camera before starting the unit, and verify advancing fresh frames and measured
 format after start. Arm drivers and their admission profiles remain separate.
@@ -177,10 +215,11 @@ calling that consumer ready; transport settings alone grant no arm authority.
 
 ## Build and shell profiles
 
-The hardware profile takes `OMX_ROS_DOMAIN_ID` and
-`OMX_ROS_AUTOMATIC_DISCOVERY_RANGE` from the Compose environment; defaults are
-domain 30 and `SUBNET`. Copy `.env.example` to `.env` beside this README to set
-them, then pass it with `--env-file deploy/robot/omx/.env` when running Compose from
+The hardware profile takes `OMX_ROS_DOMAIN_ID` from the Compose environment
+(default 30). Discovery is fixed to `LOCALHOST` and the container mounts Pinky's
+loopback-only Cyclone profile as `/etc/rosy/cyclonedds.xml`: no DDS traffic leaves
+this host (D-795). Copy `.env.example` to `.env` beside this README to set the
+domain, then pass it with `--env-file deploy/robot/omx/.env` when running Compose from
 the repository root. RMW is fixed to `rmw_cyclonedds_cpp` by D-117. The
 simulation profile uses a separate configurable domain (default 31) and forces
 `LOCALHOST` discovery.
@@ -369,6 +408,17 @@ block poses (helpers in `cell_sim_tools.py`). Do not start `pilot_sim_server` be
 probe refuses to run if one is present. Commands, stand-in flags, sim aid and results:
 [docs/validation/rosy-cell-gazebo-c3-2026-10-02](../../../docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md).
 
+## Instance namespace (simulation)
+
+`run_cell_owner.py`, `g2_owner.py`, `g2_common.py`, `g2_observer.py` and `probe_cell_transfer.py`
+take the arm graph names from `instance_names.py`. `ROSY_OMX_ROS_NAMESPACE` names the instance
+graph (for example `/omx_02`); unset means the root graph `/`, the single-arm default. The joint
+state topic, the `arm_controller` action and the `controller_manager` service are prefixed with it;
+`/clock` stays global. The second-owner refusal now refuses only an owner in the same namespace
+(an owner whose namespace cannot be read counts as the same graph). Two arms on one host still need
+separate graphs, sockets and devices (D-281); this only stops the root names from being hard-coded
+(D-778 §1, D-779).
+
 ## Cell owner Fleet fence configuration (simulation)
 
 `run_cell_owner.py` requires `ROSY_FLEET_FENCE_URL` and `ROSY_FLEET_FENCE_TOKEN`
@@ -517,3 +567,230 @@ export PYTHONPATH="$PWD/middleware/devices/omx/adapter:$PWD/contracts/foundation
 Hub 업로드는 [기존 registry 도구](../../../learning/registry/policy/README.md)의
 검토된 파일·private repo·고정 SHA readback 절차를 따른다. Compose는 upload나
 HF 인증을 하지 않는다. 실제 정책의 Gazebo 집기·실물 운용은 별도 검증이다.
+
+### Read-only startup register review
+
+The same `register_probe.py` READ(0,147) snapshot now includes pending goal
+position/current, profile velocity/acceleration, current/PWM limits, position PID
+and signed bus watchdog state (-1 is the documented watchdog fault).
+XL430 model 1060 has no current-control registers; those fields stay null.
+These are register observations, not accepted mechanical limits or stop evidence.
+
+The inspected Fleet LeRobot `OmxFollower.connect(calibrate=False)` still calls
+`configure()`, whose `torque_disabled()` context enables torque in `finally`.
+Do not use that method as a passive preflight. The installed-source inspection,
+actual torque-off snapshots and remaining initialization requirements are recorded
+in [the startup validation](../../../docs/validation/omx-native-startup-2026-10-16.md).
+
+### Local camera and commissioning feedback viewer
+
+After sourcing the camera ROS environment and selecting its ROS domain, run
+`python3 deploy/robot/omx/commissioning_view.py`. The read-only tool binds to
+`127.0.0.1:8766`; an authenticated SSH forward can expose that same loopback port
+on the development PC. It subscribes to existing top/front images and the
+commissioning joint topic, opens no devices, and issues no actuator commands.
+Source/receipt age, decoded picture expiry and disconnected joint feedback are
+checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
+
+### Prepare an initialization-description candidate
+
+```bash
+python3 deploy/robot/omx/preserved_description.py expanded.urdf new-candidate-directory
+```
+
+This offline command removes explicit GPIO initialization register parameters,
+sets torque/reboot selection to zero and preserves declared metadata/interfaces.
+It creates a new directory with description.urdf and receipt.json, refusing an
+existing output. It never starts hardware. The pinned driver still has activation
+writes and write services; this candidate does not prove a read-only driver or
+accepted physical runtime. See [evidence and remaining checks](../../../docs/validation/omx-preserved-description-2026-10-16.md).
+
+### Driver lifecycle error and owner-boundary patches
+
+The development Dockerfile applies `hardware-lifecycle-errors.patch` and
+`hardware-owner-command-path.patch` to the locked driver before compilation.
+Startup rejects failed initial command writes and exhausted torque enable retries.
+Failed activation attempts disable both motor groups and keep ERROR even if cleanup
+fails. Stop attempts both groups and reports disable failures. Direct register,
+reboot and torque command services are omitted; the read service remains.
+
+The locked-source compiled-method check runs on a lab host with g++ and patch:
+pass `ROSY_OMX_VENDOR_ROOT=<locked-checkout-relative-to-host-home>` before
+`test/test_omx_driver_lifecycle.py` in the remote pytest arguments. Without an
+explicit source checkout this hardware-free integration check skips. It compiles
+actual vendor method bodies with communication doubles and never opens a device.
+A passing result proves error propagation, not physical stopping or safe load retention.
+See [validation and remaining checks](../../../docs/validation/omx-driver-lifecycle-2026-10-16.md).
+
+`hardware-export-dependencies.patch` also exports the driver's public CMake
+dependencies `std_srvs` and `realtime_tools`, allowing downstream consumers to
+link its installed target. A real ROS initialization probe rejected a fixed
+nonexistent port and destructed normally; it never used a real serial port.
+See [native initialization evidence](../../../docs/validation/omx-native-init-negative-2026-10-16/result.md).
+
+`hardware-init-no-reboot.patch` additionally removes the hidden InitDxlComm fault
+reboot while preserving its error return. GPIO Reboot=0 alone did not cover it.
+The temporary Linux `probe_exclusive_open.cpp` helper checks the literal
+`ROSY_OMX_PROBE_PORT`, independently measured decimal `ROSY_OMX_PROBE_DEVICE_ID`,
+kernel exclusivity and sole fuser ownership before returning the SDK descriptor.
+It requires a non-root account; ordinary file opens use SYS_openat to avoid a
+loader-lock deadlock during ROS library constructors. It is for a bounded native
+probe, with pre/post snapshots and packet evidence, and is not an actuator runtime.
+The loaded driver must be bound to the patched artifact under the actual child
+environment. See [the actual passive-read result and failed attempts](../../../docs/validation/omx-native-passive-read-2026-10-16/result.md).
+
+`hardware-write-errors.patch` rejects unhealthy pre-status and propagates buffered
+or multiwrite failures immediately. `hardware-fault-stop.patch` connects error and
+shutdown callbacks to the existing stop implementation; a fault remains terminal
+even after cleanup succeeds. The installed framework calls on_error directly on
+write failure, so on_deactivate alone did not provide that stop attempt.
+The native consumer probe and inherited-callback negative control are recorded in
+[the write/fault validation](../../../docs/validation/omx-cyclic-write-fault-2026-10-16/result.md).
+These changes establish error propagation and software cleanup attempts; physical
+stopping, load retention and hardware owner admission still require actual evidence.
+
+`hardware-torque-uncertainty.patch` retains uncertain ON/OFF attempts until an
+acknowledged result, so lost enable acknowledgments cannot suppress cleanup.
+`hardware-status-readback.patch` requires exactly one Torque Enable and Hardware
+Error Status state interface per motor before opening the bus. The candidate
+generator adds these read interfaces and rejects ambiguous names. Read failures
+or invalid fields return ERROR immediately; publication uses successful physical
+reads instead of command caches or default zero/off values. Legacy descriptions
+without those fields require migration. Native PTY rejection and torque-off read
+evidence, including an unresolved one-tick goal-register change that failed the
+preservation check, are recorded in [measured-status validation](../../../docs/validation/omx-measured-status-2026-10-16/result.md).
+
+### Torque-off commissioning limits
+
+`commissioning_limits.py` is a separate exclusive configuration procedure. It
+requires the confirmed follower, six known motors, existing modes and torque/error
+zero. An explicit JSON input supplies positive raw PWM/current/profile caps. Only
+non-increasing supported caps may change, with durable original/intent records,
+one exact unicast write, acknowledgment and full readback before each next write.
+It never writes goals, torque, modes or offsets and never retries or rolls back an
+uncertain result. Existing output directories are refused.
+
+PWM and Current Limit writes persist in EEPROM; originals remain in the journal
+and successful lower caps stay installed. RAM profiles require fresh readback
+after restart. The tool does not authorize activation or establish physical limits.
+See [actual configuration, tests and remaining work](../../../docs/validation/omx-bounded-commissioning-2026-10-16/result.md).
+
+A bounded native controller probe additionally loaded the actual state broadcaster
+and six-joint trajectory controller with all torque selections zero. The current
+owner received real encoder states and rejected a stale command into HOLD before
+dispatch. Controller-specific `params_file` forwarding is required on the installed
+framework; generated ROS parameter YAML must avoid aliases. This establishes the
+torque-off feedback path, while operational admission and powered stopping remain
+unaccepted. See [execution and preserved failures](../../../docs/validation/omx-native-controller-feedback-2026-10-16/result.md).
+
+### Stop-only commissioning fallback
+
+`commissioning_stop.py` requires the confirmed by-id path, its expected device
+identity, an explicit subset of follower IDs, and an output directory. The native
+controller must release the serial device first. The helper acquires exclusive
+ownership, checks the opened device identity, and permits only one exact
+Torque Enable=0 write per selected motor. It attempts the remaining selected
+motors after an individual failure, never retries an uncertain write, and then
+reads all six motors. Clean success requires acknowledged writes, selected
+motors OFF/error-free, successful port cleanup, and a durable receipt.
+
+Stop attempts precede output creation so a full filesystem cannot suppress them.
+An existing record is preserved; recording failure makes the invocation fail.
+The helper cannot write ON, goals, modes, offsets, reboot or EEPROM settings.
+`stop_verified` describes the selected motors' electrical readback; it does not
+prove standstill or load support. The tool does not open the operational profile.
+
+An isolated transient systemd probe killed the native main process with all
+torque selections zero. `KillMode=control-group` released the controller's port
+before an independent `ExecStopPost` invoked the helper for the gripper. Actual
+OFF acknowledgment and all-six OFF/error-free readback passed. This verifies
+process-death handover while unpowered; a powered stop remains unverified.
+See [source, tests and actual stop-only execution](../../../docs/validation/omx-independent-stop-2026-10-16/result.md).
+## Environment-aware camera readiness
+
+`rosy-omx-camera-view.service` subscribes to the existing camera topics and serves
+the original frames and their quality on localhost port8767. It opens no camera
+device. `rosy-omx-camera-readiness.service` reads that viewer and adjusts only
+V4L2 controls of the already selected, single-owner camera devices.
+
+Copy `camera-readiness.json.example` to the private
+`~/.config/rosy/omx-camera-readiness.json`, replacing both identities with the
+existing camera configuration's persistent paths. The candidates are examples
+for the measured cameras, not universal camera defaults. The tuner checks the
+actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
+in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
+`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, and `camera_readiness.py` from the
+same revision. Keep the existing two preview environment files and producers.
+
+Install the two user units in `~/.config/systemd/user/`, then run:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now rosy-omx-camera-readiness.service
+```
+
+The readiness unit starts the read-only viewer and its existing preview
+dependencies. It writes baseline, attempted/applied settings and a current
+`readiness.json` under `~/.local/state/rosy/omx-camera-environment/`. Control writes
+start only after durable originals, measured control-range checks, and fresh
+advancing frames. Candidates settle before assessment. Both cameras require
+three confirmations; the receipt expires after750ms. A consumer must check the
+expiry, profile hash and current policy as well as `photometric_ready`.
+
+The web view shows brightness/contrast status on each frame. Use an SSH localhost
+forward to port8767; do not expose it publicly. An `INSUFFICIENT` assessment is a
+valid automatic outcome, not permission to ignore missing scene information.
+Bright gain noise can still pass a simple photometric screen; independent object,
+jaw clearance, calibration and motion-owner checks remain necessary.
+
+`systemctl --user stop rosy-omx-camera-readiness.service` restores the original
+camera controls. Both process cleanup and independent `ExecStopPost` attempt
+restoration. A changed profile requires a new state directory after confirming
+restoration; never delete a baseline to suppress a mismatch. Failure stops the
+tuner (`Restart=no`); inspect `restoration.json` and device/producer identity
+before restarting. Preview capture remains owned by the original producers.
+
+Policy v3 distinguishes normal, underexposed, overexposed, mixed lighting,
+low contrast and low spatial signal. The recovery state machine debounces both
+entry and exit over three advancing samples. Separate `candidates` (dark) and
+`bright_candidates` (overexposure) allow sustained dark-to-bright-to-dark recovery.
+Mixed lighting and missing structure do not trigger blind gain increases.
+Temporal brightness changes hold recovery; this is not a power-frequency flicker detector.
+
+Each confirmed condition starts an environment epoch. Best controls and exhausted
+candidates belong to that epoch. Settings require readback, a1s host-receive
+settling boundary, and5s cooldown measured after application completes. This
+does not establish sensor exposure synchronization. Recovery attempts, including
+partial failures and best selection, reserve a persistent budget before writes:
+six batches per minute across the two cameras. Budget exhaustion waits; clock
+rollback or invalid records stop recovery. Final baseline restoration is exempt.
+
+`environment.jsonl` retains state transitions with run/profile identity,
+environment epoch and control generation. This is an observation history, not a
+completed binding to collected episodes or training manifests. Preserve the old
+v2 `omx-camera-readiness/` baseline when upgrading to v3's new state directory;
+stop/restore the old tuner before changing the profile, sources or unit.
+
+Repeated polls of the exact same still-fresh frame/quality are `WAITING_FRAME`.
+They preserve distinct-frame confirmations without counting or refreshing READY,
+temporal samples or controls. Real expiry, backwards identity or contradictory
+quality resets confirmation. Poll frequency is not an assumed camera frame rate.
+
+The broader operating envelope, ownership and remaining dataset/evaluation
+contracts are in the [environment plan](../../../docs/plans/2026-10-17-omx-environment-readiness.md).
+
+Actual camera-only execution and deployment evidence:
+[2026-10-16 record](../../../docs/validation/omx-lowlight-automation-2026-10-16/result.md).
+Environment v3 execution and migration:
+[2026-10-17 record](../../../docs/validation/omx-environment-readiness-2026-10-17/result.md).
+
+
+## 다음 날 실물 수집 준비
+
+`collection_cli.py`가 기존 native ROS owner를 사용하는 bounded teacher 수집과
+장치에 연결하지 않는6개 `rehearsal-suite`를 제공한다. disabled profile/teacher/acceptance 예시,
+독립 환경·owner 감시, 원본 시각·RGB·reference·native event 보존과 비활성 systemd unit을 포함한다.
+실측 수용 뒤 check→preflight→첫1회 수집→검증 전송→사람 검토→모델 PC 학습을 진행한다.
+[실행 절차](../../../docs/plans/2026-10-17-omx-next-day-collection.md)와
+[소프트웨어 검증·양쪽 PC 배치](../../../docs/validation/omx-next-day-collection-2026-10-17/result.md)를 따른다.
+예시 값과 모의 실행은 물리 수용이나 실제 데이터가 아니다.

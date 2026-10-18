@@ -84,6 +84,9 @@ FULL_SUITES = (
     "learning/training/pinky/test",
     "learning/registry/policy/test",
     "learning/training/omx/test",
+    "learning/training/world_model/test",
+    "learning/evaluation/world_model/test",
+    "operations/prediction/world_model/test",
     "learning/curation/omx/test",
     "learning/curation/pinky/test",
     "middleware/core/events/test",
@@ -101,22 +104,17 @@ ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
 SUITE_SHARDS = {"fleet": 4, "sensing": 2}
-# Main CI 38056130519 (2026-10-10), seconds per slow Fleet file. These only
-# choose runners; every discovered test still runs exactly once.
+# Seconds per Fleet file of 5 s or more, the mean of CI 38807338775, 38711952782 and 38830518002
+# (2026-10-15/16, timestamps of the -v result lines); others weigh 1. These only choose runners;
+# every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
-FLEET_TEST_SECONDS = {
-    "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
-    "test_blocks.py": 89, "test_start_point_browser.py": 45,
-    "test_console_roles_browser.py": 28, "test_password_session.py": 28,
-    "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
-    "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
-    "test_signal_phase.py": 13, "test_trip_runner.py": 11,
-    "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
-}
+FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
-        ["learning/curation/omx/test"], ["learning/curation/pinky/test"]], "ros": "none"},
+        ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
+        ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
+        ["operations/prediction/world_model/test"]], "ros": "none"},
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
@@ -415,7 +413,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
                 add(path, f"changed test file {path}")
             continue
         module = repo.module_for(path)
-        referencing = repo.referencing_tests(path)
+        referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
         for test in referencing:
             add(test, f"references {path}")
         if module:
@@ -529,7 +527,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
     # One suite that cannot import (a wheel missing on this host) must not hide
     # the rest of a packed invocation; the collection error still fails the run.
-    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors"]
+    # Same ROS launch_testing block as CI (test/known_failures.py NO_ROS_LAUNCH_PLUGINS).
+    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors",
+            "-pno:launch_testing", "-pno:launch_ros"]
 
 
 def render(sel: Selection) -> str:

@@ -52,7 +52,11 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 86  # D-757 adds account administration and permission assets; D-763 4 the work/ package.
+    assert len(expected) == 97  # Includes the shared host report reader and stuck evidence helper.
+    assert {'shared/host-health.js', 'shared/stuck-evidence.js'} <= expected.keys()
+    assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',
+            'calibration/measured-calibration.css'} <= expected.keys()
+    assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
     assert {'accounts.html', 'shared/account-page.js', 'shared/account-permissions.js'} <= expected.keys()
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
@@ -84,7 +88,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
-        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress'):
+        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking'):
             for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):
                 target = 'fleet/server/' + source.name
                 assert names.count(target) == 1
@@ -318,6 +322,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'fleet.server.context_log', 'fleet.server.context_options',
                'rosy.decision.deliberation.profiles', 'rosy.decision.deliberation.judgment',
                'rosy.decision.deliberation.calibration', 'rosy.decision.deliberation.versioned_request',
                'rosy.decision.deliberation.versioned_cli', 'rosy.decision.deliberation.local',

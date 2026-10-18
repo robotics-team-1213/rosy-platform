@@ -163,6 +163,9 @@ def test_cleanup_cannot_target_other_units(monkeypatch):
     asyncio.run(run())
 
 
+@pytest.mark.skipif(not os.environ.get('XDG_RUNTIME_DIR')
+                    or not os.path.exists(os.path.join(os.environ['XDG_RUNTIME_DIR'], 'systemd', 'private')),
+                    reason='needs a running systemd user manager (the CI container has none)')
 def test_actual_user_manager_confirms_absent_generated_scope():
     from deploy.site.deliberation_sandbox import cleanup_scope
     unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'

@@ -320,3 +320,34 @@
 - 변경: `shared/site-map-model.js` `trafficCardLine`이 `/traffic` 행의 `preview` 첫 두 사건을 "예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도"로 붙인다. 없거나 만료한 미리보기는 서버가 행에서 빼므로 아무것도 안 보인다. 파일 800/800, 콘솔 단위 17,718/17,719.
 - 증거: `operations/fleet/test/web/traffic-layer.test.mjs`(원격 `test_site_map_api.py` node 시험 포함 fleet 5,290 passed). 브라우저는 확인 못 함.
 - gate 변화: 없음.
+
+
+## 2026-10-16 · uncommitted · 앱별 작업으로 이동하는 로봇 카드
+
+- 변경: 승인 directory에서 Robot/Pilot 링크를 구성하고 주소가 없거나 충돌하면 안내한다. 새 원장·명령·URL 토큰 전달을 추가하지 않는다. 세션·화면 수명 변경에서 캐시를 폐기하는 회귀를 검증한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · 8c6692128 · 설치 보정 손잡이의 상단 바 가림 수정
+
+- 변경: 실측 교정 패널로 늘어난 화면에서 기존 사각 보정 손잡이를 스크롤하면 고정 상단 바에 가려졌다. 손잡이의 스크롤 시작 여백에 공용 앱 바 높이와 간격 토큰을 적용했다.
+- 증거: 병합 전 전체 원격 검사 ea71743778의 `test_camera_rectification_direct_manipulation`이 실제 hit test에서 실패했다. 8c6692128의 같은 드래그 검사와 실측 교정 브라우저 두 폭은 3 passed, NEW 0이다. 원본 로그는 저장소 밖 `C:/DevTemp/camera-calibration/landing-handle-fix/`에 있다.
+- gate 변화: 없음. 수정본과 최신 main의 전체 병합 검증은 별도 수행한다.
+
+## 2026-10-17 · uncommitted · 실측 보정 조회와 승인 동시 실행 차단
+
+- 변경: 실측 보정 상태 조회 중 승인·확인·철회·영상 읽기를 잠그고, 이벤트 처리에서도 조회와 쓰기가 겹치지 않게 했다. source·session·revision 확인과 미리보기 만료는 유지한다.
+- 증거: FULL 통과 뒤 main 추가 변경 검사에서 미리보기 표시 1건이 실패했다. 기존 브라우저 흐름에서 상태 응답을 보류하는 재현 검사를 추가했고 commit `1cde86ca1`의 데스크톱·전화 폭 모두 조회 중 확인 버튼이 활성 상태로 남아 실패했다. 수정본의 원격 재검증은 후속이다.
+- gate 변화: 없음. 실패를 기준선에 추가하지 않았으며 main 착지·push·배포·실측·DEVICE/FIELD 수용으로 표시하지 않는다.
+
+## 2026-10-17 · uncommitted · 실측 보정 조회 중 입력 유지
+
+- 변경: 자동 상태 조회 중 로컬 파일·오차 한도·촬영 조건 입력은 유지하고, 승인·확인·철회·영상 읽기 요청은 계속 잠근다. 조회와 쓰기의 동시 실행 차단과 실제 session·revision 변경 시 조건 해제는 유지한다.
+- 증거: commit `8e72b84d65`의 FULL 일반 22묶음과 브라우저 216·211건은 통과했으나, 보정 확인란 클릭 1건이 실패해 착지하지 않았다. commit `11729e090`에서 실제 mouse down/up 사이에 상태 응답을 보류한 재현 검사는 두 폭 모두 확인란이 선택되지 않아 실패했다. 수정본 검증은 후속이다.
+- gate 변화: 없음. 실패 원본과 중단 상태를 외부 기록에 보존하며 실패 목록을 늘리지 않는다.

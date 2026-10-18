@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -22,7 +23,7 @@ def default_root():
     if configured:
         return Path(configured)
     if os.name == 'nt':
-        return Path('X:/DevTemp/rosy-model-delivery-journal')
+        return Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir()) / 'rosy-model-delivery-journal'
     return Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'rosy/model-delivery'
 
 

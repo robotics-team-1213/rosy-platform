@@ -1,4 +1,4 @@
-"""tools/land.py against throwaway git repos: a main checkout plus one topic worktree."""
+"""tools/land.py (with tools/land_checks.py) against throwaway git repos: a main checkout plus one topic worktree."""
 
 from __future__ import annotations
 
@@ -589,7 +589,8 @@ def test_logs_md_edit_of_an_existing_entry_still_refuses():
 @pytest.mark.parametrize("files, calls_expected, code", [
     # A NEW guard failure stops before the long round (pkg/test never runs).
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert False\n", "pkg/a.py": "x = 2\n"},
-     [[["test/architecture"]]], 1),
+     [[["test/architecture"]], [["test/architecture/test_rule.py::test_rule"]],  # D-790: rerun alone once
+      [["test/architecture/test_rule.py::test_rule"]]], 1),  # then once on main (MAIN-RED check)
     # Green guards, then the round as selected.
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"},
      [[["test/architecture"]], [["pkg/test", "test/architecture/test_rule.py"]]], 0),
@@ -653,3 +654,96 @@ def test_main_moving_during_the_guard_round_skips_to_the_next_round(repos, monke
     assert land.main(["--tests", "auto"]) == 0
     long_round = [["pkg/test", "test/architecture/test_rule.py"]]
     assert calls == [[["test/architecture"]], [["test/architecture"]], long_round]
+
+
+# --- D-790: load-flaky rerun, stale history, size advice ----------------------------
+
+def _red_once(repos, monkeypatch, alone_codes, ids=("pkg/test/test_a.py::test_a",)):
+    """The landing run fails ``ids``; the rerun alone returns ``alone_codes``. Returns the calls made."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    calls = []
+
+    def run(invocations, logs, *args, **kwargs):
+        calls.append([list(inv) for inv in invocations])
+        if len(calls) > 1:
+            return list(alone_codes)
+        for log in logs:
+            log.write_text("F [100%]\n" + "".join(f"FAILED {i} - TimeoutError\n" for i in ids) + "1 failed\n",
+                           encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    return calls
+
+
+def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, capsys):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    assert land.main(["--tests", "pkg/test"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert calls == [[["pkg/test"]], [["pkg/test/test_a.py::test_a"]]]  # one more invocation, the id alone
+    out = capsys.readouterr().out
+    assert "LOAD-FLAKY pkg/test/test_a.py::test_a" in out
+    candidates = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
+    assert candidates.startswith("pkg/test/test_a.py::test_a  # LOAD-FLAKY ") and "flaky_quarantine" in candidates
+    assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("alone_codes, ids, why", [
+    ([1], ("pkg/test/test_a.py::test_a",), "failed again when run alone"),
+    ([0] * 6, tuple(f"pkg/test/test_a.py::test_{n}" for n in range(6)), "a rerun alone is tried only for 1 to 5"),
+])
+def test_new_failure_that_fails_again_or_too_many_still_stops(repos, monkeypatch, capsys, alone_codes, ids, why):
+    main, wt = repos
+    before = git(main, "rev-parse", "HEAD")
+    calls = _red_once(repos, monkeypatch, alone_codes, ids)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert why in capsys.readouterr().err and git(main, "rev-parse", "HEAD") == before
+    assert len(calls) == (3 if len(ids) == 1 else 2)  # + the MAIN-RED check on main
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+def test_safety_root_test_is_never_rerun(repos, monkeypatch, capsys):
+    main, wt = repos
+    monkeypatch.setattr(land.land_checks, "_safety", lambda wt_, python, ids: list(ids))
+    calls = _red_once(repos, monkeypatch, [0])
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert "never retried (D-762)" in capsys.readouterr().err and len(calls) == 2  # + the MAIN-RED check
+
+
+def test_new_failure_that_also_fails_on_main_is_named_main_red(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before, shas = git(main, "rev-parse", "HEAD"), []
+
+    def run(invocations, logs, sha="HEAD", *args, **kwargs):  # red everywhere, main included
+        shas.append(sha)
+        for log in logs:
+            log.write_text("F [100%]\nFAILED pkg/test/test_a.py::test_a - AssertionError\n1 failed\n", encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    captured = capsys.readouterr()
+    assert shas[-1] == before and "MAIN-RED pkg/test/test_a.py::test_a" in captured.out
+    assert "Main is broken, not this branch" in captured.err and git(main, "rev-parse", "HEAD") == before
+
+
+def test_branch_on_the_pre_rewrite_history_is_refused(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land.worktree_rules, "STALE_COMMITS", 0)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == 1
+    assert "more than 0 commits not in main" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_size_failure_says_how_to_fix_it(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {land.SIZE_RANGE: "import sys\nprint('tools/x.py 612 > 600', file=sys.stderr)\nsys.exit(1)\n"}, "size")
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    assert land.main(["--tests", "auto"]) == 1
+    err = capsys.readouterr().err
+    assert "tools/x.py 612 > 600" in err and "never raise a row" in err and f"python {land.SIZE_RANGE} main HEAD" in err

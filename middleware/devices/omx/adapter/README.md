@@ -123,3 +123,40 @@ Recovery only makes the owner ready. A new separately admitted command is needed
 
 Host regression and its limits: docs/validation/d427-source-migration/omx-preempt-recovery-2026-10-04.md.
 No real operator, ROS transport, physical standstill or device recovery is claimed here.
+
+## Local observation viewer (D-770)
+
+On the camera ROS host, source its ROS setup and select the camera domain, then run:
+
+```bash
+python3 deploy/robot/omx/commissioning_view.py
+```
+
+The viewer binds only `127.0.0.1:8766`. Access it on that PC, or use an authenticated
+SSH forward with the same local port and open `http://127.0.0.1:8766/`.
+It subscribes to existing `/top_camera/image_raw`, `/front_camera/image_raw` and
+`/omx_commissioning/joint_states`; it never opens cameras or serial ports,
+publishes commands, enables a profile or starts the physical observer.
+The commissioning observer must already be running for joint values to appear.
+Those values are nominal radians from that observer, not accepted physical calibration.
+
+Only advancing source stamps are accepted. Both source and receipt age must be
+within two seconds; replay, future clocks, disconnected state and stalled image
+loads cannot keep old observations visible as live. Source timestamps describe
+host capture/read time, not synchronized camera exposure. This is a temporary
+commissioning tool, not a new Fleet API, a physical E-stop or control acceptance.
+
+## ROS joint-state source freshness
+
+The action runtime requires positive, advancing source timestamps within the
+configured state-age bound. It deducts transport delay from owner freshness and
+rejects incomplete, duplicate-name or nonfinite joint arrays. Rejected packets
+cannot refresh the snapshot or watchdog; an active goal then reaches the existing
+stale-state HOLD/cancel path. Extra uniquely named mimic joints remain supported.
+This validates message integrity and age, not publisher identity or physical stop.
+
+The optional `test/test_omx_native_ros_runtime.py` check runs the native ROS suite
+inside a committed remote-runner checkout. Select a Jazzy/Python 3.12 lab host and
+pass `ROSY_OMX_NATIVE_RUNTIME_TESTS=1` before that target. The adapter suite uses
+domain 113; policy transport/parent-episode tests use domain 199. Both use
+localhost discovery and test ActionServers only. No device or vendor launch runs.

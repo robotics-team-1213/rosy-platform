@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosy-media-edge"
+version = "0.1.0"
+description = "Optional native ROSY camera WebRTC publisher"
+requires-python = ">=3.12"
+dependencies = ["core_common>=0.0.2"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["rosy_media_edge*"]

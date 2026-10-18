@@ -326,3 +326,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 
 #review-versions img,#review-versions canvas{max-width:100%;height:auto;}
 #review-ai-jobs,#review-versions{overflow-wrap:anywhere;}
+/* D-792 camera setup */
+.camera-view{display:block;max-width:100%;height:auto;margin-block:var(--space-3);background:var(--surface-recessed)}
+.camera-numbers{display:grid;grid-template-columns:max-content 1fr;gap:var(--space-1) var(--space-4);font-variant-numeric:tabular-nums}

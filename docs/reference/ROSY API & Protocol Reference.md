@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.244
+**Version:** v1.271
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,59 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.271 CORE OMX policy I/O (D-800)
+
+Additive, operator-authenticated `/api/v1/arm/*`. No new TaskKind or Fleet grant.
+Unbound `CoreServices.arm_policy` returns 503 `ARM_POLICY_UNAVAILABLE`. The current
+port supports an explicitly installed SIM session only.
+
+| Method/path | Request | Response |
+|---|---|---|
+| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `camera: {name, shape}` (CHW) |
+| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `camera: {name, shape, rgb_base64}`; bytes are interleaved RGB uint8 HWC |
+| `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
+| `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
+
+The first three paths require the session's installed authenticated token ID.
+Stop is open to every operator. Revision: 64 lowercase hex characters; targets:
+finite JSON numbers (no bool/string), 1–8 exact installed joints. Request objects
+forbid extras. No client timestamp, lease or reset is accepted.
+Wrong principal/failed owner authority: 403 `ARM_POLICY_FORBIDDEN`; mismatched,
+consumed or replaced source: 409 `ARM_POLICY_CONFLICT`; prior goal active:
+409 `ARM_POLICY_BUSY`; schema errors: 400 (CORE ERR-101). Never retry an uncertain action.
+Capture time conservatively anchors action age; the owner rechecks source,
+lease, stop and envelope before submission. Clients wait for a fresh observation
+after completion. Observation data alone is not training ground truth.
+### v1.268 운영자의 정책 승인 표시와 세션의 `policy_admin` (D-793)
+
+Additive. 예전 방식 `site-users.yaml` 항목에 선택 필드 `policy_admin: true`(operator에만)를 더한다. 그 사람은 operator 역할을 유지하면서 `fleet.policy` 판단(§10.18)을 할 수 있다. 통합 계정(Rosy Account) 세션은 기존처럼 자원 권한으로 판단한다. `GET /api/fleet/auth/session`은 통합 계정이 아니고 `fleet.policy`가 있을 때만 `policy_admin: true`를 더 돌려준다(없으면 필드가 없다). 표시는 `deploy/site/site_users.py set-policy-admin`으로 켜고 끈다. 이 필드를 모르는 이전 Fleet은 파일을 거부하므로 Fleet을 먼저 배포한다. envelope 1.0 변경 없음.
+
+### v1.266 학습 정책 승인 관문: 단계·승인 창·확인 요청·사고 잠금·실행 lease (D-793)
+
+Additive. 새 Fleet 경로 묶음 `/api/fleet/workcells/{workcell_id}/policy/*`와 콘솔 화면 `/console/policy`다. 기존 경로·envelope 1.0 변경 없음. 장치 명령을 보내는 경로는 없다.
+
+- 학습 결과는 L0으로만 등록되고 단계는 `fleet.policy`(레거시 `policy-admin`) 승인으로 하나씩 오른다. L3·LIMITED는 제안자와 다른 사람이 승인한다.
+- 승인 창(shadow 8시간, 입회 시험 기본 15분·최대 30분, 제한 사용 8시간)과 실행 lease(기본 1초·최대 2초, 승인 창을 넘지 않음)를 분리한다. lease는 아직 장치에 전달되지 않는다(`device_delivery: "not_connected"`).
+- 열린 확인 요청이나 사고 잠금은 새 lease를 거절한다. 사고 신고는 이름 있는 운영자 누구나, 해제는 신고자와 다른 관리자가 한다.
+
+### v1.259 recipe/3 sku를 CELL_TRANSFER에 싣고, 팔마다 목표 술어를 두고, Cell 앱이 두 팔 Job을 미리 본다 (D-781 §2·§5, D-779 §4)
+
+Additive. 한 팔 Job(recipe/1·/2)의 grant 바이트, digest, 미리보기 응답은 그대로다. envelope 1.0 변경 없음.
+
+- **`cell_transfer.sku`.** `CellTransferPayload`에 선택 필드 `sku`(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`, `item: "box"`일 때만)를 더한다. 없으면 직렬화에서 빠져 digest가 이전과 같고, 있으면 digest가 덮는다. recipe/3 Step의 팔별 입력(`placement.actions[role]`)에 `sku`가 있고, Fleet은 그것을 grant 본문에 옮긴다. recipe/3 로더는 sku를 같은 식별자 규칙으로 받는다.
+- **owner의 승인된 물체 형상.** 형상 키는 `item_key`다: sku가 없으면 `item`(`box`·`slip_sheet`), 있으면 `box:<sku>`. owner는 `capability_current`·계획기·SIM 그리퍼 판정에서 이 키로 찾는다. recipe/3 검증기는 cell/3 문서에 대해 컴파일되는 레시피의 sku마다 `{grasp_width_m: width, grasp_depth_m, height_m}`를 `box:<sku>` 키로 낸다. owner가 cell/3 문서를 승인하는 길은 아직 없다(열린 항목). 그래서 실제 owner에서 recipe/3 레시피 승인은 아직 거절된다.
+- **팔마다 목표 술어.** 목표 허용오차가 설정된 Fleet은 recipe/3 Job의 Step마다 `goal_predicates: {arm_role: item_at_pose 술어}`를 고정한다. 술어는 주 배정 팔과 대체 팔마다 하나씩, 그 팔 입력으로 계산되어 그 팔의 `robot_base` 좌표계에 있다. 물체 중심 높이는 sku의 `grasp_depth`·`height`로 정한다. `POST /api/fleet/cell-goal-evidence`의 술어 팔은 Step에 배정된 첫 팔이다(첫 주 배정 팔, 또는 Step을 넘겨받은 대체 팔). 그 팔에 저장된 술어로 판정한다. 대체 팔이 실행한 Step은 그 팔 술어가 있으면 받는다. 없으면 409 `CELL_GOAL_PREDICATE_MISSING`이다. 첫 주 배정 팔 좌표의 단일 `goal_predicate`로 대체 팔을 판정하지 않는다. 나머지 범위 검사(`EVIDENCE_SCOPE_MISMATCH`, `PRODUCER_SCOPE_MISMATCH`)는 그대로다.
+- **Cell 앱 미리보기.** `POST /api/fleet/cell-app/compile`은 recipe/3 문서를 `compile_mixed`로 미리 본다. candidate envelope는 같다. `summary`에 `multi_arm: {arms: [{role, instance_id, workcell_id}], steps: [{index, sku, arm, alternates, zone, coupling, depends_on}]}`가 붙는다. `transfer_count`는 Step 수이고, `pallet_markers`는 팔레트마다 하나다. recipe/1·/2 응답에는 `multi_arm`이 없다. `POST /api/fleet/cell-app/proposals`는 recipe/3에서 두 팔 Job을 resolve한다. `instance_id`는 cell 팔 instance 가운데 하나여야 한다.
+- **두 팔 제안 경로**는 Proposal 절의 "Multi-arm proposal path"에 적었다(recipe/3 candidate → 두 팔 submission 모양, 팔, 배치).
+
+### v1.258 두 팔 Cell Job의 Step 목표 증거와 팔 하나 재개 (D-779 §3·§6)
+
+Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 판정이다. envelope 1.0과 한 팔 Job의 동작은 그대로다.
+
+- **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
+- **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 아직 없어 거절한다(D-779 열린 질문, fail closed). 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
+- **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
 
 ### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
 
@@ -2552,6 +2605,26 @@ carry height must cover both approaches. This schema describes one atomic
 pick-plus-place unit. It does not enable Fleet dispatch or certify that any
 receiver executes the variant; the D-403 simulation gate remains in force.
 
+D-779 §7 and D-780 §3, §5 add optional pair and barrier fields to the same variant
+(v1.257). `arm_role` (`^[a-z][a-z0-9_]{0,31}$`), `pair_id` and `partner_instance_id`
+(both present or both absent; the partner differs from `instance_id`) and `coupling`
+(`independent`, `loose`, `tight`; only on a pair grant) sit on the grant. The
+`cell_transfer` body may carry `barriers`, 1-4 entries of `{barrier_id, after_phase |
+before_first_phase: true, coupling_after, max_wait_s}` in phase order, one per boundary,
+with unique ids; `after_phase` is `approach`, `grasp` or `transfer` and `0 < max_wait_s <= 600`.
+A barrier list requires a pair grant, and `coupling` must equal the strongest
+`coupling_after` (`independent` without barriers), otherwise the grant is invalid.
+Absent fields are omitted from serialization, so a single-arm grant serializes and
+digests exactly as before; when present, the digest covers them.
+
+D-781 §2 (v1.259) adds the optional `cell_transfer.sku` (`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`,
+only with `item: "box"`): the recipe/3 item this step expects. It is omitted when absent,
+so recipe/1-2 grants keep their bytes and digest. The owner looks up the accepted grasp
+geometry (`grasp_width_m`, `grasp_depth_m`, `height_m`) by the payload's `item_key`:
+`item` without a sku, `box:<sku>` with one. A recipe/3 recipe accepted by an owner holds
+one geometry entry per sku under that key. The `pallet.transfer` Skill input keeps
+`item: "box"`; the sku is a grant field only.
+
 `DeviceActionState` is the durable local Action journal state: `PREPARED`,
 `SUBMITTING`, `ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`, `UNKNOWN`, `SUCCEEDED`,
 `FAILED`, or `HOLD`. A successful transport response or `SUCCEEDED` Action
@@ -2561,8 +2634,8 @@ authorizes an automatic re-submit. Read and cancel are fenced by the Fleet-
 issued action/attempt pair.
 
 Stop snapshots expose `OPEN`, `REQUESTED`, `LOCAL_LATCHED`, or `UNKNOWN`, with
-request source derived by the trusted server. Caller-supplied stop principal is
-forbidden. `OPEN` means the software submission fence has been rearmed for the
+request source (`fleet`, `operator_local`, or `coordinator` since v1.257) derived by the
+trusted server. Caller-supplied stop principal is forbidden. `OPEN` means the software submission fence has been rearmed for the
 reported generation. `LOCAL_LATCHED` is a middleware software fact; it is not a
 driver standstill readback, safety-rated E-stop, or physical stop confirmation.
 Physical stop and goal evidence remain separately sourced and correlated.
@@ -2577,6 +2650,24 @@ owner recovery adapter를 가진 같은-host OMX 구성은 version 1의 `GetOwne
 - local stop OPEN·현재 fence·미해결 Action 없음(PREPARED 포함)·선점 이후 fresh readback·operator 확인을 검사한다. stop→owner→journal 순서로 확인부터 복구까지 직렬화한다. journal commit 실패는 원래 owner HOLD를 같은 잠금 안에서 복원한다. 반환은 `decision`(accepted/state/reason), 정확한 장치·actor·readback identity이며 성공은 ready일 뿐 동작이나 물리 정지 증거가 아니다. 닫힌 fence/오래된 readback은 409, 저장소 실패는 503이다.
 
 Fleet 표면은 `GET /api/fleet/workcells/{workcell_id}/owner`(viewer 읽기), `POST /api/fleet/workcells/{workcell_id}/owner/recover`(configured named operator만)다. POST 본문은 `{operator_confirmed:true, observed_sequence, expected_generation}`(strict bool/int, 추가 필드 금지). Fleet의 기존 durable INTENT/RESULT 감사 경로를 사용하고 저장 실패·닫힌 dispatch·미해결 Action·generation 불일치 시 UDS를 보내지 않는다. workcell은 configured OMX map에서 instance로 해석하며 사용자가 instance를 바꾸지 않는다. POST는 현재 epoch/generation과 인증된 actor를 UDS에 전달한다. ACK의 identity·순번·ready 상태를 검사하고 잃거나 불명한 ACK를 자동 재전송하지 않는다.
+
+#### OMX 작업대 조율자 peer와 barrier (D-780)
+
+양팔 작업대의 owner는 설정 `coordinator_peer_uids`(기본 비어 있음)와 `coordinator_liveness_s`를 가진다. 목록이 비어 있으면 아래 연산과 검사는 없고, `GetBarrier`·`ReleaseBarrier`는 지금처럼 404 `UNKNOWN_OPERATION`이다. 조율자 UID는 Fleet UID와 달라야 한다. 연산별 허용 주체는 다음과 같다.
+
+| 연산 | Fleet | 조율자 |
+|---|---|---|
+| `SubmitAction`, `CancelAction`, `RecoverOwner`, `RearmLocal` | 허용 | 403 `COORDINATOR_NOT_ALLOWED` |
+| `GetAction`, `GetOwnerIdentity`, `GetOwnerState`, `GetStopState` | 허용 | 허용(읽기, `GetAction`은 principal 검사 없이 읽는다) |
+| `StopLocal` | 허용, 출처 `fleet` | 허용, 출처 `coordinator`, `reason`은 `PARTNER_FAILED`·`PARTNER_UNKNOWN`·`PARTNER_LINK_LOST`·`BARRIER_TIMEOUT` 가운데 하나(아니면 400) |
+| `GetBarrier`, `ReleaseBarrier` | 403 `COORDINATOR_PEER_REQUIRED` | 허용(version 2) |
+
+- `GetBarrier`: `{version:2, operation:"GetBarrier"}`는 이 owner의 미해결 짝 Action 목록 `actions`를, `action_id`를 더하면 그 Action 하나 `action`을 돌려준다. 항목은 Action·attempt·workcell·instance identity, `arm_role`, `pair_id`, `partner_instance_id`, `coupling`, 지금 구간의 결합 `coupling_now`, 이 owner의 정지 래치·Fleet fence가 그 generation에서 열려 있는지 `fence_open`, epoch·generation, `action_state`, 움직인 phase 여부 `moved`, 그리고 barrier마다 정의와 `gated_phase`, `state`(`not_reached`, `waiting`, `released`, `expired`), `arrived_at`, `released_at`이다.
+- `ReleaseBarrier`: `{version:2, operation:"ReleaseBarrier", action_id, pair_id, barrier_id, authority_epoch, dispatch_generation, partner_arrival:{instance_id, action_id, arrived_at}}`. owner는 grant의 `pair_id`(409 `PAIR_MISMATCH`), 계획의 barrier(404 `BARRIER_NOT_IN_PLAN`), grant의 epoch·generation과 지금 stop·Fleet fence(409 `FENCE_STALE`), 도착(409 `BARRIER_NOT_REACHED`), 만료(409 `BARRIER_EXPIRED`)를 더 움직일 수 없는 Action(`HOLD`, `UNKNOWN`, 종료; 409 `ACTION_NOT_ACTIVE`), owner 재시작 전에 기록된 도착(409 `BARRIER_STALE_BOOT`)을 확인한 뒤 해제를 기록한다. 이미 해제된 barrier는 저장된 해제를 `created:false`로 그대로 돌려준다. 짝의 도착과 조율자 주체 `coordinator-uid-<uid>`는 추적용으로 기록한다. 조율자는 두 owner가 모두 도착했고 둘 다 `fence_open`일 때만 해제하며, 한쪽만 해제된 채 다른 쪽이 거절되면 단단한 결합 구간에 들어간 팔에 곧바로 결합 정지(`PARTNER_FAILED` 또는 `PARTNER_UNKNOWN`)를 보낸다.
+- barrier에 이른 실행기는 다음 phase를 내지 않고 Action event `PHASE_WAIT`(barrier, 도착 시각)를 남긴다. ROS 목표가 없으므로 목표 시간 한계는 적용되지 않는다. owner의 주기 점검이 해제를 읽고 다음 phase를 낸다. 처음 phase 앞의 barrier에서 기다리는 Action은 `SUBMITTING`으로 보인다.
+- `max_wait_s`가 지나면 움직인 phase가 없는 Action은 `FAILED`(`BARRIER_TIMEOUT`)로 끝나고 owner는 멈추지 않는다. 움직인 phase가 있으면 owner HOLD다. HOLD는 출처 `coordinator`의 로컬 정지 래치와 Action HOLD이며, 지금처럼 운영자 확인으로만 풀린다. barrier에서 기다리는 동안 정지 래치나 authority fence가 닫히면 그 Action은 곧바로 끝난다(움직인 것이 없으면 `FAILED`, 있으면 HOLD, 이유 `STOP_FENCED_AT_BARRIER`). 짝 팔은 이를 `PARTNER_FAILED`로 읽는다.
+- `coupling_after: tight`인 barrier가 해제된 뒤부터 다음 barrier가 결합을 늦출 때까지, 조율자 UID의 요청이 `coordinator_liveness_s`(0.5 s 이상, 기본 2 s)보다 오래 없으면 owner는 출처 `coordinator`, 이유 `PARTNER_LINK_LOST`로 HOLD한다.
+- 조율자가 없는 owner는 `pair_id`나 `barriers`가 든 grant를 journal 기록 전에 409 `BARRIERS_UNSUPPORTED`로 거절한다. 이 표면은 소프트웨어 제출 동기이고 물리 정지나 E-stop 증거가 아니다.
 
 현재 이 recovery 표면은 OMX cell simulation composition에 연결된다. 실제 ROS/UDS·물리 장치 수용은 별도 증거이며, 이 API를 추가했다고 hardware owner를 켜지 않는다.
 
@@ -2627,6 +2718,7 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 | GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. v1.237 (D-763 4): the same scope as the work list — the proposer; any operator for a Job that is not `PROPOSED`; only a named operator for another principal's `PROPOSED` Job (others 404 `CELL_JOB_NOT_FOUND`). A reader who is not the proposer gets no `proposal_principal_id` and sees the proposer as `actor_id: "proposer"` in events. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/reconcile` | Named Operator | Read the current step back from the OMX owner now (GetAction), ignoring the readback backoff. 503 when the dispatcher is disabled. v1.240 (D-763 4 review): the returned Cell Job is redacted for a caller who is not its proposer, as in `GET /api/fleet/cell-jobs/{mission_id}` (no `proposal_principal_id`; the proposer's events read `actor_id: "proposer"`). |
 | POST | `/api/fleet/cell-jobs/{mission_id}/resume` | Named Operator | Body `{expected_generation}`. Re-approve a HOLD Job under the current fence: the first unconfirmed step becomes READY (or ACTION_SUCCEEDED if its last device outcome was a success; it is never resent), claims are re-taken at the new generation. Refused (409) while a claim is DISPATCHING or UNKNOWN, or for a cancelled Job. v1.240 (D-763 4 review): the returned Cell Job is redacted for a caller who is not its proposer, as in `GET /api/fleet/cell-jobs/{mission_id}` (no `proposal_principal_id`; the proposer's events read `actor_id: "proposer"`). |
+| POST | `/api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` | Named Operator | v1.258 (D-779 §6). Body `{expected_generation}`. Multi-arm Job only: return one `HOLD`/`OFFLINE` arm to `READY` under the current fence and release its `HELD` arm and zone claims; its Action whose last device outcome was a success stays `ACTION_SUCCEEDED` and is never resent. Refused (409 `CELL_JOB_RECOVERY_REFUSED`) for a single-arm Job, an unknown or unheld arm, a cancelled Job, a changed stop generation or authority (resume the whole Job), a `DISPATCHING`/`UNKNOWN` claim of that arm, and an arm held `TIGHT_PARTNER_HELD` while its tight partner is still `HOLD`/`OFFLINE`. The returned Cell Job is redacted as for `/resume`. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/cancel` | Named Operator | End the Job: status HOLD with reason `CANCELLED_BY_OPERATOR` (terminal; no CANCELLED status until the D-420 v2 schema) and its claims released in the same transaction. Refused while a claim is DISPATCHING or UNKNOWN. v1.240 (D-763 4 review): the returned Cell Job is redacted for a caller who is not its proposer, as in `GET /api/fleet/cell-jobs/{mission_id}` (no `proposal_principal_id`; the proposer's events read `actor_id: "proposer"`). |
 | GET | `/api/fleet/resource-claims` | Viewer | `{claims: [{resource_key, resource_kind, resource_id, owner_kind, owner_id, generation, phase, mission_id, job_status, job_reason}]}`; `mission_id`/`job_status`/`job_reason` are set when a Cell Job owns the claim, otherwise null. `phase` is CLAIMED, DISPATCHING, UNKNOWN or HELD (a held Cell Job; the stop latch keeps it, rearm ignores it). v1.240 (D-763 4 review): a viewer gets only `{resource_key, resource_kind, resource_id, phase}` per claim. An operator gets the full row for a Cell Job claim (`job_status` not null). Any other claim (legacy Mission, Task, direct action) is full only to the proposer of the legacy Mission that owns it, and reduced to the viewer fields for everyone else. |
 
@@ -2636,12 +2728,44 @@ The Cell Job candidate contains `recipe`, `cell`, `recipe_sha256`,
 `cell_sha256`, and submitted compiled `job`; its metadata limit is 64 KiB
 (ER 2 remains 32 KiB). Fleet recompiles with the injected process compiler and
 rejects a Job or digest mismatch. Recipe/Cell calculations remain outside
-Fleet. Its authenticated owner and request scope are
+Fleet. Multi-arm proposals are described below. Its authenticated owner and request scope are
 stored by Fleet; duplicate same-content requests return the existing proposal,
 while reuse with a changed candidate or workcell/instance returns `409
 REQUEST_CONFLICT`. The API does not call ER 2. Candidate records allow only
 selector/provenance metadata and reject principal, credential, and image-payload
 fields.
+
+**Multi-arm proposal path (recipe/3, D-781 §5, D-779 stages 2-4; v1.259).** A
+`cell_job` candidate whose `recipe.schema` is `rosy_cell.recipe/3` has the same envelope
+`{kind, recipe, cell, recipe_sha256, cell_sha256, job}`. Its `cell` is the provisional
+`rosy_cell.cell/3` document with `arms[{role, instance_id, workcell_id, base_in_cell, zone_id,
+home}]`. Its `job` is `{recipe_hash, cell_hash, planner_version, plan_digest,
+submission_version, plan}`, where `plan.steps[]` carry `sku`, `arm`, `alternates`, `zone`,
+`coupling`, `depends_on`, `pose_cell` and `carry_z`, and `plan.feed_order` gives the order
+per pick station. Resolve runs the process compiler's `compile_mixed` and refuses a Job
+or digest mismatch as for recipe/1-2. It also refuses a cell with fewer than two arms (a
+one-arm recipe/3 Job is not defined yet) and an `instance_id` that is not one of the cell's
+arm instances. The proposal's `workcell_id` is the cell's own workcell. The resolved
+multi-arm submission is:
+
+- `job_id`: SHA-256 over canonical `{recipe_sha256, cell_sha256, job}`, as for a single-arm Job.
+- `arms`: `[{role, instance_id, workcell_id}]` in cell order (2-4 arms; roles, instances and
+  owner workcells are distinct).
+- `steps`: one per plan step, `{skill_id: "pallet.transfer", version: "1.0.0", placement,
+  goal_predicates?}`. `placement` is `{arm, alternates, zone, coupling, depends_on, actions}`.
+  `actions` maps every primary and alternate role to its `pallet.transfer` inputs in that
+  arm's base frame, with `sku`. A coordinated step (`arm` is a list of two roles) has no
+  alternates. `goal_predicates` maps the same roles to the `item_at_pose` predicate in that
+  arm's frame; it is present when a goal tolerance is configured.
+- `resources`: `["workcell", <cell>]`, `["workcell", <each arm owner>]` and
+  `["pallet", <id>]` per filled pallet. Arm and zone claims are taken per Action (D-779 §5).
+- `ledger_markers` (one per pallet, after its last step), `recipe_digest`, `cell_digest`
+  and `process_artifact_digest`.
+
+The Job is stored `PROPOSED` with per-arm rows. A read adds `arms`, `placements` (with
+`assigned`, the arm(s) that run the step) and `step_actions`. Admission, two-person
+approval and dispatch are unchanged. A held single-arm step may go to a `READY`
+alternate (`CELL_STEP_ALTERNATE_ARM` event), whose own payload and predicate are then used.
 
 ER 2 feedback candidates use the same proposal read/resolve routes. Their
 response adds `source_mission_id`, `source_action_id`, `source_attempt_id`,
@@ -2897,6 +3021,24 @@ their basis) and confirms the step only when it is met, after the step's durable
 device `SUCCEEDED` for the same attempt. A submission carrying `satisfied` is
 rejected (422).
 
+v1.258 (D-779 §3): for a multi-arm Cell Job the evidence names the Action of the
+arm the step's predicate was compiled for (the placement's first primary arm), the
+producer is registered for the Job's cell `workcell_id` and that arm's
+`instance_id`, and the step is judged on its own (not by `current_step_index`). A
+coordinated step is confirmed only when every assigned arm Action's latest device
+outcome is its attempt's `SUCCEEDED`; the final observations follow the last of
+those successes and the initial one follows every arm's grant and precedes the
+first success. A step run by an alternate arm is refused
+(`EVIDENCE_SCOPE_MISMATCH`) until a per-arm predicate exists.
+
+v1.259 (D-781 §5): the predicate arm is the step's first assigned arm. That is the first
+primary arm, or the alternate that took the step. The step is judged against the
+predicate stored for that arm (`goal_predicates[arm_role]`, in that arm's `robot_base`).
+The producer must be registered for that arm's `instance_id`. A step run by an alternate
+arm is accepted when its predicate exists. Without it the step is refused with
+`CELL_GOAL_PREDICATE_MISSING` (409). A single `goal_predicate` is in the first primary
+arm's frame and never judges an alternate.
+
 Both poses require finite `x_m`, `y_m`, `z_m`, `roll_rad`, `pitch_rad`, `yaw_rad`.
 Observation timestamps are nonnegative epoch seconds. The read-only YAML registry
 pins producer/workcell/instance/recipe/cell/evaluator identities, `max_age_s`
@@ -2936,7 +3078,7 @@ and field acceptance require their own evidence.
 | `GET /api/fleet/cell-app/documents` | 기존 viewer | `{documents:[{kind,id,digest,updated_at}]}` |
 | `GET /api/fleet/cell-app/documents/{kind}/{identifier}` | 기존 viewer | `{kind,id,digest,document,updated_at}` |
 | `POST /api/fleet/cell-app/documents/{kind}/{identifier}` | named operator | `CellAppDocumentSaveRequest`: `{document,expected_digest:null 또는 sha256}` → 저장 문서. 생성은 null, 수정은 현재 digest가 필요 |
-| `POST /api/fleet/cell-app/compile` | named operator | `CellAppCompileRequest`: `{recipe_id,recipe_digest,cell_id,cell_digest}` → `{candidate,process_artifact_digest,summary:{transfer_count,pallet_markers}}`. 실행·제안·승인 부작용 없음 |
+| `POST /api/fleet/cell-app/compile` | named operator | `CellAppCompileRequest`: `{recipe_id,recipe_digest,cell_id,cell_digest}` → `{candidate,process_artifact_digest,summary:{transfer_count,pallet_markers}}`. recipe/3는 `compile_mixed`로 보고 `summary.multi_arm:{arms,steps:[{index,sku,arm,alternates,zone,coupling,depends_on}]}`를 더한다(v1.259). 실행·제안·승인 부작용 없음 |
 | `POST /api/fleet/cell-app/proposals` | named operator | `CellAppProposalRequest`: compile 참조 + `{request_key,workcell_id,instance_id}` → 기존 proposal resolve 응답. 구성된 service principal이 제안·resolve하며 admit하지 않음 |
 
 `kind`는 `recipe|cell`, 문서 ID는 `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`, digest는 소문자 sha256다. 문서는 finite JSON object, canonical JSON UTF-8 64 KiB 이하. 동일 DB의 문서 revision은 트랜잭션에서 비교한다. `request_key`는 160자 이하, `workcell_id`/`instance_id`는 96자 이하이며 공백 trim·제어문자 없는 기존 proposal 식별자 규칙을 따른다. 미리보기 candidate는 기존 `{kind:"cell_job",recipe,cell,recipe_sha256,cell_sha256,job}` 계약 그대로다. 저장 revision digest와 process의 recipe/cell hash는 각각 해당 canonical 표현의 해시다.
@@ -3113,10 +3255,38 @@ build/import, signed delivery, Native Pilot coupled client, 실제 두 화면 �
 Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 주장하지 않는다.
 
 
+## 10.18 Learned-policy governance (D-793)
+
+학습 정책이 실물을 움직이기 전의 사람 승인 기록이다. 규칙은 Fleet 서버가 판단하고 콘솔 `/console/policy`는 서버가 거절할 조작을 사유와 함께 미리 잠근다. 이 절의 어떤 경로도 장치에 명령을 보내지 않는다. 오류는 `{"detail": {"code": "UPPER_SNAKE"}}`다.
+
+| 경로 | 권한 | 설명 |
+|---|---|---|
+| `GET /api/fleet/policy-governance/workcells` | `fleet.read` | 설정된 OMX 작업셀 id 목록 |
+| `GET /api/fleet/workcells/{id}/policy` | `fleet.read` | `policies`(단계), `proposals`, `windows`(`active` 포함), `confirmations`, `incidents`, `now_ns`, `rules` |
+| `POST .../policy/proposals` | `fleet.policy` | `{operator_confirmed, policy_revision, to_stage, rig_revision, calibration_revision, evidence_sha256, note}`. 다음 단계만 허용(`STAGE_SKIP_REFUSED`), 첫 단계는 L0 |
+| `POST .../policy/proposals/{proposal_id}/decision` | `fleet.policy` | `{operator_confirmed, approve}`. L3·LIMITED 승인은 제안자와 다른 사람(`APPROVER_MUST_DIFFER_FROM_PROPOSER`, 403) |
+| `POST .../policy/windows` | `fleet.policy` | `{operator_confirmed, policy_revision, kind: shadow\|supervised\|limited, minutes?, scope, rig_revision, calibration_revision}`. 최소 단계 L2·L3·LIMITED. revision이 단계 기록과 다르면 `REVISION_CHANGED_REAPPROVAL_REQUIRED` |
+| `POST .../policy/windows/{window_id}/approve` | `fleet.policy` | `{operator_confirmed}`. supervised·limited는 요청자와 다른 사람. 작업셀당 열린 창 하나(`ANOTHER_WINDOW_ACTIVE`) |
+| `POST .../policy/windows/{window_id}/close` | 이름 있는 운영자 | `{operator_confirmed, reason}`. 멈춤은 더 강한 권한이 필요 없다 |
+| `POST .../policy/lease` | `fleet.operate`(operator·service) | `{episode_id, owner_session_id, duration_ms?(1..2000, 기본 1000), lease_id?}`. 열린 supervised·limited 창에서만, 확인 요청·사고가 없을 때만. 만료는 창 만료를 넘지 않는다. `lease_id`를 주면 같은 창·episode·owner session의 더 늦은 만료로 갱신. 응답의 `clock: "fleet_wall_ns"`, `device_delivery: "not_connected"` |
+| `POST .../policy/confirmations` | 이름 있는 운영자 | `{operator_confirmed, reason, policy_revision?, evidence(≤8 KiB)}`. reason은 `rules.reasons` |
+| `POST .../policy/confirmations/sync-owner` | 이름 있는 운영자 | owner readback이 `hold`이면 같은 HOLD당 한 건을 연다. `{owner, created}` |
+| `POST .../policy/confirmations/{confirmation_id}/resolve` | `fleet.policy` | `{operator_confirmed, resolution: resume\|abort\|send_to_learning, note, demote_to?}`. abort·send_to_learning은 창을 닫고, send_to_learning은 단계를 낮춘다(기본 L1). resume은 owner HOLD를 풀지 않는다(§10.12 owner recover) |
+| `POST .../policy/incidents` | 이름 있는 운영자 | `{operator_confirmed, description}`. 작업셀의 모든 창을 닫고 L3·LIMITED 승인과 새 창을 막는다 |
+| `POST .../policy/incidents/{incident_id}/clear` | `fleet.policy` | `{operator_confirmed, note}`. 신고자와 다른 사람 |
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
+| v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
+| v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
+| v1.265 | 2026-10-18 | Additive (D-789, feat/webrtc-camera-land): `/api/v1/vision/media/grants`·`/renew`·`DELETE`·`/source-grant`·`/validate` 영상 위임과 사이트 media origin의 `/v1/*` 경로. `vision.media.site_url`이 있으면 기본 활성, `enabled: false`로 끔. 상세는 v1.265 절 |
+| v1.259 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |
+| v1.258 | 2026-10-17 | Additive (D-779 §3·§6, feat/multi-arm-goal-evidence): `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` `{expected_generation}`(이름 있는 운영자, 두 팔 Job의 팔 하나, 단단한 결합 짝이 잡혀 있으면 409), `POST /api/fleet/cell-goal-evidence`의 두 팔 Job Step 단위 판정(술어 팔의 Action, 그 팔 instance의 producer, 협조 Step은 모든 팔 성공 뒤, 대체 팔 Step 거절). 한 팔 Job과 envelope 1.0 변경 없음. |
+| v1.257 | 2026-10-17 | Additive (D-780, D-779 §7, feat/omx-coordinator-barriers): `StopRequestSource.coordinator`와 조율자 정지 이유 4종, `FleetCellTransferGrant`의 선택 필드 `arm_role`·`pair_id`·`partner_instance_id`·`coupling`과 `cell_transfer.barriers`(없으면 직렬화와 digest가 이전과 같다), OMX owner UDS `GetBarrier`·`ReleaseBarrier`(version 2, 조율자 UID만)와 연산별 peer 역할, `PHASE_WAIT`, barrier 시간 초과(FAILED 또는 HOLD), 단단한 결합 구간의 조율자 생존 HOLD. 조율자 peer가 없는 owner와 barrier 없는 grant는 바뀌지 않는다. Fleet `/api/fleet/*`와 envelope 1.0 변경 없음. |
+| v1.256 | 2026-10-16 | Additive (D-775): preview 목적의 실측 교정 bundle 승인·영속 선택·CAS 철회, source config opt-in·수치 적용 readback, 현재 촬영 session에 결속한 named operator 확인과 signed measured preview. tracking/sighting 승인·주행 권한과 envelope 1.0은 유지한다. |
 | v1.242 | 2026-10-15 | Additive (D-763 조각 7, feat/fleet-job-trip-steps): `POST /api/fleet/trip-jobs` `{robot_id, steps:[{to, via[]}]}`(1–8), 이름 있는 운영자, `simulation` 프로필이고 Step 원장이 있을 때만. 응답 `{job}`(Step 원장 행, 종류 `TRIP`). 거절: 404 `UNKNOWN_ROBOT`, 422 `TRIP_UNKNOWN_PLACE`, 422 `LINK_UNBOUNDED_MOTION` `{reasons, missing}`, 409 `TRIP_ROBOT_BUSY`, 409 `JOB_ESTOP`, 409 `JOB_ROBOT_REFUSED`. trip 작업은 `GET /api/fleet/work`에 `cell_job` 행(`action_kind:"TRIP"`)으로 나온다. 재개·취소는 지금의 `/api/fleet/cell-jobs/{id}/resume`·`/cancel`이다. 동작: 차로 `arrived` 뒤 다음 trip이 그 로봇이 쥔 정지 하나를 넘겨받는다. envelope 1.0 변경 없음. |
 | v1.241 | 2026-10-15 | Additive (D-767 A부, feat/instruction-pose-stamp, Safety-Review 대상): `POST /api/v1/line-follow/junction` 선택 필드 `pose_stamp`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_instruction_stamp`(설정 `line_follow.instruction_stamp_enabled`, 기본 꺼짐), `line_follow.junction.distance_basis`·`distance_basis_reason`. 거리 있는 지시의 쓸 수 없는 stamp는 409 `INSTRUCTION_STAMP_UNUSABLE`(`detail.reason`)이고 상태는 그대로다. Fleet은 그 능력의 로봇에 `pose_stamp`를 싣고 굽이 앞당김과 전송 지연 허용치를 뺀다. v1.238–v1.240은 다른 작업이 선점했다. Fleet `/api/fleet/*` 변경 없음. envelope 1.0 변경 없음. |
 | v1.240 | 2026-10-15 | Behaviour (D-763 조각 4 리뷰, fix/fleet-proposal-read-scope; 인증·응답 범위만, 스키마 변화 없음): `GET /api/fleet/proposals/{proposal_id}`는 Cell Job 제안을 `GET /api/fleet/cell-jobs/{mission_id}`와 같은 범위로 읽는다 — 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만, 나머지 404 `PROPOSAL_NOT_FOUND`(없는 id와 같은 본문). 제안자 아닌 독자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`. 레거시 Mission 제안은 제안자만. admit·reject와 Cell Job reconcile·resume·cancel 응답의 Job도 같은 가림. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. `POST /api/fleet/channel-requests/{request_id}/admit`·`/submit`은 이름 있는 운영자(이름 없는 공유 토큰은 403 `OPERATOR_IDENTITY_REQUIRED`). 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` detail은 `job_id` 대신 `{"reason": "job", "owner_kind": "mission"}`. |
@@ -3506,6 +3676,7 @@ context는 request, receiver-challenge, session-request로 분리한다. 공개 
 `OPERATOR_IDENTITY_REQUIRED`이고, site-users와 로그인이 둘 다 없으면 Fleet은 도우미를 만들지 않는다.
 `host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, stoppable_units, reboot_delay_min}`이다.
 GET 본문은 그 목록과 함께 읽기 전용 `guard`(관제 PC `/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `/var/lib/rosy-host-state/status.json`)를 붙인다(D-530). 파일이 없거나 객체가 아니면 그 필드는 null이고, 수치를 만들지 않는다. PC 가드 항목의 `resources`는 `{avail_pct, swap_pct, load, cores, uptime_s, down}`이다.
+PC별 `guard[host].recovery`와 관제 PC `drift.recovery`는 D-530의 2026-10-18 실행값 감시 보고다(`time`, `role`, `state`, `issues`, `resources`, `watchdog`, `kernel`, `ssh`, `swap`). 구버전·접속 불가·해석 실패는 null/부재이며 정상으로 추정하지 않는다. 가드 자신의 행은 `source=local`이고 원래 보고 시각을 유지한다. 화면은 원격 호스트 보고 15분, 로컬/복구 보고 35분 초과를 점검 지연으로 표시한다. 새 제어 동작이나 설치 API는 추가하지 않는다.
 POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`,
 `cancel-reboot`, `restart-unit`, `stop-unit`만이다. `pkill`, 시그널, 셸, 프로세스 이름은 400
 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용 목록에 있고 그 동작이 허용될 때만 받는다(사이트 유닛은
@@ -3688,3 +3859,89 @@ AI 작업 상태는 queued/running/succeeded/failed/cancelled/stale다. 성공�
 승인·학습 투입이 아니다. 생성 시 stale version은 409, 잘못된 입력·미설정은 400,
 권한 거부는 403이다. 결과 등록 전 요청자의 세션/권한과 입력을 재검사한다.
 재시도는 현재 revision으로 새 POST다. 기존 작업 이력은 유지한다.
+
+
+## 실측 카메라 지도 미리보기 (D-775, v1.256)
+
+기존 tracking 승인·sighting 허용 revision은 유지한다. 실측 묶음 schema는
+`rosy.measured-calibration/1`이며 `core_common.protocol.measured_calibration`이 정본이다.
+source/map/revision, 원본 lens/floor 후보, 서로 다른 training/validation SHA-256 목록,
+독립 survey digest, capture(signature·reported lens·rotation), bounds_m, evidence_kind,
+canonical digest를 보존한다. 원본 후보 revision도 내용·원본 digest로 다시 계산한다.
+`rosy-camera-calibrate bundle --input <bundle-input.json> --output <new-dir>` 입력은
+`{report:<relative-report>, floor:<relative-floor>, context:{map_revision, survey_digest,
+capture, bounds_m, evidence_kind}}`다. 출력은 수치 전용 bundle.json이며 자동 승인하지 않는다.
+
+- POST `/api/fleet/calibrations`: 기존 body는 그대로, 새 body는
+  `{purpose:"preview", kind:"measured", bundle, expected_revision:string|null,
+  limits:{p95_m,max_m}}`. 이름 있는 operator만, measured 근거와 명시적 양수 한도 필수.
+- GET `/api/fleet/calibrations?purpose=preview`: preview 승인 목록·persistent와 적용 readback.
+  목적 생략은 기존 tracking 목록만 반환한다.
+- DELETE `/api/fleet/calibrations/{source_id}?purpose=preview&expected_revision=<revision>`:
+  이름 있는 operator의 원자적 철회. 기대 revision 불일치는 409이며 기존 tracking 기록은 유지한다.
+- GET `/api/fleet/detections/config?include_preview=true`: 해당 source token에만 optional
+  measured_preview를 추가한다. 기본 응답과 기존 calibration 필드는 유지한다.
+- POST `/api/fleet/detections/preview-status`: source token으로 자신의 revision/session/state/reason과
+  frame_seq, optional render_age_s(0 이상 5초 미만)를 보고한다. 추가 필드·영상은 거절한다.
+  readback 신선도는 Fleet 수신 시각과 마지막 render의 나이를 함께 확인한다.
+- POST `/api/fleet/vision/lease`: optional measured 요청은 source/session/revision/capture_signature와
+  confirm_conditions를 결속한다. 확인 권한은 named operator, 일반 viewer는 읽기만 가능하다.
+  서명마다 새 jti를 부여하여 조건 변경 뒤 옛 확인을 재사용하지 않는다.
+- Vision direct GET `/api/vision/sources/{id}/measured-status`는 기존 signed viewer lease로
+  session·입력 조건·적용 상태를 JSON으로 읽는다. frame GET의 signed measured 요청만 새 변환을 사용한다.
+
+저장 승인과 실제 적용은 다르다. Vision은 receiver boot/session과 정확한 입력 조건을 확인하고
+monotonic 기준 최대 5초의 config lease가 만료되면 적용을 중단한다. 갱신 실패는 lease를 연장하지
+않고 remap 뒤에도 generation/session을 다시 검사한다. 원본·기준 지도를 유지하며 미관측은 mask로
+구분한다. 실측 승인·미리보기는 위치 앵커·마커 높이 보정·주행·DEVICE/FIELD 수용을 부여하지 않는다.
+
+### v1.265 — D-789 WebRTC 영상 위임 자격
+
+실시간 영상 전환을 위한 추가 계약이다. 장치 설치·6대 현장 수용은 뜻하지 않는다.
+`site_url`(고정 HTTPS origin)이 설정되면 영상 위임은 기본 활성이고 `vision.media.enabled: false`로만 끈다
+(D-789 부록 2026-10-18, 측정 생략). `site_url`이 없으면 비활성이다. `audience`(`site:<id>`),
+`key_id`, `signing_key_file`(로봇별 전용 Ed25519 PEM)을 갖춰야 읽기 위임이 열린다.
+`source_credential_file`은 선택 설치된 로컬 영상 발행자만 읽을 32~512바이트 전용 자격이다.
+키·source 자격은 저장소 밖에 두고 media 서비스에만 필요한 최소 파일 권한으로 설치한다.
+없거나 잘못된 설정은 영상만 503 `MEDIA_UNAVAILABLE`이며 CORE 시작은 유지한다. 뷰어는 503이면 기존 JPEG에 남는다.
+설정되면 `/pilot` 페이지 CSP `connect-src`에 그 site origin 하나만 추가된다.
+
+| Method | Path | Authorization / body | Result |
+|---|---|---|---|
+| POST | `/api/v1/vision/media/grants` | CORE Viewer 이상; `{robot_id}` | 201 읽기 위임 |
+| POST | `/api/v1/vision/media/grants/{grant_id}/renew` | 같은 CORE 소유자 | 200 같은 grant_id, 수명 갱신 |
+| DELETE | `/api/v1/vision/media/grants/{grant_id}` | 같은 CORE 소유자 | 204 철회; 없는 ID는 같은 소유자 범위에서 멱등 |
+| POST | `/api/v1/vision/media/source-grant` | 전용 source Bearer; `{robot_id, grant_id?}` | 201 발행 위임; grant_id가 있으면 같은 발행 위임 갱신 |
+| POST | `/api/v1/vision/media/validate` | Authorization의 영상 위임 Bearer | `{active:false}` 또는 신선한 위임 상태 |
+
+읽기/발행 receipt는 `grant_id`, 새 `token`, `expires_at`(UTC epoch 초), `audience`,
+`robot_id`, `path`(`robots/<robot_id>/front`), `action`(`read|publish`), `site_url`이다.
+일반 Viewer body로 `action=publish`를 요청할 수 없다(기존 validation envelope의 추가 필드 400). 다른 robot·소유자·원본 권한
+상실은 403이다. 토큰·키는 URL이나 로그로 보내지 않으며 모든 위임 응답은 `no-store`다.
+CORE의 일반 Bearer는 validate에서 영상 자격으로 인정되지 않고, 영상 자격도 CORE 명령 권한이 없다.
+
+서명된 `rosy-media+jwt`는 Ed25519, key id와 정확한 robot/path/action/audience 및 최대 60초의
+iat/exp에 결속된다. 원본 CORE 권한을 매 검사마다 다시 확인하고 서버의 철회 기록과 대조한다.
+CORE 재시작은 이전 위임을 닫는다. Account는 현재 앱 cookie 세션에 결속하고 영상 재검사에서
+기존 Account 10초 cache/offline grace를 사용하지 않는다. cookie 없는 Account Bearer 위임은
+403 `MEDIA_BROWSER_SESSION_REQUIRED`다. 미디어 서비스는 1초마다 validate하고 원본 권한 상실·
+CORE 단절·활성 lease 만료 시 실제 MediaMTX 세션을 5초 안에 종료해야 한다.
+활성 미디어 세션의 20초 갱신과 종료 집행은 사이트 media 서비스의 별도 책임이다.
+
+사이트 media origin은 Fleet과 별도 서비스이며 다음 좁은 관리 경로를 제공한다. 전부 영상 위임
+Bearer를 헤더로 받고 `no-store`로 응답한다. 일반 CORE/source 장기 자격을 이 origin으로 보내지 않는다.
+
+| Method | Path | Scope / result |
+|---|---|---|
+| POST | `/v1/intents` | read 위임. 201 `{grant_id}`; 시작 demand 최대 10초 |
+| DELETE | `/v1/intents/{grant_id}` | 같은 read 위임의 시작 취소, 204 |
+| GET | `/v1/sources/{robot_id}/demand` | 해당 robot의 publish 위임. `{active, robot_id, fps, target_bitrate, max_bitrate}`; bitrate는 bit/s, 최대 1000000 |
+| GET | `/v1/session` | 위임 jti에 결속한 실제 MediaMTX `{session_id, expires_at}`; 아직 없으면 404 |
+| POST | `/v1/session/renew` | 갱신된 같은 위임으로 기존 실제 세션 lease 갱신. `{active:true, session_id}`; 소유자/scope 변경은 403 |
+| DELETE | `/v1/session` | 같은 위임의 실제 세션 종료, 204; 소유 불일치는 403 |
+
+MediaMTX WHIP/WHEP의 Location resource 식별자를 관리 API의 session_id로 추정하지 않는다.
+실제 session_id는 MediaMTX auth callback에서 얻은 id와 위임 jti의 결속으로 조회한다.
+관리 callback `/auth`와 `/health`, MediaMTX 관리 API는 loopback 전용이며 외부 proxy에 공개하지 않는다.
+`/auth`는 publish/read에 `protocol=webrtc`와 정확한 path·위임을 확인하고, action=api에는 별도 로컬
+관리 자격만 인정한다. source/read 위임으로 관리 API를 호출할 수 없다.

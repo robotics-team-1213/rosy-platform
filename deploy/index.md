@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · uncommitted · docs(omx): native preview 수신기 전송 조건
-- 2026-10-15 · 731c5ae61 · OMX 실물 제어 준비와 비구동 진단
-- 2026-10-15 · dbe5db55b · fix(omx): 카메라 사용자 서비스 복구
-- 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
-- 2026-10-14 · b3d6f4cd5 · OMX 녹화 검증 개선
+- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+- 2026-10-17 · 9108fd4d8e · fix(omx): 명시적 startup을 기존 정지·취소 경로에 연결
+- 2026-10-17 · 52062796dd · feat(omx): Docker 없는 native Gazebo 실행 경로
+- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결

@@ -23,7 +23,8 @@ hosts (D-553): each host runs one at a time and takes the next when free, larges
 first. Pytest never runs on this machine (D-584): when no host is reachable
 the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
-Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
+Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system
+temp directory without ``ROSY_SCRATCH``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
 collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
 on the host: ``-- ROSY_RUN_BROWSER_TESTS=1 <paths>`` runs the real-Chromium tests, and the job
@@ -45,6 +46,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -77,7 +79,7 @@ RESERVE_S = {"pytest": 4500, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
-PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider"]
+PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", *known_failures.NO_ROS_LAUNCH_PLUGINS]
 # Leading words of an invocation that remote_job.JOB exports instead of passing to pytest.
 ENV_ARG = re.compile(r"^ROSY_[A-Z0-9_]*=")
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
@@ -532,9 +534,13 @@ def worst(codes: list[int]) -> int:
     return max((0 if c == 5 else 1 if c < 0 else c for c in codes), default=0)
 
 
+def log_root(name: str) -> Path:
+    """$ROSY_SCRATCH/<name>, else the system temp directory."""
+    return Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / name
+
+
 def default_log_dir(sha: str) -> Path:
-    base = os.environ.get("ROSY_TEST_LOGS") or ("X:/DevTemp/remote-pytest" if os.name == "nt"
-                                                 else "/tmp/remote-pytest")
+    base = os.environ.get("ROSY_TEST_LOGS") or log_root("remote-pytest")
     return Path(base) / sha[:12]
 
 

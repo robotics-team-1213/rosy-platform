@@ -4,7 +4,7 @@ robot frames, and write per-frame branch counts, the way's steering target, over
 sheets. Recordings and results stay outside the public repository (D-226): --out inside it is refused.
 
   python tools/drivable_branch_replay.py --model X:/.../lane-seg-20261010-71edcb6d \
-      --frames X:/DevTemp/v13-drive/frames --video teleop_x.mp4 --every-s 1 --out X:/DevTemp/dbr/run1
+      --frames $ROSY_SCRATCH/v13-drive/frames --video teleop_x.mp4 --every-s 1 --out $ROSY_SCRATCH/dbr/run1
 
 Per frame (frames.csv): reason/branches/near_fraction from drivable_target; target_x is the way's
 centre column at its middle row (the steering target), error = (target_x - centre) / half width,

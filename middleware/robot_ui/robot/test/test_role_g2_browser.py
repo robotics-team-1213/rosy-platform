@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,7 +27,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 TOKENS = {"operator": "rosy-dev-operator", "administrator": "rosy-dev-admin"}
-CAPTURES = Path(os.environ.get("ROSY_SCREENSHOT_DIR", "X:/DevTemp/rosy-uiux-d306-roles-g2"))
+CAPTURES = Path(os.environ.get("ROSY_SCREENSHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-uiux-d306-roles-g2")
 SCENARIOS = {
     "setup": ("normal", "empty", "delayed", "disconnected", "unavailable", "unsupported", "forbidden", "error", "safe_stop", "confirm_cancel"),
     "device": ("normal", "empty", "delayed", "disconnected", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
