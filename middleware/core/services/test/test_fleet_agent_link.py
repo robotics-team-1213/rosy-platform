@@ -774,7 +774,7 @@ def test_a_backlog_replay_starts_after_a_jittered_delay(monkeypatch):
             raise OSError("connection reset")
 
     asyncio.run(asyncio.wait_for(agent._event_loop(Gone()), timeout=1.0))
-    assert asked == [(agent_mod.REPLAY_JITTER_S, {"maximum_s": agent_mod.REPLAY_JITTER_S})]
+    assert asked == [(0.5, {"maximum_s": 0.5})]
     agent._event_buffer[:] = agent._event_buffer[:1]          # a small replay is not delayed
     asyncio.run(asyncio.wait_for(agent._event_loop(Gone()), timeout=1.0))
     assert len(asked) == 1

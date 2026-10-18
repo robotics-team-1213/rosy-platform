@@ -50,7 +50,6 @@ EVENT_MAX_TRIES = 3
 #: commit per event, so a heartbeat queued behind a 1000-event backlog would miss its
 #: deadline and flap the link (D-419 landing review); behind 8 it does not.
 MAX_EVENTS_IN_FLIGHT = 8
-REPLAY_JITTER_S = 0.5   # a backlog larger than the window starts its replay 0.25-0.5 s late
 
 
 def next_backoff(current: float) -> float:
@@ -560,7 +559,7 @@ class FleetAgent(HeartbeatLoop):
         if self._event_slot is None:
             self._event_slot = asyncio.Event()
         if len(self._event_buffer) > MAX_EVENTS_IN_FLIGHT:   # network load: robots reconnecting together
-            await asyncio.sleep(retry_delay(REPLAY_JITTER_S, maximum_s=REPLAY_JITTER_S))   # replay apart
+            await asyncio.sleep(retry_delay(0.5, maximum_s=0.5))   # replay a backlog 0.25-0.5 s apart
         while self.enabled:
             if not self._event_buffer:
                 await asyncio.sleep(0.1)
