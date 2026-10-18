@@ -3,6 +3,10 @@
 A ``contracts/foundation`` module may select its known test readers. Runtime consumers,
 config files and CI workflows retain FULL until their downstream coverage is established.
 ``affected_tests.select`` calls `add_readers` for every triggered path.
+
+`registry_readers` narrows the other way: some contract suites scan every tree a registry lists
+(``shared/web/surfaces.yaml``) and never name those trees, so path matching missed them and the
+D-792 camera page in ``review_app_web`` landed red on the shared/web token suites (2026-10-18).
 """
 
 from __future__ import annotations
@@ -10,12 +14,16 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
+import yaml
+
 import affected_tests as at  # attributes read at call time, so the cyclic import is safe
 
 # D-762 stage 0 ("넓은 경로 일치가 아니라 실제 영향"): triggers whose real readers the selector can
 # find. A path matching only these selects its readers (`narrowed`); no reader found -> FULL.
 NARROWABLE_TRIGGERS = ("contracts/foundation/**",)
 FOUNDATION = "contracts/foundation"
+#: registry file -> (top-level list key, reader module its contract tests import)
+REGISTRIES = {"shared/web/surfaces.yaml": ("surfaces", "surface_registry")}
 FROM_IMPORT = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
 
 
@@ -129,3 +137,17 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
     if path.endswith(".py"):
         return None
     return None  # Naming a config file does not establish all consumers of its values.
+
+
+def registry_readers(repo: at.Repo, path: str) -> list[str]:
+    """Tests that import a registry's reader module when `path` is under a tree that registry lists."""
+    cache = vars(repo).setdefault("_registry_trees", {})
+    found: list[str] = []
+    for registry, (key, reader) in REGISTRIES.items():
+        if registry not in cache:
+            data = yaml.safe_load(repo.text(registry) or "{}") or {}
+            rows = data.get(key) if isinstance(data, dict) else None
+            cache[registry] = [r["path"] for r in rows or [] if isinstance(r, dict) and r.get("path")]
+        if any(at._under(path, tree) for tree in cache[registry]):
+            found += [t for t in repo.test_files if t != path and reader in repo.imports(t) and t not in found]
+    return found
