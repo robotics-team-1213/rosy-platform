@@ -215,6 +215,20 @@ def prove(out, runtime, camera, controllers, calibration):
             rig_revision='sim-rig-32x24',calibration_revision=cfg.calibration_revision))
         scope = LeaseScope(identity,'sim-episode',policy.recheck()['revision'],runtime.owner.session_id,
             fleet.window['window_id'],'sim-rig-32x24',cfg.calibration_revision,fleet.scope)
+        preparation = {}
+        for label, operation in (
+            ('stdlib_process',lambda:subprocess.run([sys.executable,'-I','-S','-c',
+                'import json, sys; from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener'],
+                timeout=.2,check=True)),
+            ('prepared_fleet_state',lambda:fleet.admin('GET',
+                '/api/fleet/workcells/'+cfg.workcell_id+'/policy'))):
+            began = runtime.monotonic()
+            try:
+                operation()
+            except Exception as error:
+                preparation[label+'_error_type'] = type(error).__name__
+            preparation[label+'_seconds'] = runtime.monotonic()-began
+        (out/'preparation-timing.json').write_text(json.dumps(preparation,indent=2))
         exchanges = []
         def request(method, path, body=None):
             began = runtime.monotonic()
