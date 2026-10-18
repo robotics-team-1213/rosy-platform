@@ -166,6 +166,7 @@ def test_a_one_sided_claim_failure_of_a_pair_leaves_nothing(tmp_path, monkeypatc
         rig.tick()
         _assert_claims_belong_to_unfinished_actions(rig)
     assert all(index not in _owner_steps(arm) for arm in rig.arms.values())
+    # Later left-arm steps may legitimately hold the shared zone; inspect this blocked pair.
     pair_actions = [a for a in rig.job()["step_actions"] if a["step_index"] == index]
     assert {a["status"] for a in pair_actions} <= {"WAITING", "READY"}
     assert all(a[key] is None for a in pair_actions for key in ("action_id", "attempt_id", "grant"))

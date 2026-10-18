@@ -55,9 +55,6 @@ case "$ROLE:$ACTION:$UNIT" in
     ;;
   ai:stop-unit:pinky-backend.service|ai:restart-unit:pinky-backend.service|\
   ai:stop-unit:pinky-frontend.service|ai:restart-unit:pinky-frontend.service|\
-  ai:stop-unit:pinky-nav2.service|ai:restart-unit:pinky-nav2.service|\
-  ai:stop-unit:pinky-rosbridge-d12.service|ai:restart-unit:pinky-rosbridge-d12.service|\
-  ai:stop-unit:pinky-rosbridge-d13.service|ai:restart-unit:pinky-rosbridge-d13.service|\
   ai:stop-unit:pinky-r2-watch.service|ai:restart-unit:pinky-r2-watch.service)
     owner=$(cat "$CONF/units-user" 2>/dev/null || true)
     [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"

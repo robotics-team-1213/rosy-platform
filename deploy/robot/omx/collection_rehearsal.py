@@ -10,11 +10,11 @@ def profile():
         max_state_age_s=.2, max_reference_age_s=.2, max_skew_s=.1, max_session_s=5., max_frame_jitter_s=.2,
         free_disk_bytes=1024*1024, camera_shapes={r: [32, 32, 3] for r in ('top', 'front')},
         joint_names=['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1'],
-        normalization=[[-1., 1.] for _ in range(6)])
+        normalization=[[-1., 1.] for _ in range(6)], reach_tolerance_rad=[.01]*6)
 
 
 def teacher():
-    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.35)])
+    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.35)])
 
 
 class RehearsalBackend:
@@ -43,7 +43,9 @@ class RehearsalBackend:
                 usable=condition == 'NORMAL', mean_intensity=90., spatial_contrast=20., p5=10., p95=180.,
                 dark_fraction=.1, clipped_fraction=.01))
         values = normalize(self.target, self.profile)
-        return dict(time_ns=now, environment=env, observation_state=values, action=values,
+        # no_motion: the controller reports success while the joints stay where they started.
+        joints = [0.]*6 if self.fault == 'no_motion' else list(self.target)
+        return dict(time_ns=now, environment=env, observation_state=values, action=values, joint_positions=joints,
             joint_source_stamp=now/1e9, reference_source_stamp=now/1e9, state_age_s=0., reference_age_s=state_age,
             images={r: dict(data=bytes([self.sequence % 255])*32*32*3, width=32, height=32,
                             source_stamp=now/1e9) for r in ('top', 'front')})

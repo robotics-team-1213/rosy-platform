@@ -37,6 +37,7 @@ CONSOLE_ASSETS = {
     "measured-calibration-view.js": ("calibration/measured-calibration-view.js", "application/javascript"),
     "measured-calibration.css": ("calibration/measured-calibration.css", "text/css"),
     "host-services.js": ("host-services.js", "application/javascript"),
+    "host-health.js": ("shared/host-health.js", "application/javascript"),
     "peer-picker.js": ("peer-picker.js", "application/javascript"),
     "device-discovery.js": ("devices/device-discovery.js", "application/javascript"),
     "address-drift.js": ("shared/address-drift.js", "application/javascript"),
@@ -47,6 +48,9 @@ CONSOLE_ASSETS = {
     "login-page.js": ("shared/login-page.js", "application/javascript"),
     "profile-page.js": ("shared/profile-page.js", "application/javascript"),
     "account-page.js": ("shared/account-page.js", "application/javascript"),
+    "policy-page.js": ("work/policy-page.js", "application/javascript"),
+    "policy-model.js": ("work/policy-model.js", "application/javascript"),
+    "policy.css": ("work/policy.css", "text/css"),
     "account-permissions.js": ("shared/account-permissions.js", "application/javascript"),
     "login-return.js": ("shared/login-return.js", "application/javascript"),
     "password-login.css": ("shared/password-login.css", "text/css"),
@@ -58,6 +62,7 @@ CONSOLE_ASSETS = {
     "formation.js": ("formation.js", "application/javascript"),
     "motion-readiness.js": ("motion-readiness.js", "application/javascript"),
     "line-stuck.js": ("line-stuck.js", "application/javascript"),
+    "stuck-evidence.js": ("shared/stuck-evidence.js", "application/javascript"),
     "trip-replan.js": ("trip-replan.js", "application/javascript"),
     "link-tag.js": ("link-tag.js", "application/javascript"),
     "site-path.js": ("site-path.js", "application/javascript"),
@@ -120,6 +125,11 @@ def install_static_routes(app: FastAPI) -> None:
     @app.get("/console/accounts", include_in_schema=False)
     def console_accounts_page():
         return FileResponse(WEB_ROOT / "accounts.html", media_type="text/html",
+                            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
+
+    @app.get("/console/policy", include_in_schema=False)
+    def console_policy_page():
+        return FileResponse(WEB_ROOT / "work/policy.html", media_type="text/html",
                             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
 
     @app.get("/console/profile", include_in_schema=False)

@@ -136,6 +136,8 @@ def test_stop_and_owner_state_are_served_to_fleet_only(tmp_path):
     ({"instance_id": "omx_cell_a_02"}, "identity"),
     ({"calibration_revision": "omx-f-gazebo-only-v1"}, "identity"),
     ({"allowed_owners": ("pilot_sim", "rule_based")}, "rule_based"),
+    ({"allowed_owners": ("rule_based", "learned_policy")}, "rule_based"),
+    ({"allowed_owners": ("learned_policy",)}, "rule_based"),
 ])
 def test_owner_config_must_match_and_admit_only_rule_based(tmp_path, override, message):
     with pytest.raises(ValueError, match=message):
@@ -222,6 +224,8 @@ def test_loader_builds_settings_config_and_names():
     (_document(instance_id="<accepted-instance>"), "placeholder"),
     (_document(socket_root="run/rosy/omx"), "absolute"),
     (_document(owner_config=dict(_document()["owner_config"], position_limits={})), "position_limits"),
+    (_document(owner_config=dict(_document()["owner_config"], allowed_owners=["rule_based", "learned_policy"])),
+     "rule_based"),
 ])
 def test_loader_refuses_incomplete_or_foreign_documents(document, message):
     with pytest.raises(ValueError, match=message):

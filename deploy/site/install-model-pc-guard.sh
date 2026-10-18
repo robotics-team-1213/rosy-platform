@@ -40,35 +40,14 @@ put() {  # put <path> <mode> <content>
 }
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || { echo "run with sudo (or --dry-run)" >&2; exit 1; }
 
-# 1. hardware watchdog
-for module in iTCO_wdt wdat_wdt; do
-  if run modprobe "$module" 2>/dev/null && { [ "$DRY" = 1 ] || [ -e /dev/watchdog0 ]; }; then
-    # Ubuntu kmod deny-lists the watchdog modules, so modules-load.d skips them at boot
-    # (D-530 6a); an explicit modprobe from a sysinit unit is what loads them.
-    put /etc/systemd/system/rosy-watchdog-load.service 0644 "[Unit]
-Description=Load the $module hardware watchdog (kmod deny-lists it; modules-load.d cannot) (D-530)
-DefaultDependencies=no
-After=systemd-modules-load.service
-Before=sysinit.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/sbin/modprobe $module
-
-[Install]
-WantedBy=sysinit.target"
-    run rm -f /etc/modules-load.d/rosy-watchdog.conf
-    run systemctl daemon-reload
-    run systemctl enable rosy-watchdog-load.service
-    put /etc/systemd/system.conf.d/rosy-watchdog.conf 0644 "[Manager]
-RuntimeWatchdogSec=30s
-RebootWatchdogSec=2min"
-    run systemctl daemon-reexec
-    echo "watchdog: $module"
-    break
-  fi
-done
+# 1. The same boot loader as role-based provisioning; do not create a second desired state.
+run install -d -m 0755 /etc/systemd/system.conf.d
+run install -m 0644 "$HERE/../hosts/common/host-state/rosy-watchdog-load.service" /etc/systemd/system/rosy-watchdog-load.service
+run systemctl daemon-reload
+if run systemctl enable --now rosy-watchdog-load.service; then
+  run install -m 0644 "$HERE/../hosts/common/host-state/rosy-watchdog.conf" /etc/systemd/system.conf.d/rosy-watchdog.conf
+  run systemctl daemon-reexec
+fi
 [ "$DRY" = 1 ] || [ -e /dev/watchdog0 ] || echo "watchdog: no device; hard hangs still need a power press" >&2
 
 # 2. kernel lockups reboot

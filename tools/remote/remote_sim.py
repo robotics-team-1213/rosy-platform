@@ -17,7 +17,7 @@ host, the ``sim`` floor (6 free cores, 8 GB) after ``~/rosy-jobs`` locks and res
 ``remote_pytest.py`` (git bundle into ``~/rosy-test``); the run builds ``gz_sim`` with colcon,
 then runs the bench headless under ``systemd-run --user --scope`` (MemoryMax, CPUQuota, nice).
 The remote shell stops that scope and frees the lock when it ends; then the outputs are fetched.
-Logs and bench outputs land in ``--log-dir`` (default ``X:/DevTemp/remote-sim/<sha>``); the
+Logs and bench outputs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-sim/<sha>``, else the system temp directory); the
 run's files are removed after a good fetch and kept on the host when the fetch fails. Never run on the operator laptop (D-584).
 Standard library only.
 """

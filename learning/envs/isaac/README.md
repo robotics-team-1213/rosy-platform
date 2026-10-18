@@ -7,7 +7,7 @@ D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless 
 ## Requirements
 
 - Ubuntu 24.04 with ROS 2 Jazzy `xacro` and the separately managed Isaac Sim SDK on a supported NVIDIA GPU host. See [D-434](../../../docs/adr/D-434-model-pc-and-site-pc-roles.md) for the accepted host/version/resource boundary. The GPU runtime is not part of this repository or the Pinky Pi image.
-- Source the ROSY Jazzy workspace for `xacro` package lookup. Before running Isaac Sim, configure its ROS 2 bridge. Set `ROS_DOMAIN_ID=41` for `rosy_01`; CORE retains its configured CycloneDDS transport, and the SDK's bridge transport must interoperate with it.
+- Source the ROSY Jazzy workspace for `xacro` package lookup. Before running Isaac Sim, configure its ROS 2 bridge. Set `ROS_DOMAIN_ID=41` for `rosy_01` and `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`; CORE retains its configured CycloneDDS transport, and the SDK's bridge transport must interoperate with it. Isaac Sim and its CORE run on the same GPU host: DDS never crosses machines (D-795), so a real Pinky (loopback-only DDS) cannot be driven from Isaac over the LAN.
 - Choose an output directory outside the repository. On this Windows workspace, generated files belong only under `X:\DevTemp\`; on the Linux GPU host, use a scratch directory outside the checkout.
 
 ## Run on the GPU host
@@ -17,7 +17,7 @@ source /opt/ros/jazzy/setup.bash
 export ROSY_REPO=/path/to/rosy-platform
 export ISAAC_PYTHON=/path/to/isaac-sdk-venv/bin/python
 source "$ROSY_REPO/install/setup.bash"
-export ROS_DOMAIN_ID=41
+export ROS_DOMAIN_ID=41 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp  # or use the same supported RMW as CORE
 python3 "$ROSY_REPO/learning/envs/isaac/prepare_urdf.py" --output /scratch/rosy-isaac/rosy.urdf
 "$ISAAC_PYTHON" "$ROSY_REPO/learning/envs/isaac/run_rosy.py" \

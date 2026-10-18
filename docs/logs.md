@@ -9012,6 +9012,20 @@ osy-d395-s1d\`.
 - 증거: native `--tests auto`가 commit `a9a061446c`를 한 round의 FULL 26개 묶음으로 검증해 28,248 passed / 1,909 skipped, NEW·known·flaky 0으로 끝났다. 그중 브라우저 opt-in 네 묶음은 928 passed / skip 0이며 사전 구조 검사 247 passed는 별도다. 최종 종료값 0과 실제 로컬 main ff-only 병합을 원본 영수증·로그·소스 blob으로 확인했다.
 - gate 변화: 없음. 계수는 중복 선택이 있는 invocation 합계이며 subtest·skip을 통과 수에 더하지 않는다. 실측 원본·독립 측량·로봇 odom 오차·DEVICE/FIELD·D-598 활성화는 제외하며 push·배포·로봇 조작은 수행하지 않았다.
 
+## 2026-10-17 · uncommitted · D-789 6대 카메라 WebRTC 전환 결정과 실행 계획
+
+- 사용자 요청: WebRTC 전환을 ADR로 결정하고 바로 구현에 착수할 계획을 작성한다.
+- 변경: 로봇 단일 H.264/WHIP 송출 → 별도 사이트 MediaMTX → WHEP 브라우저 분배를 D-789로 결정했다. CORE 위임 인증, Fleet 비중계, 6대 영상 예산·혼잡 강등·단계적 기본값 전환을 명시했다.
+- 산출물: `docs/adr/D-789-six-robot-webrtc-camera-transport.md`, `docs/plans/2026-10-17-webrtc-camera-migration.md`. 브랜치 `docs/webrtc-camera-migration`.
+- 검증: lint·링크·원격 문서 계약 검사를 수행한다. 구현·ARM64 산출물·장치 설치·6대 FIELD 검증은 이번 문서 작업에서 수행하지 않았다. 기존 gate 변화 없음.
+- gate 변화: 없음. WebRTC 구현·장치·현장 수용은 T1~T6의 후속 증거로 판정한다.
+
+## 2026-10-17 · uncommitted · D-791 미디어 프로세스의 독립 배포 소유권
+
+- 변경: D-789 발행자 구현은 독립 `middleware/media` wheel, 사이트 권한 구현은 독립 `operations/site_ui/media` wheel로 등록했다. 기존 인식 패키지와 frozen size ratchet을 키우지 않는다.
+- 증거: 원격 구조 검사에서 기존 perception·schema의 ratchet 증가와 새 사이트 모듈의 미계측을 발견했다. receipt DTO를 공통 계약으로 옮기고 실제 독립 wheel을 크기 단위로 등록하여 재검증한다.
+- gate 변화: 없음. 전송·권한·예산 수용 계약은 D-789를 유지하고 구현 내부의 소스 경로만 D-791로 보완한다.
+
 ## 2026-10-17 · uncommitted · 기기·실행 호스트·담당 Fleet 분리 목표와 설계
 
 - 변경: 기존 기기 등록을 재사용하고 PC 배치와 별도로 담당 Fleet을 지정하는 목표를 `plans/2026-10-17-fleet-device-authority-design.md`에 정리했다. 장치 측 담당 지정 정본, 기존 dispatch fence와 별도의 지정 버전, 명시적 인계, 같은 호스트 UDS와 원격 gateway 경계, 양팔 구성 및 세 가지 PC 배치의 완료 조건을 정의했다.
@@ -9023,3 +9037,53 @@ osy-d395-s1d\`.
 - 변경: 기존 OMX host inventory를 재사용 출처로 명시하고, 한 팔을 가리키는 기존 Workcell 행과 협업 작업대 그룹을 구별했다. 담당 회수와 driver 제출을 같은 stop fence 경계로 직렬화하는 조건 및 인계 경합 검증을 추가했다. 동일 Fleet ID/등록 자격의 중복 실행 방지와 활성 세션 비밀 탈취의 신뢰 한계도 구별했다.
 - 근거: `deploy/robot/omx/host_inventory.py`는 host/instance와 장치 선택을 검증하고, `action_runner.py`는 journal 준비 뒤 `_fenced_submission`에서 권한을 재검사한 후 driver 제출과 수락 기록을 stop fence 안에 둔다. 기존 grant는 Fleet 논리 신원이나 담당 지정 버전을 담지 않는다.
 - gate 변화: 없음. 설계의 코드 대조 보완이며 구현 승인·제품 변경·실물 제어권 변경이 아니다. 원격 pytest·ROS-SIM·DEVICE/FIELD는 실행하지 않았다.
+
+## 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
+
+- 변경: 학습 산출물은 L0 등록만 하고 L1–L3·제한 사용은 Fleet API의 사람 승인으로만 연다는 ADR D-793(Proposed)을 추가했다. 승인 창(L3 15분/상한 30분, 제한 사용 8시간)과 실행 lease(기본 1초/상한 2초)를 나누고, 위험 상황은 HOLD 뒤 확인 요청으로 남겨 API로만 푼다. 실물 owner의 private 설정 `learned_policy` 기동 거부와 실제 도달 확인을 첫 구현 순서로 정했다.
+- 증거: 저장소 조사(owner 허용 목록, `OwnerPolicySession` lease 상한 1초, registry 승격, mission admit·owner recover 패턴)와 비공개 2026-10-18 micro-step 기록 대조. 코드·장치 변경 없음.
+- gate 변화: 없음. 구현·Safety review·실물 수용은 후속이다.
+
+## 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
+
+- 변경: `run_hardware_owner.py --check`가 조립 단계와 같이 `rule_based` 외 owner(`learned_policy` 포함)를 거부한다. 수집기는 성공 terminal 뒤 실제 native 관절이 profile `reach_tolerance_rad` 안에 들어와야 `REACHED`를 남기고 다음 단계로 간다. 들지 않으면 ABORT·HOLD하며 intake는 단계마다 허용차 안의 `REACHED`를 요구한다. rehearsal에 `no_motion` 시나리오를 더했다.
+- 증거: 2026-10-18 비공개 micro-step 기록에서 토크 ON 그리퍼가 목표 2틱 송신 뒤에도 움직이지 않았는데 Action은 SUCCEEDED였다. 원격 시험 결과는 커밋 메시지·후속 행에 남긴다.
+- gate 변화: 없음. 실물 수집·Safety review 수용은 후속이며 실제 시연은 0회다.
+
+## 2026-10-18 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
+
+- 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
+- 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-18 · 5e3af70e6d · D-800 CORE 경유 OMX–LeRobot 연동
+
+- 변경: 기존 OMX owner와 watchdog을 유지하는 선택적 CORE arm 관측·후보·정지 API(v1.271), HTTP 전용 LeRobot Robot 및 공식 recorder 진입점을 추가했다. 설치 절차와 검증 기록을 연결했다.
+- 증거: 최종 코드의 원격 CORE/native ROS/실제 SDK 22 passed/0 skipped, 기존 UI 브라우저 45 passed/0 skipped. 독립 소스 리뷰와 안전 trailer·크기 검사 통과. 상세 출처는 validation/core-omx-lerobot-2026-10-18/result.md.
+- 추가 검증: 전체 영향 범위 22개 분할에서 27,638 passed/1,916 skipped와 safety symbol anchor 누락 1건을 확인했다. 8beeb47ef2에서 등록 보완 후 관련 계약 170 passed/0 skipped, NEW 0. 원래 실패 기록도 보존했다.
+- gate 변화: SIM 연동만 검증했다. 실물 정책 승인·Fleet lease 전달·설치 profile·작업 성공·배포 수용을 승격하지 않았다.
+
+## 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
+
+- 변경: 사용자 커밋·머지 요청에 따라 main을 통합하고, 출처·체크섬을 포함하는 client wheel workflow와 GET-only preflight를 추가했다. 사용자가 실물 대상·승인 정책이 없다고 답했으므로 실물 target의 차단 결과를 유지했다.
+- 증거: CORE/native ROS/실제 SDK 22 passed, 실제 workflow build·오프라인 wheel 설치 보완 후 1 passed/0 skipped/NEW 0. 독립 계약 소스 리뷰 완료. validation/core-omx-deployment-2026-10-18/result.md 참조.
+- gate 변화: 배포 준비 코드·시험이며 장치 설치·승인·실물 구동·GitHub CI 수용은 아니다. 로컬 착지는 tools/land.py 검증을 따르고 push는 하지 않는다.
+
+## 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
+
+- 변경: 현장 `site-users.yaml`의 사람 계정은 모두 operator 하나뿐이라 정책 승인을 할 수 없었다. operator 항목의 `policy_admin: true`가 역할을 유지한 채 `fleet.policy`를 더하고, 세션 응답이 이를 알린다. `site_users.py set-policy-admin`과 `/console/policy`의 로그인 링크를 더했다.
+- 증거: 원격 pytest와 실제 Chromium 세 사람 시나리오. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. 현장 배포와 계정 표시는 후속 행에 기록한다.
+
+## 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
+
+- 변경: 사이트 Compose에 네 번째 서비스 `postgres`를 파생 문맥·로그 저장소로 추가한다(원장 `fleet.sqlite3`는 그대로 SQLite 하나, D-750). 미러 대상은 D-640 숙고 저널의 터미널 run이다. sink와 그 CLI 표면은 `operations/fleet/fleet/server/ledger/`(등록 유닛)에 둔다: `context_log.py`의 `ContextLog`가 `rosy_deliberation_run`에 best-effort로 기록하고(SQLite 커밋 뒤에만 호출, 실패는 경고와 `False`, 원장 트랜잭션 불변), `context_options.py`가 `--context-db-*`(기본 포트 5432)와 `activate_from_args`를 들며, `deliberation_journal.py`(같은 홀더로 이동, 신원 `fleet.server.ledger.deliberation_journal`)가 `context_log` 파라미터와 `_mirror`를 갖고 프로세스 활성 sink(`set_active`/`active`)를 기본값으로 집는다. `cli.py`는 `add_cli_arguments`·`activate_from_args`를 한 줄씩만 부르고(`app.py`는 손대지 않는다 — D-766 동결 파일), 동결을 맞추려 `_ai_first`·`_stuck_resolver_enrolled`를 `fleet/stuck/cli_config.py`로 옮긴다. `deploy/site/compose.yaml`에 postgres(read_only·tmpfs, `cap_drop: [ALL]`, healthcheck `pg_isready`, `pg_data` 볼륨, `postgres_password` secret)와 Fleet의 `depends_on`·secret·`--context-db-*`를 추가하고, `.env.example`에 `ROSY_SITE_PG_MAX_CONNECTIONS`, `requirements-fleet.txt`에 `psycopg[binary]==3.2.3`을 넣는다. 서명 candidate는 `build_candidate.py`의 `MIRRORED_IMAGES`(postgres:16-alpine, 해석한 digest를 manifest에 기록)로 네 이미지를 포함하고, `verify_candidate.py`·`site_update_io.py`·`rosy_site_autoupdate.py`·`site_functional_setup.py`의 4-이미지 목록과 prune 정규식을 넓힌다. ADR [D-796](../adr/D-796-site-context-log-store-postgres-mirror.md) 파일과 Log 행, `platform-folder-responsibilities.md`의 D-750 예외 한 줄, `deploy/site/README.md`를 함께 남긴다.
+- 증거: 신규 `operations/fleet/test/test_context_log.py`(가짜 커넥션: 인자 검증, password_file 시점 읽기, 스키마 1회 생성과 INSERT 파라미터, 실패 시 `False`·rollback, 터미널 run만 미러, 깨진 미러에도 run 생존, sink 없으면 `_mirror`가 `None`, `--context-db-*`가 활성 sink를 켜면 저널이 그것을 집음). `test/test_site_candidate.py`(images 4, syft 목록), `test/test_site_candidate_signing.py`, `test/test_site_candidate_verifier.py`(SERVICES 4), `test/test_site_autoupdate.py`(`upd.SERVICES` 사용), `test/test_site_functional_setup.py`, `test_deliberation_journal.py`, `test_incident_deliberation.py`, `test_remaining_platform_installed.py`(이동한 모듈 신원), `test_stuck_no_motion_fleet.py`(`fleet.stuck.cli_config`). `python tools/harness/size_range.py main HEAD`가 fleet·`cli.py`·`app.py`를 모두 한도 아래로 본다. 로컬 pytest는 금지(D-584)라 원격 pytest·Docker 이미지 빌드·현장 수용은 NOT RUN이다.
+- gate 변화: 없음. SOURCE 수준이며 LOCAL 이상은 원격 시험, Docker 빌드, 현장 PC가 필요하다.
+
+## 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
+
+- 정정: 위 D-796 항목의 `deliberation_journal.py` 신원 표기(`fleet.server.ledger.deliberation_journal`)는 설치 import 이름이 아니다. 서버 홀더는 빌드할 때 `fleet.server.*`로 평탄화되므로(`tools/packaging/fleet_sources.py`의 `HolderDevelop.find_package_modules`), 소스트리와 설치본 모두 평탄한 `fleet.server.deliberation_journal`·`fleet.server.context_log`·`fleet.server.context_options`를 쓴다. 설치본에는 `fleet.server.ledger`가 없어 홀더를 거치는 이름은 런타임에 죽는다(`fleet console`의 import). ADR D-796의 열린 항목도 같은 문장으로 고치고, 설치 모듈 목록 시험이 세 평탄 이름을 고정한다.
+- 변경: `cli.py`의 홀더 import와 `ledger/`의 상호 참조, 세 시험 파일의 import를 평탄 이름으로 바꾼다. `context_log.py`는 비밀번호 파일 경로를 그대로 보관하고 `_dsn`에서 dict 순서(host·port·dbname·user·connect_timeout·password)로 DSN을 조립한다 — 값은 파일에서 읽은 뒤에만 문자열에 들어가고, `deploy/robot/pinky_pro/release/secret_scan.py`의 assignment 규칙을 우회하지 않는다. `context_options.py`는 `args.context_db_password_file`을 그대로 읽는다. `compose.pairing.yaml`의 fleet `command`는 base를 통째로 반복해야 하므로(`test_site_pairing_deploy.py`), D-796 `--context-db-*` 네 플래그를 base와 같은 순서로 넣는다.
+- 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
+- gate 변화: 없음.

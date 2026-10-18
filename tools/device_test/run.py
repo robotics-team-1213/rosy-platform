@@ -596,7 +596,7 @@ def main(argv=None, robot=None):
         ap.error("--plan is required")
     plan = load_plan(args.plan)
     stamp = dt.datetime.now().strftime("%Y-%m-%d")
-    args.evidence_dir = args.evidence_dir or f"X:/DevTemp/device-test/{plan['topic']}-{stamp}-{time.strftime('%H%M%S')}"
+    args.evidence_dir = args.evidence_dir or f"{os.environ.get('ROSY_SCRATCH') or os.environ.get('TEMP') or '/tmp'}/device-test/{plan['topic']}-{stamp}-{time.strftime('%H%M%S')}"
     args.summary_dir = args.summary_dir or str(REPO / "docs" / "validation" / f"{plan['topic']}-{stamp}")
     if args.dry_run:
         return dry_run(plan, args)
