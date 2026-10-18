@@ -4042,6 +4042,22 @@
 - 증거: 통합 후보의 1 failed / 6635 passed / 354 skipped와 동일 후보 단독 통과로 타이밍 의존을 확인했다. 독립 producer-consumer 분석 후 수정 커밋 원격 G1 SIM·timing 12 passed, 새 실패 0개.
 - gate 변화: 생산 제어·claim 권한 변경 없음. 중단된 후보의 병합 검사와 실제 G2·실물 수용을 완료로 표시하지 않는다.
 
+## 2026-10-18 · c4bf531fd8 · Compute direction from the selected trip (D-769) (이식, 원래 2026-10-16)
+
+
+- Added `fleet.routing.direction.route_direction`: follows selected directed plan segments, validates boundary continuity, returns source-relative here/ahead angles and plan station. Preview ends at the final partial destination or before free driving; returned ahead_m is actual available distance, including zero at the end.
+- Evidence: remote missing-module red followed by 8 passing geometry tests (chosen outgoing lane despite a competing straight edge, partial destination, free transition, disconnected lanes, reverse direction, accumulated station and invalid inputs). Private logs: `rosy-d769-audit/route-direction-red`, `route-direction-reviewed`. Independent reviewer found no blocker for validated graph/plan inputs.
+- Scope: pure geometry only, no publisher or motion permission. The actual Fleet producer must bind fresh validated MapPose, active map/route revision and source odometry to the existing CORE transport lifetime. CORE bridge wiring and Gazebo acceptance remain pending. Gate unchanged.
+- 변경: See implementation and evidence recorded above.
+- gate 변화: None; D-769 acceptance remains pending.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
+## 2026-10-18 · c11a34f64b · Bind selected-route guidance to fresh Fleet poses (D-769) (이식, 원래 2026-10-16)
+
+- 변경: Fleet captures selected-route direction only for opted-in CORE capabilities and a fresh localized pose in the active map, with the exact authority odometry stamp. Changed route, plan, hold, source or age invalidates the captured sample; shrink carries no guide. Normalize full-lane endpoints only within the existing four-decimal station serialization precision. Share the injected trip clock with the authority sender.
+- 증거: Remote integration suite passed 186 tests across Fleet route guidance, authority, route direction, trip runner, CORE capabilities/protocol/timers and SIM overlays. Private evidence: rosy-d769-audit/fleet-route-integrated/run-1.txt. Earlier failing integration exposed rounded lane endpoints and mismatched injected clocks. Independent review found no blocking producer issue; size-range and safety-review guards passed for all eight commits since 64c8eb701.
+- gate 변화: None. Real Gazebo guide consumption and learned driving acceptance remain pending.
+
 ## 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
 
 - 변경: `tracking/robot_media_routes.py`가 fleet.read 주체에게 로봇별 READ 위임을 발급·갱신·종료하고 `fleet_media_audit`에 남기며 미디어 권한 서비스의 재확인에 답한다. 콘솔 CSP는 설정된 media origin만 추가한다.
