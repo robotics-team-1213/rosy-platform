@@ -10,8 +10,8 @@ Frozen when any of these holds:
   - /etc/rosy/update-freeze exists (this host, any unit), or ~/.config/rosy/update-freeze (this user);
   - the tag `ops-update-freeze` exists in the code repository (every site; its message says who, why
     and the intended thaw date).
-Fail closed: if the tag cannot be checked (no git, DNS, timeout, error), the unit is skipped too. The
-only "run" answer is a successful `git ls-remote` that lists no such tag.
+Fail closed: if the tag cannot be checked (DNS, timeout, error), the unit is skipped too. The only "run"
+answer is a successful ref listing (`git ls-remote`, or its HTTPS form where git is absent) without the tag.
 
   freeze (seconds, no push hooks; the annotated tag message says who, why and the thaw date):
     sha=$(gh api repos/robotics-team-1213/rosy-platform/git/ref/heads/main --jq .object.sha)
@@ -23,6 +23,7 @@ After freezing, wait until no updater unit is active (systemctl list-units 'rosy
 a freeze stops new runs, not one already running.
 """
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,12 +33,33 @@ TAG = "refs/tags/ops-update-freeze"
 ROOT = os.environ.get("ROSY_HOST_STATE_ROOT", "")  # tests prefix absolute paths, like rosy-host-state
 
 
+def tag_over_https() -> tuple[int, str]:
+    # The git smart-HTTP ref list (what `git ls-remote` reads): no API rate limit for a fleet behind one IP.
+    import re
+    import urllib.request
+
+    url = os.environ.get("ROSY_UPDATE_GATE_REFS", REPO + "/info/refs?service=git-upload-pack")
+    try:
+        with urllib.request.urlopen(url, timeout=10) as answer:
+            body = answer.read(8 << 20)
+    except Exception as exc:
+        return 1, f"skip: freeze tag not checkable over HTTPS ({type(exc).__name__}); failing closed"
+    if not (body.startswith(b"001e# service=git-upload-pack\n") and body.endswith(b"0000")):  # whole list only
+        return 1, "skip: unexpected ref list; failing closed"
+    if re.search(rb"[0-9a-f]{40} " + TAG.encode() + rb"[\x00\n^]", body):
+        return 1, "frozen by tag ops-update-freeze"
+    return 0, "run: no freeze"
+
+
 def decide() -> tuple[int, str]:
     for path in (Path(ROOT + "/etc/rosy/update-freeze"), Path.home() / ".config/rosy/update-freeze"):
         if path.exists():
             return 1, f"frozen by {path}"
+    git = os.environ.get("ROSY_UPDATE_GATE_GIT", "git")
+    if not shutil.which(git):  # robots carry no git: read the same ref list over HTTPS (same fail-closed rule)
+        return tag_over_https()
     try:
-        done = subprocess.run([os.environ.get("ROSY_UPDATE_GATE_GIT", "git"), "ls-remote", "--tags", REPO, TAG],
+        done = subprocess.run([git, "ls-remote", "--tags", REPO, TAG],
                               capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return 1, f"skip: freeze tag not checkable ({type(exc).__name__}); failing closed"

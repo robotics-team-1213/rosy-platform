@@ -432,3 +432,10 @@ def test_build_commit_reads_git_or_is_none(tmp_path):
     assert service.build_commit(tmp_path) is None              # not a checkout
     commit = service.build_commit()
     assert commit is None or re.fullmatch(r"[0-9a-f]{7,40}(-dirty)?", commit)
+
+
+def test_build_commit_of_an_autoupdate_release_comes_from_its_release_file(tmp_path):
+    package = tmp_path / "release/operations/situation/rosy_situation"
+    package.mkdir(parents=True)
+    (tmp_path / "release/RELEASE").write_text("a" * 40 + "\n")
+    assert service.build_commit(package) == "a" * 12

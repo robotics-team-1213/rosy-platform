@@ -1,8 +1,10 @@
 """D-805: updaters run only when nothing freezes updates; anything uncertain skips (fail closed)."""
 from pathlib import Path
+import http.server
 import os
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -11,8 +13,9 @@ GATE = ROOT / "deploy/hosts/common/host-state/rosy-update-gate"
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell fake git")
 
 
-def gate(tmp_path, *, git_script=None, local=False, home_freeze=False):
-    env = {**os.environ, "ROSY_HOST_STATE_ROOT": str(tmp_path / "root"), "HOME": str(tmp_path / "home")}
+def gate(tmp_path, *, git_script=None, local=False, home_freeze=False, refs_url="http://127.0.0.1:9/closed"):
+    env = {**os.environ, "ROSY_HOST_STATE_ROOT": str(tmp_path / "root"), "HOME": str(tmp_path / "home"),
+           "ROSY_UPDATE_GATE_REFS": refs_url}
     if git_script is not None:
         fake = tmp_path / "git"
         fake.write_text("#!/bin/sh\n" + git_script)
@@ -45,9 +48,57 @@ def test_an_uncheckable_tag_skips_the_run(tmp_path, script):
     assert code == 1 and "failing closed" in out
 
 
-def test_missing_git_skips_the_run(tmp_path):
+def test_missing_git_and_unreachable_refs_skip_the_run(tmp_path):
     code, out = gate(tmp_path)
     assert code == 1 and "failing closed" in out
+
+
+ADVERT = b"001e# service=git-upload-pack\n0000"
+
+
+@pytest.mark.parametrize("body,expected", [
+    (ADVERT + b"00f1" + b"a" * 40 + b" HEAD\x00multi_ack\n003f" + b"b" * 40 + b" refs/heads/main\n0000", 0),
+    (ADVERT + b"0048" + b"c" * 40 + b" refs/tags/ops-update-freeze\x00caps\n0000", 1),
+    (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n004b" + b"d" * 40 + b" refs/tags/ops-update-freeze^{}\n0000",
+     1),
+    (ADVERT + b"0048" + b"e" * 40 + b" refs/tags/ops-update-freeze-old\n0000", 0),
+    (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n", 1),  # cut off before the tags: not a "run"
+    (b"<html>rate limited</html>", 1),
+])
+def test_robots_without_git_read_the_ref_list_over_https(tmp_path, body, expected):
+    class Refs(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Refs)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        code, out = gate(tmp_path, refs_url=f"http://127.0.0.1:{server.server_port}/info/refs")
+    finally:
+        server.shutdown()
+    assert code == expected, out
+    assert ("run: no freeze" in out) if expected == 0 else ("frozen by tag" in out or "failing closed" in out)
+
+
+def test_the_robot_updater_ships_and_checks_the_same_gate():
+    native = ROOT / "deploy/robot/pinky_pro/native"
+    assert ("ExecCondition=/bin/sh -c 'exec /usr/bin/python3 -I /opt/rosy/native-runtime/rosy-update-gate'"
+            in (native / "rosy-auto-update.service").read_text().splitlines())
+    installer = (native / "install-native-runtime.sh").read_text()
+    assert 'cp "$SCRIPT_DIR/../../../hosts/common/host-state/rosy-update-gate" "$DESTINATION/rosy-update-gate"' in installer
+    assert (native / "../../../hosts/common/host-state/rosy-update-gate").resolve() == GATE
+
+
+def test_the_installed_robot_runtime_carries_the_gate(tmp_path):
+    destination = tmp_path / "native-runtime"
+    subprocess.run(["bash", str(ROOT / "deploy/robot/pinky_pro/native/install-native-runtime.sh"), str(destination)],
+                   check=True, capture_output=True, timeout=60)
+    assert (destination / "rosy-update-gate").read_bytes() == GATE.read_bytes()
 
 
 @pytest.mark.parametrize("where", ["local", "home_freeze"])
@@ -60,7 +111,8 @@ def test_every_gated_unit_and_drop_in_points_at_the_installed_gate():
     dropin = (ROOT / "deploy/hosts/common/host-state/10-update-gate.conf").read_text()
     assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in dropin
     for unit in ("deploy/robot/omx/rosy-omx-autoupdate.service", "deploy/model_pc/rosy-review-release-update.service",
-                 "deploy/site/rosy-model-code-update.service"):
+                 "deploy/site/rosy-model-code-update.service",
+                 "deploy/ai_pc/rosy-situation-autoupdate.service"):
         assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in (ROOT / unit).read_text(), unit
     common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text()
     assert "safe file /usr/local/bin/rosy-update-gate common/rosy-update-gate 0755" in common
