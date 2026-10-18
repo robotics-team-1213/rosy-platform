@@ -1096,3 +1096,8 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+## 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
+
+- 변경: 기본 미결선 arm policy 포트, 인증된 관측·후보·정지 API, 원 관측 단일 사용과 CORE E-stop 전파. 관절 writer는 기존 OMX owner다.
+- 증거: 원격 AI PC 041591d44e의 명시적 native ROS/LeRobot/CORE 시험 21 passed, skipped 0, known_failures NEW 0. 합성 관측·정책·권한과 격리 Action 서버이며 실물·학습 과제 성공 증거가 아니다.
+- gate 변화: SOURCE/HOST 및 격리 ROS transport 연결. 기본 실물 profile·정책 승인·배포·Fleet lease 전달은 활성화하지 않았다. D-800과 docs/plans/2026-10-18-core-omx-lerobot.md 참조.

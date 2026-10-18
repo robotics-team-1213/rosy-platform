@@ -284,6 +284,10 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             files += ['learning/training/omx/'+path for path in ('act_inference.py', 'act_owner_capture.py',
                 'test/act_cpu_fixture.py', 'test/test_act_owner_capture.py', 'test/test_act_native_chain.py')]
             files += ['contracts/learning/src/rosy/contracts/learning/inference.py']
+        if with_core:
+            files += ['middleware/robot_execution/local/src/rosy/execution/local/core_arm_policy.py',
+                      'middleware/core/api/core_api_web/api/v1/arm.py',
+                      'middleware/core/api/core_api_web/api/app.py']
         scope = ('isolated actual CPU ACT and ROS transport; synthetic zero weights/capture/authority; '
                  'no trained quality/task/hardware/authenticated Fleet' if with_inference else
                  'isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet')

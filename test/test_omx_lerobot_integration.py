@@ -18,6 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
 import draccus
 from types import SimpleNamespace
+import base64
+import numpy as np
 from lerobot.robots import Robot, RobotConfig
 import lerobot_robot_rosy_omx
 config = draccus.decode(RobotConfig, dict(type='rosy_omx', url='http://localhost:8080',
@@ -36,6 +38,23 @@ except ValueError:
     pass
 else:
     raise AssertionError('queued ACT actions cannot acquire a fresh observation identity')
+lerobot_robot_rosy_omx.validate_record_config(SimpleNamespace(policy=SimpleNamespace(
+    type='act', n_action_steps=1, temporal_ensemble_coeff=None)))
+robot._client = SimpleNamespace(is_connected=True,
+    get_observation=lambda: dict(positions={'joint1': .1, 'joint2': .2},
+        camera=dict(rgb_base64=base64.b64encode(bytes(range(12))).decode())),
+    send_action=lambda positions: positions, disconnect=lambda: None)
+obs = robot.get_observation()
+assert obs['front'].shape == (2,2,3) and obs['front'].dtype == np.uint8
+assert obs['front'].reshape(-1).tolist() == list(range(12)) and obs['joint1.pos'] == .1
+assert robot.send_action({'joint1.pos':np.float32(.1), 'joint2.pos':.2})['joint2.pos'] == .2
+try:
+    robot.send_action({'joint1.pos':True, 'joint2.pos':.2})
+except ValueError:
+    pass
+else:
+    raise AssertionError('bool is not a joint target')
+robot._client = None
 print('ROSY_OMX_PLUGIN_PASS')
 '''
     result = subprocess.run([str(PYTHON), '-c', script, str(ROOT)],
