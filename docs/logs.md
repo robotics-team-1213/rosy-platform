@@ -9149,3 +9149,9 @@ osy-d395-s1d\`.
 - 변경: 원격 venv에 `pytest-xdist==3.8.0`을 넣고, `tools/remote/xdist_plan.py`가 invocation마다 `-n W --dist loadfile` 또는 직렬을 고른다. 직렬 목록은 `tools/remote/serial_suites.txt`(rclpy·ROS_DOMAIN_ID·고정 포트·playwright·git·홈 디렉터리를 쓰는 묶음)와 브라우저·node id·경로 없음 규칙이다. job 잠금은 실제 워커 수를 적는다. 여유 메모리 4~6 GB인 pytest 호스트는 가벼운 호스트로, 하한을 넘는 호스트 뒤에서 큐의 작은 invocation을 직렬로, 자기 여유 GB의 `MemoryMax`로 돈다. 현장 PC는 그대로 맨 뒤다.
 - 증거: 노트북에서 `test/test_remote_pytest.py`·`test/test_known_failures.py`와 관련 시험(사용자 지시로 로컬 실행). xdist 3.8.0 실제 출력으로 known_failures 파싱을 확인했다. 시험 PC 측정은 아직 없다.
 - gate 변화: 없음. 시험 PC에서 7,151개 묶음의 직렬 대 `-n` 비교가 남았다.
+
+## 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
+
+- 변경: `tools/land_full.py`가 FULL 티어를 통과한 후보와 `main`을 `<git-common-dir>/rosy-land-full/<브랜치>.json`에 적는다. 다음 `land.py` 실행은 후보가 HEAD에 있고, 적힌 `main`이 `main`에 있고, 그 뒤 브랜치에 `main` 병합(git 자체 병합과 같거나 자동 해결 기록만 다른 것)만 더해졌을 때 그 `main`부터의 변경분 선택만 돈다. 자기 커밋이 더해지면 FULL을 다시 돈다. 착지하면 기록을 지운다. 변경분과 브랜치 자신의 대응 묶음의 합집합은 넣지 않았다(이유는 2026-10-18 착지 교훈 노트).
+- 증거: `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 깨끗한 병합 → 복원, 수정 커밋 → 복원 안 함을 손으로 확인했다.
+- gate 변화: 없음.

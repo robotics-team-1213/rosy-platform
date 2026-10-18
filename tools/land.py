@@ -45,6 +45,7 @@ import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
 import land_guards  # noqa: E402  (structural guards before the long round)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
+import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, plan,  # noqa: E402,F401  (conflict auto-resolve)
@@ -363,7 +364,10 @@ def land(args) -> int:
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
-    full_main: str | None = None  # main under this branch's last green FULL tier
+    # main under this branch's last green FULL tier, also from an earlier run (host lost, Ctrl-C, round cap)
+    full_main = land_full.restore(wt, branch) if args.tests == "auto" else None
+    if full_main:
+        summary.append(f"an earlier run's FULL tier passed over main {full_main[:10]} with this branch's change")
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
@@ -429,6 +433,7 @@ def land(args) -> int:
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
+            land_full.save(wt, branch, candidate, main_sha)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -442,6 +447,7 @@ def land(args) -> int:
         on_main(main_co)
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
+            land_full.forget(wt, branch)
             landed = out(main_co, "rev-parse", "HEAD")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
