@@ -21,7 +21,7 @@ import yaml
 _ROLES = {"viewer", "operator", "policy-admin", "service", "ai_observer"}  # D-577 4: ai_observer posts facts only
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _LOGIN = re.compile(r"[a-z0-9._-]{1,32}\Z")
-_FIELDS = {"principal_id", "role", "token_sha256", "login", "password_scrypt"}
+_FIELDS = {"principal_id", "role", "token_sha256", "login", "password_scrypt", "policy_admin"}
 
 #: D-519 1: n=2^15, r=8, p=1, 16-byte salt, 32-byte result.
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 15, 8, 1
@@ -102,13 +102,18 @@ def load_site_accounts(path: Path | str) -> tuple[dict[str, dict[str, str]], dic
             raise ValueError("site principal_id values must be unique")
         if role not in _ROLES:
             raise ValueError("site user role is unknown")
+        # D-793: an operator may also hold fleet.policy without losing the operator role.
+        policy_admin = entry.get("policy_admin", False)
+        if policy_admin is not False and (policy_admin is not True or role != "operator"):
+            raise ValueError("site user policy_admin must be true on an operator, or absent")
+        extra = {"policy_admin": True} if policy_admin else {}
         if "token_sha256" in keys:
             token_digest = entry["token_sha256"]
             if not isinstance(token_digest, str) or not _SHA256.fullmatch(token_digest):
                 raise ValueError("site user token_sha256 must be a lowercase SHA-256 digest")
             if token_digest in users:
                 raise ValueError("site user token digests must be unique")
-            users[token_digest] = {"principal_id": principal_id, "role": role}
+            users[token_digest] = {"principal_id": principal_id, "role": role, **extra}
         if "login" in keys:
             login = entry["login"]
             if role in ("service", "ai_observer"):
@@ -119,7 +124,7 @@ def load_site_accounts(path: Path | str) -> tuple[dict[str, dict[str, str]], dic
                 raise ValueError("site user logins must be unique")
             _parse_password_hash(entry["password_scrypt"])
             logins[login] = {"principal_id": principal_id, "role": role,
-                             "password_scrypt": entry["password_scrypt"]}
+                             "password_scrypt": entry["password_scrypt"], **extra}
         principals.add(principal_id)
     return users, logins
 
