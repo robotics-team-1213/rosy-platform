@@ -1,9 +1,28 @@
-"""The legacy map-plane response adapter, separate from ingest transport."""
+"""Preview encode adapters, separate from ingest transport: the legacy map plane and the rectified view."""
 import asyncio
-from rosy_vision.rectify import MapPlane, crop_map_plane, plane_observed_fraction
+from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
 
 
-async def map_plane_response(ingest, source, frame, age, lease, *, unavailable, response, lens_header, warp):
+async def rectified_jpeg(ingest, source, frame, settings) -> bytes:
+    """Network load: ``frame`` rectified with ``settings``, encoded once off the loop for every viewer.
+
+    Kept per (source, settings) for the source's current frame only; a new frame drops the older ones.
+    Per-viewer rate limits stay in ingest. A failure (TypeError, ValueError, cv2.error) reaches the caller.
+    """
+    cache = ingest.__dict__.setdefault("_rectify_cache", {})
+    key = (source, repr(settings))   # repr: auto-mode corners may arrive as lists (unhashable)
+    cached = cache.get(key)
+    if cached is None or cached[0] is not frame:
+        for old in [k for k, v in cache.items() if k[0] == source and v[0] is not frame]:
+            del cache[old]
+        task = asyncio.ensure_future(asyncio.to_thread(rectify_jpeg, frame.jpeg, settings))
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())
+        cached = cache[key] = (frame, task)
+    return await asyncio.shield(cached[1])
+
+
+async def map_plane_response(ingest, source, frame, age, lease, *, unavailable, response, lens_header,
+                             warp=map_plane_jpeg):
     """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
 
     The warp runs off the event loop, once per (frame, record revision) for all readers.
