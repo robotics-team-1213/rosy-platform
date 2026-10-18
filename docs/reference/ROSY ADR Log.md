@@ -798,7 +798,6 @@
 | D-800 | CORE-mediated OMX LeRobot observation and action requests | Proposed |
 | D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
-| D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Proposed |
 | D-802 | 실험실 PC의 Python 설치 도구는 uv 하나 — host-state가 해시 고정 휠(`wheel-tool`)로 배포하고, 원격 도구는 pip·venv 대체 경로를 쓰지 않는다 | Proposed |
 | D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
