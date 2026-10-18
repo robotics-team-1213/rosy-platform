@@ -4057,3 +4057,9 @@
 - 변경: Fleet captures selected-route direction only for opted-in CORE capabilities and a fresh localized pose in the active map, with the exact authority odometry stamp. Changed route, plan, hold, source or age invalidates the captured sample; shrink carries no guide. Normalize full-lane endpoints only within the existing four-decimal station serialization precision. Share the injected trip clock with the authority sender.
 - 증거: Remote integration suite passed 186 tests across Fleet route guidance, authority, route direction, trip runner, CORE capabilities/protocol/timers and SIM overlays. Private evidence: rosy-d769-audit/fleet-route-integrated/run-1.txt. Earlier failing integration exposed rounded lane endpoints and mismatched injected clocks. Independent review found no blocking producer issue; size-range and safety-review guards passed for all eight commits since 64c8eb701.
 - gate 변화: None. Real Gazebo guide consumption and learned driving acceptance remain pending.
+
+## 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
+
+- 변경: 사용자 지시에 따라 legacy·Account 이관에서 ID!를 첫 변경 대상으로 인식한다. 관리자 생성/reset의 정확한 ID!만 짧은 임시값 예외로 허용하고 첫 변경 제한을 유지한다. 영구 비밀번호 변경에서는 ID! 복귀를 거절한다. API·권한·기계 자격은 추가하지 않았다.
+- 증거: 최초 정책 RED와 수정8675d2453의 원격153 passed·skip0·NEW0. 독립 리뷰가 짧은 생성/reset 경로 불일치를 찾아 API·실제 관리 Chromium 3건 RED로 재현 후 보완했다. 최종103df862b의6파일 원격160 passed·skip0·NEW0. 상세 범위와 실패 이력은 docs/validation/account-initial-password-2026-10-19/result.md.
+- gate 변화: 없음. 팀 명단은 Notion 인증 실패로 미확인이고 운영 사용자·비밀번호·DB는 변경하지 않았다. source/지정 시험과 병합·서명 배포·실제 사용자 로그인을 구분한다.
