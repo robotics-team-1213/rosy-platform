@@ -1,5 +1,4 @@
-﻿# Local operator settings only; credentials remain in the existing DPAPI store.
-function Read-SdSetupSettings([string]$ConfigPath, [Collections.IDictionary]$Overrides) {
+﻿function Read-SdSetupSettings([string]$ConfigPath, [Collections.IDictionary]$Overrides) {
     if (-not $ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot "..\..\..\..\sd-setup.local.json" }
     if (-not [IO.Path]::IsPathRooted($ConfigPath)) { $ConfigPath = Join-Path (Get-Location).ProviderPath $ConfigPath }
     $ConfigPath = [IO.Path]::GetFullPath($ConfigPath)
@@ -88,7 +87,6 @@ function Initialize-SdSetupSettings([string]$ConfigPath, [Collections.IDictionar
             "-SetWifiCredential", "-WifiProfile", $settings.WifiProfile, "-WifiSsid", $settings.WifiSsid) |
             ForEach-Object { Write-Host ([string]$_) }
     }
-    # Read the SSID only; the credential's SecureString is never decrypted here.
     if (-not $ReadOnly -or $settings.WifiSsid) {
         try { $credential = Import-Clixml -LiteralPath $credentialPath }
         catch { Stop-Setup "현재 Windows 사용자로 Wi-Fi 프로필을 읽을 수 없습니다. 보안 입력으로 다시 저장하세요." }

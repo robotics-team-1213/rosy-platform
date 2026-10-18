@@ -228,7 +228,7 @@ try {
 
     $verifyArguments = @((Join-Path $PSScriptRoot "verify-image-release.py"), "--release-root", $ReleaseDir,
         "--public-key", $publicKey, "--image", $imagePath, "--release-id", $releaseId)
-    $verification = @(& python @verifyArguments 2>&1)
+    $null = @(& python @verifyArguments 2>&1)
     if ($LASTEXITCODE -ne 0) { Stop-Setup "SD 이미지의 서명·checksum 검증에 실패했습니다. 카드에는 기록하지 않았습니다." }
     $scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
     if (-not (Test-Path -LiteralPath $scratchRoot -PathType Container)) {
