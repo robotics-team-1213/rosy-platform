@@ -470,7 +470,9 @@ def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
-    assert [e["invocations"][0] for e in pytest_entries] == sel.invocations
+    # Each invocation becomes one runner per ROS environment; every selected path runs exactly once.
+    assert sorted(p for e in pytest_entries for p in e["invocations"][0]) == sorted(p for inv in sel.invocations for p in inv)
+    assert all(len({affected._full_tier_ros(p) for p in e["invocations"][0]}) == 1 for e in pytest_entries)
 
 
 def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):
