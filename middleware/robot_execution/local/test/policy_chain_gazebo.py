@@ -3,6 +3,7 @@
 No learned checkpoint, Mission admission or physical-device qualification.
 """
 from contextlib import ExitStack, contextmanager, closing
+from collections import deque
 from dataclasses import asdict
 import base64
 import hashlib
@@ -18,6 +19,7 @@ import sys
 import threading
 import time
 import traceback
+import uvicorn
 from types import SimpleNamespace
 from uuid import uuid4
 import xml.etree.ElementTree as ET
@@ -220,6 +222,11 @@ def prove(out, runtime, camera, controllers, calibration):
         scope = LeaseScope(identity,'sim-episode',policy.recheck()['revision'],runtime.owner.session_id,
             fleet.window['window_id'],'sim-rig-32x24',cfg.calibration_revision,fleet.scope)
         preparation = {}
+        began = runtime.monotonic()
+        closed_services = SimpleNamespace(arm_policy=None,safety=SimpleNamespace(estop=False,estop_listeners=[]))
+        closed_app = create_app({},closed_services)
+        uvicorn.Config(closed_app,log_level='warning',lifespan='off').load()
+        preparation['closed_core_preparation_seconds'] = runtime.monotonic()-began
         for label, operation in (
             ('stdlib_process',lambda:subprocess.run([sys.executable,'-I','-S','-c',
                 'import json, sys; from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener'],
@@ -275,7 +282,10 @@ def prove(out, runtime, camera, controllers, calibration):
         token_file.write_text(credential)
         config = dict(auth=dict(tokens=[dict(id='sim-sdk',role='operator',sha256=hashlib.sha256(credential.encode()).hexdigest())]))
         services = SimpleNamespace(config=config,arm_policy=chain.port,safety=SimpleNamespace(estop=False,estop_listeners=[]))
+        began = runtime.monotonic()
         app = create_app(config,services)
+        preparation['bound_core_app_seconds'] = runtime.monotonic()-began
+        assert chain.port.stop in services.safety.estop_listeners
         commands, observations = [], []
         async def traced(scope, receive, send):
             status = None
@@ -300,7 +310,10 @@ def prove(out, runtime, camera, controllers, calibration):
                             rgb_sha256=hashlib.sha256(raw).hexdigest(),source=camera.captures[-1]))
                 await send(message)
             await app(scope,receive,delivered)
+        began = runtime.monotonic()
         core = stack.enter_context(HttpServer(traced))
+        preparation['bound_core_server_start_seconds'] = runtime.monotonic()-began
+        (out/'preparation-timing.json').write_text(json.dumps(preparation,indent=2))
         sdk_send(child,dict(url=core.url,token_file=str(token_file),policy_revision=scope.policy_revision,
             joint_names=['joint1'],camera_height=SHAPE[1],camera_width=SHAPE[2]))
         assert sdk_message(child) == dict(connected=True)
@@ -406,6 +419,22 @@ def main():
             acceleration_limits={'joint1':1.},max_start_state_tolerances={'joint1':.001},
             max_joint_state_age_s=.5,max_goal_duration_s=1.5,action_timeout_s=4.)
         runtime = RosArmCommandRuntime(node,cfg,poll_period_s=.01,owner_clock='steady')
+        intake_trace = deque(maxlen=2000)
+        intake = runtime._joint_state_intake
+        snapshot = intake.snapshot
+        def traced_snapshot(*args,**kwargs):
+            entry = dict(callback_s=time.monotonic(),previous_stamp_ns=intake._last_stamp_ns,
+                         previous_received_at=intake._last_received_at,**kwargs)
+            try:
+                value = snapshot(*args,**kwargs)
+                entry.update(sequence=value.sequence,adjusted_received_at=value.received_at)
+                return value
+            except Exception as error:
+                entry['rejected'] = str(error)[:200]
+                raise
+            finally:
+                intake_trace.append(entry)
+        intake.snapshot = traced_snapshot
         camera = Camera(node,runtime.monotonic,calibration)
         controllers = node.create_client(ListControllers,'/controller_manager/list_controllers')
         executor = MultiThreadedExecutor(num_threads=4)
@@ -438,6 +467,7 @@ def main():
                 remaining_thread_stacks={} if workers_stopped else {
                     str(ident):traceback.format_stack(frame) for ident,frame in sys._current_frames().items()}),indent=2))
             assert stopped and workers_stopped, 'own executor/workers did not drain; do not destroy live entities'
+            (out/'joint-intake.json').write_text(json.dumps(list(intake_trace),indent=2))
             runtime.destroy()
             node.destroy_node()
             rclpy.try_shutdown()
