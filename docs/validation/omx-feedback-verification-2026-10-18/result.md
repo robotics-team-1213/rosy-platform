@@ -49,7 +49,28 @@ AI 시험 PC에 `joint_trajectory_controller/JointTrajectoryController` plugin�
 - SHA256: `35786786db14b731c1dc2562f3e3a4e788c21e35c0e37864fe081877e7a00f94` (`gazebo-ai-installed/out/executed-probe.py`, 실행 당시 원본 보존)
 - SHA256: `3cfa398056169ca084f7339ef2e0b339ad0c18d88d24637bbe91f348c93f53b8` (`gazebo-ai-installed/out/feedback-trace.json`)
 
-이동 중 cancel ACK·ROS CANCELED·HOLD와 취소 뒤 위치 안정성을 확인하는 추가 probe를 준비했다. 추가 실행 결과는 아래 후속 기록에 구분한다. 최초 이동 통과만으로 정지까지 통과했다고 쓰지 않는다.
+### 후속 이동 중 취소·위치 안정성
+
+동일 소스 revision의 `gazebo-ai-stop-final`은 exit 0이었다. 실행 자원이 부족한 동안에는 runner가 시작을 거절했고, 30초 간격으로 배치 가능 여부만 확인했다. 시뮬레이션이 시작된 뒤 실패를 재시도한 결과가 아니다. placement floor와 host cap은 유지했다.
+
+첫 목표 0.01rad는 `completed`였고 1초 settling 뒤 이동량 0.009999965723rad, 목표 오차 약 0.00000003428rad였다. 이는 단일 SIM 표본이며 장치 정확도 수치로 쓰지 않는다. 두 번째 목표는 1초 동안 추가 0.01rad 이동이며 실제 변화가 0.002rad를 넘은 뒤 같은 command를 취소했다.
+
+| 취소·정지 관측 | 결과 |
+|---|---|
+| ROS driver goal UUID | `04976b3c-d45b-470d-a722-c8c0913f9fe6` |
+| cancel ACK | true |
+| terminal | 5 (`CANCELED`), 해당 command의 terminal event 정확히 1개 |
+| owner | `hold` |
+| 취소 요청 시 위치 | 0.012047898024rad |
+| 이후 관측 위치 | 0.012143172324rad |
+| 관측 1초 중 마지막 0.3초의 서로 다른 sequence | 12개 |
+| 마지막 구간 위치 최댓값−최솟값 | 약 0.00000001397rad; 사전 기준 <0.001rad 통과 |
+
+최초 HOLD 이유는 `cancel_requested`였다. 이 관측은 Gazebo의 취소 후 위치 안정성이며 물리 정지 거리·E-stop·torque 차단 수용을 대신하지 않는다. teardown에는 `cannot use Destroyable because destruction was requested`라는 미수거 예외 경고 3건이 있었다. 실행과 측정 assertion은 통과했지만 ROS 종료 정리의 무경고 성공은 주장하지 않는다. runner는 종료 후 해당 scope를 정리했다.
+
+- SHA256: `9988009dac1f2380578d31d4fc45404e69de9f30b3114f93e889cd8840c23156` (`gazebo-ai-stop-final/run.txt`)
+- SHA256: `3172243e6eb01ea2564c6e6d8bfc71cb795a7bcfc508259cb21edfaf4ddd980a` (`gazebo-ai-stop-final/out/executed-probe.py`, 실행 원본)
+- SHA256: `05da12a0b22af471a7079cb4f0ac2063aa6a7a578cfb1359be044ec5c963c5c6` (`gazebo-ai-stop-final/out/feedback-trace.json`)
 
 ## Fleet lease와 장치 방어
 
