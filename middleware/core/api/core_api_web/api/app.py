@@ -133,6 +133,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     if app.state.account_client and app.state.account_client.resource != 'robot:' + services.identity.robot_id:
         raise ValueError('Account resource does not match robot identity')
     install_account_sessions(app)
+    from .media_binding import install_media
+    install_media(app, config, services)
     agent = getattr(services, "fleet_agent", None)
     if agent is not None and hasattr(agent, "start_on_loop"):
         # The FleetAgent needs a running loop; uvicorn's is the one CORE runs (thread in
@@ -288,6 +290,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "screens/drive.js": "application/javascript",
         "screens/drive-auto.js": "application/javascript",
         "screens/drive-view.js": "application/javascript",
+        "screens/drive-video.js": "application/javascript",
         "screens/inputs.js": "application/javascript",
         "screens/robot-recording.js": "application/javascript",
         "screens/arm.js": "application/javascript",
@@ -304,6 +307,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "icons/icon-512.png": "image/png",
     }
 
+    # D-789: WHEP signaling goes to the configured site media origin, and only there.
+    media_origin = f" {app.state.media_site_url}" if app.state.media_site_url else ""
+
     @app.get("/pilot", include_in_schema=False)
     def pilot():
         return FileResponse(
@@ -312,7 +318,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             headers={
                 "Cache-Control": "no-cache",
                 "Content-Security-Policy": (
-                    "default-src 'self'; connect-src 'self' ws: wss:; "
+                    f"default-src 'self'; connect-src 'self' ws: wss:{media_origin}; "
                     "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
                     "frame-ancestors 'none'; base-uri 'self'"
                 ),

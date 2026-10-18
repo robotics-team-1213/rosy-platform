@@ -35,6 +35,9 @@ python tools/worktrees.py status                              # every worktree w
   removes dirty or unmerged worktrees too, the caller's own unless `--all`: only a person or the dispatcher runs it.
   `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 
+- One landable concern and one module family per branch. Over ~15 changed files, or `land.py --dry-run` says FULL
+  (30-90 min per round): split first. Land FULL-trigger (`tools/harness/**`, `contracts/foundation/**`) and `shared/web`
+  parts on their own branch first; land the split of a D-766 unit at >=95% of its limit before adding to it.
 - `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `$ROSY_SCRATCH` (unset: the system temp directory; lab PCs set `ROSY_SCRATCH=X:\DevTemp`).
 - Check `ListAgents` (when available) for peers and what they own.
 - Background executors: commit after every step, and the dispatcher runs a commit monitor
@@ -125,7 +128,8 @@ digraph land {
    Do not keep working in a landed worktree. `land.py` refuses a `stale-history` branch, checks D-766 sizes
    before any remote test (`python tools/harness/size_range.py main HEAD` shows it first), and reruns 1-5 NEW ids
    alone once: all pass -> `LOAD-FLAKY`, landing continues, ids go to `<git-common-dir>/rosy-flaky-candidates.txt`
-   for a person to review (never auto-quarantined); any fails again -> stop. A branch
+   for a person to review (never auto-quarantined); any fails again -> stop. A stop reruns its NEW ids once on main:
+   red there too -> `MAIN-RED` (main is broken; fix main in a small `fix/` branch first, after checking no peer is). A branch
    you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
 5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
    Local main ahead of `origin/main` has no CI evidence.

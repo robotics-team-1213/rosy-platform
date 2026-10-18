@@ -1817,6 +1817,23 @@ exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없�
 `optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
 
+## 로봇 실시간 영상 서비스 (D-789)
+
+Fleet과 별도 Compose 프로젝트다. Fleet은 영상을 중계하지 않는다.
+
+```bash
+docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-media up -d
+```
+
+- `ROSY_MEDIA_CONFIG_DIR`: `media-authority.json`(`media-authority.example.json` 형식), MediaMTX 관리 자격,
+  로봇별 media 공개키·CORE CA. `ROSY_SITE_SECRETS_DIR`에 `media_cert`·`media_key`.
+- `ROSY_MEDIA_HTTPS_PORT`, `ROSY_MEDIA_ICE_HOST`(사이트 LAN 주소), `ROSY_MEDIA_BIND_ADDRESS`, `ROSY_MEDIA_ICE_PORT`(UDP, 기본 8189).
+  `site-firewall.py`는 이 두 포트를 관리하지 않는다.
+- 로봇 CORE에는 `vision.media.site_url` 등을 설정하면 WebRTC가 기본이 되고(`enabled: false`로 끔),
+  로봇에 `/etc/rosy/media/rosy-media.json`(`deploy/robot/pinky_pro/native/rosy-media.example.json`)이 있으면
+  `rosy-media.service`가 발행한다. 둘 다 없으면 기존 JPEG다.
+- 장치·6대 현장 측정은 2026-10-18 사용자 결정으로 생략했다. 이 설치는 DEVICE/FIELD 수용이 아니다.
+
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 
 관제 PC는 운영 전용이다. 사용자 결정(2026-10-09, "관제 PC는 시뮬레이션에서 제외")에 따라 Gazebo나 다른 시뮬레이션을 이 PC에서 돌리지 않고, ROS나 시뮬 이미지도 설치하지 않는다. `tools/remote/remote_sim.py`는 이 PC를 후보에 넣지 않고 `--host site`를 거절하며, `~/rosy-jobs/site` 표시가 있는 호스트(D-568 3항)도 쓰지 않는다. 호스트 pytest는 D-568대로 맨 뒤 순서로 받는다. 시뮬레이션은 모델 PC와, 소유자가 동의한 뒤의 AI PC에서 돈다.

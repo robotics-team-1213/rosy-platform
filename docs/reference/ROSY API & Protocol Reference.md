@@ -3278,6 +3278,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
+| v1.265 | 2026-10-18 | Additive (D-789, feat/webrtc-camera-land): `/api/v1/vision/media/grants`·`/renew`·`DELETE`·`/source-grant`·`/validate` 영상 위임과 사이트 media origin의 `/v1/*` 경로. `vision.media.site_url`이 있으면 기본 활성, `enabled: false`로 끔. 상세는 v1.265 절 |
 | v1.259 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |
 | v1.258 | 2026-10-17 | Additive (D-779 §3·§6, feat/multi-arm-goal-evidence): `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume` `{expected_generation}`(이름 있는 운영자, 두 팔 Job의 팔 하나, 단단한 결합 짝이 잡혀 있으면 409), `POST /api/fleet/cell-goal-evidence`의 두 팔 Job Step 단위 판정(술어 팔의 Action, 그 팔 instance의 producer, 협조 Step은 모든 팔 성공 뒤, 대체 팔 Step 거절). 한 팔 Job과 envelope 1.0 변경 없음. |
 | v1.257 | 2026-10-17 | Additive (D-780, D-779 §7, feat/omx-coordinator-barriers): `StopRequestSource.coordinator`와 조율자 정지 이유 4종, `FleetCellTransferGrant`의 선택 필드 `arm_role`·`pair_id`·`partner_instance_id`·`coupling`과 `cell_transfer.barriers`(없으면 직렬화와 digest가 이전과 같다), OMX owner UDS `GetBarrier`·`ReleaseBarrier`(version 2, 조율자 UID만)와 연산별 peer 역할, `PHASE_WAIT`, barrier 시간 초과(FAILED 또는 HOLD), 단단한 결합 구간의 조율자 생존 HOLD. 조율자 peer가 없는 owner와 barrier 없는 grant는 바뀌지 않는다. Fleet `/api/fleet/*`와 envelope 1.0 변경 없음. |
@@ -3888,3 +3889,54 @@ capture, bounds_m, evidence_kind}}`다. 출력은 수치 전용 bundle.json이�
 monotonic 기준 최대 5초의 config lease가 만료되면 적용을 중단한다. 갱신 실패는 lease를 연장하지
 않고 remap 뒤에도 generation/session을 다시 검사한다. 원본·기준 지도를 유지하며 미관측은 mask로
 구분한다. 실측 승인·미리보기는 위치 앵커·마커 높이 보정·주행·DEVICE/FIELD 수용을 부여하지 않는다.
+
+### v1.265 — D-789 WebRTC 영상 위임 자격
+
+실시간 영상 전환을 위한 추가 계약이다. 장치 설치·6대 현장 수용은 뜻하지 않는다.
+`site_url`(고정 HTTPS origin)이 설정되면 영상 위임은 기본 활성이고 `vision.media.enabled: false`로만 끈다
+(D-789 부록 2026-10-18, 측정 생략). `site_url`이 없으면 비활성이다. `audience`(`site:<id>`),
+`key_id`, `signing_key_file`(로봇별 전용 Ed25519 PEM)을 갖춰야 읽기 위임이 열린다.
+`source_credential_file`은 선택 설치된 로컬 영상 발행자만 읽을 32~512바이트 전용 자격이다.
+키·source 자격은 저장소 밖에 두고 media 서비스에만 필요한 최소 파일 권한으로 설치한다.
+없거나 잘못된 설정은 영상만 503 `MEDIA_UNAVAILABLE`이며 CORE 시작은 유지한다. 뷰어는 503이면 기존 JPEG에 남는다.
+설정되면 `/pilot` 페이지 CSP `connect-src`에 그 site origin 하나만 추가된다.
+
+| Method | Path | Authorization / body | Result |
+|---|---|---|---|
+| POST | `/api/v1/vision/media/grants` | CORE Viewer 이상; `{robot_id}` | 201 읽기 위임 |
+| POST | `/api/v1/vision/media/grants/{grant_id}/renew` | 같은 CORE 소유자 | 200 같은 grant_id, 수명 갱신 |
+| DELETE | `/api/v1/vision/media/grants/{grant_id}` | 같은 CORE 소유자 | 204 철회; 없는 ID는 같은 소유자 범위에서 멱등 |
+| POST | `/api/v1/vision/media/source-grant` | 전용 source Bearer; `{robot_id, grant_id?}` | 201 발행 위임; grant_id가 있으면 같은 발행 위임 갱신 |
+| POST | `/api/v1/vision/media/validate` | Authorization의 영상 위임 Bearer | `{active:false}` 또는 신선한 위임 상태 |
+
+읽기/발행 receipt는 `grant_id`, 새 `token`, `expires_at`(UTC epoch 초), `audience`,
+`robot_id`, `path`(`robots/<robot_id>/front`), `action`(`read|publish`), `site_url`이다.
+일반 Viewer body로 `action=publish`를 요청할 수 없다(기존 validation envelope의 추가 필드 400). 다른 robot·소유자·원본 권한
+상실은 403이다. 토큰·키는 URL이나 로그로 보내지 않으며 모든 위임 응답은 `no-store`다.
+CORE의 일반 Bearer는 validate에서 영상 자격으로 인정되지 않고, 영상 자격도 CORE 명령 권한이 없다.
+
+서명된 `rosy-media+jwt`는 Ed25519, key id와 정확한 robot/path/action/audience 및 최대 60초의
+iat/exp에 결속된다. 원본 CORE 권한을 매 검사마다 다시 확인하고 서버의 철회 기록과 대조한다.
+CORE 재시작은 이전 위임을 닫는다. Account는 현재 앱 cookie 세션에 결속하고 영상 재검사에서
+기존 Account 10초 cache/offline grace를 사용하지 않는다. cookie 없는 Account Bearer 위임은
+403 `MEDIA_BROWSER_SESSION_REQUIRED`다. 미디어 서비스는 1초마다 validate하고 원본 권한 상실·
+CORE 단절·활성 lease 만료 시 실제 MediaMTX 세션을 5초 안에 종료해야 한다.
+활성 미디어 세션의 20초 갱신과 종료 집행은 사이트 media 서비스의 별도 책임이다.
+
+사이트 media origin은 Fleet과 별도 서비스이며 다음 좁은 관리 경로를 제공한다. 전부 영상 위임
+Bearer를 헤더로 받고 `no-store`로 응답한다. 일반 CORE/source 장기 자격을 이 origin으로 보내지 않는다.
+
+| Method | Path | Scope / result |
+|---|---|---|
+| POST | `/v1/intents` | read 위임. 201 `{grant_id}`; 시작 demand 최대 10초 |
+| DELETE | `/v1/intents/{grant_id}` | 같은 read 위임의 시작 취소, 204 |
+| GET | `/v1/sources/{robot_id}/demand` | 해당 robot의 publish 위임. `{active, robot_id, fps, target_bitrate, max_bitrate}`; bitrate는 bit/s, 최대 1000000 |
+| GET | `/v1/session` | 위임 jti에 결속한 실제 MediaMTX `{session_id, expires_at}`; 아직 없으면 404 |
+| POST | `/v1/session/renew` | 갱신된 같은 위임으로 기존 실제 세션 lease 갱신. `{active:true, session_id}`; 소유자/scope 변경은 403 |
+| DELETE | `/v1/session` | 같은 위임의 실제 세션 종료, 204; 소유 불일치는 403 |
+
+MediaMTX WHIP/WHEP의 Location resource 식별자를 관리 API의 session_id로 추정하지 않는다.
+실제 session_id는 MediaMTX auth callback에서 얻은 id와 위임 jti의 결속으로 조회한다.
+관리 callback `/auth`와 `/health`, MediaMTX 관리 API는 loopback 전용이며 외부 proxy에 공개하지 않는다.
+`/auth`는 publish/read에 `protocol=webrtc`와 정확한 path·위임을 확인하고, action=api에는 별도 로컬
+관리 자격만 인정한다. source/read 위임으로 관리 API를 호출할 수 없다.

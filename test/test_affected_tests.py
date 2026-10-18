@@ -32,6 +32,15 @@ def test_external_drive_holders_select_their_installing_distribution():
     assert 'middleware/core/services/test' in selection.reasons
     assert 'middleware/core/gateway/test' in selection.reasons
 
+@pytest.mark.parametrize("changed", ["learning/curation/perception/review_app_web/camera.html",
+                                     "operations/site_ui/console/console.js"])
+def test_a_surface_tree_change_selects_the_registry_contract_suites(changed):
+    # 2026-10-18: the D-792 camera page landed red because these suites never name review_app_web.
+    selection = affected.select(affected.Repo.load(ROOT), [changed])
+    assert {"shared/web/test/test_ui_token_contracts.py", "shared/web/test/test_shared_controls.py"} <= set(
+        selection.reasons)
+
+
 HARNESS_YAML = """\
 modules:
   - name: core

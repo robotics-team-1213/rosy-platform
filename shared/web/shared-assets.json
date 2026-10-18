@@ -14,6 +14,7 @@
     "live-dialog-geometry.js": "text/javascript",
     "theme.js": "text/javascript",
     "evidence.js": "text/javascript",
+    "webrtc.js": "text/javascript",
     "request.js": "text/javascript",
     "scope.js": "text/javascript",
     "fleet-client.js": "text/javascript",
