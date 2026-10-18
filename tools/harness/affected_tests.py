@@ -492,6 +492,8 @@ def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
 
 def _full_tier_ros(path: str) -> str:
     """The ROS environment the full tier gives this path; paths outside CI_FULL_MATRIX keep overlay."""
+    if _under(path, "test"):
+        return "overlay"  # the full tier's root shards run every root test/ file under overlay
     best = ("", "overlay")
     for entry in CI_FULL_MATRIX:
         for prefix in (p for inv in entry["invocations"] for p in inv if not p.startswith("-")):
