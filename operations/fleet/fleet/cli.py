@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
-from fleet.server.ledger.context_options import activate_from_args, add_cli_arguments
+from fleet.server.context_options import activate_from_args, add_cli_arguments
 from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)

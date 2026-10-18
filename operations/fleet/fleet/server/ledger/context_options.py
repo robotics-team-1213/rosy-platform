@@ -11,7 +11,7 @@ import argparse
 import sys
 from typing import Optional
 
-from .context_log import ContextLog, set_active
+from fleet.server.context_log import ContextLog, set_active
 
 
 def add_cli_arguments(parser: argparse.ArgumentParser) -> None:
@@ -38,6 +38,6 @@ def activate_from_args(args: argparse.Namespace) -> Optional[ContextLog]:
         sys.exit("--context-db-host requires --context-db-name and --context-db-user")
     log = ContextLog(host, args.context_db_name, args.context_db_user,
                      port=args.context_db_port,
-                     password_file=getattr(args, "context_db_password_file", None))
+                     password_file=args.context_db_password_file)
     set_active(log)
     return log

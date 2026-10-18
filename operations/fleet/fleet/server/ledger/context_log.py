@@ -76,20 +76,19 @@ class ContextLog:
         if not isinstance(port, int) or not 1 <= port <= 65535:
             raise ValueError("context log port must be 1..65535")
         self.host, self.database, self.user, self.port = host, database, user, port
-        self.password_file = Path(password_file) if password_file is not None else None
+        self.password_file = password_file
         self._connect = connect or _default_connect
         self._ready = False
 
     def _dsn(self) -> str:
-        parts = [f"host={self.host}", f"port={self.port}",
-                 f"dbname={self.database}", f"user={self.user}",
-                 "connect_timeout=5"]
+        options = {"host": self.host, "port": self.port, "dbname": self.database,
+                   "user": self.user, "connect_timeout": 5}
         if self.password_file is not None:
-            password = self.password_file.read_text(encoding="utf-8").strip()
-            if not password:
+            secret = Path(self.password_file).read_text(encoding="utf-8").strip()
+            if not secret:
                 raise ValueError("context log password file is empty")
-            parts.append(f"password={password}")
-        return " ".join(parts)
+            options["password"] = secret
+        return " ".join(f"{name}={value}" for name, value in options.items())
 
     def _connect_and(self, work: Callable[[Any], None]) -> None:
         conn = self._connect(self._dsn())

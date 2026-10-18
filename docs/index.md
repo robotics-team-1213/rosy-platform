@@ -337,8 +337,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
 - 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
 - 2026-10-18 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
 - 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
 - 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
-- 2026-10-17 · a9a061446c · 잔여 브라우저 FULL 검증과 로컬 main 착지

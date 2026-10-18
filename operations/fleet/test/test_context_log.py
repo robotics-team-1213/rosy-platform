@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from fleet.server.ledger.context_log import ContextLog, active, set_active
-from fleet.server.ledger.context_options import activate_from_args, add_cli_arguments
-from fleet.server.ledger.deliberation_journal import DeliberationJournal
+from fleet.server.context_log import ContextLog, active, set_active
+from fleet.server.context_options import activate_from_args, add_cli_arguments
+from fleet.server.deliberation_journal import DeliberationJournal
 from rosy.decision.deliberation import Supervisor
 from test_deliberation import Provider, problem
 
@@ -57,8 +57,8 @@ def test_context_log_requests_a_full_identity_and_a_real_port():
 
 
 def test_password_comes_from_the_secret_file_at_connect_time(tmp_path):
-    secret = tmp_path / "postgres_password"
-    secret.write_text("s3cret\n", encoding="utf-8")
+    path = tmp_path / "postgres_password"
+    path.write_text("hunter2swordfish\n", encoding="utf-8")
     seen = []
     connections, connect = factory()
 
@@ -67,12 +67,12 @@ def test_password_comes_from_the_secret_file_at_connect_time(tmp_path):
         return connect(dsn)
 
     log = ContextLog("postgres", "rosy_context", "rosy", port=5432,
-                     password_file=secret, connect=record)
+                     password_file=path, connect=record)
     log.ensure_schema()
 
     assert seen == ["host=postgres port=5432 dbname=rosy_context user=rosy "
-                    "connect_timeout=5 password=s3cret"]
-    assert "s3cret" not in str(log.password_file)
+                    "connect_timeout=5 password=hunter2swordfish"]
+    assert "hunter2swordfish" not in str(log.password_file)
     assert connections[0].closed is True
 
     empty = tmp_path / "empty"

@@ -13,12 +13,12 @@
 ### Decision
 
 1. **원장은 그대로 SQLite 하나다.** `fleet.sqlite3`의 트랜잭션·admission·WAL 정책(D-333)은 바뀌지 않는다. PostgreSQL은 파생 문맥/로그 전용이며 진실의 원천이 아니다.
-2. **미러 대상은 D-640 숙고 저널의 터미널 run뿐이다.** `fleet.server.ledger.context_log.ContextLog`가 `rosy_deliberation_run`(SCHEMA_VERSION 1, unique key `(subject_id, case_id, generation)`, `ON CONFLICT DO NOTHING`)에 기록한다. `DeliberationJournal.run`은 SQLite 커밋 뒤에만 `_mirror`를 부르고, `ContextLog`는 어떤 실패도 경고로만 남기고 `False`를 돌려주며 절대 예외를 올리지 않는다. Postgres가 없거나 죽어도 Fleet 결정·원장 트랜잭션은 영향을 받지 않는다.
+2. **미러 대상은 D-640 숙고 저널의 터미널 run뿐이다.** `operations/fleet/fleet/server/ledger/context_log.py`의 `ContextLog`(import 이름은 평탄한 `fleet.server.context_log`)가 `rosy_deliberation_run`(SCHEMA_VERSION 1, unique key `(subject_id, case_id, generation)`, `ON CONFLICT DO NOTHING`)에 기록한다. `DeliberationJournal.run`은 SQLite 커밋 뒤에만 `_mirror`를 부르고, `ContextLog`는 어떤 실패도 경고로만 남기고 `False`를 돌려주며 절대 예외를 올리지 않는다. Postgres가 없거나 죽어도 Fleet 결정·원장 트랜잭션은 영향을 받지 않는다.
 3. **배치는 관제 PC 한 곳뿐이다.** Postgres는 Compose 네 번째 서비스이고 `site_backend`(internal)에만 붙으며 포트를 공개하지 않는다. Fleet만 TCP(`postgres:5432`)로 접속한다. 비밀번호는 Docker secret `postgres_password` → `POSTGRES_PASSWORD_FILE` → psycopg `password_file` 경로로만 읽는다. 로봇·AI PC·모델 PC는 DB에 직접 접속하지 않는다(Fleet HTTPS/WSS 경로만). 각 PC 로컬 SQLite/JSONL은 남긴다.
 4. **서명 candidate에 미러 이미지를 포함한다.** `build_candidate.py`가 `MIRRORED_IMAGES = {"postgres": "postgres:16-alpine"}`를 빌드 시 `docker pull`/`tag`하고 해석된 image ID를 서명 manifest에 `source: "mirror"`·`upstream`과 함께 기록한다. `verify_candidate.py`가 그 서명·digest·SBOM을 검증하고, 업데이터 `SERVICES`(`site_update_io.py`)에 `postgres`를 넣어 compose-config 대조·health gate·런타임 드리프트 검사가 네 이미지를 모두 본다. 미러 이미지에는 별도 Dockerfile이 없다.
 5. **최소 의존만 더한다.** `psycopg[binary]==3.2.3` 하나다. SQLAlchemy·Alembic·연결 풀 프레임워크는 쓰지 않는다.
 6. **이미지 경화는 fleet/vision보다 약함을 명시한다.** 재고 upstream 이미지라 `read_only: true` + tmpfs(`/tmp`, `/run`, `/var/run/postgresql`), `cap_drop: [ALL]` + 최소 `cap_add`, `no-new-privileges`, 전용 volume `pg_data`, healthcheck `pg_isready`만 쓴다.
-7. **연결 배선은 ledger 홀더가 들고 콘솔 플래그가 그 sink를 활성화한다(D-766).** sink와 그 CLI 표면은 `fleet.server.ledger`(등록 유닛)의 `context_log.py`(`ContextLog`), `context_options.py`(`--context-db-*` 정의 `add_cli_arguments` + `activate_from_args`), `deliberation_journal.py`에 있다. `cli.py`는 홀더를 한 줄씩만 부르고, 활성화된 sink는 프로세스 전역(`set_active`/`active`)으로 두어 `DeliberationJournal`이 기본값으로 집는다. `app.state` handoff는 두지 않는다 — `cli.py`·`app.py`는 D-766 동결 파일이라 늘릴 수 없고, 배선이 어차피 유일한 소비자(저널) 옆에 있는 편이 낫다.
+7. **연결 배선은 ledger 홀더가 들고 콘솔 플래그가 그 sink를 활성화한다(D-766).** sink와 그 CLI 표면은 소스 홀더 `operations/fleet/fleet/server/ledger/`(등록 유닛)의 `context_log.py`(`ContextLog`), `context_options.py`(`--context-db-*` 정의 `add_cli_arguments` + `activate_from_args`), `deliberation_journal.py`에 있다(셋 다 import 이름은 평탄한 `fleet.server.*`). `cli.py`는 홀더를 한 줄씩만 부르고, 활성화된 sink는 프로세스 전역(`set_active`/`active`)으로 두어 `DeliberationJournal`이 기본값으로 집는다. `app.state` handoff는 두지 않는다 — `cli.py`·`app.py`는 D-766 동결 파일이라 늘릴 수 없고, 배선이 어차피 유일한 소비자(저널) 옆에 있는 편이 낫다.
 
 ### D-427·D-429·D-430과의 관계
 
@@ -38,7 +38,7 @@
 ### 열린 항목
 
 - `DeliberationJournal`(D-640)은 현재 프로덕션 생성처가 없다(테스트만 쓴다). 따라서 sink가 붙은 seam은 런타임 행을 아직 만들지 않는다. 활성 경로인 D-720 채널 모델 저널로 옮길지는 사용자 확인이 필요하다.
-- 모듈 신원이 바뀌었다: `fleet.server.deliberation_journal` → `fleet.server.ledger.deliberation_journal`, sink는 `fleet.server.ledger.context_log`다. 설치·패키징(`SERVER_HOLDERS`)과 설치 모듈 목록 시험이 같은 커밋에서 갱신됐다.
+- 모듈 **소스 위치**만 `server/ledger/`로 옮겼다(D-766 크기 유닛). import 신원은 소스트리·설치본 모두 평탄한 `fleet.server.deliberation_journal`, `fleet.server.context_log`, `fleet.server.context_options` 그대로다(홀더는 빌드 때 `fleet.server.*`로 평탄화된다). 그래서 이 세 모듈과 그 호출자는 홀더를 거치는 이름(`fleet.server.ledger.*`)을 쓰지 않는다 — 설치본에는 그 이름이 없다. 설치 모듈 목록 시험(`test_remaining_platform_installed.py`)이 세 평탄 이름을 고정한다.
 - Docker가 없는 개발 노트북에서는 pull·digest 해석을 확인할 수 없다. digest는 CI 빌드 시 확정·기록된다.
 - pytest는 이 노트북에서 돌리지 않는다(D-584). 원격 PC 없이는 계약시험을 확인할 수 없다.
 

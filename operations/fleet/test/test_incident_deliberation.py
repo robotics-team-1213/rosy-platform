@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from fleet.server.ledger.deliberation_journal import DeliberationJournal
+from fleet.server.deliberation_journal import DeliberationJournal
 from fleet.server.incident_deliberation import FleetBaseline, run_line_judgment
 from rosy.decision.deliberation import ConditionalReview, Supervisor
 from rosy_situation.assessment import AssessmentInput, EvidenceRef, assess

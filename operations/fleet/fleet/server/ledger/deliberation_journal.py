@@ -7,8 +7,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 from rosy.decision.deliberation import canonical
-from ..sqlite_policy import configure_connection
-from .context_log import active
+from fleet.server.context_log import active
+from fleet.server.sqlite_policy import configure_connection
 
 
 class DeliberationJournal:
