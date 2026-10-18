@@ -28,7 +28,7 @@ def wire():
             active=True, approved_by='second-sim-admin', closed_ns=None, expires_ns=2_000_000_000_000)])
     calls = []
     response = dict(lease_id='lease', window_id='window', episode_id='episode', owner_session_id='owner-session',
-        issued_ns=1_000_000_000_000, expires_ns=1_001_000_000_000, workcell_id='cell',
+        issued_ns=1_000_075_000_000, expires_ns=1_001_075_000_000, workcell_id='cell',
         policy_revision='policy-pin', clock='fleet_wall_ns', device_delivery='not_connected')
     def request(method, path, body=None):
         calls.append((method, path, body))
@@ -89,7 +89,7 @@ def test_late_response_does_not_extend_deadline(wire):
 def test_renewal_accepts_old_and_pending_then_commits_new_authority(wire):
     old = wire.consumer.acquire()
     wire.clock[0] = 100.4
-    wire.response.update(issued_ns=1_000_400_000_000, expires_ns=1_001_400_000_000)
+    wire.response.update(issued_ns=1_000_475_000_000, expires_ns=1_001_475_000_000)
     class Session:
         lease = old
         def renew(self, new):
@@ -107,7 +107,7 @@ def test_replayed_renewal_and_network_failure_latch_closed(wire):
     old = wire.consumer.acquire()
     with pytest.raises(PermissionError): wire.consumer.renew(SimpleNamespace(lease=old))
     assert not wire.consumer.authority(old)
-    wire.response.update(issued_ns=1_000_400_000_000, expires_ns=1_001_400_000_000)
+    wire.response.update(issued_ns=1_000_475_000_000, expires_ns=1_001_475_000_000)
     with pytest.raises(PermissionError): wire.consumer.acquire()
 
 
