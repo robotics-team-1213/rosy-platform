@@ -381,7 +381,11 @@ DECLARED_WRITES = {
         "/var/lib/rosy/camera/recordings",
         # D-411: the Pilot recorder (pilot_recorder_node), setgid rosy-core.
         "/var/lib/rosy/pilot-recordings",
+        # D-789 T3: rosy_media_edge.camera_tap FrameWriter mailbox (and its .owner lock).
+        "/run/rosy-media/front.rgb", "/run/rosy-media/front.rgb.owner",
     },
+    # D-789 T5: the optional media publisher writes nothing on disk (journal only).
+    "rosy-media.service": set(),
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
@@ -1101,9 +1105,10 @@ def test_camera_reads_the_optional_learned_perception_switch_file():
         "/etc/rosy/runtime.env", "-/etc/rosy/learned-perception.env"]
     for line in CAMERA_HARDENING:
         assert line in unit.splitlines(), line
-    # The switch opens no write path of its own (D-411's recorder owns exactly one)
-    # and never reaches the command line: the launch file reads the variables itself.
-    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings"]
+    # The switch opens no write path of its own (D-411's recorder and the D-789 media
+    # mailbox are the only two) and never reaches the command line: the launch file
+    # reads the variables itself.
+    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings", "/run/rosy-media"]
     exec_start = directives["ExecStart"][0]
     assert "ROSY_LEARNED_SHADOW" not in exec_start and "ROSY_CAPTURE" not in exec_start
     assert "learned_shadow:=" not in exec_start and "capture:=" not in exec_start

@@ -4,6 +4,8 @@ Requires=rosy-core.service
 After=rosy-core.service
 PartOf=rosy-runtime.target
 Wants=rosy-camera-healthy.timer
+# D-789: optional media publisher; condition-gated on its site config, own cgroup.
+Wants=rosy-media.service
 StartLimitIntervalSec=300
 StartLimitBurst=3
 
@@ -20,6 +22,8 @@ StateDirectory=rosy/camera
 StateDirectoryMode=0750
 # D-411: pilot_recorder_node's sessions (tmpfiles: 2750 rosy-camera:rosy-core; CORE reads).
 ReadWritePaths=/var/lib/rosy/pilot-recordings
+# D-789 T3: the 640x480 media mailbox (rosy_media_edge.camera_tap; tmpfiles 0750).
+ReadWritePaths=/run/rosy-media
 Environment=ROS_HOME=/var/log/rosy-camera ROS_LOG_DIR=/var/log/rosy-camera
 Environment=HOME=/var/lib/rosy/camera
 Environment=PYTHONNOUSERSITE=1
