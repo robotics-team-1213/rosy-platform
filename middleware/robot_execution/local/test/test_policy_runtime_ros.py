@@ -94,7 +94,7 @@ def native_setup_cleanup(root):
 @pytest.mark.parametrize('revoke', [False, True])
 @pytest.mark.parametrize('with_parent',[False,True],ids=['native_only','parent_episode_fleet'])
 def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent, *,
-                                                with_inference=False, with_core=False):
+                                                with_inference=False, with_core=False, core_client=None):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, _, _, authority, policy_root = setup_session(
         tmp_path,execution_journal=journal,max_lease_duration_ns=15_000_000_000,
@@ -220,17 +220,20 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             app = create_app({}, SimpleNamespace(arm_policy=port,
                 safety=SimpleNamespace(estop=False, estop_listeners=[])))
             app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='fixture-operator', role='operator')
-            with TestClient(app) as client:
-                source = client.post('/api/v1/arm/observations',
-                    json=dict(policy_revision=session.lease.policy_revision))
-                assert source.status_code == 200, source.text
-                response = client.post('/api/v1/arm/actions', json=dict(
-                    policy_revision=session.lease.policy_revision,
-                    observation_id=source.json()['observation_id'],
-                    positions={'joint_1': .101, 'joint_2': .001}))
-                assert response.status_code == 202, response.text
-                assert response.json()['accepted'] is True
-                command = response.json()['command_id']
+            if core_client is not None:
+                command = core_client(app, session)
+            else:
+                with TestClient(app) as client:
+                    source = client.post('/api/v1/arm/observations',
+                        json=dict(policy_revision=session.lease.policy_revision))
+                    assert source.status_code == 200, source.text
+                    response = client.post('/api/v1/arm/actions', json=dict(
+                        policy_revision=session.lease.policy_revision,
+                        observation_id=source.json()['observation_id'],
+                        positions={'joint_1': .101, 'joint_2': .001}))
+                    assert response.status_code == 202, response.text
+                    assert response.json()['accepted'] is True
+                    command = response.json()['command_id']
         else:
             state, _ = session.capture_observation()
             action_candidate = candidate(session,sequence=state.sequence,
