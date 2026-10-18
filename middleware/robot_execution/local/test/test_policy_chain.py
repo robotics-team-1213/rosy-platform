@@ -66,13 +66,13 @@ def test_real_fleet_renewal_then_stop_cancels_exact_session_goal(tmp_path, fault
         renewed = chain.consumer.renew(chain.session)
         assert renewed.lease_id == original.lease_id and renewed.expires_at_ns > original.expires_at_ns
         if fault == 'window':
-            fleet.admin('POST', fleet.base+'/windows/'+fleet.window['window_id']+'/close',
+            fleet.operator('POST', fleet.base+'/windows/'+fleet.window['window_id']+'/close',
                         dict(operator_confirmed=True, reason='SIM revoke'))
         elif fault == 'confirmation':
-            fleet.admin('POST', fleet.base+'/confirmations', dict(operator_confirmed=True,
+            fleet.operator('POST', fleet.base+'/confirmations', dict(operator_confirmed=True,
                 reason='owner_fault', policy_revision=original.policy_revision, evidence={'simulation':True}))
         elif fault == 'incident':
-            fleet.admin('POST', fleet.base+'/incidents', dict(operator_confirmed=True, description='SIM incident'))
+            fleet.operator('POST', fleet.base+'/incidents', dict(operator_confirmed=True, description='SIM incident'))
         else:
             fleet.server.close()
         with pytest.raises(PermissionError): chain.consumer.renew(chain.session)
@@ -97,7 +97,7 @@ def test_chain_refuses_installed_scope_substitution_before_issuance(tmp_path, fi
 
 def test_worker_closes_authority_after_actual_fleet_window_revoke(tmp_path):
     with chain_setup(tmp_path) as (chain, fleet, runtime, driver, clock):
-        fleet.admin('POST', fleet.base+'/windows/'+fleet.window['window_id']+'/close',
+        fleet.operator('POST', fleet.base+'/windows/'+fleet.window['window_id']+'/close',
                     dict(operator_confirmed=True, reason='SIM worker revoke'))
         chain.start()
         deadline = time.monotonic()+3

@@ -64,7 +64,8 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
                    rig_revision='sim-rig', calibration_revision='cal-7'):
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = tmp_path/'fleet.sqlite3'
-    names = {'sim-admin-a':'policy-admin', 'sim-admin-b':'policy-admin', 'sim-device':'service'}
+    names = {'sim-admin-a':'policy-admin', 'sim-admin-b':'policy-admin',
+             'sim-operator':'operator', 'sim-device':'service'}
     credentials = {name: secrets.token_urlsafe(32) for name in names}
     users = {sha256(credentials[name].encode()).hexdigest():dict(principal_id=name, role=role)
              for name, role in names.items()}
@@ -90,6 +91,7 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
         window = admin('POST', base+'/windows', dict(operator_confirmed=True,
             policy_revision=policy_revision, kind='supervised', scope='SIM fixed reach', minutes=1, **revisions))
         window = second('POST', base+'/windows/'+window['window_id']+'/approve', dict(operator_confirmed=True))
-        yield SimpleNamespace(server=server, admin=admin, device=clients['sim-device'], window=window,
+        yield SimpleNamespace(server=server, admin=admin, operator=clients['sim-operator'],
+            device=clients['sim-device'], window=window,
             db=db, base=base, rig_revision=rig_revision, calibration_revision=calibration_revision,
             credentials=credentials, scope='SIM fixed reach')
