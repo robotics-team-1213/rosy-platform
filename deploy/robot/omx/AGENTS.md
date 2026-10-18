@@ -22,7 +22,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `host_inventory.py`, `host-inventory.yaml.example` | Static `rosy.omx-host-inventory.v1` loader and a disabled placement template |
 | `preflight.py` | Multi-workcell preflight over the host inventory |
 | `run_pilot_sim.sh`, `probe_*.py`, `probe_*.sh` | Simulation and pilot probes (vendor owner, Fleet ROS vendor sim, pilot HTTP, pilot recording) |
-| `gripper_tune.py` | Gripper (ID 16) commissioning: move or sweep its ends with temporary limits/gains, always torque OFF and restored, camera frames per settled position |
+| `joint_tune.py` | Follower joint commissioning (IDs 11-16): bounded move of one joint (sag check at torque ON), gripper sweep of its ends; temporary limits/gains, always torque OFF and restored, camera frames per settled position |
 | `requirements-lerobot-export.txt` | Python deps for demonstration export |
 
 ## Subdirectories

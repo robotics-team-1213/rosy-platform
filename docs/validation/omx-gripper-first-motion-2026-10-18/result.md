@@ -36,11 +36,11 @@ torque가 false였고 목표 레지스터도 바뀌지 않았다(`selected` 전�
 
 ## 도구
 
-`deploy/robot/omx/gripper_tune.py`(`move`, `sweep`). ID 16과 정해진 레지스터만 쓴다. 한 번 실행하는 동안만
+`deploy/robot/omx/joint_tune.py`(`move`, 그리퍼만 `sweep`). 고른 모터 하나와 정해진 레지스터만 쓴다. 그리퍼 외 관절은 한 번에 최대 200틱, torque ON 때 처짐 감시가 있다(실물 미검증). 한 번 실행하는 동안만
 PWM/Current Limit와 P/I 게인을 올리고, 어떤 종료에서도 torque OFF 뒤 바꾼 값을 되쓰고 다시 읽는다.
 EEPROM은 torque OFF에서만 쓴다. 멈춘 위치마다 top·wrist 프레임을 로컬 viewer에서 저장한다. sweep의 끝은
 목표 전류의 80% 이상으로 멈췄을 때만 인정한다. 저장소 버전으로 실물에서 3000 → 3004, 2030 → 2028을
-확인했고 종료 뒤 값이 모두 복구됐다. 시험: `test/test_omx_gripper_tune.py`(가짜 그리퍼).
+확인했고 종료 뒤 값이 모두 복구됐다. 시험: `test/test_omx_joint_tune.py`(가짜 모터).
 
 ## 열린 항목
 

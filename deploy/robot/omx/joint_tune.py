@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
-"""OMX gripper (follower ID 16) tuning: move it, or sweep it to find its closed and open ends.
+"""OMX follower joint tuning (IDs 11-16): move one joint, or sweep the gripper to find its ends.
 
 Commissioning tool, not an actuator owner: run it only while no owner or controller holds the bus
-and a person watches the arm. Each run raises the gripper's PWM/Current Limit (EEPROM 36/38) and,
-optionally, its position P/I gains (RAM 84/82) for its own duration only, and always ends with
-torque OFF and every changed register written back and read back. Current-based position mode
-(mode 5) caps the force at the goal current, so stopping at a mechanical end is a stall, not a
-crash. Only ID 16 and the registers below are ever written.
+and a person watches the arm. Only the chosen motor and the registers below are ever written, and
+only that motor's torque is ever turned on. Each run raises that motor's PWM Limit (EEPROM 36),
+its Current Limit (EEPROM 38, XL330 only) and, optionally, its position P/I gains (RAM 84/82) for
+its own duration only, and always ends with torque OFF and every changed register written back and
+read back. EEPROM is written with torque OFF only.
+
+Per joint:
+- 16 gripper (XL330, mode 5 current-based position): the goal current caps the force, so `sweep`
+  may push to the mechanical ends; an end counts only when the motor stalled near the goal current.
+- 14-15 wrist (XL330, mode 4) and 11-13 (XL430, mode 4; 11-13 carry the arm's weight): only the
+  PWM Limit caps the force. `move` only, at most --max-delta ticks from the start (default 200). At
+  torque ON the joint must hold its position within --sag ticks for the hold window, or the run stops
+  before any motion (a weak PWM Limit lets a loaded joint sag).
 
 Every step goes to tune.jsonl; each settled position also saves the top and wrist frames from the
-local camera viewer (frames/), so the motion can be checked by eye. A sweep writes
-gripper-profile.json; an end counts only when the motor stalled near the goal current.
+local camera viewer (frames/). A gripper sweep writes gripper-profile.json.
 
-  gripper_tune.py --device /dev/serial/by-id/... move --to 2030 --p-gain 600 --i-gain 200
-  gripper_tune.py --device /dev/serial/by-id/... sweep --reach 1700 --p-gain 600 --i-gain 200
+  joint_tune.py --device /dev/serial/by-id/... --id 15 move --delta 50 --pwm 150
+  joint_tune.py --device /dev/serial/by-id/... --id 16 sweep --reach 1700 --p-gain 600 --i-gain 200
 
-Measured 2026-10-18 on the lab cell: closed 1982, open 3300, 15-24 mA in free motion. Without an
-I gain the gripper stops short of its goal under load (P-only steady-state error).
+Measured 2026-10-18 on the lab cell: gripper closed 1982, open 3300, 15-24 mA in free motion;
+without an I gain it stops short of its goal under load (P-only steady-state error).
 """
 from __future__ import annotations
 
@@ -27,22 +34,24 @@ import urllib.request
 from pathlib import Path
 
 GRIPPER = 16
-CAP_MAX = 400  # trial ceiling for PWM and Current Limit (XL330: PWM 885, current 1750)
+#: id -> (model number, operating mode); XL430-W250 = 1060, XL330-M288 = 1200
+FOLLOWER = {11: (1060, 4), 12: (1060, 4), 13: (1060, 4), 14: (1200, 4), 15: (1200, 4), 16: (1200, 5)}
+CAP_MAX = 400  # trial ceiling for PWM and Current Limit (PWM max 885)
 WRITES = {"torque": (64, 1), "goal_current": (102, 2), "profile_acc": (108, 4), "profile_vel": (112, 4),
           "goal_pos": (116, 4), "pwm_limit": (36, 2), "current_limit": (38, 2), "p_gain": (84, 2),
           "i_gain": (82, 2)}
-READS = {"mode": (11, 1), "torque": (64, 1), "hw_error": (70, 1), "moving": (122, 1),
-         "present_current": (126, 2), "present_pos": (132, 4), **{k: WRITES[k] for k in
-                                                                   ("pwm_limit", "current_limit", "p_gain", "i_gain")}}
-SIGNED = {"present_current": 2, "present_pos": 4}
-EEPROM = ("pwm_limit", "current_limit")  # writable with torque OFF only
-STATE = ("torque", "hw_error", "moving", "present_current", "present_pos")
+READS = {"model": (0, 2), "mode": (11, 1), "torque": (64, 1), "hw_error": (70, 1), "moving": (122, 1),
+         "present_load": (126, 2), "present_pos": (132, 4),
+         **{k: WRITES[k] for k in ("pwm_limit", "current_limit", "p_gain", "i_gain")}}
+SIGNED = {"present_load": 2, "present_pos": 4}  # present_load: XL330 current (mA), XL430 load (0.1 %)
+EEPROM = ("pwm_limit", "current_limit")
+STATE = ("torque", "hw_error", "moving", "present_load", "present_pos")
 
 
 class SerialBus:
-    """The confirmed follower bus, opened exclusively; reads and the WRITES whitelist on ID 16 only."""
+    """The confirmed follower bus, opened exclusively; reads and the WRITES whitelist on one motor."""
 
-    def __init__(self, device: str) -> None:
+    def __init__(self, device: str, motor: int) -> None:
         import fcntl, termios
         import serial
         from dynamixel_sdk import PacketHandler, PortHandler
@@ -51,6 +60,7 @@ class SerialBus:
         if path.parent != Path("/dev/serial/by-id") or not path.is_symlink():
             raise SystemExit("a physically confirmed /dev/serial/by-id symlink is required")
         resolved = str(path.resolve(strict=True))
+        self.motor = motor
         self.port = PortHandler(resolved)
         self.port.ser = serial.Serial(port=None, baudrate=1000000, timeout=0, exclusive=True)
         self.port.ser.port = resolved
@@ -64,7 +74,7 @@ class SerialBus:
     def read(self, name: str) -> int:
         address, size = READS[name]
         fn = {1: self.packet.read1ByteTxRx, 2: self.packet.read2ByteTxRx, 4: self.packet.read4ByteTxRx}[size]
-        value, comm, error = fn(self.port, GRIPPER, address)
+        value, comm, error = fn(self.port, self.motor, address)
         if comm or error:
             raise RuntimeError(f"read {name}: comm {comm} error {error}")
         bits = 8 * SIGNED.get(name, 0)
@@ -73,7 +83,7 @@ class SerialBus:
     def write(self, name: str, value: int) -> None:
         address, size = WRITES[name]
         fn = {1: self.packet.write1ByteTxRx, 2: self.packet.write2ByteTxRx, 4: self.packet.write4ByteTxRx}[size]
-        comm, error = fn(self.port, GRIPPER, address, value)
+        comm, error = fn(self.port, self.motor, address, value)
         if comm or error:
             raise RuntimeError(f"write {name}: comm {comm} error {error}")
 
@@ -82,34 +92,40 @@ class SerialBus:
 
 
 class Run:
-    def __init__(self, bus, *, log, grab, clock=time.monotonic, sleep=time.sleep) -> None:
-        self.bus, self.log, self.grab, self.clock, self.sleep = bus, log, grab, clock, sleep
+    def __init__(self, bus, motor: int, *, log, grab, clock=time.monotonic, sleep=time.sleep) -> None:
+        self.bus, self.motor, self.log, self.grab, self.clock, self.sleep = bus, motor, log, grab, clock, sleep
+        self.xl330 = FOLLOWER[motor][0] == 1200
 
     def state(self) -> dict:
         return {name: self.bus.read(name) for name in STATE}
 
     def set(self, name: str, value: int) -> int:
         """Write one whitelisted register and read it back; returns the previous value."""
+        if name == "current_limit" and not self.xl330:
+            raise RuntimeError("XL430 has no Current Limit register")
         before = self.bus.read(name) if name in READS else None
         if name in EEPROM and self.bus.read("torque") != 0:
             raise RuntimeError("torque must be OFF to write EEPROM")
         self.bus.write(name, value)
         after = self.bus.read(name) if name in READS else value
-        self.log(step="set", name=name, before=before, value=value, after=after)
+        self.log(step="set", motor=self.motor, name=name, before=before, value=value, after=after)
         if after != value:
             raise RuntimeError(f"{name} readback {after} != {value}")
         return before
 
-    def settle(self, label: str, *, timeout=6.0, still=0.75, grace=1.5) -> dict:
+    def settle(self, label: str, *, timeout=6.0, still=0.75, grace=1.5, origin=None, sag=None) -> dict:
         """Until the position has not changed for `still` s. A stall in the first `grace` s is not an
-        end: an integrator wound up at the previous end needs time to unwind."""
+        end: an integrator wound up at the previous end needs time to unwind. With `sag`, any drift
+        beyond `sag` ticks from `origin` stops the run."""
         begun = self.clock()
         last, since, s = None, begun, None
         while self.clock() - begun < timeout:
             s = self.state()
-            self.log(step="watch", label=label, **s)
+            self.log(step="watch", label=label, motor=self.motor, **s)
             if s["hw_error"]:
                 raise RuntimeError(f"hardware error {s['hw_error']}")
+            if sag is not None and abs(s["present_pos"] - origin) > sag:
+                raise RuntimeError(f"joint {self.motor} sagged {s['present_pos'] - origin} ticks at torque ON")
             now = self.clock()
             if s["present_pos"] != last:
                 last, since = s["present_pos"], now
@@ -121,28 +137,37 @@ class Run:
 
     def execute(self, args) -> dict:
         before = self.state()
-        mode = self.bus.read("mode")
-        self.log(step="before", mode=mode, **before)
+        model, mode = self.bus.read("model"), self.bus.read("mode")
+        self.log(step="before", motor=self.motor, model=model, mode=mode, **before)
         self.grab("before")
-        if mode != 5 or before["torque"] != 0 or before["hw_error"] != 0:
-            raise SystemExit("precondition failed: mode 5, torque OFF, no hardware error")
+        if ((model, mode) != FOLLOWER[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
+            raise SystemExit(f"precondition failed: motor {self.motor} must be {FOLLOWER[self.motor]} "
+                             f"(model, mode), torque OFF, no hardware error")
         saved = {}
         try:
-            for name, value in (("pwm_limit", args.pwm), ("current_limit", args.current_limit),
+            for name, value in (("pwm_limit", args.pwm),
+                                ("current_limit", args.current_limit if self.xl330 else None),
                                 ("p_gain", args.p_gain), ("i_gain", args.i_gain)):
                 if value is not None:
                     saved[name] = self.set(name, value)
             start = before["present_pos"]
-            for name, value in (("profile_acc", args.acceleration), ("profile_vel", args.velocity),
-                                ("goal_current", args.goal_current), ("goal_pos", start), ("torque", 1)):
-                self.set(name, value)
-            self.settle("hold", timeout=1.0, still=0.3, grace=0)
-            if args.command == "move":
+            target = None
+            if args.command == "move":  # bounded before any torque
                 target = args.to if args.to is not None else start + args.delta
+                if self.motor != GRIPPER and abs(target - start) > args.max_delta:
+                    raise SystemExit(f"joint {self.motor}: {target - start} ticks exceeds --max-delta {args.max_delta}")
+            self.set("profile_acc", args.acceleration)
+            self.set("profile_vel", args.velocity)
+            if self.motor == GRIPPER:
+                self.set("goal_current", args.goal_current)
+            self.set("goal_pos", start)
+            self.set("torque", 1)
+            self.settle("hold", timeout=args.hold, still=args.hold, grace=0, origin=start, sag=args.sag)
+            if args.command == "move":
                 self.set("goal_pos", target)
                 end = self.settle("move")
-                result = {"target": target, "reached": end["present_pos"],
-                          "error_ticks": target - end["present_pos"], "current": end["present_current"]}
+                result = {"motor": self.motor, "target": target, "reached": end["present_pos"],
+                          "error_ticks": target - end["present_pos"], "load": end["present_load"]}
             else:
                 ends = {}
                 for name, sign in (("open", 1), ("closed", -1)):
@@ -150,11 +175,11 @@ class Run:
                     ends[name] = self.settle(name)
                 self.set("goal_pos", ends["closed"]["present_pos"])
                 self.settle("rest", timeout=3.0, still=0.3)
-                result = {"gripper_id": GRIPPER, "goal_current": args.goal_current, "pwm_limit": args.pwm,
+                result = {"motor": self.motor, "goal_current": args.goal_current, "pwm_limit": args.pwm,
                           "current_limit": args.current_limit, "p_gain": args.p_gain, "i_gain": args.i_gain,
                           "open_raw": ends["open"]["present_pos"], "closed_raw": ends["closed"]["present_pos"],
-                          "stall_current": {k: v["present_current"] for k, v in ends.items()},
-                          "end_found": {k: abs(v["present_current"]) >= 0.8 * args.goal_current
+                          "stall_current": {k: v["present_load"] for k, v in ends.items()},
+                          "end_found": {k: abs(v["present_load"]) >= 0.8 * args.goal_current
                                         for k, v in ends.items()},
                           "measured_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
             self.log(step="result", **result)
@@ -162,7 +187,7 @@ class Run:
         finally:
             try:
                 self.bus.write("torque", 0)
-                self.log(step="after", **self.state())
+                self.log(step="after", motor=self.motor, **self.state())
                 self.grab("after")
             finally:
                 for name, value in saved.items():  # torque is OFF, so EEPROM may be written
@@ -172,24 +197,32 @@ class Run:
 def parse(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--device", required=True)
+    parser.add_argument("--id", type=int, default=GRIPPER, choices=sorted(FOLLOWER))
     parser.add_argument("--viewer", default="http://127.0.0.1:8767", help="local camera viewer ('' to skip frames)")
     parser.add_argument("command", choices=("move", "sweep"))
     parser.add_argument("--to", type=int)
     parser.add_argument("--delta", type=int)
     parser.add_argument("--pwm", type=int, default=300)
-    parser.add_argument("--current-limit", type=int, default=250)
-    parser.add_argument("--goal-current", type=int, default=200)
+    parser.add_argument("--current-limit", type=int, default=250, help="XL330 only")
+    parser.add_argument("--goal-current", type=int, default=200, help="gripper only")
     parser.add_argument("--p-gain", type=int)
     parser.add_argument("--i-gain", type=int)
     parser.add_argument("--velocity", type=int, default=20)
     parser.add_argument("--acceleration", type=int, default=10)
-    parser.add_argument("--reach", type=int, default=1700, help="sweep: how far past the start to push each way")
+    parser.add_argument("--hold", type=float, default=1.0, help="seconds to hold the start at torque ON")
+    parser.add_argument("--sag", type=int, default=20, help="ticks the start may drift while holding")
+    parser.add_argument("--max-delta", type=int, default=200, help="non-gripper move limit in ticks")
+    parser.add_argument("--reach", type=int, default=1700, help="gripper sweep: push this far each way")
     args = parser.parse_args(argv)
     if not (1 <= args.pwm <= CAP_MAX and 1 <= args.current_limit <= CAP_MAX
             and 1 <= args.goal_current <= args.current_limit):
         parser.error(f"caps must be 1..{CAP_MAX} and the goal current at most the current limit")
     if any(gain is not None and not 0 <= gain <= 2000 for gain in (args.p_gain, args.i_gain)):
         parser.error("gains must be 0..2000")
+    if not (0 < args.hold <= 5 and 0 < args.sag <= 100 and 0 < args.max_delta <= 400):
+        parser.error("--hold 0..5 s, --sag 1..100, --max-delta 1..400")
+    if args.command == "sweep" and args.id != GRIPPER:
+        parser.error("sweep pushes to mechanical ends: gripper (16) only")
     if args.command == "move":
         if (args.to is None) == (args.delta is None):
             parser.error("move needs exactly one of --to / --delta")
@@ -214,7 +247,7 @@ def main(argv=None):
         Path("frames").mkdir(exist_ok=True)
         saved = {}
         for camera in ("top", "front"):
-            name = f"frames/tune-{time.strftime('%H%M%S')}-{label}-{camera}.jpg"
+            name = f"frames/tune-{time.strftime('%H%M%S')}-id{args.id}-{label}-{camera}.jpg"
             try:
                 host = args.viewer.split("//", 1)[-1]
                 request = urllib.request.Request(f"{args.viewer}/frame/{camera}.jpg", headers={"Host": host})
@@ -224,9 +257,9 @@ def main(argv=None):
                 saved[camera] = f"unavailable: {exc}"
         log(step="frames", label=label, **saved)
 
-    bus = SerialBus(args.device)
+    bus = SerialBus(args.device, args.id)
     try:
-        result = Run(bus, log=log, grab=grab).execute(args)
+        result = Run(bus, args.id, log=log, grab=grab).execute(args)
     finally:
         bus.close()
     if args.command == "sweep":
