@@ -9075,3 +9075,9 @@ osy-d395-s1d\`.
 - 변경: `cli.py`의 홀더 import와 `ledger/`의 상호 참조, 세 시험 파일의 import를 평탄 이름으로 바꾼다. `context_log.py`는 비밀번호 파일 경로를 그대로 보관하고 `_dsn`에서 dict 순서(host·port·dbname·user·connect_timeout·password)로 DSN을 조립한다 — 값은 파일에서 읽은 뒤에만 문자열에 들어가고, `deploy/robot/pinky_pro/release/secret_scan.py`의 assignment 규칙을 우회하지 않는다. `context_options.py`는 `args.context_db_password_file`을 그대로 읽는다. `compose.pairing.yaml`의 fleet `command`는 base를 통째로 반복해야 하므로(`test_site_pairing_deploy.py`), D-796 `--context-db-*` 네 플래그를 base와 같은 순서로 넣는다.
 - 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
 - gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+
+- 변경: `plans/2026-10-18-pinky-sd-ready.md`에 단일 명령의 새 카드 준비, 기존 작성기 재사용, 첫 부팅·자동 업데이트 검증 순서를 기록했다. 첫 장치 런북에 준비물, Wi-Fi 보안 입력, 등록부 복원, 기록 로그·receipt 완료 판정과 읽기 전용 상태 확인을 추가했다.
+- 증거: 기존 SD·first-boot·D-412 코드 확인 및 네이티브 PowerShell fixture 검증 6개 PASS. 최신 이미지 성공 실행의 현재 Actions artifacts와 조회한 release의 `.img.xz` 목록은 비어 있어, 이미지 확보를 미완료 단계로 남겼다.
+- gate 변화: 없음. 빌드 성공, 서명 이미지, 매체 readback, 실기 부팅·자동 업데이트를 서로 대체하지 않는다.
