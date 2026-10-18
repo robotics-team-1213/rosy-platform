@@ -1,4 +1,4 @@
-"""tools/land.py (with tools/land_checks.py) against throwaway git repos: a main checkout plus one topic worktree."""
+"""tools/land.py with land_checks.py, land_queue.py and land_full.py, against throwaway repos: main plus a worktree."""
 
 from __future__ import annotations
 
@@ -747,3 +747,100 @@ def test_size_failure_says_how_to_fix_it(repos, monkeypatch, capsys):
     assert land.main(["--tests", "auto"]) == 1
     err = capsys.readouterr().err
     assert "tools/x.py 612 > 600" in err and "never raise a row" in err and f"python {land.SIZE_RANGE} main HEAD" in err
+
+
+def queued(main: Path) -> list[str]:
+    return sorted(p.name for p in (main / ".git" / land.land_queue.QUEUE).glob("*"))
+
+
+def test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    peer = land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # this test process: alive
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1
+    captured = capsys.readouterr()
+    assert "position 2; ahead: feat/peer" in captured.out and "--no-queue" in captured.err
+    assert git(main, "rev-parse", "HEAD") == before and git(wt, "rev-list", "--merges", "main..HEAD") == ""
+    assert queued(main) == [peer.name], "the waiting run removed its own ticket, not the peer's"
+
+
+def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    seen = []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        seen.append(queued(main))
+        raise land.Stop("simulated NEW failure")
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 1
+    assert len(seen[0]) == 1 and queued(main) == []
+
+    def interrupted(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(land, "run_tests", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        land.main(["--tests", "auto"])
+    assert queued(main) == []
+
+
+def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # would block a queued run
+    assert land.main(["--tests", "none", "--no-queue"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
+    """Run 1: the FULL tier passes while a peer lands, then the delta round loses its test host."""
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    calls = []
+
+    def select(wt_, base, python, head=None):
+        calls.append(head)
+        return [["pkg/test"]], (None if head else "selector escalated to FULL")
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        if round_no == 2:
+            raise land.Stop("no test host reachable")
+        commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return ["pytest ok"]
+
+    monkeypatch.setattr(land, "select", select)
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 1
+    assert calls == [None, git(main, "rev-parse", "HEAD")]
+    calls.clear()
+    monkeypatch.setattr(land, "run_tests", lambda *a: ["pytest ok"])
+    return calls
+
+
+def test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass(repos, monkeypatch):
+    main, wt = repos
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    peer_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [peer_main], "delta selection only, no FULL tier"
+    assert not list((main / ".git" / land.land_full.RECORDS).glob("*")), "the record goes once landed"
+
+
+def test_a_branch_commit_after_the_full_pass_means_full_again(repos, monkeypatch):
+    main, wt = repos
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "fix after the FULL tier")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls[0] is None
+
+
+def test_a_merge_that_changed_more_than_main_voids_the_full_pass(repos, monkeypatch):
+    main, wt = repos
+    full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(main, {"lib/other.py": "peer = 2\n"}, "peer 2")
+    subprocess.run(["git", "-C", str(wt), "merge", "--no-commit", "--no-ff", "main"], check=True, capture_output=True)
+    commit(wt, {"pkg/a.py": "x = 4\n"}, "merge main, with an edit of its own")
+    assert land.land_full.restore(wt, "feat/x") is None
