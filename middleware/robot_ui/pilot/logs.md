@@ -869,3 +869,52 @@
 - 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
 - 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
 - gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
+
+## 2026-10-13 · uncommitted · feat(pilot): Pilot 웹 앱 바의 이름표 (D-741 조각 11)
+
+- 변경: 머리의 이름표를 R 심볼과 앱 이름 `Pilot`, 그 다음 이 화면이 붙어 있는 로봇 이름(`/api/v1/auth/connection`의 `robot_id`, 모르면 숨김)으로 바꿨다. 부제 `직접 조종`은 뺐다. 머리의 순서(이름표, 알림, 상태, `운용 지도`, 비상 정지)와 비상 정지 마크업·동작, 주행 중 얇은 머리, Android 셸 숨김, 64rem 아래 접속 화면 격자, `--topbar-height`, 주행 HUD는 고치지 않았다. `styles.css`는 바뀌지 않았다. 로봇 이름은 기존 규칙대로 주행·Gazebo 연습 화면과 64rem 아래 접속 화면에서 숨는다. `sw.js` 캐시 이름을 `rosy-pilot-shell-2026-10-13-app-bar`로 올렸다.
+- 증거: 소스 시험 `test/test_app_bar.py` 셋을 더했고 `test_pilot_browser.py::test_connection_offer_names_this_robot_before_the_neighbour`에 이름표와 마지막 조작 단언을 더했다. 원격 결과는 다음 항목에 적는다.
+- gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기다. 화면 렌더, 설치본, Android 셸, 실물 로봇에서의 비상 정지는 이 변경으로 확인하지 않았다. 브랜치 `feat/pilot-app-bar`.
+
+## 2026-10-13 · 44aca95f3 · feat(pilot): 조각 11 원격 결과
+
+- 변경: 없음(증거 기록).
+- 증거: 원격 `middleware/robot_ui/pilot/test` 97 passed 149 skipped, CORE `/pilot` 경로와 표면 쪽 시험 8 passed 13 skipped, `shared/web/test` 285 passed 49 skipped. 셋 다 known_failures NEW 0 (`X:/DevTemp/pilot-app-bar/pilot.txt`, `core-api.txt`, `shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main 10581c1ce에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
+- gate 변화: 없음. 건너뛴 시험은 브라우저 시험이다. 화면·Android·실물 수용은 확인 못 함.
+
+## 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native Pilot
+
+- 변경: 공통 Account 로그인과 보호된 native 세션을 연결했다. Proxy는 현재 Bearer를 HTTP/WS upstream에만 전달하고 WebView 저장소에는 넣지 않는다. 계정/family 변경은 이전 연결을 닫는다. 활성 로봇 최대 두 대만 갱신하며 조작과 정지 경로는 네트워크를 기다리지 않는 검증된 캐시를 읽는다. TLS CA 범위와 CORE의 최종 정지 권한은 유지한다.
+- 증거: 설정 포함 Gradle testDebugUnitTest 107 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/pilot-configured.txt. APK 공개 설정과 merged manifest의 정확한 callback/autoVerify를 확인했다. 원격 OMEN에서 test_shell_assets.py 4 passed, known_failures NEW 0 (같은 세션 logs/web-closure/run-1.txt).
+- 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB이며 Cam/Pilot은 순서대로 빌드했다.
+- gate 변화: SOURCE/JVM/APK. 운영 issuer/callback/signer 등록, 실제 Android app link와 Keystore, 장치 로그인 및 물리 주행은 확인하지 않았다. 현장 설정과 계정은 변경하지 않았다.
+
+## 2026-10-14 · f5e01bdea · test(pilot): 같은 sha에서 결과가 바뀌던 브라우저 시험 둘
+
+- 변경: 제품은 그대로다. `test_stick_takes_over_auto`는 주행 화면이 수동 모드를 잡았는지 모르는 채 `진행`을 한 번 눌렀다. `drive.js`는 engage 요청이 돌아오기 전의 누름을 버리고(`blocked: !engaged`) 다시 누르는 것이 없어 `GO_ACTIVE`가 10초 동안 오지 않았다. `_arm_auto`가 `조작 응답` 표시를 기다린다. 이 글은 수동 모드를 잡은 뒤의 hold 루프만 쓴다. 새 시험 `test_go_pressed_before_manual_mode_is_held_starts_nothing`이 engage 요청을 붙잡아 두고 그 사이의 누름이 CORE에 닿지 않음을 고정한다. 마지막 `대기` 확인은 멈추는 중이 아니라 idle을 기다린다. `test_startup_target_failure_retries_without_pinky_fallback`은 두 번째 시도의 끝을 안내 글로 판단했는데 그 글은 첫 실패 때 이미 떠 있다. `start()`가 화면을 갈아 끼우는 사이에 옛 단추를 재서 `bounding_box()`가 None이었다. 보이던 단추가 문서에서 떨어질 때까지 기다린다.
+- 증거: 모델 PC Chromium에서 두 시험과 새 시험, `test_go_releases_on_cancel_and_leave`를 다섯 번 연속 돌려 매번 4 passed(`X:/DevTemp/browser-run/snw-flaky-1.txt`~`5.txt`, sha f5e01bdea). 경합을 다시 만들어 실패를 본 것은 아니다. 근거는 코드 경로와 새 시험이다.
+- gate 변화: 없음. 시한을 늘리거나 잠을 넣지 않았다.
+
+## 2026-10-14 · 71e43aeed · feat(pilot): 전화 폭 접속 화면 앱 바의 로봇 이름 (D-741 3)
+
+- 변경: 64rem 아래 접속 화면에서 숨기던 로봇 이름(`[data-pilot-robot]`)을 이름 줄에 남겼다. 길면 말줄임이 된다. 30rem 아래에서는 워드마크 `Pilot`이 R 심볼로 접힌다(Fleet·Robot과 같다). 링크의 접근 이름은 그대로다. 주행·팔 화면, 접속 화면의 두 줄 격자, 비상 정지의 마크업·핸들러·순서는 바꾸지 않았다. 캐시된 시트가 바뀌어 `sw.js`의 캐시 이름을 올렸다.
+- 증거: 바꾸기 전 측정(AI PC Chromium, `snw-measure-pilot-1.txt`): 이름 줄 폭 390에서 252px·320에서 182px, 워드마크 79px, 비상 정지 82×74px. 바꾼 뒤(`snw-measure-pilot-2.txt`, sha 71e43aeed) `test_connect_app_bar_names_this_robot_at_phone_width` 4 passed: R 심볼 20px, `rosy_26` 61px, 긴 이름은 이름 줄 끝에서 잘리고, 이름을 숨겼을 때와 비상 정지 상자·머리 높이가 같다. `test_pilot_browser.py` 전체 153 passed(`snw-pilot-file-1.txt`). 원격 소스 시험 `middleware/robot_ui/pilot/test`와 `shared/web/test`는 known_failures NEW 0(`X:/DevTemp/shell-narrow/`).
+- gate 변화: 없음. 접속 화면 머리는 전화 폭에서 103px 두 줄이다(D-466 그대로). 64px 한 줄로 만들지 않았고, 상태 표와 `운용 지도`까지 한 줄에 서는지는 재지 않았다. Android 셸은 이름표를 숨기므로 달라지지 않는다. 실기 전화·태블릿에서는 보지 않았다.
+
+## 2026-10-14 · 8b44b2399 · test(pilot): 이른 누름 시험이 모드 기록 전체를 본다 (검토 반영)
+
+- 변경: 제품은 그대로다. `test_go_pressed_before_manual_mode_is_held_starts_nothing`이 끝에서 idle을 기다린 뒤 차선 추종 모드 기록이 정확히 `CAMERA_LINE`, `OFF` 한 쌍인지 본다. 꼬리만 보던 확인은 늦게 닿은 이른 누름을 놓칠 수 있었다.
+- 증거: AI PC Chromium에서 이 시험과 `test_stick_takes_over_auto`, `test_go_releases_on_cancel_and_leave` 3 passed(`X:/DevTemp/browser-run/snw-review-pilot-1.txt`, sha 8b44b2399), `test_pilot_browser.py` 전체 153 passed(`snw-review-pilot-file-1.txt`).
+- gate 변화: 없음.
+
+## 2026-10-14 · 0679a548b · feat(pilot): 접속 화면 앱 바는 64rem 이상에서 한 줄 64px (D-741 3·5)
+
+- 변경: 64rem 이상 접속 화면의 머리가 88px에서 `--appbar-height` 64px 한 줄이 됐다. 자리는 세로 가운데에 서고 순서는 그대로다(R 심볼·Pilot, 로봇 이름, 알림 글, 상태 표, `운용 지도`, 비상 정지). 알림 글은 같은 줄에 남는다(1024px에서 240px 한 줄로 서고 표와 정지를 밀지 않았다). 64rem 아래는 D-466 두 줄 격자 그대로다. 한 줄 64px로는 두 줄을 차지하는 정지(82x74)가 작아지므로 사용자가 2026-10-14에 그렇게 정했다(D-741 부기). 규칙은 `html:not([data-pilot-shell="android"])`와 접속 화면으로 좁혀 주행·팔 화면과 Android 셸에는 닿지 않는다. `sw.js` 캐시 이름을 올렸다. `styles.css`는 951줄 그대로다.
+- 증거: 모델 PC Chromium. 바꾸기 전(`X:/DevTemp/browser-run/p1r-measure-1.txt`, sha d434979c9): 머리 320·390·768에서 103px(알림 글이 있으면 120px), 1024·1366에서 88px. 정지 320·390·768에서 82x74(y 16), 1024·1366에서 82x48(y 31). 바꾼 뒤(`p1r-green-4.txt`, sha 608e4cf88): 320·390·768의 머리·정지·상태 표·`운용 지도`·이름이 앞의 값과 같고, 1024·1366은 머리 64px, 정지 82x48(x 그대로, y 8), `운용 지도` 82x48, 상태 표 44x32. Android 셸은 앞뒤 모두 머리 88px, 정지 82x48(y 31). `test_pilot_browser.py` 전체와 `test_app_bar.py` 162 passed(`p1r-full-5.txt`, sha 0679a548b). 원격 `middleware/robot_ui/pilot/test`, `shared/web/test`, `test/architecture` 529 passed 209 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
+- gate 변화: 없음. 실기 전화·태블릿과 Android WebView에서는 확인하지 못했다. 64rem 이상에서 긴 오류 글이 알림 자리에 들어올 때의 줄바꿈은 재지 않았다(바꾸기 전과 같은 flex 줄이다).
+
+## 2026-10-14 · a3a4befa7 · fix(pilot): 한 줄 앱 바에서 긴 글이 정지를 줄이지 않는다 (검토 반영)
+
+- 변경: 64rem 이상 접속 화면에서 긴 알림 글(105자, 실제 접속 화면 문구는 90자에 못 미쳐 로그아웃 실패 글을 만들어 썼다), 긴 로봇 이름, 긴 상태 표가 함께 오면 머리가 1024px에서 124px로 커지고 1366px에서 정지가 56x48로 줄었다. 정지와 `운용 지도`는 `flex: none`, 알림 글과 로봇 이름은 한 줄 말줄임이 됐다. 알림 전문은 `role="status"` 글로 그대로 남는다. 알림을 머리 아래 줄로 옮기면 머리가 64px를 넘으므로 말줄임을 골랐다. 앞서 한 줄로 합친 알림 규칙을 두 줄로 되돌리고 주석을 제 줄에 뒀다. `styles.css` 956줄(상한 961). `test_app_bar.py`의 두 줄 격자 고정은 64rem 아래 블록 안을 본다.
+- 증거: 바꾸기 전 `X:/DevTemp/browser-run/p1r-long-7.txt`(모델 PC)와 `p1r-long-7ai.txt`(AI PC), sha 821e9d5f5: 1024에서 머리 124px·정지 48x48, 1366에서 정지 56x48. 바꾼 뒤 `p1r-long-9.txt`(AI PC, sha 468838479) 8 passed: 1024·1366 모두 머리 64px, 정지 82x48(x 918·1260, y 8)이 맨 위 요소, 지도 82x48, 알림 389·639px 한 줄, 가로 넘침 0. `test_pilot_browser.py` 전체와 `test_app_bar.py` 164 passed(`p1r-full-10.txt`, AI PC, sha a3a4befa7). 원격 pilot·shared/web·architecture 529 passed 211 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
+- gate 변화: 없음. 말줄임으로 잘린 알림 글의 뒷부분은 화면에서 보이지 않는다(낭독기는 전문을 읽는다). 실기 전화·태블릿·Android WebView는 확인하지 못했다.

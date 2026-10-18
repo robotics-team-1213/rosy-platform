@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import math
 
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
+from core_features.line_follow.authority import STAMP_MATCH_S, STAMP_TOL_S
+from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M
 
 MAX_EXPECT_IN_M, MAX_EXPECT_TOL_M, MAX_PIVOT_PAST_LINE_M = 2., .30, .30
 MAX_AHEAD_M = 2.
@@ -97,17 +98,43 @@ class JunctionApproachMixin:
     _corner_right_at = None  # ... 'corner_right'; each way latches on its own (review)
     _junction_held = False  # lap SIM A: a bend pass handed its sighting on; seen until odom passes the line
 
-    def _expect_window(self, expect, now):
+    @property
+    def supports_lane_instruction_stamp(self):
+        """D-767 A capability lane_instruction_stamp: line_follow.instruction_stamp_enabled (default off)."""
+        return self._config.instruction_stamp_enabled
+
+    def _stamp_odometer(self, stamp, now):
+        """D-767 A 2-3: ((odometer, received_at), None): the junction trail odometer (trail.odometer, not the
+        authority log's path_m) at the odom sample published at ``stamp`` (D-758 0, that sample only; an
+        "at or before" one would count more travel than since the pose), the basis of this instruction's
+        expect_in_m / bend_in_m. No age cut (review): travel is counted while the trail holds the sample.
+        Else (None, why), and set_junction refuses: disabled, ambiguous, future, no_sample, epoch, stale
+        (the sample has left the trail). Locked."""
+        if not self._config.instruction_stamp_enabled:
+            return None, 'disabled'
+        log, pose, ev = self._odom_log, self._fresh_pose(now), self._return_evidence
+        hits = [e for e in log if abs(e[0]-stamp) <= STAMP_MATCH_S]
+        if len(hits) != 1 or pose is None:
+            return None, ('ambiguous' if len(hits) > 1 else 'future' if not hits and log and stamp > log[-1][0]+STAMP_TOL_S
+                          else 'no_sample')
+        if hits[0][1] != (ev.epoch, pose.frame):
+            return None, 'epoch'
+        sample = next((p for p in ev.trail.samples if p.stamp_ns == hits[0][2]), None)
+        odometer = None if sample is None else ev.trail.odometer_at(sample)
+        return (None, 'stale') if odometer is None else ((odometer, sample.received_at), None)
+
+    def _expect_window(self, expect, now, basis=None):
         """The odom placement of the expected window, None without the fields, False without
-        fresh odom to place it. Locked."""
+        fresh odom to place it. ``basis``: D-767 A (odometer, received_at) of the stamped sample,
+        else the receipt. Locked."""
         if expect is None or expect.get('expect_in_m') is None:
             return None
         pose = self._fresh_pose(now)
         if pose is None:
             return False
-        odometer = self._return_evidence.trail.odometer
+        odometer, seen_to = basis or (self._return_evidence.trail.odometer, pose.received_at)
         return dict(key=(self._return_evidence.epoch, pose.frame), odometer=odometer,
-                    peak=odometer, retreat=0., seen_to=pose.received_at,
+                    peak=odometer, retreat=0., seen_to=seen_to,
                     expect_in=expect['expect_in_m'], tol=expect['expect_tol_m'])
 
     def _track_retreat(self, w):

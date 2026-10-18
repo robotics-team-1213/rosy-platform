@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import pytest
@@ -9,7 +10,7 @@ from pydantic import ValidationError
 
 from fleet.routing.graph import build_graph
 from fleet.server.console_view import TripCaps, trip_caps
-from fleet.server.trip_ports import bend_geometry, straight_approach
+from fleet.server.trip_ports import bend_geometry, line_past, straight_approach
 from fleet.site_map import SiteMap, SitePlace, from_lane_graph
 from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _arc, _plan, _setup, _ticks, run
@@ -28,13 +29,13 @@ def _bend_map(*bends) -> SiteMap:
                    edges=base.edges)
 
 
-def _trip(site_map, caps=BEND_CAPS, ahead=0.4, before=None):
+def _trip(site_map, caps=BEND_CAPS, ahead=0.4, before=None, to="SE"):
     """Start NW -> SE on west:rev with the SW bend's arc start ``ahead`` m in front; tick once
     (``before(runner)`` runs ahead of that tick)."""
     runner, store, ports = _setup(site_map, caps=caps)
     arc = _arc(store, "west:rev")
     s_start = bend_geometry(SitePlace(**SW_BEND), arc)[0]
-    _plan(store, ports, arc.id, s_start - ahead, "SE")
+    _plan(store, ports, arc.id, s_start - ahead, to)
     run(runner.start("p1", "bob"))
     ports.at(arc, s_start - ahead)
     if before is not None:
@@ -81,6 +82,9 @@ def test_caps_read_lane_bend():
     assert trip_caps(_caps()).lane_bend is False
     assert trip_caps(_caps(lane_bend=True)).lane_bend is True
     assert trip_caps(_caps(lane_bend="true")).lane_bend is False
+    assert trip_caps(_caps(lane_bend=True)).lane_bend_next_line is False  # D-754
+    assert trip_caps(_caps(lane_bend_next_line=True)).lane_bend_next_line is True
+    assert trip_caps(_caps(lane_bend_next_line="true")).lane_bend_next_line is False
 
 
 # ---- the trip loop -------------------------------------------------------------------------
@@ -91,8 +95,11 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     assert ports.turns == [pytest.approx(63.6, abs=0.1)]
     fields = ports.expects[0]
     assert fields["map_id"] == "site" and fields["bend_radius_m"] == 0.064
-    # 0.4 m along the lane, led by the trip speed over the pose latency (here the send allowance)
-    assert fields["bend_in_m"] == pytest.approx(0.34, abs=0.005)
+    # 0.4 m along the lane, led by the top speed over the measured pose latency (0.2 m/s x 0.1 s);
+    # no fixed send allowance: on top it began the arc 2 cm early (Gazebo m16/m17)
+    assert fields["bend_in_m"] == pytest.approx(0.38, abs=0.005)
+    from fleet.server.trip_ports import TripConfig, bend_fields
+    assert TripConfig.from_mapping({"bend_send_s": 0.1}).bend_send_s == 0.1      # a site's measured send time leads more
     assert fields["bend_tol_m"] == pytest.approx(0.12, abs=0.001)         # the junction tol rule
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
     ports.core.phase("bending")
@@ -103,6 +110,74 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     ports.at(arc, s_start + 0.12)
     _ticks(runner, ports)
     assert ports.sent[1][1] == "SW" and ports.sent[1][0] != "bend"        # then the next place
+
+
+ENTRY_CAPS = dataclasses.replace(BEND_CAPS, lane_bend_map_entry=True)
+
+
+def test_caps_read_lane_bend_map_entry():
+    assert trip_caps(_caps(lane_bend=True)).lane_bend_map_entry is False
+    assert trip_caps(_caps(lane_bend=True, lane_bend_map_entry=True)).lane_bend_map_entry is True
+    assert trip_caps(_caps(lane_bend_map_entry="true")).lane_bend_map_entry is False
+
+
+def _stamped(stamp):
+    """The located pose turned 0.2 rad off its lane, with ``odom_stamp`` (D-759)."""
+    def before(runner):
+        pose = runner._poses.pose
+        runner._poses.pose = dataclasses.replace(pose, yaw=pose.yaw + 0.2, odom_stamp=stamp)
+    return before
+
+
+def test_a_map_entry_robot_gets_the_lane_heading_at_the_arc_start_and_the_located_yaw_pair():
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))
+    fields = ports.expects[0]
+    assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m", "map_entry"}
+    assert fields["map_entry"] == {"yaw_rad": pytest.approx(arc.point_at(s_start)[2], abs=1e-4),
+                                   "pose_yaw_rad": ports.pose.yaw, "odom_stamp_s": 1790000000.25}
+    assert abs(ports.pose.yaw - fields["map_entry"]["yaw_rad"]) > 0.05  # the lane's heading, not the robot's yaw
+    plain = _trip(_bend_map(SW_BEND))[2].expects[0]
+    assert {k: v for k, v in fields.items() if k != "map_entry"} == plain
+
+
+def test_without_the_capability_or_an_odom_stamp_the_bend_is_todays():
+    for caps, stamp in ((BEND_CAPS, 1790000000.25), (ENTRY_CAPS, None)):
+        fields = _trip(_bend_map(SW_BEND), caps, before=_stamped(stamp))[2].expects[0]
+        assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}, (caps, stamp)
+
+
+def test_bend_fields_without_a_located_pose_carry_no_map_entry(monkeypatch):
+    """Review 6: the capability alone is not enough; no pose passed in, no object."""
+    from fleet.server import trip_runner
+    real = trip_runner.bend_fields
+    monkeypatch.setattr(trip_runner, "bend_fields", lambda live, *args: real(live, *args[:4]))
+    fields = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))[2].expects[0]
+    assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
+
+
+def test_a_bend_done_on_one_segment_goes_out_again_on_another():
+    """Gazebo lap run54/55/57: with the lap end 0.4 m after a bend, that bend was done right after
+    one lap change and stayed done until the next change, 2 cm before its arc: no_anchor."""
+    live = lambda runner: next(iter(runner._live.values()))
+    done = lambda index: (lambda runner: live(runner).bends_done.add((index, "B_SW")))
+    assert all(sent[0] != "bend" for sent in _trip(_bend_map(SW_BEND), before=done(0))[2].sent)  # done here
+    assert _trip(_bend_map(SW_BEND), before=done(4))[2].sent == [("bend", "B_SW", None)]
+def test_a_next_line_robot_gets_the_distance_to_the_next_junction_line():
+    """D-754: from the bend's vertex along the route to SW's painted line; a robot without the
+    capability gets the four fields (pinned above), and a trip that ends on the lane before any
+    junction place gets none."""
+    caps = dataclasses.replace(BEND_CAPS, lane_bend_next_line=True)
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), caps=caps)
+    _, s_end, turn, radius = bend_geometry(SitePlace(**SW_BEND), arc)
+    to_place = radius * math.tan(math.radians(turn) / 2) + arc.length_m - s_end
+    past = line_past(store.active()[2], *arc.point_at(arc.length_m)) or 0.0
+    assert ports.sent == [("bend", "B_SW", None)] and 0.05 < to_place < 1.0
+    assert ports.expects[0]["next_line_in_m"] == pytest.approx(to_place + past, abs=0.002)
+    assert runner.view("p1")["caps"]["lane_bend_next_line"] is True
+    x, y, yaw = arc.point_at(s_end + 0.1)                                 # a start place on the lane, before SW
+    stop = dict(id="P", name="P", kind="start", x=x, y=y, yaw=yaw)
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND, stop), caps=caps, to="P")
+    assert ports.sent == [("bend", "B_SW", None)] and "next_line_in_m" not in ports.expects[0]
 
 
 def test_a_bend_core_ended_on_the_next_junction_counts_done_and_the_place_goes_out():
@@ -224,3 +299,9 @@ def test_a_trip_closed_mid_step_sends_no_bend(monkeypatch):
     monkeypatch.setattr(trip_runner, "bend_fields", closing)
     runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND))
     assert ports.sent == []
+
+
+def test_a_robot_with_both_bend_capabilities_receives_heading_and_next_line_distance():
+    caps = dataclasses.replace(BEND_CAPS, lane_bend_map_entry=True, lane_bend_next_line=True)
+    _, _, ports, _, _ = _trip(_bend_map(SW_BEND), caps, before=_stamped(1790000000.25))
+    assert "map_entry" in ports.expects[0] and "next_line_in_m" in ports.expects[0]

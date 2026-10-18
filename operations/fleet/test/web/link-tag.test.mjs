@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { linkTag } from "../../../ui/console/link-tag.js";
+import { linkTag } from "../../../site_ui/console/link-tag.js";
 
 test("only a problem link produces a tag", () => {
   assert.equal(linkTag("up"), null);
@@ -21,11 +21,26 @@ test("only a problem link produces a tag", () => {
 });
 
 test("new link files do not name transport exceptions", () => {
-  const web = new URL("../../../ui/console/", import.meta.url);
+  const web = new URL("../../../site_ui/console/", import.meta.url);
   for (const name of ["link-tag.js", "site-path.js"]) {
     const text = readFileSync(new URL(name, web), "utf8");
     for (const banned of ["RemoteProtocolError", "ConnectError", "RobotApiError", "SSLError"]) {
       assert.equal(text.includes(banned), false, `${name} names ${banned}`);
     }
   }
+});
+
+test("D-550 8: only an unbounded verdict produces the Rule M mark, with its reason in words", async () => {
+  const { ruleMTag } = await import("../../../site_ui/console/link-tag.js");
+  for (const rule of [undefined, null, {}, { state: "idle" }, { state: "bounded", motion: "goal" }]) {
+    assert.equal(ruleMTag(rule), null);
+  }
+  const mark = ruleMTag({ state: "unbounded", motion: "lane_trip", reason: "hold_back" });
+  assert.equal(mark.word, "정지 한도 없음");
+  assert.deepEqual(Object.keys(mark), ["word", "kind", "text"]);
+  assert.equal(mark.kind, "warn");
+  assert.equal(mark.text, "관제가 끊겨도 로봇이 계속 갑니다 (차로 통행권·운행 임대 없음)");
+  assert.match(ruleMTag({ state: "unbounded", reason: "no_goal_lease" }).text, /\(목표 임대 없음\)/);
+  assert.match(ruleMTag({ state: "unbounded", reason: "toString" }).text, /이유 모름/);
+  assert.match(ruleMTag({ state: "unbounded" }).text, /이유 모름/);
 });

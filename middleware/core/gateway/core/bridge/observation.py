@@ -25,7 +25,7 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.line_follow.clearance import return_scan_view as _return_scan_view
-from core_features.line_follow.crosswalk_gate import scan_rays
+from core_features.line_follow.crosswalk.gate import scan_rays
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
@@ -54,7 +54,7 @@ def line_observation(services, raw: str, *, source_now: float,
             if not isinstance(quality, dict) or type(quality.get('valid')) is not bool:
                 raise ValueError('invalid camera quality')
             if quality['valid'] is False:
-                if quality.get('reason') not in ('low_light', 'overexposed'):
+                if quality.get('reason') not in ('low_light', 'overexposed', 'odom_side_conflict'):
                     raise ValueError('unknown invalid camera quality')
                 quality_reason = quality['reason']
         calibrated = data.get("ir_calibrated", False)

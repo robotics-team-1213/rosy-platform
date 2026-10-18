@@ -51,6 +51,18 @@ class BaseVelocityControl(_Wire):
     sends it only then.
     ``lane_bend`` (D-507 addendum) is true when CORE takes the junction instruction's action
     ``bend`` (``bend_in_m``, ``bend_tol_m``, ``bend_radius_m``); Fleet sends bends only then.
+    ``lane_bend_map_entry`` (D-759 2) is true when CORE takes the bend's ``map_entry``
+    (``line_follow.bend_map_entry_enabled``, off by default, with ``lane_bend``); Fleet sends it only then.
+    ``lane_turn_map_entry`` (D-759 rev 1) is the same for a left/right turn's exit heading
+    (``line_follow.turn_map_entry_enabled``, off by default, with ``junction_turn``).
+    ``lane_instruction_stamp`` (D-767 A) is true when CORE measures a junction instruction's
+    ``expect_in_m`` / ``bend_in_m`` from its ``pose_stamp`` odom sample
+    (``line_follow.instruction_stamp_enabled``, off by default); Fleet sends ``pose_stamp`` only then.
+    ``lane_bend_next_line`` (D-754) is true when CORE takes a bend's ``next_line_in_m``; Fleet
+    sends it only then.
+    ``lane_crosswalk_gate`` / ``lane_junction_signal`` (D-763 10 (c)) are true only when
+    ``line_follow.crosswalk_gate_enabled`` / ``junction_signal_enabled`` is on; Fleet refuses a
+    route over a crosswalk / signal zone to a robot announcing it false (absent: a warning).
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
     whose floor was walked; absent = none. Fleet opens lane trips only on that active map.
     """
@@ -71,13 +83,22 @@ class BaseVelocityControl(_Wire):
     lane_arc: bool | None = None
     lane_arc_map_anchor: bool | None = None
     lane_bend: bool | None = None
+    lane_bend_map_entry: bool | None = None
+    lane_turn_map_entry: bool | None = None
+    lane_instruction_stamp: bool | None = None
+    lane_bend_next_line: bool | None = None
+    lane_crosswalk_gate: bool | None = None
+    lane_junction_signal: bool | None = None
     route_context: bool | None = None
     site_floor_map_id: str | None = Field(None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
     line_follow_authority_required: bool | None = None  # D-517 4: enforced before any authority too
+    line_follow_authority_shrink: bool | None = None  # D-760 3: the authority takes shrink and seq, ttl_s <= 5
+    line_follow_authority_under_lease: bool | None = None  # D-760 2: enforced while the trip lease is open
     line_follow_advice: bool | None = None  # D-525: POST /line-follow/advice is shown (display only)
     trip_lease: bool | None = None  # D-541 1: CORE takes PUT/DELETE /trip-lease and /trip-lease/takeover
     goal_lease: bool | None = None  # D-550 10: navigation/goal takes lease_ttl_s and /navigation/goal/lease
+    trip_lease_job: bool | None = None  # D-763 6: a trip lease opened with job_id survives IDLE between steps
     # D-607 8: the REALIGN kinds the stuck decision takes (line_follow.stuck_realign_enabled); absent = none.
     stuck_realign: tuple[Literal["PIVOT", "KTURN"], ...] | None = None
 
@@ -171,11 +192,18 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    junction_pivot: bool | None = None, lane_bend: bool | None = None,
                    lane_arc: bool | None = None, site_floor_map_id: str | None = None,
                    lane_arc_map_anchor: bool | None = None,
+                   lane_bend_map_entry: bool | None = None, lane_turn_map_entry: bool | None = None,
+                   lane_instruction_stamp: bool | None = None,
+                   lane_bend_next_line: bool | None = None,
+                   lane_crosswalk_gate: bool | None = None, lane_junction_signal: bool | None = None,
                    route_context: bool | None = None,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
+                   line_follow_authority_shrink: bool | None = None,
+                   line_follow_authority_under_lease: bool | None = None,
                    line_follow_advice: bool | None = None,
                    trip_lease: bool | None = None, goal_lease: bool | None = None,
+                   trip_lease_job: bool | None = None,
                    stuck_realign: tuple[Literal["PIVOT", "KTURN"], ...] | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
@@ -191,11 +219,19 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          junction_turn=junction_turn, junction_pivot=junction_pivot,
                                          lane_bend=lane_bend, lane_arc=lane_arc,
                                          lane_arc_map_anchor=lane_arc_map_anchor,
+                                         lane_bend_map_entry=lane_bend_map_entry,
+                                         lane_turn_map_entry=lane_turn_map_entry,
+                                         lane_instruction_stamp=lane_instruction_stamp,
+                                         lane_bend_next_line=lane_bend_next_line,
+                                         lane_crosswalk_gate=lane_crosswalk_gate,
+                                         lane_junction_signal=lane_junction_signal,
                                          route_context=route_context,
                                          site_floor_map_id=site_floor_map_id,
                                          line_follow_authority=line_follow_authority,
                                          line_follow_authority_required=line_follow_authority_required,
+                                         line_follow_authority_shrink=line_follow_authority_shrink,
+                                         line_follow_authority_under_lease=line_follow_authority_under_lease,
                                          line_follow_advice=line_follow_advice,
-                                         trip_lease=trip_lease, goal_lease=goal_lease,
+                                         trip_lease=trip_lease, goal_lease=goal_lease, trip_lease_job=trip_lease_job,
                                          stuck_realign=stuck_realign))
     return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json", exclude_none=True)

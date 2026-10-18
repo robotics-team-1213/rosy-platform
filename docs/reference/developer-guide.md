@@ -3,7 +3,7 @@
 현재 전체 배치와 각 holder의 유지 이유는 [폴더 책임표](platform-folder-responsibilities.md), 실제 이동·설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)를 본다. 모든 pytest는 D-584에 따라 원격 시험 PC 또는 CI에서 실행한다.
 
 - **대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
-- **갱신:** 2026-10-11 (D-637 실제 source holder 반영)
+- **갱신:** 2026-10-14 (폴더 이름은 [편집 집](platform-folder-responsibilities.md#편집-집). World 자세는 D-752)
 - 처음 합류했다면 [팀 가이드](team-guide.md)부터 본다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
 
 ## 구조
@@ -13,8 +13,8 @@
 | 폴더 | 무엇 |
 |---|---|
 | `contracts/` | 공유 계약: `foundation`(core_common 타입·프로토콜·설정), `ros_idl`(ROS 인터페이스), `motion`, `skill`, `learning`. 계약은 동작을 실행하지 않는다 |
-| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API), `control/drive`(길찾기·추종·복구·보정), `perception`(센서·vision, 기존 배포 `control`), `devices`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `execution`, `ui`(대시보드·Pilot·face) |
-| `operations/` | 현장 서버 쪽: `fleet`(미션·원장·admission·serving), `decision`(기존 제안 코드), `ui/console`(Fleet가 설치·제공하는 자산), `vision`(천장 카메라), `processes`, `execution`, `world`, `apps`, `ui/cam`(Rosy Cam 앱), `site_devices`(도크·신호등 펌웨어) |
+| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API), `drive`(길찾기·추종·복구·보정), `perception`(센서·앞 카메라, ROS 패키지 `control`), `devices`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `robot_execution`(로컬 policy·receipt), `robot_ui`(대시보드·Pilot·face) |
+| `operations/` | 현장 서버 쪽: `fleet`(미션·원장·admission·serving), `world`(현재 자세. Fleet이 `rosy.world.state.projections.map_pose`를 직접 import, D-752), `decision`(기존 제안 코드, Fleet 배포), `site_ui/console`(Fleet가 설치·제공하는 자산), `overhead`(천장 카메라), `site_execution`, `site_ui/cam`(Rosy Cam 앱), `processes`, `apps`, `site_devices`(도크·신호등 펌웨어), `situation` |
 | `learning/` | 데이터 정리·학습·모델 등록(`curation`, `training`, `registry`, `evaluation`), `envs/isaac`(Isaac Sim) |
 | `integrations/` | 로봇·시뮬레이션 adapter (`robots`, `simulation` — Gazebo 월드·다로봇 시뮬) |
 | `shared/web/` | 공용 웹 자산 (패키지 `web_common`) |
@@ -50,6 +50,46 @@ bash tools/run_fleet_sim.sh
 메모와 주행 세션은 소스나 설치물이 아니라 `data/teleop` 및 `data/drive`에 둔다.
 세션 파일은 커밋하지 않으며, 예외는 `data/README.md`를 따른다.
 
+### 로그 레벨과 디버거
+
+core 로그를 자세히 보려면 `log_level`을 준다. core 로거에만 적용되고 rcl/DDS 로그는 그대로다.
+
+```bash
+ros2 launch core rosy_core.launch.py log_level:=debug
+```
+
+중단점이 필요하면 debugpy로 띄우고 VS Code에서 붙는다. debugpy는 개발 PC에만 설치하고 payload에는 넣지 않는다.
+
+```bash
+python3 -m pip install --user debugpy
+# 클라이언트가 붙을 때까지 기다린다. 127.0.0.1에만 연다
+ros2 run --prefix 'python3 -m debugpy --listen 127.0.0.1:5678 --wait-for-client' core core
+```
+
+다른 PC(시뮬 PC 등)에서 띄웠다면 포트를 밖으로 열지 말고 SSH 터널로 가져온다: `ssh -N -L 5678:127.0.0.1:5678 <host>`.
+
+`.vscode/`는 gitignore 대상이라 설정은 각자 둔다. 개인 `.vscode/launch.json` 예:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "core attach (debugpy)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "justMyCode": false,
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}", "remoteRoot": "<원격 PC의 rosy-platform 경로>" }
+      ]
+    }
+  ]
+}
+```
+
+같은 PC에서 `--symlink-install`로 빌드했다면 `pathMappings`는 필요 없다. 원격이면 `remoteRoot`를 그 PC의 checkout 경로로 바꾼다.
+
 ## 테스트와 CI
 
 테스트는 세 단계다 ([D-436](../adr/D-436-change-scoped-test-tiers.md)).
@@ -66,16 +106,17 @@ flowchart LR
 | full | GitHub CI (main push, PR, 야간, 릴리스) | 로컬에서 돌리지 않는다 (Windows 40–60분, 일부 wheel 없음) |
 
 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
+로그·증거·빌드 산출물 같은 저장소 밖 파일은 `ROSY_SCRATCH`에 둔다. 설정하지 않으면 시스템 임시 폴더를 쓰고, 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`로 둔다.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- <paths> -q
-python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
+python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/<이름> -- <paths> -q
+python test/known_failures.py $ROSY_SCRATCH/<이름>/run-1.txt
 ```
 
 pre-push가 돌리는 quick 묶음을 손으로 돌릴 때:
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/quick-check -- test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
+python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/quick-check -- test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
 python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 ```
 
@@ -83,11 +124,11 @@ python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only�
 
 실제 Chromium 시험은 옵트인이다. 정식 이름은 `ROSY_RUN_BROWSER_TESTS=1`이고, 예전 Fleet 이름 `ROSY_BROWSER_TESTS=1`도 받는다(`test/browser_harness.py`의 `browser_tests_enabled()`). 로컬 서버 포트는 `safe_listener()`/`free_port()`로 잡는다. Windows 동적 포트 범위가 1024부터면(`netsh int ipv4 show dynamicport tcp`) port 0이 Chromium 차단 포트(2049, 6000, 10080 등)를 주고 `net::ERR_UNSAFE_PORT`로 실패한다.
 
-선택한 Linux 시험 PC에서 바꾼 경로에 걸린 브라우저 시험만 돌린다. 아래 browser 명령은 그 PC에서 실행하며, 노트북 환경 변수는 remote runner가 전달하지 않는다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다.
+바꾼 경로에 걸린 브라우저 시험만 시험 PC에서 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다. `tools/land.py --tests auto`는 고른 시험 묶음 뒤에 이 브라우저 시험을 `ROSY_RUN_BROWSER_TESTS=1` 묶음으로 더 돌린다. 손으로 돌릴 때는 `tools/remote/remote_pytest.py`의 `--` 뒤 맨 앞에 `ROSY_RUN_BROWSER_TESTS=1`을 둔다. 앞에 오는 `ROSY_*=값` 단어는 시험 PC 작업의 환경 변수가 되고 pytest 인자가 아니다. 그 작업은 먼저 venv의 playwright에 맞는 Chromium을 그 PC의 `~/.cache/ms-playwright`에 설치한다(있으면 그대로 둔다).
 
 ```bash
-t=$(python test/browser_scope.py <바꾼 경로...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > <scratch>/browser.txt
-python test/known_failures.py <scratch>/browser.txt
+t=$(python test/browser_scope.py <바꾼 경로...>) && python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/<이름> -- ROSY_RUN_BROWSER_TESTS=1 $t
+python test/known_failures.py $ROSY_SCRATCH/<이름>/run-1.txt
 ```
 
 전체 브라우저 묶음은 개발 노트북에서 돌리지 않는다. 2026-10-07 이 노트북에서 34분–2시간 26분이 걸렸고 MemoryError와 `Page.goto` 타임아웃 플레이크가 났다. Gazebo처럼 현장 PC(robttt)나 모델 PC(OMEN)의 그 PC 체크아웃에서 돌린다.
@@ -109,8 +150,10 @@ CI(`.github/workflows/ci.yml`)는 `ros:jazzy-ros-base` 이미지에서 colcon �
 현장 Ubuntu PC가 Fleet·Vision·Caddy 서비스를 실행하고, 관제 PC는 HTTPS로 Fleet의
 `/console`을 여는 브라우저 단말이다. 두 역할은 한 물리 PC에 함께 놓을 수도 있다.
 Pinky의 화면과 최종 주행·정지 판단은 각 로봇의 CORE에 남는다. OMX-AI 작업대 제어는
-별도 로컬 인스턴스의 수용 절차가 필요하다. 현재 화면은 Fleet 콘솔이며,
-`ROSY Console`은 사람의 화면·대화 접점에 쓰는 제품 이름이다. 자연어 명령과
+별도 로컬 인스턴스의 수용 절차가 필요하다. 관제 화면의 현재 표시 이름은
+`Rosy Fleet`이다(D-487). 현장 운영은 Fleet, 한 대 관리는 Robot, 직접 운전은
+Pilot이 맡는다. [앱별 작업과 책임](app-responsibilities.md)에서 API·정본·실행 권한과
+앱 간 이동 및 이행 조건을 확인한다. 자연어 명령과
 OMX 원격 작업은 아직 수용된 기능이 아니다.
 
 배치 결정은 [D-275](../adr/D-275-web-surface-and-video-runtime-ownership.md)와

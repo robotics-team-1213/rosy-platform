@@ -43,6 +43,38 @@ def test_camera_change_is_reported_once():
     assert gate.update("garbage") is None
 
 
+def test_initial_managed_on_and_perception_wake_require_new_ready_report():
+    gate = DevicePowerGate()
+    assert gate.update('{"lidar":"on"}') is None
+    assert gate.update('{"camera":"on","perception":"on"}') == ("on", "on")
+    assert gate.update('{"camera":"on","perception":"on"}') is None
+    assert gate.update('{"camera":"on","perception":"off"}') == ("on", "on")
+    assert gate.update('{"camera":"on","perception":"on"}') == ("on", "on")
+
+
+def test_ready_recheck_does_not_restart_an_unchanged_camera():
+    from types import SimpleNamespace
+    source = ast.parse((NODE.parent / "camera_power.py").read_text(encoding="utf-8"))
+    cls = next(n for n in source.body if isinstance(n, ast.ClassDef))
+    namespace = {}
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), "camera_power.py", "exec"), namespace)
+    calls = []
+    node = namespace["CameraPowerMixin"]()
+    node._power_gate = DevicePowerGate()
+    node._policy = SimpleNamespace(reset=lambda: calls.append("reset"))
+    node._start_cam = lambda: calls.append("start")
+    node._stop_cam = lambda: calls.append("stop")
+    node.get_logger = lambda: SimpleNamespace(info=lambda _: None)
+    node._report_camera_ready = lambda ready: calls.append(ready)
+    node._on_power_devices(SimpleNamespace(data='{"camera":"on","perception":"on"}'))
+    assert calls == ["reset", False]
+    calls.clear()
+    node._on_power_devices(SimpleNamespace(data='{"camera":"on","perception":"off"}'))
+    node._on_power_devices(SimpleNamespace(data='{"camera":"on","perception":"on"}'))
+    assert "start" not in calls and "stop" not in calls
+    assert calls[-2:] == ["reset", False]
+
+
 def test_ready_report_shape_matches_core_parser():
     assert json.loads(ready_report("camera", False)) == {"device": "camera", "ready": False}
 

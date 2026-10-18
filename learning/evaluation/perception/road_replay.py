@@ -1,6 +1,6 @@
 """D-384 R0 replay: LaneKeeper + RoadStateEstimator over recorded D-356 sessions.
 
-  python learning/evaluation/perception/road_replay.py data/perception/raw/<session> --out X:/DevTemp/road-replay/<name>
+  python learning/evaluation/perception/road_replay.py data/perception/raw/<session> --out $ROSY_SCRATCH/road-replay/<name>
   python learning/evaluation/perception/road_replay.py <bag_to_video>.mp4 --out ... [--labels data/perception/labels/<session>]
   python learning/evaluation/perception/road_replay.py <bag_to_video>.mp4 --out ... --compare-boundary
 
@@ -55,6 +55,7 @@ from control.sensing.perception.camera_ground import nominal_ground_plane  # noq
 from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
 from control.sensing.perception.lane_bev import pose_if_fresh  # noqa: E402
+from control.keep_odom_veto import OdomVetoLaneKeeper  # noqa: E402
 from road_replay_metrics import (  # noqa: E402, F401 — re-exported for tests and tools
     _boundary_comparison,
     boundary_candidate,
@@ -224,13 +225,14 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
            params: RoadStateParams | None = None, pitch_deg: float | None = None,
            lidar_forward_deg: float = 180.0, height_m: float | None = None,
            roll_deg: float = 0.0, compare_boundary: bool = False,
-           recorded_ground: bool = False) -> tuple[dict, list]:
+           recorded_ground: bool = False, odom_veto: bool = False) -> tuple[dict, list]:
     if recorded_ground and (pitch_deg is not None or height_m is not None or roll_deg != 0.0):
         raise SystemExit("recorded ground cannot be mixed with geometry overrides")
     params = params or RoadStateParams(lane_width_m=2 * HALF)
     profile, ground = ground_for(pitch_deg, height_m)
     camera_x_offset = float(profile["x_offset_m"])
-    keeper = LaneKeeper(camera_x_offset_m=camera_x_offset)
+    keeper_type = OdomVetoLaneKeeper if odom_veto else LaneKeeper  # D-556 candidate, off by default
+    keeper = keeper_type(camera_x_offset_m=camera_x_offset)
     boundary = (LaneBoundaryTracker(camera_x_offset_m=camera_x_offset)
                 if compare_boundary else None)
     est = RoadStateEstimator(params)
@@ -256,7 +258,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
             if selected_projection is None:
                 ground, selected_projection = plane, projection
                 camera_x_offset = offset
-                keeper = LaneKeeper(camera_x_offset_m=camera_x_offset)
+                keeper = keeper_type(camera_x_offset_m=camera_x_offset)
                 if compare_boundary:
                     boundary = LaneBoundaryTracker(camera_x_offset_m=camera_x_offset)
             elif projection != selected_projection:
@@ -270,9 +272,9 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
             if compare_boundary:
                 boundary = LaneBoundaryTracker(camera_x_offset_m=camera_x_offset)
                 had_boundary_pair = False
-        obs = keeper.update(img, ground, lane_half_width_m=HALF)
-        boundary_pose = (pose_if_fresh(frame.odom, frame.odom_stamp, t)
-                         if boundary is not None else None)
+        keeper_pose = pose_if_fresh(frame.odom, frame.odom_stamp, t) if odom_veto or boundary is not None else None
+        obs = keeper.update(img, ground, lane_half_width_m=HALF, pose=keeper_pose)
+        boundary_pose = keeper_pose if boundary is not None else None
         fresh_odom_frames += boundary_pose is not None
         boundary_obs = (boundary.update(t, boundary_pose, img, ground,
                                         lane_half_width_m=HALF) if boundary is not None else None)
@@ -484,6 +486,8 @@ def main(argv=None) -> int:
                         help="offline LaneBoundaryTracker tier comparison on the same threshold frames")
     parser.add_argument("--recorded-ground", action="store_true",
                         help="require same-frame keep_debug ground projection; fail on missing or changed values")
+    parser.add_argument("--odom-veto", action="store_true",
+                        help="D-556 candidate: replay with the odometry side-conflict veto keeper")
     parser.add_argument("--max-frames", type=int, default=0)
     parser.add_argument("--pitch-deg", type=float, default=None,
                         help="camera pitch override (the D-379 real-frame fit is 11.8)")
@@ -502,7 +506,8 @@ def main(argv=None) -> int:
     metrics, rows = replay(frames, labels=load_labels(Path(args.labels) if args.labels else None),
                            pitch_deg=args.pitch_deg, lidar_forward_deg=args.lidar_forward_deg,
                            height_m=args.height_m, roll_deg=args.roll_deg,
-                           compare_boundary=args.compare_boundary, recorded_ground=args.recorded_ground)
+                           compare_boundary=args.compare_boundary, recorded_ground=args.recorded_ground,
+                           odom_veto=args.odom_veto)
     metrics["source"] = str(args.source)
     metrics["validated"] = False
     out.mkdir(parents=True, exist_ok=True)

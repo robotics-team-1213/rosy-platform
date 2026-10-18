@@ -94,6 +94,8 @@
     <string name="guide_robots_none">보이는 로봇 없음</string>
 
     <string name="settings_title">연결 설정</string>
+    <string name="lan_title">영상 받을 기기</string>
+    <string name="peer_title">기기 연결</string>
     <string name="settings_link">연결 링크 또는 개발 연결 설정 붙여넣기</string>
     <string name="settings_link_apply">링크 적용</string>
     <string name="settings_host">현장 PC 주소</string>

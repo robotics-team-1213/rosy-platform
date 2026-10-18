@@ -163,6 +163,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
         site_floor_map_id=raw.get("site_floor_map_id", defaults.site_floor_map_id),
         arc_enabled=_flag(raw, "arc_enabled", defaults.arc_enabled),
+        bend_map_entry_enabled=_flag(raw, "bend_map_entry_enabled", defaults.bend_map_entry_enabled),
+        turn_map_entry_enabled=_flag(raw, "turn_map_entry_enabled", defaults.turn_map_entry_enabled),
+        instruction_stamp_enabled=_flag(raw, "instruction_stamp_enabled", defaults.instruction_stamp_enabled),
         route_context_enabled=_flag(raw, "route_context_enabled", defaults.route_context_enabled),
         arc_curvature_gain=float(raw.get("arc_curvature_gain", defaults.arc_curvature_gain)),
         arc_blind_max_m=float(raw.get("arc_blind_max_m", defaults.arc_blind_max_m)),
@@ -226,8 +229,12 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
     """
     def allowed(now, linear, angular) -> bool:
         try:
-            sensor_now = now if policy_clock is None else policy_clock()
-            return (sensor_adapter.return_sensor_allowed(sensor_now, linear, angular) is True
+            def sensor():
+                at = now if policy_clock is None else policy_clock()
+                return sensor_adapter.return_sensor_allowed(at, linear, angular) is True
+            # The worker can publish between the clock read and the probe (snapshot_future, Gazebo
+            # lap run56: 0.034 s); a refusal is asked once more on a fresh read of the policy clock.
+            return ((sensor() or (policy_clock is not None and sensor()))
                     and line_follow.return_body_clear(now, linear, angular) is True)
         except Exception:  # noqa: BLE001 - missing runtime evidence denies motion
             return False

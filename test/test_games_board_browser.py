@@ -29,9 +29,146 @@ from games.game import Observation, Phase  # noqa: E402
 from games.game.state import MatchState  # noqa: E402
 from games.host.preview import (  # noqa: E402
     PreviewBoard,
-    PreviewServer,
+    PreviewServer as AccountPreviewServer,
     overlay_payload,
 )
+
+
+class _LayoutAccount:
+    """Verified-claims fixture for layout only; security flow is tested below."""
+    resource = 'site:layout'
+    profile_url = 'https://account.test/console/profile'
+
+    def profile(self, _cookie):
+        return None
+
+    def resolve(self, _cookie):
+        from types import SimpleNamespace
+        return SimpleNamespace(sub='layout-account', permits=lambda resource, capability:
+                               (resource, capability) == (self.resource, 'games.operate'))
+
+    def retry_revocations(self):
+        pass
+
+
+def PreviewServer(board, **kwargs):
+    account = _LayoutAccount()
+    server = AccountPreviewServer(board, account=account, **kwargs)
+    account.callback = server.url.rstrip('/') + '/api/account/callback'
+    return server
+
+
+def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
+    """Real HTTPS receiver/cookies/SQLite; only authority transport is a signed fixture."""
+    pytest.importorskip('playwright.sync_api')
+    import ssl
+    import subprocess
+    import time
+    from functools import partial
+    from urllib.parse import parse_qs, urlsplit, urlencode
+    from playwright.sync_api import sync_playwright, expect
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization
+    from core_common.protocol.account_access import sign_access
+    from core_common.protocol.account_client import AccountClient
+    from games.host.preview import _Handler
+
+    cert, key = tmp_path/'cert.pem', tmp_path/'key.pem'
+    subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+                    '-keyout', str(key), '-out', str(cert), '-days', '1',
+                    '-subj', '/CN=localhost'], check=True, capture_output=True)
+    board = PreviewBoard(clock=lambda: 100.0)
+    board.publish(_play_payload())
+    server = AccountPreviewServer(board, port=0)
+    origin = server.url.rstrip('/').replace('http:', 'https:')
+    issuer = origin.replace('127.0.0.1', 'localhost')
+    callback = origin + '/api/account/callback'
+    private = Ed25519PrivateKey.generate()
+    raw = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption())
+    public = private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    clock = [int(time.time())]
+    state = {'active': True, 'operate': False, 'challenge': '', 'display_name':'Game Alice'}
+
+    def authority(endpoint, fields):
+        if endpoint == 'userinfo':
+            return {'account_id':'alice', 'login':'alice', 'display_name':state['display_name']}
+        if endpoint == 'introspect':
+            return {'active': state['active']}
+        if endpoint == 'revoke':
+            state['active'] = False
+            return {}
+        assert endpoint == 'token' and fields['grant_type'] == 'authorization_code'
+        import base64
+        from hashlib import sha256
+        assert base64.urlsafe_b64encode(sha256(fields['code_verifier'].encode()).digest()).rstrip(b'=').decode() == state['challenge']
+        assert fields['redirect_uri'] == callback and fields['code'] == 'browser-code'
+        access = sign_access({'iss': issuer, 'aud': 'site:games',
+            'sub': 'alice', 'sid': 'family', 'jti': 'browser-fixture-123', 'rev': 1,
+            'iat': clock[0], 'exp': clock[0] + 300,
+            'grants': [{'resource': 'site:games', 'capabilities': ['games.operate' if state['operate'] else 'fleet.read']}]},
+            raw, key_id='key')
+        return {'access_token': access, 'refresh_token': 'fixture-reusable-token', 'token_type': 'Bearer'}
+
+    account = AccountClient(tmp_path/'account.db', issuer=issuer,
+        client_id='games', resource='site:games', callback=callback, public_keys={'key': public},
+        encryption_key=Fernet.generate_key(), clock=lambda: clock[0], post=authority)
+    server.account = account
+    class FixtureHandler(_Handler):
+        def do_GET(self):
+            request = urlsplit(self.path)
+            if request.path == '/api/fleet/auth/authorize':
+                query = parse_qs(request.query)
+                state['challenge'] = query['code_challenge'][0]
+                target = callback + '?' + urlencode({'state': query['state'][0], 'code': 'browser-code'})
+                self._send(302, 'text/plain', b'', headers=[('Location', target)])
+            else:
+                super().do_GET()
+    server._httpd.RequestHandlerClass = partial(FixtureHandler, board=board, account=account)
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(cert, key)
+    server._httpd.socket = tls.wrap_socket(server._httpd.socket, server_side=True)
+    server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(ignore_https_errors=True)
+            navigation_errors = []
+            page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
+            page.goto(origin)
+            page.locator('#account-login').wait_for(state='visible')
+            assert page.locator('#halt').is_hidden()
+            stop = "async () => (await fetch('/stop', {method:'POST'})).status"
+            assert page.evaluate(stop) == 403 and not board.stop
+            page.locator('#account-login').click()
+            page.wait_for_url(origin + '/')
+            page.locator('#account-logout').wait_for(state='visible')
+            expect(page.locator('[data-account-profile]')).to_contain_text('Game Alice')
+            assert page.locator('[data-account-profile]').get_attribute('href') == issuer + '/console/profile'
+            assert page.locator('#halt').is_hidden()
+            assert page.evaluate(stop) == 403 and not board.stop
+            page.locator('#account-logout').click()
+            page.locator('#account-login').wait_for(state='visible')
+            assert page.locator('[data-account-profile]').is_hidden()
+            state.update(active=True, operate=True)
+            page.locator('#account-login').click()
+            page.locator('#halt').wait_for(state='visible')
+            state['display_name'] = 'Updated Player'
+            expect(page.locator('[data-account-profile]')).to_contain_text('Updated Player', timeout=15000)
+            page.locator('#halt').click()
+            page.locator('#halt-status[data-state="sent"]').wait_for()
+            assert board.stop
+            board.stop = False
+            state['active'] = False
+            clock[0] += 11
+            assert page.evaluate(stop) == 403 and not board.stop
+            page.locator('#halt').wait_for(state='hidden', timeout=15000)
+            assert page.locator('#account-login').is_visible()
+            assert page.locator('[data-account-profile]').is_hidden()
+            browser.close()
+    finally:
+        server.close()
 
 
 def _play_payload() -> dict:
@@ -283,7 +420,10 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
                 assert max(box["width"] for box in layout["panels"]) - min(box["width"] for box in layout["panels"]) <= 1, layout
                 assert layout["stop"]["bottom"] <= height and layout["stop"]["right"] <= width, layout
                 if height <= 568:
-                    assert page.locator("#lost").bounding_box()["y"] + page.locator("#lost").bounding_box()["height"] <= page.locator(".halt-row").bounding_box()["y"]
+                    # D-741: the stop moved into the sticky top bar; the reason stays below it, in the first view.
+                    lost = page.locator("#lost").bounding_box()
+                    bar = page.locator("ui-topbar").bounding_box()
+                    assert bar["y"] + bar["height"] <= lost["y"] and lost["y"] + lost["height"] <= height, (bar, lost)
             else:
                 assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert not errors, f"페이지 오류: {errors}"
@@ -351,19 +491,29 @@ def test_missing_camera_frame_does_not_render_broken_image_placeholder():
         server.close()
 
 
-# --- D-201: 초점 문법의 적합 계약 — 정지 행은 선언 뷰포트(1280×800) 안에 있다.
+# --- D-201 적합 계약, D-741 3·4의 자리 — 정지는 앱 바의 마지막 조작이고 선언 뷰포트(1280×800) 안에 있다.
 
 GAMES_FIT_PROBE = """() => {
-  const halt = document.getElementById('halt').getBoundingClientRect();
+  const stop = document.getElementById('halt');
+  const halt = stop.getBoundingClientRect();
+  const bar = document.querySelector('ui-topbar');
+  const box = bar.getBoundingClientRect();
+  const controls = [...bar.querySelectorAll('a, button, ui-button, input, select')];
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
     halt: { top: Math.round(halt.top), bottom: Math.round(halt.bottom) },
+    inBar: stop.closest('ui-topbar') === bar && halt.top >= box.top && halt.bottom <= box.bottom,
+    last: controls.at(-1) === stop,
+    rightmost: controls.every(node => node.getBoundingClientRect().right <= halt.right + 1),
+    label: stop.textContent.trim(),
+    note: document.querySelector('.halt-note').getBoundingClientRect().toJSON(),
+    barBottom: box.bottom,
     vh: window.innerHeight,
   };
 }"""
 
 
-def test_halt_row_stays_inside_the_declared_viewport():
+def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
     """정지 버튼이 접힘 아래로 내려가면 스페이스를 알아도 손이 못 쓴다."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -389,8 +539,11 @@ def test_halt_row_stays_inside_the_declared_viewport():
         f"보드가 {fit['docOverflow']}px 스크롤된다 — 초점 문법 위반(D-201): {fit}"
     )
     assert fit["halt"]["bottom"] <= fit["vh"] and fit["halt"]["top"] >= 0, (
-        f"정지 행이 뷰포트 밖이다(D-201): {fit}"
+        f"정지가 뷰포트 밖이다(D-201): {fit}"
     )
+    assert fit["inBar"] and fit["last"] and fit["rightmost"], f"정지는 앱 바의 마지막 조작이다(D-741 3): {fit}"
+    assert fit["label"] == "두 로봇 정지", fit
+    assert fit["note"]["height"] > 0 and fit["note"]["bottom"] <= fit["barBottom"], f"안내와 결과는 머리 안에 보인다: {fit}"
 
 
 def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
@@ -427,7 +580,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
                 connection: rect('#connection').toJSON(), scoreEvidence: rect('#score-evidence').toJSON(),
                 awayName: rect('#away-name').toJSON(), halt: rect('#halt').toJSON(),
                 scrollWidth: document.documentElement.scrollWidth,
-                sticky: getComputedStyle(document.querySelector('.halt-row')).position};
+                sticky: getComputedStyle(document.querySelector('ui-topbar')).position};
             }""")
             assert narrow["connection"]["top"] >= max(narrow["brand"]["bottom"], narrow["phase"]["bottom"])
             assert narrow["scoreEvidence"]["bottom"] <= narrow["awayName"]["top"]
@@ -448,12 +601,16 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             page.wait_for_timeout(100)
             scrolled = page.evaluate("""() => ({
               halt: document.getElementById('halt').getBoundingClientRect().toJSON(),
+              bar: document.querySelector('ui-topbar').getBoundingClientRect().toJSON(),
               stair: document.getElementById('stair1').getBoundingClientRect().toJSON(),
               scrollWidth: document.documentElement.scrollWidth,
             })""")
             assert scrolled["scrollWidth"] <= 600
-            assert scrolled["halt"]["bottom"] >= 780
-            assert scrolled["stair"]["bottom"] <= scrolled["halt"]["top"]
+            # D-741: the bar is sticky, so the stop is still at the top after scrolling to the end,
+            # and the last line of the page is in view (nothing is parked under a bottom row).
+            assert abs(scrolled["bar"]["top"]) <= 1, scrolled
+            assert scrolled["halt"]["top"] >= 0 and scrolled["halt"]["bottom"] <= scrolled["bar"]["bottom"], scrolled
+            assert scrolled["stair"]["bottom"] <= 800, scrolled
             assert not errors
             browser.close()
     finally:
@@ -743,8 +900,10 @@ def test_stalled_stop_request_recovers_for_retry(width, height):
                 assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, (state, layout)
                 assert layout["status"]["right"] <= width and layout["status"]["bottom"] <= height, (state, layout)
                 if width <= 390:
-                    assert abs(layout["stop"]["x"] - layout["score"]["x"]) <= 1, (state, layout)
-                    assert abs(layout["stop"]["width"] - layout["score"]["width"]) <= 1, (state, layout)
+                    # D-741: the stop is the right end of the top bar (was a full-width bottom row).
+                    assert abs(layout["stop"]["right"] - layout["score"]["right"]) <= 1, (state, layout)
+                    assert layout["stop"]["bottom"] <= layout["score"]["top"], (state, layout)
+                    assert layout["stop"]["width"] >= 96 and layout["stop"]["height"] >= 44, (state, layout)
                 save_temp_screenshot(page, f"games_board_stop_{state}_{width}x{height}.png")
             assert "시간 초과" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
@@ -791,7 +950,12 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
               canvasScale: document.querySelector('#pitch').clientWidth / document.querySelector('#pitch').width,
               chips: [...document.querySelectorAll('#markers li')]
                 .filter(li => li.scrollWidth > li.clientWidth).map(li => li.textContent),
+              account: (() => { const link = document.querySelector('[data-account-profile]');
+                return {...link.getBoundingClientRect().toJSON(), inBar: !!link.closest('ui-topbar'),
+                  color: getComputedStyle(link).color}; })(),
+              mark: document.querySelector('ui-brand b').getBoundingClientRect().width,
             })""")
+            mark_status = page.evaluate("fetch('/common/brand/mark.svg').then(response => response.status)")
             save_temp_screenshot(page, f"games_board_live_{width}x{height}.png")
             browser.close()
     finally:
@@ -802,11 +966,20 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["topbar"] <= 0.2 * height, fit
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
-    assert abs(halt["x"] - fit["panels"][0]["x"]) <= 1 and abs(halt["width"] - fit["panels"][0]["width"]) <= 1, fit
+    # D-741: the stop is the right end of the top bar (was a full-width bottom row).
+    assert abs(halt["right"] - fit["panels"][0]["right"]) <= 1 and halt["bottom"] <= fit["topbar"], fit
+    assert halt["right"] - halt["left"] >= 96 and halt["bottom"] - halt["top"] >= 44, fit
     assert max(panel["x"] for panel in fit["panels"]) - min(panel["x"] for panel in fit["panels"]) <= 1, fit
     assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
     assert fit["chips"] == [], fit
+    # D-741 3·5: the R mark stays when the wordmark folds; the account link is in the bar's 나 seat, in the gutter,
+    # in the page's ink (it was a default-blue link flush at x=0 under the bar).
+    assert mark_status == 200 and fit["mark"] >= 16, (mark_status, fit)
+    account = fit["account"]
+    assert account["inBar"] and account["width"] > 0 and account["bottom"] <= fit["topbar"], fit
+    assert account["left"] >= fit["panels"][0]["x"] - 1 and account["right"] <= fit["panels"][0]["right"] + 1, fit
+    assert account["color"] != "rgb(0, 0, 238)", fit
 def test_visibility_observations_are_not_operational_approval():
     from playwright.sync_api import sync_playwright, expect
     board = PreviewBoard(clock=lambda: 100.0)

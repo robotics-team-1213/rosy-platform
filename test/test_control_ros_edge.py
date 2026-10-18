@@ -36,7 +36,9 @@ EDGE_ADAPTERS = {
     "control.tf_buffer": "wraps tf2_ros.Buffer for every node",
     "control.web_map_control": "slam_toolbox reset/pause service client for web_node",
     "control.sensor_provider": "D-126 entry point core loads; it constructs the sensor-only ROS worker",
+    "control.safety.ros_edges": "SafetyNode's ROS edge mixin: clock, TF lookups, messages and the drive-sign parameter write for the ROS-free safety mixins (D-171, split from node.py by D-766)",
     "control.camera_region_range": "D-423 mixin of camera_detect_node: owns the LaserScan subscription; the geometry is ROS-free in sensing.perception.region_range",
+    "control.camera_power": "camera node mixin: owns the power/devices subscription and the ready report; the decisions are ROS-free in camera_power_gate",
 }
 
 #: Ratchet: library modules that build ROS messages themselves (D-171 track 1).
@@ -45,14 +47,8 @@ KNOWN_ROS_LEAKS = {
     "control.wander.motion": "Twist, rclpy Parameter",
     "control.wander.judge": "Twist",
     "control.wander.senses": "Bool/Float32/Odometry/UInt16MultiArray",
-    "control.safety.bumper": "Float32/LaserScan/Range, TF",
     "control.wander.contact": "Twist",
-    "control.safety.hazard": "Bool/Imu/String/Twist/UInt16MultiArray",
-    "control.goal_escape": "String",
-    "control.safety.gate": "Twist, rclpy Parameter",
-    "control.safety.scale": "Float32",
     "control.safety.evidence": "String",
-    "control.safety.obstacles": "String, TF",
     "control.wander.obstacles": "String",
 }
 
@@ -103,7 +99,7 @@ def test_the_scan_sees_nodes_and_libraries():
 def test_the_scan_includes_relocated_safety_and_tracking():
     modules = dict(_modules())
     drive = ROOT / "middleware/drive"
-    assert modules["control.safety.gate"] == drive / "safety/adapter/gate.py"
+    assert modules["control.safety.gate"] == drive / "motion_limits/adapter/gate.py"
     assert modules["control.wander.motion"] == drive / "tracking/wander/motion.py"
 
 

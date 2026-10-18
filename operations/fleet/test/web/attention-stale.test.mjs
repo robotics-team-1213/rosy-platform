@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { STALE_STATE_S, staleAgeS } from "../../../ui/console/state-age.js";
+import { STALE_STATE_S, staleAgeS } from "../../../site_ui/console/state-age.js";
 
 const T0 = 1_000_000;
 const row = (extra) => ({ robot_id: "a", online: true, state_age_s: 0.4, ...extra });
@@ -28,7 +28,7 @@ test("offline, missing field and never-received views are not judged", () => {
 // The real attentionItems, with the browser's "/common/..." imports mapped to shared/web.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
-const { createRoster } = await import("../../../ui/console/roster.js");
+const { createRoster } = await import("../../../site_ui/console/roster.js");
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: null };
 const { attentionItems } = createRoster({ view, streamEvidence: () => null });
@@ -111,4 +111,15 @@ test("a running trip shows its live AI route deviation without a wait cycle", ()
     view.trafficAi = [];
     view.trafficTrips = [];
   }
+});
+
+test("attentionItems: D-550 8 an unbounded Fleet motion is one warn row; bounded and idle add nothing", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const rule = (rule_m) => full({ line_stuck: null, rule_m });
+  assert.deepEqual(texts(attentionItems(rule({ state: "unbounded", motion: "goal", reason: "no_goal_lease" }))),
+    ["warn: 한도 없는 움직임 — 관제가 끊겨도 로봇이 계속 갑니다 (목표 임대 없음)"]);
+  assert.equal(attentionItems({ robot_id: "a", online: false, state: null }).length, 1);
+  assert.deepEqual(attentionItems(rule({ state: "bounded", motion: "goal", reason: null })), []);
+  assert.deepEqual(attentionItems(rule({ state: "idle", motion: null, reason: null })), []);
+  assert.deepEqual(attentionItems(rule(undefined)), []);
 });

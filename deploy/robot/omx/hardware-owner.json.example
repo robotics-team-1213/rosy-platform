@@ -1,0 +1,22 @@
+{
+  "schema": "rosy.omx-hardware-owner.v1",
+  "workcell_id": "<accepted-workcell>",
+  "instance_id": "<accepted-instance>",
+  "namespace": "/<accepted-namespace>",
+  "fleet_peer_uid": 10001,
+  "journal_path": "/<home>/.local/state/rosy/omx-owner/<accepted-instance>.sqlite3",
+  "socket_root": "/run/rosy/omx",
+  "owner_config": {
+    "enabled": true,
+    "workcell_id": "<accepted-workcell>",
+    "instance_id": "<accepted-instance>",
+    "joint_names": ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"],
+    "position_limits": {},
+    "max_final_state_errors": {"joint1": "<measured>", "joint2": "<measured>", "joint3": "<measured>", "joint4": "<measured>", "joint5": "<measured>", "gripper_joint_1": null},
+    "allowed_owners": ["rule_based"],
+    "calibration_revision": "<verified-native-normalization-revision>",
+    "max_joint_state_age_s": 0.2,
+    "max_goal_duration_s": 1,
+    "action_timeout_s": 2
+  }
+}

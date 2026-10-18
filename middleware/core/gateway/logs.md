@@ -436,6 +436,7 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
+
 ## 2026-09-24 · uncommitted · docs(adr): D-200 docking owns the DOCKING mode
 - 변경: `docs/adr/D-200-docking-owns-the-docking-mode.md` 추가(Accepted), ADR Log 표 D-200 행, `progress.md`의 `adrs`에 D-200. 주차 설계 문서에 D-200 링크 한 줄. 이미 main에 있는 구현(도킹 전용 슬롯, `route_nav_cmd_vel`, `take_docking_mode`/`release_docking_mode`/`leave_docking`, ModeMachine `expect`와 리스너 격리)을 기록했다. 코드 본문은 바꾸지 않았다.
 - 증거: 시험 `test_docking_mode_ownership`, `test_docking_mode_release`, `test_mode_listener_isolation`, `test_bridge_docking_executor`, `test_docking_parking*`, `core_features/test/test_docking_review_fixes`. Gazebo 미션 4/4(주차 오차 1.4–2.3 mm, 1.7° 이하)는 25° 세계의 ROS-SIM이고 장치 증거가 아니다.
@@ -456,6 +457,7 @@
 - gate 변화: 없음 (DEVICE 재검증 필요).
 - 결정: D-32, D-192.
 - 교훈: 없음
+
 ## 2026-09-25 · uncommitted · refactor(runtime): move core under src/runtime (D-231)
 
 - 변경: src/runtime/core로 이동, 동작 변경 없음 (D-231)
@@ -478,6 +480,7 @@
 - gate 변화: 없음; ROS-SIM/DEVICE/FIELD 범위 밖.
 - 결정: D-257 Proposed; schema-only pass는 카메라/vision worker 동작 증명이 아니다.
 - 교훈: 없음
+
 ## 2026-09-26 · uncommitted · FleetAgent site discovery integration
 
 - 변경: CORE가 기존 직접 Fleet URL 경로를 유지하면서, 승인된 pairing token이 있는 경우에만 발견된 사이트로 outbound WSS를 연다. SD 등록용 일회성 값은 연결 토큰으로 쓰지 않는다.
@@ -488,6 +491,7 @@
 - Change: launch now resolves default YAML from core_common share; source fixtures follow the new owner.
 - Evidence: 1,812 gateway/config/image tests passed with 28 skipped; flake8 passed for changed runtime/config Python files.
 - Gate: LOCAL only; ROS-SIM, image and device runtime remain unverified.
+
 ## 2026-09-28 · uncommitted · report camera-line observation hold
 
 - Change: selected CAMERA_LINE missing/stale/invalid evidence keeps the existing fail-closed zero command candidate and adds a camera-specific reason. Source changes still discard old evidence; no IR auto-switch was added.
@@ -511,6 +515,7 @@
 - Change: preserve the canceled Nav2 generation's Fleet correlation until the terminal result callback, including cancel-before-acceptance. Publish that result without changing a newer navigation state.
 - Evidence: focused GoalTracker and navigation manager regression suites pass; full changed-suite rerun pending.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+
 ## 2026-09-28 · uncommitted · close canceled-generation result recovery
 
 - Change: retain at most 128 canceled correlations; publish late terminal results without changing a newer navigation state. Unreadable action results leave the attempt unresolved.
@@ -534,12 +539,14 @@
 - Change: `_signal_observer_binding` parses the file-only `traffic_policy.signal_observer` block (empty/absent = feature off; malformed values fail the build; a binding without the policy's map/scene fails the build too — every frame would be rejected otherwise). CoreServices carries `signal_observer` and starts the daemon-thread monitor next to the manager it feeds; status fields `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen` flow to snapshots and `/api/v1/traffic` unchanged routes.
 - Evidence: test_traffic_policy +4 (absent by default, binds+starts with url captured, missing map/scene ValueError, status view). Combined host run 501 passed (traffic, services, API, event catalogue, foundation, runtime config); flake8 clean on changed lines — the reported services.py F401/E306/W293 sit outside this diff (parallel track's lines).
 - Gate: SOURCE/LOCAL only; no live observer, ROS-SIM, device, or FIELD acceptance. Dashboard readback (T4) remains.
+
 ## 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
 
 - 변경: 24b6d4bb(2026-09-24)가 bridge/observation.py 신설, 시블리 4종 확장(reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call), ros_bridge 757-590행(D-168 예산 복귀)을 반영하면서 이 모듈의 저널과 bridge/AGENTS.md 갱신이 빠졌다. bridge/AGENTS.md에 observation.py 행(Key Files·시험 sibling 목록)과 D-338 원칙 서술을 추가하고, 낡은 no-remote 주장을 origin/CI 현황으로 정정했으며 이 항목으로 모듈 저널을 소급 기록한다. 결정 원칙의 정본은 docs/adr/D-338.
 - 증거: 24b6d4bb stat 13 files +1047/-237. 현재 observation.py 203행(c33f51a6 카메라 폴트 폴백 확장 포함), ros_bridge.py 582행. bridge 시블리 시험(test_bridge_observation·timers·goal_tracker·reconcile·display·save_map) 전체 통과(2026-09-29 Windows).
 - gate 변화: 없음.
 - 교훈: 병행 세션에 작업이 흡수 커밋되면 저널 의무까지 사라지지는 않는다 — 구현이 이미 main에 있으면 기록만 별도 커밋으로 보수한다.
+
 ## 2026-09-29 · uncommitted · feat(api): /system/capabilities에 lifecycle 블록 (D-347, v1.58)
 
 - 변경: api/v1/system.py의 capabilities 끝점에 lifecycle_from(svc.capability.to_dict(), truth.reasons)를 실었다 — 광고된 플래그별 단일 생애 어휘(additive). 기존 flags·withheld·runtime·501 게이트·409 CAPABILITY_WITHHELT 불변. 신규 시험 test_capability_lifecycle.py(wire 1건 포함 6건).
@@ -547,6 +554,7 @@
 - gate 변화: 없음.
 - 결정: inventory PresentationState는 그대로 — D-347 본문 표가 대응을 정의한다(unavailable≈blocked 등).
 - 교훈: core_client은 팩토리 픽스처다( (TestClient, services) 반환) — 첫 사용에 401·function 오류가 나면 소비 방식부터 확인한다.
+
 ## 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
 
 - 변경: bridge/display.py info_payload에 "charging" 필드 추가 (additive, false 기본). 화면이 CHARGING/CHARGED_HOLD 상태를 표시할 수 있게 한다.
@@ -603,6 +611,7 @@
 - 변경: ros_bridge 가 5 Hz 상태 틱에서 reconcile.emotion(LiDAR 문법 — latch 없이 재시도)으로 표정을 바꾼다. 서비스 클라이언트 5개로 늘어 test_bridge_timers 핀을 같이 갱신했다.
 - 증거: test_bridge_reconcile.py 표정 3건·test_bridge_timers.py. 433 passed.
 - gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · fix(test): status-inputs 키 집합에 swarm_role 추가 (D-383 뒤치움)
 
 - 변경: d0f2b7f5(D-383)가 `api/v1/host.py` 의 `status_inputs` 에 `swarm_role`(대형 역할 leader/follower, 없으면 absent)을 더하며 루트 host 시험만 갱신했다. 게이트웨이의 키 집합 동일성 시험이 그 키를 몰라 main CI core 단계가 붉었다. 기대 키 집합에 `swarm_role` 을 넣고, 상태 없음(None)도 absent로 기록됨을 함께 단언한다.
@@ -615,6 +624,7 @@
 - 변경: bridge/display.py 에 DRIVE_EVERY_S/DRIVE_HOLD_S·drive_due(운용 중에만, 20 s)·drive_payload(kind: drive, 웨이크 카드와 같은 반올림 계약, 결측 속도 None). ros_bridge 상태 틱이 기존 display/info 퍼블리셔로 발행한다(구조 변화 없음).
 - 증거: test_bridge_display.py (변이: EMERGENCY 제외 시 빨강). 게이트웨이 관련 212 passed.
 - gate 변화: 없음.
+
 ## 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
 - 변경: `CoreServices.calibration` 을 만들고 상태 스냅샷 provider 로 건다. `ros_bridge._tick_power` 가 `calibration.expire_due()` 를 불러 아무도 상태를 읽지 않아도 만료 이벤트가 난다. 새 시험 `test/test_calibration_session.py`. 15770a9c: `display.info_payload` 가 `activity` 를 싣는다(LCD).
 - 증거: test_calibration_session.py 13 passed, test_bridge_display 통과, test_event_catalogue·test_module_criteria 통과(릴레이 함수·getattr 도달을 만들지 않도록 고침).
@@ -812,6 +822,7 @@
 - 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
+
 ## 2026-10-04 · uncommitted · feat(vision): 원본 조도와 얼굴 handover
 
 - 변경: JPEG metadata의 원본 low_light quality를 기존 front/status에 전달한다. legacy·malformed·stale는 null이며 JPEG는 유지한다. face-inputs에 camera_quality와 JPEG 수신 나이를 전달하고 reader가 handover 나이를 더해 만료한다. read-only 표시로서 이동 권한은 아니다.
@@ -909,6 +920,12 @@
 - 증거: 신규 query와 기존 adapter/구조 검사 105 PASS, 0 NEW. 독립 SOURCE/크기 검토도 105 PASS, 0 NEW.
 - gate 변화: 센서 판정 seam만. CORE swept path·바닥 경로 검증 전에는 실제 복귀 이동 공급자로 연결하지 않는다.
 
+## 2026-10-05 · uncommitted · fix(ci): D-468 센서 경계 시험과 C6 기록
+
+- 변경: gateway 시험은 provider 원래 clock·candidate 전달과 strict boolean 거부만 검증한다. 실제 센서 lease·floor 판단은 perception 소유 시험에서 유지한다. 공개 local_return_allowed 연결의 기본 거부 계약을 C6 triage와 동일 커밋으로 기록한다.
+- 증거: ownership+gateway 6 PASS, 실제 센서 판단 26 PASS, C6 1 PASS. 제품 안전 판단 변경 없음.
+- gate 변화: SOURCE/HOST 경계 검증만. 실제 주행 수용 없음.
+
 ## 2026-10-05 · uncommitted · feat(bridge): bind D-468 motion evidence into CORE
 - Change: CORE now binds local lane-return candidates to the live enforced floor/sensor verdict and the manager's fresh full-circle LiDAR swept-body check. Unknown provider failures deny the candidate.
 - Evidence: gateway/scan/bridge integration checks 151 PASS, 0 NEW; host source only. No ROS-SIM, device, release, or field result.
@@ -937,6 +954,7 @@
 - 증거: 호스트는 `ros_bridge.py`를 import하지 않는다. 상태 쪽 시험은 services `test_state_odom_pose.py`. `test_capabilities_controls.py`에 D-494 1 시험 2개 추가. gateway 2181 passed·17 skip, known_failures 0 new.
 - gate 변화: 없음. ROS-SIM·DEVICE 미확인.
 - 결정: D-494 (Proposed)
+
 ## 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
 - 변경: `bridge/observation.py` `keep_junction`이 `line/keep_debug`의 `reason`(`junction_transverse`·`junction_fork`)과 카메라 시각(`stale_after_s` 안)을 읽어 `observe_junction`에 넘긴다. 정지 입력으로만 쓴다. `ros_bridge.py`의 기존 구독에 한 줄 붙임
 - 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
@@ -1041,6 +1059,7 @@
 - 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
 - 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
 - gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
+
 ## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유를 얼굴 노트로
 
 - 변경: `face_line_note`가 발행된 `line_follow.reason`만 본다. `crosswalk_`와 `ir_guard_crosswalk`는 횡단보도, 차선 가장자리 셋은 차선 가장자리, `stuck_yield`는 양보다. 그 이름으로 붙은 HOLD는 선 소실 주의를 내지 않는다. 각속도가 있는 양보는 기존 좌우 신호가 남는다.
@@ -1078,3 +1097,92 @@
 - 증거: `test_cmd_vel_cycle.py`, `test_power_device_adapters.py`, `test_power_command_routes.py`, `test_bridge_timers.py`. 독립 리뷰(code-reviewer, REQUEST CHANGES 한 번 뒤 APPROVE WITH NOTES)를 받았다. 원격 pytest 결과는 착지 보고에 둔다.
 - gate 변화: 없음. 스위치가 꺼진 로봇은 기기 명령을 하나도 내지 않고 `motion_ready`는 늘 true다. 실기 증거 없음.
 - 결정: `power/manager.py`·`power/devices.py`·`bridge/device_power.py`의 safety 태그는 넣지 않았다. D-430 매니페스트 결정으로 남긴다.
+
+## 2026-10-13 · uncommitted · D-556 한쪽 경계 충돌 품질 사유 포팅
+
+- 변경: CAMERA_LINE `quality.reason=odom_side_conflict`를 불가시·신뢰도 0으로만 받는다. CORE line-follow는 저조도처럼 D-476 bridge·D-468 로컬 복구를 거치지 않고 HOLD한다(`reason: camera_odom_side_conflict`). 최종 cmd_vel 소유권은 그대로다.
+- 증거: 커밋 779dd22fe의 원격 `middleware/core/gateway/test` 2780 passed(`X:/DevTemp/land-recent/odomveto/3-gateway/run-1.txt`). 실물 수용 근거는 아님.
+- gate 변화: 없음(SOURCE 후보).
+
+## 2026-10-14 · 06ce5334b · enforce 어댑터가 stale_hold_s를 안전 관리자에 넘긴다 (D-400 4항, API v1.223)
+
+- 변경: `bridge/control_sensor_adapter.py::bind_safety`가 enforce에서 `bind_control_policy(policy, stale_hold_s=...)`로 묶는다. shadow와 off는 그대로다. `safety_policy_status.py`가 enforce일 때 `hold {count, reason}`를 싣고 `node.py`가 안전 관리자를 넘긴다.
+- 증거: `test_control_sensor_adapter.py`(설정값 전달, shadow·off 미전달, 실제 `SafetyManager` 바인딩), `test_control_absorption_safety.py`·`test_control_policy_link.py`(HOLD, 재개, 2 s 뒤 래치, 바로 래치하는 경우), `test_safety_policy_status.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM과 장치 수용은 미검증이다.
+- 결정: D-400 개정(2026-10-14).
+- 교훈: 시험의 가짜 safety 둘(`bind_control_policy(self, policy)`)은 새 키워드 인자를 받도록 고쳐야 했다.
+
+## 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
+
+- Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
+- Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
+- gate 변화: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+
+## 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 설정 읽기 (D-759 검토 반영, API v1.224)
+
+- 변경: `core/drive/line_follow.py::_line_follow_config`가 `bend_map_entry_enabled`를 YAML boolean으로만 읽는다(`_flag`).
+- 증거: `test_line_junction_api.py`(기본 `false`, `true`, `"true"`는 `ValueError`), `test_capabilities_controls.py`(설정이 꺼지면 `lane_bend`가 참이어도 `lane_bend_map_entry`는 거짓). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-759(Proposed).
+- 교훈: 없음.
+
+## 2026-10-14 · 1ee33639c · trip 임대가 열려 있으면 차선 추종이 통행권을 요구한다 (D-760 2단계, API v1.225)
+
+- 변경: `core/trip_lease.py::build_trip_lease`가 `line_follow.authority_leased = lambda: trip_lease.current() is not None`을 묶는다. 5 Hz 타이머가 아직 끝내지 않은 만료 임대도 열린 것으로 센다. 임대 객체는 그대로다(움직임을 주지 않는다, D-541 9).
+- 증거: `test_trip_lease.py` 3건(임대 없으면 통행권 문이 명령을 그대로 둠, 임대 → 차선 → `authority_none` → 통행권 → 통과 → lane·free·lane 뒤 다시 `authority_none` → 임대 해제 뒤 통과, 만료 임대는 타이머가 끝낼 때까지 강제), `test_line_authority_api.py` 2건, `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다. `trip_lease.py` 315줄 → 318줄.
+- 결정: D-760 Decision 2. 잠금 순서는 차선 관리자 잠금 → 임대 잠금 한 방향이다(임대는 자기 잠금을 놓은 뒤에만 `halt`를 부른다).
+- 교훈: `fleet.trip_lease_required`만 켜고 `fleet.traffic.authority`를 끈 현장에 이 CORE를 올리면 lane trip 로봇이 `authority_none`으로 서 있다. Fleet 출발 검사(`TRIP_AUTHORITY_SITE_OFF`)는 아직 `line_follow_authority_required`만 본다(3단계).
+
+## 2026-10-14 · 8a73125e6 · 임대가 첫 통행권 전에 끝나도 로봇은 서 있다 (D-760 2단계 안전 검토 M1, API v1.225)
+
+- 변경: 코드 변경 없음(`core/trip_lease.py`의 묶음은 그대로). 차선 관리자가 강제를 세션에 래치하므로, `TripLeaseManager.end()`가 임대를 지운 뒤 `halt`가 차선 추종을 끄기 전의 틈에서도 통행권 문이 명령을 0으로 둔다.
+- 증거: `test_trip_lease.py` — 만료와 인수 각각에서 `halt`가 불리는 순간(임대 없음, 차선 추종 켜짐) 문이 0을 낸다. 해제(DELETE) 뒤에도 `authority_none`이고 모드를 바꾼 뒤에만 풀린다. `test_line_authority_api.py` — `seq`를 본 구간의 `seq` 없는 요청은 `seq_required`, 쥔 것 없는 `shrink`는 `shrink_none_held`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-760 Decision 2.
+- 교훈: 없음.
+
+## 2026-10-14 · uncommitted · fix(bridge): D-758 0단계 odom 스냅숏 stamp를 line-follow odom 기록에 넘긴다
+
+- 변경: `core/bridge/ros_bridge.py::_on_odom`이 `state.set_odom_pose`를 먼저 부르고(odom `frame_id`·헤더 시각을 같이 넘겨 epoch 판정) 그 반환 stamp를 `odometry.observe_lane_return(..., wall=)`로 line-follow에 넘긴다.
+- 증거: `test_lane_return_odometry.py::test_the_published_wall_stamp_keys_the_odom_log`(수정 전 적색), `test_line_follow_lane_cue.py` 벽시계 ±5 s 시험, `middleware/core/gateway/test` 2865 통과(`X:/DevTemp/odom-monotonic/gw/run-1.txt`), `known_failures` NEW 0.
+- gate 변화: SOURCE·호스트 근거만. `ros_bridge.py` 910 → 912줄(판정 799 + 150 안).
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
+## 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로
+
+- 변경: `ros_bridge._on_odom`의 스냅숏 stamp → line-follow 기록 넘김을 ROS 없는 `core/bridge/odometry.py::observe_odom`으로 옮기고 `_on_odom`은 그것을 부른다(`test_bridge_timers.py`가 콜백 시험을 ROS 없는 형제 모듈에 두라고 한다). `ros_bridge.py` 912 → 908줄.
+- 증거: `test_lane_return_odometry.py::test_the_odom_callback_logs_the_sample_under_the_snapshots_stamp`. `wall=wall`을 뺀 변이 커밋 `1a0413b01`(가지에 없음)을 만들었으나 원격 실행은 전송 실패로 확인 못 함.
+- gate 변화: SOURCE 근거만, 호스트 시험 미확인.
+- 결정: D-758 0단계 독립 Safety-Review 조건 2.
+- 교훈: 없음.
+
+## 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
+- 변경: `core/drive/line_follow.py`가 `turn_map_entry_enabled`를 bool로만 읽는다(기본 꺼짐).
+- 증거: `test/test_line_junction_api.py`(기본값, 켬, 문자열 거절), `test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-14 · uncommitted · test: 수동 거절 시험을 벽시계 워치독에서 떼어 낸다
+- 변경: `test/test_line_junction_api.py::test_refused_while_manual_control_is_active`가 `watchdog.timeout_ms`를 60 s로 고정한다(`test_manual_navigation_ownership.py`와 같은 방식). 제품 코드는 그대로다.
+- 원인: CI 38573105206(b1e84dd79)에서 teleop과 `/line-follow/junction` 사이가 500 ms를 넘어 teleop 세션이 만료됐고(`command/manager.py` `manual_active`), `require_manual_released`가 통과해 `set_junction`의 `LINE_FOLLOW_NOT_ACTIVE`가 나왔다. 확인 순서는 맞다: 거절 검사가 먼저이고, 만료된 세션을 수동 제어로 치지 않는 것은 설계다(SAF-002). 시험 설정 경합이지 제품 순서 결함이 아니다.
+- 증거: 원격 pytest 20회 호출. 수정 전 20/20 통과(느린 러너에서만 재현돼 재현 못 함), 수정 후 19/20 통과 + 1회 하네스 기동 실패(같은 HEAD 파일 전체 재실행 21 passed). 원인 판단 근거는 코드 경로와 CI 로그다.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 벽시계 워치독(500 ms)을 쓰는 시험은 세션 유지가 시험 대상이 아니면 타임아웃을 고정한다.
+
+## 2026-10-15 · 84f0c8456 · 작업의 trip lease는 단계 사이 IDLE에서 끝나지 않는다 (D-763 조각 6, API v1.236)
+
+- 변경: `core/trip_lease.py` `_Lease.job_id`. `job_id`로 연 lease는 모드 감시(`end_on_mode`)가 IDLE에서 끝내지 않는다. MANUAL·도킹·비상 정지·넘겨받기·만료·주인 해제는 그대로 끝낸다. renew는 `job_id`를 바꾸지 않는다. 공개 dict에 `job_id`. 통행권 래치(`authority_leased`)는 그대로라 다음 차선 세션에서 lease가 있으면 바로 다시 걸린다.
+- 증거: `test/test_trip_lease.py` D-763 6 절 — 주인 IDLE 뒤 lease 유지, 단계 사이 주인 아닌 `/mode`(MANUAL·NAVIGATION)·`/teleop` 409, 넘겨받기 통과, 주인 아닌 IDLE·E-stop은 lease를 끝냄, 단계 중 주인 아닌 IDLE도 끝냄, 주인 MANUAL은 끝냄, 만료는 지금과 같음, renew가 작업 lease로 바꾸지 않음, `job_id` 검증, 능력, lease를 갱신해도 통행권(`authority_expired`)과 목표 임대가 만료함, lease → 모드 → 첫 통행권 순서. 원격(모델 PC, 7334f9c40) 통과, `known_failures` 0 new, 로그 X: `job-lease/core/run-1.txt`.
+- gate 변화: 없음. SOURCE·호스트 근거만이다. 장치 미확인.
+- 결정: D-763 4항·조각 6, 개정 2 질문 2·3. 팔 단계 중 만료의 동작은 정하지 않았다(남은 질문 1).
+- 교훈: 없음.
+
+## 2026-10-15 · 1a9960df2 · line_follow.instruction_stamp_enabled 설정 읽기와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+
+- 변경: `core/drive/line_follow.py`가 `instruction_stamp_enabled`(bool 엄격)를 읽는다.
+- 증거: `test/test_capabilities_controls.py`(능력이 설정을 따름), `test/test_line_junction_api.py`(설정 읽기, `distance_basis` 기록). 원격(모델 PC, 9639a41b8) `middleware/core/gateway/test` 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 4항.
+- 교훈: 없음.

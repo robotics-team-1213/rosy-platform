@@ -14,6 +14,7 @@ from typing import Optional
 import httpx
 
 from core_common.protocol import connect_reason
+from fleet.hub.hub import HubError
 from fleet.swarm.transport import RobotApiError
 
 # D-499: plain HTTP against a TLS-only CORE. Do not add SSLError or ConnectError here.
@@ -32,6 +33,11 @@ class TripAware:
     @staticmethod
     def trip_busy(robot_id: str) -> bool:
         return False
+
+    def trip_refusal(self, robot_ids) -> Optional[HubError]:
+        """D-763 4: the one "has this robot a holder" check of every Fleet motion entry."""
+        busy = [robot_id for robot_id in dict.fromkeys(robot_ids) if self.trip_busy(robot_id)]
+        return HubError("TRIP_ROBOT_BUSY", f"{', '.join(busy)} is on a running trip; cancel the trip first") if busy else None
 
 
 class CapabilityDisplay:
@@ -72,15 +78,15 @@ class CapabilityDisplay:
             return None
         cached = self.cache.get(robot_id)
         if cached is None or self.clock() - cached[0] >= self.refresh_s:
-            task = self.pending.get(robot_id)
+            task, started = self.pending.get(robot_id), False
             if task is None or task.done() or task.get_loop() is not asyncio.get_running_loop():
-                task = asyncio.create_task(self._refresh(robot_id, client))
+                task, started = asyncio.create_task(self._refresh(robot_id, client)), True
                 self.pending[robot_id] = task
-            # Only a robot never read (or whose kept value outlived max_age_s) waits; otherwise
-            # the request answers the kept value now.
+            # Only a robot never read (or whose kept value outlived max_age_s) waits, and only the
+            # request that started the refresh: a slow robot does not add wait_s to every request.
             expired = (cached is None or cached[1] is not None and self.max_age_s is not None
                        and self.clock() - cached[0] > self.max_age_s)
-            await asyncio.wait({task}, timeout=wait_s if expired else 0)
+            await asyncio.wait({task}, timeout=wait_s if expired and started else 0)
         return self._kept(robot_id, client)
 
     def _kept(self, robot_id, client):
@@ -129,24 +135,27 @@ class TripCaps:
     kind: str
     modes: frozenset
     max_speed: float
-    #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
-    junction_turn: bool = False
+    junction_turn: bool = False  #: D-495: the robot can turn at a junction on its own (bounded turn); absent = no
     #: D-507 9: the map the robot's site floor declaration covers; None when absent (older CORE) or null.
     site_floor_map_id: Optional[str] = None
-    #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
-    junction_pivot: bool = False
-    #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent means no.
-    lane_arc: bool = False
+    junction_pivot: bool = False  #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent = no
+    lane_arc: bool = False  #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent = no
     lane_arc_map_anchor: bool = False  #: D-744 2: CORE takes ``exit_segment.map_anchor``; absent = no
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
     line_follow_authority_required: bool = False
-    #: D-551: CORE shows a signal advice (``POST /line-follow/advice``, display only); absent means no.
-    line_follow_advice: bool = False
-    #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent means no.
-    lane_bend: bool = False
-    #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent means no.
-    trip_lease: bool = False
+    #: D-760 3: ``shrink``/``seq`` and ``ttl_s`` up to 5 s; D-760 2: enforced while its trip lease is open. Absent = no.
+    line_follow_authority_shrink: bool = False
+    line_follow_authority_under_lease: bool = False
+    line_follow_advice: bool = False  #: D-551: CORE shows a signal advice (POST /line-follow/advice, display only); absent = no
+    lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
+    lane_bend_map_entry: bool = False  #: D-759 2: CORE takes the bend's ``map_entry``; absent = no
+    lane_turn_map_entry: bool = False  #: D-759 rev 1: the same for a left/right turn's exit heading
+    lane_instruction_stamp: bool = False  #: D-767 A: CORE measures from a junction instruction's pose_stamp
+    lane_bend_next_line: bool = False  #: D-754: CORE takes next_line_in_m; absent = no
+    lane_crosswalk_gate: Optional[bool] = None  #: D-763 10 (c): CORE's crosswalk gate is on; None = not announced (older CORE); a non-bool is False
+    lane_junction_signal: Optional[bool] = None  #: D-763 10 (c): CORE asks Fleet's junction signal; None = not announced
+    trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease; absent = no
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
     line_camera: Optional[dict] = None
 
@@ -172,12 +181,17 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
             camera = line.get("camera") if isinstance(line, dict) else None
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
-                            junction_pivot=item.get("junction_pivot") is True,
+                            junction_pivot=item.get("junction_pivot") is True, lane_bend_next_line=item.get("lane_bend_next_line") is True,
                             lane_arc=item.get("lane_arc") is True, lane_arc_map_anchor=item.get("lane_arc_map_anchor") is True,
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
+                            line_follow_authority_shrink=item.get("line_follow_authority_shrink") is True,
+                            line_follow_authority_under_lease=item.get("line_follow_authority_under_lease") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
+                            lane_bend_map_entry=item.get("lane_bend_map_entry") is True, lane_turn_map_entry=item.get("lane_turn_map_entry") is True,
+                            lane_instruction_stamp=item.get("lane_instruction_stamp") is True,
+                            **{k: item[k] is True for k in ("lane_crosswalk_gate", "lane_junction_signal") if k in item},
                             line_camera=camera if isinstance(camera, dict) else None)
     return None
 

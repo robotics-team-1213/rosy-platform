@@ -44,7 +44,7 @@ from rosy_situation.snapshot_assessment import snapshot_assessments
 
 __version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
-TIMEOUT_S = 4.0       # /api/fleet/state takes ~2 s on the site (power read waits 0.5 s per robot)
+TIMEOUT_S = 4.0       # /api/fleet/state is a shared cached gather; a cold gather can still take ~2 s
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
 OWNER_MODES = ("available", "shared", "owner_busy")

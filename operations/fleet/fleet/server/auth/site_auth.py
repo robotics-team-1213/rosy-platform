@@ -27,6 +27,24 @@ class SitePrincipal:
     role: str
     password_change_required: bool = False
     password_fingerprint: str = field(default="", compare=False, repr=False)
+    account_id: Optional[str] = None
+    grants: tuple = ()
+    site_resource: Optional[str] = None
+
+    def permits(self, resource: str, capability: str) -> bool:
+        return bool(self.account_id) and any(
+            scope == resource and capability in capabilities for scope, capabilities in self.grants)
+
+    def permits_site(self, capability: str, legacy_roles=None) -> bool:
+        if self.account_id:
+            return bool(self.site_resource) and self.permits(self.site_resource, capability)
+        # D-793: a users-file grant (policy_admin) adds a capability beside the single legacy role.
+        return (legacy_roles is None or self.role in legacy_roles
+                or any(scope == "legacy" and capability in caps for scope, caps in self.grants))
+
+
+def legacy_grants(details: Mapping) -> tuple:
+    return (("legacy", ("fleet.policy",)),) if details.get("policy_admin") is True else ()
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
@@ -50,7 +68,7 @@ def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
                 or principal_id in seen_principal_ids
                 or role not in {"viewer", "operator", "policy-admin", "service", "ai_observer"}):
             raise ValueError("site user credentials require a token, principal_id, and known role")
-        principals[token] = SitePrincipal(principal_id, role)
+        principals[token] = SitePrincipal(principal_id, role, grants=legacy_grants(details))
         seen_principal_ids.add(principal_id)
     if not principals:
         raise ValueError("site user credentials cannot be empty")
@@ -132,6 +150,13 @@ def build_authorize(console_token: Optional[str],
             for token_digest, principal in principals.items():
                 if hmac.compare_digest(supplied_digest, token_digest):
                     matched = principal
+            if matched is not None and password_sessions is not None:
+                from fleet.server.password_session import SessionStorageUnavailable, _storage_unavailable
+                try:
+                    if password_sessions.migrated_principal(matched.principal_id):
+                        matched = None
+                except SessionStorageUnavailable:
+                    raise _storage_unavailable() from None
             if matched is None:
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "valid site credential required"})
@@ -186,16 +211,18 @@ def build_authorize(console_token: Optional[str],
 
 def build_role_guards(authorize, principals: Mapping[str, SitePrincipal], *, named_logins: bool = False):
     def require_viewer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
+        if not principal.permits_site("fleet.read"):
+            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "fleet.read required"})
         return principal
 
     def require_operator(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
-        if principal.role != "operator":
+        if not principal.permits_site("fleet.operate", {"operator"}):
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN",
                                                          "message": "operator role required"})
         return principal
 
     def require_proposer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
-        if principal.role not in {"operator", "service"}:
+        if not principal.permits_site("fleet.operate", {"operator", "service"}):
             raise HTTPException(status_code=403, detail={
                 "code": "FORBIDDEN", "message": "operator or service proposal role required",
             })

@@ -208,11 +208,16 @@ def _assert_aborted(rig, status, reason):
     assert rig.m._junction['state'] == 'aborted' and (rig.v, rig.w) == (0., 0.)
 
 
-def test_approach_aborts_on_stale_odom():
+def test_approach_holds_on_stale_odom_and_aborts_on_a_new_odom_run():
+    """Gazebo m27: a short odom gap holds (junction_pose_gap); a new run that moved the pose aborts."""
     rig = Rig()
     _approaching(rig)
     rig.now += .4
-    _assert_aborted(rig, rig.step(pose=False, seen=False)[1], 'odom')
+    status = rig.step(pose=False, seen=False)[1]
+    assert (status.junction.state, status.reason) == ('approaching', 'junction_pose_gap') and (rig.v, rig.w) == (0., 0.)
+    rig.m._return_evidence.epoch += 1                   # a new odom run: the pose jumped (re-init)
+    rig.x += .3
+    _assert_aborted(rig, rig.step(seen=False)[1], 'odom')
 
 
 def test_approach_aborts_on_mode_change():

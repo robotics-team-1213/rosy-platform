@@ -34,21 +34,27 @@ class DevicePowerGate:
         self.camera = "on"
         self.perception = "on"
         self._tick = 0
+        self._managed = False
 
     def update(self, raw: str) -> Optional[tuple[str, str]]:
-        """Apply one board. Returns (previous, new) camera level when it changed."""
+        """Return camera levels when a managed board requires readiness to be rechecked."""
         try:
             board = json.loads(raw)
         except (TypeError, ValueError):
             return None
         if not isinstance(board, dict):
             return None
+        if not any(name in board for name in ("camera", "perception")):
+            return None
         previous = self.camera
+        previous_perception = self.perception
         camera = board.get("camera", "on")
         perception = board.get("perception", "on")
         self.camera = camera if camera in LEVELS else "on"
         self.perception = perception if perception in LEVELS else "on"
-        return (previous, self.camera) if previous != self.camera else None
+        changed = not self._managed or previous != self.camera or previous_perception != self.perception
+        self._managed = True
+        return (previous, self.camera) if changed else None
 
     def plan(self) -> str:
         if self.camera == "off" or self.perception == "off":

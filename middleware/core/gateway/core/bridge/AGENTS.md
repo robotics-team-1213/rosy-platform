@@ -27,6 +27,7 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 | `cmd_vel.py` | ROS-free 50 Hz `cmd_vel` cycle: select, readiness HOLD → zero (hardware graph, and D-440 `motion_ready` after a power wake), wheels, then power activity and the SAF-002 `safety.watchdog` announcement |
 | `save_map.py` | ROS-free SaveMap reply handling: safe basenames under the configured map directory, `RESULT_SUCCESS = 0`, and the D-13 map id |
 | `docking_mode.py` | ROS-free seam for docking's hold on the DOCKING mode: releases DOCKING in the same critical section that ends a run, and the docking tick rate. Pinned by `core/test/test_docking_mode_{ownership,release}.py` |
+| `pilot_recorder_client.py` | D-411 requests to the camera unit's recorder (set_active, typed start), split out of `ros_bridge.py` (D-766). The bridge passes its service client and `warn` in. Pinned by `test/test_bridge_timers.py` |
 | `docking_executor.py` | ROS-free `BridgeDockingExecutor` (the `DockingExecutor` Protocol): docking-slot drive/stop, latched collision-exemption intent, undock odometry mark. `ros_bridge` passes the Nav2 send/cancel, the Bool publish and the odom pose in as callables. Pinned by `core/test/test_bridge_docking_executor.py` |
 
 ## Subdirectories

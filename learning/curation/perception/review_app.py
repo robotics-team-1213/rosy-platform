@@ -1,4 +1,4 @@
-"""Pinky local persistent object review application (no robot or model access).
+"""Pinky persistent review with optional model-PC draft jobs; no robot control.
 
 Run: python review_app.py --state <persistent-directory> --source source.jsonl
      --human human.jsonl --images <image-root> [--port 8767]
@@ -20,14 +20,16 @@ import uuid
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import cv2
 import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web
+import review_versions
+from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
 from learning_control import Control, ControlConflict
 
@@ -195,9 +197,15 @@ class ReviewStore:
         with self.connect() as db:
             events = {}
             for lane, table in (('object', 'events'), ('pixel', 'pixel_events')):
-                events[lane] = [dict(row) for row in db.execute(
-                    f'SELECT ts,action,version FROM {table} WHERE frame=? ORDER BY id DESC LIMIT 20',
-                    (index,))]
+                events[lane] = []
+                for row in db.execute(f'SELECT ts,action,version,review FROM {table} '
+                                      'WHERE frame=? ORDER BY id DESC LIMIT 20', (index,)):
+                    event = dict(row)
+                    detail = json.loads(event.pop('review'))
+                    actor = detail.get('last_actor') if lane == 'object' else detail.get('actor')
+                    if actor:
+                        event['actor'] = actor
+                    events[lane].append(event)
         return {'source': frame['source'].get('annotation_source'),
                 'object_status': frame['status'],
                 'pixel_status': review_masks.get(self, index)['status'],
@@ -213,7 +221,7 @@ class ReviewStore:
             raise ValueError('image hash mismatch')
         return path
 
-    def update(self, index, body):
+    def update(self, index, body, *, actor=None):
         classes = self.object_classes()
         with self.lock, self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -275,6 +283,13 @@ class ReviewStore:
                     review.pop('disposition', None)
             else:
                 raise ValueError('unknown review action')
+            review.pop('last_actor', None)
+            if actor:
+                review['last_actor'] = actor
+                if action == 'approve':
+                    review['reviewer'] = actor
+                elif action == 'save':
+                    review['author'] = actor
             version = frame['version'] + 1
             db.execute('UPDATE frames SET review=?,status=?,version=? WHERE id=?',
                        (json.dumps(review), status, version, index))
@@ -340,19 +355,39 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None):
     check_bind_host(host)
+    if ai_jobs is not None and ai_jobs.store.db != store.db:
+        raise ValueError('AI jobs must belong to the review workspace')
+    collaboration = None
+    with store.connect() as db:
+        bound = db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone()
+    if bound and not accounts:
+        raise ValueError('collaboration-bound workspace requires its account configuration')
+    project = accounts.project_id if accounts else review_evidence.metadata(store, 'workspace_id')
+    if storage and storage.project_id != project:
+        raise ValueError('storage project must match workspace project')
+    if accounts:
+        from learning_collaboration import Collaboration
+        if not ipaddress.ip_address(host).is_loopback:
+            raise ValueError('collaboration requires loopback behind an HTTPS reverse proxy')
+        collaboration = Collaboration(accounts, store, oauth=oauth, imports=imports, repos=repos)
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
+    ai_jobs = ai_jobs if ai_jobs is not None else Jobs(store)
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None, cache='no-store'):
+            if collaboration and isinstance(data, dict) and 'token' in data:
+                data = dict(data, token=collaboration.csrf(self, token))
             if isinstance(data, (dict, list)):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
             self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', cache)
+            for name, value in getattr(self, 'extra_headers', []):
+                self.send_header(name, value)
             if etag:
                 self.send_header('ETag', etag)
             self.send_header('X-Content-Type-Options', 'nosniff')
@@ -362,13 +397,52 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
 
         def allowed_host(self):
             port = self.server.server_port
-            return self.headers.get('Host') in (f'127.0.0.1:{port}', f'localhost:{port}', f'{host}:{port}')
+            allowed = [f'127.0.0.1:{port}', f'localhost:{port}', f'{host}:{port}']
+            if collaboration and collaboration.authority:
+                allowed.append(collaboration.authority)
+            return self.headers.get('Host') in allowed
+
+        def log_message(self, fmt, *args):
+            if not collaboration:
+                super().log_message(fmt, *args)
+            # OAuth authorization codes and errors must not enter access logs.
 
         def do_GET(self):
+            self.extra_headers = []
             if not self.allowed_host():
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
+                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state):
+                    return
+                if path == '/api/accounts/options':
+                    return self.send({'enabled': False, 'oauth': False})
+                if path.startswith('/api/review-ai/'):
+                    match = re.fullmatch(r'/api/review-ai/(\d+)', path)
+                    if not match:
+                        raise ValueError('invalid AI frame path')
+                    return self.send(ai_jobs.status(int(match[1])))
+                if path.startswith('/api/review-history/'):
+                    match = re.fullmatch(r'/api/review-history/(object|pixel)/(\d+)', path)
+                    query = parse_qs(urlparse(self.path).query, strict_parsing=True, keep_blank_values=True)
+                    if (not match or set(query) - {'before', 'limit'}
+                            or any(len(values) != 1 for values in query.values())):
+                        raise ValueError('invalid review history request')
+                    return self.send(review_versions.page(store, match[1], int(match[2]),
+                        before=int(query['before'][0]) if 'before' in query else None,
+                        limit=int(query.get('limit', ['20'])[0])))
+                if path.startswith('/api/review-versions/'):
+                    match = re.fullmatch(r'/api/review-versions/(object|pixel)/(\d+)/(\d+)', path)
+                    if not match:
+                        raise ValueError('invalid review version path')
+                    return self.send(review_versions.version(store, match[1], int(match[2]), int(match[3])))
+                if path.startswith('/api/review-version-images/'):
+                    match = re.fullmatch(r'/api/review-version-images/(\d+)/(\d+)', path)
+                    if not match:
+                        raise ValueError('invalid review version image path')
+                    return self.send(review_versions.image(store, int(match[1]), int(match[2])), mime='image/png')
+                if path == '/api/learning/storage':
+                    return self.send(storage.snapshot() if storage else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
                     frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
                               for row in store.list_frames()]
@@ -432,7 +506,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
                                            if row['status'] == 'pending' and
                                            bool((review_masks.pixels(store, row) != 255).any())]
                     pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
-                                               and (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
+                                               and row['draft_candidates']]
                     latest = next(iter(store.exports()), None)
                     preparation = None
                     if latest:
@@ -482,7 +556,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
-                         '/catalog': 'catalog.html', '/catalog.js': 'catalog.js'}
+                         '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
+                         '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
+                         '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
@@ -493,10 +569,13 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
                              '.js': 'text/javascript', '.mjs': 'text/javascript'}
                     return self.send(file.read_bytes(), mime=types[file.suffix] + '; charset=utf-8')
                 self.send({'error': 'not found'}, 404)
+            except PermissionError:
+                self.send({'error': '프로젝트 접근 권한이 없습니다.'}, 403)
             except (KeyError, ValueError, OSError) as exc:
                 self.send({'error': str(exc)}, 400)
 
         def do_POST(self):
+            self.extra_headers = []
             # Consume bounded rejected bodies before responding; Windows may otherwise
             # reset the connection while the client is still transmitting its request.
             def deny():
@@ -508,11 +587,17 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
                 except (ValueError, OSError):
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
-            if not self.allowed_host() or self.headers.get('X-Pinky-Token') != token:
+            path = urlparse(self.path).path
+            login_request = collaboration and path in ('/api/accounts/login', '/api/accounts/oauth', '/api/accounts/logout')
+            expected_token = collaboration.csrf(self, token) if collaboration else token
+            if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
                 return deny()
             origin = self.headers.get('Origin')
             port = self.server.server_port
-            if origin and origin not in (f'http://127.0.0.1:{port}', f'http://localhost:{port}', f'http://{host}:{port}'):
+            origins = [f'http://127.0.0.1:{port}', f'http://localhost:{port}', f'http://{host}:{port}']
+            if collaboration and collaboration.origin:
+                origins = [collaboration.origin]
+            if (collaboration and not origin) or (origin and origin not in origins):
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
@@ -522,6 +607,44 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
                 if not isinstance(body, dict):
                     raise ValueError('JSON object required')
                 path = urlparse(self.path).path
+                if path.startswith('/api/review-ai/') and set(body) != {'action', 'version'}:
+                    raise ValueError('AI request accepts only action and version')
+                if path.startswith('/api/review-ai-cancel/') and body:
+                    raise ValueError('AI cancellation accepts an empty object only')
+                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration):
+                    return
+                actor = self.learning_principal['user_id'] if collaboration else None
+                if path.startswith('/api/review-ai/'):
+                    match = re.fullmatch(r'/api/review-ai/(\d+)', path)
+                    if not match or body['action'] not in ('object_draft', 'pixel_draft', 'mask_check') or type(body['version']) is not int:
+                        raise ValueError('invalid AI request')
+                    index = int(match[1])
+                    principal = self.learning_principal if collaboration else None
+                    authorize = (lambda _: accounts.require(principal, 'edit')) if collaboration else None
+                    with ai_jobs.guard, store.lock:
+                        current = store.get(index) if body['action'] == 'object_draft' else review_masks.get(store, index)
+                        if current['version'] != body['version']:
+                            raise Conflict('검수 버전이 바뀌었습니다. 사진을 다시 불러오세요.')
+                        job = ai_jobs.create(index, body['action'], body['version'],
+                                             actor or 'local-unidentified', authorize=authorize)
+                    return self.send(job)
+                if path.startswith('/api/review-ai-cancel/'):
+                    match = re.fullmatch(r'/api/review-ai-cancel/([a-f0-9]{32})', path)
+                    if not match:
+                        raise ValueError('invalid AI job identifier')
+                    with ai_jobs.guard, store.lock:
+                        with store.connect() as db:
+                            row = db.execute('SELECT document FROM review_ai_jobs WHERE id=?', (match[1],)).fetchone()
+                        if row is None:
+                            raise ValueError('AI job not found')
+                        job = json.loads(row[0])
+                        if collaboration and job['actor'] != actor:
+                            accounts.require(self.learning_principal, 'manage')
+                        return self.send(ai_jobs.cancel(match[1], actor or 'local-unidentified'))
+                if path == '/api/learning/storage/preflight':
+                    if not storage:
+                        raise ValueError('storage is not configured')
+                    return self.send(storage.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
                 if path == '/api/import':
@@ -541,18 +664,34 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None):
                     return self.send({'mask_png': base64.b64encode(png).decode('ascii'),
                                       'selected_pixels': count, 'tolerance': tolerance})
                 if path.startswith('/api/masks/'):
-                    return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict))
+                    return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict,
+                                                         actor=actor))
                 if path in ('/api/learning/register', '/api/learning/remove', '/api/learning/control'):
                     return self.send(learning.action(path, body, control, Conflict))
                 if path.startswith('/api/frames/'):
-                    return self.send(store.update(int(path.rsplit('/', 1)[1]), body))
+                    return self.send(store.update(int(path.rsplit('/', 1)[1]), body, actor=actor))
                 self.send({'error': 'not found'}, 404)
             except (Conflict, ControlConflict) as exc:
                 self.send({'error': str(exc)}, 409)
+            except PermissionError:
+                self.send({'error': '로그인 또는 프로젝트 권한을 확인하세요.'}, 403)
             except (ValueError, KeyError, OSError) as exc:
                 self.send({'error': str(exc)}, 400)
 
-    return ThreadingHTTPServer((host, port), Handler)
+    class Server(ThreadingHTTPServer):
+        def server_close(self):
+            ai_jobs.close()
+            if collaboration:
+                collaboration.shutdown()
+            super().server_close()
+
+    try:
+        return Server((host, port), Handler)
+    except Exception:
+        ai_jobs.close()
+        if collaboration:
+            collaboration.shutdown()
+        raise
 
 
 def main():
@@ -566,6 +705,9 @@ def main():
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--decisions-port', type=int, help='optional loopback-only current-decisions readback')
     parser.add_argument('--learning-control', type=Path, help='private binding for owned signed pipeline controls')
+    parser.add_argument('--collaboration', type=Path, help='private project account/OAuth configuration')
+    parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
+    parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -589,7 +731,23 @@ def main():
             if path:
                 db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
     control = Control(args.learning_control, review_evidence.metadata(store, 'workspace_id')) if args.learning_control else None
-    server = make_server(store, args.port, args.host, control=control)
+    accounts = oauth = imports = None
+    if args.collaboration:
+        if args.decisions_port:
+            parser.error('collaboration cannot expose unauthenticated decisions-port')
+        from learning_collaboration import load
+        accounts, oauth, imports = load(args.collaboration, store)
+    storage = None
+    if args.storage_config:
+        from storage_inventory import StorageInventory
+        try:
+            storage = StorageInventory(store.db, json.loads(args.storage_config.read_text(encoding='utf-8')),
+                accounts.project_id if accounts else review_evidence.metadata(store, 'workspace_id'))
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+    ai_jobs = Jobs(store, args.review_ai_config)
+    server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
+                         storage=storage, ai_jobs=ai_jobs)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

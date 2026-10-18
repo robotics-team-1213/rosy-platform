@@ -10,6 +10,7 @@ import { createCameraPeerPanel } from "./camera-peer.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
+import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
 import { createTrackingRelearn } from "./tracking-relearn.js";
 import { createHostServices } from "./host-services.js";
@@ -38,6 +39,7 @@ const LOG_MAX = 40;
 const discoveryGate = createPollGate();
 let peerPicker = null;
 let startPoints = null; // D-540 5 시작점 — 자기 잠금 사유(이름 있는 운영자)를 역할 적용 뒤에 다시 건다
+let measuredCalibration = null;
 
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
@@ -62,6 +64,7 @@ function operatorControls() {
 function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
   startPoints?.updateAuthorization();
+  measuredCalibration?.updateAuthorization();
 }
 
 function markLocked(reason = "auth") {
@@ -72,10 +75,6 @@ function markLocked(reason = "auth") {
   auth.role = null;
   peerPicker?.reset();
   showSignedOut({refused: reason === "auth"});
-  const pill = el("online-pill");
-  pill.textContent = "접속 전";
-  pill.setAttribute("status", "neutral");
-  pill.dataset.locked = "true"; // 해제 때 문구가 아니라 이 표시로 잠금 pill을 알아본다
   el("console-token").setAttribute("aria-invalid", "true");
   applyRole();
 }
@@ -124,6 +123,7 @@ const hostServices = createHostServices({
 // Task navigation preserves mounted owners and drafts across auth/page epochs.
 const taskChooser = createTaskChooser({beforeSelect: from => {
   if (from === "calibration") visionView.pausePreview();
+  if (from === 'calibration') measuredCalibration?.pause();
   return true;
 }, tasks: [
   {id: "peers", title: "장비 찾기", panel: el("peer-picker")},
@@ -176,6 +176,7 @@ let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
 mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
+measuredCalibration = createMeasuredCalibrationView({scope:pageScope,root:el('measured-calibration'),call,visionView,auth});
 // D-540 5 — 시작점(D-513)과 배경 다시 학습(D-539)은 `카메라 설치·보정`이 가진다. 관제 문서에는 없다.
 startPoints = createStartPointView({ scope: pageScope, el, view, call, auth, onChanged: () => mapFit.render() });
 const relearn = createTrackingRelearn({ scope: pageScope, el, call, auth, confirm: confirmIrreversible });
@@ -302,12 +303,6 @@ async function refreshAuthorization(renewed = false) {
     if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
     loginForm.refresh(false);
     showSession(identity);
-    const pill = el("online-pill");
-    if (pill.dataset.locked === "true") {
-      delete pill.dataset.locked;
-      pill.textContent = "설치 준비 중";
-      pill.setAttribute("status", "neutral");
-    }
     applyRole();
     await Promise.allSettled([
       cameraPairing.refresh({ credentials: true }),

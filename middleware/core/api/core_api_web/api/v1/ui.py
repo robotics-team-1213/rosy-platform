@@ -20,7 +20,7 @@ def surface_manifest(surface: str, request: Request, auth: AuthContext = Depends
     registry = request.app.state.ui_registry
     if surface not in registry.surfaces:
         raise ApiError("NOT_FOUND", 404, "unknown surface")
-    if auth.rank < ROLE_RANK[registry.surfaces[surface].min_role]:
+    if not auth.allows_role(registry.surfaces[surface].min_role):
         raise ApiError("FORBIDDEN", 403, "requires a higher role for this surface")
     # /system/capabilities 와 같은 CAP-001 본문을 읽는다 — 화면과 게이트가 다른 사실을 보면 안 된다.
     caps = svc.capability.to_dict()
@@ -30,4 +30,5 @@ def surface_manifest(surface: str, request: Request, auth: AuthContext = Depends
     if truth.reasons:
         caps = withhold_hardware_flags(caps, truth.reasons)
     descriptors = svc.inventory().get("descriptors", [])
-    return build_manifest(registry, surface, auth.role, caps, descriptors)
+    return build_manifest(registry, surface, auth.role, caps, descriptors,
+                          allowed_roles={role for role in ROLE_RANK if auth.allows_role(role)} if auth.account else None)

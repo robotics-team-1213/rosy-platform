@@ -1,0 +1,43 @@
+--- a/src/dynamixel_hardware_interface.cpp
++++ b/src/dynamixel_hardware_interface.cpp
+@@ -542,6 +542,22 @@
+ }
+ 
+ hardware_interface::CallbackReturn DynamixelHardware::on_deactivate(
++  [[maybe_unused]] const rclcpp_lifecycle::State & previous_state)
++{
++  return stop();
++}
++
++hardware_interface::CallbackReturn DynamixelHardware::on_error(
++  [[maybe_unused]] const rclcpp_lifecycle::State & previous_state)
++{
++  if (stop() != hardware_interface::CallbackReturn::SUCCESS) {
++    RCLCPP_ERROR_STREAM(logger_, "Dynamixel fault cleanup failed; stop remains unverified");
++  }
++  // Cleanup success does not recover the fault or admit another command.
++  return hardware_interface::CallbackReturn::ERROR;
++}
++
++hardware_interface::CallbackReturn DynamixelHardware::on_shutdown(
+   [[maybe_unused]] const rclcpp_lifecycle::State & previous_state)
+ {
+   return stop();
+--- a/include/dynamixel_hardware_interface/dynamixel_hardware_interface.hpp
++++ b/include/dynamixel_hardware_interface/dynamixel_hardware_interface.hpp
+@@ -152,6 +152,15 @@
+   hardware_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state)
+   override;
+ 
++  // Fault and shutdown transitions must attempt torque disable as well.
++  DYNAMIXEL_HARDWARE_INTERFACE_PUBLIC
++  hardware_interface::CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state)
++  override;
++
++  DYNAMIXEL_HARDWARE_INTERFACE_PUBLIC
++  hardware_interface::CallbackReturn on_shutdown(const rclcpp_lifecycle::State & previous_state)
++  override;
++
+   /**
+    * @brief Reads data from the hardware.
+    * @param time Current time.

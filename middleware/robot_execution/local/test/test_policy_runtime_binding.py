@@ -12,8 +12,9 @@ import pytest
 
 from test_omx_policy_session import setup_session, candidate, ROOT
 from rosy.execution.local.policy_journal import PolicyExecutionJournal
-from omx_adapter.command_owner import JointStateSnapshot, CommandDecision
+from omx_adapter.command_owner import JointStateSnapshot, CommandDecision, TrajectoryCommand
 from omx_adapter.ros_goal_contract import RosGoalEvent
+from omx_adapter.joint_state_intake import JointStateIntake
 
 
 def runtime_methods(session, client):
@@ -25,7 +26,7 @@ def runtime_methods(session, client):
              '_dispatch_goal_event', '_on_joint_state', '_watchdog_tick', 'submit', '_submit_policy'}
     cls.body = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in names]
     scope = dict(RosGoalEvent=RosGoalEvent, Callable=Callable, JointStateSnapshot=JointStateSnapshot,
-                 CommandDecision=CommandDecision, JointState=Any)
+                 CommandDecision=CommandDecision, TrajectoryCommand=TrajectoryCommand, JointState=Any, Any=Any)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(file), 'exec',
                  flags=__future__.annotations.compiler_flag, dont_inherit=True), scope)
     runtime = scope['RosArmCommandRuntime'].__new__(scope['RosArmCommandRuntime'])
@@ -39,12 +40,22 @@ def runtime_methods(session, client):
     runtime._goal_event_lock = threading.RLock()
     runtime._phase_event_sinks = {}
     runtime._observer_goal_event = None
-    runtime._sequence = 10
+    runtime._joint_state_intake = JointStateIntake(session.owner.config)
+    runtime._joint_state_intake._sequence = session.owner._highest_observed_sequence
+    clock = SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=int(runtime.monotonic()*1e9)))
+    runtime._node = SimpleNamespace(get_clock=lambda: clock)
     runtime.latest_joint_state = None
     runtime.last_terminal_decision = None
     runtime.last_decision = CommandDecision(True, 'ready', 'ready')
     client.last_handle = None
     return runtime
+
+
+def joint_message(runtime):
+    ns = int(runtime.monotonic()*1e9)
+    stamp = SimpleNamespace(sec=ns//1_000_000_000, nanosec=ns%1_000_000_000)
+    return SimpleNamespace(name=['joint_1','joint_2'], position=[.1,0.],
+                           header=SimpleNamespace(stamp=stamp))
 
 
 def attached(tmp_path, camera=False):
@@ -57,7 +68,7 @@ def attached(tmp_path, camera=False):
 
 def test_same_runtime_observes_once_registers_before_send_and_preserves_source_bytes(tmp_path):
     session, runtime, client, clock, authority, journal, root = attached(tmp_path)
-    runtime._on_joint_state(SimpleNamespace(name=['joint_1','joint_2'], position=[.1, 0.]))
+    runtime._on_joint_state(joint_message(runtime))
     assert session._snapshot.sequence == session.owner._joint_state.sequence == 11
     assert session.owner.state == 'ready'
     send = client.send_goal
@@ -137,7 +148,7 @@ def test_raw_command_bypasses_are_denied(tmp_path, path):
     client.handles[0].finished = client.handles[0].success = True
     runtime._watchdog_tick()
     assert session.owner.state == 'ready'
-    runtime._on_joint_state(SimpleNamespace(name=['joint_1','joint_2'],position=[.1,0.]))
+    runtime._on_joint_state(joint_message(runtime))
     command = replace(client.commands[0], command_id=str(uuid4()), source_state_sequence=11)
     denied = runtime.submit(command) if path == 'runtime' else session.owner.submit(command)
     assert not denied.accepted

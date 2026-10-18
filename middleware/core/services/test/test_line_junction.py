@@ -78,7 +78,9 @@ def test_idle_tracks_and_reports_idle():
     assert decision.linear > 0 and status.state == 'TRACKING'
     assert status.junction.model_dump() == dict(pending_action=None, place_id=None, state='idle',
                                                 seq=0, turn_deg=None, reason=None, pivot_basis=None,
-                                                signal_request_id=None, signal_state=None)
+                                                signal_request_id=None, signal_state=None,
+                                                map_entry_used=False, map_entry_reason=None,
+                                                distance_basis=None, distance_basis_reason=None)
 
 
 def test_no_instruction_at_a_junction_waits_and_latches():
@@ -373,10 +375,15 @@ def test_turn_times_out():
     assert status.reason == 'junction_aborted'
 
 
-def test_odom_stale_aborts():
+def test_odom_stale_holds_then_aborts_past_lost_after_s():
+    """D-507 note 14: a stale odom holds the turn at zero (junction_pose_gap); past lost_after_s it aborts."""
     rig = Rig()
     _to_turning(rig, 90.)
     rig.now += .3  # the last odom sample is now older than 0.3 s
+    decision, status = rig.step(seen=False, pose=False)
+    assert (status.junction.state, status.reason) == ('turning', 'junction_pose_gap')
+    assert (decision.linear, decision.angular) == (0., 0.)
+    rig.now += rig.m._config.lost_after_s
     decision, status = rig.step(seen=False, pose=False)
     assert (status.junction.state, status.junction.reason) == ('aborted', 'odom')
     assert (decision.linear, decision.angular) == (0., 0.)

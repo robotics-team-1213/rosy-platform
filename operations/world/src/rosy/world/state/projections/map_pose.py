@@ -128,6 +128,8 @@ class OdomSample:
     y: float
     yaw: float
     stamp: float
+    #: D-758 0: CORE's odom epoch (snapshot `odom_pose.epoch`); None from a CORE before v1.234.
+    epoch: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -204,7 +206,9 @@ def odom_from_snapshot(state: Optional[Mapping]) -> Optional[OdomSample]:
     stamp = float(stamp) if _finite(stamp) else parse_utc(stamp)
     if stamp is None or not _finite(x, y, yaw):
         return None
-    return OdomSample(float(x), float(y), float(yaw), stamp)
+    epoch = raw.get("epoch")  # D-758 0: anything but a count is no epoch (today's rule)
+    return OdomSample(float(x), float(y), float(yaw), stamp,
+                      epoch if type(epoch) is int and epoch >= 0 else None)
 
 
 def sighting_from_row(row: Optional[Mapping]) -> Optional[Sighting]:
@@ -253,6 +257,7 @@ class MapPoseTracker:
         self._refused = 0
         self._refused_reason: Optional[str] = None
         self._epoch = 0   # D-581: odom resets so far (odom_to_map)
+        self._core_epoch: Optional[int] = None  # D-758 0: the robot's odom epoch last sent
         self._survey_breaks = 0  # rejected observations break recording, not the operational anchor
 
     @property
@@ -309,6 +314,11 @@ class MapPoseTracker:
                 self.refuse_odom("out_of_order")
             return False           # the same sample read twice is not a refusal
         pose = (sample.x, sample.y, sample.yaw)
+        if sample.epoch is not None:  # D-758 0: CORE says its odom restarted, jump or not
+            if last is not None and self._core_epoch is not None and sample.epoch != self._core_epoch:
+                self._reset(sample.stamp)
+                last = None
+            self._core_epoch = sample.epoch
         if last is not None:
             dt = sample.stamp - last.stamp
             step = math.dist(last.pose[:2], pose[:2])

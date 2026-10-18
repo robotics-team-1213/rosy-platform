@@ -2095,7 +2095,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
         # D-493: document navigation owns one link to each other document; recovery CTAs may repeat a destination.
-        for href in ("/console/install", "/console/site-map", "/console/cell"):
+        for href in ("/console/install", "/console/site-map", "/console?view=work", "/console?view=records"):
             assert page.get_by_role("navigation", name="Rosy Fleet 문서", exact=True).locator(f'a[href="{href}"]').count() == 1, href
         assert page.locator('.install-link, .device-link').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
@@ -2466,8 +2466,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
-        # D-540 (d): goal, trip, cancel, LED and map pin wrap whole, never wider than the row.
-        assert len(action_widths) == 5 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        # D-540 (d), D-440 6: goal, trip, cancel, LED, map pin and sleep/wake wrap whole, never wider than the row.
+        assert len(action_widths) == 6 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
         assert all(w <= actions_width + 1 for w in action_widths), action_widths
         _open_cards(page)
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
@@ -2495,7 +2495,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          inbox: document.querySelector('#fleet-theme').getBoundingClientRect().toJSON(),
+          inbox: document.querySelector('#fleet-inbox').getBoundingClientRect().toJSON(),
           stopScopeHidden: (() => {
             const small = document.querySelector('#estop small');
             return !!small && getComputedStyle(small).display === 'none';
@@ -2504,8 +2504,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
         if width <= 320:
-            # D-501: the Cell link lives in the document tab row, visible without opening settings.
-            assert page.locator('.doc-tabs a[href="/console/cell"]').is_visible()
+            # D-741 2: the work area link lives in the rail, visible without opening settings.
+            assert page.locator('.doc-tabs a[href="/console?view=work"]').is_visible()
         browser.close()
     assert errors == []
     assert layout["overflow"] == 0, layout["outside"]
@@ -2513,14 +2513,12 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["status"]["right"] <= width, layout
     assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
-    assert layout["headerRows"] <= 2, layout  # D-641: identity/connection and status/inbox, clock in footer.
+    assert layout["headerRows"] == 1, layout  # D-741 5: one row down to 320px.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # D-641/D-668: compact header keeps the status center and theme on one row; the clock belongs to the flow footer.
-        status, inbox = layout["status"], layout["inbox"]
-        assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
-        assert layout["clock"]["height"] > 0, layout
-        assert layout["clock"]["top"] >= layout["stop"]["bottom"], layout
+        # D-741 3: the clock lives in the app bar and folds below 48rem; the robot count sits in the map head.
+        assert layout["status"]["top"] >= layout["stop"]["bottom"], layout
+        assert layout["clock"]["height"] == 0, layout
         assert layout["stopScopeHidden"], layout
         # 보이는 동사는 비상 정지. 래치 부제는 이 폭에서 숨고, 접근 이름은 보이는 글이다.
         assert layout["stopVerb"] == "비상 정지", layout
@@ -2576,8 +2574,10 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             stop: box('#estop'), more: box('#topbar-more'),
             expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
             token: shown('#console-token'), theme: shown('#fleet-theme'), role: shown('#user-role'),
+            roleText: document.querySelector('#user-role').textContent.trim(),
+            moreName: document.querySelector('#topbar-more').getAttribute('aria-label'),
             status: shown('#online-pill'), clock: shown('#clock'),
-            clockInFooter: !!document.querySelector('footer.fleet-footer #clock'),
+            footer: !!document.querySelector('footer'),
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)
@@ -2595,11 +2595,16 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     assert folded["sticky"] == "sticky", folded
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
-    assert folded["expanded"] == "false" and not folded["token"] and folded["theme"] and not folded["role"], folded
-    assert folded["status"] and folded["clock"] and folded["clockInFooter"], folded
-    assert not folded["clockInHeader"], folded
+    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"], folded
+    # D-741 3: below 30rem the role text folds (fleet-header.css); the account button's name says the role.
+    role_text_shown = width >= 480
+    for state in (folded, opened):
+        assert state["role"] == role_text_shown, state
+        assert state["roleText"] and state["moreName"].startswith(f"계정과 접속 · {state['roleText']}"), state
+    assert folded["status"] and not folded["clock"] and not folded["footer"], folded
+    assert folded["clockInHeader"], folded
     assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
-    assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
+    assert opened["expanded"] == "true" and opened["token"] and opened["theme"], opened
     assert opened["overflow"] <= 0, opened
     assert scrolled["expanded"] == "false", scrolled
     assert 0 <= scrolled["stop"]["top"] and scrolled["stop"]["bottom"] <= height, scrolled
@@ -2615,8 +2620,8 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
-            # D-668: 테마는 접히지 않는 버튼 하나다. 접속 상세는 상태 센터 뒤에 접혀 있다.
-            assert page.locator('#fleet-theme').is_visible()
+            # D-741 3: 화면 표시와 접속 상세는 계정 단추 아래에 접혀 있다.
+            assert page.locator('#fleet-theme').is_hidden()
             assert page.locator('#topbar-extra').is_hidden()
             results[width] = page.evaluate("""() => {
               const more = document.querySelector('#topbar-more');
@@ -2891,11 +2896,19 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
           const more = document.getElementById('topbar-more');
           const next = more.getClientRects().length ? more.getBoundingClientRect() : null;
           return {lines, textRight: text.right, boxRight: b.getBoundingClientRect().right,
-                  nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null};
+                  nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null,
+                  wordWidth: document.querySelector('.fleet-wordmark').getBoundingClientRect().width,
+                  brandWidth: document.querySelector('ui-brand').getBoundingClientRect().width,
+                  name: document.querySelector('ui-brand a').getAttribute('aria-label')};
         }""")
         browser.close()
 
     assert errors == []
+    if width < 480:
+        # D-741 5: below 30rem the wordmark text folds to the R mark; the link keeps its name.
+        assert mark["wordWidth"] <= 1 and mark["brandWidth"] > 0, mark
+        assert mark["name"] == "Rosy Fleet 관제 홈", mark
+        return
     assert mark["lines"] == 1, mark
     assert mark["textRight"] <= mark["boxRight"] + 0.5, mark
     if mark["nextLeft"] is not None:

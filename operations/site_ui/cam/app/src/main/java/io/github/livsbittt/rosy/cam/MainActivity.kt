@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -51,6 +52,9 @@ import io.github.livsbittt.rosy.cam.health.ScreenPower
 import io.github.livsbittt.rosy.cam.health.ScreenCoolingPolicy
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerViewModel
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerState
+import io.github.livsbittt.rosy.cam.ui.CamAppBar
+import io.github.livsbittt.rosy.cam.ui.CamBar
+import io.github.livsbittt.rosy.cam.ui.CamPath
 import io.github.livsbittt.rosy.cam.ui.CameraLanScreen
 import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
 
@@ -60,6 +64,31 @@ import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
  * confirms, so a stray link cannot silently redirect frames to another host.
  */
 class MainActivity : ComponentActivity() {
+    private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
+    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private var accountVersion = 0L
+    private val accountReady = mutableStateOf(false)
+    private val accountName = mutableStateOf<String?>(null)
+    private val accountMessage = mutableStateOf("Rosy Account로 로그인하세요")
+    private fun accountResource() = account!!.config.resources.single { it.startsWith("site:") }
+    private fun handleAccountIntent(incoming: Intent?): Boolean {
+        if (!accountConfigured || account?.isCallback(incoming) != true) return false
+        val callback = incoming?.dataString ?: return true
+        incoming.data = null
+        val version = ++accountVersion
+        accountName.value = null
+        lifecycleScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
+                val resource = account!!.session.complete(callback)
+                account!!.session.refreshProfile(resource)
+                account!!.session.permits(resource, "camera.manage")
+            }.getOrDefault(false) }
+            if (version != accountVersion) return@launch
+            accountName.value = if (ok) account!!.session.profile(accountResource())?.optString("display_name") else null
+            accountReady.value = ok; accountMessage.value = if (ok) "로그인됨" else "로그인 상태와 카메라 관리 권한을 확인하세요"
+        }
+        return true
+    }
     private val pendingPairing = mutableStateOf<PairingUri?>(null)
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
@@ -74,7 +103,7 @@ class MainActivity : ComponentActivity() {
         screenPower = ScreenPower(this)
         settings = SettingsStore(applicationContext)
         if (savedInstanceState == null) {
-            handlePairingIntent(intent)
+            if (!handleAccountIntent(intent)) handlePairingIntent(intent)
         } else {
             restorePendingPairing(savedInstanceState)
         }
@@ -105,7 +134,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handlePairingIntent(intent)
+        if (!handleAccountIntent(intent)) handlePairingIntent(intent)
     }
     override fun onStop() {
         if (!isChangingConfigurations) cameraPeerModel.close()
@@ -141,8 +170,55 @@ class MainActivity : ComponentActivity() {
         if (requestCode == ScreenPower.REQUEST_SCREEN_LOCK && screenPower.approved()) screenPower.sleep()
     }
 
+    /** D-741 3: one app bar above every screen, also before login. The stream screen has no title under it, so the preview keeps its height. Cam commands nothing, so it has no stop seat. */
     @Composable
     private fun OverheadApp() {
+        val state by StreamService.state.collectAsStateWithLifecycle()
+        val stored by settings.stored.collectAsStateWithLifecycle(initialValue = SiteLinkPrefs.Stored(null))
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
+            CamAppBar(CamBar.from(state, stored.link))
+            AccountContent()
+        }
+    }
+    @Composable
+    private fun AccountContent() {
+        if (!accountConfigured) { CameraContent(); return }
+        LaunchedEffect(Unit) {
+            while (true) {
+                val version = accountVersion
+                val ready = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    account!!.session.refreshProfile(accountResource())
+                    runCatching { account!!.session.permits(accountResource(), "camera.manage") }.getOrDefault(false)
+                }
+                if (version == accountVersion) {
+                    if (!ready) { pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null }
+                    accountReady.value = ready
+                    accountName.value = if (ready) account!!.session.profile(accountResource())?.optString("display_name") else null
+                }
+                kotlinx.coroutines.delay(10000)
+            }
+        }
+        Column {
+            if (accountReady.value) {
+                TextButton(onClick = { account!!.manageProfile(this@MainActivity) }) {
+                    Text("${accountName.value ?: "프로필 확인 불가"} · 프로필 관리")
+                }
+                TextButton(onClick = {
+                    accountVersion++; accountReady.value = false; accountName.value = null; pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null
+                    lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
+                        accountMessage.value = if (ok) "로그아웃됨" else "앱에서 로그아웃했습니다. 서버 세션 회수를 다시 시도합니다" }
+                }) { Text("Rosy Account 로그아웃 / 계정 변경") }
+                CameraContent()
+            } else {
+                Text(accountMessage.value)
+                Text("카메라 관리에는 계정 권한이 필요합니다. 기존 기계 전송은 유지됩니다.")
+                TextButton(onClick = { account!!.launch(this@MainActivity, accountResource()) }) { Text("Rosy Account 로그인") }
+                TextButton(onClick = { StreamService.stop(this@MainActivity) }) { Text("전송 정지") }
+            }
+        }
+    }
+    @Composable
+    private fun CameraContent() {
         val state by StreamService.state.collectAsStateWithLifecycle()
         LaunchedEffect(state.health, state.running) {
             if (state.running && screenCooling.requestSleep(state.health)) sleepScreen(false)
@@ -200,12 +276,14 @@ class MainActivity : ComponentActivity() {
         val rememberedPeers by cameraPeerModel.remembered.collectAsStateWithLifecycle()
         val current = attempt
         if (peerState != CameraPeerState.Idle && !state.running) {
+            CamPath(stringResource(R.string.peer_title))
             CameraPeerScreen(peerState, cameraPeerModel::confirmCertificate, cameraPeerModel::close, cameraPeerModel::open,
                 onDone = { cameraPeerModel.close(); showLan = false }, onForget = cameraPeerModel::forget)
         } else if (current != null) {
             val session = current.session
             val pairingState by session.state.collectAsStateWithLifecycle()
             val busy by session.busy.collectAsStateWithLifecycle()
+            CamPath(stringResource(R.string.pairing_title))
             PairingScreen(
                 site = current.site,
                 state = pairingState,
@@ -219,6 +297,7 @@ class MainActivity : ComponentActivity() {
                 },
             )
         } else if (showLan && !showSettings && !state.running) {
+            CamPath(stringResource(R.string.lan_title))
             CameraLanScreen(onSelect = { record ->
                 val site = PairableSite(record.name, record.tlsHost, record.port, record.address)
                 if (record.peerApproval) cameraPeerModel.open(site)
@@ -226,6 +305,7 @@ class MainActivity : ComponentActivity() {
             }, onSettings = { showSettings = true }, onCurrent = if (siteLink == null) null else ({ showLan = false }),
                 remembered = rememberedPeers, onRemembered = cameraPeerModel::open)
         } else if (showSettings) {
+            CamPath(stringResource(R.string.settings_title))
             SettingsScreen(
                 currentLink = siteLink,
                 locked = state.running,

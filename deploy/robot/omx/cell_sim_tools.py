@@ -24,11 +24,27 @@ from pathlib import Path
 WORLD = "omx_cell_workcell"
 
 
-_ARM_OWNERS = ("pilot_sim_server", "probe_cell_transfer", "run_cell_owner")
+_ARM_OWNERS = ("pilot_sim_server", "probe_cell_transfer", "run_cell_owner", "run_hardware_owner")
 
 
-def refuse_second_owner(proc_root: Path | str = "/proc") -> None:
-    """Refuse to start next to another /arm_controller writer (D-390 §3, D-403 §8)."""
+def _process_namespace(proc: Path) -> str | None:
+    """The other owner's ROSY_OMX_ROS_NAMESPACE ("/" when unset), or None when unreadable."""
+    try:
+        entries = (proc / "environ").read_bytes().split(b"\0")
+    except OSError:
+        return None
+    for entry in entries:
+        if entry.startswith(b"ROSY_OMX_ROS_NAMESPACE="):
+            return entry.split(b"=", 1)[1].decode(errors="ignore")
+    return "/"
+
+
+def refuse_second_owner(proc_root: Path | str = "/proc", *, namespace: str = "/") -> None:
+    """Refuse to start next to another arm_controller writer in the same graph (D-390 §3, D-403 §8).
+
+    Two arms on one host run in different instance namespaces (D-778 §1); an owner in another
+    namespace is allowed. An owner whose namespace cannot be read counts as the same graph.
+    """
     mine = {os.getpid(), os.getppid()}
     for proc in Path(proc_root).iterdir():
         if not proc.name.isdigit() or int(proc.name) in mine:
@@ -39,6 +55,9 @@ def refuse_second_owner(proc_root: Path | str = "/proc") -> None:
             continue
         cmd = b" ".join(argv).decode(errors="ignore")
         if b"python" in argv[0] and any(owner in cmd for owner in _ARM_OWNERS):
+            other = _process_namespace(proc)
+            if other is not None and other != namespace:
+                continue
             raise RuntimeError(f"another arm owner process is running (pid {proc.name}): {cmd[:80]}")
 
 

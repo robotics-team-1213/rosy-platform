@@ -128,7 +128,7 @@ class RosyCoreNode(Node):
                                f"{params.revision if params else '-'}")
         self.core.state.set_safety_policy_provider(lambda: safety_policy_block(
             configured_mode, self.control_adapter, params, self.core.safety.shadow,
-            self.core.safety.shadow_record_errors))
+            self.core.safety.shadow_record_errors, self.core.safety))
 
         from core.system.ros_graph import RosGraphMonitor
         self.ros_graph_monitor = RosGraphMonitor(self)
@@ -167,7 +167,8 @@ class RosyCoreNode(Node):
 
     def _start_events(self) -> None:
         def _on_event(event) -> None:
-            self.get_logger().debug("event %s seq=%d", event.type, event.seq)
+            # rclpy logger는 %-포맷 인자를 받지 않는다. 넘기면 TypeError가 나고 bus가 삼킨다.
+            self.get_logger().debug(f"event {event.type} seq={event.seq}")
 
         self.core.events.subscribe(_on_event)
 

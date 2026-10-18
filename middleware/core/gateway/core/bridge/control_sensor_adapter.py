@@ -317,7 +317,8 @@ class ControlSensorAdapter:
         if self.config.mode == "shadow":
             safety.bind_shadow_control_policy(self.policy)
         else:
-            safety.bind_control_policy(self.policy)
+            # D-400 4: enforce holds a sensor gap shorter than stale_hold_s instead of latching.
+            safety.bind_control_policy(self.policy, stale_hold_s=self.config.stale_hold_s)
         return True
 
     def return_proof_configured(self):

@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-12 · d7008e6b4 · 선택 status 미설치와 conversation 설치 분리
-- 2026-10-12 · d905c939b · ingress dispatcher 경로 접근 복구
-- 2026-10-12 · 7ead3df40 · 보호 conversation 버전의 검토된 교체
-- 2026-10-12 · a5925d7ae · D-728 이전 턴 의미 평가 동결
-- 2026-10-12 · a60550e41 · conversation broker 관리자 설치
+- 2026-10-19 · uncommitted · 이미지 마운트 정리 실패 보존
+- 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
+- 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
+- 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)
+- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증

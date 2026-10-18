@@ -1,7 +1,11 @@
 """D-494 decision 4: POST /api/v1/line-follow/junction, its gate and the snapshot field."""
 import json
+from dataclasses import replace
+
+import pytest
 
 from core.bridge import observation
+from core.line_follow_wiring import _line_follow_config
 from core_features.line_follow.manager import LineFollowMode, LineObservation
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
@@ -54,7 +58,9 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
     assert snapshot["junction"] == {"pending_action": "left", "place_id": "J2",
                                     "state": "unresolved", "seq": 2, "turn_deg": None,
                                     "reason": None, "pivot_basis": None,
-                                    "signal_request_id": None, "signal_state": None}
+                                    "signal_request_id": None, "signal_state": None,
+                                    "map_entry_used": False, "map_entry_reason": None,
+                                    "distance_basis": None, "distance_basis_reason": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
@@ -161,9 +167,13 @@ def test_refused_while_manual_control_is_active(core_client):
     """Review L6: the same manual-released rule as the other motion endpoints."""
     client, services = core_client()
     services.state.set_velocity(0.0, 0.0)
+    # The 500 ms teleop watchdog runs on the wall clock; a slow CI runner between the two
+    # requests expires the session (= no manual control), so pin it. Expiry has its own test.
+    services.command.watchdog.timeout_ms = 60_000
     assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
     assert client.post("/api/v1/teleop", json={"linear": 0.05, "angular": 0.0},
                        headers=OPERATOR).status_code == 200
+    assert services.command.manual_active
     refused = client.post(URL, json=BODY, headers=OPERATOR)
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "MODE_CONFLICT"
 
@@ -249,16 +259,72 @@ def test_d507_bend_fields_validation(core_client):
     client, services, clock = _active(core_client)
     for bad in ({"turn_deg": None}, {"turn_deg": 0}, {"turn_deg": 91}, {"map_id": None},
                 {"bend_in_m": None}, {"bend_in_m": 2.01}, {"bend_tol_m": 0.31}, {"bend_radius_m": 0.51},
-                {"expect_in_m": 0.5, "expect_tol_m": 0.1}, {"pivot_past_line_m": 0.1}, {"advance_m": 0.1}):
+                {"expect_in_m": 0.5, "expect_tol_m": 0.1}, {"pivot_past_line_m": 0.1}, {"advance_m": 0.1},
+                {"next_line_in_m": -0.01}, {"next_line_in_m": 2.01}):  # D-754
         body = {k: v for k, v in {**BEND, **bad}.items() if v is not None}
         assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, body
     assert client.post(URL, json={**BODY, "bend_in_m": 0.5}, headers=OPERATOR).status_code == 400
+    assert client.post(URL, json={**BODY, "next_line_in_m": 0.5}, headers=OPERATOR).status_code == 400
     refused = client.post(URL, json=BEND, headers=OPERATOR)  # no odom: the travel cannot start
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ODOM_STALE"
     _pose(services, clock)
     assert client.post(URL, json=BEND, headers=OPERATOR).json() == {
         "accepted": True, "junction_seq": 1, "state": "armed"}
     assert client.post(URL, json={**BEND, "turn_deg": -40}, headers=OPERATOR).json()["junction_seq"] == 2
+    for line in (0, 2.0):  # D-754: the optional next line reaches the manager
+        assert client.post(URL, json={**BEND, "place_id": f"B{line}", "next_line_in_m": line},
+                           headers=OPERATOR).json()["accepted"] is True
+        assert services.line_follow._junction["next_line"] == line
+
+
+ENTRY = {"yaw_rad": 3.1416, "pose_yaw_rad": 2.9, "odom_stamp_s": 1.0}
+
+
+def test_d759_bend_map_entry_validation_and_record(core_client):
+    client, services, clock = _active(core_client)
+    for bad in ({"yaw_rad": None}, {"yaw_rad": 7.0}, {"pose_yaw_rad": None}, {"pose_yaw_rad": "west"},
+                {"odom_stamp_s": None}, {"odom_stamp_s": 0}, {"odom_stamp_s": -1.0}):
+        entry = {k: v for k, v in {**ENTRY, **bad}.items() if v is not None}
+        assert client.post(URL, json={**BEND, "map_entry": entry}, headers=OPERATOR).status_code == 400, bad
+    for entry in ([1.0, 2.0], "entry", {}):
+        assert client.post(URL, json={**BEND, "map_entry": entry}, headers=OPERATOR).status_code == 400
+    assert client.post(URL, json={**BODY, "map_entry": ENTRY}, headers=OPERATOR).status_code == 400
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).bend_map_entry_enabled is False       # off by default
+    assert _line_follow_config({"bend_map_entry_enabled": True}).bend_map_entry_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"bend_map_entry_enabled": "true"})
+    assert client.post(URL, json={**BEND, "map_entry": ENTRY}, headers=OPERATOR).json()["state"] == "armed"
+    assert lf._junction["map_entry"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, bend_map_entry_enabled=True)
+    client.post(URL, json={**BEND, "place_id": "B3", "map_entry": ENTRY}, headers=OPERATOR)
+    assert lf._junction["map_entry"] == {"reason": "stale"}  # a stamp of 1970
+    junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "stale")
+    client.post(URL, json={**BEND, "place_id": "B2"}, headers=OPERATOR)
+    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "none_sent")
+
+
+def test_d759_rev1_turn_map_entry_validation_and_record(core_client):
+    client, services, clock = _active(core_client)
+    turn = {**BODY, "action": "right", "turn_deg": -108.1}
+    for bad in ({**BODY, "action": "stop"}, {**BODY, "action": "left"}):  # no turn_deg: no exit heading
+        assert client.post(URL, json={**bad, "map_entry": ENTRY}, headers=OPERATOR).status_code == 400, bad
+    assert client.post(URL, json={**turn, "map_entry": {**ENTRY, "yaw_rad": 7.0}}, headers=OPERATOR).status_code == 400
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).turn_map_entry_enabled is False       # off by default
+    assert _line_follow_config({"turn_map_entry_enabled": True}).turn_map_entry_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"turn_map_entry_enabled": "true"})
+    assert client.post(URL, json={**turn, "map_entry": ENTRY}, headers=OPERATOR).json()["state"] == "armed"
+    assert lf._junction["map_entry"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, turn_map_entry_enabled=True)
+    client.post(URL, json={**turn, "place_id": "J3", "map_entry": ENTRY}, headers=OPERATOR)
+    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "stale")  # a stamp of 1970
 
 
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
@@ -275,3 +341,26 @@ def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
         raw = json.dumps({"reason": "no_boundary", "stamp": clock["t"], "junction_ahead_v": marker})
         observation.keep_junction(services, raw, source_now=clock["t"], received_at=clock["t"])
         assert services.line_follow.supports_junction_pivot is on, marker
+
+
+def test_d767_pose_stamp_validation_and_refusal(core_client):
+    client, services, clock = _active(core_client)
+    for bad in (0, -1.0, "now", "1.5", True, [1.0]):  # review: strict, no JSON true or numeric string
+        assert client.post(URL, json={**BEND, "pose_stamp": bad}, headers=OPERATOR).status_code == 400, bad
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).instruction_stamp_enabled is False       # off by default
+    assert _line_follow_config({"instruction_stamp_enabled": True}).instruction_stamp_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"instruction_stamp_enabled": "true"})
+    response = client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INSTRUCTION_STAMP_UNUSABLE"
+    assert response.json()["error"]["detail"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, instruction_stamp_enabled=True)
+    response = client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR)  # a stamp of 1970
+    assert (response.status_code, response.json()["error"]["detail"]) == (409, {"reason": "no_sample"})
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["state"] == "idle"
+    assert client.post(URL, json=BEND, headers=OPERATOR).json()["state"] == "armed"
+    junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
+    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "none_sent")

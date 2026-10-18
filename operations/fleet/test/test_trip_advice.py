@@ -153,6 +153,7 @@ def test_advice_failure_never_affects_the_authority(monkeypatch):
                             junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                             blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(),
                             authority=True, signal_advice=True)
+        runner.authority.quiet_until = float("-inf")  # D-760 5: long after Fleet started
         monkeypatch.setattr(runner.traffic, "signal_ahead", lambda robot_id: AHEAD)
         _trip(runner, store, fleet, "a", "east:fwd", 0.3)
         assert runner.view("a")["caps"]["line_follow_advice"] is True

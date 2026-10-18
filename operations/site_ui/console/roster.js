@@ -6,8 +6,10 @@
 import { NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL,
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
+import { createPowerButton } from "/console/assets/power-action.js";
+import { createRobotAppActions } from "/console/assets/device-discovery.js";
 import { addressReason } from "/console/assets/address-drift.js";
-import { linkTag } from "./link-tag.js";
+import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
@@ -295,6 +297,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       }
       head.appendChild(linkNode);
     }
+    const unbounded = view.stateUnavailable ? null : ruleMTag(robot.rule_m);
+    if (unbounded) {
+      const boundNode = tag(unbounded.word, unbounded.kind);
+      boundNode.title = unbounded.text;
+      head.appendChild(boundNode);
+    }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
     head.appendChild(tag(
@@ -325,14 +333,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     node.appendChild(head);
-    const context = nodeWithText('div', 'robot-actions');
-    const recording = nodeWithText('a', '', '지도 기록');
-    recording.href = `/console/site-map?robot=${encodeURIComponent(robot.robot_id)}#teach-heading`;
-    recording.dataset.mapRecording = '';
+    const context = createRobotAppActions(robot.robot_id, view.robotPeers, nodeWithText);
     const group = nodeWithText('ui-button', '', '대형·대열 관리');
     group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
     group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
-    context.append(recording, group); node.appendChild(context);
+    context.append(group); node.appendChild(context);
     if (role) node.appendChild(nodeWithText('p', 'hint',
       `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).
@@ -654,34 +659,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    // D-440 6: sleep / wake is CORE's own power API. CORE keeps a robot that is not IDLE awake.
-    const asleep = ["STANDBY", "IDLE"].includes(state.power?.mode);
-    const powerName = asleep ? "깨우기" : "절전";
-    const power = document.createElement("ui-button");
-    power.setAttribute("kind", "quiet");
-    power.type = "button";
-    power.dataset.powerAction = asleep ? "wake" : "sleep";
-    power.textContent = powerName;
-    blockWith(power, !isOperator() ? "운영자 권한이 필요합니다"
-      : namedReason() ? namedReason()
-      : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
-        : !asleep && state.mode !== "IDLE" ? "일하는 로봇은 절전할 수 없습니다" : "");
-    power.addEventListener("click", scope.guard(async () => {
-      try {
-        const answer = await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/power`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: power.dataset.powerAction }),
-        });
-        const got = answer.result?.mode;
-        // CORE answers with the mode it is in now: a refused sleep comes back ACTIVE.
-        const done = got ? (asleep ? got === "ACTIVE" : got !== "ACTIVE") : null;
-        log(`${robot.robot_id} ${powerName} · ${done === false ? "로봇이 받아들이지 않았습니다" : enumLabel(POWER_MODE_LABEL, got, "CORE 응답 확인")}`,
-          done === false ? "bad" : "good");
-      } catch (error) {
-        if (error.name !== "AbortError") log(`${robot.robot_id} ${powerName} 실패 · ${error.message}`, "bad");
-      }
-    }));
-    actions.append(aim, pin, trip.toggle(robot), cancel, identify, power);
+    const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith });
+    actions.append(aim, pin, trip.toggle(robot), cancel, identify, powerButton);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = document.createElement("ui-button");

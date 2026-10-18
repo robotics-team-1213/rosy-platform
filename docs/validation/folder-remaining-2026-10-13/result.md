@@ -4,14 +4,14 @@
 
 | 단계 | local main에 포함된 commit |
 |---|---|
-| S3 | `8acaebe047493a5c5af7aa3bd3ccefcd52da4766` |
-| S4 | `57c99647dff3517c724371d64b909354606f319a` |
-| S5 | `575fa2466cc93b9aced696f39dff76d56d41a6de` |
-| S6 | `2134e03b64ff06e67fd2db83a64d8b50173d96ca` |
-| S7 | `2e96da6dddf5a4b15dbaeaf5f5dee7a447bd1b73` |
-| S8 | `5b5eb527c7e647adac9f58187394e80702f78c66` |
-| S9 | `cb827166368bccfdefa657bade4c56c82e8e3f19` |
-| S10 | `10581c1cea9e610cdda41b5ad43248b5ac573d89` |
+| S3 | `8acaebe047` |
+| S4 | `57c99647df` |
+| S5 | `575fa2466c` |
+| S6 | `2134e03b64` |
+| S7 | `2e96da6ddd` |
+| S8 | `5b5eb527c7` |
+| S9 | `cb82716636` |
+| S10 | `10581c1cea` |
 
 
 
@@ -84,3 +84,10 @@ CORE peer_crypto와 Fleet peer/camera_peer_crypto는 byte 동일하고 각각 �
 ## 다음 검증
 
 변경된 시험 PC 주소/VPN을 반영한 뒤 committed main의 해당 suite를 remote_pytest.py로 실행하고 known_failures.py와 비교한다. Source·local merge는 원격 시험·배포·장치 수용 증거가 아니다. 사용자 요청대로 이번 작업은 local commit/merge까지만 수행한다.
+
+## 착지 뒤 확인된 결과 (2026-10-14)
+
+착지 뒤 원격 시험에서 드러난 guard 수리(`fix/main-guards-after-folder-split`)가 남긴 두 가지다. 이 절은 기록이며 ADR 결정문을 바꾸지 않는다.
+
+- **열린 항목 — Gazebo 도구의 로봇 이름 감시.** S9가 `middleware/perception/tools/gz`를 `tools/sim/gazebo`로 옮기면서 그 폴더가 production part 밖으로 나갔다. `test/test_robot_literals.py`는 production part(operations, middleware, contracts, shared_web, integrations)만 보고 `tools/`를 scan root로 받지 않는다. 그래서 `test/robot_literal_backlog.txt`에 있던 23개 행을 뺐다. 2026-10-14 기준 `tools/sim/gazebo`의 추적 파일 49개 가운데 25개가 "pinky"를 쓰며, 로봇 이름 guard는 지금 이 파일들을 보지 않는다. 이 상태를 받아들일지, 감시 범위를 다시 둘지는 이 정리의 소유자가 정한다. 아직 정해지지 않았다.
+- **D-748과 D-377의 관계.** D-748 2·3항은 `rosy_vision` 패키지의 source holder를 `operations/overhead`로 두고 패키지·console script 이름은 유지한다. D-377은 폴더의 마지막 이름과 패키지 이름이 `rosy_`만 다르다고 정했으므로, overhead holder에서는 D-748이 그 폴더 이름 규칙을 대신한다. `test/architecture/test_app_identity.py`의 `identity_problems`가 word `vision`의 폴더 이름만 `overhead`로 받고, 패키지·console script 검사는 그대로 둔다. D-748에 같은 내용의 개정 절을 달았다.

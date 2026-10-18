@@ -9,11 +9,13 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <link rel="stylesheet" href="/console/assets/device-watch.css">
+  <link rel="stylesheet" href="/console/assets/work.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
 </head>
@@ -24,34 +26,32 @@
   <header class="fleet-header">
   <ui-topbar>
     <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
-    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
+    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
-    <div class="fleet-link-status" data-header-region="status" role="group" aria-label="관제 상태">
-      <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="상태 센터: 연결·권한·메시지 확인">
-        <span class="header-status-item"><span data-action-icon="connect" data-icon-only="" aria-label="로봇 연결"></span><ui-tag id="online-pill" variant="inline" status="neutral">연결 대기</ui-tag></span>
-        <span class="header-status-item"><span data-action-icon="notification" data-icon-only="" aria-label="미확인 메시지"></span><span id="header-unread" aria-hidden="true">—</span></span>
-        <!-- D-473/D-668 — 개발 접속 경고는 닫힌 상태 센터에서도 보인다. -->
-        <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
-      </ui-button>
+    <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
+      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <ui-text id="clock" scale="value">--:--:--</ui-text>
     </div>
-    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="화면 테마와 계정">
+    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
+    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="알림 창"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
     <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
-    <details id="fleet-account" hidden>
-      <summary class="ui-disclosure-row" data-action-icon="account">계정</summary>
-      <div class="fleet-account-panel">
-        <p id="fleet-account-identity"></p>
-        <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
-        <div id="password-login" class="password-login" hidden></div>
-      </div>
-    </details>
-    <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
+    <!-- D-473 — 개발 접속 경고는 닫힌 계정 단추에서도 보인다. -->
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="계정과 접속">
+      <span class="header-status-item"><span data-action-icon="account" data-icon-only="" aria-label="계정"></span><ui-tag id="user-role" variant="inline" status="neutral">인증 필요</ui-tag></span>
+      <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
+    </ui-button>
     </div>
     <div class="fleet-header-safety" data-header-region="safety" role="group" aria-label="안전 조작">
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
     </div>
-    <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="접속과 알림">
-      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
-      <!-- D-519 — paired 화면은 아이디·비밀번호로 로그인한다. 토큰은 접힘 안에 남는다. -->
+    <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="계정과 접속 상세">
+      <div id="fleet-account" class="fleet-account-panel" hidden>
+        <p id="fleet-account-identity"></p>
+        <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
+        <div id="password-login" class="password-login" hidden></div>
+      </div>
+      <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
+      <!-- D-519 — 사람은 /console/login에서 로그인한다. 토큰 접속은 계정 단추 아래에 남는다. -->
 
       <details id="token-access" class="token-access">
         <summary>토큰으로 접속</summary>
@@ -62,15 +62,31 @@
     </div>
   </ui-topbar>
   </header>
-  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" data-action-icon="fleet" data-icon-only="" aria-current="page">관제</a>
-    <a href="/console/install" data-action-icon="install" data-icon-only="">설치·보정</a>
-    <a href="/console/site-map" data-action-icon="map" data-icon-only="">현장 지도</a>
-    <a href="/console?view=work" data-action-icon="history" data-icon-only="">작업</a>
-    <a href="/console/cell" data-action-icon="cell" data-icon-only="">Cell</a>
+    <a href="/console" data-action-icon="fleet" aria-current="page">관제</a>
+    <a href="/console?view=work" data-action-icon="list">작업</a>
+    <a href="/console?view=records" data-action-icon="history">기록</a>
+    <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
+    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
+  <!-- D-741 7 — 영역의 화면은 하위 탐색 자리에 선다. 주소의 view가 고른 영역 것만 보인다(console.js). -->
+  <div class="ui-subnav" data-area="work" hidden><nav class="ui-subnav-nav" aria-label="작업 화면">
+    <a class="ui-subnav-item" href="/console?view=work">전체 작업</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=new">새 작업</a>
+  </nav></div>
+  <div class="ui-subnav" data-area="records" hidden><nav class="ui-subnav-nav" aria-label="기록 화면">
+    <span class="ui-subnav-head">사건</span>
+    <a class="ui-subnav-item" href="/console?view=records">검토할 사건</a>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=open">열린 사건</a>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=closed">닫힌 사건</a>
+    <span class="ui-subnav-head">AI 판단</span>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=facts">AI 상황 사실</a>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=log">관제 기록</a>
+  </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
@@ -79,7 +95,6 @@
       <p id="connection-guide-detail">아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
     <a id="connection-guide-action" class="ui-disclosure-row" href="#console-token" data-action-icon="login">관제 접속</a>
   </section>
-
 
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
@@ -91,7 +106,7 @@
       </div>
       <label class="sr-only" for="work-filter">업무 종류</label>
       <select id="work-filter" class="ui-field" data-work-read="" aria-label="업무 종류">
-        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option>
+        <option value="all">전체 업무</option><option value="task">주행</option><option value="mission">팔 작업</option><option value="trip">운행</option><option value="cell_job">Cell 적재</option>
       </select>
       <p id="work-state" class="hint" role="status">접속 후 조회합니다.</p>
       <p id="work-sources" class="hint"></p>
@@ -140,11 +155,21 @@
       </section>
     </section>
 
+    <!-- D-763 6·9 — 새 작업은 여기서 실행할 수 있는 종류만 보인다. 이동의 폼은 오른쪽 칸에 서는 로봇 카드의 운행 폼이다. -->
+    <section class="panel" id="work-new" aria-labelledby="work-new-heading" hidden>
+      <h2 id="work-new-heading">새 작업</h2>
+      <ul class="work-list" aria-label="새 작업 종류">
+        <li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move" type="button" data-work-read="" aria-pressed="false" aria-expanded="false" aria-controls="work-move">이동</ui-button></li>
+        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">Cell 적재</a></li>
+      </ul>
+    </section>
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
         <div>
           <h2 id="map-heading" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다">현장 지도</h2>
         </div>
+        <!-- D-741 3 — 로봇 연결 수는 앱 바가 아니라 관제 화면의 내용이다. -->
+        <span class="map-robots"><span data-action-icon="connect" data-icon-only="" aria-label="로봇 연결"></span><ui-tag id="online-pill" variant="inline" status="neutral">연결 대기</ui-tag></span>
         <div class="spacer"></div>
         <label for="map-display-mode">표시</label>
         <select class="ui-field" id="map-display-mode" aria-label="지도 표시 방식">
@@ -273,8 +298,14 @@
       <section class="panel" id="work-context" aria-labelledby="work-detail-heading" hidden>
         <h2 id="work-detail-heading">작업 상세</h2>
         <dl id="work-detail" class="work-detail"></dl>
+        <ui-button kind="primary" id="work-admit" type="button" hidden>실행 승인</ui-button>
         <p id="work-evidence" class="hint" role="status">작업을 선택하세요.</p>
-        <a href="/console/cell" data-action-icon="cell">팔 공정 설정</a>
+      </section>
+      <section class="panel" id="work-move" aria-labelledby="work-move-heading" hidden>
+        <h2 id="work-move-heading">이동</h2>
+        <label for="work-move-robot">로봇</label><select id="work-move-robot" class="ui-field" data-work-read=""></select>
+        <p id="work-move-state" class="hint" role="status"></p>
+        <div id="work-move-form"></div>
       </section>
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
@@ -401,10 +432,6 @@
           <p class="hint" id="signals-hint" hidden></p>
         </div>
 
-
-
-
-
         <details id="console-diagnostics" class="console-diagnostics">
           <summary class="ui-disclosure-row">진단</summary>
           <dl class="diag-readout">
@@ -458,7 +485,10 @@
           <ul id="incident-traffic-list" class="issue-list"></ul>
         </div>
       </section>
-
+      <section class="panel" id="incident-side" aria-labelledby="incident-side-heading" hidden>
+        <h2 id="incident-side-heading">원인과 조치</h2><div id="incident-judgment"></div>
+        <p class="hint">사건을 열면 담당 인수와 사람 검토를 여기에 적습니다.</p>
+      </section>
         </div>
       </section>
     </aside>
@@ -466,7 +496,6 @@
 
   </div>
   </div>
-  <footer class="fleet-footer" aria-label="운영 정보"><span>현재 시각</span><ui-text id="clock" scale="value">--:--:--</ui-text><a href="/console?inbox=1" data-action-icon="notification" data-icon-only="">관제 알림</a></footer>
   </ui-shell>
 </body>
 </html>

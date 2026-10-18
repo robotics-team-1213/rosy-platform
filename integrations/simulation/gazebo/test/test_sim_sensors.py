@@ -41,6 +41,14 @@ def test_no_frame_until_every_channel_has_a_reading():
     assert ir.ir_raw([0.013, 0.013, None]) is None
 
 
+def test_multi_launch_ir_calibration_is_the_sim_floor_and_adc_saturation():
+    """map_v2_fleet_multi_real's observer calibration: the sim floor is black, saturation white."""
+    sys.path.insert(0, str(ROOT / "launch"))
+    from gz_multi_parts import SIM_IR_CALIBRATION
+    assert "all(0 < v < 4000 for v in self.ir_raw)" in (SAFETY_ADAPTER / "hazard.py").read_text(encoding="utf-8")
+    assert SIM_IR_CALIBRATION == {"ir_black": [float(_ir().FLOOR_RAW)] * 3, "ir_white": [4000.0] * 3}
+
+
 def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
     callbacks, published, timers = {}, [], []
     now = [1_000_000_000]
@@ -112,7 +120,7 @@ def test_values_are_valid_ir_on_the_worker_thresholds():
 
 def test_channel_order_matches_the_device_adc_node():
     ir = _ir()
-    control = REPO / "middleware" / "perception" / "control"
+    control = REPO / "middleware" / "perception" / "nodes"
     assert "return [values[2], values[1], values[0]]" in (control / "ir_adc_node.py").read_text(encoding="utf-8")
     calib = (REPO / 'middleware' / 'perception' / 'front_camera' / "perception" / "ir_calibration.py").read_text(encoding="utf-8")
     assert 'CHANNELS = ("left", "centre", "right")' in calib

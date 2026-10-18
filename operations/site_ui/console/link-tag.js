@@ -19,3 +19,17 @@ const TAGS = {
 export function linkTag(link) {
   return Object.prototype.hasOwnProperty.call(TAGS, link) ? TAGS[link] : null;
 }
+
+// D-550 8 / D-760 3: why Fleet's verdict (`rule_m`) calls a motion unbounded. Warn only.
+const RULE_M_REASON = {
+  hold_back: "차로 통행권·운행 임대 없음",
+  no_goal_lease: "목표 임대 없음",
+  leg_unknown: "운행 구간 모름",
+};
+
+// The mark beside the card's link tag, or null when the motion is bounded or nothing moves.
+export function ruleMTag(rule) {
+  if (rule?.state !== "unbounded") return null;
+  const reason = Object.prototype.hasOwnProperty.call(RULE_M_REASON, rule.reason) ? RULE_M_REASON[rule.reason] : "이유 모름";
+  return { word: "정지 한도 없음", kind: "warn", text: `관제가 끊겨도 로봇이 계속 갑니다 (${reason})` };
+}

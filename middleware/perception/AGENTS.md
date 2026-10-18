@@ -12,7 +12,6 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 ## Key Files
 | File | Description |
 |------|-------------|
-| `CLAUDE.md` | Deep architecture guide (command chain, lidar trap, parameters) — read first |
 | `STEPS.txt` | Korean operator runbook: bringup order, tuning log, LCD/web notes |
 | `package.xml` / `setup.py` | ament_python package manifest and entry points |
 | `resource/control` | ament resource marker (generated, do not edit) |
@@ -39,6 +38,20 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 | `web/` | web_node dashboard UI — served from share/control/web (see `web/AGENTS.md`) |
 | `map/` | Gazebo world asset for the desk maze (see `map/AGENTS.md`) |
 
+### Size units (D-766)
+
+Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 lines; the rest stays in `control`). Paths are relative to the colcon root; holders are the `control/_source_layout.py` entries named.
+
+| Unit | Responsibility |
+|------|----------------|
+| `drive/tracking/wander` | `PACKAGE_DIRS` `control.wander`: the wander node's senses, judge, motion and navigator |
+| `drive/planning/grid` | `PACKAGE_DIRS` `control.planning`: map check, point to go, best route, zigzag coverage |
+| `perception/sensors/sensing` | `PACKAGE_DIRS` `control.sensing`: raw sensor data to robot-frame geometry |
+| `drive/motion_limits` | `FLAT_ROOTS`: Drive safety limits that withhold or reduce a candidate, plus `adapter/` (`control.safety`); no final `/cmd_vel` (see its `AGENTS.md`) |
+| `drive/calibration` | `FLAT_ROOTS`: stationary sensor checks and bounded calibration motion (see its `AGENTS.md`) |
+| `drive/recovery` | `FLAT_ROOTS`: bounded recovery proposals (escape, trail retreat, hazard response) (see its `AGENTS.md`) |
+| `perception/sensors/line_observation` | `CONTROL_ROOTS`: line observer node, input validation and composition, IR overlay, route followers |
+
 ## For AI Agents
 
 ### Working In This Directory
@@ -56,6 +69,20 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 ### Testing Requirements
 - `python3 -m pytest test/ -q` from this package directory (`middleware/perception`); needs numpy/OpenCV. ROS graph tests require a separate isolated ROS Jazzy run.
 - Keep the suite green before committing; add tests for new pure-logic decisions.
+
+### Device flow
+The Device is Raspberry Pi OS Lite 64-bit with the release installed at `/opt/rosy`. Keep the runtime stationary while installing and reading back identity and release evidence (scripts in `deploy/robot/pinky_pro/` and its `verify/`):
+
+```bash
+sudo ROSY_ROBOT_NUMBER=1 bash ./install-pi.sh
+sudo ./verify-pi.sh
+sudo ./runtime-mode.sh up
+sudo ./device-readback.sh --json
+```
+
+- `install-pi.sh` derives `ROS_DOMAIN_ID` and `ROSY_NAMESPACE`. Do not write identity values into `.env` by hand.
+- Enable `motor` or `hardware` only after the stationary core, immutable image digest, ROS graph and single-publisher checks are GO. Enable calibration and camera profiles only after the matching generation and sensor readback are retained.
+- Record source/local/ROS-simulation results separately from artifact, Device and FIELD results. A host test or a successful build does not prove a Device install, sensor capture, motor motion or arm operation; ARM64 image publication, Pi readback, CSI timing, motor deadman and OMX acceptance each need their own evidence record.
 
 ### Common Patterns
 - Subject mixins: each node = `rclpy.Node` + one-concern mixins (wander = Senses/Judge/Contact/Motion; safety = Bumper/Hazard/Gate/Scale).

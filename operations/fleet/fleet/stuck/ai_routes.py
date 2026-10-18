@@ -156,7 +156,7 @@ def install_ai_first_routes(app, *, first, line_stuck, loop, episodes, read_guar
     @app.delete("/api/fleet/ai/human-classes/{type_key}", tags=["ai"])
     def human_class_remove(type_key: str, reason: str = Query(min_length=1, max_length=200),
                            principal=Depends(authorize)) -> dict:
-        if principal.role != "policy-admin":
+        if not principal.permits_site("fleet.policy", {"policy-admin"}):
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "policy-admin only"})
         if episodes is None or type_key not in episodes.active():
             raise HTTPException(status_code=404, detail={"code": "AI_HUMAN_CLASS_NOT_ACTIVE", "message": type_key})

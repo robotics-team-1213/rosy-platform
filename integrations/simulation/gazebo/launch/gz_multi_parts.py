@@ -16,6 +16,14 @@ import os
 import yaml
 
 
+#: The line observer's IR calibration for the Gazebo IR floor (scripts/sim_ir_floor.py). That
+#: sensor reads every floor as FLOOR_RAW 2000 (no tape reflectance), so the floor is the black
+#: endpoint and the ADC saturation 4000 (motion_limits/adapter/hazard.py: valid IR is < 4000) the
+#: white one. SIM IR then never sees a line (CORE guard "clear"): it proves fresh calibrated IR,
+#: not IR line detection. test_sim_sensors.py pins both values to their sources.
+SIM_IR_CALIBRATION = {'ir_black': [2000.0] * 3, 'ir_white': [4000.0] * 3}
+
+
 def observer_steering_law(path):
     """Forward four nonsecret law parameters; CORE's private overlay stays with CORE."""
     from core_common.config import load_config

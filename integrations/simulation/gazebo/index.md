@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 5eb721d11 · 두 로봇 Fleet+Gazebo 차선 trip을 커밋된 구성으로
+- 2026-10-15 · 271f923283 · select the default profile in remote build composition
+- 2026-10-15 · cbf3ab55bd · restore native SIM profile and contract installation
 - 2026-10-12 · uncommitted · Validate optional ROS launch environment and normalized parameters
 - 2026-10-12 · uncommitted · 두 카메라의 횡단보도 거리 불확실성을 전달한다
-- 2026-10-12 · uncommitted · 시뮬 관찰 법칙은 core_common 의존으로 선언한다
-- 2026-10-12 · 2efcfe4b2 · 독립 Gazebo 시험의 CORE 설정 출처 고정
-- 2026-10-12 · 3bafbd232 · 두 카메라 실행의 원본·곡선 지도 선택

@@ -648,3 +648,152 @@
 - 변경: 기존 NativeReceipts에 실제 owner 잠금을 nonblocking으로 얻어 immutable receipt만 반환하는 capture를 추가한다. 경합은 명시적 실패이며 unlocked lookup이나 transport 조회가 없다.
 - 증거: 실제 owner 잠금 경합 RED 5건 후 safety/native owner·구조·설치 패키지 원격 exit 0/NEW 0. native 크기 단위 117로 기존 예산을 유지한다.
 - gate 변화: SOURCE 회귀 근거 추가. 배포·장치·현장 수용은 수행하지 않았다.
+
+## 2026-10-14 · 06ce5334b · safety_policy.hold와 stale_hold_s 주석 (D-400 4항, API v1.223)
+
+- 변경: `SafetyPolicyHold`와 `SafetyPolicyStatus.hold`(선택, enforce에서만). `rosy_default.yaml`의 `stale_hold_s` 주석이 "reserved"가 아니라 enforce HOLD를 설명한다. 값은 그대로 2.0이다.
+- 증거: `test_safety_policy_status.py`. `schemas.py`는 1340줄에서 1348줄이고 기록된 1389줄 한도 안이다. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-400 개정(2026-10-14).
+- 교훈: 없음.
+
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
+## 2026-10-14 · a9901c702 · 능력 lane_bend_map_entry와 junction.map_entry_used·map_entry_reason (D-759, API v1.224)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_bend_map_entry`(없으면 wire에서 빠진다). `schemas.py`의 `LineJunctionStatus`에 `map_entry_used: bool = False`, `map_entry_reason: Optional[str] = None`.
+- 증거: `test_line_junction.py`의 idle dump, `test_line_junction_api.py`의 스냅숏 dict가 두 필드를 본다. `schemas.py`는 1348줄에서 1353줄이다. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759(Proposed).
+- 교훈: 없음.
+
+## 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 기본값과 설명 (D-759 검토 반영, API v1.224)
+
+- 변경: `rosy_default.yaml`의 `line_follow.bend_map_entry_enabled: false`와 그 설명. `controls.py`·`schemas.py`의 주석이 설정과 까닭 `disabled`를 적는다.
+- 증거: `test_line_junction_api.py`(기본 꺼짐, 켜짐, 따옴표 친 값 거절). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759(Proposed).
+- 교훈: 없음.
+
+## 2026-10-14 · 1ee33639c · 통행권 ttl_s 상한 5 s, shrink·seq, 능력 플래그 둘 (D-760 2단계, API v1.225)
+
+- 변경: `core_common/protocol/line_authority.py` — `MAX_TTL_S` 2.0 → 5.0, `LineAuthorityRequest`에 선택 필드 `shrink: bool = False`와 `seq: Optional[int]`(≥ 0). `core_common/protocol/controls.py` — `base_velocity`에 `line_follow_authority_shrink`·`line_follow_authority_under_lease`(없으면 wire에 싣지 않는다).
+- 증거: `middleware/core/gateway/test/test_line_authority_api.py`(`ttl_s` 5.0 수락, 5.01·음수 `seq`·정수가 아닌 `seq`·bool이 아닌 `shrink`는 400), `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-760 Decision 1·3.
+- 교훈: 계획은 범위 밖 `ttl_s`를 422로 적었지만 CORE API의 검증 실패는 400 `VALIDATION_ERROR`다.
+
+## 2026-10-14 · 5264ef279 · 통행권 상한 5 s는 CORE 통행권에만 (D-760 2단계)
+
+- 변경: `line_advice.py`가 `line_authority.MAX_TTL_S`를 가져다 쓰던 것을 자기 상한 `MAX_TTL_S = 2.0`으로 바꿨다(D-525 참고 신호의 `ttl_s`는 그대로 2 s). `line_authority.py`에 `LEGACY_TTL_S = 2.0`(D-760 전 상한, Fleet이 능력 플래그 없는 CORE에 보내는 값).
+- 증거: 영향 범위 원격 실행에서 `test_line_advice_contract.py`·`test_line_advice_api.py`(2.5 s 거절)와 `operations/fleet/test/test_trip_authority.py`(`ttl_s` 2.0)가 실패해 드러났다. 원격 재실행 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3("플래그가 없는 로봇에는 `ttl_s` 2로 보낸다").
+- 교훈: 공유 상수의 값을 바꾸기 전에 그 이름을 가져다 쓰는 곳을 모두 찾는다. 상한 하나가 참고 신호의 상한과 Fleet 송신값을 같이 옮겼다.
+
+## 2026-10-14 · 8a73125e6 · 통행권 응답 사유 seq_required·seq_legs_full·shrink_none_held (D-760 2단계 안전 검토, API v1.225)
+
+- 변경: `core_common/protocol/line_authority.py`의 `shrink`·`seq` 설명만 고쳤다(필드와 범위는 그대로). 응답 `reason`은 자유 문자열이라 schema 변경이 없다.
+- 증거: `middleware/core/gateway/test/test_line_authority_api.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3. API Reference v1.225 절.
+- 교훈: 앞 항목의 사실을 다시 적는다. 범위 밖 `ttl_s`(예: 5.01)는 400 `VALIDATION_ERROR`다. 422가 아니다.
+
+## 2026-10-14 · uncommitted · feat(protocol): D-758 0단계 `OdomPose.epoch`·`mono_s` (v1.228 additive)
+
+- 변경: `core_common/protocol/localization.py::OdomPose`에 선택 필드 `epoch`(정수 ≥ 0)와 `mono_s`(유한 실수). 없는 스냅숏은 그대로 읽힌다.
+- 증거: `test_state_odom_pose.py::test_an_old_snapshot_odom_pose_without_epoch_still_parses`, `contracts/foundation/test` 통과(`X:/DevTemp/odom-monotonic/root/run-1.txt`).
+- gate 변화: 없음(추가 필드).
+- 결정: D-758 0단계. API Reference v1.228 절.
+- 교훈: 없음.
+
+## 2026-10-14 · uncommitted · core_common(protocol): LineFollowStatus.regulation_wait (D-760 개정 3 9항)
+
+- 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `regulation_wait: authority | signal | crosswalk_held | crosswalk_wait | crosswalk_look | None`(기본 None, additive). API Ref v1.227.
+- 증거: `middleware/core/services/test/test_line_regulation_wait.py`(기본값, 모르는 값 거절), `middleware/core/gateway/test/test_line_regulation_wait_api.py`.
+- gate 변화: 없음.
+- 결정: D-760 개정 3 9항.
+
+## 2026-10-14 · 775b1f3f6 · 능력 lane_turn_map_entry와 설정 turn_map_entry_enabled (D-759 개정 1, API v1.231)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_turn_map_entry`(없으면 wire에서 빠진다). `config/rosy_default.yaml`에 `line_follow.turn_map_entry_enabled: false`. `schemas.py`는 바꾸지 않았다(`map_entry_used`·`map_entry_reason`을 회전도 쓴다).
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 없음.
+
+## 2026-10-15 · 84f0c8456 · trip lease 상태 job_id와 능력 trip_lease_job (D-763 조각 6, API v1.236)
+
+- 변경: `protocol/trip_lease.py` `TripLeaseStatus.job_id`(선택, 기본 None). `protocol/controls.py` `BaseVelocityControl`·`pinky_controls`에 `trip_lease_job`(없으면 wire에서 빠진다).
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`(상태·능력), `test_protocol_schemas.py` 원격 통과(7334f9c40).
+- gate 변화: 없음.
+- 결정: D-763 조각 6, 개정 2 질문 10.
+- 교훈: 없음.
+
+## 2026-10-15 · 868461505 · 작업 읽기 계약 확장 (D-763 조각 4, API v1.235)
+- 변경: `protocol/work.py` `FleetWorkSummary`에 출처 `trip`·`cell_job`, `visible_state`·`wait`(`FleetWorkWait`)·`approval`. `FleetWorkOverview`에 `cell_jobs_available`·`kinds`, 행 최대 400, `truncated_sources` 최대 4. `schemas.py`가 `FleetWorkWait`를 내보낸다.
+- 증거: 원격 225+66 passed(모델 PC, 6ae1df74e), 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4.
+- 교훈: 없음.
+
+## 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_crosswalk_gate`·`lane_junction_signal`(없으면 wire에서 빠진다). 설정 기본값은 바꾸지 않았다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`(설정 켬·끔). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+
+- 변경: main이 v1.237(D-763 조각 4, `feat/fleet-work-read-sources`)을 썼다. 이 브랜치의 위 항목에 적힌 v1.233·v1.237은 v1.238로 읽는다. 시작 검사 파일은 main의 `server/trip_checks/`, trip 루프는 `server/trips/`에 있다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
+
+- 변경: `protocol/controls.py` `BaseVelocityControl.lane_instruction_stamp`, `protocol/schemas.py` `LineJunctionStatus.distance_basis`·`distance_basis_reason`, `config/rosy_default.yaml` `line_follow.instruction_stamp_enabled: false`와 설명.
+- 증거: CORE·Fleet 원격 시험 통과(9639a41b8), `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부. 켜는 것은 Safety-Review·SIM 바퀴 뒤 사용자가 정한다.
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · schemas.py를 D-766 천장 아래로 (1364 → 1345)
+
+- 변경: `protocol/schemas.py` `MissionProgressEvent.detail_is_bounded_json`이 같은 파일의 `_bounded_finite_json_size`를 쓴다(직렬화 중복 7줄 제거, 16 KiB 한도·필드 그대로). 옮겨 간 모델(`BatteryStatus` 뒤, Swarm 절)이 남긴 빈 줄 12줄 제거. `test/architecture/size_ratchet.txt` 행을 가드 스크립트로 1345로 내림.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
+- 교훈: 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.259)
+
+- 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.

@@ -5,7 +5,7 @@ FROM ros:jazzy-ros-base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV ROS_DISTRO=jazzy \
     ROS_DOMAIN_ID=30 \
-    ROS_LOCALHOST_ONLY=0 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
     PYTHONDONTWRITEBYTECODE=1
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -17,6 +17,31 @@ WORKDIR /opt/omx_ws
 COPY stack.lock.yaml /opt/omx_ws/stack.lock.yaml
 COPY fetch_sources.py /usr/local/bin/fetch_omx_sources.py
 RUN python3 /usr/local/bin/fetch_omx_sources.py /opt/omx_ws/stack.lock.yaml /opt/omx_ws/src
+COPY patches/hardware-lifecycle-errors.patch /tmp/hardware-lifecycle-errors.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-lifecycle-errors.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-lifecycle-errors.patch
+COPY patches/hardware-owner-command-path.patch /tmp/hardware-owner-command-path.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-owner-command-path.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-owner-command-path.patch
+COPY patches/hardware-export-dependencies.patch /tmp/hardware-export-dependencies.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-export-dependencies.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-export-dependencies.patch
+COPY patches/hardware-init-no-reboot.patch /tmp/hardware-init-no-reboot.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-init-no-reboot.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-init-no-reboot.patch
+COPY patches/hardware-write-errors.patch /tmp/hardware-write-errors.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-write-errors.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-write-errors.patch
+COPY patches/hardware-fault-stop.patch /tmp/hardware-fault-stop.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-fault-stop.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-fault-stop.patch
+COPY patches/hardware-torque-uncertainty.patch /tmp/hardware-torque-uncertainty.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-torque-uncertainty.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-torque-uncertainty.patch
+COPY patches/hardware-status-readback.patch /tmp/hardware-status-readback.patch
+RUN git -C /opt/omx_ws/src/dynamixel_hardware_interface apply --check /tmp/hardware-status-readback.patch \
+    && git -C /opt/omx_ws/src/dynamixel_hardware_interface apply /tmp/hardware-status-readback.patch
+
 COPY patches/omx-f-gazebo-headless.patch /tmp/omx-f-gazebo-headless.patch
 RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-f-gazebo-headless.patch \
     && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-f-gazebo-headless.patch

@@ -17,7 +17,7 @@ middleware/perception/config/robot.yaml
 middleware/perception/nodes/calibration_relocation.py
 middleware/perception/nodes/dock_observer_node.py
 middleware/perception/sensors/line_observation/ir_overlay.py
-middleware/perception/nodes/line_observer_overrides.py
+middleware/perception/sensors/line_observation/line_observer_overrides.py
 middleware/perception/nodes/goal_escape.py
 middleware/perception/nodes/ir_adc_node.py
 middleware/perception/sensors/line_observation/line_observer_node.py
@@ -36,29 +36,6 @@ middleware/perception/map/map_260905.world
 middleware/perception/map/map_260905_update_v2/original/map_260905.world
 middleware/perception/tools/device/hotpath_measure.py
 middleware/perception/tools/device/ir_line_calibrate.py
-tools/sim/gazebo/calibration_mapping_audit.py
-tools/sim/gazebo/calibration_mapping_rig.py
-tools/sim/gazebo/calibration_spaces.py
-tools/sim/gazebo/check_map.py
-tools/sim/gazebo/clock_relay.py
-tools/sim/gazebo/gen_maze_world.py
-tools/sim/gazebo/inspect_mapping.py
-tools/sim/gazebo/localization_rig.py
-tools/sim/gazebo/measure_motion_contract.py
-tools/sim/gazebo/observe_obstacle_tracks.py
-tools/sim/gazebo/obstacle_camera.py
-tools/sim/gazebo/obstacle_scenario.py
-tools/sim/gazebo/pinky_maze.sdf
-tools/sim/gazebo/prepare_track_world.py
-tools/sim/gazebo/record_obstacle_decisions.py
-tools/sim/gazebo/rendered_camera_adapter.py
-tools/sim/gazebo/rig_capture_evidence.py
-tools/sim/gazebo/rig_decision_probe.py
-tools/sim/gazebo/rig_environment.py
-tools/sim/gazebo/rig_rate.py
-tools/sim/gazebo/rig_reload_navigation.py
-tools/sim/gazebo/run_calibration_spaces.py
-tools/sim/gazebo/track_run_monitor.py
 middleware/drive/behaviors/line_follow/clearance.py
 integrations/simulation/gazebo/config/simulation_actuation.yaml
 integrations/simulation/gazebo/config/worlds.yaml
@@ -73,8 +50,8 @@ integrations/simulation/gazebo/worlds/rosy_maze.world
 # Service Control (D-524): the AI PC unit names contain pinky. They are systemd unit names.
 operations/fleet/fleet/host_control.py
 operations/fleet/fleet/localization/service_logic.py
-operations/fleet/fleet/server/bays.py
-operations/fleet/fleet/server/traffic.py
+operations/fleet/fleet/server/rightofway/bays.py
+operations/fleet/fleet/server/rightofway/traffic.py
 operations/fleet/fleet/server/cancel_all.py
 # D-536 guide defaults to the Pinky body geometry for its read-only clearance display.
 operations/fleet/fleet/server/guide_service.py

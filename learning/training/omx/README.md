@@ -1,5 +1,9 @@
 # OMX ACT 오프라인 학습 연구
 
+공식 native recorder/자동 교사 데이터는 [native 실행 안내](../../curation/omx/README.md)의
+`native_cycle.py` 경로를 사용한다. byte-bound 검토 분할 → 공식 ACT CLI → 별도 프로세스
+model/processor 재적재 → eval 재생을 연결한다. 아래 `act_job.py`의 SIM rad 계약과 혼합하지 않는다.
+
 `act_job.py`는 기존 LeRobot 0.4.4 export의 원본 OMX 시연을 검증하고,
 episode 단위 train/eval → ACT 학습 → weights 저장·재독출 → offline 평가 →
 공통 DatasetManifest/PolicyArtifact까지 연결한다. 분리된 CPU 환경에서 실행하며
@@ -91,3 +95,12 @@ python learning/training/omx/act_inference_replay.py
 owner dispatch·독립 SIM 과제·물리 수용을 증명하지 않는다.
 고정 seed/data의 4행동/1행동 실제 비교와 남은 품질 거절은
 [추론 binding 검증](../../../docs/validation/act-inference-binding-2026-10-04.md)에 기록했다.
+
+## Native OMX ACT 준비
+
+`native-act.example.json`은 공식 LeRobot 0.4.4 CPU smoke 설정이다. [실행 안내](../../curation/omx/README.md)에 따라 검토한 train 경로를 채운다. SIM rad 데이터와 섞지 않는다. 실제 GPU 학습·독립 평가는 별도다.
+
+`native_cycle.py`는 split receipt의 환경 원본·hash·episode 창·요약·split coverage도 시작과
+별도 모델 재적재에서 재검증한다. cycle receipt와 offline evaluation에 환경 coverage를
+보존한다. 이 값은 sparse 변경 이벤트 집계이며 에피소드 전체 환경 수용률이나 환경별 과제
+성공률이 아니다. 환경 이력이 없는 기존 receipt는 unrecorded로 표시한다.

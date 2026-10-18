@@ -62,6 +62,7 @@
 | D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 
 ## 계획·결과 문서
 
@@ -99,8 +100,8 @@
 
 ## 최근 기록
 
-- 2026-10-13 · uncommitted · 콘솔에서 로봇 한 대를 재우고 깨운다 (D-440 6, feat/device-power-policy에서 옮김)
-- 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
-- 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
-- 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
-- 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
+- 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+- 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+- 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
+- 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
+- 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영

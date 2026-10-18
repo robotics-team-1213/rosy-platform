@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-13 · uncommitted · 받아들여진 명령이 절전 타이머를 리셋한다 (D-24 개정, feat/device-power-policy에서 옮김)
-- 2026-10-13 · 7c9547f52 · docs: correct dashboard source holder guidance
-- 2026-10-12 · 4554e84c6e · D-732 선택적 owner 누락에도 E-Stop 유지
-- 2026-10-12 · ddbc7f64aa · D-732 정지 receipt 캡처는 잠금을 기다리지 않는다
-- 2026-10-12 · 1cbfe5314a · D-732 안전 정지 native 실행 receipt
+- 2026-10-18 · abca483966 · OMX 배포 준비 점검 연결
+- 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
+- 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
+- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+- 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)

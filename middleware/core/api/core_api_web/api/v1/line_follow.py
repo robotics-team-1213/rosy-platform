@@ -237,6 +237,17 @@ class LineArcMapAnchor(BaseModel):
     odom_stamp_s: float = Field(gt=0, allow_inf_nan=False)
 
 
+class LineBendMapEntry(BaseModel):
+    """D-759 1: the lane's heading at the bend's arc start in the map frame and one yaw pair: Fleet's
+    map yaw of the robot and the stamp of the odom sample it was computed for (CORE wall clock, as
+    snapshot odom_pose.stamp). Sent only to a robot announcing lane_bend_map_entry. D-759 rev 1: with
+    left/right, yaw_rad is the exit lane's map heading, to a robot announcing lane_turn_map_entry."""
+
+    yaw_rad: float = Field(ge=-6.2832, le=6.2832, allow_inf_nan=False)
+    pose_yaw_rad: float = Field(ge=-6.2832, le=6.2832, allow_inf_nan=False)
+    odom_stamp_s: float = Field(gt=0, allow_inf_nan=False)
+
+
 class LineExitSegment(BaseModel):
     """D-520 1: the lane the robot enters after this place's turn is one circular arc to the next
     place. Fleet sends it only to a robot announcing lane_arc, always with the instruction's map_id."""
@@ -272,6 +283,14 @@ class LineJunctionRequest(BaseModel):
     bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
     bend_radius_m: Optional[float] = Field(default=None, gt=0, le=0.5)
+    map_entry: Optional[LineBendMapEntry] = None  # D-759 1 (bend), rev 1 (left/right turn)
+    # D-754: a bend's lane distance from its vertex to the next junction's cross line (2 = that far
+    # or further), sent only to a robot announcing lane_bend_next_line.
+    next_line_in_m: Optional[float] = Field(default=None, ge=0, le=2.0, allow_inf_nan=False)
+    # D-767 A: the odom stamp (CORE wall clock, snapshot odom_pose.stamp) of the pose expect_in_m /
+    # bend_in_m were measured from, sent only to a robot announcing lane_instruction_stamp. Strict: no
+    # JSON true and no numeric string (review). Unusable with a distance: 409 INSTRUCTION_STAMP_UNUSABLE.
+    pose_stamp: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False, strict=True)
 
 
 def _expect(body: LineJunctionRequest):
@@ -279,7 +298,8 @@ def _expect(body: LineJunctionRequest):
     fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
                   pivot_past_line_m=body.pivot_past_line_m, bend_in_m=body.bend_in_m,
                   bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m,
-                  lane_turn_deg=body.lane_turn_deg)
+                  lane_turn_deg=body.lane_turn_deg, next_line_in_m=body.next_line_in_m,
+                  map_entry=None if body.map_entry is None else body.map_entry.model_dump())
     return fields if any(v is not None for v in fields.values()) else None
 
 
@@ -302,8 +322,11 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
             or body.pivot_past_line_m is not None or body.advance_m is not None):
         raise ApiError("VALIDATION_ERROR", 400, "bend needs turn_deg (0 < |turn_deg| <= 90), map_id, "
                        "bend_in_m, bend_tol_m and bend_radius_m, and no window, pivot or advance")
-    if body.action != "bend" and any(v is not None for v in bend):
-        raise ApiError("VALIDATION_ERROR", 400, "bend_in_m, bend_tol_m and bend_radius_m belong to bend")
+    if body.action != "bend" and any(v is not None for v in (*bend, body.next_line_in_m)):
+        raise ApiError("VALIDATION_ERROR", 400,
+                       "bend_in_m, bend_tol_m, bend_radius_m and next_line_in_m belong to bend")
+    if body.map_entry is not None and body.action != "bend" and body.turn_deg is None:  # D-759 rev 1
+        raise ApiError("VALIDATION_ERROR", 400, "map_entry belongs to bend or a turn (left/right with turn_deg)")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
     if (body.expect_in_m is None) != (body.expect_tol_m is None):
@@ -325,9 +348,10 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
                                               body.stop_after_m, body.turn_deg, body.advance_m,
                                               expect=_expect(body),
                                               exit_segment=(None if body.exit_segment is None
-                                                            else body.exit_segment.model_dump(exclude_none=True)))
+                                                            else body.exit_segment.model_dump(exclude_none=True)),
+                                              pose_stamp=body.pose_stamp)
     except JunctionRefused as exc:
-        raise ApiError(exc.code, 409, str(exc)) from exc
+        raise ApiError(exc.code, 409, str(exc), None if exc.reason is None else {"reason": exc.reason}) from exc
     svc.state.set_line_follow(svc.line_follow.status())
     return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
 
@@ -336,13 +360,15 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
 def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(operator),
                        svc: CoreServicesLike = Depends(get_services)):
     """D-517 4 (M2): Fleet's movement authority for the trip leg. The same seat as /junction.
-    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg).
+    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg without
+    ``shrink``; D-760 3 stale_seq / seq_required / seq_legs_full: the leg's ``seq`` order; shrink_none_held:
+    a ``shrink`` with nothing live to shrink, which also drops what is held).
     A 409 refusal also drops the held authority, so the robot stands."""
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow authority")
     try:
         result = svc.line_follow.set_authority(body.authority_id, body.leg_id, body.pose_stamp,
-                                               body.until_m, body.ttl_s)
+                                               body.until_m, body.ttl_s, shrink=body.shrink, seq=body.seq)
     except AuthorityRefused as exc:
         raise ApiError(exc.code, 409, exc.args[1]) from exc
     return result

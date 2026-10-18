@@ -996,3 +996,208 @@
 - 결정: D-744 5항·6항 개정(같은 ADR). 횡단보도 사전 검사와 시계 step은 ADR 한계 5·6으로 적었다.
 - 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
 
+
+## 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
+
+- 변경: test/conftest.py 가 gateway 패키지 루트(core)를 sys.path 에 넣는다. test_lane_return_manager 의 core.drive.line_follow import 가 gateway 테스트가 같이 수집될 때만 풀렸다.
+- 증거: 단독 실행 ModuleNotFoundError 원인은 services conftest 에 gateway 경로가 없던 것. 단독·CI 모양 원격 실행 결과는 커밋 메시지 참조.
+- gate 변화: 없음. 테스트 경로 설정만 바뀐다. 제품 코드 무변경.
+
+## 2026-10-14 · db8e0977a · D-754 굽이가 넘겨줄 목격을 지도 거리로 가린다 (API v1.222)
+
+- 변경: `bend` 지시의 선택 필드 `next_line_in_m`(꼭짓점에서 다음 교차로 가로선까지의 차로 거리, 0–2 m)을 `check_bend`가 검증하고 `gate.py`가 지시에 둔다. `bend.py::_bend_own_line`은 필드가 있으면 목격 선 지점의 출구선 거리와 그 값의 차가 `bend_tol_m + crosswalk_range_error_fraction × junction_ahead_m + CORRIDOR_HALF_M`을 넘을 때 넘기지 않는다. 필드가 없으면 D-507 보충 9항의 모양 규칙 그대로다. 두 규칙은 선 지점 계산 `_bend_line`을 같이 쓴다. 능력 `lane_bend_next_line`은 `lane_bend`와 같은 값이다.
+- 증거: 원격(모델 PC) 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다. `test_junction_bend.py`: 90° 굽이의 호 가운데 0.17 m 목격이 필드 없이는 `waiting`, 지도 거리 1.0 m면 `idle`. 지도 거리가 맞으면 `waiting`, 허용치 밖이면 `idle`.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo run55 구간의 재실행과 장치 수용은 미검증이다. 상태 필드는 더하지 않았다.
+- 결정: D-754. 필드가 있으면 지도가 판단하고 9항의 60° 문턱은 쓰지 않는다.
+- 교훈: 굽이 자신의 선과 바로 뒤 교차로의 선은 호 가운데에서 모양이 같다. 가르는 것은 지도의 다음 장소 거리뿐이다.
+
+## 2026-10-14 · 7c94fc4af · D-740 개정 3 거절된 한 틱은 교차로 기동을 버리지 않는다 (API v1.222)
+
+- 변경: `recovery/junction/gate.py::_unconfirmed`. 기동 중 `_return_probe`가 거절하면 그 틱은 HOLD `junction_motion_unconfirmed`(명령 0)이고 기동은 유지된다. 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 `motion_unconfirmed`로 중단한다. 굽이는 두 번째 물음(`motion_admitted`)까지 통과해야 승인으로 친다.
+- 증거: Gazebo run56·run58에서 한 틱의 거절(시계 경합, 순서가 뒤바뀐 스캔으로 비워진 몸 스캔 뷰)이 굽이를 중단시켜 주행이 끝났다. 원격 단위 테스트는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
+- 교훈: 최종 명령 경로는 다르다. 안전 관리자의 `decision_valid`는 판정이 0.01 s를 넘기면 `policy_invalid`로 E-stop을 건다(D-400). run59는 부하가 걸린 PC에서 그렇게 끝났다. 이 개정은 거기에 닿지 않는다.
+
+## 2026-10-14 · 1e8acc5dd · D-400 4항 집행 HOLD와 정책 답 시간 상한 (API v1.223)
+
+- 변경: `safety_gate/manager.py` — `bind_policy`·`bind_control_policy`가 `stale_hold_s`(기본 0 = 전과 같음)를 받고, `evaluate_candidate`가 끊김(평가기 없음, `PolicyObservationUnavailable`, 시간 조건만 어긴 판정)을 `_policy_gap`으로 세어 `stale_hold_s` 미만이면 `policy_hold`를 세운다. `command/manager.py::_policy_output`은 `policy_hold`면 래치 없이 0을 낸다. 판정 계약(`SafetyRequest`, `SafetyDecision`, `decision_valid`, `check_decision`)은 새 `decision_fault`·`POLICY_ANSWER_BUDGET_S = 1/50`과 함께 `safety_gate/decision.py`로 옮겼다(`manager.py`가 594/600줄이었다. 지금 582줄). `manager.py`가 이름을 다시 내보낸다.
+- 증거: Gazebo run59가 부하가 걸린 PC에서 `control:policy_invalid`로 끝났다(D-740 개정 3 기록의 교훈). 원격 단위 시험 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
+- 결정: D-400 개정(2026-10-14).
+- 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.
+
+## 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
+
+- Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
+- Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
+- gate 변화: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+
+## 2026-10-14 · 3f6c69245 · fix: HOLD 공백 시간에 평가 실행 시간 포함
+
+- 변경: 시계 역행·비유한 완료 시각을 거절하고 평가 완료까지 HOLD 나이를 센다. idle은 이전 평가 완료부터 다음 시작까지다. 처음부터 래치한 평가를 HOLD 계수에 넣지 않는다.
+- 증거: 원격 재현 NEW 7 후 수정본 322 passed, NEW 0. 독립 Codex review_release_safety 소스 리뷰; docs/validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. E-stop reset·SIM·실물 활성화 없음.
+
+## 2026-10-14 · 6579182c7 · D-759 굽이 통과의 진입 직선을 지도의 차로 방향에 놓는다 (API v1.224)
+
+- 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 검사하고(유한한 세 값, `odom_stamp_s` > 0, `bend`에만), `_place_map_entry`가 받은 때 차로 방향을 odom으로 옮기며(`odom yaw + yaw_rad − pose_yaw_rad`), `_start_bend`가 `_map_entry_yaw`로 닻의 yaw를 그 방향으로 바꾼다(닻 yaw와 30° 안, 받은 뒤 경로 1.5 m 안). 닻의 위치는 그대로다. `authority.py`는 D-744의 odom 표본 조회를 `_odom_at_stamp`로 꺼내 `_place_map_anchor`와 같이 쓴다(동작 변화 없음). `gate.py`는 지시에 둔 방향과 까닭을 싣고 상태에 `map_entry_used`·`map_entry_reason`을 낸다.
+- 증거: Gazebo run56·run62·run63·run64(W3에서 넘겨받을 때 yaw가 차로에서 21.6° 어긋나 `motion_unconfirmed`)가 계기다. `test_junction_bend.py`가 그 yaw 어긋남을 rig로 옮겼다: `map_entry`가 있으면 통과 끝이 나가는 직선에서 2 cm 안이고 yaw 60°±3°, 없으면 벽 쪽으로 6 cm 넘게 벗어나고 yaw 38.4°±3°다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이다. 시제품 run66(16바퀴)은 odom과 지도가 같은 시뮬레이터 overlay였고 이 구현이 아니다. `bend.py` 234줄 → 278줄, `gate.py` 586줄 → 590줄(파일 한도 600), `authority.py` 158줄 → 165줄.
+- 결정: D-759(Proposed). 한도 30°는 `REACQUIRE_HEADING_RAD`다. 횡 위치는 옮기지 않는다.
+- 교훈: odom 궤적은 한 틱에 0.15 rad 넘게 도는 yaw를 새 실행으로 본다(`lane_return.py`). rig에서 21.6°를 한 번에 주면 굽이가 `odom`으로 중단되므로 다섯 틱에 나눠 준다.
+
+## 2026-10-14 · e60a7891e · D-759 검토 반영: 기본 꺼짐, 닻을 로봇 자리로, 재전송 때 다시 옮김 (API v1.224)
+
+- 변경: `model.py`에 `bend_map_entry_enabled`(기본 `False`). `bend.py` — 능력 `supports_lane_bend_map_entry`가 그 설정을 요구하고, 꺼져 있으면 `_place_map_entry`가 받은 `map_entry`를 `disabled`로 둔다. `_start_bend`는 지도 방향을 쓸 때 닻을 넘겨받는 틱의 로봇 자세와 그때까지의 travel로 옮긴다(남은 직선은 `bend_in − travel` 그대로). `gate.py`의 재전송 가지는 둔 방향에 까닭이 남아 있을 때만 다시 옮긴다.
+- 증거: 독립 검토(LAND WITH FOLLOW-UP)의 1–3, 6항. `test_junction_bend.py`: 설정이 꺼지면 닻·경로·60틱의 명령이 `map_entry` 없는 지시와 같다; 0.22 m 뒤의 닻과 21.6°(옛 닻의 직선에서 6.5 cm 넘게 떨어짐)에서 `off_path` 없이 호를 돈다; `stale`이던 방향을 재전송이 다시 두고 둔 방향은 그대로다; Fleet yaw 15°·25° 오차를 그대로 따르는 동작과 남는 횡 오프셋을 고정했다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이고, 설정은 그 전까지 꺼 둔다. `model.py` 597줄 → 600줄(파일 한도 600에 닿았다. 다음 설정 키 전에 나눠야 한다), `gate.py` 591줄, `bend.py` 284줄.
+- 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
+- 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.
+
+## 2026-10-14 · 7f5e596614 · D-754/D-759 integration applies the bounded-turn seam
+
+- Change: junction gate grew to 602 lines after both optional bend fields were preserved. Its existing split obligation is applied: unchanged standing-still, start-turn and turn-step methods move to JunctionTurnMixin in turn.py. Constants and yaw wrapper retain gate import identities; one manager state/lock/generation and CORE final writer remain.
+- Evidence: first remote affected group at 7f5e596614 had 10014 passed, 538 skipped and one NEW architecture failure (gate602/trip_ports606). Independent integration_review confirmed all moved and remaining methods' AST identity and source/wheel/sdist closure. Final remote gate is pending.
+- Gate: SOURCE review only; no Gazebo, device, ARM64 or physical acceptance.
+## 2026-10-14 · 75d15d3f4 · 횡단보도 게이트·보고·구역을 `line_follow/crosswalk` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py`를 `git mv`로 `line_follow/crosswalk/`의 `gate.py`, `report.py`, `zone.py`로 옮겼다. 바뀐 내용은 import 줄뿐이다. 옛 import 경로는 3줄짜리 호환 재수출 모듈로 남는다. 제품 코드는 새 경로를 import한다. `SIZE_UNITS`에 `drive/behaviors/line_follow/crosswalk`를 더했다.
+- 증거: `git diff -M`에서 세 파일은 rename이고 import 줄만 다르다. `test_crosswalk_gate.py`의 소스 글자 검사만 새 경로로 돌렸다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
+- 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
+## 2026-10-14 · 1ee33639c · D-760 2단계: 통행권 줄이기·순서, trip 임대 중 강제 (API v1.225)
+
+- 변경: `line_follow/authority.py` — `set_authority(..., shrink=False, seq=None)`. `seq`가 같은 `leg_id`에서 마지막으로 본 값 이하면 `accepted: false`, `reason: stale_seq`로 무시하고 쥔 끝과 만료를 건드리지 않는다. `seq`는 거절 판정 전에 기억한다(거절된 줄이기보다 먼저 보낸 늘리기가 늦게 닿아도 받지 않게). 기억 `_authority_seq`는 `leg_id` 하나에 대한 것이고 모드 변경에도 남는다(모드를 껐다 켠 사이에 늦게 닿은 옛 요청이 새 통행권이 되지 않게). `shrink: true`면 끝 = `min(쥔 끝, 요청 끝)`이고 만료를 갱신한다. 강제 조건은 `_authority_on()` 한 곳이다: 설정 `authority_required`, 이 세션의 요청, 또는 `authority_leased()`(CORE가 trip 임대를 묶는다, 기본 거짓). `recovery/junction/gate.py`의 기동 시계 멈춤도 같은 조건을 쓴다(줄 수 변화 없음, 600줄).
+- 증거: `middleware/core/services/test/test_line_authority.py`에 14건을 더했다: 4.9 s FREE·5.1 s EXPIRED, 벽시계를 ±1시간 옮겨도 만료가 같음, 늘리기(seq 3) → 줄이기(seq 4) → 늦은 늘리기(seq 2), 낡은 `seq`가 만료를 늦추지 않음, 구간별 `seq`와 모드 변경, `seq`·`shrink` 없는 요청의 옛 동작, `shrink` + `until_m: 0`의 다음 틱 HOLD `authority_end`, 줄이기가 끝을 늘리지 않음, 거절된 줄이기가 통행권을 버림, 임대 중 첫 통행권 전 `authority_none`, 임대 중 모드 변경, 임대 없는 주행, IR 가드·몸체 정지·E-stop 사유가 임대 중에도 앞섬. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo·장치 수용은 미검증이다. `authority.py` 165줄 → 175줄. 크기 단위 `drive/behaviors/line_follow`는 3167줄 → 3177줄로 한도 3168을 넘는다(`test_size_verdicts_are_well_formed_and_current` 실패). 디스패처가 아는 실패이고 `refactor/line-follow-crosswalk-unit`이 자리를 낸다. 이 브랜치에서 판정을 고치지 않았다.
+- 결정: D-760 Decision 2·3, Open 1(장치의 `ttl_s` 시계는 `time.monotonic`이다. `core/bridge/traffic_gate.py::line_clock`, `test_line_follow_sim_clock.py`가 고정한다. D-517 4항 구현 노트의 "장치에서는 ROS 시계"는 틀렸고 `use_sim_time`일 때만 ROS 시계다). Open 2는 바꾸지 않았다: 통행권 문은 교차로 회전·접근·굽이·호의 명령도 0으로 만든다. 교차로 기동은 그동안 기동 시계가 서고(합계 `crosswalk_report_s + crosswalk_clear_s`까지) 그 뒤 `timeout`으로 중단된다. 호는 시계가 서지 않아 `length_m`/v + 2 s 뒤 `lane_arc_timeout`으로 멈추고 다시 열리지 않는다.
+- 교훈: 순서 번호는 "받았다"가 아니라 "봤다"로 기억해야 한다. 받은 것만 기억하면 거절된 줄이기 뒤의 늦은 늘리기가 통행권을 되살린다.
+
+## 2026-10-14 · 8a73125e6 · D-760 2단계 안전 검토 반영: 임대 래치, 구간별 seq 기억, 줄이기는 주지 않는다 (API v1.225)
+
+- 변경: `line_follow/authority.py`. (M1) 임대 중 강제를 차선 세션에 래치한다: 모드를 고를 때 임대가 열려 있거나(`_init_authority`) 문이 임대가 열린 것을 한 번 보면(`_authority_on`) `_authority_seen`이 참이 되고 모드 변경까지 남는다. 임대가 첫 통행권 전에 풀림·만료·인수로 끝나도 로봇은 `authority_none`으로 서 있다. (M2) `seq` 기억을 구간별 사전으로 바꿨다(`SEQ_LEGS` 8개). 어떤 구간을 마지막으로 본 CORE 벽시계 시각이 odom 기록의 가장 오래된 표본보다 앞일 때만 지운다. 그 구간의 늦은 요청은 그 시각보다 앞선 `pose_stamp`를 실으므로 `AUTHORITY_POSE_STALE`로 거절된다. 지울 수 없는 구간이 8개면 새 구간은 `seq_legs_full`로 무시한다. `seq`를 본 구간의 `seq` 없는 요청은 `seq_required`로 무시한다. (M3) 같은 구간·같은 odom 궤적의 만료 전 통행권이 없을 때의 `shrink`는 통행권을 만들지 않고 쥔 것도 버린다(`shrink_none_held`).
+- 증거: `test_line_authority.py` 11건 추가·1건 고침(임대가 끝난 뒤에도 정지, 모드 변경 때의 래치, 옛 구간의 늦은 요청, 기록 밖으로 나간 구간만 잊음, 9번째 구간 거절, `seq` 없는 요청 무시, `shrink` 세 경우, 문은 0인 결정을 올리지 않음). `test_junction_bend.py`(통행권 정지 중 기동 시계가 15 s까지 서고 `timeout`, HOLD `junction_aborted`), `test_lane_arc.py`(호는 시계가 서지 않아 `lane_arc_timeout`, 통행권이 돌아와도 HOLD). 변이 시험 표와 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. `authority.py` 175줄 → 192줄. 크기 단위 `drive/behaviors/line_follow`는 이 브랜치에서 모두 +27줄이다.
+- 결정: D-760 Decision 2·3. 순서(코드): 교차로 문(D-740 0.5 s 유지는 `recovery/junction/gate.py::_unconfirmed`) → 통행권 문 → 횡단보도 문(`manager.py`의 틱 합성) → 교통 정책 → `CommandManager`의 D-400 `policy_hold`(`command/manager.py`). 통행권 문은 0이 아닌 결정을 0으로 만들 뿐이라 뒤의 정지를 풀 수 없고, 앞의 정지(0인 결정)는 그대로 지난다.
+- 교훈: 열려 있는 동안만 참인 조건을 문이 그대로 읽으면 그 조건이 끝나는 순간이 열린 쪽 실패다. 범위 밖 `ttl_s`는 CORE API에서 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다).
+
+## 2026-10-14 · 97ad6ca74 · 목표 임대는 그 목표를 보낸 토큰만 갱신한다 (D-760 5단계)
+
+- 변경: `navigation/manager.py`. `goal()`·`home()`이 `lease_owner`(보낸 토큰 id)를 받아 임대 튜플의 네 번째 칸에 둔다. `renew_goal_lease(..., owner)`는 활성 여부(`GOAL_LEASE_NOT_ACTIVE`)를 먼저 보고, 그 다음 `owner`가 다르면 `FORBIDDEN`을 낸다. 거절된 갱신은 임대·만료 시각·목표를 건드리지 않는다. 파일은 600줄 그대로다.
+- 증거: `middleware/core/gateway/test/test_goal_lease.py` 2건 추가(다른 토큰 403·목표는 제 만료에 끝남, 거절 뒤 보낸 토큰 갱신 200), 기존 409·임대 없는 목표 시험 통과. 원격(AI PC) 97ad6ca74 exit 0.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 근거 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
+
+## 2026-10-14 · cd937291b · 가상 신호 mixin을 `line_follow/signal` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `recovery/junction/signal.py`를 `git mv`로 `line_follow/signal/gate.py`로 옮겼다. 내용은 그대로다. `recovery/junction/gate.py`의 import 줄 하나가 새 경로를 가리킨다. 옛 경로에 호환 재수출을 두지 않았다. `SIZE_UNITS`에 `drive/behaviors/line_follow/signal`을 더했다.
+- 증거: `git diff -M`에서 파일은 100% rename이고 다른 변경은 import 줄 하나와 한 줄짜리 `signal/__init__.py`다. 옛 모듈 경로를 import하는 시험은 없었다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. `recovery/junction` 단위 1,281줄 → 1,188줄, 새 단위 94줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가와 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`의 2026-10-14 보탬.
+- 교훈: 신호 mixin의 파일은 옮겼지만 `_junction_signal` 자리와 호출 순서는 교차로 게이트에 남는다. 다음 수정이 그 줄을 건드리면 `recovery/junction` 단위가 자란다.
+
+## 2026-10-14 · be48f4d34 · D-760 2b단계: 뒤 문이 가져간 시간은 호의 기한이 아니다
+
+- 변경: `line_follow/arc/lane_arc.py::_arc_step`. D-507 13항(`recovery/junction/gate.py::_maneuver`)과 같은 규칙: 틱마다 통행권(`_authority_on`·`_authority_state`)이 `FREE`가 아니거나 횡단보도 게이트(`_xwalk.status`)가 `looking`·`waiting`이면 지난 틱부터의 시간을 호 기한과 열린 IR 보정 기한에 더한다. 한 호에 `crosswalk_report_s + crosswalk_clear_s`(15 s)까지. 그 뒤는 지금처럼 `lane_arc_timeout`과 HOLD. 문이 가져가지 않은 시간은 지금 기한 그대로다. `crossing`의 느린 몫(교차로 기동의 규칙)은 호에 넣지 않았다(호는 알려진 횡단보도 위에서 열리지 않는다). D-400 `policy_hold`는 이 층에서 보이지 않아 넣지 않았다. D-744 원, 호 기하, D-759, 타임아웃 뒤 동작은 그대로다.
+- 증거: `test_lane_arc.py` — 통행권·`looking`·`waiting`이 호 도중 3 s·6 s 잡았다가 풀리면 호를 마침(6건), 통행권 없이 연 호는 기한 + 15 s에 `lane_arc_timeout`·HOLD(옛 "오늘 동작" 고정 시험을 바꿈), 호 도중 20 s는 기한 + 15 s에 `lane_arc_timeout`, 문이 없거나 `armed`·`crossing`이면 기한이 `length_m`/v + 2 s 그대로, IR 보정 중 잡힘은 보정 기한도 세움, 10 s 두 번은 합해서 15 s(호마다 상한). 고치기 전 커밋에서 새 시험 10건이 원격으로 실패했다.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요. 크기 단위 `drive/behaviors/line_follow/arc` 460 → 469(한도 460, +9 초과, 재판정 필요). 부모 단위 `line_follow`는 바뀌지 않음.
+- 결정: D-760 개정 2 6항. API Reference의 호 시간 한도 문장을 고쳤다(버전 행은 올리지 않음).
+- 교훈: 호 0.5 s 지점의 20 s 정지는 남은 여유 때문에 정지 안이 아니라 풀린 뒤 주행 중에 시간이 다한다. 시험의 시점은 기한 + 15 s로 잰다.
+
+## 2026-10-14 · uncommitted · D-760 2b 독립 검토 반영: 공유 계산, 틱 간격 상한, 건너는 중의 몫
+
+- 변경: `line_follow/crosswalk/gate.py`에 `_regulated_wait_share(now, dt, speed)`를 두고 `recovery/junction/gate.py::_maneuver`(D-507 13)와 `arc/lane_arc.py::_arc_step`이 같이 쓴다. 통행권 비`FREE`, `looking`·`waiting`, 건너는 중 앞 물체로 선 상태(`look_progress`, 두 호출부 모두 놓쳤다)는 전부, 건너는 중은 `1 - crosswalk_cross_speed/speed`만 센다. `dt`는 `stale_after_s`까지만 센다(틱 스레드가 멈췄다 HOLDING으로 깨어나도 그 간격을 주지 않는다). 상한 15 s는 호출부가 지킨다. 호는 이제 건너는 중의 몫도 받는다(속도는 `_arc_speed()`). `lane_arc.py`의 공백만 바뀐 줄을 되돌렸다. 크기 판정 `line_follow/arc`를 467로 재판정 문구와 함께 바꿨다(검토자 문구 + 단위 계획 인용, 가드가 계획 인용을 요구한다).
+- 증거: `test_lane_arc.py` — 2 s 주행 뒤 3 s 정지가 기한을 3.0 s 옮김, 멈춘 틱 간격은 `stale_after_s`까지(그 틱은 낡은 odom으로 호도 끝난다), 건너는 중 선 시간 2 s 전부·움직이는 건너기 2 s의 절반. 교차로·횡단보도·통행권·호 시험과 `test_module_structure.py` 원격 통과.
+- gate 변화: SOURCE·호스트 근거만. 크기: arc 467, crosswalk 769(판정 756), junction 1239, `recovery/junction/gate.py` 597줄.
+
+## 2026-10-14 · uncommitted · fix(line_follow,state): D-758 0단계 odom 기록을 발행 stamp로 찾고 line-follow 시계로 잰다, odom epoch
+
+- 변경: `line_follow/authority.py` — odom 기록 항목에 스냅숏이 발행한 벽시계 stamp(`observe_return_pose(wall=...)`, 없으면 지금 벽시계)와 line-follow 시계(`trail` 표본의 `received_at`)를 둔다. `_odom_entry(stamp)`가 |차| ≤ `STAMP_MATCH_S`(1 µs)인 가장 새 항목을 찾고, 없으면 이전처럼 벽시계에서 그 이전 항목을 찾는다. 통행권(`set_authority`)·호 기준(`_odom_at_stamp`, D-744·D-759)·차로 신호(`cue/lane_cue.py::_cue_pose_yaw`, D-511)가 이 조회를 쓰고, 찾은 표본의 나이·미래 판정은 line-follow 시계로 한다. `_authority_seq`도 line-follow 시계다. `state/manager.py::set_odom_pose(x, y, yaw, frame=None, source_stamp_ns=None)`가 발행한 stamp를 돌려주고 `odom_pose.epoch`(한 표본 이동 > 0.02 + 0.2·dt m, frame 변경, 원본 시각 역행에서만 증가)와 `mono_s`를 싣는다.
+- 증거: `test_line_authority.py`(벽시계 ±5 s 뒤 같은 표본, JSON 왕복, 같은 stamp 둘이면 새것, 옛 Fleet 계산 stamp는 이전대로, 역행 뒤 seq 기억), `test_lane_arc_map_anchor.py`(±5 s 뒤 기준 사용), `test_state_odom_pose.py`(원점 통과는 epoch 그대로, 이동·frame·시각 역행에서 증가) — 수정 전 적색 확인(`X:/DevTemp/odom-monotonic`), 수정 뒤 `middleware/core/services/test` 1867 통과, `known_failures` NEW 0.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요(통행권 주행 거리 계산). 크기: `line_follow` 2452(판정 2412 + 150 안), cue 380, `state/manager.py` 360줄, `authority.py` 205줄.
+- 결정: D-758 0단계(조정자가 계획 범위 변경을 기록한다: 기록은 line_follow에 남고 Fleet은 stamp를 그대로 돌려준다).
+- 교훈: 스냅숏 stamp와 기록 stamp가 따로 찍히면 "이전 표본" 탐색만 가능하다. 같은 값을 한 번 찍어 두 곳에 쓰면 벽시계 이동과 무관하게 정확히 찾는다.
+
+## 2026-10-14 · uncommitted · fix(line_follow): D-758 0단계 독립 안전 검토 1·3항 — 모호한 stamp와 뒤로 간 벽시계에서 거절
+
+- 변경: `line_follow/authority.py::_odom_entry` — 발행 stamp와 맞는 항목이 둘 이상이면 찾지 못한 것으로 한다(새것을 고르면 지난 거리가 줄어 여유가 커진다). 맞는 항목이 없고 기록 안의 벽시계 stamp가 한 곳이라도 뒤로 가면 "그 이전" 탐색을 하지 않고 거절한다. 통행권 `AUTHORITY_POSE_STALE`, 호 기준 `no_sample`, 차로 신호 `pose_stale`.
+- 증거: `test_line_authority.py`(같은 stamp 둘 → 거절, 0.1 s 뒤로 간 뒤 발행하지 않은 stamp → 거절), `test_lane_arc_map_anchor.py`·`test_line_follow_lane_cue.py`(같은 stamp 둘). 원격 시험은 확인 못 함: 이 노트북에서 시험 PC로의 묶음 전송이 모두 `Connection reset by peer`(짧은 ssh는 된다).
+- gate 변화: SOURCE 근거만, 호스트 시험 미확인. `authority.py` 213줄.
+- 결정: D-758 0단계 독립 Safety-Review 조건 1·3.
+- 교훈: 같은 stamp에서 "가장 새것"은 안전 쪽이 아니다. 통행권은 모를 때 서야 한다.
+
+## 2026-10-14 · uncommitted · D-760 개정 3 9항: `line_follow.regulation_wait`
+
+- 변경: `line_follow/crosswalk/gate.py`에 `_regulation_wait(now)`를 두었다. 통행권 비`FREE` → `authority`, D-620 신호 대기(`signal/gate.py::_signal_holding`: 신호 켜짐, 들어가지 않은 회차, 교차로 `waiting`) → `signal`, 횡단보도 `waiting` → `crosswalk_wait`, `looking` → `crosswalk_look`, 건너는 중 앞 물체로 섬(`look_progress`) → `crosswalk_held`, 아니면 None. 우선순위는 그 순서다(횡단보도 셋은 서로 겹치지 않는다). `_regulated_wait_share`는 이 분류가 None이 아니면 dt 전부를 센다(사본 없음). 신호 대기가 새로 들어갔지만 그때 교차로는 `waiting`이라 기동 시계가 돌지 않고, 호는 틱을 가져가 교차로 문이 돌지 않는다. `manager.status()`가 꺼짐이 아니면 이 값을 `regulation_wait`에 넣어 `GET /line-follow`와 상태 스냅숏에 같이 실린다.
+- 증거: `middleware/core/services/test/test_line_regulation_wait.py`, `middleware/core/gateway/test/test_line_regulation_wait_api.py`. 고치기 전 커밋에서 새 시험 17건이 원격으로 실패했다.
+- gate 변화: SOURCE·호스트 근거만. Fleet은 아직 읽지 않는다(rosy-44 몫). Safety-Review 대상 경로(`crosswalk/gate.py`)를 건드렸다.
+- 결정: D-760 개정 3 9항. API Reference v1.227.
+
+## 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.231)
+
+- 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받고, `_place_map_entry`가 회전에서는 `turn_map_entry_enabled`를 본다. `gate.py`가 회전 지시를 받을 때 방향을 둔다. `turn.py` — 정지 확인 뒤 목표를 `_map_entry_yaw`로 지도 방향에 둔다(오늘 목표와 30° 안, 받은 뒤 경로 1.5 m 안). 능력 `supports_lane_turn_map_entry`. `model.py`에 `turn_map_entry_enabled`(기본 `false`); bool 검사 넷을 한 반복으로 묶었다(문구 그대로).
+- 증거: Gazebo m18·m19(NW 출구, 물려받은 yaw 오차 0.07–0.10 rad, `junction_unresolved`)가 계기다. `test_junction_turn_map_entry.py`(0.08 rad 진입 오차에서 목표가 지도 방향, 없으면 오차가 남음, 30° 경계, `stale`, 설정 꺼짐 = 오늘과 같은 목표·움직임, 능력, 400). `test_junction_bend.py`의 `left`+`map_entry` 거절 시험은 `straight`로 바꿨다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM과 장치는 미검증이다. 크기 단위 `recovery/junction` 1188 → 1200줄(한도 1287), `turn.py` 98 → 106, `gate.py` 519 → 521, `bend.py` 306 → 308. `line_follow` 단위 `model.py` 600 → 598.
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 없음.
+
+## 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.231)
+
+- 변경: `bend.py` — 둔 방향이 odom 키를 기억하고 `_map_entry_yaw`가 키가 다르면 `epoch`(굽이도 같다), 한도를 인자로 받는다. `turn.py` — 회전 한도 `TURN_MAP_ENTRY_MAX_RAD = REACQUIRE_HEADING_RAD/2`(15°), 쓴 지도 목표가 180°를 넘어도 `turn_deg` 부호 쪽으로 돈다.
+- 증거: `test_junction_turn_map_entry.py`에 `epoch`·`carry`·`future`·20° `heading`·왼쪽 회전·재전송·180° 너머 방향·D-520 호 출발 방향. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. 크기 단위 `recovery/junction` 1200 → 1208줄(한도 1287).
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
+
+## 2026-10-15 · 9a9ea4554 · 규제 능력 속성 (D-763 10항 (c), API v1.233)
+
+- 변경: `line_follow/crosswalk/gate.py`에 `supports_lane_crosswalk_gate`(= `crosswalk_gate_enabled`), `line_follow/signal/gate.py`에 `supports_lane_junction_signal`(= `junction_signal_enabled`). 동작은 바뀌지 않는다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`.
+- gate 변화: 없음. 크기 단위 `crosswalk`·`signal` 각 +4줄.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)
+
+- 변경: `line_follow/signal/gate.py` `_signal_gate` — `_authority_on()`(통행권 강제·trip lease)이면 3초 무응답 우측 fallback을 고르지 않고 대기, journal 한 줄. `line_follow/crosswalk/gate.py` `_regulated_wait_share`가 시계 dict를 받아 상한까지 적용: 앞뒤 두 틱이 통행권 `HOLDING`이면 전부, 그 밖(`NONE`·`EXPIRED`·횡단보도)은 15 s. `recovery/junction/gate.py` `_maneuver`와 `arc/lane_arc.py`가 자기 dict를 넘긴다.
+- 증거: `test_junction_signal.py`(trip 무응답 6 s 대기, trip·모드 변경 뒤 fallback 복귀), `test_regulated_wait_clock.py`(FREE↔HOLDING 매 틱 반복은 0, HOLDING 무상한, NONE·EXPIRED 15 s), `test_junction_bend.py`(30 s HOLDING 뒤 굽이 이어 감, NONE은 상한 뒤 abort), `test_lane_arc.py`. 임대 상실 시 차선 추종 정지는 gateway `test_trip_lease.py::test_expiry_halts_a_moving_robot_to_idle`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. `recovery/junction` 단위 1줄 감소.
+- 결정: D-620 노트 2026-10-15, D-760 개정 4.
+- 교훈: 상한 없는 대기 크레딧은 살아 있는 상대가 기다리라고 할 때만 준다. 링크 끊김은 상한으로 닫는다.
+## 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+
+- 변경: `line_follow/recovery/junction/approach.py` `_stamp_odometer`·`supports_lane_instruction_stamp`, `_expect_window`의 기준 인자. `gate.py` `set_junction(pose_stamp=)`: 설정 `instruction_stamp_enabled`(기본 꺼짐)가 켜져 있으면 `_odom_entry`(D-758 0)로 그 stamp에 발행된 표본을 찾고(정확한 표본만), 같은 표본의 교차로 궤적 주행 거리계(`trail.odometer_at`)를 창의 기준으로, 그 뒤 달린 거리(`trail.odometer` − 그 값)를 굽이의 처음 `travel`로 둔다. 통행권 기록의 `path_m`은 쓰지 않는다. 못 쓰면 받은 때 기준, 거절 없음: 상태 `distance_basis`·`distance_basis_reason`(none_sent·disabled·ambiguous·stale·future·no_sample·epoch). `model.py` 설정 한 줄.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 895d7f30b → 초록): stamp 뒤 0.05 m 움직인 굽이는 Fleet 자세에서 `bend_in − tol`에 시작, 창 기준은 stamp 표본의 odometer, 두 기록이 같은 odom 메시지(stamp_ns), 벽시계 ±5 s, 떨어짐 사유 넷, 설정 꺼짐 = 명령이 같음, 거리 없는 지시는 기준 없음, 능력, 잘못된 stamp. 원격(모델 PC, 9639a41b8) `middleware/core/services/test` 통과, `known_failures` 0 new, 로그 X: `instruction-stamp/services/run-1.txt`.
+- gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
+- 결정: D-767 A부 1–3항.
+- 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.
+## 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
+
+- 변경: `recovery/junction/approach.py` `_stamp_odometer`는 `_odom_at_stamp`의 2 s 나이 상한(D-744 지도 자세용)을 쓰지 않고, 정확한 표본을 교차로 궤적이 가진 동안 쓴다. `gate.py`: 거리(창 또는 굽이) 있는 지시의 `pose_stamp`를 못 쓰면 상태를 바꾸기 전에 `JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', reason=…)`(disabled·ambiguous·future·no_sample·epoch·stale). 받은 때 기준으로 조용히 떨어지지 않는다. `pose_stamp` 없는 지시와 거리 없는 지시는 그대로.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 eb3a3e8b2 → 초록): 2.5 s 묵은 stamp도 기준, 못 쓰는 사유 다섯 × 굽이·창 거절과 상태 그대로, 설정 꺼짐 `disabled`, stamp와 받음 사이 후진이 창의 후퇴로 잡힘(이 시험은 처음부터 초록: 구현이 이미 맞았다). 원격(모델 PC) 통과, `known_failures` 0 new.
+- gate 변화: 없음. 호스트 근거만.
+- 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
+- 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
+## 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
+
+- 변경: `recovery/junction/gate.py` `set_junction`의 stamp 검사를 재전송·굽이 갱신 갈래 뒤로 옮겼다. 둘은 stamp로 재지 않으므로 쓸 수 없는 stamp에도 받는다(되풀이된 거절로 이미 잰 굽이가 만료되던 일).
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 4865e2b0e → 초록): 갱신은 travel을 지키고 받음, `bending` 중 재전송 그대로. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2, 재검토 MEDIUM.
+- 교훈: 없음.
+
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.

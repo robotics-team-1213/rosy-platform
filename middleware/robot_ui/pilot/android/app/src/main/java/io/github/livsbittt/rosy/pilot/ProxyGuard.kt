@@ -12,6 +12,6 @@ class ProxyGuard(private val authority: String, private val capability: String,
     companion object {
         fun allowedPath(path: String): Boolean = !path.contains("..") && !path.contains('\\') &&
             (path == "/pilot" || path.startsWith("/pilot/") || path.startsWith("/common/") ||
-             path.startsWith("/api/v1/") || path.startsWith("/ws/"))
+             path in setOf("/api/account/session", "/api/account/logout") || path.startsWith("/api/v1/") || path.startsWith("/ws/"))
     }
 }

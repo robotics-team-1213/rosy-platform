@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
-def account_page(tmp_path, request):
+def account_page(tmp_path, request, account_backend):
     from playwright.sync_api import sync_playwright
     console = FleetConsole([RobotEndpoint('rosy_01', 'http://127.0.0.1:8080', 'robot-only')],
                            [FakeRobot('rosy_01')])
@@ -33,6 +33,8 @@ def account_page(tmp_path, request):
         logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': hash_password('pw-1234')}
     app = create_app(console, task_service=tasks, site_users={}, site_logins=logins,
         web_common=ROOT / 'shared' / 'web', start_task_dispatcher=False)
+    if account_backend == 'managed':
+        app.state.password_sessions.bootstrap_accounts('alice', 'test-site')
     listener = safe_listener()
     origin = f'http://localhost:{listener.getsockname()[1]}'
     server = uvicorn.Server(uvicorn.Config(app, log_level='error', timeout_graceful_shutdown=3))
@@ -57,21 +59,27 @@ def account_page(tmp_path, request):
         assert not worker.is_alive()
 
 
+@pytest.fixture(params=['legacy', 'managed'])
+def account_backend(request):
+    return request.param
+
+
 def _credentials(page):
     page.locator('[data-login=login]').fill('alice')
     page.locator('[data-login=password]').fill('pw-1234')
 
 
 @pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
-def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path):
+def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path, account_backend):
     from playwright.sync_api import expect
     page, origin = account_page
     page.goto(origin + '/console/login?return=' + path)
     _credentials(page)
     page.locator('[data-login=submit]').click()
-    expect(page.locator('#fleet-account')).to_be_visible()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
     expect(page.locator('#fleet-login')).to_be_hidden()  # D-683 1: login link or account menu, never both
-    page.locator('#fleet-account > summary').click()
+    page.locator('#topbar-more').click()
+    expect(page.locator('#fleet-account')).to_be_visible()
     expect(page.locator('#fleet-profile')).to_be_visible()
     writes = []
     page.context.on('request', lambda req: writes.append(req.url) if req.method in ('POST', 'PATCH') else None)
@@ -85,6 +93,12 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
         profile = page
     expect(profile.locator('#profile-id')).to_have_text('alice')
     expect(profile.locator('#profile-role')).to_have_text('운영자')
+    if account_backend == 'managed':
+        expect(profile.locator('#profile-grants')).to_be_visible()
+        expect(profile.locator('#profile-grant-list')).to_contain_text('site:test-site')
+        expect(profile.locator('#profile-grant-list')).to_contain_text('계정 관리')
+    else:
+        expect(profile.locator('#profile-grants')).to_be_hidden()
     assert profile.locator('#profile-id input, #profile-email input, #profile-role input').count() == 0
     assert profile.evaluate('document.documentElement.scrollWidth <= innerWidth')
     name = '<b>현장 운영자</b>'
@@ -153,6 +167,7 @@ def test_profile_save_failure_preserves_name_and_does_not_claim_success(account_
                if route.request.method == 'PATCH' else route.continue_())
     page.locator('#profile-name-save').click()
     expect(page.locator('#profile-status')).to_contain_text('처리 결과를 확인할 수 없습니다')
+    expect(page.locator('#profile-grants')).to_be_hidden()
     expect(page.locator('#profile-name')).to_have_value('저장 확인 필요')
     page.unroute('**/api/fleet/auth/profile')
     page.locator('#profile-reload').click()
@@ -324,8 +339,9 @@ def test_account_entry_returns_to_each_document_without_commands(account_page, p
             login.screenshot(path=str(Path(output) / f'account-login-{width}.png'), full_page=True)
     login.locator('[data-login=password]').press('Enter')
     expect(login).to_have_url(origin + path)
+    expect(login.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    login.locator('#topbar-more').click()
     expect(login.locator('#fleet-account')).to_be_visible()
-    login.locator('#fleet-account > summary').click()
     expect(login.locator('#fleet-account-identity')).to_contain_text('alice')
     expect(login.locator('[data-login=logout]')).to_be_enabled()
     for width in (320, 1366):
@@ -342,8 +358,9 @@ def test_logout_failure_does_not_claim_the_session_ended(account_page):
     page.goto(origin + '/console/login')
     _credentials(page)
     page.locator('[data-login=submit]').click()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    page.locator('#topbar-more').click()
     expect(page.locator('#fleet-account')).to_be_visible()
-    page.locator('#fleet-account > summary').click()
     page.route('**/api/fleet/auth/logout', lambda route: route.fulfill(status=503, body='{}'))
     page.locator('[data-login=logout]').click()
     expect(page.locator('[data-login=error]')).to_contain_text('확인 불가')
@@ -395,12 +412,12 @@ def test_empty_cell_token_uses_cookie_despite_stale_storage(account_page):
     page.goto(origin + '/console/login?return=%2Fconsole%2Fcell')
     _credentials(page)
     page.locator('[data-login=submit]').click()
-    expect(page.locator('#fleet-account')).to_be_visible()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
     page.evaluate("sessionStorage.setItem('rosy-console-token', 'stale-token')")
     open_token_access(page)
     page.locator('#console-token').fill('')
     page.locator('#token-save').click()
-    page.locator('#fleet-account > summary').click()
+    expect(page.locator('#fleet-account')).to_be_visible()  # open_token_access가 계정 단추를 이미 열었다
     expect(page.locator('[data-login=logout]')).to_be_visible()
     expect(page.locator('[data-login=logout]')).to_have_text('로그아웃')
     expect(page.locator('[data-login=logout]')).to_be_enabled()

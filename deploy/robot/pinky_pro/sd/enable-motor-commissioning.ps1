@@ -97,7 +97,8 @@ if ($CheckOnly) {
     return
 }
 
-$evidenceDir = Join-Path 'X:\DevTemp' ("rosy-motor-{0}-{1}" -f $DeviceName, (Get-Date -Format 'yyyyMMddTHHmmssfff'))
+$scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
+$evidenceDir = Join-Path $scratchRoot ("rosy-motor-{0}-{1}" -f $DeviceName, (Get-Date -Format 'yyyyMMddTHHmmssfff'))
 New-Item -ItemType Directory -Path $evidenceDir -ErrorAction Stop | Out-Null
 [IO.File]::WriteAllText((Join-Path $evidenceDir 'runtime.before.env'), $runtimeText,
     [Text.UTF8Encoding]::new($false))

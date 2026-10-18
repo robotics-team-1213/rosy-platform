@@ -22,6 +22,7 @@ from .manipulation_plan import (
     PlannedMotionPhase,
     ResolvedPickPlacePlan,
 )
+from .phase_gate import PHASE_WAIT
 from .phase_recorder import ActionPhaseRecorder
 from .pose_plan import CellPlanningProfile, CellTransferPlan, validate_cell_transfer_plan
 from .ros_goal_contract import RosGoalEvent
@@ -265,8 +266,12 @@ class PickPlaceRunner:
         ), state
 
     def start(self) -> dict[str, object]:
-        """Persist and submit only the first phase of a fresh attempt."""
-        if self.phase_gate(self.plan.phases[0].phase_id) is not True:
+        """Persist and submit only the first phase of a fresh attempt. On PHASE_WAIT (D-780 barrier,
+        arrival journaled) nothing is submitted; the owner's tick calls start again after release."""
+        gate = self.phase_gate(self.plan.phases[0].phase_id)
+        if gate is PHASE_WAIT:
+            return {"waiting": self.plan.phases[0].phase_id}
+        if gate is not True:
             raise RuntimeError("semantic workflow gate does not permit the first motion phase")
         if self.recorder.phases():
             raise RuntimeError("phase journal is not empty; automatic replay is forbidden")
@@ -288,7 +293,10 @@ class PickPlaceRunner:
         if next_ordinal >= len(self.plan.phases):
             raise RuntimeError("all planned motion phases have already been submitted")
         next_phase = self.plan.phases[next_ordinal]
-        if self.phase_gate(next_phase.phase_id) is not True:
+        gate = self.phase_gate(next_phase.phase_id)
+        if gate is PHASE_WAIT:
+            return {"waiting": next_phase.phase_id}
+        if gate is not True:
             raise RuntimeError("semantic workflow gate does not permit the next motion phase")
         if self._current_phase is None or self._current_phase.ordinal != previous["ordinal"]:
             raise RuntimeError("prior phase identity is not the coordinator's active phase")
@@ -394,14 +402,8 @@ class PickPlaceRunner:
     def _record_dispatch_failure(self, phase: PlannedMotionPhase, first: bool,
                                  dispatched: bool | None) -> None:
         accepted = False if dispatched is False else None
-        if first:
-            self.recorder.record_first_submission(
-                phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None,
-            )
-        else:
-            self.recorder.record_submission(
-                phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None,
-            )
+        record = self.recorder.record_first_submission if first else self.recorder.record_submission
+        record(phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None)
         if accepted is None:
             self.recorder.hold(reason="LOCAL_DISPATCH_UNKNOWN")
 

@@ -1276,3 +1276,28 @@
 - 증거: 원격 Chromium 결합 회귀 039bbbffa 176 passed, 신선도·최근 접속 후속 e01abed51 27 passed, 전체 Robot 캡처 ab2f331a4 3 passed, 겹침·잘림 회귀 432e39895 8 passed, 입구 권한 한 줄 회귀 855e5b46a 3 passed. 각 종료 로그의 known_failures는 0 new/0 known이다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--020319--robot-pilot-ux--7d7d85/logs/ 아래 browser, captures, robot-captures, visual-final, entry-final에 있다.
 - 검토: 원격 대역 CORE의 Pilot 목록 없음/읽기 실패 4뷰포트 8장과 Robot 입구·운용·작업 준비·설치 정비 320/390 캡처 8장을 받았다. Pilot 320 실패/2000 빈 상태와 Robot 네 화면 320을 직접 검토했다. 권한 글자 잘림과 상태·설명 혼합을 발견해 수정하고 다시 캡처했다.
 - gate 변화: SOURCE와 원격 Chromium 근거만 추가했다. 노트북 pytest·로컬 browser·착지·push·배포·실제 설치 화면 확인은 하지 않았다. DEVICE/FIELD와 실제 전체 UI 수용은 이 증거로 승격하지 않는다.
+
+## 2026-10-13 · 2a7afbd1f · feat(robot): 화면 전환은 공용 레일, 작업 목록은 하위 탐색 자리 (D-741 6)
+
+- 변경: `surface.html`이 `ui-app-shell`이 됐다. 머리는 이름·알림·역할·비상 정지만 갖고, 그 아래 공용 탐색 레일(`#surface-switch`)에 `renderSwitch()`가 표면마다 항목 하나를 그린다(아이콘, 짧은 이름 `운용·준비·설치`, 전체 이름은 접근성 이름). `/setup`·`/device`의 `createTaskChooser()`는 공용 하위 탐색 자리(`.ui-subnav`)에 선다. `/console` 본문의 세 열과 고정 높이 프레임은 그대로다. 64rem 아래에서 머리는 한 줄(64px), 레일은 그 아래 가로 한 줄이다. `#shell-estop` 마크업과 자리는 바뀌지 않았다.
+- 증거: 원격 pytest(2a7afbd1f) `shared/web/test`, `middleware/robot_ui/robot/test`, CORE 표면 시험 여섯 파일 통과, `known_failures` NEW 0. `test/architecture`는 여섯 건이 실패하며(Fleet 줄 수 판정, app identity 둘, safety separation 셋) 이 브랜치의 밑동 10581c1ce에서도 같은 여섯 건이다. 브라우저 시험은 고쳤으나 원격에서 건너뛰어 실행되지 않았다. 머리 예산은 계산값이다: 390×844와 320×568에서 머리 64px + 레일 줄 49px = 113px(20%는 168.8px, 113.6px).
+- gate 변화: 없음. SOURCE만 바뀌었다. 브라우저 렌더·캡처(G2), 설치본, 실물 화면은 확인하지 못했다. 착지·push하지 않았다.
+
+
+## 2026-10-16 · uncommitted · 상태 패널에서 같은 로봇의 Pilot으로 이동
+
+- 변경: 상태 패널에 same-origin /pilot 진입을 추가했다. 기존 조작·정지 계약은 유지하고 중복 저속 조종 제거는 대상·릴리스별 실기 증거 예외로 남긴다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-17 · eab1d0fb1 · 남은 대시보드 브라우저 검사의 현재 계약 반영
+
+- 변경: 만료 토큰 시험에 익명 계정 세션 조회를 반영하고, 셸 정지 대기식을 CSP에 맞는 함수로 고쳤다. 보정 표시 시험은 현재 소스 경로로 단독 import하도록 고쳤다. 토큰 삭제·서랍·실제 CORE 정지 및 보정 lease 검사를 유지한다.
+- 증거: Python 시험 세 파일의 구문 검사·차이 공백 검사·수정 커밋 safety 검사·독립 계약 검토 통과. 원격 시험 PC의 SSH 연결 시간 초과로 실행 결과는 대기 중이다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
+- gate 변화: 없음. 기존 실패 목록·장치 수용은 유지하며 main 착지·push·배포하지 않았다.
+
+## 2026-10-17 · 0e8ba72832 · 인증·정지·단독 보정 표시 브라우저 확인
+
+- 변경: 기존 만료 토큰·CSP 정지·보정 표시 실패의 실제 원격 성공을 확보해 목록 해제를 진행한다.
+- 증거: focused 19 passed 중 토큰 삭제·익명 조회·실제 CORE 정지 상태를 확인했고 보정 표시는 별도 invocation 1 passed, skip 0, 각 로그 NEW 0이다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
+- gate 변화: 없음. 호스트 모의 CORE·합성 lease 검사이며 물리 정지·실측·DEVICE/FIELD 수용이 아니다.

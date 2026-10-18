@@ -5,6 +5,7 @@ stuck and asks, rosy_02's trip waits at a place for a changed route, rosy_03 is 
 No robot moves. ROSY_SHOT_DIR keeps the screenshots.
 """
 
+import base64
 import json
 import os
 import threading
@@ -143,6 +144,238 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         assert json.loads(Path(download.path()).read_text(encoding="utf-8"))["traffic_reports"][0]["id"] == "ai_fact:17"
         assert not errors
         browser.close()
+
+@pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
+def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_side(site, size):
+    """D-741 8 — /console?view=records: 사건은 본문, 연 사건의 원인과 조치는 오른쪽 칸, 하위 탐색이 화면을 고른다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    def report(stuck, closed, reviews):
+        return {"id": f"line_stuck:rosy_01:{stuck}", "classification": "line_stuck", "robot_ids": ["rosy_01"],
+                "stuck_id": stuck, "opened_at": "2026-10-10T05:00:00+00:00", "closed_at": closed,
+                "actions": [], "reviews": reviews,
+                "evidence": {"core": {}, "fleet": {}, "rosy_cam": None, "ai_facts": [],
+                             "front_image": {"status": "not_retained"}}}
+    fact = {"id": "ai_fact:17", "classification": "stalled", "robot_ids": ["rosy_01"],
+            "opened_at": "2026-10-10T05:00:00+00:00", "actions": [], "reviews": [],
+            "evidence": {"ai_fact": {"fact_row": 17, "kind": "stalled", "source": "analyzer:traffic_watch@1",
+                                     "stage": "shadow", "confidence": 0.7, "value": {}, "evidence": {}}}}
+    done = [{"root_cause": "obstacle", "note": "상자", "principal_id": "bob"}]
+    reports = [report("open-new", None, []), report("closed-new", "2026-10-10T05:10:00+00:00", []),
+               report("closed-done", "2026-10-10T05:10:00+00:00", done)]
+    # Enough unreviewed rows on the one robot that, below 64rem, the judgment seat starts off-screen.
+    reports += [report(f"more-{index}", "2026-10-10T05:10:00+00:00", []) for index in range(12)]
+    api = {**API, "/api/fleet/incidents": {"reports": reports, "traffic_reports": [fact]}}
+    answers = {f"/api/fleet/incidents/rosy_01/{stuck}/review": (200, {"reviewed": True}) for stuck in ("open-new", "closed-new")}
+    posts = []
+
+    def screen(show):
+        page.goto(site + "/console?view=records" + (f"&show={show}" if show else ""))
+        page.clock.run_for(2000)
+        return page.get_by_role("navigation", name="기록 화면", exact=True)
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers, size=size)
+        try:
+            nav = screen("")
+            rows = page.locator("#incident-list > li")
+            expect(rows).to_have_count(14)  # 검토할 사건: 검토 기록이 없는 것만
+            expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 14건")
+            assert nav.locator("a").all_inner_texts() == ["검토할 사건", "열린 사건", "닫힌 사건", "AI 상황 사실", "관제 기록"]
+            assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["검토할 사건"]
+            assert [text.strip() for text in page.locator('.doc-tabs a[aria-current="page"]').all_inner_texts()] == ["기록"]
+            expect(page.locator('.ui-subnav[data-area="work"]')).to_be_hidden()
+            panel, side = page.locator(".incident-panel"), page.locator("#incident-side")
+            expect(panel).to_be_visible()
+            expect(side).to_be_visible()
+            expect(side.locator(".hint")).to_be_visible()
+            expect(page.locator(".queues-panel")).to_be_visible()
+            expect(page.locator('[aria-labelledby="map-heading"]')).to_be_hidden()
+            expect(page.locator("#incident-traffic-list")).to_be_hidden()
+            assert panel.evaluate("node => !node.closest('[role=tabpanel]')")
+            assert side.evaluate("node => node.closest('[role=tabpanel]').id") == "context-evidence"
+            if size[0] >= 1024:
+                body, right = panel.bounding_box(), side.bounding_box()
+                assert body["x"] + body["width"] <= right["x"], (body, right)
+            first = rows.first
+            first.locator(":scope > details > summary").click()
+            expect(first).to_contain_text("해소 확인")
+            expect(side).to_contain_text("담당 인수: 아직 없음")
+            expect(side).to_contain_text("사람 검토: 아직 없음")
+            expect(side.locator(".hint")).to_be_hidden()
+            assert first.locator("form").count() == 0 and "사람 검토" not in first.inner_text()
+            heading = page.locator("#incident-judgment h3")
+            expect(heading).to_contain_text("rosy_01")
+            expect(heading).to_contain_text("사건 기록 · 종료 미확인")  # A: the open incident
+            expect(heading).to_contain_text("시작 ")
+            seat = page.locator("#incident-judgment")
+            if size[0] < 1024:  # the form sits under the whole list: opening a fold brings it into view
+                expect(seat).to_be_in_viewport()
+            # ArrowDown on the fold's summary is not roster navigation: the review form stays in front.
+            first.locator(":scope > details > summary").press("ArrowDown")
+            expect(page.locator("#context-evidence")).to_be_visible()
+            expect(page.get_by_role("tab", name="기록·근거")).to_have_attribute("aria-selected", "true")
+            # Two incidents of one robot, without <details name>: script closes A, the seat names B, the review posts B.
+            assert page.locator("details[name]").count() == 0
+            rows.nth(1).locator(":scope > details > summary").click()
+            expect(first.locator(":scope > details")).not_to_have_attribute("open", "")
+            expect(page.locator(".incident-row > details[open]")).to_have_count(1)
+            expect(page.locator('#incident-judgment > [data-report-key="rosy_01|closed-new"]')).to_have_count(1)
+            expect(heading).to_have_count(1)
+            expect(heading).to_contain_text("과거 · 종료 기록 있음")  # B: the closed incident
+            if size[0] < 1024:
+                expect(seat).to_be_in_viewport()
+            # A repaint keeps the seat on B and returns focus to B's control: both incidents' controls share one label.
+            side.locator("select").focus()
+            page.evaluate("""() => { window.oldSeat = document.querySelector('#incident-judgment > div');
+                document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
+            page.wait_for_function("""() => document.querySelector('#incident-judgment > div') !== window.oldSeat
+                && document.activeElement.matches('#incident-judgment > [data-report-key="rosy_01|closed-new"] select')""")
+            side.locator("select").select_option("obstacle")
+            side.locator("input").fill("현장 상자 확인")
+            side.locator("ui-button[type=submit]").click()
+            assert posts[-1][0] == "/api/fleet/incidents/rosy_01/closed-new/review"
+            assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= size[1]
+            _shot(page, f"records-review-{size[0]}.png", full_page=True)
+            for show, count in (("open", 1), ("closed", 14)):
+                nav = screen(show)
+                expect(page.locator("#incident-list > li")).to_have_count(count)
+                assert len(nav.locator('a[aria-current="page"]').all_inner_texts()) == 1
+            nav = screen("nonsense")  # an unknown screen falls back to the default list and marks it
+            expect(page.locator("#incident-list > li")).to_have_count(14)
+            assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["검토할 사건"]
+            # The filter runs over a capped fetch: a full answer says so in the count line.
+            api["/api/fleet/incidents"] = {"reports": [report(f"cap-{index}", None, done if index else []) for index in range(100)],
+                                           "traffic_reports": []}
+            screen("")
+            expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 100건 중 1건")
+            api["/api/fleet/incidents"] = {"reports": reports, "traffic_reports": [fact]}
+            nav = screen("facts")
+            expect(page.locator("#incident-traffic-list > li")).to_have_count(1)
+            expect(page.locator("#incident-list")).to_be_hidden()
+            assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["AI 상황 사실"]
+            screen("log")
+            expect(page.locator("#log-panel")).to_be_visible()
+            assert page.locator("#log-panel").evaluate("node => !node.closest('[role=tabpanel]')")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert not errors
+        finally:
+            browser.close()
+
+
+# Is the element itself what a pointer meets at its centre (not a sticky bar or a neighbour laid over it)?
+ON_TOP = """node => { const r = node.getBoundingClientRect();
+  return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }"""
+# Text below 4.5:1 (3:1 from 24px) against the surfaces painted under it. A 1px canvas resolves any CSS colour
+# (rgb, color(srgb ...), alpha) the way the page composites it.
+LOW_CONTRAST = """selector => {
+  const ctx = document.createElement('canvas').getContext('2d', {willReadFrequently: true});
+  const paint = colours => { ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 1, 1);
+    for (const colour of colours) { ctx.fillStyle = colour; ctx.fillRect(0, 0, 1, 1); }
+    return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).map(v => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); };
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const low = [];
+  let read = 0;
+  for (const node of document.querySelectorAll(selector)) {
+    if (!node.checkVisibility({visibilityProperty: true}) || node.closest('[disabled]')) continue;
+    if (![...node.childNodes].some(child => child.nodeType === 3 && child.textContent.trim())) continue;
+    const under = [];
+    read += 1;
+    for (let at = node; at; at = at.parentElement) under.unshift(getComputedStyle(at).backgroundColor);
+    const style = getComputedStyle(node), ground = lum(paint(under)), ink = lum(paint([...under, style.color]));
+    const ratio = (Math.max(ground, ink) + 0.05) / (Math.min(ground, ink) + 0.05);
+    if (ratio < (parseFloat(style.fontSize) >= 24 ? 3 : 4.5))
+      low.push(`${node.tagName.toLowerCase()}#${node.id}.${node.className} ${ratio.toFixed(2)} "${node.textContent.trim().slice(0, 16)}"`);
+  }
+  return {read, low};
+}"""
+
+
+@pytest.mark.parametrize("size,theme", [((320, 568), "dark"), ((320, 568), "light"), ((390, 844), "light"),
+                                        ((1366, 768), "light"), ((1024, 768), "dark"), ((1100, 800), "light")])
+def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site, size, theme):
+    """D-741 8 at 320x568 and in the light theme: nothing runs off sideways, the stop is in view with nothing over
+    it, every records screen can be reached from the sub-nav, and the judgment seat's heading and review form can
+    be read and used."""
+    from playwright.sync_api import expect, sync_playwright
+
+    width, height = size
+    reports = [{"id": f"line_stuck:rosy_01:s-{index}", "classification": "line_stuck", "robot_ids": ["rosy_01"],
+                "stuck_id": f"s-{index}", "opened_at": "2026-10-10T05:00:00+00:00", "closed_at": None, "actions": [],
+                "reviews": [], "evidence": {"core": {}, "fleet": {}, "rosy_cam": None, "ai_facts": [],
+                                             "front_image": {"status": "not_retained"}}} for index in range(8)]
+    api = {**API, "/api/fleet/incidents": {"reports": reports, "traffic_reports": []}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts,
+                                      {"/api/fleet/incidents/rosy_01/s-0/review": (200, {"reviewed": True})}, size=size)
+        try:
+            page.goto(site + "/console?view=records")
+            ground = {name: page.evaluate("""theme => { document.documentElement.dataset.theme = theme;
+                return getComputedStyle(document.body).backgroundColor; }""", name) for name in ("dark", theme)}
+            assert (ground[theme] != ground["dark"]) == (theme == "light"), ground  # the theme is really the one named
+            page.clock.run_for(2000)
+            links = page.get_by_role("navigation", name="기록 화면", exact=True).locator("a")
+            expect(links).to_have_count(5)
+            reach = []
+            for index in range(5):
+                link = links.nth(index)
+                link.scroll_into_view_if_needed()
+                box = link.bounding_box()
+                reach.append((round(box["x"]), round(box["width"]), round(box["height"])))
+                # The row scrolls on whole pixels, so an entry brought to its edge may sit a fraction past it.
+                assert box["x"] >= -1 and box["x"] + box["width"] <= width + 1 and box["height"] >= 44, (index, box)
+                assert link.evaluate(ON_TOP), (index, box)
+            page.locator("#incident-list > li").first.locator(":scope > details > summary").click()
+            seat = page.locator("#incident-judgment")
+            heading = seat.locator("h3")
+            expect(heading).to_contain_text("rosy_01")
+            if width < 1024:
+                expect(seat).to_be_in_viewport()
+            controls = {name: seat.locator(selector) for name, selector in
+                        (("heading", "h3"), ("cause", "select"), ("note", "input"), ("save", "ui-button[type=submit]"))}
+            boxes = {}
+            for name, control in controls.items():
+                control.scroll_into_view_if_needed()
+                box = boxes[name] = control.bounding_box()
+                assert box["x"] >= 0 and box["x"] + box["width"] <= width and box["width"] >= 144, (name, box)
+                assert control.evaluate("node => node.scrollWidth <= node.clientWidth + 1"), (name, box)
+                assert control.evaluate(ON_TOP), (name, box)
+            order = sorted(boxes.values(), key=lambda box: (box["y"], box["x"]))
+            for above, below in zip(order, order[1:]):  # no control lies over the next
+                assert above["y"] + above["height"] <= below["y"] + 1 or above["x"] + above["width"] <= below["x"] + 1, boxes
+            stop = page.locator("#estop")
+            box = stop.bounding_box()
+            assert box["height"] >= 48 and box["y"] >= 0 and box["y"] + box["height"] <= height, box
+            assert box["x"] >= 0 and box["x"] + box["width"] <= width and stop.evaluate(ON_TOP), box
+            overflow = page.evaluate("document.documentElement.scrollWidth - innerWidth")
+            seats = ".ui-subnav *, .doc-tabs *, .incident-panel *, #incident-side *"
+            contrast = page.evaluate(LOW_CONTRAST, seats)
+            print(json.dumps({"size": size, "theme": theme, "subnav": reach, "seat": boxes, "stop": box,
+                              "overflow": overflow, "contrast": contrast}, ensure_ascii=False))
+            assert overflow <= 0, overflow
+            assert contrast["read"] >= 20 and contrast["low"] == [], contrast
+            # The measure itself: grey on grey in the seat heading must be reported, in a colour syntax tokens resolve to.
+            heading.evaluate("node => { node.style.color = 'color(srgb 0.5 0.5 0.5)'; node.style.backgroundColor = 'rgb(140 140 140)'; }")
+            assert any(line.startswith("h3") for line in page.evaluate(LOW_CONTRAST, seats)["low"])
+            heading.evaluate("node => { node.style.color = ''; node.style.backgroundColor = ''; }")
+            controls["cause"].select_option("obstacle")
+            controls["note"].fill("현장 상자 확인")
+            controls["save"].click()
+            for _ in range(50):  # the request leaves on the real network clock
+                page.clock.run_for(100)
+                if posts:
+                    break
+            assert posts and posts[-1][0] == "/api/fleet/incidents/rosy_01/s-0/review", posts
+            _shot(page, f"records-{theme}-{width}.png", full_page=True)
+            assert not errors
+        finally:
+            browser.close()
+
 
 # Elements that scroll on their own right now (the document is reported separately).
 SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
@@ -334,6 +567,11 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
             posts.append((path, request.post_data))
             status, body = (answers or {}).get(path, (404, {"detail": "no such api"}))
             route.fulfill(status=status, json=body)
+        elif isinstance(api.get(path), tuple):   # binary evidence (Accept: image/jpeg): (meta, jpeg)
+            assert request.headers.get("accept", "").startswith("image/jpeg")
+            meta, jpeg = api[path]
+            route.fulfill(body=jpeg, content_type="image/jpeg",
+                          headers={"X-Stuck-Evidence": json.dumps(meta), "Cache-Control": "no-store"})
         elif path in api:
             route.fulfill(json=api[path])
         else:
@@ -462,11 +700,11 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
     api = {**API}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [], size=(1024, 768))
-        preview["jpeg_base64"] = page.evaluate("""() => {
+        jpeg = base64.b64decode(page.evaluate("""() => {
           const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 48;
           return canvas.toDataURL('image/jpeg').split(',')[1];
-        }""")
-        api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = preview
+        }"""))
+        api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = (preview, jpeg)
         page.reload()
         page.clock.run_for(1500)
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
@@ -474,7 +712,7 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
         page.wait_for_function("""() => {
           const img = document.querySelector('.stuck-evidence img'); return img?.complete && img.naturalWidth > 0;
         }""")
-        assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
+        assert image.get_attribute("src").startswith("blob:")
         slot.locator('[data-focus-key="evidence-summary"]').click()
         assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
         for decision in DECISIONS:

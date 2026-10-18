@@ -12,9 +12,9 @@ from core_common.protocol.schemas import LineCrosswalkStatus, LineFollowStatus
 from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
-from core_features.line_follow.crosswalk_gate import CrosswalkGateMixin
+from core_features.line_follow.crosswalk.gate import CrosswalkGateMixin
 from core_features.line_follow.cue.lane_cue import LaneCueMixin
-from core_features.line_follow.crosswalk_report import CrosswalkReportMixin
+from core_features.line_follow.crosswalk.report import CrosswalkReportMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck.stuck_wiring import StuckRecoveryMixin
@@ -135,6 +135,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             self._reset_arc(reason or default)
             self._init_authority()
             self._xwalk.reset()
+            self._regulated_wait_sample = None
             self._init_lane_cue()  # D-430 review 10: a mode change (and E-stop) drops the cue and its latch
             self._generation += 1
             self._mode = selected
@@ -275,6 +276,8 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                                                    'crosswalk_reported': True, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
                                                    'lane_cue': self._lane_cue_view(self._clock()),
+                                                   'regulation_wait': None if self._mode is LineFollowMode.OFF
+                                                   else self._regulation_wait(self._clock()),  # D-760 rev 3 9
                                                    # run 2 fix 4: a latched cue HOLD names itself even when
                                                    # a later gate (junction_waiting) rewrote the reason
                                                    **({'reason': self._cue_latch} if self._cue_latch
@@ -496,7 +499,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                     # no junction gate); D-517 4 and D-573 only ever lower it
                     return self._crosswalk_gate(current, self._authority_gate(current, decision))
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
-                        and self._observation.quality_reason in ('low_light', 'overexposed')):
+                        and self._observation.quality_reason in ('low_light', 'overexposed', 'odom_side_conflict')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     self._end_bridge()  # D-476: invalid vision ends a bridge for good
                     # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
@@ -552,7 +555,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             # 차선 자동은 수동 한도 L1 이상에서만(D-344 §13, 사용자 결정).
             return self._stop_decision("HOLD", "limit_level_too_low")
         if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
-                and self._observation.quality_reason in ('low_light', 'overexposed')):
+                and self._observation.quality_reason in ('low_light', 'overexposed', 'odom_side_conflict')):
             # Invalid vision cannot authorize obstacle back-off or remembered steering.
             age = None if self._received_at is None else current - self._received_at
             if self._lost_latched:

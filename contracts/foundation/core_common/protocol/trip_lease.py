@@ -32,6 +32,7 @@ class TripLeaseStatus(BaseModel):
     operator_name: str
     since: str
     expires_in_s: float
+    job_id: Optional[str] = None  # D-763 6 (v1.236): a job's lease, kept through IDLE between its steps
 
 
 class TripLeaseEnded(BaseModel):

@@ -381,7 +381,11 @@ DECLARED_WRITES = {
         "/var/lib/rosy/camera/recordings",
         # D-411: the Pilot recorder (pilot_recorder_node), setgid rosy-core.
         "/var/lib/rosy/pilot-recordings",
+        # D-789 T3: rosy_media_edge.camera_tap FrameWriter mailbox (and its .owner lock).
+        "/run/rosy-media/front.rgb", "/run/rosy-media/front.rgb.owner",
     },
+    # D-789 T5: the optional media publisher writes nothing on disk (journal only).
+    "rosy-media.service": set(),
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
@@ -566,7 +570,12 @@ PROGRAM_SOURCES = {
     "rosy-tailscale-join.service": ["deploy/robot/pinky_pro/native/rosy-tailscale-join.py"],
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_host.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_records.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_stage.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_apply.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",
+                                 "deploy/robot/pinky_pro/native/rosy_transfer.py",
                                  "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",
                                  "deploy/robot/pinky_pro/native/native_release.py",
                                  "deploy/robot/pinky_pro/native/sync-image-layer.py"],
@@ -636,6 +645,12 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
     """Files of `package` (rooted at package_root) that `importer` sources import."""
     found: set[Path] = set()
     own = ROOT / package_root
+    modules = {}
+    if package == 'control':
+        from runpy import run_path
+        inventory = run_path(str(own / 'test/control_sources.py'))['control_sources']()
+        modules = {('control.' + name.replace('/', '.')).removesuffix('.py').removesuffix('.__init__'): path
+                   for name, path in inventory}
     for source in _source_files(importer):
         # The package's own imports are not the importer's: control sits inside
         # src/core since a93d5188, and would otherwise pull in all of itself.
@@ -646,6 +661,9 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
             if parts[0] != package:
                 continue
             for depth in range(len(parts), 0, -1):
+                module = '.'.join(parts[:depth])
+                if module in modules:
+                    found.add(modules[module])
                 base = ROOT / package_root / Path(*parts[:depth])
                 for candidate in (base.with_suffix(".py"), base / "__init__.py"):
                     if candidate.is_file():
@@ -1091,9 +1109,10 @@ def test_camera_reads_the_optional_learned_perception_switch_file():
         "/etc/rosy/runtime.env", "-/etc/rosy/learned-perception.env"]
     for line in CAMERA_HARDENING:
         assert line in unit.splitlines(), line
-    # The switch opens no write path of its own (D-411's recorder owns exactly one)
-    # and never reaches the command line: the launch file reads the variables itself.
-    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings"]
+    # The switch opens no write path of its own (D-411's recorder and the D-789 media
+    # mailbox are the only two) and never reaches the command line: the launch file
+    # reads the variables itself.
+    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings", "/run/rosy-media"]
     exec_start = directives["ExecStart"][0]
     assert "ROSY_LEARNED_SHADOW" not in exec_start and "ROSY_CAPTURE" not in exec_start
     assert "learned_shadow:=" not in exec_start and "capture:=" not in exec_start

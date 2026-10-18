@@ -222,11 +222,19 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `junction_pivot` (D-507 2): CORE takes the window/pivot fields and this run's perception
     # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
     # `lane_bend` (D-507 addendum): the line-follow manager takes action `bend`.
+    # `lane_bend_next_line` (D-754): the manager takes a bend's next_line_in_m (with lane_bend).
     # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
     # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
     # `lane_arc_map_anchor` (D-744 2): the manager takes exit_segment.map_anchor (with lane_arc).
+    # `lane_bend_map_entry` (D-759 2): line_follow.bend_map_entry_enabled (default off) with lane_bend.
+    # `lane_turn_map_entry` (D-759 rev 1): line_follow.turn_map_entry_enabled (default off) with junction_turn.
+    # `lane_instruction_stamp` (D-767 A): line_follow.instruction_stamp_enabled (default off).
+    # `lane_crosswalk_gate`/`lane_junction_signal` (D-763 10 (c)): line_follow.crosswalk_gate_enabled /
+    # junction_signal_enabled is on; Fleet refuses a route over a crosswalk / signal zone when false.
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
+    # `line_follow_authority_shrink` (D-760 3): that authority takes `shrink` and `seq`, `ttl_s` up to 5 s.
+    # `line_follow_authority_under_lease` (D-760 2): enforced while this CORE's trip lease is open.
     # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
     # `trip_lease` (D-541 1): CORE holds the Fleet trip lease and fences non-owner motion.
     # `goal_lease` (D-550 10): navigation/goal takes lease_ttl_s; announced with goal navigation.
@@ -235,6 +243,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
         trip_max_linear = min(trip_max_linear, svc.line_follow.config.max_linear)
+    authority = callable(getattr(svc.line_follow, "set_authority", None))
     drive_modes = tuple(mode for mode, on in (
         ("lane", svc.line_follow is not None),
         ("free", (data.get("navigation") or {}).get("goal_navigation") is True)) if on)
@@ -254,17 +263,32 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       lane_arc_map_anchor=getattr(
                                           svc.line_follow, "supports_lane_arc_map_anchor", False) is True,
                                       lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
+                                      lane_bend_map_entry=getattr(
+                                          svc.line_follow, "supports_lane_bend_map_entry", False) is True,
+                                      lane_turn_map_entry=getattr(
+                                          svc.line_follow, "supports_lane_turn_map_entry", False) is True,
+                                      lane_instruction_stamp=getattr(
+                                          svc.line_follow, "supports_lane_instruction_stamp", False) is True,
+                                      lane_bend_next_line=getattr(
+                                          svc.line_follow, "supports_lane_bend_next_line", False) is True,
+                                      lane_crosswalk_gate=getattr(
+                                          svc.line_follow, "supports_lane_crosswalk_gate", False) is True,
+                                      lane_junction_signal=getattr(
+                                          svc.line_follow, "supports_lane_junction_signal", False) is True,
                                       route_context=(True if svc.line_follow is not None and
                                                      svc.line_follow.config.route_context_enabled else None),
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
                                           svc.line_follow.config, "site_floor_map_id", None)),
-                                      line_follow_authority=callable(getattr(svc.line_follow,
-                                                                             "set_authority", None)),
+                                      line_follow_authority=authority,
+                                      line_follow_authority_shrink=authority,
+                                      line_follow_authority_under_lease=authority and getattr(
+                                          svc, "trip_lease", None) is not None,
                                       line_follow_authority_required=svc.line_follow is not None and getattr(
                                           svc.line_follow.config, "authority_required", False) is True,
                                       line_follow_advice=svc.line_follow is not None and getattr(
                                           svc, "line_advice", None) is not None,
                                       trip_lease=getattr(svc, "trip_lease", None) is not None,
+                                      trip_lease_job=getattr(svc, "trip_lease", None) is not None,  # D-763 6
                                       goal_lease=True if "free" in drive_modes else None,
                                       stuck_realign=(("PIVOT", "KTURN") if svc.line_follow is not None and getattr(
                                           svc.line_follow.config, "stuck_realign_enabled", False) is True else None))

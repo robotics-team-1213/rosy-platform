@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from core.bridge import observation as obs
 
 
@@ -172,13 +174,14 @@ def test_a_string_visible_is_rejected_not_coerced():
     assert _calls(calls, "command.clear_navigation") == []
 
 
-def test_camera_low_light_marker_reaches_stop_evidence_and_rejects_visible_claim():
+@pytest.mark.parametrize('reason', ['low_light', 'odom_side_conflict'])  # odom_side_conflict: D-556
+def test_invalid_camera_marker_reaches_stop_evidence_and_rejects_visible_claim(reason):
     svc, calls = _services()
-    quality = dict(valid=False, reason='low_light')
+    quality = dict(valid=False, reason=reason)
     obs.line_observation(svc, _line_payload(source='CAMERA_LINE', visible=False, error=None,
                          confidence=0., quality=quality), source_now=12.5, received_at=50.)
     observation = _calls(calls, 'line_follow.observe')[0][1][0]
-    assert observation.quality_reason == 'low_light' and not observation.visible
+    assert observation.quality_reason == reason and not observation.visible
     svc, calls = _services()
     obs.line_observation(svc, _line_payload(source='CAMERA_LINE', quality=quality),
                          source_now=12.5, received_at=50.)

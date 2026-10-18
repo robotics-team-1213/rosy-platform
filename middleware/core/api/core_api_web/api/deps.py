@@ -43,6 +43,8 @@ from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
 from core_features.vision.stream import StreamRefused as VisionStreamRefused
+from core_features.vision.media_grants import MediaGrantService, MediaGrantRefused
+from core_common.protocol.schemas import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest
 from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceRecord, VisionEvidenceList
 
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
@@ -71,6 +73,11 @@ __all__ = [
     "VisionFrameAdvanced",
     "VisionPullRateLimited",
     "VisionStreamRefused",
+    "MediaGrantService",
+    "MediaGrantRefused",
+    "MediaGrantRequest",
+    "MediaGrantResponse",
+    "MediaSourceGrantRequest",
 ]
 
 
@@ -84,6 +91,7 @@ class CoreServicesLike(Protocol):
     """
 
     adapter_registry: Any
+    arm_policy: Any
     audit: Any
     battery: Any
     calibration: Any
@@ -384,7 +392,7 @@ class AuthContext:
     def __init__(self, token_id: str, role: str, *, source: str = "manual",
                  expires_at: Optional[str] = None, label: str = "",
                  created_at: Optional[str] = None,
-                 principal_ref: Optional[str] = None, shared_dev: bool = False) -> None:
+                 principal_ref: Optional[str] = None, shared_dev: bool = False, account=None) -> None:
         self.token_id = token_id
         self.shared_dev = shared_dev  # D-548: one of the three public rosy-dev-* tokens
         self.principal_ref = principal_ref or token_id
@@ -393,6 +401,13 @@ class AuthContext:
         self.expires_at = expires_at
         self.label = label
         self.created_at = created_at
+        self.account = account
+
+    def allows_role(self, role):
+        if self.account is not None:
+            capability = {'viewer': 'robot.read', 'operator': 'robot.operate', 'administrator': 'robot.admin'}.get(role)
+            return capability is not None and self.account.permits(self.account.aud, capability)
+        return self.rank >= ROLE_RANK[role]
 
     @property
     def rank(self) -> int:
@@ -431,7 +446,11 @@ SHARED_DEV_REFUSED_WRITES = ("/api/v1/host/", "/api/v1/system/tokens", "/api/v1/
 
 def auth_dependency(request: Request,
                     authorization: Optional[str] = Header(default=None)) -> AuthContext:
-    auth = authenticate(request.app.state.core.config, authorization, None)
+    from .account_sessions import authenticate_account
+    auth = authenticate_account(request, authorization) or authenticate(request.app.state.core.config, authorization, None)
+    if auth.account is not None and request.method not in ('GET', 'HEAD') and request.url.path.startswith(
+            ('/api/v1/system/tokens', '/api/v1/auth/enrollment-codes', '/api/v1/auth/peer-pairing')):
+        raise ApiError('FORBIDDEN', 403, 'Account sessions cannot issue independent credentials')
     if auth.shared_dev and device_mode():
         path = request.url.path
         if (path.startswith(SHARED_DEV_REFUSED_PREFIXES)
@@ -442,7 +461,7 @@ def auth_dependency(request: Request,
 
 def require_role(min_role: str):
     def _dep(auth: AuthContext = Depends(auth_dependency)) -> AuthContext:
-        if auth.rank < ROLE_RANK[min_role]:
+        if not auth.allows_role(min_role):
             raise ApiError("FORBIDDEN", 403, f"requires {min_role} role")
         return auth
     return _dep

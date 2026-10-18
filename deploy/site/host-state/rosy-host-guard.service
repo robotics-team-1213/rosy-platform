@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=rosy-host-guard
+StateDirectory=rosy-host-guard
+StateDirectoryMode=0751
+UMask=0022
 ExecStart=/usr/bin/python3 /usr/local/bin/rosy-host-guard
 SyslogIdentifier=rosy-host-guard
 TimeoutStartSec=600

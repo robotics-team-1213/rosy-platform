@@ -66,7 +66,9 @@ def _api():
     r2["line_stuck"] = STUCK
     r2["state"]["line_follow"] = {"mode": "CAMERA_LINE", "state": "HOLD", "stuck": STUCK}
     r3 = tv._robot("rosy_03", 0.0, 1.2, 3.14)
-    r3.update(online=False, error="robot unreachable: ConnectError", power_health=None, power_health_age_s=None)
+    # The shape console_view._error_of sends; a bare string drew "닿지 않음: undefined" on the card.
+    r3.update(online=False, error={"reachable": False, "code": "ConnectError", "message": "ConnectError"},
+              power_health=None, power_health_age_s=None)
     api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 2, "total": 3}, "ts": 0.0, "robots": [r1, r2, r3]}
     return api
 
@@ -130,48 +132,92 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             role = page.locator("#user-role")
             expect(role).to_have_text("운영자", timeout=15000)  # D-540 2: Korean role, principal id in title
             expect(page.locator("#development-badge")).to_be_visible()
-            expect(page.locator("#online-pill")).to_have_text("2/3", timeout=15000)
+            if name == "console":
+                count = page.locator('main [aria-labelledby="map-heading"] #online-pill')
+                expect(count).to_have_text("2/3", timeout=15000)
+                offline = page.locator('article.robot-summary[data-robot-id="rosy_03"]').first
+                expect(offline).to_contain_text("닿지 않음: 접속 실패")
+                assert "undefined" not in page.locator("main").inner_text(), name
+            else:
+                expect(page.locator("#online-pill")).to_have_count(0)
             expect(page.locator("#estop")).to_be_enabled()
             expect(page.locator("#clock")).not_to_have_text("--:--:--")
+            expect(page.locator("#link-state")).to_have_text("실시간", timeout=15000)
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 page.wait_for_timeout(400)
                 fact = page.evaluate(PROBE)
                 assert page.locator('ui-topbar [data-header-region]').count() == 4
-                for region in ("identity", "status", "actions", "safety"):
+                for region in ("identity", "actions", "safety"):
                     expect(page.locator(f'[data-header-region="{region}"]')).to_be_visible()
-                assert page.locator('[data-header-region="actions"] #fleet-theme').count() == 1
+                if width >= 768:  # 48rem 아래의 연결 자리는 평상시 비어 있다
+                    expect(page.locator('[data-header-region="status"]')).to_be_visible()
+                assert page.locator('[data-header-region="status"] ui-button').count() == 0
+                assert page.locator('[data-header-region="actions"] > #fleet-inbox').count() == 1
+                assert page.locator('[data-header-region="actions"] > #topbar-more').count() == 1
                 assert page.locator('#topbar-more ui-button').count() == 0
+                expect(page.locator('#topbar-more #user-role')).to_have_text("운영자")
+                if width >= 480:
+                    expect(page.locator('#topbar-more #user-role')).to_be_visible()
+                else:  # 30rem 아래: 역할 글은 접히고 아래 줄의 접근 이름이 역할을 말한다
+                    expect(page.locator('#topbar-more #user-role')).to_be_hidden()
+                    expect(page.locator('#topbar-more [data-action-icon="account"]')).to_be_visible()
                 expect(page.locator('#topbar-more #development-badge')).to_have_text("개발")
-                expect(page.locator('#topbar-more')).to_have_attribute("aria-label", re.compile("상태 센터.*2/3"))
+                expect(page.locator('#topbar-more')).to_have_attribute(
+                    "aria-label", re.compile("계정과 접속.*운영자.*개발 연결 모드"))
                 for value in page.locator('#topbar-more ui-tag').all():
                     expect(value).to_have_css("border-width", "0px")
                     expect(value).to_have_css("background-color", "rgba(0, 0, 0, 0)")
                 assert page.locator('[data-header-region="safety"] #estop').count() == 1
+                more = page.locator("#topbar-more")
                 expect(page.locator('#topbar-extra')).not_to_be_visible()
-                theme = page.locator("#fleet-theme")
+                expect(page.locator("#fleet-theme")).to_be_hidden()  # 화면 표시는 계정 단추 아래에 있다
+                more.click()
+                expect(more).to_have_attribute("aria-expanded", "true")
+                theme = page.locator("#topbar-extra #fleet-theme")
+                expect(theme).to_be_visible()
                 expect(theme).to_be_enabled()
+                assert theme.locator(".ui-icon-label").count() == 0
+                expect(theme).to_have_attribute("data-ui-tooltip", re.compile("테마:"))
+                assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, (name, width)
                 preference = page.evaluate("RosyTheme.get()")
                 for _ in range(3):
                     theme.click()
                 assert page.evaluate("RosyTheme.get()") == preference
+                theme.focus()
+                page.keyboard.press("Escape")
+                expect(more).to_be_focused()
+                expect(more).to_have_attribute("aria-expanded", "false")
 
                 measured[(name, width)] = fact
                 nav = page.locator(".doc-tabs").bounding_box()
                 main = page.locator("main").bounding_box()
-                footer = page.get_by_role("contentinfo")
-                expect(footer.locator("#clock")).not_to_have_text("--:--:--")
+                expect(page.get_by_role("contentinfo")).to_have_count(0)
+                expect(page.locator('[data-header-region="status"] #clock')).not_to_have_text("--:--:--")
+                if width >= 768:
+                    expect(page.locator("#clock")).to_be_visible()
+                    expect(page.locator("#link-state")).to_be_visible()
+                else:  # 48rem 아래: 시계와 평상(실시간) 글은 접힌다
+                    expect(page.locator("#clock")).to_be_hidden()
+                    expect(page.locator("#link-state")).to_be_hidden()
                 expect(page.get_by_role("banner")).to_have_count(1)
                 assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
+                labels = []
                 for link in page.locator(".doc-tabs a").all():
                     box = link.bounding_box()
-                    assert box["width"] == box["height"] == 48, (name, width, box)
-                    assert link.locator(".ui-icon-label").bounding_box()["width"] <= 1
-                    expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
-                more = page.locator("#fleet-theme")
-                if more.is_visible():
-                    assert more.locator(".ui-icon-label").count() == 0
-                    expect(more).to_have_attribute("data-ui-tooltip", re.compile("테마:"))
+                    assert box["height"] == 56 and 55 <= box["width"] <= 56, (name, width, box)
+                    if width >= 1024:  # the vertical rail: inside the track's padding (8 + 8) and 1px rule
+                        assert box["width"] <= nav["width"] - 17, (name, width, box, nav)
+                    label, icon = link.locator(".ui-icon-label"), link.locator(".ui-icon").bounding_box()
+                    expect(label).to_be_visible()
+                    assert label.bounding_box()["y"] >= icon["y"] + icon["height"] - 1, (name, width)
+                    assert link.get_attribute("data-ui-tooltip") is None, (name, width)
+                    labels.append(label.text_content().strip())
+                assert labels == ["관제", "작업", "기록", "지도", "설치"], (name, width)
+                rail = page.locator(".doc-tabs")
+                expect(rail.get_by_role("link", name="설치·보정", exact=True)).to_have_count(1)
+                expect(rail.get_by_role("link", name="현장 지도", exact=True)).to_have_count(1)
+                expect(page.locator("#fleet-inbox")).to_be_visible()
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
                 expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
@@ -183,12 +229,11 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
                 else:
                     assert nav["y"] + nav["height"] <= main["y"] + 1, (name, width, nav, main)
-                assert footer.bounding_box()["y"] >= main["y"] + main["height"] - 1
                 x, y, w, h = fact["stop"]
                 assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
                 assert page.locator("#development-badge").evaluate(
                     "node => node.scrollWidth <= node.clientWidth + 1"), (name, width)
-                inbox = page.locator("#fleet-theme").bounding_box()
+                inbox = page.locator("#fleet-inbox").bounding_box()
                 assert inbox and inbox["height"] >= 48 and inbox["y"] + inbox["height"] <= height
                 assert h == inbox["height"] == 48 and w >= 48, (name, width, fact)
                 assert page.locator("#estop").evaluate("""node => {
@@ -200,27 +245,13 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 }"""), (name, width)
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
-                if width <= 390:
-                    assert abs(inbox["x"] + inbox["width"] - (x + w)) <= 1
-                    more = page.locator("#topbar-more")
-                    expect(more).to_be_visible()
-                    more.click()
-                    expect(more).to_have_attribute("aria-expanded", "true")
-                    expect(page.locator("#fleet-inbox")).to_be_visible()
-                    assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, (name, width)
-                    page.locator("#fleet-inbox").focus()
-                    page.keyboard.press("Escape")
-                    expect(more).to_be_focused()
-                    expect(more).to_have_attribute("aria-expanded", "false")
-                if width >= 1440:
-                    assert fact["rows"] == 1, (name, width, fact)
-                elif width >= 1024:
-                    assert fact["rows"] <= 2, (name, width, fact)
-                else:
-                    assert fact["header"] <= 0.2 * height, (name, width, fact)
+                expect(more).to_be_visible()
+                # D-741 5: 앱 바는 320px까지 한 줄이고 높이는 --appbar-height(64px)다.
+                assert fact["rows"] == 1, (name, width, fact)
+                assert fact["header"] <= 64 + 1, (name, width, fact)
+                assert fact["header"] <= 0.2 * height, (name, width, fact)
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
-            page.locator("#topbar-more").click()
             page.locator("#fleet-inbox").click()
             expect(page.locator("#context-inbox")).to_be_visible()
             expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
@@ -234,6 +265,26 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             # Same size and place on every document (a scrollbar may shift x by its width).
             assert fact["stop"][2:] == first["stop"][2:], (name, width, fact["stop"], first["stop"])
             assert abs(fact["stop"][1] - first["stop"][1]) <= 1, (name, width, fact["stop"], first["stop"])
+
+
+def test_a_lost_link_is_readable_on_a_phone(tmp_path):
+    from playwright.sync_api import expect
+
+    # Fleet gone behind the proxy: every API answer is 502, the state poll included.
+    with _fleet(tmp_path, console_token="header-token") as (browser, origin):
+        for name, path in DOCS:
+            page = browser.new_page(viewport={"width": 320, "height": 568})
+            page.route("**/api/fleet/**", lambda route: route.fulfill(status=502, json={"detail": "bad gateway"}))
+            page.goto(origin + path)
+            word = page.locator("#link-state")
+            expect(word).to_have_text("연결 끊김", timeout=15000)
+            expect(word).to_be_visible()
+            box, stop = word.bounding_box(), page.locator("#estop").bounding_box()
+            assert box["x"] >= 0 and box["x"] + box["width"] <= 320, (name, box)
+            assert box["y"] >= stop["y"] + stop["height"] - 1, (name, box, stop)  # its own row under the bar
+            expect(page.locator("#estop")).to_be_visible()
+            assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, name
+            page.close()
 
 
 def test_estop_locks_only_after_the_session_is_refused(tmp_path):

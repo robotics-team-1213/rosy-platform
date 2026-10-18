@@ -37,11 +37,14 @@ def build_manifest(
     role: str,
     capabilities: Mapping[str, Any],
     descriptors: Iterable[Mapping[str, Any]],
+    allowed_roles=None,
 ) -> dict[str, Any]:
     surface = registry.surfaces[surface_id]
     capability = Capability(dict(capabilities))
     by_id = {str(item.get("id")): item for item in descriptors}
-    visible = [panel for panel in registry.panels if _visible(panel, role, capability, by_id)]
+    visible = [panel for panel in registry.panels
+               if (allowed_roles is None or panel.min_role in allowed_roles)
+               and _visible(panel, role, capability, by_id)]
     slot_rank = {slot: index for index, slot in enumerate(surface.slots)}
     mine = sorted((p for p in visible if p.surface == surface.id), key=lambda p: (slot_rank[p.slot], p.order))
     panels = []
@@ -63,7 +66,8 @@ def build_manifest(
         "grammar": surface.grammar,
         "role": role,
         "surfaces": [{"id": s.id, "title": s.title} for s in registry.surfaces.values()
-                      if ROLE_RANK.get(role, -1) >= ROLE_RANK[s.min_role]],
+                      if ROLE_RANK.get(role, -1) >= ROLE_RANK[s.min_role]
+                      and (allowed_roles is None or s.min_role in allowed_roles)],
         "action_groups": [
             {"id": group.id, "title": group.title, "order": group.order}
             for group in sorted(registry.action_groups, key=lambda item: item.order)

@@ -85,6 +85,7 @@
 - 변경: route·한 바퀴·반복·대열 모두 출발 POST 직전 현재 권한·안전·대형·위치·계획 버전·만료·진행 운행을 다시 검사한다. 목적지 또는 출발·경유지가 달라진 지연 미리보기는 채택하지 않는다. 포커스로 유지한 카드에서도 같은 로봇의 거절 안내만 갱신한다.
 - 증거: 85632eeade Node 305 PASS, 원격 서버/운행 계약 153 PASS/NEW 0. 원격 Chromium 108개 중 focused SELECT의 안내 누락 3 NEW를 재현했고 출발 POST는 0이었다. 17758e2b29에서 안내 갱신 후 card Chromium 19 PASS/NEW 0, Node 305 PASS. 독립 소스 검토는 두 커밋을 수용했다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-11--212133--wall-stop-cross-sim--126256/logs/console-browser-fixed/run-1.txt`와 같은 세션의 `console-contracts/run-1.txt`다.
 - gate 변화: 원격 브라우저는 실제 Fleet 정적 자산과 fake API를 사용한다. 배포된 Console, 실물 주행, 두 대 Fleet 또는 Isaac 카메라 강화학습 완주를 대신하지 않는다. main 통합 후 수용·원격 CI는 별도 확인한다.
+
 ## 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
 
 - 변경: 기존 tasks DB의 별도 bounded 접수 원장, immutable Discord identity→현재 기명 operator, 전용 HMAC와 Goal/Cell producer 자격 격리, 같은 메시지 중복/수정 및 owner read를 구현했다. 순수 projection/signature holder는 Fleet wheel/sdist/source image에 함께 설치한다. Console 작업 화면은 자기 원문을 textContent로 읽고 권한 철회 시 지운다.
@@ -144,6 +145,7 @@
 - 변경: 위 커밋된 제목 오류 기록을 보존하고 정식 후속 기록을 추가했다. 표시·접근성 보완은 기존 승인·안전 조건을 유지한다.
 - 증거: source193d54401 AI PC 자원 하한을 충족한 원격 Chromium·문구·disabled·버전·설치·구조 전체 선택군 terminal exit0/NEW0, Node work-view2 PASS. 표시 문구와 사건 잠금 사유를 검증했다.
 - gate 변화: source 회귀만 확인했다. 전체 영향 검사·착지·배포·실제 Discord 왕복은 미확인이다.
+
 ## 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
 
 - 변경: 네 문서 우측에 로그인/계정을 두고 `/console/login`에서 기존 쿠키 API로 인증한 뒤 서버 세션을 확인해 허용된 업무 주소로 복귀한다. 계정·화면 표시·고급 접속을 구분한다. 지도/Cell 새 탭 로그인, 로컬 편집 보존, 기존 revision 검사, 확인된 로그아웃/확인 불가를 구분한다.
@@ -209,3 +211,143 @@
 - 변경: `cell/cell.css`의 `.document-group` 테두리를 `--field-line`에서 `--border-default`로 옮겼다. `--field-line`이 조작 경계(잉크 50%)가 되어도 폼 묶음 선은 면 구분으로 남는다. `.file-picker-button`은 조작이라 `--field-line`을 그대로 쓴다.
 - 증거: 원격 소스 시험 통과. 화면 확인 없음.
 - gate 변화: 없음.
+
+## 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
+
+- 변경: 네 문서의 머리가 맥락 | 연결 | 알림·나 | 정지의 한 줄 앱 바가 됐다. 시계와 연결 글(`실시간`·`지연`·`연결 끊김`)이 머리로 오고 푸터와 그 안의 `관제 알림` 링크가 없어졌다. 알림 단추는 정적 마크업이다. 계정 단추(`#topbar-more`)가 역할 이름을 달고 그 아래에 계정·화면 표시·토큰 접속이 있다. 로봇 연결 수(`#online-pill`)는 관제 문서의 지도 머리로 갔고 다른 세 문서에는 없다. 레일 아이콘 아래에 `관제·설치·지도·작업·Cell`을 적었다. 접힘은 `.fleet-shell` 칸 질의(64rem, 48rem, 30rem)다.
+- 증거: 원격 소스 시험과 node 단위 시험 통과, `known_failures` NEW 0. `*_browser.py`는 원격에서 돌지 않았다. `operations/fleet/test`의 브라우저 시험은 푸시 뒤 CI가 증거이고, `test/test_fleet_console_browser.py`와 `shared/web/test/test_theme_browser.py`는 어디서도 저절로 돌지 않는다.
+- gate 변화: 없음. D-153 G2 캡처와 G3 사람 검토는 `docs/validation/fleet-app-bar-2026-10-13.md`에 적은 대로 아직 없다.
+
+## 2026-10-14 · 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
+
+- 변경: 네 문서의 레일이 `관제·작업·기록·지도·설치` 다섯 영역이 됐다. 현장 지도와 Cell의 가로 앵커 줄(`.task-nav`)이 공용 하위 탐색 자리(`/common/app-shell.css`의 `.ui-subnav`)로 갔다. `/console?view=work`는 `전체 작업·승인 대기·끝난 작업·새 작업`을, `/console?view=records`는 `검토할 사건·열린 사건·닫힌 사건·AI 상황 사실·관제 기록`을 하위 탐색에 둔다. 화면은 `show`로 고르고 기존 `GET /api/fleet/work`, `GET /api/fleet/incidents` 답을 브라우저에서 거른다. `/console/cell`은 주소를 유지하고 `작업` 영역의 `새 작업`이다. 기록 영역에서는 사건 패널(또는 관제 기록)이 본문으로 올라가고 연 사건의 담당 인수·사람 검토·검토 폼이 오른쪽 칸 `원인과 조치`에 선다. 관제의 `기록·근거` 탭은 그대로다.
+- 증거: 원격 소스 시험 통과(`known_failures` NEW 0). 브라우저 시험은 시험 PC에서 조각마다 돌렸고 결과는 착지 보고에 있다. 화면을 사람이 본 적은 없다.
+- gate 변화: 없음. 검토 반영(2376c3886: 자리의 사건 이름, 한 번에 한 건을 스크립트로, 키·스크롤·상한 표기) 뒤 Fleet 크기 단위가 55464로 상한 55452를 12줄 넘었다. 판정은 올리지 않고, 저장소 어디서도 부르지 않는 Fleet 서버 코드 33줄(쓰지 않는 import 8, `mark_rejected`, `next_running`, `next_reconciliation`, `_ACTOR`, `formation_relay_kwargs`, `anchor_status`)을 지워 55439가 됐다(D-168). D-153 G2 캡처와 G3 사람 검토는 없다.
+
+## 2026-10-14 · 2c409d117 · refactor: console.js의 읽지 않는 선언 두 개 삭제
+
+- 변경: `console.js`의 `authHeaders()`와 `lastStateOk`를 지웠다(5줄). 둘 다 선언만 있고 읽는 곳이 없다. `install.js`의 `authHeaders`는 그대로다.
+- 증거: `node --check console.js`, `operations/fleet/test/web` node 시험. 원격 시험 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-14 · 33f6d8415 · fix(fleet): 현장 지도·Cell의 열이 본문 폭에 답한다 (D-741 2)
+
+- 변경: `site-map.css`와 `cell/cell.css`의 `main`이 칸(`container-type: inline-size`)이 됐고 64rem 접힘이 `@media`에서 `@container`로 갔다. 레일 72px과 하위 탐색 232px 옆에서 넓은 배치는 본문 자체가 64rem일 때부터 선다. 30rem 전화 단 규칙은 뷰포트 그대로다. 머리와 비상 정지는 건드리지 않았다.
+- 증거: 고치기 전 측정(모델 PC Chromium, `X:/DevTemp/browser-run/snw-measure-fleet-1.txt`): 1024×768에서 본문 720px, 두 열이 336px씩, 세 열 폼의 칸 104px(1100에서 117px). 하위 탐색이 들어오기 전 같은 시트의 64rem 경계 값은 계산으로 154px다(잰 값이 아니다). 가로 넘침·가려진 하위 탐색 항목·잘린 단추 글은 없었고 Cell 하위 탐색의 아래 끝은 651px다. 고친 뒤(`snw-measure-fleet-2.txt`, sha 71e43aeed): 1024와 1100에서 한 열, 폼 칸 221px 이상, 1366에서는 전과 같은 두 열(칸 161px). 관련 브라우저 파일 넷 162 passed(`snw-fleet-files-1.txt`). 원격 소스 시험 known_failures NEW 0.
+- gate 변화: 없음. Fleet 크기 단위 56742 → 56744(기준 56755). 창 높이가 651px보다 낮은 넓은 창에서 Cell 하위 탐색의 아래 항목이 화면 밖에 남는지는 재지 않았다. Cell `요청 키` 입력은 1024에서 값(311px)이 칸(219px)보다 길어 입력 안에서 밀어 읽는다.
+
+## 2026-10-14 · ac505f819 · test(fleet): 기록 영역을 320×568·밝게·1024에서 잼 (D-741 8)
+
+- 변경: 제품은 그대로다. `test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme`이 가로 넘침, 비상 정지(화면 안, 위에 덮인 것 없음), 하위 탐색 다섯 항목, 판단 자리의 제목과 검토 폼(창 안, 잘리지 않음, 서로 겹치지 않음), 기록 자리 글의 대비를 잰다.
+- 증거: AI PC Chromium 6 passed(`X:/DevTemp/browser-run/snw-measure-records-3.txt`, sha ac505f819): 320×568 어둡게·밝게, 390×844 밝게, 1366×768 밝게, 1024×768 어둡게, 1100×800 밝게. 넘침 0, 글 45~47개 가운데 4.5:1 아래 없음, 320에서 폼 칸 296px, 1024에서 판단 자리 219px. 결함은 찾지 못했다.
+- gate 변화: 없음. 1024에서 `console.js`는 아직 뷰포트 폭으로 본문을 2:1로 나눠 판단 자리가 219px다(1366에서 333px). 쓸 수는 있어 고치지 않았다. 화면을 사람이 본 적은 없다.
+
+## 2026-10-14 · 8b44b2399 · test(fleet): 폭마다 열 수를 고정하고 360·1349를 더함 (검토 반영)
+
+- 변경: 제품은 그대로다. 현장 지도와 Cell 본문 시험이 폭마다 기대하는 열 수를 그대로 단언한다. 앞 시험의 `열 1 또는 칸 144px 이상`은 1024와 1100에서 실패할 수 없었고, 보이는 자식이 없는 격자는 `Infinity`로 통과했다. 그런 격자는 재지 않는다. 여러 열일 때의 9rem 바닥은 남겼다. 창 밖으로 나간 조작도 잰다. 기록 영역 시험은 밝게일 때 `body` 바탕이 어둡게와 다른지 먼저 본다.
+- 증거: 모델 PC Chromium 16 passed(`X:/DevTemp/browser-run/snw-review-fleet-1.txt`, sha 8b44b2399), 세 파일 전체 165 passed(`snw-review-fleet-files-1.txt`). 넓은 배치가 서는 실제 범위: 앞 항목(33f6d8415)의 "1366에서는 두 열"은 셸 폭이 1366일 때의 값이다. 넓은 배치는 `main`의 내용 폭이 64rem일 때, 곧 셸 폭(창 폭에서 세로 스크롤바를 뺀 값) 1360px부터 선다. 1024px 이상 1360px 미만의 셸은 모두 한 열이다. 1349(스크롤바 17px가 있는 1366 노트북 창)에서 쟀다: 본문 1045px, `main` 내용 1013px, 한 열, 현장 지도 폼 칸 1013px, Cell 칸 세 열 330px. 고치기 전 그 창은 두 열이었다(칸 계산값 약 158px). 360에서 쟀다: 한 열 328px, 가로 넘침 0, 잘리거나 창 밖으로 나간 조작 없음. 두 문서의 `main` 안에는 공용 22rem 칸 부품(`.ui-form`·`.ui-readout`·`ui-actions`)이 없다.
+- gate 변화: 없음. 스크롤바가 자리를 차지하는 1366 노트북 창에서 두 문서가 한 열이 되는 것은 이 브랜치가 만든 변화다. 접히는 값을 낮출지는 정하지 않았다. 머리 없는 Chromium은 스크롤바 폭을 잡지 않아 1349는 뷰포트 폭으로 흉내 냈다.
+
+## 2026-10-14 · 08fd296c0 · fix(fleet): 현장 지도·Cell 본문 접힘을 60rem으로 (D-741 2)
+
+- 변경: `site-map.css`와 `cell/cell.css`의 칸 질의 접힘을 64rem에서 60rem으로 내렸다. 64rem이면 스크롤바가 있는 1366 노트북 창(셸 1349px, `main` 내용 1013px)이 한 열이 되어 폼 칸 하나가 1013px였다. 고치려던 것은 1024·1100 창의 104~117px 칸뿐이다. 60rem은 세 단 값이 아니라 `shared/web/surfaces.yaml`의 `console` 표면 `container_breakpoints`에 이유와 함께 올렸다. 앞 항목(8b44b2399)의 "셸 1360px부터 넓은 배치"는 이 커밋으로 바뀐다.
+- 증거: 실제 범위 — 넓은 배치는 `main` 내용 폭 960px, 곧 셸 폭(창 폭에서 세로 스크롤바를 뺀 값) 1296px부터 선다. 셸 1024px 이상 1296px 미만은 한 열이다. AI PC Chromium 10 passed(`X:/DevTemp/browser-run/snw-fold60-measure-1.txt`, sha 08fd296c0): 1024는 한 열(본문 내용 688px, Cell 칸 221px), 1100은 한 열(764px, 247px), 1349는 두 열(열 499px, 세 열 폼 칸 158px), 1366은 두 열(열 507px, 칸 161px), 360은 한 열 328px. 모든 폭에서 가로 넘침 0, 잘린 단추·선택 글 없음, 지도 글자 높이 14px. 두 열이 서는 가장 좁은 셸 1296px의 칸은 계산으로 149px다(잰 값이 아니다). 세 브라우저 파일 전체와 원격 소스 시험 결과는 착지 보고에 있다.
+- gate 변화: 없음. Fleet 크기 단위는 56744 그대로다. 머리 없는 Chromium은 스크롤바 폭을 잡지 않아 1349는 뷰포트 폭으로 흉내 냈다. 화면을 사람이 본 적은 없다.
+
+## 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 경고 행과 카드 표시 (D-550 8항, D-760 3항 1단계)
+
+- 변경: `queues.js` `attentionItems`가 `robot.rule_m.state === "unbounded"`일 때 주의 행 하나(`: 한도 없는 움직임 — 관제가 끊겨도 로봇이 계속 갑니다 (<이유>)`)를 낸다. `roster.js` 카드는 연결 태그 자리 옆에 `한도 없음` 태그를 붙인다. 이유 글은 `link-tag.js` `ruleMTag` 한 곳에 있다. 새 칸·새 클래스·인라인 스타일은 없다.
+- 증거: `node --test`(link-tag, attention-stale, queue-inline) 통과, `test_console_queues_contract.py` 원격 통과. 브라우저 시험과 화면 확인 없음.
+- gate 변화: 없음.
+
+## 2026-10-14 · ba11d856d · fix(fleet): 규칙 M 카드 글과 이유 정리 (검토 반영)
+
+- 변경: 카드 태그 글을 `정지 한도 없음`으로 바꿨다. 이유는 `hold_back`·`no_goal_lease`·`leg_unknown` 셋이다. `ruleMTag`의 쓰지 않는 `reason` 값과 카드의 `data-rule-m`을 지웠다. 오프라인 로봇은 서버가 판정을 주지 않아 주의 행도 카드 태그도 없다.
+- 증거: `node --test`(link-tag, attention-stale, queue-inline) 통과. 브라우저 시험과 화면 확인 없음.
+- gate 변화: 없음.
+
+## 2026-10-14 · 776bdacfc · feat(fleet): 새 작업에 이동 종류 (D-763 조각 3)
+
+- 변경: 작업 › 새 작업은 `/console?view=work&show=new`의 종류 목록이다. 이동은 활성 현장 지도에 장소가 있고 로봇이 있을 때만 선다(꺼진 단추가 아니라 없는 항목, D-763 9). 누르면 오른쪽 칸에 로봇 선택과 로봇 카드의 운행 폼(`card-trip.js` `trip.section`, `focus`)이 선다. 계획·시작은 카드와 같은 `planTrip`/`startTrip`이고 거절 글도 같다. 서버 변경 없음. Cell 적재는 `/console/cell`로 가고 그 문서의 하위 탐색 `새 작업`이 새 주소를 현재로 표시한다. Cell 문서의 `#work-kind` 문장과 작업 상세의 `팔 공정 설정` 링크를 지웠다. `placeOptions`를 내보낸다.
+- 증거: 원격 소스·node(`test_site_map_api.py`의 `node --test` 포함) 145 passed(HEAD 229d47e94, 모델 PC; 같은 이름 로그가 다음 실행에 덮였다), `known_failures` 0 new. AI PC Chromium 39 passed(`X:/DevTemp/browser-run/work-move-b1.txt`, nonce 2026-10-14_19:16:26, sha 229d47e94): 카드와 새 작업에서 보낸 요청 넷(계획·시작·계획·바쁜 시작)이 method·path·body·content-type까지 같고 `TRIP_ROBOT_BUSY` 거절 글이 같다. 장소 없는 지도에서 이동 항목이 없고 생기면 선다. 1366·390에서 가로 넘침 없고 비상 정지가 첫 화면에 있다.
+- gate 변화: 없음. 장치에서 새 작업으로 시작한 운행 한 번이 카드와 같은 trip 기록을 남기는지는 확인 못 함. 화면을 사람이 본 적은 없다.
+
+## 2026-10-14 · 13b907495 · test(arch): 관제를 자기 크기 단위로 (D-763 조각 3, D-753)
+
+- 변경: `site_ui/console`을 `SIZE_UNITS`에 더했다(첫 등록 229d47e94, 이 커밋이 재판정 조건 반영). D-757 판정 커밋 61aa49b32에서 잰 값으로 나눈다: 서버 `fleet` 38822 + 관제 17933 = 56755. 브랜치 기점 06e97383b까지의 101줄(서버 +46, 관제 +55)은 다시 잡지 않는다. 지금 서버 38868, 관제 18023. 계획 `docs/plans/2026-10-14-fleet-console-size-unit.md`.
+- 증거: 읽기 전용 critic 독립 재판정 AGREE-WITH-CONDITIONS, 조건 반영. 원격 AI PC `test_module_structure.py`(P6 셋 포함)·`test_doc_tabs.py`·`test_site_map_api.py` 70 passed(`X:/DevTemp/work-move/run-1.txt`, HEAD 13b907495), `known_failures` 0 new.
+- gate 변화: 없음.
+
+## 2026-10-14 · f38a5093a · feat(console): 카드에 trip 기다림, 상한을 넘으면 개입 행 (D-763 조각 2, API v1.231)
+
+- 변경: `shared/site-map-model.js` `tripWaitText`가 `대기 · 횡단보도`·`대기 · 신호`·`대기 · 통행권`·`대기 · 연결`(상한을 넘으면 `대기 상한 넘음 · …`)을 만든다. `card-trip.js` 카드 줄은 기다림이면 이것을 먼저 보인다. `queues.js`는 `wait.over_bound`인 열린 trip을 crit 행 `개입 필요 — 대기 상한 넘음 · …`으로 낸다. 지도 화면 trip 줄(`tripStatusText`)에도 같은 글. API 문서 v1.231과 버전 고정 시험.
+- 증거: 원격 시험(모델 PC) 284 passed(node 시험 포함), 로그 X: `wait-read/run-1.txt`. 브라우저(모델 PC, f38a5093a) `test_console_card_trips_browser.py` 20 passed: 카드 글, 1366×600·390×844 넘침 없음, 비상 정지 화면 안, 상한 넘으면 최우선 개입 행. 로그 X: `browser-run/wait-read-b1.txt`.
+- gate 변화: 없음.
+
+## 2026-10-14 · 7c26a028c · fix(console): 상한을 넘은 기다림은 주의 행 (D-763 개정 2 질문 7)
+
+- 변경: 상한을 넘으면 카드 줄과 주의 행이 `대기 상한 넘음 · 막힘 해결 중 · <사유>`다(warn). crit `개입 필요` 행을 지웠다. 개입은 기존 막힘·해결기 인계 경로가 낸다.
+- 증거: 원격 시험(AI PC) 285 passed(node 시험 포함), 로그 X: `wait-read/run-1.txt`. 브라우저(AI PC, 7c26a028c) `test_console_card_trips_browser.py` 20 passed: 상한 넘으면 주의 목록과 카드 줄에 글, 최우선 개입 목록에는 없음. 로그 X: `browser-run/wait-read-b2.txt`.
+- gate 변화: 없음.
+
+## 2026-10-14 · f79947c25 · fix(console): 지도 화면 trip 줄은 열린 trip에만 기다림 글
+
+- 변경: `tripStatusText`가 `started`·`running`·`link_wait` trip에만 `tripWaitText`를 붙인다. API로 취소된 trip은 저장된 마지막 `waiting: true`를 가지고 있을 수 있다. `site-map-model.js` 799줄 그대로. 0d66d8b41에서 상한 넘김 글을 중립 문구 `대기 상한 넘음 · <사유>`로 바꿨다.
+- 증거: node 시험 포함 원격 218 passed, 로그 X: `wait-read/run-1.txt`. 브라우저(AI PC, f79947c25) `test_console_card_trips_browser.py` 20 passed, 로그 X: `browser-run/wait-read-b5.txt`.
+- gate 변화: 없음.
+
+## 2026-10-14 · ce31980a5 · feat(console): 작업 칸에서 승인 대기 팔 작업 승인 (D-741 7)
+
+- 변경: `/console?view=work`에서 `PROPOSED` 팔 작업(Mission)을 고르면 오른쪽 작업 칸에 `실행 승인`(`#work-admit`)이 선다. Cell과 같은 기존 `POST /api/fleet/missions/{id}/admit`에 `/api/fleet/dispatch-control`의 `generation`을 `expected_generation`으로 보낸다. 보기 전용이면 `운영자 권한이 필요합니다`, 공유 토큰이면 `이름 있는 운영자 로그인이 필요합니다`를 단추 아래 사유로 적고 막는다(세션의 역할·주체에서 나온다). 그 밖의 거절은 서버가 답한 말을 그 자리에 적고, 5xx·연결 실패는 결과 미확인으로 적고 다시 보내지 않는다. 성공하면 목록과 칸을 다시 읽는다. 새 API·필드는 없다.
+- 하지 않은 것: `반려`는 없다. `PROPOSED` 작업을 반려하는 서버 경로가 없다(Cell `cancel`은 `PROPOSED`를 거절하고, Mission에는 취소 경로가 없다). Cell 작업은 `/api/fleet/work`에 나오지 않아(`fleet_cell_jobs`는 이 조회에 없다) 제안자 규칙과 `적재 배치 미리보기 열기`는 이 목록에 설 자리가 없다. 서버가 그 규칙으로 거절하면 그 코드가 사유로 보인다.
+- 증거: 브라우저 시험 `test_pending_seat_approves_through_the_existing_admit_route`(1366·390 × 승인·보기 전용·공유 토큰·거절·미확인)를 포함한 `test_work_overview_browser.py` 20 passed, AI PC Chromium(`X:/DevTemp/browser-run/work-approval-b4.txt`, sha 226268b05). 첫 실행에서 `ui-button`이 `hidden`을 무시해 단추가 늘 보이고, 서버 코드가 든 사유가 1366에서 단추를 넘치게 한 것을 잡아 226268b05에서 기존 규칙(`#dispatch-rearm[hidden]`, `.work-list ui-button`)에 이름을 더해 고쳤다. 화면을 사람이 본 적은 없다.
+- gate 변화: Fleet 크기 단위 +25줄. D-753 증가 허용 0을 넘는다. 지울 수 있는 죽은 코드(`next_running_mission` 등)는 main에서 이미 지워졌다.
+
+## 2026-10-15 · 6ae1df74e · D-763 조각 4: 작업 화면의 trip·Cell Job 행과 서버 종류 목록
+
+- 변경: `work-view.js` 줄 글이 서버의 보이는 상태를 쓰고 기다림을 먼저 보인다(`tripWaitText`, 상한을 넘으면 `대기 상한 넘음 · <사유>`, 개입 아님). 필터에 운행·Cell 적재, 끝난 작업에 trip 끝 상태. trip·Cell Job 행은 기존 상세 읽기를 연다. 새 작업은 `/api/fleet/work`의 `kinds`에 있는 종류만 보이고 답이 없으면 아무 종류도 없다. `console.js` `paintMove`의 브라우저 추측(장소·로봇) 줄을 지웠다. 콘솔 단위 18082→18083(상한 18083).
+- 증거: 브라우저(AI PC, 6ae1df74e) `test_work_overview_browser.py`·`test_console_card_trips_browser.py` 35 passed, 로그 X: `browser-run/wrs4-b1.txt`. node 시험은 `test_site_map_api.py`로 원격 225 passed 안에 있다.
+- gate 변화: 없음.
+
+## 2026-10-15 · e7b196839 · D-763 조각 4 검토: 끝난 작업·승인 대기는 보이는 상태로 거른다
+
+- 변경: `work/work-view.js`(6377fe873에서 `work/`로 옮김, 자기 크기 단위)의 `show=pending|done`이 서버의 `visible_state`(`approval_pending`·`ended`)로 거른다. 취소된 Cell Job은 끝난 작업에 있고 실패한 Task는 없다. 6ae1df74e에서 크기를 맞추려고 한 줄에 모은 문장을 파일의 모양으로 되돌렸다. 단위: 콘솔 17,717/17,719, 작업 영역 379/514.
+- 증거: 브라우저(AI PC, e7b196839) `test_work_overview_browser.py`·`test_console_card_trips_browser.py`·`test_cell_app_browser.py` 93 passed, 로그 X: `browser-run/wrs4-b3.txt`.
+- gate 변화: 없음.
+
+## 2026-10-15 · 239d2d607 · D-767 P0 로봇 카드 "예고" 한 줄
+
+- 변경: `shared/site-map-model.js` `trafficCardLine`이 `/traffic` 행의 `preview` 첫 두 사건을 "예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도"로 붙인다. 없거나 만료한 미리보기는 서버가 행에서 빼므로 아무것도 안 보인다. 파일 800/800, 콘솔 단위 17,718/17,719.
+- 증거: `operations/fleet/test/web/traffic-layer.test.mjs`(원격 `test_site_map_api.py` node 시험 포함 fleet 5,290 passed). 브라우저는 확인 못 함.
+- gate 변화: 없음.
+
+
+## 2026-10-16 · uncommitted · 앱별 작업으로 이동하는 로봇 카드
+
+- 변경: 승인 directory에서 Robot/Pilot 링크를 구성하고 주소가 없거나 충돌하면 안내한다. 새 원장·명령·URL 토큰 전달을 추가하지 않는다. 세션·화면 수명 변경에서 캐시를 폐기하는 회귀를 검증한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · 8c6692128 · 설치 보정 손잡이의 상단 바 가림 수정
+
+- 변경: 실측 교정 패널로 늘어난 화면에서 기존 사각 보정 손잡이를 스크롤하면 고정 상단 바에 가려졌다. 손잡이의 스크롤 시작 여백에 공용 앱 바 높이와 간격 토큰을 적용했다.
+- 증거: 병합 전 전체 원격 검사 ea71743778의 `test_camera_rectification_direct_manipulation`이 실제 hit test에서 실패했다. 8c6692128의 같은 드래그 검사와 실측 교정 브라우저 두 폭은 3 passed, NEW 0이다. 원본 로그는 저장소 밖 `C:/DevTemp/camera-calibration/landing-handle-fix/`에 있다.
+- gate 변화: 없음. 수정본과 최신 main의 전체 병합 검증은 별도 수행한다.
+
+## 2026-10-17 · uncommitted · 실측 보정 조회와 승인 동시 실행 차단
+
+- 변경: 실측 보정 상태 조회 중 승인·확인·철회·영상 읽기를 잠그고, 이벤트 처리에서도 조회와 쓰기가 겹치지 않게 했다. source·session·revision 확인과 미리보기 만료는 유지한다.
+- 증거: FULL 통과 뒤 main 추가 변경 검사에서 미리보기 표시 1건이 실패했다. 기존 브라우저 흐름에서 상태 응답을 보류하는 재현 검사를 추가했고 commit `1cde86ca1`의 데스크톱·전화 폭 모두 조회 중 확인 버튼이 활성 상태로 남아 실패했다. 수정본의 원격 재검증은 후속이다.
+- gate 변화: 없음. 실패를 기준선에 추가하지 않았으며 main 착지·push·배포·실측·DEVICE/FIELD 수용으로 표시하지 않는다.
+
+## 2026-10-17 · uncommitted · 실측 보정 조회 중 입력 유지
+
+- 변경: 자동 상태 조회 중 로컬 파일·오차 한도·촬영 조건 입력은 유지하고, 승인·확인·철회·영상 읽기 요청은 계속 잠근다. 조회와 쓰기의 동시 실행 차단과 실제 session·revision 변경 시 조건 해제는 유지한다.
+- 증거: commit `8e72b84d65`의 FULL 일반 22묶음과 브라우저 216·211건은 통과했으나, 보정 확인란 클릭 1건이 실패해 착지하지 않았다. commit `11729e090`에서 실제 mouse down/up 사이에 상태 응답을 보류한 재현 검사는 두 폭 모두 확인란이 선택되지 않아 실패했다. 수정본 검증은 후속이다.
+- gate 변화: 없음. 실패 원본과 중단 상태를 외부 기록에 보존하며 실패 목록을 늘리지 않는다.

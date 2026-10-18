@@ -353,7 +353,7 @@ def _image(path):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("target", "fit", "preview", "floor", "plane", "advice"))
+    parser.add_argument("action", choices=("target", "fit", "preview", "floor", "plane", "advice", "bundle"))
     parser.add_argument("--input", help="JSON manifest, candidate or advice")
     parser.add_argument("--output", required=True, help="new output directory")
     parser.add_argument("--image")
@@ -409,6 +409,12 @@ def main(argv=None):
                 if not cv2.imwrite(str(out / filename), pixels):
                     raise ValueError("preview image write failed")
             _write(out / "coverage.json", {"observed_fraction": float(mask.mean()), "applied": False})
+        elif args.action == "bundle":
+            from rosy_vision.calibration_bundle import export_bundle
+            root = Path(args.input).resolve().parent
+            report = _read(root / value['report'])
+            floor = _read(root / value['floor'])
+            _write(out / 'bundle.json', export_bundle(report, floor, value['context']))
         elif args.action == "floor":
             candidate = _read(Path(args.input).resolve().parent / value["lens_candidate"])
             floor = fit_floor(candidate, value["pixels"], value["metres"], value["check_pixels"],

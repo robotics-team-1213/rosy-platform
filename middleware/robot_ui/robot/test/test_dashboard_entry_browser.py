@@ -91,8 +91,9 @@ def test_entry_loads_only_identity_and_destinations_with_stop_on_demand(entry):
     _open(page)
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
     expect(page.get_by_role('link', name='작업 준비', exact=True)).to_be_visible()
+    # restoreAccount() probes the account session first; the fixture answers 404 (no account), so the token path continues.
     assert [(method, path) for method, path, _ in state['calls']] == [
-        ('GET', '/api/v1/auth/whoami'), ('GET', '/api/v1/ui/surfaces/console')]
+        ('GET', '/api/account/session'), ('GET', '/api/v1/auth/whoami'), ('GET', '/api/v1/ui/surfaces/console')]
     assert page.evaluate('window.entrySockets') == 0
     assert not any(path.endswith(('/app.js', '/vision.js', '/state-socket.js', '/teleop.js')) for path in state['assets'])
     for width in (320, 390):
@@ -145,7 +146,7 @@ def test_entry_code_pairing_and_local_logout_use_existing_credential_helpers(ent
     page, state = entry
     _open(page, token='')
     expect(page.locator('#auth-drawer')).to_be_visible()
-    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
+    assert state['calls'] == [('GET', '/api/account/session', None), ('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-label').fill('fixture tablet')
     page.locator('#code-remember').check()
@@ -206,7 +207,7 @@ def test_entry_remembers_only_expiring_paired_login_and_revokes_on_logout(entry)
     page.locator('#code-input').fill('ABCD')
     page.locator('#code-submit').click()
     expect(page.locator('#code-message')).to_contain_text('8자')
-    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
+    assert state['calls'] == [('GET', '/api/account/session', None), ('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
@@ -380,8 +381,11 @@ def test_entry_old_stop_ack_cannot_fetch_state_with_expired_session(entry):
     page.locator('#token-input').fill('fixture-new-token')
     page.locator('#auth-form').get_by_role('button', name='연결', exact=True).click()
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
-    page.evaluate('window.releaseOldStop()')
-    page.wait_for_function('() => window.oldStopDecoded === true')
+    # api() rejects a response that arrives after the identity changed, before decoding it.
+    # A MessageChannel task (not faked by page.clock) lets the old ack's promise chain settle first.
+    page.evaluate("""() => { window.releaseOldStop();
+      return new Promise(resolve => { const channel = new MessageChannel(); channel.port1.onmessage = resolve; channel.port2.postMessage(0); }); }""")
+    assert page.evaluate('window.oldStopDecoded') is None
     assert page.evaluate('window.oldStopReadbackTokens') == []
     assert not any(path == '/api/v1/robot/state' for _, path, _ in state['calls'])
     expect(page.locator('#entry-stop-notice')).to_be_hidden()

@@ -23,9 +23,10 @@ class CameraPowerMixin:
         change = self._power_gate.update(msg.data)
         if change is None:
             return
-        _previous, level = change
+        previous, level = change
         if level == 'off':
-            self._stop_cam()
+            if previous != level:
+                self._stop_cam()
             self.get_logger().info('camera paused by power policy')
         else:
             # A restart re-runs the settle/lock and the warmup gate: frames from a
@@ -33,7 +34,8 @@ class CameraPowerMixin:
             self._locked = None
             self._lock_attempts = 0
             self._policy.reset()
-            self._start_cam()
+            if previous == 'off':
+                self._start_cam()
             self.get_logger().info('camera resumed by power policy')
         self._report_camera_ready(False)
 

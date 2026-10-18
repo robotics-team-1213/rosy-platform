@@ -94,14 +94,17 @@ surfaces:
     medium: web
     ports:
       - {port: 8090, source: operations/fleet/fleet/cli.py}
-    audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정) · Cell 작업 준비자 (/console/cell, D-446)
-    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-370 1항)
-    owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop]
+    audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정) · Cell 작업 준비자 (/console/cell, D-446) · 계정 관리자 (/console/accounts, D-757) · 정책 관리자 (/console/policy, D-793)
+    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인·Rosy Account 계정 관리 (D-370 1항, D-757)
+    owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop, account-management, policy-governance]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
-    breakpoints:
+    container_breakpoints:
       - value: 48rem
-        reason: D-658의 네 헤더 영역을 제품·비상정지 첫 줄과 상태·조작 둘째 줄로 배치한다. 접속 상세는 화면 폭에 관계없이 별도 펼침 영역이다.
+        reason: 한 줄 앱 바가 시계와 평상 연결 글(실시간)을 접는 셸 칸 폭 — 그 아래에서는 맥락·알림·계정·비상 정지가 한 줄에 서려면 연결 자리가 비어야 한다. 공용 셸의 본문 접힘과 같은 값이다(D-741 5항)
+      - value: 60rem
+        reason: 현장 지도·Cell 본문(main)이 두 열로 서는 칸 폭 — 레일과 하위 탐색(304px) 옆 1024·1100 창의 본문(688·764px)은 한 열이고, 스크롤바가 있는 1366 노트북 창(1349, 본문 1013px)은 두 열이다. 64rem이면 그 노트북이 한 열이 된다(D-741 2항)
+    breakpoints:
       - value: 110rem
         reason: 지도와 개입 칸을 같은 폭으로 두어도 좁은 화면에서는 지도·관제 카메라가 작아진다 — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png

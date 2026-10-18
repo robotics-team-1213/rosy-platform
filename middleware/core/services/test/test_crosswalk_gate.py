@@ -7,8 +7,9 @@ import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_common.robot_body import PINKY_PRO
-from core_features.line_follow import crosswalk_gate as gate_module
-from core_features.line_follow.crosswalk_gate import CrosswalkGate, Scan, judge, scan_rays
+from core_features.line_follow.crosswalk import gate as gate_module
+from core_features.line_follow.crosswalk import kernel as kernel_module
+from core_features.line_follow.crosswalk.gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
 from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
@@ -49,8 +50,8 @@ def rays_at(x, objects, *, no_return=None, wall_m=1.5, step_deg=2):
 
 
 class Sim:
-    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, **config):
-        self.edges = edges          # (left, right) inner paint edges the camera reports, or None
+    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, slope=0.0, **config):
+        self.edges, self.slope = edges, slope   # slope: the lane's direction in the body frame (dy/dx)          # (left, right) inner paint edges the camera reports, or None
         self.xw_u, self.lat_u = xw_u, lat_u   # crosswalk along-track bound (None = detector off), lane lateral
         self.t, self.x, self.linear = 1.0, 0.0, 0.0
         self.objects, self.no_return, self.scans = [], None, True
@@ -72,8 +73,9 @@ class Sim:
         raw = dict(stamp=t, geometry_id="rig", ground_source="CALIBRATED", uncertainty_m=self.lat_u,
                    crosswalk_uncertainty_m=self.xw_u,
                    boundaries=[] if self.edges is None else [
-                       dict(side=side, slope=0.0, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
-                       for side, y in zip(("left", "right"), self.edges)])
+                       dict(side=side, slope=k, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
+                       for side, y, k in zip(("left", "right"), self.edges,
+                                             self.slope if isinstance(self.slope, tuple) else (self.slope,) * 2)])
         if crosswalk is not None and crosswalk[0] - self.x >= 0.0:
             raw["crosswalk"] = dict(near_m=crosswalk[0] - self.x, far_m=crosswalk[1] - self.x)
         m.observe(LineObservation(LineFollowMode.CAMERA_LINE, t, True, 0.0, 0.9,
@@ -115,7 +117,8 @@ def test_stop_gap_comes_from_the_body_and_range_min():
     geo = s.m._crosswalk_geometry()
     assert geo.s_wait == pytest.approx(RANGE_MIN - (B.front_x_m - B.lidar_x_m) + 0.02)
     assert geo.s_wait == pytest.approx(0.11, abs=0.002)       # D-573 2: Pinky nominal about 0.11 m
-    text = Path(gate_module.__file__).read_text(encoding="utf-8")
+    text = "\n".join(Path(module.__file__).read_text(encoding="utf-8")
+                     for module in (gate_module, kernel_module))
     assert "0.15" not in text and "0.22" not in text           # no D-384 hand constants
 
 
@@ -368,6 +371,140 @@ def test_the_track_wall_beside_the_lane_is_outside_the_look_area():
     assert go - stop_t <= 5.6
 
 
+def test_wall_bases_read_as_the_lane_edges_do_not_hold_an_empty_crosswalk():
+    """Gazebo lap 2026-10-14 (m3): the camera gave the wall bases 0.120 / 0.122 m either side as the
+    lane edges; A's edge lay on the wall, its returns hit one edge cell every scan and the persistence
+    rule answered person for good. The lane is no wider than its model, so the wall stays outside."""
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.121, 0.121)]
+    s.to_stop()
+    stop_t = s.t
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
+    assert go - stop_t <= 5.6
+
+
+def test_a_poor_lane_reading_while_crossing_does_not_widen_the_way_ahead_into_the_walls():
+    """D-573 개정 5 (Gazebo lap m15): on the stripes the camera's lane bound grew to 0.046 m; merged
+    into the zone's edges it made the way ahead of the crossing body 0.14 m wide each side and the
+    walls 0.117 m out held the crossing for good. The way ahead is the lane's own width about the
+    body; a person in it still stops the crossing."""
+    for person, moves in (([], True), ([(FAR - 0.02, 0.05, 0.02)], False)):
+        s = Sim(edges=(0.079, -0.079))
+        walls = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+        s.objects = walls
+        s.to_stop()
+        s.run(5.5)
+        assert s.crosswalk.state == "crossing"
+        end = s.t + 20.0
+        while s.x + B.front_x_m < NEAR + 0.02:
+            assert s.t < end, s.m.status()
+            s.frame()
+        s.lat_u, s.objects = 0.046, walls + person
+        out = [d.linear for _, d in s.run(1.0)]
+        assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
+def test_the_look_area_follows_the_lane_direction_not_the_body_heading():
+    """D-573 개정 5 6항 (Gazebo m23): the robot stood 0.1 rad off the lane at the stop; turned to the body's
+    heading, the far end of the look area ran over the wall 0.117 m out and person_present held. The lane's
+    direction is the seen edges' slope; in that frame the walls stay outside and the lane stays inside."""
+    walls = [(x / 100, side + 0.1 * x / 100, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+    s = Sim(edges=(0.079, -0.079), slope=0.1)
+    s.objects = walls
+    s.to_stop()
+    assert any(d.linear > 0 for _, d in s.run(7.0))
+    s = Sim(edges=(0.079, -0.079), slope=0.1)
+    s.objects = walls + [(0.60, -0.060 + 0.06, 0.012)]       # in the lane at its far right edge
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+
+
+def test_an_edge_misread_with_another_slope_cannot_hide_the_other_lane_edge():
+    """Review 2026-10-14: a straight lane with the left edge misread at slope 0.1 tilts the mean frame
+    0.05 rad; the right edge's seen ends in that frame still bound A, so someone at its far end holds."""
+    s = Sim(edges=(0.079, -0.079), slope=(0.1, 0.0))
+    s.objects = [(0.60, -0.070, 0.012)]
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+
+
+def test_a_loose_lane_reading_on_the_stripes_does_not_turn_the_way_ahead():
+    """Gazebo m24: while crossing, the camera read the stripes as a lane 0.08 m wide, slope 0.18, bound
+    0.043 m; turned by it the way ahead ran over the wall and the crossing held for good. A reading looser
+    than D-491's MAX_LATERAL_M is no lane: the zone's own frame stays, and a person in the way still holds."""
+    walls = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+    for person, moves in (([], True), ([(FAR - 0.02, 0.0, 0.02)], False)):
+        s = Sim(edges=(0.079, -0.079))
+        s.objects = walls
+        s.to_stop()
+        s.run(5.5)
+        assert s.crosswalk.state == "crossing"
+        end = s.t + 20.0
+        while s.x + B.front_x_m < NEAR + 0.02:
+            assert s.t < end, s.m.status()
+            s.frame()
+        s.edges, s.slope, s.lat_u, s.objects = (0.0, -0.08), (0.36, 0.0), 0.043, walls + person
+        out = [d.linear for _, d in s.run(1.0)]
+        assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
+def test_a_frame_without_the_line_keeps_the_last_corridor_for_its_ttl_in_the_same_odom_run():
+    """Gazebo m25: a camera frame without the line cleared the lane evidence for a tick; without a corridor A
+    widened in the zone's skewed frame, read unknown and restarted the 5 s clear window at every such tick."""
+    s = Sim(edges=(0.079, -0.079))
+    s.frame()
+    held = s.m._fresh_corridor(s.t)
+    assert held is not None
+    s.m.observe(LineObservation(LineFollowMode.CAMERA_LINE, s.t, False, None, 0.0), received_at=s.t, source_now=s.t)
+    assert s.m._return_evidence._lane is None and s.m._fresh_corridor(s.t + 0.1) is held
+    s.linear = 0.08                                                   # moving: only for EVIDENCE_TTL_S
+    s.m._standing_still = lambda now: False
+    assert s.m._fresh_corridor(s.t + 0.31) is None
+    s.m._standing_still = lambda now: True                            # standing still where it was seen
+    here = SimpleNamespace(x=held[0].x, y=held[0].y, yaw=held[0].yaw)
+    assert s.m._fresh_corridor(s.t + 5.0, here) is held
+    for moved in (dict(x=here.x + 0.05), dict(yaw=here.yaw + 0.3)):    # drove or pivoted, then stopped (review)
+        assert s.m._fresh_corridor(s.t + 5.0, SimpleNamespace(**{**vars(here), **moved})) is None
+    s.m._return_evidence.reset()                                      # a new odom run: never the old corridor
+    assert s.m._fresh_corridor(s.t + 0.1) is None
+
+
+def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
+    """D-573 개정 4: with wall bases read as the edges, someone 0.09 m from the middle (beyond the
+    body's own 0.077 m) still stops the crossing; someone 0.118 m out, against the wall, is no
+    longer judged (the documented loss; D-422 keeps the body's own path). A change that sees that
+    person again is welcome: update the second half then."""
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(0.42, 0.075, 0.012)]                     # in the lane, reaching 0.087 m out
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(0.42, 0.118, 0.004)]
+    s.to_stop()
+    assert any(d.linear > 0 for _, d in s.run(7.0))
+
+
+def test_lane_edges_caps_raw_edges_only_and_pads_stay_outside():
+    """Review: the cap is on what the camera saw; an edge alone, a lane-wide pair and the zone's
+    uncertainty/drift pad are untouched (an off-centre robot keeps its real edges)."""
+    from core_features.line_follow.crosswalk.gate import lane_edges, zone_of
+    assert lane_edges(0.120, -0.122) == pytest.approx((0.078, -0.080))    # the lane's inner width
+    # m6: with the corridor's pads (0.024 m there) the wall face (0.117 m) and its edge band stay outside
+    assert lane_edges(0.120, -0.122)[0] + 0.024 < 0.117 - 0.0105
+    assert lane_edges(0.109, -0.049) == (0.109, -0.049)        # 3 cm off-centre, a real lane
+    # review: one far misread edge (the next lane's line) must not slide the lane off the body
+    left, right = lane_edges(0.109, -0.29, body_half=0.0765)
+    assert (left, right) == pytest.approx((0.0555, -0.1025))   # the lane stays about the body (0 inside)
+    assert lane_edges(None, -0.122) == (None, -0.122) and lane_edges(0.14, None) == (0.14, None)
+    anchor = SimpleNamespace(x=0.0, y=0.0, yaw=0.0, frame="odom")
+    z = zone_of(dict(anchor=anchor, epoch=0, near=0.3, far=0.45, uncertainty=0.09, left=0.120, right=-0.122), 0.05)
+    assert (z.left, z.right, z.lateral) == (pytest.approx(0.078), pytest.approx(-0.080), 0.09)
+    geo = Geometry(front_x=0.04, rear_x=-0.07, lidar_x=-0.017, v_cross=0.04, s_wait=0.04, slow_from=0.08,
+                   lane_half_m=0.10, body_half_m=0.077, strip_m=0.0, exit_m=0.15, end_margin=0.02)
+    look = CrosswalkGate()._boxes(z, geo, front=0.0)[0]
+    assert look[2:] == (pytest.approx(-0.170), pytest.approx(0.168))   # the pad is outside the cap
+
+
 def test_a_person_inside_the_seen_lane_corridor_still_stops():
     s = Sim(edges=(LANE_HALF, -LANE_HALF))
     s.objects = [(0.60, -0.07, 0.02)]           # beside the body path, on the lane
@@ -387,7 +524,7 @@ def test_the_corridor_never_narrower_than_the_body():
 import random
 from types import SimpleNamespace
 
-from core_features.line_follow.crosswalk_gate import Geometry, Zone
+from core_features.line_follow.crosswalk.gate import Geometry, Zone
 
 SIGMA = 0.0035      # measured C1 range noise, 0-0.5 m (8kcn 2026-10-10, p90 0.0031, max 0.0034)
 EDGE = 0.08
@@ -503,10 +640,127 @@ def _looking_gate():
     return g, zone, geo
 
 
-def _step(g, zone, geo, pose, t, scan):
+def _step(g, zone, geo, pose, t, scan, **more):
     return g.step(t, zones=[zone], pose=pose, key=(0, "odom"), still=True, scan=scan, geo=geo, cruise=0.08,
                   look_s=1.0, min_scans=8, report_s=10.0, stale_s=0.5, range_sigma_m=SIGMA,
-                  persist_k=2, persist_n=3)
+                  persist_k=2, persist_n=3, **more)
+
+
+def _look_between_walls(zone_yaw, corridor, psi=0.0, person=(), toggle=False):
+    """The gate standing before a zone 0.30..0.45 m ahead on a lane whose walls stand 0.117 m either
+    side; the zone's anchor is `zone_yaw` off the lane and the robot `psi` (the world is turned by
+    -psi about the robot, which stays at yaw 0). Returns the reasons of 3 s."""
+    px = 0.30 - 0.035 - B.front_x_m
+
+    def world(x, y):
+        c, sn = math.cos(-psi), math.sin(-psi)
+        return px + c * (x - px) - sn * y, sn * (x - px) + c * y
+    g = CrosswalkGate()
+    zx, zy = world(0.0, 0.0)
+    zone = Zone(key=(0, "odom"), x=zx, y=zy, yaw=zone_yaw - psi, near=0.30, far=0.45, margin=0.02, lateral=0.02)
+    geo = Geometry(front_x=B.front_x_m, rear_x=B.rear_x_m, lidar_x=B.lidar_x_m, v_cross=0.04, s_wait=0.04,
+                   slow_from=0.08, lane_half_m=0.10, body_half_m=B.half_width_m + 0.02, strip_m=0.0,
+                   exit_m=0.15, end_margin=0.02)
+    pose = SimpleNamespace(x=px, y=0.0, yaw=0.0)
+    things = [(x / 200, side, 0.002) for x in range(-80, 320) for side in (-0.117, 0.117)] + list(person)
+    things = [(*world(x, y), r) for x, y, r in things]
+    out = []
+    for i in range(30):
+        t = 1.0 + i * 0.1
+        seen = None if corridor is None or (toggle and i % 2) else (pose, *corridor)
+        out.append(_step(g, zone, geo, pose, t, Scan(rays_at(px, things, step_deg=1), 0.05, t), corridor=seen)[1])
+    return out
+
+
+def test_the_look_area_follows_the_lane_seen_now_not_the_zones_older_anchor():
+    """D-573 개정 5 (Gazebo lap m6-m13): the anchor of a zone seen earlier is a few degrees off the
+    lane seen now; that slope over the look area used to widen it by 0.02-0.03 m into the walls
+    0.117 m from the lane middle and person_present never cleared. Judged in the frame of the
+    lane seen now the area is the lane plus the camera's own bound, and the walls stay outside."""
+    for yaw in (0.0, 0.03, -0.03):                 # m8: 0.024 rad, the camera's own bound 0.02 m
+        reasons = _look_between_walls(yaw, (0.079, -0.079, 0.02))
+        assert "crosswalk_person_present" not in reasons and reasons[-1] is None, (yaw, reasons[-3:])
+    # no lane seen now: the corridor's full width in the zone's own frame, as before (the wall holds)
+    assert "crosswalk_person_present" in _look_between_walls(0.03, None)
+    # the camera reads the wall bases as the edges: the lane's inner width stands in
+    reasons = _look_between_walls(0.03, (0.120, -0.122, 0.02))
+    assert "crosswalk_person_present" not in reasons and reasons[-1] is None
+
+
+@pytest.mark.parametrize("psi", [0.04, -0.04])
+def test_a_person_at_the_far_lane_edge_holds_a_robot_standing_askew(psi):
+    """Review 2026-10-14: the lane seen now is known in the robot's own heading; askew by psi, the
+    far end of the look area tilts off the lane. The edges over their seen range (0.1-0.4 m) and
+    their slope beyond it keep the lane's far edge inside."""
+    seen = (0.079 - min(psi * 0.1, psi * 0.4), -0.079 - max(psi * 0.1, psi * 0.4), 0.005, abs(psi), 0.4)
+    for side in (0.075, -0.075):
+        reasons = _look_between_walls(0.0, seen, psi=psi, person=[(0.57, side, 0.012)])
+        assert None not in reasons and "crosswalk_person_present" in reasons, (side, reasons[-3:])
+
+
+def test_a_lane_seen_on_and_off_between_ticks_never_clears_a_person():
+    reasons = _look_between_walls(0.03, (0.079, -0.079, 0.02), person=[(0.40, 0.05, 0.02)], toggle=True)
+    assert None not in reasons
+
+
+def _cross_between_walls(*, seen_while_looking=True, walls=True, person=()):
+    """D-573 개정 5 8항 (Gazebo m34/m35): a zone imaged 0.1 rad off the lane (no edges of its own) on a
+    lane whose walls stand 0.117 m either side. The robot looks (with the lane seen if
+    `seen_while_looking`), then crosses along the lane with no corridor at all (the camera's lane bound
+    above MAX_LATERAL_M); `person` appears once it moves. Returns [(cap, reason, remembered lane yaw)]."""
+    px = 0.30 - 0.035 - B.front_x_m
+    g = CrosswalkGate()
+    zone = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=0.1, near=0.30, far=0.45, margin=0.02, lateral=0.02)
+    geo = Geometry(front_x=B.front_x_m, rear_x=B.rear_x_m, lidar_x=B.lidar_x_m, v_cross=0.04, s_wait=0.04,
+                   slow_from=0.08, lane_half_m=0.10, body_half_m=B.half_width_m + 0.02, strip_m=0.0,
+                   exit_m=0.15, end_margin=0.02)
+    things = [(x / 200, side, 0.002) for x in range(-80, 320) for side in (-0.117, 0.117)] if walls else []
+    out, moving = [], False
+    for i in range(200):
+        t = 1.0 + i * 0.1
+        pose = SimpleNamespace(x=px, y=0.0, yaw=0.0)
+        seen = (pose, 0.079, -0.079, 0.02) if seen_while_looking and not moving else None
+        scan = Scan(rays_at(px, things + (list(person) if moving else []), step_deg=1), 0.05, t)
+        cap, reason = _step(g, zone, geo, pose, t, scan, corridor=seen)
+        out.append((cap, reason, getattr(g, "_lane_yaw", None)))
+        if cap is None and moving:
+            return out                                  # past the zone
+        if cap:
+            moving, px = True, px + cap * 0.1
+    return out
+
+
+def test_a_crossing_that_loses_the_lane_keeps_the_lanes_direction_not_the_zones():
+    out = _cross_between_walls()
+    crossing = out[next(i for i, (cap, _, _) in enumerate(out) if cap):]
+    assert crossing[-1][0] is None, out[-3:]                          # crossed and closed
+    assert all(cap for cap, _, _ in crossing[:-1]), [r for _, r, _ in crossing if r]
+    assert crossing[-2][2] == pytest.approx(0.0) and crossing[-1][2] is None   # forgotten with the zone
+
+
+def test_a_person_in_the_lane_still_holds_a_crossing_that_lost_the_lane():
+    out = _cross_between_walls(person=[(0.40, 0.03, 0.02)])
+    assert out[-1][0] == 0.0 and out[-1][1] == "crosswalk_person_present", out[-3:]
+
+
+def test_a_zone_never_seen_with_a_lane_keeps_its_own_frame():
+    out = _cross_between_walls(seen_while_looking=False, walls=False)
+    assert out[-1][0] is None and all(yaw is None for _, _, yaw in out)
+    assert "crosswalk_person_present" in _look_between_walls(0.03, None)   # with the walls: as before
+
+
+def test_an_armed_zone_the_robot_turned_away_from_disarms_with_a_lane_in_view():
+    """Review 2026-10-14: turning the frame to the lane seen now must not hide the turn from
+    _on_course (a zone left behind at a junction would ride along the new road)."""
+    g, zone, geo = _looking_gate()
+    ahead = SimpleNamespace(x=0.0, y=0.0, yaw=0.0)
+    assert _step(g, zone, geo, ahead, 1.0, Scan((), 0.05, 1.0), corridor=(ahead, 0.079, -0.079, 0.02)) == (None, None)
+    assert g.zone is not None
+    for yaw in (math.radians(60), 0.35):            # another road; just past MAX_TURN_RAD
+        away = SimpleNamespace(x=0.10, y=0.0, yaw=yaw)
+        _step(g, zone, geo, away, 1.1, Scan((), 0.05, 1.1), corridor=(away, 0.079, -0.079, 0.02))
+        assert g.zone is None, yaw
+        _step(g, zone, geo, ahead, 1.2, Scan((), 0.05, 1.2))
 
 
 @pytest.mark.parametrize("rays", [

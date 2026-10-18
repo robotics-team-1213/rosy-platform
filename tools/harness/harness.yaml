@@ -47,6 +47,16 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: media
+    path: operations/site_ui/media
+    tests: [operations/site_ui/media/test]
+    functional_kind: pytest
+    functional: [operations/site_ui/media/test]
+  - name: media_edge
+    path: middleware/media
+    tests: [middleware/media/test]
+    functional_kind: pytest
+    functional: [middleware/media/test]
   - name: console_source
     path: operations/site_ui/console
     tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
@@ -94,9 +104,9 @@ modules:
     functional: [operations/processes/cell/test]
   - name: palletizing
     path: operations/processes/palletizing
-    tests: [test/test_platform_palletizing_compat.py, test/architecture/test_platform_dependency_boundaries.py]
+    tests: [operations/processes/palletizing/test, test/test_platform_palletizing_compat.py, test/architecture/test_platform_dependency_boundaries.py]
     functional_kind: pytest
-    functional: [test/test_platform_palletizing_compat.py]
+    functional: [operations/processes/palletizing/test, test/test_platform_palletizing_compat.py]
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam

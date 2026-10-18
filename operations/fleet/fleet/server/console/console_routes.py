@@ -18,6 +18,7 @@ from typing import Callable, Literal, Optional
 
 import httpx
 from fastapi import Depends, HTTPException, Path, Query, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
@@ -31,6 +32,7 @@ from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
+from fleet.traffic import rule_m
 
 
 class FormationRequest(BaseModel):
@@ -173,7 +175,6 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
         refresh_s=1.0, max_age_s=5.0)
     lane = getattr(app.state, "lane_compliance", None)
-
     async def gathered() -> dict:
         snapshot = await gather()
         # Per response, on copies: the cached snapshot is shared with the resolver.
@@ -195,6 +196,15 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             row["power_health"] = next(power_values) if row["online"] else None
             row["power_health_age_s"] = (power_display.age(row["robot_id"])
                                          if row["power_health"] is not None else None)
+        # D-550 8 / D-760 3 stage 1: warn only. The verdict is shown, nothing is refused.
+        runner = getattr(app.state, "trip_runner", None)
+        trips = {trip["robot_id"]: trip for trip in runner.open_trips()} if runner is not None else {}
+        for row in rows:
+            robot_id = row["robot_id"]
+            if row["online"]:  # an offline row already says the link is down
+                row["rule_m"] = rule_m.verdict(
+                    trip=trips.get(robot_id), leg=runner.leg_mode(robot_id) if robot_id in trips else None,
+                    goal=row.get("goal"), navigation=(row.get("state") or {}).get("navigation"))
         return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
@@ -280,10 +290,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
 
-    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
-    async def line_stuck_evidence(robot_id: str, response: Response, stuck_id: str = Query(
-            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$"), live: bool = False) -> dict:
-        response.headers["Cache-Control"] = "no-store"
+    async def stuck_evidence(robot_id: str, stuck_id: str, live: bool) -> tuple[dict, bytes]:
+        """The evidence picture's metadata and JPEG bytes (shared by the JSON and binary routes)."""
         # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
         # memory until the stuck closes. A failed read is not kept: the next read asks again.
         if not board.is_open(robot_id, stuck_id):
@@ -317,14 +325,25 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                                  "message": "current raw frame age unknown or stale"})
                 return {"robot_id": robot_id, "stuck_id": stuck_id, "sequence": status.get("sequence"),
                         "source": status.get("source"), "media_type": "image/jpeg", "live": True,
-                        "captured_at": captured, "age_s": round(age_s, 3),
-                        "jpeg_base64": base64.b64encode(jpeg).decode("ascii")}
+                        "captured_at": captured, "age_s": round(age_s, 3)}, bytes(jpeg)
             board.keep_preview(robot_id, stuck_id, jpeg, status)
             shown = board.preview(robot_id, stuck_id)
             if shown is None:   # the stuck closed while the robot answered
                 raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
                                                              "message": f"{stuck_id} closed"})
-        return shown
+        return shown, board.preview_jpeg(robot_id, stuck_id)
+
+    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_evidence(robot_id: str, request: Request, stuck_id: str = Query(
+            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$"), live: bool = False):
+        meta, jpeg = await stuck_evidence(robot_id, stuck_id, live)
+        # Network load: `Accept: image/jpeg` (the console's 2 s live poll) gets the raw JPEG with the
+        # metadata in X-Stuck-Evidence instead of base64 in JSON (+33 %). Same route, same D-136 exception.
+        if request.headers.get("accept", "").startswith("image/jpeg"):
+            return Response(jpeg, media_type="image/jpeg", headers={
+                "Cache-Control": "no-store", "X-Stuck-Evidence": json.dumps(meta, separators=(",", ":"))})
+        return JSONResponse({**meta, "jpeg_base64": base64.b64encode(jpeg).decode("ascii")},
+                            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
     def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
@@ -376,9 +395,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
-        on_trip = console.trip_busy(robot_id)
+        on_trip = console.trip_refusal([robot_id])
         if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-494 5: motion
-            raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
+            raise http_error(on_trip)
         try:
             if body.decision not in ('WAIT', 'ABORT') and board._log is not None:
                 # Claim and motion admission have one order; stops never wait on this lock.

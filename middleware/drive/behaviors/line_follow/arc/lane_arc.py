@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 
 from core_common.protocol.line_arc import LineArcStatus
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
+from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M
 from core_features.line_follow.model import LineFollowDecision
 from core_features.line_follow.recovery.junction.gate import DEFAULT_ADVANCE_M, JunctionRefused
 from core_features.line_follow.recovery.junction.approach import STEP_MARGIN_S
@@ -156,7 +156,7 @@ class ArcMixin:
             'length': float(segment['length_m']), 'map_id': j.get('map_id'), 'travelled': 0.,
             'offset': float(segment['outer_line_offset_m']),
             'state': 'running', 'reason': None, 'corr': None, 'grace': set(), 'checked': False,
-            'deadline': now + STEP_MARGIN_S}
+            'deadline': now + STEP_MARGIN_S, 'tick_at': now, 'added': 0.}
         v = self._arc_capped(v, 0.)
         a['deadline'] += segment['length_m']/v if v > 0 else 0.
         if pose is None:
@@ -215,6 +215,12 @@ class ArcMixin:
         if (pose is None or not 0 <= now-pose.received_at <= cfg.stale_after_s
                 or (self._return_evidence.epoch, pose.frame) != a['key']):
             return self._arc_stop('lane_arc_pose_lost')
+        # D-760 2b, the D-507 13 rule (crosswalk/gate.py _regulated_wait_share): time a later gate takes
+        # is not the arc's (its deadline and a correction's stand); the helper caps all but authority per arc.
+        add = self._regulated_wait_share(now, now-a['tick_at'], self._arc_speed(), a)
+        a.update(tick_at=now, deadline=a['deadline']+add)
+        if c is not None:
+            c['deadline'] += add
         x, y, yaw = a['last']
         step = (pose.x-x)*math.cos(yaw)+(pose.y-y)*math.sin(yaw)  # D-507 3 signed projection
         a['last'] = (pose.x, pose.y, pose.yaw)

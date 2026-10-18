@@ -177,6 +177,7 @@ def registered(tmp_path, monkeypatch):
     # a result that depends on file ordering.
     key = "core.bridge.ros_bridge"
     sys.modules.pop(key, None)
+    sys.modules.pop("core.bridge.pilot_recorder_client", None)
 
     def read(name):
         return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
@@ -195,6 +196,7 @@ def registered(tmp_path, monkeypatch):
     yield types.SimpleNamespace(node=node, bridge=bridge, services=services)
 
     sys.modules.pop(key, None)
+    sys.modules.pop("core.bridge.pilot_recorder_client", None)
     if getattr(bridge_pkg, "ros_bridge", None) is not None:
         delattr(bridge_pkg, "ros_bridge")
 
@@ -345,8 +347,7 @@ def test_the_bridge_opens_the_same_service_clients(registered):
 
 @pytest.mark.parametrize('mode,number', [('raw',0), ('annotated',1)])
 def test_typed_recording_start_transports_the_closed_mode(registered, monkeypatch, mode, number):
-    import sys
-    module = sys.modules[registered.bridge.__class__.__module__]
+    module = sys.modules[type(registered.bridge).__module__].pilot_recorder_client
     requests = []
     response = types.SimpleNamespace(success=True, message='confirmed')
     monkeypatch.setattr(module, 'PilotRecordingStart', types.SimpleNamespace(Request=types.SimpleNamespace))
@@ -354,7 +355,7 @@ def test_typed_recording_start_transports_the_closed_mode(registered, monkeypatc
     registered.bridge._pilot_recording_start_client = types.SimpleNamespace(
         service_is_ready=lambda: True,
         call_async=lambda request: requests.append(request) or object())
-    assert registered.bridge._request_pilot_recording_start(mode, True) == (True, 'confirmed')
+    assert registered.services.pilot_recording.request_start(mode, True) == (True, 'confirmed')
     assert requests[0].preview_mode == number
 
 

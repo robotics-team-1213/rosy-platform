@@ -66,7 +66,7 @@ deactivate_image() {
             cleanup_failed=1
         fi
     fi
-    if (( ROOT_MOUNTED )); then
+    if (( ROOT_MOUNTED && ! BOOT_MOUNTED )); then
         if umount -- "$ROSY_IMAGE_ROOT"; then
             ROOT_MOUNTED=0
         else
@@ -74,7 +74,7 @@ deactivate_image() {
             cleanup_failed=1
         fi
     fi
-    if [[ -n "$LOOP_DEVICE" ]]; then
+    if (( ! ROOT_MOUNTED && ! BOOT_MOUNTED )) && [[ -n "$LOOP_DEVICE" ]]; then
         if losetup --detach "$LOOP_DEVICE"; then
             LOOP_DEVICE=""
         else
@@ -87,6 +87,10 @@ deactivate_image() {
 
 remove_workspace() {
     [[ -z "$WORK_DIR" ]] && return
+    if (( ROOT_MOUNTED || BOOT_MOUNTED )) || [[ -n "$LOOP_DEVICE" ]]; then
+        echo "FAIL: refusing to remove active image workspace: $WORK_DIR" >&2
+        return 1
+    fi
     case "$WORK_DIR" in
         "$WORK_ROOT_REAL"/rosy-image.*)
             rm -rf -- "$WORK_DIR"
@@ -103,8 +107,10 @@ cleanup_on_exit() {
     local status=$?
     trap - EXIT
     set +e
-    deactivate_image
-    remove_workspace
+    if ! deactivate_image || ! remove_workspace; then
+        echo "FAIL: preserving image workspace: $WORK_DIR" >&2
+        (( status )) || status=1
+    fi
     rm -f -- "$OUTPUT_PART"
     exit "$status"
 }

@@ -38,6 +38,7 @@ from core.bridge import (
     goal_tracker,
     observation,
     odometry,
+    pilot_recorder_client,
     reconcile,
     save_map,
     traffic_gate,
@@ -288,8 +289,11 @@ class RosBridge:
         self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
             String(data=json.dumps(teleop_intent(**fields))))
         guard = self._svc.pilot_recording
-        guard.request_active = self._request_pilot_recording
-        guard.request_start = self._request_pilot_recording_start
+        warn = self._node.get_logger().warn
+        guard.request_active = lambda on, wait: pilot_recorder_client.request_active(
+            self._pilot_recorder_client, on, wait, warn)
+        guard.request_start = lambda mode, wait: pilot_recorder_client.request_start(
+            self._pilot_recording_start_client, mode, wait, warn)
         guard.start_available = self._pilot_recording_start_client.service_is_ready
         guard.publish_fetched = lambda rid: self.pilot_fetched_pub.publish(
             String(data=json.dumps({"id": rid})))
@@ -302,57 +306,14 @@ class RosBridge:
             self._node.get_logger().warn(f"pilot recorder status ignored: {exc}",
                                          throttle_duration_sec=10.0)
 
-    def _request_pilot_recording(self, on: bool, wait: bool) -> tuple[bool, str]:
-        """D-411: ask the camera unit's recorder. wait=False from executor callbacks."""
-        client = self._pilot_recorder_client
-        if not client.service_is_ready():
-            return False, ""
-        request = SetBool.Request()
-        request.data = on
-        future = client.call_async(request)
-        if not wait:
-            # The guard announces nothing until the recorder's status confirms; log a refusal.
-            future.add_done_callback(self._log_pilot_recording_refusal)
-            return True, ""
-        try:
-            response = save_map.await_call(future, timeout=3.0)
-        except RuntimeError:
-            return False, ""
-        return bool(response.success), str(response.message)
-
-    def _request_pilot_recording_start(self, preview_mode: str, wait: bool) -> tuple[bool, str]:
-        client = self._pilot_recording_start_client
-        if not client.service_is_ready():
-            return False, ''
-        request = PilotRecordingStart.Request()
-        request.preview_mode = {'raw': 0, 'annotated': 1}[preview_mode]
-        future = client.call_async(request)
-        if not wait:
-            future.add_done_callback(self._log_pilot_recording_refusal)
-            return True, ''
-        try:
-            response = save_map.await_call(future, timeout=3.0)
-        except RuntimeError:
-            return False, ''
-        return bool(response.success), str(response.message)
-
-    def _log_pilot_recording_refusal(self, future) -> None:
-        response = future.result() if not future.cancelled() and future.exception() is None else None
-        if response is None:
-            self._node.get_logger().warn("pilot recorder did not answer a guard stop")
-        elif not response.success:
-            self._node.get_logger().warn(f"pilot recorder refused a guard stop: {response.message}")
-
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
         sample = translate.odom_sample(msg)
-        odometry.observe_bounded_trial(self, msg, sample)
-        odometry.observe_lane_return(self, msg, sample)
+        odometry.observe_odom(self, msg, sample)  # D-758 0: snapshot stamp keys the line-follow odom log
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
-        self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])

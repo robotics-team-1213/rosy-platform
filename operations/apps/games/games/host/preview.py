@@ -13,6 +13,8 @@ from typing import Any, Callable
 
 from games.field import Field
 from games.game import MatchState, Observation
+from games.host.account import cookie, route, same_origin
+from core_common.protocol.account_client import AccountUnavailable
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 
@@ -129,11 +131,24 @@ class PreviewBoard:
 
 
 class PreviewServer:
-    def __init__(self, board: PreviewBoard, *, host: str = "127.0.0.1", port: int = 8765) -> None:
+    def __init__(self, board: PreviewBoard, *, host: str = "127.0.0.1", port: int = 8765, account=None) -> None:
         self.board = board
-        handler = partial(_Handler, board=board)
+        if account and not account.resource.startswith('site:'):
+            raise ValueError('Games Account requires a site resource')
+        self._closed = threading.Event()
+        self.account = account
+        handler = partial(_Handler, board=board, account=account)
         self._httpd = ThreadingHTTPServer((host, port), handler)
         self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._revocations = threading.Thread(target=self._retry, daemon=True)
+
+    def _retry(self):
+        while not self._closed.is_set():
+            try:
+                self.account.retry_revocations()
+            except (AccountUnavailable, ValueError):
+                pass
+            self._closed.wait(20)
 
     @property
     def url(self) -> str:
@@ -142,22 +157,28 @@ class PreviewServer:
 
     def start(self) -> str:
         self._thread.start()
+        if self.account:
+            self._revocations.start()
         return self.url
 
     def close(self) -> None:
+        self._closed.set()
         self._httpd.shutdown()
         self._httpd.server_close()
 
 
 class _Handler(BaseHTTPRequestHandler):
-    def __init__(self, *args, board: PreviewBoard, **kwargs) -> None:
+    def __init__(self, *args, board: PreviewBoard, account=None, **kwargs) -> None:
         self.board = board
+        self.account = account
         super().__init__(*args, **kwargs)
 
     def log_message(self, fmt: str, *args) -> None:
         return
 
     def do_GET(self) -> None:  # noqa: N802
+        if route(self, 'GET'):
+            return
         path = self.path.split("?", 1)[0]
         if path == "/overlay.json":
             payload, _ = self.board.snapshot()
@@ -175,7 +196,8 @@ class _Handler(BaseHTTPRequestHandler):
             asset = path.removeprefix("/common/")
             media = COMMON_ASSETS.get(asset)
             file = COMMON / asset
-            if media is None or "/" in asset or not file.is_file():
+            # The manifest is the allowlist (brand/mark.svg has a folder); no other name reaches the disk.
+            if media is None or not file.is_file():
                 self._send(404, "text/plain; charset=utf-8", b"not found")
                 return
             self._send(200, f"{media}; charset=utf-8", file.read_bytes())
@@ -191,23 +213,35 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, MIME[file.suffix], file.read_bytes())
 
     def do_POST(self) -> None:  # noqa: N802
+        if route(self, 'POST'):
+            return
         path = self.path.split("?", 1)[0]
         if path != "/stop":
             self._send(404, "text/plain; charset=utf-8", b"not found")
             return
-        origin = self.headers.get("Origin")
-        if origin is not None and origin != f"http://{self.headers.get('Host', '')}":
-            # Only the board itself may stop the match; another page open in
-            # the same browser may not (a POST without Origin is not a page).
-            self._send(403, MIME[".json"], b'{"ok":false,"error":"foreign origin"}')
+        if not same_origin(self):
+            self._send(403, MIME[".json"], b'{"ok":false,"error":"Account origin required"}')
+            return
+        try:
+            claims = self.account.resolve(cookie(self, 'rosy_app_account'))
+        except AccountUnavailable:
+            self._send(503, MIME[".json"], b'{"ok":false,"error":"Account unavailable"}')
+            return
+        except ValueError:
+            claims = None
+        if not claims or not claims.permits(self.account.resource, 'games.operate'):
+            self._send(403, MIME[".json"], b'{"ok":false,"error":"games.operate required"}')
             return
         self.board.request_stop()
         self._send(200, MIME[".json"], b'{"ok":true}')
 
-    def _send(self, code: int, media: str, body: bytes) -> None:
+    def _send(self, code: int, media: str, body: bytes, *, headers=()) -> None:
         self.send_response(code)
         self.send_header("Content-Type", media)
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        for name, value in headers:
+            self.send_header(name, value)
         if media.startswith("text/html"):
             self.send_header("Content-Security-Policy", PAGE_CSP)
         self.send_header("Content-Length", str(len(body)))

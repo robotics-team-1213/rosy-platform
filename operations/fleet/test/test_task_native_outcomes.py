@@ -1,6 +1,7 @@
 """Native Task navigation binds a CORE run, rather than caller CID alone."""
 
 from uuid import uuid4
+import asyncio
 from types import SimpleNamespace
 from functools import partial
 import pytest
@@ -10,9 +11,47 @@ from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 
 
-def _accepted_native_task(tmp_path):
+def test_slow_native_owner_does_not_block_another_tasks_completion(tmp_path):
+    from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
+    from test_channel_native_outcomes import _readback
+
+    service, first, _, _ = _accepted_native_task(tmp_path, robot_ids={"rosy_01", "rosy_02"})
+    run(service.submit_navigation(robot_id="rosy_02", x=1., y=2., source="operator",
+                                  actor_id="op", request_key="second-native-goal"))
+
+    async def dispatch(attempt):
+        return {"accepted": True, "operation": first["receipt"]["operation"] | {
+            "run_id": str(uuid4()), "correlation_id": attempt["attempt_id"]}}
+
+    second = run(service.dispatch_next({"rosy_02"}, dispatch=dispatch))
+    slow, fast = sorted((first, second), key=lambda task: task["task_id"])
+
+    async def exercise():
+        fast_read = asyncio.Event()
+
+        async def slow_get(path):
+            await fast_read.wait()
+            return _readback(slow["receipt"]["operation"])
+
+        async def fast_get(path):
+            fast_read.set()
+            return _readback(fast["receipt"]["operation"])
+
+        clients = {slow["robot_id"]: SimpleNamespace(_get=slow_get),
+                   fast["robot_id"]: SimpleNamespace(_get=fast_get)}
+        await reconcile_tasks(service, SimpleNamespace(_client=clients.__getitem__))
+        for task in (slow, fast):
+            result = service.store.get_task(task["task_id"])
+            assert result["status"] == "COMPLETED"
+            assert result["receipt"]["safe_released"] is True
+            assert not service.store.resource_claims(resource_kind="robot", resource_id=task["robot_id"])
+
+    run(exercise())
+
+
+def _accepted_native_task(tmp_path, *, robot_ids=frozenset({"rosy_01"})):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    service = FleetTaskService(store, robot_ids={"rosy_01"})
+    service = FleetTaskService(store, robot_ids=robot_ids)
     control = store.dispatch_control()
     store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator")
     queued = run(service.submit_navigation(

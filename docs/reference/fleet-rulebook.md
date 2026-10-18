@@ -81,7 +81,7 @@ law는 후보의 우선순위보다 먼저 적용하며 실행 직전에도 적�
 | FR-STALL | AI-first 대상, 라인 모드 켜짐, stuck 없음, 20 s 동안 정지·이동 < 0.05 m | 허용 선택 WAIT/LINE_OFF/STOP. 최종 condition·law 검사 뒤 기존 CORE API. trip은 WAIT만 | `ProblemWatch`; D-610 |
 | FR-POSE | AI-first 대상, 지도 자세 DEGRADED/UNKNOWN | WAIT/IDENTIFY/STOP. 현재 자세가 회복됐으면 `problem_changed`로 미전송 | `ProblemWatch`; D-395/D-610 |
 | FR-NECESSITY | 동일 사건·revision·유효 근거의 정상/막힘/부족 상태 | DO_NOT_INTERVENE / INTERVENE / ABSTAIN. 실행 권한 아님 | Situation `assessment.py`, `snapshot_assessment.py`; D-652 |
-| FR-DELIBERATION | 현재 CORE blocked 사건에서 유효한 INTERVENE | reobserve/human 후보 토론만. 항상 `action_admissible=False`; 공개 자동 호출 없음 | `server/incident_deliberation.py`, Decision supervisor; D-672 |
+| FR-DELIBERATION | 현재 CORE blocked 사건에서 유효한 INTERVENE | reobserve/human 후보 토론만. 항상 `action_admissible=False`; 공개 자동 호출 없음 | `server/evidence/incident_deliberation.py`, Decision supervisor; D-672 |
 
 ## 4. AI가 파이프라인에 들어오는 위치
 
@@ -190,8 +190,8 @@ CORE 결과 식별 계약과 건강 보고, 숙고형 모델 수용, 배포·실
 - [공통 law와 후보 선택](../../operations/fleet/fleet/stuck/pipeline.py), [resolver lifecycle와 rule](../../operations/fleet/fleet/stuck/resolver.py), [전송 admission](../../operations/fleet/fleet/stuck/loop.py)
 - [기타 문제](../../operations/fleet/fleet/stuck/problems.py), [결과 판단](../../operations/fleet/fleet/stuck/outcome.py), [원장 연결](../../operations/fleet/fleet/stuck/closed_loop.py)
 - [AI-first](../../operations/fleet/fleet/stuck/ai_first.py), [D-577 후보 검사](../../operations/fleet/fleet/stuck/lane_lost.py), [Decision](../../operations/decision/src/rosy/decision/)
-- [교통](../../operations/fleet/fleet/traffic/handover.py), [trip guard](../../operations/fleet/fleet/server/ledger/trip_guard.py), [자원 admission](../../operations/fleet/fleet/server/dispatch_admission.py)
-- [Task](../../operations/fleet/fleet/server/ledger/task_service.py), [Mission](../../operations/fleet/fleet/server/ledger/mission_dispatcher.py), [Situation](../../operations/situation/rosy_situation/assessment.py)
+- [교통](../../operations/fleet/fleet/traffic/handover.py), [trip guard](../../operations/fleet/fleet/server/trips/trip_guard.py), [자원 admission](../../operations/fleet/fleet/server/dispatch_admission.py)
+- [Task](../../operations/fleet/fleet/server/ledger/task_service.py), [Mission](../../operations/fleet/fleet/server/missions/mission_dispatcher.py), [Situation](../../operations/situation/rosy_situation/assessment.py)
 
 
 ## 9. 관측·운영 기록과 AI 학습 원본

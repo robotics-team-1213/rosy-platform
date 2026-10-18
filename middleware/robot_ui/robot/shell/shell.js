@@ -1,3 +1,5 @@
+import '/common/account-profile.js';
+import { restoreAccount } from "../client.js";
 // 역할별 화면의 셸(D-204). 매니페스트를 받아 패널을 조립하고,
 // 세 화면이 공유하는 것 — 화면 전환기, 역할 표시, 비상 정지 하나 — 만 소유한다.
 // 로그인은 아직 /dashboard 가 소유한다(같은 탭의 sessionStorage 토큰을 그대로 쓴다, D-193 6).
@@ -6,6 +8,7 @@ import { api, session } from "../client.js";
 import { mountPanels } from "./mount.js";
 import { createStore } from "./store.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { actionIcon } from "/common/ui.js";
 import { dashboardLoginHref } from "../surface-navigation.js";
 import { createNode } from "../dom.js";
 
@@ -80,12 +83,22 @@ function showRoleDeniedStatus() {
   showLinkedStatus("이 화면은 현재 계정 역할로 열 수 없습니다.", "/console", "운용 화면으로 이동");
 }
 
+// D-741 6 — 화면 전환은 탐색 레일이다. 아이콘과 아래 적는 짧은 이름은 표면 id로 고르고
+// 전체 이름은 접근성 이름으로 남긴다. 매니페스트 계약은 그대로다.
+const RAIL = {console: ["robot", "운용"], setup: ["settings", "준비"], device: ["install", "설치"]};
+
 function renderSwitch(surfaces) {
   const nav = document.getElementById("surface-switch");
   nav.replaceChildren(...surfaces.map(({ id, title }) => {
-    const link = createNode("a", "", title);
+    const [icon, short] = RAIL[id] || [null, title];
+    const link = createNode("a", "ui-rail-item", short);
     link.href = `/${id}`;
+    link.setAttribute("aria-label", title);
     if (id === surface) link.setAttribute("aria-current", "page");
+    if (icon) {
+      link.dataset.actionIcon = icon;
+      actionIcon(link, icon);
+    }
     return link;
   }));
 }
@@ -197,7 +210,8 @@ document.getElementById("shell-estop").addEventListener("click", async () => {
   }
 });
 
-if (!session.token) {
+await restoreAccount();
+if (!session.authenticated) {
   showLoginStatus("로그인이 필요합니다.");
 } else {
   if (["setup", "device"].includes(surface) && safetyStatus) {

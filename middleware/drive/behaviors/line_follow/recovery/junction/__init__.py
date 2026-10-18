@@ -1,2 +1,2 @@
-"""D-494 4 / D-495 / D-507 junction instruction mixins of LineFollowManager: gate and bounded turn
-(gate.py), expected window and pivot approach (approach.py), map bend pass (bend.py)."""
+"""D-494/D-495/D-507 junction mixins: instruction gate (gate.py), bounded turn (turn.py),
+expected window/pivot approach (approach.py), map bend pass (bend.py)."""

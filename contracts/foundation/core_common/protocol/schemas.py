@@ -11,6 +11,8 @@ additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노
 
 from __future__ import annotations
 
+from .account_access import AccountAccess, AccountGrant  # noqa: F401
+from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
     ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
@@ -34,7 +36,7 @@ from core_common.protocol.power import (  # noqa: F401 (PWR-001~005, D-440)
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
-from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
+from core_common.protocol.work import FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
@@ -43,6 +45,8 @@ from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequ
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
 from core_common.protocol.localization import LocalizationStatus, OdomPose
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
+from core_common.protocol.cell_transfer import (  # noqa: F401 (D-403; D-779 7, D-780 pair/barrier fields)
+    _ACTION_ID, CellTransferBarrier, CellTransferPayload, CellTransferPose, FleetCellTransferGrant)
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
@@ -192,9 +196,7 @@ class LocalStopState(str, enum.Enum):
 class StopRequestSource(str, enum.Enum):
     FLEET = "fleet"
     OPERATOR_LOCAL = "operator_local"
-
-
-_ACTION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")
+    COORDINATOR = "coordinator"  # D-780 2: workcell coordinator peer; reason codes in workcell_barrier
 
 
 class ResolvedTargetEvidence(BaseModel):
@@ -293,92 +295,6 @@ class FleetActionGrant(BaseModel):
             raise ValueError("source and destination must cite the same observation")
         if source.object_id == destination.object_id:
             raise ValueError("source and destination must identify distinct objects")
-        if (self.issued_at.tzinfo is None or self.expires_at.tzinfo is None
-                or self.expires_at <= self.issued_at):
-            raise ValueError("grant expiry must follow an aware issuance timestamp")
-        return self
-
-
-class CellTransferPose(BaseModel):
-    """Finite robot-base pose carried by the fixed-cell transfer grant (D-403)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    x: float = Field(strict=True, allow_inf_nan=False)
-    y: float = Field(strict=True, allow_inf_nan=False)
-    z: float = Field(strict=True, allow_inf_nan=False)
-    yaw: float = Field(strict=True, allow_inf_nan=False)
-
-
-class CellTransferPayload(BaseModel):
-    """One inseparable pick/place pair compiled from an approved Cell Job."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    job_id: str = Field(min_length=1, max_length=192)
-    recipe_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    cell_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    step_index: int = Field(strict=True, ge=0)
-    item: Literal["box", "slip_sheet"]
-    pallet: str = Field(min_length=1, max_length=96)
-    layer: int = Field(strict=True, ge=0)
-    frame: Literal["robot_base"]
-    home: CellTransferPose
-    pick: CellTransferPose
-    place: CellTransferPose
-    pick_approach_z: float = Field(strict=True, allow_inf_nan=False)
-    place_approach_z: float = Field(strict=True, allow_inf_nan=False)
-    carry_z: float = Field(strict=True, allow_inf_nan=False)
-
-    @field_validator("job_id", "pallet")
-    @classmethod
-    def _cell_transfer_identifier(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("Cell Transfer identity must be a trimmed identifier")
-        return value
-
-    @model_validator(mode="after")
-    def _approaches_are_carried(self):
-        if (self.pick_approach_z < self.pick.z or self.place_approach_z < self.place.z
-                or self.carry_z < max(self.pick_approach_z, self.place_approach_z)):
-            raise ValueError("carry_z must cover both target approach heights")
-        return self
-
-
-class FleetCellTransferGrant(BaseModel):
-    """Fleet authority for exactly one ordered Cell Job transfer step."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    mission_id: str = Field(min_length=1, max_length=192)
-    step_id: str = Field(min_length=1, max_length=192)
-    action_id: str = Field(min_length=1, max_length=192)
-    attempt_id: str = Field(min_length=1, max_length=192)
-    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-    action_kind: Literal["CELL_TRANSFER"]
-    cell_transfer: CellTransferPayload
-    capability_revision: str = Field(min_length=1, max_length=128)
-    config_revision: str = Field(min_length=1, max_length=128)
-    authority_epoch: int = Field(strict=True, ge=0)
-    dispatch_generation: int = Field(strict=True, ge=0)
-    issued_at: datetime
-    expires_at: datetime
-
-    @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id",
-                     "instance_id", "capability_revision", "config_revision")
-    @classmethod
-    def _cell_grant_identifier(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("identity must be a trimmed identifier")
-        return value
-
-    @model_validator(mode="after")
-    def _cell_grant_consistency(self):
-        identities = (self.mission_id, self.step_id, self.action_id, self.attempt_id)
-        if len(set(identities)) != len(identities):
-            raise ValueError("mission, step, action and attempt identities must be distinct")
         if (self.issued_at.tzinfo is None or self.expires_at.tzinfo is None
                 or self.expires_at <= self.issued_at):
             raise ValueError("grant expiry must follow an aware issuance timestamp")
@@ -627,14 +543,7 @@ class MissionProgressEvent(BaseModel):
     @field_validator("detail")
     @classmethod
     def detail_is_bounded_json(cls, value: dict[str, Any]) -> dict[str, Any]:
-        try:
-            encoded = json.dumps(
-                value, sort_keys=True, separators=(",", ":"),
-                ensure_ascii=False, allow_nan=False,
-            ).encode("utf-8")
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Mission event detail must be finite JSON") from exc
-        if len(encoded) > MISSION_EVENT_DETAIL_MAX_BYTES:
+        if _bounded_finite_json_size(value) > MISSION_EVENT_DETAIL_MAX_BYTES:
             raise ValueError("Mission event detail exceeds the 16 KiB limit")
         return value
 
@@ -904,10 +813,6 @@ class BatteryStatus(BaseModel):
     shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
-
-
-
-
 class SafetySummary(BaseModel):
     estop: bool = False
 
@@ -915,14 +820,6 @@ class SafetySummary(BaseModel):
 # --- 절전/근접 웨이크 (PWR-001~004, D-24) -----------------------------------
 
 # --- Swarm (D-20, SWM-001~006, API Ref §7.8) --------------------------------
-
-
-
-
-
-
-
-
 
 class PoseSample(BaseModel):
     """Leader Pose Stream payload (SWM-003, ≥10 Hz)."""
@@ -972,6 +869,16 @@ class LineJunctionStatus(BaseModel):
     pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
     signal_request_id: Optional[str] = None  # D-620: one stopped junction episode
     signal_state: Optional[str] = None       # waiting | red | unknown | green | fallback | entered
+    #: D-759 5: the bend pass took its entry heading from Fleet's map_entry, not the body's own yaw.
+    map_entry_used: bool = False
+    #: D-759 5: why not (none_sent, disabled, stale, future, no_sample, epoch, carry, heading); None when used,
+    #: before the take-over of a placed one, and for every instruction that is not a bend.
+    map_entry_reason: Optional[str] = None
+    #: D-767 A: what a window's or bend's distance counts from: stamp (the odom sample at pose_stamp) |
+    #: receipt (as before); None for an instruction without either.
+    distance_basis: Optional[str] = None
+    #: D-767 A: none_sent when receipt (an unusable pose_stamp is refused, 409 INSTRUCTION_STAMP_UNUSABLE).
+    distance_basis_reason: Optional[str] = None
 
 
 class LineFollowStatus(BaseModel):
@@ -1004,6 +911,10 @@ class LineFollowStatus(BaseModel):
     # D-573 6 (개정 2026-10-10): CORE always reports it; absent = an older CORE (D-577 R3 fails closed).
     crosswalk: Optional[LineCrosswalkStatus] = None
     crosswalk_reported: bool = Field(default=False, exclude=True)
+    # D-760 rev 3 item 9 (v1.227): the regulation standing the robot, by precedence authority > signal >
+    # crosswalk_held > crosswalk_wait > crosswalk_look; None = line-follow off or none holds it.
+    regulation_wait: Optional[Literal['authority', 'signal', 'crosswalk_held', 'crosswalk_wait',
+                                      'crosswalk_look']] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1118,6 +1029,13 @@ class SafetyShadowStatus(BaseModel):
     record_errors: int = 0
 
 
+class SafetyPolicyHold(BaseModel):
+    """D-400 4: enforce sensor gaps answered with HOLD since CORE start (v1.223 additive)."""
+
+    count: int = 0
+    reason: str = ""
+
+
 class SafetyPolicyStatus(BaseModel):
     """D-400: the safety policy mode CORE runs, and why (v1.71 additive)."""
 
@@ -1127,6 +1045,7 @@ class SafetyPolicyStatus(BaseModel):
     revision: str = ""
     sources: dict[str, str] = Field(default_factory=dict)
     shadow: Optional[SafetyShadowStatus] = None
+    hold: Optional[SafetyPolicyHold] = None  # enforce only
 
 
 class StateSnapshot(TripLeaseFields):

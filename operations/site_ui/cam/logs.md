@@ -312,3 +312,23 @@
 - 변경: D-691에 안전 예외를 더했다. PowerManager 열 상태가 SEVERE 이상이거나, 열 상태를 모를 때 배터리 45°C 이상이면 요청과 미리보기보다 먼저 센서와 JPEG를 멈춘다. 화면 끄기와 같은 기준이고, LIGHT 이하 또는 배터리 41°C 이하로 식으면 다시 따른다. 소켓과 wake lock은 유지한다. 36°C대 충전 온도로는 멈추지 않는다.
 - 증거: Gradle testDebugUnitTest 421 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-heat.txt). 2026-10-12 S21 디버그 APK 설치 후 Fleet lease JPEG 1280x720, 순번 1285에서 1289, 화면을 끈 뒤 1434. 그때 배터리는 36.2°C라 발열 정지는 기기에서 확인하지 않았다. 현장 Vision은 demand를 보내지 않아 약 2초 유예 송출이었다.
 - gate 변화: SOURCE/JVM. 송출 DEVICE는 유예 경로로 확인. 30초 대기와 발열 정지의 DEVICE/FIELD는 PARKED.
+
+## 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native management
+
+- 변경: 외부 브라우저 PKCE와 정확한 HTTPS callback, Python authority와 같은 Ed25519 검증, issuer/client/redirect별 Keystore 저장소, 재시작 후에도 남는 회수 outbox를 추가했다. 사람의 camera.manage 권한 회수는 진행 중인 페어링과 지연 응답을 무효화하며 기존 기계 전송은 유지한다.
+- 증거: 설정 포함 Gradle testDebugUnitTest 431 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/cam-configured.txt. 실제 Python 서명 fixture, refresh identity, 지연 페어링, 재시작 회수, HTTP 시간 제한을 확인했다. APK의 공개 설정과 merged manifest의 정확한 callback/autoVerify도 읽어 확인했다.
+- 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB다.
+- gate 변화: SOURCE/JVM/APK. 운영 설정을 활성화하거나 APK를 장치에 설치하지 않았다. 실제 Keystore, 검증된 app link, 운영 로그인과 DEVICE/FIELD 수용은 별도 확인한다.
+
+## 2026-10-14 · 0f446e518 · feat(cam): D-741 앱 바 (통합 셸 조각 14)
+
+- 변경: 다섯 화면과 로그인 전 화면 위에 앱 바 하나를 둔다. R 심볼(`shared/web/brand/mark.svg` 복사본), `Cam`, 저장된 받는 곳 이름, 그 아래 줄에 연결 상태가 선다. 네 화면의 제목과 새 제목 `촬영`은 앱 바 아래 경로 자리(`CamPath`)로 옮겼다. 촬영 화면 상태 칸의 상태 머리글은 앱 바로 갔다. Cam은 명령하지 않으므로 정지 자리와 푸터는 없다. 와이어 이름과 문자열 자원은 바꾸지 않았다.
+- 증거: 0f446e518을 원격 시험 PC(Ubuntu, JDK 21, 사용자 홈의 Android SDK platform 35)에서 `android.yml`과 같은 `testDebugUnitTest --no-daemon`으로 돌려 438 passed, failures/errors 0(이전 main 22811dc39는 431). `CamBarTest` 6, `LauncherIconParityTest`의 심볼 대조 1이 새 시험이다. Cam 소스를 읽는 Python 시험 58 passed, known_failures NEW 0. 로그 X: `DevTemp/cam-app-bar/bar-1.txt`, `run-1.txt`.
+- gate 변화: 없음(SOURCE/JVM). 화면을 렌더하거나 폰에 설치하지 않았다. 좁은 폭에서 앱 바 높이와 미리보기 크기, TalkBack 읽기는 확인하지 않았다. DEVICE/FIELD는 PARKED.
+
+## 2026-10-14 · 66321009d · fix(cam): D-741 앱 바 검토 반영
+
+- 변경: 촬영 화면은 앱 바 아래 제목을 두지 않는다(가로로 든 폰에서 미리보기 높이를 지킨다). 연결 상태 줄은 본문 크기의 잉크색이고 바뀌면 읽어 주는 영역이다. R 심볼과 `Cam`은 한 머리글로 읽힌다. 비어 있는 사이트 이름과 호스트는 다음 값으로 넘어간다. 글자로 적혀 있던 제목 둘은 문자열 자원(`lan_title`, `peer_title`)이 됐다. `RosyColors.BrandRose` 설명에 심볼을 더했다(D-654 3항).
+- 시험: 끊긴 연결과 빈 이름의 직접 사례를 더했고, 소스를 읽는 세 시험은 잡으려는 실수를 이름에 적었다. 심볼의 뷰포트를 SVG viewBox와 대조한다. D-741 부기에 Android 벡터가 `mark.svg`의 허용된 옮김임을 적었다.
+- 증거: 66321009d를 원격 시험 PC에서 `testDebugUnitTest --no-daemon`으로 돌려 438 passed, failures/errors 0. 로그 X: `DevTemp/cam-app-bar/fix-1.txt`.
+- gate 변화: 없음(SOURCE/JVM). 화면을 렌더하거나 폰에 설치하지 않았다. 가로 화면의 미리보기 높이와 TalkBack 읽기는 기기에서 확인하지 않았다. DEVICE/FIELD는 PARKED.

@@ -29,8 +29,8 @@ WORD = re.compile(r"^[a-z]+$")
 
 #: Rows not yet moved, keyed by registry id (plan 2026-09-30-app-identity-rename-plan.md §3).
 PENDING = {
-    "robot": "D-374 stage 3: middleware/robot_ui/robot -> src/hmi/robot, package rosy_robot (D-362 gate)",
-    "console": "D-637 source moved to operations/site_ui/console; D-377 display/icon/package naming debt remains, same Fleet distribution",
+    "robot": "D-377 stage 3: folder is middleware/robot_ui/robot; package.xml stays dashboard until rosy_robot (D-362 gate)",
+    "console": "D-487 display is Rosy Fleet while id and icon stay console; source is operations/site_ui/console; package rosy_console was not opened",
 }
 
 #: Packages kept by the D-377 decision table ("unchanged"), keyed by id.
@@ -67,8 +67,9 @@ def identity_problems(row: dict, root: Path = ROOT, *, check_icon: bool = True) 
     for key in ("app_name", "app_name_en", "short_name"):
         if key in row and row[key] != display:
             problems.append(f"{key} {row[key]!r} should be {display!r}")
-    if folder.name != word:
-        problems.append(f"folder {row['path']!r} should end in {word!r}")
+    holder = 'overhead' if word == 'vision' else word  # D-748 keeps the rosy_vision identity.
+    if folder.name != holder:
+        problems.append(f"folder {row['path']!r} should end in {holder!r}")
     icon = row.get("icon")
     if check_icon and (not icon or Path(icon).name != f"{word}.svg"):
         problems.append(f"icon {icon!r} should be named {word}.svg")

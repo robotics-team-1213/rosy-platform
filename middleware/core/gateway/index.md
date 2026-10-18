@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
-- 2026-10-13 · uncommitted · D-440 기기 전원 어댑터와 웨이크 뒤 cmd_vel 0 유지 (feat/device-power-policy에서 옮김)
-- 2026-10-12 · uncommitted · 카메라 곡률이 CORE 유효 법칙과 같다
-- 2026-10-12 · d3bd5513c · 이동 교통 감속과 실제 command SDK 정합성
-- 2026-10-12 · af76fcc5f · 관측 표식의 가까운 경계와 기존 교통 gate 검증
-- 2026-10-12 · 47ace984f2 · 내장 센서 이름과 CORE clock 전달
+- 2026-10-15 · 1a9960df2 · line_follow.instruction_stamp_enabled 설정 읽기와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+- 2026-10-15 · 84f0c8456 · 작업의 trip lease는 단계 사이 IDLE에서 끝나지 않는다 (D-763 조각 6, API v1.236)
+- 2026-10-14 · uncommitted · test: 수동 거절 시험을 벽시계 워치독에서 떼어 낸다
+- 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
+- 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로

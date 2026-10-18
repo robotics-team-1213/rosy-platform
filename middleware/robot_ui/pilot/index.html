@@ -16,7 +16,7 @@
 <body>
   <ui-shell grammar="focal">
     <ui-topbar>
-      <ui-brand><a href="/pilot" data-pilot-home aria-label="Rosy Pilot 접속 홈"><b>Rosy Pilot</b><small>직접 조종</small></a></ui-brand>
+      <ui-brand><a href="/pilot" data-pilot-home aria-label="Rosy Pilot 접속 홈"><b>Pilot</b><small data-pilot-robot hidden></small></a></ui-brand>
       <span data-spacer></span>
       <ui-text id="pilot-notice" scale="label" role="status"></ui-text>
       <ui-tag data-gate-state aria-label="접속 상태">대기</ui-tag>
@@ -24,6 +24,7 @@
       <ui-button kind="irreversible" type="button" data-estop data-always-live>비상 정지</ui-button>
     </ui-topbar>
     <main id="pilot-main" class="pilot-main">
+      <a data-account-profile hidden></a>
       <h1 class="sr-only">Rosy Pilot — 접속 게이트</h1>
       <ui-empty data-pilot-note hidden>Pinky CORE 연결을 확인합니다.</ui-empty>
       <section class="pilot-panel" data-screen="connect" aria-labelledby="pilot-gate-heading"></section>

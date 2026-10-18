@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   loopCapacityText, occupancyLampText, repeatTripBody, routePoint, signalAheadText, signalText, tripErrorText, tripStartReason,
   trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts,
-} from '../../../ui/console/shared/site-map-model.js';
+} from '../../../site_ui/console/shared/site-map-model.js';
 
 // A square loop: east (0,0)->(2,0) cut in 3 blocks, ring (2,0)->(2,1) one zone, west (2,1)->(0,1)->(0,0).
 const ACTIVE = {version: 7, map: {edges: [
@@ -73,6 +73,13 @@ test('one card line per trip robot', () => {
   assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 4, accepted: true }), 'r'), '운행 중 · 신호 참고 전송 · seq 4');
   assert.equal(trafficCardLine(advice({ signal: true, sent_seq: 0, accepted: false, reason: 'stale' }), 'r'), '운행 중 · 신호 참고 전송 · seq 0 · stale');
   assert.equal(trafficCardLine(advice({ signal: false, sent_seq: 5, accepted: true }), 'r'), '운행 중');  // cleared: no line
+  // D-767 P0: the server puts a fresh preview on the row (an expired one is left off): the first two events
+  const preview = (events) => ({ robots: [{ robot_id: 'r', trip_state: 'running', preview: events && { events } }], units: [] });
+  assert.equal(trafficCardLine(preview([{ at_m: 0.42, kind: 'turn', params: { action: 'left' } },
+    { at_m: 0.951, kind: 'crosswalk', params: {} }, { at_m: 1.5, kind: 'stop', params: {} }]), 'r'),
+  '운행 중 · 예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도');
+  assert.equal(trafficCardLine(preview([]), 'r'), '운행 중');
+  assert.equal(trafficCardLine(preview(undefined), 'r'), '운행 중');
   const unknown = {...TRAFFIC, robots: [{robot_id: 'rosy_04', waiting_for: [], lap: null, trip_state: 'running'}]};
   assert.equal(trafficCardLine(unknown, 'rosy_04'), '위치 불명 · 블록 유지');
 });

@@ -19,6 +19,9 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
 | `team-guide.md` | 새 팀원 안내: 첫날 설정(클론·작성자·venv·훅), 공유 범위, 이슈에서 머지까지의 명령, 작업 영역, 막혔을 때. 규칙 원본은 README·AGENTS·ADR |
 | `shared-checkout.md` | 「같이 하는 깃」: 실험실 PC 공유 체크아웃의 착수 순서(README에서 옮김, `test/test_readme_agent_start.py`가 고정). 명령 전문은 루트 `AGENTS.md` |
+| `git-workflow.md` | 사람용 git 규칙 한 장: 팀원 PR 길과 실험실 착지 길의 비교, `--no-verify` 기준, push 순서, D-762 단계 현황, 사용자가 정할 것. 규칙 원본은 D-372·D-427·D-510·D-584·D-761·D-762와 루트 `AGENTS.md` |
+| `handoff.md` | 인수인계: 목표, 증거 기준의 현재 상태, 흐름별 2026-10-15 인계 문서, 다음 할 일, 담당, 새 컴퓨터 체크리스트. 날짜가 있는 사실이다 |
+| `held-branches.md` | 2026-10-13/14 정리의 결과: 보류한 브랜치 5개와 풀리는 조건, 보관 태그(`archive/<날짜>/<브랜치>`) 목록·되살리기 명령. 태그와 wip 스냅샷은 실험실 clone에만 있고 wip은 공개 원격에 push하지 않는다 (D-172, D-762) |
 | `developer-guide.md` | 구조, 빌드·시뮬, 테스트 단계(affected/quick/full), 관제 배치, Pi 5 런타임, 로드맵 — README에서 옮김 |
 | `sim2real-gaps.md` | GENERATED from `tools/harness/sim2real_gaps.yaml` by `rosy_harness.py generate`; edit the YAML, not this table |
 | `perception-gaps.md` | GENERATED from `tools/harness/perception_gaps.yaml`. Do not hand-edit |

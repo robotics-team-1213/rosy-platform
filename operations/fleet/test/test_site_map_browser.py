@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
 
 from test_site_map_trip import _app, _on_ring_s
 
@@ -481,7 +481,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page, store, robot = page_site
     page.set_viewport_size({"width": width, "height": height})
     expect(page).to_have_title("Rosy Fleet · 현장 지도")
-    expect(page.locator("ui-brand")).to_contain_text("Rosy Fleet")
+    expect(page.locator("ui-brand")).to_contain_text("Fleet")
+    expect(page.locator("ui-brand a")).to_have_attribute("aria-label", "Rosy Fleet 관제 홈")
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -564,9 +565,20 @@ def test_site_map_fits_declared_widths(page_site, width, height):
       header: document.querySelector('ui-topbar').getBoundingClientRect().height,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
-      stop: document.querySelector('#estop').getBoundingClientRect().right
+      stop: document.querySelector('#estop').getBoundingClientRect().right,
+      // A select's own width with its chosen words and the native arrow, measured on an unsqueezed copy.
+      selects: [...document.querySelectorAll('ui-head select')].map((node) => {
+        const copy = node.cloneNode(true);
+        copy.style.cssText = 'width:auto;min-width:0;max-width:none;position:absolute';
+        copy.replaceChildren(new Option(node.selectedOptions[0].textContent));
+        document.body.append(copy);
+        const need = copy.offsetWidth;
+        copy.remove();
+        return [node.id, need, node.offsetWidth];
+      })
     })""")
     assert sizes["overflow"] <= 0, sizes
+    assert all(need <= has + 1 for _id, need, has in sizes["selects"]), sizes
     assert sizes["label"] >= 12, sizes
     if width < 1024:
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
@@ -574,6 +586,41 @@ def test_site_map_fits_declared_widths(page_site, width, height):
         assert sizes["header"] <= height * 0.2, sizes  # D-540 2: identity folds behind 설정
     assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
     assert sizes["stop"] <= width, sizes
+
+
+# The wide layout stands from a 60rem body: a 1296px shell. 1349 is a 1366 laptop window with a classic scrollbar.
+@pytest.mark.parametrize("width,height,panels,fields", [(360, 740, 1, 1), (1024, 768, 1, 1), (1100, 800, 1, 1),
+                                                       (1349, 768, 2, 3), (1366, 768, 2, 3)])
+def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels, fields):
+    """D-741 2: the rail and the sub-nav take 304px. The body picks its columns from its own width: one panel column
+    and one-column forms until the body has 60rem, then two and three. There is no sideways overflow, no control
+    past the window or with cut text, no multi-column cell under 9rem (what these forms had at the sheet's own
+    64rem break before the seats), and the sticky sub-nav shows every entry at the top and at the end of the page."""
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    expect(page.locator("#place-form")).to_be_visible()
+    page.set_viewport_size({"width": width, "height": height})
+    top = page.evaluate(BODY_FIT)
+    page.evaluate("scrollTo(0, document.documentElement.scrollHeight)")
+    end = page.evaluate(BODY_FIT)
+    label = page.locator("#site-map-svg .label").first.evaluate("node => node.getBoundingClientRect().height")
+    print(json.dumps({"size": [width, height], "top": top, "end": end, "label": label}, ensure_ascii=False))
+    assert top["nav"]["column"] == (width >= 1024), top
+    assert top["overflow"] <= 0 and end["overflow"] <= 0, (top, end)
+    assert top["stop"] and end["stop"], (top, end)
+    if width >= 1024:  # below it the sub-nav is a row that scrolls sideways
+        assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
+    assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
+    columns = {grid["name"]: grid["columns"] for grid in top["grids"]}
+    assert columns == {"map-workflow": panels, "place-form": fields, "form": fields,
+                       "actions draft-actions": 1 if width < 480 else 3}, top["grids"]
+    assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
+    assert label >= 12, label
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])

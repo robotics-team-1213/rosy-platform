@@ -90,9 +90,11 @@ def test_preview_server_serves_the_board():
         from urllib.request import Request
 
         req = Request(url + "stop", method="POST", data=b"")
-        stop = urlopen(req, timeout=2).read().decode("utf-8")
-        assert board.stop is True
-        assert "ok" in stop
+        from urllib.error import HTTPError
+        with pytest.raises(HTTPError) as error:
+            urlopen(req, timeout=2)
+        assert error.value.code == 403
+        assert board.stop is False
         html = urlopen(url, timeout=2).read().decode("utf-8")
         assert "정지" in html
     finally:
@@ -127,9 +129,12 @@ def test_preview_server_serves_the_web_common_manifest_assets():
         ticker = urlopen(url + "common/hold-ticker.js", timeout=2)
         assert ticker.headers["Content-Type"].startswith("text/javascript")
         assert b"createHoldTicker" in ticker.read()
-        with pytest.raises(HTTPError) as error:
-            urlopen(url + "common/shared-assets.json", timeout=2)
-        assert error.value.code == 404
+        # The R mark sits in a folder; the board drew no mark while folders were refused.
+        assert urlopen(url + "common/brand/mark.svg", timeout=2).headers["Content-Type"].startswith("image/svg+xml")
+        for name in ("shared-assets.json", "brand/../tokens.css", "brand/../../host/preview.py"):
+            with pytest.raises(HTTPError) as error:
+                urlopen(url + "common/" + name, timeout=2)
+            assert error.value.code == 404, name
     finally:
         server.close()
 
@@ -154,7 +159,44 @@ def test_board_page_has_csp_and_stop_refuses_foreign_origins():
         assert error.value.code == 403
         assert board.stop is False
         own = Request(url + "stop", method="POST", data=b"", headers={"Origin": url.rstrip("/")})
-        assert b"ok" in urlopen(own, timeout=2).read()
-        assert board.stop is True
+        with pytest.raises(HTTPError) as error:
+            urlopen(own, timeout=2)
+        assert error.value.code == 403
+        assert board.stop is False
+    finally:
+        server.close()
+
+
+def test_stop_uses_exact_account_capability_and_origin():
+    from types import SimpleNamespace
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+    from games.host.preview import PreviewBoard, PreviewServer
+    claims = SimpleNamespace(sub='games-user', permits=lambda resource, cap: resource == 'site:one' and cap == 'games.operate')
+    class Account:
+        callback = 'https://games.test/api/account/callback'
+        resource = 'site:one'
+        profile_url = 'https://account.test/console/profile'
+        def profile(self, cookie):
+            return {'account_id':'games-user','login':'player','display_name':'Player'}
+        def resolve(self, cookie):
+            return claims if cookie == 'valid' else None
+        def retry_revocations(self): pass
+    board = PreviewBoard(); server = PreviewServer(board, port=0, account=Account()); url = server.start()
+    try:
+        import json
+        identity = json.load(urlopen(Request(url+'api/account/session', headers={'Cookie':'rosy_app_account=valid'})))
+        assert identity['profile']['account_id'] == identity['account_id'] == 'games-user'
+        assert identity['profile_url'] == Account.profile_url
+        assert json.load(urlopen(url+'api/account/session'))['profile'] is None
+        for origin in ['', 'https://evil.test']:
+            req = Request(url+'stop', data=b'', headers={'Cookie':'rosy_app_account=valid','Origin':origin})
+            with pytest.raises(HTTPError): urlopen(req, timeout=2)
+            assert not board.stop
+        req = Request(url+'stop', data=b'', headers={'Cookie':'rosy_app_account=valid','Origin':'https://games.test'})
+        assert urlopen(req, timeout=2).status == 200
+        assert board.stop
+        claims.permits = lambda *args:False
+        with pytest.raises(HTTPError): urlopen(req, timeout=2)
     finally:
         server.close()

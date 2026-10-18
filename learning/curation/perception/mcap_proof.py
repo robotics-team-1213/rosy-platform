@@ -37,8 +37,8 @@ def prove_frames(session, rows, scratch_parent, *, expected=None) -> dict:
 
     session = Path(session)
     scratch_parent = Path(scratch_parent).resolve()
-    if os.name == "nt" and not scratch_parent.is_relative_to(Path("X:/DevTemp").resolve()):
-        raise ValueError("MCAP proof scratch must be under X:/DevTemp")
+    if os.name == "nt" and not scratch_parent.is_relative_to(Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()).resolve()):
+        raise ValueError("MCAP proof scratch must be under ROSY_SCRATCH or the system temp directory")
     if session.name.endswith(".compact"):
         raise ValueError("compact MCAP needs original-to-compact equivalence proof")
     if not rows or not isinstance(rows, list):

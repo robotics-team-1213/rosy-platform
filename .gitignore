@@ -106,8 +106,6 @@ data/calibration/
 # scripts belong in tools/ or outside the repo.
 /*.py
 
-# Upstream reference archives (never vendored)
-reference/src/*.zip
 
 # Agent and tool state, per-machine (.omc/skills is committable)
 .impeccable/
@@ -138,3 +136,12 @@ Thumbs.db
 
 # D-456: generated Fleet camera application identity; public PEM stays tracked.
 *.camera-peer.pem
+
+# D-755 filled collaboration settings and encryption keys are private.
+**/learning-collaboration.json
+**/learning-storage.json
+**/learning-accounts.key
+
+# Runtime config locks written next to the config file (filelock), never tracked.
+contracts/foundation/config/*.lock
+.kotlin/

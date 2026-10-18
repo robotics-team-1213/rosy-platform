@@ -12,7 +12,7 @@ CSS를 복제하는 것 — concept 16 §4가 결함으로 규정한 "Fleet이 �
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
+WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 
 #: 콘솔의 공간 문법(concept 16 §7.1) — 고정 3분할 레일(sense/observe/act).
 #: 이 이름들은 콘솔 styles.css 가 소유한다. fleet 이 쓰는 순간 fleet 은
@@ -35,12 +35,14 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-501: doc-tabs.css is Fleet's own tab-row sheet, shared by its four documents.
         # D-519: password-login.css is Fleet's own login-form sheet, shared the same way.
         # D-540: fleet-header.css is the one header sheet of the four documents.
-        "index.html": [*shared_sheets, "/console/assets/styles.css", "/console/assets/doc-tabs.css",
+        # D-741 6: app-shell.css is the shared seat sheet; Fleet uses its sub-nav seat.
+        "index.html": [*shared_sheets, "/common/app-shell.css", "/console/assets/styles.css", "/console/assets/doc-tabs.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
-                       "/console/assets/device-watch.css"],
+                       "/console/assets/device-watch.css", "/console/assets/work.css"],
         "install.html": [*shared_sheets, "/common/task-chooser.css",
                          "/console/assets/styles.css", "/console/assets/doc-tabs.css",
-                         "/console/assets/fleet-header.css", "/console/assets/password-login.css"],
+                         "/console/assets/fleet-header.css", "/console/assets/password-login.css",
+                         "/console/assets/measured-calibration.css"],
     }
     for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',

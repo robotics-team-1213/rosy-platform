@@ -20,10 +20,12 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_measured_calibration_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",
     "test/test_fleet_workflows_browser.py",
+    "test/test_host_recovery_browser.py",
     "test/test_overhead_tracking_browser.py",
     "test/test_peer_picker_browser.py",
     "operations/fleet/test/*_browser.py",
@@ -33,6 +35,7 @@ ROBOT = [
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",
     "test/test_surface_device_browser.py",
+    "test/test_surface_shell_browser.py",
     "test/test_camera_capture_browser.py",
     "middleware/robot_ui/robot/test/*_browser.py",
     "middleware/robot_ui/robot/test/test_surface_bridge.py",
@@ -51,6 +54,7 @@ PILOT = [
 ]
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
+    "test/learning/perception/test_storage_inventory_http.py",
     "test/learning/perception/test_review_flow_browser.py",
     "test/learning/perception/test_pixel_review_browser.py",
     "test/learning/perception/test_review_app_smoke.py",
