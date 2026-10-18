@@ -11,12 +11,13 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / 'middleware/robot_execution/local/test'))
 from test_omx_policy_session import setup_session, CameraSnapshot
+from test_policy_runtime_binding import attached
 from core_api_web.api.app import create_app
 from core_api_web.api.v1.common import operator
 
 
 def setup_api(tmp_path):
-    session, driver, clock, authority, _ = setup_session(tmp_path, camera=True)
+    session, runtime, driver, clock, authority, *_ = attached(tmp_path, camera=True)
     rgb = bytes(range(12))
     camera = CameraSnapshot('front', 'cam-front', 'a' * 64, (3, 2, 2),
                             10_000_000_000, hashlib.sha256(rgb).hexdigest())
@@ -74,6 +75,13 @@ def test_core_refuses_before_driver_submission(tmp_path, failure):
         observation(client, session)
     assert client.post('/api/v1/arm/actions', json=body).status_code in (403, 409)
     assert not driver.commands
+
+
+def test_port_requires_independent_runtime_watchdog(tmp_path):
+    from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
+    session, *_ = setup_session(tmp_path)
+    with pytest.raises(ValueError, match='watchdog-bound'):
+        CoreArmPolicyPort(session, capture=lambda: None, principal='operator-a')
 
 
 def test_stop_latches_existing_fence_and_cancels_own_goal(tmp_path):

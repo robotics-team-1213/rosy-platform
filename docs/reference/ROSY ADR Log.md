@@ -1154,3 +1154,11 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 - start는 자동 timer와 소유 서비스를 시작한다. stop은 timer를 끄고 소유 service의 control group만 중지한다. retry는 중지 상태의 소유 서비스를 한 번 실행한다. 상태는 다시 읽으며 명령 접수를 학습 완료로 표시하지 않는다.
 
 Details: docs/adr/D-745-learning-center-owner-controls.md.
+
+## D-800 CORE-mediated OMX LeRobot observation and action requests
+
+**Status:** Proposed
+
+CORE authenticates policy I/O and delegates to the existing watchdog-bound OMX
+session. Single-use observations preserve source age; physical admission remains
+closed. Details: [D-800](../adr/D-800-core-mediated-omx-lerobot.md).

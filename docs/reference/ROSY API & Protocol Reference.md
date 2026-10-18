@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.266
+**Version:** v1.271
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,30 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.271 CORE OMX policy I/O (D-800)
+
+Additive, operator-authenticated `/api/v1/arm/*`. No new TaskKind or Fleet grant.
+Unbound `CoreServices.arm_policy` returns 503 `ARM_POLICY_UNAVAILABLE`. The current
+port supports an explicitly installed SIM session only.
+
+| Method/path | Request | Response |
+|---|---|---|
+| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `camera: {name, shape}` (CHW) |
+| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `camera: {name, shape, rgb_base64}`; bytes are interleaved RGB uint8 HWC |
+| `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
+| `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
+
+The first three paths require the session's installed authenticated token ID.
+Stop is open to every operator. Revision: 64 lowercase hex characters; targets:
+finite JSON numbers (no bool/string), 1–8 exact installed joints. Request objects
+forbid extras. No client timestamp, lease or reset is accepted.
+Wrong principal/failed owner authority: 403 `ARM_POLICY_FORBIDDEN`; mismatched,
+consumed or replaced source: 409 `ARM_POLICY_CONFLICT`; prior goal active:
+409 `ARM_POLICY_BUSY`; schema errors: 422. Never retry an uncertain action.
+Capture time conservatively anchors action age; the owner rechecks source,
+lease, stop and envelope before submission. Clients wait for a fresh observation
+after completion. Observation data alone is not training ground truth.
 
 ### v1.266 학습 정책 승인 관문: 단계·승인 창·확인 요청·사고 잠금·실행 lease (D-793)
 

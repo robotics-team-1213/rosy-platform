@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.266."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.271."""
 
 from __future__ import annotations
 
@@ -114,10 +114,11 @@ def _pilot_root() -> Path:
 
 
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
+    from core_api_web.api.v1.routes import arm_router
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.266)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.271)",
     )
     app.state.core = services
     from .account_sessions import install_account_sessions
@@ -204,6 +205,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(system_router)
     app.include_router(robot_router)
     app.include_router(control_router)
+    app.include_router(arm_router)
     app.include_router(calibration_router)
     app.include_router(trip_lease_router)
     app.include_router(fleet_link_router)

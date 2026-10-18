@@ -841,6 +841,7 @@ safety_modules:
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
   - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
+  - middleware/robot_execution/local/src/rosy/execution/local/core_arm_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py

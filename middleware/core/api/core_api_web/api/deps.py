@@ -84,6 +84,7 @@ class CoreServicesLike(Protocol):
     """
 
     adapter_registry: Any
+    arm_policy: Any
     audit: Any
     battery: Any
     calibration: Any
