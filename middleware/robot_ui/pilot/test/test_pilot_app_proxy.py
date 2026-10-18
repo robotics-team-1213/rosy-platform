@@ -20,9 +20,6 @@ GRADLEW = ROOT / 'operations' / 'site_ui' / "cam" / ("gradlew.bat" if os.name ==
 
 def _gradle(probe: Path, log: Path) -> tuple[subprocess.Popen[str], object]:
     env = os.environ.copy()
-    if os.name == "nt":
-        env.setdefault("JAVA_HOME", r"X:\java\jdk-21.0.8")
-        env.setdefault("GRADLE_USER_HOME", r"X:\DevCaches\gradle")
     command = [
         str(GRADLEW), "-p", ".",
         "--project-cache-dir", str(probe.parent / "project-cache"),

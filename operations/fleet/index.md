@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+- 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
 - 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
 - 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
 - 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
-- 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결

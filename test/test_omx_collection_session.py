@@ -26,7 +26,7 @@ def profile():
                 max_state_age_s=.2, max_reference_age_s=.2, free_disk_bytes=1024, max_frame_jitter_s=.2,
                 camera_shapes={r: [2, 2, 3] for r in ('top', 'front')},
                 joint_names=['joint'+str(i) for i in range(6)],
-                normalization=[[-1., 1.]]*6, max_session_s=5.)
+                normalization=[[-1., 1.]]*6, reach_tolerance_rad=[.01]*6, max_session_s=5.)
 
 
 class Backend:
@@ -50,7 +50,9 @@ class Backend:
                 source_age_s=0., receipt_age_s=0., quality=dict(policy='omx-photometric-v3',
                 condition=conditions, usable=conditions == 'NORMAL', mean_intensity=90.,
                 spatial_contrast=20., p5=10., p95=150., dark_fraction=.1, clipped_fraction=.01))
-        return dict(environment=env, time_ns=now, observation_state=[0.]*6, action=[0.]*6,
+        # no_motion: the controller reports success while the joints stay where they started.
+        joints = [.1]*6 if self.commands and self.fault != 'no_motion' else [0.]*6
+        return dict(environment=env, time_ns=now, observation_state=[0.]*6, action=[0.]*6, joint_positions=joints,
                     joint_source_stamp=now/1e9, reference_source_stamp=now/1e9,
                     state_age_s=0., reference_age_s=0.,
                     images={r: dict(data=b'\x00'*12, width=2, height=2, source_stamp=now/1e9,
@@ -68,7 +70,7 @@ class Backend:
 
 
 def teacher():
-    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[0.]*6, duration_s=.2)])
+    return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.2)])
 
 
 def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path):
@@ -84,7 +86,7 @@ def test_rehearsal_records_windows_original_images_and_never_claims_hardware(mod
     assert all((tmp_path/'capture'/p).is_file() for p in result['files'])
 
 
-@pytest.mark.parametrize('fault', ['dark', 'reject', 'generation'])
+@pytest.mark.parametrize('fault', ['dark', 'reject', 'generation', 'no_motion'])
 def test_degradation_or_owner_rejection_stops_and_preserves_incomplete_attempt(module, tmp_path, fault):
     backend = Backend(fault)
     result = module.run_session(profile(), teacher(), tmp_path/fault, backend)
@@ -92,6 +94,49 @@ def test_degradation_or_owner_rejection_stops_and_preserves_incomplete_attempt(m
     assert result['episodes'][0]['reason']
     assert backend.stops and len(backend.commands) == 1
     assert (tmp_path/fault/'manifest.json').is_file()
+
+
+def test_successful_terminal_without_reaching_the_target_holds_and_records_no_reach(module, tmp_path):
+    backend = Backend('no_motion')
+    result = module.run_session(profile(), teacher(), tmp_path/'still', backend)
+    assert result['episodes'][0]['complete'] is False
+    assert 'did not reach' in result['episodes'][0]['reason'] and backend.stops
+    kinds = [line.split('"kind": "')[1].split('"')[0]
+             for line in (tmp_path/'still'/'events.jsonl').read_text().splitlines() if '"kind": "' in line]
+    assert 'TERMINAL' in kinds and 'REACHED' not in kinds and kinds[-1] == 'ABORT'
+
+
+def test_reached_step_records_measured_errors(module, tmp_path):
+    module.run_session(profile(), teacher(), tmp_path/'ok', Backend())
+    text = (tmp_path/'ok'/'events.jsonl').read_text()
+    assert '"kind": "REACHED"' in text and '"errors_rad": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]' in text
+
+
+@pytest.mark.parametrize('reach', [None, [], [.01]*5, [0.]*6, [.3]*6, [float('nan')]*6])
+def test_profile_requires_a_measured_reach_tolerance(module, reach):
+    value = profile()
+    if reach is None:
+        del value['reach_tolerance_rad']
+    else:
+        value['reach_tolerance_rad'] = reach
+    with pytest.raises(ValueError, match='reach tolerance'):
+        module.validate_profile(value, mode='rehearsal')
+
+
+def test_step_smaller_than_its_tolerance_is_refused_before_dispatch(module, tmp_path):
+    backend = Backend()
+    small = dict(teacher(), steps=[dict(positions=[.005]*6, duration_s=.2)])
+    result = module.run_session(profile(), small, tmp_path/'small', backend)
+    assert result['episodes'][0]['complete'] is False and 'unprovable' in result['episodes'][0]['reason']
+    assert backend.commands == [] and backend.stops
+
+
+def test_reach_tolerance_is_bounded_by_the_joint_span(module):
+    value = profile()
+    value['normalization'] = [[-1., 1.]]*5+[[0., .5]]
+    value['reach_tolerance_rad'] = [.01]*5+[.06]
+    with pytest.raises(ValueError, match='reach tolerance'):
+        module.validate_profile(value, mode='rehearsal')
 
 
 def test_disabled_profile_cannot_construct_hardware_runtime(module):

@@ -1096,3 +1096,26 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+## 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+
+- 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
+- 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
+- gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.
+
+## 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
+
+- 변경: 기본 미결선 arm policy 포트, 인증된 관측·후보·정지 API, 원 관측 단일 사용과 CORE E-stop 전파. 관절 writer는 기존 OMX owner다.
+- 증거: 원격 AI PC 041591d44e의 명시적 native ROS/LeRobot/CORE 시험 21 passed, skipped 0, known_failures NEW 0. 합성 관측·정책·권한과 격리 Action 서버이며 실물·학습 과제 성공 증거가 아니다.
+- gate 변화: SOURCE/HOST 및 격리 ROS transport 연결. 기본 실물 profile·정책 승인·배포·Fleet lease 전달은 활성화하지 않았다. D-800과 docs/plans/2026-10-18-core-omx-lerobot.md 참조.
+
+## 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
+
+- 변경: RGB capture 대기로 stop이 막히던 경로를 기존 persistent fence에 직접 연결했다. 실제 LeRobot recorder의 remote camera 계약과 native fixture의 최초 capture 순서를 보완했다.
+- 증거: 최종 코드 원격 집중 검증 22 passed/0 skipped, 브라우저 45 passed/0 skipped, 양쪽 known_failures NEW 0. 독립 core_arm_review 최종 소스 검토 완료. 이전 21-pass 기록 이후 stop 회귀를 추가한 결과다.
+- gate 변화: 실물·배포 승격 없음. 전체 검증 출처와 한계는 docs/validation/core-omx-lerobot-2026-10-18/result.md 참조.
+
+## 2026-10-18 · abca483966 · OMX 배포 준비 점검 연결
+
+- 변경: 코드 wheel·출처·체크섬 빌드 workflow와 GET-only CORE 점검을 추가했다. 배포 대상·승인 정책이 없다는 사용자 답변에 따라 실물 target은 기존 runtime·lease·D-793 관문을 차단 사유로 남긴다.
+- 증거: 독립 소스 리뷰 완료. 원격 CORE/native ROS/실제 SDK 22 passed. wheel 빌드 시험의 Python PATH 전달 누락은 fixture에서 보완하며 최종 결과는 후속 검증 기록에 남긴다.
+- gate 변화: 없음. 실제 설치·승인·lease 발급·동작·정지 요청은 이 점검의 기능이 아니다.

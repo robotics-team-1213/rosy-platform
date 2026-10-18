@@ -16,7 +16,7 @@ command. Screenshots and the full JSON report land in ``--out-dir``.
 Examples:
 
     python tools/web_visible_roles.py
-    python tools/web_visible_roles.py --out-dir X:/DevTemp/visible-roles
+    python tools/web_visible_roles.py --out-dir $ROSY_SCRATCH/visible-roles
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@ from deploy.site.build_candidate import DEPLOY_FILES, DOC_FILES
 
 
 COMMIT = "a" * 40
-SERVICES = ("fleet", "vision", "proxy")
+SERVICES = ("fleet", "vision", "proxy", "postgres")
 TEST_KEY_ID = "rosy-site-test-1"
 
 

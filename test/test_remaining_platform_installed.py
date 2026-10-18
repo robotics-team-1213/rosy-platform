@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 91  # Adds measured view/CSS and the calibration resource package.
+    assert len(expected) == 97  # Includes the shared host report reader and stuck evidence helper.
+    assert {'shared/host-health.js', 'shared/stuck-evidence.js'} <= expected.keys()
     assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',
             'calibration/measured-calibration.css'} <= expected.keys()
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
@@ -321,6 +322,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'fleet.server.context_log', 'fleet.server.context_options',
                'rosy.decision.deliberation.profiles', 'rosy.decision.deliberation.judgment',
                'rosy.decision.deliberation.calibration', 'rosy.decision.deliberation.versioned_request',
                'rosy.decision.deliberation.versioned_cli', 'rosy.decision.deliberation.local',

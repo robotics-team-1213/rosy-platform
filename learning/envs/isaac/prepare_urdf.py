@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import xml.etree.ElementTree as ET
 
 
@@ -17,8 +18,8 @@ def validate_output_path(path: Path) -> Path:
     output = path.resolve()
     if output.is_relative_to(REPOSITORY):
         raise ValueError("Generated artifacts must be written outside the source checkout")
-    if os.name == "nt" and not output.is_relative_to(Path("X:/DevTemp").resolve()):
-        raise ValueError("On Windows, generated artifacts must be under X:\\DevTemp")
+    if os.name == "nt" and not output.is_relative_to(Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()).resolve()):
+        raise ValueError("On Windows, generated artifacts must be under ROSY_SCRATCH or the system temp directory")
     return output
 
 

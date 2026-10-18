@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · 9108fd4d8e · fix(omx): 명시적 startup을 기존 정지·취소 경로에 연결
-- 2026-10-17 · 52062796dd · feat(omx): Docker 없는 native Gazebo 실행 경로
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
-- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
-- 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
+- 2026-10-19 · uncommitted · SIM reach 수집 파이프라인 통합
+- 2026-10-19 · uncommitted · 이미지 마운트 정리 실패 보존
+- 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
+- 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
+- 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)

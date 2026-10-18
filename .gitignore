@@ -144,3 +144,4 @@ Thumbs.db
 
 # Runtime config locks written next to the config file (filelock), never tracked.
 contracts/foundation/config/*.lock
+.kotlin/

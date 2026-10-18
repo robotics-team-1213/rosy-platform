@@ -60,21 +60,24 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     control.setAttribute('aria-description', enabled ? '' : reason);
   }
   function render() {
+    const pending = busy || reading;
+    const pendingReason = reading ? '적용 상태를 확인 중입니다.' : '요청을 처리 중입니다.';
     const editable = operator() && !busy;
-    const editReason = busy ? '요청을 처리 중입니다.' : '이름 있는 운영자 권한이 필요합니다.';
+    const operable = editable && !reading;
+    const editReason = pending ? pendingReason : '이름 있는 운영자 권한이 필요합니다.';
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
-    setEnabled(buttons.approve,editable && !!candidate && candidate.evidence_kind === 'measured'
+    setEnabled(buttons.approve,operable && !!candidate && candidate.evidence_kind === 'measured'
       && !!limits() && candidate.source_id === source,
-      !editable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
-    setEnabled(buttons.revoke,editable && !!record,!editable ? editReason : '철회할 승인 기록이 없습니다.');
+      !operable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
+    setEnabled(buttons.revoke,operable && !!record,!operable ? editReason : '철회할 승인 기록이 없습니다.');
     const current = record && status?.calibration_revision === record.calibration_revision && status.state !== 'invalid';
-    setEnabled(buttons.confirm,editable && !!current && conditions.checked,
-      !editable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
-    setEnabled(buttons.read,!busy && !!current && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : busy ? '요청을 처리 중입니다.' : '현재 교정·촬영 상태를 먼저 확인하세요.');
-    setEnabled(buttons.refresh,!busy && !!source && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : busy ? '요청을 처리 중입니다.' : '카메라를 먼저 선택하세요.');
+    setEnabled(buttons.confirm,operable && !!current && conditions.checked,
+      !operable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
+    setEnabled(buttons.read,!pending && !!current && !auth.locked,
+      auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '현재 교정·촬영 상태를 먼저 확인하세요.');
+    setEnabled(buttons.refresh,!pending && !!source && !auth.locked,
+      auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '카메라를 먼저 선택하세요.');
     const b = candidate || record?.bundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
   }
@@ -138,7 +141,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     clearImage(); message.textContent = `실측 교정 확인 실패: ${error.message}`;
   }
   async function action(fn) {
-    if (busy) return;
+    if (busy || reading) return;
     const t = ticket(); busy = true; render();
     try { await fn(t); } catch(error) { failure(error,t); }
     finally { if (t.current()) { busy = false; render(); } }
@@ -146,7 +149,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   async function refresh() {
     syncSource();
     if (!source || busy || reading || auth.locked || !visible()) return;
-    const t = ticket(); reading = true;
+    const t = ticket(); reading = true; render();
     try {
       const wasVisible = !!imageURL; await readState(t);
       if (wasVisible && imageURL) await showFrame(t,false);
