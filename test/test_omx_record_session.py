@@ -42,19 +42,21 @@ class Arm:
         self.closed += 1
 
 
-def follower(**changes):
+def follower(changes=None):
     motors = {}
     for motor, (model, mode) in m.FOLLOWER.items():
         motors[motor] = {"model": model, "mode": mode, "torque": 0, "hw_error": 0, "pwm_limit": 20}
         if model == 1200:
             motors[motor]["current_limit"] = 50
-    for motor, values in changes.items():
+    for motor, values in (changes or {}).items():
         motors[motor].update(values)
     return Arm(motors)
 
 
-CAPS = {motor: ({"pwm": 300, "current": 250} if model == 1200 else {"pwm": 300})
-        for motor, (model, _) in m.FOLLOWER.items()}
+CAPS_FILE = {motor: ({"pwm": 300, "current": 250} if model == 1200 else {"pwm": 300})
+             for motor, (model, _) in m.FOLLOWER.items()}
+CAPS = {motor: {{"pwm": "pwm_limit", "current": "current_limit"}[k]: v for k, v in cap.items()}
+        for motor, cap in CAPS_FILE.items()}
 
 
 def config(tmp_path):
@@ -135,7 +137,7 @@ def test_a_failed_or_interrupted_recording_still_restores_the_cell(tmp_path, out
 
 @pytest.mark.parametrize("change", [{12: {"torque": 1}}, {14: {"hw_error": 4}}, {16: {"mode": 4}}])
 def test_nothing_changes_unless_every_follower_motor_is_idle(tmp_path, change):
-    arm, leader = follower(**change), leader_arm()
+    arm, leader = follower(change), leader_arm()
     s, calls = session(arm, leader)
     with pytest.raises(SystemExit):
         s.execute(config(tmp_path), CAPS, teleop_only=False)
@@ -152,12 +154,15 @@ def test_teleop_only_runs_teleoperate_on_the_robot_and_teleop_part(tmp_path):
 
 
 @pytest.mark.parametrize("caps", [
-    {k: v for k, v in CAPS.items() if k != 13},                 # a motor missing
-    {**CAPS, 12: {"pwm": 300, "current": 100}},                 # XL430 has no Current Limit
-    {**CAPS, 15: {"pwm": 900}},                                 # above the PWM range
-    {**CAPS, 16: {"current": 250}},                             # no pwm
+    {k: v for k, v in CAPS_FILE.items() if k != 13},                 # a motor missing
+    {**CAPS_FILE, 12: {"pwm": 300, "current": 100}},                 # XL430 has no Current Limit
+    {**CAPS_FILE, 15: {"pwm": 900}},                                 # above the PWM range
+    {**CAPS_FILE, 16: {"current": 250}},                             # no pwm
 ])
 def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps({str(k): v for k, v in CAPS_FILE.items()}))
+    assert m.load_caps(good) == CAPS
     path = tmp_path / "caps.json"
     path.write_text(json.dumps({str(k): v for k, v in caps.items()}))
     with pytest.raises(SystemExit):

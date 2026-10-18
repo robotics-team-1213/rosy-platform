@@ -52,7 +52,8 @@ def load_caps(path: Path) -> dict:
             raise SystemExit(f"motor {motor}: pwm 1..{PWM_MAX}")
         if "current" in cap and not (type(cap["current"]) is int and 1 <= cap["current"] <= CURRENT_MAX):
             raise SystemExit(f"motor {motor}: current 1..{CURRENT_MAX}")
-    return caps
+    names = {"pwm": "pwm_limit", "current": "current_limit"}  # caps-file keys -> register names
+    return {motor: {names[key]: value for key, value in cap.items()} for motor, cap in caps.items()}
 
 
 class Session:
