@@ -9175,3 +9175,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 추가 지시로 현장 owner-only 폴더에 키·Authority/Cam 설정·TLS443 proxy/Compose 후보를 준비했다. private 안내에 실제 관리자 발급 명령·기존 서명 전환 순서를 적었다. 로봇 roster가 비어 있는 항목은 추측하지 않았다.
 - 증거: 기존 Fleet parser UID10001 PASS, 현재 proxy Caddy adapt PASS. 기존 모델 PC SDK에서 설정 포함 Cam debug APK PASS 및 APK asset과 후보 JSON 전체 대조 일치. 실제 tailscale cert는 daemon 권한 거부로 실패했다. 상세 SHA/한계는 docs/validation/account-service-2026-10-19/prepared-activation-candidate.md.
 - gate 변화: 운영 gate 변화 없음. Authority 활성화·서명 배포·실물 로그인/회수/복구는 미완료다. 이번 준비가 설치·사용자 수용을 대신하지 않는다.
+
+## 2026-10-19 · uncommitted · Account 인증서 발급 확인·보호 백업·갱신 타이머
+
+- 변경: 사용자 인증서 발급 후 체인·hostname·pair·만료를 확인하고 현장 root 백업과 Windows DPAPI 암호화 백업을 만들었다. private 운영 갱신 helper와 daily user timer를 설치했다.
+- 증거: 백업10개 원본 대조·복호화 archive hash 일치 PASS. 실제 갱신 접근·격리 최초 쓰기/반복·설치 대상 모형의 UID0400 PASS. user timer active와 첫 oneshot success. 상세 경계는 docs/validation/account-service-2026-10-19/certificates-backed-up.md.
+- gate 변화: 인증서 준비·갱신 timer 설치만 확인했다. Authority 활성화·새443·운영 Caddy reload·실물 로그인/회수/복구는 미완료다. 기존 Account signing key와 운영 DB는 바꾸지 않았다.
