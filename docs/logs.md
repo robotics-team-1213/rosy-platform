@@ -9125,3 +9125,9 @@ osy-d395-s1d\`.
 - 증거: `2fd2b168e8` RED, `e81c3f1a4` 원격 socket 1 passed/0 skipped/NEW 0. 최종 목표 비교 보강은 후속 opt-in native 검증 대상이다. `docs/validation/core-omx-runtime-2026-10-18/result.md`.
 - 정정: Fleet lease 발급기는 이미 있으며 `device_delivery=not_connected`다. 빠진 것은 장치 clock/session에 대한 신뢰된 전달·검증·갱신·폐기와 운영 조립이다. 합성 인증·고정 목표의 시험을 학습 정책·Gazebo/실물 이동으로 주장하지 않는다.
 - gate 변화: 없음.
+
+## 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
+
+- 변경: D-787 시뮬레이션 모방학습 제안과 ADR Log를 합치면서 main에서 들어온 D-787 미작성 예약 행 두 개만 제거했다. 다른 ADR 예약은 보존한다.
+- 증거: 착지 lint가 이미 존재하는 D-787 파일을 gap으로도 선언했다고 거절했다. ADR 번호와 Proposed 상태는 유지하며 현재 커밋으로 원격 검증한다.
+- gate 변화: 없음. 시뮬레이션 실행·실물 정책 활성화·장치 수용을 선언하지 않는다.
