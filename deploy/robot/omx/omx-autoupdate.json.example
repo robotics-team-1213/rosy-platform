@@ -1,0 +1,10 @@
+{
+  "repo_url": "https://github.com/<owner>/rosy-platform.git",
+  "github_repo": "<owner>/rosy-platform",
+  "branch": "main",
+  "required_checks": ["ci-result"],
+  "root": "~/rosy-omx",
+  "python": "/home/<user>/venv/bin/python",
+  "devices": ["/dev/serial/by-id/<follower>", "/dev/serial/by-id/<leader>"],
+  "keep": 3
+}

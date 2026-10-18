@@ -25,6 +25,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `joint_tune.py` | Follower joint commissioning (IDs 11-16): bounded move of one joint (sag check at torque ON), gripper sweep of its ends; temporary limits/gains, always torque OFF and restored, camera frames per settled position |
 | `record_session.py` | One leader→follower LeRobot record/teleoperate session: follower caps raised only for the run, camera services handed over and back, always torque OFF and caps restored |
 | `task-card.example.yaml` | Task card template (`rosy.omx-task-card.v1`): task text, episode timing, dataset name and design; plugged in with `record_session.py --task-card` |
+| `omx_autoupdate.py`, `rosy-omx-autoupdate.{service,timer}`, `omx-autoupdate.json.example` | Native release updater for the cell's tools: newest main with green `ci-result`, unpacked to `~/rosy-omx/releases/<sha12>`, `current` switched atomically only while idle (no session lock, devices free, follower torque OFF), smoke check and rollback |
 | `requirements-lerobot-export.txt` | Python deps for demonstration export |
 
 ## Subdirectories

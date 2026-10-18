@@ -29,6 +29,8 @@ session.json, so review knows which design an episode was recorded under.
 from __future__ import annotations
 
 import argparse
+import fcntl
+import os
 import hashlib
 import json
 import re
@@ -65,6 +67,24 @@ def load_caps(path: Path) -> dict:
 
 
 CARD_SCHEMA = "rosy.omx-task-card.v1"
+
+
+def release() -> str | None:
+    """The code commit these tools came from (RELEASE written by omx_autoupdate.py), if installed so."""
+    marker = Path(__file__).resolve().parents[3] / "RELEASE"
+    return marker.read_text().strip() if marker.exists() else None
+
+
+def session_lock():
+    """Held for the whole session so omx_autoupdate.py never switches releases under it."""
+    root = Path(os.environ.get("ROSY_OMX_HOME", Path.home() / "rosy-omx"))
+    root.mkdir(parents=True, exist_ok=True)
+    handle = (root / "session.lock").open("a")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SystemExit("another OMX session holds session.lock")
+    return handle
 
 
 def load_task_card(path: Path) -> dict:
@@ -162,7 +182,8 @@ class Session:
         return state
 
     def execute(self, config_path: Path, caps: dict, *, teleop_only: bool, task_card: Path | None = None) -> dict:
-        record = {"config": str(config_path), "caps": caps, "teleop_only": teleop_only, "started": time.time()}
+        record = {"config": str(config_path), "caps": caps, "teleop_only": teleop_only, "started": time.time(),
+                  "release": release()}
         if task_card is not None:
             text = task_card.read_bytes()
             record["task_card"] = {"path": str(task_card), "sha256": hashlib.sha256(text).hexdigest(),
@@ -241,7 +262,11 @@ def main(argv=None):
 
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl,
                       run=lambda command: subprocess.call(command), log=log)
-    record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
+    lock = session_lock()
+    try:
+        record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
+    finally:
+        lock.close()
     Path("session.json").write_text(json.dumps(record, indent=2, default=str))
     raise SystemExit(record.get("exit_code") or 0)
 
