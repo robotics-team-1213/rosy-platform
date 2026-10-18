@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("run_sim_reach_pipeline", ROOT / "tools/sim/run_sim_reach_pipeline.py")
@@ -36,6 +39,21 @@ def test_dry_run_prints_each_stage_in_order(tmp_path):
             assert "skipped" in line and "not in this checkout" in line
         else:
             assert "--first-index 6" in line or optional == "eval"
+
+
+@pytest.mark.parametrize("recordings, expected", [(None, "/recordings"), ("/captures", "/captures")])
+def test_inside_export_reads_container_recordings_unless_overridden(tmp_path, recordings, expected):
+    lines = []
+    args = ["--task", TASK, "--episodes", "4", "--run", str(tmp_path / "run"), "--inside", "--dry-run"]
+    if recordings is not None:
+        args.extend(["--recordings", recordings])
+
+    assert pipeline.main(args, log=lines.append) == 0
+
+    export = shlex.split(next(line for line in lines if line.startswith("[export]")))[1:]
+    assert export[export.index("--recordings") + 1] == expected
+    assert any(line.startswith("[copy] skipped") for line in lines)
+    assert not (tmp_path / "run").exists()
 
 
 def test_run_reads_act_job_args_from_the_batch_manifest_and_stops_on_failure(tmp_path, monkeypatch):
