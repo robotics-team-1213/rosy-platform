@@ -2950,3 +2950,22 @@
 - 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.
 - 증거: 첫 확장 시험의 release scan FAIL을 재현했고 독립 hash 검토 후 관련 원격 745 PASS/0 skip/NEW 0으로 통과했다. provenance의 stale/변경·비밀 탐지 회귀를 포함한다.
 - gate 변화: 저장소 검사 보완이며 배포·장치 실행·FIELD 수용을 수행하지 않았다.
+
+## 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)
+
+- 변경: `sd/setup-moved-device.ps1`에서 로봇 주소를 생략하면 새 SD 준비로 시작한다. 주소를 명시한 이동 카드의 SETUP 검사, core 계획, 기존 분리 작성기와 삭제·readback 절차는 유지한다. Wi-Fi 프로필 준비와 첫 부팅 뒤 자동 업데이트 timer/status 확인을 안내한다.
+- 증거: Windows PowerShell 네이티브 self-check 6개 PASS. 주소 필수로 새 SD 준비가 막히는 실패를 먼저 재현했다. fixture만 사용해 PrepareOnly·잘못된 주소·등록부/Wi-Fi 누락·이동 카드 SETUP 게이트·기존 작성기 위임을 확인했다. 원격 pytest는 커밋 뒤 별도로 기록한다.
+- gate 변화: 없음. 현재 서명 이미지 확보, SD 기록/readback, 실제 Pinky 첫 부팅·자동 업데이트는 미수행이다. 실행 계획은 `docs/plans/2026-10-18-pinky-sd-ready.md`다.
+
+## 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
+
+- 변경: 실행 계획에 커밋 기반 원격 시험 결과, 독립 리뷰와 보관 이미지의 한계를 기록했다. 제품 코드 추가 변경은 없다.
+- 증거: 네이티브 PowerShell fixture self-check 6개 PASS, AI PC 커밋 기반 원격 관련 6개 파일 366 passed·30 skipped·기존 SyntaxWarning 2건. known_failures 비교 0 NEW·0 known·0 flaky. 독립 리뷰 material finding 0건. 전체 suite와 영향 선택 전체 25경로 실행은 미수행이다.
+- 이미지: 로컬 `2026.09.22-001`은 공식 verifier의 서명·checksum 검증 PASS이나 D-412 도입 전 source이므로 최신 자동 업데이트 배포 이미지로 선택하지 않는다. 새 이미지 빌드·서명 또는 최신 보관 이미지 확보가 남았다.
+- gate 변화: 없음. 실제 카드·로봇·릴리스 발행은 변경하지 않았다.
+
+## 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
+
+- 변경: 사용자 반영·push·이미지 빌드 승인 후 이번 작업만 원격 main 위로 재적용했다. 안내 도구의 기존 `X:\DevTemp` 필수 경로를 `ROSY_SCRATCH` 또는 시스템 임시 폴더로 바꿔 별도 드라이브 없는 PC에서도 준비할 수 있게 했다. 동료의 로컬 main 이력은 보존한다.
+- 증거: 원격 기준에서 고정 경로 때문에 실패하는 네이티브 회귀를 확인하고, 수정 후 fixture self-check 6개 PASS. 재적용 후 원격·CI 검증과 이미지 빌드는 별도 단계다.
+- gate 변화: 없음. 기록 충돌은 원격 기록과 이번 작업 행만 보존하고 생성 index를 재생성했다. 실제 카드와 장치는 변경하지 않았다.
