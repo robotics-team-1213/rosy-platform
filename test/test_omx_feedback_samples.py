@@ -6,7 +6,7 @@ import pytest
 from test_omx_native_ros_runtime import test_native_ros_runtime as run_native
 
 
-@pytest.mark.skipif(os.environ.get('ROSY_OMX_FEEDBACK_TRACE') != '1',
+@pytest.mark.skipif(os.environ.get('ROSY_OMX_FEEDBACK_TRACE') not in ('0', '1'),
                     reason='explicit native feedback diagnostic sampling required')
 @pytest.mark.parametrize('sample', range(5))
 def test_feedback_timing_sample(sample):
@@ -14,7 +14,7 @@ def test_feedback_timing_sample(sample):
                '::test_slow_feedback_handling_cannot_starve_the_joint_state_subscription')
 
 
-@pytest.mark.skipif(os.environ.get('ROSY_OMX_FEEDBACK_TRACE') != '1',
+@pytest.mark.skipif(os.environ.get('ROSY_OMX_FEEDBACK_TRACE') not in ('0', '1'),
                     reason='explicit native feedback diagnostic sampling required')
 @pytest.mark.parametrize('sample', range(5))
 def test_feedback_after_full_suite_sample(sample):

@@ -59,6 +59,11 @@ class FeedbackTrace:
     def add(self, kind, **facts):
         self.events.append(dict(kind=kind, at=time.monotonic(), thread=threading.get_ident(), **facts))
 
-    def dump(self):
-        print('OMX_FEEDBACK_TRACE=' + json.dumps(dict(first_hold=self.first_hold,
-            events=list(self.events), stacks=self.stacks)), flush=True)
+    def dump(self, path=None):
+        payload = json.dumps(dict(first_hold=self.first_hold,
+            events=list(self.events), stacks=self.stacks))
+        if path is None:
+            print('OMX_FEEDBACK_TRACE=' + payload, flush=True)
+        else:
+            path.write_text(payload, encoding='utf-8')
+            print('OMX_FEEDBACK_TRACE_FILE=' + path.name, flush=True)
