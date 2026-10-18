@@ -37,6 +37,7 @@ CONSOLE_ASSETS = {
     "measured-calibration-view.js": ("calibration/measured-calibration-view.js", "application/javascript"),
     "measured-calibration.css": ("calibration/measured-calibration.css", "text/css"),
     "host-services.js": ("host-services.js", "application/javascript"),
+    "host-health.js": ("shared/host-health.js", "application/javascript"),
     "peer-picker.js": ("peer-picker.js", "application/javascript"),
     "device-discovery.js": ("devices/device-discovery.js", "application/javascript"),
     "address-drift.js": ("shared/address-drift.js", "application/javascript"),

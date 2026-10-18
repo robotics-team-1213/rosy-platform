@@ -210,8 +210,13 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
             sh("systemctl", "reload", "ssh")
         elif target.startswith("/etc/systemd/system/"):
             sh("systemctl", "daemon-reload")
+        elif target == "/etc/systemd/system.conf.d/rosy-watchdog.conf":
+            result = sh("systemctl", "daemon-reexec")
+            if result.returncode != 0:
+                raise RuntimeError("watchdog runtime configuration was not reloaded")
         elif target.startswith("/etc/sysctl.d/"):
-            sh("sysctl", "-q", "--system")
+            if sh("sysctl", "-q", "--system").returncode != 0:
+                raise RuntimeError(f"{target}: kernel settings were not applied cleanly")
         return f"wrote {target}{saved}"
     if kind in ("enabled", "disabled"):
         verb = "enable" if kind == "enabled" else "disable"
@@ -260,6 +265,7 @@ def repo_dirs(role: str) -> dict[str, Path]:
 def install(role: str, dry_run: bool, approve: list[str]) -> int:
     dirs = repo_dirs(role)
     changes = 0
+    failures = 0
     for policy, kind, args in read_manifest(dirs):
         found = drift(kind, args, dirs)
         if found is None:
@@ -276,6 +282,18 @@ def install(role: str, dry_run: bool, approve: list[str]) -> int:
             changes += 1
         except RuntimeError as exc:  # e.g. empty Wi-Fi allow list: report and carry on
             print(f"  not applied: {exc}")
+            failures += 1
+    # Matching files can hide disabled runtime settings; explicit provisioning reapplies them.
+    if not dry_run:
+        for target, command in (
+            ("/etc/systemd/system.conf.d/rosy-watchdog.conf", ("systemctl", "daemon-reexec")),
+            ("/etc/sysctl.d/90-rosy-hang.conf", ("sysctl", "-q", "-p", str(host("/etc/sysctl.d/90-rosy-hang.conf")))),
+        ):
+            if ("recovery" in approve or target in approve) and sh(*command).returncode != 0:
+                print(f"  not applied: runtime settings for {target}")
+                failures += 1
+    if failures:
+        raise RuntimeError(f"{failures} change(s) could not be applied")
     return changes
 
 
@@ -288,6 +306,7 @@ def copy_approved(role: str) -> None:
     new.mkdir(parents=True)
     for name in ("common", "role"):
         shutil.copytree(dirs[name], new / name)
+    (new / "role-name").write_text(role + "\n", encoding="utf-8")
     for _policy, kind, args in read_manifest(dirs):  # deploy/<path> sources (D-524 helper)
         if kind == "file" and args[1].startswith("deploy/"):
             src = dirs["deploy"] / args[1].split("/", 1)[1]
@@ -307,6 +326,8 @@ def copy_approved(role: str) -> None:
     shutil.rmtree(old, ignore_errors=True)
     tool = host("/usr/local/sbin/rosy-host-state")
     tool.parent.mkdir(parents=True, exist_ok=True)
+    # Install the reader before replacing its entry point, including when a timer is already active.
+    shutil.copyfile(HERE / "rosy_host_recovery.py", tool.with_name("rosy_host_recovery.py"))
     tool_tmp = tool.with_name(tool.name + ".rosy-tmp")
     shutil.copyfile(Path(__file__).resolve(), tool_tmp)
     tool_tmp.chmod(0o755)
@@ -314,6 +335,8 @@ def copy_approved(role: str) -> None:
 
 
 def check() -> int:
+    from rosy_host_recovery import snapshot
+
     lib = host(LIB)
     dirs = {"common": lib / "common", "role": lib / "role", "deploy": lib / "deploy"}
     status = {"time": int(time.time()), "fixed": [], "drift": [], "awaiting_approval": [], "errors": []}
@@ -333,9 +356,12 @@ def check() -> int:
     for key in ("fixed", "drift", "awaiting_approval", "errors"):
         for item in status[key]:
             print(f"{key}: {item}")
+    status["recovery"] = snapshot(ROOT, sh)
     out = host(STATUS)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    tmp = out.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    os.replace(tmp, out)
     # awaiting_approval is reported (status.json, journal) but is not a failure of the unit.
     return 1 if status["drift"] or status["errors"] else 0
 
@@ -352,8 +378,16 @@ def main(argv: list[str]) -> int:
             if not ROOT and os.geteuid() != 0:
                 raise SystemExit("run with sudo (or --dry-run)")
             copy_approved(role)
-        changes = install(role, dry_run, approve)
+        try:
+            changes = install(role, dry_run, approve)
+        except RuntimeError as exc:
+            if not dry_run:
+                check()
+            print(str(exc), file=sys.stderr)
+            return 1
         print(f"{'dry run: ' if dry_run else ''}{changes} change(s) applied")
+        if not dry_run:
+            check()
         return 0
     print(__doc__)
     return 2
