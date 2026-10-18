@@ -54,10 +54,30 @@ except ValueError:
     pass
 else:
     raise AssertionError('bool is not a joint target')
+from unittest.mock import Mock
+from lerobot.teleoperators import Teleoperator
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.scripts.lerobot_record import record_loop
+features = {key: dict(dtype='float32', shape=(2,), names=['joint1.pos', 'joint2.pos'])
+            for key in ('action', 'observation.state')}
+features['observation.images.front'] = dict(dtype='image', shape=(2,2,3),
+                                         names=['height', 'width', 'channels'])
+dataset = LeRobotDataset.create(repo_id='local/core-plugin-fixture', root=Path(sys.argv[2])/'recorded',
+    fps=10, features=features, robot_type=robot.name, use_videos=False, video_backend='pyav',
+    image_writer_threads=len(robot.cameras))
+teleop = Mock(spec=Teleoperator)
+teleop.get_action.return_value = {'joint1.pos':.1, 'joint2.pos':.2}
+record_loop(robot=robot, events={'exit_early':False}, fps=10,
+    teleop_action_processor=lambda pair:pair[0], robot_action_processor=lambda pair:pair[0],
+    robot_observation_processor=lambda obs:obs, dataset=dataset, teleop=teleop,
+    control_time_s=.01, single_task='synthetic CORE plugin fixture')
+dataset.save_episode()
+dataset.finalize()
+assert dataset.meta.total_frames == 1 and dataset.meta.total_episodes == 1
 robot._client = None
 print('ROSY_OMX_PLUGIN_PASS')
 '''
-    result = subprocess.run([str(PYTHON), '-c', script, str(ROOT)],
+    result = subprocess.run([str(PYTHON), '-c', script, str(ROOT), str(tmp_path)],
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'ROSY_OMX_PLUGIN_PASS' in result.stdout
