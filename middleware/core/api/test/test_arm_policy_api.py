@@ -25,7 +25,8 @@ def setup_api(tmp_path):
     session._cameras = lambda: (camera,)
     from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
     port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera), principal='operator-a')
-    app = create_app({}, SimpleNamespace(arm_policy=port))
+    app = create_app({}, SimpleNamespace(arm_policy=port,
+        safety=SimpleNamespace(estop=False, estop_listeners=[])))
     auth = SimpleNamespace(token_id='operator-a', role='operator')
     app.dependency_overrides[operator] = lambda: auth
     return TestClient(app), session, driver, clock, authority, auth
@@ -83,6 +84,18 @@ def test_port_requires_independent_runtime_watchdog(tmp_path):
     session, *_ = setup_session(tmp_path)
     with pytest.raises(ValueError, match='watchdog-bound'):
         CoreArmPolicyPort(session, capture=lambda: None, principal='operator-a')
+
+
+def test_core_estop_stops_arm_without_another_client_request(tmp_path):
+    client, session, driver, *_ = setup_api(tmp_path)
+    source = observation(client, session)
+    assert client.post('/api/v1/arm/actions', json=action(source, session)).status_code == 202
+    safety = client.app.state.core.safety
+    safety.estop = True
+    for listener in safety.estop_listeners:
+        listener()
+    assert session.hold_reason and driver.handles[0].cancel_calls == 1
+    assert not session.fence.is_open(authority_epoch=2, dispatch_generation=7)
 
 
 def test_stop_latches_existing_fence_and_cancels_own_goal(tmp_path):
