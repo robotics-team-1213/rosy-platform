@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
 import draccus
+from types import SimpleNamespace
 from lerobot.robots import Robot, RobotConfig
 import lerobot_robot_rosy_omx
 config = draccus.decode(RobotConfig, dict(type='rosy_omx', url='http://localhost:8080',
@@ -28,6 +29,13 @@ assert robot.observation_features == {'joint1.pos': float, 'joint2.pos': float, 
 assert robot.action_features == {'joint1.pos': float, 'joint2.pos': float}
 assert not robot.is_connected
 assert 'rclpy' not in sys.modules
+try:
+    lerobot_robot_rosy_omx.validate_record_config(SimpleNamespace(policy=SimpleNamespace(
+        type='act', n_action_steps=4, temporal_ensemble_coeff=None)))
+except ValueError:
+    pass
+else:
+    raise AssertionError('queued ACT actions cannot acquire a fresh observation identity')
 print('ROSY_OMX_PLUGIN_PASS')
 '''
     result = subprocess.run([str(PYTHON), '-c', script, str(ROOT)],

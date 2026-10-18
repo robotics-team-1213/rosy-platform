@@ -121,6 +121,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.271)",
     )
     app.state.core = services
+    arm_policy = getattr(services, 'arm_policy', None)
+    if arm_policy is not None:
+        services.safety.estop_listeners.append(arm_policy.stop)
+        if services.safety.estop:
+            arm_policy.stop()
     from .account_sessions import install_account_sessions
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')
