@@ -17,10 +17,11 @@ job is left running on the host.
 
 Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. Each
 host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
-and the ones above the class floor are used, most headroom first; the site PC only
-when no other host qualifies (D-568). Several invocations share one queue over the chosen
-hosts (D-553): each host runs one at a time and takes the next when free, largest test files
-first. Pytest never runs on this machine (D-584): when no host is reachable
+and the ones above the class floor are used, most headroom first (a pytest host with 4-6 GB is light:
+serial, capped at its free GB, smallest invocations); the site PC only when no other host qualifies (D-568).
+An invocation gets pytest-xdist ``-n`` unless ``xdist_plan.py`` keeps it serial. Several invocations
+share one queue over the chosen hosts (D-553): each host runs one at a time and takes the next
+when free, largest test files first. Pytest never runs on this machine (D-584): when no host is reachable
 the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
 Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system
@@ -55,6 +56,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2] / "test"))
 import known_failures  # noqa: E402
 import lab_hosts  # noqa: E402
 import remote_job  # noqa: E402
+import xdist_plan  # noqa: E402
 from work_queue import Work, cost  # noqa: E402,F401
 
 # Live Fleet host: last resort, Fleet reserve, CPU cap (D-568 3).
@@ -71,6 +73,9 @@ DEFAULT_HOSTS = " ".join(str(item).strip() for item in _FILE_HOSTS if str(item).
 TAILSCALE_PROFILE = str(_LAB.get("tailscale_profile") or "").strip()
 # D-568 2: (free cores, free GB) a host needs for one job of the class.
 NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
+# A host with this many GB (under NEEDS) is "light": serial, MemoryMax = its free GB, smallest invocations first.
+LIGHT_GB = {"pytest": 4}
+HEADROOM: dict[str, dict] = {}  # place(): measured free cores/GB of each placed host, for xdist_plan
 SITE_RESERVE = (2, 4)
 SITE_CPU_QUOTA = "400%"
 # Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it:
@@ -153,7 +158,7 @@ extra = (line for filename in sys.argv[2:-1] for line in Path(filename).read_tex
 Path(sys.argv[-1]).write_text("".join(extra))
 PY
 $P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
-  jsonschema ext4 numpy pillow playwright
+  jsonschema ext4 numpy pillow playwright pytest-xdist==3.8.0
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
   --target "$N/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
@@ -247,8 +252,9 @@ def parse_probe(out: str) -> dict | None:
 
 
 def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[str], list[str]]:
-    """(hosts above the cls floor, most headroom first, the site PC only when no other fits; a note per host)."""
+    """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes)."""
     need_c, need_m = NEEDS[cls]
+    floor_m = LIGHT_GB.get(cls, need_m)
     ranked, notes = [], []
     for i, (host, p) in enumerate(zip(hosts, probes)):
         if p is None:
@@ -258,12 +264,14 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
         why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
-               else f"below {cls} floor {need_c} cores/{need_m} GB" if cores < need_c or mem < need_m else "ok")
+               else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
+               else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
         notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{' (site PC)' if site else ''} - {why}")
-        if why == "ok":
-            ranked.append((site, -min(cores / need_c, mem / need_m), i, host))
+        if why == "ok" or why.startswith("light"):
+            HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m}
+            ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
     ranked.sort()
-    return [r[3] for r in ranked if not r[0]] or [r[3] for r in ranked], notes
+    return [r[-1] for r in ranked if not r[0]] or [r[-1] for r in ranked], notes
 
 
 LOCAL_REFUSED = ("[remote-pytest] {what} is removed (D-584): tests never run on the operator laptop."
@@ -469,7 +477,8 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
-        while not (lost and shared) and (i := work.take()) is not None:
+        take = work.take_small if HEADROOM.get(host, {}).get("light") else work.take
+        while not (lost and shared) and (i := take()) is not None:
             inv, log = invocations[i], logs[i]
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             if lost:
@@ -495,8 +504,10 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
 def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str], repo: Path,
         sha: str) -> tuple[int, str | None]:
     """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
+    words, extra, note = xdist_plan.plan(inv, HEADROOM.get(host))
+    print(f"[remote-pytest] {note}", flush=True)
     try:
-        code = remote_job.run(host, name, k, log, job, [*inv, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH)
+        code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH)
     except remote_job.Lost as error:
         print(error, file=sys.stderr, flush=True)
         return remote_job.LOST_EXIT, str(error)
@@ -509,8 +520,9 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
     rerun, lost = log.with_name(log.stem + "-rerun.txt"), None
     try:
-        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*itertools.takewhile(ENV_ARG.match, inv),
-                                    *ids, "-q", "-rA", "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
+        env = [*words, *itertools.takewhile(ENV_ARG.match, inv)]  # serial: ids, never -n
+        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*env, *ids, "-q", "-rA", "-p", "no:cacheprovider"],
+                                    PYTEST_TIMEOUT, SSH)
     except remote_job.Lost as error:
         lost, rerun_code = str(error), remote_job.LOST_EXIT
         print(lost, file=sys.stderr, flush=True)

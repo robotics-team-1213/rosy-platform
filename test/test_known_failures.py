@@ -158,3 +158,43 @@ def test_the_quarantine_is_safety_tagged_and_never_holds_a_safety_test():
     quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
     under_safety = [n for n in quarantine if safety_review.is_safety(n.partition("::")[0], roots, modules)]
     assert not under_safety, under_safety
+
+# pytest-xdist 3.8.0 output (tools/remote/xdist_plan.py), captured from a real -n 2 run.
+XDIST_Q = """bringing up nodes...
+.[gw0] node down: Not properly terminated
+..FE.F                                                                   [100%]
+=================================== ERRORS ====================================
+[gw0] linux -- Python 3.12.3 /venv/bin/python
+=========================== short test summary info ===========================
+FAILED t/test_a.py::test_bad - assert 1 == 2
+FAILED t/test_a.py::test_p[2] - assert 2 == 1
+FAILED t/test_c.py::test_crash - worker 'gw0' crashed while running 't/test_c...
+ERROR t/test_a.py::test_err - RuntimeError: fx
+3 failed, 3 passed, 1 error in 0.64s
+"""
+XDIST_V = """created: 2/2 workers
+2 workers [6 items]
+
+[gw1] [ 16%] PASSED t/test_b.py::test_b 
+[gw0] [ 50%] FAILED t/test_a.py::test_bad 
+[gw0] [ 66%] ERROR t/test_a.py::test_err 
+=========================== short test summary info ===========================
+FAILED t/test_a.py::test_bad - assert 1 == 2
+ERROR t/test_a.py::test_err - RuntimeError: fx
+"""
+
+
+def test_xdist_output_gives_each_failure_once_and_a_crashed_worker_is_a_failure():
+    assert known_failures.failed_ids(XDIST_Q) == [
+        "t/test_a.py::test_bad", "t/test_a.py::test_p[2]", "t/test_c.py::test_crash", "t/test_a.py::test_err"]
+    assert known_failures.failed_ids(XDIST_V) == ["t/test_a.py::test_bad", "t/test_a.py::test_err"]
+    new, seen, _ = known_failures.compare(XDIST_V, {"t/test_a.py::test_bad": "r"})
+    assert (new, seen) == (["t/test_a.py::test_err"], ["t/test_a.py::test_bad"])
+
+
+def test_an_xdist_session_that_collected_nothing_is_caught():
+    paths = ["a/test", "b/test"]
+    assert known_failures.collected_nothing("created: 2/2 workers\n2 workers [0 items]\n", paths)
+    assert known_failures.collected_nothing("6 workers [0 items]\n", paths)
+    assert not known_failures.collected_nothing("2 workers [10 items]\n", paths)
+    assert not known_failures.collected_nothing("2 workers [0 items]\n", paths[:1])
