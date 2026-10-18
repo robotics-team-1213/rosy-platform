@@ -349,6 +349,12 @@ def main():
     assert out.is_dir() and os.environ.get('ROS_AUTOMATIC_DISCOVERY_RANGE') == 'LOCALHOST'
     thread_limits = {key:'1' for key in ('LP_NUM_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}
     os.environ.update(thread_limits)
+    relative_group = next(line.removeprefix('0::') for line in
+                          Path('/proc/self/cgroup').read_text().splitlines() if line.startswith('0::'))
+    cpu_group = Path('/sys/fs/cgroup')/relative_group.lstrip('/')
+    (out/'cpu-profile.json').write_text(json.dumps(dict(thread_limits=thread_limits,
+        cpu_max=(cpu_group/'cpu.max').read_text(),cpu_before=(cpu_group/'cpu.stat').read_text(),
+        started_monotonic_s=time.monotonic()),indent=2))
     original = ROOT/'integrations/simulation/gazebo/worlds/omx_pilot_workcell.sdf'
     world = ET.fromstring(original.read_bytes())
     world.find('./world/physics/max_step_size').text = '0.002'
@@ -403,6 +409,7 @@ def main():
             workers_stopped = drained.wait(5)
             (out/'teardown.json').write_text(json.dumps(dict(executor_stopped=stopped,
                 workers_stopped=workers_stopped, primary_error=repr(errors[0]) if errors else None,
+                cpu_after=(cpu_group/'cpu.stat').read_text(),finished_monotonic_s=time.monotonic(),
                 remaining_thread_stacks={} if workers_stopped else {
                     str(ident):traceback.format_stack(frame) for ident,frame in sys._current_frames().items()}),indent=2))
             assert stopped and workers_stopped, 'own executor/workers did not drain; do not destroy live entities'
