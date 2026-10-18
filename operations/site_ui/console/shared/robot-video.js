@@ -116,7 +116,9 @@ export function mountRobotVideoPanel({doc = document} = {}) {
   // console.js와 같은 자격: 로그인 쿠키, 또는 이 탭의 고급 접속 토큰.
   const call = createFleetClient({credential: () => sessionStorage.getItem("rosy-console-token") || ""});
   const video = createRobotVideo({doc, call});
-  bindVisibility({doc, target: panel, video});
+  // 관찰자는 패널이 펼쳐진 동안만 둔다: 접힘·pagehide에서 세션과 관찰자를 모두 정리한다.
+  let unbind = null;
+  const release = () => { video.stop(); unbind?.(); unbind = null; };
 
   async function loadRobots() {
     try {
@@ -144,7 +146,12 @@ export function mountRobotVideoPanel({doc = document} = {}) {
     await video.start(stage, robots);
   });
   stopButton.addEventListener("click", () => { video.stop(); status.textContent = "영상을 닫았습니다."; });
-  panel.addEventListener("toggle", () => { if (panel.open) loadRobots(); else video.stop(); });
+  panel.addEventListener("toggle", () => {
+    if (!panel.open) { release(); return; }
+    unbind ??= bindVisibility({doc, target: panel, video});
+    loadRobots();
+  });
+  doc.defaultView?.addEventListener("pagehide", release);
   return {panel, video};
 }
 
