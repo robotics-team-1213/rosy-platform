@@ -10,14 +10,14 @@ description: Use when starting, committing, or merging work in rosy-platform whi
 The full record is `AGENTS.md` section 「같이 하는 깃」.
 `docs/reference/shared-checkout.md` section 「같이 하는 깃」 is the same start order.
 This file repeats those commands. A wording change updates `AGENTS.md` and `docs/reference/shared-checkout.md` in one commit.
-The lab umbrella `F:\Dev\Control\Robot\Rosy\Agents.md` records the same procedure.
-The repo is `F:\Dev\Control\Robot\Rosy\rosy-platform` (no space). One `.git/index` serves the
+The lab umbrella `..\AGENTS.md` (the folder above the repo, outside git) records the same procedure.
+The repo is the `rosy-platform` folder under that umbrella; the drive differs per machine. One `.git/index` serves the
 shared `main` checkout. A path you did not write belongs to another session.
 
 ## Before you start
 
 ```bash
-cd F:\Dev\Control\Robot\Rosy\rosy-platform
+cd <umbrella>/rosy-platform        # the shared main checkout
 git status --short --branch; git worktree list
 python tools/worktrees.py new <short-name> <type>/<topic>     # not a bare `git worktree add`
 python tools/worktrees.py status                              # every worktree with a verdict
