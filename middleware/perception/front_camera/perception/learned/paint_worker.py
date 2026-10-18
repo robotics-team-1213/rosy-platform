@@ -208,7 +208,8 @@ class LearnedPaintWorker:
             return
         try:
             if self.target == "drivable":
-                mask, kind, drivable, latency_ms = model.infer_drivable(frame)
+                side = getattr(self, 'route_side', None)   # D-769 rev 2: only a set side reaches the model
+                mask, kind, drivable, latency_ms = model.infer_drivable(frame, prefer=side) if side else model.infer_drivable(frame)
             else:
                 (mask, latency_ms), kind, drivable = model.infer_mask(frame), "lane_marking", None
         except Exception as exc:  # noqa: BLE001 - a failed inference is no paint, never a crash.

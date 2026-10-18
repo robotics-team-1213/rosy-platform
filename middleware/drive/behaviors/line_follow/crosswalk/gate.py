@@ -1,5 +1,6 @@
 """D-573 manager glue; pure gate types and helpers retain their existing import paths."""
 from __future__ import annotations
+import logging
 import math
 from dataclasses import replace
 from types import SimpleNamespace
@@ -129,6 +130,10 @@ class CrosswalkGateMixin:
             odom_error_fraction=c.crosswalk_odom_error_fraction, range_sigma_m=c.crosswalk_range_sigma_m,
             persist_k=c.crosswalk_persist_k, persist_n=c.crosswalk_persist_n,
             corridor=self._fresh_corridor(now, pose))
+        if reason != getattr(self, '_xwalk_logged', None):   # diagnostics on stderr (ROS launch logs keep it)
+            self._xwalk_logged = reason
+            logging.getLogger(__name__).warning('crosswalk %s look=%s hit=%s', reason,
+                                                getattr(self._xwalk, 'last_look', None), getattr(self._xwalk, 'last_hit', None))
         if cap is None:
             return decision
         if cap <= 0.0:

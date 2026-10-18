@@ -584,6 +584,21 @@ def test_the_curve_offset_term_is_still_capped_at_0_30():
     assert sent["expect_tol_m"] == 0.30
 
 
+def test_a_route_guided_robot_gets_no_turn_instruction_and_no_window_stop():
+    """A line_follow_route_guide robot takes the branch from its route prior (keeps right without one):
+    no turn is sent, so none can stay armed and stop the trip at the next junction (v2 lap r18/r19)."""
+    guided = dataclasses.replace(PIVOT, line_follow_route_guide=True)
+    runner, store, ports = _setup(_free_map("lane"), caps=guided)
+    arc = _arc(store, "ab:fwd")
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, 0.5)
+    _ticks(runner, ports)
+    ports.at(arc, 1.0)                                    # on the place
+    _ticks(runner, ports, 1, dt=8.0)
+    assert ports.sent == [] and runner.view("p1")["state"] != "stopped"
+
+
 def test_a_refresh_at_or_past_the_place_while_armed_stops_the_trip():
     """Intended (D-507 2, 2026-10-08): CORE still armed with the robot on the place means
     ``expect_in_m`` 0, outside (0, 2], so the refreshed turn would go without a window: stop."""

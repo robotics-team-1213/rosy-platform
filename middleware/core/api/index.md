@@ -35,4 +35,4 @@
 - 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
 - 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
 - 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
-- 2026-10-15 · 0f7ae1a51 · pose_stamp strict, 409 INSTRUCTION_STAMP_UNUSABLE (D-767 A 검토, API v1.241)
+- 2026-10-16 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769)

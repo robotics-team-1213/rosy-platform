@@ -3001,3 +3001,19 @@
 - 변경: teacher/task와 batch export를 파이프라인으로 연결한다. --inside의 기본 녹화 경로를 /recordings로 고쳤고 명시 경로 우선권을 유지한다. held-out은 seed/episode 기준이며 반올림된 자세 비중복이나 자세 일반화를 보장하지 않는다고 명시했다.
 - 증거: 시험 전용 커밋 7de87d49cd의 원격 실행에서 기본 경로 오류를 재현했다. 수정 73f8a5f6a8의 pipeline/teacher/batch 3개 시험 파일은 원격 exit 0, 독립 검토 새 결함 없음. main 통합 뒤 영향 시험은 별도 수행한다.
 - gate 변화: 없음. 누락된 폐루프·평가기 단계는 계속 명시적으로 생략하며 Gazebo·학습·실물 수용은 미검증이다.
+
+## 2026-10-19 · uncommitted · SD 공통 설정과 순차 카드 준비
+
+- 변경: 루트의 git 제외 로컬 JSON을 기존 SD 안내 도구에 연결했다. 누락된 현장 Wi-Fi는 기존 보안 입력·DPAPI 저장소를 사용하고, 등록부는 복원 또는 명시적인 NEW SITE만 허용한다. Configure는 카드 없이 공통 설정을 준비하며, 여러 장은 작성기 종료·readback 영수증·식별자·등록부 확인 후 다음 계획을 만든다.
+- 증거: 기존 도구의 ConfigPath 미지원 실패를 네이티브 fixture로 재현했다. 실제 카드·이미지 작성기는 fixture로 대체하여 세 장 순서, 실패 중단, 비밀 항목 거부, 설정 전용 경로와 기존 한 장 경로를 검증한다. 원격 커밋 검사와 독립 검토는 후속 확인한다.
+- gate 변화: 없음. 서명·카드별 삭제 확인·전체 readback은 기존 작성기가 수행하며, unsigned 이미지를 운영 매체로 승인하지 않는다.
+## 2026-10-19 · 16d152510 · SD 설정 개선 검증 결과
+
+- 변경: 독립 검토 후 사용하지 않는 결과 변수와 구현을 반복 설명한 주석만 정리했다. 검증 조건과 보호된 fixture 시험은 유지했다.
+- 증거: Windows 네이티브 기존 안내 fixture 6묶음과 새 설정·연속 작업 fixture 10묶음 PASS. e55137777 기준 원격 관련 6개 파일 112 PASS·212 SKIP, known_failures 비교 NEW 0. 건너뛴 환경 의존 검사는 통과로 세지 않는다. 재사용·효율·품질·시험·주석 검토 및 최종 실제 producer/consumer 검토 완료, material finding 0건. lint 0 errors.
+- gate 변화: 없음. 실제 매체·서명·첫 부팅은 미수행이며, main 반영과 게시 CI는 후속 단계다.
+## 2026-10-19 · uncommitted · 비밀 항목 거부 fixture의 공개 placeholder
+
+- 변경: JSON의 password 필드를 거부하는 fixture 값을 명시적인 공개 placeholder로 바꿨다. 동일한 필드 거부·값 비출력 검증은 유지하며 scanner 규칙과 예외 목록은 변경하지 않았다.
+- 증거: e1bf55b660 공식 fast 검사에서 이 fixture 한 줄을 credential로 탐지했다. 수정 후 네이티브 설정·연속 작업 fixture 10묶음 PASS. 수정 커밋의 원격 비밀정보 검사와 공식 재검증은 이어서 수행한다.
+- gate 변화: 없음. 실제 비밀번호는 기존 보안 입력과 DPAPI 저장소에만 처리했으며 소스·JSON에 저장하지 않았다.
