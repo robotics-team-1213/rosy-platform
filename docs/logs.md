@@ -9132,6 +9132,12 @@ osy-d395-s1d\`.
 - 증거: 착지 lint가 이미 존재하는 D-787 파일을 gap으로도 선언했다고 거절했다. ADR 번호와 Proposed 상태는 유지하며 현재 커밋으로 원격 검증한다.
 - gate 변화: 없음. 시뮬레이션 실행·실물 정책 활성화·장치 수용을 선언하지 않는다.
 
+## 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
+
+- 변경: 실물 하달 개방에 필요한 운행·팔의 장치 증거, 관측·인계 장벽 조건을 Proposed ADR로 통합한다. 해당 문서가 없다고 선언한 D-797 예약 두 행만 제거하고 다른 예약은 보존한다.
+- 증거: ADR 본문과 Log의 Proposed 상태, 코드·설치 profile 변경이 없는 범위를 확인했다. 현재 커밋의 원격 검증은 착지 기록에 남긴다.
+- gate 변화: 없음. 실물 운행·팔 실행·device_trial 활성화·장치 수용을 승인하거나 실행하지 않는다.
+
 ## 2026-10-18 · uncommitted · D-799 원격 pytest의 호스트 안 병렬(pytest-xdist)과 가벼운 호스트
 
 - 변경: 원격 venv에 `pytest-xdist==3.8.0`을 넣고, `tools/remote/xdist_plan.py`가 invocation마다 `-n W --dist loadfile` 또는 직렬을 고른다. 직렬 목록은 `tools/remote/serial_suites.txt`(rclpy·ROS_DOMAIN_ID·고정 포트·playwright·git·홈 디렉터리를 쓰는 묶음)와 브라우저·node id·경로 없음 규칙이다. job 잠금은 실제 워커 수를 적는다. 여유 메모리 4~6 GB인 pytest 호스트는 가벼운 호스트로, 하한을 넘는 호스트 뒤에서 큐의 작은 invocation을 직렬로, 자기 여유 GB의 `MemoryMax`로 돈다. 현장 PC는 그대로 맨 뒤다.
