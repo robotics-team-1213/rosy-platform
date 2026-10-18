@@ -9051,7 +9051,7 @@ osy-d395-s1d\`.
 - 추가 검증: 전체 영향 범위 22개 분할에서 27,638 passed/1,916 skipped와 safety symbol anchor 누락 1건을 확인했다. 8beeb47ef2에서 등록 보완 후 관련 계약 170 passed/0 skipped, NEW 0. 원래 실패 기록도 보존했다.
 - gate 변화: SIM 연동만 검증했다. 실물 정책 승인·Fleet lease 전달·설치 profile·작업 성공·배포 수용을 승격하지 않았다.
 
-## 2026-10-18 · abca483966 / f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
+## 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
 
 - 변경: 사용자 커밋·머지 요청에 따라 main을 통합하고, 출처·체크섬을 포함하는 client wheel workflow와 GET-only preflight를 추가했다. 사용자가 실물 대상·승인 정책이 없다고 답했으므로 실물 target의 차단 결과를 유지했다.
 - 증거: CORE/native ROS/실제 SDK 22 passed, 실제 workflow build·오프라인 wheel 설치 보완 후 1 passed/0 skipped/NEW 0. 독립 계약 소스 리뷰 완료. validation/core-omx-deployment-2026-10-18/result.md 참조.
