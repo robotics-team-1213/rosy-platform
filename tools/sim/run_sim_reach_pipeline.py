@@ -12,8 +12,8 @@ stops at the first failing stage. ``--dry-run`` prints the commands.
   5 closed_loop learning/evaluation/omx/sim_closed_loop.py   (other owner; skipped when missing)
   6 eval        learning/evaluation/omx/sim_reach_eval.py    (other owner; skipped when missing)
 
-The closed loop runs held-out starts: episode indices from N on (seed = task seed + index), so no
-start pose of the teacher's training episodes is reused. RUN must be a new directory.
+The closed loop uses held-out episode indices from N on (seed = task seed + index). Rounded
+start poses can repeat across seeds; this does not prove pose generalization. RUN must be new.
 
 python3 tools/sim/run_sim_reach_pipeline.py --task deploy/robot/omx/sim/reach_task.example.json \\
     --episodes 12 --run /srv/rosy-sim-il/run-01 --lerobot-python /opt/lerobot/bin/python [--steps 400]
@@ -41,7 +41,8 @@ OPTIONAL = {"closed_loop": CLOSED_LOOP, "eval": EVALUATOR}
 def commands(args, act_job_args: list[str] | None = None) -> list[tuple[str, list[str]]]:
     run, py, lerobot = Path(args.run), args.python, args.lerobot_python
     target = ["--inside"] if args.inside else [args.container]
-    recordings = Path(args.recordings) if args.recordings else run / "recordings"
+    recordings = Path(args.recordings) if args.recordings else (
+        Path("/recordings") if args.inside else run / "recordings")
     results = run / "teacher-results.json"
     planned = [
         ("teacher", [py, str(TEACHER), *target, "--task", str(args.task), "--episodes", str(args.episodes),
@@ -54,6 +55,7 @@ def commands(args, act_job_args: list[str] | None = None) -> list[tuple[str, lis
                    "--out", str(run / "act"), "--steps", str(args.steps)]),
         # The pairing code is one-time per server start: the closed loop pairs with a restarted server.
         ("restart", [] if args.inside else ["docker", "restart", args.container]),
+        # shortcut: seeds can share rounded poses; verify pose separation before claiming generalization.
         ("closed_loop", [lerobot, str(CLOSED_LOOP), *target, "--task", str(args.task), "--policy", str(run / "act"),
                          "--first-index", str(args.episodes), "--episodes", str(args.eval_episodes),
                          "--out", str(run / "closed-loop.json")]),
