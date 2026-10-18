@@ -45,7 +45,7 @@ PowerShell 명령 한 번으로 기존 도구의 이미지·Wi-Fi·카드 선택
 ### 실행 결과
 
 - 제품 코드 커밋: `efa12a92be` (`feat/pinky-sd-ready`). 작업 시작 기준선은
-  `34e4ca99339bbbaf491fb9278bd313134ea6fdbb`이며 변경은 9개 파일이다.
+  `34e4ca9933`이며 변경은 9개 파일이다.
 - Windows PowerShell 네이티브 self-check: 6개 PASS. 작성기와 디스크는 fixture다.
 - AI PC 원격: `test_sd_guided_setup`, `test_new_device_setup`,
   `test_sd_write_card_entrypoint`, `test_sd_personalization`, `test_rosy_auto_update`,
@@ -86,7 +86,7 @@ D-412 자동 업데이트 도입 전의 기준선이다. 이를 최신 자동 �
 
 사용자가 변경 반영·push와 새 이미지 빌드 진행을 승인했다. 로컬 main에는 원격에
 없는 커밋 426개가 있어, 이를 함께 발행하지 않고 이번 작업의 두 커밋만 원격
-`3a77b51c185a6473c8b086245a41e88b3b180ab0` 위에 재적용했다. 기존 검증 브랜치는
+`3a77b51c18` 위에 재적용했다. 기존 검증 브랜치는
 `docs/pinky-sd-verified-local`로 보존했다. 기록 충돌은 원격 기록을 유지한 뒤
 이번 작업 행만 붙이고 index를 재생성했다. PR 검증 후 원격 main에 반영한다.
 
