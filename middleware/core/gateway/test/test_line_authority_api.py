@@ -32,6 +32,22 @@ def test_viewer_is_forbidden(core_client):
     assert client.post(URL, json=_body(clock), headers=VIEWER).status_code == 403
 
 
+def test_selected_route_prior_reaches_accepted_authority(core_client):
+    client, services, clock = _active(core_client)
+    guide = dict(map_id='map-a', map_revision=2, heading_here_deg=0., heading_ahead_deg=20.,
+                 ahead_m=.25, s_m=.5, off_route_m=.01, max_age_s=.8)
+    response = client.post(URL, json=_body(clock, seq=1, route_guide=guide), headers=OPERATOR)
+    assert response.status_code == 200 and response.json()['accepted']
+    assert services.line_follow.route_guide().heading_ahead_deg == 20.
+
+
+def test_route_prior_rejects_unknown_or_nonfinite_geometry(core_client):
+    client, _, clock = _active(core_client)
+    guide = dict(map_id='map-a', map_revision=2, heading_here_deg=0., heading_ahead_deg=20.,
+                 ahead_m=.25, s_m=.5, off_route_m=.01, max_age_s=.8, pivot_ok=True)
+    assert client.post(URL, json=_body(clock, seq=1, route_guide=guide), headers=OPERATOR).status_code == 400
+
+
 def test_refused_unless_line_follow_is_active(core_client):
     client, _ = core_client()
     response = client.post(URL, json=_body({"t": 10.0}), headers=OPERATOR)

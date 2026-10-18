@@ -36,6 +36,9 @@ from .lane_mask import DRIVABLE_MIN_FRACTION, NEAR_FIELD_FRACTION, NonFiniteLogi
 #: a branch. Replay 2026-10-10 (crop128 model, 36 drive frames): every frame showed 2-5 "branches"
 #: before this rule, all from the region's ragged far edge.
 MIN_BRANCH_WIDTH_FRACTION = 0.25
+#: D-769 rev 2: a route-side run must start within this fraction of the width from the centre column
+#: (about the body's half width at the bottom row) and reach a quarter of it past the centre.
+PREFER_REACH_FRACTION = 0.3
 
 
 def fill_holes(region: np.ndarray) -> np.ndarray:
@@ -58,7 +61,7 @@ def _runs(row: np.ndarray) -> list[tuple[int, int]]:
 FAR_SPLIT_ROWS = 18
 
 
-def right_branch(region: np.ndarray, far_row: int = -1) -> tuple[np.ndarray, int]:
+def right_branch(region: np.ndarray, far_row: int = -1, prefer: str | None = None) -> tuple[np.ndarray, int]:
     """(the way, most branches seen in a row). From the region's lowest row (the run nearest the
     centre column: the robot's own road), go up keeping the runs that touch the kept run below;
     where more than one at least MIN_BRANCH_WIDTH_FRACTION of its width does, the road splits and
@@ -69,7 +72,13 @@ def right_branch(region: np.ndarray, far_row: int = -1) -> tuple[np.ndarray, int
         return out, 0
     start = int(rows.max())
     centre = (region.shape[1] - 1) / 2.0
-    first, last = min(_runs(region[start]), key=lambda r: 0.0 if r[0] <= centre <= r[1]
+    runs = _runs(region[start])
+    # D-769 rev 2: off the route to one side, the run reaching the route's side of the centre column
+    # (the lane beyond a line under the robot), when one is near enough; else the nearest as before
+    reach = PREFER_REACH_FRACTION * region.shape[1]
+    side = [r for r in runs if (r[1] > centre + reach / 4 if prefer == "right" else r[0] < centre - reach / 4)
+            and (r[0] <= centre + reach if prefer == "right" else r[1] >= centre - reach)] if prefer else []
+    first, last = min(side or runs, key=lambda r: 0.0 if r[0] <= centre <= r[1]
                       else min(abs(r[0] - centre), abs(r[1] - centre)))
     out[start, first:last + 1] = True
     below, branches = out[start], 1
@@ -155,7 +164,7 @@ def close_thin_gaps(labels: np.ndarray, drivable: int, background) -> np.ndarray
     return np.where(closed & np.isin(labels, background), drivable, labels)
 
 
-def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tuple[np.ndarray | None, dict]:
+def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0, prefer: str | None = None) -> tuple[np.ndarray | None, dict]:
     """(the drivable way as a bool mask on the logits grid, or None; info for keep_debug).
 
     info: reason (ok | no_drivable_class | low_coverage), branches, near_fraction."""
@@ -178,7 +187,7 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
         labels, roles["drivable"][0], roles.get("lane_marking", ()), ignore_top=ignore_top,
         max_row_growth=math.inf,
         boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
-    way, branches = right_branch(fill_holes(region), ignore_top + FAR_SPLIT_ROWS)
+    way, branches = right_branch(fill_holes(region), ignore_top + FAR_SPLIT_ROWS, prefer)
     band = way[int(way.shape[0] * (1 - NEAR_FIELD_FRACTION)):]
     near = float(band.mean())
     if near < DRIVABLE_MIN_FRACTION:
