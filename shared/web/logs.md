@@ -801,3 +801,9 @@
 - 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
 - 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
 - gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
+
+- 변경: 웹 전용 Learning·Games의 title_prefix를 명시하고 기존 런처 신원은 유지했다. 제목 검사는 Fleet 하위 문서와 Learning 계정·카메라 화면까지 포함한다.
+- 증거: 제목 회귀 검사의 수정 전 원격 실행은 2 failed로 기존 불일치를 확인했다. 수정 후 검증은 이 작업의 커밋과 외부 시험 기록으로 확인한다.
+- gate 변화: 없음. 이름·문서·정적 화면 범위이며 설치·실물 실행·DEVICE/FIELD 수용을 바꾸지 않는다.

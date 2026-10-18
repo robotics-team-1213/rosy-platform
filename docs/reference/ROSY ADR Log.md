@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
 | D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
