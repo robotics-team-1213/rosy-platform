@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
 - 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
 - 2026-10-18 · uncommitted · D-797 제안 문서와 예약 목록 정합성
 - 2026-10-18 · uncommitted · D-787 제안 문서와 예약 목록 정합성
 - 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
-- 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
