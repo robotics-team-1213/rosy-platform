@@ -9137,3 +9137,9 @@ osy-d395-s1d\`.
 - 변경: 실물 하달 개방에 필요한 운행·팔의 장치 증거, 관측·인계 장벽 조건을 Proposed ADR로 통합한다. 해당 문서가 없다고 선언한 D-797 예약 두 행만 제거하고 다른 예약은 보존한다.
 - 증거: ADR 본문과 Log의 Proposed 상태, 코드·설치 profile 변경이 없는 범위를 확인했다. 현재 커밋의 원격 검증은 착지 기록에 남긴다.
 - gate 변화: 없음. 실물 운행·팔 실행·device_trial 활성화·장치 수용을 승인하거나 실행하지 않는다.
+
+## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
+
+- 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
+- 증거: 소비기·통합 회귀 136 passed, 관절 intake 수정 후 기존 owner와 함께 215 passed, 원격 known-failures NEW 0. 실제 Gazebo는 owner_clock_jumped_back을 계측해 원인을 좁혔으며 최신 수정의 전체 동작 확인은 진행 중이다. `docs/validation/omx-policy-chain-2026-10-19/result.md`에 revision·명령·원시 로그 hash와 실패도 보존한다.
+- gate 변화: 없음. 고정 SIM 정책과 합성 승인·설치 fixture이며, 학습 모델·Mission admission·물리 구동·실물 배포 승인을 입증하지 않는다.

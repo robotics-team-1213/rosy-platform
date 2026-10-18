@@ -32,6 +32,8 @@ admission이 아니며, 이 시험으로 Fleet 작업 완료를 선언하지 않
 | `e622829278` | `green-chain-preparation/run-1.txt` | 실제 Fleet HTTP와 기존 session/runtime 회귀 134 passed |
 | `39a42e94d5` | `red-total-deadline/run-1.txt` | drip 응답 timeout 실패 재현. 카메라는 잘못된 fixture digest로 실패하여 source-age RED로 사용하지 않음 |
 | `87abee0f43` | `green-total-final/run-1.txt` | 136 passed / 13.30s, known-failures NEW 0 |
+| `345a36df09` | `red-intake-order/run-1.txt` | source stamp·로컬 monotonic이 증가해도 source-age receipt가 역행하는 회귀 1 failed / 10 passed |
+| `302614ef41` | `green-intake-final/run-1.txt` | 역행 관측 거부와 기존 owner·session·Fleet 회귀 215 passed / 26.44s |
 
 최종 GREEN의 runner 인자:
 
@@ -61,8 +63,14 @@ Fleet/CORE HTTP 인증, 원본 Gazebo 카메라, 기존 OMX owner와 vendor cont
   ROS/로봇 명령 전에 중단. source 경로를 보완했다.
 - `87abee0f43`, `gazebo-chain-age-run/run.txt`: 카메라·컨트롤러 준비 뒤 chain admission이
   거절됐다. 목표는 보내지 않았다. teardown에서 Destroyable 경고도 발생했다.
-- `ebcb62f4d`: 다음 실행에서 admission의 owner state/reason과 조건을 기록하도록
-  진단을 추가했다. 최종 Gazebo 통과 결과는 아직 없다.
+- `ebcb62f4d`, `gazebo-chain-admission-run/run.txt`: `admission.json`의 실제 owner는
+  `hold / owner_clock_jumped_back`, observed sequence 474였다. 나머지 결속 조건은 일치했다.
+- `302614ef41`: 원래 시각에서 source age를 차감한 값이 직전 수용 관측보다 역행하면
+  intake에서 거부한다. timestamp를 다시 찍거나 clamp하지 않고, owner 전달·source/sequence
+  commit 전에 차단한다. 기존 freshness·clock·HOLD 규칙과 recovery는 변경하지 않았다.
+- `8f9a3fb97`: 기존 native fixture의 worker drain 패턴을 재사용해 ROS entity 파괴 전에
+  executor와 worker 종료를 확인한다. `teardown.json`으로 실패와 잔여 thread를 보존한다.
+  이 revision의 최종 Gazebo 통과 결과는 아직 없다.
 
 probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixture의 설치 binding은
 선언한 시험 설정에서 구성하며, 외부에서 승인된 학습 release의 설치를 검증하지 않는다.
