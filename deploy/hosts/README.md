@@ -1,0 +1,63 @@
+# PC 자동 복구와 모니터링
+
+모델·AI·관제 PC의 복구 기준은 `common/host-state/manifest`가 소유한다.
+각 PC는 승인된 저장소 리비전을 설치하고, 이후에는 로컬 사본과 실행값을 점검한다.
+Fleet은 결과만 읽으며 root 설치 명령을 실행하지 않는다(D-530).
+
+## PC 설치와 갱신
+
+역할은 `model`, `ai`, `site` 중 하나다. 다음은 모델 PC 예다. 하드웨어 워치독과
+커널 오류 후 재부팅을 켜므로 작업을 중단할 수 있는 시간에 설치한다.
+`site` 역할은 아래 가드 계정·대상·키 준비를 먼저 마친다.
+
+```bash
+python3 deploy/hosts/common/rosy-host-state install model --approve recovery --dry-run
+sudo python3 deploy/hosts/common/rosy-host-state install model --approve recovery
+sudo /usr/local/sbin/rosy-host-state check
+```
+
+이 명령은 기존 역할별 설정도 적용한다. `recovery` 승인은 SSH 복구 스크립트와 타이머,
+하드웨어 워치독 로드 유닛, systemd 30초 워치독, 커널 panic 10초와 soft lockup 대응,
+읽기 전용 가드 응답을 설치한다. 다른 승인 그룹(방화벽·Wi-Fi·시뮬레이터)은 허용하지 않는다.
+하드웨어는 기존 장치를 먼저 사용하고, 없으면 `iTCO_wdt`, `wdat_wdt`를 시도한다.
+장치가 없으면 유닛과 설치가 실패하며, 미지원 상태를 숨기지 않는다.
+
+swap 용량과 우선순위, 로컬 SSH 복구 제한(`/etc/default/rosy-ssh-watchdog`), 비밀번호
+로그인은 변경하지 않는다. `deploy/site/install-model-pc-guard.sh`는 swap 변경까지
+필요한 모델 PC의 별도 유지보수용이다.
+
+재부팅 후 장치 존재, `RuntimeWatchdogUSec=30s`, `kernel.panic=10`,
+`kernel.softlockup_panic=1`, 복구·점검 타이머 활성 상태를 다시 확인한다.
+이 확인은 실제 장애 복구 시험을 대신하지 않는다.
+
+## PC별 모니터링 연결
+
+관제 PC에서 기존 `deploy/site/install-host-guard.sh`로 가드 계정을 준비한다.
+`/etc/rosy/host-guard/hosts.conf`에 `model`, `ai` 대상을 적고 실제 주소·키는 호스트에만 둔다.
+템플릿은 `deploy/site/host-guard.conf.example`이다. 자동화용 SSH는 강제 명령 키를 쓰는
+OpenSSH LAN 경로로 연결한다. Tailscale SSH는 `authorized_keys` 강제 명령을 우회하므로
+이 감시 키의 전송 경로로 사용하지 않는다.
+
+대상 PC마다 `common/install-guard-remote.sh --site-key "<guard-public-key>"`로 공개키를
+등록한다. 계정·접속 범위와 대상 소유자의 동의는 기존 설치 절차를 따른다.
+`--approve recovery` 자체는 새 키나 재부팅 권한을 추가하지 않는다.
+
+관제 PC의 가드 계정·대상·키를 준비한 뒤, 다음 명령으로 최신 가드와 타이머도 적용한다.
+
+```bash
+sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
+```
+
+이후 Fleet의 **설치·보정 → 호스트 서비스**에서 세 PC를 각각 확인한다.
+
+- 가드는 10분마다 원격 PC의 `health`(메모리·swap 사용률·CPU 부하)와 `recovery` 캐시를 읽는다.
+  관제 PC는 자기 로컬 보고를 사용한다.
+- 로컬 점검은 설치 직후 및 30분마다 실제 워치독·커널 설정·SSH 복구의 최근 실행과
+  실패 카운터·활성 swap 총량과 사용량을 기록한다. 화면은 30초마다 읽는다.
+- 원격 호스트 결과 15분, 복구 설정 결과 35분 초과는 점검 지연이다. 결과 부재·미지원·접속
+  실패도 정상으로 표시하지 않는다. 접속 실패·새벽 점검 유예 시 이전 복구 보고를 지운다.
+- 설정 누락은 보고만 하며 기존 가드의 재부팅 조건·상한을 바꾸지 않는다.
+
+원본은 각 PC의 `/var/lib/rosy-host-state/status.json`과 관제 PC의
+`/var/lib/rosy-host-guard/status.json`이다. 가드가 멈추면 파일의 시각으로 지연을 표시한다.
+Fleet 자체가 중단되면 이 화면도 사용할 수 없으며, 외부 가용성 감시는 별도다.
