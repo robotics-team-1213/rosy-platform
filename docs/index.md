@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
+- 2026-10-18 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
+- 2026-10-18 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인
+- 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
 - 2026-10-17 · uncommitted · 원격 main 기준 충전 배포 통합 검사 보완
-- 2026-10-17 · uncommitted · reviewed final station deployment source
-- 2026-10-17 · uncommitted · deployment safety gap remediation
-- 2026-10-17 · uncommitted · station deployment main integration
-- 2026-10-17 · uncommitted · measured charge admission verified
