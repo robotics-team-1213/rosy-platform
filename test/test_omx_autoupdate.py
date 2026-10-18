@@ -128,8 +128,12 @@ def test_a_broken_first_install_leaves_no_current(tmp_path):
 def test_a_release_failing_its_smoke_check_is_discarded(tmp_path):
     host = FakeHost()
     host.smoke_ok["a" * 12] = False
-    assert updater(tmp_path, host).run() == "smoke_failed"
+    u = updater(tmp_path, host)
+    assert u.run() == "smoke_failed"
     assert not (tmp_path / "releases" / ("a" * 12)).exists()
+    assert u.run() == "known_bad" and host.archived == ["a" * 40]  # not refetched every run
+    host.head = "b" * 40
+    assert u.run() == "switched"  # a new main is tried again
 
 
 def test_old_releases_are_pruned_but_current_and_previous_stay(tmp_path):

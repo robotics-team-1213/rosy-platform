@@ -150,6 +150,9 @@ class Updater:
         if name == state["current"]:
             log(step="up_to_date", release=name)
             return "up_to_date"
+        if name == state.get("failed"):  # do not refetch a release that failed until main moves on
+            log(step="known_bad", release=name)
+            return "known_bad"
         checks = self.host.checks(sha)
         for required in self.cfg["required_checks"]:
             status = checks.get(required)
@@ -171,6 +174,8 @@ class Updater:
             (staging / "RELEASE").write_text(sha + "\n")
             if not self.host.smoke(staging):
                 shutil.rmtree(staging, ignore_errors=True)
+                state["failed"] = name
+                self.save(state)
                 log(step="smoke_failed", release=name)
                 return "smoke_failed"
             os.replace(staging, release)
