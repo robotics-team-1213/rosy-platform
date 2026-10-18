@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · 30acdffbfb · Account 활성화 후보와 설정 포함 Cam APK 준비
 - 2026-10-19 · 8d05ced7b · Account 전환 선행 조건 재확인
 - 2026-10-19 · 6a80a63e55 · Account 문서 관문과 운영 비활성 readback
 - 2026-10-19 · 30acdffbfb · D-807 승인과 Account 앱별 검증 기록
 - 2026-10-19 · uncommitted · Account 서비스 앱 적용 목표와 실행 계획
-- 2026-10-19 · uncommitted · D-807 Account 서비스의 자격 책임과 운영 완료 기준 제안

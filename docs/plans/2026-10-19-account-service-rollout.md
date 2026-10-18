@@ -87,6 +87,7 @@
 **Interfaces:** Authority는 기존 `--account-config`, site `ROSY_ACCOUNT_CONFIG`; CORE는 `auth.account_client_file`; Review는 `account_client_file/account_subjects`; Games는 `--preview-account-config`.
 
 - [ ] issuer/TLS 이름·기존 bootstrap 계정·영속 DB·기계 자격·정확한 client/callback/resource·receiver 공개키·세션 암호화 키의 비밀 비노출 설치 목록을 준비한다. 실제 값이 없는 항목은 임의 생성하지 않는다.
+  - 현장 보호 폴더에 실제 tailnet issuer·새 site namespace·확인한 기존 관리자·Cam client/callback/resource를 명시한 후보와 키를 준비했다. 기존 parser UID10001 검증과 Caddy adapt, 설정 포함 Cam debug APK/asset 대조는 PASS. private 안내에 실제 관리자 명령을 작성했다. 인증서 발급은 daemon 권한 거부, 정확한 나머지 앱 등록·운영 승인/설치는 대기다. [후속 증거](../validation/account-service-2026-10-19/prepared-activation-candidate.md).
 - [x] 기존 `load_account_config`와 `load_account_client`의 시작 시 검증을 재사용하도록 설치 절차에 기록했다. site_preflight는 Account 일관성을 검사하지 않는다고 명시했다. 새 validator/생성 CLI는 추가하지 않았다.
 - [ ] 동일 시점 DB/설정 백업과 현재 비밀번호·프로필 보존을 준비하고 verifier 호환 배포→authority→앱 receiver→기존 사람 경로 종료 순서로 전환안을 만든다.
 - [ ] 기존 서명 candidate·서비스 관문에 넣을 구체적 변경·readback·복구 절차가 준비된 뒤에만 운영 전환을 수행한다. source 검증만으로 운영 재시작을 실행하지 않는다.
