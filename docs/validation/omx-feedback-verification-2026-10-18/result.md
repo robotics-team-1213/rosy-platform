@@ -15,7 +15,7 @@ AI 시험 PC의 실제 Gazebo controller에서 `rule_based` 관절 명령 완료
 | 계측 켠 단독 native 사례 5회 | wrapper 5 passed | `samples/run-1.txt` |
 | 계측 켠 native 8개 전체 suite 5회 | wrapper 5 passed, 다른 묶음 5 deselected; 내부 40 passed | `suite-samples/run-1.txt` |
 | 계측 끈 native 8개 전체 suite 5회 | wrapper 5 passed, 다른 묶음 5 deselected; 내부 40 passed | `untraced-suite/run-1.txt` |
-| 변경하지 않은 main `a2076ddd8d79fd9cb1f19fc436925e00bdbdb667` 전체 suite, 별개 호출 5회 | 매 호출 wrapper 1 passed·내부 8 passed | `main-fixed-1/run-1.txt`부터 `main-fixed-5/run-1.txt` |
+| 변경하지 않은 main (commit: `a2076ddd8d79fd9cb1f19fc436925e00bdbdb667`) 전체 suite, 별개 호출 5회 | 매 호출 wrapper 1 passed·내부 8 passed | `main-fixed-1/run-1.txt`부터 `main-fixed-5/run-1.txt` |
 
 계측 켠 단독·전체 묶음에서 HOLD와 intake 거절은 없었다. 최대 intake 간격은 각각 약 0.03887s·0.03328s였다. 기존 freshness 0.2s, slow sink 0.6s, executor 4 threads를 유지했다. 계측 자체의 영향을 배제하기 위해 계측 없는 묶음과 수정하지 않은 main도 별도로 실행했다. 이 20개 표본 호출의 통과는 간헐 실패의 원인 규명이나 영구 수정 증거가 아니다.
 
