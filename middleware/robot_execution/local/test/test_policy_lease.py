@@ -273,3 +273,18 @@ def test_fleet_context_close_interrupts_own_pending_request(tmp_path):
         server.shutdown()
         serving.join(2)
         server.server_close()
+
+
+@pytest.mark.parametrize('output', ["print('not-json',flush=True)",
+    "print(json.dumps({'id':0,'value':{}}),flush=True)",
+    "print('x'*(6*1024*1024+2048),flush=True)"])
+def test_bad_helper_framing_is_permanently_closed(tmp_path, monkeypatch, output):
+    import rosy.execution.local.policy_lease as module
+    monkeypatch.setattr(module, '_HTTP_EXCHANGE',
+        "import json,sys\nprint('READY',flush=True)\nsys.stdin.readline()\n"+output)
+    token = tmp_path/'token'
+    token.write_text('test-only')
+    with FleetPolicyHttp('http://127.0.0.1:1234', token, loopback_sim=True) as client:
+        with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
+        assert client._process.poll() is not None
+        with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
