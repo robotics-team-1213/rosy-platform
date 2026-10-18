@@ -74,13 +74,14 @@ def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
         sessions.bootstrap_accounts("alice", "other-site")
 
 
-def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path):
+@pytest.mark.parametrize("initial", ["fixture-pass-9384", "bob!"])
+def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path, initial):
     sessions = activated(tmp_path)
     manager = cookie(sessions)
     new = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
-                                  password="fixture-pass-9384", grants=[])
+                                  password=initial, grants=[])
     second = PasswordSessions(sessions.path, {})
-    bob = cookie(second, "bob", "fixture-pass-9384")
+    bob = cookie(second, "bob", initial)
     assert second.principal(bob)[0].password_change_required
     bob, _ = second.change_password(bob, "a permanent secret")
     current = sessions.list_accounts(manager)
@@ -115,18 +116,28 @@ def test_last_manager_and_operator_cannot_manage_accounts(tmp_path):
     assert "password_scrypt" not in other
 
 
-def test_admin_reset_and_revoke_sessions(tmp_path):
+@pytest.mark.parametrize("initial", ["SuperSecretSitePsk99", "bob!"])
+def test_admin_reset_and_revoke_sessions(tmp_path, initial):
     sessions = activated(tmp_path)
     manager = cookie(sessions)
     row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
                                   password="fixture-pass-9384", grants=[])
     bob = cookie(sessions, "bob", "fixture-pass-9384")
     updated = sessions.reset_account_password(manager, row["account_id"], revision=row["revision"],
-                                              password="SuperSecretSitePsk99")
+                                              password=initial)
     assert sessions.principal(bob) is None
-    bob = cookie(sessions, "bob", "SuperSecretSitePsk99")
+    bob = cookie(sessions, "bob", initial)
+    assert sessions.principal(bob)[0].password_change_required
     sessions.revoke_account_sessions(manager, row["account_id"], revision=updated["revision"])
     assert sessions.principal(bob) is None
+
+
+@pytest.mark.parametrize("password", ["other!", "bob", ""])
+def test_account_creation_rejects_other_short_passwords(tmp_path, password):
+    sessions = activated(tmp_path)
+    with pytest.raises(ValueError, match="invalid password"):
+        sessions.create_account(cookie(sessions), login="bob", principal_id="bob", role="viewer",
+                                password=password, grants=[])
 
 
 def test_account_api_cookie_origin_capability_and_strict_bodies(tmp_path):
