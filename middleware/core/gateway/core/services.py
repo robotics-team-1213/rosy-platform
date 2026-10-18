@@ -126,6 +126,7 @@ class CoreServices:
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
     # D-525 signal advice, display only: kept off LineFollowManager so no decision can read it.
     line_advice: AdviceStore = field(default_factory=AdviceStore)
+    arm_policy: Any = field(default=None, repr=False)  # Explicit installed OMX session only.
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,

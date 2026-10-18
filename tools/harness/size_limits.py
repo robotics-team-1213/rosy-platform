@@ -63,6 +63,8 @@ STANDALONE = {
     "rosy-palletizing": "operations/processes/palletizing",
     "rosy-world": "operations/world",
     "rosy-cam": "operations/site_ui/cam",
+    "rosy-media": "operations/site_ui/media",
+    "rosy-media-edge": "middleware/media",
 }
 #: D-766 coverage addendum (2026-10-15): files already over their limit when the roots above and
 #: ``.kt`` joined the count. Each may enter the ratchet as a new row once, at no more than this.

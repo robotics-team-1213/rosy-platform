@@ -589,7 +589,8 @@ def test_logs_md_edit_of_an_existing_entry_still_refuses():
 @pytest.mark.parametrize("files, calls_expected, code", [
     # A NEW guard failure stops before the long round (pkg/test never runs).
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert False\n", "pkg/a.py": "x = 2\n"},
-     [[["test/architecture"]], [["test/architecture/test_rule.py::test_rule"]]], 1),  # D-790: rerun alone once
+     [[["test/architecture"]], [["test/architecture/test_rule.py::test_rule"]],  # D-790: rerun alone once
+      [["test/architecture/test_rule.py::test_rule"]]], 1),  # then once on main (MAIN-RED check)
     # Green guards, then the round as selected.
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"},
      [[["test/architecture"]], [["pkg/test", "test/architecture/test_rule.py"]]], 0),
@@ -699,7 +700,7 @@ def test_new_failure_that_fails_again_or_too_many_still_stops(repos, monkeypatch
     calls = _red_once(repos, monkeypatch, alone_codes, ids)
     assert land.main(["--tests", "pkg/test"]) == 1
     assert why in capsys.readouterr().err and git(main, "rev-parse", "HEAD") == before
-    assert len(calls) == (2 if len(ids) == 1 else 1)
+    assert len(calls) == (3 if len(ids) == 1 else 2)  # + the MAIN-RED check on main
     assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
 
 
@@ -708,7 +709,25 @@ def test_safety_root_test_is_never_rerun(repos, monkeypatch, capsys):
     monkeypatch.setattr(land.land_checks, "_safety", lambda wt_, python, ids: list(ids))
     calls = _red_once(repos, monkeypatch, [0])
     assert land.main(["--tests", "pkg/test"]) == 1
-    assert "never retried (D-762)" in capsys.readouterr().err and len(calls) == 1
+    assert "never retried (D-762)" in capsys.readouterr().err and len(calls) == 2  # + the MAIN-RED check
+
+
+def test_new_failure_that_also_fails_on_main_is_named_main_red(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before, shas = git(main, "rev-parse", "HEAD"), []
+
+    def run(invocations, logs, sha="HEAD", *args, **kwargs):  # red everywhere, main included
+        shas.append(sha)
+        for log in logs:
+            log.write_text("F [100%]\nFAILED pkg/test/test_a.py::test_a - AssertionError\n1 failed\n", encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    captured = capsys.readouterr()
+    assert shas[-1] == before and "MAIN-RED pkg/test/test_a.py::test_a" in captured.out
+    assert "Main is broken, not this branch" in captured.err and git(main, "rev-parse", "HEAD") == before
 
 
 def test_branch_on_the_pre_rewrite_history_is_refused(repos, monkeypatch, capsys):

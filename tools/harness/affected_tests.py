@@ -413,7 +413,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
                 add(path, f"changed test file {path}")
             continue
         module = repo.module_for(path)
-        referencing = repo.referencing_tests(path)
+        referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
         for test in referencing:
             add(test, f"references {path}")
         if module:

@@ -77,6 +77,21 @@ def test_logout_erases_local_session_and_revokes_family(receiver):
     assert any(path == 'revoke' for path, _ in calls)
 
 
+def test_media_session_check_does_not_use_offline_or_ten_second_grace(receiver):
+    from hashlib import sha256
+    client, _, _, active = receiver
+    cookie = session(client)
+    session_id = sha256(cookie.encode()).hexdigest()
+    assert hasattr(client, 'media_session_active'), 'D-789 needs strict online session revalidation'
+    assert client.media_session_active(session_id) is True
+    active[0] = 'offline'
+    assert client.media_session_active(session_id) is False
+    active[0] = True
+    assert client.media_session_active(session_id) is True
+    active[0] = False
+    assert client.media_session_active(session_id) is False
+
+
 def test_expired_flow_and_external_return_are_refused(receiver):
     client, clock, _, _ = receiver
     for target in ['//evil.test', 'https://evil.test', '/pilot?token=secret', '/api/stop']:

@@ -54,6 +54,19 @@ services:
       - /var/lib/rosy/fleet.sqlite3
       - --tasks-db
       - /var/lib/rosy/fleet.sqlite3
+      # D-796: additive advisory context/log mirror on the site host only. The
+      # fleet.sqlite3 ledger above stays the single source of truth; absent the
+      # service/secret the flags are simply not passed.
+      - --context-db-host
+      - postgres
+      - --context-db-port
+      - "5432"
+      - --context-db-name
+      - rosy_context
+      - --context-db-user
+      - rosy
+      - --context-db-password-file
+      - /run/secrets/postgres_password
       - --robot-credential-key-file
       - /run/secrets/robot_credential_key
       - --tls-cert
@@ -111,6 +124,7 @@ services:
       - site_cert
       - site_key
       - site_ca
+      - postgres_password
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -126,6 +140,9 @@ services:
       timeout: 3s
       retries: 3
       start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks: [site_backend, robot_egress]
 
   vision:
@@ -195,6 +212,45 @@ services:
       start_period: 15s
     networks: [site_backend]
 
+  # D-796: optional site-host context/log store. It is an additive mirror of the
+  # D-640 advisory journal only — the Fleet SQLite ledger stays the single source
+  # of truth. It lives on the internal site network: the port is never published
+  # and no robot, AI PC or model PC connects to it. Less hardened than fleet and
+  # vision (stock upstream image, so read_only with tmpfs and a minimal cap set)
+  # — see the D-796 ADR. An absent image.tags entry fails the stack loudly.
+  postgres:
+    image: rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}
+    command:
+      - postgres
+      - -c
+      - "max_connections=${ROSY_SITE_PG_MAX_CONNECTIONS:-50}"
+    environment:
+      POSTGRES_DB: rosy_context
+      POSTGRES_USER: rosy
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    secrets:
+      - postgres_password
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+      - /var/run/postgresql:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U rosy -d rosy_context"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [site_backend]
+
   proxy:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
     build:
@@ -248,6 +304,7 @@ services:
 volumes:
   sighting_data:
   vision_state:
+  pg_data:
 
 networks:
   site_backend:
@@ -268,6 +325,8 @@ secrets:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/vision_preview_secret
   robot_credential_key:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/robot_credential_key
+  postgres_password:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/postgres_password
   site_cert:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.crt
   site_key:
