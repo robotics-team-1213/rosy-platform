@@ -10,7 +10,7 @@ from fleet.server.site_users import hash_password
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 
-PASSWORD = "correct horse"
+from test_password_session import TYPED as PASSWORD  # noqa: E402  shared fixture value
 HASH = hash_password(PASSWORD)
 BASE = "https://rosy-site.local:8443"
 ORIGIN = {"Origin": BASE}
