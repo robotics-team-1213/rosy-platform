@@ -16,13 +16,16 @@ commissioning caps (PWM 20, Current 50) keep the follower from following. This w
 
 No independent stop exists while LeRobot holds the bus: keep a hand on the follower power switch.
 
-  record_session.py --config record-config.json --caps caps.json [--teleop-only]
+  record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
 caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs)
+A task card (the layout, phases, success and failure labels decided before recording) is copied
+verbatim with its sha256 into session.json, so review knows which design an episode was recorded under.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -116,8 +119,12 @@ class Session:
                 state[motor] = f"error: {exc}"
         return state
 
-    def execute(self, config_path: Path, caps: dict, *, teleop_only: bool) -> dict:
+    def execute(self, config_path: Path, caps: dict, *, teleop_only: bool, task_card: Path | None = None) -> dict:
         record = {"config": str(config_path), "caps": caps, "teleop_only": teleop_only, "started": time.time()}
+        if task_card is not None:
+            text = task_card.read_bytes()
+            record["task_card"] = {"path": str(task_card), "sha256": hashlib.sha256(text).hexdigest(),
+                                   "text": text.decode("utf-8")}
         validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
         saved = self._with_follower(self.check_idle)
         record["saved_caps"] = saved
@@ -168,6 +175,7 @@ def main(argv=None):
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--caps", required=True, type=Path)
     parser.add_argument("--teleop-only", action="store_true")
+    parser.add_argument("--task-card", type=Path, help="task design card to embed in session.json")
     args = parser.parse_args(argv)
     caps = load_caps(args.caps)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -186,7 +194,7 @@ def main(argv=None):
 
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl,
                       run=lambda command: subprocess.call(command), log=log)
-    record = session.execute(args.config, caps, teleop_only=args.teleop_only)
+    record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
     Path("session.json").write_text(json.dumps(record, indent=2, default=str))
     raise SystemExit(record.get("exit_code") or 0)
 

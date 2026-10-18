@@ -167,3 +167,16 @@ def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
     path.write_text(json.dumps({str(k): v for k, v in caps.items()}))
     with pytest.raises(SystemExit):
         m.load_caps(path)
+
+
+def test_the_task_card_is_embedded_verbatim_with_its_hash(tmp_path):
+    import hashlib
+    card = tmp_path / "task-card.yaml"
+    card.write_text("task_id: strawberry-out-and-back
+revision: 1
+", encoding="utf-8")
+    arm, leader = follower(), leader_arm()
+    s, _ = session(arm, leader)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True, task_card=card)
+    assert record["task_card"]["sha256"] == hashlib.sha256(card.read_bytes()).hexdigest()
+    assert "strawberry-out-and-back" in record["task_card"]["text"]
