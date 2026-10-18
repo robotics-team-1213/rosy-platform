@@ -58,7 +58,7 @@
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
-12188 site_ui/console
+12177 site_ui/console
 981 site_ui/console/console.js
 756 site_ui/console/line-stuck.js
 952 site_ui/console/map-view.js

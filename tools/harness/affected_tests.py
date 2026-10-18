@@ -479,7 +479,8 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
 
 def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
     """A SUITE_SHARDS suite's files in balanced groups (Fleet by measured seconds); [] if unsplit."""
-    n, fleet = SUITE_SHARDS.get(entry["name"], 1), entry["name"] == "fleet"
+    n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
+    fleet = entry["name"] == "fleet"
     files = sorted(t for t in repo.test_files if _under(t, entry["invocations"][0][0])) if n > 1 else []
     groups, loads = [[] for _ in range(n)], [0] * n
     for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
@@ -508,6 +509,7 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             entries.append({"name": "modules", "invocations": modules, "ros": "overlay", "gating": False})
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
+        whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
             split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
