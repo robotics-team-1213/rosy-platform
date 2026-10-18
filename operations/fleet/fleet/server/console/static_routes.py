@@ -98,6 +98,8 @@ CONSOLE_ASSETS = {
     "device-watch.js": ("device-watch.js", "application/javascript"),
     "device-watch.css": ("device-watch.css", "text/css"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
+    "robot-video.js": ("shared/robot-video.js", "application/javascript"),  # D-801
+    "robot-video.css": ("shared/robot-video.css", "text/css"),
     "power-action.js": ("shared/power-action.js", "application/javascript"),
     "area-nav.js": ("shared/area-nav.js", "application/javascript"),
 }

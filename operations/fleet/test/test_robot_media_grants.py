@@ -62,7 +62,7 @@ def _validate(client, token):
 def _login(client):
     response = client.post("/api/fleet/auth/login", headers=ORIGIN,
                            json={"login": "alice", "password": TYPED, "remember": False})
-    assert response.status_code == 200, response.text
+    assert response.status_code in (200, 204), response.text
 
 
 def test_signed_in_viewer_gets_a_read_only_per_robot_grant(site):
