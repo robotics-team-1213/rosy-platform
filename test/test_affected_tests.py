@@ -447,9 +447,23 @@ def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
     invocations = [e["invocations"][0] for e in matrix]
     assert invocations == [["test/test_land.py"], *full, ["test/test_affected_tests.py"]]
     assert [e["name"] for e in matrix] == [f"affected-{i + 1}" for i in range(len(matrix))]
-    assert all(e["gating"] and e["ros"] == "overlay" for e in matrix)
+    assert all(e["gating"] for e in matrix)
+    assert [e["ros"] for e in matrix] == ["overlay", *["none"] * len(full), "overlay"]
     fleet = [p for inv in full for p in inv]
     assert sorted(fleet) == sorted(p for p in repo.test_files if p.startswith("operations/fleet/test/"))
+
+
+def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
+    """PR #96 (2026-10-18): gateway rclpy tests that main runs under ros: none ran under overlay on a PR."""
+    repo = affected.Repo.load(ROOT)
+    sel = affected.Selection("affected", [], invocations=[
+        ["middleware/core/gateway/test/test_node_wiring.py", "test/test_land.py", "--ignore=x"]])
+    matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
+    assert [(e["ros"], e["invocations"][0]) for e in matrix] == [
+        ("none", ["middleware/core/gateway/test/test_node_wiring.py", "--ignore=x"]),
+        ("overlay", ["test/test_land.py", "--ignore=x"])]
+    assert affected._full_tier_ros("integrations/simulation/gazebo/test/test_x.py") == "overlay"
+    assert affected._full_tier_ros("middleware/devices/pinky/bringup/test/test_y.py") == "base"
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
