@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
 - 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
 - 2026-10-17 · uncommitted · 원격 main 기준 충전 배포 통합 검사 보완
 - 2026-10-17 · uncommitted · reviewed final station deployment source
 - 2026-10-17 · uncommitted · deployment safety gap remediation
-- 2026-10-17 · uncommitted · station deployment main integration
