@@ -9302,6 +9302,13 @@ osy-d395-s1d\`.
 - 증거: 7fa484c528의 공식 원격 pre-push는 네 묶음 모두 종료했다. 각각 517 pass/2 fail, 11180 pass/12 fail/523 skip, 5610 pass/1 fail/157 skip, 5903 pass/1 fail/316 skip이며 전부 NEW로 처리했다. 이벤트 검사는 두 묶음에 중복된다. 검사 기준 완화나 known_failures 추가 없이 원인별 수정 후 새 SHA를 재검증한다.
 - 보안: provenance JSON의 원래 줄 형식을 복원하고 이 브랜치에 없는 peer fixture의 정확한 10개 기록만 제거한다. 추가 공개 source/SDK 값은 기존 path·원본 줄 SHA256·정확한 값 결속 방식으로 독립 검토하며 scanner 규칙을 바꾸지 않는다.
 - gate 변화: 없음. 이 검사와 수동적인 소프트웨어 배포는 실제 자동 충전·이안·암 작업 활성화나 현장 수용이 아니다.
+
+## 2026-10-18 · uncommitted · 새 SD 배포 계획과 운영 절차 (feat/pinky-sd-ready)
+
+- 변경: `plans/2026-10-18-pinky-sd-ready.md`에 단일 명령의 새 카드 준비, 기존 작성기 재사용, 첫 부팅·자동 업데이트 검증 순서를 기록했다. 첫 장치 런북에 준비물, Wi-Fi 보안 입력, 등록부 복원, 기록 로그·receipt 완료 판정과 읽기 전용 상태 확인을 추가했다.
+- 증거: 기존 SD·first-boot·D-412 코드 확인 및 네이티브 PowerShell fixture 검증 6개 PASS. 최신 이미지 성공 실행의 현재 Actions artifacts와 조회한 release의 `.img.xz` 목록은 비어 있어, 이미지 확보를 미완료 단계로 남겼다.
+- gate 변화: 없음. 빌드 성공, 서명 이미지, 매체 readback, 실기 부팅·자동 업데이트를 서로 대체하지 않는다.
+
 ## 2026-10-18 · uncommitted · D-793 OMX 학습 정책의 실물 실행 승인 관문
 
 - 변경: 학습 산출물은 L0 등록만 하고 L1–L3·제한 사용은 Fleet API의 사람 승인으로만 연다는 ADR D-793(Proposed)을 추가했다. 승인 창(L3 15분/상한 30분, 제한 사용 8시간)과 실행 lease(기본 1초/상한 2초)를 나누고, 위험 상황은 HOLD 뒤 확인 요청으로 남겨 API로만 푼다. 실물 owner의 private 설정 `learned_policy` 기동 거부와 실제 도달 확인을 첫 구현 순서로 정했다.
