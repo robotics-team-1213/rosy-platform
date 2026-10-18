@@ -75,6 +75,29 @@ dataset.save_episode()
 dataset.finalize()
 assert dataset.meta.total_frames == 1 and dataset.meta.total_episodes == 1
 robot._client = None
+from dataclasses import replace
+from rosy.integrations.robots.omx.deployment import deployment_report
+token_file = Path(sys.argv[2])/'core-token'
+token_file.write_text('private-fixture-token')
+probe_config = SimpleNamespace(robot=replace(config, token_file=str(token_file)), policy=None)
+probes = []
+class ReadOnlyClient:
+    def __init__(self, *args, **kwargs):
+        self.info = dict(policy_revision='a'*64, simulation=True, units='rad',
+                        joint_names=['joint1','joint2'], camera=dict(name='front', shape=[3,2,2]))
+    def connect(self):
+        probes.append('GET policy')
+    def disconnect(self):
+        raise AssertionError('a preflight must not stop an existing session')
+lerobot_robot_rosy_omx.CoreArmClient = ReadOnlyClient
+simulation = deployment_report(probe_config, target='sim')
+assert simulation['ready'] is True and simulation['device_execution'] is False
+physical = deployment_report(probe_config, target='real')
+assert physical['ready'] is False
+assert 'PHYSICAL_POLICY_RUNTIME_CLOSED' in physical['blockers']
+assert physical['policy_revision'] == 'a'*64
+assert probes == ['GET policy', 'GET policy']
+assert 'private-fixture-token' not in str(physical)
 print('ROSY_OMX_PLUGIN_PASS')
 '''
     result = subprocess.run([str(PYTHON), '-c', script, str(ROOT), str(tmp_path)],
