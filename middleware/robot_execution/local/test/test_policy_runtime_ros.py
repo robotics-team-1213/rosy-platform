@@ -143,6 +143,13 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
         runtime.action_port._event_sink = trace_sink
         install_transport_fixture(session,runtime,policy_root)
         if with_core:
+            # Cold web imports precede the original capture and lease clocks.
+            from types import SimpleNamespace
+            sys.path[:0] = [str(ROOT/'middleware/core'/part) for part in ('api','gateway','services','events')]
+            from fastapi.testclient import TestClient
+            from core_api_web.api.app import create_app
+            from core_api_web.api.v1.common import operator
+            from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
             from test_omx_policy_session import CameraSnapshot
             rgb = bytes(range(12))
         if with_inference:
@@ -209,12 +216,6 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             command,runner,api,parent=submit_parent(session,journal,tmp_path,
                 candidate_factory=prepare_inference if with_inference else None)
         elif with_core:
-            from types import SimpleNamespace
-            sys.path[:0] = [str(ROOT/'middleware/core'/part) for part in ('api','gateway','services','events')]
-            from fastapi.testclient import TestClient
-            from core_api_web.api.app import create_app
-            from core_api_web.api.v1.common import operator
-            from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
             port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera_capture), principal='fixture-operator')
             app = create_app({}, SimpleNamespace(arm_policy=port,
                 safety=SimpleNamespace(estop=False, estop_listeners=[])))
