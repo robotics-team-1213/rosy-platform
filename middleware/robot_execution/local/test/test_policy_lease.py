@@ -156,3 +156,38 @@ def test_fleet_transport_never_uses_environment_proxy(tmp_path, monkeypatch):
     monkeypatch.setenv('http_proxy', 'http://proxy.invalid:8888')
     client = FleetPolicyHttp('http://127.0.0.1:1234', tmp_path/'token', loopback_sim=True)
     assert not any(isinstance(handler, ProxyHandler) and handler.proxies for handler in client._opener.handlers)
+
+
+def test_fleet_transport_has_total_deadline_for_dripping_body(tmp_path):
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import threading
+    import time
+
+    stopped = threading.Event()
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args): pass
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-Length', '22')
+            self.end_headers()
+            try:
+                for part in [b' ']*20+[b'{}']:
+                    self.wfile.write(part)
+                    self.wfile.flush()
+                    if stopped.wait(.04): break
+            except (BrokenPipeError, ConnectionResetError): pass
+    server = HTTPServer(('127.0.0.1', 0), Handler)
+    worker = threading.Thread(target=server.serve_forever)
+    worker.start()
+    token = tmp_path/'token'
+    token.write_text('test-only')
+    client = FleetPolicyHttp(f'http://127.0.0.1:{server.server_port}', token, loopback_sim=True)
+    try:
+        started = time.monotonic()
+        with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
+        assert time.monotonic()-started < .5
+    finally:
+        stopped.set()
+        server.shutdown()
+        worker.join(2)
+        server.server_close()
