@@ -1,0 +1,95 @@
+"""Actual loopback Fleet HTTP/auth/SQLite with explicitly synthetic SIM approvals."""
+from contextlib import contextmanager
+from hashlib import sha256
+from pathlib import Path
+import secrets
+import socket
+import sys
+import threading
+import time
+from types import SimpleNamespace
+
+import uvicorn
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
+               str(ROOT/'middleware/robot_execution/local/src')]
+from rosy.execution.local.policy_lease import FleetPolicyHttp
+from fleet.server.app import create_app
+from fleet.server.console import FleetConsole
+from fleet.server.mission_service import MissionService
+from fleet.server.mission_store import MissionStore
+from fleet.server.proposal_store import ProposalStore
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
+
+
+class HttpServer:
+    def __init__(self, app):
+        self.app, self.worker, self.listener = app, None, None
+
+    def __enter__(self):
+        try:
+            self.listener = socket.socket()
+            self.listener.bind(('127.0.0.1', 0))
+            self.listener.listen()
+            self.url = 'http://127.0.0.1:'+str(self.listener.getsockname()[1])
+            self.server = uvicorn.Server(uvicorn.Config(self.app, log_level='warning', lifespan='off'))
+            self.worker = threading.Thread(target=self.server.run, kwargs={'sockets':[self.listener]})
+            self.worker.start()
+            deadline = time.monotonic()+10
+            while not self.server.started:
+                if not self.worker.is_alive() or time.monotonic() >= deadline:
+                    raise AssertionError('own HTTP fixture did not start')
+                time.sleep(.01)
+            return self
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        if self.worker is not None:
+            self.server.should_exit = True
+            self.worker.join(5)
+            assert not self.worker.is_alive(), 'own HTTP fixture did not exit'
+        if self.listener is not None:
+            self.listener.close()
+
+    def __exit__(self, *args):
+        self.close()
+
+
+@contextmanager
+def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
+                   rig_revision='sim-rig', calibration_revision='cal-7'):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    db = tmp_path/'fleet.sqlite3'
+    names = {'sim-admin-a':'policy-admin', 'sim-admin-b':'policy-admin', 'sim-device':'service'}
+    credentials = {name: secrets.token_urlsafe(32) for name in names}
+    users = {sha256(credentials[name].encode()).hexdigest():dict(principal_id=name, role=role)
+             for name, role in names.items()}
+    app = create_app(FleetConsole([], []), site_users=users,
+        task_service=FleetTaskService(FleetTaskStore(db), robot_ids=()),
+        mission_service=MissionService(MissionStore(db)), proposal_store=ProposalStore(db),
+        omx_instances={workcell_id:instance_id}, start_task_dispatcher=False)
+    with HttpServer(app) as server:
+        clients = {}
+        for name, token in credentials.items():
+            path = tmp_path/(name+'.private')
+            path.write_text(token)
+            clients[name] = FleetPolicyHttp(server.url, path, loopback_sim=True)
+        base = '/api/fleet/workcells/'+workcell_id+'/policy'
+        admin, second = clients['sim-admin-a'], clients['sim-admin-b']
+        revisions = dict(rig_revision=rig_revision, calibration_revision=calibration_revision)
+        for stage in ('L0','L1','L2','L3'):
+            proposal = admin('POST', base+'/proposals', dict(operator_confirmed=True,
+                policy_revision=policy_revision, to_stage=stage, evidence_sha256='a'*64,
+                note='synthetic SIM acceptance only', **revisions))
+            second('POST', base+'/proposals/'+proposal['proposal_id']+'/decision',
+                   dict(operator_confirmed=True, approve=True))
+        window = admin('POST', base+'/windows', dict(operator_confirmed=True,
+            policy_revision=policy_revision, kind='supervised', scope='SIM fixed reach', minutes=1, **revisions))
+        window = second('POST', base+'/windows/'+window['window_id']+'/approve', dict(operator_confirmed=True))
+        yield SimpleNamespace(server=server, admin=admin, device=clients['sim-device'], window=window,
+            db=db, base=base, rig_revision=rig_revision, calibration_revision=calibration_revision,
+            credentials=credentials, scope='SIM fixed reach')
