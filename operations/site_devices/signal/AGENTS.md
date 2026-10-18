@@ -52,7 +52,7 @@ Host pytest (Windows OK) — README↔펌웨어 대조는 소스 스캔이다. �
 
 ### Common Patterns
 
-Contract in README; implementation in `firmware/rosy_signal/rosy_signal.ino`; client in `operations/fleet/fleet/server/signals.py` (G-S3).
+Contract in README; implementation in `firmware/rosy_signal/rosy_signal.ino`; client in `operations/fleet/fleet/server/rightofway/signals.py` (G-S3).
 
 ## Dependencies
 
