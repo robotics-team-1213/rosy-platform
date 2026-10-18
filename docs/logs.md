@@ -1476,7 +1476,7 @@
 - 변경: `ROSY API & Protocol Reference.md` v1.12→v1.13. API-002 에 Corrective 변경 분류 추가. §8 을 CORE 다섯 패키지의 발행 지점과 일치시켰다 — payload 키 정정(`nav.stuck` `timeout_s`, `mode.changed` `by`, `nav.started` `{goal, by}`, `nav.completed`·`system.shutdown` `{}`, `nav.lane_lost` `{mode, reason, lost_after_s}`, `slam.*`·`presence.*` 분리), `nav.lane_lost` 심각도 warning, 미문서 이벤트 추가(`docking.*` 11종, `battery.deep`, `battery.shutdown_request_failed`, `localization.initialpose`, `nav.line_mode_changed`, `nav.traffic_policy_*` 3종, `sim.traffic_signal_changed`), `nav.blocked` 미구현 표시, `config.changed` key 에 `dds.rmw`. `test/test_line_follow_contract_docs.py` 의 버전 고정을 v1.13 으로 갱신. 보관 브랜치 `archive/2026-09-22/fix/event-catalogue-drift` 의 v1.8 정정을 현재 main 으로 다시 적용한 것이다.
 - 증거: `src/core/core/test/test_event_catalogue.py` 가 카탈로그↔발행 지점(이름·키·심각도·발신)을 양방향으로 고정한다 — 문서 수정 전 7 failed, 후 전부 통과.
 - gate 변화: 없음.
-- 결정: 이미 발행되는 값이 사실이다. 심각도는 `config.changed`·`swarm.aborted` 만 코드를 고쳤고(core 로그 참조) 나머지는 문서를 코드에 맞췄다. 정정은 버전 노트에 양쪽 값을 `A(≠B)` 로 남긴다.
+
 
 ## 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
 
@@ -9075,3 +9075,10 @@ osy-d395-s1d\`.
 - 변경: `cli.py`의 홀더 import와 `ledger/`의 상호 참조, 세 시험 파일의 import를 평탄 이름으로 바꾼다. `context_log.py`는 비밀번호 파일 경로를 그대로 보관하고 `_dsn`에서 dict 순서(host·port·dbname·user·connect_timeout·password)로 DSN을 조립한다 — 값은 파일에서 읽은 뒤에만 문자열에 들어가고, `deploy/robot/pinky_pro/release/secret_scan.py`의 assignment 규칙을 우회하지 않는다. `context_options.py`는 `args.context_db_password_file`을 그대로 읽는다. `compose.pairing.yaml`의 fleet `command`는 base를 통째로 반복해야 하므로(`test_site_pairing_deploy.py`), D-796 `--context-db-*` 네 플래그를 base와 같은 순서로 넣는다.
 - 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
 - gate 변화: 없음.
+
+## 2026-10-18 · e81c3f1a4 · test(omx): 실제 SDK 프로세스와 CORE socket을 native ROS에 연결한다
+
+- 변경: 기존 native session fixture에 시험용 client 교환 지점만 추가하고, 실제 LeRobot 0.4.4 별도 프로세스가 loopback uvicorn CORE를 통해 RGB·관절 관측, 목표 송신, ROS 결과 대기, disconnect 정지까지 수행하는 opt-in 회귀를 추가했다. ROS 서버에 도착한 목표도 비교한다. 생산 기본값·owner 허용 목록·lease 발급·승인·실물 배포는 바꾸지 않았다.
+- 증거: `2fd2b168e8` RED, `e81c3f1a4` 원격 socket 1 passed/0 skipped/NEW 0. 최종 목표 비교 보강은 후속 opt-in native 검증 대상이다. `docs/validation/core-omx-runtime-2026-10-18/result.md`.
+- 정정: Fleet lease 발급기는 이미 있으며 `device_delivery=not_connected`다. 빠진 것은 장치 clock/session에 대한 신뢰된 전달·검증·갱신·폐기와 운영 조립이다. 합성 인증·고정 목표의 시험을 학습 정책·Gazebo/실물 이동으로 주장하지 않는다. gate 변화 없음.
+- 결정: 이미 발행되는 값이 사실이다. 심각도는 `config.changed`·`swarm.aborted` 만 코드를 고쳤고(core 로그 참조) 나머지는 문서를 코드에 맞췄다. 정정은 버전 노트에 양쪽 값을 `A(≠B)` 로 남긴다.

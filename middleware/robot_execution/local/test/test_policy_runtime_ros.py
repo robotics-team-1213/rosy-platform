@@ -110,7 +110,10 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             nodes.append(node)
             own(node.destroy_node)
         received, server_canceled, fixture_shutdown = threading.Event(), threading.Event(), threading.Event()
+        received_goal = {}
         def execute(handle):
+            received_goal.update(joint_names=list(handle.request.trajectory.joint_names),
+                positions=list(handle.request.trajectory.points[-1].positions))
             received.set()
             if revoke:
                 deadline = time.monotonic()+6
@@ -242,6 +245,8 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             assert result.accepted
             command=result.command_id
         assert received.wait(3)
+        if with_core:
+            assert received_goal == dict(joint_names=['joint_1', 'joint_2'], positions=[.101, .001])
         if revoke:authority[0] = False
         deadline = time.monotonic()+7
         record = journal.read(command)
@@ -296,6 +301,7 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
                  'no trained quality/task/hardware/authenticated Fleet' if with_inference else
                  'isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet')
         proof = dict(scope=scope, core_http_admission=with_core,
+            core_socket_sdk=core_client is not None, received_ros_goal=received_goal,
             fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000,
                                 poll_period_s=.01),
             short_deadline_acceptance=False,revoke=revoke,journal=record,

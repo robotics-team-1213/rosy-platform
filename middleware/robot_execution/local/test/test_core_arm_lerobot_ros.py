@@ -121,6 +121,7 @@ def test_real_plugin_socket_to_native_ros_and_stop(tmp_path):
                             terminal_status=record['events'][-1]['status'], hold=session.hold_reason,
                             auth_scope='synthetic principal override; no Fleet/device authority',
                             physical_motion_verified=False), indent=2))
+                        print((tmp_path/'socket-receipt.json').read_text(), flush=True)
                         print('CORE_LEROBOT_NATIVE_SOCKET_PASS', flush=True)
                         return commands[0]
                     finally:
