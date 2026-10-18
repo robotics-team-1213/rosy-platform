@@ -263,6 +263,7 @@ def test_fleet_context_close_interrupts_own_pending_request(tmp_path):
             caller = threading.Thread(target=call)
             caller.start()
             assert entered.wait(1)
+            assert caller.is_alive() and client._process.poll() is None
             client.close()
             caller.join(1)
             assert not caller.is_alive() and errors == ['closed']
