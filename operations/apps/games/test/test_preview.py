@@ -129,9 +129,12 @@ def test_preview_server_serves_the_web_common_manifest_assets():
         ticker = urlopen(url + "common/hold-ticker.js", timeout=2)
         assert ticker.headers["Content-Type"].startswith("text/javascript")
         assert b"createHoldTicker" in ticker.read()
-        with pytest.raises(HTTPError) as error:
-            urlopen(url + "common/shared-assets.json", timeout=2)
-        assert error.value.code == 404
+        # The R mark sits in a folder; the board drew no mark while folders were refused.
+        assert urlopen(url + "common/brand/mark.svg", timeout=2).headers["Content-Type"].startswith("image/svg+xml")
+        for name in ("shared-assets.json", "brand/../tokens.css", "brand/../../host/preview.py"):
+            with pytest.raises(HTTPError) as error:
+                urlopen(url + "common/" + name, timeout=2)
+            assert error.value.code == 404, name
     finally:
         server.close()
 

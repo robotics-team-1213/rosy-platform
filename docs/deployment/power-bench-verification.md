@@ -139,3 +139,51 @@ bash /opt/rosy/deploy/robot/verify/verify-power.sh --csv /tmp/power-samples.csv
 체크리스트를 돌리지 않았다면 `standby_stop` 은 `false` 로 남는다. 이 경우
 PWR-005 코드 경로는 존재하고 단위 검증도 되어 있지만 **실측 절감은 0** 이다.
 설계 문서와 ADR D-25 는 이 상태를 전제로 쓰여 있다.
+
+## 8. 기기별 전원 정책 벤치 (D-440)
+
+기기별 전원 정책(D-24 개정, [D-440](../adr/D-440-per-device-power-policy.md))은 한 스위치
+`power.device_policy.enabled` 뒤에 있다. 기본 `false` 이며 이 절을 통과하기 전에는
+켜지 않는다. 한 로봇에서만 시험할 때는 그 로봇의 오버레이
+(`/var/lib/rosy/core/.rosy/rosy.yaml`)에 쓴다. 기기 하나만 시험하려면
+`power.device_policy.devices.<기기>.enabled: true` 를 쓴다(스위치보다 우선).
+시간은 같은 오버레이의 `power.idle_after_s`·`standby_after_s` 로 줄여 시험해도 된다.
+
+```yaml
+power:
+  idle_after_s: 30
+  standby_after_s: 90
+  device_policy:
+    enabled: true
+```
+
+체크리스트 — 로봇은 바퀴를 띄우거나 막힌 곳에 두고, 모든 항목을
+`docs/validation/device-power-<YYYY-MM-DD>/` 에 증거로 남긴다.
+
+- [ ] 1. 스위치 꺼짐(기본): STANDBY 까지 무명령으로 둔 뒤 `GET /api/v1/power` 의 `devices[]` 가 모두
+      `level: on`, `managed: false`, `motion_ready: true`. `power/devices` 토픽이 한 번도 발행되지 않는다.
+- [ ] 2. 대시보드·Pilot 화면을 열어 둔 채(WS 구독·GET 폴링) 무명령이면 IDLE→STANDBY 로 간다.
+- [ ] 3. 초음파 잡음: 사람이 없는 상태로 30 분 STANDBY 유지, `power.wake` 이벤트 0 건
+      (`proximity` 웨이크 없음). 손을 0.4 s 이상 대면 깨어난다.
+- [ ] 4. 배터리 WARNING 아래에서 시작해도 `warning_standby_after_s` 뒤 STANDBY 로 간다.
+- [ ] 5. 스위치 켬, STANDBY: LiDAR 모터 정지(소리·전류), `camera_detect_node` 로그
+      `camera paused by power policy`, `camera/blocked` 가 true. 전류계로 ACTIVE/STANDBY 전류 기록.
+- [ ] 6. IDLE: perception `reduced` — `camera/telemetry` 주기가 약 1/4.
+- [ ] 7. STANDBY 에서 `POST /api/v1/teleop`(MANUAL): 즉시 `power.wake{reason: command}`,
+      `motion_ready=false` 동안 바퀴 0, 스캔이 다시 들어오고 `wake_ready_s`(2.0 s)가 지난 뒤에만 움직인다.
+      실측 스핀업이 2.0 s 보다 길면 로봇 패키지 `core.yaml` 의 `wake_ready_s` 를 고친다.
+- [ ] 8. 확인 없는 웨이크: LiDAR 커넥터를 뺀 채(또는 드라이버를 내린 채) 7번을 되풀이하면
+      `motion_ready` 가 계속 false 이고 바퀴는 60 s 뒤에도 0 이다.
+- [ ] 9. STANDBY 중 CORE 만 재시작(`rosy-core` 컨테이너): 다시 뜬 CORE 가 LiDAR·카메라를 켜고,
+      첫 스캔과 `wake_ready_s` 전에는 `motion_ready=false` 다. ACTIVE 에서 CORE 를 재시작하면
+      이미 도는 LiDAR 가 `start_motor` 를 한 번 더 받는다 — 스캔이 끊기거나 모터가 멈칫하지 않는다.
+- [ ] 10. 카메라 재기동: `power/device_ready` 에 camera false → true(워밍업 뒤), 그 전까지
+      라인 추종이 blocked 로 서 있다. 실측 시간이 `camera.wake_ready_s`(3.0 s)보다 길면 고친다.
+- [ ] 11. STANDBY 중 E-Stop(`POST /api/v1/safety/stop`)과 teleop 워치독이 그대로 동작한다.
+- [ ] 12. Nav2 가 떠 있는 상태에서 STANDBY 5 분 → 웨이크 → 목표 주행이 재초기화 없이 된다(§5 와 같은 관찰).
+- [ ] 13. Fleet 콘솔: 로봇 카드가 상시/유휴/절전을 보이고, 절전 버튼이 IDLE 로봇을 STANDBY 로,
+      깨우기 버튼이 ACTIVE 로 바꾼다. 일하는 로봇의 절전 버튼은 막혀 있다.
+- [ ] 14. 모두 통과하면 `rosy_default.yaml` 의 `power.device_policy.enabled` 를 `true` 로 바꾸는
+      커밋을 독립 리뷰와 함께 올린다.
+
+바퀴 토크 해제(STANDBY 에서 모터 드라이버 토크 off)는 이 절의 범위가 아니다. 별도 ADR 후속이다.

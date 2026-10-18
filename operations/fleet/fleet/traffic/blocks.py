@@ -85,7 +85,7 @@ class Layout:
                 parts = tuple((u, length - s1, length - s0) for u, s0, s1 in reversed(parts))
             for unit, s0, s1 in parts:
                 if spans and spans[-1].unit == unit:
-                    spans[-1] = Span(unit, spans[-1].d0, base + s1, arc.forward)
+                    spans[-1] = Span(unit, spans[-1].d0, base + s1, arc.forward, spans[-1].entry)
                 else:
                     spans.append(Span(unit, base + s0, base + s1, arc.forward,
                                       arc_ids[k - 1] if k and s0 == 0.0 else ""))

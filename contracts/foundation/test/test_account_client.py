@@ -77,6 +77,21 @@ def test_logout_erases_local_session_and_revokes_family(receiver):
     assert any(path == 'revoke' for path, _ in calls)
 
 
+def test_media_session_check_does_not_use_offline_or_ten_second_grace(receiver):
+    from hashlib import sha256
+    client, _, _, active = receiver
+    cookie = session(client)
+    session_id = sha256(cookie.encode()).hexdigest()
+    assert hasattr(client, 'media_session_active'), 'D-789 needs strict online session revalidation'
+    assert client.media_session_active(session_id) is True
+    active[0] = 'offline'
+    assert client.media_session_active(session_id) is False
+    active[0] = True
+    assert client.media_session_active(session_id) is True
+    active[0] = False
+    assert client.media_session_active(session_id) is False
+
+
 def test_expired_flow_and_external_return_are_refused(receiver):
     client, clock, _, _ = receiver
     for target in ['//evil.test', 'https://evil.test', '/pilot?token=secret', '/api/stop']:
@@ -178,3 +193,47 @@ def test_profile_drops_response_when_local_session_is_logged_out(receiver):
         return original(endpoint, fields)
     client.post = post
     assert client.profile(cookie) is None
+
+
+@pytest.mark.parametrize('elapsed', [11, 270])
+def test_profile_never_introspects_or_renews_and_denial_keeps_session(receiver, elapsed):
+    client, clock, calls, _ = receiver
+    cookie = session(client)
+    subject = client.resolve(cookie).sub
+    clock[0] += elapsed
+    calls.clear()
+    denied = [False]
+    def post(endpoint, fields):
+        calls.append(endpoint)
+        assert endpoint == 'userinfo'
+        if denied[0]:
+            raise AccountDenied('Profile refused')
+        return {'account_id':subject, 'login':'alice', 'display_name':'Alice'}
+    client.post = post
+    with client.transaction() as db:
+        before = tuple(db.execute('SELECT * FROM app_account_sessions').fetchone())
+    assert client.profile(cookie)['account_id'] == subject
+    assert calls == ['userinfo']
+    denied[0] = True
+    assert client.profile(cookie) is None
+    with client.transaction() as db:
+        assert tuple(db.execute('SELECT * FROM app_account_sessions').fetchone()) == before
+    clock[0] += 301
+    calls.clear()
+    assert client.profile(cookie) is None
+    assert calls == []
+
+
+def test_profile_transport_timeout_is_shorter_than_auth(receiver, monkeypatch):
+    from core_common.protocol import account_client
+    client, _, _, _ = receiver
+    timeouts = []
+    class Opener:
+        def open(self, request, *, timeout):
+            timeouts.append(timeout)
+            raise TimeoutError()
+    monkeypatch.setattr(account_client, 'build_opener', lambda *args: Opener())
+    for endpoint in ('userinfo', 'introspect', 'token'):
+        with pytest.raises(AccountUnavailable):
+            client._post(endpoint, {'token':'test'})
+    assert timeouts == [1, 3, 3]

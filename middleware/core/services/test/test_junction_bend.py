@@ -185,18 +185,46 @@ def test_arc_time_bound():
     assert decision.linear == 0.
 
 
-def _seconds_until_timeout(look):
-    """A bend commanded but not moving: seconds until 'timeout', with the crosswalk state `look`."""
+def _seconds_until_timeout(look, leased=False):
+    """A bend commanded but not moving: seconds until 'timeout', with the crosswalk state `look`
+    (leased: under a trip lease with no authority, NONE, D-760 2)."""
     rig = armed_rig()
     until(rig, 'bending')
+    rig.m.authority_leased = lambda: leased
     rig.m._xwalk.status = lambda now: {'state': look} if look else None
     start = rig.now
     for _ in range(3000):
         decision, status = site_step(rig)
         if status.junction.state != 'bending':
             assert (status.junction.state, status.junction.reason) == ('aborted', 'timeout')
+            assert (decision.linear, decision.angular, status.state, status.reason) == (0., 0., 'HOLD', 'junction_aborted')
             return rig.now-start
     raise AssertionError('never timed out')
+
+
+def test_a_30_s_holding_authority_stands_the_bend_clock_and_the_bend_goes_on():
+    """Gazebo m33c: rosy_02 stood mid B_W2 bend behind a parked robot and the bend ended 'timeout' after
+    the 15 s credit. D-760 개정 4: a HOLDING authority (Fleet alive, saying wait) stands the phase clock
+    for as long as it lasts; once FREE the bend goes on and reacquires."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    rig.m._authority_on = lambda: True
+    rig.m._authority_state = lambda now: ('HOLDING', 0., 'authority_end')
+    for _ in range(600):                                                         # 30 s
+        decision, status = site_step(rig)
+        assert status.junction.state == 'bending'
+        assert (decision.linear, decision.angular) == (0., 0.)
+    assert status.regulation_wait == 'authority'
+    del rig.m._authority_on, rig.m._authority_state                              # FREE
+    decision, status = site_step(rig, move=True)
+    assert status.junction.state == 'bending' and decision.linear > 0
+    until(rig, 'reacquiring')
+
+
+def test_a_missing_authority_keeps_the_cap_then_the_bend_aborts():
+    """No authority under a trip lease (NONE; EXPIRED alike): the phase clock stands 15 s at most,
+    then 'timeout' and HOLD junction_aborted, so a stale maneuver never resumes later."""
+    assert _seconds_until_timeout(None, leased=True) == pytest.approx(_seconds_until_timeout(None)+15., abs=.3)
 
 
 def test_time_under_a_crosswalk_look_is_not_the_bends():
@@ -473,6 +501,18 @@ def test_backward_travel_while_armed_does_not_bring_the_arc_closer():
     assert rig.x == pytest.approx(.25, abs=.01)           # the arc start did not move
 
 
+def test_a_short_odom_gap_while_bending_holds_and_the_bend_goes_on():
+    """Gazebo m27: a 0.6 s odom gap mid-bend aborted the bend ('odom') and ended the trip. Within the
+    phase limit a missing pose holds the maneuver; a new odom run still aborts (below)."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    for _ in range(12):                                   # 0.6 s without a pose
+        decision, status = site_step(rig, pose=False)
+        assert status.junction.state == 'bending'
+    assert status.reason == 'junction_pose_gap' and decision.linear == 0.
+    until(rig, 'reacquiring')
+
+
 def test_odom_restart_while_armed_aborts():
     rig = armed_rig()
     site_step(rig, move=True)
@@ -728,7 +768,8 @@ def test_a_malformed_map_entry_is_refused(bad):
 def test_map_entry_belongs_to_bend():
     rig = _wall_rig()
     with pytest.raises(ValueError):
-        rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=dict(map_entry=_entry(rig)))
+        # D-759 rev 1: a left/right turn takes one too (test_junction_turn_map_entry.py)
+        rig.m.set_junction('straight', 'J1', 10., None, None, None, expect=dict(map_entry=_entry(rig)))
 
 
 def test_the_own_line_rule_reads_the_map_entry_axis():
@@ -841,3 +882,81 @@ def test_a_resend_places_a_heading_the_first_receipt_could_not():
     assert send(rig, map_entry=_entry(rig, lane_yaw=.2)) == (True, 1, 'armed')   # a placed one stays
     assert rig.m._junction['map_entry']['yaw'] == pytest.approx(.1, abs=1e-9)
     assert send(rig) == (True, 1, 'armed') and 'yaw' in rig.m._junction['map_entry']
+
+
+
+def _no_anchor_run(rig, error=.2, seen=True, refusal=None, limit=100):
+    """From receipt on the camera never reads straight (Gazebo m35, B_W4): every tick is `error`
+    off centre, or the lane is out of view. The rig steps 1 cm along x until the pass leaves 'armed'."""
+    _camera_reads(rig, error)
+    if refusal:
+        rig.m._maneuver_refusal = lambda now: refusal
+    for _ in range(limit):
+        _, status = site_step(rig, dx=.01, seen=seen)
+        if status.junction.state != 'armed':
+            break
+    return status
+
+
+@pytest.mark.parametrize('lane_deg, enabled, state, reason', [
+    (None, True, 'aborted', 'no_anchor'), (29., True, 'bending', None), (31., True, 'aborted', 'no_anchor'),
+    (29., False, 'aborted', 'no_anchor')])
+def test_a_usable_map_entry_stands_in_for_a_missing_straight_anchor(lane_deg, enabled, state, reason):
+    """D-759 note (m35): no straight tick. A usable map heading (flag on, within 30 deg of the body's
+    yaw) starts the pass from the body on a tracking tick near the lane; else no_anchor as before."""
+    rig = _wall_rig(enabled=enabled)
+    send(rig, **({} if lane_deg is None else dict(map_entry=_entry(rig, lane_yaw=math.radians(lane_deg)))))
+    status = _no_anchor_run(rig)
+    assert (status.junction.state, status.junction.reason) == (state, reason)
+    assert status.junction.map_entry_used is (state == 'bending')
+    if state == 'bending':
+        assert rig.m._junction['anchor'][:3] == pytest.approx((rig.x, rig.y, math.radians(29.)), abs=1e-9)
+        assert rig.x == pytest.approx(.25, abs=.011)       # the earliest arc start
+    else:
+        assert rig.m.status().state == 'HOLD' and rig.x < .26
+
+
+def test_far_off_the_lane_with_no_anchor_the_map_entry_waits_then_aborts():
+    """Review H1: the path would start at the body, so a tick 0.6 off centre (3x the straight bound
+    is 0.3) never starts it; the pass stays armed to the latest arc start, then no_anchor."""
+    rig = _wall_rig(y=.04)
+    send(rig, map_entry=_entry(rig))
+    status = _no_anchor_run(rig, error=.6)
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'no_anchor')
+    assert rig.x == pytest.approx(.36, abs=.011) and status.junction.map_entry_used is False
+
+
+def test_a_lane_out_of_view_with_no_anchor_never_starts_the_map_entry_pass():
+    rig = _wall_rig()
+    send(rig, map_entry=_entry(rig))
+    _camera_reads(rig, .6)
+    while rig.x < .27:                                     # past the earliest arc start, waiting
+        _, status = site_step(rig, dx=.01)
+    assert status.junction.state == 'armed'
+    for _ in range(100):
+        decision, status = site_step(rig, seen=False)      # in the lead window: the camera's own hold
+        assert status.junction.state in ('armed', 'aborted') and decision.linear == 0.
+    assert status.junction.reason == 'lane_lost_before_bend' or status.junction.state == 'armed'
+
+
+def test_a_stale_anchor_with_a_usable_map_entry_starts_from_the_body():
+    """The last straight tick is more than BEND_LEAD_M back at the take-over: no anchor."""
+    rig = _wall_rig()
+    send(rig, map_entry=_entry(rig))
+    while rig.x < .02:
+        site_step(rig, dx=.01)                             # straight ticks: the anchor
+    while rig.x < .3:                                      # a D-422 hold keeps it armed, not a camera hold
+        site_step(rig, dx=.01, points=[(.07, 0.)])
+    status = _no_anchor_run(rig)
+    j = rig.m._junction
+    assert status.junction.state == 'bending' and j['anchor'][3]-.02 > bend.BEND_LEAD_M  # 0.02 m was straight
+    assert status.junction.map_entry_used is True and j['anchor'][:3] == pytest.approx((rig.x, rig.y, 0.), abs=1e-9)
+
+
+def test_a_refused_pass_did_not_use_the_map_entry():
+    """Review M2: the record says used only once the pass starts."""
+    rig = _wall_rig()
+    send(rig, map_entry=_entry(rig))
+    status = _no_anchor_run(rig, refusal='stuck')
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'stuck')
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (False, None)

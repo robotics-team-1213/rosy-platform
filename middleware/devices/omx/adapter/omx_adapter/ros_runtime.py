@@ -30,6 +30,7 @@ from .command_owner import (
     TrajectoryCommand,
 )
 from .pick_place_runner import PhaseDispatch
+from .joint_state_intake import JointStateIntake
 from .ros_goal_contract import RosGoalEvent, canonical_ros_goal_id
 
 
@@ -363,7 +364,7 @@ class RosArmCommandRuntime:
         self.owner_clock = owner_clock
         self.poll_period_s = poll_period_s
         self._policy_binding = None
-        self._sequence = 0
+        self._joint_state_intake = JointStateIntake(config)
         self._goal_event_lock = threading.RLock()
         self._phase_event_sinks: dict[str, Callable[[RosGoalEvent], bool]] = {}
         self.latest_joint_state: JointStateSnapshot | None = None
@@ -410,21 +411,15 @@ class RosArmCommandRuntime:
         )
 
     def _on_joint_state(self, message: JointState) -> None:
-        self._sequence += 1
-        reported_positions = {
-            name: value for name, value in zip(message.name, message.position)
-        }
-        positions = {
-            name: reported_positions[name]
-            for name in self.owner.config.joint_names
-            if name in reported_positions
-        }
-        snapshot = JointStateSnapshot(
-            positions=positions,
-            sequence=self._sequence,
-            received_at=self.monotonic(),
-            calibration_revision=self.owner.config.calibration_revision,
-        )
+        try:
+            snapshot = self._joint_state_intake.snapshot(
+                message.name, message.position,
+                stamp_ns=message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec,
+                source_now_ns=self._node.get_clock().now().nanoseconds, received_at=self.monotonic())
+        except (TypeError, ValueError, OverflowError):
+            # Rejected packets cannot refresh the state or watchdog. Loss of valid
+            # feedback reaches the existing stale-state HOLD and cancel path.
+            return
         self.latest_joint_state = snapshot
         def deliver_owner(state):
             binding = self._policy_binding

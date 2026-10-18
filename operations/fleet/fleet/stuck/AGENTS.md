@@ -8,7 +8,7 @@
 
 ## Purpose
 
-D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plans/2026-10-10-fleet-stuck-subpackage.md`). Fleet picks one answer per open lane stuck by fixed rules, or hands it to a human; CORE re-checks every answer (D-407). Own P6 size unit (`SIZE_UNITS` in `test/architecture/test_module_structure.py`).
+D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plans/2026-10-10-fleet-stuck-subpackage.md`). Fleet picks one answer per open lane stuck by fixed rules, or hands it to a human; CORE re-checks every answer (D-407). Own P6 size unit (`test/architecture/size_units.txt`, D-766).
 
 ## Key Files
 
@@ -22,6 +22,7 @@ D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plan
 | `realign.py` | D-622 standalone REALIGN (R9): opt-in `realign_robots`/recovery-area config, sweep geometry, evidence selection; pure, returns a request or a hold reason |
 | `loop.py` | `StuckResolverLoop` — 1 s poll + hub wake, board update, sends answers as `fleet-resolver` |
 | `ai_facts.py` | D-577 AI PC facts, heartbeat and proposals (`ai_observer`, no command path), routes and audit |
+| `cli_config.py` | `fleet console` adapters from `--site-config` `fleet.stuck_resolver`/`fleet.ai_first` to `ResolverConfig`/`AiFirst`; no I/O beyond reading that YAML |
 
 ## For AI Agents
 

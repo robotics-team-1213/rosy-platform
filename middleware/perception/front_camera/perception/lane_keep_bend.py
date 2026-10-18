@@ -90,6 +90,27 @@ def bend_target(bends, half, radius, target, strategy):
     return _pursuit_point(origin, along, radius)[0], f"bend_{side}", math.inf
 
 
+def near_run(recovered, ends, half, parallel, taken, limits):
+    """[line] for a rejected steep line: the lane edge before it curves into it (m20 roundabout exit), or [].
+    `recovered`: the frame's paint refitted favouring the heading (extract_lines' blob retry: every usable,
+    flank, cell and length check kept), so the steep line's drop band cannot eat the run. Taken: the nearest
+    one under the steep angle starting nearer than the steep line's near end and within `band` of that end's
+    offset there; that end past the ambiguous offset and inside the lane width. None when that side has a
+    `parallel` line a half-width long, or its run is already `taken` (one per side)."""
+    steep, ambiguous, band = limits
+    near = min(ends, key=lambda p: float(p[0]))
+    x, y = float(near[0]), float(near[1])
+    if not ambiguous < abs(y) <= 2.0 * half or any((v > 0.0) == (y > 0.0) and far - start >= half for v, start, far in parallel):
+        return []
+    fits = [line for line in nearest_first(recovered) if abs(line["direction"][1]) <= math.sin(steep)
+            and min(float(line["centre"][0] + line["direction"][0] * t) for t in line["along"]) < x
+            and abs(_lateral_at(line["centre"], line["direction"], x) - y) <= band]
+    if not fits or any(fits[0] is line for line in taken):
+        return []
+    fits[0]["near_run"] = True  # kept out of the corner and junction rules
+    return fits[:1]
+
+
 def stop_short(target, room):
     """`target` pulled back along its ray to no further than `room` ahead."""
     target = np.asarray(target, float)

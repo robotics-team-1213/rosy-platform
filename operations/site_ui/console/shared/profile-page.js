@@ -62,6 +62,8 @@ async function load(expected = null) {
   return profile;
 }
 function failure(error) {
+  $('profile-grants').hidden = true;
+  $('profile-grant-list').replaceChildren();
   if (error.code === 'PROFILE_ACCOUNT_CHANGED') {
     for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
     $('profile-content').hidden = true;

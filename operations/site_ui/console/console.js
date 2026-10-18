@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { cardTripLine, placeOptions } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";
@@ -16,9 +17,9 @@ import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { pinPrefill } from "./localization-badge.js";
 import { createVisionView } from "/console/assets/vision-view.js";
-import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
+import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
-import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
+import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
@@ -27,6 +28,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
+import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
@@ -36,18 +38,6 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
-// D-741 6·7 — 주소의 view가 영역을 고른다: 레일의 현재 위치와 그 영역의 하위 탐색, 그 안의 현재 화면(show)이 따라온다.
-const area = new URLSearchParams(location.search);
-const areaNav = [...document.querySelectorAll(".ui-subnav")].find(node => node.dataset.area === area.get("view"));
-if (areaNav) {
-  areaNav.hidden = false;
-  const show = [...areaNav.querySelectorAll("a")].some(link => link.href.endsWith(`show=${area.get("show")}`)) ? area.get("show") : null;
-  for (const link of document.querySelectorAll(".doc-tabs a, .ui-subnav a")) {
-    const to = new URL(link.href).searchParams;
-    if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === show)) link.setAttribute("aria-current", "page");
-    else link.removeAttribute("aria-current");
-  }
-}
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
@@ -59,13 +49,14 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
-const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
+const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
+  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
-const raised = area.get("view") !== "records" ? el("work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
+const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? "work-new" : "work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
-if (raised.id !== "work-overview") {
+if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;
   if (inbox.choice !== "inbox") inbox.select("evidence");
@@ -123,6 +114,7 @@ function cancelAllNotice(message = "", details = false) {
 const connectionView = createConnectionView({scope: pageScope, el});
 
 function markLocked(reason = "auth") {
+  resetRobotApps();
   confirmedAction.cancel();
   stopNotice();
   cancelAllNotice();
@@ -146,7 +138,7 @@ function markLocked(reason = "auth") {
   el("birdseye-toggle").setAttribute("aria-pressed", "false");
   connectionView.show(reason, auth.token);
   if (firstLock) {
-    Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
+    Object.assign(view, {robots: [], robotPeers: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
       stateLoaded: false, stateUnavailable: false, focusRobot: null, selected: null, pinning: null, cursor: null, formation: null, signals: {},
       traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
     visionView.reset(); visionView.refreshSources(); trackingView.reset();
@@ -178,6 +170,7 @@ const view = {
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
+  robotPeers: [], // authenticated peer catalogue; navigation only, never control authority
   robotNames: {}, // enrolled robot_id -> verified discovery hostname; presentation only
   queueChoice: null,  // D-540 3: the queue row the operator opened or closed {key, open}
   selected: null, // 목표 지정을 기다리는 robot_id
@@ -339,6 +332,7 @@ function render() {
   roster.fillQueues();
   inbox.refresh();
   roster.trip.syncConvoy();  // D-540 (d) 대형·대열
+  if (!el("work-new").hidden) paintMove();
   lineStuck.render();
   deviceWatch.render();
   tripReplan.render();
@@ -400,6 +394,7 @@ async function refreshHealthz() {
   paintSitePath();
 }
 pageScope.onDispose(() => {
+  resetRobotApps();
   statePollInFlight = false;
   view.focusRobot = null;
   view.pinning = null;
@@ -471,105 +466,10 @@ function disarmGoal(reason) {
   log(reason, "bad");
 }
 
-let scannerLost = false;
-
-async function refreshDiscovery() {
-  const life = pageScope.capture();
-  life.check();
-  // D-410 — 발견 목록·등록은 설치 화면에 있다. 운용 화면은 검색기 건강과
-  // 고정 주소 판정(로스터 안내)만 이 요청에서 얻는다.
-  if (auth.locked) return;
-  if (!discoveryGate.due()) return;
-  try {
-    const snapshot = await call("/api/fleet/discovery");
-    life.check();
-    discoveryGate.ok();
-    let names = { ...view.robotNames };
-    try {
-      const listing = await call("/api/fleet/enrollment/robots");
-      life.check();
-      names = Object.fromEntries((listing.robots || [])
-        .filter((row) => row.robot_id && row.hostname)
-        .map((row) => [row.robot_id, row.hostname]));
-    } catch (err) {
-      if (err.name === "AbortError") return;
-    }
-    for (const device of snapshot.devices || []) {
-      if (device.status === "enrolled" && device.robot_id && device.name) names[device.robot_id] = device.name;
-    }
-    if (JSON.stringify(names) !== JSON.stringify(view.robotNames)) {
-      view.robotNames = names;
-      render();
-      await incidents.refresh();
-    }
-    const pending = snapshot.scanner_online
-      ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
-    const pendingNote = el("discovery-pending");
-    const summary = pending.length
-      ? `발견됐지만 미등록 ${pending.length}대: ${pending.map((device) => device.name).join(", ")}` : "";
-    if (pendingNote.firstElementChild.textContent !== summary) pendingNote.firstElementChild.textContent = summary;
-    pendingNote.hidden = !summary;
-    await refreshAddresses();
-    life.check();
-    // 검색기 임대(45 s)가 끊기면 새 주소 안내가 멈춘다 — 대기와 구별해 알린다.
-    if (snapshot.scanner_state === "expired") {
-      if (!scannerLost) log("발견 검색기 끊김 — 로봇 발견·주소 이동 안내 불가", "bad");
-      scannerLost = true;
-      return;
-    }
-    if (scannerLost && snapshot.scanner_online) log("발견 검색기 다시 연결됨", "good");
-    scannerLost = false;
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    if (auth.locked) return;
-    if (discoveryGate.fail(err.status, err.code) === "absent") return;
-  }
-}
-
-// 고정 주소 판정은 발견과 같은 주기로 읽는다. 못 읽으면 까닭 줄을 지운다(짐작하지 않는다).
-let addressText = "";
-
-// D-410 — 주소 이동 대화상자(로봇 화면 코드)는 설치 화면에 있다. 운용 화면의
-// 이동 안내는 그 화면으로 가는 링크로만 말한다.
-function moveLink() {
-  const node = document.createElement("a");
-  node.href = "/console/install";
-  node.textContent = "설치 화면에서 이동";
-  return node;
-}
-
-async function refreshAddresses() {
-  const life = pageScope.capture();
-  life.check();
-  let payload = null;
-  try {
-    payload = await call("/api/fleet/discovery/addresses");
-    life.check();
-  } catch (_err) {
-    if (_err.name === "AbortError") return;
-    payload = null;
-  }
-  const banner = el("address-banner");
-  const text = renumberBanner(payload, view.robots);
-  banner.hidden = !text;
-  if (text && banner.textContent !== text) banner.textContent = text;
-  // 옮길 수 있는 로봇마다 한 줄과 그 로봇의 지름길. 옮기기마다 그 로봇의 화면 코드를 묻는다.
-  const movable = movableRobots(payload);
-  const next = JSON.stringify([payload?.robots || [], auth.role, auth.principal]);
-  if (next !== addressText) {
-    addressText = next;
-    el("address-movable").replaceChildren(...movable.map((entry) => {
-      const item = document.createElement("li");
-      const label = document.createElement("span");
-      label.textContent = `${entry.robot_id} → ${entry.seen_addresses[0]}`;
-      item.append(label, moveLink());
-      return item;
-    }));
-    view.addresses = addressMap(payload);
-    render();
-  }
-  el("address-drift").hidden = !text && movable.length === 0;
-}
+const deviceDirectory = createDeviceDiscovery({pageScope, auth, discoveryGate, view, call, render, incidents, el, log});
+const refreshDiscovery = () => deviceDirectory.refreshDiscovery();
+const refreshRobotApps = () => deviceDirectory.refreshRobotApps();
+function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 
 async function refreshAuthorization() {
   const life = pageScope.capture();
@@ -581,7 +481,9 @@ async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
     life.check();
-    if (auth.role !== identity.role || auth.principal !== identity.principal_id) { confirmedAction.cancel(); workView.reset(); }
+    if (auth.role !== identity.role || auth.principal !== identity.principal_id) {
+      resetRobotApps(); confirmedAction.cancel(); workView.reset();
+    }
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     showSession(identity);
@@ -603,6 +505,7 @@ async function refreshAuthorization() {
       workView.refresh(),
       mapView.refresh(),
       refreshState(),
+      refreshRobotApps(),
       refreshDispatchControl(),
       refreshDiscovery(),
       formation.refreshFormation(),
@@ -914,6 +817,25 @@ view.openFormationWorkspace = () => {
   heading.focus({preventScroll: false});
 };
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
+// D-763 6·9 — 새 작업의 이동은 로봇 카드의 운행 폼(card-trip.js) 그 자체다: 같은 계획·시작 요청, 같은 거절.
+// 이동이 종류 목록에 서는지는 서버의 종류 목록이 정한다(work-view.js showKinds, D-763 9). 꺼진 단추로 보이지 않는다.
+function paintMove() {
+  const pick = el("work-move-robot"), box = el("work-move-form"), focused = document.activeElement;
+  el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
+  const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
+  const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
+  el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";
+  if (el("work-move").hidden || (focused?.tagName === "SELECT" && box.contains(focused))) return;  // as roster.place
+  const controls = () => [...box.querySelectorAll("ui-button, select")], at = controls().indexOf(focused);
+  if (robot && !roster.trip.section(robot)) roster.trip.focus(id);  // another robot, or reopened after a start
+  box.replaceChildren(...(robot ? [roster.trip.section(robot)] : []));
+  controls()[at]?.focus({preventScroll: true});
+}
+pageScope.listen(el("work-new-move"), "click", ({currentTarget: button}) => {
+  for (const name of ["aria-pressed", "aria-expanded"]) button.setAttribute(name, String(button.getAttribute(name) !== "true"));
+  render();
+});
+pageScope.listen(el("work-move-robot"), "change", () => render());
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
@@ -930,7 +852,7 @@ function refreshDiagnostics() {
   };
   diag("diag-state", view.stateUnavailable ? "불가"
     : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
-  diag("diag-scanner", scannerLost ? "끊김"
+  diag("diag-scanner", deviceDirectory.scannerLost ? "끊김"
     : "정상");
   const robotErrors = view.robots
     .filter((r) => r.error)
@@ -1042,6 +964,7 @@ pageScope.interval(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 pageScope.interval(refreshDiscovery, MAP_MS);
+pageScope.interval(refreshRobotApps, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);

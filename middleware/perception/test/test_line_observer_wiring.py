@@ -125,6 +125,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
         _native_core_law=(SimpleNamespace(read=lambda *_: None) if native_law_missing else None),
         _drivable_required=native_law_missing,
         _cmd_twist=None, _cmd_stamp=None, _cmd_stale_frames=0, _keep_last_stamp=None,
+        _odom_pose=None, _odom_stamp=None,  # D-556: keep hands the keeper a fresh pose or None
         _ground=lambda *_: object(), _paint_for=lambda *_: (None, 'threshold'),
         _ground_label=lambda: 'NOMINAL', _ground_error=None, _paint_half_width_m=0.0125,
         _camera_mode_uses_ground=lambda: True, _stamp=lambda: 10.1,
@@ -203,6 +204,7 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]
     assert params["lane_corner_turning"] is True  # D-495: junction HOLD on robots
+    assert params["lane_odom_veto_enabled"] is False  # D-556 candidate: SOURCE only
     # D-495: keep_debug carries the flag; it is how CORE learns junction_turn support.
     keep = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in keep
@@ -251,7 +253,7 @@ def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
     """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
     source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._odom_pose, frame, ground" not in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 6  # 6th: keep, D-556
 
 
 def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
@@ -259,7 +261,7 @@ def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
     assert "LaneBoundaryTracker" in source
     assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
     assert "self._centre_tracker.update(" in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 6  # 6th: keep, D-556
 
 
 def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
@@ -295,11 +297,11 @@ def test_route_modes_need_a_graph_and_a_route():
     assert params["route"] == []
     assert params["route_start"] == []
     builder = (ROOT / "sensors/line_observation/route_followers.py").read_text(encoding="utf-8")
-    assert "build_route_follower(mode, graph_path, route, route_start," in source
+    assert "build_route_follower(mode, graph_path, route, route_start," in builder
     assert "RouteCameraFollower" in builder and "RouteMapFollower" in builder
     assert "RouteHybridFollower" in builder
     assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
-    assert "route modes need lane_graph_path, route and route_start" in source
+    assert "route modes need lane_graph_path, route and route_start" in builder
 
 
 def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
@@ -324,7 +326,7 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
 ])
 def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time, admitted):
     """Execute the ROS wrapper method without ROS so alternate configs cannot open route mode."""
-    tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'sensors/line_observation/route_followers.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
                   and n.name == '_build_route_follower')
     built, warnings = object(), []

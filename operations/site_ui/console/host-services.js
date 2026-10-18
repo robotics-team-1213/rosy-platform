@@ -2,16 +2,7 @@
 // 가드가 이미 읽은 메모리 여유·부하를 보여주고, 닫힌 서비스 제어만 보낸다.
 // 프로세스 종료와 로봇 재부팅은 이 화면의 동작이 아니다.
 
-const STATE_LABEL = {
-  ok: "정상",
-  bad: "나쁨",
-  "load-high": "부하 높음",
-  unreachable: "응답 없음",
-  quiet: "새벽 창",
-  error: "확인 실패",
-};
-
-const HOST_LABEL = {site: "관제 PC", ai: "AI PC", model: "모델 PC"};
+import {HOST_LABEL, stateLabel, resourceText, driftText, gib, hostHealth} from "/console/assets/host-health.js";
 
 function node(tag, className, text) {
   const el = document.createElement(tag);
@@ -20,44 +11,42 @@ function node(tag, className, text) {
   return el;
 }
 
-function stateLabel(state) {
-  return STATE_LABEL[state] || state || "확인 불가";
-}
-
-function resourceText(resources) {
-  if (!resources || typeof resources !== "object") return "여유 수치 없음";
-  const parts = [];
-  if (Number.isFinite(resources.avail_pct)) parts.push(`메모리 여유 ${resources.avail_pct}%`);
-  if (Number.isFinite(resources.swap_pct)) parts.push(`스왑 ${resources.swap_pct}%`);
-  if (Number.isFinite(resources.load) && Number.isFinite(resources.cores)) {
-    parts.push(`부하 ${resources.load}/${resources.cores}코어`);
-  }
-  if (Number.isFinite(resources.uptime_s)) parts.push(`가동 ${resources.uptime_s}초`);
-  if (Array.isArray(resources.down) && resources.down.length) {
-    parts.push(`멈춘 유닛 ${resources.down.join(", ")}`);
-  }
-  return parts.length ? parts.join(" · ") : "여유 수치 없음";
-}
-
-function driftText(drift) {
-  if (!drift) return "바라는 상태 확인 불가";
-  const driftN = (drift.drift || []).length;
-  const errorN = (drift.errors || []).length;
-  const waitN = (drift.awaiting_approval || []).length;
-  if (!driftN && !errorN) {
-    return waitN ? `바라는 상태 차이 없음 · 승인 대기 ${waitN}` : "바라는 상태 차이 없음";
-  }
-  return `바라는 상태 차이 ${driftN} · 오류 ${errorN} · 승인 대기 ${waitN}`;
-}
-
-function guardRows(guard) {
-  if (!guard) return [node("p", "hint", "가드 보고 없음. 관제 PC의 rosy-host-guard가 아직 남긴 파일이 없습니다.")];
-  return Object.keys(guard).sort().map((name) => {
-    const row = guard[name] || {};
-    const line = node("p", "hint");
-    line.append(node("strong", "", `${name} · ${stateLabel(row.state)} `));
-    line.append(document.createTextNode(resourceText(row.resources)));
-    return line;
+function reportRows(body) {
+  return Object.keys(HOST_LABEL).map((name) => {
+    let row = body.guard?.[name];
+    if (name === "site" && !row && body.drift?.recovery) {
+      row = {time: body.drift.time, source: "local", state: body.drift.recovery.state,
+        resources: body.drift.recovery.resources, recovery: body.drift.recovery};
+    }
+    row ||= {};
+    const recovery = row.recovery;
+    const {current, verified, label, healthy} = hostHealth(row);
+    const card = node("section", "install-step");
+    card.dataset.host = name;
+    card.dataset.state = healthy ? "ok" : "unverified";
+    const head = node("div", "robot-head");
+    const tag = node("ui-tag", "", label);
+    tag.setAttribute("status", healthy ? "ok" : "warn");
+    head.append(node("h3", "", HOST_LABEL[name]), tag);
+    card.append(head);
+    const received = Number.isFinite(row.time) ? new Date(row.time * 1000).toLocaleString() : "없음";
+    card.append(node("p", "hint", `마지막 호스트 점검 ${received}`));
+    if (current && !["unreachable", "quiet", "error"].includes(row.state)) {
+      card.append(node("p", "hint", resourceText(row.resources)));
+    }
+    if (verified && !["unreachable", "quiet", "error"].includes(row.state)) {
+      const watchdog = recovery.watchdog || {};
+      const kernel = recovery.kernel || {};
+      card.append(node("p", "hint", `워치독 · ${stateLabel(watchdog.state)} · ${watchdog.timeout_s ?? "미확인"}초`));
+      card.append(node("p", "hint", `커널 복구 · ${stateLabel(kernel.state)} · 재부팅 ${kernel.panic_s ?? "미확인"}초`));
+      card.append(node("p", "hint", `SSH 복구 · ${stateLabel(recovery.ssh?.state)}`));
+      const swap = recovery.swap || {};
+      card.append(node("p", "hint", `swap · ${stateLabel(swap.state)} · ${gib(swap.used_bytes)} / ${gib(swap.total_bytes)}`));
+      card.append(node("p", "hint", `복구 설정 점검 ${new Date(recovery.time * 1000).toLocaleString()}`));
+    } else {
+      card.append(node("p", "hint", "최신 복구 설정을 확인할 수 없습니다."));
+    }
+    return card;
   });
 }
 
@@ -75,7 +64,8 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   }
 
   function paint(body) {
-    report.replaceChildren(node("p", "hint", driftText(body.drift)), ...guardRows(body.guard));
+    const rows = reportRows(body);
+    report.replaceChildren(node("p", "hint", driftText(body.drift)), ...rows);
     const hosts = body.hosts || [];
     const key = JSON.stringify(hosts);
     if (key !== commandKey) {
@@ -83,9 +73,9 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
       paintCommands(hosts);
       onPaint?.();
     }
-    const sawGuard = Boolean(body.guard) && typeof body.guard === "object";
-    status.textContent = sawGuard ? "호스트 여유를 읽었습니다" : "가드 보고 없음";
-    status.setAttribute("status", sawGuard ? "ok" : "neutral");
+    const allHealthy = rows.every((row) => row.dataset.state === "ok");
+    status.textContent = allHealthy ? "PC 3대 정상" : "PC별 점검 결과를 확인하세요";
+    status.setAttribute("status", allHealthy ? "ok" : "warn");
   }
 
   function paintCommands(hosts) {
@@ -146,10 +136,9 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
     try {
       paint(await call("/api/fleet/hosts"));
     } catch (error) {
-      if (status.getAttribute("status") !== "ok") {
-        status.textContent = "호스트 여유를 읽지 못했습니다";
-        status.setAttribute("status", "error");
-      }
+      status.textContent = "호스트 점검 결과를 읽지 못했습니다";
+      status.setAttribute("status", "warn");
+      report.replaceChildren(node("p", "hint", "연결 실패 · 최신 PC 상태를 확인할 수 없습니다."));
       throw error;
     }
   }

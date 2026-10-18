@@ -477,3 +477,41 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
         server.should_exit = True
         worker.join(timeout=20)
         listener.close()
+
+
+def test_robot_card_sleeps_and_wakes_a_robot_through_fleet(fleet_site):
+    """D-440 6: the card's sleep / wake button posts to Fleet, which forwards to CORE's power API."""
+    from playwright.sync_api import expect, sync_playwright
+
+    origin, robots = fleet_site
+    robots["rosy_02"]._state["power"] = {"mode": "ACTIVE", "motion_ready": True}
+    with sync_playwright() as playwright:
+        browser, page, errors, posts = _login(playwright, origin)
+        try:
+            button = _card(page, "rosy_02").locator("ui-button[data-power-action]")
+            expect(button).to_have_attribute("data-power-action", "sleep", timeout=15000)
+            expect(button).to_have_text("절전")
+            button.click()
+            deadline = time.monotonic() + 10
+            while ("power", "sleep") not in robots["rosy_02"].calls and time.monotonic() < deadline:
+                page.wait_for_timeout(100)
+            assert ("power", "sleep") in robots["rosy_02"].calls
+            assert ("/api/fleet/robots/rosy_02/power", '{"action":"sleep"}') in posts
+
+            robots["rosy_02"]._state["power"] = {"mode": "STANDBY", "motion_ready": False}
+            button = _card(page, "rosy_02").locator('ui-button[data-power-action="wake"]')
+            expect(button).to_have_text("깨우기", timeout=15000)
+            button.click()
+            deadline = time.monotonic() + 10
+            while ("power", "wake") not in robots["rosy_02"].calls and time.monotonic() < deadline:
+                page.wait_for_timeout(100)
+            assert ("power", "wake") in robots["rosy_02"].calls
+
+            # A robot that is working cannot be put to sleep from the card.
+            robots["rosy_03"]._state["mode"] = "NAVIGATION"
+            robots["rosy_03"]._state["power"] = {"mode": "ACTIVE", "motion_ready": True}
+            busy = _card(page, "rosy_03").locator('ui-button[data-power-action="sleep"]')
+            expect(busy).to_have_attribute("reason", "일하는 로봇은 절전할 수 없습니다", timeout=15000)
+            assert errors == []
+        finally:
+            browser.close()

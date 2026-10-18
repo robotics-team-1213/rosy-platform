@@ -24,6 +24,8 @@ export ROS_DOMAIN_ID=$((DOMAIN_BASE + ROBOT_NUM))
 # 두 값 모두 같은 로봇 번호 하나에서 나온다 (ADR D-33).
 export ROSY_NAMESPACE="$(printf 'rosy_%02d' "$ROBOT_NUM")"
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+# D-795: localhost discovery even when the lo-only profile below is missing.
+export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_STATIC_PEERS=
 
 PROFILE="$(ros2 pkg prefix bringup)/share/bringup/config/cyclonedds_localhost.xml"
 if [[ -f "$PROFILE" ]]; then

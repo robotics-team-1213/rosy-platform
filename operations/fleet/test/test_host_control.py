@@ -63,10 +63,12 @@ def test_site_units_restart_but_never_stop():
 
 
 def test_only_an_allowlisted_unit_on_that_host_can_stop():
-    assert decide("ai", "stop-unit", "pinky-nav2.service", confirmed=True)["argv"] == (
-        "stop-unit", "pinky-nav2.service")
+    assert decide("ai", "stop-unit", "pinky-backend.service", confirmed=True)["argv"] == (
+        "stop-unit", "pinky-backend.service")
     for host, unit in (("ai", "docker.service"), ("site", "ssh.service"),
-                       ("model", "ollama.service"), ("ai", "pinky-nav2.service;reboot")):
+                       ("model", "ollama.service"), ("ai", "pinky-backend.service;reboot"),
+                       # D-795: cross-host DDS units (AI PC Nav2, rosbridge) are gone.
+                       ("ai", "pinky-nav2.service"), ("ai", "pinky-rosbridge-d12.service")):
         assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
 
 
@@ -133,9 +135,10 @@ def test_vision_cannot_reach_fleet_secrets():
             assert item["source"].endswith("/site-cameras.yaml") and item["read_only"], item
     mounted = str(services["vision"]["volumes"])
     assert "SECRETS_DIR" not in mounted and "host-control" not in mounted
+    # D-796: the fleet service also reads the site context-log store's password.
     own = {"fleet": {"registry_token", "fleet_sighting_token", "discovery_token",
                      "vision_preview_secret", "robot_credential_key", "site_cert", "site_key",
-                     "site_ca"},
+                     "site_ca", "postgres_password"},
            "vision": {"phone_ingress_token", "fleet_sighting_token", "vision_preview_secret",
                       "site_cert", "site_key", "site_ca"},
            "proxy": {"site_cert", "site_key", "site_ca"}}
@@ -365,8 +368,8 @@ def test_helper_refuses_site_stop_and_unknown_role(tmp_path):
     (tmp_path / "conf" / "role").write_text("robot\n")
     assert helper("reboot") == 2
     (tmp_path / "conf" / "role").write_text("ai\n")
-    assert helper("stop-unit", "pinky-nav2.service") == 0
-    assert "systemctl --user --machine=pinky@ --no-block stop pinky-nav2.service" in (
+    assert helper("stop-unit", "pinky-backend.service") == 0
+    assert "systemctl --user --machine=pinky@ --no-block stop pinky-backend.service" in (
         tmp_path / "calls").read_text()
 
 

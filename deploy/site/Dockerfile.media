@@ -1,0 +1,40 @@
+# D-789 T5: site media service (MediaMTX + media authority under one supervisor). Never Fleet.
+# shortcut: base pinned by tag, not digest (no registry access when this was written); pin
+# ubuntu:24.04@sha256:<digest> from `docker buildx imagetools inspect` before the first site install.
+FROM ubuntu:24.04
+
+# MediaMTX release and checksum must equal deploy/site/media-sources.lock.json (amd64 site PC).
+ARG MEDIAMTX_VERSION=v1.21.2
+ARG MEDIAMTX_SHA256=121be6e00397e473a95d83c75f4fcd3819a6af3b0e1a50889cba43ab4fab6a27
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/opt/rosy-venv/bin:$PATH \
+    PYTHONPATH=/opt/rosy/src/media:/opt/rosy/src/contracts/foundation
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl python3 python3-venv \
+    && curl -fsSL -o /tmp/mediamtx.tar.gz \
+       "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_amd64.tar.gz" \
+    && echo "${MEDIAMTX_SHA256}  /tmp/mediamtx.tar.gz" | sha256sum -c - \
+    && install -d /opt/mediamtx && tar -xzf /tmp/mediamtx.tar.gz -C /opt/mediamtx mediamtx LICENSE \
+    && rm -f /tmp/mediamtx.tar.gz \
+    && apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 rosy \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin rosy
+
+COPY deploy/site/requirements-media.txt /opt/rosy/requirements.txt
+COPY deploy/site/mediamtx.yaml /opt/rosy/mediamtx.yaml
+COPY operations/site_ui/media/src/rosy_media/ /opt/rosy/src/media/rosy_media/
+COPY contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
+
+RUN python3 -m venv /opt/rosy-venv \
+    && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \
+    && /opt/rosy-venv/bin/python -c "import rosy_media.main, rosy_media.supervisor" \
+    && rm /opt/rosy/requirements.txt
+
+WORKDIR /opt/rosy
+USER 10001:10001
+ENTRYPOINT ["python3", "-m", "rosy_media.supervisor"]
+CMD ["/run/rosy-media/media-authority.json", "/opt/mediamtx/mediamtx", "/opt/rosy/mediamtx.yaml"]

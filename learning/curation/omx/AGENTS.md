@@ -15,6 +15,7 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 | File | Description |
 |------|-------------|
 | `lerobot_export.py` | `python learning/curation/omx/lerobot_export.py <episode> <output> [--repo-id ...]`: validates the episode, writes the dataset, reads every frame back, copies the source into `rosy_provenance/` |
+| `world_model_dataset.py` | D-782 W1: closed collection sessions (including failed and aborted attempts) into session-split action-conditioned windows with human labels; `load()` checks the receipt digest |
 | `test/test_lerobot_export.py` | Schema, frame and refusal checks; the full LeRobot round trip skips without `lerobot` |
 
 ## For AI Agents

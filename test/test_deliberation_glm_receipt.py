@@ -9,7 +9,7 @@ from rosy.decision.deliberation import canonical
 from test_deliberation_glm_judgment import fixture, opinion
 
 
-def setup():
+def _setup():
     from deploy.ai_pc import deliberation_glm_receipt as bridge
     problem, bound, raw = fixture()
     response = dict(id='response-1', request_id='request-1', model=gate.MODEL,
@@ -26,7 +26,7 @@ def setup():
 
 
 def test_verified_plan_basis_is_distinct_from_observed_charge_and_sdk_cost():
-    bridge, raw, receipt, policy, sdk = setup()
+    bridge, raw, receipt, policy, sdk = _setup()
     normalized, billing = bridge.normalize(raw, sdk, receipt, policy, 16384, 0)
     assert json.loads(normalized.splitlines()[-1])['part']['cost'] == 0
     assert billing['basis'] == 'vendor_included_plan' and billing['marginal_cash_usd'] == 0
@@ -38,7 +38,7 @@ def test_verified_plan_basis_is_distinct_from_observed_charge_and_sdk_cost():
 @pytest.mark.parametrize('change', ['none', 'expired', 'profile', 'job', 'judgment',
                                   'request_id', 'tokens', 'sdk_scope', 'tool', 'limit', 'credential'])
 def test_unknown_or_mismatched_billing_binding_refuses(change):
-    bridge, raw, receipt, policy, sdk = setup()
+    bridge, raw, receipt, policy, sdk = _setup()
     limit = 16384
     if change == 'none': policy = None
     elif change == 'expired': policy = replace(policy, valid_until=0)
@@ -78,7 +78,7 @@ def test_versioned_launcher_default_admission_refuses_before_gateway(monkeypatch
 @pytest.mark.parametrize('change', ['calibration', 'role', 'timeout', 'revision'])
 def test_same_revision_profile_changes_refused_before_sandbox(monkeypatch, change):
     from deploy.ai_pc import deliberation_opencode as module
-    bridge, _, _, policy, _ = setup()
+    bridge, _, _, policy, _ = _setup()
     _, bound, _ = fixture()
     changes = {'calibration': {'calibration_revision': 'cal-v2'}, 'role': {'role': 'primary'},
                'timeout': {'timeout_s': 1}, 'revision': {'profile_revision': 'foreign'}}
@@ -117,7 +117,7 @@ def test_actual_versioned_provider_uses_launcher_host_receipt_not_sdk_cost(monke
     from contextlib import asynccontextmanager
     from deploy.ai_pc import deliberation_opencode as module
     from rosy.decision.deliberation.versioned_cli import VersionedCliProvider
-    bridge, raw, receipt, policy, sdk = setup()
+    bridge, raw, receipt, policy, sdk = _setup()
     problem, bound, _ = fixture()
     caps = replace(bridge.CAPABILITIES, ready=True, isolated=True, cost_verified=True)
     if change == 'wrong_runtime': caps = replace(caps, model_revision='foreign')

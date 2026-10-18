@@ -1788,6 +1788,7 @@
 - 변경: Playwright를 브라우저 fixture의 명시적 opt-in 뒤에 불러온다. opt-in 중 의존성 누락은 오류로 남기며 Fleet CI는 도구 설치 후 ROSY_BROWSER_TESTS=1을 명시한다.
 - 증거: 실제 부모 Chromium에서 카메라 7·시작점 3·픽셀 편집 3 합계 13 passed/201.85s. 후보에서 opt-out 7 SKIP과 의존성 없는 opt-in 7 ERROR를 구분해 확인했다. 런타임 TLS 검사는 완화하지 않았다.
 - gate 변화: SOURCE/LOCAL 브라우저 증거. CI 성공·서명 배포·실제 양쪽 승인과 재연결은 별도다.
+
 ## 2026-10-05 · uncommitted · fix(dialog-target): 카메라 승인·해제 대상 확인
 
 - 변경: 기존 승인·해제 대화상자의 기기 이름과 확인 문자를 따옴표로 구분하고 승인 여부를 질문한다. 레이아웃·UI/UX 리팩터링·API·권한 변경 없음.
@@ -1872,6 +1873,7 @@
 - 변경: T2 probe 테스트가 전역 sys.path 앞에 Gazebo 경로를 넣어 Vision observer를 가리던 문제를 private exact-file 모듈 로더로 닫았다. probe 판정 함수와 런타임은 바꾸지 않았다.
 - 증거: 원래 probe-first/Vision collection 1 ERROR 재현 후 T2/T5/T3/Vision 양방향 각 105 PASS. 기존 generic observer/probe/scenarios 및 sys.path를 보존하는 fresh-process 회귀 포함.
 - gate 변화: 없음. HOST collection 증거이며 ROS/SIM/기기 실행 수용은 아니다.
+
 ## 2026-10-05 · uncommitted · fix(ui): 목표 취소·관제 적합·미지원 카메라 조회 복구
 
 - 변경: 시작점 설정을 기본 접힌 disclosure로 묶고 모든 입력·저장·상태·지도 표시는 유지했다. wide 지도42dvh 규칙이 뒤의 기본54dvh 규칙에 덮이지 않도록 실제 CSS 우선순위를 바로잡았다. v2 카메라의 인증된 지원 조회가 성공하기 전에는 legacy source 목록을 추가 조회하지 않는다.
@@ -1993,6 +1995,7 @@
 - 변경: 운용·설치 비상 정지 응답과 운용 준비 순서·접속 안내의 좌우 여백을 본문 패널과 같게 했다.
 - 증거: 1920/390/320px 운용·설치 좌우 끝 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: UI/UX 회차의 `captures/fleet-width/`.
 - gate 변화: Fleet LOCAL 폭 근거 추가. 전체 G2/G3와 현장 사용자 독회는 HOLD다.
+
 ## 2026-10-06 · uncommitted · uiux(fleet): 로봇 카드 행동 폭과 데스크톱 높이
 
 - 변경: 로봇 카드의 동등한 목표 지정·취소 버튼을 같은 폭으로 배치하고, 1920px 본문 하단 5px 넘침을 제거했다.
@@ -2095,6 +2098,7 @@
 - 변경: `site-cameras.yaml` 검증과 `SightingService`가 `calibration_source: field_boundary`(코너 마커 없음, `corner_world_m` 필수)를 받고, payload의 `calibration_source`까지 일치 검사한다(불일치 409 CALIBRATION_MISMATCH). `GET /api/fleet/site-map` source에 `calibration_source`를 노출하고 field 소스는 `corner_marker_ids: null`이다. 설치 화면 영상 패널에 "자동 보정 (필드)" 보기 모드(리스 rectification `mode:"auto"`, 배지 "자동 보정 미리보기"/"자동 보정 대기")를 추가했다. 관제(/console) 화면은 기존대로 원본만(D-410).
 - 증거: `test_sightings_api.py`·`test_site_map_api.py` 확장(field 수용·양방향 불일치·설정 검증·site_map 노출), node 웹 시험 통과(`vision-badge.test.mjs` auto 케이스 포함).
 - gate 변화: 없음. sighting은 표시 전용(D-257 5항)·정책 증거 아님을 유지.
+
 ## 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
 
 - 변경: 배치가 계산되기 전 또는 미리보기 결과가 무효가 된 동안 팔레트 선택과 빈 20rem 평면도를 함께 숨긴다. 배치가 있는 성공 결과에서만 다시 보인다.
@@ -2208,6 +2212,7 @@
 - 변경: `/console` 3 : 2 배치(왼쪽 지도, 오른쪽 열 예외 큐·등록 로봇·카메라 썸네일·대형·신호·기록), `roster.js` `attentionItems`로 큐와 카드 주의 규칙 통일(릴레이 끊김·비상 정지·목표 실패·교통 대기·양보가 큐에 오른다), 천장 카메라는 한 곳에만(지도 없음·크게 보기면 `#map-birdseye`), 설치 순서 막대·"…에서 합니다" 문장·기기 연결 칸 제거, 다른 문서 링크는 머리 접힘 칸에 하나씩, 발행 띠는 로봇 목록 머리(`data-state`), 전체 주행 취소 `quiet`.
 - 증거: Fleet 단위 2284 passed, 웹 Node 144 passed, 공용·아키텍처 통과, Fleet 브라우저 142 passed(실패 3은 단독 재실행 6 passed, MemoryError·로드 타임아웃), 1920×1080 접속 전·운용·지도 없음 문서 높이 1080.
 - gate 변화: LOCAL 화면 구조. SITE/FIELD 상태는 그대로 둔다.
+
 ## 2026-10-07 · uncommitted · feat(fleet): D-494 1 로봇 trip 능력으로 계획을 묶는다
 
 - 변경: `console_view.TripCaps(kind, modes, max_speed)`와 `trip_caps(capabilities)`(모르는 필드는 무시, 세 필드가 모두 맞을 때만 값). `FleetConsole.caps_for(robot_id)`는 capability 캐시(최대 2 s 대기)에서 읽는다. `POST /trip`은 능력이 있으면 `PlanRequest`의 `robot_kind`·`drive_modes`·`max_speed_mps`를 채운다. 0 m/s 로봇은 간선을 쓰지 못해 `TRIP_NO_ROUTE`다. 능력이 없는 옛 로봇은 지금처럼 미리보기를 계획한다. 실행(`/start`)은 여전히 501이다. 계약 문서 버전 고정 시험을 v1.112로 올렸다.
@@ -2228,6 +2233,7 @@
 - 증거: `test_trip_caps.py` 2 PASS.
 - gate 변화: 없음.
 - 결정: D-494 (Proposed)
+
 ## 2026-10-07 · uncommitted · feat(fleet): D-494 3 trip 전용 지도 자세(map pose)
 
 - 변경: `fleet/localization/map_pose.py`(순수, 표준 라이브러리만)가 로봇마다 받아들인 Rosy Cam sighting을 그 시각의 `odom_pose`(0.25 s 안 가장 가까운 표본, 둘이 감싸면 보간)와 짝지어 앵커로 두고, 그 뒤 odom 강체 증분으로 잇는다. `LOCALIZED`/`DEGRADED`(odom 1.5 m 초과, 예측과 0.15 m·20° 넘게 어긋남 → 다시 앵커, 연속 2회 일치로 회복)/`UNKNOWN`(앵커 없음, odom 3 s 초과). 설정은 사이트 YAML `fleet.map_pose`.
@@ -2260,6 +2266,7 @@
 - 변경: `/console/cell`의 원시 역할 코드를 Fleet 관제·설치 화면과 같은 한국어 역할 이름으로 표시한다. 권한 판정·API 요청은 변경하지 않는다.
 - 증거: 320px 브라우저 수정 전 1 failed, 수정 후 1 passed; Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW; `docs/validation/uiux-cell-role-label-2026-10-07/result.md`.
 - gate 변화: 없음. LOCAL 화면 근거만 추가하고 사이트·장치·G3는 HOLD.
+
 ## 2026-10-07 · 556dd1954 · feat(fleet): 카메라 차선 지도 초안 가져오기
 
 - 변경: D-497: 현장 지도에서 카메라 생성 JSON 초안 가져오기. 기존 이름 있는 운영자·스키마·revision·크기 검사를 재사용. 기존 초안 교체 확인, 활성 지도 유지.
@@ -2277,6 +2284,7 @@
 - 변경: D-497 command registration and existing-draft confirmation are explicitly pinned in their existing contract tests. Existing aliases and confirmation ownership remain asserted.
 - 증거: 18 CLI/dialog checks passed after fixing the two NEW findings from pre-push; the remaining candidate checks continue.
 - gate 변화: SOURCE only; deployment and installed readback pending.
+
 ## 2026-10-07 · uncommitted · feat(fleet): D-494 5 서버 trip 루프 (브랜치 feat/d491-fleet-trip-loop)
 - 변경: 계획 본문을 `plan_id`로 저장(D-490 보존 그대로), 새 `fleet/server/trip_runner.py`(시작 검사·상태기계·0.5 s 루프·다음 장소 재계획 대기), `POST /api/fleet/trips/{plan_id}/start`·`/{id}/cancel`·`/{id}/confirm-replan`·`GET /api/fleet/trips`·`/{id}`, 활성화 가드를 "진행 중 trip"으로 교체(`/route`는 그대로), `HttpRobotClient.line_follow_junction`, 콘솔 지도 화면 운행 칸, API Ref v1.112. D-495 3항(`turn_deg`, `junction_turn` 능력, CORE `aborted`/`unresolved`/긴 `waiting` → `stopped(junction)`)과 지도 자세 검토 반영(시작 시 anchor 2 s 이내, tick마다 상태 갱신)을 포함한다
 - 증거: `python -m pytest operations/fleet/test -q` 2310 passed, 93 skipped, known_failures 0 new(2026-10-07 Windows, D-495 반영 커밋 기준); 마지막 커밋 뒤 관련 묶음 132 passed, 0 new; `node --test operations/fleet/test/web/*.mjs` 145 passed; `ROSY_BROWSER_TESTS=1` 현장 지도 브라우저 33 passed(D-495 이전 UI, 이후 UI 변경은 문구 한 줄)
@@ -2352,6 +2360,7 @@
 - gate 변화: 없음. 서버 판정은 표시 경로만 바꾼다
 - 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강, D-375 제안 엔드포인트 재사용)
 - 교훈: 로봇이 카메라에 안 보이는 현장에서 교정 낡음의 유일한 독립 증거는 바닥 페인트 맞춤 제안이다. 프레임 모서리가 아니라 트랙 모서리로 재야 한다 — 기울어진 카메라의 프레임 가장자리는 지평선 근처에서 소리 없이 수십 미터 튄다
+
 ## 2026-10-07 · uncommitted · feat(fleet): 직사각형 카메라 평면 지도와 클릭 좌표 확인
 - 변경: 기존 표시 보정·preview lease·평면 변환을 재사용해 현장 지도에 직사각형 카메라 영상과 미터 좌표를 표시한다. 같은 지도 ID·렌즈·영상 크기·신선도를 확인하고, 카메라 변경 시 이전 영상을 비운다. 좌표 확인과 운행 선택은 분리하며 확인 중 경로 계산·시작·재개를 잠근다. 새 API·패키지는 없음
 - 증거: node 153 passed; 관련 Python 148 passed·26 skipped; Chromium 관련 5 passed, 최종 좌표 확인 회귀 1 passed; known_failures 0 NEW. 저장된 현장 영상으로 실제 화면 1440·390·320 px에서 직사각형 지도·좌표 확인, 가로 넘침 없음. 독립 소스 검토 PASS
@@ -2398,6 +2407,7 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
 ## 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
 - 변경: 현장 지도 장소 종류 `start`(yaw 필수)를 더하고, 활성화·첫 가져오기에서 출발 붙이기로 검사해 `SITE_MAP_START_INVALID`로 거절한다. 기록 모드 `place`가 `start`를 받는다. 현장 지도 화면은 출발 자리와 방향 화살표를 그린다.
 - 증거: 관련 pytest 79 passed(브라우저 55 skipped), `site-map.test.mjs` 13 passed.
@@ -2431,6 +2441,7 @@
 - 변경: 실영상 위 시작점 클릭을 회전·보정 역변환으로 지도 좌표로 바꾼다. 실영상 위 x/y 축을 지도 방향으로 그린다. 레일 썸네일을 편집 중이 아닐 때 돌린다. 현장 지도 화면을 관제 실영상과 같은 방향의 90° 단위로 돌린다(평면 사진 포함). 돌린 조감도는 보일 때만 다시 만든다.
 - 증거: 웹 Node 시험 174 passed.
 - gate 변화: SOURCE/LOCAL만.
+
 ## 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
 - 변경: 순수 판정 `fleet/localization/lane_compliance.py`(부호 있는 가로 편차 왼쪽 +, 몸체 여유 `width_m/2 − (|d| + half width)`, `core_common.robot_body` PINKY_PRO 반폭, `persist_n` 연속 규칙, `fleet.lane_compliance` 잠정 기본값 0.02 m·3회·3.0 s). 2 Hz 감시 `server/lane_compliance_service.py` + `background_workers.lane_compliance_loop`: odom이 움직인 로봇만 `refresh(force_rest=True)`, 모든 로봇을 `arbitrated_pose`로 판정(D-511 §2가 D-494 §3을 넓힘). `GET /api/fleet/robots/{id}/lane-compliance`, `/api/fleet/state` 행 `lane_compliance`, 콘솔 예외 큐 WARN/ACT 항목. API Ref v1.128(v1.124–127은 열린 동료 브랜치)
 - 증거: `test_lane_compliance.py`·`test_lane_compliance_service.py` 신규, node `attention-stale.test.mjs` 8 passed, fleet 묶음 + `test/known_failures.py` (X:/DevTemp/d511-m0/run.txt)
@@ -2449,6 +2460,7 @@
 - 변경: `site-cameras.yaml`의 `display_rotation_deg` 키를 지운다(푸시 전). 관제 실영상·크게 보기·썸네일은 그 카메라 보정에서 지도 +y가 위로 오는 90° 단위 회전(`mapUpTurn`)으로 돈다. 현장 지도 화면의 보기 회전도 지운다(원래 지도 좌표).
 - 증거: 웹 Node 시험 174 passed.
 - gate 변화: SOURCE/LOCAL만. 현장에서 벽이 아래로 보이는지(F3)는 별도.
+
 ## 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
 - 변경: `junction_pivot: true` 로봇에만 교차로 지시에 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m`(좌·우만, 나가는 차로 폭/2, 상한 0.30)를 싣는다. `expect_in_m`이 (0, 2] 밖이면 `map_id`만. `expect_tol_m`은 지도 자세에 오차 추정이 없어 0.05×추측항법 거리 + trip 최고 속도×자세 나이 + `ENDPOINT_TOL_M`(상한 0.30)로 둔다. `site_floor_map_id`가 활성 지도와 다른 로봇의 `lane` trip은 422 `TRIP_SITE_FLOOR_MISMATCH`(키 없음·null은 검사 안 함). CORE `unexpected`, 또는 다음 장소가 `arm_distance_m`보다 먼 `waiting`은 10 s를 기다리지 않고 `stopped(junction_unexpected)`. API Ref v1.127.
 - 증거: `test_trip_d507.py` 16건, trip·caps·문서 시험, 웹 Node 시험, 변이 검사 2건(능력 문, `waiting` 거리 규칙), `test/known_failures.py`.
@@ -2480,6 +2492,7 @@
 - 변경: `camera-warp.js`(사이트 사각형 576 삼각형 메시·아핀, 순수), `map-view.js` `drawSiteView` 실영상을 지도 미터 뷰 위에 편 그림으로 그림(돌린 원본 대신), `view.cameraPick` 제거(미터 뷰 역변환 사용), `static_routes.py` 자산 등록. 썸네일·크게 보기는 원본 회전 그대로.
 - 증거: `camera-warp.test.mjs` 3 passed(실제 보정 paint-f81a872f5cd8), 웹 Node 178 passed, 실프레임 1920 캡처에서 사이트 사각형이 차선과 맞고 원이 둥글다([실측](../../docs/validation/site-camera-topdown-2026-10-07/result.md)).
 - gate 변화: LOCAL 표시. SITE/FIELD 상태는 그대로 둔다.
+
 ## 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
 - 변경: `server/identity.py` `IdentityService` — 움직이는 미확인 로봇 한 대씩, 6 s 창, 로봇 설정 색으로 CORE 점멸 요청. Vision 판정으로 익명 트랙에 묶고 트랙 손실·0.30 m 겹침·map/보정 revision 변경·`identity_ttl_s`에 UNKNOWN. `confirmed_track_pose(robot_id)`가 D-511 입력. 읽기 전용 `GET /api/fleet/tracking/identity`, Vision 판정 `POST /api/fleet/detections/identity`, detections config `identity_challenge`. 사이트 YAML `identity:`(기본 `auto_request: false`). API Ref v1.130
 - 증거: `test_led_identity.py`, `test_lamp_identify_route.py`, `test_boundaries.py`(지도 자세 중재·trip·명령 경로가 identity를 읽지 않음)
@@ -2496,6 +2509,7 @@
 - 증거: 모델 PC `test_lane_traffic.py` 10 passed, trip·routing·blocks·site_map·cancel_all 묶음 252 passed(1 실패는 시험 배치 오류, 고쳐서 통과)
 - gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
 - 결정: D-517 1·2·3·4(정체)·7항
+
 ## 2026-10-08 · uncommitted · feat(fleet): D-511 감시가 LED 확인 트랙을 입력으로 쓴다
 - 변경: `LaneComplianceMonitor`가 지도 자세가 LOCALIZED가 아니면 D-472 `IdentityService.confirmed_track_pose`를 판정한다(CONFIRMED, `age_s` ≤ `fleet.map_pose.sighting_lease_s`, 활성 지도 map id). 결과에 `pose_source`(`map_pose`|`led_track`)·`heading_source`(`pose`|`track_motion`|`none`)를 싣고 바뀔 때 로그를 남긴다. 트랙에 yaw가 없어 `moving_min_m`을 넘게 움직인 이전 위치에서의 방향을 쓰고, 정지면 순수 판정이 방향 문 없이 가장 가까운 호를 고른다. `pose_state`는 지도 자세 그대로. API Ref v1.132(가산)
 - 증거: `test_lane_compliance_service.py` 신규 2개, `test_boundaries.py`(lane_compliance_service만 identity 읽기 허용, map pose·trip 모듈 금지) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
@@ -2509,6 +2523,7 @@
 - gate 변화: 없음. SOURCE/LOCAL만
 - 결정: D-472 addendum 3, D-511 Open (4)
 - 교훈: 없음
+
 ## 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)
 - 변경: `trip_ports.line_past` — 칠한 선 = 차로 합집합 경계(차로마다 중심선 둘레 `width_m` 띠). 장소에서 진행 방향(창이 있으면 로봇 yaw, 없으면 장소의 차로 방향)으로 처음 벗어나는 거리. `junction_fields`가 `pivot_past_line_m = −그 거리`를 보낸다. 0.30 m 안에 선이 없으면 나가는 차로 폭/2, 창 없음. API Ref v1.133.
 - 증거: `test_trip_d507.py` 260919 SW spoke SIM 자세(−0.655, −0.432, 64°): pivot −0.105, 창 기대 선 0.401(SIM 측정 0.402), 창 없음 −0.096. L자 −0.1, 곧게 지나감 폭/2·창 없음. 부호 변이 4건 실패 확인 뒤 복원.
@@ -2589,6 +2604,7 @@
 - 증거: tether·trail 시험(odom 제외, anchor 범위, NaN 500 고정) 통과. fleet 2685 통과, shared/web 237, architecture 133 통과. `known_failures.py` NEW 1건 `test_grammar_separation`은 깨끗한 main에서도 실패한다(D-519 password-login.css).
 - gate 변화: 없음. D-512 개정 1 5항의 Fleet tether 감시(정지 지시)는 열림.
 - 결정: 병합 후 fleet 44929 ≤ 44806+150이라 크기 판정 변경 없음. 앱 공통 422 응답이 JSON 아닌 NaN을 담지 못해 500이 되는 문제는 후속.
+
 ## 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
 - 변경: main(M0 `unplaced`·`pinned`·발생별 허가) 병합. `lane_traffic.py` 위치 없는 trip 로봇이 있으면 그 주기 교차로 지시 없음, `GET /api/fleet/traffic` `unplaced`. 끝난 trip·다른 지도 버전 trip의 허가·몸체는 `pinned`로 남고 신선한 LOCALIZED 자세가 벗어남을 보일 때 풀림(D-517 6), 지도 활성화는 마지막 자세로 다시 핀. `TRIP_LOOP_FULL`은 한 바퀴(via…, to) 간선 집합으로 고리를 묶고 그 바퀴 블록으로 S를 센다. 표 계산 예외 시 모든 trip의 `traffic`을 비움. 교차로 지시 보류는 장소 + `PAST_PLACE_M`까지. 실패한 바퀴 검사는 5 s마다 2회(D-438 예산)·확인 때 다시. E-stop은 모든 trip을 먼저 닫고 동시에 정지. `confirm_replan`이 `at` 초기화. 반복 trip은 지난 바퀴를 잘라 계획을 두 바퀴로 유지(표의 허가 색인·통행권을 같이 옮김). 주기는 틱 시간을 뺀 나머지만 잔다. `routing/trip.py` 차로 중간 장소의 도달 불가 yaw는 `TRIP_ARRIVE_YAW_UNREACHABLE`
 - 증거: 모델 PC `operations/fleet/test/` + `test/test_line_follow_contract_docs.py`; 기존 실패 3건(grammar_separation password-login.css, learning_receiver PIL, site_map_api attention-stale.test.mjs)은 깨끗한 main ba15e926b에서도 같은 문구로 실패
@@ -2691,6 +2707,7 @@
 - 증거: 모델 PC a90d9b705 `operations/fleet/test/`·`test/architecture/` 2900 passed/151 skipped/4 failed. `test_learning_receiver` PIL·`test_site_map_api` node는 main에서도 실패, `test_colcon_roots`·`test_omx_policy_config`는 git 없는 스냅샷 탓(로컬 통과). 로컬 git 가드(document_placement, colcon_roots, platform_parts, harness_contracts, robot_literals) 131 passed
 - gate 변화: 없음(SOURCE)
 - 결정: `fleet/fleet/traffic` SIZE_UNITS 등록, 측정 867(blocks 425, lane_traffic 369, trip_authority 69, __init__ 4). fleet 패키지 판정 기준 46434→45571(옮긴 863줄만큼, 새 판정 아님). D-517 M4 뒤 재판정
+
 ## 2026-10-08 · 070959eea · fix(fleet): CORE가 교차로 목격으로 끝낸 굽이도 끝난 것으로 셈
 - 변경: lap SIM 원인 D(1/20). `trip_runner._step_bend`는 실어 보낸 굽이를 CORE `idle` 또는 `waiting`(같은 seq)에서 끝난 것으로 센다. 그 뒤 같은 틱에 다음 장소 지시가 기대 창과 함께 나간다
 - 증거: 수정 전 `test_a_bend_core_ended_on_the_next_junction_counts_done_and_the_place_goes_out` 실패(아무것도 안 보냄), 수정 뒤 모델 PC `test_trip_bend.py` 통과
@@ -2724,12 +2741,14 @@
 - 증거: 시험 `test_a_robot_requiring_authority_is_refused_while_the_site_flag_is_off`(고치기 전 실패 e722804ac). 모델 PC 결과는 브랜치 보고
 - gate 변화: 없음(SOURCE). trip 시작 판단이라 독립 Safety-Review 전에는 착지하지 않음
 - 결정: CORE 상태 필드는 늘리지 않음. 이미 있는 능력 `line_follow_authority_required`로 시작에서 막는다
+
 ## 2026-10-08 · uncommitted · fix(fleet): `straight` 지시에 지도 차로 방향 변화 `lane_turn_deg` (API v1.152)
 - 변경: `junction_fields` 가 기대 창이 있는 `straight` 에 로봇에서 장소까지 차로의 부호 있는 방향 변화(도, `WINDOW_BEND_STEP_M` 간격 합, ±360 클램프)를 싣는다. `_curve_offset_m` 과 같은 표본(`_lane_steps`)을 쓴다
 - 증거: `test_trip_d507.py::test_a_straight_on_the_ring_sends_its_lane_turn_and_a_turn_does_not` (ring_s → SE 45–65°), 모델 PC 53 passed
 - gate 변화: 없음(SOURCE)
 - 결정: 회전 지시에는 싣지 않는다(방향은 action 이 말한다)
 - 교훈: 없음
+
 ## 2026-10-08 · uncommitted · feat(fleet): D-526 1단계 Fleet tether 감시 (API v1.156)
 - 변경: `server/tether_watch.py` `TetherWatch`가 0.5 s마다 테더가 있는 로봇의 지도 자세(상태 pose, odom 프레임 제외)로 기준점 거리·펼친 누적 회전·자세 나이를 재고, 반경+0.15 m·405°·2 s 초과면 기존 로봇 E-Stop(`hub.scatter_estop`)을 보내고 trip을 `tether_trip`으로 끝낸다. 래치, 테더 POST가 재무장. `GET /api/fleet/tethers` 행 `watch`, 지도 원은 트립이면 `--status-crit`. `platform_parts.yaml` safety_modules에 태그(D-430)
 - 증거: `test_tether_routes.py`(반경, ±180° 넘는 회전, 자세 없음, 테더 없음, 정지 재시도, 실제 앱의 로봇 estop 호출), `web/trail-view.test.mjs`. 모델 PC 결과는 브랜치 보고
@@ -2743,6 +2762,7 @@
 - gate 변화: SOURCE
 - 결정: CORE가 직진을 일찍 닫는 일(후진 중 감지 끊김)은 그대로다. 그 경우 이제 잘못된 `pose` 대신 뒤의 `junction`·`stall` 로 끝날 수 있다
 - 교훈: 위치 판정은 로봇이 실제로 있는 차로에 대고 한다. 지시 완료는 위치의 증거가 아니다
+
 ## 2026-10-08 · uncommitted · fix(fleet): 교차로 회전은 들어오는 차로 끝 방향에서 나가는 차로 접선까지 (lap SIM 2 원인 2)
 - 변경: `turn_target` 이 `theta`(5 cm lead 접선) + 6° 대신, 들어오는 차로의 끝 방향(마지막 두 0.10 m 현: 마지막 현 + 차이의 절반)에서 나가는 차로 `start_tangent` 까지를 보낸다. `TURN_OVERTURN_DEG`·`BEND_MIN_DEG` 삭제, 0.20 m보다 짧은 차로는 `theta`. D-507 4항 개정 줄
 - 증거: 260919 SW lead 접선 72.6°(입구 polyline 잡음) vs 현 62.7°, 로봇 진입 59–60° → 회전 끝이 ring 접선보다 약 20° 바깥(lap SIM 2·3 rec_01–03). 고친 뒤 SIM 4회 회전 끝 −4.3…+0.3°. 모델 PC `test_routing_execute.py`·`test_trip_d507.py`·`test_trip_d520.py` 100 passed
@@ -2808,6 +2828,7 @@
 - 비상 정지 규칙: 마크업은 언제나 눌림. 세션 거절(401)이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유로 잠근다. 모름(로딩·Fleet 끊김)은 눌린다. 관제·설치는 접속 전 잠김에서 모름=눌림으로, 현장 지도는 처음 잠김에서 같은 규칙으로, Cell은 401 뒤 잠김이 새로 생겼다(그 누름은 401로 거절됐던 것이다).
 - 증거: 모델 PC `operations/fleet/test/`+관제 브라우저 묶음 3268 passed / 14 failed — 13건은 main `59f8427c1` 계열에서도 같은 실패(main 스냅숏 재실행 14 failed), 1건(`test_module_structure` styles.css 판정 stale)은 이 브랜치에서 고침. 새 `test_fleet_header_browser.py`(네 문서 × 1920·1440·1024·390, `#estop` 크기·자리 같음, 머리 줄 수, 가로 넘침 0, 401 잠금·토큰 해제). 캡처 `X:\DevTemp\fleet-header\{before,after}\`.
 - gate 변화: 없음. LOCAL/MODEL-PC 브라우저. 세션 조회는 아직 `/api/fleet/session`(D-540 2의 `/auth/session` 하나로 합치기는 남음). 현장·G3는 HOLD.
+
 ## 2026-10-09 · uncommitted · feat(fleet): 미션 API가 개발 세션으로도 시작 (D-548)
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.
@@ -2876,18 +2897,22 @@
 - 원인: 2026-10-09 현장(site-54057e6872f3) 콘솔에서 "추적 중"과 "위치 수명 만료"가 번갈아 떴다. 1 s 폴링이면 다음 응답이 항상 수명 뒤에 와 표시가 매 주기 끊긴다(현장 폴링 간격 0.34–1.47 s 측정)
 - 증거: test_overhead_tracking_console.py가 TRACKING_MS ≤ 500 ms와 그 사용을 고정
 - gate 변화: 없음. 현장 반영 뒤 깜박임 재확인 전
+
 ## 2026-10-09 · uncommitted · uiux(fleet): 큐 항목이 그 자리에서 결정으로 펼친다, 레일 하나만 스크롤, 접힌 로봇 카드 (D-540 3, 계획 (c))
 - 변경: `#stuck-panel`을 없애고 막힘 다섯 답(같은 값, 같은 비활성 사유, 경로 권한 그대로)을 최우선 큐 행 펼침으로 옮겼다. 재계획 확인(`바뀐 경로로 계속` / `운행 취소`, quiet·확인 없음)을 큐 행으로 더했다(`web/trip-replan.js`, 현장 지도 칸은 (e)까지 남는다). 한 번에 한 행, 가장 급한 결정이 먼저 펼친다. 넓은 단은 문서가 스크롤하지 않고 레일만 스크롤한다(큐 12rem·로봇 목록 15rem 상한 제거, 지도 칸은 남는 높이를 채움). 로봇 카드는 정상이면 한 줄(이름·운행 한 줄·배터리), 예외·선택이면 펼침, 오프라인·비상 정지 래치·안전 상태 미확인·보정 lease(`robot.calibration`, (h1) 필드)는 접기 없이 펼침. `전체 로봇 보기` 토글 제거. Cell 승인은 제안 대기 목록을 읽는 경로가 없어 이 브랜치에 넣지 않았다.
 - 증거: ai PC(모델 PC가 첫 실행 중 응답 끊김) `operations/fleet/test/`+`test_module_structure` 1 failed(fleet 단위 크기 판정, 아래), 관제 브라우저 묶음+새 `test_console_queue_inline_browser.py`는 main 스냅숏과 같은 실패만. node `queue-inline.test.mjs` 7건. 캡처 `X:\DevTemp\fleet-queue\{before,after}\`.
 - gate 변화: 없음. fleet 단위 크기 47012+150을 넘는다(+185, 판정 재심 필요) — 착지 보류.
+
 ## 2026-10-09 · uncommitted · feat(fleet): 로봇의 위치 요청에 답한다 (D-546 6)
 - 변경: `localization/pose_request.py`(천장 카메라 LOCALIZED·기준 2 s 이내 자세 → `source: overhead` 결정 ttl 5 s, 그 밖은 중재기 → `resolve_pose_with_model`(미구현, `None`) → `needs_human` 배지). `LocalizationService`가 `lane_return_*`로 서 있는 로봇의 `GET /localization/request`를 읽는다. 천장 카메라 답은 `--localization-overhead-cue`가 켜졌을 때만.
 - 증거: `test_localization_pose_request.py`, `test_transport_localization.py`.
 - gate 변화: SOURCE. VLM(D-546 8)은 AI PC 주인 동의 대기.
+
 ## 2026-10-09 · uncommitted · fix(fleet): 위치 요청 3번 답해도 열려 있으면 needs_human, 천장 카메라 답 기본 켜짐 (D-546 6)
 - 변경: `MAX_ANSWERS` 3 뒤 `needs_human`(lane_return이 놓을 때까지 고정). `--localization-overhead-cue` 기본 켜짐, 끄기 `--no-localization-overhead-cue`(사용자 결정, D-257 5 개정 제안은 D-546에 기록).
 - 증거: `test_localization_pose_request.py`.
 - gate 변화: SOURCE.
+
 ## 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
 - 변경: `--pose-request-overhead/--no-pose-request-overhead`(기본 켜짐)는 위치 요청 답만, `--localization-overhead-cue`는 기본 꺼짐으로 복원. 답 횟수는 요청이 닫혔다 열려도 lane_return이 놓거나 `lane_return_corridor_verified`까지 유지하고 중재기 답도 센다.
 - 증거: `test_localization_pose_request.py`, `test_cli.py`.
@@ -2924,6 +2949,7 @@
 - 변경: `shared/vision-view.js`가 lease `rectification: {"mode": "map"}`로 평면을 따로 받는다(`fetchMapPlane`, `createPlaneFeed`). `X-Frame-Plane`은 유한한 수 다섯, min < max, px_per_m > 0일 때만 받는다. 409 `plane-unavailable`, lease 422(옛 Fleet 계약), `X-Frame-Rectified: map`이 아닌 응답(옛 Vision)은 평면 없음 상태로 두고 30 s 뒤 다시 묻는다. 관제 현장 지도(`camera-backdrop.js`)는 신선한(3000 ms) 평면이고 그 revision이 이 현장 지도의 승인 보정이면 평면을 같은 `toPx`(view_turn_deg 포함)로 사각형에 그대로 그리고, 아니면 D-515 삼각형 펴기로 대신한다. map-tag는 "Rosy Cam 평면 영상" / "브라우저 보정(대체)". 교정 어긋남은 그대로 그림을 내린다. 썸네일·크게 보기는 원본 그대로. 현장 지도 탭 "직사각형 평면 영상 불러오기"는 평면을 먼저 받고 점 잡기는 `x = min_x + u/ppm`, `y = max_y − v/ppm`(화면 방향을 먼저 푼다), `warpImage`는 평면이 없을 때만. 설치·보정 확인 그림(`field-view.js`)은 승인 보정이 있으면 평면을 보여 준다.
 - 증거: node `map-plane.test.mjs` 5건(헤더, 식 왕복, 0/90/180/270° 배치·점 잡기). AI PC 브라우저: 새 `test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409`, `test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_409` 통과, `test_site_map_browser.py` 56 passed, 관제·작업 흐름 브라우저 묶음은 기준 커밋 d08b96805와 같은 10 failed(새 실패 없음; `test_stale_camera_calibration_drops_the_frame_and_warns`는 기준에서도 `goto networkidle` 시간 초과). 실데이터(`paint-7b220d432c2a`, raw.jpg를 D-560 기하로 cv2 평면화) 관제·현장 지도 0°/90° 캡처 `X:/DevTemp/fleet-map-plane/`에서 차선이 도로 가운데에 놓인다.
 - gate 변화: SOURCE. Vision S1(`mode: map`)과 같이 착지해야 실제로 평면이 나온다. 그 전에는 대체 경로다. fleet 크기 단위 48322로 재판정.
+
 ## 2026-10-09 · uncommitted · fix(fleet): D-560 S2 리뷰 반영
 - 변경: 현장 지도 탭은 평면의 `X-Frame-Calibration`이 고른 보정 revision과 같을 때만 그리고 점을 잡는다(다르면 "보정 revision이 다릅니다 — 다시 불러오세요"). 헤더 사각형 × px_per_m가 영상 크기와 1 px 넘게 다르면 평면 없음으로 보고 브라우저 펴기로 대신한다. 점 잡기는 평면 사각형에 맞춘 view의 `toMap` 하나로 한다. 설치·보정 확인 그림은 관제와 같은 규칙(source, revision, Fleet 차선 지도의 map)으로 평면을 쓰고, 격자를 지도 미터에 맞추며 트랙 크기를 적는다. 관제는 그릴 수 있을 때만 평면을 묻고 사이트 뷰 밖은 자른다. 일시 오류는 신선한 그림을 만료까지 두고 5 s 쉰다. lease 수명은 `expires_in_s`를 따른다.
 - 증거: node 224건(새 `map-plane.test.mjs` revision 불일치·1 px·만료·쉬기). 브라우저·원격 결과는 착지 전 실행에 기록한다.
@@ -2940,6 +2966,7 @@
 - 변경: `POST /api/fleet/place-markers`(source 토큰, 2 s, source·marker별 순서)·`GET` 보기, `POST /api/fleet/teach/place-from-marker`(이름 있는 운영자; 새 초안 장소 또는 `place_id` 이동, 이동한 장소에 닿는 차로 끝도 옮김), `sightings_config.py` `place_markers` 검증, 지도 가르치기 패널 "마커로 등록". 로봇에 보내는 것 없음. API v1.167.
 - 증거: 모델 PC `remote_pytest.py` 관련 묶음(fleet 13 파일·vision·foundation·version alignment·architecture) exit 0, `known_failures.py` 신규 0 (X:/DevTemp/place-markers/run-1.txt).
 - gate 변화: 없음(SOURCE). 현장 스티커·천장 카메라 확인은 열림.
+
 ## 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
 - 변경: 마커 지도와 초안(활성·초안 없으면 빈 `site`)의 `map_id`가 다르면 409 `PLACE_MARKER_MAP_MISMATCH`. Vision 장소 마커 전송은 한 번에 하나인 백그라운드 작업이라 Fleet이 늦어도 프레임 루프·로봇 sighting을 막지 않는다. 콘솔 마커 목록은 반올림한 자세가 바뀌면 다시 그린다. 시험: ±90° yaw 부호, 목록에 없는 id 403, bend 이동 거절.
 - 열림: 장소를 마커로 옮기면 그 장소에 닿는 차로는 끝점만 옮기고 안쪽 점은 그대로다. 크게 옮기면 차로 끝 접선이 꺾일 수 있다(활성화 전 지도에서 확인).
@@ -2968,6 +2995,7 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 가짜 시계(`page.clock`) 아래에서는 폴링 응답이 진짜 네트워크로 와서, 찍기 전에 로봇 수를 기다려야 한다.
+
 ## 2026-10-09 · uncommitted · refactor(fleet): 시작점·배경 다시 학습을 설치·보정으로 (D-540 (f))
 - 변경: 관제 지도 아래에서 시작점 도구와 `배경 다시 학습`을 뺐다(범례·추적 상태줄·`관제 범위 안내`는 남김). 설치·보정 `카메라 설치·보정`이 시작점(D-513, `start-point-view.js`)과 새 `tracking-relearn.js`(D-539)를 가진다. 시작점은 맵 맞춤 위에서 본 그림에서 고르고(`picturePose`: 여백·트랙 밖·퇴화 변환은 자세 없음) 표시도 그 그림에 한다. 관제 `cameraPick`/`pointerPose`와 시작점 표시는 지웠다. 서버 경로는 그대로, 시작점 쓰기는 이름 있는 운영자(D-540 9). 카메라 승인 패널 하나로 합치기와 `#vision-heading` 중복은 이 브랜치 밖.
 - 증거: node `start-point-layer.test.mjs` 5건. OMEN `operations/fleet/test/` 3210 passed, 3 failed: `test_cell_app_browser`·`test_site_map_browser[320-568]`은 깨끗한 main(039e21ab0)에서도 실패, `test_console_card_trips_browser`는 부하 탓(AI PC 단독 8 passed). `test/test_fleet_console_browser.py`는 main과 같은 8 failed. main 병합(ad7655ce9) 뒤 AI PC `operations/fleet/test/` 3266 passed, 5 skipped, 0 NEW. 캡처 `X:/DevTemp/setup-tools/{before,after}-*.png`.
@@ -2980,6 +3008,7 @@
 - 안전 검토 보완(2026-10-10): 잃은 자세(`UNKNOWN`이지만 목격 출처 있었음) → `pose`, 뒤 띠는 신뢰 지도 자세로만 재고 모르면 `peer_unknown`, `line_follow.crosswalk` 보고 없음 → `crosswalk_unknown`(지금은 R3가 사실상 닫힘), R5 WAIT 전송 실패 한 번 재전송, 시작 시 답할 로봇 출력. 새 시험 10건 먼저 실패(`X:/DevTemp/d577a/red2.txt`), 모델 PC fleet 3162 passed, 0 new. API v1.173.
 - 결정: D-577 Accepted (2026-10-09, 사용자)
 - 교훈: 모델 PC로 `git archive` 200 MB를 보내면 느린 링크에서 40분이 넘는다. `repo`에 bundle(origin/main..HEAD)을 fetch해 거기서 archive하면 1분 안이다.
+
 ## 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
 - 변경: `rosy.site_map/1` `crosswalks[] {id, polygon, approach[], lanes[], revision}`. 다각형은 `lane_graph.yaml`에서 그대로(`cw1`.., `lane_graph:<sha12>`), `lanes`는 검증 때마다 차로 교차로 유도, 대기 띠는 현장 지도 편집기에서 그리고 지운다(초안, 이름 있는 운영자 저장). 띠가 차로에 닿지 않거나 D-507 9 바닥(차로 + 0.30 m) 밖이면 `SITE_MAP_INVALID`. `GET /site-map/lane-graph-crosswalks`로 이미 활성 지도가 있는 현장도 가져온다. 관제 지도에 읽기 전용 윤곽. `PlaceKind` 그대로. CORE·교통·통행권 변경 없음. API v1.174.
 - 증거: red `X:/DevTemp/crosswalk-zones/red.txt`(시험만, 수집 실패). 모델 PC `operations/fleet/test/` 전체(브라우저 포함) 3230 passed, 53 failed: 52개는 같은 부분 스냅숏의 깨끗한 main에서도 실패(deploy/·integrations/ 빠짐), 1개(`test_the_open_form_fits_every_viewport_without_rail_overflow`)는 부하 중 DOM 재그림 흔들림이고 단독 3/3 통과 (X:/DevTemp/crosswalk-zones/run.txt). 편집기 캡처 `X:/DevTemp/crosswalk-zones/site-map-crosswalk-band.png`.
@@ -3058,6 +3087,7 @@
 - Change: `operations/situation/rosy_situation/deadlock.py` `TrafficWatch` (`analyzer:traffic_watch@1`) reads Fleet's `/traffic` table and robot states over time and posts shadow facts of the existing kinds `wait_cycle_confirmed` (3 snapshots, all still; `fleet_agrees` flags Fleet's `wait_cycle` vs the table's own waits), `wait_cycle_stale_input` (offline, state > 2 s, unplaced, UNKNOWN unit), `waiting_but_moving` (> 0.05 m in 2 s), `livelock` (cycle re-formed 3x in 60 s, or 20 s moving/commanded without 0.05 m route progress), `stalled` (running trip with authority, 20 s still; held units, zones and who waits) and `unknown_occupancy_long` (30 s). `Analyzer` appends them after its proposals, so no proposal or Fleet rule reads them (no `ACTING_KINDS` change); a traffic fact Fleet would refuse (command word, > 16 ids) is dropped so it cannot sink a batch carrying an acting `rear_blocked`. Review fixes: a one-snapshot cycle flicker is not a re-formation, unknown start pose is not "still", AI facts shown once per kind (newest). The console wait-cycle row now opens (`decision: deadlock`) on Fleet's resolver decision per cycle robot, the AI facts from `GET /api/fleet/ai` (read only while a cycle is shown) and three actions on existing routes: `바뀐 경로로 계속` (`/trips/{id}/confirm-replan`, named operator), `운행 취소` (`/trips/{id}/cancel`, open), `로봇 카드 열기`. Labels: `RESOLVER_DECISION_LABEL`, `AI_FACT_LABEL` in `site-map-model.js`. No API change.
 - Evidence: model PC remote pytest red first (X:/DevTemp/d577-dl/red, red-web), then situation tests, test_ai_facts, node web units green (X:/DevTemp/d577-dl/green-web); the only failure is main's `line_observer_node.py` size verdict (perception). The real-Chromium row test is opt-in and skipped on the test hosts.
 - Gate: SOURCE. Shadow facts and console only; no motion decision changes.
+
 ## 2026-10-10 · uncommitted · uiux(console): walkthrough fixes — leader/follower appointment, lane-follow words, 100 robots
 
 - Change: 대형 follower boxes leave the leader out, buttons 대형 시작/변경/재개/해제 with a one-line help, one cause line `#formation-why` (held-off buttons say 위 사유), shape/spacing stay reachable while running (대형 변경 used to send a hidden form), shapes and HOLDING ("멈춤 · 재개 대기") from `core_ui_logic.js`. Cards: 대형 리더/팔로워 tags, the lane-follow mode as the mode tag (was 대기 while CAMERA_LINE drove), no double 대기, 충전 확인 불가, one word 차선 추종. 대열: leader first, the follower list leaves out robots on a trip, the leader card names its followers. Scale: 로봇 찾기 filters every robot picker, bounded follower list, queue heads and summaries name a few and count the rest. No route, auth or motion change.
@@ -3136,6 +3166,7 @@
 - Change: Each image is observed independently before task context reasoning; exact per-call prompts/options remain recorded. The shared 6-second deadline also rejects late final replies. Fleet retains timestamped route intent without granting motion authority.
 - Evidence: Remote focused contracts 108 passed, known_failures 0 NEW. AI PC replay with local Qwen3-VL took 4.03/3.94 seconds and separated wall/front observations from ceiling objects in two cases; classification accuracy and execution freshness are unverified.
 - Gate: SOURCE / remote contracts / offline replay. D-577 freshness, enrollment and CORE authority remain unchanged; no autonomous corner or arm acceptance.
+
 ## 2026-10-10 · 3aff82db2 · fix(fleet): lane convoy automatic leader selection
 
 - Change: Integrated automatic-leader console selection. Lane convoy candidates are online open-repeat-trip robots; rank fresh LOCALIZED guide poses in the active map, otherwise robot number. Both callers share selection; formation capability admission is preserved.
@@ -3153,6 +3184,7 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
 ## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
@@ -3311,6 +3343,7 @@
 - 증거: busy RED 4 FAIL, start 경합 RED 뒤 131 PASS, place fixture의 같은 위치로 SITE_MAP_INVALID가 난 경우를 구분하고 distinct pose에서 실제 DID NOT RAISE를 재현했다. 공통 수정 a4a9e2f9e 132 PASS/NEW 0. 대형 화면/서버/구조 68 PASS, 개입·부분 취소·불명 응답·운행 권한·위치 손실 253 PASS/NEW 0. 최종 d6abc8e863 Chromium 역할/대형 및 teach/활성화/구조 140 PASS/NEW 0, 모델 PC 22 cores/7.9 GB 기준 통과. UI Node 301 PASS. 넓은 Node 첫 실행의 누락 loader 오류는 기존 loader를 지정해 해결했다.
 - 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
 - gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.
+
 ## 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
 
 - 변경: 기존 tasks DB의 별도 bounded 접수 원장, immutable Discord identity→현재 기명 operator, 전용 HMAC와 Goal/Cell producer 자격 격리, 같은 메시지 중복/수정 및 owner read를 구현했다. 순수 projection/signature holder는 Fleet wheel/sdist/source image에 함께 설치한다. Console 작업 화면은 자기 원문을 textContent로 읽고 권한 철회 시 지운다.
@@ -3397,6 +3430,7 @@
 - 변경: 기존 PasswordSessions/SQLite에 login+principal 결속 표시 이름과 GET/PATCH 본인 프로필을 추가했다. 일반 쿠키의 현재 비밀번호 검증과 원자적 세션 회전은 D-686 경로를 재사용한다. API reference v1.211과 정확한 버전 핀을 함께 갱신했다.
 - 증거: 125209aa2 TDD 원격 RED 15 NEW 확인 후 73b23b956c 원격 선택 회귀 exit 0, known_failures 0 NEW/0 known. AI PC 시작 자원 22 cores/9 GB로 최소 조건을 충족했다. 동시 변경 한 승자, 이전 검사 무효화, DB commit rollback, 계정 분리, 재시작/자격 원본 결속, 입력 거절을 포함한다.
 - gate 변화: 본인 프로필/일반 변경의 소스와 선택 원격 회귀 증거만 추가했다. 독립 검토, 최종 통합 CI, 설치 및 실제 팀원 사용은 아직 확인하지 않았다.
+
 ## 2026-10-12 · c7afe628ca · D-681 모델 실패 피드백 export
 
 - 변경: 고정 프로파일 SHA와 subject/case를 대조한 단일 SQLite 읽기 snapshot에서 시도·비용·종결 근거를 export한다. 결과 불명·진행 중·미개입을 구분하며 비밀/원문/worker ID는 export하지 않는다. 기존 녹화 feedback 경로에 미검수 근거로 연결했다.
@@ -3408,6 +3442,7 @@
 - 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
 - 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
 - gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
+
 ## 2026-10-12 · d8d4d4058 · D-684 사건 원장 책임 분리
 
 - 변경: 실제 예산·creator·시도·종결·FINAL 원장을 `incidents/automation/ledger`로 옮기고 기존 import의 클래스·helper identity를 유지한다. DB 본문과 수치는 동일하며 store의 closure import 깊이만 조정했다.
@@ -3437,6 +3472,7 @@
 - 변경: 새 NE/SW 진입 ordered 경로를 기존 segmentation·CORE·frozen RL로 실제 headless 평가했다. 최신 main 통합 소스로 별도 Gazebo build/install과 두 CORE·실제 Fleet 연결 정지 시험을 준비했다.
 - 증거: R23 source 7,337 파일 실행 전후 hash 검증, SDK exit 1, 네 heading baseline/eval 완주 0/8·진행 0m. 영상 8개 ffprobe·SHA·시각 증가, 무효 camera 명령 0·최종 정지·GPU 없음·독립 runner PID 부재 확인. private 원본 56개 hash 대조 보관. A21 ROS 17 패키지 빌드 exit 0; 실행 직전 공식 sim selector는 eligible 없음·exit 1이다.
 - gate 변화: 완주/RL 개선은 HOLD다. trace의 lane_cue null·junction idle과 camera_target_unavailable을 기록했다. native Fleet 회전·공간/오차 승인·재획득과 두 대 실제 주행이 남았다. 정지 sensor/Fleet 연결 script는 준비·syntax 확인뿐이며 A21 SDK/CORE/Fleet 실행을 주장하지 않는다. 기존 안전 정지를 완화하지 않았다.
+
 ## 2026-10-12 · 51176f181 · D-685 crash-consistent admission
 
 - 변경: durable pending 선기록과 마지막 await 뒤 law/AI/사람 점유/동일 client 재검사를 연결했다. 모호한 receipt·500·crash는 재시작 후에도 동결하고 확정 대조만 해제한다. 자율 설정은 durable journal과 background resolver가 필수다.
@@ -3548,6 +3584,12 @@
 - 이행: REALIGN 행은 0.1.11 독자가 거절한다. 어느 현장이든 `realign_robots`를 켜기 전에 현장 Fleet과 모델 PC wheel이 `rosy-contracts-learning` 0.1.12여야 한다.
 - gate 변화: 없음. 설정 digest 값이 바뀌므로 이 변경 앞뒤의 선택 기록은 같은 `config_sha256` 범위로 export되지 않는다. 장치·현장 수용은 별도다.
 
+## 2026-10-13 · uncommitted · 콘솔에서 로봇 한 대를 재우고 깨운다 (D-440 6, feat/device-power-policy에서 옮김)
+
+- 변경: `POST /api/fleet/robots/{robot_id}/power {action: sleep|wake}`(이름 있는 운영자)가 로봇의 `/api/v1/power/mode`(STANDBY)·`/api/v1/power/wake`로 그대로 간다. `HttpRobotClient.power`. 로봇 카드에 절전·깨우기 버튼과 전원 태그의 `준비 중`. 경로는 `console_routes.py`의 identify 옆에 두었다.
+- 증거: `test/test_fleet_power.py`. 원격 pytest와 브라우저 결과는 착지 보고에 둔다.
+- gate 변화: 없음. 실제 로봇을 재우거나 깨우지 않았다.
+
 ## 2026-10-13 · 9e2d4ef0c · test(fleet): app bar and rail contracts follow D-741
 
 - 변경: `test_fleet_header.py`, `test_doc_tabs.py`, `test_site_map_api.py`, `web/fleet-header.test.mjs`와 브라우저 시험 다섯 파일(`test_fleet_header_browser.py`, `test_development_console_browser.py`, `test_password_login_browser.py`, `test_fleet_account_browser.py`, `test_site_map_browser.py`)이 새 앱 바를 고정한다. 서버 코드와 API는 바뀌지 않았다.
@@ -3568,6 +3610,30 @@
 - 변경: `server/ledger/trip_ports.py::bend_fields`의 중첩 `**({} if ...)`를 `fields` dict와 `if` 한 가지로 바꿨다. 보내는 값은 같다. `console_view.TripCaps`의 두 주석을 줄였다.
 - 증거: `test_trip_bend.py`(넘겨받은 자세가 없으면 능력이 있어도 `map_entry`를 싣지 않음, 기존 두 시험). 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. fleet 제품 줄 수는 main 대비 0 증가 그대로다(`trip_ports.py` 600줄).
+
+## 2026-10-14 · 5264ef279 · 통행권 송신 ttl_s는 2 s 그대로 (D-760 2단계의 상수 분리)
+
+- 변경: `fleet/traffic/trip_authority.py`가 `MAX_TTL_S` 대신 `LEGACY_TTL_S`(2.0)를 보낸다. 값과 동작은 바뀌지 않는다. CORE 계약의 상한이 5 s가 되면서 같은 상수를 보내던 Fleet이 모든 로봇에 5 s를 보내게 되는 것을 막는다.
+- 증거: `test_trip_authority.py::test_the_payload_is_relative_to_the_pose_the_table_used`(`ttl_s` 2.0). 원격 재실행 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3. 능력 플래그에 따라 5 s를 보내는 것은 3단계다.
+- 교훈: 없음.
+
+## 2026-10-14 · 97ad6ca74 · 목표 임대 갱신은 그 목표를 보낸 클라이언트로 (D-760 5단계 확인)
+
+- 변경: 시험만. `test/test_goal_lease.py`에 `SenderRobot`(CORE의 D-760 9 규칙을 흉내 낸 가짜)와 갱신 경로 네 개(operator, dispatch, yield, trip) 매개 시험을 더했다. 보내기(`goal_lease.py:112`, 로스터 클라이언트)와 갱신(`goal_lease.py:173-177`, 같은 로스터 `_clients[rid]`)이 같은 객체임을 고정한다. stuck resolver 클라이언트(`cli.py:640`)는 목표를 보내지도 갱신하지도 않는다.
+- 증거: `operations/fleet/test/test_goal_lease.py` 원격 exit 0.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 주소 이동(`_replace_client`, 새 토큰)은 임대 행을 남긴다. 새 토큰의 갱신은 403이고 Fleet은 경고만 남긴다. 목표는 CORE에서 ttl(≤5 s) 안에 끝나고 다음 갱신이 409라 행이 지워진다. 화면 코드 교환은 5 s보다 길어 실제로는 이미 끝난 목표다.
+
+## 2026-10-14 · uncommitted · 목표 임대 갱신의 403도 임대를 놓는다 (D-760 5단계 안전 검토 MINOR 4)
+
+- 변경: `fleet/server/goal_lease.py` `renew`가 403을 409처럼 다룬다. 그 임대 행을 지우고 경고를 한 번 남긴다. 화면이 CORE가 거절하는 임대를 살아 있는 것으로 보이지 않게 한다. CORE는 그 목표를 제 만료에 끝낸다.
+- 증거: `test/test_goal_lease.py::test_every_renewal_path_renews_with_the_client_that_sent_the_goal`의 대조 단계(다른 클라이언트 403 → 행 삭제, 다음 갱신 시도 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
 
 ## 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
 - 변경: `server/ledger/mission_store.py`의 `next_running_mission`·`next_reconciliation_mission`(16줄, 부르던 `mission_service` 두 줄은 6fd54b3a3에서 이미 지워졌다. 4fe614c8b 커밋 글의 6d764bd77은 추가한 커밋이라 틀린 표기다), `server/ledger/task_store.py`의 `recover_interrupted_requests`(29줄, 호출은 423921562에서 없어졌다), `server/signals.py`의 `SignalConsole.signal_ids`(4줄), Console `console.js`의 `authHeaders`·`lastStateOk`(5줄)를 지웠다. 동작, 경로, 스키마는 그대로다.
@@ -3594,3 +3660,385 @@
 - Change: redundant module and bend_fields docstrings are shortened, retaining provider identities, both bend contracts and refusal conditions. All validation, geometry, error handling and safety rationale remain.
 - Evidence: non-docstring module AST equals the preceding candidate; independent integration_review approved the editorial-only cleanup. Final remote gate is pending.
 - Gate: no runtime or device claim.
+
+## 2026-10-14 · uncommitted · fix(world): D-758 0단계 지도 자세 추적기가 CORE odom epoch 변경에 기준을 버린다
+
+- 변경: `operations/world/src/rosy/world/state/projections/map_pose.py` — `OdomSample.epoch`(선택), `odom_from_snapshot`이 `odom_pose.epoch`(0 이상 정수만)를 읽고, `add_odom`이 이전에 받은 epoch와 다른 표본에서 이동이 없어도 `_reset`한다. epoch가 없는 로봇은 이전 규칙 그대로다. Fleet이 돌려주는 `pose_stamp`·`odom_stamp_s`는 바뀌지 않는다. API 핀 시험 4개를 v1.228로.
+- 증거: `test_map_pose.py` 새 3건(수정 전 적색). Fleet·world 전체 스위트 결과는 보고서에 적는다.
+- gate 변화: SOURCE·호스트 근거만.
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
+## 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
+
+- 변경: 임대를 쥔 trip에서 상태 읽기 실패나 로봇 호출 무응답은 trip을 끝내지 않고 `link_wait`로 둔다(`trip_progress._link_wait`). 그동안 교차로 지시·목표·늘린 통행권이 나가지 않고 블록 표에서 UNKNOWN이라 블록이 그대로 잡힌다. 끝내는 것은 `lease_lost`(기본 8 s)와, 임대 `ttl_s`를 넘겨 기다린 뒤의 정체 규칙뿐이다. 돌아오면 지도 버전과 차선 모드를 다시 보고(`trip_admission._link_back`) 실패하면 그 시작 거절 코드로 끝낸다. 정체 예외는 대기 사유→상한 표 하나(`_wait_bound`, 지금은 `link_wait`만). 송신기는 `seq`를 싣고 구간 id에 Fleet 프로세스 epoch를 넣는다. `line_follow_authority_shrink` 로봇에는 `ttl_s` 5와 `shrink`+`until_m` 0(답이 `accepted: true`일 때까지 주기마다), 없는 로봇에는 2와 옛 동작. 단계 중·`link_wait`·차선 켜기 전·시작 뒤 5 s에는 늘리지 않는다. 확인 전에는 지도 버전이 바뀐 로봇의 고정 블록이 마지막 `until_m`까지 덮는다. 출발 검사는 임대가 켜져 있으면 `line_follow_authority_under_lease`도 받는다. trip 임대 `ttl_s` 기본 8. 콘솔 상태 이름 `연결 대기`.
+- 증거: `operations/fleet/test/test_trip_link_wait.py` 새 시험(3·4.5·5.5 s 끊김 뒤 이어 감, 9 s `lease_lost`, 돌아온 뒤 모드·지도 버전 검사, 임대 없는 trip은 첫 실패에 끝, 임대가 살아 있는 동안 정체 아님, 블록 유지와 뒤 로봇 대기, 다섯 경우의 줄이기와 확인 뒤 멈춤, 플래그 없는 로봇 2 s·줄이기 없음, `seq`·재시작 뒤 새 구간, 재시작 뒤 5 s, 차선 켜기 전 통행권 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만. Gazebo·장치 수용 전, 독립 Safety-Review 전.
+- 결정: D-760 Decision 1·2·3·4·5와 개정 2. 기본값 `fleet.traffic.authority`·`fleet.trip_lease_required`는 그대로 false(6단계).
+- 교훈: 송신 주기가 단계 결과를 기다리는 동안의 로봇도 "보내지 않음"이 아니라 "줄임"의 대상이다.
+
+## 2026-10-14 · 58a3fdc99 · D-760 3단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: HIGH-1 연결 끊김은 무응답(`HubError`, `OSError`·시간 초과, `httpx.TransportError`)만이고 `ValueError`·`RuntimeError`는 지금처럼 `failed`다. `link_wait`의 `since`는 한 단계가 끊김 없이 끝날 때까지 남는다. MEDIUM-2 trip이 끝나도 정지가 확인되지 않았으면(`stop_sent`가 참이 아님) 마지막 늘리기의 송신 시각 + 5 s + 클라이언트 한도까지 고정 블록이 그 끝을 덮는다. MEDIUM-3 단계 중인 로봇에는 늘리기도 줄이기도 보내지 않는다(검토자 결정, ADR에는 검토자가 적는다). 작은 것: `shrink_none_held`는 확인으로 센다, 통행권이 켜져 있으면 trip 임대 `ttl_s`는 5 s보다 커야 한다, 돌아올 때 끊긴 뒤 보낸 임대 갱신이 확인되어야 한다, `link_wait` 동안 목표 임대를 갱신하지 않고 돌아오면 목표를 다시 보낸다.
+- 증거: `test_trip_link_wait.py`에 시험을 더해 먼저 원격에서 8건 실패를 보고(3aa6ff21b), 고친 뒤 trip·교통 묶음이 원격에서 통과했다(`known_failures` 0 new). 다리 확인과 `forget` 호출을 지우는 변이를 잡는 시험 두 건을 더했다.
+- gate 변화: 없음. 독립 Safety-Review 재확인 전.
+- 결정: D-760 Decision 3·4, 3단계 Safety-Review.
+- 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
+
+## 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다
+
+- 변경: `TripAware.trip_refusal(robot_ids)`(`console/console_view.py`)가 "이 로봇에 주인이 있는가"의 하나뿐인 검사다. `trip_busy` 위에 서고, 주인이 있으면 `HubError("TRIP_ROBOT_BUSY", ...)`를, 없으면 None을 준다. 대화 요청 제출, 콘솔 목표 받기와 비켜설 자리 보내기, 막힘 결정, `/route`, `/goal`, `trip_guard`의 대형·차선 추종 거절이 이것을 부르고, 각자 응답 모양·문구·검사 순서는 그대로다. `trip_runner` 시작 때의 `engaged` 검사는 반대 질문(콘솔 움직임이 이미 있는가)이라 그대로 둔다. Fleet 크기 단위 56856 → 56854.
+- 증거: 원격 시험(ai PC) 631 passed, `known_failures` 0 new, 로그 X: `holder-check/run-1.txt`. 새 시험: 대화 요청 제출 409 문자열, `/goal`·`/route`·막힘 BACK_AND_RETRY의 409 본문 전체.
+- gate 변화: 없음. 동작 같음.
+- 결정: D-763 4항, 구현 조각 1. Safety-Review는 커밋 trailer.
+
+## 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
+
+- 변경: `step_action_kinds.StepActionKind`에 `approval`(값 `two_person`·`proposer_only`·`one_person`, 엄한 순서 `APPROVALS`)을 더했다. `CELL_TRANSFER`는 `two_person`. 레거시 `PICK_PLACE`는 단계 원장 규칙이 없어 `_LEGACY_APPROVALS`에 `proposer_only`로 따로 적었다(실물 하달 조각에서 두 사람으로, 개정 2 질문 5). `required_approval(kinds)`는 가장 엄한 값을 주고 모르는 종류·빈 목록은 `ValueError`. `mission_routes` admit은 `decidable()`로 등록부 판정을 읽고 `candidate.kind` 분기를 지웠다. 코드와 순서는 그대로(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404, `PROPOSAL_NOT_RESOLVED` 409).
+- 증거: `test_approval_registry.py`(등록된 모든 종류에 승인 값, 종류별 값, 모르는 종류 거절, 제안 단계의 모르는 종류 422, 두 사람 종류의 제안자 403과 다른 운영자 승인, 제안자만 종류의 다른 운영자 404·viewer 403, 공유 콘솔 토큰 403). 원격 119 passed: `X:/DevTemp/approval-registry/s5/run-1.txt`.
+- gate 변화: 없음. 동작은 같다.
+
+## 2026-10-14 · 65bea79df · D-763 조각 5b: 승인 대기 작업의 거절 경로 (API v1.230)
+
+- 변경: `POST /api/fleet/missions/{mission_id}/reject`, 본문 `FleetWorkDecisionRequest {expected_generation}`(`core_common.protocol.work`, admit·Cell resume도 같은 모델). 이름 있는 운영자만, 볼 수 있는 범위는 admit과 같은 등록부 판정. 제안자는 `WITHDRAWN_BY_PROPOSER`, 다른 운영자는 `REJECTED_BY_OPERATOR`. Cell Job은 취소와 같은 끝 상태 HOLD/`CANCELLED_BY_OPERATOR`(resume·cancel·admit 거절, 사건 `CELL_JOB_REJECTED`), 레거시 Mission은 `CANCELED`(사건 `MISSION_REJECTED`). claim 없음. `PROPOSED`가 아니거나(두 번째 거절 포함) 정지 세대가 다르면 409 `MISSION_REJECT_REFUSED`. 크기: admit의 두 원장 분기를 한 경로로, 제안 생성·resolve의 Cell 역할 검사를 도우미 하나로, `cell_job_store._json`을 `mission_store._json` 재사용으로 줄였다.
+- 증거: `test_approval_registry.py` 거절 시험(제안자 철회와 다른 운영자 404, 다른 운영자의 Cell 거절, viewer·서비스 403, 낡은 세대 409, 두 번째 거절 409, 거절 뒤 admit·resume 409, claim 없음, 감사 사건의 행위자, 공유 토큰 403, 잘못된 본문 422). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 화면(조각 5c)은 이 브랜치에 없다.
+- 결정: v1.228·v1.229는 착지 전 브랜치(`fix/odom-log-monotonic-epoch`, `feat/junction-turn-map-entry`)가 쓰고 있어 v1.230을 썼다. 대화 요청에 연결된 작업의 서버 쪽 직접 승인 차단은 이 조각에서 하지 않았다.
+
+## 2026-10-14 · 65e315231 · D-763 조각 5·5b 보안 검토 반영
+
+- 변경: `decidable()`가 resolve된 원장 행의 단계 종류(Cell Job 단계의 `action_kind`, Mission `action_kind`)에서 가장 엄한 승인을 읽는다. 등록부에 없는 종류는 500이 아니라 409 `APPROVAL_RULE_UNREGISTERED`. resolve 전 제안의 보이는 범위는 전과 같다(Cell·제안자 409, 그 밖 404). Cell 거절은 새 메서드 대신 `CellJobStore.cancel(decision=, expected_generation=)`(사건 `CELL_JOB_REJECTED` 그대로). 대화 요청에 연결된 작업의 거절은 기존 결과 회신 경로로 요청자에게 간다: Cell `HOLD`는 이미 회신했고 Mission `CANCELED`를 관측 상태에 더했다. 작업 흐름 행은 `LINKED`(그 관계의 끝 상태)로 남는다. `work.py` docstring에 v1.230.
+- 증거: `test_approval_registry.py`(경로 수준의 가장 엄한 값, 미등록 종류 409, 대화 요청 연결 작업 거절의 회신). 원격 `X:/DevTemp/approval-registry/r2/run-1.txt`, secret-scan 가드 `test/test_release_boundary_guards.py` 포함, `known_failures` 0 new.
+- gate 변화: 없음.
+
+## 2026-10-14 · c53057fef · Fleet 작업 원장을 자기 크기 단위로 등록 (D-763 5·5b)
+
+- 변경: `docs/plans/2026-10-14-fleet-ledger-size-unit.md`. `fleet/fleet/server/ledger` 단위, 판정값 6,985(`61aa49b32`에서 잼), `fleet` 판정값 31,837. 지금 서버 31,886, 원장 7,036, 관제 18,023. 원장은 `__init__.py` 없는 `fleet.server` 보관 자리라 하위 패키지 시험이 `FLEET_SERVER_HOLDER_UNITS`도 받는다.
+- 증거: 원격 `test/architecture` 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 독립 재판정 전.
+
+## 2026-10-14 · 8163f878f · feat: D-759 개정 1 회전 지시에 출구 차로의 map_entry를 싣는다 (API v1.231)
+- 변경: `server/ledger/trip_runner.py::_step_lane`이 `lane_turn_map_entry` 로봇에게, 찾은 자세에 `odom_stamp`가 있을 때 `left`·`right`에 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 출구 차로의 `start_tangent`다. `console_view.TripCaps.lane_turn_map_entry`, trip 보기 `caps.lane_turn_map_entry`.
+- 증거: `test_trip_turn_map_entry.py`(능력 읽기, 값, 그 밖의 필드는 오늘과 같음, stamp가 없으면 싣지 않음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 0 증가다. `exit_segment` 조건문을 한 줄로, D-520 주석 두 줄을 한 줄로, `TripCaps`의 D-551 주석을 필드 옆으로 옮겼다.
+
+## 2026-10-14 · 68a91feca · D-763 조각 2: trip 읽기에 기다림 판정의 답을 싣는다
+
+- 변경: `ledger/trip_progress.py` `_waiting`이 판정할 때마다 `view.wait`에 `bound_s`·`over_bound`·`waiting`을 적는다. 정체 시계가 쓰는 판정 그대로다(두 번째 판정 없음). 줄 수 같음(서버 순증 0). 정체 규칙의 동작은 같다. API v1.231(문서는 f38a5093a).
+- 증거: 원격 시험(모델 PC, f38a5093a) 284 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 사유마다 상한 안 기다림·넘으면 `over_bound`, 사유가 바뀌어도 한 번, 진행이 끝냄, `link_wait`의 lease 상한.
+- gate 변화: 없음. `GET /api/fleet/work`에는 trip 행이 없어(조각 4) trip 읽기에만 실었다.
+- 결정: D-763 8항, 구현 조각 2.
+
+## 2026-10-14 · 7c26a028c · D-763 조각 2 검토: 상한 넘김은 해결기 몫, 지난 tick의 답을 남기지 않는다
+
+- 변경: `ledger/trip_runner.py` `_step`이 맨 앞에서 `view.wait`의 `waiting`·`bound_s`·`over_bound`를 None(모름)으로 둔다. `_waiting`까지 가지 않고 끝난 tick은 지난 답을 보이지 않는다. 세 키는 정체 규칙이 읽지 않으므로 정체 시계는 같다. 서버 순증 0(`trip_progress.py` 주석 한 줄 줄임).
+- 증거: 원격 시험(AI PC, 7c26a028c) 285 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 자세를 잃어 `_stalled` 전에 끝난 tick에서 세 키가 None.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 7. 상한을 넘은 기다림은 막힘 해결기(D-622)로 가고, 개입은 해결기가 사람에게 넘길 때만이다.
+
+## 2026-10-14 · f79947c25 · D-763 조각 2 검토 2: tick마다 한 번 쓰고, 보고가 있을 때만 상한 넘김
+
+- 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
+- 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
+- gate 변화: 없음.
+
+## 2026-10-14 · uncommitted · fix(test): 사실 기록 정지가 비상 정지를 늦추지 않는다는 시험을 시계 없이 (CI 38568954601)
+- 변경: `test/test_ai_facts.py::test_a_stalled_fact_write_does_not_delay_the_emergency_stop`. 사실 쓰기를 `time.sleep(1.0)` 뒤 실제 쓰기로 두고 `/api/fleet/estop` 왕복을 0.5 s로 재던 것을, 쓰기를 끝내 풀리지 않는 `threading.Event`에 세워 두고 정지가 먼저 200으로 끝나는지만 보는 것으로 바꿨다(쓰기 진입 확인, 정지 뒤에도 쓰기 요청이 미완, 그다음 풀어 200). 시계는 hang 가드 30 s뿐. 제품 코드는 그대로다.
+- 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
+- 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
+
+## 2026-10-14 · 70092c527 · D-760 4단계: 로봇마다 공유 상태 읽기 하나
+
+- 변경: `MapPoseService.state(robot_id, max_age_s)`가 로봇마다 하나인 REST 상태 읽기다. 읽기 시작 시각(Fleet 단조 시계)부터 `max_age_s` 안이면 그 값을, 아니면 진행 중인 읽기에 붙거나 새로 읽는다. 실패한 읽기는 아무것도 남기지 않고 같은 예외 객체를 기다리던 모두에게 던진다. 읽기마다 odom을 한 번 넣는다(스냅숏 stamp 그대로). trip 루프의 자세 갱신과 교차로 상태(`HttpLaneJunction(read=)`)가 0.45 s로 한 읽기를 같이 쓰고, 차로 준수(0.45 s), 위치 결정(`read_state`, 0.5 s), 관제 REST 대체(0.45 s, 2 Hz tether 감시가 매번 새로 읽는다)와 하달 직전 읽기(0.2 s)도 같은 읽기를 쓴다(`app.py`가 `console.read_state = map_pose.state`). `refresh`의 로봇 odom 시계 대 Fleet 벽시계 0.2 s 건너뛰기는 Fleet 단조 나이 규칙으로 바꿨다. trip 루프는 응답 없음(`HubError`, `OSError`, `httpx.TransportError`)만 읽지 못한 상태로 보고 그 밖의 읽기 오류는 trip을 끝낸다(D-760 개정 3의 2).
+- 증거: `test_shared_state_read.py`(나이·합류·실패 객체·정확한 stamp, 교차로 읽기 공유, 느린 로봇, trip 루프의 전송 오류 `link_wait`·`ValueError` 실패, 가짜 로봇 2·10대 60 s에 로봇당 120회 = 2.0회/s·어느 1 s에도 3회 이하, 주기 루프의 직접 `state()` 금지). 가짜 로봇을 요청 사이에 바꾸는 기존 시험 8개 파일은 `fakes.fresh_reads(app)`로 공유를 끈다(`fleet_gather.max_age_s = 0`과 같은 뜻). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 전송 계약은 그대로다.
+- 결정: D-760 Decision 8. 차로 준수는 계획의 0.5 s 대신 기본 0.45 s다(시뮬 자세 포트 `tools/sim/native_gazebo_map_pose.py`의 `refresh`가 `max_age_s`를 받지 않는다). 군집(`swarm/session.py`)과 명령 한 번짜리 경로는 그대로다.
+
+## 2026-10-15 · 0349f6177 · 계정 runtime pin과 SSO CI 연결
+
+- 변경: `fix/omx-readiness-followup`에서 패키지 OAuthlib 요구를 사이트·CI와 같은 4.0.0으로 정렬했다. full CI의 account pipeline 파일만 브라우저 opt-in을 추가해 일반 CORE 범위는 유지한다.
+- 증거: pin/CI guard RED 뒤 원격 계정·selector·runtime 계약 102 passed, 1 skipped, NEW 0; 독립 소스 검토 완료. 실제 Chromium 실행은 새 CI에서 별도 확인한다.
+- gate 변화: 없음. 장치 활성화나 계정 외부 수용 증거가 아니다.
+
+## 2026-10-15 · aa9913d2f · 다단계 작업이 로봇의 lease와 claim을 쥔다 (D-763 조각 6)
+
+- 변경: `ledger/trip_admission.py` `hold_job`(개정 2 질문 10 (a)(b) 관문, 아니면 422 `LINK_UNBOUNDED_MOTION`; `on_job_lost` 없이는 거절)와 `release_job`. `traffic/trip_lease.py`: `jobs`, 단계 사이 갱신(`period`가 열린 trip 없는 작업도 갱신, `/trip-lease`만 보낸다), 작업의 단계가 lease를 이어받고 닫아도 유지, 시작 실패는 작업 lease를 두고, 작업 lease 상실은 `on_job_lost`. `ledger/trip_runner.py` `start(job_id=)`: 작업이 쥔 로봇의 다른 시작은 정렬 회전 전에 `TRIP_ROBOT_BUSY`. `ledger/trip_guard.py`: `trip_busy`가 작업의 hold와 내구 D-330 `mission` robot claim도 본다. `server/app.py` 한 줄(claims 연결). 서버 크기 단위 순증 0(31904), traffic 2200(≤2201), ledger 7083.
+- 증거: `test/test_trip_job_lease.py`. 원격(7334f9c40) 통과, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음. 아직 `hold_job`을 부르는 운영 경로가 없다(조각 7).
+- 결정: D-763 4항·조각 6.
+- 교훈: 없음.
+
+## 2026-10-15 · d05bccdec · 조각 6 안전 검토 반영
+
+- 변경: Fleet이 보낸 사람의 멈춤(취소, line-follow OFF)은 lease 주인 토큰이라 CORE가 lease를 두므로 `stop_job`이 lease를 놓고 사건 경로를 부르며 작업을 HOLD로 둔다. `hold_job`은 로봇 잠금 안에서, 이미 움직이는 로봇(열린 trip, 콘솔 목표, 대형)을 거절한다. `release_job`은 단계 trip이 열려 있으면 409 `TRIP_BUSY`. 사건 hook 예외는 기록한다. SRS CORE `SAF-007`, Fleet `MSN-007`.
+- 증거: `test/test_trip_job_lease.py` 새 시험 셋. 원격(d05bccdec) 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 3.
+- 교훈: 같은 토큰을 쓰는 Fleet 콘솔의 멈춤은 CORE의 "주인 아닌 멈춤" 규칙에 걸리지 않는다. Fleet 쪽에서 따로 닫아야 한다.
+
+## 2026-10-15 · 9f1f7876f · trip 취소가 실패해도 작업은 HOLD
+
+- 변경: `ledger/trip_guard.py` `end_trip`이 `stop_job`을 따로 `try`에서 부른다. trip 저장소가 실패해도 사람의 멈춤 뒤 작업 lease가 갱신되며 남지 않는다(재검토 LOW).
+- 증거: `test_a_failed_trip_cancel_still_holds_the_job`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-15 · 0b7df2e16 · hold_job의 움직임 한도는 Rule M이 판정한다 (D-760 6, D-763 조각 6)
+
+- 변경: D-760 담당 세션 요청. `ledger/trip_admission.py` `hold_job`이 로봇이 모는 다리(lane·free)마다 `traffic/rule_m.py` `verdict`를 lease 없이 부른다(lane은 통행권 `core`, free는 임대 있는 목표). 422 `LINK_UNBOUNDED_MOTION` 본문은 `reasons`(Rule M의 말: `hold_back`, `no_goal_lease`, `leg_unknown`)와 `missing`(질문 10의 능력·설정)이다. traffic 단위 그대로(2200), ledger 7115, 서버 순증 0.
+- 증거: `test_the_motion_bound_part_is_rule_ms_verdict`, `test_a_lane_only_robot_needs_no_free_leg_bound`. 원격(0b7df2e16) exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-760 Decision 6, D-763 4항.
+
+## 2026-10-15 · e0febb524 · 잘못된 drive_modes는 leg_unknown, 다리 시험을 반증 가능하게
+
+- 변경: `hold_job`이 list·tuple이 아닌 `drive_modes`(true, 5)를 모드 없음으로 본다(422 `leg_unknown`, TypeError 500이 아니다). lane만 가진 로봇 시험은 `goal_lease`를 빼고 Rule M 사유가 없음을 확인한다. free만 가진 경우를 더했다.
+- 증거: 원격(e0febb524) `test_trip_job_lease.py`·`test_rule_m.py` exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음.
+
+## 2026-10-15 · 0bc2a16c1 · native readback and background shutdown
+
+- Change: reconcile up to 20 existing native Task owners concurrently; keep identity, quiescence, two-second freshness, claim CAS and UNKNOWN ownership. Cancel all app background workers before awaiting their results; log failed workers without interrupting remaining cleanup.
+- Evidence: shutdown RED e4804ba77; corrected readback RED b73b04577 reached UNKNOWN instead of COMPLETED. Remote AI PC regression at 0bc2a16c1: 117 passed, exit 0, known_failures NEW 0. Raw logs: X: runtime-pipelines--0fd8e5 session logs/green-2/run-1.txt.
+- Scope: 14 flow entries and outstanding inputs/evidence in docs/plans/2026-10-15-runtime-pipeline-closure.md. No main landing, push, deployment, model activation or robot actuation. Source review found no critical/important issue.
+- Gate: unchanged. This regression does not establish ROS-SIM, ARTIFACT, DEVICE or FIELD acceptance.
+- Final evidence: fc7cd8aea affected checkpoint: 6278 passed, 330 skipped, 3 NEW (journal format and size verdict). Those failures were fixed without changing the size allowance or known-failure list. 30b06737a remote functional/contract/structure regression: 273 passed, terminal exit 0, NEW 0. Broad affected was not repeated at the final SHA; skipped tests remain unverified.
+
+## 2026-10-15 · 39d8e72973 · finish resource cleanup after worker shutdown
+
+- Change: register existing sync/async close callbacks with AsyncExitStack and run them after all background workers are canceled and awaited. A failed close does not skip the other callbacks; exceptions remain visible to the caller. No new owner, dependency or activation.
+- Evidence: 6b2b811f4 remote RED 2 NEW. 39d8e72973 remote app/native outcome/model feedback/harness/structure regression: 281 passed, terminal exit 0, NEW 0. Independent source review found no critical/important issue. Logs: X: pipeline-resources--0c429d session logs/green/run-1.txt.
+- Gate: unchanged. Resource cleanup is not robot standstill, field acceptance or startup-failure recovery.
+
+## 2026-10-15 · 95c9263a5 · D-760 4단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: `MapPoseService`가 REST 읽기마다 번호를 매기고(`read_number`), `state`·`refresh`가 `after`를 받는다. 번호가 `after` 이하인 읽기는 나이가 젊어도 주지 않고, 그런 읽기가 진행 중이면 끝나기를 기다린 뒤 새로 읽는다. trip 루프는 단계의 읽기 뒤, 교차로 지시 송신 뒤, 링크 끊김 때 울타리를 친다(`trip_progress._fence`). 그래서 지시 앞의 읽기로 같은 지시를 다시 보내지 않고, `link_wait`는 끊긴 뒤 시작한 읽기로만 끝난다. 한 단계의 자세와 교차로 상태는 여전히 한 읽기다. 상태 읽기의 HTTP 오류는 trip을 그 코드·status로 끝낸다(`TRIP_LOOP_ERROR` 대신). 로스터를 떠난 로봇의 읽기를 지우고, odom을 넣은 뒤 읽기를 남긴다.
+- 증거: `test_shared_state_read_fences.py`(0.43 s 간격으로 송신 뒤 단계가 와도 재송신 없음, 단계마다 새 읽기, 울타리 앞의 진행 중 읽기를 넘겨주지 않음, 끊기기 전 읽기가 끊긴 뒤 닿아도 `link_wait` 유지, 허브와 REST 읽기 분리, HTTP 503으로 `failed`/`HTTP_503`, 로스터 이탈). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 4단계 Safety-Review. 읽기 번호가 없는 자세 포트(시뮬 `native_gazebo_map_pose.py`, 시험 가짜)는 울타리 없이 지금처럼 읽는다.
+
+## 2026-10-15 · febf77ca9 · D-760 4단계 재검토: SIM 자세 포트 옆에서도 교차로 읽기에 울타리
+
+- 변경: trip 울타리가 자세 포트가 아니라 교차로 포트가 읽는 공유 읽기의 번호를 센다(`HttpLaneJunction(read, read_number)`, `app.py`가 `map_pose.state`·`map_pose.read_number`를 넘긴다). `junction_state`가 `after`를 받는다. `simulation_pose`면 자세 포트가 SIM 포트(`tools/sim/native_gazebo_map_pose.py`, 읽기 번호 없음)라 지금까지 교차로 읽기에 울타리가 없었다. 자세 갱신은 같은 번호의 읽기일 때만 `after`를 받는다(`trip_progress._after`). 울타리는 단계의 자세·교차로 읽기 뒤에 친다(한 단계 한 읽기 그대로).
+- 증거: `test_shared_state_read_fences.py`의 0.43 s 재송신 시험을 SIM 자세 포트로도 돌린다(직진 지시: 지시 앞의 idle 읽기면 다시 보낸다). 수정 전 SIM 경우 실패를 원격에서 확인했다(`X:/DevTemp/shared-state-read/red4/run-1.txt`). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 4단계 Safety-Review 재검토 MEDIUM.
+
+## 2026-10-15 · 868461505 · D-763 조각 4: 작업 읽기에 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (API v1.235)
+
+- 변경: `GET /api/fleet/work`가 Task·Mission에 더해 trip(저장된 최근 것 + 열린 것 전부)과 Cell Job을 읽는다. 행마다 `visible_state`(D-763 8), trip 행은 `wait`(v1.232의 네 키, `since` 없음), `PROPOSED` 행은 등록부 `approval`. 응답에 `cell_jobs_available`·`kinds`(`trip`: 활성 지도 장소 + trip 능력을 알리는 로봇, `CELL_TRANSFER`: 단계 하달 열림 + 하달기 + OMX 설정). Cell Job 범위는 서버가 정한다: 제안자, `PROPOSED`가 아닌 행은 운영자(cell-jobs 상세와 같다), `PROPOSED` 행은 이름 있는 운영자(개정 2 질문 6). 제안자 신원은 쿼리 밖으로 나가지 않는다. `work_routes.py`를 같은 종류의 경로가 있는 원장 holder(`ledger/`)로 옮겼다. 크기: 서버 31904→31880(순증 −24), 원장 7036→7123(상한 7135), 기준값은 올리지 않았다.
+- 증거: 원격 시험(모델 PC, 6ae1df74e) fleet 13개 파일 225 passed, 계약·구조 5개 파일 66 passed, `known_failures` 0 new, 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`. 새 시험 `test_work_sources.py`: 출처별 행, viewer·운영자·제안자·다른 운영자·이름 없는 운영자 범위, 원장 미설정, 종류 목록.
+- gate 변화: 없음. 호스트 시험뿐이고 장치·현장 확인은 하지 않았다.
+- 결정: D-763 조각 4. 끝난 작업 필터는 상태 목록 그대로(실패도 끝난 작업)이고 보이는 상태는 줄 글에만 쓴다.
+
+## 2026-10-15 · e7b196839 · D-763 조각 4 검토: Cell Job 상세 범위, 닫힌 trip의 기다림, 루프 밖 읽기, 작업 영역 단위
+
+- 변경: `GET /api/fleet/cell-jobs/{id}`가 작업 목록과 같은 범위다(제안자; `PROPOSED`가 아니면 운영자; 남의 `PROPOSED`는 이름 있는 운영자만, 나머지 404). 제안자 아닌 독자에게 `proposal_principal_id`가 없고 사건의 제안자는 `actor_id: "proposer"`다. trip 행의 `wait`는 열린 trip에만 싣는다. 작업 읽기의 SQLite 읽기는 `asyncio.to_thread` 한 번으로 이벤트 루프 밖에서 한다(33a0b5706). 관제 작업 영역은 자기 크기 단위 `site_ui/console/work`다(6377fe873, 계획 `docs/plans/2026-10-15-fleet-console-work-unit.md`). 원장 단위 7,135/7,135, 다음 원장 증가는 Mission 분리부터.
+- 증거: 원격(모델 PC, e7b196839) fleet 16개 파일 266 passed, 계약·구조 6개 파일 69 passed, `known_failures` 0 new, 로그 X: `work-read/r3a/run-1.txt`, `work-read/r3b/run-1.txt`. 새 시험: 제안자·이름 있는 운영자·공유 토큰·viewer 상세 범위, 닫힌 trip의 남은 `over_bound`, 루프 밖 읽기.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 6. 남의 `PROPOSED` Cell Job 상세는 이전에 운영자 누구나였고 이제 이름 있는 운영자만이다.
+
+## 2026-10-15 · db7b5cf3a · Mission 원장과 작업 읽기를 자기 크기 단위로 (main 머지 ab8ac53f6 뒤, API v1.238)
+
+- 변경: main(조각 6, v1.236) 머지 뒤 원장 단위가 7,215로 한도 7,135를 넘었다. 원장 계획이 이름 붙인 분리로 `mission_*` 여덟 파일을 새 holder `server/missions`(2,575/2,725)로, 그것으로 모자라 작업 읽기(`work_read.py`·`work_routes.py`)를 `server/work`(128/207)로 옮겼다. 모듈 이름은 그대로다(`SERVER_HOLDERS`). 원장 4,545/4,560, 서버 31,846/31,930(같은 경계로 조각 전 31,847). 조각 4는 v1.237(feat/regulation-capabilities 선점) 위의 v1.238이다. 머지의 logs 해소가 main의 마지막 gate 줄을 잘랐던 것을 main 파일 + 이 브랜치의 추가 행으로 고쳤다.
+- 증거: 원격(AI PC, db7b5cf3a) `operations/fleet/test` 전체 5,249 passed, 293 skipped(브라우저 opt-in), 계약·구조 176 passed, `known_failures` 0 new, 로그 X: `work-read/r4a/run-1.txt`, `work-read/r4b/run-1.txt`. 브라우저 3개 파일 93 passed, 로그 X: `browser-run/wrs4-b4.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4, 계획 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`.
+
+## 2026-10-15 · f4fb26e0c · D-525 여러 호에 걸친 구역 span의 입구 보존
+
+- 변경: `Layout.route`가 같은 구역의 이웃 span을 합칠 때 입구(`entry`)를 버렸다(`traffic/blocks.py`). 원형 교차로를 `west:fwd → ring_s → ring_e → ring_n`처럼 세 호 이상 지나는 경로는 구역 span의 입구가 `""`가 되어, 가상 신호가 그 로봇을 녹색에도 들이지 않았다(Gazebo m33: 녹색·빈 구역에서도 1,442 표본 대기). 합칠 때 첫 span의 입구를 유지한다. 입구를 읽는 곳(`step`의 적색 판정, `signal_phase.zone_occupancy`, `signal_service._signals_ahead`)은 모두 이 값을 쓴다.
+- 증거: `test_signal_phase.py`에 네 호 경로가 입구 `west:fwd`를 유지하고 그 접근로 녹색에 들어가며 다른 접근로 녹색에는 막히는 시험을 넣었다. 원격 결과는 이 브랜치 보고에 적는다.
+- 확인: `fleet_sim_camera_site.yaml`의 `west:rev`는 공유 지도(west가 SW→NW 양방향, 링은 CCW)에서 SW 입구로 들어가는 호라 맞다. m32/m33의 `west:fwd`는 저장소 밖 SIM 부트스트랩이 west를 NW→SW 일방으로 뒤집은 지도 기준이라 설정은 바꾸지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-15 · 84bbabeca · D-763 10항 (c): 규제 능력 없는 로봇에 횡단보도·신호 구역 경로를 거절 (API v1.233)
+
+- 변경: `TripCaps`가 `lane_crosswalk_gate`·`lane_junction_signal`을 읽는다(없으면 꺼짐). `ledger/trip_admission.py` `_caps_checks`(시작·바퀴·재계획)가 lane 경로가 현장 지도 횡단보도 다각형에 들어가거나(`crosswalks_on`, 2 cm 표본) 신호 구역을 지나는데(`TrafficService.route_signals`, `signal_refusal`이 하던 구간 걷기) 능력이 없으면 422 `TRIP_REGULATION_CAPS_MISSING` `{missing: {능력: [id]}}`. 콘솔 문구 추가. 시험 fixture `LANE`·`BOTH`·`PIVOT`·`LEGACY`는 map_v2_fleet에 횡단보도가 있어 `lane_crosswalk_gate`를 알린다.
+- 증거: `test/test_trip_regulation_caps.py`, `test_traffic_signals.py`. 원격 시험(AI PC, cb1e6c61f) `operations/fleet/test` 전체 통과, `known_failures` 0 new.
+- gate 변화: 없음. 크기: 서버 단위 순증 0(`console_view.py` 주석 압축), ledger +23, traffic +2.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 횡단보도가 있는 기본 시험 지도 때문에 능력 하나를 요구하는 검사가 trip 시험 112개를 깨뜨렸다. 공유 caps fixture를 현재 로봇처럼 고치면 된다.
+
+## 2026-10-15 · 4ca431d25 · D-763 10항 (c) 사용자 결정: 필드 없는 옛 CORE는 경고, false만 거절
+
+- 변경: `TripCaps`의 두 능력이 `None`(알리지 않음)과 `false`를 가른다. `_caps_checks`가 `false`만 422 `TRIP_REGULATION_CAPS_MISSING`, `None`은 trip detail `regulation_caps_unknown {능력: [id]}`와 경고 로그 한 줄(ponytail: 새 릴리스가 다 깔리면 거절로 좁힌다). 시작·바퀴·재계획이 detail을 넘긴다. 공유 trip fixture의 `lane_crosswalk_gate=True`는 되돌렸다. 콘솔 문구·API 참조·D-763 부기 갱신.
+- 증거: `test/test_trip_regulation_caps.py`(없음 → 시작+경고, false → 거절, true → 시작, 둘 다 없는 경로 → 시작). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), 사용자 결정 2026-10-15.
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 독립 검토 반영: 운영자 재계획·다음 바퀴·잘못된 값·지난 경고
+
+- 변경: `confirm_replan`이 `_apply_replan` 전에 보류된 계획의 구간으로 `_caps_checks`를 돈다(지도가 바뀌었으면 그대로 `TRIP_MAP_CHANGED`). `_next_lap`이 지금 바퀴의 남은 구간이 아니라 다음 바퀴 `body`의 구간을 검사한다. `TripCaps`는 있는데 bool이 아닌 값을 `false`로 읽어 거절한다. 깨끗한 검사가 trip detail의 `regulation_caps_unknown`을 지운다. `trip_runner.py` 896 → 898줄(한도 901).
+- 증거: `test/test_trip_regulation_caps.py`(운영자 재계획 거절·통과와 경고 지움, 다음 바퀴 구간, 잘못된 값). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), 독립 검토 LAND-WITH-CONDITIONS.
+- 교훈: 거절 검사는 경로를 바꾸는 모든 입구(시작, AI 재계획, 운영자 재계획, 다음 바퀴)에 같이 둔다.
+
+## 2026-10-15 · ca386fb1a · 크기: trip 시작 검사를 단위 `server/trip_checks`로, 신호 구간 걷기를 그 옆으로
+
+- 변경: main `c4cd2bf95` 병합 뒤 원장 단위 7,170(한도 7,135), `trip_runner.py` 903(한도 901), `traffic` 2,202(한도 2,201)였다. `trip_admission.py`·`trip_progress.py`를 내용 그대로 `server/trip_checks/`(새 `SERVER_HOLDERS` 보관 자리, 크기 단위, 판정 제안·독립 재판정 필요)로 옮겼다. `TrafficService.route_signals`를 지우고 `signal_service.py`를 main 그대로 두었으며, 같은 구간 걷기를 `trip_admission.signals_on`으로 옮겼다. 운영자 재계획 확인은 `TripAdmission._admit_replan`(검사 뒤 `_apply_replan`)을 한 줄로 부른다. 동작은 바뀌지 않는다.
+- 증거: 원장 6,714, `trip_checks` 472, `trip_runner.py` 901, `traffic` 2,195. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), `docs/plans/2026-10-14-fleet-ledger-size-unit.md` 2026-10-15 부기.
+- 교훈: 남의 착지로 한도가 찬 단위에 더할 때는 판정이 이름 붙인 경계로 먼저 옮긴다.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+
+- 변경: main이 v1.237(D-763 조각 4, `feat/fleet-work-read-sources`)을 썼다. 이 브랜치의 위 항목에 적힌 v1.233·v1.237은 v1.238로 읽는다. 시작 검사 파일은 main의 `server/trip_checks/`, trip 루프는 `server/trips/`에 있다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · d6d84dffd · 크기: `trip_checks`를 두 단위로 — `trip_progress` 보관 자리
+
+- 변경: main 병합 뒤 `trip_checks` 474(한도 422, 이 브랜치의 D-763 10항 (c) +53). 판정 문구대로 수용하지 않고 `trip_progress.py`를 바이트 그대로 새 `server/trip_progress/`(`SERVER_HOLDERS`, 크기 단위, 판정 제안·독립 재판정 필요)로 옮겼다. import는 그대로다. `trip_checks` 338(기준 192, 한도 342), `trip_progress` 136(기준 80, 한도 230).
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: `docs/plans/2026-10-15-fleet-ledger-trips-unit.md` 2026-10-15 부기.
+- 교훈: 없음.
+
+## 2026-10-15 · 7f3bd72a1 · 제안 읽기는 Cell Job 상세 범위를, 채널 제출·승인은 이름 있는 운영자를 (D-763 조각 4 리뷰)
+
+- 변경: `GET /api/fleet/proposals/{id}`가 Cell Job 제안을 `GET /api/fleet/cell-jobs/{id}`와 같은 범위·가림으로 읽는다(두 경로가 한 도우미 `cell_job_view`를 쓴다). 이전에는 운영자 누구나 남의 Cell Job 제안을 읽었고 응답의 `mission`에 `proposal_principal_id`가 실렸다. 이제 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만 읽고 나머지는 404 `PROPOSAL_NOT_FOUND`다. 레거시 Mission 제안은 그대로 제안자만. `POST /api/fleet/channel-requests/{id}/admit`·`/submit`은 `require_named_operator`다(직접 Mission admit·`/goal`과 같다). API 참조의 세 경로 인증 문구, 버전 머리는 그대로.
+- 증거: 원격(모델 PC, 7f3bd72a1) `operations/fleet/test` exit 0(293 skipped, 브라우저 opt-in), `test/architecture` exit 0, `known_failures` 둘 다 0 new, 로그 X: `proposal-scope/fleet/run-1.txt`, `proposal-scope/arch/run-1.txt`. 고치기 전 빨강 X: `proposal-scope/red/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 리뷰. API 변경 이력 번호는 착지 때 정한다.
+
+## 2026-10-15 · c0c7fb706 · Cell Job 제안자 가림을 모든 응답에, 자원 claim 읽기는 역할별로, API v1.240 (D-763 조각 4 보안 리뷰 L1/L2)
+
+- 변경: 가림을 모듈 수준 `redact_cell_job(job, principal)`로 옮기고 Cell Job을 돌려주는 모든 응답(제안 읽기, Cell Job 상세, Mission admit·reject, Cell Job reconcile·resume·cancel)에 쓴다. 제안자 아닌 호출자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`다. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. API 참조 v1.240(머리, 변경 이력 행, 해당 경로 행), 버전을 고정한 시험 다섯 곳과 `core_api_web` app.py 설명. 시험: 숨긴 id의 404 본문이 없는 id와 같음, 제안자 사건이 두 읽기에서 `proposer`, 실제 `build_role_guards`와 `install_channel_feature`로 이름 없는 운영자의 채널 admit 403, L1/L2.
+- 증거: 원격(AI PC, 2a2c1871a) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet4/run-1.txt`. 원격(165a1d95d) `test/architecture`, `test/test_line_follow_contract_docs.py`, `middleware/core/api/test` exit 0, 0 new, 로그 X: `proposal-scope/arch2/run-1.txt`. 중간 실패 2건(새 시험이 stop generation을 두 번 rearm)은 2a2c1871a에서 시험을 고쳤다, 로그 X: `proposal-scope/fleet2/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰(APPROVE 뒤 L1/L2). API v1.240은 동료와 조율해 받은 번호다.
+
+## 2026-10-15 · bbfac7c5c · claim 읽기는 행마다 쓰지 않고, 채널 submit 배선 시험, 작업이 쥔 로봇의 거절에 mission id 없음 (D-763 조각 4 보안 리뷰 N1·후속)
+
+- 변경: N1(dd0da079a) — `GET /api/fleet/resource-claims`가 레거시 Mission 주인을 기존 `get_in_transaction`으로 한 연결에서 읽는다. 행마다 `get()`이 돌리던 `purge_expired()`(SQLite 쓰기 잠금을 잡는 DELETE)가 없다. 만료 행은 None으로 읽혀 답은 같다. 후속(bbfac7c5c) — 다른 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` 세 곳(trip 시작 `trip_runner`, 작업 단계 admission `trip_admission`, lease 채택 `trip_lease`)이 그 작업의 `job_id`를 실었다. 이제 `{"reason": "job", "owner_kind": "mission"}`이다. `trip_guard.py:35`의 `lease.claimed`는 그 `job_id`의 출처이고 그 자체는 응답에 나가지 않는다. `console_view.trip_refusal`의 문구는 로봇 id만 싣는다. API 참조 v1.240 절과 이력 행에 한 줄. 시험: 실제 `build_role_guards`·`install_channel_feature`로 이름 없는 운영자의 채널 `/submit` 403과 Task 0건, purge 0회, 거절 detail에 mission id 없음. fleet 줄 수 변화 0(31,901/31,930).
+- 증거: 원격(AI PC, bbfac7c5c) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet6/run-1.txt`. N1은 dd0da079a에서 같은 결과, 로그 X: `proposal-scope/fleet5/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰 후속. API v1.240 안에 든다.
+
+## 2026-10-15 · uncommitted · D-763 조각 7: 작업의 운행 단계가 Step 원장 안의 trip이 된다
+
+- 변경: Step 원장 CHECK가 등록부의 종류가 되었다(사용자 결정 2026-10-15 "작게 풀고 진행"). 표 정의는 `work/step_ledger_schema.py`에 있고, CHECK가 다른 표는 행을 그대로 두고 다시 만든다. 이관 버전은 2다. 등록부에 `TRIP`(한 사람 승인, SIM 전용)을 더했다. `JobTripSteps`(`missions/job_trip_steps.py`)가 단계마다 `trip_routes` `plan`으로 계획하고 `TripRunner.start(job_id=)`로 시작한다. `arrived`만 다음 단계로 간다. 나머지는 HOLD, lease 놓기, 사건 하나다(사건은 누가 쓴 HOLD든 tick이 연다). 원장 행은 `ledger/job_trip_rows.py`, 입구 `POST /api/fleet/trip-jobs`는 `trips/trip_job_routes.py`에 있다. 독립 안전 검토 지적 1–6·8–10을 고쳤다: lease를 잃은 표시, 비상 정지에서 lease 놓기, start token, 모든 HOLD에 사건, `stop_job`이 단계 trip을 끝냄, 이관 버전. SIM에서 찾은 trip 사이 넘겨받기도 고쳤다(`trip_progress.inherited_stop`, `TripRunner.held_stops`, `_core_busy`를 `TripProgress`로 옮김). 이어진 독립 검토 세 번의 지적도 고쳤다: E-stop epoch를 lease 전에 읽음, 넘겨받은 정지는 한 번만 쓰고 멈춤이나 E-stop이 지움, 행이 없을 때는 표시를 지우지 않음, 사건 중복 방지, 프로필이 닫히면 HOLD, Cell 재개 이벤트의 `approvals`.
+- 증거: 원격 pytest(X:/DevTemp/job-trip-steps/held, fix3, fleet2, arch2, gateway2). AI PC Gazebo s7-1·s7-2·s7-3에서 두 단계가 모두 달려 `arrived`, `GOAL_CONFIRMED`, lease 풀림(X:/DevTemp/job-trip-steps/sim/s7-1). 크기: fleet 31,884 → 31,873, ledger 2,018, missions 2,704, work 188, trips 2,354, trip_checks 342, trip_progress 153, `trip_runner.py` 894.
+- gate 변화: SIM(한 번, 2대 Gazebo). 장치는 하지 않았다.
+- 결정: D-763 2026-10-15 부기(조각 7), D-420 2026-10-15 부기.
+- 교훈: 차로 `arrived`는 CORE에 쥔 정지를 남긴다. 연이은 trip은 처음부터 그 정지를 넘겨받아야 한다. 같은 fence에서 다시 승인하면 이벤트가 중복으로 지워지므로, 원장 이벤트 수로 재승인을 셀 수 없다.
+
+## 2026-10-15 · 279cfdd52 · D-767 P0 경로 미리보기 (Fleet만, 로봇에 보내지 않음)
+
+- 변경: 새 `server/trips/trip_preview.py`(116줄)가 trip 주기마다 블록 표·신호 참고 뒤에 그 단계가 이미 읽은 자세(D-760 8 공유 읽기, 자기 읽기 없음)로 trip 경로 위 2 m 안의 사건 목록을 만든다: `turn`(가로선 `line_before_m`), `bend`(호 시작점, 여러 구간), `arc`(`exit_segment`), `crosswalk`(새 `site_map.crosswalk_spans`가 다각형을 경로에 투영한 앞쪽 경계), `signal`(경로 위 전부, `/traffic` 신호 접근로), `stop`(trip 끝·보류, `hold_back_m`), `authority_end`. `horizon_m = min(2, trip 끝, max(R + d_stop, v × 8 s))`, 8개에서 자름. `/api/fleet/traffic` 로봇 행 `preview`(≤ 2 s, 만료·없음은 행에 없음, `work_read` 아님). 방금 보낸 지시의 앞당김 전 지점과 0.005 m 넘게 다르면 `preview_mismatch{kind}`. 바뀜 = 다리·사건 집합·params·`s_m` 0.01 m. `ROSY_ROUTE_PREVIEW_LOG=<file>`이면 JSON 줄로 남고 `tools/sim/route_preview_accuracy.py`(5fba65e10)가 ADR 7항 기준으로 잰다. `trip_runner.py` 900줄: import·호출 두 줄을 `confirm_replan`의 같은 세 줄 블록 둘을 합쳐 갚았다. 주석 고침 ab922a2f8(`crosswalks[]`는 없다). 단위: trips 2,387/2,388, fleet 31,904/31,930, 콘솔 17,718/17,719.
+- 증거: 원격(모델 PC, 239d2d607) `operations/fleet/test` 5,290 passed, 293 skipped(브라우저 opt-in), `known_failures` 0 new, 로그 X: `route-preview-p0/fleet/run-1.txt`. 원격(5fba65e10) 구조·하네스 계약·채점기·`operations/world/test` 146 passed, 0 new, 로그 X: `route-preview-p0/arch/run-1.txt`. 브라우저 시험은 원격 실행기가 `ROSY_RUN_BROWSER_TESTS`를 넘기지 않아 확인 못 함(카드 문구는 node 시험).
+- gate 변화: 없음. Gazebo 2대 30분·장치 2대 10바퀴 정확도 측정은 남았다(참값 추출 도구 없음).
+- 결정: D-767 B부 P0. 설정 `fleet.trip.route_preview: off|observe`는 만들지 않았다(app.py·TripConfig 동결). 되돌림은 호출 한 줄.
+
+## 2026-10-15 · 512d26a73 · D-767 P0 독립 검토(CONDITIONS) 반영
+
+- 변경: 횡단보도 투영은 `site_map.route_crosswalks`가 경로마다 한 번 계산해 캐시한다(지도 기하는 주기마다 바뀌지 않는다). 다각형 상자와 겹치지 않는 경로 조각은 표본을 뽑지 않고, 2 cm 표본에 교차점만 1 mm까지 이분한다. 한 로봇의 미리보기 실패는 그 로봇의 미리보기만 비우고 trip마다 한 번 ERROR로 남는다(이후 DEBUG). 자세와 앞 끝 사이의 사건은 싣지 않는다(`at_m` ≥ 0, 그 자리에 보낸 지시는 불일치로 세지 않음). `seq`가 바뀜 횟수를 센다(`changes` 필드 대신). 불일치 경고 로그는 줄 수 때문에 뺐고 `/traffic` 행 `preview.mismatch`에만 남는다. 채점기(69f10c23d): `pose_stamp` 없는 행 건너뜀, `--offset-s`(참값 시계 − 예측 시계), 통과에 `leg_id`가 있으면 같은 다리만 맞춤, 기준은 사건마다 |오차| / (a + b·`at_m`)의 p95 ≤ 1(ADR의 p95 ≤ a + b·`at_m`). 단위: trips 2,388/2,388, fleet 31,926/31,930, 콘솔 17,718/17,719.
+- 되돌림: `ROSY_ROUTE_PREVIEW=off`(Fleet 프로세스 환경). `TripConfig` 필드(`fleet.trip.route_preview`)가 허락될 때까지 이것이 D-767 P0의 되돌림이다.
+- 증거: 원격(f4162e635) `operations/fleet/test` 5,294 passed, 293 skipped(브라우저 opt-in), `known_failures` 0 new, 로그 X: `route-preview-p0/r3fleet/run-1.txt`. 구조·하네스·채점기·`operations/world/test` 148 passed, 0 new, 로그 X: `route-preview-p0/r3arch/run-1.txt`. 새 시험: 경로당 한 번 표본(두 번째 주기 0회, 먼 횡단보도 0회, 첫 주기 ≤ 130회), 한 로봇 실패 격리·로그 한 번, 앞 끝 거름, 끄기 스위치, 채점기 시계·다리.
+- gate 변화: 없음.
+
+## 2026-10-15 · 64816ae7e · lane_instruction_stamp 로봇에 pose_stamp, 지연 추정 없음 (D-767 A부, API v1.241)
+
+- 변경: `server/console/console_view.py` `TripCaps.lane_instruction_stamp`. `server/trips/trip_runner.py` trip 능력 보기에 그 키(기존 줄 안, 901줄 그대로). `server/trips/trip_ports.py`: 능력이 참이고 이 걸음의 자세에 odom stamp(`live.at_stamp`)가 있으면 교차로·굽이 필드에 `pose_stamp`(= `map_entry.odom_stamp_s`), 굽이 앞당김 0, `_pose_tol`에서 읽기→전송·`SEND_ALLOWANCE_S` 항 제외(자세 나이·dead reckoning·드리프트는 남음). 600줄 그대로(주석을 줄였다). 능력이 없는 로봇은 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`(빨강 → 초록): 창 허용치 0.095(지연 0.5 s 무시), 능력·stamp 없으면 0.235와 `pose_stamp` 없음, 굽이 0.4 무앞당김과 `pose_stamp` = `map_entry.odom_stamp_s`, 능력 없으면 0.38. 원격(모델 PC, 9639a41b8) `operations/fleet/test` 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 4항. `bend_send_s`는 능력 없는 로봇에 그대로 쓴다.
+- 교훈: 없음.
+
+## 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)
+
+- 변경: `server/trips/trip_runner.py` `_send`: `INSTRUCTION_STAMP_UNUSABLE`을 `JUNCTION_ODOM_STALE`처럼 다음 주기에 새 자세로 다시 보낸다. `detail.reason`이 `disabled`이면 그 trip의 `caps.lane_instruction_stamp`를 거짓으로 고쳐 다음부터 stamp 없이 앞당김을 넣는다. 901줄 그대로(`_step_free`의 한 번 쓰는 `arc` 지역 변수를 없앴다). `trip_ports.py`: `pose_stamp`는 창 있는 교차로 지시와 굽이에만. 600줄 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`(빨강 → 초록): 창 없는 지시엔 `pose_stamp` 없음, 거절 뒤 새 stamp로 재전송, `disabled` 뒤 stamp 없이 0.38 앞당김. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.
+
+## 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
+
+- 변경: `server/trips/trip_runner.py` `_send`: `detail.junction_retry` = 코드와 `detail.reason`(예: `INSTRUCTION_STAMP_UNUSABLE no_sample`). 901줄 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.
+
+
+## 2026-10-16 · uncommitted · Robot/Pilot 진입 JS 설치 closure
+
+- 변경: Fleet 기존 static allowlist와 wheel/sdist 설치 검증에 device-discovery.js를 포함했다. 기존 API·정적 서빙을 유지한다. e596dc451의 최초 checkout 밖 설치·자산 HTTP 검증 55개 시험이 통과했으며, D-766에 따른 devices/ 분리 이후 최종 설치 검증을 다시 한다.
+- 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
+- gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+## 2026-10-16 · uncommitted · discovery 분리 후 기존 계약 시험 경로 수정
+
+- 변경: disabled-feature poller와 scanner lease 경보 시험이 분리된 device-discovery.js를 검증한다. HTTP 자산 응답과 console.js의 import 연결도 확인한다.
+- 증거: main 착지 전체 시험에서 기존 소스 경로를 읽던 2건 실패를 확인했다(5357 passed, 315 skipped). 제품 코드는 변경하지 않았으며 수정 후 원격 검증은 착지 절차에서 수행한다.
+- gate 변화: 없음. 전체 검증 통과 전 main 반영 보류.
+
+## 2026-10-16 · uncommitted · 경로 보기 브라우저의 명시적 탭 클릭
+
+- 변경: 폼 밖 클릭을 패널 중앙 대신 상태 탭으로 지정한다. 앱 링크로 카드 높이가 바뀌자 중앙 좌표가 대형 관리 버튼과 겹쳤고 실제 탭 전환을 일으켰다.
+- 증거: 전체 및 파일 단위 원격 Chromium에서 재현. 위치 없음의 경로 보기 차단과 위치 수신 후 활성화 검증은 유지한다.
+- gate 변화: 없음.
+
+## 2026-10-16 · uncommitted · 최신 크기 규칙 통합
+
+- 변경: D-766 개정 2의 roster.js 제한을 지키도록 앱·지도 기록 링크 생성 코드를 기존 device-discovery.js로 옮겼다. 새 파일이나 권한 경로는 추가하지 않았다.
+- 증거: main 통합 전 원격 FULL은 새 실패 0건이었다. 통합 후에는 크기 검사와 관련 브라우저·설치 검증을 다시 수행한다.
+- gate 변화: 없음.
+
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · uncommitted · D-779 2~4단계 팔 여러 개 Cell Job 실행
+
+- 변경: `arms: [{role, instance_id}]`와 Step별 `placement`(주 팔·대체 팔·구역·결합·depends_on·팔별 Action 내용)를 받는 팔 여러 개 Job을 만든다. 배치는 `fleet_cell_step_placements`, 표시는 `fleet_cell_arm_jobs`에 두고 1단계 거울 트리거와 backfill은 표시된 Job을 건너뛴다. 한 팔 디스패처 조회(`jobs_by_status`, `unresolved_jobs`)는 그 Job을 돌려주지 않는다. `cell_arm_dispatcher`가 팔별 준비 집합(의존 GOAL_CONFIRMED, 팔 READY, 팔·구역 claim 비어 있음)으로 Action을 내고, 결과는 그 팔과 그 claim만 HOLD한다(`tight`면 짝도). 대체 팔 한 팔 모드, 팔 단위·Job 단위 재개, 취소, 사이트 정지 래치와 시작 복구를 팔 단위로 처리한다. claim 단계 전환은 safety 태그 `cell/cell_arm_claims.py`와 `ledger/action_claims.release_held_keys`에 있다. app.py는 같은 자리에서 `CellJobDispatcher`를 만들고, 팔 여러 개 Job이 없으면 틱은 한 팔 틱과 같다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다. 장치·ARM64·현장 수용 없음.
+- gate 변화: 없음(SIM 코드만). 착지·push 없음. 팔 여러 개 Job의 목표 증거 경로와 API reference 개정은 남았다.
+
+## 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영
+
+- 변경: 팔마다 owner 작업대(`arms[].workcell_id`)를 Job에 적고, 그 작업대를 Job 단위 claim으로 승인부터 끝까지 잡는다. 같은 owner를 쓰는 한 팔 Job이나 다른 팔 여러 개 Job은 승인에서 거절된다. 설정이 그 인스턴스를 다른 작업대로 매핑하면 그 팔은 NOT_CONFIGURED다. 짝 Action은 두 번째 송신 전에 fence를 다시 읽고, 바뀌었으면 남은 팔을 미송신 HOLD로 두고 받은 팔을 취소한다. 짝의 틱당 I/O는 팔당 2와 취소 1이다. 취소는 팔·Action 표시까지 한 트랜잭션이다. Cell 원장 버전은 4다(1단계 Fleet는 거부).
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 남은 일: 팔 여러 개 Job은 아직 끝까지 갈 수 없다. Cell 목표 증거 ingress(`cell_goal_evidence_service`)와 성공 hook이 팔 여러 개 Step을 모르고, `ArmJobStore.confirm_step_goal`만 GOAL_CONFIRMED를 쓴다(닫힌 쪽으로 실패). D-781 컴파일러 출력, API reference의 팔 단위 재개 경로, D-780 barrier가 든 짝 grant도 남았다.
+
+## 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
+
+- 변경: 레시피 스키마가 `rosy_cell.recipe/3`인 Cell 후보는 `cell_mixed_submission.compile_mixed_submission`으로 간다. `PalletizingCellJobCompiler.compile_mixed`가 혼합 계획기로 다시 컴파일하고, 후보 Job과 바이트 비교, recipe·cell digest 비교, 64 KiB 한도를 한 팔 경로와 같게 지킨다. 팔 목록은 cell/3 문서의 `arms`, claim은 작업대·팔 owner 작업대·팔레트다. 제안의 `instance_id`는 작업대 팔 가운데 하나여야 한다. recipe/1·/2 경로와 그 Job id는 바뀌지 않았다(26a148117 기준 고정값 시험). palletizing을 import하는 Fleet 모듈은 여전히 `cell_compiler.py` 하나다.
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 후속: 팔별 좌표의 item_at_pose 목표 술어, Cell 앱 미리보기(`/cell-app/compile`)의 recipe/3, 한 팔 recipe/3.
+
+## 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
+
+- 변경: 목표 허용오차가 설정되면 resolver가 recipe/3 Step마다 `goal_predicates`를 고정한다. 술어는 주 팔과 대체 팔마다 하나씩, 그 팔 입력과 sku 형상으로 계산된 그 팔 `robot_base` 좌표다. `cell_arm_jobs`는 그 키가 Step의 팔과 같은지 확인하고 `step_json`에 둔다. 목표 증거 서비스의 술어 팔은 배정된 첫 팔(첫 주 팔 또는 Step을 넘겨받은 대체 팔)이다. 대체 팔 Step은 그 팔 술어로 판정하고, 술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`으로 거절한다. 첫 주 팔 좌표의 단일 `goal_predicate`는 대체 팔에 쓰지 않는다. `step_action_kinds`는 입력의 `sku`를 CELL_TRANSFER 본문에 옮긴다. sku가 없으면 본문은 같다. `/api/fleet/cell-app/compile`은 recipe/3를 `compile_mixed`로 미리 보고 `summary.multi_arm`(팔, Step별 sku·팔·대체 팔·구역·결합·depends_on)을 더한다. recipe/1·/2 응답은 그대로다.
+- 증거: 원격 pytest를 돌리지 못했다. 이 시점에 실험실 시험 호스트에 하나도 닿지 않았다. 시험은 썼지만 실행하지 않았다.
+- gate 변화: 없음. 남은 일(ADR 필요): 한 팔 recipe/3 Job, 짝 Step 부분 성공 회복, owner의 cell/3 승인.
+
+## 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+
+- 변경: 에이전트가 고른 topic·레시피/셀 digest·instance를 기존 compile/proposal API로 연결하는 `fleet/server/work/cell_task_client.py`를 추가했다. 원본·제출 intent·Fleet 응답을 보존하고 기존 Cell Job 원장을 조회한다. 별도 명시적 admit는 저장된 요청과 현재 제안을 대조하고 기존 named operator·generation 검사로 위임한다. 자동 재전송·dispatch 재무장은 없다.
+- 증거: bbaf06bbe 원격 pytest 30 passed, known failures NEW 0. 실제 Cell compiler·API와 새 프로세스 CLI import를 검사했다. 독립 계약 리뷰에서 추가 material finding 없음.
+- gate 변화: 없음. 자유문장 해석기·Gazebo 실행·실물 구동·실제 모방학습 완료의 증거는 아니다. ACTION_SUCCEEDED와 독립 GOAL_CONFIRMED를 구분한다.
+
+## 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+
+- 변경: 한쪽 claim 거절의 즉시 rollback 검사는 유지하고 이후 독립 왼팔 작업이 점유한 정상 shared zone을 실패한 pair의 누수로 판단하지 않게 했다. 최종 action_id와 claims를 대상 pair에 결속한다.
+- 증거: 통합 후보의 1 failed / 6635 passed / 354 skipped와 동일 후보 단독 통과로 타이밍 의존을 확인했다. 독립 producer-consumer 분석 후 수정 커밋 원격 G1 SIM·timing 12 passed, 새 실패 0개.
+- gate 변화: 생산 제어·claim 권한 변경 없음. 중단된 후보의 병합 검사와 실제 G2·실물 수용을 완료로 표시하지 않는다.
+

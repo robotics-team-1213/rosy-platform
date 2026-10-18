@@ -38,10 +38,11 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-741 6: app-shell.css is the shared seat sheet; Fleet uses its sub-nav seat.
         "index.html": [*shared_sheets, "/common/app-shell.css", "/console/assets/styles.css", "/console/assets/doc-tabs.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
-                       "/console/assets/device-watch.css"],
+                       "/console/assets/device-watch.css", "/console/assets/work.css"],
         "install.html": [*shared_sheets, "/common/task-chooser.css",
                          "/console/assets/styles.css", "/console/assets/doc-tabs.css",
-                         "/console/assets/fleet-header.css", "/console/assets/password-login.css"],
+                         "/console/assets/fleet-header.css", "/console/assets/password-login.css",
+                         "/console/assets/measured-calibration.css"],
     }
     for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',

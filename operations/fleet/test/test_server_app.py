@@ -23,6 +23,73 @@ GRID = {"map_id": "occupancy:abc", "width": 1, "height": 1, "resolution": 0.05,
         "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "data": [0]}
 
 
+def test_failed_background_worker_does_not_interrupt_remaining_shutdown():
+    import asyncio
+
+    async def exercise():
+        robot = FakeRobot("rosy_01")
+        app = create_app(FleetConsole([RobotEndpoint("rosy_01", "http://a:8080", "t")], [robot]))
+        failed, started, stopped = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        async def broken_trip():
+            failed.set()
+            raise RuntimeError("trip worker failed")
+
+        async def path_watch():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+        app.state.trip_runner.run = broken_trip
+        app.state.paths.run = path_watch
+        async with app.router.lifespan_context(app):
+            await failed.wait()
+            await started.wait()
+        assert stopped.is_set()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("failing_close", ["power", "start_points"])
+def test_close_failure_still_closes_all_resources_after_workers_stop(failing_close):
+    import asyncio
+    from types import SimpleNamespace
+
+    async def exercise():
+        robot = FakeRobot("rosy_01")
+        app = create_app(FleetConsole([RobotEndpoint("rosy_01", "http://a:8080", "t")], [robot]))
+        started, stopped = asyncio.Event(), asyncio.Event()
+        closed = {}
+
+        def mark_closed(name):
+            closed[name] = stopped.is_set()
+            if name == failing_close:
+                raise RuntimeError(name + " close failed")
+
+        async def close_power():
+            mark_closed("power")
+
+        async def path_watch():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+        app.state.power_health_display = SimpleNamespace(aclose=close_power)
+        app.state.start_points = SimpleNamespace(close=lambda: mark_closed("start_points"))
+        app.state.paths.run = path_watch
+        with pytest.raises(RuntimeError, match=failing_close + " close failed"):
+            async with app.router.lifespan_context(app):
+                await started.wait()
+        assert stopped.is_set()
+        assert closed == {"power": True, "start_points": True}
+
+    asyncio.run(exercise())
+
+
 def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
                                token="t") for i, r in enumerate(robots)]

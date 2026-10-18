@@ -61,3 +61,25 @@
 - **SOURCE·호스트 단위 시험만 했다.** `middleware/core/services/test/test_junction_bend.py`(측정 사례: `map_entry`가 있으면 진입 직선이 차로 방향이고 통과 끝이 나가는 직선에서 2 cm 안, 없으면 오늘처럼 로봇 yaw를 따라 벽 쪽으로 6 cm 넘게 벗어남; yaw 쌍으로 옮기기; 29°는 쓰고 31°는 `heading`; `stale`·`future`·`no_sample`·odom 재시작·`carry`; 잘못된 객체 거절; 9항 축; 설정이 꺼지면 능력이 거짓이고 받은 `map_entry`는 `disabled`이며 닻·경로·명령이 `map_entry` 없는 지시와 같음; 0.22 m 뒤의 닻과 21.6°에서 `off_path` 없이 호를 돎; 재전송이 `stale`이던 방향을 다시 둠; 한계 1(횡 오프셋이 남음)과 한계 8(Fleet yaw 15°·25° 오차를 그대로 따름)의 동작 고정), `middleware/core/gateway/test/test_line_junction_api.py`·`test_capabilities_controls.py`(400, 기록, 능력), `operations/fleet/test/test_trip_bend.py`(능력과 `odom_stamp`가 있을 때만 실음, 값은 호 시작점의 차로 방향과 찾은 자세의 yaw 쌍, 넘겨받은 자세가 없으면 싣지 않음).
 - **SIM: 열려 있다.** 이 구현으로 Gazebo map_v2_fleet 한 바퀴를 돌리지 않았다. run66은 다른 코드(3항)다.
 - **DEVICE: 열려 있다.**
+
+## 개정 1 (2026-10-14) · 교차로 회전도 지도의 출구 방향을 겨눈다
+
+Gazebo m18·m19에서 회전형 로터리 출구(NW, 오른쪽, Fleet 고정 `turn_deg` −108.1)가 `junction_unresolved`로 끝났다. 회전 목표는 `진입 yaw + turn_deg`다(`turn.py`, 진입 yaw는 교차로를 본 순간의 로봇 yaw). 앞선 기동에서 남은 0.07–0.10 rad의 yaw 오차가 그대로 출구 방향의 오차가 됐고, 0.10 m 전진 뒤 재획득(30° 안 3프레임)이 `camera_line_not_visible`로 실패해 `lost_after_s` 3초 뒤 끝났다. 굽이의 진입 직선(이 ADR 본문)과 같은 원인이고 같은 재료로 고친다.
+
+결정:
+1. `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 싣는다. `yaw_rad`는 출구 차로가 교차로 장소에서 시작하는 방향(지도 좌표, Fleet `start_tangent`)이다. 필드, 범위, 400 규칙은 1항과 같고 `straight`·`stop`·`turn_deg` 없는 회전에 실으면 400이다.
+2. 설정 `line_follow.turn_map_entry_enabled`(bool, 기본 `false`)와 능력 `lane_turn_map_entry`(설정이 켜져 있고 `junction_turn`이 참일 때만 참)를 더한다. Fleet은 2항과 같은 조건(능력, 찾은 지도 자세의 `odom_stamp`)에서만 싣는다. 설정이 꺼지면 받은 값은 `disabled`다. 굽이 설정과 따로 둔 까닭은 켜는 조건(SIM 한 바퀴)이 기동마다 따로이기 때문이다.
+3. CORE는 받을 때 3항과 같이 odom으로 옮긴다: `target = wrap(odom_yaw(odom_stamp_s) + yaw_rad − pose_yaw_rad)`. 교차로에 서서 회전을 시작할 때(정지 확인 직후) 그 방향이 오늘의 목표(진입 yaw + `turn_deg`)에서 `TURN_MAP_ENTRY_MAX_RAD`(15°) 안이면 목표를 그 방향으로 둔다. 넘으면 `heading`으로 오늘의 목표를 쓴다. 15°는 `REACQUIRE_HEADING_RAD`(30°)의 절반이다. 고치려는 오차는 4–6°이고, 재획득은 그 목표를 중심으로 30°를 보므로 틀린 지도 yaw가 이웃 출구를 받아들이는 폭을 45°로 묶는다(독립 검토). 굽이는 4항의 30°를 그대로 쓴다. 받은 뒤 odom 실행이 바뀌면(받을 때 둔 odom 키가 회전 시작의 키와 다름) `epoch`로 오늘의 목표다. 새 실행은 경로 길이를 다시 세므로 `carry`만으로는 거르지 못한다(독립 검토, 굽이에도 같은 검사를 둔다). 나머지 실패(`stale`·`future`·`no_sample`·`carry`)는 5항 그대로다. 지도 목표가 180°를 넘으면 회전은 `turn_deg`의 부호 쪽으로 간다.
+4. 기록은 6항의 `map_entry_used`·`map_entry_reason`을 그대로 쓴다. 이제 `turn_deg`가 있는 회전에서도 채워진다(6항의 "`bend`가 아닌 지시에서는 늘 false와 null"은 "`bend`도 회전도 아닌 지시"로 읽는다). `used`는 회전 목표가 지도 방향일 때만 참이다.
+
+바뀌지 않는 것: 회전 규칙(정지 확인, 5° 정착, 앞당김 정지, 시간 상한), `advance_m`, 재획득 규칙과 그 30° 비교(목표만 바뀐다), D-422·`motion_admitted`, D-520 호(`exit_segment`)의 기하. `map_entry`가 없거나 설정이 꺼진 회전의 목표와 명령은 오늘과 같다.
+
+한계: 본문 한계 2·3·5·6이 그대로 적용된다. Fleet 지도 yaw의 오차는 출구 방향의 오차가 된다. 오늘 목표와 15°까지 다를 수 있으므로, 진입 yaw가 맞고 Fleet yaw가 틀린 로봇은 오늘보다 나빠질 수 있다(본문 한계 8과 같은 이유로 기본은 꺼짐). 횡 위치는 옮기지 않는다. 0.10 m 전진의 끝이 출구 차로 중심에서 벗어난 만큼은 그대로 남는다.
+
+검증 상태: SOURCE·호스트 단위 시험만 했다. `middleware/core/services/test/test_junction_turn_map_entry.py`(0.08 rad 진입 오차에서 목표가 지도 방향, 없으면 오늘처럼 오차가 남음, 15° 경계 안팎과 20°, `stale`·`future`·`epoch`·`carry`, 왼쪽 회전, 재전송이 다시 둠, 180° 넘는 목표의 회전 방향, D-520 호가 지도 방향으로 출발, 설정이 꺼지면 `disabled`이고 목표·움직임이 같음, 능력, 400), `middleware/core/gateway/test/test_line_junction_api.py`·`test_capabilities_controls.py`, `operations/fleet/test/test_trip_turn_map_entry.py`. SIM(NW 출구 한 바퀴)과 DEVICE는 열려 있다. API Reference는 additive로 v1.231다.
+
+## 주석 (2026-10-15) · 닻이 없을 때 지도 방향이 닻을 대신한다 (5항 고침)
+
+Gazebo m35에서 rosy_02의 굽이 B_W4가 `no_anchor`로 중단됐고 Fleet이 trip을 멈췄다. B_W4의 호는 NW 로터리 출구에서 약 0.15 m 뒤에 시작한다. NW가 작은 오프셋을 남기자 추종기가 흔들렸고(오차 0.157, `line_not_visible`, +0.6 1.1 s, −0.65, −1.0) 앞당김 창 0.25 m 안에 곧은 틱(오차 0.1 이하)이 하나도 없었다. `map_entry`는 놓여 있었지만(`map_entry_reason` null) 4항의 방향 바꾸기는 닻 검사 뒤에서만 돌아 중단을 막지 못했다. m34는 같은 굽이를 7번 지났다.
+
+고침: 5항의 "그 밖에는 오늘의 닻"을 다음으로 읽는다. 넘겨받을 때 쓸 닻이 없고(곧은 틱이 없거나 0.25 m보다 오래됨) 쓸 수 있는 `map_entry`가 있으면, 4항과 같이 `(지금 자세의 x, y, 둔 방향, 지금까지의 travel)`로 진입 직선을 놓고 통과를 시작한다. 30° 검사는 닻의 yaw 대신 넘겨받는 틱의 로봇 yaw와 한다. 경로가 로봇이 선 자리에서 시작하므로 그 자리의 옆 어긋남은 아무것도 묶지 않는다(독립 검토 H1, B_W4에서 벽까지 0.117 m, 몸 sweep 반경 0.088 m). 그래서 넘겨받는 틱은 TRACKING이고 |error| ≤ 3 × `bridge_arm_max_error`(0.3)여야 한다. 카메라 hold나 그보다 큰 오차면 넘겨받지 않고 `armed`로 기다리며, 가장 늦은 호 시작점(`bend_in_m + bend_tol_m`)을 지나면 `no_anchor`로 중단한다. `map_entry_used`는 통과가 시작될 때만 참이다(거절된 통과는 거짓). m35 기록(`native-pose-events.jsonl`, 약 5 Hz)에서 B_W4의 `armed` 동안 오차는 0.157, 0.6, −0.65, −1.0이었다. 0.3 한도로는 m35의 이 굽이를 살리지 못하고, 중단이 가장 늦은 호 시작점까지 늦춰질 뿐이다. 남은 일: Fleet이 Rosy Cam 자세와 지도 차로의 옆 어긋남을 재어 `map_entry`의 새 필드로 보내고, CORE가 그 값으로 시작점을 묶는 것(별도 결정). 5항의 다른 실패(`epoch`·`carry`·`heading` 등)도 그대로 적용되고, 닻도 쓸 수 있는 `map_entry`도 없으면 오늘처럼 `no_anchor`로 중단한다. `off_path`, D-422 sweep, `motion_admitted`, 거리·시간 상한은 바뀌지 않는다. 설정이 꺼진 로봇의 동작은 같다. 검증: `test_junction_bend.py`(곧은 틱 없이 오차 0.2·29°는 넘겨받고, `map_entry`가 없거나 31°이거나 설정이 꺼지면 `no_anchor`; 오차 0.6은 기다렸다가 `no_anchor`; 카메라 hold에서는 넘겨받지 않음; 오래된 닻; 거절된 통과는 `map_entry_used` 거짓). SIM(m35 굽이 B_W4)과 DEVICE는 열려 있다.

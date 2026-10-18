@@ -35,6 +35,7 @@
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 - [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
+- [2026-10-15-omx-camera-recovery.md](../../../../docs/plans/2026-10-15-omx-camera-recovery.md)
 
 ## 교훈 (docs/solutions)
 
@@ -46,8 +47,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 1691d395c · refactor: OMX adapter 장치 holder 이전 검증
-- 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
-- 2026-10-05 · uncommitted · test(omx): 좌석 교체 검사 시간 독립화
-- 2026-10-05 · 814e5571e · fix(omx): 단계 상태와 이벤트 ID의 읽기 일관성
-- 2026-10-05 · uncommitted · fix(omx): provider 후 최종 local STOP 재확인
+- 2026-10-18 · 4b97b23ac7 · test(omx): native feedback 진단과 Gazebo 이동 검증
+- 2026-10-17 · 9108fd4d8e · fix(omx): Unix Action listener 수명 조회
+- 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+- 2026-10-17 · ff9037b4a · fix(omx): D-780 독립 Safety-Review 지적 반영
+- 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)

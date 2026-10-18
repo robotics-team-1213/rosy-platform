@@ -1,4 +1,4 @@
-const DOCUMENTS = new Set(['/console', '/console/install', '/console/site-map', '/console/cell', '/console/profile', '/console/accounts']);
+const DOCUMENTS = new Set(['/console', '/console/install', '/console/site-map', '/console/cell', '/console/profile', '/console/accounts', '/console/policy']);
 
 // Login can only return to a Fleet document on this origin, never to credentials or another service.
 export function loginReturn(value, origin) {
@@ -22,7 +22,7 @@ export function loginReturn(value, origin) {
     if (url.pathname === '/console') {
       const view = url.searchParams.get('view'), show = url.searchParams.get('show');
       if (view === 'work' || view === 'records') query.set('view', view);
-      if (query.has('view') && ['pending', 'done', 'open', 'closed', 'facts', 'log'].includes(show)) query.set('show', show);
+      if (query.has('view') && ['pending', 'done', 'new', 'open', 'closed', 'facts', 'log'].includes(show)) query.set('show', show);
       if (url.searchParams.get('inbox') === '1') query.set('inbox', '1');
     }
     const robot = url.searchParams.get('robot');

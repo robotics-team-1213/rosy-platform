@@ -509,3 +509,29 @@ def test_active_map_frame_filters_and_degrades():
                                active_map_id="a")
     assert tr.pose(T0 + 0.25, active_map_id="a").sightings_filtered_map_id == 1
     assert tr.pose(T0 + 0.25, active_map_id="b").state == DEGRADED   # the site map changed
+
+
+def test_snapshot_adapter_reads_the_odom_epoch_when_sent():
+    """D-758 0: CORE's odom epoch rides along; a robot before it sends none."""
+    raw = {"x": 1, "y": 2, "yaw": 0.5, "stamp": 1791331200.0}
+    assert odom_from_snapshot({"odom_pose": raw}).epoch is None
+    assert odom_from_snapshot({"odom_pose": dict(raw, epoch=3, mono_s=12.5)}).epoch == 3
+    for bad in (True, -1, 1.5, "3"):
+        assert odom_from_snapshot({"odom_pose": dict(raw, epoch=bad)}).epoch is None
+
+
+def test_a_new_core_odom_epoch_drops_the_anchor_even_without_a_jump():
+    """D-758 0: odom reset to where the robot stood (no step to see): CORE's epoch says it."""
+    tr = localized()
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 0.3, epoch=0), T0 + 0.3)
+    assert tr.pose(T0 + 0.3).state == LOCALIZED
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 0.4, epoch=1), T0 + 0.4)
+    assert tr.pose(T0 + 0.4).state == UNKNOWN and tr.odom_to_map() is None
+    assert tr._epoch == 1
+
+
+def test_an_odom_sample_without_epoch_keeps_todays_rule():
+    tr = localized()
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 0.3, epoch=4), T0 + 0.3)
+    assert tr.add_odom(odom(0.4), T0 + 0.4)            # an old robot's sample: no epoch to compare
+    assert tr.pose(T0 + 0.4).state == LOCALIZED

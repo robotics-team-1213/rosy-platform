@@ -167,6 +167,7 @@ def test_profile_save_failure_preserves_name_and_does_not_claim_success(account_
                if route.request.method == 'PATCH' else route.continue_())
     page.locator('#profile-name-save').click()
     expect(page.locator('#profile-status')).to_contain_text('처리 결과를 확인할 수 없습니다')
+    expect(page.locator('#profile-grants')).to_be_hidden()
     expect(page.locator('#profile-name')).to_have_value('저장 확인 필요')
     page.unroute('**/api/fleet/auth/profile')
     page.locator('#profile-reload').click()

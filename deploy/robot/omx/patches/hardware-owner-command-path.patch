@@ -1,0 +1,41 @@
+--- a/src/dynamixel_hardware_interface.cpp
++++ b/src/dynamixel_hardware_interface.cpp
+@@ -376,36 +376,8 @@
+     str_get_dxl_data_srv_name,
+     std::bind(&DynamixelHardware::get_dxl_data_srv_callback, this, _1, _2));
+ 
+-  // Set Dynamixel data service
+-  std::string str_set_dxl_data_srv_name = "dynamixel_hardware_interface/set_dxl_data";
+-  if (info_.hardware_parameters.find("set_dynamixel_data_srv_name") !=
+-    info_.hardware_parameters.end())
+-  {
+-    str_set_dxl_data_srv_name = info_.hardware_parameters["set_dynamixel_data_srv_name"];
+-  }
+-  set_dxl_data_srv_ = create_service<dynamixel_interfaces::srv::SetDataToDxl>(
+-    str_set_dxl_data_srv_name,
+-    std::bind(&DynamixelHardware::set_dxl_data_srv_callback, this, _1, _2));
+-
+-  // Reboot Dynamixel service
+-  std::string str_reboot_dxl_srv_name = "dynamixel_hardware_interface/reboot_dxl";
+-  if (info_.hardware_parameters.find("reboot_dxl_srv_name") != info_.hardware_parameters.end()) {
+-    str_reboot_dxl_srv_name = info_.hardware_parameters["reboot_dxl_srv_name"];
+-  }
+-  reboot_dxl_srv_ = create_service<dynamixel_interfaces::srv::RebootDxl>(
+-    str_reboot_dxl_srv_name,
+-    std::bind(&DynamixelHardware::reboot_dxl_srv_callback, this, _1, _2));
+-
+-  // Set Dynamixel torque service
+-  std::string str_set_dxl_torque_srv_name = "dynamixel_hardware_interface/set_dxl_torque";
+-  if (info_.hardware_parameters.find("set_dxl_torque_srv_name") !=
+-    info_.hardware_parameters.end())
+-  {
+-    str_set_dxl_torque_srv_name = info_.hardware_parameters["set_dxl_torque_srv_name"];
+-  }
+-  set_dxl_torque_srv_ = create_service<std_srvs::srv::SetBool>(
+-    str_set_dxl_torque_srv_name,
+-    std::bind(&DynamixelHardware::set_dxl_torque_srv_callback, this, _1, _2));
++  // ROSY: direct register, reboot and torque services bypass the command owner.
++  // Keep read service above; commands use the accepted controller/lifecycle path.
+ 
+   return hardware_interface::CallbackReturn::SUCCESS;
+ }

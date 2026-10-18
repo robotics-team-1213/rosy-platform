@@ -12,10 +12,8 @@ D-239 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253
 D-240 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
 D-244 unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245
 D-324 unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324
-D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
-D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
 D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-621 reserved by another active session; ADR not yet landed in this branch
@@ -33,4 +31,15 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 
 
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
-D-746 Reserved by a concurrent local session; ADR not included in this branch as of S2
+D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
+D-772 reserved on branch docs/station-charge-lifecycle (refs/adr/D-772), not yet on main; remove when it lands
+D-774 reserved in another in-flight branch (refs/adr/D-774); remove when its ADR lands
+D-776 reserved in another in-flight branch (refs/adr/D-776); remove when its ADR lands
+D-777 reserved in another in-flight branch (refs/adr/D-777); remove when its ADR lands
+D-783 reserved on branch feat/station-charge-deploy (refs/adr/D-783), not yet on main; remove when it lands
+D-784 reserved on branch docs/bimanual-workcell-adr-publish (refs/adr/D-784), not yet on main; remove when it lands
+D-786 reserved in another in-flight branch (refs/adr/D-786); remove when its ADR lands
+D-788 reserved in another in-flight branch (refs/adr/D-788); remove when its ADR lands
+D-786 reserved in another worktree (refs/adr/D-786), absent from local main; remove when its ADR lands
+D-788 reserved in another worktree (refs/adr/D-788), absent from local main; remove when its ADR lands
+D-799 reserved in another worktree (refs/adr/D-799), absent from this branch; remove when its ADR lands

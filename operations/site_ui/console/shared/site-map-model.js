@@ -81,6 +81,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_SIGNAL_START_IN_ZONE: '신호 교차로 안에서는 출발할 수 없습니다 · 교차로 밖으로 옮긴 뒤 다시 하세요',
   // D-517 3: 구역 안에서는 서지 않는다
   TRIP_STOP_IN_ZONE: '경로 위에 구역(교차로) 밖에 설 장소가 없습니다 · 다른 목적지를 고르세요',
+  TRIP_REGULATION_CAPS_MISSING: '경로가 횡단보도나 신호 교차로를 지나는데 이 로봇의 CORE에 그 규칙(횡단보도 게이트·교차로 신호)이 꺼져 있다고 알립니다',
   TRIP_SIGNAL_NEEDS_AUTHORITY: '경로가 신호 교차로를 지나는데 이 로봇은 통행권(CORE)을 받지 않습니다 · 적색에서 선다는 보장이 없습니다',
   TRIP_ROBOT_BUSY: '이 로봇은 운행 중입니다 · 운행을 먼저 취소하세요',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
@@ -105,7 +106,7 @@ const LEASE_END_LABEL = {
   core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
 };
 export const TRIP_STATE_LABEL = {
-  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨',
+  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기',
 };
 const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
 export const TRIP_REASON_LABEL = {
@@ -334,6 +335,11 @@ export function tripEndText(trip) {
   return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why].filter(Boolean).join(' · ');
 }
 
+const WAIT_LABEL = {signal: '신호', authority: '통행권', link_wait: '연결', crosswalk_look: '횡단보도', crosswalk_wait: '횡단보도', crosswalk_held: '횡단보도'};
+export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
+  return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
+}
+
 /** One line for the trip panel: state, current lane, next place and action, pose source. */
 export function tripStatusText(trip, map) {
   if (!trip) return '진행 중인 운행 없음';
@@ -343,6 +349,7 @@ export function tripStatusText(trip, map) {
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
   if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
   if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
+  if (['started', 'running', 'link_wait'].includes(trip.state) && tripWaitText(trip)) parts.push(tripWaitText(trip));  // open only
   if (trip.stop_moved) {  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): never stands inside a zone
     const {from, to} = trip.stop_moved;
     parts.push(`목적지 ${names.get(from) || from || '좌표'} → ${names.get(to) || to} · 교차로 안에 서지 않도록 다음 지점에서 섭니다`);
@@ -695,8 +702,8 @@ export function trafficCardLine(traffic, robotId) {
     parts.push("대기 순환 후보 · 지속 여부 확인 중");
   }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
-  const advice = robot.advice;  // D-551: display-only signal advice to CORE
-  if (advice?.signal) parts.push(`신호 참고 전송 · seq ${advice.sent_seq}${advice.accepted ? "" : ` · ${advice.reason || "미수락"}`}`);
+  if (robot.advice?.signal) parts.push(`신호 참고 전송 · seq ${robot.advice.sent_seq}${robot.advice.accepted ? "" : ` · ${robot.advice.reason || "미수락"}`}`);  // D-551: display-only signal advice to CORE
+  if (robot.preview?.events?.length) parts.push(`예고: ${robot.preview.events.slice(0, 2).map((e) => `${e.at_m.toFixed(2)} m ${{left: "왼쪽 회전", right: "오른쪽 회전", straight: "교차로 직진", stop: "정지", bend: "굽이", arc: "호", crosswalk: "횡단보도", signal: "신호", authority_end: "통행권 끝"}[e.kind === "turn" ? e.params.action : e.kind] || e.kind}`).join(" · ")}`);  // D-767 P0, display only
   return parts.join(" · ");
 }
 

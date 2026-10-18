@@ -21,6 +21,45 @@ from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
 
 
+def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
+    rclpy.init()
+    node = Node("omx_source_replay_test")
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="w", instance_id="i", joint_names=("joint1",),
+        position_limits={"joint1": (-1., 1.)}, allowed_owners=("moveit",),
+        calibration_revision="cal", max_joint_state_age_s=.1,
+        max_goal_duration_s=1., action_timeout_s=2.)
+    runtime = RosArmCommandRuntime(node, config, joint_state_topic="/source_replay/state",
+                                   trajectory_action="/source_replay/action")
+    try:
+        message = JointState()
+        message.name, message.position = ["joint1"], [0.]
+        message.header.stamp = node.get_clock().now().to_msg()
+        runtime._on_joint_state(message)
+        original = runtime.latest_joint_state
+        assert original is not None
+        from types import SimpleNamespace
+        cancellations = []
+        pending = SimpleNamespace(cancel=lambda: cancellations.append(True), done=lambda: False)
+        runtime.owner._action_port = SimpleNamespace(send_goal=lambda command: pending)
+        command = TrajectoryCommand(
+            workcell_id="w", instance_id="i", command_id="c", owner="moveit",
+            session_id=runtime.owner.session_id, positions={"joint1": .1}, duration_s=.5,
+            source_state_sequence=original.sequence, calibration_revision="cal")
+        assert runtime.submit(command).reason == "submitted"
+        time.sleep(.12)
+        runtime._on_joint_state(message)
+        assert runtime.latest_joint_state is original, "replayed source refreshed owner state"
+        runtime._watchdog_tick()
+        assert runtime.owner.state == "hold"
+        assert runtime.last_decision.reason == "joint_state_stale"
+        assert cancellations == [True]
+    finally:
+        runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
 def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
     """Actual DDS intake can run while a synthetic watchdog is blocked."""
     from omx_adapter.command_owner import CommandDecision
@@ -65,6 +104,7 @@ def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
         deadline = time.monotonic() + 2
         while not observed.is_set() and time.monotonic() < deadline:
             message = JointState(); message.name = ['joint1']; message.position = [0.]
+            message.header.stamp = source_node.get_clock().now().to_msg()
             publisher.publish(message)
             observed.wait(.01)
         assert observed.is_set(), 'joint snapshot not delivered while watchdog blocked'
@@ -155,6 +195,7 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
                 message = JointState()
                 message.name = ["joint1", "joint2", "gripper_joint_1"]
                 message.position = [0.0, 0.1, 0.0]
+                message.header.stamp = feedback_node.get_clock().now().to_msg()
                 feedback_publisher.publish(message)
                 if runtime.latest_joint_state is not None:
                     break
@@ -291,6 +332,7 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
             message = JointState()
             message.name = ["joint1"]
             message.position = [0.0]
+            message.header.stamp = feedback_node.get_clock().now().to_msg()
             feedback_publisher.publish(message)
             publisher_stop.wait(0.03)
 
@@ -394,6 +436,11 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
     phase_port = RosArmPhaseGoalPort(runtime)
+    import os
+    trace = None
+    if os.environ.get('ROSY_OMX_FEEDBACK_TRACE') == '1':
+        from feedback_trace import FeedbackTrace
+        trace = FeedbackTrace(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
         executor.add_node(node)
@@ -406,6 +453,9 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             message = JointState()
             message.name = ["joint1"]
             message.position = [0.0]
+            message.header.stamp = feedback_node.get_clock().now().to_msg()
+            if trace is not None:
+                trace.add('publish', stamp_ns=message.header.stamp.sec*10**9+message.header.stamp.nanosec)
             state_publisher.publish(message)
             stop.wait(0.01)
 
@@ -415,7 +465,11 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
             slow_feedbacks.append(event)
+            if trace is not None:
+                trace.add('sink_begin')
             time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+            if trace is not None:
+                trace.add('sink_end')
         return True
 
     try:
@@ -448,6 +502,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
+        if trace is not None:
+            trace.dump()
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():

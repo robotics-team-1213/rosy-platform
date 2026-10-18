@@ -31,6 +31,44 @@ Messages before startup or an unrecoverable session gap require manual readback
 and resubmission; an unresolved journal delivery stops reception on session loss.
 Resume the updater only after the configuration and running identities agree.
 
+## Context/log mirror store (D-796)
+
+The stack has a fourth service, `postgres`, as a derived context/log store. It is
+not the Fleet ledger: Fleet's task/ledger SQLite (`fleet.sqlite3`) stays the only
+source of truth (D-750), and the database here only mirrors the terminal runs of
+the D-640 deliberation journal. Fleet writes it best-effort after the SQLite
+commit; a missing or failing store never blocks a decision and never changes a
+ledger transaction.
+
+The console activates that sink through its `--context-db-*` flags (host, port, name,
+user, and the password file secret); without `--context-db-host` the mirror stays off
+and the process is SQLite-only.
+
+`postgres` joins only the internal Compose network. Do not publish its port and
+do not let robots, AI PCs, or model PCs connect to it directly — they reach Fleet
+over HTTPS/WSS as before. Fleet is the only client, over `postgres:5432`.
+
+Prepare the password before the first start, outside the checkout:
+
+```bash
+umask 077
+tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 > "$ROSY_SITE_SECRETS_DIR/postgres_password"
+chown root:10001 "$ROSY_SITE_SECRETS_DIR/postgres_password"
+chmod 0440 "$ROSY_SITE_SECRETS_DIR/postgres_password"
+```
+
+Compose mounts it as the `postgres_password` secret into both `postgres`
+(`POSTGRES_PASSWORD_FILE`) and Fleet (psycopg `password_file`); the value never
+appears in `site.env`, argv, or logs. Keep the data in the named `pg_data`
+volume. `ROSY_SITE_PG_MAX_CONNECTIONS` bounds Fleet's connections. The service
+uses the repo image `rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}`, built or
+mirrored from `postgres:16-alpine` by the candidate build. Because it is stock
+upstream, its hardening is weaker than Fleet/Vision; `read_only` with a tmpfs,
+dropped capabilities, `no-new-privileges`, and an internal-only network are the
+bounds. The signed candidate covers four images (Fleet, Vision, proxy,
+Postgres), and the updater checks the compose-config image pins, container
+health, and drift for all four.
+
 ## Where the control console runs
 
 ### Rosy Account activation (D-757)
@@ -722,8 +760,13 @@ it in YAML, `.env`, command arguments, images, or logs. Rotate or revoke a user
 by replacing or removing their digest and restarting Fleet. The API hashes the
 presented bearer token and compares it against the configured digests. A viewer
 can read Fleet state and task history. An operator can request, cancel, and stop
-work. `policy-admin` is reserved for future policy endpoints; no policy mutation
-route is exposed yet. All roles remain subject to CORE's local safety checks.
+work. `policy-admin` approves learned-policy stages, approval windows and incident
+clearing on `/console/policy` (D-793). An operator who also approves policies keeps
+the `operator` role and gets `policy_admin: true` through `python3 deploy/site/site_users.py
+set-policy-admin /etc/rosy/site/site-users.yaml --principal <id> [--principal <id> ...]`
+(`--off` revokes); several people change in one write, so Fleet restarts once.
+Deploy a Fleet that knows `policy_admin` before setting it: an older Fleet refuses the
+key at startup. All roles remain subject to CORE's local safety checks.
 
 Maintain `site-users.yaml` with `deploy/site/site_users.py` instead of an
 editor: `python3 deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
@@ -1816,6 +1859,23 @@ exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없�
 거절은 항상 확인하며, 기존 status wrapper가 있으면 보호 metadata와 HOLD 응답도 확인한다.
 `optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
+
+## 로봇 실시간 영상 서비스 (D-789)
+
+Fleet과 별도 Compose 프로젝트다. Fleet은 영상을 중계하지 않는다.
+
+```bash
+docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-media up -d
+```
+
+- `ROSY_MEDIA_CONFIG_DIR`: `media-authority.json`(`media-authority.example.json` 형식), MediaMTX 관리 자격,
+  로봇별 media 공개키·CORE CA. `ROSY_SITE_SECRETS_DIR`에 `media_cert`·`media_key`.
+- `ROSY_MEDIA_HTTPS_PORT`, `ROSY_MEDIA_ICE_HOST`(사이트 LAN 주소), `ROSY_MEDIA_BIND_ADDRESS`, `ROSY_MEDIA_ICE_PORT`(UDP, 기본 8189).
+  `site-firewall.py`는 이 두 포트를 관리하지 않는다.
+- 로봇 CORE에는 `vision.media.site_url` 등을 설정하면 WebRTC가 기본이 되고(`enabled: false`로 끔),
+  로봇에 `/etc/rosy/media/rosy-media.json`(`deploy/robot/pinky_pro/native/rosy-media.example.json`)이 있으면
+  `rosy-media.service`가 발행한다. 둘 다 없으면 기존 JPEG다.
+- 장치·6대 현장 측정은 2026-10-18 사용자 결정으로 생략했다. 이 설치는 DEVICE/FIELD 수용이 아니다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 

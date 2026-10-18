@@ -19,6 +19,7 @@ The legacy safety velocity gate fuses lidar sectors, US, IR, IMU and camera, app
 | `hazard.py` | ESTOP/CLIFF/TILT/PICK detection: latched e-stop (`/estop`, `/estop/cmd`), `ir_looks_like_cliff` (4095-saturation ignore + hysteresis); on engage zeros commands and cross-publishes `/wander/cmd 'stop'` + `/calib/step 'abort'`
 | `gate.py` | The command gate: halt on obstacle/cliff/tilt/pickup/estop/stale>0.5 s, tilt-reverse creep, `cmd_linear_sign` flip, re-publishes last raw command every 20 ms |
 | `scale.py` | Narrow-map auto-cal: corridor width L+R → `map_range`/`open_max` HUD scaling |
+| `ros_edges.py` | `RosEdges`, SafetyNode's ROS edge (D-171): `now`/`age`, `stamp_time`, `lookup_base_from`, `lookup_odom_base`, `zero_twist`, `publish_text`/`publish_bool`/`publish_float`, `set_linear_sign_parameter` (split from `node.py`, D-766) |
 
 ## For AI Agents
 
@@ -29,6 +30,7 @@ The legacy safety velocity gate fuses lidar sectors, US, IR, IMU and camera, app
 - Hazard *detection* lives here; hazard *response policy* lives in `control/recover.hazard_action` — don't duplicate.
 - The e-stop chain crosses nodes by design (engage → wander stop + calib abort); keep it intact when touching `hazard.py`.
 - Latched QoS (TRANSIENT_LOCAL depth 1) is required on `/estop/state` so late joiners see the latch.
+- D-171 track 1: `bumper.py`, `hazard.py`, `gate.py`, `scale.py` and `obstacles.py` import no ROS. `node.py` (its `RosEdges` mixin in `ros_edges.py`) builds every message, TF lookup and parameter write for them (`zero_twist`, `publish_text`/`publish_bool`/`publish_float`, `stamp_time`, `lookup_base_from`, `lookup_odom_base`, `set_linear_sign_parameter`) and creates their topics. `evidence.py` still builds `String` itself (listed in `KNOWN_ROS_LEAKS`).
 
 ### Testing Requirements
 - `python3 -m pytest test/test_command_gate.py test/test_configured_operation.py test/test_scale.py -q` covers semantic restrictions and their node adapter. Sensor geometry and physical stopping still require device acceptance.

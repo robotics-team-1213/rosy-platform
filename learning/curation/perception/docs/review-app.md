@@ -300,7 +300,7 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 }
 ```
 
-실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
+실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. 저장소 관리 연결은 `read-repos write-repos manage-repos`를 요청하고, 쓰기와 저장소 관리가 모두 있을 때만 저장한다. 요청하지 않은 범위는 저장하지 않는다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
 
 가져오기는 branch/tag를 최초 요청에서 immutable commit으로 고정한다. 재시도도 같은 commit과 계정 세대를 유지하며 다른 계정으로 자동 대체하지 않는다. gated 개인 접근 승인은 팀 이용 허가가 아니므로 팀 이용 근거가 없으면 `rights_hold`다. 크기·경로·해시 검증 후 원자적으로 등록하며 중간 파일을 완료 자료로 노출하지 않는다. 다운로드한 Python 코드·pickle·모델 코드를 실행하지 않는다.
 
@@ -312,7 +312,7 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 
 하나의 private imports root에서는 OS 잠금으로 worker 하나만 실행한다. DB 트랜잭션은 중복 생성과 취소/완료 경합을 조정한다. 검증한 기존 부분 파일을 제외한 남은 bytes와 여유분·metadata 1MiB를 시작 전에 검사하고 쓰기마다 여유를 다시 검사한다. `reserved_bytes`는 이 실행기의 남은 전송량에 대한 논리 예약이며 다른 앱의 디스크 쓰기를 막지 않는다. 파일시스템과 OS 잠금을 공유하지 않는 여러 호스트의 NAS worker는 지원하지 않는다. `.partial`은 완료 자료로 등록하지 않고 취소 후에도 재개용으로 남긴다. 자동 원본 삭제·유료 증설은 하지 않는다.
 
-완료 상태는 `pending_curation`이다. 확장자가 있어도 디코딩·시간 정렬을 증명한 것으로 보지 않는다. `rosy.media-manifest/1`은 원본 파일, 권리 증거, 외부 commit을 묶고 미확인 라벨·권리·capture group은 보류한다. 동기화된 state/action이 없는 자료는 모방 학습에 사용할 수 없다. 모델 다운로드는 적재·승격·로봇 실행을 허용하지 않는다. 다른 provider, 외부 게시와 Spaces 실행은 현재 범위에 포함되지 않는다.
+완료 상태는 `pending_curation`이다. 확장자가 있어도 디코딩·시간 정렬을 증명한 것으로 보지 않는다. `rosy.media-manifest/1`은 원본 파일, 권리 증거, 외부 commit을 묶고 미확인 라벨·권리·capture group은 보류한다. 동기화된 state/action이 없는 자료는 모방 학습에 사용할 수 없다. 모델 다운로드는 적재·승격·로봇 실행을 허용하지 않는다. 다른 provider, 파일 업로드, Spaces 실행은 현재 범위에 포함되지 않는다. 외부 게시 권한이 있는 사용자는 저장된 연결로 비공개 데이터셋·모델 저장소를 조회·생성·삭제할 수 있다. 공개로 바꾸거나 기존 공개 저장소를 지우지 않는다.
 
 전환 전 앱과 관련 쓰기를 멈추고 state, DB, 설정의 일관된 백업을 보관한다. 협업 바인딩 후 `--collaboration`만 제거하거나 DB의 바인딩 행을 지워 인증을 해제하지 않는다. 되돌릴 때도 협업을 유지하는 지원 버전을 쓰거나, 서비스를 멈추고 전환 전 백업을 별도 위치에 복원하여 기존 접근 범위를 다시 검토한다. 전환 후 이력은 별도로 보존하며 원본 백업을 덮어쓰지 않는다. 실제 외부 인증 수용은 등록된 앱과 사용자 동의로 로그인·연결·private/gated 접근·철회까지 확인해야 하며 가짜 provider 시험은 이를 대신하지 않는다.
 
@@ -325,10 +325,13 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 | GET | `/api/accounts/session` | 현재 세션·프로젝트·연결 |
 | POST | `/api/accounts/login` | `username`, `password` |
 | POST | `/api/accounts/logout` | `{}`; 현재 세션 철회 |
-| POST | `/api/accounts/oauth` | `purpose: login` 또는 `link` |
+| POST | `/api/accounts/oauth` | `purpose: login`, `link`, 또는 `manage` |
 | GET | `/oauth/huggingface/callback` | provider의 `code`, `state` |
 | POST | `/api/accounts/connect` | `token`, `sharing: personal|project`, `resources` |
 | POST | `/api/accounts/disconnect` | `connection_id` |
+| GET | `/api/accounts/repos` | `connection_id`, `repo_type`은 dataset 또는 model; `learning.publish`와 기록된 `read-repos` |
+| POST | `/api/accounts/repos/create` | `connection_id`, `repo_type`, `repo_id`; `learning.publish`와 기록된 `write-repos`. 비공개만 만든다 |
+| POST | `/api/accounts/repos/delete` | `connection_id`, `repo_type`, `repo_id`, `confirm`; `confirm`은 `repo_id`와 같다. `learning.publish`와 기록된 `manage-repos`. 조회 결과가 비공개일 때만 지운다 |
 | GET | `/api/learning/imports` | 현재 프로젝트 작업 목록 |
 | POST | `/api/learning/imports/create` | `connection_id`, `repo_type: dataset|model`, `repo_id`, `revision`, `files`, `rights` |
 | POST | `/api/learning/imports/retry` | `id`; 동일 고정 입력 재시도 |
@@ -355,3 +358,59 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 공간 사전 점검은 목적지 ID와 다운로드·임시 복사·변환 추가 공간·업로드 예상 크기를 받는다. 로컬 세 항목은 같은 목적지 볼륨에 존재하는 사본으로 합산하고 reserve_bytes를 더한다. 공간을 예약하거나 전송하지 않는다. 실제 작업 시작 시 자원 재검사가 필요하다. 웹 경로 입력, 삭제, 외부 게시와 유료 증설을 제공하지 않는다.
 
 원격 quota는 미확인이 기본이다. 공식 quota API를 호출하지 않는다. 관리자가 수동 확인한 경우에만 remote_quota에 remaining_bytes, source(공개해도 되는 근거 설명), measured_at, expires_at(UTC epoch 초 정수)을 기록한다. 측정 전/만료 후에는 보류한다. 한 설정의 한 대상 quota이며 여러 계정 용량을 더하지 않는다. 업로드 요구량이 0이면 원격 quota는 점검하지 않는다. 최신 상태는 HTTP 401/403·오류가 발생하면 화면에서 지우고 재시도를 제공한다.
+### 카메라 맞춤 (D-792)
+
+`/learning/camera`는 모방학습 녹화 전에 카메라를 같은 자리로 되돌리는 화면이다. 움직이지 않는 배경이 밝게 보이는 사진 한 장, 내부 교정 값, 선택 실측값으로 촬영 기준(`rosy.camera-setup-reference/1`)을 만든다. 기본 `features`는 마커 없이 기준 사진의 배경 특징점으로 화면 이동·pan·tilt·roll·크기를 잰다. 선택 `markers`는 작업면 마커(ArUco `DICT_4X4_50`)와 마커 배치(작업대 원점 기준 cm)로 높이·거리까지 잰다. 기준은 `<state>/camera-setup/<revision>.json`과 같은 이름의 `.jpg`로 저장하고 덮어쓰지 않는다. 읽을 때마다 봉인 revision과 사진 SHA-256을 다시 검사하며, 어긋나면 400이다. 판정은 녹화를 막지 않는 조언이다(shadow).
+
+| 방법 | 경로 | 내용 |
+|---|---|---|
+| GET | `/api/learning/camera/references` | `references`: 최신순 촬영 기준 전체 |
+| GET | `/api/learning/camera/stills/<revision>` | 기준 사진 JPEG |
+| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `method`(`features`·`markers`), `layout`(`features`는 `[]`), `measured`, `guides`, `check_pose`(손목 카메라만, 나머지는 null); 협업 모드는 다른 `/api/learning/` 쓰기와 같이 `manage` 권한 |
+| POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256`, `joints`(기준에 확인 자세가 있으면 관절 이름→rad, 아니면 null) → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `features`는 `homography`(기준→지금 3×3), `markers`는 `detected`(마커 ID별 꼭짓점 픽셀) |
+
+화면은 기준의 안쪽 틀·가이드·마커를 점선으로, 같은 윤곽의 지금 위치(호모그래피로 옮긴 것 또는 검출한 마커)를 실선으로 그리고 기준에서 현재로 가는 화살표를 그린다. 맞춘 특징점이 150개 미만이면 측정 불가다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.
+
+# AI 실행과 저장 버전 조회 (D-764)
+
+객체/픽셀 화면의 **AI 초안과 확인**에서 저장된 사진 revision으로 새 초안을 요청한다.
+실행 상태와 요청자·모델이 표시되며 완료 후 **AI 결과 목록 조회**로 후보 또는 참고 의견을
+불러온다. 조회·실행은 라벨 적용이나 승인이 아니다. 미저장 획·선택 영역은 먼저 저장하거나
+버린 뒤 요청한다. 실패 후 같은 실행 버튼으로 현재 revision의 새 작업을 만들 수 있다.
+**이 AI 작업 취소**는 결과 등록을 막고 worker를 중지한다. 이미 모델 서버가 받은 연산은
+종료될 때까지 남을 수 있다. 새 기능은 Tab 또는 Ctrl+K 기능 검색으로 접근한다.
+
+**전체 이력 · 이전 버전 비교**는 20건씩 과거 이력을 조회한다. 버전을 선택하면 작업자·상태와
+저장된 박스/마스크를 현재 화면과 비교할 수 있다. 과거 스냅샷이 없는 기록은 비교 불가로
+표시한다. 과거 기록 조회로 현재 검수 revision은 바뀌지 않는다.
+
+관리자는 모델 PC의 검증된 Python 환경과 기존 Qwen/SAM 설치를 사용해 private JSON을 만든다.
+`--review-ai-config <private-config>`로 지정하거나 설치 도구가 읽는 state의 `review-ai.json`에
+둔다. 설정이 없으면 실행 버튼에 이유가 표시되고 기존 검수는 계속 사용할 수 있다.
+등록값 예시는 다음과 같다(실제 주소·경로·계정은 공개 저장소에 넣지 않는다).
+
+```json
+{
+  "workspace_id": "<current-workspace-id>",
+  "python": "/absolute/model-venv/bin/python",
+  "model_digest": "<64-lowercase-hex-sha256>",
+  "sam_checkpoint": "/absolute/models/sam3.pt",
+  "sam_checkpoint_sha256": "<64-lowercase-hex-sha256>"
+}
+```
+
+SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopback endpoint는 기존 adapter의
+고정값을 사용한다. digest가 다르면 결과를 등록하지 않는다. 임의 명령·모델 URL·Python 경로를
+웹에서 입력할 수 없다. 작업공간마다 실행 하나만 허용하며 서버 재시작 시 미완료 작업은 실패로
+기록한다. 구버전 release로 돌아갈 때 설치 도구는 지원하지 않는 AI 옵션을 제거한다.
+객체 초안은 기존 adapter의 7클래스(robot/obstacle_box/cone/traffic_light/sign/person/obstacle)
+작업공간만 지원한다. 기존 6클래스 자료를 재해석하지 않는다. 새 자료는 별도 작업공간을 처음
+만들 때 `--object-classes learning/curation/perception/classes/object_review_obstacle_v1.yaml`로
+등록한다. 픽셀 보완·검사는 차선 내부 의미 체계만 지원하며 road_surface/1은 차단한다.
+협업 모드는 edit 권한으로 요청·취소하고 타인 작업 취소는 manage도 필요하다. 등록 직전에
+세션·권한을 다시 확인한다. 로컬 비협업 작업은 미인증 로컬 작업자로 표시한다.
+
+관련 HTTP 계약은 API reference D-764 부록, 시험은 `test_review_ai_jobs.py`,
+`test_review_ai_http.py`, `test_review_versions.py`, `test_review_ai_browser.py`다.
+pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROSY_RUN_BROWSER_TESTS=1이
+필요하다. 모의 모델 연결 시험은 실제 GPU 모델 실행이나 정답 기반 정확도를 증명하지 않는다.

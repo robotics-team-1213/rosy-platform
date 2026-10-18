@@ -1,0 +1,12 @@
+--- a/src/dynamixel/dynamixel.cpp
++++ b/src/dynamixel/dynamixel.cpp
+@@ -331,7 +331,8 @@
+       );
+     }
+ 
+-    Reboot(id);
++    // Initialization reports the fault; recovery requires the command owner.
++    // Do not reset firmware/position state while probing or retrying startup.
+     return DxlError::DXL_HARDWARE_ERROR;
+   } else {
+     std::string model_name = dxl_info_.GetModelName(dxl_model_number);

@@ -52,10 +52,11 @@ def check_bend(action, turn_deg, expect):
     """The bend fields belong to 'bend' and 'bend' needs all of them (the API answers 400 first)."""
     e = expect or {}
     entry = e.get('map_entry')
-    if entry is not None and not (action == 'bend' and isinstance(entry, dict) and all(
+    if entry is not None and not ((action == 'bend' or action in ('left', 'right') and turn_deg is not None)
+            and isinstance(entry, dict) and all(  # D-759 rev 1: a turn's exit heading too
             type(entry.get(k)) in (int, float) and math.isfinite(entry[k]) for k in MAP_ENTRY_FIELDS)
             and entry['odom_stamp_s'] > 0):
-        raise ValueError('map_entry belongs to bend: finite yaw_rad, pose_yaw_rad and odom_stamp_s > 0')
+        raise ValueError('map_entry belongs to bend or a turn: finite yaw_rad, pose_yaw_rad and odom_stamp_s > 0')
     if action != 'bend':
         if any(e.get(k) is not None for k in (*BEND_FIELDS, NEXT_LINE)):
             raise ValueError('bend_in_m, bend_tol_m, bend_radius_m and next_line_in_m belong to bend')
@@ -114,14 +115,15 @@ class JunctionBendMixin:
         """D-759 3: at receipt, the lane's map heading at the arc start turned into odom through
         Fleet's yaw pair (the map yaw and CORE's odom yaw at `odom_stamp_s`) into j['map_entry']:
         {yaw, path}, or {reason} for today's anchor. check_bend has validated the object."""
+        c = self._config  # D-759 rev 1: a turn has its own flag
         found = ('none_sent' if entry is None else
-                 'disabled' if not self._config.bend_map_entry_enabled else
+                 'disabled' if not (c.bend_map_entry_enabled if j['action'] == 'bend' else c.turn_map_entry_enabled) else
                  self._odom_at_stamp(entry['odom_stamp_s'], now))
         placed = dict(reason=found) if isinstance(found, str) else dict(
-            yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau), path=found[2])
+            yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau), path=found[2], key=found[1])
         j.update(map_entry=placed, entry_why=placed.get('reason'))
 
-    def _map_entry_yaw(self, j, yaw):
+    def _map_entry_yaw(self, j, yaw, bound=MAP_ENTRY_MAX_HEADING_RAD):
         """D-759 4: the placed lane heading for the pass's entry line, or None for today's anchor
         (whose own `yaw` it is judged against) with the reason on the record. The odom run is the
         pass's own (a new one aborts it). Locked."""
@@ -129,8 +131,9 @@ class JunctionBendMixin:
         if 'reason' in entry:
             return None
         j['entry_why'] = why = (
+            'epoch' if entry['key'] != j['key'] else  # review: a new odom run restarts the path too
             'carry' if not log or log[-1][3]-entry['path'] > ARC_ANCHOR_MAX_CARRY_M else
-            'heading' if abs(math.remainder(yaw-entry['yaw'], math.tau)) > MAP_ENTRY_MAX_HEADING_RAD
+            'heading' if abs(math.remainder(yaw-entry['yaw'], math.tau)) > bound
             else None)
         j['entry_used'] = why is None
         return None if why else entry['yaw']
@@ -172,16 +175,30 @@ class JunctionBendMixin:
         if self._lost_latched:
             return self._abort(j, 'lane_lost_before_bend', decision)
         anchor = j.get('anchor')
-        if anchor is None or abs(j['travel']-anchor[3]) > BEND_LEAD_M:
+        if anchor is not None and abs(j['travel']-anchor[3]) > BEND_LEAD_M:
+            anchor = None
+        # D-759 note (m35): no straight tick? A usable map heading stands in, judged on the body's yaw.
+        entry = self._map_entry_yaw(j, pose.yaw if anchor is None else anchor[2])
+        j['entry_used'] = False  # until the pass starts (review: a refused pass did not use it)
+        if anchor is None and entry is None:
             return self._abort(j, 'no_anchor', decision)
+        if anchor is None:
+            # The path then starts at the body: only from a tracking tick near the lane (3x the
+            # straight bound), else stay armed until the latest arc start (review H1).
+            st = self._status
+            if not (st.state == 'TRACKING' and (st.reason or '').removeprefix('camera_') == 'tracking'
+                    and st.error is not None and abs(st.error) <= 3*self._config.bridge_arm_max_error):
+                if j['travel']-j['bend_in'] > j['tol']:
+                    return self._abort(j, 'no_anchor', decision)
+                return decision
         refusal = self._maneuver_refusal(now)
         if refusal is not None:
             return self._abort(j, refusal, decision)
         speed = self._half_trip_speed()
         if speed <= 0:
             return self._abort(j, 'linear_limit_zero', decision)
-        x, y, yaw, travel = anchor
-        entry = self._map_entry_yaw(j, yaw)
+        x, y, yaw, travel = anchor or (pose.x, pose.y, pose.yaw, j['travel'])
+        j['entry_used'] = entry is not None
         if entry is not None:
             # D-759 4: the lane's heading, from where the body is now. The straight-tick point may
             # be BEND_LEAD_M back and off a line on another heading (0.2 m at 21.6 deg: 7 cm, past

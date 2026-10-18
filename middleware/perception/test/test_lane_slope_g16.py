@@ -138,7 +138,7 @@ def test_keeper_and_containment_share_one_paint_half_width():
     assert lane_containment.PAINT_HALF_WIDTH_M is lane_keep_lines.PAINT_HALF_WIDTH_M
     node = (REPO / "middleware" / "perception" / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     # The node hands its validated read-only lane_paint_half_width_m to the keeper too.
-    assert "paint_half_width_m=self._paint_half_width_m)" in node.split("LaneKeeper(", 1)[1].split(")\n", 1)[0] + ")"
+    assert "paint_half_width_m=self._paint_half_width_m)" in node.split("else LaneKeeper)(", 1)[1].split(")\n", 1)[0] + ")"
     with pytest.raises(ValueError):
         LaneKeeper(paint_half_width_m=-.001)
 

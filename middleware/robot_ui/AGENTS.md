@@ -1,11 +1,11 @@
-# ui
+# robot_ui
 
 **Parent context:** `../AGENTS.md`
 **Generated:** 2026-10-07 · **Updated:** 2026-10-07
 
 ## Purpose
 
-Robot-facing UI served or packaged beside CORE. The dashboard is static files, not a Node server (D-23).
+Robot-side screen home beside CORE. The parent folder is not a product. `robot/` is Rosy Robot (ROS package `dashboard`), `pilot/` is Rosy Pilot, and `face/` is the LCD (ROS package `emotion`). The dashboard is static files, not a Node server (D-23).
 
 ## Subdirectories
 

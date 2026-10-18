@@ -40,6 +40,10 @@ API = {
     "/api/fleet/formation": {"active": False, "state": "IDLE", "leader": None, "formation": None, "spacing": None,
                              "assignment": {}, "reason": None, "pending_triggers": [], "stream_evidence": {},
                              "relay": None},
+    # D-763 9 (v1.237): 새 작업 shows only the kinds the server lists
+    "/api/fleet/work": {"rows": [], "observed_at": "2026-10-15T00:00:00+00:00", "tasks_available": True,
+                        "missions_available": True, "cell_jobs_available": True, "truncated_sources": [],
+                        "kinds": ["trip"]},
 }
 PLAN = {"segments": [{"edge_id": "e1"}], "places": [], "actions": [], "length_m": 2.1, "eta_s": 14,
         "map_version": 4, "expires_at": 4e9}
@@ -100,7 +104,8 @@ def test_unknown_site_pose_blocks_plan_without_hiding_inspection(site):
         assert "위치" in preview.get_attribute("reason")
         api["/api/fleet/guide"]["robots"][0]["pose"] = {
             "state": "LOCALIZED", "x": 0, "y": 0, "yaw": 0, "u_m": 0.12, "source": "operator_pin"}
-        page.locator("#context-status").click()
+        # Blur the form through its tab, rather than clicking a panel centre that can hit an action.
+        page.locator('[data-context-tab="status"]').click()
         page.clock.run_for(1500)
         expect(form.get_by_role("button", name="경로 보기", exact=True)).to_be_enabled()
         assert not posts and not errors
@@ -536,5 +541,164 @@ def test_cancel_all_goes_at_once_for_any_operator(site):  # noqa: F811
         assert ("/api/fleet/cancel-all", None) in posts
         expect(page.locator("#cancel-all-result")).to_contain_text("전체 주행 취소를 보냈습니다 · 3대")
         assert not any(path == "/api/fleet/estop" for path, _ in posts)
+        assert not errors
+        browser.close()
+
+
+def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(site):  # noqa: F811
+    """D-763 8 (v1.232): the card line shows Fleet's wait; past its bound a warn row, never 개입 (rev 2 Q7)."""
+    from playwright.sync_api import expect, sync_playwright
+
+    waiting = {**LEAD, "wait": {"reason": "crosswalk_look", "since": 0.0, "bound_s": 15.0, "over_bound": False,
+                                "waiting": True}}
+    api = {**API, "/api/fleet/trips": {"running": waiting, "trips": [waiting, LOST], "open": [waiting]}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [])
+        for width, height in [(1366, 600), (390, 844)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.clock.run_for(1500)
+            expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 · 횡단보도")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
+        assert "대기 상한" not in page.locator(".queues-panel").inner_text()
+        over = {**waiting, "wait": {**waiting["wait"], "reason": "signal", "over_bound": True, "waiting": False}}
+        api["/api/fleet/trips"] = {"running": over, "trips": [over, LOST], "open": [over]}
+        page.clock.run_for(1500)
+        expect(page.locator("#warning-list")).to_contain_text("대기 상한 넘음 · 신호")
+        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 신호")
+        assert "대기 상한" not in page.locator("#critical-list").inner_text()
+        assert not errors
+        browser.close()
+
+
+def test_new_work_move_sends_the_card_requests_and_shows_the_same_refusal(site):  # noqa: F811
+    """D-763 6: 작업 › 새 작업의 이동은 로봇 카드의 운행 폼 그대로다. 같은 계획·시작 요청을 보내고, 바쁜 로봇에는
+    카드와 같은 거절(TRIP_ROBOT_BUSY)을 보인다."""
+    from urllib.parse import urlparse
+    from playwright.sync_api import expect, sync_playwright
+
+    plan_path, start_path = "/api/fleet/robots/rosy_02/trip", "/api/fleet/trips/p2/start"
+    started = (200, {**LEAD, "trip_id": "p2", "robot_id": "rosy_02", "repeat": False})
+    busy = (409, {"detail": {"code": "TRIP_ROBOT_BUSY", "message": "robot busy"}})
+    answers = {plan_path: (200, {"plan_id": "p2", **PLAN}), start_path: started}
+
+    def trip(page, form, posts, count):
+        form.get_by_role("combobox", name="목적지", exact=True).select_option("B")
+        form.get_by_role("button", name="경로 보기", exact=True).click()
+        _settle(page, posts, plan_path, count)
+        expect(form).to_contain_text("1개 차로 · 2.10 m · 약 14 s · 지도 v4 · 실행하지 않음")
+        form.locator('ui-button[data-trip-start="rosy_02"]').click()
+        _settle(page, posts, start_path, count)
+
+    with sync_playwright() as playwright:
+        posts, sent, seat = [], {"card": [], "work": []}, ["card"]
+        browser, page, errors = _open(playwright, site, API, posts, answers)
+        page.on("request", lambda r: r.method != "GET" and "/api/" in r.url and sent[seat[0]].append(
+            (r.method, urlparse(r.url).path, r.post_data, r.headers.get("content-type"))))
+        trip(page, _open_form(page, "rosy_02"), posts, 1)
+        page.clock.run_for(1500)  # the next poll drops the trip the start answer opened
+        answers[start_path] = busy
+        form = _open_form(page, "rosy_02")
+        trip(page, form, posts, 2)
+        expect(form.locator(".stuck-result")).to_contain_text("운행 거절 · 이 로봇은 운행 중입니다")
+        card_refusal = form.locator(".stuck-result").inner_text()
+
+        answers[start_path], seat[0] = started, "work"
+        page.goto(site + "/console?view=work&show=new")
+        page.clock.run_for(2500)
+        screens = page.get_by_role("navigation", name="작업 화면", exact=True)
+        assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["새 작업"]
+        page.locator("#work-new-move").click()
+        page.locator("#work-move-robot").select_option("rosy_02")
+        form = page.locator("#work-move .card-trip")
+        trip(page, form, posts, 3)
+        page.clock.run_for(1500)
+        answers[start_path] = busy
+        trip(page, form, posts, 4)
+        expect(form.locator(".stuck-result")).to_contain_text("운행 거절")
+        assert form.locator(".stuck-result").inner_text() == card_refusal
+        assert len(sent["card"]) == 4 and sent["work"] == sent["card"], sent
+        assert not errors
+        browser.close()
+
+
+def test_a_viewer_switches_robots_in_new_work_and_reads_each_reason(site):  # noqa: F811
+    """Review P2: the 이동 robot picker is a read control; a viewer switches robots and sees each card's reason,
+    while the start controls stay locked."""
+    from playwright.sync_api import expect, sync_playwright
+
+    api = {**API, "/api/fleet/session": {"principal_id": "eve", "role": "viewer"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [])
+        page.goto(site + "/console?view=work&show=new")
+        page.clock.run_for(2500)
+        page.locator("#work-new-move").click()
+        pick = page.locator("#work-move-robot")
+        for robot_id in ("rosy_02", "rosy_04"):
+            expect(pick).to_be_enabled()
+            pick.select_option(robot_id)
+            page.clock.run_for(1500)
+            go = page.locator(f'#work-move ui-button[data-trip-start="{robot_id}"]')
+            expect(go).to_have_count(1)
+            assert go.evaluate("node => node.disabled") and go.get_attribute("reason"), robot_id
+        assert not errors
+        browser.close()
+
+
+def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noqa: F811
+    """D-763 9 (v1.237): 새 작업은 서버의 종류 목록(`kinds`)만 보인다. 목록에 없는 종류는 꺼진 단추도 아니고 없다.
+    Cell 적재는 /console/cell로 간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    api = {**API, "/api/fleet/work": {**API["/api/fleet/work"], "kinds": []}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [])
+        page.goto(site + "/console?view=work&show=new")
+        page.clock.run_for(2500)
+        kinds = page.get_by_role("list", name="새 작업 종류", exact=True)
+        cell = kinds.get_by_role("link", name="Cell 적재", exact=True)
+        assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
+        assert page.locator("#work-new-cell-item").is_hidden()  # places and robots in the browser do not decide
+        assert not page.locator("#work-list").is_visible() and not page.locator("#work-context").is_visible()
+        api["/api/fleet/work"] = {**API["/api/fleet/work"], "kinds": ["trip", "CELL_TRANSFER"]}
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
+        expect(cell).to_be_visible()
+        assert cell.get_attribute("href") == "/console/cell"
+        expect(page.locator("#work-new-move")).to_be_visible()
+        # One row look for every kind: the Cell link once drew as a small underlined box beside a full-width 이동.
+        move_box, cell_box = page.locator("#work-new-move").bounding_box(), cell.bounding_box()
+        assert all(abs(move_box[key] - cell_box[key]) <= 1 for key in ("x", "width", "height")), (move_box, cell_box)
+        assert cell.evaluate("node => getComputedStyle(node).textDecorationLine") == "none"
+        page.locator("#work-new-move").click()
+        page.locator("#work-move-robot").select_option("rosy_02")
+        for width, height in [(1366, 768), (390, 844)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.clock.run_for(1500)
+            assert page.locator("#work-move .card-trip").count() == 1, width
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+            assert page.evaluate("""() => [...document.querySelectorAll('#work-move ui-button, #work-move select')]
+              .filter((node) => node.getBoundingClientRect().height > 0)
+              .every((node) => node.scrollWidth <= node.clientWidth + 1)"""), width
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
+            if width < 1024:
+                assert page.locator("#work-new").bounding_box()["y"] < page.locator("#work-move").bounding_box()["y"]
+            page.evaluate("document.querySelector('#work-move')?.scrollIntoView({block: 'nearest'})")
+            _shot(page, f"work-new-move-{width}x{height}.png")
+            page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary').scrollTop = 0")
+        page.set_viewport_size({"width": 1366, "height": 768})
+        api["/api/fleet/work"] = {**API["/api/fleet/work"], "kinds": ["CELL_TRANSFER"]}
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
+        assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
+        page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
+        assert page.locator("#work-new-cell-item").is_hidden()  # no answer: no kind
+        page.unroute("**/api/fleet/work")
+        page.clock.run_for(5000)  # the work poll (MAP_MS)
+        cell.click()
+        page.wait_for_url("**/console/cell")
+        screens = page.get_by_role("navigation", name="작업 화면", exact=True)
+        assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["새 작업"]
         assert not errors
         browser.close()

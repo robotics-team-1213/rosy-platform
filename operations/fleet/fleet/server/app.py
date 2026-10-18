@@ -19,14 +19,13 @@ import dataclasses
 import hmac
 import logging
 import sqlite3
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from typing import Mapping, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from fleet.server.cancel_all import DriveCancelFence
@@ -44,7 +43,7 @@ from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
-from fleet.server.step_dispatcher import StepJobDispatcher
+from fleet.server.cell_arm_dispatcher import CellJobDispatcher  # D-779: single-arm + multi-arm Cell Jobs
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.incidents.automation.runtime import install_incident_runtime
@@ -88,20 +87,6 @@ from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재�
 _LOG = logging.getLogger(__name__)
 _goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
-
-
-class VisionLeaseRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    source_id: str
-    rectification: Optional[dict[str, object]] = None
-
-    @field_validator("rectification")
-    @classmethod
-    def _valid_rectification(cls, value):
-        if value is None:
-            return None
-        from core_common.protocol.vision_preview import PreviewRectification
-        return PreviewRectification.from_mapping(value).as_dict()
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
@@ -252,17 +237,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_goal_evidence_service = CellGoalEvidenceService(cell_job_store, cell_goal_registry, GoalEvidenceStore(
             mission_service.store.path))
 
-    def on_step_action_succeeded(job, _index):
+    def on_step_action_succeeded(job, index):
         if cell_goal_evidence_service is None:
             return None
         try:  # a goal-processing failure never rewrites the recorded device success
-            return cell_goal_evidence_service.on_action_terminal(job["mission_id"])
+            return cell_goal_evidence_service.on_action_terminal(job["mission_id"], index)
         except Exception:
             _LOG.exception("stored Cell goal evidence could not be applied for %s", job["mission_id"])
             return None
 
     cell_job_dispatcher = (
-        StepJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
+        CellJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
                           omx_cell_grant_revisions or {}, deployment_profile=deployment_profile,
                           on_step_action_succeeded=on_step_action_succeeded)
         if enable_mission_dispatcher else None
@@ -383,6 +368,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         tether_task = app.state.tether_watch.start()  # D-526
         path_task = asyncio.create_task(app.state.paths.run())  # D-594
+        job_task = asyncio.create_task(app.state.job_trips.run()) if getattr(app.state, "job_trips", None) else None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -407,29 +393,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
-            power_display = getattr(app.state, "power_health_display", None)
-            if power_display is not None:
-                await power_display.aclose()
-            for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
-                               goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task, calibration_drift_task, notification_task):
-                if background is not None:
+            async with AsyncExitStack() as cleanup:
+                for resource in (getattr(app.state, "power_health_display", None), notification_http,
+                                 calibration_drift_watch, post_action_observation_source):
+                    close = getattr(resource, "aclose", None)
+                    if callable(close):
+                        cleanup.push_async_callback(close)
+                start_points = getattr(app.state, "start_points", None)
+                if start_points is not None:
+                    cleanup.callback(start_points.close)
+                backgrounds = [background for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
+                                   goal_evidence_worker, mission_feedback_scheduler,
+                                   mission_model_turn_worker_task, localization_task,
+                                   signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
+                                   lease_task, path_task, calibration_drift_task, notification_task, job_task)
+                               if background is not None]
+                for background in backgrounds:
                     background.cancel()
-                    try:
-                        await background
-                    except asyncio.CancelledError:
-                        pass
-            if notification_http is not None:
-                await notification_http.aclose()
-            if calibration_drift_watch is not None:
-                await calibration_drift_watch.aclose()
-            close_observation_source = getattr(post_action_observation_source, "aclose", None)
-            if callable(close_observation_source):
-                await close_observation_source()
-            if getattr(app.state, "start_points", None) is not None:
-                app.state.start_points.close()
+                for result in await asyncio.gather(*backgrounds, return_exceptions=True):
+                    if isinstance(result, Exception):
+                        _LOG.error("Fleet background worker failed before shutdown",
+                                   exc_info=(type(result), result, result.__traceback__))
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -454,7 +438,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.cell_goal_evidence_service = cell_goal_evidence_service
     app.state.deployment_profile = deployment_profile
     app.state.proposal_store = proposal_store
-    app.state.omx_instances = configured_omx
+    app.state.omx_instances, app.state.omx_stop_transport = configured_omx, stop_transport
     app.state.localization_service = localization_service
     if task_service is not None:
 
@@ -619,6 +603,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         execution_pose.bind_active_map(_execution_active_map)
     app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
+    console.read_state = map_pose.state   # D-760 8: one shared REST state read per robot for every loop
     identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
@@ -665,9 +650,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.ai_episodes = ProblemLog(task_service.store.path if task_service else None)   # D-610 9
     app.state.ai_first.human_classes = app.state.ai_episodes.active
     if tracking is not None and tracking.enabled:
+        from fleet.server.measured_calibration import active_map_revision
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
-                                read_guard=read_guard, operator_guard=operator_guard)
+                                read_guard=read_guard, operator_guard=operator_guard,
+                                require_named_operator=require_named_operator,
+                                map_revision=partial(active_map_revision, site_maps))
         from fleet.server.start_points import StartPointService
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
@@ -763,7 +751,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
-                             junction=lane_junction or HttpLaneJunction(console.clients),
+                             junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state, map_pose.read_number),
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
@@ -771,7 +759,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
-    install_trip_guard(console, trip_runner)
+    install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
     trip_runner.autonomous_robots = frozenset(autonomous_robots)
     trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)
     if hub is not None:
@@ -842,14 +830,19 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             require_proposer=require_proposer, read_guard=read_guard, operator_guard=operator_guard)
         from fleet.server.cell_job_routes import install_cell_job_routes
 
-        install_cell_job_routes(app, cell_job_store=cell_job_store,
+        install_cell_job_routes(app, cell_job_store=cell_job_store, proposal_store=proposal_store,
+                                require_viewer=require_viewer,
                                 require_named_operator=require_named_operator,
                                 operator_guard=operator_guard, read_guard=read_guard)
 
     from fleet.server.work_routes import install_work_routes
     from fleet.server.channel_requests import install_channel_feature
-    install_work_routes(app, task_service=task_service, mission_service=mission_service,
-                        require_viewer=require_viewer, read_guard=read_guard)
+    install_work_routes(app, task_service=task_service, mission_service=mission_service, require_viewer=require_viewer,
+                        require_named=(require_operator, require_named_operator), read_guard=read_guard)
+    from fleet.server.trip_job_routes import install_trip_job_routes  # D-763 7: trip steps, SIM profile only
+    install_trip_job_routes(app, store=cell_job_store, runner=trip_runner, console=console,
+                            deployment_profile=deployment_profile, episodes=app.state.ai_episodes,
+                            require_named_operator=require_named_operator, operator_guard=operator_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
     cell_prepare = install_cell_app_routes(
         app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,
@@ -857,7 +850,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         require_viewer=require_viewer, require_named_operator=require_named_operator)
     install_channel_feature(
         app, config=channel_config, task_service=task_service, principals=principals, site_logins=site_logins,
-        require_operator=require_operator, read_guard=read_guard, console=console, existing_tokens=other_tokens,
+        require_operator=require_operator, require_named_operator=require_named_operator, read_guard=read_guard,
+        console=console, existing_tokens=other_tokens,
         secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
         proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
     from .channel_model_runtime import install_channel_models
@@ -880,25 +874,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               cancel_pending_task_queue, task_service, console))
     install_conversation(app,conversation_config,site_maps,task_service=task_service)
 
-    @app.get("/api/fleet/vision/sources", tags=["vision-preview"])
-    def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
-        if vision_signer is None:
-            raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
-        return {"sources": list(vision_sources)}
-
-    @app.post("/api/fleet/vision/lease", tags=["vision-preview"])
-    def vision_preview_lease(body: VisionLeaseRequest,
-                             principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
-        if vision_signer is None:
-            raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
-        if body.source_id not in vision_sources:
-            raise HTTPException(status_code=404, detail={"code": "UNKNOWN_VISION_SOURCE"})
-        token = vision_signer.issue(principal_id=principal.principal_id,
-                                    source_id=body.source_id, ttl_s=60,
-                                    rectification=body.rectification)
-        return {"source_id": body.source_id, "lease": token,
-                "frame_path": f"/api/vision/sources/{body.source_id}/frame",
-                "expires_in_s": 60}
+    from fleet.server.vision_preview_routes import install_vision_preview_routes
+    install_vision_preview_routes(app, signer=vision_signer, sources=vision_sources,
+                                  require_camera_viewer=require_camera_viewer,
+                                  require_named_operator=require_named_operator)
 
     from fleet.host_control import UnavailableHostHelper, helper_from_config
     from fleet.server.host_control_routes import install_host_control_routes
@@ -971,7 +950,7 @@ async def _mission_model_turn_worker_loop(worker) -> None:
         await asyncio.sleep(0.25)
 
 
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher | StepJobDispatcher) -> None:
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher | CellJobDispatcher) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
         try:

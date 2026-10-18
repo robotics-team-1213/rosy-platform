@@ -24,6 +24,7 @@ from std_msgs.msg import String, UInt16MultiArray
 from .core_law_input import configure_drivable_law, refresh_drivable_law
 from . import executor_choice
 from .route_context_input import RouteContextInput, bend_expected
+from .keep_odom_veto import OdomVetoLaneKeeper
 from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import (
     nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane,
@@ -50,7 +51,7 @@ from .sensing.perception.evidence_mode import EvidenceModes
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
-from .route_followers import build_route_follower
+from .route_followers import RouteFollowerInput
 
 #: Fixed at startup: the edge follower and odom subscription are built from these once (a change runs the wrong pipeline).
 _READ_ONLY = ParameterDescriptor(read_only=True)
@@ -68,7 +69,7 @@ def _spinning_in_place(twist):
     return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < COMMANDED_PIVOT_LINEAR_MPS
 
 
-class LineObserverNode(Node):
+class LineObserverNode(Node, RouteFollowerInput):
     def __init__(self):
         super().__init__('line_observer_node')
         self.declare_parameter('ir_calibration_enabled', False)
@@ -142,6 +143,7 @@ class LineObserverNode(Node):
         self.declare_parameter('gazebo_camera_max_range_m', 0.6)
         # Lane mode only: odometry-bounded 90 deg corner turning; off by default, never leaves FOLLOW without odometry.
         self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
+        self.declare_parameter('lane_odom_veto_enabled', False, _READ_ONLY)  # D-556 candidate: off = D-364 keeper
         self.declare_parameter('camera_x_offset_m', 0.0)
         self.declare_parameter('debug_overlay', False, _READ_ONLY)
         self.declare_parameter('debug_overlay_max_hz', 5.0)
@@ -171,7 +173,7 @@ class LineObserverNode(Node):
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
         self._keep_last_stamp, self._cmd_stale_frames = None, 0
-        self._lane_keeper = LaneKeeper(
+        self._lane_keeper = (OdomVetoLaneKeeper if self.get_parameter('lane_odom_veto_enabled').value else LaneKeeper)(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
         self._route_context_input = RouteContextInput()
@@ -242,43 +244,6 @@ class LineObserverNode(Node):
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
 
-    def _build_route_follower(self, mode: str):
-        """route_a/route_b/route_ab only. Missing or invalid lane_graph_path, route or
-        route_start (or a graph/route that fails to build, e.g. a
-        disconnected pair or a one-way ring arc walked backwards) fails
-        closed: a warning logged once here at startup, no follower built,
-        and CAMERA_LINE keeps publishing None (visible:false) every frame
-        rather than going silent (D-143: this node still owes CORE
-        evidence)."""
-        # A static route_start anchors the first odometry pose without an
-        # independent map fix. Keep these junction prototypes in simulation
-        # until an active map and fresh localized start can authorize them.
-        if not simulation_ground_allowed(
-                source=self.get_parameter('camera_ground_source').value,
-                simulation_enabled=self.get_parameter('allow_simulation_ground').value,
-                use_sim_time=self.get_parameter('use_sim_time').value):
-            self.get_logger().warning(
-                f'{mode} prototype route modes require Gazebo simulation ground and clock; '
-                'no follower built, CAMERA_LINE will publish no observation')
-            return None
-        graph_path = str(self.get_parameter('lane_graph_path').value)
-        route = [str(key) for key in self.get_parameter('route').value]
-        route_start = [float(v) for v in self.get_parameter('route_start').value]
-        if not graph_path or not route or len(route_start) != 3:
-            self.get_logger().warning(
-                f'{mode} route modes need lane_graph_path, route and route_start; '
-                'no follower built, CAMERA_LINE will publish no observation')
-            return None
-        try:
-            return build_route_follower(mode, graph_path, route, route_start,
-                                        float(self.get_parameter('camera_x_offset_m').value))
-        except (OSError, yaml.YAMLError, ValueError) as exc:
-            self.get_logger().warning(
-                f'{mode} route modes need lane_graph_path, route and route_start '
-                f'to build a valid follower ({exc}); no follower built, '
-                'CAMERA_LINE will publish no observation')
-            return None
-
     def _nominal_profile(self):
         if self._nominal_profile_cache is None:
             path = str(self.get_parameter('nominal_camera_profile_path').value)
@@ -342,6 +307,8 @@ class LineObserverNode(Node):
 
     def _publish(self, source, observation, *, stamp=None, quality=None, containment=None,
                  route_context_seq=None) -> None:
+        if source == 'CAMERA_LINE' and getattr(self._lane_keeper, 'side_conflict_hold', False):  # D-556 rule 2: latched
+            observation, containment, quality = None, None, quality or dict(valid=False, reason='odom_side_conflict')
         payload = line_observation_payload(
             source, self._stamp() if stamp is None else stamp, observation,
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
@@ -401,7 +368,8 @@ class LineObserverNode(Node):
             raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
         floor_gate = bool(self.get_parameter('learned_paint_floor_gate').value)
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
-            folder, threads=threads, allow_spinning=False, floor_gate=floor_gate)) if pointer else None
+            folder, threads=threads, allow_spinning=False, floor_gate=floor_gate,
+            paint_target=target)) if pointer else None
         return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
                                   warn=self.get_logger().warning, target=target)
@@ -550,6 +518,7 @@ class LineObserverNode(Node):
                     crosswalk_mask=(self._paint_worker.used_crosswalk  # D-597 amendment: D-491 extent
                                     if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
+                    pose=pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),  # D-556: LaneKeeper ignores it
                     bend_expected=bend_rules)
                 if self._drivable_required and self._drivable_steer is None:
                     # A missing authoritative law cannot fall through to another steering law.
@@ -579,6 +548,8 @@ class LineObserverNode(Node):
                               paint_drivable=(self._paint_worker.used_drivable
                                               if self._paint_worker is not None else None),
                               paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value)
+                                                if self._paint_worker is not None else None),
+                              paint_last_error=(self._paint_worker.last_error
                                                 if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],

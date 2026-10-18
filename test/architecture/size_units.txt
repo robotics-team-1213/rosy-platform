@@ -1,0 +1,72 @@
+# D-766 size units: subpackages and declared holders counted as their own unit (10,000 lines).
+# A unit's lines leave its parent (the innermost enclosing unit wins). Paths are relative to the
+# colcon root. One unit per line; `<path> small` marks a unit grandfathered below the 1,000-line
+# floor (SMALL_UNITS, D-766 3). A new unit whose parent is 2,000 lines or more must be at least
+# 1,000 lines, and no new `small` mark may be added. Checked by
+# test/architecture/test_module_structure.py; how-to in test/architecture/AGENTS.md.
+drive/behaviors/line_follow
+foundation/core_common/protocol/native small
+drive/behaviors/navigation small
+drive/behaviors/line_follow/recovery
+drive/behaviors/line_follow/recovery/junction
+drive/behaviors/line_follow/recovery/stuck
+drive/behaviors/line_follow/recovery/stuck/realign small
+drive/behaviors/line_follow/arc small
+drive/behaviors/line_follow/cue small
+drive/behaviors/line_follow/crosswalk small
+drive/behaviors/line_follow/signal small
+drive/behaviors/localization
+drive/behaviors/docking
+drive/behaviors/swarm small
+fleet/fleet/traffic
+fleet/fleet/observe small
+fleet/fleet/server/channel
+fleet/fleet/server/channel/health small
+fleet/fleet/server/channel/conversation small
+fleet/fleet/server/channel/execution small
+fleet/fleet/server/channel/execution/outcomes small
+fleet/fleet/localization
+fleet/fleet/stuck
+fleet/fleet/stuck/submission small
+fleet/fleet/incidents small
+fleet/fleet/incidents/automation small
+fleet/fleet/incidents/automation/ledger small
+fleet/fleet/incidents/automation/execution small
+fleet/fleet/incidents/automation/operating small
+decision/src/rosy/decision/deliberation small
+decision/src/rosy/decision/conversation small
+decision/src/rosy/decision/deliberation/contracts small
+decision/src/rosy/decision/deliberation/providers small
+decision/src/rosy/decision/deliberation/evaluation small
+perception/front_camera/perception
+perception/front_camera/perception/learned
+perception/front_camera/perception/drivable small
+site_ui/console
+site_ui/console/devices
+fleet/fleet/server/ledger
+site_ui/console/work small
+fleet/fleet/server/missions
+fleet/fleet/server/work small
+fleet/fleet/server/trips
+fleet/fleet/server/trip_checks small
+fleet/fleet/server/trip_progress small
+foundation/core_common/protocol
+robot_ui/robot/panels
+fleet/fleet/server/auth
+fleet/fleet/server/console
+fleet/fleet/server/cell
+fleet/fleet/swarm
+fleet/fleet/routing
+decision/src/rosy/decision
+drive/tracking/wander
+drive/planning/grid
+perception/sensors/sensing
+drive/motion_limits
+drive/calibration
+drive/recovery
+perception/sensors/line_observation
+site_ui/console/shared
+site_ui/console/calibration
+fleet/fleet/server/tracking
+situation
+site_execution

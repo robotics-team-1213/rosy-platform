@@ -37,8 +37,11 @@ ROS-free repository architecture, installation, deployment, motor/network and cr
 | `test_release_storage.py` | Release store / retention |
 | `test_release_updater.py` | Activate/rollback updater |
 | `robot_contracts.py` | Shared ROOT/DEPLOY/compose helpers |
+| `g1_layout.py`, `g1_sim_harness.py` | D-778/D-781 G1 SIM support: IK reach audit, capsule swept separation, schedule model; Fleet multi-arm dispatcher to two real OMX cell owners and the coordinator in one process (bridges listed in its header). `python test/g1_layout.py` prints the layout report |
+| `test_platform_g1_layout.py`, `test_platform_g1_sim.py`, `test_platform_g1_timing.py` | G1 SIM layout, end-to-end/fault and timing tests (`ROSY_G1_EVIDENCE_DIR` writes run evidence); record in `docs/validation/bimanual-g1-sim-2026-10-17` |
 | `known_failures.txt` | Pre-existing failures on main (node id + reason). Delete a line in the commit that fixes it; never add one to hide your own failure |
-| `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure |
+| `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure. A failure listed in `flaky_quarantine.txt` whose one rerun (appended after `RERUN_MARKER` by `tools/remote/remote_pytest.py`) shows `PASSED` prints `FLAKY`, not `NEW` |
+| `flaky_quarantine.txt` | D-762 stage 1: tests seen flaky on an unchanged sha (node id + `  # ` reason, evidence, "remove when ...", date, owner). Listed failures rerun once in CI and on the lab PCs; fails twice = NEW; unlisted never rerun. Add only with flake evidence, never to hide your own failure; browser follow-ups (not rerun anywhere) are comments in the file |
 | `test_known_failures.py` | The comparison and that every listed id names a real test |
 | `browser_harness.py` | Shared helpers for the optional Chromium regressions (launch/error-collection/confirm-stub/screenshot, D-153 capture tooling); `browser_tests_enabled()` opt-in, `safe_listener()`/`free_port()` never return a Chromium-restricted port |
 | `browser_scope.py` | `SCOPE` map from source path prefix to the browser tests that load those pages; `python test/browser_scope.py <paths>` prints pytest targets |
@@ -73,7 +76,7 @@ Ignore `__pycache__/`.
 - Run it before shipping dashboard JS: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py`. Opt-in tests that are never run are not coverage.
 - Browser opt-in: gate every real-Chromium test with `pytest.mark.skipif(not browser_tests_enabled(), ...)` from `browser_harness.py`. `ROSY_RUN_BROWSER_TESTS=1` is canonical; `ROSY_BROWSER_TESTS=1` still works. Do not read either variable directly — a second name silently skipped the Fleet start-point tests until 2026-10-07.
 - Local servers a page loads must bind through `safe_listener()` or `free_port()`, not port 0: this laptop's dynamic range starts at 1024 and port 0 handed out 2049 (`net::ERR_UNSAFE_PORT`). A new browser test that loads a new page family gets a `SCOPE` entry in `browser_scope.py`.
-- Full browser suites run on the site PC or model PC, not this laptop (34 min–2 h 26 min and MemoryError/`Page.goto` flakes here on 2026-10-07). Command pattern: `docs/reference/developer-guide.md` 「브라우저 시험」.
+- Browser tests run on the test PCs, never this laptop (34 min–2 h 26 min and MemoryError/`Page.goto` flakes here on 2026-10-07). `tools/land.py` adds the ones `browser_scope.py` maps the changed paths to, opted in; by hand: `-- ROSY_RUN_BROWSER_TESTS=1 <paths>` to `tools/remote/remote_pytest.py`. `docs/reference/developer-guide.md` 「브라우저 시험」.
 - A new guard, gate or contract test is not believed until it has been **mutation-proven**: change the thing it guards, watch it go red, restore, watch it go green — and confirm the mutation actually landed before trusting the red. Assertions on source text are the easiest to write as tautologies, so mutate them harder, not less (`docs/solutions/workflow-issues/inability-to-check-recorded-as-clean-result.md`).
 
 ### Testing Requirements
@@ -81,8 +84,8 @@ Ignore `__pycache__/`.
 ```bash
 python tools/remote/remote_pytest.py --log-dir X:/DevTemp/repo-test -- test/ -v
 python tools/remote/remote_pytest.py --log-dir X:/DevTemp/motor-test -- test/test_motor_control.py test/test_host_agent.py -v
-# The following browser command runs only on the selected Linux test PC:
-t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider
+# Browser tests: leading ROSY_*=value words are the job's environment on the test PC.
+t=$(python test/browser_scope.py <changed paths...>) && python tools/remote/remote_pytest.py --log-dir X:/DevTemp/browser -- ROSY_RUN_BROWSER_TESTS=1 $t
 ```
 
 ### Common Patterns

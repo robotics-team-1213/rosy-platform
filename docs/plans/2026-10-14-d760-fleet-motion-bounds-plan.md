@@ -1,6 +1,6 @@
 # D-760 실행 계획 — Fleet이 시작한 움직임의 한도와 5초 끊김 버티기
 
-**날짜:** 2026-10-14 · **결정:** [D-760](../adr/D-760-fleet-motion-bounds-ride-through.md) 개정 1, 짝 기록 [D-758](../adr/D-758-robot-held-site-anchor.md) · **상태:** 1단계 진행 중
+**날짜:** 2026-10-14 · **결정:** [D-760](../adr/D-760-fleet-motion-bounds-ride-through.md) 개정 1, 짝 기록 [D-758](../adr/D-758-robot-held-site-anchor.md) · **상태:** 1단계 리뷰 승인(착지 대기), 2단계 안전 재검토 중, 삭제 브랜치 리뷰 승인(착지 대기)
 
 이 문서는 단계별 작업, 닿는 파일, 시험 항목, 통과 기준을 적는다. 계약과 이유는 ADR에 있다. 단계마다 실행기가 시험을 먼저 쓰고(TDD) 단계마다 자기 브랜치에 커밋한다.
 
@@ -53,7 +53,7 @@
   4. 임대 중 강제: trip 임대가 열려 있으면 통행권이 없을 때 `authority_none`으로 선다. 모드 변경과 CORE 재시작 뒤에도 같다. 임대가 끝나면 지금 규칙(`authority_required` 또는 `_authority_seen`)으로 돌아간다.
   5. 능력 플래그 둘을 알린다.
 - **시험(기존 D-517 M2 시험에 더한다)**
-  - `ttl_s` 5.0 수락, 5.01 거절(422). 4.9 s에 FREE, 5.1 s에 EXPIRED.
+  - `ttl_s` 5.0 수락, 5.01 거절(400 `VALIDATION_ERROR`). 4.9 s에 FREE, 5.1 s에 EXPIRED.
   - 늘리기(seq 3) → 줄이기(seq 4) → 늦게 닿은 늘리기(seq 2): 끝이 줄인 채다.
   - `shrink` + `until_m: 0`: 다음 틱에 HOLD `authority_end`.
   - `shrink` 요청이 `AUTHORITY_POSE_STALE`로 거절: 통행권이 없어지고 로봇이 선다.
@@ -64,12 +64,29 @@
   - 몸체 정지(D-422)·IR 가드·E-stop이 통행권 문보다 먼저다(기존 시험이 그대로 통과).
 - **끝난 기준:** 위 시험과 기존 차선 추종·trip 임대 시험 통과, 가드 시험(프로토콜 버전 맞춤, 이벤트 목록) 통과, Safety-Review trailer.
 
+## 2b단계 — 호의 기한에서 문이 가져간 시간 빼기 (D-760 개정 2의 6)
+
+- **브랜치:** `fix/lane-arc-hold-clock` · **검토:** Safety-Review · **선행:** 2단계 착지, `line_follow/arc` 크기 단위 재판정
+- **닿는 곳:** `middleware/drive/behaviors/line_follow/arc/lane_arc.py`
+- **작업:** 통행권이 FREE가 아니거나 횡단보도 게이트가 살피는 동안 호의 기한을 세지 않는다. 한 호에 더하는 시간은 상한을 둔다(D-507 13항과 같은 규칙, 15 s). 시작 전에 rosy-44에 알린다(D-744·D-759와 닿는다).
+- **시험:** 호 도중 통행권이 3 s·6 s 없다가 돌아옴: 호를 이어서 마친다. 20 s 없음: `lane_arc_timeout`으로 서 있다(지금과 같다). 문이 가져가지 않은 시간은 지금 기한 그대로다.
+
+## 2c단계 — 안전 모듈 목록에 두 파일 추가 (D-760 개정 2의 7)
+
+- 2단계가 origin에 올라간 뒤 `tools/harness/platform_parts.yaml` `safety_modules`에 `line_follow/authority.py`와 `core/trip_lease.py`를 넣는다. 그 커밋은 trailer를 단다.
+
 ## 0단계 — odom 기록을 단조 시각으로 (D-758 0단계)
 
 - **브랜치:** `fix/odom-log-monotonic-epoch` · **검토:** Safety-Review(통행권 주행 거리 계산이 이 기록을 쓴다)
 - **닿는 곳:** `middleware/core/services/core_features/state/manager.py`(odom 기록, `odom_pose.epoch`·단조 시각), `middleware/drive/behaviors/line_follow/authority.py`·`cue/lane_cue.py`(조회), `contracts/foundation/core_common/protocol/schemas.py`·`localization.py`(`OdomPose` 추가 필드), Fleet `rosy.world...map_pose`(epoch가 바뀌면 기준을 버림), API Reference
 - **작업:** 기록을 StateManager로 옮기고 단조 시각으로 찾는다. `pose_stamp`는 Fleet이 돌려주는 값 그대로 비교하므로 스냅숏이 단조 시각을 같이 내고 Fleet이 그것을 돌려준다(옛 Fleet의 벽시계 stamp도 받는다).
 - **시험:** 벽시계를 ±5 s 옮긴 뒤 통행권·호·차로 신호의 조회가 같은 표본을 찾는다. odom이 0으로 돌아가면 epoch가 늘고 Fleet 추적기가 기준을 버린다. 기존 D-517·D-744·D-511 시험 통과.
+- **범위 변경(2026-10-14, 코드 조사 뒤):** odom 기록은 이미 하나다(`line_follow/authority.py` `_odom_log`, 세 조회가 같이 쓴다). 그래서 기록을 옮기지 않는다. 대신 다음처럼 한다.
+  - 스냅숏이 내는 벽시계 stamp와 단조 시각을 기록 항목에 같이 적는다.
+  - 조회는 Fleet이 돌려준 stamp와 정확히 같은 항목을 찾는다. 나이·미래·순서 판정은 단조 시각으로 한다. 정확히 같은 항목이 없으면 지금 방식으로 찾는다(옛 Fleet).
+  - StateManager가 odom 불연속에만 느는 `odom_pose.epoch`와 `odom_pose.mono_s`를 낸다(선택 필드, v1.228). 차선 추종 모드 변경으로는 늘지 않는다.
+  - Fleet은 `map_pose.py`만 고쳐 epoch가 바뀌면 기준을 버린다.
+  - Fleet이 단조 stamp를 돌려주는 것은 사이트 앵커(D-758 2단계 이후)로 미룬다. 3단계 파일 9개와 겹치지 않는다.
 
 ## 3단계 — Fleet trip 루프: 끊김 기다리기, 줄이기 송신, 재시작 뒤 T
 

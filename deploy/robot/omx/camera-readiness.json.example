@@ -1,0 +1,27 @@
+{
+  "viewer_url": "http://127.0.0.1:8767",
+  "cameras": {
+    "top": {
+      "device": "/dev/v4l/by-id/<top-camera>-video-index0",
+      "candidates": [
+        {"auto_exposure": 1, "exposure_time_absolute": 400, "gain": 7, "gamma": 10, "brightness": 0},
+        {"auto_exposure": 1, "exposure_time_absolute": 800, "gain": 7, "gamma": 10, "brightness": 0}
+      ],
+      "bright_candidates": [
+        {"auto_exposure": 1, "exposure_time_absolute": 160, "gain": 2, "gamma": 10, "brightness": -10},
+        {"auto_exposure": 1, "exposure_time_absolute": 80, "gain": 1, "gamma": 10, "brightness": -10}
+      ]
+    },
+    "front": {
+      "device": "/dev/v4l/by-id/<front-camera>-video-index0",
+      "candidates": [
+        {"auto_exposure": 1, "exposure_time_absolute": 400, "gain": 50, "gamma": 150},
+        {"auto_exposure": 1, "exposure_time_absolute": 800, "gain": 80, "gamma": 200}
+      ],
+      "bright_candidates": [
+        {"auto_exposure": 1, "exposure_time_absolute": 160, "gain": 0, "gamma": 100},
+        {"auto_exposure": 1, "exposure_time_absolute": 80, "gain": 0, "gamma": 100}
+      ]
+    }
+  }
+}

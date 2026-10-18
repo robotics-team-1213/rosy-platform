@@ -62,6 +62,7 @@
 | D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 
 ## 계획·결과 문서
 
@@ -99,8 +100,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
-- 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
-- 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
-- 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
-- 2026-10-14 · 9ee82e94d · refactor: D-759 bend_fields의 map_entry 가지를 if 문으로 (검토 반영)
+- 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
+- 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
+- 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
+- 2026-10-17 · uncommitted · feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
+- 2026-10-17 · uncommitted · D-779 팔 여러 개 Job safety 리뷰 반영

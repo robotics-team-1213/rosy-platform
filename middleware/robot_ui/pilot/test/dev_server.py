@@ -50,6 +50,7 @@ PILOT_MIME = {
     "screens/drive.js": "application/javascript",
     "screens/drive-auto.js": "application/javascript",
     "screens/drive-view.js": "application/javascript",
+    "screens/drive-video.js": "application/javascript",
     "screens/inputs.js": "application/javascript",
     "screens/robot-recording.js": "application/javascript",
     "screens/arm.js": "application/javascript",
@@ -65,17 +66,9 @@ PILOT_MIME = {
     "icons/icon-192-maskable.png": "image/png",
     "icons/icon-512.png": "image/png",
 }
-COMMON_MIME = {
-    "tokens.css": "text/css",
-    "components.css": "text/css",
-    "template.html": "text/html",
-    "core_ui_logic.js": "application/javascript",
-    "hold-ticker.js": "application/javascript",
-    "ui.js": "application/javascript",
-    "confirmation.js": "application/javascript",
-    "live-dialog-geometry.js": "application/javascript",
-    "evidence.js": "application/javascript",
-}
+#: The one /common allowlist every server reads. A private copy here drifted and 404ed account-profile.js and
+#: brand/mark.svg, so /pilot never drew.
+COMMON_MIME = json.loads((WEB_COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
 
 app = FastAPI(title="Rosy Pilot dev server", version="dev")
 

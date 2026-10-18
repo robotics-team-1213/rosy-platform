@@ -180,7 +180,8 @@ def test_drivable_model_without_wall_loads_but_cannot_use_ungated_lane_fallback(
     if has_way:
         labels[100:, 90:230] = 2
     folder = _model_dir(tmp_path, classes)
-    model = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels, 3), floor_gate=True)
+    model = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels, 3), floor_gate=True,
+                              paint_target="drivable")
     frame = np.zeros((H, W, 3), np.uint8)
     assert model.floor_gate is True
     if has_way:
@@ -194,3 +195,25 @@ def test_drivable_model_without_wall_loads_but_cannot_use_ungated_lane_fallback(
         model.infer_mask(frame)
     with pytest.raises(NoWallClass):
         model.infer_with_mask(frame)
+
+
+GAZEBO_ROLES = (ClassSpec(0, "background", "background"), ClassSpec(1, "lane_left", "lane_marking"),
+                ClassSpec(2, "lane_right", "lane_marking"), ClassSpec(3, "crosswalk", "ignore"),
+                ClassSpec(4, "speed_bump", "ignore"), ClassSpec(5, "drivable", "drivable"))
+
+
+def test_lane_marking_target_refuses_a_model_without_wall_at_open(tmp_path):
+    folder = _model_dir(tmp_path, GAZEBO_ROLES)
+    factory = lambda p, t: _Session(np.zeros((H, W), np.int64), 6)  # noqa: E731
+    with pytest.raises(ManifestError, match="floor gate needs a wall role class; this model has none"):
+        LaneSegModel.open(folder, session_factory=factory, floor_gate=True, paint_target="lane_marking")
+    assert LaneSegModel.open(folder, session_factory=factory, floor_gate=True, paint_target="drivable").floor_gate
+    assert LaneSegModel.open(folder, session_factory=factory, paint_target="lane_marking").floor_gate is False
+
+
+def test_lane_marking_target_accepts_a_model_with_wall(tmp_path):
+    folder = _model_dir(tmp_path, CLASSES)
+    model = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(_scene()), floor_gate=True,
+                              paint_target="lane_marking")
+    assert model.floor_gate is True
+    model.infer_mask(np.zeros((H, W, 3), np.uint8))
