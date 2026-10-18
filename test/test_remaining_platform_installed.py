@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 95  # Adds measured view/CSS, the calibration package and the D-793 policy page.
+    assert len(expected) == 96  # Includes the shared host report reader.
+    assert 'shared/host-health.js' in expected
     assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',
             'calibration/measured-calibration.css'} <= expected.keys()
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
