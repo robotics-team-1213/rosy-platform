@@ -21,7 +21,7 @@ def test_camera_preserves_source_age():
     exec(compile(ast.Module(body=[camera], type_ignores=[]), '<actual Camera provider>', 'exec'), scope)
     node = NS(create_subscription=lambda *args: None,
               get_clock=lambda: NS(now=lambda: NS(nanoseconds=20_000_000_000)))
-    provider = scope['Camera'](node, lambda: 100.0, 'cal')
+    provider = scope['Camera'](node, lambda: 100.0, 'a'*64)
     provider.receive(NS(header=NS(stamp=NS(sec=19, nanosec=510_000_000)),
                         encoding='rgb8', height=24, width=32, step=96, data=bytes(2304)))
     assert provider._latest[1].received_at_ns == 99_510_000_000
