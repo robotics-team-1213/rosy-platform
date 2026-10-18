@@ -804,3 +804,9 @@
 - 변경: Added optional typed route_guide to the existing authority API (reference v1.246). CORE binds it only on acceptance with sequence and exact echoed odom sample. The source lifetime is capped by max_age_s <= 1 and authority TTL; clears and same-source republication do not replenish the budget. Shrink/no-guide/mode reset/expiry/unavailable odom expose no prior. Existing movement-authority acceptance and distance gate semantics remain. No publisher, producer or deployed capability was enabled.
 - 증거: 79 remote tests passed for authority-route binding, existing authority behavior, actual API and protocol version alignment. Ten new tests first failed on the missing route_guide argument. Independent safety review caught and verified the sub-ULP source-lifetime fix: optional binding completes before authority replacement and unrepresentable deadlines drop the guide. Logs: private rosy-d769-audit/authority-route-red and authority-route-green. Per-commit size and safety-review checks passed for all three commits in this slice.
 - gate 변화: None. CORE ROS publication, Fleet selected-route production, Gazebo learned driving and constrained learned-policy acceptance remain pending.
+
+## 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
+
+- 변경: 기존 Account 작업의 receiver 재생성 후 회수 큐 복구 검사를 foundation 전용 브랜치로 분리했다. 제품 AccountClient는 변경하지 않았다.
+- 증거: 원래 c22ee485ad의 지정 원격 suite15개 PASS, NEW0. 이 브랜치는 최신 main 위에서 착지 관문을 다시 실행한다. 원래 결과는 최신 main 병합 시험을 대신하지 않는다.
+- gate 변화: 없음. 운영 인증·서비스·장치 수용은 이 검사와 별도다.
