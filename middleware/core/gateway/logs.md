@@ -1186,6 +1186,19 @@
 - gate 변화: 없음.
 - 결정: D-767 A부 4항.
 - 교훈: 없음.
+
+## 2026-10-16 · ddd1b70f4 · Publish authority-bound route priors through CORE (D-769)
+
+- 변경: Added the single line/lane_guide publisher to the existing line-follow timer; no new motor publisher or timer. Inactive line following, E-stop and unavailable authority yield ordered clears. Initial and rewound source clocks announce a publisher epoch with clear before active data. Publication retains monotonic source expiry across epoch resets and caps wire validity by remaining budget. Existing route-context cadence moved into a state holder so the oversized bridge shrank by one line, with its size ratchet lowered in the same commit.
+- 증거: 48 remote tests passed across route publication, real publisher-to-inbox lifetime, route context, bridge registrations, authority binding and inbox. Review regressions reproduced expired-source resurrection and receiver lifetime extension after rewind; both now pass. Independent review of ddd1b70f4 found no further narrow blocker. Private evidence: rosy-d769-audit/lane-route-publication-red, lane-route-rewind-red, lane-route-wire-budget-red and lane-route-wire-budget-green. Structural publisher registration proves the sole cmd_vel publisher remains, not real DDS behavior.
+- gate 변화: None. Fleet selected-route production, deployed capability and actual Gazebo acceptance remain pending. Paused ROS time during message transit cannot expose elapsed wall time from this schema alone; budget is capped at publication and again at receipt.
+
+## 2026-10-16 · c11a34f64b · Explicit deployment opt-in for route guidance (D-769)
+
+- 변경: Parse false-default route_guide_enabled and expose line_follow_route_guide only when authority and the deployment setting are enabled. CORE publishes clear while disabled. Learned-drivable Fleet SIM overlays explicitly enable the setting; other overlays retain the default. API reference and advertised version advance together to v1.247.
+- 증거: Remote integration suite passed 186 tests, including capability opt-in, protocol alignment, bridge registration and both SIM overlay settings. Private evidence: rosy-d769-audit/fleet-route-integrated/run-1.txt. Independent safety review approved the false default and explicit opt-in; the commit carries its Safety-Review trailer. Size and safety guards passed.
+- gate 변화: None. Capability reflects deployment configuration, not consumer health attestation. Gazebo acceptance remains pending.
+
 ## 2026-10-19 · uncommitted · preview API 짝 시험의 시간 의존성 제거
 
 - 변경: raw/annotated API의 신선한 짝을 검증하는 시험에서 canonical core_features.vision.store에만 고정 clock을 주입한다. 운영 TTL과 pairing·rate 제한은 변경하지 않는다.

@@ -24,6 +24,10 @@ approval file /etc/rosy/host-control/role role/host-control-role
 safe file /usr/local/sbin/rosy-avahi-interfaces deploy/hosts/common/rosy-avahi-interfaces 0755
 safe file /etc/systemd/system/rosy-avahi-interfaces.service deploy/hosts/common/rosy-avahi-interfaces.service
 safe enabled rosy-avahi-interfaces.service
+# D-802: uv is the one Python installer on every lab PC (remote_pytest venvs, remote_sim pins); pinned wheel,
+# hash-checked, installed with the distro pip, linked as /usr/local/bin/uv and uvx. Bump both version and hash.
+approval=uv apt python3-pip
+approval=uv wheel-tool uv 0.12.22 680769ef701922dd93426b73476073411941f51ac46991a6e5c5a6efbf68a713 # SHA256 wheel integrity
 # New-PC recovery baseline: one explicit installation approval; later checks report drift.
 # Never overwrite /etc/default/rosy-ssh-watchdog: local limits and robot flags stay host-owned.
 approval=recovery file /usr/local/sbin/rosy-ssh-watchdog deploy/hosts/common/rosy-ssh-watchdog 0755

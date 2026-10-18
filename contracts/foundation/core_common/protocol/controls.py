@@ -94,6 +94,7 @@ class BaseVelocityControl(_Wire):
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
     line_follow_authority_required: bool | None = None  # D-517 4: enforced before any authority too
     line_follow_authority_shrink: bool | None = None  # D-760 3: the authority takes shrink and seq, ttl_s <= 5
+    line_follow_route_guide: bool | None = None  # D-769: configured authority-to-observer route prior pipeline
     line_follow_authority_under_lease: bool | None = None  # D-760 2: enforced while the trip lease is open
     line_follow_advice: bool | None = None  # D-525: POST /line-follow/advice is shown (display only)
     trip_lease: bool | None = None  # D-541 1: CORE takes PUT/DELETE /trip-lease and /trip-lease/takeover
@@ -200,6 +201,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
                    line_follow_authority_shrink: bool | None = None,
+                   line_follow_route_guide: bool | None = None,
                    line_follow_authority_under_lease: bool | None = None,
                    line_follow_advice: bool | None = None,
                    trip_lease: bool | None = None, goal_lease: bool | None = None,
@@ -230,6 +232,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          line_follow_authority=line_follow_authority,
                                          line_follow_authority_required=line_follow_authority_required,
                                          line_follow_authority_shrink=line_follow_authority_shrink,
+                                         line_follow_route_guide=line_follow_route_guide,
                                          line_follow_authority_under_lease=line_follow_authority_under_lease,
                                          line_follow_advice=line_follow_advice,
                                          trip_lease=trip_lease, goal_lease=goal_lease, trip_lease_job=trip_lease_job,

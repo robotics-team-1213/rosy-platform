@@ -5,7 +5,9 @@ import math
 import numpy as np
 
 ROW_BAND_M = 0.03
-MAX_TARGET_CURVATURE = 5.0
+#: tightest arc the target asks for (1/m): map_v2_fleet's NE corner is a ~0.12 m radius quarter turn; at 5
+#: (0.2 m) the v2 Gazebo lap swung out to the wall there, nose 0.13 m off it and no room to pivot (r9, r10)
+MAX_TARGET_CURVATURE = 9.0
 
 
 def _row_x(rows, ground, x_offset):
@@ -55,3 +57,39 @@ def _centre_target(xs, centre, lookahead):
         math.sin(k * reach) / k, (1.0 - math.cos(k * reach)) / k)
     band[order[near]] = True
     return point, k, band
+
+
+#: rows averaged before an edge's slope is taken for the one-edge centre offset
+EDGE_SMOOTH_ROWS = 7
+
+
+def one_edge_centre(xs, edge, offset, seen=None):
+    """(x, y) arrays: each edge point (xs, edge; base_link, left +) moved `offset` along the edge's left
+    normal (negative: right), the slope taken over a moving average of EDGE_SMOOTH_ROWS pixel-stepped rows.
+    `seen` (default all): rows where the edge is the way's edge, not the frame border; a window with an
+    unseen row keeps the across-row offset (slope 0), a frame border step is no bend."""
+    k = min(EDGE_SMOOTH_ROWS, len(xs))
+    smooth = lambda v: np.convolve(np.pad(v, (k // 2, k - 1 - k // 2), mode="edge"), np.ones(k) / k, "valid")  # noqa: E731
+    with np.errstate(divide="ignore", invalid="ignore"):   # rows at one range give an infinite slope
+        slope = np.nan_to_num(np.gradient(smooth(edge), smooth(xs)), nan=0.0, posinf=1e6, neginf=-1e6)
+    if seen is not None:
+        slope = np.where(smooth(np.asarray(seen, float)) > 1.0 - 1e-9, slope, 0.0)
+    norm = np.hypot(1.0, slope)
+    return xs - offset * slope / norm, edge + offset / norm
+
+
+def _to_world(point, pose):
+    x, y, yaw = pose
+    return (x + math.cos(yaw) * point[0] - math.sin(yaw) * point[1], y + math.sin(yaw) * point[0] + math.cos(yaw) * point[1])
+
+
+def _to_current(point, source_pose, current_pose):
+    """A base_link point at source_pose seen from current_pose ((x, y, yaw) odometry)."""
+    if source_pose is None or current_pose is None:
+        return point
+    xs, ys, yaws = source_pose
+    xc, yc, yawc = current_pose
+    wx = xs + math.cos(yaws) * point[0] - math.sin(yaws) * point[1]
+    wy = ys + math.sin(yaws) * point[0] + math.cos(yaws) * point[1]
+    dx, dy = wx - xc, wy - yc
+    return (math.cos(yawc) * dx + math.sin(yawc) * dy, -math.sin(yawc) * dx + math.cos(yawc) * dy)
