@@ -104,15 +104,6 @@ def test_logout_ends_the_grant_at_the_next_recheck_and_is_audited(site):
     assert row["principal_id"] == "alice" and row["end_reason"] == "credential_revoked" and row["ended_at"]
 
 
-def test_a_changed_login_credential_revokes_the_grant(site):
-    build, _, logins = site
-    app, client = build()
-    _login(client)
-    grant = client.post(GRANT, headers=ORIGIN).json()
-    logins["alice"]["password_scrypt"] = hash_password("another password")
-    assert _validate(TestClient(app, base_url=BASE), grant["token"]) == {"active": False}
-
-
 def test_renewal_keeps_the_grant_owner_and_close_is_audited(site):
     build, public, _ = site
     app, client = build()

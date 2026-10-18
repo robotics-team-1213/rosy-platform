@@ -130,7 +130,11 @@ export function mountRobotVideoPanel({doc = document} = {}) {
   }
   picker.addEventListener("change", () => {
     const boxes = [...picker.querySelectorAll("input:checked")];
-    for (const box of picker.querySelectorAll("input")) box.disabled = !box.checked && boxes.length >= MAX_TILES;
+    for (const box of picker.querySelectorAll("input")) {
+      box.disabled = !box.checked && boxes.length >= MAX_TILES;
+      if (box.disabled) box.setAttribute("reason", `한 번에 ${MAX_TILES}대까지 볼 수 있습니다`);
+      else box.removeAttribute("reason");
+    }
   });
   show.addEventListener("click", async () => {
     const robots = [...picker.querySelectorAll("input:checked")].map((box) => box.value);
