@@ -166,7 +166,7 @@ class LaneSegModel:
                                  floor_gate=self.floor_gate)
         return mask, (time.perf_counter() - t0) * 1000.0
 
-    def infer_drivable(self, bgr: np.ndarray) -> tuple[np.ndarray, str, dict, float]:
+    def infer_drivable(self, bgr: np.ndarray, prefer: str | None = None) -> tuple[np.ndarray, str, dict, float]:
         """(mask at the frame's size, kind, info, latency ms) from one inference for keep mode with
         learned_paint_target drivable: the drivable way (drivable_paint.drivable_target, kind
         "drivable"), or the lane_marking mask (kind "lane_marking") when the model has no
@@ -179,7 +179,7 @@ class LaneSegModel:
         logits = self._logits(bgr)
         spec, size = self.manifest.input, (bgr.shape[1], bgr.shape[0])
         way, info = drivable_target(logits, self.manifest.classes,
-                                    ignore_top=spec.crop[2] if spec.crop is not None else 0)
+                                    ignore_top=spec.crop[2] if spec.crop is not None else 0, prefer=prefer)
         if way is None:
             mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size,
                                           floor_gate=self.floor_gate), "lane_marking"

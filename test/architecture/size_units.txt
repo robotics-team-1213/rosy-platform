@@ -40,7 +40,7 @@ decision/src/rosy/decision/deliberation/providers small
 decision/src/rosy/decision/deliberation/evaluation small
 perception/front_camera/perception
 perception/front_camera/perception/learned
-perception/front_camera/perception/drivable small
+perception/front_camera/perception/drivable
 site_ui/console
 site_ui/console/devices
 fleet/fleet/server/ledger

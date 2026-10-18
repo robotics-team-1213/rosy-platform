@@ -17,13 +17,14 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, turn_target
 from fleet.server.trip_admission import LOCALIZED
-from fleet.server.trip_geometry import arc_newer, bend_fields, junction_fields, next_bend, record_bend_candidate
+from fleet.server.trip_geometry import arc_newer, bend_fields, junction_fields, next_bend
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
 from fleet.server.trip_ports import pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
 from fleet.swarm.transport import RobotApiError
+from fleet.traffic.route_guide import route_guided
 
 _LOG = logging.getLogger("fleet.server.trip_runner")  # the trip loop's logger, as before the D-798 split
 
@@ -66,13 +67,13 @@ class TripSteps:
             return await self._stop(live, "failed", exc.code, {"status": exc.status})
         if not live.open:
             return
-        live.see(pose)
-        live.view["pose_observed_at"] = self._clock()
+        live.see(pose); live.view["pose_observed_at"] = self._clock()
         if robot_id in self._unread and await self._link_wait(live, "state_unread"):
             return  # D-760 4: no state read, so nothing new goes out
         if pose is None or pose.state != LOCALIZED:
-            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
-                                                       **pose_diagnostics(pose)}, halt_free=False)
+            if getattr(pose, "source", None) == "native_gazebo_sim" and await self._link_wait(live, "pose_stale"):
+                return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
+            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=False)
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
@@ -122,7 +123,7 @@ class TripSteps:
             if index != live.view["segment_index"]:
                 live.view["segment_index"] = index
                 live.last_goal = None
-            record_bend_candidate(live, pose, self._store.active(), index, s)
+            self.authority.record_guidance(live, pose, self._store.active(), index, s, self._clock())
             self._describe(live)
             last = index == len(live.segments) - 1
             resolver = (live.traffic or {}).get("resolver") or {}
@@ -204,15 +205,14 @@ class TripSteps:
                 and arc.get("end_place_id") == sent["place"] != live.place(index)
                 and (j.get("state"), j.get("place_id"), j.get("seq")) == ("armed", sent["place"], sent["seq"])):
             return  # map pose can cross the boundary before CORE odom ends its arc: keep the armed end-place instruction
-        if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining, pose):
+        if not route_guided(live) and await self._step_bend(live, index, live.segments[index]["s_to"] - remaining, pose):
             return  # D-507 addendum: a bend ahead on this lane comes before its place
         place = live.place(index)
         if place is None or remaining > self.config.arm_distance_m:
             return
-        action = (STOP if live.view["hold"] is not None
-                  else lane_action(live.graph, live.segments, index, self._routing))
-        if action != STOP and self.traffic.holds(live, index):
-            return  # D-517 3 (M1): nothing tells the robot to drive into a refused block
+        action = STOP if live.view["hold"] is not None else lane_action(live.graph, live.segments, index, self._routing)
+        if action != STOP and (route_guided(live) or self.traffic.holds(live, index)):
+            return  # route-guided: stops only; D-517 3 (M1): nothing tells the robot to drive into a refused block
         state, sent, now = live.junction.get("state"), live.sent, self._clock()
         same = sent is not None and (sent["index"], sent["action"], sent["place"]) == (index, action, place)
         if self._core_busy(live):
