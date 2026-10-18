@@ -102,6 +102,26 @@ Fleet/CORE HTTP 인증, 원본 Gazebo 카메라, 기존 OMX owner와 vendor cont
   close는 helper를 먼저 종료하고 진행 중 I/O가 끝난 뒤 descriptor를 닫으며,
   최종 응답도 폐쇄 상태와 동기화한다. 독립 소스 리뷰의 동시성 지적 두 건을 수정했다.
   이 revision의 Gazebo 실행은 자원 기준을 충족하는 host를 기다리고 있다.
+- `85dfae7860`의 실제 Gazebo에서는 초기 HTTP 3회가 0.217초로 줄었지만,
+  다음 POST가 timeout으로 차단됐다. `1327001f4`의 서버 계측은 승인 요청
+  0.180초 중 저장소 처리 0.006초 등 저장소 밖 대기 구간을 확인했다.
+  이를 GIL만의 원인으로 확정하지 않는다. CPU throttling count 증가도 없었다.
+- `b0e29b1f5c`부터 Fleet을 ROS executor와 별도 프로세스로 실행한다.
+  CORE HTTP와 ROS는 기존 동일 프로세스다. 기존 실제 HTTP/auth/SQLite와
+  시간·권한 검증을 그대로 사용한다. 해당 revision의 연결 단절 시험은 close
+  hook 누락으로 1 failed/11 passed였으며, `435847b9bc`에서 수정 후
+  **12 passed in 23.76s**, runner exit 0을 확인했다.
+- 첫 별도 Fleet Gazebo 실행은 `rosy.contracts.learning` source 경로 누락으로
+  lease 발급 전에 중단됐다. `1d1faf1fc2`에서 경로를 추가했다.
+- `1d1faf1fc2`, `gazebo-chain-isolated-contracts/run.txt`: 실제 SDK 관절 목표의
+  SUCCESS(status 4), readback 변화 >0.007rad·목표 오차 <0.003rad, 같은 lease의
+  실제 갱신, 두 번째 목표 이동 중 승인 창 폐쇄, 해당 목표의 cancel ACK와
+  CANCELED(status 5)·owner HOLD까지 assertion을 통과했다. HTTP 52회 중 최대
+  RTT는 0.15043초였다. 그러나 정지 확인의 마지막 0.3초에서 3개 이상 관측과
+  위치 spread <0.001rad를 함께 요구한 assertion이 실패했다. 원시 관측이 그
+  assertion 전에 저장되지 않았으므로 샘플 부족과 계속된 움직임을 구분할 수 없다.
+  전체 PASS와 재연결 거부는 확인하지 못했다. `d5cfb0ccc`는 정지 관측을 assertion
+  전에 `stop-readback.json`에 보존한다. 수용 기준은 완화하지 않았다.
 
 probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixture의 설치 binding은
 선언한 시험 설정에서 구성하며, 외부에서 승인된 학습 release의 설치를 검증하지 않는다.
