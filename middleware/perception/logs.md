@@ -1634,3 +1634,34 @@
 - gate 변화: 없음.
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-18 · 7e49afe20a · Bound drivable tangent estimation by metric support (D-769) (이식, 원래 2026-10-16)
+
+- 변경: Changed: estimate the pursuit tangent over the existing 3 cm spatial band, requiring at least 15 mm longitudinal support. The synthetic origin only defines initial bearing. Sparse clean bends retain anticipation; inadequate support uses chord curvature.
+- Evidence: model-PC remote regression first reproduced two phase/sign failures, then 56 tests passed (drivable target noise and steering). Independent reviewer `review_arrival` found no remaining implementation blocker in 7e49afe20a; it did not independently run tests.
+- Replay: identical frozen model and 15 selected source PNGs. Frame 000123 changed from -5 to -1.077/m and target (0.190, -0.137) to (0.247, -0.033). Frames 000107/000134 remain saturated; 000189 changes from -0.263 to -1.964/m. This is mixed evidence, not general steering improvement or bend acceptance. Raw polyline arc inflation and centre extraction remain unresolved.
+- Artifacts: private diagnostic root `rosy-d769-audit`, `target-noise-phase-red`, `target-tangent-span-green`, `target-geometry-analysis.json`, and `target-tangent-7e49afe20a.json`. No weights, route, safety gate, or command publisher changed. Gate unchanged; Gazebo acceptance remains pending.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
+## 2026-10-18 · dca38984c · Isolate the remaining startup target error (D-769) (이식, 원래 2026-10-16)
+
+- 변경: Replayed source PNG 000107 with unchanged frozen weights and recorded Gazebo projection on the model PC. The near dark floor patch is classified as background, not lane marking: row 207 background spans columns 40..176, drivable spans 0..39 and 177..319. The selected way keeps 176..319 after postprocessing. `branches=1` and split rows empty do not certify an undivided road.
+- At x=0.168 m the one-open-edge width prior places centre y=-0.088 m beyond the sampled right edge y=-0.080 m; at x=0.202 m the intact right boundary instead implies centre y=-0.001 m. The target therefore inherits a segmentation discontinuity, not only adjacent-row tangent noise. The original image shows continuous dark floor in this patch; this is qualitative diagnostic evidence, not an independently annotated accuracy score.
+- Evidence: private root `rosy-d769-audit/start-label-rows.json` and `start-centre-rows.json`, source PNG hash already recorded in the bend replay evidence. No runtime edits or gate changes in this diagnostic step. Do not erase unknown background or relax floor/safety gates to force a pass. Selected-route guidance wiring and observed-centre geometry remain pending alongside model error evaluation.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
+## 2026-10-18 · a473a5093 · Align route-prior angles with the consuming camera pose (D-769) (이식, 원래 2026-10-16)
+
+- 변경: Changed: reject future/expired directional guide stamps and require both source/current odometry. Subtract odometry yaw change from source-relative ahead/here angles, wrapping to [-180,180). A fresh nonfuture scalar off-route distance still causes HOLD even if the older heading pose is missing; independent review caught that regression before final validation.
+- Evidence: three new regressions failed remotely before implementation (rotation, future guide, missing source pose). Final keep/steer/noise/guide suite: 71 passed on remote AI PC. Logs in private `rosy-d769-audit/guide-alignment-red` and `guide-alignment-reviewed`. Existing diagnostic producer explicitly writes tangent minus source yaw, confirming frame convention.
+- Scope: consumer correction only. Fleet selected-route producer, CORE bridge publication, source lease transport, Gazebo runs and full D-769 acceptance remain pending. No gate changed.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
+## 2026-10-18 · 6ec7681069 · Add an ordered source-expiring route-prior inbox (D-769) (이식, 원래 2026-10-16)
+
+- 변경: Added typed LaneRouteGuideInput with source deadline, local monotonic remaining budget, ordered clears, publisher retirement and capacity fail-closed latch. Repeated source samples cannot renew expiry; typed output retains actual preview distance. Remote inbox/alignment/protocol tests: 14 passed. Independent review found no remaining narrow blocker. Producer and runtime subscription are not wired; no gate change.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)

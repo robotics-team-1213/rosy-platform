@@ -136,8 +136,10 @@ class NativeGazeboMapPosePort:
             now, wall = self._mono(), self._wall()
             if (type(stamp_ns) is not int or stamp_ns < 0
                     or (self._clock is not None and (stamp_ns <= self._clock[0]
-                        or not 0 <= now-self._clock[1] <= self.config.max_pair_s
-                        or not 0 <= wall-self._clock[2] <= self.config.max_pair_s))):
+                        or now < self._clock[1] or wall < self._clock[2]))):
+                if self._clock is not None and not self._samples and type(stamp_ns) is int and stamp_ns >= 0:
+                    self._clock = (stamp_ns, now, wall)   # a startup pause or restart: no pose to revoke yet
+                    return True
                 for robot_id in self._robots:
                     self._fail(robot_id, 'clock_reset_or_replay')
                 return False
@@ -175,6 +177,8 @@ class NativeGazeboMapPosePort:
             if (not _finite(original_mono) or not _finite(original_wall)
                     or not 0 <= now-original_mono <= self.config.max_pair_s
                     or not 0 <= wall-original_wall <= self.config.max_pair_s):
+                if _finite(original_mono) and _finite(original_wall) and original_mono <= now and original_wall <= wall:
+                    return False   # rev 1: late under load, dropped; the pose reads UNKNOWN until a fresh one
                 return self._fail(robot_id, 'invalid_native_receipt')
             if (not isinstance(sample, NativeGazeboSample) or sample.binding != self.binding
                     or sample.model != robot.model or sample.frame_id != robot.frame_id):
@@ -188,13 +192,14 @@ class NativeGazeboMapPosePort:
                     or not 0 <= now - received <= self.config.max_pair_s
                     or not 0 <= wall - clock_wall <= self.config.max_pair_s
                     or not 0 <= age <= self.config.max_pair_s):
+                if clock_stamp_ns in (None, clock) and age >= 0:
+                    return False   # rev 1: stale (a slow /clock or sample), dropped, not latched
                 return self._fail(robot_id, 'native_clock_or_sample_stale')
             previous = self._samples.get(robot_id)
             if previous is not None:
                 if (original_mono < previous['received'] or original_wall < previous['wall']):
                     return self._fail(robot_id, 'native_receipt_replay')
-                if max(self._ages(previous, now, wall)) > self.config.max_pair_s:
-                    return self._fail(robot_id, 'native_gap')
+                # rev 1: a gap since the previous sample is not latched; the jump check below spans it by stamp
                 old = previous['sample']; dt = (sample.stamp_ns - old.stamp_ns) * 1e-9
                 distance = math.dist(sample.pose[:2], old.pose[:2])
                 turn = abs(_angle(sample.pose[2] - old.pose[2]))
@@ -218,17 +223,16 @@ class NativeGazeboMapPosePort:
         if pending is None:
             pending = self._refreshing[robot_id] = asyncio.ensure_future(self._gather_core(robot_id))
         try:
+            # A failed read keeps the last snapshot; _current still revokes it once it ages past max_odom_age_s.
             state = await asyncio.shield(pending)
-        except Exception:
-            with self._lock:
-                self._fail(robot_id, 'core_read_failed')
-            raise
         finally:
             if pending.done() and self._refreshing.get(robot_id) is pending:
                 self._refreshing.pop(robot_id, None)
         with self._lock:
             core = odom_from_snapshot(state)
             previous = self._core.get(robot_id)
+            if previous is None and core is None and isinstance(state, dict) and state.get('robot_id') == robot_id:
+                return  # CORE has no odometry yet at startup: nothing to revoke, read again
             if (not isinstance(state, dict) or state.get('robot_id') != robot_id or core is None
                     or not 0 <= self._wall() - core.stamp <= self.config.max_odom_age_s
                     or (previous is not None and (core.stamp < previous.stamp
@@ -253,13 +257,14 @@ class NativeGazeboMapPosePort:
         sample = row['sample']; captured_wall = row['join_wall'] - row['source_age']
         if (not 0 <= elapsed or not 0 <= wall_elapsed
                 or now < row['joined'] or wall < row['join_wall']
-                or max(native_ages) > self.config.max_pair_s
-                or not 0 <= self._wall() - core.stamp <= self.config.max_odom_age_s
-                or abs(core.stamp - captured_wall) > self.config.max_interp_gap_s
                 or math.dist((core.x, core.y), sample.pose[:2]) > self.config.max_jump_m
                 or abs(_angle(core.yaw - sample.pose[2])) > math.radians(self.config.max_jump_deg)):
             self._fail(robot_id, 'native_or_core_stale_or_contradictory')
             return None
+        if (max(native_ages) > self.config.max_pair_s
+                or not 0 <= self._wall() - core.stamp <= self.config.max_odom_age_s
+                or abs(core.stamp - captured_wall) > self.config.max_interp_gap_s):
+            return None   # rev 1: stale under load reads UNKNOWN until fresh; not latched
         return row, core, max(native_ages)
 
     def arbitrated_pose(self, robot_id):

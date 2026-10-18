@@ -135,6 +135,12 @@ took hours to land. Four separate things blocked it.
   takes direct reverse dependents of what main changed, so the union would rerun suites that passed on the same
   branch code. A narrow (non-FULL) branch still reruns its own affected tier each round, as before.
   Tests: `test/test_land.py::test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass` and the two after it.
+- **Landed ADR gaps drop themselves (2026-10-19).** `tools/harness/adr_gaps.txt` merges with `merge=union`, so a
+  merge of `main` kept the branch's copy of a gap line `main` had already removed when that ADR landed, and lint
+  stopped the landing with "declared gap now exists" (three branches that day, `feat/land-queue` among them).
+  After each merge of `main`, `tools/land.py` now drops every gap line whose ADR file or Log row exists
+  (`land_merge.landed_gaps`), commits that on the topic branch and prints it in the land log. Test:
+  `test/test_land.py::test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge`.
 
 The candidates as first written:
 
