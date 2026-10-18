@@ -45,7 +45,7 @@ PowerShell 명령 한 번으로 기존 도구의 이미지·Wi-Fi·카드 선택
 ### 실행 결과
 
 - 제품 코드 커밋: `efa12a92be` (`feat/pinky-sd-ready`). 작업 시작 기준선은
-  `34e4ca99339bbbaf491fb9278bd313134ea6fdbb`이며 변경은 9개 파일이다.
+  `34e4ca9933`이며 변경은 9개 파일이다.
 - Windows PowerShell 네이티브 self-check: 6개 PASS. 작성기와 디스크는 fixture다.
 - AI PC 원격: `test_sd_guided_setup`, `test_new_device_setup`,
   `test_sd_write_card_entrypoint`, `test_sd_personalization`, `test_rosy_auto_update`,
