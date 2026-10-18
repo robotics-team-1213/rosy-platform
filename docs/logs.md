@@ -9144,6 +9144,18 @@ osy-d395-s1d\`.
 - 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
 - gate 변화: 없음.
 
+## 2026-10-18 · edae42db99 · docs: 굽이 영상 재생과 경로 방향 입력 누락 (이식, 원래 2026-10-16)
+- 변경: PNG 기록기 추출, 굽이 736 frame 회수, 오류 전후 15장 동일 모델 재생, 대체 인식 기준선과 비교
+- 증거: docs/validation/d769-bend-replay-2026-10-16/result.md. 학습 인식은 서쪽·대체 인식은 동쪽에서 stall. 오류 전 오른쪽 목표와 누락된 line/lane_guide 발행 경로 확인
+- gate 변화: 없음. wall 역할 오류만으로 재학습하지 않으며 영역→목표와 Fleet 방향 연결을 후속 검증
+- 결정: D-769
+
+## 2026-10-18 · 6ec7681069 · Specify internal selected-route prior transport v1.245 (D-769) (이식, 원래 2026-10-16)
+
+- 변경: API reference and app contract label now document the internal LaneRouteGuide schema, exact source frame association, ordered invalidation, bounded lifetime, shortened preview semantics and required capability opt-in. No REST or envelope 1.0 change. Runtime authority attachment and publisher remain pending. Private evidence: rosy-d769-audit/route-guide-reviewed; 14 remote tests passed.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
 ## 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
 
 - 변경: `tools/land_full.py`가 FULL 티어를 통과한 후보와 `main`을 `<git-common-dir>/rosy-land-full/<브랜치>.json`에 적는다. 다음 `land.py` 실행은 후보가 HEAD에 있고, 적힌 `main`이 `main`에 있고, 그 뒤 브랜치에 `main` 병합(git 자체 병합과 같거나 자동 해결 기록만 다른 것)만 더해졌을 때 그 `main`부터의 변경분 선택만 돈다. 자기 커밋이 더해지면 FULL을 다시 돈다. 착지하면 기록을 지운다. 변경분과 브랜치 자신의 대응 묶음의 합집합은 넣지 않았다(이유는 2026-10-18 착지 교훈 노트).

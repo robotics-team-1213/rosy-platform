@@ -167,6 +167,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         turn_map_entry_enabled=_flag(raw, "turn_map_entry_enabled", defaults.turn_map_entry_enabled),
         instruction_stamp_enabled=_flag(raw, "instruction_stamp_enabled", defaults.instruction_stamp_enabled),
         route_context_enabled=_flag(raw, "route_context_enabled", defaults.route_context_enabled),
+        route_guide_enabled=_flag(raw, "route_guide_enabled", defaults.route_guide_enabled),
         arc_curvature_gain=float(raw.get("arc_curvature_gain", defaults.arc_curvature_gain)),
         arc_blind_max_m=float(raw.get("arc_blind_max_m", defaults.arc_blind_max_m)),
         authority_required=_flag(raw, "authority_required", defaults.authority_required),
