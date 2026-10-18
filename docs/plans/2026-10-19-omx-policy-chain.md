@@ -56,3 +56,4 @@ Files: 소유 모듈 시험용 SIM probe, `docs/validation/omx-policy-chain-2026
 - commit `39a42e94d5`에서 drip HTTP deadline 회귀는 실패를 재현했다. 같은 실행의 카메라 시험은 잘못된 calibration digest로 실패했으므로 source-age RED의 증거로 사용하지 않는다. digest와 시험 source path를 수정했다.
 - commit `87abee0f43`에서 원격 136 passed, known-failures NEW 0. 실제 HTTP body drip의 전체 교환 timeout, 환경 proxy 차단, 실제 Camera 클래스의 source-age 차감과 기존 Fleet/session/runtime 회귀를 포함한다. 독립 소스 리뷰는 통과했으며 Gazebo 결과는 별도로 기록한다.
 - 실제 owner_clock_jumped_back을 계측하고 역행하는 source-age 관측을 입력에서 거부한 뒤 원격 215 passed. 이어 실제 403의 lease 만료를 HTTP 교환 시각으로 확인하고, 남은 예산 기반 갱신과 stdlib `-S` 교환으로 수정했다. commit `c7792975d0`에서 217 passed. 만료된 old authority를 새 응답으로 연결하지 않는 회귀도 포함한다.
+- Ruling: 실제 stdlib 적재 0.0759초, 준비된 Fleet 조회 0.0297초로 매 요청의 프로세스 시작 비용이 확인됐다. lease 전에 명시적 POSIX context에서 helper를 준비하고, 각 요청은 기존 0.2초 절대 기한으로 교환한다. 준비 2초는 HTTP·lease 예산에 합치지 않는다. consumer authority 폐쇄는 메모리에서 즉시 수행하고 helper 회수는 소유 context가 담당한다.

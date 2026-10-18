@@ -289,3 +289,39 @@ def test_bad_helper_framing_is_permanently_closed(tmp_path, monkeypatch, output)
         with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
         assert client._process.poll() is not None
         with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')
+
+
+def test_close_retains_inflight_descriptors_and_refuses_completed_reply(tmp_path, monkeypatch):
+    import threading
+    entered, release = threading.Event(), threading.Event()
+    token = tmp_path/'token'
+    token.write_text('test-only')
+    errors = []
+    with FleetPolicyHttp('http://127.0.0.1:1234', token, loopback_sim=True) as client:
+        child = client._process
+        def reply(*args):
+            entered.set()
+            assert release.wait(2)
+            return b'{"id":1,"value":{}}'
+        monkeypatch.setattr(client, '_line', reply)
+        def call():
+            try: client('GET', '/api/fleet/workcells/cell/policy')
+            except PermissionError: errors.append('closed')
+        caller = threading.Thread(target=call)
+        closer = threading.Thread(target=client.close)
+        caller.start()
+        try:
+            assert entered.wait(1)
+            closer.start()
+            child.wait(timeout=1)
+            assert closer.is_alive()
+            assert not child.stdin.closed and not child.stdout.closed
+        finally:
+            release.set()
+            caller.join(2)
+            if closer.ident is not None: closer.join(2)
+        assert not caller.is_alive() and not closer.is_alive()
+        assert errors == ['closed']
+        assert child.stdin.closed and child.stdout.closed
+        assert client._process.poll() is not None
+        with pytest.raises(PermissionError): client('GET', '/api/fleet/workcells/cell/policy')

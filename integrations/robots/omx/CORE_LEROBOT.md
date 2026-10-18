@@ -149,10 +149,20 @@ motion; G4 is additionally required for LIMITED use.
 `rosy.execution.local.policy_lease` consumes the existing Fleet policy-state and
 lease HTTP endpoints. `FleetPolicyHttp` uses a fixed authenticated TLS origin;
 plain HTTP requires explicit loopback SIM configuration. It disables redirects
-and environment proxies. Its token comes from a private file. Each exchange runs
-in an owned isolated subprocess with a 0.2-second exchange timeout and kill/reap
-on expiry; process creation and OS scheduling are not real-time guarantees.
-Credentials travel through stdin rather than command arguments.
+and environment proxies. Its token comes from a private file. Enter its explicit
+POSIX context before acquiring leases. It prepares one owned stdlib helper with
+a two-second READY budget and makes no HTTP request during preparation. Requests
+then reuse that helper with the existing total 0.2-second exchange timeout;
+timeout, malformed replies and context exit kill/reap it without automatic restart.
+Credentials travel through stdin rather than command arguments. Process creation
+and OS scheduling are not real-time guarantees. The SDK's HTTP client is separate
+and keeps its existing platform support.
+
+```python
+with FleetPolicyHttp(origin, private_token_file, loopback_sim=True) as transport:
+    consumer = FleetLeaseConsumer(scope, request=transport, monotonic=runtime.monotonic)
+    # Enter the explicitly enabled SimPolicyChain inside this transport context.
+```
 
 Create `LeaseScope` from the trusted local SIM execution configuration: exact
 AttemptIdentity, episode, installed policy revision, owner session, approved window,

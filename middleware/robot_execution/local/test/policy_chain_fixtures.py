@@ -91,7 +91,7 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
             path.touch(mode=0o600, exist_ok=False)
             path.write_text(token)
             if name == 'sim-device':
-                clients[name] = FleetPolicyHttp(server.url, path, loopback_sim=True)
+                clients[name] = connections.enter_context(FleetPolicyHttp(server.url, path, loopback_sim=True))
             else:
                 # Approval preparation precedes execution; the device's 0.2s transport budget is unchanged.
                 client = connections.enter_context(httpx.Client(base_url=server.url, timeout=2,

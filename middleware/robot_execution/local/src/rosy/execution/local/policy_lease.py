@@ -2,10 +2,13 @@
 from dataclasses import dataclass
 import json
 import math
+import os
 from pathlib import Path
+import selectors
 import subprocess
 import sys
 import threading
+import time
 from urllib.parse import quote, urlsplit
 
 from rosy.contracts.skill import AttemptIdentity
@@ -41,24 +44,27 @@ import json, sys
 from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs): return None
-try:
-    call = json.load(sys.stdin)
-    payload = None if call['body'] is None else json.dumps(call['body'], allow_nan=False).encode()
-    request = Request(call['url'], payload, method=call['method'],
-        headers={'Authorization': 'Bearer '+call['token'], 'Content-Type': 'application/json'})
-    with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=call['timeout']) as response:
-        raw = response.read(1024*1024+1)
-        if response.status != 200 or len(raw) > 1024*1024: raise ValueError()
-        value = json.loads(raw)
-        if not isinstance(value, dict): raise ValueError()
-    print(json.dumps(value, allow_nan=False))
-except Exception:
-    sys.exit(1)
+opener = build_opener(ProxyHandler({}), NoRedirect())
+print('READY', flush=True)
+for line in sys.stdin:
+    try:
+        call = json.loads(line)
+        payload = None if call['body'] is None else json.dumps(call['body'], allow_nan=False).encode()
+        request = Request(call['url'], payload, method=call['method'],
+            headers={'Authorization': 'Bearer '+call['token'], 'Content-Type': 'application/json'})
+        with opener.open(request, timeout=call['timeout']) as response:
+            raw = response.read(1024*1024+1)
+            if response.status != 200 or len(raw) > 1024*1024: raise ValueError()
+            value = json.loads(raw)
+            if not isinstance(value, dict): raise ValueError()
+        print(json.dumps({'id':call['id'], 'value':value}, allow_nan=False), flush=True)
+    except Exception:
+        sys.exit(1)
 '''
 
 
 class FleetPolicyHttp:
-    """Authenticated fixed origin; no redirects or credentials in diagnostics."""
+    """POSIX device context; prepare stdlib before leases, bound each HTTP exchange."""
     def __init__(self, origin, token_file, *, loopback_sim=False, timeout_s=.2):
         parsed = urlsplit(origin)
         loopback = parsed.hostname in ('localhost', '127.0.0.1', '::1')
@@ -72,25 +78,117 @@ class FleetPolicyHttp:
         parsed.port  # Validate the port before using any credential.
         self.origin, self.token_file = origin.rstrip('/'), Path(token_file)
         self.timeout_s = timeout_s
+        self._process, self._closed = None, False
+        self._io_lock = threading.RLock()
+        self._state_lock = threading.Lock()
+        self._sequence = 0
+
+    def __enter__(self):
+        with self._io_lock:
+            try:
+                with self._state_lock:
+                    if os.name != 'posix' or self._closed or self._process is not None:
+                        raise PermissionError('one prepared POSIX transport context required')
+                    self._process = subprocess.Popen([sys.executable, '-I', '-S', '-c', _HTTP_EXCHANGE],
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+                for pipe in (self._process.stdin, self._process.stdout):
+                    os.set_blocking(pipe.fileno(), False)
+                if self._line(time.monotonic()+2) != b'READY':
+                    raise ValueError('invalid helper preparation')
+                with self._state_lock:
+                    if self._closed:
+                        raise PermissionError('Fleet transport closed during preparation')
+                    return self
+            except Exception:
+                self.close()
+                raise PermissionError('Fleet transport preparation failed') from None
+
+    def _line(self, deadline, payload=b''):
+        result = bytearray()
+        child = self._process
+        with selectors.DefaultSelector() as selector:
+            if payload:
+                selector.register(child.stdin, selectors.EVENT_WRITE)
+                while payload:
+                    remaining = deadline-time.monotonic()
+                    if remaining <= 0 or not selector.select(remaining):
+                        raise TimeoutError('Fleet exchange deadline')
+                    try:
+                        written = os.write(child.stdin.fileno(), payload)
+                    except BlockingIOError:
+                        continue
+                    if written <= 0:
+                        raise OSError('Fleet helper closed')
+                    payload = payload[written:]
+                selector.unregister(child.stdin)
+            selector.register(child.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline-time.monotonic()
+                if remaining <= 0 or not selector.select(remaining):
+                    raise TimeoutError('Fleet exchange deadline')
+                try:
+                    chunk = os.read(child.stdout.fileno(), 65536)
+                except BlockingIOError:
+                    continue
+                if not chunk:
+                    raise OSError('Fleet helper closed')
+                result.extend(chunk)
+                if len(result) > 6*1024*1024+1024:
+                    raise ValueError('oversized helper framing')
+                if b'\n' in result:
+                    line, _, extra = result.partition(b'\n')
+                    if extra:
+                        raise ValueError('unexpected helper output')
+                    return bytes(line)
+
+    def close(self):
+        with self._state_lock:
+            self._closed = True
+            child = self._process
+            if child is not None:
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=.5)
+        # Reap first to interrupt I/O; retain descriptors until its owner drains.
+        with self._io_lock:
+            if child is not None:
+                child.stdin.close()
+                child.stdout.close()
+
+    def __exit__(self, *args):
+        self.close()
 
     def __call__(self, method, path, body=None):
         if method not in ('GET', 'POST') or not path.startswith('/api/fleet/workcells/'):
             raise ValueError('Fleet policy operation required')
+        if self._closed or self._process is None or not self._io_lock.acquire(blocking=False):
+            raise PermissionError('prepared exclusive Fleet transport required')
         try:
+            with self._state_lock:
+                if self._closed:
+                    raise PermissionError('Fleet transport closed')
+            deadline = time.monotonic()+self.timeout_s
             token = self.token_file.read_text(encoding='ascii').strip()
             if not token or len(token) > 8192 or any(c.isspace() for c in token):
                 raise ValueError('invalid credential file')
-            call = dict(url=self.origin+path, method=method, body=body, token=token, timeout=self.timeout_s)
-            # Kill and reap our exchange process on a total deadline, including DNS and a dripping response.
-            exchange = subprocess.run([sys.executable, '-I', '-S', '-c', _HTTP_EXCHANGE],
-                input=json.dumps(call, allow_nan=False), capture_output=True, text=True,
-                timeout=self.timeout_s, check=True)
-            result = json.loads(exchange.stdout)
-            if not isinstance(result, dict):
+            self._sequence += 1
+            call = dict(id=self._sequence,url=self.origin+path,method=method,body=body,
+                        token=token,timeout=self.timeout_s)
+            payload = json.dumps(call, allow_nan=False).encode()+b'\n'
+            reply = json.loads(self._line(deadline, payload))
+            if (not isinstance(reply, dict) or set(reply) != {'id','value'}
+                    or type(reply['id']) is not int or reply['id'] != self._sequence
+                    or not isinstance(reply['value'], dict) or time.monotonic() >= deadline):
                 raise ValueError('Fleet object response required')
-            return result
+            with self._state_lock:
+                if self._closed:
+                    raise PermissionError('Fleet transport closed')
+                return reply['value']
         except Exception:
+            self.close()
             raise PermissionError('Fleet policy transport refused or unavailable') from None
+        finally:
+            self._io_lock.release()
 
 
 class FleetLeaseConsumer:
