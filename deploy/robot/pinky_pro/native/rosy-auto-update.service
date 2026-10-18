@@ -14,6 +14,9 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+# D-805: skipped while updates are frozen (tag ops-update-freeze, or /etc/rosy/update-freeze on this
+# robot). The gate ships in the same payload; a missing gate makes sh exit 127, which also skips.
+ExecCondition=/bin/sh -c 'exec /usr/bin/python3 -I /opt/rosy/native-runtime/rosy-update-gate'
 # -I: no PYTHONPATH, no user site; the script adds its own directory.
 ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy_auto_update.py run
 # Download + unpack + verify + activation + 60 s health; each step is bounded
