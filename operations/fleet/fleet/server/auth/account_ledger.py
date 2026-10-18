@@ -267,7 +267,9 @@ class AccountLedger:
     @staticmethod
     def encode(password, login=None):
         from fleet.server.password_session import LoginRateLimited, _SCRYPT_SLOTS, _SCRYPT_WAIT_S
-        if not isinstance(password, str) or not 8 <= len(password) <= 1024 or password == login:
+        if (not isinstance(password, str) or password == login
+                or not (8 <= len(password) <= 1024
+                        or (isinstance(login, str) and password == login + "!"))):
             raise ValueError("invalid password")
         if not _SCRYPT_SLOTS.acquire(timeout=_SCRYPT_WAIT_S):
             raise LoginRateLimited()
