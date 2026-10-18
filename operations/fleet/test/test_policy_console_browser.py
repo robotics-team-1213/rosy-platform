@@ -19,7 +19,7 @@ from fleet.server.task_store import FleetTaskStore
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
-PASSWORD = "correct horse"
+from test_password_session import TYPED as PASSWORD  # noqa: E402  shared fixture value
 REV = dict(rig_revision="rig-1", calibration_revision="cal-1")
 
 
