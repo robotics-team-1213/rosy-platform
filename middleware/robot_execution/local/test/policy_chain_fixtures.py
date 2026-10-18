@@ -13,7 +13,7 @@ import uvicorn
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'),
-               str(ROOT/'middleware/robot_execution/local/src')]
+               str(ROOT/'middleware/robot_execution/local/src'), str(ROOT/'operations/fleet')]
 from rosy.execution.local.policy_lease import FleetPolicyHttp
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
