@@ -36,7 +36,6 @@
 1014 fleet/fleet/server/ledger/task_store.py
 936 fleet/fleet/server/missions/mission_store.py
 797 fleet/fleet/server/proposal_store.py
-899 fleet/fleet/server/trips/trip_runner.py
 628 fleet/fleet/swarm/session.py
 1234 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
