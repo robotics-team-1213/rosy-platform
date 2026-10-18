@@ -24,6 +24,7 @@
 | **Account** | 공용 로그인·계정·권한 기능. Fleet 계정 관리는 `Rosy Fleet — 계정 관리`, Learning 계정 화면은 `Rosy Learning — 계정과 외부 자료` |
 | **Pilot 연결 로비** | Android에서 신뢰된 대상 발견·접속을 제공하는 Pilot 하위 화면 |
 | **로봇 얼굴 LCD** | Robot의 상태 표시 표면. 별도 Rosy Face 앱을 만들지 않음 |
+| **오프라인 검수 페이지** | Learning의 엣지·영상 라벨 검수 산출물. 별도 검수 앱으로 등록하지 않음 |
 
 ## Cell의 구조와 책임
 
@@ -47,6 +48,9 @@ Workcell은 좌표·설비·접근·공유 자원을 가진 작업 공간이다.
 | **Rosy Vision** | 천장 영상에서 관측을 만드는 서비스. 독립 사용자 화면 없음 |
 | **World** | 관측·odom 등으로 현재 세계 상태·자세를 제공 |
 | **Decision** | 규칙·정책·판단 후보를 다루는 영역. 독립 앱명 아님 |
+| **Dock / Signal / Signal Observer** | 충전·교통 신호 장치와 관측 서비스. 독립 사용자 앱으로 세지 않음 |
+| **Media** | 사이트 영상 접근을 제공하는 내부 기능. 별도 앱 이름을 만들지 않음 |
+| **device-core** | 외부 저장소에서 Rosy Device 콘솔·기기 API를 제공하는 서비스 코드 이름. 로봇 CORE와 구분 |
 | **ROSY Site / Runtime / Fabric / Operations** | 각각 현장 배포 범위 / 로컬 실행 기반 / 연결 계약·어댑터 / 운영 목표 표현. [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)의 역할 이름 |
 | **rosy-platform / rosy-vault / rosy-ops / rosy-docs** | 각각 플랫폼 소스 / Vault·Device 소스 / 비공개 운영 설정·기록 / 설계·가이드 문서 저장소 |
 
