@@ -2,6 +2,7 @@
 # policy: safe (the timer fixes it), report (install applies, timer reports), approval (only with --approve;
 # approval=<group> is also approved by --approve <group>).
 # file sources: role/<name> is the role's host-state folder, common/<name> is this folder.
+safe file /usr/local/sbin/rosy_host_recovery.py deploy/hosts/common/rosy_host_recovery.py 0644
 safe file /etc/systemd/system/rosy-host-state.service common/rosy-host-state.service
 safe file /etc/systemd/system/rosy-host-state.timer common/rosy-host-state.timer
 safe enabled rosy-host-state.timer
@@ -23,5 +24,16 @@ approval file /etc/rosy/host-control/role role/host-control-role
 safe file /usr/local/sbin/rosy-avahi-interfaces deploy/hosts/common/rosy-avahi-interfaces 0755
 safe file /etc/systemd/system/rosy-avahi-interfaces.service deploy/hosts/common/rosy-avahi-interfaces.service
 safe enabled rosy-avahi-interfaces.service
+# New-PC recovery baseline: one explicit installation approval; later checks report drift.
+# Never overwrite /etc/default/rosy-ssh-watchdog: local limits and robot flags stay host-owned.
+approval=recovery file /usr/local/sbin/rosy-ssh-watchdog deploy/hosts/common/rosy-ssh-watchdog 0755
+approval=recovery file /etc/systemd/system/rosy-ssh-watchdog.service deploy/hosts/common/rosy-ssh-watchdog.service
+approval=recovery file /etc/systemd/system/rosy-ssh-watchdog.timer deploy/hosts/common/rosy-ssh-watchdog.timer
+approval=recovery enabled rosy-ssh-watchdog.timer
+approval=recovery file /usr/local/sbin/rosy-host-guard-remote deploy/hosts/common/rosy-host-guard-remote 0755
+approval=recovery file /etc/systemd/system/rosy-watchdog-load.service common/rosy-watchdog-load.service
+approval=recovery enabled rosy-watchdog-load.service
+approval=recovery file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
+approval=recovery file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf
 # D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
 safe file /usr/local/bin/rosy-update-gate common/rosy-update-gate 0755

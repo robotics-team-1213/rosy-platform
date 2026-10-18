@@ -5,11 +5,7 @@ safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot
 safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
 safe enabled rosy-nightly-reboot.timer
 report wifi-allow
-# Hardware watchdog and panic: approved 2026-10-09 (D-530 2). Ubuntu blacklists iTCO_wdt, so a oneshot unit modprobes it (modules-load.d cannot).
-approval file /etc/systemd/system/rosy-watchdog-load.service common/rosy-watchdog-load.service
-approval enabled rosy-watchdog-load.service
-approval file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
-approval file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf
+# PC recovery is shared: install with --approve recovery (common/manifest).
 # D-571 headless Gazebo bench: gz_sim's dependency closure (package.xml files up to gz_sim). Only with
 # --approve sim; the timer reports. Not listed: sllidar_ros2 (no Jazzy deb, device only), tf_transformations
 # and joint_state_publisher_gui (not on the bench path). CORE's pip pins come from tools/remote/remote_sim.py.
