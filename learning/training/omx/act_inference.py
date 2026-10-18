@@ -17,6 +17,7 @@ import time
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/'contracts/learning/src'))
 from rosy.contracts.learning import validate_policy
+from rosy.contracts.learning.omx import WRIST, camera_role
 
 
 def _text(value):
@@ -38,13 +39,18 @@ def _vector(values,size=None,positive=False):
 from rosy.contracts.learning.inference import InferenceObservation, InferenceResult
 
 
+def image_key(doc):
+    """Model input key the policy was trained with (D-794 B: never the device's current name)."""
+    return 'observation.images.'+doc['cameras'][0]['name']
+
+
 def _snapshot(root,pin):
     root=Path(root).resolve();manifest=root/'policy-artifact.json';payload=manifest.read_bytes()
     doc=validate_policy(json.loads(payload),root=root)
     if doc['revision']!=pin:raise ValueError('policy revision differs from pinned input')
     if doc['profile']!='omx_joint_target_v1' or doc['environment']!='sim':
         raise ValueError('only the OMX SIM ACT study profile is supported')
-    if len(doc['cameras'])!=1 or doc['cameras'][0]['name']!='front':raise ValueError('one explicit front RGB camera required')
+    if len(doc['cameras'])!=1 or camera_role(doc['cameras'][0]['name'])!=WRIST:raise ValueError('one explicit wrist RGB camera required')
     buffers={}
     for ref in [*doc['files'],doc['normalization'],*doc['evaluations']]:
         content=(root/ref['path']).read_bytes()
@@ -64,7 +70,7 @@ def _configuration(doc,buffers):
             or config.get('pretrained_backbone_weights') is not None or config.get('pretrained_path') is not None
             or config.get('temporal_ensemble_coeff') is not None):raise ValueError('local CPU ACT with no downloads or ensemble required')
     inputs={'observation.state':dict(type='STATE',shape=[size]),
-            'observation.images.front':dict(type='VISUAL',shape=camera['model_shape'])}
+            image_key(doc):dict(type='VISUAL',shape=camera['model_shape'])}
     outputs={'action':dict(type='ACTION',shape=[size])}
     if config.get('input_features')!=inputs or config.get('output_features')!=outputs:
         raise ValueError('ACT features differ from policy metadata')
@@ -98,7 +104,7 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
     policy.eval()
     means={name:torch.tensor(stats[name],dtype=torch.float32) for name in ('state_mean','action_mean')}
     stds={name:torch.tensor(stats[name],dtype=torch.float32) for name in ('state_std','action_std')}
-    camera=metadata['cameras'][0]
+    camera=metadata['cameras'][0];key=image_key(metadata)
 
     def predict(obs):
         _,height,width=obs.camera_shape
@@ -107,7 +113,7 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
         image=torch.nn.functional.interpolate(image,size=tuple(camera['model_shape'][1:]),mode='bilinear',align_corners=False)
         state=(torch.tensor(obs.positions,dtype=torch.float32)-means['state_mean'])/stds['state_std']
         with torch.inference_mode():
-            chunk=policy.predict_action_chunk({'observation.state':state.unsqueeze(0),'observation.images.front':image})
+            chunk=policy.predict_action_chunk({'observation.state':state.unsqueeze(0),key:image})
             actions=chunk[0,:config.n_action_steps]*stds['action_std']+means['action_mean']
         return actions.tolist()
     return predict

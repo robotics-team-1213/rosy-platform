@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
-from native_environment import _events, seal_environment
+from native_environment import ROLES, _events, _roles, seal_environment
 from native_review import JOINTS, dataset_files, inspect_dataset, write_json
 
 SCHEMA = 'rosy.omx-collection-session.v1'
@@ -197,7 +197,8 @@ def validate_session(root, *, completed_only=False, require_complete=True):
              and manifest.get('gripper_units') == 'normalized_0_100', 'normalized units required')
     _require(type(manifest.get('fps')) is int and 0 < manifest['fps'], 'positive integer fps required')
     shapes = manifest.get('camera_shapes')
-    _require(isinstance(shapes, dict) and set(shapes) == {'top', 'front'}, 'both camera shapes required')
+    _require(isinstance(shapes, dict) and len(shapes) == 2 and _roles(shapes) == set(ROLES),
+             'both camera shapes required')
     for shape in shapes.values():
         _require(isinstance(shape, list) and len(shape) == 3 and shape[2] == 3
                  and all(type(n) is int and n > 0 for n in shape), 'positive HWC RGB shape required')
@@ -319,7 +320,7 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
     features = {key: dict(dtype='float32', shape=(6,), names=JOINTS[:])
                 for key in ('observation.state', 'action')}
     features['source.capture_time_ns'] = dict(dtype='int64', shape=(1,), names=['fleet_host_unix_ns'])
-    for source in ('joint', 'reference', 'top', 'front'):
+    for source in ('joint', 'reference', *baseline['camera_shapes']):
         features[f'source.{source}_time_ns'] = dict(dtype='int64', shape=(1,), names=[source+'_source_unix_ns'])
     features.update({f'observation.images.{role}': dict(dtype='video', shape=tuple(shape),
                      names=['height', 'width', 'channels']) for role, shape in baseline['camera_shapes'].items()})
