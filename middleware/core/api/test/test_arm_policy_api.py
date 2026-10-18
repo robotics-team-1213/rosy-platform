@@ -1,6 +1,8 @@
 """CORE HTTP admission over the real OMX session; driver and RGB are host fixtures."""
 import base64
 import hashlib
+import io
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -111,3 +113,73 @@ def test_non_numeric_targets_never_reach_owner(tmp_path, bad):
     body['positions']['joint_1'] = bad
     assert client.post('/api/v1/arm/actions', json=body).status_code == 422
     assert not driver.commands
+
+
+def http_adapter(client, monkeypatch):
+    sys.path.insert(0, str(ROOT / 'integrations/robots/omx/src'))
+    from rosy.integrations.robots.omx import core_arm_client
+    from urllib.error import HTTPError
+    from urllib.parse import urlsplit
+    calls = []
+
+    def urlopen(request, timeout):
+        path = urlsplit(request.full_url).path
+        calls.append((request.method, path))
+        response = client.request(request.method, path, content=request.data,
+                                  headers=dict(request.header_items()))
+        stream = io.BytesIO(response.content)
+        if response.status_code >= 400:
+            raise HTTPError(request.full_url, response.status_code, 'refused', {}, stream)
+        return stream
+
+    monkeypatch.setattr(core_arm_client, 'urlopen', urlopen)
+    return core_arm_client, calls
+
+
+def test_lerobot_client_uses_core_for_observation_action_and_stop(tmp_path, monkeypatch):
+    api, session, driver, *_ = setup_api(tmp_path)
+    module, calls = http_adapter(api, monkeypatch)
+    robot = module.CoreArmClient('http://localhost:8080', token='test-token',
+                                 policy_revision=session.lease.policy_revision)
+    robot.connect()
+    source = robot.get_observation()
+    assert source['positions']['joint_1'] == 0.1
+    sent = robot.send_action({'joint_1': 0.101, 'joint_2': 0.001})
+    assert sent == {'joint_1': 0.101, 'joint_2': 0.001}
+    with pytest.raises(RuntimeError, match='observation'):
+        robot.send_action(sent)
+    assert len(driver.commands) == 1
+    robot.disconnect()
+    assert calls == [('GET', '/api/v1/arm/policy'), ('POST', '/api/v1/arm/observations'),
+                     ('POST', '/api/v1/arm/actions'), ('POST', '/api/v1/arm/stop')]
+
+
+def test_lerobot_client_refuses_wrong_model_pin(tmp_path, monkeypatch):
+    api, *_ = setup_api(tmp_path)
+    module, calls = http_adapter(api, monkeypatch)
+    robot = module.CoreArmClient('http://localhost:8080', token='test-token', policy_revision='b' * 64)
+    with pytest.raises(ValueError, match='policy'):
+        robot.connect()
+    assert calls == [('GET', '/api/v1/arm/policy')]
+
+
+def test_client_stops_on_uncertain_action_without_resubmitting(tmp_path, monkeypatch):
+    api, session, driver, *_ = setup_api(tmp_path)
+    module, calls = http_adapter(api, monkeypatch)
+    robot = module.CoreArmClient('http://localhost:8080', token='test-token',
+                                 policy_revision=session.lease.policy_revision)
+    robot.connect()
+    robot.get_observation()
+    original = module.urlopen
+
+    def lost_response(request, timeout):
+        response = original(request, timeout)
+        if request.full_url.endswith('/actions'):
+            raise TimeoutError('response lost after admission')
+        return response
+
+    monkeypatch.setattr(module, 'urlopen', lost_response)
+    with pytest.raises(TimeoutError):
+        robot.send_action({'joint_1': 0.101, 'joint_2': 0.001})
+    assert len(driver.commands) == 1 and driver.handles[0].cancel_calls == 1
+    assert calls[-1] == ('POST', '/api/v1/arm/stop')
