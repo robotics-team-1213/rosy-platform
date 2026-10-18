@@ -419,7 +419,7 @@ def test_uv_installs_only_with_its_approval_hash_checked_and_linked(tmp_path):
     for name in ("uv", "uvx"):
         link = tmp_path / "host/usr/local/bin" / name
         assert link.is_symlink() and Path(os.readlink(link)) == folder / "bin" / name
-    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0
+    _run(tmp_path, bin_dir, fake, "check")  # the model's unapproved sim apt lines still report
     status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
     assert not [item for item in status["awaiting_approval"] if "uv" in item]
 
