@@ -9029,3 +9029,9 @@ osy-d395-s1d\`.
 - 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
 - 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
 - gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
+
+- 변경: 현장 `site-users.yaml`의 사람 계정은 모두 operator 하나뿐이라 정책 승인을 할 수 없었다. operator 항목의 `policy_admin: true`가 역할을 유지한 채 `fleet.policy`를 더하고, 세션 응답이 이를 알린다. `site_users.py set-policy-admin`과 `/console/policy`의 로그인 링크를 더했다.
+- 증거: 원격 pytest와 실제 Chromium 세 사람 시나리오. 결과는 커밋 메시지와 후속 행에 남긴다.
+- gate 변화: 없음. 현장 배포와 계정 표시는 후속 행에 기록한다.
