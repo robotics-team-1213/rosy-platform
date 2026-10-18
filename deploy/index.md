@@ -79,4 +79,3 @@
 - 2026-10-19 · uncommitted · SD 공통 설정과 순차 카드 준비
 - 2026-10-19 · uncommitted · SIM reach 수집 파이프라인 통합
 - 2026-10-19 · uncommitted · 이미지 마운트 정리 실패 보존
-- 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
