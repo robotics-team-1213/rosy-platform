@@ -3012,3 +3012,8 @@
 - 변경: 독립 검토 후 사용하지 않는 결과 변수와 구현을 반복 설명한 주석만 정리했다. 검증 조건과 보호된 fixture 시험은 유지했다.
 - 증거: Windows 네이티브 기존 안내 fixture 6묶음과 새 설정·연속 작업 fixture 10묶음 PASS. e55137777 기준 원격 관련 6개 파일 112 PASS·212 SKIP, known_failures 비교 NEW 0. 건너뛴 환경 의존 검사는 통과로 세지 않는다. 재사용·효율·품질·시험·주석 검토 및 최종 실제 producer/consumer 검토 완료, material finding 0건. lint 0 errors.
 - gate 변화: 없음. 실제 매체·서명·첫 부팅은 미수행이며, main 반영과 게시 CI는 후속 단계다.
+## 2026-10-19 · uncommitted · 비밀 항목 거부 fixture의 공개 placeholder
+
+- 변경: JSON의 password 필드를 거부하는 fixture 값을 명시적인 공개 placeholder로 바꿨다. 동일한 필드 거부·값 비출력 검증은 유지하며 scanner 규칙과 예외 목록은 변경하지 않았다.
+- 증거: e1bf55b660 공식 fast 검사에서 이 fixture 한 줄을 credential로 탐지했다. 수정 후 네이티브 설정·연속 작업 fixture 10묶음 PASS. 수정 커밋의 원격 비밀정보 검사와 공식 재검증은 이어서 수행한다.
+- gate 변화: 없음. 실제 비밀번호는 기존 보안 입력과 DPAPI 저장소에만 처리했으며 소스·JSON에 저장하지 않았다.
