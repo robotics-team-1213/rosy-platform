@@ -317,5 +317,8 @@ def test_the_real_restart_installs_the_live_units_reloads_and_checks_they_stay_a
     assert calls.read_text().splitlines() == ["--user daemon-reload", "--user restart svc.service",
                                                "--user is-active --quiet svc.service"]
     assert not host.restart(["bad.service"])  # the restart failed
-    host.cfg["unit_files"] = ["deploy/ai_pc/missing.service"]
-    assert not host.restart(["svc.service"])  # a release without its unit file is a failed switch
+    calls.write_text("")
+    host.cfg["unit_files"] = ["deploy/ai_pc/missing.service", "deploy/ai_pc/svc.service"]
+    assert not host.restart(["svc.service"])  # a release without its unit file is a failed switch ...
+    assert calls.read_text().splitlines() == ["--user daemon-reload", "--user restart svc.service",
+                                               "--user is-active --quiet svc.service"]  # ... yet still restarted

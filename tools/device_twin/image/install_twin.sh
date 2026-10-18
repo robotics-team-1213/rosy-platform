@@ -48,7 +48,7 @@ done
 install -m 0644 "$CTX/twin/image/rosy-first-boot.service" /etc/systemd/system/rosy-first-boot.service
 install -m 0644 "$NATIVE/tmpfiles-rosy-state.conf" /usr/lib/tmpfiles.d/rosy-state.conf
 # D-805: the freeze gate asks a local ref list (no tag) instead of github.com, so scenarios stay offline.
-printf '001e# service=git-upload-pack\n0000003faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/heads/main\n0000' > /etc/rosy-twin-refs
+printf '001e# service=git-upload-pack\n0000003daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/heads/main\n0000' > /etc/rosy-twin-refs
 install -d /etc/systemd/system/rosy-auto-update.service.d
 printf '[Service]\nEnvironment=ROSY_UPDATE_GATE_REFS=file:///etc/rosy-twin-refs\n' \
     > /etc/systemd/system/rosy-auto-update.service.d/twin.conf

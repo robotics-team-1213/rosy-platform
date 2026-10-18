@@ -104,17 +104,23 @@ class Host:
         """Restart the service units and report whether all are still active after `settle` seconds."""
         if not units:
             return True
+        complete = True
         try:
             if self.cfg.get("unit_files"):  # the live release's own unit files, so unit edits on main arrive too
                 unit_dir = Path(self.cfg.get("unit_dir", "~/.config/systemd/user")).expanduser()
                 for name in self.cfg["unit_files"]:
-                    shutil.copyfile(Path(self.cfg["root"]) / "current" / name, unit_dir / Path(name).name)
-                subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, timeout=60)
+                    try:
+                        shutil.copyfile(Path(self.cfg["root"]) / "current" / name, unit_dir / Path(name).name)
+                    except OSError:  # an older release (rollback target) may lack one: keep going, still restart
+                        complete = False
+                        log(step="unit_file_missing", file=name)
+                subprocess.run(["systemctl", "--user", "daemon-reload"], timeout=60)
             if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             time.sleep(self.cfg.get("settle", 10))
-            return subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30).returncode == 0
-        except (OSError, subprocess.SubprocessError):  # a missing unit file, a failed reload or a timeout
+            active = subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30)
+            return complete and active.returncode == 0  # forward: a release missing its unit file fails
+        except subprocess.SubprocessError:  # a timeout
             return False
 
     def archive(self, sha: str, paths, target: Path) -> None:
