@@ -1,0 +1,16 @@
+{
+  "kind": "service",
+  "repo_url": "https://github.com/<owner>/rosy-platform.git",
+  "github_repo": "<owner>/rosy-platform",
+  "branch": "main",
+  "required_checks": ["ci-result"],
+  "root": "~/rosy-situation",
+  "base_python": "/usr/bin/python3",
+  "lock": null,
+  "paths": ["operations/situation", "contracts/foundation", "deploy/ai_pc", "deploy/robot/omx/omx_autoupdate.py"],
+  "smoke": "import sys; sys.path[:0] = ['contracts/foundation', 'operations/situation']; import rosy_situation.service; print('smoke ok')",
+  "units": ["rosy-situation.service"],
+  "settle": 10,
+  "require_verified_commit": false,
+  "keep": 3
+}

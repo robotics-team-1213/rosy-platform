@@ -19,6 +19,11 @@ atomic `current` symlink, not containers. One run (a user systemd timer calls it
    failure;
 7. keep the newest `keep` releases and the venvs they use (always the current and previous ones).
 
+`"kind": "service"` (D-805, e.g. the AI PC's rosy-situation) reuses the same steps for a host service:
+`paths` and `smoke` come from the config, `lock` may be null (a `--system-site-packages` venv with
+nothing installed), there is no cell to be idle, and after the switch the listed user `units` are
+restarted and must stay active `settle` seconds, otherwise the previous release is linked and restarted.
+
 Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
 `systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
 branch protection of main, the Actions-reported checks and the ancestry rule.
@@ -84,10 +89,23 @@ class Host:
     def verified(self, sha: str) -> bool:
         return bool(self._api(f"commits/{sha}")["commit"]["verification"]["verified"])
 
-    def build_env(self, lock: Path, target: Path) -> None:
+    def build_env(self, lock: Path | None, target: Path) -> None:
+        if lock is None:  # a service on the host's own packages
+            subprocess.run([self.cfg["base_python"], "-m", "venv", "--system-site-packages", str(target)],
+                           check=True, timeout=300)
+            return
         subprocess.run([self.cfg["base_python"], "-m", "venv", str(target)], check=True, timeout=300)
         subprocess.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
                        check=True, timeout=3000)
+
+    def restart(self, units) -> bool:
+        """Restart the service units and report whether all are still active after `settle` seconds."""
+        if not units:
+            return True
+        if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
+            return False
+        time.sleep(self.cfg.get("settle", 10))
+        return subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30).returncode == 0
 
     def archive(self, sha: str, paths, target: Path) -> None:
         mirror = Path(self.cfg["root"]) / "mirror.git"
@@ -101,8 +119,8 @@ class Host:
             tar.extractall(target, filter="data")
 
     def smoke(self, release: Path, python: Path) -> bool:
-        done = subprocess.run([str(python), "-c", SMOKE], cwd=release, capture_output=True, text=True,
-                              timeout=120)
+        done = subprocess.run([str(python), "-c", self.cfg.get("smoke", SMOKE)], cwd=release, capture_output=True,
+                              text=True, timeout=120)
         return done.returncode == 0 and "smoke ok" in done.stdout
 
     def hold_session(self):
@@ -176,8 +194,9 @@ class Updater:
 
     def env_for(self, release: Path) -> str:
         """The venv for this release's lock, built once per lock hash."""
-        lock = release / LOCK
-        name = hashlib.sha256(lock.read_bytes()).hexdigest()[:12]
+        rel = self.cfg.get("lock", LOCK)
+        lock = release / rel if rel else None
+        name = hashlib.sha256(lock.read_bytes() if lock else b"system-site-packages").hexdigest()[:12]
         target = self.envs / name
         if not target.exists():
             staging = self.envs / f"{name}.tmp"
@@ -192,6 +211,8 @@ class Updater:
         return self.envs / env / "bin" / "python"
 
     def idle(self, release: Path, env: str) -> str | None:
+        if self.cfg.get("kind") == "service":  # no cell; the restart and its health check guard the switch
+            return None
         if self.host.device_in_use():
             return "device_in_use"
         if not self.host.follower_torque_off(release, self.python(env)):
@@ -237,7 +258,7 @@ class Updater:
             staging.mkdir()
             self.host.archive(sha, self.cfg["paths"], staging)
             (staging / "RELEASE").write_text(sha + "\n")
-            if not (staging / LOCK).exists():
+            if self.cfg.get("lock", LOCK) and not (staging / self.cfg.get("lock", LOCK)).exists():
                 shutil.rmtree(staging, ignore_errors=True)
                 state["failed"] = name
                 self.save(state)
@@ -272,9 +293,12 @@ class Updater:
             return "would_switch"
         previous, previous_env = state["current"], state.get("env")
         self.link(name, env)
-        if not self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python"):
+        units = self.cfg.get("units", [])
+        if not (self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python")
+                and self.host.restart(units)):
             if previous:
                 self.link(previous, previous_env)
+                self.host.restart(units)
             else:  # first install: leave no current pointing at a broken release
                 self.unlink()
             log(step="rolled_back", release=name, to=previous)
@@ -303,6 +327,7 @@ class Updater:
                 log(step="deferred", reason=busy)
                 return "deferred"
             self.link(state["previous"], state["previous_env"])
+            self.host.restart(self.cfg.get("units", []))
         finally:
             session.close()
         # current_sha is dropped: after a manual rollback the next forward update is not refused as older
@@ -332,6 +357,13 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("paths", list(DEFAULT_PATHS))
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", "~/rosy-omx"))
+    if cfg.get("kind") == "service":  # its own paths, smoke and root; never the cell's session lock
+        missing = [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root")
+                   if not cfg.get(k)]
+        cfg.setdefault("lock", None)
+        if missing or not cfg["required_checks"] or cfg["keep"] < 2:
+            raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
+        return cfg
     missing = [k for k in ("repo_url", "github_repo", "base_python", "devices", "follower_device") if not cfg.get(k)]
     if missing or not cfg["required_checks"] or cfg["keep"] < 2:
         raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")

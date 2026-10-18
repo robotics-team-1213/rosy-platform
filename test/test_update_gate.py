@@ -59,8 +59,10 @@ ADVERT = b"001e# service=git-upload-pack\n0000"
 @pytest.mark.parametrize("body,expected", [
     (ADVERT + b"00f1" + b"a" * 40 + b" HEAD\x00multi_ack\n003f" + b"b" * 40 + b" refs/heads/main\n0000", 0),
     (ADVERT + b"0048" + b"c" * 40 + b" refs/tags/ops-update-freeze\x00caps\n0000", 1),
-    (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n004b" + b"d" * 40 + b" refs/tags/ops-update-freeze^{}\n", 1),
+    (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n004b" + b"d" * 40 + b" refs/tags/ops-update-freeze^{}\n0000",
+     1),
     (ADVERT + b"0048" + b"e" * 40 + b" refs/tags/ops-update-freeze-old\n0000", 0),
+    (ADVERT + b"003f" + b"b" * 40 + b" refs/heads/main\n", 1),  # cut off before the tags: not a "run"
     (b"<html>rate limited</html>", 1),
 ])
 def test_robots_without_git_read_the_ref_list_over_https(tmp_path, body, expected):
@@ -109,7 +111,8 @@ def test_every_gated_unit_and_drop_in_points_at_the_installed_gate():
     dropin = (ROOT / "deploy/hosts/common/host-state/10-update-gate.conf").read_text()
     assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in dropin
     for unit in ("deploy/robot/omx/rosy-omx-autoupdate.service", "deploy/model_pc/rosy-review-release-update.service",
-                 "deploy/site/rosy-model-code-update.service"):
+                 "deploy/site/rosy-model-code-update.service",
+                 "deploy/ai_pc/rosy-situation-autoupdate.service"):
         assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in (ROOT / unit).read_text(), unit
     common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text()
     assert "safe file /usr/local/bin/rosy-update-gate common/rosy-update-gate 0755" in common
