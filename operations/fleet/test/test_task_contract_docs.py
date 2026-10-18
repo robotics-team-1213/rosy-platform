@@ -169,7 +169,7 @@ def test_policy_evidence_contract_is_governed_together():
         encoding="utf-8")
     task_service = (ROOT / "operations/fleet/fleet/server/ledger/task_service.py").read_text(
         encoding="utf-8")
-    store = (ROOT / "operations/fleet/fleet/server/policy_evidence.py").read_text(
+    store = (ROOT / "operations/fleet/fleet/server/evidence/policy_evidence.py").read_text(
         encoding="utf-8")
 
     assert "### 10.6.2 Site Fleet policy-eligible evidence" in reference or (
