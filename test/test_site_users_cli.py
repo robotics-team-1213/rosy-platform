@@ -383,5 +383,29 @@ def test_set_policy_admin_keeps_the_operator_role_and_loads_in_fleet(tmp_path):
         site_users.set_policy_admin(path, "viewer-1", True)
     site_users.set_policy_admin(path, "operator-1", False)
     assert "policy_admin" not in list_users(path)[0]
+
+
+def test_set_policy_admin_one_at_a_time_keeps_everyone_elses_flag(tmp_path):
+    path = tmp_path / "site-users.yaml"
+    _seed(path, _entry("a"), _entry("b", token="tok-2"), _entry("c", token="tok-3"))
+    for principal in ("a", "b", "c"):
+        site_users.set_policy_admin(path, principal, True)
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, True, True]
+    site_users.set_policy_admin(path, "b", False)
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, None, True]
+
+
+def test_set_policy_admin_writes_several_people_once(tmp_path, monkeypatch):
+    path = tmp_path / "site-users.yaml"
+    _seed(path, _entry("a"), _entry("b", token="tok-2"), _entry("v", "viewer", "tok-3"))
+    writes = []
+    publish = site_users._publish
+    monkeypatch.setattr(site_users, "_publish", lambda *args: (writes.append(1), publish(*args)))
+    assert main(["set-policy-admin", str(path), "--principal", "a", "--principal", "b"]) == 0
+    assert len(writes) == 1
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, True, None]
+    with pytest.raises(SystemExit):
+        main(["set-policy-admin", str(path), "--principal", "a", "--principal", "v"])
+    assert [user.get("policy_admin") for user in list_users(path)] == [True, True, None]
     with pytest.raises(SiteUsersError, match="policy_admin"):
         validate_users_document({"users": [{**_entry(), "policy_admin": "yes"}]})
