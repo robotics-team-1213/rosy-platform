@@ -53,9 +53,9 @@ DEPS = r"""( flock -w 600 9 || exit 1
   rm -rf "$PYDEPS.new"; mkdir -p "$PYDEPS.new"
   grep -viEf <(sed -n 's/^\([A-Za-z0-9._-]*\)==.*/^\1==/p' "$REQ") "$FLEET_REQ" > "$PYDEPS.new/fleet-extra.txt" \
     || [ $? = 1 ]
-  UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-  if [ -n "$UV" ]; then PIP() { "$UV" pip install -q --python /usr/bin/python3 "$@"; }
-  else PIP() { /usr/bin/python3 -m pip install -q "$@"; }; fi
+  UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)   # D-802: uv only, deployed by host-state
+  [ -n "$UV" ] || { echo "[remote-sim] uv missing (D-802): sudo python3 deploy/hosts/common/rosy-host-state install <role> --approve uv"; exit 1; }
+  PIP() { "$UV" pip install -q --python /usr/bin/python3 "$@"; }
   PIP --target "$PYDEPS.new" -r "$REQ" -r "$PYDEPS.new/fleet-extra.txt" httpx 'setuptools>=68' wheel \
     && PIP --target "$PYDEPS.new/learned" --require-hashes --no-deps --only-binary :all: -r "$LEARNED_REQ" \
     && touch "$PYDEPS.new/.ok" && rm -rf "$PYDEPS" && mv "$PYDEPS.new" "$PYDEPS"

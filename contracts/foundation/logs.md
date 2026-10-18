@@ -805,6 +805,12 @@
 - 증거: 79 remote tests passed for authority-route binding, existing authority behavior, actual API and protocol version alignment. Ten new tests first failed on the missing route_guide argument. Independent safety review caught and verified the sub-ULP source-lifetime fix: optional binding completes before authority replacement and unrepresentable deadlines drop the guide. Logs: private rosy-d769-audit/authority-route-red and authority-route-green. Per-commit size and safety-review checks passed for all three commits in this slice.
 - gate 변화: None. CORE ROS publication, Fleet selected-route production, Gazebo learned driving and constrained learned-policy acceptance remain pending.
 
+## 2026-10-18 · uncommitted · schemas 크기 정리의 기존 반영 확인
+
+- 변경: `refactor/schemas-ratchet-offset`을 최신 main과 통합했다. 유한 JSON 크기 계산 재사용은 이미 main과 같아 코드 변경을 남기지 않고, main의 1234줄 기준을 그대로 보존했다.
+- 증거: 원본 변경과 main의 validator 구현이 같고, 통합 후 schemas.py와 size_ratchet.txt의 main 대비 차이가 없음을 확인한다. 원격 검증은 착지 기록에 남긴다.
+- gate 변화: 없음. 크기 제한을 높이지 않는다.
+
 ## 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
 
 - 변경: 기존 Account 작업의 receiver 재생성 후 회수 큐 복구 검사를 foundation 전용 브랜치로 분리했다. 제품 AccountClient는 변경하지 않았다.
