@@ -28,6 +28,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_fleet_agent.py",
     "middleware/core/gateway/test/test_fleet_agent_mdns.py",
     "middleware/core/gateway/test/test_initial_pose.py",
+    # D-769 route prior: CORE's bridge publication checked end to end with the camera's control inbox.
+    "middleware/core/gateway/test/test_lane_route_publication.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
     # D-760 rev 3: gateway HTTP serialization of the real manager wait judgement.

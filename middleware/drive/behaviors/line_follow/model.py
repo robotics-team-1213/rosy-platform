@@ -225,6 +225,7 @@ class LineFollowConfig:
     turn_map_entry_enabled: bool = False  # D-759 rev 1: the same for a junction turn's exit heading
     instruction_stamp_enabled: bool = False  # D-767 A: measure from a junction instruction's pose_stamp
     route_context_enabled: bool = False
+    route_guide_enabled: bool = False  # D-769: opt in only with the source-expiring camera inbox deployed
     arc_curvature_gain: float = 1.0
     arc_blind_max_m: float = 1.0
     authority_required: bool = False  # D-517 4: no motion without a live Fleet authority, even before one
@@ -402,7 +403,7 @@ class LineFollowConfig:
             raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
         if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
-        for flag in ("arc_enabled", "bend_map_entry_enabled", "turn_map_entry_enabled", "route_context_enabled",
+        for flag in ("arc_enabled", "bend_map_entry_enabled", "turn_map_entry_enabled", "route_context_enabled", "route_guide_enabled",
                      "instruction_stamp_enabled"):
             if type(getattr(self, flag)) is not bool:
                 raise ValueError(f"{flag} must be a boolean")

@@ -1,6 +1,15 @@
 """ROS-free publication cadence for D-531 route context."""
 
 
+class RouteContextPublication:
+    def __init__(self):
+        self.previous, self.at = None, float('-inf')
+
+    def message(self, context, now):
+        message, self.previous, self.at = publication(context, self.previous, self.at, now=now)
+        return message
+
+
 def publication(context, previous, last_at, *, now):
     """Return (wire message, active identity, publication time)."""
     if now < last_at:

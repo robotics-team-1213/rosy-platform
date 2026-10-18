@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+from .lane_route_guide import AuthorityRouteGuide
 
 #: ``ttl_s`` is in (0, MAX_TTL_S], measured on CORE's line-follow clock (as ``hold_s``): ``time.monotonic``
 #: on the Device, sim time under ``use_sim_time``; never the wall clock. 5 s since D-760 1 (was 2).
@@ -47,6 +48,7 @@ class LineAuthorityRequest(BaseModel):
     #: leg (``accepted`` false, ``reason`` stale_seq), and one without seq on a leg that has one
     #: (seq_required); absent on a leg that never had one: no order check (a Fleet before D-760).
     seq: Optional[int] = Field(default=None, ge=0)
+    route_guide: Optional[AuthorityRouteGuide] = None
 
 
 class LineAuthorityStatus(BaseModel):

@@ -582,6 +582,7 @@
 - 변경: foundation 계약 시험 파일을 	est_route_context_contract.py로 바꿔 core services의 동명 시험과 pytest 수집 충돌을 해소했다.
 - 증거: GitHub CI 37914451689 core-domain의 import file mismatch; 시험 본문 5125 passed, 수집 1 error.
 - gate 변화: CI 동일 묶음 재검증 대기.
+
 ## 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
 - 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
 - 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
@@ -797,6 +798,24 @@
 - 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
 - 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
 - gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.
+
+## 2026-10-18 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769) (이식, 원래 2026-10-16)
+
+- 변경: Added optional typed route_guide to the existing authority API (reference v1.246). CORE binds it only on acceptance with sequence and exact echoed odom sample. The source lifetime is capped by max_age_s <= 1 and authority TTL; clears and same-source republication do not replenish the budget. Shrink/no-guide/mode reset/expiry/unavailable odom expose no prior. Existing movement-authority acceptance and distance gate semantics remain. No publisher, producer or deployed capability was enabled.
+- 증거: 79 remote tests passed for authority-route binding, existing authority behavior, actual API and protocol version alignment. Ten new tests first failed on the missing route_guide argument. Independent safety review caught and verified the sub-ULP source-lifetime fix: optional binding completes before authority replacement and unrepresentable deadlines drop the guide. Logs: private rosy-d769-audit/authority-route-red and authority-route-green. Per-commit size and safety-review checks passed for all three commits in this slice.
+- gate 변화: None. CORE ROS publication, Fleet selected-route production, Gazebo learned driving and constrained learned-policy acceptance remain pending.
+
+## 2026-10-18 · uncommitted · schemas 크기 정리의 기존 반영 확인
+
+- 변경: `refactor/schemas-ratchet-offset`을 최신 main과 통합했다. 유한 JSON 크기 계산 재사용은 이미 main과 같아 코드 변경을 남기지 않고, main의 1234줄 기준을 그대로 보존했다.
+- 증거: 원본 변경과 main의 validator 구현이 같고, 통합 후 schemas.py와 size_ratchet.txt의 main 대비 차이가 없음을 확인한다. 원격 검증은 착지 기록에 남긴다.
+- gate 변화: 없음. 크기 제한을 높이지 않는다.
+
+## 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
+
+- 변경: 기존 Account 작업의 receiver 재생성 후 회수 큐 복구 검사를 foundation 전용 브랜치로 분리했다. 제품 AccountClient는 변경하지 않았다.
+- 증거: 원래 c22ee485ad의 지정 원격 suite15개 PASS, NEW0. 이 브랜치는 최신 main 위에서 착지 관문을 다시 실행한다. 원래 결과는 최신 main 병합 시험을 대신하지 않는다.
+- gate 변화: 없음. 운영 인증·서비스·장치 수용은 이 검사와 별도다.
 
 ## 2026-10-19 · uncommitted · D-807 receiver 재개 후 회수 대기열 검증
 

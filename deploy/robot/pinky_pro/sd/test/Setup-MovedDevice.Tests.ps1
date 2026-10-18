@@ -14,6 +14,11 @@ foreach ($directory in @($sd, $release, $local, $scratch, (Join-Path $sandbox "r
 $utf8 = New-Object Text.UTF8Encoding($true)
 function Save-Fixture([string]$Path, [string]$Text) { [IO.File]::WriteAllText($Path, $Text, $utf8) }
 Copy-Item -LiteralPath $Source -Destination (Join-Path $sd "setup-moved-device.ps1")
+foreach ($helper in @("sd-setup-settings.ps1", "sd-card-completion.ps1")) {
+    Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $Source) $helper) -Destination $sd
+}
+Save-Fixture (Join-Path $sd "verify-image-release.py") "raise SystemExit(0)"
+Save-Fixture (Join-Path $sd "imager.exe") "fixture executable, never run"
 Save-Fixture (Join-Path $sandbox "release\public-keys\rosy-release-2026-01.pem") "fixture public key"
 Save-Fixture (Join-Path $release "manifest.json") '{"release_id":"2026.10.18-001"}'
 Save-Fixture (Join-Path $release "SHA256SUMS.sig") "fixture signature"
@@ -23,7 +28,11 @@ Save-Fixture (Join-Path $release "SHA256SUMS") (("a" * 64) + "  " + $image)
 $credentials = Join-Path $local "Rosy\credentials"
 New-Item -ItemType Directory -Path $credentials -Force | Out-Null
 $profile = Join-Path $credentials "site.credential.xml"
-Save-Fixture $profile "fixture profile; never decrypted"
+function Save-WifiFixture {
+    $secure = ConvertTo-SecureString "fixture only" -AsPlainText -Force
+    New-Object Management.Automation.PSCredential("fixture-site", $secure) | Export-Clixml -LiteralPath $profile
+}
+Save-WifiFixture
 $registry = Join-Path $local "Rosy\device-registry.json"
 Save-Fixture $registry '{"robot_numbers":[],"device_names":[],"device_uids":[]}'
 $planMarker = Join-Path $sandbox "planned.json"
@@ -60,7 +69,8 @@ function Get-Disk {
         IsBoot=$false;IsSystem=$false;FriendlyName="fixture";SerialNumber="FIXTURE-7"}
 }
 function Read-Host { "REGISTER 40" }
-$arguments = @{ReleaseDir=$env:FIXTURE_RELEASE;WifiProfile="site";DiskNumber=7}
+$arguments = @{ReleaseDir=$env:FIXTURE_RELEASE;WifiProfile="site";DiskNumber=7;
+    RpiImager=(Join-Path $env:FIXTURE_SD "imager.exe");ConfigPath=(Join-Path $env:FIXTURE_SCRATCH "sd-setup.local.json")}
 if (-not $WriteCard) { $arguments.PrepareOnly = $true }
 if ($PSBoundParameters.ContainsKey("Address")) { $arguments.RobotAddress = $Address }
 & (Join-Path $env:FIXTURE_SD "setup-moved-device.ps1") @arguments
@@ -105,7 +115,7 @@ Remove-Item -LiteralPath $profile
 $result = Invoke-Case
 Assert ($result.Code -ne 0) "missing Wi-Fi profile must fail"
 Assert (-not (Test-Path -LiteralPath $planMarker)) "missing Wi-Fi profile must fail before planning"
-Save-Fixture $profile "fixture profile; never decrypted"
+Save-WifiFixture
 Write-Output "PASS: missing Wi-Fi profile cannot produce a card plan"
 
 # Replace only the external HTTP boundary in the disposable script copy.
