@@ -1,6 +1,6 @@
 {
   "record_kind": "agent-recorded runner completion; not a device-issued attestation",
-  "source_sha": "62971299f71b97fed94681f4b749ece3dd946796",
+  "source_commit": "62971299f71b97fed94681f4b749ece3dd946796",
   "runner": "tools/remote/remote_sim.py",
   "mode": "cmd",
   "minutes": 12,

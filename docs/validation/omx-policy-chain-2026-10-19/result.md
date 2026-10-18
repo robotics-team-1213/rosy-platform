@@ -58,14 +58,14 @@ python tools/remote/remote_pytest.py --log-dir <root>/green-total-final --
 ```
 
 원시 최종 로그 SHA256:
-`3beb7ef5521add3d99488d2f8c87a3e9a05f7e93f28461f55c6277dd2a6f81c3`.
+SHA256 `3beb7ef5521add3d99488d2f8c87a3e9a05f7e93f28461f55c6277dd2a6f81c3`.
 독립 reviewer는 이 원시 로그의 136 passed와 hash를 확인했다. 실행 SHA·선택은
 runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 출력만으로 식별하지 않는다.
 이후 `d7ee20bfc`는 문서와 fixture credential의 0600 생성만 추가했다.
 
 ## Gazebo 실행 결과
 
-`62971299f71b97fed94681f4b749ece3dd946796`를 AI 시험 PC의 `remote_sim.py`로 실행해
+commit `62971299f71b97fed94681f4b749ece3dd946796`를 AI 시험 PC의 `remote_sim.py`로 실행해
 `OMX_POLICY_CHAIN_GAZEBO_PASS`, teardown 뒤 `OMX_POLICY_CHAIN_EXIT_OK`, runner exit 0을 확인했다.
 [수신·실행 receipt](native-receipt.json)는 외부 `chain-result.json`과 같은 JSON 값이다.
 [runner 완료 기록](runner-receipt.json)은 요청한 전체 SHA·명령과 도구의 exit 0을 연결한다.
@@ -91,11 +91,11 @@ runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 �
 
 | Artifact | SHA256 |
 |---|---|
-| `run.txt` | `8c5371795b11d2d41c1c92be47d2b441a7fe1e0be0815be4fb6ea365ae484a97` |
-| `chain-result.json` | `cb2fb5e6dfb50cb5ed67b61a6fba8ca1fe54522b0b9b87abb2036194211ec92b` |
-| `stop-readback.json` | `c680e1b5343658bfac8b1b2bab62665f3a5afdc1f4aa4c04e633dc98ecf9ac79` |
-| `teardown.json` | `cc2ef9a254ba7b587cd326c0581d0523aeb2daa8b36bf2f92307a732c39c4fd1` |
-| `joint-intake.json` | `47dc88d274d2165be20f8184c076a59dbfb89249ffb5f27fdf4bd8d7d86d6887` |
+| `run.txt` | SHA256 `8c5371795b11d2d41c1c92be47d2b441a7fe1e0be0815be4fb6ea365ae484a97` |
+| `chain-result.json` | SHA256 `cb2fb5e6dfb50cb5ed67b61a6fba8ca1fe54522b0b9b87abb2036194211ec92b` |
+| `stop-readback.json` | SHA256 `c680e1b5343658bfac8b1b2bab62665f3a5afdc1f4aa4c04e633dc98ecf9ac79` |
+| `teardown.json` | SHA256 `cc2ef9a254ba7b587cd326c0581d0523aeb2daa8b36bf2f92307a732c39c4fd1` |
+| `joint-intake.json` | SHA256 `47dc88d274d2165be20f8184c076a59dbfb89249ffb5f27fdf4bd8d7d86d6887` |
 
 ### 진행 중 보존한 회귀·실패
 
@@ -104,7 +104,7 @@ runner receipt와 위 명령을 함께 사용해야 하며, pytest의 세 줄 �
 helper 재사용·drip 응답의 전체 deadline·진행 중 종료·잘못된 framing과
 descriptor 유지 및 종료 후 응답 거부를 포함한다. 외부 로그는
 `green-prepared-transport/run-1.txt`, SHA256은
-`dea1512a82a430f3f9c3242292b69d851c97b3d627fd30a049d1bf2ca543d96d`이다.
+SHA256 `dea1512a82a430f3f9c3242292b69d851c97b3d627fd30a049d1bf2ca543d96d`이다.
 
 `policy_chain_gazebo.py`는 `remote_sim.py`를 통해서만 실행한다. 원본 world의
 hash와 32×24 RGB/10Hz, physics step 0.002초인 명시적 시험 variant의 hash를 기록한다.
@@ -190,9 +190,21 @@ probe는 합성 관리자 승인과 고정 +0.01rad 목표를 사용한다. fixt
 foundation 경로를 목록 앞에 두어 문자열 인접성을 없앴다. 실제 검색 경로 집합과
 fixture의 HTTP·승인·실행 검증은 유지하며, 수정된 커밋으로 검사를 다시 요청한다.
 
-안전 분류 prerequisite는 로컬 main `3c9254a52676cfcafaaa764c8eabcae5efa9692b`에 착지했다.
-가장 최근 FULL candidate는 `4ee3f3aaa9b3445f063427a76bd70e0f68e30850`, 그 아래 main은
-`7b11775712834f2f1dfcad68ac35e844bc12125d`였다. 외부 `safety-registration-resume/rosy-land/`
+수정 commit `266c5d259`의 원격 경로 검사와 실제 Fleet HTTP 연동 검사는 13개 통과,
+runner exit 0·NEW 0이었다. main 병합 candidate `04390a11de`의 guard는 247개 통과했다.
+영향 범위 검사는 1631 passed/15 skipped/1 failed였고, 명시적으로 실행한 브라우저
+네 묶음은 14+14+14+6개 통과했다. 실패는 이 보고서의 공개 commit·SHA256 값에
+같은 줄의 무결성 표기가 빠져 비밀정보로 탐지된 것이다. 자동 단독·main 재검사는
+잘못 구성된 pytest 항목 경로로 exit 4였으므로 판정 근거로 쓰지 않는다.
+값을 유지하고 commit·SHA256 표기를 붙였으며 runner 기록의 키도 `source_commit`으로
+명확히 했다. 검사기·예외 목록은 바꾸지 않았다. 수정 후 검사를 다시 요청한다.
+독립 비교에서 SIM 통과 commit부터 candidate `04390a11de`까지 해당 제품 실행 경로와
+Gazebo probe는 동일했고 fixture 검색 경로 순서만 바뀌었다. candidate 자체의 전체
+SIM 재실행 결과로 표시하지 않는다.
+
+안전 분류 prerequisite는 로컬 main commit `3c9254a52676cfcafaaa764c8eabcae5efa9692b`에 착지했다.
+가장 최근 FULL candidate commit은 `4ee3f3aaa9b3445f063427a76bd70e0f68e30850`, 그 아래 main은
+commit `7b11775712834f2f1dfcad68ac35e844bc12125d`였다. 외부 `safety-registration-resume/rosy-land/`
 아래 22개 FULL 로그와 main 차이의 guard·affected 로그를 NEW 0으로 확인했다.
 최신 main을 병합한 제품 selection은 `affected`다. 제품 착지는
 `python tools/land.py --tests auto --no-prune`의 같은 candidate 검사·NEW 0과
