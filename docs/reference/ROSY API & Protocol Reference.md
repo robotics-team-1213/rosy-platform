@@ -17,7 +17,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ### v1.268 운영자의 정책 승인 표시와 세션의 `policy_admin` (D-793)
 
-Additive. 예전 방식 `site-users.yaml` 항목에 선택 필드 `policy_admin: true`(operator에만)를 더한다. 그 사람은 operator 역할을 유지하면서 `fleet.policy` 판단(§10.18)을 할 수 있다. 통합 계정(Rosy Account) 세션은 기존처럼 자원 권한으로 판단한다. `GET /api/fleet/auth/session`은 통합 계정이 아닐 때 `policy_admin`(bool)을 더 돌려준다. 표시는 `deploy/site/site_users.py set-policy-admin`으로 켜고 끈다. 이 필드를 모르는 이전 Fleet은 파일을 거부하므로 Fleet을 먼저 배포한다. envelope 1.0 변경 없음.
+Additive. 예전 방식 `site-users.yaml` 항목에 선택 필드 `policy_admin: true`(operator에만)를 더한다. 그 사람은 operator 역할을 유지하면서 `fleet.policy` 판단(§10.18)을 할 수 있다. 통합 계정(Rosy Account) 세션은 기존처럼 자원 권한으로 판단한다. `GET /api/fleet/auth/session`은 통합 계정이 아니고 `fleet.policy`가 있을 때만 `policy_admin: true`를 더 돌려준다(없으면 필드가 없다). 표시는 `deploy/site/site_users.py set-policy-admin`으로 켜고 끈다. 이 필드를 모르는 이전 Fleet은 파일을 거부하므로 Fleet을 먼저 배포한다. envelope 1.0 변경 없음.
 
 ### v1.266 학습 정책 승인 관문: 단계·승인 창·확인 요청·사고 잠금·실행 lease (D-793)
 

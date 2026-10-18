@@ -37,7 +37,7 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         managed = ({"account_id": principal.account_id, "site_resource": principal.site_resource,
                     "grants": [{"resource": resource, "capabilities": list(capabilities)}
                                for resource, capabilities in principal.grants]} if principal.account_id
-                   else {"policy_admin": principal.permits_site("fleet.policy", {"policy-admin"})})
+                   else {"policy_admin": True} if principal.permits_site("fleet.policy", {"policy-admin"}) else {})
         if principal.account_id and not principal.password_change_required:
             try:
                 context = sessions.account_context(request.cookies.get(COOKIE, ''))

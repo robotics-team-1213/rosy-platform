@@ -42,7 +42,7 @@ def test_policy_admin_flag_grants_policy_decisions_beside_operate(tmp_path):
     assert alice.post("/api/fleet/workcells/cell-1/policy/proposals", headers=ORIGIN, json=body).status_code == 200
     carol = TestClient(alice.app, base_url=BASE)
     _login(carol, "carol")
-    assert carol.get("/api/fleet/auth/session").json()["policy_admin"] is False
+    assert "policy_admin" not in carol.get("/api/fleet/auth/session").json()
     refused = carol.post("/api/fleet/workcells/cell-1/policy/proposals", headers=ORIGIN,
                          json=dict(body, policy_revision="act-r2"))
     assert refused.status_code == 403
