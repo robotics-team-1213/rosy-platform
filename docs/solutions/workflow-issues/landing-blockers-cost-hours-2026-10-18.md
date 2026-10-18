@@ -132,9 +132,10 @@ took hours to land. Four separate things blocked it.
 - Test PC placement still uses hosts below the memory floor when nothing else is free (D-568), and
   an agent that dies mid-land leaves no resumable state. Run long lands as a watched background task
   ([landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md](landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md)).
-- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) are themselves at or above 95%
-  of the 600-line limit. These fixes left their line counts unchanged. The next change there needs
-  a split first.
+- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) were at or above 95% of the
+  600-line limit. `refactor/land-split` moved the CI full-run matrix to `tools/harness/affected_ci.py`
+  (`affected_tests.py` 495) and the conflict auto-resolution to `tools/land_merge.py` (`land.py` 472),
+  pure moves with the old names re-exported.
 
 ## Related
 
