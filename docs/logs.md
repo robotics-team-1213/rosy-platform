@@ -9137,3 +9137,15 @@ osy-d395-s1d\`.
 - 변경: 실물 하달 개방에 필요한 운행·팔의 장치 증거, 관측·인계 장벽 조건을 Proposed ADR로 통합한다. 해당 문서가 없다고 선언한 D-797 예약 두 행만 제거하고 다른 예약은 보존한다.
 - 증거: ADR 본문과 Log의 Proposed 상태, 코드·설치 profile 변경이 없는 범위를 확인했다. 현재 커밋의 원격 검증은 착지 기록에 남긴다.
 - gate 변화: 없음. 실물 운행·팔 실행·device_trial 활성화·장치 수용을 승인하거나 실행하지 않는다.
+
+## 2026-10-18 · edae42db99 · docs: 굽이 영상 재생과 경로 방향 입력 누락 (이식, 원래 2026-10-16)
+- 변경: PNG 기록기 추출, 굽이 736 frame 회수, 오류 전후 15장 동일 모델 재생, 대체 인식 기준선과 비교
+- 증거: docs/validation/d769-bend-replay-2026-10-16/result.md. 학습 인식은 서쪽·대체 인식은 동쪽에서 stall. 오류 전 오른쪽 목표와 누락된 line/lane_guide 발행 경로 확인
+- gate 변화: 없음. wall 역할 오류만으로 재학습하지 않으며 영역→목표와 Fleet 방향 연결을 후속 검증
+- 결정: D-769
+
+## 2026-10-18 · 6ec7681069 · Specify internal selected-route prior transport v1.245 (D-769) (이식, 원래 2026-10-16)
+
+- 변경: API reference and app contract label now document the internal LaneRouteGuide schema, exact source frame association, ordered invalidation, bounded lifetime, shortened preview semantics and required capability opt-in. No REST or envelope 1.0 change. Runtime authority attachment and publisher remain pending. Private evidence: rosy-d769-audit/route-guide-reviewed; 14 remote tests passed.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)

@@ -269,6 +269,7 @@ EXPECTED_PUBLISHERS = [
     ("teleop/intent", 10),
     # D-411 A: a recording left CORE in full; the recorder may then evict it under quota.
     ("pilot_recorder/fetched", 5),
+    ("line/lane_guide", 10),
     # Per-device power policy (2026-10-04): latched level board for camera / perception.
     ("power/devices", "LATCHED"),
 ]
