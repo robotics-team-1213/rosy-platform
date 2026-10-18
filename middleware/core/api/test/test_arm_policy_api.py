@@ -142,6 +142,21 @@ def test_stop_latches_existing_fence_and_cancels_own_goal(tmp_path):
     assert session.hold_reason
 
 
+def test_pinned_capture_does_not_refresh_an_aged_observation(tmp_path):
+    client, session, driver, clock, *_ = setup_api(tmp_path)
+    port = client.app.state.core.arm_policy
+    capture = port.capture
+    @contextmanager
+    def delayed():
+        with capture() as frame:
+            clock[0] += .051
+            yield frame
+    port.capture = delayed
+    reply = client.post('/api/v1/arm/observations',json={'policy_revision':session.lease.policy_revision})
+    assert reply.status_code == 403 and session.hold_reason
+    assert not driver.commands
+
+
 def test_unbound_core_refuses_arm_execution():
     app = create_app({}, SimpleNamespace())
     app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='a', role='operator')
