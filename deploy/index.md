@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 비밀 항목 거부 fixture의 공개 placeholder
+- 2026-10-19 · 16d152510 · SD 설정 개선 검증 결과
+- 2026-10-19 · uncommitted · SD 공통 설정과 순차 카드 준비
 - 2026-10-19 · uncommitted · 이미지 마운트 정리 실패 보존
 - 2026-10-18 · uncommitted · SD 안내를 원격 기준으로 재적용
-- 2026-10-18 · efa12a92be · 새 SD 안내 경로 검증 결과
-- 2026-10-18 · uncommitted · 새 SD 카드 안내 경로 (feat/pinky-sd-ready)
-- 2026-10-17 · 61e95e784 · 공개 진단 도구 hash의 정확한 provenance 등록
