@@ -155,11 +155,11 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
 #: D-472 addendum 3: a LED-confirmed track feeds D-511 lane compliance and the console only.
 #: Map pose arbitration, trips, initialpose, routes, bays, formations and commands never read it,
 #: neither by import nor through the wiring attributes ``tracking.identity`` / ``app.state.identity``.
-IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server/identity.py",
-                    "server/tracking/tracking.py", "server/tracking/tracking_routes.py", "server/sightings_config.py",
-                    "server/lane_compliance_service.py"}
+IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server/recognition/identity.py",
+                    "server/tracking/tracking.py", "server/tracking/tracking_routes.py", "server/recognition/sightings_config.py",
+                    "server/pose/lane_compliance_service.py"}
 #: Never on that list: the D-494 map pose arbitration and the trip loop (addendum 3).
-IDENTITY_NEVER = ("server/map_pose_service.py", "server/trips/trip_*.py", "server/trip_checks/trip_*.py", "server/trip_progress/trip_*.py",
+IDENTITY_NEVER = ("server/pose/map_pose_service.py", "server/trips/trip_*.py", "server/trip_checks/trip_*.py", "server/trip_progress/trip_*.py",
                   "routing/execute.py")
 
 
