@@ -6,6 +6,7 @@
   "root": "~/rosy-omx",
   "base_python": "/home/<user>/.local/bin/python3.12",
   "require_verified_commit": false,
+  "follower_device": "/dev/serial/by-id/<follower>",
   "devices": ["/dev/serial/by-id/<follower>", "/dev/serial/by-id/<leader>"],
   "keep": 3
 }

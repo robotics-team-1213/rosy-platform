@@ -152,3 +152,27 @@ def test_eeprom_limits_are_never_written_with_torque_on():
 def test_out_of_bounds_arguments_are_refused(argv):
     with pytest.raises(SystemExit):
         m.parse(["--device", "x", *argv])
+
+
+def test_a_motor_whose_caps_are_not_the_baseline_is_refused_untouched():
+    bus = Motor()
+    bus.reg["pwm_limit"] = 300  # an earlier run that never restored
+    with pytest.raises(SystemExit, match="baseline"):
+        run(bus, ["move", "--to", "2100"])
+    assert bus.writes == []
+
+
+def test_one_failed_restore_never_skips_the_others():
+    bus = Motor()
+    original = bus.write
+
+    def write(name, value):
+        if name == "pwm_limit" and value == 20:
+            raise RuntimeError("bus dropped")
+        original(name, value)
+
+    bus.write = write
+    with pytest.raises(RuntimeError, match="did not end safely"):
+        run(bus, ["move", "--to", "2100", "--p-gain", "600", "--i-gain", "200"])
+    assert bus.reg["torque"] == 0
+    assert (bus.reg["current_limit"], bus.reg["p_gain"], bus.reg["i_gain"]) == (50, 250, 0)

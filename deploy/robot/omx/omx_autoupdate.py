@@ -47,7 +47,7 @@ DEFAULT_PATHS = ("deploy/robot/omx", "contracts/foundation", "middleware/devices
                  "test/test_omx_record_session.py")
 LOCK = "deploy/robot/omx/requirements-cell.lock"
 SMOKE = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); "
-         "import joint_tune, record_session, record_config; print('smoke ok')")
+         "import joint_tune, record_session, record_config, omx_autoupdate; print('smoke ok')")
 
 
 def log(**row):
@@ -105,16 +105,18 @@ class Host:
                               timeout=120)
         return done.returncode == 0 and "smoke ok" in done.stdout
 
-    def session_busy(self) -> bool:
+    def hold_session(self):
+        """Take the cell's session lock (the one joint_tune and record_session hold) and keep it for the
+        whole switch, so no session can start between the idle check and the smoke check."""
         lock = Path(self.cfg["root"]) / "session.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)
-        with lock.open("a") as handle:
-            try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                return True
-            fcntl.flock(handle, fcntl.LOCK_UN)
-        return False
+        handle = lock.open("a")
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.close()
+            return None
+        return handle
 
     def device_in_use(self) -> bool:
         for device in self.cfg["devices"]:
@@ -125,7 +127,7 @@ class Host:
 
     def follower_torque_off(self, release: Path, python: Path) -> bool:
         code = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
-                f"bus = SerialBus({self.cfg['devices'][0]!r}, 0)\n"
+                f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
                 "try:\n    on = []\n    for m in FOLLOWER:\n        bus.motor = m\n        on.append(bus.read('torque'))\n"
                 "finally:\n    bus.close()\nprint('torque', sum(on))")
         done = subprocess.run([str(python), "-c", code], cwd=release, capture_output=True, text=True,
@@ -146,6 +148,13 @@ class Updater:
             return json.loads(self.state_path.read_text())
         except FileNotFoundError:
             return {"current": None, "previous": None, "history": []}
+        except ValueError:  # a corrupt state file: keep it aside and trust the links on disk
+            os.replace(self.state_path, self.state_path.with_suffix(f".corrupt-{int(time.time())}"))
+            current = self.root / "current"
+            name = Path(os.readlink(current)).name if current.is_symlink() else None
+            env = Path(os.readlink(self.root / "current-env")).name if (self.root / "current-env").is_symlink() else None
+            log(step="state_rebuilt", current=name)
+            return {"current": name, "previous": None, "env": env, "history": []}
 
     def save(self, state: dict) -> None:
         tmp = self.state_path.with_suffix(".tmp")
@@ -183,8 +192,6 @@ class Updater:
         return self.envs / env / "bin" / "python"
 
     def idle(self, release: Path, env: str) -> str | None:
-        if self.host.session_busy():
-            return "session_running"
         if self.host.device_in_use():
             return "device_in_use"
         if not self.host.follower_torque_off(release, self.python(env)):
@@ -246,6 +253,16 @@ class Updater:
             os.replace(staging, release)
             log(step="prepared", release=name)
         env = self.env_for(release)
+        session = self.host.hold_session()
+        if session is None:
+            log(step="deferred", release=name, reason="session_running")
+            return "deferred"
+        try:
+            return self.switch(state, sha, name, release, env, dry_run)
+        finally:
+            session.close()
+
+    def switch(self, state, sha, name, release, env, dry_run) -> str:
         busy = self.idle(release, env)
         if busy:
             log(step="deferred", release=name, reason=busy)
@@ -261,6 +278,7 @@ class Updater:
             else:  # first install: leave no current pointing at a broken release
                 self.unlink()
             log(step="rolled_back", release=name, to=previous)
+            state["failed"] = name  # do not retry it every run until main moves on
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})
             self.save(state)
             return "rolled_back"
@@ -275,11 +293,18 @@ class Updater:
         state = self.state()
         if not state["previous"]:
             return "no_previous"
-        busy = self.idle(self.releases / state["previous"], state["previous_env"])
-        if busy:
-            log(step="deferred", reason=busy)
+        session = self.host.hold_session()
+        if session is None:
+            log(step="deferred", reason="session_running")
             return "deferred"
-        self.link(state["previous"], state["previous_env"])
+        try:
+            busy = self.idle(self.releases / state["previous"], state["previous_env"])
+            if busy:
+                log(step="deferred", reason=busy)
+                return "deferred"
+            self.link(state["previous"], state["previous_env"])
+        finally:
+            session.close()
         # current_sha is dropped: after a manual rollback the next forward update is not refused as older
         state.update(current=state["previous"], previous=state["current"], env=state["previous_env"],
                      previous_env=state["env"], current_sha=None)
@@ -307,9 +332,12 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("paths", list(DEFAULT_PATHS))
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", "~/rosy-omx"))
-    missing = [k for k in ("repo_url", "github_repo", "base_python", "devices") if not cfg.get(k)]
+    missing = [k for k in ("repo_url", "github_repo", "base_python", "devices", "follower_device") if not cfg.get(k)]
     if missing or not cfg["required_checks"] or cfg["keep"] < 2:
         raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
+    home = os.environ.get("ROSY_OMX_HOME")
+    if home and os.path.realpath(os.path.expanduser(home)) != os.path.realpath(cfg["root"]):
+        raise SystemExit("root must be the ROSY_OMX_HOME the sessions lock (one session.lock for the cell)")
     return cfg
 
 

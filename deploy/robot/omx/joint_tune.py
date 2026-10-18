@@ -28,7 +28,11 @@ without an I gain it stops short of its goal under load (P-only steady-state err
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
+import os
+import signal
 import time
 import urllib.request
 from pathlib import Path
@@ -43,9 +47,55 @@ WRITES = {"torque": (64, 1), "goal_current": (102, 2), "profile_acc": (108, 4), 
 READS = {"model": (0, 2), "mode": (11, 1), "torque": (64, 1), "hw_error": (70, 1), "moving": (122, 1),
          "present_load": (126, 2), "present_pos": (132, 4),
          **{k: WRITES[k] for k in ("pwm_limit", "current_limit", "p_gain", "i_gain")}}
+#: commissioning resting caps; every run starts from and ends at these (D-770)
+BASELINE = {"pwm_limit": 20, "current_limit": 50}
 SIGNED = {"present_load": 2, "present_pos": 4}  # present_load: XL330 current (mA), XL430 load (0.1 %)
 EEPROM = ("pwm_limit", "current_limit")
 STATE = ("torque", "hw_error", "moving", "present_load", "present_pos")
+
+
+def lock_root() -> Path:
+    """One place for the cell's session lock: shared by joint_tune, record_session and omx_autoupdate."""
+    return Path(os.environ.get("ROSY_OMX_HOME", Path.home() / "rosy-omx"))
+
+
+def session_lock():
+    """Held for a whole tuning run or recording session; another holder means the cell is busy."""
+    root = lock_root()
+    root.mkdir(parents=True, exist_ok=True)
+    handle = (root / "session.lock").open("a")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        raise SystemExit("another OMX session holds session.lock")
+    return handle
+
+
+def _interrupt(signum, frame):
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
+def protect_signals() -> None:
+    """SIGTERM (systemd) and SIGHUP (a dropped SSH session) end the run like Ctrl-C, so cleanup runs."""
+    signal.signal(signal.SIGTERM, _interrupt)
+    signal.signal(signal.SIGHUP, _interrupt)
+
+
+@contextlib.contextmanager
+def no_interrupts():
+    """While cleaning up, a second Ctrl-C (or SIGTERM/SIGHUP) must not abort torque OFF or a restore."""
+    signals = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+    try:
+        previous = [signal.signal(s, signal.SIG_IGN) for s in signals]
+    except ValueError:  # not the main thread: nothing to mask
+        yield
+        return
+    try:
+        yield
+    finally:
+        for s, handler in zip(signals, previous):
+            signal.signal(s, handler)
 
 
 class SerialBus:
@@ -143,13 +193,19 @@ class Run:
         if ((model, mode) != FOLLOWER[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
             raise SystemExit(f"precondition failed: motor {self.motor} must be {FOLLOWER[self.motor]} "
                              f"(model, mode), torque OFF, no hardware error")
-        saved = {}
+        limits = ("pwm_limit", "current_limit") if self.xl330 else ("pwm_limit",)
+        found = {name: self.bus.read(name) for name in limits}
+        if any(found[name] != BASELINE[name] for name in limits):
+            raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; "
+                             "an earlier run did not restore them - restore before tuning")
+        restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
             for name, value in (("pwm_limit", args.pwm),
                                 ("current_limit", args.current_limit if self.xl330 else None),
                                 ("p_gain", args.p_gain), ("i_gain", args.i_gain)):
                 if value is not None:
-                    saved[name] = self.set(name, value)
+                    restore[name] = BASELINE[name] if name in BASELINE else self.bus.read(name)
+                    self.set(name, value)
             start = before["present_pos"]
             target = None
             if args.command == "move":  # bounded before any torque
@@ -185,13 +241,26 @@ class Run:
             self.log(step="result", **result)
             return result
         finally:
+            with no_interrupts():
+                self.finish(restore)
+
+    def finish(self, restore: dict) -> None:
+        """Torque OFF, then every changed register back; each step is tried even if another failed."""
+        failures = []
+        try:
+            self.bus.write("torque", 0)
+            self.log(step="after", motor=self.motor, **self.state())
+        except Exception as exc:
+            failures.append(f"torque OFF: {exc}")
+        self.grab("after")
+        for name, value in restore.items():  # torque is OFF, so EEPROM may be written
             try:
-                self.bus.write("torque", 0)
-                self.log(step="after", motor=self.motor, **self.state())
-                self.grab("after")
-            finally:
-                for name, value in saved.items():  # torque is OFF, so EEPROM may be written
-                    self.set(name, value)
+                self.set(name, value)
+            except Exception as exc:
+                failures.append(f"restore {name}={value}: {exc}")
+        if failures:
+            self.log(step="unsafe_end", motor=self.motor, failures=failures)
+            raise RuntimeError(f"motor {self.motor} did not end safely: {failures}")
 
 
 def parse(argv=None):
@@ -257,11 +326,16 @@ def main(argv=None):
                 saved[camera] = f"unavailable: {exc}"
         log(step="frames", label=label, **saved)
 
-    bus = SerialBus(args.device, args.id)
+    protect_signals()
+    lock = session_lock()
     try:
-        result = Run(bus, args.id, log=log, grab=grab).execute(args)
+        bus = SerialBus(args.device, args.id)
+        try:
+            result = Run(bus, args.id, log=log, grab=grab).execute(args)
+        finally:
+            bus.close()
     finally:
-        bus.close()
+        lock.close()
     if args.command == "sweep":
         Path("gripper-profile.json").write_text(json.dumps(result, indent=2))
 

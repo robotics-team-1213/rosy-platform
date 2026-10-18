@@ -58,13 +58,23 @@ class FakeHost:
         assert Path(os.path.realpath(python)).exists() or str(python).endswith("python")
         return self.smoke_ok.get(Path(os.path.realpath(release)).name.replace(".tmp", ""), True)
 
-    def session_busy(self):
-        return self.busy
+    def hold_session(self):
+        if self.busy:
+            return None
+        host = self
+
+        class Held:
+            def close(self):
+                host.held = False
+
+        self.held = True
+        return Held()
 
     def device_in_use(self):
         return self.in_use
 
     def follower_torque_off(self, release, python):
+        assert self.held, "the idle check runs while the session lock is held"
         return self.torque_off
 
 
@@ -162,6 +172,8 @@ def test_a_release_that_fails_through_current_rolls_back_release_and_environment
     host.smoke = flaky_smoke(1)  # passes in staging, fails once switched in
     assert u.run() == "rolled_back"
     assert current(tmp_path) == str(Path("releases") / ("a" * 12)) and current(tmp_path, "current-env") == first_env
+    assert u.run() == "known_bad"  # not retried every timer tick
+    assert not host.held
 
 
 def test_a_broken_first_install_leaves_no_current(tmp_path):
@@ -210,8 +222,22 @@ def test_a_manual_rollback_needs_an_idle_cell_and_restores_the_environment(tmp_p
 
 def test_the_config_needs_its_sources_and_two_kept_releases(tmp_path):
     path = tmp_path / "cfg.json"
-    path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"], "keep": 1}')
+    path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"], '
+                    '"follower_device": "d", "keep": 1}')
     with pytest.raises(SystemExit):
         m.load_config(path)
     path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"]}')
+    with pytest.raises(SystemExit):  # the follower device for the torque probe must be named
+        m.load_config(path)
+    path.write_text('{"repo_url": "u", "github_repo": "o/r", "base_python": "p", "devices": ["d"], '
+                    '"follower_device": "d"}')
     assert m.load_config(path)["required_checks"] == ["ci-result"]
+
+
+def test_a_corrupt_state_file_is_kept_aside_and_rebuilt_from_the_links(tmp_path):
+    host = FakeHost()
+    u = updater(tmp_path, host)
+    u.run()
+    (tmp_path / "state.json").write_text("{not json")
+    state = u.state()
+    assert state["current"] == "a" * 12 and list(tmp_path.glob("state.corrupt-*"))

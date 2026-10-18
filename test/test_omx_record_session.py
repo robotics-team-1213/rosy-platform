@@ -88,8 +88,13 @@ def session(arm, leader, *, active=("rosy-omx-camera@top.service",), run=lambda 
         leader.motors[6]["torque"] = 1
         return run(command)
 
+    clock = [0.0]
+
+    def sleep(seconds):
+        clock[0] += seconds
+
     s = m.Session(open_bus=lambda which: arm if which == "follower" else leader, systemctl=systemctl,
-                  run=recorder, log=lambda **row: None, sleep=lambda s: None)
+                  run=recorder, log=lambda **row: None, sleep=sleep, clock=lambda: clock[0])
     return s, calls
 
 
@@ -109,7 +114,7 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     arm, leader = follower(), leader_arm()
     s, calls = session(arm, leader)
     record = s.execute(config(tmp_path), CAPS, teleop_only=False)
-    assert record["exit_code"] == 0 and record["caps_restored"] is True
+    assert record["exit_code"] == 0 and record["caps_restored"] is True and record["safe_end"] is True
     assert (11, "pwm_limit", 300) in arm.writes and (16, "current_limit", 250) in arm.writes
     assert_restored(arm, leader)
     assert ("stop", "rosy-omx-camera@top.service") in calls and ("start", "rosy-omx-camera@top.service") in calls
@@ -157,6 +162,7 @@ def test_teleop_only_runs_teleoperate_on_the_robot_and_teleop_part(tmp_path):
     {k: v for k, v in CAPS_FILE.items() if k != 13},                 # a motor missing
     {**CAPS_FILE, 12: {"pwm": 300, "current": 100}},                 # XL430 has no Current Limit
     {**CAPS_FILE, 15: {"pwm": 900}},                                 # above the PWM range
+    {**CAPS_FILE, 11: {"pwm": 500}},                                 # above the first-session ceiling
     {**CAPS_FILE, 16: {"current": 250}},                             # no pwm
 ])
 def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
@@ -224,3 +230,51 @@ def test_the_task_card_is_embedded_verbatim_with_its_hash(tmp_path):
 def test_the_repository_example_task_card_stays_valid():
     card = m.load_task_card(DIRECTORY / "task-card.example.yaml")
     assert card["schema"] == m.CARD_SCHEMA and card["record"]["episode_time_s"] > 0
+
+
+def test_a_session_refuses_caps_that_are_not_the_baseline(tmp_path):
+    arm, leader = follower({13: {"pwm_limit": 300}}), leader_arm()
+    s, calls = session(arm, leader)
+    with pytest.raises(SystemExit, match="baseline"):
+        s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert arm.writes == [] and calls == []
+
+
+def test_torque_that_never_reads_off_is_retried_then_reported_unsafe(tmp_path):
+    arm, leader = follower(), leader_arm()
+    original = arm.write
+
+    def write(motor_name, value):  # motor 12 ignores torque OFF (e.g. the bus is gone)
+        if arm.motor == 12 and motor_name == "torque" and value == 0:
+            return
+        original(motor_name, value)
+
+    arm.write = write
+    s, _ = session(arm, leader)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["safe_end"] is False and record["torque_after"][12] == 1
+    assert all(arm.motors[m]["torque"] == 0 for m in (11, 13, 14, 15, 16))
+
+
+def test_one_motor_failing_its_restore_does_not_leave_the_others_raised(tmp_path):
+    arm, leader = follower(), leader_arm()
+    original = arm.write
+
+    def write(name, value):
+        if arm.motor == 12 and name == "pwm_limit" and value == 20:
+            raise RuntimeError("write failed")
+        original(name, value)
+
+    arm.write = write
+    s, _ = session(arm, leader)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["safe_end"] is False and any("follower 12" in f for f in record["caps_restored"])
+    assert all(arm.motors[m]["pwm_limit"] == 20 for m in (11, 13, 14, 15, 16))
+
+
+def test_max_relative_target_has_a_ceiling(tmp_path):
+    import json as _json
+    config_value = _json.loads(config(tmp_path).read_text())
+    config_value["robot"]["max_relative_target"] = 25
+    with pytest.raises(ValueError, match="at most 20"):
+        m.validate_config(config_value)

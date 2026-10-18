@@ -11,10 +11,17 @@ commissioning caps (PWM 20, Current 50) keep the follower from following. This w
 3. stops the active camera services, because the recorder opens the V4L devices itself (D-770 §3:
    never two openers);
 4. runs `lerobot-record` (or `lerobot-teleoperate` with --teleop-only, for a dry run without data);
-5. always, however the command ends: torque OFF on follower 11-16 and the leader gripper (6), the
-   saved caps written back and read back, the stopped services started again, session.json written.
+5. always, however the command ends (Ctrl-C, SIGTERM, a dropped SSH session's SIGHUP): the recorder
+   gets SIGINT and 10 s to finish its episode before it is killed; then, with further interrupts
+   ignored, torque OFF on follower 11-16 (retried for up to 30 s, reopening the port after a USB
+   drop, until every motor reads 0) and on the leader gripper (6), each motor's caps back to the
+   commissioning baseline (PWM 20, Current 50) even if another motor failed, the stopped services
+   started again, session.json written. The exit status is non-zero unless that ending was safe.
 
+The session refuses to start unless the follower caps are at the baseline (an earlier session that
+did not restore them must be fixed first), and caps files may not exceed 400.
 No independent stop exists while LeRobot holds the bus: keep a hand on the follower power switch.
+Run it inside tmux so a dropped connection does not even reach it.
 
   record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
@@ -29,23 +36,23 @@ session.json, so review knows which design an episode was recorded under.
 from __future__ import annotations
 
 import argparse
-import fcntl
-import os
 import hashlib
 import json
 import re
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from joint_tune import FOLLOWER, SerialBus
+from joint_tune import BASELINE, CAP_MAX, FOLLOWER, SerialBus, no_interrupts, protect_signals, session_lock
 from record_config import validate_config
 
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
             "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service")
 LEADER_GRIPPER = 6
-PWM_MAX, CURRENT_MAX = 885, 1750
+PWM_MAX = CURRENT_MAX = CAP_MAX  # first sessions stay well below the hardware maximum (885 / 1750)
+TORQUE_OFF_DEADLINE_S = 30.0
 
 
 def load_caps(path: Path) -> dict:
@@ -73,18 +80,6 @@ def release() -> str | None:
     """The code commit these tools came from (RELEASE written by omx_autoupdate.py), if installed so."""
     marker = Path(__file__).resolve().parents[3] / "RELEASE"
     return marker.read_text().strip() if marker.exists() else None
-
-
-def session_lock():
-    """Held for the whole session so omx_autoupdate.py never switches releases under it."""
-    root = Path(os.environ.get("ROSY_OMX_HOME", Path.home() / "rosy-omx"))
-    root.mkdir(parents=True, exist_ok=True)
-    handle = (root / "session.lock").open("a")
-    try:
-        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        raise SystemExit("another OMX session holds session.lock")
-    return handle
 
 
 def load_task_card(path: Path) -> dict:
@@ -122,8 +117,9 @@ def compose(config: dict, card: dict, *, stamp: str) -> dict:
 
 
 class Session:
-    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep) -> None:
-        self.open_bus, self.systemctl, self.run_command, self.log, self.sleep = open_bus, systemctl, run, log, sleep
+    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic) -> None:
+        self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
+        self.sleep, self.clock = sleep, clock
 
     @staticmethod
     def command(config_path: Path, teleop_only: bool) -> list:
@@ -147,16 +143,20 @@ class Session:
     def _cap_registers(self, motor):
         return ("pwm_limit", "current_limit") if FOLLOWER[motor][0] == 1200 else ("pwm_limit",)
 
-    def check_idle(self, bus) -> dict:
-        saved = {}
+    def check_idle(self, bus) -> None:
         for motor in FOLLOWER:
             bus.motor = motor
             model, mode = bus.read("model"), bus.read("mode")
             torque, error = bus.read("torque"), bus.read("hw_error")
             if (model, mode) != FOLLOWER[motor] or torque or error:
                 raise SystemExit(f"follower {motor} not idle: model/mode {(model, mode)}, torque {torque}, error {error}")
-            saved[motor] = {name: bus.read(name) for name in self._cap_registers(motor)}
-        return saved
+            caps = {name: bus.read(name) for name in self._cap_registers(motor)}
+            if any(caps[name] != BASELINE[name] for name in caps):
+                raise SystemExit(f"follower {motor} caps {caps} are not the commissioning baseline; "
+                                 "an earlier session did not restore them - restore before recording")
+
+    def baseline(self) -> dict:
+        return {motor: {name: BASELINE[name] for name in self._cap_registers(motor)} for motor in FOLLOWER}
 
     def write_caps(self, bus, caps) -> None:
         for motor, values in caps.items():
@@ -181,6 +181,32 @@ class Session:
                 state[motor] = f"error: {exc}"
         return state
 
+    def torque_off_until_confirmed(self) -> tuple[bool, dict]:
+        """Retry, reopening the port each time (the recorder may still hold it, a USB drop may have
+        re-enumerated it), until every follower motor reads torque 0 or the deadline passes."""
+        deadline = self.clock() + TORQUE_OFF_DEADLINE_S
+        last = {}
+        while True:
+            try:
+                last = self._with_follower(self.all_torque_off)
+            except Exception as exc:
+                last = {"open": f"error: {exc}"}
+            if last and all(value == 0 for value in last.values()) and len(last) == len(FOLLOWER):
+                return True, last
+            if self.clock() >= deadline:
+                return False, last
+            self.sleep(1.0)
+
+    def restore_caps(self) -> list:
+        """Each motor back to the baseline; a failure on one motor never skips the others."""
+        failures = []
+        for motor, values in self.baseline().items():
+            try:
+                self._with_follower(lambda bus, m=motor, v=values: self.write_caps(bus, {m: v}))
+            except Exception as exc:
+                failures.append(f"follower {motor}: {exc}")
+        return failures
+
     def execute(self, config_path: Path, caps: dict, *, teleop_only: bool, task_card: Path | None = None) -> dict:
         record = {"config": str(config_path), "caps": caps, "teleop_only": teleop_only, "started": time.time(),
                   "release": release()}
@@ -189,8 +215,7 @@ class Session:
             record["task_card"] = {"path": str(task_card), "sha256": hashlib.sha256(text).hexdigest(),
                                    "text": text.decode("utf-8")}
         validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
-        saved = self._with_follower(self.check_idle)
-        record["saved_caps"] = saved
+        self._with_follower(self.check_idle)
         stopped = []
         try:
             self._with_follower(lambda bus: self.write_caps(bus, caps))
@@ -203,34 +228,36 @@ class Session:
             self.log(step="run", command=command)
             record["exit_code"] = self.run_command(command)
         finally:
-            for attempt in range(5):  # the recorder may still be releasing the port
-                try:
-                    record["torque_after"] = self._with_follower(self.all_torque_off)
-                    break
-                except Exception as exc:
-                    record["torque_after"] = f"error: {exc}"
-                    self.sleep(0.5)
-            try:
-                leader = self.open_bus("leader")
-                try:
-                    leader.motor = LEADER_GRIPPER
-                    leader.write("torque", 0)
-                    record["leader_gripper_torque_after"] = leader.read("torque")
-                finally:
-                    leader.close()
-            except Exception as exc:
-                record["leader_gripper_torque_after"] = f"error: {exc}"
-            try:
-                self._with_follower(lambda bus: self.write_caps(bus, saved))
-                record["caps_restored"] = True
-            except Exception as exc:
-                record["caps_restored"] = f"error: {exc}"
-            for unit in stopped:
-                self.systemctl("start", unit)
-            record["restarted_services"] = stopped
-            record["ended"] = time.time()
-            self.log(step="session", **record)
+            with no_interrupts():
+                self.finish(record, stopped)
         return record
+
+    def finish(self, record: dict, stopped: list) -> None:
+        torque_ok, record["torque_after"] = self.torque_off_until_confirmed()
+        try:
+            leader = self.open_bus("leader")
+            try:
+                leader.motor = LEADER_GRIPPER
+                leader.write("torque", 0)
+                record["leader_gripper_torque_after"] = leader.read("torque")
+            finally:
+                leader.close()
+        except Exception as exc:
+            record["leader_gripper_torque_after"] = f"error: {exc}"
+        failures = self.restore_caps()
+        record["caps_restored"] = not failures or failures
+        for unit in stopped:
+            try:
+                self.systemctl("start", unit)
+            except Exception as exc:
+                record.setdefault("service_errors", []).append(f"{unit}: {exc}")
+        record["restarted_services"] = stopped
+        record["safe_end"] = torque_ok and not failures
+        record["ended"] = time.time()
+        self.log(step="session", **record)
+        if not record["safe_end"]:
+            self.log(step="UNSAFE_END", torque_after=record["torque_after"], caps_restored=record["caps_restored"],
+                     action="switch off the follower power and restore the caps before the next session")
 
 
 def main(argv=None):
@@ -260,14 +287,34 @@ def main(argv=None):
         done = subprocess.run(["systemctl", "--user", verb, unit], capture_output=True, text=True, timeout=30)
         return done.stdout.strip()
 
-    session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl,
-                      run=lambda command: subprocess.call(command), log=log)
+    def run(command):
+        """The recorder in its own session: our Ctrl-C/SIGTERM/SIGHUP reaches it only as one SIGINT,
+        with 10 s to save the episode, then it is killed."""
+        child = subprocess.Popen(command, start_new_session=True)
+        try:
+            return child.wait()
+        except KeyboardInterrupt:
+            with no_interrupts():
+                child.send_signal(signal.SIGINT)
+                try:
+                    child.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+            raise
+
+    protect_signals()
+    session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log)
     lock = session_lock()
+    record = {}
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
     finally:
         lock.close()
-    Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+        if record:
+            Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+    if not record.get("safe_end"):
+        raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)
 
 
