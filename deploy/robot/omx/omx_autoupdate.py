@@ -5,17 +5,23 @@ Native (D-246): the device owners run on the host, so updates are release direct
 atomic `current` symlink, not containers. One run (a user systemd timer calls it every few minutes):
 
 1. read the newest commit of the tracked branch (anonymous HTTPS for the public code repository);
-2. wait until every required GitHub check of that commit completed successfully (`ci-result`);
+2. trust gate: every required check completed successfully and was reported by GitHub Actions; the
+   commit descends from the installed one (a force-push back to old code is refused); optionally
+   GitHub must show it as a verified signed commit (`require_verified_commit`);
 3. unpack only the configured paths of that commit into `releases/<sha12>` and write `RELEASE`;
-4. smoke-check the release (its tools import with the configured interpreter);
+4. environment: one venv per sha256 of the release's `requirements-cell.lock` (`envs/<hash12>`),
+   built with `base_python` before the idle gate and reused while the lock is unchanged; the release
+   is smoke-checked with that venv (its tools import);
 5. switch only when the cell is idle: no recording session holds `session.lock`, no process has the
    follower or leader serial device open, and every follower motor reports torque OFF; otherwise the
    prepared release waits for the next run;
-6. move `current` atomically, re-run the smoke check through `current`, and roll back on failure;
-7. keep the newest `keep` releases (always the current and previous ones).
+6. move `current` and `current-env` atomically, re-run the smoke check through them, and roll back on
+   failure;
+7. keep the newest `keep` releases and the venvs they use (always the current and previous ones).
 
 Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
-`systemctl --user disable --now rosy-omx-autoupdate.timer`. Signing (D-441) is a later step.
+`systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
+branch protection of main, the Actions-reported checks and the ancestry rule.
 
   omx_autoupdate.py --config ~/.config/rosy/omx-autoupdate.json run [--dry-run]
   omx_autoupdate.py --config ... status | rollback
@@ -24,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import io
 import json
 import os
@@ -38,6 +45,7 @@ from pathlib import Path
 DEFAULT_PATHS = ("deploy/robot/omx", "contracts/foundation", "middleware/devices/omx/adapter",
                  "integrations/robots/omx", "learning/curation/omx", "test/test_omx_joint_tune.py",
                  "test/test_omx_record_session.py")
+LOCK = "deploy/robot/omx/requirements-cell.lock"
 SMOKE = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); "
          "import joint_tune, record_session, record_config; print('smoke ok')")
 
@@ -62,7 +70,24 @@ class Host:
         url = f"https://api.github.com/repos/{self.cfg['github_repo']}/commits/{sha}/check-runs?per_page=100"
         request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
         runs = json.load(urllib.request.urlopen(request, timeout=30))["check_runs"]
-        return {run["name"]: (run["status"], run["conclusion"]) for run in runs}
+        return {run["name"]: (run["status"], run["conclusion"], (run.get("app") or {}).get("slug"))
+                for run in runs}
+
+    def _api(self, path: str) -> dict:
+        request = urllib.request.Request(f"https://api.github.com/repos/{self.cfg['github_repo']}/{path}",
+                                         headers={"Accept": "application/vnd.github+json"})
+        return json.load(urllib.request.urlopen(request, timeout=30))
+
+    def descends(self, base: str, head: str) -> bool:
+        return self._api(f"compare/{base}...{head}")["status"] in {"ahead", "identical"}
+
+    def verified(self, sha: str) -> bool:
+        return bool(self._api(f"commits/{sha}")["commit"]["verification"]["verified"])
+
+    def build_env(self, lock: Path, target: Path) -> None:
+        subprocess.run([self.cfg["base_python"], "-m", "venv", str(target)], check=True, timeout=300)
+        subprocess.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
+                       check=True, timeout=3000)
 
     def archive(self, sha: str, paths, target: Path) -> None:
         mirror = Path(self.cfg["root"]) / "mirror.git"
@@ -75,8 +100,8 @@ class Host:
         with tarfile.open(fileobj=io.BytesIO(data)) as tar:
             tar.extractall(target, filter="data")
 
-    def smoke(self, release: Path) -> bool:
-        done = subprocess.run([self.cfg["python"], "-c", SMOKE], cwd=release, capture_output=True, text=True,
+    def smoke(self, release: Path, python: Path) -> bool:
+        done = subprocess.run([str(python), "-c", SMOKE], cwd=release, capture_output=True, text=True,
                               timeout=120)
         return done.returncode == 0 and "smoke ok" in done.stdout
 
@@ -98,12 +123,12 @@ class Host:
                 return True
         return False
 
-    def follower_torque_off(self, release: Path) -> bool:
+    def follower_torque_off(self, release: Path, python: Path) -> bool:
         code = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
                 f"bus = SerialBus({self.cfg['devices'][0]!r}, 0)\n"
                 "try:\n    on = []\n    for m in FOLLOWER:\n        bus.motor = m\n        on.append(bus.read('torque'))\n"
                 "finally:\n    bus.close()\nprint('torque', sum(on))")
-        done = subprocess.run([self.cfg["python"], "-c", code], cwd=release, capture_output=True, text=True,
+        done = subprocess.run([str(python), "-c", code], cwd=release, capture_output=True, text=True,
                               timeout=60)
         return done.returncode == 0 and done.stdout.strip() == "torque 0"
 
@@ -113,6 +138,7 @@ class Updater:
         self.cfg, self.host = cfg, host
         self.root = Path(cfg["root"])
         self.releases = self.root / "releases"
+        self.envs = self.root / "envs"
         self.state_path = self.root / "state.json"
 
     def state(self) -> dict:
@@ -126,20 +152,57 @@ class Updater:
         tmp.write_text(json.dumps(state, indent=2))
         os.replace(tmp, self.state_path)
 
-    def link(self, name: str) -> None:
-        tmp = self.root / "current.tmp"
-        if tmp.is_symlink() or tmp.exists():
-            tmp.unlink()
-        tmp.symlink_to(Path("releases") / name)
-        os.replace(tmp, self.root / "current")
+    def link(self, name: str, env: str) -> None:
+        for link, target in (("current-env", Path("envs") / env), ("current", Path("releases") / name)):
+            tmp = self.root / f"{link}.tmp"
+            if tmp.is_symlink() or tmp.exists():
+                tmp.unlink()
+            tmp.symlink_to(target)
+            os.replace(tmp, self.root / link)
 
-    def idle(self, release: Path) -> str | None:
+    def unlink(self) -> None:
+        for link in ("current", "current-env"):
+            if (self.root / link).is_symlink():
+                (self.root / link).unlink()
+
+    def env_for(self, release: Path) -> str:
+        """The venv for this release's lock, built once per lock hash."""
+        lock = release / LOCK
+        name = hashlib.sha256(lock.read_bytes()).hexdigest()[:12]
+        target = self.envs / name
+        if not target.exists():
+            staging = self.envs / f"{name}.tmp"
+            shutil.rmtree(staging, ignore_errors=True)
+            self.envs.mkdir(parents=True, exist_ok=True)
+            self.host.build_env(lock, staging)
+            os.replace(staging, target)
+            log(step="env_built", env=name)
+        return name
+
+    def python(self, env: str) -> Path:
+        return self.envs / env / "bin" / "python"
+
+    def idle(self, release: Path, env: str) -> str | None:
         if self.host.session_busy():
             return "session_running"
         if self.host.device_in_use():
             return "device_in_use"
-        if not self.host.follower_torque_off(release):
+        if not self.host.follower_torque_off(release, self.python(env)):
             return "follower_torque_not_off"
+        return None
+
+    def trusted(self, sha: str, state: dict) -> str | None:
+        checks = self.host.checks(sha)
+        for required in self.cfg["required_checks"]:
+            status = checks.get(required)
+            if status is None or status[0] != "completed":
+                return "waiting_ci"
+            if status[1] != "success" or status[2] != "github-actions":
+                return "ci_failed"
+        if state.get("current_sha") and not self.host.descends(state["current_sha"], sha):
+            return "not_descendant"
+        if self.cfg.get("require_verified_commit") and not self.host.verified(sha):
+            return "unverified_commit"
         return None
 
     def run(self, *, dry_run: bool = False) -> str:
@@ -153,15 +216,10 @@ class Updater:
         if name == state.get("failed"):  # do not refetch a release that failed until main moves on
             log(step="known_bad", release=name)
             return "known_bad"
-        checks = self.host.checks(sha)
-        for required in self.cfg["required_checks"]:
-            status = checks.get(required)
-            if status is None or status[0] != "completed":
-                log(step="waiting_ci", release=name, check=required, status=status)
-                return "waiting_ci"
-            if status[1] != "success":
-                log(step="ci_failed", release=name, check=required, status=status)
-                return "ci_failed"
+        refused = self.trusted(sha, state)
+        if refused:
+            log(step=refused, release=name)
+            return refused
         release = self.releases / name
         if not release.exists():
             if dry_run:
@@ -172,7 +230,14 @@ class Updater:
             staging.mkdir()
             self.host.archive(sha, self.cfg["paths"], staging)
             (staging / "RELEASE").write_text(sha + "\n")
-            if not self.host.smoke(staging):
+            if not (staging / LOCK).exists():
+                shutil.rmtree(staging, ignore_errors=True)
+                state["failed"] = name
+                self.save(state)
+                log(step="no_environment_lock", release=name)
+                return "smoke_failed"
+            env = self.env_for(staging)
+            if not self.host.smoke(staging, self.python(env)):
                 shutil.rmtree(staging, ignore_errors=True)
                 state["failed"] = name
                 self.save(state)
@@ -180,25 +245,26 @@ class Updater:
                 return "smoke_failed"
             os.replace(staging, release)
             log(step="prepared", release=name)
-        busy = self.idle(release)
+        env = self.env_for(release)
+        busy = self.idle(release, env)
         if busy:
             log(step="deferred", release=name, reason=busy)
             return "deferred"
         if dry_run:
             log(step="would_switch", release=name)
             return "would_switch"
-        previous = state["current"]
-        self.link(name)
-        if not self.host.smoke(self.root / "current"):
+        previous, previous_env = state["current"], state.get("env")
+        self.link(name, env)
+        if not self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python"):
             if previous:
-                self.link(previous)
+                self.link(previous, previous_env)
             else:  # first install: leave no current pointing at a broken release
-                (self.root / "current").unlink()
+                self.unlink()
             log(step="rolled_back", release=name, to=previous)
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})
             self.save(state)
             return "rolled_back"
-        state.update(current=name, previous=previous)
+        state.update(current=name, previous=previous, current_sha=sha, env=env, previous_env=previous_env)
         state["history"] = (state["history"] + [{"release": name, "result": "active", "at": time.time()}])[-50:]
         self.save(state)
         self.cleanup(state)
@@ -209,12 +275,14 @@ class Updater:
         state = self.state()
         if not state["previous"]:
             return "no_previous"
-        busy = self.idle(self.releases / state["previous"])
+        busy = self.idle(self.releases / state["previous"], state["previous_env"])
         if busy:
             log(step="deferred", reason=busy)
             return "deferred"
-        self.link(state["previous"])
-        state.update(current=state["previous"], previous=state["current"])
+        self.link(state["previous"], state["previous_env"])
+        # current_sha is dropped: after a manual rollback the next forward update is not refused as older
+        state.update(current=state["previous"], previous=state["current"], env=state["previous_env"],
+                     previous_env=state["env"], current_sha=None)
         self.save(state)
         log(step="rolled_back_manually", release=state["current"])
         return "rolled_back"
@@ -226,6 +294,10 @@ class Updater:
         for path in names[self.cfg["keep"]:]:
             if path.name not in keep:
                 shutil.rmtree(path, ignore_errors=True)
+        used = {state.get("env"), state.get("previous_env")}
+        for path in self.envs.iterdir() if self.envs.exists() else ():
+            if path.is_dir() and not path.name.endswith(".tmp") and path.name not in used:
+                shutil.rmtree(path, ignore_errors=True)
 
 
 def load_config(path: Path) -> dict:
@@ -235,7 +307,7 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("paths", list(DEFAULT_PATHS))
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", "~/rosy-omx"))
-    missing = [k for k in ("repo_url", "github_repo", "python", "devices") if not cfg.get(k)]
+    missing = [k for k in ("repo_url", "github_repo", "base_python", "devices") if not cfg.get(k)]
     if missing or not cfg["required_checks"] or cfg["keep"] < 2:
         raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
     return cfg

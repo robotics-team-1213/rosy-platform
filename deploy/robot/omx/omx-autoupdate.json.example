@@ -4,7 +4,8 @@
   "branch": "main",
   "required_checks": ["ci-result"],
   "root": "~/rosy-omx",
-  "python": "/home/<user>/venv/bin/python",
+  "base_python": "/home/<user>/.local/bin/python3.12",
+  "require_verified_commit": false,
   "devices": ["/dev/serial/by-id/<follower>", "/dev/serial/by-id/<leader>"],
   "keep": 3
 }
