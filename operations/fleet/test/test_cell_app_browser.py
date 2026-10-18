@@ -330,7 +330,8 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
-    expect(page.locator("#cell-purpose")).to_contain_text("레시피와 셀 문서를 준비")
+    expect(page.get_by_role("heading", level=1)).to_have_text("팔레타이징 작업 준비")
+    expect(page.locator("#cell-purpose")).to_contain_text("레시피와 작업대 설정으로 적재 계획")
     expect(page.locator("#cell-purpose")).to_contain_text("승인·진행")
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
         status=503, json={"detail": {"code": "CELL_APP_UNCONFIGURED"}}))
