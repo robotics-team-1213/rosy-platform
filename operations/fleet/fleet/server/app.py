@@ -438,7 +438,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.cell_goal_evidence_service = cell_goal_evidence_service
     app.state.deployment_profile = deployment_profile
     app.state.proposal_store = proposal_store
-    app.state.omx_instances = configured_omx
+    app.state.omx_instances, app.state.omx_stop_transport = configured_omx, stop_transport
     app.state.localization_service = localization_service
     if task_service is not None:
 
