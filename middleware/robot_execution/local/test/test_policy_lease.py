@@ -85,6 +85,19 @@ def test_late_response_does_not_extend_deadline(wire):
     with pytest.raises(PermissionError): consumer.acquire()
 
 
+def test_renewal_cannot_bridge_expired_old_authority_even_if_new_lease_is_live(wire):
+    old = wire.consumer.acquire()
+    wire.clock[0] = 100.4
+    wire.response.update(issued_ns=1_000_750_000_000, expires_ns=1_001_750_000_000)
+    def request(*args):
+        wire.clock[0] += .18
+        return wire.request(*args)
+    wire.consumer.request = request
+    with pytest.raises(PermissionError): wire.consumer.renew(SimpleNamespace(lease=old))
+    assert not wire.consumer.authority(old)
+    with pytest.raises(PermissionError): wire.consumer.acquire()
+
+
 def test_renewal_accepts_old_and_pending_then_commits_new_authority(wire):
     old = wire.consumer.acquire()
     wire.clock[0] = 100.4
