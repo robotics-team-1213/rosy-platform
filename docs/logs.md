@@ -9029,3 +9029,9 @@ osy-d395-s1d\`.
 - 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
 - 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
 - gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-18 · uncommitted · land.py 통과 결과 캐시
+
+- 변경: `tools/land.py`가 통과한 pytest 호출을 공통 git 디렉터리의 `rosy-land-cache.jsonl`에 남기고(`tools/land_cache.py`), 다시 돌릴 때 같은 git 트리·같은 명령·같은 시험 환경 해시(`remote_pytest.deps`)면 건너뛴다. `--tests auto`에서는 조상 커밋에서 통과한 호출도 그 사이 차이에 D-436 셀렉터가 그 호출의 경로를 고르지 않으면(FULL 아님, 삭제·이름바꿈 없음, known_failures 목록 그대로) 다시 쓰고, 그때는 pre-push용 land record를 남기지 않는다. 실패, LOAD-FLAKY, 중단·호스트 유실이 있는 실행은 남기지 않는다. lint·safety-review·size-range·node는 늘 돈다. `--no-cache`로 끈다.
+- 증거: 2026-10-18 큰 머지 한 건을 다섯 번 다시 착지하며(네트워크 끊김, 한 줄 수정, main 이동) 매번 약 11,000개 시험(약 20분)을 다시 돌렸다. 로컬 `test/test_land.py`.
+- gate 변화: 없음.
