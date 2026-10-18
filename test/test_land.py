@@ -794,3 +794,52 @@ def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
     land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # would block a queued run
     assert land.main(["--tests", "none", "--no-queue"]) == 0
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
+    """Run 1: the FULL tier passes while a peer lands, then the delta round loses its test host."""
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    calls = []
+
+    def select(wt_, base, python, head=None):
+        calls.append(head)
+        return [["pkg/test"]], (None if head else "selector escalated to FULL")
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        if round_no == 2:
+            raise land.Stop("no test host reachable")
+        commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return ["pytest ok"]
+
+    monkeypatch.setattr(land, "select", select)
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 1
+    assert calls == [None, git(main, "rev-parse", "HEAD")]
+    calls.clear()
+    monkeypatch.setattr(land, "run_tests", lambda *a: ["pytest ok"])
+    return calls
+
+
+def test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass(repos, monkeypatch):
+    main, wt = repos
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [git(main, "rev-parse", "HEAD")], "delta selection only, no FULL tier"
+    assert not list((main / ".git" / land.land_full.RECORDS).glob("*")), "the record goes once landed"
+
+
+def test_a_branch_commit_after_the_full_pass_means_full_again(repos, monkeypatch):
+    main, wt = repos
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "fix after the FULL tier")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls[0] is None
+
+
+def test_a_merge_that_changed_more_than_main_voids_the_full_pass(repos, monkeypatch):
+    main, wt = repos
+    full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(main, {"lib/other.py": "peer = 2\n"}, "peer 2")
+    subprocess.run(["git", "-C", str(wt), "merge", "--no-commit", "--no-ff", "main"], check=True, capture_output=True)
+    commit(wt, {"pkg/a.py": "x = 4\n"}, "merge main, with an edit of its own")
+    assert land.land_full.restore(wt, "feat/x") is None
