@@ -1,5 +1,5 @@
 [Unit]
-Description=Load the iTCO hardware watchdog (kmod deny-lists it; modules-load.d cannot) (D-530)
+Description=Load a supported PC hardware watchdog (D-530)
 DefaultDependencies=no
 After=systemd-modules-load.service
 Before=sysinit.target
@@ -7,7 +7,7 @@ Before=sysinit.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/modprobe iTCO_wdt
+ExecStart=/bin/sh -c 'test -c /dev/watchdog0 || /usr/sbin/modprobe iTCO_wdt; test -c /dev/watchdog0 || /usr/sbin/modprobe wdat_wdt; test -c /dev/watchdog0'
 
 [Install]
 WantedBy=sysinit.target

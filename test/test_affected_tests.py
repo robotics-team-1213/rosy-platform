@@ -466,6 +466,21 @@ def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
     assert affected._full_tier_ros("middleware/devices/pinky/bringup/test/test_y.py") == "base"
 
 
+@pytest.mark.parametrize("flags", [[], ["--ignore=test/test_host_recovery.py"]])
+def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
+    """PR #95: the unsplit root suite reached only 60% before the 25-minute limit."""
+    repo = affected.Repo.load(ROOT)
+    full = [e["invocations"][0] for e in affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+            if e["name"].startswith("root-test-")]
+    other = "learning/registry/policy/test"
+    sel = affected.Selection("affected", [], invocations=[["test", other, *flags]])
+    matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
+    assert [e["invocations"][0] for e in matrix] == [[other, *flags], *[group + flags for group in full]]
+    assert all(e["gating"] for e in matrix)
+    assert [e["ros"] for e in matrix] == ["none", *["overlay"] * len(full)]
+    assert sorted(p for group in full for p in group) == sorted(p for p in repo.test_files if p.startswith("test/"))
+
+
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
