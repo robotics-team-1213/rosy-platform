@@ -589,7 +589,8 @@ def test_logs_md_edit_of_an_existing_entry_still_refuses():
 @pytest.mark.parametrize("files, calls_expected, code", [
     # A NEW guard failure stops before the long round (pkg/test never runs).
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert False\n", "pkg/a.py": "x = 2\n"},
-     [[["test/architecture"]], [["test/architecture/test_rule.py::test_rule"]]], 1),  # D-790: rerun alone once
+     [[["test/architecture"]], [["test/architecture/test_rule.py::test_rule"]],  # D-790: rerun alone once
+      [["test/architecture/test_rule.py::test_rule"]]], 1),  # then once on main (MAIN-RED check)
     # Green guards, then the round as selected.
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"},
      [[["test/architecture"]], [["pkg/test", "test/architecture/test_rule.py"]]], 0),
