@@ -23,6 +23,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `preflight.py` | Multi-workcell preflight over the host inventory |
 | `run_pilot_sim.sh`, `probe_*.py`, `probe_*.sh` | Simulation and pilot probes (vendor owner, Fleet ROS vendor sim, pilot HTTP, pilot recording) |
 | `joint_tune.py` | Follower joint commissioning (IDs 11-16): bounded move of one joint (sag check at torque ON), gripper sweep of its ends; temporary limits/gains, always torque OFF and restored, camera frames per settled position |
+| `record_session.py` | One leader→follower LeRobot record/teleoperate session: follower caps raised only for the run, camera services handed over and back, always torque OFF and caps restored |
 | `requirements-lerobot-export.txt` | Python deps for demonstration export |
 
 ## Subdirectories
