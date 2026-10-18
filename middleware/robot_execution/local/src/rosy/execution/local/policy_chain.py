@@ -5,7 +5,7 @@ from .core_arm_policy import CoreArmPolicyPort
 from .omx_policy import OwnerPolicySession
 from .policy_install import InstalledPolicy
 from .policy_journal import PolicyExecutionJournal
-from .policy_lease import FleetLeaseConsumer
+from .policy_lease import FleetLeaseConsumer, MAX_HTTP_TIMEOUT_S
 
 SIM_POLICY_ENVIRONMENT = 'sim'
 
@@ -66,8 +66,10 @@ class SimPolicyChain:
 
     def _run(self):
         try:
-            while not self._stop.wait(self.consumer.max_duration_ns/4e9):
-                if self.session.hold_reason:
+            while not self._stop.is_set():
+                remaining = self.session.lease.expires_at_ns/1e9-self.consumer.monotonic()
+                wait = max(0, min(self.consumer.max_duration_ns/4e9, remaining-3*MAX_HTTP_TIMEOUT_S))
+                if self._stop.wait(wait) or self.session.hold_reason:
                     break
                 self.consumer.renew(self.session)
         except Exception:

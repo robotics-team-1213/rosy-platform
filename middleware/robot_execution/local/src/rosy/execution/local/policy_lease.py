@@ -12,6 +12,7 @@ from rosy.contracts.skill import AttemptIdentity
 from .omx_policy import PolicyLease
 
 MAX_LEASE_DURATION_NS = 1_000_000_000
+MAX_HTTP_TIMEOUT_S = .25
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,7 @@ class FleetPolicyHttp:
                 or parsed.query or parsed.fragment or parsed.path not in ('', '/')
                 or (parsed.scheme == 'http' and not (loopback_sim is True and loopback))
                 or type(timeout_s) not in (int, float) or not math.isfinite(timeout_s)
-                or not 0 < timeout_s <= .25):
+                or not 0 < timeout_s <= MAX_HTTP_TIMEOUT_S):
             raise ValueError('fixed authenticated TLS origin or explicit loopback SIM required')
         parsed.port  # Validate the port before using any credential.
         self.origin, self.token_file = origin.rstrip('/'), Path(token_file)
@@ -81,7 +82,7 @@ class FleetPolicyHttp:
                 raise ValueError('invalid credential file')
             call = dict(url=self.origin+path, method=method, body=body, token=token, timeout=self.timeout_s)
             # Kill and reap our exchange process on a total deadline, including DNS and a dripping response.
-            exchange = subprocess.run([sys.executable, '-I', '-c', _HTTP_EXCHANGE],
+            exchange = subprocess.run([sys.executable, '-I', '-S', '-c', _HTTP_EXCHANGE],
                 input=json.dumps(call, allow_nan=False), capture_output=True, text=True,
                 timeout=self.timeout_s, check=True)
             result = json.loads(exchange.stdout)
