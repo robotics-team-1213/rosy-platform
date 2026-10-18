@@ -11,6 +11,136 @@ PYTHON = Path(os.environ.get('ROSY_OMX_LEROBOT_PYTHON',
 
 
 @pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
+def test_rosy_omx_robot_plugin_contract(tmp_path):
+    script = r'''
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
+import draccus
+from types import SimpleNamespace
+import base64
+import numpy as np
+from lerobot.robots import Robot, RobotConfig
+import lerobot_robot_rosy_omx
+config = draccus.decode(RobotConfig, dict(type='rosy_omx', url='http://localhost:8080',
+    token_file='/not-read-before-connect', policy_revision='a'*64,
+    joint_names=['joint1', 'joint2'], camera_height=2, camera_width=2))
+robot = lerobot_robot_rosy_omx.RosyOmx(config)
+assert isinstance(robot, Robot)
+assert robot.observation_features == {'joint1.pos': float, 'joint2.pos': float, 'front': (2,2,3)}
+assert robot.action_features == {'joint1.pos': float, 'joint2.pos': float}
+assert not robot.is_connected
+assert 'rclpy' not in sys.modules
+try:
+    lerobot_robot_rosy_omx.validate_record_config(SimpleNamespace(policy=SimpleNamespace(
+        type='act', n_action_steps=4, temporal_ensemble_coeff=None)))
+except ValueError:
+    pass
+else:
+    raise AssertionError('queued ACT actions cannot acquire a fresh observation identity')
+lerobot_robot_rosy_omx.validate_record_config(SimpleNamespace(policy=SimpleNamespace(
+    type='act', n_action_steps=1, temporal_ensemble_coeff=None)))
+robot._client = SimpleNamespace(is_connected=True,
+    get_observation=lambda: dict(positions={'joint1': .1, 'joint2': .2},
+        camera=dict(rgb_base64=base64.b64encode(bytes(range(12))).decode())),
+    send_action=lambda positions: positions, disconnect=lambda: None)
+obs = robot.get_observation()
+assert obs['front'].shape == (2,2,3) and obs['front'].dtype == np.uint8
+assert obs['front'].reshape(-1).tolist() == list(range(12)) and obs['joint1.pos'] == .1
+assert robot.send_action({'joint1.pos':np.float32(.1), 'joint2.pos':.2})['joint2.pos'] == .2
+try:
+    robot.send_action({'joint1.pos':True, 'joint2.pos':.2})
+except ValueError:
+    pass
+else:
+    raise AssertionError('bool is not a joint target')
+from unittest.mock import Mock
+from lerobot.teleoperators import Teleoperator
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.scripts.lerobot_record import record_loop
+features = {key: dict(dtype='float32', shape=(2,), names=['joint1.pos', 'joint2.pos'])
+            for key in ('action', 'observation.state')}
+features['observation.images.front'] = dict(dtype='image', shape=(2,2,3),
+                                         names=['height', 'width', 'channels'])
+dataset = LeRobotDataset.create(repo_id='local/core-plugin-fixture', root=Path(sys.argv[2])/'recorded',
+    fps=10, features=features, robot_type=robot.name, use_videos=False, video_backend='pyav',
+    image_writer_threads=len(robot.cameras))
+teleop = Mock(spec=Teleoperator)
+teleop.get_action.return_value = {'joint1.pos':.1, 'joint2.pos':.2}
+record_loop(robot=robot, events={'exit_early':False}, fps=10,
+    teleop_action_processor=lambda pair:pair[0], robot_action_processor=lambda pair:pair[0],
+    robot_observation_processor=lambda obs:obs, dataset=dataset, teleop=teleop,
+    control_time_s=.01, single_task='synthetic CORE plugin fixture')
+dataset.save_episode()
+dataset.finalize()
+assert dataset.meta.total_frames == 1 and dataset.meta.total_episodes == 1
+robot._client = None
+from dataclasses import replace
+from rosy.integrations.robots.omx.deployment import deployment_report
+token_file = Path(sys.argv[2])/'core-token'
+token_file.write_text('private-fixture-token')
+probe_config = SimpleNamespace(robot=replace(config, token_file=str(token_file)), policy=None)
+probes = []
+class ReadOnlyClient:
+    def __init__(self, *args, **kwargs):
+        self.info = dict(policy_revision='a'*64, simulation=True, units='rad',
+                        joint_names=['joint1','joint2'], camera=dict(name='front', shape=[3,2,2]))
+    def connect(self):
+        probes.append('GET policy')
+    def disconnect(self):
+        raise AssertionError('a preflight must not stop an existing session')
+lerobot_robot_rosy_omx.CoreArmClient = ReadOnlyClient
+simulation = deployment_report(probe_config, target='sim')
+assert simulation['ready'] is True and simulation['device_execution'] is False
+physical = deployment_report(probe_config, target='real')
+assert physical['ready'] is False
+assert 'PHYSICAL_POLICY_RUNTIME_CLOSED' in physical['blockers']
+assert physical['policy_revision'] == 'a'*64
+assert probes == ['GET policy', 'GET policy']
+assert 'private-fixture-token' not in str(physical)
+from rosy.integrations.robots.omx.deployment import main as preflight_main
+from lerobot.scripts.lerobot_record import DatasetRecordConfig, RecordConfig
+from lerobot.policies.act.configuration_act import ACTConfig
+import hashlib, json
+checkpoint = Path(sys.argv[2])/'checkpoint'
+checkpoint.mkdir()
+(checkpoint/'model.safetensors').write_bytes(b'synthetic hash fixture, not a usable model')
+(checkpoint/'config.json').write_text('{}')
+record_cfg = RecordConfig(robot=probe_config.robot,
+    dataset=DatasetRecordConfig(repo_id='local/preflight', single_task='fixture', push_to_hub=False),
+    policy=ACTConfig(n_action_steps=1, pretrained_path=checkpoint))
+private_config = Path(sys.argv[2])/'preflight-config.json'
+private_config.write_text(json.dumps(draccus.encode(record_cfg)))
+report_file = Path(sys.argv[2])/'preflight-result.json'
+assert preflight_main(['--target','real','--config',str(private_config),'--out',str(report_file)]) == 3
+report = json.loads(report_file.read_text())
+assert report['checkpoint_sha256']['model.safetensors'] == hashlib.sha256(
+    (checkpoint/'model.safetensors').read_bytes()).hexdigest()
+assert report['ready'] is False and report['deployment'] is False
+original = report_file.read_bytes()
+try:
+    preflight_main(['--target','sim','--config',str(private_config),'--out',str(report_file)])
+except SystemExit as error:
+    assert error.code == 2
+else:
+    raise AssertionError('an existing deployment record must not be replaced')
+assert report_file.read_bytes() == original
+class UnavailableClient(ReadOnlyClient):
+    def connect(self):
+        raise RuntimeError('private fixture error must not escape into the report')
+lerobot_robot_rosy_omx.CoreArmClient = UnavailableClient
+blocked = deployment_report(probe_config, target='sim')
+assert blocked['ready'] is False and blocked['core_ready'] is False
+assert blocked['blockers'] == ['CORE_ARM_UNAVAILABLE_OR_INCOMPATIBLE']
+print('ROSY_OMX_PLUGIN_PASS')
+'''
+    result = subprocess.run([str(PYTHON), '-c', script, str(ROOT), str(tmp_path)],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'ROSY_OMX_PLUGIN_PASS' in result.stdout
+
+
+@pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
 def test_official_config_reader_and_split_roundtrip(tmp_path):
     script = r'''
 import copy, hashlib, json, subprocess, sys

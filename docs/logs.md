@@ -9043,3 +9043,16 @@ osy-d395-s1d\`.
 - 변경: Fleet에 학습 정책 단계(L0→L3→LIMITED, 한 단계씩)·승인 창(shadow/입회 시험/제한 사용)·확인 요청·사고 잠금·실행 lease 기록과 `/api/fleet/workcells/{id}/policy/*` 경로, `/console/policy` 화면을 더했다. 실물 단계·사고 해제는 제안자와 다른 관리자가 승인하고, 열린 확인 요청·사고는 새 lease를 막는다. API Reference v1.266 §10.18.
 - 증거: 원격 pytest와 node 규칙 시험. 결과는 커밋 메시지와 후속 행에 남긴다.
 - gate 변화: 없음. lease의 장치 전달(OMX UDS)·shadow 실행기·실물 수용은 후속이며 학습 정책의 실물 실행 경로는 여전히 없다.
+
+## 2026-10-18 · 5e3af70e6d · D-800 CORE 경유 OMX–LeRobot 연동
+
+- 변경: 기존 OMX owner와 watchdog을 유지하는 선택적 CORE arm 관측·후보·정지 API(v1.271), HTTP 전용 LeRobot Robot 및 공식 recorder 진입점을 추가했다. 설치 절차와 검증 기록을 연결했다.
+- 증거: 최종 코드의 원격 CORE/native ROS/실제 SDK 22 passed/0 skipped, 기존 UI 브라우저 45 passed/0 skipped. 독립 소스 리뷰와 안전 trailer·크기 검사 통과. 상세 출처는 validation/core-omx-lerobot-2026-10-18/result.md.
+- 추가 검증: 전체 영향 범위 22개 분할에서 27,638 passed/1,916 skipped와 safety symbol anchor 누락 1건을 확인했다. 8beeb47ef2에서 등록 보완 후 관련 계약 170 passed/0 skipped, NEW 0. 원래 실패 기록도 보존했다.
+- gate 변화: SIM 연동만 검증했다. 실물 정책 승인·Fleet lease 전달·설치 profile·작업 성공·배포 수용을 승격하지 않았다.
+
+## 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
+
+- 변경: 사용자 커밋·머지 요청에 따라 main을 통합하고, 출처·체크섬을 포함하는 client wheel workflow와 GET-only preflight를 추가했다. 사용자가 실물 대상·승인 정책이 없다고 답했으므로 실물 target의 차단 결과를 유지했다.
+- 증거: CORE/native ROS/실제 SDK 22 passed, 실제 workflow build·오프라인 wheel 설치 보완 후 1 passed/0 skipped/NEW 0. 독립 계약 소스 리뷰 완료. validation/core-omx-deployment-2026-10-18/result.md 참조.
+- gate 변화: 배포 준비 코드·시험이며 장치 설치·승인·실물 구동·GitHub CI 수용은 아니다. 로컬 착지는 tools/land.py 검증을 따르고 push는 하지 않는다.

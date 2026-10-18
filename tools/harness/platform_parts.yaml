@@ -693,7 +693,7 @@ roots:
     integration: robots
     d427_target: integrations/robots/omx
     wave: none
-    import_prefix: [rosy.integrations.robots.omx]
+    import_prefix: [rosy.integrations.robots.omx, lerobot_robot_rosy_omx]
     concern: control
   - path: integrations/simulation/gazebo
     part: integrations
@@ -859,6 +859,7 @@ safety_modules:
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
   - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
+  - middleware/robot_execution/local/src/rosy/execution/local/core_arm_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
@@ -910,6 +911,7 @@ safety_anchors:
   - {symbol: core.drive.line_follow.bind_lane_return_motion}
   - {symbol: core.drive.docking.build_docking_and_swarm}
   - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
+  - {symbol: rosy.execution.local.core_arm_policy.CoreArmPolicyPort}
   - {symbol: core_features.safety.manager.SafetyManager}
   - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
   - {symbol: core_features.safety.manager.SafetyManager.release, public: true}

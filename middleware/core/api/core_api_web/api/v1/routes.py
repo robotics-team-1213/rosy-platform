@@ -9,6 +9,7 @@ API Ref §5 구현은 도메인별 모듈에 있다. 이 파일은 그것들을 
 from __future__ import annotations
 
 from core_api_web.api.v1.auth import auth_router
+from core_api_web.api.v1.arm import arm_router
 from core_api_web.api.v1.calibration import calibration_router
 from core_api_web.api.v1.common import admin, enter_navigation_mode, operator, viewer
 from core_api_web.api.v1.control import control_router
@@ -44,6 +45,7 @@ vision_router.include_router(media_router)
 
 __all__ = [
     "admin",
+    "arm_router",
     "auth_router",
     "calibration_router",
     "control_router",
