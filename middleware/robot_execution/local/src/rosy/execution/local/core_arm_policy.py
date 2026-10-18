@@ -71,20 +71,20 @@ class CoreArmPolicyPort:
             return asdict(self.session.submit(candidate))
 
     def stop(self):
-        with self._lock:
-            self._pending = None
-            identity = self.session.lease.identity
-            request = LocalStopRequest(workcell_id=identity.workcell_id, instance_id=identity.instance_id,
-                authority_epoch=identity.authority_epoch, dispatch_generation=identity.dispatch_generation,
-                requested_at=datetime.now(timezone.utc), reason='CORE_OPERATOR_STOP')
+        # A stalled RGB provider holds the I/O lock; stop must reach the fence without it.
+        self._pending = None
+        identity = self.session.lease.identity
+        request = LocalStopRequest(workcell_id=identity.workcell_id, instance_id=identity.instance_id,
+            authority_epoch=identity.authority_epoch, dispatch_generation=identity.dispatch_generation,
+            requested_at=datetime.now(timezone.utc), reason='CORE_OPERATOR_STOP')
 
-            def cancel_session():
-                try:
-                    self.session.poll()
-                except PermissionError:
-                    pass  # The closed fence latches HOLD and cancels the session's own command.
+        def cancel_session():
+            try:
+                self.session.poll()
+            except PermissionError:
+                pass  # The closed fence latches HOLD and cancels the session's own command.
 
-            latch = self.session.fence.trip(request, source=StopRequestSource.OPERATOR_LOCAL,
-                                           cancel_active=cancel_session)
-            return dict(local_stop=latch.model_dump(mode='json'),
-                        hold_reason=self.session.hold_reason, physical_stop_verified=False)
+        latch = self.session.fence.trip(request, source=StopRequestSource.OPERATOR_LOCAL,
+                                       cancel_active=cancel_session)
+        return dict(local_stop=latch.model_dump(mode='json'),
+                    hold_reason=self.session.hold_reason, physical_stop_verified=False)
