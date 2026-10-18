@@ -91,6 +91,18 @@ freshness 기준·thread 수·known failures·quarantine은 바꾸지 않았다.
 표기였다. 원래 과거 행을 제자리에 복구하고 새 항목을 끝에만 추가했으며,
 실제 로그 hash를 같은 줄의 SHA256 표기로 고쳤다. 검사기·baseline은 변경하지 않는다.
 
+정정 commit `5d9fc07247`의 원격 최종 문서·구조·비밀·harness 검사는
+**248 passed / 0 skipped / NEW 0**, 로컬 lint는 0 errors였다. c32f56b762 이후
+이 검증을 수행한 commit까지의 변경은 `docs/logs.md`와 이 결과 문서뿐이다.
+최종 결과를 적은 후속 문서 commit에서 native 전체가 통과했다고 주장하지 않는다.
+
+- `fence-native/run-1.txt` SHA256: `1fc21a601818101717e51250daff927a08fbbb12fcaf9f4d3c9643b79fc255cd`.
+- `main-native/run-1.txt` SHA256: `4871c568bcc22a182480c944f9ed351c0f531b809ffe47da89b51e5ea4187e9d`.
+- `final-guards/run-1.txt` SHA256: `5d5595e2c2ba1c098540fcd64d24972d30650152c4026a985d7ec46c8e780e7a`.
+
+이 기록 당시 공유 main은 `a2076ddd8d`로 진행됐으나, 재현 main commit 대비
+변경 3파일에 adapter·native wrapper·의존성·conftest 수정은 없었다.
+
 ## 실제 Gazebo probe
 
 모델 시험 PC의 자원이 확보된 뒤 기존 OMX vendor overlay와 새로 격리한 Gazebo를
