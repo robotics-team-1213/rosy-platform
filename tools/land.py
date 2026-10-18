@@ -4,7 +4,10 @@ Run from a topic worktree (never the shared main checkout)::
 
     python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
                          [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune]
+                         [--queue-timeout MIN | --no-queue]
 
+Landings of one clone take turns (``land_queue.py``): the run waits in a FIFO queue under the git
+common dir until no live ticket is ahead, so it merges ``main`` once, after the one ahead landed.
 Each round merges the current local ``main`` into the branch, auto-resolves the
 append-only/generated conflicts (ADR Log, logs.md, adr_gaps.txt, index.md,
 STATUS.md; ``tools/harness/adr_gaps.txt`` arrives with the ADR-reservation
@@ -41,6 +44,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
 import land_guards  # noqa: E402  (structural guards before the long round)
+import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
+import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, plan,  # noqa: E402,F401  (conflict auto-resolve)
@@ -351,13 +356,22 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    if not (args.no_queue or args.dry_run):
+        before = out(wt, "rev-parse", "main")
+        safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
+        size_check(wt, before, "HEAD", python)
+        land_queue.join(wt, branch, args.queue_timeout * 60)  # main() releases the ticket on every exit
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
-    full_main: str | None = None  # main under this branch's last green FULL tier
+    # main under this branch's last green FULL tier, also from an earlier run (host lost, Ctrl-C, round cap)
+    full_main = land_full.restore(wt, branch) if args.tests == "auto" else None
+    if full_main:
+        summary.append(f"an earlier run's FULL tier passed over main {full_main[:10]} with this branch's change")
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
+        land_queue.touch()  # a held ticket stays fresh through long rounds
         reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
@@ -419,6 +433,7 @@ def land(args) -> int:
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
+            land_full.save(wt, branch, candidate, main_sha)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -432,6 +447,7 @@ def land(args) -> int:
         on_main(main_co)
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
+            land_full.forget(wt, branch)
             landed = out(main_co, "rev-parse", "HEAD")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
@@ -460,12 +476,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
     parser.add_argument("--no-prune", action="store_true", help="do not report finished worktrees either")
+    parser.add_argument("--queue-timeout", type=float, default=180, help="minutes to wait in the landing queue")
+    parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
     try:
         return land(args)
-    except Stop as exc:
+    except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
         return 1
+    finally:
+        land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID
 
 
 if __name__ == "__main__":
