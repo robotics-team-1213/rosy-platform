@@ -20,7 +20,7 @@ from typing import Callable, Iterator
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
-SERVICES = ("fleet", "vision", "proxy")
+SERVICES = ("fleet", "vision", "proxy", "postgres")
 PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
 SIGNATURE = "release.json.sig"

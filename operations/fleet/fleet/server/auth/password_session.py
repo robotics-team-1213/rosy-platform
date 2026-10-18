@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
 
-from fleet.server.site_auth import SitePrincipal
+from fleet.server.site_auth import SitePrincipal, legacy_grants
 from fleet.server.site_users import _LOGIN, hash_password, verify_password
 
 COOKIE = "rosy_fleet_session"
@@ -242,7 +242,8 @@ class PasswordSessions:
             if self._ledger.active:
                 return self._ledger.principal_for(account, fingerprint=self._ledger.credential_revision(account))
             return SitePrincipal(account["principal_id"], account["role"],
-                                 self._required[login], _digest(account["password_scrypt"]))
+                                 self._required[login], _digest(account["password_scrypt"]),
+                                 grants=legacy_grants(account))
         return None
 
     def _refund(self, keys, stamp: float) -> None:
@@ -458,7 +459,8 @@ class PasswordSessions:
             expiry = self._expiry(cached, now)
             if self._tombstoned(key) or expiry is None:
                 return None  # logged out while this request was in flight
-            return SitePrincipal(cached["principal_id"], cached["role"], self._required[cached["login"]]), _iso(expiry)
+            return SitePrincipal(cached["principal_id"], cached["role"], self._required[cached["login"]],
+                                 grants=legacy_grants(self._logins.get(cached["login"], {}))), _iso(expiry)
 
     def revoke(self, value: str) -> None:
         key = _digest(value)

@@ -93,11 +93,12 @@ def native_setup_cleanup(root):
 
 @pytest.mark.parametrize('revoke', [False, True])
 @pytest.mark.parametrize('with_parent',[False,True],ids=['native_only','parent_episode_fleet'])
-def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent, *, with_inference=False):
+def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent, *,
+                                                with_inference=False, with_core=False):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, _, _, authority, policy_root = setup_session(
         tmp_path,execution_journal=journal,max_lease_duration_ns=15_000_000_000,
-        camera=with_inference)
+        camera=with_inference or with_core)
     suffix = uuid4().hex[:10]
     prefix = '/isolated_policy_'+suffix
     rclpy.init()
@@ -141,6 +142,16 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             finally:entry['elapsed_ms'] = (time.monotonic()-entry['begin'])*1000
         runtime.action_port._event_sink = trace_sink
         install_transport_fixture(session,runtime,policy_root)
+        if with_core:
+            # Cold web imports precede the original capture and lease clocks.
+            from types import SimpleNamespace
+            sys.path[:0] = [str(ROOT/'middleware/core'/part) for part in ('api','gateway','services','events')]
+            from fastapi.testclient import TestClient
+            from core_api_web.api.app import create_app
+            from core_api_web.api.v1.common import operator
+            from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
+            from test_omx_policy_session import CameraSnapshot
+            rgb = bytes(range(12))
         if with_inference:
             # Explicit test-only numerical composition. Cold loading precedes the
             # original lease/grant issuance; inference never refreshes their clocks.
@@ -189,6 +200,10 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
         with session._lock:
             binding_started = runtime.monotonic()
             session.bind_runtime(runtime)
+            if with_core:
+                camera_capture = CameraSnapshot('front', 'cam-front', 'a'*64, (3,2,2),
+                    int(runtime.monotonic()*1e9), hashlib.sha256(rgb).hexdigest())
+                session._cameras = lambda: (camera_capture,)
             if with_inference:
                 camera_capture = CameraSnapshot('front', 'cam-front', 'a'*64, (3,8,8),
                     int(runtime.monotonic()*1e9), hashlib.sha256(rgb).hexdigest())
@@ -200,6 +215,22 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
         if with_parent:
             command,runner,api,parent=submit_parent(session,journal,tmp_path,
                 candidate_factory=prepare_inference if with_inference else None)
+        elif with_core:
+            port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera_capture), principal='fixture-operator')
+            app = create_app({}, SimpleNamespace(arm_policy=port,
+                safety=SimpleNamespace(estop=False, estop_listeners=[])))
+            app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='fixture-operator', role='operator')
+            with TestClient(app) as client:
+                source = client.post('/api/v1/arm/observations',
+                    json=dict(policy_revision=session.lease.policy_revision))
+                assert source.status_code == 200, source.text
+                response = client.post('/api/v1/arm/actions', json=dict(
+                    policy_revision=session.lease.policy_revision,
+                    observation_id=source.json()['observation_id'],
+                    positions={'joint_1': .101, 'joint_2': .001}))
+                assert response.status_code == 202, response.text
+                assert response.json()['accepted'] is True
+                command = response.json()['command_id']
         else:
             state, _ = session.capture_observation()
             action_candidate = candidate(session,sequence=state.sequence,
@@ -254,10 +285,14 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             files += ['learning/training/omx/'+path for path in ('act_inference.py', 'act_owner_capture.py',
                 'test/act_cpu_fixture.py', 'test/test_act_owner_capture.py', 'test/test_act_native_chain.py')]
             files += ['contracts/learning/src/rosy/contracts/learning/inference.py']
+        if with_core:
+            files += ['middleware/robot_execution/local/src/rosy/execution/local/core_arm_policy.py',
+                      'middleware/core/api/core_api_web/api/v1/arm.py',
+                      'middleware/core/api/core_api_web/api/app.py']
         scope = ('isolated actual CPU ACT and ROS transport; synthetic zero weights/capture/authority; '
                  'no trained quality/task/hardware/authenticated Fleet' if with_inference else
                  'isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet')
-        proof = dict(scope=scope,
+        proof = dict(scope=scope, core_http_admission=with_core,
             fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000,
                                 poll_period_s=.01),
             short_deadline_acceptance=False,revoke=revoke,journal=record,

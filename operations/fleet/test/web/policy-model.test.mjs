@@ -14,6 +14,8 @@ const empty = {incidents: [], confirmations: [], windows: [], now_ns: 0};
 test("legacy and account sessions map to the same governance roles", () => {
   assert.deepEqual(roles({principal_id: "a", role: "policy-admin"}), {me: "a", admin: true, operator: false});
   assert.deepEqual(roles({principal_id: "site-console", role: "operator"}).operator, false);
+  assert.deepEqual(roles({principal_id: "c", role: "operator", policy_admin: true}), {me: "c", admin: true, operator: true});
+  assert.equal(roles({principal_id: "d", role: "operator", policy_admin: false}).admin, false);
   const account = {principal_id: "b", account_id: "x", site_resource: "site:s",
     grants: [{resource: "site:s", capabilities: ["fleet.read", "fleet.operate", "fleet.policy"]}]};
   assert.deepEqual(roles(account), {me: "b", admin: true, operator: true});

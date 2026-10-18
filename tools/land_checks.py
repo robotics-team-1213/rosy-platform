@@ -6,7 +6,12 @@ the landing as NEW. ``load_flaky`` reruns such NEW ids once, each alone, in a se
 invocation. Every id passing alone is ``LOAD-FLAKY``: the landing continues and the ids go to a
 candidates file for a person to review for ``test/flaky_quarantine.txt`` (never added there by
 this tool). One id that fails again, more than ``MAX_RERUN`` NEW ids, or an id under a safety
-root (D-762: a safety test is never retried) stops the landing as before. Standard library only.
+root (D-762: a safety test is never retried) stops the landing as before.
+
+On 2026-10-18 a landed change left shared/web contract tests red on main and every later branch was
+refused for them as NEW. ``main_red`` reruns a stopping round's NEW ids once on ``main`` itself: ids
+that fail there too are ``MAIN-RED``. The landing still stops, but the message says main is broken
+and how to fix it. Standard library only.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ import time
 from pathlib import Path
 
 MAX_RERUN = 5  # more NEW ids than this is a real break, not load
+MAX_MAIN_CHECK = 30  # NEW ids rerun on main in one invocation (bounds the command line)
 NEW_LINE = re.compile(r"^NEW\s+(\S.*)$")
 ENV_TOKEN = re.compile(r"^[A-Z_][A-Z0-9_]*=")  # remote_pytest's opt-in tokens (ROSY_RUN_BROWSER_TESTS=1)
 CANDIDATES = "rosy-flaky-candidates.txt"  # in the git common dir: every worktree of this clone sees it
@@ -68,7 +74,17 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
     """Rerun the NEW ids of one invocation alone; ``(load-flaky ids, "")`` or ``([], why it stops)``.
 
     ``verdict`` is test/known_failures.py's output for ``log``; ``run`` is ``remote_pytest.run``.
+    A stop also says whether the ids fail on main too (``main_red``).
     """
+    ids, why = _rerun_alone(wt, inv, log, verdict, logdir, tag, python, run)
+    if ids:
+        return ids, why
+    where = main_red(wt, inv, verdict, logdir, tag, python, run)
+    return [], f"{why}; {where}" if where else why
+
+
+def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
+                 run) -> tuple[list[str], str]:
     ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
     if not ids or len(ids) > MAX_RERUN:
         return [], f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}"
@@ -93,3 +109,36 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
         print(f"LOAD-FLAKY {nodeid}")
     print(f"[land] candidates for review: {common / CANDIDATES}")
     return ids, ""
+
+
+def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, python: str, run) -> str:
+    """Rerun up to ``MAX_MAIN_CHECK`` NEW ids of ``verdict`` once on ``main``; one line for the stop message.
+
+    Never lets a landing through: it only says whether the failure is main's or the branch's.
+    """
+    ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    if not ids:
+        return ""
+    main = _git(wt, "rev-parse", "main").stdout.strip()
+    env = [token for token in inv if ENV_TOKEN.match(token)]
+    log = logdir / f"main-{tag}.txt"
+    print(f"[land] rerunning {min(len(ids), MAX_MAIN_CHECK)} NEW id(s) on main {main[:10]} (MAIN-RED check)",
+          flush=True)
+    try:
+        code = run([[*env, *ids[:MAX_MAIN_CHECK]]], [log], main, repo=wt, label=f"land-main-{tag}")[0]
+    except SystemExit as exc:  # no test host (D-584): unknown, not main's
+        return f"main check not run ({exc})"
+    if code == 0:
+        return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
+    if code != 1 or not log.is_file():
+        return f"main check gave no verdict (exit {code}, log {log}); new tests may not exist on main"
+    again = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+    red = [m.group(1).strip() for line in again.stdout.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    for nodeid in red:
+        print(f"MAIN-RED {nodeid}")
+    if not red:
+        return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
+    return (f"MAIN-RED: {len(red)} of {len(ids)} NEW id(s) also fail on main {main[:10]} (log {log}). Main is"
+            " broken, not this branch: fix main first in a small fix/ branch that changes only that, land it,"
+            " then rerun land.py here (check that no peer is already fixing it)")
