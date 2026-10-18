@@ -34,7 +34,7 @@ finite JSON numbers (no bool/string), 1–8 exact installed joints. Request obje
 forbid extras. No client timestamp, lease or reset is accepted.
 Wrong principal/failed owner authority: 403 `ARM_POLICY_FORBIDDEN`; mismatched,
 consumed or replaced source: 409 `ARM_POLICY_CONFLICT`; prior goal active:
-409 `ARM_POLICY_BUSY`; schema errors: 422. Never retry an uncertain action.
+409 `ARM_POLICY_BUSY`; schema errors: 400 (CORE ERR-101). Never retry an uncertain action.
 Capture time conservatively anchors action age; the owner rechecks source,
 lease, stop and envelope before submission. Clients wait for a fresh observation
 after completion. Observation data alone is not training ground truth.

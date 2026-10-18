@@ -675,7 +675,7 @@ roots:
     integration: robots
     d427_target: integrations/robots/omx
     wave: none
-    import_prefix: [rosy.integrations.robots.omx]
+    import_prefix: [rosy.integrations.robots.omx, lerobot_robot_rosy_omx]
     concern: control
   - path: integrations/simulation/gazebo
     part: integrations

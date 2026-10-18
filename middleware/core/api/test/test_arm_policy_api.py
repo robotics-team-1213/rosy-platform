@@ -2,7 +2,6 @@
 import base64
 import hashlib
 import io
-import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -111,7 +110,7 @@ def test_non_numeric_targets_never_reach_owner(tmp_path, bad):
     client, session, driver, *_ = setup_api(tmp_path)
     body = action(observation(client, session), session)
     body['positions']['joint_1'] = bad
-    assert client.post('/api/v1/arm/actions', json=body).status_code == 422
+    assert client.post('/api/v1/arm/actions', json=body).status_code == 400
     assert not driver.commands
 
 
