@@ -11,6 +11,32 @@ PYTHON = Path(os.environ.get('ROSY_OMX_LEROBOT_PYTHON',
 
 
 @pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
+def test_rosy_omx_robot_plugin_contract(tmp_path):
+    script = r'''
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
+import draccus
+from lerobot.robots import Robot, RobotConfig
+import lerobot_robot_rosy_omx
+config = draccus.decode(RobotConfig, dict(type='rosy_omx', url='http://localhost:8080',
+    token_file='/not-read-before-connect', policy_revision='a'*64,
+    joint_names=['joint1', 'joint2'], camera_height=2, camera_width=2))
+robot = lerobot_robot_rosy_omx.RosyOmx(config)
+assert isinstance(robot, Robot)
+assert robot.observation_features == {'joint1.pos': float, 'joint2.pos': float, 'front': (2,2,3)}
+assert robot.action_features == {'joint1.pos': float, 'joint2.pos': float}
+assert not robot.is_connected
+assert 'rclpy' not in sys.modules
+print('ROSY_OMX_PLUGIN_PASS')
+'''
+    result = subprocess.run([str(PYTHON), '-c', script, str(ROOT)],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'ROSY_OMX_PLUGIN_PASS' in result.stdout
+
+
+@pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
 def test_official_config_reader_and_split_roundtrip(tmp_path):
     script = r'''
 import copy, hashlib, json, subprocess, sys
