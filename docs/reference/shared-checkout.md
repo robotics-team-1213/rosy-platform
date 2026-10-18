@@ -2,7 +2,7 @@
 
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
 - **팀원 개인 클론이라면** 이 문서 대신 [팀 가이드](team-guide.md)를 따른다.
-- **갱신:** 2026-10-14 — 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
+- **갱신:** 2026-10-18 — 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
 
 ## 같이 하는 깃
 
@@ -22,7 +22,9 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `git worktree list`를 본 다음
    `python tools/worktrees.py new <짧은이름> <type>/<topic>`
    을 실행한다. 맨손 `git worktree add`는 쓰지 않는다. `<type>`은 내용과 맞는
-   `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 이 도구는
+   `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 한 브랜치에는 한 주제만 둔다.
+   착지 단위로 나눈다: 한 브랜치는 따로 착지할 수 있는 관심사 하나와 한 모듈 계열이고, 바뀐 파일이 15개를 넘거나 `tools/land.py --dry-run`이 FULL을 찍으면 먼저 나눌 수 있는지 본다(FULL 한 라운드는 시험 PC에서 30~90분이다). FULL 트리거(`tools/harness/**`, `contracts/foundation/**`)나 공유 자산(`shared/web`)을 바꾸는 부분은 제품 변경과 다른 브랜치로 먼저 착지한다. D-766 한도의 95% 이상인 파일·단위에 더할 일은 그 나누기 브랜치를 먼저 착지한다. 배경은 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md`다.
+   이 도구는
    아무것도 지우지 않고, 치울 수 있는 끝난 워크트리 개수와
    `python tools/worktrees.py prune --apply`를 알린다(D-761, Proposed). 그 명령은
    누가 만들었든 깨끗하고, `main`에 들어갔고, 잠기지 않았고, 충분히 쉰 것만
@@ -69,7 +71,7 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `python tools/land.py --tests auto`다. 손으로 할 때 착지는 워크트리에서 `git merge main`을
    하고 관련 테스트를 다시 돌린 다음, `main` 체크아웃에서
    `git merge --ff-only <브랜치>`를 한다. `--ff-only`가 거절되면 그 문구를
-   알리고, 다른 세션 파일을 치운 뒤 다시 시도하지 않는다. `tools/land.py`는 치울 수 있는
+   알리고, 다른 세션 파일을 치운 뒤 다시 시도하지 않는다. 멈춘 라운드의 NEW id는 `main`에서 한 번 더 돌린다. 거기서도 실패하는 id는 `MAIN-RED`로 찍히고 멈춤 문구가 main이 깨졌다고 적는다. 그때는 자기 브랜치를 고치지 말고, 동료가 이미 고치는지 본 다음 main만 고치는 작은 `fix/` 브랜치를 먼저 착지한다. `tools/land.py`는 치울 수 있는
    끝난 워크트리 개수를 알리기만 한다(`--prune`을 주면 치운다). 착지한 자신의 워크트리는
    `main` 체크아웃에서 명령 하나 `python tools/worktrees.py prune --apply`로 치운다. 보류하는 브랜치는 커밋해 두면 남고, 워크트리까지 남기려면
    `git worktree lock`으로 잠근다. 푸시 순서는 `AGENTS.md`의

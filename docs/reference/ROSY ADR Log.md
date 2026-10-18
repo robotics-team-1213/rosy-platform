@@ -796,6 +796,7 @@
 | D-793 | OMX 학습 정책의 실물 실행 승인 관문 — 학습은 실행 권한을 바꾸지 않고, 위험하면 멈춘 뒤 API로 확인받는다 | Proposed |
 | D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
+| D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
