@@ -1,5 +1,6 @@
 // D456 receiver-screen approval. A remembered camera is not a running stream or lease.
 const BASE = '/api/fleet/pairing/v2';
+import {createDeviceRequest} from '/console/assets/device-request.js';
 
 export function approvalBody(row, source, remember, who) {
   if (row?.state !== 'pending' || !Number.isInteger(row.revision) || row.revision < 0
@@ -18,12 +19,9 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
   const el = id => document.getElementById(id);
   let inFlight = false, busy = false, inView=true, deniedOwner='', pending = [], sources = [];
   const ownerKey = () => `${identity()?.principal_id || ''}:${identity()?.role || ''}:${headers().Authorization || headers().authorization || ''}`;
+  const request = createDeviceRequest({scope, headers});
   async function call(path,{method='GET',body}={}) {
-    const life = scope.capture();
-    life.check();
-    const response = await fetch(path,{method,headers:{...headers(),...(body ? {'Content-Type':'application/json'} : {})},
-      signal:life.signal, ...(body ? {body:JSON.stringify(body)} : {})});
-    life.check();
+    const response = await request(path, {method, ...(body ? {body} : {})});
     if (response.status===401 || response.status===403 || response.status===404) {
       deniedOwner=ownerKey(); clear();
       if (response.status===401) onUnauthorized();
@@ -32,7 +30,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
       if (error.status===401) error.message='현재 인증을 확인할 수 없습니다. 로그인 정보를 다시 확인하세요.';
       if (error.status===403) error.message='현재 운영자에게 카메라 연결 승인 권한이 없습니다.';
       throw error; }
-    const value = await response.json(); life.check(); return value;
+    return response.body;
   }
   const text = (tag,value) => {const node = document.createElement(tag); node.textContent=value; return node;};
   function button(label,action) {

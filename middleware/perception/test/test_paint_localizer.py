@@ -17,6 +17,17 @@ WORLD = stl_world()
 START = (-1.26955, 0.24255, -math.pi / 2)
 
 
+def test_birds_eye_cache_is_shared_and_invalidates_for_camera_offset():
+    from types import SimpleNamespace
+    from control.sensing.perception.lane_bev import cached_birds_eye
+
+    owner = SimpleNamespace(_camera_x=CAM_X, _view_key=None, _view=None)
+    first = cached_birds_eye(owner, GROUND, (240, 320))
+    assert cached_birds_eye(owner, GROUND, (240, 320)) is first
+    owner._camera_x += .01
+    assert cached_birds_eye(owner, GROUND, (240, 320)) is not first
+
+
 def localizer(pose=START, particles=300):
     return PaintLocalizer(PaintMap.from_bundle(), camera_x_offset_m=CAM_X,
                           particles=particles, seed=7).initialise(pose)

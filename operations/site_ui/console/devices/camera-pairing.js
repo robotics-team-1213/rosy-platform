@@ -3,6 +3,7 @@
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createCameraPairingPanel 이 화면 배선이다.
 
 import { createPollGate } from "/console/assets/poll-gate.js";
+import { createDeviceRequest } from "/console/assets/device-request.js";
 import { canManage } from "./enrollment.js";
 
 const BASE = "/api/fleet/pairing/v1";
@@ -134,25 +135,10 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
   };
 
   // 분류(detail.code/attempts_left)를 잃지 않으려고 셸의 call() 대신 쓴다.
-  async function call(path, { method = "GET", body } = {}) {
-    const life = scope.capture();
-    life.check();
-    const init = { method, headers: { ...headers() } };
-    if (body !== undefined) {
-      init.headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(body);
-    }
-    const resp = await fetch(path, {...init, signal: life.signal});
-    life.check();
-    let payload = null;
-    try {
-      payload = await resp.json();
-      life.check();
-    } catch (_err) {
-      life.check();
-      if (_err.name === "AbortError") throw _err;
-      payload = null;
-    }
+  const request = createDeviceRequest({scope, headers});
+  async function call(path, options = {}) {
+    const resp = await request(path, options);
+    const payload = resp.body;
     if (!resp.ok) {
       const error = new Error(`HTTP ${resp.status}`);
       error.status = resp.status;
