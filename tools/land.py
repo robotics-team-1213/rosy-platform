@@ -334,6 +334,22 @@ def on_main(main_co: Path) -> None:
         raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
 
 
+def pretest(wt: Path, branch: str, args, python: str) -> None:
+    """A FULL tier while waiting in the queue (v2 lap 2026-10-19: 5 landers ahead, each with its FULL tier
+    inside the queue, held a landing 100+ min). Green, it is recorded as the turn's ``land_full`` (D-762
+    stage 0): the turn then runs main's delta only. An affected tier is short and runs at the turn."""
+    main_sha = out(wt, "rev-parse", "main")
+    if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
+        merge(wt, main_sha, branch, python, False)
+    candidate = out(wt, "rev-parse", "HEAD")
+    invocations, note = select(wt, main_sha, python)
+    if not note:
+        return
+    print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
+    run_tests(wt, args, invocations, tmp_dir(branch), "pre")   # a NEW failure stops here, before the wait
+    land_full.save(wt, branch, candidate, main_sha)
+
+
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -360,7 +376,10 @@ def land(args) -> int:
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
-        land_queue.join(wt, branch, args.queue_timeout * 60)  # main() releases the ticket on every exit
+        qdir, ticket = land_queue.enter(wt, branch)  # main() releases the ticket on every exit
+        if args.tests == "auto" and land_queue.ahead(qdir, ticket) and land_full.restore(wt, branch) is None:
+            pretest(wt, branch, args, python)   # keeps its place: the FULL tier runs while the others land
+        land_queue.wait(qdir, ticket, args.queue_timeout * 60)
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None

@@ -766,6 +766,30 @@ def test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout(repos, mo
     assert queued(main) == [peer.name], "the waiting run removed its own ticket, not the peer's"
 
 
+def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos, monkeypatch, capsys):
+    """2026-10-19: five landers ahead, each with its FULL tier inside the queue, held a landing 100+ min."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2
+"}, "branch")
+    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")      # a live lander ahead
+    real_select, rounds = land.select, []
+    monkeypatch.setattr(land, "select", lambda *a, **k: (real_select(*a, **k)[0], "FULL tier (test)"))
+    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
+    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1                # the peer never leaves
+    assert rounds == ["pre"] and "FULL tier while waiting" in capsys.readouterr().out
+    assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
+
+
+def test_no_pretest_without_anyone_ahead(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2
+"}, "branch")
+    rounds = []
+    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
+    assert land.main(["--tests", "auto"]) == 0
+    assert "pre" not in rounds
+
+
 def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch):
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
