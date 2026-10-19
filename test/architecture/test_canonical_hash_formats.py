@@ -9,19 +9,19 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ASCII_COMPACT = 'bf5f3a724c0edc626e1d8627c4c003dda63ea2f5cf29d5460456b37c34853a39'
-UTF8_COMPACT = 'f75345d82281e57408262b04e08f63de354ea70eb40fb30b4d0d5324ce570e2e'
-ASCII_SPACED = 'a8ef4c89d0d703ed8662aa426e7aa5b9e8ab9a70f8b01459bd6e31ca896f525e'
+ASCII_COMPACT_SHA256 = 'bf5f3a724c0edc626e1d8627c4c003dda63ea2f5cf29d5460456b37c34853a39'
+UTF8_COMPACT_SHA256 = 'f75345d82281e57408262b04e08f63de354ea70eb40fb30b4d0d5324ce570e2e'
+ASCII_SPACED_SHA256 = 'a8ef4c89d0d703ed8662aa426e7aa5b9e8ab9a70f8b01459bd6e31ca896f525e'
 CASES = [
-    ('contracts/learning/src/rosy/contracts/learning/incident_handoff.py', 'digest', ASCII_COMPACT),
-    ('contracts/learning/src/rosy/contracts/learning/prediction.py', 'canonical_sha256', ASCII_COMPACT),
-    ('contracts/learning/src/rosy/contracts/learning/artifacts.py', '_json', UTF8_COMPACT),
-    ('learning/registry/policy/registry.py', 'canonical', UTF8_COMPACT),
-    ('learning/curation/pinky/fleet_rules.py', 'digest', ASCII_COMPACT),
-    ('learning/evaluation/decision/operational_comparison.py', 'digest', ASCII_COMPACT),
-    ('learning/evaluation/perception/judgment_acceptance.py', 'digest', UTF8_COMPACT),
-    ('learning/training/perception/review_admission.py', '_hash', ASCII_SPACED),
-    ('learning/training/perception/review_migration.py', '_canonical', ASCII_SPACED),
+    ('contracts/learning/src/rosy/contracts/learning/incident_handoff.py', 'digest', ASCII_COMPACT_SHA256),
+    ('contracts/learning/src/rosy/contracts/learning/prediction.py', 'canonical_sha256', ASCII_COMPACT_SHA256),
+    ('contracts/learning/src/rosy/contracts/learning/artifacts.py', '_json', UTF8_COMPACT_SHA256),
+    ('learning/registry/policy/registry.py', 'canonical', UTF8_COMPACT_SHA256),
+    ('learning/curation/pinky/fleet_rules.py', 'digest', ASCII_COMPACT_SHA256),
+    ('learning/evaluation/decision/operational_comparison.py', 'digest', ASCII_COMPACT_SHA256),
+    ('learning/evaluation/perception/judgment_acceptance.py', 'digest', UTF8_COMPACT_SHA256),
+    ('learning/training/perception/review_admission.py', '_hash', ASCII_SPACED_SHA256),
+    ('learning/training/perception/review_migration.py', '_canonical', ASCII_SPACED_SHA256),
 ]
 
 
