@@ -23,6 +23,12 @@ from rosy.contracts.learning.pinky import validate_profile as validate_pinky  # 
 from rosy.contracts.learning.omx_execution import validate_profile as validate_execution  # noqa: E402
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def _profile(episode, root):
     validators = {'omx_demonstration_v1': validate_omx, 'pinky_recording_session_v1': validate_pinky,
                   'omx_policy_execution_v1': validate_execution}
@@ -40,8 +46,8 @@ def join(episode, receipt):
 def export(episode_file, receipt_file, output):
     """Validate source file closure, preserve input hashes, and never replace an export."""
     episode_file, receipt_file, output = map(Path, (episode_file, receipt_file, output))
-    if output.resolve().drive.upper() == 'F:':
-        raise ValueError('artifact output belongs on X:, not the source drive')
+    if _in_checkout(output):
+        raise ValueError('artifact output belongs outside the source checkout')
     episode_bytes, receipt_bytes = episode_file.read_bytes(), receipt_file.read_bytes()
     episode = json.loads(episode_bytes)
     validate_episode(episode, root=episode_file.parent)

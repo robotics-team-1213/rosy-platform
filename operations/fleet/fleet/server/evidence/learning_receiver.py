@@ -10,11 +10,17 @@ from .learning_bundle import capture, pack, unpack, verify
 from .sqlite_policy import configure_connection, enable_wal
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 class LearningReceiver:
     def __init__(self, path):
         self.path = Path(path)
-        if self.path.resolve().drive.upper() == 'F:':
-            raise ValueError('receiver outputs belong on X:, not the source drive')
+        if _in_checkout(self.path):
+            raise ValueError('receiver outputs belong outside the source checkout')
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as connection:
             enable_wal(connection)
