@@ -41,6 +41,75 @@ def observation(client, session):
     return reply.json()
 
 
+def test_late_arm_binding_preserves_closed_http_and_estop(tmp_path):
+    from core_api_web.api.app import install_arm_policy
+    original, session, driver, *_, auth = setup_api(tmp_path)
+    port = original.app.state.core.arm_policy
+    services = SimpleNamespace(arm_policy=None, safety=SimpleNamespace(estop=False, estop_listeners=[]))
+    app = create_app({}, services)
+    app.dependency_overrides[operator] = lambda: auth
+    client = TestClient(app)
+    assert client.get('/api/v1/arm/policy').status_code == 503
+    install_arm_policy(services, port)
+    install_arm_policy(services, port)
+    assert services.safety.estop_listeners == [port.stop]
+    source = observation(client, session)
+    assert client.post('/api/v1/arm/actions', json=action(source, session)).status_code == 202
+    services.safety.estop = True
+    services.safety.estop_listeners[0]()
+    assert session.hold_reason and driver.handles[0].cancel_calls == 1
+    with pytest.raises(ValueError, match='already installed'):
+        install_arm_policy(services, object())
+
+
+@pytest.mark.parametrize('during_registration', [False, True])
+def test_late_arm_binding_checks_estop_before_publication(during_registration):
+    from core_api_web.api.app import install_arm_policy
+    safety = SimpleNamespace(estop=not during_registration)
+    services = SimpleNamespace(arm_policy=None, safety=safety)
+    stopped = []
+    def stop():
+        assert services.arm_policy is None
+        stopped.append(True)
+    port = SimpleNamespace(policy=lambda: None, observation=lambda: None, submit=lambda: None, stop=stop)
+    class Listeners(list):
+        def append(self, listener):
+            super().append(listener)
+            safety.estop = True
+    safety.estop_listeners = Listeners()
+    install_arm_policy(services, port)
+    assert stopped == [True] and services.arm_policy is port
+
+
+def test_late_arm_binding_stop_failure_keeps_http_closed():
+    from core_api_web.api.app import install_arm_policy
+    services = SimpleNamespace(arm_policy=None, safety=SimpleNamespace(estop=True, estop_listeners=[]))
+    def stop():
+        raise RuntimeError('stop failed')
+    port = SimpleNamespace(policy=lambda: None, observation=lambda: None, submit=lambda: None, stop=stop)
+    with pytest.raises(RuntimeError, match='stop failed'):
+        install_arm_policy(services, port)
+    assert services.arm_policy is None
+
+
+def test_concurrent_late_arm_binding_cannot_replace_port():
+    from core_api_web.api.app import install_arm_policy
+    services = SimpleNamespace(arm_policy=None, safety=SimpleNamespace(estop=False, estop_listeners=[]))
+    ports = [SimpleNamespace(policy=lambda: None, observation=lambda: None, submit=lambda: None,
+                             stop=lambda: None) for _ in range(2)]
+    barrier = threading.Barrier(2)
+    def install(port):
+        barrier.wait(timeout=3)
+        try:
+            install_arm_policy(services, port)
+            return True
+        except ValueError:
+            return False
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(install, ports)) == [False, True]
+    assert len(services.safety.estop_listeners) == 1
+
+
 def action(source, session):
     return dict(observation_id=source['observation_id'], policy_revision=session.lease.policy_revision,
                 positions={'joint_1': 0.101, 'joint_2': 0.001})
