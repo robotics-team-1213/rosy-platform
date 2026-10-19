@@ -2,6 +2,7 @@
 import copy
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -101,12 +102,23 @@ def test_all_64_box_only_phases_pass_original_profile_without_extending_duration
 
 
 def test_runtime_preflight_saves_narrow_mesh_bound_report(tmp_path):
-    from g2_runner import preflight
-    preflight(tmp_path, sdk=False)
+    # The CLI starts with a fresh import cache. Other collection tests intentionally
+    # load the installed palletizing wheel, which the source-origin guard rejects.
+    result = subprocess.run([
+        sys.executable, "-c",
+        "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
+        "from g2_common import configure_imports; configure_imports(); "
+        "from g2_runner import preflight; preflight(Path(sys.argv[2]), sdk=False)",
+        str(ROOT / 'deploy/robot/omx'), str(tmp_path),
+    ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout
     report = json.loads((tmp_path/'finger-envelope.json').read_text())
     assert report['scope'] == 'NOMINAL_DESCENT_FINGER_ENVELOPE_ONLY'
     assert report['mesh_binding'] == 'TRACKED_ASSETS_ONLY'
     assert report['box_count'] == 16
+    preflight_report = json.loads((tmp_path / 'preflight.json').read_text())
+    assert preflight_report['source_module_origins']['rosy.processes.palletizing.compiler'] == (
+        'operations/processes/palletizing/src/rosy/processes/palletizing/compiler.py')
 
 
 def test_changed_urdf_gripper_transform_is_unsupported_even_with_identical_meshes(tmp_path):

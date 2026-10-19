@@ -13,7 +13,7 @@ from omx_adapter.action_store import ActionStore
 from test_omx_action_api import FakePhaseExecution, _cell_transfer_grant, _grant, _runner
 
 
-def setup(tmp_path, cell=False):
+def _setup(tmp_path, cell=False):
     kind = 'CELL_TRANSFER' if cell else 'PICK_PLACE'
     grant = (FleetCellTransferGrant.model_validate(_cell_transfer_grant()) if cell
              else FleetActionGrant.model_validate(_grant()))
@@ -24,7 +24,7 @@ def setup(tmp_path, cell=False):
 
 @pytest.mark.parametrize('cell', [False, True])
 def test_phase_writer_between_cached_watermark_and_phase_read_cannot_corrupt_v1_v2_receipt(tmp_path, monkeypatch, cell):
-    grant, store, runner = setup(tmp_path, cell)
+    grant, store, runner = _setup(tmp_path, cell)
     cached = store.get_action(grant.action_id)
     writer = ActionStore(store.path)
     original = store._connect
@@ -56,7 +56,7 @@ def test_phase_writer_between_cached_watermark_and_phase_read_cannot_corrupt_v1_
 
 
 def test_cached_parent_state_and_goal_are_refreshed_with_its_watermark(tmp_path):
-    grant, store, runner = setup(tmp_path, True)
+    grant, store, runner = _setup(tmp_path, True)
     cached = store.get_action(grant.action_id)
     store.mark_phase_running(grant.action_id, grant.attempt_id, phase_id='approach', driver_goal_id='ros-goal-approach')
     store.mark_running(grant.action_id, grant.attempt_id, driver_goal_id='ros-goal-approach')
@@ -68,7 +68,7 @@ def test_cached_parent_state_and_goal_are_refreshed_with_its_watermark(tmp_path)
 
 @pytest.mark.parametrize('change', [{'action_id': 'missing'}, {'attempt_id': 'another-attempt'}])
 def test_missing_or_changed_attempt_cannot_mint_receipt_from_cached_binding(tmp_path, change):
-    grant, store, runner = setup(tmp_path, True)
+    grant, store, runner = _setup(tmp_path, True)
     with pytest.raises(PermissionError):
         runner._receipt({**store.get_action(grant.action_id), **change}, created=False)
 
@@ -87,7 +87,7 @@ def test_prepared_without_attempt_remains_a_coherent_empty_phase_read(tmp_path):
 
 
 def test_expired_grant_still_allows_read_only_reconciliation_without_resubmit(tmp_path):
-    grant, store, runner = setup(tmp_path, True)
+    grant, store, runner = _setup(tmp_path, True)
     history = store.history(grant.action_id)
     runner.now = lambda: grant.expires_at+timedelta(seconds=1)
     receipt = runner.get(grant.action_id, peer_uid=1001)

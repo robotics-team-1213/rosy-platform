@@ -34,7 +34,7 @@ ALLOW_UNSIGNED_ENV = "ROSY_ALLOW_UNSIGNED_MODELS"
 
 
 def _git_for_windows_dirs() -> tuple[str, ...]:
-    # Same lookup as deploy/robot/pinky_pro/release/signing.py: git on PATH first, then %ProgramFiles%\Git.
+    # Same lookup as the release signing helper: git on PATH first, then %ProgramFiles%\Git.
     roots = [os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Git")]
     git = shutil.which("git")
     if git:
