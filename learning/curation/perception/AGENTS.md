@@ -57,7 +57,7 @@ Media stage, before a recording job: `media_pipeline.py` scans raw sessions, mak
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/learning-perception -- test/learning/perception -q -p no:cacheprovider
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception -q -p no:cacheprovider
 ```
 
 Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_reclaim.py`, `test_media_pipeline.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`), `test_lane_failure.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
