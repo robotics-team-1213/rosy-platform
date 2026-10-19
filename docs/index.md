@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 원래 CI의 첫 tick departure 증거 보완
+- 2026-10-20 · uncommitted · 같은 소스 station 시험의 분류 근거
 - 2026-10-20 · 3a1392d2e · Account 전송 불명 문서·구현 검증
 - 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 계약 명시
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
-- 2026-10-20 · uncommitted · D-757 Learning 배포 인증 보존
-- 2026-10-19 · uncommitted · D-806 게시 기준 소스의 Learning 범위 확인
