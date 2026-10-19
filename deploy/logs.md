@@ -3035,3 +3035,9 @@
 - 변경: 616줄 updater의 기존 설정 검사를 이미 설치·검토되는 site_update_io로 옮겼다. 클래스 진입점과 거절·JSON 처리·Compose 이미지 검사는 유지한다. Account overlay 기능보다 먼저 적용하는 D-766 분리다.
 - 증거: 기존 site updater 회귀 시험으로 이동 전후 동작을 비교한다. Account ingress 후보의 별도 원격 검증은 새 배포 동작에 대한 증거이며 이 이동의 착지를 대신하지 않는다.
 - gate 변화: 없음. 호스트 설치·서비스 변경은 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · feat(omx): recover isolated native simulation host tools
+
+- 변경: Recover the fixed privileged helper, explicit installer, source/input bindings, isolated job preparation and remote CLI with their tests. D-786 remains Proposed. No host provisioning or service activation is performed.
+- 증거: Independent review and committed remote tests are pending; historical SIM records do not prove field acceptance.
+- gate 변화: None.

@@ -1,0 +1,8 @@
+{
+  "schema": "rosy.omx-native-sim-host/1",
+  "role": "ai",
+  "ros_setup": "/opt/ros/jazzy/setup.bash",
+  "overlay": "/home/SIM_USER/rosy-test/omx-native-sdk/install",
+  "dependency_prefix": "/home/SIM_USER/rosy-test/omx-native-jtc/extracted/opt/ros/jazzy",
+  "python_site": "/home/SIM_USER/rosy-test/venvs/SDK_HASH/lib/python3.12/site-packages"
+}
