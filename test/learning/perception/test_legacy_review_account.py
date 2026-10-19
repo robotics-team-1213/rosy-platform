@@ -45,7 +45,7 @@ def app(tmp_path, monkeypatch):
                 'refresh_token': 'refresh-secret-for-test-only', 'token_type': 'Bearer'}
     account = AccountClient(tmp_path / 'sessions.db', issuer='https://account.example.test',
                             client_id='937', resource='project:937',
-                            callback='https://review.example.test/auth/callback', public_keys={'test': public},
+                            callback='https://review.example.test/api/account/callback', public_keys={'test': public},
                             encryption_key=Fernet.generate_key(), clock=lambda: state['clock'], post=central,
                             destinations=('/',))
     class Backend(BaseHTTPRequestHandler):
@@ -92,12 +92,12 @@ def app(tmp_path, monkeypatch):
         connection.close()
         return result
     def login():
-        status, headers, _ = request('/auth/login')
+        status, headers, _ = request('/api/account/login')
         assert status == 303
         flow = next(value.split(';')[0] for key, value in headers if key == 'Set-Cookie')
         target = dict(headers)['Location']
         state_value = parse_qs(urlsplit(target).query)['state'][0]
-        status, headers, body = request('/auth/callback?code=valid-code&state=' + state_value, cookie=flow)
+        status, headers, body = request('/api/account/callback?code=valid-code&state=' + state_value, cookie=flow)
         assert status == 303 and dict(headers)['Location'] == '/'
         assert b'refresh' not in body
         return next(value.split(';')[0] for key, value in headers
@@ -113,16 +113,16 @@ def app(tmp_path, monkeypatch):
 def test_login_profile_cookie_and_unchanged_assets(app):
     server, state, request, login, _ = app
     assert request('/')[0:1] == (303,)
-    assert dict(request('/')[1])['Location'] == '/auth/login'
+    assert dict(request('/')[1])['Location'] == '/api/account/login'
     assert request('/api/data')[0] == 401
-    status, headers, _ = request('/auth/login')
+    status, headers, _ = request('/api/account/login')
     cookie = next(value for key, value in headers if key == 'Set-Cookie')
     assert all(flag in cookie for flag in ['Secure', 'HttpOnly', 'SameSite=Lax', 'Path=/'])
     session = login()
     body = request('/', cookie=session)[2]
-    assert b'original human content' in body and b'/auth/logout' in body
+    assert b'original human content' in body and b'/api/account/logout' in body
     assert b'<script>alert' not in body
-    profile = json.loads(request('/auth/session', cookie=session)[2])
+    profile = json.loads(request('/api/account/session', cookie=session)[2])
     assert profile['account_id'] == 'human-937'
     for path in ['/api/data', '/reviews.csv', '/image/0/frame.jpg', '/mask/0/m.png', '/rawmask/0/m.png', '/info/0/i.json']:
         assert request(path, cookie=session)[2] == b'original-bytes'
@@ -141,7 +141,7 @@ def test_backend_path_allowlist(app, path):
 
 def test_host_origin_validation_and_no_token_identity_forwarding(app):
     server, state, request, login, _ = app
-    assert request('/auth/login', Host='evil.test')[0] == 421
+    assert request('/api/account/login', Host='evil.test')[0] == 421
     session = login()
     body = json.dumps({'index': 0, 'status': 'fix', 'note': 'human note'}).encode()
     assert request('/api/review', 'POST', body, session, Origin='https://evil.test')[0] == 403
@@ -199,7 +199,7 @@ def test_logout_local_first_pending_revoke_and_revocation(app):
     server, state, request, login, _ = app
     session = login()
     state['offline'] = True
-    assert request('/auth/logout', 'POST', b'', session)[0] == 303
+    assert request('/api/account/logout', 'POST', b'', session)[0] == 303
     assert request('/api/data', cookie=session)[0] == 401
     with server.account.transaction() as db:
         assert db.execute('SELECT count(*) FROM app_account_revocations').fetchone()[0] == 1
@@ -218,15 +218,15 @@ def test_logout_local_first_pending_revoke_and_revocation(app):
                                   'code=a&state=', 'code=a', 'code=a&state=b&next=https://evil'])
 def test_callback_strict_parameters(app, query):
     _, _, request, _, _ = app
-    assert request('/auth/callback?' + query)[0] == 400
+    assert request('/api/account/callback?' + query)[0] == 400
 
 
 def test_callback_browser_binding_and_replay(app):
     _, _, request, _, _ = app
-    _, headers, _ = request('/auth/login')
+    _, headers, _ = request('/api/account/login')
     state = parse_qs(urlsplit(dict(headers)['Location']).query)['state'][0]
     flow = next(value.split(';')[0] for key, value in headers if key == 'Set-Cookie')
-    callback = '/auth/callback?code=a&state=' + state
+    callback = '/api/account/callback?code=a&state=' + state
     assert request(callback)[0] == 400
     assert request(callback, cookie=flow)[0] == 303
     assert request(callback, cookie=flow)[0] == 400

@@ -36,7 +36,7 @@ a placeholder, never a device address):
 
 `receiver.json` uses the existing Account receiver schema: `issuer`, `client_id`,
 `resource`, `callback`, `public_key_files`, `encryption_key_file`, `session_db`.
-Register its exact callback as `origin + /auth/callback` and its resource as the
+Register its exact callback as `origin + /api/account/callback` and its resource as the
 explicit `project:<id>`. The session database's parent must also be private.
 Keep receiver keys and all three databases outside the dataset tree. Back up the
 session database and its encryption key together. Do not copy secrets into this
@@ -44,7 +44,7 @@ runbook, unit files tracked in git, command lines or browser storage.
 
 Grant `learning.view` for viewing. Editing pending/fix/hold needs the additional
 `learning.edit`; ok requires the additional `learning.approve`. Site roles,
-`learning.manage` and edit permissions do not imply approval. `/auth/session`
+`learning.manage` and edit permissions do not imply approval. `/api/account/session`
 returns the current account/profile; the injected bar links to the central
 profile and submits local logout. A central logout failure leaves a durable
 revocation pending and the wrapper retries it while running, including after

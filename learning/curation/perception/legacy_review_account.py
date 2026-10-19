@@ -50,7 +50,7 @@ class ReviewServer(ThreadingHTTPServer):
         parsed = urlsplit(origin)
         if (parsed.scheme != 'https' or not parsed.hostname or parsed.username
                 or parsed.password or parsed.path or parsed.query or parsed.fragment
-                or account.callback != origin + '/auth/callback'
+                or account.callback != origin + '/api/account/callback'
                 or not re.fullmatch(r'project:[A-Za-z0-9._-]{1,96}', account.resource)):
             raise ValueError('Fixed HTTPS origin and project receiver required')
         self.origin, self.host, self.account = origin, parsed.netloc, account
@@ -149,13 +149,13 @@ class ReviewHandler(BaseHTTPRequestHandler):
         cookies = self.cookies()
         session = cookies.get(self.server.session_cookie)
         session = session.value if session else ''
-        if not unsafe and self.path == '/auth/login':
+        if not unsafe and self.path == '/api/account/login':
             flow, destination = account.start('/')
             self.reply(303, location=destination,
                        cookies=[self.cookie(self.server.flow_cookie, flow)])
             return
         parsed = urlsplit(self.path)
-        if not unsafe and parsed.path == '/auth/callback':
+        if not unsafe and parsed.path == '/api/account/callback':
             if parsed.fragment:
                 raise ValueError('Invalid callback')
             query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True, max_num_fields=2)
@@ -168,7 +168,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self.reply(303, location='/', cookies=[self.cookie(self.server.session_cookie, session),
                        self.cookie(self.server.flow_cookie, clear=True)])
             return
-        if unsafe and self.path == '/auth/logout':
+        if unsafe and self.path == '/api/account/logout':
             try:
                 account.logout(session)
             except AccountUnavailable:
@@ -179,7 +179,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
         if unsafe:
             allowed = self.path == '/api/review'
         else:
-            allowed = self.path in {'/', '/api/data', '/reviews.csv', '/auth/session'} or bool(READ_PATH.fullmatch(self.path))
+            allowed = self.path in {'/', '/api/data', '/reviews.csv', '/api/account/session'} or bool(READ_PATH.fullmatch(self.path))
             if any(component in {'.', '..'} for component in self.path.split('/')):
                 allowed = False
         if not allowed:
@@ -188,12 +188,12 @@ class ReviewHandler(BaseHTTPRequestHandler):
         claims = account.resolve(session)
         if claims is None:
             self.reply(303 if self.path == '/' else 401,
-                       location='/auth/login' if self.path == '/' else None)
+                       location='/api/account/login' if self.path == '/' else None)
             return
         if not claims.permits(account.resource, 'learning.view'):
             self.reply(403)
             return
-        if self.path == '/auth/session':
+        if self.path == '/api/account/session':
             profile = account.profile(session)
             self.reply(200, json.dumps({'account_id': claims.sub, 'profile': profile,
                                        'profile_url': account.profile_url}).encode())
@@ -242,7 +242,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
             content_type = response.getheader('Content-Type', 'application/octet-stream')
             if self.path == '/' and response.status == 200:
                 bar = ('<nav aria-label="Rosy Account"><a href="' + escape(self.server.account.profile_url, quote=True)
-                       + '">Rosy Account profile</a> <form method="post" action="/auth/logout" style="display:inline">'
+                       + '">Rosy Account profile</a> <form method="post" action="/api/account/logout" style="display:inline">'
                        '<button>Log out</button></form></nav>')
                 result = result.replace(b'<body>', b'<body>' + bar.encode(), 1)
             self.reply(response.status, result, content_type)
