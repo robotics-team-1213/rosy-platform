@@ -534,7 +534,7 @@ class DrivableSteer:
             self._smoothed = self._pivot = None
             error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
             return error, self._pivot_confidence, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
-        if self._in_crosswalk(current_pose) and (guide_deg is None or abs(guide_deg) < EXIT_BEND_DEG):
+        if not front_blocked and self._in_crosswalk(current_pose) and (guide_deg is None or abs(guide_deg) < EXIT_BEND_DEG):
             # (only where the map lane goes straight on: g10-9dfk held 822 frames "crosswalk straight"
             # into the wall at the SW 90-degree corner, the corner's transverse line read as bars)
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight

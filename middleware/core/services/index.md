@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 횡단보도 대기 중 pivot 차단 회귀
 - 2026-10-19 · uncommitted · 성공 drivable SIM의 Drive 소비 구현 분리
 - 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
 - 2026-10-16 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769)
 - 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
-- 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)

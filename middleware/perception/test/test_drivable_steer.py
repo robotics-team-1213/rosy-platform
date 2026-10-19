@@ -310,6 +310,10 @@ def test_crosswalk_straight_does_not_override_a_lidar_front_stop():
     assert debug["strategy"] == "drivable_pivot_left", debug
     assert error < 0 and confidence == CORE_MIN_CONFIDENCE
 
+    error, _, debug = steer.update(way, 2, G, XO, HALF,
+        (0.05, 0.0, 0.0), (0.05, 0.0, 0.0), front_sector_m=0.3)
+    assert (error, debug["strategy"]) == (0.0, "drivable_crosswalk_straight"), debug
+
 
 def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
     steer = DrivableSteer()
