@@ -9356,3 +9356,9 @@ osy-d395-s1d\`.
 - Evidence: independent source review completed. Fresh committed-revision host and native verification is tracked separately; historical SIM evidence is not publication evidence.
 - gate 변화: none. Only a fixture-trained two-step ACT checkpoint and actionless observations were found; physical learned-policy execution remains unverified.
 - Records: docs/validation/omx-policy-publication-2026-10-19/asset-inventory.md; docs/plans/2026-10-19-omx-policy-publication.md.
+
+## 2026-10-19 · uncommitted · Account 서비스 운영 완료 기준과 증거
+
+- 변경: 승인된 D-807과 앱별 실행 계획, 기존 원격 검증·TLS 준비·인증서 백업 기록을 보존했다. 새 main의 문서와 다른 작업 기록은 유지했다.
+- 증거: 각 검증 기록에 시험 커밋과 실행 범위, 미검증 항목을 구분했다. 문서 통합의 lint와 착지는 별도 실행한다.
+- gate 변화: 없음. 소스 검증·설정 준비를 운영 로그인이나 사용자 수용 완료로 표시하지 않는다.

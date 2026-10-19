@@ -46,6 +46,53 @@ The [Account protocol](../../docs/reference/rosy-account-protocol.md) defines th
 JSON and migration checks. Use the signed candidate deployment path, then read
 back accounts, grants and session revocation. Source tests do not activate SSO.
 
+#### Account rollout and acceptance (D-807)
+
+Use the [rollout plan](../../docs/plans/2026-10-19-account-service-rollout.md)
+and record each app's SOURCE, REMOTE TEST, CI, INSTALLED, RUNTIME and USER
+ACCEPTANCE separately. Prepare these inputs before a maintenance transition:
+
+| Consumer | Existing installation input |
+|---|---|
+| Fleet / Account | protected authority JSON, persistent tasks DB, existing bootstrap login, issuer TLS and signing key |
+| CORE / Robot / Pilot web | `auth.account_client_file`, registered robot resource/callback, trusted public keys, persistent session DB and its encryption key |
+| Review / Learning | collaboration `account_client_file` and explicit `account_subjects` mapping to existing owners |
+| Games board | `--preview-account-config`, registered site resource/callback and its own receiver DB/key |
+| Pilot Android / Cam | `-Prosy.accountConfig=<protected-public-config>`, exact callback, trusted keys, installed APK signer and verified app links |
+
+1. Inventory the current account identities, effective passwords/profiles,
+   machine credentials and config revisions without printing secrets. Preserve
+   a consistent DB/config backup using the existing maintenance procedure.
+   Do not select a new bootstrap administrator implicitly.
+2. Run the existing site TLS preflight, for example
+   `python3 deploy/site/site_preflight.py --site-cert <protected-cert> --json`.
+   This command checks site TLS/TXT/pairing/Caddy; it does **not** validate
+   Account client registrations or prove that the issuer callback works.
+   Reuse the existing authority/receiver startup validators for their protected
+   settings. A valid site certificate alone does not establish Android trust.
+3. Prepare receiver-compatible releases first, then activate the authority,
+   connect each registered receiver, and retire migrated human legacy access.
+   Apply changes through the existing signed candidate/native deployment paths.
+   Keep machine/pairing credentials separate. Do not regenerate keys on restart.
+4. Read the administrator-only `/api/fleet/auth/setup` from the authenticated
+   Console origin and confirm the registered issuer/clients. `configured=true`
+   only describes this process's configuration; test actual login and callback
+   separately for every app and real Android device.
+5. Confirm login, app return, an allowed operation, denied cross-resource access,
+   persisted result readback and logout/revocation of existing sessions. On
+   authority failure, distinguish local logout from pending central revocation.
+   Validate media against D-789's stricter online checks and actual connection
+   teardown on the deployed revision; the general five-minute Account limit is
+   not a media grace period. Record uninstalled media changes as pending.
+6. Exercise restart, key rotation and recovery on an isolated copy before
+   production recovery. Never restore a stale ledger that reactivates old
+   passwords, revoked families or consumed refresh tokens. Retain the existing
+   explicit device recovery path; do not make it an automatic auth fallback.
+
+Do not mark a deployment complete while an app's installation/runtime/user
+acceptance remains unverified. Use synthetic/no-motion operations for automated
+checks; physical operation and user consent follow their existing owner gates.
+
 Android callbacks require an approved HTTPS domain with a browser/Android-trusted
 certificate on port443. Existing `.local` site certificates do not prove this.
 For an existing tailnet, read the site machine's MagicDNS name and HTTPS state;
