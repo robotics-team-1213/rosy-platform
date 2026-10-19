@@ -3041,3 +3041,9 @@
 - 변경: Recover the fixed privileged helper, explicit installer, source/input bindings, isolated job preparation and remote CLI with their tests. D-786 remains Proposed. No host provisioning or service activation is performed.
 - 증거: Independent review and committed remote tests are pending; historical SIM records do not prove field acceptance.
 - gate 변화: None.
+
+## 2026-10-19 · uncommitted · feat(omx): recover G2 clock and diagnostic helpers
+
+- 변경: Recover the dedicated SIM clock, terminal/placement/gripper diagnostics and clearance helpers with G2 owner/observer/runner wiring and matching world/layout fixtures. The runner uses the reviewed Fleet topic wrapper. D-788 remains Proposed; existing owner/fence/stop checks remain authoritative.
+- 증거: Independent review and committed remote tests are pending. No simulator or physical service is started by recovery.
+- gate 변화: None; source and host regression checks do not prove successful task placement, physical behavior or field acceptance.
