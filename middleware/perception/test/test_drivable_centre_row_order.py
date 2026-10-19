@@ -5,7 +5,10 @@ PNG hashes identify the 320x240 inputs; packbits preserve every inferred way pix
 Actual ground, camera offset and lane half are those used by the recorded run.
 """
 import base64
+import gzip
+import json
 import math
+from pathlib import Path
 import zlib
 
 import numpy as np
@@ -17,12 +20,8 @@ from control.sensing.perception.drivable.target import _centre_target
 
 
 G = GroundPlane(.06343, .13962634015954636, 281.59681292203703, 160, 120, .6)
-MASKS = [
-    # e434578bcc 91.0s, PNG 81509d2184bfaadd0dbb7caa8fc3f54f5862efdb366b6f145eb06ebb84c442f6
-    'eJztz7EJgEAQRFGNDC3J0rS0K8UyDMQVE0NvgwMR34s/A9N1AAAAAAAAAD/WH6lsiiiJsbjUqiEi082R6e7qsRuDmi3Zlcbd8lLX+sea7PZkB/AZJyZ3fVc=',
-    # 88121a4c42 92.0s, PNG f9884586eed7c01254690314b1bd83342e180f0f4608fbad5cf341120e47c79b
-    'eJzt0zEOg0AMRFGOnqNxFI5ASYFw0sGux85IqSL9Xz95V2ZZFiIiIiIiIiIiIiIi+rU4TBdxme6T62I1XWymi5fpvsDb9XcMEz5dd/Tgmj2O7jRdvcbJlSfPbjdddXJyxcnZ6Yebnd62cHKJwsnvrJwaqJwaKJ34A6UTy9Yu31C7PLBw6YaFSwMrN9+wcvNXLt1humlg7XbThes2012mGwZ27jTd8722joiIiP6iNwSvwRE=',
-]
+MASKS = json.loads(gzip.decompress((Path(__file__).parent / 'fixtures' /
+    'drivable_centre_row_order_20261020.json.gz').read_bytes()))['masks']
 
 
 @pytest.fixture(params=[0, 1], ids=['e434-91s', '8812-92s'])
@@ -32,7 +31,7 @@ def case(request):
 
 @pytest.fixture
 def way(case):
-    packed = zlib.decompress(base64.b64decode(MASKS[case]))
+    packed = zlib.decompress(base64.b64decode(MASKS[case]['way_packbits_zlib_b64']))
     assert len(packed) == 240 * 320 // 8
     return np.unpackbits(np.frombuffer(packed, np.uint8)).reshape(240, 320).astype(bool)
 
