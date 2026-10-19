@@ -92,3 +92,28 @@ SIM은 GPU, map_v2_fleet, lap, stall60, record, `lane_return` 제외 조건을 �
 생산 commit `bd3a450cbbc9e21b839abc38182a542efc3c7a3e`. d639 재현2 failed / 106 passed / NEW2 후1행 보정 가드를 추가했다. 선택된 출구의 near=True 또는 유효한 route observation memory라면 기존 조향 후보를 보존한다. 다른 쪽 출구가 near라는 이유로 미래 보정을 막지는 않는다. 독립 reviewer `/root/drive_success_review`가 실제6회 기록과 생산 경계를 확인했고 추가 소스 지적이 없다.
 
 원격 관련·문서·release 합계340 passed / 0 skipped / 36 warnings / NEW0, runner exit0. 앞선 문서 해시 표기 실패는 이 실행에서 해소됐다. size-range는4d0 이후3커밋 통과. 다음 영향 범위·동일 조건 SIM은 별도 검증하며 연속 완주 수용 HOLD를 유지한다.
+
+## 8463f45c51: 현재 분기 보정 범위 수정 후에도 SIM 실패
+
+최종 독립 검토는 Critical0 / Important0 / Minor0. affected는1회차6862 passed / 408 skipped / 38 warnings / 62 subtests, 원본 마스크 시험의 이전 centre 보정 기대값1 failed; 2회차9 passed / NEW0. 실패를 숨기지 않고 두 원본 mask의 right near=True를 명시적으로 검사해 현재 분기를 보존하도록 기대값을 맞췄다. 시험 commit `4dc209dccea56e99ff3f31beba3d761ada62e183`의 원본 마스크·현재 차로 회귀34 passed / NEW0. 이를 전체 최신 affected 재실행으로 표시하지 않는다.
+
+고정 조건 `sim-8463f45c51-e208e7`는3.253m에서 realign 뒤 stall FAIL. current-lane deferral0, learned_drivable632회 / fallback0, 최종 cmd·odom0, lease 해제·남은 프로세스 없음·native 정리 완료다.
+
+- result SHA256: `f4193eb8fd884011d11041ecc542eab2f6797c257825ac3dc2636b9788acbe37`.
+- observations SHA256: `971f1399377ab70898e22746b377fd94fcdf846fb598cbe6528fe1eed29422c1`.
+
+경로 station 급변도 추적했다. Fleet 다음 arc admission에서 약2mm 더 가까운 다음 polyline을 선택하며 발생했고 CORE 시점·좌표 전달 오류는 발견하지 못했다. 같은 station/here의 과거 PASS에서도 유사한 안내가 있으므로 이를 실패의 단독 원인으로 단정하지 않는다.
+
+동일 PNG·고정 모델의 native `mask-replay-5`는 exit 계산과 목표 행 순서를 분리했다. 이번710 PNG는 새 행 순서 centre(.222,+.099)m, 과거 x 정렬(.171,-.152)m, ahead.315m/right near=True였다. r51 PASS710 PNG도 새 순서(.201,+.126)m와 과거 정렬(.219,-.103)m로 방향이 달랐고 ahead.306m였다. 앞이 열린 현재 junction에서 fresh route가 선택한 near right를 final arc selector가 `ahead<.25` 조건 때문에 소비하지 않고 neutral centre로 대체하는 경로를 확인했다.
+
+후속 수정은 이 새 범위에서 운동 target 선택을 바꾼다. 이미 선택된 near 출구가 source→current 변환 후에도 앞에 있고 guide가 fresh이면 기존 arc 경로로 소비하도록 검증한다. 원본 mask 행 순서 롤백·REALIGN 임계값 완화·CORE 권한 변경은 하지 않는다. 재현 commit `903560ba1` native1 failed / 7 passed / NEW1, 반례는 stale·far 출구다. 추가 안전·지난 출구 반례와 GREEN·SIM은 별도 확인한다.
+
+## 열린 junction 선택 출구 소비 후보 67e0b96e85
+
+생산 commit `67e0b96e85e52046a2109b8a68e63e250b1b7dab`. 독립 reviewer `/root/drive_success_review`가 현재 좌표의 전방 검사를 포함한 source/test diff를 확인했고 추가 material finding이 없다. 열린 junction에서도 fresh guide와 일치하는 실제 near 출구를 기존 arc에 전달한다. 현재 뒤로 지난 cached 출구, 누락 점, 반대쪽만 near, far, stale·안내 없음, wall 차단은 새 선택을 허용하지 않는다. front-stop·straddle·crosswalk·pivot 우선 처리는 앞에서 유지한다. 이것은 새 범위의 조향 목표 선택 변경이며 CORE 권한과 기존 임계값·회전량 예산을 유지한다.
+
+관련6개 파일 native168 passed / 0 skipped / NEW0, runner exit0. 8463 이후3커밋 size-range 통과. 반복 SIM과 최신 전체 영향 범위는 아직 별도 검증 전이며 완주 수용 HOLD다.
+
+- native replay JSON SHA256: `e1b6209cdc1d51983207f36475363c52443dd3d7b439b136874f23f6e7934087`.
+- 이번 실패710 PNG SHA256: `d805d512002093ddba660b668433ed98bfbbb2d1c57de498ad396683c61ceae8`.
+- r51 PASS710 PNG SHA256: `07028eba6c6060b43432fbe23271acffb8a6ff35df30879c6c627bf2001e3e6f`.

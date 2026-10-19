@@ -9299,3 +9299,9 @@ osy-d395-s1d\`.
 - 변경: 4d0 관측 기억 보존 후보의 실제 효과와 남은 stall 실패를 추가 보존했다. 현재 근접 분기를 미래 회전 보정이 덮는 후속 원인을 구분했다.
 - 증거: 같은 검증 기록의4d0 run·해시·관측점·회전량. 원격 영향 범위 문서 guard 실패도 생략하지 않고, HEAD 코드 표기 교정 뒤 release guard 통과를 별도로 기록했다.
 - gate 변화: 없음. 수정·회귀·SIM·실물 수용을 구분한다.
+
+## 2026-10-20 · uncommitted · 열린 junction 원본 재생과 선택 소비 검증
+
+- 변경: 8463 실패·원본 mask 기대값 수정과 native PNG 대조 결과를 동결 기록에 보존했다. 열린 직진로 옆의 선택된 near 출구 소비 후보를 기존 계약 범위에서 검증했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 native replay JSON·PNG 해시, source commit67e0와 관련168 passed/NEW0. station 변화는 producer의 다음 arc admission에서 발생하며 transport 오류로 단정하지 않았다.
+- gate 변화: 없음. 반복 완주 수용 HOLD.

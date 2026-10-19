@@ -1725,3 +1725,9 @@
 - 변경: current-lane 보정이 이미 near 수용한 선택 출구와 그 범위 안 관측 기억을 미래 분기로 취급하지 않게 했다. 기존 출구 조향을 보존하는1행 조건이며 회전량 예산은 유지했다.
 - 증거: 4d0 SIM에서 관측 기억 보존은 확인됐으나 centre 보정6회가 현재 오른쪽 분기를 덮었다. d639 원격 재현2 failed/106 passed, 문서 secret guard는 HEAD 표기 교정 후 통과. bd3a 생산 변경은 독립 contract 리뷰 지적 없이 커밋했고 후속 검증 중이다.
 - gate 변화: 없음. SIM 완주 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 열린 junction의 선택된 근접 출구 소비
+
+- 변경: fresh route가 선택한 near 출구가 현재 좌표에서도 앞에 있으면, 다른 도로가 직진으로 열려 있어도 기존 arc 조향에 전달한다. source near만으로 지난 출구를 살리지 않으며 CORE 권한·기존 임계값·회전량 예산을 유지한다.
+- 증거: 8463 SIM3.253m realign·stall 실패 뒤 동일 PNG native 재생으로 centre 계산과 선택 출구를 분리했다. 903560 재현1 failed/7 passed 후67e0 관련168 passed/NEW0. 독립 contract 리뷰 지적 없음. 반복 SIM·최신 영향 범위는 별도 확인한다.
+- gate 변화: 없음. 실제 조향 목표 선택이 바뀌므로 회귀 통과를 완주 수용으로 계산하지 않는다.
