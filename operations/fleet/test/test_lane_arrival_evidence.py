@@ -24,6 +24,9 @@ def test_executing_stop_does_not_end_the_trip_before_the_configured_arrival_dist
     _ticks(runner, ports)
     assert runner.view('p1')['state'] == 'running'
     assert runner._live['rosy_60'].open
+    ports.core.see_junction()
+    _ticks(runner, ports)
+    assert runner.view('p1')['state'] == 'running'  # Even an actual hold is not spatial arrival.
     ports.at(arc, arc.length_m - .14)
     _ticks(runner, ports)
     assert runner.view('p1')['state'] == 'arrived'
