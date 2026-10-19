@@ -117,3 +117,40 @@ SIM은 GPU, map_v2_fleet, lap, stall60, record, `lane_return` 제외 조건을 �
 - native replay JSON SHA256: `e1b6209cdc1d51983207f36475363c52443dd3d7b439b136874f23f6e7934087`.
 - 이번 실패710 PNG SHA256: `d805d512002093ddba660b668433ed98bfbbb2d1c57de498ad396683c61ceae8`.
 - r51 PASS710 PNG SHA256: `07028eba6c6060b43432fbe23271acffb8a6ff35df30879c6c627bf2001e3e6f`.
+
+## e5b1e33744: 같은 소스 1 PASS / 1 FAIL
+
+생산67e0와 문서 포함 검증 HEAD `e5b1e3374451b4b33b95f52723b84f3e79d8c8f7`의 최종 독립 검토는 Critical0 / Important0 / Minor0. native affected는1회차6886 passed / 408 skipped / 38 warnings / 62 subtests, 2회차9 passed이며 각각 NEW0, exit0이다. 합계6895 passed이며 skip을 통과로 계산하지 않는다.
+
+두 SIM은 실제 result의 pointer·render·paint target·lap·stall60·제외 항목·spawn·place 값이 같다. source·world·graph·URDF provenance도 동일하다. 다만 결과는 연속 완주 기준에 미달이다.
+
+| 기록 | 1차 | 2차 |
+|---|---|---|
+| run | sim-e5b1e33744-1213a3 | sim-e5b1e33744-068d4c |
+| 결과 | PASS / arrived | FAIL / pose / off_lane .114m |
+| 열린 junction 선택 / 먼 출구 거절 | 252 / 100 | 257 / 86 |
+| learned_drivable / fallback | 1483 / 0 | 1342 / 0 |
+| 최종 cmd·odom | 0 / 0 | 0 / 0 |
+| lease / 남은 프로세스 | released / 없음 | released / 없음 |
+| native 종료·회수·정리 | exit0 / 완료 | exit1 / 완료 |
+
+1차 motion interval 중 realign33회·정렬 예산 HOLD2회 뒤 최종 도착했으므로 무중단 주행으로 표시하지 않는다. 1차 revision metadata1473개와 2차1340개는 고정 revision과 일치한다. 나머지10개·2개는 null이다. 1차10개는 mask_for metadata 초기화와 latest_way 캐시 소비 경로 차이로 설명되며 cached learned-drivable 사용과 일치한다. null 표본별 revision을 직접 입증하지 않는다. 1차 mask age는.25/.375s이고 다른 denoise·expected_path 조향으로 바뀐 증거는 없다.
+
+- 1차 result SHA256: `6218283dfcf085aa914ba62e599dad5a8fab469b030a87e9467f2aecedeb5d16`.
+- 1차 observations SHA256: `099f8079a339f3f5fe275f8cd15a2da0d38771d74f39b212211462bfeae5c0d8`.
+- 2차 result SHA256: `f50bbd2e7ddb7134e3d48fd7f830584f45accbd7f8a484d28c7e3638cefc531f`.
+- 2차 observations SHA256: `b189ddd1f6f6166c13c46997b99271ddc4e8ac429de6da7c36182f28f8cf0cb2`.
+
+## 2차 마지막 코너의 분리된 opening 혼합 재현
+
+169.375s 오른쪽 점(.183,-.089)m이169.5s(.407,-.214)m로 바뀌어 near=True로 저장됐고, 이후 네 표본의 route memory로 남았다. native PNG 재생 `mask-replay-6`은1356 원본에서 서로 다른 두 border run을 직접 확인했다. 먼6행(123~128, x.4071~.4521m)과 가까운5행(194~198, x.1792~.1846m)이 합쳐져 전체11행 중앙값이 먼 점이 됐다. 인접1355에는 가까운6행만,1357에는 opening이 없다. near 입장과 point·reach가 같은 opening이라는 결속이 빠진 직접 재현이다.
+
+PNG SHA256 `f8ee3850c152629863afe40337ac7713dd54e50eaa285d2b821b1f14cc733933`의 native mask를 RLE fixture로 보존했다. 재현 commit `0aaacaf136`의 native 회귀1 failed / NEW1, point x=.407m를 확인했다. 후속 수정은 기존 above 조건·최소4행·기존 row gap 기준으로 연결된 opening을 고르고 near·point·reach를 동일 run에 결속한다. 넓게 연결된 단일 opening은 잘라내지 않는다. 실제 diff 독립 검토·GREEN·반복 SIM은 별도 확인한다. 완주 수용 HOLD를 유지한다.
+
+## 연결된 opening 결속 후보 f47dbb4ddd: 관련 회귀 통과
+
+생산 commit `f47dbb4dddcb1fba59a6b4225d90c664b137ff24`. `_exit_rows`가 기존 above .04m·최소4행·행 간격 기준을 유지한 채 유효한 연결 opening을 선택하고, 동일한 행에서 near·point·reach를 산출한다. 가까운 유효 run이 있으면 그 run을 사용하고, 없으면 기존 reach 판단을 위해 먼 유효 run을 유지하되 near로 입장시키지 않는다. 전체 mask 연결성 보장이나 새로운 최대거리 cap은 추가하지 않는다.
+
+독립 reviewer `/root/drive_success_review`의 실제 source/test 검토에서 추가 material finding은 없다. native 관련7개 파일173 passed / 0 skipped / NEW0, exit0. 실제1356 mask와 저장 기억, 고립 near hit, 두 opening, 누락 이미지 행, 넓게 연결된 opening을 검증했다. e5b1 이후2커밋 size-range 통과. native replay JSON SHA256: `8e694f171efab03ec9bee05fabd9fdb51868ac9c287441cbf311cd1eb26d3f47`.
+
+최신 영향 범위·동일 조건 반복 SIM은 별도로 검증하며, 앞선1 PASS / 1 FAIL을 이 후보의 통과로 이월하지 않는다. CORE 권한·기존 임계값·회전량 예산과 새 연결점 프로토콜 NO-GO 판정을 유지한다.

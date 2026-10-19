@@ -1731,3 +1731,9 @@
 - 변경: fresh route가 선택한 near 출구가 현재 좌표에서도 앞에 있으면, 다른 도로가 직진으로 열려 있어도 기존 arc 조향에 전달한다. source near만으로 지난 출구를 살리지 않으며 CORE 권한·기존 임계값·회전량 예산을 유지한다.
 - 증거: 8463 SIM3.253m realign·stall 실패 뒤 동일 PNG native 재생으로 centre 계산과 선택 출구를 분리했다. 903560 재현1 failed/7 passed 후67e0 관련168 passed/NEW0. 독립 contract 리뷰 지적 없음. 반복 SIM·최신 영향 범위는 별도 확인한다.
 - gate 변화: 없음. 실제 조향 목표 선택이 바뀌므로 회귀 통과를 완주 수용으로 계산하지 않는다.
+
+## 2026-10-20 · uncommitted · 분리된 출구 관측의 입장·목표 결속
+
+- 변경: 가까운 opening과 별도의 먼 opening이 합쳐지지 않게 border run을 나눠 같은 run에서 near·point·reach를 계산한다. 기존 above·최소4행·이미지 행 간격을 유지하며 넓은 연결 opening은 자르지 않는다.
+- 증거: e5b1 동일 조건1 PASS/1 FAIL 뒤 마지막 코너1356 원본 재생에서 near5행과 far6행의 혼합을 확인했다. 0aaaca 재현1 failed 후f47d 관련173 passed/NEW0. 실제 mask와 기억 저장까지 회귀로 확인했고 독립 contract 검토 지적 없다.
+- gate 변화: 없음. 최신 반복 SIM과 영향 범위 검증 전이며 이전 첫 PASS를 새 후보에 이월하지 않는다.

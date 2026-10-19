@@ -9305,3 +9305,9 @@ osy-d395-s1d\`.
 - 변경: 8463 실패·원본 mask 기대값 수정과 native PNG 대조 결과를 동결 기록에 보존했다. 열린 직진로 옆의 선택된 near 출구 소비 후보를 기존 계약 범위에서 검증했다.
 - 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 native replay JSON·PNG 해시, source commit67e0와 관련168 passed/NEW0. station 변화는 producer의 다음 arc admission에서 발생하며 transport 오류로 단정하지 않았다.
 - gate 변화: 없음. 반복 완주 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 1 PASS/1 FAIL 보존과 분리된 출구 재현
+
+- 변경: 열린 junction 후보의 첫 완주와 마지막 구간 이탈 실패, 중간 일시적 HOLD·revision metadata 누락을 함께 보존했다. 마지막 코너의 분리된 opening이 합쳐지는 native 재생과 후속 결속 회귀를 기록했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`에 두 run의 조건 동일성·정지·lease·정리·원본 hash를 기록했다. f47d 관련173 passed/NEW0는 최신 SIM 수용과 구분한다.
+- gate 변화: 없음. 주행 재현 수용 HOLD, 실물·현장 gate 승격 없음.
