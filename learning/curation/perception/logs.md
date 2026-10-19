@@ -147,9 +147,10 @@
 - 증거: 합성 상태를 쓰는 원격98ae70a563에서 거절된 클래스 YAML이 남는1실패를 재현했다. 수정a58e7fdaaa의 회귀·기존 review cycle·pixel draft import57개 모두 통과, skip0. 로그는 외부 scratch rosy-worktree-reconcile/review-binding-red 및 review-binding-green/run-1.txt. 승리한 import 이후 전체 DB 논리 내용과 비DB 파일 해시가 변하지 않음을 검사했다. 전체 착지 관문은 별도 수행한다.
 - gate 변화: 없음. 원본 브랜치의 signed portable-catalog 파이프라인·과거13866개 이력을 병합한 것은 아니다. 운영 사람 라벨·서명 배포·실물·브라우저 수용은 검증하지 않았다.
 
-## 2026-10-19 · portable catalog와 명시적 legacy 동영상 준비 이식
+## 2026-10-19 · 1bcc82a593 · portable catalog와 명시적 legacy 동영상 준비 이식
 
 - 변경: 원본18b06c2172의 catalog-relative PNG/video 참조를 POSIX no-follow·같은 핸들 bounded capture로 검증하고, persistence 잠금 안에서 namespace를 재확인한다. 기존 main 클래스 바인딩 경쟁 재검사를 유지한다. 명시한 안전한 legacy session을 허용하되 canonical identity 덮어쓰기와 이미지 목적지 충돌은 거절한다. 동영상 바이트의 독립 검증·새 인간 승인·실행 권한을 만들지 않는다.
 - 증거: 시험 import를 현재 ReviewStore로 보정한 commit bd097e5091의 원격 실행에서32개 실패를 재현했다. 생산 수정1bcc82a593의 기본 선택은124통과와 mcap_ros2 부재1실패였으며 이를 전체 통과로 세지 않았다. 격리된 native pinky-raw profile의 readiness가 package origin·version·closure를 확인한 뒤 같은125개를 모두 통과했다. 선택 시험에는 기존 클래스 바인딩 경쟁 회귀도 포함된다.
 - 환경: 기본 MCAP control만 기존 MCAP suite와 같은 optional dependency 조건을 사용한다. 해당 코드·시험 변경의 착지는 모듈 AGENTS의 필수 raw-profile 검사 exit0/skip0을 별도로 요구한다. 환경 분리 commit db23d46516도 실제 raw125passed/skip0, NEW/known/flaky0이다. source_components 분할 알고리즘은 이식하거나 검증했다고 주장하지 않는다. 최종 로그·생성물이 담긴 HEAD도 착지 전에 raw 검사를 다시 확인한다.
 - 범위: strict signed source expectation/retained proof는 별도 후속 단위다. 운영 라벨·실물·배포·학습 품질·현장 수용은 검증하지 않았다.
+- gate 변화: 없음. 기본 환경의 optional MCAP 검사는 필수 raw-profile 검사 exit0/skip0을 대신하지 않는다.
