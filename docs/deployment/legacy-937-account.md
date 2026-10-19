@@ -6,6 +6,20 @@ Its Account client is the existing foundation receiver (D-757); it creates no
 second account directory. The previous unauthenticated legacy boundary must not
 remain reachable after switching ingress.
 
+Deployment inventory (D-809):
+
+| Component | Source and owner | Intended listener / Account scope | Evidence |
+|---|---|---|---|
+| Legacy 937 review HTML and review writer | External `/home/rosy/dataset-review-937/server.py`; existing dataset operator | HTTP `127.0.0.1:18770`, reachable only through the Account front | Preserve original HTML, JSON, CSV, images and human decisions; installation is a separate operator check |
+| Account front | Platform `learning/curation/perception/legacy_review_account.py`; perception curation | HTTP `127.0.0.1:8770`; `project:learning-dataset-937`; registered HTTPS origin on port 9448 | Source `1bcd83ba3a`: 35 remote synthetic tests passed, NEW 0; production installation and browser acceptance are separate |
+| HTTPS ingress | Existing model-host ingress; deployment operator | Exact private registered origin forwards only to the Account front | Confirm TLS, public Host preservation and inaccessible direct backend during activation |
+
+The external HTML is not a Platform frontend and is not registered as a new
+`shared/web/surfaces.yaml` surface. This inventory tracks the deployed service
+and its Platform Account boundary; it does not assert Platform UI design-system
+coverage. [D-809](../adr/D-809-legacy-learning-account-boundary.md) owns the decision
+to preserve the external app and its separate protected audit ledger.
+
 Before switching, back up the existing server and hash the human review JSON,
 CSV and image files. Move the unchanged legacy service behind a loopback-only
 `127.0.0.1:18770` listener. Bind the wrapper to `127.0.0.1:8770` and configure the
