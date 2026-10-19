@@ -24,6 +24,11 @@ def module():
     return m
 
 
+def test_current_checkout_satisfies_signed_source_inventory():
+    root = SCRIPT.parents[2]
+    assert not [name for name in module().SPLIT_REQUIRED if not (root / name).is_file()]
+
+
 @pytest.fixture
 def keys(tmp_path):
     sys.path.insert(0, str(SCRIPT.parent))
