@@ -5,6 +5,7 @@
     edge_capture.py verified <E> --session ID --classes classes.yaml       (model PC)
     edge_capture.py sam3     <E>/verified-inputs --checkpoint sam3.pt       (model PC, GPU)
     edge_capture.py import   <E>/verified-inputs/verified-inputs-v3.jsonl --state REVIEW_STATE
+    edge_capture.py import   /prepared/verified-inputs.jsonl --state REVIEW_STATE --catalog-relative
 
 <S> is the PC work folder of one session (edge_capture_session.py lays it out),
 <E> its copy on the model PC. frames: one camera frame per second of the
@@ -274,7 +275,10 @@ def cmd_import(args):
     import review_app
     import review_ingest
     store = review_app.ReviewStore(args.state)
-    r = review_ingest.import_frames(store, {"path": str(args.catalog)})
+    body = {"path": str(args.catalog)}
+    if getattr(args, 'catalog_relative', False):
+        body['catalog_relative'] = True
+    r = review_ingest.import_frames(store, body)
     print({k: r.get(k) for k in ("added", "pixel_reviews_pending", "indices")})
 
 
@@ -303,6 +307,8 @@ def main(argv=None):
     p = sub.add_parser("import")
     p.add_argument("catalog", type=Path)
     p.add_argument("--state", type=Path, required=True, help="review app state folder")
+    p.add_argument("--catalog-relative", action="store_true",
+                   help="import draft-free PNG/video paths relative to the selected catalog")
     p.set_defaults(fn=cmd_import)
     args = ap.parse_args(argv)
     args.fn(args)
