@@ -3038,3 +3038,9 @@
 - 변경: 기존 SQLite 복원 경로에서 현재 Account·OAuth·Console 자격의 schema와 전체 행을 읽기 전용 snapshot으로 비교한다. 다른 상태나 확인할 수 없는 현재 DB는 교체 전에 거부한다. 동일 인증 상태의 업무 데이터 복원과 인증 테이블이 없는 기존 DB 동작은 유지한다. 강제 우회나 인증 테이블 이식은 추가하지 않았다.
 - 증거: AI PC RED `1f1cbde4e5`에서 기존 복원이 자격 소유 10개 테이블의 변경을 허용해 10개 회귀가 실패했다. 실제 첫 비밀번호 변경과 현재 revision을 반영한 `7c0af51339`의 DB·Account 원장·OAuth 전체 85개 시험은 통과했고 NEW0이다. 이후 모델 PC의 `ff859c5288`에서 가드 호출 한 줄을 제거한 mutation은 복원 관련 23개 시험을 실패시켰고 7개는 통과했다. 가드를 복구한 최종 커밋을 verbose 출력으로 재검증한다. 이전 fixture 오류 4개/1개는 수정했으며 기존 실패 목록에 추가하지 않았다.
 - gate 변화: 없음. D-807의 복구 누락 수정이며, 원격 GREEN·독립 리뷰·정상 게시와 서명 배포 전에는 운영 적용을 주장하지 않는다.
+
+## 2026-10-20 · uncommitted · Fleet 소스 이미지의 순수 평가 의존성 복구
+
+- 변경: Fleet 소스 이미지의 COPY와 build context에 기존 순수 helper `fact_rules.py`·`wait_graph.py`를 포함한다. wheel 목록에는 이미 있던 파일이며, 상황 서비스·writer·실행 권한은 추가하지 않는다. 격리한 소스 이미지 시험은 실제 시작 소비자인 `fleet.stuck.ai_facts`·`fleet.traffic.blocks`를 가져오고 helper의 출처를 staged 이미지 안으로 확인한다.
+- 증거: 기존 후보 이미지의 격리 실행에서 `rosy_situation.fact_rules` 누락을 확인했다. 네트워크·호스트 데이터·서비스 시작 없이 직접 import만 수행했다. 원격 AI PC RED `023afd30e3`에서도 같은 시작 소비자의 ModuleNotFoundError로 1개 회귀가 실패했다. 누락 두 파일을 포함한 최종 커밋의 원격 GREEN과 독립 리뷰를 이어간다.
+- gate 변화: 없음. 실제 서비스는 앞선 정상 후보로 롤백됐고 작업 소유 maintenance hold를 설정했다. CI·서명 후보·실제 이미지 시작과 health 확인 전에는 새 후보 설치 성공을 주장하지 않는다.
