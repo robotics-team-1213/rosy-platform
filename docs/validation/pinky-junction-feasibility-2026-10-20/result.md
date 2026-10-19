@@ -154,3 +154,43 @@ PNG SHA256 `f8ee3850c152629863afe40337ac7713dd54e50eaa285d2b821b1f14cc733933`의
 독립 reviewer `/root/drive_success_review`의 실제 source/test 검토에서 추가 material finding은 없다. native 관련7개 파일173 passed / 0 skipped / NEW0, exit0. 실제1356 mask와 저장 기억, 고립 near hit, 두 opening, 누락 이미지 행, 넓게 연결된 opening을 검증했다. e5b1 이후2커밋 size-range 통과. native replay JSON SHA256: `8e694f171efab03ec9bee05fabd9fdb51868ac9c287441cbf311cd1eb26d3f47`.
 
 최신 영향 범위·동일 조건 반복 SIM은 별도로 검증하며, 앞선1 PASS / 1 FAIL을 이 후보의 통과로 이월하지 않는다. CORE 권한·기존 임계값·회전량 예산과 새 연결점 프로토콜 NO-GO 판정을 유지한다.
+
+## b42 검증 종료와 마지막 코너 실패
+
+HEAD `b42b05b0893a4db9f978f9333efda8e6cc5a1776`
+
+native 영향 범위는 run-1 6,891 passed / 408 skipped, run-2 9 passed로 총6,900건을 통과했다. 두 로그 모두 known_failures 비교 NEW0이다. e5..b42 독립 최종 검토는 Critical0 / Important0 / Minor0이었다.
+
+동일 조건 첫 SIM `sim-b42b05b089-81d313`은 마지막 코너에서 pose/off_lane 0.108m로 실패했다. settled_xy는 (0.002470, -0.358619), 목표 거리는0.551514m였다. 실제 주행 표본1,291개 모두 learned_drivable이고 fallback0이다. revision 표기가 있는1,280개는 고정 revision과 일치하고11개는 누락되어 표본별 revision을 직접 입증하지 않는다. 열린 junction 수용298회·먼 출구 거절63회였다. final cmd·odom은0, lease released, left_running은 빈 목록이며 산출물 회수와 native 정리를 마쳤다. lane_return은 기존 조건대로 SKIP이다.
+
+167.125초에는 오른쪽 영상 목표(0.223, -0.091)를 미래 왼쪽 안내로 다시 명명한 exit_from_target 후보가 왼쪽 pivot을 선택했다. 당시 here는-17.77도, ahead는+53.5도였다. 원래 관측 방향과 지도 유래 후보의 출처 분리를 후속 진단 대상으로 삼는다. centre_path_m은 보간된 행 중심이므로 그 자체를 실제 마스크 연결 증거로 사용하지 않는다. 같은 실패 후보를 수정 없이 반복하지 않으며 수용은 HOLD다.
+
+- result.json SHA256: `b4d4c8b9319a55860914935f71dc1611124a218e9fdad7128cb4953f042a9196`
+- observations.jsonl SHA256: `701bea450c2a6a26397d8f9a65b25e0a58a3aad0b49fab50621eb0e947014c43`
+- run.txt SHA256: `7c7db8e26cf01b83d282add11891667818b05076c086b498531f66912f1fe479`
+
+## 관측 출처 보존과 실제 화면 바닥 정렬 후보
+
+HEAD `8a870ada3ea6a8a657d102a9f8921a9395bd4f17`
+
+b42의 원본 PNG001337·001338·001339를 같은 모델로 native 재생했다. 001337의 합성 목표는(0.223, -0.091)이지만 원래 행 중심 추정점은 화면 밖이라 실제 마스크 지지를 직접 증명하지 못했다. 화면 경계로 제한한 픽셀을 다시 지면으로 투영하고, 원본 픽셀과 행 사이 연결 픽셀이 모두 floor인 실제 raw 행 prefix만 정렬 근거로 삼았다. 이 값은 차로 중심이나 출구 사실로 표시하지 않는다.
+
+수정 후보는 memory·target의 원래 방향을 미래 guide 방향으로 바꾸지 않는다. 반대 관측은 출구 승격을 거절하고 명시적인 guide 후보로 구분한다. guide만으로 반대쪽 현재 target을 따라 전진하는 경로도 제자리 look로 제한했다. 현재 target의 반대 여부는 odometry로 현재 좌표에 변환해 검사한다.
+
+짧은 실제 floor prefix가4개 이상의 raw 행을 가지며 source/current 모든 점이 앞쪽0.18m 안이고 같은 side일 때만 기존 정렬 분기에서 사용한다. 회전 방향과 초기 상한은 같은 prefix의 첫 실측점에 결속한다. 전체 prefix가 더 멀리 이어지면 근접 구간만 잘라 수용하지 않는다. zero-linear confidence, 누적 yaw 예산, odometry 연속성, fresh guide, 전진 후 수명 종료와 CORE 최종 권한은 유지한다.
+
+native RED는 a81c256의14개 NEW와 현재 좌표 별도 회귀1개 NEW로 확인했다. 이후8a870 생산 후보의 관련8파일193건이 native 통과했고 skip0, known_failures NEW0이다. clip 지점이 non-way일 때, 픽셀 연결의 구멍, 긴 prefix, current 범위 이탈, 무전진 예산 소진을 포함한다. 실제001337 mask를 사용한 full steer는 반대 미래 pivot보다 관측 floor 방향의 bounded 정렬을 선택했다. 독립 contract 검토의 두 P2를 수정하고 소스 커밋 전 재검토에서 추가 material finding 없음을 확인했다. b42 이후5커밋 size-range 통과. 최신 영향 범위와 반복 SIM 수용은 별도 검증하며 아직 HOLD다.
+
+- 원본001337 PNG SHA256: `9c5eeba847fec65766775ff7a220c06813069b959cc78a1857811fcc36f0e0b8`
+- native mask packbits SHA256: `820227703f251726f03f3b7bbcbbb3a5767b06f66ef5be770a4e4dbad037ee07`
+- native replay JSON SHA256: `55e829a44bbedbd0210c118a9aac9c5b67900de09cd4552818f4bc7715d8de08`
+
+## 촬영 이후 회전한 합성 후보의 현재 좌표 판정
+
+HEAD `8387e53ffbd2ba132b278b34ea0098cc7dc315d1`
+
+8a870의 별도 최종 소스 검토에서 Important1을 확인했다. target 승격 방향은 source 좌표였고, source target(0.15, +0.10), 관측 이후 yaw +0.8rad, guide +30도에서는 현재 목표가 오른쪽으로 바뀌어도 왼쪽 출구로 승격해 오른쪽 전진 arc가 남았다. 같은 문제가 memory 유래 후보에도 남아 native3794606c 회귀2개 NEW로 재현했다.
+
+8387은 target 승격을 현재 좌표에서 판정하고, guide·target·memory 유래 후보의 반대 방향 검사도 final selector와 같은 선택 점을 현재 좌표로 변환해 수행한다. 실제 near 출구의 관측 입장은 바꾸지 않는다. 최신 diff는 source 커밋 전 독립 safety 재검토에서 추가 material finding이 없었다. 이전193건 통과는 후속 변경의 검증을 대신하지 않으며 최신 native 회귀·영향 범위·SIM은 별도로 확인한다.
+
+8387의 최신 관련8파일은 native195 passed / skip0, known_failures NEW0로 종료했다. b42 이후7커밋 size-range 통과. 영향 범위와 동일 조건 반복 SIM은 아직 수용 증거가 아니며 HOLD를 유지한다.

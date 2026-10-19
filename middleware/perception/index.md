@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 합성 출구의 현재 좌표 방향 재검증
+- 2026-10-20 · uncommitted · 관측 출처와 실제 바닥 정렬 결속
 - 2026-10-20 · uncommitted · 분리된 출구 관측의 입장·목표 결속
 - 2026-10-20 · uncommitted · 열린 junction의 선택된 근접 출구 소비
 - 2026-10-20 · uncommitted · 현재 근접 분기의 경로 선택 보존
-- 2026-10-20 · uncommitted · recentre와 근접 출구 관측 수명 분리
-- 2026-10-20 · uncommitted · 현재 차로와 원본 행 순서 후보 검증

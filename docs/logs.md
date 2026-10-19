@@ -9311,3 +9311,9 @@ osy-d395-s1d\`.
 - 변경: 열린 junction 후보의 첫 완주와 마지막 구간 이탈 실패, 중간 일시적 HOLD·revision metadata 누락을 함께 보존했다. 마지막 코너의 분리된 opening이 합쳐지는 native 재생과 후속 결속 회귀를 기록했다.
 - 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`에 두 run의 조건 동일성·정지·lease·정리·원본 hash를 기록했다. f47d 관련173 passed/NEW0는 최신 SIM 수용과 구분한다.
 - gate 변화: 없음. 주행 재현 수용 HOLD, 실물·현장 gate 승격 없음.
+
+## 2026-10-20 · uncommitted · 마지막 코너 실패와 실제 픽셀 근거 보존
+
+- 변경: b42의 영향6,900 passed와 마지막 코너 이탈 실패를 함께 동결 기록에 추가했다. 후속 관측 출처 보존·실제 floor 픽셀 정렬 후보와 native RED→GREEN 증거를 결속했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`에 SIM 정지·lease·정리·원본 hash, 001337 mask/replay hash와 생산8a870 관련193 passed/NEW0를 기록했다.
+- gate 변화: 없음. 같은 후보 연속2회 완주 조건 미달이며 이전 e5 첫 PASS를 이월하지 않는다.

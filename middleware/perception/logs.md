@@ -1737,3 +1737,15 @@
 - 변경: 가까운 opening과 별도의 먼 opening이 합쳐지지 않게 border run을 나눠 같은 run에서 near·point·reach를 계산한다. 기존 above·최소4행·이미지 행 간격을 유지하며 넓은 연결 opening은 자르지 않는다.
 - 증거: e5b1 동일 조건1 PASS/1 FAIL 뒤 마지막 코너1356 원본 재생에서 near5행과 far6행의 혼합을 확인했다. 0aaaca 재현1 failed 후f47d 관련173 passed/NEW0. 실제 mask와 기억 저장까지 회귀로 확인했고 독립 contract 검토 지적 없다.
 - gate 변화: 없음. 최신 반복 SIM과 영향 범위 검증 전이며 이전 첫 PASS를 새 후보에 이월하지 않는다.
+
+## 2026-10-20 · uncommitted · 관측 출처와 실제 바닥 정렬 결속
+
+- 변경: 오른쪽 영상 목표·기억을 미래 왼쪽 경로로 다시 명명하지 않는다. guide-only 후보는 현재 좌표에서 반대 target을 따라 전진하지 않으며, 짧은 실제 floor 픽셀 prefix만 기존 bounded 제자리 정렬의 근거로 소비한다. 화면 clip 후 재투영·raw 행/연결 픽셀 지지·source/current 전체 근거리·동일 side를 확인한다.
+- 증거: b42는 native 영향6,900 passed 뒤 SIM 마지막 코너 off_lane0.108m로 실패했다. 원본1337 mask의 화면 밖 중심 추정을 확인하고 a81c RED14개·현재 좌표 RED1개 후8a870 관련193 passed/NEW0, skip0. 독립 contract 검토의 두 P2를 수정 후 재검토했으며 기존 회전량 예산·수명·CORE 권한을 유지한다.
+- gate 변화: 없음. 최신 영향 범위와 동일 조건 연속2회 SIM 검증 전이며 실물 수용을 주장하지 않는다.
+
+## 2026-10-20 · uncommitted · 합성 출구의 현재 좌표 방향 재검증
+
+- 변경: target 승격과 guide·target·memory 유래 후보의 반대 방향 판단을 현재 좌표 및 최종 선택 점에 결속했다. 촬영 이후 회전한 source 방향으로 반대쪽 전진 arc를 만들지 않게 했다.
+- 증거: 8a870 별도 최종 소스 검토 Important1을 native3794606c 회귀2개 NEW로 확인했다. 후속8387은 독립 safety 재검토 후 관련195 passed/skip0/NEW0, b42 이후7커밋 size-range 통과.
+- gate 변화: 없음. 최신 영향 범위·반복 SIM과 실물 수용은 별도이며 수용 HOLD.
