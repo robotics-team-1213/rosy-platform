@@ -365,3 +365,13 @@ def test_a_connected_tight_bend_is_measured_along_the_path_instead_of_the_forwar
     drive_curve(owner, guard, tight, here=14.4, ahead=67.5)
     assert guard._alignment is None
     assert step(owner, guard, 0.7, 0.16)[0] == -PIVOT_ERROR
+
+
+def test_pixel_zigzags_cannot_inflate_a_short_observed_path_into_episode_completion():
+    owner, guard = guarded()
+    spend(owner, guard)
+    noisy = dict(CURVED, target_now_m=(0.195, -0.010), exit_point_m={'right': (0.190, -0.010)},
+        exit_reach_m={'right': 0.210},
+        centre_path_m=[(0.139 + i * 0.002, -0.020 if i % 2 else 0.0) for i in range(32)])
+    drive_curve(owner, guard, noisy)
+    assert step(owner, guard, 0.7, 0.16)[2]['reason'] == 'recentre_alignment_spent'

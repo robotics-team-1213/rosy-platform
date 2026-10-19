@@ -22,7 +22,7 @@ def _observed_turn(info, source_pose, pose, owner):
     if (seen not in ('left', 'right') or info['strategy'] != f'drivable_turn_{seen}'
             or not ctx.get('guide') or not ctx.get('fresh')
             or any(info.get('exit_from_' + key) for key in ('memory', 'route_memory', 'guide', 'target'))
-            or info.get('exit_reach_m', {}).get(seen, 0.0) < LOOKAHEAD_M):
+            or info.get('exit_reach_m', {}).get(seen, 0.0) < BEND_ON_X_M):
         return False
     raw, target, opening = info.get('centre_path_m'), info.get('target_now_m'), info.get('exit_point_m', {}).get(seen)
     try:
@@ -31,8 +31,10 @@ def _observed_turn(info, source_pose, pose, owner):
             return False
         path = [_to_current(p, source_pose, pose) for p in raw]
         opening = _to_current(opening, source_pose, pose)
+        # A lower bound on connected curve length; row-to-row pixel zigzags cannot inflate it.
+        coverage = math.hypot(*path[0]) + math.dist(path[0], path[-1])
         if (not 0.0 < path[0][0] <= BEND_ON_X_M or abs(path[0][1]) > CORRIDOR_HALF_M
-                or path[-1][0] < LOOKAHEAD_M or target[0] < BEND_ON_X_M or opening[0] <= 0.0
+                or coverage < LOOKAHEAD_M or target[0] < BEND_ON_X_M or opening[0] <= 0.0
                 or any(a[0] >= b[0] or math.dist(a, b) > ROW_BAND_M for a, b in zip(path, path[1:]))
                 or not math.isfinite(ctx.get('here'))
                 or abs(math.remainder(math.radians(ctx['here']) - math.atan2(target[1], target[0]), math.tau))
