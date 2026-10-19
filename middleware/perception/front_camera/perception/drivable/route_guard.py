@@ -70,6 +70,7 @@ def _current_lane(error, confidence, info, source_pose, pose, owner, stamp, obse
     if (info['strategy'] not in ('drivable_turn_left', 'drivable_turn_right')
             or error is None or confidence is None or confidence <= owner._pivot_confidence
             or not ctx.get('guide') or not ctx.get('fresh') or info.get('reason')
+            or info.get('exit_near', {}).get(info.get('exit')) or info.get('exit_from_route_memory')
             or any(info.get(key) for key in ('straddle', 'crosswalk_hold', 'pivot_limit'))
             or info.get('front_blocked_m') is not None):
         return None
