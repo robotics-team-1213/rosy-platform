@@ -13,6 +13,7 @@
 # baseline_reason을 적는다.
 # app_name·app_name_en·short_name·icon은 D-377 이름 규칙(Rosy + 영어 한 단어, id = 그 단어 소문자)과
 # D-370 3항 아이콘이다(test_surface_icons.py, test/architecture/test_app_identity.py).
+# title_prefix는 런처 신원을 등록하지 않는 웹 앱의 표시 이름이다(D-806).
 # role은 D-370 1항 역할 표의 한 줄 요약, owns는 그 표면이 소유하는 조작(D-370 4항)이다. 한 조작은
 # 한 표면만 소유한다 — 겹침은 estop(모든 운용 표면)과 transitional 사유가 붙은 이행기 항목만
 # 허용한다(test/architecture/test_app_roles.py). 소유가 없으면 owns: []로 적는다.
@@ -35,6 +36,7 @@
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: pinky-review
+    title_prefix: Rosy Learning
     api_owners: []
     path: learning/curation/perception/review_app_web
     themes: [dark, light]
@@ -50,7 +52,7 @@ surfaces:
     ports:
       - {port: 8767, source: learning/curation/perception/review_app.py}
     audience: Pinky 학습 객체·픽셀 라벨 검수자
-    role: 원본 다중 영상·객체/픽셀 독립 검수와 최신 결정 export를 소유하는 로컬 학습 도구 (D-459·D-462). Rosy Learning은 작업 화면 표시 이름이며 별도 런처·PWA·ROS·Android 앱 등록이 아니다 (D-461).
+    role: Rosy Learning — 객체·픽셀 검수, 자료 등록, 학습 작업을 제공하는 학습 관리 센터. Studio는 검수 작업대 이름이다. 별도 런처·PWA·ROS·Android 앱 등록은 아니다 (D-461·D-806).
     owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.
@@ -95,7 +97,7 @@ surfaces:
     ports:
       - {port: 8090, source: operations/fleet/fleet/cli.py}
     audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정) · Cell 작업 준비자 (/console/cell, D-446) · 계정 관리자 (/console/accounts, D-757) · 정책 관리자 (/console/policy, D-793)
-    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인·Rosy Account 계정 관리 (D-370 1항, D-757)
+    role: 사이트 관제·Mission·원장·기기 연결 승인과 계정 관리. Cell은 팔레타이징 작업 준비 화면이며 Account는 공용 로그인 기능이다 (D-370·D-757·D-806).
     owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop, account-management, policy-governance]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
@@ -110,6 +112,7 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
+    title_prefix: Rosy Games
     path: operations/apps/games/games/web
     themes: [dark]
     theme_reason: 경기장 녹색이 곧 바탕이다(D-359 §3.3)
@@ -118,7 +121,7 @@ surfaces:
     ports:
       - {port: 8765, source: operations/apps/games/games/cli.py}
     audience: 게임 호스트 노트북 (D-153 §7 — /board)
-    role: 게임 호스트 보드 — D-370 역할 표 밖이다(8항)
+    role: Rosy Games — 노트북 게임 호스트의 경기 운영 화면. Fleet 관제와 로봇 CORE 대시보드에 속하지 않는다 (D-90·D-101·D-806).
     owns: []
     grammar: focal
     contracts: [shared_controls, typography_focus, dialog]

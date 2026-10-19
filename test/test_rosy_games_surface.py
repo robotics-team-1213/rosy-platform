@@ -131,8 +131,8 @@ def test_two_robot_stop_is_the_last_control_of_the_top_bar():
     assert controls and controls[-1].startswith('<ui-button id="halt"')
     assert bar.index("<ui-brand") < bar.index('id="phase"') < bar.index('id="connection"') < bar.index('id="halt"')
     title = re.search(r"<b>(.*?)</b>", bar, re.S)
-    assert title and re.sub(r"<[^>]+>", "", title.group(1)) == "1v1 피치"
-    assert title.end() < bar.index("<small>노트북 게임 호스트</small>"), "title, then scope"
+    assert title and re.sub(r"<[^>]+>", "", title.group(1)) == "Games"
+    assert title.end() < bar.index("<small>1v1 피치 · 노트북 게임 호스트</small>"), "title, then scope"
     note = bar.split(stop, 1)[1]
     assert "스페이스 키로도 두 로봇을 세웁니다" in note
     assert '<span id="halt-status" role="status" aria-live="polite"></span>' in note

@@ -795,3 +795,9 @@
 - 변경: enrollment/camera-pairing의 실제 devices 경로를 공통 UI 검사에 반영했다. 비가역 버튼·비활성 이유·항상 살아 있는 정지 검사 조건은 유지한다.
 - 증거: 첫 전체 착지 검사에서 기존 경로 때문에 3 failed, 같은 invocation에서 6252 passed / 63 skipped. 수정 후 원격 검증은 착지 로그에서 확인한다.
 - gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · D-806 웹 전용 앱 제목 게시
+
+- 변경: Learning·Games의 title_prefix와 기존 Fleet 하위 화면 제목 검사를 반영한다. 런처·패키지 신원은 유지한다.
+- 증거: 원래 구현과 로컬 착지 검증은 보존한다. 이 게시 head는 별도 원격 검사·독립 검토·CI로 확인한다.
+- gate 변화: 없음. 이 기록은 운영 배포나 장치 수용의 증거가 아니다.

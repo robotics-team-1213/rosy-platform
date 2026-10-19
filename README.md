@@ -22,6 +22,8 @@ ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전
 
 ## 한눈에 보기
 
+사용자가 여는 앱과 내부 서비스는 [앱 이름과 역할](docs/reference/app-names-and-roles.md)에서 구분한다. Cell은 Fleet의 팔레타이징 작업 준비 화면이며, 계정·로봇 얼굴·Pilot 연결 로비는 각 앱의 하위 기능이다.
+
 ```mermaid
 flowchart TB
     op["관제 브라우저<br/>Fleet 콘솔"] -->|HTTPS| fleet
