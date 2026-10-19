@@ -7,7 +7,6 @@ import asyncio
 import math
 import secrets
 from contextlib import AsyncExitStack, asynccontextmanager
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,26 +14,14 @@ import pytest
 from core.bridge import docking_mode
 from core_common.protocol.station_charging import ChargeSessionStatus, Pose2D, StationPoseRecord
 from test_station_docking_api import station_api
-
-
-@pytest.fixture
-def pipeline_sources(monkeypatch):
-    """This cross-domain test must also run alone, without sibling conftest collection."""
-    root = Path(__file__).resolve().parents[4]
-    for relative in ('operations/fleet', 'operations/fleet/test', 'operations/world/src',
-                     'operations/decision/src', 'operations/site_execution/src', 'operations/overhead',
-                     'operations/apps/games', 'operations/situation',
-                     'middleware/core/services/test'):
-        monkeypatch.syspath_prepend(str(root / relative))
+from station_pipeline_sensors import pipeline_sources
 
 
 @pytest.mark.parametrize('full_return', [False, True, 'continuous', 'relocation_abort', 'composed', 'lifespan',
                                       'motion_busy', 'shutdown_RETURNING', 'shutdown_CHARGING', 'shutdown_UNDOCKING'])
 def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_stop(station_api, tmp_path,
                                                                                    pipeline_sources, full_return, monkeypatch):
-    import cv2
     import httpx
-    import numpy as np
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
     from fleet.server.station_ingress import StationIngress, StationSource
@@ -45,9 +32,6 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
     from fleet.server.station_return_http import StationReturnHttp
     from fleet.swarm.robots import RobotEndpoint
     from fleet.swarm.transport import HttpRobotClient
-    from core_features.docking.agent import DockReachability, DockStatus
-    from core_features.docking.station_sensors import DockSample, StationSensorReader
-    from rosy_vision.detect import generate_marker_image
     from rosy_vision.publish import SightingPublisher
     from rosy_vision.station_observation import StationCameraCalibration
     from rosy_vision.station_worker import create_station_worker
@@ -82,21 +66,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
             mode=svc.modes.mode.value if full_return else 'IDLE')
     owner.local_scope = owner.local_scope_nowait = local_scope
     signals = dict(contact=False, moving=False, normal=False)
-    def cached_contact():
-        status = DockStatus(DockReachability.OK, dock_id='charger-1',
-            load_present=signals['contact'], charging=signals['contact'] and not signals['normal'],
-            load_sample_at=now[0], termination='NORMAL' if signals['normal'] else 'UNKNOWN',
-            termination_source='charger' if signals['normal'] else 'unknown',
-            termination_sample_at=now[0] if signals['normal'] else None,
-            battery_id='pack-1' if signals['normal'] else None)
-        return DockSample(status, now[0], now[0])
-    cache = SimpleNamespace(start=lambda: None, close=lambda: None, snapshot=cached_contact)
-    owner.sensors = StationSensorReader(clock=lambda: now[0], source_clock=lambda: now[0],
-        poller_factory=lambda *args, **kwargs: cache,
-        battery_health=lambda: dict(sample_age_s=0., filtered_voltage=8.25),
-        motion_sample=lambda: dict(odom_epoch='0', captured_at=now[0],
-            measured_linear_m_s=0.02 if signals['moving'] else world.command[0],
-            measured_angular_rad_s=world.command[1]))
+    from station_pipeline_sensors import sensors
+    owner.sensors = sensors(now, signals, world)
     svc.state.set_odom_pose(*world.pose, source_stamp_ns=int(now[0]*1e9))
     if not full_return:
         bound = core.put('/api/v1/docking/station-target', headers=auth['fleet-a'], json=binding)
@@ -133,33 +104,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
         image_to_station=(0.001, 0., -0.3, 0., -0.001, 0.3, 0., 0., 1.),
         plane='robot_marker', lens_rectified=True, approved=True, uncertainty_m=0.002, uncertainty_rad=0.005)
     frame = SimpleNamespace(header=SimpleNamespace(seq=0), captured_at=now[0], received_at=now[0], jpeg=b'')
-    marker = generate_marker_image(7, 100)
-    station_marker = generate_marker_image(33, 100)
-    global_anchors = tuple(dict(marker_id=40+i, corners=((x, y), (x+49, y), (x+49, y+49), (x, y+49)))
-                           for i, (x, y) in enumerate(((5, 5), (545, 5), (545, 545), (5, 545))))
-    def render_global():
-        # Independent fixed camera/map; station carries this marker and its local docking camera.
-        canvas = np.full((600, 600), 255, dtype=np.uint8)
-        for anchor in global_anchors:
-            x, y = anchor['corners'][0]
-            canvas[y:y+50, x:x+50] = generate_marker_image(anchor['marker_id'], 50)
-        centre = round((scene.station_x-.8)*1000)
-        canvas[250:350, centre-50:centre+50] = station_marker
-        ok, data = cv2.imencode('.jpg', canvas)
-        assert ok
-        return data.tobytes()
-    def render(visible=True):
-        canvas = np.full((600, 600), 255, dtype=np.uint8)
-        if visible:
-            x, y, yaw = world.pose
-            cx, cy = round(300+(x-scene.station_x)*1000), round(300-y*1000)
-            if 50 <= cx <= 550 and 50 <= cy <= 550:
-                canvas[cy-50:cy+50, cx-50:cx+50] = marker
-                canvas = cv2.warpAffine(canvas, cv2.getRotationMatrix2D((cx, cy), math.degrees(yaw), 1.),
-                                        (600, 600), borderValue=255)
-        ok, encoded = cv2.imencode('.jpg', canvas)
-        assert ok
-        return encoded.tobytes()
+    from station_pipeline_images import PipelineImages
+    images = PipelineImages(world, scene)
 
     async def scenario():
         robot_token = auth['fleet-a']['Authorization'].removeprefix('Bearer ')
@@ -288,26 +234,13 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     first = await runtime.tick()
                     assert first.state == 'RETURNING', (first.reason, owner.reason, failures)
                     assert runtime.decision.reason == 'LOW_SOC_RETURN'
-            tick_finished, tick_generation, runtime_tasks = asyncio.Condition(), [0], set()
-            initial_core_tick = asyncio.Event()
-            async def wait_runtime():
-                async with tick_finished:
-                    previous = tick_generation[0]
-                    await asyncio.wait_for(tick_finished.wait_for(lambda: tick_generation[0] > previous), 3.)
+            from station_pipeline_clock import PipelineClock
+            workers = PipelineClock()
             if lifespan:
-                original_tick = runtime.tick
-                async def observed_tick():
-                    runtime_tasks.add(asyncio.current_task())
-                    await initial_core_tick.wait()
-                    result = await original_tick()
-                    async with tick_finished:
-                        tick_generation[0] += 1
-                        tick_finished.notify_all()
-                    return result
-                runtime.tick = observed_tick
+                workers.observe(runtime, 'tick')
             async def advance():
                 if lifespan:
-                    await wait_runtime()
+                    await workers.wait()
                     return charges.get('charge-1')
                 return await runtime.tick() if full_return else await monitor.advance('charge-1')
             console = FleetConsole([endpoint], [robot], clock=lambda: now[0])
@@ -327,6 +260,9 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 assert returns.adapter.runner is fleet.state.trip_runner
                 assert ports.work_handover.__self__.tasks is cycles.tasks
                 assert ports.work_handover.__self__.console is console
+                if lifespan:
+                    workers.observe(fleet.state.trip_runner, 'tick')
+                    workers.observe(cycles.tasks, 'dispatch_next')
                 original_handover = ports.work_handover
                 async def observed_handover(*args, **kwargs):
                     before = fleet.state.trip_runner._engaged(robot_id)
@@ -343,7 +279,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 async with fleet.router.lifespan_context(fleet):
                     yield
                 assert runtime._closed
-                assert len(runtime_tasks) == 1 and all(task.done() for task in runtime_tasks)
+                workers.assert_stopped()
             async with (
                 AsyncExitStack() as lifetime,
                 SightingPublisher('http://fleet', source_token, transport=httpx.ASGITransport(app=fleet)) as publisher,
@@ -362,7 +298,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                         marker_id=33, marker_side_m=.1, marker_mount=Pose2D(x=0., y=0., yaw=math.pi/2),
                         image_to_map=(.001, 0., .8, 0., -.001, .3, 0., 0., 1.), plane='station_marker',
                         lens_rectified=True, approved=True, fixed_map_anchor=True,
-                        image_anchors=global_anchors, max_anchor_error_px=.5,
+                        image_anchors=images.global_anchors, max_anchor_error_px=.5,
                         uncertainty_m=.002, uncertainty_rad=.005, approach_offset_m=.1)
                     global_worker = create_station_map_worker(calibration=fixed,
                         ingest=SimpleNamespace(latest_frame=lambda _: global_frame), rectify=lambda data: data,
@@ -380,7 +316,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                         if global_worker:
                             global_frame.header.seq += 1
                             global_frame.captured_at = global_frame.received_at = now[0]
-                            global_frame.jpeg = render_global()
+                            global_frame.jpeg = images.render_global()
                             await global_worker.process_latest()
                         else:
                             # Isolated legacy variant: explicit SIM global source.
@@ -395,18 +331,18 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                         cycles.pulse()
                     frame.header.seq += 1
                     frame.captured_at = frame.received_at = now[0]
-                    frame.jpeg = render(visible)
+                    frame.jpeg = images.render(visible)
                     await worker.process_latest()
                     docking_mode.tick(svc, pytest.fail, station=owner)
-                    if lifespan and not initial_core_tick.is_set():
+                    if lifespan and not workers.started.is_set():
                         # Exercise a CORE timer before the async worker's initial binding.
                         # Startup must preserve the real, already-pulsed motion sample.
                         assert owner.session is None and owner.state == 'UNBOUND'
                         assert cycles.motion.snapshot() is not None
-                        initial_core_tick.set()
+                        workers.started.set()
                     if full_return and server_running:
                         if lifespan:
-                            await wait_runtime()
+                            await workers.wait()
                         else:
                             await runtime.tick()
                 async def shutdown_and_restart(phase):
