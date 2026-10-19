@@ -3026,3 +3026,9 @@
 - 변경: 기존 개인키의 위치를 확인할 수 없어 사용자가 새 키 생성을 승인했다. 개인키는 Windows 사용자 보호 경로에 보관하고 공개키만 기존 이미지·SD·업데이터 신뢰 경로에 반영했다. 공개키 지문과 기존 장치의 자동 이관이 없다는 점을 trust anchor README에 기록했다.
 - 증거: OpenSSL Ed25519 공개키 파싱과 DER SPKI SHA-256 지문 확인. 원격 서명·이미지 검증 회귀와 새 공개키를 포함하는 ARM64 이미지 빌드는 이어서 실행한다.
 - gate 변화: 없음. 새 이미지의 서명·카드 readback·실제 부팅 확인 전까지 ARTIFACT/DEVICE/FIELD 완료를 주장하지 않는다.
+
+## 2026-10-20 · uncommitted · OMX 첫 관절 시운전의 출력·피드백 검사
+
+- Change: joint_tune defaults use low raw output/profile values without automatic escalation. Reject time-based and auto-torque Drive Modes, verify command readback and fresh startup position, require a stable hold, and confirm torque OFF before restoring any register.
+- Evidence: committed regression tests exposed the old behavior on the remote model PC (startup-red, startup-drive-red, startup-feedback-red, startup-profile-red). Implementation review and committed-revision green checks follow before publication.
+- Gate: unchanged. These software checks do not accept physical torque limits, a gravity-safe stop, robot deployment or strawberry grasping. Physical commissioning remains pending serial access and supervised acceptance.
