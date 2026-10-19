@@ -547,3 +547,10 @@
 - 변경: 시험 전용 선택적 intake·owner lock·최초 HOLD trace와 고정 5회 native 표본을 추가했다. 생산 안전 기준과 freshness·timeout·executor 설정은 유지했다.
 - 증거: 계측 단독 5회·계측 전체 suite 5회·계측 없는 전체 suite 5회·수정하지 않은 main 전체 suite 별도 5회 통과. 원격 affected 1281 passed, 22 skipped, NEW 0. 독립 리뷰는 진단 전용 변경으로 적절하다고 판정했다. 사용자 승인 controller 패키지 설치 후 Gazebo 목표 0.01rad에 관측 이동량 0.008547rad·오차 0.001453rad. 상세 범위와 로그 해시는 docs/validation/omx-feedback-verification-2026-10-18/result.md.
 - gate 변화: 없음. 간헐 stale-feedback 원인은 미확정이며 Fleet→장치 lease 전달·학습 정책 종단간·실물 수용 증거는 없다.
+
+## 2026-10-19 · uncommitted · refactor(omx): recover canonical contract extraction
+
+- 변경: 보존된 omx-native-ready 미커밋에서 ROS-free 계약 타입과 검증을 contracts 단위로 옮긴다. 기존 import는 동일 객체를 다시 내보내고 명령 owner의 상태·정지·실행 권한은 유지한다. command_types의 safety 분류와 import 동일성 회귀를 함께 복구한다.
+- 증거: 현재 main과 이동한 정의의 AST 동일성 및 독립 소스 리뷰를 확인했다. 원격 시험은 커밋 후 착지 관문에서 실행하며 아직 통과로 기록하지 않는다.
+- gate 변화: 없음. 실물 실행·장치 수용·배포를 수행하지 않는다.
+- 결정: D-427·D-429·D-430·D-766의 기존 경계와 크기 규칙을 따른다.

@@ -78,3 +78,4 @@ fleet/fleet/server/recognition
 fleet/fleet/server/rightofway
 situation
 site_execution
+devices/omx/adapter/omx_adapter/contracts

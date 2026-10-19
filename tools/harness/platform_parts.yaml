@@ -880,6 +880,7 @@ safety_modules:
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py
+  - middleware/devices/omx/adapter/omx_adapter/contracts/command_types.py
   - middleware/devices/omx/adapter/omx_adapter/local_stop.py
   - middleware/devices/omx/adapter/omx_adapter/action_api.py
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
