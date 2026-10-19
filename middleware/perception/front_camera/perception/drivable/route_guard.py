@@ -128,11 +128,13 @@ def _observed_turn(info, source_pose, pose, owner):
         opening = _to_current(opening, source_pose, pose)
         # A lower bound on connected curve length; row-to-row pixel zigzags cannot inflate it.
         coverage = math.hypot(*path[0]) + math.dist(path[0], path[-1])
+        # The guide here is local direction; a curve's distant target chord has already turned.
         if (not 0.0 < path[0][0] <= BEND_ON_X_M or abs(path[0][1]) > CORRIDOR_HALF_M
                 or coverage < LOOKAHEAD_M or target[0] < BEND_ON_X_M or opening[0] <= 0.0
                 or any(a[0] >= b[0] or math.dist(a, b) > ROW_BAND_M for a, b in zip(path, path[1:]))
                 or not math.isfinite(ctx.get('here'))
-                or abs(math.remainder(math.radians(ctx['here']) - math.atan2(target[1], target[0]), math.tau))
+                or abs(math.remainder(math.radians(ctx['here']) - math.atan2(
+                    path[1][1] - path[0][1], path[1][0] - path[0][0]), math.tau))
                 > math.radians(REALIGN_DEG)):
             return False
     except (TypeError, ValueError):
