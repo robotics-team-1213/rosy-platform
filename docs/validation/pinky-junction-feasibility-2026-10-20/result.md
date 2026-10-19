@@ -75,3 +75,20 @@ SIM은 GPU, map_v2_fleet, lap, stall60, record, `lane_return` 제외 조건을 �
 생산·회귀 HEAD `124cccd11548e8a3a52f6770faa68ee2987318fa`. 독립 read-only contract reviewer `/root/drive_success_review`가 원본 wall 임계값과 검출 가능한 odom 시각·pose 불연속에 대한 두 지적을 재검토해 해소했다. source 시각·pose 연속성과 실제 keeper의 current_stamp로 source→current 나이·이동·yaw를 검사하며, 모든 odom epoch 변화를 검출한다고 주장하지 않는다. 과거 current_stamp 없는 직접 호출은 기존 호환 범위다.
 
 원격 관련5개 파일은150 passed / NEW0, skip0, runner exit0. 새 회귀는 recentre 보존, 좌표변환, reset·경로·wall·stale 거절, 원래.5m 만료, far/generated 미저장, cached source 결속, clock·pose 불연속을 포함한다. size-range는1b6 이후 두 커밋 통과. 기존 회전량 예산·CORE 최종 명령은 유지했다. 전체 영향 범위와 같은 조건 SIM은 별도 검증 전이며 완주 수용 HOLD다.
+
+## 관측 기억 수명 후보 4d0f811fad: SIM 실패
+
+독립 최종 검토는 Critical0 / Important0 / Minor0. 원격 affected는1회차6873 passed / 408 skipped / 38 warnings / 62 subtests와 문서 secret guard1 failed, 2회차9 passed / NEW0이다. 문서 SHA 옆 한글·구두점 때문에 integrity 문맥으로 인식되지 않은 표기 문제이며, guard를 완화하지 않고 기록 형식을 고쳐 별도 재검증한다. 이 실행을 전체 GREEN으로 기록하지 않는다.
+
+같은 고정 조건 `sim-4d0f811fad-e6b372`는 progress3.420m에서 stall FAIL. learned_drivable682회 / fallback0, 최종 cmd·odom0, lease 해제와 남은 프로세스 없음, native 정리 완료. 근접 출구 기억은91.375~94s 실제 유지됐으나 current-lane 보정6회(5회 유효)가 현재 관측 분기까지 덮었다. 89.125s 오른쪽 near=True 관측점(.189,-.092)m, 89.625s 같은 관측의 bounded memory(.1773,-.0911)m인데도 centre left로 바뀌었다. 이후91.375s left recentre, off-line,93.75s 정렬 예산.9083rad/limit.6039rad 소진으로 HOLD했다. 완주 수용 미달이며 같은 실패 source를 반복하지 않는다.
+
+- result SHA256: `a02158eceee1259d56ac12fa9f0f2780a657714ebedee668ea05ed6fb84f6117`.
+- observations SHA256: `017c15028baba0a4ffaf6617a5e98d8f954b35d0ae2eb6e542e7fe62ef095f2c`.
+
+후속 회귀는 이미 near 수용한 경로 분기 및 그 범위 안 관측 기억을 미래 분기로 간주하지 않도록 요구한다. 임계값·회전량 예산 완화와 새 API는 추가하지 않는다.
+
+## 현재 분기 선택 보존 후보 bd3a450cbb: 관련·문서 회귀 통과
+
+생산 commit `bd3a450cbbc9e21b839abc38182a542efc3c7a3e`. d639 재현2 failed / 106 passed / NEW2 후1행 보정 가드를 추가했다. 선택된 출구의 near=True 또는 유효한 route observation memory라면 기존 조향 후보를 보존한다. 다른 쪽 출구가 near라는 이유로 미래 보정을 막지는 않는다. 독립 reviewer `/root/drive_success_review`가 실제6회 기록과 생산 경계를 확인했고 추가 소스 지적이 없다.
+
+원격 관련·문서·release 합계340 passed / 0 skipped / 36 warnings / NEW0, runner exit0. 앞선 문서 해시 표기 실패는 이 실행에서 해소됐다. size-range는4d0 이후3커밋 통과. 다음 영향 범위·동일 조건 SIM은 별도 검증하며 연속 완주 수용 HOLD를 유지한다.

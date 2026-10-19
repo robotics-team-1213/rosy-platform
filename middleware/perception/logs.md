@@ -1719,3 +1719,9 @@
 - 변경: 운동 선택 해제가 관측점까지 지우던 결합을 기존 route_guard로 옮겨 분리한다. 실제 near 점·source·관측 시각만 저장하고 기존.5m와 앞쪽 조건, fresh guide, 원본 wall clearance, source 프레임 연속성과 source→current 이동 한도로 만료한다. 경로 변경·reset·안전 거절은 기억을 지운다. 회전량 예산과 CORE 권한은 유지한다.
 - 증거: a10a7d275 native 재현2 failed/4 passed, NEW2. 앞선1b6 SIM은3.421m stall FAIL이나 먼 입구 거절40회와 현재 차로 선택2회가 적용됐다. 후속 GREEN·SIM은 별도 기록한다.
 - gate 변화: 없음. 주행 수용 HOLD. drivable_steer의 기존 수명 블록을 옮겨 파일을 축소했고, capped 파일에 기능을 덧붙이지 않았다.
+
+## 2026-10-20 · uncommitted · 현재 근접 분기의 경로 선택 보존
+
+- 변경: current-lane 보정이 이미 near 수용한 선택 출구와 그 범위 안 관측 기억을 미래 분기로 취급하지 않게 했다. 기존 출구 조향을 보존하는1행 조건이며 회전량 예산은 유지했다.
+- 증거: 4d0 SIM에서 관측 기억 보존은 확인됐으나 centre 보정6회가 현재 오른쪽 분기를 덮었다. d639 원격 재현2 failed/106 passed, 문서 secret guard는 HEAD 표기 교정 후 통과. bd3a 생산 변경은 독립 contract 리뷰 지적 없이 커밋했고 후속 검증 중이다.
+- gate 변화: 없음. SIM 완주 수용 HOLD.

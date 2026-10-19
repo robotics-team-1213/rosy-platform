@@ -9293,3 +9293,9 @@ osy-d395-s1d\`.
 - 변경: 1b6 near admission 후보의 원격 시험과3.421m stall SIM 실패를 동결 기록에 추가했다. 관측 기억과 recentre 운동 선택의 수명 결합을 다음 재현 대상으로 기록했다.
 - 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 run ID·raw hash·실제 적용 횟수. 최종 정지·lease 해제·native 정리를 확인했으며 완주 수용은 미달이다.
 - gate 변화: 없음. 연속2회 동일 조건 완주를 통과하기 전까지 HOLD다.
+
+## 2026-10-20 · uncommitted · 관측 기억 후보 실패와 분기 보정 경계
+
+- 변경: 4d0 관측 기억 보존 후보의 실제 효과와 남은 stall 실패를 추가 보존했다. 현재 근접 분기를 미래 회전 보정이 덮는 후속 원인을 구분했다.
+- 증거: 같은 검증 기록의4d0 run·해시·관측점·회전량. 원격 영향 범위 문서 guard 실패도 생략하지 않고, HEAD 코드 표기 교정 뒤 release guard 통과를 별도로 기록했다.
+- gate 변화: 없음. 수정·회귀·SIM·실물 수용을 구분한다.
