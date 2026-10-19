@@ -3053,3 +3053,9 @@
 - 변경: Recover the dedicated SIM clock, terminal/placement/gripper diagnostics and clearance helpers with G2 owner/observer/runner wiring and matching world/layout fixtures. The runner uses the reviewed Fleet topic wrapper. D-788 remains Proposed; existing owner/fence/stop checks remain authoritative.
 - 증거: Independent review and committed remote tests are pending. No simulator or physical service is started by recovery.
 - gate 변화: None; source and host regression checks do not prove successful task placement, physical behavior or field acceptance.
+
+## 2026-10-19 · 0dbc66c10e · 서명 source의 보존 증거와 strict 실행 이식
+
+- 변경: 기존 D-446 lock·idle·환경·checkout guard 안에서 retained Ed25519 manifest/archive와 실제 source 파일을 재검증하고 source·manifest·환경 pin과 활성 sequence가 일치한 뒤에만 strict child를 실행한다. 일반 실행과 과거 payload build는 유지하며 현재 검수 앱의 읽기 전용 의존성 8파일만 허용한다.
+- 증거: 순수 controller 분리143passed. strict handoff 시험4RED 후 실제 import가 드러낸 native_review/camera_setup 누락과 과거 fixture build를 수정했다. 최종0dbc66c10e 원격193passed/skip0, comparator NEW/known/flaky0. 원본 source-proof 변조·shadow·pin·lock·legacy 회귀와 누락8사례 포함. 독립 소스 검토 material finding 없음. 전체 착지 관문은 후속 수행한다.
+- gate 변화: 없음. T4 byte-key backend·reader supervision·운영 서명/설치·장치·FIELD 수용을 수행하지 않았다.

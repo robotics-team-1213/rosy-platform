@@ -120,8 +120,14 @@ SPLIT_REQUIRED = (
                   "middleware/drive/tracking/wander/__init__.py")
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
+OMX_REVIEW_FILES = (
+    *("learning/curation/omx/" + name for name in
+      ("native_review.py", "native_capture.py", "native_environment.py")),
+    *("contracts/learning/src/rosy/contracts/learning/" + name for name in
+      ("__init__.py", "omx.py", "artifacts.py", "png.py", "camera_setup.py")))
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
+                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
+                 *OMX_REVIEW_FILES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
