@@ -1,5 +1,5 @@
 https://{$ROSY_ACCOUNT_HTTPS_HOST}:443 {
-	tls /run/secrets/account_cert /run/secrets/account_key
+	tls /run/rosy-account-tls/account-frontend.crt /run/rosy-account-tls/account-frontend.key
 	route {
 		handle /.well-known/assetlinks.json {
 			root * /run/rosy-account-public

@@ -106,12 +106,16 @@ def compose_settings(config: dict) -> dict:
         host = config["services"]["proxy"].get("environment", {}).get("ROSY_ACCOUNT_HTTPS_HOST", "")
         if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", host):
             raise ConfigError("Account HTTPS requires its certificate DNS hostname")
-        try:
-            account = {"port": 443, "ifaces": ["tailscale0"], "tls_host": host,
-                       "cert": config["secrets"]["account_cert"]["file"],
-                       "key": config["secrets"]["account_key"]["file"]}
-        except KeyError:
-            raise ConfigError("Account HTTPS requires its separate frontend certificate and key") from None
+        mounts = [entry for entry in config["services"]["proxy"].get("volumes", [])
+                  if entry.get("target") == "/run/rosy-account-tls"]
+        if (len(mounts) != 1 or mounts[0].get("type") != "bind"
+                or mounts[0].get("read_only") is not True
+                or mounts[0].get("source") != "/etc/rosy/account-tls"):
+            raise ConfigError("Account HTTPS requires its read-only certificate directory bind")
+        directory = Path(mounts[0]["source"])
+        account = {"port": 443, "ifaces": ["tailscale0"], "tls_host": host,
+                   "cert": str(directory / "account-frontend.crt"),
+                   "key": str(directory / "account-frontend.key")}
         ports = [entry for entry in ports if entry is not listener]
     if len(ports) != 1:
         raise ConfigError("the proxy must publish exactly one TCP port")

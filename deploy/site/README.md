@@ -125,7 +125,11 @@ apply both firewall policies, and run `site-firewall.py check --verify-certs`.
 The frontend chain/key/hostname must pass system trust verification as well as
 the existing site CA checks. Confirm both8443 and443 from their intended clients
 and deny443 from LAN. Certificate renewal must reload the same proxy only after
-validating the replacement pair. An optional frontend is still subject to the
+validating the replacement pair (`caddy reload --force` when the config is
+unchanged). Mount the certificate directory, keep that directory in place, and
+atomically replace its two files; file-only binds retain old certificate inodes.
+Preflight verifies the files in that same read-only directory bind.
+An optional frontend is still subject to the
 same maintenance, backup, signature and user acceptance gates.
 To disable this frontend, stop the proxy before removing the Account overlay,
 apply the primary-only firewall, then recreate the proxy. The firewall refuses

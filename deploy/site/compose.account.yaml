@@ -19,12 +19,10 @@ services:
         read_only: true
         bind:
           create_host_path: false
-    secrets:
-      - account_cert
-      - account_key
-
-secrets:
-  account_cert:
-    file: /etc/rosy/account-tls/account-frontend.crt
-  account_key:
-    file: /etc/rosy/account-tls/account-frontend.key
+      # Keep atomic certificate replacement visible inside the running proxy.
+      - type: bind
+        source: /etc/rosy/account-tls
+        target: /run/rosy-account-tls
+        read_only: true
+        bind:
+          create_host_path: false

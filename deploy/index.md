@@ -74,6 +74,7 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 원자적 인증서 갱신이 proxy에 보이도록 directory bind
 - 2026-10-19 · uncommitted · Account HTTPS 선택 overlay의 서명·방화벽·복구 경계
 - 2026-10-19 · uncommitted · Account 배포 선행 updater 크기 분리
 - 2026-10-19 · uncommitted · Account 앱별 활성화와 인증서 복구 안내

@@ -3008,3 +3008,9 @@
 - 변경: 기존 세 서비스·backend CA·site 포트를 유지하며 같은 proxy에 tailnet 전용443을 추가한다. 두 ingress를 함께 검사하고 실행 중 보호 제거를 거절한다. 이전 manifest 복구와 새로운 두 자산의 서명을 구분한다.
 - 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
 - gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · 원자적 인증서 갱신이 proxy에 보이도록 directory bind
+
+- 변경: frontend 인증서의 파일별 bind를 read-only 디렉터리 bind로 바꿨다. preflight도 그 실제 mount의 고정 두 파일을 검증한다. 디렉터리는 유지하고 파일만 교체하며 같은 Caddy 설정의 인증서 갱신은 강제 reload를 사용한다.
+- 증거: 0410c56d48에서 새 실제 mount 구성이 기존 secret-only 검사에 거절되는 RED를 원격 재현했다. 수정 뒤 잘못된/missing/writable/중복 mount 거절과 실제 컨테이너 갱신 fingerprint를 별도 확인한다.
+- gate 변화: 없음. 운영 proxy는 아직 기존 구성이고 Account 활성화·운영 인증서 교체는 하지 않았다.
