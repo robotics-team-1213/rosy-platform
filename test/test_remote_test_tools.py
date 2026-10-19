@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 import remote_pytest as rp  # noqa: E402
 import remote_job as rj  # noqa: E402
 
-BASE = "6ecf921d912e170fd6132697f09d1d5e60615b3e"
+BASE = "6ecf921d91"
 RAW = "learning/curation/pinky/requirements-raw.txt"
 PROFILE = "pinky-raw"
 
