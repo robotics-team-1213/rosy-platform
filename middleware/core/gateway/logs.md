@@ -1204,3 +1204,9 @@
 - 변경: raw/annotated API의 신선한 짝을 검증하는 시험에서 canonical core_features.vision.store에만 고정 clock을 주입한다. 운영 TTL과 pairing·rate 제한은 변경하지 않는다.
 - 증거: 693dae79b4의 원격 시험에서 두 publish 후 clock을 20→23초로 이동하면 기존 raw_available 단언이 실패함을 재현했다. 수정 뒤 preview API 및 explicit-clock frame pair·만료 시험과 전체 영향 시험은 별도 실행한다.
 - gate 변화: 없음. 실제 카메라·ROS·장치 수용은 검증하지 않음.
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 CORE 소비 결선 복원
+
+- 변경: foundation 선행 계약 위에서 기존 v2 성공 구현의 지도 벽 band와 경로 안내 표본 결선을 복원했다. 새 writer나 실물 활성화를 추가하지 않는다.
+- 증거: 원본 91f14c997f의 모델 PC 재실행은 PASS, 목표 거리 0.105 m, 최종 명령·odom 속도 0, lease released다. 이는 원본 소스 증거이며 이 후보의 검증은 별도다.
+- gate 변화: 없음. 실물 지도 오차·보정·장치 수용은 남아 있다.
