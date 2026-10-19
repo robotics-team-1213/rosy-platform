@@ -9197,3 +9197,15 @@ osy-d395-s1d\`.
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
+
+- 변경: origin #63(5c2001ef05)을 로컬 main으로 옮겼다. `promote_readback.py`가 push·rollback·promote 성공 뒤 `<journal-dir>/pointer-changes/pointer_changes.jsonl`에 한 줄을 남기고, `--readback`은 pointer와 노드 status topic을 다시 읽어 `match`/`mismatch`/`unavailable`/`no_node`를 기록한다. exit code는 바꾸지 않는다.
+- 증거: 원격 pytest(`test_model_promote_readback.py`, deliver 시험). 로봇 위 확인은 아직이다.
+- gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
+
+- 변경: origin #105(03e470abff)를 로컬 main으로 옮겼다. `native_cycle.py`의 cycle receipt에 `policy_revision`(모델 파일 목록 해시)·rig/보정 revision을 남기고, `register_policy.py`가 그 영수증 해시를 근거로 Fleet `/api/fleet/workcells/{id}/policy/proposals`에 L0 제안을 올린다(`--dry-run`/`--confirm`, 토큰은 `ROSY_FLEET_TOKEN`만). 오프라인·미승격 영수증만 받는다. 본문 필드는 main의 `StageProposal`과 같다.
+- 증거: 원격 pytest(등록 본문·거절 조건·HTTP 경로·CLI). 실제 학습 산출물 등록은 첫 실물 학습 뒤다.
+- gate 변화: 없음. L0은 실행 권한이 아니다.
