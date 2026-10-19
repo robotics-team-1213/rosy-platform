@@ -9275,3 +9275,9 @@ osy-d395-s1d\`.
 - 변경: 현재 1 PASS/1 FAIL 후보의 다음 단계로 연결점 station·다음 edge 방향을 같은 authority pose에 결합하는 설계를 작성했다. 관측 기반 후보 선택, 혼합 버전 배포 제약, 실패 장면 비교와 연속 2회 SIM 수용 기준을 명시했다.
 - 증거: 기존 source·검증 기록과 producer/schema/consumer 계약을 근거로 한 설계다. 거리 안내의 개선 효과는 아직 검증할 가설이며 제품 필드·동작을 추가하지 않았다.
 - gate 변화: 없음. 작성된 설계 검토 대기이며 주행 수용은 HOLD다.
+
+## 2026-10-20 · uncommitted · 연결점 거리 안내 실행 계획
+
+- 변경: 사용자의 설계 진행 승인에 따라 증거 확인→foundation 계약→Fleet/CORE 전달→perception 거리 구간→관측 출구 회귀→반복 SIM의 실행 순서를 작성했다. 카메라에 없는 경로 기하와 source/current 오차 근거를 먼저 확보하고, 목표 장면에서 조건이 성립하지 않으면 제품 변경 전에 중단한다.
+- 증거: native Gazebo model-pose odom과 일반 localization을 구별했다. 기존 along-path heuristic은 2D 오차 보증으로 전용하지 않으며, 초기 활성 범위는 동일 배포 묶음의 native SIM으로 제한하는 추가 제안을 적었다.
+- gate 변화: 없음. 작성된 실행 계획 검토 전이며 제품 코드·API·주행 수용은 바꾸지 않았다.
