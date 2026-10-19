@@ -1,5 +1,6 @@
 """Observe real app workers while the SIM sensor clock remains fixed."""
 import asyncio
+import traceback
 
 
 class PipelineClock:
@@ -25,6 +26,18 @@ class PipelineClock:
             return result
 
         setattr(owner, name, observed)
+
+    def trace_calls(self, motion, failures):
+        original = motion.call
+
+        async def traced(function, *args, **kwargs):
+            try:
+                return await original(function, *args, **kwargs)
+            except Exception:
+                failures.append((function.__qualname__, traceback.format_exc()))
+                raise
+
+        motion.call = traced
 
     async def wait(self):
         async with self.changed:

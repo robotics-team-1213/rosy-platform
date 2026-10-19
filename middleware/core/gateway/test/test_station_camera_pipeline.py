@@ -16,7 +16,6 @@ from core_common.protocol.station_charging import ChargeSessionStatus, Pose2D, S
 from test_station_docking_api import station_api
 from station_pipeline_sources import pipeline_sources
 
-
 @pytest.mark.parametrize('full_return', [False, True, 'continuous', 'relocation_abort', 'composed', 'lifespan',
                                       'motion_busy', 'shutdown_RETURNING', 'shutdown_CHARGING', 'shutdown_UNDOCKING'])
 def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_stop(station_api, tmp_path,
@@ -238,6 +237,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
             workers = PipelineClock()
             if lifespan:
                 workers.observe(runtime, 'tick')
+                workers.trace_calls(monitor.motion, failures)
             async def advance():
                 if lifespan:
                     await workers.wait()
