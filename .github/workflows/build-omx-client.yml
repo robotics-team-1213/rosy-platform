@@ -18,14 +18,14 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build tools
-        run: python -m pip install setuptools==80.9.0 wheel==0.45.1
+        run: python3 -m pip install setuptools==80.9.0 wheel==0.45.1
       - name: Build client wheels
         shell: bash
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/omx-client"
           mkdir -p "$stage"
-          python -m pip wheel --no-deps --no-build-isolation --wheel-dir "$stage" \
+          python3 -m pip wheel --no-deps --no-build-isolation --wheel-dir "$stage" \
             contracts/skill middleware/skills/api middleware/skills/manipulation integrations/robots/omx
           echo "$GITHUB_SHA" > "$stage/source-sha.txt"
           cd "$stage"
