@@ -51,7 +51,7 @@
         <label class="ui-check"><input id="account-enabled" class="ui-field" type="checkbox" checked> 계정 사용</label>
         <div id="account-initial-password">
           <label for="account-password">임시 비밀번호 · 사용자가 첫 로그인에서 변경</label>
-          <input id="account-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="8" maxlength="1024">
+          <input id="account-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024">
         </div>
         <h3>자원별 권한</h3>
         <p>조작 권한과 조회 권한은 별개입니다. 필요한 조회 권한도 함께 선택하세요.</p>
@@ -62,7 +62,7 @@
       <section id="account-actions" hidden aria-label="선택 계정 보안 작업">
         <h3>비밀번호 초기화</h3>
         <label for="account-reset-password">새 임시 비밀번호</label>
-        <input id="account-reset-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="8" maxlength="1024">
+        <input id="account-reset-password" class="ui-field password-login-field" type="password" autocomplete="new-password" minlength="2" maxlength="1024">
         <ui-button id="account-reset" kind="quiet">초기화 및 모든 세션 종료</ui-button>
         <h3>세션 회수</h3><ui-button id="account-revoke" kind="quiet">모든 앱의 로그인 세션 종료</ui-button>
       </section>

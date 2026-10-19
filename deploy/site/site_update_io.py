@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import ssl
 import subprocess
 import sys
@@ -39,6 +40,47 @@ _LIST_LIMIT = 16 * 1024 * 1024
 _SMALL_LIMIT = 8 * 1024 * 1024
 _FUNCTIONAL_PATHS = {'/api/fleet/state': ('robots', 'robot_id'),
                      '/api/fleet/vision/sources': ('sources', None)}
+
+
+def check_overrides(env: dict[str, str], commit: str, run, compose) -> None:
+    """Refuse when anything could pin a site image other than the candidate's."""
+    link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
+    pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
+    account = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
+    allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
+    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
+        raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
+                      "the candidate's pairing, omx and Account overlays")
+    if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
+        raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
+    unit = run(["systemctl", "cat", STACK_UNIT]).stdout
+    for line in unit.splitlines():
+        line = line.strip()
+        if line.startswith("Environment") and "COMPOSE_FILE" in line:
+            raise Refused(f"{STACK_UNIT} sets COMPOSE_FILE")
+        if not line.startswith(("ExecStart=", "ExecStartPre=", "ExecStop=",
+                                "ExecReload=")):
+            continue
+        words = shlex.split(line.partition("=")[2])
+        if "compose" not in words:
+            continue
+        for index, word in enumerate(words):
+            if word in {"-f", "--file"}:
+                value = words[index + 1] if index + 1 < len(words) else ""
+                if value != link_compose:
+                    raise Refused(f"{STACK_UNIT} adds Compose file {value}")
+            elif word.startswith(("--file=", "-f=")):
+                raise Refused(f"{STACK_UNIT} adds Compose file {word}")
+    result = compose(env, "config", "--format", "json", tag=commit)
+    try:
+        services = json.loads(result.stdout).get("services") or {}
+    except (json.JSONDecodeError, AttributeError):
+        raise Transient("docker compose config output is not JSON") from None
+    for service in SERVICES:
+        image = (services.get(service) or {}).get("image")
+        if image != f"rosy-site-{service}:{commit}":
+            raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
+                          f"image; remove the image override first")
 
 
 class Transient(Exception):

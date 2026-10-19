@@ -1546,3 +1546,9 @@
 - 변경: 카메라 충전 SIM의 실제 lifespan worker는 유지하고 센서 pulse마다 허용된 runtime tick의 완료를 기다린다. tick 중 가상 시계가 바뀌면 실패한다. 제품의 readback 불가 HOLD와 freshness 한도는 유지한다.
 - 증거: 1bb6af2bdc 원격 affected에서 5132 passed/221 skipped/1 failed. shutdown_CHARGING이 CHARGE_MOTION_READBACK_UNAVAILABLE로 HOLD했다. 같은 항목의 candidate와 origin e1dc1b5122 단독 실행은 모두 통과했다. 기존 fixture는 완료 generation만 기다려 다음 tick과 clock 전진의 중첩을 막지 않았다. 정확한 이전 예외 원인은 이 HOLD 코드만으로 특정하지 않는다. 새 동기화의 원격 회귀는 대기 중이다.
 - gate 변화: 없음. 실물 충전·학습 정책·현장 수용을 검증하지 않았다.
+
+## 2026-10-19 · uncommitted · Account 장애 중 로그아웃·재연결 회귀
+
+- 변경: durable 회수 대기와 cookie 제거, lifespan 재시도, 새 로그인 family 보존 및 실제 Chromium 로그아웃을 검증한다. 다른 작업의 strict-media 구현·native fixture는 포함하지 않았다.
+- 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
+- gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.

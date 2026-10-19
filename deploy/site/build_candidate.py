@@ -23,6 +23,7 @@ DEPLOY_FILES = (
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
+    "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)

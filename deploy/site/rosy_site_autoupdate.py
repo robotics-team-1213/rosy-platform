@@ -28,7 +28,7 @@ if __package__:
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
+        check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
 else:  # pragma: no cover - installed host CLI
@@ -39,7 +39,7 @@ else:  # pragma: no cover - installed host CLI
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
+        check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
 
@@ -166,42 +166,7 @@ class SiteUpdater:
 
     # host checks
     def check_overrides(self, env: dict[str, str], commit: str) -> None:
-        """Refuse when anything could pin a site image other than the candidate's."""
-        link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
-        pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
-        if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in ([], pairing, omx, pairing + omx):  # D-785
-            raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                          "the candidate's compose.pairing.yaml and compose.omx.yaml")
-        if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
-            raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
-        unit = self._run(["systemctl", "cat", STACK_UNIT]).stdout
-        for line in unit.splitlines():
-            line = line.strip()
-            if line.startswith("Environment") and "COMPOSE_FILE" in line:
-                raise Refused(f"{STACK_UNIT} sets COMPOSE_FILE")
-            if not line.startswith(("ExecStart=", "ExecStartPre=", "ExecStop=",
-                                    "ExecReload=")):
-                continue
-            words = shlex.split(line.partition("=")[2])
-            if "compose" not in words:
-                continue
-            for index, word in enumerate(words):
-                if word in {"-f", "--file"}:
-                    value = words[index + 1] if index + 1 < len(words) else ""
-                    if value != link_compose:
-                        raise Refused(f"{STACK_UNIT} adds Compose file {value}")
-                elif word.startswith(("--file=", "-f=")):
-                    raise Refused(f"{STACK_UNIT} adds Compose file {word}")
-        result = self._compose(env, "config", "--format", "json", tag=commit)
-        try:
-            services = json.loads(result.stdout).get("services") or {}
-        except (json.JSONDecodeError, AttributeError):
-            raise Transient("docker compose config output is not JSON") from None
-        for service in SERVICES:
-            image = (services.get(service) or {}).get("image")
-            if image != f"rosy-site-{service}:{commit}":
-                raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
-                              f"image; remove the image override first")
+        check_overrides(env, commit, self._run, self._compose)
 
     def _prior_target(self) -> Path:
         """Return the installed candidate folder, migrating a real directory once."""
@@ -295,13 +260,18 @@ class SiteUpdater:
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 
-    def _verify(self, folder: Path, *, loaded: bool, expected_commit: str | None = None) -> dict:
+    def _verify(self, folder: Path, *, loaded: bool, expected_commit: str | None = None,
+                env: dict | None = None) -> dict:
         try:
             manifest = self.verifier(folder, trusted_key_id=self.config["key_id"],
                                      trusted_public_key=self.config["public_key"],
                                      runner=self.runner, inspect_loaded_images=loaded)
             if manifest.get('source_commit') != (expected_commit or folder.name):
                 raise Rejected('signed manifest commit differs from candidate commit')
+            overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
+            for name, field in (('account', 'account_https'), ('omx', 'omx')):
+                if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
+                    raise Rejected(f'{name} overlay is not covered by this signed candidate')
             if loaded:
                 self._accepted_images[manifest['source_commit']] = manifest.get('accepted_image_ids', {})
             return manifest
@@ -391,7 +361,8 @@ class SiteUpdater:
                 or read_env(self.paths.env_backup).get('ROSY_SITE_IMAGE_TAG') != transaction['current']):
             raise Refused('rollback backup does not match journal commit')
         verification_path = previous if previous.exists() else self.paths.link
-        self._verify(verification_path, loaded=True, expected_commit=transaction['current'])
+        self._verify(verification_path, loaded=True, expected_commit=transaction['current'],
+                     env=read_env(self.paths.env_backup))
         if (transaction.get('migration') and not previous.exists()
                 and self.paths.link.is_dir() and not self.paths.link.is_symlink()):
             os.rename(self.paths.link, previous)
@@ -491,7 +462,8 @@ class SiteUpdater:
             state["last_run"]["result"] = "refused"
             return EXIT_FAILED
         try:
-            self._verify(self.paths.link, loaded=True, expected_commit=current)
+            self._verify(self.paths.link, loaded=True, expected_commit=current,
+                         env=env)
             reason = self._containers_reason(env, current)
             if not reason:
                 self._functional_baseline, missing = functional_inventory(self.config, self.http)
@@ -538,12 +510,14 @@ class SiteUpdater:
                 return EXIT_OK
             log("staging", tag=tag, commit=commit)
             target = self.stage(release, commit, sums)
-            self._verify(target, loaded=False)
+            self._verify(target, loaded=False,
+                         env=env)
             load = self._run(["docker", "image", "load", "--input", str(target / "images.tar")],
                              timeout=1800, check=False)
             if load.returncode != 0:
                 raise Rejected("docker image load failed")
-            self._verify(target, loaded=True)
+            self._verify(target, loaded=True,
+                         env=env)
             previous = self._prior_target()
             ok, reason = self.switch(env, previous, target, commit, current)
         except Refused as error:

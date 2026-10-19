@@ -45,6 +45,8 @@ class FakeHost:
             return 0, json.dumps(self.config), ""
         if argv[:2] == ["docker", "version"]:
             return (0, self.engine + "\n", "") if self.engine else (1, "", "Cannot connect")
+        if argv[:2] == ["docker", "ps"]:
+            return 0, "proxy-id\n" if getattr(self, "published443", False) else "", ""
         if argv[0] == "iptables-restore":
             assert argv[1:] == ["-w", "--noflush"]
             lines = stdin.splitlines()
@@ -212,8 +214,8 @@ def test_loopback_bind_needs_no_interface_and_touches_no_rules():
     for bind in ("127.0.0.1", "::1"):
         plan = _plan(module, bind=bind, lan_iface="")
         assert plan["mode"] == "loopback"
-        host = FakeHost(chains={})
-        assert module.apply(plan, run=host) == [] and host.calls == []
+        host = FakeHost()
+        assert module.apply(plan, run=host) == [] and host.mutations() == []
         module.check(plan, run=host)
 
 

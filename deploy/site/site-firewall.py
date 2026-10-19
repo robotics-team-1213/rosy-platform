@@ -29,6 +29,7 @@ import tempfile
 from pathlib import Path
 
 CHAIN = "ROSY-SITE-INGRESS"
+ACCOUNT_CHAIN = "ROSY-ACCOUNT-INGRESS"
 TABLE = "mangle"
 HOOK = "PREROUTING"
 KEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
@@ -93,6 +94,29 @@ def compose_settings(config: dict) -> dict:
     """
     ports = [entry for entry in config["services"]["proxy"].get("ports", [])
              if entry.get("protocol", "tcp") == "tcp" and entry.get("mode", "ingress") == "ingress"]
+    extension = config.get("x-rosy-site") or {}
+    account = None
+    if extension.get("account_https") == "1":
+        listeners = [entry for entry in ports if str(entry.get("published")) == "443"]
+        if len(ports) != 2 or len(listeners) != 1:
+            raise ConfigError("Account HTTPS requires the primary port and exactly one port443")
+        listener = listeners[0]
+        if listener.get("host_ip") != "0.0.0.0" or listener.get("target") != 443:
+            raise ConfigError("Account HTTPS requires IPv4 wildcard port443 and the tailnet filter")
+        host = config["services"]["proxy"].get("environment", {}).get("ROSY_ACCOUNT_HTTPS_HOST", "")
+        if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", host):
+            raise ConfigError("Account HTTPS requires its certificate DNS hostname")
+        mounts = [entry for entry in config["services"]["proxy"].get("volumes", [])
+                  if entry.get("target") == "/run/rosy-account-tls"]
+        if (len(mounts) != 1 or mounts[0].get("type") != "bind"
+                or mounts[0].get("read_only") is not True
+                or mounts[0].get("source") != "/etc/rosy/account-tls"):
+            raise ConfigError("Account HTTPS requires its read-only certificate directory bind")
+        directory = Path(mounts[0]["source"])
+        account = {"port": 443, "ifaces": ["tailscale0"], "tls_host": host,
+                   "cert": str(directory / "account-frontend.crt"),
+                   "key": str(directory / "account-frontend.key")}
+        ports = [entry for entry in ports if entry is not listener]
     if len(ports) != 1:
         raise ConfigError("the proxy must publish exactly one TCP port")
     try:
@@ -119,6 +143,7 @@ def compose_settings(config: dict) -> dict:
             if command.count(flag) != 1 or command.index(flag)+1 >= len(command) or not command[command.index(flag)+1] or command[command.index(flag)+1].startswith('--'):
                 raise ConfigError('camera peer profile requires complete receiver pairing configuration')
     return {"bind": ports[0].get("host_ip") or "", "port": int(ports[0]["published"]),
+            "account": account,
             'camera_peer': '1' if profile is not None else '0',
             "lan_iface": extension.get("lan_iface") or "",
             "allow_literal_bind": extension.get("allow_literal_bind") == "1",
@@ -184,7 +209,8 @@ def site_plan(settings: dict, *, assigned=address_assigned, exists=iface_exists)
     warnings = [f"interface {name} does not exist now; the filter still admits it by name "
                 "(a bridged LAN needs the bridge name, e.g. br0)"
                 for name in ifaces if not name.endswith("+") and not exists(name)]
-    return {"bind": bind, "mode": mode, "port": port, "ifaces": ifaces, "warnings": warnings}
+    return {"bind": bind, "mode": mode, "port": port, "ifaces": ifaces, "warnings": warnings,
+            "account": settings.get("account")}
 
 
 def chain_rules(ifaces: list[str]) -> list[list[str]]:
@@ -198,25 +224,32 @@ def chain_rules(ifaces: list[str]) -> list[list[str]]:
                ["-i", "br+", "-j", "RETURN"], ["-i", "docker0", "-j", "RETURN"], ["-j", "DROP"]])
 
 
-def chain_listing(ifaces: list[str]) -> list[str]:
+def chain_listing(ifaces: list[str], chain: str = CHAIN) -> list[str]:
     """`iptables -t mangle -S CHAIN` text for the wanted chain."""
-    return [f"-N {CHAIN}"] + [f"-A {CHAIN} " + " ".join(rule) for rule in chain_rules(ifaces)]
+    return [f"-N {chain}"] + [f"-A {chain} " + " ".join(rule) for rule in chain_rules(ifaces)]
 
 
-def restore_payload(ifaces: list[str]) -> str:
+def restore_payload(ifaces: list[str], chain: str = CHAIN) -> str:
     """One iptables-restore --noflush transaction; declaring the chain flushes it atomically."""
-    lines = [f"*{TABLE}", f":{CHAIN} - [0:0]"]
-    lines += [f"-A {CHAIN} " + " ".join(rule) for rule in chain_rules(ifaces)]
+    lines = [f"*{TABLE}", f":{chain} - [0:0]"]
+    lines += [f"-A {chain} " + " ".join(rule) for rule in chain_rules(ifaces)]
     return "\n".join([*lines, "COMMIT", ""])
 
 
-def jump_rules(port: int) -> dict[tuple[str, bool], list[str]]:
+def jump_rules(port: int, chain: str = CHAIN) -> dict[tuple[str, bool], list[str]]:
     """One jump for the published port. The proxy listens on that same port.
 
     A packet to the host and a packet routed straight to the container IP share this
     destination port, so one rule covers both. A jump for any other port is not wanted.
     """
-    return {(str(port), False): ["-p", "tcp", "--dport", str(port), "-j", CHAIN]}
+    return {(str(port), False): ["-p", "tcp", "--dport", str(port), "-j", chain]}
+
+
+def ingress_chains(plan: dict) -> dict[str, dict]:
+    policies = {CHAIN: plan} if plan["mode"] != "loopback" else {}
+    if plan.get("account"):
+        policies[ACCOUNT_CHAIN] = plan["account"]
+    return policies
 
 
 def _run(argv: list[str], stdin: str | None = None) -> tuple[int, str, str]:
@@ -232,7 +265,18 @@ def _key(line: str) -> tuple[str | None, bool]:
 
 def _jumps(listing: str) -> list[str]:
     return [line for line in listing.splitlines()
-            if line.startswith(f"-A {HOOK} ") and line.split()[-2:] == ["-j", CHAIN]]
+            if line.startswith(f"-A {HOOK} ")
+            and line.split()[-2:] in (["-j", CHAIN], ["-j", ACCOUNT_CHAIN])]
+
+
+def _jump_rule(line: str) -> list[str]:
+    words = shlex.split(line)[2:]
+    # iptables -S adds the implicit TCP match module to port rules.
+    if "-m" in words:
+        index = words.index("-m")
+        if words[index:index + 2] == ["-m", "tcp"]:
+            del words[index:index + 2]
+    return words
 
 
 def _hook_listing(run) -> str:
@@ -244,15 +288,20 @@ def _hook_listing(run) -> str:
 
 def apply(plan: dict, run=_run) -> list[str]:
     """Make the live rules match the plan; returns the changes it made."""
-    if plan["mode"] == "loopback":
-        return []
+    policies = ingress_chains(plan)
+    jumps = _jumps(_hook_listing(run))
+    if not plan.get("account") and any(line.split()[-1] == ACCOUNT_CHAIN for line in jumps):
+        code, out, _ = run(["docker", "ps", "--filter", "publish=443", "--format", "{{.ID}}"])
+        if code != 0 or out.strip():
+            raise RuntimeError("stop the Account proxy before removing its overlay/443 firewall protection")
     done = []
-    code, current, _ = run(["iptables", "-w", "-t", TABLE, "-S", CHAIN])
-    if code != 0 or current.splitlines() != chain_listing(plan["ifaces"]):
-        code, _, err = run(["iptables-restore", "-w", "--noflush"], restore_payload(plan["ifaces"]))
-        if code != 0:
-            raise RuntimeError(f"iptables-restore failed: {err.strip()}")
-        done.append("iptables-restore -w --noflush")
+    for chain, policy in policies.items():
+        code, current, _ = run(["iptables", "-w", "-t", TABLE, "-S", chain])
+        if code != 0 or current.splitlines() != chain_listing(policy["ifaces"], chain):
+            code, _, err = run(["iptables-restore", "-w", "--noflush"], restore_payload(policy["ifaces"], chain))
+            if code != 0:
+                raise RuntimeError(f"iptables-restore failed: {err.strip()}")
+            done.append("iptables-restore -w --noflush")
 
     def mutate(*argv: str) -> None:
         command = ["iptables", "-w", "-t", TABLE, *argv]
@@ -261,14 +310,15 @@ def apply(plan: dict, run=_run) -> list[str]:
             raise RuntimeError(f"failed: {shlex.join(command)}: {err.strip()}")
         done.append(shlex.join(command))
 
-    jumps, wanted = _jumps(_hook_listing(run)), jump_rules(plan["port"])
-    present = {_key(line) for line in jumps}
+    wanted = {key: rule for chain, policy in policies.items()
+              for key, rule in jump_rules(policy["port"], chain).items()}
+    present = {_key(line) for line in jumps if _jump_rule(line) in wanted.values()}
     for key, rule in wanted.items():  # new jumps first, so no gap opens while old ones go
         if key not in present:
             mutate("-I", HOOK, "1", *rule)
     kept = set()
     for line in jumps:  # a changed port leaves an old jump; drop it and any duplicate
-        if _key(line) in wanted and _key(line) not in kept:
+        if _jump_rule(line) in wanted.values() and _key(line) not in kept:
             kept.add(_key(line))
             continue
         mutate("-D", *shlex.split(line)[1:])
@@ -277,19 +327,23 @@ def apply(plan: dict, run=_run) -> list[str]:
 
 def check(plan: dict, run=_run) -> None:
     """Raise unless the live rules already match the plan (changes nothing)."""
-    if plan["mode"] == "loopback":
-        return
+    policies = ingress_chains(plan)
     hint = "run: systemctl restart rosy-site-firewall.service"
-    code, current, _ = run(["iptables", "-w", "-t", TABLE, "-S", CHAIN])
-    if code != 0 or current.splitlines() != chain_listing(plan["ifaces"]):
-        raise RuntimeError(f"{CHAIN} does not admit only lo,{','.join(plan['ifaces'])}; {hint}")
+    for chain, policy in policies.items():
+        code, current, _ = run(["iptables", "-w", "-t", TABLE, "-S", chain])
+        if code != 0 or current.splitlines() != chain_listing(policy["ifaces"], chain):
+            raise RuntimeError(f"{chain} does not admit only lo,{','.join(policy['ifaces'])}; {hint}")
     lines = _hook_listing(run).splitlines()
     jumps = _jumps("\n".join(lines))
     bypass = next((index for index, line in enumerate(lines)
                    if line in (f"-A {HOOK} -j ACCEPT", f"-A {HOOK} -j RETURN")), None)
-    for key in jump_rules(plan["port"]):
+    wanted = {key: rule for chain, policy in policies.items()
+              for key, rule in jump_rules(policy["port"], chain).items()}
+    if any(_jump_rule(line) not in wanted.values() for line in jumps):
+        raise RuntimeError(f"unexpected site/Account ingress jump; {hint}")
+    for key, rule in wanted.items():
         jump = next((index for index, line in enumerate(lines)
-                     if line in jumps and _key(line) == key), None)
+                     if line in jumps and _jump_rule(line) == rule), None)
         if jump is None or (bypass is not None and bypass < jump):
             raise RuntimeError(f"{TABLE} {HOOK} does not send port {key[0]} to {CHAIN}; {hint}")
 
@@ -306,13 +360,13 @@ def docker_engine_warning(run=_run) -> str | None:
     return None
 
 
-def verify_site_certificate(cert: Path, key: Path, ca: Path, tls_host: str) -> None:
+def verify_site_certificate(cert: Path, key: Path, ca: Path | None, tls_host: str) -> None:
     """In-memory TLS handshake with VERIFY_X509_STRICT, as the bridge and phones verify."""
     if not tls_host:
         raise ConfigError("ROSY_SITE_TLS_HOST is empty; it must be the certificate DNS name")
     server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server.load_cert_chain(str(cert), str(key))
-    client = ssl.create_default_context(cafile=str(ca))
+    client = ssl.create_default_context(cafile=str(ca) if ca else None)
     client.verify_flags |= ssl.VERIFY_X509_STRICT
     pipes = [ssl.MemoryBIO() for _ in range(4)]
     tls_client = client.wrap_bio(pipes[0], pipes[1], server_hostname=tls_host)
@@ -378,6 +432,10 @@ def main(argv: list[str] | None = None, run=_run) -> int:
             secrets = settings["secrets"]
             verify_site_certificate(Path(secrets["site_cert"]), Path(secrets["site_key"]),
                                     Path(secrets["site_ca"]), settings["tls_host"])
+            if settings.get("account"):
+                account = settings["account"]
+                verify_site_certificate(Path(account["cert"]), Path(account["key"]), None,
+                                        account["tls_host"])
     except (ConfigError, OSError, KeyError, ValueError) as error:
         print(f"rosy-site preflight: {error}", file=sys.stderr)
         return 2
@@ -388,13 +446,14 @@ def main(argv: list[str] | None = None, run=_run) -> int:
         print(f"warning: {warning}", file=sys.stderr)
     try:
         if args.dry_run:
-            if plan["mode"] == "loopback":
+            if not ingress_chains(plan):
                 print(f"# bind {plan['bind']}:{plan['port']} is loopback-only; no LAN filter")
             else:
                 print("# iptables-restore -w --noflush <<EOF")
-                print(restore_payload(plan["ifaces"]) + "# EOF")
-                for rule in jump_rules(plan["port"]).values():
-                    print(shlex.join(["iptables", "-w", "-t", TABLE, "-I", HOOK, "1", *rule]))
+                for chain, policy in ingress_chains(plan).items():
+                    print(restore_payload(policy["ifaces"], chain) + "# EOF")
+                    for rule in jump_rules(policy["port"], chain).values():
+                        print(shlex.join(["iptables", "-w", "-t", TABLE, "-I", HOOK, "1", *rule]))
         elif args.command == "apply":
             changed = apply(plan, run)
             write_public_env(settings, args.public_env)

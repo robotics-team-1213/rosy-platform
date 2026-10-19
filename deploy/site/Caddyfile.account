@@ -1,0 +1,18 @@
+https://{$ROSY_ACCOUNT_HTTPS_HOST}:443 {
+	tls /run/rosy-account-tls/account-frontend.crt /run/rosy-account-tls/account-frontend.key
+	route {
+		handle /.well-known/assetlinks.json {
+			root * /run/rosy-account-public
+			rewrite * /assetlinks.json
+			header Content-Type application/json
+			file_server
+		}
+		reverse_proxy https://fleet:{$ROSY_FLEET_PORT} {
+			header_up -X-Rosy-Lan-Camera
+			transport http {
+				tls_trust_pool file /run/secrets/site_ca
+				tls_server_name fleet
+			}
+		}
+	}
+}
