@@ -924,3 +924,9 @@
 - 변경: 권한이 없어 막힌 화면에도 Account 로그아웃을 표시하고 legacy 토큰 초기화는 숨긴다. 기존 공개 service worker 목록을 유지하며 캐시 키만 갱신했다.
 - 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
 - gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.
+
+## 2026-10-19 · 432b0b909 · Android release 네트워크 설정 검사
+
+- 변경: 로컬 프록시의 `127.0.0.1` domain에 `includeSubdomains="false"`를 명시했다. 기존 LAN 연결과 TLS 정책은 그대로다.
+- 증거: main `85150a1514ec`의 실제 `testReleaseUnitTest assembleRelease`에서 JVM 107건 중 실패 0/skip 1 뒤 `lintVitalRelease`가 누락된 필수 속성을 거절했다. `432b0b909` 소스로 같은 release 작업을 다시 실행해 lint와 APK 생성에 성공했고 JVM 107건 중 실패 0/skip 1을 확인했다. lint를 끄거나 baseline에 숨기지 않았다.
+- gate 변화: 없음. 서명 APK 생성·단말 설치와 Account의 실제 로봇 등록/권한 수용은 별도로 확인한다.
