@@ -1210,3 +1210,9 @@
 - 변경: 실제 Fleet Authority와 CORE receiver를 사용하는 HTTP 로그아웃 실패, lifespan 회수 재시도, 미디어 strict online 검증을 추가했다. HTTPS Chromium의 정상/회수 대기 로그아웃을 함께 검사한다.
 - 증거: `41e03f029e`의 원격 모델 PC에서 pipeline/media 14개 통과, skip 0, NEW 0. 첫 browser 실패는 조회 전용 Pilot 차단 화면의 로그아웃 부재를 재현했고 Pilot 수정 뒤 같은 검증이 통과했다. 로그는 외부 scratch의 `rosy-account-rollout-20261019/task2-fixed/run-1.txt`다.
 - gate 변화: 없음. 실제 운영 계정·배포·단말·MediaMTX 연결 종료를 이 시험으로 수용하지 않는다.
+
+## 2026-10-19 · 212a8b51b2 · Account CORE HTTP·browser 회귀를 앱 착지 단위로 재적용
+
+- 변경: 실제 Authority fixture의 HTTP 로그아웃 pending·쿠키 제거·lifespan 재시도·strict media 재검증·새 family 분리를 최신 main 위에 재적용했다. CORE 제품 인증 코드는 변경하지 않았다.
+- 증거: 원래 d58258fee6의 공통/CORE/Pilot 실제 Chromium/proxy 묶음35개 PASS, skip0·NEW0. 이번 착지 SHA의 검증은 별도 실행한다. 이전 SHA 결과를 최신 main 수용으로 대신하지 않는다.
+- gate 변화: 없음. 실제 미디어 종료·운영 배포·사용자 수용은 미확인이다.

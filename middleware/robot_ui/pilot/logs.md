@@ -930,3 +930,9 @@
 - 변경: PWA 캐시 갱신, 원격 시험의 기존 SDK 전달과 고정 의존성 해석을 허용했다. native mock의 identity 뒤 `/pilot` CSP 응답 누락은 별도 fix/pilot-native-fixtures에서 두 시험만 수정해 반영했다. 제품 stop 경로는 바꾸지 않았다.
 - 증거: 최종 보안/실제 Chromium/proxy 묶음 d58258fee6에서 35 passed, skip 0, NEW 0. 같은 모델 PC의 기존 main에서 native 3개 실패 재현 후 30acdffbfb 전체 JVM 111 tests, failures/errors 0, skipped 1, debug APK 1. skip된 opt-in proxy는 앞의 실제 browser 묶음에서 통과했다. 상세 SHA·로그·한계는 docs/validation/account-service-2026-10-19/results.md.
 - gate 변화: 없음. 기본 debug 빌드이며 운영 Account 설정 포함 서명·실물 callback/Keystore·설치는 미확인이다.
+
+## 2026-10-19 · 212a8b51b2 · Account 앱 변경을 독립 착지 단위로 재적용
+
+- 변경: 조회 전용 로그아웃·PWA 캐시·원격 SDK 전달·native CSP mock 수정을 최신 main 기반 앱 브랜치로 모았다. foundation 회귀는 별도 브랜치에서 먼저 착지한다.
+- 증거: 기존30acdffbfb의 Pilot JVM111 tests 중 skip1·실패0·APK1과 실제 proxy Chromium 결과는 기존 기록에 남긴다. 최신 main 착지 검사는 따로 수행하며 설치·실물 수용을 뜻하지 않는다.
+- gate 변화: 없음. 운영 배포와 실제 사용자·단말 수용은 미확인이다.
