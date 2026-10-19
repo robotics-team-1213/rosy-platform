@@ -114,7 +114,7 @@ def _route_transition(steer, identity):
     if previous == identity:
         return
     steer._last_out = steer._pending = steer._smoothed = None
-    steer._side = steer._pivot = steer._pivot_yaw = None
+    steer._side = steer._pivot = steer._pivot_yaw = steer._route_exit = None
     steer._misaligned_since = None
     steer._expected_path = None
 

@@ -14,6 +14,52 @@ LOOK_MIN_DEG = 15.0        # a route bend under this is straight on: turning sho
 LOOK_MAX_RAD = math.pi / 2
 
 
+def route_exit_point(owner, info, side, want, source_pose, pose, stamp, side_clear):
+    """Keep an admitted observation across recentring, within its original travel budget."""
+    from .drivable_steer import EXIT_MEMORY_M, MAX_CRUISE_MPS, SIDE_WALL_M, TURN_RELEASE_M
+    from .drivable_keep import WAY_MAX_AGE_S
+
+    clear = (side_clear or {}).get(want)
+    previous = getattr(owner, '_route_exit_frame', None)
+    continuous = True
+    if previous is not None and source_pose is not None:
+        dt = stamp - previous[0]
+        continuous = (dt >= 0.0 and math.dist(source_pose[:2], previous[1][:2]) <= MAX_CRUISE_MPS * dt + 1e-6
+                      and abs(math.remainder(source_pose[2] - previous[1][2], math.tau))
+                      <= owner.steering_law['steering_gain'] * dt + 1e-6)
+    owner._route_exit_frame = None if source_pose is None else (stamp, source_pose)
+    now = owner._ctx.get('stamp')
+    if now is not None and source_pose is not None and pose is not None:
+        age = now - stamp
+        continuous = (continuous and 0.0 <= age <= WAY_MAX_AGE_S
+                      and math.dist(pose[:2], source_pose[:2]) <= MAX_CRUISE_MPS * age + 1e-6
+                      and abs(math.remainder(pose[2] - source_pose[2], math.tau))
+                      <= owner.steering_law['steering_gain'] * age + 1e-6)
+    valid = (want is not None and owner._ctx.get('fresh') and source_pose is not None and pose is not None
+             and continuous and info['ahead_m'] < TURN_RELEASE_M and not info.get('exit_behind_line')
+             and (clear is None or clear >= SIDE_WALL_M))
+    if not valid:
+        owner._route_exit = None
+    elif (info.get('exit_near', {}).get(want) and want in info['exit_point_m']
+          and not info.get('exit_from_target')):
+        if owner._route_exit is None or owner._route_exit[3] != stamp:
+            owner._route_exit = (want, info['exit_point_m'][want], source_pose, stamp)
+    memory = owner._route_exit
+    if memory is not None:
+        point = _to_current(memory[1], memory[2], source_pose)
+        if (memory[0] != want or math.dist(pose[:2], memory[2][:2]) > EXIT_MEMORY_M
+                or point[0] <= 0.0 or _to_current(memory[1], memory[2], pose)[0] <= 0.0):
+            owner._route_exit = None
+        elif not info.get('exit_near', {}).get(want) or want not in info['exit_point_m']:
+            info['exit_point_m'] = dict(info['exit_point_m'], **{want: point})
+            owner._side = side = info['exit'] = want
+            info['exit_from_route_memory'] = True
+    if owner._side in info['exit_point_m'] and (owner._side != want
+            or info.get('exit_near', {}).get(want) or info.get('exit_from_route_memory')):
+        side = info['exit'] = owner._side
+    return side
+
+
 def _current_lane(error, confidence, info, source_pose, pose, owner, stamp, observed):
     """Follow a visible current-lane target before an opposing future exit."""
     from .drivable_keep import WAY_MAX_AGE_S
