@@ -145,7 +145,7 @@ def test_prepare_legacy_roundtrip_cli_keeps_pending_and_preserves_human_review(t
     import numpy as np
     import review_dataset
     import review_masks
-    from review_store import ReviewStore
+    from review_app import ReviewStore
 
     out, rows = prepare_legacy(tmp_path)
     # Relocation demonstrates that the published catalog remains portable.
