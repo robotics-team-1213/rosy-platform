@@ -34,7 +34,7 @@ class PipelineClock:
             try:
                 return await original(function, *args, **kwargs)
             except Exception:
-                failures.append((function.__qualname__, traceback.format_exc()))
+                failures.append(function.__qualname__ + '\n' + traceback.format_exc())
                 raise
 
         motion.call = traced
