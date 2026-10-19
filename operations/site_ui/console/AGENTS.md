@@ -61,7 +61,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 
 ```bash
 node --test operations/fleet/test/web/
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/console -- operations/fleet/test/test_server_app.py operations/fleet/test/test_console_palette.py operations/fleet/test/test_console_disabled_features.py -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/console" -- operations/fleet/test/test_server_app.py operations/fleet/test/test_console_palette.py operations/fleet/test/test_console_disabled_features.py -q
 ```
 
 `node --check <file>.js` is a quick syntax check for DOM-free source. Pytest and browser checks run from committed HEAD on remote test PCs per D-584. `test/test_remaining_platform_installed.py` checks wheel/self-contained sdist resources and HTTP allowlist/CSP.
