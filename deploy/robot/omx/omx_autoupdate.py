@@ -23,6 +23,8 @@ atomic `current` symlink, not containers. One run (a user systemd timer calls it
 `paths` and `smoke` come from the config, `lock` may be null (a `--system-site-packages` venv with
 nothing installed), there is no cell to be idle, and after the switch the listed user `units` are
 restarted and must stay active `settle` seconds, otherwise the previous release is linked and restarted.
+Before each restart the `unit_files` (release paths) are copied from `current` into the user unit folder
+and systemd reloads them, so a unit edit on main reaches the host and a rollback brings the old unit back.
 
 Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
 `systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
@@ -102,12 +104,26 @@ class Host:
         """Restart the service units and report whether all are still active after `settle` seconds."""
         if not units:
             return True
+        complete = True
         try:
+            if self.cfg.get("unit_files"):  # the live release's own unit files, so unit edits on main arrive too
+                unit_dir = Path(self.cfg.get("unit_dir", "~/.config/systemd/user")).expanduser()
+                for name in self.cfg["unit_files"]:
+                    try:
+                        shutil.copyfile(Path(self.cfg["root"]) / "current" / name, unit_dir / Path(name).name)
+                    except OSError:  # an older release (rollback target) may lack one: keep going, still restart
+                        complete = False
+                        log(step="unit_file_missing", file=name)
+                try:
+                    subprocess.run(["systemctl", "--user", "daemon-reload"], timeout=60)
+                except subprocess.SubprocessError:  # still restart on what systemd has
+                    complete = False
             if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             time.sleep(self.cfg.get("settle", 10))
-            return subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30).returncode == 0
-        except subprocess.TimeoutExpired:
+            active = subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30)
+            return complete and active.returncode == 0  # forward: a release missing its unit file fails
+        except (OSError, subprocess.SubprocessError):  # systemctl missing or timed out
             return False
 
     def archive(self, sha: str, paths, target: Path) -> None:

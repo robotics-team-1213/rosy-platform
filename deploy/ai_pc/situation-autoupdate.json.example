@@ -10,6 +10,8 @@
   "paths": ["operations/situation", "contracts/foundation", "deploy/ai_pc", "deploy/robot/omx/omx_autoupdate.py"],
   "smoke": "import sys; sys.path[:0] = ['contracts/foundation', 'operations/situation']; import rosy_situation.service; print('smoke ok')",
   "units": ["rosy-situation.service"],
+  "unit_files": ["deploy/ai_pc/rosy-situation.service", "deploy/ai_pc/rosy-situation-autoupdate.service",
+                 "deploy/ai_pc/rosy-situation-autoupdate.timer"],
   "settle": 10,
   "require_verified_commit": false,
   "keep": 3
