@@ -30,6 +30,8 @@ The D-61 module harness: a registry of modules, each of which keeps `progress.md
 | `affected_ci.py` | The GitHub full-run matrix for `affected_tests.py`, split from it (pure move): `FULL_SUITES`, `CI_FULL_MATRIX`, `ROOT_SHARDS`, `SUITE_SHARDS`, `CI_FULL_EXCLUDED`, Fleet shard weights and `ci_matrix` (`--ci-matrix`); `affected_tests` re-exports every name. Tests: `test/test_affected_tests.py` |
 | `affected_narrow.py` | D-762 stage 0 narrowing for `affected_tests.py`: foundation modules may select known test readers; unresolved runtime consumers, config and workflows retain FULL. `registry_readers`: a change under a tree listed in `shared/web/surfaces.yaml` selects every test importing `surface_registry` (the D-792 page landed red without them, 2026-10-18). Tests: `test/test_affected_tests.py` |
 | `run_functional.py` | Runs each module's `functional` pytest surface in isolation (`--module NAME` for one) |
+| `structure_report.py` | D-773 read-only size report and at most three safe split picks, using the size gate counter. `--issue` renders a GitHub task body; `--picks-json` feeds the optional publisher. |
+| `structure_jira.py` | Manually configured Jira publisher for selected picks; absent configuration skips it. Repository workflows do not provide Jira secrets. Do not invoke its publishing CLI without a user request to publish. |
 
 ## For AI Agents
 
