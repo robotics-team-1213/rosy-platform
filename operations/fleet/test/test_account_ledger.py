@@ -46,12 +46,13 @@ def test_db_restore_cannot_undo_current_account_changes(tmp_path, change):
 
     sessions = activated(tmp_path)
     manager = cookie(sessions)
-    row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
-                                  password=TYPED, grants=[])
+    sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
+                            password=TYPED, grants=[])
     value = cookie(sessions, login="bob")
     old_password = "Bob permanent password"
     value, _ = sessions.change_password(value, old_password, current_password=TYPED)
-    family = sessions.account_context(value)["session_family"]
+    row = sessions.account_context(value)
+    family = row["session_family"]
     backup = tmp_path / "before-change.sqlite3"
     backup_database(sessions.path, backup)
     if change == "password":
