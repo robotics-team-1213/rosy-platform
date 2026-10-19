@@ -334,22 +334,24 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     return charges.get('charge-1')
                 return await runtime.tick() if full_return else await monitor.advance('charge-1')
             console = FleetConsole([endpoint], [robot], clock=lambda: now[0])
+            goal_clock = asyncio.Lock()
             work_admitting, clock_boundary = asyncio.Event(), asyncio.Event()
             original_goal = console.goal
             async def observed_goal(*args, **kwargs):
                 if kwargs.get('task_id') is None or kwargs.get('lease_source') == 'trip':
                     return await original_goal(*args, **kwargs)
-                entered = now[0]
-                work_admitting.set()
-                try:
-                    if lifespan and not clock_boundary.is_set():
-                        await clock_boundary.wait()  # Force the first send to overlap a requested SIM step.
-                    assert now[0] == entered, 'SIM clock advanced during ordinary goal admission'
-                    result = await original_goal(*args, **kwargs)
-                    assert now[0] == entered, 'SIM clock advanced during ordinary goal admission'
-                    return result
-                finally:
-                    work_admitting.clear()
+                async with goal_clock:
+                    entered = now[0]
+                    work_admitting.set()
+                    try:
+                        if lifespan and not clock_boundary.is_set():
+                            await clock_boundary.wait()  # Force the first send to overlap a requested SIM step.
+                        assert now[0] == entered, 'SIM clock advanced during ordinary goal admission'
+                        result = await original_goal(*args, **kwargs)
+                        assert now[0] == entered, 'SIM clock advanced during ordinary goal admission'
+                        return result
+                    finally:
+                        work_admitting.clear()
             console.goal = trace_failure('work_goal', observed_goal)
             def build_runtime(context):
                 assert context.plans is returns.adapter.plans
@@ -424,6 +426,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 async def step(*, visible=True, server_running=True):
                     if work_admitting.is_set():
                         clock_boundary.set()
+                    async with goal_clock:
+                        pass  # SIM time advances between ordinary goal admissions.
                     if cycles:
                         cycles.apply_output()
                     elif svc.modes.mode.value != 'NAVIGATION':
