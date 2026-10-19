@@ -1,7 +1,7 @@
 import time
 from types import SimpleNamespace as NS
 
-from omx_adapter.pilot_sim_capture import PilotSimCapture
+from omx_adapter.pilot_sim.capture import PilotSimCapture
 from omx_adapter.ros_goal_contract import RosGoalEvent
 from test_demonstration import sample
 

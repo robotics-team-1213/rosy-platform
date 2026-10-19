@@ -7,8 +7,8 @@ import threading
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, JointState
 
-from .camera_contract import CameraFrameGate, CameraStreamConfig
-from .ros_camera_runtime import RosCameraStreamRuntime
+from ..camera_contract import CameraFrameGate, CameraStreamConfig
+from ..ros_camera_runtime import RosCameraStreamRuntime
 
 
 class PilotSimCamera:

@@ -2463,7 +2463,7 @@ def test_empty_controls_are_not_an_old_server(tablet_page):
     assert errors == [], errors
 
 
-# The fake follows the real SIM runtime (pilot_sim_runtime.snapshot/submit, command_owner):
+# The fake follows the real SIM runtime (pilot_sim.runtime.snapshot/submit, command_owner):
 # while a goal runs /state says ready:false, owner_state "active", active_goal; a goal needs a
 # state_sequence served by a ready readback; a second goal while one runs is refused.
 _ARM_HARNESS = """async (opts) => {

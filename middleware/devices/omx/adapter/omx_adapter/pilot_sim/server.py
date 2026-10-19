@@ -18,14 +18,14 @@ import yaml
 
 from core_common.protocol.omx_sim import GRIPPER_GOAL_MAX_DURATION_S
 
-from .command_owner import ArmCommandConfig
-from .pilot_sim_api import create_pilot_sim_app
-from .pilot_sim_runtime import (PilotSimRuntime, sim_admission_limits, urdf_position_limits,
+from ..command_owner import ArmCommandConfig
+from .api import create_pilot_sim_app
+from .runtime import (PilotSimRuntime, sim_admission_limits, urdf_position_limits,
                                 urdf_velocity_limits)
-from .pilot_sim_capture import PilotSimCapture
-from .pilot_sim_camera import PilotSimCamera
-from .pose_plan import CellPlanningProfile
-from .ros_runtime import RosArmCommandRuntime
+from .capture import PilotSimCapture
+from .camera import PilotSimCamera
+from ..pose_plan import CellPlanningProfile
+from ..ros_runtime import RosArmCommandRuntime
 
 
 def main() -> None:
@@ -41,8 +41,10 @@ def main() -> None:
     cell_path = repo / "deploy/robot/omx/sim/cell_profile.yaml"
     cell = CellPlanningProfile.load(cell_path)
     source_hasher = hashlib.sha256()
-    for file in sorted((repo / "middleware/devices/omx/adapter/omx_adapter").glob("*.py")):
-        source_hasher.update(file.name.encode() + b"\0" + file.read_bytes())
+    adapter_root = repo / "middleware/devices/omx/adapter/omx_adapter"
+    # pilot_sim/ moved out for D-766; keep its sources in the provenance hash.
+    for file in sorted([*adapter_root.glob("*.py"), *adapter_root.glob("pilot_sim/*.py")]):
+        source_hasher.update(file.relative_to(adapter_root).as_posix().encode() + b"\0" + file.read_bytes())
     source_hasher.update((repo / "contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
     source_hasher.update((repo / "contracts/foundation/core_common/protocol/controls.py").read_bytes())
     source_hasher.update(cell_path.read_bytes())
