@@ -9239,3 +9239,9 @@ osy-d395-s1d\`.
 - 변경: D-769 개정 3과 API v1.287에 source 수명·선택 지도 벽·CORE 우선 배포·거절한 짧은 연장의 안내 갱신 예외를 기록했다. 기존 성공 구현은 foundation 선행 변경과 후속 제품 변경으로 구분한다.
 - 증거: 독립 계약 검토가 기존 API의 1초·수락 후 binding 문구와 성공 구현의 차이를 확인했다. 원본 소스의 원격 관련 회귀 159 passed, NEW 0이며 현재 후보 시험은 별도다.
 - gate 변화: 없음. 실물 활성화·main 착지·push는 수행하지 않는다.
+
+## 2026-10-19 · uncommitted · 안내 API 변경 이력 행 보완
+
+- 변경: FULL 회귀가 찾은 API v1.287 변경 이력 표의 누락 행을 추가했다. 헤더·스키마·실행 코드는 바꾸지 않는다.
+- 증거: d9b706e204의 `test_protocol_version_alignment.py::test_changelog_has_a_row_for_the_live_version` 실패를 보존하고 수정 후 같은 검사를 원격 실행한다.
+- gate 변화: 없음. 문서 누락 보완이며 실물·SIM 동작 변경이 아니다.
