@@ -16,6 +16,7 @@ _ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(_ROOT / 'learning/curation/perception'), str(_ROOT / 'contracts/learning/src')]
 import camera_setup  # noqa: E402
 from rosy.contracts.learning.camera_setup import validate_reference, validate_setup  # noqa: E402
+from rosy.contracts.learning.omx import WRIST, camera_role  # noqa: E402
 
 SCHEMA = 'rosy.omx-camera-setup-intake/1'
 
@@ -34,13 +35,15 @@ def load_reference(path):
 
 
 def camera_info_fingerprints(blobs):
-    """Role -> sha256 of the first published camera model, canonical JSON as the recorder hashes it.
+    """Role -> sha256 of a model that stays unchanged throughout the recording.
 
     Copy this value into a reference's ``camera_info_sha256`` so later checks can match it."""
     text = blobs.get('camera_info.jsonl', b'').decode('utf-8')
-    first = json.loads(text.splitlines()[0])['cameras'] if text.strip() else {}
+    models = [json.loads(line)['cameras'] for line in text.splitlines() if line.strip()]
+    first = models[0] if models else {}
+    # shortcut: changed calibration is unmeasurable session-wide; select by frame time if per-episode models are needed.
     return {role: hashlib.sha256(json.dumps(model, sort_keys=True, allow_nan=False).encode()).hexdigest()
-            for role, model in first.items()}
+            for role, model in first.items() if all(other.get(role) == model for other in models)}
 
 
 def _check(frame, reference, still, fingerprint, joints):
@@ -59,6 +62,10 @@ def episode_checks(record, episode, references, joint_names):
     for role, (reference, still) in references.items():
         if role not in shapes:
             raise ValueError(f'reference role {role} is not a recorded camera')
+        if camera_role(reference['camera_role']) != camera_role(role):
+            raise ValueError('reference camera role differs from the recorded camera')
+        if camera_role(role) == WRIST and reference['check_pose'] is None:
+            raise ValueError('wrist reference requires a check pose')
 
         def measure(row):
             rgb = np.frombuffer(record['blobs'][row['images'][role]['path']], np.uint8).reshape(shapes[role])
