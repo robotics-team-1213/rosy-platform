@@ -42,13 +42,14 @@ def test_far_normal_offsets_cannot_precede_the_near_observed_centre(way):
     assert x >= .18 and abs(math.degrees(math.atan2(y, x)) - 10.) < 30
 
 
-def test_corrected_row_order_selects_the_current_lane_only_when_it_opposes_the_exit(way, case):
+def test_corrected_rows_preserve_the_selected_near_route_junction(way):
     pose = (0., 0., 0.)
+    assert way_target(way, G, .03317, .0925)['exit_near']['right']
     error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, pose, pose,
         observed_only=True, current_stamp=1.125, guide_fresh=True,
         guide_here_deg=10., guide_deg=-75., guide_pivot_ok=False)
-    assert info['strategy'] == ('drivable_turn_right', 'drivable_centre')[case]
-    assert (error > 0) if case == 0 else (error < 0 and info['future_turn_deferred'])
+    assert info['strategy'] == 'drivable_turn_right' and error > 0
+    assert not info.get('future_turn_deferred')
     assert confidence == .6
 
 
