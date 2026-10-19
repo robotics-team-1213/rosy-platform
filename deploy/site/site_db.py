@@ -176,7 +176,6 @@ def restore_database(
         _copy_database(source_path, temporary)
         verify_database(temporary)
         _private_mode(temporary)
-        _guard_account_restore(temporary, destination_path)
         if destination_path.exists():
             rollback = _rollback_name(destination_path)
             backup_database(destination_path, rollback)
