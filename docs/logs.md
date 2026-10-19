@@ -9341,3 +9341,9 @@ osy-d395-s1d\`.
 - 변경: 24cc 영향6,937 passed와1 PASS/1 FAIL, 마지막 코너 종단 spent HOLD 및 정상 odom 중 안내만 사라진3프레임을 동결 기록에 추가했다.
 - 증거: 원본·결과 hash와 native 재생12,168개 odom fixture 및1941 관련12파일 통과/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0. 비선택 경로는 추적만 하며 기존 상태의 생성·종료·출력 변경이 없다.
 - gate 변화: 없음. 최신 영향 범위·반복 SIM을 새 후보에서 검증하며 이전 PASS를 이월하지 않는다.
+
+## 2026-10-20 · uncommitted · 도착 상태와 실제 목표 수용 분리
+
+- 변경: f976의 코너 완주 후 정착0.196729m 실패와 조기 arrived pose0.287m를 보존했다. source SHA 표기의 secret guard 오인은 값 변경 없이 HEAD 단독 문장으로 수정했다.
+- 증거: Fleet stop executing과 실제 hold의 구분,737 관련254 passed와 미포함 문서 guard1 FAIL, 독립 safety·최종 소스 검토0/0/0을 동결 기록에 결속했다.
+- gate 변화: 없음. 기존0.15m 수용 기준을 유지하며 수정 문서 guard·최신 영향 범위·같은 후보 연속2회 SIM 전까지 HOLD다.

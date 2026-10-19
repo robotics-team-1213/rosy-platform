@@ -4081,3 +4081,9 @@
 - 변경: 선행 schema·CORE/Drive·recentre 위에서 기존 지도 벽 검증·선택 경로 안내 생산·SIM 지도와 실행 설정을 복원했다. 운영 Fleet 안내 기본 1초, 명시적 SIM 3초이며 원격 자원 계산과 시나리오 도구 확장은 가져오지 않았다.
 - 증거: 원본 소스의 모델 PC 재실행 PASS와 종료·실제 모델 소비를 `docs/validation/pinky-success-baseline-2026-10-19/result.md`에 보존했다. 현재 통합 후보는 별도 원격 회귀와 같은 조건의 SIM을 실행한다.
 - gate 변화: 없음. 실물 지도 활성화·설치·서비스 변경은 수행하지 않는다.
+
+## 2026-10-20 · uncommitted · lane 도착의 실제 정지 목표 결속
+
+- 변경: 수락된 stop executing만으로0.3m에서 완료하지 않고, 검증된 실제 MapPose와 선택된 정지 목표의 Euclidean 거리에 기존0.15m 도착 기준을 적용한다. traffic hold-back 정지점과 free 판정·CORE stop 권한은 보존한다.
+- 증거: f976 SIM은 전체 경로 arrived 뒤 실제 정착0.196729m로 FAIL이었다. native RED4→737 관련254 passed/skip0, 별도 문서 secret guard1 FAIL은 수정 문서 재검증 대상이다. 초과 거리의 접수·실제 hold·overshoot·측면·hold-back·거절 회귀와 독립 safety·최종 소스 검토0/0/0을 기록했다.
+- gate 변화: 없음. 새 후보 반복 SIM 수용 HOLD. CORE가 목표 전에 hold하면 자동 해제·재지시하지 않는다.

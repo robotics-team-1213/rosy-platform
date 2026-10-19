@@ -302,4 +302,28 @@ native 영향 범위는 run-1 6,908 passed / 408 skipped / 38 warnings / 62 subt
 
 - native 재생12 analysis SHA256: `b75d86f9a345ec06b885786d5481ebcc97005c212a7494204d4e0944fd1a725f`
 
-생산 `1941d5025efbd7b8c2e41e392bb7d0a1a6f83bee`는 기존 episode의 시간·pose 연속성 검사와 누적 절대 yaw 갱신을 `_track_alignment`로 분리한다. 선택 안내가 없는 경로는 기존 episode 추적만 하며 후보 객체·출력을 그대로 반환한다. 이 경로는 상태를 생성·종료하지 않는다. 안내 복귀 후 기존 실제 이동·fresh 관측·straight/curve 종료 조건을 평가하며 실제 odom 공백·jump·reset의 uncertainty는 유지한다. seen_exit·기하 기준·회전량 예산·CORE 권한은 바꾸지 않았다. 원본168개 odom과 실제 안내 공백·160.375 관측을 fixture로 결속한 e12 native RED4개 후1941 관련12파일 통과/skip0/NEW0, 독립 소스 safety 검토 material finding 없음, 24cc 이후3커밋 size-range 통과다. 최신 영향 범위·같은 후보 연속2회 SIM 검증 전까지 수용 HOLD다.
+생산 HEAD `1941d5025efbd7b8c2e41e392bb7d0a1a6f83bee`.
+
+기존 episode의 시간·pose 연속성 검사와 누적 절대 yaw 갱신을 `_track_alignment`로 분리한다. 선택 안내가 없는 경로는 기존 episode 추적만 하며 후보 객체·출력을 그대로 반환한다. 이 경로는 상태를 생성·종료하지 않는다. 안내 복귀 후 기존 실제 이동·fresh 관측·straight/curve 종료 조건을 평가하며 실제 odom 공백·jump·reset의 uncertainty는 유지한다. seen_exit·기하 기준·회전량 예산·CORE 권한은 바꾸지 않았다. 원본168개 odom과 실제 안내 공백·160.375 관측을 fixture로 결속한 e12 native RED4개 후1941 관련12파일 통과/skip0/NEW0, 독립 소스 safety 검토 material finding 없음, 24cc 이후3커밋 size-range 통과다. 최신 영향 범위·같은 후보 연속2회 SIM 검증 전까지 수용 HOLD다.
+
+## f976: 코너 통과 후 조기 도착 선언으로 수용 실패
+
+검증 HEAD `f976d6001a0ce85948cd0be9d5c1f3f41f0d8e2f`.
+
+관련 native220 passed/skip0/NEW0 및 독립 소스·문서 최종 검토0/0/0 뒤 영향 범위는 run-1 6,918 passed / 408 skipped / 38 warnings / 62 subtests passed, run-2 9 passed였으나 release guard1건이 실패했다. 동결 기록의 전체 source SHA 바로 뒤에 붙은 한국어 조사가 high-entropy-token으로 오인되었다. SHA 값은 보존하고 HEAD 단독 문장으로 표기를 수정했으며 해당 guard 재검증 전이다. 통과 수와 별개로 이 영향 범위 실행은 FAIL/NEW1이다.
+
+첫 SIM `sim-f976d6001a-40c170`은 마지막 코너와 전체 경로를 통과해 states arrived였지만 실제 정착 거리가 기존0.15m를 초과해 FAIL이었다. settled_xy(0.336366,-0.507173), 목표 거리0.196729m, via0.032m다. 비영 명령 구간 learned_drivable1,425개/fallback0, nonnull revision1,418개 고정 일치/누락7개, 열린 junction292회/먼 출구 거절87회, drivable_closed1회·일시적 realign38회였다. final cmd·odom0, lease released, left_running 빈 목록, 산출물 회수·native 정리 완료, lane_return SKIP이다. 같은 소스로 두 번째를 반복하지 않는다.
+
+Fleet API 원본의 마지막 running pose는(0.230,-0.510), arrived에 저장된 pose는(0.246,-0.511)로 목표(0.533086,-0.509)보다 약0.287m 전이다. Fleet의 matching stop executing + pass_window0.3m 예외가 도착을 인정했다. CORE는 stop 접수 즉시 executing이며 실제 hold가 아닐 수 있다. 실제 settled 오차0.196729m와 도착 선언을 분리하고 기존0.15m 수용 기준을 유지한다. terminal 처리 뒤 authority 갱신 중단은 소스에서 확인했으나 기록에 stop held/seq 상세 receipt가 없어 최종 정지의 직접 원인까지 확정하지 않는다.
+
+- result SHA256: `b8eee31c678b0a18164f0c999f771c2850302f7bfdfa34b49407b3a9aa74cfcd`
+- observations SHA256: `774144fa428239691e023b7b390c84e8731f7e18c28a3728bc41feb8c1ea7f78`
+- run SHA256: `233ab91544635e6fdedc774acdba011cf350ebfdc0c6a8859457dcbd29e846e4`
+
+## 실제 정지 목표 거리로 lane 도착 판정 결속
+
+생산 HEAD `737630e6ba6cc0164426dce631c752f0bb1fdbbb`.
+
+Fleet lane 도착은 해당 segment의 stop 수락 기록과 실제 검증된 MapPose가 기존 arrive_lane_m 이내라는 증거를 요구한다. 선택된 arc의 s_to에서 기존 traffic hold-back을 뺀 실제 정지 목표와 Euclidean 거리를 비교해 접근 중 executing·overshoot·측면 오차를 구분한다. stop 수신 직후 executing을 실제 hold로 간주한 pass_window0.3m 예외를 제거했다. 기존 arrive_lane_m0.15m·free 판정·CORE stop 권한·재전송/해제 정책은 유지한다. 목표 전에 CORE가 실제 hold하면 자동 전진시키지 않고 기존 trip 정체 처리를 유지한다.
+
+새 native 회귀에서 접근 중 executing의 조기 arrival을 확인한 RED4개 뒤 관련6파일은254 passed / skip0와 기존 문서 secret guard1 FAIL/NEW1이었다. 초과 거리에서 실제 hold를 만들어도 running 유지,0.14m 도착, overshoot·측면 거리·traffic hold-back 및 stop 거절 회귀를 포함한다. 해당 실행의 wrapper는 실패 로그의 한국어 출력 중 encoding 오류로 종료했으며 보존된 run-1 결과로 판정을 대조했다. 문서 SHA 형식 수정은 당시 커밋에 포함되지 않았으므로 수정 문서 HEAD의 guard 재검증 전이다. 독립 safety·최종 소스 검토0/0/0, f976 이후4커밋 size-range 통과다. 새 후보 영향 범위·동일 조건 연속2회 SIM 전까지 수용 HOLD이며 임계값을 바꿔 이전 실패를 PASS로 재해석하지 않는다.
