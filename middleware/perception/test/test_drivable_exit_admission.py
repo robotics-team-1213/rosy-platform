@@ -35,11 +35,11 @@ def test_the_route_cannot_restore_the_recorded_far_exit_or_remember_it():
     assert owner._memory is None and owner._side is None
 
 
-def raw(**changes):
+def raw():
     return dict(target_m=(.24, 0.), ahead_m=.2, exit='right', seen_exit='right', straddle=None,
         both=False, exit_point_m={'right': (.2, -.1)}, exit_reach_m={'right': .25},
         exit_near={'right': True}, near_centre_m=(.16, 0.), centre_path_m=[],
-        edges_m=[], near_edges_m={}, **changes)
+        edges_m=[], near_edges_m={})
 
 
 def update(monkeypatch, owner, observation, key, current=POSE, source=POSE):
@@ -76,3 +76,11 @@ def test_an_admitted_near_exit_retains_its_existing_distance_bounded_memory(monk
     assert info.get('exit_from_memory') and owner._memory == ('right', POSE)
     update(monkeypatch, owner, hidden, 3., source=(.51, 0., 0.), current=(.51, 0., 0.))
     assert owner._memory is None
+
+
+def test_a_near_selected_exit_cannot_override_a_side_wall_stop(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as module
+    monkeypatch.setattr(module, 'way_target', lambda *args: raw())
+    _, _, info = DrivableSteer().update(np.ones((240, 320), bool), 1., G, .03317, .0925,
+        POSE, POSE, guide_here_deg=0., guide_deg=-50., side_clear_m={'right': .01})
+    assert info['strategy'] == 'drivable_centre' and info['exit'] is None

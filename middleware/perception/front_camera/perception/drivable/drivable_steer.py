@@ -182,7 +182,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["exit"] = next(iter(reach))
     # The opening must already reach beside the robot: turning toward a mouth still ahead cuts
     # across the boundary before it (9dfk 20261010T002026Z hit the ring's outer line at the SE exit).
-    out["seen_exit"] = out["exit"]
+    out.update(seen_exit=out["exit"], exit_near=near_ok)
     if out["exit"] is not None and not near_ok[out["exit"]]:
         out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
@@ -387,7 +387,7 @@ class DrivableSteer:
             for remembered in (self._memory[0] if self._memory else None, self._side, self._pivot):
                 if remembered is not None and side_clear_m.get(remembered) is not None and side_clear_m[remembered] < SIDE_WALL_M:
                     self._memory = self._side = self._pivot = self._pivot_yaw = None
-        ahead, side = info["ahead_m"], info["exit"]
+        ahead, side, near = info["ahead_m"], info["exit"], info.get("exit_near", {info["exit"]: info["exit"] is not None})
         bridge, want = False, None
         if guide_deg is not None:
             # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
@@ -418,7 +418,7 @@ class DrivableSteer:
                 # is bridged along the lane below (user 2026-10-10: the map is the route reference)
                 side = info["exit"] = None
                 self._pivot = self._side = None
-            elif want in info["exit_reach_m"]:
+            elif want in info["exit_reach_m"] and near.get(want) and (not side_clear_m or want in open_sides):
                 side = info["exit"] = want
             elif side is not None and side != want:
                 side = info["exit"] = None      # an opening against the route is not taken
@@ -436,9 +436,9 @@ class DrivableSteer:
         # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
         # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
         # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).
-        if info.get("seen_exit") is not None:
-            self._memory = (info["seen_exit"], current_pose)
-        elif self._memory is not None and current_pose is not None and self._memory[1] is not None and math.hypot(
+        if near.get(side or info.get("seen_exit")):
+            self._memory = (side or info["seen_exit"], source_pose)
+        if self._memory is not None and current_pose is not None and self._memory[1] is not None and math.hypot(
                 current_pose[0] - self._memory[1][0], current_pose[1] - self._memory[1][1]) > EXIT_MEMORY_M:
             self._memory = None
         # A way whose target runs on ahead is no corner, whatever closed the short straight corridor: on
