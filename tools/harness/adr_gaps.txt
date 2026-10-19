@@ -36,7 +36,6 @@ D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet
 
 
 D-775 reserved in another worktree (refs/adr/D-775), absent from origin/main; remove when its ADR lands
-D-785 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-786 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-787 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-788 landed on local main only (not yet on origin); remove when its ADR reaches origin
@@ -44,7 +43,6 @@ D-789 landed on local main only (not yet on origin); remove when its ADR reaches
 D-790 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-791 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-792 landed on local main only (not yet on origin); remove when its ADR reaches origin
-D-785 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-786 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-787 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-788 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands

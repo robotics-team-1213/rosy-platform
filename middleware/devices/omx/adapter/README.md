@@ -57,7 +57,7 @@ evidence; this module does not produce a 3D pose, grasp, trajectory, or pick
 success claim. Coordinate selectors must already be in source-observation
 pixels; cropped coordinates without a verified inverse transform are refused.
 
-`omx_adapter.pick_place_transaction` is an evidence-only transition model for
+`omx_adapter.pick_place.pick_place_transaction` is an evidence-only transition model for
 approach, grasp, hold verification, transfer, release, and independent placement
 predicate verification. `gripper_contract` requires fresh, advancing,
 workcell/session-bound gripper readback for hold and release receipts. An

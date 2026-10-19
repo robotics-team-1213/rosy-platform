@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from omx_adapter.gripper_contract import GripperObservation
     from omx_adapter.action_runner import StopFence
     from omx_adapter.manipulation_plan import PlannedMotionPhase
-    from omx_adapter.pick_place_runner import PhaseGoalPort
+    from omx_adapter.pick_place.pick_place_runner import PhaseGoalPort
     from omx_adapter.pose_plan import CellPlanningProfile, CellTransferPlan, CellTransferPlanProvider
 
 
@@ -241,7 +241,7 @@ def create_omx_cell_transfer_phase_factory(
     opts into durable hold/release verification and local Action terminalization;
     without it the caller retains responsibility for terminal workflow evidence.
     """
-    from omx_adapter.pick_place_runner import PickPlaceRunner
+    from omx_adapter.pick_place.pick_place_runner import PickPlaceRunner
 
     def planner_for_grant(grant: FleetCellTransferGrant) -> OMXAnalyticTransferPlanner:
         return OMXAnalyticTransferPlanner(
@@ -277,7 +277,7 @@ def create_omx_cell_transfer_phase_factory(
     if gripper_sensor_revision is None:
         return phase_factory
 
-    from omx_adapter.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
+    from omx_adapter.pick_place.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
     from .cell_workflow import CellTransferWorkflowExecution
 
     if (not isinstance(gripper_sensor_revision, str) or not gripper_sensor_revision

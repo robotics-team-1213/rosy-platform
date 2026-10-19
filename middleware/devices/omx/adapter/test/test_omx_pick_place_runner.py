@@ -16,7 +16,7 @@ from omx_adapter.manipulation_plan import (
     ResolvedPickPlacePlan,
 )
 from omx_adapter.phase_recorder import ActionPhaseRecorder
-from omx_adapter.pick_place_runner import PhaseDispatch, PickPlaceRunner
+from omx_adapter.pick_place.pick_place_runner import PhaseDispatch, PickPlaceRunner
 from omx_adapter.ros_goal_contract import RosGoalEvent
 
 

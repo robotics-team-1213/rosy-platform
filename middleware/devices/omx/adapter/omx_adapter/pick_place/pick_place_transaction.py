@@ -14,15 +14,15 @@ from typing import Any, Callable, Mapping
 
 from core_common.protocol.schemas import FleetCellTransferGrant
 
-from .gripper_contract import (
+from ..gripper_contract import (
     GripperObservation,
     HoldReceipt,
     ReleaseReceipt,
     verify_held_object,
     verify_released_object,
 )
-from .target_evidence import TargetEvidence
-from .phase_recorder import ActionPhaseRecorder
+from ..target_evidence import TargetEvidence
+from ..phase_recorder import ActionPhaseRecorder
 
 
 class TransactionError(ValueError):

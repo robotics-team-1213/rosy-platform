@@ -339,7 +339,7 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
     execution = executions[0]
     execution.advance()
     if release_fault == "grasp-timeout":
-        from omx_adapter.pick_place_transaction import TransactionError
+        from omx_adapter.pick_place.pick_place_transaction import TransactionError
         with pytest.raises(TransactionError):
             execution.advance()
         assert store.get_action(grant.action_id)["state"] == "HOLD"
@@ -355,7 +355,7 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
         assert [row["state"] for row in store.action_phases(grant.action_id)] == ["SUCCEEDED"] * 4
         if workflow_revision:
             if release_fault:
-                from omx_adapter.pick_place_transaction import TransactionError
+                from omx_adapter.pick_place.pick_place_transaction import TransactionError
                 if release_fault == "clock-failure":
                     def unavailable_clock():
                         raise RuntimeError("clock unavailable")
@@ -413,7 +413,7 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
 
 def test_cell_transaction_has_recipe_provenance_and_reuses_gripper_checks():
     from omx_adapter.gripper_contract import GripperObservation
-    from omx_adapter.pick_place_transaction import ArmActionResult, PickPlaceTransaction, TransactionError
+    from omx_adapter.pick_place.pick_place_transaction import ArmActionResult, PickPlaceTransaction, TransactionError
 
     grant = _grant()
     tx = PickPlaceTransaction.for_cell_transfer(grant, gripper_sensor_revision="sensor-1")
@@ -451,7 +451,7 @@ def test_cell_transaction_has_recipe_provenance_and_reuses_gripper_checks():
 def test_cell_transaction_rejects_gripper_identity_mismatch(field, value):
     from dataclasses import replace
     from omx_adapter.gripper_contract import GripperObservation
-    from omx_adapter.pick_place_transaction import ArmActionResult, PickPlaceTransaction, TransactionError
+    from omx_adapter.pick_place.pick_place_transaction import ArmActionResult, PickPlaceTransaction, TransactionError
 
     grant = _grant()
     tx = PickPlaceTransaction.for_cell_transfer(grant, gripper_sensor_revision="sensor-1")
@@ -467,7 +467,7 @@ def test_cell_transaction_rejects_gripper_identity_mismatch(field, value):
 
 def test_cell_cancel_timeout_records_workflow_hold_and_blocks_late_success(tmp_path):
     from omx_adapter.action_api import ActionApi
-    from omx_adapter.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
+    from omx_adapter.pick_place.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
     from rosy.integrations.robots.omx.cell_workflow import CellTransferWorkflowExecution
     from test_omx_action_api import FakePhaseExecution, _cell_transfer_grant, _runner
 
