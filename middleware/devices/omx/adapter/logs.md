@@ -547,3 +547,9 @@
 - 변경: 시험 전용 선택적 intake·owner lock·최초 HOLD trace와 고정 5회 native 표본을 추가했다. 생산 안전 기준과 freshness·timeout·executor 설정은 유지했다.
 - 증거: 계측 단독 5회·계측 전체 suite 5회·계측 없는 전체 suite 5회·수정하지 않은 main 전체 suite 별도 5회 통과. 원격 affected 1281 passed, 22 skipped, NEW 0. 독립 리뷰는 진단 전용 변경으로 적절하다고 판정했다. 사용자 승인 controller 패키지 설치 후 Gazebo 목표 0.01rad에 관측 이동량 0.008547rad·오차 0.001453rad. 상세 범위와 로그 해시는 docs/validation/omx-feedback-verification-2026-10-18/result.md.
 - gate 변화: 없음. 간헐 stale-feedback 원인은 미확정이며 Fleet→장치 lease 전달·학습 정책 종단간·실물 수용 증거는 없다.
+
+## 2026-10-19 · dc1d3419eb · refactor(omx): pilot-sim 묶음을 omx_adapter/pilot_sim 크기 단위로 이동
+
+- 변경: `pilot_sim_{runtime,api,capture,server,camera,gripper}.py`를 `omx_adapter/pilot_sim/`으로 옮기고 D-766 단위(`test/architecture/size_units.txt`)로 등록했다. 실행은 `python3 -m omx_adapter.pilot_sim.server`, `_ARM_OWNERS`는 `pilot_sim.server`다. 시연 `source_tree_sha256`은 `pilot_sim/*.py`도 계속 포함한다.
+- 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
+- gate 변화: 없음. 동작 변경 없는 경로 이동이다.

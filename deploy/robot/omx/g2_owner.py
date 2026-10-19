@@ -31,8 +31,8 @@ def main():
     from rclpy.node import Node
     from rclpy.parameter import Parameter
     from core_common.protocol.schemas import FleetCellTransferGrant
-    from omx_adapter.pilot_sim_api import create_pilot_sim_app
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.api import create_pilot_sim_app
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
     from omx_adapter.gripper_contract import verify_held_object
     from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation

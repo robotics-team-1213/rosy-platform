@@ -8,7 +8,7 @@ contracts/foundation/core_common/protocol/schemas.py
 middleware/robot_ui/face/emotion/info_screen.py
 middleware/robot_ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
-middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
+middleware/devices/omx/adapter/omx_adapter/pilot_sim/api.py
 middleware/core/api/core_api_web/api/app.py
 middleware/drive/planning/nav2/launch/hardware.launch.py
 middleware/drive/planning/nav2/params/nav2_params.yaml

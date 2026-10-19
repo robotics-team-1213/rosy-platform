@@ -12,7 +12,7 @@ from uuid import UUID
 
 from PIL import Image
 
-from .demonstration import DemonstrationRecorder, MAX_FRAMES
+from ..demonstration import DemonstrationRecorder, MAX_FRAMES
 
 
 class PilotSimCapture:
