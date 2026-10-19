@@ -14,6 +14,13 @@ LOOK_MIN_DEG = 15.0        # a route bend under this is straight on: turning sho
 LOOK_MAX_RAD = math.pi / 2
 
 
+def _valid(value, size):
+    try:
+        return len(value) == size and all(math.isfinite(v) for v in value)
+    except (TypeError, ValueError):
+        return False
+
+
 def route_exit_point(owner, info, side, want, source_pose, pose, stamp, side_clear):
     """Keep an admitted observation across recentring, within its original travel budget."""
     from .drivable_steer import EXIT_MEMORY_M, MAX_CRUISE_MPS, SIDE_WALL_M, TURN_RELEASE_M
@@ -162,20 +169,14 @@ class RouteBridge:
         if self._alignment is not None:
             self._alignment['uncertain'] = True
 
-    def _align(self, error, confidence, info, pose, owner, source_pose, stamp, observed):
-        from .drivable_steer import (BEND_ON_X_M, LOOKAHEAD_M, MAX_CRUISE_MPS, PIVOT_AHEAD_M, PIVOT_ERROR,
-                                     PIVOT_MAX_RAD, REALIGN_DEG, RECENTRE_M)
+    def _track_alignment(self, pose, owner, source_pose, stamp, observed):
+        """Track an existing episode even while its selected guide is absent."""
+        from .drivable_steer import MAX_CRUISE_MPS
         from .drivable_keep import WAY_MAX_AGE_S
         from ..learned.paint_motion import ODOM_HISTORY_MAX_GAP_S
 
-        def valid(value, size):
-            try:
-                return len(value) == size and all(math.isfinite(v) for v in value)
-            except (TypeError, ValueError):
-                return False
-
-        timing = valid((stamp, observed), 2) and 0.0 <= stamp - observed <= WAY_MAX_AGE_S
-        poses = valid(pose, 3) and valid(source_pose, 3)
+        timing = _valid((stamp, observed), 2) and 0.0 <= stamp - observed <= WAY_MAX_AGE_S
+        poses = _valid(pose, 3) and _valid(source_pose, 3)
         if timing and poses:
             age = stamp - observed
             poses = (math.hypot(pose[0] - source_pose[0], pose[1] - source_pose[1]) <= MAX_CRUISE_MPS * age + 1e-6
@@ -195,18 +196,27 @@ class RouteBridge:
                     state['uncertain'] = True
                 state['used'] += angle
                 state['stamp'], state['last'] = stamp, tuple(pose)
-                moved = math.hypot(pose[0] - state['origin'][0], pose[1] - state['origin'][1])
-                straight = (info['strategy'] == 'drivable_centre' and info.get('ahead_m', 0.0) >= LOOKAHEAD_M
-                            and len(info.get('centre_path_m', [])) >= 2)
-                curved = (math.dist(source_pose[:2], state['origin'][:2]) > BRIDGE_MAX_M
-                          and confidence is not None and confidence > owner._pivot_confidence
-                          and _observed_turn(info, source_pose, pose, owner))
-                # End this location's episode after measured progress, including an observed connected bend.
-                if (not state['uncertain'] and moved > BRIDGE_MAX_M and observed > state['observed']
-                        and error is not None and (straight or curved)
-                        and not info.get('reason') and not info.get('straddle')
-                        and info.get('front_blocked_m') is None and not info.get('crosswalk_hold')):
-                    self._alignment = state = None
+        return timing, poses
+
+    def _align(self, error, confidence, info, pose, owner, source_pose, stamp, observed):
+        from .drivable_steer import (BEND_ON_X_M, LOOKAHEAD_M, PIVOT_AHEAD_M, PIVOT_ERROR,
+                                     PIVOT_MAX_RAD, REALIGN_DEG, RECENTRE_M)
+
+        timing, poses = self._track_alignment(pose, owner, source_pose, stamp, observed)
+        state = self._alignment
+        if state is not None and timing and poses:
+            moved = math.hypot(pose[0] - state['origin'][0], pose[1] - state['origin'][1])
+            straight = (info['strategy'] == 'drivable_centre' and info.get('ahead_m', 0.0) >= LOOKAHEAD_M
+                        and len(info.get('centre_path_m', [])) >= 2)
+            curved = (math.dist(source_pose[:2], state['origin'][:2]) > BRIDGE_MAX_M
+                      and confidence is not None and confidence > owner._pivot_confidence
+                      and _observed_turn(info, source_pose, pose, owner))
+            # End this location's episode after measured progress, including an observed connected bend.
+            if (not state['uncertain'] and moved > BRIDGE_MAX_M and observed > state['observed']
+                    and error is not None and (straight or curved)
+                    and not info.get('reason') and not info.get('straddle')
+                    and info.get('front_blocked_m') is None and not info.get('crosswalk_hold')):
+                self._alignment = state = None
 
         pivot = next((side for side, sign in (('left', -1), ('right', 1))
                       if info['strategy'] == f'drivable_pivot_{side}' and error == sign * PIVOT_ERROR
@@ -229,7 +239,7 @@ class RouteBridge:
         near, target, seen = info.get('near_centre_m'), info.get('target_m'), info.get('seen_exit')
         opening = info.get('exit_point_m', {}).get(seen)
         floor = info.get('local_floor_m', [])
-        local = (len(floor) >= 4 and all(valid(point, 2) and 0.0 < point[0] < BEND_ON_X_M for point in floor))
+        local = (len(floor) >= 4 and all(_valid(point, 2) and 0.0 < point[0] < BEND_ON_X_M for point in floor))
         if local:
             local = all(point[1] * floor[0][1] > 0.0 for point in floor)
             current = [_to_current(point, source_pose, pose) for point in floor]
@@ -239,7 +249,7 @@ class RouteBridge:
             local = local and len(floor) >= 4 and all(point[1] * sign > 0.0 for point in current)
         if local:
             near, target, opening = floor[0], floor[-1], floor[-1]
-        if not (valid(near, 2) and valid(target, 2) and valid(opening, 2)):
+        if not (_valid(near, 2) and _valid(target, 2) and _valid(opening, 2)):
             return fallback
         if not local and info.get('exit_reach_m', {}).get(seen, 0.0) < PIVOT_AHEAD_M:
             return fallback
@@ -306,7 +316,12 @@ class RouteBridge:
 
 def observed_route_candidate(error, confidence, info, *, observed_only, owner=None, pose=None,
                              source_pose=None, current_stamp=None, observation_stamp=None):
-    if not observed_only or owner is None:
+    if owner is None:
+        return error, confidence, info
+    if not observed_only:
+        bridge = owner.__dict__.get('_route_bridge')
+        if bridge is not None and bridge._alignment is not None:
+            bridge._track_alignment(pose, owner, source_pose, current_stamp, observation_stamp)
         return error, confidence, info
     bridge = owner.__dict__.setdefault('_route_bridge', RouteBridge())
     return bridge.step(error, confidence, info, pose, owner, source_pose=source_pose,
