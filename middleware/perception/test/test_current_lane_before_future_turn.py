@@ -48,6 +48,18 @@ def test_current_lane_selection_rejects_a_remembered_boundary_crossing():
     assert error == old_error and not info.get('future_turn_deferred')
 
 
+@pytest.mark.parametrize('evidence', [
+    {'exit_near': {'right': True}},
+    {'exit_near': {'left': True}, 'exit_from_route_memory': True},
+])
+def test_an_admitted_route_junction_is_not_a_future_turn(evidence):
+    # 4d0 SIM89.125/89.625: current near junction, then its bounded observed point.
+    (error, confidence, info), _, old_error = candidate(dict(RECORDED, **evidence))
+    assert error == old_error and confidence == .6
+    assert info['strategy'] == 'drivable_turn_right'
+    assert not info.get('future_turn_deferred')
+
+
 def test_full_steer_defers_the_recorded_opposite_future_turn(monkeypatch):
     import control.sensing.perception.drivable.drivable_steer as module
     raw = {k: v for k, v in RECORDED.items() if k not in ('strategy', 'reason', 'target_now_m')}

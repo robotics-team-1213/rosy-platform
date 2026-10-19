@@ -61,7 +61,7 @@ SIM은 GPU, map_v2_fleet, lap, stall60, record, `lane_return` 제외 조건을 �
 
 생산 코드는 `c1de655151`, 회귀 자료는 `b496d1e26`이며 최종 문서 HEAD는 `1b6d47f4bb`다. b311 원격 관련·문서·release 452 passed, affected 두 실행 6860+9=6869 passed / 408 skipped / NEW0. 1b6 문서·release 별도 실행은 212 passed / NEW0이며 전체 affected 재실행으로 표시하지 않는다.
 
-- 문서 HEAD SHA: `1b6d47f4bb03a1e39be818d74b75686b7d0f28b4`.
+- 문서 HEAD `1b6d47f4bb03a1e39be818d74b75686b7d0f28b4`.
 
 같은 고정 모델·지도 조건의 `sim-1b6d47f4bb-58308c`는 progress3.421m에서 stall FAIL. 먼 출구 거절40회, 현재 차로 우선 판단2회가 실제 적용돼 앞선1.861m 실패 구간은 통과했다. learned_drivable677회 / fallback0, 최종 cmd·odom0, lease 해제, 남은 프로세스 없음, native 정리 완료. 연속 완주 수용은 미달이다.
 
