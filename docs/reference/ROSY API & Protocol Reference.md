@@ -3394,6 +3394,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.287 | 2026-10-19 | D-769 rev 3 / D-573 rev 8 route-prior compatibility prerequisite: optional map-wall geometry, at most three-second source lifetime, receiver-first rollout, and the separately installed consumer's ignored-short extension exception. Operational Fleet remains one second; no physical activation. |
 | v1.275 | 2026-10-19 | Additive (D-801, feat/site-console-video): Fleet `POST /api/fleet/robots/{robot_id}/media-grant`·`/renew`·`DELETE`와 미디어 권한 서비스용 `POST /api/fleet/media/validate`. 사이트 로그인 주체(fleet.read)의 로봇별 READ 전용 영상 위임. 상세는 v1.275 절 |
 | v1.273 | 2026-10-19 | Additive (docs/stuck-evidence-jpeg-api): `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` with `Accept: image/jpeg` returns the raw JPEG and its metadata in `X-Stuck-Evidence`; the JSON body is unchanged for other clients. Documents the behaviour shipped in fix(fleet) 0659636cff. |
 | v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
