@@ -116,6 +116,21 @@ def _current_lane(error, confidence, info, source_pose, pose, owner, stamp, obse
         future_turn_deferred=True)
 
 
+def _near_selected_arc(point, target):
+    """Bind a near observation to the short branch of the selected current-frame arc."""
+    from .drivable_steer import CORRIDOR_HALF_M
+
+    d2 = target[0] * target[0] + target[1] * target[1]
+    if not math.isfinite(d2) or d2 <= 0.0:
+        return False
+    curvature = 2.0 * target[1] / d2
+    sine = curvature * point[0]
+    if not math.isfinite(sine) or abs(sine) > 1.0:
+        return False
+    arc_y = point[0] * sine / (1.0 + math.sqrt(1.0 - sine * sine))
+    return math.isfinite(arc_y) and abs(point[1] - arc_y) <= CORRIDOR_HALF_M
+
+
 def _observed_turn(info, source_pose, pose, owner):
     """A selected forward turn agrees with a connected path measured at this new location."""
     from .drivable_steer import BEND_ON_X_M, CORRIDOR_HALF_M, LOOKAHEAD_M, REALIGN_DEG
@@ -136,7 +151,7 @@ def _observed_turn(info, source_pose, pose, owner):
         # A lower bound on connected curve length; row-to-row pixel zigzags cannot inflate it.
         coverage = math.hypot(*path[0]) + math.dist(path[0], path[-1])
         # The guide here is local direction; a curve's distant target chord has already turned.
-        if (not 0.0 < path[0][0] <= BEND_ON_X_M or abs(path[0][1]) > CORRIDOR_HALF_M
+        if (not 0.0 < path[0][0] <= BEND_ON_X_M or not _near_selected_arc(path[0], target)
                 or coverage < LOOKAHEAD_M or target[0] < BEND_ON_X_M or opening[0] <= 0.0
                 or any(a[0] >= b[0] or math.dist(a, b) > ROW_BAND_M for a, b in zip(path, path[1:]))
                 or not math.isfinite(ctx.get('here'))
