@@ -1,6 +1,6 @@
 # D-807 Account 서비스 구현·원격 검증
 
-2026-10-19 기록. 작업 브랜치 `feat/account-service-completion`, 출발 main `48fdd711ae96cf394e1a43f264c35d84855cedff`. 최종 제품/시험 소스 `30acdffbfb`. [실행 계획](../../plans/2026-10-19-account-service-rollout.md), [D-807](../../adr/D-807-account-service-credential-ownership-and-acceptance.md), [설치 절차](../../../deploy/site/README.md)를 함께 본다. 이 기록은 source·명시한 원격 시험의 증거이며 CI·설치·운영 수용 판정이 아니다.
+2026-10-19 기록. 작업 브랜치 `feat/account-service-completion`, 출발 main commit `48fdd711ae96cf394e1a43f264c35d84855cedff`. 최종 제품/시험 소스 `30acdffbfb`. [실행 계획](../../plans/2026-10-19-account-service-rollout.md), [D-807](../../adr/D-807-account-service-credential-ownership-and-acceptance.md), [설치 절차](../../../deploy/site/README.md)를 함께 본다. 이 기록은 source·명시한 원격 시험의 증거이며 CI·설치·운영 수용 판정이 아니다.
 
 ## 변경과 판정
 
@@ -16,13 +16,13 @@ pytest 명령은 `python tools/remote/remote_pytest.py --sha <아래 SHA> --log-
 
 | 묶음 | 커밋 | 호스트 역할 | 실제 결과 | 로그 SHA-256 |
 |---|---|---|---|---|
-| task1 | c22ee485ad | 모델 PC | 15 passed, 0 skipped | `511fb971caf59261241ec2a3919d9d10c7dcb9ec044ee07d50b2db465184f057` |
-| task2-fixed | 41e03f029e | 모델 PC | 14 passed, 0 skipped | `3b5afd355f1ef5672b3888f295948ee5359e05ebeb52175a1c1ad764f9ada8f1` |
-| task3-apps | 41e03f029e | 모델 PC | 170 passed, 0 skipped | `59068dfd0208c22b7c93baf69805c65192aea643da2844546e038d6a9fce5cd5` |
-| final-runtime-online | ce2f94e833 | 모델 PC | 34 passed, 0 skipped | `257641c2246fba9de3639d5fc2560abd47e2f568eb9868ad9111f1495329130c` |
-| final-security | d58258fee6 | 모델 PC | 35 passed, 0 skipped | `2de617cc7e72e752873e7dba940062c3bb98fa553927a8747ce2be1d5cead147` |
-| task3-games-browser | d58258fee6 | 현장 시험 PC | 38 passed, 0 skipped | `8e0dd3e259f68c193f05e3e04acef6407a9ed36e5124438d9f9a04fbd0db33db` |
-| final-source-launcher | 30acdffbfb | 모델 PC | 2 passed, 0 skipped | `99db33d5c94c6f7da021687c7391181685cc33299c5435b1c861e2db3be3ec87` |
+| task1 | c22ee485ad | 모델 PC | 15 passed, 0 skipped | SHA-256 `511fb971caf59261241ec2a3919d9d10c7dcb9ec044ee07d50b2db465184f057` |
+| task2-fixed | 41e03f029e | 모델 PC | 14 passed, 0 skipped | SHA-256 `3b5afd355f1ef5672b3888f295948ee5359e05ebeb52175a1c1ad764f9ada8f1` |
+| task3-apps | 41e03f029e | 모델 PC | 170 passed, 0 skipped | SHA-256 `59068dfd0208c22b7c93baf69805c65192aea643da2844546e038d6a9fce5cd5` |
+| final-runtime-online | ce2f94e833 | 모델 PC | 34 passed, 0 skipped | SHA-256 `257641c2246fba9de3639d5fc2560abd47e2f568eb9868ad9111f1495329130c` |
+| final-security | d58258fee6 | 모델 PC | 35 passed, 0 skipped | SHA-256 `2de617cc7e72e752873e7dba940062c3bb98fa553927a8747ce2be1d5cead147` |
+| task3-games-browser | d58258fee6 | 현장 시험 PC | 38 passed, 0 skipped | SHA-256 `8e0dd3e259f68c193f05e3e04acef6407a9ed36e5124438d9f9a04fbd0db33db` |
+| final-source-launcher | 30acdffbfb | 모델 PC | 2 passed, 0 skipped | SHA-256 `99db33d5c94c6f7da021687c7391181685cc33299c5435b1c861e2db3be3ec87` |
 
 시험 경로:
 

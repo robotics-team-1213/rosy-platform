@@ -57,7 +57,7 @@ function notice(text) {
 
 function appendAccountLogout(actions) {
   if (!account?.authenticated) return;
-  const exit = el('ui-button', '로그아웃', {type:'button', kind:'quiet'});
+  const exit = el('ui-button', '로그아웃', {type:'button'});
   exit.setAttribute('kind', 'quiet');
   exit.addEventListener('click', async () => {
     try { await accountLogout(); window.location.assign('/pilot'); }

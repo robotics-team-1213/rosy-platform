@@ -949,3 +949,9 @@
 - 변경: 조회 전용 로그아웃·PWA 캐시·원격 SDK 전달·native CSP mock 수정을 최신 main 기반 앱 브랜치로 모았다. foundation 회귀는 별도 브랜치에서 먼저 착지한다.
 - 증거: 기존30acdffbfb의 Pilot JVM111 tests 중 skip1·실패0·APK1과 실제 proxy Chromium 결과는 기존 기록에 남긴다. 최신 main 착지 검사는 따로 수행하며 설치·실물 수용을 뜻하지 않는다.
 - gate 변화: 없음. 운영 배포와 실제 사용자·단말 수용은 미확인이다.
+
+## 2026-10-19 · 4a5d5eef7f · 보관 Account 통합의 버튼 선언과 검증 해시 표기
+
+- 변경: 보관된 Account 앱·운영 문서를 최신 main과 통합했다. 로그아웃 버튼의 기존 quiet 종류를 공용 검사에서 읽는 명시적 setter로 옮겼다. 기존 공개 커밋·로그 무결성 해시의 값은 그대로 두고 commit/SHA-256 표기를 보충했다. 인증 동작·검사 규칙·비밀값 허용 목록은 바꾸지 않았다.
+- 증거: 첫805ce7d116 착지 검사에서 버튼 선언·문서 해시의2NEW를 확인해 착지하지 않았다. 수정4a5d5eef7f의 원격 공용 컨트롤·release 경계·secret scanner121개 통과, skip0·NEW0. 독립 최종 소스 검토 finding 없음. 실패 로그11개는 외부 scratch account-failed-805ce7d116에 hash 대조 보존했다. 첫 검사에서 잘못 축약된 middleware/media:: node id의 단독·main 재실행은 exit4로 판정 불가였으며 main-red나 flaky로 세지 않는다.
+- gate 변화: 없음. 전체 착지 관문은 수정된 커밋으로 다시 수행한다. 운영 설정·서명 배포·실물·사용자 수용은 미확인이다.
