@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.268."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.277."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.auth import PairingState
 from core_api_web.api.v1.connection import connection_router
 from core_api_web.api.v1.routes import (
+    arm_router,
     auth_router,
     calibration_router,
     control_router,
@@ -118,9 +119,14 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.268)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.277)",
     )
     app.state.core = services
+    arm_policy = getattr(services, 'arm_policy', None)
+    if arm_policy is not None:
+        services.safety.estop_listeners.append(arm_policy.stop)
+        if services.safety.estop:
+            arm_policy.stop()
     from .account_sessions import install_account_sessions
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')
@@ -205,6 +211,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(system_router)
     app.include_router(robot_router)
     app.include_router(control_router)
+    app.include_router(arm_router)
     app.include_router(calibration_router)
     app.include_router(trip_lease_router)
     app.include_router(fleet_link_router)

@@ -793,6 +793,8 @@
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 | D-793 | OMX 학습 정책의 실물 실행 승인 관문 — 학습은 실행 권한을 바꾸지 않고, 위험하면 멈춘 뒤 API로 확인받는다 | Proposed |
 | D-782 | OMX 행동 조건부 World 모델 도입 — 실행 전 검사기부터, 예측은 거절·보류 근거로만, 폴더는 실제 소비자가 생길 때 | Proposed |
+| D-800 | CORE-mediated OMX LeRobot observation and action requests | Proposed |
+| D-804 | SIM 장치의 Fleet policy lease 소비와 CORE 결속 | Proposed |
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
 | D-785 | OMX 실물 no-goal owner와 Fleet 연결 — 정지·상태 읽기부터 열고 동작은 열지 않는다, 현장 overlay는 fence 전송 결정 뒤 | Proposed |
 
