@@ -39,7 +39,7 @@
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [interfaces](contracts/ros_idl/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
+| [interfaces](contracts/ros_idl/progress.md) | 장치 | 8058c3676 (2026-10-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](middleware/devices/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [description](middleware/devices/pinky/description/progress.md) | 로봇 통합 | c0bb0393c (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | PARKED |

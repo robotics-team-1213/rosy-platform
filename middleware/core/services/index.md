@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
-- 2026-10-16 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769)
-- 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
-- 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
-- 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) private energy handover naming
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy restriction implementation
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) original energy remote verification not run
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) new energy log formatting correction
