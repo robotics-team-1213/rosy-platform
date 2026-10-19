@@ -9197,3 +9197,9 @@ osy-d395-s1d\`.
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
+
+- 변경: 로컬 main도 승인 API를 `missions/mission_routes.py` 안에서만 설치해, `--tasks-db`만 있고 `--mission-api`가 없는 Fleet에서 `/api/fleet/workcells/{id}/policy/*`가 404였다. origin #106(e5661d443f)처럼 작업 기록부만 있으면 `work/work_routes.py`에서 설치하고 Mission 쪽 설치 블록은 지운다.
+- 증거: 원격 pytest `test_policy_governance.py`(Mission 없는 앱 시험 포함).
+- gate 변화: 없음.

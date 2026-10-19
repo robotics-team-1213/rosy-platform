@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
 - 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
 - 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
 - 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
 - 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
-- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
