@@ -51,7 +51,7 @@ deploy\robot\pinky_pro\sd\enable-motor-commissioning.ps1 -DeviceName <rosy-pinky
 
 - 도우미가 하는 일/하지 않는 일: 표시된 E-Stop 유지, 토크 오프 ID 탐색, `motor`+`drive=true` 원자 전환, `drive=ready`·단일 `cmd_vel` 발행자 판독. **무인 토크·G4 승인 파일 생성·내비게이션 승격은 없다.**
 - **이상 시 복구**(D-319 본문): I/O 정지 → 저장된 `runtime.env` 복원 → CORE 재시작 → E-Stop 재걸기 → 무구동 I/O 기동 → 토크 레지스터 2개 판독.
-- **증거**: 기기별 판독은 `X:\DevTemp` 개인 운영 기록에.
+- **증거**: 기기별 판독은 `$ROSY_SCRATCH` 개인 운영 기록에.
 
 ## 3. G4 계단 (D-311/312/314 · D-321 승인 흐름)
 
