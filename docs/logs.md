@@ -9269,3 +9269,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 선택에 따라 관측 곡선의 실제 전진으로 정렬 episode를 종료하고, coverage와 전방 x거리를 구분한 후보의 검증을 결속했다. 기존 실패 기록은 보존한다.
 - 증거: 최종 source 관련 원격 140 passed, 영향 범위 6,832 passed/408 skipped/NEW 0. 동일 source SIM 1 PASS/1 FAIL이며 실패 실행에서 새 정렬 사용 뒤 현 차로와 목표 불일치로 realign→CORE HOLD/LOST가 발생했다. 모든 실행 최종 정지·lease 해제·소유 잔존 없음과 native fetch/정리를 확인했다.
 - gate 변화: 없음. trip 자동 REALIGN은 기존 계약이 명시적으로 거절하는 별도 미수용 범위임을 독립 추적했다. 반복 수용은 HOLD이고 main·실물은 바꾸지 않았다.
+
+## 2026-10-20 · uncommitted · 선택 경로 연결점 거리 안내 설계
+
+- 변경: 현재 1 PASS/1 FAIL 후보의 다음 단계로 연결점 station·다음 edge 방향을 같은 authority pose에 결합하는 설계를 작성했다. 관측 기반 후보 선택, 혼합 버전 배포 제약, 실패 장면 비교와 연속 2회 SIM 수용 기준을 명시했다.
+- 증거: 기존 source·검증 기록과 producer/schema/consumer 계약을 근거로 한 설계다. 거리 안내의 개선 효과는 아직 검증할 가설이며 제품 필드·동작을 추가하지 않았다.
+- gate 변화: 없음. 작성된 설계 검토 대기이며 주행 수용은 HOLD다.
