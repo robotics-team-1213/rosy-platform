@@ -44,7 +44,9 @@
 2. 현재 segment가 실제 arc 끝까지 가고, 다음 선택 segment가 lane 모드의 시작 station 0에서 시작하며, place와 polyline endpoint가 연속일 때만 객체를 만든다. 부분 목적지, 마지막 segment, free-space 전환, 불연속 경로에는 `None`을 보낸다. 왼쪽/오른쪽 임계각으로 새로운 회전점을 탐색하지 않는다.
 3. 다음 arc 시작 접선을 현재 guide와 같은 pose yaw 기준으로 변환한다. 다음 edge가 직진이어도 연결점 사실은 보낼 수 있다. 소비자는 연결점이라는 이유만으로 회전하지 않는다.
 4. 기존 guide의 freshness·선택 authority 문맥 검증이 실패하면 기존 규칙대로 guide 자체를 무효화한다. next_junction만 다른 pose나 오래된 trip view에서 조립하지 않는다.
-5. CORE authority 입력, 선택 prior 복사, gateway publish, 카메라 입력 및 source→current pose 보정까지 객체가 손실 없이 전달되는지를 각각 검증한다. source→current 변환은 기존 here/ahead 각도와 같은 yaw 변화량을 적용한다. current station을 기존 odom/경로 진행으로 신뢰성 있게 계산할 수 없으면 새 객체를 사용하지 않는다.
+5. CORE authority 입력, 선택 prior 복사, gateway publish, 카메라 입력 및 source→current pose 보정까지 객체가 손실 없이 전달되는지를 각각 검증한다. source→current 변환은 기존 here/ahead 각도와 같은 yaw 변화량을 적용한다. 현재 keeper의 source/current 위치 직선 거리는 곡선의 경로 station 증가량이 아니므로 `current_s_m` 보정에 그대로 사용하지 않는다.
+
+실행 계획을 승인하기 전에 선택 경로에 대한 current pose 투영 방법과 오차 범위, 관측된 연결 통로의 누적 길이와 비교하는 방법을 확정해야 한다. 유효한 투영에 필요한 경로 기하가 소비자에게 없다면 그 전달 계약까지 먼저 설계·검토한다. 새 API를 임의로 만들거나 직선 이동량으로 대체하지 않는다. 잔여 거리의 오차 구간 전체가 0 이상이고 관측 경로 길이의 보수적 하한 이내일 때만 연결점이 도달 범위 안이라고 판단한다. 오차 때문에 연결점 전후 또는 관측 범위 안팎을 구분할 수 없으면 새 분기를 비활성화한다. 이 보정 증거가 준비되지 않으면 후보 선택 구현을 시작하지 않는다.
 
 ## 소비자 동작과 중단 기준
 
@@ -63,7 +65,7 @@
 
 ## 변경 범위와 배포
 
-구현은 foundation 계약과 consumer 호환성 준비를 먼저 분리한다. `extra="forbid"`인 구버전 독자는 새 필드를 거절하므로 optional 추가만으로 혼합 버전 호환이 성립하지 않는다. producer는 CORE·gateway·카메라의 해당 스키마/복사/소비 지원이 확인된 동일 배포 묶음에서만 활성화한다. 현재 capability가 이를 보장하지 못하면 필드 지원을 명시적으로 협상하는 계약 변경을 먼저 설계에 반영해야 하며, 알 수 없는 상대에게 새 객체를 전송하지 않는다.
+구현은 foundation 계약과 consumer 호환성 준비를 먼저 분리한다. `extra="forbid"`인 구버전 독자는 새 필드를 거절하므로 optional 추가만으로 혼합 버전 호환이 성립하지 않는다. 기본 `model_dump()`의 `next_junction: null`도 같은 문제를 일으킨다. 지원이 확인되기 전에는 모든 전달 단계에서 필드 자체를 생략해야 한다. 객체 값만 `None`으로 만드는 것은 비활성화가 아니다. 우선 전체 수신자를 갱신하고, CORE·gateway·카메라의 스키마/복사/소비 지원이 확인된 동일 배포 묶음에서만 필드 송신을 활성화한다. 현재 capability가 이를 보장하지 못하면 필드 지원을 명시적으로 협상하는 계약 변경을 먼저 설계에 반영한다. 구버전 수신자 대상 출력에 키 자체가 없는 회귀 시험을 포함한다.
 
 구체 실행 계획에는 foundation 스키마/시험, Fleet 기하/authority producer/시험, CORE authority→prior→publish, perception 입력·좌표 보정·후보 선택/캡처 회귀 시험, API reference/ADR, wheel·payload 의존 버전의 실제 경로를 열거한다. 새 일반 추상화나 별도 회전 상태 머신은 만들지 않는다. D-766 한도 95% 이상 파일에 추가할 경우 동작을 바꾸지 않는 분리 작업을 먼저 진행한다. foundation FULL 검사와 제품 관심사를 별도 착지 단위로 유지한다.
 
