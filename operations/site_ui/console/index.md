@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
 - 2026-10-19 · uncommitted · D-806 Fleet 하위 화면 이름 게시
 - 2026-10-19 · uncommitted · 관리자 임시값 입력과 프로필 변경 구분
 - 2026-10-17 · 8c6692128 · 설치 보정 손잡이의 상단 바 가림 수정
 - 2026-10-16 · 39f94f151 · 충전 운행 주체 오류 안내와 Console 회귀
-- 2026-10-16 · uncommitted · 앱별 작업으로 이동하는 로봇 카드

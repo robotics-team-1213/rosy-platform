@@ -9380,3 +9380,9 @@ osy-d395-s1d\`.
 - 변경: 독립 검토에서 원격 main에 없는 카메라·모방학습 화면 설명과 D-792 참조를 찾아 게시 문서·표면 역할을 실제 기존 화면 범위로 맞췄다. 화면 기능은 추가하지 않았다.
 - 증거: 수정 전 게시 head 9af27301a의 이름·출처·비밀 경계·기존 계정 화면 원격 검사 163 passed. 문구 수정 후 게시 head는 pre-push·CI에서 별도로 확인한다.
 - gate 변화: 없음. 운영 배포·라벨·학습 결과·장치 수용은 별도다.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Recorded D-808, its own ADR Log row and the Account protocol capability contract. Public records contain no deployment addresses, keys or account details.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.

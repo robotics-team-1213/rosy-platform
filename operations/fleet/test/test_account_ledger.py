@@ -76,6 +76,15 @@ def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
         sessions.bootstrap_accounts("alice", "other-site")
 
 
+@pytest.mark.parametrize('role', ['viewer', 'operator', 'policy-admin'])
+def test_bootstrap_does_not_add_vault_grants(tmp_path, role):
+    sessions = PasswordSessions(tmp_path / 'accounts.sqlite3', _accounts(role=role))
+    sessions.bootstrap_accounts('alice', 'test-site')
+    context = sessions.account_context(cookie(sessions))
+    capabilities = context['grants'][0]['capabilities']
+    assert not any(capability.startswith('vault.') for capability in capabilities)
+
+
 @pytest.mark.parametrize("INITIAL_PASSWORD", ["fixture-pass-9384", "bob!"])
 def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path, INITIAL_PASSWORD):
     sessions = activated(tmp_path)
