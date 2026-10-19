@@ -146,3 +146,42 @@ def test_chat_cannot_publish_unverified_physical_completion(tmp_path):
     result = service.read('alice', 'req-1')
     assert result.state in ('HOLD', 'ANSWERED')
     assert result.response != claim and '도착했습니다' not in (result.response or '')
+
+
+def test_site_model_calls_are_serialized_across_operators(tmp_path):
+    active, peak = [0], [0]
+    async def model(*_):
+        active[0] += 1
+        peak[0] = max(peak[0], active[0])
+        await asyncio.sleep(.01)
+        active[0] -= 1
+        return dict(kind='CHAT', response='안녕하세요.', evidence_refs=[])
+    service, _, _, _ = fixture(tmp_path, provider=model)
+    service.submit('alice', message())
+    service.submit('bob', message())
+    async def exercise():
+        await asyncio.gather(service.step('alice', 'req-1'), service.step('bob', 'req-1'))
+    asyncio.run(exercise())
+    assert peak[0] == 1
+
+
+def test_cancel_during_durable_claim_leaves_unknown_instead_of_running(tmp_path):
+    import threading
+    service, journal, calls, _ = fixture(tmp_path)
+    service.submit('alice', message())
+    claimed, release = threading.Event(), threading.Event()
+    original = journal.start
+    def slow_claim(*args):
+        result = original(*args)
+        claimed.set()
+        assert release.wait(5)
+        return result
+    journal.start = slow_claim
+    async def exercise():
+        task = asyncio.create_task(service.step('alice', 'req-1'))
+        assert await asyncio.to_thread(claimed.wait, 5)
+        task.cancel(); release.set()
+        with pytest.raises(asyncio.CancelledError): await task
+    asyncio.run(exercise())
+    assert journal.read('alice', 'req-1').state == 'UNKNOWN'
+    assert not calls
