@@ -99,7 +99,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     rails = set()
     for name, here in [('learning.html', '/learning'), ('index.html', '/'),
                        ('pixels.html', '/pixels'), ('catalog.html', '/catalog'),
-                       ('camera.html', '/learning/camera')]:
+                       ('camera.html', '/learning/camera'), ('omx.html', '/learning/omx')]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
@@ -115,12 +115,12 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(icon, href, full, short) for icon, href, full, _, short in items] == [
             ('list', '/learning', '작업 목록', '목록'), ('box', '/', '객체 검수', '객체'),
             ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료'),
-            ('image', '/learning/camera', '카메라 맞춤', '카메라')]
+            ('image', '/learning/camera', '카메라 맞춤', '카메라'), ('robot', '/learning/omx', '모방학습', '모방')]
         assert [href for _, href, _, current, _ in items if current] == [here]
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
         assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
         assert html.count('<h1') == 1
         rails.add(re.sub(r' aria-current="page"', '', rail))
-    assert len(rails) == 1, 'the rail is the same in the five documents'
+    assert len(rails) == 1, 'the rail is the same in the six documents'
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'

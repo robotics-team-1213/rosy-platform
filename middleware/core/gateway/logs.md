@@ -1204,6 +1204,25 @@
 - 변경: raw/annotated API의 신선한 짝을 검증하는 시험에서 canonical core_features.vision.store에만 고정 clock을 주입한다. 운영 TTL과 pairing·rate 제한은 변경하지 않는다.
 - 증거: 693dae79b4의 원격 시험에서 두 publish 후 clock을 20→23초로 이동하면 기존 raw_available 단언이 실패함을 재현했다. 수정 뒤 preview API 및 explicit-clock frame pair·만료 시험과 전체 영향 시험은 별도 실행한다.
 - gate 변화: 없음. 실제 카메라·ROS·장치 수용은 검증하지 않음.
+
+## 2026-10-19 · uncommitted · Account 장애·재시도·미디어의 실제 연결 검증
+
+- 변경: 실제 Fleet Authority와 CORE receiver를 사용하는 HTTP 로그아웃 실패, lifespan 회수 재시도, 미디어 strict online 검증을 추가했다. HTTPS Chromium의 정상/회수 대기 로그아웃을 함께 검사한다.
+- 증거: `41e03f029e`의 원격 모델 PC에서 pipeline/media 14개 통과, skip 0, NEW 0. 첫 browser 실패는 조회 전용 Pilot 차단 화면의 로그아웃 부재를 재현했고 Pilot 수정 뒤 같은 검증이 통과했다. 로그는 외부 scratch의 `rosy-account-rollout-20261019/task2-fixed/run-1.txt`다.
+- gate 변화: 없음. 실제 운영 계정·배포·단말·MediaMTX 연결 종료를 이 시험으로 수용하지 않는다.
+
+## 2026-10-19 · 212a8b51b2 · Account CORE HTTP·browser 회귀를 앱 착지 단위로 재적용
+
+- 변경: 실제 Authority fixture의 HTTP 로그아웃 pending·쿠키 제거·lifespan 재시도·strict media 재검증·새 family 분리를 최신 main 위에 재적용했다. CORE 제품 인증 코드는 변경하지 않았다.
+- 증거: 원래 d58258fee6의 공통/CORE/Pilot 실제 Chromium/proxy 묶음35개 PASS, skip0·NEW0. 이번 착지 SHA의 검증은 별도 실행한다. 이전 SHA 결과를 최신 main 수용으로 대신하지 않는다.
+- gate 변화: 없음. 실제 미디어 종료·운영 배포·사용자 수용은 미확인이다.
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 CORE 소비 결선 복원
+
+- 변경: foundation 선행 계약 위에서 기존 v2 성공 구현의 지도 벽 band와 경로 안내 표본 결선을 복원했다. 새 writer나 실물 활성화를 추가하지 않는다.
+- 증거: 원본 91f14c997f의 모델 PC 재실행은 PASS, 목표 거리 0.105 m, 최종 명령·odom 속도 0, lease released다. 이는 원본 소스 증거이며 이 후보의 검증은 별도다.
+- gate 변화: 없음. 실물 지도 오차·보정·장치 수용은 남아 있다.
+
 ## 2026-10-19 · 27427874e · (origin #92 2026-10-16) D-772 실제 영상·관제 API·접안 확인 통합
 
 - 변경: 이상적 운동학 plant를 JPEG 마커 영상으로 렌더링해 실제 Vision worker·source 전용 Fleet API·HttpRobotClient·CORE API·기존 접안 제어기로 전달하는 SIM 시험을 추가했다. plant 위치는 영상 생성과 독립 오차 판정에만 쓰며 상대 카메라 입력으로 직접 주입하지 않는다.

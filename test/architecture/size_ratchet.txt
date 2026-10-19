@@ -17,9 +17,7 @@
 686 deploy/robot/pinky_pro/release/updater.py
 806 deploy/robot/pinky_pro/sd/verify-media-readback.py
 698 deploy/site/rosy_model_code.py
-616 deploy/site/rosy_site_autoupdate.py
 1141 devices/omx/adapter/omx_adapter/action_store.py
-695 devices/omx/adapter/omx_adapter/command_owner.py
 728 devices/omx/adapter/omx_adapter/pose_plan.py
 771 drive/behaviors/docking/manager.py
 822 drive/behaviors/line_follow/manager.py

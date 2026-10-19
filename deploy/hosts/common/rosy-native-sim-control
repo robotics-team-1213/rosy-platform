@@ -1,0 +1,218 @@
+#!/usr/bin/python3 -I
+"""D-786 fixed native simulation service boundary. No caller-supplied commands."""
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+CONFIG = Path('/etc/rosy/native-sim-control.json')
+ENV = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C', 'HOME': '/root'}
+VERSION = 1
+FIELDS = {'schema', 'role', 'account', 'uid', 'gid', 'home', 'state_root'}
+
+
+def validate_config(value):
+    if not isinstance(value, dict) or set(value) != FIELDS:
+        raise ValueError('unexpected configuration fields')
+    if value['schema'] != 'rosy.native-sim-control/1' or value['role'] not in ('ai', 'model'):
+        raise ValueError('unsupported schema or host role')
+    account = value['account']
+    if not isinstance(account, str) or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', account) or account == 'root':
+        raise ValueError('invalid unprivileged account')
+    if any(type(value[key]) is not int or value[key] <= 0 for key in ('uid', 'gid')):
+        raise ValueError('uid/gid must be positive integers')
+    if value['home'] != '/home/' + account:
+        raise ValueError('home must match the configured account')
+    if value['state_root'] != '/var/lib/rosy-native-sim/' + str(value['uid']):
+        raise ValueError('state root must match the configured uid')
+    return value
+
+
+def validate_caller(config, euid, environ):
+    if euid != 0 or environ.get('SUDO_USER') != config['account']:
+        raise PermissionError('requires root via sudo from the configured account')
+
+
+def parse_args(args):
+    if args == ['probe']:
+        return 'probe', None
+    if len(args) != 2 or args[0] not in ('start', 'status', 'stop'):
+        raise ValueError('expected probe or start/status/stop RUN_ID')
+    validate_run_id(args[1])
+    return args[0], args[1]
+
+
+def validate_run_id(run_id):
+    if not isinstance(run_id, str) or not re.fullmatch(r'[0-9a-f]{40}-[0-9a-f]{12}', run_id):
+        raise ValueError('invalid run ID')
+    return run_id
+
+
+def check_entry(path, *, owner=0, directory=False):
+    info = Path(path).lstat()
+    kind = stat.S_ISDIR if directory else stat.S_ISREG
+    if not kind(info.st_mode) or info.st_uid != owner or info.st_mode & 0o022:
+        raise PermissionError('unsafe owner, mode or entry type: ' + str(path))
+    return info
+
+
+def check_root_chain(path):
+    path = Path(path)
+    for entry in [*reversed(path.parents), path]:
+        check_entry(entry, directory=True)
+
+
+def host_role(config):
+    role_file = Path('/etc/rosy/host-control/role')
+    if role_file.exists() or role_file.is_symlink():
+        check_root_chain(role_file.parent)
+        check_entry(role_file)
+        if role_file.read_text().strip() != config['role']:
+            raise PermissionError('host role differs from configured simulation role')
+    if any(path.exists() or path.is_symlink() for path in (
+            Path('/etc/rosy/site'), Path(config['home']) / 'rosy-jobs/site')):
+        raise PermissionError('site/Fleet hosts cannot run this simulation')
+
+
+def load_config():
+    check_root_chain(CONFIG.parent)
+    check_entry(CONFIG)
+    if CONFIG.stat().st_size > 4096:
+        raise ValueError('oversized configuration')
+    config = validate_config(json.loads(CONFIG.read_text()))
+    account = pwd.getpwnam(config['account'])
+    if (account.pw_uid, account.pw_gid, account.pw_dir) != (config['uid'], config['gid'], config['home']):
+        raise PermissionError('configured account has changed')
+    root = Path(config['state_root'])
+    check_root_chain(root)
+    for leaf in ('releases', 'state'):
+        check_entry(root / leaf, owner=config['uid'], directory=True)
+    check_entry(root / 'start-intents', directory=True)
+    host_role(config)
+    return config
+
+
+def build_command(config, run_id):
+    validate_config(config)
+    validate_run_id(run_id)
+    root = Path(config['state_root'])
+    source = root / 'releases' / run_id[:40]
+    cpu, memory = ('400%', '4G') if config['role'] == 'ai' else ('800%', '6G')
+    properties = ['PrivateNetwork=yes', 'PrivateDevices=yes', 'ProtectSystem=strict',
+                  'ProtectHome=read-only', 'NoNewPrivileges=yes', 'KillMode=control-group',
+                  'Restart=no', 'UMask=0077', 'RuntimeMaxSec=7500', 'TimeoutStopSec=15',
+                  'CPUQuota=' + cpu, 'MemoryMax=' + memory, 'MemorySwapMax=0',
+                  'ReadWritePaths=' + str(root / 'state'), 'PrivateTmp=yes']
+    return ['/usr/bin/systemd-run', '--quiet', '--unit=rosy-native-sim-' + run_id,
+            '--uid=' + config['account'], '--gid=' + str(config['gid']),
+            *['--property=' + prop for prop in properties],
+            '--setenv=HOME=' + config['home'], '--setenv=PATH=/usr/bin:/bin',
+            '--setenv=LANG=C', '--working-directory=' + str(source),
+            '/usr/bin/python3', '-B', str(source / 'deploy/robot/omx/native_sim_job.py'),
+            'run', '--state', str(root / 'state' / run_id[-12:])]
+
+
+def command(args):
+    return subprocess.run(args, env=ENV, text=True, capture_output=True, timeout=40)
+
+
+def atomic_json(path, value):
+    with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            os.chmod(temporary, 0o600)
+            json.dump(value, stream, sort_keys=True)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def start(config, run_id):
+    root = Path(config['state_root'])
+    intent = root / 'start-intents' / (run_id + '.json')
+    # This lock lives in a root-owned anchor, never a caller-controlled directory.
+    lock = root / 'control.lock'
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'r+') as stream:
+        check_entry(lock)
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        if intent.exists():
+            raise PermissionError('run already has a durable start intent; query status')
+        active = command(['/usr/bin/systemctl', 'list-units', '--plain', '--no-legend',
+                          '--all', '--state=active,activating,deactivating,reloading',
+                          'rosy-native-sim-*.service'])
+        if active.returncode != 0 or active.stdout.strip():
+            raise PermissionError('another native simulation is active or service state is unavailable')
+        source = root / 'releases' / run_id[:40]
+        state_dir = root / 'state' / run_id[-12:]
+        # Only metadata is inspected by root; all release code runs as User/Group.
+        for path in (source, state_dir):
+            check_entry(path, owner=config['uid'], directory=True)
+        value = {'run_id': run_id, 'unit': 'rosy-native-sim-' + run_id,
+                 'requested_at': time.time(), 'outcome': 'UNKNOWN'}
+        atomic_json(intent, value)
+        result = command(build_command(config, run_id))
+        value.update(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr,
+                     outcome='SERVICE_REQUEST_ACKNOWLEDGED' if result.returncode == 0 else 'UNKNOWN')
+        atomic_json(intent, value)
+        return dict(value, action='start', intent=True)
+
+
+def status(config, run_id):
+    result = command(['/usr/bin/systemctl', 'show', 'rosy-native-sim-' + run_id + '.service',
+                      '--property=LoadState,ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,ControlGroup'])
+    properties = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
+    intent = Path(config['state_root']) / 'start-intents' / (run_id + '.json')
+    record = None
+    if intent.exists():
+        check_entry(intent)
+        record = json.loads(intent.read_text())
+    return {'action': 'status', 'run_id': run_id, 'unit': 'rosy-native-sim-' + run_id,
+            'properties': properties, 'returncode': result.returncode,
+            'stderr': result.stderr, 'intent': record}
+
+
+def main(args):
+    action, run_id = parse_args(args)
+    caller = {'SUDO_USER': os.environ.get('SUDO_USER')}
+    os.environ.clear()
+    os.environ.update(ENV)
+    if os.geteuid() != 0:
+        raise PermissionError('root helper requires configured sudo authorization')
+    config = load_config()
+    validate_caller(config, os.geteuid(), caller)
+    if action == 'probe':
+        return dict(config, version=VERSION, capabilities=['probe', 'start', 'status', 'stop'],
+                    cpu=4 if config['role'] == 'ai' else 8,
+                    memory_gb=4 if config['role'] == 'ai' else 6, runtime_sec=7500)
+    if action == 'start':
+        return start(config, run_id)
+    if action == 'stop':
+        result = command(['/usr/bin/systemctl', 'stop', 'rosy-native-sim-' + run_id + '.service'])
+        return dict(status(config, run_id), action='stop', stop_returncode=result.returncode)
+    return status(config, run_id)
+
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(main(sys.argv[1:]), sort_keys=True))
+    except (ValueError, PermissionError, OSError, KeyError, subprocess.SubprocessError) as exc:
+        print(json.dumps({'status': 'REFUSED', 'error': str(exc)}, sort_keys=True))
+        sys.exit(1)

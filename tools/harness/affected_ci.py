@@ -11,6 +11,8 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
+import affected_ros  # PR #96: per-path full-tier ROS environment for affected runners
+
 if TYPE_CHECKING:
     from affected_tests import Repo, Selection
 
@@ -82,6 +84,20 @@ CI_FULL_EXCLUDED = {
 }
 
 
+def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
+    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit."""
+    import affected_tests as at
+    n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
+    fleet = entry["name"] == "fleet"
+    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])) if n > 1 else []
+    groups, loads = [[] for _ in range(n)], [0] * n
+    for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
+        i = min(range(n), key=lambda i: (loads[i], i))
+        groups[i].append(path)
+        loads[i] += FLEET_TEST_SECONDS.get(PurePosixPath(path).name, 1) if fleet else 1
+    return [sorted(group) for group in groups] if n > 1 and len(files) >= n else []
+
+
 def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     import affected_tests as at  # here, not at the top: affected_tests imports this module
@@ -89,21 +105,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         root_tests = sorted(t for t in repo.test_files if at._under(t, "test"))
         entries = []
         for entry in CI_FULL_MATRIX:
-            n = SUITE_SHARDS.get(entry["name"], 1)
-            files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])) if n > 1 else []
-            if len(files) < n or n == 1:
-                entries.append(dict(entry))
-                continue
-            groups = [files[i::n] for i in range(n)]
-            if entry["name"] == "fleet":
-                groups, loads = [[] for _ in range(n)], [0] * n
-                for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)):
-                    i = min(range(n), key=lambda i: (loads[i], i))
-                    groups[i].append(path)
-                    loads[i] += FLEET_TEST_SECONDS.get(PurePosixPath(path).name, 1)
-                groups = [sorted(group) for group in groups]
-            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{n}", invocations=[groups[i]])
-                        for i in range(n)]
+            groups = _shard_groups(repo, entry)
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}", invocations=[g])
+                        for i, g in enumerate(groups)] or [dict(entry)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
                             "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
@@ -112,9 +116,15 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         modules = at.pack(repo, at._outside_ci_matrix(at._full_paths(repo)))
         if modules:
             entries.append({"name": "modules", "invocations": modules, "ros": "overlay", "gating": False})
-    else:
-        entries = [{"name": f"affected-{i + 1}", "invocations": [inv]}
-                   for i, inv in enumerate(sel.invocations)]
+    else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
+        whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
+        whole["test"] = {"name": "root-test", "invocations": [["test"]]}
+        for inv in sel.invocations:
+            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
+            rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
+            out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
+            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
+        entries = affected_ros.entries(out, CI_FULL_MATRIX)
     entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")

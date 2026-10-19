@@ -16,6 +16,12 @@ from rosy.contracts.learning.omx import validate_profile  # noqa: E402
 from rosy.contracts.learning.pinky import validate_profile as validate_pinky  # noqa: E402
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def closure(root, *, policy=None):
     root = Path(root).resolve()
     doc = validate_dataset(json.loads((root / 'dataset-manifest.json').read_text(encoding='utf-8')), root=root)
@@ -58,8 +64,8 @@ def closure(root, *, policy=None):
 class DatasetStore:
     def __init__(self, root, *, read_only=False):
         self.root = Path(root).resolve()
-        if self.root.drive.upper() == 'F:':
-            raise ValueError('dataset output belongs outside source drive F:')
+        if _in_checkout(self.root):
+            raise ValueError('dataset output belongs outside the source checkout')
         if not isinstance(read_only, bool):
             raise ValueError('read_only must be boolean')
         self._read_only = read_only

@@ -3029,6 +3029,31 @@
 - 통합: main에서 Accepted로 바뀐 D-798 행을 보존하고 union 병합이 되살린 오래된 Proposed 행만 제거했다.
 - 검증 보정: manifest의 고정 wheel SHA256을 비밀값으로 오탐한 원격 guard 실패 후, 값과 설치 인자는 그대로 두고 같은 행에 공개 무결성 용도만 표시했다. 비밀값 검사는 변경하지 않았다.
 - 적용 전제: 읽기 전용 확인에서 model/site에는 uv가 있으나 AI PC에는 없음. uv-only 원격 시험기로 전환하면 AI PC의 새 환경 생성이 실패하므로 승인된 호스트 적용 전까지 이 후보의 착지는 보류한다. 호스트 설치는 실행하지 않았다.
+
+## 2026-10-19 · uncommitted · D-807 Account 앱별 설치 입력과 인수 절차
+
+- 변경: 기존 site README에 Authority·CORE·Learning·Games·native의 기존 설정 진입점과 호환 receiver→authority→앱 전환·회수·격리 복구 인수 순서를 보충했다. 기존 site preflight가 Account 설정 검증은 하지 않는다는 한계를 명시했다.
+- 증거: 기존 Account protocol·배포 경로와 대조했다. 보호 설정 파일 생성·서비스 재시작·운영 계정 변경·배포는 수행하지 않았다.
+- gate 변화: 없음. 승인된 실제 issuer/callback·보호 설정 입력과 사용자/단말 수용이 남아 있다.
+
+## 2026-10-19 · uncommitted · site updater 호스트 설정 검사 분리
+
+- 변경: 616줄 updater의 기존 설정 검사를 이미 설치·검토되는 site_update_io로 옮겼다. 클래스 진입점과 거절·JSON 처리·Compose 이미지 검사는 유지한다. Account overlay 기능보다 먼저 적용하는 D-766 분리다.
+- 증거: 기존 site updater 회귀 시험으로 이동 전후 동작을 비교한다. Account ingress 후보의 별도 원격 검증은 새 배포 동작에 대한 증거이며 이 이동의 착지를 대신하지 않는다.
+- gate 변화: 없음. 호스트 설치·서비스 변경은 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · feat(omx): recover isolated native simulation host tools
+
+- 변경: Recover the fixed privileged helper, explicit installer, source/input bindings, isolated job preparation and remote CLI with their tests. D-786 remains Proposed. No host provisioning or service activation is performed.
+- 증거: Independent review and committed remote tests are pending; historical SIM records do not prove field acceptance.
+- gate 변화: None.
+
+## 2026-10-19 · uncommitted · feat(omx): recover G2 clock and diagnostic helpers
+
+- 변경: Recover the dedicated SIM clock, terminal/placement/gripper diagnostics and clearance helpers with G2 owner/observer/runner wiring and matching world/layout fixtures. The runner uses the reviewed Fleet topic wrapper. D-788 remains Proposed; existing owner/fence/stop checks remain authoritative.
+- 증거: Independent review and committed remote tests are pending. No simulator or physical service is started by recovery.
+- gate 변화: None; source and host regression checks do not prove successful task placement, physical behavior or field acceptance.
+
 ## 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 공개 진단 도구 hash의 정확한 provenance 등록
 
 - 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.

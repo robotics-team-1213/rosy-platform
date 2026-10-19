@@ -1217,6 +1217,13 @@
 - 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
 - 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
 - gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 Drive 소비 구현 분리
+
+- 변경: 기존 v2 구현의 횡단보도 re-anchor·선택 지도 벽 clipping과 짧아 거절한 live 연장의 안내 갱신을 별도 소비 변경으로 옮겼다. 이동 권한 끝점·TTL·FREE 검사와 null 기본 band를 유지한다.
+- 증거: 기존 구현의 독립 계약 검토에서 새 command 권한 우회는 발견되지 않았다. 원본 브랜치 관련 원격 159 passed, NEW 0과 현재 후보 검증을 구분한다.
+- gate 변화: 없음. 후속 Fleet 생산자와 실제 SIM 재실행은 별도다.
+
 ## 2026-10-19 · cc1c3e2d3 · (origin #92 2026-10-16) D-772 native fences and live station readback
 
 - 변경: Bind atomically against native boot/generation; retain admitted correlation and operation identity. Refresh local cached sensor evidence before reporting verified seating/charge, cap status to underlying leases, and reject stale completion without requiring a background tick.

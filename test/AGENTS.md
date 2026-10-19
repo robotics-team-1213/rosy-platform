@@ -82,10 +82,10 @@ Ignore `__pycache__/`.
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/repo-test -- test/ -v
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/motor-test -- test/test_motor_control.py test/test_host_agent.py -v
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/repo-test" -- test/ -v
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/motor-test" -- test/test_motor_control.py test/test_host_agent.py -v
 # Browser tests: leading ROSY_*=value words are the job's environment on the test PC.
-t=$(python test/browser_scope.py <changed paths...>) && python tools/remote/remote_pytest.py --log-dir X:/DevTemp/browser -- ROSY_RUN_BROWSER_TESTS=1 $t
+t=$(python test/browser_scope.py <changed paths...>) && python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/browser" -- ROSY_RUN_BROWSER_TESTS=1 $t
 ```
 
 ### Common Patterns

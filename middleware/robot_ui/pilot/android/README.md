@@ -32,7 +32,7 @@ cookie(두 로봇에서는 프록시마다 다른 이름), 정확한 Host/Origin
 않는다. CORE로는 API와 WS만 전달하며 API는 PWA의 Authorization을 사용한다.
 앱이 연 세션만 쓴다. 번들 화면은 앱 안에서 두 번째 개발 연결, 코드 입력, 로봇 콘솔이나
 다른 로봇으로의 이동을 열지 않는다.
-HTML에는 CSP를 보낸다. 원본 JS는 복제 구현하지 않고 X:의 generated assets에서 묶는다.
+HTML에는 CSP를 보낸다. 원본 JS는 복제 구현하지 않고 $ROSY_SCRATCH의 generated assets에서 묶는다.
 
 후보 64개·60초, legacy resolve 직렬 처리·갱신 jitter, WS 대기 8개/64 KiB,
 서버 WS 프레임 1 MiB, HTTP 요청 256 KiB, HTML·JSON 8 MiB, 동시 연결 12개/WS 4개로
@@ -52,15 +52,15 @@ Android의 force-lock 승인을 선택적으로 요청한다. 승인 없이는 �
 내리고 OS 절전 시간을 따른다. 자동 보호는 권한 팝업을 띄우지 않는다. 발열 회복 전에는
 재연결을 막는다. 원본 조종 UI의 주행 안전장치는 그대로 사용한다.
 
-Windows 빌드(F: 소스, X: 출력·캐시):
+Windows 빌드(출력·캐시는 `$env:ROSY_SCRATCH`):
 
 ```powershell
-$env:JAVA_HOME = 'X:\java\jdk-21.0.8'
-$env:GRADLE_USER_HOME = 'X:\DevCaches\gradle'
-..\..\..\..\operations\site_ui\cam\gradlew.bat -p . --project-cache-dir X:\DevTemp\rosy-pilot-d432\project-cache :app:testDebugUnitTest :app:assembleDebug
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+$env:JAVA_HOME = '<JDK 21 경로>'
+..\..\..\..\operations\site_ui\cam\gradlew.bat -p . "-Prosy.buildRoot=$RosyScratch/rosy-pilot-d432/build" --project-cache-dir "$RosyScratch/rosy-pilot-d432/project-cache" :app:testDebugUnitTest :app:assembleDebug
 ```
 
-APK: `X:\DevTemp\rosy-pilot-d432\build\app\outputs\apk\debug\app-debug.apk`.
+APK: `$ROSY_SCRATCH/rosy-pilot-d432/build/app/outputs/apk/debug/app-debug.apk`.
 package: `io.github.livsbittt.rosy.pilot`; activity: `.MainActivity`.
 `-Prosy.buildRoot=<scratch>/build`와 Kotlin persistent 경로로 다른 scratch를 지정할 수 있다.
 공통 Kotlin 규약은 Cam 원본을 빌드 출력의 generated source로 가져온다.

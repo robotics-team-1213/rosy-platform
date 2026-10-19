@@ -4063,6 +4063,31 @@
 - 변경: `tracking/robot_media_routes.py`가 fleet.read 주체에게 로봇별 READ 위임을 발급·갱신·종료하고 `fleet_media_audit`에 남기며 미디어 권한 서비스의 재확인에 답한다. 콘솔 CSP는 설정된 media origin만 추가한다.
 - 증거: 원격 시험 결과는 착지 기록에 남긴다. 장치·현장 측정은 2026-10-18 사용자 결정으로 생략했다.
 - gate 변화: 없음. 모자이크(MCU)는 후속 feat/site-video-mosaic이다.
+
+## 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
+
+- 변경: 사용자 지시에 따라 legacy·Account 이관에서 ID!를 첫 변경 대상으로 인식한다. 관리자 생성/reset의 정확한 ID!만 짧은 임시값 예외로 허용하고 첫 변경 제한을 유지한다. 영구 비밀번호 변경에서는 ID! 복귀를 거절한다. API·권한·기계 자격은 추가하지 않았다.
+- 증거: 최초 정책 RED와 수정8675d2453의 원격153 passed·skip0·NEW0. 독립 리뷰가 짧은 생성/reset 경로 불일치를 찾아 API·실제 관리 Chromium 3건 RED로 재현 후 보완했다. 최종103df862b의6파일 원격160 passed·skip0·NEW0. 상세 범위와 실패 이력은 docs/validation/account-initial-password-2026-10-19/result.md.
+- gate 변화: 없음. 팀 명단은 Notion 인증 실패로 미확인이고 운영 사용자·비밀번호·DB는 변경하지 않았다. source/지정 시험과 병합·서명 배포·실제 사용자 로그인을 구분한다.
+
+## 2026-10-19 · uncommitted · 초기값 회귀 fixture 변수 구분과 중단 시험 회수
+
+- 변경: 테스트의 임시 비밀번호·해시 변수 이름을 명확히 하고 함수 호출을 분리했다. 비밀 스캐너의 규칙이나 허용 목록은 바꾸지 않았다. 제품 인증 코드는 그대로다.
+- 증거: 통신 중단 뒤 남아 있던 원격 job의 rc를 확인했다. 한 job은143, 다른 job은 fixture 변수 표현의 secret-scan 오검출1건이었다. 새 검사와 착지는 별도 실행한다. 이전160개 실제 Chromium 결과는 원래103df862b 범위로 유지한다.
+- gate 변화: 없음. 운영 명단·비밀번호·서비스는 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · feat(fleet): recover OMX topic task client
+
+- 변경: Recover the G2 wrapper and additional tests for the existing topic proposal/admission client, using Fleet compiler and named operator admission endpoints. The runner wiring is a later recovery group. Lost responses preserve intent and do not retry.
+- 증거: Committed remote tests are pending. No robot or service activation is performed.
+- gate 변화: None; topic text does not acquire ledger or device writer authority.
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 Fleet 생산 연결 분리
+
+- 변경: 선행 schema·CORE/Drive·recentre 위에서 기존 지도 벽 검증·선택 경로 안내 생산·SIM 지도와 실행 설정을 복원했다. 운영 Fleet 안내 기본 1초, 명시적 SIM 3초이며 원격 자원 계산과 시나리오 도구 확장은 가져오지 않았다.
+- 증거: 원본 소스의 모델 PC 재실행 PASS와 종료·실제 모델 소비를 `docs/validation/pinky-success-baseline-2026-10-19/result.md`에 보존했다. 현재 통합 후보는 별도 원격 회귀와 같은 조건의 SIM을 실행한다.
+- gate 변화: 없음. 실물 지도 활성화·설치·서비스 변경은 수행하지 않는다.
+
 ## 2026-10-19 · 3cc60afde · (origin #92 2026-10-16) D-772 카메라 관측의 Fleet 인증·세션 경로
 
 - 변경: 명시적인 station_ingress 구성에서만 위치 후보·상대 관측·설치 원장 조회를 설치한다. 카메라 자격은 사용자·로봇·Agent 자격과 분리하고 상대 관측은 기존 HttpRobotClient의 로봇 자격으로 CORE 관측 경로에만 전달한다. 세션 상태와 예약 권한은 단일 읽기 트랜잭션에서 확인한다.

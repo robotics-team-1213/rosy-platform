@@ -117,7 +117,8 @@ class PasswordSessions:
                     # Source rotation invalidates sessions even if YAML now contains the effective hash.
                     db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (row["login"],))
                     db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
-        self._required = {login: verify_password(login, account["password_scrypt"])
+        self._required = {login: (verify_password(login, account["password_scrypt"])
+                                 or verify_password(login + "!", account["password_scrypt"]))
                           for login, account in self._logins.items()}
 
     def bootstrap_accounts(self, admin_login: str, site_id: str) -> None:
@@ -322,7 +323,7 @@ class PasswordSessions:
                         raise ValueError("current password required")
                     if not current_ok:
                         raise CurrentPasswordIncorrect()
-                    if password == login or same_password or not 8 <= len(password) <= 1024:
+                    if password in (login, login + "!") or same_password or not 8 <= len(password) <= 1024:
                         raise ValueError("invalid new password")
                     db.execute("INSERT OR REPLACE INTO fleet_console_passwords VALUES (?,?,?)",
                                (login, self._sources[login], encoded))

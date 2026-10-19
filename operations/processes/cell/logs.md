@@ -48,3 +48,9 @@
 - gate 변화: 없음. ROS-SIM은 omx_adapter의 C3b 단일 transfer 증거.
 - 결정: D-401 보강(2026-10-02, C3b). 깊이는 셀 공구가 아니라 물건에 둔다.
 - 교훈: 레시피 gap 15 mm(20 mm도)는 Gazebo의 실제 손가락 폭보다 좁아, 층을 채우면 나중 배치가 이웃을 민다. gap 검증에 공구 폭이 들어가야 한다(C4/C6).
+
+## 2026-10-19 · uncommitted · fix(rosy_cell): recover OMX simulation example layout
+
+- 변경: Recover the reviewed OMX sample cell/recipe coordinates alongside the matching native G2 runner and layout fixtures.
+- 증거: Committed remote layout regression tests are pending. Original partial native records are recovered separately with their limits.
+- gate 변화: None; complete Job success and physical operation remain unproven.

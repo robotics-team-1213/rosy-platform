@@ -426,3 +426,9 @@
 - 변경: `map_v2_fleet_multi_real`에 로봇별 IR 바닥 ray·`sim_ir_floor.py`·SIM IR 교정(`gz_multi_parts.SIM_IR_CALIBRATION`: 바닥 2000 검정, 포화 4000 흰색)을 넣었다. `learned_paint_target` 기본은 `lane_marking`이고 `learned_lane_pointer`는 선택이다. `remote_sim.py`는 CORE에 없는 Fleet pin과 D-373 학습 런타임을 설치한다. 실행기는 `tools/sim/fleet_trips.py`(벤치 `fleet_trips`, D-725 native pose)다.
 - 증거: AI PC run-4 PASS. 두 trip 모두 `arrived`, 10 s 뒤 장소에서 0.021/0.019 m, 이동 0.423/0.401 m, 남은 프로세스 0. 관련 원격 회귀 exit 0, NEW 0. run-1·2·3이 각각 출발 거절(`LANE_END_NOT_A_PLACE`), pass window 안의 짧은 trip, 이른 판정 표본을 드러냈고 실행기에서 고쳤다. 자세한 내용은 `docs/plans/2026-10-15-sim-multi-robot-trips.md`.
 - gate 변화: 없음. SIM 증거다. 학습 페인트, bend가 있는 바퀴, DEVICE·FIELD는 아니다.
+
+## 2026-10-19 · uncommitted · fix(gz_sim): recover OMX workcell layout fixtures
+
+- 변경: Recover preserved OMX workcell model coordinates and SIM AID layout with the matching analytic clearance tests. Source worlds remain simulation fixtures.
+- 증거: Committed remote layout regression tests are pending; no new Gazebo run is claimed.
+- gate 변화: None; historical partial native simulation is not field acceptance.

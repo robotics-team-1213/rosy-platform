@@ -1,5 +1,7 @@
 """Exercise the real UDS server while startup authorizes and settles."""
 import json
+from datetime import datetime, timezone
+import os
 from pathlib import Path
 import socket
 import sys
@@ -34,6 +36,7 @@ def build(tmp_path):
     owner.stop.rearm(authority_epoch=3, dispatch_generation=8, operator_confirmed=True,
                      fleet_fence_current=lambda epoch, generation: True)
     runtime.cancel = lambda **kwargs: NS(reason="cancel_requested", cancel_outcome="call_returned")
+    runtime.action_port = NS(server_is_ready=lambda: True)
     return owner, runtime
 
 
@@ -114,3 +117,74 @@ def test_absent_authorization_keeps_hold_and_leaves_readback_running(tmp_path):
     finally:
         owner.uds_server.stop()
         thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("mode", ["delayed", "never", "stop", "generation", "missing", "exception"])
+def test_own_client_readiness_gates_one_startup_goal(tmp_path, monkeypatch, mode):
+    import test_platform_cell_owner_assembly as assembly
+    from g2_startup_session import serve_startup, publish_json
+    # Configure the test Fleet peer to the real socket caller UID; retain SO_PEERCRED checks.
+    monkeypatch.setattr(assembly, "FLEET_UID", os.getuid())
+    owner, runtime = build(tmp_path)
+    run = tmp_path / "evidence"; run.mkdir()
+    ready, fence, ticks, premature = [False], [True], [0], []
+    runtime.action_port = NS(server_is_ready=lambda: ready[0])
+    if mode == "missing":
+        runtime.action_port = NS()
+    elif mode == "exception":
+        def unavailable():
+            raise RuntimeError("client discovery unavailable")
+        runtime.action_port.server_is_ready = unavailable
+    original_submit = runtime.submit
+    def submit(command):
+        if not ready[0]:
+            premature.append(command.command_id)
+        return original_submit(command)
+    runtime.submit = submit
+
+    def sleep(seconds):
+        time.sleep(.002)
+        challenge = run / "startup-awaiting-authorization.json"
+        if challenge.exists() and not (run / "startup-request.json").exists():
+            publish_json(run / "startup-request.json", {**json.loads(challenge.read_text()),
+                "actor_id": "g2-sim-approver", "authority_epoch": 3, "dispatch_generation": 8})
+        elif (run / "startup-request.json").exists() and "submit" not in runtime.calls:
+            ticks[0] += 1
+            assert request_identity(owner.uds_server.socket_path)["status"] == 200
+            if ticks[0] == 3:
+                if mode == "delayed":
+                    ready[0] = True
+                elif mode == "generation":
+                    fence[0] = False
+                elif mode == "stop":
+                    with socket.socket(socket.AF_UNIX) as client:
+                        client.settimeout(2)
+                        client.connect(str(owner.uds_server.socket_path))
+                        client.sendall(json.dumps({"version": 1, "operation": "StopLocal",
+                            "workcell_id": owner.settings.workcell_id,
+                            "instance_id": owner.settings.instance_id, "authority_epoch": 3,
+                            "dispatch_generation": 8, "requested_at": datetime.now(timezone.utc).isoformat(),
+                            "reason": "stop before local client discovery"}).encode()+b"\n")
+                        assert json.loads(client.recv(65536))["status"] == 200
+        if "submit" in runtime.calls:
+            runtime.sleep(seconds)
+        else:
+            runtime.t += seconds
+            runtime.latest_joint_state.received_at = runtime.t
+
+    server = serve_startup(owner, run, target={"joint1": .2, "gripper": 1.},
+        expected_actor="g2-sim-approver", fleet_fence_current=lambda *_: fence[0],
+        timeout_s=1., wall_clock=runtime.monotonic, sleep=sleep)
+    try:
+        assert premature == []
+        if mode == "delayed":
+            assert ticks[0] >= 3 and runtime.calls.count("submit") == 1
+            assert json.loads((run / "startup-home-ready.json").read_text())["result"] == "READY"
+        else:
+            assert "submit" not in runtime.calls
+            assert owner.runner.enabled is False
+            assert json.loads((run / "startup-home-failure.json").read_text())["result"] == "HOLD"
+        assert request_identity(owner.uds_server.socket_path)["status"] == 200
+    finally:
+        owner.uds_server.stop()
+        server.join(timeout=5)

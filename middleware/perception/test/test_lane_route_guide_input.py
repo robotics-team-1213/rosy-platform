@@ -43,7 +43,7 @@ def test_new_publisher_requires_clear_and_retires_previous_epoch():
 
 
 def test_future_and_overlong_priors_do_not_supply_a_guide():
-    for change in ({"source_stamp_s": 10.2}, {"valid_until_s": 11.1}, {"pivot_ok": True}):
+    for change in ({"source_stamp_s": 10.2}, {"valid_until_s": 13.1}, {"pivot_ok": True}):
         inbox = LaneRouteGuideInput()
         inbox.receive(message(**change), 10.1)
         assert inbox.for_frame(10.3) is None

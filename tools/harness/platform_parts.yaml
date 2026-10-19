@@ -958,6 +958,7 @@ safety_modules:
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py
+  - middleware/devices/omx/adapter/omx_adapter/contracts/command_types.py
   - middleware/devices/omx/adapter/omx_adapter/local_stop.py
   - middleware/devices/omx/adapter/omx_adapter/action_api.py
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
@@ -1117,6 +1118,7 @@ safety_anchors:
   - {symbol: core_common.robot_body.NOMINAL_BODY, public: true}
   - {symbol: core_common.robot_body.nominal_body_for, public: true}
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
+  - {symbol: omx_adapter.contracts.command_types.ArmCommandConfig}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
   - {symbol: omx_adapter.owner_recovery_api.OwnerRecoveryApi.dispatch}

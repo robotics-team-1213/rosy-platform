@@ -38,6 +38,7 @@ Media stage, before a recording job: `media_pipeline.py` scans raw sessions, mak
 | `ceiling_pose.py` | D-563 3: robot ArUco (D-562 id = robot number) in a `tools/capture/ceiling_record.py` recording -> map poses via the approved tracking calibration (parallax-corrected); `fuse` carries detections to robot frame stamps by odometry, flags gaps and disagreement; clock offset from motion onset |
 | `camera_setup.py` | D-792: `make_reference` builds a sealed `rosy.camera-setup-reference/1` from one frame; default `features` needs no markers (ORB homography against the reference still: screen shift, pan/tilt/roll, scale), optional `markers` uses DICT_4X4_50 work-surface markers for height and distance in cm; `check`/`measure` give ok/adjust/unmeasurable; pure cv2/numpy, advice only |
 | `camera_setup_web.py` | D-792 S2: `/api/learning/camera/*` helpers for `review_app.py`; references stay immutable under `<state>/camera-setup/` and are revalidated on every read; page `review_app_web/camera.html` (`/learning/camera`) |
+| `omx_web.py` | D-792 S4: read-only `/learning/omx` and `GET /api/learning/omx` hook for `review_app.py`; lists `omx` learning rows that are intake folders with decisions, `reviewed_splits` trainability and camera setup verdicts; no host paths, no writes |
 | `map_projected_drivable.py` | D-563 3: map road raster (lane_graph centrelines +-0.0925 m, STL line paint, 2 mm, cached) projected into the robot camera at the fused pose, 0.15-0.40 m ahead -> `rosy.map-projected-drivable/1` (`map_projected`); review/finalize with `lane_derived_drivable.py` sheets/import-verdicts/finalize |
 | `edge_capture.py` | Edge-capture loop steps: `frames` (one camera frame per second whose 40x30 thumb changed), `drafts` (v2: autolabel LiDAR mask + lane-model components >= 40 px, 255 elsewhere), `verified` (model PC: mp4 frames by log time + indexed drafts bound to classes.yaml), `sam3` (model PC GPU, lazy import: v3 = drop lane-model lane, fill 255 with SAM floor/wall, SAM white line over non-wall; receipt-v3.json), `import` (review_ingest); merges are pure functions |
 | `edge_capture_session.py` | One re-runnable loop pass per recording id (`--from N`): operator-SSH copy verified by `fetch_http.verify`, bag_to_video, autolabel + frames, model-PC prelabel, v2 drafts, model-PC verified + SAM 3 + review import (review unit stopped for the import, always restarted) |
@@ -57,7 +58,7 @@ Media stage, before a recording job: `media_pipeline.py` scans raw sessions, mak
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/learning-perception -- test/learning/perception -q -p no:cacheprovider
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception -q -p no:cacheprovider
 ```
 
 Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_reclaim.py`, `test_media_pipeline.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`), `test_lane_failure.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.

@@ -92,7 +92,7 @@
 - perception_cli ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_cli DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_cli FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
-- rosy_cell ROS-SIM: No Fleet route (C4) or end-to-end Job run (C6). Step z is the item top face, but the OMX-F TCP is at the fingertips, so a box grasp needs a depth below the top that no Rosy Cell or grant field carries yet.
+- rosy_cell ROS-SIM: Recovered 2026-10-17 native evidence exercised canonical topic proposal/admission through Fleet and the OMX owner with the box grasp-depth profile. Independent placement confirmed 3/16 goals and 15 ROS phases succeeded, then insufficient held-object proof caused HOLD before the fourth release. Failure-time gripper evidence, complete box/slip-sheet Job success and the full G2 fault matrix remain unproven. See docs/validation/omx-native-held-proof-2026-10-17/result.md; recovery itself does not rerun Gazebo.
 - palletizing ROS-SIM: Task 8 must verify fixed-cell transfer execution and interrupted recovery in Gazebo
 - palletizing ARTIFACT: The wheel is locally built and installed for validation; a declared installation profile and release provenance are Task 6
 - navigation SOURCE: native AMCL/static은 검증했지만 CORE 연결·운영 failed-config 정리·FULL CI 미완료. branch safety exception ancestry guard 1 FAIL(이번 변경 이전 cb19bf69f도 재현, 현재 main은 PASS)

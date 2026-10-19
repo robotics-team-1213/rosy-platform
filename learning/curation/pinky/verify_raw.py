@@ -17,6 +17,12 @@ from rosy.contracts.learning.pinky import validate_profile
 STAMPED = ('line/observation', 'perception/learned/shadow')
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def selected(series, row, gap, topic):
     if topic in STAMPED:
         hits = []
@@ -157,9 +163,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path); parser.add_argument('--out', required=True, type=Path)
     args = parser.parse_args()
-    if (args.out.exists() or args.out.resolve().drive.upper() == 'F:'
+    if (args.out.exists() or _in_checkout(args.out)
             or args.out.resolve().is_relative_to(args.root.resolve())):
-        raise ValueError('new verification report outside source drive required')
+        raise ValueError('new verification report outside the source checkout required')
     result = verify(args.root)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open('x', encoding='utf-8') as stream:

@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 성공 drivable SIM의 중앙 복귀 조건 분리
 - 2026-10-18 · 6ec7681069 · Add an ordered source-expiring route-prior inbox (D-769) (이식, 원래 2026-10-16)
 - 2026-10-18 · a473a5093 · Align route-prior angles with the consuming camera pose (D-769) (이식, 원래 2026-10-16)
 - 2026-10-18 · dca38984c · Isolate the remaining startup target error (D-769) (이식, 원래 2026-10-16)
 - 2026-10-18 · 7e49afe20a · Bound drivable tangent estimation by metric support (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · uncommitted · docs: CLAUDE.md를 AGENTS.md로 합치고 지운다

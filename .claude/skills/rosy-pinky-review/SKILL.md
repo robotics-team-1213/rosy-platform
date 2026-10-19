@@ -15,20 +15,20 @@ gets it running and judges a change with its own eyes.
 ## 1. Get a state you may write to
 
 The `--state` folder is the reviewer's record of truth (SQLite, frozen originals, exports).
-**Never point a write-capable session at an operational state.** Copy it under `X:\DevTemp`:
+**Never point a write-capable session at an operational state.** Copy it under `$ROSY_SCRATCH`:
 
 ```bash
 ls -d /x/DevTemp/*/reviews.sqlite3 /x/DevTemp/*/*/reviews.sqlite3   # existing states
-mkdir -p X:/DevTemp/<name> && cp -r <state> X:/DevTemp/<name>/state
+mkdir -p "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>" && cp -r <state> "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/state"
 ```
 
-`X:/DevTemp/pinky-review-flow-20261005/visual-state-ready` holds 357 real Pinky frames: copy from it, never serve it directly.
+On the lab PC only, `$ROSY_SCRATCH/pinky-review-flow-20261005/visual-state-ready` holds 357 real Pinky frames: copy from it, never serve it directly. Elsewhere, ask for a copy; it is not in the repo.
 With no state, the first run needs `--source <jsonl> --human <jsonl> --images <root>`.
 
 ## 2. Look before changing anything
 
 ```bash
-python learning/curation/perception/tools/review_app_smoke.py --state X:/DevTemp/<name>/state --out X:/DevTemp/<name>/smoke
+python learning/curation/perception/tools/review_app_smoke.py --state "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/state" --out "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/smoke"
 ```
 
 It copies the state under `--out` (app startup may migrate the schema), serves the copy on a
@@ -43,7 +43,7 @@ iterating, start it in the background. Static files are re-read on every request
 browser reload picks up JS/CSS edits without restarting the server:
 
 ```bash
-python learning/curation/perception/review_app.py --state X:/DevTemp/<name>/state --port 8791
+python learning/curation/perception/review_app.py --state "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/state" --port 8791
 ```
 
 ## 3. Walk a reviewer flow (copied state only)
@@ -74,8 +74,8 @@ ROSY_RUN_BROWSER_TESTS=1 PYTHONIOENCODING=utf-8 python -m pytest \
   test/learning/perception/test_review_flow_browser.py \
   test/learning/perception/test_pixel_review_browser.py \
   test/learning/perception/test_review_app_smoke.py \
-  -q -rfE -p no:cacheprovider --basetemp X:/DevTemp/<name>/bt > X:/DevTemp/<name>/browser.txt
-python test/known_failures.py X:/DevTemp/<name>/browser.txt
+  -q -rfE -p no:cacheprovider --basetemp "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/bt" > "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/browser.txt"
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/browser.txt"
 ```
 
 Without `ROSY_RUN_BROWSER_TESTS=1` these tests **skip** and "pass". Their fixture has two

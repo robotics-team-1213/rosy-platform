@@ -5,7 +5,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from omx_adapter.pilot_sim_api import create_pilot_sim_app
+from omx_adapter.pilot_sim.api import create_pilot_sim_app
 
 
 ROOT = Path(__file__).resolve().parents[5]

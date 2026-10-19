@@ -19,8 +19,9 @@ Windows 호스트에서 `python`으로 돌린다(ROS 불필요). `opencv-python`
   돌린다. 결과물은 커밋하지 않는다.
 
 ```powershell
-mkdir X:\tmp\perception-proto; cd X:\tmp\perception-proto
-$T = "F:\Dev\Control\Robot\Rosy\rosy-platform\tools\perception_prototype"
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+$T = "$(git rev-parse --show-toplevel)\tools\perception_prototype"   # 저장소 안에서 먼저 실행
+mkdir $RosyScratch\perception-proto; cd $RosyScratch\perception-proto
 python "$T\realrun\replay.py" 1 16     # part 1의 앞 16프레임
 ```
 

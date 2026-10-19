@@ -18,6 +18,12 @@ sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
 from rosy.contracts.learning import seal, validate_policy, validate_promotion  # noqa: E402
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
 
@@ -91,8 +97,8 @@ def pinky_assessment(report):
 class Registry:
     def __init__(self, root, *, trusted=None, read_only=False):
         self.root = Path(root).resolve()
-        if self.root.drive.upper() == 'F:':
-            raise ValueError('registry output belongs outside source drive F:')
+        if _in_checkout(self.root):
+            raise ValueError('registry output belongs outside the source checkout')
         if not isinstance(read_only, bool):
             raise ValueError("read_only must be boolean")
         self._read_only = read_only

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-D-427 learning part. Perception curation, replay evaluation and offline training, shared artifact/provenance and policy registries, and Isaac Sim. Only the ROS package `isaac_sim` is a `colcon_roots` entry and only that package is allowed onto a device payload (D-427 Q8). The other folders are host-side tools. Local development outputs stay on X:, not in this repo. Existing remote data and store paths retain their declared lineage.
+D-427 learning part. Perception curation, replay evaluation and offline training, shared artifact/provenance and policy registries, and Isaac Sim. Only the ROS package `isaac_sim` is a `colcon_roots` entry and only that package is allowed onto a device payload (D-427 Q8). The other folders are host-side tools. Local development outputs stay on $ROSY_SCRATCH, not in this repo. Existing remote data and store paths retain their declared lineage.
 
 ## Subdirectories
 
@@ -23,11 +23,11 @@ D-427 learning part. Perception curation, replay evaluation and offline training
 
 - Do not install torch, LeRobot, or these job CLIs onto the robot image or the contract wheels.
 - A training result is not promotion and not a Fleet dispatch. Registry promotion is metadata only.
-- New run outputs go to a new directory on X:. Do not overwrite a previous run.
+- New run outputs go to a new directory on $ROSY_SCRATCH. Do not overwrite a previous run.
 
 ### Testing Requirements
 
-Each child names its suite. Run pytest only for committed HEAD through `tools/remote/remote_pytest.py --log-dir X:/DevTemp/<session> -- <suite>`, then compare the returned log with `test/known_failures.py` (D-584). The unified perception suite is `test/learning/perception/`; host results do not replace device or field acceptance.
+Each child names its suite. Run pytest only for committed HEAD through `tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<session>" -- <suite>`, then compare the returned log with `test/known_failures.py` (D-584). The unified perception suite is `test/learning/perception/`; host results do not replace device or field acceptance.
 
 ### Common Patterns
 

@@ -816,6 +816,19 @@
 - 변경: 기존 Account 작업의 receiver 재생성 후 회수 큐 복구 검사를 foundation 전용 브랜치로 분리했다. 제품 AccountClient는 변경하지 않았다.
 - 증거: 원래 c22ee485ad의 지정 원격 suite15개 PASS, NEW0. 이 브랜치는 최신 main 위에서 착지 관문을 다시 실행한다. 원래 결과는 최신 main 병합 시험을 대신하지 않는다.
 - gate 변화: 없음. 운영 인증·서비스·장치 수용은 이 검사와 별도다.
+
+## 2026-10-19 · uncommitted · D-807 receiver 재개 후 회수 대기열 검증
+
+- 변경: 중앙 장애 중 로그아웃한 receiver를 같은 DB·암호화 키로 다시 열어 로컬 접근 거부와 중앙 복구 후 회수·큐 소진을 확인하는 시험을 추가했다. 제품 구현은 변경하지 않았다.
+- 증거: `test_pending_revocation_survives_receiver_reopen`을 커밋 SHA로 원격 실행한다. 실행 결과는 Account rollout 결과표에 기록한다.
+- gate 변화: 없음. 시험 PC 검증은 설치·실사용 수용이 아니다.
+
+## 2026-10-19 · uncommitted · drivable v2 안내 계약을 제품보다 먼저 분리
+
+- 변경: 기존 성공 구현의 선택 지도 벽 필드와 source 수명 3초 상한을 foundation 선행 브랜치로 분리했다. 운영 Fleet 기본 1초와 이동 권한 TTL은 유지한다. API v1.287과 D-769 개정 3에 호환성·CORE 우선 배포·후속 제품 동작을 구분했다.
+- 증거: 원본 성공 브랜치의 관련 원격 회귀 159 passed, NEW 0. 이 선행 후보의 검증 결과는 별도로 기록하며 원본 시험을 후보 통과로 합산하지 않는다.
+- gate 변화: 없음. 스키마 설치는 생산자 활성화·SIM 반복·실물 수용이 아니다.
+
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-16) feat(contracts): 스테이션 설치 위치와 충전 근거 분리 (D-772)
 
 - 변경: station_charging DTO에 지도/위치/교정/충전 session/boot/odom 세대를 분리하고, 제어 입력 문맥·유효기간·유한 수·미측정 건강도·정상 충전 종단을 검증한다. canonical schema export와 API v1.245 기록을 함께 추가했다. REST·실기 capability는 아직 열지 않았다.

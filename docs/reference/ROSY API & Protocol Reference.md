@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.286
+**Version:** v1.288
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -247,6 +247,35 @@ Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 
 - **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
 - **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 아직 없어 거절한다(D-779 열린 질문, fail closed). 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
 - **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
+
+### v1.287 D-769 route-prior compatibility prerequisite
+
+This additive prerequisite prepares the existing drivable-v2 SIM implementation; installing
+the schema alone does not activate a disabled producer, wall clipping or physical deployment.
+It supersedes the one-second wire limits in v1.246/v1.247: `AuthorityRouteGuide.max_age_s`
+and the source-based `SelectedRoutePrior` lifetime accept at most three seconds. Fleet's
+operational producer still sends one second; only the explicit isolated SIM runner uses
+three seconds. Neither value extends the enclosing movement authority's end or TTL,
+and repeated use of the same source cannot refresh its original age budget.
+
+Both shapes add optional finite `wall_left_m` in (0,2], `wall_right_m` in [-2,0), and
+`wall_ahead_m` in (0,2]. They describe map wall faces across the selected directed lane
+from the robot, and their forward coverage, not observed free floor. Omission means no
+map-wall evidence. CORE and the camera consumer must understand these fields before
+an upgraded Fleet serializes them. Existing enabled producers use `model_dump()` and
+already send the new fields as null after a schema-only upgrade. An older CORE with
+`extra="forbid"` rejects the entire enclosing authority request at nested validation,
+not only its guide. Upgrade CORE and the camera receiver before upgrading Fleet's schema.
+The default `crosswalk_map_wall_band_m` is null, so this prerequisite does not clip scans.
+D-573 revision 8 defines the downstream clipping bounds and physical calibration gate.
+
+The corresponding product implementation makes one explicit exception to v1.246's
+accepted-authority-only binding rule: a live, same-scope, newer-sequence extension rejected
+as `reason="shrink"` may refresh a valid exact-pose guide. It keeps the existing movement
+end and expiry unchanged. Actual shrink requests, stale/out-of-order or wrong-scope
+requests do not gain that exception; source-age limits and the FREE authority gate remain.
+Until that consumer implementation is installed, a rejected extension retains the old
+behavior. Envelope 1.0 and final CORE command ownership are unchanged.
 
 ### v1.247 D-769 selected-route production capability
 
@@ -3537,6 +3566,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.288 | 2026-10-19 | Integrate D-772/D-774/D-776/D-783 Station contracts from reserved v1.278–286 with the current v1.287 route-prior contract. Preserve both histories and envelope 1.0; no physical activation. |
+| v1.287 | 2026-10-19 | D-769 rev 3 / D-573 rev 8 route-prior compatibility prerequisite: optional map-wall geometry, at most three-second source lifetime, receiver-first rollout, and the separately installed consumer's ignored-short extension exception. Operational Fleet remains one second; no physical activation. |
 | v1.286 | 2026-10-16 | (origin #92 v1.255, 2026-10-19 port) D-772 완료된 native navigation의 exact boot/run/correlation/generation·quiescent transport를 확인한 수동적 IDLE handover. 새 이동·취소·물리 정지 판정을 추가하지 않음 |
 | v1.285 | 2026-10-16 | (origin #92 v1.254, 2026-10-19 port) D-772 작업·attempt 결속 이안 허가/실측 Receipt. 명시적 로컬 피드·절연·후방 공간 검사와 native 이안·허가 갱신·실측 완료 API, 정확한 선행/진행 중 중단 |
 | v1.284 | 2026-10-16 | (origin #92 v1.253, 2026-10-19 port) D-772 세션·현재 native owner에 한정한 station-stop. 근거 만료 뒤에도 권한을 닫으며 ACK는 물리 정지·자원 해제가 아님 |

@@ -27,7 +27,7 @@ import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web
 import review_versions
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
@@ -413,7 +413,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state):
+                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})

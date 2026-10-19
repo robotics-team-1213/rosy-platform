@@ -80,7 +80,7 @@ def test_prepare_returns_explicit_review_paths_and_structured_next_argv(module, 
         return {'reader_verified': True}
     monkeypatch.setattr(module.intake, 'prepare', prepare)
     result = module.prepare([tmp_path/'raw'], output, 'fixture/omx', completed_only=True)
-    assert calls == [([tmp_path/'raw'], output, 'fixture/omx', {'completed_only': True})]
+    assert calls == [([tmp_path/'raw'], output, 'fixture/omx', {'completed_only': True, 'camera_references': None})]
     assert result['decisions'] == str(output/'decisions.json')
     assert result['inspection'] == str(output/'inspection.json')
     argv = result['next_command']['argv']

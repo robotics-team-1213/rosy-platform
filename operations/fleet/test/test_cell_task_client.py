@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from hashlib import sha256
 import subprocess
 import sys
 
@@ -191,3 +192,114 @@ def test_changed_local_request_does_not_admit(module, tmp_path):
     with pytest.raises(ValueError, match='digest'):
         module.admit_task(api, tmp_path/'request', 0, tmp_path/'admission')
     assert len(api.calls) == 2
+
+
+class G2FleetClient:
+    """Existing role-keyed request boundary backed by the actual authenticated Fleet app."""
+    def __init__(self, client, tasks, *, stale=False, lost=False):
+        self.client, self.tasks, self.calls = client, tasks, []
+        self.stale, self.lost = stale, lost
+
+    def request(self, method, path, body=None, *, role="approver"):
+        self.calls.append((method, path, role))
+        if self.stale and method == "POST" and path.endswith("/admit"):
+            self.tasks.store.trip_stop_latch(actor_id="g2-approver", reason="GENERATION_CHANGED")
+        response = self.client.request(method, path, json=body,
+            headers={"Authorization": "Bearer g2-" + role + "-secret"})
+        if response.status_code != 200:
+            raise ValueError("Fleet refused: " + str(response.status_code))
+        if self.lost and path == "/api/fleet/cell-app/proposals":
+            raise TimeoutError("proposal response lost")
+        return response.json()
+
+
+def g2_setup(tmp_path, monkeypatch, *, box_only=True):
+    import test_cell_job_api as fixture
+    actual_create = fixture.create_app
+    def create(*args, **kwargs):
+        users = dict(kwargs["site_users"])
+        for role in ("proposer", "approver"):
+            users[sha256(("g2-" + role + "-secret").encode()).hexdigest()] = {
+                "principal_id": "g2-" + role, "role": "operator"}
+        return actual_create(*args, **{**kwargs, "site_users": users})
+    monkeypatch.setattr(fixture, "create_app", create)
+    sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
+    from g2_common import box_only_document
+    client, tasks, _ = system(tmp_path)
+    refs = {"workcell_id": "omx_cell_sim", "instance_id": "omx_cell_sim_01"}
+    for kind in ("recipe", "cell"):
+        document = yaml.safe_load((ROOT / "operations/processes/cell/examples/omx_sim" / (kind + ".yaml")).read_text())
+        if kind == "recipe" and box_only:
+            document = box_only_document(document)
+        saved = _save(client, kind, "g2-" + kind, document)
+        assert saved.status_code == 200, saved.text
+        refs[kind + "_id"], refs[kind + "_digest"] = "g2-" + kind, saved.json()["digest"]
+    control = tasks.store.dispatch_control()
+    tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="g2-approver")
+    return client, tasks, refs
+
+
+def test_g2_topic_path_uses_real_proposer_and_approver_before_canonical_admission(tmp_path, monkeypatch):
+    client, tasks, refs = g2_setup(tmp_path, monkeypatch)
+    from g2_task import submit_topic_task, SIM_TOPIC
+    api = G2FleetClient(client, tasks)
+    mission_id = submit_topic_task(tmp_path / "run", api, refs)
+    receipt = json.loads((tmp_path / "run/topic-task/prepare/receipt.json").read_text())
+    assert mission_id == receipt["mission"]["mission_id"]
+    request = json.loads((tmp_path / "run/topic-task/prepare/request.json").read_text())
+    assert request["topic"] == SIM_TOPIC and request["binding"] == refs
+    job = client.get("/api/fleet/cell-jobs/" + mission_id,
+                     headers={"Authorization": "Bearer g2-approver-secret"}).json()["job"]
+    assert job["status"] == "READY" and len(job["steps"]) == 16
+    assert any(row["event_type"] == "CELL_JOB_ADMITTED" and row["actor_id"] == "g2-approver"
+               for row in job["events"])
+    assert api.calls[:2] == [("POST", "/api/fleet/cell-app/compile", "proposer"),
+                             ("POST", "/api/fleet/cell-app/proposals", "proposer")]
+    assert all(role == "approver" for _, _, role in api.calls[2:])
+    assert sum(path.endswith("/admit") for _, path, _ in api.calls) == 1
+    assert not any("rearm" in path for _, path, _ in api.calls)
+    assert (tmp_path / "run/topic-task/admission/admission-intent.json").exists()
+
+
+def test_g2_topic_stale_generation_never_rearms_or_retries_admission(tmp_path, monkeypatch):
+    client, tasks, refs = g2_setup(tmp_path, monkeypatch)
+    from g2_task import submit_topic_task
+    api = G2FleetClient(client, tasks, stale=True)
+    with pytest.raises(ValueError, match="Fleet refused"):
+        submit_topic_task(tmp_path / "run", api, refs)
+    assert sum(path.endswith("/admit") for _, path, _ in api.calls) == 1
+    assert not any("rearm" in path for _, path, _ in api.calls)
+    failure = json.loads((tmp_path / "run/topic-task/admission/failure.json").read_text())
+    assert failure["submission_uncertain"] is True and failure["automatically_retried"] is False
+    assert tasks.store.resource_claims(resource_kind="workcell", resource_id="omx_cell_sim") == []
+
+
+@pytest.mark.parametrize("failure", ["digest", "shape"])
+def test_g2_topic_failed_compile_or_unreviewed_shape_never_admits(tmp_path, monkeypatch, failure):
+    client, tasks, refs = g2_setup(tmp_path, monkeypatch, box_only=failure != "shape")
+    from g2_task import submit_topic_task
+    if failure == "digest":
+        refs["recipe_digest"] = "0" * 64
+    api = G2FleetClient(client, tasks)
+    with pytest.raises((ValueError, RuntimeError)):
+        submit_topic_task(tmp_path / "run", api, refs)
+    assert not any(path.endswith("/admit") or "rearm" in path for _, path, _ in api.calls)
+    if failure == "digest":
+        assert api.calls == [("POST", "/api/fleet/cell-app/compile", "proposer")]
+    assert tasks.store.resource_claims(resource_kind="workcell", resource_id="omx_cell_sim") == []
+
+
+def test_g2_topic_lost_proposal_response_never_admits_or_replays(tmp_path, monkeypatch):
+    client, tasks, refs = g2_setup(tmp_path, monkeypatch)
+    from g2_task import submit_topic_task
+    api = G2FleetClient(client, tasks, lost=True)
+    with pytest.raises(TimeoutError):
+        submit_topic_task(tmp_path / "run", api, refs)
+    assert (tmp_path / "run/topic-task/prepare/submission-intent.json").exists()
+    failure = json.loads((tmp_path / "run/topic-task/prepare/failure.json").read_text())
+    assert failure["submission_uncertain"] is True and failure["automatically_retried"] is False
+    assert len(api.calls) == 2
+    with pytest.raises(FileExistsError):
+        submit_topic_task(tmp_path / "run", api, refs)
+    assert len(api.calls) == 2
+    assert not any(path.endswith("/admit") or "rearm" in path for _, path, _ in api.calls)

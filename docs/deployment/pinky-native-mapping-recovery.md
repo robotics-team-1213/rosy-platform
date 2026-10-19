@@ -2,7 +2,7 @@
 
 이 문서는 Ubuntu/systemd 릴리스에 적용한다. `runtime-mode.sh`와 Docker Compose는
 레거시 개발 경로다. 장치 주소와 계정 토큰, 실제 G4/G5 원시 자료는 공개 저장소에
-적지 않는다. 원격 작업 파일은 작업 PC의 `X:\DevTemp\`에 둔다.
+적지 않는다. 원격 작업 파일은 작업 PC의 `$ROSY_SCRATCH/`에 둔다.
 
 Rosy Cam은 원격 명령·관찰 담당자의 현장 시야로 사용할 수 있다(D-521).
 G4 schema v2와 G5는 별도 현장 담당자 없이 진행할 수 있다. 영상·프레임 나이·
