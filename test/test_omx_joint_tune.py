@@ -176,3 +176,107 @@ def test_one_failed_restore_never_skips_the_others():
         run(bus, ["move", "--to", "2100", "--p-gain", "600", "--i-gain", "200"])
     assert bus.reg["torque"] == 0
     assert (bus.reg["current_limit"], bus.reg["p_gain"], bus.reg["i_gain"]) == (50, 250, 0)
+
+
+def test_startup_defaults_never_raise_output_above_the_resting_caps():
+    bus = Motor()
+    enabled = []
+    original = bus.write
+
+    def write(name, value):
+        original(name, value)
+        if name == "torque" and value == 1:
+            enabled.append(dict(bus.reg))
+
+    bus.write = write
+    run(bus, ["move", "--delta", "10"])
+    assert len(enabled) == 1
+    assert (enabled[0]["pwm_limit"], enabled[0]["current_limit"], enabled[0]["goal_current"]) == (20, 50, 50)
+    assert (enabled[0]["profile_vel"], enabled[0]["profile_acc"]) == (1, 1)
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("register", ["profile_vel", "profile_acc", "goal_current", "goal_pos"])
+def test_startup_refuses_an_acknowledged_setting_that_did_not_read_back(register):
+    bus = Motor()
+    original = bus.write
+
+    def write(name, value):
+        original(name, value)
+        if name == register:
+            bus.reg[name] = 0
+
+    bus.write = write
+    with pytest.raises(RuntimeError, match="readback"):
+        run(bus, ["move", "--to", "2100"])
+    assert ("torque", 1) not in bus.writes
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("fault", ["jitter", "moving"])
+def test_startup_never_sends_a_move_until_the_hold_is_observed_stable(fault):
+    bus = Motor()
+    original = bus.sleep
+
+    def sleep(seconds):
+        original(seconds)
+        if bus.reg["torque"]:
+            if fault == "jitter":
+                bus.reg["present_pos"] = 2028 + round(bus.t * 10) % 2
+            else:
+                bus.reg["moving"] = 1
+
+    bus.sleep = sleep
+    with pytest.raises(RuntimeError, match="settle|stable|hold"):
+        run(bus, ["move", "--to", "2100"])
+    assert ("goal_pos", 2100) not in bus.writes
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("drift", [5, 100])
+def test_startup_rechecks_position_after_configuration_before_enabling_torque(drift):
+    bus = Motor()
+    original = bus.write
+    changed = False
+
+    def write(name, value):
+        nonlocal changed
+        original(name, value)
+        if name == "pwm_limit" and not changed:
+            changed = True
+            bus.reg["present_pos"] += drift
+
+    bus.write = write
+    if drift > 20:
+        with pytest.raises(RuntimeError, match="startup|position.*changed"):
+            run(bus, ["move", "--to", "2100"])
+        assert ("torque", 1) not in bus.writes
+    else:
+        run(bus, ["move", "--to", "2100"])
+        assert next(value for name, value in bus.writes if name == "goal_pos") == 2028 + drift
+    assert_restored(bus)
+
+
+def test_startup_cleanup_does_not_restore_gains_without_confirmed_torque_off():
+    bus = Motor(torque=1)
+    bus.reg["p_gain"] = 600
+    original = bus.write
+
+    def write(name, value):
+        original(name, value)
+        if name == "torque" and value == 0:
+            bus.reg["torque"] = 1
+
+    bus.write = write
+    runner = m.Run(bus, 16, log=lambda **row: None, grab=lambda label: None, sleep=bus.sleep)
+    with pytest.raises(RuntimeError, match="did not end safely"):
+        runner.finish({"p_gain": 250})
+    assert bus.writes.count(("torque", 0)) == 5
+    assert ("p_gain", 250) not in bus.writes
+
+
+@pytest.mark.parametrize("option", ["--velocity", "--acceleration", "--reach"])
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_startup_refuses_zero_or_negative_motion_profiles(option, value):
+    with pytest.raises(SystemExit):
+        m.parse(["--device", "x", "sweep", option, value])
