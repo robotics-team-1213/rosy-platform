@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · sim: drivable v2 원본 판정과 최신 소스 재검증
+- 2026-10-19 · uncommitted · 안내 API 변경 이력 행 보완
+- 2026-10-19 · uncommitted · drivable 성공 원본의 새 초기화 재실행 보존
+- 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
 - 2026-10-19 · uncommitted · test(recovery): preserve historical inputs and host test boundaries
-- 2026-10-19 · uncommitted · fix(recovery): bind independently verified public digests
-- 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
-- 2026-10-19 · uncommitted · Account 인증서 발급 확인·보호 백업·갱신 타이머
-- 2026-10-19 · 30acdffbfb · Account 활성화 후보와 설정 포함 Cam APK 준비

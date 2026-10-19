@@ -1665,3 +1665,9 @@
 - 변경: Added typed LaneRouteGuideInput with source deadline, local monotonic remaining budget, ordered clears, publisher retirement and capacity fail-closed latch. Repeated source samples cannot renew expiry; typed output retains actual preview distance. Remote inbox/alignment/protocol tests: 14 passed. Independent review found no remaining narrow blocker. Producer and runtime subscription are not wired; no gate change.
 - 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
 - gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 중앙 복귀 조건 분리
+
+- 변경: 기존 v2 성공 구현의 recentre 조건과 회귀를 별도 인식 변경으로 복원했다. 열린 출구의 호·회전 또는 route-memory pivot에서 중심이 반대편이면 먼저 중앙으로 돌아오며 전방 정지·관측 경계를 유지한다.
+- 증거: 원본 91f14c997f의 모델 PC 재실행 PASS와 기존 브랜치 관련 159 passed를 확보했다. 현재 split 후보의 원격 회귀·SIM은 별도다.
+- gate 변화: 없음. 카메라 모델·가중치·실물 보정을 바꾸지 않는다.

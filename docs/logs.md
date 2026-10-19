@@ -9307,3 +9307,27 @@ osy-d395-s1d\`.
 - 변경: Freeze the original recipe/1 YAML inputs from commit 26a148117 for the two historical compatibility tests, preserving both original golden assertions and the corrected live G2 SIM geometry. Complete the AST runtime fixture's existing diagnostic dependencies, rename its unrelated nose-style setup helper, and remove a robot-family name from a generic signing comment. Run only the preflight boundary test in a fresh process, retaining the real source-origin guard and asserting the committed compiler origin.
 - 증거: Official FULL at 0c87e43219 found 15 failures across Fleet, root and policy suites; that failed round was stopped before completion, with the three failure logs preserved under external recovery-full-0c87-failed. Whole root-suite collection with only G2 preflight execution reproduced the installed-wheel import mismatch before the fix. Independent source review approved f3458f244a; its official remote regression selection passed 190 tests with zero skips, and whole root-suite collection with only preflight execution passed one test with zero skips. Both saved reports have NEW0, known0 and flaky0. These focused checks do not replace the next official FULL landing round.
 - gate 변화: None. Native and clock ADRs remain Proposed; no simulator, service or robot was activated, and field acceptance remains HOLD.
+
+## 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
+
+- 변경: D-769 개정 3과 API v1.287에 source 수명·선택 지도 벽·CORE 우선 배포·거절한 짧은 연장의 안내 갱신 예외를 기록했다. 기존 성공 구현은 foundation 선행 변경과 후속 제품 변경으로 구분한다.
+- 증거: 독립 계약 검토가 기존 API의 1초·수락 후 binding 문구와 성공 구현의 차이를 확인했다. 원본 소스의 원격 관련 회귀 159 passed, NEW 0이며 현재 후보 시험은 별도다.
+- gate 변화: 없음. 실물 활성화·main 착지·push는 수행하지 않는다.
+
+## 2026-10-19 · uncommitted · drivable 성공 원본의 새 초기화 재실행 보존
+
+- 변경: 성공 소스·모델·조건·결과 hash와 원본 재실행을 날짜 검증 기록으로 보존했다. 현재 main 기반 split 후보와 원본의 증거를 구분한다.
+- 증거: 원본 모델 PC runner exit 0, 목표 0.105 m, 주행 샘플 learned_drivable 1,539건/fallback 0건, 최종 명령·odom 속도 0, lease released, 소유 잔존 프로세스 없음.
+- gate 변화: 없음. lane_return 생략 조건의 SIM이며 실물 수용은 별도다.
+
+## 2026-10-19 · uncommitted · 안내 API 변경 이력 행 보완
+
+- 변경: FULL 회귀가 찾은 API v1.287 변경 이력 표의 누락 행을 추가했다. 헤더·스키마·실행 코드는 바꾸지 않는다.
+- 증거: d9b706e204의 `test_protocol_version_alignment.py::test_changelog_has_a_row_for_the_live_version` 실패를 보존하고 수정 후 같은 검사를 원격 실행한다.
+- gate 변화: 없음. 문서 누락 보완이며 실물·SIM 동작 변경이 아니다.
+
+## 2026-10-19 · uncommitted · sim: drivable v2 원본 판정과 최신 소스 재검증
+
+- 변경: `validation/pinky-drivable-v2-recheck-2026-10-19/result.md`에 r51 원본과 새 Gazebo 실행, 실제 인식 출처, 실물 테스트 준비 범위를 기록했다. 제품 코드는 추가 수정하지 않았다.
+- 증거: r51a는 최종 PASS, r51b는 Fleet arrived이나 정착 거리 0.156 m로 0.15 m 기준을 넘어 FAIL이다. 새 소스 ff8eca4d9b의 실제 AI PC 실행은 ring_s에서 전진 없이 좌우 회전 후 stall/exit 1이었다. 모델 hash, 종료 zero·OFF·lease 해제와 원본 로그 보존을 확인했다.
+- gate 변화: 없음. 기존 카메라 drivable 완주 기록은 인정하되 반복 완주·실물 수용으로 확대하지 않는다. 모델·성공 소스 준비만 했으며 실물 배포와 주행은 수행하지 않았다.

@@ -30,4 +30,4 @@ def bind_guide(raw, *, base, exact, leg_id, seq, now, ttl_s, shrink, budget):
             **hint.model_dump(exclude={'max_age_s'}))
     except ValueError:  # A sub-ULP source lifetime is no usable directional evidence.
         return None, budget
-    return dict(prior=prior, expires_at=expires), budget
+    return dict(prior=prior, expires_at=expires, stamp_ns=base[2]), budget   # D-573 rev 8: the odom sample

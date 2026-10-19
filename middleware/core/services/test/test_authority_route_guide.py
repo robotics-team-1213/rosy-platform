@@ -89,3 +89,19 @@ def test_clear_does_not_replenish_same_source_budget():
     rig.step()
     rig.send(1., seq=3, stamp=WALL + source, route_guide=hint())
     assert rig.m.route_guide().valid_until_s == deadline
+
+
+def test_an_extend_ignored_as_short_still_renews_the_route_prior_but_not_the_grant():
+    """v2 lap r48b/r49a: Fleet's map metres ran behind CORE's odom path; each such extend dropped the prior."""
+    rig = Rig()
+    rig.step()
+    rig.send(1., seq=1, ttl_s=.52, route_guide=hint())
+    end = rig.authority()['remaining_m']
+    rig.step()
+    answer = rig.send(.3, seq=2, route_guide={**hint(), 'heading_ahead_deg': 30.})
+    assert answer['accepted'] is False and answer['reason'] == 'shrink'
+    assert rig.m.route_guide().heading_ahead_deg == 30. and rig.m.route_guide().authority_seq == 2
+    assert rig.authority()['remaining_m'] <= end                 # the held end and its ttl stay as they were
+    for _ in range(10):
+        rig.step()
+    assert rig.step().linear == 0. and rig.authority()['state'] == 'EXPIRED' and rig.m.route_guide() is None

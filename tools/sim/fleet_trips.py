@@ -120,7 +120,10 @@ def seed_site_map(tasks_db, lap=False):
     base = from_lane_graph(GRAPH, map_id=GRAPH.parent.name).model_dump(by_alias=True)
     ends = [dict(id=pid, name=pid, kind='stop', x=pose[0], y=pose[1], yaw=pose[2])
             for pid, pose in layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), lap)[1].items()]
-    SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate({**base, 'places': base['places'] + ends}),
+    # D-573 rev 8: the surveyed walls of this world from its site map (the lane graph has none)
+    walls = json.loads((REPO / 'deploy/site/site-maps/map_v2_fleet-v5.json').read_text(encoding='utf-8'))['walls']
+    SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate({**base, 'places': base['places'] + ends,
+                                                                         'walls': walls}),
                                                  source=GRAPH.name)
 
 
@@ -198,7 +201,9 @@ def write_run(root, run_id, partition, reservations, stall_s=None, *, route_guid
             line_follow={'bend_map_entry_enabled': True, 'turn_map_entry_enabled': True,
                          'authority_required': True, 'route_context_enabled': True, 'route_guide_enabled': route_guide, 'obstacle_mode': 'path',
                          'ir_guard_enabled': True, 'site_floor_map_id': 'map_v2_fleet',
-                         'junction_signal_enabled': True, **{SKIP_CHECKS[name]: False for name in skip}},
+                         'junction_signal_enabled': True,
+                         'crosswalk_map_wall_band_m': .01,   # D-573 rev 8: the sim pose is exact
+                         **{SKIP_CHECKS[name]: False for name in skip}},
             auth={'tokens': [{'token': rest, 'role': 'operator', 'label': f'{run_id} Fleet'},
                              {'token': resolver, 'role': 'stuck_resolver', 'label': f'{run_id} resolver'}]})
         (root / f'core_{ns}.yaml').write_text(yaml.safe_dump(config), encoding='utf-8')
@@ -312,6 +317,8 @@ def run(args):
     rest = {row['robot_id']: row['token'] for row in manifest}
     cores = {row['robot_id']: row['base_url'] for row in manifest}
     fleet = f'http://127.0.0.1:{reservations.console_port}/api/fleet'
+    if args.lap:   # a whole lap at ~0.3 real time takes 10+ min of wall time; 240 s cut r42a 0.6 m short of the end
+        args.budget_s = max(args.budget_s, 900.)
     mode = args.scenario or args.lap
     spawns, places, requests = layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), mode)
     env = dict(os.environ, GZ_PARTITION=partition, ROS_DOMAIN_ID=str(reservations.ros_domain_id), GZ_IP='127.0.0.1',
@@ -386,6 +393,10 @@ def fleet_console(binding_path, cli_args):
     from rclpy.qos import QoSProfile, ReliabilityPolicy
     from rosgraph_msgs.msg import Clock
     import fleet.server.app as app_module
+    import fleet.traffic.route_guide as route_guide
+    # D-769 rev 3: the sim runs at ~0.3 real time, so a 1 s wall-clock route prior expires before the next
+    # authority (r37-r41 lost it for 4-14 s at the ring exit); 3 s wall is ~1 s of sim time, as on a robot.
+    route_guide.MAX_AGE_S = 3.
     from fleet.cli import main as fleet_main
     from native_gazebo_map_pose import (NativeGazeboBinding, NativeGazeboMapPosePort, NativeGazeboSample,
                                         NativeRobotBinding)
@@ -497,8 +508,8 @@ def main(argv=None):
                         help='leave this CORE check out of the run (a lap proof of the driving alone)')
     parser.add_argument('--record', action='store_true', help='record camera PNGs and keep_debug (fleet_trip_recorder)')
     parser.add_argument('--boot-s', type=float, default=300, help='wait for both COREs (includes Gazebo start)')
-    parser.add_argument('--settle-s', type=float, default=30)
-    parser.add_argument('--budget-s', type=float, default=240, help='wall time for both trips')
+    parser.add_argument('--settle-s', type=float, default=10)   # observers settle in a few seconds (30 s cost every run)
+    parser.add_argument('--budget-s', type=float, default=240, help='wall time for both trips (a --lap gets at least 900)')
     parser.add_argument('--stall-s', type=float, help="Fleet's trip stall_s (wall clock; default 20 s), scaled for a slow sim")
     args = parser.parse_args(argv)
     if args.learned_paint_target == 'drivable' and not args.learned_lane_pointer:

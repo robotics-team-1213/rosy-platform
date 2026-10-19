@@ -476,3 +476,31 @@ def test_a_seen_opening_is_turned_into_rather_than_bridged_on_the_map(monkeypatc
     monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(closed))
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=21.8)[2]
     assert debug["strategy"] == "drivable_turn_left", debug
+
+
+def test_a_body_corridor_closed_by_drifting_to_the_edge_recentres_before_the_bend(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as steer_module
+    # v2 lap r45a on the east road's turn north: drifted to the left edge, the way's centre 7 cm right, the
+    # body corridor read 0 m and the robot pivoted left 0.2 m before the bend (map 51 deg ahead)
+    edge = dict(target_m=(0.213, -0.111), ahead_m=0.0, exit="left", seen_exit="left", straddle=None, both=False,
+                exit_point_m={"left": (0.262, 0.134), "right": (0.197, -0.096)},
+                exit_reach_m={"left": 0.364, "right": 0.219}, near_centre_m=(0.163, -0.07),
+                centre_path_m=[], edges_m=[], near_edges_m={})
+    monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(edge))
+    debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=51.4)[2]
+    assert debug["strategy"] == "drivable_centre" and debug.get("recentre_first"), debug
+    corner = dict(edge, near_centre_m=(0.14, 0.0))       # centred at a real corner: still turned in place
+    monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(corner))
+    assert DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=51.4)[2]["strategy"] == "drivable_pivot_left"
+
+
+def test_an_arc_toward_the_routes_bend_waits_while_the_ways_centre_lies_the_other_way(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as steer_module
+    # v2 lap r50b on the south spoke: the map bends left 0.25 m on, the way's centre still 6 cm right; an arc
+    # left from there cut the corner and left the lane
+    spoke = dict(target_m=(0.238, -0.067), ahead_m=0.194, exit=None, seen_exit="right", straddle=None, both=False,
+                 exit_point_m={"left": (0.2, 0.12), "right": (0.2, -0.1)}, exit_reach_m={"left": 0.3, "right": 0.25},
+                 near_centre_m=(0.163, -0.055), centre_path_m=[], edges_m=[], near_edges_m={})
+    monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(spoke))
+    debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=25.0)[2]
+    assert debug["strategy"] == "drivable_centre" and debug.get("recentre_first"), debug

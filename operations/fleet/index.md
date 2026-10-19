@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 성공 drivable SIM의 Fleet 생산 연결 분리
 - 2026-10-19 · uncommitted · feat(fleet): recover OMX topic task client
 - 2026-10-19 · uncommitted · 초기값 회귀 fixture 변수 구분과 중단 시험 회수
 - 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
 - 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
-- 2026-10-18 · c11a34f64b · Bind selected-route guidance to fresh Fleet poses (D-769) (이식, 원래 2026-10-16)

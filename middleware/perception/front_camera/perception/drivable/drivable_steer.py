@@ -13,13 +13,11 @@ way_target   the way (frame-size mask, one inference) + ground plane -> the purs
              lane_half_width toward the open side; none -> the middle of the view. The pursuit
              point is the centre at arc length LOOKAHEAD_M, on the commanded curvature. ahead_m
              is how far the robot's corridor (|y| <= CORRIDOR_HALF_M) stays on the way.
-DrivableSteer per camera frame: the newest way's target moved into the current pose by odometry
-             (the way is not re-warped). The error holds that curvature at cruise_speed.
-             Closed ahead (ahead_m < PIVOT_AHEAD_M) with an exit at a side of the view turns in
-             place toward it (keep right when both sides are open, D-384 2): error +-PIVOT_ERROR
-             at the law's min_confidence, which CORE's speed scale turns into 0 linear. Released when
-             the way runs ahead again (PIVOT_RELEASE_M). Closed with no exit: no target (HOLD;
-             CORE's own back-off and resume apply).
+DrivableSteer per camera frame: the newest way's target moved into the current pose by odometry (not re-warped);
+             the error holds that curvature at cruise_speed. Closed ahead (ahead_m < PIVOT_AHEAD_M) with an exit
+             at a side turns in place toward it (keep right when both are open, D-384 2): +-PIVOT_ERROR at the
+             law's min_confidence (CORE: 0 linear), released when the way runs ahead again (PIVOT_RELEASE_M).
+             Closed with no exit: no target (HOLD; CORE's own back-off and resume apply).
 """
 
 from __future__ import annotations
@@ -42,15 +40,14 @@ CORRIDOR_HALF_M = 0.03
 CORRIDOR_FILL = 0.8
 PIVOT_AHEAD_M = 0.14
 PIVOT_GUIDE_DEG = 45.0   # a milder map bend ahead is arced, not turned in place (v2 lap r28: 14 cm early)
-#: a way whose centre target lies at least this far ahead bends on past a short straight corridor; it
-#: is not closed (v2 lap 2026-10-18: 17 deg behind a right bend the corridor read 0 m, target 0.21 m)
+RECENTRE_M = 0.04   # way centre this far toward the other side: recentre, no pivot (v2 lap r45a)
+#: a way whose centre target lies at least this far ahead bends on past a short straight corridor (v2 lap 2026-10-18)
 BEND_ON_X_M = 0.18
 #: closed ahead with no opening: a way target at least this far off the heading is the side to turn to
 TARGET_SIDE_DEG = 20.0
 #: a way closed nearer than this is closed at the body: only a turn in place remains
 PIVOT_AT_BODY_M = 0.05
-#: CORE's front stop distance (safety profile `stop`, LiDAR range, nominal body); a base_link reach fired 1.7 cm
-#: early beside walls on straight lanes (v2 lap r20)
+#: CORE's front stop distance (safety profile `stop`, LiDAR range, nominal body; v2 lap r20)
 FRONT_STOP_M = 0.149
 PIVOT_RELEASE_M = 0.22
 #: a latched turn side is released when the way runs this far straight ahead again
@@ -107,8 +104,7 @@ EXIT_NEAR_M = 0.05
 #: the bottom rows and centre half-width (px) that tell a line under the body
 STRADDLE_ROWS = 12
 STRADDLE_HALF_PX = 12
-#: without a way this long, the pivot latch and smoothing are forgotten
-FORGET_S = 1.5
+FORGET_S = 1.5   # without a way this long, the pivot latch and smoothing are forgotten
 SMOOTHING = 0.5
 
 
@@ -549,6 +545,10 @@ class DrivableSteer:
             if ahead < LOOKAHEAD_M:
                 self._smoothed = 0.0 if self._smoothed is None else self._smoothed
                 return 0.0, ONE_CONFIDENCE, dict(info, strategy="drivable_crosswalk_straight")
+        if self._pivot is None and not front_blocked and (side in info["exit_reach_m"] or info.get("exit_from_route_memory") and ahead
+                < PIVOT_AHEAD_M) and (info.get("near_centre_m") or (0, 0))[1] * (1 if side == "left" else -1) <= -RECENTRE_M:
+            side = info["exit"] = self._side = None   # arcs too: the south spoke cut its bend 0.2 m early (r50b)
+            info["recentre_first"] = True
         if self._pivot is None and side is not None and (front_blocked or ahead < PIVOT_AHEAD_M and (
                 guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG)):
             self._pivot = side

@@ -4081,3 +4081,9 @@
 - 변경: Recover the G2 wrapper and additional tests for the existing topic proposal/admission client, using Fleet compiler and named operator admission endpoints. The runner wiring is a later recovery group. Lost responses preserve intent and do not retry.
 - 증거: Committed remote tests are pending. No robot or service activation is performed.
 - gate 변화: None; topic text does not acquire ledger or device writer authority.
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 Fleet 생산 연결 분리
+
+- 변경: 선행 schema·CORE/Drive·recentre 위에서 기존 지도 벽 검증·선택 경로 안내 생산·SIM 지도와 실행 설정을 복원했다. 운영 Fleet 안내 기본 1초, 명시적 SIM 3초이며 원격 자원 계산과 시나리오 도구 확장은 가져오지 않았다.
+- 증거: 원본 소스의 모델 PC 재실행 PASS와 종료·실제 모델 소비를 `docs/validation/pinky-success-baseline-2026-10-19/result.md`에 보존했다. 현재 통합 후보는 별도 원격 회귀와 같은 조건의 SIM을 실행한다.
+- gate 변화: 없음. 실물 지도 활성화·설치·서비스 변경은 수행하지 않는다.

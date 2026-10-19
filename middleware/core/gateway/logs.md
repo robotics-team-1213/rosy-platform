@@ -1216,3 +1216,9 @@
 - 변경: 실제 Authority fixture의 HTTP 로그아웃 pending·쿠키 제거·lifespan 재시도·strict media 재검증·새 family 분리를 최신 main 위에 재적용했다. CORE 제품 인증 코드는 변경하지 않았다.
 - 증거: 원래 d58258fee6의 공통/CORE/Pilot 실제 Chromium/proxy 묶음35개 PASS, skip0·NEW0. 이번 착지 SHA의 검증은 별도 실행한다. 이전 SHA 결과를 최신 main 수용으로 대신하지 않는다.
 - gate 변화: 없음. 실제 미디어 종료·운영 배포·사용자 수용은 미확인이다.
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 CORE 소비 결선 복원
+
+- 변경: foundation 선행 계약 위에서 기존 v2 성공 구현의 지도 벽 band와 경로 안내 표본 결선을 복원했다. 새 writer나 실물 활성화를 추가하지 않는다.
+- 증거: 원본 91f14c997f의 모델 PC 재실행은 PASS, 목표 거리 0.105 m, 최종 명령·odom 속도 0, lease released다. 이는 원본 소스 증거이며 이 후보의 검증은 별도다.
+- gate 변화: 없음. 실물 지도 오차·보정·장치 수용은 남아 있다.
