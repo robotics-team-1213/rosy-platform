@@ -88,6 +88,7 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
         self._start_cancels: dict[str, int] = {}
         self.autonomous_robots: frozenset[str] = frozenset()
         self._locks: dict[str, asyncio.Lock] = {}
+        self.charge_goal_ready = None  # Explicit charge-only native-readiness dependency.
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
@@ -139,7 +140,8 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
 
     # ---- operator actions -------------------------------------------------------------
 
-    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None) -> dict:
+    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None,
+                    start_guard=None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
@@ -160,22 +162,18 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
-            engaged = self._engaged(robot_id)
-            if engaged is not None:
-                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
-            self._check_start_token(robot_id, start_token)
+            self._check_engaged(robot_id)
+            await self._guard_start(robot_id, start_token, start_guard)
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps,
-                start_token=start_token)
-            self._check_start_token(robot_id, start_token)
+                start_token=start_token, start_guard=start_guard)
+            await self._guard_start(robot_id, start_token, start_guard)
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id}, caps)
             try:
                 self._check_start_token(robot_id, start_token)
-                engaged = self._engaged(robot_id)
-                if engaged is not None:
-                    raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
+                self._check_engaged(robot_id)
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
