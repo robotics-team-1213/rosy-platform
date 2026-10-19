@@ -199,6 +199,10 @@ def import_frames(store, body):
     # No frame/decision mutation until every image, draft and class reference passes.
     with store.lock:
         if class_raw:
+            # Another import may have bound classes during filesystem preflight.
+            current = review_masks.classes(store)
+            if current and current['sha256'] != binding['sha256']:
+                raise ValueError('pixel classes differ from existing workspace')
             review_masks.bind_classes(store, class_raw)
         frozen = []
         for source, data, suffix, mask in checked:
