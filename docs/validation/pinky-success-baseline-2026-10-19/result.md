@@ -23,7 +23,7 @@
 
 ```text
 python tools/remote/remote_sim.py --host model
- --sha 91f14c997fcd1c509b2ee6bb9f72b2fdc8548090 --minutes 60
+ --sha 91f14c997fcd --minutes 60
  --log-dir <external-scratch>/pinky-success-baseline-20261019/r51a-repeat-1
  fleet_trips -- --render gpu --learned-lane-pointer <host-model-pointer>
  --learned-paint-target drivable --lap --stall-s 60 --record --skip-check lane_return

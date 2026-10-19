@@ -4,9 +4,9 @@
 
 ## 버전과 범위
 
-- 기존 r51a/r51b 소스: `91f14c997fcd1c509b2ee6bb9f72b2fdc8548090`.
-- 완주 수정 집계 커밋: `39d2ffae42f0ab598b9ab07ac7f10acd83f69856`.
-- 이번 실행 소스: `ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789`. 이후 main 병합을 포함하므로 r51과 동일 바이트의 재현은 아니다.
+- 기존 r51a/r51b source commit: `91f14c997fcd1c509b2ee6bb9f72b2fdc8548090`.
+- 완주 수정 집계 commit: `39d2ffae42f0ab598b9ab07ac7f10acd83f69856`.
+- 이번 실행 source commit: `ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789`. 이후 main 병합을 포함하므로 r51과 동일 바이트의 재현은 아니다.
 - 모델: `lane-seg-20261010-451f0f85`, ONNX SHA-256 `451f0f85b390d6601dc38c60865ed721936ff407845f7a8196099ae9a110f3d2`. 새 실행 전후 실제 파일과 manifest의 hash가 일치했다.
 - 실행 경로: 실제 Gazebo 센서 → learned drivable → Drive → CORE 최종 명령. 별도 강화학습 정책 승격·적재 시험이 아니다.
 - 세 실행 모두 GPU 렌더링, `--lap --stall-s 60 --record --skip-check lane_return` 조건이다. 차선 복귀 검사를 생략했으며 실물 운용 수용으로 확대하지 않는다.
@@ -30,7 +30,7 @@
 
 ## 최신 워크트리 재실행
 
-`tools/remote/remote_sim.py --host ai --sha ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789 --minutes 60`으로 실행했다. bench는 `fleet_trips`, 인자는 `--render gpu --learned-lane-pointer <host-model-pointer> --learned-paint-target drivable --lap --stall-s 60 --record --skip-check lane_return`이다. 실행 식별자는 `sim-ff8eca4d9b-043ecd`다.
+고정 commit 실행 명령은 `tools/remote/remote_sim.py --host ai --sha ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789 --minutes 60`이다. bench는 `fleet_trips`, 인자는 `--render gpu --learned-lane-pointer <host-model-pointer> --learned-paint-target drivable --lap --stall-s 60 --record --skip-check lane_return`이다. 실행 식별자는 `sim-ff8eca4d9b-043ecd`다.
 
 **exit 1 / FAIL.** 약 523.5초 뒤 `started → running → stopped`, 사유 `stall`로 종료됐다. 서쪽 횡단보도를 통과한 뒤 `ring_s`의 약 `(-0.188, -0.189) m`에서 진행이 멈췄다. Fleet 경로 투영 진행은 6.683 m, 샘플 path 누적 이동은 약 6.216 m, 경유점 최근접 거리는 0.032 m다. 위치 추정은 LOCALIZED였다.
 
