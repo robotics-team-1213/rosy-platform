@@ -30,6 +30,7 @@ class FakeHost:
         self.lock_text = "lerobot==0.4.4\n"
         self.smoke_ok = {}
         self.archived, self.envs_built = [], []
+        self.restarts, self.healthy = [], True
 
     def remote_head(self):
         return self.head
@@ -50,7 +51,7 @@ class FakeHost:
         lock.write_text(self.lock_text)
 
     def build_env(self, lock, target):
-        self.envs_built.append(lock.read_text())
+        self.envs_built.append(lock.read_text() if lock else None)
         (target / "bin").mkdir(parents=True)
         (target / "bin" / "python").write_text("")
 
@@ -72,6 +73,10 @@ class FakeHost:
 
     def device_in_use(self):
         return self.in_use
+
+    def restart(self, units):
+        self.restarts.append(list(units))
+        return self.healthy or not units
 
     def follower_torque_off(self, release, python):
         assert self.held, "the idle check runs while the session lock is held"
@@ -246,3 +251,48 @@ def test_a_corrupt_state_file_is_kept_aside_and_rebuilt_from_the_links(tmp_path)
     (tmp_path / "state.json").write_text("{not json")
     state = u.state()
     assert state["current"] == "a" * 12 and list(tmp_path.glob("state.corrupt-*"))
+
+
+SERVICE = {"kind": "service", "lock": None, "units": ["rosy-situation.service"]}
+
+
+def test_a_service_release_needs_no_cell_and_restarts_its_units_on_the_hosts_packages(tmp_path):
+    host = FakeHost()
+    host.in_use, host.torque_off, host.busy = True, False, False  # cell signals do not apply to a service
+    u = updater(tmp_path, host, **SERVICE)
+    assert u.run() == "switched"
+    assert host.envs_built == [None] and host.restarts == [["rosy-situation.service"]]
+
+
+def test_a_service_that_does_not_stay_active_is_rolled_back_and_restarted_on_the_previous_release(tmp_path):
+    host = FakeHost()
+    u = updater(tmp_path, host, **SERVICE)
+    u.run()
+    host.head, host.healthy = "b" * 40, False
+    assert u.run() == "rolled_back"
+    assert current(tmp_path) == str(Path("releases") / ("a" * 12))
+    assert host.restarts[-2:] == [["rosy-situation.service"]] * 2  # the new one, then the previous one again
+    assert u.run() == "known_bad"
+
+
+def test_a_failed_first_service_install_puts_back_the_hand_deployed_current(tmp_path):
+    (tmp_path / "abc123").mkdir()
+    (tmp_path / "current").symlink_to(tmp_path / "abc123")
+    host = FakeHost()
+    host.healthy = False
+    assert updater(tmp_path, host, **SERVICE).run() == "rolled_back"
+    assert current(tmp_path) == str(tmp_path / "abc123") and not (tmp_path / "current-env").is_symlink()
+    assert host.restarts == [["rosy-situation.service"]] * 2  # restarted again on the old code
+
+
+def test_a_service_config_names_its_paths_smoke_units_and_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "home"))
+    path = tmp_path / "cfg.json"
+    base = '"kind": "service", "repo_url": "u", "github_repo": "o/r", "base_python": "p"'
+    path.write_text("{%s, \"paths\": [\"x\"], \"smoke\": \"s\"}" % base)
+    with pytest.raises(SystemExit, match="units"):
+        m.load_config(path)
+    path.write_text("{%s, \"paths\": [\"x\"], \"smoke\": \"s\", \"units\": [\"a.service\"], "
+                    "\"root\": \"%s\"}" % (base, tmp_path / "situation"))
+    cfg = m.load_config(path)  # no devices, and a root other than the cell's session.lock root
+    assert cfg["lock"] is None and cfg["root"] == str(tmp_path / "situation")
