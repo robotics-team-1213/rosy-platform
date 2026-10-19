@@ -49,14 +49,14 @@ def test_db_restore_cannot_undo_current_account_changes(tmp_path, change):
     sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
                             password=TYPED, grants=[])
     value = cookie(sessions, login="bob")
-    typed = TYPED + " for Bob"
-    value, _ = sessions.change_password(value, typed, current_password=TYPED)
+    password = TYPED + " for Bob"
+    value, _ = sessions.change_password(value, password)
     row = sessions.account_context(value)
     family = row["session_family"]
     backup = tmp_path / "before-change.sqlite3"
     backup_database(sessions.path, backup)
     if change == "password":
-        sessions.change_password(value, "new permanent password", current_password=typed)
+        sessions.change_password(value, "new permanent password", current_password=password)
     elif change == "disable":
         sessions.update_account(manager, row["account_id"], revision=row["revision"], enabled=False)
     elif change == "family":
@@ -69,10 +69,10 @@ def test_db_restore_cannot_undo_current_account_changes(tmp_path, change):
 
     restarted = PasswordSessions(sessions.path, {})
     if change == "password":
-        assert restarted.check("local", "bob", typed) is None
+        assert restarted.check("local", "bob", password) is None
         assert restarted.check("local", "bob", "new permanent password") is not None
     elif change == "disable":
-        assert restarted.check("local", "bob", typed) is None
+        assert restarted.check("local", "bob", password) is None
     elif change == "family":
         assert restarted.context_by_family(family) is None
     else:
