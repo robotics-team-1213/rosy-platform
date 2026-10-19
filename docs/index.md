@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
-- 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
-- 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
-- 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
-- 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+- 2026-10-19 · uncommitted · sim: drivable v2 원본 판정과 최신 소스 재검증
+- 2026-10-19 · uncommitted · 안내 API 변경 이력 행 보완
+- 2026-10-19 · uncommitted · drivable 성공 원본의 새 초기화 재실행 보존
+- 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
+- 2026-10-19 · uncommitted · test(recovery): preserve historical inputs and host test boundaries
