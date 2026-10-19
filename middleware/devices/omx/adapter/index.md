@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
 - 2026-10-19 · dc1d3419eb · refactor(omx): pilot-sim 묶음을 omx_adapter/pilot_sim 크기 단위로 이동
 - 2026-10-19 · uncommitted · feat(omx): recover bounded feedback diagnostics
 - 2026-10-19 · uncommitted · refactor(omx): recover canonical contract extraction
 - 2026-10-18 · 4b97b23ac7 · test(omx): native feedback 진단과 Gazebo 이동 검증
-- 2026-10-17 · 9108fd4d8e · fix(omx): Unix Action listener 수명 조회

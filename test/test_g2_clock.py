@@ -286,13 +286,18 @@ def test_clock_timeout_preserves_source_and_can_finish_cleanup_later(rig, monkey
         assert clock.close(timeout=1.) is True
 
 
-@pytest.mark.parametrize('blocked', ['owner', 'clock'])
+@pytest.mark.parametrize('blocked', ['owner', 'action', 'clock'])
 def test_owner_cleanup_hold_preserves_required_clock_and_context(tmp_path, blocked):
     from g2_owner import close_runtime
     events = []
     node = SimpleNamespace(destroy_timer=lambda timer: events.append('timer'),
                            destroy_node=lambda: events.append('node'))
-    owner = SimpleNamespace(uds_server=SimpleNamespace(stop=lambda: events.append('uds')))
+    def destroy_action():
+        events.append('action')
+        if blocked == 'action':
+            raise RuntimeError('action event executor did not stop')
+    owner = SimpleNamespace(uds_server=SimpleNamespace(stop=lambda: events.append('uds')),
+                            runtime=SimpleNamespace(destroy=destroy_action))
     def shutdown_owner(*, timeout_sec, wait_for_threads):
         assert timeout_sec == 5 and wait_for_threads is False
         events.append('owner')
@@ -306,3 +311,4 @@ def test_owner_cleanup_hold_preserves_required_clock_and_context(tmp_path, block
         close_runtime(node, owner, object(), executor, clock, tmp_path, lock, context)
     assert 'node' not in events and 'context' not in events and 'lock' not in events
     assert ('clock' in events) is (blocked == 'clock')
+    assert ('action' in events) is (blocked != 'owner')
