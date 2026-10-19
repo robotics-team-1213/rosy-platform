@@ -91,10 +91,12 @@ def _floor_prefix(way, rows, cols, xs, ys):
 
 
 def _local_floor(way, rows, xs, centre, ground, max_x):
-    """Clip an offscreen estimate to visible pixels; this is floor, not a lane centre."""
+    """Observed near-floor ROI for alignment, not a lane centre or road end."""
     denominator = ground.focal_px * math.sin(ground.pitch_rad) + (rows - ground.principal_y) * math.cos(ground.pitch_rad)
     cols = np.clip(np.rint(ground.principal_x - centre * denominator / ground.height_m), 0, way.shape[1] - 1).astype(int)
     points = _floor_prefix(way, rows, cols, xs, _col_y(cols, rows, ground))
+    end = next((i for i, point in enumerate(points) if point[0] >= max_x), len(points))
+    points = points[:end]
     return points if len(points) >= 4 and all(0.0 < x < max_x for x, _ in points) else []
 
 
