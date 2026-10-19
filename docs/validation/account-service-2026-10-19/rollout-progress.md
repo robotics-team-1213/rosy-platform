@@ -5,7 +5,7 @@
 
 ## 소스와 시험
 
-- 인증 공개 후보 `5894130b68fe584a0da2a1a8ce065d5768611c6f`는
+- 인증 공개 후보 commit `5894130b68fe584a0da2a1a8ce065d5768611c6f`는
   원격 Linux 시험 PC에서 실제 Chromium을 포함한 17개 suite를 실행했다.
   결과는 **451 passed / 2 skipped / NEW 0**이다. 범위는 초기 비밀번호,
   프로필·관리 UI, CORE SSO·로그아웃·장애·lifespan, 공유 제어,
@@ -18,7 +18,7 @@
   `caddy reload --force` 뒤 새 인증서를 제공하는 것을 확인했다.
   실제 서비스 개인키를 시험 데이터로 사용하지 않았다.
 - 공개 pre-push는 변경 전 main에서도 재현된 충전 lifespan SIM 실패로 중단됐다.
-  별도 후보 `eea981799fbac009c63c98f69bafd7f14f103882`는 실제 세 worker를
+  별도 후보 commit `eea981799fbac009c63c98f69bafd7f14f103882`는 실제 세 worker를
   라운드마다 완료·대기시켜 다음 센서 프레임이 진행 중인 ACK 읽기를 앞지르지
   않게 한다. 독립 검토 지적 사항은 해소됐고 빠른 계약 검사 519개는 통과했다.
   같은 후보의 3회 반복 lifespan 단독 검사는 exit0으로 통과했다. 전체 변형·
@@ -31,7 +31,7 @@
 
 ## 현장 상태
 
-- Fleet·Vision·프록시는 기존 `e5661d443f41fcc665115c59af240fe4755bc3d0`으로
+- Fleet·Vision·프록시는 기존 commit `e5661d443f41fcc665115c59af240fe4755bc3d0`으로
   동작하며 8443만 게시한다. Account 설정은 아직 비활성이다.
 - 기존 signing key를 재사용해 Authority 설정·키·TLS pair를 보호 경로에
   UID10001, 디렉터리0700/파일0400으로 준비했다. 실제 parser와 TLS pair 검사는

@@ -33,7 +33,7 @@
 
 ## 조사 기준과 적용 목록
 
-출발 SHA는 `d1b8daf243f0b2575a3ec7f8c533d05290bd9678`이다. 공통 로그아웃 대기열·CORE 20초 재시도, refresh 회전/replay 회수, media strict online, 웹의 회수 미완료 메시지는 코드에 있다. 이번 조사에서 구현 결함을 확정하지 않았다. 이전 시험 수치는 이번 SHA의 시험 증거가 아니다.
+출발 commit SHA: `d1b8daf243f0b2575a3ec7f8c533d05290bd9678`. 조사 기준은 미게시 선행 작업도 포함한 로컬 통합 이력이다. 공통 로그아웃 대기열·CORE 20초 재시도, refresh 회전/replay 회수, media strict online, 웹의 회수 미완료 메시지는 해당 이력에서 확인했다. 미디어 선행 코드의 공개 착지·설치는 별도로 확인한다. 당시 조사에서 구현 결함을 확정하지 않았으며 이전 시험 수치는 새 공개 SHA의 시험 증거가 아니다.
 
 | 표면/서비스 | 기존 연결·owner | 이번 목표 |
 |---|---|---|
@@ -42,7 +42,7 @@
 | pilot-shell / cam | 기존 native Account·Gradle 설정·Keystore | 설정 포함 빌드와 실제 단말 callback/회수 구분 |
 | pinky-review / Learning | `learning/curation/perception/learning_rosy_accounts.py`, collaboration receiver | subject 매핑·provider 소유·worker 재검증 |
 | game-board | `operations/apps/games/games/host/account.py`, `preview.py` | HTTPS 쿠키·Origin·games.operate·회수 재시도 |
-| 미디어 서비스 | CORE `media_binding.py`, `operations/site_ui/media` | 원본 권한 strict online과 실제 세션 종료 |
+| 미디어 서비스 | 미게시 선행 D-789의 CORE `media_binding.py`, `operations/site_ui/media` | 공개 착지 후 원본 권한 strict online과 실제 세션 종료 검증 |
 | lane-live-view / Face / web-common / control-diagnostic | 기존 surface 정의 유지 | 읽기 전용·LCD·라이브러리·PARKED 사유 기록. 새 로그인 앱으로 확대하지 않음 |
 
 ## Task 1: 공통 receiver의 영속 회수 검사
