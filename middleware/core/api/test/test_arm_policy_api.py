@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from contextlib import contextmanager, nullcontext
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +27,7 @@ def setup_api(tmp_path):
                             10_000_000_000, hashlib.sha256(rgb).hexdigest())
     session._cameras = lambda: (camera,)
     from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
-    port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera), principal='operator-a')
+    port = CoreArmPolicyPort(session, capture=lambda: nullcontext((rgb, camera)), principal='operator-a')
     app = create_app({}, SimpleNamespace(arm_policy=port,
         safety=SimpleNamespace(estop=False, estop_listeners=[])))
     auth = SimpleNamespace(token_id='operator-a', role='operator')
@@ -106,10 +107,12 @@ def test_stop_does_not_wait_for_blocked_rgb_capture(tmp_path):
     capture = port.capture
     entered, release = threading.Event(), threading.Event()
 
+    @contextmanager
     def blocked_capture():
-        entered.set()
-        assert release.wait(5)
-        return capture()
+        with capture() as frame:
+            entered.set()
+            assert release.wait(5)
+            yield frame
 
     port.capture = blocked_capture
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -137,6 +140,21 @@ def test_stop_latches_existing_fence_and_cancels_own_goal(tmp_path):
     assert driver.handles[0].cancel_calls == 1
     assert not session.fence.is_open(authority_epoch=2, dispatch_generation=7)
     assert session.hold_reason
+
+
+def test_pinned_capture_does_not_refresh_an_aged_observation(tmp_path):
+    client, session, driver, clock, *_ = setup_api(tmp_path)
+    port = client.app.state.core.arm_policy
+    capture = port.capture
+    @contextmanager
+    def delayed():
+        with capture() as frame:
+            clock[0] += .051
+            yield frame
+    port.capture = delayed
+    reply = client.post('/api/v1/arm/observations',json={'policy_revision':session.lease.policy_revision})
+    assert reply.status_code == 403 and session.hold_reason
+    assert not driver.commands
 
 
 def test_unbound_core_refuses_arm_execution():

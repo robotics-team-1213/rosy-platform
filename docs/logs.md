@@ -9144,6 +9144,12 @@ osy-d395-s1d\`.
 - 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
 - gate 변화: 없음.
 
+## 2026-10-18 · uncommitted · D-799 원격 pytest의 호스트 안 병렬(pytest-xdist)과 가벼운 호스트
+
+- 변경: 원격 venv에 `pytest-xdist==3.8.0`을 넣고, `tools/remote/xdist_plan.py`가 invocation마다 `-n W --dist loadfile` 또는 직렬을 고른다. 직렬 목록은 `tools/remote/serial_suites.txt`(rclpy·ROS_DOMAIN_ID·고정 포트·playwright·git·홈 디렉터리를 쓰는 묶음)와 브라우저·node id·경로 없음 규칙이다. job 잠금은 실제 워커 수를 적는다. 여유 메모리 4~6 GB인 pytest 호스트는 가벼운 호스트로, 하한을 넘는 호스트 뒤에서 큐의 작은 invocation을 직렬로, 자기 여유 GB의 `MemoryMax`로 돈다. 현장 PC는 그대로 맨 뒤다.
+- 증거: 노트북에서 `test/test_remote_pytest.py`·`test/test_known_failures.py`와 관련 시험(사용자 지시로 로컬 실행). xdist 3.8.0 실제 출력으로 known_failures 파싱을 확인했다. 시험 PC 측정은 아직 없다.
+- gate 변화: 없음. 시험 PC에서 7,151개 묶음의 직렬 대 `-n` 비교가 남았다.
+
 ## 2026-10-18 · edae42db99 · docs: 굽이 영상 재생과 경로 방향 입력 누락 (이식, 원래 2026-10-16)
 - 변경: PNG 기록기 추출, 굽이 736 frame 회수, 오류 전후 15장 동일 모델 재생, 대체 인식 기준선과 비교
 - 증거: docs/validation/d769-bend-replay-2026-10-16/result.md. 학습 인식은 서쪽·대체 인식은 동쪽에서 stall. 오류 전 오른쪽 목표와 누락된 line/lane_guide 발행 경로 확인
@@ -9173,3 +9179,9 @@ osy-d395-s1d\`.
 - 변경: 기존 `Accept: image/jpeg` 응답의 JPEG 본문·`X-Stuck-Evidence` 메타데이터·JSON 오류를 API reference v1.273에 기록하고 버전 pin을 맞췄다. 원래 예약 사유와 최신 main 내용을 보존하며 새 경로·권한·동작은 추가하지 않았다.
 - 증거: 독립 소스 검토에서 Fleet 응답·공유 소비자·기존 JPEG/JSON 시험과 문서의 일치를 확인했다. 통합 커밋의 원격 착지 시험은 대기 중이며 소스 검토를 실행 증거로 대신하지 않는다.
 - gate 변화: 없음. 실물 카메라·배포 수용은 실행하지 않았다.
+
+## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
+
+- 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
+- 증거: 원격 257 passed/1 skipped, NEW 0. commit `62971299f`의 실제 Fleet·LeRobot·CORE·Gazebo 연동에서 +0.01rad 이동 SUCCESS, 같은 lease 갱신, 이동 중 철회 후 cancel ACK/CANCELED·HOLD와 재접속 거부를 확인했다. 폐쇄 응답 후 취소 관측 0.295306초, 마지막 0.3초 14개 관측 spread 0rad. 종료 executor/worker 회수는 확인했지만 Destroyable 경고 1건이 남았다. `docs/validation/omx-policy-chain-2026-10-19/result.md`에 receipt·원시 로그 hash와 앞선 실패도 보존한다. 제품 착지는 최종 검사 후 별도 기록한다.
+- gate 변화: 없음. 고정 SIM 정책과 합성 승인·설치 fixture이며, 학습 모델·Mission admission·물리 구동·실물 배포 승인을 입증하지 않는다.

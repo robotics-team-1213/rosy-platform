@@ -4,7 +4,7 @@ import math
 
 from core_common.protocol.lane_route_guide import AuthorityRouteGuide
 from fleet.routing.direction import route_direction
-from fleet.server.trip_ports import record_bend_candidate
+from fleet.server.trip_geometry import record_bend_candidate
 
 MAX_AGE_S = 1.
 
