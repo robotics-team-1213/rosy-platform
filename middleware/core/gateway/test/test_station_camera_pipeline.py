@@ -221,6 +221,9 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                             failures.append(f'{label} at SIM {now[0]}\n'+traceback.format_exc())
                         print('STATION_ASYNC_FAILURE', failures[-1])
                         try:
+                            if label == 'work_goal':
+                                print('STATION_WORK_FAILURE', runtime.work_admission(robot_id),
+                                    runtime.reason, runtime._work_snapshot, returns.runner.open_trips())
                             if returns and args and hasattr(args[0], 'operation_id'):
                                 print('STATION_TRIP_FAILURE', returns.runner.view(args[0].operation_id))
                         except Exception as diagnostic_error:
