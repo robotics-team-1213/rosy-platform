@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · docs(omx): recover historical native simulation evidence
 - 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
 - 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
 - 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
 - 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
-- 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료

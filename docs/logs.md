@@ -9227,3 +9227,9 @@ osy-d395-s1d\`.
 - 변경: 로컬 main도 승인 API를 `missions/mission_routes.py` 안에서만 설치해, `--tasks-db`만 있고 `--mission-api`가 없는 Fleet에서 `/api/fleet/workcells/{id}/policy/*`가 404였다. origin #106(e5661d443f)처럼 작업 기록부만 있으면 `work/work_routes.py`에서 설치하고 Mission 쪽 설치 블록은 지운다.
 - 증거: 원격 pytest `test_policy_governance.py`(Mission 없는 앱 시험 포함).
 - gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · docs(omx): recover historical native simulation evidence
+
+- 변경: Preserve eleven authored native SIM validation records with explicit historical-source/run scope. Update the Cell ROS-SIM blocker to the documented partial 3/16 result and held-object HOLD, without promoting its gate.
+- 증거: Corrected G2 source 8c5b3f694a passed 103 focused remote regressions with 0 NEW. Those host tests do not repeat or extend the historical Gazebo evidence.
+- gate 변화: None; complete task success, physical operation and field acceptance remain unproven.
