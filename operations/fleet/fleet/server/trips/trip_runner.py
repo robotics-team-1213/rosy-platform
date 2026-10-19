@@ -22,6 +22,7 @@ from typing import Awaitable, Callable, Iterable, Optional
 
 import httpx
 
+from core_common.link_retry import start_offset
 from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
 from fleet.routing.cost import STOP
@@ -305,6 +306,9 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                 restart.cancel()
 
     async def _loop(self) -> None:
+        # D-432: the first tick runs at once; one random offset after it keeps the 0.5 s loop out of
+        # lockstep with Fleet's other periodic loops (gather, lane compliance, tether).
+        offset = start_offset(self.config.period_s)
         while True:
             started = time.monotonic()
             try:
@@ -313,7 +317,8 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                 raise
             except Exception:  # the steps catch their own; this is the traffic table
                 _LOG.exception("trip loop tick failed")
-            await asyncio.sleep(max(0.0, self.config.period_s - (time.monotonic() - started)))
+            await asyncio.sleep(max(0.0, self.config.period_s + offset - (time.monotonic() - started)))
+            offset = 0.0
 
     async def _loop_failed(self, live: LiveTrip) -> None:
         if not live.open:

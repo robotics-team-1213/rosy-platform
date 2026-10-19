@@ -6,15 +6,17 @@
 
 웹, Android 앱, 로봇 LCD
 
+앱 이름과 현재 구현·소유의 기준은 [앱 이름과 역할](docs/reference/app-names-and-roles.md)이다(D-806). Robot·Fleet·Pilot·Cam·Learning·Games, 별도 저장소의 Vault·Device를 구분한다. Cell은 Fleet의 팔레타이징 작업 준비, Account는 공용 계정 기능이며 얼굴 LCD와 Pilot 연결 로비는 상위 앱의 하위 화면이다.
+
 ## Users
 
 - 운용자(감시·조종), 설치자/정비자, 관리자(장치·네트워크·릴리스) — 역할별 `/console` `/setup` `/device`. 노트북 1366×768, 전화 390×844.
 - 사이트 관제자 — Fleet `/console`. 관제 PC 1920×1080, 모바일 390/320.
-- 경기 운영자 — 게임 보드 1280×800.
+- 경기 운영자 — Rosy Games 경기 보드 1280×800.
 - 원격 운전자 — Pilot 웹 조종 화면과 Android 태블릿 연결 로비.
 - 행인·운용자 — 로봇 얼굴 LCD 320×240. 1.5m 거리에서 약 0.5초 판독이 계약이다.
 - 카메라 설치자 — Rosy Cam(천장 카메라 Android 폰 앱).
-- 학습 검수자 — 로컬 학습 작업/사진 검수 웹. 학습 결과를 찾고 실패 이유를 확인하며 객체 라벨을 수정·명시 승인한다.
+- 학습 검수자 — Rosy Learning(학습 관리 센터). 학습 결과를 찾고 실패 이유를 확인하며 객체 라벨을 수정·명시 승인한다.
 
 ## Product Purpose
 

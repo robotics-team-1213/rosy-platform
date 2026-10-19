@@ -9185,3 +9185,15 @@ osy-d395-s1d\`.
 - 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
 - 증거: 원격 257 passed/1 skipped, NEW 0. commit `62971299f`의 실제 Fleet·LeRobot·CORE·Gazebo 연동에서 +0.01rad 이동 SUCCESS, 같은 lease 갱신, 이동 중 철회 후 cancel ACK/CANCELED·HOLD와 재접속 거부를 확인했다. 폐쇄 응답 후 취소 관측 0.295306초, 마지막 0.3초 14개 관측 spread 0rad. 종료 executor/worker 회수는 확인했지만 Destroyable 경고 1건이 남았다. `docs/validation/omx-policy-chain-2026-10-19/result.md`에 receipt·원시 로그 hash와 앞선 실패도 보존한다. 제품 착지는 최종 검사 후 별도 기록한다.
 - gate 변화: 없음. 고정 SIM 정책과 합성 승인·설치 fixture이며, 학습 모델·Mission admission·물리 구동·실물 배포 승인을 입증하지 않는다.
+
+## 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
+
+- 변경: D-806의 사용자 승인 이름과 앱·하위 기능·서비스의 소유를 기록하고 README·PRODUCT·CONCEPTS를 현재 구현과 맞췄다. Vault·Device는 외부 저장소 소유이며 Cell은 Fleet의 준비 화면이다.
+- 증거: 제목 회귀 검사의 수정 전 원격 실행은 2 failed로 기존 불일치를 확인했다. 수정 후 검증은 이 작업의 커밋과 외부 시험 기록으로 확인한다.
+- gate 변화: 없음. 이름·문서·정적 화면 범위이며 설치·실물 실행·DEVICE/FIELD 수용을 바꾸지 않는다.
+
+## 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+
+- 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
+- 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
+- gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.

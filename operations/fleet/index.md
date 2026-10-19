@@ -63,6 +63,7 @@
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
+| D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
 
 ## 계획·결과 문서
 
@@ -100,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
 - 2026-10-18 · c11a34f64b · Bind selected-route guidance to fresh Fleet poses (D-769) (이식, 원래 2026-10-16)
 - 2026-10-18 · c4bf531fd8 · Compute direction from the selected trip (D-769) (이식, 원래 2026-10-16)
 - 2026-10-17 · a3bd16c251 · test(fleet): G1 실패한 pair의 예약만 추적
 - 2026-10-17 · bbaf06bbe · 주제와 등록 Cell 작업의 연결 클라이언트
-- 2026-10-17 · uncommitted · feat(fleet): recipe/3 팔별 목표 술어, sku grant, Cell 앱 두 팔 미리보기 (D-781 §2·§5, API v1.259)
