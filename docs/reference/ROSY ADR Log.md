@@ -11,6 +11,10 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
+| D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
+| D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
+| D-774 | 스테이션 측정 카메라는 설치된 관측 프로세스가 실행 중일 때 송출을 요청한다 | Accepted (2026-10-16) |
+| D-772 | 스테이션 위치 버전과 배터리 기반 자동 충전 운영 | Accepted (2026-10-16) |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
 | D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
@@ -1167,3 +1171,12 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 - start는 자동 timer와 소유 서비스를 시작한다. stop은 timer를 끄고 소유 service의 control group만 중지한다. retry는 중지 상태의 소유 서비스를 한 번 실행한다. 상태는 다시 읽으며 명령 접수를 학습 완료로 표시하지 않는다.
 
 Details: docs/adr/D-745-learning-center-owner-controls.md.
+
+## D-774 - Installed station measurement camera lifespan
+
+Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).
+
+
+## D-776 - Installed station charge facts
+
+Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
