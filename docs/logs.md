@@ -9239,3 +9239,9 @@ osy-d395-s1d\`.
 - 변경: D-769 개정 3과 API v1.287에 source 수명·선택 지도 벽·CORE 우선 배포·거절한 짧은 연장의 안내 갱신 예외를 기록했다. 기존 성공 구현은 foundation 선행 변경과 후속 제품 변경으로 구분한다.
 - 증거: 독립 계약 검토가 기존 API의 1초·수락 후 binding 문구와 성공 구현의 차이를 확인했다. 원본 소스의 원격 관련 회귀 159 passed, NEW 0이며 현재 후보 시험은 별도다.
 - gate 변화: 없음. 실물 활성화·main 착지·push는 수행하지 않는다.
+
+## 2026-10-19 · uncommitted · drivable 성공 원본의 새 초기화 재실행 보존
+
+- 변경: 성공 소스·모델·조건·결과 hash와 원본 재실행을 날짜 검증 기록으로 보존했다. 현재 main 기반 split 후보와 원본의 증거를 구분한다.
+- 증거: 원본 모델 PC runner exit 0, 목표 0.105 m, 주행 샘플 learned_drivable 1,539건/fallback 0건, 최종 명령·odom 속도 0, lease released, 소유 잔존 프로세스 없음.
+- gate 변화: 없음. lane_return 생략 조건의 SIM이며 실물 수용은 별도다.

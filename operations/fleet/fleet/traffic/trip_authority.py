@@ -122,6 +122,11 @@ class AuthoritySender:
         try:
             answer = await asyncio.wait_for(self._port.send_authority(robot_id, body), self._timeout_s) or {}
             live.authority = answer.get("authority")
+            # diagnostics: CORE's answers per kind, and whether the extend carried a route prior
+            key = ("accepted" if answer.get("accepted") else str(answer.get("reason"))) + (
+                "+guide" if "route_guide" in body else "")
+            counts = live.view.setdefault("detail", {}).setdefault("authority_answers", {})
+            counts[key] = counts.get(key, 0) + 1
             held = self._held.get(robot_id)
             confirmed = answer.get("accepted") is True or answer.get("reason") == "shrink_none_held"  # nothing held
             if body.get("shrink") and confirmed and held is not None and held["leg"] == body["leg_id"]:
