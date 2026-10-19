@@ -1468,7 +1468,7 @@ def test_already_done_from_core_counts_as_carried_out():
     assert runner.running()["segment_index"] == 1 and ports.sent[-1] == ("straight", "NE", None)
 
 
-def test_lane_arrival_needs_our_accepted_stop_and_accepts_core_holding_it():
+def test_lane_arrival_needs_our_accepted_stop_within_the_arrival_window():
     runner, store, ports = _setup()
     arc = _arc(store, "east:fwd")
     _plan(store, ports, "east:fwd", 0.5, "SE")
@@ -1480,7 +1480,7 @@ def test_lane_arrival_needs_our_accepted_stop_and_accepts_core_holding_it():
     runner, store, ports = _setup()
     _plan(store, ports, "east:fwd", 0.5, "SE")
     run(runner.start("p1", "bob"))
-    ports.at(arc, arc.length_m - 0.25)
+    ports.at(arc, arc.length_m - 0.14)
     _ticks(runner, ports)
     assert runner.view("p1")["state"] == "running"  # stop sent this tick
     ports.core.see_junction()  # CORE holds our stop at the junction it sighted (M7)
