@@ -3,7 +3,7 @@
 - 날짜: 2026-10-17 (Asia/Seoul)
 - 기준: 로컬 main `855817932`에서 읽은 ADR과 소스, 2026-10-17 웹 조사
 - 상태: 조사 보고. ADR을 대체하지 않는다. 레시피 스키마 변경, 계획기 구현, 온라인 적재, D-778 개정을 승인하지 않는다. 아래 관문 기준은 제안이며 팀이 정한다.
-- 범위: [D-401](../adr/D-401-rosy-cell-application.md), [D-402](../adr/D-402-omx-motion-planner-v1-analytic-top-down-ik.md), [D-403](../adr/D-403-fleet-cell-job-route-cell-transfer.md), [D-450](../adr/D-450-palletizing-app-completion-goals.md), D-778(브랜치 `docs/bimanual-workcell-adr`, Proposed)
+- 범위: [D-401](../adr/D-401-rosy-cell-application.md), [D-402](../adr/D-402-omx-motion-planner-v1-analytic-top-down-ik.md), [D-403](../adr/D-403-fleet-cell-job-route-cell-transfer.md), [D-450](../adr/D-450-palletizing-app-completion-goals.md), [D-778](../adr/D-778-bimanual-workcell-foundation.md)(Proposed)
 - 제외: 코드 변경, 실물 측정, 시뮬 실행
 - 앞선 보고서: [듀얼 로봇팔 운용 조사](2026-10-17-dual-arm-operation-research.md)
 - 원본: Claude Docs 「혼합 팔레타이징 적재 계획 조사 보고서」(같은 내용, 로드맵은 그림)
@@ -458,7 +458,7 @@ OMX는 팔 전체로 부드럽게 받칠 수 없다. 어깨와 팔꿈치 쪽 관
 
 - `operations/processes/palletizing/src/rosy/processes/palletizing/` (pattern.py, stack.py, sequence.py, compiler.py, recipe.py)
 - [D-401](../adr/D-401-rosy-cell-application.md), [D-402](../adr/D-402-omx-motion-planner-v1-analytic-top-down-ik.md), [D-450](../adr/D-450-palletizing-app-completion-goals.md)
-- D-778 (브랜치 `docs/bimanual-workcell-adr`, `docs/adr/D-778-bimanual-workcell-foundation.md`)
+- [D-778](../adr/D-778-bimanual-workcell-foundation.md)
 - `docs/plans/2026-09-12-mobile-manipulation-research.md` §7
 - `docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md`
 - `deploy/robot/omx/sim/cell_profile.yaml`

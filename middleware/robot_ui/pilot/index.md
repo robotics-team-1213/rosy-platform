@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · 212a8b51b2 · Account 앱 변경을 독립 착지 단위로 재적용
+- 2026-10-19 · 30acdffbfb · Account 로그아웃과 native fixture 원격 검증
+- 2026-10-19 · uncommitted · 조회 전용 Account도 조종 차단 화면에서 로그아웃
+- 2026-10-19 · b83c616cd7 · native mock의 identity 뒤 CSP 요청 반영
 - 2026-10-14 · a3a4befa7 · fix(pilot): 한 줄 앱 바에서 긴 글이 정지를 줄이지 않는다 (검토 반영)
-- 2026-10-14 · 0679a548b · feat(pilot): 접속 화면 앱 바는 64rem 이상에서 한 줄 64px (D-741 3·5)
-- 2026-10-14 · 8b44b2399 · test(pilot): 이른 누름 시험이 모드 기록 전체를 본다 (검토 반영)
-- 2026-10-14 · 71e43aeed · feat(pilot): 전화 폭 접속 화면 앱 바의 로봇 이름 (D-741 3)
-- 2026-10-14 · f5e01bdea · test(pilot): 같은 sha에서 결과가 바뀌던 브라우저 시험 둘

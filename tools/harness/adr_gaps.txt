@@ -35,6 +35,9 @@ D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet
 D-772 reserved on branch docs/station-charge-lifecycle (refs/adr/D-772), not yet on main; remove when it lands
 D-774 reserved in another in-flight branch (refs/adr/D-774); remove when its ADR lands
 D-776 reserved in another in-flight branch (refs/adr/D-776); remove when its ADR lands
-D-777 reserved in another in-flight branch (refs/adr/D-777); remove when its ADR lands
 D-783 reserved on branch feat/station-charge-deploy (refs/adr/D-783), not yet on main; remove when it lands
 D-784 reserved on branch docs/bimanual-workcell-adr-publish (refs/adr/D-784), not yet on main; remove when it lands
+D-786 reserved in another in-flight branch (refs/adr/D-786); remove when its ADR lands
+D-788 reserved in another in-flight branch (refs/adr/D-788); remove when its ADR lands
+D-786 reserved in another worktree (refs/adr/D-786), absent from local main; remove when its ADR lands
+D-788 reserved in another worktree (refs/adr/D-788), absent from local main; remove when its ADR lands

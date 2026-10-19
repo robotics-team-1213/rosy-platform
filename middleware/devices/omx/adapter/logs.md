@@ -560,3 +560,10 @@
 - 변경: Recover bounded intake/watchdog observations and coherent action-receipt snapshots from preserved native simulation work. Current-main age-adjusted receipt regression rejection remains authoritative.
 - 증거: Independent source review approved; committed remote adapter and owner regressions passed with 0 NEW. No hardware or field acceptance is claimed.
 - gate 변화: None; device deployment is outside this recovery.
+
+## 2026-10-19 · dc1d3419eb · refactor(omx): pilot-sim 묶음을 omx_adapter/pilot_sim 크기 단위로 이동
+
+- 변경: `pilot_sim_{runtime,api,capture,server,camera,gripper}.py`를 `omx_adapter/pilot_sim/`으로 옮기고 D-766 단위(`test/architecture/size_units.txt`)로 등록했다. 실행은 `python3 -m omx_adapter.pilot_sim.server`, `_ARM_OWNERS`는 `pilot_sim.server`다. 시연 `source_tree_sha256`은 `pilot_sim/*.py`도 계속 포함한다.
+- 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
+- gate 변화: 없음. 동작 변경 없는 경로 이동이다.
+
