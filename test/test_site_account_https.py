@@ -11,10 +11,11 @@ def account_config():
         "host_ip": "0.0.0.0", "published": "443", "target": 443, "protocol": "tcp",
     })
     config["services"]["proxy"]["environment"] = {"ROSY_ACCOUNT_HTTPS_HOST": "account.example.com"}
-    config["secrets"].update({
-        "account_cert": {"file": "/s/account.crt"},
-        "account_key": {"file": "/s/account.key"},
-    })
+    config["services"]["proxy"]["volumes"] = [{
+        "type": "bind", "source": "/etc/rosy/account-tls",
+        "target": "/run/rosy-account-tls", "read_only": True,
+        "bind": {"create_host_path": False},
+    }]
     return config
 
 
@@ -40,7 +41,9 @@ def test_account_ingress_keeps_primary_discovery_and_both_filters(tmp_path):
     assert not any("ROSY-ACCOUNT-INGRESS" in row for row in host.chains["PREROUTING"])
 
 
-@pytest.mark.parametrize("change", ["disabled", "extra", "literal", "target", "hostname", "key"])
+@pytest.mark.parametrize("change", ["disabled", "extra", "literal", "target", "hostname",
+                                    "missing_mount", "writable_mount", "wrong_type",
+                                    "wrong_source", "duplicate_mount"])
 def test_account_ingress_refuses_ambiguous_or_unprotected_config(change):
     config = account_config()
     proxy = config["services"]["proxy"]
@@ -54,8 +57,16 @@ def test_account_ingress_refuses_ambiguous_or_unprotected_config(change):
         proxy["ports"][1]["target"] = 8443
     elif change == "hostname":
         proxy["environment"]["ROSY_ACCOUNT_HTTPS_HOST"] = ""
-    elif change == "key":
-        del config["secrets"]["account_key"]
+    elif change == "missing_mount":
+        proxy["volumes"] = []
+    elif change == "writable_mount":
+        proxy["volumes"][0]["read_only"] = False
+    elif change == "wrong_type":
+        proxy["volumes"][0]["type"] = "volume"
+    elif change == "wrong_source":
+        proxy["volumes"][0]["source"] = "/other/tls"
+    elif change == "duplicate_mount":
+        proxy["volumes"].append(dict(proxy["volumes"][0]))
     with pytest.raises(ValueError):
         _module().compose_settings(config)
 
