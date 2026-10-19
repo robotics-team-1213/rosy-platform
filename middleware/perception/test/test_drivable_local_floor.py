@@ -58,6 +58,18 @@ def support(way=None, rows=None, cols=None):
                          rows, cols, xs, np.array([-.08] * 4))
 
 
+def test_guide_look_checks_the_target_in_current_coordinates(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as module
+    observation = raw()
+    observation.update(target_m=(.15, .02), ahead_m=0., exit=None, seen_exit=None,
+                       exit_near={}, exit_point_m={}, exit_reach_m={})
+    monkeypatch.setattr(module, 'way_target', lambda *args: copy.deepcopy(observation))
+    error, confidence, info = DrivableSteer().update(np.ones((240, 320), bool), 1., G, .03317, .0925,
+        POSE, (0., 0., .2), guide_here_deg=-18., guide_deg=30., current_stamp=1.25)
+    assert info.get('exit_from_guide')
+    assert (error, confidence, info['strategy']) == (-.5, .35, 'drivable_pivot_left')
+
+
 def test_floor_prefix_preserves_actual_raw_points_without_interpolation():
     assert support() == [(.14, -.08), (.15, -.08), (.16, -.08), (.17, -.08)]
 
