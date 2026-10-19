@@ -135,6 +135,55 @@ def _centre_target(xs, centre, lookahead):
     return point, k, band
 
 
+def _arc_floor(way, ground, x_offset, curvature, reach):
+    """Visible source-arc raster support: False is known non-way, None is unknown."""
+    along = np.linspace(0.0, reach, 2 * max(way.shape) + 1)
+    x, y = ((along, np.zeros_like(along)) if abs(curvature) < 1e-6 else
+            (np.sin(curvature * along) / curvature, (1.0 - np.cos(curvature * along)) / curvature))
+    forward = x - x_offset
+    sine, cosine = math.sin(ground.pitch_rad), math.cos(ground.pitch_rad)
+    depth = forward * cosine + ground.height_m * sine
+    with np.errstate(divide='ignore', invalid='ignore'):
+        u = ground.principal_x - ground.focal_px * y / depth
+        v = ground.principal_y + ground.focal_px * (ground.height_m * cosine - forward * sine) / depth
+    visible = np.flatnonzero((depth > 0.0) & np.isfinite(u) & np.isfinite(v)
+        & (u >= 0.0) & (u <= way.shape[1] - 1) & (v >= 0.0) & (v <= way.shape[0] - 1))
+    if not len(visible):
+        return None
+    cols, rows = np.rint(u[visible]).astype(int), np.rint(v[visible]).astype(int)
+    if not way[rows, cols].all():
+        return False
+    jumps = np.flatnonzero((np.maximum(np.abs(np.diff(cols)), np.abs(np.diff(rows))) > 1)
+                          & (np.diff(visible) == 1))
+    for i in jumps:
+        count = max(abs(cols[i + 1] - cols[i]), abs(rows[i + 1] - rows[i])) + 1
+        cc = np.rint(np.linspace(cols[i], cols[i + 1], count)).astype(int)
+        rr = np.rint(np.linspace(rows[i], rows[i + 1], count)).astype(int)
+        if not way[rr, cc].all():
+            return False
+    return True
+
+
+def _observed_target(choice, xs, centre, lookahead, way, ground, x_offset):
+    """Correct a known off-floor source estimate only with a supported same-band chord."""
+    point, curvature, band = choice
+    if point is None:
+        return choice
+    tx, ty = float(np.median(xs[band])), float(np.median(centre[band]))
+    chord = max(-MAX_TARGET_CURVATURE, min(MAX_TARGET_CURVATURE, 2.0 * ty / (tx * tx + ty * ty)))
+    if abs(curvature) <= abs(chord) + 1e-9:
+        return choice
+    valid = np.isfinite(xs) & np.isfinite(centre) & (xs > 0.0)
+    reach = min(lookahead, float(np.hypot(np.diff(np.r_[0.0, xs[valid]]),
+                                        np.diff(np.r_[0.0, centre[valid]])).sum()))
+    if (_arc_floor(way, ground, x_offset, curvature, reach) is not False
+            or _arc_floor(way, ground, x_offset, chord, reach) is not True):
+        return choice
+    point = (reach, ty) if abs(chord) < 1e-3 else (math.sin(chord * reach) / chord,
+                                                  (1.0 - math.cos(chord * reach)) / chord)
+    return point, chord, band
+
+
 #: rows averaged before an edge's slope is taken for the one-edge centre offset
 EDGE_SMOOTH_ROWS = 7
 

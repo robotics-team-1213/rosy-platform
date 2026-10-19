@@ -30,7 +30,7 @@ import time
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
 
-from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _local_floor, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
+from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _local_floor, _observed_target, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
 from .route_guard import observed_route_candidate, route_exit_point
 from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
@@ -209,6 +209,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
             cx, cy = one_edge_centre(xs, edge, sign * inner, seen)
             target_x, target_y = np.where(one, cx, target_x), np.where(one, cy, target_y)
     point, curvature, band = _centre_target(target_x[::-1], target_y[::-1], lookahead)
+    point, curvature, band = _observed_target((point, curvature, band), target_x[::-1], target_y[::-1], lookahead, way, ground, x_offset)
     if point is not None:
         out["target_m"] = (round(point[0], 3), round(point[1], 3))
         out["curvature_1pm"] = round(curvature, 3)
