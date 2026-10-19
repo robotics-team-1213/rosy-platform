@@ -15,6 +15,7 @@ import pytest
 from core.bridge import docking_mode
 from core_common.protocol.station_charging import ChargeSessionStatus, Pose2D, StationPoseRecord
 from test_station_docking_api import station_api
+from station_readback_probe import install_hold_probe
 
 
 @pytest.fixture
@@ -266,6 +267,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 policy_enabled=lambda: True, ports=ports, id_factory=lambda: next(ids),
                 admit_return=lambda *_: ChargeDecision(decision='WORK_ALLOWED', reason='SIM_BUDGET',
                     profile_revision='sim-profile', capacity_revision=None))
+            install_hold_probe(monitor.motion, lambda: now[0])
             ingress = StationIngress(stations=stations, sessions=charges, sources=[source, global_source],
                 clients=lambda: {robot_id: robot}, clock=lambda: now[0])
             if full_return:

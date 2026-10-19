@@ -1558,3 +1558,9 @@
 - 변경: 출발 HTTP 시험 fixture가 motion.call과 advance_departure 예외의 종류·경과 시간·SIM 시각·traceback을 기록하고 그대로 다시 던진다. 제품 코드·deadline·freshness·단언은 변경하지 않는다.
 - 증거: e26407972b 전체 CI에서 첫 tick의 UNDOCKING 대신 CHARGE_DEPARTURE_UNVERIFIED가 발생했다. 같은 head 재시도와 깨끗한 aff1 기준선 전체 실행은 통과해 원인은 아직 확인되지 않았다. a78c699274 진단 fixture의 관련 68개 시험은 통과했으며 양성 출발 사례의 예외 기록은 없었다. 새 게시 head의 원격 검사와 전체 CI는 별도로 확인한다.
 - gate 변화: 없음. 진단 추가는 수정 완료 근거가 아니며 학습 웹 병합·활성화는 원인 해결 전까지 보류한다.
+
+## 2026-10-20 · uncommitted · 카메라·출발 SIM의 HOLD 원인 예외 관측
+
+- 변경: 공유 시험 helper가 새 ChargeMotion 인스턴스의 stop_hold 진입 시 활성 예외를 기록한다. readback 불가·출발 미검증 HOLD의 session, SIM 시각, 예외 종류·문자열·traceback만 stdout JSON에 남기고 원래 호출·인자·결과를 유지한다. 기존 출발 call wrapper는 제거한다. 제품 코드·deadline·freshness·기존 안전 단언은 변경하지 않는다.
+- 증거: 집중 회귀는 중첩 await에서 원래 예외와 HOLD 결과·kwargs가 보존되고 정상 HOLD는 기록하지 않는지 확인한다. commit `48ab802817`의 원격 RED는 helper 부재로 1 failed, NEW 1이었다. 구현 head의 같은 시험과 카메라·출발 모듈 원격 결과는 별도로 확인한다.
+- gate 변화: 없음. 앞선 카메라 composed 회귀는 readback 불가 HOLD였지만 원인 예외가 남지 않았다. 이번 변경은 관측 추가이며 원인 해결·실물 충전·현장 수용 근거가 아니다.

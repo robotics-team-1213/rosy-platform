@@ -5,8 +5,6 @@ establish installed device acceptance or the preceding camera/return pipeline.
 """
 import asyncio
 import json
-import time
-import traceback
 from types import SimpleNamespace
 
 import httpx
@@ -14,6 +12,7 @@ import pytest
 
 from test_station_docking_api import station_api  # noqa: F401
 from test_station_camera_pipeline import pipeline_sources  # noqa: F401
+from station_readback_probe import install_hold_probe
 
 
 def test_hold_probe_preserves_nested_exception_and_original_hold(capsys):
@@ -114,21 +113,7 @@ async def configured(station_api, tmp_path):
     enabled = [True]
     service = ChargeService(ledger, stations=stations, ports=port, clock=lambda: now[0],
         policy_enabled=lambda: enabled[0], admit_return=policy)
-    def diagnose(label, method):
-        async def observed(*args, **kwargs):
-            began, clock_before = time.perf_counter(), now[0]
-            try:
-                return await method(*args, **kwargs)
-            except Exception as exc:
-                report = dict(operation=label, elapsed_s=time.perf_counter()-began,
-                    clock_before=clock_before, clock_after=now[0],
-                    exception_type=type(exc).__name__, exception=str(exc),
-                    traceback=traceback.format_exc(), test_source=__file__)
-                print('STATION_DEPARTURE_DIAGNOSTIC '+json.dumps(report), flush=True)
-                raise
-        return observed
-    service.motion.call = diagnose('motion.call', service.motion.call)
-    port.advance_departure = diagnose('ports.advance_departure', port.advance_departure)
+    install_hold_probe(service.motion, lambda: now[0])
     runtime = ChargeRuntime(service, robot_id='robot-1', station_id='charger-1', admission=policy,
         monotonic=lambda: now[0], period_s=.1)
     return runtime, service, ledger, tasks, client, http, owner, manager, now, sample, enabled

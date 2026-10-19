@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 카메라·출발 SIM의 HOLD 원인 예외 관측
 - 2026-10-20 · uncommitted · 출발 SIM의 숨겨진 예외 진단
 - 2026-10-19 · uncommitted · Account 장애 중 로그아웃·재연결 회귀
 - 2026-10-19 · uncommitted · station SIM pulse와 lifespan tick 동기화
 - 2026-10-17 · uncommitted · map refresh fixture preserves installed energy clock
-- 2026-10-17 · uncommitted · non-simulation station source evidence
