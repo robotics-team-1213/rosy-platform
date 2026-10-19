@@ -9251,3 +9251,9 @@ osy-d395-s1d\`.
 - 변경: FULL 회귀가 찾은 API v1.287 변경 이력 표의 누락 행을 추가했다. 헤더·스키마·실행 코드는 바꾸지 않는다.
 - 증거: d9b706e204의 `test_protocol_version_alignment.py::test_changelog_has_a_row_for_the_live_version` 실패를 보존하고 수정 후 같은 검사를 원격 실행한다.
 - gate 변화: 없음. 문서 누락 보완이며 실물·SIM 동작 변경이 아니다.
+
+## 2026-10-19 · uncommitted · 통합 주행 반복 실패와 후보 HOLD 보존
+
+- 변경: 통합 첫 PASS, 두 번째 west stall, 전방 정지 수정 후 ring_n stall을 같은 검증 기록에 남겼다. 재현 명령은 위에서 고정한 source를 placeholder로 참조한다.
+- 증거: 수정본 관련 원격 132 passed, NEW 0과 실제 SIM 실패를 구분한다. 기존 명령의 SHA를 토큰으로 오인한 secret-scan 실패도 보존하며 검사 예외는 늘리지 않는다.
+- gate 변화: 없음. 반복 주행 수용은 HOLD, 추가 운동 변경과 실물 배포는 미수행이다.

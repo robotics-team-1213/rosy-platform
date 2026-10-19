@@ -23,7 +23,7 @@
 
 ```text
 python tools/remote/remote_sim.py --host model
- --sha 91f14c997fcd1c509b2ee6bb9f72b2fdc8548090 --minutes 60
+ --sha <source-commit> --minutes 60
  --log-dir <external-scratch>/pinky-success-baseline-20261019/r51a-repeat-1
  fleet_trips -- --render gpu --learned-lane-pointer <host-model-pointer>
  --learned-paint-target drivable --lap --stall-s 60 --record --skip-check lane_return
@@ -75,3 +75,30 @@ runner가 가져온 파일을 읽고 아래 hash와 결과를 계산했다.
 계약·문서·기존 Fleet API 핀 검사는 1,209 passed, NEW 0이었다. 원본 SIM 결과를 현재
 통합 후보의 실행 결과로 합산하지 않는다. 후속 후보는 같은 호스트·모델·인자로 실행하고
 현재 source SHA의 결과로 별도 판정한다.
+
+## 통합 반복 결과: HOLD
+
+동일 모델 PC·모델 pointer·인자로 실행한 통합 후보의 결과를 모두 보존한다.
+
+| source | run ID | 결과 |
+|---|---|---|
+| d9b706e204 | sim-d9b706e204-2b8d7b | PASS; 목표 0.113m, 경유점 최근접 0.049m, 최종 명령·odom 정지 |
+| 13f44844af | sim-13f44844af-9223d8 | FAIL; west 진행 4.698m에서 stall |
+| bafb32dc10 | sim-bafb32dc10-0cfcfb | FAIL; ring_n 진행 3.420m에서 stall |
+
+`bafb32dc10`은 당시 main `4b2cb988cc`를 병합한 뒤, 횡단보도 직진 유지가 측정한
+LiDAR 전방 막힘의 pivot 판단을 지우지 않게 한 수정이다. 원격 회귀를 먼저 RED로
+재현했고 수정 후 인식·CORE 횡단보도 회귀는 132 passed, NEW 0이었다. 독립 계약 검토에
+중대한 소스 발견은 없었으나, 이 결과를 반복 완주나 실물 수용으로 올리지 않는다.
+
+수정본은 LOCALIZED 상태에서 실제 pursuit target의 전방 길이가 0.111m인 상황에서,
+반대편 관측 중심 때문에 출구 선회를 취소한 뒤 `drivable_closed`로 정지했다. 가까운
+행 중심 중앙값을 목표로 대체하거나 보호 조건을 건너뛸 근거는 부족해 추가 운동 변경을
+하지 않았다. 같은 시각 mask·경계·centre path·odom 변환 기억 출구를 대조해야 한다.
+이 정체는 앞선 횡단보도 오류와 다른 지점이다.
+
+결과 파일 SHA256은 첫 통합 `dea67341436f3c0301ab89e742946097c8f57f912b8facd344909e9efe9d4f62`,
+두 번째 `d6a9630623793ffbee13ba233872c197cae92b069f86c4f6ef6d86912bb35fcf`,
+수정본 `b96670601bc439ee0f4dffe0d4ad0912bd72a96c3c12676fa0c5497ab4bd10df`다.
+외부 scratch의 `integrated-repeat-1`, `integrated-repeat-2`, `front-stop-repeat-1`에
+각 result·관측·API·영상 프레임을 보존했다. main 착지·push·실물 배포는 하지 않았다.
