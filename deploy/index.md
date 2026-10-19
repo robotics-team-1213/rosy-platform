@@ -75,7 +75,7 @@
 ## 최근 기록
 
 - 2026-10-19 · uncommitted · fix(omx): owner 진입점에 origin #83 executor 적용
+- 2026-10-19 · 0dbc66c10e · 서명 source의 보존 증거와 strict 실행 이식
 - 2026-10-19 · uncommitted · feat(omx): recover G2 clock and diagnostic helpers
 - 2026-10-19 · uncommitted · feat(omx): recover isolated native simulation host tools
 - 2026-10-19 · uncommitted · site updater 호스트 설정 검사 분리
-- 2026-10-19 · uncommitted · D-807 Account 앱별 설치 입력과 인수 절차

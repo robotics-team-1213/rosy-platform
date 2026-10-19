@@ -25,140 +25,16 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
-PREFIX = "tools/perception/"
-LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/perception/",
-                          "learning/training/perception/", "learning/evaluation/perception/", PREFIX)
-LEGACY_LEARNING_PREFIXES = ("learning/training/perception/", "tools/perception/")
-LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
-                     PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
-                     "learning/curation/perception/review_app.py",
-                     "learning/training/perception/train_job.py",
-                     "learning/evaluation/perception/road_replay.py",
-                     "learning/curation/perception/classes/lane_lr5.yaml",
-                     "learning/curation/perception/classes/lane_lr6_drivable.yaml",
-                     "learning/curation/perception/classes/object_review_obstacle_v1.yaml",
-                     "learning/curation/perception/review_app_web/index.html",
-                     "learning/curation/perception/review_app_web/pixels.html")
-CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
-CAMERA_MAP_FILES = tuple("operations/overhead/rosy_vision/" + name
-                         for name in ("__init__.py", "lane_map.py", "map_register.py"))
-#: D-497: job names whose entry point is a signed file outside PREFIX. Exact name only;
-#: aliases retain existing job names while resolving to exact signed canonical files.
-JOB_ENTRY_POINTS = {"camera_lane_map.py": "operations/overhead/rosy_vision/lane_map.py"}
-JOB_ENTRY_POINTS.update({'dataset/' + name: 'learning/curation/perception/' + name
-                         for name in ('autolabel.py', 'bag_to_video.py', 'build.py', 'catalog.py',
-                             'ceiling_pose.py', 'class_sets.py', 'clip_lane_draft.py', 'edge_capture.py',
-                             'edge_capture_session.py', 'edge_review.py', 'edge_review_return.py',
-                             'extract.py', 'fetch_http.py', 'frames.py', 'geometry.py', 'harvest.py',
-                             'incident_feedback.py', 'labels.py', 'lane_derived_drivable.py',
-                             'lane_failure.py', 'lane_failure_loop.py', 'learning_workspace.py',
-                             'map_projected_drivable.py', 'mcap_proof.py', 'media_pipeline.py', 'object_boxes.py',
-                             'pixel_label_job.py', 'prelabel.py', 'publish.py', 'qwen_points.py',
-                             'qwen_review_completion.py', 'reclaim.py', 'review_app.py', 'review_eval_bootstrap.py',
-                             'review_evidence.py', 'review_ingest.py', 'review_masks.py', 'review_pack.py',
-                             'review_quality.py', 'review_return.py', 'road_draft.py', 'sam3_road_draft.py',
-                             'shrink_session.py', 'stuck_markers.py', 'vision_review_drafts.py',
-                             'vlm_mask_feedback.py',)})
-JOB_ENTRY_POINTS.update({'model/' + name: 'learning/registry/perception/' + name
-                         for name in ('bench_backends.py', 'compare_backends.py', 'convert.py', 'deliver.py',
-                             'delivery_journal.py', 'drivable_versions.py', 'export_class_names.py',
-                             'export_ncnn.py', 'export_ncnn_lane.py', 'export_onnx.py', 'intake.py',
-                             'intake_eval_gate.py', 'peer_targets.py', 'sign_model.py', 'slot_cli.py',
-                             'watch.py', 'watch_core.py',)})
-JOB_ENTRY_POINTS.update({'training/' + name: 'learning/training/perception/' + name
-                         for name in ('capture_goal.py', 'check_manifest.py', 'drivable_head.py',
-                             'export_cell.py', 'gen_notebook.py', 'handover.py', 'job_state.py',
-                             'learning_cycle.py', 'recipes.py', 'recording_job.py', 'review_admission.py',
-                             'review_authority.py', 'review_bridge.py', 'review_dataset.py',
-                             'review_eval_companion.py', 'review_eval_package.py', 'review_migration.py',
-                             'review_pipeline.py', 'review_provenance.py', 'rosy_lane_model.py',
-                             'run_log.py', 'train_job.py',)})
-JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_replay.py', 'road_replay_inputs.py': 'learning/evaluation/perception/road_replay_inputs.py', 'road_replay_metrics.py': 'learning/evaluation/perception/road_replay_metrics.py', 'store.py': 'learning/registry/perception/store.py'})
-CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
-SPLIT_CODE_PREFIXES = ("middleware/perception/nodes/", "middleware/perception/localization/",
-                       "middleware/perception/graph_health/", "middleware/perception/snapshots/",
-                       "middleware/perception/sensors/", "middleware/perception/front_camera/",
-                       "middleware/perception/package.xml",
-                       *("middleware/drive/" + name + "/" for name in
-                         ("motion_limits", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
-SPLIT_REQUIRED = (
-                  'middleware/perception/nodes/calib_node.py',
-                  'middleware/perception/nodes/calibrated_values.py',
-                  'middleware/perception/nodes/calibration_atomic.py',
-                  'middleware/perception/nodes/calibration_camera.py',
-                  'middleware/perception/nodes/calibration_lock.py',
-                  'middleware/perception/nodes/calibration_record.py',
-                  'middleware/perception/nodes/calibration_relocation.py',
-                  'middleware/perception/nodes/calibration_rotation.py',
-                  'middleware/perception/nodes/calibration_sequence.py',
-                  'middleware/perception/nodes/calibration_snapshot.py',
-                  'middleware/perception/nodes/calibration_storage.py',
-                  'middleware/perception/nodes/camera_detect_node.py',
-                  'middleware/perception/nodes/camera_lock.py',
-                  'middleware/perception/nodes/camera_region_range.py',
-                  'middleware/perception/nodes/dock_observer_node.py',
-                  'middleware/perception/nodes/executor_choice.py',
-                  'middleware/perception/nodes/goal_escape.py',
-                  'middleware/perception/nodes/ir_adc_node.py',
-                  'middleware/perception/nodes/learned_lane_node.py',
-                  'middleware/perception/nodes/obstacle_observer_node.py',
-                  'middleware/perception/nodes/pilot_recorder_node.py',
-                  'middleware/perception/nodes/pilot_recording.py',
-                  'middleware/perception/nodes/record_session.py',
-                  'middleware/perception/nodes/recording.py',
-                  'middleware/perception/nodes/road_observer_node.py',
-                  'middleware/perception/nodes/road_state_node.py',
-                  'middleware/perception/nodes/sensor_provider.py',
-                  'middleware/perception/nodes/startup_calibration_node.py',
-                  'middleware/perception/nodes/tf_buffer.py',
-                  'middleware/perception/nodes/web_http.py',
-                  'middleware/perception/nodes/web_map_control.py',
-                  'middleware/perception/nodes/web_node.py',
-                  'middleware/perception/nodes/web_render.py',
-                  'middleware/perception/nodes/web_state.py',
-
-                  'middleware/perception/localization/loc_assist.py',
-                  'middleware/perception/localization/loc_assist_node.py',
-                  'middleware/perception/localization/localization_node.py',
-                  'middleware/perception/graph_health/watch.py',
-                  'middleware/perception/graph_health/watch_node.py',
-                  'middleware/perception/front_camera/object_observation/object_detector.py',
-                  'middleware/perception/front_camera/object_observation/object_detector_node.py',
-                  'middleware/perception/sensors/line_observation/ir_overlay.py',
-                  'middleware/perception/sensors/line_observation/line_observer_overrides.py',
-                  'middleware/perception/sensors/line_observation/core_law_input.py',
-                  'middleware/perception/sensors/line_observation/route_context_input.py',
-                  'middleware/perception/sensors/line_observation/route_followers.py',
-                  'middleware/perception/sensors/line_observation/line_observer_node.py',
-                  'middleware/perception/snapshots/capture_trigger.py',
-                  'middleware/perception/snapshots/capture_trigger_node.py',
-                  "middleware/perception/package.xml",
-                  "middleware/perception/sensors/sensing/__init__.py",
-                  "middleware/perception/front_camera/perception/__init__.py",
-                  "middleware/drive/motion_limits/command_gate.py",
-                  "middleware/drive/recovery/recover.py",
-                  "middleware/drive/tracking/path_follow.py",
-                  "middleware/drive/calibration/modes.py",
-                  "middleware/drive/planning/grid/__init__.py",
-                  "middleware/drive/runtime/control_node.py",
-                  "middleware/drive/motion_limits/adapter/__init__.py",
-                  "middleware/drive/tracking/wander/__init__.py")
-FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
-FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
-CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
-# Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
-CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
-                                    "src/contracts/foundation/core_common/")
-LIMIT = 512 * 1024 * 1024
-FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
-IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
-                "middleware/perception", "contracts/foundation", "operations/overhead",
-                *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
-                "src/runtime/sensing", "src/contracts/foundation")
-PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
-              f"sys.path[:0]=[str(root/p) for p in {IMPORT_PATHS!r}]")
-
+from model_code_layout import (  # noqa: F401 — preserve controller exports
+    PREFIX, LEARNING_CODE_PREFIXES, LEGACY_LEARNING_PREFIXES,
+    LEARNING_REQUIRED, CAMERA_PROFILE, CAMERA_MAP_FILES,
+    JOB_ENTRY_POINTS, CAMERA_MAP_ENTRY, SPLIT_CODE_PREFIXES,
+    SPLIT_REQUIRED, FITNESS_ENTRY, FITNESS_CONTRACT_FILES,
+    CODE_PREFIXES, CHECKOUT_PREFIXES, LIMIT, OMX_REVIEW_FILES,
+    FORBIDDEN, IMPORT_PATHS, PATH_SETUP,
+)
+import model_code_execution
+import model_code_source
 
 def bootstrap_command(python, root, script, args):
     code = PATH_SETUP + ";script=sys.argv.pop(1);sys.argv[0]=script;runpy.run_path(script,run_name='__main__')"
@@ -331,50 +207,23 @@ def legacy_busy(roots, *, proc=Path("/proc")):
     return None
 
 
+def source_policy():
+    return dict(prefixes=CODE_PREFIXES, forbidden=FORBIDDEN, limit=LIMIT,
+                required=(*LEARNING_REQUIRED,
+                          "middleware/perception/control/__init__.py",
+                          "contracts/foundation/core_common/__init__.py"),
+                conditional=(
+                    ("middleware/perception/control/_source_layout.py", SPLIT_REQUIRED,
+                     "missing perception or Drive source-holder dependency"),
+                    (CAMERA_MAP_ENTRY, CAMERA_MAP_FILES, "missing camera-map dependency"),
+                    ("learning/curation/perception/omx_web.py", OMX_REVIEW_FILES,
+                     "missing OMX review dependency"),
+                    (FITNESS_ENTRY, FITNESS_CONTRACT_FILES,
+                     "missing road-fitness observation dependency")))
+
+
 def unpack(archive, dest):
-    """Manual extraction: code subtree only; no links, duplicates or special files."""
-    dest = Path(dest)
-    seen, total = set(), 0
-    with tarfile.open(archive, "r:") as tar:
-        entries = tar.getmembers()
-        if len(entries) > 10000: raise ValueError("too many archive members")
-        checked = []
-        for item in entries:
-            name = item.name.rstrip("/")
-            path = PurePosixPath(name)
-            if "\\" in name or path.is_absolute() or ".." in path.parts or str(path) != name:
-                raise ValueError("unsafe archive path")
-            ancestors = {str(p) for prefix in CODE_PREFIXES for p in PurePosixPath(prefix).parents}
-            if item.isdir() and (name in ancestors or any(name == prefix.rstrip("/") for prefix in CODE_PREFIXES)): continue
-            if not any(name == prefix or (prefix.endswith("/") and name.startswith(prefix)) for prefix in CODE_PREFIXES) or not (item.isfile() or item.isdir()):
-                raise ValueError("archive must contain only approved model-code dependencies, without links")
-            relative = path
-            if set(relative.parts) & FORBIDDEN or any(p.startswith(".env") for p in relative.parts):
-                raise ValueError("persistent data or secrets in code archive")
-            if str(relative) in seen: raise ValueError("duplicate archive member")
-            seen.add(str(relative))
-            total += item.size
-            if total > LIMIT: raise ValueError("expanded archive too large")
-            checked.append((item, dest.joinpath(*relative.parts)))
-        for item, target in checked:
-            if item.isdir(): target.mkdir(parents=True, exist_ok=True)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with tar.extractfile(item) as src, target.open("xb") as out:
-                    shutil.copyfileobj(src, out)
-                if os.name == "posix": target.chmod(0o444)
-    for required in (*LEARNING_REQUIRED,
-                     "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
-        if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
-    if (dest / "middleware/perception/control/_source_layout.py").is_file():
-        if not all((dest / name).is_file() for name in SPLIT_REQUIRED):
-            raise ValueError("missing perception or Drive source-holder dependency")
-    if (dest / CAMERA_MAP_ENTRY).is_file():
-        if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
-            raise ValueError("missing camera-map dependency")
-    if (dest / FITNESS_ENTRY).is_file():
-        if not all((dest / name).is_file() for name in FITNESS_CONTRACT_FILES):
-            raise ValueError("missing road-fitness observation dependency")
+    model_code_source.unpack(archive, dest, policy=source_policy())
 
 
 def replace_link(root, target):
@@ -453,24 +302,9 @@ class Updater:
         return state
 
     def read_candidate(self, folder):
-        for name, maximum in [("release.json", 65536), ("release.json.sig", 16384), ("READY", 128), ("code.tar", LIMIT)]:
-            p = folder / name
-            if p.is_symlink() or not p.is_file() or p.stat().st_size > maximum:
-                raise ValueError("missing or unsafe candidate file")
-        raw = (folder / "release.json").read_bytes()
-        if (folder / "READY").read_text().strip() != hashlib.sha256(raw).hexdigest():
-            raise ValueError("candidate is not complete")
-        verify_manifest_signature(raw, (folder / "release.json.sig").read_bytes(),
-                                  trusted_key_id=self.key_id, public_key=self.public_key)
-        v = json.loads(raw)
-        if not isinstance(v, dict) or set(v) != {"schema", "source_commit", "sequence", "environment_sha256", "archive_sha256"} or v["schema"] != "rosy-model-code/1":
-            raise ValueError("wrong model-code manifest")
-        if type(v["sequence"]) is not int or not 0 < v["sequence"] < 2**63:
-            raise ValueError("invalid sequence")
-        for k, length in [("source_commit", 40), ("environment_sha256", 64), ("archive_sha256", 64)]:
-            if not isinstance(v[k], str) or not re.fullmatch(f"[0-9a-f]{{{length}}}", v[k]):
-                raise ValueError("invalid manifest digest")
-        return v
+        return model_code_source.read_candidate(folder, key_id=self.key_id,
+                                                public_key=self.public_key, limit=LIMIT)
+
 
     def run(self):
         try:
@@ -520,6 +354,8 @@ class Updater:
                 if digest(archive) != manifest["archive_sha256"]: raise ValueError("archive digest differs")
                 source = stage / "source"
                 unpack(archive, source)
+                model_code_source.retain_proof(folder, source, expected_manifest=manifest,
+                                              key_id=self.key_id, public_key=self.public_key, limit=LIMIT)
                 if self.data_root is not None:
                     (source / "data").symlink_to(self.data_root, target_is_directory=True)
                 self.health(source)
@@ -560,6 +396,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
                                                 "middleware/perception/control/_source_layout.py"]).strip()
         if not split_layout:
             paths = tuple(p for p in paths if p not in SPLIT_CODE_PREFIXES)
+        review_page = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
+                                               "learning/curation/perception/omx_web.py"]).strip()
+        if not review_page:
+            paths = tuple(p for p in paths if p not in OMX_REVIEW_FILES)
         subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
         # files are never inputs; archive reads the committed Git object.
@@ -589,68 +429,12 @@ def load_config(path):
 
 
 def job_entry(source, script):
-    """(entry file, conflict base, conflict name, mapped path or None) for a job name.
-
-    A JOB_ENTRY_POINTS name resolves to exactly its one signed file; any other name
-    only under the CLI holder PREFIX. '../', absolute and symlinked escapes raise ValueError."""
-    source = Path(source).resolve(strict=True)
-    # Existing signed releases retain their original bytes, paths and job names.
-    # New candidates require LEARNING_REQUIRED; this only resolves a retained release.
-    if script != "camera_lane_map.py" and not (source / "learning/registry/perception/watch.py").is_file():
-        for prefix in LEGACY_LEARNING_PREFIXES:
-            perception = source / prefix
-            if (perception / "model/watch.py").is_file():
-                file = (perception / script).resolve(strict=True)
-                file.relative_to(perception)
-                return file, perception, script, None
-    mapped = JOB_ENTRY_POINTS.get(script) if isinstance(script, str) else None
-    if mapped is not None:
-        file = (source / mapped).resolve(strict=True)
-        if file.relative_to(source) != Path(mapped):
-            raise ValueError("job entry point is not its mapped file")
-        return file, source, mapped, mapped
-    perception = source / PREFIX
-    file = (perception / script).resolve(strict=True)
-    file.relative_to(perception)
-    return file, perception, script, None
+    return model_code_execution.job_entry(source, script, runtime=globals())
 
 
-def execute(config, script, args):
-    root = Path(config["root"])
-    # Serialize GPU jobs as well as code switches (D-434: no concurrent Isaac
-    # and training). The child inherits the lock, including if its parent dies.
-    with work_lock(root, exclusive=True, blocking=True) as lock_fd:
-        busy = legacy_busy(config.get("legacy_roots", [])) or gpu_busy()
-        if busy: raise WorkBusy("work busy: " + busy)
-        state = Updater(root, config["key_id"], config["public_key"], config["python"]).state()
-        if state.get("pending"): raise ValueError("interrupted update needs recovery first")
-        source = (root / "current").resolve(strict=True)
-        source.relative_to((root / "releases").resolve())
-        file, base, name, mapped = job_entry(source, script)
-        if file.suffix != ".py": raise ValueError("job entry point must be a Python script")
-        local = Path(config["work_dir"]) / (base.relative_to(source) if mapped is None else "")
-        conflict = checkout_script_conflict(base, local, name)
-        if conflict: raise ValueError(conflict)
-        if script != "camera_lane_map.py":
-            # Retained enrolled paths must not lose their local edit guard after a move.
-            for prefix in LEGACY_LEARNING_PREFIXES:
-                legacy = Path(config["work_dir"]) / prefix / Path(script).parent
-                conflict = checkout_script_conflict(file.parent, legacy, Path(script).name)
-                if conflict: raise ValueError(conflict)
-        env_hash = Updater(root, config["key_id"], config["public_key"], config["python"]).probe_environment()
-        if env_hash != state.get("environment_sha256"):
-            raise ValueError("job environment differs from the activated candidate")
-        receipt = root / "jobs" / f"{time.time_ns()}-{os.getpid()}.json"
-        job = {"source_commit": state["source_commit"], "environment_sha256": env_hash,
-               "script": str(file.relative_to(base)) if mapped is None else script,
-               "arguments_sha256": fingerprint(args), "started": time.time()}
-        if mapped is not None: job["entry"] = mapped
-        atomic_json(receipt, job)
-        result = subprocess.run(bootstrap_command(config["python"], source, file, args), cwd=config["work_dir"],
-                                pass_fds=(lock_fd,))
-        job.update(exit_code=result.returncode, finished=time.time())
-        atomic_json(receipt, job)
-        return result.returncode
+def execute(config, script, args, *, source_expectation=None):
+    return model_code_execution.execute(config, script, args, runtime=globals(),
+                                        source_expectation=source_expectation)
 
 
 def main():

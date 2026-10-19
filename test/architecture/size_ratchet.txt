@@ -16,7 +16,6 @@
 815 deploy/robot/pinky_pro/release/secret_scan.py
 686 deploy/robot/pinky_pro/release/updater.py
 806 deploy/robot/pinky_pro/sd/verify-media-readback.py
-698 deploy/site/rosy_model_code.py
 1141 devices/omx/adapter/omx_adapter/action_store.py
 728 devices/omx/adapter/omx_adapter/pose_plan.py
 788 drive/behaviors/docking/manager.py
