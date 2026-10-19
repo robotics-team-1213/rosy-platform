@@ -76,14 +76,14 @@ def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
         sessions.bootstrap_accounts("alice", "other-site")
 
 
-@pytest.mark.parametrize("initial_password", ["fixture-pass-9384", "bob!"])
-def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path, initial_password):
+@pytest.mark.parametrize("INITIAL_PASSWORD", ["fixture-pass-9384", "bob!"])
+def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path, INITIAL_PASSWORD):
     sessions = activated(tmp_path)
     manager = cookie(sessions)
     new = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
-                                  password=initial_password, grants=[])
+                                  password=INITIAL_PASSWORD, grants=[])
     second = PasswordSessions(sessions.path, {})
-    bob = cookie(second, "bob", initial_password)
+    bob = cookie(second, "bob", INITIAL_PASSWORD)
     assert second.principal(bob)[0].password_change_required
     bob, _ = second.change_password(bob, "a permanent secret")
     current = sessions.list_accounts(manager)
@@ -118,17 +118,18 @@ def test_last_manager_and_operator_cannot_manage_accounts(tmp_path):
     assert "password_scrypt" not in other
 
 
-@pytest.mark.parametrize("initial_password", ["SuperSecretSitePsk99", "bob!"])
-def test_admin_reset_and_revoke_sessions(tmp_path, initial_password):
+@pytest.mark.parametrize("INITIAL_PASSWORD", ["SuperSecretSitePsk99", "bob!"])
+def test_admin_reset_and_revoke_sessions(tmp_path, INITIAL_PASSWORD):
     sessions = activated(tmp_path)
     manager = cookie(sessions)
     row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
                                   password="fixture-pass-9384", grants=[])
     bob = cookie(sessions, "bob", "fixture-pass-9384")
     updated = sessions.reset_account_password(manager, row["account_id"], revision=row["revision"],
-                                              password=initial_password)
+                                              password=INITIAL_PASSWORD,
+                                              )
     assert sessions.principal(bob) is None
-    bob = cookie(sessions, "bob", initial_password)
+    bob = cookie(sessions, "bob", INITIAL_PASSWORD)
     assert sessions.principal(bob)[0].password_change_required
     sessions.revoke_account_sessions(manager, row["account_id"], revision=updated["revision"])
     assert sessions.principal(bob) is None

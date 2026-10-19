@@ -506,8 +506,10 @@ BOOTSTRAP_PASSWORD_HASH = hash_password("alice")
 
 
 def _bootstrap(tmp_path, password="alice"):
-    password_hash = BOOTSTRAP_PASSWORD_HASH if password == "alice" else hash_password(password)
-    app, _ = _app(tmp_path, logins=_accounts(password_scrypt=password_hash))
+    source = _accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH)
+    if password != "alice":
+        source = _accounts(password_scrypt=hash_password(password))
+    app, _ = _app(tmp_path, logins=source)
     client = _client(app)
     response = _login(client, password=password)
     assert response.status_code == 204
