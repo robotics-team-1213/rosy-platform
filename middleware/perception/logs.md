@@ -1779,3 +1779,9 @@
 - 변경: 기존 중심축0.03m 지지를 보존하고 축 밖인 가까운 점은 선택 current 원호의 short branch와 같은 x에서0.03m 이내일 때 추가 인정한다. 공간 입장은 넓어지며 연결·tangent·target/opening·실제 이동·uncertainty·예산 기준은 유지한다. 저장 경로나 TTL 예외는 없다.
 - 증거: 7956 SIM 중간 코너 stall60 실패. 원본156개 odom·3관측에서 곡선 자체의 bow가 직선 축 기준을 넘었다. native RED14/negative1 passed→2b 기존 곡선3FAIL/최종 Important1→d8 관련235 passed/skip0/NEW0와 별도 safety·최종 소스 검토0/0/0으로 종료했다.
 - gate 변화: 없음. 최신 전체 영향 범위·반복 SIM 수용 HOLD, smoothing/current 최종 궤적의 전역 보장은 아니다.
+
+## 2026-10-20 · uncommitted · 고정 조건 주행 SIM 연속2회 수용
+
+- 변경: a24 고정 후보의 최종 주행·학습 모델 소비·정지·정리 증거를 동결 기록에 추가했다. 이전 실패와 중간3FAIL/Important1은 보존했다.
+- 증거: exact selector86경로를 제외 없이 분할해 native12,973 passed/776 skipped/NEW0. 같은 소스·모델·지도·출발 조건의 연속2회 PASS, 실제 목표 오차0.004722/0.007501m·via각0.029m, 두 실행 final cmd·odom0/lease released/left_running 없음과 회수·정리 완료.
+- gate 변화: 전체 모듈·FIELD 승격 없음. 이번 요청의 고정 조건 주행 SIM 수용을 충족했으며 lane_return·실물·현장 localization은 미검증이다.

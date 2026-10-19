@@ -348,3 +348,41 @@ native 재생13에서95.375초 RIGHT episode는 불확실성 없이 추적됐고
 기존 중심축0.03m 입장은 유지하고, 축 밖인 가까운 점은 guard에 전달된 선택 current 후보의 short arc와 같은 x에서0.03m 이내일 때 추가 인정한다. 이는 곡선의 공간적 입장을 넓히는 변경이며 숫자가 같다는 이유로 보호 범위가 동일하다고 주장하지 않는다. 관측점을 옮기거나 path를 수정하지 않으며 기존 first x·연결·gap·coverage·target/opening·here/tangent30도·실제 source/current 이동·uncertainty·회전량 예산을 유지한다. finite/영점/직선 근접/원호 정의역 밖을 처리하고 새 저장 경로나 TTL 예외는 추가하지 않는다.
 
 원본156개 odom·3개 관측 회귀에서6ea native RED는 실제 positive/종료4개와 신규 helper 미구현10개로 NEW14/기존 negative1 passed였다. 첫2b 구현은 새15개는 통과했지만 기존 정상 직선-prefix 곡선3개가 실패했다. 최종 검토 Important1을 보존하고, 기존 중심축 입장을 OR로 복원한 d8에서 관련13파일235 passed/skip0/NEW0으로 재검증했다. 독립 safety 재검토와 최종 소스 재검토0/0/0,7956 이후4커밋 size-range 통과다. 반대 곡률·평행 오프셋·원호 다른 branch/정의역 밖·비유한 값·직선 근접 회귀를 포함한다. 최신 전체 영향 범위·동일 후보 연속2회 SIM 전까지 수용 HOLD다.
+
+## 최종 고정 조건 주행 SIM 수용: 연속2회 PASS
+
+검증 HEAD `a24ed73549294d7a5a61fb097c320acf1f881cde`.
+
+생산 Perception은 d8, Fleet 도착 판정은737이다. 소스·문서 별도 최종 검토0/0/0 및7956 이후5커밋 size-range 통과 후 이 HEAD를 두 실행과 전체 영향 범위 동안 고정했다. 이전 후보의 PASS를 이월하지 않았다.
+
+영향 범위는 f976 이후 selector가 선택한86개 경로를 Fleet1·Perception/CORE/SIM15·기타70경로의3묶음으로 나눴다. 원본과 분할 경로 Counter 일치를 assert했으며 제외한 경로는 없다. native wrapper exit0, run-1 5,592 passed/317 skipped/2 warnings, run-2 4,354 passed/128 skipped/2 warnings/62 subtests passed, run-3 3,027 passed/331 skipped/38 warnings로 총12,973 passed/776 skipped/42 warnings/62 subtests passed다. 완료된 세 로그 각각 known_failures NEW0을 확인했다. skipped는 통과로 세지 않으며 이전 중단 실행을 완료 증거로 대체하지 않는다.
+
+| 항목 | 첫 실행 | 두 번째 실행 |
+|---|---|---|
+| run | sim-a24ed73549-8dce8c | sim-a24ed73549-eb4e59 |
+| 결과 | PASS / arrived | PASS / arrived |
+| settled_xy | (0.534763,-0.513414) | (0.532310,-0.501539) |
+| 실제 목표 거리 | 0.004721585m | 0.007500985m |
+| via 거리 | 0.029m | 0.029m |
+| API arrived에 저장된 pose | (0.386,-0.510) | (0.396,-0.500) |
+| 비영 명령 구간 learned_drivable | 1,481 | 1,467 |
+| 같은 구간 fallback | 0 | 0 |
+| nonnull revision 고정 일치 | 1,475 | 1,459 |
+| revision metadata 누락 | 6 | 8 |
+| 열린 junction 선택 / 먼 출구 거절 | 263 / 71 | 272 / 81 |
+| final cmd / odom | (0,0) / (0,0) | (0,0) / (0,0) |
+| lease / left_running | released / 빈 목록 | released / 빈 목록 |
+| wrapper·회수·정리 | exit0·완료 | exit0·완료 |
+
+비영 명령 구간은 최초~마지막 nonzero cmd의 receipt 시간으로 제한한다. 두 구간의 drivable reason 집계는 비어 있지만 CORE의 교통·횡단보도 대기까지 무중단이었다는 뜻은 아니다. revision 누락6/8개는 cached learned 소비 경로와 일치하는 metadata 한계이며 개별 표본의 revision을 직접 입증하지 않는다. nonnull 표본은 모두 고정 revision과 일치한다.
+
+두 result JSON의 pointer·render·paint target·lap·scenario·skip·stall·spawns·places가 동일함을 대조했다. 각 실행 전 native ONNX·manifest hash를 재검증했다. 모델 revision은 lane-seg-20261010-451f0f85, ONNX SHA256은 `451f0f85b390d6601dc38c60865ed721936ff407845f7a8196099ae9a110f3d2`, manifest SHA256은 `0b0c4e3de8b58e128dc195c5362f3ba9688154f7771ae62960ba68ee9903a2d2`다. Fleet native binding도 두 실행 모두 source_revision이 위 HEAD와 일치하며 world/graph/URDF hash는 기존 고정값과 일치한다. API arrived 저장 위치도 실제 정지 목표의 기존0.15m 이내이고,10초 settle 뒤 실제 목표 거리를 별도로 통과했다. 도착 임계값이나 lane_return 제외 조건은 완화하지 않았다.
+
+- 첫 result SHA256: `62ecfafd747c0828569c9486830d71fed61d51527af66665a4c0d6cdfecf9695`
+- 첫 observations SHA256: `fd8524315a0d2bbc00fdf57192f72947f3a4ed037701cadee8767a9349bf33fa`
+- 첫 run SHA256: `5df1025d6e1f58a21eeb5c01d0dbad15ddc2334be4be2ac73e6f5abb3a4c9ce1`
+- 두 번째 result SHA256: `cc8493089e455ce5c9fb0189b3545022533e2a2cd618e40473e54b0ef39c3682`
+- 두 번째 observations SHA256: `cc8b44ba7b01e1f29850376628fe2064b8b100d2025fdde013437a9f5a183f4c`
+- 두 번째 run SHA256: `8e31573246bbf206a1e057dbdf05598f04eedbcad84e4790ed697f876414fb6b`
+
+충족한 범위는 고정 지도·고정 학습 모델·native model-pose·GPU·lap·stall60·record·기존 lane_return SKIP 조건의 주행 SIM이다. 실제 Pinky·현장 localization·lane_return·동적 모델/지도 교체·main 착지/push는 검증하거나 수행하지 않았다. Perception의 가시 source 픽셀 보정은 최종 smoothing/current 궤적 전체의 안전 보장이 아니다. 전체 모듈·FIELD gate를 승격하지 않으며 후속 문서 커밋은 이 SIM 소스를 바꾸지 않는 증거 정리다.

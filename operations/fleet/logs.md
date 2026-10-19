@@ -4087,3 +4087,9 @@
 - 변경: 수락된 stop executing만으로0.3m에서 완료하지 않고, 검증된 실제 MapPose와 선택된 정지 목표의 Euclidean 거리에 기존0.15m 도착 기준을 적용한다. traffic hold-back 정지점과 free 판정·CORE stop 권한은 보존한다.
 - 증거: f976 SIM은 전체 경로 arrived 뒤 실제 정착0.196729m로 FAIL이었다. native RED4→737 관련254 passed/skip0, 별도 문서 secret guard1 FAIL은 수정 문서 재검증 대상이다. 초과 거리의 접수·실제 hold·overshoot·측면·hold-back·거절 회귀와 독립 safety·최종 소스 검토0/0/0을 기록했다.
 - gate 변화: 없음. 새 후보 반복 SIM 수용 HOLD. CORE가 목표 전에 hold하면 자동 해제·재지시하지 않는다.
+
+## 2026-10-20 · uncommitted · 실제 목표 도달의 연속 SIM 검증
+
+- 변경: stop 접수와 실제 도착을 구분한 후보의 최종 주행 증거를 보존했다. 기존0.15m와 traffic hold-back·CORE 권한은 유지한다.
+- 증거: a24 native전체 영향12,973 passed/776 skipped/NEW0 중 Fleet5,592 passed/317 skipped. 같은 후보 연속2회 PASS, API arrived 위치가 기존0.15m 이내이며 실제 settle 오차0.004722/0.007501m, 최종 정지·lease 해제·정리 완료다.
+- gate 변화: 전체 Fleet/현장 gate 승격 없음. 고정 조건 주행 SIM 수용만 충족했으며 실제 장치 이동·main 착지/push는 수행하지 않았다.

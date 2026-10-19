@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 고정 조건 주행 SIM 연속2회 수용
 - 2026-10-20 · uncommitted · 곡선 진행의 근거리 입장 추가
 - 2026-10-20 · uncommitted · 선택 안내 유실과 odometry 공백 분리
 - 2026-10-20 · uncommitted · 실제 픽셀로 확인한 source 곡률 보정
 - 2026-10-20 · uncommitted · 곡선 전진 뒤 이전 정렬 상태 종료
-- 2026-10-20 · uncommitted · 근거리 정렬 ROI의 source/current 연속성

@@ -9353,3 +9353,9 @@ osy-d395-s1d\`.
 - 변경: 7956의 spent 정체 실패, native 재생13, 중단된 영향 범위와 ratchet 실패를 보존했다. 테스트 삭제에 따른 ratchet1,748 갱신 뒤 구조40 passed와 새 곡선 입장 증거를 기록했다.
 - 증거: d8 관련235 passed/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0. 최초2b의 기존3FAIL/Important1도 삭제하지 않았다.
 - gate 변화: 없음. 전체 선택 경로를 보존한 영향 범위 분할 실행과 최신 후보 연속2회 SIM 전까지 HOLD다.
+
+## 2026-10-20 · uncommitted · 주행 SIM 수용 완료 증거 정리
+
+- 변경: a24 고정 소스의 연속2회 PASS와 실제 도착 거리, 동일 조건·model/map/source hash, 원본 로그 hash와 정지·lease·정리 증거를 동결 기록에 추가했다.
+- 증거: native12,973 passed/776 skipped/세 로그 NEW0, 목표 오차4.722/7.501mm·via각29mm. metadata 누락과 lane_return SKIP, native model-pose 및 실물 미검증 범위를 함께 기록했다.
+- gate 변화: 전체 모듈·FIELD 승격 없음. 본 고정 조건 주행 SIM 수용을 충족했으며 최종 문서 guard·증거 검토는 후속 HEAD에서 별도 확인한다.
