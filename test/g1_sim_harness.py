@@ -62,7 +62,7 @@ from omx_adapter.cell_acceptance import ValidatedCell, ValidatedRecipe  # noqa: 
 from omx_adapter.command_owner import ArmCommandOwner  # noqa: E402
 from omx_adapter.gripper_contract import GripperObservation  # noqa: E402
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose  # noqa: E402
-from omx_adapter.pick_place_runner import PhaseDispatch  # noqa: E402
+from omx_adapter.pick_place.pick_place_runner import PhaseDispatch  # noqa: E402
 from omx_adapter.ros_goal_contract import RosGoalEvent  # noqa: E402
 from rosy.execution.site.item_pose import ItemPoseTolerance, centre_above_tcp_m, step_goal_predicate  # noqa: E402
 from rosy.processes.palletizing.mixed_cell_doc import load_mixed_cell  # noqa: E402

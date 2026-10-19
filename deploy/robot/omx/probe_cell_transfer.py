@@ -154,7 +154,7 @@ def main() -> int:
     from omx_adapter.local_stop import LocalStopBlocked
     from omx_adapter.manipulation_plan import ExecutionStateSnapshot
     from omx_adapter.phase_recorder import ActionPhaseRecorder
-    from omx_adapter.pick_place_runner import PickPlaceRunner
+    from omx_adapter.pick_place.pick_place_runner import PickPlaceRunner
     from omx_adapter.pose_plan import (
         AnalyticCellTransferPlanner, CellPlanningProfile, CellTransferPlanRejected, CellTransferRequest,
     )

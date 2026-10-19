@@ -48,7 +48,7 @@ from omx_adapter.manipulation_plan import (  # noqa: E402
     ResolvedObjectPose,
     ResolvedPickPlacePlan,
 )
-from omx_adapter.pick_place_runner import PickPlaceRunner  # noqa: E402
+from omx_adapter.pick_place.pick_place_runner import PickPlaceRunner  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
 from test_mission_dispatcher import _ready_mission  # noqa: E402
 

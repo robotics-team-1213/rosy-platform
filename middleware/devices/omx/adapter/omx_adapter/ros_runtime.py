@@ -19,7 +19,7 @@ from .command_owner import (
     JointStateSnapshot,
     TrajectoryCommand,
 )
-from .pick_place_runner import PhaseDispatch
+from .pick_place.pick_place_runner import PhaseDispatch
 from .joint_state_intake import JointStateIntake
 from .ros_goal_contract import RosGoalEvent
 from .ros_trajectory_action import (

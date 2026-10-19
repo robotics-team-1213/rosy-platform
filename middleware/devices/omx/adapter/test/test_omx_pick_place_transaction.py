@@ -3,7 +3,7 @@ import pytest
 from omx_adapter.action_store import ActionStore
 from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.phase_recorder import ActionPhaseRecorder
-from omx_adapter.pick_place_transaction import (
+from omx_adapter.pick_place.pick_place_transaction import (
     ArmActionResult,
     PickPlaceState,
     PickPlaceTransaction,
