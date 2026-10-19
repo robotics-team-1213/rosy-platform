@@ -230,3 +230,52 @@ def test_callback_browser_binding_and_replay(app):
     assert request(callback)[0] == 400
     assert request(callback, cookie=flow)[0] == 303
     assert request(callback, cookie=flow)[0] == 400
+
+
+def test_upstream_timeout_is_audited_without_retry(app, monkeypatch):
+    _, state, request, login, directory = app
+    session = login()
+    attempts = []
+    class TimeoutConnection:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def request(self, *args, **kwargs):
+            attempts.append(args)
+            raise TimeoutError('possibly committed upstream')
+
+        def close(self):
+            pass
+    monkeypatch.setattr(module, 'HTTPConnection', TimeoutConnection)
+    body = b'{"index":0,"status":"fix","note":"human"}'
+    assert request('/api/review', 'POST', body, session)[0] == 502
+    assert len(attempts) == 1 and state['writes'] == []
+    with sqlite3.connect(directory / 'audit.db') as db:
+        assert db.execute('SELECT outcome FROM review_audit').fetchall() == [('unknown',)]
+
+
+def test_restart_marks_unfinished_intent_unknown_and_retains_private_state(app):
+    server, _, _, _, directory = app
+    with sqlite3.connect(directory / 'audit.db') as db:
+        db.execute('INSERT INTO review_audit(account_id,resource,body_sha256,created,outcome) '
+                   'VALUES(?,?,?,?,?)', ('human-937', 'project:937', '0' * 64, 1000, 'intent'))
+    restarted = module.ReviewServer(0, origin=server.origin, account=server.account,
+                                    audit_db=directory / 'audit.db')
+    restarted.server_close()
+    with sqlite3.connect(directory / 'audit.db') as db:
+        assert db.execute('SELECT outcome FROM review_audit').fetchall() == [('unknown',)]
+    assert (directory / 'audit.db').stat().st_mode & 0o077 == 0
+
+
+def test_private_config_and_project_binding(app):
+    server, _, _, _, directory = app
+    config = directory / 'wrapper.json'
+    config.write_text('{}')
+    config.chmod(0o644)
+    with pytest.raises(ValueError):
+        module.private_file(config)
+    config.chmod(0o600)
+    assert module.private_file(config) == config
+    for origin in ['http://review.example.test', 'https://review.example.test/path', 'https://evil.test']:
+        with pytest.raises(ValueError):
+            module.ReviewServer(0, origin=origin, account=server.account, audit_db=directory / 'other.db')
