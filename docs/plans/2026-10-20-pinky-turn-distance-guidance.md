@@ -89,12 +89,12 @@ python tools/remote/remote_pytest.py --log-dir C:/DevTemp/pinky-success-baseline
 **수정:** `middleware/perception/front_camera/perception/drivable/drivable_steer.py`, `middleware/perception/test/test_observed_recentre_alignment.py`, `middleware/perception/test/test_drivable_steer.py`.
 **생성:** `middleware/perception/test/fixtures/pinky_nw_junction_recomputed.json` — 단계 1의 full-resolution mask RLE·정확한 stamp/pose/prior·이미지/모델 SHA256을 담고 재계산 여부를 명시한다.
 
-**인터페이스:** `junction_observed(interval, connected_path_m, exit_point_m, heading_after_deg, *, way, ground, x_offset, source_pose, current_pose, heading_error_deg) -> bool`을 `junction_guide.py`에 둔다. `DrivableSteer.update`는 keyword `junction_context=None`을 받고 유효한 결과를 `_update`의 기존 `recentre_first` 판단에만 사용한다.
+**인터페이스:** `junction_observed(interval, connected_path_m, exit_point_m, heading_after_deg, *, junction_point_m, way, ground, x_offset, source_pose, current_pose, heading_error_deg) -> bool`을 `junction_guide.py`에 둔다. keeper는 prior path의 연결점 station을 보간해 `junction_point_m`을 current body 좌표로 변환한다. `DrivableSteer.update`는 keyword `junction_context=None`을 받고 유효한 결과를 `_update`의 기존 `recentre_first` 판단에만 사용한다. context에는 이 연결점 좌표, 잔여 거리 구간, current body 기준 다음 방향과 총 yaw 오차를 함께 넣고 source/current 검증 실패 시 전체를 `None`으로 만든다.
 
 - [ ] RED: `test_recorded_nw_exit_is_not_overridden_by_opposite_recentre`가 기존 동일 mask/pose 입력의 잘못된 우선순위를 재현해야 한다. 기존 코드가 이미 통과하거나 새 조건이 그 장면에서 사용되지 않으면 회귀를 고쳐 꾸미지 말고 가설 재검토로 돌아간다.
 - [ ] `test_disconnected_border_exit_does_not_authorize_junction`, `test_stale_or_opposite_exit_keeps_existing_guard`, `test_same_junction_does_not_recharge_alignment`, `test_crosswalk_front_stop_and_realign_remain_effective`를 추가한다. exit 이름·route memory·최대 전방 x만 있는 입력은 새 분기를 허용하지 않아야 한다.
 - [ ] 현재 관측의 통로 path 각 segment와 출구를 source 영상으로 되돌려, near seed에서 이어진 같은 mask component 안에 있는지 raster 단위로 확인한다. 기존 ground↔pixel/SE2 변환을 재사용한다. 지도 연결점도 이 관측 경로와 연결되어야 한다. path의 양 끝 Euclidean 거리를 실제 연결 경로 길이의 보수적인 하한으로 사용한다. 이것은 누적 경로 길이의 추정치가 아니라 그 하한이며, 최대 전방 x를 하한으로 쓰지 않는다. 잔여 거리 구간 전체가 0 이상이고 이 하한 이내인지 검사한다. 기존 출구 방향 허용 범위를 재사용하되 source/상대 odom yaw 오차 전체에서도 일치해야 한다. 양 조건을 통과하면 반대 `recentre_first`만 억제한다. realign timer나 CORE 정지 판단을 리셋/완화하지 않는다.
-- [ ] `drivable_steer.py`가 현재 574 LOC로 600 LOC 한도의 95%를 넘으므로, 여기에 추가하기 전에 동작 불변 분리 브랜치를 먼저 준비한다. `way_target`과 그 전용 기하를 `drivable/way_target.py`로 옮기고 기존 import/re-export와 반환값을 유지한다. 해당 크기 guard와 기존 drivable 회귀를 별도 SHA로 통과·검토하고, 필요한 선행 착지 권한은 사용자에게 별도로 받는다. 한도를 넘는 기능 추가로 우회하지 않는다.
+- [ ] `drivable_steer.py`가 현재 574 LOC로 600 LOC 한도의 95%를 넘으므로, 여기에 추가하기 전에 동작 불변 분리 브랜치를 먼저 준비한다. `way_target`과 그 전용 기하·상수를 `drivable/way_target.py`로 옮기고 기존 import/re-export와 반환값을 유지한다. 새 모듈이 drivable_steer를 역으로 import하는 순환은 만들지 않는다. 해당 크기 guard와 기존 drivable 회귀를 별도 SHA로 통과·검토하고, 필요한 선행 착지 권한은 사용자에게 별도로 받는다. 한도를 넘는 기능 추가로 우회하지 않는다.
 - [ ] native RED/GREEN 후 독립 안전 리뷰를 받는다. 진단에는 source/current station 구간·연결점 identity·오차 근거·관측 path 길이·선택/거절 이유를 기존 debug 경로로 남긴다.
 
 ## 6. 같은 배포 묶음의 native SIM 수용
