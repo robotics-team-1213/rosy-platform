@@ -604,6 +604,56 @@ def test_legacy_candidate_cannot_enable_unsigned_omx_overlay(host, loaded):
         updater._verify(old, loaded=loaded, env=env)
 
 
+@pytest.mark.parametrize("phase", ["current", "staged", "loaded"])
+def test_unsigned_omx_overlay_is_refused_before_switch(host, phase):
+    with host.paths.site_env.open("a") as stream:
+        stream.write("ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    http, fake = FakeHttp(releases, blobs), FakeHost(host.paths)
+    updater = _updater(host, http, fake)
+    original = updater.verifier
+    def verifier(folder, **kwargs):
+        manifest = original(folder, **kwargs)
+        current = manifest['source_commit'] == OLD
+        if ((phase == 'current' and current) or
+                (not current and kwargs['inspect_loaded_images'] == (phase == 'loaded'))):
+            manifest['omx'] = False
+        return manifest
+    updater.verifier = verifier
+    assert updater.run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+    assert not any(call[:2] == ['systemctl', 'restart'] for call in fake.calls)
+    if phase == 'current':
+        assert not http.downloads
+    assert any(call[:3] == ['docker', 'image', 'load'] for call in fake.calls) == (phase == 'loaded')
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_pre_omx_rollback_uses_backup_overlay_requirements(host, enabled):
+    old = host.paths.candidates / OLD
+    (old / 'release.json').write_text(json.dumps({'source_commit': OLD, 'omx': False}))
+    (old / 'deploy/site/compose.omx.yaml').write_text('services: {}\n')
+    shutil.copy2(host.paths.site_env, host.paths.env_backup)
+    if enabled:
+        with host.paths.env_backup.open('a') as stream:
+            stream.write('ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n')
+    target = host.paths.candidates / NEW
+    target.mkdir()
+    upd.write_env_tag(host.paths.site_env, NEW)
+    upd.swap_link(host.paths.link, target)
+    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD}}
+    fake = FakeHost(host.paths)
+    updater = _updater(host, FakeHttp([], {}), fake)
+    if enabled:
+        with pytest.raises(upd.Rejected, match='not covered by this signed candidate'):
+            updater.rollback(state)
+        assert host.paths.link.resolve() == target and 'switch' in state
+        assert not fake.calls
+    else:
+        updater.rollback(state)
+        assert host.paths.link.resolve() == old and 'switch' not in state
+
+
 def test_real_candidate_directory_is_migrated_once_to_a_symlink(host):
     host.paths.link.unlink()
     old = host.paths.candidates / OLD
