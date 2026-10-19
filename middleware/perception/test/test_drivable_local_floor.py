@@ -29,9 +29,14 @@ def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment(fixture,
     assert raw_info['target_m'] == target
     floor = raw_info['local_floor_m']
     assert len(floor) == count and .16 < floor[-1][0] < .18
-    error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, POSE, (0., 0., yaw),
-        guide_here_deg=here, guide_deg=guide, observed_only=True, current_stamp=1.125)
+    owner = DrivableSteer()
+    first = owner.update(way, 1., G, .03317, .0925, POSE, POSE,
+        guide_here_deg=here, guide_deg=guide, observed_only=True, current_stamp=1.125)[2]
+    error, confidence, info = owner.update(way, 1., G, .03317, .0925, POSE, (0., 0., yaw),
+        guide_here_deg=here, guide_deg=guide, observed_only=True, current_stamp=1.25)
     assert (error, confidence, info['strategy']) == (.5, .35, 'drivable_recentre_pivot_right')
+    assert info['alignment_used_rad'] == pytest.approx(abs(yaw), abs=.0001)
+    assert info['alignment_limit_rad'] == first['alignment_limit_rad']
 
 
 @pytest.mark.parametrize('memory', [False, True])
@@ -163,3 +168,10 @@ def test_short_source_floor_must_remain_short_in_current_coordinates():
     owner._ctx.update(here=-18., ahead=53.)
     assert guard.step(-.5, .35, local_info(), (-.014, 0., 0.), owner, source_pose=POSE,
         current_stamp=.15, observation_stamp=0.)[2]['strategy'] == 'drivable_pivot_left'
+
+
+def test_a_current_roi_cannot_skip_a_first_point_behind_the_robot():
+    owner, guard = guarded()
+    owner._ctx.update(here=-18., ahead=53.)
+    assert guard.step(-.5, .35, local_info(), (.15, 0., 0.), owner, source_pose=POSE,
+        current_stamp=1.5, observation_stamp=0.)[2]['strategy'] == 'drivable_pivot_left'
