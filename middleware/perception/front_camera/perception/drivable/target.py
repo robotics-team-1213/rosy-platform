@@ -15,6 +15,20 @@ CROSS_TOL_M = 0.015
 CROSS_MIN_ALONG_M = 0.06
 
 
+def _exit_rows(xs, rows, edge, minimum_rows, near_m):
+    """Admission, point and reach use one connected frame-border opening."""
+    nearest = float(xs.min())
+    hit = np.flatnonzero(edge & (xs > nearest + 0.04))
+    split = np.flatnonzero((np.diff(hit) > 1) | (np.diff(rows[hit]) > 2)) + 1
+    runs = [run for run in np.split(hit, split) if len(run) >= minimum_rows]
+    if not runs:
+        return hit[:0], False
+    close = [run for run in runs if float(xs[run].min()) <= nearest + near_m]
+    chosen = (min(close, key=lambda run: float(xs[run].min())) if close
+              else max(runs, key=lambda run: float(xs[run].max())))
+    return chosen, bool(close)
+
+
 def _crosses(points, tx, ty):
     """Lateral offset of the nearest remembered boundary point within CROSS_TOL_M of the arc the
     robot drives to (tx, ty) (tangent to its heading, as a pure-pursuit arc), or None. The chord

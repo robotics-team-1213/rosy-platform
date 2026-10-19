@@ -30,7 +30,7 @@ import time
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
 
-from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
+from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
 from .route_guard import observed_route_candidate, route_exit_point
 from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
@@ -163,17 +163,15 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     # A side exit: the way stays on that frame border for SIDE_EXIT_ROWS rows past the near band.
     # The side whose open border reaches farther wins (a wall corner leaves the floor on the border
     # only near the robot); within EXIT_TIE_M of each other, keep right (D-384 2).
-    above = xs > float(xs.min()) + 0.04
     reach, near_ok = {}, {}
     for side, edge in (("left", open_left), ("right", open_right)):
-        hit = edge & above
-        if int(hit.sum()) >= SIDE_EXIT_ROWS:
-            near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
+        idx, close = _exit_rows(xs, rows, edge, SIDE_EXIT_ROWS, EXIT_NEAR_M)
+        if len(idx):
+            near_ok[side] = close
             # aim at the middle of the opening, not its far end: the far end cut the inside corner
             # (9dfk 20261010T030423Z_rosy_41 left the lane twice at the NE spoke turning right)
-            idx = np.flatnonzero(hit)
             far = int(idx[np.argsort(xs[idx])[len(idx) // 2]])
-            reach[side] = float(xs[hit].max())
+            reach[side] = float(xs[idx].max())
             out["exit_point_m"][side] = (round(float(xs[far]), 3),
                                                        round(float((y_left if side == "left" else y_right)[far]), 3))
     if len(reach) == 2:
