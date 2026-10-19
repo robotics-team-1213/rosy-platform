@@ -19,9 +19,9 @@ from core_common.protocol.omx_sim import (
     GRIPPER_GOAL_MAX_DURATION_S, GRIPPER_GOAL_MIN_DURATION_S, OmxSimGripperGoal, OmxSimJog,
 )
 
-from .command_owner import TrajectoryCommand
-from .kinematics import DEFAULT_KINEMATICS_PATH
-from .pilot_sim_gripper import GRIPPER_TOLERANCE_RAD, STILL_RAD, STILL_WINDOW_S, gripper_state
+from ..command_owner import TrajectoryCommand
+from ..kinematics import DEFAULT_KINEMATICS_PATH
+from .gripper import GRIPPER_TOLERANCE_RAD, STILL_RAD, STILL_WINDOW_S, gripper_state
 
 JOG_MAX_STEP_RAD = BOUNDED_JOG_MAX_STEP_RAD
 JOG_DURATION_S = 0.4

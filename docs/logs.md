@@ -9265,3 +9265,15 @@ osy-d395-s1d\`.
 - 변경: origin #105(03e470abff)를 로컬 main으로 옮겼다. `native_cycle.py`의 cycle receipt에 `policy_revision`(모델 파일 목록 해시)·rig/보정 revision을 남기고, `register_policy.py`가 그 영수증 해시를 근거로 Fleet `/api/fleet/workcells/{id}/policy/proposals`에 L0 제안을 올린다(`--dry-run`/`--confirm`, 토큰은 `ROSY_FLEET_TOKEN`만). 오프라인·미승격 영수증만 받는다. 본문 필드는 main의 `StageProposal`과 같다.
 - 증거: 원격 pytest(등록 본문·거절 조건·HTTP 경로·CLI). 실제 학습 산출물 등록은 첫 실물 학습 뒤다.
 - gate 변화: 없음. L0은 실행 권한이 아니다.
+
+## 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
+
+- 변경: 로컬 main도 승인 API를 `missions/mission_routes.py` 안에서만 설치해, `--tasks-db`만 있고 `--mission-api`가 없는 Fleet에서 `/api/fleet/workcells/{id}/policy/*`가 404였다. origin #106(e5661d443f)처럼 작업 기록부만 있으면 `work/work_routes.py`에서 설치하고 Mission 쪽 설치 블록은 지운다.
+- 증거: 원격 pytest `test_policy_governance.py`(Mission 없는 앱 시험 포함).
+- gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
+
+- 변경: origin/main에만 있던 문서를 옮겼다. PR 파이프라인(`docs/reference/pr-pipeline.md`, #57·#64·#74·#75·#79·#86 문서 부분), CODEOWNERS와 팀 가이드 §5.1 역할 담당(#59), D-777 간결한 문서 기준(#64), Jira 키 도구 `tools/jira_refs.py`와 Atlassian 연결 안내(#65), D-784 비공개 운영·staging 경계와 계획(#73·#74), 파이프라인 점검 기록 둘(#75·#79), D-773 정정(#56), `contracts/AGENTS.md` 새 계약 타입 자리(#62), D-376·D-781·조사 보고서의 #80 참조 줄을 반영했다. D-777·D-784의 진행 중 gap 줄을 지우고 ADR Log에 행을 더했다.
+- 근거: main에서 merge-base 이후 손대지 않은 파일은 origin 판을 그대로 가져왔고, main이 고친 파일(README·AGENTS·CONTRIBUTING·팀 가이드·공유 체크아웃·개발 가이드·progress)은 main의 내용을 유지하며 origin의 추가를 손으로 합쳤다. 공유 체크아웃 본문은 main의 착지 규칙을 유지하고 origin의 PR 파이프라인 연결·흐름도·게시 브랜치 merge 규칙만 더했다. #83에만 있는 OMX·릴리스 환경 기록 연결은 옮기지 않았다.
+- gate 변화: 없음. 문서·도구 안내와 GitHub 기준의 기록이며 서버 설정·장치·현장 수용을 바꾸지 않는다.

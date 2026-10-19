@@ -196,6 +196,18 @@ def test_changed_rig_needs_reapproval(client):
     assert changed.json()["detail"]["code"] == "REVISION_CHANGED_REAPPROVAL_REQUIRED"
 
 
+def test_governance_is_installed_without_the_mission_api(tmp_path):
+    """The site Fleet runs with --tasks-db but without --mission-api (2026-10-19)."""
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.db"), robot_ids=())
+    users = {sha256(b"viewer-a-token").hexdigest(): {"principal_id": "viewer-a", "role": "viewer"}}
+    app = create_app(FleetConsole([], []), task_service=tasks, site_users=users,
+                     omx_instances={"cell-1": "arm-1"}, omx_stop_transport=Transport(), start_task_dispatcher=False)
+    client = TestClient(app)
+    assert client.get("/api/fleet/policy-governance/workcells", headers=auth("viewer-a")).json() == {
+        "workcells": ["cell-1"]}
+    assert client.get(BASE, headers=auth("viewer-a")).status_code == 200
+
+
 def test_unknown_workcell_and_unconfirmed_bodies_are_refused(client):
     assert client.get("/api/fleet/workcells/other/policy", headers=auth("viewer-a")).status_code == 404
     assert client.post(BASE + "/incidents", headers=auth("operator-a"),

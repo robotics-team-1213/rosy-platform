@@ -167,7 +167,7 @@ def test_refuse_second_owner_sees_the_cell_owner_and_the_pilot(tmp_path):
         (proc / pid / "cmdline").write_bytes(cmd)
     with pytest.raises(RuntimeError, match="4001"):
         refuse_second_owner(proc_root=proc)
-    (proc / "4001" / "cmdline").write_bytes(b"python3\0-m\0omx_adapter.pilot_sim_server")
+    (proc / "4001" / "cmdline").write_bytes(b"python3\0-m\0omx_adapter.pilot_sim.server")
     with pytest.raises(RuntimeError, match="4001"):
         refuse_second_owner(proc_root=proc)
     (proc / "4001" / "cmdline").write_bytes(b"bash\0-c\0sleep")

@@ -174,7 +174,7 @@ surfaces:
     surface: robot
     medium: web
     ports:
-      - {port: 8088, source: middleware/devices/omx/adapter/omx_adapter/pilot_sim_server.py}
+      - {port: 8088, source: middleware/devices/omx/adapter/omx_adapter/pilot_sim/server.py}
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — Pinky는 CORE /pilot, OMX 연습은 격리된 Gazebo 호스트 8088)
     role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
     owns: [manual-drive, driver-video, drive-assist, sim-arm-practice, estop]

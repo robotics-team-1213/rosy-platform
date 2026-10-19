@@ -426,5 +426,9 @@ def patch_local_config(patch: dict[str, Any], path: Optional[Path] = None,
                        replace: tuple[str, ...] = ()) -> Path:
     """Preserve unrelated overlay keys under the shared process/thread fence."""
     target = Path(path) if path is not None else overlay_path()
+    # Refuse the packaged default before taking the lock: under a colcon --symlink-install
+    # share dir the transaction would otherwise fail first with "unsafe config path".
+    if target.resolve() == _find_default_config().resolve():
+        raise ConfigError("refusing to write package default config")
     with transaction(target):
         return _patch_local_config_unlocked(patch, target, replace)
