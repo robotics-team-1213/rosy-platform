@@ -4075,3 +4075,9 @@
 - 변경: 테스트의 임시 비밀번호·해시 변수 이름을 명확히 하고 함수 호출을 분리했다. 비밀 스캐너의 규칙이나 허용 목록은 바꾸지 않았다. 제품 인증 코드는 그대로다.
 - 증거: 통신 중단 뒤 남아 있던 원격 job의 rc를 확인했다. 한 job은143, 다른 job은 fixture 변수 표현의 secret-scan 오검출1건이었다. 새 검사와 착지는 별도 실행한다. 이전160개 실제 Chromium 결과는 원래103df862b 범위로 유지한다.
 - gate 변화: 없음. 운영 명단·비밀번호·서비스는 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · feat(fleet): recover OMX topic task client
+
+- 변경: Recover the G2 wrapper and additional tests for the existing topic proposal/admission client, using Fleet compiler and named operator admission endpoints. The runner wiring is a later recovery group. Lost responses preserve intent and do not retry.
+- 증거: Committed remote tests are pending. No robot or service activation is performed.
+- gate 변화: None; topic text does not acquire ledger or device writer authority.
