@@ -263,6 +263,23 @@ def test_duplicate_basenames_run_in_separate_invocations(sample):
         assert len(names) == len(set(names)), inv
 
 
+def test_pack_separates_transitively_imported_test_helpers(sample):
+    files = {
+        'a/test_lease.py': 'VALUE = 1\n',
+        'b/test_lease.py': 'from test_bridge import VALUE\n',
+        'b/test_bridge.py': 'from test_lease import VALUE\n',
+        'b/test_job.py': 'from test_bridge import VALUE\n',
+    }
+    for name, source in files.items():
+        path = sample / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(source, encoding='utf-8')
+    _git(sample, 'add', '--', *files)
+    repo = affected.Repo.load(sample)
+    groups = affected.pack(repo, ['a/test_lease.py', 'b/test_job.py'])
+    assert groups == [['a/test_lease.py'], ['b/test_job.py']]
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])

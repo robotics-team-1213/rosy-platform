@@ -63,10 +63,10 @@ Raw logs remain outside the public repository, in the operator's
 
 | Artifact | SHA256 |
 |---|---|
-| `run.txt` | `bbb4eac261f4ab5cf2eba57c31b453d1fb45ca175060bbd272f77d359ab581bb` |
-| `out/teardown.json` | `e302abe46be929a251c35b6edd89f9ae0e13c0dc8ea540c8d827de56b591d9ef` |
-| `out/stop-readback.json` | `fe9ccfafa8be8541162a107c0492332f2354ecae4e2c368aff22c2661f6560d8` |
-| `out/preparation-timing.json` | `bd865dde745fa9a3e867fc60909b725178135e7eb684559b222a9d2190e41f37` |
+| `run.txt` | SHA256 `bbb4eac261f4ab5cf2eba57c31b453d1fb45ca175060bbd272f77d359ab581bb` |
+| `out/teardown.json` | SHA256 `e302abe46be929a251c35b6edd89f9ae0e13c0dc8ea540c8d827de56b591d9ef` |
+| `out/stop-readback.json` | SHA256 `fe9ccfafa8be8541162a107c0492332f2354ecae4e2c368aff22c2661f6560d8` |
+| `out/preparation-timing.json` | SHA256 `bd865dde745fa9a3e867fc60909b725178135e7eb684559b222a9d2190e41f37` |
 
 The diagnostic wrapper records unconsumed Future exceptions directly, then calls
 the original destructor; it neither fetches exceptions nor suppresses warnings.
