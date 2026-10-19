@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · Account 컨테이너 issuer DNS
 - 2026-10-19 · uncommitted · 신규 Pinky 3대용 배포 서명 키 교체
 - 2026-10-19 · uncommitted · 이전 OMX overlay 도입 전 패키지의 검증·복구
 - 2026-10-19 · uncommitted · 원자적 인증서 갱신이 proxy에 보이도록 directory bind
 - 2026-10-19 · uncommitted · Account HTTPS 선택 overlay의 서명·방화벽·복구 경계
-- 2026-10-19 · uncommitted · Account 배포 선행 updater 크기 분리

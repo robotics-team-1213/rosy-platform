@@ -348,3 +348,9 @@
 - 변경: Fleet 하위 문서 제목과 계정 앱 이름을 맞추고 Cell을 팔레타이징 작업 준비로 표시한다. URL·승인·실행 계약은 유지한다.
 - 증거: 원래 구현과 로컬 착지 검증은 보존한다. 이 게시 head는 별도 원격 검사·독립 검토·CI로 확인한다.
 - gate 변화: 없음. 이 기록은 운영 배포나 장치 수용의 증거가 아니다.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Added Vault labels to the existing account editor and profile vocabulary. The real-ledger Chromium scenario checks unchecked defaults, explicit selection, profile labels and durable readback.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.

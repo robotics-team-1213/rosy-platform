@@ -9386,3 +9386,9 @@ osy-d395-s1d\`.
 - 변경: 표준 검수 앱의 중앙 Account 쿠키를 프로젝트·공개 origin별로 구분하고, 관리 설치의 collaboration 결속·서비스 선택·loopback·인증 readiness 및 보관 버전 거부 조건을 문서화했다.
 - 증거: 회귀 먼저 커밋한 73cdfd1d5의 원격 RED를 확인했다. 구현 4bdea79bb의 원격 회귀와 브라우저 검사는 진행 중이며 AST·diff 확인은 완료했다.
 - gate 변화: 없음. 실제 로그인·권한·회수, HTTPS 설치와 자료 무변경 수용은 별도 증거다.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Recorded D-808, its own ADR Log row and the Account protocol capability contract. Public records contain no deployment addresses, keys or account details.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.

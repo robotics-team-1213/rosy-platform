@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-808 | Vault 권한은 명시적 site grant로 부여한다 | Accepted (2026-10-20) |
 | D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
 | D-774 | 스테이션 측정 카메라는 설치된 관측 프로세스가 실행 중일 때 송출을 요청한다 | Accepted (2026-10-16) |
