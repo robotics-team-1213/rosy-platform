@@ -514,7 +514,7 @@ def test_an_arc_toward_the_routes_bend_waits_while_the_ways_centre_lies_the_othe
     # left from there cut the corner and left the lane
     spoke = dict(target_m=(0.238, -0.067), ahead_m=0.194, exit=None, seen_exit="right", straddle=None, both=False,
                  exit_point_m={"left": (0.2, 0.12), "right": (0.2, -0.1)}, exit_reach_m={"left": 0.3, "right": 0.25},
-                 near_centre_m=(0.163, -0.055), centre_path_m=[], edges_m=[], near_edges_m={})
+                 exit_near={"left": True, "right": False}, near_centre_m=(0.163, -0.055), centre_path_m=[], edges_m=[], near_edges_m={})
     monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(spoke))
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=25.0)[2]
     assert debug["strategy"] == "drivable_centre" and debug.get("recentre_first"), debug
