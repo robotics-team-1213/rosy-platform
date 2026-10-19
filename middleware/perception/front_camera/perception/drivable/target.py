@@ -9,6 +9,37 @@ ROW_BAND_M = 0.03
 #: (0.2 m) the v2 Gazebo lap swung out to the wall there, nose 0.13 m off it and no room to pivot (r9, r10)
 MAX_TARGET_CURVATURE = 9.0
 
+#: a remembered boundary point this close to the path robot->target blocks that target
+CROSS_TOL_M = 0.015
+#: boundary points nearer than this along the arc are not judged (projection and odometry noise)
+CROSS_MIN_ALONG_M = 0.06
+
+
+def _crosses(points, tx, ty):
+    """Lateral offset of the nearest remembered boundary point within CROSS_TOL_M of the arc the
+    robot drives to (tx, ty) (tangent to its heading, as a pure-pursuit arc), or None. The chord
+    would cut the inside of every bend."""
+    d2 = tx * tx + ty * ty
+    if d2 < 1e-6 or not points:
+        return None
+    k = 2.0 * ty / d2                                    # signed curvature, left +
+    pts = np.asarray(points, float)
+    if abs(k) < 1e-6:
+        along, across = pts[:, 0], np.abs(pts[:, 1])
+        length = tx
+    else:
+        r = 1.0 / k                                       # circle centre (0, r)
+        dist = np.hypot(pts[:, 0], pts[:, 1] - r)
+        across = np.abs(dist - abs(r))
+        ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
+        along = ang * abs(r)
+        length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
+    hit = (along > CROSS_MIN_ALONG_M) & (along < length) & (across < CROSS_TOL_M)
+    if not hit.any():
+        return None
+    first = int(np.argmin(np.where(hit, along, np.inf)))
+    return float(pts[first, 1])
+
 
 def _row_x(rows, ground, x_offset):
     """base_link x of the floor at each image row (inf at or above the horizon)."""
