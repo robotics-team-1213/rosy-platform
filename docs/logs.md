@@ -9251,3 +9251,9 @@ osy-d395-s1d\`.
 - 변경: FULL 회귀가 찾은 API v1.287 변경 이력 표의 누락 행을 추가했다. 헤더·스키마·실행 코드는 바꾸지 않는다.
 - 증거: d9b706e204의 `test_protocol_version_alignment.py::test_changelog_has_a_row_for_the_live_version` 실패를 보존하고 수정 후 같은 검사를 원격 실행한다.
 - gate 변화: 없음. 문서 누락 보완이며 실물·SIM 동작 변경이 아니다.
+
+## 2026-10-19 · uncommitted · sim: drivable v2 원본 판정과 최신 소스 재검증
+
+- 변경: `validation/pinky-drivable-v2-recheck-2026-10-19/result.md`에 r51 원본과 새 Gazebo 실행, 실제 인식 출처, 실물 테스트 준비 범위를 기록했다. 제품 코드는 추가 수정하지 않았다.
+- 증거: r51a는 최종 PASS, r51b는 Fleet arrived이나 정착 거리 0.156 m로 0.15 m 기준을 넘어 FAIL이다. 새 소스 ff8eca4d9b의 실제 AI PC 실행은 ring_s에서 전진 없이 좌우 회전 후 stall/exit 1이었다. 모델 hash, 종료 zero·OFF·lease 해제와 원본 로그 보존을 확인했다.
+- gate 변화: 없음. 기존 카메라 drivable 완주 기록은 인정하되 반복 완주·실물 수용으로 확대하지 않는다. 모델·성공 소스 준비만 했으며 실물 배포와 주행은 수행하지 않았다.
