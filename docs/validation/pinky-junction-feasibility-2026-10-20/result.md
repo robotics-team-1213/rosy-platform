@@ -254,3 +254,33 @@ HEAD `eeb3a746e34ccf8821a490e7004d52276cbc5f73`
 _observed_turn의 방향 비교만 검증된 current path 첫 segment tangent로 바꿨다. 기존30도 한도, 실제 origin/source/current 이동, fresh 관측, 연결·coverage·target/opening 결속, 불확실 odometry 거절과 누적 회전량 예산은 유지한다. 첫 segment는 잡음에 민감할 수 있으며 반복 SIM에서 수용 여부를 별도로 확인한다.
 
 eef043 native RED3개 뒤eeb3 관련9파일203 passed / skip0 / NEW0으로 종료했다. 실제138초의 곡선 관측과 odometry로 이전 spent episode가 종료되어 다음 왼쪽 pivot을 막지 않는 것을 확인했다. sideways-first 경로는 near 위치나 먼 target이 맞더라도 진행 방향이 다르면 거절한다. 기존 CURVED·tight bend·불확실 odom·source 이동·예산 보호 회귀도 통과했다. 소스 커밋 전 독립 safety 검토에서 추가 material finding은 없었으며 dfca 이후2커밋 size-range 통과다. 최신 영향 범위·동일 조건 연속2회 SIM은 별도이며 수용 HOLD다.
+
+## d42 반복 결과: 1 PASS / 1 FAIL과 열린 직진로의 추정 artifact
+
+HEAD `d42e93133b38a703a51611e4943431614010e4ae`
+
+native 영향 범위는 run-1 6,908 passed / 408 skipped / 38 warnings / 62 subtests passed, run-2 9 passed로 총6,917건 통과했고 두 로그 모두 NEW0이었다. 소스·문서 최종 검토 Critical0 / Important0 / Minor0, dfca 이후3커밋 size-range 통과다.
+
+첫 SIM `sim-d42e93133b-e250bd`은 arrived/PASS였다. settled_xy(0.405612,-0.506585), 목표 거리0.127497m, via0.030m였다. 비영 속도 명령의 최초~마지막 구간에서 learned_drivable1,527개·fallback0, nonnull revision1,514개 고정 일치·누락13개, 열린 junction296회·먼 출구 거절86회였다. 이 구간의 정렬 예산 HOLD2회를 포함하므로 무중단 주행으로 표시하지 않는다.
+
+두 번째 `sim-d42e93133b-09c9be`는 realign HOLD 뒤 s4.851의 stall60초로 실패했다. settled_xy(-1.276760,0.023497), 목표 거리1.886557m, via0.031m였다. 비영 속도 명령의 최초~마지막 구간에서 learned_drivable874개·fallback0, nonnull revision869개 고정 일치·누락5개, 열린 junction181회·먼 출구 거절62회였다. 종단 realign HOLD는 마지막 비영 명령 뒤에도 이어지므로 이 구간 집계와 별도로 keep_debug의119.75초 이후 관측으로 확인했다. 두 실행 모두 final cmd·odom0, lease released, left_running 빈 목록, 산출물 회수·native 정리 완료, lane_return SKIP이다.
+
+두 실행의 pointer·render·paint target·lap·scenario·skip·stall·spawns·places JSON이 동일함을 대조했다. 모델·manifest는 각 시작 전 native 해시로 재확인했다. 같은 조건1 PASS / 1 FAIL이므로 연속2회 조건은 미달이며 수정 없이 세 번째를 반복하지 않는다.
+
+두 번째119.75초에는 guide here/ahead +1.41도, ahead0.601m, near centre(0.163,+0.011)인데 source target(0.194,-0.133)이었다. exact PNG000957·000958·000959를 같은 모델로 native 재생해 band median(0.222034,-0.024891), reach0.25m를 확인했다. 선택 k_path -4.801843의 보이는13개 arc 표본 중8개가 non-way였고, 같은 band의 k_chord -0.997280은 보이는45개 표본에 non-way가 없었다. 이는 source 추정 artifact의 근거이며, sample 사이 pixel 연결과 최종 current/smoothing 동작은 별도로 검증해야 한다. 화면 밖·사각은 unknown이며 clip해 floor로 인정하지 않는다. 검증된 same-band 대안이 있을 때만 source estimate를 보정하는 좁은 후보를 검토하며, REALIGN·CORE·near 출구 입장은 유지한다.
+
+- 첫 result SHA256: `f32758bc506ef9f9b0d99f0fc37b949da91153f01aea8c5f550f789d9be4d0b1`
+- 첫 observations SHA256: `89cc08326fed150ded21fb59c3abdde2f42998e3cba61a0ad2808ee2b4d5a20b`
+- 두 번째 result SHA256: `253f5ad228e6f8b04614b13260744360e0bbd0db3a087d23ff4cfc3dfba72696`
+- 두 번째 observations SHA256: `15f0ad5d7e2b2a6b9f9c9f1afaebe08d1bd6d61551dd1df28596516aa7f86d53`
+- 재생 PNG SHA256: `90f958b5f3a183c53197449da9e161c6080c1cfebe4460976df0fd803cbab6b1`
+- native mask packbits SHA256: `897ffa891ed446bb74b76103b54b39afa4d28667e43b0cca8f3e82ef926c5aa0`
+- native replay JSON SHA256: `2efd886f7350f9f625917bd91d3d2c728fe192c995b5a4c811ac7456df674b38`
+
+## 가시 픽셀 지지에 한정한 source 곡률 보정
+
+생산 HEAD `9550f4c9ce2422e6bb4350153f9105376fc4ab2e`.
+
+기존 source arc가 가시 non-way 픽셀을 지나고 같은 confidence band의 기존 chord가 가시 바닥에 지지될 때만 교체한다. 투영 표본 사이 픽셀 연결도 검사하며 화면 밖을 clip하여 바닥 근거로 만들지 않는다. 불확실하거나 대안이 검증되지 않으면 기존 후보를 유지한다. 정상 굽은 바닥의 기존 곡률도 유지한다. 이 검사는 source 추정 artifact 보정이며 최종 smoothing/current 변환 이후 궤적 전체의 바닥 보장을 뜻하지 않는다. REALIGN·CORE 명령 권한·정렬 예산을 완화하지 않는다.
+
+원본000958의 실제 마스크를 RLE fixture로 결속했다. native4e0 회귀 RED6개 뒤9550 관련10파일210 passed / skip0 / NEW0이었다. 픽셀 공백·완전 offscreen·보정 조건 부재·정상 굽은 바닥 보존과 이전 smoothing 뒤 기존 REALIGN 통과 회귀를 포함한다. 독립 safety 검토와 별도 최종 소스 검토는 Critical0 / Important0 / Minor0, d42 이후3커밋 size-range 통과다. 새 후보의 영향 범위 및 동일 조건 연속2회 SIM 전까지 수용 HOLD이며 d42의 첫 PASS를 이월하지 않는다.

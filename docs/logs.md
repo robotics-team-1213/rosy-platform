@@ -9329,3 +9329,9 @@ osy-d395-s1d\`.
 - 변경: dfca의 영향6,914 passed·s5.357 정체 실패와 원본138초 곡선 전진 증거를 기록했다. 가까운 진행 방향과 먼 곡선 목표 방향을 구분하는 수명 종료 수정을 회귀에 결속했다.
 - 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 원본 hash·145개 raw odom·native RED3→eeb3 관련203 passed/skip0/NEW0. 회전량 예산을 늘리지 않고 측정된 전진으로 이전 episode를 종료한다.
 - gate 변화: 없음. 최신 영향 범위·연속2회 SIM 미검증이며 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 반복 실패와 가시 픽셀 곡률 보정 증거
+
+- 변경: d42의1 PASS/1 FAIL, 종단 realign HOLD와 native 원본 재생을 동결 기록에 추가했다. 실제 픽셀로 검증한 같은 band chord에 한정한 source 추정 보정을 기록했다.
+- 증거: 9550 관련210 passed/skip0/NEW0, 독립 safety 및 최종 소스 검토0/0/0. 가시 표본 사이 픽셀 공백·offscreen·정상 곡선 보존 회귀를 포함한다.
+- gate 변화: 없음. 이전 PASS 이월 없이 새 후보의 영향 범위·동일 조건 연속2회 SIM을 확인한다.
