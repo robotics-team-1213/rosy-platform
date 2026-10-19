@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 93  # Includes the shared host report reader and the D-793 policy page.
+    assert len(expected) == 94  # Includes the shared host report reader, policy page and device request helper.
+    assert 'shared/device-request.js' in expected
     assert 'shared/host-health.js' in expected
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
     assert {'accounts.html', 'shared/account-page.js', 'shared/account-permissions.js'} <= expected.keys()
@@ -74,7 +75,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
             assessment_files = {Path(name).name for name in archive.getnames()
                                 if '/_source_roots/assessment/' in name and name.endswith('.py')}
-            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py',
+                                        'wait_graph.py', 'fact_rules.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/site_ui/console')

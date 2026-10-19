@@ -55,3 +55,19 @@ def test_publisher_surfaces_contract_error_code(status, code):
     with pytest.raises(SightingPublishError) as exc:
         asyncio.run(run())
     assert (exc.value.status_code, exc.value.code) == (status, code)
+
+
+@pytest.mark.parametrize("status, content, code", [
+    (502, b"<html>Bad Gateway</html>", "SIGHTING_HTTP_ERROR"),
+    (502, b"[]", "SIGHTING_HTTP_ERROR"),
+    (200, b"<html>Bad Gateway</html>", "SIGHTING_BAD_RESPONSE"),
+])
+def test_publisher_reports_malformed_response_as_publish_error(status, content, code):
+    async def run():
+        transport = httpx.MockTransport(lambda _: httpx.Response(status, content=content))
+        async with SightingPublisher("https://fleet.example.test", "token", transport=transport) as publisher:
+            await publisher.publish(_sighting())
+
+    with pytest.raises(SightingPublishError) as exc:
+        asyncio.run(run())
+    assert (exc.value.status_code, exc.value.code) == (status, code)

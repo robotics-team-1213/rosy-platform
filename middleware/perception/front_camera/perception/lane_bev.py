@@ -45,6 +45,7 @@ from .lane import (
     _WASHED_FRACTION,
 )
 from .lane_boundary_identity import stationary_boundary_replaced
+from .bev_cache import cached_birds_eye
 
 #: Grid cell. A lane line is ten cells wide, and the 6 mm gap between the
 #: lap's crosswalk bars and the boundary is at least two, so the gap
@@ -365,13 +366,7 @@ class LaneEdgeFollower:
         self._last_pose = None
         self._fresh_at = None
 
-    def _birds_eye(self, ground, shape) -> BirdsEye:
-        key = (ground.height_m, ground.pitch_rad, ground.focal_px, ground.principal_x,
-               ground.principal_y, ground.max_range_m, shape[0], shape[1], self._camera_x)
-        if key != self._view_key:
-            self._view = BirdsEye(ground, shape[1], shape[0], self._camera_x)
-            self._view_key = key
-        return self._view
+    _birds_eye = cached_birds_eye
 
     def _allow_unseen_memory(self) -> bool:
         # Route followers may override only with an active, aligned map gate.

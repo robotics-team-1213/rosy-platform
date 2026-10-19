@@ -28,6 +28,7 @@ from .motor_control import (
     MotorController,
 )
 from .pinky_pro_adapter import PinkyProAdapter
+from .pinky_pro_adapter import DEFAULTS
 from .wheel_calibration import calibrated_wheels
 
 TWIST_SUB_TOPIC_NAME = "cmd_vel"
@@ -74,8 +75,8 @@ class Rosy(Node):
         self.declare_parameter('motor_device', DEFAULT_SERIAL_PORT_NAME)
         self.declare_parameter('motor_baudrate', DEFAULT_BAUDRATE)
         self.declare_parameter('motor_ids', DEFAULT_DYNAMIXEL_IDS)
-        self.declare_parameter('max_linear_mps', 0.20)
-        self.declare_parameter('max_angular_rps', 0.80)
+        self.declare_parameter('max_linear_mps', DEFAULTS['max_linear_mps'])
+        self.declare_parameter('max_angular_rps', DEFAULTS['max_angular_rps'])
         self.declare_parameter('max_wheel_rpm', 100.0)
         self.declare_parameter('motor_profile_acceleration', 200)
         # D-192 no-motion mode: false keeps motor torque off, never subscribes

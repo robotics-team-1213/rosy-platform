@@ -15,17 +15,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 [[ "$(uname -m)" == "aarch64" ]] || fail "Pinky hardware dependencies require native aarch64"
 [[ -f "$LOCK" ]] || fail "input lock is missing"
 
-lock_value() {
-    local section="$1" wanted="$2"
-    awk -v section="$section" -v wanted="$wanted" '
-        $0 ~ "^" section ":[[:space:]]*$" { inside=1; next }
-        inside && /^[^[:space:]]/ { exit }
-        inside {
-            key=$1; sub(/:$/, "", key)
-            if (key == wanted) { $1=""; sub(/^[[:space:]]+/, ""); sub(/\r$/, ""); print; exit }
-        }
-    ' "$LOCK"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/lock.sh"
 
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA256="$(lock_value hardware_dependencies wiringpi_sha256)"

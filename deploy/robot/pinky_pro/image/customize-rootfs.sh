@@ -40,17 +40,7 @@ done
 [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]] || fail "release id is invalid"
 [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || fail "source revision is invalid"
 
-lock_value() {
-    local section="$1" wanted="$2"
-    awk -v section="$section" -v wanted="$wanted" '
-        $0 ~ "^" section ":[[:space:]]*$" { inside=1; next }
-        inside && /^[^[:space:]]/ { exit }
-        inside {
-            key=$1; sub(/:$/, "", key)
-            if (key == wanted) { $1=""; sub(/^[[:space:]]+/, ""); sub(/\r$/, ""); print; exit }
-        }
-    ' "$LOCK"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/lock.sh"
 
 ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"

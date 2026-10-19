@@ -17,6 +17,16 @@
 | D-772 | 스테이션 위치 버전과 배터리 기반 자동 충전 운영 | Accepted (2026-10-16) |
 | D-809 | Legacy 937 Learning Account boundary and protected human audit | Accepted (2026-10-20) |
 | D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
+| D-811 | contracts의 동작 코드 소유권 | Proposed |
+| D-812 | learning의 실행 코드 의존과 부트스트랩 경계 | Proposed |
+| D-813 | CORE와 Fleet peer 암호·TLS 사본의 소유권 | Proposed |
+| D-814 | Fleet localization 자세 판정의 소유권 | Proposed |
+| D-815 | Gazebo scripts의 manifest와 책임 문서 일치 | Proposed |
+| D-816 | Isaac 시뮬레이션 holder의 소유권 | Proposed |
+| D-817 | 움직임을 요청하는 보정 노드의 holder | Proposed |
+| D-818 | 모델 PC guard 설치 스크립트의 존치 | Proposed |
+| D-819 | local action과 stop 전송의 공통 구현 | Proposed |
+| D-820 | Discord 알림과 답글 전송의 공통 소유권 | Proposed |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |

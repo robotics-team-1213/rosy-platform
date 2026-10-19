@@ -27,17 +27,7 @@ fail() { echo "FAIL VENDOR_SOURCE $*" >&2; exit 1; }
 [[ -d "$DEST" ]] || fail "destination is missing: $DEST"
 [[ -z "$(ls -A -- "$DEST")" ]] || fail "destination is not empty: $DEST"
 
-lock_value() {
-    local section="$1" wanted="$2"
-    awk -v section="$section" -v wanted="$wanted" '
-        $0 ~ "^" section ":[[:space:]]*$" { inside=1; next }
-        inside && /^[^[:space:]]/ { exit }
-        inside {
-            key=$1; sub(/:$/, "", key)
-            if (key == wanted) { $1=""; sub(/^[[:space:]]+/, ""); sub(/\r$/, ""); print; exit }
-        }
-    ' "$LOCK"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/lock.sh"
 
 COMMIT="$(lock_value hardware_dependencies sllidar_ros2_commit)"
 SHA256="$(lock_value hardware_dependencies sllidar_ros2_sha256)"
