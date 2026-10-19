@@ -30,7 +30,7 @@ import time
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
 
-from .target import MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
+from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
 from .route_guard import observed_route_candidate
 from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
@@ -79,10 +79,6 @@ EDGE_MEMORY_MAX_X_M = 0.25
 CORRIDOR_NEAR_M = 0.12
 #: URDF body (D-424), base_footprint
 BODY_HALF_M = NOMINAL_BODY.half_width_m
-#: a remembered boundary point this close to the path robot->target blocks that target
-CROSS_TOL_M = 0.015
-#: boundary points nearer than this along the arc are not judged (projection and odometry noise)
-CROSS_MIN_ALONG_M = 0.06
 #: an in-place turn stops after this much rotation (no U-turn without a route; p8 crosswalk)
 PIVOT_MAX_RAD = 1.75
 #: a route prior within this of straight ahead means "keep going" (no exit turn)
@@ -219,32 +215,6 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["curvature_1pm"] = round(curvature, 3)
         out["both"] = bool(np.mean(~open_left[band] & ~open_right[band]) >= 0.5)
     return out
-
-
-def _crosses(points, tx, ty):
-    """Lateral offset of the nearest remembered boundary point within CROSS_TOL_M of the arc the
-    robot drives to (tx, ty) (tangent to its heading, as a pure-pursuit arc), or None. The chord
-    would cut the inside of every bend."""
-    d2 = tx * tx + ty * ty
-    if d2 < 1e-6 or not points:
-        return None
-    k = 2.0 * ty / d2                                    # signed curvature, left +
-    pts = np.asarray(points, float)
-    if abs(k) < 1e-6:
-        along, across = pts[:, 0], np.abs(pts[:, 1])
-        length = tx
-    else:
-        r = 1.0 / k                                       # circle centre (0, r)
-        dist = np.hypot(pts[:, 0], pts[:, 1] - r)
-        across = np.abs(dist - abs(r))
-        ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
-        along = ang * abs(r)
-        length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
-    hit = (along > CROSS_MIN_ALONG_M) & (along < length) & (across < CROSS_TOL_M)
-    if not hit.any():
-        return None
-    first = int(np.argmin(np.where(hit, along, np.inf)))
-    return float(pts[first, 1])
 
 
 # Legacy defaults; runtime instances use the effective CORE law.
