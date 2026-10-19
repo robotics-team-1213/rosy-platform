@@ -84,3 +84,53 @@ def test_reference_options_are_one_path_per_role():
     for bad in (['top'], ['top=/a', 'top=/b'], ['=/a']):
         with pytest.raises(ValueError):
             collection_intake.camera_references(bad)
+
+
+@pytest.mark.parametrize('role', ['front', 'wrist'])
+def test_fixed_reference_cannot_measure_a_wrist_stream(tmp_path, role):
+    record = session(role, [scene(), scene()])
+    fingerprint = camera_setup_intake.camera_info_fingerprints(record['blobs'])[role]
+    reference = camera_setup_intake.load_reference(stored_reference(tmp_path, 'top', fingerprint))
+    with pytest.raises(ValueError, match='camera role'):
+        camera_setup_intake.report([record], [(record, dict(episode_index=0))], {role: reference})
+
+
+@pytest.mark.parametrize('role', ['front', 'wrist'])
+def test_wrist_reference_requires_its_confirmation_pose(tmp_path, role):
+    record = session(role, [scene(), scene()])
+    fingerprint = camera_setup_intake.camera_info_fingerprints(record['blobs'])[role]
+    reference = camera_setup_intake.load_reference(stored_reference(tmp_path, role, fingerprint))
+    with pytest.raises(ValueError, match='check pose'):
+        camera_setup_intake.report([record], [(record, dict(episode_index=0))], {role: reference})
+
+
+def test_reference_role_accepts_the_wrist_alias(tmp_path):
+    record = session('front', [scene(), scene()], joints=WRIST_POSE['positions_rad'])
+    fingerprint = camera_setup_intake.camera_info_fingerprints(record['blobs'])['front']
+    reference = camera_setup_intake.load_reference(stored_reference(tmp_path, 'wrist', fingerprint, WRIST_POSE))
+    report = camera_setup_intake.report([record], [(record, dict(episode_index=0))], {'front': reference})
+    assert report['episodes'][0]['checks']['front']['before']['verdict'] == 'ok'
+
+
+def test_changed_calibration_is_not_measured_using_the_first_camera_model(tmp_path):
+    record = session('top', [scene(), scene()])
+    fingerprint = camera_setup_intake.camera_info_fingerprints(record['blobs'])['top']
+    reference = camera_setup_intake.load_reference(stored_reference(tmp_path, 'top', fingerprint))
+    later = json.loads(record['blobs']['camera_info.jsonl'])
+    later['time_ns'] = 2
+    later['cameras']['top']['k'][0] = 650.
+    record['blobs']['camera_info.jsonl'] += json.dumps(later).encode() + b'\n'
+    for i, row in enumerate(record['samples'][0]):
+        row['time_ns'] = 3 + i
+    report = camera_setup_intake.report([record], [(record, dict(episode_index=0))], {'top': reference})
+    check = report['episodes'][0]['checks']['top']
+    assert check['before']['verdict'] == check['after']['verdict'] == 'unmeasurable'
+    assert 'top' not in report['camera_info_sha256']
+
+
+def test_calibration_changes_do_not_invalidate_an_unchanged_other_camera():
+    first = dict(time_ns=1, cameras={'top': {'k': [600.]}, 'front': {'k': [700.]}})
+    later = dict(time_ns=2, cameras={'top': {'k': [600.]}, 'front': {'k': [710.]}})
+    blobs = {'camera_info.jsonl': b'\n'.join(json.dumps(row).encode() for row in [first, later]) + b'\n'}
+    assert camera_setup_intake.camera_info_fingerprints(blobs) == {
+        'top': hashlib.sha256(json.dumps(first['cameras']['top'], sort_keys=True).encode()).hexdigest()}
