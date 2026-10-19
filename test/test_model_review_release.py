@@ -246,10 +246,11 @@ def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, mon
     import urllib.error
     from types import SimpleNamespace
     seen = []
+    public_workspace = False
     def open_url(url, timeout):
         seen.append(url)
         path = url.split(':8774')[-1]
-        if path == '/api/workspace':
+        if path == '/api/workspace' and not public_workspace:
             raise urllib.error.HTTPError(url, 401, 'login required', {}, io.BytesIO(b'{}'))
         payload = b'{"enabled":true,"rosy_account":true,"project_id":"alpha"}' if path.endswith('options') else b'accounts page'
         response = io.BytesIO(payload)
@@ -262,3 +263,17 @@ def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, mon
     assert [url.split(':8774')[-1] for url in seen] == ['/api/workspace', '/api/accounts/options', '/accounts']
     with pytest.raises(RuntimeError):
         release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'wrong'})
+    public_workspace = True
+    with pytest.raises(RuntimeError):
+        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha'})
+
+
+def test_bound_central_account_refuses_source_without_account_bridge(tmp_path):
+    app = tmp_path / 'review_app.py'
+    app.write_text("parser.add_argument('--collaboration')")
+    binding = tmp_path / 'learning-collaboration.json'
+    binding.write_text('{"account_client_file":"/private/client.json"}')
+    with pytest.raises(ValueError, match='central Account'):
+        release.check_collaboration(app, binding, '127.0.0.1')
+    (tmp_path / 'learning_rosy_accounts.py').write_text('bridge')
+    assert release.check_collaboration(app, binding, '127.0.0.1')['account_client_file'] == '/private/client.json'
