@@ -39,13 +39,13 @@ linear ≤ 0.03 m/s, |angular| ≤ 0.4 rad/s, `--max-s` ≤ 120.
 
 1. **Bundle the committed code and copy it.** The tool imports `contracts/foundation/core_common`
    and `middleware/perception/control`, so ship those with `tools/capture`. Scratch on the PC
-   goes to `X:\DevTemp\<topic>\`.
+   goes to `$ROSY_SCRATCH/<topic>/`.
    ```bash
    git archive HEAD contracts/foundation/core_common middleware/perception/control tools/capture \
-     -o X:/DevTemp/<topic>/bundle.tar
+     -o "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<topic>/bundle.tar"
    rssh 'mkdir -p ~/<topic>/repo ~/<topic>/model ~/<topic>/runs'
    scp -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o UserKnownHostsFile="$KH" \
-     X:/DevTemp/<topic>/bundle.tar rosy@"$R":<topic>/bundle.tar
+     "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<topic>/bundle.tar" rosy@"$R":<topic>/bundle.tar
    rssh 'tar -xf ~/<topic>/bundle.tar -C ~/<topic>/repo'
    ```
 2. **Copy the model with a sha256 check.** `/var/lib/rosy/models` is `root:rosy-camera` 0750;
@@ -95,7 +95,7 @@ linear ≤ 0.03 m/s, |angular| ≤ 0.4 rad/s, `--max-s` ≤ 120.
    the run with mode `IDLE`. After any crash, check `GET /api/v1/robot/state` shows `IDLE`.
 7. **Clean up.** `POST /api/v1/auth/logout` with the token (204), then
    `rssh 'rm -f ~/<topic>/token'`. Copy `~/<topic>/runs/<run>/` (`cycles.jsonl`, `frames/`,
-   `summary.json`) to `X:\DevTemp\<topic>\` and write the record under `docs/validation/`.
+   `summary.json`) to `$ROSY_SCRATCH/<topic>/` and write the record under `docs/validation/`.
 
 A new loop of your own follows the same contract: frame or scan in,
 `POST /api/v1/mode {"mode": "MANUAL"}`, then `POST /api/v1/teleop {"linear", "angular"}`
