@@ -821,3 +821,9 @@
 - 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
 - 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
 - gate 변화: 없음.
+
+## 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 회귀와 공통 예외 정규화
+
+- 변경: 공유 AccountClient의 HTTPException을 빈 AccountUnavailable로 정규화한다. IncompleteRead(read), BadStatusLine/LineTooLong(open)를 token/introspect/revoke/userinfo에 주입하고 불명확한 refresh 뒤 세션 삭제·재사용 금지, 반복 회수 실패 뒤 대기열 보존·복구 후 삭제를 고정했다. 서명·CSRF·grant·오프라인 만료 정책은 변경하지 않았다.
+- 증거: tests-only 79cc935a8dab7d57884c85c513022c50f8fbe989의 원격 model PC run-1.txt(account-http-red-20261020)는 신규 회귀 18건 실패, known_failures 비교 NEW 18/known 0/flaky 0, exit 1이다. 구현 GREEN은 후속 커밋 SHA로 별도 검증한다.
+- gate 변화: 없음. 이 회귀는 공유 전송/세션/회수 대기열 계약을 확인하며 실제 background thread·HTTPS 서버·배포·장치·현장 수용 증거는 아니다. D-757 계약을 보완하며 신규 ADR·API 버전은 없다.
