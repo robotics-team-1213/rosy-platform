@@ -298,8 +298,8 @@ CURVED = dict(strategy='drivable_turn_right', reason=None, straddle=None,
         (0.285003,-0.208417),(0.289866,-0.228514)])
 
 
-def drive_curve(owner, guard, info):
-    owner._ctx.update(here=-12.7, ahead=-62.9)
+def drive_curve(owner, guard, info, *, here=-12.7, ahead=-62.9):
+    owner._ctx.update(here=here, ahead=ahead)
     for i in range(1, 17):
         assert step(owner, guard, 0.7, i * 0.01, info=info, error=0.1, confidence=0.6)[:2] == (0.1, 0.6)
     owner._ctx.update(here=36.5, ahead=-68.8)
@@ -345,3 +345,23 @@ def test_a_curve_captured_before_leaving_the_origin_cannot_end_the_episode():
         guard.step(0.1, 0.6, info, (x, 0.0, 0.7), owner, source_pose=(source_x, 0.0, 0.7),
             current_stamp=owner._test_stamp, observation_stamp=owner._test_stamp - 0.5)
     assert guard._alignment is not None and not guard._alignment['uncertain']
+
+
+def test_a_connected_tight_bend_is_measured_along_the_path_instead_of_the_forward_axis():
+    # sim-68725ef0f4-ea9db8 decision64.875: 0.308m of path, but only 0.202m of forward x.
+    tight = dict(CURVED, strategy='drivable_turn_left', seen_exit='left',
+        target_now_m=(0.183, 0.085), exit_point_m={'left': (0.190, 0.094)},
+        exit_reach_m={'left': 0.202}, centre_path_m=[
+            (0.139118,0.023854),(0.141141,0.024605),(0.143164,0.026972),(0.145187,0.028914),
+            (0.147210,0.031462),(0.149233,0.034073),(0.151255,0.036439),(0.153278,0.038806),
+            (0.155301,0.041442),(0.157324,0.044333),(0.159347,0.048040),(0.161370,0.051875),
+            (0.163392,0.056185),(0.165415,0.059730),(0.167438,0.063614),(0.169461,0.066492),
+            (0.171484,0.069873),(0.173507,0.073779),(0.175529,0.077968),(0.177552,0.083528),
+            (0.179575,0.089905),(0.181598,0.096323),(0.183621,0.102244),(0.185644,0.107810),
+            (0.187667,0.116845),(0.189689,0.124678),(0.191712,0.131490),(0.193735,0.141343),
+            (0.195758,0.148732),(0.197781,0.155587),(0.199804,0.165471),(0.201826,0.174916)])
+    owner, guard = guarded()
+    spend(owner, guard)
+    drive_curve(owner, guard, tight, here=14.4, ahead=67.5)
+    assert guard._alignment is None
+    assert step(owner, guard, 0.7, 0.16)[0] == -PIVOT_ERROR
