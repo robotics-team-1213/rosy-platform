@@ -272,6 +272,7 @@ def test_losing_the_observed_opening_does_not_restore_the_opposing_raw_pivot():
 
 def test_continuing_alignment_uses_the_original_budget_when_the_near_offset_shrinks():
     owner, guard = guarded()
+    owner._ctx.update(here=25.3, ahead=-80.2)
     step(owner, guard, info=LATCHED, error=PIVOT_ERROR, confidence=owner._pivot_confidence)
     limit = guard._alignment['limit']
     near = dict(LATCHED, near_centre_m=(0.180, 0.02))
