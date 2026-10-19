@@ -242,8 +242,8 @@ def test_full_local_uses_deploy_functional_tests_and_leaves_root_suite_to_ci(sam
 def test_pack_bounds_remote_command_length_without_dropping_tests():
     class FakeRepo:
         @staticmethod
-        def test_files_under(path):
-            return [path]
+        def test_import_names(path):
+            return {PurePosixPath(path).name: path}
 
     paths = [f"test/test_case_{i:04d}_{'x' * 24}.py" for i in range(200)]
     groups = affected.pack(FakeRepo(), paths)
@@ -278,6 +278,8 @@ def test_pack_separates_transitively_imported_test_helpers(sample):
     repo = affected.Repo.load(sample)
     groups = affected.pack(repo, ['a/test_lease.py', 'b/test_job.py'])
     assert groups == [['a/test_lease.py'], ['b/test_job.py']]
+    assert affected.pack(repo, ['b/test_job.py', 'b/test_bridge.py']) == [
+        ['b/test_job.py', 'b/test_bridge.py']]
 
 
 def test_reasons_name_the_reverse_dependency(sample):
