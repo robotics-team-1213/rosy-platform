@@ -66,6 +66,30 @@ nothing on a robot going about its work.
 | `dock_id` | no | Identity, for an operator staring at two docks |
 | `firmware` | no | Version, for the same reason |
 | `faults` | no | List of strings; empty when healthy |
+| `termination` | no | `NORMAL` only for measured charger/BMS normal termination; absent means `UNKNOWN` |
+| `termination_source` | no | `charger` or `bms`; absent or unsupported means `unknown` |
+| `termination_sample_at` | no | Original measured termination event time in synchronized UTC epoch seconds; never the poll receive time |
+| `battery_id` | no | Measured or commissioned pack identity associated with that termination event |
+| `load_sample_at` | no (legacy), required for automatic station seating | Actual limit-switch sample time in synchronized UTC epoch seconds; omission is not a fresh contact sample |
+
+Automatic station seating also requires `dock_id` to match the session's station.
+Missing or different identity, missing switch sample time, and stale/future switch
+samples cannot prove seating. Required `load_present` and `charging` values must
+be JSON booleans; strings such as `"false"` are bad responses. The new collector
+uses the earlier of switch sample time and HTTP request start to bound freshness;
+polling a cached value does not renew the switch sample. The reference firmware
+does not yet provide a synchronized switch timestamp, so this new automatic
+seating path needs a measured sensor adapter before device acceptance.
+
+The reference firmware does not measure a charger/BMS normal-termination signal.
+It omits these optional fields, so clients preserve `UNKNOWN`. Zero current,
+`charging=false`, or normal output voltage cannot produce `NORMAL`. Adding a
+real signal requires bench validation and a synchronized source clock; an MCU
+uptime timestamp is not a UTC timestamp. A missing source time or pack identity
+also remains `UNKNOWN`. Existing required fields and the local load/relay
+interlock stay unchanged. Normal termination must belong to the current docking
+attempt; fresh contact, pack and charger readback remain necessary while waiting
+for work. It does not by itself authorize undocking or work assignment (D-772).
 
 ### `load_present` and `charging` are different questions
 
