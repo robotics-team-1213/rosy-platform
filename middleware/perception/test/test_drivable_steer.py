@@ -301,6 +301,16 @@ def test_at_a_crosswalk_a_closed_way_goes_straight_not_around():
     assert (error, debug["strategy"]) == (0.0, "drivable_crosswalk_straight"), debug
 
 
+def test_crosswalk_straight_does_not_override_a_lidar_front_stop():
+    steer = DrivableSteer()
+    steer.crosswalk((0.0, 0.0, 0.0))
+    way = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
+    error, confidence, debug = steer.update(way, 1, G, XO, HALF,
+        (0.05, 0.0, 0.0), (0.05, 0.0, 0.0), front_sector_m=0.114)
+    assert debug["strategy"] == "drivable_pivot_left", debug
+    assert error < 0 and confidence == CORE_MIN_CONFIDENCE
+
+
 def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
     steer = DrivableSteer()
     closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
