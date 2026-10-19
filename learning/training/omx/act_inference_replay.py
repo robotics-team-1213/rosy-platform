@@ -11,7 +11,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path[:0]=[str(ROOT/'contracts/learning/src'),str(ROOT/'learning/curation/omx')]
-from act_inference import ACTInference,InferenceObservation
+from act_inference import ACTInference,InferenceObservation,image_key
 from rosy.contracts.learning import validate_dataset,validate_policy
 
 
@@ -77,7 +77,7 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
                 if int(actual['source.'+field].item())!=row[field]:raise ValueError('reader source clock/sequence differs')
             if int(actual['source.received_wall_time_ns'].item())!=row['received_at_ns']:
                 raise ValueError('reader original wall receipt differs')
-            image=actual['observation.images.front']
+            image=actual[image_key(policy)]
             if list(image.shape)!=camera['source_shape']:raise ValueError('reader source image dimensions differ')
             rgb=(image.permute(1,2,0).numpy()*255).round().astype(np.uint8).tobytes()
             received=time.monotonic_ns()

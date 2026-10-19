@@ -126,6 +126,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     if len(set(ids)) != len(ids):
         raise ValueError("same original Episode cannot straddle train/eval")
     compatible_sources(sources)
+    # D-794 B: the image key and the artifact camera name follow the recorded camera name.
+    image_key = "observation.images." + sources[0]["camera"]["name"]
     durations = {r["duration_s"] for rows in original_rows for r in rows}
     if len(durations) != 1:
         raise ValueError("joint-only study requires one explicit source duration")
@@ -158,8 +160,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                     raise ValueError("LeRobot wall receipt clock differs")
                 np.testing.assert_allclose(actual["action.duration_s"].numpy(), [row["duration_s"]],
                                            atol=1e-7, rtol=1e-6)
-                verify_reader_image(actual["observation.images.front"].numpy(), source / row["image_path"], row["image_sha256"])
-                images.append(torch.nn.functional.interpolate(actual["observation.images.front"].unsqueeze(0),
+                verify_reader_image(actual[image_key].numpy(), source / row["image_path"], row["image_sha256"])
+                images.append(torch.nn.functional.interpolate(actual[image_key].unsqueeze(0),
                                                               size=(64, 64), mode="bilinear", align_corners=False)[0])
                 states.append(actual["observation.state"])
                 actions.append(actual["action"])
@@ -179,7 +181,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             arrays[i] = (images, (states - state_mean) / state_std, (actions - action_mean) / action_std)
         names = sources[0]["joint_names"]
         config = ACTConfig(input_features={"observation.state": PolicyFeature(FeatureType.STATE, (len(names),)),
-                           "observation.images.front": PolicyFeature(FeatureType.VISUAL, (3, 64, 64))},
+                           image_key: PolicyFeature(FeatureType.VISUAL, (3, 64, 64))},
                            output_features={"action": PolicyFeature(FeatureType.ACTION, (len(names),))},
                            chunk_size=4, n_action_steps=n_action_steps, dim_model=64, n_heads=4, dim_feedforward=256,
                            n_encoder_layers=1, n_decoder_layers=1, use_vae=False, dropout=0.0,
@@ -193,12 +195,12 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         _write(out / "state.json", {"status": "training", "steps": steps, "seed": seed, "source_episodes": ids})
         for step in range(steps):
             picked = [indices[i] for i in torch.randint(len(indices), (8,)).tolist()]
-            batch = {k: [] for k in ("observation.state", "observation.images.front", "action", "action_is_pad")}
+            batch = {k: [] for k in ("observation.state", image_key, "action", "action_is_pad")}
             for e, i in picked:
                 images, states, actions = arrays[e]
                 chunk = chunk_indices(len(actions), i, 4)
                 batch["observation.state"].append(states[i])
-                batch["observation.images.front"].append(images[i])
+                batch[image_key].append(images[i])
                 batch["action"].append(torch.stack([actions[j] if j is not None else actions[-1] for j in chunk]))
                 batch["action_is_pad"].append(torch.tensor([j is None for j in chunk], dtype=torch.bool))
             batch = {k: torch.stack(v) for k, v in batch.items()}
@@ -220,7 +222,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             images, states, _ = arrays[-1]
             with torch.no_grad():
                 predictions = [model.select_action({"observation.state": states[i:i+1],
-                               "observation.images.front": images[i:i+1]}).squeeze(0)
+                               image_key: images[i:i+1]}).squeeze(0)
                                for i in range(len(states))]
             return (torch.stack(predictions) * action_std + action_mean).numpy()
 
@@ -253,7 +255,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                          "robot_type": "omx_sim_ros", "environment": "sim",
                          "device_profile_revision": "sim-world:" + sources[0]["world_sha256"],
                          "camera_profile_revision": None,
-                         "cameras": [{"name": "front", "identity": sources[0]["camera"]["identity"],
+                         "cameras": [{"name": sources[0]["camera"]["name"], "identity": sources[0]["camera"]["identity"],
                                       "calibration_sha256": sources[0]["camera"]["camera_info_sha256"],
                                       "source_shape": [3, sources[0]["camera"]["height"], sources[0]["camera"]["width"]],
                                       "model_shape": [3, 64, 64], "color": "rgb", "scale": 1/255}],
