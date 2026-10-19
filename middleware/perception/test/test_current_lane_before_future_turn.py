@@ -6,6 +6,7 @@ not a full-mask replay. The same-source SIM remains the behavioral acceptance.
 import copy
 import math
 
+import numpy as np
 import pytest
 
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer
@@ -21,11 +22,11 @@ RECORDED = dict(strategy='drivable_turn_right', reason=None, target_m=(0.238, 0.
     straddle=None, both=False)
 
 
-def candidate(info=None, *, context=None, source=SOURCE, current=CURRENT, stamp=91.125, observed=91.0):
+def candidate(info=None, *, context=None, source=SOURCE, current=CURRENT, stamp=91.125, observed=91.0, edges=()):
     owner = DrivableSteer()
-    owner._ctx = dict(guide=True, fresh=True, here=9.556876300408135, ahead=-75.08783022157792,
-                      **(context or {})) if not context else {
-        **dict(guide=True, fresh=True, here=9.556876300408135, ahead=-75.08783022157792), **context}
+    owner._ctx = {**dict(guide=True, fresh=True, here=9.556876300408135, ahead=-75.08783022157792),
+                  **(context or {})}
+    owner._edges = list(edges)
     info = copy.deepcopy(RECORDED if info is None else info)
     error = owner.pursuit_error(*RECORDED['target_now_m'], 0.6)
     output = RouteBridge().step(error, 0.6, info, current, owner, source_pose=source,
@@ -39,6 +40,25 @@ def test_recorded_current_lane_target_wins_over_the_future_opposite_arc():
     assert error < 0 and confidence == 0.6
     assert info['strategy'] == 'drivable_centre' and info['future_turn_deferred']
     assert info['target_now_m'][0] > 0 and info['target_now_m'][1] > 0
+
+
+def test_current_lane_selection_rejects_a_remembered_boundary_crossing():
+    edges = [(0.1, float(y)) for y in np.linspace(-0.15, 0.15, 100)]
+    (error, _, info), _, old_error = candidate(source=(0., 0., 0.), current=(0., 0., 0.), edges=edges)
+    assert error == old_error and not info.get('future_turn_deferred')
+
+
+def test_full_steer_defers_the_recorded_opposite_future_turn(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as module
+    raw = {k: v for k, v in RECORDED.items() if k not in ('strategy', 'reason', 'target_now_m')}
+    raw.update(edges_m=[], near_edges_m={}, centre_path_m=[])
+    monkeypatch.setattr(module, 'way_target', lambda *args: copy.deepcopy(raw))
+    owner = DrivableSteer()
+    error, confidence, info = owner.update(np.ones((240, 320), bool), 91.0, None, 0.033, 0.0925,
+        SOURCE, CURRENT, observed_only=True, current_stamp=91.125, guide_fresh=True,
+        guide_here_deg=9.556876300408135, guide_deg=-75.08783022157792, guide_pivot_ok=False)
+    assert error < 0 and confidence > owner._pivot_confidence
+    assert info['strategy'] == 'drivable_centre' and info['future_turn_deferred']
 
 
 @pytest.mark.parametrize('change', [
