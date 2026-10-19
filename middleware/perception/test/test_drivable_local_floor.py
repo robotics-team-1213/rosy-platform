@@ -70,6 +70,23 @@ def test_guide_look_checks_the_target_in_current_coordinates(monkeypatch):
     assert (error, confidence, info['strategy']) == (-.5, .35, 'drivable_pivot_left')
 
 
+@pytest.mark.parametrize('memory', [False, True])
+def test_synthetic_exits_cannot_drive_to_a_target_that_turned_opposite_after_capture(monkeypatch, memory):
+    import control.sensing.perception.drivable.drivable_steer as module
+    observation = raw()
+    observation.update(target_m=(.15, .1), ahead_m=0., exit=None, seen_exit=None,
+                       exit_near={}, exit_point_m={}, exit_reach_m={})
+    monkeypatch.setattr(module, 'way_target', lambda *args: copy.deepcopy(observation))
+    owner = DrivableSteer()
+    if memory:
+        owner._memory = ('left', POSE)
+    error, confidence, info = owner.update(np.ones((240, 320), bool), 1., G, .03317, .0925,
+        POSE, (0., 0., .8), guide_here_deg=0., guide_deg=30., current_stamp=2.)
+    assert not info.get('exit_from_target')
+    assert info.get('exit_from_memory' if memory else 'exit_from_guide')
+    assert (error, confidence, info['strategy']) == (-.5, .35, 'drivable_pivot_left')
+
+
 def test_floor_prefix_preserves_actual_raw_points_without_interpolation():
     assert support() == [(.14, -.08), (.15, -.08), (.16, -.08), (.17, -.08)]
 
