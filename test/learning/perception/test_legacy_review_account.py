@@ -21,7 +21,7 @@ import legacy_review_account as module
 def app(tmp_path, monkeypatch):
     tmp_path.chmod(0o700)
     private = Ed25519PrivateKey.generate()
-    secret = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+    private_pem = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                    serialization.NoEncryption())
     public = private.public_key().public_bytes(serialization.Encoding.PEM,
                                                serialization.PublicFormat.SubjectPublicKeyInfo)
@@ -41,7 +41,7 @@ def app(tmp_path, monkeypatch):
                   'sid': 'central-session', 'jti': 'x' * 32, 'rev': 1, 'iat': state['clock'],
                   'exp': state['clock'] + 300,
                   'grants': [{'resource': 'project:937', 'capabilities': state['caps']}]}
-        return {'access_token': sign_access(claims, secret, key_id='test'),
+        return {'access_token': sign_access(claims, private_pem, key_id='test'),
                 'refresh_token': 'refresh-secret-for-test-only', 'token_type': 'Bearer'}
     account = AccountClient(tmp_path / 'sessions.db', issuer='https://account.example.test',
                             client_id='937', resource='project:937',
