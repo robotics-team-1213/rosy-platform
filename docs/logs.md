@@ -9263,3 +9263,9 @@ osy-d395-s1d\`.
 - 변경: 첫 관측 정렬·이미 선택된 반대 pivot 수정의 원격 회귀와 두 SIM 실패를 별도 검증 기록에 결속했다. 정렬 episode가 관측된 굽은 통로의 실제 전진을 종료 근거로 인정하지 못해 다음 회전까지 남는 경계를 적었다.
 - 증거: 최종 runtime 후보 관련 원격 125 passed, 영향 범위 6,701 passed/408 skipped/NEW 0, SIM 1.813m stall. 카메라 source stamp·이미지 hash·odom 이동·발행 명령·최종 정지와 lease 해제를 구분했다. 소스 검토 통과를 주행 수용으로 확대하지 않는다.
 - gate 변화: 없음. 반복 수용 HOLD, 다음 상태 수명 수정은 사용자 방향 확인 전 중단했고 main·실물은 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · 정렬 수명 수정 후 반복과 realign 계약 경계
+
+- 변경: 사용자 선택에 따라 관측 곡선의 실제 전진으로 정렬 episode를 종료하고, coverage와 전방 x거리를 구분한 후보의 검증을 결속했다. 기존 실패 기록은 보존한다.
+- 증거: 최종 source 관련 원격 140 passed, 영향 범위 6,832 passed/408 skipped/NEW 0. 동일 source SIM 1 PASS/1 FAIL이며 실패 실행에서 새 정렬 사용 뒤 현 차로와 목표 불일치로 realign→CORE HOLD/LOST가 발생했다. 모든 실행 최종 정지·lease 해제·소유 잔존 없음과 native fetch/정리를 확인했다.
+- gate 변화: 없음. trip 자동 REALIGN은 기존 계약이 명시적으로 거절하는 별도 미수용 범위임을 독립 추적했다. 반복 수용은 HOLD이고 main·실물은 바꾸지 않았다.
