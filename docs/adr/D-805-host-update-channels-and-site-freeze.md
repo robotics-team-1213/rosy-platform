@@ -21,16 +21,20 @@
 5. **설치 경로.** 관문 스크립트(`deploy/hosts/common/host-state/rosy-update-gate`)는 host-state `common` manifest의 `safe file`로 `/usr/local/bin/rosy-update-gate`에 설치·유지된다. 유닛은 `ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'`로 부른다: 관문이 아직 없으면 sh가 127을 내 그 실행은 건너뛴다(fail closed)(사이트 유닛이 저장소나 `current`에서 관문을 읽지 않는다). 시스템 유닛은 drop-in `<unit>.service.d/10-update-gate.conf`(host-state가 설치 후 `daemon-reload`), 사용자 유닛(`rosy-omx-autoupdate`·`rosy-model-code-update`·`rosy-review-release-update`)은 유닛 파일에 `ExecCondition=`을 직접 둔다. 크기 동결 파일 `rosy_site_autoupdate.py`는 바꾸지 않는다.
 6. **시연 동결.** 2026-11-14에 태그를 올리고 시연(11/21)이 끝난 뒤 해제한다.
 7. **신뢰.** 컨테이너 경로는 D-441 서명을 쓴다. 네이티브 셀 경로는 서명 키가 준비될 때까지 CI 통과(Actions 보고)·조상 확인에 기대고, 준비되면 같은 서명으로 맞춘다. 자동 반영 범위가 넓어지므로 main 규칙의 필요 승인 수를 1 이상으로 올리기를 권한다(사용자 결정).
+8. **로봇(개정 2026-10-19, #101).** Pinky `rosy-auto-update.service`(D-412)도 같은 관문을 `ExecCondition=/bin/sh -c 'exec /usr/bin/python3 -I /opt/rosy/native-runtime/rosy-update-gate'`로 돈다. 관문은 `install-native-runtime.sh`가 native runtime 사본마다 넣어 payload와 함께 간다(같은 원본 하나). 로봇에는 git이 없으므로 관문은 `git ls-remote`가 읽는 smart-HTTP ref 목록(`<repo>.git/info/refs?service=git-upload-pack`)을 직접 읽는다. API가 아니어서 한 IP 뒤 여러 로봇에도 요청 한도가 없다. 머리·끝 flush·브랜치 한 줄이 다 있는 목록에 태그가 없을 때만 실행이다. 그 밖(연결 실패, 잘린 목록, HTML)은 건너뛴다. `sync-image-layer.py`가 runtime 파일을 유닛보다 먼저 놓으므로 관문을 처음 싣는 payload는 관문 없는 옛 유닛이 적용하고, 관문 파일이 관문 유닛보다 먼저 생긴다. 각 로봇은 이 payload를 받은 뒤부터 동결을 따른다. 그 전 로봇은 타이머를 멈춘다. `rosy-update-check`(D-387)는 내려받아 놓기만 하고 설치하지 않으므로 관문을 두지 않는다. 미러를 쓰는 현장은 drop-in으로 `ROSY_UPDATE_GATE_REFS`를 준다(디바이스 트윈은 `file://` 로컬 목록).
+9. **AI PC 상황 서비스(개정 2026-10-19, #101).** 컨테이너 전환(P1) 전까지 `rosy-situation`은 셀과 같은 네이티브 업데이터(`omx_autoupdate.py`, `"kind": "service"`)로 CI 통과 main을 따른다: 설정의 경로만 풀고 가져오기 확인 뒤 `current`를 옮기고, 릴리스의 유닛 파일(`unit_files`)을 사용자 유닛 폴더에 놓고 `daemon-reload` 뒤 서비스를 다시 띄운다. `settle` 초 뒤 active가 아니면 이전 릴리스(첫 설치면 손으로 놓았던 `current`)로 되돌리고 다시 띄운다. 타이머는 `rosy-situation-autoupdate.timer`(10분)이고 관문을 거친다. 설치는 AI PC 소유자 동의 뒤 사람이 한다(README).
 
 ### 일부러 하지 않는 것
 
 - 새 역할 파일 트리나 별도 호스트 상태 도구를 만들지 않는다(D-530의 manifest·status·`/api/fleet/hosts`를 쓴다).
-- 로봇(D-412) 유닛에 관문을 이 결정에서 넣지 않는다. 로봇은 이미지·payload로만 바뀐다(D-225). 그때까지 시연 동결은 로봇 자동 업데이트 타이머를 멈추는 절차로 한다.
+- ~~로봇(D-412) 유닛에 관문을 이 결정에서 넣지 않는다.~~ 개정 2026-10-19: 8에서 넣는다(payload로 간다, D-225 그대로).
 - AI PC 서비스의 컨테이너 전환과 모델 PC 학습 이미지는 후속(P1·P2)이다.
 
 ### 열린 항목
 
-- 각 PC에 host-state를 다시 설치해야 관문과 drop-in이 놓인다: `sudo python3 deploy/hosts/common/rosy-host-state install <site|model|ai>`(사람, sudo). 사용자 유닛은 다시 복사하고 `systemctl --user daemon-reload`.
+- ~~각 PC에 host-state를 다시 설치~~ 2026-10-19 끝: 관제·AI·모델 PC에 설치, 세 PC 모두 관문 "run: no freeze", drift 0. 모델 PC 사용자 유닛 2개도 관문 포함본으로 교체(이전 사본 `.pre-d805`).
+- AI PC 상황 서비스 자동 업데이트 설치(9): 소유자 동의 대기.
+- 로봇: 관문을 실은 payload가 각 로봇에 반영됐는지 확인(그 전 시연 동결은 타이머 정지).
 - AI PC에서 기계 사이 DDS 유닛(`pinky-nav2`, `pinky-rosbridge-d12`, `pinky-rosbridge-d13`)이 아직 돈다. 정리는 그 결정 기록과 공동 사용자 동의(D-530 §6)를 거친 뒤 의존 관계(역의존 유닛, 연결, backend/frontend 설정)를 확인하고 한다.
 - 업데이트 결과·동결 상태를 `/api/fleet/hosts`에 보이게 하는 일(host-state status 확장).
 
@@ -42,6 +46,8 @@
 ### Validation
 
 - SOURCE: `test/test_update_gate.py`(태그 없음·있음, git 실패·시간 초과·부재, 로컬 동결 파일, 유닛·manifest 연결), `test/test_host_state.py`.
+- SOURCE(개정): 같은 시험에 smart-HTTP 목록(태그·peeled 태그·비슷한 이름·잘린 목록·빈 목록·HTML), 로봇 유닛·설치기 연결, 설치된 runtime의 관문, 트윈 로컬 목록이 "run"인지. `test/test_omx_autoupdate.py`에 service 종류(셀 신호 무시, 재시작·건강 실패 되돌림, 첫 설치 실패 시 손 배포 `current` 복구, 실제 `Host.restart`의 유닛 복사·reload·is-active).
+- DEVICE(2026-10-19, 관제 PC systemd 259): 늘 건너뛰는 `ExecCondition`의 사용자 유닛을 `OnUnitActiveSec=20s` 타이머로 돌리면 20 s마다 "Skipped due to 'exec-condition'"이 계속 찍힌다. 건너뛴 실행 뒤에도 타이머가 다시 걸린다(로봇 Ubuntu 24.04 systemd 255는 트윈에서 아직 미확인).
 - DEVICE: 관제 PC에서 태그를 만들면 다음 `rosy-omx-autoupdate` 실행이 건너뛰고(조건 실패 기록), 지우면 다시 돈다.
 
 **References:** D-225, D-246, D-301, D-412, D-441, D-524, D-530.
