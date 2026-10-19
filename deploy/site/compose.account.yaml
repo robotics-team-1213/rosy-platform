@@ -8,6 +8,11 @@ services:
     environment:
       ROSY_ACCOUNT_CONFIG: "${ROSY_ACCOUNT_CONFIG:?set ROSY_ACCOUNT_CONFIG}"
   proxy:
+    networks:
+      site_backend: {}
+      site_edge:
+        aliases:
+          - "${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}"
     ports:
       - "0.0.0.0:443:443"
     environment:
