@@ -4,11 +4,11 @@
 
 ## 소스와 변경
 
-- 보존한 이전 후보: `4d92cc1a8146f9074f73bf36464168dae442c571`.
-- 선행 기하 이동: `7d14f20241c5664c364070afc34ab2d5b25c954a`. steer의 기존 경계 교차 계산·상수를 기존 target 모듈로 옮기고 import 이름을 재노출했다.
-- 첫 관측 정렬: `4766cfbf8868533b61f648a5b5ecad2c84cbbef0`. 짧은 전진 목표·신선한 현 차로 안내·실제 관측 통로가 동의할 때 zero-linear 정렬을 낸다. source/current pose·신선도·연속 odom·누적 절대 yaw 예산을 검사하고 기대 전진 경로용 target은 제거한다.
-- 반대 pivot 처리: `8949ff012507a37d712b880fc09fc3258e88e4d0`. 이미 선택된 반대 zero-linear pivot도 같은 정렬 예산으로 처리한다. 예산 소진·관측 소실·odom 불확실성 뒤 반대 latch를 복원하지 않는다. 앞쪽 장애물·straddle·횡단보도·pivot-limit 보호는 유지한다.
-- 최종 시험 소스: `00e9913f2988e27aff2acef8cee29c6cbfcd7974`. 직전 runtime과 같고 회귀의 현재 안내 fixture만 캡처 값으로 바꿨다.
+- 보존한 이전 후보 commit SHA: `4d92cc1a8146f9074f73bf36464168dae442c571`.
+- 선행 기하 이동 commit SHA: `7d14f20241c5664c364070afc34ab2d5b25c954a`. steer의 기존 경계 교차 계산·상수를 기존 target 모듈로 옮기고 import 이름을 재노출했다.
+- 첫 관측 정렬 commit SHA: `4766cfbf8868533b61f648a5b5ecad2c84cbbef0`. 짧은 전진 목표·신선한 현 차로 안내·실제 관측 통로가 동의할 때 zero-linear 정렬을 낸다. source/current pose·신선도·연속 odom·누적 절대 yaw 예산을 검사하고 기대 전진 경로용 target은 제거한다.
+- 반대 pivot 처리 commit SHA: `8949ff012507a37d712b880fc09fc3258e88e4d0`. 이미 선택된 반대 zero-linear pivot도 같은 정렬 예산으로 처리한다. 예산 소진·관측 소실·odom 불확실성 뒤 반대 latch를 복원하지 않는다. 앞쪽 장애물·straddle·횡단보도·pivot-limit 보호는 유지한다.
+- 최종 시험 소스 commit SHA: `00e9913f2988e27aff2acef8cee29c6cbfcd7974`. 직전 runtime과 같고 회귀의 현재 안내 fixture만 캡처 값으로 바꿨다.
 - 브랜치: `fix/pinky-observed-recentre-alignment`. 이전 성공·통합·전방 정지 후보를 유지하고 작업 워크트리는 잠금 상태로 보존했다.
 
 독립 검토자 `/root/drive_success_review`가 기하 이동과 두 정렬 변경의 실제 생산자·소비자·안전 경계를 읽고 중대한 소스 발견이 없다고 확인했다. 해당 커밋의 `Safety-Review:`에 귀속했다. 이 검토는 실행·장치 수용과 별개다. CORE 최종 명령 권한과 안전 임계값은 바꾸지 않았다.
