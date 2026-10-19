@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 곡선 진행의 방향 비교와 정렬 수명 회귀 보존
 - 2026-10-20 · uncommitted · 중반 코너 실패와 근거리 ROI 입장 변경 보존
 - 2026-10-20 · uncommitted · 마지막 코너 실패와 실제 픽셀 근거 보존
 - 2026-10-20 · uncommitted · 1 PASS/1 FAIL 보존과 분리된 출구 재현
 - 2026-10-20 · uncommitted · 열린 junction 원본 재생과 선택 소비 검증
-- 2026-10-20 · uncommitted · 관측 기억 후보 실패와 분기 보정 경계

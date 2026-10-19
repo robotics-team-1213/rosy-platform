@@ -230,3 +230,27 @@ HEAD `b8e9ac4ebe9c395bb412feafdbd48f03a0ba8268`
 현재 좌표에서도 같은 raw prefix의 첫 점부터 최초 범위 이탈 직전까지만 선택한다. 최소4개 원본 점을 유지하고 첫 점을 건너뛰거나 뒤의 재진입 점을 붙이지 않는다. 첫 점이 뒤로 가거나 남은 지지가 부족하면 기존 후보/HOLD로 남는다. episode origin·초기 limit·누적 yaw는 다시 만들지 않는다. 최신 actual diff는 소스 커밋 전 독립 safety 검토에서 추가 material finding이 없었다. 최신 native 회귀·영향 범위·SIM은 별도 검증한다.
 
 b8e9 최신 관련8파일은 native200 passed / skip0 / NEW0이며, 7a0 이후5커밋 size-range 통과다. 별도 최종 소스 검토의 Important1을 닫고 Critical0 / Important0 / Minor0을 확인했다. 최신 영향 범위와 반복 SIM은 아직 진행 전이며 수용 HOLD를 유지한다.
+
+## dfca 영향 범위와 후반 정렬 수명 실패
+
+HEAD `dfca5bc48b68a068f8c60d892dba16e577e90b26`
+
+native 영향 범위는 run-1 6,905 passed / 408 skipped / 38 warnings / 62 subtests passed, run-2 9 passed로 총6,914건 통과했고 두 로그 모두 NEW0이었다. 소스와 문서 delta 독립 검토는 Critical0 / Important0 / Minor0이다.
+
+동일 조건 첫 SIM `sim-dfca5bc48b-42bb40`은 s5.357에서 stall60초로 실패했다. settled_xy(-1.229924, -0.466980), 목표 거리1.763511m, via0.007m였다. 주행1,039표본 모두 learned_drivable, fallback0이다. nonnull revision1,034개는 고정 revision과 일치하고5개는 metadata 누락이다. 열린 junction 수용200회·먼 출구 거절77회, local alignment는76.625초 left와133.625초 right 두 번 활성화됐다. final cmd·odom0, lease released, left_running 빈 목록, 산출물 회수·native 정리 완료, lane_return SKIP이다.
+
+133.625초에 시작한 오른쪽 정렬은 limit0.4417rad였다. 이후 실제 왼쪽 관측 출구를 따라 전진했고138.0초의 odometry 기준 origin 이동은 약0.150m였다. 하지만 _observed_turn이 current-here -18.77도와 곡선상의 먼 target bearing 약+25.3도를 비교해44도 차이로 거절했다. 같은 current 경로의 가까운 첫 구간 진행 방향은 약-0.78도로 current-here와 기존30도 범위에서 맞았다. 다른 coverage·연결·target/opening 거리 조건은 통과했다. 139.75초 새 왼쪽 pivot이 이전 오른쪽 episode의 spent HOLD에 막혔다. 같은 실패 후보를 수정 없이 반복하지 않으며 수용 HOLD를 유지한다.
+
+후속 native eef043 회귀3개 NEW로 실제138초 near 방향 일치·측정된 곡선 전진 후 이전 상태 종료·sideways-first 거절의 누락을 재현했다. fixture는 raw odom145개를 native OdomHistory로 보간하며 origin·source·current 시각과 원본 관측 해시에 결속한다. 방향 비교를 검증된 가까운 첫 연결 구간의 current tangent로 수정한다. 근처 점을 바라보는 bearing 자체도 tangent가 아니므로 대체 근거로 쓰지 않는다.
+
+- result.json SHA256: `97901ca696f59695eeb846edf69d540b5af0b17cbed441d52a80c110ac864cbb`
+- observations.jsonl SHA256: `f944fcf58821d8bde3dd89b12696e2be1689c81d8fb125576279e8b233828573`
+- run.txt SHA256: `e26d2c020588757a30919b8ddd67fd61f435198ac7a7bdd8ecad576cf53b75f3`
+
+## 가까운 진행 방향으로 곡선 전진 수명 종료 검증
+
+HEAD `eeb3a746e34ccf8821a490e7004d52276cbc5f73`
+
+_observed_turn의 방향 비교만 검증된 current path 첫 segment tangent로 바꿨다. 기존30도 한도, 실제 origin/source/current 이동, fresh 관측, 연결·coverage·target/opening 결속, 불확실 odometry 거절과 누적 회전량 예산은 유지한다. 첫 segment는 잡음에 민감할 수 있으며 반복 SIM에서 수용 여부를 별도로 확인한다.
+
+eef043 native RED3개 뒤eeb3 관련9파일203 passed / skip0 / NEW0으로 종료했다. 실제138초의 곡선 관측과 odometry로 이전 spent episode가 종료되어 다음 왼쪽 pivot을 막지 않는 것을 확인했다. sideways-first 경로는 near 위치나 먼 target이 맞더라도 진행 방향이 다르면 거절한다. 기존 CURVED·tight bend·불확실 odom·source 이동·예산 보호 회귀도 통과했다. 소스 커밋 전 독립 safety 검토에서 추가 material finding은 없었으며 dfca 이후2커밋 size-range 통과다. 최신 영향 범위·동일 조건 연속2회 SIM은 별도이며 수용 HOLD다.

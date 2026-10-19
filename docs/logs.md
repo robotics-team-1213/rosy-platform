@@ -9323,3 +9323,9 @@ osy-d395-s1d\`.
 - 변경: 7a0의 native6,922 passed와 중반 코너 이탈 실패를 동결 기록에 추가했다. 원본 마스크의42개 근거리 행, 도로 끝 판단과 정렬 ROI의 분리, 회전 후 현재 좌표의 연속 prefix와 예산 보존을 기록했다.
 - 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 원본·mask·replay hash, b8e9 관련200 passed/skip0/NEW0 및 독립 최종 소스 검토0/0/0.
 - gate 변화: 없음. 최신 영향 범위·반복 SIM 수용 HOLD, 실물·현장 gate 승격 없음.
+
+## 2026-10-20 · uncommitted · 곡선 진행의 방향 비교와 정렬 수명 회귀 보존
+
+- 변경: dfca의 영향6,914 passed·s5.357 정체 실패와 원본138초 곡선 전진 증거를 기록했다. 가까운 진행 방향과 먼 곡선 목표 방향을 구분하는 수명 종료 수정을 회귀에 결속했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 원본 hash·145개 raw odom·native RED3→eeb3 관련203 passed/skip0/NEW0. 회전량 예산을 늘리지 않고 측정된 전진으로 이전 episode를 종료한다.
+- gate 변화: 없음. 최신 영향 범위·연속2회 SIM 미검증이며 수용 HOLD.
