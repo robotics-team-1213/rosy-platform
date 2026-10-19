@@ -49,7 +49,8 @@ Workcell은 좌표·설비·접근·공유 자원을 가진 작업 공간이다.
 | **World** | 관측·odom 등으로 현재 세계 상태·자세를 제공 |
 | **Decision** | 규칙·정책·판단 후보를 다루는 영역. 독립 앱명 아님 |
 | **Dock / Signal / Signal Observer** | 충전·교통 신호 장치와 관측 서비스. 독립 사용자 앱으로 세지 않음 |
-| **Media** | 사이트 영상 접근을 제공하는 내부 기능. 별도 앱 이름을 만들지 않음 |
+| **Media** | 영상 세션 권한·시청 요청·미디어 프로세스를 관리하는 별도 서비스. `operations/site_ui/media`에 있으며 Fleet이 설치·제공하는 화면이 아님 |
+| **Site App Gateway** | `operations/apps/fleet`의 프로세스 조립 코드. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Fleet 서버나 Fleet 화면과 구분 |
 | **device-core** | 외부 저장소에서 Rosy Device 콘솔·기기 API를 제공하는 서비스 코드 이름. 로봇 CORE와 구분 |
 | **ROSY Site / Runtime / Fabric / Operations** | 각각 현장 배포 범위 / 로컬 실행 기반 / 연결 계약·어댑터 / 운영 목표 표현. [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)의 역할 이름 |
 | **rosy-platform / rosy-vault / rosy-ops / rosy-docs** | 각각 플랫폼 소스 / Vault·Device 소스 / 비공개 운영 설정·기록 / 설계·가이드 문서 저장소 |
