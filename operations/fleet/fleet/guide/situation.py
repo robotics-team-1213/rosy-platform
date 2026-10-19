@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional
+from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 
 #: tracking statuses that mean Rosy Cam did not find the robot this lease (tracking_match.py)
 NOT_SEEN = frozenset({"NO_POSE"})
@@ -34,10 +35,6 @@ class GuideConfig:
     wrong_way_deg: float = 100.0
     #: a lane is "the robot's lane" only within this many lane widths of its centre line
     lane_reach_widths: float = 1.5
-
-
-def _wrap(angle: float) -> float:
-    return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
 def uncertainty_m(dead_reckon_m: float, config: GuideConfig = GuideConfig()) -> float:

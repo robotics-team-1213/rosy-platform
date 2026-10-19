@@ -167,8 +167,11 @@ class MapPose:
     bridge_turn_deg: float = 0.0
 
 
-def _wrap(angle: float) -> float:
+def wrap_angle(angle: float) -> float:
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
+
+
+_wrap = wrap_angle
 
 
 def relative(a: Pose, b: Pose) -> Pose:

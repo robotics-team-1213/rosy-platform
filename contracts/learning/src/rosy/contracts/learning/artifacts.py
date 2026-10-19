@@ -4,8 +4,10 @@ import json
 import math
 from pathlib import Path, PurePosixPath
 import re
+from .digest import file_sha256, is_sha256_hex
 
 
+# Format pinned: artifact manifest revisions use these bytes; test_canonical_hash_formats.
 def _json(doc):
     return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
                       allow_nan=False).encode("utf-8")
@@ -40,7 +42,7 @@ def _text(value):
 
 
 def _hash(value):
-    if not isinstance(value, str) or not re.fullmatch("[0-9a-f]{64}", value):
+    if not is_sha256_hex(value):
         raise ValueError("sha256 revision required")
 
 
@@ -70,11 +72,8 @@ def _ref(ref, root):
         file = (base / ref["path"]).resolve()
         if not file.is_relative_to(base) or not file.is_file():
             raise ValueError("artifact file path escapes root or is missing")
-        digest = hashlib.sha256()
-        with file.open("rb") as stream:
-            for block in iter(lambda: stream.read(1 << 20), b""):
-                digest.update(block)
-        if file.stat().st_size != ref["bytes"] or digest.hexdigest() != ref["sha256"]:
+        digest = file_sha256(file)
+        if file.stat().st_size != ref["bytes"] or digest != ref["sha256"]:
             raise ValueError("artifact file hash/size differs")
 
 

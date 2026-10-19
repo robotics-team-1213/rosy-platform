@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from typing import Optional
+from rosy_situation.wait_graph import wait_cycle
 
 VERSION = "1"
 SOURCE = f"analyzer:traffic_watch@{VERSION}"
@@ -39,7 +40,7 @@ LIVELOCK_S, LIVELOCK_PATH_M, STEP_M = 20.0, 0.10, 0.02
 REFORM_GAP = 2             # snapshots a cycle must be gone before it counts as re-formed (not a flicker)
 #: Fleet refuses a whole facts post over one command word or > 16 robot ids (ai_facts.py); a bad traffic fact
 #: must never take a stuck_scene acting fact down with it, so such a fact is dropped here.
-COMMAND_WORDS = frozenset({"WAIT", "RESUME", "BACK_AND_RETRY", "YIELD", "ABORT", "MANUAL", "STOP", "GO"})
+from rosy_situation.fact_rules import COMMAND_WORDS
 MAX_IDS = 16
 STALL_S = 20.0             # same as the trip stall rule
 UNKNOWN_S = 30.0           # same as M4 UNKNOWN_LIMIT_S
@@ -70,25 +71,6 @@ def _sendable(fact: dict) -> bool:
         w.strip().upper() in COMMAND_WORDS for w in _words([fact["value"], fact["evidence"]]))
 
 
-def _cycle(waits: dict[str, set]) -> Optional[frozenset]:
-    """One cycle in "robot waits for robot" (sorted walk, so the same table gives the same cycle)."""
-    colour: dict[str, int] = {}
-    for start in sorted(waits):
-        if colour.get(start):
-            continue
-        colour[start], path, stack = 1, [start], [iter(sorted(waits.get(start, ())))]
-        while stack:
-            nxt = next(stack[-1], None)
-            if nxt is None:
-                colour[path.pop()] = 2
-                stack.pop()
-            elif colour.get(nxt) == 1:
-                return frozenset(path[path.index(nxt):])
-            elif not colour.get(nxt):
-                colour[nxt] = 1
-                path.append(nxt)
-                stack.append(iter(sorted(waits.get(nxt, ()))))
-    return None
 
 
 class TrafficWatch:
@@ -150,7 +132,7 @@ class TrafficWatch:
 
         # wait cycles: Fleet's and the table's own
         fleet_cycle = frozenset(str(r) for r in traffic.get("wait_cycle") or [] if not str(r).startswith("signal:"))
-        table_cycle = _cycle(waits) or frozenset()
+        table_cycle = frozenset(wait_cycle(waits) or ())
         members = fleet_cycle | table_cycle         # one group while Fleet and the table name the same robots
         last, count, since, at = self._cycle
         if members and members == last:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from typing import Optional
+from core.bridge.translate import yaw_from_quat
 
 Point = Optional[tuple[float, float]]
 
@@ -246,7 +247,7 @@ def observe_lane_return(bridge, msg, sample, *, now=None, wall=None):
         if (not all(type(v) in (int, float) and math.isfinite(v) for v in values)
                 or abs(sum(v*v for v in values)-1.) > .01):
             raise ValueError("invalid original odometry rotation")
-        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+        yaw = yaw_from_quat(q)
         if abs(math.atan2(math.sin(yaw-sample["yaw"]), math.cos(yaw-sample["yaw"]))) > 1e-6:
             raise ValueError("translated yaw does not match original rotation")
         line.observe_return_pose(stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec,

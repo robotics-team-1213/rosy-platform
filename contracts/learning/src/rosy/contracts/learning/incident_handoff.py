@@ -1,16 +1,13 @@
 """Bounded handoff evidence; recorded claims never verify human identity."""
-import hashlib
-import json
 import math
-import re
+import json
 
-
-def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+from .prediction import canonical_sha256 as digest
+from .digest import is_sha256_hex
 
 
 def _hash(value):
-    if type(value) is not str or re.fullmatch('[0-9a-f]{64}', value) is None:
+    if type(value) is not str or not is_sha256_hex(value):
         raise ValueError('INVALID_HANDOFF_HASH')
 
 

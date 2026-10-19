@@ -11,8 +11,7 @@ MOTION_SECONDS = 4.0
 MOTION_LIMIT = .04
 
 
-def wrap(angle):
-    return math.atan2(math.sin(angle), math.cos(angle))
+from control.sensing.localization import wrap
 
 
 class StationaryBaseline:

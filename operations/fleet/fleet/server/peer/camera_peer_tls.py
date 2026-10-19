@@ -3,16 +3,22 @@ from datetime import datetime, timezone
 import re
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
+try:
+    from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
+except ImportError:  # cryptography < 42: keep importable and refuse unverified anchors.
+    PolicyBuilder = Store = VerificationError = None
+
+_VERIFICATION_ERRORS = (VerificationError,) if VerificationError is not None else ()
 
 
 def configured_site_anchor(ca_pem, served_pem, hostname):
     if (not isinstance(ca_pem, str) or not 1 <= len(ca_pem.encode()) <= 8192
             or not isinstance(served_pem, str) or not 1 <= len(served_pem.encode()) <= 32768
-            or not isinstance(hostname, str)
-            or not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local', hostname)):
+            or not isinstance(hostname, str) or not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local', hostname)):
         raise ValueError('configured camera receiver TLS material unavailable')
     try:
+        if PolicyBuilder is None:
+            raise ValueError('cryptography>=42 chain verification is required')
         roots = x509.load_pem_x509_certificates(ca_pem.encode('ascii'))
         chain = x509.load_pem_x509_certificates(served_pem.encode('ascii'))
         if len(roots) != 1 or not 1 <= len(chain) <= 5:
@@ -29,5 +35,5 @@ def configured_site_anchor(ca_pem, served_pem, hostname):
         return {'tls_hostname': hostname,
                 'tls_ca_pem': root.public_bytes(serialization.Encoding.PEM).decode('ascii'),
                 'tls_ca_sha256': root.fingerprint(hashes.SHA256()).hex()}
-    except (ValueError, x509.ExtensionNotFound, VerificationError, UnicodeError) as exc:
+    except (ValueError, x509.ExtensionNotFound, *_VERIFICATION_ERRORS, UnicodeError) as exc:
         raise ValueError('site CA does not validate the configured receiver leaf') from exc

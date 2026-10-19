@@ -14,6 +14,7 @@ LIMITS = {'miss_rate', 'unnecessary_rate', 'abstain_rate', 'abstain_required_err
 ZERO = ('danger_missed', 'stale_or_other_case_actions', 'forbidden_authority', 'normal_commands')
 
 
+# Format pinned: judgment acceptance reports store this digest; test_canonical_hash_formats.
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
                                      separators=(',', ':'), allow_nan=False).encode()).hexdigest()

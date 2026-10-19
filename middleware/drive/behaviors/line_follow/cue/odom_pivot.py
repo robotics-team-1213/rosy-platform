@@ -17,6 +17,7 @@ TIME_PAD_S = 2.0
 
 
 def wrap(a: float) -> float:
+    # Keep [-pi, pi): atan2-based wrapping chooses +pi at the positive endpoint.
     return (a + math.pi) % (2.0 * math.pi) - math.pi
 
 

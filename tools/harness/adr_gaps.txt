@@ -59,3 +59,5 @@ D-799 reserved in another worktree or local main, absent from origin/main at D-8
 D-801 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-802 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-803 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
+D-809 reserved in another in-flight branch (refs/adr/D-809); remove when its ADR lands
+D-810 reserved in another in-flight branch (refs/adr/D-810); remove when its ADR lands

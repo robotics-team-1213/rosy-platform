@@ -9,6 +9,7 @@ XML $(eval) 프론트엔드 한계로 Python launch로 구현 (upload_robot.laun
 """
 
 import os
+from bringup.pinky_pro_adapter import DEFAULTS
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -70,8 +71,8 @@ def generate_launch_description():
         DeclareLaunchArgument('motor_device', default_value='/dev/ttyAMA4'),
         DeclareLaunchArgument('motor_baudrate', default_value='1000000'),
         DeclareLaunchArgument('motor_ids', default_value='[1, 2]'),
-        DeclareLaunchArgument('max_linear_mps', default_value='0.20'),
-        DeclareLaunchArgument('max_angular_rps', default_value='0.80'),
+        DeclareLaunchArgument('max_linear_mps', default_value=str(DEFAULTS['max_linear_mps'])),
+        DeclareLaunchArgument('max_angular_rps', default_value=str(DEFAULTS['max_angular_rps'])),
         DeclareLaunchArgument('max_wheel_rpm', default_value='100.0'),
         DeclareLaunchArgument('motor_profile_acceleration', default_value='200'),
         DeclareLaunchArgument(
