@@ -341,6 +341,7 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 게시된 main을 기준으로 Account 변경 분리
 - 2026-10-19 · uncommitted · Account 서비스 운영 완료 기준과 증거
 - 2026-10-19 · 2b5d3c84d8 · D-800/D-804 origin publication
 - 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치

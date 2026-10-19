@@ -55,6 +55,17 @@ function notice(text) {
   if (node) node.textContent = text;
 }
 
+function appendAccountLogout(actions) {
+  if (!account?.authenticated) return;
+  const exit = el('ui-button', '로그아웃', {type:'button'});
+  exit.setAttribute('kind', 'quiet');
+  exit.addEventListener('click', async () => {
+    try { await accountLogout(); window.location.assign('/pilot'); }
+    catch (error) { notice(error.message); }
+  });
+  actions.append(exit);
+}
+
 function readoutPair(pairs) {
   const list = el("dl", null, {"class": "ui-readout", "data-gate-readout": ""});
   for (const [label, value] of pairs) {
@@ -421,7 +432,7 @@ async function check(root, onReady, onEnter) {
     retry.setAttribute("kind", "quiet");
     retry.addEventListener("click", () => check(root, onReady, onEnter));
     actions.append(retry);
-    if (!inPilotApp()) {
+    if (!inPilotApp() && !account?.authenticated) {
       const reset = el("ui-button", "토큰 초기화", {type: "button"});
       reset.setAttribute("kind", "segment");
       reset.addEventListener("click", () => {
@@ -430,6 +441,7 @@ async function check(root, onReady, onEnter) {
       });
       actions.append(reset);
     }
+    appendAccountLogout(actions);
     root.replaceChildren(
       el("ui-head", "접속", {id: "pilot-gate-heading"}),
       readoutPair(pairs), ...statuses, actions,
@@ -477,15 +489,7 @@ async function check(root, onReady, onEnter) {
         "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
     });
   }
-  if (account?.authenticated) {
-    const exit = el('ui-button', '로그아웃', {type:'button'});
-    exit.setAttribute('kind', 'quiet');
-    exit.addEventListener('click', async () => {
-      try { await accountLogout(); window.location.assign('/pilot'); }
-      catch (error) { notice(error.message); }
-    });
-    actions.append(exit);
-  }
+  appendAccountLogout(actions);
   onReady?.({role: me.body?.role});
 }
 

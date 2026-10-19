@@ -186,6 +186,7 @@ def _verifier(calls):
         if not (Path(folder) / "release.json.sig").is_file():
             raise upd.CandidateVerificationError("release signature is missing or unsafe")
         manifest = json.loads((Path(folder) / 'release.json').read_text())
+        manifest.setdefault('account_https', True)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
     return verify
@@ -567,12 +568,25 @@ def test_pairing_overlay_from_the_candidate_is_allowed(host):
 @pytest.mark.parametrize("overlay", [
     "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
     "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.account.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
 ])
 def test_omx_overlay_from_the_candidate_is_allowed(host, overlay):
     with host.paths.site_env.open("a", encoding="utf-8") as stream:
         stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+def test_legacy_candidate_cannot_enable_unsigned_account_overlay(host):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "account_https": False}))
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    assert updater._verify(old, loaded=True)["account_https"] is False
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=True, require_account=True)
 
 
 def test_real_candidate_directory_is_migrated_once_to_a_symlink(host):

@@ -918,3 +918,9 @@
 - 변경: 64rem 이상 접속 화면에서 긴 알림 글(105자, 실제 접속 화면 문구는 90자에 못 미쳐 로그아웃 실패 글을 만들어 썼다), 긴 로봇 이름, 긴 상태 표가 함께 오면 머리가 1024px에서 124px로 커지고 1366px에서 정지가 56x48로 줄었다. 정지와 `운용 지도`는 `flex: none`, 알림 글과 로봇 이름은 한 줄 말줄임이 됐다. 알림 전문은 `role="status"` 글로 그대로 남는다. 알림을 머리 아래 줄로 옮기면 머리가 64px를 넘으므로 말줄임을 골랐다. 앞서 한 줄로 합친 알림 규칙을 두 줄로 되돌리고 주석을 제 줄에 뒀다. `styles.css` 956줄(상한 961). `test_app_bar.py`의 두 줄 격자 고정은 64rem 아래 블록 안을 본다.
 - 증거: 바꾸기 전 `X:/DevTemp/browser-run/p1r-long-7.txt`(모델 PC)와 `p1r-long-7ai.txt`(AI PC), sha 821e9d5f5: 1024에서 머리 124px·정지 48x48, 1366에서 정지 56x48. 바꾼 뒤 `p1r-long-9.txt`(AI PC, sha 468838479) 8 passed: 1024·1366 모두 머리 64px, 정지 82x48(x 918·1260, y 8)이 맨 위 요소, 지도 82x48, 알림 389·639px 한 줄, 가로 넘침 0. `test_pilot_browser.py` 전체와 `test_app_bar.py` 164 passed(`p1r-full-10.txt`, AI PC, sha a3a4befa7). 원격 pilot·shared/web·architecture 529 passed 211 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
 - gate 변화: 없음. 말줄임으로 잘린 알림 글의 뒷부분은 화면에서 보이지 않는다(낭독기는 전문을 읽는다). 실기 전화·태블릿·Android WebView는 확인하지 못했다.
+
+## 2026-10-19 · uncommitted · Account 차단 화면에서도 앱 로그아웃
+
+- 변경: 권한이 없어 막힌 화면에도 Account 로그아웃을 표시하고 legacy 토큰 초기화는 숨긴다. 기존 공개 service worker 목록을 유지하며 캐시 키만 갱신했다.
+- 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
+- gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.

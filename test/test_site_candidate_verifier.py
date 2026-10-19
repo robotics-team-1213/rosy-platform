@@ -222,6 +222,29 @@ def test_content_check_uses_the_exact_manifest_bytes_that_were_verified(candidat
     assert result["source_commit"] == COMMIT
 
 
+@pytest.mark.parametrize("removed", [("compose.account.yaml",), ("Caddyfile.account",),
+                                    ("compose.account.yaml", "Caddyfile.account")])
+def test_account_signed_assets_are_paired_and_legacy_candidate_remains_verifiable(candidate, removed):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    for name in removed:
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest))
+    if len(removed) == 2:
+        assert _verify(candidate)["account_https"] is False
+    else:
+        with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment"):
+            _verify(candidate)
+
+
+@pytest.mark.parametrize("name", ["compose.account.yaml", "Caddyfile.account"])
+def test_account_asset_tampering_is_rejected(candidate, name):
+    (candidate[0] / "deploy/site" / name).write_text("changed\n")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
 def test_rejects_changed_deployment_file(candidate):
     root, _, _, _ = candidate
     (root / "deploy/site/compose.yaml").write_text("changed\n", encoding="utf-8")
