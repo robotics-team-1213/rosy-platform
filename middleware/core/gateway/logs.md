@@ -1570,3 +1570,9 @@
 - 변경: 기존 readback·lock·ACK 관측 helper의 설치 조건만 lifespan에서 composed로 넓힌다. manual SIM step·runtime tick·lock 동작과 모든 안전 기준은 유지한다.
 - 증거: commit `02e42a19dc`에서 카메라·출발 두 모듈은 20 passed, 0 skipped, NEW 0이었다. 예상 부정 사례의 HOLD 예외 10건을 기록했고 composed·양성 출발에는 예외 기록이 없었다. 추가 조건의 집중 회귀는 새 head에서 별도로 확인한다.
 - gate 변화: 없음. 비동기 return 작업과 readback lock 경합은 아직 원인으로 관측되지 않았으며 이 연결은 이후 실패의 증거 수집용이다.
+
+## 2026-10-20 · uncommitted · return HOLD의 제한된 Trip 상태 관측
+
+- 변경: HOLD 예외 traceback의 read_return 프레임에 view dict가 있으면 state·reason·detail만 기록한다. 다른 locals·인증 정보는 수집하지 않으며 정상 경로의 추가 호출·clock·제품 동작은 변경하지 않는다.
+- 증거: 앞선 전체 실행의 shutdown_CHARGING은 CHARGE_RETURN_NOT_ARRIVED 예외였지만 Trip 상태가 남지 않았다. commit `96b2c09a9a`의 집중 RED는 return_trip 부재로 1 failed, NEW 1이었다. 제한 필드·중첩 await·원래 HOLD 결과 보존의 GREEN과 단일 shutdown_CHARGING 회귀는 구현 head에서 별도로 확인한다.
+- gate 변화: 없음. Trip 원인 관측 전까지 lifecycle·시간·thread·안전 기준을 수정하지 않는다.

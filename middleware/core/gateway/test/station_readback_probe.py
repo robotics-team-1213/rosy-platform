@@ -88,6 +88,10 @@ def install_hold_probe(motion, clock):
             report = dict(session_id=current.session_id, reason=reason, clock=clock(),
                 exception_type=type(error).__name__, exception=str(error),
                 traceback=traceback.format_exception(error))
+            for frame, _ in traceback.walk_tb(error.__traceback__):
+                view = frame.f_locals.get('view') if frame.f_code.co_name == 'read_return' else None
+                if isinstance(view, dict):
+                    report['return_trip'] = {key: view.get(key) for key in ('state', 'reason', 'detail')}
             print('STATION_HOLD_DIAGNOSTIC '+json.dumps(report), flush=True)
         return await original(current, reason, **kwargs)
 
