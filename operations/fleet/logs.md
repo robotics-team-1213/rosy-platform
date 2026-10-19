@@ -4252,3 +4252,9 @@
 - 변경: 기존 D-318 계약 검사가 ingest_preview의 실제 보정 구현과 ingest의 위임 연결을 함께 확인하도록 경로를 맞췄다. 인증·수치 보정·preview/sightings 분리 검사는 유지하고 제품 코드는 바꾸지 않았다.
 - 증거: 7fa484c528 원격 Fleet 묶음은 5903 passed, 이 경로 검사 1 failed, 316 skipped였다. known_failures 비교에서 NEW 1이며 기존 실패로 등록하지 않았다. 수정은 독립 scoped 검토 PASS, 최신 SHA 원격 검증은 커밋 후 수행한다.
 - gate 변화: 없음. 건너뛴 브라우저·실물 장치 시험을 통과로 주장하지 않는다.
+
+## 2026-10-20 · d91c5c0fb4 · fix(station): reconcile native completion during departure renewal
+
+- 변경: 정상 native 완료가 status 조회와 permit 갱신 PUT 사이에 들어온 명시적 세대 거절만 재관측한다. 같은 boot/run/correlation, vacant owner, SUCCEEDED와 정확한 generation +1, 기존 permit·선택 작업·정책을 다시 검증한다. 새 motion·갱신 PUT·DB 갱신 없이 다음 tick으로 넘기며 다른 거절·불명 응답·권한 상실은 HOLD를 유지한다. CORE 가드와 원래 유효 기간은 그대로다.
+- 증거: 실제 CORE tick을 갱신 직전에 넣은 a0c374810c 반례에서 정상 완료 1 FAIL, foreign readback·정책 해제·만료·불명 응답 4 PASS를 확인했다. 독립 계약 리뷰 후 d91c5c0fb4의 관련 HTTP·원장 5파일89 passed/skip0, 원격 exit0·known_failures 비교0. 중복 -q로 요약이 생략돼 실제 progress89건과 exit를 확인했다. source 범위16커밋 D-766 검사도 통과했다.
+- gate 변화: 없음. 앞선 두 FULL 실패의 원인까지 입증한 것은 아니며 동시 시나리오와 새 통합 SHA의 FULL 관문을 추가 확인한다. 실기·현장 수용은 미실행이다.

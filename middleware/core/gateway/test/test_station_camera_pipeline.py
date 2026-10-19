@@ -219,6 +219,12 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                         import traceback
                         if len(failures) < 16:
                             failures.append(f'{label} at SIM {now[0]}\n'+traceback.format_exc())
+                        print('STATION_ASYNC_FAILURE', failures[-1])
+                        try:
+                            if returns and args and hasattr(args[0], 'operation_id'):
+                                print('STATION_TRIP_FAILURE', returns.runner.view(args[0].operation_id))
+                        except Exception as diagnostic_error:
+                            print('STATION_TRIP_DIAGNOSTIC_UNAVAILABLE', repr(diagnostic_error))
                         raise
                 return traced
             ports.read_operation = trace_failure('read_operation', ports.read_operation)
@@ -325,6 +331,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     return charges.get('charge-1')
                 return await runtime.tick() if full_return else await monitor.advance('charge-1')
             console = FleetConsole([endpoint], [robot], clock=lambda: now[0])
+            console.goal = trace_failure('work_goal', console.goal)
             def build_runtime(context):
                 assert context.plans is returns.adapter.plans
                 returns.use_runner(context.runner)

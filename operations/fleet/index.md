@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · d91c5c0fb4 · fix(station): reconcile native completion during departure renewal
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 분리된 영상 보정 구현의 계약 검사 경로
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) exact charge stop before journal contention
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) measured health operational admission
 - 2026-10-19 · 79226ce97 · (origin #92 2026-10-17) SIM 초기 CORE 틱의 원본 이동 계측 보존
-- 2026-10-19 · e801f1e01 · (origin #92 2026-10-17) 원본 전송과 boot 대조를 결속한 충전 World pose reader
