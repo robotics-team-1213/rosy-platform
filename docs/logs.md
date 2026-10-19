@@ -9227,3 +9227,9 @@ osy-d395-s1d\`.
 - 변경: 로컬 main도 승인 API를 `missions/mission_routes.py` 안에서만 설치해, `--tasks-db`만 있고 `--mission-api`가 없는 Fleet에서 `/api/fleet/workcells/{id}/policy/*`가 404였다. origin #106(e5661d443f)처럼 작업 기록부만 있으면 `work/work_routes.py`에서 설치하고 Mission 쪽 설치 블록은 지운다.
 - 증거: 원격 pytest `test_policy_governance.py`(Mission 없는 앱 시험 포함).
 - gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · 남은 learning 계획 문서의 역사 보존
+
+- 변경: learning-delivery·learning-plan의 서로 다른 계획 원문 6개와 미커밋 로그 행을 `docs/validation/uncommitted-recovery-2026-10-19/learning/`에 보존했다. 원본 SHA-256·출처와 D-771 선행 구현 부재를 기록하고, 이미 main에 포함된 v13-map-labels·d427-bulk의 중복 소스 변경은 다시 적용하지 않았다.
+- 증거: 원본과 보존본의 바이트·해시 대조, 현행 소비 경로·기존 커밋의 main 조상 관계 확인. 문서 계약은 원격 시험과 공식 착지 관문으로 검증한다.
+- gate 변화: 없음. 역사 계획의 시험 수치·설치 서비스·GPU·장치·현장 수용을 재확인한 기록이 아니다.
