@@ -368,3 +368,11 @@ def test_startup_rechecks_drive_mode_after_configuration():
     assert not any(name == "goal_pos" for name, _ in bus.writes)
     assert ("torque", 1) not in bus.writes
     assert_restored(bus)
+
+
+def test_startup_rejects_a_stable_sample_after_the_settle_deadline():
+    bus = Motor(torque=1)
+    runner = m.Run(bus, 16, log=lambda **row: None, grab=lambda label: None,
+                   clock=lambda: bus.t, sleep=bus.sleep)
+    with pytest.raises(RuntimeError, match="settle"):
+        runner.settle("hold", timeout=0.15, still=0.15, grace=0)
