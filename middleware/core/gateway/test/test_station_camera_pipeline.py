@@ -345,6 +345,15 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 trip_lease={'required': True}, charge_runtime_factory=build_runtime) if composed else {}
             fleet = create_app(console, console_token=secrets.token_urlsafe(32), station_ingress=ingress,
                 task_service=cycles.tasks if cycles else None, **app_options)
+            original_refusal = console.trip_refusal
+            def traced_refusal(robot_ids):
+                refusal = original_refusal(robot_ids)
+                if refusal and robot_id in console._goal_busy:
+                    print('STATION_ADMISSION_REFUSAL', now[0], runtime.work_admission(robot_id),
+                        runtime._work_snapshot, returns.runner.robot_busy(robot_id),
+                        returns.runner.lease.jobs.get(robot_id), runtime._next_evaluation)
+                return refusal
+            console.trip_refusal = traced_refusal
             handover_checks = []
             if composed:
                 assert runtime is fleet.state.charge_runtime
