@@ -11,6 +11,7 @@ class AssistantService:
     def __init__(self, journal, *, context, provider, admitted, authorized, clock=time.time):
         self.journal, self.context, self.provider = journal, context, provider
         self.admitted, self.authorized, self.clock = admitted, authorized, clock
+        self._model_lock = asyncio.Lock()
 
     def submit(self, principal, message):
         return self.journal.submit(principal, message, admitted=self.admitted())
@@ -33,11 +34,20 @@ class AssistantService:
             raise
 
     async def step(self, principal, request_id, *, reauthorize=None):
-        if not await self.db(self.journal.start, principal, request_id):
-            return
+        async with self._model_lock:
+            await self._process(principal, request_id, reauthorize=reauthorize)
+
+    async def _process(self, principal, request_id, *, reauthorize):
+        claimed = False
+        def claim():
+            nonlocal claimed
+            claimed = self.journal.start(principal, request_id)
+            return claimed
         authorized = reauthorize or (lambda: self.authorized(principal))
         invoked = False
         try:
+            if not await self.db(claim):
+                return
             if not authorized() or not self.admitted():
                 raise ValueError('ASSISTANT_AUTHORITY_CHANGED')
             message = await self.db(self.journal.message, principal, request_id)
@@ -73,7 +83,8 @@ class AssistantService:
                 await self.db(self.journal.finish, principal, request_id, state='ANSWERED', response=response,
                               facts=selected, kind=answer.kind)
         except asyncio.CancelledError:
-            await self.db(self.journal.finish, principal, request_id, state='UNKNOWN', reason='ASSISTANT_INTERRUPTED')
+            if claimed:
+                await self.db(self.journal.finish, principal, request_id, state='UNKNOWN', reason='ASSISTANT_INTERRUPTED')
             raise
         except (TimeoutError, OSError):
             await self.db(self.journal.finish, principal, request_id, state='UNKNOWN' if invoked else 'HOLD',
