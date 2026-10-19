@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
+globalThis.crypto ??= webcrypto;
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
 const { createDialogue } = await import('../../../site_ui/console/assistant/panel.js');
