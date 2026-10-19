@@ -1,7 +1,8 @@
-# GitHub 기반 ROSY 런타임 업데이트
+# GitHub 컨테이너 번들 업데이트 — 개발·호환 경로
 
-현재 범위는 로컬 구현과 시험이다. Pi 실기기는 컨셉 단계이며 공개 GitHub 저장소,
-실제 릴리스 키, ARM64 배포 산출물은 아직 준비하지 않았다. 아래 명령은 향후 운영 절차다.
+이 문서는 기존 컨테이너 번들 업데이터의 개발·호환 경로다. 제품 로봇은 Ubuntu Server 24.04 arm64·ROS 2 Jazzy·systemd로 실행한다(D-161·D-197·D-246). 제품 배포는 [산출물 선택](pinky-release-artifact-selection.md)에서 시작하고 [Pi 런타임](raspberry-pi-runtime.md)을 따른다.
+
+공개 소스 저장소와 빌드 워크플로의 존재는 서명·게시·장치 수용을 뜻하지 않는다. 아래 Docker 번들 명령은 네이티브 제품 설치 절차로 사용하지 않는다. 여기서 staging은 다운로드한 번들의 설치 전 보관이며, Fleet·웹의 개발 검증 환경과는 다르다.
 
 ## 동작과 경계
 
@@ -31,12 +32,12 @@ python3 deploy/robot/pinky_pro/release/package_release.py payload rosy-release-2
   --public-key /secure/rosy-release-1.pem --private-key /secure/rosy-release-1.key
 ```
 
-저장소 공개를 결정한 뒤에만 `OWNER/rosy`를 실제 소유자로 바꾸고, 공개키만
+이 호환 경로의 게시를 별도로 검증한 뒤 `OWNER/rosy`를 실제 배포 저장소로 바꾸고, 공개키만
 `deploy/robot/pinky_pro/release/public-keys/`에 커밋한다. GitHub의 `ROSY_RELEASE_KEY_ID` 변수와
 `release` 환경을 설정한다. 승인된 커밋을 가리키는 `YYYY.MM.DD-NNN` 태그의 draft release에
 외부에서 만든 서명 번들을 업로드한 다음 `publish-release.yml`을 수동 실행한다.
 워크플로는 서명·태그·커밋 일치를 확인한 뒤 공개한다. ARM64 빌드나 실기기 검증을 대신하지 않는다.
-공개 저장소 전환 전에는 전체 이력의 비밀값·라이선스·배포 권한 검토가 별도로 필요하다.
+배포 저장소의 공개 범위와 번들 전체의 비밀값·라이선스·배포 권한은 게시 전에 확인한다.
 
 ## 향후 호스트 등록
 

@@ -9197,3 +9197,9 @@ osy-d395-s1d\`.
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
+
+- 변경: origin/main에만 있던 문서를 옮겼다. PR 파이프라인(`docs/reference/pr-pipeline.md`, #57·#64·#74·#75·#79·#86 문서 부분), CODEOWNERS와 팀 가이드 §5.1 역할 담당(#59), D-777 간결한 문서 기준(#64), Jira 키 도구 `tools/jira_refs.py`와 Atlassian 연결 안내(#65), D-784 비공개 운영·staging 경계와 계획(#73·#74), 파이프라인 점검 기록 둘(#75·#79), D-773 정정(#56), `contracts/AGENTS.md` 새 계약 타입 자리(#62), D-376·D-781·조사 보고서의 #80 참조 줄을 반영했다. D-777·D-784의 진행 중 gap 줄을 지우고 ADR Log에 행을 더했다.
+- 근거: main에서 merge-base 이후 손대지 않은 파일은 origin 판을 그대로 가져왔고, main이 고친 파일(README·AGENTS·CONTRIBUTING·팀 가이드·공유 체크아웃·개발 가이드·progress)은 main의 내용을 유지하며 origin의 추가를 손으로 합쳤다. 공유 체크아웃 본문은 main의 착지 규칙을 유지하고 origin의 PR 파이프라인 연결·흐름도·게시 브랜치 merge 규칙만 더했다. #83에만 있는 OMX·릴리스 환경 기록 연결은 옮기지 않았다.
+- gate 변화: 없음. 문서·도구 안내와 GitHub 기준의 기록이며 서버 설정·장치·현장 수용을 바꾸지 않는다.

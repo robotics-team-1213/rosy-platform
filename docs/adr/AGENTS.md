@@ -8,7 +8,7 @@
 
 ## Purpose
 
-One Markdown file per Architecture Decision Record (about 400 files, `D-1` to roughly `D-409`). Each file holds the body of one decision; the index table (ID, title, Status) lives in `docs/reference/ROSY ADR Log.md`. Records preserve why a decision was made, not how the code looks now.
+One Markdown file per Architecture Decision Record. Each file holds the body of one decision; the index table (ID, title, Status) lives in `docs/reference/ROSY ADR Log.md`. Use that index for the current list. Records preserve why a decision was made, not how the code looks now.
 
 ## Key Files
 
