@@ -9186,6 +9186,50 @@ osy-d395-s1d\`.
 - 증거: 독립 소스 검토에서 Fleet 응답·공유 소비자·기존 JPEG/JSON 시험과 문서의 일치를 확인했다. 통합 커밋의 원격 착지 시험은 대기 중이며 소스 검토를 실행 증거로 대신하지 않는다.
 - gate 변화: 없음. 실물 카메라·배포 수용은 실행하지 않았다.
 
+## 2026-10-19 · uncommitted · D-807 Account 서비스의 자격 책임과 운영 완료 기준 제안
+
+- 변경: D-757을 보충하는 D-807과 ADR Log 행을 추가했다. 자격별 발급·보관·검증·회수 owner, 기존 Fleet 배치, 업무 승인 경계와 배포 단위 수용 기준을 기록했다. 다른 진행 중 브랜치의 로컬 예약 D-801~806은 번호 공백으로 명시했다.
+- 검토: 계약·운영 증거 에이전트의 읽기 전용 의견을 교환했다. 일반 Account의 30초/5분 상한보다 엄격한 D-789 미디어 경계, 중앙 회수 실패와 로컬 로그아웃의 구분, 복구 시 회수 자격 부활 방지를 반영했다. 서로 다른 모델의 독립 검증이나 실행 시험으로 세지 않는다.
+- 증거: 기존 ADR·protocol·완료 계획과 구현 경계를 확인했다. harness generate 후 lint exit 0(오류 0, 경고 33), ADR 상대 링크 확인 통과. 제품 원격 시험·배포·실사용 수용은 수행하지 않았다. 문서 원격 검증은 별도 실행 결과로 기록한다.
+- gate 변화: 없음. D-807 Proposed, D-757 Accepted 유지. 제품 코드·API·설정·운영 계정은 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · Account 서비스 앱 적용 목표와 실행 계획
+
+- 변경: D-807을 앱·서비스에 반영하는 지속 목표를 등록하고 `docs/plans/2026-10-19-account-service-rollout.md`를 작성했다. 공통 receiver/CORE 통합 검증, 앱별 기존 회귀, 배포 입력·전환·실사용 인수로 나눴다.
+- 증거: 계약·운영 증거 검토로 핵심 로그인·refresh 회전·회수 대기열·CORE 재시도·미디어 strict online이 이미 있음을 확인했다. 구현 결함은 확정하지 않았고 재현한 누락만 수정하도록 정했다. 새 IdP·설정 생성 CLI는 추가하지 않는다.
+- 상태: 사용자에게 작성된 계획 확인과 현재 세션의 직접 구현·검증 진행 승인을 받았다. 계획 작성 시점 운영 설정·배포·실사용 수용은 미수행이다. 지속 목표는 active이며 설치·실사용 증거 없이 완료로 바꾸지 않는다.
+- gate 변화: 없음. D-807 Proposed와 기존 원격 문서 검증 상태를 유지한다.
+
+## 2026-10-19 · 30acdffbfb · D-807 승인과 Account 앱별 검증 기록
+
+- 변경: 사용자 계획 승인에 따라 D-807을 Accepted로 기록하고 조회 전용 Pilot 로그아웃 누락을 수정했다. 기존 인증 서비스를 재사용하며 앱별 여섯 관문·전환 절차·남은 운영 입력을 기록했다.
+- 증거: 공통·CORE·Fleet·Learning·Games 실제 browser와 native JVM/proxy/debug APK의 SHA·실행/skip/실패 이력을 docs/validation/account-service-2026-10-19/results.md에 고정했다. 마지막 독립 계약 리뷰에 근거 있는 finding은 없었다. docs 관문은 별도 원격 실행으로 기록한다.
+- gate 변화: 운영 gate 변화 없음. 실제 보호 설정 경로/접근 확인과 운영 설정 포함 native 빌드·설치·실사용·격리 복구는 남아 있으며 지속 목표는 active다. main 착지·push·전체 CI는 미수행이다.
+
+## 2026-10-19 · 6a80a63e55 · Account 문서 관문과 운영 비활성 readback
+
+- 변경: 후속 문서 시험과 현장 읽기 전용 확인을 별도 고정 기록에 남겼다. 앞선 결과를 덮어쓰지 않았다.
+- 증거: 모델 PC 문서/배치 계약 142 passed, skip 0, NEW 0. 실행 Fleet의 빈 Account 설정·비어 있는 Account 디렉터리·기존 사용자 후보 정확히 1개·현재 .local TLS/8443·tailnet serve 미설정을 확인했다. 상세 SHA와 한계는 docs/validation/account-service-2026-10-19/governance-and-site-readback.md.
+- gate 변화: 없음. 운영 설정 변경·우회 권한 사용·배포·실사용 수용은 미수행이다. 기존 tailnet issuer 후보의 신뢰된 TLS/443 구성과 운영 관리 권한이 필요하다.
+
+## 2026-10-19 · 8d05ced7b · Account 전환 선행 조건 재확인
+
+- 변경: 활성화 선행 조건의 후속 readback을 별도 고정 기록에 남겼다. 제품 소스 변경은 없다.
+- 증거: 실행 Fleet/proxy healthy와 배포 이미지 tag를 확인했다. 후보 issuer 443의 실제 연결은 거부됐으며 TLS/callback은 검증하지 못했다. 상세 범위는 docs/validation/account-service-2026-10-19/activation-prerequisite-readback.md.
+- gate 변화: 없음. 운영 관리 권한·신뢰된 HTTPS issuer·등록 receiver/native signer가 필요하다. 설치·실사용·격리 복구는 미완료이며 지속 목표는 active다.
+
+## 2026-10-19 · 30acdffbfb · Account 활성화 후보와 설정 포함 Cam APK 준비
+
+- 변경: 사용자 추가 지시로 현장 owner-only 폴더에 키·Authority/Cam 설정·TLS443 proxy/Compose 후보를 준비했다. private 안내에 실제 관리자 발급 명령·기존 서명 전환 순서를 적었다. 로봇 roster가 비어 있는 항목은 추측하지 않았다.
+- 증거: 기존 Fleet parser UID10001 PASS, 현재 proxy Caddy adapt PASS. 기존 모델 PC SDK에서 설정 포함 Cam debug APK PASS 및 APK asset과 후보 JSON 전체 대조 일치. 실제 tailscale cert는 daemon 권한 거부로 실패했다. 상세 SHA/한계는 docs/validation/account-service-2026-10-19/prepared-activation-candidate.md.
+- gate 변화: 운영 gate 변화 없음. Authority 활성화·서명 배포·실물 로그인/회수/복구는 미완료다. 이번 준비가 설치·사용자 수용을 대신하지 않는다.
+
+## 2026-10-19 · uncommitted · Account 인증서 발급 확인·보호 백업·갱신 타이머
+
+- 변경: 사용자 인증서 발급 후 체인·hostname·pair·만료를 확인하고 현장 root 백업과 Windows DPAPI 암호화 백업을 만들었다. private 운영 갱신 helper와 daily user timer를 설치했다.
+- 증거: 백업10개 원본 대조·복호화 archive hash 일치 PASS. 실제 갱신 접근·격리 최초 쓰기/반복·설치 대상 모형의 UID0400 PASS. user timer active와 첫 oneshot success. 상세 경계는 docs/validation/account-service-2026-10-19/certificates-backed-up.md.
+- gate 변화: 인증서 준비·갱신 timer 설치만 확인했다. Authority 활성화·새443·운영 Caddy reload·실물 로그인/회수/복구는 미완료다. 기존 Account signing key와 운영 DB는 바꾸지 않았다.
+
 ## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
 
 - 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.

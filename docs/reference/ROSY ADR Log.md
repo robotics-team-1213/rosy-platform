@@ -806,6 +806,7 @@
 | D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
 | D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Accepted (2026-10-18, 사용자 결정) |
+| D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
 | D-803 | 착지는 줄을 선다 — 클론 하나의 착지 대기열(FIFO 표), 변경분 재시험보다 먼저 | Accepted (2026-10-18, 사용자 결정) |
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
