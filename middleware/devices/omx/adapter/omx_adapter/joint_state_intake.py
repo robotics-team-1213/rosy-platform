@@ -11,6 +11,7 @@ class JointStateIntake:
         self.config = config
         self._last_stamp_ns = 0
         self._sequence = 0
+        self._last_received_at = None
 
     def snapshot(self, names, positions, *, stamp_ns, source_now_ns, received_at):
         if (type(stamp_ns) is not int or type(source_now_ns) is not int
@@ -29,6 +30,10 @@ class JointStateIntake:
         snapshot = JointStateSnapshot(
             positions=values, sequence=self._sequence + 1, received_at=received_at - age_s,
             calibration_revision=self.config.calibration_revision)
+        # Variable source delay can regress the age-adjusted receipt even when both clocks advance.
+        if self._last_received_at is not None and snapshot.received_at < self._last_received_at:
+            raise ValueError("joint state age-adjusted receipt regressed")
         self._last_stamp_ns = stamp_ns
+        self._last_received_at = snapshot.received_at
         self._sequence += 1
         return snapshot

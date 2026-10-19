@@ -18,6 +18,14 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
 import remote_job as rj  # noqa: E402
 import remote_pytest as rp  # noqa: E402
+import xdist_plan as xp  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _fresh_headroom(monkeypatch):
+    """place() fills rp.HEADROOM; no test sees another test's hosts."""
+    monkeypatch.setattr(rp, "HEADROOM", {})
+    monkeypatch.delenv("ROSY_TEST_WORKERS", raising=False)
 
 
 def test_changed_vision_dependency_rebuilds_remote_environment(monkeypatch):
@@ -394,8 +402,9 @@ def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
         [], 1 if script == rp.VENV and h in venv_fails else 0, b"", b""))
 
     def run(h, name, k, log, job_args, inv, *a):
-        seen.append((h, inv[0]))
-        code = job(h, inv[0])
+        path = next(w for w in inv if not rp.ENV_ARG.match(w))  # past xdist_plan's ROSY_JOB_* words
+        seen.append((h, path))
+        code = job(h, path)
         log.write_bytes(b"")
         return code
     monkeypatch.setattr(rp.remote_job, "run", run)
@@ -596,9 +605,9 @@ def _skip_unreaped(pid):
         pytest.skip("PID 1 does not reap orphaned jobs here (CI container); covered on the lab hosts")
 
 
-def _poll_until_done(env):
+def _poll_until_done(env, k="0"):
     for _ in range(100):
-        code, _, _ = rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)
+        code, _, _ = rj.parse_poll(_sh(rj.POLL, env, "r", k, "0").stdout)
         if code is not None:
             return code
         time.sleep(0.1)
@@ -848,3 +857,134 @@ def test_tailscale_profile_check_skipped_without_cli_or_key_or_with_explicit_hos
     rp.check_tailscale_profile("", which=lambda _: "tailscale", run=never)  # no lab-hosts.json key
     monkeypatch.setenv("ROSY_TEST_HOSTS", "user@host")
     rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=never)  # manual host override
+
+
+# --- pytest-xdist on the test hosts (xdist_plan.py) and light hosts below the memory floor ---
+
+GROUP = ["middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
+         "shared/web/test", "contracts/foundation/test", "middleware/devices/pinky/profile/test",
+         "middleware/devices/omx/profile/test"]  # the 7,151-test group measured at 722 s serial
+
+
+def test_a_host_under_the_memory_floor_is_light_ranked_after_full_hosts_and_before_the_site_pc(monkeypatch):
+    monkeypatch.setattr(rp, "SITES", {"site@lab"})
+    hosts = ["ai@2", "model@1", "site@lab", "tiny@4"]
+    probes = [host(nproc=18, avail_gb=5), host(), host(nproc=8, load1=0.2, avail_gb=13), host(avail_gb=3.5)]
+    chosen, notes = rp.place("pytest", hosts, probes)
+    assert chosen == ["model@1", "ai@2"]  # the site PC stays out while any other host fits
+    assert "light" in notes[0] and notes[1].endswith("ok") and "below pytest floor 2 cores/4 GB" in notes[3]
+    assert rp.HEADROOM["ai@2"]["light"] and not rp.HEADROOM["model@1"]["light"]
+    assert rp.place("pytest", hosts[2:3], probes[2:3])[0] == ["site@lab"]  # alone: last resort as before
+    # Sim keeps its own floor; there is no light sim host.
+    assert rp.place("sim", ["ai@2"], [{**probes[0], "sim": True, "avail_gb": 7}])[0] == []
+
+
+def test_a_light_host_takes_the_smallest_invocations_with_a_memory_cap(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(rp.remote_job, "run", lambda h, name, k, log, job, inv, *a:
+                        seen.append(inv) or log.write_bytes(b"") and 0)
+    rp.HEADROOM["ai@2"] = {"cores": 18, "mem": 5.4, "site": False, "light": True}
+    work = rp.Work([0, 1, 2])  # largest first
+    work.todo.popleft()  # a full host took the largest
+    rp.run_on("ai@2", [["big"], ["mid"], ["small"]], [tmp_path / f"{i}.txt" for i in range(3)],
+              "ab" * 20, tmp_path, None, work)
+    assert [inv[1] for inv in seen] == ["small", "mid"]
+    assert all(inv[0] == "ROSY_JOB_MEM_GB=5" and "-n" not in inv for inv in seen)
+    assert work.take_small() is None and work.take() is None
+
+
+def test_worker_count_follows_free_cores_memory_the_job_cap_and_the_site_quota(monkeypatch):
+    assert xp.workers(14.5, 11.0, False) == xp.MAX_WORKERS == 6  # MemoryMax 6 GB / 1 GB a worker
+    assert xp.workers(3.9, 11.0, False) == 3
+    assert xp.workers(16, 2.5, False) == 2
+    assert xp.workers(1.5, 11.0, False) == 1  # one worker is serial
+    assert xp.workers(10, 10, True) == 4  # CPUQuota 400%
+    monkeypatch.setenv("ROSY_TEST_WORKERS", "12")
+    assert xp.workers(2, 2, False) == 12  # measurement override
+    monkeypatch.setenv("ROSY_TEST_WORKERS", "0")
+    assert xp.workers(16, 12, False) == 1
+    monkeypatch.setenv("ROSY_TEST_WORKERS", "auto")
+    with pytest.raises(SystemExit, match="whole number"):
+        xp.workers(16, 12, False)
+
+
+@pytest.mark.parametrize("inv, why", [
+    (GROUP, None),
+    (["shared/web/test/", ".\\contracts\\foundation\\test", "-k", "not slow"], None),
+    (["test/test_land.py"], "test is in serial_suites.txt"),
+    (["middleware/core/gateway/test", "middleware/perception/test"], "middleware/perception is in"),
+    (["middleware"], "is in serial_suites.txt"),  # a parent of a serial suite
+    (["."], "is in serial_suites.txt"),
+    (["middleware/core/gateway/test/test_api.py::test_x"], "node ids"),
+    ([rp.BROWSER_ENV, "shared/web/test"], "browser job"),
+    (["shared/web/test", "-n", "2"], "sets xdist itself"),
+    (["shared/web/test", "-pno:xdist"], "sets xdist itself"),
+    (["-q"], "no path named"),
+])
+def test_serial_list_and_rules_keep_hazardous_invocations_serial(inv, why):
+    serial = xp.load_serial(xp.SERIAL_FILE.read_text(encoding="utf-8"))
+    reason = xp.serial_reason(inv, serial)
+    assert reason is None if why is None else why in reason
+
+
+def test_serial_list_parses_comments_and_names_real_paths():
+    assert xp.load_serial("# head\n\ntest  # why\n middleware\\perception/ \n") == ["test", "middleware/perception"]
+    serial = xp.load_serial(xp.SERIAL_FILE.read_text(encoding="utf-8"))
+    assert "test" in serial and "operations/fleet/test" in serial
+    assert all((ROOT / prefix).exists() for prefix in serial), "a stale line keeps nothing serial"
+
+
+def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts():
+    full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
+    words, extra, note = xp.plan(GROUP, full, [])
+    assert (words, extra, note) == (["ROSY_JOB_CORES=6"], ["-n", "6", "--dist", "loadfile"], "xdist: 6 workers")
+    assert xp.plan(["test"], full, ["test"])[:2] == ([], [])
+    assert xp.plan(GROUP, None, [])[:2] == ([], [])  # D-568 7 fallback host: unmeasured, serial
+    assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
+
+
+def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path, monkeypatch):
+    monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(rp, "quarantine", lambda repo, sha: {"shared/web/test/test_q.py::test_f": "r"})
+    rp.HEADROOM["h"] = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
+    calls = []
+
+    def job(host, name, k, log, job_args, inv, *a):
+        calls.append(inv)
+        log.write_bytes(b"[gw2] [ 50%] FAILED shared/web/test/test_q.py::test_f \n"
+                        b"FAILED shared/web/test/test_q.py::test_f - boom\n" if k == 0
+                        else b"PASSED shared/web/test/test_q.py::test_f\n")
+        return 1 if k == 0 else 0
+
+    monkeypatch.setattr(rp.remote_job, "run", job)
+    assert rp.run_on("h", [["shared/web/test"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None) == [0]
+    assert calls[0][:6] == ["ROSY_JOB_CORES=6", "shared/web/test", "-n", "6", "--dist", "loadfile"]
+    assert calls[0][6:] == rp.PYTEST_TAIL
+    assert calls[1][:2] == ["ROSY_JOB_CORES=6", "shared/web/test/test_q.py::test_f"] and "-n" not in calls[1]
+
+
+def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():
+    assert "pytest-xdist==3.8.0" in rp.VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
+
+
+@pytest.mark.parametrize("words, lock, mem", [([], "2 6", "6G"), (["ROSY_JOB_CORES=6"], "6 6", "6G"),
+                                              (["ROSY_JOB_MEM_GB=4"], "2 4", "4G")])
+def test_job_records_its_xdist_budget_in_the_lock_and_caps_memory(tmp_path, words, lock, mem):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    home, env = _job_env(tmp_path, 'cat "$HOME/rosy-jobs/r.lock"\n')
+    (tmp_path / "bin" / "systemd-run").write_text(
+        '#!/bin/bash\necho "$*" > "$HOME/scope"\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
+    start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, *words, "x.py")
+    assert start.returncode == 0, start.stderr
+    assert _poll_until_done(env) == 0
+    out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
+    assert out.split()[1:] == ["pytest", *lock.split()]
+    assert f"MemoryMax={mem}" in (home / "scope").read_text()
+    bad = _sh(rj.START, env, "r", "d", "", "1", "60", rj.JOB, "ROSY_JOB_CORES=$(id)", "x.py")
+    assert bad.returncode == 0 and _poll_until_done(env, "1") == 2

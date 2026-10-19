@@ -797,8 +797,10 @@
 | D-794 | OMX 카메라 역할 — top은 작업대 고정, front는 손목; wrist 이름으로 단계 이행하고 학습은 두 카메라를 쓴다 | Proposed |
 | D-793 | OMX 학습 정책의 실물 실행 승인 관문 — 학습은 실행 권한을 바꾸지 않고, 위험하면 멈춘 뒤 API로 확인받는다 | Proposed |
 | D-800 | CORE-mediated OMX LeRobot observation and action requests | Proposed |
+| D-804 | SIM 장치의 Fleet policy lease 소비와 CORE 결속 | Proposed |
 | D-790 | 워크트리 규칙 보강 — 착지한 워크트리 1시간, orphan 보관 후 정리, 옛 이력 브랜치 거절, landed-dirty 경고, 부하성 실패 재실행(D-761 개정) | Proposed |
 | D-795 | DDS는 호스트 하나 안에서만 흐른다 — 기계 사이 DDS 금지(OMX LOCALHOST·lo 프로파일, AI PC Nav2/rosbridge 유닛 제거, 회귀 시험) | Accepted |
+| D-799 | 원격 pytest를 호스트 안에서 병렬로(pytest-xdist, 직렬 목록) 돌리고, 메모리 하한 아래 호스트도 가벼운 일을 받는다(D-568 2항 개정) | Proposed |
 | D-802 | 실험실 PC의 Python 설치 도구는 uv 하나 — host-state가 해시 고정 휠(`wheel-tool`)로 배포하고, 원격 도구는 pip·venv 대체 경로를 쓰지 않는다 | Proposed |
 | D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |

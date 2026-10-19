@@ -94,14 +94,14 @@ def test_deadlock_proposal_is_not_replayed_and_new_answers_obey_the_cap():
 def _routable(monkeypatch, runner):
     """This demo map has no other route around ring_n (TRIP_NO_ROUTE); hand back the trip's own plan
     as the replanned route so the switch itself is under test."""
-    from fleet.server import trip_runner
+    from fleet.server import trip_replan
 
     def hold(_active, _pose, _remaining, _request, _caps, blocked, *_args):
         live = runner._live["b"]
         return {"reason": "replan", "map_version": live.view["map_version"], "blocked": sorted(blocked),
                 "plan": {k: live.view["plan"][k] for k in ("segments", "places", "actions")}}
 
-    monkeypatch.setattr(trip_runner, "replan_hold", hold)
+    monkeypatch.setattr(trip_replan, "replan_hold", hold)
 
 
 def test_an_ai_replan_switches_the_route_without_the_operator_after_the_start_checks(monkeypatch):

@@ -1,0 +1,76 @@
+{
+  "scope": "fixed SIM episode; no learned model, Mission admission or physical motion",
+  "policy_revision": "6f620dcf50ad443b1d447c05cb88b39b29c47724cce398a100d71dee145beb12",
+  "window_id": "win-c5d5157185810746",
+  "lease": {
+    "lease_id": "lease-9f24ec556e03ef8e",
+    "episode_id": "sim-episode",
+    "policy_revision": "6f620dcf50ad443b1d447c05cb88b39b29c47724cce398a100d71dee145beb12",
+    "identity": {
+      "mission_id": "sim-local-mission",
+      "step_id": "step",
+      "action_id": "action",
+      "attempt_id": "attempt",
+      "workcell_id": "sim_policy_cell",
+      "instance_id": "sim_policy_arm",
+      "request_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "authority_epoch": 1,
+      "dispatch_generation": 1
+    },
+    "issued_at_ns": 27226516778695,
+    "expires_at_ns": 27227516778695,
+    "owner_session_id": "accec3953e6828332b1d08bd6ff2eb9b"
+  },
+  "server_delivery_marker": "not_connected",
+  "device_received": true,
+  "actual_auth": true,
+  "initial_fleet_issued_ns": 1792347988840188431,
+  "renewed_fleet_issued_ns": 1792347991884524939,
+  "camera_topic": "/workcell_camera/image",
+  "camera_accepted": 90,
+  "camera_rejected": 0,
+  "observations": [
+    {
+      "observation_id": "_FBVkYmLsfpSLAF_kkUT9vjBovT9laZ1",
+      "rgb_sha256": "810d8d5e74e40531a27061994321a6fd14bbcb963bd9ca69c5f2dfe334735eb8",
+      "source": {
+        "frame_sha256": "810d8d5e74e40531a27061994321a6fd14bbcb963bd9ca69c5f2dfe334735eb8",
+        "received_at_ns": 27223692124888,
+        "source_stamp_ns": 4500000000,
+        "shape": [3, 24, 32]
+      }
+    },
+    {
+      "observation_id": "CedCARSPhpTQnlQA6uw3IAMRFmIqmktm",
+      "rgb_sha256": "d61c40c59e5577c289c5942327bcc5f021f58ee803eb5981b9125204225d9b75",
+      "source": {
+        "frame_sha256": "d61c40c59e5577c289c5942327bcc5f021f58ee803eb5981b9125204225d9b75",
+        "received_at_ns": 27226093185951,
+        "source_stamp_ns": 6900000000,
+        "shape": [3, 24, 32]
+      }
+    }
+  ],
+  "first_sdk": {
+    "target_rad": 0.010000018175208894,
+    "observed_rad": 1.8175208893467243e-08,
+    "rgb_sha256": "810d8d5e74e40531a27061994321a6fd14bbcb963bd9ca69c5f2dfe334735eb8",
+    "rgb_bytes": 2304,
+    "ros_imported": false
+  },
+  "first_readback_rad": 0.010000014677643776,
+  "first_goal": "238735d4-8be7-4da7-808a-96228e26f113",
+  "cancel_command_id": "35320761-8b1b-4250-81a7-54339d8b9d07",
+  "cancel_goal_id": "09aea670-80a3-4ed1-a509-e69b3e586cd4",
+  "cancel_status": 5,
+  "cancel_ack": true,
+  "cancellation_observed_after_revoke_s": 0.29530606800108217,
+  "owner_state": "hold",
+  "hold_reason": "policy_authority_stale",
+  "final_window_samples": 14,
+  "final_spread_rad": 0.0,
+  "reconnect": {
+    "reconnect_refused": true,
+    "error_type": "CoreArmError"
+  }
+}
