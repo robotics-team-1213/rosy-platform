@@ -10,7 +10,7 @@
 | **Rosy Fleet** | 현장 관제·작업 승인·진행·기기 연결·계정 관리 | `operations/site_ui/console`의 웹, `operations/fleet`의 서비스·원장. 화면 id는 `console` 유지 |
 | **Rosy Pilot** | 직접 수동 운전과 운전석 영상 | `middleware/robot_ui/pilot`의 웹/PWA와 Android 연결 셸. 연결 로비는 별도 앱이 아님 |
 | **Rosy Cam** | 카메라 폰에서 천장 영상 캡처·전송 | `operations/site_ui/cam`의 Android 앱. 관측 처리는 Vision 서비스가 담당 |
-| **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업·카메라 맞춤·모방학습 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출 |
+| **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출. 별도 미게시 화면을 이름 변경과 함께 추가하지 않음 |
 | **Rosy Games** | 경기 운영과 게임 호스트 상태 확인 | `operations/apps/games`의 노트북 호스트·경기 보드. Fleet 관제나 CORE 로봇 모드가 아님 |
 | **Rosy Vault** | 보관고 입고·출고·장부·보류 작업 처리 | 별도 `rosy-vault` 저장소의 `vault/web`. 장치 API를 소비하는 업무 앱 |
 | **Rosy Device** | 로봇팔 등 연결 기기의 상태·보정·설정·복구 | 별도 `rosy-vault` 저장소의 `device_core/web`. Robot의 `/device` 역할 화면과는 다른 구현 |
