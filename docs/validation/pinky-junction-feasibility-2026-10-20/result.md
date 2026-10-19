@@ -194,3 +194,39 @@ HEAD `8387e53ffbd2ba132b278b34ea0098cc7dc315d1`
 8387은 target 승격을 현재 좌표에서 판정하고, guide·target·memory 유래 후보의 반대 방향 검사도 final selector와 같은 선택 점을 현재 좌표로 변환해 수행한다. 실제 near 출구의 관측 입장은 바꾸지 않는다. 최신 diff는 source 커밋 전 독립 safety 재검토에서 추가 material finding이 없었다. 이전193건 통과는 후속 변경의 검증을 대신하지 않으며 최신 native 회귀·영향 범위·SIM은 별도로 확인한다.
 
 8387의 최신 관련8파일은 native195 passed / skip0, known_failures NEW0로 종료했다. b42 이후7커밋 size-range 통과. 영향 범위와 동일 조건 반복 SIM은 아직 수용 증거가 아니며 HOLD를 유지한다.
+
+## 7a0 영향 범위 통과와 중반 코너 실패
+
+HEAD `7a0bb35e63f4c0a633e447fd88bc3e644c0bd528`
+
+최신 native 영향 범위는 run-1 6,913 passed / 408 skipped / 38 warnings / 62 subtests passed, run-2 9 passed로 총6,922건 통과했고 두 로그 모두 NEW0이다. 최신 소스와 문서 delta 독립 최종 검토는 Critical0 / Important0 / Minor0이었다.
+
+동일 조건 첫 SIM `sim-7a0bb35e63-6537e8`은 중반 코너에서 pose/off_lane0.104m로 실패했다. settled_xy(-0.733093, 0.340562), 목표 거리1.524783m, via0.543m였다. 주행684표본 모두 learned_drivable, fallback0, nonnull revision678개는 고정 revision과 일치하고6개는 metadata 누락이다. 열린 junction 수용187회·먼 출구 거절38회이며 새 local alignment 활성화는0회였다. final cmd·odom0, lease released, left_running 빈 목록, 산출물 회수·native 정리 완료, lane_return SKIP이다.
+
+90.375초 s3.623에서 current-here -18.56도와 미래 안내 +42.37도가 충돌했다. 오른쪽 target(0.227, -0.090), near centre(0.163, -0.083), near right opening(0.213, -0.105)이 있었으나 explicit guide의 왼쪽 pivot을 선택했다. 실제 floor prefix가0.18m를 넘어 이어진다는 이유로 local-floor 증거가 비어 정렬 분기는 활성화되지 않았다. 후속 진단은 도로 끝 판단과 bounded 제자리 정렬의 근거리 관측 범위를 구분한다. ROI의 끝을 도로 끝·junction·opening으로 표시하지 않으며, 같은 실패 후보를 수정 없이 재실행하지 않는다.
+
+- result.json SHA256: `f6585e04cea1ee4a174f43ff1fd969a6a0d7cecc32b535a8a9446adebfd69c2f`
+- observations.jsonl SHA256: `0bb8fd00de5770c987d983f07514be9f3e1575d0d74e44200bf3685a9ddfa5df`
+- run.txt SHA256: `c5e33cf7ab22bda54bb050b9a8bd13c11a6e4f8545a0168c3353432b9dc5b4aa`
+
+## 도로 끝과 근거리 정렬 ROI의 분리
+
+HEAD `5be728c2ebc23e333b3d1762e88153856d1e6dde`
+
+7a0 실패 지점000722·000723·000724 PNG를 같은 모델로 native 재생했다. 000723에서 실제 연결 floor119행 중 가까운42행은 x0.139118..0.179172m, y-0.064225..-0.081173m였고 더 먼 연결은 x0.473155m까지 이어졌다. 새 후보는 검증된 연속 raw prefix의 첫 점부터 처음 x>=0.18m이 나오기 직전까지를 정렬 ROI로 사용한다. 이는 종전의 “전체 prefix가 짧게 끝나야 한다”는 입장 조건을 의도적으로 바꾸는 것이다. ROI 끝을 도로 끝·closed·junction·opening으로 표시하거나 전진 후보·정렬 수명 종료·예산 재생성에 사용하지 않는다.
+
+최소4개 실제 raw 행, 원본 픽셀과 연결 픽셀의 floor 지지, source/current 근거리·동일 side, fresh current-here 일치와 첫 실측점 기반 기존 회전 상한은 유지한다. 928d882 native RED2개 뒤5be 관련197 passed/skip0/NEW0, 7a0 이후2커밋 size-range 통과였다. 독립 safety 검토에서 추가 material finding은 없었다.
+
+- 000723 PNG SHA256: `fc4ac55c609d75f279e32f8d2fc21a8d8dcd9dc2a0a2ffc3672375d2b6ca2692`
+- native mask packbits SHA256: `da9f5ddecc0b9d1b39f307f81d2e6b3fb6900850d1b587e53e3cb7902cb3fa69`
+- native replay JSON SHA256: `56f77f8977f855d1bdbb3678c2a6e3fbe3c1130ac841a71e4f2a803e6fa2261b`
+
+## 회전 중 현재 좌표 ROI와 예산의 연속성
+
+HEAD `b8e9ac4ebe9c395bb412feafdbd48f03a0ba8268`
+
+5be 별도 최종 검토에서 Important1을 확인했다. source ROI 끝 x0.179m가 오른쪽 yaw -0.05rad 변화 뒤 current x0.18m 밖으로 나가면, 앞쪽에 충분한 유효 점이 남아 있어도 전체 정렬이 거절됐다. native c8f788 회귀1개 NEW, cached source의 동일 전환을 검증한24f083 회귀1개 NEW로 재현했다.
+
+현재 좌표에서도 같은 raw prefix의 첫 점부터 최초 범위 이탈 직전까지만 선택한다. 최소4개 원본 점을 유지하고 첫 점을 건너뛰거나 뒤의 재진입 점을 붙이지 않는다. 첫 점이 뒤로 가거나 남은 지지가 부족하면 기존 후보/HOLD로 남는다. episode origin·초기 limit·누적 yaw는 다시 만들지 않는다. 최신 actual diff는 소스 커밋 전 독립 safety 검토에서 추가 material finding이 없었다. 최신 native 회귀·영향 범위·SIM은 별도 검증한다.
+
+b8e9 최신 관련8파일은 native200 passed / skip0 / NEW0이며, 7a0 이후5커밋 size-range 통과다. 별도 최종 소스 검토의 Important1을 닫고 Critical0 / Important0 / Minor0을 확인했다. 최신 영향 범위와 반복 SIM은 아직 진행 전이며 수용 HOLD를 유지한다.

@@ -1749,3 +1749,9 @@
 - 변경: target 승격과 guide·target·memory 유래 후보의 반대 방향 판단을 현재 좌표 및 최종 선택 점에 결속했다. 촬영 이후 회전한 source 방향으로 반대쪽 전진 arc를 만들지 않게 했다.
 - 증거: 8a870 별도 최종 소스 검토 Important1을 native3794606c 회귀2개 NEW로 확인했다. 후속8387은 독립 safety 재검토 후 관련195 passed/skip0/NEW0, b42 이후7커밋 size-range 통과.
 - gate 변화: 없음. 최신 영향 범위·반복 SIM과 실물 수용은 별도이며 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 근거리 정렬 ROI의 source/current 연속성
+
+- 변경: 실제 연결 floor가 멀리 이어져도 검증된 raw prefix의 가까운 구간을 제자리 정렬 ROI로 사용한다. 현재 좌표에서도 최초 범위 이탈 직전까지만 같은 prefix를 유지하며 첫 점·최소4개 raw 지지·기존 회전량 예산을 보존한다. 도로 끝·출구·전진 후보·수명 종료의 증거로 쓰지 않는다.
+- 증거: 7a0 native6,922 passed 뒤 SIM 중반 이탈0.104m/정렬0회. 원본000723 native 재생119행 중 가까운42행을 확인했다. producer RED2→5be197 passed, current 좌표·cached source RED각1→b8e9 관련200 passed/skip0/NEW0. 독립 safety 및 최종 소스 검토 지적0, 7a0 이후5커밋 size-range 통과.
+- gate 변화: 없음. 후속 영향 범위·같은 조건 연속2회 SIM 미검증, 수용 HOLD.

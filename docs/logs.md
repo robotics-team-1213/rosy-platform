@@ -9317,3 +9317,9 @@ osy-d395-s1d\`.
 - 변경: b42의 영향6,900 passed와 마지막 코너 이탈 실패를 함께 동결 기록에 추가했다. 후속 관측 출처 보존·실제 floor 픽셀 정렬 후보와 native RED→GREEN 증거를 결속했다.
 - 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`에 SIM 정지·lease·정리·원본 hash, 001337 mask/replay hash와 생산8a870 관련193 passed/NEW0를 기록했다.
 - gate 변화: 없음. 같은 후보 연속2회 완주 조건 미달이며 이전 e5 첫 PASS를 이월하지 않는다.
+
+## 2026-10-20 · uncommitted · 중반 코너 실패와 근거리 ROI 입장 변경 보존
+
+- 변경: 7a0의 native6,922 passed와 중반 코너 이탈 실패를 동결 기록에 추가했다. 원본 마스크의42개 근거리 행, 도로 끝 판단과 정렬 ROI의 분리, 회전 후 현재 좌표의 연속 prefix와 예산 보존을 기록했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 원본·mask·replay hash, b8e9 관련200 passed/skip0/NEW0 및 독립 최종 소스 검토0/0/0.
+- gate 변화: 없음. 최신 영향 범위·반복 SIM 수용 HOLD, 실물·현장 gate 승격 없음.
