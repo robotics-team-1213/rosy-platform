@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +116,25 @@ def _pilot_root() -> Path:
     return Path(__file__).resolve().parents[5] / 'middleware' / 'robot_ui' / "pilot"
 
 
+_arm_install_lock = threading.Lock()
+
+
+def install_arm_policy(services: CoreServicesLike, port: Any) -> None:
+    """Trusted bootstrap binding; E-stop is wired before HTTP can see the port."""
+    with _arm_install_lock:
+        current = getattr(services, 'arm_policy', None)
+        if current is not None and current is not port:
+            raise ValueError('arm policy already installed')
+        if not all(callable(getattr(port, name, None)) for name in ('policy', 'observation', 'submit', 'stop')):
+            raise ValueError('invalid arm policy port')
+        listeners = services.safety.estop_listeners
+        if port.stop not in listeners:
+            listeners.append(port.stop)
+        if services.safety.estop:
+            port.stop()
+        services.arm_policy = port
+
+
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
@@ -124,9 +144,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.state.core = services
     arm_policy = getattr(services, 'arm_policy', None)
     if arm_policy is not None:
-        services.safety.estop_listeners.append(arm_policy.stop)
-        if services.safety.estop:
-            arm_policy.stop()
+        install_arm_policy(services, arm_policy)
     from .account_sessions import install_account_sessions
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')

@@ -20,6 +20,8 @@ import threading
 import time
 import traceback
 import uvicorn
+from http.client import HTTPConnection
+from urllib.parse import urlsplit
 from types import SimpleNamespace
 from uuid import uuid4
 import xml.etree.ElementTree as ET
@@ -37,7 +39,7 @@ from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from controller_manager_msgs.srv import ListControllers
-from core_api_web.api.app import create_app
+from core_api_web.api.app import create_app, install_arm_policy
 from omx_adapter.action_store import ActionStore
 from omx_adapter.command_owner import ArmCommandConfig
 from omx_adapter.local_stop import LocalStopController
@@ -223,10 +225,6 @@ def prove(out, runtime, camera, controllers, calibration):
             fleet.window['window_id'],'sim-rig-32x24',cfg.calibration_revision,fleet.scope)
         preparation = {}
         began = runtime.monotonic()
-        closed_services = SimpleNamespace(arm_policy=None,safety=SimpleNamespace(estop=False,estop_listeners=[]))
-        closed_app = create_app({},closed_services)
-        uvicorn.Config(closed_app,log_level='warning',lifespan='off').load()
-        preparation['closed_core_preparation_seconds'] = runtime.monotonic()-began
         for label, operation in (
             ('stdlib_process',lambda:subprocess.run([sys.executable,'-I','-S','-c',
                 'import json, sys; from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener'],
@@ -255,6 +253,48 @@ def prove(out, runtime, camera, controllers, calibration):
                 row['elapsed_s'] = runtime.monotonic()-began
                 exchanges.append(row)
                 (out/'exchanges.json').write_text(json.dumps(exchanges,indent=2))
+        credential = secrets.token_urlsafe(32)
+        token_file = out/'sdk.private'
+        token_file.touch(mode=0o600, exist_ok=False)
+        token_file.write_text(credential)
+        config = dict(auth=dict(tokens=[dict(id='sim-sdk',role='operator',sha256=hashlib.sha256(credential.encode()).hexdigest())]))
+        services = SimpleNamespace(config=config,arm_policy=None,safety=SimpleNamespace(estop=False,estop_listeners=[]))
+        began = runtime.monotonic()
+        app = create_app(config,services)
+        preparation['bound_core_app_seconds'] = runtime.monotonic()-began
+        commands, observations = [], []
+        chain = None
+        async def traced(scope, receive, send):
+            status = None
+            async def delivered(message):
+                nonlocal status
+                if message['type'] == 'http.response.start':
+                    status = message['status']
+                if message['type'] == 'http.response.body' and message.get('body'):
+                    body = json.loads(message['body'])
+                    if status is not None and status >= 400 and chain is not None:
+                        diagnostic = dict(path=scope.get('path'),status=status,response=body,
+                            hold_reason=chain.session.hold_reason, owner=runtime.owner.recovery_state(),
+                            camera_accepted=camera.accepted,camera_rejected=camera.rejected,
+                            camera_age_ns=int(runtime.monotonic()*1e9)-camera.current()[0].received_at_ns)
+                        (out/'core-refusal.json').write_text(json.dumps(diagnostic,indent=2))
+                        print('OMX_POLICY_CHAIN_CORE_REFUSAL='+json.dumps(diagnostic),flush=True)
+                    if scope.get('path') == '/api/v1/arm/actions' and body.get('accepted') is True:
+                        commands.append(body['command_id'])
+                    elif scope.get('path') == '/api/v1/arm/observations' and 'observation_id' in body:
+                        raw = base64.b64decode(body['camera']['rgb_base64'])
+                        observations.append(dict(observation_id=body['observation_id'],
+                            rgb_sha256=hashlib.sha256(raw).hexdigest(),source=camera.captures[-1]))
+                await send(message)
+            await app(scope,receive,delivered)
+        began = runtime.monotonic()
+        core = stack.enter_context(HttpServer(traced))
+        preparation['bound_core_server_start_seconds'] = runtime.monotonic()-began
+        (out/'preparation-timing.json').write_text(json.dumps(preparation,indent=2))
+        address = urlsplit(core.url)
+        with closing(HTTPConnection(address.hostname,address.port,timeout=2)) as connection:
+            connection.request('GET','/api/v1/arm/policy',headers={'Authorization':'Bearer '+credential})
+            assert connection.getresponse().status == 503
         consumer = FleetLeaseConsumer(scope,request=request,monotonic=runtime.monotonic)
         journal = PolicyExecutionJournal(out/'execution.sqlite3')
         admission = dict(owner=runtime.owner.recovery_state(), environment=policy.recheck()['environment'],
@@ -276,44 +316,8 @@ def prove(out, runtime, camera, controllers, calibration):
                 camera_age_ns=int(runtime.monotonic()*1e9)-camera.current()[0].received_at_ns),indent=2))
         stack.callback(remember_session)
         initial_wire = consumer._wire
-        credential = secrets.token_urlsafe(32)
-        token_file = out/'sdk.private'
-        token_file.touch(mode=0o600, exist_ok=False)
-        token_file.write_text(credential)
-        config = dict(auth=dict(tokens=[dict(id='sim-sdk',role='operator',sha256=hashlib.sha256(credential.encode()).hexdigest())]))
-        services = SimpleNamespace(config=config,arm_policy=chain.port,safety=SimpleNamespace(estop=False,estop_listeners=[]))
-        began = runtime.monotonic()
-        app = create_app(config,services)
-        preparation['bound_core_app_seconds'] = runtime.monotonic()-began
+        install_arm_policy(services,chain.port)
         assert chain.port.stop in services.safety.estop_listeners
-        commands, observations = [], []
-        async def traced(scope, receive, send):
-            status = None
-            async def delivered(message):
-                nonlocal status
-                if message['type'] == 'http.response.start':
-                    status = message['status']
-                if message['type'] == 'http.response.body' and message.get('body'):
-                    body = json.loads(message['body'])
-                    if status is not None and status >= 400:
-                        diagnostic = dict(path=scope.get('path'),status=status,response=body,
-                            hold_reason=chain.session.hold_reason, owner=runtime.owner.recovery_state(),
-                            camera_accepted=camera.accepted,camera_rejected=camera.rejected,
-                            camera_age_ns=int(runtime.monotonic()*1e9)-camera.current()[0].received_at_ns)
-                        (out/'core-refusal.json').write_text(json.dumps(diagnostic,indent=2))
-                        print('OMX_POLICY_CHAIN_CORE_REFUSAL='+json.dumps(diagnostic),flush=True)
-                    if scope.get('path') == '/api/v1/arm/actions' and body.get('accepted') is True:
-                        commands.append(body['command_id'])
-                    elif scope.get('path') == '/api/v1/arm/observations' and 'observation_id' in body:
-                        raw = base64.b64decode(body['camera']['rgb_base64'])
-                        observations.append(dict(observation_id=body['observation_id'],
-                            rgb_sha256=hashlib.sha256(raw).hexdigest(),source=camera.captures[-1]))
-                await send(message)
-            await app(scope,receive,delivered)
-        began = runtime.monotonic()
-        core = stack.enter_context(HttpServer(traced))
-        preparation['bound_core_server_start_seconds'] = runtime.monotonic()-began
-        (out/'preparation-timing.json').write_text(json.dumps(preparation,indent=2))
         sdk_send(child,dict(url=core.url,token_file=str(token_file),policy_revision=scope.policy_revision,
             joint_names=['joint1'],camera_height=SHAPE[1],camera_width=SHAPE[2]))
         assert sdk_message(child) == dict(connected=True)
@@ -447,30 +451,52 @@ def main():
                 errors.append(error)
         worker = threading.Thread(target=work,name='sim-policy-chain-probe')
         worker.start()
+        spin_error = None
+        teardown_errors = []
         try:
             while worker.is_alive():
                 executor.spin_once(timeout_sec=.1)  # CORE ROS executor stays on the main thread.
             worker.join()
+        except BaseException as error:
+            spin_error = error
+            raise
         finally:
             runtime._timer.cancel()
-            stopped = executor.shutdown(timeout_sec=5)
+            worker.join(timeout=5)
+            probe_stopped = not worker.is_alive()
+            executor.remove_node(node)
             drained = threading.Event()
             def drain():
-                executor._executor.shutdown(wait=True)  # Existing native fixture pattern, pinned Jazzy only.
-                drained.set()
+                try:
+                    # Jazzy shutdown destroys the guard; pending handlers still need it.
+                    executor._executor.shutdown(wait=True)
+                except BaseException as error:
+                    teardown_errors.append(repr(error))
+                finally:
+                    drained.set()
             drainer = threading.Thread(target=drain,daemon=True)
             drainer.start()
-            workers_stopped = drained.wait(5)
+            workers_stopped = drained.wait(5) and not teardown_errors
+            stopped = False
+            if workers_stopped and probe_stopped:
+                try:
+                    stopped = executor.shutdown(timeout_sec=5)
+                except BaseException as error:
+                    teardown_errors.append(repr(error))
             (out/'teardown.json').write_text(json.dumps(dict(executor_stopped=stopped,
-                workers_stopped=workers_stopped, primary_error=repr(errors[0]) if errors else None,
+                workers_stopped=workers_stopped, probe_stopped=probe_stopped,
+                teardown_errors=teardown_errors,
+                primary_error=repr(spin_error or (errors[0] if errors else None)),
                 cpu_after=(cpu_group/'cpu.stat').read_text(),finished_monotonic_s=time.monotonic(),
-                remaining_thread_stacks={} if workers_stopped else {
+                remaining_thread_stacks={} if workers_stopped and probe_stopped else {
                     str(ident):traceback.format_stack(frame) for ident,frame in sys._current_frames().items()}),indent=2))
-            assert stopped and workers_stopped, 'own executor/workers did not drain; do not destroy live entities'
             (out/'joint-intake.json').write_text(json.dumps(list(intake_trace),indent=2))
-            runtime.destroy()
-            node.destroy_node()
-            rclpy.try_shutdown()
+            if stopped and workers_stopped and probe_stopped:
+                runtime.destroy()
+                node.destroy_node()
+                rclpy.try_shutdown()
+            elif spin_error is None and not errors:
+                raise RuntimeError('own probe/executor/workers did not drain; live entities retained')
         if errors:
             raise errors[0]
         print('OMX_POLICY_CHAIN_EXIT_OK',flush=True)
