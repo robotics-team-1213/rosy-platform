@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
@@ -1173,3 +1174,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 - start는 자동 timer와 소유 서비스를 시작한다. stop은 timer를 끄고 소유 service의 control group만 중지한다. retry는 중지 상태의 소유 서비스를 한 번 실행한다. 상태는 다시 읽으며 명령 접수를 학습 완료로 표시하지 않는다.
 
 Details: docs/adr/D-745-learning-center-owner-controls.md.
+
+## D-810 통합관제 운영자 AI 대화의 출처와 조회 권한
+
+**Status:** Accepted for implementation (2026-10-20). 운영 모델 승인·음성 수용·배포는 별도다.
+
+웹 대화를 기존 Discord 신원과 분리하고 첫 버전은 근거에 따른 조회만 제공한다. 전문은 [D-810](../adr/D-810-console-operator-assistant.md).

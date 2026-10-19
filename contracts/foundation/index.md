@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · D-810 Console 대화 DTO
 - 2026-10-19 · uncommitted · drivable v2 안내 계약을 제품보다 먼저 분리
 - 2026-10-19 · uncommitted · D-807 receiver 재개 후 회수 대기열 검증
 - 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
 - 2026-10-18 · uncommitted · schemas 크기 정리의 기존 반영 확인
-- 2026-10-18 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769) (이식, 원래 2026-10-16)

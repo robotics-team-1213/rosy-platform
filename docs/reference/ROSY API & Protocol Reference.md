@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.287
+**Version:** v1.289
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,23 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.289 Console operator assistant (D-810)
+
+Additive, named operator only and read-only. Console credentials and cookie Origin/CSRF rules remain unchanged. Canonical DTOs are `AssistantMessage`, `AssistantFact`, `AssistantResult`, `AssistantStatus`, and `AssistantHistory` in `core_common.protocol.assistant`, following the existing protocol submodule pattern without growing the oversized schemas facade.
+
+| Method/path | Input | Result |
+|---|---|---|
+| GET `/api/fleet/assistant/status` | none | `AssistantStatus`: available, mode=`READ_ONLY`, reason; configuration/admission missing or expired is unavailable |
+| POST `/api/fleet/assistant/messages` | `AssistantMessage`: conversation_id, request_id, text, optional selected_robot_id | 202 `AssistantResult`, or 200 same request on duplicate |
+| GET `/api/fleet/assistant/messages/{request_id}` | path ID | Own `AssistantResult`; other principal or absent is the same 404 |
+| GET `/api/fleet/assistant/conversations/{conversation_id}` | path ID | Own `AssistantHistory`, latest 40 messages in chronological order |
+
+IDs are `[A-Za-z0-9_-]{1,96}`. Original text is retained, 1..2000 characters, nonblank and no control characters except CR/LF/tab. selected_robot_id is optional `[A-Za-z0-9_.:-]{1,96}`; it is rechecked against current Fleet reads. Unknown body fields, including identity/source/Discord fields, are rejected. Principal comes only from authentication, and each site's existing Fleet DB defines site scope. Shared `site-console` and development principals are refused for persistent assistant conversations. Reading or submitting requires the current named operator credential.
+
+Results contain request_id, conversation_id, original text, state (`PENDING`, `RUNNING`, `ANSWERED`, `HOLD`, `UNKNOWN`), nullable response/reason, facts (ref, text, observed_at), created_at, nullable completed_at, and action_admissible=false. These are conversation states, never execution-completion states. Model text does not establish physical facts: STATUS is rendered from verified fact references. CONTROL requests are handed off to the existing work UI; this release never dispatches a command.
+
+Same principal/request ID and same original body returns the existing result without a second model call. Changed body is 409 `ASSISTANT_REQUEST_CHANGED`. Only one pending/running request per principal, 64 site-wide, and at most 1000 stored requests per principal; excess is 429 `ASSISTANT_LIMIT`. No implicit deletion or replay is used to free capacity. Missing/expired admission produces a durable HOLD rather than inference. In-flight restart/cancellation/transport ambiguity is UNKNOWN, never automatically retried. Unknown/foreign request is 404 `ASSISTANT_NOT_FOUND`; unavailable durable storage is 503 `ASSISTANT_STORAGE_UNAVAILABLE`. Invalid input is 422. Current snapshot age limit is five seconds; stale/unavailable observations hold the request. Recent model history is capped at four turns, 120 seconds, same principal/conversation/selection; previous STATUS facts are not reused as current observations. Every result is `Cache-Control: no-store`.
 
 ### v1.273 Stuck evidence as a raw JPEG for `Accept: image/jpeg`
 
@@ -3394,6 +3411,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
 | v1.287 | 2026-10-19 | D-769 rev 3 / D-573 rev 8 route-prior compatibility prerequisite: optional map-wall geometry, at most three-second source lifetime, receiver-first rollout, and the separately installed consumer's ignored-short extension exception. Operational Fleet remains one second; no physical activation. |
 | v1.275 | 2026-10-19 | Additive (D-801, feat/site-console-video): Fleet `POST /api/fleet/robots/{robot_id}/media-grant`·`/renew`·`DELETE`와 미디어 권한 서비스용 `POST /api/fleet/media/validate`. 사이트 로그인 주체(fleet.read)의 로봇별 READ 전용 영상 위임. 상세는 v1.275 절 |
 | v1.273 | 2026-10-19 | Additive (docs/stuck-evidence-jpeg-api): `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` with `Accept: image/jpeg` returns the raw JPEG and its metadata in `X-Stuck-Evidence`; the JSON body is unchanged for other clients. Documents the behaviour shipped in fix(fleet) 0659636cff. |
