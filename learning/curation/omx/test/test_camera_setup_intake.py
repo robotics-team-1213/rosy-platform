@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path[:0] = [str(ROOT / 'learning/curation/omx'), str(ROOT / 'test/learning/perception')]
+sys.path[:0] = [str(ROOT / 'learning/curation/omx'), str(ROOT / 'learning/curation/perception'),
+                str(ROOT / 'test/learning/perception')]
 import camera_setup  # noqa: E402
 import camera_setup_intake  # noqa: E402
 import collection_intake  # noqa: E402
