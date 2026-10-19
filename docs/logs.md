@@ -9380,3 +9380,15 @@ osy-d395-s1d\`.
 - 변경: 독립 검토에서 원격 main에 없는 카메라·모방학습 화면 설명과 D-792 참조를 찾아 게시 문서·표면 역할을 실제 기존 화면 범위로 맞췄다. 화면 기능은 추가하지 않았다.
 - 증거: 수정 전 게시 head 9af27301a의 이름·출처·비밀 경계·기존 계정 화면 원격 검사 163 passed. 문구 수정 후 게시 head는 pre-push·CI에서 별도로 확인한다.
 - gate 변화: 없음. 운영 배포·라벨·학습 결과·장치 수용은 별도다.
+
+## 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 계약 명시
+
+- 변경: Account protocol에 HTTPException의 네트워크 불명 분류, 불명확한 refresh의 로컬 세션 삭제, 회수 대기열 유지·재시도를 기존 D-757 정책으로 명시했다. endpoint·wire shape·권한은 변경하지 않았다.
+- 증거: tests-only 79cc935a8 신규 전송 회귀 18건 원격 RED(account-http-red-20261020, NEW 18). 구현 검증은 후속 SHA에 결속해 기록한다.
+- gate 변화: 없음. 운영 활성화·장치·현장 수용을 뜻하지 않는다.
+
+## 2026-10-20 · 3a1392d2e · Account 전송 불명 문서·구현 검증
+
+- 변경: Account HTTPException 장애 분류 설명을 기존 세션 삭제·회수 대기열 재시도 구현과 맞췄다.
+- 증거: 3a1392d2efa959d84ad5bc14966d9524ad395254 원격 account_client/access·CORE pipeline·harness/module_structure 191 passed/2 skipped, NEW 0, exit 0(account-http-green-20261020/run-1.txt). harness lint 0 errors/31 warnings.
+- gate 변화: 없음. focused 검증이며 FULL·운영 활성화·현장 수용 증거는 아니다.
