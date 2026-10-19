@@ -298,7 +298,7 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
                 with page.expect_navigation(url=robot+'/pilot'):
                     page.get_by_text('로그아웃', exact=True).click()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
-            assert not page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
+            assert not context.request.get(robot+'/api/account/session').json()['authenticated']
             assert not failures, failures
         finally:
             browser.close()
