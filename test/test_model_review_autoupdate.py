@@ -35,6 +35,8 @@ def test_new_generation_activates_and_recheck_is_idle(tmp_path, monkeypatch):
     seen = []
 
     def install(source, release, review_root, *_args):
+        if source is None:
+            return
         assert (source / module.APP).read_text() == "signed"
         assert not (source / "data").exists()
         seen.append(release)

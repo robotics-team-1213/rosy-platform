@@ -252,7 +252,9 @@ def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, mon
         if path == '/api/workspace':
             raise urllib.error.HTTPError(url, 401, 'login required', {}, io.BytesIO(b'{}'))
         payload = b'{"enabled":true,"rosy_account":true,"project_id":"alpha"}' if path.endswith('options') else b'accounts page'
-        return io.BytesIO(payload)
+        response = io.BytesIO(payload)
+        response.status = 200
+        return response
     monkeypatch.setattr(release.urllib.request, 'build_opener', lambda *a: SimpleNamespace(open=open_url))
     monkeypatch.setattr(release, 'run_systemctl', lambda *a: None)
     monkeypatch.setattr(release.time, 'sleep', lambda *a: None)

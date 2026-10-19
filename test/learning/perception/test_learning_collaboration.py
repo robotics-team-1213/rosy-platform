@@ -37,6 +37,7 @@ def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
                 jar.load(value)
         assert len(jar) == 9
         for app, port in zip(apps, (9444, 9445, 9446)):
+            assert app.cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
             seen = []
             app.accounts.authenticate = lambda value: seen.append(value) or {'capabilities': ['view']}
             handler = SimpleNamespace(headers={'Cookie': jar.output(header='', sep=';')})
@@ -90,10 +91,10 @@ def running(tmp_path):
         thread.join()
 
 
-def request(base, path, session=None, body=None, token=None):
+def request(base, path, session=None, body=None, token=None, *, cookie_name='rosy_learning_session'):
     headers = {'Origin': base}
     if session:
-        headers['Cookie'] = 'rosy_learning_session=' + session
+        headers['Cookie'] = cookie_name + '=' + session
     if token:
         headers['X-Pinky-Token'] = token
     raw = None if body is None else json.dumps(body).encode()
