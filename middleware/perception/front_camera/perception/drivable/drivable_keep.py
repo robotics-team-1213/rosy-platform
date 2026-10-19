@@ -177,7 +177,7 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
                         confidence=None, target_m=None)
             return None, True
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
-                                               source, current, observed_only=route_prior is not None, **extra)
+            source, current, observed_only=route_prior is not None, current_stamp=stamp, **extra)
         # Missing source odometry drops the hypothesis; cached inferences count once.
         _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp,
                                         current_pose=current))

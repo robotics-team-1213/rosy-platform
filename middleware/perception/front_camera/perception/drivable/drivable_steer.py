@@ -219,6 +219,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
 
 # Legacy defaults; runtime instances use the effective CORE law.
 CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.08
+MAX_CRUISE_MPS = 0.10
 
 
 def error_for_k(curvature, confidence, *, cruise_speed=CORE_CRUISE_MPS,
@@ -248,14 +249,14 @@ class DrivableSteer:
     @classmethod
     def from_config(cls, raw):
         return cls(cruise_speed=min(float(raw.get('cruise_speed', CORE_CRUISE_MPS)),
-                                    float(raw.get('max_linear', .10))),
+                                    float(raw.get('max_linear', MAX_CRUISE_MPS))),
                    steering_gain=float(raw.get('steering_gain', CORE_STEERING_GAIN)),
                    min_confidence=float(raw.get('min_confidence', CORE_MIN_CONFIDENCE)))
 
     def __init__(self, *, cruise_speed=CORE_CRUISE_MPS, steering_gain=CORE_STEERING_GAIN,
                  min_confidence=CORE_MIN_CONFIDENCE):
         if (not all(math.isfinite(v) for v in (cruise_speed, steering_gain, min_confidence))
-                or not 0. < cruise_speed <= .10 or steering_gain <= 0.
+                or not 0. < cruise_speed <= MAX_CRUISE_MPS or steering_gain <= 0.
                 or not 0. < min_confidence <= 1.):
             raise ValueError('invalid CORE steering law')
         self.steering_law = dict(cruise_speed=cruise_speed, steering_gain=steering_gain,
@@ -279,6 +280,8 @@ class DrivableSteer:
         self._last_out = self._pending = None
 
     def _forget_latches(self):
+        if '_route_bridge' in self.__dict__:
+            self._route_bridge.invalidate_alignment()
         self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
         self._pivot_yaw = None
         self._crosswalk_pose = None
@@ -314,7 +317,7 @@ class DrivableSteer:
             return False
         return True
 
-    def update(self, *args, guide_s=None, guide_fresh=True, observed_only=False, **kw):
+    def update(self, *args, guide_s=None, guide_fresh=True, observed_only=False, current_stamp=None, **kw):
         """_update with the driving context: the realign rule, a strategy switch only after two
         consecutive frames (a HOLD applies at once), and the decision history."""
         here = kw.get("guide_here_deg", kw.get("guide_deg"))
@@ -322,7 +325,9 @@ class DrivableSteer:
                          ahead=kw.get("guide_deg"))
         error, confidence, info = self._update(*args, **kw)
         error, confidence, info = observed_route_candidate(error, confidence, info, observed_only=observed_only, owner=self,
-                                                           pose=args[6] if len(args) > 6 else kw.get('current_pose'))
+            pose=args[6] if len(args) > 6 else kw.get('current_pose'),
+            source_pose=args[5] if len(args) > 5 else kw.get('source_pose'), current_stamp=current_stamp,
+            observation_stamp=args[1] if len(args) > 1 else kw.get('way_key'))
         guide = kw.get("guide_deg")
         target = info.get("target_now_m")
         if error is not None and guide is not None and guide_fresh and target:
