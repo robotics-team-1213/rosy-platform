@@ -118,9 +118,11 @@ def test_review_app_serves_advisory_feedback_without_approval(tmp_path):
     import review_evidence
     import review_masks
     from test_review_return import fixture_inputs
+    from test_pixel_draft_import import V13_CLASSES
 
     source, human, images = fixture_inputs(tmp_path)
     store = ReviewStore(tmp_path / "review", source, human, images)
+    review_masks.bind_classes(store, V13_CLASSES)
     with store.connect() as db:
         db.execute("INSERT INTO masks(frame,version,status,complete,background) "
                    "VALUES (0,0,'pending',0,0)")
@@ -144,7 +146,7 @@ def test_review_app_serves_advisory_feedback_without_approval(tmp_path):
         url = f"http://127.0.0.1:{server.server_port}/api/vlm-feedback/0"
         response = json.load(urllib.request.urlopen(url))
         assert response["available"] is True
-        assert response["current"] is True
+        assert response["current"] is False
         assert response["feedback"]["note"] == "Inspect boundary"
         assert review_masks.get(store, 0)["status"] == mask["status"]
     finally:
@@ -189,3 +191,16 @@ def test_feedback_expires_when_review_meaning_changes(tmp_path, monkeypatch, cha
     assert read_current_feedback(state, 0)["current"] is False
     with pytest.raises(ValueError, match="stale"):
         publish_feedback(state, report)
+
+
+def test_explicit_current_region_keeps_lane_feedback_supported(tmp_path):
+    state = _workspace(tmp_path)
+    with sqlite3.connect(state / "reviews.sqlite3") as db:
+        binding = json.loads(db.execute("SELECT value FROM metadata WHERE key='pixel_classes'").fetchone()[0])
+        binding["classes"][1]["semantic"] = "current_road_region/1"
+        db.execute("UPDATE metadata SET value=? WHERE key='pixel_classes'", (json.dumps(binding),))
+    report = analyze(state, lambda *_: {"verdict": "uncertain", "issue": "none", "note": "check"},
+                     model_digest="model-sha")
+    publish_feedback(state, report)
+    assert report["review_binding"]["semantic"] == "current_road_region/1"
+    assert read_current_feedback(state, 0)["current"] is True

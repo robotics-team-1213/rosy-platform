@@ -40,6 +40,22 @@ def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def feedback_binding(binding):
+    """Bind lane-only advice to its declared meaning, class content and prompt."""
+    drivable = [item for item in binding["classes"] if item["role"] == "drivable"]
+    if len(drivable) != 1:
+        raise ValueError("exactly one drivable class required")
+    item = drivable[0]
+    if "semantic" in item and item["semantic"] != "current_road_region/1":
+        raise ValueError("unsupported lane-feedback semantic")
+    if type(item["index"]) is not int or not 0 <= item["index"] < 255:
+        raise ValueError("invalid drivable class index")
+    return {"drivable_index": item["index"], "semantic": item.get("semantic"),
+            "classes_sha256": binding.get("sha256"),
+            "classes_content_sha256": _sha(json.dumps(binding, sort_keys=True).encode()),
+            "prompt_sha256": _sha(json.dumps([PROMPT, FORMAT], sort_keys=True).encode())}
+
+
 def _inside(state, name):
     path = (state / name).resolve()
     if not path.is_relative_to(state.resolve()):
@@ -70,10 +86,8 @@ def _feedback(value):
 def analyze(state, ask, model_digest, limit=None):
     state = Path(state).resolve()
     metadata, rows = _snapshot(state)
-    classes = json.loads(metadata["pixel_classes"])["classes"]
-    drivable = [item["index"] for item in classes if item["role"] == "drivable"]
-    if len(drivable) != 1:
-        raise ValueError("exactly one drivable class required")
+    binding = feedback_binding(json.loads(metadata["pixel_classes"]))
+    drivable = binding["drivable_index"]
     selected = [row for row in rows if row[2] != "excluded"]
     if limit is not None:
         if type(limit) is not int or limit < 1:
@@ -93,7 +107,7 @@ def analyze(state, ask, model_digest, limit=None):
                 or mask.dtype != np.uint8):
             raise ValueError(f"frame {index} image or mask format differs")
         overlay = photo.copy()
-        for value, color in ((drivable[0], (0, 255, 0)), (255, (255, 0, 255))):
+        for value, color in ((drivable, (0, 255, 0)), (255, (255, 0, 255))):
             pixels = mask == value
             overlay[pixels] = (photo[pixels].astype(np.float32) * .4 +
                                np.asarray(color) * .6).astype(np.uint8)
@@ -108,14 +122,16 @@ def analyze(state, ask, model_digest, limit=None):
         results.append({"frame": index, "status_at_snapshot": status,
                         "image_sha256": source["image_sha256"], "mask_sha256": mask_sha,
                         "unknown_pixels": unknown, "review_blocked": unknown > 0,
-                        "drivable_pixels": int(np.count_nonzero(mask == drivable[0])),
+                        "drivable_pixels": int(np.count_nonzero(mask == drivable)),
                         "feedback": feedback})
         print(json.dumps({"frame": index, "verdict": feedback["verdict"]}), flush=True)
     latest, _ = _snapshot(state)
     return {"schema": "rosy.v13-vlm-feedback/1", "advisory_only": True,
             "training_admission": False, "model": MODEL, "model_digest": model_digest,
             "workspace_id": metadata["workspace_id"], "generation": metadata["generation"],
-            "stale": latest["generation"] != metadata["generation"],
+            "review_binding": binding,
+            "stale": (latest["generation"] != metadata["generation"] or
+                      feedback_binding(json.loads(latest["pixel_classes"])) != binding),
             "eligible_frames_at_snapshot": len([row for row in rows if row[2] != "excluded"]),
             "frames": results}
 
@@ -145,7 +161,8 @@ def read_current_feedback(state, index):
                 or feedback["issue"] not in ISSUES or not isinstance(feedback["note"], str)
                 or len(feedback["note"]) > 200):
             return {"available": False}
-        current = (item["image_sha256"] == json.loads(row[1])["image_sha256"] and
+        current = (report.get("review_binding") == feedback_binding(json.loads(metadata["pixel_classes"])) and
+                   item["image_sha256"] == json.loads(row[1])["image_sha256"] and
                    item["mask_sha256"] == row[4])
         return {"available": True, "current": current, "advisory_only": True,
                 "workspace_changed": report["generation"] != metadata["generation"],
@@ -163,6 +180,7 @@ def publish_feedback(state, report):
     metadata, _ = _snapshot(state)
     if (report["stale"] or report["workspace_id"] != metadata["workspace_id"]
             or report["generation"] != metadata["generation"]
+            or report.get("review_binding") != feedback_binding(json.loads(metadata["pixel_classes"]))
             or len(report["frames"]) != report["eligible_frames_at_snapshot"]):
         raise ValueError("stale or incomplete feedback report")
     raw = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
