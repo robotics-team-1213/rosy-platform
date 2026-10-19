@@ -23,8 +23,8 @@ The fixed policy proposes +0.01 rad for one SIM joint. No trained model loads.
 - The same Fleet lease renewed during actual movement.
 - Closing the approval window during the second goal produced cancel status 5
   and acknowledged cancellation of that exact journaled goal.
-- Revocation-to-cancel observation: 0.10080117 s. This is one measured SIM result,
-  not a guaranteed physical stop latency.
+- Approval-window close HTTP response to cancel observation: 0.10080117 s.
+  This excludes the close request latency and is not a physical stop guarantee.
 - Final 0.3 s readback: 30 samples, spread 1.862645149230957e-08 rad.
 - The session latched HOLD, closed its local fence and refused reconnect.
 - Probe, executor and pool drained; no primary or teardown errors. No Destroyable
@@ -63,6 +63,7 @@ Raw logs remain outside the public repository, in the operator's
 
 | Artifact | SHA256 |
 |---|---|
+| `run.txt` | `bbb4eac261f4ab5cf2eba57c31b453d1fb45ca175060bbd272f77d359ab581bb` |
 | `out/teardown.json` | `e302abe46be929a251c35b6edd89f9ae0e13c0dc8ea540c8d827de56b591d9ef` |
 | `out/stop-readback.json` | `fe9ccfafa8be8541162a107c0492332f2354ecae4e2c368aff22c2661f6560d8` |
 | `out/preparation-timing.json` | `bd865dde745fa9a3e867fc60909b725178135e7eb684559b222a9d2190e41f37` |
