@@ -9386,3 +9386,9 @@ osy-d395-s1d\`.
 - 변경: Recorded D-808, its own ADR Log row and the Account protocol capability contract. Public records contain no deployment addresses, keys or account details.
 - 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
 - gate 변화: none.
+
+## 2026-10-20 · uncommitted · 같은 소스 station 시험의 분류 근거
+
+- 변경: D-762의 한 번 재시험 후보 세 항목과 같은 SHA 실패·통과 증거를 기록한다. 생산 코드·안전 조건·기존 실패 목록은 변경하지 않는다. 첫 tick departure와 미게시 fixture의 lifespan 실패는 제외한다.
+- 증거: e264의 나중 departure는 같은 소스 정상 tier 실패·통과, c584 composed와1368 shutdown_CHARGING은 원래 실패 SHA의 정확한 원격 항목 각각1 passed/skip0/NEW0. 원인 해결·변경 전부터 존재한 실패를 주장하지 않는다. 구체적인 Safety-Review와 최종 commit 관문은 별도로 수행한다.
+- gate 변화: 기존 D-762의 한 번 재시험 분류를 세 항목에 적용한다. 두 번 실패하면 NEW이며 생산 기대 결과·필수 검사는 유지한다. 앱 배포·실사용 수용은 별도다.
