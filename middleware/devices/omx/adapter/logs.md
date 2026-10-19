@@ -557,6 +557,6 @@
 
 ## 2026-10-19 · uncommitted · feat(omx): recover bounded feedback diagnostics
 
-- Recover bounded intake/watchdog observations and coherent action-receipt snapshots from preserved native simulation work. Current-main age-adjusted receipt regression rejection remains authoritative.
-- Evidence: independent source review and committed remote tests are pending. No hardware or field acceptance is claimed.
-- Gate change: none; device deployment is outside this recovery.
+- 변경: Recover bounded intake/watchdog observations and coherent action-receipt snapshots from preserved native simulation work. Current-main age-adjusted receipt regression rejection remains authoritative.
+- 증거: Independent source review approved; committed remote adapter and owner regressions passed with 0 NEW. No hardware or field acceptance is claimed.
+- gate 변화: None; device deployment is outside this recovery.
