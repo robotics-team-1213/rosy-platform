@@ -2996,3 +2996,9 @@
 - 변경: D-807에 따라 기존 서명 배포 경로, 보호 설정, 앱별 callback·권한·세션 검증 및 복구 절차를 site 안내에 연결했다.
 - 증거: 실제 TLS 발급·키 일치·보호 백업·갱신 timer 기록은 docs/validation/account-service-2026-10-19/certificates-backed-up.md에 보존했다. 후보 검증과 운영 활성화는 별개로 남긴다.
 - gate 변화: 없음. Android 실물 수용·운영 callback과 계정 이관은 이 문서만으로 완료되지 않는다.
+
+## 2026-10-19 · uncommitted · Account 배포 선행 updater 크기 분리
+
+- 변경: 게시된 main 위에서 기존 호스트 override 검사를 이미 설치되는 I/O 모듈로 이동했다. 기존 세 서비스·오류 처리·이미지 검증은 보존했다. 크기 한도 아래로 내려온 updater의 ratchet 행을 제거했다.
+- 증거: 로컬 통합본의 같은 이동은 원격71개 통과했다. 이 게시 기반 분리와 후속 Account 변경은 새 SHA로 다시 검증한다.
+- gate 변화: 없음. 운영 서비스·권한·계정·DB를 변경하지 않았다.
