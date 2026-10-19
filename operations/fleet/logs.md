@@ -4258,3 +4258,9 @@
 - 변경: 정상 native 완료가 status 조회와 permit 갱신 PUT 사이에 들어온 명시적 세대 거절만 재관측한다. 같은 boot/run/correlation, vacant owner, SUCCEEDED와 정확한 generation +1, 기존 permit·선택 작업·정책을 다시 검증한다. 새 motion·갱신 PUT·DB 갱신 없이 다음 tick으로 넘기며 다른 거절·불명 응답·권한 상실은 HOLD를 유지한다. CORE 가드와 원래 유효 기간은 그대로다.
 - 증거: 실제 CORE tick을 갱신 직전에 넣은 a0c374810c 반례에서 정상 완료 1 FAIL, foreign readback·정책 해제·만료·불명 응답 4 PASS를 확인했다. 독립 계약 리뷰 후 d91c5c0fb4의 관련 HTTP·원장 5파일89 passed/skip0, 원격 exit0·known_failures 비교0. 중복 -q로 요약이 생략돼 실제 progress89건과 exit를 확인했다. source 범위16커밋 D-766 검사도 통과했다.
 - gate 변화: 없음. 앞선 두 FULL 실패의 원인까지 입증한 것은 아니며 동시 시나리오와 새 통합 SHA의 FULL 관문을 추가 확인한다. 실기·현장 수용은 미실행이다.
+
+## 2026-10-20 · 984a170d8e · fix(station): refresh readiness ACK and fence SIM goal admission
+
+- 변경: navigation readiness의 HTTP·DB 조회 뒤 새 CORE ACK를 읽고, 이전 readback의 원래 수명도 다시 검사한다. 동일 위치의 전역 관측 갱신 때문에 옛 ACK가 거절되는 경합을 제거하며 기존 scope·permit·accept_ack 검사를 유지한다. 실제 호출자의 후속 원장·lease guard도 확인했다. SIM에서는 ordinary task 요청이 끝나기 전 다음 가상 시간 진행만 기다리며 trip·실제 worker는 그대로 실행한다.
+- 증거: e0c51b8d0 동시 12건에서 4 FAIL/8 PASS. 3건은 실제 trip/job 없이 원본 정책 만료를 올바르게 거절했고, 1건은 옛 ACK 재사용이었다. 871fa4de73의 실제 HTTP·강제 시간 경계 반례에서 2 FAIL/음성 6 PASS·오류0을 확인했다. 두 독립 리뷰 후 984a170d8e의 HTTP·pipeline·runtime·bootstrap·trip 5파일98 passed/skip0, 원격 exit0·known_failures0. D-766 23커밋 및 lint0errors/33warnings를 확인했다.
+- gate 변화: 없음. CORE·정책 유효기간과 motion 권한은 유지한다. 새 통합 SHA의 전체 착지 관문과 동시 재현 시험은 별도 확인하며 실기·현장 수용은 미실행이다.
