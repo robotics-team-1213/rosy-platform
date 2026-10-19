@@ -589,6 +589,19 @@ def test_legacy_candidate_cannot_enable_unsigned_account_overlay(host):
         updater._verify(old, loaded=True, require_account=True)
 
 
+@pytest.mark.parametrize("loaded", [False, True])
+def test_legacy_candidate_cannot_enable_unsigned_omx_overlay(host, loaded):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "omx": False}))
+    # An injected file is not permission to run an unsigned overlay.
+    (old / "deploy/site/compose.omx.yaml").write_text("services: {}\n")
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    assert updater._verify(old, loaded=loaded)["omx"] is False
+    env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml"}
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=loaded, env=env)
+
+
 def test_real_candidate_directory_is_migrated_once_to_a_symlink(host):
     host.paths.link.unlink()
     old = host.paths.candidates / OLD

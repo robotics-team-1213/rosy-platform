@@ -245,6 +245,31 @@ def test_account_asset_tampering_is_rejected(candidate, name):
         _verify(candidate)
 
 
+@pytest.mark.parametrize("account", [False, True])
+def test_pre_omx_candidate_remains_verifiable(candidate, account):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    removed = ["compose.omx.yaml"]
+    if not account:
+        removed += ["compose.account.yaml", "Caddyfile.account"]
+    for name in removed:
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest))
+    assert _verify(candidate)["omx"] is False
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed"])
+def test_signed_omx_asset_must_exist_and_match(candidate, damage):
+    overlay = candidate[0] / "deploy/site/compose.omx.yaml"
+    if damage == "missing":
+        overlay.unlink()
+    else:
+        overlay.write_text("changed\n")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file"):
+        _verify(candidate)
+
+
 def test_rejects_changed_deployment_file(candidate):
     root, _, _, _ = candidate
     (root / "deploy/site/compose.yaml").write_text("changed\n", encoding="utf-8")
