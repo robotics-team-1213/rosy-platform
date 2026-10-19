@@ -9233,3 +9233,9 @@ osy-d395-s1d\`.
 - 변경: Preserve eleven authored native SIM validation records with explicit historical-source/run scope. Update the Cell ROS-SIM blocker to the documented partial 3/16 result and held-object HOLD, without promoting its gate.
 - 증거: Corrected G2 source 8c5b3f694a passed 103 focused remote regressions with 0 NEW. Those host tests do not repeat or extend the historical Gazebo evidence.
 - gate 변화: None; complete task success, physical operation and field acceptance remain unproven.
+
+## 2026-10-19 · uncommitted · docs(omx): preserve native recovery design history
+
+- 변경: Recover the three original native deployment, contract-integration and topic-task plans, marked as historical context governed by current repository instructions. Current ADR status and operational approval remain unchanged.
+- 증거: Their implementation and validation records are preserved in separate source/evidence commits; plan prose is not execution evidence.
+- gate 변화: None; these documents authorize no deployment or hardware activation.
