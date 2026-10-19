@@ -372,6 +372,10 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 
 화면은 기준의 안쪽 틀·가이드·마커를 점선으로, 같은 윤곽의 지금 위치(호모그래피로 옮긴 것 또는 검출한 마커)를 실선으로 그리고 기준에서 현재로 가는 화살표를 그린다. 맞춘 특징점이 150개 미만이면 측정 불가다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.
 
+### 모방학습 (D-792 S4)
+
+`/learning/omx`는 읽기 전용이다. `GET /api/learning/omx`는 `omx` 종류로 연결한 학습 행 가운데 `intake-receipt.json`이 있는 폴더만 `sets`로 돌려준다. 각 세트는 `id`, `name`, `trainable`(`reviewed_splits` 결과: `ok`와 `counts` 또는 `reason`), `episodes`(검수 결정 필드와 역할별 카메라 판정 `before`·`after`·`pose_error_rad`), `camera_setup`(`mode`, `references`, `camera_info_sha256`)을 가진다. 서버 경로는 넣지 않는다. 쓰기 API는 없다.
+
 # AI 실행과 저장 버전 조회 (D-764)
 
 객체/픽셀 화면의 **AI 초안과 확인**에서 저장된 사진 revision으로 새 초안을 요청한다.
