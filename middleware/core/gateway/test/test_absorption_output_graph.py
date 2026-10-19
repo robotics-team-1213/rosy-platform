@@ -63,7 +63,9 @@ class OutputGraphTests(unittest.TestCase):
         cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body
                    if isinstance(n, ast.ClassDef) and n.name == 'RosBridge')
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == '_publish_cmd_vel')
-        scope = dict(Twist=Twist)
+        # _publish_cmd_vel delegates to the module-level cmd_vel_cycle (core.bridge.cmd_vel).
+        from core.bridge.cmd_vel import cmd_vel_cycle
+        scope = dict(Twist=Twist, cmd_vel_cycle=cmd_vel_cycle)
         exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), scope)
         modes = ModeMachine()
         modes.transition(Mode.NAVIGATION)
@@ -76,11 +78,21 @@ class OutputGraphTests(unittest.TestCase):
             [Parameter('use_sim_time', value=True)] if control_actuation else []))
         observed = []
         node.create_subscription(Twist, 'cmd_vel', lambda msg: observed.append(msg), 10)
+        publisher = node.create_publisher(Twist, 'cmd_vel', 10)
+
+        def send_twist(out):
+            # RosBridge._send_twist's publish step; its wheels_sent journal is not under test.
+            msg = Twist()
+            msg.linear.x, msg.angular.z = out.linear, out.angular
+            publisher.publish(msg)
+
         bridge = SimpleNamespace(_svc=SimpleNamespace(command=command,
                                                       power=Mock(motion_ready=lambda: True)),
                                  _readiness=None,
                                  _bounded_trial_guard=None,
-                                 cmd_vel_pub=node.create_publisher(Twist, 'cmd_vel', 10))
+                                 _node=node,
+                                 _send_twist=send_twist,
+                                 cmd_vel_pub=publisher)
         try:
             if control_obstacle or control_geometry or control_tracking or control_actuation:
                 from control.control.command_gate import CommandPolicy, GateInputs, GateSnapshot
