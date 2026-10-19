@@ -45,7 +45,7 @@ def test_navigation_read_revalidates_camera_refresh_without_reusing_old_ack(
                 if change == 'permit':
                     now[0] += 1.1
                 if change == 'motion':
-                    svc.station_docking.motion_feed = SimpleNamespace(snapshot=lambda: None)
+                    svc.station_docking.motion_feed = SimpleNamespace(snapshot=lambda: None, clear=lambda: None)
                 return body
             client.station_navigation_state = refresh_during_read
             if change == 'refresh':
