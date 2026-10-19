@@ -3053,3 +3053,9 @@
 - 변경: Recover the dedicated SIM clock, terminal/placement/gripper diagnostics and clearance helpers with G2 owner/observer/runner wiring and matching world/layout fixtures. The runner uses the reviewed Fleet topic wrapper. D-788 remains Proposed; existing owner/fence/stop checks remain authoritative.
 - 증거: Independent review and committed remote tests are pending. No simulator or physical service is started by recovery.
 - gate 변화: None; source and host regression checks do not prove successful task placement, physical behavior or field acceptance.
+
+## 2026-10-19 · uncommitted · fix(omx): owner 진입점에 origin #83 executor 적용
+
+- 변경: `collection_ros.py`·`g2_owner.py`·`run_cell_owner.py`·`probe_cell_transfer.py`(origin #83, 78a4bea23c)와 main 전용 `run_hardware_owner.py`가 `OwnerMultiThreadedExecutor`를 쓴다. owner 진입점은 종료 때 `runtime.destroy()`로 action event 스레드를 정리한다. 수집 graph 검사는 부모 노드와 runtime 소유 action client identity만 허용한다.
+- 증거: docs/validation/omx-owner-executor-port-2026-10-19/result.md.
+- gate 변화: 소스·원격 시험 범위. 실물 owner 기동·DEVICE/FIELD는 미검증이며 독립 Safety-Review 전 착지하지 않는다.
