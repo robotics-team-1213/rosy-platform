@@ -3053,3 +3053,9 @@
 - 변경: Recover the dedicated SIM clock, terminal/placement/gripper diagnostics and clearance helpers with G2 owner/observer/runner wiring and matching world/layout fixtures. The runner uses the reviewed Fleet topic wrapper. D-788 remains Proposed; existing owner/fence/stop checks remain authoritative.
 - 증거: Independent review and committed remote tests are pending. No simulator or physical service is started by recovery.
 - gate 변화: None; source and host regression checks do not prove successful task placement, physical behavior or field acceptance.
+
+## 2026-10-20 · uncommitted · Console AI 독립 broker·평가 소스
+
+- 변경: 기존 강제 명령 ingress 안에 별도 웹 조회 정책·모델 입력·보호된 source/evaluation 결속을 추가했다. 기존 Discord v1 dispatch는 유지한다.
+- 증거: dab629c171 집중 회귀에서 fake broker의 출처·hash·정책 결속과 독립 영수증 필수 사례를 확인했다. 실제 추론·보호 설치를 실행하지 않았다.
+- gate 변화: 없음. 모델 PC 독립 평가와 AI PC 보호 config 설치 지원·승인은 운영 활성화의 선행 조건이다.

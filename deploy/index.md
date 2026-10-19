@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · Console AI 독립 broker·평가 소스
 - 2026-10-19 · uncommitted · feat(omx): recover G2 clock and diagnostic helpers
 - 2026-10-19 · uncommitted · feat(omx): recover isolated native simulation host tools
 - 2026-10-19 · uncommitted · site updater 호스트 설정 검사 분리
 - 2026-10-19 · uncommitted · D-807 Account 앱별 설치 입력과 인수 절차
-- 2026-10-19 · uncommitted · uv 도구 링크 drift와 main 통합
