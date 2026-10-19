@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · 4a5d5eef7f · 보관 Account 통합의 버튼 선언과 검증 해시 표기
 - 2026-10-19 · 212a8b51b2 · Account 앱 변경을 독립 착지 단위로 재적용
 - 2026-10-19 · 30acdffbfb · Account 로그아웃과 native fixture 원격 검증
 - 2026-10-19 · uncommitted · 조회 전용 Account도 조종 차단 화면에서 로그아웃
 - 2026-10-19 · b83c616cd7 · native mock의 identity 뒤 CSP 요청 반영
-- 2026-10-14 · a3a4befa7 · fix(pilot): 한 줄 앱 바에서 긴 글이 정지를 줄이지 않는다 (검토 반영)
