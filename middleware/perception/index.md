@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 관측 굽은 통로 전진으로 정렬 장소 종료
 - 2026-10-19 · uncommitted · 이미 선택된 반대 pivot의 관측 정렬
 - 2026-10-19 · uncommitted · 관측 통로 정렬 후보와 소진 예산 보존
 - 2026-10-19 · uncommitted · drivable 경계 호 기하 분리
 - 2026-10-19 · uncommitted · 횡단보도 직진 유지의 전방 정지 덮어쓰기 수정
-- 2026-10-19 · uncommitted · 성공 drivable SIM의 중앙 복귀 조건 분리

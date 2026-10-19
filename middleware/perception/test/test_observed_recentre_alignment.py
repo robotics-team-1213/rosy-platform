@@ -314,7 +314,7 @@ def test_observed_curved_progress_ends_the_old_episode_before_a_new_corner():
 
 
 @pytest.mark.parametrize('change', [dict(exit_from_route_memory=True), dict(exit_from_guide=True),
-    dict(exit_from_memory=True), dict(seen_exit=None), dict(target_now_m=(0.21, 0.15)),
+    dict(exit_from_memory=True), dict(seen_exit=None), dict(target_now_m=(0.21, 0.15)), dict(target_now_m=(0.14, 0.0)),
     dict(exit_point_m={'right': (0.22, 0.15)}), dict(centre_path_m=[(0.14, 0), (0.30, -0.20)]),
     dict(centre_path_m=[(0.14, 0), (0.13, 0), (0.30, -0.20)]),
     dict(centre_path_m=[(0.14, 0), (math.nan, 0), (0.30, -0.20)])])
@@ -332,3 +332,16 @@ def test_an_observed_curve_cannot_repair_an_uncertain_odometry_episode():
     drive_curve(owner, guard, CURVED)
     assert guard._alignment is not None and guard._alignment['uncertain']
     assert step(owner, guard, 0.7, 0.16)[0] is None
+
+
+def test_a_curve_captured_before_leaving_the_origin_cannot_end_the_episode():
+    owner, guard = guarded()
+    spend(owner, guard)
+    owner._ctx.update(here=-12.7, ahead=-62.9)
+    for i in range(1, 17):
+        owner._test_stamp += 0.125
+        x, source_x = i * 0.01, max(0.0, i * 0.01 - 0.03)
+        info = dict(CURVED, target_now_m=(0.213 + source_x - x, -0.100))
+        guard.step(0.1, 0.6, info, (x, 0.0, 0.7), owner, source_pose=(source_x, 0.0, 0.7),
+            current_stamp=owner._test_stamp, observation_stamp=owner._test_stamp - 0.5)
+    assert guard._alignment is not None and not guard._alignment['uncertain']

@@ -3,7 +3,7 @@ BRIDGE_MAX_M along the route, then the robot turns toward it to look again, then
 CORE's LiDAR, body and IR stops act every tick; the steer refuses a bridge across a boundary seen earlier."""
 import math
 
-from .target import _to_current
+from .target import ROW_BAND_M, _to_current
 
 BRIDGES = ('drivable_map_bridge', 'drivable_creep_map')
 #: frames that mean the camera saw floor ahead: only these give a new bridge budget (review: not pivots)
@@ -12,6 +12,44 @@ BRIDGE_MAX_M = 0.14        # the camera's near blind zone (~0.14 m ahead of the 
 BRIDGE_CONFIDENCE = 0.45   # creep: the default law scales (0.45 - 0.35) / 0.65 = 15 % of cruise
 LOOK_MIN_DEG = 15.0        # a route bend under this is straight on: turning shows nothing new
 LOOK_MAX_RAD = math.pi / 2
+
+
+def _observed_turn(info, source_pose, pose, owner):
+    """A selected forward turn agrees with a connected path measured at this new location."""
+    from .drivable_steer import BEND_ON_X_M, CORRIDOR_HALF_M, LOOKAHEAD_M, REALIGN_DEG
+
+    seen, ctx = info.get('seen_exit'), owner._ctx
+    if (seen not in ('left', 'right') or info['strategy'] != f'drivable_turn_{seen}'
+            or not ctx.get('guide') or not ctx.get('fresh')
+            or any(info.get('exit_from_' + key) for key in ('memory', 'route_memory', 'guide', 'target'))
+            or info.get('exit_reach_m', {}).get(seen, 0.0) < LOOKAHEAD_M):
+        return False
+    raw, target, opening = info.get('centre_path_m'), info.get('target_now_m'), info.get('exit_point_m', {}).get(seen)
+    try:
+        if (not 2 <= len(raw) <= 32 or any(len(p) != 2 for p in (*raw, target, opening))
+                or not all(math.isfinite(v) for p in (*raw, target, opening) for v in p)):
+            return False
+        path = [_to_current(p, source_pose, pose) for p in raw]
+        opening = _to_current(opening, source_pose, pose)
+        if (not 0.0 < path[0][0] <= BEND_ON_X_M or abs(path[0][1]) > CORRIDOR_HALF_M
+                or path[-1][0] < LOOKAHEAD_M or target[0] < BEND_ON_X_M or opening[0] <= 0.0
+                or any(a[0] >= b[0] or math.dist(a, b) > ROW_BAND_M for a, b in zip(path, path[1:]))
+                or not math.isfinite(ctx.get('here'))
+                or abs(math.remainder(math.radians(ctx['here']) - math.atan2(target[1], target[0]), math.tau))
+                > math.radians(REALIGN_DEG)):
+            return False
+    except (TypeError, ValueError):
+        return False
+
+    def distance(point):
+        distances = []
+        for a, b in zip(path, path[1:]):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            t = max(0.0, min(1.0, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / (dx * dx + dy * dy)))
+            distances.append(math.hypot(point[0] - a[0] - t * dx, point[1] - a[1] - t * dy))
+        return min(distances)
+
+    return all(distance(point) <= CORRIDOR_HALF_M for point in (target, opening))
 
 
 class RouteBridge:
@@ -59,11 +97,16 @@ class RouteBridge:
                 state['used'] += angle
                 state['stamp'], state['last'] = stamp, tuple(pose)
                 moved = math.hypot(pose[0] - state['origin'][0], pose[1] - state['origin'][1])
-                # Independent observed forward floor AND continuous physical progress; a pivot or mask flicker is no refill.
+                straight = (info['strategy'] == 'drivable_centre' and info.get('ahead_m', 0.0) >= LOOKAHEAD_M
+                            and len(info.get('centre_path_m', [])) >= 2)
+                curved = (math.dist(source_pose[:2], state['origin'][:2]) > BRIDGE_MAX_M
+                          and confidence is not None and confidence > owner._pivot_confidence
+                          and _observed_turn(info, source_pose, pose, owner))
+                # End this location's episode after measured progress, including an observed connected bend.
                 if (not state['uncertain'] and moved > BRIDGE_MAX_M and observed > state['observed']
-                        and error is not None and info['strategy'] == 'drivable_centre'
+                        and error is not None and (straight or curved)
                         and not info.get('reason') and not info.get('straddle')
-                        and info.get('ahead_m', 0.0) >= LOOKAHEAD_M and len(info.get('centre_path_m', [])) >= 2):
+                        and info.get('front_blocked_m') is None and not info.get('crosswalk_hold')):
                     self._alignment = state = None
 
         pivot = next((side for side, sign in (('left', -1), ('right', 1))
