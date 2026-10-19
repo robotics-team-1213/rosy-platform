@@ -9354,5 +9354,5 @@ osy-d395-s1d\`.
 
 - Change: port the CORE arm, SDK and SIM lease producer/consumer closure onto origin. Preserve station docking, the owner executor and physical learned-policy refusal. API v1.277.
 - Evidence: independent source review completed. Fresh committed-revision host and native verification is tracked separately; historical SIM evidence is not publication evidence.
-- Gate change: none. Only a fixture-trained two-step ACT checkpoint and actionless observations were found; physical learned-policy execution remains unverified.
+- gate 변화: none. Only a fixture-trained two-step ACT checkpoint and actionless observations were found; physical learned-policy execution remains unverified.
 - Records: docs/validation/omx-policy-publication-2026-10-19/asset-inventory.md; docs/plans/2026-10-19-omx-policy-publication.md.
