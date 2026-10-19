@@ -105,3 +105,34 @@ def test_a_current_route_junction_is_taken_even_when_the_way_runs_straight(monke
         observed_only=True, current_stamp=1.125)
     assert info['strategy'] == expected
     assert (error > 0) if fresh and near else (error < 0)
+
+
+@pytest.mark.parametrize('case', ['passed', 'missing', 'opposite', 'no_guide', 'wall', 'front', 'straddle'])
+def test_open_junction_selection_preserves_evidence_and_safety_checks(monkeypatch, case):
+    import control.sensing.perception.drivable.drivable_steer as module
+    observation = raw()
+    observation.update(target_m=(.222, .099), ahead_m=.315, near_centre_m=(.163, -.011))
+    pose, stamp = POSE, 1.125
+    kw = dict(guide_here_deg=-20.76, guide_deg=-82.33)
+    if case == 'passed':
+        pose, stamp = (0., 0., 1.5), 2.125
+    elif case == 'missing':
+        observation['exit_point_m'] = {}
+    elif case == 'opposite':
+        observation.update(exit=None, exit_near={'left': True, 'right': False})
+    elif case == 'no_guide':
+        kw['guide_deg'] = None
+    elif case == 'wall':
+        kw['side_clear_m'] = {'right': .01}
+    elif case == 'front':
+        kw['front_sector_m'] = .01
+    else:
+        observation['straddle'] = 'left'
+    monkeypatch.setattr(module, 'way_target', lambda *args: copy.deepcopy(observation))
+    _, confidence, info = DrivableSteer().update(np.ones((240, 320), bool), 1., G, .03317, .0925,
+        POSE, pose, observed_only=True, current_stamp=stamp, **kw)
+    assert info['strategy'] != 'drivable_turn_right'
+    if case == 'front':
+        assert info['strategy'] == 'drivable_pivot_right' and confidence == .35
+    elif case == 'straddle':
+        assert info['strategy'] == 'drivable_off_line_left'

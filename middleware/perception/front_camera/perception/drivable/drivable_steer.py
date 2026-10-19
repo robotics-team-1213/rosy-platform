@@ -540,8 +540,12 @@ class DrivableSteer:
             self._smoothed = None
             return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")
         strategy, target = "drivable_centre", info["target_m"]
-        if ahead < LOOKAHEAD_M and side is not None:
-            # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
+        opening = info["exit_point_m"].get(side)
+        route_turn = (side == want and near.get(side) and self._ctx.get("fresh") and opening is not None
+                      and source_pose is not None and current_pose is not None
+                      and _to_current(opening, source_pose, current_pose)[0] > 0.0)
+        if side is not None and (ahead < LOOKAHEAD_M or route_turn):
+            # A selected near route branch is taken even when another road runs straight on.
             strategy, target = f"drivable_turn_{side}", info["exit_point_m"].get(side, info["target_m"])   # a remembered side may be out of view
         tx, ty = _to_current(target, source_pose, current_pose)
         # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:
