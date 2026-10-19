@@ -4170,3 +4170,9 @@
 - 변경: 기존 로그인+느낌표를 최초 변경 대상으로 인식한다. 관리자 생성/reset에서는 정확한 임시값만 짧은 길이 예외를 허용하며, 본인 영구 비밀번호는8자 이상이고 ID/초기값 재사용을 거절한다. 기존 프로필·세션 회수 경로를 재사용한다.
 - 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
 - gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Added Vault code-exchange, signed-grant and revision-revocation coverage, plus no automatic Vault grants for the three bootstrap roles. Existing account issuance and ledger implementations are reused.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.

@@ -72,12 +72,18 @@ Account identity는 불변 opaque `account_id`다. login/email은 identity가 �
 
 | 자원 | 허용 capability |
 |---|---|
-| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate |
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, vault.read, vault.operate, vault.manage |
 | robot | robot.read, robot.operate, robot.admin |
 | project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
 
 capability는 서로 상속하지 않는다. UI는 관련 읽기 권한도 함께 부여하도록 안내하고,
 서버는 요청에 필요한 정확한 권한을 검사한다. 기존 기계/복구 자격의 역할 계약은 유지한다.
+
+D-808: Vault 조회는 `vault.read`, 작업·대기열·응답·정지는 `vault.operate`, HELD 장부
+정리는 `vault.manage`를 정확히 요구한다. 정리 actor는 인증된 `account_id`다. Vault 권한은
+site 자원에만 부여하며 서로 상속하지 않는다. Fleet 권한·기존 role·`accounts.manage`로
+대신할 수 없다. 기존 계정과 bootstrap에 자동 추가하지 않고, 계정 관리 API/UI에서 명시적으로
+부여한다. Vault는 독립 HTTP 클라이언트이며 이 grant 지원은 Vault 배포·현장 수용의 증거가 아니다.
 
 ## 중앙 계정 관리
 

@@ -110,6 +110,25 @@ def test_revision_change_and_family_logout_invalidate_access(authority):
     assert instance.introspect(tokens['access_token']) == {'active': False}
 
 
+@pytest.mark.parametrize('capability', ['vault.read', 'vault.operate', 'vault.manage'])
+def test_vault_site_grant_survives_exchange_and_revocation(authority, capability):
+    from core_common.protocol.account_access import verify_access
+    instance, context, families = authority
+    instance.clients['robot-app']['resources'] = ['site:test']
+    context['grants'] = [{'resource': 'site:test', 'capabilities': [capability]}]
+    families['family-1'] = deepcopy(context)
+    location = authorize(instance, context, scope='site:test')[0]['Location']
+    code = parse_qs(urlsplit(location).query)['code'][0]
+    tokens = json.loads(exchange(instance, code)[1])
+    state = instance.introspect(tokens['access_token'])
+    assert state['active'] and state['aud'] == 'site:test'
+    claims = verify_access(tokens['access_token'], instance.public_keys, issuer=ISSUER,
+                           audience='site:test', now=1000)
+    assert [grant.model_dump() for grant in claims.grants] == context['grants']
+    families['family-1']['revision'] += 1
+    assert instance.introspect(tokens['access_token']) == {'active': False}
+
+
 def test_removed_client_resource_stops_pending_exchange_and_refresh(authority):
     instance, context, _ = authority
     tokens = json.loads(exchange(instance, get_code(instance, context))[1])

@@ -32,6 +32,22 @@ def test_valid_signed_grant_is_bound_to_one_resource():
     assert not result.permits('robot:r1', 'robot.operate')
 
 
+@pytest.mark.parametrize('capability', ['vault.read', 'vault.operate', 'vault.manage'])
+def test_vault_signed_grants_are_site_scoped_without_inheritance(capability):
+    private, public = keys()
+    data = {**claims(), 'aud': 'site:one', 'grants': [
+        {'resource': 'site:one', 'capabilities': [capability]}]}
+    result = verify_access(sign_access(data, private, key_id='key-1'), {'key-1': public},
+                           issuer=data['iss'], audience='site:one', now=1001)
+    assert result.permits('site:one', capability)
+    assert not result.permits('site:two', capability)
+    for other in ['vault.read', 'vault.operate', 'vault.manage', 'accounts.manage', 'fleet.operate']:
+        assert result.permits('site:one', other) == (other == capability)
+    for resource in ['robot:r1', 'project:p']:
+        with pytest.raises(ValidationError):
+            AccountGrant(resource=resource, capabilities=[capability])
+
+
 @pytest.mark.parametrize('resource,capability', [('robot:*', 'robot.read'), ('robot:r1', '*'),
                                                ('site:local', 'robot.admin'), ('project:p', 'accounts.manage')])
 def test_grants_reject_wildcards_and_wrong_resource_kind(resource, capability):
