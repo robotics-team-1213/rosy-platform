@@ -369,3 +369,9 @@
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · 103df862b · 관리자 임시 비밀번호 입력의 ID! 초기값 지원
+
+- 변경: 관리자 생성·초기화의 임시 입력만 최소 길이2로 조정했다. 정확한 ID! 예외는 서버가 검증하고 다른 짧은 값은 거절한다. 본인 첫 변경·프로필의8자 조건은 유지한다.
+- 증거: 실제 Chromium에서 짧은 초기값의 관리자 생성이 HTML 검증으로 막힘을 먼저 재현했다. 생성/reset→본인 제한 로그인→변경→프로필 복귀와 외부 변경 뒤 관리자 revision 재조회 검사를 추가했다.103df862b의 서버·실제 Chromium6파일160 passed·skip0·NEW0. 상세 범위는 docs/validation/account-initial-password-2026-10-19/result.md.
+- gate 변화: 없음. 운영 사용자·프로필·설치 화면은 변경하지 않았으며 실제 사용자 로그인 수용은 미확인이다.
