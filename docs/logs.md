@@ -9331,3 +9331,9 @@ osy-d395-s1d\`.
 - 변경: `validation/pinky-drivable-v2-recheck-2026-10-19/result.md`에 r51 원본과 새 Gazebo 실행, 실제 인식 출처, 실물 테스트 준비 범위를 기록했다. 제품 코드는 추가 수정하지 않았다.
 - 증거: r51a는 최종 PASS, r51b는 Fleet arrived이나 정착 거리 0.156 m로 0.15 m 기준을 넘어 FAIL이다. 새 소스 ff8eca4d9b의 실제 AI PC 실행은 ring_s에서 전진 없이 좌우 회전 후 stall/exit 1이었다. 모델 hash, 종료 zero·OFF·lease 해제와 원본 로그 보존을 확인했다.
 - gate 변화: 없음. 기존 카메라 drivable 완주 기록은 인정하되 반복 완주·실물 수용으로 확대하지 않는다. 모델·성공 소스 준비만 했으며 실물 배포와 주행은 수행하지 않았다.
+
+## 2026-10-20 · uncommitted · 관제 운영자용 AI 에이전트 설계·구현 계획 초안
+
+- 변경: `plans/2026-10-20-operator-ai-design.md`와 `plans/2026-10-20-operator-ai-plan.md`에 Console 오른쪽 패널, Fleet 웹 접수, 기존 conversation 재사용, 음성 입출력과 실행 연결 순서를 적었다.
+- 증거: 기존 Console·Decision conversation·Fleet channel 원장·D-728·broker 설치 경로를 읽었다. Discord 신원과 Console 세션의 차이를 계획에 반영했다.
+- gate 변화: 없음. 검토용 문서이며 제품 구현·배포·모델 접속·음성 수용·장비 동작을 수행하지 않았다.
