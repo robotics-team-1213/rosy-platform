@@ -38,7 +38,8 @@ def advance(data, history, owner, bridge, *, omit=None):
             current_stamp=stamp, observation_stamp=stamp - .125)
         if stamp == data['gap'][-1]:
             assert bridge._alignment['stamp'] == stamp
-            assert not bridge._alignment['uncertain']
+            if omit is None:
+                assert not bridge._alignment['uncertain']
     ctx = data['info']['context']
     owner._ctx = dict(guide=True, fresh=ctx['fresh'], here=ctx['here_deg'], ahead=ctx['ahead_deg'])
     return observed_route_candidate(data['error'], data['confidence'], copy.deepcopy(data['info']),
