@@ -307,8 +307,9 @@ def bundle_base(repo: Path, sha: str) -> str | None:
     return result.stdout.strip() or None
 
 
-def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
+def deps(repo: Path, sha: str, test_tools: str | None = None) -> tuple[str, list[str]]:
     """(hash of the CI install inputs at sha, the platform wheel dirs ci.yml builds)."""
+    remote_test_tools.validate(test_tools)
     ci = git(repo, "show", f"{sha}:{CI}")
     match = re.search(r'--wheel-dir "\$wheelhouse" \\\n\s*(.+)', ci)
     if not match:
@@ -317,7 +318,11 @@ def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
     ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, VISION_REQ, *dirs)]
     # Lock/swap changes do not change installed packages or need another venv build.
     install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
-    return hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16], dirs
+    key = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
+    if test_tools:
+        blob = git(repo, "rev-parse", f"{sha}:{remote_test_tools.RAW_REQUIREMENTS}")
+        key = remote_test_tools.identity(key, blob)
+    return key, dirs
 
 
 def ship(repo: Path, host: str, sha: str, name: str) -> None:
@@ -366,11 +371,12 @@ def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:
 
 def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo: Path | None = None,
         label: str | None = None, wait: float = WAIT_S, poll: float = POLL_S, sleep=time.sleep,
-        clock=time.monotonic) -> list[int]:
+        clock=time.monotonic, test_tools: str | None = None) -> list[int]:
     """Run each pytest invocation for commit sha on a test host; one exit code per invocation.
 
     No host: retry every poll s for up to wait s, then fail (D-584); never runs pytest here.
     """
+    remote_test_tools.validate(test_tools)
     refuse_local()
     repo = Path(git(repo or Path.cwd(), "rev-parse", "--show-toplevel"))
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
@@ -387,13 +393,15 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         hosts = placed_hosts("pytest")
     hosts = hosts[:len(invocations)]
     if len(hosts) == 1:
-        return run_on(hosts[0], invocations, logs, sha, repo, label)
+        return run_on(hosts[0], invocations, logs, sha, repo, label,
+                      **({"test_tools": test_tools} if test_tools else {}))
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
     work = Work(sorted(range(len(invocations)), key=lambda i: -cost(repo, invocations[i])))
 
     def attempt(host):
         try:
-            run_on(host, invocations, logs, sha, repo, label, work)
+            run_on(host, invocations, logs, sha, repo, label, work,
+                   **({"test_tools": test_tools} if test_tools else {}))
             return True
         except SystemExit as error:  # ship/venv failed; pytest failures are exit codes, not this
             print(f"[remote-pytest] {host} failed ({error}); the other hosts take its invocations",
@@ -410,7 +418,8 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             for i in work.todo:  # the only hosts that set up went silent: as run_on reports a lost host
                 work.codes[i] = remote_job.LOST_EXIT
             break
-        run_on(working[0], invocations, logs, sha, repo, label, work)
+        run_on(working[0], invocations, logs, sha, repo, label, work,
+               **({"test_tools": test_tools} if test_tools else {}))
     return [work.codes[i] for i in range(len(invocations))]
 
 
@@ -422,11 +431,12 @@ def quarantine(repo: Path, sha: str) -> dict[str, str]:
 
 
 def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, repo: Path,
-           label: str | None, work: Work | None = None) -> list[int]:
+           label: str | None, work: Work | None = None, test_tools: str | None = None) -> list[int]:
     """Run invocations on host, one at a time; one exit code per invocation.
 
     With a shared work (run() over several hosts) the host takes indices from it until none is left or the
     host is lost; an index that raises mid-run goes back for another host. Codes land in work.codes."""
+    remote_test_tools.validate(test_tools)
     shared = work is not None
     work = work or Work(range(len(invocations)))
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
@@ -434,8 +444,12 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
     lost = None
     try:
         ship(repo, host, sha, name)
-        deps_sha, dirs = deps(repo, sha)
-        if remote(host, VENV, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
+        deps_sha, dirs = deps(repo, sha, test_tools=test_tools) if test_tools else deps(repo, sha)
+        if test_tools:
+            blob = git(repo, "rev-parse", f"{sha}:{remote_test_tools.RAW_REQUIREMENTS}")
+            print(f"[remote-pytest] test-tools={test_tools} tested={sha} deps={deps_sha} raw-blob={blob}", flush=True)
+        recipe = remote_test_tools.render_setup(VENV, test_tools)
+        if remote(host, recipe, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
@@ -447,7 +461,8 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
                 work.codes[i] = remote_job.LOST_EXIT
                 continue
             try:
-                work.codes[i], lost = one(host, name, k, inv, log, [name, deps_sha, cpu], repo, sha)
+                context = [name, deps_sha, cpu, *([test_tools] if test_tools else [])]
+                work.codes[i], lost = one(host, name, k, inv, log, context, repo, sha)
             except BaseException:
                 work.todo.appendleft(i)  # never dropped: another host (or run()'s fallback) runs it
                 raise
@@ -521,6 +536,7 @@ def default_log_dir(sha: str) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sha", default="HEAD", help="commit to test (default HEAD)")
+    parser.add_argument("--test-tools", choices=[remote_test_tools.PROFILE], help="optional native test dependency profile")
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--affected-json", help="`rosy_harness.py affected --json` output file, or -")
     parser.add_argument("--skip", action="append", default=[], help="drop this path from the affected set")
@@ -548,7 +564,8 @@ def main(argv: list[str] | None = None) -> int:
     sha = git(Path.cwd(), "rev-parse", f"{args.sha}^{{commit}}")
     log_dir = args.log_dir or default_log_dir(sha)
     logs = [log_dir / f"run-{i}.txt" for i in range(1, len(invocations) + 1)]
-    codes = run(invocations, logs, sha, wait=args.wait, poll=args.retry_poll)
+    codes = run(invocations, logs, sha, wait=args.wait, poll=args.retry_poll,
+                **({"test_tools": args.test_tools} if args.test_tools else {}))
     for inv, code, log in zip(invocations, codes, logs):
         print(f"[remote-pytest] exit {code}: {' '.join(inv)} ({log})")
     return worst(codes)
