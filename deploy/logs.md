@@ -3044,3 +3044,9 @@
 - 변경: Fleet 소스 이미지의 COPY와 build context에 기존 순수 helper `fact_rules.py`·`wait_graph.py`를 포함한다. wheel 목록에는 이미 있던 파일이며, 상황 서비스·writer·실행 권한은 추가하지 않는다. 격리한 소스 이미지 시험은 실제 시작 소비자인 `fleet.stuck.ai_facts`·`fleet.traffic.blocks`를 가져오고 helper의 출처를 staged 이미지 안으로 확인한다.
 - 증거: 기존 후보 이미지의 격리 실행에서 `rosy_situation.fact_rules` 누락을 확인했다. 네트워크·호스트 데이터·서비스 시작 없이 직접 import만 수행했다. 원격 AI PC RED `023afd30e3`에서도 같은 시작 소비자의 ModuleNotFoundError로 1개 회귀가 실패했다. 누락 두 파일을 포함한 최종 커밋의 원격 GREEN과 독립 리뷰를 이어간다.
 - gate 변화: 없음. 실제 서비스는 앞선 정상 후보로 롤백됐고 작업 소유 maintenance hold를 설정했다. CI·서명 후보·실제 이미지 시작과 health 확인 전에는 새 후보 설치 성공을 주장하지 않는다.
+
+## 2026-10-20 · uncommitted · Fleet helper 변경의 후보 빌드 트리거 동기화
+
+- 변경: 소스 이미지에 포함한 `fact_rules.py`·`wait_graph.py`를 기존 후보 빌드 workflow의 명시적 push 경로에도 추가한다. 서명·게시 권한과 빌드 작업은 유지한다.
+- 증거: main `87a1de80e7` 전체 CI에서 기존 `test_push_paths_cover_every_image_source_and_candidate_doc`가 `fact_rules.py` 경로 누락으로 실패했다(NEW1). 앞선 PR의 선택 시험과 후보 빌드 성공만으로 전체 회귀가 통과했다고 판단하지 않았다. 기존 workflow 계약 시험 전체를 수정 커밋으로 원격 검증한다.
+- gate 변화: 없음. 작업 소유 hold와 정상 aff1 서비스를 유지하며, 수정된 main CI·서명·이미지 검증 후에만 전환한다.
