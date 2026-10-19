@@ -67,6 +67,8 @@ def test_real_confirmation_cancel_and_owner_change_submit_nothing(browser):
 
 
 def test_real_component_desktop_mobile_and_explicit_remember_submit_once(browser,tmp_path):
+    from playwright.sync_api import expect
+
     for width in [390,1366]:
         current=page(browser,width)
         assert current.evaluate('document.documentElement.scrollWidth')<=width
@@ -76,7 +78,7 @@ def test_real_component_desktop_mobile_and_explicit_remember_submit_once(browser
         current.locator('dialog ui-button').filter(has_text='연결 승인').click()
         current.wait_for_function('window.writes.length===1')
         assert current.evaluate('window.writes[0].body')=={'action':'approve','revision':2,'source_id':'ceiling_north','persist_requested':True}
-        assert '마무리' in current.locator('#camera-peer-status').inner_text()
+        expect(current.locator('#camera-peer-status')).to_contain_text('마무리')
         current.close()
 
 
