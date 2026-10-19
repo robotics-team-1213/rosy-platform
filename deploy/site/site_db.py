@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import zip_longest
 from pathlib import Path
 
 DEFAULT_DATABASE = Path("/var/lib/rosy/fleet.sqlite3")
@@ -113,6 +114,39 @@ def _rollback_name(target: Path) -> Path:
     return target.with_name(f"{target.name}.pre-restore-{stamp}.sqlite3")
 
 
+def _guard_account_restore(source: Path, destination: Path) -> None:
+    """A stale whole-DB restore must not undo credential changes or token consumption."""
+    def schema(db):
+        return [row for row in db.execute(
+            "SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name"
+        ) if row[2].startswith(("rosy_account", "account_oauth_", "fleet_console_"))]
+
+    try:
+        with closing(sqlite3.connect(_database_uri(source), uri=True, timeout=5.0)) as saved:
+            saved.execute("BEGIN")
+            saved_schema = schema(saved)
+            if not destination.exists():
+                if saved_schema:
+                    raise DatabaseError("Account security state needs a readable current database")
+                return
+            with closing(sqlite3.connect(_database_uri(destination), uri=True, timeout=5.0)) as current:
+                current.execute("BEGIN")
+                if saved_schema != schema(current):
+                    raise DatabaseError("Account security state schema differs; restore refused")
+                for kind, name, _, _ in saved_schema:
+                    if kind != "table":
+                        continue
+                    table = '"' + name.replace('"', '""') + '"'
+                    columns = len(saved.execute(f"SELECT * FROM {table} LIMIT 0").description)
+                    query = f"SELECT * FROM {table} ORDER BY " + ",".join(
+                        str(index) for index in range(1, columns + 1))
+                    if any(left != right for left, right in zip_longest(
+                            saved.execute(query), current.execute(query))):
+                        raise DatabaseError("Account security state differs; restore refused")
+    except sqlite3.Error as exc:
+        raise DatabaseError("Account security state could not be verified") from exc
+
+
 def restore_database(
     source: Path | str,
     destination: Path | str = DEFAULT_DATABASE,
@@ -142,6 +176,7 @@ def restore_database(
         _copy_database(source_path, temporary)
         verify_database(temporary)
         _private_mode(temporary)
+        _guard_account_restore(temporary, destination_path)
         if destination_path.exists():
             rollback = _rollback_name(destination_path)
             backup_database(destination_path, rollback)
