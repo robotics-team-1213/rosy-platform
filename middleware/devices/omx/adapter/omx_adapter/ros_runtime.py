@@ -122,7 +122,9 @@ class RosArmCommandRuntime:
                 stamp_ns=message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec,
                 source_now_ns=self._node.get_clock().now().nanoseconds, received_at=self.monotonic())
         except (TypeError, ValueError, OverflowError):
-            # Invalid feedback never refreshes the existing stale-state HOLD timer.
+            self._record_joint_intake(callback_entered, prior_attempt)
+            # Rejected packets cannot refresh the state or watchdog. Loss of valid
+            # feedback reaches the existing stale-state HOLD and cancel path.
             return
         self._record_joint_intake(callback_entered, prior_attempt)
         self.latest_joint_state = snapshot
