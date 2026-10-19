@@ -16,7 +16,8 @@ from test_observed_recentre_alignment import guarded, step
     ('drivable_local_floor_20261020.json', (.223, -.091), 20, -17.77, 53.5),
     ('drivable_near_floor_20261020.json', (.227, -.09), 42, -18.56, 42.37),
 ])
-def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment(fixture, target, count, here, guide):
+@pytest.mark.parametrize('yaw', [0., -.05])
+def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment(fixture, target, count, here, guide, yaw):
     from control.sensing.perception.drivable.drivable_steer import way_target
     doc = json.loads((Path(__file__).parent / 'fixtures' / fixture).read_text())
     way = np.zeros(doc['shape'], bool)
@@ -28,7 +29,7 @@ def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment(fixture,
     assert raw_info['target_m'] == target
     floor = raw_info['local_floor_m']
     assert len(floor) == count and .16 < floor[-1][0] < .18
-    error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, POSE, POSE,
+    error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, POSE, (0., 0., yaw),
         guide_here_deg=here, guide_deg=guide, observed_only=True, current_stamp=1.125)
     assert (error, confidence, info['strategy']) == (.5, .35, 'drivable_recentre_pivot_right')
 
