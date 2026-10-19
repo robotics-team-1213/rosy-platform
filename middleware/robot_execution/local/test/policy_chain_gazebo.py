@@ -33,7 +33,7 @@ sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'), str(ROOT/'contracts/
     *[str(ROOT/'middleware/core'/part) for part in ('api','gateway','services','events')]]
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
@@ -441,7 +441,7 @@ def main():
         intake.snapshot = traced_snapshot
         camera = Camera(node,runtime.monotonic,calibration)
         controllers = node.create_client(ListControllers,'/controller_manager/list_controllers')
-        executor = MultiThreadedExecutor(num_threads=4)
+        executor = OwnerMultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
         errors = []
         def work():
