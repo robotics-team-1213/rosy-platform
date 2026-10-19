@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · fix(recovery): bind independently verified public digests
 - 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
-- 2026-10-19 · uncommitted · 남은 learning 계획 문서의 역사 보존
-- 2026-10-19 · uncommitted · docs(omx): preserve native recovery design history
-- 2026-10-19 · uncommitted · docs(omx): recover historical native simulation evidence
-- 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
+- 2026-10-19 · uncommitted · Account 인증서 발급 확인·보호 백업·갱신 타이머
+- 2026-10-19 · 30acdffbfb · Account 활성화 후보와 설정 포함 Cam APK 준비
+- 2026-10-19 · 8d05ced7b · Account 전환 선행 조건 재확인

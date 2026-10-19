@@ -566,4 +566,3 @@
 - 변경: `pilot_sim_{runtime,api,capture,server,camera,gripper}.py`를 `omx_adapter/pilot_sim/`으로 옮기고 D-766 단위(`test/architecture/size_units.txt`)로 등록했다. 실행은 `python3 -m omx_adapter.pilot_sim.server`, `_ARM_OWNERS`는 `pilot_sim.server`다. 시연 `source_tree_sha256`은 `pilot_sim/*.py`도 계속 포함한다.
 - 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
 - gate 변화: 없음. 동작 변경 없는 경로 이동이다.
-
