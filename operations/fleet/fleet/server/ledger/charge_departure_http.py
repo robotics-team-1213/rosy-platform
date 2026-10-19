@@ -158,7 +158,32 @@ class ChargeDepartureHttp:
             check()
             StationDeparturePermit.model_validate(active.model_dump(), context={'now': p.clock()})
             StationDeparturePermit.model_validate(renewed.model_dump(), context={'now': p.clock()})
-            await client.station_departure(renewed)
+            try:
+                await client.station_departure(renewed)
+            except Exception as exc:
+                if (getattr(exc, 'status', None) != 409
+                        or getattr(exc, 'code', None) != 'OWNER_GENERATION_CHANGED'
+                        or operation.phase == 'TERMINAL'):
+                    raise
+                await p._admitted(session, {'UNDOCKING'})
+                live = await p.read_station(session)
+                body = await client.docking_status(session.operation_id)
+                terminal = self._operation(session, original, body)
+                if (terminal.phase != 'TERMINAL' or terminal.result != 'SUCCEEDED'
+                        or p._owner(body, session, vacant=True) != renewed.expected_owner_generation+1):
+                    raise
+                check()
+                StationDeparturePermit.model_validate(active.model_dump(), context={'now': p.clock()})
+                if live.departure_receipt is not None:
+                    proof = self._receipt(session, original, active, live, body)
+                    check()
+                    return proof
+                actual = live.departure_permit
+                if (live.state != 'DEPARTURE_CHECK' or actual is None
+                        or actual.model_dump(exclude={'valid_until'}) != active.model_dump(exclude={'valid_until'})
+                        or actual.valid_until > active.valid_until):
+                    raise
+                return None  # Same run completed; the next tick rechecks fresh authority before finish.
             await self._persist_renewal(renewed, active, check)
             active = renewed
         if operation.phase != 'TERMINAL':
