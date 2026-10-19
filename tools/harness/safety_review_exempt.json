@@ -488,5 +488,10 @@
     "commit": "057be833ab289ab341049191f90e1c7c94077015",
     "original_commit": "55d5b426b9fc8fb8d79768515b47f74d26cc92d8",
     "reason": "GitHub squash merge of PR #108 dropped the trailer of the reviewed commit; command_owner.py change is identical to 55d5b426b9 (D-785 final-state reach check, default off). Original Safety-Review: independent read-only reviewer agent, 2026-10-17: APPROVE WITH NOTES; unset policy is behaviour-identical (folded limit loop same order/messages/values, disabled configs skip it), HOLD path clears _active before _enter_hold so no extra cancel, no hold-reason whitelist anywhere (ros_runtime, action_runner, pilot_sim, g2_startup, recovery), stale snapshots cannot pass (freshness checked in the same locked poll); notes fixed: non-mapping policy is a ValueError, tests for failed Action, recovery state, negative/int/extra-joint inputs, disabled config; phase receipt still records ROS SUCCEEDED (fail-safe, documented). No device run."
+  },
+  {
+    "commit": "815e5027483cb49ceacc4c562d83cb1439692cbe",
+    "original_commit": "eddf756d3bfb93ac0d1879f4c1685f6f13859b91",
+    "reason": "PR #126 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only /root/shared_http_review, 2026-10-20: exact source tree 752742953a12466d766080443de9729101b47ed5 reviewed with no supported findings; main squash has that identical tree. Four D-762 station classifications retain same-source fail/pass evidence, explicit environment caveats, unknown causes and twice-fail NEW; unpublished fixture lifespan excluded. Source native policy/scanner 170 passed, normal push 785 passed, PR CI39336986634 493 passed/0 skipped; main CI39337638405 failed its trailer gate before pytest. Exact squash provenance retention using the existing reviewed-history mechanism only; no production code, scanner, safety policy or device/field acceptance change."
   }
 ]

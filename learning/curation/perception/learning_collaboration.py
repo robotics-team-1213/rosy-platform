@@ -37,6 +37,9 @@ class Collaboration:
             if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
                     or parsed.path or parsed.query or parsed.fragment):
                 raise ValueError('public_origin must be an HTTPS origin without path')
+        # Cookies share a host across ports; each trusted project origin needs its own flow.
+        self.cookie_suffix = ('_' + hashlib.sha256((accounts.project_id + '\0' + (self.origin or '')).encode()).hexdigest()[:24]
+                              if self.receiver else '')
         if oauth:
             oauth.validate_origin(self.origin)
         with store.connect() as db:
@@ -72,18 +75,22 @@ class Collaboration:
             self.pool.shutdown(wait=True, cancel_futures=True)
 
     def set_cookie(self, handler, name, value, *, clear=False):
+        name += self.cookie_suffix
         suffix = '; Secure' if self.origin else ''
         handler.extra_headers.append(('Set-Cookie', f'{name}={value}; Path=/; HttpOnly; SameSite=Lax'
                                      + ('; Max-Age=0' if clear else '') + suffix))
 
+    def cookie(self, handler, name):
+        return cookie(handler, name + self.cookie_suffix)
+
     def identity(self, handler):
-        principal = self.accounts.authenticate(cookie(handler, COOKIE))
+        principal = self.accounts.authenticate(self.cookie(handler, COOKIE))
         self.accounts.require(principal, 'view')
         handler.learning_principal = principal
         return principal
 
     def csrf(self, handler, token):
-        return hmac.new(token.encode(), cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
+        return hmac.new(token.encode(), self.cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
 
     def get(self, handler, path, token):
         try:
@@ -105,7 +112,7 @@ class Collaboration:
             query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
             if set(query) != {'code','state'} or any(len(v) != 1 for v in query.values()):
                 raise ValueError('invalid Account callback')
-            session, target = self.receiver.finish(cookie(handler, 'rosy_account_flow'), query['state'][0], query['code'][0])
+            session, target = self.receiver.finish(self.cookie(handler, 'rosy_account_flow'), query['state'][0], query['code'][0])
             self.set_cookie(handler, 'rosy_account_flow', '', clear=True)
             self.set_cookie(handler, COOKIE, session)
             handler.extra_headers.append(('Location', target))
@@ -125,7 +132,7 @@ class Collaboration:
             if any(len(v) != 1 for v in query.values()):
                 raise ValueError('duplicate OAuth callback parameters')
             session, _ = self.oauth.complete({k: v[0] for k, v in query.items()},
-                                             cookie(handler, BINDING), session=cookie(handler, COOKIE) or None)
+                                             self.cookie(handler, BINDING), session=self.cookie(handler, COOKIE) or None)
             self.set_cookie(handler, BINDING, '', clear=True)
             if session:
                 self.set_cookie(handler, COOKIE, session)
@@ -231,7 +238,7 @@ class Collaboration:
             raise PermissionError('Account session changed')
         if self.receiver and path == '/api/accounts/logout':
             self.set_cookie(handler, COOKIE, '', clear=True)
-            self.accounts.logout(cookie(handler, COOKIE))
+            self.accounts.logout(self.cookie(handler, COOKIE))
             handler.send({'ok':True})
             return True
         if path == '/api/accounts/login':
@@ -251,14 +258,14 @@ class Collaboration:
             return True
         principal = self.authorize_write(handler, path, body)
         if path == '/api/accounts/logout':
-            self.accounts.logout(cookie(handler, COOKIE))
+            self.accounts.logout(self.cookie(handler, COOKIE))
             self.set_cookie(handler, COOKIE, '', clear=True)
             handler.send({'ok': True})
         elif path == '/api/accounts/oauth':
             purpose = body.get('purpose')
             if not self.oauth or purpose not in ('link', 'manage'):
                 raise ValueError('Hugging Face account linking is unavailable')
-            url, binding = self.oauth.begin(purpose, session=cookie(handler, COOKIE))
+            url, binding = self.oauth.begin(purpose, session=self.cookie(handler, COOKIE))
             self.set_cookie(handler, BINDING, binding)
             handler.send({'url': url})
         elif path == '/api/accounts/connect':

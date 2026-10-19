@@ -258,6 +258,8 @@ python learning/registry/perception/export_class_names.py best.pt --out data.yam
 
 `--collaboration <private-config.json>`은 기존 검수 작업공간에 사용자 로그인과 프로젝트 권한을 적용한다. `/accounts`에서 로그인, 개인별 복수 HF 연결, 계정 선택, dataset/model 가져오기와 같은 고정 버전 재시도를 수행한다. 기존 단일 사용자 이력은 신원 미확인으로 남는다. 협업 모드의 새 객체·픽셀 이벤트는 인증된 사용자와 revision을 기록하며 요청 본문에 적은 검수자 이름은 신원으로 쓰지 않는다.
 
+중앙 Account 모드의 세션·PKCE·HF 쿠키 이름은 설정의 프로젝트와 공개 HTTPS origin별로 구분한다. 같은 DNS 이름의 다른 포트에서도 서로 덮어쓰지 않는다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 업데이트 후 한 번 다시 로그인한다. 관리 설치기는 `state/learning-collaboration.json`을 코드 업데이트와 지원되는 보관 릴리스 전환에서 유지하며, loopback·HTTPS 프록시와 무인증 decisions-port 제외를 요구한다. 서비스별 설치 방법은 [Model PC 배포 설명](../../../../deploy/model_pc/README.md#account-프로젝트별-설치-d-757)을 따른다.
+
 설정 예제는 [`learning-collaboration.example.json`](../learning-collaboration.example.json)이다. 실제 설정·DB·키·OAuth 비밀·가져온 자료는 Git 밖의 private 경로에 둔다. 예제의 `password_hash` 자리표시자는 시작 가능한 계정이 아니며 사용자별 명령 출력으로 바꾼다. 모델 PC의 검수 앱 환경에서 다음을 준비한다. 비밀번호를 명령행 인자나 로그에 적지 않는다.
 
 ```bash

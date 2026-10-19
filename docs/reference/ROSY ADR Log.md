@@ -15,6 +15,7 @@
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
 | D-774 | 스테이션 측정 카메라는 설치된 관측 프로세스가 실행 중일 때 송출을 요청한다 | Accepted (2026-10-16) |
 | D-772 | 스테이션 위치 버전과 배터리 기반 자동 충전 운영 | Accepted (2026-10-16) |
+| D-809 | Legacy 937 Learning Account boundary and protected human audit | Accepted (2026-10-20) |
 | D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
 | D-811 | contracts의 동작 코드 소유권 | Proposed |
 | D-812 | learning의 실행 코드 의존과 부트스트랩 경계 | Proposed |
@@ -1179,3 +1180,8 @@ Dedicated D-772 measurement sources request the existing demand while their inst
 ## D-776 - Installed station charge facts
 
 Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
+
+
+## D-809 - Legacy 937 Learning Account boundary
+
+The existing dataset review writer keeps its original human results behind a loopback-only Account boundary. Project grants and a protected server-attributed audit bind review writes; uncertain writes are never retried automatically. Details: [D-809](../adr/D-809-legacy-learning-account-boundary.md).

@@ -64,7 +64,8 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
     import threading
     from hashlib import sha256
     from test_review_app import open_store
-    from test_learning_collaboration import request
+    from test_learning_collaboration import request as legacy_request
+    from functools import partial
     from review_app import make_server
     config = accounts.config()
     config['account_subjects'] = {'central-alice':'alice','central-bob':'bob'}
@@ -74,6 +75,7 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         profile_url='https://account.test/console/profile',
         profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'})
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
+    request = partial(legacy_request, cookie_name='rosy_learning_session_' + sha256(b'one\0').hexdigest()[:24])
     (tmp_path/'workspace').mkdir()
     store = open_store(tmp_path/'workspace')
     server = make_server(store,0,accounts=managed)
