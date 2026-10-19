@@ -9337,3 +9337,9 @@ osy-d395-s1d\`.
 - 변경: `plans/2026-10-20-operator-ai-design.md`와 `plans/2026-10-20-operator-ai-plan.md`에 Console 오른쪽 패널, Fleet 웹 접수, 기존 conversation 재사용, 음성 입출력과 실행 연결 순서를 적었다.
 - 증거: 기존 Console·Decision conversation·Fleet channel 원장·D-728·broker 설치 경로를 읽었다. Discord 신원과 Console 세션의 차이를 계획에 반영했다.
 - gate 변화: 없음. 검토용 문서이며 제품 구현·배포·모델 접속·음성 수용·장비 동작을 수행하지 않았다.
+
+## 2026-10-20 · uncommitted · 관제 AI 기능·상태 소유권과 유지보수 구조 보완
+
+- 변경: 같은 설계/계획에 기능별 책임, service/context 인터페이스, 출처 계약 분리, 단일 실행 소유자와 변경 영향 표를 추가했다. 구현 전에 계약·회귀를 확정하는 Task 0을 넣었다.
+- 증거: conversation codec/history의 Discord 필드, 4개·120초·environment hash 이력 제한, 채널 outbox 필수 설치와 단일 실행 callback, 현재 문맥 필드·기존 읽기 도구를 확인했다.
+- gate 변화: 없음. 설계 문서만 보완했고 공통 처리 이전·API 등록·모델 승인·제품 구현은 수행하지 않았다.

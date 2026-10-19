@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 관제 AI 기능·상태 소유권과 유지보수 구조 보완
 - 2026-10-20 · uncommitted · 관제 운영자용 AI 에이전트 설계·구현 계획 초안
 - 2026-10-19 · uncommitted · sim: drivable v2 원본 판정과 최신 소스 재검증
 - 2026-10-19 · uncommitted · 안내 API 변경 이력 행 보완
 - 2026-10-19 · uncommitted · drivable 성공 원본의 새 초기화 재실행 보존
-- 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
