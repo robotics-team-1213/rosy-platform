@@ -279,3 +279,56 @@ def test_continuing_alignment_uses_the_original_budget_when_the_near_offset_shri
     assert step(owner, guard, 0.1, info=near, error=PIVOT_ERROR,
                 confidence=owner._pivot_confidence)[0] == -PIVOT_ERROR
     assert guard._alignment['limit'] == limit
+
+
+# Connected centre geometry from source50.375 / decision50.500 of sim-00e9913f29-26f127.
+CURVED = dict(strategy='drivable_turn_right', reason=None, straddle=None,
+    ahead_m=0.202, target_m=(0.250, 0.001), target_now_m=(0.213, -0.100),
+    seen_exit='right', exit_reach_m={'right': 0.290}, exit_point_m={'right': (0.221, -0.110)},
+    centre_path_m=[(0.139118,0.000202),(0.143981,0.000211),(0.148844,-0.015655),
+        (0.153707,-0.018822),(0.158570,-0.022342),(0.163433,-0.026216),
+        (0.168295,-0.029531),(0.173158,-0.033791),(0.178021,-0.038558),
+        (0.182884,-0.042347),(0.187747,-0.046941),(0.192610,-0.051081),
+        (0.197472,-0.056405),(0.202335,-0.061947),(0.207198,-0.067156),
+        (0.212061,-0.072583),(0.216924,-0.078747),(0.221787,-0.084488),
+        (0.226649,-0.091732),(0.231512,-0.099006),(0.236375,-0.107034),
+        (0.241238,-0.114457),(0.246101,-0.122774),(0.250964,-0.131153),
+        (0.255826,-0.139869),(0.260689,-0.149197),(0.265552,-0.159526),
+        (0.270415,-0.171455),(0.275278,-0.181671),(0.280141,-0.197114),
+        (0.285003,-0.208417),(0.289866,-0.228514)])
+
+
+def drive_curve(owner, guard, info):
+    owner._ctx.update(here=-12.7, ahead=-62.9)
+    for i in range(1, 17):
+        assert step(owner, guard, 0.7, i * 0.01, info=info, error=0.1, confidence=0.6)[:2] == (0.1, 0.6)
+    owner._ctx.update(here=36.5, ahead=-68.8)
+
+
+def test_observed_curved_progress_ends_the_old_episode_before_a_new_corner():
+    owner, guard = guarded()
+    spend(owner, guard)
+    drive_curve(owner, guard, CURVED)
+    assert guard._alignment is None
+    assert step(owner, guard, 0.7, 0.16)[0] == -PIVOT_ERROR
+
+
+@pytest.mark.parametrize('change', [dict(exit_from_route_memory=True), dict(exit_from_guide=True),
+    dict(exit_from_memory=True), dict(seen_exit=None), dict(target_now_m=(0.21, 0.15)),
+    dict(exit_point_m={'right': (0.22, 0.15)}), dict(centre_path_m=[(0.14, 0), (0.30, -0.20)]),
+    dict(centre_path_m=[(0.14, 0), (0.13, 0), (0.30, -0.20)]),
+    dict(centre_path_m=[(0.14, 0), (math.nan, 0), (0.30, -0.20)])])
+def test_unmeasured_or_disconnected_turns_do_not_end_the_alignment_episode(change):
+    owner, guard = guarded()
+    spend(owner, guard)
+    drive_curve(owner, guard, dict(CURVED, **change))
+    assert step(owner, guard, 0.7, 0.16)[2]['reason'] == 'recentre_alignment_spent'
+
+
+def test_an_observed_curve_cannot_repair_an_uncertain_odometry_episode():
+    owner, guard = guarded()
+    spend(owner, guard)
+    owner.reset()
+    drive_curve(owner, guard, CURVED)
+    assert guard._alignment is not None and guard._alignment['uncertain']
+    assert step(owner, guard, 0.7, 0.16)[0] is None
