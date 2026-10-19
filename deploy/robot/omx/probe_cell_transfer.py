@@ -139,7 +139,7 @@ def main() -> int:
 
     import rclpy
     from rclpy.callback_groups import ReentrantCallbackGroup
-    from rclpy.executors import MultiThreadedExecutor
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
     from rclpy.qos import qos_profile_sensor_data
@@ -233,7 +233,7 @@ def main() -> int:
     # Observation only (velocities for settling); the owner has its own subscription.
     node.create_subscription(JointState, names.joint_state_topic, lambda m: raw.update(msg=m),
                              qos_profile_sensor_data, callback_group=ReentrantCallbackGroup())
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     spinner = threading.Thread(target=executor.spin, daemon=True)
     spinner.start()

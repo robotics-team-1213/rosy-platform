@@ -28,6 +28,8 @@ def close_runtime(node, owner, workflow_timer, executor, clock, run, lock, rclpy
             node.destroy_timer(workflow_timer)
         if executor is not None and executor.shutdown(timeout_sec=5, wait_for_threads=False) is not True:
             raise RuntimeError("owner executor did not stop")
+        if owner is not None:
+            owner.runtime.destroy()
     except Exception as error:
         raise RuntimeError("CLEANUP_HOLD: OWNER_SHUTDOWN_INCOMPLETE") from error
     if clock is not None:
@@ -63,7 +65,7 @@ def main():
     lock.write(str(os.getpid()))
     lock.flush()
     import rclpy
-    from rclpy.executors import MultiThreadedExecutor
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
     from core_common.protocol.schemas import FleetCellTransferGrant
@@ -159,7 +161,7 @@ def main():
         # Reuse the canonical composition's workflow tick; callbacks alone do not advance phases.
         workflow_timer = create_workflow_timer(node, owner.advance_pending)
         # Clock has its own executor; these slots serve state, watchdog, action and workflow.
-        executor = MultiThreadedExecutor(num_threads=4)
+        executor = OwnerMultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
         threading.Thread(target=executor.spin, daemon=True).start()
         from g2_startup_session import serve_startup
