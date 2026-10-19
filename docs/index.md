@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 원래 CI의 첫 tick departure 증거 보완
 - 2026-10-20 · uncommitted · 같은 소스 station 시험의 분류 근거
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
 - 2026-10-19 · uncommitted · D-806 게시 기준 소스의 Learning 범위 확인
 - 2026-10-19 · uncommitted · D-806 앱 이름 게시 범위 분리
-- 2026-10-19 · uncommitted · 게시된 main을 기준으로 Account 변경 분리
