@@ -1540,3 +1540,9 @@
 - 변경: 공유 native 시험 fixture에 동일 trusted clock callable 안의 갱신 hook을 추가했다. map 갱신 경합 시험은 실행 중 Ledger clock을 교체하지 않고 capture 이후 갱신을 재현한다. 별도 반례는 같은 숫자를 반환하는 시계 교체도 ZERO/STOPPED가 됨을 요구한다. 제품 제어·에너지 제한은 변경하지 않는다.
 - 증거: 57a136d87 공식 원격 회귀 581 PASS/2 FAIL/NEW 2. 두 실패의 기존 시험이 Ledger clock을 교체해 설치된 energy clock과 다른 객체가 되는 직접 원인을 확인했다. 수정은 시험만이며 전체 회귀를 새 커밋에서 재실행한다.
 - gate 변화: 없음. 실기/현장 수용·FULL CI를 대신하지 않는다.
+
+## 2026-10-19 · uncommitted · station SIM pulse와 lifespan tick 동기화
+
+- 변경: 카메라 충전 SIM의 실제 lifespan worker는 유지하고 센서 pulse마다 허용된 runtime tick의 완료를 기다린다. tick 중 가상 시계가 바뀌면 실패한다. 제품의 readback 불가 HOLD와 freshness 한도는 유지한다.
+- 증거: 1bb6af2bdc 원격 affected에서 5132 passed/221 skipped/1 failed. shutdown_CHARGING이 CHARGE_MOTION_READBACK_UNAVAILABLE로 HOLD했다. 같은 항목의 candidate와 origin e1dc1b5122 단독 실행은 모두 통과했다. 기존 fixture는 완료 generation만 기다려 다음 tick과 clock 전진의 중첩을 막지 않았다. 정확한 이전 예외 원인은 이 HOLD 코드만으로 특정하지 않는다. 새 동기화의 원격 회귀는 대기 중이다.
+- gate 변화: 없음. 실물 충전·학습 정책·현장 수용을 검증하지 않았다.

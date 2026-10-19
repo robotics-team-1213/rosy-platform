@@ -14,6 +14,8 @@ import pytest
     (114, "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py"),
     (199, "middleware/robot_execution/local/test/test_policy_runtime_ros.py"
           "::test_native_session_goal_facts_and_revocation"),
+    (199, "middleware/robot_execution/local/test/test_core_arm_ros.py"),
+    (199, "middleware/robot_execution/local/test/test_core_arm_lerobot_ros.py"),
 ])
 def test_native_ros_runtime(domain, target):
     root = Path(__file__).resolve().parents[1]

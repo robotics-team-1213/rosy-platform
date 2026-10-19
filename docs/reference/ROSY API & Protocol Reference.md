@@ -4,6 +4,30 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ## 공유 인터페이스 계약서
 
+### v1.277 CORE OMX policy I/O (D-800)
+
+Additive, operator-authenticated `/api/v1/arm/*`. No new TaskKind or Fleet grant.
+Unbound `CoreServices.arm_policy` returns 503 `ARM_POLICY_UNAVAILABLE`. The current
+port supports an explicitly installed SIM session only.
+
+| Method/path | Request | Response |
+|---|---|---|
+| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `camera: {name, shape}` (CHW) |
+| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `camera: {name, shape, rgb_base64}`; bytes are interleaved RGB uint8 HWC |
+| `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
+| `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
+
+The first three paths require the session's installed authenticated token ID.
+Stop is open to every operator. Revision: 64 lowercase hex characters; targets:
+finite JSON numbers (no bool/string), 1–8 exact installed joints. Request objects
+forbid extras. No client timestamp, lease or reset is accepted.
+Wrong principal/failed owner authority: 403 `ARM_POLICY_FORBIDDEN`; mismatched,
+consumed or replaced source: 409 `ARM_POLICY_CONFLICT`; prior goal active:
+409 `ARM_POLICY_BUSY`; schema errors: 400 (CORE ERR-101). Never retry an uncertain action.
+Capture time conservatively anchors action age; the owner rechecks source,
+lease, stop and envelope before submission. Clients wait for a fresh observation
+after completion. Observation data alone is not training ground truth.
+
 ### v1.268 운영자의 정책 승인 표시와 세션의 `policy_admin` (D-793)
 
 Additive. 예전 방식 `site-users.yaml` 항목에 선택 필드 `policy_admin: true`(operator에만)를 더한다. 그 사람은 operator 역할을 유지하면서 `fleet.policy` 판단(§10.18)을 할 수 있다. 통합 계정(Rosy Account) 세션은 기존처럼 자원 권한으로 판단한다. `GET /api/fleet/auth/session`은 통합 계정이 아니고 `fleet.policy`가 있을 때만 `policy_admin: true`를 더 돌려준다(없으면 필드가 없다). 표시는 `deploy/site/site_users.py set-policy-admin`으로 켜고 끈다. 이 필드를 모르는 이전 Fleet은 파일을 거부하므로 Fleet을 먼저 배포한다. envelope 1.0 변경 없음.
@@ -189,7 +213,7 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.268
+**Version:** v1.277
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3422,6 +3446,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.277 | 2026-10-19 | Additive (D-800, feat/omx-policy-chain-publish): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
 | v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
 | v1.264 | 2026-10-17 | Additive (D-781 §2·§5, D-779 §4, feat/mixed-compile-followups): `cell_transfer.sku` 선택 필드(box만, 없으면 직렬화·digest가 같다)와 owner 형상 키 `item_key`(`box:<sku>`), recipe/3 Step의 팔별 `goal_predicates`, 대체 팔이 실행한 Step을 그 팔 술어로 판정(술어가 없으면 `CELL_GOAL_PREDICATE_MISSING`), `POST /api/fleet/cell-app/compile`의 recipe/3 `summary.multi_arm`, 두 팔 제안 경로 문서화. recipe/1·/2 Job·grant·미리보기와 envelope 1.0 변경 없음. |

@@ -56,9 +56,7 @@ D-796 reserved in another worktree or local main, absent from origin/main at D-8
 D-797 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-798 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-799 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-800 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-801 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-802 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-803 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-804 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-806 reserved in another worktree or local main, absent from origin/main at D-807; remove when its ADR lands

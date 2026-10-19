@@ -1158,3 +1158,9 @@
 - 변경: 현재 동일 native 완료의 수동적 navigation/handover를 기존 navigation router의 canonical 경로로 등록했다. guard callback이 끝난 다음 exact native/transport proof를 확인하며 공유 admission은 Nav lock 아래 비차단으로만 획득한다. 늦은 소유권 생성·reentrant 새 실행·busy admission에서 mode/candidate를 넘기지 않는다.
 - 증거: task-10-navigation-handover-final 원격 387개, task-10-handover-version-pins 원격 93개 통과, 각 NEW 0/skip 0/exit 0. 최초 fe5671413의 nested-router 경로 추적과 이미 terminal인 cancel을 상태 변경으로 본 잘못된 시험 2건은 canonical 등록 및 실제 새 native 실행을 만드는 회귀로 수정했다. 독립 scoped 안전 리뷰 PASS. 0ba8294c9의 실제 HttpRobotClient/귀환/카메라/기존 재투입·구조/안전 원격 261개에서도 통과했다. 범위가 겹쳐 합산하지 않는다.
 - gate 변화: 관련 CORE/HTTP 소프트웨어 회귀 근거. Fleet 완료 원장·native safe-release와 주기 인계의 결속, 전체 3회 연속 cycle와 실측 DEVICE/FIELD 수용은 아직 미완료다. 목표 ACTIVE, push/merge/장치 활성화 없음.
+
+## 2026-10-19 · uncommitted · OMX SIM CORE 준비와 안전한 내부 port 연결
+
+- 변경: CORE HTTP 서버를 SIM lease보다 먼저 준비할 수 있도록 trusted bootstrap 연결 함수를 추가했다. 서로 다른 port 교체를 잠금으로 거부하고, E-stop listener 등록과 현재 상태 처리를 마친 뒤 HTTP에 port를 공개한다. 외부 API와 안전 시간 한도는 유지한다.
+- 증거: 42916efbfa 원격 회귀 5건은 함수 부재로 예상대로 실패했다. 1bc8d78 native SIM은 controller 준비 뒤 첫 SDK 요청에서 stale 관측을 거부했다. 서버 준비 순서를 변경한 커밋의 원격 GREEN과 native 재검증은 대기 중이다.
+- gate 변화: 없음. 실제 학습 정책과 실물 장치 수용은 검증하지 않았다.

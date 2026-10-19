@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.268."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.277."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.auth import PairingState
 from core_api_web.api.v1.connection import connection_router
 from core_api_web.api.v1.routes import (
+    arm_router,
     auth_router,
     calibration_router,
     control_router,
@@ -114,13 +116,35 @@ def _pilot_root() -> Path:
     return Path(__file__).resolve().parents[5] / 'middleware' / 'robot_ui' / "pilot"
 
 
+_arm_install_lock = threading.Lock()
+
+
+def install_arm_policy(services: CoreServicesLike, port: Any) -> None:
+    """Trusted bootstrap binding; E-stop is wired before HTTP can see the port."""
+    with _arm_install_lock:
+        current = getattr(services, 'arm_policy', None)
+        if current is not None and current is not port:
+            raise ValueError('arm policy already installed')
+        if not all(callable(getattr(port, name, None)) for name in ('policy', 'observation', 'submit', 'stop')):
+            raise ValueError('invalid arm policy port')
+        listeners = services.safety.estop_listeners
+        if port.stop not in listeners:
+            listeners.append(port.stop)
+        if services.safety.estop:
+            port.stop()
+        services.arm_policy = port
+
+
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.268)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.277)",
     )
     app.state.core = services
+    arm_policy = getattr(services, 'arm_policy', None)
+    if arm_policy is not None:
+        install_arm_policy(services, arm_policy)
     from .account_sessions import install_account_sessions
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')
@@ -205,6 +229,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(system_router)
     app.include_router(robot_router)
     app.include_router(control_router)
+    app.include_router(arm_router)
     app.include_router(calibration_router)
     app.include_router(trip_lease_router)
     app.include_router(fleet_link_router)

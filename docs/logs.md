@@ -9350,6 +9350,13 @@ osy-d395-s1d\`.
 - 증거: 현장 컨테이너 안에서 `/console/policy` 200, 작업셀 목록 API 404 확인. Mission 없는 앱 시험을 추가했다.
 - gate 변화: 없음. 현장 작업셀 설정과 `policy_admin` 표시는 후속이다.
 
+## 2026-10-19 · 2b5d3c84d8 · D-800/D-804 origin publication
+
+- Change: port the CORE arm, SDK and SIM lease producer/consumer closure onto origin. Preserve station docking, the owner executor and physical learned-policy refusal. API v1.277.
+- Evidence: independent source review completed. Fresh committed-revision host and native verification is tracked separately; historical SIM evidence is not publication evidence.
+- gate 변화: none. Only a fixture-trained two-step ACT checkpoint and actionless observations were found; physical learned-policy execution remains unverified.
+- Records: docs/validation/omx-policy-publication-2026-10-19/asset-inventory.md; docs/plans/2026-10-19-omx-policy-publication.md.
+
 ## 2026-10-19 · uncommitted · Account 서비스 운영 완료 기준과 증거
 
 - 변경: 승인된 D-807과 앱별 실행 계획, 기존 원격 검증·TLS 준비·인증서 백업 기록을 보존했다. 새 main의 문서와 다른 작업 기록은 유지했다.

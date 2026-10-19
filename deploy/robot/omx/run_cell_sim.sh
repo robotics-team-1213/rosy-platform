@@ -4,7 +4,7 @@
 # that probe is the one owner process (D-403 §8). Do not start pilot_sim_server beside it.
 set -eo pipefail
 source /opt/ros/jazzy/setup.bash
-source /opt/omx_ws/install/setup.bash
+source "${OMX_CELL_OVERLAY:-/opt/omx_ws/install}/setup.bash"
 set -u
 # Path without ".sdf" (the vendor launch appends it). Override only for a recorded variant.
 world="${OMX_CELL_WORLD:-/repo/integrations/simulation/gazebo/worlds/omx_cell_workcell}"
