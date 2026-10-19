@@ -252,7 +252,8 @@ def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, mon
         path = url.split(':8774')[-1]
         if path == '/api/workspace' and not public_workspace:
             raise urllib.error.HTTPError(url, 401, 'login required', {}, io.BytesIO(b'{}'))
-        payload = b'{"enabled":true,"rosy_account":true,"project_id":"alpha"}' if path.endswith('options') else b'accounts page'
+        payload = (b'{"enabled":true,"rosy_account":true,"project_id":"alpha"}' if path.endswith('options')
+                   else b'{}' if path == '/api/workspace' else b'accounts page')
         response = io.BytesIO(payload)
         response.status = 200
         return response
@@ -265,7 +266,7 @@ def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, mon
         release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'wrong'})
     public_workspace = True
     with pytest.raises(RuntimeError):
-        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha'})
+        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha', 'account_client_file': '/private/client.json'})
 
 
 def test_bound_central_account_refuses_source_without_account_bridge(tmp_path):
