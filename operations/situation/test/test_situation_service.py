@@ -13,6 +13,8 @@ from rosy_situation.service import Situation
 
 
 def test_fleet_timeout_identifies_route_without_leaking_credentials(monkeypatch, caplog):
+    import logging
+
     import pytest
 
     error = TimeoutError("private-network-detail")
@@ -20,9 +22,17 @@ def test_fleet_timeout_identifies_route_without_leaking_credentials(monkeypatch,
     def fail(*args, **kwargs):
         raise error
 
+    # Capture on the service's own logger: in the CI ROS overlay a co-collected suite's logging setup
+    # stops these records reaching root (they fell to logging.lastResort), so caplog saw nothing.
+    logger = logging.getLogger("rosy_situation")
+    monkeypatch.setattr(logger, "disabled", False)
+    logger.addHandler(caplog.handler)
     monkeypatch.setattr(service.urllib.request, "urlopen", fail)
-    with pytest.raises(TimeoutError) as caught:
-        service.Fleet("http://site", "private-bearer").call("/api/fleet/events?after_id=private-cursor")
+    try:
+        with pytest.raises(TimeoutError) as caught:
+            service.Fleet("http://site", "private-bearer").call("/api/fleet/events?after_id=private-cursor")
+    finally:
+        logger.removeHandler(caplog.handler)
     assert caught.value is error
     assert "GET /api/fleet/events" in caplog.text and "TimeoutError" in caplog.text
     assert all(value not in caplog.text for value in ("private-bearer", "private-cursor", "private-network-detail"))
@@ -422,3 +432,10 @@ def test_build_commit_reads_git_or_is_none(tmp_path):
     assert service.build_commit(tmp_path) is None              # not a checkout
     commit = service.build_commit()
     assert commit is None or re.fullmatch(r"[0-9a-f]{7,40}(-dirty)?", commit)
+
+
+def test_build_commit_of_an_autoupdate_release_comes_from_its_release_file(tmp_path):
+    package = tmp_path / "release/operations/situation/rosy_situation"
+    package.mkdir(parents=True)
+    (tmp_path / "release/RELEASE").write_text("a" * 40 + "\n")
+    assert service.build_commit(package) == "a" * 12

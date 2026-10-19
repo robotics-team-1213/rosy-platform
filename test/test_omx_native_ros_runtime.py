@@ -11,6 +11,7 @@ import pytest
                     reason="requires a Jazzy/Python 3.12 lab host")
 @pytest.mark.parametrize("domain,target", [
     (113, "middleware/devices/omx/adapter/test/test_omx_ros_runtime.py"),
+    (114, "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py"),
     (199, "middleware/robot_execution/local/test/test_policy_runtime_ros.py"
           "::test_native_session_goal_facts_and_revocation"),
     (199, "middleware/robot_execution/local/test/test_core_arm_ros.py"),
