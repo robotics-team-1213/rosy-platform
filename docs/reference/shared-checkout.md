@@ -1,7 +1,8 @@
-# 같이 하는 깃 — 공유 체크아웃 착수 순서
+# 같이 하는 깃: 실험실 공유 체크아웃
 
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
 - **팀원 개인 클론이라면** 이 문서 대신 [git으로 일하는 법](git-workflow.md)과 [팀 가이드](team-guide.md)를 따른다. 두 길의 비교도 [git으로 일하는 법](git-workflow.md) §1에 있다.
+- **GitHub 게시·병합:** 로컬 착지와 별도로 [PR 파이프라인](pr-pipeline.md)을 따른다. 작성·독립 검토 두 에이전트가 확인하고 게시 담당 한 명이 올린다.
 - **갱신:** 2026-10-18 — 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761). 2026-10-06 README에서 옮김. 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
 
 ## 같이 하는 깃
@@ -14,6 +15,17 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
 [`.claude/skills/rosy-land-on-main/SKILL.md`](../../.claude/skills/rosy-land-on-main/SKILL.md)다.
 브랜치 이름과, 남의 미커밋을 지우지 않는 이유는
 [D-372](../adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다.
+
+작업 위치를 분리하고 자기 파일만 커밋한 뒤, 원격 시험과 검토를 거쳐 게시한다.
+
+```mermaid
+flowchart TD
+    tree["작업 상태 확인·전용 워크트리"] --> own["자기 경로만 수정·커밋"]
+    own --> test["커밋 SHA 원격 시험·기존 실패 비교"]
+    test -->|NEW 실패| own
+    test -->|시험 PC 접속 불가| stop["확인 못 함: 착지·push 중단"]
+    test -->|검증 완료| pr["PR 파이프라인: 독립 검토·게시·CI"]
+```
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에
 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
@@ -79,5 +91,7 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `python tools/harness/rosy_harness.py generate`를 하고, pre-push 검사를
    통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이
    `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
+
+위 푸시 순서의 rebase는 아직 원격에 게시하지 않은 주제 브랜치에만 적용한다. 이미 게시한 브랜치는 `git merge origin/main`으로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 [PR 파이프라인](pr-pipeline.md)을 따른다.
 
 착수 다음에 손댈 제품 규칙은 [README 「핵심 계약」](../../README.md#핵심-계약)이다.

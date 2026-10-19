@@ -21,10 +21,11 @@ def _hash(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def prepare(sessions, output, repo_id, *, completed_only=False):
+def prepare(sessions, output, repo_id, *, completed_only=False, camera_references=None):
     """Write the inspected dataset and print exact review and next-command paths."""
     output = Path(output).resolve()
-    receipt = intake.prepare(sessions, output, repo_id, completed_only=completed_only)
+    receipt = intake.prepare(sessions, output, repo_id, completed_only=completed_only,
+                             camera_references=camera_references)
     return dict(prepared_root=str(output), inspection=str(output/'inspection.json'),
                 decisions=str(output/'decisions.json'), intake_receipt=str(output/'intake-receipt.json'),
                 reader_verified=receipt['reader_verified'], review_required=True,
@@ -82,6 +83,8 @@ def main():
     preparation.add_argument('--out', type=Path, required=True)
     preparation.add_argument('--repo-id', required=True)
     preparation.add_argument('--completed-only', action='store_true')
+    preparation.add_argument('--camera-reference', action='append', default=[], metavar='ROLE=PATH',
+                             help='D-792 camera setup reference JSON per camera role; adds shadow checks')
     training = commands.add_parser('train')
     training.add_argument('prepared', type=Path)
     training.add_argument('--decisions', type=Path, required=True)
@@ -92,7 +95,8 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
-            result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only)
+            result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
+                             camera_references=intake.camera_references(args.camera_reference))
         else:
             result = train(args.prepared, args.decisions, args.out, steps=args.steps,
                            batch_size=args.batch_size, device=args.device)

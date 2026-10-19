@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import os
 import stat
 from pathlib import Path
@@ -14,6 +15,9 @@ import pytest
 import yaml
 
 launch = pytest.importorskip("launch")
+# ROS 2 launch 는 처음 import 될 때 logging.setLoggerClass(LaunchLogger) 를 걸어, 이 pytest
+# 프로세스에서 그 뒤 만들어지는 로거가 모두 propagate=False 가 된다(다른 시험의 caplog 가 빈다).
+logging.setLoggerClass(logging.Logger)
 if not hasattr(launch, "LaunchContext"):
     # 여러 시험 디렉터리를 한 번에 돌리면 `src/gz_sim` 가 sys.path 에 얹히고,
     # 그때 `import launch` 는 이 패키지의 `launch/` 디렉터리를 namespace 패키지로

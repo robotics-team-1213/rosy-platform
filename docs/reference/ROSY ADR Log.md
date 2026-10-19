@@ -781,7 +781,7 @@
 | D-768 | 순간적인 차로 상실과 카메라 조향 튐에서 가던 경로를 짧게 유지한다 — 튄 프레임은 없는 프레임으로 보고 D-476 이어 가기로 넘긴다(SIM 먼저, 장치는 별도 결정) | Proposed |
 | D-746 | SD 카드의 기존 robot identity를 덮어쓰지 않고, 재이미징은 배포 설정을 유지한다 | Proposed |
 | D-769 | 기존 drivable 검수 자료를 활용한 강화학습과 Gazebo Fleet 검증 | Accepted |
-| D-773 | OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조 — 장치 권한 포트 하나, 모델·정책 배포 경로 하나, AI 출력은 사실과 후보 두 종류 | Proposed |
+| D-773 | OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조 — 장치 Action 타입 하나, 기록·readback이 남는 모델·정책 배포, AI 출력은 사실과 후보 두 종류 | Proposed |
 | D-778 | 양팔 작업대 기반 — 팔 둘을 한 작업대로 묶고, 권한은 Fleet이 짝으로 주고, 동기는 작업대 조율자가 하고, 역할은 Step마다 정한다(L1만 연다, 실행 계약 변경은 후속 ADR) | Proposed |
 | D-779 | Cell Job 원장을 팔 단위로 나눈다 — 팔별 상태, Step 의존 관계, 팔별 Action, arm·zone claim, 대체 팔로 한 팔 모드 | Accepted |
 | D-780 | 작업대 조율자와 owner의 연결 — 조율자 전용 peer UID와 연산별 권한, COORDINATOR 정지 출처, 이름 붙은 barrier와 PHASE_WAIT, 단단한 결합 구간의 조율자 생존 확인 | Proposed |
@@ -806,7 +806,10 @@
 | D-797 | 실물 하달 개방 — 운행(`TRIP`)은 `production`, 팔(`CELL_TRANSFER`)은 새 프로필 `device_trial`에서 장치 증거로만(실물 identity, 하달 전 인계 장벽, 카메라 목표 증거, 다팔은 계속 시뮬레이션) | Proposed |
 | D-796 | 사이트 문맥·로그 저장소(Postgres 미러) | Accepted |
 | D-798 | 한도에 걸린 크기 단위는 미리 나눠 여유를 만든다 — fleet·site_ui/console·rosy_auto_update 분할 지도, 95% 선에서 나누기 브랜치 먼저, 상속된 초과 커밋의 재적층 | Accepted (2026-10-18, 사용자 결정) |
+| D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
 | D-803 | 착지는 줄을 선다 — 클론 하나의 착지 대기열(FIFO 표), 변경분 재시험보다 먼저 | Accepted (2026-10-18, 사용자 결정) |
+| D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
+| D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거

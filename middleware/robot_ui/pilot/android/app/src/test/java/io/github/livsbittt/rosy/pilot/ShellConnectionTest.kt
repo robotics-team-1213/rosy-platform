@@ -31,8 +31,13 @@ class ShellConnectionTest {
             try {
                 a.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_01\"}"))
                 b.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_02\"}"))
+                a.enqueue(MockResponse().setResponseCode(200))
+                b.enqueue(MockResponse().setResponseCode(200))
                 pa.verifyIdentity(); pb.verifyIdentity()
-                a.takeRequest(1, TimeUnit.SECONDS); b.takeRequest(1, TimeUnit.SECONDS)
+                for (remote in listOf(a, b)) {
+                    assertEquals("/api/v1/system/info", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
+                    assertEquals("/pilot", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
+                }
                 pa.start(5000, false); pb.start(5000, false)
                 assertFalse(pa.cookieName == pb.cookieName)
                 browser.newCall(Request.Builder().url("${pa.origin}/api/v1/vision/front/status")
@@ -77,6 +82,7 @@ class ShellConnectionTest {
             assertEquals("/api/v1/auth/development-session", join.path)
             assertEquals("{}", join.body.readUtf8())
             remote.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_01\"}"))
+            remote.enqueue(MockResponse().setResponseCode(200))
             val assets = File(System.getProperty("rosy.pilot.assets"))
             val proxy = PilotProxy(session, BundledAssets { path ->
                 File(assets, path).takeIf { it.isFile }?.readBytes()
@@ -84,6 +90,7 @@ class ShellConnectionTest {
             try {
                 proxy.verifyIdentity()
                 assertEquals("/api/v1/system/info", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
+                assertEquals("/pilot", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
                 proxy.start(5000, false)
                 val browser = OkHttpClient()
                 val cookie = "${proxy.cookieName}=${proxy.capability}"

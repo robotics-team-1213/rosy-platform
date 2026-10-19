@@ -4,7 +4,7 @@
 # omx_adapter (Python package)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-19
 
 ## Purpose
 
@@ -17,12 +17,12 @@ Disabled-by-default profile validation plus optional ROS action and camera adapt
 | `__init__.py` | Package marker |
 | `profile.py` | `OmxAdapterProfile`: model aliases, joint/frame checks, `ros2_control_contract()` / `capability_enabled` |
 | `cli.py` | YAML path → profile → JSON stdout for commissioning and CI |
-| `pilot_sim_runtime.py` | SIM-only Pilot facade over the single owner: jog/gripper goals, readback snapshot, `rosy.controls/1`, admission = cell profile within URDF (D-390, D-411) |
-| `pilot_sim_gripper.py` | D-411 C pure gripper state (`open`/`closed`/`holding`/`moving`/`unknown`); position evidence only, not grip force |
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `pilot_sim/` | SIM-only Pilot owner, own D-766 size unit (see `pilot_sim/AGENTS.md`) |
 
 ## For AI Agents
 

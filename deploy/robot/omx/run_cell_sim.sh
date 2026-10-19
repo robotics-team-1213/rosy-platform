@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rosy Cell C3: locked OMX-F Gazebo follower in the omx_cell_workcell world, with NO command
 # owner. The selected owner runs separately in the same simulation graph (D-403 §8).
-# Do not start pilot_sim_server beside another owner. Native hosts use an explicit overlay.
+# Do not start pilot_sim.server beside another owner. Native hosts use an explicit overlay.
 set -eo pipefail
 if [[ -e "$HOME/rosy-jobs/site" ]]; then
   echo "OMX simulation refuses a site host (D-571)" >&2

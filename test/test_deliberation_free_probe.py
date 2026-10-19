@@ -124,13 +124,21 @@ def test_actual_unix_free_gateway_uses_one_shared_claim_and_holds_refusal(tmp_pa
         server.deadline, server.calls, server.timeout = time.monotonic() + 30, 0, 2
         worker = threading.Thread(target=server.handle_request, daemon=True); worker.start()
         with closing(Connection(path)) as client:
-            client.request('POST', '/other' if change == 'route' else '/v1/chat/completions',
-                           json.dumps(incoming), {'User-Agent': 'actual-sdk-fixture'})
-            result = client.getresponse(); result.read()
+            try:
+                client.request('POST', '/other' if change == 'route' else '/v1/chat/completions',
+                               json.dumps(incoming), {'User-Agent': 'actual-sdk-fixture'})
+                result = client.getresponse(); result.read(); status = result.status
+            except (BrokenPipeError, ConnectionResetError):
+                # 'route' is refused on the request line, before the body is read. http.client sends
+                # the body after the headers, so a fast refusal can close the socket under that send
+                # (CI 2026-10-16: runs 38959095932, 38964287715, 38968030520). Either way it is refused.
+                if change != 'route':
+                    raise
+                status = None  # no response to read; the server-side checks below still hold
         worker.join(4); assert not worker.is_alive()
         count = 1 if change in {'valid', '403'} else 0
         assert len(calls) == len(claims) == server.calls == count
-        assert result.status == (200 if change == 'valid' else 400)
+        assert status in ({200} if change == 'valid' else {400, None} if change == 'route' else {400})
         assert server.metrics['cost_usd'] is None and server.metrics['cost_complete'] is False
         assert server.metrics['state'] == ('PASS_FREE_PROVIDER_ONLY' if change == 'valid' else 'HOLD')
 

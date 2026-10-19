@@ -816,3 +816,9 @@
 - 변경: 기존 Account 작업의 receiver 재생성 후 회수 큐 복구 검사를 foundation 전용 브랜치로 분리했다. 제품 AccountClient는 변경하지 않았다.
 - 증거: 원래 c22ee485ad의 지정 원격 suite15개 PASS, NEW0. 이 브랜치는 최신 main 위에서 착지 관문을 다시 실행한다. 원래 결과는 최신 main 병합 시험을 대신하지 않는다.
 - gate 변화: 없음. 운영 인증·서비스·장치 수용은 이 검사와 별도다.
+
+## 2026-10-19 · uncommitted · D-807 receiver 재개 후 회수 대기열 검증
+
+- 변경: 중앙 장애 중 로그아웃한 receiver를 같은 DB·암호화 키로 다시 열어 로컬 접근 거부와 중앙 복구 후 회수·큐 소진을 확인하는 시험을 추가했다. 제품 구현은 변경하지 않았다.
+- 증거: `test_pending_revocation_survives_receiver_reopen`을 커밋 SHA로 원격 실행한다. 실행 결과는 Account rollout 결과표에 기록한다.
+- gate 변화: 없음. 시험 PC 검증은 설치·실사용 수용이 아니다.
