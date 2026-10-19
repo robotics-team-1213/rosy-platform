@@ -3029,3 +3029,8 @@
 - 통합: main에서 Accepted로 바뀐 D-798 행을 보존하고 union 병합이 되살린 오래된 Proposed 행만 제거했다.
 - 검증 보정: manifest의 고정 wheel SHA256을 비밀값으로 오탐한 원격 guard 실패 후, 값과 설치 인자는 그대로 두고 같은 행에 공개 무결성 용도만 표시했다. 비밀값 검사는 변경하지 않았다.
 - 적용 전제: 읽기 전용 확인에서 model/site에는 uv가 있으나 AI PC에는 없음. uv-only 원격 시험기로 전환하면 AI PC의 새 환경 생성이 실패하므로 승인된 호스트 적용 전까지 이 후보의 착지는 보류한다. 호스트 설치는 실행하지 않았다.
+## 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 공개 진단 도구 hash의 정확한 provenance 등록
+
+- 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.
+- 증거: 첫 확장 시험의 release scan FAIL을 재현했고 독립 hash 검토 후 관련 원격 745 PASS/0 skip/NEW 0으로 통과했다. provenance의 stale/변경·비밀 탐지 회귀를 포함한다.
+- gate 변화: 저장소 검사 보완이며 배포·장치 실행·FIELD 수용을 수행하지 않았다.

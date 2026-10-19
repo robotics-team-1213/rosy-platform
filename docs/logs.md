@@ -9197,3 +9197,316 @@ osy-d395-s1d\`.
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+## 2026-10-19 · uncommitted · (origin #92 2026-10-16) docs(docking): 정밀 접안과 자동 충전 운영 설계 초안
+
+- 변경: `plans/2026-10-16-station-charge-lifecycle-design.md`에 스테이션 관측→착좌·정지 확인→충전→완료 대기→이안→작업 재투입과 배터리 건강도·작업 비용에 따른 스케줄을 작성했다. 1대/1스테이션을 첫 범위로 두고 장치 계측과 현장 수용 기준을 분리했다.
+- 추가 요구 반영: 스테이션 이동 후 재발견·좌표 검증·관제 발행 위치 버전·로봇 수락·경로와 에너지 재평가를 포함했다. 스테이션 카메라의 상대 관측만으로 지도상 새 위치를 확정하지 않으며, 진행 중 목표의 위치 버전 무효화와 충전 중 이동도 별도 검증한다. 기존 teach API와 D-758의 Proposed 상태를 대조했다.
+- 증거: 기준 `436d52a55`의 접안·충전·배터리·Fleet 스케줄러·현장 sighting 구현을 읽었다. 현재 건강도 수치와 남은 운행 시간은 미측정이며, 기본 만충 전략은 전압 기반이다. 새 구현·시뮬레이션·실기 시험 증거는 아니다.
+- gate 변화: 없음. 실기 capability·공개 API를 변경하지 않았다. 사용자가 스테이션 위치 변경까지 목표·설계에 반영하고 진행하라고 요청해 설계 승인 상태로 기록했다.
+- 결정: 기존 D-350·D-369·D-763 경계를 반영했다. `plans/2026-10-16-station-charge-lifecycle.md`에 계약·위치 버전·관측·착좌/충전 종단·에너지·세션 복구·복귀·재투입·운영·SIM·실기 검증 11개 작업의 구현 계획을 작성했다. 계획 검토와 기능 구현·검증은 아직이다.
+
+## 2026-10-19 · 39f94f151 · (origin #92 2026-10-16) 충전 경로 검증의 정책·구성 누락 보완
+
+- 변경: 추가된 Fleet 시험을 5개 CI shard로 분산해 기존 210 비용 상한을 유지했다. Vision은 station-observations/station-poses/관측 scope만 추가로 허용하고 이동·작업·확정 경로는 계속 거부한다. gateway 통합 시험은 기존 공개 API 타입과 실제 goal 해석 경로를 사용해 외부 behavior 시험 예외 목록을 늘리지 않았다. OMX 관측기 오류 시험은 관측기의 검증된 실행 조건인 rmw_fastrtps_cpp를 명시해 다른 suite의 환경에 의존하지 않는다.
+- 증거: 확대 검사에서 누락을 재현했다. origin/main 810ea9bbea의 비교 대상 106개도 실행했다. 수정 후 CORE 237개와 Fleet/구조/안전/설치/harness 486개를 같은 39f94f151에서 통과했다. 각 NEW 0/skip 0. 관련 구조·크기·shard 비용 기준을 완화하지 않았다.
+- gate 변화: 개발 관련 검사 완료. affected tier는 FULL을 유지한다. tools/harness/AGENTS.md의 D-436에 따라 개발 검증은 guards와 mapped suite 근거이며 전체 CI 승격은 별도다. push/merge/실기 활성화는 하지 않았다.
+
+## 2026-10-19 · 209bfafc4 · (origin #92 2026-10-16) D-772 주기 충전 정책과 기존 app lifecycle
+
+- 변경: ChargePolicyAdmission은 원본 robot/battery/budget 시각과 robot·boot·battery·station·map·pose/profile 및 승인 source/epoch/cost revision을 검사한다. ChargeRuntime이 기존 ChargeService를 주기적으로 진행하며 새 작업의 최종 admission은 실제 durable task ID·type·전체 request digest와 예산을 결속한다. 초기 미평가·저SOC·보수 프로필 없는 건강도 결측·만료·다른 작업은 새 작업 수락을 막는다. factory는 같은 TripRunner·지도/작업/충전/스테이션 원장·HTTP client와 callable source adapter를 요구하며 기본값은 비활성이다.
+- 장애 처리: 전송 전 정확한 session/correlation/intent를 정지용으로 보관한다. 취소와 DB 장애에서도 해당 정지를 시도하고 HOLD 저장 실패를 숨기지 않는다. 다른 station/배터리 구성은 기존 세션을 자동 진행하지 않는다. 실제 lifespan 시험이 초기 CLAIMED 충전 예약의 재시작 해제를 발견해, 기존 stop 트랜잭션에서 모든 charge_session claim을 UNKNOWN으로 유지하도록 수정했다. rearm은 재조정 전 차단한다. ACK를 물리 정지·자원 해제로 간주하지 않는다.
+- 증거: afba04ec2 관련 65개, fad32a155 연속 runtime→실제 TripRunner/HTTP/native→JPEG 접안→정상 종단 및 CORE 회귀 129개, a692cb51e app/충전/task 회귀 154개, 209bfafc4 DB 이관/구조/안전/설치/재시작 관련 170개 통과. 각각 원격 종료 코드 0, NEW 0/skip 0이다. 시험 범위가 겹치므로 합산하지 않는다. 로그는 저장소 밖 task-9-runtime-green-retry, task-9-runtime-continuous, task-9-charge-final, task-9-schema-retry/run-1.txt다. native navigation plant/map pose·배터리/BMS·접점·에너지 입력은 명시적 SIM이다.
+- 수정 과정: bootstrap의 실제 clients() provider 계약, 선택 작업 미결속, 충전 예약 해제와 크기 위반을 재현하고 고쳤다. 확대 guard 실행 a692cb51e는 380 PASS/1 FAIL이며 유일한 TaskStore 크기 실패는 209bfafc4의 170개에 포함해 재검증했다. 첫 DB 함수 추출 5482fc995는 세 번째 migration 메서드 누락으로 실패했고 세 메서드를 보존하는 TaskSchemaMigrations로 수정했다. 실패를 면제하지 않았다. Fleet root 16042→16021, app 989→968, TaskStore 1014→955로 상한을 낮췄다.
+- gate 변화: runtime 정지 경로, bootstrap/작업 digest 및 충전 claim 보존을 독립 안전 검토했다. 내부 조합만 추가해 API v1.253을 유지한다. 전체 CI·배포·실기 수용 승격은 아니다. 실제 장치 source/CLI/배포 설정, 장시간 충전 중 같은 버전 위치 갱신, 안전 이안·재투입, 독립 전역 스테이션 이동 producer, 전체 3회 cycle와 FIELD 수용은 미완료다. 전체 목표는 진행 중이며 push/merge/장치 활성화는 하지 않았다.
+
+## 2026-10-19 · 741c9b95f · (origin #92 2026-10-16) D-772 원래 위치 수명을 넘기는 충전 세션
+
+- 변경: ChargeRobotHttp는 실제 return/dock owner를 읽을 때에도 관제의 새 전역 위치 근거를 CORE의 기존 binding과 동기화한다. ACK만 신선하고 CORE target은 만료되는 단절을 해결했다. 같은 session/robot/boot/battery/map/attempt·위치/접근 포즈·출처/교정을 유지하며 새 capture의 시간·불확실성만 갱신한다. 만료/HOLD binding, 같은 capture의 TTL 연장, 다른 native owner, 만료/미래 측정 권한은 거절한다. source/native/DB I/O 뒤에도 원본 수명을 확인하며 feed·native 실행·착좌·충전 완료 근거를 재설정하지 않는다.
+- 증거: 40d405e5e RED 5건과 3e579caae의 실제 runtime 위치 만료 RED를 확인했다. f1726a72e Fleet·위치 원장·구조/안전/설치 178개, 1f45569ca CORE/HTTP·refresh·owner 190개, 741c9b95f 충전 유지/완료 수명·sensor reader·영상 pipeline 134개가 원격 종료 코드 0, NEW 0/skip 0으로 통과했다. 범위가 겹쳐 합산하지 않는다. 로그는 저장소 밖 task-9-target-fleet-guards, task-9-target-refresh-retry, task-9-target-charge-final/run-1.txt다.
+- 실행 범위: 연속 시험은 최초 2초 위치 lease와 충전 시작 시점의 lease를 넘기면서 3초 동안 CHARGING을 유지한 뒤 정상 종단으로 CHARGED_HOLD가 됨을 검사한다. 매 JPEG step에 실제 runtime을 진행한다. 갱신 permission은 초기 SIM seed 이후 실제 StationIngress scope 경로를 사용한다. 새 전역 후보는 SIM 입력으로 StationService.observe에 공급하므로 독립 전역 producer의 운영/인증 통합 수용은 아니다. 주행 plant·map pose·접점·BMS·에너지도 SIM이며 상대 접안은 실제 JPEG/worker/인증 HTTP 경로다.
+- 검토/수정: scoped 독립 안전 검토의 post-I/O permission TTL 지적을 반영했다. 기존 순수 owner fixture의 미래 permission(100.1)을 시각 100에서 수락하던 잘못된 입력은 현재 시각을 100.1로 맞췄다. 별도의 미래/만료 거절 회귀는 유지했다. 실제 연속 경로가 ACK 수명과 target 수명의 차이를 재현해, 이후 exact intent 확인 뒤 owner 조회 때도 동기화하도록 수정·재검토했다.
+- gate 변화: 소프트웨어의 같은 버전 장기 세션 갱신을 검증했다. 기존 PUT 계약과 DTO를 사용해 API v1.253을 유지하며 크기/공차/실패 허용을 늘리지 않았다. 안전 이안·재투입, 독립 전역 이동 producer, 전체 3회 cycle·실측 profile·DEVICE/FIELD 수용은 미완료다. 전체 목표는 ACTIVE이며 push/merge/실기 활성화는 하지 않았다.
+
+## 2026-10-19 · a78e502f5 · (origin #92 2026-10-16) 충전 위치 갱신 최종 계약 회귀
+
+- 변경: 제품 소스 변경 없이 같은 버전 위치 갱신 문서와 기존 API 의미를 검증했다.
+- 증거: 원격 task-9-target-contract-final의 behavior 소유권·영향 선택/CI 비용·harness 계약 166개 통과, NEW 0/skip 0, 종료 코드 0.
+- gate 변화: 개발 관련 회귀 근거 추가. 전체 CI·실기 수용 승격은 아니다.
+
+## 2026-10-19 · 1216b3f7b · (origin #92 2026-10-16) 이안 계약과 실제 native API 최종 회귀
+
+- 변경: v1.254 이안 허가/실측 Receipt, 로컬 원본 시각 피드·기존 native owner, 명시적 simulation 빈 피드와 관제 API·정확한 중단을 검증했다. 이전 API 경로 추적표·버전 이력·로그 제목/생성 인덱스 실패를 수정했으며 허용 한도나 안전 검사를 완화하지 않았다.
+- 증거: task-8-departure-final 원격 412개 통과, NEW 0/skip 0, exit 0. 별도 1f8569773 task-8-departure-contract-pins 96개 통과, NEW 0/skip 0, exit 0. 7d3f6418d의 native/기존 docking 회귀 194개와 범위가 겹치므로 합산하지 않는다. Safety-Review scoped PASS는 DTO/source/controller·owner/manager 및 API/갱신/프로필/중단 범위다.
+- gate 변화: 관련 소프트웨어 회귀 증거. HTTP 정상 경로는 실제 native owner+합성 로컬 facts로 adapter를 검증했고 bridge/mode 구성은 별도 시험이다. Fleet의 영속 선택 작업/예산 결속·실제 Receipt 기반 claim 해제/재투입·3회 cycle·독립 전역 위치 producer·실측 프로필/DEVICE/FIELD 수용은 미완료다. 목표 ACTIVE, 실기 구성 미정, push/merge/실기 활성화 없음.
+
+## 2026-10-19 · 3621458a6 · (origin #92 2026-10-16) 스테이션 이동과 지도 카메라 고정 검증 근거
+
+- 변경: 승인 설계와 Task 13에 별도 지도/상대 카메라 역할, 매 영상의 네 독립 landmark 검증, 측정 전체 uncertainty와 재교정 기준을 반영했다. 고정 카메라의 후보를 기존 인증 ingress·위치 원장·CORE 세션에 연결해 작업 사이 relocation과 이동 중 중단을 검증했다.
+- 증거: 3621458a6 원격 anchors-order 245 PASS/0 skip/NEW 0/exit 0, 독립 safety review scoped PASS와 trailer 검사 통과. 초기 camera-bump RED와 시험 모듈명 충돌 후 동일 SHA 재검증 경과는 구현 계획에 남겼다. C:/DevTemp/station-charge/task-13-anchors-order/run-1.txt.
+- gate 변화: 해당 source/SIM 증거 추가. 전체 목표 ACTIVE, 운영 CLI/설치 프로필·실시간 lifespan/장애·실측 광학/BMS/충전기 및 DEVICE/FIELD 미완료. main 착지·push·실기 활성화 없음.
+
+## 2026-10-19 · 0b816554c · (origin #92 2026-10-16) 스테이션 설치 실행과 측정 송출 수명 계약
+
+- 변경: D-774는 기존 D-691 preview 수요를 가장하지 않는 전용 스테이션 측정 프로세스를 정의한다. 설치 프로필의 검증·렌즈 변환·기존 worker 조립과 실제 socket/client 수명을 설계·안내에 반영했다. 승인 JSON과 실제 물리 카메라/광학 수용을 구분하며 Fleet/CORE 실행 권한은 유지한다.
+- 증거: 0b816554c task-14-install-final 원격 전체 overhead·구조/안전 781 PASS/0 skip/NEW 0/exit 0, 독립 safety scoped PASS와 trailer 검사. 초기 크기 실패는 preview/proposal 책임 분리와 ratchet 제거 후 같은 전체 시험군으로 재검증했다. 로그 C:/DevTemp/station-charge/task-14-install-final/run-1.txt.
+- gate 변화: 해당 카메라 설치·실제 host 수명 검증 추가. Fleet/CORE 운영 조립·전체 재시작/장애 matrix·실측 장치 프로필·DEVICE/FIELD는 남아 있으며 전체 목표 ACTIVE다. 중간 후보의 크기 실패를 전체 브랜치 CI 통과로 간주하지 않는다.
+
+## 2026-10-19 · cb43b5da1 · (origin #92 2026-10-16) 충전 앱 조립과 작업 projection 인계 검증
+
+- 변경: Task 15에 기존 연속 시험과 실제 앱 소유 runner 조립의 차이, 두 번째 복귀 실패·정확한 Console projection 정리·경합과 IDLE 이후 재확인을 기록했다. v1.255의 기존 인계 의미를 유지하며 장치 상태나 durable claim을 projection 정리로 바꾸지 않는다. 목표 lease의 canonical import는 기존 ledger holder 이동 후에도 유지된다.
+- 증거: cb43b5da1 원격 관련 Fleet 229 PASS와 별도 CORE 통합 117 PASS, 각 0 skip/NEW 0/exit 0. 독립 safety review와 trailer 검사, root ratchet 감소를 확인했다. 초기 fixture/크기 실패와 최종 재검증 경과를 계획에 남겼다.
+- gate 변화: 해당 software/factory/SIM 증거 추가. 실제 lifespan/재시작 장애 matrix·운영 설정과 실측 source/장치 프로필·DEVICE/FIELD는 미완료이며 목표 ACTIVE다. 전체 CI나 착지 준비 완료로 간주하지 않는다.
+
+## 2026-10-19 · 6da412cb7 · (origin #92 2026-10-16) 충전 lifespan 및 실제 도착 증거 보강
+
+- 변경: Task 16에 SIM 작업 목표 오차 RED/수정, 실제 Fleet lifespan 소유 실행기/dispatcher의 3회 사이클과 motion feed 경합 시 안전 보류 증거를 기록했다. 정상 재실행과 최초 간헐 실패의 해결을 구분했다.
+- 증거: b7860877b 관련 원격 117 PASS, fd97129bb lifespan 1 PASS, 6da412cb7 강제 경합 1 PASS로 각각 0 skip/NEW 0/exit 0. 경합 시 원본 claim과 HOLD를 유지하고 실제 속도 출력·native navigation·adapter 재진입이 없음을 확인했다. 세 실행을 전체 브랜치 CI로 합산하지 않는다.
+- gate 변화: 한 스테이션/로봇의 SIM 및 Fleet lifespan 근거를 보강했다. 최초 간헐 실패 원인·재시작 장애 matrix·운영 설치/실측 source·DEVICE/FIELD는 미완료이며 전체 목표 ACTIVE다.
+- 최종 관련 회귀: fd97129bb task-16-final 전체 6 variant/gateway lease 118 PASS/0 skip/NEW 0/exit 0. 강제 경합의 별도 SHA/시험과 구분하며 최초 간헐 실패의 해결로 기록하지 않는다.
+
+## 2026-10-19 · 49e4cb188 · (origin #92 2026-10-16) 진행 중 충전 수명 종료와 보류 상태 재구성 근거
+
+- 변경: Task 17에 RETURNING/CHARGING/UNDOCKING 실제 출력·계측 경계의 정상 서버 종료와 새 Fleet 구성의 HOLD 수용 기준을 추가했다. phase를 놓쳐 정상 사이클로 시험이 통과하는 경로를 차단했다.
+- 증거: 49e4cb188 관련 원격 3 PASS/0 skip/NEW 0/exit 0. 원본 ID/UNKNOWN claims·정지 출력과 위치·새 runtime 반복 tick·콜백 미호출·장치 명령 미재제출·조정 전 재개 거절을 확인했다. 최초 rearm 성공 기대의 시험 오류와 수정한 기대값을 기록했다. scoped 독립 검토를 거쳤다.
+- gate 변화: graceful Fleet lifespan 재구성 증거를 보강했으며 강제 종료·CORE boot 변경·이전 route 재개·운영 CLI/source 조립·DEVICE/FIELD로 확대하지 않는다. 전체 목표 ACTIVE다.
+
+## 2026-10-19 · 518f2eeec · (origin #92 2026-10-16) 원본 충전 계측 입력 계약과 수명 검증
+
+- 변경: D-776과 Task 18에 승인 local fact IPC·원본 계측/monotonic 수명·durable replay·재시작 기준을 정리했다. source 파일은 명령·작업 선택·예산을 받지 않고 후속 계산은 Fleet 소유로 유지한다. 설치 계약과 미연결 범위를 reference에 기록했다.
+- 증거: 518f2eeec 관련 원격 151 PASS/0 skip/NEW 0/exit 0. source RED와 독립 검토가 발견한 clock/battery lease 반례·수정을 기록했다. ADR Log의 UTF-8 BOM/CRLF와 peer D-775 reservation gap을 보존했다.
+- gate 변화: 원본 source 경계의 software 검증이며 실제 운영 CLI/source→예산/factory 조립·장치 프로필/정밀도 수용을 완료한 근거는 아니다. 전체 목표 ACTIVE다.
+
+
+## 2026-10-19 · bbb785a31 · (origin #92 2026-10-17) charge selection evidence and hardware readiness limits
+- 변경: Task 18에 실제 queue 선택 검증과 다음 비용 승인 조건을 기록했다. nominal ETA/차로 길이를 native navigate 실행 상한으로 간주하지 않으며 World 원본 boot/odom 결속과 집행되는 실행 범위를 요구한다. 실기 우선순위와 현재 접속 미확인 상태를 기록했다.
+- 증거: 선택/이탈/scheduler/policy·구조/안전 원격 129 PASS/0 skip/NEW 0, 독립 scoped review. Fleet PC 읽기 진단은 등록 기록을 확인했지만 실제 로봇 release/장치 상태는 확인하지 못했다.
+- gate 변화: 없음. 설치 조립·실기 수용·전체 목표는 미완료다.
+
+## 2026-10-19 · 25155a7fb · (origin #92 2026-10-17) existing site hardware and physical feedback
+- 변경: 기존 Fleet PC의 OpenRB 두 대·상부/전면 카메라 서비스·지도 version 5와 과거 위치를 확인했다. 두 JPEG를 실제 수신했고 기존 검증 follower observer/고정 SDK로 2초 19 sample exit 0, 여섯 모터 torque 0/error 0의 현재 위치를 읽었다. 이전 이동 로봇 주소 실패를 전체 장치 미연결로 확대하지 않도록 계획에 기록했다.
+- 증거: docs/validation/station-existing-hardware-2026-10-17/result.md의 도구 hash·고정 SDK revision·관측 범위. 최초 SDK 환경 누락은 포트 열기 전 0 sample 실패였고 기존 overlay를 subprocess에만 적용했다. 새 설치·설정/torque/목표 쓰기·서비스 재시작 없음.
+- gate 변화: bounded 물리 연결/피드백 증거 추가. 상시 controller·자동 접안/충전·기구/광학 수용은 미완료다. 이동 로봇 저장 위치는 약 4일 전, 상부 영상은 과소노출이었다.- 추가 확인: 두 이동 로봇의 정확한 등록 호스트만 tailnet 상태에서 대조했으며 둘 다 Online=false, 해당 SSH 연결 불가였다. 암·카메라 접속 결과와 구분한다.
+- 문서 검증: 25155a7fb 원격 document placement/folder layout 18 PASS/0 skip/NEW 0/exit 0. harness generate/lint 0 errors, 기존 경고 32개, git diff --check 통과.
+
+## 2026-10-19 · 1eeaeb653 · (origin #92 2026-10-17) scoped World input proof
+- 변경: 기존 위치 추적기를 재사용하는 내부 source scope와 남은 native identity 검증을 source 계약 안내/실행 계획에 기록했다. 선언 ticket을 실제 boot 증거나 이동 허가로 취급하지 않는다.
+- 증거: 원격 265 PASS/0 skip/NEW 0, 독립 safety review. 최초 구조 검사 1 FAIL은 모듈 전체 이동과 크기 한도 하향 후 같은 관련 시험군에 기존 경계/공유 읽기 회귀를 추가해 재검증했다.
+- gate 변화: 전체 운영·실기 수용은 미완료이며 기존 현장 카메라/arm 연결 증거와 분리한다.
+
+## 2026-10-19 · d89199482 · (origin #92 2026-10-17) 충전 운행 한계 계산과 기존 현장 상태 재관측
+
+- 변경: 전체 충전 운행 한계 설계와 구현 순서를 기록하고 기존 command holder의 private 계산을 추가했다. 시간×검증된 최대 물리 속도/각속도 상한은 표본 사이 왕복·완전 회전·대기를 포함한다. 원본 위치/clock/gap과 정지 tail·watchdog·전체 부하·공간/overflow를 검사한다. 실제 출력/부트별 parent 원장/native/Fleet 조립은 후속 단계다.
+- 증거: 새 모듈 부재 RED 24건 후 source 원격 159 PASS/0 skip/1 FAIL. 실패한 과거 safety 예외 SHA ancestry 검사는 clean main ea3f8c868 원격에서도 동일하게 재현했다(known_failures NEW 1, main 대비 추가 실패 0). 독립 scoped 안전 검토 PASS와 source trailer 검사 통과. 합성 profile 계산 검증이며 실측 장치 수용은 아니다.
+- 현장: 기존 Fleet PC SSH·Fleet/Vision/proxy와 두 카메라 서비스·JPEG200을 다시 확인했다. 상부 UNDEREXPOSED/전면 NORMAL, 암 viewer는 과거 19 sample 이후 stale, 관제 위치는 약 4일 전·두 등록 needs_new_code다. 사용자는 현장 담당자가 나중에 확인 가능하다고 답했다. 새 frozen 기록 docs/validation/station-existing-hardware-2026-10-17b/result.md에 원본 시각과 범위를 남겼다. 장치/서비스/등록/torque/이동 변경 없음.
+- gate 변화: 없음. 자동 접안·정지·착좌·충전/재투입과 실기 정밀도/DEVICE/FIELD는 계속 목표 ACTIVE다.
+
+## 2026-10-19 · 194826e8a · (origin #92 2026-10-17) boot 실행 소비와 native phase 전진 경계
+
+- 변경: 공통 충전 운행 한계 계획에 private 실행 원장의 source와 검증을 반영했다. parent/native run ID는 부트 전체에 소모 보존하고, 현재 붙은 exact run만 phase generation을 전진할 수 있다. 과거 cleanup은 현재 parent를 바꾸지 않으며 최초 window·adoption deadline을 재설정하지 않는다.
+- 증거: 원격 RED 24 FAIL/NEW 24 후 execution-ledger-green 268 PASS/skip 0/NEW 0. 독립 scoped 안전 검토와 D-430 source trailer 검사 통과. 테스트의 identity/profile은 합성·선언 값이며 실제 native/물리 정지 수용은 아니다.
+- gate 변화: 없음. Event.set의 내부 잠금과 기존 None/manual clear의 경계 밖 변경을 writer 연결 전 해결할 구체 조건으로 기록했다. runtime 단일 설치·비차단 출력 차단·actual native/Fleet/cost/factory·실기 수용과 전체 목표는 계속 남아 있다. 현장 담당자의 확인은 아직 대기이며 장비 재설정/모터 활성화/이동은 수행하지 않았다.
+
+## 2026-10-19 · f3503ce86 · (origin #92 2026-10-17) 최종 출력 준비를 위한 입력 clear 경계 수정
+
+- 변경: NAV/DOCK None·manual/watchdog/input epoch와 policy/E-stop 전체 입력 clear를 기존 mode lock으로 직렬화했다. native receipt 정리/이벤트를 outer mode lock 밖으로 옮기고 캡처한 native session만 종료한다. 늦은 취소가 새 수동 명령을 지우지 않는다. 공개 API/capability와 실제 writer는 바꾸지 않았다.
+- 증거: 유효한 RED 6건과 교정한 정책 clear baseline RED 1건 후, source ce12776c6 +시험 fixture 교정 f3503ce86 원격 관련 251 PASS/skip 0/NEW 0. 정책 case의 최초 RED는 잘못된 MANUAL→NAV 준비 실패였으며 별도 672e8bf212에서 정상 IDLE 인계와 동일 수정 전 source로 실제 (0.1,0.0) 대 ZERO 실패를 확인했다. 독립 scoped 안전 검토와 source trailer 검사 통과.
+- gate 변화: 없음. 새 budget의 sealed selection/비차단 STOP store/final fence와 native/Fleet/cost 조립·장치 수용은 아직 없다. 물리 정지·접안 정밀도·실기 활성화의 완료 증거가 아니며 전체 목표는 ACTIVE다. 현장 확인은 여전히 담당자 확인 대기다.
+
+## 2026-10-19 · 7d5eadfd3 · (origin #92 2026-10-17) 실제 출력 잠금 밖으로 관측 이동
+
+- 변경: 같은 ROS publisher를 유지하면서 raw 발행과 D-422 관측/로그를 분리했다. 실제 성공한 payload와 ZERO fallback만 Port·trial 잠금 해제 후 관측하며 관측 오류로 비제로를 재전송하지 않는다. 계획에 설치 전 최초 cycle 경계·봉인 receipt·경합 시험의 미완료 조건을 기록했다.
+- 증거: a93774889 RED 16 NEW 후 source 1fc85c6f9/fixture 7d5eadfd3의 원격 관련 320 PASS/0 skip/NEW 0. 첫 잘못된 시험 경로와 기존 fixture의 1 FAIL은 별도 기록했고 완료 근거로 사용하지 않는다. 독립 scoped source·fixture 안전 검토 PASS.
+- gate 변화: 전체 목표 ACTIVE. 최종 budget fence·native/Fleet 조립·장치 수용은 미완료이며 실제 카메라/로봇/충전기의 현장 점검은 추후 담당자 확인을 기다린다. 실기 배포·이동·torque 활성화는 수행하지 않았다.
+
+## 2026-10-19 · a9efc3800 · (origin #92 2026-10-17) 실행 예산에 묶인 최종 writer 검증 기록
+
+- 변경: private 설치 전 최초 cycle 경계·원래 parent/child/input/mode 봉인·최종 동일 시각·같은 Port 제출과 비차단 STOP 요청/commit을 설계에 반영했다. 원래 source capture 구간을 보존하고 관측 후 최신 budget을 확인한다. 실제 native 조립·운영 capability와 장치 수용은 미완료로 유지했다.
+- 증거: initial RED 19건, 독립 검토의 세 blocker를 별도 4aec2deb43에서 19 PASS/3 FAIL, 추가 fault/Budget 상태를 a3411b42ee에서 29 PASS/4 FAIL로 재현했다. 수정 a9efc3800의 결합 원격 572 PASS/0 skip/NEW 0, scoped source/회귀 review와 source trailer 검사 PASS. 두 defective witness는 소유 test ref이며 accepted source가 아니다.
+- gate 변화: 전체 충전 목표 ACTIVE. private host 검증으로 native run admission·실측 전력/BMS·물리 정지/접안 정밀도·runtime factory 설치나 DEVICE/FIELD 완료를 주장하지 않는다. 장비 재설정·서비스 변경·모터 활성화·실제 이동은 수행하지 않았다.
+
+## 2026-10-19 · 4a82303e4 · (origin #92 2026-10-17) 최종 제한의 복사 handle 회귀와 검증 범위 정정
+
+- 변경: 원장이 거절하기 전에 wrapper가 복사 parent의 공유 STOP flag를 변경하는 결함을 exact current-parent 검사로 막았다. 작업 계획에 추가 RED와 최신 source 검증을 기록하고 초기 primitive/입력 clear 단계의 미완료 문구를 당시 scope로 명시했다.
+- 증거: 복사 handle의 7b857ab56 RED 4 FAIL/NEW 4 후 수정 4a82303e4 결합 원격 576 PASS/0 skip/NEW 0. 독립 scoped exact diff review PASS. 초기 a9efc3800 572 PASS와 검증 범위를 구분한다.
+- gate 변화: 전체 목표 ACTIVE. native run/factory/실측 profile·물리 정지·정밀 접안 수용은 여전히 미완료다. 현재 host 시험은 실제 ROS 실행·현장 자동 충전 활성화의 완료 근거가 아니다.
+
+## 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 정상 갱신 예산 보존과 native 연결의 다음 조건
+
+- 변경: 정상 context 교체와 fault의 구분, 실제 Drive manager에 주입할 binding·Dock→Nav 설치 순서·cancel/reservation 경계, 현장 담당자의 이후 카메라 확인 일정을 실행 계획에 반영했다.
+- 증거: RED 네 건, 첫 확장 702 PASS/2 FAIL의 guard 누락, 수정 후 관련 원격 745 PASS/0 skip/NEW 0/exit 0을 구분했다. actual writer 시험의 선언 generation을 실제 native lease 증거로 확장하지 않는다.
+- gate 변화: 전체 목표는 ACTIVE. 운영 native/runtime·에너지 factory·실측 충전/접안과 DEVICE/FIELD는 계속 남아 있다.
+
+## 2026-10-19 · cfa8ab1ad · (origin #92 2026-10-17) private native 연결과 남은 운영 통합
+
+- 변경: 실제 Nav/Dock owner의 1회 ticket·변경 전 pause·실제 receipt 후 재결속과 첫 입력 WAIT를 설계/계획에 기록했다. safety module과 resolving installer anchor를 등록했다. source Cap은 Nav 593/600, Dock 771/771이며 한도를 높이지 않았다.
+- 증거: 초기 미구현 RED와 별도 defective witness 두 개를 accepted source에서 구분했다. 관련 원격 363 PASS/0 skip/NEW 0/exit 0, 독립 scoped 검토 PASS다. manifest 변경으로 selector는 FULL이다. lab mapped 영향 검사는 7065 PASS/217 SKIP/1 FAIL/NEW 1로 종료했다. 실패는 기존 handover의 mode.changed 식별자 두 개가 이벤트 표에 빠진 문서 누락이며 API-002 Corrective로 수정한다. FULL CI 통과를 주장하지 않는다.
+- gate 변화: 전체 목표 ACTIVE. 원본 odometry/clock·현재 map/에너지 proof·StationDockingOwner/HTTP ticket·runtime factory와 실제 장치/현장 수용은 계속 남아 있다.
+
+## 2026-10-19 · 605ba2c17 · (origin #92 2026-10-17) 이벤트 문서 수정과 이안 회귀 재검증
+
+- 변경: API-002 Corrective로 기존 mode.changed의 선택 boot_id/run_id를 문서화하고 v1.255를 유지했다. 실제 handover 중복 호출은 정확한 이벤트 하나만 발행함을 기존 시험에서 확인한다.
+- 증거: 모델 PC 원격 native-owner-catalogue-green은 256 PASS/0 SKIP/NEW 0/exit 0이다. native binding 24건, handover·event catalogue·protocol schema·harness/network 계약을 포함한다. c280d6767의 추가 이안 회귀도 이 revision에서 처음 검증됐다. 기존 7065 PASS/217 SKIP/1 FAIL 확장 기록을 전체 재실행·FULL CI 통과로 바꾸지 않는다. 독립 scoped 검토 PASS, local lint 0 errors/33 warnings다.
+- gate 변화: 전체 목표 ACTIVE. 주입한 접안 완료는 물리 착좌·충전·출발 증거가 아니며 현장 카메라 확인은 사용자 답변대로 이후 일정이다.
+
+## 2026-10-19 · a67abda37 · (origin #92 2026-10-17) 원본 거리계와 실행 예산 연결
+
+- 변경: 변환 전 exact parent 캡처, 같은 Ledger clock의 읽기 구간과 StateManager의 atomic wall/epoch receipt를 실제 Budget 관측에 연결했다. 기존 wall 반환과 legacy observer 순서는 유지한다. runtime factory 활성화는 하지 않았다.
+- 증거: 미구현 RED 17 FAIL/NEW 17, 최초 source 351 PASS/1 FAIL(888→887 크기 기록 누락), 교정 후 관련 원격 352 PASS/0 SKIP/NEW 0/exit 0이다. 새 source 회귀 17건, 독립 scoped 검토 PASS, D-430·size-range 각 2 commits PASS다. 최초 source는 별도 owned test ref로 보존했다. FULL selector의 lab mapped 51대상은 별도 실행 중이며 FULL CI 통과를 주장하지 않는다.
+- gate 변화: 전체 목표 ACTIVE. 운영 map/에너지·HTTP ticket·factory와 실제 clock/profile/착좌/충전/제동 및 현장 수용은 남아 있다.
+
+## 2026-10-19 · 2b1991f85 · (origin #92 2026-10-17) 실제 정지 관측의 epoch·수명 귀속
+
+- 변경: StationMotionFeed를 같은 odom 쓰기의 epoch·원래 feed·읽기 하한에 결속했다. 최종 clock bracket까지 확인하고 관측한 만료는 새 원본 전까지 영구 폐기한다. 기존 final writer와 Budget parent를 유지한다. D-184 누락 다섯 경로는 실제 CORE 통합 사유를 검토해 정확히 등록했다.
+- 증거: 이전 a67 lab mapped 7367 PASS/217 SKIP/1 FAIL/NEW 1은 D-184 등록 누락이다. 새 source RED 12 PASS/17 FAIL, clock 회귀 추가 RED 12 PASS/21 FAIL을 구분한다. 첫 수정 515 PASS/1 FAIL/NEW 1은 연속 SIM의 동명 test helper import 충돌이며 49564de0e가 정확한 CORE namespace로 수정했다. 같은 23대상 최종 원격 516 PASS/0 SKIP/NEW 0/exit 0이다. 신규 motion 21건과 기존 12건 및 continuous JPEG/HTTP SIM 충전 세션 3개·이안/작업 3회·복귀/재충전 2회와 relocation을 포함한다. SIM contact/BMS·odom·clearance·energy는 합성이다. 독립 scoped source·import 검토 PASS, 네 commit의 D-430·size-range PASS다.
+- gate 변화: 전체 목표 ACTIVE. FULL CI·물리 정지·clock/profile·접안/충전 수용을 host 수치로 대체하지 않는다.
+
+## 2026-10-19 · 165c317e5 · (origin #92 2026-10-17) 초기 admission용 원본 관측 보관
+
+- 변경: parent 이전의 실제 odometry receipt를 보관하고 같은 state 쓰기와 원래 수명을 검증한다. 설계/실행 계획에 map 전체 digest·활성 generation, 계측 energy의 parent 간 소비, HTTP native ticket와 폐쇄 factory 순서를 반영했다. 실행 계획의 오래된 1단계 표기를 실제 3단계로 고쳤다.
+- 증거: RED 1 PASS/17 ERROR와 추가 RED 1 PASS/21 ERROR는 absent API setup 차단이다. 최초 GREEN 요청은 시험 경로 오기로 수집 전 종료했다. 경로 수정 후 source 165c317e5의 538 PASS/2 FAIL은 신규 clock fixture 재조회 오류였으며 test-only bd3aebe7f 수정 뒤 동일 24대상은 540 PASS/0 SKIP/NEW 0/exit 0이다. 신규 source 21건과 기존 native/writer·station motion/sensor·구조/안전/harness를 포함한다. source·fixture 독립 scoped 검토 PASS, e704c42dd 이후 네 commit의 D-430·size-range PASS다.
+- gate 변화: 전체 목표 ACTIVE. FULL CI·이번 continuous SIM·실제 map/energy admission·운영 factory 활성화·전체 3회 복귀·DEVICE/FIELD는 이 host 결과로 대체하지 않는다. 현장 담당자는 이후 카메라 가림/방향/조명과 최신 이동 로봇 위치를 확인할 수 있다고 응답했다.
+
+## 2026-10-19 · 78b095ec8 · (origin #92 2026-10-17) 원본 지도 관측과 채택 확인의 분리
+
+- 변경: 실제 grid/lifecycle callback에서 exact parent STOP과 full map source evidence를 연결했다. 설계/계획에 binary digest 형식·최대 cells·pending/hash 경합·static 시간 의미와 동일 수신도 STOP하는 진행성 한계를 기록했다. CORE local generation을 Nav2 채택 ACK로 올리지 않는다.
+- 증거: d5d3d4ebc 미구현 RED 1 PASS/29 FAIL/8 ERROR/NEW 37은 module 부재다. source 78b095ec8의 관련 원격 32대상은 651 PASS/0 SKIP/NEW 0/exit 0이다. 신규 지도 37건과 이전 source/native/writer·지도/readiness·CORE·구조/소유권/안전/harness를 포함한다. 독립 scoped source 검토 PASS, ea1fbfde4 이후 두 commit의 D-430·size-range PASS다. source 대조상 map server GetMap만으로 consumer 채택을 증명하지 않는다.
+- gate 변화: 전체 목표 ACTIVE. selector FULL의 CI 전체·이번 continuous SIM·실제 consumer map ACK·승인 변환/energy·HTTP/factory·전체 3회 복귀·DEVICE/FIELD는 미완료다. 기존 현장 확인은 담당자가 이후 진행한다.
+
+## 2026-10-19 · d3c1017f8 · (origin #92 2026-10-17) 복귀 좌표의 원본 TF 수명
+
+- 변경: cached TF 조회 성공을 현재 위치의 새 수명으로 취급하던 경로를 원본 시각과 전체 read/잠금 대기로 제한했다. 설계와 실행 계획에 동일 header 비갱신, 시계 오류, map invalidation, state freshness와 후속 admission의 검증 범위를 기록했다. native 채택 설계 R1은 REVISE 상태로 남겼다.
+- 증거: source 관련 원격 30대상 705 PASS/1 FAIL/0 SKIP/NEW 1은 기존 inline 갱신 AST guard 한 건이 실패했다. 테스트만 보정한 d261d4698의 관련 5대상은 98 PASS/0 SKIP/NEW 0이다. [상세 기록](validation/station-map-pose-freshness-2026-10-17/result.md)은 setup RED와 실제 실패, 두 revision과 미실행 FULL CI를 구분한다. 독립 source/test scoped PASS이며 D430·크기 검사를 수행했다.
+- gate 변화: 전체 목표 ACTIVE다. TF header는 AMCL 측정/수렴·native 지도 채택·진행 중 명령의 물리 정지 증거가 아니다. 원본 energy·운영 HTTP/factory·전체 3회 충전 복귀·스테이션 이동·DEVICE/FIELD는 남아 있다. 현장 담당자의 이후 확인을 기다리는 동안 장치 재탐색·이동·토크·재시작·배포·landing·push를 하지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) D-783 native 지도 채택 설계와 내부 계약 RED
+
+- 변경: 기존 구독을 나중에 감싸는 R1을 폐기하고 초기 subscription 소유·실제 native 처리/적용·private callback group·고정 parent tuple과 유한 evidence를 승인 계획에 명시했다. 같은 SHA interfaces 선행 생성과 실패 artifact 보존을 포함한다.
+- 증거: 독립 architecture/critic 3라운드에서 R3 모두 APPROVE다. 이는 설계 승인이고 source/native 실행 결과가 아니다. 내부 service surface RED 3건은 아직 실행 전이다.
+- gate 변화: 없음. D-783과 module plan 연결을 추가했으며 native 채택 연결·원본 energy·HTTP/factory·세 번의 전체 주기와 DEVICE/FIELD를 계속 요구한다. 전체 목표 ACTIVE다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) native 지도 readback wire 생성 검증
+
+- 변경: D-783 내부 ROS service 정의와 실제 생성·C++/Python 직렬화 검증 경로를 추가하고 [revision별 증거](validation/station-native-map-wire-2026-10-17/result.md)를 기록했다.
+- 증거: surface RED 3 PASS/3 FAIL 뒤 f6ae71b14 GREEN 6 PASS/0 SKIP/NEW 0. 최초 remote_sim은 generated metadata 예상 표기에서 실패했다. fixture-only 수정 8058c3676은 같은 SHA interfaces 생성/provenance·Python 검사와 실제 C++ compile/link/CTest 1 PASS/0 SKIP, exit 0이다. 독립 scoped source/test review와 D430/크기 검사를 수행했다.
+- gate 변화: 전체 목표 ACTIVE. 실제 native producer/admission·canonical helper·원본 energy·운영 HTTP/factory·전체 3회 충전 복귀/스테이션 이동·DEVICE/FIELD는 남아 있다. 현장 점검은 나중에 가능한 것으로 유지하며 장치 재탐색·이동·토크·재시작·배포·landing·push를 하지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 AMCL의 원본 지도 채택 native 검증
+
+- 변경: D-783의 원본 grid helper와 최초 subscription을 소유하는 standalone AMCL opt-in/readback을 구현했다. config 정밀도와 cleanup callback barrier의 독립 검토 지적을 반영했고 실제 SDK 탐색·Linux 원본 pin 및 fixture context 오류를 수정했다. [상세 증거](validation/station-native-map-amcl-2026-10-17/result.md)는 실패와 revision을 보존한다.
+- 증거: 0034827d2 승인 AI 시험 PC에서 같은 SHA interfaces/native navigation 생성·compile/link, 실제 gtest16 PASS/0 FAIL/0 SKIP 및 설치 standalone 초기 lifecycle graph/정상 종료를 확인했다. 별도 source guard 207 PASS/1 FAIL/0 SKIP은 이전 branch에서도 재현되는 safety exception ancestry 한 건이며 main 비교는 PASS다. FULL CI를 대체하지 않는다.
+- gate 변화: 전체 목표 ACTIVE. 실제 전역 StaticLayer/CORE final writer·원본 energy/승인 좌표/운영 HTTP/factory·전체 3회 충전 복귀/스테이션 이동·DEVICE/FIELD가 남아 있다. 현장 장치 재탐색·이동·토크·재시작·배포·landing·push는 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 전역 StaticLayer의 원본 full application native 검증
+
+- 변경: D-783의 첫 구독부터 원본을 소유하는 StaticLayer opt-in과 적용 확인을 구현하고, 부분 구성 정리·TF listener 동기화의 실패와 bounded thread 진단을 보존했다. [검증 기록](validation/station-native-map-static-2026-10-17/result.md)은 실제 실행과 남은 운영/장치 수용을 구분한다.
+- 증거: 83db3b1da4 승인 AI 시험 PC에서 같은 SHA interfaces/navigation native compile/link와 실제 gtest30 PASS/0 FAIL/0 SKIP, 설치 AMCL 초기 graph/정상 종료 PASS다. 독립 source/fixture 검토를 수행했다. 별도 source guard207 PASS/1 FAIL/0 SKIP은 이전 branch에서도 재현되는 exception ancestry이며 FULL CI가 남아 있다.
+- gate 변화: 전체 목표 ACTIVE. CORE immutable parent/final writer·운영 실패 정리·승인 map/원본 energy/HTTP factory·세 번의 전체 충전 복귀/재투입·relocation·DEVICE/FIELD는 남아 있다. 현장 장치 재탐색·이동·토크·서비스 재시작·배포·landing·push는 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) native map evidence owner와 generated ROS 응답 변환
+
+- 변경: [검증 기록](validation/station-native-map-owner-2026-10-17/result.md)에 객체 identity·불변 native tuple·finite sample·nonce/provider 수명, actual generated response 소비와 남은 final writer 연결을 기록했다.
+- 증거: a90891d712 소유자/ownership/safety/structure110 PASS/0 SKIP/NEW0, production 동일64accf7fe9 actual interfaces/wire/generated ndarray→domain 변환 exit0이다. source 독립 검토의 시간·타입·ticket/소유 위치 지적을 수정했고 구조 small 표시만 졸업했다.
+- gate 변화: 전체 목표 ACTIVE. 실제 ROS bridge와 required/CLOSED native admission/final writer·전체 충전 주기·운영/실기 수용은 아직 남아 있으며 장치 동작·배포·landing·push는 하지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 native map 비동기 DDS 검증
+
+- 변경: [CORE clients 검증](validation/station-native-map-clients-2026-10-17/result.md)에 실제 typed DDS transport·owner 종료·C6 의존성 수정의 revision과 증거를 기록했다.
+- 증거: 2fd55d947b 실제 DDS PASS/exit0, cd53393a09 원격9대상 198PASS/0FAIL/0SKIP/NEW0. 서버 값/clock/parent는 합성이고 실제 native ACK·최종 writer·장치 수용은 아니다.
+- gate 변화: 없음. full lifecycle·required/CLOSED factory/Fence·장시간 용량과 FIELD는 남아 있다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) native map와 실제 sole writer 검증
+
+- 변경: [REQUIRED/CLOSED 검증](validation/station-native-map-writer-2026-10-17/result.md)에 실제 native manager/selection/final submit 연결과 source/retained deadline의 거절 증거를 기록했다.
+- 증거: 1144e9e4e0 승인 원격13대상296PASS/0FAIL/0SKIP/NEW0. readback/clock/pose/profile은 합성이며 actual native ACK/factory/physical stop 수용은 아니다.
+- gate 변화: 없음. 전체 스테이션 주기와 현장 수용은 계속 ACTIVE다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) ongoing localization frame 상실 정지 검증
+
+- 변경: [검증 기록](validation/station-localization-frame-loss-2026-10-17/result.md)에 LOCALIZED/map 유효 조건의 상실과 실제 진행 운행/native parent/다음 writer 출력 정지 증거를 남겼다.
+- 증거: fa0279c11c 승인 원격14대상387PASS/0FAIL/0SKIP/NEW0. TF/위치/readback은 합성이며 물리 정지·장치 수용은 아니다.
+- gate 변화: 없음. full station lifecycle과 운영 factory·원본 energy·장시간 용량·FIELD는 남아 있다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy admission counterexample
+
+- 변경: Original pack energy R2 has independent architecture/critic APPROVE (two rounds). Separate source facts and CORE publication; accepted immutable profile owns reserve J; ordered low/fault publication permanently stops the exact parent. Plan only, no energy implementation/field acceptance yet.
+- 증거: R2 plan reviews complete; no energy tests have executed.
+- gate 변화: none. Full station goal remains ACTIVE.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) new energy log formatting correction
+
+- 변경: Correct only the new entries created in bab06a2c34/4449dc4772/4be5552ec7: PowerShell stdin encoding replaced separators and required field labels were missing. Earlier session records and verification facts are unchanged.
+- 증거: Initial lint caught 4 malformed headings; corrected headings then exposed missing labels and the HEAD append-only comparison. This explicit format repair is recorded, with post-commit lint still required.
+- gate 변화: None. No source implementation, test execution or device acceptance is claimed.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original energy remote verification not run
+
+- 변경: R2 energy plan and test-only commits are retained for continued execution. No product energy implementation or runtime/device change was made.
+- 증거: remote_pytest on bab06a2c34, test_native_execution_binding.py, approved first two test hosts, completed exit 1 after the default 600 s no-host retry. Tests did NOT run: no collection, behavioral RED, PASS count or run-1.txt; known_failures comparison is unavailable. Latest pure-source and slot-loss tests also remain unexecuted. Local committed-tree lint passed with 0 errors/33 warnings after the explicit journal-format repair; AST/diff checks pass.
+- gate 변화: None. Full station goal remains ACTIVE; this is the first consecutive test-infrastructure interruption after prior source progress. No local test fallback, landing, push or hardware activation.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy restriction implementation
+
+- 변경: Record user steering to exclude simulation while continuing reversible non-simulation implementation. Existing R2 invariants remain; actual robot precision, hardware source, seating/charge completion and field cycles remain separate acceptance.
+- 증거: Official unchanged runner was permitted to consider all three configured pytest hosts under D-568 Fleet reserve/CPU/memory limits; all were unreachable so far. Implemented against prewritten tests with execution explicitly pending, departing from skill fail-first execution ordering under the latest user continuation request; no TDD compliance/RED/GREEN claimed. Final independent scoped static review PASS covers source, clock binding/reversal, publication and admission/final writer; it is not execution evidence.
+- gate 변화: None. No simulation executed or accepted; no deployment, landing or push.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) attended station practice preparation
+
+- 변경: Add deployment/station-charge-attended-runbook.md for one-station/one-mobile non-simulator preparation, actual evidence checklist, seating/measured-stop handover, charge termination, new-parent redeployment and relocation/three physical cycles. It links existing SSH/camera/attended procedures and preserves deferred onsite confirmation.
+- 증거: Cross-checked current station contract fields, SeatingGate/ChargeCompletionTracker, private energy source and still-closed hardware factory. No onsite action or hardware acceptance performed; committed source ba4868ef59 has scoped static review and local guards only.
+- gate 변화: None. New energy regression remains pending; source host attempt still in approved no-host retry.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
+
+- 변경: Preserve source commits ba4868ef59 (energy restriction) and e5f51f5c7 (internal completion naming) with independent scoped static safety reviews, plus attended runbook and validation/station-pack-energy-source-2026-10-17/result.md.
+- 증거: Both official default-three-host pytest requests ended exit1 after600s with no hosts and no tests/report/RED/GREEN. Source request covered ba4868ef59 only; latest naming-only source also remains unexecuted. Changed Python AST/doc links/diff pass; harness lint0errors33warnings; source safety_review/size_range checked both commits successfully. FULL CI remains required and unrun. No simulation, local pytest, deployment, landing or push.
+- gate 변화: None. Actual vendor energy port, hardware factory/Fleet HTTP closure, source-rate capacity/long-run map limits and deferred physical three-cycle/relocation acceptance remain.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) station hardware integration design R2
+
+- 변경: 사용자 요청에 따라 robotics-design-patterns·ralplan·계약 경계 검토를 적용해 plans/2026-10-17-station-hardware-integration-design.md를 작성했다. 기존 FSM·Fleet 원장·CORE 단일 Base writer·독립 OMX owner를 유지하고 실제 계측 포트, 타이머 전 조립, verified native map 기동, HTTP/native 결합과 OMX 인계/출발 예약을 G0–G6로 나눴다.
+- 증거: 기준 소스 ee0153823ab8b4b464cb2ceb33929af71da642ac. 독립 architecture/critic 2회 검토 후 양쪽 R2 APPROVE. 동결 R2 SHA256 3BD066412EC923C70B4D62C8158A1E6359B57FBF059239FC9A211A4219128FEF. 문서 상대 링크 4개 존재 확인. 이번 작업은 계획 검토이며 코드 변경·시험 실행·시뮬레이션·장치 접근·배포·push는 수행하지 않았다.
+- gate 변화: 없음. 기존 승인 범위의 소스 구현에 사용할 계획이며 하드웨어 활성화 완료가 아니다. G0 회귀/FULL CI, 실제 장치·교정·운영 용량, 실물 3회 주기·위치 변경·지속 운행 수용은 미완료다. 현장 확인은 이후 가능 시점으로 유지한다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) station operating policy design review
+
+- 변경: 기존 실기 결합 R2를 유지하고 plans/2026-10-17-station-operating-policy-design.md에 건강도 자동 운영 capability, 비용/히스테리시스, 정상 충전 종료와 전기 분리, 좌표 후보 합의, 장애 복구/부하와 P1–P5 수용 기준을 보완했다. 기존 순수 정책의 SOH 결측 허용·시간 fallback을 이번 원본 Wh/건강도 운영의 완료 근거와 구분했다.
+- 증거: 기준 ee0153823ab8b4b464cb2ceb33929af71da642ac, 동결 R1 SHA256 E85288A018BF3FBB93D60E9B2AACB3A87C117AE40EA960831EEB42EF28A043EF. 독립 architecture/critic 1회 검토 양쪽 APPROVE, 필수 수정 없음. 구현 수용 시 SOH 값과 품질/신선도 구분, Fleet/CORE reserve 경계·중복 공제 검증, 취소로 소모된 parent 재사용 금지, 위치 예약 무효화와 물리 점유 claim 해제 구분을 유지한다. 상대 링크 존재와 diff 형식을 확인했다. 제품 코드·회귀 시험·장치 접근·시뮬레이션·배포·push 없음.
+- gate 변화: 없음. 기존 승인 범위의 단계별 구현에 사용할 설계 보완이며 실제 장비/교정·회귀/FULL CI·3회 물리 주기/위치 변경/지속 운행 수용은 미완료다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) measured charge admission counterexamples
+
+- 변경: 즉시 구현 요청에 따라 실기 결합/운영 보완 설계를 유지하고, Fleet 실제 bootstrap의 실측 건강도 정책 요구·source/capacity 고정·SOH/Wh 결측 거절·최종 dispatch 재검사 반례를 먼저 추가했다. 기존 보수적 정책의 별도 사용은 유지하는 시험을 포함한다.
+- 증거: test_charge_measured_admission.py 작성, 제품 코드 변경 전 원격 시험 요청용 커밋. 시험 미실행이며 RED/GREEN·장치 활성화는 주장하지 않는다.
+- gate 변화: 없음. 기존 전체 목표와 현장 확인 연기를 유지한다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) measured charge admission verified
+
+- 변경: 실측 건강도 P1 정책과 실제 Fleet bootstrap 경계를 구현한 57a136d87, 원본 시계 identity를 보존하는 시험 fixture 수정 65a26cbd61을 기록한다. 현장 runbook과 validation/station-measured-health-2026-10-17/result.md에 현재 근거·미완료 항목을 반영했다.
+- 증거: 새 반례 23 FAIL 이후 Fleet 112 PASS/NEW 0. 에너지/native 회귀의 시계 fixture 2 FAIL을 원인 확인 후 시험만 수정했고 최종 합동 22파일 696 PASS/0 skip/NEW 0/exit 0을 공식 원격 모델 PC에서 확인했다. 제품 독립 안전/최종 code 검토와 시험 diff 검토 PASS, scoped safety/size 3커밋 통과. 최초 GREEN 파일명 오류 exit4는 실행 근거에서 제외했다.
+- gate 변화: 해당 CPU 회귀 근거 확보. FULL CI·실제 vendor 계측·CORE/native/암 기동 연결·지속 운행 용량·장치/현장 수용은 미완료다. 시뮬레이션·장치 변경·배포·merge/push는 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) station deployment main integration
+
+- 변경: 배포 진행 요청에 따라 main 1280232165bb926506a74e797ca1c3f6de3a1cac를 작업 브랜치에 통합했다. station/charge_session과 arm/zone 원장 자원을 함께 유지하고 tracking 이동·측정 교정과 station preview 분리를 결합했다. 기존 API v1.255~258의 내용/기록과 최신 pin을 유지했다. 실제 존재하게 된 ADR gap 11개를 제거하고 크기 ratchet은 실제 감소값으로 낮췄다.
+- 증거: 원격 696 PASS 이후의 별도 통합 변경이다. source AST·중복 holder 검사·독립 scoped 안전 검토 PASS, harness lint 0 errors/33 warnings. merge SHA의 필수 FULL 검증은 다음 단계이며 기존 결과를 통합 통과로 재사용하지 않는다. 서명된 운영 Fleet readback은 정상, 기존 계정 sudo-n 거절은 별도로 남긴다.
+- gate 변화: 없음. 실제 통합 시험·CI·서명/배포·장치 수용은 아직 미완료다. 사용자 배포 승인을 유지하며 임의 privileged 경로를 만들지 않는다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) deployment safety gap remediation
+
+- 변경: 실제 main 통합 후 발견한 cached STOP의 SQLite 대기와 반복 취소 cleanup 경계를 반례부터 보완했다. 초기 역사 커밋의 미검토/크기 결함을 exemption으로 숨기지 않고 원래 브랜치를 보존한 별도 최종 배포 브랜치 구성 절차를 선택했다.
+- 증거: 09a2060f58 통합 회귀 963 PASS/0 skip/NEW 0. 과거 16개 trailer 누락과 14개 크기 실패는 공식 관문에서 실제 확인했다. 독립 검토는 원본의 후속 수정 사실과 현재 journal STOP 지연을 구분했고, 현재 수정은 scoped 안전 검토를 통과했다. 새 source SHA의 원격 GREEN/FULL은 아직 미확인이다.
+- gate 변화: 없음. 배포 승인은 유지하며 미검증 상태를 배포 완료로 선언하지 않는다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) reviewed final station deployment source
+
+- 변경: 공식 통합 도구가 안내하는 새 브랜치 재구성 경로를 사용했다. 기존 docs/station-charge-lifecycle의 87e51739ff 이력은 그대로 보존하고, feat/station-charge-deploy에는 main 기준 최종 수정 상태만 모았다. 과거 결함/크기 실패를 exemption으로 덮거나 기존 커밋을 수정하지 않았다.
+- 증거: 최종 staged tree와 보존된 원본 tip의 tree 일치를 확인한 뒤 Fleet/station/Vision 및 CORE/native-map 영역의 독립 정적 안전 검토가 각각 PASS했다. 실제 DB lock·취소 수정의 원격 GREEN은 87e51739ff 127 PASS/0 skip/NEW 0이며, 원본의 반복 취소 반례는 4 FAIL/1 PASS였다. 새 배포 commit의 FULL·원격 최신 main 적용 검증은 이어서 수행한다.
+- gate 변화: 없음. 서명/설치·실기 수용을 주장하지 않는다. 사용자의 배포 승인을 유지한다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 원격 main 기준 충전 배포 통합 검사 보완
+
+- 변경: 공유 main의 미게시 이력은 보존하고 원격 main c80ac69a5b 위로 배포 소스를 분리했다. 실제 pose holder와 영상 라우트 연결을 유지하며 앱 상한과 Fleet 크기 기준을 실제 감소량으로 낮췄다. 새 계약·구조 검사에 맞춰 측정 정책/TF 시험 fixture, helper 이름, 이벤트 문서, 검토된 writer·부분 빌드 목록과 native component의 소유 대상을 보완했다.
+- 증거: 7fa484c528의 공식 원격 pre-push는 네 묶음 모두 종료했다. 각각 517 pass/2 fail, 11180 pass/12 fail/523 skip, 5610 pass/1 fail/157 skip, 5903 pass/1 fail/316 skip이며 전부 NEW로 처리했다. 이벤트 검사는 두 묶음에 중복된다. 검사 기준 완화나 known_failures 추가 없이 원인별 수정 후 새 SHA를 재검증한다.
+- 보안: provenance JSON의 원래 줄 형식을 복원하고 이 브랜치에 없는 peer fixture의 정확한 10개 기록만 제거한다. 추가 공개 source/SDK 값은 기존 path·원본 줄 SHA256·정확한 값 결속 방식으로 독립 검토하며 scanner 규칙을 바꾸지 않는다.
+- gate 변화: 없음. 이 검사와 수동적인 소프트웨어 배포는 실제 자동 충전·이안·암 작업 활성화나 현장 수용이 아니다.

@@ -235,6 +235,7 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
+| D-783 | Native adopted-map readback with finite parent evidence |
 | D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
 | D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
 
@@ -325,6 +326,7 @@
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
+- [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -339,8 +341,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
-- 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
-- 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
-- 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
-- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 원격 main 기준 충전 배포 통합 검사 보완
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) reviewed final station deployment source
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) deployment safety gap remediation
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) station deployment main integration
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) measured charge admission verified

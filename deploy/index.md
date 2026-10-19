@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 공개 진단 도구 hash의 정확한 provenance 등록
 - 2026-10-19 · uncommitted · uv 도구 링크 drift와 main 통합
 - 2026-10-19 · uncommitted · 비밀 항목 거부 fixture의 공개 placeholder
 - 2026-10-19 · 16d152510 · SD 설정 개선 검증 결과
 - 2026-10-19 · uncommitted · SD 공통 설정과 순차 카드 준비
-- 2026-10-19 · uncommitted · SIM reach 수집 파이프라인 통합
