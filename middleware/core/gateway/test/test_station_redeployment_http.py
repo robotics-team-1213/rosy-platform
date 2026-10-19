@@ -35,11 +35,16 @@ def test_hold_probe_preserves_nested_exception_and_original_hold(capsys):
         await asyncio.sleep(0)
         return await motion.stop_hold(current, reason, intent=intent)
 
+    async def read_return(error):
+        view = dict(state='FAILED', reason='SIM_TRIP_FAILURE', detail={'phase': 'arrival'},
+            forbidden='MUST_NOT_BE_REPORTED')
+        raise error
+
     async def run():
         for reason in ('CHARGE_MOTION_READBACK_UNAVAILABLE', 'CHARGE_DEPARTURE_UNVERIFIED'):
             error = ValueError('original readback failure')
             try:
-                raise error
+                await read_return(error)
             except ValueError:
                 assert await nested(reason) is result
                 assert sys.exception() is error
@@ -51,6 +56,9 @@ def test_hold_probe_preserves_nested_exception_and_original_hold(capsys):
             assert report['exception_type'] == 'ValueError'
             assert report['exception'] == str(error)
             assert 'raise error' in ''.join(report['traceback'])
+            assert report.get('return_trip') == dict(state='FAILED', reason='SIM_TRIP_FAILURE',
+                detail={'phase': 'arrival'})
+            assert 'MUST_NOT_BE_REPORTED' not in payload
             assert calls[-1] == (current, reason, {'intent': intent}, error)
         assert await nested('CHARGE_MOTION_READBACK_UNAVAILABLE') is result
         assert calls[-1] == (current, 'CHARGE_MOTION_READBACK_UNAVAILABLE', {'intent': intent}, None)
