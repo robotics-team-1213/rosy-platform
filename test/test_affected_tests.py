@@ -263,7 +263,7 @@ def test_duplicate_basenames_run_in_separate_invocations(sample):
         assert len(names) == len(set(names)), inv
 
 
-def test_pack_separates_transitively_imported_test_helpers(sample):
+def test_pack_separates_transitively_imported_test_helpers(tmp_path):
     files = {
         'a/test_lease.py': 'VALUE = 1\n',
         'b/test_lease.py': 'from test_bridge import VALUE\n',
@@ -271,11 +271,10 @@ def test_pack_separates_transitively_imported_test_helpers(sample):
         'b/test_job.py': 'from test_bridge import VALUE\n',
     }
     for name, source in files.items():
-        path = sample / name
+        path = tmp_path / name
         path.parent.mkdir(exist_ok=True)
         path.write_text(source, encoding='utf-8')
-    _git(sample, 'add', '--', *files)
-    repo = affected.Repo.load(sample)
+    repo = affected.Repo(tmp_path, modules=[], owners=[], tracked=list(files), test_files=list(files))
     groups = affected.pack(repo, ['a/test_lease.py', 'b/test_job.py'])
     assert groups == [['a/test_lease.py'], ['b/test_job.py']]
     assert affected.pack(repo, ['b/test_job.py', 'b/test_bridge.py']) == [
