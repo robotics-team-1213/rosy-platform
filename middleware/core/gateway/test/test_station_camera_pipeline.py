@@ -221,7 +221,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     raise
             ret._live = traced_live
             readback_reports = []
-            if lifespan:
+            if composed:
                 from station_readback_probe import install_readback_probe
                 readback_reports = install_readback_probe(owner, cycles.motion, lambda: now[0], monkeypatch)
             contended_readbacks, return_submissions = [], []

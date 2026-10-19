@@ -1564,3 +1564,9 @@
 - 변경: 공유 시험 helper가 새 ChargeMotion 인스턴스의 stop_hold 진입 시 활성 예외를 기록한다. readback 불가·출발 미검증 HOLD의 session, SIM 시각, 예외 종류·문자열·traceback만 stdout JSON에 남기고 원래 호출·인자·결과를 유지한다. 기존 출발 call wrapper는 제거한다. 제품 코드·deadline·freshness·기존 안전 단언은 변경하지 않는다.
 - 증거: 집중 회귀는 중첩 await에서 원래 예외와 HOLD 결과·kwargs가 보존되고 정상 HOLD는 기록하지 않는지 확인한다. commit `48ab802817`의 원격 RED는 helper 부재로 1 failed, NEW 1이었다. 구현 head의 같은 시험과 카메라·출발 모듈 원격 결과는 별도로 확인한다.
 - gate 변화: 없음. 앞선 카메라 composed 회귀는 readback 불가 HOLD였지만 원인 예외가 남지 않았다. 이번 변경은 관측 추가이며 원인 해결·실물 충전·현장 수용 근거가 아니다.
+
+## 2026-10-20 · uncommitted · composed SIM의 기존 readback probe 연결
+
+- 변경: 기존 readback·lock·ACK 관측 helper의 설치 조건만 lifespan에서 composed로 넓힌다. manual SIM step·runtime tick·lock 동작과 모든 안전 기준은 유지한다.
+- 증거: commit `02e42a19dc`에서 카메라·출발 두 모듈은 20 passed, 0 skipped, NEW 0이었다. 예상 부정 사례의 HOLD 예외 10건을 기록했고 composed·양성 출발에는 예외 기록이 없었다. 추가 조건의 집중 회귀는 새 head에서 별도로 확인한다.
+- gate 변화: 없음. 비동기 return 작업과 readback lock 경합은 아직 원인으로 관측되지 않았으며 이 연결은 이후 실패의 증거 수집용이다.
