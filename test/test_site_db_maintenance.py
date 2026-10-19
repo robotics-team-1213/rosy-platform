@@ -96,6 +96,30 @@ def test_restore_validates_source_before_touching_current_database(tmp_path):
     assert not list(tmp_path.glob("*.pre-restore-*.sqlite3"))
 
 
+@pytest.mark.parametrize("table", [
+    "rosy_account_authority", "rosy_accounts", "rosy_account_sessions", "rosy_account_audit",
+    "fleet_console_sessions", "fleet_console_passwords", "fleet_console_profiles",
+    "account_oauth_codes", "account_oauth_refresh", "account_oauth_access",
+])
+def test_restore_refuses_changed_account_security_state(tmp_path, table):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(target, "keep-current")
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute(f'CREATE TABLE "{table}" (state TEXT)')
+        db.execute(f'INSERT INTO "{table}" VALUES (?)', ("before-revocation",))
+    backup_database(target, source)
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute(f'UPDATE "{table}" SET state=?', ("after-revocation",))
+    before = target.read_bytes()
+
+    with pytest.raises(DatabaseError, match="Account security state"):
+        restore_database(source, target, replace=True, assume_stopped=True)
+
+    assert target.read_bytes() == before
+    assert _value(target) == "keep-current"
+    assert not list(tmp_path.glob("*.pre-restore-*.sqlite3"))
+
+
 def test_restore_does_not_leave_old_wal_sidecars_on_restored_target(tmp_path):
     source = tmp_path / "restore.sqlite3"
     target = tmp_path / "fleet.sqlite3"
