@@ -453,12 +453,10 @@ class DrivableSteer:
             side = info["exit"] = self._memory[0]
             info["exit_from_memory"] = True
         if side is None and ahead < PIVOT_AHEAD_M and info["target_m"] is not None:
-            # A corner whose way turns inside the view (no opening on the frame border, none remembered): the
-            # way's own centre target names the side (v2 lap r8 stood 0.16 m from the wall at an inner corner),
-            # unless it lies beyond a boundary seen earlier, as a rejected opening would. Closed at the body
-            # the side only turns the robot in place, which crosses no line (v2 lap r11: a ~0.06 m radius
-            # corner, the arc to the target clipped the inner line remembered on the way in).
-            bearing = math.degrees(math.atan2(info["target_m"][1], info["target_m"][0]))
+            # No border opening or memory: the pursuit target names the side unless beyond a seen line.
+            # Closed at the body, pivot only: the arc clipped the inner line at v2 lap r11's tight corner.
+            target_now = _to_current(info["target_m"], source_pose, current_pose)
+            bearing = math.degrees(math.atan2(target_now[1], target_now[0]))
             target_side = "left" if bearing > 0 else "right"
             beyond = info.get("exit_behind_line") or current_pose is not None and _crosses(
                 seen, *_to_current(info["target_m"], source_pose, current_pose)) is not None
@@ -512,10 +510,11 @@ class DrivableSteer:
                 < PIVOT_AHEAD_M) and (info.get("near_centre_m") or (0, 0))[1] * (1 if side == "left" else -1) <= -RECENTRE_M:
             side = info["exit"] = self._side = None   # arcs too: the south spoke cut its bend 0.2 m early (r50b)
             info["recentre_first"] = True
+        turn_target = info['exit_point_m'].get(side, target)
         if self._pivot is None and side is not None and (front_blocked or ahead < PIVOT_AHEAD_M and (
                 guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG
-                or info.get('exit_from_guide') and target is not None
-                and _to_current(target, source_pose, current_pose)[1] * (1 if side == 'left' else -1) < 0.0)):
+                or any(info.get(f'exit_from_{origin}') for origin in ('guide', 'target', 'memory')) and target is not None
+                and _to_current(turn_target, source_pose, current_pose)[1] * (1 if side == 'left' else -1) < 0.0)):
             self._pivot = side
             self._pivot_yaw = None if current_pose is None else current_pose[2]
         if self._pivot is None:
