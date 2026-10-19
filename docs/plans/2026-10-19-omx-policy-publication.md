@@ -8,12 +8,12 @@
 원격의 station docking, owner executor와 실물 learned-policy 거부는 보존한다.
 새 소스는 이전 SIM 실행 commit과 다르므로 새 commit의 실행 증거가 필요하다.
 
-- [ ] producer/consumer 전체를 이식하고 독립 계약 리뷰를 받는다.
-- [ ] 원격 host 검사와 실제 SDK/native ROS 경로를 검사한다.
-- [ ] 전체 Gazebo 경로에서 종료 경고의 traceback을 수집하고 원인을 재현한다.
-- [ ] 원인을 수정한 commit에서 실행·취소·정지·종료를 다시 검사한다.
+- [x] producer/consumer 전체를 이식하고 독립 계약 리뷰를 받는다.
+- [x] 원격 host 검사와 실제 SDK/native ROS 경로를 검사한다.
+- [x] 전체 Gazebo 경로에서 종료 경고의 traceback을 수집하고 원인을 재현한다.
+- [x] 원인을 수정한 commit에서 실행·취소·정지·종료를 다시 검사한다.
 - [ ] 게시 commit의 pre-push 검사를 통과하고 GitHub branch/PR과 CI를 확인한다.
-- [ ] 체크포인트·데이터 조사 결과와 실물 준비 순서를 기록한다.
+- [x] 체크포인트·데이터 조사 결과와 실물 준비 순서를 기록한다.
 
 공유 안전 manifest는 새 모듈을 가리킨다. 해당 모듈 없이 먼저 게시하면
 참조 검사가 실패하므로 이번 공개 이식과 같은 단위로 검사한다.
