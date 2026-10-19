@@ -73,13 +73,13 @@ def test_prepare_sources_binds_png_to_exact_decoded_video_frame(tmp_path, declar
 LEGACY_SESSION = "legacy-teleop-20260919-151213"
 # Independently recorded original inventory; never derived from producer output.
 LEGACY_ORIGINALS = [
-    (3027828, "939180124c12e8eedb200ba3a34901149557a1e4c110b2781ea345b4bda7d22d"),
-    (3354324, "e88325e134af782121838ef77324cc5e186b8dfd3a7b6213f4a5ffe074140be5"),
-    (3648053, "d5a0e6c84160e73925e469553a693c84bd7c373627a2146a58828a4bdb91533c"),
-    (3795012, "ca6dab1ed6140f13372c0510d71dafcb54989b29cab601abf5fb0b3bebe1779f"),
-    (3232286, "ed52707f3dda5a8104ef9df4b65a24c786e410161cb449f1ff4989a30453d151"),
-    (4190305, "0916bb53747546823b4c945570e404d542bec6f92023f3a624cbe7e150b3e0d1"),
-    (866985, "204d52d0a95819a2dfe788f814268ab1d67952838304093c3f95420fdf72e131"),
+    (3027828, "939180124c12e8eedb200ba3a34901149557a1e4c110b2781ea345b4bda7d22d"),  # SHA256 original fixture integrity
+    (3354324, "e88325e134af782121838ef77324cc5e186b8dfd3a7b6213f4a5ffe074140be5"),  # SHA256 original fixture integrity
+    (3648053, "d5a0e6c84160e73925e469553a693c84bd7c373627a2146a58828a4bdb91533c"),  # SHA256 original fixture integrity
+    (3795012, "ca6dab1ed6140f13372c0510d71dafcb54989b29cab601abf5fb0b3bebe1779f"),  # SHA256 original fixture integrity
+    (3232286, "ed52707f3dda5a8104ef9df4b65a24c786e410161cb449f1ff4989a30453d151"),  # SHA256 original fixture integrity
+    (4190305, "0916bb53747546823b4c945570e404d542bec6f92023f3a624cbe7e150b3e0d1"),  # SHA256 original fixture integrity
+    (866985, "204d52d0a95819a2dfe788f814268ab1d67952838304093c3f95420fdf72e131"),  # SHA256 original fixture integrity
 ]
 
 
