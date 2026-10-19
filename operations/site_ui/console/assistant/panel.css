@@ -8,9 +8,9 @@
 .assistant-messages p { white-space: pre-wrap; }
 .assistant-messages small { display: block; }
 .assistant-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; }
-@media (width >= 80rem) {
+@media (width >= 64rem) {
   .assistant-layout:has(> .assistant-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
 }
-@media (width < 80rem) {
+@media (width < 64rem) {
   .assistant-layout:has(> .assistant-panel:not([hidden])) > #fleet-main { display: none; }
 }
