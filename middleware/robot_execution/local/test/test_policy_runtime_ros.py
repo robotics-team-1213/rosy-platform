@@ -12,7 +12,7 @@ import threading
 import time
 import traceback
 from dataclasses import replace, asdict
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from uuid import uuid4
 
 import pytest
@@ -94,7 +94,7 @@ def native_setup_cleanup(root):
 @pytest.mark.parametrize('revoke', [False, True])
 @pytest.mark.parametrize('with_parent',[False,True],ids=['native_only','parent_episode_fleet'])
 def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent, *,
-                                                with_inference=False, with_core=False):
+                                                with_inference=False, with_core=False, core_client=None):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, _, _, authority, policy_root = setup_session(
         tmp_path,execution_journal=journal,max_lease_duration_ns=15_000_000_000,
@@ -110,7 +110,10 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             nodes.append(node)
             own(node.destroy_node)
         received, server_canceled, fixture_shutdown = threading.Event(), threading.Event(), threading.Event()
+        received_goal = {}
         def execute(handle):
+            received_goal.update(joint_names=list(handle.request.trajectory.joint_names),
+                positions=list(handle.request.trajectory.points[-1].positions))
             received.set()
             if revoke:
                 deadline = time.monotonic()+6
@@ -216,21 +219,24 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             command,runner,api,parent=submit_parent(session,journal,tmp_path,
                 candidate_factory=prepare_inference if with_inference else None)
         elif with_core:
-            port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera_capture), principal='fixture-operator')
+            port = CoreArmPolicyPort(session, capture=lambda: nullcontext((rgb, camera_capture)), principal='fixture-operator')
             app = create_app({}, SimpleNamespace(arm_policy=port,
                 safety=SimpleNamespace(estop=False, estop_listeners=[])))
             app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='fixture-operator', role='operator')
-            with TestClient(app) as client:
-                source = client.post('/api/v1/arm/observations',
-                    json=dict(policy_revision=session.lease.policy_revision))
-                assert source.status_code == 200, source.text
-                response = client.post('/api/v1/arm/actions', json=dict(
-                    policy_revision=session.lease.policy_revision,
-                    observation_id=source.json()['observation_id'],
-                    positions={'joint_1': .101, 'joint_2': .001}))
-                assert response.status_code == 202, response.text
-                assert response.json()['accepted'] is True
-                command = response.json()['command_id']
+            if core_client is not None:
+                command = core_client(app, session)
+            else:
+                with TestClient(app) as client:
+                    source = client.post('/api/v1/arm/observations',
+                        json=dict(policy_revision=session.lease.policy_revision))
+                    assert source.status_code == 200, source.text
+                    response = client.post('/api/v1/arm/actions', json=dict(
+                        policy_revision=session.lease.policy_revision,
+                        observation_id=source.json()['observation_id'],
+                        positions={'joint_1': .101, 'joint_2': .001}))
+                    assert response.status_code == 202, response.text
+                    assert response.json()['accepted'] is True
+                    command = response.json()['command_id']
         else:
             state, _ = session.capture_observation()
             action_candidate = candidate(session,sequence=state.sequence,
@@ -239,6 +245,8 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             assert result.accepted
             command=result.command_id
         assert received.wait(3)
+        if with_core:
+            assert received_goal == dict(joint_names=['joint_1', 'joint_2'], positions=[.101, .001])
         if revoke:authority[0] = False
         deadline = time.monotonic()+7
         record = journal.read(command)
@@ -293,6 +301,7 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
                  'no trained quality/task/hardware/authenticated Fleet' if with_inference else
                  'isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet')
         proof = dict(scope=scope, core_http_admission=with_core,
+            core_socket_sdk=core_client is not None, received_ros_goal=received_goal,
             fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000,
                                 poll_period_s=.01),
             short_deadline_acceptance=False,revoke=revoke,journal=record,

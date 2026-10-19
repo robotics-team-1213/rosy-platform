@@ -14,6 +14,7 @@ symptoms:
   - "NEW shared/web/test/test_shared_controls.py::test_measure_comes_from_the_scale on branches that never touched it (main was red after D-792)"
   - "two sessions landed the same main fix in parallel (f376f8cbba, 44a24983da)"
   - "land runs took 30-90+ minutes with ~10 sessions on the test PCs; one run lost to 'no test host reachable' after 600 s"
+  - "fix/fleet-network-load-v2 needed 4 land.py rounds (~2.5 h): each passed, but main moved and forced a full-tier rerun; one merge put core_features at 10,001 / 10,000"
 applies_when:
   - "a land.py run stops on a D-766 size verdict, or a NEW failure in a file the branch did not change"
   - "planning a change inside fleet, site_ui/console, rosy_auto_update.py, trip_runner.py or trip_ports.py"
@@ -71,6 +72,22 @@ took hours to land. Four separate things blocked it.
   round, and one failure anywhere sent the whole bundle back. Splitting into smaller branches is
   what finally landed it.
 
+### 5. Main moved during every round (observed later the same day)
+
+- **Symptom:** `fix/fleet-network-load-v2` needed four `land.py` rounds. Every round passed, but
+  each time another session had landed on `main` meanwhile, so `land.py` merged the new `main` and
+  reran the full-tier tests: about 30-60 minutes per round, about 2.5 hours in total.
+- **Symptom (size):** after one of those merges, `main`'s growth plus the branch put the
+  `core_features` unit at 10,001 lines (limit 10,000). The size refusal came from the merge, not
+  from the branch alone. `core_features` now sits exactly at its limit, so the next addition
+  anywhere in it needs a split first; it is a [D-798](../../adr/D-798-size-headroom-splits-and-restack.md)
+  split candidate next to `fleet` and `site_ui/console`.
+- **Symptom (infra):** two runs lost host contact for more than 600 s (exit 255).
+  `test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds`
+  was flagged LOAD-FLAKY twice under load.
+- **Root cause:** there is no landing order or queue. A wide branch selects the full tier, so every
+  move of `main` during a round costs a full rerun.
+
 ## What worked
 
 - **Re-stack, do not patch on top.** Make a new worktree from `main`, cherry-pick the needed commits,
@@ -101,14 +118,49 @@ took hours to land. Four separate things blocked it.
   plan from `land.py --dry-run`, split first. FULL-trigger and `shared/web` parts land first, on
   their own branch.
 
+## Prevention for 5 (user decision 2026-10-18: "improve further if possible")
+
+- **Landing queue (implemented, [D-803](../../adr/D-803-landing-queue-before-delta-rerun.md)).** `tools/land.py`
+  takes a FIFO ticket in `<git-common-dir>/rosy-land-queue/` (`tools/land_queue.py`) before its test rounds,
+  prints its position and who is ahead, and waits (`--queue-timeout`, default 180 min) until it is first; then it
+  merges `main` once and tests. The ticket is released on every exit, Ctrl-C included; a dead holder's ticket (PID
+  gone on this host, or not refreshed for 3 h) is reclaimed. `--no-queue` is the incident escape hatch. Tests:
+  `test/test_land_queue.py`, `test/test_land.py::test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout`.
+- **Delta rerun across runs (implemented, D-803 6).** Within one run, D-762 stage 0 already reran only main's
+  delta selection after a green FULL tier. A fresh run (after a lost host, Ctrl-C or the round cap) started with
+  FULL again: `refactor/land-split` itself hit "main kept moving: gave up after 5 rounds" on 2026-10-18 and its
+  rerun paid a second FULL tier. `tools/land_full.py` now keeps the FULL pass in `<git-common-dir>/rosy-land-full/`
+  and a later run reuses it while the branch added nothing but merges of main. Not done: uniting main's delta with
+  the branch's own mapped suites. The FULL tier already passed those with the branch's code, and the delta selection
+  takes direct reverse dependents of what main changed, so the union would rerun suites that passed on the same
+  branch code. A narrow (non-FULL) branch still reruns its own affected tier each round, as before.
+  Tests: `test/test_land.py::test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass` and the two after it.
+- **Landed ADR gaps drop themselves (2026-10-19).** `tools/harness/adr_gaps.txt` merges with `merge=union`, so a
+  merge of `main` kept the branch's copy of a gap line `main` had already removed when that ADR landed, and lint
+  stopped the landing with "declared gap now exists" (three branches that day, `feat/land-queue` among them).
+  After each merge of `main`, `tools/land.py` now drops every gap line whose ADR file or Log row exists
+  (`land_merge.landed_gaps`), commits that on the topic branch and prints it in the land log. Test:
+  `test/test_land.py::test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge`.
+
+The candidates as first written:
+
+
+1. **Landing queue or lock.** Sessions land in order; the next one merges or rebases onto `main`
+   once, after the one ahead of it has landed, instead of chasing a moving `main`.
+2. **Rerun only the delta when `main` moves.** When `main` moves during a round, rerun the tests
+   affected by `main`'s delta united with the branch's affected set, not the whole tier.
+3. **Keep branches narrow.** The existing rule in `AGENTS.md` 「같이 하는 깃」 1 (one landable concern
+   per branch, about 15 changed files at most) keeps branches in narrow tiers, so a rerun is cheap.
+
 ## Not fixed here
 
 - Test PC placement still uses hosts below the memory floor when nothing else is free (D-568), and
   an agent that dies mid-land leaves no resumable state. Run long lands as a watched background task
   ([landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md](landing-runs-need-a-watched-runner-and-a-checked-network-2026-10-15.md)).
-- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) are themselves at or above 95%
-  of the 600-line limit. These fixes left their line counts unchanged. The next change there needs
-  a split first.
+- `tools/harness/affected_tests.py` (600) and `tools/land.py` (594) were at or above 95% of the
+  600-line limit. `refactor/land-split` moved the CI full-run matrix to `tools/harness/affected_ci.py`
+  (`affected_tests.py` 495) and the conflict auto-resolution to `tools/land_merge.py` (`land.py` 472),
+  pure moves with the old names re-exported.
 
 ## Related
 

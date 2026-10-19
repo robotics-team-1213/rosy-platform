@@ -87,6 +87,35 @@
 
 **7. 사람만 할 수 있는 일.** BIOS의 "AC 전원 연결 시 켜기"(세 PC), 8kcn SPI 하드웨어 점검, 모델 PC 유선 연결, 관제 PC sudo 비밀번호를 아는 사람의 첫 설치. 이 체계는 sudo 없이 처음 설치될 수 없고, 그 뒤부터 사람 없이 유지된다.
 
+### 2026-10-18 PC 복구 공통 설치와 실행값 감시
+
+- 세 PC의 복구 파일·유닛을 공통 매니페스트 `approval=recovery`로 모은다.
+  `install <site|model|ai> --approve recovery`로 설치하며 기존 파일·유닛별 승인도 유지한다.
+  swap 구성·로컬 재부팅 제한·로그인 정책·키 등록은 이 묶음이 변경하지 않는다.
+- 로컬 점검은 설치 직후 및 30분마다 `status.json.recovery`를 남긴다.
+  객체는 `{time, role, state, issues, resources, watchdog, kernel, ssh, swap}`이다.
+  모든 검사 정상일 때만 `state=ok`, 나머지는 `degraded`다. `issues`는 정상 아닌 검사 이름 배열이다.
+- `watchdog`는 장치 존재, 로드 유닛 enabled/active, PID 1 실행값 `timeout_s=30`을 확인한다.
+  장치 부재는 `unsupported`(미확인·미지원), 나머지 불일치는 `degraded`다. 장치를 직접 열지 않는다.
+  로드 유닛은 기존 장치 우선 후 `iTCO_wdt`·`wdat_wdt`를 시도하고 장치 부재 시 실패한다.
+  systemd 설정 설치 시 daemon-reexec로 실행값도 적용한다.
+- `kernel`은 실제 `panic_s=10`, `softlockup_panic=1`을 확인한다. `ssh`는 타이머,
+  서비스 종료 결과·단조 시계 기준 최근 실행(360초 이내), 연속 실패와 복구 재부팅 카운터를 읽는다.
+  `swap`은 활성 총량·사용량(바이트)을 기록한다. 0 용량은 `missing`, 읽기 실패는 `unknown`이다.
+  로컬 `resources`는 기존 자원 필드에 `mem_total_bytes`, `mem_available_bytes`를 더하고,
+  확인하지 못한 값은 null이다. 파일 일치만으로 실행 상태를 정상이라 하지 않는다.
+- 강제 명령에 인자 없는 읽기 전용 `recovery`를 추가한다. 루트 점검 캐시 중 해당 객체만
+  반환하며 수리·추가 권한을 수행하지 않는다. 기존 `health`의 여섯 필드는 유지한다.
+- 가드는 PC 캐시를 `guard[host].recovery`에 붙인다. 구버전·잘못된 응답·역할 불일치는 null이다.
+  접속 불가·새벽 창에서는 이전 보고를 지운다. 자신의 로컬 보고는 해당 역할 항목에
+  `source=local`로 합치되 원래 `time`을 유지한다. 로컬 보고가 없어지면 이전 항목도 지운다.
+- Fleet은 기존 `GET /api/fleet/hosts`의 `guard`·`drift` 안에서만 보고를 전달한다.
+  화면은 세 PC별 상태와 시각을 표시한다. 원격 호스트 15분(로컬 35분), 복구 보고 35분 초과,
+  잘못된 미래 시각·결과 부재·읽기 실패를 정상으로 표시하지 않는다. 갱신 실패 시 이전 정상 표시를 지운다.
+  설정 누락만으로 재부팅하지 않으며 기존 회복 사다리와 재부팅 상한은 유지한다.
+- 설치 실패는 0이 아닌 종료 코드로 반환하고 가능한 점검 보고를 남긴다.
+  절차는 [PC 운영 안내](../../deploy/hosts/README.md)에 둔다.
+
 ### Open questions
 
 - D-524 에는 지금 `model` 역할의 유닛이 없다. 모델 PC는 가드가 이 도우미로 `restart-unit`을 하능 것도 없고 `reboot`만 된다. 본문 5항의 유닛 목록이 D-524 개정으로 들어가기 전까지 빈칸이다(D-524는 고치지 않음).

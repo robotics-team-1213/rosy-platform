@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
-- 2026-10-17 · 9108fd4d8e · fix(omx): 명시적 startup을 기존 정지·취소 경로에 연결
-- 2026-10-17 · 52062796dd · feat(omx): Docker 없는 native Gazebo 실행 경로
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
-- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
+- 2026-10-19 · uncommitted · uv 도구 링크 drift와 main 통합
+- 2026-10-19 · uncommitted · 비밀 항목 거부 fixture의 공개 placeholder
+- 2026-10-19 · 16d152510 · SD 설정 개선 검증 결과
+- 2026-10-19 · uncommitted · SD 공통 설정과 순차 카드 준비
+- 2026-10-19 · uncommitted · SIM reach 수집 파이프라인 통합

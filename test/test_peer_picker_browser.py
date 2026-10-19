@@ -26,7 +26,7 @@ def test_peer_picker_names_owner_navigation_and_session_lifetime(width):
         def resource(route):
             path = urlsplit(route.request.url).path
             if path == '/fixture':
-                html = (WEB / 'install.html').read_text(encoding='utf-8').replace(
+                html = (WEB / 'installation' / 'install.html').read_text(encoding='utf-8').replace(
                     '<script type="module" src="/console/assets/install.js"></script>', '')
                 route.fulfill(status=200, content_type='text/html', body=html)
                 return

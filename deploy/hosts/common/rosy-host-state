@@ -15,8 +15,9 @@ Manifest line: <policy> <kind> <args>. Kinds: file <path> <role/x|common/x|deplo
 ending in .in gets @LOGIN@ replaced; sudoers files must pass visudo -c), enabled <unit>,
 disabled <unit>, masked <unit>, linger, wifi-allow, apt <package>... (approval policy only; checked with
 dpkg-query; only the missing names are installed, with --no-upgrade --no-remove; D-571 keeps these on
-approval=sim). ROSY_HOST_STATE_ROOT prefixes every absolute
-path (tests).
+approval=sim), wheel-tool <name> <version> <sha256> (approval policy only, D-802: one pinned PyPI wheel
+installed hash-checked into /usr/local/lib/rosy-tools/<name>-<version> and linked from /usr/local/bin;
+needs python3-pip, an earlier apt line). ROSY_HOST_STATE_ROOT prefixes every absolute path (tests).
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ LIB = "/usr/local/lib/rosy-host-state"
 STATUS = "/var/lib/rosy-host-state/status.json"
 WIFI_ALLOW = "/etc/rosy/host-state/wifi-allow"
 BACKUP = "/var/lib/rosy-host-state/backup"
+TOOLS = "/usr/local/lib/rosy-tools"
 
 
 def host(path: str) -> Path:
@@ -55,8 +57,8 @@ def read_manifest(dirs: dict[str, Path]) -> list[tuple[str, str, list[str]]]:
             if raw:
                 if raw[0] not in ("safe", "report", "approval") and not raw[0].startswith("approval="):
                     raise SystemExit(f"bad policy: {raw}")
-                if raw[1:2] == ["apt"] and not raw[0].startswith("approval"):
-                    raise SystemExit(f"apt needs an approval policy (D-571): {raw}")
+                if raw[1:2] in (["apt"], ["wheel-tool"]) and not raw[0].startswith("approval"):
+                    raise SystemExit(f"{raw[1]} needs an approval policy (D-571, D-802): {raw}")
                 lines.append((raw[0], raw[1], raw[2:]))
     return lines
 
@@ -114,6 +116,12 @@ def apt_missing(names: list[str]) -> list[str]:
     return [name for name in names if name not in have]
 
 
+def wheel_tool(args: list[str]) -> tuple[Path, Path]:
+    """(the versioned install folder, the /usr/local/bin link) of a wheel-tool line."""
+    name, version = args[0], args[1]
+    return host(f"{TOOLS}/{name}-{version}"), host(f"/usr/local/bin/{name}")
+
+
 def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
     """Return a one-line description of the drift, or None when the host matches."""
     if kind == "file":
@@ -159,6 +167,16 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
     if kind == "apt":
         missing = apt_missing(args)
         return f"apt packages missing: {' '.join(missing)} ({' '.join(APT_INSTALL)})" if missing else None
+    if kind == "wheel-tool":
+        folder, link = wheel_tool(args)
+        tool = folder / "bin" / args[0]
+        if not tool.is_file():
+            return f"{args[0]} {args[1]} not installed in {folder}"
+        for tool in sorted((folder / "bin").iterdir()):
+            target = link.with_name(tool.name)
+            if not target.is_symlink() or Path(os.readlink(target)) != tool:
+                return f"{target} is not {args[0]} {args[1]}"
+        return None
     raise SystemExit(f"unknown kind: {kind}")
 
 
@@ -210,8 +228,13 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
             sh("systemctl", "reload", "ssh")
         elif target.startswith("/etc/systemd/system/"):
             sh("systemctl", "daemon-reload")
+        elif target == "/etc/systemd/system.conf.d/rosy-watchdog.conf":
+            result = sh("systemctl", "daemon-reexec")
+            if result.returncode != 0:
+                raise RuntimeError("watchdog runtime configuration was not reloaded")
         elif target.startswith("/etc/sysctl.d/"):
-            sh("sysctl", "-q", "--system")
+            if sh("sysctl", "-q", "--system").returncode != 0:
+                raise RuntimeError(f"{target}: kernel settings were not applied cleanly")
         return f"wrote {target}{saved}"
     if kind in ("enabled", "disabled"):
         verb = "enable" if kind == "enabled" else "disable"
@@ -243,6 +266,30 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
             if result.returncode != 0:
                 raise RuntimeError(f"{' '.join(cmd[:2])}: {result.stderr.strip()[-400:]}")
         return f"installed {' '.join(missing)}"
+    if kind == "wheel-tool":
+        name, version, sha = args
+        folder, link = wheel_tool(args)
+        if not (folder / "bin" / name).is_file():
+            req = folder.with_name(folder.name + ".req")
+            req.parent.mkdir(parents=True, exist_ok=True)
+            req.write_text(f"{name}=={version} --hash=sha256:{sha}\n", encoding="utf-8")
+            result = subprocess.run(["python3", "-m", "pip", "install", "-q", "--no-deps", "--only-binary=:all:",
+                                     "--require-hashes", "--target", str(folder), "-r", str(req)],
+                                    capture_output=True, text=True, timeout=600)
+            req.unlink()
+            if result.returncode != 0:
+                shutil.rmtree(folder, ignore_errors=True)
+                raise RuntimeError(f"pip install {name}=={version}: {result.stderr.strip()[-400:]}")
+        done = []
+        link.parent.mkdir(parents=True, exist_ok=True)
+        for tool in sorted((folder / "bin").iterdir()):   # uv ships uv and uvx
+            target = link.with_name(tool.name)
+            tmp = target.with_name(target.name + ".rosy-tmp")
+            tmp.unlink(missing_ok=True)
+            tmp.symlink_to(tool)
+            os.replace(tmp, target)
+            done.append(target.name)
+        return f"{name} {version} at {folder}, linked {', '.join(done)}"
     raise SystemExit(f"unknown kind: {kind}")
 
 
@@ -253,6 +300,9 @@ def line_id(kind: str, args: list[str]) -> str:
 def repo_dirs(role: str) -> dict[str, Path]:
     if role not in ROLE_DIRS:
         raise SystemExit(f"role must be one of {', '.join(ROLE_DIRS)}")
+    if not (HERE / "host-state").is_dir():   # the /usr/local/sbin copy only checks; install reads the repo
+        raise SystemExit("install reads the repo: cd <checkout> && sudo python3 deploy/hosts/common/rosy-host-state "
+                         f"install {role} [--approve ...]")
     deploy = HERE.parent.parent
     return {"common": HERE / "host-state", "role": deploy / ROLE_DIRS[role] / "host-state", "deploy": deploy}
 
@@ -260,6 +310,7 @@ def repo_dirs(role: str) -> dict[str, Path]:
 def install(role: str, dry_run: bool, approve: list[str]) -> int:
     dirs = repo_dirs(role)
     changes = 0
+    failures = 0
     for policy, kind, args in read_manifest(dirs):
         found = drift(kind, args, dirs)
         if found is None:
@@ -276,6 +327,18 @@ def install(role: str, dry_run: bool, approve: list[str]) -> int:
             changes += 1
         except RuntimeError as exc:  # e.g. empty Wi-Fi allow list: report and carry on
             print(f"  not applied: {exc}")
+            failures += 1
+    # Matching files can hide disabled runtime settings; explicit provisioning reapplies them.
+    if not dry_run:
+        for target, command in (
+            ("/etc/systemd/system.conf.d/rosy-watchdog.conf", ("systemctl", "daemon-reexec")),
+            ("/etc/sysctl.d/90-rosy-hang.conf", ("sysctl", "-q", "-p", str(host("/etc/sysctl.d/90-rosy-hang.conf")))),
+        ):
+            if ("recovery" in approve or target in approve) and sh(*command).returncode != 0:
+                print(f"  not applied: runtime settings for {target}")
+                failures += 1
+    if failures:
+        raise RuntimeError(f"{failures} change(s) could not be applied")
     return changes
 
 
@@ -288,6 +351,7 @@ def copy_approved(role: str) -> None:
     new.mkdir(parents=True)
     for name in ("common", "role"):
         shutil.copytree(dirs[name], new / name)
+    (new / "role-name").write_text(role + "\n", encoding="utf-8")
     for _policy, kind, args in read_manifest(dirs):  # deploy/<path> sources (D-524 helper)
         if kind == "file" and args[1].startswith("deploy/"):
             src = dirs["deploy"] / args[1].split("/", 1)[1]
@@ -307,6 +371,8 @@ def copy_approved(role: str) -> None:
     shutil.rmtree(old, ignore_errors=True)
     tool = host("/usr/local/sbin/rosy-host-state")
     tool.parent.mkdir(parents=True, exist_ok=True)
+    # Install the reader before replacing its entry point, including when a timer is already active.
+    shutil.copyfile(HERE / "rosy_host_recovery.py", tool.with_name("rosy_host_recovery.py"))
     tool_tmp = tool.with_name(tool.name + ".rosy-tmp")
     shutil.copyfile(Path(__file__).resolve(), tool_tmp)
     tool_tmp.chmod(0o755)
@@ -314,6 +380,8 @@ def copy_approved(role: str) -> None:
 
 
 def check() -> int:
+    from rosy_host_recovery import snapshot
+
     lib = host(LIB)
     dirs = {"common": lib / "common", "role": lib / "role", "deploy": lib / "deploy"}
     status = {"time": int(time.time()), "fixed": [], "drift": [], "awaiting_approval": [], "errors": []}
@@ -333,9 +401,12 @@ def check() -> int:
     for key in ("fixed", "drift", "awaiting_approval", "errors"):
         for item in status[key]:
             print(f"{key}: {item}")
+    status["recovery"] = snapshot(ROOT, sh)
     out = host(STATUS)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    tmp = out.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    os.replace(tmp, out)
     # awaiting_approval is reported (status.json, journal) but is not a failure of the unit.
     return 1 if status["drift"] or status["errors"] else 0
 
@@ -352,8 +423,16 @@ def main(argv: list[str]) -> int:
             if not ROOT and os.geteuid() != 0:
                 raise SystemExit("run with sudo (or --dry-run)")
             copy_approved(role)
-        changes = install(role, dry_run, approve)
+        try:
+            changes = install(role, dry_run, approve)
+        except RuntimeError as exc:
+            if not dry_run:
+                check()
+            print(str(exc), file=sys.stderr)
+            return 1
         print(f"{'dry run: ' if dry_run else ''}{changes} change(s) applied")
+        if not dry_run:
+            check()
         return 0
     print(__doc__)
     return 2

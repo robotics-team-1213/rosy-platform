@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-18 · uncommitted · land.py 통과 결과 캐시
-- 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
-- 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
-- 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
-- 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
+- 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
+- 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
+- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
+- 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
+- 2026-10-18 · 6ec7681069 · Specify internal selected-route prior transport v1.245 (D-769) (이식, 원래 2026-10-16)
