@@ -211,6 +211,18 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 clock=lambda: now[0], returns=returns.adapter if returns else None, return_http=ret,
                 snapshot=snapshot, observation_scope=observation_scope)
             failures = []
+            def trace_failure(label, call):
+                async def traced(*args, **kwargs):
+                    try:
+                        return await call(*args, **kwargs)
+                    except Exception:
+                        import traceback
+                        if len(failures) < 16:
+                            failures.append(f'{label} at SIM {now[0]}\n'+traceback.format_exc())
+                        raise
+                return traced
+            ports.read_operation = trace_failure('read_operation', ports.read_operation)
+            ports.read_station = trace_failure('read_station', ports.read_station)
             original_live = ret._live
             def traced_live(session, target, body, **kwargs):
                 try:
@@ -266,6 +278,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 policy_enabled=lambda: True, ports=ports, id_factory=lambda: next(ids),
                 admit_return=lambda *_: ChargeDecision(decision='WORK_ALLOWED', reason='SIM_BUDGET',
                     profile_revision='sim-profile', capacity_revision=None))
+            monitor.motion.checked = trace_failure('checked', monitor.motion.checked)
+            monitor.motion.call = trace_failure('motion_call', monitor.motion.call)
             ingress = StationIngress(stations=stations, sessions=charges, sources=[source, global_source],
                 clients=lambda: {robot_id: robot}, clock=lambda: now[0])
             if full_return:
@@ -487,7 +501,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     for _ in range(400):
                         await step()
                         current = await advance()
-                        assert current.state != 'HOLD', (current.reason, owner.reason, world.pose)
+                        assert current.state != 'HOLD', (current.reason, owner.reason, world.pose, failures)
                         if shutdown_phase == 'RETURNING' and current.state == 'RETURNING' and world.command[0] > 0.:
                             await shutdown_and_restart('RETURNING')
                             return
@@ -588,7 +602,12 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                             if complete:
                                 break
                         else:
-                            raise AssertionError(('ordinary work did not complete', cycles.work, world.pose))
+                            raise AssertionError(('ordinary work did not complete',
+                                tasks.get_task(cycles.work['task_id']), world.pose,
+                                svc.nav.nav_state.value, returns.backend.current, returns.runner.open_trips(),
+                                [(task.get_name(), [(frame.f_code.co_name, frame.f_lineno)
+                                    for frame in task.get_stack(limit=2)])
+                                 for task in list(asyncio.all_tasks())[:16]], failures))
                         assert math.hypot(world.pose[0]-.9, world.pose[1]) <= .02, (
                             'ordinary work receipt before physical SIM arrival', number, world.pose)
                         assert abs(math.remainder(world.pose[2], 2*math.pi)) <= math.radians(5)
