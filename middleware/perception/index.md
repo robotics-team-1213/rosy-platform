@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · recentre와 근접 출구 관측 수명 분리
 - 2026-10-20 · uncommitted · 현재 차로와 원본 행 순서 후보 검증
 - 2026-10-19 · uncommitted · 굽은 관측 경로 길이와 전방 x거리 구분
 - 2026-10-19 · uncommitted · 관측 굽은 통로 전진으로 정렬 장소 종료
 - 2026-10-19 · uncommitted · 이미 선택된 반대 pivot의 관측 정렬
-- 2026-10-19 · uncommitted · 관측 통로 정렬 후보와 소진 예산 보존

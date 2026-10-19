@@ -1713,3 +1713,9 @@
 - 변경: 미래 출구와 현재 차로 후보를 구분하는881 후보, 법선 보정 뒤 x 정렬로 영상 행이 섞이는 현상을 고친44f463 후보를 독립 검토와 native 재생으로 확인했다. 목표 행을 뒤집는 caller와 confidence band를 함께 맞췄다. 정렬 수명·회전 예산·CORE 정지 조건을 완화하지 않았다.
 - 증거: 100c 검증 head의 관련·release252 passed, 영향 범위6,668 passed/408 skipped/NEW0. 두 후보의 native SIM은 각각 pose·stall 실패이며 새 판단은0회다. 새 동결 기록 `docs/validation/pinky-junction-feasibility-2026-10-20/result.md`에 source·모델·원본·기각 가설을 결속했다.
 - gate 변화: 없음. source 검토와 원격 회귀 통과를 SIM 수용으로 승격하지 않는다. 앞선 먼 입구의 producer near 거절을 guide/memory가 되살리는 원본 재생을 추가 확인해, side별 near 사실과 관측 source에 결속한 기억을 별도 회귀로 검증한다.
+
+## 2026-10-20 · uncommitted · recentre와 근접 출구 관측 수명 분리
+
+- 변경: 운동 선택 해제가 관측점까지 지우던 결합을 기존 route_guard로 옮겨 분리한다. 실제 near 점·source·관측 시각만 저장하고 기존.5m와 앞쪽 조건, fresh guide, 원본 wall clearance, source 프레임 연속성과 source→current 이동 한도로 만료한다. 경로 변경·reset·안전 거절은 기억을 지운다. 회전량 예산과 CORE 권한은 유지한다.
+- 증거: a10a7d275 native 재현2 failed/4 passed, NEW2. 앞선1b6 SIM은3.421m stall FAIL이나 먼 입구 거절40회와 현재 차로 선택2회가 적용됐다. 후속 GREEN·SIM은 별도 기록한다.
+- gate 변화: 없음. 주행 수용 HOLD. drivable_steer의 기존 수명 블록을 옮겨 파일을 축소했고, capped 파일에 기능을 덧붙이지 않았다.

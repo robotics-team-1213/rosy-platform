@@ -9287,3 +9287,9 @@ osy-d395-s1d\`.
 - 변경: 승인된 거리 안내 계획의 첫 관측 검증을 NO-GO로 표시하고 새 protocol 미구현 상태를 명확히 했다. 현재 차로·공통 목표 행 순서 후보의 회귀·독립 리뷰·실패 SIM을 새 검증 기록으로 보존했다.
 - 증거: `pinky-junction-feasibility-2026-10-20/result.md`. 100c 원격 영향 범위6,668 passed/408 skipped/NEW0이나 SIM은 stall 실패, 앞선881도 pose 실패·새 판단0회다. code 시험을 완주 수용으로 계산하지 않았다.
 - gate 변화: 없음. 주행 수용 HOLD. cue 통과 평면 완화도 원본에서 여유 조건이 성립하지 않아 기각했다. 후속 near admission 우회 회귀는 별도 검증한다.
+
+## 2026-10-20 · uncommitted · 근접 출구 후보 실패와 후속 수명 진단
+
+- 변경: 1b6 near admission 후보의 원격 시험과3.421m stall SIM 실패를 동결 기록에 추가했다. 관측 기억과 recentre 운동 선택의 수명 결합을 다음 재현 대상으로 기록했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 run ID·raw hash·실제 적용 횟수. 최종 정지·lease 해제·native 정리를 확인했으며 완주 수용은 미달이다.
+- gate 변화: 없음. 연속2회 동일 조건 완주를 통과하기 전까지 HOLD다.

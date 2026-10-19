@@ -56,3 +56,20 @@ SIM은 GPU, map_v2_fleet, lap, stall60, record, `lane_return` 제외 조건을 �
 ## 기록 범위 정정
 
 독립 리뷰에 따라 위 “이후 커밋은 시험 자료 형식 정리”의 범위를 명시한다. 이는 `44f463f1c` 이후 `100c962ec47`까지의 후속 커밋을 뜻한다. 그 뒤 `c1de655151`은 별도의 near admission·기억 source 결속 생산 코드 수정이며, 위100c의 시험·SIM 결과로 검증됐다고 해석하지 않는다.
+
+## near admission 후보 1b6d47f4bb: SIM 실패
+
+생산 코드는 `c1de655151`, 회귀 자료는 `b496d1e26`이며 최종 문서 HEAD는 `1b6d47f4bb03a1e39be818d74b75686b7d0f28b4`다. b311 원격 관련·문서·release 452 passed, affected 두 실행 6860+9=6869 passed / 408 skipped / NEW0. 1b6 문서·release 별도 실행은 212 passed / NEW0이며 전체 affected 재실행으로 표시하지 않는다.
+
+같은 고정 모델·지도 조건의 `sim-1b6d47f4bb-58308c`는 progress3.421m에서 stall FAIL. 먼 출구 거절40회, 현재 차로 우선 판단2회가 실제 적용돼 앞선1.861m 실패 구간은 통과했다. learned_drivable677회 / fallback0, 최종 cmd·odom0, lease 해제, 남은 프로세스 없음, native 정리 완료. 연속 완주 수용은 미달이다.
+
+- result SHA256: `fd6d06bba6477e87fdf487e98e9d9b2a263541fcb305d5d9e6c61ccdffd1c906`.
+- observations SHA256: `ad181349fd148a8c78802985191c1f1e5ab58a6cd2eade4f20b3a62a4956e96a`.
+
+새 실패는90.75s recentre_first가 운동 선택 `_side`를 지운 뒤 다음 프레임이 관측 기억 `_route_exit`까지 지우는 수명 결합으로 재현된다. 88.625s에 near 수용한 오른쪽 관측점은 raw odom 보간상91.875s에도 현재 좌표(.1038,-.0819)m, 원점 이동.0804m로 기존.5m 범위 안에 있다. 같은 route leg이며, 새 프로토콜·정렬 회전 예산 완화 없이 관측 기억과 운동 선택의 수명을 분리하는 후보를 검증한다. 재현 커밋 `a10a7d275`의 원격 시험은 최근접 관측 유실·원거리 만료 두 항목 RED이며 기존 실패 목록과 비교했다.
+
+## 관측 기억 수명 후보 124cccd115: 관련 회귀 통과
+
+생산·회귀 HEAD `124cccd11548e8a3a52f6770faa68ee2987318fa`. 독립 read-only contract reviewer `/root/drive_success_review`가 원본 wall 임계값과 검출 가능한 odom 시각·pose 불연속에 대한 두 지적을 재검토해 해소했다. source 시각·pose 연속성과 실제 keeper의 current_stamp로 source→current 나이·이동·yaw를 검사하며, 모든 odom epoch 변화를 검출한다고 주장하지 않는다. 과거 current_stamp 없는 직접 호출은 기존 호환 범위다.
+
+원격 관련5개 파일은150 passed / NEW0, skip0, runner exit0. 새 회귀는 recentre 보존, 좌표변환, reset·경로·wall·stale 거절, 원래.5m 만료, far/generated 미저장, cached source 결속, clock·pose 불연속을 포함한다. size-range는1b6 이후 두 커밋 통과. 기존 회전량 예산·CORE 최종 명령은 유지했다. 전체 영향 범위와 같은 조건 SIM은 별도 검증 전이며 완주 수용 HOLD다.
