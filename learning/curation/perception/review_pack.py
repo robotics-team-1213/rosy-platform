@@ -76,7 +76,7 @@ def build_review(source, out):
 
 PAGE = r'''<!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ROSY 영상 라벨 검수</title>
+<title>Rosy Learning — 영상 라벨 검수</title>
 <style>body{font:16px system-ui;margin:24px;background:#f5f5f3;color:#202520}button,select,textarea{font:inherit;padding:8px;margin:4px}button{cursor:pointer}main{max-width:1100px;margin:auto}.workspace{display:flex;gap:20px;flex-wrap:wrap}canvas{width:100%;max-width:720px;touch-action:none;border:1px solid #555;background:#ddd}.image{flex:2;min-width:300px}.controls{flex:1;min-width:260px}textarea{box-sizing:border-box;width:100%;height:190px}#gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}#gallery img{width:100%}.card{background:white;padding:12px}#status{font-weight:bold}label{display:block;margin:12px 0}small{overflow-wrap:anywhere}li{cursor:pointer;padding:6px}li.selected{background:#d5eadd}</style>
 <main><h1>촬영 영상 라벨 검수</h1><p>객체 4프레임: 박스를 선택한 뒤 다시 드래그하면 위치·크기가 바뀝니다. 새 박스 버튼을 누른 뒤 드래그하면 추가됩니다. 원본 이미지의 픽셀은 변경하지 않습니다.</p>
 <p><strong>변경은 다운로드 전까지 이 브라우저에만 있습니다. 새로고침하거나 탭을 닫으면 저장하지 않은 수정이 사라집니다.</strong> 아래에서 프레임 전체를 확인하고 승인해야 학습 라벨 후보로 표시됩니다. 이 파일은 검수자 신원을 인증하지 않습니다.</p>

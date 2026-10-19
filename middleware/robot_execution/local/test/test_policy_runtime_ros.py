@@ -12,7 +12,7 @@ import threading
 import time
 import traceback
 from dataclasses import replace, asdict
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from uuid import uuid4
 
 import pytest
@@ -219,7 +219,7 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             command,runner,api,parent=submit_parent(session,journal,tmp_path,
                 candidate_factory=prepare_inference if with_inference else None)
         elif with_core:
-            port = CoreArmPolicyPort(session, capture=lambda: (rgb, camera_capture), principal='fixture-operator')
+            port = CoreArmPolicyPort(session, capture=lambda: nullcontext((rgb, camera_capture)), principal='fixture-operator')
             app = create_app({}, SimpleNamespace(arm_policy=port,
                 safety=SimpleNamespace(estop=False, estop_listeners=[])))
             app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='fixture-operator', role='operator')

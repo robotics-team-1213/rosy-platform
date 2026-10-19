@@ -11,7 +11,7 @@ from typing import Optional
 from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.cost import STOP
 from fleet.server.trip_laps import hold_back_m
-from fleet.server.trip_ports import LiveTrip
+from fleet.server.trip_live import LiveTrip
 
 #: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
 #: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
