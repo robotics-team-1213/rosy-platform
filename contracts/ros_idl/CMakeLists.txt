@@ -23,6 +23,7 @@ set(
   "srv/SetBrightness.srv"
   "srv/SetLamp.srv"
   "srv/PilotRecordingStart.srv"
+  "srv/MapAdoption.srv"
 )
 
 set(
