@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · test(recovery): preserve historical inputs and host test boundaries
 - 2026-10-19 · uncommitted · fix(recovery): bind independently verified public digests
 - 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
 - 2026-10-19 · uncommitted · Account 인증서 발급 확인·보호 백업·갱신 타이머
 - 2026-10-19 · 30acdffbfb · Account 활성화 후보와 설정 포함 Cam APK 준비
-- 2026-10-19 · 8d05ced7b · Account 전환 선행 조건 재확인
