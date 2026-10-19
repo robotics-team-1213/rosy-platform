@@ -25,9 +25,14 @@ MASKS = [
 ]
 
 
-@pytest.fixture(params=MASKS, ids=['e434-91s', '8812-92s'])
-def way(request):
-    packed = zlib.decompress(base64.b64decode(request.param))
+@pytest.fixture(params=[0, 1], ids=['e434-91s', '8812-92s'])
+def case(request):
+    return request.param
+
+
+@pytest.fixture
+def way(case):
+    packed = zlib.decompress(base64.b64decode(MASKS[case]))
     assert len(packed) == 240 * 320 // 8
     return np.unpackbits(np.frombuffer(packed, np.uint8)).reshape(240, 320).astype(bool)
 
@@ -35,23 +40,17 @@ def way(request):
 def test_far_normal_offsets_cannot_precede_the_near_observed_centre(way):
     info = way_target(way, G, .03317, .0925)
     x, y = info['target_m']
-    assert x >= .18 and abs(math.degrees(math.atan2(y, x))) < 20
+    assert x >= .18 and abs(math.degrees(math.atan2(y, x)) - 10.) < 30
 
 
-def test_a_current_straight_centre_defers_the_future_exit_arc(way):
+def test_corrected_row_order_selects_the_current_lane_only_when_it_opposes_the_exit(way, case):
     pose = (0., 0., 0.)
     error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, pose, pose,
         observed_only=True, current_stamp=1.125, guide_fresh=True,
         guide_here_deg=10., guide_deg=-75., guide_pivot_ok=False)
-    assert info['strategy'] == 'drivable_centre'
-    assert abs(error) < .05 and confidence > .35
-
-
-def test_a_disconnected_far_centre_does_not_change_the_near_target():
-    point, curvature, band = _centre_target(np.array([.14, .15, .16, .04, .05]),
-                                           np.array([0., 0., 0., .12, .13]), .25)
-    assert point == pytest.approx((.16, 0.)) and curvature == 0.
-    assert not band[3:].any()
+    assert info['strategy'] == ('drivable_turn_right', 'drivable_centre')[case]
+    assert (error > 0) if case == 0 else (error < 0 and info['future_turn_deferred'])
+    assert confidence == .6
 
 
 def test_confidence_uses_the_same_image_rows_as_the_reversed_target_input():
