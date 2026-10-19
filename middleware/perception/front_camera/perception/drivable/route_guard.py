@@ -232,7 +232,9 @@ class RouteBridge:
             local = all(point[1] * floor[0][1] > 0.0 for point in floor)
             current = [_to_current(point, source_pose, pose) for point in floor]
             sign = 1.0 if current[0][1] > 0.0 else -1.0
-            local = local and all(0.0 < point[0] < BEND_ON_X_M and point[1] * sign > 0.0 for point in current)
+            end = next((i for i, point in enumerate(current) if not 0.0 < point[0] < BEND_ON_X_M), len(current))
+            floor, current = floor[:end], current[:end]
+            local = local and len(floor) >= 4 and all(point[1] * sign > 0.0 for point in current)
         if local:
             near, target, opening = floor[0], floor[-1], floor[-1]
         if not (valid(near, 2) and valid(target, 2) and valid(opening, 2)):
