@@ -288,21 +288,23 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     first = await runtime.tick()
                     assert first.state == 'RETURNING', (first.reason, owner.reason, failures)
                     assert runtime.decision.reason == 'LOW_SOC_RETURN'
-            tick_finished, tick_generation, runtime_tasks = asyncio.Condition(), [0], set()
+            tick_finished, tick_permitted, runtime_tasks = asyncio.Event(), asyncio.Event(), set()
             initial_core_tick = asyncio.Event()
             async def wait_runtime():
-                async with tick_finished:
-                    previous = tick_generation[0]
-                    await asyncio.wait_for(tick_finished.wait_for(lambda: tick_generation[0] > previous), 3.)
+                tick_finished.clear()
+                tick_permitted.set()
+                await asyncio.wait_for(tick_finished.wait(), 3.)
             if lifespan:
                 original_tick = runtime.tick
                 async def observed_tick():
                     runtime_tasks.add(asyncio.current_task())
                     await initial_core_tick.wait()
+                    await tick_permitted.wait()
+                    tick_permitted.clear()
+                    tick_clock = now[0]
                     result = await original_tick()
-                    async with tick_finished:
-                        tick_generation[0] += 1
-                        tick_finished.notify_all()
+                    assert now[0] == tick_clock, 'SIM clock advanced during an in-flight runtime tick'
+                    tick_finished.set()
                     return result
                 runtime.tick = observed_tick
             async def advance():
@@ -487,7 +489,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     for _ in range(400):
                         await step()
                         current = await advance()
-                        assert current.state != 'HOLD', (current.reason, owner.reason, world.pose)
+                        assert current.state != 'HOLD', (current.reason, owner.reason, world.pose, failures)
                         if shutdown_phase == 'RETURNING' and current.state == 'RETURNING' and world.command[0] > 0.:
                             await shutdown_and_restart('RETURNING')
                             return
