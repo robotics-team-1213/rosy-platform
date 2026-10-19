@@ -1,6 +1,6 @@
 # Contributing
 
-새 팀원은 [팀 가이드](../docs/reference/team-guide.md)를 위에서 아래로 따라 한다. 첫날 설정, 공유 범위, 이슈에서 머지까지의 명령, 맡을 일이 거기 있다. 훅과 머지에 대한 설명이 이 문서와 다르면 이 문서와 [D-762](../docs/adr/D-762-main-gateway-pull-request-merge-queue.md)가 맞다.
+새 팀원은 [인수인계](../docs/reference/handoff.md)로 지금 상황을 보고, [팀 가이드](../docs/reference/team-guide.md)를 위에서 아래로 따라 한다. 브랜치·커밋·PR·push 규칙을 한 장으로 모은 것은 [git으로 일하는 법](../docs/reference/git-workflow.md)이다. 첫날 설정, 공유 범위, 이슈에서 머지까지의 명령, 맡을 일이 거기 있다. 훅과 머지에 대한 설명이 이 문서와 다르면 이 문서와 [D-762](../docs/adr/D-762-main-gateway-pull-request-merge-queue.md)가 맞다.
 
 ## 지금 main에 들어가는 길 (2026-10-16 GitHub 설정 확인)
 

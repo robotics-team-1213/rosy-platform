@@ -52,3 +52,30 @@ def test_network_failure_retries_then_stops_without_blocking_other_exports(tmp_p
         state = review_bridge.run_once(cfg, tmp_path / "state", publisher=fail)
     assert len(calls) == 2
     assert next(iter(state["steps"].values()))["status"] == "failed"
+
+
+def test_export_archive_scp_is_bandwidth_capped(tmp_path, monkeypatch):
+    """Network load: the bulk scp gets -l <kbit/s> (default 2000, config limit_kbps, 0 = off)."""
+    import json
+    folder = tmp_path / "export"
+    folder.mkdir()
+    (folder / "manifest.json").write_text(json.dumps({"files": []}))
+    (folder / "COMPLETE").write_text("")
+    seen = []
+
+    class Stop(Exception):
+        pass
+
+    def run(args, **kwargs):
+        seen.append((args, kwargs["timeout"]))
+        raise Stop
+
+    monkeypatch.setattr(review_bridge.subprocess, "run", run)
+    cfg = {"peer": "approved-model-peer", "remote_reviews": "/srv/reviews"}
+    for extra, cap in (({}, ["-l", "2000"]), ({"limit_kbps": 0}, [])):
+        with pytest.raises(Stop):
+            review_bridge.publish(folder, "d" * 64, {**cfg, **extra}, tmp_path)
+        args, timeout = seen.pop()
+        assert args[0] == "scp" and (args[1 + len(review_bridge.SSH_OPTIONS):][:2] == cap
+                                     if cap else "-l" not in args)
+        assert timeout >= 60

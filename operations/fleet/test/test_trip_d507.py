@@ -13,13 +13,14 @@ from fleet.routing.cost import STOP
 from fleet.server.console_view import TripCaps, trip_caps
 from fleet.routing.graph import build_graph
 from fleet.site_map import from_lane_graph
-from fleet.server.trip_ports import HttpLaneJunction, TripConfig, TripError, line_past
+from fleet.server.trip_geometry import line_past
+from fleet.server.trip_ports import HttpLaneJunction, TripConfig, TripError
 from fleet.site_map import SiteMap
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
 from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _activate_again, _arc, _free_map, _map, _plan, _setup, _ticks, run
-import fleet.server.trip_ports as trip_ports
+import fleet.server.trip_geometry as trip_geometry
 
 PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 LEGACY = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)  # no junction_pivot
@@ -29,15 +30,15 @@ def test_west_edge_bend_candidate_needs_a_fresh_aligned_pose():
     arc = build_graph(from_lane_graph(LANE_GRAPH)).arcs["west:rev"]
     _, s, _ = arc.project(-0.951, -0.491)
     pose = {"x": -0.951, "y": -0.491, "yaw": -0.068, "age_s": 0.1, "dead_reckon_m": 0.0}
-    candidate = trip_ports.bend_candidate(arc, s, pose)
+    candidate = trip_geometry.bend_candidate(arc, s, pose)
     assert candidate["arc_id"] == "west:rev"
     assert 0.20 < candidate["bend_in_m"] < 0.30
     assert 55 < candidate["heading_change_deg"] < 70
     for rejected in ({"age_s": 0.4}, {"dead_reckon_m": 0.1}, {"yaw": 1.0},
                      {"y": -0.40}):
-        assert trip_ports.bend_candidate(arc, s, {**pose, **rejected}) is None
+        assert trip_geometry.bend_candidate(arc, s, {**pose, **rejected}) is None
     _, straight_s, _ = arc.project(-1.15, -0.511)
-    assert trip_ports.bend_candidate(arc, straight_s,
+    assert trip_geometry.bend_candidate(arc, straight_s,
                                      {**pose, "x": -1.15, "y": -0.511, "yaw": 0.0}) is None
 
 
@@ -245,7 +246,7 @@ def test_a_straight_on_the_ring_sends_its_lane_turn_and_a_turn_does_not():
     ports.at(arc, arc.length_m - 0.25)
     _ticks(runner, ports)
     assert ports.sent[0][:2] == ("straight", "SE")
-    turn = math.degrees(trip_ports._lane_turn(arc, arc.length_m, 0.25))
+    turn = math.degrees(trip_geometry._lane_turn(arc, arc.length_m, 0.25))
     assert ports.expects[0]["lane_turn_deg"] == pytest.approx(turn, abs=0.1) and 45 < turn < 65
     assert "lane_turn_deg" not in _sw_spoke_sends().expects[0]   # a turn: its action says the way
 
@@ -582,6 +583,21 @@ def test_the_curve_offset_term_is_still_capped_at_0_30():
     sent = _sent_at(_bent_map(60.0), PIVOT, 0.5, pose={"y": 0.09, "age_s": 0.6},
                     expect_tol_min_m=0.29).expects[0]
     assert sent["expect_tol_m"] == 0.30
+
+
+def test_a_route_guided_robot_gets_no_turn_instruction_and_no_window_stop():
+    """A line_follow_route_guide robot takes the branch from its route prior (keeps right without one):
+    no turn is sent, so none can stay armed and stop the trip at the next junction (v2 lap r18/r19)."""
+    guided = dataclasses.replace(PIVOT, line_follow_route_guide=True)
+    runner, store, ports = _setup(_free_map("lane"), caps=guided)
+    arc = _arc(store, "ab:fwd")
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, 0.5)
+    _ticks(runner, ports)
+    ports.at(arc, 1.0)                                    # on the place
+    _ticks(runner, ports, 1, dt=8.0)
+    assert ports.sent == [] and runner.view("p1")["state"] != "stopped"
 
 
 def test_a_refresh_at_or_past_the_place_while_armed_stops_the_trip():

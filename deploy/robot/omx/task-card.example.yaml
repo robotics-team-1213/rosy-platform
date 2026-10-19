@@ -1,0 +1,53 @@
+# Task card — decided before recording; embedded in session.json by record_session.py --task-card.
+schema: rosy.omx-task-card.v1
+task_id: strawberry-out-and-back
+revision: 1                      # bump whenever anything below changes; one revision per session
+single_task: "Take the strawberry out of the white bowl, put it on the marked spot, then pick it up again and put it back in the bowl."
+
+record:                          # plugged into the device config by record_session.py --task-card
+  repo_id: local/omx-strawberry-out-and-back
+  root_prefix: /home/<user>/rosy-data/omx-leader
+  episode_time_s: 40
+  reset_time_s: 10                # the scene resets itself; only fix a dropped strawberry
+  num_episodes: 5
+
+success:
+  end_state: strawberry inside the bowl, arm back at the home pose
+  required_path: strawberry rested on the marked spot in between
+  judged_by: top camera (human review; not the teacher or joint targets)
+
+layout:                          # relative to the follower base, measured with a ruler in the morning
+  bowl: {distance_cm: 22, side: "slightly left of front", fixed: true}
+  spot: {distance_cm: 22, from_bowl_cm: 9, marking: tape cross}
+  reach_check: move the leader slowly to the bowl floor and the spot before recording
+  keep_clear: arm path between home, bowl and spot
+
+objects:
+  strawberry: {kind: toy, color: red, check: width within gripper range 1982-3300, not slippery}
+  bowl: {color: white, check: wall height lets a vertical approach reach the strawberry}
+
+home_pose: arm folded beside the bowl, not over it; mark the leader pose so each episode starts the same
+
+phases: [approach, grasp, lift, place_on_spot, release, regrasp, place_in_bowl, release, return_home]
+
+variation:
+  session_1: everything fixed; strawberry orientation in the bowl varies naturally
+  later: bowl position +/- 3 cm, recorded per episode
+
+cameras_lighting:
+  top: bowl, spot and gripper in view; fixed lamp, condition NORMAL in viewer state.json
+  front: wrist; strawberry visible at grasp (needs a side light; dark at night)
+
+operator: one person, same strategy every time, slow and smooth
+
+failure_labels: [missed_grasp, dropped, outside_bowl, collision, timeout, intervention]
+
+counts: {train_success: 50, validation: 10, final_test: 10, split_by: session}   # D-770 G2
+
+design_decisions:
+  - id: loop
+    issue: the end state equals the start state, so a learned policy repeats the cycle
+    decision: keep one out-and-back episode (self-resetting); evaluate "one full cycle within 40 s"
+    revisit: for one-shot tasks split into separate sub-tasks or add a done marker
+
+safety: area clear of hands during motion, a hand on the follower power switch, caps from caps.json only

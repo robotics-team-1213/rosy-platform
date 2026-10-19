@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-18 · uncommitted · site: D-796 미러 배선을 설치 신원·비밀 스캐너·pairing overlay에 맞춘다
-- 2026-10-18 · uncommitted · site: 사이트 문맥·로그 저장소(Postgres 미러) D-796
-- 2026-10-18 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
-- 2026-10-18 · f6050b86a7 · OMX 클라이언트 배포 준비 파이프라인
-- 2026-10-18 · 5e3af70e6d · D-800 CORE 경유 OMX–LeRobot 연동
+- 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
+- 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
+- 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
+- 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+- 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합

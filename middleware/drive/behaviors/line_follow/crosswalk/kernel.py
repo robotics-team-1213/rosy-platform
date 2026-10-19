@@ -132,7 +132,7 @@ def _edge_sides(boxes):
     return out
 
 
-def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = False, band: float = 0.0):
+def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = False, band: float = 0.0, hits=None):
     """(verdict, edge cells). A return deeper than ``band`` inside A is a person at once; one within
     ``band`` of A's outer edge only names its cell (size ``band``) for the caller's persistence count
     (D-573 rev 2). origin/heading: the LiDAR origin and base heading in the anchor frame.
@@ -163,6 +163,8 @@ def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = Fals
             continue
         if band <= 0.0:
             occupied = True
+            if hits is not None and not hits:   # diagnostics: the first return that held
+                hits.append((origin[0] + dx * distance, origin[1] + dy * distance))
             continue
         px, py = origin[0] + dx * distance, origin[1] + dy * distance
         depth = 0.0
@@ -172,6 +174,8 @@ def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = Fals
                 depth = max(depth, min([v for v, e in zip(d, edge) if e] or [math.inf]))
         if depth > band:
             occupied = True
+            if hits is not None and not hits:
+                hits.append((px, py))
         else:
             cells.add((math.floor(px / band), math.floor(py / band)))
     return (PERSON if occupied else UNKNOWN if unknown or not all(crossed) else None), cells
@@ -374,9 +378,12 @@ class CrosswalkGate:
         heading = math.atan2(math.sin(pose.yaw - z.yaw), math.cos(pose.yaw - z.yaw))
         front = self._local(z, pose, geo.front_x)[0]
         band, k, n = self._persist
-        verdict, cells = judge_cells(scan, self._boxes(z, geo, front, self._local(z, pose, 0.0)[1], heading),
-                                     self._local(z, pose, geo.lidar_x),
-                                     heading, blind_proven=self._state == CROSSING, band=band)
+        boxes, hits = self._boxes(z, geo, front, self._local(z, pose, 0.0)[1], heading), []
+        verdict, cells = judge_cells(scan, boxes, self._local(z, pose, geo.lidar_x),
+                                     heading, blind_proven=self._state == CROSSING, band=band, hits=hits)
+        # diagnostics (the gate glue logs them when the reason changes): A and the return that held, anchor frame
+        self.last_look = tuple(round(v, 3) for v in boxes[0])
+        self.last_hit = tuple(round(v, 3) for v in hits[0]) if hits else None
         # D-573 rev 2: a return within 3 sigma of A's edge is a person once the same cell is hit in
         # >= k of the last n scans; range noise from a surface just outside A scatters over cells.
         self._edge_hist = (self._edge_hist + [cells])[-n:]

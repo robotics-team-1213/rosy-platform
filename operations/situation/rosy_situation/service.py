@@ -44,7 +44,7 @@ from rosy_situation.snapshot_assessment import snapshot_assessments
 
 __version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
-TIMEOUT_S = 4.0       # /api/fleet/state takes ~2 s on the site (power read waits 0.5 s per robot)
+TIMEOUT_S = 4.0       # /api/fleet/state is a shared cached gather; a cold gather can still take ~2 s
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
 OWNER_MODES = ("available", "shared", "owner_busy")
@@ -62,7 +62,11 @@ def build_commit(where: Path = Path(__file__).resolve().parent) -> Optional[str]
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=where, capture_output=True,
                                text=True, timeout=5, check=True).stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        return None
+        # D-805 releases (omx_autoupdate.py kind "service") are git archives with the commit in RELEASE.
+        try:  # <release>/operations/situation/rosy_situation
+            return (where.parents[2] / "RELEASE").read_text().strip()[:12] or None
+        except (OSError, IndexError):
+            return None
     return f"{head}-dirty" if dirty else head
 
 

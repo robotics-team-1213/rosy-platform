@@ -91,6 +91,9 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["line_follow_authority"] is True       # D-517 4: the manager enforces an authority
     assert base["line_follow_authority_required"] is False  # config line_follow.authority_required off
     assert base["line_follow_authority_shrink"] is True  # D-760 3: shrink, seq and ttl_s up to 5 s
+    assert base["line_follow_route_guide"] is False
+    svc.line_follow._config = dataclasses.replace(svc.line_follow.config, route_guide_enabled=True)
+    assert _controls(client)["items"][0]["line_follow_route_guide"] is True
     assert base["line_follow_authority_under_lease"] is True  # D-760 2: this CORE holds the trip lease
     assert base["line_follow_advice"] is True          # D-525: advice stored and shown, display only
     lf = svc.line_follow

@@ -1,6 +1,6 @@
 ## D-789 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다
 
-**Status:** Accepted (2026-10-17, 사용자 결정). 전환 구현 착수 결정이며 SOURCE·ARTIFACT·DEVICE·FIELD 통과나 설치 완료를 뜻하지 않는다.
+**Status:** Accepted (2026-10-17, 사용자 결정). 전환 구현 착수 결정이며 SOURCE·ARTIFACT·DEVICE·FIELD 통과나 설치 완료를 뜻하지 않는다. Decision 3의 사이트 계정 금지는 [D-801](D-801-site-console-robot-video-site-grants-and-hybrid-topology.md)이 사이트 발급 읽기 위임으로 대체했다(2026-10-18).
 
 ### Context
 
@@ -43,6 +43,7 @@ JPEG를 UDP로 옮기는 것만으로 프레임 간 압축, 혼잡 제어, 인�
 
 ### Alternatives
 
+- 토폴로지(Mesh·SFU·simulcast·MCU) 비교와 SFU 기본 + 사이트 PC MCU 모자이크 혼합 결정은 [D-801](D-801-site-console-robot-video-site-grants-and-hybrid-topology.md) 「토폴로지 선택」에 둔다(2026-10-18 부록).
 - JPEG/MJPEG 유지: 즉시 호환되지만 독립 프레임 전송과 소비자 증가가 6대 송출 예산을 압박한다. 이행 폴백으로만 유지한다.
 - 로봇↔브라우저 직접 WebRTC: 사이트 장애 경계는 작지만 뷰어·AI 소비자가 늘 때 로봇 송출과 세션 부담이 증가한다. 사이트 단일 uplink 분배를 선택한다.
 - 직접 UDP JPEG 또는 RTSP만 사용: 손실·혼잡·브라우저 재생·인증 연결을 별도로 구현해야 한다. 이번 목표는 브라우저 실시간 영상이므로 채택하지 않는다.

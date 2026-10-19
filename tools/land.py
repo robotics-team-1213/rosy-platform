@@ -3,8 +3,11 @@
 Run from a topic worktree (never the shared main checkout)::
 
     python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
-                         [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune]
+                         [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune] [--no-cache]
+                         [--queue-timeout MIN | --no-queue]
 
+Landings of one clone take turns (``land_queue.py``): the run waits in a FIFO queue under the git
+common dir until no live ticket is ahead, so it merges ``main`` once, after the one ahead landed.
 Each round merges the current local ``main`` into the branch, auto-resolves the
 append-only/generated conflicts (ADR Log, logs.md, adr_gaps.txt, index.md,
 STATUS.md; ``tools/harness/adr_gaps.txt`` arrives with the ADR-reservation
@@ -17,20 +20,19 @@ measured headroom, D-568; an unavailable host stops landing); an auto selection 
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
 that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
-stashes, resets or cleans. Standard library only.
+stashes, resets or cleans. A pytest invocation that passed on the same tree (or, when the selector
+vouches for the delta, an ancestor) is reused from ``land_cache.py`` unless --no-cache. Standard library only.
 """
 
 from __future__ import annotations
 
 import argparse
-import difflib
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path, PurePosixPath
 
@@ -41,16 +43,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
-from land_logs import append_blocks  # noqa: E402  (logs.md: whole entries, date order)
+from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
 import land_guards  # noqa: E402  (structural guards before the long round)
+import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
+import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
+import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
+from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
+                        resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
-ADR_LOG = "docs/reference/ROSY ADR Log.md"
-ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
-ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
-GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
 SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
@@ -78,125 +81,7 @@ def lines(cwd: Path, *args: str) -> list[str]:
     return [line for line in out(cwd, *args).splitlines() if line]
 
 
-# --- conflict resolution ------------------------------------------------------
-
-def resolver(path: str) -> str | None:
-    """How a conflicted path is auto-resolved, or None when a human must decide."""
-    name = PurePosixPath(path).name
-    if path == ADR_LOG:
-        return "adr-log"
-    if name == "logs.md":
-        return "append"
-    if path == ADR_GAPS:
-        return "union-dedupe"
-    # progress.md is hand-written lint input (gates), not generated: a human resolves it.
-    if name == "index.md" or path in GENERATED:
-        return "generated"
-    return None
-
-
-def _blob(wt: Path, oid: str, path: str) -> bytes:
-    # --filters gives the working-tree form (CRLF under core.autocrlf), so the
-    # result keeps the file's line endings and `git add` cleans it as usual.
-    return subprocess.run(["git", "-C", str(wt), "cat-file", "--filters", f"--path={path}", oid],
-                          capture_output=True, check=True, env=ENV).stdout
-
-
-def conflict_stages(text: str) -> dict[str, dict[int, str]]:
-    """`<mode> <oid> <stage>\\t<path>` lines (ls-files -u, merge-tree) -> {path: {stage: oid}}."""
-    found: dict[str, dict[int, str]] = {}
-    for line in text.splitlines():
-        match = re.match(r"^\d+ ([0-9a-f]+) ([123])\t(.+)$", line)
-        if match:
-            found.setdefault(match.group(3), {})[int(match.group(2))] = match.group(1)
-    return found
-
-
-def union(base: bytes, ours: bytes, theirs: bytes) -> bytes:
-    """Both sides' added lines, ours then theirs (git merge-file --union)."""
-    with tempfile.TemporaryDirectory() as tmp:
-        files = []
-        for name, data in (("ours", ours), ("base", base), ("theirs", theirs)):
-            files.append(Path(tmp, name))
-            files[-1].write_bytes(data)
-        return subprocess.run(["git", "merge-file", "-p", "--union", *map(str, files)],
-                              capture_output=True, env=ENV).stdout
-
-
-def clashes_are_insertions(base: bytes, ours: bytes, theirs: bytes) -> bool:
-    """True when every change touching the other side's change only adds lines.
-
-    A side that rewrote or dropped a base line next to the other side's append
-    would come back from a line union with the old line resurrected.
-    """
-    b = base.splitlines(keepends=True)
-
-    def changes(side: bytes) -> list[tuple[str, int, int]]:
-        ops = difflib.SequenceMatcher(None, b, side.splitlines(keepends=True), autojunk=False).get_opcodes()
-        return [(op, i1, i2) for op, i1, i2, _, _ in ops if op != "equal"]
-
-    mine, other = changes(ours), changes(theirs)
-    for side, against in ((mine, other), (other, mine)):
-        for op, i1, i2 in side:
-            # Adjacent (touching) ranges conflict in git too, hence <= on both ends.
-            if op != "insert" and any(i1 <= j2 and j1 <= i2 for _, j1, j2 in against):
-                return False
-    return True
-
-
-def sort_adr_rows(data: bytes) -> bytes:
-    """Sort each run of ``| D-n |`` rows by number and drop identical rows; BOM/EOL kept."""
-    rows = data.splitlines(keepends=True)
-    eol = b"\r\n" if b"\r\n" in data else b"\n"
-    result: list[bytes] = []
-    i = 0
-    while i < len(rows):
-        if not ADR_ROW.match(rows[i]):
-            result.append(rows[i])
-            i += 1
-            continue
-        j = i
-        while j < len(rows) and ADR_ROW.match(rows[j]):
-            j += 1
-        run = [r.rstrip(b"\r\n") for r in rows[i:j]]
-        run = sorted(dict.fromkeys(run), key=lambda r: int(ADR_ROW.match(r).group(1)))
-        last_eol = rows[j - 1][len(rows[j - 1].rstrip(b"\r\n")):]
-        result += [r + eol for r in run[:-1]] + [run[-1] + last_eol]
-        i = j
-    return b"".join(result)
-
-
-def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, bytes], list[str]]:
-    """Resolved bytes per auto-resolvable path, and `path: why` for the rest. Touches nothing."""
-    resolved: dict[str, bytes] = {}
-    manual: list[str] = []
-    for path, stage in conflicts.items():
-        kind = resolver(path)
-        if not kind:
-            manual.append(f"{path}: not in the auto-resolvable set")
-            continue
-        if set(stage) != {1, 2, 3}:
-            manual.append(f"{path}: modify/delete or add/add (stages {sorted(stage)})")
-            continue
-        base, ours, theirs = (_blob(wt, stage[n], path) for n in (1, 2, 3))
-        if kind == "generated":
-            data: bytes | None = theirs
-        elif kind == "append":
-            data = append_blocks(base, ours, theirs)
-        elif clashes_are_insertions(base, ours, theirs):
-            data = union(base, ours, theirs)
-            if kind == "adr-log":
-                data = sort_adr_rows(data)
-            else:
-                data = b"".join(dict.fromkeys(data.splitlines(keepends=True)))
-        else:
-            data = None
-        if data is None:
-            manual.append(f"{path}: a side changed existing lines, not only appended")
-        else:
-            resolved[path] = data
-    return resolved, manual
-
+# --- merging (conflict auto-resolution itself: land_merge.py) --------------------
 
 def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> list[str]:
     """Merge main_sha into HEAD; return the auto-resolved paths. Stop on anything else."""
@@ -393,23 +278,19 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
-    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
+    head = out(wt, "rev-parse", "HEAD")
+    reused, todo, keep = land_cache.split(wt, args, invocations, head, python, select)
+    done += reused
+    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
     began = time.monotonic()
-    codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+    codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
-    for inv, log, code in zip(invocations, logs, codes):
-        # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
-        # print no FAILED lines, so known_failures would wave them through.
-        if code not in (0, 1):
-            raise Stop(f"pytest {' '.join(inv)} exited {code} (log {log}); not landing")
-        if code == 1:
-            report = log.read_text(encoding="utf-8-sig", errors="replace")
-            if ("[tailscale-ssh: process died: signal:" in report
-                    or not any(re.match(r"^FAILED \S", line.strip()) for line in report.splitlines())):
-                raise Stop(f"pytest {' '.join(inv)} exited 1 without usable failure evidence "
-                           f"(log {log}); not landing")
+    whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
+    for inv, log, code in zip(todo, logs, codes):
+        if why := land_cache.unusable(code, log):
+            raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
@@ -417,6 +298,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run)
         if check.returncode != 0 and not flaky:
             raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+        if check.returncode == 0 and whole:
+            keep(inv, log)
         done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
     if args.node:
         mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
@@ -473,13 +356,22 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    if not (args.no_queue or args.dry_run):
+        before = out(wt, "rev-parse", "main")
+        safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
+        size_check(wt, before, "HEAD", python)
+        land_queue.join(wt, branch, args.queue_timeout * 60)  # main() releases the ticket on every exit
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
-    full_main: str | None = None  # main under this branch's last green FULL tier
+    # main under this branch's last green FULL tier, also from an earlier run (host lost, Ctrl-C, round cap)
+    full_main = land_full.restore(wt, branch) if args.tests == "auto" else None
+    if full_main:
+        summary.append(f"an earlier run's FULL tier passed over main {full_main[:10]} with this branch's change")
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
+        land_queue.touch()  # a held ticket stays fresh through long rounds
         reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
@@ -487,6 +379,13 @@ def land(args) -> int:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
+            gaps, dropped = landed_gaps(wt) if not args.dry_run else (b"", [])
+            if dropped:  # merge=union brought back lines main removed when those ADRs landed
+                (wt / ADR_GAPS).write_bytes(gaps)
+                git(wt, "add", "--", ADR_GAPS)
+                git(wt, "commit", "-m", f"chore(adr): drop adr_gaps lines of landed {', '.join(dropped)}")
+                print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
+                summary.append(f"round {round_no}: dropped landed ADR gap(s) {dropped} from {ADR_GAPS}")
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
         size_check(wt, main_sha, candidate, python)
@@ -537,10 +436,12 @@ def land(args) -> int:
             continue
         began = time.monotonic()
         tested = run_tests(wt, args, invocations, logdir, round_no)
-        reusable = reusable and not any("LOAD-FLAKY" in line for line in tested)  # pre-push reruns its gate
+        # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
+        reusable = reusable and not any("LOAD-FLAKY" in line or land_cache.NARROW in line for line in tested)
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
+            land_full.save(wt, branch, candidate, main_sha)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -554,6 +455,7 @@ def land(args) -> int:
         on_main(main_co)
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
+            land_full.forget(wt, branch)
             landed = out(main_co, "rev-parse", "HEAD")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
@@ -582,12 +484,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
     parser.add_argument("--no-prune", action="store_true", help="do not report finished worktrees either")
+    parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
+    parser.add_argument("--queue-timeout", type=float, default=180, help="minutes to wait in the landing queue")
+    parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
     try:
         return land(args)
-    except Stop as exc:
+    except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
         return 1
+    finally:
+        land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID
 
 
 if __name__ == "__main__":

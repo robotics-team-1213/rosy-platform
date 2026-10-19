@@ -110,6 +110,7 @@ def test_only_awaiting_approval_items_do_not_fail_the_check(tmp_path):
     fake, bin_dir = _fakes(tmp_path, wifi="site-net:802-11-wireless:yes\n")
     result = _run(tmp_path, bin_dir, fake, "check")
     assert result.returncode == 0, result.stdout
+    assert [c for c in _calls(fake) if not c.startswith(("systemctl is-", "systemctl show"))] == []
     status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
     assert status["awaiting_approval"] and not status["drift"] and not status["errors"]
 
@@ -120,7 +121,50 @@ def test_a_matching_host_is_clean(tmp_path):
     fake, bin_dir = _fakes(tmp_path, {"a.timer": ("enabled", "active")})
     result = _run(tmp_path, bin_dir, fake, "check")
     assert result.returncode == 0, result.stdout
-    assert [c for c in _calls(fake) if not c.startswith("systemctl is-")] == []
+
+
+def test_check_reports_live_recovery_even_when_config_files_match(tmp_path):
+    _lib(tmp_path, "", "", {})
+    fake, bin_dir = _fakes(tmp_path)
+
+    result = _run(tmp_path, bin_dir, fake, "check")
+
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    recovery = status["recovery"]
+    assert recovery["time"] > 0
+    assert recovery["state"] != "ok"
+    assert recovery["watchdog"]["state"] != "ok"
+    assert recovery["ssh"]["state"] != "ok"
+
+
+def test_recovery_install_is_a_single_explicit_approval_group():
+    lines = (ROOT / "deploy/hosts/common/host-state/manifest").read_text().splitlines()
+    for target in ("/usr/local/sbin/rosy-ssh-watchdog", "enabled rosy-ssh-watchdog.timer",
+                   "/etc/systemd/system/rosy-watchdog-load.service", "enabled rosy-watchdog-load.service",
+                   "/etc/systemd/system.conf.d/rosy-watchdog.conf", "/etc/sysctl.d/90-rosy-hang.conf"):
+        assert any(line.startswith("approval=recovery ") and target in line for line in lines), target
+
+
+def test_kernel_activation_failure_is_not_a_successful_install(tmp_path):
+    fake, bin_dir = _fakes(tmp_path)
+    (bin_dir / "sysctl").write_text("#!/bin/sh\nexit 1\n")
+    (bin_dir / "sysctl").chmod(0o755)
+    result = _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "/etc/sysctl.d/90-rosy-hang.conf")
+    assert result.returncode == 1
+    assert "could not be applied" in result.stderr
+    assert (tmp_path / "host/var/lib/rosy-host-state/status.json").is_file()
+
+
+def test_provisioning_reapplies_live_settings_even_when_the_files_already_match(tmp_path):
+    fake, bin_dir = _fakes(tmp_path)
+    for name, target in (("rosy-watchdog.conf", "/etc/systemd/system.conf.d/rosy-watchdog.conf"),
+                         ("90-rosy-hang.conf", "/etc/sysctl.d/90-rosy-hang.conf")):
+        _host_file(tmp_path, target, (ROOT / "deploy/hosts/common/host-state" / name).read_text())
+    result = _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "recovery")
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = _calls(fake)
+    assert "systemctl daemon-reexec" in calls
+    assert any(call.startswith("sysctl -q -p ") and call.endswith("90-rosy-hang.conf") for call in calls)
 
 
 def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
@@ -128,7 +172,7 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
     result = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "+OnCalendar=*-*-* 06:03:00" in result.stdout
-    assert "[approval] /etc/systemd/system.conf.d/rosy-watchdog.conf: missing: skip (needs --approve)" in result.stdout
+    assert "[approval=recovery] /etc/systemd/system.conf.d/rosy-watchdog.conf: missing: skip (needs --approve)" in result.stdout
     assert not (tmp_path / "host").exists()
     assert [c for c in _calls(fake) if not c.startswith(("systemctl is-", "nmcli -t"))] == []
 
@@ -271,12 +315,13 @@ def test_hang_settings_wait_for_approval_on_every_pc():
     names = ("system/rosy-watchdog-load.service", "system.conf.d/rosy-watchdog.conf", "sysctl.d/90-rosy-hang.conf")
     for role in ROLES.values():
         manifest = ROOT / "deploy" / role / "host-state" / "manifest"
-        lines = manifest.read_text(encoding="utf-8").splitlines()
+        lines = (manifest.read_text(encoding="utf-8") + "\n" +
+                 (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8")).splitlines()
         for name in names:
             found = [ln for ln in lines if name in ln and not ln.startswith("#")]
             assert found and all(ln.startswith("approval") for ln in found), (role, name)
     unit = (ROOT / "deploy/hosts/common/host-state/rosy-watchdog-load.service").read_text()
-    assert "ExecStart=/usr/sbin/modprobe iTCO_wdt" in unit and "RemainAfterExit=yes" in unit
+    assert "modprobe iTCO_wdt" in unit and "modprobe wdat_wdt" in unit and "RemainAfterExit=yes" in unit
 
 
 def test_ssh_password_login_stays_on():
@@ -389,6 +434,73 @@ def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
             assert not lines
         else:
             assert len(lines) == 1 and lines[0].startswith("approval=sim apt ros-jazzy-ros-gz "), role
-    # The common manifest reaches every PC, the site PC included.
+    # The common manifest reaches every PC, the site PC included: no sim package, only uv's pip (D-802).
     common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8").splitlines()
-    assert not [line for line in common if line.split("#", 1)[0].split()[1:2] == ["apt"]]
+    assert [line for line in common if line.split("#", 1)[0].split()[1:2] == ["apt"]] == [
+        "approval=uv apt python3-pip"]
+
+
+def _pip_fake(bin_dir):
+    """python3 -m pip install ... --target DIR: logs the call and drops DIR/bin/uv and uvx."""
+    path = bin_dir / "python3"
+    path.write_text('#!/bin/sh\necho "python3 $*" >> "$FAKE/calls"\n'
+                    'while [ $# -gt 0 ]; do [ "$1" = --target ] && T="$2"; shift; done\n'
+                    'mkdir -p "$T/bin" && touch "$T/bin/uv" "$T/bin/uvx"\nexit 0\n')
+    path.chmod(0o755)
+
+
+def test_uv_installs_only_with_its_approval_hash_checked_and_linked(tmp_path):
+    """D-802: the pinned uv wheel goes in with --approve uv; without it, install and the timer only report."""
+    fake, bin_dir = _apt_fakes(tmp_path, ["python3-pip"])
+    _pip_fake(bin_dir)
+    dry = _run(tmp_path, bin_dir, fake, "install", "model").stdout
+    assert "[approval=uv] uv 0.12.22 not installed in" in dry and "skip (needs --approve)" in dry
+    assert not [c for c in _calls(fake) if c.startswith("python3")]
+
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    pip = [c for c in _calls(fake) if c.startswith("python3")]
+    assert len(pip) == 1 and "--no-deps --only-binary=:all: --require-hashes --target" in pip[0]
+    folder = tmp_path / "host/usr/local/lib/rosy-tools/uv-0.12.22"
+    for name in ("uv", "uvx"):
+        link = tmp_path / "host/usr/local/bin" / name
+        assert link.is_symlink() and Path(os.readlink(link)) == folder / "bin" / name
+    _run(tmp_path, bin_dir, fake, "check")  # the model's unapproved sim apt lines still report
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert not [item for item in status["awaiting_approval"] if "uv" in item]
+
+
+@pytest.mark.parametrize("stale", [False, True], ids=["missing", "stale"])
+def test_uvx_link_drift_is_reported_and_repaired_only_with_approval(tmp_path, stale):
+    fake, bin_dir = _apt_fakes(tmp_path, ["python3-pip"])
+    _pip_fake(bin_dir)
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    link = tmp_path / "host/usr/local/bin/uvx"
+    expected = Path(os.readlink(link))
+    link.unlink()
+    if stale:
+        link.symlink_to(expected.with_name("old-uvx"))
+
+    _run(tmp_path, bin_dir, fake, "check")  # unrelated unapproved SIM packages can report drift
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert any("uvx" in item for item in status["awaiting_approval"])
+    assert not link.exists()
+
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    assert link.is_symlink() and Path(os.readlink(link)) == expected
+    assert len([c for c in _calls(fake) if c.startswith("python3")]) == 1
+
+
+def test_a_wheel_tool_line_without_an_approval_policy_is_refused(tmp_path):
+    fake, bin_dir = _apt_fakes(tmp_path, [])
+    _lib(tmp_path, "safe wheel-tool uv 0.12.22 " + "ab" * 32 + "\n", "", {})
+    result = _run(tmp_path, bin_dir, fake, "check")
+    assert result.returncode != 0 and "wheel-tool needs an approval policy" in result.stderr
+
+
+def test_the_installed_copy_tells_install_to_run_from_the_repo(tmp_path):
+    copy = tmp_path / "sbin" / "rosy-host-state"
+    copy.parent.mkdir()
+    copy.write_bytes(TOOL.read_bytes())
+    result = subprocess.run([sys.executable, str(copy), "install", "model", "--dry-run"],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0 and "install reads the repo" in result.stderr

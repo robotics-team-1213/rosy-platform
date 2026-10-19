@@ -10,14 +10,14 @@ description: Use when starting, committing, or merging work in rosy-platform whi
 The full record is `AGENTS.md` section 「같이 하는 깃」.
 `docs/reference/shared-checkout.md` section 「같이 하는 깃」 is the same start order.
 This file repeats those commands. A wording change updates `AGENTS.md` and `docs/reference/shared-checkout.md` in one commit.
-The lab umbrella `F:\Dev\Control\Robot\Rosy\Agents.md` records the same procedure.
-The repo is `F:\Dev\Control\Robot\Rosy\rosy-platform` (no space). One `.git/index` serves the
+The lab umbrella `..\AGENTS.md` (the folder above the repo, outside git) records the same procedure.
+The repo is the `rosy-platform` folder under that umbrella; the drive differs per machine. One `.git/index` serves the
 shared `main` checkout. A path you did not write belongs to another session.
 
 ## Before you start
 
 ```bash
-cd F:\Dev\Control\Robot\Rosy\rosy-platform
+cd <umbrella>/rosy-platform        # the shared main checkout
 git status --short --branch; git worktree list
 python tools/worktrees.py new <short-name> <type>/<topic>     # not a bare `git worktree add`
 python tools/worktrees.py status                              # every worktree with a verdict
@@ -103,6 +103,13 @@ blocks whole, one after the other. Regenerate `index.md` conflicts with
 착지 도구: from the topic worktree run `python tools/land.py --tests auto` (`--dry-run` first to see the plan).
 It loops merge main -> auto-resolve ADR Log/logs.md/index.md conflicts -> D-436 affected tests + lint
 -> `known_failures` -> `--ff-only`, stops on any NEW failure or other conflict, and never pushes.
+It first takes a ticket in the landing queue (`<git-common-dir>/rosy-land-queue/`, D-803) and waits, printing its
+position and who is ahead, until the landings ahead have finished; past `--queue-timeout` minutes (default 180) it
+stops without merging or testing. First in line, it merges main once and tests. The ticket is released on every
+exit (errors and Ctrl-C included); a dead holder's ticket (PID gone on this host, or not refreshed for 3 h) is
+removed by the next session. `--no-queue` is for incidents only. After a green FULL tier, a moved main costs only
+main's delta selection, also in a fresh `land.py` run after an interrupted one, as long as the branch added nothing
+but merges of main (`<git-common-dir>/rosy-land-full/`); a new commit of its own means FULL again.
 The manual steps below are what it does.
 
 테스트는 시험 PC에서만 돈다(D-584): 닿는 PC가 없으면 10분 기다린 뒤 실패하고 착지하지 않는다. 노트북 로컬 실행(`--local`, `ROSY_TEST_LOCAL`)은 없다. 못 돌린 시험은 "확인 못 함"으로 보고한다.

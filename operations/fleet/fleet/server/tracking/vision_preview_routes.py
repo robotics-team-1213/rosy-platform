@@ -32,6 +32,9 @@ class VisionLeaseRequest(BaseModel):
 
 
 def install_vision_preview_routes(app, *, signer, sources, require_camera_viewer, require_named_operator):
+    from fleet.server.robot_media_routes import install_robot_media_routes   # D-801, off without its config
+    install_robot_media_routes(app, require_camera_viewer=require_camera_viewer)
+
     @app.get('/api/fleet/vision/sources', tags=['vision-preview'])
     def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)):
         if signer is None:

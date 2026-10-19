@@ -33,7 +33,8 @@ from rosy.world.state.projections.map_pose import MapPoseConfig
 from fleet.traffic import blocks, handover, signal_phase
 from fleet.traffic.signal_service import SignalService, PRESENCE_S as PRESENCE_S
 from fleet.routing.execute import arc_id
-from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig, pose_view
+from fleet.server.trip_geometry import ODOM_DRIFT_PER_M, pose_view
+from fleet.server.trip_ports import TripConfig
 
 LOCALIZED = "LOCALIZED"
 #: D-517 3: blocks one robot holds at worst (occupancy 2 + one grant ahead on the demo blocks).

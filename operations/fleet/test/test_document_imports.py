@@ -45,11 +45,17 @@ OWN = {
         "connection-view.js",
         "formation.js",
         "map-view.js",
+        "map-overlays.js",  # D-798 3.2: map-view.js overlay drawing
+        "map-polling.js",  # D-798 3.2: map-view.js polling
+        "console-auth.js",  # D-798 3.2: console.js lock, session and token handling
+        "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
+        "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
+        "stuck-evidence.js",  # network load: the stuck picture as raw JPEG (line-stuck.js)
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
@@ -81,6 +87,7 @@ OWN = {
         "start-point-layer.js",
         "tracking-relearn.js",  # D-540 5 / D-539: 배경 다시 학습
         "host-services.js",  # D-524 / D-530: 호스트 여유와 닫힌 서비스 제어
+        "host-health.js",  # D-530: 읽기 전용 PC 상태 판정
     },
     "cell.js": {
         "cell-document-editor.js",
@@ -103,7 +110,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices", "calibration"):
+    for folder in ("shared", "cell", "work", "devices", "calibration", "sitemap", "installation", "map"):
         path = WEB / folder / name
         if path.is_file():
             return path

@@ -436,6 +436,11 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
     phase_port = RosArmPhaseGoalPort(runtime)
+    import os
+    trace = None
+    if os.environ.get('ROSY_OMX_FEEDBACK_TRACE') == '1':
+        from feedback_trace import FeedbackTrace
+        trace = FeedbackTrace(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
         executor.add_node(node)
@@ -449,6 +454,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             message.name = ["joint1"]
             message.position = [0.0]
             message.header.stamp = feedback_node.get_clock().now().to_msg()
+            if trace is not None:
+                trace.add('publish', stamp_ns=message.header.stamp.sec*10**9+message.header.stamp.nanosec)
             state_publisher.publish(message)
             stop.wait(0.01)
 
@@ -458,7 +465,11 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
             slow_feedbacks.append(event)
+            if trace is not None:
+                trace.add('sink_begin')
             time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+            if trace is not None:
+                trace.add('sink_end')
         return True
 
     try:
@@ -491,6 +502,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
+        if trace is not None:
+            trace.dump()
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():

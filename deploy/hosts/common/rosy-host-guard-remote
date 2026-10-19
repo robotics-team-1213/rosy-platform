@@ -1,6 +1,6 @@
 #!/bin/sh
 # Forced command for the host guard key (D-530; authorized_keys `command=...,restrict`).
-# health | restart <unit listed in /etc/rosy/host-guard/units> | reboot. Nothing else.
+# health | recovery (cached, read-only) | restart <listed unit> | reboot. Nothing else.
 # restart and reboot go through the D-524 Service Control helper (rosy-host-control), which
 # owns the closed unit set and reboots with shutdown -r +10; this script never runs systemctl
 # restart or reboot itself.
@@ -16,6 +16,11 @@ refuse() { echo "refused: ${SSH_ORIGINAL_COMMAND:-}" >&2; exit 2; }
 # shellcheck disable=SC2086 # split the command into words; set -f stops globbing
 set -- ${SSH_ORIGINAL_COMMAND:-health}
 case "$1" in
+  recovery)
+    [ $# -eq 1 ] || refuse
+    # Read the root timer's report; this key cannot run probes or repair settings.
+    exec python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get("recovery")))' "${GUARD_RECOVERY_STATUS:-/var/lib/rosy-host-state/status.json}"
+    ;;
   health)
     [ $# -eq 1 ] || refuse
     # avail% swap_used% load1 cores uptime_s down_units(comma list or -)

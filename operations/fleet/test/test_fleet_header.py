@@ -4,8 +4,8 @@ import re
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
-DOCS = {"index.html": "console.js", "install.html": "install.js",
-        "site-map.html": "site-map.js", "cell/cell.html": "cell/cell.js"}
+DOCS = {"index.html": "console.js", "installation/install.html": "installation/install.js",
+        "sitemap/site-map.html": "sitemap/site-map.js", "cell/cell.html": "cell/cell.js"}
 
 
 def _header(name):
@@ -82,7 +82,7 @@ def test_estop_is_live_in_markup_and_one_module_gates_it():
         assert "bindEstop(" in source, entry
         assert "'/api/fleet/estop'" not in source and '"/api/fleet/estop"' not in source, entry
         assert "gate('estop'" not in source, entry
-    for entry in ("console.js", "install.js"):
+    for entry in ("console.js", "installation/install.js"):
         assert "ui-button:not(#estop)" in (WEB / entry).read_text(encoding="utf-8"), entry
 
 
@@ -90,7 +90,7 @@ def test_document_sheets_do_not_paint_the_header():
     header_sheet = (WEB / "shared/fleet-header.css").read_text(encoding="utf-8")
     assert "body { margin: 0; }" in header_sheet
     assert ".fleet-header { position: sticky; top: 0;" in header_sheet
-    for sheet in ("shared/styles.css", "site-map.css", "cell/cell.css"):
+    for sheet in ("shared/styles.css", "sitemap/site-map.css", "cell/cell.css"):
         body = (WEB / sheet).read_text(encoding="utf-8")
         assert "ui-topbar" not in body and ".estop" not in body and "#topbar-more" not in body, sheet
     assert ".fleet-footer" not in (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")

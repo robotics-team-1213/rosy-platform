@@ -4,8 +4,8 @@ import test from "node:test";
 import {
   createPlaneFeed, mapToPlane, parsePlaneHeader, parseObservedFraction, planeCalibration, planeFitsImage, planeToMap,
 } from "../../../site_ui/console/shared/vision-view.js";
-import { planeAffine } from "../../../site_ui/console/camera-backdrop.js";
-import { fitTransform, project, quarterTurn } from "../../../site_ui/console/site-layer.js";
+import { planeAffine } from "../../../site_ui/console/map/camera-backdrop.js";
+import { fitTransform, project, quarterTurn } from "../../../site_ui/console/map/site-layer.js";
 import { planeView } from "../../../site_ui/console/shared/site-map-model.js";
 
 const PLANE = { min_x: -0.15, min_y: -0.15, max_x: 6.55, max_y: 3.75, ppm: 400 };

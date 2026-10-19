@@ -1,0 +1,19 @@
+{
+  "record_kind": "agent-recorded runner completion; not a device-issued attestation",
+  "source_commit": "62971299f71b97fed94681f4b749ece3dd946796",
+  "runner": "tools/remote/remote_sim.py",
+  "mode": "cmd",
+  "minutes": 12,
+  "entrypoint": "python3 middleware/robot_execution/local/test/policy_chain_gazebo.py",
+  "environment": "existing approved vendor SIM overlay and LeRobot 0.4.4 environment",
+  "placement_role": "ai",
+  "log_directory": "gazebo-chain-prepared-core",
+  "reported_remote_exit_code": 0,
+  "outer_command_exit_code": 0,
+  "observed_markers": ["OMX_POLICY_CHAIN_GAZEBO_PASS", "OMX_POLICY_CHAIN_EXIT_OK"],
+  "run_txt_sha256": "8c5371795b11d2d41c1c92be47d2b441a7fe1e0be0815be4fb6ea365ae484a97",
+  "original_chain_result_sha256": "cb2fb5e6dfb50cb5ed67b61a6fba8ca1fe54522b0b9b87abb2036194211ec92b",
+  "committed_receipt_values_match_original": true,
+  "remaining_warning": "cannot use Destroyable because destruction was requested",
+  "scope": "one fixed-policy SIM execution; no trained checkpoint, Mission admission or physical qualification"
+}

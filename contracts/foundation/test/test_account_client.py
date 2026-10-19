@@ -131,6 +131,35 @@ def test_logout_retries_revocation_after_outage(receiver):
     assert calls[-1][0] == 'revoke'
 
 
+def test_pending_revocation_survives_receiver_reopen(receiver):
+    original, _, calls, active = receiver
+    settings = dict(issuer=original.issuer, client_id=original.client_id,
+        resource=original.resource, callback=original.callback,
+        public_keys=original.public_keys, encryption_key=Fernet.generate_key(),
+        clock=original.clock, post=original.post)
+    client = AccountClient(original.path, **settings)
+    cookie = session(client)
+    assert client.resolve(cookie)
+
+    def unavailable(endpoint, fields):
+        raise AccountUnavailable()
+
+    client.post = unavailable
+    with pytest.raises(AccountUnavailable):
+        client.logout(cookie)
+    assert client.resolve(cookie) is None
+    assert active[0] is True
+    assert b'fresh-secret' not in client.path.read_bytes()
+
+    reopened = AccountClient(client.path, **settings)
+    assert reopened.resolve(cookie) is None
+    reopened.retry_revocations()
+    assert active[0] is False
+    revocations = sum(endpoint == 'revoke' for endpoint, _ in calls)
+    reopened.retry_revocations()
+    assert sum(endpoint == 'revoke' for endpoint, _ in calls) == revocations
+
+
 def test_expired_refresh_cannot_change_account_identity(receiver):
     client, clock, _, _ = receiver
     cookie = session(client)

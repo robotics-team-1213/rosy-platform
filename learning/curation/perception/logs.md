@@ -122,3 +122,15 @@
 - 변경: 픽셀 사진·현재 결과·편집 도구를 먼저 두고 AI 실행과 검수 주체 요약은 아래 참고·결정 영역에 둔다.
 - 증거: 원격 focused 19 passed, skip 0, NEW 0. 기존 사진 두 실패와 전화 도구 간격·검수 이력·AI 초기화·원본 보존을 함께 확인하고 최종 합성 캡처 세 폭을 직접 읽었다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
 - gate 변화: 없음. 사람 라벨·모델 정확도·실측·장치 수용은 별도다.
+
+## 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
+
+- 변경: 객체·픽셀·자료·학습·카메라·계정 화면 제목을 Rosy Learning — 화면으로 맞췄다. 계정 화면도 Learning 앱 바를 쓴다. 학습·검수·사람 라벨·실행 권한은 유지한다.
+- 증거: 제목 회귀 검사의 수정 전 원격 실행은 2 failed로 기존 불일치를 확인했다. 수정 후 검증은 이 작업의 커밋과 외부 시험 기록으로 확인한다.
+- gate 변화: 없음. 이름·문서·정적 화면 범위이며 설치·실물 실행·DEVICE/FIELD 수용을 바꾸지 않는다.
+
+## 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+
+- 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
+- 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
+- gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
