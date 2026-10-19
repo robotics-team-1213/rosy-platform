@@ -226,9 +226,18 @@ class RouteBridge:
             return fallback
         near, target, seen = info.get('near_centre_m'), info.get('target_m'), info.get('seen_exit')
         opening = info.get('exit_point_m', {}).get(seen)
+        floor = info.get('local_floor_m', [])
+        local = (len(floor) >= 4 and all(valid(point, 2) and 0.0 < point[0] < BEND_ON_X_M for point in floor))
+        if local:
+            local = all(point[1] * floor[0][1] > 0.0 for point in floor)
+            current = [_to_current(point, source_pose, pose) for point in floor]
+            sign = 1.0 if current[0][1] > 0.0 else -1.0
+            local = local and all(0.0 < point[0] < BEND_ON_X_M and point[1] * sign > 0.0 for point in current)
+        if local:
+            near, target, opening = floor[0], floor[-1], floor[-1]
         if not (valid(near, 2) and valid(target, 2) and valid(opening, 2)):
             return fallback
-        if info.get('exit_reach_m', {}).get(seen, 0.0) < PIVOT_AHEAD_M:
+        if not local and info.get('exit_reach_m', {}).get(seen, 0.0) < PIVOT_AHEAD_M:
             return fallback
         near, target, opening = (_to_current(point, source_pose, pose) for point in (near, target, opening))
         sign = 1.0 if near[1] > 0.0 else -1.0

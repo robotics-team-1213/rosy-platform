@@ -69,6 +69,35 @@ def _col_y(cols, rows, ground):
     return (ground.principal_x - np.asarray(cols, float)) * ground.height_m / np.maximum(denominator, 1e-9)
 
 
+def _floor_prefix(way, rows, cols, xs, ys):
+    """Actual raw points connected by floor pixels, nearest first."""
+    points, previous = [], None
+    for i in range(len(rows) - 1, -1, -1):
+        col, row = int(cols[i]), int(rows[i])
+        if not (0 <= col < way.shape[1] and way[row, col] and math.isfinite(xs[i]) and math.isfinite(ys[i])):
+            break
+        if previous is not None:
+            pc, pr = previous
+            if pr - row > 2:
+                break
+            count = max(abs(col - pc), abs(row - pr)) + 1
+            cc = np.rint(np.linspace(pc, col, count)).astype(int)
+            rr = np.rint(np.linspace(pr, row, count)).astype(int)
+            if not way[rr, cc].all():
+                break
+        points.append((float(xs[i]), float(ys[i])))
+        previous = col, row
+    return points
+
+
+def _local_floor(way, rows, xs, centre, ground, max_x):
+    """Clip an offscreen estimate to visible pixels; this is floor, not a lane centre."""
+    denominator = ground.focal_px * math.sin(ground.pitch_rad) + (rows - ground.principal_y) * math.cos(ground.pitch_rad)
+    cols = np.clip(np.rint(ground.principal_x - centre * denominator / ground.height_m), 0, way.shape[1] - 1).astype(int)
+    points = _floor_prefix(way, rows, cols, xs, _col_y(cols, rows, ground))
+    return points if len(points) >= 4 and all(0.0 < x < max_x for x, _ in points) else []
+
+
 def _centre_target(xs, centre, lookahead):
     """(point, curvature, band). Input follows the centre from near to far in row order.
     Curvature is that span's heading change when it bends with the chord and harder;

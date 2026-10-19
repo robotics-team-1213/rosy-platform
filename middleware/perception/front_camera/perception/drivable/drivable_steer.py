@@ -30,7 +30,7 @@ import time
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
 
-from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
+from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _local_floor, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
 from .route_guard import observed_route_candidate, route_exit_point
 from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
@@ -146,6 +146,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     inner = half - PAINT_HALF_M
     centre = np.where(open_left & ~open_right, y_right + inner,
                       np.where(open_right & ~open_left, y_left - inner, (y_left + y_right) / 2.0))
+    out['local_floor_m'] = _local_floor(way, rows, xs, centre, ground, BEND_ON_X_M)
     # ahead: walk up from the nearest row while the corridor columns are on the way
     ahead = 0.0
     for index in range(len(rows) - 1, -1, -1):
@@ -447,8 +448,9 @@ class DrivableSteer:
                        and abs(math.degrees(math.atan2(target[1], target[0]))) < TARGET_SIDE_DEG
                        and (wall_ahead_m is None or wall_ahead_m > target[0]))   # a LiDAR wall short of it closes
         info["straight_on"] = straight_on
-        if side is None and ahead < PIVOT_AHEAD_M and self._memory is not None and not straight_on:
-            side = info["exit"] = want or self._memory[0]
+        if (side is None and ahead < PIVOT_AHEAD_M and self._memory is not None and not straight_on
+                and (want is None or want == self._memory[0])):
+            side = info["exit"] = self._memory[0]
             info["exit_from_memory"] = True
         if side is None and ahead < PIVOT_AHEAD_M and info["target_m"] is not None:
             # A corner whose way turns inside the view (no opening on the frame border, none remembered): the
@@ -457,16 +459,16 @@ class DrivableSteer:
             # the side only turns the robot in place, which crosses no line (v2 lap r11: a ~0.06 m radius
             # corner, the arc to the target clipped the inner line remembered on the way in).
             bearing = math.degrees(math.atan2(info["target_m"][1], info["target_m"][0]))
+            target_side = "left" if bearing > 0 else "right"
             beyond = info.get("exit_behind_line") or current_pose is not None and _crosses(
                 seen, *_to_current(info["target_m"], source_pose, current_pose)) is not None
-            if abs(bearing) >= TARGET_SIDE_DEG and (not beyond or ahead < PIVOT_AT_BODY_M):
-                side = info["exit"] = want or ("left" if bearing > 0 else "right")
+            if (abs(bearing) >= TARGET_SIDE_DEG and (not beyond or ahead < PIVOT_AT_BODY_M)
+                    and (want is None or want == target_side)):
+                side = info["exit"] = target_side
                 info["exit_point_m"] = dict(info["exit_point_m"], **{side: tuple(info["target_m"])})
                 info["exit_from_target"] = True
         if side is None and want is not None and ahead < PIVOT_AHEAD_M and not straight_on:
-            # Closed at the corner, no opening seen, the route turns: turn in place toward it. The route
-            # prior names sides only; when a turn in place fits is CORE's (rotation clearance), not a
-            # creep-then-hold (that held the v2 lap's corners; user 2026-10-18).
+            # No observed opening: the route names a look direction; CORE checks rotation clearance.
             side = info["exit"] = want
             info["exit_from_guide"] = True
         # The side chosen at a closing bend or junction is kept until the way runs ahead again (9dfk 20261010T001349Z weaved at the ring's SE exit)
@@ -511,7 +513,9 @@ class DrivableSteer:
             side = info["exit"] = self._side = None   # arcs too: the south spoke cut its bend 0.2 m early (r50b)
             info["recentre_first"] = True
         if self._pivot is None and side is not None and (front_blocked or ahead < PIVOT_AHEAD_M and (
-                guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG)):
+                guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG
+                or info.get('exit_from_guide') and target is not None
+                and _to_current(target, source_pose, current_pose)[1] * (1 if side == 'left' else -1) < 0.0)):
             self._pivot = side
             self._pivot_yaw = None if current_pose is None else current_pose[2]
         if self._pivot is None:
