@@ -209,11 +209,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         if one.any() and len(xs) > 1:
             cx, cy = one_edge_centre(xs, edge, sign * inner, seen)
             target_x, target_y = np.where(one, cx, target_x), np.where(one, cy, target_y)
-    point, curvature, band = _centre_target(target_x, target_y, lookahead)
+    point, curvature, band = _centre_target(target_x[::-1], target_y[::-1], lookahead)
     if point is not None:
         out["target_m"] = (round(point[0], 3), round(point[1], 3))
         out["curvature_1pm"] = round(curvature, 3)
-        out["both"] = bool(np.mean(~open_left[band] & ~open_right[band]) >= 0.5)
+        out["both"] = bool(np.mean(~open_left[band[::-1]] & ~open_right[band[::-1]]) >= 0.5)
     return out
 
 

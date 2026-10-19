@@ -52,3 +52,21 @@ def test_a_disconnected_far_centre_does_not_change_the_near_target():
                                            np.array([0., 0., 0., .12, .13]), .25)
     assert point == pytest.approx((.16, 0.)) and curvature == 0.
     assert not band[3:].any()
+
+
+def test_confidence_uses_the_same_image_rows_as_the_reversed_target_input():
+    way = np.zeros((240, 320), bool)
+    way[150:200, :221] = True
+    way[200:, 100:221] = True
+    assert way_target(way, G, .03317, .0925, lookahead=.15)['both']
+
+
+def test_a_continuous_bend_keeps_row_order_when_x_folds_after_ninety_degrees():
+    distance = np.linspace(.001, .27, 100)
+    radius = .12
+    xs = radius * np.sin(distance / radius)
+    ys = radius * (1. - np.cos(distance / radius))
+    point, curvature, _ = _centre_target(xs, ys, .25)
+    assert curvature == pytest.approx(1. / radius, abs=.2)
+    assert point == pytest.approx((radius * math.sin(.25 / radius),
+                                   radius * (1. - math.cos(.25 / radius))), abs=.005)

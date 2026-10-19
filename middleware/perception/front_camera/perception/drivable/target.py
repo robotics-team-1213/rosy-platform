@@ -56,12 +56,12 @@ def _col_y(cols, rows, ground):
 
 
 def _centre_target(xs, centre, lookahead):
-    """(point, curvature, band). Station is arc length `lookahead` along the centre.
+    """(point, curvature, band). Input follows the centre from near to far in row order.
     Curvature is that span's heading change when it bends with the chord and harder;
     the chord wins for a return onto a straighter centre. The point is on that arc.
     """
     xs, centre = np.asarray(xs, float), np.asarray(centre, float)
-    order = np.argsort(xs)
+    order = np.arange(xs.size)
     keep = np.isfinite(xs[order]) & np.isfinite(centre[order]) & (xs[order] > 0.0)
     order, band = order[keep], np.zeros(xs.shape, bool)
     if order.size == 0:
