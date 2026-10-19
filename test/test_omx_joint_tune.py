@@ -252,7 +252,8 @@ def test_startup_never_sends_a_move_until_the_hold_is_observed_stable(fault):
 
 
 @pytest.mark.parametrize("drift", [5, 100])
-def test_startup_rechecks_position_after_configuration_before_enabling_torque(drift):
+@pytest.mark.parametrize("change_register", ["pwm_limit", "profile_vel", "goal_current"])
+def test_startup_rechecks_position_after_configuration_before_enabling_torque(drift, change_register):
     bus = Motor()
     original = bus.write
     changed = False
@@ -260,7 +261,7 @@ def test_startup_rechecks_position_after_configuration_before_enabling_torque(dr
     def write(name, value):
         nonlocal changed
         original(name, value)
-        if name == "pwm_limit" and not changed:
+        if name == change_register and not changed:
             changed = True
             bus.reg["present_pos"] += drift
 
