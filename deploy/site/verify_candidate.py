@@ -107,6 +107,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
     # Preserve verification/rollback of earlier signed candidates; the new pair is indivisible.
     if not set(hashes) & set(ACCOUNT_DEPLOYMENT_FILES):
         required.difference_update(ACCOUNT_DEPLOYMENT_FILES)
+    if "compose.omx.yaml" not in hashes:
+        required.discard("compose.omx.yaml")
     unsupported = set(hashes) - required
     if unsupported:
         raise CandidateVerificationError("unsupported deployment file path")
@@ -165,6 +167,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "image_ids": image_ids,
         "deployment_files": len(hashes),
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
+        "omx": "compose.omx.yaml" in hashes,
         "image_archive_sha256": archive_hash,
     }
 
@@ -326,6 +329,7 @@ def verify_candidate(
             "platform": summary["platform"],
             "deployment_files": summary["deployment_files"],
             "account_https": summary["account_https"],
+            "omx": summary["omx"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
         }

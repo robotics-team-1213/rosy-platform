@@ -187,6 +187,7 @@ def _verifier(calls):
             raise upd.CandidateVerificationError("release signature is missing or unsafe")
         manifest = json.loads((Path(folder) / 'release.json').read_text())
         manifest.setdefault('account_https', True)
+        manifest.setdefault('omx', True)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
     return verify
@@ -586,7 +587,8 @@ def test_legacy_candidate_cannot_enable_unsigned_account_overlay(host):
     updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
     assert updater._verify(old, loaded=True)["account_https"] is False
     with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
-        updater._verify(old, loaded=True, require_account=True)
+        updater._verify(old, loaded=True, env={
+            "ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.account.yaml"})
 
 
 @pytest.mark.parametrize("loaded", [False, True])

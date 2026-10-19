@@ -295,7 +295,8 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
                 page.get_by_text('로그아웃', exact=True).click()
                 expect(page.get_by_text('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.', exact=True)).to_be_visible()
             else:
-                page.get_by_text('로그아웃', exact=True).click()
+                with page.expect_navigation(url=robot+'/pilot'):
+                    page.get_by_text('로그아웃', exact=True).click()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
             assert not page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
             assert not failures, failures
