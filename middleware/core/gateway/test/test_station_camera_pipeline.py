@@ -423,7 +423,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     for _ in range(400):
                         await step()
                         current = await advance()
-                        assert current.state != 'HOLD', (current.reason, owner.reason, world.pose)
+                        assert current.state != 'HOLD', (current.reason, owner.reason, world.pose,
+                                                       failures, readback_reports[-3:])
                         if shutdown_phase == 'RETURNING' and current.state == 'RETURNING' and world.command[0] > 0.:
                             await shutdown_and_restart('RETURNING')
                             return
