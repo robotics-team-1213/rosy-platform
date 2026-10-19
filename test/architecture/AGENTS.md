@@ -45,7 +45,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/architecture-check -- test/architecture -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/architecture-check" -- test/architecture -q
 ```
 
 `test_module_structure.py` is also part of the D-346 pre-push fast gate (`tools/hooks/`).

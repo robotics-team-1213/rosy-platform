@@ -18,7 +18,7 @@ cover, and then copy its patterns. Four dashboard facts break naive scripts:
 | Teleop is hold-to-drive on `pointerdown`/`pointerup` | `click()` sends one tick and a stop. Use `hover()` + `mouse.down()` … `mouse.up()` |
 
 Get a token first: **rosy-device-access** (`sudo rosy-login-code --role administrator`, pair,
-log out afterwards). Keep the token in a file under `X:\DevTemp`, never in the repo.
+log out afterwards). Keep the token in a file under `$ROSY_SCRATCH`, never in the repo.
 
 For a fixture that opens the compatibility screen, wait for
 `#compatibility-shell[data-ready="true"]` before clicking its view navigation. Procedure
@@ -30,11 +30,11 @@ its handler. Check cancellation and command bodies using the shipped controls (D
 ## The tool
 
 ```bash
-T="--base-url http://<robot-ip>:8080 --token-file X:/DevTemp/rosy.token"
+T="--base-url http://<robot-ip>:8080 --token-file ${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/rosy.token"
 python tools/dashboard_drive.py $T status                       # robot/safety/commissioning/hardware JSON
 python tools/dashboard_drive.py $T mode MANUAL                  # exit 1 if the robot did not follow
 python tools/dashboard_drive.py $T teleop --direction forward --seconds 1.0
-python tools/dashboard_drive.py $T screenshot --view inspect --out X:/DevTemp/inspect.png
+python tools/dashboard_drive.py $T screenshot --view inspect --out "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/inspect.png"
 ```
 
 `teleop` prints velocity samples while held and `stop_latency_s`: time from release until
@@ -71,7 +71,7 @@ enough. `POST /api/v1/host/hardware/refresh` is administrator-only.
 
 ```python
 from test_dashboard_browser import _launch_page     # run from test/ on sys.path
-hw = json.load(open("X:/DevTemp/hardware-api.json", encoding="utf-8"))  # GET /api/v1/host/hardware body
+hw = json.load(open(os.path.expandvars("$ROSY_SCRATCH/hardware-api.json"), encoding="utf-8"))  # GET /api/v1/host/hardware body
 browser, page = _launch_page(p, extra_init=f"window.__rosyHardware = {json.dumps(hw)};", width=1366, height=900)
 page.goto("http://rosy.test/dashboard", wait_until="load")
 ```
