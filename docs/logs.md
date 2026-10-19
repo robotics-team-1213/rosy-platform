@@ -9095,6 +9095,12 @@ osy-d395-s1d\`.
 - 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
 - gate 변화: 없음.
 
+## 2026-10-18 · uncommitted · land.py 통과 결과 캐시
+
+- 변경: `tools/land.py`가 통과한 pytest 호출을 공통 git 디렉터리의 `rosy-land-cache.jsonl`에 남기고(`tools/land_cache.py`), 다시 돌릴 때 같은 git 트리·같은 명령·같은 시험 환경 해시(`remote_pytest.deps`)면 건너뛴다. `--tests auto`에서는 조상 커밋에서 통과한 호출도 그 사이 차이에 D-436 셀렉터가 그 호출의 경로를 고르지 않으면(FULL 아님, 삭제·이름바꿈 없음, known_failures 목록 그대로) 다시 쓰고, 그때는 pre-push용 land record를 남기지 않는다. 실패, LOAD-FLAKY, 중단·호스트 유실이 있는 실행은 남기지 않는다. lint·safety-review·size-range·node는 늘 돈다. `--no-cache`로 끈다.
+- 증거: 2026-10-18 큰 머지 한 건을 다섯 번 다시 착지하며(네트워크 끊김, 한 줄 수정, main 이동) 매번 약 11,000개 시험(약 20분)을 다시 돌렸다. 로컬 `test/test_land.py`.
+- gate 변화: 없음.
+
 ## 2026-10-18 · uncommitted · Fleet 담당 지정 설계의 기준 커밋 표기
 
 - 변경: `plans/2026-10-17-fleet-device-authority-design.md`의 기준 해시 앞에 SHA를 명시해 공개 커밋 참조임을 표시했다. 설계 내용과 비밀정보 검사 규칙은 유지한다.
@@ -9197,3 +9203,33 @@ osy-d395-s1d\`.
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
+
+- 변경: 사용자의 후속 초기 비밀번호 지시를 기존 Account protocol에 기록했다. 정확한 ID!의 임시 생성/reset 길이 예외와 필수 변경, 영구 비밀번호의 기존 길이·현재 비밀번호·회수·revision 계약을 구분했다.
+- 증거: 정책 RED→원격153개 통과 뒤 독립 리뷰에서 짧은 초기값의 생성/reset/UI 누락을 발견·재현해 보완했다. 최종103df862b의 실제 Chromium/서버160 passed·skip0·NEW0. 고정 기록은 docs/validation/account-initial-password-2026-10-19/result.md.
+- gate 변화: 없음. 운영 명단 확인·비밀번호 초기화·main 착지·서명 배포·실제 사용자 수용은 완료로 표시하지 않는다.
+
+## 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
+
+- 변경: origin #63(5c2001ef05)을 로컬 main으로 옮겼다. `promote_readback.py`가 push·rollback·promote 성공 뒤 `<journal-dir>/pointer-changes/pointer_changes.jsonl`에 한 줄을 남기고, `--readback`은 pointer와 노드 status topic을 다시 읽어 `match`/`mismatch`/`unavailable`/`no_node`를 기록한다. exit code는 바꾸지 않는다.
+- 증거: 원격 pytest(`test_model_promote_readback.py`, deliver 시험). 로봇 위 확인은 아직이다.
+- gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
+
+- 변경: origin #105(03e470abff)를 로컬 main으로 옮겼다. `native_cycle.py`의 cycle receipt에 `policy_revision`(모델 파일 목록 해시)·rig/보정 revision을 남기고, `register_policy.py`가 그 영수증 해시를 근거로 Fleet `/api/fleet/workcells/{id}/policy/proposals`에 L0 제안을 올린다(`--dry-run`/`--confirm`, 토큰은 `ROSY_FLEET_TOKEN`만). 오프라인·미승격 영수증만 받는다. 본문 필드는 main의 `StageProposal`과 같다.
+- 증거: 원격 pytest(등록 본문·거절 조건·HTTP 경로·CLI). 실제 학습 산출물 등록은 첫 실물 학습 뒤다.
+- gate 변화: 없음. L0은 실행 권한이 아니다.
+
+## 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
+
+- 변경: 로컬 main도 승인 API를 `missions/mission_routes.py` 안에서만 설치해, `--tasks-db`만 있고 `--mission-api`가 없는 Fleet에서 `/api/fleet/workcells/{id}/policy/*`가 404였다. origin #106(e5661d443f)처럼 작업 기록부만 있으면 `work/work_routes.py`에서 설치하고 Mission 쪽 설치 블록은 지운다.
+- 증거: 원격 pytest `test_policy_governance.py`(Mission 없는 앱 시험 포함).
+- gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
+
+- 변경: origin/main에만 있던 문서를 옮겼다. PR 파이프라인(`docs/reference/pr-pipeline.md`, #57·#64·#74·#75·#79·#86 문서 부분), CODEOWNERS와 팀 가이드 §5.1 역할 담당(#59), D-777 간결한 문서 기준(#64), Jira 키 도구 `tools/jira_refs.py`와 Atlassian 연결 안내(#65), D-784 비공개 운영·staging 경계와 계획(#73·#74), 파이프라인 점검 기록 둘(#75·#79), D-773 정정(#56), `contracts/AGENTS.md` 새 계약 타입 자리(#62), D-376·D-781·조사 보고서의 #80 참조 줄을 반영했다. D-777·D-784의 진행 중 gap 줄을 지우고 ADR Log에 행을 더했다.
+- 근거: main에서 merge-base 이후 손대지 않은 파일은 origin 판을 그대로 가져왔고, main이 고친 파일(README·AGENTS·CONTRIBUTING·팀 가이드·공유 체크아웃·개발 가이드·progress)은 main의 내용을 유지하며 origin의 추가를 손으로 합쳤다. 공유 체크아웃 본문은 main의 착지 규칙을 유지하고 origin의 PR 파이프라인 연결·흐름도·게시 브랜치 merge 규칙만 더했다. #83에만 있는 OMX·릴리스 환경 기록 연결은 옮기지 않았다.
+- gate 변화: 없음. 문서·도구 안내와 GitHub 기준의 기록이며 서버 설정·장치·현장 수용을 바꾸지 않는다.

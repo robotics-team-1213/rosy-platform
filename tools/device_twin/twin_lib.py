@@ -84,7 +84,8 @@ class Build:
             log("WARNING: deploy/robot/pinky_pro has uncommitted changes; the twin uses HEAD only")
         # LF product content from the commit, never the CRLF working tree.
         with (self.ctx / "repo.tar").open("wb") as handle:
-            subprocess.run(["git", "archive", "--format=tar", "HEAD", "deploy/robot/pinky_pro", SSH_HANDOFF],
+            subprocess.run(["git", "archive", "--format=tar", "HEAD", "deploy/robot/pinky_pro", SSH_HANDOFF,
+                            "deploy/hosts/common/host-state/rosy-update-gate"],
                            cwd=ROOT, stdout=handle, check=True)
         requirements = subprocess.run(
             ["git", "show", "HEAD:deploy/robot/pinky_pro/image/device-python-requirements.txt"],

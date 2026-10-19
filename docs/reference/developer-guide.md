@@ -1,32 +1,49 @@
-# ROSY 개발 가이드 — 구조·빌드·시뮬·테스트·배포
+# ROSY 개발 가이드 — 빌드·시뮬·테스트·배포
 
-현재 전체 배치와 각 holder의 유지 이유는 [폴더 책임표](platform-folder-responsibilities.md), 실제 이동·설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)를 본다. 모든 pytest는 D-584에 따라 원격 시험 PC 또는 CI에서 실행한다.
+빌드·시뮬레이션·시험 명령과 배포 시작점을 찾는 문서다. 처음 합류했다면 [팀 가이드](team-guide.md), 실험실에서 함께 작업한다면 [공유 체크아웃](shared-checkout.md)부터 읽는다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
 
-- **대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
-- **갱신:** 2026-10-14 (폴더 이름은 [편집 집](platform-folder-responsibilities.md#편집-집). World 자세는 D-752)
-- 처음 합류했다면 [팀 가이드](team-guide.md)부터 본다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
+실험실 노트북의 pytest는 원격 시험 PC로 보낸다. 개인 클론의 로컬 시험 조건은 [팀 가이드 §3.3](team-guide.md#33-시험-결과-읽기)을 따른다(D-584·D-762).
 
 ## 구조
 
 폴더는 **소스 책임 분류**일 뿐이다. 디렉터리 경로만으로 최종 명령 writer, 설치 호스트, 이미지 묶음을 판단하지 않는다([D-315](../adr/D-315-source-folder-responsibility-and-runtime-authority.md)). 소스 루트와 소유 영역의 정본은 [`tools/harness/platform_parts.yaml`](../../tools/harness/platform_parts.yaml)이다 (D-427).
 
-| 폴더 | 무엇 |
-|---|---|
-| `contracts/` | 공유 계약: `foundation`(core_common 타입·프로토콜·설정), `ros_idl`(ROS 인터페이스), `motion`, `skill`, `learning`. 계약은 동작을 실행하지 않는다 |
-| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API), `drive`(길찾기·추종·복구·보정), `perception`(센서·앞 카메라, ROS 패키지 `control`), `devices`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `robot_execution`(로컬 policy·receipt), `robot_ui`(대시보드·Pilot·face) |
-| `operations/` | 현장 서버 쪽: `fleet`(미션·원장·admission·serving), `world`(현재 자세. Fleet이 `rosy.world.state.projections.map_pose`를 직접 import, D-752), `decision`(기존 제안 코드, Fleet 배포), `site_ui/console`(Fleet가 설치·제공하는 자산), `overhead`(천장 카메라), `site_execution`, `site_ui/cam`(Rosy Cam 앱), `processes`, `apps`, `site_devices`(도크·신호등 펌웨어), `situation` |
-| `learning/` | 데이터 정리·학습·모델 등록(`curation`, `training`, `registry`, `evaluation`), `envs/isaac`(Isaac Sim) |
-| `integrations/` | 로봇·시뮬레이션 adapter (`robots`, `simulation` — Gazebo 월드·다로봇 시뮬) |
-| `shared/web/` | 공용 웹 자산 (패키지 `web_common`) |
-| `deploy/` | 설치·이미지·서명 릴리스: `robot/pinky_pro`, `robot/omx`, `site` |
-| `profiles/` | 설치 프로필 |
-| `tools/` | 개발 도구(harness, hooks, release, sim, calibration, perception 운영 CLI …). 로봇에 설치되지 않는다 |
-| `test/` | 저장소 단위 계약 시험, `known_failures` |
-| `docs/` | SRS, API reference, ADR, 계획, 검증 기록 |
-| `data/` | 로컬 주행 기록. 세션 파일은 커밋하지 않는다 (`data/README.md`) |
-| `reference/` | 동결된 upstream pinky_pro 사본 |
+코드를 고칠 위치는 [폴더 책임표의 편집 집](platform-folder-responsibilities.md#편집-집)에서 찾는다. 현재 경로와 소유권은 manifest, 이동 당시의 설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)와 책임표의 후속 기록을 확인한다. 이 가이드에 별도 폴더 목록을 유지하지 않는다.
 
 폴더 이름과 ROS 패키지 이름은 항상 같지 않다(예: `middleware/core/gateway`는 `core`, `middleware/perception`은 `control`). site 앱은 폴더 끝 이름이 `<word>`, 패키지가 `rosy_<word>`다(D-377). Pinky의 최종 `cmd_vel`은 CORE가 발행하고, 제품 adapter는 ROS/vendor 표현 변환만 한다 ([D-317](../adr/D-317-control-and-shared-contract-source-boundaries.md)).
+
+## 인지와 판단
+
+현재 구현과 제안을 구분한다. 점선은 목표 연결이며 운영 연결로 읽지 않는다.
+
+World(`operations/world`, 배포 휠 `rosy-world`)는 별도 PC나 프로세스가 아니다. 현장의 Fleet이 `rosy.world.state.projections.map_pose`를 직접 읽어 현재 자세를 만들고, 그 자세를 미션·대형·차로에 쓴다. 행동 후보로 미래 상태를 예측하는 World model은 [D-782](../adr/D-782-omx-action-conditioned-world-model.md)의 OMX 실행 전 검사기로 기반(데이터·학습·평가·그림자)만 있고 실행 경로에는 연결하지 않았다.
+
+시험은 개발 계약 검사(실험실은 원격 시험 PC·CI, 개인 클론은 팀 가이드 조건) → 모델 PC 독립 L0 → AI PC 고정 버전 스모크 → 현장 Fleet/CORE 수용으로 나눈다([D-527](../adr/D-527-decision-test-host-boundaries.md)). 모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](../adr/D-516-offline-decision-model-replay-boundary.md)).
+
+관측 → 현재 자세 → 규칙 → CORE. `world`는 관측과 확정 사건을 대조하는 상태이며 현재 구현은 자세를 제공한다([v0.2 §3.1](../reference/ROSY_Platform_Architecture_Design_v0.2.md), [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)). 생성형 월드 모델은 구현되지 않았다. `age_s`는 그 자세가 얼마나 오래됐는지를 나타낸다.
+
+```mermaid
+flowchart LR
+    sense["Perception<br/>관측"] --> world["World<br/>현재 자세"]
+    world --> fleet["Fleet<br/>원장 · 규칙"]
+    fleet --> core["CORE<br/>재검사 · 최종 명령"]
+    decision["Decision<br/>후보"] -.-> fleet
+    learn["모델 PC"] -.-> ai["AI PC"]
+    ai -.-> decision
+```
+
+| 층 | 자리 | 지금 |
+|---|---|---|
+| **Perception** | `middleware/perception` · `operations/overhead`; 학습은 `learning/{curation,registry,training,evaluation}/perception`, 운영 CLI는 `tools/perception` | 동작. 학습 차선은 섀도 ([D-356](../adr/D-356-perception-learning-loop-and-model-delivery.md) Proposed) |
+| **World** | `operations/world` (`rosy.world.state.projections.map_pose`, `rosy.world.api`) | 받은 sighting·운영자 pin·odom의 현재 자세(`state`, `source`, `age_s`). Fleet이 직접 import. service·trip·swarm·admission은 Fleet ([D-752](../adr/D-752-canonical-world-map-pose-consumers.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)). odom으로 잇는 `source=bridged`는 dead reckoning |
+| **Decision** | `operations/decision/src/rosy/decision` (`rosy.decision`, Fleet 배포에 포함) | 기존 ER2/VLM·후보·도구 요청. 원장·admission·dispatch는 Fleet에 유지 ([D-637](../adr/D-637-remaining-decision-console-learning-folders.md)) |
+| **Supervisor** | Fleet `stuck_resolver` | 막힘 규칙과 사람. 원장·admission은 Fleet |
+| **모델** | 모델 PC 평가 → AI PC 승인 버전 | [D-516](../adr/D-516-offline-decision-model-replay-boundary.md) 경계. 점선은 목표. VLM은 [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md) Proposed |
+| **CORE** | `middleware/core/gateway` | 최종 `/cmd_vel` (D-2) |
+
+`MapPose`는 현재 자세다. `ObservationSnapshot`은 관측 근거 참조이고, 원본 영상 경로나 Fleet 정책이 아니다. `road_region`은 카메라 구역 입력의 시각·프레임·보정·변환·근거를 검사한다. 화소 기하와 주행은 하지 않는다([D-665](../adr/D-665-observed-road-region-and-paired-fitness.md)). 그 타입과 순수 검사의 정본은 `core_common.observation`이고, World import는 같은 객체를 다시보낸다([D-667](../adr/D-667-shared-observation-contract-for-offline-fitness.md)). 여러 소비자를 위한 일반 World State 계약은 아직 없다.
+
+정체(`wall` · `object` · `robot` · `person` · `unknown`)와 텍스트 후보는 별도 작업이다. Perception → World State → Supervisor → Skill → Planner/Control 다섯 층은 [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md)이 문서만으로 제안한다. 그 제안이 적은 World 경로 `fleet/localization/map_pose.py`는 지금 경로가 아니다. 절차는 [파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md).
 
 ## 빌드 및 시뮬레이션
 
@@ -92,31 +109,37 @@ ros2 run --prefix 'python3 -m debugpy --listen 127.0.0.1:5678 --wait-for-client'
 
 ## 테스트와 CI
 
-테스트는 세 단계다 ([D-436](../adr/D-436-change-scoped-test-tiers.md)).
+작업 중에는 변경 범위의 시험을 요청하고, push 전 훅과 GitHub CI에서 검증을 이어간다([D-436](../adr/D-436-change-scoped-test-tiers.md)). PR의 전체 검사 전환 여부는 selector가 정한다. main push·야간·수동 실행은 전체 검사를 수행한다.
 
 ```mermaid
 flowchart LR
-    a["affected<br/>작업 중 · 원격 시험 PC<br/>바꾼 범위만"] --> q["quick<br/>push 직전 · pre-push 훅<br/>약 3분"] --> f["full<br/>GitHub CI<br/>main · PR · 야간 · 릴리스"]
+    a["작업 중: affected · 원격 시험"] --> q["push 전: quick + affected 훅"]
+    q --> ci{"GitHub selector"}
+    ci -->|PR 변경 범위| affected["affected 검사"]
+    ci -->|전체 전환 · main · 야간 · 수동| full["full 검사"]
+    affected --> result["개별 잡 확인: PR 파이프라인"]
+    full --> result
 ```
 
 | 단계 | 언제 | 명령 |
 |---|---|---|
-| affected | 작업하는 동안 | `python tools/harness/rosy_harness.py affected --base origin/main --run` — 바꾼 파일에 연결된 시험과 가드만 |
-| quick (pre-push) | push 직전, 훅이 자동 실행 (~3분) | `bash tools/hooks/install.sh`로 설치한 `pre-push` |
-| full | GitHub CI (main push, PR, 야간, 릴리스) | 로컬에서 돌리지 않는다 (Windows 40–60분, 일부 wheel 없음) |
+| affected | 작업하는 동안 | `python tools/harness/rosy_harness.py affected --base origin/main --print`로 선택을 확인하고 아래 원격 실행기로 요청 |
+| quick + affected (pre-push) | push 직전, 훅이 자동 실행 | `bash tools/hooks/install.sh`로 설치한 `pre-push` |
+| GitHub CI | PR은 selector 결과, main·야간·수동 실행은 full | `.github/workflows/ci.yml`. 릴리스 빌드는 별도 검증 관문을 따른다 |
 
-결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
+실험실에서는 먼저 자기 변경을 커밋한 뒤 선택 결과를 원격 실행기에 보낸다. `affected --run`은 현재 PC에서 pytest를 직접 호출하므로 이 노트북에서는 쓰지 않는다. 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
 로그·증거·빌드 산출물 같은 저장소 밖 파일은 `ROSY_SCRATCH`에 둔다. 설정하지 않으면 시스템 임시 폴더를 쓰고, 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`로 둔다.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/<이름> -- <paths> -q
+python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir $ROSY_SCRATCH/<이름>
 python test/known_failures.py $ROSY_SCRATCH/<이름>/run-1.txt
 ```
 
-pre-push가 돌리는 quick 묶음을 손으로 돌릴 때:
+여러 시험 묶음이 선택되면 `run-2.txt`, `run-3.txt`도 생긴다. 실행기가 출력한 모든 `run-N.txt`를 위 비교 명령에 각각 넘기고, 각 로그의 실행·건너뜀 수와 `NEW`를 확인한다. 첫 로그만으로 전체 통과를 판단하지 않는다.
+
+quick 시험 목록은 [`tools/hooks/pre-push`](../../tools/hooks/pre-push)가 관리한다. 실패한 묶음을 재현할 때는 훅에 출력된 명령을 원격 실행기로 요청한다. GitHub의 `ci-result`와 개별 잡, 건너뛴 검사는 [PR 파이프라인](pr-pipeline.md#ci와-병합)에 따라 확인한다.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir $ROSY_SCRATCH/quick-check -- test/test_harness_contracts.py test/architecture/test_module_structure.py   test/test_io_image_closure.py test/test_line_follow_contract_docs.py   test/test_behavior_test_ownership.py test/test_module_scorecard.py   test/test_release_boundary_guards.py test/test_robot_literals.py   middleware/core/gateway/test/test_protocol_version_alignment.py   middleware/core/gateway/test/test_event_catalogue.py   middleware/core/gateway/test/test_console_layout.py   middleware/core/gateway/test/test_host_cards.py   middleware/core/gateway/test/test_host_hardware.py   middleware/core/gateway/test/test_triage_contract.py   middleware/core/gateway/test/test_host_status_summary.py -q
 python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 ```
 
@@ -202,6 +225,4 @@ RPM 상한을 독립적으로 검사하고 엔코더 32비트 롤오버를 안�
 
 ## 로드맵
 
-Phase 0 리네임·멀티로봇 리팩토링 → **Phase 1 core** → Phase 2 웹 대시보드 →
-Phase 3 2대 검증 → Phase 4 fleet → Phase 5 Formation → Phase 6 확장.
-상세: [`docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md`](../plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
+현재 진행 상태와 남은 게이트는 생성된 [STATUS](../../STATUS.md)에서 해당 모듈의 `progress.md`로 이동해 확인한다. [2026-09-13 계획](../plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)은 당시의 단계 구분을 보존한 기록이다.

@@ -6,11 +6,15 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 
 import pytest
 
 launch = pytest.importorskip("launch")
+# ROS 2 launch 는 처음 import 될 때 logging.setLoggerClass(LaunchLogger) 를 걸어, 이 pytest
+# 프로세스에서 그 뒤 만들어지는 로거가 모두 propagate=False 가 된다(다른 시험의 caplog 가 빈다).
+logging.setLoggerClass(logging.Logger)
 if not hasattr(launch, "LaunchContext"):
     pytest.skip("`launch` resolved to this package's launch/ directory, not ROS 2 launch",
                 allow_module_level=True)
