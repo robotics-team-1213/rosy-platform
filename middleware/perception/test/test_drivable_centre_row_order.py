@@ -1,0 +1,54 @@
+"""Native re-inference masks from failed NW corners, not original worker-state replay.
+
+ONNX SHA256: 451f0f85b390d6601dc38c60865ed721936ff407845f7a8196099ae9a110f3d2.
+PNG hashes identify the 320x240 inputs; packbits preserve every inferred way pixel.
+Actual ground, camera offset and lane half are those used by the recorded run.
+"""
+import base64
+import math
+import zlib
+
+import numpy as np
+import pytest
+
+from control.sensing.perception.camera_ground import GroundPlane
+from control.sensing.perception.drivable.drivable_steer import DrivableSteer, way_target
+from control.sensing.perception.drivable.target import _centre_target
+
+
+G = GroundPlane(.06343, .13962634015954636, 281.59681292203703, 160, 120, .6)
+MASKS = [
+    # e434578bcc 91.0s, PNG 81509d2184bfaadd0dbb7caa8fc3f54f5862efdb366b6f145eb06ebb84c442f6
+    'eJztz7EJgEAQRFGNDC3J0rS0K8UyDMQVE0NvgwMR34s/A9N1AAAAAAAAAD/WH6lsiiiJsbjUqiEi082R6e7qsRuDmi3Zlcbd8lLX+sea7PZkB/AZJyZ3fVc=',
+    # 88121a4c42 92.0s, PNG f9884586eed7c01254690314b1bd83342e180f0f4608fbad5cf341120e47c79b
+    'eJzt0zEOg0AMRFGOnqNxFI5ASYFw0sGux85IqSL9Xz95V2ZZFiIiIiIiIiIiIiIi+rU4TBdxme6T62I1XWymi5fpvsDb9XcMEz5dd/Tgmj2O7jRdvcbJlSfPbjdddXJyxcnZ6Yebnd62cHKJwsnvrJwaqJwaKJ34A6UTy9Yu31C7PLBw6YaFSwMrN9+wcvNXLt1humlg7XbThes2012mGwZ27jTd8722joiIiP6iNwSvwRE=',
+]
+
+
+@pytest.fixture(params=MASKS, ids=['e434-91s', '8812-92s'])
+def way(request):
+    packed = zlib.decompress(base64.b64decode(request.param))
+    assert len(packed) == 240 * 320 // 8
+    return np.unpackbits(np.frombuffer(packed, np.uint8)).reshape(240, 320).astype(bool)
+
+
+def test_far_normal_offsets_cannot_precede_the_near_observed_centre(way):
+    info = way_target(way, G, .03317, .0925)
+    x, y = info['target_m']
+    assert x >= .18 and abs(math.degrees(math.atan2(y, x))) < 20
+
+
+def test_a_current_straight_centre_defers_the_future_exit_arc(way):
+    pose = (0., 0., 0.)
+    error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, pose, pose,
+        observed_only=True, current_stamp=1.125, guide_fresh=True,
+        guide_here_deg=10., guide_deg=-75., guide_pivot_ok=False)
+    assert info['strategy'] == 'drivable_centre'
+    assert abs(error) < .05 and confidence > .35
+
+
+def test_a_disconnected_far_centre_does_not_change_the_near_target():
+    point, curvature, band = _centre_target(np.array([.14, .15, .16, .04, .05]),
+                                           np.array([0., 0., 0., .12, .13]), .25)
+    assert point == pytest.approx((.16, 0.)) and curvature == 0.
+    assert not band[3:].any()
