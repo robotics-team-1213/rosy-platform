@@ -341,6 +341,6 @@
 
 - 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
 - 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
+- 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
 - 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
 - 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
-- 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
