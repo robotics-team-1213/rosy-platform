@@ -143,7 +143,6 @@ def test_prepare_legacy_seven_original_parts_have_exact_distinct_pngs(tmp_path):
 
 def test_prepare_legacy_roundtrip_cli_keeps_pending_and_preserves_human_review(tmp_path):
     import numpy as np
-    import review_dataset
     import review_masks
     from review_app import ReviewStore
 
@@ -186,7 +185,8 @@ def test_prepare_legacy_roundtrip_cli_keeps_pending_and_preserves_human_review(t
         assert np.all(review_masks.pixels(store, mask) == 255)
         assert digest(store.image(index)) == row["image_sha256"]
         sources.append(dict(source, frame=index))
-    assert review_dataset.source_components(sources, {}) == [list(range(7))]
+    assert {source['source_session'] for source in sources} == {LEGACY_SESSION}
+    assert {source['capture_group'] for source in sources} == {LEGACY_SESSION}
     with store.connect() as db:
         assert [row[0] for row in db.execute("SELECT identity FROM frame_keys ORDER BY frame")] == [
             f"video:{expected}:0" for _, expected in LEGACY_ORIGINALS]
