@@ -366,7 +366,7 @@ def test_cancel_all_contract_is_documented_and_wired_to_the_console():
     reference = (root / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
     srs = (root / "docs/spec/ROSY FLEET SRS.md").read_text(encoding="utf-8")
     web = root / "operations/site_ui/console"
-    console_js = (web / "console.js").read_text(encoding="utf-8")
+    console_js = (web / "console-refresh.js").read_text(encoding="utf-8")  # D-798 3.2: cancel-all moved here
     index = (web / "index.html").read_text(encoding="utf-8")
 
     assert "| POST | `/api/fleet/cancel-all` | `operator` bearer | D-421" in reference

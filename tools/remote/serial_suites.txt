@@ -1,0 +1,20 @@
+# Suites that run without pytest-xdist on the test hosts (tools/remote/xdist_plan.py).
+# One repo-relative path prefix per line; an invocation that names a path under or above one runs
+# serial as a whole. Remove a line only after a serial vs -n run on a test host gave the same failures.
+# Browser jobs (ROSY_RUN_BROWSER_TESTS=1) and node-id invocations are serial without a line here.
+test  # root guards: git in the repo, colcon/ament scans, ROS_DOMAIN_ID, ports, playwright, subprocesses
+integrations/simulation/gazebo/test  # rclpy nodes, ROS_DOMAIN_ID, ports
+middleware/perception  # rclpy nodes, ROS_DOMAIN_ID, many subprocesses
+middleware/devices/omx/adapter/test  # rclpy nodes
+middleware/robot_execution/local/test  # rclpy, ROS_DOMAIN_ID
+middleware/drivers/imu_bno055/test  # ROS_DOMAIN_ID, subprocess
+middleware/robot_ui/robot/test  # playwright servers, subprocesses
+middleware/robot_ui/pilot/test  # playwright, subprocesses
+middleware/core/api/test  # playwright, ports
+operations/fleet/test  # fixed ports in many files, playwright, subprocesses
+operations/overhead/test  # fixed ports
+operations/situation/test  # fixed ports
+learning/envs/isaac/test  # ROS_DOMAIN_ID, subprocesses
+learning/training/omx/test  # ROS_DOMAIN_ID
+deploy  # host scripts and subprocesses
+tools  # calibration and device tools touch the home directory

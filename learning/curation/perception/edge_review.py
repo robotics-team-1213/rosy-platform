@@ -127,7 +127,7 @@ def prepare(root, videos, datasets, evalsets, out):
                               f"video seconds {row.get('video_time_s')} | hints {row.get('candidate_tags', [])}")
         cards.append('<figure><img loading="lazy" src="data:image/png;base64,'
                      + base64.b64encode(data).decode() + '"><figcaption>' + caption + '</figcaption></figure>')
-    page = ('<!doctype html><meta charset="utf-8"><title>ROSY edge review</title>'
+    page = ('<!doctype html><meta charset="utf-8"><title>Rosy Learning — 엣지 검수</title>'
             '<style>body{font:16px system-ui;margin:24px}main{display:grid;grid-template-columns:'
             'repeat(auto-fit,minmax(300px,1fr))}figure{margin:12px}img{width:100%}figcaption{overflow-wrap:anywhere}</style>'
             f'<h1>{len(rows)}장 후보 검수</h1><p>자동 태그는 정답이 아닙니다. 횡단보도·벽 경계·원형 경계·가림을 확인하세요. '

@@ -4058,6 +4058,12 @@
 - 증거: Remote integration suite passed 186 tests across Fleet route guidance, authority, route direction, trip runner, CORE capabilities/protocol/timers and SIM overlays. Private evidence: rosy-d769-audit/fleet-route-integrated/run-1.txt. Earlier failing integration exposed rounded lane endpoints and mismatched injected clocks. Independent review found no blocking producer issue; size-range and safety-review guards passed for all eight commits since 64c8eb701.
 - gate 변화: None. Real Gazebo guide consumption and learned driving acceptance remain pending.
 
+## 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
+
+- 변경: `tracking/robot_media_routes.py`가 fleet.read 주체에게 로봇별 READ 위임을 발급·갱신·종료하고 `fleet_media_audit`에 남기며 미디어 권한 서비스의 재확인에 답한다. 콘솔 CSP는 설정된 media origin만 추가한다.
+- 증거: 원격 시험 결과는 착지 기록에 남긴다. 장치·현장 측정은 2026-10-18 사용자 결정으로 생략했다.
+- gate 변화: 없음. 모자이크(MCU)는 후속 feat/site-video-mosaic이다.
+
 ## 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
 
 - 변경: 사용자 지시에 따라 legacy·Account 이관에서 ID!를 첫 변경 대상으로 인식한다. 관리자 생성/reset의 정확한 ID!만 짧은 임시값 예외로 허용하고 첫 변경 제한을 유지한다. 영구 비밀번호 변경에서는 ID! 복귀를 거절한다. API·권한·기계 자격은 추가하지 않았다.

@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.273."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.275."""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.273)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.275)",
     )
     app.state.core = services
     arm_policy = getattr(services, 'arm_policy', None)
@@ -135,6 +135,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     install_account_sessions(app)
     from .media_binding import install_media
     install_media(app, config, services)
+    # D-789: operator pages (dashboard camera) may open WHEP to the configured site media origin, and only there.
+    operator_headers = dict(OPERATOR_PAGE_HEADERS)
+    if app.state.media_site_url:
+        operator_headers["Content-Security-Policy"] = OPERATOR_PAGE_CSP.replace(
+            "connect-src 'self' ws: wss:;", f"connect-src 'self' ws: wss: {app.state.media_site_url};")
     agent = getattr(services, "fleet_agent", None)
     if agent is not None and hasattr(agent, "start_on_loop"):
         # The FleetAgent needs a running loop; uvicorn's is the one CORE runs (thread in
@@ -254,7 +259,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         return FileResponse(
             web_root / "index.html",
             media_type="text/html",
-            headers=dict(OPERATOR_PAGE_HEADERS),
+            headers=dict(operator_headers),
         )
 
     @app.get("/dashboard/assets/{asset_name:path}", include_in_schema=False)
@@ -418,6 +423,6 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         html = (surface_template.replace("{{title}}", definition.title)
                 .replace("{{surface}}", definition.id).replace("{{grammar}}", definition.grammar)
                 .replace("{{slots}}", slots))
-        return HTMLResponse(html, headers=dict(OPERATOR_PAGE_HEADERS))
+        return HTMLResponse(html, headers=dict(operator_headers))
 
     return app

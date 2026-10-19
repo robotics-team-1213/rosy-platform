@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import pytest
 
 from browser_harness import browser_tests_enabled, open_page
+from fleet.server.static_routes import CONSOLE_ASSETS
 from test_fleet_console_browser import API, WEB, console_url  # noqa: F401
 from test_fleet_console_browser import _camera_api, _open_token_access
 
@@ -88,7 +89,7 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
         page.route("**/api/**", serve)
         page.goto(f"{base}/{document}", wait_until="domcontentloaded")
         asset = "console.js" if document == "index.html" else "install.js"
-        assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / asset).read_bytes()
+        assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / CONSOLE_ASSETS[asset][0]).read_bytes()
         if held.startswith("/api/vision/"):
             page.locator('[data-context-tab="status"]').click()
             assert page.locator("#context-status").is_visible()

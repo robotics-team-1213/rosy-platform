@@ -67,6 +67,9 @@ drive/recovery
 perception/sensors/line_observation
 site_ui/console/shared
 site_ui/console/calibration
+site_ui/console/sitemap
+site_ui/console/installation
+site_ui/console/map
 fleet/fleet/server/tracking
 fleet/fleet/server/evidence
 fleet/fleet/server/sitemap

@@ -31,7 +31,8 @@ PASSED = re.compile(r"^PASSED (?P<nodeid>\S+)")
 # whole session: "collected 0 items / 1 skipped", exit 0. No suite here is a launch test.
 # One token each, so callers that read every non-dash word as a path stay right.
 NO_ROS_LAUNCH_PLUGINS = ["-pno:launch_testing", "-pno:launch_ros"]
-NOTHING_COLLECTED = re.compile(r"\bcollected 0 items\b")
+# pytest-xdist prints "6 workers [0 items]" instead of "collected 0 items".
+NOTHING_COLLECTED = re.compile(r"\bcollected 0 items\b|\bworkers? \[0 items\]")
 
 
 def collected_nothing(report: str, paths: list[str]) -> bool:

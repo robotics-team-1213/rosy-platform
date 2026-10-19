@@ -507,6 +507,7 @@ def test_the_loop_period_includes_the_tick_and_finished_steps_are_dropped(monkey
         raise asyncio.CancelledError
 
     runner.tick = slow_tick
+    monkeypatch.setattr(trip_runner, "start_offset", lambda _interval: 0.0)  # D-432 offset: test_trip_loop_offset
     monkeypatch.setattr(trip_runner.asyncio, "sleep", sleep)
     with pytest.raises(asyncio.CancelledError):
         run(runner._loop())

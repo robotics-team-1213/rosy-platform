@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.273
+**Version:** v1.275
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3365,6 +3365,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.275 | 2026-10-19 | Additive (D-801, feat/site-console-video): Fleet `POST /api/fleet/robots/{robot_id}/media-grant`·`/renew`·`DELETE`와 미디어 권한 서비스용 `POST /api/fleet/media/validate`. 사이트 로그인 주체(fleet.read)의 로봇별 READ 전용 영상 위임. 상세는 v1.275 절 |
 | v1.273 | 2026-10-19 | Additive (docs/stuck-evidence-jpeg-api): `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` with `Accept: image/jpeg` returns the raw JPEG and its metadata in `X-Stuck-Evidence`; the JSON body is unchanged for other clients. Documents the behaviour shipped in fix(fleet) 0659636cff. |
 | v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
@@ -3984,6 +3985,29 @@ capture, bounds_m, evidence_kind}}`다. 출력은 수치 전용 bundle.json이�
 monotonic 기준 최대 5초의 config lease가 만료되면 적용을 중단한다. 갱신 실패는 lease를 연장하지
 않고 remap 뒤에도 generation/session을 다시 검사한다. 원본·기준 지도를 유지하며 미관측은 mask로
 구분한다. 실측 승인·미리보기는 위치 앵커·마커 높이 보정·주행·DEVICE/FIELD 수용을 부여하지 않는다.
+
+### v1.275 — D-801 관제 콘솔 사이트 발급 영상 위임
+
+D-789 Decision 3을 대체한다. Fleet에 `ROSY_FLEET_MEDIA_CONFIG`(JSON: `site_url`, `audience`=`site:<id>`,
+`key_id`, `signing_key_file`=사이트 전용 Ed25519 PEM, `audit_db`)가 있을 때만 열린다. 없으면 아래 경로는 404다.
+
+| Method | Path | Authorization | Result |
+|---|---|---|---|
+| POST | `/api/fleet/robots/{robot_id}/media-grant` | 사이트 로그인 쿠키 또는 사이트 Bearer, `fleet.read`. LAN 카메라 프록시 주체·ai_observer 불가 | 201 읽기 위임(아래 receipt). 모르는 로봇 404 |
+| POST | `/api/fleet/robots/{robot_id}/media-grant/{grant_id}/renew` | 같은 주체 | 200 같은 grant_id, 새 token. 끝난 위임 403 |
+| DELETE | `/api/fleet/robots/{robot_id}/media-grant/{grant_id}` | 같은 주체 | 204, 감사 종료 `closed` |
+| POST | `/api/fleet/media/validate` | Authorization의 사이트 위임 Bearer(세션 없음) | `{active:false}` 또는 `{active:true, grant_id, robot_id, path, action:"read", audience, expires_at}` |
+
+receipt는 v1.265와 같은 모양(`grant_id`, `token`, `expires_at`, `audience`, `robot_id`, `path`, `action:"read"`,
+`site_url`)이며 `no-store`다. 위임은 `rosy-media+jwt`, iss=aud=`site:<id>`, action은 read만, 최대 60초다.
+validate는 발급 때의 브라우저 자격으로 Fleet 인증·권한을 다시 검사하므로 로그아웃·역할 회수 뒤 inactive다.
+70초 동안 갱신이 없으면 위임은 `expired`로 끝난다. 감사 표 `fleet_media_audit`(grant_id, principal_id, role,
+robot_id, started_at, last_seen_at, ended_at, end_reason)에 위임마다 한 행을 남긴다.
+
+미디어 권한 서비스 설정 `site_issuer`(`fleet_url`, `fleet_ca`, `keys`)가 있으면 사이트 위임을 받는다.
+1초 재확인은 로봇 CORE `POST /api/v1/vision/media/validate`의 영상 설정 상태(200=켜짐, 503=꺼짐; 로봇 거부권)와
+Fleet validate가 모두 활성일 때만 통과한다. 로봇 키로 서명된 위임은 사이트를 대신할 수 없다.
+콘솔 페이지 CSP `connect-src`에는 설정된 site media origin 하나만 추가된다. Fleet은 영상을 중계하지 않는다.
 
 ### v1.265 — D-789 WebRTC 영상 위임 자격
 
