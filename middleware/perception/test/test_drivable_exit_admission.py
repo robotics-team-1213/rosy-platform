@@ -11,6 +11,7 @@ from pathlib import Path
 import zlib
 
 import numpy as np
+import pytest
 
 from control.sensing.perception.camera_ground import GroundPlane
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer, way_target
@@ -84,3 +85,23 @@ def test_a_near_selected_exit_cannot_override_a_side_wall_stop(monkeypatch):
     _, _, info = DrivableSteer().update(np.ones((240, 320), bool), 1., G, .03317, .0925,
         POSE, POSE, guide_here_deg=0., guide_deg=-50., side_clear_m={'right': .01})
     assert info['strategy'] == 'drivable_centre' and info['exit'] is None
+
+
+@pytest.mark.parametrize('fresh,near,expected', [
+    (True, True, 'drivable_turn_right'),
+    (False, True, 'drivable_centre'),
+    (True, False, 'drivable_centre'),
+])
+def test_a_current_route_junction_is_taken_even_when_the_way_runs_straight(monkeypatch, fresh, near, expected):
+    # Native sim8463 PNG710: another road continues; the selected near exit is right.
+    import control.sensing.perception.drivable.drivable_steer as module
+    observation = raw()
+    observation.update(target_m=(.222, .099), ahead_m=.315, near_centre_m=(.163, -.011),
+        exit='right' if near else None, exit_near={'right': near},
+        exit_point_m={'right': (.205, -.101)})
+    monkeypatch.setattr(module, 'way_target', lambda *args: copy.deepcopy(observation))
+    error, _, info = DrivableSteer().update(np.ones((240, 320), bool), 1., G, .03317, .0925,
+        POSE, POSE, guide_here_deg=-20.76, guide_deg=-82.33, guide_fresh=fresh,
+        observed_only=True, current_stamp=1.125)
+    assert info['strategy'] == expected
+    assert (error > 0) if fresh and near else (error < 0)
