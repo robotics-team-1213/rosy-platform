@@ -9233,3 +9233,9 @@ osy-d395-s1d\`.
 - 변경: origin/main에만 있던 문서를 옮겼다. PR 파이프라인(`docs/reference/pr-pipeline.md`, #57·#64·#74·#75·#79·#86 문서 부분), CODEOWNERS와 팀 가이드 §5.1 역할 담당(#59), D-777 간결한 문서 기준(#64), Jira 키 도구 `tools/jira_refs.py`와 Atlassian 연결 안내(#65), D-784 비공개 운영·staging 경계와 계획(#73·#74), 파이프라인 점검 기록 둘(#75·#79), D-773 정정(#56), `contracts/AGENTS.md` 새 계약 타입 자리(#62), D-376·D-781·조사 보고서의 #80 참조 줄을 반영했다. D-777·D-784의 진행 중 gap 줄을 지우고 ADR Log에 행을 더했다.
 - 근거: main에서 merge-base 이후 손대지 않은 파일은 origin 판을 그대로 가져왔고, main이 고친 파일(README·AGENTS·CONTRIBUTING·팀 가이드·공유 체크아웃·개발 가이드·progress)은 main의 내용을 유지하며 origin의 추가를 손으로 합쳤다. 공유 체크아웃 본문은 main의 착지 규칙을 유지하고 origin의 PR 파이프라인 연결·흐름도·게시 브랜치 merge 규칙만 더했다. #83에만 있는 OMX·릴리스 환경 기록 연결은 옮기지 않았다.
 - gate 변화: 없음. 문서·도구 안내와 GitHub 기준의 기록이며 서버 설정·장치·현장 수용을 바꾸지 않는다.
+
+## 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
+
+- 변경: D-769 개정 3과 API v1.287에 source 수명·선택 지도 벽·CORE 우선 배포·거절한 짧은 연장의 안내 갱신 예외를 기록했다. 기존 성공 구현은 foundation 선행 변경과 후속 제품 변경으로 구분한다.
+- 증거: 독립 계약 검토가 기존 API의 1초·수락 후 binding 문구와 성공 구현의 차이를 확인했다. 원본 소스의 원격 관련 회귀 159 passed, NEW 0이며 현재 후보 시험은 별도다.
+- gate 변화: 없음. 실물 활성화·main 착지·push는 수행하지 않는다.

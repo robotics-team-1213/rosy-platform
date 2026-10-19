@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
 - 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
 - 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
 - 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
 - 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
-- 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
