@@ -294,7 +294,76 @@ def test_startup_cleanup_does_not_restore_gains_without_confirmed_torque_off():
 
 
 @pytest.mark.parametrize("option", ["--velocity", "--acceleration", "--reach"])
-@pytest.mark.parametrize("value", ["0", "-1"])
+@pytest.mark.parametrize("value", ["0", "-1", "32768"])
 def test_startup_refuses_zero_or_negative_motion_profiles(option, value):
     with pytest.raises(SystemExit):
         m.parse(["--device", "x", "sweep", option, value])
+
+
+@pytest.mark.parametrize("fault", ["position", "torque", "hardware"])
+def test_startup_rechecks_feedback_after_the_camera_capture_before_moving(fault):
+    bus = Motor()
+    args = m.parse(["--device", "x", "move", "--to", "2100"])
+
+    def grab(label):
+        if label == "hold":
+            name, value = {"position": ("present_pos", 2300), "torque": ("torque", 0),
+                           "hardware": ("hw_error", 32)}[fault]
+            bus.reg[name] = value
+
+    runner = m.Run(bus, 16, log=lambda **row: None, grab=grab, clock=lambda: bus.t, sleep=bus.sleep)
+    with pytest.raises(RuntimeError, match="capture|hold|startup|hardware"):
+        runner.execute(args)
+    assert ("goal_pos", 2100) not in bus.writes
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("fault", ["stalled", "backward", "nonfinite", "gap"])
+def test_startup_does_not_count_unobserved_or_invalid_clock_time_as_stable(fault):
+    bus = Motor()
+    original = bus.sleep
+    calls = 0
+
+    def sleep(seconds):
+        nonlocal calls
+        calls += 1
+        if calls > 20:
+            raise AssertionError("startup observation loop did not terminate")
+        before = bus.t
+        original(seconds)
+        bus.t = {"stalled": before, "backward": before - 0.1,
+                 "nonfinite": float("nan"), "gap": before + 1.0}[fault]
+
+    bus.sleep = sleep
+    with pytest.raises(RuntimeError, match="clock|feedback|sample"):
+        run(bus, ["move", "--to", "2100"])
+    assert ("goal_pos", 2100) not in bus.writes
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("motor,position,delta", [(16, 2028, 5000), (14, 1048570, 10), (12, -1048570, -10)])
+def test_startup_refuses_a_computed_target_outside_its_position_range(motor, position, delta):
+    bus = Motor(motor=motor, position=position)
+    with pytest.raises(SystemExit, match="target|position|range"):
+        run(bus, ["move", "--delta", str(delta)])
+    assert bus.writes == []
+
+
+def test_startup_rechecks_drive_mode_after_configuration():
+    bus = Motor()
+    original = bus.write
+    changed = False
+
+    def write(name, value):
+        nonlocal changed
+        original(name, value)
+        if name == "pwm_limit" and not changed:
+            changed = True
+            bus.reg["drive_mode"] = 8
+
+    bus.write = write
+    with pytest.raises(RuntimeError, match="startup|drive mode"):
+        run(bus, ["move", "--to", "2100"])
+    assert not any(name == "goal_pos" for name, _ in bus.writes)
+    assert ("torque", 1) not in bus.writes
+    assert_restored(bus)
