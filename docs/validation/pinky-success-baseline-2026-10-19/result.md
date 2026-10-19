@@ -97,8 +97,8 @@ LiDAR 전방 막힘의 pivot 판단을 지우지 않게 한 수정이다. 원격
 하지 않았다. 같은 시각 mask·경계·centre path·odom 변환 기억 출구를 대조해야 한다.
 이 정체는 앞선 횡단보도 오류와 다른 지점이다.
 
-결과 파일 SHA256은 첫 통합 `dea67341436f3c0301ab89e742946097c8f57f912b8facd344909e9efe9d4f62`,
-두 번째 `d6a9630623793ffbee13ba233872c197cae92b069f86c4f6ef6d86912bb35fcf`,
-수정본 `b96670601bc439ee0f4dffe0d4ad0912bd72a96c3c12676fa0c5497ab4bd10df`다.
+첫 통합 result SHA256: `dea67341436f3c0301ab89e742946097c8f57f912b8facd344909e9efe9d4f62`.
+두 번째 result SHA256: `d6a9630623793ffbee13ba233872c197cae92b069f86c4f6ef6d86912bb35fcf`.
+수정본 result SHA256: `b96670601bc439ee0f4dffe0d4ad0912bd72a96c3c12676fa0c5497ab4bd10df`.
 외부 scratch의 `integrated-repeat-1`, `integrated-repeat-2`, `front-stop-repeat-1`에
 각 result·관측·API·영상 프레임을 보존했다. main 착지·push·실물 배포는 하지 않았다.
