@@ -605,8 +605,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                             raise AssertionError(('ordinary work did not complete',
                                 tasks.get_task(cycles.work['task_id']), world.pose,
                                 svc.nav.nav_state.value, returns.backend.current, returns.runner.open_trips(),
-                                [(task.get_name(), [(frame.f_code.co_name, frame.f_lineno)
-                                    for frame in task.get_stack(limit=2)])
+                                [(task.get_name(), [(stack_frame.f_code.co_name, stack_frame.f_lineno)
+                                    for stack_frame in task.get_stack(limit=2)])
                                  for task in list(asyncio.all_tasks())[:16]], failures))
                         assert math.hypot(world.pose[0]-.9, world.pose[1]) <= .02, (
                             'ordinary work receipt before physical SIM arrival', number, world.pose)
