@@ -36,6 +36,17 @@ GPU가 정상이고 Model PC에서 승인된 digest·revision과 최소 비식�
 
 `~/.config/rosy/situation.env`(`FLEET_URL`, `FLEET_TOKEN_FILE`, `FLEET_CA`)와 토큰 파일은 배포가 건드리지 않는다.
 
+**자동 업데이트 (D-805).** `rosy-situation-autoupdate.timer`(사용자 유닛, 10분마다)가 `ci-result`가 통과한 main을 `~/rosy-situation/releases/<sha12>`에 풀고(`operations/situation`, `contracts/foundation`, `deploy/ai_pc`, 업데이터 자신), 가져오기 확인(smoke) 뒤 `current`를 옮기고 `rosy-situation.service`를 다시 띄운다. 10 s 뒤 active가 아니면 이전 릴리스로 되돌리고 다시 띄운다. 다시 띄우기 전에 `unit_files`(서비스·업데이터 유닛)를 그 릴리스에서 `~/.config/systemd/user/`로 복사하고 `daemon-reload`한다. 그래서 main에서 유닛을 고치면 그대로 따라오고, 되돌리면 이전 유닛도 돌아온다. 업데이터는 OMX 셀과 같은 `deploy/robot/omx/omx_autoupdate.py`(`"kind": "service"`)다. heartbeat의 `build_commit`은 릴리스의 `RELEASE` 파일에서 읽는다. 동결 태그 `ops-update-freeze`가 있으면 관문(`/usr/local/bin/rosy-update-gate`)이 실행을 건너뛴다.
+
+설치(소유자 동의 후, `ai` 계정, 한 번):
+1. `cp deploy/ai_pc/situation-autoupdate.json.example ~/.config/rosy/situation-autoupdate.json` 후 `<owner>`를 채운다.
+2. 첫 실행은 저장소 사본의 업데이터로: `python3 deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/situation-autoupdate.json run`. `current`가 새 릴리스를 가리키게 된다.
+3. `rosy-situation.service`, `rosy-situation-autoupdate.{service,timer}`를 `~/.config/systemd/user/`에 복사하고 `systemctl --user daemon-reload && systemctl --user enable --now rosy-situation-autoupdate.timer`.
+
+자동 업데이트로 옮긴 뒤 예전 `~/rosy-situation/<sha>` worktree는 쓰이지 않는다. `git -C <원래 저장소> worktree remove`로 지운다(업데이터는 `releases/`만 정리한다).
+
+타이머가 켜져 있으면 위의 `deploy-situation.sh`로 옮긴 커밋은 다음 실행에서 최신 main으로 돌아간다. 특정 커밋에 묶어 두려면 타이머를 끄고(`systemctl --user disable --now rosy-situation-autoupdate.timer`) 쓴다. 상태: `python3 ~/rosy-situation/current/deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/situation-autoupdate.json status`.
+
 ## Qwen3-VL 로컬 추론 (D-619)
 
 소유자가 설치·사용을 승인한 AI PC에는 검증한 Ollama 실행 파일을 `~/rosy-models/ollama/dist`에, 같은 `qwen3-vl:8b-instruct` manifest와 해시를 확인한 blobs를 `~/rosy-models/ollama/models`에 둔다. `rosy-ollama.service`를 사용자 유닛으로 설치한다. `127.0.0.1:11434`만 열며 모델 PC의 임시 tunnel을 대체한다. `ollama --version`, `/api/tags`의 digest, `/api/ps`의 GPU 적재와 문맥 길이, 실제 영상 응답·시간을 함께 확인한다. 적재·스모크 성공은 정확도나 주행 수용을 뜻하지 않는다.
