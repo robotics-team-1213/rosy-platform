@@ -197,3 +197,64 @@ def test_source_and_current_pose_cannot_jump_without_elapsed_time():
     owner, guard = guarded()
     assert guard.step(None, None, copy.deepcopy(STALLED), (0.02, 0.0, 0.0), owner,
         source_pose=(0.0, 0.0, 0.0), current_stamp=0.125, observation_stamp=0.125)[0] is None
+
+
+# sim-4766cfbf88-4dc846, source camera 173.750, decision 173.875.
+# A future right pivot was already latched while the observed local opening stayed left.
+LATCHED = dict(STALLED, strategy='drivable_pivot_right', reason=None,
+    target_m=(0.122, 0.117), near_centre_m=(0.163, 0.098),
+    exit='right', exit_point_m={'left': (0.190, 0.094)},
+    exit_reach_m={'left': 0.202}, guide_deg=-80.2)
+LATCHED.pop('recentre_first')
+LATCHED.pop('exit_from_route_memory')
+
+
+def test_an_opposing_latched_pivot_uses_the_same_observed_alignment_budget():
+    owner, guard = guarded()
+    owner._ctx.update(here=25.3, ahead=-80.2)
+    error, confidence, info = step(owner, guard, info=LATCHED, error=PIVOT_ERROR,
+                                    confidence=owner._pivot_confidence)
+    assert (error, confidence, info['strategy']) == (
+        -PIVOT_ERROR, owner._pivot_confidence, 'drivable_recentre_pivot_left')
+    for i in range(1, 8):
+        step(owner, guard, i * 0.1, info=LATCHED, error=PIVOT_ERROR,
+             confidence=owner._pivot_confidence)
+    off_line = dict(LATCHED, strategy='drivable_off_line_left', straddle='left')
+    assert step(owner, guard, 0.7, info=off_line, error=-PIVOT_ERROR,
+                confidence=owner._pivot_confidence)[2]['strategy'] == 'drivable_off_line_left'
+    # Losing the narrow near-centre trigger cannot restore the old right latch or refill the episode.
+    narrowed = dict(LATCHED, near_centre_m=(0.163, 0.01))
+    error, confidence, info = step(owner, guard, 0.7, info=narrowed, error=PIVOT_ERROR,
+                                   confidence=owner._pivot_confidence)
+    assert error is None and confidence is None
+    assert info['reason'] == 'recentre_alignment_spent'
+
+
+@pytest.mark.parametrize('change', [dict(front_blocked_m=0.114), dict(straddle='left'),
+    dict(crosswalk_hold=True), dict(pivot_limit=True), dict(strategy='drivable_turn_right'),
+    dict(strategy='drivable_pivot_left')])
+def test_alignment_does_not_replace_protected_or_nonopposing_candidates(change):
+    owner, guard = guarded()
+    raw = dict(LATCHED, **change)
+    assert step(owner, guard, info=raw, error=PIVOT_ERROR,
+                confidence=owner._pivot_confidence)[2]['strategy'] == raw['strategy']
+
+
+def test_recorded_local_left_floor_can_override_a_right_latch_in_the_full_steer(monkeypatch):
+    import control.sensing.perception.drivable.drivable_steer as steer_module
+    from test_drivable_steer import G, HALF, XO, _lane
+
+    raw = {k: copy.deepcopy(v) for k, v in LATCHED.items()
+           if k not in ('strategy', 'reason', 'guide_deg')}
+    raw['exit'] = 'left'
+    monkeypatch.setattr(steer_module, 'way_target', lambda *a, **k: copy.deepcopy(raw))
+    owner = DrivableSteer()
+    owner._pivot = owner._side = 'right'
+    owner._pivot_yaw = 0.0
+    for i in range(3):
+        pose = (0.0, 0.0, i * 0.05)
+        error, confidence, info = owner.update(_lane(HALF, -HALF), (i + 1) / 8,
+            G, XO, HALF, pose, pose, guide_deg=-80.2, guide_here_deg=25.3,
+            observed_only=True, current_stamp=(i + 1) / 8)
+        assert (error, confidence, info['strategy']) == (
+            -PIVOT_ERROR, owner._pivot_confidence, 'drivable_recentre_pivot_left')
