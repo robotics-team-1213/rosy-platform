@@ -25,7 +25,7 @@ class RouteBridge:
         if self._alignment is not None:
             self._alignment['uncertain'] = True
 
-    def _align(self, error, info, pose, owner, source_pose, stamp, observed):
+    def _align(self, error, confidence, info, pose, owner, source_pose, stamp, observed):
         from .drivable_steer import (BEND_ON_X_M, LOOKAHEAD_M, MAX_CRUISE_MPS, PIVOT_AHEAD_M, PIVOT_ERROR,
                                      PIVOT_MAX_RAD, REALIGN_DEG, RECENTRE_M)
         from .drivable_keep import WAY_MAX_AGE_S
@@ -66,27 +66,42 @@ class RouteBridge:
                         and info.get('ahead_m', 0.0) >= LOOKAHEAD_M and len(info.get('centre_path_m', [])) >= 2):
                     self._alignment = state = None
 
-        ctx = owner._ctx
-        if (error is not None or info.get('reason') != 'drivable_closed' or not info.get('recentre_first')
-                or info.get('front_blocked_m') is not None or info.get('pivot_limit')
-                or not timing or not poses or not ctx.get('guide') or not ctx.get('fresh')):
+        pivot = next((side for side, sign in (('left', -1), ('right', 1))
+                      if info['strategy'] == f'drivable_pivot_{side}' and error == sign * PIVOT_ERROR
+                      and confidence == owner._pivot_confidence), None)
+        closed = error is None and info.get('reason') == 'drivable_closed' and info.get('recentre_first')
+        opposing = state is not None and pivot is not None and pivot != state['side']
+        if (info.get('front_blocked_m') is not None or info.get('pivot_limit')
+                or info.get('straddle') or info.get('crosswalk_hold')):
             return None
+        # A spent/uncertain observed episode cannot fall back to its opposing future-route latch.
+        reason = ('recentre_alignment_spent' if opposing and state['used'] >= state['limit'] else
+                  'recentre_alignment_odometry' if opposing and state['uncertain'] else None)
+        if reason:
+            return None, None, dict(info, strategy='none', reason=reason, target_m=None, target_now_m=None)
+        ctx = owner._ctx
+        fallback = ((None, None, dict(info, strategy='none', reason='recentre_alignment_unobserved',
+                                     target_m=None, target_now_m=None)) if opposing else None)
+        if (not (closed or pivot) or not timing or not poses or not ctx.get('guide') or not ctx.get('fresh')):
+            return fallback
         near, target, seen = info.get('near_centre_m'), info.get('target_m'), info.get('seen_exit')
         opening = info.get('exit_point_m', {}).get(seen)
         if not (valid(near, 2) and valid(target, 2) and valid(opening, 2)):
-            return None
+            return fallback
         if info.get('exit_reach_m', {}).get(seen, 0.0) < PIVOT_AHEAD_M:
-            return None
+            return fallback
         near, target, opening = (_to_current(point, source_pose, pose) for point in (near, target, opening))
         sign = 1.0 if near[1] > 0.0 else -1.0
         bearing = math.atan2(near[1], near[0])
         here = ctx.get('here')
         if (near[0] <= 0.0 or not 0.0 < target[0] < BEND_ON_X_M or opening[0] <= 0.0
-                or abs(near[1]) < RECENTRE_M or target[1] * sign <= 0.0 or opening[1] * sign <= 0.0
+                or (not opposing and abs(near[1]) < RECENTRE_M) or target[1] * sign <= 0.0 or opening[1] * sign <= 0.0
                 or here is None or not math.isfinite(here)
                 or abs(math.remainder(math.radians(here) - bearing, math.tau)) > math.radians(REALIGN_DEG)):
-            return None
+            return fallback
         side = 'left' if sign > 0.0 else 'right'
+        if pivot == side:
+            return fallback
         if state is None:
             state = self._alignment = dict(origin=tuple(pose), last=tuple(pose), stamp=stamp, observed=observed,
                 used=0.0, limit=min(PIVOT_MAX_RAD, abs(bearing)), side=side, uncertain=False)
@@ -101,7 +116,7 @@ class RouteBridge:
             strategy=f'drivable_recentre_pivot_{side}', reason=None)
 
     def step(self, error, confidence, info, pose, owner, *, source_pose=None, current_stamp=None, observation_stamp=None):
-        alignment = self._align(error, info, pose, owner, source_pose, current_stamp, observation_stamp)
+        alignment = self._align(error, confidence, info, pose, owner, source_pose, current_stamp, observation_stamp)
         if alignment is not None:
             return alignment
         if info['strategy'] not in BRIDGES:

@@ -258,3 +258,23 @@ def test_recorded_local_left_floor_can_override_a_right_latch_in_the_full_steer(
             observed_only=True, current_stamp=(i + 1) / 8)
         assert (error, confidence, info['strategy']) == (
             -PIVOT_ERROR, owner._pivot_confidence, 'drivable_recentre_pivot_left')
+
+
+def test_losing_the_observed_opening_does_not_restore_the_opposing_raw_pivot():
+    owner, guard = guarded()
+    step(owner, guard, info=LATCHED, error=PIVOT_ERROR, confidence=owner._pivot_confidence)
+    missing = dict(LATCHED, seen_exit=None)
+    error, confidence, info = step(owner, guard, info=missing, error=PIVOT_ERROR,
+                                   confidence=owner._pivot_confidence)
+    assert error is None and confidence is None
+    assert info['reason'] == 'recentre_alignment_unobserved'
+
+
+def test_continuing_alignment_uses_the_original_budget_when_the_near_offset_shrinks():
+    owner, guard = guarded()
+    step(owner, guard, info=LATCHED, error=PIVOT_ERROR, confidence=owner._pivot_confidence)
+    limit = guard._alignment['limit']
+    near = dict(LATCHED, near_centre_m=(0.180, 0.02))
+    assert step(owner, guard, 0.1, info=near, error=PIVOT_ERROR,
+                confidence=owner._pivot_confidence)[0] == -PIVOT_ERROR
+    assert guard._alignment['limit'] == limit
