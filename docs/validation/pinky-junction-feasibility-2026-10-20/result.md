@@ -327,3 +327,24 @@ Fleet API 원본의 마지막 running pose는(0.230,-0.510), arrived에 저장�
 Fleet lane 도착은 해당 segment의 stop 수락 기록과 실제 검증된 MapPose가 기존 arrive_lane_m 이내라는 증거를 요구한다. 선택된 arc의 s_to에서 기존 traffic hold-back을 뺀 실제 정지 목표와 Euclidean 거리를 비교해 접근 중 executing·overshoot·측면 오차를 구분한다. stop 수신 직후 executing을 실제 hold로 간주한 pass_window0.3m 예외를 제거했다. 기존 arrive_lane_m0.15m·free 판정·CORE stop 권한·재전송/해제 정책은 유지한다. 목표 전에 CORE가 실제 hold하면 자동 전진시키지 않고 기존 trip 정체 처리를 유지한다.
 
 새 native 회귀에서 접근 중 executing의 조기 arrival을 확인한 RED4개 뒤 관련6파일은254 passed / skip0와 기존 문서 secret guard1 FAIL/NEW1이었다. 초과 거리에서 실제 hold를 만들어도 running 유지,0.14m 도착, overshoot·측면 거리·traffic hold-back 및 stop 거절 회귀를 포함한다. 해당 실행의 wrapper는 실패 로그의 한국어 출력 중 encoding 오류로 종료했으며 보존된 run-1 결과로 판정을 대조했다. 문서 SHA 형식 수정은 당시 커밋에 포함되지 않았으므로 수정 문서 HEAD의 guard 재검증 전이다. 독립 safety·최종 소스 검토0/0/0, f976 이후4커밋 size-range 통과다. 새 후보 영향 범위·동일 조건 연속2회 SIM 전까지 수용 HOLD이며 임계값을 바꿔 이전 실패를 PASS로 재해석하지 않는다.
+
+## 7956 중간 코너 실패와 곡선 근거리 입장 기준
+
+검증 HEAD `7956cd9d315dbea17fcf26bbbcb15dd76ba0f501`.
+
+수정 문서의 release guard80 passed/skip0/NEW0을 확인했다. Fleet 영향 범위 실행은 SSH 연결 유실 뒤92%에서 Terminated로 끝났고89%의 F 표시1개가 남았다. 완료 summary가 없어 known_failures 파서의0건을 NEW0 근거로 사용하지 않는다. native collection으로 실패 위치를 module_structure의 ratchet 검사로 좁히고 별도 재실행에서 정확히 재현했다. 기존 테스트 중복 삭제로 test_trip_runner.py가1,757→1,748줄이 되어 저장된 ratchet도 낮추라는 실패다. 수용 범위를 줄이거나 테스트를 제외하지 않고 row를1,748로 갱신한 후 해당 구조 검사40 passed/NEW0을 확인했다. 전체 영향 범위는 재검증 대상이다.
+
+첫 SIM `sim-7956cd9d31-0212c5`는 중간 코너 spent HOLD 뒤 stall60초/진행3.841m로 FAIL이었다. debug station3.872m, settled_xy(-0.748327,0.484273), 목표 거리1.621299m, via0.524m다. 비영 명령 구간 learned_drivable755개/fallback0, nonnull revision751개 고정 일치/누락4개, 열린 junction198회/먼 출구 거절55회, spent23회였고 이후 종단 HOLD도 이어졌다. final cmd·odom0, lease released, left_running 빈 목록, 회수·native 정리 완료, lane_return SKIP이다. 같은 소스로 두 번째를 반복하지 않는다. 목표에 못 갔으므로 Fleet 도착 보정의 SIM 수용은 아직 검증하지 못했다.
+
+- result SHA256: `dad811f28d3212e4900d9fef5f6fb2cf53e3ebea818f175021530bec063c8c87`
+- observations SHA256: `3b27344e7f46bd78178ce2857ba1b5e081c673f38756b79e08ab10d374ee1f71`
+- run SHA256: `e4fad71875d67a5709c574f4995e8e961c18172ccbbce782cf70dbadd6ff90d9`
+- native 재생13 analysis SHA256: `d7cb4cee00aa076cb83c29303ddeac6e656319b06032bb95424839760c7a3b95`
+
+native 재생13에서95.375초 RIGHT episode는 불확실성 없이 추적됐고 선택 출구와 seen_exit도 LEFT로 일치했다.97.25~98.75초 곡선 증거는 통과했지만 실제 이동이0.14m 미만이었다.100.125초 이후에는 실제 이동을 만족하고 가까운 tangent·연결·선택 target/opening도 맞지만 가까운 곡선이 직선 body-axis에서0.03m 이상 벗어나 종료를 막았다. 원본100.125/100.25/100.375의 source 첫 점 y는0.0376/0.0400/0.0420m다. 기록 odom으로 current 좌표에 옮긴 y는0.03587/0.03830/0.04033m이며 선택 current 원호의 같은 x와 오차는 약0.0060/0.0084/0.0106m다. 추가 재생14는 SSH banner timeout으로 실행되지 않았고 이 수치 계산은 회수한 기록의 stdlib 분석이며 제품 실행으로 표시하지 않는다.
+
+생산 HEAD `d8fe6d1d022c42becd920bc64bf7db5529f7a1dc`.
+
+기존 중심축0.03m 입장은 유지하고, 축 밖인 가까운 점은 guard에 전달된 선택 current 후보의 short arc와 같은 x에서0.03m 이내일 때 추가 인정한다. 이는 곡선의 공간적 입장을 넓히는 변경이며 숫자가 같다는 이유로 보호 범위가 동일하다고 주장하지 않는다. 관측점을 옮기거나 path를 수정하지 않으며 기존 first x·연결·gap·coverage·target/opening·here/tangent30도·실제 source/current 이동·uncertainty·회전량 예산을 유지한다. finite/영점/직선 근접/원호 정의역 밖을 처리하고 새 저장 경로나 TTL 예외는 추가하지 않는다.
+
+원본156개 odom·3개 관측 회귀에서6ea native RED는 실제 positive/종료4개와 신규 helper 미구현10개로 NEW14/기존 negative1 passed였다. 첫2b 구현은 새15개는 통과했지만 기존 정상 직선-prefix 곡선3개가 실패했다. 최종 검토 Important1을 보존하고, 기존 중심축 입장을 OR로 복원한 d8에서 관련13파일235 passed/skip0/NEW0으로 재검증했다. 독립 safety 재검토와 최종 소스 재검토0/0/0,7956 이후4커밋 size-range 통과다. 반대 곡률·평행 오프셋·원호 다른 branch/정의역 밖·비유한 값·직선 근접 회귀를 포함한다. 최신 전체 영향 범위·동일 후보 연속2회 SIM 전까지 수용 HOLD다.

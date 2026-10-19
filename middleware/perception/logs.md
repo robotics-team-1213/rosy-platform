@@ -1773,3 +1773,9 @@
 - 변경: 선택 안내가 없는 동안에도 기존 정렬 episode의 pose·시각·절대 yaw를 추적한다. 후보와 출력을 바꾸거나 상태를 생성·종료하지 않으며, 안내 복귀 후 기존 관측 전진 조건으로 종료한다. 실제 odom 공백·jump·reset uncertainty는 보존한다.
 - 증거: 24cc 영향6,937 passed 뒤 SIM1 PASS/1 FAIL, 마지막 코너 정체. native 재생에서156.875~157.125 안내 유실이 정상 odom에도157.25의0.5초 공백 오인을 만들었다. 원본168개 odom 회귀 e12 RED4→1941 관련12파일 통과/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0.
 - gate 변화: 없음. 최신 영향 범위·동일 후보 연속2회 SIM 전까지 수용 HOLD. 회전량 예산이나 종료 기하 기준을 완화하지 않는다.
+
+## 2026-10-20 · uncommitted · 곡선 진행의 근거리 입장 추가
+
+- 변경: 기존 중심축0.03m 지지를 보존하고 축 밖인 가까운 점은 선택 current 원호의 short branch와 같은 x에서0.03m 이내일 때 추가 인정한다. 공간 입장은 넓어지며 연결·tangent·target/opening·실제 이동·uncertainty·예산 기준은 유지한다. 저장 경로나 TTL 예외는 없다.
+- 증거: 7956 SIM 중간 코너 stall60 실패. 원본156개 odom·3관측에서 곡선 자체의 bow가 직선 축 기준을 넘었다. native RED14/negative1 passed→2b 기존 곡선3FAIL/최종 Important1→d8 관련235 passed/skip0/NEW0와 별도 safety·최종 소스 검토0/0/0으로 종료했다.
+- gate 변화: 없음. 최신 전체 영향 범위·반복 SIM 수용 HOLD, smoothing/current 최종 궤적의 전역 보장은 아니다.

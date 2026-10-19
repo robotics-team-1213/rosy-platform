@@ -9347,3 +9347,9 @@ osy-d395-s1d\`.
 - 변경: f976의 코너 완주 후 정착0.196729m 실패와 조기 arrived pose0.287m를 보존했다. source SHA 표기의 secret guard 오인은 값 변경 없이 HEAD 단독 문장으로 수정했다.
 - 증거: Fleet stop executing과 실제 hold의 구분,737 관련254 passed와 미포함 문서 guard1 FAIL, 독립 safety·최종 소스 검토0/0/0을 동결 기록에 결속했다.
 - gate 변화: 없음. 기존0.15m 수용 기준을 유지하며 수정 문서 guard·최신 영향 범위·같은 후보 연속2회 SIM 전까지 HOLD다.
+
+## 2026-10-20 · uncommitted · 중간 코너 실패와 곡선 입장 회귀 보존
+
+- 변경: 7956의 spent 정체 실패, native 재생13, 중단된 영향 범위와 ratchet 실패를 보존했다. 테스트 삭제에 따른 ratchet1,748 갱신 뒤 구조40 passed와 새 곡선 입장 증거를 기록했다.
+- 증거: d8 관련235 passed/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0. 최초2b의 기존3FAIL/Important1도 삭제하지 않았다.
+- gate 변화: 없음. 전체 선택 경로를 보존한 영향 범위 분할 실행과 최신 후보 연속2회 SIM 전까지 HOLD다.
