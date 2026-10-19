@@ -16,6 +16,7 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 |------|-------------|
 | `lerobot_export.py` | `python learning/curation/omx/lerobot_export.py <episode> <output> [--repo-id ...]`: validates the episode, writes the dataset, reads every frame back, copies the source into `rosy_provenance/` |
 | `world_model_dataset.py` | D-782 W1: closed collection sessions (including failed and aborted attempts) into session-split action-conditioned windows with human labels; `load()` checks the receipt digest |
+| `camera_setup_intake.py` | D-792 S3: shadow camera setup checks at intake (`collection_intake.py`/`collection_pipeline.py prepare --camera-reference ROLE=PATH`): first/last frame of each selected episode per role -> `camera-setup.json` (`rosy.omx-camera-setup-intake/1`) with reference revisions and camera_info fingerprints; never blocks |
 | `test/test_lerobot_export.py` | Schema, frame and refusal checks; the full LeRobot round trip skips without `lerobot` |
 | `sim_batch_export.py` | Teacher reach results + recordings -> one `lerobot_export.py` run per complete successful episode, refusals with reasons, eval = highest seed, `batch-manifest.json` with `act_job.py` args. Test `test/test_sim_batch_export.py` |
 

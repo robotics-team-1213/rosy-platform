@@ -95,7 +95,7 @@ def match_features(still, frame, intrinsics):
             'd_pan_deg': round(math.degrees(math.atan2(r[0, 2], r[2, 2])), 3),
             'd_tilt_deg': round(math.degrees(math.asin(max(-1.0, min(1.0, -r[1, 2])))), 3),
             'd_roll_deg': round(math.degrees(math.atan2(r[1, 0], r[0, 0])), 3),
-            'd_scale_pct': round((math.sqrt(s[0] * s[1]) / s[2] - 1) * 100, 3)}, h
+            'd_scale_pct': round((math.sqrt(float(s[0] * s[1])) / float(s[2]) - 1) * 100, 3)}, h
 
 
 def marker_world(marker):
@@ -160,7 +160,7 @@ def make_reference(frame, *, camera_role, camera_identity, fps, intrinsics, meas
     }))
 
 
-def _unmeasurable(method, matches, pose=None):
+def unmeasurable(method, matches, pose=None):
     return {'method': method, 'matches': matches, 'pose_error_rad': pose, 'px_mean': None, 'px_max': None,
             **{key: None for key in ('d_pan_deg', 'd_tilt_deg', 'd_roll_deg', 'd_scale_pct',
                                      'd_height_cm', 'd_distance_cm')}, 'verdict': 'unmeasurable'}
@@ -178,13 +178,13 @@ def measure(frame, reference, camera_info_sha256, still=None, joints=None):
     if (camera_info_sha256 != reference['intrinsics']['camera_info_sha256']
             or (width, height) != (reference['width'], reference['height'])
             or (pose is not None and pose > reference['check_pose']['tolerance_rad'])):
-        return _unmeasurable(method, 0, pose), {}
+        return unmeasurable(method, 0, pose), {}
     if method == 'features':
         if still is None or still.shape[:2] != frame.shape[:2]:
             raise ValueError('features check needs the reference still at the frame size')
         metrics, h = match_features(still, frame, reference['intrinsics'])
         if metrics is None:
-            return _unmeasurable(method, h, pose), {}
+            return unmeasurable(method, h, pose), {}
         record = {'method': method, **metrics, 'pose_error_rad': pose, 'd_height_cm': None, 'd_distance_cm': None}
         record['verdict'] = judge(record, width, height)
         return record, {'homography': np.round(h, 8).tolist()}
@@ -193,7 +193,7 @@ def measure(frame, reference, camera_info_sha256, still=None, joints=None):
     current = estimate_mount(found, layout, reference['intrinsics'])
     overlay = {'detected': {str(i): np.round(c, 2).tolist() for i, c in found.items()}}
     if current is None:
-        return _unmeasurable(method, len(layout), pose), overlay
+        return unmeasurable(method, len(layout), pose), overlay
     errors = np.concatenate([np.linalg.norm(found[m['id']] - np.array(m['corners_px']), axis=1) for m in layout])
     estimated = reference['mount']['estimated']
     delta = {key: current[key] - estimated[key] for key in MOUNT}

@@ -134,3 +134,9 @@
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · a73095ddfe · 보관된 OMX 학습 S3/S4 통합과 카메라 증거 결속
+
+- 변경: 보관 원본2dd4d009b9의 D-792 S3 shadow 점검·S4 읽기 전용 OMX 화면과 D-794 front/wrist 읽기 별칭을 현재 main에 통합한다. 독립 검토에서 찾은 역할이 다른 기준의 적용과 첫 교정값 재사용을 수정했다. wrist 기준은 확인 자세를 요구하고, 교정값이 바뀌거나 사라지는 역할은 세션 전체를 측정 불가로 기록한다. 사람 검수·실행·승격 권한을 추가하지 않았다.
+- 증거: AI 시험 PC의4e682c9bd2 focused11개 중6실패5통과로 두 문제를 재현했다. 수정a73095ddfe에서 같은11개 모두 통과, skip0. 로그는 외부 scratch rosy-worktree-reconcile/omx-intake-red-collected 및 omx-intake-green/run-1.txt. 최종 독립 소스 검토에서 남은 finding 없음. 전체 착지·브라우저 관문은 별도 수행한다.
+- gate 변화: 없음. 프레임 시각별 교정 선택은 아직 없으므로 교정 변경 전의 유효한 프레임도 보수적으로 측정 불가일 수 있다. 실물 카메라 정확도·학습 품질·운영 라벨·배포는 검증하지 않았다.
