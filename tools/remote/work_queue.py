@@ -19,6 +19,13 @@ class Work:
         except IndexError:
             return None
 
+    def take_small(self) -> int | None:
+        """The last queued index (the smallest, largest-first order): a light host's pick."""
+        try:
+            return self.todo.pop()
+        except IndexError:
+            return None
+
 
 def cost(repo: Path, inv: list[str]) -> int:
     """Bytes of the test files an invocation names (dirs: their .py files), a cheap stand-in for run time."""

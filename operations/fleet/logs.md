@@ -4057,3 +4057,9 @@
 - 변경: Fleet captures selected-route direction only for opted-in CORE capabilities and a fresh localized pose in the active map, with the exact authority odometry stamp. Changed route, plan, hold, source or age invalidates the captured sample; shrink carries no guide. Normalize full-lane endpoints only within the existing four-decimal station serialization precision. Share the injected trip clock with the authority sender.
 - 증거: Remote integration suite passed 186 tests across Fleet route guidance, authority, route direction, trip runner, CORE capabilities/protocol/timers and SIM overlays. Private evidence: rosy-d769-audit/fleet-route-integrated/run-1.txt. Earlier failing integration exposed rounded lane endpoints and mismatched injected clocks. Independent review found no blocking producer issue; size-range and safety-review guards passed for all eight commits since 64c8eb701.
 - gate 변화: None. Real Gazebo guide consumption and learned driving acceptance remain pending.
+
+## 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
+
+- 변경: `tracking/robot_media_routes.py`가 fleet.read 주체에게 로봇별 READ 위임을 발급·갱신·종료하고 `fleet_media_audit`에 남기며 미디어 권한 서비스의 재확인에 답한다. 콘솔 CSP는 설정된 media origin만 추가한다.
+- 증거: 원격 시험 결과는 착지 기록에 남긴다. 장치·현장 측정은 2026-10-18 사용자 결정으로 생략했다.
+- gate 변화: 없음. 모자이크(MCU)는 후속 feat/site-video-mosaic이다.

@@ -53,6 +53,7 @@ gates:
     state: PARKED
 adrs:
 - D-775
+- D-801
 - D-693
 - D-687
 - D-679

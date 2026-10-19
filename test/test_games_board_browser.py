@@ -546,7 +546,8 @@ def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
     assert fit["note"]["height"] > 0 and fit["note"]["bottom"] <= fit["barBottom"], f"안내와 결과는 머리 안에 보인다: {fit}"
 
 
-def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
+@pytest.mark.parametrize("medium_width", [600, 480])
+def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate(medium_width):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -596,7 +597,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             assert max(r["width"] for r in small["panels"]) - min(r["width"] for r in small["panels"]) <= 1
             assert small["scrollWidth"] <= 320 and small["halt"]["bottom"] <= 568
             save_temp_screenshot(page, "games_board_delayed_320x568.png")
-            page.set_viewport_size({"width": 600, "height": 800})
+            page.set_viewport_size({"width": medium_width, "height": 800})
             page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
             page.wait_for_timeout(100)
             scrolled = page.evaluate("""() => ({
@@ -605,7 +606,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
               stair: document.getElementById('stair1').getBoundingClientRect().toJSON(),
               scrollWidth: document.documentElement.scrollWidth,
             })""")
-            assert scrolled["scrollWidth"] <= 600
+            assert scrolled["scrollWidth"] <= medium_width
             # D-741: the bar is sticky, so the stop is still at the top after scrolling to the end,
             # and the last line of the page is in view (nothing is parked under a bottom row).
             assert abs(scrolled["bar"]["top"]) <= 1, scrolled
