@@ -483,5 +483,10 @@
     "commit": "e0d77bcff8cab9b486a6ef8055960dc3e17d5b4b",
     "original_commit": "8158a0a685aa27265a23131f4476c8c43d3532eb",
     "reason": "PR #78 squash lost the source Safety-Review trailer of 8158a0a685 (test/flaky_quarantine.txt, D-762 stage 1). Independent read-only agent review, 2026-10-17, two passes: first pass required 3 fixes (drop the slow-feedback entry and reopen issue #68, correct the actionserver and timeout reasons), second pass no findings; evidence runs 38959095932 (attempts 1-3) and 38969322695 (attempts 1-2) verified. Squash patch-id equals the reviewed head (fc6879003987). Squash provenance retention only; no product code or safety rule change."
+  },
+  {
+    "commit": "057be833ab289ab341049191f90e1c7c94077015",
+    "original_commit": "55d5b426b9fc8fb8d79768515b47f74d26cc92d8",
+    "reason": "GitHub squash merge of PR #108 dropped the trailer of the reviewed commit; command_owner.py change is identical to 55d5b426b9 (D-785 final-state reach check, default off). Original Safety-Review: independent read-only reviewer agent, 2026-10-17: APPROVE WITH NOTES; unset policy is behaviour-identical (folded limit loop same order/messages/values, disabled configs skip it), HOLD path clears _active before _enter_hold so no extra cancel, no hold-reason whitelist anywhere (ros_runtime, action_runner, pilot_sim, g2_startup, recovery), stale snapshots cannot pass (freshness checked in the same locked poll); notes fixed: non-mapping policy is a ValueError, tests for failed Action, recovery state, negative/int/extra-joint inputs, disabled config; phase receipt still records ROS SUCCEEDED (fail-safe, documented). No device run."
   }
 ]
