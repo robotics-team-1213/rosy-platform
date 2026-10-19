@@ -338,6 +338,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
             def build_runtime(context):
                 assert context.plans is returns.adapter.plans
                 returns.use_runner(context.runner)
+                context.runner._call = trace_failure('trip_call', context.runner._call)
+                context.runner._step_free = trace_failure('trip_free', context.runner._step_free)
                 ports.clients = ports.return_http.clients = ingress.clients = context.clients
                 return runtime
             app_options = dict(site_maps=returns.adapter.plans, trip_caps_port=returns.plant.caps_for,
