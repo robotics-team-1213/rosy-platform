@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+import remote_test_tools
+
 POLL_S = 10.0
 BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
@@ -32,7 +34,7 @@ echo "$$ pytest 2 6" > "$L"; echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
 trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
 echo $c > "$D/$K.rc.tmp"; rm -f "$L"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
-shift 5
+""" + remote_test_tools.DEFAULT_CONTEXT + r"""shift 5
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
 while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
@@ -146,7 +148,11 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
     where = f"{host}:~/rosy-test/runs/{name}.jobs/{k}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_bytes(b"")
-    args = [*job_args, str(k), str(timeout_s), JOB, *pytest_args]
+    profile = job_args[3] if len(job_args) == 4 else None
+    if len(job_args) not in (3, 4):
+        raise SystemExit("[remote-pytest] invalid test-tools job context")
+    body = remote_test_tools.render_job(JOB, profile)
+    args = [*job_args[:3], str(k), str(timeout_s), body, *pytest_args]
 
     def poll():
         result = call(ssh, host, POLL, name, str(k), str(offset))
