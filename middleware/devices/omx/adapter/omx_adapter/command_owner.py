@@ -26,6 +26,14 @@ from .contracts.command_types import (
     _positive_finite,
 )
 from .manipulation_plan import JointTrajectoryPoint
+from .watchdog_observation import JointIntakeObservation, WatchdogObservation, watchdog_observation
+
+
+def _steady_observation():
+    try:
+        return time.monotonic()
+    except Exception:
+        return None  # Diagnostic sampling cannot replace a policy clock read or decision.
 
 
 class ArmCommandOwner:
@@ -63,6 +71,8 @@ class ArmCommandOwner:
         self._hold_reason = ""
         self._hold_sequence = -1
         self._control_admission = None
+        self.watchdog_observation: WatchdogObservation | None = None
+        self.joint_intake_observation: JointIntakeObservation | None = None
 
     def bind_control_admission(self, admission) -> None:
         """Bind the same-process seat policy before any owner command is admitted."""
@@ -127,18 +137,35 @@ class ArmCommandOwner:
         return now - snapshot.received_at <= self.config.max_joint_state_age_s
 
     def _wall_stale_reason(self) -> str | None:
+        return self._wall_stale_check()[0]
+
+    def _wall_stale_check(self) -> tuple[str | None, float | None]:
         """Outer wall-clock bound; only with a sim owner clock (C3b A3)."""
         if self._wall is None or self.config.wall_clock_bound_factor is None:
-            return None
+            return None, None
         factor = self.config.wall_clock_bound_factor
         now = self._wall()
         if (self._joint_state_wall is None
                 or now - self._joint_state_wall > self.config.max_joint_state_age_s * factor):
-            return "joint_state_stale_wall_clock"
+            return "joint_state_stale_wall_clock", now
         if (self._active_wall is not None
                 and now - self._active_wall >= self.config.action_timeout_s * factor):
-            return "action_wall_timeout"
-        return None
+            return "action_wall_timeout", now
+        return None, now
+
+    def _watchdog_hold(self, reason, command, now, wall_now=None, *, now_bracket=(None, None)):
+        # Freeze the exact decision before cancel() can block or deliver callbacks.
+        # A later HOLD poll or feedback does not rewrite this transition's evidence.
+        try:
+            self.watchdog_observation = watchdog_observation(
+                reason, command, self._joint_state, self.config, owner_now=now,
+                steady_now=time.monotonic(), joint_wall=self._joint_state_wall,
+                active_started_at=self._active[2], active_wall=self._active_wall, wall_now=wall_now,
+                intake=self.joint_intake_observation,
+                owner_now_steady_before=now_bracket[0], owner_now_steady_after=now_bracket[1])
+        except Exception:
+            self.watchdog_observation = None  # Evidence failure cannot suppress HOLD/cancel.
+        return self._enter_hold(reason)
 
     def _cancel_active(self) -> str | None:
         active, self._active = self._active, None
@@ -322,21 +349,23 @@ class ArmCommandOwner:
             if self._state != "active" or self._active is None:
                 return self._decision(True, "ready")
             command, handle, started_at = self._active
+            steady_before = _steady_observation()
             now = self._monotonic()
+            now_bracket = (steady_before, _steady_observation())
             if self._clock_jumped_back(now):
-                cancel_outcome = self._enter_hold("owner_clock_jumped_back")
+                cancel_outcome = self._watchdog_hold("owner_clock_jumped_back", command, now, now_bracket=now_bracket)
                 return self._decision(False, "owner_clock_jumped_back", command.command_id, cancel_outcome)
             if not self._fresh_joint_state(now):
-                cancel_outcome = self._enter_hold("joint_state_stale")
+                cancel_outcome = self._watchdog_hold("joint_state_stale", command, now, now_bracket=now_bracket)
                 return self._decision(
                     False, "joint_state_stale", command.command_id, cancel_outcome
                 )
             if now - started_at >= self.config.action_timeout_s:
-                cancel_outcome = self._enter_hold("action_timeout")
+                cancel_outcome = self._watchdog_hold("action_timeout", command, now, now_bracket=now_bracket)
                 return self._decision(False, "action_timeout", command.command_id, cancel_outcome)
-            wall_reason = self._wall_stale_reason()
+            wall_reason, wall_now = self._wall_stale_check()
             if wall_reason is not None:
-                cancel_outcome = self._enter_hold(wall_reason)
+                cancel_outcome = self._watchdog_hold(wall_reason, command, now, wall_now, now_bracket=now_bracket)
                 return self._decision(False, wall_reason, command.command_id, cancel_outcome)
             try:
                 if not handle.done():

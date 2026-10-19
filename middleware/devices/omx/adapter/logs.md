@@ -554,3 +554,9 @@
 - 증거: 현재 main과 이동한 정의의 AST 동일성 및 독립 소스 리뷰를 확인했다. 원격 시험은 커밋 후 착지 관문에서 실행하며 아직 통과로 기록하지 않는다.
 - gate 변화: 없음. 실물 실행·장치 수용·배포를 수행하지 않는다.
 - 결정: D-427·D-429·D-430·D-766의 기존 경계와 크기 규칙을 따른다.
+
+## 2026-10-19 · uncommitted · feat(omx): recover bounded feedback diagnostics
+
+- Recover bounded intake/watchdog observations and coherent action-receipt snapshots from preserved native simulation work. Current-main age-adjusted receipt regression rejection remains authoritative.
+- Evidence: independent source review and committed remote tests are pending. No hardware or field acceptance is claimed.
+- Gate change: none; device deployment is outside this recovery.

@@ -185,6 +185,9 @@ class ActionRunner:
 
     def _receipt(self, action: Mapping[str, object], *, created: bool,
                  reason: str | None = None) -> dict[str, object]:
+        from .policy_parent import projection
+        snapshot = self.store.attempt_snapshot(str(action['action_id']), action.get('attempt_id'))
+        action = snapshot['action']
         request = action.get("request", {})
         payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
         if not isinstance(payload, Mapping):
@@ -198,13 +201,10 @@ class ActionRunner:
             "authority_epoch": payload.get("authority_epoch"),
             "dispatch_generation": payload.get("dispatch_generation"),
             "state": action["state"], "driver_goal_id": action.get("driver_goal_id"),
-            "journal_event_id": action.get("journal_event_id")
-            or self.store.latest_event_id(str(action["action_id"])),
+            "journal_event_id": action["journal_event_id"],
             "observed_at": action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
-            "phase_summaries": self.store.action_phase_receipts(
-                str(action["action_id"]), str(action.get("attempt_id")),
-            ) if action.get("attempt_id") else [],
+            "phase_summaries": projection(snapshot)['phase_summaries'] if action.get('attempt_id') else [],
         }
 
     def submit(self, grant: ActionGrant, *, peer_uid: int) -> dict[str, object]:
