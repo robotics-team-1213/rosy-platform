@@ -16,8 +16,7 @@
 
 ## 2026-09-16 · uncommitted · docs(harness): hold docs while the ADR log carries a conflict marker
 - 변경: 2차 리뷰 반영. 다른 세션 merge-aside 복원이 `ROSY ADR Log.md` 1590행에 충돌 종료 표시를 남겼고, lint가 충돌 표시를 오류로 잡도록 바뀌므로 lint 기반 증거를 쓰는 SOURCE/LOCAL을 HOLD로. 표시는 다른 세션 소유 작업이라 이 기록에서 고치지 않았다
-- 증거: `Select-String -Path "docs/reference/ROSY ADR Log.md" -Pattern '^(<<<<<<<|=======|>>>>>>>)( |$)'` → 1590행 (2026-09-16 01:10)
-- gate 변화: SOURCE GO→HOLD, LOCAL GO→HOLD
+- 증거: `Select-String -Path "docs/reference/ROSY ADR Log.md" -Pattern '^(- gate 변화: SOURCE GO→HOLD, LOCAL GO→HOLD
 - 결정: 없음
 - 교훈: 없음
 
@@ -9228,6 +9227,7 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest `test_policy_governance.py`(Mission 없는 앱 시험 포함).
 - gate 변화: 없음.
 
+<<<<<<< HEAD
 ## 2026-10-19 · uncommitted · docs(omx): recover historical native simulation evidence
 
 - 변경: Preserve eleven authored native SIM validation records with explicit historical-source/run scope. Update the Cell ROS-SIM blocker to the documented partial 3/16 result and held-object HOLD, without promoting its gate.
@@ -9239,3 +9239,9 @@ osy-d395-s1d\`.
 - 변경: Recover the three original native deployment, contract-integration and topic-task plans, marked as historical context governed by current repository instructions. Current ADR status and operational approval remain unchanged.
 - 증거: Their implementation and validation records are preserved in separate source/evidence commits; plan prose is not execution evidence.
 - gate 변화: None; these documents authorize no deployment or hardware activation.
+
+## 2026-10-19 · uncommitted · 남은 learning 계획 문서의 역사 보존
+
+- 변경: learning-delivery·learning-plan의 서로 다른 계획 원문 6개와 미커밋 로그 행을 `docs/validation/uncommitted-recovery-2026-10-19/learning/`에 보존했다. 원본 SHA-256·출처와 D-771 선행 구현 부재를 기록하고, 이미 main에 포함된 v13-map-labels·d427-bulk의 중복 소스 변경은 다시 적용하지 않았다.
+- 증거: 원본과 보존본의 바이트·해시 대조, 현행 소비 경로·기존 커밋의 main 조상 관계 확인. 문서 계약은 원격 시험과 공식 착지 관문으로 검증한다.
+- gate 변화: 없음. 역사 계획의 시험 수치·설치 서비스·GPU·장치·현장 수용을 재확인한 기록이 아니다.
