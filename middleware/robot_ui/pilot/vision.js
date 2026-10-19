@@ -5,6 +5,7 @@
 // 더 자주 당기면 429 만 늘고, 그 요청들이 teleop 과 같은 브라우저 연결 풀을 잡아먹는다.
 
 import {fetchCameraPair} from "/common/evidence.js";
+import {MEDIA_GRANT_PATH, openCamera, requestMediaGrant} from "/common/webrtc.js";
 
 export const MIN_PULL_INTERVAL_MS = 420;
 
@@ -251,4 +252,39 @@ export function createVisionPreview({
       onUnavailable("카메라 중지");
     },
   };
+}
+
+// D-789 read-only camera view: WHEP <video> when CORE issues a media grant, else the JPEG preview above
+// (sequence-paced, >=420 ms). Never both at once; a lost or refused WebRTC falls back to JPEG.
+export function createWhepView({video, jpeg, robotId, postJson, api, onState = () => {}}) {
+  let camera = null, opening = false, active = false;
+  const revoke = (id) => api(`${MEDIA_GRANT_PATH}/${id}`, {method: "DELETE"});
+  const fallback = () => { camera = null; video.hidden = true; if (active) jpeg.start(); };
+  function stop() { active = false; camera?.close("stopped"); camera = null; video.hidden = true; jpeg.stop(); }
+  async function start() {
+    active = true;
+    if (camera || opening) return;
+    opening = true;
+    try {
+      const id = await robotId();
+      const grant = id ? await requestMediaGrant(postJson, id) : null;
+      if (!grant) return fallback();
+      if (!active) { revoke(grant.grant_id).catch(() => {}); return; }
+      jpeg.stop();
+      camera = await openCamera({grant, video, revokeGrant: revoke,
+        onState: (state) => {
+          if (state.state === "live" || state.state === "stale") video.hidden = false;
+          else if (state.state === "hidden") video.hidden = true;
+          else if ((state.state === "lost" || state.state === "closed") && state.reason !== "stopped") fallback();
+          onState(state);
+        },
+        renewGrant: async (grantId) => {
+          const result = await postJson(`${MEDIA_GRANT_PATH}/${grantId}/renew`, {});
+          if (result.status !== 200) throw new Error("영상 권한 갱신 거절");
+          return result.body;
+        }});
+      if (!active) stop();
+    } catch (_error) { fallback(); } finally { opening = false; }
+  }
+  return {start, stop};
 }

@@ -490,17 +490,17 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   if (announced.max_linear != null || announced.max_angular != null) setServerLimits(withProfileLimits(null));
   loadLimits();
 
-  // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
+  // --- 로봇 상태 폴링(폴백): /ws/state(10 Hz)가 1초 넘게 조용할 때만 REST로 실측 속도·회전율을 읽는다 ---
   const stateTimer = setInterval(async () => {
+    if (Date.now() - lastSocketReadbackAt < READBACK_GAP_MS) return;
     const state = await apiGet("/api/v1/robot/state", {timeoutMs: READBACK_GAP_MS}).catch(() => null);
+    if (Date.now() - lastSocketReadbackAt < READBACK_GAP_MS) return;   // 그 사이 소켓 값이 왔다: 소켓이 이긴다
     if (!state || state.status !== 200) {
-      if (Date.now() - lastSocketReadbackAt >= READBACK_GAP_MS) {
-        renderTelemetry(null);
-        element.mode.textContent = "—";
-        if (session.state() === "OPEN") {
-          element.state.textContent = "상태 수신 없음";
-          element.state.dataset.readback = "silent";
-        }
+      renderTelemetry(null);
+      element.mode.textContent = "—";
+      if (session.state() === "OPEN") {
+        element.state.textContent = "상태 수신 없음";
+        element.state.dataset.readback = "silent";
       }
       return;
     }
