@@ -147,6 +147,7 @@ class Jobs:
                             binding=mask['classes'],
                             mask=base64.b64encode(review_masks.encode(review_masks.pixels(self.store, mask))).decode('ascii'))
         if action == 'mask_check':
+            snapshot['binding'] = review_masks.classes(self.store)
             snapshot['review_binding'] = vlm_mask_feedback.feedback_binding(snapshot['binding'])
         if version is not None and version != snapshot['version']:
             raise ValueError('검수 버전이 바뀌었습니다. 사진을 다시 불러오세요.')
