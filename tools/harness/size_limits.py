@@ -73,7 +73,7 @@ COVERAGE_ROWS = {
     "site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt": 791,
     "robot_ui/pilot/screens/drive.js": 783, "site_ui/console/line-stuck.js": 756,
     "site_ui/console/roster.js": 711, "site_ui/console/shared/site-map-model.js": 800,
-    "site_ui/console/shared/vision-view.js": 788, "site_ui/console/site-map.js": 771,
+    "site_ui/console/shared/vision-view.js": 788, "site_ui/console/sitemap/site-map.js": 771,
     "middleware/core/events/test/test_audit.py": 1533,
     "middleware/robot_ui/pilot/test/test_pilot_browser.py": 3059,
     "operations/fleet/test/test_trip_runner.py": 1757,

@@ -3035,3 +3035,9 @@
 - 변경: 기존 site README에 Authority·CORE·Learning·Games·native의 기존 설정 진입점과 호환 receiver→authority→앱 전환·회수·격리 복구 인수 순서를 보충했다. 기존 site preflight가 Account 설정 검증은 하지 않는다는 한계를 명시했다.
 - 증거: 기존 Account protocol·배포 경로와 대조했다. 보호 설정 파일 생성·서비스 재시작·운영 계정 변경·배포는 수행하지 않았다.
 - gate 변화: 없음. 승인된 실제 issuer/callback·보호 설정 입력과 사용자/단말 수용이 남아 있다.
+
+## 2026-10-19 · uncommitted · site updater 호스트 설정 검사 분리
+
+- 변경: 616줄 updater의 기존 설정 검사를 이미 설치·검토되는 site_update_io로 옮겼다. 클래스 진입점과 거절·JSON 처리·Compose 이미지 검사는 유지한다. Account overlay 기능보다 먼저 적용하는 D-766 분리다.
+- 증거: 기존 site updater 회귀 시험으로 이동 전후 동작을 비교한다. Account ingress 후보의 별도 원격 검증은 새 배포 동작에 대한 증거이며 이 이동의 착지를 대신하지 않는다.
+- gate 변화: 없음. 호스트 설치·서비스 변경은 수행하지 않았다.

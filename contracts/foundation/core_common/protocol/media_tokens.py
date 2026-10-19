@@ -11,7 +11,8 @@ class MediaTokenRejected(ValueError):
 
 class MediaClaims(BaseModel):
     model_config = ConfigDict(extra='forbid', frozen=True, strict=True)
-    iss: str = Field(pattern=r'^robot:[A-Za-z0-9._-]{1,96}$')
+    # D-801: a site may issue READ-only grants (iss == aud == site:<id>); robots issue their own.
+    iss: str = Field(pattern=r'^(robot|site):[A-Za-z0-9._-]{1,96}$')
     aud: str = Field(pattern=r'^site:[A-Za-z0-9._-]{1,96}$')
     sub: str = Field(min_length=1, max_length=128)
     jti: str = Field(pattern=r'^[a-f0-9]{32}$')
@@ -23,7 +24,9 @@ class MediaClaims(BaseModel):
 
     @model_validator(mode='after')
     def bounded(self):
-        if (not 0 < self.exp - self.iat <= 60 or self.iss != 'robot:' + self.robot_id
+        issuer_ok = (self.iss == 'robot:' + self.robot_id
+                     or (self.iss == self.aud and self.action == 'read'))
+        if (not 0 < self.exp - self.iat <= 60 or not issuer_ok
                 or self.path != f'robots/{self.robot_id}/front'):
             raise ValueError('media delegation outside scope')
         return self

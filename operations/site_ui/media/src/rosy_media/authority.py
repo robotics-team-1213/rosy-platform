@@ -1,5 +1,7 @@
 """Bounded media leases. The transport adapter must tick at least once a second."""
 
+import base64
+import json
 import math
 import threading
 
@@ -7,10 +9,12 @@ from core_common.protocol.media_tokens import MediaTokenRejected, verify_media
 
 
 class MediaAuthority:
-    def __init__(self, *, audience, public_keys, validate_online, kick):
+    def __init__(self, *, audience, public_keys, validate_online, kick, site_keys=None):
         if not 1 <= len(public_keys) <= 6:
             raise ValueError('D-789 supports one to six registered robot sources')
         self.audience, self._keys = audience, public_keys
+        # D-801: the site's own READ-only grant keys, separate from every robot key.
+        self._site_keys = dict(site_keys or {})
         self._validate_online, self._kick = validate_online, kick
         self._intents, self._sessions = {}, {}
         self._lock = threading.RLock()
@@ -18,10 +22,19 @@ class MediaAuthority:
     def _claims(self, token, now):
         for robot_id, keys in self._keys.items():
             try:
-                return verify_media(token, keys, robot_id=robot_id, audience=self.audience, now=now)
+                claims = verify_media(token, keys, robot_id=robot_id, audience=self.audience, now=now)
             except MediaTokenRejected:
                 continue
-        return None
+            # A robot key never speaks for the site.
+            return claims if claims.iss == 'robot:' + robot_id else None
+        robot_id = _unverified_robot(token) if self._site_keys else None
+        if robot_id not in self._keys:
+            return None
+        try:
+            claims = verify_media(token, self._site_keys, robot_id=robot_id, audience=self.audience, now=now)
+        except MediaTokenRejected:
+            return None
+        return claims if claims.iss == self.audience and claims.action == 'read' else None
 
     def _online(self, token, claims, now):
         try:
@@ -178,4 +191,14 @@ class MediaAuthority:
                         and (claims.jti, claims.sub, claims.robot_id, claims.path, claims.action)
                         == (prior.jti, prior.sub, prior.robot_id, prior.path, prior.action)):
                     return {'session_id': session_id, 'expires_at': record['expires']}
+        return None
+
+
+def _unverified_robot(token):
+    """Only selects which registered robot to verify a site grant for; the signature decides."""
+    try:
+        part = token.split('.')[1]
+        value = json.loads(base64.urlsafe_b64decode(part + '=' * (-len(part) % 4)))['robot_id']
+        return value if isinstance(value, str) else None
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return None

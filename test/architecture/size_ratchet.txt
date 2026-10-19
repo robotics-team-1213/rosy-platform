@@ -17,7 +17,6 @@
 686 deploy/robot/pinky_pro/release/updater.py
 806 deploy/robot/pinky_pro/sd/verify-media-readback.py
 698 deploy/site/rosy_model_code.py
-616 deploy/site/rosy_site_autoupdate.py
 1141 devices/omx/adapter/omx_adapter/action_store.py
 695 devices/omx/adapter/omx_adapter/command_owner.py
 728 devices/omx/adapter/omx_adapter/pose_plan.py
@@ -34,7 +33,6 @@
 797 fleet/fleet/server/evidence/proposal_store.py
 1014 fleet/fleet/server/ledger/task_store.py
 936 fleet/fleet/server/missions/mission_store.py
-899 fleet/fleet/server/trips/trip_runner.py
 628 fleet/fleet/swarm/session.py
 1234 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
@@ -57,15 +55,12 @@
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
-11305 site_ui/console
-981 site_ui/console/console.js
 755 site_ui/console/line-stuck.js
-952 site_ui/console/map-view.js
 709 site_ui/console/roster.js
 800 site_ui/console/shared/site-map-model.js
 856 site_ui/console/shared/styles.css
 788 site_ui/console/shared/vision-view.js
-771 site_ui/console/site-map.js
+771 site_ui/console/sitemap/site-map.js
 1531 test/learning/perception/test_review_flow_browser.py
 3049 test/test_dashboard_browser.py
 3884 test/test_fleet_console_browser.py

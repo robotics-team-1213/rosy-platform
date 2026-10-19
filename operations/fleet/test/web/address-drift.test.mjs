@@ -70,7 +70,8 @@ test("the renumber hint follows all_outside unless a name-pinned robot is online
 });
 
 test("no console text shows a 192.168.1.x example address", () => {
-  for (const name of ["index.html", "devices/enrollment.js", "shared/address-drift.js", "console.js", "roster.js"]) {
+  for (const name of ["index.html", "devices/enrollment.js", "shared/address-drift.js", "console.js", "console-auth.js",
+    "console-goal.js", "console-refresh.js", "roster.js"]) {
     const text = readFileSync(new URL(name, WEB), "utf8");
     assert.doesNotMatch(text, /192\.168\.1\.\d/, name);
   }
@@ -91,7 +92,8 @@ test("the banner lists only enrolled robots the server marked movable", () => {
 });
 
 test("there is no bulk move: every move asks for that robot's screen code", () => {
-  for (const name of ["index.html", "console.js", "shared/address-drift.js", "devices/enrollment.js"]) {
+  for (const name of ["index.html", "console.js", "console-auth.js", "console-goal.js", "console-refresh.js",
+    "shared/address-drift.js", "devices/enrollment.js"]) {
     const text = readFileSync(new URL(name, WEB), "utf8");
     assert.doesNotMatch(text, /\(전체\)|runBulkMove|address-move-all/, name);
   }

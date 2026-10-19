@@ -104,3 +104,12 @@ owner dispatch·독립 SIM 과제·물리 수용을 증명하지 않는다.
 별도 모델 재적재에서 재검증한다. cycle receipt와 offline evaluation에 환경 coverage를
 보존한다. 이 값은 sparse 변경 이벤트 집계이며 에피소드 전체 환경 수용률이나 환경별 과제
 성공률이 아니다. 환경 이력이 없는 기존 receipt는 unrecorded로 표시한다.
+
+## 학습 결과를 L0 정책으로 등록 (D-793)
+
+`native_cycle.py`의 `cycle-receipt.json`에는 `policy_revision`(모델 파일 목록의 해시), `rig_revision`, `calibration_revision`이 남는다. `register_policy.py`는 이 영수증으로 Fleet에 L0 제안을 올린다. 근거는 영수증의 SHA-256이다. L0은 실행 권한이 아니며 관리자가 `/console/policy`에서 결정한다.
+
+```bash
+python learning/training/omx/register_policy.py --cycle <run> --fleet https://<site>:8443 --workcell <id> --dry-run
+ROSY_FLEET_TOKEN=<policy-admin token> python learning/training/omx/register_policy.py --cycle <run> --fleet https://<site>:8443 --workcell <id> --confirm
+```

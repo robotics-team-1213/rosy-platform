@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { affineFromTriangles, warpMesh } from "../../../site_ui/console/camera-warp.js";
+import { affineFromTriangles, warpMesh } from "../../../site_ui/console/map/camera-warp.js";
 import { project } from "../../../site_ui/console/shared/map-fit.js";
 
 // 2026-10-07 site refit (paint-f81a872f5cd8): map_v2_fleet ±1.405 × ±0.63 m on a 1280×720 frame.

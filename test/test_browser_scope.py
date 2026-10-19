@@ -6,7 +6,7 @@ import browser_scope
 
 
 def test_fleet_web_change_selects_fleet_browser_tests():
-    found = browser_scope.targets(["operations/site_ui/console/site-map.js"])
+    found = browser_scope.targets(["operations/site_ui/console/sitemap/site-map.js"])
     assert "test/test_fleet_console_browser.py" in found
     assert "operations/fleet/test/test_start_point_browser.py" in found
     assert "operations/fleet/test/test_site_map_browser.py" in found

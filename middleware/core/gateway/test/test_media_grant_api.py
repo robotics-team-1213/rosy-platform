@@ -108,6 +108,8 @@ def test_site_media_configuration_makes_webrtc_the_default_and_false_opts_out(co
     assert tc.post(PATH, json={'robot_id': 'rosy_01'}, headers=AUTH).status_code == 201
     pilot = tc.get('/pilot').headers.get('content-security-policy', '')
     assert "connect-src 'self' ws: wss: https://media.example;" in pilot
+    dashboard = tc.get('/dashboard').headers.get('content-security-policy', '')
+    assert "connect-src 'self' ws: wss: https://media.example;" in dashboard
     disabled = {**configured_media(tmp_path), 'enabled': False}
     opted_out, _ = core_client(config_overrides={'vision': {'media': disabled}})
     assert opted_out.post(PATH, json={'robot_id': 'rosy_01'}, headers=AUTH).status_code == 503
@@ -116,6 +118,7 @@ def test_site_media_configuration_makes_webrtc_the_default_and_false_opts_out(co
     jpeg_only, _ = core_client(config_overrides={'vision': {'media': no_site}})
     assert jpeg_only.post(PATH, json={'robot_id': 'rosy_01'}, headers=AUTH).status_code == 503
     assert "https://" not in jpeg_only.get('/pilot').headers.get('content-security-policy', '')
+    assert "https://" not in jpeg_only.get('/dashboard').headers.get('content-security-policy', '')
 
 
 def test_invalid_media_audience_disables_media_without_blocking_core(core_client, tmp_path):

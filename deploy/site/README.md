@@ -1922,6 +1922,9 @@ docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-m
   로봇에 `/etc/rosy/media/rosy-media.json`(`deploy/robot/pinky_pro/native/rosy-media.example.json`)이 있으면
   `rosy-media.service`가 발행한다. 둘 다 없으면 기존 JPEG다.
 - 장치·6대 현장 측정은 2026-10-18 사용자 결정으로 생략했다. 이 설치는 DEVICE/FIELD 수용이 아니다.
+- 관제 콘솔 로봇 영상(D-801): `/etc/rosy/fleet-media/`에 사이트 전용 Ed25519 키와 `fleet-media.json`
+  (`fleet-media.example.json` 형식)을 두고 `ROSY_FLEET_MEDIA_CONFIG=/run/rosy-fleet-media/fleet-media.json`을 준다.
+  미디어 권한 서비스 설정에 같은 키의 공개키를 `site_issuer`로 넣는다. 로봇은 CORE `vision.media.enabled: false`로 거부할 수 있다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 

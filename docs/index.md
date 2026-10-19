@@ -339,8 +339,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · Account 인증서 발급 확인·보호 백업·갱신 타이머
-- 2026-10-19 · 30acdffbfb · Account 활성화 후보와 설정 포함 Cam APK 준비
-- 2026-10-19 · 8d05ced7b · Account 전환 선행 조건 재확인
-- 2026-10-19 · 6a80a63e55 · Account 문서 관문과 운영 비활성 readback
-- 2026-10-19 · 30acdffbfb · D-807 승인과 Account 앱별 검증 기록
+- 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
+- 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
+- 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
+- 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+- 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
