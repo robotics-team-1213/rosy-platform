@@ -52,12 +52,21 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
       paint();
     }});
   function clearTimer() { clearTimeout(timer); timer = null; }
+  function setOff(control, off, reason) {
+    control.disabled = off;
+    if (off) control.setAttribute('reason', reason);
+    else control.removeAttribute('reason');
+  }
   function paint() {
-    el('assistant-send').disabled = !identity || !available || dialogue.busy || listening;
-    input.disabled = !identity || dialogue.busy || listening;
-    el('assistant-dictate').disabled = !identity || dialogue.busy || listening;
-    el('assistant-read').disabled = !identity || listening || !dialogue.rows.some(row => row.state === 'ANSWERED' && row.response);
-    el('assistant-voice-prepare').disabled = !identity;
+    const reason = !identity ? '기명 운영자로 로그인해 주세요.' : listening ? '음성 인식을 마쳐 주세요.' : '요청 처리 중입니다.';
+    setOff(el('assistant-send'), !identity || !available || dialogue.busy || listening,
+      identity && !available ? '관제 AI 연결 준비 중입니다.' : reason);
+    setOff(input, !identity || dialogue.busy || listening, reason);
+    input.setAttribute('aria-describedby', 'assistant-state assistant-voice-state');
+    setOff(el('assistant-dictate'), !identity || dialogue.busy || listening, reason);
+    setOff(el('assistant-read'), !identity || listening || !dialogue.rows.some(row => row.state === 'ANSWERED' && row.response),
+      !identity || listening ? reason : '읽을 답변이 없습니다.');
+    setOff(el('assistant-voice-prepare'), !identity, reason);
     list.replaceChildren();
     for (const row of identity ? dialogue.rows : []) {
       const item = document.createElement('li');
