@@ -1,6 +1,7 @@
 """Correct a known non-way source arc only with a witnessed same-band alternative."""
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -53,6 +54,23 @@ def test_visible_non_way_pixels_between_samples_are_not_skipped():
 def test_unknown_offscreen_is_not_a_supported_alternative():
     from control.sensing.perception.drivable.target import _arc_floor
     assert _arc_floor(np.ones((240, 320), bool), G, .03317, 0., .05) is None
+
+
+def test_a_supported_bend_keeps_the_existing_path_curvature():
+    from control.sensing.perception.drivable.target import _arc_floor, _centre_target, _col_y, _observed_target, _row_x
+    xs, ys = list(np.linspace(.04, .16, 7)), [0.] * 7
+    for distance in np.linspace(.02, .12, 6):
+        xs.append(.16 + .2 * math.sin(distance / .2))
+        ys.append(.2 * (1. - math.cos(distance / .2)))
+    xs, ys = np.asarray(xs), np.asarray(ys)
+    rows, cols = np.indices((240, 320))
+    x = _row_x(rows[:, 0], G, .03317)[:, None]
+    y = _col_y(cols, rows, G)
+    centre = np.where(x <= .16, 0., .2 - np.sqrt(np.maximum(0., .04 - (x - .16) ** 2)))
+    way = (x < .33) & (np.abs(y - centre) < .06)
+    choice = _centre_target(xs, ys, .25)
+    assert choice[1] > 1.2 and _arc_floor(way, G, .03317, choice[1], .25) is True
+    assert _observed_target(choice, xs, ys, .25, way, G, .03317) is choice
 
 
 @pytest.mark.parametrize('fill', [False, True])
