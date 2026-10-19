@@ -1552,3 +1552,9 @@
 - 변경: durable 회수 대기와 cookie 제거, lifespan 재시도, 새 로그인 family 보존 및 실제 Chromium 로그아웃을 검증한다. 다른 작업의 strict-media 구현·native fixture는 포함하지 않았다.
 - 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
 - gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.
+
+## 2026-10-20 · uncommitted · 출발 SIM의 숨겨진 예외 진단
+
+- 변경: 출발 HTTP 시험 fixture가 motion.call과 advance_departure 예외의 종류·경과 시간·SIM 시각·traceback을 기록하고 그대로 다시 던진다. 제품 코드·deadline·freshness·단언은 변경하지 않는다.
+- 증거: e26407972b 전체 CI에서 첫 tick의 UNDOCKING 대신 CHARGE_DEPARTURE_UNVERIFIED가 발생했다. 같은 head 재시도와 깨끗한 aff1 기준선 전체 실행은 통과해 원인은 아직 확인되지 않았다. a78c699274 진단 fixture의 관련 68개 시험은 통과했으며 양성 출발 사례의 예외 기록은 없었다. 새 게시 head의 원격 검사와 전체 CI는 별도로 확인한다.
+- gate 변화: 없음. 진단 추가는 수정 완료 근거가 아니며 학습 웹 병합·활성화는 원인 해결 전까지 보류한다.
