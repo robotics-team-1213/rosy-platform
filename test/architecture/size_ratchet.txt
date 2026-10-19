@@ -21,7 +21,7 @@
 1141 devices/omx/adapter/omx_adapter/action_store.py
 695 devices/omx/adapter/omx_adapter/command_owner.py
 728 devices/omx/adapter/omx_adapter/pose_plan.py
-788 drive/behaviors/docking/manager.py
+771 drive/behaviors/docking/manager.py
 822 drive/behaviors/line_follow/manager.py
 691 drive/behaviors/swarm/manager.py
 630 drive/behaviors/traffic_policy/manager.py

@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.16)
+project(navigation_native_map_grid LANGUAGES CXX)
+
+# Preliminary canonical-byte fixture; the real consumer tests are separate.
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_gtest REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(OpenSSL REQUIRED)
+set(BUILD_TESTING ON)
+enable_testing()
+ament_add_gtest(native_map_grid grid_test.cpp ../../native_map/grid.cpp)
+target_compile_features(native_map_grid PRIVATE cxx_std_17)
+target_include_directories(native_map_grid PRIVATE ../../native_map/include)
+target_link_libraries(native_map_grid OpenSSL::Crypto)
+ament_target_dependencies(native_map_grid nav_msgs)

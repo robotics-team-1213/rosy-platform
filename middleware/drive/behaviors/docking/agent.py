@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import math
+
 import enum
 from dataclasses import dataclass, field
 from typing import Optional
@@ -57,6 +59,11 @@ class DockStatus:
     dock_id: Optional[str] = None
     firmware: Optional[str] = None
     error: Optional[str] = None
+    termination: str = 'UNKNOWN'
+    termination_source: str = 'unknown'
+    termination_sample_at: Optional[float] = None
+    battery_id: Optional[str] = None
+    load_sample_at: Optional[float] = None
 
     @property
     def answered(self) -> bool:
@@ -97,7 +104,12 @@ class DockAgent:
             url, timeout_s=self._timeout_s, required_fields=_REQUIRED)
 
         if reachability is PollReachability.OK:
-            faults = document.get("faults") or []
+            if any(type(document[key]) is not bool for key in _REQUIRED):
+                return _failure(DockReachability.BAD_RESPONSE, 'contact and charging must be JSON booleans')
+            faults = document.get('faults', [])
+            if not isinstance(faults, list) or any(not isinstance(f, str) for f in faults):
+                return _failure(DockReachability.BAD_RESPONSE, 'faults must be a list of strings')
+            termination, source, sample_at, battery_id = _termination(document)
             return DockStatus(
                 reachability=DockReachability.OK,
                 load_present=bool(document["load_present"]),
@@ -108,6 +120,9 @@ class DockAgent:
                 faults=tuple(str(f) for f in faults),
                 dock_id=_optional_str(document.get("dock_id")),
                 firmware=_optional_str(document.get("firmware")),
+                termination=termination, termination_source=source,
+                termination_sample_at=sample_at, battery_id=battery_id,
+                load_sample_at=_sample_time(document.get('load_sample_at')),
             )
         dock_reachability = {
             PollReachability.UNREACHABLE: DockReachability.UNREACHABLE,
@@ -127,8 +142,28 @@ def _optional_float(value: Any) -> Optional[float]:
 
 
 def _optional_bool(value: Any) -> Optional[bool]:
-    return None if value is None else bool(value)
+    return value if type(value) is bool else None
 
 
 def _optional_str(value: Any) -> Optional[str]:
     return None if value is None else str(value)
+
+
+def _sample_time(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        return None
+    return float(value)
+
+
+def _termination(document):
+    label, source = document.get('termination'), document.get('termination_source')
+    stamp, battery = document.get('termination_sample_at'), document.get('battery_id')
+    measured = (source in ('charger', 'bms') and not isinstance(stamp, bool)
+                and isinstance(stamp, (int, float)) and math.isfinite(stamp) and stamp >= 0
+                and isinstance(battery, str) and bool(battery.strip()))
+    if (label == 'NORMAL' and measured and document.get('charging') is False
+            and document.get('load_present') is True and not document.get('faults')):
+        return 'NORMAL', source, float(stamp), battery
+    # Missing support, zero current, output voltage and a poll receipt timestamp
+    # cannot stand in for the charger's actual normal termination event.
+    return 'UNKNOWN', 'unknown', None, None
