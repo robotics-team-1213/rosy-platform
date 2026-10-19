@@ -134,3 +134,9 @@
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · a58e7fdaaa · 이전 검수 이력의 클래스 바인딩 경쟁 수정 이식
+
+- 변경: 과거 이력0ef4c1bebf의 재검사를 현재 일반 importer의 잠금 안으로 옮겼다. 파일 preflight 동안 다른 import가 클래스셋을 먼저 확정하면, 거절된 YAML·프레임·결정 파일을 쓰기 전에 중단한다. 다른 검수자의 기존 바인딩과 라벨은 보존한다.
+- 증거: 합성 상태를 쓰는 원격98ae70a563에서 거절된 클래스 YAML이 남는1실패를 재현했다. 수정a58e7fdaaa의 회귀·기존 review cycle·pixel draft import57개 모두 통과, skip0. 로그는 외부 scratch rosy-worktree-reconcile/review-binding-red 및 review-binding-green/run-1.txt. 승리한 import 이후 전체 DB 논리 내용과 비DB 파일 해시가 변하지 않음을 검사했다. 전체 착지 관문은 별도 수행한다.
+- gate 변화: 없음. 원본 브랜치의 signed portable-catalog 파이프라인·과거13866개 이력을 병합한 것은 아니다. 운영 사람 라벨·서명 배포·실물·브라우저 수용은 검증하지 않았다.
