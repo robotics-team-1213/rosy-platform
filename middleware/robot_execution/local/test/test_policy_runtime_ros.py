@@ -20,12 +20,12 @@ import pytest
 rclpy = pytest.importorskip('rclpy', reason='requires isolated Jazzy ROS transport')
 from rclpy.action import ActionServer, CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from control_msgs.action import FollowJointTrajectory
 from sensor_msgs.msg import JointState
 
 from test_omx_policy_session import setup_session, candidate, owner_binding, ROOT
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from omx_adapter.ros_runtime import RosArmCommandRuntime
 from rosy.execution.local.policy_install import InstallBinding, load_policy
 from rosy.execution.local.policy_journal import PolicyExecutionJournal
@@ -182,7 +182,7 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent,
             publisher.publish(message)
         publisher_timer = nodes[2].create_timer(.005,publish)
         own(publisher_timer.cancel)
-        executor = MultiThreadedExecutor(num_threads=6)
+        executor = OwnerMultiThreadedExecutor(num_threads=6)
         own(lambda: executor.shutdown(timeout_sec=5))
         for node in nodes:executor.add_node(node)
         spinner = threading.Thread(target=executor.spin)

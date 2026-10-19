@@ -245,11 +245,15 @@ def test_runtime_goal_identity_is_durable_and_unknown_send_stays_fenced(tmp_path
     assert not admission._durable.has_pending()
 
 
-def test_unknown_send_persists_pending_and_preload_cannot_follow_release(tmp_path):
+def test_unknown_send_persists_pending_and_preload_cannot_follow_release(tmp_path, monkeypatch):
     from omx_adapter.command_owner import CommandDecision
     from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from test_pilot_sim_runtime import Arm, jog
     arm = Arm()
+    # This tests a lost send reply, not expiry of the synthetic readback during SQLite I/O.
+    import omx_adapter.pilot_sim.runtime as pilot_runtime
+    observed_at = arm.latest_joint_state.received_at
+    monkeypatch.setattr(pilot_runtime, "time", SimpleNamespace(monotonic=lambda: observed_at))
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     store = ActionStore(tmp_path / "lost-reply.sqlite3")
     admission = ControlSeatAdmission(arm.owner, store)

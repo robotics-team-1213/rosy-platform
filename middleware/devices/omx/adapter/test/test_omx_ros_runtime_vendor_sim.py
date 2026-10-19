@@ -9,7 +9,7 @@ import pytest
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 ListControllers = pytest.importorskip("controller_manager_msgs.srv").ListControllers
 
-from rclpy.executors import MultiThreadedExecutor
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from rclpy.node import Node
 from action_msgs.msg import GoalStatus
 
@@ -49,7 +49,7 @@ def test_runtime_forwards_bounded_noop_goal_to_locked_vendor_simulation():
         poll_period_s=0.01,
     )
     controllers_client = node.create_client(ListControllers, "/controller_manager/list_controllers")
-    executor = MultiThreadedExecutor(num_threads=3)
+    executor = OwnerMultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
