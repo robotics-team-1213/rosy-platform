@@ -1,5 +1,8 @@
 """Short current-lane alignment needs connected source-mask support."""
 import copy
+import hashlib
+import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -7,6 +10,24 @@ import pytest
 from control.sensing.perception.drivable.drivable_steer import DrivableSteer
 from test_drivable_exit_admission import G, POSE, raw
 from test_observed_recentre_alignment import guarded, step
+
+
+def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment():
+    from control.sensing.perception.drivable.drivable_steer import way_target
+    doc = json.loads((Path(__file__).parent / 'fixtures' /
+        'drivable_local_floor_20261020.json').read_text())
+    way = np.zeros(doc['shape'], bool)
+    for row, runs in enumerate(doc['way_runs']):
+        for start, end in runs:
+            way[row, start:end] = True
+    assert hashlib.sha256(np.packbits(way).tobytes()).hexdigest() == doc['packbits_sha256']
+    raw_info = way_target(way, G, .03317, .0925)
+    assert raw_info['target_m'] == (.223, -.091)
+    floor = raw_info['local_floor_m']
+    assert len(floor) == 20 and .16 < floor[-1][0] < .18
+    error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, POSE, POSE,
+        guide_here_deg=-17.77, guide_deg=53.5, observed_only=True, current_stamp=1.125)
+    assert (error, confidence, info['strategy']) == (.5, .35, 'drivable_recentre_pivot_right')
 
 
 @pytest.mark.parametrize('memory', [False, True])
