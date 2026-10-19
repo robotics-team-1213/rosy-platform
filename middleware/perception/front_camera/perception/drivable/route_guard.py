@@ -14,6 +14,54 @@ LOOK_MIN_DEG = 15.0        # a route bend under this is straight on: turning sho
 LOOK_MAX_RAD = math.pi / 2
 
 
+def _current_lane(error, confidence, info, source_pose, pose, owner, stamp, observed):
+    """Follow a visible current-lane target before an opposing future exit."""
+    from .drivable_keep import WAY_MAX_AGE_S
+    from .drivable_steer import BEND_ON_X_M, MAX_CRUISE_MPS, PIVOT_AHEAD_M, REALIGN_DEG, RECENTRE_M
+    from .target import _crosses
+
+    ctx = owner._ctx
+    if (info['strategy'] not in ('drivable_turn_left', 'drivable_turn_right')
+            or error is None or confidence is None or confidence <= owner._pivot_confidence
+            or not ctx.get('guide') or not ctx.get('fresh') or info.get('reason')
+            or any(info.get(key) for key in ('straddle', 'crosswalk_hold', 'pivot_limit'))
+            or info.get('front_blocked_m') is not None):
+        return None
+    try:
+        target, near = info['target_m'], info['near_centre_m']
+        here, ahead = ctx['here'], ctx['ahead']
+        if (len(source_pose) != 3 or len(pose) != 3 or len(target) != 2 or len(near) != 2
+                or not all(math.isfinite(v) for v in (*source_pose, *pose, *target, *near,
+                                                       stamp, observed, here, ahead, error, confidence))):
+            return None
+        age = stamp - observed
+        if (not 0.0 <= age <= WAY_MAX_AGE_S
+                or math.dist(pose[:2], source_pose[:2]) > MAX_CRUISE_MPS * age + 1e-6
+                or abs(math.remainder(pose[2] - source_pose[2], math.tau))
+                    > owner.steering_law['steering_gain'] * age + 1e-6):
+            return None
+        tx, ty = _to_current(target, source_pose, pose)
+        nx, ny = _to_current(near, source_pose, pose)
+        bearing = math.atan2(ty, tx)
+        if (info['ahead_m'] < PIVOT_AHEAD_M or tx < BEND_ON_X_M or nx <= 0.0
+                or abs(ny) > RECENTRE_M or abs(ty) < RECENTRE_M or ty * ahead >= 0.0 or error * ty <= 0.0
+                or abs(math.remainder(math.radians(ahead - here), math.tau)) <= math.radians(REALIGN_DEG)
+                or abs(math.remainder(bearing - math.radians(here), math.tau)) > math.radians(REALIGN_DEG)):
+            return None
+        seen = [_to_current(p, (0.0, 0.0, 0.0), pose) for p in owner._edges]
+        if _crosses(seen, tx, ty) is not None:
+            return None
+    except (KeyError, TypeError, ValueError):
+        return None
+    curvature = 2.0 * ty / (tx * tx + ty * ty)
+    owner._smoothed = curvature
+    length = math.hypot(tx, ty)
+    shown = (math.sin(curvature * length) / curvature, (1.0 - math.cos(curvature * length)) / curvature)
+    return owner.pursuit_error(tx, ty, confidence), confidence, dict(info, strategy='drivable_centre',
+        target_now_m=tuple(round(v, 3) for v in shown), curvature_1pm=round(curvature, 3),
+        future_turn_deferred=True)
+
+
 def _observed_turn(info, source_pose, pose, owner):
     """A selected forward turn agrees with a connected path measured at this new location."""
     from .drivable_steer import BEND_ON_X_M, CORRIDOR_HALF_M, LOOKAHEAD_M, REALIGN_DEG
@@ -161,6 +209,10 @@ class RouteBridge:
             strategy=f'drivable_recentre_pivot_{side}', reason=None)
 
     def step(self, error, confidence, info, pose, owner, *, source_pose=None, current_stamp=None, observation_stamp=None):
+        current = None if self._alignment is not None else _current_lane(
+            error, confidence, info, source_pose, pose, owner, current_stamp, observation_stamp)
+        if current is not None:
+            error, confidence, info = current
         alignment = self._align(error, confidence, info, pose, owner, source_pose, current_stamp, observation_stamp)
         if alignment is not None:
             return alignment

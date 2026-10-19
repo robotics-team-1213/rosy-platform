@@ -84,7 +84,7 @@ def test_a_current_lane_choice_requires_distinct_fresh_current_direction(context
 
 
 @pytest.mark.parametrize('values', [
-    {'source': None}, {'current': None}, {'stamp': 92.0}, {'stamp': 90.9},
+    {'source': None}, {'current': None}, {'stamp': 93.0}, {'stamp': 90.9},
     {'current': (2.0, 0.0, 0.0)},
 ])
 def test_current_lane_selection_requires_source_current_odometry_and_fresh_observation(values):
