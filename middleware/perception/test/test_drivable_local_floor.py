@@ -12,21 +12,24 @@ from test_drivable_exit_admission import G, POSE, raw
 from test_observed_recentre_alignment import guarded, step
 
 
-def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment():
+@pytest.mark.parametrize('fixture,target,count,here,guide', [
+    ('drivable_local_floor_20261020.json', (.223, -.091), 20, -17.77, 53.5),
+    ('drivable_near_floor_20261020.json', (.227, -.09), 42, -18.56, 42.37),
+])
+def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment(fixture, target, count, here, guide):
     from control.sensing.perception.drivable.drivable_steer import way_target
-    doc = json.loads((Path(__file__).parent / 'fixtures' /
-        'drivable_local_floor_20261020.json').read_text())
+    doc = json.loads((Path(__file__).parent / 'fixtures' / fixture).read_text())
     way = np.zeros(doc['shape'], bool)
     for row, runs in enumerate(doc['way_runs']):
         for start, end in runs:
             way[row, start:end] = True
     assert hashlib.sha256(np.packbits(way).tobytes()).hexdigest() == doc['packbits_sha256']
     raw_info = way_target(way, G, .03317, .0925)
-    assert raw_info['target_m'] == (.223, -.091)
+    assert raw_info['target_m'] == target
     floor = raw_info['local_floor_m']
-    assert len(floor) == 20 and .16 < floor[-1][0] < .18
+    assert len(floor) == count and .16 < floor[-1][0] < .18
     error, confidence, info = DrivableSteer().update(way, 1., G, .03317, .0925, POSE, POSE,
-        guide_here_deg=-17.77, guide_deg=53.5, observed_only=True, current_stamp=1.125)
+        guide_here_deg=here, guide_deg=guide, observed_only=True, current_stamp=1.125)
     assert (error, confidence, info['strategy']) == (.5, .35, 'drivable_recentre_pivot_right')
 
 
@@ -91,7 +94,7 @@ def test_floor_prefix_preserves_actual_raw_points_without_interpolation():
     assert support() == [(.14, -.08), (.15, -.08), (.16, -.08), (.17, -.08)]
 
 
-def test_offscreen_clip_is_reprojected_and_cannot_jump_to_other_floor_or_truncate_a_long_path():
+def test_offscreen_clip_is_reprojected_and_cannot_jump_to_other_floor_or_use_only_distant_floor():
     from control.sensing.perception.drivable.target import _local_floor
     way = np.ones((240, 320), bool)
     rows, xs, centre = np.arange(236, 240), np.array([.17, .16, .15, .14]), np.full(4, -.2)
@@ -100,6 +103,13 @@ def test_offscreen_clip_is_reprojected_and_cannot_jump_to_other_floor_or_truncat
     assert _local_floor(way, rows, xs + .04, centre, G, .18) == []
     way[239, 319] = False
     assert _local_floor(way, rows, xs, centre, G, .18) == []
+
+
+def test_connected_far_floor_does_not_remove_the_verified_near_alignment_region():
+    from control.sensing.perception.drivable.target import _local_floor
+    way, rows = np.ones((240, 320), bool), np.arange(234, 240)
+    points = _local_floor(way, rows, np.array([.3, .2, .17, .16, .15, .14]), np.full(6, -.2), G, .18)
+    assert [x for x, _ in points] == [.14, .15, .16, .17]
 
 
 @pytest.mark.parametrize('hole', [(8, 4), (9, 5), (8, 6)])
