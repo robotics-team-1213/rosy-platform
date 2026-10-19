@@ -29,7 +29,8 @@ class Motor:
     def __init__(self, motor=16, position=2028, torque=0, mode=None, model=None, fail_at=None, sag=0, holds_at=0):
         default_model, default_mode = m.FOLLOWER[motor]
         self.motor = motor
-        self.reg = {"model": model or default_model, "mode": mode or default_mode, "torque": torque, "hw_error": 0,
+        self.reg = {"model": model or default_model, "mode": mode or default_mode, "drive_mode": 0,
+                    "torque": torque, "hw_error": 0,
                     "moving": 0, "present_load": 0, "present_pos": position, "pwm_limit": 20,
                     "current_limit": 50 if default_model == 1200 else None, "p_gain": 250, "i_gain": 0,
                     "goal_current": 0, "goal_pos": position, "profile_acc": 0, "profile_vel": 0}
@@ -193,6 +194,23 @@ def test_startup_defaults_never_raise_output_above_the_resting_caps():
     assert len(enabled) == 1
     assert (enabled[0]["pwm_limit"], enabled[0]["current_limit"], enabled[0]["goal_current"]) == (20, 50, 50)
     assert (enabled[0]["profile_vel"], enabled[0]["profile_acc"]) == (1, 1)
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("drive_mode", [4, 5, 8, 9, 12])
+def test_startup_refuses_time_profiles_or_automatic_torque_on_untouched(drive_mode):
+    bus = Motor()
+    bus.reg["drive_mode"] = drive_mode
+    with pytest.raises(SystemExit, match="drive mode"):
+        run(bus, ["move", "--delta", "10"])
+    assert bus.writes == []
+
+
+def test_startup_preserves_a_reversed_motor_drive_direction():
+    bus = Motor()
+    bus.reg["drive_mode"] = 1
+    run(bus, ["move", "--delta", "10"])
+    assert bus.reg["drive_mode"] == 1
     assert_restored(bus)
 
 
