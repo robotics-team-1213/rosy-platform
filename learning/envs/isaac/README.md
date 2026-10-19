@@ -8,7 +8,7 @@ D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless 
 
 - Ubuntu 24.04 with ROS 2 Jazzy `xacro` and the separately managed Isaac Sim SDK on a supported NVIDIA GPU host. See [D-434](../../../docs/adr/D-434-model-pc-and-site-pc-roles.md) for the accepted host/version/resource boundary. The GPU runtime is not part of this repository or the Pinky Pi image.
 - Source the ROSY Jazzy workspace for `xacro` package lookup. Before running Isaac Sim, configure its ROS 2 bridge. Set `ROS_DOMAIN_ID=41` for `rosy_01` and `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`; CORE retains its configured CycloneDDS transport, and the SDK's bridge transport must interoperate with it. Isaac Sim and its CORE run on the same GPU host: DDS never crosses machines (D-795), so a real Pinky (loopback-only DDS) cannot be driven from Isaac over the LAN.
-- Choose an output directory outside the repository. On this Windows workspace, generated files belong only under `X:\DevTemp\`; on the Linux GPU host, use a scratch directory outside the checkout.
+- Choose an output directory outside the repository. On this Windows workspace, generated files belong only under `$ROSY_SCRATCH/`; on the Linux GPU host, use a scratch directory outside the checkout.
 
 ## Run on the GPU host
 
@@ -79,7 +79,7 @@ The Pinky URDF places wheel joint origins at ±0.04055 m, a geometric center sep
   --source-revision "$(git -C "$ROSY_REPO" rev-parse HEAD)" --train-episodes 6
 ```
 
-baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서로 실행한다. 실제 pose의 ordered progress·이탈·물리 정지를 판정하고 trace·Q table·결과를 출력한다. 학습 업데이트 없이 기존 규칙만 완주한 결과는 학습 성공으로 처리하지 않는다. [검증 결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 내부 날짜별 일지는 Git 제외 경로 `private/isaac/{plans,journal,results,templates}/`에, 원시 로그는 관리된 X: 세션과 모델 PC scratch에 보관한다.
+baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서로 실행한다. 실제 pose의 ordered progress·이탈·물리 정지를 판정하고 trace·Q table·결과를 출력한다. 학습 업데이트 없이 기존 규칙만 완주한 결과는 학습 성공으로 처리하지 않는다. [검증 결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 내부 날짜별 일지는 Git 제외 경로 `private/isaac/{plans,journal,results,templates}/`에, 원시 로그는 관리된 스크래치 세션과 모델 PC scratch에 보관한다.
 
 ### 실제 화면 녹화와 네 시작 방향
 
