@@ -1,5 +1,7 @@
 # Pinky 연결점 거리 안내 Implementation Plan
 
+상태: 사용자 승인 후 Task1의 관측 feasibility가 **NO-GO**로 판정됐다. Task2 이후의 새 protocol 구현은 진행하지 않는다. [검증 기록](../validation/pinky-junction-feasibility-2026-10-20/result.md)이 근거와 후속 기존 계약 내 수정을 소유한다. 아래 단계는 원래 제안의 기록이다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. 각 단계의 증거를 확인하고 다음 단계로 진행한다. 독립 안전 리뷰는 별도로 받는다.
 
 **Goal:** 같은 조건에서 실패한 코너의 연결점 거리 가설을 검증하고, 관측된 출구 선택에만 적용한 SIM 후보를 연속 2회 수용한다.

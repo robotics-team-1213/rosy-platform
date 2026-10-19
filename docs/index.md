@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 연결점 feasibility와 실패 후보 보존
 - 2026-10-20 · uncommitted · 연결점 거리 안내 실행 계획
 - 2026-10-20 · uncommitted · 선택 경로 연결점 거리 안내 설계
 - 2026-10-19 · uncommitted · 정렬 수명 수정 후 반복과 realign 계약 경계
 - 2026-10-19 · uncommitted · 관측 코너 정렬 후보의 상태 수명 실패 보존
-- 2026-10-19 · uncommitted · 통합 주행 반복 실패와 후보 HOLD 보존

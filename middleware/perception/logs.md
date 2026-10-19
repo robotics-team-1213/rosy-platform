@@ -1707,3 +1707,9 @@
 - 변경: episode 종료의 곡선 lookahead를 마지막 점의 x거리 대신 연결 경로 길이의 보수적 하한으로 판단한다. 기존 near-start 범위 아래 몸→첫 점 연결과 첫→끝 chord를 쓰므로 픽셀 지그재그로 누적 길이를 부풀릴 수 없다. 출구 도달의 종료 조건은 0.25m에서 BEND_ON_X_M(0.18m) 전방 x조건으로 구분하고, 실제 현재 목표의 0.18m 조건은 유지한다.
 - 증거: 앞 수명 후보는 2.408m에서 실패했다. 실제 0.308m 연결 경로의 전방 x가 0.202m라 곡선 종료를 놓쳤으며 원격 RED로 재현했다. 관측 연결성·새 위치에서 찍힌 source·실제 이동·불확실 odom 차단과 noisy short path 거부를 함께 확인한다. GREEN·SIM은 별도다.
 - gate 변화: 없음. 종료 조건의 거리 의미를 정정했으며 CORE 안전 임계값과 일반 후보·명령 권한을 바꾸지 않는다.
+
+## 2026-10-20 · uncommitted · 현재 차로와 원본 행 순서 후보 검증
+
+- 변경: 미래 출구와 현재 차로 후보를 구분하는881 후보, 법선 보정 뒤 x 정렬로 영상 행이 섞이는 현상을 고친44f463 후보를 독립 검토와 native 재생으로 확인했다. 목표 행을 뒤집는 caller와 confidence band를 함께 맞췄다. 정렬 수명·회전 예산·CORE 정지 조건을 완화하지 않았다.
+- 증거: 100c 검증 head의 관련·release252 passed, 영향 범위6,668 passed/408 skipped/NEW0. 두 후보의 native SIM은 각각 pose·stall 실패이며 새 판단은0회다. 새 동결 기록 `docs/validation/pinky-junction-feasibility-2026-10-20/result.md`에 source·모델·원본·기각 가설을 결속했다.
+- gate 변화: 없음. source 검토와 원격 회귀 통과를 SIM 수용으로 승격하지 않는다. 앞선 먼 입구의 producer near 거절을 guide/memory가 되살리는 원본 재생을 추가 확인해, side별 near 사실과 관측 source에 결속한 기억을 별도 회귀로 검증한다.

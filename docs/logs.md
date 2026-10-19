@@ -9281,3 +9281,9 @@ osy-d395-s1d\`.
 - 변경: 사용자의 설계 진행 승인에 따라 증거 확인→foundation 계약→Fleet/CORE 전달→perception 거리 구간→관측 출구 회귀→반복 SIM의 실행 순서를 작성했다. 카메라에 없는 경로 기하와 source/current 오차 근거를 먼저 확보하고, 목표 장면에서 조건이 성립하지 않으면 제품 변경 전에 중단한다.
 - 증거: native Gazebo model-pose odom과 일반 localization을 구별했다. 기존 along-path heuristic은 2D 오차 보증으로 전용하지 않으며, 초기 활성 범위는 동일 배포 묶음의 native SIM으로 제한하는 추가 제안을 적었다.
 - gate 변화: 없음. 작성된 실행 계획 검토 전이며 제품 코드·API·주행 수용은 바꾸지 않았다.
+
+## 2026-10-20 · uncommitted · 연결점 feasibility와 실패 후보 보존
+
+- 변경: 승인된 거리 안내 계획의 첫 관측 검증을 NO-GO로 표시하고 새 protocol 미구현 상태를 명확히 했다. 현재 차로·공통 목표 행 순서 후보의 회귀·독립 리뷰·실패 SIM을 새 검증 기록으로 보존했다.
+- 증거: `pinky-junction-feasibility-2026-10-20/result.md`. 100c 원격 영향 범위6,668 passed/408 skipped/NEW0이나 SIM은 stall 실패, 앞선881도 pose 실패·새 판단0회다. code 시험을 완주 수용으로 계산하지 않았다.
+- gate 변화: 없음. 주행 수용 HOLD. cue 통과 평면 완화도 원본에서 여유 조건이 성립하지 않아 기각했다. 후속 near admission 우회 회귀는 별도 검증한다.
