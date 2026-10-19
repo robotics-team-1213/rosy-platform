@@ -31,7 +31,8 @@ def test_recorded_screen_edge_floor_bounds_the_opposing_guide_alignment():
 
 
 @pytest.mark.parametrize('memory', [False, True])
-def test_opposite_observation_keeps_its_side_and_falls_through_to_explicit_guide(monkeypatch, memory):
+@pytest.mark.parametrize('guide', [30., 53.])
+def test_opposite_observation_keeps_its_side_and_falls_through_to_explicit_guide(monkeypatch, memory, guide):
     import control.sensing.perception.drivable.drivable_steer as module
     observation = raw()
     observation.update(target_m=(.15, -.1), ahead_m=0., exit=None, seen_exit=None,
@@ -40,11 +41,12 @@ def test_opposite_observation_keeps_its_side_and_falls_through_to_explicit_guide
     owner = DrivableSteer()
     if memory:
         owner._memory = ('right', POSE)
-    _, _, info = owner.update(np.ones((240, 320), bool), 1., G, .03317, .0925, POSE, POSE,
-                             guide_here_deg=-18., guide_deg=53.)
+    error, confidence, info = owner.update(np.ones((240, 320), bool), 1., G, .03317, .0925, POSE, POSE,
+                                         guide_here_deg=-18., guide_deg=guide)
     assert info.get('exit_from_guide')
     assert not info.get('exit_from_target') and not info.get('exit_from_memory')
     assert info['exit_point_m'] == {}
+    assert (error, confidence, info['strategy']) == (-.5, .35, 'drivable_pivot_left')
 
 
 def support(way=None, rows=None, cols=None):
@@ -58,6 +60,17 @@ def support(way=None, rows=None, cols=None):
 
 def test_floor_prefix_preserves_actual_raw_points_without_interpolation():
     assert support() == [(.14, -.08), (.15, -.08), (.16, -.08), (.17, -.08)]
+
+
+def test_offscreen_clip_is_reprojected_and_cannot_jump_to_other_floor_or_truncate_a_long_path():
+    from control.sensing.perception.drivable.target import _local_floor
+    way = np.ones((240, 320), bool)
+    rows, xs, centre = np.arange(236, 240), np.array([.17, .16, .15, .14]), np.full(4, -.2)
+    points = _local_floor(way, rows, xs, centre, G, .18)
+    assert len(points) == 4 and all(-.1 < y < 0. for _, y in points)
+    assert _local_floor(way, rows, xs + .04, centre, G, .18) == []
+    way[239, 319] = False
+    assert _local_floor(way, rows, xs, centre, G, .18) == []
 
 
 @pytest.mark.parametrize('hole', [(8, 4), (9, 5), (8, 6)])
@@ -86,6 +99,14 @@ def test_verified_local_floor_aligns_before_the_opposite_future_pivot():
     error, confidence, info = step(owner, guard, info=local_info(), error=-.5, confidence=.35)
     assert (error, confidence, info['strategy']) == (.5, .35, 'drivable_recentre_pivot_right')
     assert 0. < info['alignment_limit_rad'] < .5
+
+
+def test_local_floor_alignment_cannot_renew_its_budget_without_progress():
+    owner, guard = guarded()
+    owner._ctx.update(here=-18., ahead=53.)
+    for i in range(7):
+        result = step(owner, guard, yaw=-i * .1, info=local_info(), error=-.5, confidence=.35)
+    assert result[0] is None and result[2]['reason'] == 'recentre_alignment_spent'
 
 
 @pytest.mark.parametrize('points', [[], [(.14, -.08)] * 3,
