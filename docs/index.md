@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · Account 서비스 운영 완료 기준과 증거
 - 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치
 - 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결
 - 2026-10-19 · uncommitted · D-793 운영자의 정책 승인 표시와 승인 화면 실제 브라우저 검증
 - 2026-10-19 · uncommitted · D-793 학습 정책 승인 관문의 Fleet API와 콘솔 화면
-- 2026-10-19 · uncommitted · D-793 A단계: 학습 정책 설정 사전 거부와 실제 도달 확인

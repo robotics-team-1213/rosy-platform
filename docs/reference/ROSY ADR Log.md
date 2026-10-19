@@ -14,6 +14,7 @@
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
 | D-774 | 스테이션 측정 카메라는 설치된 관측 프로세스가 실행 중일 때 송출을 요청한다 | Accepted (2026-10-16) |
 | D-772 | 스테이션 위치 버전과 배터리 기반 자동 충전 운영 | Accepted (2026-10-16) |
+| D-807 | Account 인증 서비스의 자격 소유 책임과 운영 완료 기준 | Accepted |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
 | D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |

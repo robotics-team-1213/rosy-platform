@@ -2990,3 +2990,9 @@
 - 변경: JSON의 password 필드를 거부하는 fixture 값을 명시적인 공개 placeholder로 바꿨다. 동일한 필드 거부·값 비출력 검증은 유지하며 scanner 규칙과 예외 목록은 변경하지 않았다.
 - 증거: e1bf55b660 공식 fast 검사에서 이 fixture 한 줄을 credential로 탐지했다. 수정 후 네이티브 설정·연속 작업 fixture 10묶음 PASS. 수정 커밋의 원격 비밀정보 검사와 공식 재검증은 이어서 수행한다.
 - gate 변화: 없음. 실제 비밀번호는 기존 보안 입력과 DPAPI 저장소에만 처리했으며 소스·JSON에 저장하지 않았다.
+
+## 2026-10-19 · uncommitted · Account 앱별 활성화와 인증서 복구 안내
+
+- 변경: D-807에 따라 기존 서명 배포 경로, 보호 설정, 앱별 callback·권한·세션 검증 및 복구 절차를 site 안내에 연결했다.
+- 증거: 실제 TLS 발급·키 일치·보호 백업·갱신 timer 기록은 docs/validation/account-service-2026-10-19/certificates-backed-up.md에 보존했다. 후보 검증과 운영 활성화는 별개로 남긴다.
+- gate 변화: 없음. Android 실물 수용·운영 callback과 계정 이관은 이 문서만으로 완료되지 않는다.
