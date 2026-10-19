@@ -9416,3 +9416,9 @@ osy-d395-s1d\`.
 - 변경: 원래 CI의 같은 checkout·tree 실패와 명시적 PASSED를 연결해 departure False도 D-762 분류에 포함한다. commit 식별자를 명시해 무작위 토큰과 구분한다.
 - 증거: CI39296167842 attempt 2의 CORE 7162 passed/64 skipped, NEW0. 원본은 NEW1이었다. runner 머신·지역 및 X11 apt 두 패키지 버전 차이를 공개하며 환경 전체의 동일성·원인 해결을 주장하지 않는다. 이전 head 게시 검사는 문서의 출처 표기 누락으로 secret scan NEW1, 다른 tier 266 passed였다.
 - gate 변화: 기존 한 번 재시험 분류가 총 네 항목에 적용되며 두 번 실패하면 NEW다. secret scanner·생산 코드·안전 조건·기존 기대 결과는 변경하지 않는다. 새 head의 독립 검토·원격 검증·정상 게시 검사는 별도다.
+
+## 2026-10-20 · uncommitted · PR126 squash의 독립 검토 출처 보존
+
+- 변경: squash commit `815e5027483cb49ceacc4c562d83cb1439692cbe`가 원래 독립 검토 commit `eddf756d3bfb93ac0d1879f4c1685f6f13859b91`과 같은 tree임을 기존 reviewed-history 목록에 결속한다. 병합 메시지에서 Safety-Review가 빠진 사실을 보존하며 공개 이력은 재작성하지 않는다.
+- 증거: 원래 PR CI493 passed/skip0, main CI39337638405는 trailer 누락으로 scope·aggregate 실패 및 pytest 미실행. 기존 검토와 정확한 squash tree 대조·새 head 검증은 독립적으로 확인한다. pytest 분류 NEW0을 main CI 성공으로 읽지 않는다.
+- gate 변화: 해당 검토 완료 squash 하나의 출처를 기존 절차로 기록한다. trailer 검사 로직·안전 태그·생산 조건은 변경하지 않는다. 새 source·게시·CI·실사용 수용은 별도다.
