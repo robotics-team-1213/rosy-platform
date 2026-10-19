@@ -14,7 +14,7 @@ import pytest
 from core.bridge import docking_mode
 from core_common.protocol.station_charging import ChargeSessionStatus, Pose2D, StationPoseRecord
 from test_station_docking_api import station_api
-from station_pipeline_sensors import pipeline_sources
+from station_pipeline_sources import pipeline_sources
 
 
 @pytest.mark.parametrize('full_return', [False, True, 'continuous', 'relocation_abort', 'composed', 'lifespan',

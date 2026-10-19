@@ -1,22 +1,8 @@
 """Explicit synthetic dock and motion readings for the camera SIM."""
-from pathlib import Path
 from types import SimpleNamespace
-
-import pytest
 
 from core_features.docking.agent import DockReachability, DockStatus
 from core_features.docking.station_sensors import DockSample, StationSensorReader
-
-
-@pytest.fixture
-def pipeline_sources(monkeypatch):
-    """This cross-domain test must also run alone, without sibling conftest collection."""
-    root = Path(__file__).resolve().parents[4]
-    for relative in ('operations/fleet', 'operations/fleet/test', 'operations/world/src',
-                     'operations/decision/src', 'operations/site_execution/src', 'operations/overhead',
-                     'operations/apps/games', 'operations/situation',
-                     'middleware/core/services/test'):
-        monkeypatch.syspath_prepend(str(root / relative))
 
 
 def sensors(now, signals, world):
