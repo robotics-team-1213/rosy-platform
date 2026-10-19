@@ -127,9 +127,9 @@ class LearnedCameraLane:
             self.wall = None
             self.invalidate('native_scan_unknown')
             return False
-        ahead, sides = scan_summary(sample['ranges'], sample['angle_min'], sample['angle_increment'],
-                                    sample['range_min'], sample['range_max'], body=body)
-        self.wall, self.scan_stamp_ns = (ahead, stamp_ns / 1e9, sides), stamp_ns
+        ahead, sides, front = scan_summary(sample['ranges'], sample['angle_min'], sample['angle_increment'],
+                                           sample['range_min'], sample['range_max'], body=body)
+        self.wall, self.scan_stamp_ns = (ahead, stamp_ns / 1e9, sides, front), stamp_ns
         return True
 
     def invalidate(self, reason):

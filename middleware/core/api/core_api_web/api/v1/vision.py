@@ -30,6 +30,16 @@ vision_router = APIRouter(prefix="/api/v1/vision", tags=["vision"])
 #: frame rate bounds the emitted fps; this only decides how soon a new
 #: sequence is noticed.
 STREAM_POLL_S = 0.05
+#: Emit cap for the driver stream: at most this many parts a second (config
+#: `vision.stream_max_fps`, (0, 30]); the newest frame at each slot wins, older ones are skipped.
+STREAM_MAX_FPS = 5.0
+
+
+def stream_min_interval_s(config) -> float:
+    """Seconds between MJPEG parts; an absent or invalid `vision.stream_max_fps` keeps 5 fps."""
+    raw = ((config or {}).get('vision') or {}).get('stream_max_fps', STREAM_MAX_FPS)
+    fps = raw if isinstance(raw, (int, float)) and not isinstance(raw, bool) else STREAM_MAX_FPS
+    return 1.0 / (fps if 0 < fps <= 30 else STREAM_MAX_FPS)
 
 
 @vision_router.get("/front/status", response_model=VisionPreviewStatus)
@@ -105,16 +115,19 @@ async def stream_front_camera(
     except VisionStreamRefused as exc:
         raise ApiError(exc.code, exc.status, str(exc)) from exc
     token = auth.token_id
+    interval = stream_min_interval_s(svc.config)
 
     async def parts():
         last_sequence = 0
+        next_at = 0.0
         try:
             while True:
                 if svc.vision_stream.driver() != token:
                     return  # seat changed (D-411 vocabulary): end the stream
                 frame = svc.vision.latest_frame(overlay=overlay)
-                if frame is not None and frame.sequence > last_sequence:
+                if frame is not None and frame.sequence > last_sequence and time.monotonic() >= next_at:
                     last_sequence = frame.sequence
+                    next_at = time.monotonic() + interval
                     headers = (
                         b"Content-Type: image/jpeg\r\n"
                         + f"Content-Length: {len(frame.data)}\r\n".encode("ascii")

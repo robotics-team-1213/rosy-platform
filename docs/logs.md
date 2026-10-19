@@ -9095,6 +9095,12 @@ osy-d395-s1d\`.
 - 증거: `secret_scan.scan_files`로 바뀐 파일 전부 0건, 소스트리에서 평탄 import가 한 모듈로 모임(`deliberation_journal.active is context_log.active`), `size_range.py main HEAD`·`rosy_harness.py lint` 통과, compose base/overlay 명령 접두 일치, DSN 문자열·빈 파일 거절 회귀 확인. 원격: `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`, `test/test_remaining_platform_installed.py`, `test/test_site_pairing_deploy.py`, `operations/fleet/test/test_context_log.py`.
 - gate 변화: 없음.
 
+## 2026-10-18 · uncommitted · land.py 통과 결과 캐시
+
+- 변경: `tools/land.py`가 통과한 pytest 호출을 공통 git 디렉터리의 `rosy-land-cache.jsonl`에 남기고(`tools/land_cache.py`), 다시 돌릴 때 같은 git 트리·같은 명령·같은 시험 환경 해시(`remote_pytest.deps`)면 건너뛴다. `--tests auto`에서는 조상 커밋에서 통과한 호출도 그 사이 차이에 D-436 셀렉터가 그 호출의 경로를 고르지 않으면(FULL 아님, 삭제·이름바꿈 없음, known_failures 목록 그대로) 다시 쓰고, 그때는 pre-push용 land record를 남기지 않는다. 실패, LOAD-FLAKY, 중단·호스트 유실이 있는 실행은 남기지 않는다. lint·safety-review·size-range·node는 늘 돈다. `--no-cache`로 끈다.
+- 증거: 2026-10-18 큰 머지 한 건을 다섯 번 다시 착지하며(네트워크 끊김, 한 줄 수정, main 이동) 매번 약 11,000개 시험(약 20분)을 다시 돌렸다. 로컬 `test/test_land.py`.
+- gate 변화: 없음.
+
 ## 2026-10-18 · uncommitted · Fleet 담당 지정 설계의 기준 커밋 표기
 
 - 변경: `plans/2026-10-17-fleet-device-authority-design.md`의 기준 해시 앞에 SHA를 명시해 공개 커밋 참조임을 표시했다. 설계 내용과 비밀정보 검사 규칙은 유지한다.
@@ -9144,8 +9150,74 @@ osy-d395-s1d\`.
 - 증거: `test/test_land_queue.py`, `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 앞선 살아 있는 표 → 시한 초과 멈춤, 죽은 표 회수 → 착지를 손으로 확인했다.
 - gate 변화: 없음.
 
+## 2026-10-18 · uncommitted · D-799 원격 pytest의 호스트 안 병렬(pytest-xdist)과 가벼운 호스트
+
+- 변경: 원격 venv에 `pytest-xdist==3.8.0`을 넣고, `tools/remote/xdist_plan.py`가 invocation마다 `-n W --dist loadfile` 또는 직렬을 고른다. 직렬 목록은 `tools/remote/serial_suites.txt`(rclpy·ROS_DOMAIN_ID·고정 포트·playwright·git·홈 디렉터리를 쓰는 묶음)와 브라우저·node id·경로 없음 규칙이다. job 잠금은 실제 워커 수를 적는다. 여유 메모리 4~6 GB인 pytest 호스트는 가벼운 호스트로, 하한을 넘는 호스트 뒤에서 큐의 작은 invocation을 직렬로, 자기 여유 GB의 `MemoryMax`로 돈다. 현장 PC는 그대로 맨 뒤다.
+- 증거: 노트북에서 `test/test_remote_pytest.py`·`test/test_known_failures.py`와 관련 시험(사용자 지시로 로컬 실행). xdist 3.8.0 실제 출력으로 known_failures 파싱을 확인했다. 시험 PC 측정은 아직 없다.
+- gate 변화: 없음. 시험 PC에서 7,151개 묶음의 직렬 대 `-n` 비교가 남았다.
+
+## 2026-10-18 · edae42db99 · docs: 굽이 영상 재생과 경로 방향 입력 누락 (이식, 원래 2026-10-16)
+- 변경: PNG 기록기 추출, 굽이 736 frame 회수, 오류 전후 15장 동일 모델 재생, 대체 인식 기준선과 비교
+- 증거: docs/validation/d769-bend-replay-2026-10-16/result.md. 학습 인식은 서쪽·대체 인식은 동쪽에서 stall. 오류 전 오른쪽 목표와 누락된 line/lane_guide 발행 경로 확인
+- gate 변화: 없음. wall 역할 오류만으로 재학습하지 않으며 영역→목표와 Fleet 방향 연결을 후속 검증
+- 결정: D-769
+
+## 2026-10-18 · 6ec7681069 · Specify internal selected-route prior transport v1.245 (D-769) (이식, 원래 2026-10-16)
+
+- 변경: API reference and app contract label now document the internal LaneRouteGuide schema, exact source frame association, ordered invalidation, bounded lifetime, shortened preview semantics and required capability opt-in. No REST or envelope 1.0 change. Runtime authority attachment and publisher remain pending. Private evidence: rosy-d769-audit/route-guide-reviewed; 14 remote tests passed.
+- 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+- gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
 ## 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
 
 - 변경: `tools/land_full.py`가 FULL 티어를 통과한 후보와 `main`을 `<git-common-dir>/rosy-land-full/<브랜치>.json`에 적는다. 다음 `land.py` 실행은 후보가 HEAD에 있고, 적힌 `main`이 `main`에 있고, 그 뒤 브랜치에 `main` 병합(git 자체 병합과 같거나 자동 해결 기록만 다른 것)만 더해졌을 때 그 `main`부터의 변경분 선택만 돈다. 자기 커밋이 더해지면 FULL을 다시 돈다. 착지하면 기록을 지운다. 변경분과 브랜치 자신의 대응 묶음의 합집합은 넣지 않았다(이유는 2026-10-18 착지 교훈 노트).
 - 증거: `test/test_land.py` 새 시험 3개(시험 PC). 임시 저장소에서 깨끗한 병합 → 복원, 수정 커밋 → 복원 안 함을 손으로 확인했다.
 - gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
+
+- 변경: 첫 장치 런북에 sd-setup.local.json, 설정 전용 Configure, Wi-Fi 보안 저장과 등록부 초기화 선택, 카드 교체·완료 확인 순서를 기록했다.
+- 증거: 사용자 승인된 비밀정보 없는 JSON 구성과 기존 작성기의 종료 표식·영수증·등록부 경로에 맞춰 작성했다. 카드가 없는 설정 준비와 실제 매체 수용을 구분한다.
+- gate 변화: 없음. 실제 SD 기록·부팅·현장 수용은 미수행이다.
+
+## 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
+
+- 변경: 기존 `Accept: image/jpeg` 응답의 JPEG 본문·`X-Stuck-Evidence` 메타데이터·JSON 오류를 API reference v1.273에 기록하고 버전 pin을 맞췄다. 원래 예약 사유와 최신 main 내용을 보존하며 새 경로·권한·동작은 추가하지 않았다.
+- 증거: 독립 소스 검토에서 Fleet 응답·공유 소비자·기존 JPEG/JSON 시험과 문서의 일치를 확인했다. 통합 커밋의 원격 착지 시험은 대기 중이며 소스 검토를 실행 증거로 대신하지 않는다.
+- gate 변화: 없음. 실물 카메라·배포 수용은 실행하지 않았다.
+
+## 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
+
+- 변경: 기존 인증된 Fleet policy state·lease HTTP를 소비하고 scope·설치 pin·장치 clock에 결속하는 기본 비활성 SIM consumer와 CORE 조립을 추가했다. 네트워크는 별도 worker에서 수행하며 만료·철회·통신 실패는 영구 폐쇄한다. 관절 상태의 source-age 시각 역행은 owner 전달 전에 거부한다. timestamp 재작성·HOLD 자동 해제·공개 API 추가는 없다.
+- 증거: 원격 257 passed/1 skipped, NEW 0. commit `62971299f`의 실제 Fleet·LeRobot·CORE·Gazebo 연동에서 +0.01rad 이동 SUCCESS, 같은 lease 갱신, 이동 중 철회 후 cancel ACK/CANCELED·HOLD와 재접속 거부를 확인했다. 폐쇄 응답 후 취소 관측 0.295306초, 마지막 0.3초 14개 관측 spread 0rad. 종료 executor/worker 회수는 확인했지만 Destroyable 경고 1건이 남았다. `docs/validation/omx-policy-chain-2026-10-19/result.md`에 receipt·원시 로그 hash와 앞선 실패도 보존한다. 제품 착지는 최종 검사 후 별도 기록한다.
+- gate 변화: 없음. 고정 SIM 정책과 합성 승인·설치 fixture이며, 학습 모델·Mission admission·물리 구동·실물 배포 승인을 입증하지 않는다.
+
+## 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
+
+- 변경: D-806의 사용자 승인 이름과 앱·하위 기능·서비스의 소유를 기록하고 README·PRODUCT·CONCEPTS를 현재 구현과 맞췄다. Vault·Device는 외부 저장소 소유이며 Cell은 Fleet의 준비 화면이다.
+- 증거: 제목 회귀 검사의 수정 전 원격 실행은 2 failed로 기존 불일치를 확인했다. 수정 후 검증은 이 작업의 커밋과 외부 시험 기록으로 확인한다.
+- gate 변화: 없음. 이름·문서·정적 화면 범위이며 설치·실물 실행·DEVICE/FIELD 수용을 바꾸지 않는다.
+
+## 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+
+- 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
+- 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
+- gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
+
+- 변경: 사용자의 후속 초기 비밀번호 지시를 기존 Account protocol에 기록했다. 정확한 ID!의 임시 생성/reset 길이 예외와 필수 변경, 영구 비밀번호의 기존 길이·현재 비밀번호·회수·revision 계약을 구분했다.
+- 증거: 정책 RED→원격153개 통과 뒤 독립 리뷰에서 짧은 초기값의 생성/reset/UI 누락을 발견·재현해 보완했다. 최종103df862b의 실제 Chromium/서버160 passed·skip0·NEW0. 고정 기록은 docs/validation/account-initial-password-2026-10-19/result.md.
+- gate 변화: 없음. 운영 명단 확인·비밀번호 초기화·main 착지·서명 배포·실제 사용자 수용은 완료로 표시하지 않는다.
+
+## 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
+
+- 변경: origin #63(5c2001ef05)을 로컬 main으로 옮겼다. `promote_readback.py`가 push·rollback·promote 성공 뒤 `<journal-dir>/pointer-changes/pointer_changes.jsonl`에 한 줄을 남기고, `--readback`은 pointer와 노드 status topic을 다시 읽어 `match`/`mismatch`/`unavailable`/`no_node`를 기록한다. exit code는 바꾸지 않는다.
+- 증거: 원격 pytest(`test_model_promote_readback.py`, deliver 시험). 로봇 위 확인은 아직이다.
+- gate 변화: 없음.
+
+## 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
+
+- 변경: origin #105(03e470abff)를 로컬 main으로 옮겼다. `native_cycle.py`의 cycle receipt에 `policy_revision`(모델 파일 목록 해시)·rig/보정 revision을 남기고, `register_policy.py`가 그 영수증 해시를 근거로 Fleet `/api/fleet/workcells/{id}/policy/proposals`에 L0 제안을 올린다(`--dry-run`/`--confirm`, 토큰은 `ROSY_FLEET_TOKEN`만). 오프라인·미승격 영수증만 받는다. 본문 필드는 main의 `StageProposal`과 같다.
+- 증거: 원격 pytest(등록 본문·거절 조건·HTTP 경로·CLI). 실제 학습 산출물 등록은 첫 실물 학습 뒤다.
+- gate 변화: 없음. L0은 실행 권한이 아니다.

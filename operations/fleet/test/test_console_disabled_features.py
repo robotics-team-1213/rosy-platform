@@ -42,11 +42,14 @@ def test_console_gates_disabled_feature_pollers():
     client = _client()
 
     gate = client.get("/console/assets/poll-gate.js")
-    shell = client.get("/console/assets/console.js").text
+    # D-798 3.2: the shell's dispatch poll and login re-ask live in its refresh and auth modules;
+    # the map's pollers live in map-polling.js.
+    shell = "".join(client.get(f"/console/assets/{name}").text
+                    for name in ("console.js", "console-refresh.js", "console-auth.js"))
     discovery_response = client.get("/console/assets/device-discovery.js")
     discovery = discovery_response.text
     enrollment = client.get("/console/assets/enrollment.js").text
-    map_view = client.get("/console/assets/map-view.js").text
+    map_view = client.get("/console/assets/map-polling.js").text
 
     assert gate.status_code == 200
     assert discovery_response.status_code == 200

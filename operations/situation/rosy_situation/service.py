@@ -62,7 +62,11 @@ def build_commit(where: Path = Path(__file__).resolve().parent) -> Optional[str]
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=where, capture_output=True,
                                text=True, timeout=5, check=True).stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        return None
+        # D-805 releases (omx_autoupdate.py kind "service") are git archives with the commit in RELEASE.
+        try:  # <release>/operations/situation/rosy_situation
+            return (where.parents[2] / "RELEASE").read_text().strip()[:12] or None
+        except (OSError, IndexError):
+            return None
     return f"{head}-dirty" if dirty else head
 
 

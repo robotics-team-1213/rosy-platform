@@ -139,3 +139,30 @@ def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, byte
         else:
             resolved[path] = data
     return resolved, manual
+
+
+def landed_gaps(wt: Path) -> tuple[bytes, list[str]]:
+    """adr_gaps.txt without the lines whose ADR now exists (docs/adr file or Log row), and the ids dropped.
+
+    adr_gaps.txt merges with merge=union, so a merge of main keeps this branch's copy of a line main already
+    removed when that ADR landed, and lint then fails "declared gap now exists" (three branches, 2026-10-19).
+    """
+    path = wt / ADR_GAPS
+    if not path.is_file():
+        return b"", []
+    present = {f"D-{m.group(1)}" for p in (wt / "docs/adr").glob("D-*.md") if (m := re.match(r"D-(\d+)-", p.name))}
+    if (wt / ADR_LOG).is_file():
+        present |= {f"D-{int(m.group(1))}" for row in (wt / ADR_LOG).read_bytes().splitlines()
+                    if (m := ADR_ROW.match(row))}
+    data = path.read_bytes()
+    kept, dropped = [], []
+    for line in data.splitlines(keepends=True):
+        words = line.decode("utf-8", "replace").lstrip("﻿").split(None, 1)
+        if words and words[0] in present:
+            dropped.append(words[0])
+        else:
+            kept.append(line)
+    result = b"".join(kept)
+    if data.startswith(b"\xef\xbb\xbf") and not result.startswith(b"\xef\xbb\xbf"):
+        result = b"\xef\xbb\xbf" + result
+    return result, sorted(set(dropped), key=lambda i: int(i[2:]))

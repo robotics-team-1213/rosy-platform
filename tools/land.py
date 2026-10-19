@@ -3,7 +3,7 @@
 Run from a topic worktree (never the shared main checkout)::
 
     python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
-                         [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune]
+                         [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune] [--no-cache]
                          [--queue-timeout MIN | --no-queue]
 
 Landings of one clone take turns (``land_queue.py``): the run waits in a FIFO queue under the git
@@ -20,7 +20,8 @@ measured headroom, D-568; an unavailable host stops landing); an auto selection 
 real-Chromium tests ``test/browser_scope.py`` maps the changed paths to. Lint, node and the
 known_failures comparison stay here. A branch on the pre-rewrite history is refused, and NEW failures
 that each pass when rerun alone land as LOAD-FLAKY (D-790, ``land_checks.py``). Never pushes,
-stashes, resets or cleans. Standard library only.
+stashes, resets or cleans. A pytest invocation that passed on the same tree (or, when the selector
+vouches for the delta, an ancestor) is reused from ``land_cache.py`` unless --no-cache. Standard library only.
 """
 
 from __future__ import annotations
@@ -47,8 +48,9 @@ import land_guards  # noqa: E402  (structural guards before the long round)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
+import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
-from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, plan,  # noqa: E402,F401  (conflict auto-resolve)
+from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
@@ -276,23 +278,19 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
-    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
     # no host means it waits, then fails, and nothing lands).
+    head = out(wt, "rev-parse", "HEAD")
+    reused, todo, keep = land_cache.split(wt, args, invocations, head, python, select)
+    done += reused
+    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
     began = time.monotonic()
-    codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+    codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
-    for inv, log, code in zip(invocations, logs, codes):
-        # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
-        # print no FAILED lines, so known_failures would wave them through.
-        if code not in (0, 1):
-            raise Stop(f"pytest {' '.join(inv)} exited {code} (log {log}); not landing")
-        if code == 1:
-            report = log.read_text(encoding="utf-8-sig", errors="replace")
-            if ("[tailscale-ssh: process died: signal:" in report
-                    or not any(re.match(r"^FAILED \S", line.strip()) for line in report.splitlines())):
-                raise Stop(f"pytest {' '.join(inv)} exited 1 without usable failure evidence "
-                           f"(log {log}); not landing")
+    whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
+    for inv, log, code in zip(todo, logs, codes):
+        if why := land_cache.unusable(code, log):
+            raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
@@ -300,6 +298,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run)
         if check.returncode != 0 and not flaky:
             raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+        if check.returncode == 0 and whole:
+            keep(inv, log)
         done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
     if args.node:
         mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
@@ -379,6 +379,13 @@ def land(args) -> int:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
+            gaps, dropped = landed_gaps(wt) if not args.dry_run else (b"", [])
+            if dropped:  # merge=union brought back lines main removed when those ADRs landed
+                (wt / ADR_GAPS).write_bytes(gaps)
+                git(wt, "add", "--", ADR_GAPS)
+                git(wt, "commit", "-m", f"chore(adr): drop adr_gaps lines of landed {', '.join(dropped)}")
+                print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
+                summary.append(f"round {round_no}: dropped landed ADR gap(s) {dropped} from {ADR_GAPS}")
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
         size_check(wt, main_sha, candidate, python)
@@ -429,7 +436,8 @@ def land(args) -> int:
             continue
         began = time.monotonic()
         tested = run_tests(wt, args, invocations, logdir, round_no)
-        reusable = reusable and not any("LOAD-FLAKY" in line for line in tested)  # pre-push reruns its gate
+        # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
+        reusable = reusable and not any("LOAD-FLAKY" in line or land_cache.NARROW in line for line in tested)
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
@@ -476,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
     parser.add_argument("--no-prune", action="store_true", help="do not report finished worktrees either")
+    parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
     parser.add_argument("--queue-timeout", type=float, default=180, help="minutes to wait in the landing queue")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)

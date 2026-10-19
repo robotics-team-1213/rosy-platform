@@ -191,7 +191,10 @@ test("the console counts every Fleet answer and keeps asking while signed out", 
   const wrapper = source.slice(source.indexOf("const fleetClient ="), source.indexOf("async function call("));
   assert.match(wrapper, /fleetApi\(path, options\)\.then\(body => \{ noteLink\(\);/);  // every answer, 401/403 included
   assert.match(wrapper, /path === "\/api\/fleet\/state" \|\| error\.status < 500\) noteLink\(error\)/);
-  const poll = source.slice(source.indexOf("async function refreshState("), source.indexOf("async function refreshAuthorization("));
+  // D-798 3.2: the state poll lives in console-refresh.js; the cancel-all handler follows it there.
+  const refresh = await readFile(new URL("../../../site_ui/console/console-refresh.js", import.meta.url), "utf8");
+  const poll = refresh.slice(refresh.indexOf("async function refreshState("), refresh.indexOf("const CANCEL_ALL_RESULT"));
+  assert.ok(poll.length > 0);
   assert.match(poll, /if \(auth\.locked\) return void fleetApi\("\/api\/fleet\/auth\/connection"/);
   assert.doesNotMatch(poll, /noteLink\(err\)/);  // a throw after the answer (render) never paints 연결 끊김
 });

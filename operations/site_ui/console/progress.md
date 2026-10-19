@@ -27,6 +27,7 @@ gates:
     blocker: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 adrs:
 - D-775
+- D-801
 - D-637
 - D-655
 plans:

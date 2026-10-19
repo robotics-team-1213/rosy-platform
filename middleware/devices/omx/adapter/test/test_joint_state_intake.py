@@ -45,3 +45,14 @@ def test_replay_and_backward_source_do_not_refresh_sequence():
         with pytest.raises(ValueError):
             sample(reader, stamp_ns=stamp)
     assert sample(reader, stamp_ns=1_100_000_000).sequence == first.sequence + 1
+
+
+def test_increasing_clocks_with_variable_delay_cannot_deliver_regressed_receipt():
+    reader = intake()
+    first = sample(reader)
+    # Both clocks/stamps advance, but subtracting the larger source age goes backward.
+    with pytest.raises(ValueError):
+        sample(reader, stamp_ns=1_100_000_000, source_now_ns=1_400_000_000, received_at=10.05)
+    current = sample(reader, stamp_ns=1_100_000_000, source_now_ns=1_200_000_000, received_at=10.1)
+    assert current.sequence == first.sequence+1
+    assert current.received_at == pytest.approx(10.)

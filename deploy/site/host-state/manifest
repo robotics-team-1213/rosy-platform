@@ -19,3 +19,7 @@ safe file /usr/local/bin/rosy-host-guard deploy/site/rosy-host-guard 0755
 report enabled rosy-host-guard.timer
 approval disabled rosy-site-update.timer
 # PC recovery is shared: install with --approve recovery (common/manifest).
+# D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
+safe file /etc/systemd/system/rosy-site-autoupdate.service.d/10-update-gate.conf common/10-update-gate.conf
+safe file /etc/systemd/system/rosy-docker-upgrade.service.d/10-update-gate.conf common/10-update-gate.conf
+safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf

@@ -36,11 +36,15 @@ shift 5
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
 while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
+# xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
+C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}
+[[ $C$M =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/ROSY_JOB_MEM_GB must be whole numbers"; exit 2; }
+echo "$$ pytest $C $M" > "$L"
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
-timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
+timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=${M}G ${CPU:+-p CPUQuota=$CPU} -- \
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@"
 """
 

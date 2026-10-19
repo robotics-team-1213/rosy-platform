@@ -23,7 +23,7 @@ gates:
   FIELD:
     state: HOLD
     blocker: "measurement skipped by user decision 2026-10-18; six physical robots never ran the 30-minute bandwidth/latency/control scenario"
-adrs: [D-789]
+adrs: [D-789, D-801]
 plans: [docs/plans/2026-10-17-webrtc-camera-migration.md]
 ---
 
