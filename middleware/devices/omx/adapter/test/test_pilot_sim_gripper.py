@@ -2,7 +2,7 @@
 
 import pytest
 
-from omx_adapter.pilot_sim_gripper import GRIPPER_TOLERANCE_RAD, gripper_state
+from omx_adapter.pilot_sim.gripper import GRIPPER_TOLERANCE_RAD, gripper_state
 
 CLOSED = 0.0
 

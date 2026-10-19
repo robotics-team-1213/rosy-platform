@@ -13,7 +13,7 @@ from browser_harness import browser_tests_enabled, safe_listener
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium")
 playwright = pytest.importorskip("playwright.sync_api")
 
-from omx_adapter.pilot_sim_api import create_pilot_sim_app
+from omx_adapter.pilot_sim.api import create_pilot_sim_app
 
 
 ROOT = Path(__file__).resolve().parents[5]

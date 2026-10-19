@@ -15,6 +15,7 @@ from core_common.protocol.schemas import (
     FleetCellTransferGrant,
 )
 
+from .action_receipts import receipt_matches_grant
 
 _INSTANCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")
 # One wire version per admitted kind. Both kinds report ordered phase summaries
@@ -126,17 +127,7 @@ class UnixLocalActionTransport:
             raise LocalActionUnavailable("v2 local Action receipt is missing phase summaries")
         if version == 1 and receipt.phase_summaries is not None:
             raise LocalActionUnavailable("v1 local Action receipt contains v2 phase summaries")
-        expected = (
-            grant.mission_id, grant.step_id, grant.action_id, grant.attempt_id,
-            grant.workcell_id, grant.instance_id, grant.request_digest,
-            grant.authority_epoch, grant.dispatch_generation,
-        )
-        actual = (
-            receipt.mission_id, receipt.step_id, receipt.action_id, receipt.attempt_id,
-            receipt.workcell_id, receipt.instance_id, receipt.request_digest,
-            receipt.authority_epoch, receipt.dispatch_generation,
-        )
-        if actual != expected:
+        if not receipt_matches_grant(grant, receipt):
             raise LocalActionUnavailable("local Action receipt does not match the Fleet grant")
         return receipt
 

@@ -2,6 +2,7 @@
 
 import ast
 import importlib.util
+import logging
 import sys
 import types
 from pathlib import Path
@@ -9,6 +10,14 @@ from pathlib import Path
 import pytest
 
 LAUNCH = Path(__file__).resolve().parents[1] / "launch" / "camera_preview.launch.py"
+
+
+def _import_ros_launch():
+    # Not "launch": this package's own launch/ folder imports as a namespace package.
+    pytest.importorskip("launch.launch_context")
+    # ROS 2 launch 는 처음 import 될 때 logging.setLoggerClass(LaunchLogger) 를 걸어, 이 pytest
+    # 프로세스에서 그 뒤 만들어지는 로거가 모두 propagate=False 가 된다(다른 시험의 caplog 가 빈다).
+    logging.setLoggerClass(logging.Logger)
 SRC = LAUNCH.read_text(encoding="utf-8")
 
 
@@ -100,8 +109,7 @@ def _load():
 
 
 def _started(args):
-    # Not "launch": this package's own launch/ folder imports as a namespace package.
-    pytest.importorskip("launch.launch_context")
+    _import_ros_launch()
     pytest.importorskip("launch_ros.actions")
     from launch import LaunchContext
     from launch.actions import DeclareLaunchArgument, ExecuteProcess, LogInfo
@@ -204,7 +212,7 @@ def test_introspection_capture_only():
 
 def _max_rate(args=None):
     """The max_rate_hz parameter learned_lane_node would get, as a float."""
-    pytest.importorskip("launch.launch_context")
+    _import_ros_launch()
     pytest.importorskip("launch_ros.actions")
     from launch import LaunchContext
     from launch.actions import DeclareLaunchArgument
@@ -257,7 +265,7 @@ def test_object_det_gets_its_pointer_and_rate():
 
 def _line_observer_params(monkeypatch, ir, operator):
     """line_observer_node's parameter files, with the two /etc/rosy overlays stubbed (D-344 §12)."""
-    pytest.importorskip("launch.launch_context")
+    _import_ros_launch()
     la = pytest.importorskip("launch_ros.actions")
     import control.ir_overlay as overlays
     monkeypatch.setattr(overlays, "usable_overlay", lambda: (ir, "stub"))

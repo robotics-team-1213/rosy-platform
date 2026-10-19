@@ -96,6 +96,7 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
         message = JointState()
         message.name = ["joint1"]
         message.position = [0.0]
+        message.header.stamp = ros_node.get_clock().now().to_msg()
         state_publisher.publish(message)
 
     if not vendor_sim:

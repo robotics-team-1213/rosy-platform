@@ -22,8 +22,8 @@ def module():
 def profile():
     return dict(schema='rosy.omx-collection-profile.v1', enabled=False, workcell_id='fixture',
                 instance_id='fixture', rig_revision='fixture-rig', calibration_revision='fixture-cal',
-                task='fixture only', fps=10, max_image_age_s=.5, max_sample_gap_s=.3,
-                max_state_age_s=.2, max_reference_age_s=.2, free_disk_bytes=1024, max_frame_jitter_s=.2,
+                task='fixture only', fps=10, max_image_age_s=.5, max_sample_gap_s=.6,
+                max_state_age_s=.2, max_reference_age_s=.2, free_disk_bytes=1024, max_frame_jitter_s=.5,  # loaded remote runners (2026-10-19)
                 camera_shapes={r: [2, 2, 3] for r in ('top', 'front')},
                 joint_names=['joint'+str(i) for i in range(6)],
                 normalization=[[-1., 1.]]*6, reach_tolerance_rad=[.01]*6, max_session_s=5.)

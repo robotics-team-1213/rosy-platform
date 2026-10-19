@@ -404,7 +404,7 @@ export 결과가 verified이고 실제 reader가 모든 frame을 재독출한 �
 (or `OMX_CELL_WORLD=<path without .sdf>`) with no command owner. `probe_cell_transfer.py`,
 run with `docker exec` in that container, is the single owner process for the run: profile-built
 `ArmCommandOwner`, analytic planner, `PickPlaceRunner`, gripper readback and `gz model -p`
-block poses (helpers in `cell_sim_tools.py`). Do not start `pilot_sim_server` beside it; the
+block poses (helpers in `cell_sim_tools.py`). Do not start `pilot_sim.server` beside it; the
 probe refuses to run if one is present. Commands, stand-in flags, sim aid and results:
 [docs/validation/rosy-cell-gazebo-c3-2026-10-02](../../../docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md).
 
