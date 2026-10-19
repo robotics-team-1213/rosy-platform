@@ -10,10 +10,16 @@ from rosy.contracts.learning.omx_execution import validate_profile
 from .policy_parent import correlate_parent, _capture_parent
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def publish(parent, api, journal, command_id, output):
     output = Path(output).resolve()
-    if output.drive.upper() == 'F:' or output.exists():
-        raise ValueError('new artifact directory outside source drive required')
+    if _in_checkout(output) or output.exists():
+        raise ValueError('new artifact directory outside the source checkout required')
     receipt_bytes = parent.owner_receipt(api)
     receipt = json.loads(receipt_bytes)
     runner_receipt = {name: value for name, value in receipt.items() if name != 'journal_id'}
