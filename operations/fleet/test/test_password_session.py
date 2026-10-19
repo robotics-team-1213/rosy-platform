@@ -508,7 +508,7 @@ BOOTSTRAP_PASSWORD_HASH = hash_password("alice")
 def _bootstrap(tmp_path, password="alice"):
     source = _accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH)
     if password != "alice":
-        source = _accounts(password_scrypt=hash_password(password))
+        source["alice"]["password_scrypt"] = hash_password(password)
     app, _ = _app(tmp_path, logins=source)
     client = _client(app)
     response = _login(client, password=password)

@@ -80,8 +80,11 @@ def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
 def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path, INITIAL_PASSWORD):
     sessions = activated(tmp_path)
     manager = cookie(sessions)
-    new = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
-                                  password=INITIAL_PASSWORD, grants=[])
+    new = sessions.create_account(
+        manager, login="bob", principal_id="bob", role="operator",
+        password=INITIAL_PASSWORD,
+        grants=[],
+    )
     second = PasswordSessions(sessions.path, {})
     bob = cookie(second, "bob", INITIAL_PASSWORD)
     assert second.principal(bob)[0].password_change_required
@@ -125,9 +128,10 @@ def test_admin_reset_and_revoke_sessions(tmp_path, INITIAL_PASSWORD):
     row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
                                   password="fixture-pass-9384", grants=[])
     bob = cookie(sessions, "bob", "fixture-pass-9384")
-    updated = sessions.reset_account_password(manager, row["account_id"], revision=row["revision"],
-                                              password=INITIAL_PASSWORD,
-                                              )
+    updated = sessions.reset_account_password(
+        manager, row["account_id"], revision=row["revision"],
+        password=INITIAL_PASSWORD,
+    )
     assert sessions.principal(bob) is None
     bob = cookie(sessions, "bob", INITIAL_PASSWORD)
     assert sessions.principal(bob)[0].password_change_required
