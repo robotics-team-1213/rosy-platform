@@ -284,3 +284,22 @@ native 영향 범위는 run-1 6,908 passed / 408 skipped / 38 warnings / 62 subt
 기존 source arc가 가시 non-way 픽셀을 지나고 같은 confidence band의 기존 chord가 가시 바닥에 지지될 때만 교체한다. 투영 표본 사이 픽셀 연결도 검사하며 화면 밖을 clip하여 바닥 근거로 만들지 않는다. 불확실하거나 대안이 검증되지 않으면 기존 후보를 유지한다. 정상 굽은 바닥의 기존 곡률도 유지한다. 이 검사는 source 추정 artifact 보정이며 최종 smoothing/current 변환 이후 궤적 전체의 바닥 보장을 뜻하지 않는다. REALIGN·CORE 명령 권한·정렬 예산을 완화하지 않는다.
 
 원본000958의 실제 마스크를 RLE fixture로 결속했다. native4e0 회귀 RED6개 뒤9550 관련10파일210 passed / skip0 / NEW0이었다. 픽셀 공백·완전 offscreen·보정 조건 부재·정상 굽은 바닥 보존과 이전 smoothing 뒤 기존 REALIGN 통과 회귀를 포함한다. 독립 safety 검토와 별도 최종 소스 검토는 Critical0 / Important0 / Minor0, d42 이후3커밋 size-range 통과다. 새 후보의 영향 범위 및 동일 조건 연속2회 SIM 전까지 수용 HOLD이며 d42의 첫 PASS를 이월하지 않는다.
+
+## 24cc 반복 결과와 안내 유실 중 정렬 odometry 추적
+
+검증 HEAD `24cc04516bd59c93b1a07c73f00abe72f12b6125`의 native 영향 범위는 run-1 6,928 passed / 408 skipped / 38 warnings / 62 subtests passed, run-2 9 passed로 총6,937건 통과했고 두 로그 모두 NEW0이었다. 별도 소스·문서 최종 검토0/0/0, d42 이후4커밋 size-range 통과다.
+
+첫 SIM `sim-24cc04516b-04d5e4`은 arrived/PASS, settled_xy(0.425275,-0.500844), 목표 거리0.108119m, via0.036m였다. 비영 명령 최초~마지막 구간의 learned_drivable1,458개·fallback0, nonnull revision1,451개 고정 일치·누락7개, 열린 junction329회·먼 출구 거절67회였다. drivable_closed1회를 포함하므로 무중단 주행으로 표시하지 않는다.
+
+두 번째 `sim-24cc04516b-2565db`는 마지막 코너에서 stall60초/진행6.848m로 실패했다. debug station은6.872735m, settled_xy(-0.069592,-0.355832), 목표 거리0.621837m, via0.030m였다. 같은 명령 구간 learned_drivable1,292개·fallback0, nonnull revision1,289개 고정 일치·누락3개, 열린 junction236회·먼 출구 거절62회, drivable_closed1회·recentre_alignment_spent5회였다. 종단 spent HOLD는171.5초 이후에도 계속되므로 명령 구간 집계와 별도로 보존한다. 두 실행 모두 final cmd·odom0, lease released, left_running 빈 목록, 회수·native 정리 완료, lane_return SKIP이다. pointer·render·paint target·lap·scenario·skip·stall·spawns·places JSON 동일 및 각 실행 전 native model/manifest hash를 확인했다. 1 PASS/1 FAIL로 수용 HOLD이며 수정 없이 세 번째를 반복하지 않는다.
+
+- 첫 result SHA256: `0b240dff0ef53cc8e3a6c754724f06749519e00e4f21aeacfd38c8ddac4b67ee`
+- 첫 observations SHA256: `3fb2bb70ed0af6b2ca7f0e515de05dffddc6ccb762e61a8602269c913fd00c9d`
+- 두 번째 result SHA256: `eb755a9e843867a975b947f43090c9a26d4557918b86fab6625b61b6c03647b2`
+- 두 번째 observations SHA256: `7a06842c4954330fdc505d225e36efda5a189a5cdaefba2051d691cc555d0dd1`
+
+두 번째155초의 LEFT 정렬 limit0.4561 뒤156.875·157·157.125초에는 SelectedRoutePrior가 없지만 camera/way·odom은0.125초 간격으로 계속됐다. observed_route_candidate의 early return으로 기존 episode 추적까지 빠져157.25초에 마지막 갱신 이후0.5초를 실제 odom 공백 한도0.2초와 비교해 uncertain을 영구 설정했다. native 원본 재생12가 이를 재현했다. 모든 관측 프레임의 odom을 추적하면 기존160.375초 straight 증거(ahead0.473m, current 실제 변위0.181521m, source0.177060m)로 이전 episode가 종료된다. 재생은 recorded strategy의 switch_pending도 복원했으며, 누적 경로 s를 원점 변위로 대체하지 않았다.
+
+- native 재생12 analysis SHA256: `b75d86f9a345ec06b885786d5481ebcc97005c212a7494204d4e0944fd1a725f`
+
+생산 `1941d5025efbd7b8c2e41e392bb7d0a1a6f83bee`는 기존 episode의 시간·pose 연속성 검사와 누적 절대 yaw 갱신을 `_track_alignment`로 분리한다. 선택 안내가 없는 경로는 기존 episode 추적만 하며 후보 객체·출력을 그대로 반환한다. 이 경로는 상태를 생성·종료하지 않는다. 안내 복귀 후 기존 실제 이동·fresh 관측·straight/curve 종료 조건을 평가하며 실제 odom 공백·jump·reset의 uncertainty는 유지한다. seen_exit·기하 기준·회전량 예산·CORE 권한은 바꾸지 않았다. 원본168개 odom과 실제 안내 공백·160.375 관측을 fixture로 결속한 e12 native RED4개 후1941 관련12파일 통과/skip0/NEW0, 독립 소스 safety 검토 material finding 없음, 24cc 이후3커밋 size-range 통과다. 최신 영향 범위·같은 후보 연속2회 SIM 검증 전까지 수용 HOLD다.

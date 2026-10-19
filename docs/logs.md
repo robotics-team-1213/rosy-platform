@@ -9335,3 +9335,9 @@ osy-d395-s1d\`.
 - 변경: d42의1 PASS/1 FAIL, 종단 realign HOLD와 native 원본 재생을 동결 기록에 추가했다. 실제 픽셀로 검증한 같은 band chord에 한정한 source 추정 보정을 기록했다.
 - 증거: 9550 관련210 passed/skip0/NEW0, 독립 safety 및 최종 소스 검토0/0/0. 가시 표본 사이 픽셀 공백·offscreen·정상 곡선 보존 회귀를 포함한다.
 - gate 변화: 없음. 이전 PASS 이월 없이 새 후보의 영향 범위·동일 조건 연속2회 SIM을 확인한다.
+
+## 2026-10-20 · uncommitted · 안내 공백의 정렬 추적 결함과 반복 실패 보존
+
+- 변경: 24cc 영향6,937 passed와1 PASS/1 FAIL, 마지막 코너 종단 spent HOLD 및 정상 odom 중 안내만 사라진3프레임을 동결 기록에 추가했다.
+- 증거: 원본·결과 hash와 native 재생12,168개 odom fixture 및1941 관련12파일 통과/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0. 비선택 경로는 추적만 하며 기존 상태의 생성·종료·출력 변경이 없다.
+- gate 변화: 없음. 최신 영향 범위·반복 SIM을 새 후보에서 검증하며 이전 PASS를 이월하지 않는다.

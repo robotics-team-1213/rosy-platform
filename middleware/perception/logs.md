@@ -1767,3 +1767,9 @@
 - 변경: 기존 source arc가 가시 non-way를 지나고 같은 band의 chord가 가시 floor 픽셀과 사이 연결에 지지될 때만 chord로 교체한다. 화면 밖·불확실 구간은 지지로 간주하지 않는다.
 - 증거: d42 반복 SIM은1 PASS/1 FAIL이었다. 실패 원본000958 native 재생에서 기존 arc 가시13개 중8개 non-way, chord 가시45개 모두 floor였다. 회귀 RED6→9550 관련210 passed/skip0/NEW0, 독립 safety 및 최종 소스 검토0/0/0, d42 이후3커밋 size-range 통과.
 - gate 변화: 없음. 이 검사는 source 후보 보정이며 smoothing/current 최종 궤적 전체의 보장은 아니다. 새 후보 영향 범위·연속2회 SIM 전까지 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 선택 안내 유실과 odometry 공백 분리
+
+- 변경: 선택 안내가 없는 동안에도 기존 정렬 episode의 pose·시각·절대 yaw를 추적한다. 후보와 출력을 바꾸거나 상태를 생성·종료하지 않으며, 안내 복귀 후 기존 관측 전진 조건으로 종료한다. 실제 odom 공백·jump·reset uncertainty는 보존한다.
+- 증거: 24cc 영향6,937 passed 뒤 SIM1 PASS/1 FAIL, 마지막 코너 정체. native 재생에서156.875~157.125 안내 유실이 정상 odom에도157.25의0.5초 공백 오인을 만들었다. 원본168개 odom 회귀 e12 RED4→1941 관련12파일 통과/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0.
+- gate 변화: 없음. 최신 영향 범위·동일 후보 연속2회 SIM 전까지 수용 HOLD. 회전량 예산이나 종료 기하 기준을 완화하지 않는다.

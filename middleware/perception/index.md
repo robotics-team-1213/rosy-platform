@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 선택 안내 유실과 odometry 공백 분리
 - 2026-10-20 · uncommitted · 실제 픽셀로 확인한 source 곡률 보정
 - 2026-10-20 · uncommitted · 곡선 전진 뒤 이전 정렬 상태 종료
 - 2026-10-20 · uncommitted · 근거리 정렬 ROI의 source/current 연속성
 - 2026-10-20 · uncommitted · 합성 출구의 현재 좌표 방향 재검증
-- 2026-10-20 · uncommitted · 관측 출처와 실제 바닥 정렬 결속
