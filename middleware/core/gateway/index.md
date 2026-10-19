@@ -75,9 +75,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · station SIM pulse와 lifespan tick 동기화
 - 2026-10-19 · uncommitted · Account 장애 중 로그아웃·재연결 회귀
+- 2026-10-19 · uncommitted · station SIM pulse와 lifespan tick 동기화
 - 2026-10-17 · uncommitted · map refresh fixture preserves installed energy clock
 - 2026-10-17 · uncommitted · non-simulation station source evidence
 - 2026-10-17 · uncommitted · private energy handover naming
-- 2026-10-17 · uncommitted · original pack energy restriction implementation

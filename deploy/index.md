@@ -79,4 +79,3 @@
 - 2026-10-19 · uncommitted · Account 배포 선행 updater 크기 분리
 - 2026-10-19 · uncommitted · Account 앱별 활성화와 인증서 복구 안내
 - 2026-10-19 · uncommitted · 비밀 항목 거부 fixture의 공개 placeholder
-- 2026-10-19 · 16d152510 · SD 설정 개선 검증 결과
