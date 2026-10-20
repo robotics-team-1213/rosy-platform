@@ -37,6 +37,9 @@ def _plain(value):
 
 
 def normalize(text, names=()):
+    # Significant registered spacing can occur in mixed Unicode forms; keep the whole copy intact.
+    if any(name != _plain(name).strip(' \t') for name in names):
+        return text
     parts, at = [], 0
     names = {form for name in names for form in (name, unicodedata.normalize('NFD', name))}
     protected = re.compile(QUOTES.pattern+'|'+'|'.join(alias_pattern(name) for name in
