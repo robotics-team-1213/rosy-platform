@@ -801,3 +801,9 @@
 - 변경: Learning·Games의 title_prefix와 기존 Fleet 하위 화면 제목 검사를 반영한다. 런처·패키지 신원은 유지한다.
 - 증거: 원래 구현과 로컬 착지 검증은 보존한다. 이 게시 head는 별도 원격 검사·독립 검토·CI로 확인한다.
 - gate 변화: 없음. 이 기록은 운영 배포나 장치 수용의 증거가 아니다.
+
+## 2026-10-20 · uncommitted · Console transport 소유 위치 정리
+
+- 변경: Console에서만 쓰는 fleet-client.js·request.js를 Console/shared로 byte 그대로 옮겼다. 설치·정적 경로·브라우저 fixture·Node import를 갱신하고 기존 common 두 URL은 Fleet의 고정 alias로 보존했다.
+- 증거: f6dc4ceca8 원격 shared/web·설치·앱 소유 계약·아키텍처 479 passed/49 skipped, NEW0. 이동 후 scope fixture 경로와 문서 공통 목록에서 드러난 실패는 소유 위치에 맞춰 수정했다. 최종 head의 정상 push gate와 GitHub CI는 별도로 확인한다.
+- gate 변화: 없음. 실제 로봇·현장 수용은 수행하지 않았다.
