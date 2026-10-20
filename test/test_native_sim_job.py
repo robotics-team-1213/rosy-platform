@@ -101,17 +101,24 @@ def test_activation_is_content_addressed_and_survives_staging_removal(tmp_path):
         activate(staged, tmp_path / "managed")
 
 
-def test_activation_preserves_named_object_task_and_status_accepts_its_outputs(tmp_path):
+@pytest.mark.parametrize('experiment,episodes,entry', [
+    ('pick-place', 1, 'sim_pick_place_task.py'),
+    ('pick-place-demonstrations', 3, 'sim_pick_place_demonstrations.py'),
+])
+def test_activation_preserves_named_object_task_and_status_accepts_its_outputs(tmp_path, experiment, episodes, entry):
     from native_sim_prepare import activate
     from native_sim_job import status
     staged = prepared(tmp_path)
     document = json.loads((staged / 'prepared.json').read_text())
-    document['experiment'] = 'pick-place'
+    document.update(experiment=experiment, episodes=episodes)
     (staged / 'prepared.json').write_text(json.dumps(document))
     (tmp_path / 'managed/releases').mkdir(parents=True)
     (tmp_path / 'managed/state').mkdir()
     state = Path(activate(staged, tmp_path / 'managed')['state'])
-    assert 'sim_pick_place_task.py' in (state / 'run.sh').read_text()
+    script = (state / 'run.sh').read_text()
+    assert entry in script
+    if experiment == 'pick-place-demonstrations':
+        assert '--episodes 3' in script
     (state / 'pick-place').mkdir()
     result = {'result': 'PASS', 'attempts': 1, 'successes': 1, 'training': 'NOT_RUN', 'full_g2': False}
     (state / 'pick-place/result.json').write_text(json.dumps(result))
