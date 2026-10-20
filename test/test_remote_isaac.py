@@ -171,3 +171,14 @@ def test_fetch_syncs_artifact_before_completion_marker(tmp_path, monkeypatch):
                     'artifacts': {'files': [metadata]}}
     mod.fetch_snapshot({'source_sha': SHA, 'run_id': 'd' * 32, 'input_sha256': 'b' * 64},
                        Files(), tmp_path / 'fetch')
+
+
+def test_transport_preserves_unknown_run_with_diagnostic_error():
+    mod = module()
+    from types import SimpleNamespace
+    row = {'run_id': 'd' * 32, 'status': 'UNKNOWN', 'error': 'owned cleanup unconfirmed'}
+    remote = mod.SSH.__new__(mod.SSH)
+    remote.host = 'unused-test-host'
+    remote.runner = SimpleNamespace(remote=lambda *a, **k: SimpleNamespace(returncode=0,
+                                    stdout=json.dumps(row).encode()))
+    assert remote._invoke('fixed script', {}) == row
