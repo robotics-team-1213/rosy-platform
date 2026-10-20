@@ -4,11 +4,11 @@
 
 ## 완료한 배포
 
-- 모델 PC의 정상 업데이트 경로로 sequence **30**, source **`9bafdf968277191b93171daf4f8740f240e9418e`**를 적용했다. updater 결과 `applied`, pending 없음, failed 목록 비어 있음.
+- 모델 PC의 정상 업데이트 경로로 sequence **30**, source **commit `9bafdf968277191b93171daf4f8740f240e9418e`**를 적용했다. updater 결과 `applied`, pending 없음, failed 목록 비어 있음.
 - 기존에 검토하고 원격 검사 **254 passed / 0 skipped / 0 NEW**를 확인한 정확한 커밋이다. 이번에는 소스를 바꾸지 않았다.
 - 공식 후보 생성기를 해당 커밋에서 실행했다. 실행별 `core.autocrlf=false`로 archive 바이트를 보존했다. archive SHA-256은 준비된 후보와 같은 `d4413c470c1c7e51a345833bd6c4e3ee8ce01d08e3e51ecca7335a0ab4e46bc3`이다.
 - 실제 서명한 manifest SHA-256은 **`e3cb73391dce5f2a2c95d4ba251942b67a19369a4353db49e5086081948c8ebe`**다. 앞서 수동 준비한 미서명 manifest `853a…`와 필드값은 같고 끝 줄바꿈 바이트가 다르다. 최초 교체 시도에서 이전 hash 기대값 검사가 이를 감지해 설정 변경 전에 중단했다. 공식 생성 파일을 독립적으로 재계산해 기대값을 바로잡은 뒤 진행했다.
-- 환경 지문은 기존과 같은 `97fab2525162e8b93ae730e6c1426ca7c84e07afc0821856ba4e31dccb1412eb`다. 기존 업데이트 서비스의 작업·GPU·환경·import·실제 CLI 검사와 동결 게이트를 통과했다. 패키지나 GPU 환경을 바꾸지 않았다.
+- 환경 지문은 기존과 같은 commit `97fab2525162e8b93ae730e6c1426ca7c84e07afc0821856ba4e31dccb1412eb`다. 기존 업데이트 서비스의 작업·GPU·환경·import·실제 CLI 검사와 동결 게이트를 통과했다. 패키지나 GPU 환경을 바꾸지 않았다.
 - 기존 review follower를 실행해 `model-code-30-9bafdf968277` 검수 UI 릴리스를 활성화했다. 검수 서비스는 active/running, updater와 review follower 타이머 모두 active다.
 - 독립 검토 `names_review`가 실제 신뢰 설정·공개 키 지문·sequence 30·전체 소스 SHA·manifest·READY·서비스·타이머·상태 경로와 아래 네 화면을 다시 확인했다. 중요한 발견 사항 없음. 서명 변조 검사와 과거 inbox 보존은 실행 담당자의 확인이며 독립 검토에서 반복하지 않았다.
 

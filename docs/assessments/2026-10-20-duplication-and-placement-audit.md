@@ -200,7 +200,7 @@ SHA256 동일 그룹은 4개뿐이다.
 `https://github.com/kernel-robot-8th/kernel-robot-repo-2.git`. HEAD `a95b81f`(branch
 `docs/rosy-verification`, origin/main 대비 3 ahead). 내부 `rosy/`는 219,128,700B(~219MB)의
 source 스냅샷이고 `.git`이 없다. `docs/SUBMISSION.md`가 source commit
-`38f0c452e410fca6c2c8fc72f45c3c250751d58f`, 제출일 2026-10-19를 문서화한다. 의도된 제출물이므로
+commit `38f0c452e410fca6c2c8fc72f45c3c250751d58f`, 제출일 2026-10-19를 문서화한다. 의도된 제출물이므로
 수정하지 않는다.
 
 ### 4.4 문서 경로 드리프트

@@ -17,17 +17,17 @@
 - 3b0bc1c617에서 새 helper import의 stub 타입2개와 fixture module-cache 정리를 보완하자 기존 회귀가 실제2failed/74passed를 드러냈다. port가 현재 main의 rejected intake 진단 호출1개를 누락한 것이며 아직 main에 착지되지 않았다. 독립 리뷰 후 d59c8e7636에서 정확한 main 호출을 복원하여 거절 시 snapshot/sequence/freshness는 그대로 두고 bounded immutable 진단만 기록한다. 관련4파일76passed/skip0·comparator0. 새 전체 착지 관문을 다시 확인한다.
 
 - portable native55731 exit0, main8d8921ac0e89277a85c921810ab28218a5741b5c 착지 완료(base2c6db1e166). g1249passed, 영향2368passed/279skipped 및 실제 opt-in Chromium161+40+3+2=206passed.5로그 합2574passed/279skipped, comparator 전부0. same-SHA 필수 raw3도124passed/skip0·비교기0이며 package readiness가 선행했다. 해당 SHA의 native land record5invocations/5logs 확인.
-- portable-candidate-8d8921ac0e.bundle742590bytes, SHA256db898d764ca99a04a03c96555fc26dac2aa952f1b2972417a3401366604032f4. exactref/bundleverify/PACK SHA1 확인. fresh canonical judge removable/소유자일치/clean/ignored0 및 정확한 경계·HEAD·lock·Git 작업·queue 확인 뒤 native no-force remove로 merge-portable-catalog 폴더만 제거했다. 원본·통합 브랜치는 보존했다.
+- portable-candidate-8d8921ac0e.bundle742590bytes, SHA256 db898d764ca99a04a03c96555fc26dac2aa952f1b2972417a3401366604032f4. exactref/bundleverify/PACK SHA1 확인. fresh canonical judge removable/소유자일치/clean/ignored0 및 정확한 경계·HEAD·lock·Git 작업·queue 확인 뒤 native no-force remove로 merge-portable-catalog 폴더만 제거했다. 원본·통합 브랜치는 보존했다.
 
 - 구조 리포트 native33978 exit0, main2c6db1e166414e22901b416dfe76ac006a9f83e5 착지 완료. FULL22invocations28278passed/1943skipped 및 g1249passed, 각22로그 비교기 NEW/known/flaky0 재확인. 원격·기본 환경에서 건너뛴 검사는 성공으로 세지 않는다.
-- merged-structure-report-2c6db1e166.bundle717043bytes, SHA256ab479ae96db4a1a8d9b32f0b50e9f029c0e2f85210055cb65c464056a9abf781. exactref/bundleverify/PACK SHA1·fresh canonical judge(removable/소유자일치/clean/ignored0) 후 native no-force remove로 merge-structure-report 폴더만 정리했다. 브랜치 보존.
+- merged-structure-report-2c6db1e166.bundle717043bytes, SHA256 ab479ae96db4a1a8d9b32f0b50e9f029c0e2f85210055cb65c464056a9abf781. exactref/bundleverify/PACK SHA1·fresh canonical judge(removable/소유자일치/clean/ignored0) 후 native no-force remove로 merge-structure-report 폴더만 정리했다. 브랜치 보존.
 - 대기 중인 source 최종 커밋의 추가 경계 검사: Station8838460a3의 secret/provenance/API 문서·protocol102passed, OMX8a18b8af9와 strict80f87cd776의 secret/provenance 각97passed. 모두 skip0·비교기0. Station8838460a3는 approved AI-PC remote_sim의 same-SHA generated IDL Python/C++ wire 및 capture/typed async DDS client를 각각 실제 실행해 exit0. nonce/기한/명시적닫힘·timeout/detach/late reply/parent 교체·음성응답/미발견 서비스를 확인했다. 합성 서비스이며 motion authority/실물 수용이 아니다.
 
-- 교체된 자체 미리보기 두 브랜치의 복구본 superseded-integration-previews.bundle1455386bytes, SHA256daa9351c68f5dfe53b512299f431bbccf945269c16e9e47d26646599d3ceac11. exact2refs·bundleverify·PACK SHA1 확인. 원본 bd23be5077/fa2f874b4 refs를 보존하며 실제 검토 브랜치의 착지 후 clean 폴더 정리에 사용한다.
+- 교체된 자체 미리보기 두 브랜치의 복구본 superseded-integration-previews.bundle1455386bytes, SHA256 daa9351c68f5dfe53b512299f431bbccf945269c16e9e47d26646599d3ceac11. exact2refs·bundleverify·PACK SHA1 확인. 원본 bd23be5077/fa2f874b4 refs를 보존하며 실제 검토 브랜치의 착지 후 clean 폴더 정리에 사용한다.
 - 전체 워크트리 재점검52개: active38, locked12, stale-history1, landed-dirty1, normal removable0. 자체 진행7개는 tracked/untracked/비캐시ignored0이다. 별도 learning-delivery의3문서 미커밋 및 owner불명 v13-map-labels의6파일 미커밋, 잠긴 폴더와 원본 peer3개는 보존한다. 이들 미커밋을 이번 포트에 섞지 않는다.
 
 - raw-tools native42588 exit0, main96ef6ffac4 착지 완료. 재시도에서는 root8856passed/1098skipped를 포함한5개 fresh invocation이 모두 통과했고 나머지 FULL 묶음은 native cache의 검증된 재사용 판정이었다. g1249passed. 과거 실패28로그와 섞어 새 고유 시험 합계를 주장하지 않는다. FULL 경로는 재사용 가능한 affected land-record JSON을 만들지 않는 것이 현재 도구 동작이다.
-- raw-tools 복구본 merged-raw-tools-96ef6ffac4.bundle702817bytes, SHA256d0e19655397d0a2230556b61c03e27fd29a55e002303b5ff22d9115f812d9da3. exactref/bundleverify/PACK SHA1 통과, 기존 공통 객체를 필요로 하는 증분 복구본이다. fresh canonical judge(full=True)/소유자일치·clean/ignored0·lock/Git 작업/queue 확인 뒤 merge-raw-test-tools 폴더만 제거했고 브랜치를 보존했다.
+- raw-tools 복구본 merged-raw-tools-96ef6ffac4.bundle702817bytes, SHA256 d0e19655397d0a2230556b61c03e27fd29a55e002303b5ff22d9115f812d9da3. exactref/bundleverify/PACK SHA1 통과, 기존 공통 객체를 필요로 하는 증분 복구본이다. fresh canonical judge(full=True)/소유자일치·clean/ignored0·lock/Git 작업/queue 확인 뒤 merge-raw-test-tools 폴더만 제거했고 브랜치를 보존했다.
 - portable의 e0b41fe413 전체 영향 관문은 원본 fixture SHA2567행의 설명 부재로 release secret guard1NEW였다. main PASS/alone FAIL, 실제 browser206passed를 포함해도 전체 성공으로 세지 않는다. 실패10로그를 별도 복사·각SHA256 검증했다. b354a4c311은 값·시험·scanner를 유지하고 정확한 SHA256 integrity 주석만 추가했다. required raw3+secret guard204passed/skip0·comparator0·독립 리뷰 finding0, native55731 재대기 중이다.
 - strict 최초 native78693은 중간 split 커밋에서 obsolete698줄 ratchet을 삭제하지 않아 거절됐다. 새8f11939fc에서 순수 분리와 ratchet 삭제를 한 커밋에 기록했고,7dbec4c99의 source/시험/문서는 기존 검토된fa2f874b4와 동일함을 독립 확인했다. size_range10commits PASS, 같은 새SHA193passed/skip0·comparator0. 이후 portable integrity 수정까지 병합한a3656c8a9f도 raw124passed/skip0·comparator0이다.
 - strict native93967은 이동된 legacy layout4문자열의 기존 scan 소유 경로가 controller에 남아 있어 g1에서 거절됐다. 실패4로그 보존·파일별SHA256 확인.80f87cd776은 기존4항목의 경로만 helper로 이동했고 허용 개수·문자열·scan/stale 검사 불변, 독립 리뷰 finding0. 후속 원격213passed/skip0·comparator0, native70891로 재요청했다.
@@ -72,10 +72,10 @@
 
 | 통합 | main 착지 SHA | 영향 시험 통과 | 실제 opt-in Chromium 포함 | 자체 폴더 |
 |---|---|---:|---:|---|
-| Pilot native fixtures | a27b980c7cb780b042ba6a85b5e541d9e533d823 | 838 | 164 | 제거 완료 |
-| OMX Learning | 4b2cb988cc649681cae2ebd4d8451cc670b6edf8 | 4407 | 1200 | 제거 완료 |
-| Account 두 원본 | 5febd43c53f58bf9d59a6cb893465f34675f5624 | 21075 | 164 | 제거 완료 |
-| 리뷰 클래스 바인딩 수정 이식 | a718f85013201c2992ac5bce90e33a02bd6a1eef | 2317 | 206 | 제거 완료 |
+| Pilot native fixtures | commit a27b980c7cb780b042ba6a85b5e541d9e533d823 | 838 | 164 | 제거 완료 |
+| OMX Learning | commit 4b2cb988cc649681cae2ebd4d8451cc670b6edf8 | 4407 | 1200 | 제거 완료 |
+| Account 두 원본 | commit 5febd43c53f58bf9d59a6cb893465f34675f5624 | 21075 | 164 | 제거 완료 |
+| 리뷰 클래스 바인딩 수정 이식 | commit a718f85013201c2992ac5bce90e33a02bd6a1eef | 2317 | 206 | 제거 완료 |
 
 각 통합의 선행 공통 시험249passed는 위 영향 시험 수와 별도로 기록한다. 표의 시험 수는 실행별 집계이며 서로 중복되는 테스트가 있다. 모든 native 비교기는 NEW/known/flaky0이다. skip은 실행 성공으로 세지 않는다. Pilot Android JVM111tests 중 skip1과 debug 빌드는 별도 증거다.
 
@@ -107,7 +107,7 @@ pytest는 커밋된 SHA를 원격 PC에서만 실행한다. RED 로그는 %TEMP%
 
 ### Account main 착지·정리 완료
 
-- 재시도 native 세션99711 exit0, 1round. main base4b2cb988cc649681cae2ebd4d8451cc670b6edf8에 통합한 최종5febd43c53f58bf9d59a6cb893465f34675f5624와 두 원본의 main 조상 관계를 확인했다. .git/rosy-land/5febd43c53f58bf9d59a6cb893465f34675f5624.json의 sha/base·5개 invocation/log 경로가 일치한다.
+- 재시도 native 세션99711 exit0, 1round. main base4b2cb988cc649681cae2ebd4d8451cc670b6edf8에 통합한 최종5febd43c53f58bf9d59a6cb893465f34675f5624와 두 원본의 main 조상 관계를 확인했다. .git/rosy-land/commit 5febd43c53f58bf9d59a6cb893465f34675f5624.json의 sha/base·5개 invocation/log 경로가 일치한다.
 - 선행249passed. 영향 묶음10596passed/537skipped,4731passed/119skipped,5584passed/317skipped, 실제 opt-in Chromium161passed+3passed. 영향 합계21075passed/973skipped, 비교기5개 모두 NEW/known/flaky0. 첫 실패 실행은 앞서 별도 보존했고 이번 전체 성공으로 덮어 쓰지 않는다.
 - merged-account-rollout-5febd43c53.bundle:220379bytes, SHA2566795b56e395048e3d7942cf680b53b1f69b3d67889b1ba3893323552fb6c4c6f. exact ref·git bundle verify·PACK SHA1 일치 확인. 기존 base a804896e58fbef93cd3ef98d210f175b367d9822를 필요로 하는 증분 복구본이다.
 - fresh judge(full=True):removable, 현재 소유자 일치, tracked/untracked/ignored0, lock/orphan 없음. 제거 직전 정확한 폴더 경계·HEAD·브랜치·Git 작업·대기열을 재검사한 뒤 native worktree remove(no force) 성공. 원본 두 브랜치와 fix/retired-account-rollout은 보존했다.
@@ -124,7 +124,7 @@ pytest는 커밋된 SHA를 원격 PC에서만 실행한다. RED 로그는 %TEMP%
 
 ### Pilot 착지 완료
 
-- fix/retired-pilot-fixtures가 a27b980c7cb780b042ba6a85b5e541d9e533d823으로 로컬 main에 착지했다. base b9828f13bd7ee8dcd62d055ff049f29294813991, 1라운드, native 세션52890 exit0. 원본43b3e6dcea도 main 조상 관계 확인.
+- fix/retired-pilot-fixtures가 a27b980c7cb780b042ba6a85b5e541d9e533d823으로 로컬 main에 착지했다. base commit b9828f13bd7ee8dcd62d055ff049f29294813991, 1라운드, native 세션52890 exit0. 원본43b3e6dcea도 main 조상 관계 확인.
 - 선행249passed. 영향674passed/163skipped, opt-in Chromium Pilot161passed + OMX SIM3passed. 전체3로그 comparator NEW/known/flaky0, 해당 SHA의 land record3invocations/3logs 일치. 앞서 실제 모델 PC JVM을 검증한81e75d301d 이후 Android source·wrapper 변경은 없었다. 푸시하지 않았다.
 - 이 통합 워크트리는 --from 원본 tip에서 생성하고 main merge만 추가한 경우여서, 제거 전 현재 gateway의 보수적 판정도 따로 확인한다. 원본·통합 브랜치와 검증된 복구본을 보존한다. 나머지3개는 아직 착지 완료로 표시하지 않는다.
 - Pilot 통합 폴더도 제거했다. 자동 gateway는 브랜치 reflog에 commit으로 시작하는 기록이 없는 merge-only 브랜치를 active/72h로 보수적으로 분류했다. 이 판정을 자동 prune 통과로 바꾸거나 메타데이터를 수정하지 않았다. 본 세션이 만든 동일 owner의 작업이고, 정확한 main 조상·land record·clean/비캐시 ignored0·잠금 없음·진행 중 작업/queue 없음·새 복구본을 확인해, 사용자가 이미 요청한 완료 작업 폴더 정리 범위에서 native remove로 대상1개만 처리했다. 원본fix/pilot-native-fixtures와 통합fix/retired-pilot-fixtures는 모두 보존했다.
@@ -132,7 +132,7 @@ pytest는 커밋된 SHA를 원격 PC에서만 실행한다. RED 로그는 %TEMP%
 
 ### OMX Learning 착지 완료
 
-- feat/retired-learning-omx가4b2cb988cc649681cae2ebd4d8451cc670b6edf8로 로컬 main에 착지했다. base a27b980c7cb780b042ba6a85b5e541d9e533d823, 1라운드, native46922 exit0. 원본2dd4d009b9도 main 조상 관계 확인.
+- feat/retired-learning-omx가4b2cb988cc649681cae2ebd4d8451cc670b6edf8로 로컬 main에 착지했다. base commit a27b980c7cb780b042ba6a85b5e541d9e533d823, 1라운드, native46922 exit0. 원본2dd4d009b9도 main 조상 관계 확인.
 - 선행249passed. 영향6호출은3125passed/312skipped,82passed,243passed,345passed,426passed,186passed(총4407passed). 마지막4호출은 실제 opt-in Chromium1200passed·skip0이다. 6로그 comparator NEW/known/flaky0 및 exact SHA land record6invocations/6logs 확인. 앞선 focused11/187 검증과 이 수치를 합쳐 고유 시험 수로 계산하지 않는다.
 - 이 세션 소유 폴더merge-learn-omx는 canonical judge(full=True)의 removable·dirty0·비캐시 ignored0·잠금 없음, 정확한 main 조상·backup ref를 확인한 뒤 native remove했다. 원본·통합 브랜치는 보존했다.
 - 복구본 merged-learning-omx-4b2cb988cc.bundle(150143bytes, SHA256 b3934dbb007cd93e14df96d237a1daf8afbd5d1c54de4785acfbf0412d01cbb2), bundle verify·PACK checksum·exact ref 통과. 기존a804896e58 객체가 필요한 증분 복구본이다. 물리 카메라 정확도·학습 품질·실물 수용·운영 배포는 검증하지 않았다.
@@ -143,4 +143,4 @@ pytest는 커밋된 SHA를 원격 PC에서만 실행한다. RED 로그는 %TEMP%
 - 공용 대기열 선행6개는 다른 세션 소유다. 앞선 fix/port-fleet-small이 27개 외부 로그 중24번째 시험 묶음을 실행 중인 것을 읽기 전용으로 확인했다. 다른 세션의 표·프로세스·순서를 변경하지 않는다. 현재 네 작업의 준비·focused 검증은 main 착지 완료를 뜻하지 않는다.
 - 이후 동료 fix/port-fleet-small 착지로 main이9684c844b3으로 진행했고 CI 이식이 대기열 맨 앞에서 실제 시험 중이다. 자체 네 작업은 기본180분 대기 제한을 유지한다. 아직 자체 main 착지를 확인하지 않았으므로 완료로 표시하지 않는다.
 - CI 이식도 bc2239c2f33a78f2bdb76a475015302a0ea01b52로 착지했다. 두 host/policy 원본의 전체 병합 preview는 아직 각각109/99파일 충돌이며, 두 원본 트리에는 현재 main의 같은 경로에 없는294개 파일(Station 수명주기·native map authority·배선 및 시험 포함)이 있다. 이 개수에는 이동된 파일도 포함되므로294개가 모두 기능 누락이라는 뜻은 아니다. 주제 구현이 이미 main이라는 독립 검토와 전체 upstream 이력 통합 여부를 구분한다. 현재 활성 origin-sync/port 작업과 겹치는 변경을 이 두 topic 이름으로 대량 되돌리거나, blanket ours merge로 버리지 않는다.
-- 동료 docs/port-collab-pipeline도 bd3c9fe3e4ca91ba4cca4f12dd8d92ef9c1fec8c로 착지했다. 자체 첫 작업은 refactor/omx-pilot-sim-unit 뒤2번까지 진행했다. 자체 대기열의4개 SHA는 순서대로81e75d301dcd9c4a4c576487c3be067ea6d33b9f,052ddf203bf272d5ae41afbd3367bd58a105e042,c453ddc0ca57e0887c0a95acbf18c54e0ba3c302,94b123f8bef6c01ba93e2a51e08dc9f8f1ada640이며, 해당 원격 land native 세션은52890/72916/46922/65691이다. root의 감시 스크립트 종료는 이 native 세션을 종료하지 않는다.
+- 동료 docs/port-collab-pipeline도 bd3c9fe3e4ca91ba4cca4f12dd8d92ef9c1fec8c로 착지했다. 자체 첫 작업은 refactor/omx-pilot-sim-unit 뒤2번까지 진행했다. 자체 대기열의4개 SHA는 순서대로81e75d301dcd9c4a4c576487c3be067ea6d33b9f,commit 052ddf203bf272d5ae41afbd3367bd58a105e042,c453ddc0ca57e0887c0a95acbf18c54e0ba3c302,94b123f8bef6c01ba93e2a51e08dc9f8f1ada640이며, 해당 원격 land native 세션은52890/72916/46922/65691이다. root의 감시 스크립트 종료는 이 native 세션을 종료하지 않는다.

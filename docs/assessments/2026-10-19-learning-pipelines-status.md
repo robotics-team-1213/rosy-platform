@@ -21,7 +21,7 @@
 ## 2. 조사 범위와 근거의 읽는 법
 
 - 현재 소스, 관련 시험 코드, ADR, 검증 기록을 읽었다. 제품 코드와 설정은 수정하지 않았다.
-- `rosy-platform` 조사 시작 HEAD는 `a804896e58fbef93cd3ef98d210f175b367d9822`, `rosy-vault`는 `69a4d03`이었다. 공유 작업 공간의 스냅샷이며 운영 설치 버전과 동일하다고 가정하지 않았다.
+- `rosy-platform` 조사 시작 HEAD는 commit `a804896e58fbef93cd3ef98d210f175b367d9822`, `rosy-vault`는 `69a4d03`이었다. 공유 작업 공간의 스냅샷이며 운영 설치 버전과 동일하다고 가정하지 않았다.
 - 이번 점검에서 pytest·GPU 학습·Gazebo를 새로 실행하거나 원격 호스트·실물 장치에 접속하지 않았다. 아래 성능·통과 수치는 해당 날짜의 보존 기록이다.
 - CORE–LeRobot 검증 manifest의 원시 로그 **25/25개**, 후속 착지 manifest의 원시 로그 **30/30개**를 로컬 보존본과 SHA-256으로 대조해 모두 일치함을 확인했다. 이는 기록의 보존 무결성 확인이며 현재 HEAD의 재시험 결과가 아니다.
 - `STATUS.md`는 모듈별 집계다. 오래된 HOLD 설명만으로 최근 부분 구현이 없다고 판단하지 않았으며, ADR의 Proposed 상태를 구현 완료나 승인 완료로 해석하지 않았다.
@@ -195,7 +195,7 @@ Isaac native 실험에서는 기존 PathFollower의 yaw gain을 tabular Q-learni
 - 같은 잠금 안에서 기존 `device_tune.py session`을 호출하도록 연결했다. 카메라 준비 실패 시 녹화를 시작하지 않으며, 녹화 명령의 인자·종료 코드를 보존한다. 별도 보정 구현은 만들지 않았다.
 - 독립 코드 검토에서 감시 스레드의 종료 경합을 발견했다. 녹화 시작 실패 뒤 카메라 서비스를 복구하면 남아 있던 감시가 이를 녹화 프로그램으로 오인해 복구된 값을 다시 쓸 수 있었다. 이를 재현하고 공용 `Session`에서 감시 취소·회수 후 카메라 복구·서비스 재시작 순서로 수정했다.
 - 최종 전체 시험: **235 passed / 4 skipped / 1 warning**. 건너뛴 네 건은 `ROSY_PLATFORM_DIR` 미설정으로 실행하지 않은 진짜 Fleet 통합 시험이다. 경고는 기존 Starlette/AnyIO deprecation이다. 수정 후 독립 재검토에서 추가 중요 지적은 없었다.
-- 저장소: `rosy-vault`, 브랜치 `fix/learning-recording-pipeline`, 커밋 `63af65695f1bee71eb4988decd2ee0af1d40d5d7`.
+- 저장소: `rosy-vault`, 브랜치 `fix/learning-recording-pipeline`, 커밋 commit `63af65695f1bee71eb4988decd2ee0af1d40d5d7`.
 - 작업 공간: `C:/Users/SERIGGG/AppData/Local/Temp/rosy-learning-closure/vault`. 공유 main 병합·push·실물 실행은 수행하지 않았다.
 
 새 녹화 진입점은 운영자가 수용 조건을 갖춘 장치 PC에서 다음 형태로 사용한다. 이 점검에서는 녹화 명령을 실제 장치에 실행하지 않았다.
@@ -209,10 +209,10 @@ python tools/record.py <workcell> --config <device.yaml> --calibration <calibrat
 - 기존 AI 의견 프롬프트는 차선 안쪽 구역을 기준으로 한다. 배치 CLI와 직접 worker가 이를 전체 도로면(`road_surface/1`)에도 적용할 수 있는 빈틈을 수정했다. 지원하지 않는 의미는 모델을 호출하기 전에 거부하며 기존 도로면 검수 보조 제한을 유지한다.
 - 실제 클래스 내용·선언된 의미·클래스 출처 hash·프롬프트와 출력 형식의 hash를 의견 보고서에 묶었다. 이미지·마스크가 같아도 이 의미가 바뀌면 이전 의견을 최신으로 사용하지 않는다. 기존 보고서와 사람 라벨·승인은 보존한다.
 - 독립 검토가 표시용 기본 이름과 저장된 원본 클래스 사이의 hash 불일치를 찾아냈다. 원본 클래스로 통일하고, 표시 이름을 생략한 기존/명시적 current-region 클래스 각각의 비동기 발행→읽기 회귀를 추가했다.
-- 최종 집중·HTTP·실제 Chromium 브라우저 시험: 커밋 `935c7b841c88925c30b8f419e85dd779d6ce2fa8`, **55 passed / 0 skipped**, runner exit 0, known_failures NEW 0.
+- 최종 집중·HTTP·실제 Chromium 브라우저 시험: 커밋 commit `935c7b841c88925c30b8f419e85dd779d6ce2fa8`, **55 passed / 0 skipped**, runner exit 0, known_failures NEW 0.
 - 같은 최종 커밋의 전체 영향 범위 perception·저장소 guard 회귀: AI 역할의 원격 시험 PC에서 **2,256 passed / 62 skipped / 36 warnings**, 733.05초, runner exit 0, known_failures exit 0(NEW/known/flaky 모두 0). 두 실행 모두 실제 Chromium opt-in을 켰으며 순차 실행했다. 최종 독립 검토에서 추가 중요 지적은 없었다.
 - 건너뛴 62건은 미검증이다. 실행기가 뒤에 붙인 `-rfE`로 요청한 `-rs`가 덮여 개별 skip 사유가 원시 로그에 남지 않았다. 소스의 선택적 의존성 조건을 실제 62건의 사유로 추정해 집계하지 않았다. 직접 변경한 집중·HTTP·브라우저 55건은 모두 실행됐다.
-- 브라우저 시험 한 건은 변경 전 기준 `a27b980c7cb780b042ba6a85b5e541d9e533d823`에서도 동일하게 실패했다. 제품이 요구하는 클래스 선택을 시험이 생략한 것이어서 UI의 기존 클래스 선택 한 단계를 추가했다. 미저장 제스처·AI 차단·결과 재적재 검사는 유지했으며 독립 검토에서 확인했다.
+- 브라우저 시험 한 건은 변경 전 기준 commit `a27b980c7cb780b042ba6a85b5e541d9e533d823`에서도 동일하게 실패했다. 제품이 요구하는 클래스 선택을 시험이 생략한 것이어서 UI의 기존 클래스 선택 한 단계를 추가했다. 미저장 제스처·AI 차단·결과 재적재 검사는 유지했으며 독립 검토에서 확인했다.
 - 작업 공간: `D:/Dev/Robot/Rosy/rosy-platform/.worktrees/learning-review-semantics`, 브랜치 `fix/learning-review-semantics`. main 병합·push·운영 모델 호출·장치 활성화는 수행하지 않았다. 시험의 모델 응답은 대역이다.
 
 최종 원격 원시 로그와 실제 호출 인자·runner 결과·기존 실패 비교는 `C:/Users/SERIGGG/AppData/Local/Temp/rosy-learning-closure/mobile/`에 보존했다. 각 실행 폴더의 `runner.txt`, `run-1.txt`, `known-failures.txt`를 함께 본다. 아래 두 원시 로그의 SHA-256과 성공 요약·비교 결과를 보고서 작성자가 다시 읽어 확인했다. 수정 전 실패·기준 커밋의 브라우저 실패·중단한 중간 회귀도 보존하며 최종 통과에 합산하지 않았다.

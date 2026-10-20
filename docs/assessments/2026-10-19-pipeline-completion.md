@@ -25,8 +25,8 @@
 
 ### 조사 기준
 
-- 플랫폼 소스 조사 기준 HEAD: `bd3c9fe3e4ca91ba4cca4f12dd8d92ef9c1fec8c`.
-- `rosy-vault` 조사 기준 HEAD: `c5da5c36f0046eb7b0bccdf1b5367b98e4720cad`.
+- 플랫폼 소스 조사 기준 HEAD: commit `bd3c9fe3e4ca91ba4cca4f12dd8d92ef9c1fec8c`.
+- `rosy-vault` 조사 기준 HEAD: commit `c5da5c36f0046eb7b0bccdf1b5367b98e4720cad`.
 - 현재 소스의 주요 진입점, 관련 시험 파일 위치, 모듈 상태표, 계획·검증 문서, OMX SIM JSON receipt, 기존 학습·주행 점검 보고서를 확인했다.
 - 활성 워크트리 목록도 확인했다. 모든 워크트리의 변경과 외부 원시 로그를 전수 감사한 것은 아니다. 주행 워크트리의 실행 결과는 해당 실행 SHA의 증거로만 사용했다.
 - `62971299f…`의 OMX SIM 성공 revision과 `4ee3f3aaa…` candidate가 조사 HEAD의 조상임을 git으로 확인했다. 이는 현재 main 이력에 포함됐다는 뜻이며 최신 HEAD를 다시 실행했다는 뜻은 아니다.

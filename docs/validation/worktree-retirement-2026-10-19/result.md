@@ -25,25 +25,25 @@
 
 | 이름 | 보존할 브랜치 | 보존 SHA |
 |---|---|---|
-| cal-pr | feat/measured-camera-calibration-pr | 2a401b5ed0b6079cc466d21f39c37c75992f1f95 |
-| wt-rules | refactor/worktree-rules | 7923905dea52f2041bdf014616db0b3cc3092f7d |
-| pre-grasp | feat/omx-pre-grasp-source-check | 9806ffc49dfaa2bedd30b4ef858aa4bf2c969a38 |
-| camera-evidence | feat/device-trial-camera-evidence | dc18ae0e8e1d42d646c713e7782ba7969ba4c456 |
-| wt-map-lap-9c7d70 | fix/gazebo-map-lap | 83b83a782a1dd60fdef4d26eac828dada87baafe |
-| device-trial | feat/device-trial-profile-identity | 9a6cebce3c13085cf3099e5d40ea24dc15be2a6e |
-| trip-prod-open | feat/trip-jobs-production-open | 9ad766d3fb04b8384c1dc05296038dc613638ecd |
-| omx-native-pilot | feat/omx-native-pilot-sim | d83f8f383751dd6a26ef49cd732df8e39017daaa |
-| sim-closed-loop | feat/omx-sim-act-closed-loop | b44ed031adda685835dc4efe318084c91662699c |
-| sim-il-int | feat/omx-sim-il-loop | a03e69d1fb2aa51f76d5177919b0568af8bcc4fd |
-| sim-il-run | feat/omx-sim-il-run | f83db056894a196336159de2f76247513c943266 |
-| policy-gov | feat/omx-policy-governance | d03c2802c8eb96cc4b4d29a032cfd8547d6726f4 |
-| camera-calibration | docs/camera-calibration-lifecycle | 899aa28ad1f3a4d80900aebe48bc3142986dbf51 |
-| fleet-net-load | fix/fleet-network-load | 5f90ae64e16926e087840bd6c341fce3d902bedb |
-| webrtc-plan | feat/webrtc-camera-migration | 1b30615099590b68417d83d63cfd1ffa65033842 |
-| d769-learned-follow | feat/d769-learned-follow | 9a9d05d67e754d8e5feadb66a870785d35a9130e |
-| pinky-lap-goal | feat/pinky-lap-runtime | 59bb7c8f23bc771abb76667f8d24628596b54127 |
-| size-ratchet | refactor/size-ratchet-d766 | b8fdf1725c23ed682a3518ab99042fef3e6d82a7 |
-| perception-agents-pr | docs/perception-claude-md-into-agents-pr | 2298f5bf8cc46a07aab7f7416451e6619325bdcb |
+| cal-pr | feat/measured-camera-calibration-pr | commit 2a401b5ed0b6079cc466d21f39c37c75992f1f95 |
+| wt-rules | refactor/worktree-rules | commit 7923905dea52f2041bdf014616db0b3cc3092f7d |
+| pre-grasp | feat/omx-pre-grasp-source-check | commit 9806ffc49dfaa2bedd30b4ef858aa4bf2c969a38 |
+| camera-evidence | feat/device-trial-camera-evidence | commit dc18ae0e8e1d42d646c713e7782ba7969ba4c456 |
+| wt-map-lap-9c7d70 | fix/gazebo-map-lap | commit 83b83a782a1dd60fdef4d26eac828dada87baafe |
+| device-trial | feat/device-trial-profile-identity | commit 9a6cebce3c13085cf3099e5d40ea24dc15be2a6e |
+| trip-prod-open | feat/trip-jobs-production-open | commit 9ad766d3fb04b8384c1dc05296038dc613638ecd |
+| omx-native-pilot | feat/omx-native-pilot-sim | commit d83f8f383751dd6a26ef49cd732df8e39017daaa |
+| sim-closed-loop | feat/omx-sim-act-closed-loop | commit b44ed031adda685835dc4efe318084c91662699c |
+| sim-il-int | feat/omx-sim-il-loop | commit a03e69d1fb2aa51f76d5177919b0568af8bcc4fd |
+| sim-il-run | feat/omx-sim-il-run | commit f83db056894a196336159de2f76247513c943266 |
+| policy-gov | feat/omx-policy-governance | commit d03c2802c8eb96cc4b4d29a032cfd8547d6726f4 |
+| camera-calibration | docs/camera-calibration-lifecycle | commit 899aa28ad1f3a4d80900aebe48bc3142986dbf51 |
+| fleet-net-load | fix/fleet-network-load | commit 5f90ae64e16926e087840bd6c341fce3d902bedb |
+| webrtc-plan | feat/webrtc-camera-migration | commit 1b30615099590b68417d83d63cfd1ffa65033842 |
+| d769-learned-follow | feat/d769-learned-follow | commit 9a9d05d67e754d8e5feadb66a870785d35a9130e |
+| pinky-lap-goal | feat/pinky-lap-runtime | commit 59bb7c8f23bc771abb76667f8d24628596b54127 |
+| size-ratchet | refactor/size-ratchet-d766 | commit b8fdf1725c23ed682a3518ab99042fef3e6d82a7 |
+| perception-agents-pr | docs/perception-claude-md-into-agents-pr | commit 2298f5bf8cc46a07aab7f7416451e6619325bdcb |
 
 보류 사유와 이전 시험 기록은 worktree-cleanup-plan-2026-10-18.md 및 worktree-cleanup-followup-2026-10-19.md에 있다. 이 목록은 소스·실물 수용이 완료됐다는 뜻이 아니다.
 

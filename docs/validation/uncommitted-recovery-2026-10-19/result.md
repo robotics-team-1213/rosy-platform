@@ -6,12 +6,12 @@
 
 | 저장소 | 최종 로컬 main | 검증·상태 |
 | --- | --- | --- |
-| rosy-platform | `6ecf921d912e170fd6132697f09d1d5e60615b3e` | 공식 FULL 26개 실행 결과 합계 29,606 passed / 1,944 skipped / 0 failed, NEW·known·flaky 모두 0. 별도 architecture/harness 249 passed. 이번 착지 41커밋. |
+| rosy-platform | commit `6ecf921d912e170fd6132697f09d1d5e60615b3e` | 공식 FULL 26개 실행 결과 합계 29,606 passed / 1,944 skipped / 0 failed, NEW·known·flaky 모두 0. 별도 architecture/harness 249 passed. 이번 착지 41커밋. |
 | rosy-vault | `c5da5c3` | 기능·후속 수정 포함. 검토한 변경 226 passed / 4 skipped. 이후 다른 세션의 PR 2 머지도 확인. 작업 트리 clean. |
 | rosy-ops | `249861b` | 기존 PR 1 MERGED와 config CI 성공, 동일 tree를 확인하고 로컬 main을 fast-forward. 작업 트리 clean. |
 | rosy-docs | `2c130ee` | 미처리 변경 없음. 작업 트리 clean. |
 
-Platform FULL의 수치는 실행별 합계이며 고유 테스트 개수가 아니다. 선택된 브라우저 회귀 4개 묶음은 총 850 passed / 0 skipped다. 최종 공식 검증 기록은 `Rosy/rosy-platform/.git/rosy-land/6ecf921d912e170fd6132697f09d1d5e60615b3e.json`에 있으며 invocation 26개와 기준 main `46bb5a840e28f28211c283e22a327bdc59031087`를 기록한다. 다른 세션의 협업 문서, pilot simulation 분리, retired fixture·learning·account·review 복구 및 Pinky 변경도 최종 main에 포함됐다.
+Platform FULL의 수치는 실행별 합계이며 고유 테스트 개수가 아니다. 선택된 브라우저 회귀 4개 묶음은 총 850 passed / 0 skipped다. 최종 공식 검증 기록은 `Rosy/rosy-platform/.git/rosy-land/commit 6ecf921d912e170fd6132697f09d1d5e60615b3e.json`에 있으며 invocation 26개와 기준 main `46bb5a840e28f28211c283e22a327bdc59031087`를 기록한다. 다른 세션의 협업 문서, pilot simulation 분리, retired fixture·learning·account·review 복구 및 Pinky 변경도 최종 main에 포함됐다.
 
 Platform main의 추적 파일은 깨끗하다. 미추적 생성 로그 `aff1.log`, 이미 반영된 원본 WIP, 캐시·잠금 파일과 과거 증거는 보존했다. 중복·생성물이나 과거 검증 기록을 현재 결과처럼 바꾸는 수정은 커밋하지 않았다. 복구 대상과 제외 근거는 아래 진행 기록에 남겼다.
 
@@ -37,20 +37,20 @@ Platform main의 추적 파일은 깨끗하다. 미추적 생성 로그 `aff1.lo
 
 이 절이 아래 최초 조사·중간 기록보다 최신이다. Vault와 Ops의 로컬 main 반영은 끝났다. Platform은 복구 커밋을 통합했으며 공식 전체 회귀·착지는 아직 진행 중이다.
 
-최신 검증 커밋은 `e698494f3a366218963e714e7d0a5468a6442724`다. 공통 교차·G2 원격 재검증 **339 passed, 0 skipped, NEW 0**을 확인했다(`D:/Dev/rosy-scratch/recovery-final-cross-gapfix/run-1.txt`). 이전 5fb 재검증에서 기능·보안/G2는 통과했으나 중복 ADR gap으로 두 harness 검사가 실패해, 이미 파일·색인이 있는 D-784/D-786/D-788의 예약 5줄만 제거한 후 같은 검증을 재실행했다. 현재 `tools/land.py --tests auto --queue-timeout 600`의 정상 FIFO FULL 착지가 진행 중이다. 아직 main 머지 완료가 아니다.
+최신 검증 커밋은 commit `e698494f3a366218963e714e7d0a5468a6442724`다. 공통 교차·G2 원격 재검증 **339 passed, 0 skipped, NEW 0**을 확인했다(`D:/Dev/rosy-scratch/recovery-final-cross-gapfix/run-1.txt`). 이전 5fb 재검증에서 기능·보안/G2는 통과했으나 중복 ADR gap으로 두 harness 검사가 실패해, 이미 파일·색인이 있는 D-784/D-786/D-788의 예약 5줄만 제거한 후 같은 검증을 재실행했다. 현재 `tools/land.py --tests auto --queue-timeout 600`의 정상 FIFO FULL 착지가 진행 중이다. 아직 main 머지 완료가 아니다.
 
 다른 세션의 추가 착지: Pilot fixture `a27b980c7c`, 학습·OMX `4b2cb988cc`의 공식 기록과 main ancestry를 확인했다. 최초 조사 때의 “학습 구현이 main에 없음”은 당시 상태를 뜻하며, 이후 동시 세션이 복구한 현재 상태를 부정하는 판정이 아니다. 보존 archive는 조사 시점의 원문·근거로 유지한다.
 
-- 통합 브랜치: `feat/recover-omx-clock`, 초기 통합 tip `610c96e4da2cbb576fe5b9874765908bd5f6b2b4`. 현재 Account 복구 커밋과 최신 main을 더 합치고 아래 검사 보완을 진행 중이므로 이 SHA는 최종 착지 SHA가 아니다.
+- 통합 브랜치: `feat/recover-omx-clock`, 초기 통합 tip commit `610c96e4da2cbb576fe5b9874765908bd5f6b2b4`. 현재 Account 복구 커밋과 최신 main을 더 합치고 아래 검사 보완을 진행 중이므로 이 SHA는 최종 착지 SHA가 아니다.
 - 이 tip에 scratch runtime `1f162132b6`, 출력 guard `6493df59dd`, ledger guard `b7205305c7`, 가이드 네 묶음 `978f135802`, `d7f7a300f8`, `7aa88ef48f`, `b1aac71d9`, 학습 원문 `3819ea7773`, OMX 계약 `cd1cef66a0`, native `bb842ece63`, G2·증거·계획 `fc7a1fafb`가 모두 ancestor임을 확인했다.
 - 통합 중 코드 충돌은 없었다. 학습 기록의 `docs/logs.md`와 생성 index 충돌을 해결했고, 통합 전 전체 로그 817,693문자가 줄바꿈 정규화 후 prefix로 그대로 보존됨을 독립 확인했다. 원문 archive 여섯 파일 194,702 bytes의 hash도 보존됐다.
 - scratch·학습 여덟 tip의 변경 경로 100건을 통합본의 blob과 대조했다. 병합한 `docs/logs.md`와 생성 `docs/index.md` 두 경로 외에는 모두 원본과 같은 blob이다.
 - Account 선행 판정 정정: logout button의 attrs와 명시적 `setAttribute`는 DOM 동작은 같지만, 기존 `test_helper_created_buttons_name_their_kind`는 후자 형태를 요구한다. 다른 세션의 account 착지 회귀에서 이를 확인했다. 원본 WIP의 명시적 kind 설정은 이 소스 검사에 필요하다. 같은 회귀의 secret guard 9건은 두 Git commit ID와 원래 시험 로그 일곱 개의 일치하는 SHA256임을 독립 확인했다. 기존 exact path/line/value provenance 정책으로 다룰 수 있으며, 스캐너 완화는 필요 없다. 해당 브랜치의 진행 중 시험·파일은 수정하지 않았다.
 - 초기 통합본의 추가 원격 교차 검사는 235 passed / 1 NEW(secret guard)였다. 미등록 공개 해시 12건을 독립 검증했다: vendored STL 2건, canonical kinematics와 URDF 각 1건, 공식 ROBOTIS xacro 2건, 공식 rclpy Jazzy 소스 3건, 보존 학습 원문 Git 참조 3건이 원본과 일치한다. Account의 9건과 함께 기존 exact line-bound provenance에 등록하는 보완과 현재 커밋 재검증을 진행 중이다. 검사 면제 범위를 넓히거나 원문 해시를 지우지 않는다.
 - Account 22경로의 독립 검토는 명령 권한·검증·기록 진실성에 추가 결함을 찾지 않았다. 승인은 위 두 검사 수정과 현재 커밋의 원격 검증을 조건으로 한다. 기존 CORE 로그아웃·영속 revoke queue·Account family revoke 경로를 유지하며 D-807의 설계 수락과 운영 수락은 구분된다.
-- 후속 수정 tip은 `5fb2d93799243082452df62bd1652fbccc038cad`다. Account 원본과 다른 세션의 수정 `4a5d5eef7f`·실패 기록 `3ee7cc06ae`를 모두 ancestor로 보존했다. 해시 자체를 축약·삭제하지 않고 기존 integrity-context 표기를 사용한 수정이며, 결과 UI와 해시 문서는 검토한 peer blob과 정확히 같다. 자체 출처 등록 `d9dcc9a91`은 기존 121건을 바꾸지 않고 검증된 12건만 추가했다(총 133건, account 중복 등록 없음). 두 독립 검토자가 모든 추가 path/line SHA/value 결합을 확인했다. 이 커밋으로 공통 교차 검사와 G2 원격 시험을 다시 진행 중이다.
+- 후속 수정 tip은 commit `5fb2d93799243082452df62bd1652fbccc038cad`다. Account 원본과 다른 세션의 수정 `4a5d5eef7f`·실패 기록 `3ee7cc06ae`를 모두 ancestor로 보존했다. 해시 자체를 축약·삭제하지 않고 기존 integrity-context 표기를 사용한 수정이며, 결과 UI와 해시 문서는 검토한 peer blob과 정확히 같다. 자체 출처 등록 `d9dcc9a91`은 기존 121건을 바꾸지 않고 검증된 12건만 추가했다(총 133건, account 중복 등록 없음). 두 독립 검토자가 모든 추가 path/line SHA/value 결합을 확인했다. 이 커밋으로 공통 교차 검사와 G2 원격 시험을 다시 진행 중이다.
 - 통합 tip의 lint는 오류 0, 경고 33. 공식 safety-review와 size-range 검사를 통과한 뒤 `tools/land.py --tests auto`로 FIFO 맨 뒤에 다시 진입했다. FULL 선택은 유지했다.
-- 앞선 다른 세션의 `docs/port-collab-pipeline`은 `bd3c9fe3e4`, `refactor/omx-pilot-sim-unit`은 `b9828f13bd`로 공식 착지됐다. 각각 main ancestry를 확인했고, 후자는 `.git/rosy-land/b9828f13bd7ee8dcd62d055ff049f29294813991.json`에 검증된 invocation 기록이 있다. 이는 아직 대기 중인 통합본의 검증 완료를 뜻하지 않는다.
+- 앞선 다른 세션의 `docs/port-collab-pipeline`은 `bd3c9fe3e4`, `refactor/omx-pilot-sim-unit`은 `b9828f13bd`로 공식 착지됐다. 각각 main ancestry를 확인했고, 후자는 `.git/rosy-land/commit b9828f13bd7ee8dcd62d055ff049f29294813991.json`에 검증된 invocation 기록이 있다. 이는 아직 대기 중인 통합본의 검증 완료를 뜻하지 않는다.
 - 통합 tip의 ancestry를 확인한 뒤 포함된 개별 브랜치의 중복 land는 아직 대기 중인 것만 취소했다. 시험은 중단하지 않았고, 순서를 건너뛰지 않았으며, 원본 커밋·브랜치는 보존했다.
 - 집중 원격 시험: 계약 545 passed / 7 skipped, 진단 617 / 13, native 100 / 0, topic 36 / 0, G2 103 / 0, 역사 증거 문서 125 / 0, 학습 archive 142 / 0. 모두 NEW 0. 이 결과는 최종 통합 FULL 결과를 대신하지 않는다.
 - G2 종료 시 executor나 clock thread가 정지하지 않으면 clock/context/lock을 보존하고 CLEANUP_HOLD로 끝나도록 고쳤다. 선택적 gripper trace의 steady-clock 샘플 실패도 원래 명령 결과·예외를 바꾸지 않도록 회귀 시험했다. 두 수정은 독립 검토를 받았다.
@@ -62,7 +62,7 @@ Platform main의 추적 파일은 깨끗하다. 미추적 생성 로그 `aff1.lo
 
 - 저장소: `D:/Dev/Robot/rosy-vault`
 - 작업 브랜치: `feat/lerobot-policy`
-- 커밋: `69a4d03c1a3666ccad2679709d51de0b550455c5`
+- 커밋: commit `69a4d03c1a3666ccad2679709d51de0b550455c5`
 - 제목: `feat: add LeRobot policy execution and camera tuning profiles`
 - 범위: 22파일. LeRobot 정책 실행, 안전 드라이버를 통한 그리퍼 관측, 카메라 보정·복원·시작 점검, 콘솔, CLI, 설정, V-018/V-019와 테스트.
 - `main`을 `4fa1d63`에서 위 커밋으로 fast-forward했다. 작업 브랜치와 main의 SHA가 일치함을 확인했다.
@@ -112,7 +112,7 @@ Platform main의 추적 파일은 깨끗하다. 미추적 생성 로그 `aff1.lo
 사용자가 남은 항목과 다른 세션의 변경도 커밋·머지하도록 명시적으로 요청했다. 아래는 2026-10-19 17:15 KST까지의 중간 기록이며, 대기열 진입은 머지 완료가 아니다.
 
 - Vault 후속 5파일은 다른 세션이 `55b0da0`으로 커밋한 것을 검토하고, 전체 시험 226 passed / 4 skipped 후 로컬 main에 fast-forward했다. 이후 다른 세션의 GitHub PR #2 머지로 현재 main은 `c5da5c3`이고 깨끗하다.
-- `rosy-ops`의 staging 브랜치와 origin/main의 tree SHA가 `b75f13a9efbf998ed0758027a202dcd61d58024b`로 일치했다. PR #1이 MERGED이고 config CI가 SUCCESS임을 GitHub CLI로 확인했다. 로컬 main을 이미 머지된 `249861b`까지 fast-forward했다. 운영 상태는 HOLD이며 배포하지 않았다.
+- `rosy-ops`의 staging 브랜치와 origin/main의 tree SHA가 commit `b75f13a9efbf998ed0758027a202dcd61d58024b`로 일치했다. PR #1이 MERGED이고 config CI가 SUCCESS임을 GitHub CLI로 확인했다. 로컬 main을 이미 머지된 `249861b`까지 fast-forward했다. 운영 상태는 HOLD이며 배포하지 않았다.
 - `auto-state`의 미추적 4,237파일 전부가 기존 커밋 `f3e0db407f`의 같은 경로와 내용이 같다. 389파일은 blob이 그대로 일치하고 3,848파일은 CRLF를 LF로 정규화하면 일치한다. 그 외 새 내용은 0파일이다. 추적된 두 sample log 삭제는 fixture 브랜치의 복구 흔적이며 main에 제품 코드로 다시 넣지 않는다.
 - `d427-bulk-check`의 15 미추적 파일은 모두 Gradle/Kotlin 캐시·잠금·오류 로그다. 제품 소스나 사용자 데이터 변경으로 커밋하지 않는다. `fleet-ship`의 설정 lock과 main의 `aff1.log`도 실행 부산물로 보존한다.
 - `d427-bulk`의 CLI 테스트 개선과 `v13-map-labels`의 여섯 파일 책임은 현재 main의 더 최신 구현에 이미 반영됐다. 구체적인 현행 경로·커밋과 학습 계획 원문은 아래 learning 복구 커밋의 검증 문서에 기록했다.

@@ -19,7 +19,7 @@
 
 원본 source commit `91f14c997fcd1c509b2ee6bb9f72b2fdc8548090`, model revision
 `lane-seg-20261010-451f0f85`, ONNX SHA256
-`451f0f85b390d6601dc38c60865ed721936ff407845f7a8196099ae9a110f3d2`를 기준으로 삼았다.
+commit `451f0f85b390d6601dc38c60865ed721936ff407845f7a8196099ae9a110f3d2`를 기준으로 삼았다.
 기존 소스 archive와 모델 보존본을 다시 hash했다.
 
 원래 성공한 모델 PC에서 같은 인자(GPU render, drivable, lap, stall 60s, record,
@@ -74,13 +74,13 @@ band 0.01m를 사용한다. 자원 예약을 절반만 세는 변경, run_scenar
 첫 source candidate commit `d9b706e204a08f87d078fc67e1149f9b893a8854`.
 FULL 회귀에서 API 변경 이력 표 행의 누락을 찾아 선행 브랜치의 commit `681c31d67`에서
 보완하고 후속 브랜치에 병합했다. 이 시점의 candidate commit은
-`13f44844af68b94621c0897b28d9259f20d4dab1`이다. 첫 후보와의 차이는 API 변경 이력
+commit `13f44844af68b94621c0897b28d9259f20d4dab1`이다. 첫 후보와의 차이는 API 변경 이력
 행·기록·생성 index 세 파일이며 runtime·테스트는 동일하다.
-그 뒤 `ca49303cd0a51e2f640fb30c7b574c459b19af95`에서 당시 main
-`4b2cb988cc649681cae2ebd4d8451cc670b6edf8`를 병합했다. 이 병합에는 별도 OMX 학습·
+그 뒤 commit `ca49303cd0a51e2f640fb30c7b574c459b19af95`에서 당시 main
+commit `4b2cb988cc649681cae2ebd4d8451cc670b6edf8`를 병합했다. 이 병합에는 별도 OMX 학습·
 카메라 수집/UI 변경이 포함되며 앞의 첫 두 SIM과 같은 전체 소스라고 표기하지 않는다.
 최종 수정 브랜치는 `fix/pinky-crosswalk-front-stop`, 소스 후보는
-`bafb32dc1085b7112427f5209642330154570676`다. 원본 네 단계 브랜치도 보존한다.
+commit `bafb32dc1085b7112427f5209642330154570676`다. 원본 네 단계 브랜치도 보존한다.
 최종 보존 head `4d92cc1a8146f9074f73bf36464168dae442c571`에는 이후 검증 문서·
 기록·생성 index 변경만 있다. 원격 FULL은 runtime 후보 `bafb32dc10`을 지정하며,
 이 문서 delta는 최종 head의 별도 원격 guard로 검증했다.
@@ -180,7 +180,7 @@ run ID `sim-13f44844af-9223d8`는 west 구간에서 stall로 실패했다. 첫 �
 
 인식 로그에서 LiDAR 전방 0.114m가 기존 front-stop 임계값 0.149m보다 가까웠지만,
 뒤의 crosswalk-straight 분기가 기존 pivot 선택을 지우고 있었다. 회귀 시험으로 이
-우선순위 오류를 먼저 재현했고, `bafb32dc1085b7112427f5209642330154570676`에서
+우선순위 오류를 먼저 재현했고, commit `bafb32dc1085b7112427f5209642330154570676`에서
 전방 막힘이 없는 경우에만 직진 유지를 적용하도록 조건 한 줄을 바꿨다. 모델·임계값·
 CORE 권한은 바꾸지 않았다. 전방이 열리면 기존 직진 유지로 복귀하는 회귀와 CORE의
 관찰·사람·관측 불명 대기에서 양 축 정지하는 회귀도 포함한다.
@@ -191,10 +191,10 @@ CORE 권한은 바꾸지 않았다. 전방이 열리면 기존 직진 유지로 
 
 | 두 번째 통합 실행 파일 | SHA256 |
 |---|---|
-| run.txt | `26ebff6ae1ad40495d97f5946f2a52633e88f1ad61478c1c0e8941f9599c4c71` |
-| out/trips/result.json | `d6a9630623793ffbee13ba233872c197cae92b069f86c4f6ef6d86912bb35fcf` |
-| out/trips/observations.jsonl | `82fbd6188b24cafc404156c8d109e16d59b4cfd3507c90d0578b57a156d6a569` |
-| out/trips/launch.log | `58231dc53e2399c76373dc9b5d68ac7b67ae4d80b889d0d2d9b1c4c7a4314802` |
+| run.txt | commit `26ebff6ae1ad40495d97f5946f2a52633e88f1ad61478c1c0e8941f9599c4c71` |
+| out/trips/result.json | commit `d6a9630623793ffbee13ba233872c197cae92b069f86c4f6ef6d86912bb35fcf` |
+| out/trips/observations.jsonl | commit `82fbd6188b24cafc404156c8d109e16d59b4cfd3507c90d0578b57a156d6a569` |
+| out/trips/launch.log | commit `58231dc53e2399c76373dc9b5d68ac7b67ae4d80b889d0d2d9b1c4c7a4314802` |
 
 ### 수정본의 코너 정체와 다음 작업
 
@@ -218,10 +218,10 @@ LOCALIZED를 유지했고 ring_n 진행 3.420m에서 stall했다. 경유점 최�
 
 | 수정본 실행 파일 | SHA256 |
 |---|---|
-| run.txt | `ac469df98c41fa79a9bbb44a699c4a70b609b53fef813d34f45671216c3eba4c` |
-| out/trips/result.json | `b96670601bc439ee0f4dffe0d4ad0912bd72a96c3c12676fa0c5497ab4bd10df` |
-| out/trips/observations.jsonl | `56bac4a99a67a7ffd42580532fb31a22faf75f10a0864c3eecac1c6a7fd367df` |
-| out/trips/launch.log | `d8fc5be5b6a29381f3b9d741b219823ede629651010dc830d5d3d1acbd08e1ec` |
+| run.txt | commit `ac469df98c41fa79a9bbb44a699c4a70b609b53fef813d34f45671216c3eba4c` |
+| out/trips/result.json | commit `b96670601bc439ee0f4dffe0d4ad0912bd72a96c3c12676fa0c5497ab4bd10df` |
+| out/trips/observations.jsonl | commit `56bac4a99a67a7ffd42580532fb31a22faf75f10a0864c3eecac1c6a7fd367df` |
+| out/trips/launch.log | commit `d8fc5be5b6a29381f3b9d741b219823ede629651010dc830d5d3d1acbd08e1ec` |
 
 ## 아직 별도인 것
 

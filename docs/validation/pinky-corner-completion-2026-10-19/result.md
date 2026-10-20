@@ -4,13 +4,13 @@
 
 ## 현재 판정
 
-현재 후보 `e434578bccbc938d2abb27cf6d5d319dd668aa83`는 곡선 길이의 보수적 하한과 출구·목표의 전방 x조건을 구분한다. 독립 안전 검토, 관련 원격 **140 passed / NEW 0**, 영향 범위 **6,832 passed / 408 skipped / NEW 0**을 통과했다. 같은 소스의 SIM은 **1회 PASS / 1회 FAIL**이다. 두 번째 실행에서 새 정렬 분기를 실제 사용한 뒤 관측 목표와 현 차로 안내의 약 45° 불일치로 기존 `realign` 보호가 정지했다. **반복 완주와 전체 주행 파이프라인은 계속 HOLD다.**
+현재 후보 commit `e434578bccbc938d2abb27cf6d5d319dd668aa83`는 곡선 길이의 보수적 하한과 출구·목표의 전방 x조건을 구분한다. 독립 안전 검토, 관련 원격 **140 passed / NEW 0**, 영향 범위 **6,832 passed / 408 skipped / NEW 0**을 통과했다. 같은 소스의 SIM은 **1회 PASS / 1회 FAIL**이다. 두 번째 실행에서 새 정렬 분기를 실제 사용한 뒤 관측 목표와 현 차로 안내의 약 45° 불일치로 기존 `realign` 보호가 정지했다. **반복 완주와 전체 주행 파이프라인은 계속 HOLD다.**
 
 최종 문서 head `db2b67580a`는 문서·배포 경계 원격 검사 **239 passed / NEW 0**이다. runtime은 위 e434 소스와 같다. [저장소 검증 기록](../../../.worktrees/pinky-rl-binding/docs/validation/pinky-corner-lifetime-2026-10-19/result.md)에 원시 출력 위치·hash·실행별 한계를 보존했다.
 
 후속 상태 수명 후보 `68725ef0f4`는 관련 원격 **138 passed**, 영향 범위 **6,830 passed / 408 skipped / NEW 0**을 통과했지만 SIM은 2.408m 정체로 실패했다. 곡선 경로 길이를 전방 x거리로 판단하던 오류를 추가 RED로 결속했다.
 
-앞선 후보 `00e9913f2988e27aff2acef8cee29c6cbfcd7974`의 관련 원격 회귀는 **125 passed / NEW 0**, 영향 범위 회귀는 **6,701 passed / 408 skipped / NEW 0**이었다. 이 후보는 정렬 상태 수명 문제로 SIM에 실패했다. 해당 runtime은 `8949ff012507a37d712b880fc09fc3258e88e4d0`에 있고 후속 변경은 시험 fixture 한 줄이었다.
+앞선 후보 commit `00e9913f2988e27aff2acef8cee29c6cbfcd7974`의 관련 원격 회귀는 **125 passed / NEW 0**, 영향 범위 회귀는 **6,701 passed / 408 skipped / NEW 0**이었다. 이 후보는 정렬 상태 수명 문제로 SIM에 실패했다. 해당 runtime은 `8949ff012507a37d712b880fc09fc3258e88e4d0`에 있고 후속 변경은 시험 fixture 한 줄이었다.
 
 ## 원인과 수정 범위
 
@@ -18,11 +18,11 @@
 
 이 경우 관측 통로 쪽으로 선속도 0의 정렬 후보를 내도록 했다. source/current pose 변환, 관측 신선도, 현재 차로 안내와의 동의가 필요하다. 회전은 시작 시 관측한 각도와 기존 상한 안에서 누적 절대 yaw로 제한한다. 좌우 진동, 초기화, 위치·시간 점프, 관측 깜빡임으로 예산을 다시 주지 않는다. 새 예산에는 독립 전방 관측과 연속 odom상의 실제 전진이 필요하다.
 
-첫 수정 후보 `4766cfbf8868533b61f648a5b5ecad2c84cbbef0`는 이전 실패 지점을 통과했지만 `ring_s` 6.658m에서 정체했다. 이미 선택된 오른쪽 pivot은 기존 recentre와 새 정렬의 진입 조건을 모두 우회했다. source 173.750초의 [실제 영상](C:/DevTemp/pinky-success-baseline-20261019/recentre-repeat-1/out/trips/frames/rosy_01/001391.png), decision 173.875초와 발행된 각속도 -0.6rad/s를 결속했다. 현재 관측 near centre `(0.163, 0.098)`, target `(0.122, 0.117)`, 왼쪽 opening `(0.190, 0.094)`와 현재 안내 +25.3°가 동의하는데 미래 안내 -80.2°의 오른쪽 pivot이 유지됐다.
+첫 수정 후보 commit `4766cfbf8868533b61f648a5b5ecad2c84cbbef0`는 이전 실패 지점을 통과했지만 `ring_s` 6.658m에서 정체했다. 이미 선택된 오른쪽 pivot은 기존 recentre와 새 정렬의 진입 조건을 모두 우회했다. source 173.750초의 [실제 영상](C:/DevTemp/pinky-success-baseline-20261019/recentre-repeat-1/out/trips/frames/rosy_01/001391.png), decision 173.875초와 발행된 각속도 -0.6rad/s를 결속했다. 현재 관측 near centre `(0.163, 0.098)`, target `(0.122, 0.117)`, 왼쪽 opening `(0.190, 0.094)`와 현재 안내 +25.3°가 동의하는데 미래 안내 -80.2°의 오른쪽 pivot이 유지됐다.
 
 최종 수정은 그 반대 pivot도 같은 정렬 예산으로 처리한다. 기존 pivot의 strategy·error·confidence가 정확히 일치하고, 실제 관측 통로와 현재 안내가 반대쪽에 동의할 때만 진입한다. 예산 소진·관측 소실·odom 불확실성 뒤 반대 latch로 복귀하지 않는다. 앞쪽 장애물, straddle/off-line, 횡단보도와 pivot-limit 보호는 유지한다. 정렬 후보에서 기대 전진 경로로 오인할 target은 제거했다. CORE의 최종 명령 권한과 안전 임계값은 바꾸지 않았다.
 
-600줄 한도에 있던 steer의 기존 경계 교차 기하는 별도 선행 커밋 `7d14f20241c5664c364070afc34ab2d5b25c954a`에서 기존 target 모듈로 이동했다. 계산·상수·기존 import 이름을 유지했다. 독립 검토자 `/root/drive_success_review`가 이 이동과 두 정렬 수정의 생산자·소비자·안전 경계를 읽고 중대한 소스 발견이 없다고 확인했다. 이 검토는 실행 검증과 구분한다.
+600줄 한도에 있던 steer의 기존 경계 교차 기하는 별도 선행 커밋 commit `7d14f20241c5664c364070afc34ab2d5b25c954a`에서 기존 target 모듈로 이동했다. 계산·상수·기존 import 이름을 유지했다. 독립 검토자 `/root/drive_success_review`가 이 이동과 두 정렬 수정의 생산자·소비자·안전 경계를 읽고 중대한 소스 발견이 없다고 확인했다. 이 검토는 실행 검증과 구분한다.
 
 ## 원격 시험
 

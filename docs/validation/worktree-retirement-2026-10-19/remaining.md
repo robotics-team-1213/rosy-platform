@@ -6,15 +6,15 @@
 
 | 폴더 | 보존 브랜치 | 원본 SHA |
 |---|---|---|
-| account-app-landing | feat/account-app-rollout-landing | 76818bd9010d87ec7f3747c811edce64461603e6 |
-| account-initial-password | fix/account-initial-password-policy | 958b8f2f11ee302d6a69e9d64dcdd4e046c37cd0 |
-| auth-service-adr | feat/account-service-completion | 1ddea9def6b811298474dc39426ce94cf0f5a873 |
-| host-recovery-publish | feat/host-recovery-publish | 727887c5c0c111702ce1c2efbc6ee036710545ce |
-| host-report-access | fix/host-report-access | ef7b094bf2e5130aa58e3189562c9025f9964fc7 |
-| learn-omx | feat/rosy-learning-omx-s3-s4 | 2dd4d009b9816e8194c0c294f3306e3a8c2174dc |
-| pilot-native-fixtures | fix/pilot-native-fixtures | 43b3e6dceaadf03a2f0e64886d97620153af4b8f |
-| publication-a0-r1-red-proof | fix/signed-catalog-restored-0ef4c1bebf | 0ef4c1bebfddb64940fb92d73a231d929ef6d72c |
-| push-batch | feat/omx-learned-policy-gate | 8e3b114f7b5f657007a2f648689bbb8a554dd4a9 |
+| account-app-landing | feat/account-app-rollout-landing | commit 76818bd9010d87ec7f3747c811edce64461603e6 |
+| account-initial-password | fix/account-initial-password-policy | commit 958b8f2f11ee302d6a69e9d64dcdd4e046c37cd0 |
+| auth-service-adr | feat/account-service-completion | commit 1ddea9def6b811298474dc39426ce94cf0f5a873 |
+| host-recovery-publish | feat/host-recovery-publish | commit 727887c5c0c111702ce1c2efbc6ee036710545ce |
+| host-report-access | fix/host-report-access | commit ef7b094bf2e5130aa58e3189562c9025f9964fc7 |
+| learn-omx | feat/rosy-learning-omx-s3-s4 | commit 2dd4d009b9816e8194c0c294f3306e3a8c2174dc |
+| pilot-native-fixtures | fix/pilot-native-fixtures | commit 43b3e6dceaadf03a2f0e64886d97620153af4b8f |
+| publication-a0-r1-red-proof | fix/signed-catalog-restored-0ef4c1bebf | commit 0ef4c1bebfddb64940fb92d73a231d929ef6d72c |
+| push-batch | feat/omx-learned-policy-gate | commit 8e3b114f7b5f657007a2f648689bbb8a554dd4a9 |
 
 대상 루트: D:/Dev/Robot/Rosy/rosy-platform/.worktrees/. 각 대상은 위 이름의 직속 디렉터리만 포함한다. 잠긴 대상·dirty 대상·최근 작업·착지 대기열의 작업은 제외한다.
 

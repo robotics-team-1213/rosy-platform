@@ -5,14 +5,14 @@
 ## Fleet / Cell
 
 - 이름 변경만 원격 main 기준으로 분리해 [PR #117](https://github.com/robotics-team-1213/rosy-platform/pull/117)로 게시·병합했다. 다른 로컬 미게시 기능은 포함하지 않았다.
-- 검토·게시 head: `8944d13758bc82c86073e2a7b61b26e531bd103c`. 원격 main 병합 SHA: `38f0c452e410fca6c2c8fc72f45c3c250751d58f`.
+- 검토·게시 head: commit `8944d13758bc82c86073e2a7b61b26e531bd103c`. 원격 main 병합 SHA: `38f0c452e410fca6c2c8fc72f45c3c250751d58f`.
 - 독립 검토: names_review, 최종 발견 사항 없음. 새 실패 0. 기존 픽셀 사진 높이 실패 1건은 변경 전·후 같은 위치와 크기로 재현됐다.
 - 원격 pre-push: fast 519 passed, affected 8,931 passed / 886 skipped, 별도 관측 721 passed. 실제 Chromium focused: 225 passed / 1 known failure.
 - PR CI·Android 개별 검사 13개 성공. [병합 후 main CI](https://github.com/robotics-team-1213/rosy-platform/actions/runs/39241398705) 19개 잡 성공, Android 성공.
 - [서버 후보 빌드](https://github.com/robotics-team-1213/rosy-platform/actions/runs/39241398733) 성공. 후보 태그: `site-38f0c452e410`.
 - `gh attestation verify`로 workflow·main ref·정확한 source digest를 검증했다. 검증된 manifest SHA-256: `fba5c493d6a3450c2e98879b44c4c2ee6eab3546b53eb1365816998e79a6edcf`.
 - 기존 현장 신뢰 키와 일치하는 `rosy-site-bench-20261003`으로 manifest를 서명하고 [후보 릴리스](https://github.com/robotics-team-1213/rosy-platform/releases/tag/site-38f0c452e410)에 `release.json.sig`를 게시했다. 키·신뢰 설정·HOLD는 변경하지 않았다.
-- **현장 설치 완료:** 2026-10-19 20:34:41 KST. 기존 자동 업데이트 타이머가 서명된 `site-38f0c452e410`을 적용했다. 설치 상태의 전체 커밋은 `38f0c452e410fca6c2c8fc72f45c3c250751d58f`이며 Fleet·Vision·proxy 세 컨테이너 모두 같은 커밋 이미지로 healthy다. updater 결과는 `installed`/success이고 HOLD·미완료 switch·해당 후보 실패가 없다. 20:35 KST에 다시 확인했다.
+- **현장 설치 완료:** 2026-10-19 20:34:41 KST. 기존 자동 업데이트 타이머가 서명된 `site-38f0c452e410`을 적용했다. 설치 상태의 전체 커밋은 commit `38f0c452e410fca6c2c8fc72f45c3c250751d58f`이며 Fleet·Vision·proxy 세 컨테이너 모두 같은 커밋 이미지로 healthy다. updater 결과는 `installed`/success이고 HOLD·미완료 switch·해당 후보 실패가 없다. 20:35 KST에 다시 확인했다.
 - 실제 서버 `robttt@100.82.51.8`의 기존 HTTPS 포트 8443에서 읽기 전용 GET으로 확인했다. `/healthz`와 아래 일곱 페이지 모두 HTTP 200이다. 이 확인은 SSH 안에서 자체 인증서 검증을 생략한 HTTP 내용 검사이며, 클라이언트 인증서 신뢰 검증을 대신하지 않는다.
 
 | 경로 | 실제 브라우저 제목 | 추가 확인 |
@@ -30,8 +30,8 @@
 ## Learning
 
 - 기존 모델 코드·검수 UI와 사람 라벨을 유지한다. 배포하지 않은 학습 코드 변경을 함께 적용하지 않도록 현재 설치 소스와 전체 tree가 동일한 재작성 기준 커밋에서 이름만 분리했다.
-- 기준: `76ef95f4b4cbb54de00a6a66a8e222a790ec54af`, 현재 설치 소스 `faea4101cd68cbc45896ec74a564dae3927122e4`와 tree `3a92a57625e819752839c35c4e865f656b219d7a`가 같다.
-- 준비한 소스: `9bafdf968277191b93171daf4f8740f240e9418e`, 브랜치 `uiux/learning-name-backport`. 기존 여섯 제목만 변경하고 `title_prefix`를 사용하며 새 `app_name`은 등록하지 않는다. 부가 변경은 이름 검사와 작업 로그뿐이다.
+- 기준: commit `76ef95f4b4cbb54de00a6a66a8e222a790ec54af`, 현재 설치 소스 `faea4101cd68cbc45896ec74a564dae3927122e4`와 tree `3a92a57625e819752839c35c4e865f656b219d7a`가 같다.
+- 준비한 소스: commit `9bafdf968277191b93171daf4f8740f240e9418e`, 브랜치 `uiux/learning-name-backport`. 기존 여섯 제목만 변경하고 `title_prefix`를 사용하며 새 `app_name`은 등록하지 않는다. 부가 변경은 이름 검사와 작업 로그뿐이다.
 - 독립 검토 발견 사항 없음. 정확한 후보 커밋의 원격 검사 **254 passed / 0 skipped**, 기존 실패 비교 **0 NEW**.
 - 올바른 미서명 후보: `C:/Users/SERIGGG/AppData/Local/Temp/rosy-learning-naming-d03d869688/narrow-unsigned-sequence-30-lf`.
 - archive SHA-256: `d4413c470c1c7e51a345833bd6c4e3ee8ce01d08e3e51ecca7335a0ab4e46bc3`. manifest SHA-256: `853a508eb6deddcd6e3bde71eeea5ee70fbe21e3c341542045baa4354b85e4c8`.
@@ -52,7 +52,7 @@
 
 ## 남은 배포 재확인 — 2026-10-19 22:06 KST
 
-- Learning의 현재 설치는 여전히 sequence 29 / `faea4101cd68cbc45896ec74a564dae3927122e4`다. 검수 서비스 active, 네 화면 HTTP 200이며 기존 `Rosy 개발` 제목이다. 새 이름의 배포 완료로 간주하지 않는다.
+- Learning의 현재 설치는 여전히 sequence 29 / commit `faea4101cd68cbc45896ec74a564dae3927122e4`다. 검수 서비스 active, 네 화면 HTTP 200이며 기존 `Rosy 개발` 제목이다. 새 이름의 배포 완료로 간주하지 않는다.
 - 준비된 `9bafdf968277191b93171daf4f8740f240e9418e` worktree는 깨끗하다. 미서명 archive·manifest의 SHA-256을 다시 계산해 위 기록과 일치함을 확인했다. 서명과 READY는 여전히 없고 전송·활성화하지 않았다.
 - 운영자 PC 임시 폴더의 제한된 파일명 검색과 모델 PC의 관련 사용자 디렉터리 검색에서도 모델 코드 전용 개인 키를 찾지 못했다. 모델 PC에서 확인한 키는 기존 공개 키다. 이 검색은 전체 디스크의 키 부재를 보장하지 않는다.
 - Vault·Device 운영 설정, Games 경기 설정과 배포 대상도 추가로 확인되지 않았다. 남은 실행에는 **기존 model-code-v1 개인 키 파일 경로, Vault·Device 대상 PC/서버와 실제 설정, Games 운영 노트북과 경기 설정 경로**가 필요하다. 현재 PC에 신규 설치할 항목이 있다면 그 항목과 설정도 필요하다. 사용자에게 이 정보를 요청했으며 답변 전까지 기존 서비스를 유지한다.

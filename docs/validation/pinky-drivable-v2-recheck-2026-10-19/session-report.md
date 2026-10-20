@@ -10,10 +10,10 @@
 
 ## 확인한 버전과 모델
 
-- main 조사 시점 HEAD: `bc2239c2f33a78f2bdb76a475015302a0ea01b52`.
+- main 조사 시점 HEAD: commit `bc2239c2f33a78f2bdb76a475015302a0ea01b52`.
 - 최신 관련 워크트리: `D:/Dev/Robot/Rosy/rosy-platform/.worktrees/v2-timing`, 브랜치 `land/v2-lap-rev8`.
-- 새 실행에 고정한 HEAD: `ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789`.
-- 완주 수정 집계 커밋: `39d2ffae42f0ab598b9ab07ac7f10acd83f69856`.
+- 새 실행에 고정한 HEAD: commit `ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789`.
+- 완주 수정 집계 커밋: commit `39d2ffae42f0ab598b9ab07ac7f10acd83f69856`.
 - r51a·r51b 원본 실행 소스: `91f14c997f` (`run.txt`의 remote-sim 실행 경로).
 - 실제 인식 revision: `lane-seg-20261010-451f0f85`.
 - 현재 AI PC ONNX SHA-256: `451f0f85b390d6601dc38c60865ed721936ff407845f7a8196099ae9a110f3d2`. 원격 manifest의 hash와 일치했다. 이전 실행의 모델은 당시 관측에 기록된 revision으로 대조했으며 당시 파일 바이트를 새로 검증한 것은 아니다.
@@ -55,7 +55,7 @@
 AI PC에 승인된 `tools/remote/remote_sim.py`로 새 빌드·Gazebo 실행을 요청했다. 현장 PC와 실물 장치에는 실행하지 않았다. 최신 워크트리 HEAD를 고정하고 r51과 같은 모델 pointer·실행 인자를 사용한다. 이후 main 병합이 포함된 소스이므로 r51과 바이트가 같은 재현 실행은 아니다.
 
 ```powershell
-python tools/remote/remote_sim.py --host ai --sha ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789 --minutes 60 --log-dir C:/DevTemp/pinky-drivable-v2-recheck-20261019/run1 fleet_trips -- --render gpu --learned-lane-pointer /home/ai/rosy-test/v2-sim-lap/model-pointer.txt --learned-paint-target drivable --lap --stall-s 60 --record --skip-check lane_return
+python tools/remote/remote_sim.py --host ai --sha commit ff8eca4d9b4adcecaccdabf7b9e3886c4eaca789 --minutes 60 --log-dir C:/DevTemp/pinky-drivable-v2-recheck-20261019/run1 fleet_trips -- --render gpu --learned-lane-pointer /home/ai/rosy-test/v2-sim-lap/model-pointer.txt --learned-paint-target drivable --lap --stall-s 60 --record --skip-check lane_return
 ```
 
 실행 식별자: `sim-ff8eca4d9b-043ecd`.
