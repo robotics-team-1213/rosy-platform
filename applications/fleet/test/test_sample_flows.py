@@ -214,6 +214,7 @@ def test_goal_idempotency_progress_and_terminal_read():
     first = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
     assert first.status == 200
     task = json.loads(first.body)['task']
+    assert call(engine, 'GET', '/api/fleet/dispatch-control')[1]['queued_tasks'] == 1
     again = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
     assert json.loads(again.body)['task']['task_id'] == task['task_id']
     assert engine.handle('POST', target, headers, b'{"x":3,"y":1,"yaw":0}').status == 409

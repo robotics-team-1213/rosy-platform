@@ -34,6 +34,8 @@ def test_formation_hold_resume_stop_and_incident_review():
     engine.advance('traffic', 'hold')
     assert call(engine, 'GET', '/api/fleet/formation')[1]['state'] == 'HOLDING'
     assert call(engine, 'POST', '/api/fleet/formation/resume')[1]['state'] == 'RUNNING'
+    assert call(engine, 'POST', '/api/fleet/cancel-all')[0] == 200
+    assert call(engine, 'GET', '/api/fleet/formation')[1]['active'] is False
     assert call(engine, 'POST', '/api/fleet/formation/stop')[1]['active'] is False
     code, incidents = call(engine, 'GET', '/api/fleet/incidents')
     assert code == 200 and incidents['reports']
