@@ -67,7 +67,7 @@ def test_login_write_logout_and_cookie_revocation(upstream):
     proxy = proxy_type()(endpoint, context, 'https://localhost:4174')
     headers = {'Host': 'localhost:4174', 'Origin': 'https://localhost:4174',
                'Cookie': 'other=secret; rosy_sample_session=demo; rosy_fleet_session=test-session',
-               'Authorization': 'Bearer test-token', 'X-Rosy-Session': 'test-family',
+               'Authorization': 'Bearer test-token', 'X-Rosy-Session': 'test-family', 'Idempotency-Key': 'test-intent',
                'Forwarded': 'host=attacker.invalid', 'X-Forwarded-Host': 'attacker.invalid'}
     for path in ('login', 'logout'):
         response = proxy.handle('POST', '/api/fleet/' + path, headers, b'{}')
@@ -82,6 +82,7 @@ def test_login_write_logout_and_cookie_revocation(upstream):
     assert forwarded['cookie'] == 'rosy_fleet_session=test-session'
     assert forwarded['authorization'] == 'Bearer test-token'
     assert forwarded['x-rosy-session'] == 'test-family'
+    assert forwarded['idempotency-key'] == 'test-intent'
     assert not any(k == 'forwarded' or k.startswith('x-forwarded-') for k in forwarded)
 
 
