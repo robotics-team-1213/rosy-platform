@@ -42,6 +42,24 @@ def test_short_targets_keep_every_planned_waypoint_without_enlarging_steps():
                for left,right in zip([points[0]] + targets[:-1], targets))
 
 
+def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_waypoint():
+    from sim_pick_place_demonstrations import readback_target
+    current={'joint3':.22406642138957977,'gripper_joint_1':.41159433126449585}
+    desired={'joint3':.18370857317041256,'gripper_joint_1':.38042608841813563}
+    intermediate=readback_target(current,desired)
+    assert intermediate != desired
+    assert max(abs(intermediate[n]-current[n]) for n in current) == pytest.approx(.035)
+    assert all(min(current[n],desired[n]) <= intermediate[n] <= max(current[n],desired[n]) for n in current)
+    arrived=dict(intermediate,joint3=intermediate['joint3']+.007)
+    assert readback_target(arrived,desired)==desired
+    assert desired['joint3']==.18370857317041256
+
+
+def test_contact_readback_within_original_admission_bound_keeps_the_exact_goal():
+    from sim_pick_place_demonstrations import readback_target
+    assert readback_target({'gripper':.42},{'gripper':.38})=={'gripper':.38}
+
+
 @pytest.mark.parametrize('points', [[], [(0.,), (float('nan'),)], [(0.,), (0., 1.)]])
 def test_malformed_trajectory_is_rejected(points):
     from sim_pick_place_demonstrations import short_targets
