@@ -45,3 +45,8 @@ def test_detach_uses_learned_opening_and_settle_requires_actual_release():
 @pytest.mark.parametrize('position,expected',[(.9,False),(.6,True),(.58,True),(.51,False)])
 def test_hold_requires_width_contact_instead_of_partially_closing_open_jaws(position,expected):
     assert contact_held(position,close=.5,contact=.6) is expected
+
+
+def test_fixed_world_actual_successful_contact_readback_is_admitted():
+    assert contact_held(.41494032740592957,close=.38042608841813563,contact=.40689174134023)
+    assert not contact_held(.45,close=.38042608841813563,contact=.40689174134023)
