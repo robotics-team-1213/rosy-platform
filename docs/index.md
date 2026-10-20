@@ -341,8 +341,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · D-806 게시 기준 소스의 Learning 범위 확인
-- 2026-10-19 · uncommitted · D-806 앱 이름 게시 범위 분리
-- 2026-10-19 · uncommitted · 게시된 main을 기준으로 Account 변경 분리
-- 2026-10-19 · uncommitted · Account 서비스 운영 완료 기준과 증거
-- 2026-10-19 · 2b5d3c84d8 · D-800/D-804 origin publication
+- 2026-10-20 · uncommitted · Account 배포 후속 증거와 남은 수용
+- 2026-10-20 · uncommitted · PR126 squash의 독립 검토 출처 보존
+- 2026-10-20 · uncommitted · 원래 CI의 첫 tick departure 증거 보완
+- 2026-10-20 · uncommitted · 같은 소스 station 시험의 분류 근거
+- 2026-10-20 · 3a1392d2e · Account 전송 불명 문서·구현 검증

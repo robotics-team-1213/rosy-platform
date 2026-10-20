@@ -1552,3 +1552,27 @@
 - 변경: durable 회수 대기와 cookie 제거, lifespan 재시도, 새 로그인 family 보존 및 실제 Chromium 로그아웃을 검증한다. 다른 작업의 strict-media 구현·native fixture는 포함하지 않았다.
 - 증거: 앞선 분리 소스 검증은 기록된 SHA 범위로 유지하며, 이 게시 기반 head는 새 원격 검사·독립 검토·CI를 거친다. 인증서 백업·갱신과 격리 TLS 검증은 운영 활성화를 대신하지 않는다.
 - gate 변화: 없음. 운영 계정·DB·서비스·방화벽은 변경하지 않았다.
+
+## 2026-10-20 · uncommitted · 출발 SIM의 숨겨진 예외 진단
+
+- 변경: 출발 HTTP 시험 fixture가 motion.call과 advance_departure 예외의 종류·경과 시간·SIM 시각·traceback을 기록하고 그대로 다시 던진다. 제품 코드·deadline·freshness·단언은 변경하지 않는다.
+- 증거: e26407972b 전체 CI에서 첫 tick의 UNDOCKING 대신 CHARGE_DEPARTURE_UNVERIFIED가 발생했다. 같은 head 재시도와 깨끗한 aff1 기준선 전체 실행은 통과해 원인은 아직 확인되지 않았다. a78c699274 진단 fixture의 관련 68개 시험은 통과했으며 양성 출발 사례의 예외 기록은 없었다. 새 게시 head의 원격 검사와 전체 CI는 별도로 확인한다.
+- gate 변화: 없음. 진단 추가는 수정 완료 근거가 아니며 학습 웹 병합·활성화는 원인 해결 전까지 보류한다.
+
+## 2026-10-20 · uncommitted · 카메라·출발 SIM의 HOLD 원인 예외 관측
+
+- 변경: 공유 시험 helper가 새 ChargeMotion 인스턴스의 stop_hold 진입 시 활성 예외를 기록한다. readback 불가·출발 미검증 HOLD의 session, SIM 시각, 예외 종류·문자열·traceback만 stdout JSON에 남기고 원래 호출·인자·결과를 유지한다. 기존 출발 call wrapper는 제거한다. 제품 코드·deadline·freshness·기존 안전 단언은 변경하지 않는다.
+- 증거: 집중 회귀는 중첩 await에서 원래 예외와 HOLD 결과·kwargs가 보존되고 정상 HOLD는 기록하지 않는지 확인한다. commit `48ab802817`의 원격 RED는 helper 부재로 1 failed, NEW 1이었다. 구현 head의 같은 시험과 카메라·출발 모듈 원격 결과는 별도로 확인한다.
+- gate 변화: 없음. 앞선 카메라 composed 회귀는 readback 불가 HOLD였지만 원인 예외가 남지 않았다. 이번 변경은 관측 추가이며 원인 해결·실물 충전·현장 수용 근거가 아니다.
+
+## 2026-10-20 · uncommitted · composed SIM의 기존 readback probe 연결
+
+- 변경: 기존 readback·lock·ACK 관측 helper의 설치 조건만 lifespan에서 composed로 넓힌다. manual SIM step·runtime tick·lock 동작과 모든 안전 기준은 유지한다.
+- 증거: commit `02e42a19dc`에서 카메라·출발 두 모듈은 20 passed, 0 skipped, NEW 0이었다. 예상 부정 사례의 HOLD 예외 10건을 기록했고 composed·양성 출발에는 예외 기록이 없었다. 추가 조건의 집중 회귀는 새 head에서 별도로 확인한다.
+- gate 변화: 없음. 비동기 return 작업과 readback lock 경합은 아직 원인으로 관측되지 않았으며 이 연결은 이후 실패의 증거 수집용이다.
+
+## 2026-10-20 · uncommitted · return HOLD의 제한된 Trip 상태 관측
+
+- 변경: HOLD 예외 traceback의 read_return 프레임에 view dict가 있으면 state·reason·detail만 기록한다. 다른 locals·인증 정보는 수집하지 않으며 정상 경로의 추가 호출·clock·제품 동작은 변경하지 않는다.
+- 증거: 앞선 전체 실행의 shutdown_CHARGING은 CHARGE_RETURN_NOT_ARRIVED 예외였지만 Trip 상태가 남지 않았다. commit `96b2c09a9a`의 집중 RED는 return_trip 부재로 1 failed, NEW 1이었다. 제한 필드·중첩 await·원래 HOLD 결과 보존의 GREEN과 단일 shutdown_CHARGING 회귀는 구현 head에서 별도로 확인한다.
+- gate 변화: 없음. Trip 원인 관측 전까지 lifecycle·시간·thread·안전 기준을 수정하지 않는다.

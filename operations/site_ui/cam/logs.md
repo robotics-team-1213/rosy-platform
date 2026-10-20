@@ -332,3 +332,9 @@
 - 시험: 끊긴 연결과 빈 이름의 직접 사례를 더했고, 소스를 읽는 세 시험은 잡으려는 실수를 이름에 적었다. 심볼의 뷰포트를 SVG viewBox와 대조한다. D-741 부기에 Android 벡터가 `mark.svg`의 허용된 옮김임을 적었다.
 - 증거: 66321009d를 원격 시험 PC에서 `testDebugUnitTest --no-daemon`으로 돌려 438 passed, failures/errors 0. 로그 X: `DevTemp/cam-app-bar/fix-1.txt`.
 - gate 변화: 없음(SOURCE/JVM). 화면을 렌더하거나 폰에 설치하지 않았다. 가로 화면의 미리보기 높이와 TalkBack 읽기는 기기에서 확인하지 않았다. DEVICE/FIELD는 PARKED.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Accepted the Vault site capabilities in strict access-token validation. JVM coverage checks Vault-only and combined camera grants without granting camera.manage implicitly.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.

@@ -60,6 +60,9 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 page.locator("#account-add-grant").click()
                 page.locator("[data-grant=id]").fill("test-site")
                 page.get_by_label("관제 조회", exact=True).check()
+                for label in ['Vault 조회', 'Vault 조작', 'Vault 장부 정리']:
+                    expect(page.get_by_label(label, exact=True)).not_to_be_checked()
+                    page.get_by_label(label, exact=True).check()
                 page.locator("#account-save").click()
                 expect(page.locator("#account-list")).to_contain_text("bob")
                 expect(page.locator("#account-password")).to_have_value("")
@@ -78,6 +81,8 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                     bob_page.locator("[data-login=confirm]").fill("a permanent secret")
                     bob_page.locator("[data-login=submit]").click()
                     expect(bob_page).to_have_url(origin + "/console/profile")
+                    for label in ['Vault 조회', 'Vault 조작', 'Vault 장부 정리']:
+                        expect(bob_page.locator('#profile-grant-list')).to_contain_text(label)
                 finally:
                     bob_page.close()
                 page.locator("#account-reload").click()
@@ -100,7 +105,8 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-list")).to_contain_text("bob · 정지됨")
                 bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
                 assert bob["enabled"] is False and bob["revision"] == 6
-                assert bob["grants"] == [{"resource": "site:test-site", "capabilities": ["fleet.read"]}]
+                assert bob["grants"] == [{"resource": "site:test-site", "capabilities": [
+                    "fleet.read", "vault.read", "vault.operate", "vault.manage"]}]
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.goto(origin + "/console")
                 expect(page.locator("#fleet-accounts")).to_have_js_property("hidden", False)

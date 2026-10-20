@@ -112,7 +112,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 state['offline'] = False
                 expect(link).to_contain_text('Updated Alice', timeout=15000)
                 old_cookie = next(item['value'] for item in page.context.cookies()
-                                  if item['name'] == 'rosy_learning_session')
+                                  if item['name'].startswith('rosy_learning_session_'))
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
                 page.locator('#logout').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')

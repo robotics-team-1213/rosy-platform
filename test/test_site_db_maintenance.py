@@ -96,6 +96,109 @@ def test_restore_validates_source_before_touching_current_database(tmp_path):
     assert not list(tmp_path.glob("*.pre-restore-*.sqlite3"))
 
 
+@pytest.mark.parametrize("table", [
+    "rosy_account_authority", "rosy_accounts", "rosy_account_sessions", "rosy_account_audit",
+    "fleet_console_sessions", "fleet_console_passwords", "fleet_console_profiles",
+    "account_oauth_codes", "account_oauth_refresh", "account_oauth_access",
+])
+def test_restore_refuses_changed_account_security_state(tmp_path, table):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(target, "keep-current")
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute(f'CREATE TABLE "{table}" (state TEXT)')
+        db.execute(f'INSERT INTO "{table}" VALUES (?)', ("before-revocation",))
+    backup_database(target, source)
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute(f'UPDATE "{table}" SET state=?', ("after-revocation",))
+    before = target.read_bytes()
+
+    with pytest.raises(DatabaseError, match="Account security state"):
+        restore_database(source, target, replace=True, assume_stopped=True)
+
+    assert target.read_bytes() == before
+    assert _value(target) == "keep-current"
+    assert not list(tmp_path.glob("*.pre-restore-*.sqlite3"))
+
+
+@pytest.mark.parametrize("state", ["missing", "corrupt", "legacy", "schema", "trigger", "duplicates"])
+def test_account_restore_requires_matching_readable_current_state(tmp_path, state):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(source, "older-operational-data")
+    with closing(sqlite3.connect(source)) as db, db:
+        db.execute("CREATE TABLE rosy_accounts (state TEXT)")
+        db.executemany("INSERT INTO rosy_accounts VALUES (?)", [("a",), ("a",), ("b",)])
+    if state == "corrupt":
+        target.write_bytes(b"unreadable-current-state")
+    elif state == "legacy":
+        _database(target, "keep-current")
+    elif state != "missing":
+        backup_database(source, target)
+        with closing(sqlite3.connect(target)) as db, db:
+            if state == "schema":
+                db.execute("ALTER TABLE rosy_accounts ADD COLUMN revision INTEGER")
+            elif state == "trigger":
+                db.execute("CREATE TRIGGER keep_auth AFTER DELETE ON rosy_accounts BEGIN SELECT 1; END")
+            else:
+                db.execute("DELETE FROM rosy_accounts")
+                db.executemany("INSERT INTO rosy_accounts VALUES (?)", [("a",), ("b",), ("b",)])
+    before = target.read_bytes() if target.exists() else None
+
+    with pytest.raises(DatabaseError, match="Account security state"):
+        restore_database(source, target, replace=True, assume_stopped=True)
+
+    assert (target.read_bytes() if target.exists() else None) == before
+    assert not list(tmp_path.glob("*.pre-restore-*.sqlite3"))
+
+
+def test_restore_refuses_legacy_backup_over_current_account_state(tmp_path):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(source, "legacy")
+    backup_database(source, target)
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute("CREATE TABLE rosy_account_authority (site_id TEXT)")
+        db.execute("INSERT INTO rosy_account_authority VALUES ('test-site')")
+    with pytest.raises(DatabaseError, match="Account security state"):
+        restore_database(source, target, replace=True, assume_stopped=True)
+    assert _value(target) == "legacy"
+
+
+def test_restore_allows_operational_recovery_with_identical_account_state(tmp_path):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(source, "restored-operational-data")
+    with closing(sqlite3.connect(source)) as db, db:
+        db.execute("CREATE TABLE rosy_accounts (state TEXT)")
+        db.executemany("INSERT INTO rosy_accounts VALUES (?)", [("b",), ("a",)])
+    backup_database(source, target)
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute("UPDATE records SET value='current-operational-data'")
+        db.execute("DELETE FROM rosy_accounts")
+        db.executemany("INSERT INTO rosy_accounts VALUES (?)", [("a",), ("b",)])
+
+    result = restore_database(source, target, replace=True, assume_stopped=True)
+
+    assert _value(target) == "restored-operational-data"
+    assert _value(result.rollback_path) == "current-operational-data"
+    with closing(sqlite3.connect(target)) as db:
+        assert db.execute("SELECT state FROM rosy_accounts ORDER BY state").fetchall() == [("a",), ("b",)]
+
+
+def test_account_restore_observes_committed_wal_changes(tmp_path):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(target, "keep-current")
+    with closing(sqlite3.connect(target)) as db:
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("CREATE TABLE account_oauth_refresh (spent INTEGER)")
+        db.execute("INSERT INTO account_oauth_refresh VALUES (0)")
+        db.commit()
+        backup_database(target, source)
+        db.execute("UPDATE account_oauth_refresh SET spent=1")
+        db.commit()
+        assert Path(str(target) + "-wal").exists()
+        with pytest.raises(DatabaseError, match="Account security state"):
+            restore_database(source, target, replace=True, assume_stopped=True)
+        assert db.execute("SELECT spent FROM account_oauth_refresh").fetchone() == (1,)
+
+
 def test_restore_does_not_leave_old_wal_sidecars_on_restored_target(tmp_path):
     source = tmp_path / "restore.sqlite3"
     target = tmp_path / "fleet.sqlite3"

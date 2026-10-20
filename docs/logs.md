@@ -9380,3 +9380,51 @@ osy-d395-s1d\`.
 - 변경: 독립 검토에서 원격 main에 없는 카메라·모방학습 화면 설명과 D-792 참조를 찾아 게시 문서·표면 역할을 실제 기존 화면 범위로 맞췄다. 화면 기능은 추가하지 않았다.
 - 증거: 수정 전 게시 head 9af27301a의 이름·출처·비밀 경계·기존 계정 화면 원격 검사 163 passed. 문구 수정 후 게시 head는 pre-push·CI에서 별도로 확인한다.
 - gate 변화: 없음. 운영 배포·라벨·학습 결과·장치 수용은 별도다.
+
+## 2026-10-20 · uncommitted · D-757 Learning 배포 인증 보존
+
+- 변경: 표준 검수 앱의 중앙 Account 쿠키를 프로젝트·공개 origin별로 구분하고, 관리 설치의 collaboration 결속·서비스 선택·loopback·인증 readiness 및 보관 버전 거부 조건을 문서화했다.
+- 증거: 회귀 먼저 커밋한 73cdfd1d5의 원격 RED를 확인했다. 구현 4bdea79bb의 원격 회귀와 브라우저 검사는 진행 중이며 AST·diff 확인은 완료했다.
+- gate 변화: 없음. 실제 로그인·권한·회수, HTTPS 설치와 자료 무변경 수용은 별도 증거다.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Recorded D-808, its own ADR Log row and the Account protocol capability contract. Public records contain no deployment addresses, keys or account details.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.
+
+## 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 계약 명시
+
+- 변경: Account protocol에 HTTPException의 네트워크 불명 분류, 불명확한 refresh의 로컬 세션 삭제, 회수 대기열 유지·재시도를 기존 D-757 정책으로 명시했다. endpoint·wire shape·권한은 변경하지 않았다.
+- 증거: tests-only 79cc935a8 신규 전송 회귀 18건 원격 RED(account-http-red-20261020, NEW 18). 구현 검증은 후속 SHA에 결속해 기록한다.
+- gate 변화: 없음. 운영 활성화·장치·현장 수용을 뜻하지 않는다.
+
+## 2026-10-20 · 3a1392d2e · Account 전송 불명 문서·구현 검증
+
+- 변경: Account HTTPException 장애 분류 설명을 기존 세션 삭제·회수 대기열 재시도 구현과 맞췄다.
+- 증거: commit `3a1392d2efa959d84ad5bc14966d9524ad395254` 원격 account_client/access·CORE pipeline·harness/module_structure 191 passed/2 skipped, NEW 0, exit 0(account-http-green-20261020/run-1.txt). harness lint 0 errors/31 warnings.
+- gate 변화: 없음. focused 검증이며 FULL·운영 활성화·현장 수용 증거는 아니다.
+
+## 2026-10-20 · uncommitted · 같은 소스 station 시험의 분류 근거
+
+- 변경: D-762의 한 번 재시험 후보 세 항목과 같은 SHA 실패·통과 증거를 기록한다. 생산 코드·안전 조건·기존 실패 목록은 변경하지 않는다. 첫 tick departure와 미게시 fixture의 lifespan 실패는 제외한다.
+- 증거: e264의 나중 departure는 같은 소스 정상 tier 실패·통과, c584 composed와1368 shutdown_CHARGING은 원래 실패 SHA의 정확한 원격 항목 각각1 passed/skip0/NEW0. 원인 해결·변경 전부터 존재한 실패를 주장하지 않는다. 구체적인 Safety-Review와 최종 commit 관문은 별도로 수행한다.
+- gate 변화: 기존 D-762의 한 번 재시험 분류를 세 항목에 적용한다. 두 번 실패하면 NEW이며 생산 기대 결과·필수 검사는 유지한다. 앱 배포·실사용 수용은 별도다.
+
+## 2026-10-20 · uncommitted · 원래 CI의 첫 tick departure 증거 보완
+
+- 변경: 원래 CI의 같은 checkout·tree 실패와 명시적 PASSED를 연결해 departure False도 D-762 분류에 포함한다. commit 식별자를 명시해 무작위 토큰과 구분한다.
+- 증거: CI39296167842 attempt 2의 CORE 7162 passed/64 skipped, NEW0. 원본은 NEW1이었다. runner 머신·지역 및 X11 apt 두 패키지 버전 차이를 공개하며 환경 전체의 동일성·원인 해결을 주장하지 않는다. 이전 head 게시 검사는 문서의 출처 표기 누락으로 secret scan NEW1, 다른 tier 266 passed였다.
+- gate 변화: 기존 한 번 재시험 분류가 총 네 항목에 적용되며 두 번 실패하면 NEW다. secret scanner·생산 코드·안전 조건·기존 기대 결과는 변경하지 않는다. 새 head의 독립 검토·원격 검증·정상 게시 검사는 별도다.
+
+## 2026-10-20 · uncommitted · PR126 squash의 독립 검토 출처 보존
+
+- 변경: squash commit `815e5027483cb49ceacc4c562d83cb1439692cbe`가 원래 독립 검토 commit `eddf756d3bfb93ac0d1879f4c1685f6f13859b91`과 같은 tree임을 기존 reviewed-history 목록에 결속한다. 병합 메시지에서 Safety-Review가 빠진 사실을 보존하며 공개 이력은 재작성하지 않는다.
+- 증거: 원래 PR CI493 passed/skip0, main CI39337638405는 trailer 누락으로 scope·aggregate 실패 및 pytest 미실행. 기존 검토와 정확한 squash tree 대조·새 head 검증은 독립적으로 확인한다. pytest 분류 NEW0을 main CI 성공으로 읽지 않는다.
+- gate 변화: 해당 검토 완료 squash 하나의 출처를 기존 절차로 기록한다. trailer 검사 로직·안전 태그·생산 조건은 변경하지 않는다. 새 source·게시·CI·실사용 수용은 별도다.
+
+## 2026-10-20 · uncommitted · Account 배포 후속 증거와 남은 수용
+
+- 변경: 전일 실행 계획·결과는 보존하고 `validation/account-service-2026-10-20/result.md`에 최종 소스·정상 push/main CI·서명 설치·Learning 데이터 보존·익명 HTTPS 경계와 남은 사람/장치 수용을 연결했다.
+- 증거: main commit `a42ae9062ee4d7b29d3d3fd66a3087f155148194` CI39342200884 19작업 성공,29451 passed/0 failed/1578 skipped/NEW0. 정상 field updater 설치와 세 서비스 healthy, Learning 다섯 앱 활성화·42테이블 원래 값/1297파일 보존의 보호 영수증과 독립 검토를 기록했다. 이 문서 변경 자체의 원격 검사·게시 결과는 별도다.
+- gate 변화: 소스·배포·익명 진입 증거가 추가됐다. 사람/Android/로봇/Games/미디어 수용은 여전히 미완료이며 지속 목표를 완료로 바꾸지 않는다. 생산 코드·검사·안전 조건은 변경하지 않는다.

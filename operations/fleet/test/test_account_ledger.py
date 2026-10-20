@@ -40,6 +40,45 @@ def test_activation_preserves_effective_password_profile_and_identity(tmp_path):
     assert restarted.account_context(value)["account_id"] == context["account_id"]
 
 
+@pytest.mark.parametrize("change", ["password", "disable", "family", "profile"])
+def test_db_restore_cannot_undo_current_account_changes(tmp_path, change):
+    from deploy.site.site_db import DatabaseError, backup_database, restore_database
+
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
+                            password=TYPED, grants=[])
+    value = cookie(sessions, login="bob")
+    password = TYPED + " for Bob"
+    value, _ = sessions.change_password(value, password)
+    row = sessions.account_context(value)
+    family = row["session_family"]
+    backup = tmp_path / "before-change.sqlite3"
+    backup_database(sessions.path, backup)
+    if change == "password":
+        sessions.change_password(value, "new permanent password", current_password=password)
+    elif change == "disable":
+        sessions.update_account(manager, row["account_id"], revision=row["revision"], enabled=False)
+    elif change == "family":
+        sessions.revoke_family(family)
+    else:
+        sessions.profile(value, "Current Bob")
+
+    with pytest.raises(DatabaseError, match="Account security state"):
+        restore_database(backup, sessions.path, replace=True, assume_stopped=True)
+
+    restarted = PasswordSessions(sessions.path, {})
+    if change == "password":
+        assert restarted.check("local", "bob", password) is None
+        assert restarted.check("local", "bob", "new permanent password") is not None
+    elif change == "disable":
+        assert restarted.check("local", "bob", password) is None
+    elif change == "family":
+        assert restarted.context_by_family(family) is None
+    else:
+        assert restarted.profile(value)["display_name"] == "Current Bob"
+
+
 def test_activation_requires_change_for_id_bang_password_and_keeps_new_password(tmp_path):
     path = tmp_path / "accounts.sqlite3"
     sessions = PasswordSessions(path, _accounts(password_scrypt=hash_password("alice!")))
@@ -74,6 +113,15 @@ def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
     sessions.bootstrap_accounts("alice", "test-site")
     with pytest.raises(ValueError):
         sessions.bootstrap_accounts("alice", "other-site")
+
+
+@pytest.mark.parametrize('role', ['viewer', 'operator', 'policy-admin'])
+def test_bootstrap_does_not_add_vault_grants(tmp_path, role):
+    sessions = PasswordSessions(tmp_path / 'accounts.sqlite3', _accounts(role=role))
+    sessions.bootstrap_accounts('alice', 'test-site')
+    context = sessions.account_context(cookie(sessions))
+    capabilities = context['grants'][0]['capabilities']
+    assert not any(capability.startswith('vault.') for capability in capabilities)
 
 
 @pytest.mark.parametrize("INITIAL_PASSWORD", ["fixture-pass-9384", "bob!"])

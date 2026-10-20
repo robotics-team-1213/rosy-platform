@@ -72,12 +72,18 @@ Account identity는 불변 opaque `account_id`다. login/email은 identity가 �
 
 | 자원 | 허용 capability |
 |---|---|
-| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate |
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, vault.read, vault.operate, vault.manage |
 | robot | robot.read, robot.operate, robot.admin |
 | project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
 
 capability는 서로 상속하지 않는다. UI는 관련 읽기 권한도 함께 부여하도록 안내하고,
 서버는 요청에 필요한 정확한 권한을 검사한다. 기존 기계/복구 자격의 역할 계약은 유지한다.
+
+D-808: Vault 조회는 `vault.read`, 작업·대기열·응답·정지는 `vault.operate`, HELD 장부
+정리는 `vault.manage`를 정확히 요구한다. 정리 actor는 인증된 `account_id`다. Vault 권한은
+site 자원에만 부여하며 서로 상속하지 않는다. Fleet 권한·기존 role·`accounts.manage`로
+대신할 수 없다. 기존 계정과 bootstrap에 자동 추가하지 않고, 계정 관리 API/UI에서 명시적으로
+부여한다. Vault는 독립 HTTP 클라이언트이며 이 grant 지원은 Vault 배포·현장 수용의 증거가 아니다.
 
 ## 중앙 계정 관리
 
@@ -152,6 +158,12 @@ fetch하지 않는다. 회전 시 새 공개키 배포→새 서명→구 token 
 token은 exp까지만 유효하며, 검증 실패 token을 새로 허용하지 않는다. WS도 반복 검사한다.
 로그아웃/정지/초기화 이후 모든 앱의 갱신과 새 권한 발급은 거부한다.
 
+공유 수신기의 HTTP 상태줄·헤더 파싱 실패와 응답 읽기 중단(`HTTPException`)도
+네트워크 불명으로 처리하며 응답 조각이나 자격 원문을 오류에 노출하지 않는다.
+refresh 응답이 불명확하면 이미 소비됐을 수 있는 refresh token을 재사용하지 않도록
+로컬 세션을 지운다. 회수 응답이 불명확하면 암호화된 대기열을 유지하고 기존
+백그라운드 재시도를 계속한다.
+
 ## 운영 활성화와 검증
 
 ### 앱 수신 세션
@@ -207,6 +219,16 @@ Account 모드에서는 기존 프로젝트 비밀번호·HF 로그인으로 사
 못한다. HF 연결·동의는 Rosy Account로 로그인한 사람에게 별도로 귀속한다.
 수신 endpoint는 `/api/account/login`, `/api/account/callback`이며 복귀는 `/accounts`
 또는 `/`만 허용한다. 로그인 후에는 기존 `/api/accounts/session`·logout을 사용한다.
+
+중앙 Account 모드의 Review 쿠키 세 개(`rosy_learning_session`, `rosy_account_flow`,
+`rosy_learning_oauth`)는 각각 이름 뒤에 `_`와 SHA-256의 앞 24개 소문자 hex를 붙인다.
+해시 입력은 신뢰 설정의 `project_id + NUL + public_origin` UTF-8 바이트다.
+브라우저 쿠키는 포트를 구별하지 않으므로 같은 DNS 이름의 다른 프로젝트/HTTPS
+origin이 서로의 세션·PKCE·HF 흐름을 덮어쓰지 않게 한다. 요청 Host나 사용자 입력으로
+이름을 고르지 않는다. 설정 origin에서 `Secure; HttpOnly; SameSite=Lax; Path=/`를
+유지하고 Domain은 지정하지 않는다. 발급·조회·CSRF 결속·삭제는 같은 이름을 쓴다.
+중앙 모드는 기존 고정 이름을 fallback으로 읽지 않으며 전환 시 재로그인이 필요하다.
+기존 비중앙 collaboration 모드의 이름과 서버의 권한 검증은 유지한다.
 
 중앙 ledger bootstrap은 지정한 기존 admin login과 site_id를 명시해야 한다.
 운영 계정을 자동 선택하지 않는다. authority URL·키·client callback·기존 identity와

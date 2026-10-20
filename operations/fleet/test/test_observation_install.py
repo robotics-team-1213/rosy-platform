@@ -21,7 +21,11 @@ from fleet.observe.events import CoreEventStore
 from fleet.observe.store import ObservationStore
 from fleet.server.core_event_store import CoreEventStore as LegacyEvents
 from fleet.server.observation_store import ObservationStore as LegacyStore
+from rosy_situation.wait_graph import wait_cycle
+from rosy_situation.fact_rules import COMMAND_WORDS
 import fleet.observe.store as owner
+assert wait_cycle({'a': 'b', 'b': 'a'})
+assert COMMAND_WORDS
 assert CoreEventStore is LegacyEvents and ObservationStore is LegacyStore
 assert Path(owner.__file__).is_relative_to(Path(sys.argv[1]))
 store = ObservationStore(sys.argv[2])

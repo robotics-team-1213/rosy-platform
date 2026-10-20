@@ -11,6 +11,7 @@ from pydantic import TypeAdapter
 from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.station_charging import Identifier, StationObservation
+from rosy_vision.track.fleet_client import _body
 
 
 class SightingPublishError(RuntimeError):
@@ -84,17 +85,5 @@ class SightingPublisher:
             json=body.model_dump(mode="json"),
             headers={"Authorization": self._authorization},
         )
-        if not response.is_success:
-            detail = response.json().get("detail", {})
-            if not isinstance(detail, dict):
-                detail = {}
-            raise SightingPublishError(
-                response.status_code,
-                str(detail.get("code", "SIGHTING_HTTP_ERROR")),
-                str(detail.get("message", "Fleet rejected sighting")),
-            )
-        body = response.json()
-        if not isinstance(body, dict):
-            raise SightingPublishError(response.status_code, "SIGHTING_BAD_RESPONSE",
-                                       "Fleet returned a non-object response")
-        return body
+        return _body(response, "SIGHTING_HTTP_ERROR", "SIGHTING_BAD_RESPONSE",
+                     error_type=SightingPublishError, rejection_message="Fleet rejected sighting")

@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 93  # Includes the shared host report reader and the D-793 policy page.
+    assert len(expected) == 94  # Includes the shared host report reader, policy page and device request helper.
+    assert 'shared/device-request.js' in expected
     assert 'shared/host-health.js' in expected
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
     assert {'accounts.html', 'shared/account-page.js', 'shared/account-permissions.js'} <= expected.keys()
@@ -74,7 +75,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
             assessment_files = {Path(name).name for name in archive.getnames()
                                 if '/_source_roots/assessment/' in name and name.endswith('.py')}
-            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py',
+                                        'wait_graph.py', 'fact_rules.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/site_ui/console')
@@ -430,6 +432,11 @@ from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence
 from rosy_situation.assessment import Assessment
+for name in ('fleet.stuck.ai_facts', 'fleet.traffic.blocks'):
+    importlib.import_module(name)
+for name in ('rosy_situation.fact_rules', 'rosy_situation.wait_graph'):
+    spec = importlib.util.find_spec(name)
+    assert Path(spec.origin).resolve().is_relative_to(roots[0].parent / 'situation/rosy_situation')
 assert importlib.util.find_spec('rosy_situation.service') is None
 board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)
 board.observe([{'robot_id': 'pinky', 'online': False}])
@@ -438,8 +445,8 @@ assert board.intervention_assessment('pinky').necessity == 'ABSTAIN'
 '''
     run(['-I', '-c', probe, json.dumps(list(map(str, roots)))], tmp_path)
     package = image / 'opt/rosy/src/site/situation/rosy_situation'
-    assert {p.name for p in package.glob('*.py')} == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+    modules = ('__init__.py', 'assessment.py', 'snapshot_assessment.py', 'fact_rules.py', 'wait_graph.py')
+    assert {p.name for p in package.glob('*.py')} == set(modules)
     allowed = {line for line in (ROOT / 'deploy/site/Dockerfile.fleet.dockerignore').read_text().splitlines()
                if line.startswith('!operations/situation')}
-    assert allowed == {'!operations/situation/rosy_situation/' + name for name in
-                       ('__init__.py', 'assessment.py', 'snapshot_assessment.py')}
+    assert allowed == {'!operations/situation/rosy_situation/' + name for name in modules}

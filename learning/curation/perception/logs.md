@@ -98,3 +98,9 @@
 - 변경: 기존 검수·자료·학습·계정 화면과 오프라인 산출물의 표시 이름을 Rosy Learning으로 맞췄다. 원격 main에 없는 카메라 화면은 추가하지 않는다.
 - 증거: 원래 구현과 로컬 착지 검증은 보존한다. 이 게시 head는 별도 원격 검사·독립 검토·CI로 확인한다.
 - gate 변화: 없음. 이 기록은 운영 배포나 장치 수용의 증거가 아니다.
+
+
+## 2026-10-20 · 1bcd83ba3a · Legacy 937 Account boundary
+- 변경: 기존 별도 검수 웹의 HTTP 앞단에 D-757 개인 세션·project 권한·보호 감사 원장을 적용하고 D-809로 보존 경계를 기록했다. 운영 검수 파일을 변경하지 않았다.
+- 증거: `1bcd83ba3a` 원격 합성 시험 35 passed, known_failures NEW 0. 최종 통합 SHA·게시 검사·실제 HTTPS/사용자 수용은 별도다.
+- gate 변화: None. SOURCE and remote synthetic tests only; installation and user/device/field acceptance remain separate.

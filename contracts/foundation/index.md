@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · 3a1392d2e · Account HTTP 전송 불명 수정 원격 GREEN
+- 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 회귀와 공통 예외 정규화
+- 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
 - 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.264)
 - 2026-10-16 · c6abafd83 · v1.254 이안 허가와 실측 결과 readback
-- 2026-10-16 · 1216b3f7b · 이안 계약과 실제 native API 최종 회귀
-- 2026-10-16 · 7d3f6418d · D-772 이안 허가와 원본 실측 계약 추가
-- 2026-10-16 · 39f94f151 · envelope 버전 규칙과 API 이력 정합성

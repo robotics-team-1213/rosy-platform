@@ -29,6 +29,7 @@ from store import Store, content_sha, file_hashes, parse_dataset_ref
 from review_dataset import build_dataset, _delivery, _stable_bytes, _capture_proofs, validate_eval_companions
 
 
+# Format pinned: review admission config_sha uses this digest; test_canonical_hash_formats.
 def _hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
