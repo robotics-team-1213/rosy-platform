@@ -12,6 +12,8 @@
 |---|---|---|
 | D-824 | 워크트리 기본 상한을 50개로 낮추고 기존 작업과 명시적 예외를 보존한다 | Accepted (2026-10-20) |
 | D-823 | OMX Leader를 통한 자동 운용 중 수동 개입·복구·자동 복귀 | Proposed (2026-10-20) |
+| D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
+| D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
@@ -1180,6 +1182,17 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 
 Details: docs/adr/D-745-learning-center-owner-controls.md.
 
+## D-810 통합관제 운영자 AI 대화의 출처와 조회 권한
+
+**Status:** Accepted for implementation (2026-10-20). 운영 모델 승인·음성 수용·배포는 별도다.
+
+웹 대화를 기존 Discord 신원과 분리하고 첫 버전은 근거에 따른 조회만 제공한다. 전문은 [D-810](../adr/D-810-console-operator-assistant.md).
+
+## D-821 관제 AI 보호 배포·명시적 이동 연결·다국어 평가
+
+**Status:** Accepted for implementation (2026-10-20). 실제 운영 수용은 별도다.
+
+별도 기명 이동 접수는 기존 Task owner를 사용하고 웹 모델은 조회 권한을 유지한다. 보호 설치와 두 언어 수용은 Discord와 독립 결속한다. 전문은 [D-821](../adr/D-821-operator-deployment-execution-languages.md).
 ## D-774 - Installed station measurement camera lifespan
 
 Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).

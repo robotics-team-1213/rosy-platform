@@ -345,6 +345,6 @@
 
 - 2026-10-20 · uncommitted · 워크트리 기본 상한 50개
 - 2026-10-20 · uncommitted · OMX Leader 운용 중 개입 Proposed ADR
-- 2026-10-20 · uncommitted · 주행 SIM 수용 완료 증거 정리
-- 2026-10-20 · uncommitted · 중간 코너 실패와 곡선 입장 회귀 보존
-- 2026-10-20 · uncommitted · 도착 상태와 실제 목표 수용 분리
+- 2026-10-20 · 6c1e5a5267 · 관제 AI 소스 착지·공통 브라우저 fixture 검증
+- 2026-10-20 · a8bc6debd0 · D-821 운영 구조·실행 연결·다국어·Discord 결과
+- 2026-10-20 · 25b77d00b6 · D-810 전체 회귀 발견 수정과 검증 기록

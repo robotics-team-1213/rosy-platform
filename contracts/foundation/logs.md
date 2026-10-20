@@ -864,3 +864,15 @@
 - 변경: StationTargetStatus의 선택 departure_permit/departure_receipt가 현재 상태·session/boot/battery/correlation·원본 evidence 수명과 결속된다. Permit은 실제 binding/ACK와 설치 revision을, Receipt는 실제 operation을 요구한다. readback이 기존 착좌/충전 완료 flags를 빌려 이탈을 증명하지 못한다. 미착지 v1.254 범위의 연속 구현이며 envelope 1.0은 유지한다.
 - 증거: c6abafd83 task-8-departure-readback-green 원격 407개, aff57b47a 실제 transport/native 갱신 원격 208개, 9286f5f77 실제 runtime HTTP 원격 253개 통과. 각각 NEW 0/skip 0, exit 0이며 겹치는 범위를 합산하지 않는다. scoped 독립 안전 리뷰 PASS.
 - gate 변화: 계약과 SIM 회귀 근거. 운영 배포·설치 producer·실기 정밀도·전체 lifecycle/DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-20 · uncommitted · D-810 Console 대화 DTO
+
+- 변경: 별도 protocol.assistant에 strict 입력·근거·응답·상태·자기 대화 읽기 계약을 추가했다. 큰 schemas facade는 늘리지 않고 API v1.289의 참조·서버 설명·tripwire를 함께 맞췄다.
+- 증거: dab629c171 집중 167개 회귀에서 새 입력 검증과 API 버전 정렬을 확인했다. foundation 변경의 필수 전체 회귀는 별도 기록한다.
+- gate 변화: 없음. 실행 권한·로봇 envelope 버전·기존 Discord 계약을 변경하지 않았다.
+
+## 2026-10-20 · 37c3907d3 · D-821 명시적 이동과 locale 추가 계약
+
+- 변경: API v1.290에 ko-KR/en-US, execution_enabled 상태와 기명 운영자 좌표 제출용 AssistantNavigation을 추가했다. 모델의 action_admissible=false와 READ_ONLY 대화는 유지한다.
+- 증거: b0675386a1 집중 94개에 finite/좌표 범위/추가 도구 거부, 자기 CONTROL 요청·현재 권한 재확인, 기존 Task owner 결속을 포함했다. FULL은 별도 결과 기록을 따른다.
+- gate 변화: 없음. CORE 최종 명령 권한·로봇 envelope·Discord 신원은 변경하지 않았다.
