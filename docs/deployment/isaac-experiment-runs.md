@@ -45,7 +45,7 @@ python tools/remote/remote_isaac.py fetch --receipt receipt.json
 }
 ```
 
-fetch는 receipt 옆 `snapshots/`에 매번 새 복사본을 만든다. 등록된 파일을 하나씩 크기·SHA-256·이식 가능한 이름으로 검증하므로 archive 추출 경로를 받지 않는다. 이번 시나리오의 공개 산출물은 1MiB 이하 JSON 보고서이며 원시 SDK 로그·USD는 포함하지 않는다. 마지막 `snapshot.json`이 없으면 불완전한 복사본이다. 실행 중 관찰은 `OBSERVATION_NOT_ATOMIC`, 최종 기록은 `FINAL`을 보존한다.
+fetch는 receipt 옆 `snapshots/`에 매번 새 복사본을 만든다. run ID와 입력 지문을 receipt와 대조한 뒤 등록된 파일을 하나씩 크기·SHA-256·이식 가능한 이름으로 검증하므로 archive 추출 경로를 받지 않는다. 이번 시나리오의 공개 산출물은 1MiB 이하 JSON 보고서이며 원시 SDK 로그·USD는 포함하지 않는다. 파일 데이터를 fsync한 뒤 마지막 `snapshot.json`을 게시하며 이 파일이 없으면 불완전한 복사본이다. 실행 중 관찰은 `OBSERVATION_NOT_ATOMIC`, 최종 기록은 `FINAL`을 보존한다. POSIX에서는 게시 디렉터리도 fsync한다. Windows에서는 파일 데이터의 flush와 원자적 게시를 제공하며 전원 장애 때 디렉터리 항목의 영속성까지 보장하지 않는다.
 
 로컬 공통 진입은 `/usr/bin/python3 SOURCE/learning/envs/isaac/run_control.py --binding BINDING.json`의 stdin JSON이다. `catalog`, `check`, `start`, `list`, `status`, `stop`, `artifact`만 처리한다. `check`는 SDK 배포 metadata·GPU 관찰과 두 잠금을 확인하며 SimulationApp을 시작하지 않는다.
 
