@@ -354,3 +354,9 @@
 - 변경: Added Vault labels to the existing account editor and profile vocabulary. The real-ledger Chromium scenario checks unchecked defaults, explicit selection, profile labels and durable readback.
 - 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
 - gate 변화: none.
+
+## 2026-10-20 · uncommitted · Account presentation and Fleet navigation
+
+- 변경: 로그인·프로필에 공용 제목과 조작 면을 적용하고, 새 작업의 종류가 없거나 조회가 실패한 경우 이유를 표시한다. 기존 목표 지정·대형·지도 실행 계약은 유지한다.
+- 증거: 변경 전 원격 Chromium에서 제목 32px와 새 작업의 빈 안내를 재현했다. 탭·관제 복귀·프로필 왕복·뒤로/앞으로와 모바일 배치는 최종 커밋 원격 시험으로 확인한다. 계정 메뉴는 인증 완료와 펼침 상태를 기다린다.
+- gate 변화: 없음. 이 기록은 배포·실물 좌표 이동·군집 주행 수용을 뜻하지 않는다.

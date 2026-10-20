@@ -25,6 +25,9 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   function showKinds(kinds = []) {
     el("work-new-move-item").hidden = !kinds.includes("trip");
     el("work-new-cell-item").hidden = !kinds.includes("CELL_TRANSFER");
+    el("work-new-status").textContent = kinds.includes("trip") || kinds.includes("CELL_TRANSFER")
+      ? "작업 종류를 선택하세요. 실행 전 장치 상태와 권한을 다시 확인합니다."
+      : "현재 만들 수 있는 작업이 없습니다. 장치 연결과 작업 설정을 확인하세요.";
   }
   el("work-overview").hidden = !active;
   // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
@@ -42,6 +45,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
+    el("work-new-status").textContent = message;
     list.replaceChildren(); clear();
     el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;

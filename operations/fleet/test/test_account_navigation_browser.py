@@ -1,5 +1,7 @@
 """Account presentation and Fleet navigation in Chromium, without device writes."""
 from urllib.parse import quote
+import os
+from pathlib import Path
 
 import pytest
 from playwright.sync_api import expect
@@ -10,8 +12,15 @@ from test_fleet_account_browser import account_backend, account_page, _credentia
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium scenario')
 
 
+def capture(page, name):
+    if directory := os.environ.get('ROSY_SHOT_DIR'):
+        target = Path(directory)
+        target.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target / name), full_page=True)
+
+
 @pytest.mark.parametrize('width', [320, 1366])
-def test_account_entry_uses_shared_heading_and_readable_layout(account_page, width):
+def test_account_entry_uses_shared_heading_and_readable_layout(account_page, account_backend, width):
     page, origin = account_page
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(origin + '/console/login')
@@ -21,9 +30,10 @@ def test_account_entry_uses_shared_heading_and_readable_layout(account_page, wid
     assert heading.evaluate('(node) => getComputedStyle(node).fontSize') == '20px'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     expect(page.locator('#login-back')).to_be_visible()
+    capture(page, f'login-{account_backend}-{width}.png')
 
 
-def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_page):
+def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_page, account_backend):
     page, origin = account_page
     page.set_viewport_size({'width': 1366, 'height': 900})
     errors = []
@@ -46,6 +56,8 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
             expect(page).to_have_url(origin + path)
             expect(page.locator(f'.ui-subnav[data-area={view}]')).to_be_visible()
             expect(page.locator(f'.ui-subnav a[href="{path}"]')).to_have_attribute('aria-current', 'page')
+            if view == 'work':
+                expect(page.locator('#work-new' if show == 'new' else '#work-overview')).to_be_visible()
     for path in ['/console', '/console/site-map', '/console/install']:
         page.locator(f'.doc-tabs a[href="{path}"]').click()
         expect(page).to_have_url(origin + path)
@@ -60,9 +72,14 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     page.locator('#topbar-more').click()
     page.locator('#fleet-profile').click()
     expect(page.locator('#profile-id')).to_have_text('alice')
+    capture(page, f'profile-{account_backend}.png')
     page.locator('#profile-back').click()
     expect(page).to_have_url(origin + target)
     expect(page.locator('#work-new')).to_be_visible()
+    page.go_back()
+    expect(page.locator('#profile-id')).to_have_text('alice')
+    page.go_forward()
+    expect(page).to_have_url(origin + target)
     assert not errors, errors
 
 
