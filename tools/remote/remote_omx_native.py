@@ -246,7 +246,8 @@ def activate(value, directory, remote):
 def deploy(args, repo, runner):
     host = choose_target(runner._LAB, args.host)
     experiment = getattr(args, 'experiment', 'g2')
-    if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations'):
+    if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations',
+                           'pick-place-policy','pick-place-policy-calibration'):
         raise ValueError('unknown native simulation experiment')
     episodes = getattr(args, 'episodes', 1)
     if (type(episodes) is not int or not 1 <= episodes <= 3
@@ -383,7 +384,8 @@ def main():
     shipping.add_argument('--config', type=Path, required=True)
     shipping.add_argument('--log-dir', type=Path, required=True)
     shipping.add_argument('--sha', default='HEAD')
-    shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations'], default='g2')
+    shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations',
+        'pick-place-policy','pick-place-policy-calibration'], default='g2')
     shipping.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
     shipping.add_argument('--approve-host-provisioning', action='store_true')
     for action in ['provision', 'start', 'status', 'fetch']:

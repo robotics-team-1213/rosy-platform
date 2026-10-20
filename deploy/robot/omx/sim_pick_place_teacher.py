@@ -16,7 +16,7 @@ from sim_pick_place_demonstrations import short_targets, dispatch_readback_targe
 from sim_pick_place_task import judge_episode
 
 
-def run(directory, world, observer_path):
+def run(directory, world, observer_path, *, home_only=False):
     isolation_guard(ROOT)
     configure_imports()
     sys.path.insert(0, str(ROOT/'operations/processes/cell'))
@@ -170,6 +170,13 @@ def run(directory, world, observer_path):
         order = config.joint_names
         for point in short_targets([tuple(state['positions'][n] for n in order), tuple(home_q[n] for n in order)]):
             dispatch(dict(zip(order, point)))
+        if home_only:
+            final = wait_ready()
+            if final['active_goal'] is not None or final['owner_state'] != 'ready':
+                raise RuntimeError('startup owner did not become idle')
+            receipt['purpose'] = 'startup_home_only'
+            success = True
+            return 0
         deadline = time.monotonic()+60
         while not capture.camera_status()['fresh']:
             if time.monotonic() > deadline:
@@ -263,5 +270,6 @@ if __name__ == '__main__':
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--world', type=Path, required=True)
     parser.add_argument('--observer', type=Path, required=True)
+    parser.add_argument('--home-only', action='store_true')
     args = parser.parse_args()
-    raise SystemExit(run(args.evidence, args.world, args.observer))
+    raise SystemExit(run(args.evidence, args.world, args.observer, home_only=args.home_only))
