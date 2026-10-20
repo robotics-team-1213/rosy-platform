@@ -48,7 +48,7 @@ class SampleEngine:
             if flow_id == 'monitoring':
                 self.work.advance_task(event)
                 return
-            feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell}.get(flow_id)
+            feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell, 'policy': self.governance}.get(flow_id)
             if feature is None:
                 raise ValueError('unknown sample flow')
             feature.advance(event)
@@ -81,7 +81,10 @@ class SampleEngine:
         response = self.work.handle(method, path, payload, headers, ['sample-robot', *self.installation.robots])
         if response is not None:
             return response
-        for feature in (self.spatial, self.governance, self.assistant, self.cell,
+        response = self.governance.handle(method, path, payload, self.sessions.profile['principal_id'])
+        if response is not None:
+            return response
+        for feature in (self.spatial, self.assistant, self.cell,
                         self.installation, self.pairing, self.calibration):
             response = feature.handle(method, path, payload)
             if response is not None:

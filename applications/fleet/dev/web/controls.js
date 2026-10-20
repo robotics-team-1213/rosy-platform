@@ -19,6 +19,12 @@ for (const [text, event] of [['Cell 보류', 'hold'], ['Cell 동작 완료', 'ac
   button(text, () => control('advance', {flow_id:'cell_jobs', event}));
 }
 button('조회자 시나리오', async () => { await control('reset', {scenario_id:'viewer'}); location.assign('/console/login'); });
+button('검토자로 로그인', async () => {
+  const response = await fetch('/api/fleet/auth/login', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({login:'sample-reviewer', password:'sample-password'})});
+  if (!response.ok) throw Error('login refused');
+  location.reload();
+});
 for (const [text, event] of [['운행 완료', 'complete'], ['운행 실패', 'fail'], ['연결 대기', 'hold'], ['운행 재개', 'resume']]) {
   button(text, () => control('advance', {flow_id:'work', event}));
 }

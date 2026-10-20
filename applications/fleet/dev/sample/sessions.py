@@ -16,6 +16,10 @@ class Sessions:
                         'display_name': '샘플 운영자', 'email': '', 'account_id': 'sample-account',
                         'grants': [{'resource': 'site:sample', 'capabilities': CAPABILITIES if role == 'operator' else ['fleet.read']}]}
         self.accounts = {'sample-account': {**self.profile, 'revision': 1, 'enabled': True}}
+        self.accounts['sample-reviewer-account'] = {**self.profile, 'login': 'sample-reviewer',
+            'principal_id': 'sample-reviewer', 'account_id': 'sample-reviewer-account', 'display_name': '샘플 검토자',
+            'revision': 1, 'enabled': True}
+        self.logins = 0
 
     def authorized(self, headers):
         cookie = SimpleCookie()
@@ -39,8 +43,13 @@ class Sessions:
         if (method, path) == ('GET', '/auth/connection'):
             return reply({'mode': 'paired', 'password_login': True})
         if (method, path) == ('POST', '/auth/login'):
-            if body.get('login') != 'sample' or body.get('password') != self.password:
+            login = body.get('login')
+            if login not in ('sample', 'sample-reviewer') or body.get('password') != self.password:
                 return error(401, 'INVALID_CREDENTIALS')
+            if self.logins:
+                self.epoch += 1
+            self.logins += 1
+            self.profile = {k: v for k, v in self.accounts[login + '-account'].items() if k not in ('revision', 'enabled')}
             self.active = True
             return reply(status=204, headers=self.cookie())
         if not self.authorized(headers):
