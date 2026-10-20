@@ -5,7 +5,7 @@
 ## 현재 출발점
 
 - 소스 기준 commit: `c42fa0260f1fdc1e9e602294c9e4d30feb99f8b4`. 기존 기능 검증은 [이전 결과](../validation/operator-ai-landing-2026-10-20/result.md)의 commit에 한정된다.
-- 현장 이미지 참조는 `rosy-site-fleet:cadbfde749be868239f4cd1899c7ad5a2414cf29`이며 Fleet·Vision·프록시가 healthy다. 이미지 태그만으로 전체 실행 바이트 일치를 증명하지 않는다.
+- 현장 이미지의 source commit 태그는 `rosy-site-fleet:cadbfde749be868239f4cd1899c7ad5a2414cf29`이며 Fleet·Vision·프록시가 healthy다. 이미지 태그만으로 전체 실행 바이트 일치를 증명하지 않는다.
 - 운영 operator 설정은 Fleet 컨테이너에서 보이지 않는다. 공개 main의 operator 설치기 조회도 404다. 배포 소스 게시·동일 SHA CI·서명 후보·보호 설치가 선행해야 한다.
 - 원격 관리 계정의 비대화형 sudo가 거부됐다. 관리자 보호 설치는 수행하지 않았다. 컨테이너 권한이나 다른 경로로 호스트 보호 경계를 우회하지 않는다.
 - 실제 Discord 진단 메시지 한 개의 송신·동일 메시지 API 조회는 확인했다. 사람의 수신 이벤트·AI 회신·작업 결과 통지는 별도다. [이번 기록](../validation/operator-ai-field-preflight-2026-10-21/result.md)을 따른다.
