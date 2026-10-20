@@ -55,7 +55,10 @@ def prepared_set(row, workspace=None):
                 for decision in decisions or []]
     review = latest(workspace, row['id']) if workspace else {'version': 0, 'document': None}
     if review['document'] is not None:
-        segments.validate_selection(inspection, review['document'], require_splits=False)
+        try:
+            segments.validate_selection(inspection, review['document'], require_splits=False)
+        except ValueError:
+            return {'id': row['id'], 'name': row['name'], 'error': '원본이 바뀌어 기존 구간 검수와 일치하지 않습니다.'}
     return {'id': row['id'], 'name': row['name'], 'trainable': trainable, 'episodes': episodes,
             'segment_review': review, 'camera_keys': inspection.get('camera_keys', []),
             'camera_setup': None if setup is None else {'mode': setup.get('mode'), 'references': setup.get('references'),
@@ -86,6 +89,8 @@ def get(handler, path, workspace):
             raise ValueError('camera is not declared by original inspection')
         from PIL import Image
         pixels = segments.copy_frame(frame, {key: {}})[key]
+        if segments.native.dataset_files(root) != report['files']:
+            raise ValueError('source bytes changed while reading frame')
         output = io.BytesIO()
         Image.fromarray(pixels).save(output, format='JPEG', quality=95)
         handler.send(output.getvalue(), mime='image/jpeg', cache='no-store')

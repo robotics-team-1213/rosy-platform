@@ -24,7 +24,8 @@ def report():
 
 
 def selections(report):
-    return [dict(**e, start_frame=2, end_frame=5, object='cube', intervention=False,
+    return [dict(**{k:e[k] for k in ('episode_index','content_sha256','frames','session_id','cycle_id') if k in e},
+                 start_frame=2, end_frame=5, object='cube', intervention=False,
                  outcome='success', reviewer='human', reason='observed grasp', split=split)
             for e, split in zip(report['episodes'], ('train', 'eval'))]
 
