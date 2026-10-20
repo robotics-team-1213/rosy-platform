@@ -343,8 +343,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 관제 자연어 전처리·명령 후보 ADR
 - 2026-10-21 · uncommitted · 관제 AI 현장 사전 점검·전처리 검토
 - 2026-10-21 · uncommitted · 항만 혼합 야드 실험 목적·비교·증거 계획
 - 2026-10-20 · uncommitted · 워크트리 기본 상한 50개
 - 2026-10-20 · uncommitted · OMX Leader 운용 중 개입 Proposed ADR
-- 2026-10-20 · 6c1e5a5267 · 관제 AI 소스 착지·공통 브라우저 fixture 검증
