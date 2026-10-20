@@ -155,7 +155,7 @@ def activate(prepared, state_root):
     pending = state.with_name(".pending-" + uuid.uuid4().hex)
     shutil.copytree(staged_state, pending)
     verify_inventory(pending, document["state_hashes"], exclude={"home", "tmp", "logs", "cache"})
-    (pending / "run.sh").write_text(run_script(release), encoding="utf-8")
+    (pending / "run.sh").write_text(run_script(release, experiment=document.get("experiment", "g2")), encoding="utf-8")
     # SDK probe is preparation evidence; execution uses the newly bound release path.
     manifest = {**document, "schema": "rosy.omx-native-sim-state/1", "source": str(release),
                 "release": str(release), "state": str(state),
