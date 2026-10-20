@@ -44,3 +44,13 @@ def test_operator_install_preparation_binds_existing_snapshot_and_expiry():
         wrong = json.dumps(receipt | changes).encode()
         with pytest.raises(ValueError): prepare(cfg, wrong, hashlib.sha256(wrong).hexdigest())
     with pytest.raises(ValueError): prepare(cfg, raw, '0'*64)
+
+
+def test_signed_site_stacks_select_optional_operator_config_from_fleet_only():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    for name in ['compose.yaml', 'compose.pairing.yaml']:
+        text = (root/'deploy/site'/name).read_text()
+        fleet = text.split('  fleet:\n', 1)[1].split('  vision:\n', 1)[0]
+        assert '--assistant-config-optional\n      - /run/rosy-deliberation/operator.json' in fleet
+        assert text.count('/run/rosy-deliberation/operator.json') == 1
