@@ -114,11 +114,13 @@ def inputs(bundle, pins):
     required = {'deploy/site/deliberation_install.py', 'deploy/site/requirements-fleet.txt',
         'deploy/ai_pc/conversation_acceptance.py', 'deploy/ai_pc/deliberation_conversation_broker.py',
         'deploy/ai_pc/deliberation_conversation.py', 'operations/decision/src/rosy/decision/conversation/codec.py'}
+    if proof['profile']['revision'] == 'd728-semantic-v3-d831':
+        required.add('operations/decision/src/rosy/decision/conversation/preprocessing.py')
     if not required <= files.keys() or sum(map(len, contents.values())) > 64*1024*1024:
         raise ValueError('SOURCE_CLOSURE_REQUIRED')
     manifest_sha = sha(json.dumps(files, sort_keys=True, separators=(',', ':')).encode())
     if (proof['source_commit'] != manifest['source_commit'] or proof['source_manifest_sha256'] != manifest_sha
-            or proof['profile']['revision'] != 'd728-semantic-v2'):
+            or proof['profile']['revision'] not in {'d728-semantic-v2', 'd728-semantic-v3-d831'}):
         raise ValueError('EVALUATED_SOURCE_MISMATCH')
     validate_receipt(receipt, proof, pins['proof'])
     return manifest, proof, contents, proof_raw, receipt_raw, key
