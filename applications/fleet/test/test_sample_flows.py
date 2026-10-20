@@ -177,7 +177,8 @@ def test_account_changes_control_login_and_sample_authority():
     engine = load_engine()
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
     target = '/api/fleet/auth/accounts/sample-reviewer-account'
-    assert call(engine, 'PATCH', target, {'revision': 1, 'role': 'viewer'})[0] == 200
+    assert call(engine, 'PATCH', target, {'revision': 1, 'role': 'viewer',
+                'grants': [{'resource':'site:sample', 'capabilities':['fleet.read']}]})[0] == 200
     assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'sample-password'})[0] == 204
     assert call(engine, 'POST', '/api/fleet/estop', {})[0] == 403
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})

@@ -44,12 +44,14 @@ class Sessions:
             return reply({'mode': 'paired', 'password_login': True})
         if (method, path) == ('POST', '/auth/login'):
             login = body.get('login')
-            if login not in ('sample', 'sample-reviewer') or body.get('password') != self.password:
+            if (login not in ('sample', 'sample-reviewer') or body.get('password') != self.password
+                    or not self.accounts[login + '-account']['enabled']):
                 return error(401, 'INVALID_CREDENTIALS')
             if self.logins:
                 self.epoch += 1
             self.logins += 1
             self.profile = {k: v for k, v in self.accounts[login + '-account'].items() if k not in ('revision', 'enabled')}
+            self.role = self.profile['role']
             self.active = True
             return reply(status=204, headers=self.cookie())
         if not self.authorized(headers):
@@ -63,6 +65,7 @@ class Sessions:
             if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
                 return error(422, 'INVALID_REQUEST')
             self.profile['display_name'] = name.strip()
+            self.accounts[self.profile['account_id']]['display_name'] = name.strip()
             return reply(self.profile)
         if (method, path) == ('POST', '/auth/change-password'):
             if body.get('current_password') != self.password:

@@ -6,6 +6,16 @@ import re
 from response import error, reply
 
 
+def visible_state(status, reason=None):
+    if status == 'HOLD' and reason == 'CANCELLED_BY_OPERATOR':
+        return 'ended'
+    if status in ('FAILED', 'UNKNOWN', 'EXPIRED', 'HOLD', 'failed', 'stopped'):
+        return 'intervention'
+    if status in ('GOAL_CONFIRMED', 'COMPLETED', 'CANCELED', 'arrived', 'canceled'):
+        return 'ended'
+    return 'approval_pending' if status == 'PROPOSED' else 'in_progress'
+
+
 class Work:
     def __init__(self):
         self.plans, self.trips = {}, {}
@@ -126,12 +136,12 @@ class Work:
             rows = [{'source': 'trip', 'source_id': t['trip_id'], 'device_id': t['robot_id'], 'action_kind': 'trip',
                      'status': t['state'], 'updated_at': '2026-10-21T00:00:00Z', 'reason': t['reason'],
                      'workcell_id': None, 'approval': None, 'wait': None,
-                     'visible_state': 'ended' if t['state'] in ('arrived', 'canceled') else 'in_progress'}
+                     'visible_state': visible_state(t['state'], t['reason'])}
                     for t in self.trips.values()]
             rows.extend({'source': 'task', 'source_id': task['task_id'], 'device_id': task['robot_id'], 'action_kind': 'navigate',
                          'status': task['status'], 'reason': task['reason'], 'updated_at': task['updated_at'],
                          'workcell_id': None, 'approval': None, 'wait': None,
-                         'visible_state': 'ended' if task['status'] in ('GOAL_CONFIRMED', 'CANCELED') else 'in_progress'}
+                         'visible_state': visible_state(task['status'], task['reason'])}
                         for task in self.tasks.values())
             return reply({'observed_at': '2026-10-21T00:00:00Z', 'rows': rows, 'kinds': ['trip'],
                           'tasks_available': True, 'missions_available': False, 'cell_jobs_available': False,
