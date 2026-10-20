@@ -38,10 +38,17 @@ def inputs(tmp_path):
                       color='rgb', scale=1/255)],
         owner=dict(kind='omx_local_controller',controller_revision='unregistered-act-study',
                    envelope_revision='unregistered-source-limits-study'))
-    for filename, change in [('policy/config.json',dict(n_action_steps=1)),
-                             ('normalization.json',dict(fixed_source_duration_s=.8)),
+    train=[str(i) for i in range(20)]
+    validation=[str(i) for i in range(20,25)]
+    for filename, change in [('policy/config.json',dict(n_action_steps=1,
+        input_features={'observation.state':dict(type='STATE',shape=[6]),
+                        'observation.images.front':dict(type='VISUAL',shape=[3,64,64])},
+        output_features={'action':dict(type='ACTION',shape=[6])})),
+                             ('normalization.json',dict(fixed_source_duration_s=.8,
+                                 state_mean=[0]*6,state_std=[1]*6,action_mean=[0]*6,action_std=[1]*6,
+                                 fit_episodes=train,image=dict(resize_hw=[64,64],color='rgb',scale=1/255))),
                              ('offline-report.json',dict(verdict='offline_only',
-                                 train_episodes=list(range(20)),eval_episodes=list(range(20,25)),
+                                 train_episodes=train,eval_episodes=validation,
                                  per_episode={str(i):{} for i in range(20,25)}))]:
         value=json.loads((root/filename).read_text());value.update(change)
         (root/filename).write_text(json.dumps(value))
