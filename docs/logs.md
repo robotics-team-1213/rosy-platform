@@ -9422,3 +9422,9 @@ osy-d395-s1d\`.
 - 변경: squash commit `815e5027483cb49ceacc4c562d83cb1439692cbe`가 원래 독립 검토 commit `eddf756d3bfb93ac0d1879f4c1685f6f13859b91`과 같은 tree임을 기존 reviewed-history 목록에 결속한다. 병합 메시지에서 Safety-Review가 빠진 사실을 보존하며 공개 이력은 재작성하지 않는다.
 - 증거: 원래 PR CI493 passed/skip0, main CI39337638405는 trailer 누락으로 scope·aggregate 실패 및 pytest 미실행. 기존 검토와 정확한 squash tree 대조·새 head 검증은 독립적으로 확인한다. pytest 분류 NEW0을 main CI 성공으로 읽지 않는다.
 - gate 변화: 해당 검토 완료 squash 하나의 출처를 기존 절차로 기록한다. trailer 검사 로직·안전 태그·생산 조건은 변경하지 않는다. 새 source·게시·CI·실사용 수용은 별도다.
+
+## 2026-10-20 · uncommitted · Account 배포 후속 증거와 남은 수용
+
+- 변경: 전일 실행 계획·결과는 보존하고 `validation/account-service-2026-10-20/result.md`에 최종 소스·정상 push/main CI·서명 설치·Learning 데이터 보존·익명 HTTPS 경계와 남은 사람/장치 수용을 연결했다.
+- 증거: main commit `a42ae9062ee4d7b29d3d3fd66a3087f155148194` CI39342200884 19작업 성공,29451 passed/0 failed/1578 skipped/NEW0. 정상 field updater 설치와 세 서비스 healthy, Learning 다섯 앱 활성화·42테이블 원래 값/1297파일 보존의 보호 영수증과 독립 검토를 기록했다. 이 문서 변경 자체의 원격 검사·게시 결과는 별도다.
+- gate 변화: 소스·배포·익명 진입 증거가 추가됐다. 사람/Android/로봇/Games/미디어 수용은 여전히 미완료이며 지속 목표를 완료로 바꾸지 않는다. 생산 코드·검사·안전 조건은 변경하지 않는다.
