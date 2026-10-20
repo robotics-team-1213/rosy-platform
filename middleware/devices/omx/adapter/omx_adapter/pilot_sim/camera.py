@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from copy import copy
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import qos_profile_sensor_data
@@ -22,8 +23,10 @@ class PilotSimCamera:
         self._bootstrap = node.create_subscription(
             CameraInfo, "/workcell_camera/camera_info", self._on_info, qos_profile_sensor_data)
         self._joint_group = MutuallyExclusiveCallbackGroup()
+        joint_qos = copy(qos_profile_sensor_data)
+        joint_qos.depth = 512
         self._joint_sub = node.create_subscription(
-            JointState, "/joint_states", capture.observe_joint_state, qos_profile_sensor_data,
+            JointState, "/joint_states", capture.observe_joint_state, joint_qos,
             callback_group=self._joint_group)
         self._stop = threading.Event()
         self._worker = threading.Thread(target=self._run, name="sim-demonstration-writer", daemon=True)
