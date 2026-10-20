@@ -26,9 +26,12 @@ class OperatorConfig(Strict):
         return self.primary_admitted and time.time() < self.valid_until
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, *, optional=False):
         try:
             return cls.model_validate_json(Path(path).read_bytes())
+        except FileNotFoundError:
+            if optional: return None
+            raise ValueError('INVALID_OPERATOR_ASSISTANT_CONFIG') from None
         except (OSError, ValueError):
             raise ValueError('INVALID_OPERATOR_ASSISTANT_CONFIG') from None
 

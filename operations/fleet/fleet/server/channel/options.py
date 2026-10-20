@@ -5,8 +5,11 @@ from pathlib import Path
 def add_conversation_options(parser):
     parser.add_argument('--conversation-config-optional', default=None, type=Path,
                         help='optional independently admitted natural conversation broker config')
-    parser.add_argument('--assistant-config', default=None, type=Path,
-                        help='independently admitted read-only Console assistant broker config')
+    assistant = parser.add_mutually_exclusive_group()
+    assistant.add_argument('--assistant-config', default=None, type=Path,
+                           help='independently admitted Console assistant broker config')
+    assistant.add_argument('--assistant-config-optional', default=None, type=Path,
+                           help='missing file keeps Console assistant off; invalid config refuses startup')
     parser.add_argument('--deliberation-config-optional', default=None, type=Path,
                         help='optional private D-720 fixed read-only status broker config')
 
@@ -19,6 +22,6 @@ def load_conversation_options(args):
              if getattr(args, 'deliberation_config_optional', None) is not None else None)
     conversation = (ConversationConfig.load(args.conversation_config_optional, optional=True)
                     if getattr(args, 'conversation_config_optional', None) is not None else None)
-    assistant = (OperatorConfig.load(args.assistant_config)
-                 if getattr(args, 'assistant_config', None) is not None else None)
+    path = getattr(args, 'assistant_config', None) or getattr(args, 'assistant_config_optional', None)
+    assistant = OperatorConfig.load(path, optional=getattr(args, 'assistant_config', None) is None) if path else None
     return model, conversation, assistant

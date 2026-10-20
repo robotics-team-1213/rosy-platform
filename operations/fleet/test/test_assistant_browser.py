@@ -6,6 +6,29 @@ from test_console_queue_inline_browser import API, _open, site  # noqa: F401
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in real Chromium scenario')
 
 
+def test_operator_can_select_english_text_and_voice_locale(site):
+    from playwright.sync_api import expect, sync_playwright
+    api = {**API, '/api/fleet/assistant/status': {'available':True, 'mode':'READ_ONLY', 'reason':None}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts)
+        try:
+            def answer(route):
+                body = route.request.post_data_json
+                posts.append(body)
+                route.fulfill(status=202, json={**body, 'state':'ANSWERED', 'response':'Hello. Current Fleet observations.',
+                    'facts':[], 'created_at':1000., 'completed_at':1000., 'reason':None, 'action_admissible':False})
+            page.route('**/api/fleet/assistant/messages', answer)
+            page.locator('#assistant-toggle').click()
+            page.locator('#assistant-locale').select_option('en-US')
+            page.locator('#assistant-input').fill('What is the robot status?')
+            page.locator('#assistant-send').click()
+            expect(page.locator('#assistant-messages')).to_contain_text('Hello.')
+            assert posts[-1]['locale'] == 'en-US' and not errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize('size', [(1440, 900), (390, 844)])
 def test_assistant_panel_text_safe_account_scoped_and_safety_visible(site, size):
     from playwright.sync_api import expect, sync_playwright

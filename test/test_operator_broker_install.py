@@ -54,3 +54,50 @@ def test_signed_site_stacks_select_optional_operator_config_from_fleet_only():
         fleet = text.split('  fleet:\n', 1)[1].split('  vision:\n', 1)[0]
         assert '--assistant-config-optional\n      - /run/rosy-deliberation/operator.json' in fleet
         assert text.count('/run/rosy-deliberation/operator.json') == 1
+
+
+@pytest.mark.parametrize('check', [True, False])
+def test_operator_installer_check_writes_nothing_and_failed_readback_rolls_back(tmp_path, monkeypatch, check):
+    import hashlib
+    import os
+    from types import SimpleNamespace
+    from deploy.site import install_operator_broker as m
+    from deploy.ai_pc import conversation_acceptance
+    from rosy.decision.conversation.codec import digest
+    base = m.base
+    monkeypatch.setattr(base, 'REVIEWED', tmp_path)
+    monkeypatch.setattr(base, 'VERSIONS', tmp_path/'versions')
+    target = base.VERSIONS/('a'*40); target.mkdir(parents=True)
+    (target/'source.py').write_bytes(b'reviewed source')
+    installed, receipt = proof()
+    installed['files'] = {'source.py':hashlib.sha256(b'reviewed source').hexdigest()}
+    receipt['source_manifest_sha256'] = digest(installed['files'])
+    config = tmp_path/'conversation.json'; config.write_text(json.dumps(installed))
+    evidence = tmp_path/'proof.json'; evidence.write_text(json.dumps(receipt))
+    broker = tmp_path/'broker'; broker.write_bytes(base.broker_wrapper(target))
+    monkeypatch.setattr(base, 'CONFIG', config); monkeypatch.setattr(base, 'BROKER', broker)
+    monkeypatch.setattr(m, 'CONFIG', tmp_path/'operator.json')
+    monkeypatch.setattr(base, 'require_admin', lambda:None)
+    monkeypatch.setattr(base, 'trusted_directory', lambda _:None)
+    monkeypatch.setattr(base, 'protected', lambda p:p.read_bytes())
+    monkeypatch.setattr(conversation_acceptance, 'source_files', lambda _:['source.py'])
+    monkeypatch.setattr(m.pwd, 'getpwnam', lambda _:SimpleNamespace(pw_name='test', pw_gid=os.getgid()))
+    writes = []
+    def replace(path, data, mode, gid, allowed):
+        writes.append(path); path.write_bytes(data)
+    monkeypatch.setattr(base, 'replace_managed', replace)
+    calls = []
+    def run(*args, **_):
+        code = args[args.index('-c')+1]; calls.append(code)
+        assert '/api/chat' not in code
+        if 'operator_broker' in code: raise ValueError('READBACK_FAILED')
+    monkeypatch.setattr(base, 'run', run)
+    args = [str(evidence), '--proof-sha256', base.sha(evidence.read_bytes()),
+            '--conversation-config-sha256', base.sha(config.read_bytes())]
+    if check:
+        assert m.main(args+['--check']) == 0
+        assert not writes and len(calls) == 1
+    else:
+        with pytest.raises(ValueError, match='READBACK_FAILED'): m.main(args)
+        assert not m.CONFIG.exists()
+    assert json.loads(config.read_text()) == installed and broker.read_bytes() == base.broker_wrapper(target)
