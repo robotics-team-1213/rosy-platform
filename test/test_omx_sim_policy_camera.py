@@ -13,7 +13,8 @@ from sim_policy_camera import packet_from_message
 
 
 def image():
-    return SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10,nanosec=0)),
+    return SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10,nanosec=0),
+                                                 frame_id='workcell_camera_optical'),
         encoding='rgb8',height=240,width=320,step=960,data=bytearray(320*240*3))
 
 
