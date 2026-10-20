@@ -207,9 +207,20 @@ def validate_profile(doc, *, root):
                 'task': manifest['task'], 'status': 'complete'}
     if any(value[key] != item for key, item in expected.items()):
         raise ValueError('OMX Episode metadata binding differs')
+    evidence = [refs[name]]
+    judge = 'operator'
+    if 'sim-truth/truth.json' in refs:
+        from .sim_object_truth import validate_truth
+        truth = validate_truth(root/'sim-truth/truth.json', validated, source=original.parent)
+        for ref in truth['document']['files'].values():
+            target = 'sim-truth/'+ref['path']
+            if refs.get(target) != {**ref, 'path': target}:
+                raise ValueError('SIM truth file absent from Episode closure')
+        judge = 'sim_ground_truth'
+        evidence.append(refs['sim-truth/truth.json'])
     if (value['revisions']['calibration'] != provenance['calibration_revision']
             or value['outcome'] != {'task': manifest['task_outcome'], 'action': 'unknown',
-                                    'judge': 'operator', 'evidence': [refs[name]]}):
+                                    'judge': judge, 'evidence': evidence}):
         raise ValueError('OMX Episode outcome/calibration binding differs')
     receipt_names = sorted(path for path in refs if path.startswith('owner-receipts/'))
     if receipt_names != [f'owner-receipts/{i:06d}.json' for i in range(len(receipt_names))]:

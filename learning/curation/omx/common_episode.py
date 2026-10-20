@@ -22,7 +22,7 @@ def _in_checkout(path) -> bool:
     return any((p / '.git').exists() for p in (path, *path.parents))
 
 
-def convert(source, output, *, owner_receipts=()):
+def convert(source, output, *, owner_receipts=(), sim_ground_truth=None):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.exists() or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError("a new directory separate from the source Episode is required")
@@ -30,6 +30,10 @@ def convert(source, output, *, owner_receipts=()):
         raise ValueError("artifact output belongs outside the source checkout")
     validated = validate_omx(source)
     manifest, samples = validated["manifest"], validated["samples"]
+    truth = None
+    if sim_ground_truth is not None:
+        from rosy.contracts.learning.sim_object_truth import validate_truth
+        truth = validate_truth(sim_ground_truth, validated, source=source)
     receipt_payloads, receipts = {}, []
     if owner_receipts:
         # The optional offline input uses the existing wire validator; the contracts wheel stays stdlib-only.
@@ -74,18 +78,28 @@ def convert(source, output, *, owner_receipts=()):
         target.write_bytes(payload)
         receipt_refs.append(dict(path=relative, bytes=len(payload), sha256=hashlib.sha256(payload).hexdigest()))
     provenance = manifest["provenance"]
+    truth_refs = []
+    if truth is not None:
+        payloads = {'truth.json': Path(sim_ground_truth).read_bytes(), **truth['payloads']}
+        for relative, payload in payloads.items():
+            target = output / 'sim-truth' / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+            truth_refs.append(dict(path=target.relative_to(output).as_posix(), bytes=len(payload),
+                                   sha256=hashlib.sha256(payload).hexdigest()))
     doc = seal({"schema": "rosy.episode/1", "episode_id": manifest["episode_id"],
                 "profile": "omx_demonstration_v1", "device": provenance["instance_id"],
                 "robot_type": manifest["robot_type"], "environment": "sim",
                 "clock_domain": provenance["clock_domain"], "task": manifest["task"], "skill": None,
                 "revisions": {"policy": None, "model": None,
                               "calibration": provenance["calibration_revision"], "camera_profile": None},
-                "sources": list(references.values()) + receipt_refs,
+                "sources": list(references.values()) + receipt_refs + truth_refs,
                 "streams": {"observation": references["samples.jsonl"],
                             "action": references["samples.jsonl"], "events": references["events.jsonl"]},
                 "correlations": correlations, "status": "complete",
-                "outcome": {"task": manifest["task_outcome"], "action": "unknown", "judge": "operator",
-                            "evidence": [references["manifest.json"]]}})
+                "outcome": {"task": manifest["task_outcome"], "action": "unknown",
+                            "judge": "sim_ground_truth" if truth else "operator",
+                            "evidence": [references["manifest.json"]] + truth_refs[:1]}})
     validate_episode(doc, root=output)
     validate_profile(doc, root=output)
     temporary = output / "manifest.json.tmp"
@@ -100,8 +114,10 @@ def main():
     ap.add_argument("output", type=Path)
     ap.add_argument('--owner-receipt', action='append', type=Path, default=[],
                     help='repeat for each recorded goal, all in one Action/attempt/journal')
+    ap.add_argument('--sim-ground-truth', type=Path)
     args = ap.parse_args()
-    print(json.dumps(convert(args.source, args.output, owner_receipts=args.owner_receipt)))
+    print(json.dumps(convert(args.source, args.output, owner_receipts=args.owner_receipt,
+                             sim_ground_truth=args.sim_ground_truth)))
 
 
 if __name__ == "__main__":

@@ -2,46 +2,14 @@
 import argparse
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import sys
 import time
 
 
-def judge_episode(samples, *, model, initial_z, goal, released_at, released):
-    result = {'success': False, 'lift_m': 0., 'stable_sim_s': 0.,
-              'xy_error_m': None, 'z_error_m': None}
-    previous, stable_since = None, None
-    try:
-        if not all(math.isfinite(x) for x in (initial_z, *goal, released_at)):
-            raise ValueError('nonfinite task inputs')
-        for sample in samples:
-            pose = sample['model_pose_base']
-            clock = sample['clock']
-            xyz = tuple(pose[key] for key in ('x_m', 'y_m', 'z_m'))
-            finger = sample['gripper_position']
-            if (sample['model_id'] != model or
-                    not all(type(x) in (float, int) and math.isfinite(x) for x in (*xyz, clock, finger))
-                    or clock < 0 or previous and clock <= previous[0]):
-                raise ValueError('invalid object identity, clock or measurement')
-            result['lift_m'] = max(result['lift_m'], xyz[2] - initial_z)
-            result['xy_error_m'] = math.hypot(xyz[0] - goal[0], xyz[1] - goal[1])
-            result['z_error_m'] = abs(xyz[2] - goal[2])
-            if clock >= released_at:
-                good = (result['xy_error_m'] <= 0.01 and result['z_error_m'] <= 0.005
-                        and abs(finger - 1.) <= 0.05)
-                if previous and previous[0] >= released_at:
-                    dt = clock - previous[0]
-                    good = good and dt <= 0.5 and math.dist(xyz, previous[1]) / dt <= 0.01
-                stable_since = (clock if stable_since is None else stable_since) if good else None
-                result['stable_sim_s'] = 0. if stable_since is None else clock - stable_since
-            previous = clock, xyz
-    except (KeyError, TypeError, ValueError, OverflowError) as error:
-        result['reason'] = str(error)
-        return result
-    result['success'] = bool(released and result['lift_m'] >= 0.03 and result['stable_sim_s'] >= 2.)
-    return result
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning.sim_object_truth import judge_episode
 
 
 def run(directory):
