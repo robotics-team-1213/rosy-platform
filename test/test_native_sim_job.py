@@ -163,6 +163,45 @@ def test_reservation_has_owned_visible_budget_and_never_replays(tmp_path, monkey
     assert link.is_symlink() and link.resolve() == state / "budget.resv"
     assert result["runtime"] == "NOT_RUN"
     assert (state / "budget.resv").read_text().split()[1:] == ["sim", "4", "4"]
+
+
+def study_state(tmp_path):
+    from native_sim_inputs import dependency_inventory
+    state=activated(tmp_path)
+    policy=tmp_path/'policy';policy.mkdir()
+    campaign=dict(schema='rosy.omx-fixed-object-policy-campaign/1',runtime_revision=SHA,
+        policy_revision='c'*64,normalization_sha256='d'*64,dataset_revision='e'*64)
+    (policy/'campaign.json').write_text(json.dumps(campaign))
+    (policy/'policy-artifact.json').write_text(json.dumps(dict(revision='c'*64,
+        normalization=dict(sha256='d'*64),dataset_revisions=['e'*64])))
+    manifest=json.loads((state/'manifest.json').read_text())
+    manifest.update(experiment='pick-place-policy',policy_input=str(policy))
+    manifest['dependency_roots'].append(str(policy))
+    manifest['dependency_hashes']=dependency_inventory(manifest['dependency_roots'])
+    (state/'manifest.json').write_text(json.dumps(manifest))
+    return state
+
+
+def test_policy_study_reservation_refuses_missing_separate_approval(tmp_path,monkeypatch):
+    import native_sim_job as job
+    state=study_state(tmp_path)
+    monkeypatch.setattr(job,'capacity',lambda *_:(12,16))
+    with pytest.raises(PermissionError,match='policy study'):
+        job.reserve(state,jobs_root=tmp_path/'jobs')
+    assert not (state/'start-intent.json').exists()
+
+
+def test_explicit_study_approval_binds_actual_input_pins_and_operator_source(tmp_path,monkeypatch):
+    import native_sim_job as job
+    state=study_state(tmp_path)
+    monkeypatch.setattr(job,'capacity',lambda *_:(12,16))
+    job.reserve(state,jobs_root=tmp_path/'jobs',approve_study=True)
+    approval=json.loads((state/'start-intent.json').read_text())['study_approval']
+    assert approval['source']=='operator_local'
+    assert approval['approval']=='isolated-policy-study'
+    assert approval['parent_policy_revision']=='c'*64
+    assert approval['normalization_sha256']=='d'*64 and approval['dataset_revision']=='e'*64
+    assert approval['source_revision']==SHA
     with pytest.raises(FileExistsError):
         job.reserve(state, jobs_root=jobs)
 
