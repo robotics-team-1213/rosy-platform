@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON, applyRoleToControls } from "../../../site_ui/console/shared/authorization.js";
-import { createConfirmedAction } from "../../../site_ui/console/confirmed-action.js";
+import { OPERATOR_REASON, applyRoleToControls } from "../../../../applications/fleet/web/shared/authorization.js";
+import { createConfirmedAction } from "../../../../applications/fleet/web/confirmed-action.js";
 import { createPageScope } from "../../../../shared/web/scope.js";
 
 test("a pending confirmation belongs to its original named operator", async () => {

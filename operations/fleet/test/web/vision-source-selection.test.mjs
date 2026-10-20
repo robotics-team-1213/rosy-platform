@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createVisionView } from "../../../site_ui/console/shared/vision-view.js";
+import { createVisionView } from "../../../../applications/fleet/web/shared/vision-view.js";
 
 // Model the select's browser behavior: replacing options selects the first option.
 function harness() {

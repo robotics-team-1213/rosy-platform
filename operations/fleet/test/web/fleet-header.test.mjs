@@ -2,14 +2,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON } from "../../../site_ui/console/shared/authorization.js";
+import { OPERATOR_REASON } from "../../../../applications/fleet/web/shared/authorization.js";
 // Header unit tests isolate authorization; shared icon rendering has real-browser coverage.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
   LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
   showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
-} = await import("../../../site_ui/console/shared/fleet-header.js");
+} = await import("../../../../applications/fleet/web/shared/fleet-header.js");
 
 function fakeNode(id) {
   const attributes = new Map();
@@ -187,12 +187,12 @@ test("only the request feeds the link word: a paint error after an answer is not
 
 test("the console counts every Fleet answer and keeps asking while signed out", async () => {
   const {readFile} = await import("node:fs/promises");
-  const source = await readFile(new URL("../../../site_ui/console/console.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../../../applications/fleet/web/console.js", import.meta.url), "utf8");
   const wrapper = source.slice(source.indexOf("const fleetClient ="), source.indexOf("async function call("));
   assert.match(wrapper, /fleetApi\(path, options\)\.then\(body => \{ noteLink\(\);/);  // every answer, 401/403 included
   assert.match(wrapper, /path === "\/api\/fleet\/state" \|\| error\.status < 500\) noteLink\(error\)/);
   // D-798 3.2: the state poll lives in console-refresh.js; the cancel-all handler follows it there.
-  const refresh = await readFile(new URL("../../../site_ui/console/console-refresh.js", import.meta.url), "utf8");
+  const refresh = await readFile(new URL("../../../../applications/fleet/web/console-refresh.js", import.meta.url), "utf8");
   const poll = refresh.slice(refresh.indexOf("async function refreshState("), refresh.indexOf("const CANCEL_ALL_RESULT"));
   assert.ok(poll.length > 0);
   assert.match(poll, /if \(auth\.locked\) return void fleetApi\("\/api\/fleet\/auth\/connection"/);

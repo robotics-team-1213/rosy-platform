@@ -4,7 +4,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const WEB = new URL("../../../site_ui/console/", import.meta.url);
+const WEB = new URL("../../../../applications/fleet/web/", import.meta.url);
 const PREFIX = "/console/assets/";
 const FOLDERS = ["shared/", "cell/", "work/", "devices/", "sitemap/", "installation/", "map/", ""];
 

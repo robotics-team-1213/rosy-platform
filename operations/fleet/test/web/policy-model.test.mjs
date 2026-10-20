@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   ADMIN_REASON, TWO_PERSON_REASON, executionVerdict, incidentLock, nextStage, proposalLock, remaining, roles, windowLock,
-} from "../../../site_ui/console/work/policy-model.js";
+} from "../../../../applications/fleet/web/work/policy-model.js";
 
 const RULES = {
   stages: ["L0", "L1", "L2", "L3", "LIMITED"], two_person_stages: ["L3", "LIMITED"],

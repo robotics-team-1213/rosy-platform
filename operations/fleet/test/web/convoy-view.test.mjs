@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   convoyLeaders, repeatTripBody, trafficCardLine, trafficDrawing, tripErrorText,
-} from '../../../site_ui/console/shared/site-map-model.js';
+} from '../../../../applications/fleet/web/shared/site-map-model.js';
 
 const ACTIVE = {version: 7, map: {edges: [{id: 'east', polyline: [[0, 0], [4, 0]]}],
   places: [{id: 'start_n', kind: 'start'}, {id: 'start_s', kind: 'start'}, {id: 'X', kind: 'junction'}]}};

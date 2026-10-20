@@ -9,7 +9,7 @@ const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
   previewFresh, headingText, fleetAnswerText, stuckSummary, judgmentText,
-} = await import("../../../site_ui/console/line-stuck.js");
+} = await import("../../../../applications/fleet/web/line-stuck.js");
 
 const STUCK = {
   stuck_id: "stuck-abc", cause: "obstacle_ahead", phase: "ASKING", held_s: 12.4,

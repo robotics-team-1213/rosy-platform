@@ -5,7 +5,7 @@ const { register } = await import("node:module");
 register("./resolve-console-assets.mjs", import.meta.url);
 const {
   localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
-} = await import("../../../site_ui/console/localization-badge.js");
+} = await import("../../../../applications/fleet/web/localization-badge.js");
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
   needs_human: false, label: "위치 확정", ...over });
@@ -102,7 +102,7 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
 });
 
 test("an LED-confirmed blob is the pin place only while the map pose is not LOCALIZED", async () => {
-  const { pinPrefill } = await import("../../../site_ui/console/localization-badge.js");
+  const { pinPrefill } = await import("../../../../applications/fleet/web/localization-badge.js");
   const identity = { robots: [{ robot_id: "rosy_41", state: "CONFIRMED", x: 0.398, y: -0.499 },
     { robot_id: "rosy_40", state: "UNKNOWN", x: null, y: null }] };
   const degraded = { pose: { x: 0.962, y: -0.011, state: "DEGRADED" } };

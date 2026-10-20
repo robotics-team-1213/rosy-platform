@@ -1,8 +1,8 @@
 // D-540 4: the site map and the 관제 map draw the same /guide marks; the view turn rotates them.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {guideMarks, poseLabel} from '../../../site_ui/console/shared/guide-layer.js';
-import {fitView} from '../../../site_ui/console/shared/site-map-model.js';
+import {guideMarks, poseLabel} from '../../../../applications/fleet/web/shared/guide-layer.js';
+import {fitView} from '../../../../applications/fleet/web/shared/site-map-model.js';
 
 const MAP = {places: [{id: 'A', x: 0, y: 0}, {id: 'B', x: 2, y: 1.2}], edges: []};
 const GUIDE = {robots: [

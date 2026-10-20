@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { shownRobot } = await import("../../../site_ui/console/device-watch.js");
+const { shownRobot } = await import("../../../../applications/fleet/web/device-watch.js");
 
 test("the watch follows the open card, then the armed robot, then a sole robot", () => {
   const one = { robot_id: "rosy_26" };

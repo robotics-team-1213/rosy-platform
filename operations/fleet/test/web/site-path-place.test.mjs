@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const root = new URL("../../../site_ui/console/", import.meta.url);
+const root = new URL("../../../../applications/fleet/web/", import.meta.url);
 const html = readFileSync(new URL("index.html", root), "utf8");
 const roster = readFileSync(new URL("roster.js", root), "utf8");
 const consoleJs = readFileSync(new URL("console.js", root), "utf8");

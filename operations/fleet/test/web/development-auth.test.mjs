@@ -6,7 +6,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const stored = new Map();
 globalThis.sessionStorage = { setItem: (k, v) => stored.set(k, v), getItem: (k) => stored.get(k) ?? null };
-const { ISSUE_GAP_MS, issueDevelopmentSession } = await import("../../../site_ui/console/shared/development-auth.js");
+const { ISSUE_GAP_MS, issueDevelopmentSession } = await import("../../../../applications/fleet/web/shared/development-auth.js");
 
 test("a page issues at most one development session per gap", async () => {
   let posts = 0;

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { fleetRow, proxyRow, visionRow, sitePathSummary } from "../../../site_ui/console/site-path.js";
+import { fleetRow, proxyRow, visionRow, sitePathSummary } from "../../../../applications/fleet/web/site-path.js";
 
 test("before any sample the three rows are still checking", () => {
   for (const row of [proxyRow(null), fleetRow(null), visionRow(null)]) {

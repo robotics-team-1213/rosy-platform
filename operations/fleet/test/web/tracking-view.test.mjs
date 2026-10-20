@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTrackingView } from "../../../site_ui/console/tracking-view.js";
+import { createTrackingView } from "../../../../applications/fleet/web/tracking-view.js";
 
 test("expired or missing observations clear coordinates without hiding the coordinate table", async () => {
   const nodes = new Map();

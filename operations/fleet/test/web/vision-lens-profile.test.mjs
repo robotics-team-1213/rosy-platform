@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseLensHeader, rectificationKey, resolveSavedProfile } from "../../../site_ui/console/shared/vision-view.js";
+import { parseLensHeader, rectificationKey, resolveSavedProfile } from "../../../../applications/fleet/web/shared/vision-view.js";
 
 function memoryStorage(entries = {}) {
   const map = new Map(Object.entries(entries));
