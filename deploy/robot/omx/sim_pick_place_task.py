@@ -71,9 +71,10 @@ def run(directory):
               'recipe_sha256': hashlib.sha256(recipe_path.read_bytes()).hexdigest(),
               'cell_sha256': hashlib.sha256(cell_path.read_bytes()).hexdigest()}
     try:
-        env = dict(os.environ, ROSY_SIM_REPO=str(ROOT),
+        domain = os.environ.get('ROS_DOMAIN_ID', '77')
+        env = dict(os.environ, ROSY_SIM_REPO=str(ROOT), ROS_DOMAIN_ID=domain,
                    OMX_CELL_WORLD=str(ROOT / 'integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid'),
-                   OMX_CELL_LOG_DIR=str(directory), OMX_CELL_DOMAIN_ID=os.environ['ROS_DOMAIN_ID'])
+                   OMX_CELL_LOG_DIR=str(directory), OMX_CELL_DOMAIN_ID=domain)
         children.start('gazebo-launch', ['bash', str(ROOT / 'deploy/robot/omx/run_cell_sim.sh')], env=env)
         observer_path = directory / 'observer.sock'
         children.start('observer', ['/usr/bin/python3', str(ROOT / 'deploy/robot/omx/g2_observer.py'),
