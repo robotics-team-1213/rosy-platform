@@ -9428,3 +9428,9 @@ osy-d395-s1d\`.
 - 변경: 전일 실행 계획·결과는 보존하고 `validation/account-service-2026-10-20/result.md`에 최종 소스·정상 push/main CI·서명 설치·Learning 데이터 보존·익명 HTTPS 경계와 남은 사람/장치 수용을 연결했다.
 - 증거: main commit `a42ae9062ee4d7b29d3d3fd66a3087f155148194` CI39342200884 19작업 성공,29451 passed/0 failed/1578 skipped/NEW0. 정상 field updater 설치와 세 서비스 healthy, Learning 다섯 앱 활성화·42테이블 원래 값/1297파일 보존의 보호 영수증과 독립 검토를 기록했다. 이 문서 변경 자체의 원격 검사·게시 결과는 별도다.
 - gate 변화: 소스·배포·익명 진입 증거가 추가됐다. 사람/Android/로봇/Games/미디어 수용은 여전히 미완료이며 지속 목표를 완료로 바꾸지 않는다. 생산 코드·검사·안전 조건은 변경하지 않는다.
+
+## 2026-10-20 · uncommitted · 일회성 WSL 진단 도구 보관
+
+- 변경: 고정 작업 공간·PID·로그 위치를 가정한 tools 루트의 일회성 스크립트 18개를 reference/legacy-tools/wsl로 옮겼다. 현재 호출되는 Fleet·Pilot 시뮬 런처는 유지한다.
+- 증거: 18개 모두 이동 전 git blob과 byte 대조가 일치한다. 내부의 과거 절대 경로도 원본으로 보존하며 현재 실행 경로로 안내하지 않는다. 커밋 SHA 원격 아키텍처·Fleet 시뮬 계약 검사는 별도 수행한다.
+- gate 변화: 없음. 고정 validation 기록과 manifest가 참조하는 map report bundle은 보존한다. 실제 WSL·Gazebo·로봇 동작 수용을 뜻하지 않는다.
