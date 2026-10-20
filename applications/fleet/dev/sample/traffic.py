@@ -26,7 +26,7 @@ class Traffic:
             if (leader not in robot_ids or not isinstance(members, list) or not members
                     or any(item not in robot_ids or item == leader for item in members)):
                 return error(422, 'FORMATION_MEMBERS_INVALID')
-            if (body.get('formation') not in ('FOLLOW', 'COLUMN', 'LINE', 'GRID', 'WEDGE')
+            if (body.get('formation') not in ('FOLLOW', 'COLUMN', 'LINE', 'V', 'GRID', 'CIRCLE', 'TRAIL')
                     or isinstance(spacing, bool) or not isinstance(spacing, (int, float)) or not math.isfinite(spacing) or spacing < .4):
                 return error(422, 'INVALID_REQUEST')
             self.formation = {'active': True, 'state': 'RUNNING', 'leader': leader, 'formation': body['formation'],

@@ -39,6 +39,47 @@ class Governance:
         if body.get('operator_confirmed') is not True:
             return error(422, 'INVALID_REQUEST')
         now = self.state['now_ns']
+        if action == '/windows':
+            rule = RULES['windows'].get(body.get('kind'))
+            if rule is None:
+                return error(422, 'UNKNOWN_WINDOW_KIND')
+            minutes = body.get('minutes', rule['default_minutes'])
+            if type(minutes) is not int or not 1 <= minutes <= rule['max_minutes'] or not body.get('scope'):
+                return error(422, 'WINDOW_TOO_LONG')
+            policy = next((p for p in self.state['policies'] if p['policy_revision'] == body.get('policy_revision')), None)
+            if policy is None or RULES['stages'].index(policy['stage']) < RULES['stages'].index(rule['min_stage']):
+                return error(409, 'STAGE_TOO_LOW')
+            if any(policy[key] != body.get(key) for key in ('rig_revision', 'calibration_revision')):
+                return error(409, 'REVISION_CHANGED_REAPPROVAL_REQUIRED')
+            if any(p['cleared_ns'] is None for p in self.state['incidents']):
+                return error(409, 'INCIDENT_OPEN')
+            row = {key: body[key] for key in ('policy_revision', 'kind', 'scope')}
+            row.update(window_id=f'sample-window-{len(self.state["windows"]) + 1}', workcell_id='sample-cell',
+                       minutes=minutes, requested_by=actor, requested_ns=now, approved_by=None,
+                       starts_ns=None, expires_ns=None, closed_ns=None, closed_reason=None, active=False)
+            self.state['windows'].append(row)
+            return reply(row)
+        match = re.fullmatch('/windows/([^/]+)/(approve|close)', action)
+        if match:
+            row = next((p for p in self.state['windows'] if p['window_id'] == match[1]), None)
+            if row is None:
+                return error(404, 'WINDOW_NOT_FOUND')
+            if match[2] == 'close':
+                if not isinstance(body.get('reason'), str) or not body['reason'].strip():
+                    return error(422, 'INVALID_REQUEST')
+                if row['closed_ns'] is None:
+                    row.update(active=False, closed_ns=now, closed_reason=f'closed by {actor}: {body["reason"]}')
+                return reply(row)
+            if row['approved_by'] or row['closed_ns'] is not None:
+                return error(409, 'WINDOW_ALREADY_DECIDED')
+            if RULES['windows'][row['kind']]['two_person'] and row['requested_by'] == actor:
+                return error(403, 'APPROVER_MUST_DIFFER_FROM_PROPOSER')
+            if any(p['cleared_ns'] is None for p in self.state['incidents']):
+                return error(409, 'INCIDENT_OPEN')
+            if any(p['active'] for p in self.state['windows']):
+                return error(409, 'ANOTHER_WINDOW_ACTIVE')
+            row.update(approved_by=actor, starts_ns=now, expires_ns=now + row['minutes'] * 60_000_000_000, active=True)
+            return reply(row)
         if action == '/proposals':
             if not all(isinstance(body.get(key), str) and body[key].strip() for key in
                        ('policy_revision', 'to_stage', 'rig_revision', 'calibration_revision', 'evidence_sha256', 'note')):
