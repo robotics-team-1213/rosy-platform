@@ -42,6 +42,23 @@ def test_conversation_config_accepts_separate_proof(installer, admission):
     assert cfg['ssh_port'] == 22
 
 
+def test_d831_client_binds_preprocessing_policy_and_refuses_policy_downgrade(installer, admission):
+    from rosy.decision.conversation.codec import Profile, source_policy
+    from rosy.decision.conversation.preprocessing import DISCORD_REVISION
+    cfg, raw = admission
+    proof = json.loads(raw)
+    profile = Profile(revision=DISCORD_REVISION)
+    cfg['profile'] = proof['profile'] = profile.model_dump()
+    cfg['policy'] = proof['policy'] = source_policy(cfg['source_commit'], profile)
+    raw = json.dumps(proof).encode()
+    cfg['semantic_evidence_sha256'] = hashlib.sha256(raw).hexdigest()
+    installer.validate_conversation(cfg, raw)
+    cfg['policy'] = dict(cfg['policy'])
+    cfg['policy'].pop('preprocessing_version')
+    with pytest.raises(ValueError):
+        installer.validate_conversation(cfg, raw)
+
+
 @pytest.mark.parametrize('field,value', [
     ('source_commit','b'*40), ('semantic_evidence_sha256','b'*64),
     ('primary_admitted',False), ('primary_admitted',1), ('valid_until',float('inf')),
