@@ -48,3 +48,45 @@ def test_output_limit_and_linked_outputs_refuse_success(tmp_path):
     bad.mkdir()
     row = run(bad, "from pathlib import Path;Path('leak').symlink_to('/etc/passwd')", timeout=2)
     assert row['reason'] == 'unsafe_output'
+
+
+@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual'])
+def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence):
+    from contextlib import nullcontext
+    import os
+    import uuid
+    mod = module()
+    import run_store
+    import import_report
+    import model_checks
+    store = run_store.RunStore(tmp_path / 'records')
+    row = store.create(uuid.uuid4().hex, 'omx-f-import', {'seed': 0}, 'a' * 40)
+    row = store.update(row['run_id'], 0, {'phase': 'LAUNCH_RESERVED'})
+    owner = {'main_pid': os.getpid(), 'invocation_id': 'b' * 32, 'cgroup': '/owned'}
+    monkeypatch.setenv('INVOCATION_ID', 'b' * 32)
+    monkeypatch.setattr(mod.System, 'observe', lambda self, unit: dict(owner, unit=unit))
+    monkeypatch.setattr(mod, 'load_binding', lambda *args: {'source_sha': 'a' * 40,
+        'sdk_python': sys.executable, 'sdk_version': '5.1.0.0'})
+    monkeypatch.setattr(mod, 'sdk_check', lambda binding: {'ready': True})
+    monkeypatch.setattr(mod, 'acquire', lambda binding: nullcontext(()))
+    monkeypatch.setattr(mod, '_cleanup', lambda owner: True)
+    monkeypatch.setattr(mod, 'gpu_state', lambda: {'ready': evidence != 'gpu_residual'})
+    def sdk(*args, **kwargs):
+        if evidence != 'none':
+            path = kwargs['output'] / 'import-report.json'
+            import_report.write_report(path, model='omx_f', frames=120, requested=120,
+                articulations=['/Manipulator'], joints=sorted(model_checks.EXPECTED_JOINTS['omx_f']),
+                sdk_version='5.1.0.0')
+            if evidence == 'incomplete':
+                value = __import__('json').loads(path.read_text())
+                value['completed_frames'] = 119
+                path.write_text(__import__('json').dumps(value))
+        return {'exit_code': 0, 'reason': 'process_exited'}
+    monkeypatch.setattr(mod, 'supervise', sdk)
+    mod.execute(store, tmp_path / 'binding.json', row['run_id'])
+    final = store.get(row['run_id'])
+    assert final['status'] == ('SUCCEEDED' if evidence == 'complete' else
+                               'UNKNOWN' if evidence == 'gpu_residual' else 'FAILED')
+    if final['status'] == 'SUCCEEDED':
+        assert final['result']['task_success'] is None
+        assert store.artifact(row['run_id'], 'import-report')['bytes'] > 0
