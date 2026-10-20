@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-825 | STL 도면 참조와 Fleet 평면 지도 편집 | Accepted (2026-10-21) |
+| D-835 | 도메인 독립 지도 따라 그리기와 검토 가능한 선·영역 추출 | Accepted (2026-10-21) |
 | D-808 | Vault 권한은 명시적 site grant로 부여한다 | Accepted (2026-10-20) |
 | D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
