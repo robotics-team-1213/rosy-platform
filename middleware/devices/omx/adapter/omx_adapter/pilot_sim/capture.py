@@ -126,6 +126,8 @@ class PilotSimCapture:
         with self._lock:
             if not self.recorder or self._episode_id != episode_id:
                 raise ValueError("episode unknown")
+            if not self.recorder.active:
+                raise ValueError('no active episode')
             self._closing = True
             recorder = self.recorder
         while self._frame_queue and recorder.active:
