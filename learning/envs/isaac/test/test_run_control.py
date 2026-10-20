@@ -111,3 +111,65 @@ def test_unit_loss_after_restart_is_unknown_and_never_restarted(setup):
     system.owner['active'] = False
     assert runner.status(row['run_id'])['status'] == 'UNKNOWN'
     assert len(system.launches) == 1
+
+
+def test_listing_keeps_corrupt_run_placeholder_and_healthy_run(setup):
+    _, runner, _, request = setup
+    row = runner.start(request)
+    broken = runner.store.root / 'runs' / ('f' * 32)
+    broken.mkdir()
+    (broken / 'state.json').write_text('broken')
+    rows = runner.list()
+    assert any(item['run_id'] == row['run_id'] for item in rows)
+    assert any(item['run_id'] == 'f' * 32 and item['status'] == 'UNKNOWN' for item in rows)
+
+
+def test_binding_accepts_root_owned_interpreter_and_excludes_managed_data(tmp_path, monkeypatch):
+    module()
+    import hashlib
+    import json
+    import run_binding
+    from types import SimpleNamespace
+    source = tmp_path / 'source'
+    source.mkdir()
+    monkeypatch.setattr(run_binding, '__file__', str(source / 'learning/envs/isaac/run_binding.py'))
+    monkeypatch.setattr(run_binding.subprocess, 'run', lambda argv, **kw:
+                         SimpleNamespace(stdout=SHA if 'rev-parse' in argv else ''))
+    owner = tmp_path / 'managed'
+    owner.mkdir()
+    data = tmp_path / 'data'
+    data.mkdir()
+    venv = tmp_path / 'venv/bin'
+    venv.mkdir(parents=True)
+    python = venv / 'python'
+    python.symlink_to('/usr/bin/python3')
+    import os
+    binding = {'uid': os.getuid(), 'source_root': str(source), 'source_sha': SHA,
+               'sdk_python': str(python), 'sdk_python_sha256': hashlib.sha256(python.read_bytes()).hexdigest(),
+               'sdk_version': '5.1.0.0', 'model_code_root': str(owner), 'data_root': str(data)}
+    path = tmp_path / 'binding.json'
+    path.write_text(json.dumps(binding))
+    assert run_binding.load_binding(path)['sdk_python'] == str(python)
+    nested = owner / 'releases/runs'
+    nested.mkdir(parents=True)
+    path.write_text(json.dumps(dict(binding, data_root=str(nested))))
+    with pytest.raises(ValueError):
+        run_binding.load_binding(path)
+
+
+def test_system_stop_pins_worker_instead_of_signalling_reused_unit(monkeypatch):
+    module()
+    import run_system
+    owner = {'unit': 'rosy-isaac-' + 'a' * 32 + '.service', 'invocation_id': 'b' * 32,
+             'boot_id': 'boot', 'cgroup': '/owned', 'main_pid': 1234, 'pid_start': '42', 'uid': 1000}
+    calls = []
+    monkeypatch.setattr(run_system.System, 'observe', lambda self, unit: dict(owner))
+    monkeypatch.setattr(run_system, '_identity', lambda pid: {'pid_start': '42', 'uid': 1000, 'cgroup': '/owned'})
+    monkeypatch.setattr(run_system.os, 'pidfd_open', lambda pid: calls.append(('open', pid)) or 99)
+    monkeypatch.setattr(run_system.os, 'close', lambda fd: calls.append(('close', fd)))
+    monkeypatch.setattr(run_system.signal, 'pidfd_send_signal', lambda fd, sig: calls.append(('signal', fd, sig)))
+    monkeypatch.setattr(run_system.subprocess, 'run', lambda *a, **k: pytest.fail('unit-name signal is forbidden'))
+    run_system.System().stop(owner)
+    assert calls[0] == ('open', 1234)
+    assert calls[1][0:2] == ('signal', 99)
+    assert calls[-1] == ('close', 99)
