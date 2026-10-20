@@ -10,8 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/p) for p in ('learning/training/omx',
     'learning/training/omx/test', 'middleware/robot_execution/local/test', 'deploy/robot/omx')]
-from sim_policy_inference import infer_for_owner
 from test_omx_policy_session import setup_session, CameraSnapshot
+from sim_policy_inference import infer_for_owner
 from test_act_inference import artifact
 from act_inference import ACTInference
 from act_owner_capture import infer_captured
