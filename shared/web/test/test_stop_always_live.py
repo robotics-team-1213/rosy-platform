@@ -13,7 +13,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]  # repository root (D-427: keys are repo-relative)
 #: D-427: product pages live under these part roots while src/ empties.
-PAGE_ROOTS = tuple(REPO / name for name in ("src", "operations", "middleware", "shared") if (REPO / name).is_dir())
+PAGE_ROOTS = tuple(REPO / name for name in ("src", "applications", "operations", "middleware", "shared") if (REPO / name).is_dir())
 
 
 def _rel(path: Path) -> str:

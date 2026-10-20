@@ -13,7 +13,7 @@ def test_ci_wheel_install_matches_project_versions_and_local_dependencies():
     step = workflow.split("- name: Build and install ROS-free platform API wheels", 1)[1]
     step = step.split("\n      - name:", 1)[0]
     built = {}
-    for path in re.findall(r"(?:contracts|middleware|operations|integrations)/[A-Za-z0-9_/-]+", step):
+    for path in re.findall(r"(?:contracts|middleware|operations|integrations|applications)/[A-Za-z0-9_/-]+", step):
         metadata = ROOT / path / "pyproject.toml"
         if metadata.exists():
             project = tomllib.loads(metadata.read_text(encoding="utf-8"))["project"]
