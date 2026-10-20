@@ -6,6 +6,31 @@ from test_sample_server import load_engine
 
 COOKIES = WeakKeyDictionary()
 
+
+def test_policy_window_approval_closure_and_expiry():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    base = '/api/fleet/workcells/sample-cell/policy'
+    body = {'operator_confirmed': True, 'policy_revision': 'p1', 'rig_revision': 'r1',
+            'calibration_revision': 'c1', 'evidence_sha256': 'a' * 64, 'note': 'sample evidence'}
+    window = {**body, 'kind': 'shadow', 'minutes': 1, 'scope': 'sample only'}
+    assert call(engine, 'POST', base + '/windows', window)[0] == 409
+    for stage in ('L0', 'L1', 'L2'):
+        status, proposal = call(engine, 'POST', base + '/proposals', {**body, 'to_stage': stage})
+        assert status == 200
+        assert call(engine, 'POST', base + '/proposals/' + proposal['proposal_id'] + '/decision',
+                    {'approve': True, 'operator_confirmed': True})[0] == 200
+    status, row = call(engine, 'POST', base + '/windows', window)
+    assert status == 200 and row['approved_by'] is None
+    path = base + '/windows/' + row['window_id']
+    status, approved = call(engine, 'POST', path + '/approve', {'operator_confirmed': True})
+    assert status == 200 and approved['active']
+    assert call(engine, 'POST', base + '/windows', {**window, 'rig_revision': 'wrong'})[0] == 409
+    engine.advance('policy', 'expire')
+    assert call(engine, 'GET', base)[1]['windows'][0]['active'] is False
+    assert call(engine, 'POST', path + '/close', {'operator_confirmed': True, 'reason': 'done'})[0] == 200
+    assert call(engine, 'POST', base + '/lease', {})[0] == 409
+
 def call(engine, method, path, body=None, headers=None):
     response = engine.handle(method, path, {'Cookie': COOKIES.get(engine, ''), **(headers or {})},
                              json.dumps(body).encode() if body is not None else b'')

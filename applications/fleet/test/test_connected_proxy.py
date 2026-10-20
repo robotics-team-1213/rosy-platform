@@ -133,5 +133,6 @@ def test_vision_frame_uses_only_lease_bearer_and_same_upstream(upstream):
     assert forwarded['authorization'] == 'Bearer sample-lease' and 'cookie' not in forwarded
     before = len(requests)
     assert proxy.handle('GET', '/api/vision/secrets', headers, b'').status == 400
-    assert proxy.handle('POST', '/api/vision/sources/sample-camera/frame', headers, b'').status == 400
+    assert proxy.handle('POST', '/api/vision/sources/sample-camera/frame',
+                        {**headers, 'Origin': 'https://localhost:4174'}, b'').status == 400
     assert len(requests) == before
