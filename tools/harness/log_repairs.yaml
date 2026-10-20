@@ -18,3 +18,11 @@
 
 # 8f1913c9ff camera provenance entry: add the missing gate field from its existing body; evidence unchanged.
 "f57a8172df2e62df5014d86cc878d1162b94856bbbf63873de2528ce11d6f559": "8317530f2a2846129e42b6ab8fe8e94bdc8d53aabe743de069223d75131b2dc8"
+
+# D-830 new dev journal: add required field labels only; recorded prose and execution evidence unchanged.
+"090997c4e8a7c6cb55e1e91161205d20297d002f061872bc840bd6b1e868bb9a": "ecd49ddac92dc41e76f4cc1ad50eeb8643bfd9ec7fb43d2831244e641e6b607f"
+"f5b7a550ce7cdb28420ccf48abc0d17195189ff02651073d0de66abd9d0d372f": "25e011c426331a111a09da10af80cd1a24567a7e84a7253a9f4b91e77c205692"
+
+# Correct Windows pipeline field-label encoding; execution evidence unchanged.
+"74e277809efbc05da1528a6673746788f587f7f3b06e683df18420e3c58b0c30": "25e011c426331a111a09da10af80cd1a24567a7e84a7253a9f4b91e77c205692"
+"75c57419447018f9e086f872e3687bb21972a37af0967530020da498fdba6f23": "ecd49ddac92dc41e76f4cc1ad50eeb8643bfd9ec7fb43d2831244e641e6b607f"
