@@ -6,6 +6,11 @@ class SimPolicyRuntimeBinding(PolicyRuntimeBinding):
     def check_command(self, command):
         if not super().check_command(command):
             return False
+        try:
+            if self.session._authority(self.session.lease) is not True:
+                return False
+        except Exception:
+            return False
         current = self.owner._joint_state
         return current is not None and all(
             abs(value-current.positions[name]) <= .04
