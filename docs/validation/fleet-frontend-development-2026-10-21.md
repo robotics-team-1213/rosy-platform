@@ -24,6 +24,7 @@ Implementation of [D-830](../adr/D-830-fleet-independent-frontend-development.md
 | Reviewed sample stop/formation/task-count coherence | `030df77030` | 21 passed, including browser fetch and real cancel-all button |
 | Combined app/browser/wheel/sdist/CLI/architecture/real-Fleet-HTTPS regression | `f5aab6d2de` | 264 passed, zero skips |
 | Final sample two-person Cell authority and all representative browser flows | `c000a57004` | 36 passed, zero skips; includes actual Cell reviewer and overview form flow |
+| Module guard/public fixture corrections and final Cell reviewer navigation | `a7ef52c3aa` | Final secret/provenance checks plus Cell form/overview: 98 passed, zero skips; preceding focused guard/browser run had 294 passed and the two subsequently corrected failures |
 
 The [machine-readable matrix](../../applications/fleet/test/feature_matrix.json) inventories 159 method/path contracts across 18 feature groups. [HTTP receipts](../../applications/fleet/test/backend_http_evidence.json) bind each observed response to an exact passing test ID and full source revision. A conservative literal/prefix inventory can include conditional routes; registration alone is not evidence that every deployment enables them.
 
