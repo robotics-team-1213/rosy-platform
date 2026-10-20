@@ -3600,6 +3600,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
 | v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
 | v1.288 | 2026-10-19 | Integrate D-772/D-774/D-776/D-783 Station contracts from reserved v1.278–286 with the current v1.287 route-prior contract. Preserve both histories and envelope 1.0; no physical activation. |
