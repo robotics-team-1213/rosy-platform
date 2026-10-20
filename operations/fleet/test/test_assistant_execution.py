@@ -11,7 +11,7 @@ from fleet.server.site_auth import SitePrincipal
 from test_channel_natural_execution import fixture
 
 
-def setup(tmp_path):
+def execution_fixture(tmp_path):
     from fleet.server.assistant.execution import AssistantExecution
     from core_common.protocol.assistant import AssistantNavigation
     f = fixture(tmp_path)
@@ -28,7 +28,7 @@ def setup(tmp_path):
 
 
 def test_console_and_discord_share_one_task_owner_and_separate_keys(tmp_path):
-    f, adapter, body, _, _ = setup(tmp_path)
+    f, adapter, body, _, _ = execution_fixture(tmp_path)
     owner = f.service.channel_admission
     principal = SitePrincipal('op', 'operator')
     first = asyncio.run(adapter.submit(principal, 'console-1', body, authorized=lambda:True))
@@ -44,7 +44,7 @@ def test_console_and_discord_share_one_task_owner_and_separate_keys(tmp_path):
 
 @pytest.mark.parametrize('change', ['disabled', 'unauthorized', 'expired', 'other_robot', 'other_user', 'not_control'])
 def test_explicit_navigation_refuses_changed_authority_or_origin(tmp_path, change):
-    f, adapter, body, enabled, journal = setup(tmp_path)
+    f, adapter, body, enabled, journal = execution_fixture(tmp_path)
     principal = SitePrincipal('op', 'operator')
     if change == 'disabled': enabled[0] = False
     if change == 'expired': f.clock[0] += 31
@@ -59,7 +59,7 @@ def test_explicit_navigation_refuses_changed_authority_or_origin(tmp_path, chang
 
 
 def test_changed_coordinates_conflict_and_restart_keeps_original_task(tmp_path):
-    f, adapter, body, _, journal = setup(tmp_path)
+    f, adapter, body, _, journal = execution_fixture(tmp_path)
     principal = SitePrincipal('op', 'operator')
     first = asyncio.run(adapter.submit(principal, 'console-1', body, authorized=lambda:True))
     from fleet.server.task_store import IdempotencyConflict
@@ -80,7 +80,7 @@ def test_execution_contract_rejects_tools_nonfinite_and_unbounded_coordinates():
 
 
 def test_authority_revoked_inside_task_transaction_rolls_back(tmp_path):
-    f, adapter, body, _, _ = setup(tmp_path)
+    f, adapter, body, _, _ = execution_fixture(tmp_path)
     decisions = iter([True, False])
     with pytest.raises(HTTPException):
         asyncio.run(adapter.submit(SitePrincipal('op', 'operator'), 'console-1', body,

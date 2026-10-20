@@ -56,6 +56,11 @@ def install_routes(app, service, *, require_named_operator, authorize, execution
                 authorized=lambda:recheck(request, principal.principal_id))
         except IdempotencyConflict:
             raise HTTPException(409, detail='ASSISTANT_NAVIGATION_CHANGED') from None
+        except ValueError as error:
+            raise HTTPException(404 if str(error) == 'UNKNOWN_ROBOT' else 400,
+                                detail='ASSISTANT_NAVIGATION_INVALID') from None
+        except (sqlite3.Error, OSError):
+            raise HTTPException(503, detail='ASSISTANT_STORAGE_UNAVAILABLE') from None
 
     @app.post('/api/fleet/assistant/messages', response_model=AssistantResult, tags=['fleet-assistant'])
     async def submit(request: Request, response: Response, background: BackgroundTasks, principal=Depends(operator)):
