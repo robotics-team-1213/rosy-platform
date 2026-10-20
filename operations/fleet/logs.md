@@ -4176,3 +4176,21 @@
 - 변경: Added Vault code-exchange, signed-grant and revision-revocation coverage, plus no automatic Vault grants for the three bootstrap roles. Existing account issuance and ledger implementations are reused.
 - 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
 - gate 변화: none.
+
+## 2026-10-21 · uncommitted · 도면 참조 계약 테스트 (D-825)
+
+- 변경: STL 도면 등록의 명시적 좌표계·단위·유한 값·고정 SHA 참조와 이전 지도 body 호환 회귀를 추가했다. 지도 모델 연결·업로드·변환·편집기는 후속 단계이며 기존 Python import·웹 URL은 유지한다.
+- 증거: tests-only2efb13fc82 native remote RED는 계약 미구현20실패·이전 지도1통과다. GREEN·구조/전체 CI·장치 수용은 각각 별도로 확인한다.
+- gate 변화: 없음. 로봇·운영 지도·계정·서비스를 변경하지 않았다.
+
+## 2026-10-21 · uncommitted · 지도 holder와 제한된 STL 투영 (D-825)
+
+- 변경: map/teach 네 모듈과 CLI 지도 구성을 maps holder로 옮기고 기존 flat import를 유지했다. 명시적 평면·단위·원점·회전을 적용하는 STL 파서/worker, 선택 drawing 참조와 도로 이름을 추가했다. 부모 unit은 14,364→13,382줄, CLI는 923→896줄, 새 maps unit은 1,164줄로 측정했다.
+- 증거: 5e0c18fbdf의 원격 계약·이전 지도·프로토콜·harness·구조 회귀는 exit0/NEW0이다. bc818a56bb 원격 RED는 새 파서/도로 이름14실패, 기존 계약21통과다. 구현 SHA의 파서·설치·구조 회귀는 별도 기록한다.
+- gate 변화: 없음. 편집·도면 API·운영 배포는 후속 단계다.
+
+## 2026-10-21 · uncommitted · 도면 API와 기존 실행 경계 검증 (D-825)
+
+- 변경: 인증된 원본/투영 보관, 참조 검증과 기존 초안/프로필 CAS·활성화 guard를 연결했다. 도면 기준이 바뀌면 편집 geometry를 보존하고 새 지도 ID·미검토 상태를 사용한다. 기존 운행·대형·가르치기와 CORE 명령 소유권은 유지한다.
+- 증거: 1d8e942ac4 STL/설치/구조147통과, 97edf0c472 API/보관/기존 프로필·대형92통과, 3adf7e4a92 편집/원본 STL/활성화/이전 계획 버전/가르치기/대형106통과. 모두 원격 커밋 SHA 실행·NEW0이다. 실제 장치와 운영 활성화 증거는 별도다.
+- gate 변화: 없음. 도면의 해시와 실측 거리만으로 로봇 위치나 주행 권한이 생기지 않는다.

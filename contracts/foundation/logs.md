@@ -839,3 +839,9 @@
 - 변경: HTTPException을 공유 AccountUnavailable 경계로 포함한 최소 수정과 Account protocol 설명을 검증했다. 앞선 tests-only 79cc935a8의 신규 실패 18건을 해소했다.
 - 증거: 3a1392d2efa959d84ad5bc14966d9524ad395254의 원격 model PC(account-http-green-20261020/run-1.txt)에서 account_client/account_access, CORE account_pipeline, harness/module_structure 191건 통과·2건 skip, exit 0, known_failures NEW 0/known 0/flaky 0. 로컬 harness lint exit 0(기존 경고 31건). pytest는 원격에서만 실행했다.
 - gate 변화: 없음. affected는 공유 foundation 변경으로 FULL이며 이번 focused 실행은 FULL/pre-push를 대체하지 않는다. 실제 HTTP 서버·background thread·배포·장치·현장 수용은 미검증이다. push/merge하지 않았다.
+
+## 2026-10-21 · uncommitted · STL 도면 좌표 등록 계약 (D-825)
+
+- 변경: ROS-free drawing DTO에 명시적 평면·단위·원점·방향·축척과 원본/projection SHA-256 참조를 정의했다. extra 필드·비유한 값·범위 밖 지도 원점·잘못된 해시를 거절하며 CORE snapshot/envelope나 실행 권한은 확장하지 않는다.
+- 증거: tests-only2efb13fc82의 원격 RED에서 기존 지도 body1개 통과, 신규 계약20개 실패를 확인했다. 현재 DTO와 v1.291 계약의 GREEN·공통 protocol 회귀는 커밋 후 원격에서 확인한다.
+- gate 변화: 없음. 호스트 DTO 시험은 도면 변환·현장 교정·주행 수용 증거가 아니다.

@@ -12,7 +12,7 @@ export async function resolve(specifier, context, nextResolve) {
     const name = specifier.slice(PREFIX.length);
     if (/^[\w.-]+\.(?:js|css)$/.test(name)) {
       for (const url of [new URL(`shared/${name}`, WEB), new URL(`cell/${name}`, WEB), new URL(`work/${name}`, WEB), new URL(`devices/${name}`, WEB),
-                         new URL(name, WEB)]) {
+                         new URL(`maps/${name}`, WEB), new URL(name, WEB)]) {
         if (existsSync(fileURLToPath(url))) {
           return { url: url.href, shortCircuit: true };
         }

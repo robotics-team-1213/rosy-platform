@@ -89,6 +89,7 @@ OWN = {
         "cell-document-editor.js",
     },
     "site-map.js": {
+        "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
@@ -106,7 +107,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices"):
+    for folder in ("shared", "cell", "work", "devices", "maps"):
         path = WEB / folder / name
         if path.is_file():
             return path

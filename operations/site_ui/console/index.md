@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 새 편집 흐름과 현장 기준 분리 회귀 (D-825)
+- 2026-10-21 · uncommitted · 공통 기하 기반과 지도 편집 연결 (D-825)
+- 2026-10-21 · uncommitted · 지도 화면 holder와 편집 이력 (D-825)
 - 2026-10-20 · uncommitted · Account presentation and Fleet navigation
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
-- 2026-10-19 · uncommitted · D-806 Fleet 하위 화면 이름 게시
-- 2026-10-19 · uncommitted · 관리자 임시값 입력과 프로필 변경 구분
-- 2026-10-17 · 8c6692128 · 설치 보정 손잡이의 상단 바 가림 수정

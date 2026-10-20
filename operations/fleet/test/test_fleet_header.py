@@ -5,7 +5,7 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 DOCS = {"index.html": "console.js", "install.html": "install.js",
-        "site-map.html": "site-map.js", "cell/cell.html": "cell/cell.js"}
+        "maps/site-map.html": "maps/site-map.js", "cell/cell.html": "cell/cell.js"}
 
 
 def _header(name):
@@ -90,7 +90,7 @@ def test_document_sheets_do_not_paint_the_header():
     header_sheet = (WEB / "shared/fleet-header.css").read_text(encoding="utf-8")
     assert "body { margin: 0; }" in header_sheet
     assert ".fleet-header { position: sticky; top: 0;" in header_sheet
-    for sheet in ("shared/styles.css", "site-map.css", "cell/cell.css"):
+    for sheet in ("shared/styles.css", "maps/site-map.css", "cell/cell.css"):
         body = (WEB / sheet).read_text(encoding="utf-8")
         assert "ui-topbar" not in body and ".estop" not in body and "#topbar-more" not in body, sheet
     assert ".fleet-footer" not in (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")

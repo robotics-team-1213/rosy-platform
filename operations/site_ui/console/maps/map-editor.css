@@ -1,0 +1,9 @@
+.drawing-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-3); }
+.drawing-tools-body label { min-width: 0; }
+.drawing-tools-body input[type="file"] { max-width: 100%; }
+.editor-properties { display: grid; gap: var(--space-3); }
+#teach-reference { overflow-wrap: anywhere; }
+#site-map-svg .drawing-background { fill: none; stroke: var(--ink-quiet); stroke-width: 1px; vector-effect: non-scaling-stroke; pointer-events: none; }
+#site-map-svg .editor-preview { fill: none; stroke: var(--series-primary); stroke-width: 2px; stroke-dasharray: 5 3; pointer-events: none; }
+#site-map-svg .editor-vertex { fill: var(--surface-raised); stroke: var(--series-primary); stroke-width: 2px; cursor: move; }
+#site-map-svg:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
