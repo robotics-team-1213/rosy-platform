@@ -62,7 +62,7 @@ import time
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/training/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 import review_bridge
 from test_learning_cycle import make_review
 

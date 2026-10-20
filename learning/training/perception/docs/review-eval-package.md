@@ -50,7 +50,7 @@ PTS의 측정 사실을 새로 인증하지 않는다.
 Windows 출력과 임시 staging은 `X:/DevTemp` 아래에만 생성한다.
 
 ```powershell
-python learning/training/perception/review_eval_package.py `
+python learning/curation/perception/review_eval_package.py `
   --eval-folder X:/DevTemp/frozen-eval/CONTENT_SHA256 `
   --sources X:/DevTemp/frozen/sources.json `
   --out X:/DevTemp/eval-companion-new

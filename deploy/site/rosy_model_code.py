@@ -66,13 +66,13 @@ JOB_ENTRY_POINTS.update({'model/' + name: 'learning/registry/perception/' + name
                              'intake_eval_gate.py', 'peer_targets.py', 'sign_model.py', 'slot_cli.py',
                              'watch.py', 'watch_core.py',)})
 JOB_ENTRY_POINTS.update({'training/' + name: 'learning/training/perception/' + name
-                         for name in ('capture_goal.py', 'check_manifest.py', 'drivable_head.py',
-                             'export_cell.py', 'gen_notebook.py', 'handover.py', 'job_state.py',
-                             'learning_cycle.py', 'recipes.py', 'recording_job.py', 'review_admission.py',
-                             'review_authority.py', 'review_bridge.py', 'review_dataset.py',
-                             'review_eval_companion.py', 'review_eval_package.py', 'review_migration.py',
-                             'review_pipeline.py', 'review_provenance.py', 'rosy_lane_model.py',
-                             'run_log.py', 'train_job.py',)})
+                         for name in ('capture_goal.py', 'check_manifest.py', 'drivable_head.py', 'export_cell.py',
+                             'gen_notebook.py', 'handover.py', 'job_state.py', 'learning_cycle.py', 'recipes.py',
+                             'recording_job.py', 'review_admission.py', 'review_migration.py', 'review_pipeline.py',
+                             'rosy_lane_model.py', 'run_log.py', 'train_job.py',)})
+JOB_ENTRY_POINTS.update({'training/' + name: 'learning/curation/perception/' + name
+                         for name in ('review_authority.py', 'review_bridge.py', 'review_dataset.py',
+                             'review_eval_companion.py', 'review_eval_package.py', 'review_provenance.py')})
 JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_replay.py', 'road_replay_inputs.py': 'learning/evaluation/perception/road_replay_inputs.py', 'road_replay_metrics.py': 'learning/evaluation/perception/road_replay_metrics.py', 'store.py': 'learning/registry/perception/store.py'})
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
 SPLIT_CODE_PREFIXES = ("middleware/perception/nodes/", "middleware/perception/localization/",

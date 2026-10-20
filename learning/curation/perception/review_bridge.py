@@ -17,7 +17,8 @@ import sys
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
+for holder in ('learning/registry/perception', 'learning/training/perception'):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / holder))
 from job_state import Job, JobError, receipt
 from learning_cycle import verified_export
 

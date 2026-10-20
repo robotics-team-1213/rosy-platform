@@ -5,4 +5,4 @@ After=rosy-review-v13.service
 [Service]
 Type=oneshot
 # Read-only transport uses the accepted immutable review source and must refresh during GPU jobs.
-ExecStart=%h/rosy-ml/.venv/bin/python -E -s %h/rosy-ml/review-v13-code/current/learning/training/perception/review_bridge.py %h/.config/rosy/review-pipeline/bridge.json --out %h/rosy-ml/review-pipeline/bridge-state --once
+ExecStart=%h/rosy-ml/.venv/bin/python -E -s %h/rosy-ml/review-v13-code/current/learning/curation/perception/review_bridge.py %h/.config/rosy/review-pipeline/bridge.json --out %h/rosy-ml/review-pipeline/bridge-state --once

@@ -8,7 +8,7 @@ cycle CLI never obtains training permission from a receipt or a config boolean.
 from pathlib import Path as _SourcePath
 import sys as _source_sys
 _source_sys.path[:0] = [str(_SourcePath(__file__).resolve().parents[3] / p)
-                        for p in ('learning/registry/perception',)]
+                        for p in ('learning/registry/perception', 'learning/curation/perception')]
 
 
 
