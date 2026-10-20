@@ -23,6 +23,14 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDS = set(affected.GUARD_SET)
 
 
+def test_fleet_development_module_selects_application_contracts():
+    repo = affected.Repo.load(ROOT)
+    module = repo.module_for('applications/fleet/dev/sample/engine.py')
+    assert module['tests'] == ['applications/fleet/test']
+    matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
+    assert any('applications/fleet/test' in inv for entry in matrix for inv in entry['invocations'])
+
+
 def test_external_drive_holders_select_their_installing_distribution():
     repo = affected.Repo.load(ROOT)
     behavior = 'middleware/drive/behaviors/line_follow/manager.py'

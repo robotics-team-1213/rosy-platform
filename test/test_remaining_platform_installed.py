@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'applications/fleet/web').rglob('*')
                 if p.is_file() and (p.suffix in ('.py', '.html', '.css', '.js') or p.name == 'assets.json')}
-    assert {'asset_registry.py', 'assets.json'} <= expected.keys()
+    assert {'asset_registry.py', 'assets.json', 'runtime.js'} <= expected.keys()
+    assert not any(p.startswith(('dev/', 'sample/')) for p in expected)
     assert {'shared/host-health.js', 'shared/stuck-evidence.js',
             'shared/robot-video.js', 'shared/robot-video.css'} <= expected.keys()
     assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',

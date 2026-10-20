@@ -20,6 +20,7 @@ class Sessions:
             'principal_id': 'sample-reviewer', 'account_id': 'sample-reviewer-account', 'display_name': '샘플 검토자',
             'revision': 1, 'enabled': True}
         self.logins = 0
+        self.passwords = {identifier: self.password for identifier in self.accounts}
 
     def authorized(self, headers):
         cookie = SimpleCookie()
@@ -44,13 +45,15 @@ class Sessions:
             return reply({'mode': 'paired', 'password_login': True})
         if (method, path) == ('POST', '/auth/login'):
             login = body.get('login')
-            if (login not in ('sample', 'sample-reviewer') or body.get('password') != self.password
-                    or not self.accounts[login + '-account']['enabled']):
+            account = next((row for row in self.accounts.values() if row['login'] == login), None)
+            if (account is None or body.get('password') != self.passwords.get(account['account_id'])
+                    or not account['enabled']):
                 return error(401, 'INVALID_CREDENTIALS')
             if self.logins:
                 self.epoch += 1
             self.logins += 1
-            self.profile = {k: v for k, v in self.accounts[login + '-account'].items() if k not in ('revision', 'enabled')}
+            self.profile = {k: v for k, v in account.items() if k not in ('revision', 'enabled')}
+            self.password = self.passwords[account['account_id']]
             self.role = self.profile['role']
             self.active = True
             return reply(status=204, headers=self.cookie())
@@ -74,6 +77,7 @@ class Sessions:
             if not isinstance(password, str) or len(password) < 8 or password in (self.password, 'sample'):
                 return error(422, 'INVALID_REQUEST')
             self.password = password
+            self.passwords[self.profile['account_id']] = password
             self.epoch += 1
             return reply(status=204, headers=self.cookie())
         if (method, path) == ('POST', '/auth/logout'):
@@ -92,6 +96,7 @@ class Sessions:
                 identifier = f'sample-account-{len(self.accounts) + 1}'
                 self.accounts[identifier] = {k: v for k, v in body.items() if k != 'password'}
                 self.accounts[identifier].update(account_id=identifier, revision=1, enabled=True)
+                self.passwords[identifier] = body['password']
                 return reply(self.accounts[identifier], 201)
             match = re.fullmatch(r'/auth/accounts/([^/]+)(?:/(reset-password|revoke-sessions))?', path)
             if match and method in ('PATCH', 'POST'):
@@ -102,10 +107,14 @@ class Sessions:
                     return error(409, 'ACCOUNT_REVISION_CONFLICT')
                 if method == 'PATCH' and match[2] is None:
                     row.update({k: v for k, v in body.items() if k in ('role', 'grants', 'enabled')})
+                elif method == 'POST' and match[2] == 'reset-password':
+                    if not isinstance(body.get('password'), str) or len(body['password']) < 8:
+                        return error(422, 'INVALID_REQUEST')
+                    self.passwords[row['account_id']] = body['password']
                 elif method != 'POST' or match[2] is None:
                     return None
                 row['revision'] += 1
-                if row['account_id'] == 'sample-account':
+                if row['account_id'] == self.profile['account_id']:
                     self.active = False
                 return reply(row)
         return None
