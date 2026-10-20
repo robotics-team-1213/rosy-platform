@@ -106,6 +106,8 @@
 
 ## Task 5: 지도 화면에서 도면 맞춤·직접 그리기·저장까지 연결
 
+2026-10-21 사용자 보완: 특정 지역·지도·업무 도메인에 종속되지 않는 기반 기능을 우선한다. STL 변환은 순수 좌표 입력 어댑터로 유지하고, 이력과 점·선·다각형 편집은 Fleet 필드·시설 종류·현장 상수를 모르는 코드로 먼저 검증한다. `maps/geometry-edit.js`가 유한 2D 좌표와 꼭짓점 교체/삭제·화면 좌표 역변환을 맡으며, `map-editor.js`가 기존 Fleet DTO와 편집 연산을 연결한다. 지도/업무의 의미와 활성화 권한은 기존 Fleet 계층에 남긴다. 추가 도메인용 플러그인 체계나 새 서비스는 만들지 않는다.
+
 **Files:** Create `operations/site_ui/console/maps/drawing-import.js`, `maps/map-editor.js`, `maps/map-editor.css`, `operations/fleet/test/test_map_editor_browser.py`; Modify Task 4에서 이동된 map HTML/CSS/JS, `server/console/static_routes.py`의 새 asset 등록.
 
 **Interfaces:** `createDrawingImport({request, map, replaceDraft, confirmDiscard})` → `{load(file), register(transform), cancel()}`; 요청 취소/세대 확인으로 뒤늦은 결과가 새 초안을 덮지 않게 한다. `createMapEditor({svg, map, view, changed, reason})` → `{sync(), cancel(), destroy()}`; `map()`·`view()`는 현재 상태, `changed(nextMap)`는 Task 4 history에 반영한다. `reason()`이 있으면 편집을 금지한다.

@@ -2,6 +2,25 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createEditHistory} from '/console/assets/edit-history.js';
 import {editSurveyElement} from '/console/assets/site-map-edit.js';
+import {replaceVertex, removeVertex, mapPoint} from '/console/assets/geometry-edit.js';
+
+test('geometry primitives know only finite points and preserve their input', () => {
+  const line = [[-2000, 5], [0, 1], [3, 4]];
+  assert.deepEqual(replaceVertex(line, 1, [7, 8]), [[-2000, 5], [7, 8], [3, 4]]);
+  assert.deepEqual(line[1], [0, 1]);
+  assert.deepEqual(removeVertex(line, 1, 2), [[-2000, 5], [3, 4]]);
+  assert.throws(() => removeVertex(line, 1, 3));
+  assert.throws(() => replaceVertex(line, 7, [0, 0]));
+  assert.throws(() => replaceVertex(line, 0, [NaN, 0]));
+  assert.throws(() => replaceVertex(line, 0, [0, Infinity]));
+});
+
+test('screen conversion delegates units and rotation to the supplied view', () => {
+  const svg = {getScreenCTM: () => ({inverse: () => ({kind: 'inverse'})})};
+  const point = {matrixTransform: matrix => { assert.equal(matrix.kind, 'inverse'); return {x: 20, y: 10}; }};
+  const view = {toMap: (x, y) => [-y / 2, x / 2]};
+  assert.deepEqual(mapPoint(svg, view, point), [-5, 10]);
+});
 
 test('undo_redo_preserves_original_and_clears_redo_on_new_edit', () => {
   const original = {places: [{id: 'a', x: 0}], edges: []};
