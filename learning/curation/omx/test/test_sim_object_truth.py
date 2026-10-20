@@ -99,6 +99,7 @@ def test_resealed_but_unbound_execution_cannot_become_sim_truth(tmp_path, change
             evidence['observation']['received_at'] = evidence['receipt']['received_at'] = value
         else:
             evidence['observation']['owner_generation'] = evidence['receipt']['owner_generation'] = 2
+        phase[prefix+'_receipt'] = evidence['receipt']
         write(run/'teacher-phases.json',phases)
     elif change == 'native_asset':
         document = json.loads(native.read_text())

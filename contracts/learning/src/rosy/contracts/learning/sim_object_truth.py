@@ -17,6 +17,83 @@ PINNED = {
     'source_world': '6bef11e3a9eb12879b17f3cda7fd9d392b9dcddeb31dbefb6a2a6a90bce79913',
     'camera_source': '3974f855b61c852c933772929112ff06104ba1a8f5e8bde034b9ebe13d64c61c',
 }
+ASSETS = dict(zip(PINNED, (
+    'operations/processes/cell/examples/omx_sim/cell.yaml',
+    'operations/processes/cell/examples/omx_sim/recipe.yaml',
+    'deploy/robot/omx/sim/cell_profile.yaml',
+    'integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid.sdf',
+    'integrations/simulation/gazebo/worlds/omx_pilot_workcell.sdf')))
+
+
+def _gripper_evidence(phase, prefix):
+    evidence = phase[prefix+'_evidence']
+    _fields(evidence, 'observation receipt checked_owner_s max_age_s')
+    observation, receipt = evidence['observation'], evidence['receipt']
+    _fields(observation, 'workcell_id instance_id sensor_revision sequence received_at state object_present object_id owner_generation')
+    _fields(receipt, 'workcell_id instance_id sensor_revision sequence received_at object_id owner_generation')
+    expected = {key: observation[key] for key in receipt}
+    expected['object_id'] = 'box'
+    held = prefix == 'hold'
+    if (receipt != expected or phase[prefix+'_receipt'] != receipt
+            or observation['workcell_id'] != 'omx_cell_sim'
+            or observation['instance_id'] != 'omx_cell_sim_01'
+            or observation['sensor_revision'] != 'omx-sim-width-matched-position-v2'
+            or observation['state'] != ('CLOSED' if held else 'OPEN')
+            or observation['object_present'] is not held
+            or observation['object_id'] != ('box' if held else None)
+            or any(type(observation[k]) is not int or observation[k] < 0
+                   for k in ('sequence', 'owner_generation'))):
+        raise ValueError('SIM raw gripper receipt differs')
+    times = [phase['started_owner_s'], observation['received_at'],
+             evidence['checked_owner_s'], phase['ended_owner_s']]
+    if (any(type(t) not in (int,float) or not math.isfinite(t) or t < 0 for t in times)
+            or times != sorted(times) or evidence['max_age_s'] != .5
+            or times[2]-times[1] > .5):
+        raise ValueError('SIM gripper freshness unproven')
+    return tuple(observation[key] for key in ('workcell_id','instance_id','sensor_revision','owner_generation'))
+
+
+def _command_evidence(payload, commands, rows, joints):
+    events = [json.loads(line) for line in payload.splitlines()]
+    indexed = {command['command_id']: command for command in commands}
+    if len(indexed) != len(commands):
+        raise ValueError('duplicate SIM command identity')
+    accepted, terminals = {}, {}
+    for event in events:
+        key = event['command_id']
+        if event['kind'] == 'GOAL_ACCEPTED':
+            if key in accepted:
+                raise ValueError('duplicate SIM acceptance')
+            command = indexed[key]
+            stamp = event['accepted_sim_time_ns']
+            if (type(stamp) is not int or stamp < 0 or event['target'] != command['target']
+                    or event['duration_s'] != command['duration_s']):
+                raise ValueError('SIM acceptance differs from command')
+            accepted[key] = event
+        elif event['kind'] == 'TERMINAL_RESULT':
+            if key in terminals:
+                raise ValueError('duplicate SIM terminal result')
+            terminals[key] = event
+        else:
+            raise ValueError('unexpected SIM command event')
+    if set(accepted) != set(indexed) or set(terminals) != set(indexed):
+        raise ValueError('SIM command lifecycle incomplete')
+    history = sorted(accepted.values(), key=lambda e: e['accepted_sim_time_ns'])
+    for key, event in accepted.items():
+        terminal = terminals[key]
+        if (terminal['goal_id'] != event['goal_id'] or terminal['sequence'] <= event['sequence']
+                or terminal['status'] != 4 or terminal['result_code'] != 0):
+            raise ValueError('SIM command completion unproven')
+    position = 0
+    for row in rows:
+        while position+1 < len(history) and history[position+1]['accepted_sim_time_ns'] <= row['capture_time_ns']:
+            position += 1
+        event = history[position]
+        if (event['accepted_sim_time_ns'] > row['capture_time_ns']
+                or row['command_id'] != event['command_id'] or row['ros_goal_id'] != event['goal_id']
+                or row['duration_s'] != event['duration_s']
+                or row['action'] != [event['target'][n] for n in joints]):
+            raise ValueError('recorded SIM action differs from actual accepted goal')
 
 
 def judge_episode(samples, *, model, initial_z, goal, released_at, released):
@@ -112,6 +189,7 @@ def _validate(path, validated, source):
             or provenance['calibration_revision'] != 'omx-f-gazebo-only-v1'
             or provenance['joint_names'] != joints or provenance['position_limits_rad'] != limits
             or provenance['camera']['identity'] != 'gazebo:omx_cell_workcell:front:'+provenance['world_sha256']
+            or provenance['camera']['camera_info_sha256'] != 'd1b538c8a736b665e05433276033d8722519e8ff1533310f8d6ede6ae8ce00bc'
             or (provenance['camera']['width'], provenance['camera']['height']) != (320,240)):
         raise ValueError('SIM rig identity differs')
     result = json.loads(data['result'])
@@ -119,7 +197,8 @@ def _validate(path, validated, source):
     inventory_hash = hashlib.sha256(json.dumps(native['source_hashes'], sort_keys=True,
                                                separators=(',', ':')).encode()).hexdigest()
     if (native['revision'] != provenance['source_revision'] or inventory_hash != provenance['source_tree_sha256']
-            or native.get('experiment') != 'pick-place-demonstrations'):
+            or native.get('experiment') != 'pick-place-demonstrations'
+            or any(native['source_hashes'].get(ASSETS[name]) != digest for name, digest in PINNED.items())):
         raise ValueError('SIM native source inventory differs')
     phases, commands, observations = (json.loads(data[name]) for name in ('phases','commands','observations'))
     if (result['episode_id'] != manifest['episode_id'] or result['source'] != {
@@ -132,31 +211,32 @@ def _validate(path, validated, source):
         raise ValueError('SIM execution receipt differs')
     if [p['phase_id'] for p in phases] != ['approach','grasp','transfer','release']:
         raise ValueError('SIM transfer phase evidence missing')
-    times = [p[k] for p in phases for k in ('started_sim_s','ended_sim_s')]
+    times = [p[k] for p in phases for k in ('started_sim_s','ended_sim_s','started_owner_s','ended_owner_s')]
     times += [result['recording_start_sim_s'], result['recording_end_sim_s']]
     if any(type(t) not in (int,float) or not math.isfinite(t) or t < 0 for t in times):
         raise ValueError('SIM execution time invalid')
-    if any(p['started_sim_s'] > p['ended_sim_s'] for p in phases):
+    if any(p['started_'+clock+'_s'] > p['ended_'+clock+'_s'] for p in phases for clock in ('sim','owner')):
         raise ValueError('SIM phase clock reversed')
     for left, right in zip(phases, phases[1:]):
-        if not left['started_sim_s'] <= left['ended_sim_s'] <= right['started_sim_s']:
+        if any(not left['started_'+clock+'_s'] <= left['ended_'+clock+'_s'] <= right['started_'+clock+'_s']
+               for clock in ('sim','owner')):
             raise ValueError('SIM phases out of order')
     grasp, release = phases[1], phases[-1]
-    for name, phase in [('hold_receipt',grasp), ('release_receipt',release)]:
-        if (phase[name]['instance_id'] != provenance['instance_id'] or phase[name]['object_id'] != 'box'):
-            raise ValueError('SIM gripper receipt identity differs')
+    if _gripper_evidence(grasp, 'hold') != _gripper_evidence(release, 'release'):
+        raise ValueError('SIM gripper owner generation differs')
     for name, phase in [('attach',grasp), ('detach',release)]:
-        if phase[name]['confirmed'] is not True or phase[name]['model'] != 'infeed_block':
+        receipt = phase[name]
+        _fields(receipt, 'model command sent_wall state_echo confirmed'+
+                (' service_ok re_commanded_after' if name == 'attach' else ''))
+        if (receipt['confirmed'] is not True or receipt['model'] != 'infeed_block'
+                or receipt['command'] != ('attach (entity/system/add on omx_f)' if name == 'attach' else 'detach')
+                or receipt['state_echo'] != ('attached' if name == 'attach' else 'detached')
+                or type(receipt['sent_wall']) not in (int,float)
+                or not math.isfinite(receipt['sent_wall']) or receipt['sent_wall'] <= 0
+                or name == 'attach' and (receipt['service_ok'] is not True or
+                    receipt['re_commanded_after'] is not None)):
             raise ValueError('SIM object attachment state unproven')
-    indexed = {command['command_id']: command for command in commands}
-    if len(indexed) != len(commands):
-        raise ValueError('duplicate SIM command identity')
-    for row in rows:
-        command = indexed[row['command_id']]
-        if (command['response']['state'] not in {'LOCAL_ACCEPTED','ROS_ACCEPTED','RUNNING','SUCCEEDED'}
-                or row['duration_s'] != command['duration_s']
-                or row['action'] != [command['target'][n] for n in provenance['joint_names']]):
-            raise ValueError('recorded SIM action differs from actual command')
+    _command_evidence(data['events'], commands, rows, joints)
     first, last = rows[0]['capture_time_ns']/1e9, rows[-1]['capture_time_ns']/1e9
     if (not observations or observations[0]['clock'] > first or observations[-1]['clock'] < last
             or first < result['recording_start_sim_s'] or last > result['recording_end_sim_s']
@@ -170,7 +250,8 @@ def _validate(path, validated, source):
     metrics = judge_episode(observations, model='infeed_block',
         initial_z=observations[0]['model_pose_base']['z_m'], goal=GOAL,
         released_at=release['ended_sim_s'], released=True)
-    if 'reason' in metrics or manifest['task_outcome'] != ('success' if metrics['success'] else 'failure'):
+    if ('reason' in metrics or manifest['task_outcome'] != ('success' if metrics['success'] else 'failure')
+            or result['success'] is not metrics['success'] or metrics['success'] and result['error'] is not None):
         raise ValueError('recorded task outcome contradicts measured SIM truth')
     return {'document': document, 'payloads': payloads, 'metrics': metrics}
 
