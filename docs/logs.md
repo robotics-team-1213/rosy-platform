@@ -9867,3 +9867,9 @@ osy-d395-s1d\`.
 - 변경: 실제 Edge 실행에서 발견한 CSP 이미지 차단과 원본 변경 후 이전 사진 잔류를 수정했다. CSP는 유지하고 실제 이미지 디코딩·선택 변경 회귀 검사를 추가했다.
 - 증거: 격리된 합성 LeRobot 자료로 원본 확인·구간 저장·새로고침 복원·JSON 다운로드·실제 구간 exporter/readback을 실행했다. 원격 RED 두 건 뒤 최종 관련 3 passed, 실제 Edge exit 0, 원본 파일·판정 불변과 train/eval/test 각 4프레임 및 int64 clocks 보존을 확인했다. 상세 근거는 `docs/validation/omx-grasp-ui-2026-10-21/result.md`다.
 - gate 변화: UI/파일 경로 확인만 추가했다. 실물·사람 정답·모델 품질·데이터 절감·배포·원격 push 증거는 추가하지 않았다. 공식 로컬 착지 검사는 별도로 수행한다.
+
+## 2026-10-21 · uncommitted · 외부 앱 공정 제안과 후보 배정
+
+- 변경: D-836에 공정 문서 ID/digest 소비, Fleet 후보 접수와 재접수, 관측 근거와 업무 완료의 책임을 기록했다. API v1.292의 배타적 단일/후보 지정과 key·본문 결속, 기존 lease/claim transaction 재사용을 구현한다.
+- 증거: 커밋 `0122aabecc`의 원격 새 시험에서 공유 request schema 부재로 RED를 확인했다. 최종 제품 시험은 구현 커밋 SHA로 별도 실행한다. 기존 cell-app compile/proposal과 named approval·simulation 제한을 유지한다.
+- gate 변화: 구현 계약만 추가한다. 실제 다중 운행·자동 충전·장치 수용·현장 검증·push는 추가하지 않는다.
