@@ -1,5 +1,6 @@
 """Fixed assisted SIM object task, judged by a separate read-only observer."""
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -50,13 +51,25 @@ def run(directory):
 
     isolation_guard(ROOT)
     configure_imports()
+    sys.path.insert(0, str(ROOT / 'operations/processes/cell'))
+    from rosy_cell.cell import load_cell
+    from rosy_cell.compiler import compile_job
+    from rosy_cell.recipe import load_recipe
+    cell_path = ROOT / 'operations/processes/cell/examples/omx_sim/cell.yaml'
+    recipe_path = ROOT / 'operations/processes/cell/examples/omx_sim/recipe.yaml'
+    recipe = load_recipe(recipe_path.read_text())
+    task = compile_job(recipe, load_cell(cell_path.read_text()), tol_m=0.001)
+    target = [step for step in task.steps if step.kind != 'pallet_done'][1].target
+    goal = (target.x, target.y, target.z + recipe.box.grasp_depth - recipe.box.height / 2)
     directory.mkdir(mode=0o700)
     children = Children(directory)
     samples, attempts, error, success = [], 0, None, False
     started = time.monotonic()
     result = {'experiment': 'pick-place', 'sim_aid': True, 'sim_gripper_sensor': True,
               'controller': 'existing_rule_based_owner', 'training': 'NOT_RUN',
-              'policy_evaluation': 'NOT_RUN', 'full_g2': False}
+              'policy_evaluation': 'NOT_RUN', 'full_g2': False, 'goal_m': goal,
+              'recipe_sha256': hashlib.sha256(recipe_path.read_bytes()).hexdigest(),
+              'cell_sha256': hashlib.sha256(cell_path.read_bytes()).hexdigest()}
     try:
         env = dict(os.environ, ROSY_SIM_REPO=str(ROOT),
                    OMX_CELL_WORLD=str(ROOT / 'integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid'),
@@ -67,11 +80,13 @@ def run(directory):
                                    '--socket', str(observer_path), '--open-position', '1.0'], env=env)
         controller_readiness(timeout_s=90)
         children.assert_alive()
+        observer = ObserverClient(observer_path)
+        initial = observer('infeed_block', require_open=False)
+        samples.append(initial)
         probe = children.start('teacher', ['/usr/bin/python3', str(ROOT / 'deploy/robot/omx/probe_cell_transfer.py'),
                                '--transfers', '0', '--journal-dir', str(directory / 'journal'),
                                '--out', str(directory / 'probe')], env=env)
         attempts = 1
-        observer = ObserverClient(observer_path)
         released_at, measurement_error = None, None
         while time.monotonic() - started < 600:
             try:
@@ -95,9 +110,8 @@ def run(directory):
             raise TimeoutError('object episode exceeded 600 wall seconds')
         evidence = json.loads((directory / 'probe/c3b-transfer.json').read_text())
         transfer = evidence['transfers'][0]
-        place = transfer['place']
-        metrics = judge_episode(samples, model='infeed_block', initial_z=transfer['block_pose_initial']['z'],
-            goal=(place['x'], place['y'], place['z']), released_at=released_at,
+        metrics = judge_episode(samples, model='infeed_block', initial_z=initial['model_pose_base']['z_m'],
+            goal=goal, released_at=released_at,
             released=bool(transfer['phases']['release'].get('release_receipt')
                           and transfer.get('sim_aid_detach_before_release', {}).get('confirmed')))
         result['metrics'] = metrics

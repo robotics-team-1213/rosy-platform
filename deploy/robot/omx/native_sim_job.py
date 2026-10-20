@@ -136,7 +136,7 @@ def run(state, *, launcher=subprocess.run):
             (state / name).mkdir(mode=0o700, exist_ok=True)
         env = dict(os.environ, OMX_NATIVE_STATE=str(state), OMX_NATIVE_RUN_ID=document["run_id"],
                    PYTHONDONTWRITEBYTECODE="1")
-        # The existing G2 runner still checks isolation, startup authorization and Fleet fencing.
+        # Each named runner retains its isolation and startup checks; G2 also keeps Fleet fencing.
         with (state / "logs/job.log").open("xb") as log:
             result = launcher(["/bin/bash", "--noprofile", "--norc", str(state / "run.sh")],
                               env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
@@ -146,8 +146,10 @@ def run(state, *, launcher=subprocess.run):
     finally:
         (state / "budget.lock").unlink(missing_ok=True)
         (state / "budget.resv").unlink(missing_ok=True)
+        task = ("SEE_CANONICAL_PICK_PLACE_RESULT" if document.get("experiment", "g2") == "pick-place"
+                else "SEE_CANONICAL_G2_RESULT")
         write_json(state / "exit.json", {"exit_code": code, "error": error, "ended_at": time.time(),
-                                         "runtime": "EXITED", "task": "SEE_CANONICAL_G2_RESULT"})
+                                         "runtime": "EXITED", "task": task})
     return code
 
 
