@@ -22,6 +22,7 @@ setup(
     cmdclass={'sdist': packaging['HolderSource'], 'build_py': packaging['PureAssessment'],
               'develop': packaging['HolderDevelop']},
     package_data={'fleet.server.web': [
+        'assets.json',
         '*.html', '*.css', '*.js',
         '*/*.html', '*/*.css', '*/*.js',  # every console subpackage: shared/, cell/, work/
     ]},

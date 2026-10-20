@@ -8,6 +8,7 @@ shared-assets.json 이 명시한 파일만 /common 아래로 서빙한다.
 from __future__ import annotations
 
 import json
+import runpy
 from pathlib import Path
 from typing import Optional
 
@@ -18,101 +19,11 @@ from fleet._source_layout import console_root
 
 WEB_ROOT = console_root()
 
-CONSOLE_ASSETS = {
-    "assistant.js": ("assistant/panel.js", "application/javascript"),
-    "assistant-voice.js": ("assistant/assistant-voice.js", "application/javascript"),
-    "assistant.css": ("assistant/panel.css", "text/css"),
-    "cell.js": ("cell/cell.js", "application/javascript"),
-    "cell-document-editor.js": ("cell/cell-document-editor.js", "application/javascript"),
-    "cell.css": ("cell/cell.css", "text/css"),
-    "doc-tabs.css": ("shared/doc-tabs.css", "text/css"),
-    "fleet-header.css": ("shared/fleet-header.css", "text/css"),
-    "fleet-header.js": ("shared/fleet-header.js", "application/javascript"),
-    "styles.css": ("shared/styles.css", "text/css"),
-    "console.js": ("console.js", "application/javascript"),
-    "console-auth.js": ("console-auth.js", "application/javascript"),
-    "console-goal.js": ("console-goal.js", "application/javascript"),
-    "console-refresh.js": ("console-refresh.js", "application/javascript"),
-    "inbox.js": ("inbox.js", "application/javascript"),
-    "work-view.js": ("work/work-view.js", "application/javascript"),
-    "work.css": ("work/work.css", "text/css"),
-    "channel-request-view.js": ("work/channel-request-view.js", "application/javascript"),
-    "incident-view.js": ("incident-view.js", "application/javascript"),
-    "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
-    "install.js": ("installation/install.js", "application/javascript"),
-    "measured-calibration-view.js": ("calibration/measured-calibration-view.js", "application/javascript"),
-    "measured-calibration.css": ("calibration/measured-calibration.css", "text/css"),
-    "host-services.js": ("installation/host-services.js", "application/javascript"),
-    "host-health.js": ("shared/host-health.js", "application/javascript"),
-    "peer-picker.js": ("installation/peer-picker.js", "application/javascript"),
-    "device-discovery.js": ("devices/device-discovery.js", "application/javascript"),
-    "address-drift.js": ("shared/address-drift.js", "application/javascript"),
-    "state-age.js": ("state-age.js", "application/javascript"),
-    "authorization.js": ("shared/authorization.js", "application/javascript"),
-    "development-auth.js": ("shared/development-auth.js", "application/javascript"),
-    "password-login.js": ("shared/password-login.js", "application/javascript"),
-    "login-page.js": ("shared/login-page.js", "application/javascript"),
-    "profile-page.js": ("shared/profile-page.js", "application/javascript"),
-    "account-page.js": ("shared/account-page.js", "application/javascript"),
-    "policy-page.js": ("work/policy-page.js", "application/javascript"),
-    "policy-model.js": ("work/policy-model.js", "application/javascript"),
-    "policy.css": ("work/policy.css", "text/css"),
-    "account-permissions.js": ("shared/account-permissions.js", "application/javascript"),
-    "login-return.js": ("shared/login-return.js", "application/javascript"),
-    "password-login.css": ("shared/password-login.css", "text/css"),
-    "camera-pairing.js": ("devices/camera-pairing.js", "application/javascript"),
-    "camera-peer.js": ("installation/camera-peer.js", "application/javascript"),
-    "field-layers.js": ("calibration/field-layers.js", "application/javascript"),
-    "field-view.js": ("calibration/field-view.js", "application/javascript"),
-    "field-warp.js": ("shared/field-warp.js", "application/javascript"),
-    "formation.js": ("formation.js", "application/javascript"),
-    "motion-readiness.js": ("motion-readiness.js", "application/javascript"),
-    "line-stuck.js": ("line-stuck.js", "application/javascript"),
-    "stuck-evidence.js": ("shared/stuck-evidence.js", "application/javascript"),
-    "trip-replan.js": ("trip-replan.js", "application/javascript"),
-    "link-tag.js": ("link-tag.js", "application/javascript"),
-    "site-path.js": ("site-path.js", "application/javascript"),
-    "localization-badge.js": ("localization-badge.js", "application/javascript"),
-    "camera-warp.js": ("map/camera-warp.js", "application/javascript"),
-    "camera-backdrop.js": ("map/camera-backdrop.js", "application/javascript"),
-    "map-fit.js": ("shared/map-fit.js", "application/javascript"),
-    "map-fit-view.js": ("calibration/map-fit-view.js", "application/javascript"),
-    "map-view.js": ("map/map-view.js", "application/javascript"),
-    "map-overlays.js": ("map/map-overlays.js", "application/javascript"),
-    "map-polling.js": ("map/map-polling.js", "application/javascript"),
-    "map-datum.js": ("map/map-datum.js", "application/javascript"),
-    "poll-gate.js": ("shared/poll-gate.js", "application/javascript"),
-    "roster.js": ("roster.js", "application/javascript"),
-    "queues.js": ("queues.js", "application/javascript"),
-    "card-trip.js": ("card-trip.js", "application/javascript"),
-    "power-health-view.js": ("power-health-view.js", "application/javascript"),
-    "enrollment.js": ("devices/enrollment.js", "application/javascript"),
-    "signals.js": ("signals.js", "application/javascript"),
-    "site-map.css": ("sitemap/site-map.css", "text/css"),
-    "site-map.js": ("sitemap/site-map.js", "application/javascript"),
-    "site-map-model.js": ("shared/site-map-model.js", "application/javascript"),
-    "site-map-edit.js": ("shared/site-map-edit.js", "application/javascript"),
-    "site-map-teach.js": ("sitemap/site-map-teach.js", "application/javascript"),
-    "site-map-survey.js": ("sitemap/site-map-survey.js", "application/javascript"),
-    "site-map-camera.js": ("sitemap/site-map-camera.js", "application/javascript"),
-    "site-layer.js": ("map/site-layer.js", "application/javascript"),
-    "tracking-layer.js": ("map/tracking-layer.js", "application/javascript"),
-    "tracking-view.js": ("tracking-view.js", "application/javascript"),
-    "tracking-relearn.js": ("installation/tracking-relearn.js", "application/javascript"),
-    "start-point-layer.js": ("map/start-point-layer.js", "application/javascript"),
-    "start-point-view.js": ("installation/start-point-view.js", "application/javascript"),
-    "trail-view.js": ("map/trail-view.js", "application/javascript"),
-    "traffic-view.js": ("map/traffic-view.js", "application/javascript"),
-    "guide-layer.js": ("shared/guide-layer.js", "application/javascript"),
-    "connection-view.js": ("connection-view.js", "application/javascript"),
-    "device-watch.js": ("device-watch.js", "application/javascript"),
-    "device-watch.css": ("device-watch.css", "text/css"),
-    "vision-view.js": ("shared/vision-view.js", "application/javascript"),
-    "robot-video.js": ("shared/robot-video.js", "application/javascript"),  # D-801
-    "robot-video.css": ("shared/robot-video.css", "text/css"),
-    "power-action.js": ("shared/power-action.js", "application/javascript"),
-    "area-nav.js": ("shared/area-nav.js", "application/javascript"),
-}
+_asset_api = runpy.run_path(str(WEB_ROOT / "asset_registry.py"))
+_REGISTRY = _asset_api["load_registry"](WEB_ROOT)
+_resolve_entry = _asset_api["resolve_entry"]
+CONSOLE_ASSETS = {name: (entry["path"], entry["media_type"])
+                  for name, entry in _REGISTRY["assets"].items()}
 
 CONSOLE_CSP = (
     "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; "
@@ -132,71 +43,27 @@ def shared_assets(root: Optional[Path]) -> dict[str, str]:
 
 
 def install_static_routes(app: FastAPI) -> None:
-    @app.get("/console/accounts", include_in_schema=False)
-    def console_accounts_page():
-        return FileResponse(WEB_ROOT / "accounts.html", media_type="text/html",
-                            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
+    def page_handler(url):
+        def page():
+            entry = _resolve_entry(WEB_ROOT, _REGISTRY["pages"], url)
+            if entry is None:
+                raise HTTPException(status_code=404, detail="console page not found")
+            path, media_type = entry
+            return FileResponse(path, media_type=media_type,
+                                headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
+        return page
 
-    @app.get("/console/policy", include_in_schema=False)
-    def console_policy_page():
-        return FileResponse(WEB_ROOT / "work/policy.html", media_type="text/html",
-                            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
-
-    @app.get("/console/profile", include_in_schema=False)
-    def console_profile_page():
-        return FileResponse(
-            WEB_ROOT / "profile.html", media_type="text/html",
-            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
-        )
-
-    @app.get("/console/login", include_in_schema=False)
-    def console_login_page():
-        return FileResponse(
-            WEB_ROOT / "login.html", media_type="text/html",
-            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
-        )
+    for url in _REGISTRY["pages"]:
+        app.add_api_route(url, page_handler(url), methods=["GET"], include_in_schema=False,
+                          name="console-page:" + url)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict:
-        """Minimal process liveness for local container supervision."""
         return {"status": "ok"}
-
-    @app.get("/console/cell", include_in_schema=False)
-    def cell_page():
-        return FileResponse(
-            WEB_ROOT / "cell" / "cell.html", media_type="text/html",
-            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
-        )
-
-    # D-488 — 현장 지도(주소·차로) 보기·초안 편집·경로 미리보기.
-    @app.get("/console/site-map", include_in_schema=False)
-    def site_map_page():
-        return FileResponse(
-            WEB_ROOT / "sitemap" / "site-map.html", media_type="text/html",
-            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
-        )
 
     @app.get("/", include_in_schema=False)
     def root():
         return RedirectResponse("/console")
-
-    @app.get("/console", include_in_schema=False)
-    def console_page():
-        return FileResponse(
-            WEB_ROOT / "index.html",
-            media_type="text/html",
-            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
-        )
-
-    # D-410 — 설치·보정 화면. 기기 등록·카메라 연결 승인·경기장/맵 보정이 산다.
-    # 운용(감시·목표·정지)은 /console 에 그대로 있다.
-    @app.get("/console/install", include_in_schema=False)
-    def console_install_page():
-        return FileResponse(
-            WEB_ROOT / "installation" / "install.html",
-            media_type="text/html",
-            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
-        )
 
     common_assets = shared_assets(app.state.web_common)
 

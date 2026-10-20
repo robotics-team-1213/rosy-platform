@@ -2,15 +2,18 @@
 
 import json
 import os
+import runpy
 import socket
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-from fleet.server.static_routes import CONSOLE_ASSETS, WEB_ROOT as WEB
 
 ROOT = Path(__file__).resolve().parents[1]
+WEB = ROOT / "applications/fleet/web"
+_registry = runpy.run_path(str(WEB / "asset_registry.py"))["load_registry"](WEB)
+CONSOLE_ASSETS = {name: (entry["path"], entry["media_type"]) for name, entry in _registry["assets"].items()}
 WEB_COMMON = ROOT / "shared" / "web"
 
 
