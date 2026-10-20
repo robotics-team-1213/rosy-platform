@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/training/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 import review_dataset as target
 from test_review_authority import current, digest, seal_bundle
 

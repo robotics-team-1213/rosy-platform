@@ -16,6 +16,17 @@ if _MODEL not in sys.path:
 
 import intake  # noqa: E402
 
+
+def test_registry_uses_the_canonical_evaluation_owner():
+    import intake_evaluation
+    import intake_eval_gate
+
+    holder = ROOT / "learning/evaluation/perception"
+    assert Path(intake_evaluation.__file__).resolve().parent == holder
+    assert Path(intake_eval_gate.__file__).resolve().parent == holder
+    assert intake.evaluate is intake_evaluation.evaluate
+
+
 SHA = "c" * 64
 H, W = 4, 8  # model input; eval frames are 8x16, so the masks are resized (nearest)
 SPEC = SimpleNamespace(height=H, width=W, color="rgb", scale=1 / 255, mean=(0, 0, 0), std=(1, 1, 1),
@@ -430,13 +441,14 @@ def test_strict_training_resolution_rejects_modified_store_content(tmp_path):
 
 def test_strict_eval_detects_truth_changed_during_inference(tmp_path, monkeypatch):
     folder = _seal(_eval_set(tmp_path))
-    original = intake.model_logits
+    import intake_evaluation
+    original = intake_evaluation.model_logits
 
     def mutate_truth(model, bgr):
         (folder / "masks/s/s__000000.png").write_bytes(b"changed")
         return original(model, bgr)
 
-    monkeypatch.setattr(intake, "model_logits", mutate_truth)
+    monkeypatch.setattr(intake_evaluation, "model_logits", mutate_truth)
     with pytest.raises(intake.EvalSetError, match="content hash"):
         intake.evaluate(_model(_pred()), folder, 400, verify_content=True)
 

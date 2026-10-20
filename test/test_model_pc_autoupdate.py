@@ -9,6 +9,7 @@ import tarfile
 import io
 import re
 import shutil
+import shlex
 
 import pytest
 
@@ -27,6 +28,19 @@ def module():
 def test_current_checkout_satisfies_signed_source_inventory():
     root = SCRIPT.parents[2]
     assert not [name for name in module().SPLIT_REQUIRED if not (root / name).is_file()]
+
+
+def test_installed_model_controller_has_its_complete_import_closure(tmp_path):
+    installer = SCRIPT.with_name("install-model-code.sh").read_text(encoding="utf-8")
+    line = next(line for line in installer.splitlines() if line.startswith("install -m 0644")
+                and '"$HERE/rosy_model_code.py"' in line)
+    for source in shlex.split(line)[3:-1]:
+        assert source.startswith("$HERE/")
+        file = SCRIPT.parent / source.removeprefix("$HERE/")
+        shutil.copyfile(file, tmp_path / file.name)
+    result = subprocess.run([sys.executable, "-I", "-B", str(tmp_path / SCRIPT.name), "--help"],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.fixture
@@ -199,6 +213,56 @@ def test_retained_signed_release_keeps_its_original_job_paths_and_bytes(tmp_path
     assert resolved.read_bytes() == b"ORIGINAL_SIGNED_BYTES = True\n"
     with pytest.raises((ValueError, OSError)):
         m.job_entry(source, "../../outside.py")
+
+
+@pytest.mark.parametrize("entry,old_holder,new_holder,alias", [
+    *((entry, "training", "curation", "training") for entry in (
+        "review_authority", "review_bridge", "review_dataset", "review_eval_companion",
+        "review_eval_package", "review_provenance")),
+    ("intake_eval_gate", "registry", "evaluation", "model"),
+])
+@pytest.mark.parametrize("layout", ["old", "new", "both"])
+def test_learning_job_resolves_the_exact_retained_or_current_signed_layout(
+        tmp_path, entry, old_holder, new_holder, alias, layout):
+    m = module()
+    source = tmp_path / "release"
+    watch = source / "learning/registry/perception/watch.py"
+    watch.parent.mkdir(parents=True)
+    watch.write_bytes(b"SIGNED_WATCH = True\n")
+    for kind, holder in (("old", old_holder), ("new", new_holder)):
+        if layout in (kind, "both"):
+            file = source / f"learning/{holder}/perception/{entry}.py"
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(holder.encode())
+    before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")}
+    holder = old_holder if layout == "old" else new_holder
+    path = f"learning/{holder}/perception/{entry}.py"
+    assert m.job_entry(source, f"{alias}/{entry}.py") == (
+        (source / path).resolve(), source.resolve(), path, path)
+    assert {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")} == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux signed-release symlinks")
+@pytest.mark.parametrize("exists", [False, True])
+@pytest.mark.parametrize("job,old_holder,new_holder", [
+    ("training/review_bridge.py", "training", "curation"),
+    ("model/intake_eval_gate.py", "registry", "evaluation"),
+])
+def test_learning_job_symlink_cannot_select_a_retained_fallback(tmp_path, exists, job, old_holder, new_holder):
+    m = module()
+    source = tmp_path / "release"
+    for path in ("learning/registry/perception/watch.py", f"learning/{old_holder}/perception/{Path(job).name}"):
+        file = source / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"SIGNED = True\n")
+    outside = tmp_path / "outside.py"
+    if exists:
+        outside.write_bytes(b"UNSIGNED = True\n")
+    link = source / f"learning/{new_holder}/perception/{Path(job).name}"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside)
+    with pytest.raises((ValueError, OSError)):
+        m.job_entry(source, job)
 
 
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):

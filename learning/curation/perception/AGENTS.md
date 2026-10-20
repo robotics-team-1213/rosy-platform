@@ -18,6 +18,8 @@ Media stage, before a recording job: `media_pipeline.py` scans raw sessions, mak
 
 | File | Description |
 |------|-------------|
+| `review_bridge.py`, `review_dataset.py` | Sealed review transport and indexed dataset preparation; neither grants training admission |
+| `review_authority.py`, `review_provenance.py`, `review_eval_package.py`, `review_eval_companion.py` | Verify pinned review/source bytes and frozen evaluation lineage; owner-side admission remains in `learning/training/perception/` |
 | `harvest.py` | Pulls un-harvested recording sessions from a robot over ssh/scp, only while CORE reports idle (D-136); `--assume-idle` is bench-only; never deletes robot data |
 | `bag_to_video.py` | Session camera topic to an H.265/H.264 mp4 plus a per-frame `.jsonl` sidecar (`--codec hevc|h264`, `--crf`) |
 | `shrink_session.py` | Writes `<session>.compact/` with raw images turned into JPEG `CompressedImage`; never modifies the source; verifies by default |
