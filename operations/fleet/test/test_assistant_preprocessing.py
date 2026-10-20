@@ -131,7 +131,7 @@ def test_operator_broker_uses_prepared_copy_and_records_actual_usage(monkeypatch
     assert 'usage' not in seen[0]['format']['properties']
     content = seen[0]['messages'][1]['content']
     context, latest = content.split('\nLATEST USER MESSAGE:\n')
-    assert 'question' not in json.loads(context)
+    assert json.loads(context)['question'] == q.question
     assert 'scope' not in json.loads(context)
     assert latest == '안녕 r1'
     assert prepare(q).original == q.question
@@ -187,7 +187,7 @@ def test_model_prompt_avoids_duplicate_text_and_provenance_without_dropping_fact
     value = prepare(q)
     prompt = json.loads(value.prompt_json)
     assert prompt['facts'] == [dict(ref='robot:r1', observed_at=1000., text='r1 online')]
-    assert 'question' not in prompt and 'preparation' not in prompt and 'scope' not in prompt
+    assert prompt['question'] == value.original and 'preparation' not in prompt and 'scope' not in prompt
     assert value.context['question'] == q.question
     assert value.context['preparation']['input_hash'] == q.digest
 

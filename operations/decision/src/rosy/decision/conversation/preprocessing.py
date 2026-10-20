@@ -36,6 +36,7 @@ def normalize(text, names=()):
     def plain(value):
         return re.sub(r'[ \t]+', ' ', unicodedata.normalize('NFC', value))
     parts, at = [], 0
+    names = {form for name in names for form in (name, unicodedata.normalize('NFD', name))}
     protected = re.compile(QUOTES.pattern+'|'+'|'.join(alias_pattern(name) for name in
         sorted(names, key=lambda name: (-len(name), name)))) if names else QUOTES
     for match in protected.finditer(text):
@@ -65,8 +66,7 @@ class Prepared:
     @property
     def prompt_json(self):
         context = self.context
-        # The current message appears once below the context; hashes stay in the bound receipt.
-        context.pop('question')
+        # Fixed-model evaluation requires the JSON question plus its readable latest-message copy.
         context.pop('preparation')
         return canonical(context)
 
