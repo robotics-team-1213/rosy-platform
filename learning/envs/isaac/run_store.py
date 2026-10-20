@@ -82,6 +82,7 @@ def _directory(root, relative='', *, create=False):
             if create:
                 try:
                     os.mkdir(part, 0o700, dir_fd=fd)
+                    os.fsync(fd)
                 except FileExistsError:
                     pass
             child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
@@ -92,10 +93,33 @@ def _directory(root, relative='', *, create=False):
         os.close(fd)
 
 
-def _read(fd, name, limit=JSON_BYTES):
+def _recover_publication(fd, name, info):
+    # A killed publisher can leave its one temporary hard link beside the final name.
+    if info.st_nlink != 2 or info.st_uid != os.getuid():
+        raise ValueError('unrelated hard links are not run records')
+    entries = os.listdir(fd)
+    if len(entries) > 1024:
+        raise ValueError('run directory exceeds recovery limit')
+    matches = []
+    for candidate in entries:
+        if re.fullmatch(r'\.pending-[0-9a-f]{32}', candidate):
+            other = os.stat(candidate, dir_fd=fd, follow_symlinks=False)
+            if (other.st_dev, other.st_ino) == (info.st_dev, info.st_ino):
+                matches.append(candidate)
+    current = os.stat(name, dir_fd=fd, follow_symlinks=False)
+    if len(matches) != 1 or (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+        raise ValueError('publication is not a recoverable store temporary link')
+    os.unlink(matches[0], dir_fd=fd)
+    os.fsync(fd)
+
+
+def _read(fd, name, limit=JSON_BYTES, *, recover=False, durable=False):
     handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
     with os.fdopen(handle, 'rb') as stream:
         before = os.fstat(stream.fileno())
+        if recover and stat.S_ISREG(before.st_mode) and before.st_nlink != 1:
+            _recover_publication(fd, name, before)
+            before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
             raise ValueError('artifact is not a bounded private regular file')
         raw = stream.read(limit + 1)
@@ -103,11 +127,14 @@ def _read(fd, name, limit=JSON_BYTES):
         if (len(raw) > limit or (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
                 != (after.st_size, after.st_mtime_ns, after.st_ctime_ns)):
             raise ValueError('artifact changed during read')
+        if durable:
+            os.fsync(stream.fileno())
+            os.fsync(fd)
         return raw
 
 
 def _json(fd, name):
-    return json.loads(_read(fd, name), object_pairs_hook=_pairs,
+    return json.loads(_read(fd, name, recover=True), object_pairs_hook=_pairs,
                       parse_constant=_invalid_constant)
 
 
@@ -115,7 +142,7 @@ def _write(fd, name, value, *, exclusive=False):
     raw = _bytes(value)
     if exclusive:
         try:
-            existing = _read(fd, name)
+            existing = _read(fd, name, recover=True)
         except FileNotFoundError:
             pass
         else:
@@ -202,6 +229,15 @@ class RunStore:
             row['input'] = record['input']
             row['snapshot'] = 'FINAL' if row['status'] in TERMINAL else 'OBSERVATION_NOT_ATOMIC'
             if row['status'] in TERMINAL:
+                completion = row.pop('_completion', None)
+                if not isinstance(completion, dict) or set(completion) != {'result', 'artifacts'}:
+                    raise ValueError('terminal checkpoint is incomplete')
+                if (hashlib.sha256(_bytes(completion['result'])).hexdigest() != row.get('result_sha256')
+                        or hashlib.sha256(_bytes(completion['artifacts'])).hexdigest() != row.get('artifacts_sha256')):
+                    raise ValueError('terminal checkpoint evidence changed')
+                # State is the atomic commit; exported files can be recovered without replaying the job.
+                _write(fd, 'artifacts.json', completion['artifacts'], exclusive=True)
+                _write(fd, 'result.json', completion['result'], exclusive=True)
                 row['result'] = _json(fd, 'result.json')
                 row['artifacts'] = _json(fd, 'artifacts.json')
                 if (hashlib.sha256(_bytes(row['result'])).hexdigest() != row.get('result_sha256')
@@ -290,7 +326,7 @@ class RunStore:
                 _write(fd, 'state.json', value)
             return self._get(run_id)
 
-    def _manifest(self, run_id, items):
+    def _manifest(self, run_id, items, *, durable=False):
         if not isinstance(items, list) or len(items) > 256:
             raise ValueError('too many artifacts')
         ids, names, total = set(), set(), 0
@@ -314,7 +350,7 @@ class RunStore:
             if item['bytes'] > limit or total > RUN_BYTES:
                 raise ValueError('artifact size exceeds limit')
             with _directory(self.root, 'runs/' + run_id + ('/' + '/'.join(parts[:-1]) if len(parts) > 1 else '')) as fd:
-                raw = _read(fd, parts[-1], limit)
+                raw = _read(fd, parts[-1], limit, durable=durable)
             if len(raw) != item['bytes'] or hashlib.sha256(raw).hexdigest() != item['sha256']:
                 raise ValueError('artifact differs from its manifest')
         return {'snapshot': 'FINAL', 'files': items}
@@ -329,14 +365,15 @@ class RunStore:
                     or result.get('import_verified') is not True or result.get('completed_frames') != 120
                     or result.get('task_success') is not None):
                 raise ValueError('SDK exit alone is not verified model import')
-            manifest = self._manifest(run_id, artifacts)
+            manifest = self._manifest(run_id, artifacts, durable=True)
             value['result_sha256'] = hashlib.sha256(_bytes(result)).hexdigest()
             value['artifacts_sha256'] = hashlib.sha256(_bytes(manifest)).hexdigest()
+            value['_completion'] = {'result': result, 'artifacts': manifest}
             with _directory(self.root, 'runs/' + run_id) as fd:
-                _write(fd, 'artifacts.json', manifest, exclusive=True)
-                _write(fd, 'result.json', result, exclusive=True)
                 self._event(fd, value)
                 _write(fd, 'state.json', value)
+                _write(fd, 'artifacts.json', manifest, exclusive=True)
+                _write(fd, 'result.json', result, exclusive=True)
             return self._get(run_id)
 
     def artifact(self, run_id: str, artifact_id: str) -> dict:
