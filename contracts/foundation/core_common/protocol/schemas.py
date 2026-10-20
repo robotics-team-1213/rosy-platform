@@ -1,12 +1,7 @@
-"""Fleet protocol schemas and canonical read exports (ROSY-API-REF-001, D-10, D-664).
-- Envelope: 모든 Fleet↔Robot WS 메시지 공통 포장 (API Ref §7.1)
-- HelloPayload / WelcomePayload: 핸드셰이크 (API Ref §7.2)
-- HeartbeatPayload: 1 Hz 상태 전송 (API Ref §7.3)
-- EventMessage: EVT-001 이벤트 모델 (API Ref §8)
-- AckPayload: 명령 추적 (API Ref §7.5, PRT-004)
+"""Fleet schemas and canonical exports (ROSY-API-REF-001, D-10, D-664).
 
-스키마 변경은 추가 전용(Additive)만 허용한다. envelope protocol_version 은 1.0 고정이고
-additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노트).
+Envelope/hello/heartbeat/ACK: API Ref §7; events: §8.
+Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.0 (PRT-006).
 """
 
 from __future__ import annotations
@@ -31,6 +26,11 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.docking import DockState, DockingStatus  # noqa: F401
+from core_common.protocol.station_charging import (  # noqa: F401 (D-772)
+    StationPoseRecord, StationPoseAck, StationObservation, MapPoseEvidence, StationTargetBinding, SeatingEvidence,
+    ChargeCompletionEvidence, BatteryEnergyEvidence, StationTargetStatus, ChargePolicyProfile, ChargeDecision,
+    ChargeSessionStatus, StationMotionCommand, StationReturnPermit, StationDeparturePermit, StationDepartureReceipt,
+)
 from core_common.protocol.power import (  # noqa: F401 (PWR-001~005, D-440)
     DevicePowerState, PowerMode, PowerStatus, PresenceState)
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401

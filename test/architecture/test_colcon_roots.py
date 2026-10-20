@@ -50,6 +50,12 @@ CONSUMERS = {
 }
 #: Files with an invocation-looking line that does not run over the repo's colcon roots.
 EXEMPT = {
+    "contracts/ros_idl/test/validate_map_adoption.sh":
+        "D-783 interfaces-only generation/provenance and wire tests; builds only the interfaces package",
+    "middleware/drive/planning/nav2/test/validate_native_amcl.sh":
+        "D-783 native validation slice; builds only interfaces/navigation in the runner-provided workspace",
+    "middleware/drive/planning/nav2/test/validate_native_static.sh":
+        "D-783 StaticLayer validation slice; builds only interfaces/navigation and tests native_map_static",
     "docs/reference/legacy-tools/wsl/sync_rosy_fast.sh": "D-637 frozen historical WSL script; no operational caller",
     "docs/reference/legacy-tools/wsl/sync_rosy.sh": "D-637 frozen historical WSL script; no operational caller",
     "docs/reference/legacy-tools/wsl/sync_api_restart.sh": "D-637 frozen historical WSL script; no operational caller",

@@ -13,6 +13,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_api.py",
     "middleware/core/gateway/test/test_battery.py",
     "middleware/core/gateway/test/test_bridge_battery_policy.py",
+    # Original TF -> real StateManager pose lifetime; CORE bridge/localization seam.
+    "middleware/core/gateway/test/test_bridge_map_pose.py",
     # bridge/docking_executor.py seam (split out of ros_bridge, df02d52e); same kind as
     # test_bridge_battery_policy: CORE bridge wiring driven through core_features fakes.
     "middleware/core/gateway/test/test_bridge_docking_executor.py",
@@ -78,6 +80,27 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_navigation_readiness.py",
     # D-732 actual CORE API/manager wiring and native callback/stop ownership seams.
     "middleware/core/gateway/test/test_native_owner_receipts.py",
+    # D-772/776 CORE composition seams: rendered station lifecycle harness, post-write
+    # observation, sole writer restriction, original ROS odom adapter and real native
+    # owner binding. These require gateway CoreServices/bridge/final writer together;
+    # pure Budget/Ledger/motion arithmetic remains under services/test.
+    "middleware/core/gateway/test/station_cycle_sim.py",
+    "middleware/core/gateway/test/test_cmd_vel_observation.py",
+    "middleware/core/gateway/test/test_execution_writer_fence.py",
+    "middleware/core/gateway/test/test_execution_odometry.py",
+    # Original ROS-to-StateManager receipt retained by actual CORE native binding.
+    "middleware/core/gateway/test/test_execution_source_bootstrap.py",
+    # Original map callback, private native composition and captured-parent stop seam.
+    "middleware/core/gateway/test/test_execution_map_observation.py",
+    # D-783 actual private native composition and sole writer map evidence seam.
+    "middleware/core/gateway/test/test_execution_native_map.py",
+    # D-783 actual generated ROS response serialization -> bounded domain capture;
+    # pure native evidence owner tests stay under core/services/test.
+    "middleware/core/gateway/test/check_native_map_capture.py",
+    # D-783 actual typed CORE ROS clients / DDS -> feature evidence owner seam.
+    "middleware/core/gateway/test/check_native_map_clients.py",
+    "middleware/core/gateway/test/test_native_map_clients.py",
+    "middleware/core/gateway/test/test_native_execution_binding.py",
     "middleware/core/gateway/test/test_safety_stop_contention.py",
     "middleware/core/gateway/test/test_safety_stop_receipts.py",
     "middleware/core/gateway/test/test_operational_journey.py",

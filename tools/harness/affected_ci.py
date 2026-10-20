@@ -41,7 +41,7 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 4, "sensing": 2}
+SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the fixed per-shard cost budget.
 # Seconds per Fleet file of 5 s or more, the mean of CI 38807338775, 38711952782 and 38830518002
 # (2026-10-15/16, timestamps of the -v result lines); others weigh 1. These only choose runners;
 # every discovered test still runs exactly once.

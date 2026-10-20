@@ -16,6 +16,7 @@ from fleet.server.task_scheduler import FleetTaskScheduler
 from fleet.server.task_store import FleetTaskStore
 from fleet.server.channel.execution.journal import native_required
 from fleet.server.channel.execution.outcomes.task_receipt import bind_native_task_result
+from fleet.server.channel.execution.outcomes.handover import handover_completed_navigation
 from fleet.swarm.transport import RobotApiError
 
 
@@ -39,10 +40,12 @@ class FleetTaskService:
         self._max_evidence_age_s = max_evidence_age_s
         self._clock = clock
         self.channel_admission = None
+        self.charge_admission = None
         self.core_events = None
 
     bind_native_receipt = bind_native_task_result
     native_required = native_required
+    handover_completed_navigation = handover_completed_navigation
 
     async def submit_navigation(
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
@@ -139,6 +142,8 @@ class FleetTaskService:
         reason = None
         if self.channel_admission is not None:
             reason = self.channel_admission(task_id)
+        if reason is None and self.charge_admission is not None:
+            reason = self.charge_admission(task['robot_id'], task=task)
         if reason is None and not self.store.dispatch_generation_is_current(task["dispatch_generation"]):
             reason = "STOP_GENERATION_CHANGED_BEFORE_SEND"
         elif reason is None and task["source"] == "policy":
@@ -153,6 +158,8 @@ class FleetTaskService:
         self, available_robot_ids: set[str], *,
         dispatch: Callable[[dict], Awaitable[Mapping]],
     ) -> dict | None:
+        if self.charge_admission is not None:
+            available_robot_ids = {robot for robot in available_robot_ids if self.charge_admission(robot) is None}
         task = self.scheduler.claim_next(available_robot_ids)
         if task is None:
             return None

@@ -90,6 +90,8 @@ def test_localized_cancels_navigation_through_the_manager(core):
     cancels = []
     services.nav.cancel = lambda source="api", **_: cancels.append(source)
     services.localization.on_state(_state("CANDIDATES", request_id="req-1"))
+    assert cancels == ['localization']  # First invalid report closes pre-report autonomy.
+    cancels.clear()
     services.localization.on_state(_state("LOCALIZED"))
     assert cancels == ["localization"]
     assert [e.data["state"] for e in _types(services, "localization.state")] == [
@@ -413,13 +415,60 @@ def test_leaving_localized_cancels_navigation_and_leaves_navigation_mode(core):
     assert event.data["previous"] == "LOCALIZED"
 
 
-def test_leaving_localized_stops_line_follow(core):
+@pytest.mark.parametrize('source', ['tick', 'state'])
+def test_frame_only_loss_stops_existing_navigation_and_recovery_does_not_resume(core, source):
+    client, services = core
+    _ready_for_goal(services)
+    services.localization.on_state(_state('LOCALIZED'))
+    assert client.post('/api/v1/navigation/goal', headers=OPERATOR,
+        json={'x': 1., 'y': 2., 'yaw': 0.}).status_code == 200
+    if source == 'tick':
+        services.localization.tick(True)
+    else:
+        services.localization.on_state(_state('LOCALIZED', frame='odom'))
+    assert services.localization.status().state.value == 'LOCALIZED'
+    assert services.nav.nav_state.value == 'CANCELED' and services.modes.mode.value == 'IDLE'
+    refused = client.post('/api/v1/navigation/goal', headers=OPERATOR,
+        json={'x': 2., 'y': 2., 'yaw': 0.})
+    assert refused.status_code == 409 and refused.json()['error']['code'] == 'NOT_LOCALIZED'
+    services.localization.on_state(_state('LOCALIZED', frame='map'))
+    services.localization.tick(False)
+    assert services.localization.autonomy_allowed()
+    assert services.modes.mode.value == 'IDLE' and services.nav.nav_state.value == 'CANCELED'
+
+
+def test_frame_only_loss_preserves_manual_teleop(core):
+    client, services = core
+    services.state.set_velocity(0., 0.)
+    services.localization.on_state(_state('LOCALIZED'))
+    assert client.post('/api/v1/mode', json={'mode': 'MANUAL'}, headers=OPERATOR).status_code == 200
+    services.localization.tick(True)
+    assert services.modes.mode.value == 'MANUAL'
+    assert client.post('/api/v1/teleop', json={'linear': .1, 'angular': 0.},
+        headers=OPERATOR).status_code == 200
+
+
+def test_first_invalid_report_closes_navigation_started_without_localization_messages(core):
+    client, services = core
+    _ready_for_goal(services)
+    assert services.localization.status() is None
+    assert client.post('/api/v1/navigation/goal', headers=OPERATOR,
+        json={'x': 1., 'y': 2., 'yaw': 0.}).status_code == 200
+    services.localization.on_state(_state('LOCALIZED', frame='odom'))
+    assert services.nav.nav_state.value == 'CANCELED' and services.modes.mode.value == 'IDLE'
+
+
+@pytest.mark.parametrize('loss', ['state', 'frame'])
+def test_leaving_localized_stops_line_follow(core, loss):
     _client, services = core
     from core_api_web.api.deps import LineFollowMode
     services.localization.on_state(_state("LOCALIZED"))
     services.line_follow.set_mode(LineFollowMode.CAMERA_LINE)
     assert services.line_follow.active
-    services.localization.on_state(_state("CANDIDATES", request_id="req-1"))
+    if loss == 'state':
+        services.localization.on_state(_state("CANDIDATES", request_id="req-1"))
+    else:
+        services.localization.tick(True)
     assert not services.line_follow.active
     assert services.line_follow.mode is LineFollowMode.OFF
 
@@ -501,7 +550,8 @@ def test_localized_in_the_odom_frame_is_refused(core):
 # --- review item 2: the halt and a start are ordered, not interleaved -------------
 
 
-def test_a_halt_arriving_between_the_check_and_the_start_cancels_the_start(core):
+@pytest.mark.parametrize('loss', ['state', 'frame'])
+def test_a_halt_arriving_between_the_check_and_the_start_cancels_the_start(core, loss):
     """The state drops to SUSPECT after `require_localized` passed but before the
     goal is sent. The halt must wait for the start and then fold it, never run
     first and let the goal through afterwards."""
@@ -514,8 +564,9 @@ def test_a_halt_arriving_between_the_check_and_the_start_cancels_the_start(core)
     halt_thread: dict = {}
 
     def resolve_then_lose_localization(**kwargs):
-        worker = threading.Thread(
-            target=services.localization.on_state, args=(_state("SUSPECT"),), daemon=True)
+        change = (lambda: services.localization.on_state(_state("SUSPECT"))) if loss == 'state' else (
+            lambda: services.localization.tick(True))
+        worker = threading.Thread(target=change, daemon=True)
         worker.start()
         worker.join(timeout=0.3)
         halt_thread["finished_before_start"] = not worker.is_alive()

@@ -18,7 +18,7 @@ from core_features.docking.manager import DockPhase
 SLOW_EVERY = 4
 
 
-def tick(svc, warn) -> None:
+def tick(svc, warn, *, station=None) -> None:
     """One docking tick from the bridge timer.
 
     An exception here would propagate out of the rclpy timer and stop CORE's
@@ -30,7 +30,10 @@ def tick(svc, warn) -> None:
     docking.on_navigation_state(svc.nav.nav_state)
     docking.set_manual_active(svc.command.manual_active)
     try:
-        docking.tick()
+        if station is not None and station.session is not None:
+            station.tick()
+        else:
+            docking.tick()
     except Exception as exc:  # a failed tick must not stop the bridge
         warn(f"docking tick failed: {exc}")
         try:
@@ -38,6 +41,18 @@ def tick(svc, warn) -> None:
         except Exception as cleanup:  # the state is DOCK_FAILED already
             warn(f"docking cleanup failed: {cleanup}")
     svc.state.set_docking(docking.status())
+
+
+def motion_ready(svc) -> bool:
+    """Keep original power/safety arbitration, plus the local automatic station lease."""
+    if svc.power.motion_ready() is not True:
+        return False
+    # Explicit operator control retains existing arbitration. The mode listener
+    # invalidates the automatic session outside this final output path.
+    if svc.modes.mode is Mode.MANUAL:
+        return True
+    station = svc.station_docking
+    return station is None or station.session is None or station.motion_ready(svc.modes.mode.value) is True
 
 
 def due(count: int, fast: bool) -> bool:

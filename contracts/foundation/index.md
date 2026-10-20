@@ -40,6 +40,6 @@
 
 - 2026-10-20 · 37c3907d3 · D-821 명시적 이동과 locale 추가 계약
 - 2026-10-20 · uncommitted · D-810 Console 대화 DTO
-- 2026-10-19 · uncommitted · drivable v2 안내 계약을 제품보다 먼저 분리
-- 2026-10-19 · uncommitted · D-807 receiver 재개 후 회수 대기열 검증
-- 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
+- 2026-10-19 · c6abafd83 · (origin #92 2026-10-16) v1.254 이안 허가와 실측 결과 readback
+- 2026-10-19 · 1216b3f7b · (origin #92 2026-10-16) 이안 계약과 실제 native API 최종 회귀
+- 2026-10-19 · 7d3f6418d · (origin #92 2026-10-16) D-772 이안 허가와 원본 실측 계약 추가

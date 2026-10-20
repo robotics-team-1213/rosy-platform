@@ -52,6 +52,7 @@ from core_api_web.api.v1.routes import (
     waypoints_router,
     diagnostics_router,
     docking_router,
+    station_docking_router,
     ui_router,
 )
 from core_api_web.api.ws import ws_router
@@ -239,6 +240,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(sensors_router)
     app.include_router(slam_router)
     app.include_router(docking_router)
+    app.include_router(station_docking_router)
     app.include_router(swarm_router)
     app.include_router(metrics_router)
     app.include_router(host_router)

@@ -566,3 +566,9 @@
 - 변경: `pilot_sim_{runtime,api,capture,server,camera,gripper}.py`를 `omx_adapter/pilot_sim/`으로 옮기고 D-766 단위(`test/architecture/size_units.txt`)로 등록했다. 실행은 `python3 -m omx_adapter.pilot_sim.server`, `_ARM_OWNERS`는 `pilot_sim.server`다. 시연 `source_tree_sha256`은 `pilot_sim/*.py`도 계속 포함한다.
 - 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
 - gate 변화: 없음. 동작 변경 없는 경로 이동이다.
+
+## 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
+
+- 변경: origin #83(78a4bea23c)의 별도 action event 노드·SingleThreadedExecutor(`ros_trajectory_action.py`)와 owner worker에 실행 기회를 넘기는 `OwnerMultiThreadedExecutor`(`ros_owner_executor.py`)를 main에 옮겼다. 느린 durable event sink가 joint-state intake와 watchdog을 막지 않는다. 즉시 HOLD, event 순서, action 이름 해석, worker 수, freshness 기준은 유지한다. main에만 있는 `run_hardware_owner.py`에도 같은 executor와 `runtime.destroy()`를 적용했다. #69의 별도 프로세스 fake vendor(`test/ros_feedback_peer.py`, adapter 시험 폴더)와 시험 재구성도 함께 옮겼고 main의 선택적 feedback trace hook은 유지했다(같은 프로세스 publish trace만 빠짐).
+- 증거: docs/validation/omx-owner-executor-port-2026-10-19/result.md.
+- gate 변화: 소스·원격 host/native 시험 범위. main의 #68 비재현 판정(docs/validation/omx-feedback-verification-2026-10-18/result.md)은 보존하고, 사용자 결정으로 예방 보완을 채택한다. 착지 전 독립 Safety-Review가 필요하다. 실물·DEVICE/FIELD는 미검증.

@@ -829,6 +829,42 @@
 - 증거: 원본 성공 브랜치의 관련 원격 회귀 159 passed, NEW 0. 이 선행 후보의 검증 결과는 별도로 기록하며 원본 시험을 후보 통과로 합산하지 않는다.
 - gate 변화: 없음. 스키마 설치는 생산자 활성화·SIM 반복·실물 수용이 아니다.
 
+## 2026-10-19 · uncommitted · (origin #92 2026-10-16) feat(contracts): 스테이션 설치 위치와 충전 근거 분리 (D-772)
+
+- 변경: station_charging DTO에 지도/위치/교정/충전 session/boot/odom 세대를 분리하고, 제어 입력 문맥·유효기간·유한 수·미측정 건강도·정상 충전 종단을 검증한다. canonical schema export와 API v1.245 기록을 함께 추가했다. REST·실기 capability는 아직 열지 않았다.
+- 증거: 신규 계약 시험은 모듈 부재로 원격 RED 26 failed를 확인했다. `4e299e46c`에서 foundation 전체·구조·harness·라인 계약 문서 시험을 원격 실행해 exit 0, NEW 0을 확인했다(`C:/DevTemp/station-charge/task-1-green/run-1.txt`).
+- gate 변화: 없음. 계약 구현은 자동 충전 운영 완료나 장치 수용이 아니다.
+
+## 2026-10-19 · d5c1a61e4 · (origin #92 2026-10-16) D-772 복귀 허가 계약과 현재 수명
+
+- 변경: v1.251 StationReturnPermit은 세션·robot/station/battery·boot·지도/위치 버전·correlation·기존 lease/trip ID·기대 native generation과 원본 유효기간을 분리한다. StationTargetStatus의 RETURNING/return_ready/현재 return_permit은 유효한 binding과 같은 범위·수명에서만 성립한다. canonical export를 기존 1320줄 안에 유지했다.
+- 증거: 4016579af의 신규 계약 부재 RED 뒤 d5c1a61e4에서 공유 계약·CORE lease/인계·Fleet camera scope 호환·구조/안전 포함 원격 283개 시험 통과, NEW 0. 로그 C:/DevTemp/station-charge/task-7-return-permit-final/run-1.txt.
+- gate 변화: 공유 계약/소프트웨어 증거. 귀환 경로 검증·실제 정지·충전·재투입을 DTO 수락만으로 주장하지 않는다.
+
+## 2026-10-19 · 39f94f151 · (origin #92 2026-10-16) envelope 버전 규칙과 API 이력 정합성
+
+- 변경: canonical schema docstring에 protocol_version 1.0 동결 규칙을 명시하고 v1.253/v1.252 변경 이력을 보완했다. wire DTO나 envelope 버전은 바꾸지 않았다.
+- 증거: 원격 test_protocol_version_alignment를 포함한 CORE 237개와 계약·구조·설치 486개 통과, 각 NEW 0/skip 0. schema 1320줄 상한을 유지했다.
+- gate 변화: 소프트웨어 문서·계약 일치 증거이며 장치 수용을 뜻하지 않는다.
+
+## 2026-10-19 · 7d3f6418d · (origin #92 2026-10-16) D-772 이안 허가와 원본 실측 계약 추가
+
+- 변경: v1.254 StationDeparturePermit/Receipt를 canonical export에 추가했다. 세션/attempt·선택 작업 digest·native 세대와 원본 정지/접점/공간/절연 시각을 결속하고 strict true 근거를 요구한다. schema 1320줄 상한과 envelope 1.0을 유지한다.
+- 증거: 56c3e1ed8 신규 계약/피드 원격 RED 15건을 확인했다. 구현 원격 GREEN은 아직 실행 전이다. 독립 안전 검토와 후속 원격 검증 결과를 별도 기록한다.
+- gate 변화: 없음. DTO 추가는 이안 REST 활성화·실측 프로필·실기 수용을 뜻하지 않는다.
+
+## 2026-10-19 · 1216b3f7b · (origin #92 2026-10-16) 이안 계약과 실제 native API 최종 회귀
+
+- 변경: v1.254 이안 허가/실측 Receipt, 로컬 원본 시각 피드·기존 native owner, 명시적 simulation 빈 피드와 관제 API·정확한 중단을 검증했다. 이전 API 경로 추적표·버전 이력·로그 제목/생성 인덱스 실패를 수정했으며 허용 한도나 안전 검사를 완화하지 않았다.
+- 증거: task-8-departure-final 원격 412개 통과, NEW 0/skip 0, exit 0. 별도 1f8569773 task-8-departure-contract-pins 96개 통과, NEW 0/skip 0, exit 0. 7d3f6418d의 native/기존 docking 회귀 194개와 범위가 겹치므로 합산하지 않는다. Safety-Review scoped PASS는 DTO/source/controller·owner/manager 및 API/갱신/프로필/중단 범위다.
+- gate 변화: 관련 소프트웨어 회귀 증거. HTTP 정상 경로는 실제 native owner+합성 로컬 facts로 adapter를 검증했고 bridge/mode 구성은 별도 시험이다. Fleet의 영속 선택 작업/예산 결속·실제 Receipt 기반 claim 해제/재투입·3회 cycle·독립 전역 위치 producer·실측 프로필/DEVICE/FIELD 수용은 미완료다. 목표 ACTIVE, 실기 구성 미정, push/merge/실기 활성화 없음.
+
+## 2026-10-19 · c6abafd83 · (origin #92 2026-10-16) v1.254 이안 허가와 실측 결과 readback
+
+- 변경: StationTargetStatus의 선택 departure_permit/departure_receipt가 현재 상태·session/boot/battery/correlation·원본 evidence 수명과 결속된다. Permit은 실제 binding/ACK와 설치 revision을, Receipt는 실제 operation을 요구한다. readback이 기존 착좌/충전 완료 flags를 빌려 이탈을 증명하지 못한다. 미착지 v1.254 범위의 연속 구현이며 envelope 1.0은 유지한다.
+- 증거: c6abafd83 task-8-departure-readback-green 원격 407개, aff57b47a 실제 transport/native 갱신 원격 208개, 9286f5f77 실제 runtime HTTP 원격 253개 통과. 각각 NEW 0/skip 0, exit 0이며 겹치는 범위를 합산하지 않는다. scoped 독립 안전 리뷰 PASS.
+- gate 변화: 계약과 SIM 회귀 근거. 운영 배포·설치 producer·실기 정밀도·전체 lifecycle/DEVICE/FIELD 수용은 아니다.
+
 ## 2026-10-20 · uncommitted · D-810 Console 대화 DTO
 
 - 변경: 별도 protocol.assistant에 strict 입력·근거·응답·상태·자기 대화 읽기 계약을 추가했다. 큰 schemas facade는 늘리지 않고 API v1.289의 참조·서버 설명·tripwire를 함께 맞췄다.

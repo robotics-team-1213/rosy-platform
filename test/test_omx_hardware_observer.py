@@ -55,6 +55,7 @@ def test_incomplete_or_unsafe_snapshot_never_becomes_joint_feedback(change):
 
 @pytest.mark.parametrize("cleanup_failure", [None, "destroy", "shutdown"])
 def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch, capsys, cleanup_failure):
+    monkeypatch.setenv('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')  # Observer's declared middleware precondition.
     module = observer()
     events = []
     @contextmanager

@@ -317,7 +317,8 @@ def test_the_bridge_binds_the_line_clock_and_stamps_receipts_on_the_ros_clock():
 
 def test_the_map_pose_freshness_behind_pose_frame_runs_on_the_line_clock():
     """The 2 s map-pose TTL decides `pose_frame` (and so autonomy); the state timer and
-    the TF it reads move at sim rate, so the TTL must too."""
+    the TF it reads move at sim rate, so the TTL must too. Original TF age and
+    read latency are exercised through real state in test_bridge_map_pose."""
     import ast
     source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
         encoding="utf-8")
@@ -325,7 +326,8 @@ def test_the_map_pose_freshness_behind_pose_frame_runs_on_the_line_clock():
     stamps = [ast.unparse(n.value) for n in ast.walk(tree)
               if (isinstance(n, ast.Assign) and "self._map_pose_ts" in map(ast.unparse, n.targets))
               or (isinstance(n, ast.AnnAssign) and ast.unparse(n.target) == "self._map_pose_ts")]
-    assert stamps == ["float('-inf')", "self._line_clock()"]
+    # The ROS-free reader owns capture time; the timer must not renew receipt age.
+    assert stamps == ["float('-inf')"]
     checks = [ast.unparse(n.args[1]) for n in ast.walk(tree) if isinstance(n, ast.Call)
               and ast.unparse(n.func) == "odometry.odom_owns_pose"]
     assert checks == ["self._line_clock()", "self._line_clock()"]

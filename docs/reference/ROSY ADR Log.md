@@ -13,6 +13,10 @@
 | D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
+| D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
+| D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
+| D-774 | 스테이션 측정 카메라는 설치된 관측 프로세스가 실행 중일 때 송출을 요청한다 | Accepted (2026-10-16) |
+| D-772 | 스테이션 위치 버전과 배터리 기반 자동 충전 운영 | Accepted (2026-10-16) |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
 | D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
 | D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
@@ -1187,3 +1191,11 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 **Status:** Accepted for implementation (2026-10-20). 실제 운영 수용은 별도다.
 
 별도 기명 이동 접수는 기존 Task owner를 사용하고 웹 모델은 조회 권한을 유지한다. 보호 설치와 두 언어 수용은 Discord와 독립 결속한다. 전문은 [D-821](../adr/D-821-operator-deployment-execution-languages.md).
+## D-774 - Installed station measurement camera lifespan
+
+Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).
+
+
+## D-776 - Installed station charge facts
+
+Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).

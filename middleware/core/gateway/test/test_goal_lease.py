@@ -89,6 +89,26 @@ def test_renewal_extends_the_lease(robot):
     assert svc.nav.expire_goal_lease() is True
 
 
+@pytest.mark.parametrize('elapsed', [2., 2.01])
+@pytest.mark.parametrize('headers', [OPERATOR, OTHER])
+def test_late_renewal_before_expiry_timer_cannot_revive_lease(robot, elapsed, headers):
+    tc, svc, executor, clock = robot
+    assert _goal(tc, correlation_id='a-1', lease_ttl_s=2.).status_code == 200
+    svc.nav.on_goal_accepted()
+    lease, generation, mode = svc.nav._lease, svc.nav.native.generation, svc.modes.mode
+    sent = list(executor.sent)
+    clock.now += elapsed
+    reply = _renew(tc, 'a-1', headers=headers)  # The 5 Hz expiry timer has not run.
+    assert reply.status_code == 409 and reply.json()['error']['code'] == 'GOAL_LEASE_NOT_ACTIVE'
+    assert svc.nav._lease == lease and svc.nav.native.generation == generation
+    assert svc.modes.mode is mode and executor.sent == sent and executor.cancelled == 0
+    assert svc.nav.expire_goal_lease() is True
+    assert executor.cancelled == 1 and svc.nav.fleet_goal() is None
+    assert _canceled(svc) == [{'source': 'goal_lease', 'correlation_id': 'a-1'}]
+    assert _renew(tc, 'a-1', headers=headers).status_code == 409
+    assert svc.nav.expire_goal_lease() is False and executor.cancelled == 1
+
+
 @pytest.mark.parametrize("end", ["cancel", "arrive", "fail", "expire"])
 def test_renewal_after_the_goal_ended_is_409_and_sends_nothing(robot, end):
     tc, svc, executor, clock = robot

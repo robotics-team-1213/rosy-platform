@@ -241,15 +241,16 @@ def test_a_job_ends_only_after_its_step_trip():
     assert getattr(busy.value, "code", None) == "TRIP_BUSY" and lease["state"] == "held"
 
 
-def test_a_jobs_durable_robot_claim_holds_the_robot_without_its_lease():
+@pytest.mark.parametrize('owner_kind', ['mission', 'charge_session'])
+def test_a_jobs_durable_robot_claim_holds_the_robot_without_its_lease(owner_kind):
     runner, store, ports, _ = _job_runner()
-    claims = {R: [{"owner_kind": "task", "owner_id": "t-1"}, {"owner_kind": "mission", "owner_id": JOB}]}
+    claims = {R: [{"owner_kind": "task", "owner_id": "t-1"}, {"owner_kind": owner_kind, "owner_id": JOB}]}
     console = _Console()
     install_trip_guard(console, runner, claims=lambda resource_kind, resource_id: claims.get(resource_id, []))
     assert runner.lease.job_of(R) == JOB and console.trip_busy(R)   # e.g. HOLD after a Fleet restart
     claims[R] = [{"owner_kind": "task", "owner_id": "t-1"}]
     assert runner.lease.job_of(R) is None and not console.trip_busy(R)  # a Task claim is not a job
-    claims[R].append({"owner_kind": "mission", "owner_id": JOB})
+    claims[R].append({"owner_kind": owner_kind, "owner_id": JOB})
     _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p1")
     assert _refused(runner, runner.start("p1", "lee")).code == "TRIP_ROBOT_BUSY"
 

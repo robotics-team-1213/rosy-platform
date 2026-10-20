@@ -76,7 +76,28 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
 
 
 class TripAdmission:
-    async def hold_job(self, robot_id: str, job_id: str, operator: str, capabilities) -> dict:
+    def _check_engaged(self, robot_id):
+        engaged = self._engaged(robot_id)
+        if engaged is not None:
+            raise TripError(409, 'TRIP_ROBOT_BUSY', {'reason': engaged})
+
+    def return_endpoint_matches(self, row, approach):
+        """Read-only route geometry port for the safety-tagged charging adapter."""
+        active = self._store.active()
+        segments = row['result']['plan'].get('segments') or ()
+        if active is None or active[0] != row['map_version'] or not segments:
+            return False
+        end = active[2].arcs[arc_id(segments[-1])].point_at(segments[-1]['s_to'])
+        return math.dist(end[:2], (approach.x, approach.y)) <= ARRIVED_M
+
+    async def _guard_start(self, robot_id, token, guard):
+        self._check_start_token(robot_id, token)
+        if guard is not None:
+            await guard()
+            self._check_start_token(robot_id, token)
+
+    async def hold_job(self, robot_id: str, job_id: str, operator: str, capabilities, *,
+                       owner_kind='mission', trip_id=None, lease_id=None) -> dict:
         """D-763 6: at approval a multi-step job takes this robot's lease and holds it to its end (``lease.hold``).
 
         Gate: Rule M's verdict on each leg the robot drives (``reasons``), then rev 2 Q10 (a)(b) (``missing``):
@@ -104,20 +125,42 @@ class TripAdmission:
             ("fleet.trip_lease_ttl_s", self.lease.ttl_s <= AUTHORITY_MAX_TTL_S)) if off]
         if reasons or missing:  # reasons: Rule M's words (hold_back, no_goal_lease, leg_unknown); missing: Q10
             raise TripError(422, "LINK_UNBOUNDED_MOTION", {"reasons": reasons, "missing": missing})
-        if self.lease.on_job_lost is None:  # rev 2 Q3: no HOLD that reaches no person
+        if owner_kind not in ('mission', 'charge_session'):
+            raise ValueError('TRIP_OWNER_KIND_INVALID')
+        hook = self.lease.on_charge_lost if owner_kind == 'charge_session' else self.lease.on_job_lost
+        if hook is None:  # rev 2 Q3: no HOLD that reaches no person
             raise RuntimeError("D-763: wire lease.on_job_lost (incident + HOLD) before a job holds a robot")
+        def check_claim():
+            claimed = self.lease.claimed_owner(robot_id)
+            if ((owner_kind == 'charge_session' and not claimed) or claimed and (
+                    claimed['owner_kind'] != owner_kind or claimed['owner_id'] != job_id)):
+                raise TripError(409, 'TRIP_ROBOT_BUSY', {'reason': 'claim'})
+        check_claim()
         async with self._lock_for(robot_id):  # a trip start on this robot runs wholly before or after this
+            check_claim()
             old = self.lease.jobs.get(robot_id)
-            if old is not None and old.view["job_id"] != job_id:  # one job per robot, no queue (D-763 4)
+            if old is not None and (old.view["job_id"] != job_id
+                                    or old.view.get('owner_kind', 'mission') != owner_kind):
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             if old is not None and old.view["lease"]["state"] == "held":
+                if lease_id is not None and (old.view['lease']['lease_id'] != lease_id
+                                              or old.view['trip_id'] != trip_id):
+                    raise ValueError('CHARGE_RETURN_LEASE_CONFLICT')
                 return old.view["lease"]
+            if old is not None and owner_kind == 'charge_session':
+                raise ValueError('CHARGE_RETURN_LEASE_LOST')
             busy = ("trip" if self.robot_busy(robot_id) else None) or self._engaged(robot_id)
             if busy is not None:  # it already moves for someone else (a trip, a console goal, formation ...)
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": busy})
             self.lease.jobs.pop(robot_id, None)  # a lost one: re-approval opens a new lease (rev 2 Q3)
-            view = {"robot_id": robot_id, "trip_id": job_id, "job_id": job_id, "started_by": operator}
-            view["lease"] = await self.lease.open(robot_id, view, SimpleNamespace(trip_lease=True))
+            view = {"robot_id": robot_id, "trip_id": trip_id or job_id, "job_id": job_id,
+                    "started_by": operator, 'owner_kind': owner_kind}
+            view["lease"] = await self.lease.open(robot_id, view, SimpleNamespace(trip_lease=True), lease_id=lease_id)
+            try:
+                check_claim()
+            except Exception:
+                await self.lease.delete(robot_id, view['lease']['lease_id'])
+                raise
             self.lease.jobs[robot_id] = SimpleNamespace(open=True, job=True, view=view)
             return view["lease"]
 
@@ -263,7 +306,7 @@ class TripAdmission:
         return True
 
     async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
-                          start_at=None, caps=None, start_token=None):
+                          start_at=None, caps=None, start_token=None, start_guard=None):
         """``_pose_checks(start=True)`` plus D-603: with ``fleet.trip.auto_align`` a TRIP_START_HEADING_MISMATCH
         (on the lane: off-lane is judged first) asks CORE to turn by the error, then checks again from a
         fresh sighting. ``(pose, enable, turns)``; a refused or aborted turn refuses the start."""
@@ -273,13 +316,13 @@ class TripAdmission:
             try:
                 result = await self._pose_checks(robot_id, graph, segments, start=True,
                                                  start_at=start_at, caps=caps)
-                self._check_start_token(robot_id, start_token)
+                await self._guard_start(robot_id, start_token, start_guard)
                 return (*result, turns)
             except TripError as exc:
                 err = exc.detail.get("heading_err_deg") if exc.code == "TRIP_START_HEADING_MISMATCH" else None
                 if not self.config.auto_align or err is None or attempt == ALIGN_TURNS:
                     raise
-            self._check_start_token(robot_id, start_token)
+            await self._guard_start(robot_id, start_token, start_guard)
             turns.append(await self._align(robot_id, round(-err, 1), operator_name))
 
     async def _align(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:

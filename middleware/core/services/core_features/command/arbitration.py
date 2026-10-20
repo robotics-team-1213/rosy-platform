@@ -9,9 +9,10 @@ import enum
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Optional, TypeVar
 
 log = logging.getLogger(__name__)
+_InputValue = TypeVar("_InputValue")
 
 
 class Priority(enum.IntEnum):
@@ -101,6 +102,7 @@ class ModeMachine:
         # Watchdog renewal may read the mode epoch again on the committing thread.
         self._lock = threading.RLock()
         self._epoch = 0
+        self._execution_fence = None
         self.manual_active: Callable[[], bool] = lambda: False
         self._motion_reserved = False
         # Calibration admission and host configuration admission are one decision.
@@ -152,6 +154,15 @@ class ModeMachine:
             update()
             return True
 
+    def commit_clear(self, update: Callable[[], _InputValue]) -> _InputValue:
+        """Invalidate input under the mode lock, regardless of the current mode.
+
+        Only bounded field updates belong here. Native receipt bookkeeping and
+        events must run after this boundary, using captured session identity.
+        """
+        with self._lock:
+            return update()
+
     def transition(self, new: Mode, expect: Optional[Mode] = None) -> tuple[bool, str]:
         """Change the mode. With `expect`, only from that mode — a caller that
         checked the mode, then did something else, must not commit over a mode
@@ -166,6 +177,8 @@ class ModeMachine:
                 return True, ""
             if not self.can_transition(new):
                 return False, f"invalid transition {self.mode.value}->{new.value}"
+            if self._execution_fence is not None and new in (Mode.MANUAL, Mode.EMERGENCY):
+                self._execution_fence.request_stop()
             old, self.mode = self.mode, new
             self._epoch += 1
         # The mode is committed. A listener's failure must neither escape to the

@@ -19,6 +19,7 @@ def runtime_module(monkeypatch):
     symbols = {'action_msgs.msg': ['GoalStatus'], 'control_msgs.action': ['FollowJointTrajectory'],
                'rclpy.action': ['ActionClient'], 'rclpy.callback_groups': ['MutuallyExclusiveCallbackGroup'],
                'rclpy.clock': ['Clock', 'ClockType'], 'rclpy.duration': ['Duration'],
+               'rclpy.executors': ['SingleThreadedExecutor'], 'rclpy.node': ['Node'],
                'rclpy.qos': ['qos_profile_sensor_data'], 'sensor_msgs.msg': ['JointState'],
                'trajectory_msgs.msg': ['JointTrajectoryPoint']}
     for name in {key.partition('.')[0] for key in symbols}:
@@ -33,8 +34,14 @@ def runtime_module(monkeypatch):
     path = Path(__file__).parents[1] / 'omx_adapter/ros_runtime.py'
     spec = importlib.util.spec_from_file_location('omx_adapter._intake_runtime_test', path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    action_module = 'omx_adapter.ros_trajectory_action'
+    had_action_module = action_module in sys.modules
+    try:
+        spec.loader.exec_module(module)
+        yield module
+    finally:
+        if not had_action_module:
+            sys.modules.pop(action_module, None)
 
 
 def make_runtime(module):

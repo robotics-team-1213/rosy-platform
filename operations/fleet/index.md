@@ -103,6 +103,6 @@
 
 - 2026-10-20 · b1f18674b2 · D-821 명시적 이동 접수와 다국어 운영 경계
 - 2026-10-20 · uncommitted · 통합관제 조회 전용 AI 대화
-- 2026-10-19 · uncommitted · 성공 drivable SIM의 Fleet 생산 연결 분리
-- 2026-10-19 · uncommitted · feat(fleet): recover OMX topic task client
-- 2026-10-19 · uncommitted · 초기값 회귀 fixture 변수 구분과 중단 시험 회수
+- 2026-10-20 · 984a170d8e · fix(station): refresh readiness ACK and fence SIM goal admission
+- 2026-10-20 · d91c5c0fb4 · fix(station): reconcile native completion during departure renewal
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 분리된 영상 보정 구현의 계약 검사 경로
