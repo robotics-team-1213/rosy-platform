@@ -9,3 +9,5 @@ V-021의 학습센터 범위를 구현한다. 기준 main은 `58db88b7a233c7f081
 5. 커밋 HEAD의 OMX curation/training 및 HTTP·브라우저 시험을 원격 runner로 실행하고 known_failures와 비교한다. LeRobot readback skip과 불통 호스트는 검증 완료로 계산하지 않는다. push·merge·장치 실행은 범위 밖이다.
 
 실제 데이터 절감·정책 학습·장치 결과 수용은 별도 실험이다. 실패·미판정·개입은 보존하며 성공 정책에 자동 편입하지 않는다.
+
+원격 affected 시험에서 signed model-PC importer의 복사된 소스 closure가 새 OMX 의존성을 포함해야 함을 확인했다. 관련 `deploy/site/model_code_layout.py`와 source-proof 시험을 소유 범위에 추가했다. 15개를 넘는 변경은 하나의 구간 계약·검수·학습과 그 signed archive 전달을 함께 검증하는 결합 범위이며 독립 기능을 덧붙이지 않는다. 실제 배포는 수행하지 않는다.
