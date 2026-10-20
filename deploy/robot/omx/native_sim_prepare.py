@@ -36,14 +36,19 @@ def environment(config):
     return "\n".join(lines) + "\n"
 
 
-def run_script(source, *, experiment="g2"):
+def run_script(source, *, experiment="g2", episodes=1):
     if experiment not in {"g2", "pick-place", "pick-place-demonstrations"}:
         raise ValueError("unknown native simulation experiment")
+    if (type(episodes) is not int or not 1 <= episodes <= 3
+            or experiment != 'pick-place-demonstrations' and episodes != 1):
+        raise ValueError('only demonstrations allow one to three episodes')
     entry = {"g2": "g2_runner.py", "pick-place": "sim_pick_place_task.py",
              "pick-place-demonstrations": "sim_pick_place_demonstrations.py"}[experiment]
     output = "g2" if experiment == "g2" else "pick-place"
     runner = str(Path(source) / "deploy/robot/omx" / entry)
     mode = " --mode run" if experiment == "g2" else ""
+    if experiment == 'pick-place-demonstrations':
+        mode = ' --episodes ' + str(episodes)
     return ("#!/bin/bash\nset -eo pipefail\n"
             "source \"$OMX_NATIVE_STATE/environment.sh\"\n"
             "exec /usr/bin/python3 -B " + shlex.quote(runner) +
@@ -86,8 +91,8 @@ def sdk_preflight(source, state):
         raise ValueError("SDK imports or source origins were not verified")
 
 
-def prepare(source, config_path, staging, run_id, *, experiment="g2"):
-    script = run_script(Path(staging).absolute() / "source", experiment=experiment)
+def prepare(source, config_path, staging, run_id, *, experiment="g2", episodes=1):
+    script = run_script(Path(staging).absolute() / "source", experiment=experiment, episodes=episodes)
     revision = run_identity(run_id)
     config = load_config(config_path)
     staging = Path(staging).absolute()
@@ -112,6 +117,7 @@ def prepare(source, config_path, staging, run_id, *, experiment="g2"):
         raise ValueError("dependency input drift during SDK preflight")
     verify_inventory(source_out, source_hashes)
     metadata = {"schema": "rosy.omx-native-sim-prepared/1", "revision": revision, "experiment": experiment,
+                "episodes": episodes,
                 "run_id": run_id, "role": config["role"], "source": str(source_out), "state": str(state),
                 "source_hashes": source_hashes, "dependency_roots": roots, "dependency_hashes": dependencies,
                 "state_hashes": inventory(state, exclude={"home", "tmp", "logs", "cache"}),
@@ -157,7 +163,8 @@ def activate(prepared, state_root):
     pending = state.with_name(".pending-" + uuid.uuid4().hex)
     shutil.copytree(staged_state, pending)
     verify_inventory(pending, document["state_hashes"], exclude={"home", "tmp", "logs", "cache"})
-    (pending / "run.sh").write_text(run_script(release, experiment=document.get("experiment", "g2")), encoding="utf-8")
+    (pending / "run.sh").write_text(run_script(release, experiment=document.get("experiment", "g2"),
+                                              episodes=document.get('episodes', 1)), encoding="utf-8")
     # SDK probe is preparation evidence; execution uses the newly bound release path.
     manifest = {**document, "schema": "rosy.omx-native-sim-state/1", "source": str(release),
                 "release": str(release), "state": str(state),
@@ -177,12 +184,14 @@ def main():
     parser.add_argument("--staging", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--experiment", choices=("g2", "pick-place", "pick-place-demonstrations"), default="g2")
+    parser.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
     parser.add_argument("--activate", action="store_true")
     parser.add_argument("--state-root", type=Path)
     args = parser.parse_args()
     if args.activate and args.state_root is None:
         parser.error("--activate requires the provisioned --state-root")
-    result = prepare(args.source, args.config, args.staging, args.run_id, experiment=args.experiment)
+    result = prepare(args.source, args.config, args.staging, args.run_id, experiment=args.experiment,
+                     episodes=args.episodes)
     if args.activate:
         result = activate(args.staging, args.state_root)
     summary = {key: value for key, value in result.items() if not key.endswith("_hashes")

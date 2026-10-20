@@ -241,6 +241,10 @@ def deploy(args, repo, runner):
     experiment = getattr(args, 'experiment', 'g2')
     if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations'):
         raise ValueError('unknown native simulation experiment')
+    episodes = getattr(args, 'episodes', 1)
+    if (type(episodes) is not int or not 1 <= episodes <= 3
+            or experiment != 'pick-place-demonstrations' and episodes != 1):
+        raise ValueError('only demonstrations allow one to three episodes')
     config = json.loads(args.config.read_text(encoding='utf-8-sig'))
     if config.get('role') != args.host:
         raise ValueError('SDK config role does not match approved target role')
@@ -263,7 +267,7 @@ def deploy(args, repo, runner):
         'staging': home+'/rosy-test/native-omx/'+run_id, 'state_root': anchor,
         'release': anchor+'/releases/'+revision, 'state': anchor+'/state/'+nonce,
         'unit': 'rosy-native-sim-'+run_id, 'deployment_status': 'PREPARING',
-        'task_execution': 'NOT_RUN', 'real_training_episodes': 0, 'experiment': experiment}
+        'task_execution': 'NOT_RUN', 'real_training_episodes': 0, 'experiment': experiment, 'episodes': episodes}
     save(directory/'deployment.json', value, exclusive=True)
     provisioning_bundle(repo, revision, directory)
     try:
@@ -274,7 +278,7 @@ def deploy(args, repo, runner):
             ")\nprint(json.dumps({'config':'STAGED'}))")
         prepared = remote.json(['/usr/bin/python3', value['source']+'/deploy/robot/omx/native_sim_prepare.py',
             '--source', value['source'], '--config', config_path, '--staging', value['staging'],
-            '--run-id', run_id, '--experiment', experiment], timeout=900)
+            '--run-id', run_id, '--experiment', experiment, '--episodes', str(episodes)], timeout=900)
         value['prepared'] = prepared
         value['deployment_status'] = 'STAGED'
         save(directory/'deployment.json', value)
@@ -373,6 +377,7 @@ def main():
     shipping.add_argument('--log-dir', type=Path, required=True)
     shipping.add_argument('--sha', default='HEAD')
     shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations'], default='g2')
+    shipping.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
     shipping.add_argument('--approve-host-provisioning', action='store_true')
     for action in ['provision', 'start', 'status', 'fetch']:
         command = commands.add_parser(action)
