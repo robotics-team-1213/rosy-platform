@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-824 | 워크트리 기본 상한을 50개로 낮추고 기존 작업과 명시적 예외를 보존한다 | Accepted (2026-10-20) |
 | D-823 | OMX Leader를 통한 자동 운용 중 수동 개입·복구·자동 복귀 | Proposed (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |

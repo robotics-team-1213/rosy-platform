@@ -343,8 +343,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 워크트리 기본 상한 50개
 - 2026-10-20 · uncommitted · OMX Leader 운용 중 개입 Proposed ADR
 - 2026-10-20 · uncommitted · 주행 SIM 수용 완료 증거 정리
 - 2026-10-20 · uncommitted · 중간 코너 실패와 곡선 입장 회귀 보존
 - 2026-10-20 · uncommitted · 도착 상태와 실제 목표 수용 분리
-- 2026-10-20 · uncommitted · 안내 공백의 정렬 추적 결함과 반복 실패 보존
