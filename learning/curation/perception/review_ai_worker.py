@@ -18,6 +18,9 @@ import vlm_mask_feedback as feedback
 
 
 def execute(snapshot, config, folder):
+    if snapshot.get('action') == 'mask_check':
+        if feedback.feedback_binding(snapshot['binding']) != snapshot.get('review_binding'):
+            raise ValueError('feedback prompt binding differs')
     models = feedback._get_json(feedback.ENDPOINT + '/api/tags')['models']
     model = next((m for m in models if m['name'] == objects.MODEL), None)
     if model is None or model['digest'] != config['model_digest']:
