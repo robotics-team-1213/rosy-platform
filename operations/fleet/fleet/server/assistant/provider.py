@@ -61,4 +61,11 @@ class OperatorProvider:
                 or any(result[k] != v for k, v in binding.items())
                 or type(result['cost_usd']) not in (int, float) or result['cost_usd'] != 0):
             raise ValueError('ASSISTANT_BROKER_IDENTITY_CHANGED')
-        return checked_operator_answer(result['answer'], question).model_dump()
+        answer = checked_operator_answer(result['answer'], question)
+        if answer.usage is not None:
+            if answer.usage.preparation_hash != prepare(question).digest:
+                raise ValueError('ASSISTANT_PREPARATION_CHANGED')
+            logging.getLogger('uvicorn.error').info('operator_inference %s', json.dumps({
+                'input_hash':question.digest, 'profile':OperatorProfile().revision,
+                'source_commit':cfg.source_commit, **answer.usage.model_dump()}, sort_keys=True))
+        return answer.model_dump()

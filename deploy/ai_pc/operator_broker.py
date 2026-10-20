@@ -82,6 +82,7 @@ Apply these rules in order:
 5 STATUS: asking about present robot/fleet condition, status, location, mode, online state, or 현재 상태.
   Select the matching supplied robot references, including their full robot: prefix. This is not CHAT.
 6 CLARIFY: an action or operational question whose target/reference is unresolved, such as it/there/그것/거기.
+  Compound or self-correcting action requests also require CLARIFY; never choose a partial action.
 7 CONTROL: a direct affirmative device action with an explicit robot/group and required destination/parameters.
   Classification does not grant execution. Unknown or incomplete parameters require CLARIFY.
 8 CHAT: greetings, thanks, and general help/capability questions only.

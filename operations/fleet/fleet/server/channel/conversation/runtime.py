@@ -62,7 +62,14 @@ class ConversationProvider:
                 or value['source_commit'] != c.source_commit or value['profile'] != profile.model_dump()
                 or value['input_hash'] != question.digest or type(value['cost_usd']) not in (int, float)
                 or value['cost_usd'] != 0):raise ValueError('CONVERSATION_BROKER_IDENTITY_CHANGED')
-        return checked_answer(value['answer'], question, preprocessing=profile.revision == DISCORD_REVISION).model_dump()
+        answer = checked_answer(value['answer'], question, preprocessing=profile.revision == DISCORD_REVISION)
+        if answer.usage is not None:
+            if answer.usage.preparation_hash != prepare(question).digest:
+                raise ValueError('CONVERSATION_PREPARATION_CHANGED')
+            logging.getLogger('uvicorn.error').info('conversation_inference %s', json.dumps({
+                'input_hash':question.digest, 'profile':profile.revision,
+                'source_commit':c.source_commit, **answer.usage.model_dump()}, sort_keys=True))
+        return answer.model_dump()
 
 
 def install_conversation(app, config, site_maps, *, task_service=None):
