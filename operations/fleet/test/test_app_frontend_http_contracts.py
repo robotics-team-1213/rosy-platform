@@ -10,6 +10,43 @@ from test_camera_peer_routes import client as peer_client
 from test_camera_peer_service import receiver, sign
 
 
+def test_hub_link_create_and_delete_use_enrollment_owner(tmp_path):
+    from fastapi import FastAPI
+    from fleet.server.enrollment_routes import install_enrollment_routes
+    from fleet.server.site_auth import SitePrincipal
+    from test_enrollment_hub_link import enrolled
+    service, _, _, store = enrolled(tmp_path)
+    app = FastAPI()
+    principal = lambda: SitePrincipal('alice', 'operator')
+    install_enrollment_routes(app, service, require_viewer=principal, require_operator=principal, named_identity=True)
+    client = TestClient(app)
+    path = '/api/fleet/robots/rosy_09/hub-link'
+    assert client.post(path).status_code == 200
+    assert store.get('rosy_09')['hub_digest']
+    assert client.delete(path).status_code == 200
+    assert store.get('rosy_09')['hub_digest'] is None
+
+
+def test_channel_deliberation_read_is_owned_and_does_not_call_model(tmp_path):
+    from fastapi import FastAPI
+    from types import SimpleNamespace
+    from fleet.server.channel.conversation.runtime import install_conversation_routes
+    from fleet.server.channel.model_runtime import BrokerConfig
+    from fleet.server.site_auth import SitePrincipal
+    from test_channel_model_jobs import model_jobs
+    _, journal, _, receipt, _, _, _ = model_jobs(tmp_path)
+    app = FastAPI()
+    app.state.channel_requests = journal
+    app.state.fleet_gather = SimpleNamespace()
+    cfg = BrokerConfig(host='ai.example', key_file='/run/rosy-deliberation/broker.key',
+        known_hosts_file='/run/rosy-deliberation/known_hosts', profile_revision='d720-v1', source_commit='a' * 40,
+        valid_until=9999999999.0, primary_admitted=True, reviewer_admitted=False)
+    install_conversation_routes(app, None, cfg, None, None, lambda: SitePrincipal('op', 'operator'), [])
+    client = TestClient(app)
+    response = client.get('/api/fleet/channel-requests/' + receipt['request_id'] + '/deliberation')
+    assert response.status_code == 200 and response.json()['action_admissible'] is False
+
+
 def test_cell_document_reads_keep_saved_identity_and_digest(tmp_path):
     from test_cell_job_api import _setup
     from test_cell_app_api import _refs
