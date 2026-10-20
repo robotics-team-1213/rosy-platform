@@ -43,6 +43,32 @@ def short_targets(points):
     return targets
 
 
+def readback_target(current, desired):
+    if (not current or set(current) != set(desired) or any(type(value) not in (int,float)
+            or not math.isfinite(value) for values in (current,desired) for value in values.values())):
+        raise ValueError('finite matching readback and target joint maps required')
+    distance = max(abs(desired[n]-current[n]) for n in current)
+    if distance <= .04:
+        return dict(desired)
+    fraction = .035/distance
+    return {name: current[name]+fraction*(desired[name]-current[name]) for name in current}
+
+
+def dispatch_readback_target(desired, read_positions, send):
+    previous = None
+    for _ in range(8):
+        current = read_positions()
+        target = readback_target(current, desired)
+        remaining = max(abs(desired[n]-current[n]) for n in current)
+        if target != desired and previous is not None and remaining >= previous-.0001:
+            raise RuntimeError('bounded_readback_step_no_progress')
+        send(target)
+        if target == desired:
+            return
+        previous = remaining
+    raise RuntimeError('bounded_readback_step_limit')
+
+
 def episode(directory):
     from g2_common import ROOT, controller_readiness
     from g2_ports import isolation_guard, write_json

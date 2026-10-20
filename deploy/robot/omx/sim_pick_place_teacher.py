@@ -12,7 +12,7 @@ import uuid
 
 from g2_common import ROOT, configure_imports
 from g2_ports import ObserverClient, isolation_guard, write_json
-from sim_pick_place_demonstrations import short_targets
+from sim_pick_place_demonstrations import short_targets, dispatch_readback_target
 from sim_pick_place_task import judge_episode
 
 
@@ -109,7 +109,7 @@ def run(directory, world, observer_path):
             time.sleep(.02)
         raise TimeoutError('owner not ready')
 
-    def dispatch(target):
+    def dispatch_once(target):
         state = wait_ready()
         command_id = str(uuid.uuid4())
         def bounded(current, limits):
@@ -139,6 +139,9 @@ def run(directory, world, observer_path):
                 raise RuntimeError('teacher goal failed: '+str(result))
             time.sleep(.02)
         raise TimeoutError('teacher goal result unknown')
+
+    def dispatch(target):
+        dispatch_readback_target(target, lambda: wait_ready()['positions'], dispatch_once)
 
     def grip(expect):
         js = arm.latest_joint_state
