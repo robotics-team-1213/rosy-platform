@@ -50,7 +50,8 @@ def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_
     assert intermediate != desired
     assert max(abs(intermediate[n]-current[n]) for n in current) == pytest.approx(.035)
     assert all(min(current[n],desired[n]) <= intermediate[n] <= max(current[n],desired[n]) for n in current)
-    arrived=dict(intermediate,joint3=intermediate['joint3']+.007)
+    arrived=dict(intermediate,joint3=intermediate['joint3']+.007,
+                 gripper_joint_1=current['gripper_joint_1'])
     assert readback_target(arrived,desired)==desired
     assert desired['joint3']==.18370857317041256
 
@@ -58,6 +59,25 @@ def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_
 def test_contact_readback_within_original_admission_bound_keeps_the_exact_goal():
     from sim_pick_place_demonstrations import readback_target
     assert readback_target({'gripper':.42},{'gripper':.38})=={'gripper':.38}
+
+
+def test_readback_correction_stops_when_actual_motion_makes_no_progress():
+    from sim_pick_place_demonstrations import dispatch_readback_target
+    commands=[]
+    with pytest.raises(RuntimeError,match='no_progress'):
+        dispatch_readback_target({'joint':.1},lambda:{'joint':0.},commands.append)
+    assert commands==[{'joint':.035}]
+
+
+def test_readback_correction_never_retries_an_unknown_transport_outcome():
+    from sim_pick_place_demonstrations import dispatch_readback_target
+    commands=[]
+    def send(target):
+        commands.append(target)
+        raise RuntimeError('actual goal outcome unknown')
+    with pytest.raises(RuntimeError,match='outcome unknown'):
+        dispatch_readback_target({'joint':.1},lambda:{'joint':0.},send)
+    assert commands==[{'joint':.035}]
 
 
 @pytest.mark.parametrize('points', [[], [(0.,), (float('nan'),)], [(0.,), (0., 1.)]])
