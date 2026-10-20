@@ -274,6 +274,32 @@ def test_decomposed_registered_name_keeps_significant_spacing():
     assert resolve_reference(unicodedata.normalize('NFD', name), 'place', environment) == 'east'
 
 
+@pytest.mark.parametrize('other_name', ['입구  통로', '입구 통로'])
+def test_quoted_decomposed_name_collision_cannot_select_a_canonical_target(other_name):
+    from rosy.decision.conversation.preprocessing import prepare, control_issue
+    from rosy.decision.conversation.codec import semantic_answer
+    text = 'Move r1 to "'+unicodedata.normalize('NFD', '입구  통로')+'"'
+    q = semantic_question(text)
+    environment = copy.deepcopy(q.environment)
+    environment['map']['places'] = [dict(id='east', name='입구  통로', x=1., y=2.),
+                                    dict(id='west', name=other_name, x=-1., y=2.)]
+    q = q.model_copy(update={'environment':environment})
+    prepared = prepare(q)
+    assert prepared.normalized == text and prepared.original == text
+    assert control_issue(prepared) == 'AMBIGUOUS_REFERENCE'
+    assert semantic_answer(navigation_answer(place='west'), q, preprocessing=True).kind == 'CLARIFY'
+
+
+@pytest.mark.parametrize('text', ['"r1을 움직여"라는 뜻을 설명해',
+                                 '"r1을 보내지 마"', 'Move r1 to "거기"'])
+def test_decomposed_quoted_cues_are_checked_without_rewriting_the_quote(text):
+    from rosy.decision.conversation.preprocessing import control_issue
+    raw = unicodedata.normalize('NFD', text)
+    prepared = prepare(raw)
+    assert prepared.original == raw
+    assert control_issue(prepared) is not None
+
+
 def test_new_discord_profile_is_not_connected_to_automatic_execution(monkeypatch):
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
