@@ -267,7 +267,14 @@ def checked_answer(value, question, *, preprocessing=False):
     allowed = {'robot:'+r for r in robots} | {'place:'+p for p in places}
     if not set(answer.evidence_refs) <= allowed:raise ValueError('CONVERSATION_EVIDENCE_UNKNOWN')
     if preprocessing and answer.intent is not None:
-        issue = control_issue(prepare(question), steps=len(interpret(answer.intent)))
+        prepared = prepare(question)
+        calls = interpret(answer.intent)
+        issue = control_issue(prepared, steps=len(calls))
+        if not issue and prepared.uses_context:
+            context = question.accepted_execution_context
+            if any(call.verb != 'navigate' or call.robot != context['robot_id']
+                   or call.body.get('waypoint') != context['place_id'] for call in calls):
+                issue = 'AMBIGUOUS_REFERENCE'
         if issue:
             return Answer(kind='CLARIFY', response='대상과 단일 동작을 다시 확인해 주세요.', intent=None,
                 evidence_refs=[], review_required=False, reason=issue, usage=answer.usage)
@@ -293,7 +300,7 @@ def checked_answer(value, question, *, preprocessing=False):
     return answer
 
 
-def reply(answer, question):
+def reply(answer, question, *, preprocessing=False):
     if answer.kind in ('CLARIFY', 'REFUSE'):
         reasons = {'MISSING_TARGET':'어느 로봇과 등록된 장소를 말하는지 알려주세요.',
             'MISSING_ACTION':'원하는 동작을 구체적으로 말씀해 주세요.',
@@ -305,6 +312,8 @@ def reply(answer, question):
         return reasons[answer.reason]
     if answer.kind == 'STATUS':
         rows = question.environment['robots']
+        if preprocessing and answer.evidence_refs:
+            rows = [row for row in rows if 'robot:'+row['robot_id'] in answer.evidence_refs]
         return '현재 관제에서 확인한 상태입니다.\n'+'\n'.join(
             r['robot_id']+' · '+('상태 미확인' if r['online'] is None else '온라인' if r['online'] else '오프라인')
             for r in rows) if rows else '등록된 로봇이 없습니다.'

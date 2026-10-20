@@ -5,6 +5,7 @@ import time
 from fastapi import HTTPException
 
 from rosy.decision.conversation.codec import Answer, ConversationInput, checked_answer, digest, reply
+from rosy.decision.conversation.preprocessing import DISCORD_REVISION
 from ..execution.instructions import selected_readback
 
 
@@ -101,7 +102,7 @@ class ConversationWorker:
                     remaining = min(self.profile.timeout_s, attempt['deadline']-self.clock())
                     if remaining <= 0:raise TimeoutError()
                     raw = await self.provider(question, self.profile, remaining)
-                    answer = checked_answer(raw, question)
+                    answer = checked_answer(raw, question, preprocessing=self.profile.revision == DISCORD_REVISION)
                     record = {'profile':self.profile.model_dump(), 'input_hash':question.digest,
                               'producer_scope':self.producer_scope, 'profile_set_hash':self.jobs.profile_set_hash,
                               'models':[{'model_id':self.profile.model_id, 'profile_id':self.profile.profile_id}],
@@ -130,7 +131,8 @@ class ConversationWorker:
                     await self.finish(rid, 'HOLD', {**record, 'answer':held.model_dump(),
                         'primary_proposal':answer.model_dump(), 'reason':'CONVERSATION_REVIEWER_NOT_ADMITTED'}, held.response, question)
                     return
-                await self.finish(rid, 'ANSWERED', record, reply(answer, question), question)
+                await self.finish(rid, 'ANSWERED', record,
+                    reply(answer, question, preprocessing=self.profile.revision == DISCORD_REVISION), question)
             except asyncio.CancelledError:raise
             except HTTPException:
                 await self.db('abandon', rid, state='SUPERSEDED', reason='OWNER_OR_SCOPE_CHANGED')

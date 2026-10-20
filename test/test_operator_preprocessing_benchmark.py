@@ -95,6 +95,8 @@ def test_real_discord_preprocessing_profile_has_independent_semantic_proof(tmp_p
             passed = answer.kind in case[2]
             if answer.kind == 'CONTROL':
                 passed = passed and interpret(answer.intent) == interpret(expected[case[0]])
+            if case[0] == 'scope-status':
+                passed = passed and answer.evidence_refs == ['robot:rosy_41']
             assert output['kind'] == answer.kind
             if not passed:
                 failures.append(dict(case=case[0], kind=answer.kind))

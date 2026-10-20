@@ -17,6 +17,7 @@ NEGATIVE = re.compile(r"\b(?:not|never|don't|doesn't|cannot|can't|without)\b|"
                       r'지\s*(?:마|말|않)|말고|안\s+(?:보내|움직|이동|실행)', re.I)
 CONDITIONAL = re.compile(r'\b(?:if|unless|suppose|hypothetical)\b|만약|'
                          r'(?:보내|움직이|이동하|실행하).{0,8}(?:면|다면)', re.I)
+REFERENCE = re.compile(r'거기|그곳|저기|그것|그거|\b(?:there|it|that\s+place)\b', re.I)
 
 
 def canonical(value):
@@ -54,6 +55,18 @@ class Prepared:
     @property
     def digest(self):
         return hashlib.sha256(self.context_json.encode()).hexdigest()
+
+    @property
+    def prompt_json(self):
+        context = self.context
+        # The current message appears once below the context; hashes stay in the bound receipt.
+        context.pop('question')
+        context.pop('preparation')
+        return canonical(context)
+
+    @property
+    def uses_context(self):
+        return bool(REFERENCE.search(self.normalized))
 
 
 def prepare(question, *, environment=None):
@@ -101,6 +114,8 @@ def control_issue(prepared, *, steps=1):
     if steps != 1:
         return 'CONFLICT'
     if prepared.ambiguous:
+        return 'AMBIGUOUS_REFERENCE'
+    if prepared.uses_context and prepared.context.get('accepted_execution_context') is None:
         return 'AMBIGUOUS_REFERENCE'
     text = prepared.normalized
     # These cues can only block a proposal; they never authorize or choose an action.
