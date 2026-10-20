@@ -74,3 +74,4 @@ D-827 reserved outside this branch (refs/adr/D-827), absent from this base; remo
 D-828 reserved outside this branch (refs/adr/D-828), absent from this base; remove when its ADR lands
 D-829 reserved outside this branch (refs/adr/D-829), absent from this base; remove when its ADR lands
 D-830 reserved outside this branch (refs/adr/D-830), absent from this base; remove when its ADR lands
+D-832 reserved on peer branch feat/omx-learning-flow (8967d9484b), absent from this branch; remove when its ADR lands
