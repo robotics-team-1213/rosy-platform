@@ -16,8 +16,8 @@ DEPENDENCY = 'tools/perception/proof_dependency.py'
 ENTRY = 'tools/perception/source_probe.py'
 
 
-@pytest.mark.parametrize('missing', range(8))
-def test_omx_review_archive_requires_its_exact_read_only_dependencies(tmp_path, keys, missing):
+@pytest.mark.parametrize('missing', range(9))
+def test_omx_review_archive_requires_its_exact_dependencies(tmp_path, keys, missing):
     m = module()
     files = {name: b'pass\n' for name in m.OMX_REVIEW_FILES}
     files['learning/curation/perception/omx_web.py'] = b'pass\n'
