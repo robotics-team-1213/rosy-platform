@@ -41,11 +41,27 @@ class TripJobRows:
                 f"AND s.step_index=j.current_step_index WHERE s.action_kind=? AND j.status IN "
                 f"({', '.join('?' * len(statuses))}) ORDER BY j.updated_at", (KIND, *statuses))]
 
-    def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list) -> dict:
+    def find_request(self, principal_id: str, request_key: str, request_digest: str) -> dict | None:
+        with closing(self.store._connect()) as connection:
+            row = connection.execute("SELECT mission_id,request_digest FROM fleet_cell_jobs "
+                                     "WHERE proposal_principal_id=? AND request_key=?",
+                                     (principal_id, request_key)).fetchone()
+            if row is None:
+                return None
+            if row["request_digest"] != request_digest:
+                raise TripError(409, "TRIP_REQUEST_CONFLICT")
+            return CellJobStore._get(connection, row["mission_id"])
+
+    def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list, *,
+               request_key: str | None = None, request_digest: str | None = None) -> dict:
         body = _json({"robot_id": robot_id, "steps": steps})
         digest, now = hashlib.sha256(body.encode()).hexdigest(), _now()
         with closing(self.store._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if request_key is not None and connection.execute(
+                    "SELECT 1 FROM fleet_cell_jobs WHERE proposal_principal_id=? AND request_key=?",
+                    (principal_id, request_key)).fetchone() is not None:
+                raise MissionConflict("trip request already committed")
             control = connection.execute("SELECT authority_epoch, generation, dispatch_enabled FROM "
                                          "fleet_dispatch_control WHERE control_id=1").fetchone()
             if control is None or not control["dispatch_enabled"]:
@@ -55,7 +71,8 @@ class TripJobRows:
                 "workcell_id, instance_id, recipe_digest, cell_digest, process_artifact_digest, job_json, "
                 "resources_json, ledger_markers_json, status, authority_epoch, dispatch_generation, created_at, "
                 "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 'READY', ?, ?, ?, ?)",
-                (mission_id, principal_id, mission_id, digest, mission_id, robot_id, robot_id, digest, digest, digest,
+                (mission_id, principal_id, request_key or mission_id, request_digest or digest, mission_id,
+                 robot_id, robot_id, digest, digest, digest,
                  body, _json([["robot", robot_id]]), control["authority_epoch"], control["generation"], now, now))
             for index, step in enumerate(steps):
                 connection.execute("INSERT INTO fleet_cell_steps (mission_id, step_index, step_id, action_kind, "

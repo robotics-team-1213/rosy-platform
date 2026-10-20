@@ -125,7 +125,7 @@ def test_database_failure_releases_acquired_lease(tmp_path, monkeypatch):
 
 def test_stop_latch_is_not_bypassed(tmp_path):
     rig = Rig(tmp_path)
-    rig.tasks.latch_dispatch_stop(actor_id="kim", reason="test")
+    rig.tasks.trip_stop_latch(actor_id="kim", reason="test")
     from fleet.server.mission_store import MissionConflict
     with pytest.raises(MissionConflict):
         allocate(rig)

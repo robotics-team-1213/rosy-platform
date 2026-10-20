@@ -28,6 +28,7 @@ class JobTripSteps:
     def __init__(self, store, runner, *, plan, caps, incident, period_s: float = 0.5) -> None:
         self.store, self.rows, self.runner, self.period_s = store, TripJobRows(store), runner, period_s
         self.plan, self.caps, self.incident = plan, caps, incident  # (robot, step, who) -> plan_id; (robot); case
+        self.candidate_lock = asyncio.Lock()
         runner.lease.on_job_lost = self._lost
         self._lost_jobs: set = set()  # lost leases whose HOLD this loop has not seen yet (``_step``)
 
