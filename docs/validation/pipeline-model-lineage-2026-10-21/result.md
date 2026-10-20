@@ -14,7 +14,8 @@ source proof, human review, training receipt는 검증되지 않은 누락으로
 
 중간 요청은 존재하지 않는 `test_model_store.py`를 지정해 exit4/no tests였다.
 올바른 `test_store.py`로 재실행한 위 결과만 검증으로 사용한다. 반복 실행 수를 합산하지 않는다.
-3개 skip은 기존 delivery의 bash 의존 시험이며 이 실행에서 검사한 것으로 세지 않는다.
+3개 skip은 기존 store의 Windows 전용 긴 경로 회귀(absolute/relative/extended)이며,
+Linux native 실행에서 검사한 것으로 세지 않는다.
 
 한 후보의 model files, dataset/eval 내용 해시, intake 후보/파일 결속을 검사한다.
 옛 eval 절대 경로는 현재 store 내 name/content SHA로만 연결한다. 다른 후보 receipt,
