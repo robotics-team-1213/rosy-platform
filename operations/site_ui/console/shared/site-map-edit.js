@@ -48,7 +48,7 @@ export function appendSurveyElement(map, item) {
     if (Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) > .05
         || Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) > .05)
       throw new Error('도로 선의 양 끝을 지정한 장소에 맞추세요');
-    next.edges.push({id, from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
+    next.edges.push({id, name: name.trim(), from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
       width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .03,
       evidence: {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''}});
   } else if (['traffic_signal', 'stop_line', 'landmark', 'exclusion'].includes(kind)) {
@@ -147,10 +147,15 @@ export function editPlace(map, id, {name, kind}) {
   return next;
 }
 
-export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_mps: speed}) {
+export function editEdge(map, id, {name, direction, drive_mode: driveMode, speed_cap_mps: speed}) {
   const next = copy(map);
   const edge = next.edges.find(item => item.id === id);
   if (!edge) throw new Error(`없는 차로 ${id}`);
+  if (name !== undefined) {
+    if (name.length > 64) throw new Error('도로 이름은 64자 이내입니다');
+    if (name.trim()) edge.name = name.trim();
+    else delete edge.name;
+  }
   if (direction !== undefined) {
     if (!['one_way', 'two_way'].includes(direction)) throw new Error('통행 방향은 일방/양방입니다');
     edge.direction = direction;

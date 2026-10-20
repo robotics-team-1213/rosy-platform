@@ -81,13 +81,14 @@ CONSOLE_ASSETS = {
     "power-health-view.js": ("power-health-view.js", "application/javascript"),
     "enrollment.js": ("devices/enrollment.js", "application/javascript"),
     "signals.js": ("signals.js", "application/javascript"),
-    "site-map.css": ("site-map.css", "text/css"),
-    "site-map.js": ("site-map.js", "application/javascript"),
+    "site-map.css": ("maps/site-map.css", "text/css"),
+    "site-map.js": ("maps/site-map.js", "application/javascript"),
+    "edit-history.js": ("maps/edit-history.js", "application/javascript"),
     "site-map-model.js": ("shared/site-map-model.js", "application/javascript"),
     "site-map-edit.js": ("shared/site-map-edit.js", "application/javascript"),
-    "site-map-teach.js": ("site-map-teach.js", "application/javascript"),
-    "site-map-survey.js": ("site-map-survey.js", "application/javascript"),
-    "site-map-camera.js": ("site-map-camera.js", "application/javascript"),
+    "site-map-teach.js": ("maps/site-map-teach.js", "application/javascript"),
+    "site-map-survey.js": ("maps/site-map-survey.js", "application/javascript"),
+    "site-map-camera.js": ("maps/site-map-camera.js", "application/javascript"),
     "site-layer.js": ("site-layer.js", "application/javascript"),
     "tracking-layer.js": ("tracking-layer.js", "application/javascript"),
     "tracking-view.js": ("tracking-view.js", "application/javascript"),
@@ -163,7 +164,7 @@ def install_static_routes(app: FastAPI) -> None:
     @app.get("/console/site-map", include_in_schema=False)
     def site_map_page():
         return FileResponse(
-            WEB_ROOT / "site-map.html", media_type="text/html",
+            WEB_ROOT / "maps/site-map.html", media_type="text/html",
             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
         )
 

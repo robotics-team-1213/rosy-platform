@@ -17,7 +17,7 @@ SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile",
 
 
 def _page(name):
-    for folder in ("cell",):
+    for folder in ("cell", "maps"):
         path = WEB / folder / name
         if path.is_file():
             return path

@@ -61,9 +61,9 @@ PINNED_CONFIRMS = {
     "operations/site_ui/console/host-services.js": 1,  # named operator host control, shared confirmation
     "operations/site_ui/console/roster.js": 1,
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
-    "operations/site_ui/console/site-map.js": 2,
-    "operations/site_ui/console/site-map-camera.js": 1,
-    "operations/site_ui/console/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
+    "operations/site_ui/console/maps/site-map.js": 2,
+    "operations/site_ui/console/maps/site-map-camera.js": 1,
+    "operations/site_ui/console/maps/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
     "operations/site_ui/console/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
