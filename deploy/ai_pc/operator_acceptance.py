@@ -8,7 +8,7 @@ import time
 from core_common.protocol.assistant import AssistantFact
 from rosy.decision.conversation.codec import digest
 from rosy.decision.conversation.operator import OperatorInput, OperatorProfile, OperatorScope, checked_operator_answer
-from .conversation_acceptance import source_files
+from .conversation_acceptance import source_files, source_digest
 
 CASES = (
     ('greeting', '안녕', ('CHAT',)),
@@ -39,7 +39,7 @@ def validate_receipt(receipt, cfg, profile):
             or receipt.get('evaluation_owner') != 'model_pc' or receipt.get('verdict') != 'PASS'
             or receipt.get('source_commit') != cfg['source_commit']
             or receipt.get('profile') != profile.model_dump()
-            or receipt.get('source_manifest_sha256') != digest(cfg['files'])
+            or receipt.get('source_manifest_sha256') != source_digest(cfg['files'])
             or receipt.get('suite_sha256') != digest(CASES)
             or type(receipt.get('evaluated_at')) not in (int, float)
             or not math.isfinite(receipt['evaluated_at'])
@@ -64,7 +64,7 @@ def evaluate(execute, *, source_commit, files):
     return {'schema':'rosy.operator-evaluation/1', 'evaluation_owner':'model_pc',
         'source_commit':source_commit, 'profile':profile.model_dump(),
         'evaluated_at':time.time(), 'suite_sha256':digest(CASES),
-        'source_manifest_sha256':digest(files), 'cases':cases, 'outputs':outputs,
+        'source_manifest_sha256':source_digest(files), 'cases':cases, 'outputs':outputs,
         'verdict':'PASS' if all(c['passed'] for c in cases) else 'FAIL'}
 
 
