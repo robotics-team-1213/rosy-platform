@@ -27,12 +27,19 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     page, origin = account_page
     page.set_viewport_size({'width': 1366, 'height': 900})
     errors = []
+    auth_responses = []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('response', lambda response: auth_responses.append((response.url.split('/api/')[-1], response.status))
+            if '/api/fleet/auth/' in response.url else None)
     target = '/console?view=work&show=new'
     page.goto(origin + '/console/login?return=' + quote(target, safe=''))
     _credentials(page)
     page.locator('[data-login=submit]').click()
     expect(page).to_have_url(origin + target)
+    try:
+        expect(page.locator('#fleet-account')).to_be_visible(timeout=5000)
+    except AssertionError:
+        pytest.fail(f'Console session not ready: pageerrors={errors}, auth={auth_responses}')
     for view, shows in [('work', ['', 'pending', 'done', 'new']),
                         ('records', ['', 'open', 'closed', 'facts', 'log'])]:
         page.locator(f'.doc-tabs a[href="/console?view={view}"]').click()
@@ -43,6 +50,14 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
             expect(page).to_have_url(origin + path)
             expect(page.locator(f'.ui-subnav[data-area={view}]')).to_be_visible()
             expect(page.locator(f'.ui-subnav a[href="{path}"]')).to_have_attribute('aria-current', 'page')
+    for path in ['/console', '/console/site-map', '/console/install']:
+        page.locator(f'.doc-tabs a[href="{path}"]').click()
+        expect(page).to_have_url(origin + path)
+        page.locator('.doc-tabs a[href="/console"]').click()
+        expect(page).to_have_url(origin + '/console')
+        expect(page.locator('.ui-subnav[data-area=work]')).to_be_hidden()
+        expect(page.locator('.ui-subnav[data-area=records]')).to_be_hidden()
+        expect(page.locator('[aria-labelledby=map-heading]')).to_be_visible()
     page.locator('.doc-tabs a[href="/console?view=work"]').click()
     page.locator(f'.ui-subnav a[href="{target}"]').click()
     page.locator('#topbar-more').click()
