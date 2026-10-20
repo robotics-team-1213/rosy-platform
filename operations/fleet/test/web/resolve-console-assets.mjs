@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const WEB = new URL("../../../../applications/fleet/web/", import.meta.url);
 const PREFIX = "/console/assets/";
 const ASSETS = JSON.parse(readFileSync(new URL("assets.json", WEB), "utf8")).assets;
+const COMMON = new URL("../../../../shared/web/", import.meta.url);
+const SHARED = JSON.parse(readFileSync(new URL("shared-assets.json", COMMON), "utf8")).shared_assets;
 
 function asset(name) {
   if (!/^[\w.-]+\.(?:js|css)$/.test(name)) return null;
@@ -18,6 +20,10 @@ function asset(name) {
 }
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith('/common/')) {
+    const name = specifier.slice('/common/'.length);
+    if (Object.hasOwn(SHARED, name)) return {url:new URL(name, COMMON).href, shortCircuit:true};
+  }
   if (specifier.startsWith(PREFIX)) {
     const found = asset(specifier.slice(PREFIX.length));
     if (found) return found;
