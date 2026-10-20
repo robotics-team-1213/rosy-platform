@@ -1196,6 +1196,12 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 **Status:** Accepted for implementation (2026-10-20). 실제 운영 수용은 별도다.
 
 별도 기명 이동 접수는 기존 Task owner를 사용하고 웹 모델은 조회 권한을 유지한다. 보호 설치와 두 언어 수용은 Discord와 독립 결속한다. 전문은 [D-821](../adr/D-821-operator-deployment-execution-languages.md).
+
+## D-831 관제 자연어 전처리·명령 후보 검증·토큰 예산
+
+**Status:** Proposed (2026-10-21)
+
+원문·정규화·비실행 후보와 실행 접수를 나누고 등록 대상·인자·기명 확인을 검증한다. 토큰 절감은 의미/거절 품질과 실제 사용량을 비교한 뒤 채택한다. 전문은 [D-831](../adr/D-831-operator-command-preprocessing.md).
 ## D-774 - Installed station measurement camera lifespan
 
 Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).
