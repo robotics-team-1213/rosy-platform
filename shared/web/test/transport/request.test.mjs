@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRequest} from '../../request.js';
+import {createRequest} from '../../../../operations/site_ui/console/shared/request.js';
 
 for (const abortParent of [false, true]) {
   test(`page and caller cancellation compose: ${abortParent ? 'caller' : 'page'}`, async () => {

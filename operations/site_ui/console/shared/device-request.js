@@ -1,4 +1,4 @@
-import {createRequest} from '/common/request.js';
+import {createRequest} from './request.js';
 
 // Device panels retain their own error text and complete Fleet detail object.
 export function createDeviceRequest({scope, headers}) {

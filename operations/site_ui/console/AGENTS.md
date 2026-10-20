@@ -19,6 +19,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
 | `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
+| `shared/fleet-client.js`, `shared/request.js` | Console transport and Fleet response interpretation. New imports use `/console/assets/`; Fleet retains only the two exact former `/common/` URLs as compatibility aliases. |
 | `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
 | `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
 | `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |

@@ -8,9 +8,6 @@ const WEB = new URL("../../../site_ui/console/", import.meta.url);
 const PREFIX = "/console/assets/";
 
 export async function resolve(specifier, context, nextResolve) {
-  if (specifier === '/common/request.js') {
-    return nextResolve(new URL('../../../../shared/web/request.js', import.meta.url).href, context);
-  }
   if (specifier.startsWith(PREFIX)) {
     const name = specifier.slice(PREFIX.length);
     if (/^[\w.-]+\.(?:js|css)$/.test(name)) {

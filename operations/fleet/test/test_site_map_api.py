@@ -290,7 +290,7 @@ def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
     assert 'setAttribute("role", "img")' in map_view and 'setAttribute("role", "button")' in map_view
     # Both documents import the served contract adapter. Its status/code behavior
     # is executed by web/fleet-client.test.mjs, rather than duplicated in the shell.
-    assert 'import { createFleetClient } from "/common/fleet-client.js"' in shell
+    assert 'import { createFleetClient } from "/console/assets/fleet-client.js"' in shell
     assert client.get("/common/fleet-client.js").status_code == 200
 
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createFleetClient} from '../../../../shared/web/fleet-client.js';
+import {createFleetClient} from '../../../site_ui/console/shared/fleet-client.js';
 import {createPollGate} from '../../../site_ui/console/shared/poll-gate.js';
 
 function clientFor(status, body) {

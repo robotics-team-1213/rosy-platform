@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 94  # Includes the shared host report reader, policy page and device request helper.
+    assert len(expected) == 96  # Includes the Console-owned Fleet client and request primitive.
+    assert {'shared/fleet-client.js', 'shared/request.js'} <= expected.keys()
     assert 'shared/device-request.js' in expected
     assert 'shared/host-health.js' in expected
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()

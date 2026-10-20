@@ -216,7 +216,7 @@ pageScope.dispose();
 console.log(JSON.stringify(calls));
 """
     data = json.dumps([str(ROOT / source), function, path, owner,
-                       str(ROOT / "shared/web/fleet-client.js")])
+                       str(ROOT / "operations/site_ui/console/shared/fleet-client.js")])
     result = subprocess.run([node, "--input-type=module", "--eval", script, data],
                             capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
