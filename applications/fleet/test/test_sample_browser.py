@@ -124,8 +124,8 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             response = context.request.post(origin + '/api/fleet/missions/sample-cell-job-1/admit',
                 headers={'Origin':origin}, data={'expected_generation':1})
             assert response.status == 403
-            page.get_by_role('button', name='검토자로 로그인', exact=True).click()
-            page.wait_for_load_state('load')
+            with page.expect_navigation(wait_until='load'):
+                page.get_by_role('button', name='검토자로 로그인', exact=True).click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('승인 대기')
