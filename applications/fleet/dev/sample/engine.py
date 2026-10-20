@@ -10,6 +10,7 @@ from sample.spatial import Spatial
 from sample.governance import Governance
 from sample.assistant import Assistant
 from sample.vision import Vision
+from sample.cell import Cell
 from sample.work import Work
 
 
@@ -31,12 +32,13 @@ class SampleEngine:
             self.governance = Governance()
             self.assistant = Assistant()
             self.vision = Vision()
+            self.cell = Cell(self.work.dispatch)
             self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []
 
     def advance(self, flow_id, event):
         with self.lock:
-            feature = {'work': self.work, 'assistant': self.assistant}.get(flow_id)
+            feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell}.get(flow_id)
             if feature is None:
                 raise ValueError('unknown sample flow')
             feature.advance(event)
@@ -66,7 +68,7 @@ class SampleEngine:
             return response
         if method != 'GET' and self.sessions.role == 'viewer':
             return error(403, 'FORBIDDEN')
-        for feature in (self.work, self.spatial, self.governance, self.assistant):
+        for feature in (self.work, self.spatial, self.governance, self.assistant, self.cell):
             response = feature.handle(method, path, payload)
             if response is not None:
                 return response

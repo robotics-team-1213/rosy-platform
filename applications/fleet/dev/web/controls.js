@@ -14,6 +14,10 @@ async function control(path, payload) {
   if (!response.ok) throw Error('transition refused');
 }
 button('샘플 초기화', async () => { await control('reset', {scenario_id:'normal'}); location.assign('/console/login'); });
+const cellHint = document.createElement('span'); cellHint.textContent = 'Cell 예제 문서 ID: sample · 작업셀: sample-cell · 인스턴스: sample-arm'; panel.append(cellHint);
+for (const [text, event] of [['Cell 보류', 'hold'], ['Cell 동작 완료', 'action-complete'], ['Cell 목표 확인', 'complete']]) {
+  button(text, () => control('advance', {flow_id:'cell_jobs', event}));
+}
 button('조회자 시나리오', async () => { await control('reset', {scenario_id:'viewer'}); location.assign('/console/login'); });
 for (const [text, event] of [['운행 완료', 'complete'], ['운행 실패', 'fail'], ['연결 대기', 'hold'], ['운행 재개', 'resume']]) {
   button(text, () => control('advance', {flow_id:'work', event}));
