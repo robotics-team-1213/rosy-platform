@@ -36,6 +36,6 @@ SDK supervisor는 실행165초, 원시 로그16MiB, 관찰 output 합계256MiB·
 
 ## 연결 유실·복구
 
-receipt의 run을 다시 조회한다. `UNKNOWN`은 unit 소유권·결과·cleanup을 확인할 수 없다는 뜻이며 자동 재실행하지 않는다. 같은 run ID의 systemd unit을 reset/reuse하지 않는다. 중지 전에 unit·InvocationID·boot ID·cgroup을 대조하며, 다르면 신호를 보내지 않는다. 강제 종료·재부팅 후 결과가 없으면 실패나 성공을 추정하지 않는다.
+receipt의 run을 다시 조회한다. `UNKNOWN`은 unit 소유권·결과·cleanup을 확인할 수 없다는 뜻이며 자동 재실행하지 않는다. 같은 run ID의 systemd unit을 reset/reuse하지 않는다. 중지 전에 unit·InvocationID·boot ID·cgroup·worker PID 시작 시각을 대조하며, 다르면 신호를 보내지 않는다. 일치하면 열린 pidfd로 해당 worker에만 SIGUSR1을 보내고 worker가 소유 SDK를 종료한다. 확인 뒤 unit/PID가 바뀌어도 다른 프로세스로 신호가 향하지 않는다. 강제 종료·재부팅 후 결과가 없으면 실패나 성공을 추정하지 않는다.
 
 SDK 원시 로그는 run 디렉터리의 `sdk.log`이며 내부 경로가 포함될 수 있다. 외부 공유 전 별도 검토한다. 불변 input·최종 result·artifact manifest는 덮어쓰지 않는다. 실제 SDK 실행·웹/CLI 교차 조회 증거는 별도 실험 기록으로 남긴다. host pytest는 실물 집기·학습 적합·정책 승격의 증거가 아니다.

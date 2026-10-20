@@ -141,10 +141,12 @@ def execute(store, binding_file, run_id):
     def stopped():
         return stop[0] or store.get(run_id)['status'] == 'STOP_REQUESTED'
 
+    leased = False
     try:
         # Check the installed SDK without loading SimulationApp before leasing it.
         admitted_gpu = sdk_check(binding)
         with acquire(binding) as descriptors:
+            leased = True
             try:
                 binding = load_binding(binding_file, row['input']['source_sha'])
                 row = store.get(run_id)
@@ -191,6 +193,8 @@ def execute(store, binding_file, run_id):
                               'sha256': hashlib.sha256(raw).hexdigest(), 'media_type': 'application/json'}]
             return _finish(store, run_id, outcome, report, artifacts, stopped(), gpu=admitted_gpu)
     except (OSError, ValueError, subprocess.SubprocessError):
+        if leased:
+            raise
         # No SDK launch occurs outside the lease; admission failures have no child to clean up.
         outcome['reason'] = 'admission_refused'
         return _finish(store, run_id, outcome, None, [], stopped(), cleanup='SDK_NOT_STARTED')
