@@ -2,7 +2,7 @@
 module: fleet_app_dev
 owner: fleet_app_dev
 last_verified:
-  commit: 7983f783c8
+  commit: c000a57004
   date: 2026-10-21
 gates:
   SOURCE:
@@ -10,8 +10,9 @@ gates:
     cmd: python tools/harness/rosy_harness.py lint
     evidence: D-830 source boundaries and independent review; cancellation and Cell overview follow-up in logs.md.
   LOCAL:
-    state: HOLD
-    blocker: Final combined remote regression and installed package checks pending after review fixes.
+    state: GO
+    cmd: python tools/remote/remote_pytest.py --log-dir private/frontend-browser -- ROSY_RUN_BROWSER_TESTS=1 applications/fleet/test
+    evidence: f5aab6d2de combined app/browser/installed/CLI regression 264 passed; c000a57004 changed sample authority and representative browser flows 36 passed. Standard landing FULL remains separate.
   ROS-SIM:
     state: HOLD
     blocker: Frontend sample and fake robot transport do not prove simulation behavior.

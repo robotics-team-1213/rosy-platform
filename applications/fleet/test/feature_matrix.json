@@ -309,7 +309,7 @@
           "scenario_id": "auth.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -328,7 +328,7 @@
           "scenario_id": "auth.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -347,7 +347,7 @@
           "scenario_id": "auth.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[auth]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -503,7 +503,7 @@
           "scenario_id": "accounts.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[accounts]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -520,7 +520,7 @@
           "scenario_id": "accounts.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[accounts]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -537,7 +537,7 @@
           "scenario_id": "accounts.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[accounts]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -649,7 +649,7 @@
           "scenario_id": "profile.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[profile]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -667,7 +667,7 @@
           "scenario_id": "profile.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[profile]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -685,7 +685,7 @@
           "scenario_id": "profile.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[profile]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -969,7 +969,7 @@
           "scenario_id": "policy.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[policy]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -988,7 +988,7 @@
           "scenario_id": "policy.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[policy]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -1007,7 +1007,7 @@
           "scenario_id": "policy.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[policy]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -1569,7 +1569,7 @@
           "scenario_id": "monitoring.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[monitoring]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -1586,7 +1586,7 @@
           "scenario_id": "monitoring.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[monitoring]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -1603,7 +1603,7 @@
           "scenario_id": "monitoring.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[monitoring]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -1767,7 +1767,7 @@
           "scenario_id": "stop.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[stop]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -1786,7 +1786,7 @@
           "scenario_id": "stop.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[stop]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -1805,7 +1805,7 @@
           "scenario_id": "stop.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[stop]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -2081,7 +2081,7 @@
           "scenario_id": "work.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[work]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2098,7 +2098,7 @@
           "scenario_id": "work.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[work]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2115,7 +2115,7 @@
           "scenario_id": "work.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[work]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -2463,7 +2463,7 @@
           "scenario_id": "mission.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[mission]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2482,7 +2482,7 @@
           "scenario_id": "mission.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[mission]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2501,7 +2501,7 @@
           "scenario_id": "mission.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[mission]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -2663,7 +2663,7 @@
           "scenario_id": "cell_documents.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[cell_documents]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2681,7 +2681,7 @@
           "scenario_id": "cell_documents.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[cell_documents]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2699,7 +2699,7 @@
           "scenario_id": "cell_documents.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[cell_documents]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -2820,7 +2820,7 @@
           "scenario_id": "cell_jobs.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[cell_jobs]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2838,7 +2838,7 @@
           "scenario_id": "cell_jobs.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[cell_jobs]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -2856,7 +2856,7 @@
           "scenario_id": "cell_jobs.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[cell_jobs]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -3233,7 +3233,7 @@
           "scenario_id": "map.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[map]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -3252,7 +3252,7 @@
           "scenario_id": "map.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[map]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -3271,7 +3271,7 @@
           "scenario_id": "map.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[map]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -3545,7 +3545,7 @@
           "scenario_id": "installation.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[installation]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -3563,7 +3563,7 @@
           "scenario_id": "installation.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[installation]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -3581,7 +3581,7 @@
           "scenario_id": "installation.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[installation]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -4000,7 +4000,7 @@
           "scenario_id": "pairing.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pairing]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -4019,7 +4019,7 @@
           "scenario_id": "pairing.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pairing]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -4038,7 +4038,7 @@
           "scenario_id": "pairing.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pairing]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -4506,7 +4506,7 @@
           "scenario_id": "calibration.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[calibration]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -4525,7 +4525,7 @@
           "scenario_id": "calibration.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[calibration]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -4544,7 +4544,7 @@
           "scenario_id": "calibration.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[calibration]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -4833,7 +4833,7 @@
           "scenario_id": "traffic.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[traffic]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -4852,7 +4852,7 @@
           "scenario_id": "traffic.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[traffic]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -4871,7 +4871,7 @@
           "scenario_id": "traffic.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[traffic]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -5071,7 +5071,7 @@
           "scenario_id": "vision.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[vision]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -5090,7 +5090,7 @@
           "scenario_id": "vision.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[vision]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -5109,7 +5109,7 @@
           "scenario_id": "vision.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[vision]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -5228,7 +5228,7 @@
           "scenario_id": "incidents.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[incidents]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -5246,7 +5246,7 @@
           "scenario_id": "incidents.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[incidents]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -5264,7 +5264,7 @@
           "scenario_id": "incidents.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[incidents]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]
@@ -5374,7 +5374,7 @@
           "scenario_id": "assistant.happy",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[assistant]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -5392,7 +5392,7 @@
           "scenario_id": "assistant.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[assistant]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         },
         {
@@ -5410,7 +5410,7 @@
           "scenario_id": "assistant.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[assistant]",
           "sample_status": "verified",
-          "source_revision": "7983f783c8",
+          "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
         }
       ]

@@ -22,6 +22,8 @@ Implementation of [D-830](../adr/D-830-fleet-independent-frontend-development.md
 | Assistant submit/poll contract capture | `4cb62aa167` | 6 passed |
 | 18 representative browser fetch flows + Cell form + real Fleet HTTPS integration | `7983f783c8` | 20 passed |
 | Reviewed sample stop/formation/task-count coherence | `030df77030` | 21 passed, including browser fetch and real cancel-all button |
+| Combined app/browser/wheel/sdist/CLI/architecture/real-Fleet-HTTPS regression | `f5aab6d2de` | 264 passed, zero skips |
+| Final sample two-person Cell authority and all representative browser flows | `c000a57004` | 36 passed, zero skips; includes actual Cell reviewer and overview form flow |
 
 The [machine-readable matrix](../../applications/fleet/test/feature_matrix.json) inventories 159 method/path contracts across 18 feature groups. [HTTP receipts](../../applications/fleet/test/backend_http_evidence.json) bind each observed response to an exact passing test ID and full source revision. A conservative literal/prefix inventory can include conditional routes; registration alone is not evidence that every deployment enables them.
 
@@ -33,4 +35,4 @@ The 54 happy/refused/terminal matrix entries point to 18 browser replay cases; t
 
 Sample state is single-session and process-local. Cell compile supports the supplied recorded example; calibration is display-only; policy execution leases remain refused. No physical robot, operational model, microphone quality, deployment or field acceptance is established here.
 
-Final combined app/browser/installed checks and standard landing FULL results are recorded in the development module journal when complete. Earlier scoped results do not substitute for that final merged revision.
+Combined app/browser/installed checks passed as recorded above. Standard landing FULL results are recorded in the development module journal when complete. Earlier scoped results do not substitute for that final merged revision.

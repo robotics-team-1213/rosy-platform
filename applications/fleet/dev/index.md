@@ -25,5 +25,6 @@
 
 ## 최근 기록
 
+- 2026-10-21 · c000a57004 · Cell approval and combined regression
 - 2026-10-21 · 030df77030 · Review corrections and cross-screen state
 - 2026-10-21 · 7983f783c8 · D-830 independent frontend development
