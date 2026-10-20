@@ -69,6 +69,14 @@ def test_module_is_available():
     assert hasattr(module(), "Updater")
 
 
+def test_review_store_dependency_cannot_be_omitted(tmp_path, keys):
+    m = module()
+    folder = candidate(m, tmp_path, keys,
+                       omit_files=('learning/curation/perception/review_store.py',))
+    with pytest.raises(ValueError, match='missing model-code entry point or dependency'):
+        m.unpack(folder / 'code.tar', tmp_path / 'incomplete')
+
+
 def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_path, keys):
     m = module()
     repo = SCRIPT.parents[2]

@@ -7,6 +7,7 @@ LEGACY_LEARNING_PREFIXES = ("learning/training/perception/", "tools/perception/"
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
                      PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
                      "learning/curation/perception/review_app.py",
+                     "learning/curation/perception/review_store.py",
                      "learning/training/perception/train_job.py",
                      "learning/evaluation/perception/road_replay.py",
                      "learning/curation/perception/classes/lane_lr5.yaml",
