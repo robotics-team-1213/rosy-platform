@@ -154,3 +154,9 @@
 - 환경: 기본 MCAP control만 기존 MCAP suite와 같은 optional dependency 조건을 사용한다. 해당 코드·시험 변경의 착지는 모듈 AGENTS의 필수 raw-profile 검사 exit0/skip0을 별도로 요구한다. 환경 분리 commit db23d46516도 실제 raw125passed/skip0, NEW/known/flaky0이다. source_components 분할 알고리즘은 이식하거나 검증했다고 주장하지 않는다. 최종 로그·생성물이 담긴 HEAD도 착지 전에 raw 검사를 다시 확인한다.
 - 범위: strict signed source expectation/retained proof는 별도 후속 단위다. 운영 라벨·실물·배포·학습 품질·현장 수용은 검증하지 않았다.
 - gate 변화: 없음. 기본 환경의 optional MCAP 검사는 필수 raw-profile 검사 exit0/skip0을 대신하지 않는다.
+
+## 2026-10-21 · uncommitted · SIM 화면 연결 전 검수 저장 코드 분리
+
+- 변경: ReviewStore·Conflict를 review_store.py로 옮기고 review_app의 기존 import를 유지했다. HTTP 서버는 471행, 저장 코드는 300행이며 크기 ratchet의 과거 예외를 제거했다. 서명된 학습 payload가 새 필수 모듈을 빠뜨리지 않게 source 필수 목록을 연결했다.
+- 증거: 기존 클래스와 이동 후 클래스의 AST가 동일하다. 원격에서 재노출 회귀의 모듈 부재 실패와 불완전 payload의 누락 거절 부재를 먼저 확인했다. GREEN·전체 영향 검사는 최종 커밋에 대해 별도 기록한다.
+- gate 변화: 없음. 기존 인간 승인·검수 자료·실행 제어를 바꾸지 않으며 새 SIM 기능·SDK 실행·호스트 배포는 아직 없다.

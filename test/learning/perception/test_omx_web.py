@@ -2,6 +2,9 @@
 import json
 import threading
 import urllib.request
+import urllib.error
+
+import pytest
 
 from review_app import ReviewStore, make_server
 from test_review_return import fixture_inputs
@@ -56,3 +59,54 @@ def test_registered_intake_folders_are_listed_read_only(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_segment_reviews_append_versions_and_leave_original_labels_untouched(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    store = ReviewStore(tmp_path/'state', source, human, images)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    def request(path, body, token=None, origin=None):
+        headers = {'Content-Type': 'application/json'}
+        if token: headers['X-Pinky-Token'] = token
+        if origin: headers['Origin'] = origin
+        return urllib.request.urlopen(urllib.request.Request(url+path,json.dumps(body).encode(),headers))
+    try:
+        token = json.load(urllib.request.urlopen(url+'/api/workspace'))['token']
+        root = tmp_path/'prepared'
+        prepared(root)
+        original = (root/'decisions.json').read_bytes()
+        row = json.load(request('/api/learning/register', dict(kind='omx', name='source',path=str(root)),token))
+        decision = json.loads(original)[0]
+        segment = {key:decision[key] for key in ('episode_index','frames','content_sha256','session_id','cycle_id')}
+        segment.update(start_frame=2,end_frame=6,object='cube',intervention=False,
+                       outcome='unknown',split='exclude',reviewer='person',reason='uncertain retention')
+        body = dict(id=row['id'],version=0,segments=[segment])
+        for options in ({}, {'token':token,'origin':'https://invalid.example'}):
+            with pytest.raises(urllib.error.HTTPError) as denied:
+                request('/api/learning/omx/segments',body,**options)
+            assert denied.value.code == 403
+        first = json.load(request('/api/learning/omx/segments',body,token))
+        assert first['version'] == 1 and first['document']['segments'][0]['outcome'] == 'unknown'
+        with pytest.raises(urllib.error.HTTPError) as stale:
+            request('/api/learning/omx/segments',body,token)
+        assert stale.value.code == 409
+        body['version'] = 1
+        body['segments'][0]['outcome'] = 'failure'
+        second = json.load(request('/api/learning/omx/segments',body,token))
+        assert second['version'] == 2
+        value = json.load(urllib.request.urlopen(url+'/api/learning/omx'))['sets'][0]
+        assert value['segment_review'] == second
+        assert (root/'decisions.json').read_bytes() == original
+        with store.connect() as db:
+            documents = db.execute('SELECT document FROM omx_segment_reviews ORDER BY version').fetchall()
+        assert len(documents) == 2 and json.loads(documents[0][0])['segments'][0]['outcome'] == 'unknown'
+        body['version'] = 2
+        body['segments'][0]['split'] = 'train'
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            request('/api/learning/omx/segments',body,token)
+        assert refused.value.code == 400
+    finally:
+        server.shutdown();server.server_close();thread.join()

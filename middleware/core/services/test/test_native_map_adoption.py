@@ -78,6 +78,42 @@ def test_both_independent_replies_required_and_first_before_bounds_lifetime(run)
     assert not run.owner.valid(sample, run.parent, raw_source=run.source, now=10.51)
 
 
+def test_default_global_nonce_capacity_cannot_be_reset_by_a_new_parent(run):
+    run.owner = NativeMapEvidence(source=lambda: run.source, parent=lambda: run.parent,
+        consumers=tuple(run.profiles.values()), clock=lambda: run.time, stop=run.stopped.append)
+    for index in range(32768):
+        run.time = 10. + index * .25
+        sample = complete(run)
+        assert sample is not None
+    assert run.nonce == 65536 and not run.stopped
+    run.time = 10. + 8192.
+    round_ = run.owner.begin()
+    assert round_ is not None and issue(run, round_, 'amcl') is None
+    assert run.stopped == [run.parent]
+    assert not run.owner.valid(sample, run.parent, raw_source=run.source, now=run.time)
+    old_parent = run.parent
+    run.parent = object()
+    round_ = run.owner.begin()
+    assert round_ is not None and issue(run, round_, 'amcl') is None
+    assert run.stopped == [old_parent, run.parent]
+
+
+def test_default_parent_capacity_never_evicts_consumed_parent_history(run):
+    run.owner = NativeMapEvidence(source=lambda: run.source, parent=lambda: run.parent,
+        consumers=tuple(run.profiles.values()), clock=lambda: run.time, stop=run.stopped.append)
+    parents = []
+    for _ in range(64):
+        run.parent = object()
+        parents.append(run.parent)
+        assert complete(run) is not None
+    run.parent = object()
+    assert run.owner.begin() is None
+    assert run.parent in run.stopped
+    for parent in parents:
+        run.parent = parent
+        assert run.owner.begin() is None
+
+
 def test_explicit_transport_close_invalidates_cached_proof_for_all_future_parents(run):
     sample = complete(run)
     assert sample is not None

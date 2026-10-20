@@ -74,3 +74,6 @@ D-826 reserved on another topic branch; absent from the D-830 implementation bas
 D-827 reserved on another topic branch; absent from the D-830 implementation base
 D-828 reserved on another topic branch; absent from the D-830 implementation base
 D-829 reserved on another topic branch; absent from the D-830 implementation base
+D-825 reserved in another session (refs/adr/D-825), absent from this base; remove when its ADR lands
+D-830 reserved outside this branch (refs/adr/D-830), absent from this base; remove when its ADR lands
+D-832 reserved on peer branch feat/omx-learning-flow (8967d9484b), absent from this branch; remove when its ADR lands
