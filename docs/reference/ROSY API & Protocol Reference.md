@@ -3472,6 +3472,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.291 | 2026-10-21 | Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
 | v1.277 | 2026-10-19 | Additive (D-800, feat/omx-policy-chain-publish): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
 | v1.266 | 2026-10-18 | Additive (D-793, feat/omx-policy-governance): `/api/fleet/workcells/{id}/policy/*` 학습 정책 단계·승인 창·확인 요청·사고 잠금·실행 lease와 `/console/policy`. 장치 전달 없음, envelope 1.0 변경 없음. |
