@@ -257,3 +257,31 @@ def test_frame_loss_consumes_actual_native_parent_with_map_readbacks_still_valid
     r.svc.command.set_nav_twist(Twist(.1, 0.), now=10.)
     r.svc.command.set_docking_twist(Twist(.05, 0.), now=10.)
     assert wheels(r) == [Twist()] and r.ledger.read().state == 'STOPPED'
+
+
+def test_frame_restore_requires_new_budget_new_ack_and_explicit_new_navigation(proven):
+    from uuid import uuid4
+    r = proven
+    r.svc.localization.on_state('{"status":{"state":"LOCALIZED","pose_frame":"map"}}')
+    first = start_nav(r)
+    old_parent, old_sample = r.parent, r.map_owner.peek()
+    r.svc.localization.tick(True)
+    assert r.ledger.read().state == 'STOPPED' and wheels(r) == [Twist()]
+    r.svc.localization.tick(False)
+    r.svc.localization.on_state('{"status":{"state":"LOCALIZED","pose_frame":"map"}}')
+    assert wheels(r) == [Twist()] and r.ledger.read().state == 'STOPPED'
+    assert r.binding.fence.retire(old_parent)
+    budget = Budget(limits=r.limits, initial=Pose(1000000000, 1000000000, 'odom', '0', 0., 0.),
+        before_mono=10., after_mono=10., now_utc=100., captured_utc=99.9,
+        admit_until_utc=100.1, duration_s=10., path_m=10., rotation_rad=20., radius_m=5.)
+    r.parent = r.binding.fence.admit(replace(r.identity, parent_id=uuid4()), budget)
+    assert r.parent is not None and r.parent is not old_parent
+    assert r.map_owner.sample(r.parent) is None
+    assert deliver_map(r)
+    assert not r.map_owner.valid(old_sample, r.parent, raw_source=r.svc.nav._map_evidence, now=10.)
+    second = start_nav(r)
+    assert second.run_id != first.run_id
+    assert r.ledger.read().state == 'ACTIVE' and wheels(r) == [Twist(.1, 0.)]
+    with pytest.raises(NavigationError):
+        r.binding.navigation(old_parent, NavGoalSpec(1., 2., 0., 'map'), lease_ttl_s=1.)
+    assert r.ledger._current is r.parent and wheels(r) == [Twist(.1, 0.)]
