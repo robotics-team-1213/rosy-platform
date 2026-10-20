@@ -47,6 +47,6 @@ def compose_site(profile: SiteCellProfile,
 
 def main(argv=None):
     """Keep the existing Fleet CLI as the gateway's command and service owner."""
-    from fleet.cli import _main_impl
+    from fleet.cli import run
 
-    return _main_impl(argv)
+    return run(argv)
