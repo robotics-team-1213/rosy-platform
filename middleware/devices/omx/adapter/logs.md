@@ -567,6 +567,11 @@
 - 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
 - gate 변화: 없음. 동작 변경 없는 경로 이동이다.
 
+## 2026-10-21 · uncommitted · 실제 파생 SIM world 카메라 출처
+
+- 변경: PilotSimCamera의 기본 world 이름은 유지하고, 별도 물체 workcell을 사용할 때 실제 world 이름을 camera identity에 기록한다.
+- 검증: native RGB 시연 수집에서 파생 world hash·이름과 실제 영상 출처를 확인할 예정이다. 장치·학습 gate 변화 없음.
+
 ## 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
 
 - 변경: origin #83(78a4bea23c)의 별도 action event 노드·SingleThreadedExecutor(`ros_trajectory_action.py`)와 owner worker에 실행 기회를 넘기는 `OwnerMultiThreadedExecutor`(`ros_owner_executor.py`)를 main에 옮겼다. 느린 durable event sink가 joint-state intake와 watchdog을 막지 않는다. 즉시 HOLD, event 순서, action 이름 해석, worker 수, freshness 기준은 유지한다. main에만 있는 `run_hardware_owner.py`에도 같은 executor와 `runtime.destroy()`를 적용했다. #69의 별도 프로세스 fake vendor(`test/ros_feedback_peer.py`, adapter 시험 폴더)와 시험 재구성도 함께 옮겼고 main의 선택적 feedback trace hook은 유지했다(같은 프로세스 publish trace만 빠짐).

@@ -12,10 +12,11 @@ from ..ros_camera_runtime import RosCameraStreamRuntime
 
 
 class PilotSimCamera:
-    def __init__(self, node, capture, world_sha256: str) -> None:
+    def __init__(self, node, capture, world_sha256: str, *, world_name="omx_pilot_workcell") -> None:
         self.node = node
         self.capture = capture
         self.world_sha256 = world_sha256
+        self.world_name = world_name
         self.error = None
         self._bootstrap = node.create_subscription(
             CameraInfo, "/workcell_camera/camera_info", self._on_info, qos_profile_sensor_data)
@@ -39,7 +40,7 @@ class PilotSimCamera:
             self.error = "simulation camera intrinsics unavailable"
             return
         config = CameraStreamConfig(
-            camera_identity=f"gazebo:omx_pilot_workcell:front:{self.world_sha256}",
+            camera_identity=f"gazebo:{self.world_name}:front:{self.world_sha256}",
             optical_frame_id="workcell_camera_optical", calibration_revision=f"sim-sdf:{self.world_sha256}",
             camera_info_sha256=CameraFrameGate.camera_info_fingerprint(info),
             max_frame_age_s=2.0, transform_revision=f"sim-sdf:{self.world_sha256}",

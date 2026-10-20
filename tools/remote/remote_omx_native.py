@@ -239,7 +239,7 @@ def activate(value, directory, remote):
 def deploy(args, repo, runner):
     host = choose_target(runner._LAB, args.host)
     experiment = getattr(args, 'experiment', 'g2')
-    if experiment not in ('g2', 'pick-place'):
+    if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations'):
         raise ValueError('unknown native simulation experiment')
     config = json.loads(args.config.read_text(encoding='utf-8-sig'))
     if config.get('role') != args.host:
@@ -372,7 +372,7 @@ def main():
     shipping.add_argument('--config', type=Path, required=True)
     shipping.add_argument('--log-dir', type=Path, required=True)
     shipping.add_argument('--sha', default='HEAD')
-    shipping.add_argument('--experiment', choices=['g2', 'pick-place'], default='g2')
+    shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations'], default='g2')
     shipping.add_argument('--approve-host-provisioning', action='store_true')
     for action in ['provision', 'start', 'status', 'fetch']:
         command = commands.add_parser(action)

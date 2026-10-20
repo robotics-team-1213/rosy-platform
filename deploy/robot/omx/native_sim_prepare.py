@@ -37,15 +37,17 @@ def environment(config):
 
 
 def run_script(source, *, experiment="g2"):
-    if experiment not in {"g2", "pick-place"}:
+    if experiment not in {"g2", "pick-place", "pick-place-demonstrations"}:
         raise ValueError("unknown native simulation experiment")
-    entry = "g2_runner.py" if experiment == "g2" else "sim_pick_place_task.py"
+    entry = {"g2": "g2_runner.py", "pick-place": "sim_pick_place_task.py",
+             "pick-place-demonstrations": "sim_pick_place_demonstrations.py"}[experiment]
+    output = "g2" if experiment == "g2" else "pick-place"
     runner = str(Path(source) / "deploy/robot/omx" / entry)
     mode = " --mode run" if experiment == "g2" else ""
     return ("#!/bin/bash\nset -eo pipefail\n"
             "source \"$OMX_NATIVE_STATE/environment.sh\"\n"
             "exec /usr/bin/python3 -B " + shlex.quote(runner) +
-            mode + " --evidence \"$OMX_NATIVE_STATE/" + experiment + "\""
+            mode + " --evidence \"$OMX_NATIVE_STATE/" + output + "\""
             " --approve-isolated-simulation --approve-startup-home\n")
 
 
@@ -174,7 +176,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--staging", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--experiment", choices=("g2", "pick-place"), default="g2")
+    parser.add_argument("--experiment", choices=("g2", "pick-place", "pick-place-demonstrations"), default="g2")
     parser.add_argument("--activate", action="store_true")
     parser.add_argument("--state-root", type=Path)
     args = parser.parse_args()

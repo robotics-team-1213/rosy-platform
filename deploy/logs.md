@@ -3089,3 +3089,9 @@
 - 변경: 기존 보호된 native launcher에 닫힌 pick-place 실험을 연결하고 별도 observer로 들림·해제·목표 오차·2초 안정 상태를 판정한다. 기본 G2·격리·입력 결속·실행 권한은 유지한다.
 - 증거: 관련 원격 회귀 60PASS/0SKIP/NEW0. 실제 부착 보조 Gazebo에서 기존 규칙 제어기 1회 시도/1회 성공, XY 오차 0.273mm·안정 2.246초·정리 확인. 원본과 준비 실패는 `docs/validation/omx-object-baseline-2026-10-21/result.md`에 연결했다.
 - gate 변화: 학습/DEVICE/FIELD 변화 없음. 실제 시연·학습 checkpoint·독립 정책 물체 20회 평가는 미실행이다.
+
+## 2026-10-21 · uncommitted · 실제 RGB 물체 시연 수집 연결
+
+- 변경: 원본 workcell에 기존 카메라만 추가한 별도 world와 기존 단일 owner·기록기로 실제 짧은 명령·영상·관절 상태를 수집한다. 모든 계획 waypoint를 유지하고 실제 발행 시간을 기록한다. 부착은 폭에 맞춘 gripper readback과 물체 근접 확인 후에만 허용한다.
+- 증거: 최초 원격 RED 6FAIL. 구현 후 원격 회귀와 보호된 native RGB 수집 검증 예정.
+- gate 변화: 없음. 학습·독립 정책 평가 완료를 주장하지 않는다.
