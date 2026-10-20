@@ -11,6 +11,9 @@ from sample.governance import Governance
 from sample.assistant import Assistant
 from sample.vision import Vision
 from sample.cell import Cell
+from sample.installation import Installation
+from sample.pairing import Pairing
+from sample.calibration import Calibration
 from sample.work import Work
 
 
@@ -33,6 +36,9 @@ class SampleEngine:
             self.assistant = Assistant()
             self.vision = Vision()
             self.cell = Cell(self.work.dispatch)
+            self.installation = Installation()
+            self.pairing = Pairing()
+            self.calibration = Calibration()
             self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []
 
@@ -68,7 +74,8 @@ class SampleEngine:
             return response
         if method != 'GET' and self.sessions.role == 'viewer':
             return error(403, 'FORBIDDEN')
-        for feature in (self.work, self.spatial, self.governance, self.assistant, self.cell):
+        for feature in (self.work, self.spatial, self.governance, self.assistant, self.cell,
+                        self.installation, self.pairing, self.calibration):
             response = feature.handle(method, path, payload)
             if response is not None:
                 return response
