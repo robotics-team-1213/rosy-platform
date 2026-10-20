@@ -3,6 +3,7 @@ import os
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -15,10 +16,10 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 
 def _open_console(*args, **kwargs):
     browser, page, errors = _open_base(*args, **kwargs)
-    # X-only served mutation proves the guard without ever changing the product file.
+    # A served mutation outside the checkout proves the guard without changing the product file.
     if candidate := os.environ.get('ROSY_FLEET_MUTATION_ASSET'):
         asset = Path(candidate).resolve()
-        assert asset.drive.upper() == 'X:'
+        assert not asset.is_relative_to(Path(__file__).resolve().parents[1])
         assert asset.name in {'install.js', 'vision-view.js'}
         body = asset.read_bytes()
         digest = hashlib.sha256(body).hexdigest()
@@ -29,6 +30,23 @@ def _open_console(*args, **kwargs):
                 'asset': str(asset), 'bytes': len(body)}), encoding='utf-8')
         page.route('**/console/assets/' + asset.name, deliver)
     return browser, page, errors
+
+
+def test_mutation_assets_stay_outside_checkout(tmp_path, monkeypatch):
+    routes = []
+    page = SimpleNamespace(route=lambda pattern, callback: routes.append(pattern))
+    monkeypatch.setitem(_open_console.__globals__, '_open_base', lambda: (None, page, []))
+    asset = tmp_path / 'install.js'
+    asset.write_text('// isolated mutation', encoding='utf-8')
+    monkeypatch.setenv('ROSY_FLEET_MUTATION_ASSET', str(asset))
+    assert _open_console()[1] is page
+    assert routes == ['**/console/assets/install.js']
+
+    inside = Path(__file__).resolve().parents[1] / 'install.js'
+    monkeypatch.setenv('ROSY_FLEET_MUTATION_ASSET', str(inside))
+    with pytest.raises(AssertionError):
+        _open_console()
+    assert len(routes) == 1
 
 
 def install_url(console):
