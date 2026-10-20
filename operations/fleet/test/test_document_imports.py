@@ -17,6 +17,8 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "fleet-client.js",
+    "request.js",
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",
@@ -71,8 +73,6 @@ OWN = {
     "install.js": {
         "enrollment.js",
         "device-request.js",
-    "fleet-client.js",
-    "request.js",
         "camera-pairing.js",
         "camera-peer.js",
         "field-view.js",
