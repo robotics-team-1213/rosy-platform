@@ -1,5 +1,6 @@
 """D-825 drawing registration and local editing in actual Chromium, no robot motion."""
 import re
+import json
 
 import pytest
 from browser_harness import browser_tests_enabled, open_token_access
@@ -50,7 +51,7 @@ def point(page, x, y):
 
 @pytest.mark.parametrize('width', [1366, 320])
 @pytest.mark.parametrize('page_site', [False], indirect=True)
-def test_import_register_edit_save_reopen(editor_site, width):
+def test_import_register_edit_save_reopen(editor_site, width, tmp_path):
     page, store, robot = editor_site
     page.set_viewport_size({'width': width, 'height': 1000})
     register(page)
@@ -94,6 +95,11 @@ def test_import_register_edit_save_reopen(editor_site, width):
         return r.width > 0 && r.right > innerWidth + 1 && !e.closest('.map-viewport');
       }).slice(-15).map(e => ({tag: e.tagName, id: e.id, cls: e.className,
         width: e.getBoundingClientRect().width, minWidth: getComputedStyle(e).minWidth}))})''')
+    if layout['overflow'] > 0:
+        print('LAYOUT=' + json.dumps(layout, ensure_ascii=False))
+        capture = tmp_path / f'map-editor-{width}.png'
+        page.screenshot(path=str(capture), full_page=True)
+        print('SCREENSHOT=' + str(capture))
     assert layout['overflow'] <= 0, layout
 
 
