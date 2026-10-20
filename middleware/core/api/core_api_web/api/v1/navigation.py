@@ -22,9 +22,11 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
 from core_common.domain.tasks import TaskKind
+from core_api_web.api.v1.navigation_handover import navigation_handover
 
 
 navigation_router = APIRouter(prefix="/api/v1", tags=["navigation"])
+navigation_router.add_api_route('/navigation/handover', navigation_handover, methods=['POST'])
 
 
 class GoalRequest(BaseModel):

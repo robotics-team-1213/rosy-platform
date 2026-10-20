@@ -6,7 +6,7 @@
 # test/architecture/test_module_structure.py; how-to in test/architecture/AGENTS.md.
 drive/behaviors/line_follow
 foundation/core_common/protocol/native small
-drive/behaviors/navigation small
+drive/behaviors/navigation
 drive/behaviors/line_follow/recovery
 drive/behaviors/line_follow/recovery/junction
 drive/behaviors/line_follow/recovery/stuck
@@ -79,3 +79,4 @@ fleet/fleet/server/recognition
 fleet/fleet/server/rightofway
 situation
 site_execution
+devices/omx/adapter/omx_adapter/contracts

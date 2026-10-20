@@ -1,0 +1,5 @@
+<library path="rosy_native_map">
+  <class name="rosy_native_map::VerifiedStaticLayer" type="rosy_native_map::VerifiedStaticLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Original full-map application readback for a pinned nonrolling static layer.</description>
+  </class>
+</library>

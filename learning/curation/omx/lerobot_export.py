@@ -19,6 +19,12 @@ from rosy.contracts.learning.omx import validate_demonstration as validate_episo
 LEROBOT_VERSION = "0.4.4"
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def image_key(manifest: dict) -> str:
     """LeRobot image key named after the recorded camera (D-794 B: ``front`` today, ``wrist`` later)."""
     return "observation.images." + manifest["provenance"]["camera"]["name"]
@@ -75,8 +81,8 @@ def export_episode(episode: Path, output: Path, repo_id: str) -> dict:
     validated = validate_episode(episode)
     if output.exists() or output.is_relative_to(episode) or episode.is_relative_to(output):
         raise ValueError("export requires a new directory separate from the source episode")
-    if output.drive.upper() == "F:":
-        raise ValueError("export output belongs on X:, not the source drive")
+    if _in_checkout(output):
+        raise ValueError("export output belongs outside the source checkout")
     version = importlib.metadata.version("lerobot")
     if version != LEROBOT_VERSION:
         raise ValueError(f"export requires lerobot=={LEROBOT_VERSION}; found {version}")

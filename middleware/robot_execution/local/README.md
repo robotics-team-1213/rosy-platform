@@ -99,5 +99,6 @@ synthetic installed policy/authority and fake callbacks; no ROS/SIM/device,
 training, promotion or physical acceptance follows from their results.
 
 ```powershell
-python -B -m pytest middleware/robot_execution/local/test/test_policy_install.py -q -p no:cacheprovider --basetemp X:/DevTemp/policy-install-tests
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+python -B -m pytest middleware/robot_execution/local/test/test_policy_install.py -q -p no:cacheprovider --basetemp $RosyScratch/policy-install-tests
 ```

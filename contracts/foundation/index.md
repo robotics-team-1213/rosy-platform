@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · drivable v2 안내 계약을 제품보다 먼저 분리
-- 2026-10-19 · uncommitted · Account 회수 큐 재시작 회귀를 독립 착지 단위로 분리
-- 2026-10-18 · uncommitted · schemas 크기 정리의 기존 반영 확인
-- 2026-10-18 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769) (이식, 원래 2026-10-16)
-- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+- 2026-10-19 · c6abafd83 · (origin #92 2026-10-16) v1.254 이안 허가와 실측 결과 readback
+- 2026-10-19 · 1216b3f7b · (origin #92 2026-10-16) 이안 계약과 실제 native API 최종 회귀
+- 2026-10-19 · 7d3f6418d · (origin #92 2026-10-16) D-772 이안 허가와 원본 실측 계약 추가
+- 2026-10-19 · 39f94f151 · (origin #92 2026-10-16) envelope 버전 규칙과 API 이력 정합성
+- 2026-10-19 · d5c1a61e4 · (origin #92 2026-10-16) D-772 복귀 허가 계약과 현재 수명

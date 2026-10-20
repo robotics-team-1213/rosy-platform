@@ -18,7 +18,7 @@ Existing artifact and provenance registries. The perception store holds content-
 
 ### Working In This Directory
 
-- The ledger root belongs on X:, not in the git repo.
+- The ledger root belongs on $ROSY_SCRATCH, not in the git repo.
 - Promotion checks a PromotionRecord and a real report JSON. It does not start a robot.
 
 ### Testing Requirements

@@ -53,10 +53,11 @@ def validate_config(config):
     _text(dataset.get('single_task'), 'single_task')
     root = _text(dataset.get('root'), 'dataset root')
     windows = PureWindowsPath(root)
-    if windows.drive and windows.drive.upper() != 'X:':
-        raise ValueError('Windows recording output belongs on X:')
     if not (PurePosixPath(root).is_absolute() or windows.is_absolute()):
         raise ValueError('dataset root must be absolute')
+    resolved = Path(root).resolve()
+    if any((p / '.git').exists() for p in (resolved, *resolved.parents)):
+        raise ValueError('recording output belongs outside the source checkout')
     if '..' in PurePosixPath(root.replace('\\', '/')).parts:
         raise ValueError('dataset root must not contain parent traversal')
     if Path(root).exists():

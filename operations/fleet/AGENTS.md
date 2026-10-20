@@ -88,8 +88,8 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 | `fleet/fleet/server/tracking` | Existing tracking service, purpose-specific calibration stores/routes and signed Vision preview grants. Static holder preserves `fleet.server.*` imports and resource identity |
 | `fleet/fleet/server/evidence` | D-798 server holder: model proposals and feedback dispatch, goal and policy evidence, learning bundle/receiver, incident deliberation |
 | `fleet/fleet/server/sitemap` | D-798 server holder: site map store/routes, drive teaching, site lanes, lane routes, path history, start points |
-| `fleet/fleet/server/pose` | D-798 server holder: localization service, D-494 `MapPoseService`, D-511 lane compliance monitor |
-| `fleet/fleet/server/recognition` | D-798 server holder: D-472 identity and triggers, sightings and their store/config, ingest routes, discovery, address drift, `SiteRoster` |
+| `fleet/fleet/server/pose` | D-798 server holder: localization service, D-494 `MapPoseService`, D-511 lane compliance monitor, D-772 `MapPoseScopes` ingestion fences and `StateSourceRead` receipts |
+| `fleet/fleet/server/recognition` | D-798 server holder: D-472 identity and triggers, sightings and their store/config, ingest routes, discovery, address drift, `SiteRoster`, D-772 versioned station installation (`station_store`/`station_service`) and source-authenticated station ingress routes (no motor writer) |
 | `fleet/fleet/server/rightofway` | D-798 server holder: signal client/config/routes, junction signal, traffic and reservations, segment store, bays |
 | `decision/src/rosy/decision` | Holder `operations/decision`: proposal-only model adapters (`rosy.decision`) outside its own deliberation/conversation units |
 | `situation` | Holder `operations/situation` (`SOURCE_ROOTS['assessment']`): the D-577 AI PC situation service `rosy_situation` (see its `AGENTS.md`) |

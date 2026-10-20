@@ -63,6 +63,11 @@ class GoalLeases(dict):
         self.pending: dict[str, int] = {}
         self._stop_epoch = 0
         self._stop_generation: dict[str, int] = {}
+        self._submission_generation: dict[str, int] = {}
+
+    def handover_token(self, robot_id: str) -> tuple[int, int, int]:
+        """Observe even an unacknowledged new send; projection identity alone is insufficient."""
+        return (*self.stop_token(robot_id), self._submission_generation.get(robot_id, 0))
 
     def operator_present(self) -> None:
         """A named operator's console is open (``POST /api/fleet/goal-lease/presence``)."""
@@ -89,6 +94,7 @@ class GoalLeases(dict):
         source = source or ("dispatch" if correlation_id is not None else "operator")
         if source not in SOURCES:
             raise ValueError(f"unknown goal lease source {source!r}")
+        self._submission_generation[robot_id] = self._submission_generation.get(robot_id, 0)+1
         stop = self.stop_token(robot_id)
         self.pop(robot_id, None)
         options = {}

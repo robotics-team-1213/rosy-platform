@@ -27,6 +27,8 @@ KNOWN_WRITERS = {
     "server/ledger/task_results.py": {"fleet_tasks", "fleet_robot_reservations"},
     "server/ledger/action_claims.py": {"fleet_action_claims"},
     "server/dispatch_admission.py": {"fleet_action_claims"},
+    "server/ledger/charge_store.py": {"fleet_action_claims"},
+    "server/ledger/task_schema.py": {"fleet_action_claims"},
     "server/cancel_all_store.py": {"fleet_tasks", "fleet_task_history", "fleet_robot_reservations"},
     "server/missions/mission_store.py": {"fleet_action_claims"},
     "server/cell/cell_job_store.py": {"fleet_action_claims"},

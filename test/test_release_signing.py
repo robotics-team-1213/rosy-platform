@@ -31,6 +31,22 @@ from signing import (  # via test/conftest.py
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("layout", ["cmd/git.exe", "mingw64/bin/git.exe"])
+@pytest.mark.parametrize("module_name", ["signing", "deploy.site.candidate_signing"])
+def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, layout, module_name):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    root = tmp_path / "custom-git"
+    git = root / layout
+    monkeypatch.setattr(module.shutil, "which", lambda name: str(git))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
+    candidates = module._git_for_windows_dirs()
+    assert str(root / r"usr\bin") in candidates
+    assert str(root / r"mingw64\bin") in candidates
+    assert str(tmp_path / "programs" / "Git" / r"usr\bin") in candidates
+
+
 def test_openssl_is_available():
     """The signature contract needs OpenSSL 3; its absence is a failure.
 
@@ -43,6 +59,17 @@ def test_openssl_is_available():
         "openssl is required by the release signing contract; "
         "install it rather than skipping these tests"
     )
+
+
+@pytest.mark.parametrize("module_name", ["signing", "deploy.site.candidate_signing"])
+def test_git_shim_at_drive_root_keeps_program_files_fallback(monkeypatch, tmp_path, module_name):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    git = Path(Path.cwd().anchor) / "git.exe"
+    monkeypatch.setattr(module.shutil, "which", lambda name: str(git))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
+    assert str(tmp_path / "programs" / "Git" / r"usr\bin") in module._git_for_windows_dirs()
 
 
 def _generate_key(directory: Path, name: str = "test") -> tuple[Path, Path]:

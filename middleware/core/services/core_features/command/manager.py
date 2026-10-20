@@ -48,6 +48,9 @@ class CommandManager:
                  teleop_timeout_ms: int = 500) -> None:
         self._registry = registry
         self._modes = modes
+        self._cycle_lock = threading.Lock()
+        self._cycle_started = False
+        self._execution_fence = None
         self._safety = safety
         self._events = events
         # Optional ROS-free runtime gate.  It is enabled for the hardware
@@ -98,6 +101,10 @@ class CommandManager:
 
     def set_readiness_gate(self, readiness) -> None:
         self._readiness = readiness
+
+    def _install_execution_restriction(self, ledger, *, _native_domains=()):
+        from core_features.command._execution_fence import install
+        return install(self, ledger, _native_domains=_native_domains)
 
     def _motion_ready(self) -> bool:
         return self._readiness is None or self._readiness.is_ready()
@@ -214,7 +221,7 @@ class CommandManager:
             self._nav_input = candidate
             self._input_epoch += 1
         if twist is None:
-            commit()
+            self._modes.commit_clear(commit)
         else:
             self._modes.commit_input(Mode.NAVIGATION, commit, epoch=epoch)
 
@@ -250,7 +257,7 @@ class CommandManager:
             self._docking_input = candidate
             self._input_epoch += 1
         if twist is None:
-            commit()
+            self._modes.commit_clear(commit)
         else:
             self._modes.commit_input(Mode.DOCKING, commit, epoch=epoch)
 
@@ -258,11 +265,17 @@ class CommandManager:
         self.set_docking_twist(None)
 
     def clear_manual(self, *, result: str = "CANCELED", reason: str = "SAFETY_STOP") -> None:
-        self._close_native_pulse(result, reason)
+        session = self._modes.commit_clear(self._clear_manual_input)
+        self._close_native_pulse(result, reason, session=session)
+
+    def _clear_manual_input(self) -> int:
+        """Pure mutation under the mode lock; close the captured native pulse later."""
+        session = self._native_session
         self._manual_twist = None
         self._manual_mode_epoch = -1
         self._input_epoch += 1
         self.watchdog.refresh(0.0)
+        return session
 
     def _drop_manual_session(self, *, mode_left: bool = False) -> None:
         """쥐고 있던 teleop 을 버리고, 그 세션의 끊김은 알리지 않는다.
@@ -272,10 +285,15 @@ class CommandManager:
         안이면) 옛 명령을 다시 내보내거나, 만료를 발견해 `safety.watchdog` 을
         낸다 — 감사 로그가 멀쩡했던 링크를 끊겼다고 적는 셈이다.
         """
+        session = self._modes.commit_clear(self._drop_manual_input)
+        self._close_native_pulse("PREEMPTED" if mode_left else "CANCELED",
+                                 "MODE_LEFT" if mode_left else "SAFETY_STOP", session=session)
+
+    def _drop_manual_input(self) -> int:
+        """Pure input/watchdog bookkeeping, called only under the mode lock."""
         self._pending_watchdog = None
         self._announced_session = self._session
-        self.clear_manual(result="PREEMPTED" if mode_left else "CANCELED",
-                          reason="MODE_LEFT" if mode_left else "SAFETY_STOP")
+        return self._clear_manual_input()
 
     def _close_native_pulse(self, result: str, reason: str, session: int | None = None) -> None:
         with self._native_lock:
@@ -310,19 +328,32 @@ class CommandManager:
                 transport_generation=self._input_epoch)
 
     def _clear_for_stop(self, *, mode_left: bool = False) -> None:
-        self._drop_manual_session(mode_left=mode_left)
+        if self._execution_fence is not None:
+            self._execution_fence.request_stop()
+        def clear() -> int:
+            session = self._drop_manual_input()
+            self.clear_navigation()
+            self.clear_docking()
+            return session
+        session = self._modes.commit_clear(clear)
+        self._close_native_pulse("PREEMPTED" if mode_left else "CANCELED",
+                                 "MODE_LEFT" if mode_left else "SAFETY_STOP", session=session)
         self._publish_native_terminal_notices()
-        self.clear_navigation()
-        self.clear_docking()
 
     def _on_mode_change(self, old: Mode, new: Mode) -> None:
+        session = None
         def clear() -> None:
+            nonlocal session
             if (new is not Mode.MANUAL or
                     self._manual_mode_epoch != self._modes.epoch):
-                self._drop_manual_session(mode_left=old is Mode.MANUAL)
+                session = self._drop_manual_input()
             self.clear_navigation()
             self.clear_docking()
         if self._modes.commit_input(new, clear):
+            if session is not None:
+                self._close_native_pulse(
+                    "PREEMPTED" if old is Mode.MANUAL else "CANCELED",
+                    "MODE_LEFT" if old is Mode.MANUAL else "SAFETY_STOP", session=session)
             self._publish_native_terminal_notices()
 
     def _note_watchdog_lapse(self, session: int) -> None:
@@ -436,6 +467,11 @@ class CommandManager:
         return self._nav_input if source == 'navigation' else self._docking_input
 
     def select_output(self, now: Optional[float] = None) -> Twist:
+        if self._execution_fence is not None:
+            return self._execution_fence.select()
+        return self._select_output(now=now)
+
+    def _select_output(self, now: Optional[float] = None) -> Twist:
         current = now if now is not None else time.monotonic()
         mode_epoch = self._modes.epoch
         if self._modes.mode is not self._unguarded_mode:

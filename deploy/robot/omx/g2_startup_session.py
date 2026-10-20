@@ -58,6 +58,7 @@ def serve_startup(owner, run, *, target, expected_actor, fleet_fence_current,
             gate.assert_current()
             sample = owner.runtime.latest_joint_state
             return (sample is not None and owner.runtime.owner.state == "ready"
+                    and owner.runtime.action_port.server_is_ready() is True
                     and 0 <= owner.runtime.monotonic()-sample.received_at <= owner.profile.max_joint_state_age_s)
 
         wait_until(fresh_ready)

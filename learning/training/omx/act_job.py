@@ -18,6 +18,12 @@ for path in (ROOT / "contracts/learning/src", ROOT / "learning/curation/omx"):
     sys.path.insert(0, str(path))
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def verify_reader_image(pixels, original, expected_sha256):
     """Recheck consumed RGB against validated PNG using the exporter's lossy bound."""
     from io import BytesIO
@@ -95,8 +101,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     if type(steps) is not int or not 1 <= steps <= 10000:
         raise ValueError("steps must be an integer in 1..10000")
     out = Path(out).resolve()
-    if out.exists() or out.drive.upper() == "F:":
-        raise ValueError("new artifact directory outside F: required")
+    if out.exists() or _in_checkout(out):
+        raise ValueError("new artifact directory outside the source checkout required")
     exports = [Path(p).resolve() for p in [*train_exports, eval_export]]
     if len(exports) < 3 or len(set(exports)) != len(exports):
         raise ValueError("two train and one disjoint eval Episode exports required")

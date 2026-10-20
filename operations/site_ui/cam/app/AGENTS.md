@@ -37,7 +37,7 @@ The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, O
 ### Testing Requirements
 
 ```powershell
-$env:JAVA_HOME='X:\java\jdk-21.0.8'; $env:GRADLE_USER_HOME='X:\DevCaches\gradle'
+$env:JAVA_HOME='<JDK 21 path>'
 cd operations/site_ui/cam; .\gradlew.bat :app:testDebugUnitTest; .\gradlew.bat --stop
 ```
 

@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · fix(rosy_cell): recover OMX simulation example layout
 - 2026-10-02 · a31ebde1 · feat(cell): per-item grasp_depth (C3b B1)
 - 2026-10-02 · 52ef7f91 · feat(cell): OMX sim demo cell/recipe for C3
 - 2026-10-02 · 9da93450 · refactor: extract palletizing process with legacy imports
 - 2026-10-01 · 13614bc0 · fix(cell): carry_z runs the compile checks, reject padded kinematics_revision
-- 2026-10-01 · c0900cff · feat(cell): rosy_cell.cell/2 with home and kinematics_revision, compiler.carry_z

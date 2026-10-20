@@ -103,6 +103,6 @@
 
 - 2026-10-20 · uncommitted · 실제 목표 도달의 연속 SIM 검증
 - 2026-10-20 · uncommitted · lane 도착의 실제 정지 목표 결속
-- 2026-10-19 · uncommitted · 성공 drivable SIM의 Fleet 생산 연결 분리
-- 2026-10-19 · uncommitted · 초기값 회귀 fixture 변수 구분과 중단 시험 회수
-- 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
+- 2026-10-20 · 984a170d8e · fix(station): refresh readiness ACK and fence SIM goal admission
+- 2026-10-20 · d91c5c0fb4 · fix(station): reconcile native completion during departure renewal
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 분리된 영상 보정 구현의 계약 검사 경로

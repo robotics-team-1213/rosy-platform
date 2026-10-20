@@ -48,7 +48,7 @@ def main() -> None:
 
     import rclpy
     import uvicorn
-    from rclpy.executors import MultiThreadedExecutor
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
 
@@ -90,7 +90,7 @@ def main() -> None:
     )
     holder["owner"] = owner
     workflow_timer = node.create_timer(0.05, owner.advance_pending)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     uds = threading.Thread(target=owner.uds_server.serve_forever, daemon=True)
@@ -104,6 +104,7 @@ def main() -> None:
         owner.uds_server.stop()
         node.destroy_timer(workflow_timer)
         executor.shutdown()
+        owner.runtime.destroy()
         node.destroy_node()
         rclpy.shutdown()
 

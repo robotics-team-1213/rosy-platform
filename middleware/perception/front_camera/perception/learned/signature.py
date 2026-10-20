@@ -30,7 +30,17 @@ SIGNATURE_NAME = MANIFEST_NAME + ".sig"
 TRUSTED_KEYS = "/etc/rosy/trusted-release-keys"
 SIGNATURE_LENGTH = 64  # Ed25519, RFC 8032
 ALLOW_UNSIGNED_ENV = "ROSY_ALLOW_UNSIGNED_MODELS"
-_WINDOWS_OPENSSL = (r"C:\Program Files\Git\usr\bin", r"C:\Program Files\Git\mingw64\bin")
+
+
+
+def _git_for_windows_dirs() -> tuple[str, ...]:
+    # Same lookup as the release signing helper: git on PATH first, then %ProgramFiles%\Git.
+    roots = [os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Git")]
+    git = shutil.which("git")
+    if git:
+        exe = Path(git).resolve()
+        roots[:0] = [str(parent) for parent in exe.parents[1:3]]
+    return tuple(os.path.join(r, s) for r in dict.fromkeys(roots) for s in (r"usr\bin", r"mingw64\bin"))
 
 
 class SignatureError(ManifestError):
@@ -40,7 +50,7 @@ class SignatureError(ManifestError):
 def openssl_path() -> str:
     path = shutil.which("openssl")
     if path is None and os.name == "nt":
-        path = next((os.path.join(d, "openssl.exe") for d in _WINDOWS_OPENSSL
+        path = next((os.path.join(d, "openssl.exe") for d in _git_for_windows_dirs()
                      if os.path.isfile(os.path.join(d, "openssl.exe"))), None)
     if path is None:
         raise SignatureError("openssl not found; model signatures cannot be verified")

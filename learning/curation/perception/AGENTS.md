@@ -58,10 +58,12 @@ Media stage, before a recording job: `media_pipeline.py` scans raw sessions, mak
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/learning-perception -- test/learning/perception -q -p no:cacheprovider
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception -q -p no:cacheprovider
 ```
 
 Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_reclaim.py`, `test_media_pipeline.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`), `test_lane_failure.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
+
+Before landing changes to `pixel_label_job.prepare_sources`, the catalog-relative importer, or their portable fixtures, run committed HEAD through `tools/remote/remote_pytest.py --test-tools pinky-raw` with `test/learning/perception/test_pixel_label_job.py`, `test_catalog_relative_import.py`, and `test_catalog_relative_import_capture.py` (all under `test/learning/perception/`). Require exit 0 and zero skips, including the MCAP control, and compare every log with `test/known_failures.py`. A default-environment MCAP skip does not satisfy this check; the raw profile must validate its pinned package origins, versions, and dependency closure first.
 
 ### Edge-capture loop
 

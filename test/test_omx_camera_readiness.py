@@ -209,4 +209,3 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert 'commissioning_view.py' in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
     assert 'rosy-omx-camera@front.service' in view['Unit']['After']
-

@@ -76,3 +76,9 @@ plans:
 ## 2026-10-04 D-442 U2 Pinky binding source/host
 
 기존 bridge publish와 호출을 보존한 single-use 래퍼를 독립 리뷰했다. 관련137 passed/1 ROS skip, 구조76 passed, 실제설치Ubuntu3.12 53 passed. docs/validation/d427-source-migration/pinky-twist-port-2026-10-04.md. 최신 변경의 ROS-SIM·ARTIFACT·DEVICE·FIELD는 pending이며 기존 과거 증거를 최신 수용으로 쓰지 않는다.
+
+## 2026-10-16 D-772 terminal 복귀의 IDLE 인계
+
+실제 navigation owner/quiescence를 lock 아래 검증한 충전 복귀만 NAVIGATION→IDLE로 넘기며 backend를 취소하지 않는다. 인계 후 새 odom 정지 dwell이 끝나야 BOUND가 된다. 50a6ef719 원격 35개 통과, NEW 0. 실제 TripRunner/HTTP/NavManager/GoalTracker/모드 경로를 사용하고 SIM의 수동 IDLE 주입을 제거했다. backend 결과·plant·odom은 SIM이며 실제 ROS/장치/전체 cycle 수용은 미완료다.
+
+002ee166e 확대 회귀는 CORE 322개와 Fleet/API/구조/안전/설치/harness 291개, 총 613개 통과(각 NEW 0/skip 0)다. 이 증거로 운영 자동 활성화나 실제 장치 수용을 주장하지 않는다.

@@ -9,6 +9,12 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
+option(ROSY_NATIVE_MAP_READBACK "Build pinned standalone native map readback (D-783)" OFF)
+if(ROSY_NATIVE_MAP_READBACK)
+  find_package(pluginlib REQUIRED)
+  pluginlib_export_plugin_description_file(nav2_costmap_2d native_map/native_plugins.xml)
+  add_subdirectory(native_map)
+endif()
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)

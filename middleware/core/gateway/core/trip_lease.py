@@ -237,6 +237,21 @@ class TripLeaseManager:
         with self._lock:
             return self._public(self._lease, self._monotonic()) if self._lease is not None else None
 
+    def matches_nowait(self, *, lease_id, trip_id, job_id, owner_id):
+        """Matching remaining lease, False if lost, None on contention; never display-rounded."""
+        if not self._lock.acquire(blocking=False):
+            return None
+        try:
+            current = self._lease
+            if current is None:
+                return False
+            elapsed = self._monotonic()-current.renewed_mono
+            matched = (0 <= elapsed < current.ttl_s and current.lease_id == lease_id
+                       and current.trip_id == trip_id and current.job_id == job_id and current.owner_id == owner_id)
+            return {'remaining_s': current.ttl_s-elapsed} if matched else False
+        finally:
+            self._lock.release()
+
     def ended(self) -> Optional[dict]:
         """``trip_lease_ended`` for the snapshot, for ENDED_VISIBLE_S after the end."""
         with self._lock:

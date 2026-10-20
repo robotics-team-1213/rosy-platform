@@ -212,7 +212,7 @@ def test_shutdown_joins_api_thread_after_audit_hook(node_module):
     node._api_server = server
     node._api_thread = threading.Thread(target=serve, daemon=True)
     node._api_thread.start()
-    node.core = types.SimpleNamespace(events=types.SimpleNamespace(
+    node.core = types.SimpleNamespace(station_docking=None, events=types.SimpleNamespace(
         publish=lambda event, **kw: calls.append(event)))
 
     node.shutdown()
@@ -230,7 +230,7 @@ def test_shutdown_says_so_when_the_api_thread_outlives_the_join(node_module, mon
     node._api_server = types.SimpleNamespace(should_exit=False)
     node._api_thread = threading.Thread(target=lambda: stuck.wait(30), daemon=True)
     node._api_thread.start()
-    node.core = types.SimpleNamespace(events=types.SimpleNamespace(
+    node.core = types.SimpleNamespace(station_docking=None, events=types.SimpleNamespace(
         publish=lambda event, **kw: calls.append(event)))
     try:
         node.shutdown()

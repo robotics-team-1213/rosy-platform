@@ -1,15 +1,16 @@
 """D-499: link address status reuses address_reasons. It does not gather again."""
 
 from pathlib import Path
+import ast
 
 from fleet.server.ingest_routes import address_reasons
 
 
 def test_dispatch_loop_does_not_read_link():
     text = Path("operations/fleet/fleet/server/app.py").read_text(encoding="utf-8")
-    start = text.index("async def _task_dispatch_loop")
-    end = text.index("async def _mission_feedback_schedule_loop")
-    body = text[start:end]
+    function = next(node for node in ast.parse(text).body
+                    if isinstance(node, ast.AsyncFunctionDef) and node.name == '_task_dispatch_loop')
+    body = ast.get_source_segment(text, function)
     assert '["link"]' not in body
     assert '.get("link")' not in body
 

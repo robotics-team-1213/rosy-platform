@@ -31,7 +31,7 @@ Offline ACT research on existing LeRobot 0.4.4 OMX demonstrations. `act_job.py` 
 
 - Use the Python 3.12 CPU environment from `deploy/robot/omx/requirements-lerobot-export.txt`. Put the adapter and foundation on `PYTHONPATH`.
 - Chunks do not cross episode boundaries. Normalization is train-only.
-- Windows outputs go on X:. A failed run is not resumed.
+- Windows outputs go on $ROSY_SCRATCH. A failed run is not resumed.
 
 ### Testing Requirements
 

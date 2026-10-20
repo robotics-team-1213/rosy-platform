@@ -19,6 +19,21 @@ from dataset_store import DatasetStore
 TEST_KEY = b'test-key' * 4
 
 
+@pytest.mark.parametrize("store", [Registry, DatasetStore])
+@pytest.mark.parametrize("linked", [False, True])
+def test_registry_refuses_any_source_checkout(tmp_path, store, linked):
+    checkout = tmp_path / "source"
+    checkout.mkdir()
+    if linked:
+        (checkout / ".git").write_text("gitdir: elsewhere\n")
+    else:
+        (checkout / ".git").mkdir()
+    output = checkout / "new-registry"
+    with pytest.raises(ValueError, match='outside the source checkout'):
+        store(output)
+    assert not output.exists()
+
+
 def source(tmp_path, report=None):
     root = tmp_path / 'source'
     root.mkdir()

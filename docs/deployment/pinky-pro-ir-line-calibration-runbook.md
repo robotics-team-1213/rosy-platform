@@ -22,9 +22,10 @@ ssh <alias> 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/instal
 도구와 교정 계산 모듈은 아직 설치 이미지에 없을 수 있다. 저장소의 `control` 패키지와 도구를 같은 배치로 임시 폴더에 복사한다(도구가 그 폴더를 `sys.path` 맨 앞에 넣는다).
 
 ```powershell
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
 cd "<Rosy OS>\src\runtime\sensing"
-tar -cf X:\DevTemp\rosy-ir.tar control tools/device/ir_line_calibrate.py
-scp X:\DevTemp\rosy-ir.tar <alias>:/tmp/
+tar -cf $RosyScratch/rosy-ir.tar control tools/device/ir_line_calibrate.py
+scp $RosyScratch/rosy-ir.tar <alias>:/tmp/
 ssh <alias> 'mkdir -p /tmp/rosy-ir && tar -xf /tmp/rosy-ir.tar -C /tmp/rosy-ir'
 ```
 

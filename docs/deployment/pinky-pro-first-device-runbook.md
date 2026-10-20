@@ -80,8 +80,8 @@ interruption, and checks the size the API reports; the token comes from
 
 ```bash
 python tools/release/download_artifact.py --run RUN_ID \
-  --name "rosy-unsigned-${RELEASE_ID}-${REVISION}" --out "X:/DevTemp/${RELEASE_ID}/artifact.zip" \
-  --extract "X:/DevTemp/${RELEASE_ID}/artifact"
+  --name "rosy-unsigned-${RELEASE_ID}-${REVISION}" --out "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/${RELEASE_ID}/artifact.zip" \
+  --extract "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/${RELEASE_ID}/artifact"
 ```
 
 Retain the run URL and job result with the builder JSON. The Actions artifact
@@ -461,8 +461,9 @@ readback, exact robot identity, and exact release revision into one verdict. It
 does not change runtime mode or send motor commands.
 
 ```powershell
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
 $Revision = "<signed-manifest-full-40-character-git-revision>"
-$Evidence = Join-Path 'X:\DevTemp' ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$Evidence = Join-Path $RosyScratch ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 ./deploy/robot/pinky_pro/verify/validate-pinky-from-windows.ps1 `
   -PiHost pinky-01.local -PiUser rosy -NetworkInterface eth0 `
   -ExpectedRobotNumber 1 -ExpectedRevision $Revision `
@@ -525,7 +526,7 @@ plan, then displays the robot number, network name, release and card serial for
 review. The operator types `REGISTER <number>` to launch the existing writer;
 the elevated writer still requires its exact `ERASE SERIAL <serial> <name>`
 confirmation and performs the full image readback. Its log, plan and receipt
-stay under `X:\DevTemp\`.
+stay under `$ROSY_SCRATCH/`.
 
 When the operator key pair exists at
 `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519[.pub]`, the helper adds a

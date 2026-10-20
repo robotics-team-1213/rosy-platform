@@ -30,8 +30,8 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/omx-curation -- learning/curation/omx/test/ -q -p no:cacheprovider
-python test/known_failures.py X:/DevTemp/omx-curation/run-1.txt
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/omx-curation" -- learning/curation/omx/test/ -q -p no:cacheprovider
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/omx-curation/run-1.txt"
 ```
 
 ## Dependencies

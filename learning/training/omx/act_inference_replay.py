@@ -15,6 +15,12 @@ from act_inference import ACTInference,InferenceObservation,image_key
 from rosy.contracts.learning import validate_dataset,validate_policy
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def _write(path,data):
     path.write_text(json.dumps(data,indent=2,allow_nan=False)+'\n',encoding='utf-8')
 
@@ -22,7 +28,7 @@ def _write(path,data):
 def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced=True):
     out=Path(out).resolve();policy_root=Path(policy_root).resolve();eval_export=Path(eval_export).resolve()
     dataset_root=Path(dataset_root or policy_root).resolve()
-    if out.exists() or out.drive.upper()=='F:':raise ValueError('new artifact directory outside F: required')
+    if out.exists() or _in_checkout(out):raise ValueError('new artifact directory outside the source checkout required')
     if type(paced) is not bool:raise ValueError('explicit replay cadence flag required')
     if any(out.is_relative_to(p) or p.is_relative_to(out) for p in (policy_root,eval_export,dataset_root)):
         raise ValueError('output must be separate from policy and source inputs')
