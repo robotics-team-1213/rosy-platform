@@ -23,6 +23,30 @@ binding과 경로는 같은 계정 소유이며 group/world 쓰기를 허용하�
 
 ## 실행·중지·증거
 
+개발 PC의 진입은 `python tools/remote/remote_isaac.py`다. `private/lab-hosts.json`의 명시적인 `sim_hosts` model 한 대만 사용한다. 첫 check 전에 모델 PC의 `~/.config/rosy/isaac-sdk.json`에 기존 SDK의 `python`, `python_sha256`, `version`을 운영자가 기록한다. 설치·의존성 변경은 하지 않는다. CLI는 승인 SHA를 새 `sim-isaac-*` checkout으로 전송하고 SHA별 source binding을 exclusive 게시한다. 기존 binding과 실행 source를 덮어쓰지 않는다.
+
+```text
+python tools/remote/remote_isaac.py check --scenario omx-f-import --config config.json --sha FULL_SHA
+python tools/remote/remote_isaac.py start --request request.json --receipt receipt.json
+python tools/remote/remote_isaac.py status --receipt receipt.json
+python tools/remote/remote_isaac.py stop --receipt receipt.json
+python tools/remote/remote_isaac.py fetch --receipt receipt.json
+```
+
+`config.json`은 `{"seed":0}`이다. check가 돌려준 입력 지문으로 아래 start 요청을 만든다. CLI는 네트워크 시작 전에 run ID·입력 지문·요청 지문·모델 PC 식별 해시를 receipt에 게시한다. 연결이 끊기면 같은 request·receipt로 재시도하거나 status를 조회한다. 다른 요청·다른 모델 PC로 바뀐 receipt는 거절한다.
+
+```json
+{
+  "request_id": "NEW_32_LOWERCASE_HEX_ID",
+  "scenario_id": "omx-f-import",
+  "config": {"seed": 0},
+  "source_sha": "FULL_40_LOWERCASE_HEX_COMMIT",
+  "expected_input_sha256": "INPUT_SHA256_FROM_CHECK"
+}
+```
+
+fetch는 receipt 옆 `snapshots/`에 매번 새 복사본을 만든다. 등록된 파일을 하나씩 크기·SHA-256·이식 가능한 이름으로 검증하므로 archive 추출 경로를 받지 않는다. 이번 시나리오의 공개 산출물은 1MiB 이하 JSON 보고서이며 원시 SDK 로그·USD는 포함하지 않는다. 마지막 `snapshot.json`이 없으면 불완전한 복사본이다. 실행 중 관찰은 `OBSERVATION_NOT_ATOMIC`, 최종 기록은 `FINAL`을 보존한다.
+
 로컬 공통 진입은 `/usr/bin/python3 SOURCE/learning/envs/isaac/run_control.py --binding BINDING.json`의 stdin JSON이다. `catalog`, `check`, `start`, `list`, `status`, `stop`, `artifact`만 처리한다. `check`는 SDK 배포 metadata·GPU 관찰과 두 잠금을 확인하며 SimulationApp을 시작하지 않는다.
 
 - `check`: `scenario_id`, `config`(`{"seed":0}`), `source_sha`를 받아 정규화 입력과 `input_sha256`을 반환한다.

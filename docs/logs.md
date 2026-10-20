@@ -9873,3 +9873,9 @@ osy-d395-s1d\`.
 - 변경: 기존 SDK·동일 계정의 두 잠금·transient unit·불변 입력을 이용한 제한 실행과 복구 절차를 deployment runbook에 기록했다. 중지 대상은 확인한 worker pidfd이며 결과는 모델 검사와 물리 과제 성공을 구분한다.
 - 증거: 독립 검토의4 Important·2 Minor를 수용해 오류 중 잠금 유지·GPU 확인·venv 소유권·관리 코드 하위 데이터 배제·프로세스 중지 fence·손상 기록 목록을 수정했다. 원격455 PASS/1 SKIP이며2 harness 실패는 main 반영 뒤 남은 D833 결번 행으로 재현·정리했다.
 - gate 변화: 없음. 실제 SDK·웹/CLI 교차 조회는 다음 검증이며 D-834 Proposed를 유지한다.
+
+## 2026-10-21 · uncommitted · 공통 Isaac 원격 CLI
+
+- 변경: 모델 PC 명시 선택·커밋 전송·고정 source binding·check/start/status/stop/fetch를 연결했다. receipt를 네트워크 요청 전에 보존하고 실행 중·최종 snapshot을 새 경로에 저장한다. 산출물별 해시 검증으로 archive 입력을 받지 않는다.
+- 증거: CLI 부재 RED7실패→GREEN7 PASS. 모델 PC 변경과 중간 JSON 게시를 추가 RED2실패로 재현해 대상 해시와 원자적 receipt 게시를 구현했다. 최종 통합 시험은 별도 기록한다.
+- gate 변화: 없음. 신규 SDK 실행·웹 연결은 후속이다.
