@@ -89,6 +89,30 @@ def test_missing_intake_is_partial_result(candidate):
     assert {"intake", "eval"} <= set(result["missing"])
 
 
+def test_symlinked_dataset_cannot_escape_store(candidate, tmp_path):
+    original = candidate[3]
+    outside = tmp_path / "outside"
+    original.rename(outside)
+    original.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="escapes|symlink"):
+        query(candidate)
+
+
+def test_eval_path_cannot_rebind_a_different_hash(candidate):
+    path = candidate[0] / candidate[2] / "intake_report.json"
+    doc = json.loads(path.read_text())
+    doc["eval"]["set"]["path"] = "/outside/heldout/" + candidate[4].name
+    path.write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="eval path/content hash"):
+        query(candidate)
+
+
+def test_malformed_intake_json_is_refused(candidate):
+    (candidate[0] / candidate[2] / "intake_report.json").write_text("{")
+    with pytest.raises(ValueError):
+        query(candidate)
+
+
 def test_journal_filters_candidate_and_preserves_consumer_mismatch(candidate, tmp_path):
     journal = tmp_path / "pointer_changes.jsonl"
     rows = [{"schema": "rosy.model-pointer-change/1", "pointer_revision": revision,
