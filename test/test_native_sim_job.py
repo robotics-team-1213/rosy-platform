@@ -101,6 +101,25 @@ def test_activation_is_content_addressed_and_survives_staging_removal(tmp_path):
         activate(staged, tmp_path / "managed")
 
 
+def test_activation_preserves_named_object_task_and_status_accepts_its_outputs(tmp_path):
+    from native_sim_prepare import activate
+    from native_sim_job import status
+    staged = prepared(tmp_path)
+    document = json.loads((staged / 'prepared.json').read_text())
+    document['experiment'] = 'pick-place'
+    (staged / 'prepared.json').write_text(json.dumps(document))
+    (tmp_path / 'managed/releases').mkdir(parents=True)
+    (tmp_path / 'managed/state').mkdir()
+    state = Path(activate(staged, tmp_path / 'managed')['state'])
+    assert 'sim_pick_place_task.py' in (state / 'run.sh').read_text()
+    (state / 'pick-place').mkdir()
+    result = {'result': 'PASS', 'attempts': 1, 'successes': 1, 'training': 'NOT_RUN', 'full_g2': False}
+    (state / 'pick-place/result.json').write_text(json.dumps(result))
+    observed = status(state)
+    assert observed['pick-place-result'] == result
+    assert observed['real_episodes'] == 0
+
+
 @pytest.mark.parametrize("area", ["release", "state", "dependency"])
 def test_validation_rejects_input_drift_before_intent(tmp_path, area):
     from native_sim_job import validate_state
