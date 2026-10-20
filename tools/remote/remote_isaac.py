@@ -3,6 +3,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -31,7 +32,6 @@ def _json(path):
 
 
 def _save(path, value):
-    import os
     temporary = path.with_name('.pending-' + uuid.uuid4().hex)
     try:
         with temporary.open('x', encoding='utf-8') as stream:
@@ -41,6 +41,16 @@ def _save(path, value):
         os.link(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+    _sync_directory(path.parent)
+
+
+def _sync_directory(path):
+    if hasattr(os, 'O_DIRECTORY'):
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
 
 def _receipt(request):
@@ -112,7 +122,7 @@ def fetch_snapshot(receipt, remote, destination):
     if receipt.get('target_id') != getattr(remote, 'target_id', None):
         raise ValueError('Receipt model-PC identity changed')
     row = remote.call(receipt['source_sha'], {'action': 'status', 'run_id': receipt['run_id']})
-    if row['run_id'] != receipt['run_id']:
+    if row['run_id'] != receipt['run_id'] or row.get('input_sha256') != receipt['input_sha256']:
         raise ValueError('Snapshot belongs to a different run')
     destination.mkdir(parents=True, exist_ok=True)
     if destination.is_symlink():
@@ -139,6 +149,9 @@ def fetch_snapshot(receipt, remote, destination):
             raise ValueError('Snapshot artifact digest differs')
         with (snapshot / name).open('xb') as stream:
             stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+    _sync_directory(snapshot)
     _save(snapshot / 'snapshot.json', {'snapshot': row['snapshot'], 'run_id': receipt['run_id'],
                                       'files': items})
     return snapshot
@@ -183,6 +196,9 @@ try:
  try: os.link(temporary,target)
  except FileExistsError: pass
 finally: temporary.unlink(missing_ok=True)
+fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY)
+try: os.fsync(fd)
+finally: os.close(fd)
 (Path.home()/'rosy-jobs'/(name+'.resv')).unlink(missing_ok=True)
 print('{"ready":true}')
 '''

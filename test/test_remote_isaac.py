@@ -99,14 +99,14 @@ def test_receipt_is_complete_before_publication(tmp_path, monkeypatch):
 @pytest.mark.parametrize('name', ['../escape.json', 'CON.json', 'a\\b.json', 'x:drive.json'])
 def test_fetch_rejects_portable_path_escape(tmp_path, name):
     mod = module()
-    row = {'run_id': 'd' * 32, 'status': 'SUCCEEDED', 'snapshot': 'FINAL',
+    row = {'run_id': 'd' * 32, 'input_sha256': 'b' * 64, 'status': 'SUCCEEDED', 'snapshot': 'FINAL',
            'artifacts': {'files': [{'id': 'import-report', 'name': name, 'bytes': 2,
                     'sha256': hashlib.sha256(b'{}').hexdigest(), 'media_type': 'application/json'}]}}
     class Files:
         def call(self, sha, payload):
             return dict(row, data_base64='e30=')
     with pytest.raises(ValueError):
-        mod.fetch_snapshot({'source_sha': SHA, 'run_id': row['run_id']}, Files(), tmp_path / 'fetch')
+        mod.fetch_snapshot({'source_sha': SHA, 'run_id': row['run_id'], 'input_sha256': 'b' * 64}, Files(), tmp_path / 'fetch')
     assert not (tmp_path / 'escape.json').exists()
 
 
@@ -119,10 +119,10 @@ def test_fetch_verifies_hash_and_keeps_new_snapshot_each_time(tmp_path):
         def call(self, sha, payload):
             if payload['action'] == 'artifact':
                 return dict(metadata, data_base64='e30=' if not self.bad else 'e10=')
-            return {'run_id': 'd' * 32, 'status': 'SUCCEEDED', 'snapshot': 'FINAL',
+            return {'run_id': 'd' * 32, 'input_sha256': 'b' * 64, 'status': 'SUCCEEDED', 'snapshot': 'FINAL',
                     'artifacts': {'files': [metadata]}}
     remote = Files()
-    receipt = {'source_sha': SHA, 'run_id': 'd' * 32}
+    receipt = {'source_sha': SHA, 'run_id': 'd' * 32, 'input_sha256': 'b' * 64}
     first = mod.fetch_snapshot(receipt, remote, tmp_path / 'fetch')
     second = mod.fetch_snapshot(receipt, remote, tmp_path / 'fetch')
     assert first != second
@@ -130,3 +130,44 @@ def test_fetch_verifies_hash_and_keeps_new_snapshot_each_time(tmp_path):
     remote.bad = True
     with pytest.raises(ValueError):
         mod.fetch_snapshot(receipt, remote, tmp_path / 'fetch')
+
+
+def test_fetch_fingerprint_conflict_makes_no_snapshot_or_artifact_request(tmp_path):
+    mod = module()
+    calls = []
+    class Files:
+        def call(self, sha, payload):
+            calls.append(payload['action'])
+            return {'run_id': 'd' * 32, 'input_sha256': 'c' * 64, 'snapshot': 'FINAL'}
+    with pytest.raises(ValueError):
+        mod.fetch_snapshot({'source_sha': SHA, 'run_id': 'd' * 32, 'input_sha256': 'b' * 64},
+                           Files(), tmp_path / 'fetch')
+    assert calls == ['status']
+    assert not (tmp_path / 'fetch').exists()
+
+
+def test_fetch_syncs_artifact_before_completion_marker(tmp_path, monkeypatch):
+    mod = module()
+    import os
+    synced = []
+    real_sync = os.fsync
+    def sync(fd):
+        synced.append(Path(os.readlink('/proc/self/fd/' + str(fd))).name)
+        real_sync(fd)
+    monkeypatch.setattr(os, 'fsync', sync)
+    save = mod._save
+    def publish(path, value):
+        if path.name == 'snapshot.json':
+            assert 'import-report.json' in synced, 'artifact data must precede durable completion'
+        save(path, value)
+    monkeypatch.setattr(mod, '_save', publish)
+    metadata = {'id': 'import-report', 'name': 'import-report.json', 'bytes': 2,
+                'sha256': hashlib.sha256(b'{}').hexdigest(), 'media_type': 'application/json'}
+    class Files:
+        def call(self, sha, payload):
+            if payload['action'] == 'artifact':
+                return dict(metadata, data_base64='e30=')
+            return {'run_id': 'd' * 32, 'input_sha256': 'b' * 64, 'snapshot': 'FINAL',
+                    'artifacts': {'files': [metadata]}}
+    mod.fetch_snapshot({'source_sha': SHA, 'run_id': 'd' * 32, 'input_sha256': 'b' * 64},
+                       Files(), tmp_path / 'fetch')
