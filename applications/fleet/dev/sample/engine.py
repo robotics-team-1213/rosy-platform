@@ -14,6 +14,9 @@ from sample.cell import Cell
 from sample.installation import Installation
 from sample.pairing import Pairing
 from sample.calibration import Calibration
+from sample.channel import Channel
+from sample.traffic import Traffic
+from sample.incidents import Incidents
 from sample.work import Work
 
 
@@ -40,6 +43,9 @@ class SampleEngine:
             self.installation = Installation()
             self.pairing = Pairing()
             self.calibration = Calibration()
+            self.channel = Channel(self.work, self.cell)
+            self.traffic = Traffic()
+            self.incidents = Incidents()
             self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []
 
@@ -48,7 +54,8 @@ class SampleEngine:
             if flow_id == 'monitoring':
                 self.work.advance_task(event)
                 return
-            feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell, 'policy': self.governance}.get(flow_id)
+            feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell,
+                       'policy': self.governance, 'traffic': self.traffic}.get(flow_id)
             if feature is None:
                 raise ValueError('unknown sample flow')
             feature.advance(event)
@@ -71,7 +78,7 @@ class SampleEngine:
         response = self.sessions.handle(method, path, payload, headers)
         if response is not None:
             return response
-        if self.sessions.role == 'viewer' and path.startswith('/assistant/'):
+        if self.sessions.role == 'viewer' and path.startswith(('/assistant/', '/channel-requests')):
             return error(403, 'FORBIDDEN')
         response = self.vision.handle(method, path, payload)
         if response is not None:
@@ -82,6 +89,13 @@ class SampleEngine:
         if response is not None:
             return response
         response = self.governance.handle(method, path, payload, self.sessions.profile['principal_id'])
+        if response is not None:
+            return response
+        for feature in (self.channel, self.incidents):
+            response = feature.handle(method, path, payload, self.sessions.profile['principal_id'])
+            if response is not None:
+                return response
+        response = self.traffic.handle(method, path, payload, ['sample-robot', *self.installation.robots])
         if response is not None:
             return response
         for feature in (self.spatial, self.assistant, self.cell,
