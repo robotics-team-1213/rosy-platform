@@ -291,6 +291,19 @@ def test_ignored_file_guard_covers_every_path_the_images_copy():
         assert expected in paths, expected
 
 
+def test_image_copy_source_guard_detects_a_missing_application_holder(monkeypatch):
+    missing = Path(__file__).resolve().parents[1] / "applications/fleet/web"
+    exists = Path.exists
+    assert missing.exists()
+    with monkeypatch.context() as mutation:
+        mutation.setattr(Path, "exists", lambda path: False if path == missing else exists(path))
+        assert not missing.exists()
+        with pytest.raises(AssertionError, match="image COPY source is missing"):
+            test_ignored_file_guard_covers_every_path_the_images_copy()
+    assert missing.exists()
+    test_ignored_file_guard_covers_every_path_the_images_copy()
+
+
 def test_site_candidate_refuses_ignored_files_under_an_image_source_path(tmp_path):
     root = tmp_path / "repo"
     _fixture_repo(root)
