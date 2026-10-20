@@ -85,3 +85,17 @@ def test_independent_operator_receipt_requires_every_bound_case():
     validate_receipt(receipt, cfg, profile)
     receipt['cases'] = receipt['cases'][:-1]
     with pytest.raises(ValueError): validate_receipt(receipt, cfg, profile)
+
+
+def test_operator_inference_schema_never_requests_freeform_completion_prose(monkeypatch):
+    from deploy.ai_pc import operator_broker
+    from rosy.decision.conversation.operator import OperatorProfile
+    monkeypatch.setattr(operator_broker, 'loaded', lambda _:None)
+    seen = []
+    def exchange(path, body, remaining):
+        if path == '/api/ps': return {}
+        seen.append(body)
+        return {'message':{'content':json.dumps(dict(kind='CHAT', response='Classified', evidence_refs=[]))}}
+    monkeypatch.setattr(operator_broker, 'exchange', exchange)
+    assert operator_broker.execute(question(), OperatorProfile(), 30)['kind'] == 'CHAT'
+    assert seen[0]['format']['properties']['response']['enum'] == ['Classified']
