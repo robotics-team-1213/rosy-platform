@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 지도 holder와 제한된 STL 투영 (D-825)
 - 2026-10-21 · uncommitted · 도면 참조 계약 테스트 (D-825)
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
 - 2026-10-19 · uncommitted · ID 뒤 ! 임시 비밀번호와 본인 변경
 - 2026-10-17 · uncommitted · 분리된 영상 보정 구현의 계약 검사 경로
-- 2026-10-17 · uncommitted · exact charge stop before journal contention

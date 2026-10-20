@@ -497,6 +497,7 @@ roots:
       fleet/server/console: fleet.server
       fleet/server/ledger: fleet.server
       fleet/server/site_observation: fleet.server
+      fleet/server/maps: fleet.server
       fleet/server/missions: fleet.server
       fleet/server/work: fleet.server
       fleet/server/trips: fleet.server

@@ -58,6 +58,7 @@ fleet/fleet/server/auth
 fleet/fleet/server/console
 fleet/fleet/server/cell
 fleet/fleet/server/site_observation
+fleet/fleet/server/maps
 fleet/fleet/swarm
 fleet/fleet/routing
 decision/src/rosy/decision
