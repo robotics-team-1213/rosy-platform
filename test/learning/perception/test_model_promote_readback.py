@@ -1,6 +1,8 @@
 """D-773 A3: every pointer change is recorded; --readback compares the node's loaded revision."""
 import json
 
+import pytest
+
 from test_model_deliver import SSH, FakeRunner, _model, deliver
 
 import promote_readback  # noqa: E402  (test_model_deliver puts its folder on sys.path)
@@ -75,8 +77,9 @@ def test_an_unreadable_status_is_unavailable(tmp_path, capsys, monkeypatch):
 
 
 def test_a_slot_no_node_reads_is_recorded_as_no_node(tmp_path):
-    runner = RobotRunner("/var/lib/rosy/models/lane-9", _status("lane-9"))
-    assert deliver.main(["rollback", "robot", "--slot", "paint", "--readback", *SSH], runner=runner) == 0
+    runner = RobotRunner(f"{OBJ_ROOT}/det-7", _status("det-7"))
+    assert deliver.main(["rollback", "robot", "--task", "object_det", "--slot", "shadow",
+                         "--readback", *SSH], runner=runner) == 0
     assert not any("ros2 topic echo" in c[-1] for c in runner.calls)
     assert _records(tmp_path)[0]["readback"] == "no_node"
 
@@ -115,3 +118,78 @@ def test_status_output_parsing():
     assert promote_readback.parse_status(json.dumps({"schema": "other"})) is None
     assert promote_readback.revision_of("/var/lib/rosy/models/object_det/det-7/\n") == "det-7"
     assert promote_readback.revision_of("") is None
+
+
+def _paint(revision="lane-9", **changes):
+    return json.dumps(dict(paint_source_used="learned_drivable", paint_model_revision=revision,
+                          stamp=12.5, **changes)) + "\n---\n"
+
+
+class PaintRunner(FakeRunner):
+    def __init__(self, debug, pointers=("lane-9", "lane-9"), echo_rc=0):
+        super().__init__()
+        self.debug, self.pointers, self.echo_rc = debug, iter(pointers), echo_rc
+
+    def __call__(self, cmd, **kw):
+        result = super().__call__(cmd, **kw)
+        if cmd[-1].startswith("sudo -n cat -- "):
+            result.stdout = next(self.pointers) + "\n"
+        elif "ros2 topic echo" in cmd[-1]:
+            result.stdout, result.returncode = self.debug, self.echo_rc
+        return result
+
+
+def _read_paint(runner):
+    return promote_readback.read_back(["ssh"], "test@consumer", "/var/lib/rosy/models",
+                                     "lane_seg", "paint", runner, timeout=10, attempts=1,
+                                     sleep=lambda _: None)
+
+
+def test_paint_readback_matches_consumed_revision():
+    runner = PaintRunner(_paint(signed=True))
+    result = _read_paint(runner)
+    assert result == dict(pointer_revision="lane-9", node_revision="lane-9", signed=None,
+                          readback="match")
+    assert sum(c[-1].startswith("sudo -n cat -- ") for c in runner.calls) == 2
+
+
+def test_paint_probe_uses_volatile_debug():
+    runner = PaintRunner(_paint())
+    _read_paint(runner)
+    [command] = [c[-1] for c in runner.calls if "ros2 topic echo" in c[-1]]
+    assert '"$NS/line/keep_debug" std_msgs/msg/String' in command
+    assert "--qos-durability volatile" in command and "transient_local" not in command
+    assert command.index("/etc/rosy/runtime.env") < command.index("${ROSY_NAMESPACE:")
+
+
+@pytest.mark.parametrize("debug", [
+    _paint(None), _paint(7), "not JSON", "[]", _status("lane-9"),
+    json.dumps(dict(paint_source_used="denoise", paint_model_revision="lane-9", stamp=12.5)),
+    json.dumps(dict(paint_source_used="learned", paint_model_revision="lane-9", stamp=True)),
+    json.dumps(dict(paint_source_used="learned", paint_model_revision="lane-9", stamp=float("nan"))),
+])
+def test_paint_readback_fallback_or_invalid_evidence_is_unavailable(debug):
+    result = _read_paint(PaintRunner(debug))
+    assert result["readback"] == "unavailable" and result["node_revision"] is None
+
+
+def test_paint_readback_different_consumed_revision_is_mismatch():
+    result = _read_paint(PaintRunner(_paint("lane-8")))
+    assert result["readback"] == "mismatch" and result["node_revision"] == "lane-8"
+
+
+@pytest.mark.parametrize("pointers", [("lane-9", "lane-10"), ("lane-9", "")])
+def test_paint_readback_pointer_change_during_probe_is_not_match(pointers):
+    assert _read_paint(PaintRunner(_paint(), pointers))["readback"] == "unavailable"
+
+
+def test_paint_readback_without_frames_is_unavailable():
+    assert _read_paint(PaintRunner("", echo_rc=124))["readback"] == "unavailable"
+
+
+def test_paint_readback_keeps_delivery_exit_and_records_actual_consumer(tmp_path):
+    runner = PaintRunner(_paint())
+    assert deliver.main(["rollback", "robot", "--slot", "paint", "--readback", *SSH], runner=runner) == 0
+    [row] = _records(tmp_path)
+    assert (row["slot"], row["readback"], row["node_revision"], row["signed"]) == (
+        "paint", "match", "lane-9", None)
