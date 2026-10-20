@@ -21,9 +21,12 @@ class SharedRuns(Runs):
                               'video_unavailable_reason': 'model_import_does_not_record_video'}
         self.rows = {self.row['run_id']: copy.deepcopy(self.row)}
         self.requests = {}
+        self.ready = True
 
     def call(self, payload):
         action = payload['action']
+        if action == 'check' and not self.ready:
+            return {'ready': False, 'reason': '다른 GPU 작업이 실행 중입니다.', 'input_sha256': 'c' * 64}
         if action == 'list':
             return list(self.rows.values())
         if action == 'status':
@@ -67,6 +70,14 @@ def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
                 assert page.locator('#sim-scenario option[value="port-mixed-stacking"]').evaluate('option=>option.disabled')
                 page.locator('#sim-runs button').first.click()
                 expect(page.locator('#sim-selected')).to_contain_text('b' * 32)
+                page.locator('#sim-check').click()
+                expect(page.locator('#sim-start')).to_be_enabled()
+                runs.ready = False
+                page.locator('#sim-check').click()
+                expect(page.locator('#sim-error')).to_contain_text('GPU 작업')
+                expect(page.locator('#sim-start')).to_be_disabled()
+                assert len(runs.requests) == 0
+                runs.ready = True
                 page.locator('#sim-check').click()
                 expect(page.locator('#sim-start')).to_be_enabled()
                 page.locator('#sim-start').click()
