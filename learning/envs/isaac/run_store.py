@@ -93,7 +93,7 @@ def _directory(root, relative='', *, create=False):
 
 
 def _read(fd, name, limit=JSON_BYTES):
-    handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+    handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
     with os.fdopen(handle, 'rb') as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
@@ -266,6 +266,8 @@ class RunStore:
         return value
 
     def update(self, run_id: str, expected_revision: int, changes: dict) -> dict:
+        if not isinstance(changes, dict) or not changes:
+            raise ValueError('state changes must be a nonempty JSON object')
         with self._locked():
             row = self._get(run_id)
             if changes.get('status') in TERMINAL:

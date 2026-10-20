@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
+import json
 from pathlib import Path
 import sys
 import subprocess
@@ -203,3 +204,27 @@ sys.exit(1)
     result = subprocess.run([sys.executable, '-c', program, str(tmp_path / 'runs'), str(ROOT)],
                             capture_output=True, timeout=3)
     assert result.returncode == 0, result.stderr.decode(errors='replace')
+
+
+@pytest.mark.parametrize('filename', ['result.json', 'artifacts.json'])
+def test_final_evidence_tampering_is_refused(tmp_path, filename):
+    store = module().RunStore(tmp_path / 'runs')
+    row = create(store)
+    finish(store, row)
+    path = tmp_path / 'runs/runs' / row['run_id'] / filename
+    value = json.loads(path.read_text())
+    value['tampered'] = True
+    path.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        store.get(row['run_id'])
+
+
+@pytest.mark.parametrize('value', [{}, [], None])
+def test_invalid_state_shape_is_a_rejected_record(tmp_path, value):
+    store = module().RunStore(tmp_path / 'runs')
+    row = create(store)
+    state = tmp_path / 'runs/runs' / row['run_id'] / 'state.json'
+    state.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        store.get(row['run_id'])
+    assert store.list()[0]['status'] == 'UNKNOWN'
