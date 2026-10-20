@@ -24,7 +24,7 @@ close는 기존과 같이 먼저 evidence를 영구 폐쇄하고 pending 요청�
 | `53c7d91367` | 실제 generated Jazzy types/DDS RED | exit1. 구성 ValueError를 해제 RuntimeError가 덮는 경로 확인 |
 | `baaef16433` | 기본 용량 경계 | 64PASS/0SKIP/NEW0, exit0 |
 | `403f4a6162` | 새 복구 회귀 초안 | 1FAIL/20PASS. 복구·새 실행 이후 잘못 쓴 navigate API에서 AttributeError; 제품 결함 RED로 쓰지 않음 |
-| `ed405d1ecf93aa6b460c19dfc6ba15e82f89613f` | transport/native execution/actual binding/evidence 4 suites | 137PASS/0SKIP/NEW0, exit0 |
+| source commit `ed405d1ecf93aa6b460c19dfc6ba15e82f89613f` | transport/native execution/actual binding/evidence 4 suites | 137PASS/0SKIP/NEW0, exit0 |
 | 같은 `ed405d1ecf` | 실제 generated Jazzy/DDS client probe | exit0. failed config 양쪽 정리 시도·원래 오류 보존, 정상 pair/refresh, pending timeout/late callback, negative reply, missing service 검사 |
 
 표의 pytest는 공식 remote_pytest, DDS probe는 공식 remote_sim의 AI 시험 역할에서 실행했다.
