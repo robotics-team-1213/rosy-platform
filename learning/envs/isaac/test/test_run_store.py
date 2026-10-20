@@ -2,10 +2,9 @@
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
-import json
-import os
 from pathlib import Path
 import sys
+import subprocess
 import uuid
 
 import pytest
@@ -174,3 +173,33 @@ def test_input_snapshot_binds_source_assets_and_normalized_conditions():
     assert first['input']['config']['frames'] == 120
     with pytest.raises(ValueError):
         mod.input_snapshot('omx-f-import', {'seed': 0}, 'HEAD')
+
+
+@pytest.mark.parametrize('changes', [None, [], 'invalid'])
+def test_non_object_state_changes_are_rejected(tmp_path, changes):
+    store = module().RunStore(tmp_path / 'runs')
+    row = create(store)
+    with pytest.raises(ValueError):
+        store.update(row['run_id'], row['revision'], changes)
+
+
+def test_fifo_is_rejected_without_waiting_for_a_writer(tmp_path):
+    module()
+    program = '''import sys,os,hashlib,uuid
+from pathlib import Path
+sys.path.insert(0,sys.argv[2])
+from run_store import RunStore
+store=RunStore(Path(sys.argv[1]))
+row=store.create(uuid.uuid4().hex,'omx-f-import',{'seed':0},'a'*40)
+os.mkfifo(Path(sys.argv[1])/'runs'/row['run_id']/'pipe')
+item={'id':'pipe','name':'pipe','bytes':0,'sha256':hashlib.sha256(b'').hexdigest(),
+      'media_type':'application/octet-stream'}
+try:
+ store.finish(row['run_id'],0,{'status':'FAILED'},[item])
+except ValueError:
+ sys.exit(0)
+sys.exit(1)
+'''
+    result = subprocess.run([sys.executable, '-c', program, str(tmp_path / 'runs'), str(ROOT)],
+                            capture_output=True, timeout=3)
+    assert result.returncode == 0, result.stderr.decode(errors='replace')

@@ -314,3 +314,9 @@
 - 후속 검증: CORE select 실패가 warning ZERO를 보낼 때 이전 실행 연결이 남는 문제를 원격 NEW1로 재현해 수정했다. 관련133 PASS, 최신 main 반영 후 Isaac 전체와 module_structure325 PASS/1 SKIP/NEW0. 독립 소스 검토는 f2697eab11ea1f095cba02a97553fb7e611851f7의 카메라 관측 주기 변경을 승인했다.
 - 실제 R42: 같은 SHA로 headless 학습6회·baseline4회·eval3회가 종료됐다. 구간 raw reward 합계와 Q 갱신1,165회(종료6회)를 독립 재계산해 저장 정책과 정확히 일치했다. 동일 관측 행동 유지44,551회, 산출물91개 hash, 영상7개 프레임 수를 검증했다. 정지 receipt16개를 확인했으나 성공 정지 구간 전체 raw sample은 저장되지 않아 연속 정지 독립 검증과 구분한다.
 - gate 변화: 전체13회 모두 camera_lane_lost로 완주0, SDK exit1, 후보 미채택이다. 진행량 증가는 완주나 안정적인 곡선 추종 증거가 아니다. 병렬 환경·신호·횡단보도·Fleet·ROS-SIM·실물 수용은 미완료다. 원본과 독립 verifier는 private/isaac/media/2026-10-12-r42-camera-cadence에 보관했다.
+
+## 2026-10-21 · uncommitted · 공통 실험 catalog·run 기록
+
+- 변경: OMX-F import의 제한된 조건과 항만 미준비 시나리오, 불변 설정·지문·요청 중복 방지·revision 상태·최종 결과·검증된 산출물 저장을 추가했다. SDK나 HTTP에 의존하지 않는 기록 단위이며 D-834 Proposed로 실행/증거 경계를 연결했다.
+- 증거: 원격 b566945754에서 새 catalog/store 부재로 28개 실패를 먼저 확인했다. GREEN·문서 계약은 최종 커밋으로 별도 확인한다. 모델 PC read-only 점검에서 기존 GPU·SDK 설치와 동일 계정 model-code root를 확인했다.
+- gate 변화: 없음. GPU 실행·웹 연결·실제 import는 후속이며 새 SDK 실행은 NOT RUN이다.

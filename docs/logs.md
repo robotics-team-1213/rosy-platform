@@ -9849,3 +9849,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 설계 승인 후 순수 웹 서버 분리, 공통 run 기록, GPU admission·CLI, 웹 연결, 실제 SDK 교차 검증의 다섯 착지 단위로 계획을 구체화했다. 기존 학습의 두 잠금 경로·동일 계정 제한과 로컬 HTTP 권한 경계를 확인했다.
 - 증거: 웹 서버 756행 ratchet과 학습 gpu.lock·signed owner work.lock 생산/소비 경로를 읽기 전용으로 조사했다. 계획의 인터페이스·시험·설계 대응을 자기 검토했다. 제품 구현·호스트 반영·신규 SDK 실행은 NOT RUN이다.
 - gate 변화: 없음. 구현 계획 검토와 실행 방식 선택을 기다린다.
+
+## 2026-10-21 · uncommitted · 공통 Isaac 실험 기록과 D-834
+
+- 변경: 제한된 OMX-F import catalog·공통 run 저장소와 D-834 Proposed를 추가했다. 요청 중복·입력 지문·불변 결과·revision 상태와 산출물 경계를 웹·CLI 공통 실행의 기반으로 둔다.
+- 증거: 원격 RED 28개를 확인한 뒤 구현했으며 GREEN·회귀는 최종 SHA에 연결한다. source/SDK/GPU의 읽기 전용 환경 확인을 실행 성공이나 과제 성공으로 세지 않는다.
+- gate 변화: 없음. 실행기·CLI·웹·신규 SDK 실행은 후속이며 NOT RUN이다.

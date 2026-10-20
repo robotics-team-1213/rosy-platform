@@ -343,8 +343,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 공통 Isaac 실험 기록과 D-834
 - 2026-10-21 · uncommitted · 공통 SIM 실험 작업공간 구현 계획
 - 2026-10-21 · uncommitted · 웹·CLI 공통 SIM 실험 작업공간 설계
 - 2026-10-21 · uncommitted · 관제 자연어 전처리·명령 후보 ADR
 - 2026-10-21 · uncommitted · main 포함 10개 워크트리 운영 예산
-- 2026-10-21 · uncommitted · 관제 AI 현장 사전 점검·전처리 검토

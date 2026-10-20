@@ -74,3 +74,5 @@ D-827 reserved outside this branch (refs/adr/D-827), absent from this base; remo
 D-828 reserved outside this branch (refs/adr/D-828), absent from this base; remove when its ADR lands
 D-829 reserved outside this branch (refs/adr/D-829), absent from this base; remove when its ADR lands
 D-830 reserved outside this branch (refs/adr/D-830), absent from this base; remove when its ADR lands
+D-832 reserved outside this branch (refs/adr/D-832), absent from this base; remove when its ADR lands
+D-833 reserved outside this branch (refs/adr/D-833), absent from this base; remove when its ADR lands
