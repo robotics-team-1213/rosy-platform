@@ -244,3 +244,45 @@ def test_stop_drains_the_accepted_tail_and_fences_new_frames(tmp_path):
     assert result['status'] == 'complete' and result['frame_count'] == 3
     rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
     assert [row['capture_time_ns'] for row in rows] == [1_100_000_000,1_200_000_000,1_300_000_000]
+
+
+def pending_frame(tmp_path):
+    capture = create_capture(tmp_path)
+    episode = capture.start('late source state')
+    capture.prepare(NS(command_id='command',positions={'joint1':.02,'gripper_joint_1':-.1},duration_s=.8))
+    capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED',command_id='command',phase_id=None,
+        goal_id='11111111-1111-4111-8111-111111111111',
+        observed_at_monotonic_s=time.monotonic(),sequence=1))
+    capture.camera.latest_frame[0].sequence = 2
+    capture.observe_frame(capture.camera.latest_frame)
+    capture.observe_joint_state(state(1_040_000_000,.01))
+    return capture, episode
+
+
+def test_late_past_state_can_pair_without_changing_the_captured_frame(tmp_path):
+    import json
+    capture, episode = pending_frame(tmp_path)
+    capture.tick()
+    assert capture.status()['issues'] == [] and capture.status()['frame_count'] == 0
+    capture.observe_joint_state(state(1_090_000_000,.02))
+    capture.tick()
+    assert capture.status()['issues'] == [] and capture.status()['frame_count'] == 1
+    row = json.loads((tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()[0])
+    assert row['capture_time_ns'] == 1_100_000_000 and row['state_time_ns'] == 1_090_000_000
+    assert row['observation.state'][0] == .02
+
+
+def test_future_source_watermark_keeps_irreparable_skew_rejected(tmp_path):
+    capture, _ = pending_frame(tmp_path)
+    capture.observe_joint_state(state(1_120_000_000,.9))
+    capture.tick()
+    assert 'state_camera_skew' in capture.status()['issues']
+    assert capture.status()['frame_count'] == 0
+
+
+def test_stop_with_an_unpairable_tail_finishes_incomplete_within_a_bound(tmp_path):
+    capture, episode = pending_frame(tmp_path)
+    started = time.monotonic()
+    closed = capture.stop(episode['episode_id'],'success')
+    assert time.monotonic()-started < 1.
+    assert closed['status'] == 'incomplete' and closed['frame_count'] == 0

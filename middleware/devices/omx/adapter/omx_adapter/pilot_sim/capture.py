@@ -12,7 +12,7 @@ from uuid import UUID
 
 from PIL import Image
 
-from ..demonstration import DemonstrationRecorder, MAX_FRAMES
+from ..demonstration import DemonstrationRecorder, MAX_FRAMES, MAX_SKEW_NS
 
 
 class PilotSimCapture:
@@ -26,6 +26,8 @@ class PilotSimCapture:
         self._lock = threading.RLock()
         self._writer_lock = threading.RLock()
         self._closing = False
+        self.source_pairing_error = None
+        self._waiting_pair = None
         self._states = deque(maxlen=1000)
         self._frame_queue = deque()
         self._state_sequence = 0
@@ -104,6 +106,7 @@ class PilotSimCapture:
             self._actions.clear()
             self._frame_queue.clear()
             self._closing = False
+            self.source_pairing_error = self._waiting_pair = None
             self._pending.clear()
             self._events.clear()
             self._interrupt_reason = None
@@ -130,8 +133,16 @@ class PilotSimCapture:
                 raise ValueError('no active episode')
             self._closing = True
             recorder = self.recorder
+        deadline = time.monotonic()+self.runtime.arm.owner.config.max_joint_state_age_s
         while self._frame_queue and recorder.active:
+            if time.monotonic() >= deadline:
+                self.source_pairing_error = self._waiting_pair
+                self._interrupt('camera_tail_not_drained', recorder=recorder)
+                break
+            pending = len(self._frame_queue)
             self._tick()
+            if len(self._frame_queue) >= pending:
+                time.sleep(.005)
         if not recorder.active:
             return recorder.status()
         with self._lock:
@@ -242,17 +253,35 @@ class PilotSimCapture:
                            if a['accepted_sim_time_ns'] <= metadata.capture_time_ns), None)
             if metadata.sequence == self._last_frame_sequence or action is None:
                 return
-            self._last_frame_sequence = metadata.sequence
             past = [s for s in states if s[0] <= metadata.capture_time_ns]
-            if not past:
-                recorder.issue("state_camera_skew")
-                return
-            source_ns, sequence, positions, received_at = max(past, key=lambda s: s[0])
+            selected = max(past, key=lambda s: s[0]) if past else None
+            watermark = max((s[0] for s in states), default=None)
+            age = time.monotonic()-max(s[3] for s in states) if states else None
+            diagnostic = {'capture_time_ns': metadata.capture_time_ns,
+                          'state_time_ns': selected[0] if selected else None,
+                          'latest_state_time_ns': watermark, 'live_state_age_s': age,
+                          'queued_frames': len(self._frame_queue)+1}
             # A delayed camera must pair with historical state, while the live
             # state stream itself must still satisfy the command freshness gate.
-            if time.monotonic() - states[-1][3] > self.runtime.arm.owner.config.max_joint_state_age_s:
+            if age is None or age > self.runtime.arm.owner.config.max_joint_state_age_s:
+                self.source_pairing_error = diagnostic
                 self.interrupt("joint_readback_stale", recorder=recorder)
                 return
+            if selected is None or metadata.capture_time_ns-selected[0] > MAX_SKEW_NS:
+                if watermark < metadata.capture_time_ns:
+                    self._waiting_pair = diagnostic
+                    with self._lock:
+                        if len(self._frame_queue) >= 32:
+                            self._interrupt_reason = 'camera_queue_overflow'
+                        else:
+                            self._frame_queue.appendleft(frame)
+                    return
+                self.source_pairing_error = diagnostic
+                recorder.issue('state_camera_skew')
+                return
+            self._waiting_pair = None
+            self._last_frame_sequence = metadata.sequence
+            source_ns, sequence, positions, received_at = selected
             output = io.BytesIO()
             if raw.encoding not in {"rgb8", "bgr8"}:
                 self.interrupt("image_encoding", recorder=recorder)
