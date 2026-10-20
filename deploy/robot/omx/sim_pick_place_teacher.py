@@ -67,12 +67,11 @@ def run(directory, world, observer_path):
     def on_event(event):
         if facade is not None:
             facade.on_goal_event(event)
-            facade.capture.on_goal_event(event)
 
     config = profile.arm_command_config(workcell_id='omx_cell_sim', instance_id='omx_cell_sim_01',
         calibration_revision='omx-f-gazebo-only-v1', allowed_owners=('pilot_sim',))
     arm = RosArmCommandRuntime(node, config, joint_state_topic=names.joint_state_topic,
-        trajectory_action=names.trajectory_action, owner_clock='sim', on_goal_event=on_event)
+        trajectory_action=names.trajectory_action, on_goal_event=on_event)
     facade = PilotSimRuntime(arm, gripper=profile.gripper_joint,
         range_inset_rad=profile.start_state_tolerance_rad, gripper_open=profile.gripper_open,
         gripper_closed=profile.gripper_closed, gripper_velocity=profile.velocity_limits[profile.gripper_joint],
@@ -89,6 +88,9 @@ def run(directory, world, observer_path):
     receipt = {'sim_aid': True, 'sim_gripper_sensor': True, 'source': source,
                'goal_m': goal, 'cell_sha256': job.cell_hash, 'recipe_sha256': job.recipe_hash,
                'profile_revision': profile.revision, 'training': 'NOT_RUN'}
+
+    def sim_time():
+        return node.get_clock().now().nanoseconds / 1_000_000_000
 
     def observe():
         value = observer('infeed_block', require_open=False)
@@ -120,7 +122,7 @@ def run(directory, world, observer_path):
         response = facade._dispatch(command_id, facade.instance_id, state['state_sequence'], .8,
                                     bounded, '', '')
         commands.append({'command_id': command_id, 'target': target, 'duration_s': .8,
-                         'response': response, 'sim_time': arm.monotonic()})
+                         'response': response, 'sim_time': sim_time()})
         if response['state'] == 'REJECTED':
             raise RuntimeError('teacher command rejected: '+response['reason'])
         deadline = time.monotonic()+30
@@ -187,9 +189,9 @@ def run(directory, world, observer_path):
         aid._robot_entity_id()
         episode_id = capture.start('Lift infeed_block and place in fixed pallet A slot 1')['episode_id']
         receipt['episode_id'] = episode_id
-        receipt['recording_start_sim_s'] = arm.monotonic()
+        receipt['recording_start_sim_s'] = sim_time()
         for phase in plan.phases:
-            event = {'phase_id': phase.phase_id, 'started_sim_s': arm.monotonic()}
+            event = {'phase_id': phase.phase_id, 'started_sim_s': sim_time()}
             events.append(event)
             if phase.phase_id == 'release':
                 event['detach'] = aid.detach('infeed_block')
@@ -209,7 +211,7 @@ def run(directory, world, observer_path):
                     raise RuntimeError('attach unconfirmed')
             if phase.phase_id == 'release':
                 event['release_receipt'] = grip('open')
-            event['ended_sim_s'] = arm.monotonic()
+            event['ended_sim_s'] = sim_time()
         released_at = observe()['clock']
         deadline = time.monotonic()+30
         while observe()['clock']-released_at < 2.2:
@@ -228,7 +230,7 @@ def run(directory, world, observer_path):
         if episode_id and capture.recorder.active:
             receipt['capture'] = capture.stop(episode_id, 'failure')
     finally:
-        receipt.update(success=success, error=error, recording_end_sim_s=arm.monotonic(),
+        receipt.update(success=success, error=error, recording_end_sim_s=sim_time(),
                        owner_final=facade.snapshot())
         write_json(directory/'observations.json', samples)
         write_json(directory/'teacher-phases.json', events)
