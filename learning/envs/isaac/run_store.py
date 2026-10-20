@@ -185,6 +185,15 @@ class RunStore:
         with _directory(self.root, 'runs/' + _id(run_id)) as fd:
             record = _json(fd, 'input.json')
             row = _json(fd, 'state.json')
+            required = {'run_id', 'request_id', 'parent_run_id', 'input_sha256',
+                        'status', 'revision', 'created_at', 'updated_at'}
+            if (not isinstance(record, dict) or set(record) != {'input', 'input_sha256'}
+                    or not isinstance(row, dict) or not required <= row.keys()
+                    or not isinstance(row['status'], str)):
+                raise ValueError('run record has an invalid shape')
+            _id(row['request_id'])
+            if row['parent_run_id'] is not None:
+                _id(row['parent_run_id'])
             digest = hashlib.sha256(_bytes(record['input'])).hexdigest()
             if (row['run_id'] != run_id or row['input_sha256'] != digest
                     or record['input_sha256'] != digest or row['status'] not in TRANSITIONS.keys() | TERMINAL
@@ -195,7 +204,10 @@ class RunStore:
             if row['status'] in TERMINAL:
                 row['result'] = _json(fd, 'result.json')
                 row['artifacts'] = _json(fd, 'artifacts.json')
-                if row['result']['status'] != row['status']:
+                if (hashlib.sha256(_bytes(row['result'])).hexdigest() != row.get('result_sha256')
+                        or hashlib.sha256(_bytes(row['artifacts'])).hexdigest() != row.get('artifacts_sha256')):
+                    raise ValueError('terminal evidence changed')
+                if not isinstance(row['result'], dict) or row['result'].get('status') != row['status']:
                     raise ValueError('terminal result and run state disagree')
             return row
 
@@ -318,6 +330,8 @@ class RunStore:
                     or result.get('task_success') is not None):
                 raise ValueError('SDK exit alone is not verified model import')
             manifest = self._manifest(run_id, artifacts)
+            value['result_sha256'] = hashlib.sha256(_bytes(result)).hexdigest()
+            value['artifacts_sha256'] = hashlib.sha256(_bytes(manifest)).hexdigest()
             with _directory(self.root, 'runs/' + run_id) as fd:
                 _write(fd, 'artifacts.json', manifest, exclusive=True)
                 _write(fd, 'result.json', result, exclusive=True)
