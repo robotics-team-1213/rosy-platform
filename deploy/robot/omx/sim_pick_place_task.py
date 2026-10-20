@@ -71,7 +71,7 @@ def run(directory):
               'recipe_sha256': hashlib.sha256(recipe_path.read_bytes()).hexdigest(),
               'cell_sha256': hashlib.sha256(cell_path.read_bytes()).hexdigest()}
     try:
-        domain = os.environ.get('ROS_DOMAIN_ID', '77')
+        domain = os.environ.setdefault('ROS_DOMAIN_ID', '77')
         env = dict(os.environ, ROSY_SIM_REPO=str(ROOT), ROS_DOMAIN_ID=domain,
                    OMX_CELL_WORLD=str(ROOT / 'integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid'),
                    OMX_CELL_LOG_DIR=str(directory), OMX_CELL_DOMAIN_ID=domain)
