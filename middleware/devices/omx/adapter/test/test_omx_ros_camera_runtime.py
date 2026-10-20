@@ -29,11 +29,13 @@ def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
     info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
     info.p = [1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     calibration_digest = CameraFrameGate.camera_info_fingerprint(info)
+    accepted = []
     runtime = RosCameraStreamRuntime(
         receiver,
         CameraStreamConfig("test-camera-serial", "overhead_optical", "test-cal-v1", calibration_digest),
         image_topic="/test/omx/image",
         camera_info_topic="/test/omx/camera_info",
+        on_frame=accepted.append,
     )
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(source)
@@ -58,6 +60,7 @@ def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
         info_pub.publish(info)
         time.sleep(0.1)
         assert runtime.latest_frame is None
+        assert accepted == []
 
         info.header.stamp.nanosec = 10
         image_pub.publish(image)
@@ -78,6 +81,10 @@ def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
         while time.monotonic() < deadline and runtime.latest_frame[0].sequence == first[0].sequence:
             time.sleep(0.01)
         assert runtime.latest_frame[0].sequence == first[0].sequence + 1
+        deadline = time.monotonic()+1
+        while len(accepted) < 2 and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert [frame[0].capture_time_ns for frame in accepted] == [7_000_000_010, 7_000_000_020]
     finally:
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
