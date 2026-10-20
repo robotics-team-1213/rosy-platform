@@ -294,6 +294,15 @@ def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
     assert client.get("/common/fleet-client.js").status_code == 200
 
 
+@pytest.mark.parametrize("name", ["fleet-client.js", "request.js"])
+def test_console_owns_transport_assets_and_preserves_exact_legacy_aliases(name):
+    client = _client([_source()])
+    current = client.get(f"/console/assets/{name}")
+    assert current.status_code == 200
+    legacy = client.get(f"/common/{name}")
+    assert legacy.status_code == 200 and legacy.content == current.content
+
+
 
 def test_field_view_review_fixes_are_served():
     client = _client([_source()])
