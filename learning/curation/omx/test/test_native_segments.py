@@ -73,19 +73,23 @@ def test_failure_and_intervention_are_retained_only_as_excluded(module, report):
     assert doc['segments'][-1]['outcome'] == 'failure'
 
 
-def test_frame_copy_preserves_action_state_images_and_source_clocks(module):
+@pytest.mark.parametrize('scalar_clock', [False, True])
+def test_frame_copy_preserves_action_state_images_and_source_clocks(module, scalar_clock):
     import numpy as np
     row = {'action': np.arange(6, dtype=np.float32), 'observation.state': np.arange(6)+10,
            'observation.images.front': np.ones((3, 2, 4), dtype=np.float32)*0.5,
-           'source.capture_time_ns': np.array([123456789], dtype=np.int64),
+           'source.capture_time_ns': np.array(123456789 if scalar_clock else [123456789], dtype=np.int64),
            'frame_index': 19, 'timestamp': 19/30, 'task': 'pick'}
     features = {k: {} for k in row if k.startswith(('action', 'observation.', 'source.'))}
+    features['source.capture_time_ns']['shape'] = [1]
     frame = module.copy_frame(row, features)
     np.testing.assert_array_equal(frame['action'], row['action'])
     np.testing.assert_array_equal(frame['observation.state'], row['observation.state'])
     assert frame['observation.images.front'].shape == (2, 4, 3)
     assert frame['observation.images.front'].dtype == np.uint8
     assert frame['source.capture_time_ns'].item() == 123456789
+    assert frame['source.capture_time_ns'].shape == (1,)
+    assert frame['source.capture_time_ns'].dtype == np.int64
     assert 'timestamp' not in frame and 'frame_index' not in frame
     assert frame['task'] == 'pick'
 
