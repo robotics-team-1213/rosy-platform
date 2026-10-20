@@ -72,6 +72,17 @@
 
 개발 HTTP 호스트는 기본 loopback에 바인딩한다. sample은 기본 모드이고 upstream을 만들거나 접속하지 않는다. connected는 모드와 개발 Fleet 주소를 명시해야 하며, 요청·오류·인증 실패를 실제 서버의 의미대로 전달한다. API·이미지 등 현재 프런트가 쓰는 HTTP 응답을 전달하고, 지원되지 않은 전달 형태를 성공으로 바꾸지 않는다. 연결 오류 때 샘플 응답으로 자동 전환하지 않는다.
 
+### 연결 모드의 인증과 origin
+
+Fleet은 `auth/password_session.py`에서 Origin과 Host를 비교하고 `auth/password_routes.py`에서 Secure·HttpOnly 세션 쿠키를 발급한다. 개발 프록시는 이 검사를 끄지 않는다.
+
+- connected의 브라우저 진입점은 HTTPS loopback origin으로 고정한다. 인증서·키는 기존 개발 인증서 절차로 마련한 private 파일을 명시하며, 자격 증명을 쓰는 연결 모드에 HTTP 예외나 TLS 검증 생략을 두지 않는다. 샘플 실행에는 이 설정이 필요하지 않다.
+- 개발 호스트가 먼저 요청 Host를 설정된 로컬 authority와 비교한다. Origin이 있으면 정확한 로컬 origin이어야 하고, 변경 요청은 Origin이 없거나 다른 origin이면 upstream에 보내기 전에 거절한다. localhost라는 이유로 임의 포트·Host·Origin을 허용하지 않는다.
+- 로컬 검사를 통과한 요청만 지정된 단일 Fleet origin으로 전달한다. upstream Host는 그 authority로 설정하고, 검증된 로컬 Origin이 있던 경우만 upstream origin으로 매핑한다. 클라이언트가 보낸 Forwarded·X-Forwarded-*와 hop-by-hop 헤더는 제거하며 사용자·역할을 새로 부여하지 않는다.
+- Authorization과 Fleet 세션 쿠키는 요청 시점의 값만 지정된 upstream으로 전달한다. upstream의 host-only `rosy_fleet_session` 쿠키는 이름·값·Path·Secure·HttpOnly·SameSite·만료/삭제 속성을 보존해 로컬 HTTPS origin에서 사용한다. Domain이 있는 예상 밖 쿠키는 거절한다. 다른 origin으로 redirect를 따라가며 자격 증명을 전달하지 않는다.
+- sample은 실제 Fleet 쿠키를 읽거나 전달하지 않는다. HTTP loopback에서 샘플 로그인 상태가 필요하면 별도 `rosy_sample_session` 쿠키를 사용한다. 이는 샘플 UI 상태용이며 실제 인증·Secure 쿠키 동작의 검증 증거가 아니다. sample과 connected는 서로 다른 origin/포트를 사용한다.
+- 연결 시험은 로그인→세션 확인→인증된 변경→로그아웃→이전 세션 거절을 검사한다. 외부 Origin·잘못된 Host·Origin 없는 변경·조작된 전달 헤더·예상 밖 Domain 쿠키·upstream TLS 오류가 upstream 호출이나 인증 우회로 이어지지 않는지도 검사한다. 실제 인증·CSRF 계약의 기준은 기존 Fleet 구현과 시험이다.
+
 ## 샘플 데이터와 대표 흐름
 
 단순한 URL별 고정 JSON 대신 하나의 시나리오 상태를 사용한다. 예를 들어 작업 생성 응답의 ID가 목록·상세·승인·진행·결과 조회에 일관되게 나타나야 한다. 시간·ID·진행은 결정적으로 제어하며, 시나리오 초기화로 같은 상태를 다시 만든다. 샘플 상태는 개발 프로세스 메모리에만 존재한다.
