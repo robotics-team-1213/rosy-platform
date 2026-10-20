@@ -67,6 +67,35 @@ def test_receipt_conflicts_and_unapproved_host_fail_before_network(tmp_path):
         mod.choose_target({'sim_hosts': ['fake@host=ai']}, 'model')
 
 
+def test_receipt_cannot_follow_changed_model_host(tmp_path):
+    mod = module()
+    path = tmp_path / 'receipt.json'
+    remote = Remote(path)
+    remote.target_id = 'c' * 64
+    with pytest.raises(ConnectionError):
+        mod.start(request(), path, remote)
+    remote.target_id = 'd' * 64
+    with pytest.raises(ValueError):
+        mod.observe(path, remote)
+    assert len(remote.calls) == 1
+
+
+def test_receipt_is_complete_before_publication(tmp_path, monkeypatch):
+    mod = module()
+    path = tmp_path / 'receipt.json'
+    original = mod.json.dump
+    def interrupted(value, stream, **kw):
+        stream.write('{')
+        raise OSError('writer stopped')
+    monkeypatch.setattr(mod.json, 'dump', interrupted)
+    with pytest.raises(OSError):
+        mod._save(path, {'must': 'be complete'})
+    assert not path.exists()
+    monkeypatch.setattr(mod.json, 'dump', original)
+    mod._save(path, {'must': 'be complete'})
+    assert json.loads(path.read_text()) == {'must': 'be complete'}
+
+
 @pytest.mark.parametrize('name', ['../escape.json', 'CON.json', 'a\\b.json', 'x:drive.json'])
 def test_fetch_rejects_portable_path_escape(tmp_path, name):
     mod = module()
