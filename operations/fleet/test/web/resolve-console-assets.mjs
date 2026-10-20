@@ -22,7 +22,13 @@ function asset(name) {
 export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith('/common/')) {
     const name = specifier.slice('/common/'.length);
-    if (Object.hasOwn(SHARED, name)) return {url:new URL(name, COMMON).href, shortCircuit:true};
+    if (Object.hasOwn(SHARED, name)) {
+      try { return await nextResolve(specifier, context); }
+      catch (error) {
+        if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+        return {url:new URL(name, COMMON).href, shortCircuit:true};
+      }
+    }
   }
   if (specifier.startsWith(PREFIX)) {
     const found = asset(specifier.slice(PREFIX.length));
