@@ -67,7 +67,7 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     monkeypatch.setattr(mod.System, 'observe', lambda self, unit: dict(owner, unit=unit))
     monkeypatch.setattr(mod, 'load_binding', lambda *args: {'source_sha': 'a' * 40,
         'sdk_python': sys.executable, 'sdk_version': '5.1.0.0'})
-    monkeypatch.setattr(mod, 'sdk_check', lambda binding: {'ready': True})
+    monkeypatch.setattr(mod, 'sdk_check', lambda binding: {'ready': True, 'uuid': 'GPU-test', 'driver': 'test-driver'})
     from contextlib import contextmanager
     held = [False]
     @contextmanager
