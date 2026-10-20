@@ -9759,3 +9759,9 @@ osy-d395-s1d\`.
 - 변경: D-822로 Fleet 화면을 applications/fleet/web, 기존 gateway wheel을 applications/fleet/gateway로 이동한다. 서비스·원장·권한은 operations/fleet에 유지하고 패키징·CI·배포 입력·검증 경로와 협업 안내를 갱신한다.
 - 증거: source holder와 설치 신원·기존 URL을 대조했다. 원격 시험 및 독립 검토 결과는 후속 항목으로 기록한다.
 - gate 변화: 없음. 소스 배치 변경이며 독립 배포·외부 연동·실물 수용을 승인하지 않는다.
+
+## 2026-10-20 · uncommitted · Fleet 앱 폴더 이동 검증
+
+- 변경: 독립 검토에서 발견한 Node import와 Docker COPY·ignore 경로를 함께 수정했다. 이미지 소스 누락 검사의 거절·복구를 fault injection으로 확인했다.
+- 증거: 237f2d386e 원격 구조·설치329 passed/skip0/NEW0, b674b70aae 원격 guard38 passed/skip0/NEW0, 동일 런타임 소스의 2aeec99374 브라우저·Node·사이트 계약289 passed/skip0/NEW0. 독립 소스·후속 변경 검토에서 잔여 발견 없음. 정확한 범위와 로그 digest는 validation/fleet-applications-2026-10-20/result.md에 기록했다.
+- gate 변화: SOURCE 검증 증거만 추가한다. 전체 CI·실제 이미지 빌드·배포·DEVICE·FIELD와 main 반영·push는 미실행이다.

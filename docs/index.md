@@ -343,8 +343,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · Fleet 앱 폴더 이동 검증
 - 2026-10-20 · uncommitted · Fleet 앱 소스를 applications에 모은다
 - 2026-10-20 · uncommitted · 주행 SIM 수용 완료 증거 정리
 - 2026-10-20 · uncommitted · 중간 코너 실패와 곡선 입장 회귀 보존
 - 2026-10-20 · uncommitted · 도착 상태와 실제 목표 수용 분리
-- 2026-10-20 · uncommitted · 안내 공백의 정렬 추적 결함과 반복 실패 보존
