@@ -48,12 +48,17 @@ function segmentReview(set,section){
   choice(form,'분할','split',[['exclude','제외·보존'],['train','학습'],['eval','독립 평가'],['test','최종 시험']]);
   const add=el('button','구간 추가');add.type='submit';form.append(add);
   const save=el('button','검수 저장'),download=el('button','선택 JSON 내려받기');save.type=download.type='button';
-  let imageURL;
   preview.onclick=async()=>{try{
     const query=new URLSearchParams({id:set.id,episode:episode.value,frame:frame.value,camera:cameraKey.value});
     const response=await accountFetch('/api/learning/omx/frame?'+query);
     if(!response.ok)throw new Error((await response.json()).error||'프레임 확인 실패');
-    if(imageURL)URL.revokeObjectURL(imageURL);imageURL=URL.createObjectURL(await response.blob());image.src=imageURL;image.hidden=false;
+    const blob=await response.blob(),reader=new FileReader();
+    image.src=await new Promise((resolve,reject)=>{
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>reject(new Error('프레임 이미지를 읽지 못했습니다.'));
+      reader.readAsDataURL(blob);
+    });
+    image.hidden=false;
     status.textContent=`원본 Episode ${episode.value}, 프레임 ${frame.value}`;
   }catch(error){image.hidden=true;status.textContent=error.message;}};
   const show=()=>{
