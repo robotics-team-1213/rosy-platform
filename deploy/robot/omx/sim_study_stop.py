@@ -1,6 +1,7 @@
 """Fresh one-shot operator-approved study latch, outside the Fleet rearm protocol."""
 from contextlib import closing
 from datetime import datetime,timezone
+import os
 
 from core_common.protocol.schemas import LocalStopRequest, StopRequestSource
 from omx_adapter.action_store import ActionStore
@@ -14,7 +15,10 @@ class NativeSimStopFence(LocalStopController):
             raise ValueError('explicit native SIM study authority required')
         self.authority=authority
         path=authority.stop_path_once()
-        if path.exists():raise FileExistsError('fresh study stop database required')
+        if path.parent.resolve()!=authority.directory or path.parent.is_symlink():
+            raise PermissionError('canonical study stop directory required')
+        descriptor=os.open(path,os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_WRONLY,0o600)
+        os.close(descriptor)
         ActionStore(path)
         config=authority.owner.config
         super().__init__(path,workcell_id=config.workcell_id,instance_id=config.instance_id)

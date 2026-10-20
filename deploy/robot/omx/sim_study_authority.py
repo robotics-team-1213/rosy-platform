@@ -74,7 +74,8 @@ class NativeSimStudyAuthority:
             try:
                 now=self._now()
                 if (not self._last<=now<self._deadline or self.owner.config is not self._config
-                        or self.owner.session_id!=self._session or self.owner.state not in ('ready','active')
+                        # Admission already holds owner._lock before entering this lock.
+                        or self.owner.session_id!=self._session or self.owner._state not in ('ready','active')
                         or self.claim.read_bytes()!=self._claim
                         or (self.directory/'study-revoked.json').exists()
                         or (self.policy.root/'policy-artifact.json').read_bytes()!=self._manifest
