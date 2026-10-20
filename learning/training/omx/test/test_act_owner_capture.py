@@ -1,5 +1,6 @@
 """Private learning composition; fake predictor/clock are not inference/device proof."""
 from dataclasses import dataclass, replace
+from contextlib import nullcontext, contextmanager
 import hashlib
 import json
 from pathlib import Path
@@ -25,6 +26,9 @@ class CapturedRGB:
     # Test caller's retained capture pair, not a trust/owner API.
     metadata: CameraSnapshot
     rgb: bytes
+
+    def capture(self):
+        return nullcontext(self)
 
 
 def case(tmp_path, monkeypatch, *, enabled=True):
@@ -70,6 +74,27 @@ def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatc
     assert not client.commands  # Adapter never submits or mints authority.
     assert session.submit(candidate).accepted
     assert client.commands[0].source_state_sequence == result.source.sequence == 10
+
+
+def test_live_capture_is_atomic_under_owner_lock_but_predict_is_outside(tmp_path, monkeypatch):
+    session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
+    active = []
+    class LiveCamera:
+        @contextmanager
+        def capture(self):
+            assert session._lock._is_owned()
+            active.append(True)
+            try:
+                yield packet
+            finally:
+                active.pop()
+    predict=engine._predict
+    def checked(observation):
+        assert not active and not session._lock._is_owned()
+        return predict(observation)
+    engine._predict=checked
+    proposed, _=infer_for_owner(engine,session,LiveCamera())
+    assert session.submit(proposed).accepted and len(client.commands)==1
 
 
 @pytest.mark.parametrize('change', ['bytes', 'timestamp', 'identity'])
