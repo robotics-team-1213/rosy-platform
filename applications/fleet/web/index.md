@@ -24,6 +24,7 @@
 
 ## 시험
 
+- `applications/fleet/test`
 - `operations/fleet/test`
 - `test/test_remaining_platform_installed.py`
 

@@ -1,23 +1,35 @@
 // D-518. 브라우저 지정자 /console/assets/<이름>을 web/shared, web/cell, web/work, web/ 파일로 푼다.
 // node --test 가 문서 모듈의 그 import를 읽게 하는 훅이다. 제품 서버는 allowlist로 같은 이름을 서빙한다.
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const WEB = new URL("../../../../applications/fleet/web/", import.meta.url);
 const PREFIX = "/console/assets/";
-const FOLDERS = ["shared/", "cell/", "work/", "devices/", "sitemap/", "installation/", "map/", "assistant/", ""];
+const ASSETS = JSON.parse(readFileSync(new URL("assets.json", WEB), "utf8")).assets;
+const COMMON = new URL("../../../../shared/web/", import.meta.url);
+const SHARED = JSON.parse(readFileSync(new URL("shared-assets.json", COMMON), "utf8")).shared_assets;
 
 function asset(name) {
-  if (name === "assistant.js") return { url: new URL("assistant/panel.js", WEB).href, shortCircuit: true };
   if (!/^[\w.-]+\.(?:js|css)$/.test(name)) return null;
-  for (const url of FOLDERS.map((folder) => new URL(`${folder}${name}`, WEB))) {
+  if (Object.hasOwn(ASSETS, name)) {
+    const url = new URL(ASSETS[name].path, WEB);
     if (existsSync(fileURLToPath(url))) return { url: url.href, shortCircuit: true };
   }
   return null;
 }
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith('/common/')) {
+    const name = specifier.slice('/common/'.length);
+    if (Object.hasOwn(SHARED, name)) {
+      try { return await nextResolve(specifier, context); }
+      catch (error) {
+        if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+        return {url:new URL(name, COMMON).href, shortCircuit:true};
+      }
+    }
+  }
   if (specifier.startsWith(PREFIX)) {
     const found = asset(specifier.slice(PREFIX.length));
     if (found) return found;

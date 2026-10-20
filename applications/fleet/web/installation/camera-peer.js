@@ -104,6 +104,11 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
   }
   async function refresh() {
     if (locked() || identity()?.role!=='operator') {clear(); return;}
+    if (!/^Bearer\s+\S+$/.test(headers().Authorization || headers().authorization || '')) {
+      clear(); el('camera-peer-panel').hidden=false;
+      notice('카메라 연결 승인은 기명 운영자의 고급 접속 토큰으로 연결한 뒤 사용할 수 있습니다. 현재 로그인은 유지됩니다.');
+      return;
+    }
     if (deniedOwner && deniedOwner===ownerKey()) return;
     if (inFlight || !inView || document.visibilityState==='hidden' || locked()
         || identity()?.role!=='operator' || !el('camera-peer-panel')) return;

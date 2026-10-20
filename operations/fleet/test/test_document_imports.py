@@ -7,16 +7,19 @@ An entry that reaches another document's module fails this test.
 """
 
 import re
+import json
 from pathlib import Path
 
 
 WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
+ASSETS = json.loads((WEB / 'assets.json').read_text(encoding='utf-8'))['assets']
 
 _FROM = re.compile(r"""\bfrom\s+['"]([^'"]+)['"]""")
 _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "app-runtime.js",
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",
@@ -112,12 +115,8 @@ def _local(spec):
 
 
 def _path(name):
-    if name == "assistant.js":
-        return WEB / "assistant/panel.js"
-    for folder in ("shared", "cell", "work", "devices", "calibration", "sitemap", "installation", "map", "assistant"):
-        path = WEB / folder / name
-        if path.is_file():
-            return path
+    if name in ASSETS:
+        return WEB / ASSETS[name]['path']
     return WEB / name
 
 

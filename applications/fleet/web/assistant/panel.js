@@ -1,5 +1,6 @@
 // Console owns draft/display only; Fleet owns durable requests and all facts.
 import { createVoice } from './assistant-voice.js';
+import {voicePlatform} from '/console/assets/app-runtime.js';
 export function createDialogue() {
   let identity = null, generation = 0, conversation = crypto.randomUUID(), pending = null;
   const rows = [];
@@ -41,7 +42,7 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
   let identity = null, available = false, timer = null;
   let listening = false;
   const voiceState = el('assistant-voice-state');
-  const voice = createVoice({onText(text) { if (identity && !dialogue.busy) { input.value = text; input.focus(); } },
+  const voice = createVoice({platform: voicePlatform, onText(text) { if (identity && !dialogue.busy) { input.value = text; input.focus(); } },
     onState(state) {
       listening = state === 'listening';
       voiceState.textContent = {listening:'듣고 있습니다. 인식을 마치면 내용을 확인하고 전송해 주세요.',

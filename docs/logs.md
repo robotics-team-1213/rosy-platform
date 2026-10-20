@@ -9885,3 +9885,21 @@ osy-d395-s1d\`.
 - 변경: D-836에 공정 문서 ID/digest 소비, Fleet 후보 접수와 재접수, 관측 근거와 업무 완료의 책임을 기록했다. API v1.292의 배타적 단일/후보 지정과 key·본문 결속, 기존 lease/claim transaction 재사용을 구현한다.
 - 증거: 커밋 `0122aabecc`의 원격 새 시험에서 공유 request schema 부재로 RED를 확인했다. 최종 제품 시험은 구현 커밋 SHA로 별도 실행한다. 기존 cell-app compile/proposal과 named approval·simulation 제한을 유지한다.
 - gate 변화: 구현 계약만 추가한다. 실제 다중 운행·자동 충전·장치 수용·현장 검증·push는 추가하지 않는다.
+
+## 2026-10-21 · uncommitted · Fleet 프런트 독립 개발 설계
+
+- 변경: docs/fleet-frontend-development에서 앱 독립 실행·시험, sample/connected 데이터 공급, 지원 기능의 대표 흐름과 실제 Fleet 인터페이스 연결을 검토용 설계로 정리했다. 운영 배포는 기존 Fleet과 함께 유지한다.
+- 증거: main 45b2bfe064의 화면 진입점 8개, HTTP 클라이언트, 자산 제공·패키징, gateway CLI 조립과 브라우저 fixture를 확인했다. 문서 검증 결과는 커밋 후 별도 보고한다.
+- gate 변화: 없음. 제품 코드·API·ADR·장치 설정을 변경하지 않았으며 구현·병합·배포 증거가 아니다.
+
+## 2026-10-21 · uncommitted · Fleet 프런트·백엔드 분리 목표와 실행 계획
+
+- 변경: 앱 독립 개발의 완료 기준, 현재 8개 진입 화면·18개 기능군의 API 대응과 미확인 범위, 7개 구현 단계의 파일 소유·인터페이스·검증·착지 단위를 정리했다. 실제 서비스 API와 샘플 계약을 같은 기준으로 대조하며 음성·영상의 브라우저 어댑터도 포함한다.
+- 증거: main 45b2bfe064의 CORE/Fleet 라우터·화면 호출·pairing 위임·음성 platform·카메라 open 주입 지점을 읽었다. 앞선 설계 6018d4eebf는 원격 문서 계약124 passed/NEW0이며, 새 계획의 최종 SHA 검증은 별도 보고한다.
+- gate 변화: 없음. 목표·설계·계획을 기록했으며 전체 API 충족·제품 분리 구현·실제 Fleet 연결·배포 완료를 뜻하지 않는다.
+
+## 2026-10-21 · uncommitted · Fleet 앱 자산 목록과 독립 정적 fixture
+
+- 변경: D-830으로 승인된 분리 구현을 기록하고 8개 페이지·93개 자산의 목록과 순수 loader를 앱에 두었다. 운영 서버·Node resolver·브라우저 fixture가 이를 소비하며 기존 Fleet 패키징에 목록을 포함한다.
+- 증거: 원격에서 loader 미구현에 따른 9개 assertion 실패를 확인한 뒤 구현했다. 경로 이탈·중복·없는 파일·symlink 변경·Fleet 없는 import와 기존 설치/화면 회귀는 커밋한 SHA로 검증한다.
+- gate 변화: 구현 중인 SOURCE 변경이다. 전체 API 계약·샘플 흐름·실제 연결·장치/배포 완료를 주장하지 않는다.
