@@ -34,3 +34,9 @@ for path in (
 _HARNESS = str(Path(__file__).resolve().parents[3] / "test")
 if _HARNESS not in sys.path:
     sys.path.append(_HARNESS)
+
+# Capture method/status/test identities only; credentials and request bodies never leave the test.
+import os
+if os.environ.get('ROSY_CAPTURE_FLEET_APP_CONTRACTS') == '1':
+    sys.path.append(str(SRC.parent / 'applications/fleet/test'))
+    from backend_evidence import fleet_contract_probe, pytest_runtest_logreport, pytest_terminal_summary

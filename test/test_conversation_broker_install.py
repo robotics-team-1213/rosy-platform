@@ -168,6 +168,35 @@ def test_reviewed_source_hashes_and_independent_receipt_match(bundle):
     assert set(contents) == set(manifest['files'])
 
 
+@pytest.mark.parametrize('include_preprocessing', [False, True])
+def test_d831_profile_requires_its_pinned_preprocessing_source(bundle, include_preprocessing):
+    m, root, pins = bundle
+    manifest = json.loads((root/'source-manifest.json').read_bytes())
+    proof = json.loads((root/'semantic-evaluation-proof.json').read_bytes())
+    receipt = json.loads((root/'semantic-evaluation-receipt.json').read_bytes())
+    revision = 'd728-semantic-v3-d831'
+    if include_preprocessing:
+        name = 'operations/decision/src/rosy/decision/conversation/preprocessing.py'
+        path = root/'source'/name
+        path.write_bytes(b'# reviewed preprocessing\n')
+        manifest['files'][name] = m.sha(path.read_bytes())
+    proof['profile']['revision'] = revision
+    proof['source_manifest_sha256'] = m.sha(json.dumps(manifest['files'], sort_keys=True, separators=(',',':')).encode())
+    proof_raw = json.dumps(proof).encode()
+    receipt.update(profile_revision=revision, proof_sha256=m.sha(proof_raw),
+                   source_manifest_sha256=proof['source_manifest_sha256'])
+    for name, key, data in [('source-manifest.json','manifest',manifest),
+        ('semantic-evaluation-proof.json','proof',proof), ('semantic-evaluation-receipt.json','receipt',receipt)]:
+        raw = json.dumps(data).encode()
+        (root/name).write_bytes(raw)
+        pins[key] = m.sha(raw)
+    if include_preprocessing:
+        assert m.inputs(root, pins)[1]['profile']['revision'] == revision
+    else:
+        with pytest.raises(ValueError):
+            m.inputs(root, pins)
+
+
 @pytest.mark.parametrize('name', ['source-manifest.json','semantic-evaluation-proof.json',
     'semantic-evaluation-receipt.json','ingress.pub','source/deploy/ai_pc/deliberation_conversation.py'])
 def test_each_tampered_review_input_is_rejected(bundle,name):

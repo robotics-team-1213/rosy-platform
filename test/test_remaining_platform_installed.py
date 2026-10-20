@@ -51,8 +51,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     expected = {p.relative_to(ROOT / 'applications/fleet/web').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'applications/fleet/web').rglob('*')
-                if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 110  # Includes D-810 assistant panel, local speech, and stylesheet.
+                if p.is_file() and (p.suffix in ('.py', '.html', '.css', '.js') or p.name == 'assets.json')}
+    assert {'asset_registry.py', 'assets.json', 'runtime.js'} <= expected.keys()
+    assert not any(p.startswith(('dev/', 'sample/')) for p in expected)
     assert {'shared/host-health.js', 'shared/stuck-evidence.js',
             'shared/robot-video.js', 'shared/robot-video.css'} <= expected.keys()
     assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',
@@ -89,6 +90,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
+        assert not any(name.startswith(('fleet_app_dev/', 'fleet/server/web/dev/', 'fleet/server/web/sample/'))
+                       or name.endswith('runtime-sample.js') for name in names)
         for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking',
                        'evidence', 'sitemap', 'pose', 'recognition', 'rightofway'):
             for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):

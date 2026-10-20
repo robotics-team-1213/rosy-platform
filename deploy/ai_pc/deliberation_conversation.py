@@ -5,6 +5,7 @@ import time
 
 from rosy.decision.conversation.codec import ConversationInput, Profile, semantic_answer, answer_schema
 from rosy.decision.deliberation import canonical
+from rosy.decision.conversation.preprocessing import DISCORD_REVISION, InferenceUsage, prepare
 from .deliberation_ollama import exchange, loaded
 
 
@@ -103,11 +104,38 @@ response is short natural Korean. No mentions, URLs, secrets, device facts or ph
 Only CHAT prose is published; the server renders STATUS/CONTROL/CLARIFY/REFUSE from typed facts.'''
 
 
+def preprocessing_instruction():
+    return instruction().replace(
+        'Keep EVERY explicit clause of a multi-step request, in order, up to 8 steps; never drop a later cancel.',
+        'Multiple distinct actions, conditions or corrections require CLARIFY, steps=[], reason=CONFLICT.')+'''
+D-831: interpret Korean or English; propose one affirmative action only. Several parameters are ONE action.
+Use registered names/IDs only. Offline state does not prevent proposals; Fleet checks execution readiness.
+N번 maps only to a registered rosy_N. Follow cancellation requires only the following robot, not its target.
+Negation scope: '7번 말고 8번 상태' is STATUS for robot:rosy_8. STATUS refs select only queried robots.
+Negated actions are not STATUS unless the user actually asks about state. CHAT always evidence_refs=[].
+The following typed examples illustrate supported commands; substitute only the actual requested values:
+'7번 선속도 -0.2 m/s 각속도 0.3 rad/s로 움직여줘' ->
+{"kind":"CONTROL","response":"속도 제안입니다.","steps":[{"verb":"move","robot_id":"rosy_7",
+"place_id":null,"parameters_json":"{\\"linear\\":-0.2,\\"angular\\":0.3}"}],
+"evidence_refs":["robot:rosy_7"],"review_required":false,"reason":null}.
+'7번 8번 따라가줘' ->
+{"kind":"CONTROL","response":"추종 제안입니다.","steps":[{"verb":"follow","robot_id":"rosy_7",
+"place_id":null,"parameters_json":"{\\"target_robot_id\\":\\"rosy_8\\"}"}],
+"evidence_refs":["robot:rosy_7","robot:rosy_8"],"review_required":false,"reason":null}.
+'7번 추종 취소해줘' -> verb=follow_cancel, robot_id=rosy_7, place_id=null, parameters_json='{}'.
+'7번 도킹 해제해줘' -> verb=undock, robot_id=rosy_7, place_id=null, parameters_json='{}'.
+These are supported CONTROL proposals, not MISSING_ACTION or UNSUPPORTED.
+Never infer accepted context or retry UNKNOWN/withdrawn/foreign executions from model history.'''
+
+
 def execute(question, profile, remaining):
     if (type(question) is not ConversationInput or type(profile) is not Profile
             or type(remaining) not in (int, float) or not math.isfinite(remaining) or not 0 < remaining <= 30):
         raise ValueError('INVALID_CONVERSATION_LOCAL_INPUT')
-    deadline = time.monotonic()+remaining
+    started = time.monotonic()
+    deadline = started+remaining
+    preprocessing = profile.revision == DISCORD_REVISION
+    prepared = prepare(question) if preprocessing else None
 
     def available():
         left = deadline-time.monotonic()
@@ -115,9 +143,10 @@ def execute(question, profile, remaining):
         return left
 
     loaded(exchange('/api/ps', None, available()))
-    request = {'model':profile.model_id, 'messages':[{'role':'system', 'content':instruction()},
-        {'role':'user','content':'UNTRUSTED CONTEXT:\n'+canonical(question.model_dump())+
-         '\nLATEST USER MESSAGE:\n'+question.question}],
+    instructions = preprocessing_instruction() if preprocessing else instruction()
+    request = {'model':profile.model_id, 'messages':[{'role':'system', 'content':instructions},
+        {'role':'user','content':'UNTRUSTED CONTEXT:\n'+(prepared.prompt_json if prepared else canonical(question.model_dump()))+
+         '\nLATEST USER MESSAGE:\n'+(prepared.normalized if prepared else question.question)}],
         'format':answer_schema(), 'stream':False,
         'options':{'num_predict':1024, 'temperature':0, 'num_ctx':8192}}
     value = exchange('/api/chat', request, available())
@@ -127,4 +156,10 @@ def execute(question, profile, remaining):
             or not 0 < value['eval_count'] <= 1024 or type(value.get('prompt_eval_count')) is not int
             or not 0 <= value['prompt_eval_count'] <= 8192):
         raise ValueError('INVALID_CONVERSATION_LOCAL_RESULT')
-    return semantic_answer(json.loads(value['message']['content']), question).model_dump()
+    raw = json.loads(value['message']['content'])
+    answer = semantic_answer(raw, question, preprocessing=preprocessing).model_dump()
+    if preprocessing:
+        usage = InferenceUsage(input_tokens=value['prompt_eval_count'], output_tokens=value['eval_count'],
+            elapsed_ms=(time.monotonic()-started)*1000, preparation_hash=prepared.digest)
+        answer['usage'] = usage.model_dump()
+    return answer

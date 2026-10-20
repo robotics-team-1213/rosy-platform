@@ -1,0 +1,644 @@
+{
+  "candidate": {
+    "kind": "cell_job",
+    "recipe": {
+      "schema": "rosy_cell.recipe/1",
+      "name": "omx-sim-foam-two-layer",
+      "mode": "palletize",
+      "box": {
+        "length": 0.04,
+        "width": 0.03,
+        "height": 0.03,
+        "mass_kg": 0.02,
+        "grasp_depth": 0.015
+      },
+      "pallets": [
+        {
+          "id": "A",
+          "frame": "pallet_a",
+          "length": 0.115,
+          "width": 0.095,
+          "max_stack_height": 0.07,
+          "max_load_kg": 0.5
+        },
+        {
+          "id": "B",
+          "frame": "pallet_b",
+          "length": 0.115,
+          "width": 0.095,
+          "max_stack_height": 0.07,
+          "max_load_kg": 0.5
+        }
+      ],
+      "pick_station": "infeed",
+      "gap": 0.03,
+      "slip_sheet": {
+        "thickness": 0.002,
+        "station": "sheets"
+      },
+      "layers": [
+        {
+          "pattern": "grid"
+        },
+        {
+          "pattern": "grid",
+          "mirrored": true,
+          "slip_sheet_below": true
+        }
+      ]
+    },
+    "cell": {
+      "schema": "rosy_cell.cell/2",
+      "frame_rules": {
+        "min_span_m": 0.02,
+        "min_angle_deg": 10,
+        "max_tilt_deg": 5
+      },
+      "frames": {
+        "base": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "x_point": [
+            0.1,
+            0,
+            0
+          ],
+          "plane_point": [
+            0,
+            0.1,
+            0
+          ]
+        },
+        "pallet_a": {
+          "origin": [
+            0.115,
+            -0.005,
+            0.01
+          ],
+          "x_point": [
+            0.215,
+            -0.005,
+            0.01
+          ],
+          "plane_point": [
+            0.115,
+            0.075,
+            0.01
+          ]
+        },
+        "pallet_b": {
+          "origin": [
+            0.105,
+            -0.125,
+            0.01
+          ],
+          "x_point": [
+            0.205,
+            -0.125,
+            0.01
+          ],
+          "plane_point": [
+            0.105,
+            -0.045,
+            0.01
+          ]
+        }
+      },
+      "stations": {
+        "infeed": {
+          "frame": "base",
+          "x": 0,
+          "y": 0.17,
+          "z": 0.03,
+          "yaw": 1.5707963267948966
+        },
+        "sheets": {
+          "frame": "base",
+          "x": 0,
+          "y": -0.17,
+          "z": 0.03,
+          "yaw": 0
+        }
+      },
+      "home": {
+        "x": 0.12,
+        "y": 0,
+        "z": 0.12,
+        "yaw": 0
+      },
+      "kinematics_revision": "27cd572830f931b57eedec55081b77749f65dcd059d11e34199bdcb1bb6db04d",
+      "approach_clearance_m": 0.03,
+      "fingertip_overhang_m": 0.00257
+    },
+    "recipe_sha256": "96b5c9a99235ee837c49fc953d771841fd67f50d27761b87aec64c04d2e48209",
+    "cell_sha256": "c6b22f218ad5bc6d0b07771f2cd29e30e950728a6cc19118caa1f34a3a962912",
+    "job": {
+      "recipe_hash": "96b5c9a99235ee837c49fc953d771841fd67f50d27761b87aec64c04d2e48209",
+      "cell_hash": "c6b22f218ad5bc6d0b07771f2cd29e30e950728a6cc19118caa1f34a3a962912",
+      "carry_z": 0.11699999999999999,
+      "steps": [
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0.20750000000000002,
+            "y": 0.0725,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0.20750000000000002,
+            "y": 0.0125,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0.1375,
+            "y": 0.0725,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 0,
+          "target": {
+            "x": 0.1375,
+            "y": 0.0125,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "slip_sheet",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": -0.17,
+            "z": 0.03,
+            "yaw": 0
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "slip_sheet",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0.17250000000000001,
+            "y": 0.0425,
+            "z": 0.042,
+            "yaw": 0
+          },
+          "approach_z": 0.07200000000000001
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0.20750000000000002,
+            "y": 0.0725,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0.20750000000000002,
+            "y": 0.0125,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0.1375,
+            "y": 0.0725,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "A",
+          "layer": 1,
+          "target": {
+            "x": 0.1375,
+            "y": 0.0125,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pallet_done",
+          "item": "",
+          "pallet": "A",
+          "layer": null,
+          "target": null,
+          "approach_z": null
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0.1975,
+            "y": -0.1075,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0.1975,
+            "y": -0.0475,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0.1275,
+            "y": -0.1075,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 0,
+          "target": {
+            "x": 0.1275,
+            "y": -0.0475,
+            "z": 0.025,
+            "yaw": 0
+          },
+          "approach_z": 0.07
+        },
+        {
+          "kind": "pick",
+          "item": "slip_sheet",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": -0.17,
+            "z": 0.03,
+            "yaw": 0
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "slip_sheet",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0.1625,
+            "y": -0.0775,
+            "z": 0.042,
+            "yaw": 0
+          },
+          "approach_z": 0.07200000000000001
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0.1975,
+            "y": -0.1075,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0.1975,
+            "y": -0.0475,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0.1275,
+            "y": -0.1075,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pick",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0,
+            "y": 0.17,
+            "z": 0.015,
+            "yaw": 1.5707963267948966
+          },
+          "approach_z": 0.06
+        },
+        {
+          "kind": "place",
+          "item": "box",
+          "pallet": "B",
+          "layer": 1,
+          "target": {
+            "x": 0.1275,
+            "y": -0.0475,
+            "z": 0.056999999999999995,
+            "yaw": 0
+          },
+          "approach_z": 0.102
+        },
+        {
+          "kind": "pallet_done",
+          "item": "",
+          "pallet": "B",
+          "layer": null,
+          "target": null,
+          "approach_z": null
+        }
+      ]
+    }
+  },
+  "process_artifact_digest": "dcdc3a7659ab06e4d39ce9ade10552218085db6eb6ce9829ffe7bdaddf75c14a",
+  "summary": {
+    "transfer_count": 18,
+    "pallet_markers": [
+      {
+        "after_step_ordinal": 9,
+        "pallet_id": "A"
+      },
+      {
+        "after_step_ordinal": 18,
+        "pallet_id": "B"
+      }
+    ]
+  }
+}

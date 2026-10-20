@@ -13,6 +13,7 @@
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_training](learning/training/perception/progress.md) | perception_training | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -72,6 +73,10 @@
 - console_source ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- fleet_app_dev ROS-SIM: Frontend sample and fake robot transport do not prove simulation behavior.
+- fleet_app_dev ARTIFACT: Operational Fleet package verification is recorded by console_source; no new device artifact.
+- fleet_app_dev DEVICE: No device access or physical action acceptance performed.
+- fleet_app_dev FIELD: No deployment or field acceptance performed.
 - perception_curation ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_curation ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_curation DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.

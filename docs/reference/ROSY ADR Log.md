@@ -10,11 +10,12 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-830 | Fleet 프런트 개발은 샘플·실제 API 공급과 앱 소유 자산 목록으로 분리한다 | Accepted (2026-10-21) |
+| D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |
 | D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-827 | 도메인 중립 플랫폼·재사용 공정·업무 앱의 책임을 분리한다 | Proposed (2026-10-21) |
 | D-828 | 작업 접수·진행·물리 완료·인계 근거를 구분한다 | Proposed (2026-10-21) |
 | D-829 | 업무 목표·제약과 공통 자원 배정·물리 점유를 분리한다 | Proposed (2026-10-21) |
-| D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Proposed (2026-10-21) |
 | D-826 | 3×3×3 혼합 화물 야드는 실행 기준선·입출고 계획·장애 복구를 분리해 실험한다 | Proposed (2026-10-21) |
 | D-822 | Fleet 화면과 실행 조합은 applications/fleet에 모으고 플랫폼 서비스 소유권은 유지한다 | Accepted (2026-10-20) |
 | D-824 | 워크트리 기본 상한을 50개로 낮추고 기존 작업과 명시적 예외를 보존한다 | Accepted (2026-10-20) |
@@ -1204,7 +1205,7 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 
 ## D-831 관제 자연어 전처리·명령 후보 검증·토큰 예산
 
-**Status:** Proposed (2026-10-21)
+**Status:** Accepted (2026-10-21)
 
 원문·정규화·비실행 후보와 실행 접수를 나누고 등록 대상·인자·기명 확인을 검증한다. 토큰 절감은 의미/거절 품질과 실제 사용량을 비교한 뒤 채택한다. 전문은 [D-831](../adr/D-831-operator-command-preprocessing.md).
 ## D-774 - Installed station measurement camera lifespan
