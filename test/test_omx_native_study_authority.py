@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 
 import pytest
 
@@ -19,7 +20,11 @@ from sim_study_stop import NativeSimStopFence
 def case(tmp_path,monkeypatch):
     parent_root,parent,owner=inputs(tmp_path)
     state=tmp_path/'state';(state/'pick-place').mkdir(parents=True)
-    clock=[10.];monotonic=lambda:clock[0]
+    clock=[10.]
+    def monotonic():
+        hook=getattr(monotonic,'hook',None)
+        if hook:hook()
+        return clock[0]
     owner._monotonic=monotonic
     policy=prepare_install(parent_root,parent['revision'],state/'pick-place/installed',owner,
                            normalization_sha256=parent['normalization']['sha256'])
@@ -102,3 +107,43 @@ def test_final_stop_callback_failure_has_research_reason_and_persistent_latch(tm
     assert status.source.value=='operator_local'
     assert 'FLEET' not in status.reason
     assert not fence.is_open(authority_epoch=1,dispatch_generation=1)
+
+
+def test_renewal_and_actual_owner_admission_do_not_deadlock(tmp_path,monkeypatch):
+    authority,_,owner,_,clock,_=case(tmp_path,monkeypatch)
+    lease=authority.issue()
+    renew_inside=threading.Event();owner_inside=threading.Event()
+    finished=[];errors=[]
+    def hook():
+        if threading.current_thread().name=='study-renew' and not renew_inside.is_set():
+            renew_inside.set()
+            assert owner_inside.wait(2)
+    clock.hook=hook
+    def renew():
+        try:
+            authority.issue();finished.append('renew')
+        except Exception as error:errors.append(error)
+    def admission():
+        owner_inside.set()
+        assert authority.current(lease)
+        finished.append('admission')
+    def submit():
+        try:owner.run_admission_policy(admission)
+        except Exception as error:errors.append(error)
+    renew_thread=threading.Thread(target=renew,name='study-renew',daemon=True)
+    submit_thread=threading.Thread(target=submit,daemon=True)
+    renew_thread.start()
+    assert renew_inside.wait(2)
+    submit_thread.start()
+    renew_thread.join(2);submit_thread.join(2)
+    assert not renew_thread.is_alive() and not submit_thread.is_alive(), 'owner/authority deadlock'
+    assert not errors and sorted(finished)==['admission','renew']
+
+
+def test_stop_database_rejects_dangling_symlink_without_creating_target(tmp_path,monkeypatch):
+    authority,*_=case(tmp_path,monkeypatch)
+    target=tmp_path/'outside.sqlite3'
+    path=authority.directory/'study-stop.sqlite3'
+    path.symlink_to(target)
+    with pytest.raises(FileExistsError):NativeSimStopFence(authority)
+    assert path.is_symlink() and not target.exists()
