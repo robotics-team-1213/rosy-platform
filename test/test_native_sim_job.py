@@ -14,6 +14,16 @@ SHA = "a" * 40
 RUN = SHA + "-" + "b" * 12
 
 
+@pytest.mark.parametrize('experiment',['pick-place-policy','pick-place-policy-calibration'])
+def test_policy_study_routes_to_explicit_single_trial_entry(experiment):
+    from native_sim_prepare import run_script
+    script=run_script(Path('/candidate'),experiment=experiment)
+    assert 'sim_pick_place_policy_job.py' in script
+    assert (' --calibration' in script)==experiment.endswith('calibration')
+    assert '--approve-isolated-simulation --approve-startup-home' in script
+    with pytest.raises(ValueError):run_script(Path('/candidate'),experiment=experiment,episodes=2)
+
+
 def test_capacity_ignores_own_advisory_lock_but_counts_visible_peer_budget(tmp_path, monkeypatch):
     import native_sim_job as job
     jobs = tmp_path / "jobs"
