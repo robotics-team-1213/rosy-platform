@@ -119,8 +119,9 @@ def _cleanup(owner):
     return False
 
 
-def execute(store, binding_file, run_id):
-    binding = load_binding(binding_file)
+def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
+    options = {'expected_digest': expected_binding_sha256} if expected_binding_sha256 else {}
+    binding = load_binding(binding_file, **options)
     row = store.get(run_id)
     if row['status'] in TERMINAL:
         return 0
@@ -148,7 +149,7 @@ def execute(store, binding_file, run_id):
         with acquire(binding) as descriptors:
             leased = True
             try:
-                binding = load_binding(binding_file, row['input']['source_sha'])
+                binding = load_binding(binding_file, row['input']['source_sha'], **options)
                 row = store.get(run_id)
                 if stopped():
                     outcome['reason'] = 'stop_requested'

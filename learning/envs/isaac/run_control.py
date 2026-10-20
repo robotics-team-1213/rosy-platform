@@ -12,14 +12,19 @@ from run_system import System, same_owner
 
 
 class Runner:
-    def __init__(self, store, binding_file, *, system=None):
+    def __init__(self, store, binding_file, *, system=None, expected_binding_sha256=None):
         self.store = store
         self.binding_file = Path(binding_file)
-        self.system = system or System()
+        self.expected_binding_sha256 = expected_binding_sha256
+        self.system = system or System(expected_binding_sha256)
+
+    def _binding(self, source_sha):
+        options = {'expected_digest': self.expected_binding_sha256} if self.expected_binding_sha256 else {}
+        return load_binding(self.binding_file, source_sha, **options)
 
     def check(self, scenario_id, config, source_sha):
         snapshot = input_snapshot(scenario_id, config, source_sha)
-        binding = load_binding(self.binding_file, source_sha)
+        binding = self._binding(source_sha)
         readiness = self.system.check(binding)
         return dict(snapshot, **readiness)
 
@@ -31,7 +36,7 @@ class Runner:
         snapshot = input_snapshot(request['scenario_id'], request['config'], request['source_sha'])
         if request['expected_input_sha256'] != snapshot['input_sha256']:
             raise ValueError('Experiment input fingerprint changed')
-        load_binding(self.binding_file, request['source_sha'])
+        self._binding(request['source_sha'])
         row = self.store.create(request['request_id'], request['scenario_id'], request['config'],
                                 request['source_sha'], parent_run_id=request.get('parent_run_id'))
         if row['revision'] != 0 or row['status'] != 'PENDING':
@@ -92,16 +97,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binding', required=True, type=Path)
     parser.add_argument('--worker')
+    parser.add_argument('--expected-binding-sha256')
     args = parser.parse_args()
-    binding = load_binding(args.binding)
+    binding = load_binding(args.binding, expected_digest=args.expected_binding_sha256)
     store = RunStore(Path(binding['data_root']))
     if args.worker:
         from run_worker import execute
-        return execute(store, args.binding, args.worker)
+        return execute(store, args.binding, args.worker, expected_binding_sha256=args.expected_binding_sha256)
     request = json.loads(sys.stdin.buffer.read(1024 * 1024 + 1))
     if not isinstance(request, dict):
         raise ValueError('Request must be an object')
-    runner = Runner(store, args.binding)
+    runner = Runner(store, args.binding, expected_binding_sha256=args.expected_binding_sha256)
     action = request.get('action')
     if action == 'catalog':
         result = catalog()

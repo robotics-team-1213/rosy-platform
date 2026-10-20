@@ -29,17 +29,23 @@ def _identity(pid):
 
 
 class System:
+    def __init__(self, expected_binding_sha256=None):
+        self.expected_binding_sha256 = expected_binding_sha256
+
     def check(self, binding):
         return sdk_check(binding)
 
     def launch(self, unit, binding_file, run_id):
-        subprocess.run(['systemd-run', '--user', '--quiet', '--unit=' + _unit(unit),
+        command = ['systemd-run', '--user', '--quiet', '--unit=' + _unit(unit),
             '--property=Type=exec', '--property=KillMode=control-group',
             '--property=RuntimeMaxSec=180', '--property=TimeoutStopSec=10',
             '--property=UMask=0077', '--property=MemoryMax=12G',
             '--property=StandardOutput=null', '--property=StandardError=null',
             '/usr/bin/python3', str(Path(__file__).with_name('run_control.py')),
-            '--binding', str(binding_file), '--worker', run_id],
+            '--binding', str(binding_file), '--worker', run_id]
+        if self.expected_binding_sha256:
+            command += ['--expected-binding-sha256', self.expected_binding_sha256]
+        subprocess.run(command,
             capture_output=True, text=True, timeout=15, check=True)
 
     def observe(self, unit):

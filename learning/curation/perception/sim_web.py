@@ -21,16 +21,18 @@ class LocalRuns:
                 or info.st_mode & 0o077 or info.st_size > 65536 or config.resolve() != config):
             raise ValueError('Unsafe SIM operator configuration')
         value = json.loads(config.read_text(encoding='utf-8'))
-        keys = {'workspace_id', 'source_sha', 'source_root', 'binding_file', 'entry_sha256'}
+        keys = {'workspace_id', 'source_sha', 'source_root', 'binding_file', 'binding_sha256', 'entry_sha256'}
         if (set(value) != keys or value['workspace_id'] != workspace_id
                 or not re.fullmatch('[0-9a-f]{40}', value['source_sha'])
-                or not re.fullmatch('[0-9a-f]{64}', value['entry_sha256'])):
+                or not re.fullmatch('[0-9a-f]{64}', value['entry_sha256'])
+                or not re.fullmatch('[0-9a-f]{64}', value['binding_sha256'])):
             raise ValueError('SIM binding differs from this review workspace')
         self.source_sha = value['source_sha']
         self.source = Path(value['source_root'])
         self.binding = Path(value['binding_file'])
         self.entry = self.source / 'learning/envs/isaac/run_control.py'
         self.entry_sha256 = value['entry_sha256']
+        self.binding_sha256 = value['binding_sha256']
 
     def call(self, payload):
         try:
@@ -38,7 +40,10 @@ class LocalRuns:
                     or self.entry.resolve() != self.entry
                     or hashlib.sha256(self.entry.read_bytes()).hexdigest() != self.entry_sha256):
                 raise ValueError('Changed SIM source binding')
-            binding = json.loads(self.binding.read_text(encoding='utf-8'))
+            raw_binding = self.binding.read_bytes()
+            if hashlib.sha256(raw_binding).hexdigest() != self.binding_sha256:
+                raise ValueError('Changed operator binding')
+            binding = json.loads(raw_binding)
             if binding['source_sha'] != self.source_sha or binding['source_root'] != str(self.source):
                 raise ValueError('Changed SIM source identity')
             sha = subprocess.run(['git', '-C', str(self.source), 'rev-parse', 'HEAD'],
@@ -50,7 +55,8 @@ class LocalRuns:
             env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR')
                    if key in os.environ}
             env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
-            result = subprocess.run(['/usr/bin/python3', str(self.entry), '--binding', str(self.binding)],
+            result = subprocess.run(['/usr/bin/python3', str(self.entry), '--binding', str(self.binding),
+                '--expected-binding-sha256', self.binding_sha256],
                 input=json.dumps(payload, allow_nan=False).encode(), capture_output=True,
                 env=env, timeout=40, check=True)
             if len(result.stdout) > 2 * 1024 * 1024:

@@ -432,6 +432,7 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
   "source_sha": "FULL_COMMITTED_SHA",
   "source_root": "/ABSOLUTE/PINNED/ISAAC_SOURCE",
   "binding_file": "/ABSOLUTE/OPERATOR/ISAAC_BINDING.json",
+  "binding_sha256": "SHA256_OF_COMPLETE_OPERATOR_BINDING_BYTES",
   "entry_sha256": "SHA256_OF_SOURCE_learning/envs/isaac/run_control.py"
 }
 ```

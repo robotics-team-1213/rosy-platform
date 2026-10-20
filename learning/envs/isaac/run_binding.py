@@ -24,11 +24,14 @@ def _owned(path, *, directory=False, allow_link=False):
     return path
 
 
-def load_binding(path, sha=None):
+def load_binding(path, sha=None, *, expected_digest=None):
     path = _owned(Path(path))
     if path.stat().st_size > 65536:
         raise ValueError('Oversized SDK binding')
-    value = json.loads(path.read_text(encoding='utf-8'))
+    raw = path.read_bytes()
+    if expected_digest is not None and hashlib.sha256(raw).hexdigest() != expected_digest:
+        raise ValueError('Operator binding fingerprint changed')
+    value = json.loads(raw)
     keys = {'uid', 'source_root', 'source_sha', 'sdk_python', 'sdk_python_sha256',
             'sdk_version', 'model_code_root', 'data_root'}
     if (not isinstance(value, dict) or set(value) != keys or type(value['uid']) is not int
