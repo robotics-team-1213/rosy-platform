@@ -9,7 +9,7 @@ from .codec import MODEL, MODEL_DIGEST, Strict, checked_answer, digest
 
 class OperatorProfile(Strict):
     profile_id: Literal['qwen-operator-readonly'] = 'qwen-operator-readonly'
-    revision: Literal['d810-readonly-v1'] = 'd810-readonly-v1'
+    revision: Literal['d821-multilingual-v1'] = 'd821-multilingual-v1'
     model_id: Literal[MODEL] = MODEL
     model_digest: Literal[MODEL_DIGEST] = MODEL_DIGEST
     protocol: Literal['rosy-operator-v1'] = 'rosy-operator-v1'
@@ -37,6 +37,7 @@ class OperatorInput(Strict):
     scope: OperatorScope
     request_id: str = Field(pattern=r'^[A-Za-z0-9_-]{1,96}$')
     question: str = Field(min_length=1, max_length=2000)
+    locale: Literal['ko-KR', 'en-US'] = 'ko-KR'
     selected_robot_id: str | None = None
     observed_at: FiniteFloat
     facts: list[AssistantFact] = Field(max_length=64)

@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
@@ -1180,3 +1181,9 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 **Status:** Accepted for implementation (2026-10-20). 운영 모델 승인·음성 수용·배포는 별도다.
 
 웹 대화를 기존 Discord 신원과 분리하고 첫 버전은 근거에 따른 조회만 제공한다. 전문은 [D-810](../adr/D-810-console-operator-assistant.md).
+
+## D-821 관제 AI 보호 배포·명시적 이동 연결·다국어 평가
+
+**Status:** Accepted for implementation (2026-10-20). 실제 운영 수용은 별도다.
+
+별도 기명 이동 접수는 기존 Task owner를 사용하고 웹 모델은 조회 권한을 유지한다. 보호 설치와 두 언어 수용은 Discord와 독립 결속한다. 전문은 [D-821](../adr/D-821-operator-deployment-execution-languages.md).

@@ -38,3 +38,13 @@ D-776 reserved in another in-flight branch (refs/adr/D-776); remove when its ADR
 D-783 reserved on branch feat/station-charge-deploy (refs/adr/D-783), not yet on main; remove when it lands
 D-808 reserved by another session for Vault explicit site capabilities (refs/adr/D-808), not present in this base; remove when its ADR lands
 D-809 reserved by another session for Legacy 937 Learning Account boundary and attributed review audit (refs/adr/D-809), not present in this base; remove when its ADR lands
+D-811 reserved in another session (refs/adr/D-811), absent from this base; remove when its ADR lands
+D-812 reserved in another session (refs/adr/D-812), absent from this base; remove when its ADR lands
+D-813 reserved in another session (refs/adr/D-813), absent from this base; remove when its ADR lands
+D-814 reserved in another session (refs/adr/D-814), absent from this base; remove when its ADR lands
+D-815 reserved in another session (refs/adr/D-815), absent from this base; remove when its ADR lands
+D-816 reserved in another session (refs/adr/D-816), absent from this base; remove when its ADR lands
+D-817 reserved in another session (refs/adr/D-817), absent from this base; remove when its ADR lands
+D-818 reserved in another session (refs/adr/D-818), absent from this base; remove when its ADR lands
+D-819 reserved in another session (refs/adr/D-819), absent from this base; remove when its ADR lands
+D-820 reserved in another session (refs/adr/D-820), absent from this base; remove when its ADR lands

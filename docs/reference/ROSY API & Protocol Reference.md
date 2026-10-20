@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.289
+**Version:** v1.290
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.290 Explicit operator navigation and language (D-821)
+
+`AssistantMessage.locale` optionally selects `ko-KR` (default, including pre-v1.290 stored messages) or `en-US`. The locale is bound to immutable request identity and model input. Unsupported locales are 422. `AssistantStatus.execution_enabled` reports the separately configured handoff; dialogue remains `READ_ONLY` and every answer remains `action_admissible=false`.
+
+POST `/api/fleet/assistant/messages/{request_id}/navigation` requires the current named operator and existing Origin/CSRF rules. Input `AssistantNavigation` is exactly robot_id, finite x/y within ±100000 metres, optional finite yaw within ±π (default 0). This is an explicit operator coordinate submission, never a model-generated command. The operator must own an ANSWERED CONTROL request completed within 30 seconds, with the same non-null selected robot. Current authentication and unexpired model admission plus `execution_enabled=true` are rechecked inside Task admission.
+
+The endpoint calls the existing `IntentExecution`/navigation Task owner and returns its accepted/queued/task result. Same principal/request reuses the Task idempotency key; changed coordinates are 409. Another principal sees the same 404 as a missing request; expired/non-control/changed selection is 409; disabled/unadmitted execution is 503; revoked authority is 403. Results use `Cache-Control: no-store`. Actual work state, cancellation and uncertain physical outcomes use the existing Task APIs and dispatch generation. No additional worker, direct robot call or automatic UNKNOWN replay is installed. This additive endpoint supersedes the D-810 no-dispatch boundary only for explicit operator submissions; model replies retain no execution authority.
 
 ### v1.289 Console operator assistant (D-810)
 
@@ -3411,6 +3419,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
 | v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
 | v1.287 | 2026-10-19 | D-769 rev 3 / D-573 rev 8 route-prior compatibility prerequisite: optional map-wall geometry, at most three-second source lifetime, receiver-first rollout, and the separately installed consumer's ignored-short extension exception. Operational Fleet remains one second; no physical activation. |
 | v1.275 | 2026-10-19 | Additive (D-801, feat/site-console-video): Fleet `POST /api/fleet/robots/{robot_id}/media-grant`·`/renew`·`DELETE`와 미디어 권한 서비스용 `POST /api/fleet/media/validate`. 사이트 로그인 주체(fleet.read)의 로봇별 READ 전용 영상 위임. 상세는 v1.275 절 |
