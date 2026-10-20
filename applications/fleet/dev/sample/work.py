@@ -163,7 +163,7 @@ class Work:
                          'action_kind': 'CELL_TRANSFER', 'workcell_id': job['workcell_id'], 'status': job['status'],
                          'reason': job['reason'], 'updated_at': '2026-10-21T00:00:00Z', 'wait': None,
                          'visible_state': visible_state(job['status'], job['reason']),
-                         'approval': 'one_person' if job['status'] == 'PROPOSED' else None}
+                         'approval': 'two_person' if job['status'] == 'PROPOSED' else None}
                         for job in self.cell_jobs.values())
             return reply({'observed_at': '2026-10-21T00:00:00Z', 'rows': rows, 'kinds': ['trip', 'CELL_TRANSFER'],
                           'tasks_available': True, 'missions_available': True, 'cell_jobs_available': True,

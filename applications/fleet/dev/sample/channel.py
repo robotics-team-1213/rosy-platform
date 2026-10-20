@@ -73,13 +73,13 @@ class Channel:
             self.review.update(state='LINKED', work_kind='task', work_id=task['task_id'], revision=self.review['revision'] + 1)
             return reply(self.current())
         if action == 'prepare' and method == 'POST' and body.get('kind') == 'cell_job':
-            response = self.cell.handle('POST', '/cell-app/proposals', {**body, 'request_key': self.review['request_key']})
+            response = self.cell.handle('POST', '/cell-app/proposals', {**body, 'request_key': self.review['request_key']}, actor)
             if response.status != 200:
                 return response
             self.review.update(state='LINKED', work_kind='cell_job', work_id=json.loads(response.body)['mission']['mission_id'],
                                revision=self.review['revision'] + 1)
             return reply(self.current())
         if action == 'admit' and method == 'POST' and self.review['work_kind'] == 'cell_job':
-            response = self.cell.handle('POST', '/missions/' + self.review['work_id'] + '/admit', body)
+            response = self.cell.handle('POST', '/missions/' + self.review['work_id'] + '/admit', body, actor)
             return reply(self.current()) if response.status == 200 else response
         return None

@@ -17,6 +17,7 @@ class Cell:
         self.dispatch = dispatch
         self.preview = json.loads((Path(__file__).parent / 'fixtures/cell-preview.json').read_text(encoding='utf-8'))
         self.documents, self.jobs, self.requests = {}, {}, {}
+        self.proposers = {}
         for kind in ('recipe', 'cell'):
             document = self.preview['candidate'][kind]
             self.documents[kind, 'sample'] = {'kind': kind, 'id': 'sample', 'document': document,
@@ -54,7 +55,7 @@ class Cell:
     def proposal(self, job):
         return {'proposal': {'proposal_id': job['mission_id']}, 'mission': self.mission(job)}
 
-    def handle(self, method, path, body):
+    def handle(self, method, path, body, actor='sample'):
         if (method, path) == ('GET', '/cell-app/documents'):
             return reply({'documents': [{k: v for k, v in row.items() if k != 'document'}
                                         for _, row in sorted(self.documents.items())]})
@@ -98,6 +99,7 @@ class Cell:
                                      'current_step_index': 0, 'workcell_id': body['workcell_id'], 'instance_id': body['instance_id'],
                                      'events': [], 'operator_checkpoints': []}
             self.requests[request] = body.copy(), identifier
+            self.proposers[identifier] = actor
             return reply(self.proposal(self.jobs[identifier]))
         match = re.fullmatch(r'/(cell-jobs|missions)/([^/]+)(?:/(admit|cancel|resume|reconcile))?', path)
         if match:
@@ -113,6 +115,8 @@ class Cell:
                     if (body.get('expected_generation') != self.dispatch['generation'] or not self.dispatch['dispatch_enabled']
                             or job['status'] != expected or job['reason'] == 'CANCELLED_BY_OPERATOR'):
                         return error(409, 'CELL_JOB_RECOVERY_REFUSED')
+                    if action == 'admit' and actor == self.proposers[identifier]:
+                        return error(403, 'CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER')
                     job.update(status='READY', reason=None)
                 elif action == 'cancel':
                     if job['status'] not in ('READY', 'HOLD', 'ACTION_SUCCEEDED'):

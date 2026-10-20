@@ -113,7 +113,10 @@ class SampleEngine:
         response = self.traffic.handle(method, path, payload, ['sample-robot', *self.installation.robots])
         if response is not None:
             return response
-        for feature in (self.spatial, self.assistant, self.cell,
+        response = self.cell.handle(method, path, payload, actor)
+        if response is not None:
+            return response
+        for feature in (self.spatial, self.assistant,
                         self.installation, self.pairing, self.calibration):
             response = feature.handle(method, path, payload)
             if response is not None:
