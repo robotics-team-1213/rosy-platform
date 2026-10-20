@@ -50,7 +50,7 @@ def test_output_limit_and_linked_outputs_refuse_success(tmp_path):
     assert row['reason'] == 'unsafe_output'
 
 
-@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual'])
+@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual'])
 def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence):
     from contextlib import nullcontext
     import os
@@ -67,12 +67,25 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     monkeypatch.setattr(mod.System, 'observe', lambda self, unit: dict(owner, unit=unit))
     monkeypatch.setattr(mod, 'load_binding', lambda *args: {'source_sha': 'a' * 40,
         'sdk_python': sys.executable, 'sdk_version': '5.1.0.0'})
-    monkeypatch.setattr(mod, 'sdk_check', lambda binding: {'ready': True})
-    monkeypatch.setattr(mod, 'acquire', lambda binding: nullcontext(()))
-    monkeypatch.setattr(mod, '_cleanup', lambda owner: True)
-    monkeypatch.setattr(mod, 'gpu_state', lambda: {'ready': evidence != 'gpu_residual'})
+    monkeypatch.setattr(mod, 'sdk_check', lambda binding: {'ready': True, 'uuid': 'GPU-test', 'driver': 'test-driver'})
+    from contextlib import contextmanager
+    held = [False]
+    @contextmanager
+    def lease(binding):
+        held[0] = True
+        try:
+            yield ()
+        finally:
+            held[0] = False
+    monkeypatch.setattr(mod, 'acquire', lease)
+    def cleanup(owner):
+        assert held[0], 'cleanup must precede lease release even after report failure'
+        return True
+    monkeypatch.setattr(mod, '_cleanup', cleanup)
+    monkeypatch.setattr(mod, 'gpu_state', lambda: {'ready': evidence not in {'gpu_residual', 'missing_residual'},
+                                                  'uuid': 'GPU-test', 'driver': 'test-driver'})
     def sdk(*args, **kwargs):
-        if evidence != 'none':
+        if evidence not in {'none', 'missing_residual'}:
             path = kwargs['output'] / 'import-report.json'
             import_report.write_report(path, model='omx_f', frames=120, requested=120,
                 articulations=['/Manipulator'], joints=sorted(model_checks.EXPECTED_JOINTS['omx_f']),
@@ -86,7 +99,8 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     mod.execute(store, tmp_path / 'binding.json', row['run_id'])
     final = store.get(row['run_id'])
     assert final['status'] == ('SUCCEEDED' if evidence == 'complete' else
-                               'UNKNOWN' if evidence == 'gpu_residual' else 'FAILED')
+                               'UNKNOWN' if evidence in {'gpu_residual', 'missing_residual'} else 'FAILED')
     if final['status'] == 'SUCCEEDED':
         assert final['result']['task_success'] is None
         assert store.artifact(row['run_id'], 'import-report')['bytes'] > 0
+        assert final['result']['gpu']['uuid'] == 'GPU-test'

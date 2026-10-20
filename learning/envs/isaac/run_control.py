@@ -49,10 +49,15 @@ class Runner:
         return self.store.get(row['run_id'])
 
     def _unknown(self, row, reason):
+        if row['status'] == 'UNKNOWN' and row.get('error') == reason:
+            return row
         try:
             return self.store.update(row['run_id'], row['revision'], {'status': 'UNKNOWN', 'error': reason})
         except RunConflict:
             return self.store.get(row['run_id'])
+
+    def list(self):
+        return [self.status(row['run_id']) if 'input' in row else row for row in self.store.list()]
 
     def status(self, run_id):
         row = self.store.get(run_id)
@@ -101,7 +106,7 @@ def main():
     if action == 'catalog':
         result = catalog()
     elif action == 'list':
-        result = [runner.status(row['run_id']) for row in store.list()]
+        result = runner.list()
     elif action == 'check':
         result = runner.check(request['scenario_id'], request['config'], request['source_sha'])
     elif action == 'start':

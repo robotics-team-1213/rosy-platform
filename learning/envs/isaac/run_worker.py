@@ -134,39 +134,49 @@ def execute(store, binding_file, run_id):
         raise ValueError('Worker lacks its own confirmed unit')
     stop = [False]
     signal.signal(signal.SIGTERM, lambda signum, frame: stop.__setitem__(0, True))
+    signal.signal(signal.SIGUSR1, lambda signum, frame: stop.__setitem__(0, True))
     directory = store.root / 'runs' / run_id
     artifacts, report, outcome = [], None, {'exit_code': None, 'reason': 'admission_refused'}
 
     def stopped():
         return stop[0] or store.get(run_id)['status'] == 'STOP_REQUESTED'
 
+    leased = False
     try:
         # Check the installed SDK without loading SimulationApp before leasing it.
-        sdk_check(binding)
+        admitted_gpu = sdk_check(binding)
         with acquire(binding) as descriptors:
-            binding = load_binding(binding_file, row['input']['source_sha'])
-            row = store.get(run_id)
-            if stopped():
-                outcome['reason'] = 'stop_requested'
-            else:
-                row = store.update(run_id, row['revision'],
-                                   {'status': 'RUNNING', 'phase': 'SDK_IMPORT', 'runtime': owner})
-                urdf = prepare('omx_f', directory / 'prepared.urdf')
-                env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR')
-                       if key in os.environ}
-                env.update(PATH='/usr/local/bin:/usr/bin:/bin', LANG='C.UTF-8',
-                           ROS_DOMAIN_ID='99', ROS_LOCALHOST_ONLY='1',
-                           ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST', ROS_STATIC_PEERS='',
-                           PYTHONUNBUFFERED='1', ACCEPT_EULA='Y')
-                argv = [binding['sdk_python'], str(Path(__file__).with_name('import_omx.py')),
-                        '--model', 'omx_f', '--urdf', str(urdf), '--output-dir', str(directory / 'usd'),
-                        '--headless', '--frames', '120', '--report', str(directory / 'import-report.json')]
-                outcome = supervise(argv, cwd=directory, env=env, descriptors=descriptors,
-                                    output=directory, stop_requested=stopped)
-                if outcome['exit_code'] == 0 and outcome['reason'] == 'process_exited':
-                    report = verify_report(directory / 'import-report.json', model='omx_f', frames=120,
-                                           sdk_version=binding['sdk_version'])
-            clean = _cleanup(owner)
+            leased = True
+            try:
+                binding = load_binding(binding_file, row['input']['source_sha'])
+                row = store.get(run_id)
+                if stopped():
+                    outcome['reason'] = 'stop_requested'
+                else:
+                    row = store.update(run_id, row['revision'],
+                        {'status': 'RUNNING', 'phase': 'SDK_IMPORT', 'runtime': dict(owner, gpu=admitted_gpu)})
+                    urdf = prepare('omx_f', directory / 'prepared.urdf')
+                    env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR')
+                           if key in os.environ}
+                    env.update(PATH='/usr/local/bin:/usr/bin:/bin', LANG='C.UTF-8',
+                               ROS_DOMAIN_ID='99', ROS_LOCALHOST_ONLY='1',
+                               ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST', ROS_STATIC_PEERS='',
+                               PYTHONUNBUFFERED='1', ACCEPT_EULA='Y')
+                    argv = [binding['sdk_python'], str(Path(__file__).with_name('import_omx.py')),
+                            '--model', 'omx_f', '--urdf', str(urdf), '--output-dir', str(directory / 'usd'),
+                            '--headless', '--frames', '120', '--report', str(directory / 'import-report.json')]
+                    outcome = supervise(argv, cwd=directory, env=env, descriptors=descriptors,
+                                        output=directory, stop_requested=stopped)
+                    if outcome['exit_code'] == 0 and outcome['reason'] == 'process_exited':
+                        report = verify_report(directory / 'import-report.json', model='omx_f', frames=120,
+                                               sdk_version=binding['sdk_version'])
+            except (OSError, ValueError, subprocess.SubprocessError):
+                outcome['reason'] = 'sdk_or_report_verification_failed'
+                report = None
+            try:
+                clean = _cleanup(owner)
+            except OSError:
+                clean = False
             until = time.monotonic() + 3
             observed_gpu = gpu_state()
             while clean and not observed_gpu['ready'] and time.monotonic() < until:
@@ -181,24 +191,22 @@ def execute(store, binding_file, run_id):
                 raw = (directory / 'import-report.json').read_bytes()
                 artifacts = [{'id': 'import-report', 'name': 'import-report.json', 'bytes': len(raw),
                               'sha256': hashlib.sha256(raw).hexdigest(), 'media_type': 'application/json'}]
-            return _finish(store, run_id, outcome, report, artifacts, stopped())
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        outcome['reason'] = 'admission_or_sdk_verification_failed'
-        # Exceptions after launch still require proof that the owned cgroup was emptied.
-        if not _cleanup(owner):
-            current = store.get(run_id)
-            store.update(run_id, current['revision'], {'status': 'UNKNOWN', 'cleanup': 'UNCONFIRMED',
-                         'error': 'worker verification failed; owned cleanup unconfirmed'})
-            return 2
-        return _finish(store, run_id, outcome, None, [], stopped())
+            return _finish(store, run_id, outcome, report, artifacts, stopped(), gpu=admitted_gpu)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        if leased:
+            raise
+        # No SDK launch occurs outside the lease; admission failures have no child to clean up.
+        outcome['reason'] = 'admission_refused'
+        return _finish(store, run_id, outcome, None, [], stopped(), cleanup='SDK_NOT_STARTED')
 
 
-def _finish(store, run_id, outcome, report, artifacts, stopped):
+def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
+            cleanup='OWNED_PROCESSES_EXITED_GPU_RELEASED'):
     current = store.get(run_id)
     status = 'STOPPED' if stopped else ('SUCCEEDED' if report else 'FAILED')
     result = dict(outcome, status=status, stage='model_import', task_success=None,
                   import_verified=report is not None, completed_frames=report['completed_frames'] if report else None,
-                  cleanup='OWNED_PROCESSES_EXITED', video_unavailable_reason='model_import_does_not_record_video')
+                  cleanup=cleanup, gpu=gpu, video_unavailable_reason='model_import_does_not_record_video')
     try:
         store.finish(run_id, current['revision'], result, artifacts)
     except RunConflict:

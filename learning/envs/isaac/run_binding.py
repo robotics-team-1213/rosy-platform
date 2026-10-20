@@ -13,10 +13,13 @@ def _owned(path, *, directory=False, allow_link=False):
         raise ValueError('Binding paths must have canonical parents')
     if not allow_link and path.is_symlink():
         raise ValueError('Linked binding path')
+    link = path.lstat()
     info = path.stat()
+    allowed_owner = {os.getuid(), 0} if allow_link else {os.getuid()}
     if ((directory and not stat.S_ISDIR(info.st_mode))
             or (not directory and not stat.S_ISREG(info.st_mode))
-            or info.st_uid != os.getuid() or info.st_mode & 0o022):
+            or info.st_uid not in allowed_owner or info.st_mode & 0o022
+            or (allow_link and link.st_uid != os.getuid())):
         raise ValueError('Unsafe binding path owner or permissions')
     return path
 
@@ -48,7 +51,8 @@ def load_binding(path, sha=None):
     if hashlib.sha256(python.read_bytes()).hexdigest() != value['sdk_python_sha256']:
         raise ValueError('SDK interpreter changed')
     data = _owned(Path(value['data_root']), directory=True)
-    if data.is_relative_to(source) or data == Path(value['model_code_root']):
+    managed = _owned(Path(value['model_code_root']), directory=True)
+    if data.is_relative_to(source) or data.is_relative_to(managed):
         raise ValueError('Run data must be outside source and signed code')
     return value
 
