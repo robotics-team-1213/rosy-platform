@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · 5d90c8d670 · D-831 인용·Unicode 검색 경계 보완
+- 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
 - 2026-10-20 · b1f18674b2 · D-821 명시적 이동 접수와 다국어 운영 경계
 - 2026-10-20 · uncommitted · 통합관제 조회 전용 AI 대화
 - 2026-10-20 · uncommitted · 실제 목표 도달의 연속 SIM 검증
-- 2026-10-20 · uncommitted · lane 도착의 실제 정지 목표 결속
-- 2026-10-20 · 984a170d8e · fix(station): refresh readiness ACK and fence SIM goal admission

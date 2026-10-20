@@ -9862,6 +9862,85 @@ osy-d395-s1d\`.
 - 증거: 웹 서버 756행 ratchet과 학습 gpu.lock·signed owner work.lock 생산/소비 경로를 읽기 전용으로 조사했다. 계획의 인터페이스·시험·설계 대응을 자기 검토했다. 제품 구현·호스트 반영·신규 SDK 실행은 NOT RUN이다.
 - gate 변화: 없음. 구현 계획 검토와 실행 방식 선택을 기다린다.
 
+## 2026-10-21 · 7385897cf3 · OMX 파지 구간 실제 화면 검증과 미리보기 수정
+
+- 변경: 실제 Edge 실행에서 발견한 CSP 이미지 차단과 원본 변경 후 이전 사진 잔류를 수정했다. CSP는 유지하고 실제 이미지 디코딩·선택 변경 회귀 검사를 추가했다.
+- 증거: 격리된 합성 LeRobot 자료로 원본 확인·구간 저장·새로고침 복원·JSON 다운로드·실제 구간 exporter/readback을 실행했다. 원격 RED 두 건 뒤 최종 관련 3 passed, 실제 Edge exit 0, 원본 파일·판정 불변과 train/eval/test 각 4프레임 및 int64 clocks 보존을 확인했다. 상세 근거는 `docs/validation/omx-grasp-ui-2026-10-21/result.md`다.
+- gate 변화: UI/파일 경로 확인만 추가했다. 실물·사람 정답·모델 품질·데이터 절감·배포·원격 push 증거는 추가하지 않았다. 공식 로컬 착지 검사는 별도로 수행한다.
+
+## 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
+
+- 변경: 공통 Decision 정규화·등록 이름 해소·충돌/부정/조건/복합 후보 차단, Console/Discord 새 profile, broker 실제 사용량과 Fleet digest 검사·개인정보 없는 로그를 연결했다. 새 Discord profile은 자동 실행 worker를 설치하지 않는다.
+- 증거: source 8454618b94 원격 전처리/보호 설치 123 passed; NFD+등록 이름 공백 회귀 RED1/36 뒤 d7fedbc9ab GREEN37. 독립 계약 검토의 이름 공백/장소-only STATUS 지적을 수정했다. 실제 모델 전후와 최종 영향 검증은 docs/validation/operator-preprocessing-2026-10-21/result.md에 기록한다.
+- gate: 기존 SOURCE/LOCAL 경계만 다룬다. 새 확인 API·보호 설치·실음성·장치/현장 수용은 미실행. source 통과를 운영 활성화로 표시하지 않는다.
+
+## 2026-10-21 · 5d90c8d670 · D-831 인용·Unicode 검색 경계 보완
+
+- 변경: 원문과 모델용 인용문은 보존하고 검색 사본만 NFC/공백 정규화한다. 유의미한 공백의 등록 이름이 있으면 입력 사본 정규화를 생략해 혼합 조합형도 보존한다.
+- 증거: 추가 RED5/37 및 RED1/42 후 GREEN43, 독립 계약 재검토 지적 해결. 실제 고정 모델 비교군19/19·Console26/26·Discord46/46, 입력 토큰 절감 없음. docs/validation/operator-preprocessing-2026-10-21b/result.md.
+- gate: 보호 설치·실음성·장치/현장 수용·새 자연어 확인 API는 미실행. 새 Discord 자동 실행은 OFF.
+
+## 2026-10-21 · uncommitted · 외부 앱 공정 제안과 후보 배정
+
+- 변경: D-836에 공정 문서 ID/digest 소비, Fleet 후보 접수와 재접수, 관측 근거와 업무 완료의 책임을 기록했다. API v1.292의 배타적 단일/후보 지정과 key·본문 결속, 기존 lease/claim transaction 재사용을 구현한다.
+- 증거: 커밋 `0122aabecc`의 원격 새 시험에서 공유 request schema 부재로 RED를 확인했다. 최종 제품 시험은 구현 커밋 SHA로 별도 실행한다. 기존 cell-app compile/proposal과 named approval·simulation 제한을 유지한다.
+- gate 변화: 구현 계약만 추가한다. 실제 다중 운행·자동 충전·장치 수용·현장 검증·push는 추가하지 않는다.
+
+## 2026-10-21 · uncommitted · Fleet 프런트 독립 개발 설계
+
+- 변경: docs/fleet-frontend-development에서 앱 독립 실행·시험, sample/connected 데이터 공급, 지원 기능의 대표 흐름과 실제 Fleet 인터페이스 연결을 검토용 설계로 정리했다. 운영 배포는 기존 Fleet과 함께 유지한다.
+- 증거: main 45b2bfe064의 화면 진입점 8개, HTTP 클라이언트, 자산 제공·패키징, gateway CLI 조립과 브라우저 fixture를 확인했다. 문서 검증 결과는 커밋 후 별도 보고한다.
+- gate 변화: 없음. 제품 코드·API·ADR·장치 설정을 변경하지 않았으며 구현·병합·배포 증거가 아니다.
+
+## 2026-10-21 · uncommitted · Fleet 프런트·백엔드 분리 목표와 실행 계획
+
+- 변경: 앱 독립 개발의 완료 기준, 현재 8개 진입 화면·18개 기능군의 API 대응과 미확인 범위, 7개 구현 단계의 파일 소유·인터페이스·검증·착지 단위를 정리했다. 실제 서비스 API와 샘플 계약을 같은 기준으로 대조하며 음성·영상의 브라우저 어댑터도 포함한다.
+- 증거: main 45b2bfe064의 CORE/Fleet 라우터·화면 호출·pairing 위임·음성 platform·카메라 open 주입 지점을 읽었다. 앞선 설계 6018d4eebf는 원격 문서 계약124 passed/NEW0이며, 새 계획의 최종 SHA 검증은 별도 보고한다.
+- gate 변화: 없음. 목표·설계·계획을 기록했으며 전체 API 충족·제품 분리 구현·실제 Fleet 연결·배포 완료를 뜻하지 않는다.
+
+## 2026-10-21 · uncommitted · Fleet 앱 자산 목록과 독립 정적 fixture
+
+- 변경: D-830으로 승인된 분리 구현을 기록하고 8개 페이지·93개 자산의 목록과 순수 loader를 앱에 두었다. 운영 서버·Node resolver·브라우저 fixture가 이를 소비하며 기존 Fleet 패키징에 목록을 포함한다.
+- 증거: 원격에서 loader 미구현에 따른 9개 assertion 실패를 확인한 뒤 구현했다. 경로 이탈·중복·없는 파일·symlink 변경·Fleet 없는 import와 기존 설치/화면 회귀는 커밋한 SHA로 검증한다.
+- gate 변화: 구현 중인 SOURCE 변경이다. 전체 API 계약·샘플 흐름·실제 연결·장치/배포 완료를 주장하지 않는다.
+
+## 2026-10-21 · uncommitted · 공통 Isaac 실험 기록과 D-834
+
+- 변경: 제한된 OMX-F import catalog·공통 run 저장소와 D-834 Proposed를 추가했다. 요청 중복·입력 지문·불변 결과·revision 상태와 산출물 경계를 웹·CLI 공통 실행의 기반으로 둔다.
+- 증거: 원격 RED 28개를 확인한 뒤 구현했으며 GREEN·회귀는 최종 SHA에 연결한다. source/SDK/GPU의 읽기 전용 환경 확인을 실행 성공이나 과제 성공으로 세지 않는다.
+- gate 변화: 없음. 실행기·CLI·웹·신규 SDK 실행은 후속이며 NOT RUN이다.
+
+## 2026-10-21 · uncommitted · 공통 Isaac 실행과 복구 절차
+
+- 변경: 기존 SDK·동일 계정의 두 잠금·transient unit·불변 입력을 이용한 제한 실행과 복구 절차를 deployment runbook에 기록했다. 중지 대상은 확인한 worker pidfd이며 결과는 모델 검사와 물리 과제 성공을 구분한다.
+- 증거: 독립 검토의4 Important·2 Minor를 수용해 오류 중 잠금 유지·GPU 확인·venv 소유권·관리 코드 하위 데이터 배제·프로세스 중지 fence·손상 기록 목록을 수정했다. 원격455 PASS/1 SKIP이며2 harness 실패는 main 반영 뒤 남은 D833 결번 행으로 재현·정리했다.
+- gate 변화: 없음. 실제 SDK·웹/CLI 교차 조회는 다음 검증이며 D-834 Proposed를 유지한다.
+
+## 2026-10-21 · uncommitted · 공통 Isaac 원격 CLI
+
+- 변경: 모델 PC 명시 선택·커밋 전송·고정 source binding·check/start/status/stop/fetch를 연결했다. receipt를 네트워크 요청 전에 보존하고 실행 중·최종 snapshot을 새 경로에 저장한다. 산출물별 해시 검증으로 archive 입력을 받지 않는다.
+- 증거: CLI 부재 RED7실패→GREEN7 PASS. 모델 PC 변경과 중간 JSON 게시를 추가 RED2실패로 재현해 대상 해시와 원자적 receipt 게시를 구현했다. 최종 통합 시험은 별도 기록한다.
+- gate 변화: 없음. 신규 SDK 실행·웹 연결은 후속이다.
+
+## 2026-10-21 · uncommitted · Learning 공통 SIM HTTP 문서
+
+- 변경: D-834 Proposed의 로컬 SIM 경로·권한·입력 지문·고정 source·조회/실행/중지 의미를 API 부록과 검수 앱 문서에 연결했다. 기존 D-755 로컬 HTTP 소유권에 따라 CORE API 버전·장치 schema는 유지했다.
+- 증거: 신규 HTTP 부재 RED5실패 후 계정·검수 회귀 통과, 명시적 Chromium의 공유 기록·중복 요청·중지·부모 run 재실행·모바일과 공통 셸·필수 payload 누락 거절이 통과했다. 웹 source closure 밖 Isaac 모듈은 고정 subprocess로만 호출한다.
+- gate 변화: 없음. 실제 SDK와 배포 수용은 별도 검증이다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 검증 기록
+
+- 변경: 커밋별 원격 시험과 실제 SDK 보고서·UNKNOWN·웹/CLI admission 거절·교차 fetch를 frozen evidence에 분리해 기록했다. 기존 SDK interpreter의 본인 소유 파일 권한만0775→0755로 바꿨고 파일 bytes·패키지는 유지했다.
+- 증거: 실제120프레임 모델 검사 보고서 hash를 독립 확인했다. 외부 GPU 점유로 무점유 최종 성공·실제 stop은 미수용이며 UNKNOWN을 보존한다. production rollout·실물/학습 성공을 주장하지 않는다.
+- gate 변화: 모델 구조와 운영 경계의 부분 증거이며 D-834 Proposed 유지다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 성공·중지 후속 증거
+
+- 변경: 실제 성공·중지 실행의 후속 검증 기록을 추가했다.
+- 증거: 소스8aa57b3d0e의 실제 모델 검사 SUCCEEDED·120프레임·exit0·GPU 해제와 별도 웹 run의 CLI STOP_REQUESTED→STOPPED·최종 fetch를 새 dated record에 기록했다. 앞선 부분 기록을 고치거나 UNKNOWN을 성공으로 바꾸지 않았다.
+- 경계: production rollout·실제 Account·컨테이너 물리 과제·학습/장치 수용은 별도다. D-834 Proposed 유지다.
+- gate 변화: 제한된 import·실행 중지의 후속 증거만 추가하며 기존 gate는 유지한다.
+
 ## 2026-10-21 · uncommitted · OMX 고정 물체 SIM 정답·학습 분할
 
 - 변경: D-449 초안과 learning 계약 0.1.13에 고정 물체 과제의 원본 SIM 증거 검증을 추가했다. LeRobot export와 ACT snapshot은 증거 bytes와 실제 judge를 보존하며 여러 검증 에피소드를 학습·정규화에서 제외한다.

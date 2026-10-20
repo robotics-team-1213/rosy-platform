@@ -48,6 +48,8 @@ def validate_conversation(cfg, raw):
     policy={'schema':'rosy.conversation-policy/1','source_commit':cfg.get('source_commit'),
         'profile_hash':hashlib.sha256(canonical(profile).encode()).hexdigest(),
         'authority':'proposal_only','output_kinds':['CHAT','STATUS','CLARIFY','CONTROL','REFUSE']}
+    if profile.get('revision')=='d728-semantic-v3-d831':
+        policy['preprocessing_version']='d831-v1'
     if (set(cfg)-{'ssh_port'}!=fields-{'ssh_port'}
             or type(cfg.get('host')) is not str
             or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]{0,252}',cfg['host'])

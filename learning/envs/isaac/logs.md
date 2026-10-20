@@ -314,3 +314,28 @@
 - 후속 검증: CORE select 실패가 warning ZERO를 보낼 때 이전 실행 연결이 남는 문제를 원격 NEW1로 재현해 수정했다. 관련133 PASS, 최신 main 반영 후 Isaac 전체와 module_structure325 PASS/1 SKIP/NEW0. 독립 소스 검토는 f2697eab11ea1f095cba02a97553fb7e611851f7의 카메라 관측 주기 변경을 승인했다.
 - 실제 R42: 같은 SHA로 headless 학습6회·baseline4회·eval3회가 종료됐다. 구간 raw reward 합계와 Q 갱신1,165회(종료6회)를 독립 재계산해 저장 정책과 정확히 일치했다. 동일 관측 행동 유지44,551회, 산출물91개 hash, 영상7개 프레임 수를 검증했다. 정지 receipt16개를 확인했으나 성공 정지 구간 전체 raw sample은 저장되지 않아 연속 정지 독립 검증과 구분한다.
 - gate 변화: 전체13회 모두 camera_lane_lost로 완주0, SDK exit1, 후보 미채택이다. 진행량 증가는 완주나 안정적인 곡선 추종 증거가 아니다. 병렬 환경·신호·횡단보도·Fleet·ROS-SIM·실물 수용은 미완료다. 원본과 독립 verifier는 private/isaac/media/2026-10-12-r42-camera-cadence에 보관했다.
+
+## 2026-10-21 · uncommitted · 공통 실험 catalog·run 기록
+
+- 변경: OMX-F import의 제한된 조건과 항만 미준비 시나리오, 불변 설정·지문·요청 중복 방지·revision 상태·최종 결과·검증된 산출물 저장을 추가했다. SDK나 HTTP에 의존하지 않는 기록 단위이며 D-834 Proposed로 실행/증거 경계를 연결했다.
+- 증거: 원격 b566945754에서 새 catalog/store 부재로 28개 실패를 먼저 확인했다. GREEN·문서 계약은 최종 커밋으로 별도 확인한다. 모델 PC read-only 점검에서 기존 GPU·SDK 설치와 동일 계정 model-code root를 확인했다.
+- gate 변화: 없음. GPU 실행·웹 연결·실제 import는 후속이며 새 SDK 실행은 NOT RUN이다.
+
+## 2026-10-21 · uncommitted · 제한된 공통 Isaac 실행기
+
+- 변경: 기존 model-code work.lock·학습 gpu.lock과 협력하는 동일 계정 admission, 불변 launch intent·중복 요청 재조회·unit 소유권 대조·중지 요청, 고정 SDK worker와 선택적 import 보고서를 구현했다. 원격 CLI·웹 adapter는 후속 분리 단위다.
+- 증거: admission 부재7실패, controller/report 부재2실패·6오류, worker 부재3실패를 원격 RED로 확인했다. 구현 후 admission7 PASS, controller/report/기존 entrypoint31 PASS, Isaac 전체349 PASS/1 SKIP. 실제 subprocess timeout·stop·출력 제한과 보고서/GPU 잔존 판정 시험을 포함한다.
+- gate 변화: 없음. SDK application·물리 집기·학습/승격은 미실행이며 원격 host 검증과 구분한다. D-834는 Proposed를 유지한다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 실제 SDK·교차 조회
+
+- 변경: 웹 workspace가 전체 binding 지문을 controller·worker까지 고정한다. 실제 host에서 발견한 UNKNOWN 진단 오인·user bus 누락과 준비 거절 응답을 수정했다.
+- 증거: 소스9dbaca197b의 실제 OMX-F 보고서120프레임·관절·articulation을 독립 검증했다. run은 cleanup/GPU 해제 미확정으로 UNKNOWN이며 외부 llama-server를 종료하지 않았다. 소스c47e8454e3의 웹 start를 CLI가 같은 최종 FAILED/admission_refused/SDK_NOT_STARTED로 조회·재전송·fetch했다. 관련 원격479 PASS/1 SKIP. 상세는 docs/validation/isaac-shared-runs-2026-10-21/result.md.
+- gate 변화: 실제 SDK 부분 증거를 추가했으나 최종 무점유 import·실제 stop·물리 집기·학습 수용은 보류다. UNKNOWN을 성공으로 변경하지 않는다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 무점유 성공·실제 중지
+
+- 변경: 무점유 상태의 모델 검사와 웹 실행·CLI 중지의 후속 증거를 추가했다.
+- 증거: 외부 GPU 점유가 자연 해제된 뒤 소스8aa57b3d0e의 새 run981e96c0bd105e38bf8b1923159ad614가 모델 검사120프레임·exit0·GPU 해제와 최종 SUCCEEDED로 끝났다. 웹에서 만든 별도 run83ef940c7e0d553cade26575bc72dffd는 CLI 중지 요청 뒤 STOPPED·exit-15·GPU 해제·최종 fetch를 확인했다.
+- 보존: 이전 UNKNOWN·FAILED와 모든 입력·결과를 유지했다. 외부 프로세스를 종료하지 않았다. frozen 후속 기록은 docs/validation/isaac-shared-runs-2026-10-21b/result.md다.
+- gate 변화: 제한된 import/실행 중지 수용만 추가한다. ROS-SIM·물리 집기·적층·협응·학습/실물 수용의 gate는 이동하지 않는다.

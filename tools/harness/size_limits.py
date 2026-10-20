@@ -37,6 +37,7 @@ WEB_SUFFIXES = {".js", ".mjs", ".ts", ".html", ".css"}
 OPS_SUFFIXES = CODE_SUFFIXES | WEB_SUFFIXES
 #: Roots outside every package: each file is held to its file limit, there is no unit total.
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
+             "applications/fleet/dev",  # D-830 development scripts; no operational package
              "operations/site_devices",  # site device firmware (D-427 wave 3b)
              "operations/signal_observation",  # one-file site service (D-766 coverage addendum)
              "operations/prediction")  # D-782 checker and shadow scripts, no package

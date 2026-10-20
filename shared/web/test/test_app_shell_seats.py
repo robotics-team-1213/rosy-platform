@@ -99,7 +99,8 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     rails = set()
     for name, here in [('learning.html', '/learning'), ('index.html', '/'),
                        ('pixels.html', '/pixels'), ('catalog.html', '/catalog'),
-                       ('camera.html', '/learning/camera'), ('omx.html', '/learning/omx')]:
+                       ('camera.html', '/learning/camera'), ('omx.html', '/learning/omx'),
+                       ('sim.html', '/learning')]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html

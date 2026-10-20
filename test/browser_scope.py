@@ -20,6 +20,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "applications/fleet/test/test_sample_browser.py",
+    "applications/fleet/test/test_feature_browser_flows.py",
+    "applications/fleet/test/test_browser_adapters.py",
     "test/test_measured_calibration_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
@@ -54,6 +57,7 @@ PILOT = [
 ]
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
+    "test/learning/perception/test_sim_browser.py",
     "test/learning/perception/test_storage_inventory_http.py",
     "test/learning/perception/test_review_flow_browser.py",
     "test/learning/perception/test_pixel_review_browser.py",
@@ -64,6 +68,8 @@ SHARED = ["shared/web/test/*_browser.py"]
 EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
 
 SCOPE: dict[str, list[str]] = {
+    "applications/fleet/dev/": FLEET,
+    "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
     "applications/fleet/web/": FLEET,
     "middleware/robot_ui/robot/": ROBOT,

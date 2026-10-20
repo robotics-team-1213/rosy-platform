@@ -419,3 +419,26 @@ SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopba
 `test_review_ai_http.py`, `test_review_versions.py`, `test_review_ai_browser.py`다.
 pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROSY_RUN_BROWSER_TESTS=1이
 필요하다. 모의 모델 연결 시험은 실제 GPU 모델 실행이나 정답 기반 정확도를 증명하지 않는다.
+
+## SIM 실험 (D-834 Proposed)
+
+작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
+
+서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
+
+```json
+{
+  "workspace_id": "CURRENT_REVIEW_WORKSPACE_ID",
+  "source_sha": "FULL_COMMITTED_SHA",
+  "source_root": "/ABSOLUTE/PINNED/ISAAC_SOURCE",
+  "binding_file": "/ABSOLUTE/OPERATOR/ISAAC_BINDING.json",
+  "binding_sha256": "SHA256_OF_COMPLETE_OPERATOR_BINDING_BYTES",
+  "entry_sha256": "SHA256_OF_SOURCE_learning/envs/isaac/run_control.py"
+}
+```
+
+웹 프로세스는 외부 source에서 모듈이나 SDK를 import하지 않는다. 고정 entrypoint를 별도 `/usr/bin/python3`로 실행해 bounded JSON 요청을 전달하며 source·binding 지문을 대조한다. 동일 workspace binding은 모델 PC CLI가 사용하는 외부 run root를 가리킨다. SDK 설치·고정 source 전송은 [공통 실행 절차](../../../../docs/deployment/isaac-experiment-runs.md)를 따른다. 서명된 웹 payload는 `sim_web.py`·SIM HTML/JS를 필수 포함한다.
+
+조회는 view, check/start/stop은 manage 권한과 기존 CSRF·Origin 검사가 필요하다. 로컬 비협업 검수에서는 실행·중지를 허용하지 않는다. 브라우저는 accountFetch로 다른 탭의 신원 변경 뒤 응답 적용을 막는다. 응답이 유실되면 같은 start 요청을 sessionStorage에 보존하고 자동 재시작하지 않는다. 조건을 다시 확인한 뒤 같은 요청을 재전송하거나 목록의 run을 조회한다. **새 실험으로 다시 실행**은 새 요청/run과 parent_run_id를 만들고 원본을 보존한다.
+
+원시 SDK 로그·환경변수·private 경로는 웹으로 보내지 않는다. 최종 모델 검사 JSON만 manifest의 해시·크기를 확인해 제공하며 기본 검사는 영상이 없음을 표시한다. UNKNOWN·중지 요청·실제 종료·모델 검사 결과를 구분한다. `test_sim_web.py`, 명시적 `ROSY_RUN_BROWSER_TESTS=1`의 `test_sim_browser.py`와 공통 셸·서명 payload 누락 거절 시험으로 검증한다. 실제 SDK 실행은 별도 증거다.

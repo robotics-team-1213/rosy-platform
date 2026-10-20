@@ -542,6 +542,19 @@ roots:
     wave: "3a"
     import_prefix: [rosy_gateway]
     concern: other
+  - path: applications/fleet/dev
+    layout_target: applications/fleet/dev
+    part: tools
+    d427_target: applications/fleet/dev
+    wave: none
+    concern: other
+    note: D-830 loopback frontend development host; never installed in Fleet or device payloads.
+  - path: applications/fleet/test
+    layout_target: applications/fleet/test
+    part: test
+    d427_target: applications/fleet/test
+    wave: none
+    concern: other
   - path: operations/site_ui/media
     layout_target: operations/site_ui/media
     part: operations

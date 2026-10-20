@@ -5,9 +5,19 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.290
+**Version:** v1.292
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.292 Candidate trip admission (D-836)
+
+`POST /api/fleet/trip-jobs`의 기존 `{robot_id, steps}`는 유지한다. 새 형식은 `{candidate_robot_ids, request_key, steps}`다. 두 지정 방식은 배타적이다. 후보는 고유한 등록 robot ID 1~8개, key는 공백/제어문자 없는 1~128자이며 steps의 기존 1~8개 제한·PlaceRef를 유지한다. 공유 request schema는 `core_common.protocol.schemas.TripJobRequest`/`TripJobStep`이다.
+
+기존 named operator·TRIP simulation profile·장소 검사 후 Fleet이 후보 순서대로 기존 trip lease와 원장 robot claim을 확보한다. `TRIP_ROBOT_BUSY`만 다음 후보로 넘어가며 다른 불명/정지/capability/lease/claim 실패는 그대로 거절한다. 전체 busy는 409 `TRIP_CANDIDATES_BUSY`; 같은 principal/key를 다른 후보 순서나 steps로 재사용하면 409 `TRIP_REQUEST_CONFLICT`다. 등록되지 않은 후보가 하나라도 있으면 기존 404 `UNKNOWN_ROBOT`이다.
+
+같은 principal/key·정규화된 본문은 기존 `{job}`을 반환하며 선택된 장치는 `job.workcell_id`와 robot resource claim으로 확인한다. 완료·HOLD·재시작 뒤 재접수도 새 실행·새 lease를 만들지 않는다. 재접수는 현재 지도·장치 등록의 신규 admission 검사보다 먼저 같은 원장을 읽는다. 인증·profile·정적 body 검사는 항상 유지한다. 단일 `robot_id` 방식에는 request-key 의미를 소급 추가하지 않는다. 내부 key namespace는 `trip-pool:`이며 앱에 DB 접근을 요구하지 않는다. 이 API는 후보 배정을 지원하며 다중 운행·자동 충전·production profile·장치 권한을 추가하지 않는다. Envelope 1.0은 유지한다.
+
+공정 문서는 기존 `/api/fleet/cell-app/compile`·`/proposals`의 ID/digest 검사와 설치된 compiler로 처리한다. proposal/resolve는 물리 submission이 아니며 기존 admit의 named/two-person 검사와 `physical_submission: NOT_CONNECTED` 의미를 유지한다. 앱의 업무 완료와 관측 근거는 별도다.
 
 > **거버넌스:** 본 문서는 로봇(rosy_core)과 Fleet(rosy_fleet)이 **공유하는 유일한 인터페이스 계약**이다.
 > 본 문서의 변경은 양측 합의 + 문서 버전 업을 통해서만 가능하며(일방 변경 금지), 구현은 본 문서에 명시된 스키마를 임의로 확장하지 않는다.
@@ -3590,6 +3600,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
 | v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
 | v1.288 | 2026-10-19 | Integrate D-772/D-774/D-776/D-783 Station contracts from reserved v1.278–286 with the current v1.287 route-prior contract. Preserve both histories and envelope 1.0; no physical activation. |
@@ -4297,3 +4308,19 @@ MediaMTX WHIP/WHEP의 Location resource 식별자를 관리 API의 session_id로
 관리 callback `/auth`와 `/health`, MediaMTX 관리 API는 loopback 전용이며 외부 proxy에 공개하지 않는다.
 `/auth`는 publish/read에 `protocol=webrtc`와 정확한 path·위임을 확인하고, action=api에는 별도 로컬
 관리 자격만 인정한다. source/read 위임으로 관리 API를 호출할 수 없다.
+
+### D-834 Learning 로컬 SIM HTTP 계약 (Proposed)
+
+기존 검수 앱의 `/learning/sim`이며 CORE `/api/v1` 버전·장치 명령 schema에 속하지 않는다. 같은 모델 PC의 공통 Isaac 실행기와 CLI run 저장소를 사용한다. 운영 binding으로 source SHA·고정 entrypoint·SDK·외부 데이터 루트를 고정하며 요청에서 shell·argv·호스트·경로·unit·환경변수를 받지 않는다. 상세 설정과 실행 의미는 [검수 앱 SIM 설명](../../learning/curation/perception/docs/review-app.md#sim-실험-d-834-proposed), [운영 절차](../deployment/isaac-experiment-runs.md)를 따른다.
+
+| 경로 | 요청·응답·권한 |
+|---|---|
+| `GET /api/learning/sim/catalog` | view: `scenarios`, 고정 `source_sha`. 비활성 시나리오도 선행 조건·이유를 반환 |
+| `GET /api/learning/sim/runs` | view: `runs`. 실패·중단·UNKNOWN 포함, 원시 runtime·SDK 로그·private 경로 제외 |
+| `GET /api/learning/sim/runs/<run_id>` | view: 불변 입력 지문·설정·source SHA, revision·상태·단계·공개 결과·산출물 metadata |
+| `GET /api/learning/sim/runs/<run_id>/artifacts/import-report` | view: 최종 manifest로 해시·크기를 검증한 최대1MiB JSON 모델 검사 보고서 |
+| `POST /api/learning/sim/check` | manage: `scenario_id`, `config`, 선택적 현재 `source_sha`. 서버가 고정 SHA로 준비 상태·입력 지문 확인 |
+| `POST /api/learning/sim/start` | manage: `request_id`, `scenario_id`, `config`, `expected_input_sha256`, 선택적 현재 `source_sha`·`parent_run_id`. 같은 요청·입력은 같은 run |
+| `POST /api/learning/sim/stop` | manage: `run_id`, 현재 `expected_revision`. 소유 worker pidfd로 중지 요청, 종료 확인과 구분 |
+
+기존 Host·Origin·`X-Pinky-Token`·최대1MiB JSON 검사 뒤 프로젝트 권한을 다시 적용한다. 비협업 로컬 모드의 SIM 제어는403이며 연결 미설정은503이다. 시작 응답 유실은 새 실험을 만들지 않고 같은 요청으로 관찰한다. 입력/revision 충돌은 기존 로컬 HTTP의400 응답으로 거절한다. UNKNOWN은 자동 재시작하지 않는다. 첫 시나리오는 모델 import·관절·120프레임 검사이며 `task_success=null`, seed 미사용·영상 없음 사유를 명시한다. 물리 집기·학습 수용·정책 승격·로봇 명령 권한을 부여하지 않는다.

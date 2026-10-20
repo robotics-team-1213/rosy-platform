@@ -5,6 +5,13 @@ from __future__ import annotations
 import browser_scope
 
 
+def test_fleet_development_changes_include_independent_browser_flows():
+    for path in ('applications/fleet/dev/sample/engine.py', 'applications/fleet/web/runtime.js'):
+        found = browser_scope.targets([path])
+        assert 'applications/fleet/test/test_feature_browser_flows.py' in found
+        assert 'applications/fleet/test/test_sample_browser.py' in found
+
+
 def test_fleet_web_change_selects_fleet_browser_tests():
     found = browser_scope.targets(["applications/fleet/web/sitemap/site-map.js"])
     assert "test/test_fleet_console_browser.py" in found
@@ -62,3 +69,12 @@ def test_empty_selection_exits_3_without_targets(capsys):
     assert out.out == "" and "no browser tests" in out.err
     assert browser_scope.main(["test/test_games_board_browser.py"]) == 0
     assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
+
+
+def test_sim_sources_select_sim_browser():
+    for path in (
+        "learning/curation/perception/review_app_web/sim.js",
+        "learning/curation/perception/sim_web.py",
+        "shared/web/ui.js",
+    ):
+        assert "test/learning/perception/test_sim_browser.py" in browser_scope.targets([path])

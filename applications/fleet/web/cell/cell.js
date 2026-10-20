@@ -95,9 +95,10 @@ function refreshControls() {
   }
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
+    const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const channelBlocked = id === 'new-proposal' && channelRequested;
-    $(id).disabled = busy || unavailable || channelBlocked;
-    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? 'Cell 서비스 구성 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
+    $(id).disabled = busy || unavailable || sessionPending || channelBlocked;
+    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? 'Cell 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
   }
   for (const id of commands) {
     if (cellServiceUnavailable) {

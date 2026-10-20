@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import logging
+import json
 from pathlib import Path
 import time
 from typing import Literal
@@ -10,6 +11,7 @@ from pydantic import Field, FiniteFloat, model_validator
 from rosy.decision.deliberation import canonical
 
 from rosy.decision.conversation.codec import Profile, Strict, bounded_environment, checked_answer, digest, source_policy
+from rosy.decision.conversation.preprocessing import DISCORD_REVISION, prepare
 from .jobs import ConversationJobs
 from .worker import ConversationWorker
 from ..broker_transport import exchange
@@ -60,7 +62,14 @@ class ConversationProvider:
                 or value['source_commit'] != c.source_commit or value['profile'] != profile.model_dump()
                 or value['input_hash'] != question.digest or type(value['cost_usd']) not in (int, float)
                 or value['cost_usd'] != 0):raise ValueError('CONVERSATION_BROKER_IDENTITY_CHANGED')
-        return checked_answer(value['answer'], question).model_dump()
+        answer = checked_answer(value['answer'], question, preprocessing=profile.revision == DISCORD_REVISION)
+        if answer.usage is not None:
+            if answer.usage.preparation_hash != prepare(question).digest:
+                raise ValueError('CONVERSATION_PREPARATION_CHANGED')
+            logging.getLogger('uvicorn.error').info('conversation_inference %s', json.dumps({
+                'input_hash':question.digest, 'profile':profile.revision,
+                'source_commit':c.source_commit, **answer.usage.model_dump()}, sort_keys=True))
+        return answer.model_dump()
 
 
 def install_conversation(app, config, site_maps, *, task_service=None):
@@ -98,7 +107,7 @@ def install_conversation(app, config, site_maps, *, task_service=None):
         context_reader=lambda context:app.state.intent_execution.console._client(context['robot_id'])._get(
             '/api/v1/navigation/state?run_id='+context['run_id']))
     app.state.channel_conversation_worker = worker
-    if task_service is not None:
+    if task_service is not None and config.profile.revision != DISCORD_REVISION:
         from ..execution.runtime import install_execution
         install_execution(app,jobs,task_service,scope,admitted,lambda:bounded_environment(cached()),
                           refresh=snapshot)

@@ -1,0 +1,415 @@
+{
+  "pages": {
+    "/console": {
+      "path": "index.html",
+      "media_type": "text/html"
+    },
+    "/console/accounts": {
+      "path": "accounts.html",
+      "media_type": "text/html"
+    },
+    "/console/policy": {
+      "path": "work/policy.html",
+      "media_type": "text/html"
+    },
+    "/console/profile": {
+      "path": "profile.html",
+      "media_type": "text/html"
+    },
+    "/console/login": {
+      "path": "login.html",
+      "media_type": "text/html"
+    },
+    "/console/cell": {
+      "path": "cell/cell.html",
+      "media_type": "text/html"
+    },
+    "/console/site-map": {
+      "path": "sitemap/site-map.html",
+      "media_type": "text/html"
+    },
+    "/console/install": {
+      "path": "installation/install.html",
+      "media_type": "text/html"
+    }
+  },
+  "assets": {
+    "app-runtime.js": {"path": "runtime.js", "media_type": "application/javascript"},
+    "assistant.js": {
+      "path": "assistant/panel.js",
+      "media_type": "application/javascript"
+    },
+    "assistant-voice.js": {
+      "path": "assistant/assistant-voice.js",
+      "media_type": "application/javascript"
+    },
+    "assistant.css": {
+      "path": "assistant/panel.css",
+      "media_type": "text/css"
+    },
+    "cell.js": {
+      "path": "cell/cell.js",
+      "media_type": "application/javascript"
+    },
+    "cell-document-editor.js": {
+      "path": "cell/cell-document-editor.js",
+      "media_type": "application/javascript"
+    },
+    "cell.css": {
+      "path": "cell/cell.css",
+      "media_type": "text/css"
+    },
+    "doc-tabs.css": {
+      "path": "shared/doc-tabs.css",
+      "media_type": "text/css"
+    },
+    "fleet-header.css": {
+      "path": "shared/fleet-header.css",
+      "media_type": "text/css"
+    },
+    "fleet-header.js": {
+      "path": "shared/fleet-header.js",
+      "media_type": "application/javascript"
+    },
+    "styles.css": {
+      "path": "shared/styles.css",
+      "media_type": "text/css"
+    },
+    "console.js": {
+      "path": "console.js",
+      "media_type": "application/javascript"
+    },
+    "console-auth.js": {
+      "path": "console-auth.js",
+      "media_type": "application/javascript"
+    },
+    "console-goal.js": {
+      "path": "console-goal.js",
+      "media_type": "application/javascript"
+    },
+    "console-refresh.js": {
+      "path": "console-refresh.js",
+      "media_type": "application/javascript"
+    },
+    "inbox.js": {
+      "path": "inbox.js",
+      "media_type": "application/javascript"
+    },
+    "work-view.js": {
+      "path": "work/work-view.js",
+      "media_type": "application/javascript"
+    },
+    "work.css": {
+      "path": "work/work.css",
+      "media_type": "text/css"
+    },
+    "channel-request-view.js": {
+      "path": "work/channel-request-view.js",
+      "media_type": "application/javascript"
+    },
+    "incident-view.js": {
+      "path": "incident-view.js",
+      "media_type": "application/javascript"
+    },
+    "confirmed-action.js": {
+      "path": "confirmed-action.js",
+      "media_type": "application/javascript"
+    },
+    "install.js": {
+      "path": "installation/install.js",
+      "media_type": "application/javascript"
+    },
+    "measured-calibration-view.js": {
+      "path": "calibration/measured-calibration-view.js",
+      "media_type": "application/javascript"
+    },
+    "measured-calibration.css": {
+      "path": "calibration/measured-calibration.css",
+      "media_type": "text/css"
+    },
+    "host-services.js": {
+      "path": "installation/host-services.js",
+      "media_type": "application/javascript"
+    },
+    "host-health.js": {
+      "path": "shared/host-health.js",
+      "media_type": "application/javascript"
+    },
+    "peer-picker.js": {
+      "path": "installation/peer-picker.js",
+      "media_type": "application/javascript"
+    },
+    "device-discovery.js": {
+      "path": "devices/device-discovery.js",
+      "media_type": "application/javascript"
+    },
+    "address-drift.js": {
+      "path": "shared/address-drift.js",
+      "media_type": "application/javascript"
+    },
+    "state-age.js": {
+      "path": "state-age.js",
+      "media_type": "application/javascript"
+    },
+    "authorization.js": {
+      "path": "shared/authorization.js",
+      "media_type": "application/javascript"
+    },
+    "development-auth.js": {
+      "path": "shared/development-auth.js",
+      "media_type": "application/javascript"
+    },
+    "password-login.js": {
+      "path": "shared/password-login.js",
+      "media_type": "application/javascript"
+    },
+    "login-page.js": {
+      "path": "shared/login-page.js",
+      "media_type": "application/javascript"
+    },
+    "profile-page.js": {
+      "path": "shared/profile-page.js",
+      "media_type": "application/javascript"
+    },
+    "account-page.js": {
+      "path": "shared/account-page.js",
+      "media_type": "application/javascript"
+    },
+    "policy-page.js": {
+      "path": "work/policy-page.js",
+      "media_type": "application/javascript"
+    },
+    "policy-model.js": {
+      "path": "work/policy-model.js",
+      "media_type": "application/javascript"
+    },
+    "policy.css": {
+      "path": "work/policy.css",
+      "media_type": "text/css"
+    },
+    "account-permissions.js": {
+      "path": "shared/account-permissions.js",
+      "media_type": "application/javascript"
+    },
+    "login-return.js": {
+      "path": "shared/login-return.js",
+      "media_type": "application/javascript"
+    },
+    "password-login.css": {
+      "path": "shared/password-login.css",
+      "media_type": "text/css"
+    },
+    "camera-pairing.js": {
+      "path": "devices/camera-pairing.js",
+      "media_type": "application/javascript"
+    },
+    "camera-peer.js": {
+      "path": "installation/camera-peer.js",
+      "media_type": "application/javascript"
+    },
+    "field-layers.js": {
+      "path": "calibration/field-layers.js",
+      "media_type": "application/javascript"
+    },
+    "field-view.js": {
+      "path": "calibration/field-view.js",
+      "media_type": "application/javascript"
+    },
+    "field-warp.js": {
+      "path": "shared/field-warp.js",
+      "media_type": "application/javascript"
+    },
+    "formation.js": {
+      "path": "formation.js",
+      "media_type": "application/javascript"
+    },
+    "motion-readiness.js": {
+      "path": "motion-readiness.js",
+      "media_type": "application/javascript"
+    },
+    "line-stuck.js": {
+      "path": "line-stuck.js",
+      "media_type": "application/javascript"
+    },
+    "stuck-evidence.js": {
+      "path": "shared/stuck-evidence.js",
+      "media_type": "application/javascript"
+    },
+    "trip-replan.js": {
+      "path": "trip-replan.js",
+      "media_type": "application/javascript"
+    },
+    "link-tag.js": {
+      "path": "link-tag.js",
+      "media_type": "application/javascript"
+    },
+    "site-path.js": {
+      "path": "site-path.js",
+      "media_type": "application/javascript"
+    },
+    "localization-badge.js": {
+      "path": "localization-badge.js",
+      "media_type": "application/javascript"
+    },
+    "camera-warp.js": {
+      "path": "map/camera-warp.js",
+      "media_type": "application/javascript"
+    },
+    "camera-backdrop.js": {
+      "path": "map/camera-backdrop.js",
+      "media_type": "application/javascript"
+    },
+    "map-fit.js": {
+      "path": "shared/map-fit.js",
+      "media_type": "application/javascript"
+    },
+    "map-fit-view.js": {
+      "path": "calibration/map-fit-view.js",
+      "media_type": "application/javascript"
+    },
+    "map-view.js": {
+      "path": "map/map-view.js",
+      "media_type": "application/javascript"
+    },
+    "map-overlays.js": {
+      "path": "map/map-overlays.js",
+      "media_type": "application/javascript"
+    },
+    "map-polling.js": {
+      "path": "map/map-polling.js",
+      "media_type": "application/javascript"
+    },
+    "map-datum.js": {
+      "path": "map/map-datum.js",
+      "media_type": "application/javascript"
+    },
+    "poll-gate.js": {
+      "path": "shared/poll-gate.js",
+      "media_type": "application/javascript"
+    },
+    "roster.js": {
+      "path": "roster.js",
+      "media_type": "application/javascript"
+    },
+    "queues.js": {
+      "path": "queues.js",
+      "media_type": "application/javascript"
+    },
+    "card-trip.js": {
+      "path": "card-trip.js",
+      "media_type": "application/javascript"
+    },
+    "power-health-view.js": {
+      "path": "power-health-view.js",
+      "media_type": "application/javascript"
+    },
+    "enrollment.js": {
+      "path": "devices/enrollment.js",
+      "media_type": "application/javascript"
+    },
+    "signals.js": {
+      "path": "signals.js",
+      "media_type": "application/javascript"
+    },
+    "site-map.css": {
+      "path": "sitemap/site-map.css",
+      "media_type": "text/css"
+    },
+    "site-map.js": {
+      "path": "sitemap/site-map.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-model.js": {
+      "path": "shared/site-map-model.js",
+      "media_type": "application/javascript"
+    },
+    "route-attention.js": {
+      "path": "shared/route-attention.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-edit.js": {
+      "path": "shared/site-map-edit.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-teach.js": {
+      "path": "sitemap/site-map-teach.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-survey.js": {
+      "path": "sitemap/site-map-survey.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-camera.js": {
+      "path": "sitemap/site-map-camera.js",
+      "media_type": "application/javascript"
+    },
+    "site-layer.js": {
+      "path": "map/site-layer.js",
+      "media_type": "application/javascript"
+    },
+    "tracking-layer.js": {
+      "path": "map/tracking-layer.js",
+      "media_type": "application/javascript"
+    },
+    "tracking-view.js": {
+      "path": "tracking-view.js",
+      "media_type": "application/javascript"
+    },
+    "tracking-relearn.js": {
+      "path": "installation/tracking-relearn.js",
+      "media_type": "application/javascript"
+    },
+    "start-point-layer.js": {
+      "path": "map/start-point-layer.js",
+      "media_type": "application/javascript"
+    },
+    "start-point-view.js": {
+      "path": "installation/start-point-view.js",
+      "media_type": "application/javascript"
+    },
+    "trail-view.js": {
+      "path": "map/trail-view.js",
+      "media_type": "application/javascript"
+    },
+    "traffic-view.js": {
+      "path": "map/traffic-view.js",
+      "media_type": "application/javascript"
+    },
+    "guide-layer.js": {
+      "path": "shared/guide-layer.js",
+      "media_type": "application/javascript"
+    },
+    "connection-view.js": {
+      "path": "connection-view.js",
+      "media_type": "application/javascript"
+    },
+    "device-watch.js": {
+      "path": "device-watch.js",
+      "media_type": "application/javascript"
+    },
+    "device-watch.css": {
+      "path": "device-watch.css",
+      "media_type": "text/css"
+    },
+    "vision-view.js": {
+      "path": "shared/vision-view.js",
+      "media_type": "application/javascript"
+    },
+    "robot-video.js": {
+      "path": "shared/robot-video.js",
+      "media_type": "application/javascript"
+    },
+    "robot-video.css": {
+      "path": "shared/robot-video.css",
+      "media_type": "text/css"
+    },
+    "power-action.js": {
+      "path": "shared/power-action.js",
+      "media_type": "application/javascript"
+    },
+    "area-nav.js": {
+      "path": "shared/area-nav.js",
+      "media_type": "application/javascript"
+    }
+  }
+}
