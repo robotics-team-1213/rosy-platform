@@ -14,6 +14,9 @@ REGISTRY = runpy.run_path(str(WEB / 'asset_registry.py'))
 ASSETS = REGISTRY['load_registry'](WEB)
 SHARED = json.loads((COMMON / 'shared-assets.json').read_text(encoding='utf-8'))['shared_assets']
 MAX_BODY = 2 * 1024 * 1024
+DEV_WEB = Path(__file__).parent / 'web'
+DEV_ASSETS = {'runtime-sample.js': 'application/javascript', 'browser-platform.js': 'application/javascript',
+              'media-session.js': 'application/javascript', 'controls.js': 'application/javascript', 'controls.css': 'text/css'}
 
 
 def static_response(path):
@@ -107,10 +110,22 @@ def make_server(provider, origin):
             elif path.path.startswith('/api/fleet/'):
                 response = provider.handle(self.command, self.path, dict(self.headers.items()), body)
             elif self.command in ('GET', 'HEAD'):
-                response = static_response(path.path)
+                response = self.static(path.path)
             else:
                 response = error(405, 'METHOD_NOT_ALLOWED')
             self.respond(response, head=self.command == 'HEAD')
+
+        def static(self, path):
+            from sample.engine import SampleEngine
+            sample = isinstance(provider, SampleEngine)
+            name = 'runtime-sample.js' if path == '/console/assets/app-runtime.js' else path.removeprefix('/__dev/assets/')
+            if sample and (path == '/console/assets/app-runtime.js' or path.startswith('/__dev/assets/')) and name in DEV_ASSETS:
+                return DevResponse(200, [('Content-Type', DEV_ASSETS[name]), ('Cache-Control', 'no-store')], (DEV_WEB / name).read_bytes())
+            response = static_response(path)
+            if sample and path in ASSETS['pages'] and response.status == 200:
+                controls = b'<link rel="stylesheet" href="/__dev/assets/controls.css"><script type="module" src="/__dev/assets/controls.js"></script>'
+                response.body = response.body.replace(b'</head>', controls + b'</head>', 1)
+            return response
 
         def control(self, path, body):
             from sample.engine import SampleEngine

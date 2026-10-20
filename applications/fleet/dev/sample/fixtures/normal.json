@@ -1,5 +1,6 @@
 {
   "GET /map": {"map_id": "sample-site", "width": 4, "height": 2, "resolution": 1, "origin": {"x": 0, "y": 0, "yaw": 0}, "data": [0, 0, 0, 0, 0, 0, 0, 0]},
+  "GET /robots/sample-robot/path": {"robot_id": "sample-robot", "points": [], "path": []},
   "GET /sightings": {"sightings": []},
   "GET /tethers": {"tethers": []},
   "GET /ai": {"facts": [], "available": false},

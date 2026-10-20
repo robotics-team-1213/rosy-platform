@@ -34,6 +34,7 @@
     }
   },
   "assets": {
+    "app-runtime.js": {"path": "runtime.js", "media_type": "application/javascript"},
     "assistant.js": {
       "path": "assistant/panel.js",
       "media_type": "application/javascript"

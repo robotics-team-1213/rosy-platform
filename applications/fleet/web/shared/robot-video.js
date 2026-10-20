@@ -6,7 +6,7 @@
 // 실패한 타일은 "영상 없음"으로 남는다: Fleet 경유 JPEG나 고속 MJPEG는 열지 않는다.
 
 import {createFleetClient} from "/common/fleet-client.js";
-import {openCamera} from "/common/webrtc.js";
+import {openRobotCamera} from "/console/assets/app-runtime.js";
 
 export const MAX_TILES = 6;
 
@@ -27,7 +27,7 @@ function el(doc, tag, text, attrs = {}) {
   return node;
 }
 
-export function createRobotVideo({doc = document, call, open = openCamera, fetchImpl}) {
+export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
   let sessions = [], running = null;
   const grantPath = (robot, suffix = "") => `/api/fleet/robots/${encodeURIComponent(robot)}/media-grant${suffix}`;
 
