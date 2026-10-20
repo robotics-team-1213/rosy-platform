@@ -8,7 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "learning/registry/perception"))
-from store import Store, content_sha  # noqa: E402
+from store import content_sha  # noqa: E402
 from test_model_deliver import _model  # noqa: E402
 
 
