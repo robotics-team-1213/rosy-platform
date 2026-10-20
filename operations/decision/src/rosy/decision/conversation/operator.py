@@ -5,11 +5,12 @@ from pydantic import Field, FiniteFloat, model_validator
 
 from core_common.protocol.assistant import AssistantFact
 from .codec import MODEL, MODEL_DIGEST, Strict, checked_answer, digest
+from .preprocessing import InferenceUsage, control_issue, prepare
 
 
 class OperatorProfile(Strict):
     profile_id: Literal['qwen-operator-readonly'] = 'qwen-operator-readonly'
-    revision: Literal['d821-multilingual-v1'] = 'd821-multilingual-v1'
+    revision: Literal['d831-preprocessing-v1'] = 'd831-preprocessing-v1'
     model_id: Literal[MODEL] = MODEL
     model_digest: Literal[MODEL_DIGEST] = MODEL_DIGEST
     protocol: Literal['rosy-operator-v1'] = 'rosy-operator-v1'
@@ -62,12 +63,15 @@ class OperatorAnswer(Strict):
     kind: Literal['CHAT', 'STATUS', 'CAUSE', 'CLARIFY', 'CONTROL', 'REFUSE']
     response: str = Field(min_length=1, max_length=1000)
     evidence_refs: list[str] = Field(max_length=64)
+    usage: InferenceUsage | None = Field(default=None, exclude=True)
 
 
 def checked_operator_answer(value, question):
     answer = OperatorAnswer.model_validate(value)
     if not set(answer.evidence_refs) <= {f.ref for f in question.facts}:
         raise ValueError('ASSISTANT_UNKNOWN_EVIDENCE')
+    if answer.kind == 'CONTROL' and control_issue(prepare(question)):
+        return OperatorAnswer(kind='CLARIFY', response='Classified', evidence_refs=[], usage=answer.usage)
     if answer.kind == 'CHAT':
         checked_answer({'kind':'CHAT', 'response':answer.response, 'evidence_refs':answer.evidence_refs,
                         'intent':None, 'review_required':False}, question)
