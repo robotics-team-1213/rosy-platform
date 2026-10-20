@@ -42,7 +42,7 @@ export function createMapAuthoring(host) {
     if (!(sourceDistance > 0 && distance > 0)) throw new Error('서로 다른 기준 두 점과 양수 실측 거리가 필요합니다');
     const result = await importer.register({plane: $('drawing-plane').value, unit, source_origin: origin,
       map_origin_m: [number('drawing-map-x'), number('drawing-map-y')],
-      heading_rad: number('drawing-heading') * Math.PI / 180,
+      heading_rad: number('drawing-rotation') * Math.PI / 180,
       scale: distance / (sourceDistance * {m: 1, cm: .01, mm: .001}[unit])},
       {measured_distance_m: distance, description: $('drawing-description').value});
     if (result) message('맞춤 완료 · 도면은 배경이며 그린 요소는 초안에 보존했습니다. 현장 기준을 다시 검토하세요');
