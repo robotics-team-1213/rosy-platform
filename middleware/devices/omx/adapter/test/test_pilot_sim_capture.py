@@ -214,3 +214,33 @@ def test_full_camera_queue_marks_incomplete_instead_of_silently_discarding_frame
     capture.tick()
     assert capture.status()['status'] == 'incomplete'
     assert 'camera_queue_overflow' in capture.status()['issues']
+
+
+def test_stop_drains_the_accepted_tail_and_fences_new_frames(tmp_path):
+    import copy
+    import json
+    capture = create_capture(tmp_path)
+    episode = capture.start('close queued frames')
+    capture.prepare(NS(command_id='command', positions={'joint1': .02, 'gripper_joint_1': -.1}, duration_s=.8))
+    capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED', command_id='command', phase_id=None,
+        goal_id='11111111-1111-4111-8111-111111111111',
+        observed_at_monotonic_s=time.monotonic(), sequence=1))
+    for sequence, stamp in [(2,1_100_000_000), (3,1_200_000_000), (4,1_300_000_000)]:
+        capture.observe_joint_state(state(stamp-2_000_000, .01))
+        frame = copy.deepcopy(capture.camera.latest_frame)
+        frame[0].capture_time_ns, frame[0].sequence = stamp, sequence
+        capture.camera.latest_frame = frame
+        capture.observe_frame(frame)
+    capture.tick()
+    capture.tick()
+    original = capture.recorder.sample
+    def sample_and_receive_later_frame(**values):
+        original(**values)
+        later = copy.deepcopy(capture.camera.latest_frame)
+        later[0].capture_time_ns, later[0].sequence = 1_400_000_000, 5
+        capture.observe_frame(later)
+    capture.recorder.sample = sample_and_receive_later_frame
+    result = capture.stop(episode['episode_id'], 'success')
+    assert result['status'] == 'complete' and result['frame_count'] == 3
+    rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
+    assert [row['capture_time_ns'] for row in rows] == [1_100_000_000,1_200_000_000,1_300_000_000]
