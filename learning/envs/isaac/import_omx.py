@@ -16,6 +16,7 @@ def parse_args():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--frames", type=int, default=120, help="Render frames after import; 0 runs until closed")
+    parser.add_argument("--report", type=Path, help="Exclusive model-import proof after SDK cleanup")
     return parser.parse_args()
 
 
@@ -67,6 +68,11 @@ def main():
     finally:
         from sdk_entrypoint import close_sdk
         close_sdk(app, headless=args.headless)
+    if args.report is not None:
+        from importlib.metadata import version
+        from import_report import write_report
+        write_report(args.report, model=args.model, frames=frame, requested=args.frames,
+                     articulations=articulations, joints=joints, sdk_version=version('isaacsim'))
 
 
 if __name__ == "__main__":
