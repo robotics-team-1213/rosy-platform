@@ -6,6 +6,7 @@ import yaml
 
 from fleet.routing.cost import RoutingConfig
 from fleet.server.site_map_store import SiteMapStore
+from fleet.server.site_map_assets import SiteMapAssetStore
 from fleet.site_map import from_lane_graph
 
 
@@ -16,7 +17,9 @@ def build_site_map(args, tasks_db):
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding='utf-8')) or {}
         routing = ((site_config.get('fleet') or {}).get('routing') if isinstance(site_config, dict) else None)
         routing_config = RoutingConfig.from_mapping(routing)
-        site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
+        assets = (SiteMapAssetStore(Path(tasks_db).parent / (Path(tasks_db).name + '.site-map-assets'))
+                  if tasks_db is not None else None)
+        site_maps = SiteMapStore(tasks_db, routing_config=routing_config, drawing_assets=assets)
         source = getattr(args, 'site_map_import', None)
         if source is not None:
             site_maps.import_source = Path(source)
