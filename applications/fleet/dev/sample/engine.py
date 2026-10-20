@@ -27,7 +27,8 @@ class SampleEngine:
         if scenario_id not in ('normal', 'viewer'):
             raise ValueError('unknown sample scenario')
         with self.lock:
-            self.epoch += 1
+            previous = getattr(self, 'sessions', None)
+            self.epoch = max(self.epoch, previous.epoch if previous else 0) + 1
             self.scenario_id = scenario_id
             self.sessions = Sessions(self.epoch, 'viewer' if scenario_id == 'viewer' else 'operator')
             self.work = Work()
@@ -44,6 +45,9 @@ class SampleEngine:
 
     def advance(self, flow_id, event):
         with self.lock:
+            if flow_id == 'monitoring':
+                self.work.advance_task(event)
+                return
             feature = {'work': self.work, 'assistant': self.assistant, 'cell_jobs': self.cell}.get(flow_id)
             if feature is None:
                 raise ValueError('unknown sample flow')
@@ -74,7 +78,10 @@ class SampleEngine:
             return response
         if method != 'GET' and self.sessions.role == 'viewer':
             return error(403, 'FORBIDDEN')
-        for feature in (self.work, self.spatial, self.governance, self.assistant, self.cell,
+        response = self.work.handle(method, path, payload, headers, ['sample-robot', *self.installation.robots])
+        if response is not None:
+            return response
+        for feature in (self.spatial, self.governance, self.assistant, self.cell,
                         self.installation, self.pairing, self.calibration):
             response = feature.handle(method, path, payload)
             if response is not None:
@@ -88,8 +95,14 @@ class SampleEngine:
                                'pose': {'x': 1, 'y': 1, 'yaw': 0}, 'battery': {'percent': 83},
                                'localization': {'state': 'LOCALIZED', 'pose_frame': 'map'}},
                      'localization': {'state': 'LOCALIZED', 'source': 'robot'}}
-            return reply({'fleet': {'name': '샘플 현장', 'online': 1, 'total': 1},
-                          'robots': [robot], 'signals': {}, 'alarms': [], 'ts': 1792454400})
+            robots = [robot]
+            for identifier in self.installation.robots:
+                from copy import deepcopy
+                added = deepcopy(robot)
+                added['robot_id'] = added['state']['robot_id'] = identifier
+                robots.append(added)
+            return reply({'fleet': {'name': '샘플 현장', 'online': len(robots), 'total': len(robots)},
+                          'robots': robots, 'signals': {}, 'alarms': [], 'ts': 1792454400})
         if method == 'GET' and f'GET {path}' in self.reads:
             return reply(self.reads[f'GET {path}'])
         self.unhandled.append((method, target))

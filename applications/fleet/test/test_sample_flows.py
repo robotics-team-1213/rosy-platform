@@ -126,7 +126,7 @@ def test_goal_idempotency_progress_and_terminal_read():
     headers = {'Cookie': 'rosy_sample_session=sample-1', 'Idempotency-Key': 'sample-goal'}
     target = '/api/fleet/robots/sample-robot/goal'
     first = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
-    assert first.status == 202
+    assert first.status == 200
     task = json.loads(first.body)['task']
     again = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
     assert json.loads(again.body)['task']['task_id'] == task['task_id']

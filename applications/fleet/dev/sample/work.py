@@ -1,5 +1,6 @@
 """A deterministic trip lifecycle; no actuator, dispatcher, or wall-clock timers."""
 from copy import deepcopy
+import math
 import re
 
 from response import error, reply
@@ -8,6 +9,7 @@ from response import error, reply
 class Work:
     def __init__(self):
         self.plans, self.trips = {}, {}
+        self.tasks, self.task_keys = {}, {}
         self.dispatch = {'dispatch_enabled': True, 'generation': 1, 'queued_tasks': 0,
                          'unresolved_actions': 0, 'rearm_available': False, 'reason': None}
 
@@ -19,7 +21,51 @@ class Work:
             if trip['state'] in ('started', 'running', 'link_wait'):
                 trip.update(state=states[event], updated_at=trip['updated_at'] + 1)
 
-    def handle(self, method, path, body):
+    def advance_task(self, event):
+        states = {'start': 'RUNNING', 'complete': 'GOAL_CONFIRMED', 'fail': 'FAILED', 'unknown': 'UNKNOWN'}
+        opened = [task for task in self.tasks.values() if task['status'] in ('QUEUED', 'RUNNING', 'ACCEPTED')]
+        if event not in states or not opened:
+            raise ValueError('unknown event or no active task')
+        for task in opened:
+            task.update(status=states[event], reason=None)
+
+    def handle(self, method, path, body, headers=None, robot_ids=('sample-robot',)):
+        match = re.fullmatch(r'/robots/([^/]+)/goal', path)
+        if method == 'POST' and match:
+            robot = match[1]
+            if robot not in robot_ids:
+                return error(404, 'UNKNOWN_ROBOT')
+            key = (headers or {}).get('idempotency-key')
+            if not key:
+                return error(400, 'IDEMPOTENCY_KEY_REQUIRED')
+            if (set(body) != {'x', 'y', 'yaw'} or any(isinstance(n, bool) or not isinstance(n, (int, float))
+                                                    or not math.isfinite(n) for n in body.values())):
+                return error(422, 'INVALID_REQUEST')
+            if key in self.task_keys:
+                identifier, saved_robot, saved_body = self.task_keys[key]
+                if saved_robot != robot or saved_body != body:
+                    return error(409, 'IDEMPOTENCY_CONFLICT')
+                task = self.tasks[identifier]
+            else:
+                identifier = f'sample-task-{len(self.tasks) + 1}'
+                task = {'task_id': identifier, 'robot_id': robot, 'status': 'QUEUED', 'reason': None,
+                        'goal': deepcopy(body), 'queue_position': 1, 'waiting_on': [], 'source': 'operator',
+                        'updated_at': '2026-10-21T00:00:00Z'}
+                self.tasks[identifier] = task
+                self.task_keys[key] = identifier, robot, deepcopy(body)
+            return reply({'accepted': task['status'] == 'ACCEPTED', 'queued': task['status'] == 'QUEUED', 'task': task})
+        match = re.fullmatch(r'/tasks/([^/]+)(/cancel)?', path)
+        if match:
+            task = self.tasks.get(match[1])
+            if task is None:
+                return error(404, 'TASK_NOT_FOUND')
+            if method == 'GET' and not match[2]:
+                return reply({'task': task, 'history': []})
+            if method == 'POST' and match[2]:
+                if task['status'] not in ('QUEUED', 'RUNNING', 'ACCEPTED'):
+                    return error(409, 'TASK_NOT_CANCELABLE')
+                task.update(status='CANCELED', reason='OPERATOR_CANCEL')
+                return reply({'task': task})
         if (method, path) == ('GET', '/dispatch-control'):
             return reply(self.dispatch)
         if method == 'POST' and path in ('/estop', '/cancel-all', '/dispatch/rearm'):
@@ -32,6 +78,9 @@ class Work:
                                      generation=self.dispatch['generation'] + 1)
                 for trip in self.trips.values():
                     trip.update(state='canceled', reason='OPERATOR_CANCEL')
+                for task in self.tasks.values():
+                    if task['status'] in ('QUEUED', 'RUNNING', 'ACCEPTED'):
+                        task.update(status='CANCELED', reason='OPERATOR_CANCEL')
             return reply(self.dispatch)
         if (method, path) == ('POST', '/robots/sample-robot/trip'):
             if body.get('execute'):
@@ -79,6 +128,11 @@ class Work:
                      'workcell_id': None, 'approval': None, 'wait': None,
                      'visible_state': 'ended' if t['state'] in ('arrived', 'canceled') else 'in_progress'}
                     for t in self.trips.values()]
+            rows.extend({'source': 'task', 'source_id': task['task_id'], 'device_id': task['robot_id'], 'action_kind': 'navigate',
+                         'status': task['status'], 'reason': task['reason'], 'updated_at': task['updated_at'],
+                         'workcell_id': None, 'approval': None, 'wait': None,
+                         'visible_state': 'ended' if task['status'] in ('GOAL_CONFIRMED', 'CANCELED') else 'in_progress'}
+                        for task in self.tasks.values())
             return reply({'observed_at': '2026-10-21T00:00:00Z', 'rows': rows, 'kinds': ['trip'],
                           'tasks_available': True, 'missions_available': False, 'cell_jobs_available': False,
                           'truncated_sources': []})
