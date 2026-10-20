@@ -57,6 +57,7 @@ PILOT = [
 ]
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
+    "test/learning/perception/test_sim_browser.py",
     "test/learning/perception/test_storage_inventory_http.py",
     "test/learning/perception/test_review_flow_browser.py",
     "test/learning/perception/test_pixel_review_browser.py",
