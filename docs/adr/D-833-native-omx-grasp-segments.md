@@ -31,3 +31,5 @@ Legacy `leader_native`의 원본 inspection에 session/cycle이 선언되지 않
 ### 원본 프레임 화면 검증 — 2026-10-21
 
 실제 Edge 실행에서 기존 `img-src 'self' data:` 정책이 OMX 미리보기의 `blob:` URL을 차단하는 결함을 확인했다. 프레임 응답은 기존 정책이 허용하는 data URL로 표시하며 보안 허용 출처를 늘리지 않는다. `test_mark_review_and_download_original_grasp_range`는 이미지 요소의 가시성에 더해 실제 `naturalWidth`를 검사한다. HTTP 200과 깨진 이미지 요소의 가시성만으로 원본 확인 성공을 선언하지 않는다. 검증 목표는 [화면 실행 계획](../plans/2026-10-21-omx-ui-walkthrough.md)에 기록한다.
+
+Episode·카메라·확인 프레임 선택이 바뀌면 이전 미리보기를 숨긴다. 선택 변경 전 또는 더 오래된 요청의 결과·오류는 늦게 도착해도 현재 미리보기를 덮어쓰지 않는다.

@@ -48,19 +48,24 @@ function segmentReview(set,section){
   choice(form,'분할','split',[['exclude','제외·보존'],['train','학습'],['eval','독립 평가'],['test','최종 시험']]);
   const add=el('button','구간 추가');add.type='submit';form.append(add);
   const save=el('button','검수 저장'),download=el('button','선택 JSON 내려받기');save.type=download.type='button';
-  preview.onclick=async()=>{try{
+  let previewVersion=0;
+  for(const input of [episode,cameraKey,frame])input.oninput=()=>{
+    previewVersion++;image.hidden=true;status.textContent='원본 선택이 바뀌었습니다. 프레임을 다시 확인하세요.';
+  };
+  preview.onclick=async()=>{const version=++previewVersion;try{
     const query=new URLSearchParams({id:set.id,episode:episode.value,frame:frame.value,camera:cameraKey.value});
     const response=await accountFetch('/api/learning/omx/frame?'+query);
     if(!response.ok)throw new Error((await response.json()).error||'프레임 확인 실패');
     const blob=await response.blob(),reader=new FileReader();
-    image.src=await new Promise((resolve,reject)=>{
+    const dataURL=await new Promise((resolve,reject)=>{
       reader.onload=()=>resolve(reader.result);
       reader.onerror=()=>reject(new Error('프레임 이미지를 읽지 못했습니다.'));
       reader.readAsDataURL(blob);
     });
-    image.hidden=false;
+    if(version!==previewVersion)return;
+    image.src=dataURL;image.hidden=false;
     status.textContent=`원본 Episode ${episode.value}, 프레임 ${frame.value}`;
-  }catch(error){image.hidden=true;status.textContent=error.message;}};
+  }catch(error){if(version!==previewVersion)return;image.hidden=true;status.textContent=error.message;}};
   const show=()=>{
     list.replaceChildren(...rows.map((row,index)=>{
       const p=el('p',`Episode ${row.episode_index}: [${row.start_frame}, ${row.end_frame}) · ${row.object} · ${OUTCOME[row.outcome]} · ${SPLIT[row.split]}`);
