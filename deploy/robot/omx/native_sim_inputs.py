@@ -94,9 +94,12 @@ def load_config(path):
     if config.get("role") not in CAPS:
         raise ValueError("native simulation role must be ai or model")
     required = {"schema", "role", "ros_setup", "overlay", "python_site"}
-    if not required <= config.keys() or config.keys() - required - {"dependency_prefix"}:
+    if not required <= config.keys() or config.keys() - required - {
+            "dependency_prefix", "policy_input", "inference_python_sites"}:
         raise ValueError("unexpected native SDK config keys")
-    for key in ("ros_setup", "overlay", "python_site", "dependency_prefix"):
+    if ('policy_input' in config) != ('inference_python_sites' in config):
+        raise ValueError('policy and inference dependencies must be explicit together')
+    for key in ("ros_setup", "overlay", "python_site", "dependency_prefix", "policy_input"):
         if key not in config:
             continue
         value = config[key]
@@ -107,6 +110,15 @@ def load_config(path):
         raise ValueError("ROS and overlay setup files are required")
     if not Path(config["python_site"]).is_dir():
         raise ValueError("python_site must be a directory")
+    if 'policy_input' in config:
+        sites=config['inference_python_sites']
+        if (not isinstance(sites,list) or len(sites)!=2 or len(set(sites))!=2
+                or any(not isinstance(p,str) or not Path(p).is_absolute()
+                       or any(c in p for c in ('\n','\x00',':')) or not Path(p).is_dir() for p in sites)
+                or any(not (Path(config['policy_input'])/name).is_file()
+                       for name in ('policy-artifact.json','campaign.json'))):
+            raise ValueError('pinned policy/campaign and two explicit inference sites required')
+        config['inference_python_sites']=[str(Path(p).resolve(strict=True)) for p in sites]
     return config
 
 

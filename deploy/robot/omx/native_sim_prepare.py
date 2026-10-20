@@ -25,7 +25,10 @@ def environment(config):
         for variable, suffix in (("AMENT_PREFIX_PATH", ""), ("CMAKE_PREFIX_PATH", ""),
                                  ("LD_LIBRARY_PATH", "/lib")):
             lines.append("export " + variable + "=" + quote(prefix + suffix) + ":${" + variable + "-}")
-    lines += ["export PYTHONPATH=" + quote(config["python_site"]) + ":${PYTHONPATH-}",
+    sites=[*config.get('inference_python_sites',[]),config['python_site']]
+    if config.get('policy_input'):
+        lines.append('export OMX_SIM_POLICY_INPUT='+quote(config['policy_input']))
+    lines += ["export PYTHONPATH=" + quote(':'.join(sites)) + ":${PYTHONPATH-}",
               "export OMX_CELL_ROS_SETUP=" + quote(config["ros_setup"]),
               "export OMX_CELL_OVERLAY=" + quote(config["overlay"]),
               "export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST", "unset ROS_LOCALHOST_ONLY",
@@ -108,6 +111,8 @@ def prepare(source, config_path, staging, run_id, *, experiment="g2", episodes=1
              "/usr/bin/python3", "/usr/lib/python3/dist-packages", sysconfig.get_paths()["stdlib"]]
     if config.get("dependency_prefix"):
         roots.append(config["dependency_prefix"])
+    if config.get('policy_input'):
+        roots.extend([config['policy_input'],*config['inference_python_sites']])
     roots = sorted(set(roots))
     # Hash before AND after SDK imports; changing artifacts cannot earn a PASS receipt.
     dependencies = dependency_inventory(roots)
