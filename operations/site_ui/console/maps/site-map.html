@@ -150,12 +150,12 @@
             <label>도로 폭 (m)<input class="ui-field" id="editor-width" type="number" min="0.001" max="10" step="any" value="0.2"></label>
             <label>통행 방향<select class="ui-field" id="editor-direction"><option value="one_way">일방</option><option value="two_way">양방</option></select></label>
           </div>
-          <div class="actions"><ui-button id="editor-finish">그리기 완료</ui-button><ui-button id="editor-cancel" kind="quiet">그리기 취소</ui-button><ui-button id="editor-undo" kind="quiet">실행 취소</ui-button><ui-button id="editor-redo" kind="quiet">다시 실행</ui-button></div>
+          <div class="actions"><ui-button id="editor-finish" kind="primary">그리기 완료</ui-button><ui-button id="editor-cancel" kind="quiet">그리기 취소</ui-button><ui-button id="editor-undo" kind="quiet">실행 취소</ui-button><ui-button id="editor-redo" kind="quiet">다시 실행</ui-button></div>
           <div class="form editor-properties">
             <label>수정할 요소<select class="ui-field" id="editor-element"></select></label><label>꼭짓점<select class="ui-field" id="editor-vertex"></select></label>
             <label>x (m)<input class="ui-field" id="editor-x" type="number" min="-1000" max="1000" step="any" value="0"></label><label>y (m)<input class="ui-field" id="editor-y" type="number" min="-1000" max="1000" step="any" value="0"></label>
           </div>
-          <div class="actions"><ui-button id="editor-add-point">좌표 점 추가</ui-button><ui-button id="editor-apply">선택 좌표·이름 적용</ui-button><ui-button id="editor-delete-vertex" kind="quiet">꼭짓점 삭제</ui-button><ui-button id="editor-delete" kind="quiet">요소 삭제</ui-button></div>
+          <div class="actions"><ui-button id="editor-add-point" kind="primary">좌표 점 추가</ui-button><ui-button id="editor-apply" kind="primary">선택 좌표·이름 적용</ui-button><ui-button id="editor-delete-vertex" kind="quiet">꼭짓점 삭제</ui-button><ui-button id="editor-delete" kind="quiet">요소 삭제</ui-button></div>
           <ui-text id="editor-status" role="status">Enter 완료 · Esc 취소 · Delete 삭제 · Ctrl/Cmd+Z 실행 취소. 입력 필드 안에서는 일반 입력을 유지합니다.</ui-text>
         </div>
       </details>

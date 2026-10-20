@@ -807,3 +807,9 @@
 - 변경: Console에서만 쓰는 fleet-client.js·request.js를 Console/shared로 byte 그대로 옮겼다. 설치·정적 경로·브라우저 fixture·Node import를 갱신하고 기존 common 두 URL은 Fleet의 고정 alias로 보존했다.
 - 증거: f6dc4ceca8 원격 shared/web·설치·앱 소유 계약·아키텍처 479 passed/49 skipped, NEW0. 이동 후 scope fixture 경로와 문서 공통 목록에서 드러난 실패는 소유 위치에 맞춰 수정했다. 최종 head의 정상 push gate와 GitHub CI는 별도로 확인한다.
 - gate 변화: 없음. 실제 로봇·현장 수용은 수행하지 않았다.
+
+## 2026-10-21 · uncommitted · 지도 source holder의 공용 UI 계약 연결
+
+- 변경: 이동한 지도 소스를 palette·문서 제목 검사가 계속 읽도록 경로를 갱신했다. 새 편집 버튼의 종류와 실행 취소·다시 실행·파일 입력 비활성 사유도 공용 부품 계약에 맞췄다.
+- 증거: 78e3516e45 원격 지도/브라우저/계약526통과 NEW0 이후 전체 영향 검사에서 공용 UI 계약 누락을 발견했다. 수정 SHA의 공용 UI·브라우저·게시 검사는 별도로 실행한다.
+- gate 변화: 없음. 물리 교정·로봇 이동 수용은 수행하지 않았다.

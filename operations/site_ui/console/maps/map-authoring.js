@@ -84,9 +84,15 @@ export function createMapAuthoring(host) {
     const working = host.draft();
     if (!host.dirty()) history.reset(working);
     else if (JSON.stringify(history.current()) !== JSON.stringify(working)) history.apply(working);
-    $('editor-undo').disabled = Boolean(editReason()) || !history.canUndo();
-    $('editor-redo').disabled = Boolean(editReason()) || !history.canRedo();
-    $('drawing-file').disabled = Boolean(host.reason());
+    for (const [id, reason] of [
+      ['editor-undo', editReason() || (!history.canUndo() ? '실행 취소할 변경이 없습니다' : '')],
+      ['editor-redo', editReason() || (!history.canRedo() ? '다시 실행할 변경이 없습니다' : '')],
+      ['drawing-file', host.reason()],
+    ]) {
+      $(id).disabled = Boolean(reason);
+      if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');
+      $(id).title = reason;
+    }
     const registrationReason = host.reason() || (!importer.ready() ? 'STL 원본을 먼저 확인하세요' : '');
     $('drawing-register').disabled = Boolean(registrationReason);
     if (registrationReason) $('drawing-register').setAttribute('reason', registrationReason);

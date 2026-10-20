@@ -33,7 +33,7 @@ CANVAS_FILES = [
     FLEET / "field-view.js",
     FLEET / "map-fit-view.js",
     FLEET / "shared" / "field-warp.js",
-    FLEET / "site-map.js",
+    FLEET / "maps" / "site-map.js",
     FLEET / "console.js",
     GAMES / "board.js",
     SRC.parent / "learning/curation/perception/review_app_web/app.js",
