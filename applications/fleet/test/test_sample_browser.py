@@ -136,8 +136,10 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')
             page.goto(origin + '/console?view=work')
-            expect(page.locator('#work-list')).to_contain_text('sample-cell-job-1')
-            expect(page.locator('#work-list')).to_contain_text('목표 확인')
+            row = page.locator('[data-work-key="cell_job:sample-cell-job-1"]')
+            expect(row).to_contain_text('목표 확인')
+            row.click()
+            expect(page.locator('#work-detail')).to_contain_text('sample-cell-job-1')
         finally:
             browser.close()
 

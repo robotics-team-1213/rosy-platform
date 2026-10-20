@@ -60,6 +60,7 @@ def registrations(path):
 
 def problems(document):
     errors, feature_ids, request_ids, covered, registry = [], set(), set(), set(), {}
+    evidence = json.loads(MATRIX.with_name('backend_http_evidence.json').read_text(encoding='utf-8'))['requests']
     for feature in document["features"]:
         if feature["id"] in feature_ids:
             errors.append("duplicate feature")
@@ -77,6 +78,11 @@ def problems(document):
             request_ids.add(request["id"])
             if request["status"] != "verified":
                 errors.append("unverified contract")
+            receipt = evidence.get(request['id'])
+            if (not receipt or receipt['status'] not in request['expected_statuses']
+                    or receipt['test'].split('::')[0] not in request['contract_tests']
+                    or not re.fullmatch('[0-9a-f]{40}', receipt['source_revision'])):
+                errors.append('missing HTTP evidence')
             implementation = ROOT / request["implementation"]
             if not implementation.is_file():
                 errors.append("missing backend implementation")
@@ -96,11 +102,14 @@ def problems(document):
         for flow in feature["flows"]:
             if not flow["steps"] or not flow["scenario_id"] or not flow["browser_test"]:
                 errors.append("missing scenario evidence target")
-            if flow["sample_status"] not in {"planned", "verified"}:
+            if flow["sample_status"] != "verified":
                 errors.append("invalid sample status")
             if flow["sample_status"] == "verified" and not (ROOT / flow["browser_test"].split("::")[0]).is_file():
                 errors.append("missing sample test")
     for feature in document["features"]:
+        for flow in feature['flows']:
+            if not set(identifier for step in flow['steps'] for identifier in step['request_ids']).issubset(request_ids):
+                errors.append('broken scenario request reference')
         for call in feature["calls"]:
             if not set(call["request_ids"]).issubset(request_ids):
                 errors.append("broken request reference")
@@ -125,6 +134,7 @@ def test_all_supported_features_have_contracts_and_flows():
     ("flow", "missing representative flow"),
     ("call", "unbound frontend call"),
     ("route", "unregistered backend route"),
+    ("receipt", "missing HTTP evidence"),
 ])
 def test_incomplete_or_stale_contracts_are_rejected(mutation, expected):
     matrix = copy.deepcopy(load_matrix())
@@ -137,6 +147,8 @@ def test_incomplete_or_stale_contracts_are_rejected(mutation, expected):
         feature["flows"] = []
     elif mutation == "route":
         feature["requests"][0]["path"] = "/api/fleet/not-implemented"
+    elif mutation == 'receipt':
+        feature['requests'][0]['expected_statuses'] = [599]
     else:
         feature["calls"][0]["request_ids"] = []
     assert expected in problems(matrix)

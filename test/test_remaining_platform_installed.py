@@ -90,6 +90,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
+        assert not any(name.startswith(('fleet_app_dev/', 'fleet/server/web/dev/', 'fleet/server/web/sample/'))
+                       or name.endswith('runtime-sample.js') for name in names)
         for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking',
                        'evidence', 'sitemap', 'pose', 'recognition', 'rightofway'):
             for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):

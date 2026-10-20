@@ -20,6 +20,7 @@ class Work:
     def __init__(self):
         self.plans, self.trips = {}, {}
         self.tasks, self.task_keys = {}, {}
+        self.cell_jobs = {}
         self.dispatch = {'dispatch_enabled': True, 'generation': 1, 'queued_tasks': 0,
                          'unresolved_actions': 0, 'rearm_available': False, 'reason': None}
 
@@ -84,13 +85,22 @@ class Work:
                     return error(409, 'DISPATCH_GENERATION_CHANGED')
                 self.dispatch.update(dispatch_enabled=True, rearm_available=False, reason=None)
             else:
-                self.dispatch.update(dispatch_enabled=False, rearm_available=True, reason='OPERATOR_STOP',
-                                     generation=self.dispatch['generation'] + 1)
+                if path == '/estop':
+                    self.dispatch.update(dispatch_enabled=False, rearm_available=True, reason='OPERATOR_STOP',
+                                         generation=self.dispatch['generation'] + 1)
                 for trip in self.trips.values():
-                    trip.update(state='canceled', reason='OPERATOR_CANCEL')
+                    if trip['state'] in ('started', 'running', 'link_wait'):
+                        trip.update(state='canceled', reason='OPERATOR_CANCEL')
                 for task in self.tasks.values():
                     if task['status'] in ('QUEUED', 'RUNNING', 'ACCEPTED'):
                         task.update(status='CANCELED', reason='OPERATOR_CANCEL')
+                if path == '/cancel-all':
+                    return reply({'cancel_all_id': 'sample-cancel-all', 'record_error': None,
+                        'cancelled': len(robot_ids), 'total': len(robot_ids), 'evidence': 'CORE_REPLY_ONLY',
+                        'robots': [{'robot_id': robot, 'result': 'cancelled',
+                                    'steps': {kind: {'ok': True} for kind in ('swarm', 'navigation', 'line_follow')},
+                                    'tasks': {'awaiting_core_result': []}} for robot in robot_ids],
+                        'formation': None, 'tasks': {'canceled': []}})
             return reply(self.dispatch)
         if (method, path) == ('POST', '/robots/sample-robot/trip'):
             if body.get('execute'):
@@ -143,7 +153,13 @@ class Work:
                          'workcell_id': None, 'approval': None, 'wait': None,
                          'visible_state': visible_state(task['status'], task['reason'])}
                         for task in self.tasks.values())
-            return reply({'observed_at': '2026-10-21T00:00:00Z', 'rows': rows, 'kinds': ['trip'],
-                          'tasks_available': True, 'missions_available': False, 'cell_jobs_available': False,
+            rows.extend({'source': 'cell_job', 'source_id': job['mission_id'], 'device_id': job['instance_id'],
+                         'action_kind': 'CELL_TRANSFER', 'workcell_id': job['workcell_id'], 'status': job['status'],
+                         'reason': job['reason'], 'updated_at': '2026-10-21T00:00:00Z', 'wait': None,
+                         'visible_state': visible_state(job['status'], job['reason']),
+                         'approval': 'one_person' if job['status'] == 'PROPOSED' else None}
+                        for job in self.cell_jobs.values())
+            return reply({'observed_at': '2026-10-21T00:00:00Z', 'rows': rows, 'kinds': ['trip', 'CELL_TRANSFER'],
+                          'tasks_available': True, 'missions_available': True, 'cell_jobs_available': True,
                           'truncated_sources': []})
         return None

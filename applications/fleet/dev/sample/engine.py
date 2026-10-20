@@ -41,6 +41,7 @@ class SampleEngine:
             self.assistant = Assistant()
             self.vision = Vision()
             self.cell = Cell(self.work.dispatch)
+            self.work.cell_jobs = self.cell.jobs
             self.installation = Installation()
             self.pairing = Pairing()
             self.calibration = Calibration()
