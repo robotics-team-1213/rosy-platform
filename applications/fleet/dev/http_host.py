@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 from response import DevResponse, error, reply
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 WEB = ROOT / 'applications/fleet/web'
 COMMON = ROOT / 'shared/web'
 REGISTRY = runpy.run_path(str(WEB / 'asset_registry.py'))
