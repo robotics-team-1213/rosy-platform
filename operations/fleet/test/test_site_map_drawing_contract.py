@@ -28,6 +28,25 @@ def test_legacy_map_dump_is_unchanged():
     assert SiteMap.model_validate(body).body() == body
 
 
+def test_optional_road_name_roundtrips_without_changing_legacy_edges():
+    old = SiteMap.model_validate({'map_id': 'site', 'places': [
+        {'id': 'a', 'name': 'A', 'x': 0, 'y': 0},
+        {'id': 'b', 'name': 'B', 'x': 1, 'y': 0}], 'edges': [
+        {'id': 'ab', 'from': 'a', 'to': 'b', 'polyline': [[0, 0], [1, 0]],
+         'width_m': .2, 'speed_cap_mps': .2}]})
+    body = old.body()
+    assert 'name' not in body['edges'][0] and 'drawing' not in body
+    for name in ('출입구 도로', '길' * 64):
+        named = {**body, 'edges': [{**body['edges'][0], 'name': name}]}
+        restored = SiteMap.model_validate(named)
+        assert restored.body() == named
+        assert restored.edges[0].id == 'ab' and restored.edges[0].to == 'b'
+    for name in ('', '  ', 'x' * 65):
+        with pytest.raises(ValidationError):
+            SiteMap.model_validate({**body, 'edges': [{**body['edges'][0], 'name': name}]})
+    assert SiteMap.model_validate(body).body() == body
+
+
 def test_drawing_hashes_and_transform_are_bounded():
     model = drawing_contract()
     reference = model.DrawingReference(asset_sha256='a' * 64, projection_sha256='b' * 64)
