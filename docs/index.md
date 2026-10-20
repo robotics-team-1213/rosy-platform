@@ -346,8 +346,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · OMX 실제 RGB 정답 편입 결과와 수집 중단
 - 2026-10-21 · uncommitted · OMX 고정 물체 SIM 정답·학습 분할
 - 2026-10-21 · uncommitted · 공통 SIM 실험 작업공간 구현 계획
 - 2026-10-21 · uncommitted · 웹·CLI 공통 SIM 실험 작업공간 설계
 - 2026-10-21 · uncommitted · 외부 업무 앱 지원 계약 기준선
-- 2026-10-21 · uncommitted · 관제 자연어 전처리·명령 후보 ADR

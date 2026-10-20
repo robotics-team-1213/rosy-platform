@@ -9867,3 +9867,9 @@ osy-d395-s1d\`.
 - 변경: D-449 초안과 learning 계약 0.1.13에 고정 물체 과제의 원본 SIM 증거 검증을 추가했다. LeRobot export와 ACT snapshot은 증거 bytes와 실제 judge를 보존하며 여러 검증 에피소드를 학습·정규화에서 제외한다.
 - 증거: 잘못된 원 gripper receipt·시계·owner generation·장면 inventory·목표 UUID·terminal·NaN sequence와 중복 학습/검증 입력의 거절을 원격 RED/GREEN으로 확인했다. d324a77929 관련 검증 45 passed; 실제 LeRobot roundtrip은 별도 모델 환경에서 후속 실행한다.
 - gate 변화: 실제 시연과 학습 정책 성공률을 구분한다. 학습·새 물체 과제 20회 평가는 아직 NOT RUN이며 DEVICE/FIELD 수용을 만들지 않는다.
+
+## 2026-10-21 · uncommitted · OMX 실제 RGB 정답 편입 결과와 수집 중단
+
+- 변경: 실제 물체 시연·원본 SIM 증거·모델 PC export/readback 지표와 반복 수집 실패를 별도 validation 기록으로 남겼다. 25 시연·checkpoint·독립 정책 평가 목표는 미달성으로 보존했다.
+- 증거: 원본 검증 시연 1개, 실제 영상 2650/2650장 readback·exit0. 소비자/원장/harness 174 passed/NEW0, 재생 제어 흐름 2 passed. 실제 ROS에서 depth 5의 과거 샘플 소실을 재현했고 최신 depth 수정 GREEN은 양쪽 시험 PC의 SSH 접속 불가로 미실행이다.
+- gate 변화: 시연 정답 편입 범위만 실제 확인했다. 반복 수집·학습·정책 실행 binding·20회 평가·최신 원격 검증·병합은 완료하지 않았다.
