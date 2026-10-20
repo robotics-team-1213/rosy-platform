@@ -54,5 +54,6 @@ def pytest_terminal_summary(terminalreporter):
                             for status, nodes in statuses.items() if nodes & PASSED}
                 for identifier, statuses in sorted(OBSERVED.items())}
     result = {'source_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+              'pytest_root': terminalreporter.config.rootpath.resolve().relative_to(ROOT).as_posix(),
               'requests': evidence}
     terminalreporter.write_line('FLEET_APP_HTTP_EVIDENCE=' + base64.b64encode(json.dumps(result).encode()).decode())

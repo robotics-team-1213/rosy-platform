@@ -65,11 +65,14 @@ def test_peer_request_pending_identity_and_revoke_http_lifecycle(peer_client):
     assert response.status_code == 200 and response.json()['state'] == 'revoked'
 
 
-def test_named_operator_formation_http_lifecycle_uses_existing_owner():
+def test_named_operator_formation_http_lifecycle_uses_existing_owner(tmp_path):
     from test_server_formation import _console, _fleet
     console = _console(*_fleet(2))
     users = {sha256(b'owner-token').hexdigest(): {'principal_id':'owner', 'role':'operator'}}
-    app = create_app(console, site_users=users, start_task_dispatcher=False)
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite3'), robot_ids=console.robot_ids)
+    app = create_app(console, site_users=users, task_service=tasks, start_task_dispatcher=False)
     with TestClient(app) as client:
         headers = {'Authorization':'Bearer owner-token'}
         assert client.get('/api/fleet/formation', headers=headers).json()['active'] is False
