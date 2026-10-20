@@ -48,3 +48,17 @@ def test_sample_session_ignores_real_fleet_credentials():
     assert cookie.startswith('rosy_sample_session=')
     assert 'rosy_fleet_session' not in cookie
 
+
+def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():
+    engine = load_engine()
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    response = engine.handle('POST', '/api/fleet/vision/lease', {'Cookie':'rosy_sample_session=sample-1'},
+                             b'{"source_id":"sample-camera"}')
+    assert response.status == 200
+    lease = json.loads(response.body)
+    assert lease['frame_path'] == '/api/vision/sources/sample-camera/frame'
+    assert engine.handle('GET', lease['frame_path'], {'Cookie':'rosy_sample_session=sample-1'}, b'').status == 401
+    response = engine.handle('GET', lease['frame_path'], {'Authorization':'Bearer ' + lease['lease']}, b'')
+    assert response.status == 200 and response.body.startswith(b'\x89PNG\r\n\x1a\n')
+    assert dict(response.headers)['Content-Type'] == 'image/png'
+

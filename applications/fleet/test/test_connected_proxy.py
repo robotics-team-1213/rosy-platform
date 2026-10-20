@@ -121,3 +121,17 @@ def test_connected_requires_verified_https_and_rejects_arbitrary_targets():
             cls(endpoint, ssl.create_default_context(), 'https://localhost:4174')
     with pytest.raises(ValueError):
         cls('https://localhost', ssl._create_unverified_context(), 'https://localhost:4174')
+
+
+def test_vision_frame_uses_only_lease_bearer_and_same_upstream(upstream):
+    endpoint, context, requests = upstream
+    proxy = proxy_type()(endpoint, context, 'https://localhost:4174')
+    headers = {'Host':'localhost:4174', 'Authorization':'Bearer sample-lease', 'Cookie':'rosy_fleet_session=private-session'}
+    response = proxy.handle('GET', '/api/vision/sources/sample-camera/frame', headers, b'')
+    assert response.status == 200 and read(response) == b'\x00\xffsample\n'
+    forwarded = {key.lower(): value for key, value in requests[-1][2].items()}
+    assert forwarded['authorization'] == 'Bearer sample-lease' and 'cookie' not in forwarded
+    before = len(requests)
+    assert proxy.handle('GET', '/api/vision/secrets', headers, b'').status == 400
+    assert proxy.handle('POST', '/api/vision/sources/sample-camera/frame', headers, b'').status == 400
+    assert len(requests) == before
