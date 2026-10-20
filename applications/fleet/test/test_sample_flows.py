@@ -1,12 +1,17 @@
 """State, revisions and terminal results survive a second frontend read."""
 import json
+from weakref import WeakKeyDictionary
 
 from test_sample_server import load_engine
 
+COOKIES = WeakKeyDictionary()
 
 def call(engine, method, path, body=None):
-    response = engine.handle(method, path, {'Cookie': 'rosy_sample_session=sample-1'},
+    response = engine.handle(method, path, {'Cookie': COOKIES.get(engine, '')},
                              json.dumps(body).encode() if body is not None else b'')
+    for key, value in response.headers:
+        if key.lower() == 'set-cookie':
+            COOKIES[engine] = value.split(';')[0]
     return response.status, json.loads(response.body) if response.body else None
 
 
@@ -166,4 +171,35 @@ def test_policy_stage_rules_and_incident_require_another_person():
     cookie = next(value for key, value in response.headers if key == 'Set-Cookie').split(';')[0]
     response = engine.handle('POST', clear, {'Cookie':cookie}, b'{"operator_confirmed":true,"note":"reviewed"}')
     assert response.status == 200 and json.loads(response.body)['cleared_by'] == 'sample-reviewer'
+
+
+def test_account_changes_control_login_and_sample_authority():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    target = '/api/fleet/auth/accounts/sample-reviewer-account'
+    assert call(engine, 'PATCH', target, {'revision': 1, 'role': 'viewer'})[0] == 200
+    assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'sample-password'})[0] == 204
+    assert call(engine, 'POST', '/api/fleet/estop', {})[0] == 403
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    assert call(engine, 'PATCH', target, {'revision': 2, 'enabled': False})[0] == 200
+    assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'sample-password'})[0] == 401
+
+
+def test_profile_change_survives_logout_and_login():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    assert call(engine, 'PATCH', '/api/fleet/auth/profile', {'display_name': '저장한 이름'})[0] == 200
+    call(engine, 'POST', '/api/fleet/auth/logout', {})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    assert call(engine, 'GET', '/api/fleet/auth/profile')[1]['display_name'] == '저장한 이름'
+
+
+def test_failed_trip_is_an_intervention_in_the_work_view():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    _, plan = call(engine, 'POST', '/api/fleet/robots/sample-robot/trip', {'to':'loading'})
+    call(engine, 'POST', f"/api/fleet/trips/{plan['plan_id']}/start", {})
+    engine.advance('work', 'fail')
+    _, work = call(engine, 'GET', '/api/fleet/work')
+    assert work['rows'][0]['status'] == 'failed' and work['rows'][0]['visible_state'] == 'intervention'
 
