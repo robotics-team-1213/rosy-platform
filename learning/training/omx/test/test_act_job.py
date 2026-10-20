@@ -9,6 +9,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from act_job import chunk_indices, offline_report, compatible_sources, run
 
 
+def test_multiple_validation_episodes_cannot_overlap_training(tmp_path, monkeypatch):
+    monkeypatch.setattr('act_job.importlib.metadata.version', lambda *_: '0.4.4')
+    with pytest.raises(ValueError, match='disjoint'):
+        run([tmp_path/'train-a', tmp_path/'train-b'],
+            [tmp_path/'val-a', tmp_path/'train-b'],tmp_path/'out')
+    assert not (tmp_path/'out').exists()
+
+
 def test_chunk_padding_never_crosses_episode_boundary():
     assert chunk_indices(3, 1, 4) == [1, 2, None, None]
     with pytest.raises(ValueError):

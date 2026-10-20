@@ -81,7 +81,7 @@ def test_ground_truth_roundtrip_keeps_original_bytes_and_all_proof_dependencies(
         validate_profile(episode,root=output)
 
 
-@pytest.mark.parametrize('change', ['missing_receipt','stale','future','generation','native_asset','goal_uuid','terminal'])
+@pytest.mark.parametrize('change', ['missing_receipt','stale','future','generation','native_asset','goal_uuid','terminal','nan_sequence'])
 def test_resealed_but_unbound_execution_cannot_become_sim_truth(tmp_path, change):
     from sim_object_truth_fixture import fixture, write
     from sim_object_truth import build
@@ -117,7 +117,8 @@ def test_resealed_but_unbound_execution_cannot_become_sim_truth(tmp_path, change
     else:
         events = [json.loads(line) for line in (source/'events.jsonl').read_text().splitlines()]
         if change == 'goal_uuid': events[0]['goal_id'] = '99999999-9999-4999-8999-999999999999'
-        else: events[1]['status'] = 6
+        elif change == 'terminal': events[1]['status'] = 6
+        else: events[1]['sequence'] = float('nan')
         payload = ''.join(json.dumps(row)+'\n' for row in events).encode()
         (source/'events.jsonl').write_bytes(payload)
         manifest = json.loads((source/'manifest.json').read_text())
