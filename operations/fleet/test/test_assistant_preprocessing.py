@@ -227,6 +227,41 @@ def test_preprocessed_status_reply_uses_selected_facts_without_changing_legacy_r
     assert 'r1' in reply(answer, q)
 
 
+def test_registered_name_spacing_is_preserved_and_folded_collisions_cannot_select_another_place():
+    from rosy.decision.conversation.preprocessing import prepare, control_issue
+    from rosy.decision.conversation.codec import semantic_answer
+    q = semantic_question('Move r1 to North  gate')
+    environment = copy.deepcopy(q.environment)
+    environment['map']['places'] = [dict(id='east', name='North  gate', x=1., y=2.),
+                                    dict(id='west', name='North gate', x=-1., y=2.)]
+    q = q.model_copy(update={'environment':environment})
+    prepared = prepare(q)
+    assert prepared.normalized == 'Move r1 to North  gate'
+    assert control_issue(prepared) == 'AMBIGUOUS_REFERENCE'
+    assert semantic_answer(navigation_answer(place='west'), q, preprocessing=True).kind == 'CLARIFY'
+
+
+def test_a_single_registered_name_with_repeated_spaces_resolves_without_rewriting_it():
+    from rosy.decision.conversation.preprocessing import prepare
+    from rosy.decision.conversation.codec import semantic_answer
+    q = semantic_question('Move r1 to North  gate')
+    environment = copy.deepcopy(q.environment)
+    environment['map']['places'][0]['name'] = 'North  gate'
+    q = q.model_copy(update={'environment':environment})
+    assert prepare(q).normalized == q.question
+    value = semantic_answer(navigation_answer(place='North  gate'), q, preprocessing=True)
+    assert value.intent == dict(do='navigate', robot='r1', waypoint='east')
+
+
+def test_place_only_status_evidence_does_not_claim_a_populated_roster_is_empty():
+    from rosy.decision.conversation.codec import Answer, reply
+    q = semantic_question('입구 상태')
+    answer = Answer(kind='STATUS', response='상태', intent=None, evidence_refs=['place:east'], review_required=False)
+    result = reply(answer, q, preprocessing=True)
+    assert '등록된 로봇이 없습니다' not in result
+    assert '로봇' in result and '지정' in result
+
+
 def test_new_discord_profile_is_not_connected_to_automatic_execution(monkeypatch):
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
