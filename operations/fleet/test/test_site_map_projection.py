@@ -2,6 +2,8 @@
 import importlib
 import math
 import struct
+from pathlib import Path
+import hashlib
 
 import pytest
 
@@ -97,3 +99,19 @@ def test_triangle_and_segment_budgets(tmp_path, monkeypatch):
     monkeypatch.setattr(module, 'MAX_SEGMENTS', 2)
     with pytest.raises(ValueError):
         module.project_stl(path, registration())
+
+
+def test_existing_design_source_is_read_only_geometry_for_every_explicit_plane():
+    module = converter()
+    path = Path(__file__).resolve().parents[3] / 'middleware/perception/map/map_v2_fleet/260919 MAP FILE.STL'
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    inspected = module.inspect_stl(path)
+    assert inspected['asset_sha256'] == before and inspected['triangle_count'] == 1768
+    hashes = set()
+    for plane in ('xy', 'xz', 'yz'):
+        result = module.project_stl(path, registration(plane=plane, unit='mm'))
+        assert result['segments'] and result['asset_sha256'] == before
+        assert not {'places', 'edges', 'facilities', 'robot_pose'} & result.keys()
+        hashes.add(result['projection_sha256'])
+    assert len(hashes) == 3
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before

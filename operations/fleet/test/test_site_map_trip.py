@@ -145,6 +145,22 @@ def test_activation_preserves_active_formation_until_explicit_release(tmp_path, 
         json={'expected_revision': draft['revision']}).status_code == 200
 
 
+@pytest.mark.parametrize('activity', ['trip', 'teach'])
+def test_running_trip_or_teach_blocks_activation_without_changing_either_map(tmp_path, monkeypatch, activity):
+    client, _, store, robot = _app(tmp_path)
+    draft = store.save_draft(SiteMap.model_validate(_line()), expected_revision=None, principal_id='bob')
+    active = store.active_view()
+    if activity == 'trip':
+        monkeypatch.setattr(client.app.state.trip_runner, 'running', lambda: {'trip_id': 'existing-trip'})
+    else:
+        monkeypatch.setattr(client.app.state.teach, 'view', lambda: {'recording': {'robot_id': 'rosy_60'}})
+    refused = client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+                           json={'expected_revision': draft['revision']})
+    assert refused.status_code == 409 and refused.json()['detail']['code'] == 'SITE_MAP_ROUTE_ACTIVE'
+    assert store.active_view() == active and store.draft_view() == draft
+    assert robot.calls == []
+
+
 def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     client, tasks, store, _robot = _app(tmp_path)
     active = client.get("/api/fleet/site-map/active", headers=VIEWER)

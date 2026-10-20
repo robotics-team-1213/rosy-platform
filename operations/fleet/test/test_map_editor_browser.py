@@ -196,6 +196,12 @@ def test_copy_template_requires_new_site_review(editor_site):
 def test_new_drawing_preserves_geometry_and_resets_frame(editor_site):
     page, store, robot = editor_site
     previous = store.active_view()['map']
+    page.route('**/api/fleet/calibrations', lambda route: route.fulfill(json={
+        'calibrations': [{'source_id': 'old-camera', 'map_id': previous['map_id'],
+                          'calibration_revision': 'old-camera-revision'}]}))
+    page.reload()
+    expect(page.locator('#plane-source option')).to_have_count(1)
+    page.locator('#drawing-tools > summary').click()
     register(page)
     page.locator('#save-draft').click()
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
@@ -206,3 +212,23 @@ def test_new_drawing_preserves_geometry_and_resets_frame(editor_site):
     assert new['survey']['reviewed'] is False
     expect(page.locator('#plane-source option')).to_have_count(0)
     assert store.active_view()['map'] == previous
+
+
+def test_draft_click_never_plans_or_starts_trip(editor_site):
+    page, store, robot = editor_site
+    active = store.active_view()
+    requests = []
+    page.on('request', lambda req: requests.append(req.url) if req.method == 'POST'
+            and re.search(r'/(trip|trips|route|formation|navigation)(/|$)', req.url) else None)
+    register(page)
+    page.locator('#site-map-svg [data-place]').first.dispatch_event('click')
+    page.locator('#editor-tools > summary').click()
+    page.locator('#editor-enabled').check()
+    page.locator('#editor-kind').select_option('road')
+    point(page, 300, 200)
+    point(page, 400, 220)
+    page.locator('#site-map-svg').focus()
+    page.keyboard.press('Escape')
+    expect(page.locator('#site-map-svg .editor-preview')).to_have_count(0)
+    assert store.plans() == [] and requests == []
+    assert store.active_view() == active
