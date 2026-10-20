@@ -5,11 +5,12 @@ import { issueDevelopmentSession } from "/console/assets/development-auth.js";
 import { createPasswordLogin } from "./password-login.js";
 import { showSession, showSignedOut, stopNotice } from "/console/assets/fleet-header.js";
 
-export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient, render, operatorControls,
+export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient, render, operatorControls, assistant,
   confirmedAction, connectionView, workView, incidents, visionView, trackingView, mapView, formation,
   dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState, refreshRobotApps,
   refreshDispatchControl, refreshDiscovery }) {
   function markLocked(reason = "auth") {
+    assistant?.setIdentity({locked:true});
     resetRobotApps();
     confirmedAction.cancel();
     stopNotice();
@@ -67,6 +68,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       }
       auth.role = identity.role;
       auth.principal = identity.principal_id;
+      assistant?.setIdentity(auth);
       showSession(identity);
       // The session already proves the token: unlock now. The state gather can take seconds
       // when a robot times out, and must not hold the operator's controls locked behind it.

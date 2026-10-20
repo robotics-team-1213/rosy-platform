@@ -3071,3 +3071,15 @@
 - 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.
 - 증거: 첫 확장 시험의 release scan FAIL을 재현했고 독립 hash 검토 후 관련 원격 745 PASS/0 skip/NEW 0으로 통과했다. provenance의 stale/변경·비밀 탐지 회귀를 포함한다.
 - gate 변화: 저장소 검사 보완이며 배포·장치 실행·FIELD 수용을 수행하지 않았다.
+
+## 2026-10-20 · uncommitted · Console AI 독립 broker·평가 소스
+
+- 변경: 기존 강제 명령 ingress 안에 별도 웹 조회 정책·모델 입력·보호된 source/evaluation 결속을 추가했다. 기존 Discord v1 dispatch는 유지한다.
+- 증거: dab629c171 집중 회귀에서 fake broker의 출처·hash·정책 결속과 독립 영수증 필수 사례를 확인했다. 실제 추론·보호 설치를 실행하지 않았다.
+- gate 변화: 없음. 모델 PC 독립 평가와 AI PC 보호 config 설치 지원·승인은 운영 활성화의 선행 조건이다.
+
+## 2026-10-20 · b1f18674b2 · D-821 operator 보호 설치와 기존 Discord 점검
+
+- 변경: 같은 SHA의 기존 Discord 보호 snapshot에 별도 operator 평가를 hash 결속해 원자적으로 설치하는 도구와 signed site optional 설정을 추가했다. 기존 SSH/Discord 설정은 보존한다.
+- 증거: a1f0252d0a 배포/설치 75개와 a57d78c070 해시/provider/설치 64개 통과. --check 무변경과 실패 rollback을 모의 검증했다. 현재 Discord Bot/지정 채널 GET 200 및 Bot/채널/서버 일치를 읽기 전용 확인했다. 실제 모델 b1f18674b2 19사례 PASS 영수증은 비공개 외부 증거에 보존했다.
+- gate 변화: 없음. operator 보호 설정 설치·서명 후보 배포·외부 메시지·실기 실행은 하지 않았다.

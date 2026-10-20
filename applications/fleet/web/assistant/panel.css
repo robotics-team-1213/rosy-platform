@@ -1,0 +1,16 @@
+.assistant-tools { display: flex; justify-content: flex-end; padding-inline: var(--space-4); }
+.assistant-layout { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; }
+.assistant-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); overflow-y: auto; border-inline-start: 1px solid var(--border-default); background: var(--surface-flat); }
+.assistant-panel[hidden] { display: none; }
+.assistant-panel .map-head { flex-wrap: wrap; }
+.assistant-messages { display: grid; gap: var(--space-4); list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; }
+.assistant-messages > li { border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-3); overflow-wrap: anywhere; }
+.assistant-messages p { white-space: pre-wrap; }
+.assistant-messages small { display: block; }
+.assistant-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+@media (width >= 64rem) {
+  .assistant-layout:has(> .assistant-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
+}
+@media (width < 64rem) {
+  .assistant-layout:has(> .assistant-panel:not([hidden])) > #fleet-main { display: none; }
+}

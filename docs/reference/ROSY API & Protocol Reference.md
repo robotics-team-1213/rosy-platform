@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.288
+**Version:** v1.290
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,6 +15,30 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
+### v1.290 Explicit operator navigation and language (D-821)
+
+`AssistantMessage.locale` optionally selects `ko-KR` (default, including pre-v1.290 stored messages) or `en-US`. The locale is bound to immutable request identity and model input. Unsupported locales are 422. `AssistantStatus.execution_enabled` reports the separately configured handoff; dialogue remains `READ_ONLY` and every answer remains `action_admissible=false`.
+
+POST `/api/fleet/assistant/messages/{request_id}/navigation` requires the current named operator and existing Origin/CSRF rules. Input `AssistantNavigation` is exactly robot_id, finite x/y within ±100000 metres, optional finite yaw within ±π (default 0). This is an explicit operator coordinate submission, never a model-generated command. The operator must own an ANSWERED CONTROL request completed within 30 seconds, with the same non-null selected robot. Current authentication and unexpired model admission plus `execution_enabled=true` are rechecked inside Task admission.
+
+The endpoint calls the existing `IntentExecution`/navigation Task owner and returns its accepted/queued/task result. Same principal/request reuses the Task idempotency key; changed coordinates are 409. Another principal sees the same 404 as a missing request; a robot removed from the current roster is 404; expired/non-control/changed selection is 409; disabled/unadmitted execution or unavailable storage is 503; revoked authority is 403. Results use `Cache-Control: no-store`. Actual work state, cancellation and uncertain physical outcomes use the existing Task APIs and dispatch generation. No additional worker, direct robot call or automatic UNKNOWN replay is installed. This additive endpoint supersedes the D-810 no-dispatch boundary only for explicit operator submissions; model replies retain no execution authority.
+
+### v1.289 Console operator assistant (D-810)
+
+Additive, named operator only and read-only. Console credentials and cookie Origin/CSRF rules remain unchanged. Canonical DTOs are `AssistantMessage`, `AssistantFact`, `AssistantResult`, `AssistantStatus`, and `AssistantHistory` in `core_common.protocol.assistant`, following the existing protocol submodule pattern without growing the oversized schemas facade.
+
+| Method/path | Input | Result |
+|---|---|---|
+| GET `/api/fleet/assistant/status` | none | `AssistantStatus`: available, mode=`READ_ONLY`, reason; configuration/admission missing or expired is unavailable |
+| POST `/api/fleet/assistant/messages` | `AssistantMessage`: conversation_id, request_id, text, optional selected_robot_id | 202 `AssistantResult`, or 200 same request on duplicate |
+| GET `/api/fleet/assistant/messages/{request_id}` | path ID | Own `AssistantResult`; other principal or absent is the same 404 |
+| GET `/api/fleet/assistant/conversations/{conversation_id}` | path ID | Own `AssistantHistory`, latest 40 messages in chronological order |
+
+IDs are `[A-Za-z0-9_-]{1,96}`. Original text is retained, 1..2000 characters, nonblank and no control characters except CR/LF/tab. selected_robot_id is optional `[A-Za-z0-9_.:-]{1,96}`; it is rechecked against current Fleet reads. Unknown body fields, including identity/source/Discord fields, are rejected. Principal comes only from authentication, and each site's existing Fleet DB defines site scope. Shared `site-console` and development principals are refused for persistent assistant conversations. Reading or submitting requires the current named operator credential.
+
+Results contain request_id, conversation_id, original text, state (`PENDING`, `RUNNING`, `ANSWERED`, `HOLD`, `UNKNOWN`), nullable response/reason, facts (ref, text, observed_at), created_at, nullable completed_at, and action_admissible=false. These are conversation states, never execution-completion states. Model text does not establish physical facts: STATUS is rendered from verified fact references. CONTROL requests are handed off to the existing work UI; this release never dispatches a command.
+
+Same principal/request ID and same original body returns the existing result without a second model call. Changed body is 409 `ASSISTANT_REQUEST_CHANGED`. Only one pending/running request per principal, 64 site-wide, and at most 1000 stored requests per principal; excess is 429 `ASSISTANT_LIMIT`. No implicit deletion or replay is used to free capacity. Missing/expired admission produces a durable HOLD rather than inference. In-flight restart/cancellation/transport ambiguity is UNKNOWN, never automatically retried. Unknown/foreign request is 404 `ASSISTANT_NOT_FOUND`; unavailable durable storage is 503 `ASSISTANT_STORAGE_UNAVAILABLE`. Invalid input is 422. Current snapshot age limit is five seconds; stale/unavailable observations hold the request. Recent model history is capped at four turns, 120 seconds, same principal/conversation/selection; previous STATUS facts are not reused as current observations. Every result is `Cache-Control: no-store`.
 ### v1.286 완료된 native 항법의 수동적 IDLE 인계 (D-772)
 
 2026-10-17 Corrective(API-002): `mode.changed` 표의 기존 `{from, to, by}`를
@@ -3566,6 +3590,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
+| v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
 | v1.288 | 2026-10-19 | Integrate D-772/D-774/D-776/D-783 Station contracts from reserved v1.278–286 with the current v1.287 route-prior contract. Preserve both histories and envelope 1.0; no physical activation. |
 | v1.287 | 2026-10-19 | D-769 rev 3 / D-573 rev 8 route-prior compatibility prerequisite: optional map-wall geometry, at most three-second source lifetime, receiver-first rollout, and the separately installed consumer's ignored-short extension exception. Operational Fleet remains one second; no physical activation. |
 | v1.286 | 2026-10-16 | (origin #92 v1.255, 2026-10-19 port) D-772 완료된 native navigation의 exact boot/run/correlation/generation·quiescent transport를 확인한 수동적 IDLE handover. 새 이동·취소·물리 정지 판정을 추가하지 않음 |

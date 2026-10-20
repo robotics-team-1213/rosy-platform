@@ -486,7 +486,9 @@ def test_real_host_kills_the_whole_process_group_on_timeout(tmp_path):
     deadline = dt.datetime.now() + dt.timedelta(seconds=5)
     while dt.datetime.now() < deadline and _alive(pid):
         pass
-    assert not _alive(pid)
+    assert not _alive(pid), (result, subprocess.run(
+        ["ps", "-o", "pid,ppid,pgid,stat,args", "-p", str(pid)],
+        capture_output=True, text=True).stdout)
 
 
 def test_disabled_while_applying_still_finishes_the_apply(device, host, hub, keys):

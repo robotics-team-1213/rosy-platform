@@ -9754,6 +9754,36 @@ osy-d395-s1d\`.
 - 증거: native12,973 passed/776 skipped/세 로그 NEW0, 목표 오차4.722/7.501mm·via각29mm. metadata 누락과 lane_return SKIP, native model-pose 및 실물 미검증 범위를 함께 기록했다.
 - gate 변화: 전체 모듈·FIELD 승격 없음. 본 고정 조건 주행 SIM 수용을 충족했으며 최종 문서 guard·증거 검토는 후속 HEAD에서 별도 확인한다.
 
+## 2026-10-20 · uncommitted · 관제 운영자용 AI 에이전트 설계·구현 계획 초안
+
+- 변경: `plans/2026-10-20-operator-ai-design.md`와 `plans/2026-10-20-operator-ai-plan.md`에 Console 오른쪽 패널, Fleet 웹 접수, 기존 conversation 재사용, 음성 입출력과 실행 연결 순서를 적었다.
+- 증거: 기존 Console·Decision conversation·Fleet channel 원장·D-728·broker 설치 경로를 읽었다. Discord 신원과 Console 세션의 차이를 계획에 반영했다.
+- gate 변화: 없음. 검토용 문서이며 제품 구현·배포·모델 접속·음성 수용·장비 동작을 수행하지 않았다.
+
+## 2026-10-20 · uncommitted · 관제 AI 기능·상태 소유권과 유지보수 구조 보완
+
+- 변경: 같은 설계/계획에 기능별 책임, service/context 인터페이스, 출처 계약 분리, 단일 실행 소유자와 변경 영향 표를 추가했다. 구현 전에 계약·회귀를 확정하는 Task 0을 넣었다.
+- 증거: conversation codec/history의 Discord 필드, 4개·120초·environment hash 이력 제한, 채널 outbox 필수 설치와 단일 실행 callback, 현재 문맥 필드·기존 읽기 도구를 확인했다.
+- gate 변화: 없음. 설계 문서만 보완했고 공통 처리 이전·API 등록·모델 승인·제품 구현은 수행하지 않았다.
+
+## 2026-10-20 · uncommitted · D-810 관제 AI 첫 조회 버전 구현과 검증 경계
+
+- 변경: API v1.289·별도 웹 대화 DTO·조회 전용 Fleet/Decision/Console 구현과 운영 안내를 기록했다. 로컬 브라우저 음성을 첫 선택적 adapter로 두고 장치 실행·실제 모델/음성 수용과 구별했다.
+- 증거: 독립 검토의 중요 발견 4개를 재현·수정하고 dab629c171 집중 167개·실제 Chromium 25개·Node 8개를 통과했다. 필수 전체 회귀와 최종 설치 검증은 후속 결과로 기록한다.
+- gate 변화: 없음. push·병합·CI·모델 활성화·운영 설치·장비 작업은 수행하지 않았다.
+
+## 2026-10-20 · 25b77d00b6 · D-810 전체 회귀 발견 수정과 검증 기록
+
+- 변경: 관제 AI 결과 기록에 FULL 22개 실행과 수정분 재검증, 독립 검토·선택·운영 미수용 조건을 남겼다. 공용 UI 규칙·설치 자산 기대값·API 시험 자료·Node 18 환경을 보완했다.
+- 증거: FULL은 28,557 통과·14 실패·1,950 건너뜀이며 14개 발견 수정 후 UI/Chromium 65개, 설치/배포 84개, Fleet 통합 121개와 내부 Node 342개를 통과했다. `docs/validation/operator-ai-2026-10-20/result.md`에 SHA와 원본 위치/해시를 구분했다.
+- gate 변화: 없음. 실제 모델 평가·보호 설치·한국어 음성·장치 실행·운영 배포는 미수용이다.
+
+## 2026-10-20 · a8bc6debd0 · D-821 운영 구조·실행 연결·다국어·Discord 결과
+
+- 변경: 명시적 이동 접수·optional 사이트 설정·보호 설치기·한국어/영어와 모델 후보 조사, 현재 Discord 읽기 전용 점검을 기록했다. 이전 조회 버전 증거는 보존했다.
+- 증거: 실제 고정 모델 b1f18674b2 19/19, Chromium 26개, Node 343개, Discord/Console 공존 263개, 최종 이동 오류/fixture 43개 통과. FULL 7b7a367014는 28,581 통과·3 실패·1,952 skip이며 자기 helper 실패는 수정했고 기존 프로세스 종료 두 실패는 미해결이다. 기준 468013c665의 두 시험은 통과했다. 결과·SHA·외부 원본 hash는 `docs/validation/operator-ai-operations-2026-10-20/result.md`에 있다.
+- gate 변화: 없음. 실제 모델 고정 사례 통과를 운영 GO로 승격하지 않았다. 실제 보호 설치·서명 배포·음성 실측·Discord 메시지·실기 작업은 미수행이다.
+
 ## 2026-10-20 · uncommitted · Fleet 앱 소스를 applications에 모은다
 
 - 변경: D-822로 Fleet 화면을 applications/fleet/web, 기존 gateway wheel을 applications/fleet/gateway로 이동한다. 서비스·원장·권한은 operations/fleet에 유지하고 패키징·CI·배포 입력·검증 경로와 협업 안내를 갱신한다.

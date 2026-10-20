@@ -38,6 +38,7 @@ SHARED = {
 OWN = {
     "account-page.js": set(),
     "console.js": {
+        "assistant.js", "assistant-voice.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "inbox.js",  # D-632: console notification and context view owner
@@ -110,7 +111,9 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices", "calibration", "sitemap", "installation", "map"):
+    if name == "assistant.js":
+        return WEB / "assistant/panel.js"
+    for folder in ("shared", "cell", "work", "devices", "calibration", "sitemap", "installation", "map", "assistant"):
         path = WEB / folder / name
         if path.is_file():
             return path
