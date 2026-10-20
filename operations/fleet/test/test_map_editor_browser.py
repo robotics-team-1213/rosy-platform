@@ -122,6 +122,12 @@ def test_zoom_rotation_and_drag_never_dispatch(editor_site):
     page.locator('#editor-apply').click()
     page.locator('#map-view-turn').select_option('90')
     page.locator('#editor-zoom').select_option('2')
+    expect(page.locator('#editor-pan-right')).to_have_count(1)
+    before = page.locator('#site-map-svg').get_attribute('viewBox').split()
+    page.locator('#editor-pan-right').click()
+    after = page.locator('#site-map-svg').get_attribute('viewBox').split()
+    assert float(after[0]) > float(before[0]) and after[2:] == before[2:]
+    page.locator('#editor-pan-left').click()
     vertex = page.locator('#site-map-svg [data-editor-vertex]')
     vertex.scroll_into_view_if_needed()
     bounds = vertex.bounding_box()
@@ -212,6 +218,26 @@ def test_new_drawing_preserves_geometry_and_resets_frame(editor_site):
     assert new['survey']['reviewed'] is False
     expect(page.locator('#plane-source option')).to_have_count(0)
     assert store.active_view()['map'] == previous
+
+
+def test_drawing_replacement_uses_working_draft_while_viewing_active(editor_site):
+    page, store, robot = editor_site
+    active = store.active_view()
+    register(page)
+    page.locator('#editor-tools > summary').click()
+    page.locator('#editor-enabled').check()
+    page.locator('#editor-kind').select_option('park')
+    page.locator('#editor-name').fill('unsaved destination')
+    point(page, 400, 240)
+    page.locator('#map-source').select_option('active')
+    page.locator('#drawing-rotation').fill('30')
+    page.locator('#drawing-register').click()
+    page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+    expect(page.locator('#map-source')).to_have_value('draft')
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    assert any(p['name'] == 'unsaved destination' for p in store.draft_view()['map']['places'])
+    assert store.active_view() == active
 
 
 def test_draft_click_never_plans_or_starts_trip(editor_site):
