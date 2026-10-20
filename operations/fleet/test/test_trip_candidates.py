@@ -142,3 +142,27 @@ def test_route_preserves_identity_profile_and_known_candidate_checks(tmp_path, m
     assert _post(client, "/api/fleet/trip-jobs", "viewer-secret", body).status_code == 403
     assert _post(client, "/api/fleet/trip-jobs", "op1-secret", {**body, "candidate_robot_ids": ["unknown"]}).status_code == 404
     assert _post(client, "/api/fleet/trip-jobs", "op1-secret", body).json()["detail"]["code"] == "TRIP_UNKNOWN_PLACE"
+
+
+def test_replay_reads_existing_job_even_when_live_map_is_no_longer_available(tmp_path, monkeypatch):
+    import test_approval_registry
+    original = test_approval_registry.create_app
+    monkeypatch.setattr(test_approval_registry, "create_app",
+                        lambda *a, **k: original(*a, deployment_profile="simulation", **k))
+    client, _ = _app(tmp_path)
+    existing = {"mission_id": "old-mission", "status": "HOLD"}
+    monkeypatch.setattr(client.app.state.job_trips.rows, "find_request", lambda *args: existing)
+    body = {"candidate_robot_ids": ["rosy_01"], "request_key": "old", "steps": [{"to": "B"}]}
+    response = _post(client, "/api/fleet/trip-jobs", "op1-secret", body)
+    assert response.status_code == 200 and response.json()["job"] == existing
+
+
+def test_concurrent_distinct_requests_cannot_claim_the_same_robot(tmp_path):
+    rig = Rig(tmp_path)
+    async def go():
+        return await asyncio.gather(*(create_candidate_trip_job(rig.jobs, [R], TWO, "kim", key)
+                                      for key in ("one", "two")), return_exceptions=True)
+    results = rig.do(go())
+    refused = [result for result in results if isinstance(result, TripError)]
+    assert len(refused) == 1 and refused[0].code == "TRIP_CANDIDATES_BUSY"
+    assert len(rig.jobs.rows.ids(("READY",))) == 1
