@@ -42,9 +42,9 @@ for _p in (_SENSING, _FOUNDATION, ROOT / 'learning/evaluation/perception'):
         sys.path.insert(0, str(_p))
 
 from control.sensing.perception.lane import detect_lane_error  # noqa: E402
-from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
+from control.sensing.perception.learned.lane_mask import NonFiniteLogits, preprocess  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
-    ManifestError, load_manifest, verify_files)
+    ManifestError, load_manifest, verify_files, validate_label_semantic)
 from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: E402
 from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
@@ -52,7 +52,7 @@ from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
                               v13_lineage_error, v13_quality_error, evaluation_semantics, road_delivery_error)
 import drivable_versions  # noqa: E402  D-558 ledger
-from intake_dataset import EvalSetError, training_sessions  # noqa: E402
+from intake_dataset import EvalSetError, _verified_manifest, _sessions, training_sessions  # noqa: E402
 from intake_evaluation import (DEFAULT_IGNORE_INDEX, even_stride, model_logits, _read_eval_set, evaluate)  # noqa: E402
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
