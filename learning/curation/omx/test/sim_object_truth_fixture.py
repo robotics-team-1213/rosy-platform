@@ -52,6 +52,8 @@ def fixture(tmp_path):
     image = io.BytesIO()
     Image.new('RGB', (320,240), (12,34,56)).save(image, format='PNG')
     commands, phases, observations = [], [], []
+    commands.append(dict(command_id='home-before-recording',target=dict.fromkeys(joints,0.),
+                         duration_s=.8,response={'state':'LOCAL_ACCEPTED'},sim_time=.1))
     for index, name in enumerate(['approach','grasp','transfer','release']):
         start, end = 1+index*.8, 1+(index+1)*.8
         command, goal = 'command-'+name, str(UUID(int=index+1))
@@ -87,7 +89,7 @@ def fixture(tmp_path):
     for index in range(56):
         stamp = 1_000_000_000+index*100_000_000
         phase_index = min(index//8,3)
-        command = commands[phase_index]
+        command = commands[phase_index+1]
         positions = dict(command['target'])
         if phase_index in (1,2): positions['gripper_joint_1'] = .42
         recorder.sample(capture_time_ns=stamp,state_time_ns=stamp-2_000_000,positions=positions,

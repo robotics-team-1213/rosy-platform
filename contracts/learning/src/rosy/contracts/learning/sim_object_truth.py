@@ -53,11 +53,16 @@ def _gripper_evidence(phase, prefix):
     return tuple(observation[key] for key in ('workcell_id','instance_id','sensor_revision','owner_generation'))
 
 
-def _command_evidence(payload, commands, rows, joints):
+def _command_evidence(payload, commands, rows, joints, start, end):
     events = [json.loads(line) for line in payload.splitlines()]
     indexed = {command['command_id']: command for command in commands}
     if len(indexed) != len(commands):
         raise ValueError('duplicate SIM command identity')
+    for command in commands:
+        stamp = command['sim_time']
+        if type(stamp) not in (int,float) or not math.isfinite(stamp) or not 0 <= stamp <= end:
+            raise ValueError('SIM command time invalid')
+    recorded = {key for key, command in indexed.items() if command['sim_time'] >= start}
     accepted, terminals = {}, {}
     for event in events:
         key = event['command_id']
@@ -66,7 +71,7 @@ def _command_evidence(payload, commands, rows, joints):
                 raise ValueError('duplicate SIM acceptance')
             command = indexed[key]
             stamp = event['accepted_sim_time_ns']
-            if (type(stamp) is not int or stamp < 0 or event['target'] != command['target']
+            if (type(stamp) is not int or not start <= stamp/1e9 <= end or event['target'] != command['target']
                     or event['duration_s'] != command['duration_s']):
                 raise ValueError('SIM acceptance differs from command')
             accepted[key] = event
@@ -76,7 +81,7 @@ def _command_evidence(payload, commands, rows, joints):
             terminals[key] = event
         else:
             raise ValueError('unexpected SIM command event')
-    if set(accepted) != set(indexed) or set(terminals) != set(indexed):
+    if not recorded or set(accepted) != recorded or set(terminals) != recorded:
         raise ValueError('SIM command lifecycle incomplete')
     history = sorted(accepted.values(), key=lambda e: e['accepted_sim_time_ns'])
     for key, event in accepted.items():
@@ -236,7 +241,8 @@ def _validate(path, validated, source):
                 or name == 'attach' and (receipt['service_ok'] is not True or
                     receipt['re_commanded_after'] is not None)):
             raise ValueError('SIM object attachment state unproven')
-    _command_evidence(data['events'], commands, rows, joints)
+    _command_evidence(data['events'], commands, rows, joints,
+                      result['recording_start_sim_s'], result['recording_end_sim_s'])
     first, last = rows[0]['capture_time_ns']/1e9, rows[-1]['capture_time_ns']/1e9
     if (not observations or observations[0]['clock'] > first or observations[-1]['clock'] < last
             or first < result['recording_start_sim_s'] or last > result['recording_end_sim_s']

@@ -47,7 +47,7 @@ def dataset_features(manifest: dict) -> dict:
         features["action.gripper"] = {"dtype": "float32", "shape": (1,), "names": ["position_rad"]}
     for name in ("capture_time_ns", "state_time_ns", "received_wall_time_ns", "state_sequence"):
         features[f"source.{name}"] = {"dtype": "int64", "shape": (1,), "names": [name]}
-    features["task.success"] = {"dtype": "int64", "shape": (1,), "names": ["operator_success"]}
+    features["task.success"] = {"dtype": "int64", "shape": (1,), "names": ["source_task_success"]}
     return features
 
 
@@ -76,13 +76,17 @@ def iter_dataset_frames(episode: Path, validated: dict):
         yield frame
 
 
-def export_episode(episode: Path, output: Path, repo_id: str) -> dict:
+def export_episode(episode: Path, output: Path, repo_id: str, *, sim_ground_truth=None) -> dict:
     episode, output = Path(episode).resolve(), Path(output).resolve()
     validated = validate_episode(episode)
     if output.exists() or output.is_relative_to(episode) or episode.is_relative_to(output):
         raise ValueError("export requires a new directory separate from the source episode")
     if _in_checkout(output):
         raise ValueError("export output belongs outside the source checkout")
+    truth = None
+    if sim_ground_truth is not None:
+        from rosy.contracts.learning.sim_object_truth import validate_truth
+        truth = validate_truth(sim_ground_truth, validated, source=episode)
     version = importlib.metadata.version("lerobot")
     if version != LEROBOT_VERSION:
         raise ValueError(f"export requires lerobot=={LEROBOT_VERSION}; found {version}")
@@ -90,7 +94,8 @@ def export_episode(episode: Path, output: Path, repo_id: str) -> dict:
 
     manifest = validated["manifest"]
     report = {"status": "failed", "lerobot_version": version, "episode_id": manifest["episode_id"],
-              "robot_type": manifest["robot_type"], "action_semantics": manifest["action_semantics"]}
+              "robot_type": manifest["robot_type"], "action_semantics": manifest["action_semantics"],
+              "task_outcome_judge": "sim_ground_truth" if truth else "operator"}
     dataset = None
     try:
         dataset = LeRobotDataset.create(
@@ -127,6 +132,12 @@ def export_episode(episode: Path, output: Path, repo_id: str) -> dict:
                     np.testing.assert_allclose(actual[key].numpy(), expected[key], rtol=1e-6, atol=1e-7)
             np.testing.assert_allclose(float(actual["timestamp"]), index / manifest["provenance"]["fps"], atol=1e-6)
         shutil.copytree(episode, output / "rosy_provenance" / manifest["episode_id"])
+        if truth is not None:
+            for relative, payload in {'truth.json': Path(sim_ground_truth).read_bytes(), **truth['payloads']}.items():
+                target = output/'rosy_sim_truth'/relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
+            validate_truth(output/'rosy_sim_truth/truth.json', validated, source=episode)
         report.update(status="verified", verified_frames=reader.num_frames,
                       video_mean_absolute_error_max=max_image_error, dataset_version="v3.0")
         return report
@@ -142,8 +153,10 @@ def main() -> None:
     parser.add_argument("episode", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--repo-id", default="rosy-local/omx-sim")
+    parser.add_argument('--sim-ground-truth', type=Path)
     args = parser.parse_args()
-    print(json.dumps(export_episode(args.episode, args.output, args.repo_id), indent=2))
+    print(json.dumps(export_episode(args.episode, args.output, args.repo_id,
+                                    sim_ground_truth=args.sim_ground_truth), indent=2))
 
 
 if __name__ == "__main__":
