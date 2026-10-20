@@ -1,5 +1,7 @@
 """Independent object success must require lift, release and measured settling."""
 from copy import deepcopy
+import json
+import os
 from pathlib import Path
 import sys
 
@@ -69,3 +71,34 @@ def test_named_native_task_uses_existing_isolated_launcher_and_explicit_approval
     assert '$OMX_NATIVE_STATE/pick-place' in script
     with pytest.raises(ValueError):
         run_script('/candidate', experiment='arbitrary-command')
+
+
+def test_readiness_client_joins_the_same_isolated_domain_as_its_children(tmp_path, monkeypatch):
+    import g2_common
+    import g2_ports
+    import g2_runner
+    from sim_pick_place_task import run
+    monkeypatch.delenv('ROS_DOMAIN_ID', raising=False)
+    monkeypatch.setattr(g2_ports, 'isolation_guard', lambda _root: None)
+    child_domains = []
+
+    class Children:
+        def __init__(self, directory):
+            pass
+
+        def start(self, name, command, *, env):
+            child_domains.append(env['ROS_DOMAIN_ID'])
+
+        def close(self):
+            return True
+
+    def readiness(**kwargs):
+        assert child_domains == ['77', '77']
+        assert os.environ.get('ROS_DOMAIN_ID') == child_domains[0]
+        raise RuntimeError('stop after readiness probe')
+
+    monkeypatch.setattr(g2_runner, 'Children', Children)
+    monkeypatch.setattr(g2_common, 'controller_readiness', readiness)
+    destination = tmp_path / 'run'
+    assert run(destination) == 1
+    assert json.loads((destination / 'result.json').read_text())['error'] == 'RuntimeError: stop after readiness probe'
