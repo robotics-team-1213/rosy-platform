@@ -77,19 +77,21 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
 
     @app.post("/api/fleet/trip-jobs", dependencies=operator_guard, tags=["fleet-work"])
     async def fleet_trip_job(body: TripJobRequest, principal=Depends(require_named_operator)) -> dict:
-        candidates = body.candidate_robot_ids or [body.robot_id]
-        if any(robot not in console.robot_ids for robot in candidates):
-            raise HTTPException(404, detail={"code": "UNKNOWN_ROBOT", "detail": {}})
-        active = runner._store.active()
-        unknown = sorted({p for s in body.steps for p in (s.to, *s.via)} - set(active[2].places if active else ()))
-        if unknown:
-            raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
+        def validate():
+            candidates = body.candidate_robot_ids or [body.robot_id]
+            if any(robot not in console.robot_ids for robot in candidates):
+                raise HTTPException(404, detail={"code": "UNKNOWN_ROBOT", "detail": {}})
+            active = runner._store.active()
+            unknown = sorted({p for s in body.steps for p in (s.to, *s.via)} - set(active[2].places if active else ()))
+            if unknown:
+                raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
         try:
             steps = [step.model_dump(mode="json") for step in body.steps]
             if body.candidate_robot_ids is not None:
                 from fleet.server.trip_candidates import create_candidate_trip_job
                 return {"job": await create_candidate_trip_job(
-                    jobs, body.candidate_robot_ids, steps, principal.principal_id, body.request_key)}
+                    jobs, body.candidate_robot_ids, steps, principal.principal_id, body.request_key, validate=validate)}
+            validate()
             return {"job": await create_trip_job(jobs, body.robot_id, steps, principal.principal_id)}
         except TripError as exc:
             raise HTTPException(exc.status, detail={"code": exc.code, "detail": exc.detail}) from exc

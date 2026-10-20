@@ -15,7 +15,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 기존 named operator·TRIP simulation profile·장소 검사 후 Fleet이 후보 순서대로 기존 trip lease와 원장 robot claim을 확보한다. `TRIP_ROBOT_BUSY`만 다음 후보로 넘어가며 다른 불명/정지/capability/lease/claim 실패는 그대로 거절한다. 전체 busy는 409 `TRIP_CANDIDATES_BUSY`; 같은 principal/key를 다른 후보 순서나 steps로 재사용하면 409 `TRIP_REQUEST_CONFLICT`다. 등록되지 않은 후보가 하나라도 있으면 기존 404 `UNKNOWN_ROBOT`이다.
 
-같은 principal/key·정규화된 본문은 기존 `{job}`을 반환하며 선택된 장치는 `job.workcell_id`와 robot resource claim으로 확인한다. 완료·HOLD·재시작 뒤 재접수도 새 실행·새 lease를 만들지 않는다. 단일 `robot_id` 방식에는 request-key 의미를 소급 추가하지 않는다. 내부 key namespace는 `trip-pool:`이며 앱에 DB 접근을 요구하지 않는다. 이 API는 후보 배정을 지원하며 다중 운행·자동 충전·production profile·장치 권한을 추가하지 않는다. Envelope 1.0은 유지한다.
+같은 principal/key·정규화된 본문은 기존 `{job}`을 반환하며 선택된 장치는 `job.workcell_id`와 robot resource claim으로 확인한다. 완료·HOLD·재시작 뒤 재접수도 새 실행·새 lease를 만들지 않는다. 재접수는 현재 지도·장치 등록의 신규 admission 검사보다 먼저 같은 원장을 읽는다. 인증·profile·정적 body 검사는 항상 유지한다. 단일 `robot_id` 방식에는 request-key 의미를 소급 추가하지 않는다. 내부 key namespace는 `trip-pool:`이며 앱에 DB 접근을 요구하지 않는다. 이 API는 후보 배정을 지원하며 다중 운행·자동 충전·production profile·장치 권한을 추가하지 않는다. Envelope 1.0은 유지한다.
 
 공정 문서는 기존 `/api/fleet/cell-app/compile`·`/proposals`의 ID/digest 검사와 설치된 compiler로 처리한다. proposal/resolve는 물리 submission이 아니며 기존 admit의 named/two-person 검사와 `physical_submission: NOT_CONNECTED` 의미를 유지한다. 앱의 업무 완료와 관측 근거는 별도다.
 
