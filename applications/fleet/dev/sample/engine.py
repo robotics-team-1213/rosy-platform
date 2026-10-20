@@ -1,5 +1,6 @@
 """Backend-free sample provider. Unsupported requests fail visibly instead of succeeding."""
 import json
+import re
 from pathlib import Path
 from threading import RLock
 from urllib.parse import urlsplit
@@ -134,5 +135,10 @@ class SampleEngine:
                           'robots': robots, 'signals': {}, 'alarms': [], 'ts': 1792454400})
         if method == 'GET' and f'GET {path}' in self.reads:
             return reply(self.reads[f'GET {path}'])
+        match = re.fullmatch('/robots/([^/]+)/path', path)
+        if method == 'GET' and match:
+            if match[1] not in ('sample-robot', *self.installation.robots):
+                return error(404, 'UNKNOWN_ROBOT')
+            return reply({'robot_id': match[1], 'points': [], 'path': []})
         self.unhandled.append((method, target))
         return error(501, 'SAMPLE_REQUEST_NOT_IMPLEMENTED', f'{method} {path}')

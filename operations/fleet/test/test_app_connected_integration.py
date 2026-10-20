@@ -56,7 +56,7 @@ def test_connected_login_write_task_cancel_read_and_logout(tmp_path):
         assert request('POST', '/auth/login', {'login':'alice', 'password':TYPED})[0] == 204
         assert cookie.startswith('rosy_fleet_session=')
         assert request('PATCH', '/auth/profile', {'display_name':'connected developer'})[0] == 200
-        assert request('GET', '/auth/session')[1]['display_name'] == 'connected developer'
+        assert request('GET', '/auth/profile')[1]['display_name'] == 'connected developer'
         code, result = request('POST', '/robots/rosy_01/goal', {'x':1,'y':2,'yaw':0}, {'Idempotency-Key':'connected-goal'})
         assert code == 200 and result['task']['status'] == 'QUEUED'
         identifier = result['task']['task_id']

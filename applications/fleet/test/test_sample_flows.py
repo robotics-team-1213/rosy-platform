@@ -199,6 +199,7 @@ def test_enrollment_pairing_and_calibration_readbacks():
     approval = {'source_id': 'sample-camera', 'map_to_image': [100, 0, 0, 0, -100, 360, 0, 0, 1],
                 'image': {'width': 640, 'height': 360}, 'track_bounds_m': {'min_x': 0, 'min_y': 0, 'max_x': 6.4, 'max_y': 3.6},
                 'fit_score': .81, 'lens': None, 'frame_seq': 12}
+    assert call(engine, 'POST', '/api/fleet/calibrations', {**approval, 'map_to_image':[]})[0] == 422
     code, record = call(engine, 'POST', '/api/fleet/calibrations', approval)
     assert code == 200 and record['use'] == 'display-only'
     assert call(engine, 'GET', '/api/fleet/calibrations')[1]['calibrations'] == [record]
@@ -268,6 +269,7 @@ def test_account_changes_control_login_and_sample_authority():
 
 def test_profile_change_survives_logout_and_login():
     engine = load_engine()
+    assert call(engine, 'GET', '/api/fleet/auth/profile')[0] == 401
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
     assert call(engine, 'PATCH', '/api/fleet/auth/profile', {'display_name': '저장한 이름'})[0] == 200
     call(engine, 'POST', '/api/fleet/auth/logout', {})
