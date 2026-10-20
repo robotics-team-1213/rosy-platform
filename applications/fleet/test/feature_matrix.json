@@ -5498,9 +5498,9 @@
         {
           "consumer": "applications/fleet/web/assistant/panel.js",
           "expression": "/api/fleet/assistant/messages/",
-          "resolution": "literal-or-template",
+          "resolution": "concatenated request_id; panel.poll",
           "request_ids": [
-            "POST:/api/fleet/assistant/messages"
+            "GET:/api/fleet/assistant/messages/{request_id}"
           ]
         },
         {
@@ -5536,6 +5536,23 @@
           "path": "/api/fleet/assistant/messages",
           "implementation": "operations/fleet/fleet/server/assistant/routes.py",
           "handler": "submit",
+          "expected_statuses": [
+            200
+          ],
+          "status": "unverified",
+          "verification_scope": "Source registration confirmed; behavior receipt pending",
+          "contract_tests": [
+            "operations/fleet/test/test_assistant_routes.py",
+            "operations/fleet/test/test_assistant_browser.py"
+          ],
+          "test_reference_kind": "existing backend suite; per-request behavior verification pending"
+        },
+        {
+          "id": "GET:/api/fleet/assistant/messages/{request_id}",
+          "method": "GET",
+          "path": "/api/fleet/assistant/messages/{request_id}",
+          "implementation": "operations/fleet/fleet/server/assistant/routes.py",
+          "handler": "read",
           "expected_statuses": [
             200
           ],
