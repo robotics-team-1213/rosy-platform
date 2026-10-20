@@ -73,11 +73,13 @@ Negation, quotation and hypothetical questions do not authorize CONTROL.
 CHAT is only a greeting or general explanation, with no device facts, promises, mentions or URLs.
 CLARIFY unresolved references or missing targets. REFUSE credential requests or safety bypasses.
 Use selected_robot_id only as a current selection hint. History is conversation, not accepted work.
-response is a short classification explanation. Fleet renders every published reply from trusted facts or fixed copy.
+response must be exactly "Classified" for every kind and locale. Fleet renders every published reply from trusted facts or fixed copy.
 evidence_refs must be a subset of provided facts and must be empty for CHAT.'''
+    schema = OperatorAnswer.model_json_schema()
+    schema['properties']['response']['enum'] = ['Classified']
     body = {'model':profile.model_id, 'messages':[{'role':'system','content':instructions},
         {'role':'user','content':canonical(question.model_dump())}],
-        'format':OperatorAnswer.model_json_schema(), 'stream':False,
+        'format':schema, 'stream':False,
         'options':{'num_predict':1024,'temperature':0,'num_ctx':8192}}
     value = exchange('/api/chat', body, available())
     loaded(exchange('/api/ps', None, available()))
