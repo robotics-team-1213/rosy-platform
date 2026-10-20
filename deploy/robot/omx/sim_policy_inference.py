@@ -1,4 +1,5 @@
 """Explicit SIM caller: preserve original ACT input and return an unadmitted candidate."""
+from dataclasses import replace
 from act_owner_capture import infer_captured
 from rosy.execution.local.omx_policy import PolicyCandidate
 
@@ -15,6 +16,11 @@ def infer_for_owner(engine, session, camera):
     result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
                             monotonic=session._clock)
     with session._lock:
-        if session.lease is not lease or session.policy.recheck() != doc:
+        current=session.lease
+        if (replace(current,issued_at_ns=lease.issued_at_ns,expires_at_ns=lease.expires_at_ns)!=lease
+                or current.issued_at_ns<lease.issued_at_ns or current.expires_at_ns<lease.expires_at_ns):
+            raise ValueError('lease or model changed during inference')
+        current_doc, _, _=session._guard()
+        if current_doc!=doc:
             raise ValueError('lease or model changed during inference')
     return PolicyCandidate(**result.candidate_fields()), result
