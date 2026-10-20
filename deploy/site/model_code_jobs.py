@@ -27,6 +27,7 @@ JOB_ENTRY_POINTS.update({'model/' + name: 'learning/registry/perception/' + name
                              'export_ncnn.py', 'export_ncnn_lane.py', 'export_onnx.py', 'intake.py',
                              'intake_eval_gate.py', 'peer_targets.py', 'sign_model.py', 'slot_cli.py',
                              'watch.py', 'watch_core.py',)})
+JOB_ENTRY_POINTS['model/intake_eval_gate.py'] = 'learning/evaluation/perception/intake_eval_gate.py'
 JOB_ENTRY_POINTS.update({'training/' + name: 'learning/training/perception/' + name
                          for name in ('capture_goal.py', 'check_manifest.py', 'drivable_head.py', 'export_cell.py',
                              'gen_notebook.py', 'handover.py', 'job_state.py', 'learning_cycle.py', 'recipes.py',
@@ -55,10 +56,11 @@ def job_entry(source, script):
                 file.relative_to(perception)
                 return file, perception, script, None
     mapped = JOB_ENTRY_POINTS.get(script) if isinstance(script, str) else None
-    if mapped and script.startswith("training/") and mapped.startswith("learning/curation/perception/"):
+    if mapped and (script.startswith("training/") or script == "model/intake_eval_gate.py"):
         current = source / mapped
         if not current.exists() and not current.is_symlink():
-            mapped = "learning/training/perception/" + Path(mapped).name
+            holder = "training" if script.startswith("training/") else "registry"
+            mapped = f"learning/{holder}/perception/{current.name}"
     perception, name = (source, mapped) if mapped is not None else (source / PREFIX, script)
     file = (perception / name).resolve(strict=True)
     if file.relative_to(perception) != Path(name) and mapped is not None:

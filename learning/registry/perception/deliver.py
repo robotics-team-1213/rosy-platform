@@ -69,7 +69,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "middleware" / "perception",
-           ROOT / "contracts" / "foundation", Path(__file__).resolve().parents[3] / 'tools/perception'):
+           ROOT / "contracts" / "foundation", ROOT / 'learning/evaluation/perception', ROOT / 'tools/perception'):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

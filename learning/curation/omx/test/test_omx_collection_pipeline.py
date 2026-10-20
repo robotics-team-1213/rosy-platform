@@ -9,7 +9,7 @@ import pytest
 
 @pytest.fixture
 def module():
-    path = Path(__file__).resolve().parents[1]/'learning/curation/omx/collection_pipeline.py'
+    path = Path(__file__).resolve().parents[1]/'collection_pipeline.py'
     spec = importlib.util.spec_from_file_location('collection_pipeline', path)
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)

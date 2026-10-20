@@ -1,8 +1,15 @@
 """Pure quality judgments for fixed perception evaluation (D-379). No I/O."""
 
 import re
+from pathlib import Path
+import sys
 
 import numpy as np
+
+for holder in ('middleware/perception', 'contracts/foundation'):
+    path = str(Path(__file__).resolve().parents[3] / holder)
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from control.sensing.perception.learned.manifest import road_delivery_error
 

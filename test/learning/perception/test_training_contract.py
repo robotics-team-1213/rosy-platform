@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / 'learning/evaluation/perception'))
 TRAINING = Path(__file__).resolve().parents[3] / 'learning/training/perception'
 if str(TRAINING) not in sys.path:
     sys.path.insert(0, str(TRAINING))

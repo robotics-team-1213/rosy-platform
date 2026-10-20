@@ -441,13 +441,14 @@ def test_strict_training_resolution_rejects_modified_store_content(tmp_path):
 
 def test_strict_eval_detects_truth_changed_during_inference(tmp_path, monkeypatch):
     folder = _seal(_eval_set(tmp_path))
-    original = intake.model_logits
+    import intake_evaluation
+    original = intake_evaluation.model_logits
 
     def mutate_truth(model, bgr):
         (folder / "masks/s/s__000000.png").write_bytes(b"changed")
         return original(model, bgr)
 
-    monkeypatch.setattr(intake, "model_logits", mutate_truth)
+    monkeypatch.setattr(intake_evaluation, "model_logits", mutate_truth)
     with pytest.raises(intake.EvalSetError, match="content hash"):
         intake.evaluate(_model(_pred()), folder, 400, verify_content=True)
 

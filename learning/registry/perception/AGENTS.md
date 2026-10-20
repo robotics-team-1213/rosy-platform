@@ -14,6 +14,8 @@ The artifact and provenance store plus the model half of the D-356 learned-perce
 
 ## Key Files
 
+Fixed-set scoring and pure quality judgments live in `learning/evaluation/perception/intake_evaluation.py` and `intake_eval_gate.py`. Registry reuses them while retaining intake decisions, artifact writes and champion lookup.
+
 | File | Description |
 |------|-------------|
 | `store.py` | Shared content-addressed datasets, evalsets, models and READY inbox storage; physical relocation preserves its paths and signatures |
