@@ -142,11 +142,10 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             owner_identity=lambda:dict(simulation=True,workcell_id=config.workcell_id,
                 instance_id=config.instance_id,profile='sim-world:'+WORLD),monotonic=arm.monotonic,
             enabled=True,camera_current=camera.snapshots,execution_journal=journal)
-        session.observe(arm.latest_joint_state)
-        renew=threading.Thread(target=renew_worker,daemon=True);renew.start();threads.append(renew)
         bind_started=time.monotonic()
         bind_sim_runtime(session,arm)
         receipt['runtime_bind_ms']=(time.monotonic()-bind_started)*1000
+        renew=threading.Thread(target=renew_worker,daemon=True);renew.start();threads.append(renew)
         sampler=threading.Thread(target=observe_worker,daemon=True);sampler.start();threads.append(sampler)
         while not samples:require_live();time.sleep(.01)
         initial_z=samples[0]['model_pose_base']['z_m']
