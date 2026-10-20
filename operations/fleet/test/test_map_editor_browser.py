@@ -152,8 +152,12 @@ def test_import_failure_and_unsaved_navigation_preserve_draft(editor_site):
     expect(page.locator('#drawing-status')).to_contain_text('INVALID')
     assert store.draft_view() == before
     expect(page.locator('#site-map-svg [data-drawing]')).to_have_count(1)
+    expect(page.locator('#drawing-register')).to_be_disabled()
+    page.locator('#drawing-file').set_input_files({'name': 'valid.stl', 'mimeType': 'application/octet-stream', 'buffer': DATA})
+    expect(page.locator('#drawing-status')).to_contain_text('원본 확인')
     page.locator('#drawing-distance').fill('0')
     page.locator('#drawing-register').click()
+    expect(page.locator('#drawing-status')).to_contain_text('양수')
     assert store.draft_view() == before
     page.locator('#editor-tools > summary').click()
     page.locator('#editor-enabled').check()
