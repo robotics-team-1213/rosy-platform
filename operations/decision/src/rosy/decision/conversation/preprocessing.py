@@ -32,17 +32,19 @@ def alias_pattern(name):
     return r'(?<![A-Za-z0-9_.:-])'+re.escape(name)+r'(?![A-Za-z0-9_.:-])'
 
 
+def _plain(value):
+    return re.sub(r'[ \t]+', ' ', unicodedata.normalize('NFC', value))
+
+
 def normalize(text, names=()):
-    def plain(value):
-        return re.sub(r'[ \t]+', ' ', unicodedata.normalize('NFC', value))
     parts, at = [], 0
     names = {form for name in names for form in (name, unicodedata.normalize('NFD', name))}
     protected = re.compile(QUOTES.pattern+'|'+'|'.join(alias_pattern(name) for name in
         sorted(names, key=lambda name: (-len(name), name)))) if names else QUOTES
     for match in protected.finditer(text):
-        parts.extend((plain(text[at:match.start()]), match.group()))
+        parts.extend((_plain(text[at:match.start()]), match.group()))
         at = match.end()
-    parts.append(plain(text[at:]))
+    parts.append(_plain(text[at:]))
     return ''.join(parts).strip(' \t')
 
 
@@ -72,7 +74,7 @@ class Prepared:
 
     @property
     def uses_context(self):
-        return bool(REFERENCE.search(self.normalized))
+        return bool(REFERENCE.search(unicodedata.normalize('NFC', self.normalized)))
 
 
 def prepare(question, *, environment=None):
@@ -92,18 +94,20 @@ def prepare(question, *, environment=None):
             for name in names:
                 aliases.setdefault(unicodedata.normalize('NFC', name), set()).add(kind+':'+identity)
     normalized = normalize(original, aliases)
+    search_text = unicodedata.normalize('NFC', normalized)
     hints, ambiguous = [], []
     for alias, identities in sorted(aliases.items()):
-        if re.search(alias_pattern(alias), normalized):
+        if re.search(alias_pattern(alias), search_text):
             hints.append({'name':alias, 'refs':sorted(identities)})
             if len(identities) != 1:
                 ambiguous.append(alias)
     # Collapsing whitespace must never silently select a different registered target.
     folded = {}
     for alias, identities in aliases.items():
-        folded.setdefault(normalize(alias), set()).update(identities)
+        folded.setdefault(_plain(alias), set()).update(identities)
+    folded_text = _plain(original)
     for alias, identities in folded.items():
-        if len(identities) > 1 and alias not in ambiguous and re.search(alias_pattern(alias), normalize(original)):
+        if len(identities) > 1 and alias not in ambiguous and re.search(alias_pattern(alias), folded_text):
             ambiguous.append(alias)
     catalog_hash = hashed({'entries':sorted(catalog), 'map':environment.get('map')})
     # Authentication IDs are verified by Fleet/the broker and are not model reasoning context.
@@ -129,7 +133,7 @@ def control_issue(prepared, *, steps=1):
         return 'AMBIGUOUS_REFERENCE'
     if prepared.uses_context and prepared.context.get('accepted_execution_context') is None:
         return 'AMBIGUOUS_REFERENCE'
-    text = prepared.normalized
+    text = unicodedata.normalize('NFC', prepared.normalized)
     # These cues can only block a proposal; they never authorize or choose an action.
     if NEGATIVE.search(text):
         return 'AMBIGUOUS_REFERENCE'
