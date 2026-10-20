@@ -16,6 +16,8 @@ Exporter는 기존 native reader로 원본을 재검증한다. 변환하지 않�
 
 원본 환경 로그 coverage는 원본 parent Episode 범위다. 구간 coverage나 프레임별 환경 증거로 승격하지 않는다. 원본 outcome은 unknown이면 그대로 두며 구간 결과로 전체 Episode 성공을 추정하지 않는다.
 
+Legacy `leader_native`의 원본 inspection에 session/cycle이 선언되지 않았으면 그 계보는 unknown으로 유지한다. 이 자료의 session 독립성은 보장하지 않는다. Production `scripted_teacher` intake의 byte-bound session/cycle 검증은 유지하며 선언된 그룹의 후손은 분할을 넘지 않는다.
+
 | 기존 결정 | 관계 |
 |---|---|
 | D-427 | 기존 learning curation/training 경로에서 offline 기능을 확장한다. 새 배포·device payload는 없다. |

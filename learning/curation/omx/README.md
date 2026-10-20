@@ -13,6 +13,8 @@ python learning/training/omx/native_cycle.py run --splits <new-segment-splits> -
 
 각 파지 구간은 별도 child Episode다. 원본 state/action·대응 카메라·source clocks를 보존하고 child index/time만 다시 매긴다. 성공을 직접 확인했고 개입이 없는 구간만 학습에 넣는다. 실패·미판정·개입은 제외로 보존한다. 같은 원본·content hash·session·cycle의 후손은 한 분할에만 둔다. 독립 train/eval이 필요하며 test를 선택하면 test도 비어 있으면 안 된다. native 정규화 단위를 SIM rad와 혼합하지 않는다.
 
+Legacy `leader_native` inspection에 session/cycle이 선언되지 않았으면 session 독립성을 보장할 수 없다. 누락된 계보를 추정하지 않는다. Production `scripted_teacher` intake는 원본 bytes에 묶인 session/cycle을 계속 검증한다.
+
 `split-receipt.json`은 원본 report/hash, 구간 선택, child→원본 frame 계보, readback과 출력 hashes를 묶는다. 원본 전체의 outcome은 구간 outcome과 별개이고, 환경 coverage도 원본 parent Episode 범위다. 다른 작업자·카메라·물체·장비에서 재사용 가능하다는 뜻은 아니다. [D-833](../../../docs/adr/D-833-native-omx-grasp-segments.md)과 [구현 계획](../../../docs/plans/2026-10-21-omx-native-grasp-segments.md)을 따른다.
 
 수집 대상은 Fleet PC, 학습·독립 평가는 모델 PC다. HF 조직은 미정이며 로컬 수집의 선행 조건이 아니다.
