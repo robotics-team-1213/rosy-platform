@@ -87,6 +87,25 @@ def test_separate_execution_approvals_are_required(tmp_path, sim, startup):
     assert remote.calls == []
 
 
+def test_policy_study_requires_its_own_explicit_start_approval(tmp_path):
+    m,remote=module(),Remote()
+    value=receipt()|dict(experiment='pick-place-policy')
+    with pytest.raises(PermissionError):
+        m.start_prepared(value,tmp_path,remote,approve_sim=True,approve_startup=True)
+    assert not remote.calls
+
+
+def test_policy_approval_reaches_reservation_and_is_recorded_before_start(tmp_path):
+    m,remote=module(),Remote()
+    value=receipt()|dict(experiment='pick-place-policy-calibration')
+    result=m.start_prepared(value,tmp_path,remote,approve_sim=True,approve_startup=True,
+                            approve_study=True)
+    reserve=next(call for call in remote.calls if 'reserve' in call)
+    assert '--approve-policy-study' in reserve
+    assert json.loads((tmp_path/'start-request.json').read_text())['policy_study_approved'] is True
+    assert result['task_success']=='UNKNOWN'
+
+
 def test_changed_root_host_role_blocks_reservation(tmp_path):
     m, remote = module(), Remote(bad_probe=True)
     with pytest.raises(PermissionError):
