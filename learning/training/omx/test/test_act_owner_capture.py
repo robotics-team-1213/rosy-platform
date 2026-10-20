@@ -9,7 +9,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/p) for p in ('learning/training/omx',
-    'learning/training/omx/test', 'middleware/robot_execution/local/test')]
+    'learning/training/omx/test', 'middleware/robot_execution/local/test', 'deploy/robot/omx')]
+from sim_policy_inference import infer_for_owner
 from test_omx_policy_session import setup_session, CameraSnapshot
 from test_act_inference import artifact
 from act_inference import ACTInference
@@ -24,21 +25,6 @@ class CapturedRGB:
     # Test caller's retained capture pair, not a trust/owner API.
     metadata: CameraSnapshot
     rgb: bytes
-
-
-def infer_for_owner(engine, session, packet):
-    # Explicit isolated caller; no production scheduler or default activation.
-    with session._lock:
-        lease = session.lease
-        doc = session.policy.recheck()
-        if engine.metadata != doc: raise ValueError('different installed policy')
-        observation = session.capture_inference_input(packet.rgb, packet.metadata)
-    result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
-                            monotonic=session._clock)
-    with session._lock:
-        if session.lease is not lease or session.policy.recheck() != doc:
-            raise ValueError('lease or model changed during inference')
-    return PolicyCandidate(**result.candidate_fields()), result
 
 
 def case(tmp_path, monkeypatch, *, enabled=True):
