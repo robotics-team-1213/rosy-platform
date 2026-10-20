@@ -55,6 +55,33 @@ def test_map_identity_cannot_reuse_another_drawing_frame(tmp_path, monkeypatch, 
     assert store.active_view() == active and store.draft_view() == draft
 
 
+def test_drawing_identity_survives_restart_and_rejects_removal_or_transform_change(tmp_path):
+    assets = asset_module().SiteMapAssetStore(tmp_path / 'assets')
+    source = tmp_path / 'input.stl'
+    source.write_bytes(DATA)
+    asset = assets.put_stl(source)
+    first = assets.project(asset['asset_sha256'], registration())
+    second = assets.project(asset['asset_sha256'], registration().model_copy(update={'heading_rad': .5}))
+    body = {**trip._line(), 'map_id': 'drawing-frame',
+            'drawing': {k: first[k] for k in ('asset_sha256', 'projection_sha256')},
+            'survey': {'revision': first['projection_sha256'], 'origin': [0, 0], 'heading_rad': 0,
+                       'scale_source': 'measured', 'measured_distance_m': 1,
+                       'description': 'measured drawing', 'reviewed': False}}
+    path = tmp_path / 'maps.db'
+    store = SiteMapStore(path, drawing_assets=assets)
+    saved = store.save_draft(SiteMap.model_validate(body), expected_revision=None, principal_id='bob')
+    store.close()
+    store = SiteMapStore(path, drawing_assets=assets)
+    changed = {**body, 'drawing': {k: second[k] for k in ('asset_sha256', 'projection_sha256')},
+               'survey': {**body['survey'], 'revision': second['projection_sha256']}}
+    for candidate in (changed, {**body, 'drawing': None, 'survey': None}):
+        with pytest.raises(SiteMapError) as error:
+            store.save_draft(SiteMap.model_validate(candidate), expected_revision=saved['revision'], principal_id='bob')
+        assert error.value.code == 'SITE_MAP_DRAWING_INVALID'
+        assert store.draft_view() == saved
+    assert store.save_draft(SiteMap.model_validate(body), expected_revision=saved['revision'], principal_id='bob')
+
+
 def asset_module():
     try:
         return importlib.import_module('fleet.server.site_map_assets')
