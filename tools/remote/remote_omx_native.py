@@ -238,6 +238,9 @@ def activate(value, directory, remote):
 
 def deploy(args, repo, runner):
     host = choose_target(runner._LAB, args.host)
+    experiment = getattr(args, 'experiment', 'g2')
+    if experiment not in ('g2', 'pick-place'):
+        raise ValueError('unknown native simulation experiment')
     config = json.loads(args.config.read_text(encoding='utf-8-sig'))
     if config.get('role') != args.host:
         raise ValueError('SDK config role does not match approved target role')
@@ -260,7 +263,7 @@ def deploy(args, repo, runner):
         'staging': home+'/rosy-test/native-omx/'+run_id, 'state_root': anchor,
         'release': anchor+'/releases/'+revision, 'state': anchor+'/state/'+nonce,
         'unit': 'rosy-native-sim-'+run_id, 'deployment_status': 'PREPARING',
-        'task_execution': 'NOT_RUN', 'real_training_episodes': 0}
+        'task_execution': 'NOT_RUN', 'real_training_episodes': 0, 'experiment': experiment}
     save(directory/'deployment.json', value, exclusive=True)
     provisioning_bundle(repo, revision, directory)
     try:
@@ -271,7 +274,7 @@ def deploy(args, repo, runner):
             ")\nprint(json.dumps({'config':'STAGED'}))")
         prepared = remote.json(['/usr/bin/python3', value['source']+'/deploy/robot/omx/native_sim_prepare.py',
             '--source', value['source'], '--config', config_path, '--staging', value['staging'],
-            '--run-id', run_id], timeout=900)
+            '--run-id', run_id, '--experiment', experiment], timeout=900)
         value['prepared'] = prepared
         value['deployment_status'] = 'STAGED'
         save(directory/'deployment.json', value)
@@ -369,6 +372,7 @@ def main():
     shipping.add_argument('--config', type=Path, required=True)
     shipping.add_argument('--log-dir', type=Path, required=True)
     shipping.add_argument('--sha', default='HEAD')
+    shipping.add_argument('--experiment', choices=['g2', 'pick-place'], default='g2')
     shipping.add_argument('--approve-host-provisioning', action='store_true')
     for action in ['provision', 'start', 'status', 'fetch']:
         command = commands.add_parser(action)

@@ -36,12 +36,16 @@ def environment(config):
     return "\n".join(lines) + "\n"
 
 
-def run_script(source):
-    runner = str(Path(source) / "deploy/robot/omx/g2_runner.py")
+def run_script(source, *, experiment="g2"):
+    if experiment not in {"g2", "pick-place"}:
+        raise ValueError("unknown native simulation experiment")
+    entry = "g2_runner.py" if experiment == "g2" else "sim_pick_place_task.py"
+    runner = str(Path(source) / "deploy/robot/omx" / entry)
+    mode = " --mode run" if experiment == "g2" else ""
     return ("#!/bin/bash\nset -eo pipefail\n"
             "source \"$OMX_NATIVE_STATE/environment.sh\"\n"
             "exec /usr/bin/python3 -B " + shlex.quote(runner) +
-            " --mode run --evidence \"$OMX_NATIVE_STATE/g2\""
+            mode + " --evidence \"$OMX_NATIVE_STATE/" + experiment + "\""
             " --approve-isolated-simulation --approve-startup-home\n")
 
 
@@ -80,7 +84,8 @@ def sdk_preflight(source, state):
         raise ValueError("SDK imports or source origins were not verified")
 
 
-def prepare(source, config_path, staging, run_id):
+def prepare(source, config_path, staging, run_id, *, experiment="g2"):
+    script = run_script(Path(staging).absolute() / "source", experiment=experiment)
     revision = run_identity(run_id)
     config = load_config(config_path)
     staging = Path(staging).absolute()
@@ -91,7 +96,7 @@ def prepare(source, config_path, staging, run_id):
     for name in ("home", "tmp", "logs", "cache"):
         (state / name).mkdir(mode=0o700)
     (state / "environment.sh").write_text(environment(config), encoding="utf-8")
-    (state / "run.sh").write_text(run_script(source_out), encoding="utf-8")
+    (state / "run.sh").write_text(script, encoding="utf-8")
     roots = [str(Path(config["ros_setup"]).parent), config["overlay"], config["python_site"],
              "/usr/bin/python3", "/usr/lib/python3/dist-packages", sysconfig.get_paths()["stdlib"]]
     if config.get("dependency_prefix"):
@@ -104,7 +109,7 @@ def prepare(source, config_path, staging, run_id):
     if dependency_inventory(roots) != dependencies:
         raise ValueError("dependency input drift during SDK preflight")
     verify_inventory(source_out, source_hashes)
-    metadata = {"schema": "rosy.omx-native-sim-prepared/1", "revision": revision,
+    metadata = {"schema": "rosy.omx-native-sim-prepared/1", "revision": revision, "experiment": experiment,
                 "run_id": run_id, "role": config["role"], "source": str(source_out), "state": str(state),
                 "source_hashes": source_hashes, "dependency_roots": roots, "dependency_hashes": dependencies,
                 "state_hashes": inventory(state, exclude={"home", "tmp", "logs", "cache"}),
@@ -169,12 +174,13 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--staging", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--experiment", choices=("g2", "pick-place"), default="g2")
     parser.add_argument("--activate", action="store_true")
     parser.add_argument("--state-root", type=Path)
     args = parser.parse_args()
     if args.activate and args.state_root is None:
         parser.error("--activate requires the provisioned --state-root")
-    result = prepare(args.source, args.config, args.staging, args.run_id)
+    result = prepare(args.source, args.config, args.staging, args.run_id, experiment=args.experiment)
     if args.activate:
         result = activate(args.staging, args.state_root)
     summary = {key: value for key, value in result.items() if not key.endswith("_hashes")

@@ -162,6 +162,9 @@ def status(state):
         path = state / "g2" / (name + ".json")
         if path.is_file():
             value[name] = read_json(path)
+    task_result = state / "pick-place" / "result.json"
+    if document.get("experiment", "g2") == "pick-place" and task_result.is_file():
+        value["pick-place-result"] = read_json(task_result)
     return value
 
 
