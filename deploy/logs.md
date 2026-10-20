@@ -3083,3 +3083,9 @@
 - 변경: 같은 SHA의 기존 Discord 보호 snapshot에 별도 operator 평가를 hash 결속해 원자적으로 설치하는 도구와 signed site optional 설정을 추가했다. 기존 SSH/Discord 설정은 보존한다.
 - 증거: a1f0252d0a 배포/설치 75개와 a57d78c070 해시/provider/설치 64개 통과. --check 무변경과 실패 rollback을 모의 검증했다. 현재 Discord Bot/지정 채널 GET 200 및 Bot/채널/서버 일치를 읽기 전용 확인했다. 실제 모델 b1f18674b2 19사례 PASS 영수증은 비공개 외부 증거에 보존했다.
 - gate 변화: 없음. operator 보호 설정 설치·서명 후보 배포·외부 메시지·실기 실행은 하지 않았다.
+
+## 2026-10-21 · 27ce202bd1 · OMX 독립 물체 판정과 native SIM baseline
+
+- 변경: 기존 보호된 native launcher에 닫힌 pick-place 실험을 연결하고 별도 observer로 들림·해제·목표 오차·2초 안정 상태를 판정한다. 기본 G2·격리·입력 결속·실행 권한은 유지한다.
+- 증거: 관련 원격 회귀 60PASS/0SKIP/NEW0. 실제 부착 보조 Gazebo에서 기존 규칙 제어기 1회 시도/1회 성공, XY 오차 0.273mm·안정 2.246초·정리 확인. 원본과 준비 실패는 `docs/validation/omx-object-baseline-2026-10-21/result.md`에 연결했다.
+- gate 변화: 학습/DEVICE/FIELD 변화 없음. 실제 시연·학습 checkpoint·독립 정책 물체 20회 평가는 미실행이다.
