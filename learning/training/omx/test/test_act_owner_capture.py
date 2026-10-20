@@ -97,6 +97,25 @@ def test_live_capture_is_atomic_under_owner_lock_but_predict_is_outside(tmp_path
     assert session.submit(proposed).accepted and len(client.commands)==1
 
 
+def test_valid_same_scope_renewal_during_compute_preserves_original_candidate(tmp_path, monkeypatch):
+    session, engine, packet, client, clock, *_ = case(tmp_path, monkeypatch)
+    original=session.lease
+    predict=engine._predict
+    def renewing(observation):
+        actions=predict(observation)
+        clock[0]+=.001
+        session.renew(replace(original,issued_at_ns=int(clock[0]*1e9),
+                              expires_at_ns=original.expires_at_ns+1_000_000))
+        return actions
+    engine._predict=renewing
+    proposed,result=infer_for_owner(engine,session,packet)
+    assert session.lease is not original
+    assert proposed.lease_id==original.lease_id
+    assert proposed.observed_at_ns==10_000_000_000
+    assert result.source.camera_received_at_ns==10_000_000_000
+    assert session.submit(proposed).accepted and len(client.commands)==1
+
+
 @pytest.mark.parametrize('change', ['bytes', 'timestamp', 'identity'])
 def test_replaced_capture_rejected_before_predict(tmp_path, monkeypatch, change):
     session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
