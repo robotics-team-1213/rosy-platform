@@ -49,3 +49,21 @@ def test_disabled_handoff_does_not_queue_a_task(tmp_path):
     assert web.get('/api/fleet/assistant/status').json()['execution_enabled'] is False
     assert web.post('/api/fleet/assistant/messages/q1/navigation', json=dict(robot_id='r1', x=1., y=2.)).status_code == 503
     assert not tasks.store.queued_task_ids()
+
+
+def test_changed_roster_returns_not_found_without_task(tmp_path):
+    web, tasks = client(tmp_path)
+    tasks.robot_ids = frozenset()
+    response = web.post('/api/fleet/assistant/messages/q1/navigation', json=dict(robot_id='r1', x=1., y=2.))
+    assert response.status_code == 404
+    assert not tasks.store.queued_task_ids()
+
+
+def test_navigation_storage_failure_returns_unavailable(tmp_path, monkeypatch):
+    import sqlite3
+    web, tasks = client(tmp_path)
+    def unavailable(*_): raise sqlite3.OperationalError('unavailable')
+    monkeypatch.setattr(web.app.state.operator_assistant.journal, 'control', unavailable)
+    response = web.post('/api/fleet/assistant/messages/q1/navigation', json=dict(robot_id='r1', x=1., y=2.))
+    assert response.status_code == 503
+    assert not tasks.store.queued_task_ids()
