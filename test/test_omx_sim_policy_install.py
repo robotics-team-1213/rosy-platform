@@ -87,7 +87,9 @@ def test_mismatched_installation_cannot_derive_trust_from_candidate(tmp_path,fau
         parent['cameras'][0]['identity']='another-camera'
         parent=seal(parent);pin=parent['revision']
         (root/'policy-artifact.json').write_text(json.dumps(parent))
-    elif fault=='owner':owner=setup_session(tmp_path/'other')[0].owner
+    elif fault=='owner':
+        (tmp_path/'other').mkdir()
+        owner=setup_session(tmp_path/'other')[0].owner
     else:
         path=root/('normalization.json' if fault=='duration' else 'policy/config.json')
         value=json.loads(path.read_text());value.update(
