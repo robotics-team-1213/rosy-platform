@@ -218,7 +218,7 @@ class SSH:
         if result.returncode or len(result.stdout) > 2 * LIMIT:
             raise ConnectionError('Model-PC operation refused or disconnected; retain the receipt')
         value = json.loads(result.stdout)
-        if isinstance(value, dict) and value.get('error'):
+        if isinstance(value, dict) and set(value) == {'error'}:
             raise ValueError('Model-PC operation refused')
         return value
 
