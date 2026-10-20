@@ -196,6 +196,7 @@ def test_missing_or_mismatched_reference_cannot_save_or_activate(tmp_path, monke
     projection = assets.project(uploaded['asset_sha256'], registration())
     body['drawing'] = {k: projection[k] for k in ('asset_sha256', 'projection_sha256')}
     body['survey']['revision'] = projection['projection_sha256']
+    body['map_id'] = 'new-drawing-frame'
     saved = store.save_draft(SiteMap.model_validate(body), expected_revision=None, principal_id='bob')
     with pytest.raises(SiteMapError) as error:
         store.activate(expected_revision=saved['revision'], principal_id='bob', route_active=False)

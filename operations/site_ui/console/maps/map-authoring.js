@@ -10,7 +10,7 @@ export function createMapAuthoring(host) {
   let projection = null, loadingHash = null, cacheController = null;
   const message = text => { $('drawing-status').textContent = text; };
   const changed = next => { history.apply(next); host.changed(history.current()); };
-  const importer = createDrawingImport({request: host.request, map: host.map,
+  const importer = createDrawingImport({request: host.request, map: host.draft,
     replaceDraft: (next, result) => { projection = result; loadingHash = result.projection_sha256; changed(next); },
     confirmDiscard: () => !host.dirty() || confirmIrreversible({
       message: '도면 기준을 바꾸고 검토 상태를 초기화할까요? 그린 요소는 보존합니다.',
@@ -61,6 +61,12 @@ export function createMapAuthoring(host) {
     const zoom = Number($('editor-zoom').value), width = 800 / zoom, height = 480 / zoom;
     host.svg.setAttribute('viewBox', `${(800 - width) / 2} ${(480 - height) / 2} ${width} ${height}`);
   });
+  for (const [direction, dx, dy] of [['left', -1, 0], ['right', 1, 0], ['up', 0, -1], ['down', 0, 1]]) {
+    $(`editor-pan-${direction}`).addEventListener('click', () => {
+      const {x, y, width, height} = host.svg.viewBox.baseVal;
+      host.svg.setAttribute('viewBox', `${x + dx * width / 4} ${y + dy * height / 4} ${width} ${height}`);
+    });
+  }
   const shortcut = event => {
     if (!editReason() && !editor.drawing() && (event.ctrlKey || event.metaKey)
         && ['z', 'y'].includes(event.key.toLowerCase())
