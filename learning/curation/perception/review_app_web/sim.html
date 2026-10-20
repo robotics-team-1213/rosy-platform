@@ -13,7 +13,7 @@
 <label class="ui-field-label">Seed <input id="sim-seed" class="ui-field" type="number" min="0" max="2147483647" step="1" value="0"></label>
 <p class="quiet">모델 연결 검사에서는 seed를 사용하지 않습니다. 고정 조건: OMX-F · headless · 120프레임.</p>
 <pre id="sim-source" class="quiet"></pre><ul id="sim-prerequisites"></ul>
-<div class="ui-workspace-bar"><ui-button id="sim-check" disabled>조건 확인</ui-button><ui-button id="sim-start" disabled>실험 시작</ui-button></div>
+<div class="ui-workspace-bar"><ui-button id="sim-check" kind="quiet" disabled>조건 확인</ui-button><ui-button id="sim-start" kind="primary" disabled>실험 시작</ui-button></div>
 <p id="sim-checked" class="quiet" role="status">조건 확인 후 실행할 수 있습니다.</p></section>
 <section class="learning-section" aria-labelledby="sim-runs-title"><div class="ui-workspace-bar"><h2 id="sim-runs-title">2 · 실행 기록</h2><ui-button id="sim-refresh" kind="quiet">새로고침</ui-button></div>
 <p class="quiet">실패·중단·판정 불가 기록도 보존합니다. UNKNOWN은 자동으로 재시작하지 않습니다.</p><div id="sim-runs" aria-live="polite"></div></section>
