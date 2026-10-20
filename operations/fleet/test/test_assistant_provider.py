@@ -95,7 +95,9 @@ def test_operator_inference_schema_never_requests_freeform_completion_prose(monk
     def exchange(path, body, remaining):
         if path == '/api/ps': return {}
         seen.append(body)
-        return {'message':{'content':json.dumps(dict(kind='CHAT', response='Classified', evidence_refs=[]))}}
+        return {'model':OperatorProfile().model_id, 'done':True, 'done_reason':'stop',
+                'eval_count':1, 'prompt_eval_count':1,
+                'message':{'role':'assistant', 'content':json.dumps(dict(kind='CHAT', response='Classified', evidence_refs=[]))}}
     monkeypatch.setattr(operator_broker, 'exchange', exchange)
     assert operator_broker.execute(question(), OperatorProfile(), 30)['kind'] == 'CHAT'
     assert seen[0]['format']['properties']['response']['enum'] == ['Classified']
