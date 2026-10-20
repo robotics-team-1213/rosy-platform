@@ -147,13 +147,19 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         sleep(POLL)
 
 
-def join(wt: Path, branch: str, timeout: float) -> Path:
-    """Take a ticket, release it at exit whatever happens, and wait until it is first."""
+def enter(wt: Path, branch: str) -> tuple[Path, Path]:
+    """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
     ticket = take(qdir, branch, str(wt))
     _held.append(ticket)
     atexit.register(leave)
     print(f"[queue] ticket {ticket.name} in {qdir}", flush=True)
+    return qdir, ticket
+
+
+def join(wt: Path, branch: str, timeout: float) -> Path:
+    """Take a ticket, release it at exit whatever happens, and wait until it is first."""
+    qdir, ticket = enter(wt, branch)
     wait(qdir, ticket, timeout)
     return ticket
 
