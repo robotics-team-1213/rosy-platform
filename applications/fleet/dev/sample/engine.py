@@ -75,24 +75,34 @@ class SampleEngine:
                 raise ValueError()
         except (ValueError, UnicodeDecodeError):
             return error(422, 'INVALID_REQUEST')
-        response = self.sessions.handle(method, path, payload, headers)
-        if response is not None:
-            return response
-        if self.sessions.role == 'viewer' and path.startswith(('/assistant/', '/channel-requests')):
+        named_token = headers.get('authorization') == 'Bearer sample-operator'
+        if named_token and method == 'GET' and path in ('/session', '/auth/session'):
+            return reply({'principal_id': 'sample', 'role': 'operator', 'via': 'bearer', 'expires_at': None,
+                          'password_change_required': False})
+        if not named_token or path.startswith('/auth/'):
+            response = self.sessions.handle(method, path, payload, headers)
+            if response is not None:
+                return response
+        role = 'operator' if named_token else self.sessions.role
+        actor = 'sample' if named_token else self.sessions.profile['principal_id']
+        if (path in ('/pairing/v2/pending', '/pairing/v2/relationships') or path.endswith(('/decision', '/revoke'))
+                and path.startswith('/pairing/v2/')) and not named_token:
+            return error(401, 'NAMED_OPERATOR_CREDENTIAL_REQUIRED')
+        if role == 'viewer' and path.startswith(('/assistant/', '/channel-requests')):
             return error(403, 'FORBIDDEN')
         response = self.vision.handle(method, path, payload)
         if response is not None:
             return response
-        if method != 'GET' and self.sessions.role == 'viewer':
+        if method != 'GET' and role == 'viewer':
             return error(403, 'FORBIDDEN')
         response = self.work.handle(method, path, payload, headers, ['sample-robot', *self.installation.robots])
         if response is not None:
             return response
-        response = self.governance.handle(method, path, payload, self.sessions.profile['principal_id'])
+        response = self.governance.handle(method, path, payload, actor)
         if response is not None:
             return response
         for feature in (self.channel, self.incidents):
-            response = feature.handle(method, path, payload, self.sessions.profile['principal_id'])
+            response = feature.handle(method, path, payload, actor)
             if response is not None:
                 return response
         response = self.traffic.handle(method, path, payload, ['sample-robot', *self.installation.robots])

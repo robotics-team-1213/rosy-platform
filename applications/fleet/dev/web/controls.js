@@ -1,6 +1,7 @@
 const panel = document.createElement('aside'); panel.id = 'rosy-sample-controls'; panel.setAttribute('aria-label', '샘플 개발 제어');
 const label = document.createElement('strong'); label.textContent = 'SAMPLE · 실제 장치와 연결되지 않음'; panel.append(label);
 const hint = document.createElement('span'); hint.textContent = '로그인: sample / sample-password'; panel.append(hint);
+const tokenHint = document.createElement('span'); tokenHint.textContent = '카메라 승인용 고급 접속 토큰: sample-operator'; panel.append(tokenHint);
 const message = document.createElement('output'); message.setAttribute('aria-live', 'polite');
 function button(text, action) {
   const node = document.createElement('button'); node.type = 'button'; node.textContent = text;

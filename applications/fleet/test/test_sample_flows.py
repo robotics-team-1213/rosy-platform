@@ -6,8 +6,8 @@ from test_sample_server import load_engine
 
 COOKIES = WeakKeyDictionary()
 
-def call(engine, method, path, body=None):
-    response = engine.handle(method, path, {'Cookie': COOKIES.get(engine, '')},
+def call(engine, method, path, body=None, headers=None):
+    response = engine.handle(method, path, {'Cookie': COOKIES.get(engine, ''), **(headers or {})},
                              json.dumps(body).encode() if body is not None else b'')
     for key, value in response.headers:
         if key.lower() == 'set-cookie':
@@ -104,18 +104,20 @@ def test_enrollment_pairing_and_calibration_readbacks():
     assert robot['robot_id'] in [row['robot_id'] for row in call(engine, 'GET', '/api/fleet/state')[1]['robots']]
     assert call(engine, 'GET', '/api/fleet/enrollment/robots')[1]['robots'][0]['robot_id'] == robot['robot_id']
     assert call(engine, 'DELETE', '/api/fleet/enrollment/robots/sample-enrolled')[1]['state'] == 'removed'
-    code, pending = call(engine, 'GET', '/api/fleet/pairing/v2/pending')
+    named = {'Authorization':'Bearer sample-operator'}
+    assert call(engine, 'GET', '/api/fleet/pairing/v2/pending')[0] == 401
+    code, pending = call(engine, 'GET', '/api/fleet/pairing/v2/pending', headers=named)
     assert code == 200 and len(pending) == 1
     item = pending[0]
     base = '/api/fleet/pairing/v2/requests/' + item['request_id']
     body = {'action': 'approve', 'source_id': 'sample-camera', 'revision': item['revision'], 'persist_requested': True}
-    assert call(engine, 'POST', base + '/decision', {**body, 'revision': -1})[0] == 409
-    assert call(engine, 'POST', base + '/decision', body)[0] == 200
-    relationships = call(engine, 'GET', '/api/fleet/pairing/v2/relationships')[1]
+    assert call(engine, 'POST', base + '/decision', {**body, 'revision': -1}, named)[0] == 409
+    assert call(engine, 'POST', base + '/decision', body, named)[0] == 200
+    relationships = call(engine, 'GET', '/api/fleet/pairing/v2/relationships', headers=named)[1]
     assert relationships and relationships[0]['persistent']
     identifier = relationships[0]['relationship_id']
-    assert call(engine, 'POST', f'/api/fleet/pairing/v2/relationships/{identifier}/revoke')[0] == 200
-    assert call(engine, 'GET', '/api/fleet/pairing/v2/relationships')[1][0]['state'] == 'revoked'
+    assert call(engine, 'POST', f'/api/fleet/pairing/v2/relationships/{identifier}/revoke', headers=named)[0] == 200
+    assert call(engine, 'GET', '/api/fleet/pairing/v2/relationships', headers=named)[1][0]['state'] == 'revoked'
     approval = {'source_id': 'sample-camera', 'map_to_image': [100, 0, 0, 0, -100, 360, 0, 0, 1],
                 'image': {'width': 640, 'height': 360}, 'track_bounds_m': {'min_x': 0, 'min_y': 0, 'max_x': 6.4, 'max_y': 3.6},
                 'fit_score': .81, 'lens': None, 'frame_seq': 12}
