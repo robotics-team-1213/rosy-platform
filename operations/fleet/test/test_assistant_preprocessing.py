@@ -131,9 +131,10 @@ def test_operator_broker_uses_prepared_copy_and_records_actual_usage(monkeypatch
     assert 'usage' not in seen[0]['format']['properties']
     content = seen[0]['messages'][1]['content']
     context, latest = content.split('\nLATEST USER MESSAGE:\n')
-    assert json.loads(context)['question'] == q.question
+    assert 'question' not in json.loads(context)
     assert 'scope' not in json.loads(context)
     assert latest == '안녕 r1'
+    assert prepare(q).original == q.question
 
 
 def test_model_cannot_supply_its_own_usage_and_generation_reserve_is_enforced(monkeypatch):
@@ -177,6 +178,53 @@ def test_legacy_semantic_profile_still_requires_canonical_ids():
     from rosy.decision.conversation.codec import semantic_answer
     with pytest.raises(ValueError):
         semantic_answer(navigation_answer(), semantic_question('r1을 입구로 보내줘'))
+
+
+def test_model_prompt_avoids_duplicate_text_and_provenance_without_dropping_facts():
+    from core_common.protocol.assistant import AssistantFact
+    from rosy.decision.conversation.preprocessing import prepare
+    q = question('r1 상태', [AssistantFact(ref='robot:r1', observed_at=1000., text='r1 online')])
+    value = prepare(q)
+    prompt = json.loads(value.prompt_json)
+    assert prompt['facts'] == [dict(ref='robot:r1', observed_at=1000., text='r1 online')]
+    assert 'question' not in prompt and 'preparation' not in prompt and 'scope' not in prompt
+    assert value.context['question'] == q.question
+    assert value.context['preparation']['input_hash'] == q.digest
+
+
+@pytest.mark.parametrize('name', ['unaccepted_followup', 'prior_map_changed'])
+def test_unaccepted_prior_place_never_resolves_demonstrative_control(name):
+    from deploy.ai_pc import conversation_acceptance as acceptance
+    from rosy.decision.conversation.codec import semantic_answer
+    case = next(case for case in acceptance.CASES if case[0] == name)
+    q = acceptance.question(case, 1000.)
+    raw = navigation_answer(place='A')
+    raw['steps'][0]['robot_id'] = 'rosy_40'
+    assert semantic_answer(raw, q, preprocessing=True).kind == 'CLARIFY'
+
+
+def test_accepted_reference_is_bound_to_the_completed_robot_and_place():
+    from deploy.ai_pc import conversation_acceptance as acceptance
+    from rosy.decision.conversation.codec import semantic_answer
+    case = next(case for case in acceptance.CASES if case[0] == 'accepted_followup')
+    q = acceptance.question(case, 1000.)
+    raw = navigation_answer(place='A')
+    raw['steps'][0]['robot_id'] = 'rosy_40'
+    assert semantic_answer(raw, q, preprocessing=True).kind == 'CONTROL'
+    raw['steps'][0]['robot_id'] = 'rosy_41'
+    assert semantic_answer(raw, q, preprocessing=True).kind == 'CLARIFY'
+
+
+def test_preprocessed_status_reply_uses_selected_facts_without_changing_legacy_reply():
+    from rosy.decision.conversation.codec import Answer, reply
+    q = semantic_question('r1 말고 r2 상태')
+    environment = copy.deepcopy(q.environment)
+    environment['robots'].append(dict(environment['robots'][0], robot_id='r2'))
+    q = q.model_copy(update={'environment':environment})
+    answer = Answer(kind='STATUS', response='상태', intent=None, evidence_refs=['robot:r2'], review_required=False)
+    current = reply(answer, q, preprocessing=True)
+    assert 'r2' in current and 'r1' not in current
+    assert 'r1' in reply(answer, q)
 
 
 def test_new_discord_profile_is_not_connected_to_automatic_execution(monkeypatch):
