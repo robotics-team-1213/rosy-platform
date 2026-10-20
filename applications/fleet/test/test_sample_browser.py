@@ -152,3 +152,26 @@ def test_assistant_synthetic_voice_receipt_and_camera_panel(sample_site):
             expect(page.locator('[data-robot-video-stage]')).to_be_empty()
         finally:
             browser.close()
+
+
+def test_cookie_login_stays_usable_when_camera_pairing_needs_named_token(sample_site):
+    from playwright.sync_api import sync_playwright, expect
+    _, origin = sample_site
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context()
+            context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
+                                 data={'login':'sample', 'password':'sample-password'})
+            page = context.new_page()
+            calls = []
+            page.on('request', lambda request: calls.append(request.url) if '/pairing/v2/pending' in request.url else None)
+            page.goto(origin + '/console/install?task=cameras')
+            expect(page.locator('#camera-peer-status')).to_contain_text('고급 접속 토큰')
+            expect(page.locator('#user-role')).to_have_attribute('title', 'sample · operator')
+            assert not calls
+            page.evaluate("sessionStorage.setItem('rosy-console-token', 'sample-operator')")
+            page.reload()
+            expect(page.locator('#camera-peer-requests')).to_contain_text('샘플 카메라')
+        finally:
+            browser.close()
