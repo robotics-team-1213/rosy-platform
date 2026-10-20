@@ -123,7 +123,7 @@ def test_renewal_and_actual_owner_admission_do_not_deadlock(tmp_path,monkeypatch
         try:
             authority.issue();finished.append('renew')
         except Exception as error:errors.append(error)
-    def admission():
+    def admission(_state):
         owner_inside.set()
         assert authority.current(lease)
         finished.append('admission')
