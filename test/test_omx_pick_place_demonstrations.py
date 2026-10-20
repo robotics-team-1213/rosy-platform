@@ -82,3 +82,33 @@ def test_teacher_delivers_each_owner_event_once_to_the_existing_facade():
     event = object()
     namespace['on_event'](event)
     assert delivered == [event]
+
+
+def test_native_demo_batch_is_explicit_bounded_and_does_not_change_default_g2():
+    from native_sim_prepare import run_script
+    script = run_script('/candidate', experiment='pick-place-demonstrations', episodes=3)
+    assert '--episodes 3' in script
+    for experiment, count in [('g2', 2), ('pick-place', 2), ('pick-place-demonstrations', 4),
+                              ('pick-place-demonstrations', True)]:
+        with pytest.raises(ValueError):
+            run_script('/candidate', experiment=experiment, episodes=count)
+
+
+def test_batch_preserves_failed_attempt_and_stops_before_the_next_episode(tmp_path, monkeypatch):
+    import json
+    import sim_pick_place_demonstrations as demo
+    calls = []
+    def episode(path):
+        calls.append(path.name)
+        path.mkdir()
+        success = len(calls) == 1
+        (path/'result.json').write_text(json.dumps({'attempts': 1, 'successes': int(success),
+            'cleanup_verified': True, 'result': 'PASS' if success else 'HOLD'}))
+        return 0 if success else 1
+    monkeypatch.setattr(demo, 'episode', episode)
+    output = tmp_path/'batch'
+    assert demo.run(output, episodes=3) == 1
+    result = json.loads((output/'result.json').read_text())
+    assert calls == ['episode-1', 'episode-2']
+    assert result['attempts'] == 2 and result['successes'] == 1
+    assert len(result['episodes']) == 2
