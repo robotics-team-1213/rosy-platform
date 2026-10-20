@@ -1,0 +1,265 @@
+{
+  "source_commit": "6c1e5a5267708db06e13675160674726a1ff0577",
+  "base_commit": "7b2ffac91f59d42fefe292c5be5d18e9cc2ab5be",
+  "raw_folder": "$TEMP/operator-ai/final-full-6c-green",
+  "guard": {
+    "file": "run-g1-1.txt",
+    "sha256": "217d3b91fa180cf515cc1cd2f6aef9918b81edb29f09e4bb2b943209ac26b1f7",
+    "summary": "250 passed, 40 warnings in 50.10s",
+    "passed": 250,
+    "skipped": 0,
+    "failed": 0
+  },
+  "runs": [
+    {
+      "tier": "FULL",
+      "file": "run-1-1.txt",
+      "sha256": "91f1ccfd5dd0dbc996ba7b4f39235efc21f2f0b26eb949e184936455d3867877",
+      "summary": "110 passed in 3.00s",
+      "passed": 110,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-2.txt",
+      "sha256": "93eb1b208cb1c56feb8655a1a6a184410da8b11c1ff675c48ae09de9d249d2ff",
+      "summary": "76 passed, 5 skipped in 1.07s",
+      "passed": 76,
+      "skipped": 5,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-3.txt",
+      "sha256": "86f58a6e721fc99f907617be4a9d5dc48273dcc1961890fbe2024fa188b980ba",
+      "summary": "6 passed, 6 skipped in 0.69s",
+      "passed": 6,
+      "skipped": 6,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-4.txt",
+      "sha256": "9271f33098e34f55177d75a9bc92c3b97ada7c17a5c0b435cb81cd83a4cf2645",
+      "summary": "168 passed, 2 skipped in 1.39s",
+      "passed": 168,
+      "skipped": 2,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-5.txt",
+      "sha256": "32e97a134eb8b077147ee716e652acfc7e2737261dc58e4b6f1dfcf6f518d99d",
+      "summary": "21 passed, 28 skipped in 0.94s",
+      "passed": 21,
+      "skipped": 28,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-6.txt",
+      "sha256": "b5f1f6e54a22ad81e1d3dcd63943805f7bdb47c841f72460bab06b24cc515e52",
+      "summary": "3 passed in 0.53s",
+      "passed": 3,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-7.txt",
+      "sha256": "622eb2f5c8eecc68791a6a140ef1b527504d6b5a626e41ee0e9d6d07204d5997",
+      "summary": "4 passed in 0.67s",
+      "passed": 4,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-8.txt",
+      "sha256": "b4d0b93fbc4bde3f34e7b0bf0943f33f11d6399ffe501992faec014ccd57ab93",
+      "summary": "12 passed in 0.51s",
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-9.txt",
+      "sha256": "869f4c00713dca5c6916d5e7bbfdf6db5d7c4012b168ea2ed21d2258ebcf5d77",
+      "summary": "7247 passed, 64 skipped, 12 warnings, 5 subtests passed in 519.69s (0:08:39)",
+      "passed": 7247,
+      "skipped": 64,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-10.txt",
+      "sha256": "f5eb52f5c210cc90d6c9e812dae2c752eefd8039cde48831ed85d2c940fa8189",
+      "summary": "6 passed, 2 skipped, 12 warnings in 11.06s",
+      "passed": 6,
+      "skipped": 2,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-11.txt",
+      "sha256": "3c24a9f81a1e22ff0db6ea424745180dc5369bb9d23eb715e341d2e54b2a0b4f",
+      "summary": "3554 passed, 113 skipped, 62 subtests passed in 160.40s (0:02:40)",
+      "passed": 3554,
+      "skipped": 113,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-12.txt",
+      "sha256": "967e580e2b3664ca1295ba85807cdb63d4780972210f7631538120053c9051e8",
+      "summary": "6048 passed, 323 skipped, 2 warnings in 718.64s (0:11:58)",
+      "passed": 6048,
+      "skipped": 323,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-13.txt",
+      "sha256": "a53ca4d040eee4d6d3fee6201e247e3eaf810f70ea3f435c69919efd431dd387",
+      "summary": "736 passed in 50.32s",
+      "passed": 736,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-14.txt",
+      "sha256": "a4b6450bdc73bcfbb997f5f9d8dad74551e9a2f7b447dc596cbdab5769e099d2",
+      "summary": "155 passed in 0.50s",
+      "passed": 155,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-15.txt",
+      "sha256": "957348738d3be79a629563e54df7af0ebed6b1fc7ada707858ad53691ca71a0f",
+      "summary": "121 passed, 2 warnings in 3.99s",
+      "passed": 121,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-16.txt",
+      "sha256": "377756a077bbe714141e1c728f84c5d1d8fe332f261b49e7e2f681177ec10ddf",
+      "summary": "9 passed in 1.46s",
+      "passed": 9,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-17.txt",
+      "sha256": "15911e9119b37360841ceb2af2dc5c666f70904c6af11cdba89ff7748624406c",
+      "summary": "25 passed in 0.95s",
+      "passed": 25,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-18.txt",
+      "sha256": "58e3c94bc6e1429339fab4fbef6bd1a62c76118e50dcc088f81c14a5eca22a8f",
+      "summary": "327 passed, 4 skipped in 8.43s",
+      "passed": 327,
+      "skipped": 4,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-19.txt",
+      "sha256": "fff25301067788ac4831ab039971dfe08b302c4e2622606a53d707718de7695e",
+      "summary": "473 passed in 0.44s",
+      "passed": 473,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-20.txt",
+      "sha256": "5201e302677340a7caeb538489f1676ba6cea53fbd3cfabb64dc1167c8e6edab",
+      "summary": "9044 passed, 1101 skipped, 55 warnings in 719.52s (0:11:59)",
+      "passed": 9044,
+      "skipped": 1101,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-21.txt",
+      "sha256": "b1db1d7f13fac9b2cfab865a6cc010c4b59a48db8d498c35f661ae09d4084df5",
+      "summary": "1863 passed, 292 skipped, 2 warnings in 48.54s",
+      "passed": 1863,
+      "skipped": 292,
+      "failed": 0
+    },
+    {
+      "tier": "FULL",
+      "file": "run-1-22.txt",
+      "sha256": "03fb543409c7bbc29634ce44a53e389caa304db68250bba2c7a158f1b5303d86",
+      "summary": "188 passed, 13 skipped, 2 warnings, 25 subtests passed in 6.20s",
+      "passed": 188,
+      "skipped": 13,
+      "failed": 0
+    },
+    {
+      "tier": "browser",
+      "file": "run-1-23.txt",
+      "sha256": "96413cf1652fe662dec46c2994ce98b946da97e8c687fe1056c6c39f8191a304",
+      "summary": "118 passed in 301.97s (0:05:01)",
+      "passed": 118,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "browser",
+      "file": "run-1-24.txt",
+      "sha256": "34fe17c0fa6787bc171e740d1fc5c87578eeb5ed996fbfd8c038b5967d7d62ba",
+      "summary": "101 passed, 2 warnings in 454.07s (0:07:34)",
+      "passed": 101,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "browser",
+      "file": "run-1-25.txt",
+      "sha256": "49368a53ad23dbf17753df7a7d3d16ca169df630f396186ca75314f3da7cc562",
+      "summary": "162 passed, 2 warnings in 363.78s (0:06:03)",
+      "passed": 162,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "tier": "browser",
+      "file": "run-1-26.txt",
+      "sha256": "923ec19edd8f20609bee08f994b8b24c16187758252f9def30f0035946631952",
+      "summary": "151 passed, 2 warnings in 421.16s (0:07:01)",
+      "passed": 151,
+      "skipped": 0,
+      "failed": 0
+    }
+  ],
+  "model": {
+    "source_commit": "6c1e5a5267708db06e13675160674726a1ff0577",
+    "evaluation_owner": "model_pc",
+    "cases": 19,
+    "verdict": "PASS",
+    "sha256": "ff7ea0f6f210050cf70586c9e7adf071b8047c6a4ea23e727e4e2454221f9d29",
+    "raw_file": "$TEMP/operator-ai/final-model-bilingual/evaluation.json"
+  },
+  "node": {
+    "source_commit": "476a8345c35cd80d455d1dad15a9ce2520b76ea2",
+    "passed": 343,
+    "failed": 0,
+    "skipped": 0,
+    "sha256": "45c458d9b72ddf2911f5dcaeedb28afb1afc6eec754f08a81ea59076dc175729",
+    "raw_file": "$TEMP/operator-ai/merge-console-node.txt"
+  }
+}

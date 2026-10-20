@@ -343,8 +343,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · uncommitted · 워크트리 기본 상한 50개
+- 2026-10-20 · uncommitted · OMX Leader 운용 중 개입 Proposed ADR
+- 2026-10-20 · 6c1e5a5267 · 관제 AI 소스 착지·공통 브라우저 fixture 검증
 - 2026-10-20 · uncommitted · Fleet 앱 폴더 이동 검증
 - 2026-10-20 · uncommitted · Fleet 앱 소스를 applications에 모은다
-- 2026-10-20 · a8bc6debd0 · D-821 운영 구조·실행 연결·다국어·Discord 결과
-- 2026-10-20 · 25b77d00b6 · D-810 전체 회귀 발견 수정과 검증 기록
-- 2026-10-20 · uncommitted · D-810 관제 AI 첫 조회 버전 구현과 검증 경계
