@@ -282,10 +282,11 @@ def test_ignored_file_guard_covers_every_path_the_images_copy():
 
     root = Path(__file__).resolve().parents[1]
     paths = _image_source_paths(root / "deploy" / "site")
+    assert not [path for path in paths if not (root / path).exists()], "image COPY source is missing"
 
     for expected in ("deploy/site", "operations/fleet", "operations/world/src", "operations/overhead/rosy_vision",
                      "operations/apps/games/games", "shared/web",
-                     "contracts/foundation/core_common", "applications/fleet/gateway/src",
+                     "contracts/foundation/core_common", "applications/fleet/gateway/src", "applications/fleet/web",
                      "middleware/perception/map/map_v2_fleet/meshes/road_lines.stl"):
         assert expected in paths, expected
 
