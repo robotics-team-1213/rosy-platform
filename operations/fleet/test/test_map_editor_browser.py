@@ -124,6 +124,7 @@ def test_zoom_rotation_and_drag_never_dispatch(editor_site):
     page.locator('#editor-zoom').select_option('2')
     vertex = page.locator('#site-map-svg [data-editor-vertex]')
     bounds = vertex.bounding_box()
+    assert bounds and 0 <= bounds['y'] < page.viewport_size['height'], bounds
     page.mouse.move(bounds['x'] + bounds['width'] / 2, bounds['y'] + bounds['height'] / 2)
     page.mouse.down()
     page.mouse.move(bounds['x'] + 25, bounds['y'] + 20)
