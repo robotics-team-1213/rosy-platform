@@ -3083,3 +3083,9 @@
 - 변경: 같은 SHA의 기존 Discord 보호 snapshot에 별도 operator 평가를 hash 결속해 원자적으로 설치하는 도구와 signed site optional 설정을 추가했다. 기존 SSH/Discord 설정은 보존한다.
 - 증거: a1f0252d0a 배포/설치 75개와 a57d78c070 해시/provider/설치 64개 통과. --check 무변경과 실패 rollback을 모의 검증했다. 현재 Discord Bot/지정 채널 GET 200 및 Bot/채널/서버 일치를 읽기 전용 확인했다. 실제 모델 b1f18674b2 19사례 PASS 영수증은 비공개 외부 증거에 보존했다.
 - gate 변화: 없음. operator 보호 설정 설치·서명 후보 배포·외부 메시지·실기 실행은 하지 않았다.
+
+## 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
+
+- 변경: 공통 Decision 정규화·등록 이름 해소·충돌/부정/조건/복합 후보 차단, Console/Discord 새 profile, broker 실제 사용량과 Fleet digest 검사·개인정보 없는 로그를 연결했다. 새 Discord profile은 자동 실행 worker를 설치하지 않는다.
+- 증거: source 8454618b94 원격 전처리/보호 설치 123 passed; NFD+등록 이름 공백 회귀 RED1/36 뒤 d7fedbc9ab GREEN37. 독립 계약 검토의 이름 공백/장소-only STATUS 지적을 수정했다. 실제 모델 전후와 최종 영향 검증은 docs/validation/operator-preprocessing-2026-10-21/result.md에 기록한다.
+- gate: 기존 SOURCE/LOCAL 경계만 다룬다. 새 확인 API·보호 설치·실음성·장치/현장 수용은 미실행. source 통과를 운영 활성화로 표시하지 않는다.

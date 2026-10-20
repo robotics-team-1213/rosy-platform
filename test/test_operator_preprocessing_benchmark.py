@@ -86,10 +86,11 @@ def test_real_discord_preprocessing_profile_has_independent_semantic_proof(tmp_p
     cases, expected = acceptance.cases_for(profile), acceptance.expected_for(profile)
     for case in cases:
         q = acceptance.question(case, at)
+        captured_before = len(captured)
         started = time.monotonic()
         try:
             output = broker.execute(q, profile, 30)
-            assert len(captured) == len(rows)+1
+            assert len(captured) == captured_before+1
             raw = json.loads(captured[-1]['message']['content'])
             answer = semantic_answer(raw, q, preprocessing=True)
             passed = answer.kind in case[2]
@@ -104,7 +105,7 @@ def test_real_discord_preprocessing_profile_has_independent_semantic_proof(tmp_p
                                      usage=output['usage']))
         except Exception as exc:
             failures.append(dict(case=case[0], error=type(exc).__name__))
-            raw = json.loads(captured[-1]['message']['content']) if captured else {}
+            raw = json.loads(captured[-1]['message']['content']) if len(captured) > captured_before else {}
         rows.append(dict(case=case[0], input=q.model_dump(), input_hash=q.digest, answer=raw))
     root = Path(__file__).resolve().parents[1]
     files = {p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in acceptance.source_files(root)}

@@ -33,9 +33,9 @@
 
 **Interfaces:** `prepare(question)`는 원 입력을 바꾸지 않고 버전·정규화 사본·카탈로그 충돌과 모델용 문맥을 반환한다. `control_issue(prepared, steps=1)`는 차단 이유 또는 None을 반환한다. `InferenceUsage`는 실제 입력/생성 토큰·지연·전처리 hash를 검증하며 일반 응답 직렬화에서 제외한다.
 
-- [ ] 원문 불변·동일 정규화/서로 다른 요청 hash·인용/부호·별칭 충돌·부정/조건/복수 행동 차단·부정 포함 STATUS 허용을 원격 RED로 확인한다.
-- [ ] 순수 Decision 모듈과 명시적 선택 검증을 구현하고 해당 테스트를 원격 GREEN으로 확인한다.
-- [ ] 원문 이력·타인 신원·현재 카탈로그를 임의로 줄이지 않는 회귀를 포함해 커밋한다.
+- [x] 원문 불변·동일 정규화/서로 다른 요청 hash·인용/부호·별칭 충돌·부정/조건/복수 행동 차단·부정 포함 STATUS 허용을 원격 RED로 확인한다.
+- [x] 순수 Decision 모듈과 명시적 선택 검증을 구현하고 해당 테스트를 원격 GREEN으로 확인한다.
+- [x] 원문 이력·타인 신원·현재 카탈로그를 임의로 줄이지 않는 회귀를 포함해 커밋한다.
 
 ## Task 2: broker·Fleet 연결과 계측
 
@@ -43,15 +43,15 @@
 
 **Interfaces:** 새 operator profile과 `d728-semantic-v3-d831`만 공통 전처리를 적용한다. broker가 실제 응답에서 측정한 usage를 내부 답변에 붙이고 Fleet가 검증·개인정보 없는 구조화 로그를 남긴 뒤 일반 답변에서 제거한다. 기존 request/REST 형식은 유지한다.
 
-- [ ] broker 입력·측정값 위조·입력+생성 예산·legacy profile 보존·새 Discord worker 미설치를 원격 RED→GREEN으로 검증한다.
-- [ ] 같은 기존 ko/en 19개 사례의 고정 모델 baseline 사용량·지연을 변경 전 기록한다. 추가 ko/en 부정 범위·별칭/조건/인용 사례를 포함한 변경 후 평가와 구분한다.
-- [ ] profile/source binding·독립 평가·source closure와 현재 의미 검증을 유지하고 새 모델 다운로드/보호 설치 없이 실제 고정 모델을 평가한다.
+- [x] broker 입력·측정값 위조·입력+생성 예산·legacy profile 보존·새 Discord worker 미설치를 원격 RED→GREEN으로 검증한다.
+- [x] 같은 기존 ko/en 19개 사례의 고정 모델 baseline 사용량·지연을 변경 전 기록한다. 추가 ko/en 부정 범위·별칭/조건/인용 사례를 포함한 변경 후 평가와 구분한다.
+- [x] profile/source binding·독립 평가·source closure와 현재 의미 검증을 유지하고 새 모델 다운로드/보호 설치 없이 실제 고정 모델을 평가한다.
 
 ## Task 3: 운영 문서·증거·착지
 
 **Files:** 기존 operator 운영 안내, Decision/Fleet/deploy의 소유 로그·생성 색인, `docs/validation/operator-preprocessing-2026-10-21/`.
 
-- [ ] 변경 SHA·원격 로그·실제 모델/사용량·실패와 미실행 범위를 기록한다. 실제 절감이 없으면 절감 성공으로 표시하지 않는다.
+- [x] 변경 SHA·원격 로그·실제 모델/사용량·실패와 미실행 범위를 기록한다. 실제 절감이 없으면 절감 성공으로 표시하지 않는다.
 - [ ] 영향 선택과 해당 모듈 회귀를 원격 실행하고 독립 최종 검토를 받는다. 자기 실패는 고치고 기존 실패 목록/안전 기준을 완화하지 않는다.
 - [ ] 기존 사용자 커밋·로컬 병합 요청 범위에서 정식 착지 관문을 통과한다. push·보호 설치·현장 gate는 별도로 남긴다.
 

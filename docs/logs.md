@@ -9837,3 +9837,9 @@ osy-d395-s1d\`.
 - 변경: D-831 Proposed에 원문/정규화 문장/비실행 후보/실행 접수를 구분하고 제한된 정규화·등록 대상 해소·부정 범위·인자 검증·기명 확인 결속·토큰 예산과 계측의 책임을 기록했다. 기존 실행표의 상세 검토안은 ADR 정본으로 연결한다.
 - 증거: D-810/D-821/D-728과 현재 Decision 입력·broker·Fleet 접수 코드를 대조했다. 문자/바이트 제한과 실제 토큰 제한, Console 분류와 별도 좌표 접수를 구분했다. 원격 문서 검사와 독립 검토는 커밋 후 수행한다.
 - gate 변화: 없음. 설계 문서이며 전처리·형태소 분석·후보/확인 계약·토큰 계측을 구현하거나 운영 권한을 확대하지 않는다.
+
+## 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
+
+- 변경: 공통 Decision 정규화·등록 이름 해소·충돌/부정/조건/복합 후보 차단, Console/Discord 새 profile, broker 실제 사용량과 Fleet digest 검사·개인정보 없는 로그를 연결했다. 새 Discord profile은 자동 실행 worker를 설치하지 않는다.
+- 증거: source 8454618b94 원격 전처리/보호 설치 123 passed; NFD+등록 이름 공백 회귀 RED1/36 뒤 d7fedbc9ab GREEN37. 독립 계약 검토의 이름 공백/장소-only STATUS 지적을 수정했다. 실제 모델 전후와 최종 영향 검증은 docs/validation/operator-preprocessing-2026-10-21/result.md에 기록한다.
+- gate: 기존 SOURCE/LOCAL 경계만 다룬다. 새 확인 API·보호 설치·실음성·장치/현장 수용은 미실행. source 통과를 운영 활성화로 표시하지 않는다.

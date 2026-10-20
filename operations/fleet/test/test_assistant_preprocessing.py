@@ -180,7 +180,7 @@ def test_legacy_semantic_profile_still_requires_canonical_ids():
         semantic_answer(navigation_answer(), semantic_question('r1을 입구로 보내줘'))
 
 
-def test_model_prompt_avoids_duplicate_text_and_provenance_without_dropping_facts():
+def test_model_prompt_retains_evaluated_question_but_omits_private_provenance():
     from core_common.protocol.assistant import AssistantFact
     from rosy.decision.conversation.preprocessing import prepare
     q = question('r1 상태', [AssistantFact(ref='robot:r1', observed_at=1000., text='r1 online')])
