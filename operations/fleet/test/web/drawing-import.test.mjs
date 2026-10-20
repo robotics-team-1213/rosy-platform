@@ -66,3 +66,16 @@ test('a late first upload cannot replace the second input adapter result', async
   assert.ok(projectionSource.includes(second));
   assert.equal(map.drawing.asset_sha256, second);
 });
+
+test('editing registration fields does not cancel an independent source upload', async () => {
+  let finish, map = null;
+  const importer = createDrawingImport({map: () => map, replaceDraft: next => { map = next; },
+    confirmDiscard: async () => true, request: async path => path.endsWith('/projections')
+      ? result : new Promise(resolve => { finish = resolve; })});
+  const loading = importer.load({size: 1});
+  importer.cancelRegistration();
+  finish({asset_sha256: asset});
+  assert.deepEqual(await loading, {asset_sha256: asset});
+  await importer.register(transform, reference);
+  assert.equal(map.drawing.asset_sha256, asset);
+});
