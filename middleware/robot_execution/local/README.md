@@ -6,7 +6,7 @@ single-use observation provenance and delegates final admission to the same owne
 See [LeRobot through CORE](../../../integrations/robots/omx/CORE_LEROBOT.md).
 It adds no physical policy activation, issuer, model loader or recovery authority.
 
-`rosy-execution-local` 0.1.4 depends on the ROS-free skill0.1.0 and learning0.1.6
+`rosy-execution-local` 0.1.7 depends on the ROS-free skill0.1.0 and learning0.1.13
 contracts wheels. The policy installation loader imports no learning registry,
 inference framework, ROS node, device driver, or network client.
 
