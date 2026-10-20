@@ -41,6 +41,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from sim_policy_inference import infer_for_owner
     from sim_policy_runtime import bind_sim_runtime
     from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
+    from sim_pick_place_task import judge_episode
     from sim_study_authority import NativeSimStudyAuthority
     from sim_study_stop import NativeSimStopFence
     from cell_sim_tools import SimAid, refuse_second_owner
@@ -206,7 +207,6 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 proof=gripper_evidence('open');released_at=samples[-1]['clock']
                 transitions.append(dict(kind='released',sim_s=released_at,evidence=proof))
                 while samples[-1]['clock']-released_at<2.2:require_live();time.sleep(.02)
-                from sim_pick_place_task import judge_episode
                 receipt['metrics']=judge_episode(samples,model='infeed_block',initial_z=initial_z,goal=goal,
                     released_at=released_at,released=True)
                 receipt['success']=receipt['metrics']['success']
@@ -227,6 +227,12 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     finally:
         stop.set()
         for thread in threads:thread.join(4)
+        if not calibration and samples and 'metrics' not in receipt:
+            receipt['metrics']=judge_episode(samples,model='infeed_block',
+                initial_z=samples[0]['model_pose_base']['z_m'],goal=goal,
+                released_at=samples[-1]['clock'],released=False)
+            assert receipt['metrics']['success'] is False
+            receipt['metrics_scope']='incomplete_trial_observation'
         if fence:
             try:fence.close_study('SIM_STUDY_COMPLETED' if receipt['success'] else 'SIM_STUDY_FAILED')
             except Exception as error:receipt['stop_error']=str(error);receipt['success']=False
