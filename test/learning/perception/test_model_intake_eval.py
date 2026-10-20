@@ -16,6 +16,17 @@ if _MODEL not in sys.path:
 
 import intake  # noqa: E402
 
+
+def test_registry_uses_the_canonical_evaluation_owner():
+    import intake_evaluation
+    import intake_eval_gate
+
+    holder = ROOT / "learning/evaluation/perception"
+    assert Path(intake_evaluation.__file__).resolve().parent == holder
+    assert Path(intake_eval_gate.__file__).resolve().parent == holder
+    assert intake.evaluate is intake_evaluation.evaluate
+
+
 SHA = "c" * 64
 H, W = 4, 8  # model input; eval frames are 8x16, so the masks are resized (nearest)
 SPEC = SimpleNamespace(height=H, width=W, color="rgb", scale=1 / 255, mean=(0, 0, 0), std=(1, 1, 1),
