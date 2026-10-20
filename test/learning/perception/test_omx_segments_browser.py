@@ -44,6 +44,7 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 page.get_by_label('확인 프레임',exact=True).fill('2')
                 page.get_by_role('button',name='프레임 확인',exact=True).click()
                 playwright.expect(page.locator('details img')).to_be_visible()
+                playwright.expect(page.locator('details img')).to_have_js_property('naturalWidth', 32)
                 page.get_by_role('button',name='현재 프레임을 시작으로').click()
                 page.get_by_label('끝 프레임 (제외)',exact=True).fill('6')
                 page.get_by_label('대상 물체',exact=True).fill('cube')
