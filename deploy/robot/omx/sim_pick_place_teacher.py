@@ -153,8 +153,11 @@ def run(directory, world, observer_path):
             held if expect == 'held' else False if opened else None,
             'box' if expect == 'held' and held else None, 1)
         verifier = verify_held_object if expect == 'held' else verify_released_object
-        return vars(verifier(observation, object_id='box', now=arm.monotonic(),
-                             max_age_s=profile.max_joint_state_age_s))
+        checked = arm.monotonic()
+        verified = verifier(observation, object_id='box', now=checked,
+                            max_age_s=profile.max_joint_state_age_s)
+        return {'observation': vars(observation), 'receipt': vars(verified),
+                'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s}
 
     try:
         state = wait_ready()
@@ -192,7 +195,8 @@ def run(directory, world, observer_path):
         receipt['episode_id'] = episode_id
         receipt['recording_start_sim_s'] = sim_time()
         for phase in plan.phases:
-            event = {'phase_id': phase.phase_id, 'started_sim_s': sim_time()}
+            event = {'phase_id': phase.phase_id, 'started_sim_s': sim_time(),
+                     'started_owner_s': arm.monotonic()}
             events.append(event)
             if phase.phase_id == 'release':
                 event['detach'] = aid.detach('infeed_block')
@@ -202,7 +206,8 @@ def run(directory, world, observer_path):
             for point in targets:
                 dispatch(dict(zip(phase.joint_names, point)))
             if phase.phase_id == 'grasp':
-                event['hold_receipt'] = grip('held')
+                event['hold_evidence'] = grip('held')
+                event['hold_receipt'] = event['hold_evidence']['receipt']
                 tcp = kin.fk([arm.latest_joint_state.positions[n] for n in ARM_JOINTS])
                 pose = observe()['model_pose_base']
                 if math.hypot(tcp.x-pose['x_m'], tcp.y-pose['y_m']) > .01 or abs(tcp.z-(pose['z_m']+recipe.box.height/2-recipe.box.grasp_depth)) > .01:
@@ -211,8 +216,10 @@ def run(directory, world, observer_path):
                 if not event['attach']['confirmed']:
                     raise RuntimeError('attach unconfirmed')
             if phase.phase_id == 'release':
-                event['release_receipt'] = grip('open')
+                event['release_evidence'] = grip('open')
+                event['release_receipt'] = event['release_evidence']['receipt']
             event['ended_sim_s'] = sim_time()
+            event['ended_owner_s'] = arm.monotonic()
         released_at = observe()['clock']
         deadline = time.monotonic()+30
         while observe()['clock']-released_at < 2.2:
