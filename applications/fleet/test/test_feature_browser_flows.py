@@ -29,6 +29,7 @@ CASES = {
     'traffic': (collaboration.test_formation_hold_resume_stop_and_incident_review, '/console'),
     'incidents': (collaboration.test_formation_hold_resume_stop_and_incident_review, '/console'),
     'profile': (flows.test_profile_change_survives_logout_and_login, '/console/profile'),
+    'accounts': (flows.test_account_changes_control_login_and_sample_authority, '/console/accounts'),
 }
 
 
@@ -42,6 +43,10 @@ class BrowserEngine:
             return {status:response.status,body:await response.text(),headers:[...response.headers]};
         }''', {'method': method, 'path': path, 'headers': {k:v for k,v in headers.items() if k.lower() != 'cookie'},
               'body': body.decode()})
+        if path == '/api/fleet/auth/login' and value['status'] == 204:
+            for cookie in self.page.context.cookies():
+                if cookie['name'] == 'rosy_sample_session':
+                    value['headers'].append(('Set-Cookie', cookie['name'] + '=' + cookie['value']))
         return SimpleNamespace(status=value['status'], body=value['body'].encode(), headers=value['headers'])
 
     def advance(self, flow_id, event):
@@ -68,8 +73,8 @@ def test_representative_contract_in_browser(sample_site, monkeypatch, feature):
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.on('request', lambda req: external.append(req.url)
                     if req.url.startswith('http') and not req.url.startswith(origin + '/') else None)
-            # Login document has no background Fleet polling to race explicit scenario steps.
-            page.goto(origin + '/console/login')
+            # A text resource keeps the same origin without application navigation racing scenario fetches.
+            page.goto(origin + '/console/assets/app-runtime.js')
             adapter = BrowserEngine(page)
             owner = flows if check.__module__ == flows.__name__ else collaboration
             monkeypatch.setattr(owner, 'load_engine', lambda: adapter)

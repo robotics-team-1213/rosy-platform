@@ -2,6 +2,9 @@ schema: rosy.platform-dependencies.v1
 
 # Existing Python components only. Add new paths in the same change that creates them.
 components:
+  - name: fleet_app_dev
+    path: applications/fleet/dev
+    import_prefix: fleet_app_dev
   - name: contracts
     path: contracts/foundation/core_common
     import_prefix: core_common
@@ -47,6 +50,8 @@ components:
 
 # Static absolute imports and relative imports resolved from their package path.
 boundaries:
+  - importer_prefix: fleet_app_dev
+    forbidden_imports: [fleet, rclpy, rosy.execution, rosy.processes, omx_adapter]
   - importer_prefix: rosy.world.state
     forbidden_imports: [fleet, rosy_situation, omx_adapter, core_features, rclpy]
   - importer_prefix: core_common

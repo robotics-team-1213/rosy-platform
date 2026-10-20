@@ -59,9 +59,14 @@ modules:
     functional: [middleware/media/test]
   - name: console_source
     path: applications/fleet/web
-    tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
+    tests: [applications/fleet/test, operations/fleet/test, test/test_remaining_platform_installed.py]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: fleet_app_dev
+    path: applications/fleet/dev
+    tests: [applications/fleet/test]
+    functional_kind: pytest
+    functional: [applications/fleet/test/test_sample_server.py]
   - name: perception_curation
     path: learning/curation/perception
     tests: [test/learning/perception]

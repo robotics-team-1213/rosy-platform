@@ -34,7 +34,7 @@ def test_channel_deliberation_read_is_owned_and_does_not_call_model(tmp_path):
     from fleet.server.channel.model_runtime import BrokerConfig
     from fleet.server.site_auth import SitePrincipal
     from test_channel_model_jobs import model_jobs
-    _, journal, _, receipt, _, _, _ = model_jobs(tmp_path)
+    _, journal, _, receipt, snapshot, problem, _ = model_jobs(tmp_path)
     app = FastAPI()
     app.state.channel_requests = journal
     app.state.fleet_gather = SimpleNamespace()
@@ -42,6 +42,7 @@ def test_channel_deliberation_read_is_owned_and_does_not_call_model(tmp_path):
         known_hosts_file='/run/rosy-deliberation/known_hosts', profile_revision='d720-v1', source_commit='a' * 40,
         valid_until=9999999999.0, primary_admitted=True, reviewer_admitted=False)
     install_conversation_routes(app, None, cfg, None, None, lambda: SitePrincipal('op', 'operator'), [])
+    app.state.channel_model_jobs.stage(receipt, problem, snapshot)
     client = TestClient(app)
     response = client.get('/api/fleet/channel-requests/' + receipt['request_id'] + '/deliberation')
     assert response.status_code == 200 and response.json()['action_admissible'] is False
