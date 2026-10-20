@@ -55,6 +55,7 @@ async function refresh(){
   if(!data.runs.length)$('sim-runs').textContent='아직 실행 기록이 없습니다.';
 }
 async function check(){
+  checked=null;
   const value=await api('check',config());
   if(value.ready!==true)throw new Error(value.reason||'실행 준비가 되지 않았습니다.');
   checked=value;notice('sim-checked','확인한 입력 지문: '+value.input_sha256);
