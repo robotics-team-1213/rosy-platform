@@ -228,3 +228,86 @@ def test_invalid_state_shape_is_a_rejected_record(tmp_path, value):
     with pytest.raises(ValueError):
         store.get(row['run_id'])
     assert store.list()[0]['status'] == 'UNKNOWN'
+
+
+@pytest.mark.parametrize('filename', ['input.json', 'state.json'])
+def test_process_death_during_exclusive_publish_recovers_same_request(tmp_path, filename):
+    mod = module()
+    request = uuid.uuid4().hex
+    program = '''import sys,os
+from pathlib import Path
+sys.path.insert(0,sys.argv[2])
+from run_store import RunStore
+store=RunStore(Path(sys.argv[1]))
+link=os.link
+def interrupt(src,dst,*args,**kwargs):
+ link(src,dst,*args,**kwargs)
+ if dst==sys.argv[4]:os._exit(72)
+os.link=interrupt
+store.create(sys.argv[3],'omx-f-import',{'seed':7},'a'*40)
+'''
+    result = subprocess.run([sys.executable, '-c', program, str(tmp_path / 'runs'),
+                             str(ROOT), request, filename], capture_output=True, timeout=5)
+    assert result.returncode == 72
+    store = mod.RunStore(tmp_path / 'runs')
+    recovered = create(store, request)
+    assert recovered['run_id'] == uuid.uuid5(uuid.NAMESPACE_URL, 'rosy.isaac-run:' + request).hex
+    assert recovered['input_sha256'] == mod.input_snapshot('omx-f-import', {'seed': 7}, SHA)['input_sha256']
+    assert len(store.list()) == 1
+    folder = tmp_path / 'runs/runs' / recovered['run_id']
+    assert (folder / 'input.json').stat().st_nlink == 1
+    assert (folder / 'state.json').stat().st_nlink == 1
+
+
+@pytest.mark.parametrize('stage', ['artifacts.json', 'result.json', 'before-state', 'after-state'])
+def test_interrupted_completion_is_recovered_or_unpublished_before_stop(tmp_path, stage):
+    mod = module()
+    request = uuid.uuid4().hex
+    program = '''import sys,os
+from pathlib import Path
+sys.path.insert(0,sys.argv[2])
+from run_store import RunStore
+store=RunStore(Path(sys.argv[1]))
+row=store.create(sys.argv[3],'omx-f-import',{'seed':7},'a'*40)
+row=store.update(row['run_id'],0,{'status':'RUNNING'})
+link,replace=os.link,os.replace
+def interrupt_link(src,dst,*args,**kwargs):
+ link(src,dst,*args,**kwargs)
+ if dst==sys.argv[4]:os._exit(72)
+def interrupt_replace(src,dst,*args,**kwargs):
+ if dst=='state.json' and sys.argv[4]=='before-state':os._exit(72)
+ replace(src,dst,*args,**kwargs)
+ if dst=='state.json' and sys.argv[4]=='after-state':os._exit(72)
+os.link,os.replace=interrupt_link,interrupt_replace
+store.finish(row['run_id'],row['revision'],{'status':'SUCCEEDED','stage':'model_import',
+ 'import_verified':True,'completed_frames':120,'task_success':None},[])
+'''
+    result = subprocess.run([sys.executable, '-c', program, str(tmp_path / 'runs'),
+                             str(ROOT), request, stage], capture_output=True, timeout=5)
+    assert result.returncode == 72
+    store = mod.RunStore(tmp_path / 'runs')
+    run_id = uuid.uuid5(uuid.NAMESPACE_URL, 'rosy.isaac-run:' + request).hex
+    recovered = store.get(run_id)
+    folder = tmp_path / 'runs/runs' / run_id
+    if recovered['status'] == 'RUNNING':
+        assert not (folder / 'result.json').exists()
+        assert not (folder / 'artifacts.json').exists()
+        stopped = store.update(run_id, recovered['revision'], {'status': 'STOP_REQUESTED'})
+        assert finish(store, stopped, status='STOPPED')['status'] == 'STOPPED'
+    else:
+        assert recovered['status'] == 'SUCCEEDED'
+        with pytest.raises(mod.RunConflict):
+            store.update(run_id, 1, {'status': 'STOP_REQUESTED'})
+        assert json.loads((folder / 'result.json').read_text())['status'] == 'SUCCEEDED'
+
+
+def test_unrelated_hardlink_is_not_cleaned_up(tmp_path):
+    store = module().RunStore(tmp_path / 'runs')
+    row = create(store)
+    source = tmp_path / 'runs/runs' / row['run_id'] / 'input.json'
+    unrelated = tmp_path / 'unrelated'
+    import os
+    os.link(source, unrelated)
+    with pytest.raises(ValueError):
+        store.get(row['run_id'])
+    assert unrelated.exists() and source.stat().st_nlink == 2
