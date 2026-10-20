@@ -165,6 +165,8 @@ def test_cell_documents_revision_preview_and_job_recovery():
     assert code == 200 and result['mission']['status'] == 'PROPOSED'
     identifier = result['mission']['mission_id']
     assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': -1})[0] == 409
+    assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': 1})[0] == 403
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample-reviewer', 'password':'sample-password'})
     assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': 1})[1]['mission']['status'] == 'READY'
     engine.advance('cell_jobs', 'hold')
     assert call(engine, 'GET', f'/api/fleet/cell-jobs/{identifier}')[1]['job']['status'] == 'HOLD'
