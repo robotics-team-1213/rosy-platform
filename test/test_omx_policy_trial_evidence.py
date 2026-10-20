@@ -5,7 +5,7 @@ import sys
 import pytest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'deploy/robot/omx'))
-from sim_policy_trial_evidence import goal_succeeded, object_transition
+from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
 
 
 def trace():
@@ -40,3 +40,8 @@ def test_detach_uses_learned_opening_and_settle_requires_actual_release():
     state.update(attached=False,held=False)
     assert object_transition(**state) is None
     assert object_transition(**dict(state,released=True))=='settle'
+
+
+@pytest.mark.parametrize('position,expected',[(.9,False),(.6,True),(.58,True),(.51,False)])
+def test_hold_requires_width_contact_instead_of_partially_closing_open_jaws(position,expected):
+    assert contact_held(position,close=.5,contact=.6) is expected
