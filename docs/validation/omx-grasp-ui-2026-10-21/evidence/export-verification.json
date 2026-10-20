@@ -1,0 +1,32 @@
+{
+  "original_files_unchanged": true,
+  "original_decisions_unchanged": true,
+  "receipt_valid": true,
+  "reader_verified": true,
+  "splits": {
+    "train": {
+      "frames": 4,
+      "clock_dtype": "torch.int64",
+      "first_clock": 9007199254740994,
+      "last_clock": 9007199254740997,
+      "action_and_clock_values_match": true
+    },
+    "eval": {
+      "frames": 4,
+      "clock_dtype": "torch.int64",
+      "first_clock": 9007199254741994,
+      "last_clock": 9007199254741997,
+      "action_and_clock_values_match": true
+    },
+    "test": {
+      "frames": 4,
+      "clock_dtype": "torch.int64",
+      "first_clock": 9007199254742994,
+      "last_clock": 9007199254742997,
+      "action_and_clock_values_match": true
+    }
+  },
+  "image_correspondence": "exporter checked each decoded child frame against original; mean absolute channel error <=8/255",
+  "physical_success_verified": false,
+  "training_activated": false
+}
