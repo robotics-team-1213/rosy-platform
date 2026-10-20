@@ -1,5 +1,6 @@
 """D-831 preserves submitted text and prevents unsafe candidates becoming commands."""
 import copy
+import json
 import unicodedata
 
 import pytest
@@ -100,3 +101,100 @@ def test_usage_reserves_generation_budget_and_rejects_forged_or_invalid_counts()
                    {'elapsed_ms':float('nan')}, {'preparation_hash':'not-a-hash'}]:
         with pytest.raises(ValueError):
             InferenceUsage(**(data | change))
+
+
+def inference_exchange(captured, *, input_tokens=100, output_tokens=10, extra=None):
+    def exchange(path, body, remaining):
+        if path == '/api/ps':
+            return {}
+        captured.append(body)
+        return dict(model='qwen3-vl:8b-instruct', done=True, done_reason='stop',
+            prompt_eval_count=input_tokens, eval_count=output_tokens,
+            message=dict(role='assistant', content=json.dumps(
+                dict(kind='CHAT', response='Classified', evidence_refs=[]) | (extra or {}))))
+    return exchange
+
+
+def test_operator_broker_uses_prepared_copy_and_records_actual_usage(monkeypatch):
+    from deploy.ai_pc import operator_broker
+    from rosy.decision.conversation.operator import OperatorProfile, checked_operator_answer
+    from rosy.decision.conversation.preprocessing import prepare
+    q = question(unicodedata.normalize('NFD', '안녕')+'  r1')
+    seen = []
+    monkeypatch.setattr(operator_broker, 'loaded', lambda _:None)
+    monkeypatch.setattr(operator_broker, 'exchange', inference_exchange(seen))
+    output = operator_broker.execute(q, OperatorProfile(), 30)
+    answer = checked_operator_answer(output, q)
+    assert answer.usage is not None and answer.usage.input_tokens == 100
+    assert answer.usage.output_tokens == 10 and answer.usage.preparation_hash == prepare(q).digest
+    assert 'usage' not in answer.model_dump()
+    assert 'usage' not in seen[0]['format']['properties']
+    content = seen[0]['messages'][1]['content']
+    context, latest = content.split('\nLATEST USER MESSAGE:\n')
+    assert json.loads(context)['question'] == q.question
+    assert 'scope' not in json.loads(context)
+    assert latest == '안녕 r1'
+
+
+def test_model_cannot_supply_its_own_usage_and_generation_reserve_is_enforced(monkeypatch):
+    from deploy.ai_pc import operator_broker
+    from rosy.decision.conversation.operator import OperatorProfile
+    monkeypatch.setattr(operator_broker, 'loaded', lambda _:None)
+    monkeypatch.setattr(operator_broker, 'exchange', inference_exchange([], extra={
+        'usage':dict(input_tokens=1, output_tokens=1, elapsed_ms=0., preparation_hash='a'*64)}))
+    with pytest.raises(ValueError):
+        operator_broker.execute(question('안녕'), OperatorProfile(), 30)
+    monkeypatch.setattr(operator_broker, 'exchange', inference_exchange([], input_tokens=7169))
+    with pytest.raises(ValueError):
+        operator_broker.execute(question('안녕'), OperatorProfile(), 30)
+
+
+def semantic_question(text, *, duplicate=False):
+    from rosy.decision.conversation.codec import ConversationInput
+    return ConversationInput(request_id='request', principal_id='alice', author_id='1'*17,
+        guild_id='2'*17, channel_id='3'*17, content_hash='a'*64, question=text, observed_at=1000.,
+        environment={'robots':[dict(robot_id='r1', online=True, mode='IDLE', estop=False, line_state='OFF')],
+            'map':dict(version=1, sha256='b'*64, places=[dict(id='east', name='입구', x=1., y=2.)] +
+                ([dict(id='west', name='입구', x=-1., y=2.)] if duplicate else [])), 'work_catalog':[]}, history=[])
+
+
+def navigation_answer(*, steps=1, place='입구'):
+    return dict(kind='CONTROL', response='이동 제안입니다.', steps=[dict(verb='navigate', robot_id='r1',
+        place_id=place, parameters_json='{}') for _ in range(steps)], evidence_refs=[], review_required=False, reason=None)
+
+
+def test_new_semantic_profile_resolves_unique_names_and_clarifies_collisions_or_multiple_actions():
+    from rosy.decision.conversation.codec import semantic_answer
+    q = semantic_question('r1을 입구로 보내줘')
+    value = semantic_answer(navigation_answer(), q, preprocessing=True)
+    assert value.intent == {'do':'navigate', 'robot':'r1', 'waypoint':'east'}
+    assert semantic_answer(navigation_answer(), semantic_question(q.question, duplicate=True),
+                           preprocessing=True).kind == 'CLARIFY'
+    assert semantic_answer(navigation_answer(steps=2, place='east'), q, preprocessing=True).kind == 'CLARIFY'
+
+
+def test_legacy_semantic_profile_still_requires_canonical_ids():
+    from rosy.decision.conversation.codec import semantic_answer
+    with pytest.raises(ValueError):
+        semantic_answer(navigation_answer(), semantic_question('r1을 입구로 보내줘'))
+
+
+def test_new_discord_profile_is_not_connected_to_automatic_execution(monkeypatch):
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from fleet.server.channel.conversation import runtime
+    from rosy.decision.conversation.codec import Profile
+    from rosy.decision.conversation.preprocessing import DISCORD_REVISION
+    installed = []
+    monkeypatch.setattr(runtime, 'ConversationJobs', lambda *args:SimpleNamespace())
+    monkeypatch.setattr(runtime, 'ConversationWorker', lambda *args, **kwargs:SimpleNamespace())
+    from fleet.server.channel.execution import runtime as execution
+    monkeypatch.setattr(execution, 'install_execution', lambda *args, **kwargs:installed.append(True))
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+    config = SimpleNamespace(profile=Profile(revision=DISCORD_REVISION), producer_scope=lambda:{})
+    app = SimpleNamespace(state=SimpleNamespace(channel_requests=SimpleNamespace(reply_outbox=object()),
+        fleet_gather=object()), router=SimpleNamespace(lifespan_context=lifespan))
+    runtime.install_conversation(app, config, object(), task_service=object())
+    assert installed == []
