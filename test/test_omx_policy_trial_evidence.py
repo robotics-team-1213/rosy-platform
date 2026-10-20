@@ -29,14 +29,14 @@ def test_goal_requires_original_accepted_uuid_and_successful_result():
     (True,.011,0.,None),(True,0.,.011,None)])
 def test_attach_requires_actual_verified_hold_and_observed_object_geometry(held,xy,z,expected):
     assert object_transition(attached=False,ever_attached=False,held=held,released=False,
-        target_gripper=.5,contact_gripper=.6,xy_error_m=xy,z_error_m=z)==expected
+        gripper_position=.5,contact_gripper=.6,xy_error_m=xy,z_error_m=z)==expected
 
 
 def test_detach_uses_learned_opening_and_settle_requires_actual_release():
     state=dict(attached=True,ever_attached=True,held=True,released=False,
-        target_gripper=.6,contact_gripper=.6,xy_error_m=0.,z_error_m=0.)
+        gripper_position=.6,contact_gripper=.6,xy_error_m=0.,z_error_m=0.)
     assert object_transition(**state) is None
-    assert object_transition(**dict(state,target_gripper=.63))=='detach'
+    assert object_transition(**dict(state,gripper_position=.63))=='detach'
     state.update(attached=False,held=False)
     assert object_transition(**state) is None
     assert object_transition(**dict(state,released=True))=='settle'
