@@ -1,5 +1,6 @@
 """Demo identities, deliberately separate from operational Fleet credentials."""
 from http.cookies import SimpleCookie
+import re
 
 from response import error, reply
 
@@ -13,7 +14,8 @@ class Sessions:
         self.password = 'sample-password'
         self.profile = {'login': 'sample', 'principal_id': 'sample', 'role': role,
                         'display_name': '샘플 운영자', 'email': '', 'account_id': 'sample-account',
-                        'grants': [{'resource': 'site:sample', 'capabilities': CAPABILITIES}]}
+                        'grants': [{'resource': 'site:sample', 'capabilities': CAPABILITIES if role == 'operator' else ['fleet.read']}]}
+        self.accounts = {'sample-account': {**self.profile, 'revision': 1, 'enabled': True}}
 
     def authorized(self, headers):
         cookie = SimpleCookie()
@@ -65,4 +67,33 @@ class Sessions:
         if (method, path) == ('POST', '/auth/logout'):
             self.active = False
             return reply(status=204, headers=self.cookie(clear=True))
+        if path.startswith('/auth/accounts'):
+            if self.role != 'operator':
+                return error(403, 'ACCOUNT_ADMIN_REQUIRED')
+            if (method, path) == ('GET', '/auth/accounts'):
+                return reply(list(self.accounts.values()))
+            if (method, path) == ('POST', '/auth/accounts'):
+                if not all(body.get(key) for key in ('login', 'principal_id', 'password', 'role')):
+                    return error(422, 'INVALID_REQUEST')
+                if any(row['login'] == body['login'] for row in self.accounts.values()):
+                    return error(409, 'ACCOUNT_ALREADY_EXISTS')
+                identifier = f'sample-account-{len(self.accounts) + 1}'
+                self.accounts[identifier] = {k: v for k, v in body.items() if k != 'password'}
+                self.accounts[identifier].update(account_id=identifier, revision=1, enabled=True)
+                return reply(self.accounts[identifier], 201)
+            match = re.fullmatch(r'/auth/accounts/([^/]+)(?:/(reset-password|revoke-sessions))?', path)
+            if match and method in ('PATCH', 'POST'):
+                row = self.accounts.get(match[1])
+                if row is None:
+                    return error(404, 'ACCOUNT_NOT_FOUND')
+                if row['revision'] != body.get('revision'):
+                    return error(409, 'ACCOUNT_REVISION_CONFLICT')
+                if method == 'PATCH' and match[2] is None:
+                    row.update({k: v for k, v in body.items() if k in ('role', 'grants', 'enabled')})
+                elif method != 'POST' or match[2] is None:
+                    return None
+                row['revision'] += 1
+                if row['account_id'] == 'sample-account':
+                    self.active = False
+                return reply(row)
         return None

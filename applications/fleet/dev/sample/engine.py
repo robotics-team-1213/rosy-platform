@@ -1,10 +1,13 @@
 """Backend-free sample provider. Unsupported requests fail visibly instead of succeeding."""
 import json
+from pathlib import Path
 from threading import RLock
 from urllib.parse import urlsplit
 
-from response import error
+from response import error, reply
 from sample.sessions import Sessions
+from sample.spatial import Spatial
+from sample.governance import Governance
 from sample.work import Work
 
 
@@ -22,6 +25,9 @@ class SampleEngine:
             self.scenario_id = scenario_id
             self.sessions = Sessions(self.epoch, 'viewer' if scenario_id == 'viewer' else 'operator')
             self.work = Work()
+            self.spatial = Spatial()
+            self.governance = Governance()
+            self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []
 
     def advance(self, flow_id, event):
@@ -50,8 +56,22 @@ class SampleEngine:
             return response
         if method != 'GET' and self.sessions.role == 'viewer':
             return error(403, 'FORBIDDEN')
-        response = self.work.handle(method, path, payload)
-        if response is not None:
-            return response
+        for feature in (self.work, self.spatial, self.governance):
+            response = feature.handle(method, path, payload)
+            if response is not None:
+                return response
+        if (method, path) == ('GET', '/state'):
+            robot = {'robot_id': 'sample-robot', 'online': True, 'state_age_s': 0, 'error': None,
+                     'goal': None, 'queued': None, 'held': None, 'yielding': None,
+                     'capabilities': {'navigation': {'goal_navigation': True}, 'swarm': {'lead': True, 'follow': True}},
+                     'state': {'robot_id': 'sample-robot', 'mode': 'IDLE', 'map_id': 'sample-site',
+                               'safety': {'estop': not self.work.dispatch['dispatch_enabled']},
+                               'pose': {'x': 1, 'y': 1, 'yaw': 0}, 'battery': {'percent': 83},
+                               'localization': {'state': 'LOCALIZED', 'pose_frame': 'map'}},
+                     'localization': {'state': 'LOCALIZED', 'source': 'robot'}}
+            return reply({'fleet': {'name': '샘플 현장', 'online': 1, 'total': 1},
+                          'robots': [robot], 'signals': {}, 'alarms': [], 'ts': 1792454400})
+        if method == 'GET' and f'GET {path}' in self.reads:
+            return reply(self.reads[f'GET {path}'])
         self.unhandled.append((method, target))
         return error(501, 'SAMPLE_REQUEST_NOT_IMPLEMENTED', f'{method} {path}')
