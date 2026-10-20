@@ -105,6 +105,12 @@ Fleet은 `auth/password_session.py`에서 Origin과 Host를 비교하고 `auth/p
 
 각 샘플 페이지는 샘플 데이터 사용을 표시한다. 작업·정지·승인 버튼은 샘플 상태만 바꾼다. 외부 데이터·실제 자격 증명·운영 장치 설정을 샘플에 복사하지 않는다. 모드를 바꾸면 페이지를 새로 열고 샘플 접속 상태·대기 요청을 재사용하지 않는다.
 
+## 브라우저 음성·영상 의존성
+
+HTTP 응답만 바꿔도 브라우저의 음성 설치·인식, WebRTC 연결은 남는다. 현재 `assistant/assistant-voice.js`의 `createVoice`는 `platform`을 받고, 앱 `shared/robot-video.js`의 `createRobotVideo`는 `open`을 받는다. 이 주입 지점을 사용해 샘플에서 실제 마이크·음성 팩 다운로드·외부 미디어 연결 없이 준비/입력/취소와 영상 준비/오래됨/불가 상태를 재현한다. 공유 WebRTC 내부의 `Peer`까지 가짜로 구현하지 않고 앱의 카메라 세션 인터페이스를 대체한다.
+
+앱의 작은 runtime provider가 브라우저 어댑터를 제공한다. 운영과 connected는 native provider, sample은 개발 호스트가 명시적으로 선택한 sample provider를 제공한다. HTML과 화면 업무 코드는 같고, 차이는 이 의존성 공급 지점에 한정한다. 전역 브라우저 API를 덮어쓰거나 화면마다 sample 분기를 추가하지 않는다. 운영 패키지는 native provider만 제공하며 샘플 구현을 포함하지 않는다.
+
 ## gateway와 배포
 
 Fleet CLI는 gateway 설치 여부에 따라 앱 코드를 다시 호출하지 않는다. Fleet이 공개 실행 함수를 제공하고, `fleet` 명령과 `rosy-site-gateway` 명령이 각자의 진입점에서 이를 사용하도록 정리한다. `_main_impl` 직접 import는 제거하되 기존 인자·종료·인터럽트 처리와 기존 설치 조합을 보존한다.
