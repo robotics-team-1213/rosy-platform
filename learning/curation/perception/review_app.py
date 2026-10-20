@@ -23,7 +23,7 @@ import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web
 import review_versions
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
@@ -70,7 +70,7 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, sim_runs=None):
     check_bind_host(host)
     if ai_jobs is not None and ai_jobs.store.db != store.db:
         raise ValueError('AI jobs must belong to the review workspace')
@@ -128,7 +128,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning):
+                if (collaboration and collaboration.get(self, path, token)) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning) or sim_web.get(self, path, sim_runs):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -326,7 +326,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI request accepts only action and version')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
-                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration) or omx_web.post(self, path, body, learning, Conflict):
+                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration) or omx_web.post(self, path, body, learning, Conflict) or sim_web.post(self, path, body, sim_runs, collaboration):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
                 if path.startswith('/api/review-ai/'):
@@ -423,6 +423,7 @@ def main():
     parser.add_argument('--collaboration', type=Path, help='private project account/OAuth configuration')
     parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
     parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
+    parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -461,8 +462,9 @@ def main():
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
     ai_jobs = Jobs(store, args.review_ai_config)
+    sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
-                         storage=storage, ai_jobs=ai_jobs)
+                         storage=storage, ai_jobs=ai_jobs, sim_runs=sim_runs)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 
