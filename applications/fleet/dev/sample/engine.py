@@ -8,6 +8,8 @@ from response import error, reply
 from sample.sessions import Sessions
 from sample.spatial import Spatial
 from sample.governance import Governance
+from sample.assistant import Assistant
+from sample.vision import Vision
 from sample.work import Work
 
 
@@ -27,14 +29,17 @@ class SampleEngine:
             self.work = Work()
             self.spatial = Spatial()
             self.governance = Governance()
+            self.assistant = Assistant()
+            self.vision = Vision()
             self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []
 
     def advance(self, flow_id, event):
         with self.lock:
-            if flow_id != 'work':
+            feature = {'work': self.work, 'assistant': self.assistant}.get(flow_id)
+            if feature is None:
                 raise ValueError('unknown sample flow')
-            self.work.advance(event)
+            feature.advance(event)
 
     def handle(self, method, target, headers, body):
         with self.lock:
@@ -54,9 +59,14 @@ class SampleEngine:
         response = self.sessions.handle(method, path, payload, headers)
         if response is not None:
             return response
+        if self.sessions.role == 'viewer' and path.startswith('/assistant/'):
+            return error(403, 'FORBIDDEN')
+        response = self.vision.handle(method, path, payload)
+        if response is not None:
+            return response
         if method != 'GET' and self.sessions.role == 'viewer':
             return error(403, 'FORBIDDEN')
-        for feature in (self.work, self.spatial, self.governance):
+        for feature in (self.work, self.spatial, self.governance, self.assistant):
             response = feature.handle(method, path, payload)
             if response is not None:
                 return response

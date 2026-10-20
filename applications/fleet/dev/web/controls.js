@@ -19,6 +19,9 @@ for (const [text, event] of [['운행 완료', 'complete'], ['운행 실패', 'f
   button(text, () => control('advance', {flow_id:'work', event}));
 }
 button('샘플 음성 입력', () => dispatchEvent(new CustomEvent('rosy-sample-voice', {detail:{text:'샘플 로봇의 상태를 알려줘'}})));
+for (const [text, event] of [['AI 답변', 'answer'], ['AI 보류', 'hold'], ['AI 결과 미확인', 'unknown']]) {
+  button(text, () => control('advance', {flow_id:'assistant', event}));
+}
 button('마이크 거절', () => dispatchEvent(new CustomEvent('rosy-sample-voice', {detail:{error:'not-allowed'}})));
 for (const [text, state] of [['영상 지연', 'stale'], ['영상 복구', 'live'], ['영상 없음', 'lost']]) {
   button(text, () => dispatchEvent(new CustomEvent('rosy-sample-media', {detail:{state}})));
