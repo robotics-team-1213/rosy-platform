@@ -17,6 +17,12 @@ def test_sample_voice_and_video_need_no_browser_devices_or_external_network(samp
             page.on('request', lambda request: external.append(request.url)
                     if request.url.startswith('http') and not request.url.startswith(origin + '/') else None)
             page.goto(origin + '/console/login')
+            for asset in ('app-runtime.js', 'assistant-voice.js'):
+                resource = page.request.get(origin + '/console/assets/' + asset)
+                assert resource.status == 200, (asset, resource.status, resource.text())
+            for asset in ('browser-platform.js', 'media-session.js'):
+                resource = page.request.get(origin + '/__dev/assets/' + asset)
+                assert resource.status == 200, (asset, resource.status, resource.text())
             result = page.evaluate('''async () => {
               const {voicePlatform, openRobotCamera} = await import('/console/assets/app-runtime.js');
               const {createVoice} = await import('/console/assets/assistant-voice.js');
