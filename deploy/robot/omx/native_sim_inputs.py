@@ -7,6 +7,7 @@ import re
 
 RUN_ID = re.compile(r"([0-9a-f]{40})-([0-9a-f]{12})")
 CAPS = {"ai": (4, 4), "model": (8, 6)}
+STUDY_EXPERIMENTS = {'pick-place-policy', 'pick-place-policy-calibration'}
 MUTABLE = {"manifest.json", "start-intent.json", "run-intent.json", "exit.json",
            "budget.resv", "budget.lock", "home", "tmp", "logs", "cache", "g2", "pick-place"}
 
@@ -121,6 +122,28 @@ def load_config(path):
             raise ValueError('pinned policy/campaign and two explicit inference sites required')
         config['inference_python_sites']=[str(Path(p).resolve(strict=True)) for p in sites]
     return config
+
+
+def study_approval(document):
+    root=Path(document['policy_input'])
+    if str(root) not in document['dependency_roots'] or root.resolve()!=root:
+        raise ValueError('policy study input is not an immutable dependency root')
+    raw=(root/'campaign.json').read_bytes()
+    campaign=json.loads(raw)
+    parent=read_json(root/'policy-artifact.json')
+    if (campaign.get('schema')!='rosy.omx-fixed-object-policy-campaign/1'
+            or campaign.get('runtime_revision')!=document['revision']
+            or any(not isinstance(campaign.get(k),str) or not re.fullmatch('[0-9a-f]{64}',campaign[k])
+                   for k in ('policy_revision','normalization_sha256','dataset_revision'))
+            or parent.get('revision')!=campaign['policy_revision']
+            or parent.get('normalization',{}).get('sha256')!=campaign['normalization_sha256']
+            or parent.get('dataset_revisions')!=[campaign['dataset_revision']]):
+        raise ValueError('policy study campaign and actual input pins differ')
+    return dict(schema='rosy.omx-native-policy-study-approval/1',source='operator_local',
+        approval='isolated-policy-study',uid=os.getuid(),run_id=document['run_id'],
+        source_revision=document['revision'],policy_input=str(root),
+        campaign_sha256=sha256(raw).hexdigest(),parent_policy_revision=campaign['policy_revision'],
+        normalization_sha256=campaign['normalization_sha256'],dataset_revision=campaign['dataset_revision'])
 
 
 def verify_bindings(document, source, state):

@@ -78,9 +78,12 @@ def verify_helper(helper, value):
         raise PermissionError('root helper identity differs from the deployment binding')
 
 
-def start_prepared(value, directory, remote, *, approve_sim=False, approve_startup=False):
+def start_prepared(value, directory, remote, *, approve_sim=False, approve_startup=False,approve_study=False):
     if not (approve_sim and approve_startup):
         raise PermissionError('isolated SIM and startup-home approvals are both required')
+    study=value.get('experiment') in {'pick-place-policy','pick-place-policy-calibration'}
+    if study and approve_study is not True:
+        raise PermissionError('explicit isolated policy study approval required')
     validate_receipt(value)
     request = directory/'start-request.json'
     if request.exists():
@@ -88,10 +91,14 @@ def start_prepared(value, directory, remote, *, approve_sim=False, approve_start
     helper = remote.json(['sudo', '-n', HELPER, 'probe'])
     verify_helper(helper, value)
     # Reserve performs fresh input/capacity checks and its own durable one-shot intent.
-    remote.json(['/usr/bin/python3', value['release']+'/deploy/robot/omx/native_sim_job.py',
-                 'reserve', '--state', value['state']])
-    save(request, {'run_id': value['run_id'], 'revision': value['revision'],
-        'requested_at': datetime.now(timezone.utc).isoformat()}, exclusive=True)
+    reservation=['/usr/bin/python3',value['release']+'/deploy/robot/omx/native_sim_job.py',
+                 'reserve','--state',value['state']]
+    if study:reservation.append('--approve-policy-study')
+    remote.json(reservation)
+    record={'run_id':value['run_id'],'revision':value['revision'],
+            'requested_at':datetime.now(timezone.utc).isoformat()}
+    if study:record['policy_study_approved']=True
+    save(request,record,exclusive=True)
     try:
         response = remote.json(['sudo', '-n', HELPER, 'start', value['run_id']])
         acknowledged = response.get('returncode') == 0 and response.get('unit') == value['unit']
@@ -387,6 +394,7 @@ def main():
         if action == 'start':
             command.add_argument('--approve-isolated-simulation', action='store_true')
             command.add_argument('--approve-startup-home', action='store_true')
+            command.add_argument('--approve-policy-study',action='store_true')
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import remote_pytest as runner
@@ -405,7 +413,8 @@ def main():
             value = activate(value, directory, remote)
         elif args.action == 'start':
             value = start_prepared(value, directory, remote,
-                approve_sim=args.approve_isolated_simulation, approve_startup=args.approve_startup_home)
+                approve_sim=args.approve_isolated_simulation, approve_startup=args.approve_startup_home,
+                approve_study=args.approve_policy_study)
         elif args.action == 'status':
             helper = helper_probe(remote)
             if helper is None:

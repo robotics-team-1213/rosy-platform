@@ -7,7 +7,8 @@ from pathlib import Path
 import subprocess
 import time
 
-from native_sim_inputs import CAPS, read_json, run_identity, verify_bindings, write_json
+from native_sim_inputs import (CAPS, STUDY_EXPERIMENTS, read_json, run_identity, study_approval,
+                               verify_bindings, write_json)
 
 
 def validate_state(state):
@@ -64,9 +65,13 @@ def capacity(jobs_root, ignore_name=None):
             min(memory_kib["MemAvailable"] / (1024 ** 2), memory_kib["MemTotal"] / (1024 ** 2) - memory))
 
 
-def reserve(state, *, jobs_root=None):
+def reserve(state, *, jobs_root=None, approve_study=False):
     state = Path(state).absolute()
     document = validate_state(state)
+    study=document.get('experiment') in STUDY_EXPERIMENTS
+    if study and approve_study is not True:
+        raise PermissionError('explicit isolated policy study approval required')
+    policy_approval=study_approval(document) if study else None
     jobs = Path(jobs_root) if jobs_root is not None else Path.home() / "rosy-jobs"
     if (jobs / "site").exists():
         raise PermissionError("native simulation refuses a site host")
@@ -90,10 +95,13 @@ def reserve(state, *, jobs_root=None):
                 link.symlink_to(state / ("budget." + suffix))
         expires = int(time.time()) + 600
         cpus, gib = CAPS[document["role"]]
-        write_json(state / "start-intent.json", {"run_id": document["run_id"], "revision": document["revision"],
+        intent={"run_id": document["run_id"], "revision": document["revision"],
                    "state": str(state), "jobs_root": str(jobs.absolute()), "uid": os.getuid(),
                    "created_at": time.time(), "expires_at": expires, "runtime": "NOT_RUN",
-                   "approval": ["isolated-simulation", "startup-home"]})
+                   "approval": ["isolated-simulation", "startup-home"]}
+        if policy_approval is not None:
+            intent['study_approval']=policy_approval
+        write_json(state / "start-intent.json",intent)
         with (state / "budget.resv").open("x") as budget:
             budget.write(f"{expires} sim {cpus} {gib}\n")
             budget.flush()
@@ -114,6 +122,8 @@ def run(state, *, launcher=subprocess.run):
             or intent.get("approval") != ["isolated-simulation", "startup-home"]
             or intent.get("expires_at", 0) < time.time()):
         raise PermissionError("reserved start intent binding invalid or expired")
+    if document.get('experiment') in STUDY_EXPERIMENTS and intent.get('study_approval')!=study_approval(document):
+        raise PermissionError('policy study approval differs from the reserved input')
     jobs = Path(intent["jobs_root"])
     if (jobs / "site").exists():
         raise PermissionError("native simulation refuses a site host")
@@ -174,10 +184,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("reserve", "run", "status"))
     parser.add_argument("--state", type=Path, required=True)
+    parser.add_argument('--approve-policy-study',action='store_true')
     args = parser.parse_args()
     if args.operation == "run":
         raise SystemExit(run(args.state))
-    print(json.dumps(reserve(args.state) if args.operation == "reserve" else status(args.state), sort_keys=True))
+    print(json.dumps(reserve(args.state,approve_study=args.approve_policy_study)
+                     if args.operation == "reserve" else status(args.state), sort_keys=True))
 
 
 if __name__ == "__main__":

@@ -127,6 +127,8 @@ def prepare(source, config_path, staging, run_id, *, experiment="g2", episodes=1
                 "source_hashes": source_hashes, "dependency_roots": roots, "dependency_hashes": dependencies,
                 "state_hashes": inventory(state, exclude={"home", "tmp", "logs", "cache"}),
                 "sdk_status": "PASS", "runtime": "NOT_RUN"}
+    if config.get('policy_input'):
+        metadata['policy_input']=config['policy_input']
     write_json(staging / "prepared.json", metadata)
     return metadata
 

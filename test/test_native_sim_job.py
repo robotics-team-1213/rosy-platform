@@ -163,6 +163,8 @@ def test_reservation_has_owned_visible_budget_and_never_replays(tmp_path, monkey
     assert link.is_symlink() and link.resolve() == state / "budget.resv"
     assert result["runtime"] == "NOT_RUN"
     assert (state / "budget.resv").read_text().split()[1:] == ["sim", "4", "4"]
+    with pytest.raises(FileExistsError):
+        job.reserve(state, jobs_root=jobs)
 
 
 def study_state(tmp_path):
@@ -202,8 +204,6 @@ def test_explicit_study_approval_binds_actual_input_pins_and_operator_source(tmp
     assert approval['parent_policy_revision']=='c'*64
     assert approval['normalization_sha256']=='d'*64 and approval['dataset_revision']=='e'*64
     assert approval['source_revision']==SHA
-    with pytest.raises(FileExistsError):
-        job.reserve(state, jobs_root=jobs)
 
 
 def test_unreserved_runtime_never_starts_child(tmp_path):
