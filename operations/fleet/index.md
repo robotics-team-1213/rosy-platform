@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-20 · b1f18674b2 · D-821 명시적 이동 접수와 다국어 운영 경계
 - 2026-10-20 · uncommitted · 통합관제 조회 전용 AI 대화
 - 2026-10-19 · uncommitted · 성공 drivable SIM의 Fleet 생산 연결 분리
 - 2026-10-19 · uncommitted · feat(fleet): recover OMX topic task client
 - 2026-10-19 · uncommitted · 초기값 회귀 fixture 변수 구분과 중단 시험 회수
-- 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
