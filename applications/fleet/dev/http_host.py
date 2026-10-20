@@ -107,7 +107,7 @@ def make_server(provider, origin):
                 return self.respond(error(400, 'INVALID_TARGET'))
             if path.path.startswith('/__dev/') and not path.path.startswith('/__dev/assets/'):
                 response = self.control(path.path, body)
-            elif path.path.startswith('/api/fleet/'):
+            elif path.path.startswith(('/api/fleet/', '/api/vision/sources/')):
                 response = provider.handle(self.command, self.path, dict(self.headers.items()), body)
             elif self.command in ('GET', 'HEAD'):
                 response = self.static(path.path)

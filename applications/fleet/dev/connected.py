@@ -2,6 +2,7 @@
 from http.client import HTTPSConnection, HTTPException
 from http.cookies import CookieError, SimpleCookie
 import ssl
+import re
 from urllib.parse import urlsplit, urlunsplit
 
 from response import DevResponse, error
@@ -58,7 +59,8 @@ class ConnectedAPI:
                 or (method not in ('GET', 'HEAD') and supplied != self.local_origin)):
             return error(403, 'DEV_ORIGIN_REJECTED')
         parsed = urlsplit(target)
-        if (parsed.scheme or parsed.netloc or parsed.fragment or not parsed.path.startswith('/api/fleet/')
+        frame = method in ('GET', 'HEAD') and re.fullmatch(r'/api/vision/sources/[A-Za-z0-9_-]+/frame', parsed.path)
+        if (parsed.scheme or parsed.netloc or parsed.fragment or not (parsed.path.startswith('/api/fleet/') or frame)
                 or any(ord(char) < 32 or ord(char) == 127 for char in target)):
             return error(400, 'INVALID_TARGET')
         outgoing = {key: value for key, value in incoming.items() if key in REQUEST_HEADERS}
@@ -72,7 +74,7 @@ class ConnectedAPI:
             cookie.load(incoming.get('cookie', ''))
         except CookieError:
             return error(400, 'INVALID_COOKIE')
-        if 'rosy_fleet_session' in cookie:
+        if not frame and 'rosy_fleet_session' in cookie:
             outgoing['Cookie'] = 'rosy_fleet_session=' + cookie['rosy_fleet_session'].coded_value
         connection = HTTPSConnection(self.upstream.hostname, self.upstream.port or 443,
                                      context=self.ssl_context, timeout=15)

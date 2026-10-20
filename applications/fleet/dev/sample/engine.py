@@ -66,6 +66,8 @@ class SampleEngine:
 
     def _handle(self, method, target, headers, body):
         path = urlsplit(target).path
+        if path.startswith('/api/vision/sources/'):
+            return self.vision.frame(method, path, headers)
         if not path.startswith('/api/fleet/'):
             return error(501, 'SAMPLE_REQUEST_NOT_IMPLEMENTED')
         path = path.removeprefix('/api/fleet')
