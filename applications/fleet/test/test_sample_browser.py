@@ -167,11 +167,13 @@ def test_cookie_login_stays_usable_when_camera_pairing_needs_named_token(sample_
             calls = []
             page.on('request', lambda request: calls.append(request.url) if '/pairing/v2/pending' in request.url else None)
             page.goto(origin + '/console/install?task=cameras')
+            page.get_by_role('tab', name='카메라 연결 승인', exact=True).click()
             expect(page.locator('#camera-peer-status')).to_contain_text('고급 접속 토큰')
             expect(page.locator('#user-role')).to_have_attribute('title', 'sample · operator')
             assert not calls
             page.evaluate("sessionStorage.setItem('rosy-console-token', 'sample-operator')")
             page.reload()
+            page.get_by_role('tab', name='카메라 연결 승인', exact=True).click()
             expect(page.locator('#camera-peer-requests')).to_contain_text('샘플 카메라')
         finally:
             browser.close()
