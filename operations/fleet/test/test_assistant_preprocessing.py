@@ -274,6 +274,16 @@ def test_decomposed_registered_name_keeps_significant_spacing():
     assert resolve_reference(unicodedata.normalize('NFD', name), 'place', environment) == 'east'
 
 
+def test_mixed_composition_registered_name_keeps_significant_spacing():
+    from rosy.decision.conversation.preprocessing import prepare
+    text = 'r1을 '+unicodedata.normalize('NFD', '입')+'구  통로로 보내줘'
+    q = semantic_question(text)
+    environment = copy.deepcopy(q.environment)
+    environment['map']['places'][0]['name'] = '입구  통로'
+    q = q.model_copy(update={'environment':environment})
+    assert prepare(q).normalized == text
+
+
 @pytest.mark.parametrize('other_name', ['입구  통로', '입구 통로'])
 def test_quoted_decomposed_name_collision_cannot_select_a_canonical_target(other_name):
     from rosy.decision.conversation.preprocessing import prepare, control_issue
