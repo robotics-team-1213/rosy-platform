@@ -9,14 +9,15 @@ from sim_policy_trial_evidence import goal_succeeded, object_transition
 
 
 def trace():
-    return dict(driver_goal_id='native-uuid',events=[
-        dict(kind='GOAL_ACCEPTED',goal_id='native-uuid',accepted=True),
-        dict(kind='TERMINAL_RESULT',goal_id='native-uuid',status=4,error_code=0)])
+    goal='12345678-1234-5678-1234-567812345678'
+    return dict(driver_goal_id=goal,events=[
+        dict(kind='GOAL_ACCEPTED',goal_id=goal),
+        dict(kind='TERMINAL_RESULT',goal_id=goal,status=4,result_code=0)])
 
 
 def test_goal_requires_original_accepted_uuid_and_successful_result():
     assert goal_succeeded(trace())
-    for field,value in [('goal_id','other'),('status',5),('error_code',1),('kind','TERMINAL_UNKNOWN')]:
+    for field,value in [('goal_id','other'),('status',5),('result_code',1),('kind','TERMINAL_UNKNOWN')]:
         row=trace();row['events'][-1][field]=value
         assert not goal_succeeded(row)
     row=trace();row['events']=row['events'][-1:]
