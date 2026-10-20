@@ -1,6 +1,6 @@
 # 업무 앱의 지원 계약과 남은 경계
 
-확인일: 2026-10-21. 소스 기준 `afa2d0373ec36af5e11b728dbe8730fcfb7c0d4a`, [API reference](ROSY%20API%20%26%20Protocol%20Reference.md) **v1.290**. 이는 문서 버전이며 서버의 기능 협상 응답이 아니다. 이 표는 새 API·실물 profile을 활성화하지 않는다.
+확인일: 2026-10-21. 소스 기준 `afa2d0373e`, [API reference](ROSY%20API%20%26%20Protocol%20Reference.md) **v1.290**. 이는 문서 버전이며 서버의 기능 협상 응답이 아니다. 이 표는 새 API·실물 profile을 활성화하지 않는다.
 
 ## 외부 HTTP 소비
 
