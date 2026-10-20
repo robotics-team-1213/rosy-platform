@@ -81,6 +81,29 @@ def test_ground_truth_roundtrip_keeps_original_bytes_and_all_proof_dependencies(
         validate_profile(episode,root=output)
 
 
+def test_act_intake_never_turns_a_missing_automatic_proof_into_operator_judgement(tmp_path):
+    import shutil
+    sys.path.insert(0,str(ROOT/'learning/training/omx'))
+    from act_job import export_truth
+    from sim_object_truth_fixture import fixture, write
+    from sim_object_truth import build
+    from rosy.contracts.learning.omx import validate_demonstration
+    run, native, source = fixture(tmp_path)
+    export = tmp_path/'export'
+    export.mkdir()
+    proof = build(run,native,export/'rosy_sim_truth')
+    write(export/'rosy_export.json',dict(status='verified',task_outcome_judge='sim_ground_truth'))
+    validated = validate_demonstration(source)
+    assert export_truth(export,source,validated) == Path(proof['truth'])
+    write(export/'rosy_export.json',dict(status='verified',task_outcome_judge='operator'))
+    with pytest.raises(ValueError,match='judge'):
+        export_truth(export,source,validated)
+    write(export/'rosy_export.json',dict(status='verified',task_outcome_judge='sim_ground_truth'))
+    shutil.rmtree(export/'rosy_sim_truth')
+    with pytest.raises(FileNotFoundError):
+        export_truth(export,source,validated)
+
+
 @pytest.mark.parametrize('change', ['missing_receipt','stale','future','generation','native_asset','goal_uuid','terminal','nan_sequence'])
 def test_resealed_but_unbound_execution_cannot_become_sim_truth(tmp_path, change):
     from sim_object_truth_fixture import fixture, write
