@@ -5,12 +5,13 @@ from fastapi import BackgroundTasks, Depends, HTTPException, Path, Request, Resp
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
-from core_common.protocol.assistant import AssistantMessage, AssistantResult, AssistantStatus, AssistantHistory
+from core_common.protocol.assistant import AssistantMessage, AssistantResult, AssistantStatus, AssistantHistory, AssistantNavigation
+from fleet.server.task_store import IdempotencyConflict
 
 ID = r'^[A-Za-z0-9_-]{1,96}$'
 
 
-def install_routes(app, service, *, require_named_operator, authorize):
+def install_routes(app, service, *, require_named_operator, authorize, execution=None):
     def operator(principal=Depends(require_named_operator)):
         if principal.principal_id == 'site-console' or principal.principal_id.startswith('development-'):
             raise HTTPException(403, detail='OPERATOR_IDENTITY_REQUIRED')
@@ -40,7 +41,21 @@ def install_routes(app, service, *, require_named_operator, authorize):
     def status(response: Response, principal=Depends(operator)):
         response.headers['Cache-Control'] = 'no-store'
         available = service is not None and service.admitted()
-        return AssistantStatus(available=available, reason=None if available else 'ASSISTANT_NOT_ADMITTED')
+        return AssistantStatus(available=available, reason=None if available else 'ASSISTANT_NOT_ADMITTED',
+            execution_enabled=bool(available and execution is not None and execution.enabled()))
+
+    @app.post('/api/fleet/assistant/messages/{request_id}/navigation', tags=['fleet-assistant'])
+    async def navigate(request: Request, response: Response, body: AssistantNavigation,
+                       request_id: str = Path(pattern=ID), principal=Depends(operator)):
+        ready()
+        if execution is None:
+            raise HTTPException(503, detail='ASSISTANT_EXECUTION_NOT_ADMITTED')
+        response.headers['Cache-Control'] = 'no-store'
+        try:
+            return await execution.submit(principal, request_id, body,
+                authorized=lambda:recheck(request, principal.principal_id))
+        except IdempotencyConflict:
+            raise HTTPException(409, detail='ASSISTANT_NAVIGATION_CHANGED') from None
 
     @app.post('/api/fleet/assistant/messages', response_model=AssistantResult, tags=['fleet-assistant'])
     async def submit(request: Request, response: Response, background: BackgroundTasks, principal=Depends(operator)):

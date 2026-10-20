@@ -1,5 +1,6 @@
 // shortcut: local Korean speech packs are browser-dependent; add AI-PC STT after target-browser acceptance.
-export function createVoice({platform = globalThis, onText, onState}) {
+export function createVoice({platform = globalThis, locale = 'ko-KR', onText, onState}) {
+  if (!['ko-KR', 'en-US'].includes(locale)) throw new Error('ASSISTANT_LOCALE_INVALID');
   const Recognition = platform.SpeechRecognition;
   let recognition = null, generation = 0, timer = null;
   const supported = () => platform.isSecureContext && Recognition &&
@@ -8,7 +9,7 @@ export function createVoice({platform = globalThis, onText, onState}) {
   function stopSpeaking() { platform.speechSynthesis?.cancel(); }
   async function available() {
     if (!supported()) return 'unavailable';
-    try { return await Recognition.available({langs:['ko-KR'], processLocally:true}); }
+    try { return await Recognition.available({langs:[locale], processLocally:true}); }
     catch { return 'unavailable'; }
   }
   function cancel() {
@@ -17,12 +18,16 @@ export function createVoice({platform = globalThis, onText, onState}) {
     previous?.abort(); stopSpeaking();
   }
   return {
+    setLocale(value) {
+      if (!['ko-KR', 'en-US'].includes(value)) throw new Error('ASSISTANT_LOCALE_INVALID');
+      cancel(); locale = value;
+    },
     available,
     async prepare() {
       const state = await available();
       if (state === 'available') return true;
       if (!['downloadable', 'downloading'].includes(state) || typeof Recognition.install !== 'function') return false;
-      return await Recognition.install({langs:['ko-KR'], processLocally:true});
+      return await Recognition.install({langs:[locale], processLocally:true});
     },
     async start() {
       cancel(); const token = generation;
@@ -32,7 +37,7 @@ export function createVoice({platform = globalThis, onText, onState}) {
       }
       let text = '';
       const current = new Recognition();
-      current.lang = 'ko-KR'; current.processLocally = true;
+      current.lang = locale; current.processLocally = true;
       current.continuous = false; current.interimResults = false;
       recognition = current;
       current.onresult = event => {
@@ -63,10 +68,10 @@ export function createVoice({platform = globalThis, onText, onState}) {
     speak(text) {
       stopSpeaking();
       const synth = platform.speechSynthesis;
-      const voice = synth?.getVoices().find(item => item.localService === true && /^ko(?:-|$)/i.test(item.lang));
+      const voice = synth?.getVoices().find(item => item.localService === true && item.lang.split('-')[0].toLowerCase() === locale.split('-')[0]);
       if (!voice || !platform.SpeechSynthesisUtterance || recognition) { onState('no-voice'); return false; }
       const utterance = new platform.SpeechSynthesisUtterance(text.slice(0, 4000));
-      utterance.lang = 'ko-KR'; utterance.voice = voice;
+      utterance.lang = locale; utterance.voice = voice;
       synth.speak(utterance); return true;
     },
   };

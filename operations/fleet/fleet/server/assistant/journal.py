@@ -4,7 +4,7 @@ import json
 import time
 
 from fastapi import HTTPException
-from core_common.protocol.assistant import AssistantResult
+from core_common.protocol.assistant import AssistantResult, AssistantMessage
 
 
 class AssistantJournal:
@@ -34,7 +34,7 @@ class AssistantJournal:
             row = db.execute('SELECT * FROM fleet_assistant_requests WHERE principal_id=? AND request_id=?',
                              (principal, message.request_id)).fetchone()
             if row:
-                if row['message_json'] != raw:
+                if AssistantMessage.model_validate_json(row['message_json']) != message:
                     raise HTTPException(409, detail='ASSISTANT_REQUEST_CHANGED')
                 return self.result(row), False
             total, active = db.execute('''SELECT COUNT(*), COALESCE(SUM(state IN ('PENDING','RUNNING')),0)
@@ -44,7 +44,8 @@ class AssistantJournal:
                 raise HTTPException(429, detail='ASSISTANT_LIMIT')
             state = 'PENDING' if admitted else 'HOLD'
             result = None if admitted else json.dumps({'reason':'ASSISTANT_NOT_ADMITTED',
-                'response':'관제 AI 연결이 준비되지 않았습니다. 기존 관제 기능을 이용해 주세요.'})
+                'response':('The assistant is not connected. Use the existing Fleet controls.' if message.locale == 'en-US'
+                    else '관제 AI 연결이 준비되지 않았습니다. 기존 관제 기능을 이용해 주세요.')})
             now = self.clock()
             db.execute('''INSERT INTO fleet_assistant_requests
                 (principal_id,request_id,conversation_id,message_json,state,created_at,completed_at,result_json,kind)
@@ -94,6 +95,15 @@ class AssistantJournal:
         with closing(self.connect()) as db, db:
             return db.execute("""UPDATE fleet_assistant_requests SET state='RUNNING'
                 WHERE principal_id=? AND request_id=? AND state='PENDING'""", (principal, request_id)).rowcount == 1
+
+    def control(self, principal, request_id):
+        result = self.read(principal, request_id)
+        with closing(self.connect()) as db:
+            kind = db.execute('SELECT kind FROM fleet_assistant_requests WHERE principal_id=? AND request_id=?',
+                              (principal, request_id)).fetchone()[0]
+        if result.state != 'ANSWERED' or kind != 'CONTROL':
+            raise HTTPException(409, detail='ASSISTANT_CONTROL_REQUIRED')
+        return result, self.message(principal, request_id)
 
     def finish(self, principal, request_id, *, state, response=None, reason=None, facts=(), kind=None):
         if state not in ('ANSWERED', 'HOLD', 'UNKNOWN'):

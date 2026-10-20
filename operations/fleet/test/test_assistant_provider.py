@@ -79,6 +79,7 @@ def test_independent_operator_receipt_requires_every_bound_case():
     profile = OperatorProfile()
     cfg = dict(source_commit='a'*40, files={'source.py':'b'*64})
     receipt = dict(schema='rosy.operator-evaluation/1', evaluation_owner='model_pc', verdict='PASS',
+        evaluated_at=__import__('time').time(), suite_sha256=digest(CASES),
         source_commit='a'*40, profile=profile.model_dump(), source_manifest_sha256=digest(cfg['files']),
         cases=[dict(name=name, passed=True) for name, _, _ in CASES])
     validate_receipt(receipt, cfg, profile)

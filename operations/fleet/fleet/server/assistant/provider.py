@@ -20,6 +20,7 @@ class OperatorConfig(Strict):
     semantic_evidence_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     valid_until: FiniteFloat
     primary_admitted: bool
+    execution_enabled: bool = False
 
     def admitted(self):
         return self.primary_admitted and time.time() < self.valid_until

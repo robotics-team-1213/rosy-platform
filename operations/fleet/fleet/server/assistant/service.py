@@ -5,6 +5,7 @@ import time
 
 from core_common.protocol.assistant import AssistantFact
 from rosy.decision.conversation.operator import OperatorInput, OperatorScope, checked_operator_answer
+from .replies import reply
 
 
 class AssistantService:
@@ -55,31 +56,22 @@ class AssistantService:
             if self.clock()-row.created_at > 30:
                 raise ValueError('ASSISTANT_REQUEST_EXPIRED')
             async with asyncio.timeout(30):
-                facts = self.valid_facts(await self.context(principal, message.selected_robot_id))
+                facts = self.valid_facts(await self.context(principal, message.selected_robot_id, message.locale))
                 question = OperatorInput(scope=OperatorScope(principal_id=principal, conversation_id=message.conversation_id),
-                    request_id=request_id, question=message.text, selected_robot_id=message.selected_robot_id,
+                    request_id=request_id, question=message.text, locale=message.locale, selected_robot_id=message.selected_robot_id,
                     observed_at=self.clock(), facts=facts, history=await self.db(self.journal.turns, principal, message))
                 invoked = True
                 raw = await self.provider(question, 30)
                 answer = checked_operator_answer(raw, question)
                 if not authorized() or not self.admitted():
                     raise ValueError('ASSISTANT_AUTHORITY_CHANGED')
-                current = self.valid_facts(await self.context(principal, message.selected_robot_id))
+                current = self.valid_facts(await self.context(principal, message.selected_robot_id, message.locale))
                 if [(f.ref, f.text) for f in current] != [(f.ref, f.text) for f in facts]:
                     raise ValueError('ASSISTANT_CONTEXT_CHANGED')
                 selected = [f for f in current if f.ref in answer.evidence_refs]
                 if answer.kind == 'STATUS':
                     selected = selected or current
-                    response = '관제에서 확인한 상태입니다.\n'+'\n'.join(f.text for f in selected) if selected else '조회할 관제 상태가 없습니다.'
-                elif answer.kind == 'CAUSE':
-                    selected = [f for f in selected if f.ref.startswith('incident:')]
-                    response = '기록된 사건 근거입니다.\n'+'\n'.join(f.text for f in selected) if selected else '기록된 정지 원인을 확인하지 못했습니다. 사건 기록을 확인해 주세요.'
-                else:
-                    response = {'CHAT':'안녕하세요. 로봇 상태 조회와 사건 근거 확인을 도와드릴 수 있습니다. 확인할 로봇과 내용을 알려주세요.',
-                        'CONTROL':'이 대화는 조회 전용입니다. 실행 요청은 작업 화면에서 진행해 주세요.',
-                        'CLARIFY':'대상을 확정할 수 없습니다. 로봇 이름과 확인할 내용을 구체적으로 알려주세요.',
-                        'REFUSE':'권한이나 안전 규칙을 우회하는 요청은 처리할 수 없습니다.'}[answer.kind]
-                    selected = []
+                response, selected = reply(answer.kind, selected, message.locale)
                 await self.db(self.journal.finish, principal, request_id, state='ANSWERED', response=response,
                               facts=selected, kind=answer.kind)
         except asyncio.CancelledError:

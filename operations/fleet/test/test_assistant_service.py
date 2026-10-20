@@ -16,7 +16,7 @@ def fixture(tmp_path, *, provider=None, admitted=True):
     journal = AssistantJournal(store._connect, clock=lambda: clock[0])
     calls = []
 
-    async def context(principal, selected):
+    async def context(principal, selected, locale='ko-KR'):
         return [AssistantFact(ref='robot:r1', text='r1: 온라인, 모드 IDLE', observed_at=clock[0])]
 
     async def model(question, remaining):

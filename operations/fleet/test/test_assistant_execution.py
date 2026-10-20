@@ -77,3 +77,12 @@ def test_execution_contract_rejects_tools_nonfinite_and_unbounded_coordinates():
     for value in [dict(robot_id='r1', x=float('nan'), y=0.), dict(robot_id='r1', x=100001., y=0.),
                   dict(robot_id='r1', x=0., y=0., tool='shell')]:
         with pytest.raises(ValidationError): AssistantNavigation(**value)
+
+
+def test_authority_revoked_inside_task_transaction_rolls_back(tmp_path):
+    f, adapter, body, _, _ = setup(tmp_path)
+    decisions = iter([True, False])
+    with pytest.raises(HTTPException):
+        asyncio.run(adapter.submit(SitePrincipal('op', 'operator'), 'console-1', body,
+                                   authorized=lambda:next(decisions)))
+    assert not f.store.queued_task_ids() and not f.writes

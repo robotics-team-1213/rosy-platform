@@ -10,12 +10,12 @@ export function createDialogue() {
     get pending() { return pending; },
     setIdentity(value) { if (value !== identity) { identity = value; reset(); return true; } return false; },
     reset,
-    begin(text, selectedRobot = null) {
+    begin(text, selectedRobot = null, locale = 'ko-KR') {
       if (!identity) throw new Error('ASSISTANT_IDENTITY_REQUIRED');
       if (pending) throw new Error('ASSISTANT_PENDING');
       if (!text.trim() || text.length > 2000) throw new Error('ASSISTANT_TEXT_INVALID');
       pending = {generation, message:{conversation_id:conversation, request_id:crypto.randomUUID(), text,
-        selected_robot_id:selectedRobot || null}};
+        selected_robot_id:selectedRobot || null, locale}};
       return pending;
     },
     retry() { return pending; },
@@ -133,7 +133,7 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
   }
   function send() {
     if (!available || !identity || dialogue.busy || !input.value.trim()) return;
-    post(dialogue.begin(input.value, readSelection()));
+    post(dialogue.begin(input.value, readSelection(), el('assistant-locale').value));
   }
   function close() {
     voice.cancel(); listening = false; paint();
@@ -145,6 +145,9 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
     if (!panel.hidden) { refreshStatus(); input.focus(); }
   });
   scope.listen(el('assistant-close'), 'click', close);
+  scope.listen(el('assistant-locale'), 'change', () => {
+    voice.setLocale(el('assistant-locale').value); listening = false; paint();
+  });
   scope.listen(panel, 'keydown', event => { if (event.key === 'Escape') close(); });
   scope.listen(el('assistant-send'), 'click', send);
   scope.listen(input, 'keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } });
