@@ -52,7 +52,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 99  # Includes domain-independent geometry editing primitives.
+    assert len(expected) == 103  # Input, geometry adapter and composition retain separate resources.
     assert {'shared/fleet-client.js', 'shared/request.js'} <= expected.keys()
     assert 'shared/device-request.js' in expected
     assert 'shared/host-health.js' in expected
@@ -64,6 +64,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             'work/__init__.py', 'work/work-view.js', 'work/work.css', 'shared/power-action.js', 'shared/area-nav.js', 'work/channel-request-view.js'} <= expected.keys()
     assert {'maps/__init__.py', 'maps/site-map.html', 'maps/site-map.css', 'maps/site-map.js',
             'maps/site-map-teach.js', 'maps/edit-history.js', 'maps/geometry-edit.js'} <= expected.keys()
+    assert {'maps/drawing-import.js', 'maps/map-editor.js', 'maps/map-authoring.js', 'maps/map-editor.css'} <= expected.keys()
     # Colcon selects full install for external holders instead of unsafe editable cleanup.
     develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
     assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help

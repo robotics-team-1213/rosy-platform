@@ -9,7 +9,7 @@ export function createSurveyPanel(host) {
   const $ = id => document.getElementById(id);
   let points = [], picking = false, editing = false, editingKind = null, mapId = null, loadedApproaches = [], approachEdited = false, lastMapId = null;
   const rows = () => [...(host.map()?.places || []).map(p => ({...p, category: 'places', geometry: [[p.x, p.y]]})),
-    ...(host.map()?.edges || []).map(e => ({...e, category: 'edges', name: e.id, kind: 'road', geometry: e.polyline})),
+    ...(host.map()?.edges || []).map(e => ({...e, category: 'edges', name: e.name || e.id, kind: 'road', geometry: e.polyline})),
     ...(host.map()?.facilities || []).map(f => ({...f, category: 'facilities'}))];
   const message = text => { $('survey-status').textContent = text; };
   const number = id => {
@@ -160,7 +160,7 @@ export function createSurveyPanel(host) {
   for (const id of ['element-kind', 'element-from', 'element-to', 'element-existing', 'survey-scale']) $(id).addEventListener('change', sync);
   for (const id of ['element-forward', 'element-stop']) $(id).addEventListener('input', () => { approachEdited = true; });
   $('element-id').value = `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
-  return {sync, points: () => picking ? points : [], picking: () => picking,
+  return {sync, cancel: clear, points: () => picking ? points : [], picking: () => picking,
     pick(event) {
       if (!picking || host.reason() || host.source() !== 'draft' || !host.view()) return false;
       const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
