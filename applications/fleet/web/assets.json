@@ -323,6 +323,10 @@
       "path": "shared/site-map-model.js",
       "media_type": "application/javascript"
     },
+    "route-attention.js": {
+      "path": "shared/route-attention.js",
+      "media_type": "application/javascript"
+    },
     "site-map-edit.js": {
       "path": "shared/site-map-edit.js",
       "media_type": "application/javascript"

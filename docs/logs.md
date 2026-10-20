@@ -9880,6 +9880,12 @@ osy-d395-s1d\`.
 - 증거: 추가 RED5/37 및 RED1/42 후 GREEN43, 독립 계약 재검토 지적 해결. 실제 고정 모델 비교군19/19·Console26/26·Discord46/46, 입력 토큰 절감 없음. docs/validation/operator-preprocessing-2026-10-21b/result.md.
 - gate: 보호 설치·실음성·장치/현장 수용·새 자연어 확인 API는 미실행. 새 Discord 자동 실행은 OFF.
 
+## 2026-10-21 · uncommitted · 외부 앱 공정 제안과 후보 배정
+
+- 변경: D-836에 공정 문서 ID/digest 소비, Fleet 후보 접수와 재접수, 관측 근거와 업무 완료의 책임을 기록했다. API v1.292의 배타적 단일/후보 지정과 key·본문 결속, 기존 lease/claim transaction 재사용을 구현한다.
+- 증거: 커밋 `0122aabecc`의 원격 새 시험에서 공유 request schema 부재로 RED를 확인했다. 최종 제품 시험은 구현 커밋 SHA로 별도 실행한다. 기존 cell-app compile/proposal과 named approval·simulation 제한을 유지한다.
+- gate 변화: 구현 계약만 추가한다. 실제 다중 운행·자동 충전·장치 수용·현장 검증·push는 추가하지 않는다.
+
 ## 2026-10-21 · uncommitted · Fleet 프런트 독립 개발 설계
 
 - 변경: docs/fleet-frontend-development에서 앱 독립 실행·시험, sample/connected 데이터 공급, 지원 기능의 대표 흐름과 실제 Fleet 인터페이스 연결을 검토용 설계로 정리했다. 운영 배포는 기존 Fleet과 함께 유지한다.

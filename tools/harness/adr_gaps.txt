@@ -72,3 +72,5 @@ D-820 reserved in another session (refs/adr/D-820), absent from this base; remov
 D-825 reserved in another session (refs/adr/D-825), absent from this base; remove when its ADR lands
 D-832 reserved outside this branch (refs/adr/D-832), absent from this base; remove when its ADR lands
 D-832 reserved on peer branch feat/omx-learning-flow (8967d9484b), absent from this branch; remove when its ADR lands
+D-834 reserved in another session (refs/adr/D-834), absent from this branch; remove when its ADR lands
+D-835 reserved in another session (refs/adr/D-835), absent from this branch; remove when its ADR lands

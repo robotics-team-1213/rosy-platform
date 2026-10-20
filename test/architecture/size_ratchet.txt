@@ -32,7 +32,7 @@
 955 fleet/fleet/server/ledger/task_store.py
 936 fleet/fleet/server/missions/mission_store.py
 628 fleet/fleet/swarm/session.py
-1234 foundation/core_common/protocol/schemas.py
+1230 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
 629 learning/registry/perception/deliver.py
 1533 middleware/core/events/test/test_audit.py
@@ -54,7 +54,7 @@
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
 755 fleet/web/line-stuck.js
 709 fleet/web/roster.js
-800 fleet/web/shared/site-map-model.js
+788 fleet/web/shared/site-map-model.js
 856 fleet/web/shared/styles.css
 788 fleet/web/shared/vision-view.js
 771 fleet/web/sitemap/site-map.js

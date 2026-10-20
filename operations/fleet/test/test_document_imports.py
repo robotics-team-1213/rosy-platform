@@ -36,6 +36,7 @@ SHARED = {
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "route-attention.js",
 }
 
 OWN = {
