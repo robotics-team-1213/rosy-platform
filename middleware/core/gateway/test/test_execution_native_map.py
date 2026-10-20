@@ -283,5 +283,5 @@ def test_frame_restore_requires_new_budget_new_ack_and_explicit_new_navigation(p
     assert second.run_id != first.run_id
     assert r.ledger.read().state == 'ACTIVE' and wheels(r) == [Twist(.1, 0.)]
     with pytest.raises(NavigationError):
-        r.binding.navigate(old_parent, NavGoalSpec(1., 2., 0., 'map'), lease_ms=1000)
+        r.binding.navigation(old_parent, NavGoalSpec(1., 2., 0., 'map'), lease_ttl_s=1.)
     assert r.ledger._current is r.parent and wheels(r) == [Twist(.1, 0.)]
