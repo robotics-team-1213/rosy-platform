@@ -201,6 +201,47 @@ def test_retained_signed_release_keeps_its_original_job_paths_and_bytes(tmp_path
         m.job_entry(source, "../../outside.py")
 
 
+@pytest.mark.parametrize("entry", ["review_authority", "review_bridge", "review_dataset",
+                                  "review_eval_companion", "review_eval_package", "review_provenance"])
+@pytest.mark.parametrize("layout", ["training", "curation", "both"])
+def test_review_job_resolves_the_exact_retained_or_current_signed_layout(tmp_path, entry, layout):
+    m = module()
+    source = tmp_path / "release"
+    watch = source / "learning/registry/perception/watch.py"
+    watch.parent.mkdir(parents=True)
+    watch.write_bytes(b"SIGNED_WATCH = True\n")
+    for holder in ("training", "curation"):
+        if layout in (holder, "both"):
+            file = source / f"learning/{holder}/perception/{entry}.py"
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(holder.encode())
+    before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")}
+    holder = "training" if layout == "training" else "curation"
+    path = f"learning/{holder}/perception/{entry}.py"
+    assert m.job_entry(source, f"training/{entry}.py") == (
+        (source / path).resolve(), source.resolve(), path, path)
+    assert {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")} == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux signed-release symlinks")
+@pytest.mark.parametrize("exists", [False, True])
+def test_review_job_symlink_cannot_select_a_retained_fallback(tmp_path, exists):
+    m = module()
+    source = tmp_path / "release"
+    for path in ("learning/registry/perception/watch.py", "learning/training/perception/review_bridge.py"):
+        file = source / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"SIGNED = True\n")
+    outside = tmp_path / "outside.py"
+    if exists:
+        outside.write_bytes(b"UNSIGNED = True\n")
+    link = source / "learning/curation/perception/review_bridge.py"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside)
+    with pytest.raises((ValueError, OSError)):
+        m.job_entry(source, "training/review_bridge.py")
+
+
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
     m = module()
     source = tmp_path / "release"
