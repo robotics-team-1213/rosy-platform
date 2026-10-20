@@ -198,3 +198,46 @@ def test_new_discord_profile_is_not_connected_to_automatic_execution(monkeypatch
         fleet_gather=object()), router=SimpleNamespace(lifespan_context=lifespan))
     runtime.install_conversation(app, config, object(), task_service=object())
     assert installed == []
+
+
+@pytest.mark.parametrize('channel', ['console', 'discord'])
+@pytest.mark.parametrize('wrong_hash', [False, True])
+def test_fleet_checks_usage_binding_and_logs_no_original_text_or_identity(monkeypatch, caplog, channel, wrong_hash):
+    import asyncio
+    import logging
+    from rosy.decision.conversation.preprocessing import DISCORD_REVISION, prepare
+    from rosy.decision.conversation.codec import Profile, source_policy
+    from test_assistant_provider import configuration
+    if channel == 'console':
+        from fleet.server.assistant import provider as module
+        q, cfg = question('private utterance sentinel'), configuration()
+        adapter = module.OperatorProvider(cfg)
+        args = (q, 30)
+        response = dict(kind='CHAT', response='안녕하세요.', evidence_refs=[])
+    else:
+        from fleet.server.channel.conversation import runtime as module
+        profile = Profile(revision=DISCORD_REVISION)
+        q = semantic_question('private utterance sentinel')
+        cfg = module.ConversationConfig(host='ai-host', key_file='/run/rosy-deliberation/broker.key',
+            known_hosts_file='/run/rosy-deliberation/known_hosts', profile=profile, source_commit='a'*40,
+            valid_until=4102444800., primary_admitted=True, semantic_evidence_sha256='b'*64,
+            policy=source_policy('a'*40, profile))
+        adapter, args = module.ConversationProvider(cfg), (q, profile, 30)
+        response = dict(kind='CHAT', response='안녕하세요.', evidence_refs=[], intent=None, review_required=False)
+    usage = dict(input_tokens=100, output_tokens=10, elapsed_ms=1.,
+                 preparation_hash='b'*64 if wrong_hash else prepare(q).digest)
+    async def exchange(config, command, packet, remaining):
+        body = json.loads(packet)
+        return {key:body[key] for key in ('source_commit', 'profile', 'input_hash')} | {
+            **({'semantic_evidence_sha256':body['semantic_evidence_sha256']} if channel == 'console' else {}),
+            'cost_usd':0., 'answer':response | {'usage':usage}}
+    monkeypatch.setattr(module, 'exchange', exchange)
+    if wrong_hash:
+        with pytest.raises(ValueError, match='PREPARATION_CHANGED'):
+            asyncio.run(adapter(*args))
+    else:
+        with caplog.at_level(logging.INFO, logger='uvicorn.error'):
+            result = asyncio.run(adapter(*args))
+        assert result['kind'] == 'CHAT' and 'usage' not in result
+        assert '"input_tokens": 100' in caplog.text
+        assert 'private utterance sentinel' not in caplog.text and 'alice' not in caplog.text

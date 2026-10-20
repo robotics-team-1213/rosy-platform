@@ -113,6 +113,18 @@ def control_issue(prepared, *, steps=1):
     return None
 
 
+def resolve_reference(value, kind, environment):
+    if value is None:
+        return None
+    rows = environment['robots'] if kind == 'robot' else (environment.get('map') or {}).get('places', [])
+    key = 'robot_id' if kind == 'robot' else 'id'
+    matches = {row[key] for row in rows if unicodedata.normalize('NFC', value) in
+               {unicodedata.normalize('NFC', row[key]), unicodedata.normalize('NFC', row.get('name', row[key]))}}
+    if len(matches) != 1:
+        raise ValueError('AMBIGUOUS_REFERENCE')
+    return matches.pop()
+
+
 class InferenceUsage(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
     preprocessing_version: Literal['d831-v1'] = VERSION

@@ -1,5 +1,7 @@
 """Independently admitted Console requests over the existing fixed broker transport."""
 from pathlib import Path
+import json
+import logging
 import time
 from typing import Literal
 
@@ -7,6 +9,7 @@ from pydantic import Field, FiniteFloat
 from rosy.decision.conversation.codec import Strict
 from rosy.decision.conversation.operator import OperatorProfile, checked_operator_answer, operator_policy
 from rosy.decision.deliberation import canonical
+from rosy.decision.conversation.preprocessing import prepare
 
 from ..channel.broker_transport import exchange
 
