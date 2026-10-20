@@ -1576,3 +1576,9 @@
 - 변경: 공유 native 시험 fixture에 동일 trusted clock callable 안의 갱신 hook을 추가했다. map 갱신 경합 시험은 실행 중 Ledger clock을 교체하지 않고 capture 이후 갱신을 재현한다. 별도 반례는 같은 숫자를 반환하는 시계 교체도 ZERO/STOPPED가 됨을 요구한다. 제품 제어·에너지 제한은 변경하지 않는다.
 - 증거: 57a136d87 공식 원격 회귀 581 PASS/2 FAIL/NEW 2. 두 실패의 기존 시험이 Ledger clock을 교체해 설치된 energy clock과 다른 객체가 되는 직접 원인을 확인했다. 수정은 시험만이며 전체 회귀를 새 커밋에서 재실행한다.
 - gate 변화: 없음. 실기/현장 수용·FULL CI를 대신하지 않는다.
+
+## 2026-10-21 · native map client cleanup
+
+- 변경: 개별 destroy_client 예외/false 뒤에도 나머지 client의 해제를 시도하고 실패를 보고한다. failed create는 원래 구성 예외를 유지한다. evidence 폐쇄·pending 분리·CORE writer 경계는 유지한다.
+- 증거: source53c7d91367 native RED2FAIL/11PASS와 실제 generated DDS RED exit1 뒤 sourceed405d1ecf native137PASS/0SKIP/NEW0 및 실제 DDS exit0. 기본 parent64/global nonce65536의 빠른 합성 clock 용량 경계와 frame 복구 후 새 Budget/ACK/navigation 성공을 추가 검증했다.
+- 검토: native_map_cleanup_review 독립 안전 검토 승인, Safety-Review trailer 기록. 정본 docs/validation/pipeline-native-map-cleanup-2026-10-21/result.md. 운영 factory·장시간 운행·장치/현장 수용은 HOLD다.
