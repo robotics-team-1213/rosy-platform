@@ -46,10 +46,25 @@ class NativeMapClients:
                 source=source, parent=parent, clock=clock, stop=stop)
             result._owned_node = node
             return result
-        except Exception:
-            for client in clients:
-                node.destroy_client(client)
+        except Exception as error:
+            try:
+                cls._destroy_clients(node, clients)
+            except Exception as cleanup_error:
+                raise error from cleanup_error
             raise
+
+    @staticmethod
+    def _destroy_clients(node, clients):
+        failure = None
+        for client in clients:
+            try:
+                if node.destroy_client(client) is False:
+                    raise RuntimeError('native map client destroy refused')
+            except Exception as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure
 
     @property
     def pending(self):
@@ -145,5 +160,4 @@ class NativeMapClients:
             self._discard()
             node, self._owned_node = self._owned_node, None
             if node is not None:
-                for client in self._clients:
-                    node.destroy_client(client)
+                self._destroy_clients(node, self._clients)
