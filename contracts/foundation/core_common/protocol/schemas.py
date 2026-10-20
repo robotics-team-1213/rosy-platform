@@ -7,6 +7,8 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 from __future__ import annotations
 
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
+from .trip_jobs import TripJobRequest, TripJobStep  # noqa: F401
+from .lamp import LampIdentifyRequest  # noqa: F401
 from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
@@ -1205,12 +1207,6 @@ class SshKeyList(BaseModel):
 class SshHostKeys(BaseModel):
     hostname: str
     host_keys: list[str]
-
-
-class LampIdentifyRequest(BaseModel):
-    """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
-    model_config = ConfigDict(extra="forbid")
-    color: Optional[Literal["blue", "amber"]] = None
 
 
 class SshPasswordRequest(BaseModel):
