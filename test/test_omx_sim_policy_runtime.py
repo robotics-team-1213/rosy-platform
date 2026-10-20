@@ -50,3 +50,17 @@ def test_existing_binding_cannot_be_replaced(tmp_path):
     session.bind_runtime(runtime)
     with pytest.raises(ValueError, match='already bound'):
         bind_sim_runtime(session, runtime)
+
+
+def test_revocation_at_final_native_admission_sends_no_new_goal(tmp_path,monkeypatch):
+    journal=PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session,client,_,authority,*_=setup_session(tmp_path,execution_journal=journal)
+    runtime=runtime_methods(session,client)
+    bind_sim_runtime(session,runtime)
+    submit=runtime._submit_policy
+    def revoke_at_edge(command,binding):
+        authority[0]=False
+        return submit(command,binding)
+    monkeypatch.setattr(runtime,'_submit_policy',revoke_at_edge)
+    with pytest.raises(PermissionError):session.submit(candidate(session))
+    assert not client.commands and session.hold_reason
