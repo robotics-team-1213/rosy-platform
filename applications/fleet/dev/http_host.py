@@ -139,4 +139,8 @@ def make_server(provider, origin):
     class Server(ThreadingHTTPServer):
         daemon_threads = True
 
-    return Server(('127.0.0.1', local.port or (443 if local.scheme == 'https' else 80)), Handler)
+    server = Server(('127.0.0.1', local.port if local.port is not None else (443 if local.scheme == 'https' else 80)), Handler)
+    if local.port == 0:
+        origin = f'{local.scheme}://{local.hostname}:{server.server_address[1]}'
+        local = urlsplit(origin)
+    return server
