@@ -166,3 +166,9 @@
 - 변경: 기존 /learning에 SIM 진입과 조회·관리 권한별 조건 확인/실행/중지·같은 요청 재전송·새 run 재실행을 추가했다. 고정 로컬 JSON subprocess가 CLI와 같은 run 실행기를 사용하고 외부 모듈/SDK를 웹에 import하지 않는다. signed payload의 필수 모듈·정적 파일과 로컬 HTTP 문서를 연결했다.
 - 증거: 주입 경계 부재로 원격5실패 RED를 확인했다. 구현 후 HTTP/기존 계정/검수 회귀가 통과했다. 추가 명시적 Chromium 시험에서 공통 셸 배치 실패를 재현해 기존 rail·pathbar와 모바일 표시를 맞췄다. 실제 SDK·기존 서비스 rollout은 아직 미실행이다.
 - gate 변화: 없음. 기존 인간 라벨·학습 제어·OMX 장치 권한을 변경하지 않는다.
+
+## 2026-10-21 · uncommitted · SIM 실제 연결 경계 수정
+
+- 변경: private workspace 설정에 binding 전체 SHA-256을 추가하고 controller/worker에서도 같은 바이트를 검증한다. 모델 PC에서 XDG_RUNTIME_DIR 없이 user bus 주소로 접근하는 경우를 재현해 고정 subprocess에 해당 운영 환경만 전달한다. GPU 준비가 다시 거절되면 이전 ready 상태를 버린다.
+- 증거: 독립 검토의 binding 교체를 원격 RED2실패→GREEN477 PASS/1 SKIP로 검증했다. 실제 격리 웹에서 CLI run 조회·동일 요청·새 run의 CLI 회수와 private runtime 제외를 확인했다. production 서비스·실제 Account 로그인·기존 사람 라벨은 수정하지 않았다.
+- gate 변화: 웹/CLI 교차 연결의 부분 수용이다. 실제 GPU 무점유 종료·stop 수용은 별도다.

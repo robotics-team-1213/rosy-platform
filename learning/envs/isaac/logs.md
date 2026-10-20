@@ -326,3 +326,9 @@
 - 변경: 기존 model-code work.lock·학습 gpu.lock과 협력하는 동일 계정 admission, 불변 launch intent·중복 요청 재조회·unit 소유권 대조·중지 요청, 고정 SDK worker와 선택적 import 보고서를 구현했다. 원격 CLI·웹 adapter는 후속 분리 단위다.
 - 증거: admission 부재7실패, controller/report 부재2실패·6오류, worker 부재3실패를 원격 RED로 확인했다. 구현 후 admission7 PASS, controller/report/기존 entrypoint31 PASS, Isaac 전체349 PASS/1 SKIP. 실제 subprocess timeout·stop·출력 제한과 보고서/GPU 잔존 판정 시험을 포함한다.
 - gate 변화: 없음. SDK application·물리 집기·학습/승격은 미실행이며 원격 host 검증과 구분한다. D-834는 Proposed를 유지한다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 실제 SDK·교차 조회
+
+- 변경: 웹 workspace가 전체 binding 지문을 controller·worker까지 고정한다. 실제 host에서 발견한 UNKNOWN 진단 오인·user bus 누락과 준비 거절 응답을 수정했다.
+- 증거: 소스9dbaca197b의 실제 OMX-F 보고서120프레임·관절·articulation을 독립 검증했다. run은 cleanup/GPU 해제 미확정으로 UNKNOWN이며 외부 llama-server를 종료하지 않았다. 소스c47e8454e3의 웹 start를 CLI가 같은 최종 FAILED/admission_refused/SDK_NOT_STARTED로 조회·재전송·fetch했다. 관련 원격479 PASS/1 SKIP. 상세는 docs/validation/isaac-shared-runs-2026-10-21/result.md.
+- gate 변화: 실제 SDK 부분 증거를 추가했으나 최종 무점유 import·실제 stop·물리 집기·학습 수용은 보류다. UNKNOWN을 성공으로 변경하지 않는다.

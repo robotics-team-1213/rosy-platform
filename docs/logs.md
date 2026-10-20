@@ -9885,3 +9885,9 @@ osy-d395-s1d\`.
 - 변경: D-834 Proposed의 로컬 SIM 경로·권한·입력 지문·고정 source·조회/실행/중지 의미를 API 부록과 검수 앱 문서에 연결했다. 기존 D-755 로컬 HTTP 소유권에 따라 CORE API 버전·장치 schema는 유지했다.
 - 증거: 신규 HTTP 부재 RED5실패 후 계정·검수 회귀 통과, 명시적 Chromium의 공유 기록·중복 요청·중지·부모 run 재실행·모바일과 공통 셸·필수 payload 누락 거절이 통과했다. 웹 source closure 밖 Isaac 모듈은 고정 subprocess로만 호출한다.
 - gate 변화: 없음. 실제 SDK와 배포 수용은 별도 검증이다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 검증 기록
+
+- 변경: 커밋별 원격 시험과 실제 SDK 보고서·UNKNOWN·웹/CLI admission 거절·교차 fetch를 frozen evidence에 분리해 기록했다. 기존 SDK interpreter의 본인 소유 파일 권한만0775→0755로 바꿨고 파일 bytes·패키지는 유지했다.
+- 증거: 실제120프레임 모델 검사 보고서 hash를 독립 확인했다. 외부 GPU 점유로 무점유 최종 성공·실제 stop은 미수용이며 UNKNOWN을 보존한다. production rollout·실물/학습 성공을 주장하지 않는다.
+- gate 변화: 모델 구조와 운영 경계의 부분 증거이며 D-834 Proposed 유지다.

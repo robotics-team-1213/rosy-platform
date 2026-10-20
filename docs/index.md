@@ -346,8 +346,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 공통 SIM 검증 기록
 - 2026-10-21 · uncommitted · Learning 공통 SIM HTTP 문서
 - 2026-10-21 · uncommitted · 공통 Isaac 원격 CLI
 - 2026-10-21 · uncommitted · 공통 Isaac 실행과 복구 절차
 - 2026-10-21 · uncommitted · 공통 Isaac 실험 기록과 D-834
-- 2026-10-21 · uncommitted · 공통 SIM 실험 작업공간 구현 계획
