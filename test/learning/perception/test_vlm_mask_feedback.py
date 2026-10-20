@@ -118,9 +118,11 @@ def test_review_app_serves_advisory_feedback_without_approval(tmp_path):
     import review_evidence
     import review_masks
     from test_review_return import fixture_inputs
+    from test_pixel_draft_import import V13_CLASSES
 
     source, human, images = fixture_inputs(tmp_path)
     store = ReviewStore(tmp_path / "review", source, human, images)
+    review_masks.bind_classes(store, V13_CLASSES)
     with store.connect() as db:
         db.execute("INSERT INTO masks(frame,version,status,complete,background) "
                    "VALUES (0,0,'pending',0,0)")
@@ -144,10 +146,61 @@ def test_review_app_serves_advisory_feedback_without_approval(tmp_path):
         url = f"http://127.0.0.1:{server.server_port}/api/vlm-feedback/0"
         response = json.load(urllib.request.urlopen(url))
         assert response["available"] is True
-        assert response["current"] is True
+        assert response["current"] is False
         assert response["feedback"]["note"] == "Inspect boundary"
         assert review_masks.get(store, 0)["status"] == mask["status"]
     finally:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1", None, "unknown/1"])
+def test_lane_feedback_refuses_unsupported_semantics_before_model_call(tmp_path, semantic):
+    state = _workspace(tmp_path)
+    with sqlite3.connect(state / "reviews.sqlite3") as db:
+        binding = json.loads(db.execute("SELECT value FROM metadata WHERE key='pixel_classes'").fetchone()[0])
+        binding["classes"][1]["semantic"] = semantic
+        db.execute("UPDATE metadata SET value=? WHERE key='pixel_classes'", (json.dumps(binding),))
+    called = []
+    with pytest.raises(ValueError, match="semantic"):
+        analyze(state, lambda *_: called.append(True), model_digest="model-sha")
+    assert not called
+
+
+@pytest.mark.parametrize("change", ["semantic", "content", "prompt", "legacy"])
+def test_feedback_expires_when_review_meaning_changes(tmp_path, monkeypatch, change):
+    import vlm_mask_feedback as feedback
+    state = _workspace(tmp_path)
+    report = analyze(state, lambda *_: {"verdict": "uncertain", "issue": "none", "note": "check"},
+                     model_digest="model-sha")
+    publish_feedback(state, report)
+    if change in ("semantic", "content"):
+        with sqlite3.connect(state / "reviews.sqlite3") as db:
+            binding = json.loads(db.execute("SELECT value FROM metadata WHERE key='pixel_classes'").fetchone()[0])
+            if change == "semantic":
+                binding["classes"][1]["semantic"] = "current_road_region/1"
+            else:
+                binding["classes"][1]["color"] = [1, 255, 0]
+            db.execute("UPDATE metadata SET value=? WHERE key='pixel_classes'", (json.dumps(binding),))
+    elif change == "prompt":
+        monkeypatch.setattr(feedback, "PROMPT", feedback.PROMPT + " Updated wording.")
+    else:
+        report.pop("review_binding", None)
+        (state / "vlm-feedback.json").write_text(json.dumps(report), encoding="utf-8")
+    assert read_current_feedback(state, 0)["current"] is False
+    with pytest.raises(ValueError, match="stale"):
+        publish_feedback(state, report)
+
+
+def test_explicit_current_region_keeps_lane_feedback_supported(tmp_path):
+    state = _workspace(tmp_path)
+    with sqlite3.connect(state / "reviews.sqlite3") as db:
+        binding = json.loads(db.execute("SELECT value FROM metadata WHERE key='pixel_classes'").fetchone()[0])
+        binding["classes"][1]["semantic"] = "current_road_region/1"
+        db.execute("UPDATE metadata SET value=? WHERE key='pixel_classes'", (json.dumps(binding),))
+    report = analyze(state, lambda *_: {"verdict": "uncertain", "issue": "none", "note": "check"},
+                     model_digest="model-sha")
+    publish_feedback(state, report)
+    assert report["review_binding"]["semantic"] == "current_road_region/1"
+    assert read_current_feedback(state, 0)["current"] is True

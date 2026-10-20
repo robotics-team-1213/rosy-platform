@@ -330,3 +330,59 @@ def test_fixed_pixel_worker_adapter_preserves_human_pixels_with_sam_stub(tmp_pat
         assert built == [{'checkpoint_path': str(checkpoint), 'load_from_HF': False}]
     finally:
         jobs.close()
+
+
+def test_direct_mask_worker_refuses_whole_road_before_model_access(tmp_path, monkeypatch):
+    import review_ai_worker as worker
+    store = workspace(tmp_path)
+    jobs = Jobs(store, backend=lambda *_: {})
+    try:
+        snapshot = jobs._snapshot(0, 'mask_check', 1)
+        next(entry for entry in snapshot['binding']['classes'] if entry['name'] == 'drivable')['semantic'] = 'road_surface/1'
+        called = []
+        monkeypatch.setattr(worker.feedback, '_get_json', lambda *_: called.append(True))
+        with pytest.raises(ValueError, match='semantic'):
+            worker.execute(snapshot, {'model_digest': 'pinned'}, tmp_path)
+        assert not called
+    finally:
+        jobs.close()
+
+
+def test_per_frame_feedback_expires_after_class_content_change(tmp_path):
+    store = workspace(tmp_path)
+    jobs = Jobs(store, backend=lambda *_: {'feedback': {'verdict': 'uncertain', 'issue': 'none', 'note': 'check'}})
+    try:
+        jobs.create(0, 'mask_check', 1, 'human-a')
+        assert finished(jobs)['state'] == 'succeeded'
+        assert read_current_feedback(store.state, 0)['current']
+        with store.connect() as db:
+            binding = review_masks.classes(store)
+            next(entry for entry in binding['classes'] if entry['name'] == 'drivable')['semantic'] = 'current_road_region/1'
+            db.execute("UPDATE metadata SET value=? WHERE key='pixel_classes'", (json.dumps(binding),))
+        assert read_current_feedback(store.state, 0)['current'] is False
+    finally:
+        jobs.close()
+
+
+@pytest.mark.parametrize('semantic', [None, 'current_road_region/1'])
+def test_async_feedback_without_display_defaults_is_current(tmp_path, semantic):
+    store = workspace(tmp_path)
+    binding = review_masks.classes(store)
+    for entry in binding['classes']:
+        entry.pop('display', None)
+        if entry['role'] == 'drivable':
+            if semantic is None:
+                entry.pop('semantic', None)
+            else:
+                entry['semantic'] = semantic
+    with store.connect() as db:
+        db.execute("UPDATE metadata SET value=? WHERE key='pixel_classes'", (json.dumps(binding),))
+    before = review_masks.get(store, 0)
+    jobs = Jobs(store, backend=lambda *_: {'feedback': {'verdict': 'uncertain', 'issue': 'none', 'note': 'check'}})
+    try:
+        jobs.create(0, 'mask_check', 1, 'human-a')
+        assert finished(jobs)['state'] == 'succeeded'
+        assert read_current_feedback(store.state, 0)['current'] is True
+        assert review_masks.get(store, 0) == before
+    finally:
+        jobs.close()
