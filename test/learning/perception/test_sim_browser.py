@@ -33,7 +33,8 @@ class SharedRuns(Runs):
             run_id = self.requests.setdefault(request['request_id'], uuid.uuid4().hex)
             if run_id not in self.rows:
                 self.rows[run_id] = dict(copy.deepcopy(self.row), run_id=run_id,
-                    status='RUNNING', parent_run_id=request.get('parent_run_id'), result=None)
+                    status='RUNNING', parent_run_id=request.get('parent_run_id'))
+                self.rows[run_id].pop('result', None)
             return self.rows[run_id]
         if action == 'stop':
             row = self.rows[payload['run_id']]
@@ -63,7 +64,7 @@ def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
                 expect = playwright.expect
                 expect(page.locator('#sim-runs button')).to_have_count(1)
                 expect(page.locator('#sim-prerequisites')).to_contain_text('E0 필요')
-                assert page.locator('#sim-scenario option[value="port-mixed-stacking"]').is_disabled()
+                assert page.locator('#sim-scenario option[value="port-mixed-stacking"]').evaluate('option=>option.disabled')
                 page.locator('#sim-runs button').first.click()
                 expect(page.locator('#sim-selected')).to_contain_text('b' * 32)
                 page.locator('#sim-check').click()

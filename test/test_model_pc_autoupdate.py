@@ -69,10 +69,12 @@ def test_module_is_available():
     assert hasattr(module(), "Updater")
 
 
-def test_review_store_dependency_cannot_be_omitted(tmp_path, keys):
+@pytest.mark.parametrize('dependency', ['review_store.py', 'sim_web.py',
+                                      'review_app_web/sim.html', 'review_app_web/sim.js'])
+def test_review_store_dependency_cannot_be_omitted(tmp_path, keys, dependency):
     m = module()
     folder = candidate(m, tmp_path, keys,
-                       omit_files=('learning/curation/perception/review_store.py',))
+                       omit_files=('learning/curation/perception/' + dependency,))
     with pytest.raises(ValueError, match='missing model-code entry point or dependency'):
         m.unpack(folder / 'code.tar', tmp_path / 'incomplete')
 
