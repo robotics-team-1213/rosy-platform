@@ -69,3 +69,5 @@ D-817 reserved in another session (refs/adr/D-817), absent from this base; remov
 D-818 reserved in another session (refs/adr/D-818), absent from this base; remove when its ADR lands
 D-819 reserved in another session (refs/adr/D-819), absent from this base; remove when its ADR lands
 D-820 reserved in another session (refs/adr/D-820), absent from this base; remove when its ADR lands
+D-825 reserved in another session (refs/adr/D-825), absent from this base; remove when its ADR lands
+D-826 reserved in another session (refs/adr/D-826), absent from this base; remove when its ADR lands
