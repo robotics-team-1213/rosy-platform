@@ -1582,3 +1582,4 @@
 - 변경: 개별 destroy_client 예외/false 뒤에도 나머지 client의 해제를 시도하고 실패를 보고한다. failed create는 원래 구성 예외를 유지한다. evidence 폐쇄·pending 분리·CORE writer 경계는 유지한다.
 - 증거: source53c7d91367 native RED2FAIL/11PASS와 실제 generated DDS RED exit1 뒤 sourceed405d1ecf native137PASS/0SKIP/NEW0 및 실제 DDS exit0. 기본 parent64/global nonce65536의 빠른 합성 clock 용량 경계와 frame 복구 후 새 Budget/ACK/navigation 성공을 추가 검증했다.
 - 검토: native_map_cleanup_review 독립 안전 검토 승인, Safety-Review trailer 기록. 정본 docs/validation/pipeline-native-map-cleanup-2026-10-21/result.md. 운영 factory·장시간 운행·장치/현장 수용은 HOLD다.
+- gate 변화: 없음. SOURCE/native 정리·합성 수명 경계와 복구 회귀 범위이며 운영 factory·장시간 운행·장치/현장 수용은 별도다.
