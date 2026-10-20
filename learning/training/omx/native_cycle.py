@@ -27,7 +27,11 @@ def validate_split(root):
                                      provenance=source.get('capture_provenance'))
         if bound['episodes'] != source['episodes']:
             raise ValueError('capture episode grouping differs from declared provenance')
-        selected = native.reviewed_splits(receipt['source'], receipt['decisions'])
+        if 'segment_selection' in receipt:
+            from native_segments import validate_receipt
+            selected = validate_receipt(receipt)
+        else:
+            selected = native.reviewed_splits(receipt['source'], receipt['decisions'])
         coverage = native.split_coverage(native.validate_environment(source), receipt['decisions'])
         if ('environment_summary' in source or 'environment_coverage' in receipt
                 or source.get('environment_evidence') is not None):

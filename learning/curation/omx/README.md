@@ -1,5 +1,20 @@
 # OMX 실물 모방학습 준비
 
+## 필요한 파지 구간만 검수·학습하기
+
+`/learning/omx`에서 등록한 intake의 「파지 구간 검수」를 연다. 원본 카메라 프레임을 확인하고 시작(포함)·끝(제외), 대상 물체, 실제 관찰 결과, 개입 여부, 검수자·근거와 분할을 기록한다. 저장은 review DB에 새 검수 revision을 추가하고 원본 `decisions.json`을 유지한다. 프로젝트 계정에서는 manage 권한이 필요하고 인증된 사용자를 검수자로 기록한다. 원본 확인에는 모델 PC의 LeRobot 0.4.4 환경이 필요하다.
+
+선택 JSON을 내려받은 뒤 같은 모델 PC의 전용 venv에서 실행한다. 출력은 모두 기존 자료와 분리된 새 폴더여야 한다.
+
+```text
+python learning/curation/omx/native_segments.py <intake-root> --report <intake-root>/inspection.json --segments <downloaded-segments.json> --out <new-segment-splits>
+python learning/training/omx/native_cycle.py run --splits <new-segment-splits> --out <new-act-run> --steps 100 --device cpu
+```
+
+각 파지 구간은 별도 child Episode다. 원본 state/action·대응 카메라·source clocks를 보존하고 child index/time만 다시 매긴다. 성공을 직접 확인했고 개입이 없는 구간만 학습에 넣는다. 실패·미판정·개입은 제외로 보존한다. 같은 원본·content hash·session·cycle의 후손은 한 분할에만 둔다. 독립 train/eval이 필요하며 test를 선택하면 test도 비어 있으면 안 된다. native 정규화 단위를 SIM rad와 혼합하지 않는다.
+
+`split-receipt.json`은 원본 report/hash, 구간 선택, child→원본 frame 계보, readback과 출력 hashes를 묶는다. 원본 전체의 outcome은 구간 outcome과 별개이고, 환경 coverage도 원본 parent Episode 범위다. 다른 작업자·카메라·물체·장비에서 재사용 가능하다는 뜻은 아니다. [D-833](../../../docs/adr/D-833-native-omx-grasp-segments.md)과 [구현 계획](../../../docs/plans/2026-10-21-omx-native-grasp-segments.md)을 따른다.
+
 수집 대상은 Fleet PC, 학습·독립 평가는 모델 PC다. HF 조직은 미정이며 로컬 수집의 선행 조건이 아니다.
 현재 도구는 host 주소를 고정하지 않고 장치를 시작하거나 기존 ROSY 실물 profile을 활성화하지 않는다.
 첫 수집 목표는 D-770의 제한된 자동 교사다. 공식 LeRobot leader recorder는 사람 시연 경로로 유지한다.
