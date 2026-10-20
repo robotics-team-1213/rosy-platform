@@ -101,3 +101,4 @@ def test_operator_inference_schema_never_requests_freeform_completion_prose(monk
     monkeypatch.setattr(operator_broker, 'exchange', exchange)
     assert operator_broker.execute(question(), OperatorProfile(), 30)['kind'] == 'CHAT'
     assert seen[0]['format']['properties']['response']['enum'] == ['Classified']
+    assert question().question in seen[0]['messages'][1]['content']
