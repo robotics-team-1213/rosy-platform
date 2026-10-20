@@ -34,12 +34,15 @@ def test_explicit_model_input_is_readonly_dependency_and_science_precedes_act(tm
     assert str((tmp_path/'science').resolve())+':'+str((tmp_path/'act').resolve())+':' in shell
 
 
-@pytest.mark.parametrize('fault',['missing_sites','missing_policy','empty_sites','missing_manifest'])
+@pytest.mark.parametrize('fault',['missing_sites','missing_policy','empty_sites','missing_manifest',
+                                 'unhashable_sites','duplicate_sites'])
 def test_incomplete_inference_inputs_are_refused(tmp_path,fault):
     config=host_config(tmp_path)
     if fault=='missing_sites':config.pop('inference_python_sites')
     elif fault=='missing_policy':config.pop('policy_input')
     elif fault=='empty_sites':config['inference_python_sites']=[]
+    elif fault=='unhashable_sites':config['inference_python_sites']=[{},[]]
+    elif fault=='duplicate_sites':config['inference_python_sites']=[config['python_site']]*2
     else:(tmp_path/'policy/policy-artifact.json').unlink()
     path=tmp_path/'host.json';path.write_text(json.dumps(config))
     with pytest.raises(ValueError):load_config(path)
