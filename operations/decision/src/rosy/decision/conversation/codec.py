@@ -8,6 +8,7 @@ from typing import Literal
 from core_common.intent import interpret
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 from rosy.decision.deliberation import canonical
+from .preprocessing import DISCORD_REVISION, VERSION, InferenceUsage, control_issue, prepare, resolve_reference
 
 
 MODEL = 'qwen3-vl:8b-instruct'
@@ -34,9 +35,12 @@ class Profile(Strict):
 
 
 def source_policy(source_commit, profile):
-    return {'schema': 'rosy.conversation-policy/1', 'source_commit': source_commit,
+    policy = {'schema': 'rosy.conversation-policy/1', 'source_commit': source_commit,
             'profile_hash': digest(profile.model_dump()), 'authority': 'proposal_only',
             'output_kinds': ['CHAT', 'STATUS', 'CLARIFY', 'CONTROL', 'REFUSE']}
+    if profile.revision == DISCORD_REVISION:
+        policy['preprocessing_version'] = VERSION
+    return policy
 
 
 class History(Strict):
@@ -190,6 +194,7 @@ class Answer(Strict):
     review_required: bool
     reason: Literal['MISSING_TARGET', 'MISSING_ACTION', 'AMBIGUOUS_REFERENCE', 'UNSUPPORTED',
                     'SAFETY', 'CONFLICT', 'CREDENTIALS'] | None = None
+    usage: InferenceUsage | None = Field(default=None, exclude=True)
 
     @model_validator(mode='after')
     def proposal_only(self):
@@ -220,33 +225,59 @@ class SemanticAnswer(Strict):
                     'SAFETY', 'CONFLICT', 'CREDENTIALS'] | None
 
 
-def semantic_answer(value, question):
+def semantic_answer(value, question, *, preprocessing=False):
     semantic = SemanticAnswer.model_validate(value)
+    if preprocessing and semantic.kind == 'CONTROL':
+        issue = control_issue(prepare(question), steps=len(semantic.steps))
+        if issue:
+            return Answer(kind='CLARIFY', response='대상과 단일 동작을 다시 확인해 주세요.',
+                          intent=None, evidence_refs=[], review_required=False, reason=issue)
     steps = []
     for step in semantic.steps:
         parameters = json.loads(step.parameters_json)
         if type(parameters) is not dict or {'do','robot','waypoint','steps'} & set(parameters):
             raise ValueError('CONVERSATION_PARAMETERS_REFUSED')
         current = {'do':step.verb, **parameters}
-        if step.robot_id is not None:current['robot'] = step.robot_id
-        if step.place_id is not None:current['waypoint'] = step.place_id
+        robot, place = step.robot_id, step.place_id
+        if preprocessing:
+            try:
+                robot = resolve_reference(robot, 'robot', question.environment)
+                place = resolve_reference(place, 'place', question.environment)
+            except ValueError:
+                return Answer(kind='CLARIFY', response='등록된 로봇과 장소를 다시 지정해 주세요.',
+                    intent=None, evidence_refs=[], review_required=False, reason='AMBIGUOUS_REFERENCE')
+        if robot is not None:current['robot'] = robot
+        if place is not None:current['waypoint'] = place
         steps.append(current)
     if (semantic.kind == 'CONTROL') != bool(steps):raise ValueError('CONTROL_SEMANTIC_STEPS_REQUIRED')
     return checked_answer({'kind':semantic.kind,'response':semantic.response,'intent':
         None if not steps else steps[0] if len(steps) == 1 else {'steps':steps},
-        'evidence_refs':semantic.evidence_refs,'review_required':semantic.review_required,'reason':semantic.reason}, question)
+        'evidence_refs':semantic.evidence_refs,'review_required':semantic.review_required,'reason':semantic.reason},
+        question, preprocessing=preprocessing)
 
 
 def answer_schema():
     return SemanticAnswer.model_json_schema()
 
 
-def checked_answer(value, question):
+def checked_answer(value, question, *, preprocessing=False):
     answer = Answer.model_validate(value)
     robots = {r['robot_id'] for r in question.environment['robots']}
     places = {} if question.environment['map'] is None else {p['id']:p for p in question.environment['map']['places']}
     allowed = {'robot:'+r for r in robots} | {'place:'+p for p in places}
     if not set(answer.evidence_refs) <= allowed:raise ValueError('CONVERSATION_EVIDENCE_UNKNOWN')
+    if preprocessing and answer.intent is not None:
+        prepared = prepare(question)
+        calls = interpret(answer.intent)
+        issue = control_issue(prepared, steps=len(calls))
+        if not issue and prepared.uses_context:
+            context = question.accepted_execution_context
+            if any(call.verb != 'navigate' or call.robot != context['robot_id']
+                   or call.body.get('waypoint') != context['place_id'] for call in calls):
+                issue = 'AMBIGUOUS_REFERENCE'
+        if issue:
+            return Answer(kind='CLARIFY', response='대상과 단일 동작을 다시 확인해 주세요.', intent=None,
+                evidence_refs=[], review_required=False, reason=issue, usage=answer.usage)
     if answer.intent is not None:
         for call in interpret(answer.intent):
             if call.scope == 'robot' and call.robot not in robots:
@@ -269,7 +300,7 @@ def checked_answer(value, question):
     return answer
 
 
-def reply(answer, question):
+def reply(answer, question, *, preprocessing=False):
     if answer.kind in ('CLARIFY', 'REFUSE'):
         reasons = {'MISSING_TARGET':'어느 로봇과 등록된 장소를 말하는지 알려주세요.',
             'MISSING_ACTION':'원하는 동작을 구체적으로 말씀해 주세요.',
@@ -281,6 +312,10 @@ def reply(answer, question):
         return reasons[answer.reason]
     if answer.kind == 'STATUS':
         rows = question.environment['robots']
+        if preprocessing and answer.evidence_refs:
+            rows = [row for row in rows if 'robot:'+row['robot_id'] in answer.evidence_refs]
+            if not rows and question.environment['robots']:
+                return '상태를 조회할 로봇을 지정해 주세요.'
         return '현재 관제에서 확인한 상태입니다.\n'+'\n'.join(
             r['robot_id']+' · '+('상태 미확인' if r['online'] is None else '온라인' if r['online'] else '오프라인')
             for r in rows) if rows else '등록된 로봇이 없습니다.'

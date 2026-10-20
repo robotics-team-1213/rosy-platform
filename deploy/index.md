@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · 5d90c8d670 · D-831 인용·Unicode 검색 경계 보완
+- 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
 - 2026-10-20 · b1f18674b2 · D-821 operator 보호 설치와 기존 Discord 점검
 - 2026-10-20 · uncommitted · Console AI 독립 broker·평가 소스
 - 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 공개 진단 도구 hash의 정확한 provenance 등록
-- 2026-10-19 · uncommitted · fix(omx): owner 진입점에 origin #83 executor 적용
-- 2026-10-19 · 0dbc66c10e · 서명 source의 보존 증거와 strict 실행 이식
