@@ -77,6 +77,45 @@ def test_pair_and_refresh_do_not_extend_selected_sample(run):
     assert all(len(c.removed) == 2 for c in r.clients) and not r.stopped
 
 
+@pytest.mark.parametrize('failure_index', [0, 1])
+def test_close_attempts_every_owned_client_even_if_destroy_raises(run, failure_index):
+    r = run
+    attempted = []
+
+    def destroy(client):
+        attempted.append(client)
+        if client is r.clients[failure_index]:
+            raise RuntimeError('native destroy failed')
+        return True
+
+    r.transport._owned_node = NS(destroy_client=destroy)
+    assert r.transport.poll() and r.transport.pending
+    old_parent = r.parent
+    with pytest.raises(RuntimeError, match='native destroy failed'):
+        r.transport.close()
+    assert attempted == list(r.clients)
+    assert not r.transport.pending and all(c.calls[-1][1].cancelled() for c in r.clients)
+    assert r.stopped == [old_parent]
+    r.parent = object()
+    assert not r.transport.poll()
+    assert r.transport.evidence.sample(old_parent) is None
+    assert r.transport.evidence.sample(r.parent) is None
+
+
+def test_close_reports_a_native_destroy_refusal_after_attempting_all_clients(run):
+    attempted = []
+
+    def destroy(client):
+        attempted.append(client)
+        return client is run.clients[1]
+
+    run.transport._owned_node = NS(destroy_client=destroy)
+    with pytest.raises(RuntimeError, match='destroy'):
+        run.transport.close()
+    assert attempted == list(run.clients)
+    assert not run.transport.poll()
+
+
 @pytest.mark.parametrize('fault', ['unavailable', 'send', 'exception', 'cancel', 'shape', 'negative'])
 def test_transport_fault_consumes_exact_parent_and_detaches_pair(run, fault):
     r = run
