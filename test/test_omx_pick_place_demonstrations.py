@@ -112,3 +112,31 @@ def test_batch_preserves_failed_attempt_and_stops_before_the_next_episode(tmp_pa
     assert calls == ['episode-1', 'episode-2']
     assert result['attempts'] == 2 and result['successes'] == 1
     assert len(result['episodes']) == 2
+
+
+def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check():
+    import ast
+    from types import SimpleNamespace as NS
+    sys.path.insert(0, str(ROOT/'middleware/devices/omx/adapter'))
+    from omx_adapter.gripper_contract import (
+        GripperObservation, GripperReadbackError, verify_held_object, verify_released_object)
+    source = ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
+    function = next(node for node in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+                    if isinstance(node, ast.FunctionDef) and node.name == 'grip')
+    arm = NS(latest_joint_state=NS(positions={'gripper_joint_1': .42}, sequence=12, received_at=20.),
+             monotonic=lambda: 20.1)
+    namespace = dict(arm=arm, profile=NS(gripper_joint='gripper_joint_1', gripper_open=1.,
+        gripper_close_for_width=lambda _: .38, gripper_contact_for_width=lambda _: .42,
+        max_joint_state_age_s=.5), recipe=NS(box=NS(width=.03)),
+        config=NS(workcell_id='omx_cell_sim', instance_id='omx_cell_sim_01'),
+        GripperObservation=GripperObservation, verify_held_object=verify_held_object,
+        verify_released_object=verify_released_object)
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
+    evidence = namespace['grip']('held')
+    assert evidence['observation']['received_at'] == 20.
+    assert evidence['checked_owner_s'] == 20.1 and evidence['max_age_s'] == .5
+    assert evidence['receipt']['sequence'] == evidence['observation']['sequence'] == 12
+    assert evidence['observation']['object_present'] is True
+    arm.monotonic = lambda: 20.6
+    with pytest.raises(GripperReadbackError, match='stale'):
+        namespace['grip']('held')

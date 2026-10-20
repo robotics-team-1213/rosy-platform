@@ -24,7 +24,10 @@ class PilotSimCapture:
         self.camera = None
         self.recorder = None
         self._lock = threading.RLock()
+        self._writer_lock = threading.RLock()
+        self._closing = False
         self._states = deque(maxlen=1000)
+        self._frame_queue = deque()
         self._state_sequence = 0
         self._pending = {}
         self._actions = deque(maxlen=64)
@@ -33,6 +36,15 @@ class PilotSimCapture:
         self._interrupt_reason = None
         self._sealed_recorder = None
         self._episode_id = None
+
+    def observe_frame(self, frame) -> None:
+        with self._lock:
+            if self.recorder is None or not self.recorder.active or self._closing:
+                return
+            if len(self._frame_queue) >= 32:
+                self._interrupt_reason = 'camera_queue_overflow'
+                return
+            self._frame_queue.append(frame)
 
     def observe_joint_state(self, message) -> None:
         stamp = message.header.stamp
@@ -90,6 +102,8 @@ class PilotSimCapture:
                                      "camera_info_sha256": self.camera.gate.config.camera_info_sha256}}
             self.recorder = DemonstrationRecorder(self.root, provenance)
             self._actions.clear()
+            self._frame_queue.clear()
+            self._closing = False
             self._pending.clear()
             self._events.clear()
             self._interrupt_reason = None
@@ -105,9 +119,22 @@ class PilotSimCapture:
         return recorder.status() if recorder else {"status": "idle", "frame_count": 0, "issues": []}
 
     def stop(self, episode_id: str, outcome: str) -> dict:
+        with self._writer_lock:
+            return self._stop(episode_id, outcome)
+
+    def _stop(self, episode_id: str, outcome: str) -> dict:
         with self._lock:
             if not self.recorder or self._episode_id != episode_id:
                 raise ValueError("episode unknown")
+            if not self.recorder.active:
+                raise ValueError('no active episode')
+            self._closing = True
+            recorder = self.recorder
+        while self._frame_queue and recorder.active:
+            self._tick()
+        if not recorder.active:
+            return recorder.status()
+        with self._lock:
             recorder, events, reason = self.recorder, list(self._events), self._interrupt_reason
             self._events.clear()
         for event in events:
@@ -128,6 +155,10 @@ class PilotSimCapture:
         return json.loads(path.read_text(encoding="utf-8"))
 
     def interrupt(self, reason: str, *, recorder=None) -> None:
+        with self._writer_lock:
+            self._interrupt(reason, recorder=recorder)
+
+    def _interrupt(self, reason: str, *, recorder=None) -> None:
         with self._lock:
             recorder = recorder or self.recorder
         if recorder is not None and recorder.active:
@@ -178,6 +209,10 @@ class PilotSimCapture:
                 self._interrupt_reason = "goal_acceptance_or_result_unknown"
 
     def tick(self) -> None:
+        with self._writer_lock:
+            self._tick()
+
+    def _tick(self) -> None:
         owner_state = self.runtime.arm.owner.state
         with self._lock:
             if self.recorder is None or not self.recorder.active:
@@ -190,7 +225,8 @@ class PilotSimCapture:
                 reason = reason or "owner_hold"
             if not self.camera_status()["fresh"]:
                 reason = reason or "camera_stale"
-            frame = self.camera.latest_frame if self.camera else None
+            frame = (self._frame_queue.popleft() if self._frame_queue else
+                     self.camera.latest_frame if self.camera else None)
             actions = list(self._actions)
             states = list(self._states)
         # Disk/encoding work runs outside the capture lock and ROS executor.

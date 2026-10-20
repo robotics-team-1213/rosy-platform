@@ -17,7 +17,7 @@ class RosCameraStreamRuntime:
 
     This node adapter does not select a camera driver or device path. The
     operator-supplied persistent identity must be resolved by deployment before
-    construction. Only one accepted image/info pair is retained for consumers.
+    construction. The latest accepted pair remains available; a callback can consume every pair.
     """
 
     def __init__(
@@ -28,6 +28,7 @@ class RosCameraStreamRuntime:
         image_topic: str,
         camera_info_topic: str,
         pending_pairs: int = 4,
+        on_frame=None,
     ) -> None:
         if not image_topic.strip() or not camera_info_topic.strip():
             raise ValueError("camera image and CameraInfo topics must be explicit")
@@ -36,6 +37,7 @@ class RosCameraStreamRuntime:
         self.gate = CameraFrameGate(config)
         self.latest_frame: tuple[CameraFrameMetadata, Image, CameraInfo] | None = None
         self.last_error: str | None = None
+        self._on_frame = on_frame
         self._pending_limit = pending_pairs
         self._images: OrderedDict[int, Image] = OrderedDict()
         self._infos: OrderedDict[int, CameraInfo] = OrderedDict()
@@ -80,6 +82,8 @@ class RosCameraStreamRuntime:
         else:
             self.latest_frame = (metadata, image, info)
             self.last_error = None
+            if self._on_frame is not None:
+                self._on_frame(self.latest_frame)
         finally:
             self._images.pop(stamp_ns, None)
             self._infos.pop(stamp_ns, None)

@@ -48,6 +48,7 @@ class PilotSimCamera:
         self.capture.camera = RosCameraStreamRuntime(
             self.node, config, image_topic="/workcell_camera/image",
             camera_info_topic="/workcell_camera/camera_info", pending_pairs=8,
+            on_frame=self.capture.observe_frame,
         )
         self.error = None
 
