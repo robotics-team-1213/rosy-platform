@@ -96,6 +96,7 @@ def test_enrollment_pairing_and_calibration_readbacks():
     assert call(engine, 'POST', '/api/fleet/enrollment/robots', {'discovery_name': 'sample-new', 'code': 'bad'})[0] == 422
     code, robot = call(engine, 'POST', '/api/fleet/enrollment/robots', {'discovery_name': 'sample-new', 'code': '123456'})
     assert code == 201 and robot['robot_id'] == 'sample-enrolled'
+    assert robot['robot_id'] in [row['robot_id'] for row in call(engine, 'GET', '/api/fleet/state')[1]['robots']]
     assert call(engine, 'GET', '/api/fleet/enrollment/robots')[1]['robots'][0]['robot_id'] == robot['robot_id']
     assert call(engine, 'DELETE', '/api/fleet/enrollment/robots/sample-enrolled')[1]['state'] == 'removed'
     code, pending = call(engine, 'GET', '/api/fleet/pairing/v2/pending')
@@ -117,4 +118,30 @@ def test_enrollment_pairing_and_calibration_readbacks():
     assert code == 200 and record['use'] == 'display-only'
     assert call(engine, 'GET', '/api/fleet/calibrations')[1]['calibrations'] == [record]
     assert call(engine, 'DELETE', '/api/fleet/calibrations/sample-camera')[1]['removed']
+
+
+def test_goal_idempotency_progress_and_terminal_read():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    headers = {'Cookie': 'rosy_sample_session=sample-1', 'Idempotency-Key': 'sample-goal'}
+    target = '/api/fleet/robots/sample-robot/goal'
+    first = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
+    assert first.status == 202
+    task = json.loads(first.body)['task']
+    again = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
+    assert json.loads(again.body)['task']['task_id'] == task['task_id']
+    assert engine.handle('POST', target, headers, b'{"x":3,"y":1,"yaw":0}').status == 409
+    engine.advance('monitoring', 'complete')
+    assert call(engine, 'GET', '/api/fleet/tasks/' + task['task_id'])[1]['task']['status'] == 'GOAL_CONFIRMED'
+
+
+def test_reset_does_not_restore_a_revoked_password_change_cookie():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    response = engine.handle('POST', '/api/fleet/auth/change-password', {'Cookie':'rosy_sample_session=sample-1'},
+                             b'{"current_password":"sample-password","password":"changed-password"}')
+    old = next(value for key, value in response.headers if key == 'Set-Cookie').split(';')[0]
+    engine.reset('normal')
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    assert engine.handle('GET', '/api/fleet/auth/session', {'Cookie':old}, b'').status == 401
 
