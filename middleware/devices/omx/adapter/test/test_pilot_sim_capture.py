@@ -152,3 +152,33 @@ def test_gripper_mode_records_the_gripper_joint_and_action_column(tmp_path):
     assert capture.status()["issues"] == []
     row = json.loads((tmp_path / episode["episode_id"] / "samples.jsonl").read_text().splitlines()[0])
     assert row["action.gripper"] == 0.3 and row["duration_s"] == 1.6
+
+
+def test_delayed_frame_at_goal_boundary_uses_its_accepted_action_without_a_gap(tmp_path):
+    import json
+    capture = create_capture(tmp_path)
+    episode = capture.start('continuous short goals')
+
+    def accept(command, accepted_ns, target, goal):
+        capture.sim_time_ns = lambda: accepted_ns
+        capture.prepare(NS(command_id=command, positions={'joint1': target, 'gripper_joint_1': -.1},
+                           duration_s=.8))
+        capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED', command_id=command, phase_id=None,
+            goal_id=goal, observed_at_monotonic_s=time.monotonic(), sequence=1))
+
+    def frame(stamp, sequence):
+        capture.observe_joint_state(state(stamp-2_000_000, .01))
+        metadata = capture.camera.latest_frame[0]
+        metadata.capture_time_ns, metadata.sequence = stamp, sequence
+        capture.tick()
+
+    accept('first', 1_050_000_000, .02, '11111111-1111-4111-8111-111111111111')
+    frame(1_100_000_000, 2)
+    accept('second', 1_206_000_000, .04, '22222222-2222-4222-8222-222222222222')
+    frame(1_200_000_000, 3)
+    frame(1_300_000_000, 4)
+    assert capture.status()['issues'] == []
+    rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
+    assert [row['command_id'] for row in rows] == ['first', 'first', 'second']
+    assert [row['action'][0] for row in rows] == [.02, .02, .04]
+    assert [row['capture_time_ns'] for row in rows] == [1_100_000_000, 1_200_000_000, 1_300_000_000]
