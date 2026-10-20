@@ -314,6 +314,8 @@ def reply(answer, question, *, preprocessing=False):
         rows = question.environment['robots']
         if preprocessing and answer.evidence_refs:
             rows = [row for row in rows if 'robot:'+row['robot_id'] in answer.evidence_refs]
+            if not rows and question.environment['robots']:
+                return '상태를 조회할 로봇을 지정해 주세요.'
         return '현재 관제에서 확인한 상태입니다.\n'+'\n'.join(
             r['robot_id']+' · '+('상태 미확인' if r['online'] is None else '온라인' if r['online'] else '오프라인')
             for r in rows) if rows else '등록된 로봇이 없습니다.'

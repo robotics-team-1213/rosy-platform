@@ -28,11 +28,17 @@ def hashed(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
-def normalize(text):
+def alias_pattern(name):
+    return r'(?<![A-Za-z0-9_.:-])'+re.escape(name)+r'(?![A-Za-z0-9_.:-])'
+
+
+def normalize(text, names=()):
     def plain(value):
         return re.sub(r'[ \t]+', ' ', unicodedata.normalize('NFC', value))
     parts, at = [], 0
-    for match in QUOTES.finditer(text):
+    protected = re.compile(QUOTES.pattern+'|'+'|'.join(alias_pattern(name) for name in
+        sorted(names, key=lambda name: (-len(name), name)))) if names else QUOTES
+    for match in protected.finditer(text):
         parts.extend((plain(text[at:match.start()]), match.group()))
         at = match.end()
     parts.append(plain(text[at:]))
@@ -72,7 +78,6 @@ class Prepared:
 def prepare(question, *, environment=None):
     raw = question.model_dump()
     original = raw['question']
-    normalized = normalize(original)
     environment = question.environment if environment is None else environment
     aliases = {}
     catalog = []
@@ -86,13 +91,20 @@ def prepare(question, *, environment=None):
             catalog.append((kind, identity, sorted(names)))
             for name in names:
                 aliases.setdefault(unicodedata.normalize('NFC', name), set()).add(kind+':'+identity)
+    normalized = normalize(original, aliases)
     hints, ambiguous = [], []
     for alias, identities in sorted(aliases.items()):
-        pattern = r'(?<![A-Za-z0-9_.:-])'+re.escape(alias)+r'(?![A-Za-z0-9_.:-])'
-        if re.search(pattern, normalized):
+        if re.search(alias_pattern(alias), normalized):
             hints.append({'name':alias, 'refs':sorted(identities)})
             if len(identities) != 1:
                 ambiguous.append(alias)
+    # Collapsing whitespace must never silently select a different registered target.
+    folded = {}
+    for alias, identities in aliases.items():
+        folded.setdefault(normalize(alias), set()).update(identities)
+    for alias, identities in folded.items():
+        if len(identities) > 1 and re.search(alias_pattern(alias), normalize(original)):
+            ambiguous.append(alias)
     catalog_hash = hashed({'entries':sorted(catalog), 'map':environment.get('map')})
     # Authentication IDs are verified by Fleet/the broker and are not model reasoning context.
     context = {key:value for key, value in raw.items() if key not in {

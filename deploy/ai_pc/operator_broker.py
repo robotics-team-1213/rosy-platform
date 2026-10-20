@@ -83,8 +83,8 @@ Apply these rules in order:
   Select the matching supplied robot references, including their full robot: prefix. This is not CHAT.
 6 CLARIFY: an action or operational question whose target/reference is unresolved, such as it/there/그것/거기.
   Compound or self-correcting action requests also require CLARIFY; never choose a partial action.
-7 CONTROL: a direct affirmative device action with an explicit robot/group and required destination/parameters.
-  Classification does not grant execution. Unknown or incomplete parameters require CLARIFY.
+7 CONTROL: a direct affirmative device action with an explicit robot/group and explicit destination/parameters.
+  Classify the request only; destination registration and execution validation belong to Fleet.
 8 CHAT: greetings, thanks, and general help/capability questions only.
 Examples of classification, not commands to perform:
 "로버7의 운용 모드를 조회해 주세요" -> STATUS, references from supplied robot facts.
