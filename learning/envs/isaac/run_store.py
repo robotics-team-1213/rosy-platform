@@ -1,4 +1,6 @@
 """Linux run records: immutable inputs, fenced state, bounded verified artifacts."""
+from __future__ import annotations
+
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
