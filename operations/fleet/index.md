@@ -62,6 +62,7 @@
 | D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
+| D-825 | STL 도면 참조와 Fleet 평면 지도 편집 |
 
 ## 계획·결과 문서
 
@@ -99,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 도면 참조 계약 테스트 (D-825)
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
 - 2026-10-19 · uncommitted · ID 뒤 ! 임시 비밀번호와 본인 변경
 - 2026-10-17 · uncommitted · 분리된 영상 보정 구현의 계약 검사 경로
 - 2026-10-17 · uncommitted · exact charge stop before journal contention
-- 2026-10-17 · uncommitted · measured health operational admission

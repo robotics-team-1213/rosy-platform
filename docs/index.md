@@ -238,6 +238,7 @@
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
 | D-783 | Native adopted-map readback with finite parent evidence |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
+| D-825 | STL 도면 참조와 Fleet 평면 지도 편집 |
 
 ## 계획·결과 문서
 
@@ -341,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · Fleet 도면 편집 계약 확정 (D-825)
 - 2026-10-21 · uncommitted · 승인된 지도 편집 설계의 구현 계획
 - 2026-10-20 · uncommitted · Fleet 평면 지도 편집 설계 제안
 - 2026-10-20 · uncommitted · 일회성 WSL 진단 도구 보관
 - 2026-10-20 · uncommitted · Account 배포 후속 증거와 남은 수용
-- 2026-10-20 · uncommitted · PR126 squash의 독립 검토 출처 보존

@@ -9447,3 +9447,9 @@ osy-d395-s1d\`.
 - 증거: 현행 map/teach 저장·라우트, Console 편집 DTO·좌표 역변환, source holder 등록, Node wrapper와 STL 샘플 크기를 확인했다. 계획 문서 자체의 원격 계약 검사는 별도 기록한다.
 - gate 변화: 없음. 제품 코드·새 API·등록 원장·운영 지도는 변경하지 않았다. 작성된 구현 계획의 사용자 검토와 실행 방식 선택 전에는 구현을 시작하지 않는다.
 - 자체 검토 보완: API reference와 공통 schema/version 핀의 동시 정렬, D-430 검토 trailer, CORE protocol version 회귀를 계획에 명시했다. 문서 첫 커밋의 원격 검사는 통과했으며 보완 후 최종 SHA도 별도 확인한다.
+
+## 2026-10-21 · uncommitted · Fleet 도면 편집 계약 확정 (D-825)
+
+- 변경: 선점한 D-825·APIv1.291에 STL 도면 원본/변환 보관·평면 좌표 등록·편집·활성화의 역할과 제한·오류를 정의하고 MAP-201…204 요구를 추가했다. API bump 도구가 현재9핀을 정렬했다. 구조 변경은 기존 source holder와 공개 import/URL을 보존하도록 규정했다.
+- 증거: 승인된 설계·실행 계획과 현재 source-holder/파일 크기·프로토콜을 대조했다. DTO RED와 커밋 후 GREEN은 원격 보고서에 묶는다.
+- gate 변화: 없음. 계약 수락은 업로드/편집기 구현·현장 교정·실물 이동 수용을 뜻하지 않는다.

@@ -4176,3 +4176,9 @@
 - 변경: Added Vault code-exchange, signed-grant and revision-revocation coverage, plus no automatic Vault grants for the three bootstrap roles. Existing account issuance and ledger implementations are reused.
 - 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
 - gate 변화: none.
+
+## 2026-10-21 · uncommitted · 도면 참조 계약 테스트 (D-825)
+
+- 변경: STL 도면 등록의 명시적 좌표계·단위·유한 값·고정 SHA 참조와 이전 지도 body 호환 회귀를 추가했다. 지도 모델 연결·업로드·변환·편집기는 후속 단계이며 기존 Python import·웹 URL은 유지한다.
+- 증거: tests-only2efb13fc82 native remote RED는 계약 미구현20실패·이전 지도1통과다. GREEN·구조/전체 CI·장치 수용은 각각 별도로 확인한다.
+- gate 변화: 없음. 로봇·운영 지도·계정·서비스를 변경하지 않았다.
