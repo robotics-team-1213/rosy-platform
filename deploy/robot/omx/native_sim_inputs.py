@@ -112,9 +112,10 @@ def load_config(path):
         raise ValueError("python_site must be a directory")
     if 'policy_input' in config:
         sites=config['inference_python_sites']
-        if (not isinstance(sites,list) or len(sites)!=2 or len(set(sites))!=2
+        if (not isinstance(sites,list) or len(sites)!=2
                 or any(not isinstance(p,str) or not Path(p).is_absolute()
                        or any(c in p for c in ('\n','\x00',':')) or not Path(p).is_dir() for p in sites)
+                or len(set(sites))!=2
                 or any(not (Path(config['policy_input'])/name).is_file()
                        for name in ('policy-artifact.json','campaign.json'))):
             raise ValueError('pinned policy/campaign and two explicit inference sites required')
