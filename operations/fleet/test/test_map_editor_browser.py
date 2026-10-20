@@ -168,7 +168,7 @@ def test_import_failure_and_unsaved_navigation_preserve_draft(editor_site):
         dialogs.append(dialog.type)
         dialog.dismiss()
     page.on('dialog', refuse)
-    page.locator('a.ui-rail-item[href="/console"]').click()
+    page.locator('nav.doc-tabs a[href="/console"]').click()
     expect(page).to_have_url(re.compile(r'/console/site-map$'))
     assert dialogs == ['beforeunload']
     expect(page.locator('#site-map-svg [data-place]')).to_have_count(1)
