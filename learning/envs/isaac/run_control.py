@@ -25,7 +25,10 @@ class Runner:
     def check(self, scenario_id, config, source_sha):
         snapshot = input_snapshot(scenario_id, config, source_sha)
         binding = self._binding(source_sha)
-        readiness = self.system.check(binding)
+        try:
+            readiness = self.system.check(binding)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            readiness = {'ready': False, 'reason': 'GPU가 사용 중이거나 SDK 확인에 실패했습니다.'}
         return dict(snapshot, **readiness)
 
     def start(self, request):

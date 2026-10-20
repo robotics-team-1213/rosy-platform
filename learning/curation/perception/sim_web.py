@@ -52,7 +52,7 @@ class LocalRuns:
                 capture_output=True, text=True, timeout=10, check=True).stdout
             if sha != self.source_sha or clean:
                 raise ValueError('Changed SIM checkout')
-            env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR')
+            env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS')
                    if key in os.environ}
             env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
             result = subprocess.run(['/usr/bin/python3', str(self.entry), '--binding', str(self.binding),
