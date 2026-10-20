@@ -47,6 +47,7 @@ class SampleEngine:
             self.calibration = Calibration()
             self.channel = Channel(self.work, self.cell)
             self.traffic = Traffic()
+            self.work.formation = self.traffic
             self.incidents = Incidents()
             self.reads = json.loads((Path(__file__).parent / 'fixtures/normal.json').read_text(encoding='utf-8'))
             self.unhandled = []

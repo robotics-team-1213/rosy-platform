@@ -1,5 +1,6 @@
 """A deterministic trip lifecycle; no actuator, dispatcher, or wall-clock timers."""
 from copy import deepcopy
+import json
 import math
 import re
 
@@ -21,6 +22,7 @@ class Work:
         self.plans, self.trips = {}, {}
         self.tasks, self.task_keys = {}, {}
         self.cell_jobs = {}
+        self.formation = None
         self.dispatch = {'dispatch_enabled': True, 'generation': 1, 'queued_tasks': 0,
                          'unresolved_actions': 0, 'rearm_available': False, 'reason': None}
 
@@ -78,6 +80,7 @@ class Work:
                 task.update(status='CANCELED', reason='OPERATOR_CANCEL')
                 return reply({'task': task})
         if (method, path) == ('GET', '/dispatch-control'):
+            self.dispatch['queued_tasks'] = sum(task['status'] == 'QUEUED' for task in self.tasks.values())
             return reply(self.dispatch)
         if method == 'POST' and path in ('/estop', '/cancel-all', '/dispatch/rearm'):
             if path == '/dispatch/rearm':
@@ -85,6 +88,8 @@ class Work:
                     return error(409, 'DISPATCH_GENERATION_CHANGED')
                 self.dispatch.update(dispatch_enabled=True, rearm_available=False, reason=None)
             else:
+                formation = self.formation.handle('POST', '/formation/stop', {}, robot_ids) if self.formation else None
+                canceled = []
                 if path == '/estop':
                     self.dispatch.update(dispatch_enabled=False, rearm_available=True, reason='OPERATOR_STOP',
                                          generation=self.dispatch['generation'] + 1)
@@ -94,13 +99,14 @@ class Work:
                 for task in self.tasks.values():
                     if task['status'] in ('QUEUED', 'RUNNING', 'ACCEPTED'):
                         task.update(status='CANCELED', reason='OPERATOR_CANCEL')
+                        canceled.append(task['task_id'])
                 if path == '/cancel-all':
                     return reply({'cancel_all_id': 'sample-cancel-all', 'record_error': None,
                         'cancelled': len(robot_ids), 'total': len(robot_ids), 'evidence': 'CORE_REPLY_ONLY',
                         'robots': [{'robot_id': robot, 'result': 'cancelled',
                                     'steps': {kind: {'ok': True} for kind in ('swarm', 'navigation', 'line_follow')},
                                     'tasks': {'awaiting_core_result': []}} for robot in robot_ids],
-                        'formation': None, 'tasks': {'canceled': []}})
+                        'formation': json.loads(formation.body) if formation else None, 'tasks': {'canceled': canceled}})
             return reply(self.dispatch)
         if (method, path) == ('POST', '/robots/sample-robot/trip'):
             if body.get('execute'):
