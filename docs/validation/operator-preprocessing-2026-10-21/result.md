@@ -34,10 +34,10 @@
 
 | 상대 위치 | SHA256 |
 |---|---|
-| `model-baseline/measurement.json` | `e6fb9f5ac7ceb96d9eeee827c7b8f69f5e95f2c425afaea7ef2a5e1a7d0f8876` |
-| `model-candidate-4/measurement.json` | `a34e3ba23f5891f6df97aaa66960371e504b92a755bcc28edcec10d97223fa7f` |
-| `model-candidate-4/discord-proof.json` | `55689228e2517815a2f1da549e7ce15e0c608d49f245dd2747e5d28a309187ef` |
-| `model-candidate-4/operator-proof.json` | `1ee320d3b3da1dab6e8cba9115670a1216dd6ee0723ff036064ec0326fb3d194` |
+| `model-baseline/measurement.json` | SHA256 `e6fb9f5ac7ceb96d9eeee827c7b8f69f5e95f2c425afaea7ef2a5e1a7d0f8876` |
+| `model-candidate-4/measurement.json` | SHA256 `a34e3ba23f5891f6df97aaa66960371e504b92a755bcc28edcec10d97223fa7f` |
+| `model-candidate-4/discord-proof.json` | SHA256 `55689228e2517815a2f1da549e7ce15e0c608d49f245dd2747e5d28a309187ef` |
+| `model-candidate-4/operator-proof.json` | SHA256 `1ee320d3b3da1dab6e8cba9115670a1216dd6ee0723ff036064ec0326fb3d194` |
 
 시험 로그는 `model-baseline/run-1.txt`, `model-candidate{-2,-3,-4}/run-1.txt`, `review-red/`, `review-green-2/`, `nfd-review-{red,green}/`다. baseline 및 후보별 UUID basetemp는 Model PC의 승인된 `rosy-test` 루트에 보존했다. receipt는 해당 SHA에 결속된 시험 산출물이며 이후 SHA/운영 설정의 승인을 대신하지 않는다.
 
