@@ -3050,3 +3050,9 @@
 - 변경: 소스 이미지에 포함한 `fact_rules.py`·`wait_graph.py`를 기존 후보 빌드 workflow의 명시적 push 경로에도 추가한다. 서명·게시 권한과 빌드 작업은 유지한다.
 - 증거: main `87a1de80e7` 전체 CI에서 기존 `test_push_paths_cover_every_image_source_and_candidate_doc`가 `fact_rules.py` 경로 누락으로 실패했다(NEW1). 앞선 PR의 선택 시험과 후보 빌드 성공만으로 전체 회귀가 통과했다고 판단하지 않았다. 기존 workflow 계약 시험 전체를 수정 커밋으로 원격 검증한다.
 - gate 변화: 없음. 작업 소유 hold와 정상 aff1 서비스를 유지하며, 수정된 main CI·서명·이미지 검증 후에만 전환한다.
+
+## 2026-10-20 · uncommitted · OMX 첫 관절 시운전의 출력·피드백 검사
+
+- Change: joint_tune defaults use low raw output/profile values without automatic escalation. Reject time-based and auto-torque Drive Modes, verify command readback and fresh startup position, require a stable hold, and confirm torque OFF before restoring any register.
+- Evidence: committed regression tests exposed the old behavior on the remote model PC (startup-red, startup-drive-red, startup-feedback-red, startup-profile-red). Implementation review and committed-revision green checks follow before publication.
+- Gate: unchanged. These software checks do not accept physical torque limits, a gravity-safe stop, robot deployment or strawberry grasping. Physical commissioning remains pending serial access and supervised acceptance.
