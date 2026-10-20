@@ -102,3 +102,35 @@ def test_sim_page_and_existing_learning_link(tmp_path):
             with urllib.request.urlopen(req) as response:
                 text = response.read().decode()
                 assert ('/learning/sim' in text if path == '/learning' else 'sim' in text.lower())
+
+
+def test_local_adapter_pins_source_and_workspace_without_importing_sdk(tmp_path, monkeypatch):
+    import hashlib
+    import sim_web
+    from types import SimpleNamespace
+    source = tmp_path / 'source'
+    entry = source / 'learning/envs/isaac/run_control.py'
+    entry.parent.mkdir(parents=True)
+    entry.write_text('pinned helper')
+    binding = tmp_path / 'binding.json'
+    binding.write_text(json.dumps({'source_root': str(source), 'source_sha': 'a' * 40}))
+    config = tmp_path / 'web.json'
+    config.write_text(json.dumps({'workspace_id': 'workspace', 'source_root': str(source),
+        'source_sha': 'a' * 40, 'binding_file': str(binding),
+        'entry_sha256': hashlib.sha256(entry.read_bytes()).hexdigest()}))
+    config.chmod(0o600)
+    calls = []
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(stdout=('a' * 40 if 'rev-parse' in argv else '') if argv[0] == 'git' else b'{"ready":true}')
+    monkeypatch.setattr(sim_web.subprocess, 'run', run)
+    with pytest.raises(ValueError):
+        sim_web.LocalRuns(config, 'other-workspace')
+    adapter = sim_web.LocalRuns(config, 'workspace')
+    assert adapter.call({'action': 'check'})['ready'] is True
+    assert calls[-1][0:2] == ['/usr/bin/python3', str(entry)]
+    before = len(calls)
+    entry.write_text('changed helper')
+    with pytest.raises(ValueError, match='SIM'):
+        adapter.call({'action': 'start'})
+    assert len(calls) == before
