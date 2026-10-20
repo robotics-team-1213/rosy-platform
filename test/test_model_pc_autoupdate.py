@@ -9,6 +9,7 @@ import tarfile
 import io
 import re
 import shutil
+import shlex
 
 import pytest
 
@@ -27,6 +28,19 @@ def module():
 def test_current_checkout_satisfies_signed_source_inventory():
     root = SCRIPT.parents[2]
     assert not [name for name in module().SPLIT_REQUIRED if not (root / name).is_file()]
+
+
+def test_installed_model_controller_has_its_complete_import_closure(tmp_path):
+    installer = SCRIPT.with_name("install-model-code.sh").read_text(encoding="utf-8")
+    line = next(line for line in installer.splitlines() if line.startswith("install -m 0644")
+                and '"$HERE/rosy_model_code.py"' in line)
+    for source in shlex.split(line)[3:-1]:
+        assert source.startswith("$HERE/")
+        file = SCRIPT.parent / source.removeprefix("$HERE/")
+        shutil.copyfile(file, tmp_path / file.name)
+    result = subprocess.run([sys.executable, "-I", "-B", str(tmp_path / SCRIPT.name), "--help"],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.fixture
