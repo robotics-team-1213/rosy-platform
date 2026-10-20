@@ -21,7 +21,9 @@ def load_engine():
 
 def test_unknown_request_is_error_and_never_generic_success():
     engine = load_engine()
-    response = engine.handle('POST', '/api/fleet/not-implemented', {}, b'{}')
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    response = engine.handle('POST', '/api/fleet/not-implemented',
+                             {'Cookie': 'rosy_sample_session=sample-1'}, b'{}')
     assert response.status == 501
     assert json.loads(response.body)['detail']['code'] == 'SAMPLE_REQUEST_NOT_IMPLEMENTED'
 
@@ -41,7 +43,7 @@ def test_sample_session_ignores_real_fleet_credentials():
     assert response.status == 401
     response = engine.handle('POST', '/api/fleet/auth/login', {},
                              b'{"login":"sample","password":"sample-password"}')
-    assert response.status == 200
+    assert response.status == 204
     cookie = next(v for k, v in response.headers if k.lower() == 'set-cookie')
     assert cookie.startswith('rosy_sample_session=')
     assert 'rosy_fleet_session' not in cookie

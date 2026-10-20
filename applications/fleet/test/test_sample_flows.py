@@ -7,19 +7,19 @@ from test_sample_server import load_engine
 def call(engine, method, path, body=None):
     response = engine.handle(method, path, {'Cookie': 'rosy_sample_session=sample-1'},
                              json.dumps(body).encode() if body is not None else b'')
-    return response.status, json.loads(response.body)
+    return response.status, json.loads(response.body) if response.body else None
 
 
 def test_flow_ids_revisions_and_reset_are_consistent():
     engine = load_engine()
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
-    code, plan = call(engine, 'POST', '/api/fleet/robots/sample-robot/trip', {'place_id': 'loading'})
+    code, plan = call(engine, 'POST', '/api/fleet/robots/sample-robot/trip', {'to': 'loading'})
     assert code == 200
     code, trip = call(engine, 'POST', f"/api/fleet/trips/{plan['plan_id']}/start", {})
     assert code == 200
     engine.advance('work', 'complete')
     code, result = call(engine, 'GET', f"/api/fleet/trips/{trip['trip_id']}")
-    assert code == 200 and result['status'] == 'succeeded'
+    assert code == 200 and result['state'] == 'arrived'
     assert result['trip_id'] == trip['trip_id']
     engine.reset('normal')
     assert call(engine, 'GET', f"/api/fleet/trips/{trip['trip_id']}")[0] == 401
