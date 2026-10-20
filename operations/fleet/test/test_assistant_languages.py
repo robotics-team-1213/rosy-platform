@@ -20,3 +20,14 @@ def test_english_text_reaches_model_and_server_rendered_reply(tmp_path):
 
 def test_unsupported_locale_is_not_silently_changed():
     with pytest.raises(ValidationError): message(locale='xx-XX')
+
+
+def test_pre_locale_request_retry_keeps_its_original_identity(tmp_path):
+    import json
+    service, journal, _, _ = fixture(tmp_path)
+    service.submit('alice', message())
+    with journal.connect() as db, db:
+        raw = json.loads(db.execute('SELECT message_json FROM fleet_assistant_requests').fetchone()[0])
+        raw.pop('locale', None)
+        db.execute('UPDATE fleet_assistant_requests SET message_json=?', (json.dumps(raw),))
+    assert service.submit('alice', message())[1] is False

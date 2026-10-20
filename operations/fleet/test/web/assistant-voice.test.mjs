@@ -65,3 +65,14 @@ test('reading uses only a local Korean voice and stops before recording', async 
   env.speechSynthesis.getVoices = () => [{lang:'ko-KR',localService:false}];
   assert.equal(voice.speak('안녕'), false);
 });
+
+test('English selection uses local English recognition and playback', async () => {
+  const env = platform();
+  env.speechSynthesis.getVoices = () => [{lang:'en-US',localService:true}];
+  const voice = createVoice({platform:env,locale:'en-US',onText(){},onState(){}});
+  await voice.start();
+  assert.equal(env.instances[0].lang, 'en-US');
+  voice.cancel();
+  assert.equal(voice.speak('Robot status'), true);
+  assert.equal(env.spoken[0].lang, 'en-US');
+});
