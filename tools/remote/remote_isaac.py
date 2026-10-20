@@ -32,10 +32,15 @@ def _json(path):
 
 def _save(path, value):
     import os
-    with path.open('x', encoding='utf-8') as stream:
-        json.dump(value, stream, ensure_ascii=False, sort_keys=True, allow_nan=False)
-        stream.flush()
-        os.fsync(stream.fileno())
+    temporary = path.with_name('.pending-' + uuid.uuid4().hex)
+    try:
+        with temporary.open('x', encoding='utf-8') as stream:
+            json.dump(value, stream, ensure_ascii=False, sort_keys=True, allow_nan=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _receipt(request):
@@ -68,6 +73,8 @@ def read_receipt(path):
 
 def start(request, receipt_file, remote):
     value = _receipt(request)
+    if getattr(remote, 'target_id', None):
+        value['target_id'] = remote.target_id
     try:
         _save(receipt_file, value)
     except FileExistsError:
@@ -81,6 +88,8 @@ def start(request, receipt_file, remote):
 
 def observe(receipt_file, remote, *, stop=False):
     value = read_receipt(receipt_file)
+    if value.get('target_id') != getattr(remote, 'target_id', None):
+        raise ValueError('Receipt model-PC identity changed')
     row = remote.call(value['source_sha'], {'action': 'status', 'run_id': value['run_id']})
     if row['run_id'] != value['run_id'] or row['input_sha256'] != value['input_sha256']:
         raise ValueError('Remote observation differs from receipt')
@@ -100,6 +109,8 @@ def _name(value):
 
 
 def fetch_snapshot(receipt, remote, destination):
+    if receipt.get('target_id') != getattr(remote, 'target_id', None):
+        raise ValueError('Receipt model-PC identity changed')
     row = remote.call(receipt['source_sha'], {'action': 'status', 'run_id': receipt['run_id']})
     if row['run_id'] != receipt['run_id']:
         raise ValueError('Snapshot belongs to a different run')
@@ -165,10 +176,13 @@ data=Path.home()/'.cache/rosy-isaac/runs';data.mkdir(mode=0o700,parents=True,exi
 binding={'uid':os.getuid(),'source_root':str(Path.home()/'rosy-test/runs'/name),'source_sha':sha,
  'sdk_python':sdk['python'],'sdk_python_sha256':sdk['python_sha256'],'sdk_version':sdk['version'],
  'model_code_root':owner['root'],'data_root':str(data)}
+temporary=root/('.pending-'+name)
 try:
- with target.open('x') as f:
+ with temporary.open('x') as f:
   os.fchmod(f.fileno(),0o600);json.dump(binding,f);f.flush();os.fsync(f.fileno())
-except FileExistsError: pass
+ try: os.link(temporary,target)
+ except FileExistsError: pass
+finally: temporary.unlink(missing_ok=True)
 (Path.home()/'rosy-jobs'/(name+'.resv')).unlink(missing_ok=True)
 print('{"ready":true}')
 '''
@@ -180,6 +194,7 @@ class SSH:
         import lab_hosts
         self.runner, self.repo = remote_pytest, repo
         self.host = choose_target(lab_hosts.load(), 'model')
+        self.target_id = hashlib.sha256(self.host.encode()).hexdigest()
 
     def _invoke(self, script, value):
         result = self.runner.remote(self.host, 'exec /usr/bin/python3 -c ' + shlex.quote(script),
