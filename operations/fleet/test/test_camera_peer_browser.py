@@ -4,7 +4,7 @@ import pytest
 from browser_harness import browser_tests_enabled
 
 ROOT=Path(__file__).resolve().parents[3]
-WEB=ROOT/'operations/site_ui/console'
+WEB=ROOT/'applications/fleet/web'
 COMMON=ROOT/'shared/web'
 source=(WEB/'installation'/'install.html').read_text(encoding='utf-8')
 PANEL=source[source.index('<section id="camera-peer-panel"'):source.index('</section>',source.index('<section id="camera-peer-panel"'))+10]

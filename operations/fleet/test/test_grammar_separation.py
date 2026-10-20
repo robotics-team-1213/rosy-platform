@@ -12,7 +12,7 @@ CSS를 복제하는 것 — concept 16 §4가 결함으로 규정한 "Fleet이 �
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
+WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 
 #: 콘솔의 공간 문법(concept 16 §7.1) — 고정 3분할 레일(sense/observe/act).
 #: 이 이름들은 콘솔 styles.css 가 소유한다. fleet 이 쓰는 순간 fleet 은

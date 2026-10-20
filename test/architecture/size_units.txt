@@ -41,10 +41,10 @@ decision/src/rosy/decision/deliberation/evaluation small
 perception/front_camera/perception
 perception/front_camera/perception/learned
 perception/front_camera/perception/drivable
-site_ui/console
-site_ui/console/devices
+fleet/web
+fleet/web/devices
 fleet/fleet/server/ledger
-site_ui/console/work small
+fleet/web/work small
 fleet/fleet/server/missions
 fleet/fleet/server/work small
 fleet/fleet/server/trips
@@ -66,11 +66,11 @@ drive/motion_limits
 drive/calibration
 drive/recovery
 perception/sensors/line_observation
-site_ui/console/shared
-site_ui/console/calibration
-site_ui/console/sitemap
-site_ui/console/installation
-site_ui/console/map
+fleet/web/shared
+fleet/web/calibration
+fleet/web/sitemap
+fleet/web/installation
+fleet/web/map
 fleet/fleet/server/tracking
 fleet/fleet/server/evidence
 fleet/fleet/server/sitemap

@@ -9,7 +9,7 @@ from fleet.server.static_routes import CONSOLE_ASSETS
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RUN_BROWSER_TESTS=1 for Chromium')
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / 'operations/site_ui/console'
+WEB = ROOT / 'applications/fleet/web'
 
 
 @pytest.mark.parametrize('width', [390, 800, 1200])

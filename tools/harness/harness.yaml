@@ -58,7 +58,7 @@ modules:
     functional_kind: pytest
     functional: [middleware/media/test]
   - name: console_source
-    path: operations/site_ui/console
+    path: applications/fleet/web
     tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]

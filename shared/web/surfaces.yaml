@@ -90,7 +90,7 @@ surfaces:
     app_name_en: Rosy Fleet
     short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
-    path: operations/site_ui/console
+    path: applications/fleet/web
     themes: [dark, light]
     surface: site
     medium: web

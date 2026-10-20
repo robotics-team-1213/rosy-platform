@@ -34,7 +34,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `tracking/` | Tracking and purpose-specific calibration holder; existing `fleet.server.tracking*`, `measured_calibration*`, `vision_preview_routes` imports remain stable through `SERVER_HOLDERS`. Preview approval does not change sighting admission |
 | `model_feedback_dispatch.py` | D-657 원장 결속 모델 도구 어댑터. 기존 scope·journal·stop/fence 재검사를 보존하며 Decision 계약/후보를 소비 |
 | `goal_evidence_service.py`, `mission_service.py`, `mission_progress.py` | producer 인증·새 post-action frame/attempt·원장/clock 소비는 Fleet 소유. 순수 목표 검증과 전체 progress 계산은 `rosy.execution.site.{goal_evidence,workflow}` 소비 |
-| `operations/site_ui/console` | 관제 UI 원본 ([안내](../../../site_ui/console/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
+| `applications/fleet/web` | 관제 UI 원본 ([안내](../../../../applications/fleet/web/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
 
 ## For AI Agents
 

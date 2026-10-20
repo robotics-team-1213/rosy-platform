@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [learning, operations, middleware, contracts, integrations, shared]
+colcon_roots: [learning, operations, middleware, contracts, integrations, shared, applications]
 
 # D-427 ownership manifest after wave 5: every tracked source root maps to one
 # D-427 part. `legacy` fields stay for one release to guard rebasing branches.
@@ -524,8 +524,8 @@ roots:
     source_packages: {src/rosy/decision: rosy.decision}
     note: D-637 canonical Decision source; installed by Fleet. D-657 ledger-bound tool dispatch is fleet.server.model_feedback_dispatch, not Decision.
     concern: decision
-  - path: operations/site_ui/console
-    layout_target: operations/site_ui/console
+  - path: applications/fleet/web
+    layout_target: applications/fleet/web
     part: operations
     d427_target: operations/ui/console
     legacy: src/site/fleet/fleet/server/web
@@ -534,7 +534,8 @@ roots:
     source_packages: {"": fleet.server.web}
     note: D-637 Console source; Fleet installs the existing fleet/server/web resources.
     concern: other
-  - path: operations/apps/fleet
+  - path: applications/fleet/gateway
+    layout_target: applications/fleet/gateway
     part: operations
     d427_target: operations/apps/fleet
     legacy: apps/gateway

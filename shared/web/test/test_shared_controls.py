@@ -640,7 +640,7 @@ REASON_WRITE = re.compile(r"""(?:set|remove)Attribute\(\s*["']reason["']""")
 REASON_HELPER = re.compile(r"\b(setOff|setEnabled)\(")
 DISABLE_ROOTS = (
     ROOT / 'middleware' / 'robot_ui' / "robot",
-    ROOT / 'operations' / 'site_ui' / "console",
+    ROOT / 'applications' / 'fleet' / 'web',
 )
 # D-359 §5.3 — 사유 없이 끄는 곳의 닫힌 목록. (src/ 기준 경로, 줄 조각) → 이유. 새 항목은 이유를 적는다.
 # 키는 경로로 파일을 가리키고(같은 이름 파일이 여러 폴더에 있다), 조각 하나는 한 곳만 덮는다(DISABLED_SITE_COUNT).
@@ -682,14 +682,14 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/robot_ui/robot/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
     ("middleware/robot_ui/robot/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
     ("middleware/robot_ui/robot/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
-    ("operations/site_ui/console/devices/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
-    ("operations/site_ui/console/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
+    ("applications/fleet/web/devices/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
+    ("applications/fleet/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
-    ("operations/site_ui/console/formation.js", 'el("formation-leader").disabled = status.active;'):
+    ("applications/fleet/web/formation.js", 'el("formation-leader").disabled = status.active;'):
         NATIVE + " (대형 상태 태그 — 리더는 해제 뒤 바꾼다)",
-    ("operations/site_ui/console/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
-    ("operations/site_ui/console/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
-    ("operations/site_ui/console/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("applications/fleet/web/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
+    ("applications/fleet/web/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
+    ("applications/fleet/web/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.
@@ -764,7 +764,7 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     """D-359 §5.3 — 끄는 곳은 reason을 쓰거나(직접·setOff·setEnabled), 닫힌 목록에 이유와 함께 있다."""
     missing, used, widened = scan_disabled(disabled_scripts())
     # Fleet 역할 잠금: 공용 버튼은 reason, 네이티브 입력은 묶음의 보이는 안내에 잇는다.
-    fleet = ROOT / 'operations' / 'site_ui' / "console"
+    fleet = ROOT / 'applications' / 'fleet' / 'web'
     lock = (fleet / "shared" / "authorization.js").read_text(encoding="utf-8")
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock

@@ -6,7 +6,7 @@ Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은
 
 | 구분 | 이름·소스 | 소유 작업 | 다른 소유자에게 연결할 작업 |
 |---|---|---|---|
-| 현장 웹 앱 | Rosy Fleet, `operations/site_ui/console` | 감시·작업·지도·설치·계정 관리 화면 | 한 로봇 상세 정비는 Robot, 직접 운전은 Pilot |
+| 현장 웹 앱 | Rosy Fleet, `applications/fleet/web` | 감시·작업·지도·설치·계정 관리 화면 | 한 로봇 상세 정비는 Robot, 직접 운전은 Pilot |
 | 로봇 웹 앱 | Rosy Robot, `middleware/robot_ui/robot` | 상세 상태·전방 영상·작업 준비·로컬 조작·영구 설정·정비 | 직접 운전은 Pilot, 현장 작업 조정은 Fleet |
 | 조종 웹/PWA/Android | Rosy Pilot, `middleware/robot_ui/pilot` | 직접 운전·운전 영상·현재 조종 세션·세션별 설정·기록 | 영구 설정·정비는 같은 대상의 Robot |
 | Android 앱 | Rosy Cam, `operations/site_ui/cam` | 캡처·송신·물리 설치와 연결 안내 | 사이트 승인·좌표 보정은 Fleet 설치 |
@@ -28,7 +28,7 @@ Fleet 내부 id·아이콘·URL의 `console`은 호환 식별자다. 표시 이�
 |---|---|---|---|
 | Mission 요청·진행·개입 / Fleet 작업 | `operations/fleet/fleet/server/missions/{mission_routes,mission_service,mission_store}.py` | Fleet Mission 원장 / 장치 로컬 Action owner | 원장 상태와 연결된 장치 결과·목표 증거. HTTP 수락만으로 물리 완료를 확정하지 않음 |
 | 현장 등록·기기 승인 / Fleet 설치 | `operations/fleet/fleet/server/auth/{enrollment_routes,enrollment_store,pairing_routes}.py` | 승인·등록·카메라 자격의 기존 store / 장치 명령 없음 | 서버 등록 결과. 검색 목록에 보임·로그인 성공과 등록 승인은 별개 |
-| 현장 좌표·카메라 보정 / Fleet 설치·지도 | `operations/site_ui/console/{install,site-map,field-view}.js`와 해당 Fleet API | 활성 map/fit의 기존 Fleet 저장 owner / 장치 주행 없음 | 승인·저장된 보정 결과. Cam 송신 성공은 좌표 보정 완료가 아님 |
+| 현장 좌표·카메라 보정 / Fleet 설치·지도 | `applications/fleet/web/{install,site-map,field-view}.js`와 해당 Fleet API | 활성 map/fit의 기존 Fleet 저장 owner / 장치 주행 없음 | 승인·저장된 보정 결과. Cam 송신 성공은 좌표 보정 완료가 아님 |
 | 영구 설정 / Robot 설치·정비 | `middleware/robot_ui/robot/settings.js`, CORE API | CORE 설정 owner / 설정을 적용하는 로컬 기능 | 서버 저장·읽기 결과. Pilot 세션 프리셋은 이 정본을 수정하지 않음 |
 | 로컬 목표·도킹 / Robot | `middleware/core/api/core_api_web/api/v1/{navigation,docking}.py` | 로컬 동작 상태 / CORE 명령 중재·장치 실행 | 로컬 동작 상태·결과. 사이트 Mission 순서는 Fleet에 남음 |
 | 직접 운전 / Pilot | `middleware/robot_ui/pilot/{client,app}.js`와 `screens/drive.js`, CORE API | 장치의 조종·안전 상태 / Pinky CORE 최종 주행 명령 | 장치 응답·상태, 누름 해제·종료·연결 상실의 정지 경로. 페이지 이동만으로 운전 시작 금지 |

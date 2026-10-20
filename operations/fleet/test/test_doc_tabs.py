@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
+WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 DOCS = {"index.html": "/console", "install.html": "/console/install",
         "site-map.html": "/console/site-map", "cell.html": "/console?view=work"}  # D-741 7: Cell은 작업 영역이다
 ORDER = ["/console", "/console?view=work", "/console?view=records", "/console/site-map", "/console/install"]

@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. It talks only to the Fleet server (`/api/fleet/*`), never to a robot API directly. The physical source holder is `operations/site_ui/console`. Fleet static mapping installs it as the existing `fleet.server.web` package and `fleet/server/web` resource path. Backend source remains `operations/fleet/fleet/server`. D-518 shared-read modules and the two shared stylesheets live in `shared/`. The Cell document lives in `cell/`. Browsers still request `/console/assets/<basename>`.
+Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. It talks only to the Fleet server (`/api/fleet/*`), never to a robot API directly. The physical source holder is `applications/fleet/web`. Fleet static mapping installs it as the existing `fleet.server.web` package and `fleet/server/web` resource path. Backend source remains `operations/fleet/fleet/server`. D-518 shared-read modules and the two shared stylesheets live in `shared/`. The Cell document lives in `cell/`. Browsers still request `/console/assets/<basename>`.
 
 Source-move verification is recorded in [progress.md](progress.md), [logs.md](logs.md), and the generated [index.md](index.md). D-637 keeps the Fleet distribution and installed `fleet.server.web` resource identity.
 

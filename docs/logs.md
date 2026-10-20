@@ -9753,3 +9753,9 @@ osy-d395-s1d\`.
 - 변경: a24 고정 소스의 연속2회 PASS와 실제 도착 거리, 동일 조건·model/map/source hash, 원본 로그 hash와 정지·lease·정리 증거를 동결 기록에 추가했다.
 - 증거: native12,973 passed/776 skipped/세 로그 NEW0, 목표 오차4.722/7.501mm·via각29mm. metadata 누락과 lane_return SKIP, native model-pose 및 실물 미검증 범위를 함께 기록했다.
 - gate 변화: 전체 모듈·FIELD 승격 없음. 본 고정 조건 주행 SIM 수용을 충족했으며 최종 문서 guard·증거 검토는 후속 HEAD에서 별도 확인한다.
+
+## 2026-10-20 · uncommitted · Fleet 앱 소스를 applications에 모은다
+
+- 변경: D-822로 Fleet 화면을 applications/fleet/web, 기존 gateway wheel을 applications/fleet/gateway로 이동한다. 서비스·원장·권한은 operations/fleet에 유지하고 패키징·CI·배포 입력·검증 경로와 협업 안내를 갱신한다.
+- 증거: source holder와 설치 신원·기존 URL을 대조했다. 원격 시험 및 독립 검토 결과는 후속 항목으로 기록한다.
+- gate 변화: 없음. 소스 배치 변경이며 독립 배포·외부 연동·실물 수용을 승인하지 않는다.

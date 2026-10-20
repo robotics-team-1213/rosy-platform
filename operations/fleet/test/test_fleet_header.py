@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
+WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 DOCS = {"index.html": "console.js", "installation/install.html": "installation/install.js",
         "sitemap/site-map.html": "sitemap/site-map.js", "cell/cell.html": "cell/cell.js"}
 

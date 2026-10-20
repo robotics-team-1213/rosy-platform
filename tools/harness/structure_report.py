@@ -48,7 +48,7 @@ PENDING = {
 EPICS = (
     ("middleware/devices/omx", "KAN-21"), ("integrations/robots/omx", "KAN-21"),
     ("learning/curation/omx", "KAN-21"), ("learning/training/omx", "KAN-21"),
-    ("operations/fleet", "KAN-19"), ("operations/site_ui/console", "KAN-19"),
+    ("operations/fleet", "KAN-19"), ("applications/fleet/web", "KAN-19"),
     ("operations/site_devices", "KAN-19"),
     ("middleware/drive", "KAN-20"), ("middleware/devices/pinky", "KAN-20"),
     ("middleware/perception/front_camera", "KAN-22"), ("learning", "KAN-22"),

@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FILES = {"/common/webrtc.js": ROOT / "shared/web/webrtc.js",
          "/common/fleet-client.js": ROOT / "shared/web/fleet-client.js",
          "/common/request.js": ROOT / "shared/web/request.js",
-         "/console/assets/robot-video.js": ROOT / "operations/site_ui/console/shared/robot-video.js",
-         "/console/assets/robot-video.css": ROOT / "operations/site_ui/console/shared/robot-video.css"}
+         "/console/assets/robot-video.js": ROOT / "applications/fleet/web/shared/robot-video.js",
+         "/console/assets/robot-video.css": ROOT / "applications/fleet/web/shared/robot-video.css"}
 PAGE = b"""<!doctype html><html><head><meta charset="utf-8"></head><body>
 <section class="panel vision-preview"></section>
 <script type="module" src="/console/assets/robot-video.js"></script></body></html>"""

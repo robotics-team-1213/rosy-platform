@@ -29,7 +29,7 @@ CURRENT_COMPONENTS = {
         "integrations/robots/omx/src/rosy/integrations/robots/omx",
         "rosy.integrations.robots.omx",
     ),
-    "gateway_app": ("operations/apps/fleet/src/rosy_gateway", "rosy_gateway"),
+    "gateway_app": ("applications/fleet/gateway/src/rosy_gateway", "rosy_gateway"),
     "agent_app": ("middleware/devices/omx/agent/src/rosy_agent", "rosy_agent"),
 }
 
@@ -115,7 +115,7 @@ def test_platform_python_roots_are_not_ament_packages():
         str(path.relative_to(ROOT))
         for root in ("modules", "integrations/robots", "apps", "profiles", "operations/world",
                      "operations/processes/palletizing", "operations/site_execution",
-                     "operations/apps/fleet")
+                     "applications/fleet/gateway")
         for path in (ROOT / root).rglob("package.xml")
     ]
     assert package_xml == []

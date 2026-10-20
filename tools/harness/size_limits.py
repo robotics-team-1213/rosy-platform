@@ -46,7 +46,7 @@ PACKAGE_HOLDERS = {
     "control": tuple(f"middleware/drive/{holder}" for holder in
                      ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")),
     "core_features": ("middleware/drive/behaviors",),
-    "fleet": ("operations/decision", "operations/site_ui/console", "operations/situation",
+    "fleet": ("operations/decision", "applications/fleet/web", "operations/situation",
               "operations/site_execution", "integrations/messaging/discord"),
 }
 #: Product roots without a package.xml (pyproject distributions, the Gradle app), counted like a package.
@@ -59,7 +59,7 @@ STANDALONE = {
     "rosy-execution-local": "middleware/robot_execution/local",
     "rosy-skill-api": "middleware/skills/api",
     "rosy-skill-manipulation": "middleware/skills/manipulation",
-    "rosy-app-gateway": "operations/apps/fleet",
+    "rosy-app-gateway": "applications/fleet/gateway",
     "rosy-palletizing": "operations/processes/palletizing",
     "rosy-world": "operations/world",
     "rosy-cam": "operations/site_ui/cam",
@@ -71,9 +71,9 @@ STANDALONE = {
 #: D-766 revision 2 (2026-10-16): the scripts over 600 and the test files over 1,500 when those limits began.
 COVERAGE_ROWS = {
     "site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt": 791,
-    "robot_ui/pilot/screens/drive.js": 783, "site_ui/console/line-stuck.js": 756,
-    "site_ui/console/roster.js": 711, "site_ui/console/shared/site-map-model.js": 800,
-    "site_ui/console/shared/vision-view.js": 788, "site_ui/console/sitemap/site-map.js": 771,
+    "robot_ui/pilot/screens/drive.js": 783, "fleet/web/line-stuck.js": 756,
+    "fleet/web/roster.js": 711, "fleet/web/shared/site-map-model.js": 800,
+    "fleet/web/shared/vision-view.js": 788, "fleet/web/sitemap/site-map.js": 771,
     "middleware/core/events/test/test_audit.py": 1533,
     "middleware/robot_ui/pilot/test/test_pilot_browser.py": 3059,
     "operations/fleet/test/test_trip_runner.py": 1757,
@@ -310,5 +310,7 @@ def unit_problems(counts: dict, owner: dict, units, small: set, base_small: set)
                        f"{parent_before}; move a whole responsibility or do not register it")
         if unit in small and counts[unit] >= UNIT_FLOOR:
             bad.append(f"{unit}: {counts[unit]} lines, no longer small; drop its `small` mark")
+    # D-822: the existing small work holder moved without changing its contents.
+    base_small = {"fleet/web/work" if unit == "site_ui/console/work" else unit for unit in base_small}
     bad += [f"{unit}: new `small` mark; only grandfathered units carry one" for unit in sorted(small - base_small)]
     return bad

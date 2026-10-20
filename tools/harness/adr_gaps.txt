@@ -32,3 +32,18 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
 D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
+
+D-808 Reserved on another topic branch; not part of the D-822 application holder move.
+D-809 Reserved on another topic branch; not part of the D-822 application holder move.
+D-810 Reserved on another topic branch; not part of the D-822 application holder move.
+D-811 Reserved on another topic branch; not part of the D-822 application holder move.
+D-812 Reserved on another topic branch; not part of the D-822 application holder move.
+D-813 Reserved on another topic branch; not part of the D-822 application holder move.
+D-814 Reserved on another topic branch; not part of the D-822 application holder move.
+D-815 Reserved on another topic branch; not part of the D-822 application holder move.
+D-816 Reserved on another topic branch; not part of the D-822 application holder move.
+D-817 Reserved on another topic branch; not part of the D-822 application holder move.
+D-818 Reserved on another topic branch; not part of the D-822 application holder move.
+D-819 Reserved on another topic branch; not part of the D-822 application holder move.
+D-820 Reserved on another topic branch; not part of the D-822 application holder move.
+D-821 Reserved on another topic branch; not part of the D-822 application holder move.

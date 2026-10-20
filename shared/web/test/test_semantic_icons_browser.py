@@ -189,7 +189,7 @@ def test_activation_dismisses_description_until_focus_moves_and_next_control_is_
 def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descriptions(page):
     page.goto(f"{HOST}/styleguide")
     page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
-    source = (ROOT / "operations/site_ui/console/index.html").read_text(encoding="utf-8")
+    source = (ROOT / "applications/fleet/web/index.html").read_text(encoding="utf-8")
     # 실제 단독 아이콘 조작의 마크업을 재사용한다. 상태 센터는 별도 구성 조작이다.
     snippets = [re.search(rf'<ui-button\b[^>]*\b{attribute}="{value}"[^>]*>.*?</ui-button>', source, re.S).group()
                 for attribute, value in [("id", "fleet-theme"), ("id", "vision-refresh")]]

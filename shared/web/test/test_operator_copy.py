@@ -49,8 +49,8 @@ SURFACES = (
     ("middleware/robot_ui/robot/panels", "**/*.js"),
     ("middleware/robot_ui/robot", "index.html"),
     ("middleware/robot_ui/robot", "surface.html"),
-    ("operations/site_ui/console", "*.js"),
-    ("operations/site_ui/console", "*.html"),
+    ("applications/fleet/web", "*.js"),
+    ("applications/fleet/web", "*.html"),
     ("operations/apps/games/games/web", "*.js"),
     ("operations/apps/games/games/web", "*.html"),
 )
@@ -370,12 +370,12 @@ def test_the_lint_catches_bare_enums_flowing_to_text():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("operations/site_ui/console/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
+    ("applications/fleet/web/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
     ("middleware/robot_ui/robot/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
     ("middleware/robot_ui/robot/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
     ("middleware/robot_ui/robot/panels/console/line-follow.js",
      '`차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}`', '`차선 추종 ${current.mode || "OFF"}`'),
-    ("operations/site_ui/console/signals.js",
+    ("applications/fleet/web/signals.js",
      "${signalIntentLabel(row.intent?.mode)}", '${row.intent?.mode || "없음"}'),
 ])
 def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
@@ -421,7 +421,7 @@ def test_every_enum_text_allowlist_entry_still_matches():
 def test_the_lint_sees_every_surface():
     rels = {_rel(path) for path in surface_files()}
     for expected in ("middleware/robot_ui/robot/panels/console/mode.js", "middleware/robot_ui/robot/app.js",
-                     "operations/site_ui/console/roster.js", "operations/site_ui/console/index.html",
+                     "applications/fleet/web/roster.js", "applications/fleet/web/index.html",
                      "operations/apps/games/games/web/board.js", "operations/apps/games/games/web/index.html"):
         assert expected in rels
 
@@ -460,7 +460,7 @@ def test_the_lint_catches_what_it_is_meant_to_catch():
     ("middleware/robot_ui/robot/panels/console/map.js", "승인된 하드웨어 실행 모드에서만", "승인된 hardware 모드에서만"),
     ("middleware/robot_ui/robot/panels/setup/localization.js", '"내비게이션 기능 없음"', '"Navigation capability 미제공"'),
     ("middleware/robot_ui/robot/panels/host/system.js", "`내비게이션 ${navigation", "`Navigation ${navigation"),
-    ("operations/site_ui/console/formation.js", "대형 재개는 대형이 멈췄을 때만", "대형 재개는 HOLDING일 때만"),
+    ("applications/fleet/web/formation.js", "대형 재개는 대형이 멈췄을 때만", "대형 재개는 HOLDING일 때만"),
 ])
 def test_reverting_a_fixed_string_fails_the_lint(rel, fixed, regressed):
     """Mutation proof on the real files: undo one US-009 fix and the lint sees it."""

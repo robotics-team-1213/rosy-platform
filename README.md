@@ -16,6 +16,7 @@ ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전
 | PR 작성·검토·게시 담당 | [git으로 일하는 법](docs/reference/git-workflow.md): 브랜치·커밋·PR·push 규칙 · [PR 파이프라인](docs/reference/pr-pipeline.md) · [기여 안내](.github/CONTRIBUTING.md) |
 | 동시 작업·교대 담당 | [작업 분담과 인수인계](docs/reference/team-guide.md#36-동시-작업과-인수인계) · [작업·버그 이슈 양식](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose) |
 | 빌드·시뮬·테스트·배포 담당 | [개발 가이드](docs/reference/developer-guide.md) |
+| 제품 앱 개발자 | [Applications](applications/README.md): 제품별 개발 위치 · [Fleet 앱](applications/fleet/README.md): 화면과 앱 진입점 |
 | 현재 구현·검증 상태 확인 | [STATUS.md](STATUS.md): 모듈별 게이트 |
 
 `main` 반영은 주제 브랜치의 PR을 통해 한다. 검토·CI·병합 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md), 문서 작성 기준은 [D-777](docs/adr/D-777-concise-human-agent-documentation.md)을 따른다.

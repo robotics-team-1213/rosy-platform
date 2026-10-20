@@ -28,7 +28,7 @@ on:
       - operations/fleet/**
       - integrations/messaging/discord/**
       - operations/decision/**
-      - operations/site_ui/console/**
+      - applications/fleet/web/**
       - operations/world/src/**
       - operations/site_execution/src/**
       - operations/situation/rosy_situation/__init__.py
@@ -38,7 +38,7 @@ on:
       - operations/apps/games/**
       - contracts/foundation/core_common/**
       - contracts/learning/src/**
-      - operations/apps/fleet/**
+      - applications/fleet/gateway/**
       - shared/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml
       - middleware/perception/map/map_v2_fleet/meshes/road_lines.stl

@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("contracts/skill/src", "operations/apps/fleet/src", "operations/processes/palletizing/src", "operations/site_execution/src", "middleware/skills/api/src"):
+for relative in ("contracts/skill/src", "applications/fleet/gateway/src", "operations/processes/palletizing/src", "operations/site_execution/src", "middleware/skills/api/src"):
     sys.path.insert(0, str(ROOT / relative))
 
 from rosy_gateway.cell_compiler import PalletizingCellCompiler

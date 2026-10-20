@@ -8,7 +8,7 @@ the top-bar icons.
 from pathlib import Path
 
 UI = Path(__file__).resolve().parents[1] / "ui.js"
-FLEET = Path(__file__).resolve().parents[3] / 'operations' / 'site_ui' / "console"
+FLEET = Path(__file__).resolve().parents[3] / 'applications' / 'fleet' / 'web'
 
 CHROME = ("settings:", '"theme-dark":', '"theme-light":', '"theme-system":', "estop:")
 SESSION = ("login:", "account:", "logout:")

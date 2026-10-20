@@ -12,18 +12,16 @@ Operator applications that run with the site, not on the robot CORE process.
 | Directory | Purpose |
 |-----------|---------|
 | `games/` | ROS package `games` (see `games/AGENTS.md`) |
-| `fleet/` | Wheel `rosy-app-gateway`, console script `rosy-site-gateway` (see `fleet/AGENTS.md`) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Games is an ament package. The gateway wheel is not. Do not add `package.xml` to the wheel to make colcon notice it.
-- The gateway composes palletizing and execution. It is not a second Fleet server.
+- Games is an ament package. Fleet application composition moved to `applications/fleet/gateway` (D-822); follow that holder's instructions for its wheel.
 
 ### Testing Requirements
 
-`python -m pytest operations/apps/games/test -q`. Gateway coverage is the tests that import `rosy_gateway`.
+Games tests live in `operations/apps/games/test`; use the root remote-testing procedure.
 
 ### Common Patterns
 

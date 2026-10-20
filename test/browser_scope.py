@@ -65,7 +65,7 @@ EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
 
 SCOPE: dict[str, list[str]] = {
     "operations/fleet/fleet/server/": FLEET,
-    "operations/site_ui/console/": FLEET,
+    "applications/fleet/web/": FLEET,
     "middleware/robot_ui/robot/": ROBOT,
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,

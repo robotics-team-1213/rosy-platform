@@ -109,6 +109,16 @@ def test_units_floor_applies_to_new_units_of_large_parents_only():
                                                                  ["pkg/unit"], {"pkg/unit"}, {"pkg/unit"}))
 
 
+def test_fleet_work_holder_move_preserves_only_its_existing_small_mark():
+    unit = "fleet/web/work"
+    counts, owner = {"fleet": 9000, unit: 796}, {unit: "fleet"}
+    assert s.unit_problems(counts, owner, [unit], {unit}, {"site_ui/console/work"}) == []
+    assert any("new `small` mark" in problem for problem in
+               s.unit_problems(counts, owner, [unit], {unit}, set()))
+    assert any("no longer small" in problem for problem in
+               s.unit_problems({"fleet": 9000, unit: 1000}, owner, [unit], {unit}, {"site_ui/console/work"}))
+
+
 def test_data_file_parsers_reject_malformed_rows():
     rows, safety = s.parse_ratchet("# c\n700 pkg/a.py\nsafety 720 pkg/a.py 2026-10-20\n")
     assert rows == {"pkg/a.py": 700} and safety == {"pkg/a.py": (720, dt.date(2026, 10, 20))}

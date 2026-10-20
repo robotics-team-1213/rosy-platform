@@ -7,7 +7,7 @@
 | 표시 이름 | 사람이 하는 일 | 구현·소유 |
 |---|---|---|
 | **Rosy Robot** | 로봇 한 대 상태 확인·조작·설치·정비 | `middleware/robot_ui/robot`, CORE가 제공하는 웹 역할 화면 |
-| **Rosy Fleet** | 현장 관제·작업 승인·진행·기기 연결·계정 관리 | `operations/site_ui/console`의 웹, `operations/fleet`의 서비스·원장. 화면 id는 `console` 유지 |
+| **Rosy Fleet** | 현장 관제·작업 승인·진행·기기 연결·계정 관리 | `applications/fleet/web`의 웹, `operations/fleet`의 서비스·원장. 화면 id는 `console` 유지 |
 | **Rosy Pilot** | 직접 수동 운전과 운전석 영상 | `middleware/robot_ui/pilot`의 웹/PWA와 Android 연결 셸. 연결 로비는 별도 앱이 아님 |
 | **Rosy Cam** | 카메라 폰에서 천장 영상 캡처·전송 | `operations/site_ui/cam`의 Android 앱. 관측 처리는 Vision 서비스가 담당 |
 | **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업·카메라 맞춤·모방학습 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출 |
@@ -50,7 +50,7 @@ Workcell은 좌표·설비·접근·공유 자원을 가진 작업 공간이다.
 | **Decision** | 규칙·정책·판단 후보를 다루는 영역. 독립 앱명 아님 |
 | **Dock / Signal / Signal Observer** | 충전·교통 신호 장치와 관측 서비스. 독립 사용자 앱으로 세지 않음 |
 | **Media** | 영상 세션 권한·시청 요청·미디어 프로세스를 관리하는 별도 서비스. `operations/site_ui/media`에 있으며 Fleet이 설치·제공하는 화면이 아님 |
-| **Site App Gateway** | `operations/apps/fleet`의 프로세스 조립 코드. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Fleet 서버나 Fleet 화면과 구분 |
+| **Site App Gateway** | `applications/fleet/gateway`의 프로세스 조립 코드. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Fleet 서버나 Fleet 화면과 구분 |
 | **device-core** | 외부 저장소에서 Rosy Device 콘솔·기기 API를 제공하는 서비스 코드 이름. 로봇 CORE와 구분 |
 | **ROSY Site / Runtime / Fabric / Operations** | 각각 현장 배포 범위 / 로컬 실행 기반 / 연결 계약·어댑터 / 운영 목표 표현. [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)의 역할 이름 |
 | **rosy-platform / rosy-vault / rosy-ops / rosy-docs** | 각각 플랫폼 소스 / Vault·Device 소스 / 비공개 운영 설정·기록 / 설계·가이드 문서 저장소 |
