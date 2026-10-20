@@ -63,3 +63,29 @@ def test_media_grant_renewal_revoke_and_viewer_read_permission():
     assert media('DELETE', f'/{identifier}')[0] == 204
     assert media('POST', f'/{identifier}/renew')[0] == 403
 
+
+def test_cell_documents_revision_preview_and_job_recovery():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    refs = {}
+    for kind in ('recipe', 'cell'):
+        code, row = call(engine, 'GET', f'/api/fleet/cell-app/documents/{kind}/sample')
+        assert code == 200 and row['document']
+        refs[kind + '_id'] = 'sample'
+        refs[kind + '_digest'] = row['digest']
+        assert call(engine, 'POST', f'/api/fleet/cell-app/documents/{kind}/sample',
+                    {'document': row['document'], 'expected_digest': 'stale'})[0] == 409
+    code, preview = call(engine, 'POST', '/api/fleet/cell-app/compile', refs)
+    assert code == 200 and preview['summary']['transfer_count'] == 18
+    body = {**refs, 'request_key': 'sample-cell-1', 'workcell_id': 'sample-cell', 'instance_id': 'sample-arm'}
+    code, result = call(engine, 'POST', '/api/fleet/cell-app/proposals', body)
+    assert code == 200 and result['mission']['status'] == 'PROPOSED'
+    identifier = result['mission']['mission_id']
+    assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': -1})[0] == 409
+    assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': 1})[1]['mission']['status'] == 'READY'
+    engine.advance('cell_jobs', 'hold')
+    assert call(engine, 'GET', f'/api/fleet/cell-jobs/{identifier}')[1]['job']['status'] == 'HOLD'
+    assert call(engine, 'POST', f'/api/fleet/cell-jobs/{identifier}/resume', {'expected_generation': 1})[0] == 200
+    engine.advance('cell_jobs', 'complete')
+    assert call(engine, 'GET', f'/api/fleet/cell-jobs/{identifier}')[1]['job']['status'] == 'GOAL_CONFIRMED'
+
