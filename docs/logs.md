@@ -9753,3 +9753,9 @@ osy-d395-s1d\`.
 - 변경: a24 고정 소스의 연속2회 PASS와 실제 도착 거리, 동일 조건·model/map/source hash, 원본 로그 hash와 정지·lease·정리 증거를 동결 기록에 추가했다.
 - 증거: native12,973 passed/776 skipped/세 로그 NEW0, 목표 오차4.722/7.501mm·via각29mm. metadata 누락과 lane_return SKIP, native model-pose 및 실물 미검증 범위를 함께 기록했다.
 - gate 변화: 전체 모듈·FIELD 승격 없음. 본 고정 조건 주행 SIM 수용을 충족했으며 최종 문서 guard·증거 검토는 후속 HEAD에서 별도 확인한다.
+
+## 2026-10-20 · uncommitted · OMX Leader 운용 중 개입 Proposed ADR
+
+- 변경: D-823에 Leader 수동 개입·복구·자동 복귀, 단일 OMX owner 내부 입력 중재, 자세·파지 연속성, 협응 작업 격리와 새 관측 기반 복귀를 제안했다. 학습 데이터는 부가 활용으로 둔다.
+- 증거: 기존 D-299·D-369·D-723·D-496·D-770과 역할 경계를 대조했다. 원격 문서 계약 시험은 커밋 후 별도 기록한다. 실물 동작·장비 설정은 변경하지 않았다.
+- gate 변화: 없음. Proposed이며 API·capability 활성화, DEVICE/FIELD 수용 또는 실물 실행 승인이 아니다.
