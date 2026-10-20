@@ -1,7 +1,7 @@
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
-import {createFleetClient} from '/common/fleet-client.js';
+import {createFleetClient} from '/console/assets/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';

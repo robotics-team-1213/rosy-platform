@@ -17,6 +17,8 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "fleet-client.js",
+    "request.js",
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",

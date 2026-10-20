@@ -1,5 +1,5 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
-import {createFleetClient} from '/common/fleet-client.js';
+import {createFleetClient} from '/console/assets/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,

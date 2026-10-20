@@ -3,6 +3,7 @@
 경로 순회를 막는 유일한 방어는 allowlist 다 — 디렉터리 스캔으로 바꾸지 않는다
 (core 와 같은 규칙). 공용 L1 자산은 서버가 설정받은 web_common 디렉터리의
 shared-assets.json 이 명시한 파일만 /common 아래로 서빙한다.
+Console 전용 transport 두 파일의 기존 URL만 고정 allowlist로 유지한다.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ CONSOLE_ASSETS = {
     "fleet-header.js": ("shared/fleet-header.js", "application/javascript"),
     "styles.css": ("shared/styles.css", "text/css"),
     "console.js": ("console.js", "application/javascript"),
+    "fleet-client.js": ("shared/fleet-client.js", "application/javascript"),
+    "request.js": ("shared/request.js", "application/javascript"),
     "inbox.js": ("inbox.js", "application/javascript"),
     "work-view.js": ("work/work-view.js", "application/javascript"),
     "work.css": ("work/work.css", "text/css"),
@@ -190,6 +193,9 @@ def install_static_routes(app: FastAPI) -> None:
 
     @app.get("/common/{asset_name:path}", include_in_schema=False)
     def common_asset(asset_name: str):
+        if asset_name in {"fleet-client.js", "request.js"}:
+            name, media_type = CONSOLE_ASSETS[asset_name]
+            return FileResponse(WEB_ROOT / name, media_type=media_type, headers={"Cache-Control": "no-cache"})
         media_type = common_assets.get(asset_name)
         root = app.state.web_common
         if media_type is None:

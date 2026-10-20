@@ -22,7 +22,7 @@ import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/cons
 import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
-import { createFleetClient } from "/common/fleet-client.js";
+import { createFleetClient } from "/console/assets/fleet-client.js";
 import { issueDevelopmentSession } from "/console/assets/development-auth.js";
 import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
