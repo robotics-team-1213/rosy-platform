@@ -1577,7 +1577,7 @@
 - 증거: 57a136d87 공식 원격 회귀 581 PASS/2 FAIL/NEW 2. 두 실패의 기존 시험이 Ledger clock을 교체해 설치된 energy clock과 다른 객체가 되는 직접 원인을 확인했다. 수정은 시험만이며 전체 회귀를 새 커밋에서 재실행한다.
 - gate 변화: 없음. 실기/현장 수용·FULL CI를 대신하지 않는다.
 
-## 2026-10-21 · native map client cleanup
+## 2026-10-21 · ed405d1ecf · native map client cleanup
 
 - 변경: 개별 destroy_client 예외/false 뒤에도 나머지 client의 해제를 시도하고 실패를 보고한다. failed create는 원래 구성 예외를 유지한다. evidence 폐쇄·pending 분리·CORE writer 경계는 유지한다.
 - 증거: source53c7d91367 native RED2FAIL/11PASS와 실제 generated DDS RED exit1 뒤 sourceed405d1ecf native137PASS/0SKIP/NEW0 및 실제 DDS exit0. 기본 parent64/global nonce65536의 빠른 합성 clock 용량 경계와 frame 복구 후 새 Budget/ACK/navigation 성공을 추가 검증했다.
