@@ -499,7 +499,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
         except (RuntimeError, OSError) as exc:
             print(f"[worktrees] warning: prune failed, continuing: {exc}", file=sys.stderr)
     rows = scan(cwd)[1]
-    if len(rows) > CAP and reason is None:
+    if len(rows) >= CAP and reason is None:
         here, me = _here(cwd), _identity(root)
         for row in rows:
             judge(row, now, IDLE_HOURS, here, me=me)
