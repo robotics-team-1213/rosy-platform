@@ -19,6 +19,16 @@ python learning/training/omx/act_job.py
   --out <new-artifact-directory> --steps 40 --seed 42750 --n-action-steps 4
 ```
 
+`--eval-export`는 여러 독립 에피소드를 받는다. 학습 에피소드만으로 정규화와
+학습 chunk를 계산하며 검증 에피소드 사이에는 정책 큐를 초기화한다. 보고서는 전체
+오차와 에피소드별 오차를 함께 보존한다. 고정 물체 과제는 train 20/validation 5를
+분리하고, 새 SIM 과제 20회의 성공률을 별도로 측정한다.
+
+`lerobot_export.py --sim-ground-truth <truth.json>`으로 검증한 고정 물체 과제의
+원본 증거는 `rosy_sim_truth/`에 복사된다. 학습 snapshot과 공통 Episode에도 같은
+bytes를 보존하고 실제 judge를 기록한다. 명시한 증거가 없으면 기존 operator
+기록을 유지하며 독립 성공 판정을 만들지 않는다.
+
 Windows 출력은 X에 둔다. 새 출력만 허용하며 실패 시 state/error와 부분 산출물을
 보존한다. 학습 중단 시 재개를 지원하지 않는 초기 연구 CLI이므로 새 run 경로를
 사용한다. perception 반복 job·장치 배포 경로와 구분한다.

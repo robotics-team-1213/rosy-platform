@@ -9861,3 +9861,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 설계 승인 후 순수 웹 서버 분리, 공통 run 기록, GPU admission·CLI, 웹 연결, 실제 SDK 교차 검증의 다섯 착지 단위로 계획을 구체화했다. 기존 학습의 두 잠금 경로·동일 계정 제한과 로컬 HTTP 권한 경계를 확인했다.
 - 증거: 웹 서버 756행 ratchet과 학습 gpu.lock·signed owner work.lock 생산/소비 경로를 읽기 전용으로 조사했다. 계획의 인터페이스·시험·설계 대응을 자기 검토했다. 제품 구현·호스트 반영·신규 SDK 실행은 NOT RUN이다.
 - gate 변화: 없음. 구현 계획 검토와 실행 방식 선택을 기다린다.
+
+## 2026-10-21 · OMX 고정 물체 SIM 정답·학습 분할
+
+- 변경: D-449 초안과 learning 계약 0.1.13에 고정 물체 과제의 원본 SIM 증거 검증을 추가했다. LeRobot export와 ACT snapshot은 증거 bytes와 실제 judge를 보존하며 여러 검증 에피소드를 학습·정규화에서 제외한다.
+- 증거: 잘못된 원 gripper receipt·시계·owner generation·장면 inventory·목표 UUID·terminal·NaN sequence와 중복 학습/검증 입력의 거절을 원격 RED/GREEN으로 확인했다. d324a77929 관련 검증 45 passed; 실제 LeRobot roundtrip은 별도 모델 환경에서 후속 실행한다.
+- gate 변화: 실제 시연과 학습 정책 성공률을 구분한다. 학습·새 물체 과제 20회 평가는 아직 NOT RUN이며 DEVICE/FIELD 수용을 만들지 않는다.

@@ -43,6 +43,32 @@ def test_snapshot_and_restart_verify_all_episode_files(tmp_path):
         store.require([doc['revision']])
 
 
+def test_sim_truth_dependencies_survive_store_snapshot_and_cannot_be_omitted(tmp_path):
+    sys.path.insert(0, str(ROOT/'learning/curation/omx/test'))
+    from sim_object_truth_fixture import fixture
+    from sim_object_truth import build
+    run, native, source = fixture(tmp_path)
+    proof = build(run,native,tmp_path/'proof')
+    root = tmp_path/'common'
+    episode = convert(source,root,sim_ground_truth=proof['truth'])
+    refs = []
+    for path in sorted(root.rglob('*')):
+        if path.is_file():
+            payload = path.read_bytes()
+            refs.append(dict(path=path.relative_to(root).as_posix(),bytes=len(payload),
+                             sha256=hashlib.sha256(payload).hexdigest()))
+    doc = seal(dict(schema='rosy.dataset-manifest/1',episodes=[episode['revision']],
+                    transformation=dict(tool_revision='fixture',config_sha256='c'*64),files=refs))
+    (root/'dataset-manifest.json').write_text(json.dumps(doc))
+    store = DatasetStore(tmp_path/'store')
+    store.register(root)
+    assert store.require([doc['revision']]) == [doc['revision']]
+    doc['files'] = [ref for ref in refs if ref['path'] != 'sim-truth/files/phases.json']
+    (root/'dataset-manifest.json').write_text(json.dumps(seal(doc)))
+    with pytest.raises(ValueError,match='closure'):
+        closure(root)
+
+
 def test_missing_episode_or_undeclared_stream_is_rejected(tmp_path):
     root = tmp_path / 'source'; doc = dataset(root)
     doc['files'] = [ref for ref in doc['files'] if ref['path'] != 'source/samples.jsonl']

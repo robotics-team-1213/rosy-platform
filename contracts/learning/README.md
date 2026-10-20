@@ -10,6 +10,11 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 
 0.1.12는 D-622 후속으로 `validate_rule()`의 ANSWER에 `REALIGN`을 받는다. REALIGN 선택만 조작 본문의 정렬 JSON SHA-256인 `selection.realign_sha256`을 반드시 가지며 다른 선택에는 이 키가 없다. 기존 `rule_selection/1` 기록은 그대로 유효하다. 자세·각도 원문은 receipt에 복사하지 않고 REALIGN도 물리 ANSWER라 reobserve/human 기준으로 변환하지 않는다.
 
+0.1.13은 고정 OMX SIM 물체 과제에 명시적으로 제공된 `rosy.omx-sim-object-truth/1`을
+검증한다. 원본 영상·명령 수락/완료·물체 관측·gripper owner 시계와 신선도·고정 장면을
+파일 해시에 연결하고 성공을 재계산한다. 공통 Episode의 `sim_ground_truth`는 이 증거를
+모두 보존하며, 기본 operator 기록과 사람 검수·운영 승격 기준은 그대로 둔다.
+
 ```python
 from rosy.contracts.learning import seal, validate_episode
 

@@ -1,6 +1,6 @@
 ## D-449 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다
 
-**Status:** Proposed (2026-10-04, active learning closure implementation; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님)
+**Status:** Proposed (2026-10-04, active learning closure implementation; 2026-10-21 고정 OMX SIM 정답 결속 보강; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님)
 
 ### Context
 
@@ -109,3 +109,18 @@ task unknown, skill null, action 결과와 native terminal 결과는 구분해 �
 실행 원장을 인증·새 dispatch 권한·학습 GT로 승격하지 않는다. DatasetStore와
 승격은 기존 demonstration profile만 허용하며 이 실행 profile을 학습으로 받지 않는다.
 실제 설치/추론/장치/원래 timing·물리 승인은 별도이고 기존 공개 Action wire는 유지한다.
+
+### 구현 보강 — 2026-10-21 고정 OMX 물체 과제의 SIM 정답
+
+계약 0.1.13은 고정 infeed→pallet A 첫 슬롯의 보조 부착 SIM 과제에 한해 명시적인
+원본 증거 묶음으로 `sim_ground_truth` 판정을 재계산한다. 원본 시연·물체 pose·고정
+장면/카메라·명령 수락/완료·원 owner 시계의 gripper 신선도를 함께 검증한다.
+초기 원점 이동은 기록 구간 밖임을 확인하며, 기록 안의 모든 명령은 실제 callback에
+연결한다. 늦은 관측에 새 시각을 붙이거나 누락된 과거 증거를 복원하지 않는다.
+
+독립 SIM 관측을 사람 검수로 표시하지 않기 위해 별도 companion을 선택했다.
+기본 operator 판정과 native review의 사람 검수 조건은 유지한다. 증거는 LeRobot
+export·ACT reader snapshot·공통 Episode·DatasetStore 파일 목록에 보존한다.
+학습 20/검증 5의 분리는 정규화와 chunk에도 적용하며, 실제 학습 정책의 새 과제
+성공률은 별도 실행 증거가 필요하다. 파일 결속은 인증·CORE 실행 권한·DEVICE/FIELD
+수용을 부여하지 않는다. 전체 목표는 실제 학습과 독립 실행 검증 전까지 active다.

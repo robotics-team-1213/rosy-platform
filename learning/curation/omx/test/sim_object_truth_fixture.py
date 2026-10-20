@@ -84,7 +84,8 @@ def fixture(tmp_path):
                 command='attach (entity/system/add on omx_f)' if held else 'detach',
                 sent_wall=1_700_000_000+end,state_echo='attached' if held else 'detached',confirmed=True)
             if held:
-                phase['attach'].update(service_ok=True,re_commanded_after=None)
+                phase['attach'].update(service_ok=True,re_commanded_after=dict(model='infeed_block',
+                    command='detach',sent_wall=1_700_000_000+end+.01,state_echo='detached',confirmed=True))
         phases.append(phase)
     for index in range(56):
         stamp = 1_000_000_000+index*100_000_000

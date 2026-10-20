@@ -232,8 +232,13 @@ def _validate(path, validated, source):
     grasp, release = phases[1], phases[-1]
     if _gripper_evidence(grasp, 'hold') != _gripper_evidence(release, 'release'):
         raise ValueError('SIM gripper owner generation differs')
-    for name, phase in [('attach',grasp), ('detach',release)]:
-        receipt = phase[name]
+    aid_receipts = [('attach',grasp['attach']), ('detach',release['detach'])]
+    retry = grasp['attach']['re_commanded_after']
+    if retry is not None:
+        aid_receipts.append(('detach', retry))
+        if not grasp['attach']['sent_wall'] <= retry['sent_wall'] <= release['detach']['sent_wall']:
+            raise ValueError('SIM attachment retry clock reversed')
+    for name, receipt in aid_receipts:
         _fields(receipt, 'model command sent_wall state_echo confirmed'+
                 (' service_ok re_commanded_after' if name == 'attach' else ''))
         if (receipt['confirmed'] is not True or receipt['model'] != 'infeed_block'
@@ -241,8 +246,7 @@ def _validate(path, validated, source):
                 or receipt['state_echo'] != ('attached' if name == 'attach' else 'detached')
                 or type(receipt['sent_wall']) not in (int,float)
                 or not math.isfinite(receipt['sent_wall']) or receipt['sent_wall'] <= 0
-                or name == 'attach' and (receipt['service_ok'] is not True or
-                    receipt['re_commanded_after'] is not None)):
+                or name == 'attach' and receipt['service_ok'] is not True):
             raise ValueError('SIM object attachment state unproven')
     _command_evidence(data['events'], commands, rows, joints,
                       result['recording_start_sim_s'], result['recording_end_sim_s'])
