@@ -88,6 +88,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     def require_live():
         if worker_errors:raise RuntimeError(worker_errors[0])
         if time.monotonic()>=deadline_owner_s:raise TimeoutError('fixed policy trial wall budget')
+        if last_observed[0] is not None and time.monotonic()-last_observed[0]>.5:
+            raise PermissionError('independent object observation stale')
         if session and session.hold_reason:raise PermissionError(session.hold_reason)
         if arm.owner.state=='hold':raise PermissionError('native owner HOLD')
 
@@ -189,6 +191,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 time.sleep(.02)
             step['native_goal_id']=row['driver_goal_id']
             js=arm.latest_joint_state
+            if not 0<=arm.monotonic()-js.received_at<=profile.max_joint_state_age_s:
+                raise PermissionError('post-goal actual gripper readback stale')
             tcp=kin.fk([js.positions[name] for name in ARM_JOINTS]);pose=samples[-1]['model_pose_base']
             q=js.positions[profile.gripper_joint]
             close=profile.gripper_close_for_width(recipe.box.width)
@@ -237,6 +241,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         write_json(directory/'policy-steps.json',steps)
         write_json(directory/'policy-native-events.json',events)
         write_json(directory/'policy-object-transitions.json',transitions)
+        write_json(directory/'policy-camera-captures.json',camera.captures)
         write_json(directory/'observations.json',samples)
         write_json(directory/'policy-result.json',receipt)
         camera.destroy();executor.shutdown();arm.destroy();node.destroy_node();rclpy.shutdown()
