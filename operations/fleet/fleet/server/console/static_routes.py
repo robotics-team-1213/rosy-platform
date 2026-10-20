@@ -91,6 +91,7 @@ CONSOLE_ASSETS = {
     "site-map.css": ("sitemap/site-map.css", "text/css"),
     "site-map.js": ("sitemap/site-map.js", "application/javascript"),
     "site-map-model.js": ("shared/site-map-model.js", "application/javascript"),
+    "route-attention.js": ("shared/route-attention.js", "application/javascript"),
     "site-map-edit.js": ("shared/site-map-edit.js", "application/javascript"),
     "site-map-teach.js": ("sitemap/site-map-teach.js", "application/javascript"),
     "site-map-survey.js": ("sitemap/site-map-survey.js", "application/javascript"),

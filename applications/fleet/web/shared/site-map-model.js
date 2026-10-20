@@ -16,21 +16,7 @@ export const AI_FACT_LABEL = {
   incident_context: '사건 원인 초안',
 };
 
-/** Newest live AI observation for this open trip; UNKNOWN clears an older deviation. */
-export function routeAttention(trip, facts, now) {
-  if (!trip) return [];
-  const newest = (facts || []).filter(fact => fact.kind === 'trip_route_check'
-    && fact.robot_ids?.includes(trip.robot_id) && fact.evidence?.trip_id === trip.trip_id
-    && fact.evidence?.map_version === trip.map_version && Number.isFinite(fact.observed_at))
-    .reduce((last, fact) => !last || fact.observed_at >= last.observed_at ? fact : last, null);
-  if (!newest || !Number.isFinite(newest.ttl_s) || newest.ttl_s <= 0 || newest.ttl_s > 5
-    || newest.observed_at > now / 1000 + 1 || newest.observed_at + newest.ttl_s < now / 1000
-    || newest.value?.status !== 'OFF_ROUTE') return [];
-  const {offset_m, limit_m} = newest.value;
-  if (!Number.isFinite(offset_m) || offset_m < 0 || !Number.isFinite(limit_m) || offset_m <= limit_m) return [];
-  const cm = Math.round((offset_m - limit_m) * 100);
-  return [{severity: 'warn', text: `: AI 경로 편차 관찰 — 허용 경계보다 ${cm} cm 밖 · 위치 확인 필요`}];
-}
+export {routeAttention} from './route-attention.js';
 export const TRIP_ERROR_LABEL = {
   TRIP_START_CANCELED: '출발 준비 중 정지 요청을 받았습니다 · 상태를 확인한 뒤 다시 시작하세요',
   TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
@@ -84,6 +70,8 @@ export const TRIP_ERROR_LABEL = {
   TRIP_REGULATION_CAPS_MISSING: '경로가 횡단보도나 신호 교차로를 지나는데 이 로봇의 CORE에 그 규칙(횡단보도 게이트·교차로 신호)이 꺼져 있다고 알립니다',
   TRIP_SIGNAL_NEEDS_AUTHORITY: '경로가 신호 교차로를 지나는데 이 로봇은 통행권(CORE)을 받지 않습니다 · 적색에서 선다는 보장이 없습니다',
   TRIP_ROBOT_BUSY: '이 로봇은 운행 중입니다 · 운행을 먼저 취소하세요',
+  TRIP_CANDIDATES_BUSY: '후보 로봇이 모두 사용 중입니다 · 현재 작업 상태를 확인하세요',
+  TRIP_REQUEST_CONFLICT: '같은 요청 번호에 다른 내용이 있습니다 · 기존 요청 내용을 확인하세요',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
   TRIP_UNKNOWN: '없는 운행입니다',
