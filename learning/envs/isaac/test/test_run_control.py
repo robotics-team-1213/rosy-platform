@@ -150,6 +150,13 @@ def test_binding_accepts_root_owned_interpreter_and_excludes_managed_data(tmp_pa
     path = tmp_path / 'binding.json'
     path.write_text(json.dumps(binding))
     assert run_binding.load_binding(path)['sdk_python'] == str(python)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    assert run_binding.load_binding(path, expected_digest=digest)['data_root'] == str(data)
+    replacement = tmp_path / 'other-data'
+    replacement.mkdir()
+    path.write_text(json.dumps(dict(binding, data_root=str(replacement))))
+    with pytest.raises(ValueError):
+        run_binding.load_binding(path, expected_digest=digest)
     nested = owner / 'releases/runs'
     nested.mkdir(parents=True)
     path.write_text(json.dumps(dict(binding, data_root=str(nested))))

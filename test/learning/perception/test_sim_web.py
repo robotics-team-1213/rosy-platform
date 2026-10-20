@@ -117,6 +117,7 @@ def test_local_adapter_pins_source_and_workspace_without_importing_sdk(tmp_path,
     config = tmp_path / 'web.json'
     config.write_text(json.dumps({'workspace_id': 'workspace', 'source_root': str(source),
         'source_sha': 'a' * 40, 'binding_file': str(binding),
+        'binding_sha256': hashlib.sha256(binding.read_bytes()).hexdigest(),
         'entry_sha256': hashlib.sha256(entry.read_bytes()).hexdigest()}))
     config.chmod(0o600)
     calls = []
@@ -129,6 +130,14 @@ def test_local_adapter_pins_source_and_workspace_without_importing_sdk(tmp_path,
     adapter = sim_web.LocalRuns(config, 'workspace')
     assert adapter.call({'action': 'check'})['ready'] is True
     assert calls[-1][0:2] == ['/usr/bin/python3', str(entry)]
+    assert '--expected-binding-sha256' in calls[-1]
+    before = len(calls)
+    binding.write_text(json.dumps({'source_root': str(source), 'source_sha': 'a' * 40,
+                                  'data_root': str(tmp_path / 'another-store')}))
+    with pytest.raises(ValueError, match='SIM'):
+        adapter.call({'action': 'list'})
+    assert len(calls) == before
+    binding.write_text(json.dumps({'source_root': str(source), 'source_sha': 'a' * 40}))
     before = len(calls)
     entry.write_text('changed helper')
     with pytest.raises(ValueError, match='SIM'):
