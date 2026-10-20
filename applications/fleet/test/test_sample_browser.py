@@ -78,3 +78,75 @@ def test_profile_save_and_logout_use_sample_session(sample_site):
             expect(page.locator('#profile-login')).to_be_visible()
         finally:
             browser.close()
+
+
+def test_cell_document_preview_admission_and_terminal_read(sample_site):
+    from playwright.sync_api import sync_playwright, expect
+    _, origin = sample_site
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context()
+            context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
+                                 data={'login':'sample', 'password':'sample-password'})
+            page = context.new_page()
+            page.goto(origin + '/console/cell')
+            for kind in ('recipe', 'cell'):
+                page.locator(f'#{kind}-id').fill('sample')
+                page.locator(f'#{kind}-load').click()
+                expect(page.locator(f'#{kind}-revision')).to_contain_text('저장된 버전')
+            page.locator('#compile').click()
+            expect(page.locator('#summary')).to_contain_text('18회 전송')
+            page.locator('#workcell').fill('sample-cell')
+            page.locator('#instance').fill('sample-arm')
+            page.locator('#propose').click()
+            expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+            page.locator('#admit').click()
+            expect(page.locator('#job-summary')).to_contain_text('실행 대기')
+            page.get_by_role('button', name='Cell 보류', exact=True).click()
+            page.locator('#read-job').click()
+            expect(page.locator('#job-summary')).to_contain_text('작업 보류')
+            page.locator('#resume').click()
+            expect(page.locator('#job-summary')).to_contain_text('실행 대기')
+            page.get_by_role('button', name='Cell 목표 확인', exact=True).click()
+            page.locator('#read-job').click()
+            expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')
+            page.reload()
+            page.locator('#mission-id').fill('sample-cell-job-1')
+            page.locator('#read-job').click()
+            expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')
+        finally:
+            browser.close()
+
+
+def test_assistant_synthetic_voice_receipt_and_camera_panel(sample_site):
+    from playwright.sync_api import sync_playwright, expect
+    _, origin = sample_site
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context()
+            context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
+                                 data={'login':'sample', 'password':'sample-password'})
+            page = context.new_page()
+            page.goto(origin + '/console')
+            page.locator('#assistant-toggle').click()
+            expect(page.locator('#assistant-send')).to_be_enabled()
+            page.locator('#assistant-dictate').click()
+            page.get_by_role('button', name='샘플 음성 입력', exact=True).click()
+            expect(page.locator('#assistant-input')).to_have_value('샘플 로봇의 상태를 알려줘')
+            page.locator('#assistant-send').click()
+            expect(page.locator('#assistant-messages')).to_contain_text('요청 접수')
+            page.get_by_role('button', name='AI 답변', exact=True).click()
+            expect(page.locator('#assistant-messages')).to_contain_text('실제 장치 명령은 보내지 않았습니다')
+            page.locator('#assistant-close').click()
+            page.locator('#robot-video summary').click()
+            page.locator('[data-robot-video-choice="sample-robot"]').check()
+            page.locator('[data-robot-video-start]').click()
+            expect(page.locator('[data-robot-video-tile="sample-robot"]')).to_have_attribute('data-state', 'live')
+            page.get_by_role('button', name='영상 지연', exact=True).click()
+            expect(page.locator('[data-robot-video-tile="sample-robot"]')).to_have_attribute('data-state', 'stale')
+            page.locator('[data-robot-video-stop]').click()
+            expect(page.locator('[data-robot-video-stage]')).to_be_empty()
+        finally:
+            browser.close()
