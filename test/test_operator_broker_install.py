@@ -29,6 +29,20 @@ def test_multilingual_receipt_cannot_reuse_old_korean_only_cases():
         with pytest.raises(ValueError): validate_receipt(changed, cfg, OperatorProfile())
 
 
+def test_source_inventory_hash_is_not_limited_like_an_inference_packet():
+    from deploy.ai_pc.operator_acceptance import evaluate, validate_receipt, CASES
+    from deploy.ai_pc.conversation_acceptance import source_digest
+    from rosy.decision.conversation.operator import OperatorProfile
+    files = {f'contracts/source_module_{n:04d}.py':'b'*64 for n in range(400)}
+    assert len(json.dumps(files)) > 16384
+    def execute(question, *_):
+        kind = next(kinds[0] for _, text, kinds in CASES if text == question.question)
+        return dict(kind=kind, response='Classified', evidence_refs=['robot:r1'] if kind == 'STATUS' else [])
+    receipt = evaluate(execute, source_commit='a'*40, files=files)
+    assert receipt['source_manifest_sha256'] == source_digest(files) and receipt['verdict'] == 'PASS'
+    validate_receipt(receipt, dict(source_commit='a'*40, files=files), OperatorProfile())
+
+
 def test_operator_install_preparation_binds_existing_snapshot_and_expiry():
     from deploy.site.install_operator_broker import prepare
     from rosy.decision.conversation.codec import digest
