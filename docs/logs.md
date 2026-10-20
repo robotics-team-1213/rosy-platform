@@ -9879,3 +9879,9 @@ osy-d395-s1d\`.
 - 변경: 모델 PC 명시 선택·커밋 전송·고정 source binding·check/start/status/stop/fetch를 연결했다. receipt를 네트워크 요청 전에 보존하고 실행 중·최종 snapshot을 새 경로에 저장한다. 산출물별 해시 검증으로 archive 입력을 받지 않는다.
 - 증거: CLI 부재 RED7실패→GREEN7 PASS. 모델 PC 변경과 중간 JSON 게시를 추가 RED2실패로 재현해 대상 해시와 원자적 receipt 게시를 구현했다. 최종 통합 시험은 별도 기록한다.
 - gate 변화: 없음. 신규 SDK 실행·웹 연결은 후속이다.
+
+## 2026-10-21 · uncommitted · Learning 공통 SIM HTTP 문서
+
+- 변경: D-834 Proposed의 로컬 SIM 경로·권한·입력 지문·고정 source·조회/실행/중지 의미를 API 부록과 검수 앱 문서에 연결했다. 기존 D-755 로컬 HTTP 소유권에 따라 CORE API 버전·장치 schema는 유지했다.
+- 증거: 신규 HTTP 부재 RED5실패 후 계정·검수 회귀 통과, 명시적 Chromium의 공유 기록·중복 요청·중지·부모 run 재실행·모바일과 공통 셸·필수 payload 누락 거절이 통과했다. 웹 source closure 밖 Isaac 모듈은 고정 subprocess로만 호출한다.
+- gate 변화: 없음. 실제 SDK와 배포 수용은 별도 검증이다.

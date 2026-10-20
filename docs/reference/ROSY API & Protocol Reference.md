@@ -4297,3 +4297,19 @@ MediaMTX WHIP/WHEP의 Location resource 식별자를 관리 API의 session_id로
 관리 callback `/auth`와 `/health`, MediaMTX 관리 API는 loopback 전용이며 외부 proxy에 공개하지 않는다.
 `/auth`는 publish/read에 `protocol=webrtc`와 정확한 path·위임을 확인하고, action=api에는 별도 로컬
 관리 자격만 인정한다. source/read 위임으로 관리 API를 호출할 수 없다.
+
+### D-834 Learning 로컬 SIM HTTP 계약 (Proposed)
+
+기존 검수 앱의 `/learning/sim`이며 CORE `/api/v1` 버전·장치 명령 schema에 속하지 않는다. 같은 모델 PC의 공통 Isaac 실행기와 CLI run 저장소를 사용한다. 운영 binding으로 source SHA·고정 entrypoint·SDK·외부 데이터 루트를 고정하며 요청에서 shell·argv·호스트·경로·unit·환경변수를 받지 않는다. 상세 설정과 실행 의미는 [검수 앱 SIM 설명](../../learning/curation/perception/docs/review-app.md#sim-실험-d-834-proposed), [운영 절차](../deployment/isaac-experiment-runs.md)를 따른다.
+
+| 경로 | 요청·응답·권한 |
+|---|---|
+| `GET /api/learning/sim/catalog` | view: `scenarios`, 고정 `source_sha`. 비활성 시나리오도 선행 조건·이유를 반환 |
+| `GET /api/learning/sim/runs` | view: `runs`. 실패·중단·UNKNOWN 포함, 원시 runtime·SDK 로그·private 경로 제외 |
+| `GET /api/learning/sim/runs/<run_id>` | view: 불변 입력 지문·설정·source SHA, revision·상태·단계·공개 결과·산출물 metadata |
+| `GET /api/learning/sim/runs/<run_id>/artifacts/import-report` | view: 최종 manifest로 해시·크기를 검증한 최대1MiB JSON 모델 검사 보고서 |
+| `POST /api/learning/sim/check` | manage: `scenario_id`, `config`, 선택적 현재 `source_sha`. 서버가 고정 SHA로 준비 상태·입력 지문 확인 |
+| `POST /api/learning/sim/start` | manage: `request_id`, `scenario_id`, `config`, `expected_input_sha256`, 선택적 현재 `source_sha`·`parent_run_id`. 같은 요청·입력은 같은 run |
+| `POST /api/learning/sim/stop` | manage: `run_id`, 현재 `expected_revision`. 소유 worker pidfd로 중지 요청, 종료 확인과 구분 |
+
+기존 Host·Origin·`X-Pinky-Token`·최대1MiB JSON 검사 뒤 프로젝트 권한을 다시 적용한다. 비협업 로컬 모드의 SIM 제어는403이며 연결 미설정은503이다. 시작 응답 유실은 새 실험을 만들지 않고 같은 요청으로 관찰한다. 입력/revision 충돌은 기존 로컬 HTTP의400 응답으로 거절한다. UNKNOWN은 자동 재시작하지 않는다. 첫 시나리오는 모델 import·관절·120프레임 검사이며 `task_success=null`, seed 미사용·영상 없음 사유를 명시한다. 물리 집기·학습 수용·정책 승격·로봇 명령 권한을 부여하지 않는다.

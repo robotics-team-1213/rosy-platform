@@ -160,3 +160,9 @@
 - 변경: ReviewStore·Conflict를 review_store.py로 옮기고 review_app의 기존 import를 유지했다. HTTP 서버는 471행, 저장 코드는 300행이며 크기 ratchet의 과거 예외를 제거했다. 서명된 학습 payload가 새 필수 모듈을 빠뜨리지 않게 source 필수 목록을 연결했다.
 - 증거: 기존 클래스와 이동 후 클래스의 AST가 동일하다. 원격에서 재노출 회귀의 모듈 부재 실패와 불완전 payload의 누락 거절 부재를 먼저 확인했다. GREEN·전체 영향 검사는 최종 커밋에 대해 별도 기록한다.
 - gate 변화: 없음. 기존 인간 승인·검수 자료·실행 제어를 바꾸지 않으며 새 SIM 기능·SDK 실행·호스트 배포는 아직 없다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 웹 연결
+
+- 변경: 기존 /learning에 SIM 진입과 조회·관리 권한별 조건 확인/실행/중지·같은 요청 재전송·새 run 재실행을 추가했다. 고정 로컬 JSON subprocess가 CLI와 같은 run 실행기를 사용하고 외부 모듈/SDK를 웹에 import하지 않는다. signed payload의 필수 모듈·정적 파일과 로컬 HTTP 문서를 연결했다.
+- 증거: 주입 경계 부재로 원격5실패 RED를 확인했다. 구현 후 HTTP/기존 계정/검수 회귀가 통과했다. 추가 명시적 Chromium 시험에서 공통 셸 배치 실패를 재현해 기존 rail·pathbar와 모바일 표시를 맞췄다. 실제 SDK·기존 서비스 rollout은 아직 미실행이다.
+- gate 변화: 없음. 기존 인간 라벨·학습 제어·OMX 장치 권한을 변경하지 않는다.

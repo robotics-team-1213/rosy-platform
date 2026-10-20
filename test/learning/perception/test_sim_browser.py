@@ -87,3 +87,41 @@ def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
                 browser.close()
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+def test_sim_discards_check_response_after_browser_identity_changes(tmp_path):
+    playwright = pytest.importorskip('playwright.sync_api')
+    runs = SharedRuns()
+    server = make_server(open_store(tmp_path), 0, accounts=Accounts(), sim_runs=runs)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    identity = ['first-session']
+    try:
+        with playwright.sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            browser.contexts[0].add_cookies([{'name': 'rosy_learning_session', 'value': 'reviewer', 'url': base}])
+            page.route('**/api/accounts/options', lambda route: route.fulfill(json={
+                'enabled': True, 'rosy_account': True, 'oauth': False, 'project_id': 'alpha'}))
+            def session(route):
+                value = route.fetch().json()
+                route.fulfill(json=dict(value, account_session=identity[0]))
+            page.route('**/api/accounts/session', session)
+            def check(route):
+                value = route.fetch().json()
+                identity[0] = 'replacement-session'
+                route.fulfill(json=value)
+            page.route('**/api/learning/sim/check', check)
+            try:
+                page.goto(base + '/learning/sim', wait_until='networkidle')
+                playwright.expect(page.locator('#sim-check')).to_be_enabled()
+                with page.expect_navigation(wait_until='networkidle'):
+                    page.locator('#sim-check').click()
+                playwright.expect(page.locator('#sim-start')).to_be_disabled()
+                assert not any(call['action'] == 'start' for call in runs.calls)
+                assert '확인한 입력 지문' not in page.locator('#sim-checked').inner_text()
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
