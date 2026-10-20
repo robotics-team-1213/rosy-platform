@@ -3,6 +3,12 @@ import math
 from uuid import UUID
 
 
+def contact_held(position,*,close,contact):
+    if not all(math.isfinite(x) for x in (position,close,contact)) or not close<contact:
+        raise ValueError('finite width-matched gripper contact required')
+    return close+(contact-close)/2<=position<=contact+.005
+
+
 def goal_succeeded(row):
     events=row['events'];goal=row['driver_goal_id']
     try:

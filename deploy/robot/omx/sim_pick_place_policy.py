@@ -40,7 +40,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from sim_policy_camera import SimPolicyCamera
     from sim_policy_inference import infer_for_owner
     from sim_policy_runtime import bind_sim_runtime
-    from sim_policy_trial_evidence import goal_succeeded, object_transition
+    from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
     from sim_study_authority import NativeSimStudyAuthority
     from sim_study_stop import NativeSimStopFence
     from cell_sim_tools import SimAid, refuse_second_owner
@@ -112,7 +112,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         q=js.positions[profile.gripper_joint]
         close=profile.gripper_close_for_width(recipe.box.width)
         contact=profile.gripper_contact_for_width(recipe.box.width)
-        held=q>=close+(contact-close)/2 and q<profile.gripper_open-.05
+        held=contact_held(q,close=close,contact=contact)
         opened=abs(q-profile.gripper_open)<=.05
         observation=GripperObservation(config.workcell_id,config.instance_id,
             'omx-sim-width-matched-position-v2',js.sequence,js.received_at,
@@ -197,7 +197,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             q=js.positions[profile.gripper_joint]
             close=profile.gripper_close_for_width(recipe.box.width)
             contact=profile.gripper_contact_for_width(recipe.box.width)
-            held=q>=close+(contact-close)/2 and q<profile.gripper_open-.05
+            held=contact_held(q,close=close,contact=contact)
             released=abs(q-profile.gripper_open)<=.05
             transition=object_transition(attached=attached,ever_attached=ever_attached,held=held,
                 released=released,gripper_position=q,
