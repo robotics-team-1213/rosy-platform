@@ -301,6 +301,20 @@ def test_at_a_crosswalk_a_closed_way_goes_straight_not_around():
     assert (error, debug["strategy"]) == (0.0, "drivable_crosswalk_straight"), debug
 
 
+def test_crosswalk_straight_does_not_override_a_lidar_front_stop():
+    steer = DrivableSteer()
+    steer.crosswalk((0.0, 0.0, 0.0))
+    way = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
+    error, confidence, debug = steer.update(way, 1, G, XO, HALF,
+        (0.05, 0.0, 0.0), (0.05, 0.0, 0.0), front_sector_m=0.114)
+    assert debug["strategy"] == "drivable_pivot_left", debug
+    assert error < 0 and confidence == CORE_MIN_CONFIDENCE
+
+    error, _, debug = steer.update(way, 2, G, XO, HALF,
+        (0.05, 0.0, 0.0), (0.05, 0.0, 0.0), front_sector_m=0.3)
+    assert (error, debug["strategy"]) == (0.0, "drivable_crosswalk_straight"), debug
+
+
 def test_an_in_place_turn_stops_after_about_a_hundred_degrees():
     steer = DrivableSteer()
     closed = _lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33)
@@ -500,7 +514,7 @@ def test_an_arc_toward_the_routes_bend_waits_while_the_ways_centre_lies_the_othe
     # left from there cut the corner and left the lane
     spoke = dict(target_m=(0.238, -0.067), ahead_m=0.194, exit=None, seen_exit="right", straddle=None, both=False,
                  exit_point_m={"left": (0.2, 0.12), "right": (0.2, -0.1)}, exit_reach_m={"left": 0.3, "right": 0.25},
-                 near_centre_m=(0.163, -0.055), centre_path_m=[], edges_m=[], near_edges_m={})
+                 exit_near={"left": True, "right": False}, near_centre_m=(0.163, -0.055), centre_path_m=[], edges_m=[], near_edges_m={})
     monkeypatch.setattr(steer_module, "way_target", lambda *a, **k: dict(spoke))
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=25.0)[2]
     assert debug["strategy"] == "drivable_centre" and debug.get("recentre_first"), debug

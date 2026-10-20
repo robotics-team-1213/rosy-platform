@@ -9646,6 +9646,114 @@ osy-d395-s1d\`.
 - 보안: provenance JSON의 원래 줄 형식을 복원하고 이 브랜치에 없는 peer fixture의 정확한 10개 기록만 제거한다. 추가 공개 source/SDK 값은 기존 path·원본 줄 SHA256·정확한 값 결속 방식으로 독립 검토하며 scanner 규칙을 바꾸지 않는다.
 - gate 변화: 없음. 이 검사와 수동적인 소프트웨어 배포는 실제 자동 충전·이안·암 작업 활성화나 현장 수용이 아니다.
 
+## 2026-10-19 · uncommitted · 통합 주행 반복 실패와 후보 HOLD 보존
+
+- 변경: 통합 첫 PASS, 두 번째 west stall, 전방 정지 수정 후 ring_n stall을 같은 검증 기록에 남겼다. 재현 명령은 위에서 고정한 source를 placeholder로 참조한다.
+- 증거: 수정본 관련 원격 132 passed, NEW 0과 실제 SIM 실패를 구분한다. 기존 명령의 SHA를 토큰으로 오인한 secret-scan 실패도 보존하며 검사 예외는 늘리지 않는다.
+- gate 변화: 없음. 반복 주행 수용은 HOLD, 추가 운동 변경과 실물 배포는 미수행이다.
+
+## 2026-10-19 · uncommitted · 관측 코너 정렬 후보의 상태 수명 실패 보존
+
+- 변경: 첫 관측 정렬·이미 선택된 반대 pivot 수정의 원격 회귀와 두 SIM 실패를 별도 검증 기록에 결속했다. 정렬 episode가 관측된 굽은 통로의 실제 전진을 종료 근거로 인정하지 못해 다음 회전까지 남는 경계를 적었다.
+- 증거: 최종 runtime 후보 관련 원격 125 passed, 영향 범위 6,701 passed/408 skipped/NEW 0, SIM 1.813m stall. 카메라 source stamp·이미지 hash·odom 이동·발행 명령·최종 정지와 lease 해제를 구분했다. 소스 검토 통과를 주행 수용으로 확대하지 않는다.
+- gate 변화: 없음. 반복 수용 HOLD, 다음 상태 수명 수정은 사용자 방향 확인 전 중단했고 main·실물은 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · 정렬 수명 수정 후 반복과 realign 계약 경계
+
+- 변경: 사용자 선택에 따라 관측 곡선의 실제 전진으로 정렬 episode를 종료하고, coverage와 전방 x거리를 구분한 후보의 검증을 결속했다. 기존 실패 기록은 보존한다.
+- 증거: 최종 source 관련 원격 140 passed, 영향 범위 6,832 passed/408 skipped/NEW 0. 동일 source SIM 1 PASS/1 FAIL이며 실패 실행에서 새 정렬 사용 뒤 현 차로와 목표 불일치로 realign→CORE HOLD/LOST가 발생했다. 모든 실행 최종 정지·lease 해제·소유 잔존 없음과 native fetch/정리를 확인했다.
+- gate 변화: 없음. trip 자동 REALIGN은 기존 계약이 명시적으로 거절하는 별도 미수용 범위임을 독립 추적했다. 반복 수용은 HOLD이고 main·실물은 바꾸지 않았다.
+
+## 2026-10-20 · uncommitted · 선택 경로 연결점 거리 안내 설계
+
+- 변경: 현재 1 PASS/1 FAIL 후보의 다음 단계로 연결점 station·다음 edge 방향을 같은 authority pose에 결합하는 설계를 작성했다. 관측 기반 후보 선택, 혼합 버전 배포 제약, 실패 장면 비교와 연속 2회 SIM 수용 기준을 명시했다.
+- 증거: 기존 source·검증 기록과 producer/schema/consumer 계약을 근거로 한 설계다. 거리 안내의 개선 효과는 아직 검증할 가설이며 제품 필드·동작을 추가하지 않았다.
+- gate 변화: 없음. 작성된 설계 검토 대기이며 주행 수용은 HOLD다.
+
+## 2026-10-20 · uncommitted · 연결점 거리 안내 실행 계획
+
+- 변경: 사용자의 설계 진행 승인에 따라 증거 확인→foundation 계약→Fleet/CORE 전달→perception 거리 구간→관측 출구 회귀→반복 SIM의 실행 순서를 작성했다. 카메라에 없는 경로 기하와 source/current 오차 근거를 먼저 확보하고, 목표 장면에서 조건이 성립하지 않으면 제품 변경 전에 중단한다.
+- 증거: native Gazebo model-pose odom과 일반 localization을 구별했다. 기존 along-path heuristic은 2D 오차 보증으로 전용하지 않으며, 초기 활성 범위는 동일 배포 묶음의 native SIM으로 제한하는 추가 제안을 적었다.
+- gate 변화: 없음. 작성된 실행 계획 검토 전이며 제품 코드·API·주행 수용은 바꾸지 않았다.
+
+## 2026-10-20 · uncommitted · 연결점 feasibility와 실패 후보 보존
+
+- 변경: 승인된 거리 안내 계획의 첫 관측 검증을 NO-GO로 표시하고 새 protocol 미구현 상태를 명확히 했다. 현재 차로·공통 목표 행 순서 후보의 회귀·독립 리뷰·실패 SIM을 새 검증 기록으로 보존했다.
+- 증거: `pinky-junction-feasibility-2026-10-20/result.md`. 100c 원격 영향 범위6,668 passed/408 skipped/NEW0이나 SIM은 stall 실패, 앞선881도 pose 실패·새 판단0회다. code 시험을 완주 수용으로 계산하지 않았다.
+- gate 변화: 없음. 주행 수용 HOLD. cue 통과 평면 완화도 원본에서 여유 조건이 성립하지 않아 기각했다. 후속 near admission 우회 회귀는 별도 검증한다.
+
+## 2026-10-20 · uncommitted · 근접 출구 후보 실패와 후속 수명 진단
+
+- 변경: 1b6 near admission 후보의 원격 시험과3.421m stall SIM 실패를 동결 기록에 추가했다. 관측 기억과 recentre 운동 선택의 수명 결합을 다음 재현 대상으로 기록했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 run ID·raw hash·실제 적용 횟수. 최종 정지·lease 해제·native 정리를 확인했으며 완주 수용은 미달이다.
+- gate 변화: 없음. 연속2회 동일 조건 완주를 통과하기 전까지 HOLD다.
+
+## 2026-10-20 · uncommitted · 관측 기억 후보 실패와 분기 보정 경계
+
+- 변경: 4d0 관측 기억 보존 후보의 실제 효과와 남은 stall 실패를 추가 보존했다. 현재 근접 분기를 미래 회전 보정이 덮는 후속 원인을 구분했다.
+- 증거: 같은 검증 기록의4d0 run·해시·관측점·회전량. 원격 영향 범위 문서 guard 실패도 생략하지 않고, HEAD 코드 표기 교정 뒤 release guard 통과를 별도로 기록했다.
+- gate 변화: 없음. 수정·회귀·SIM·실물 수용을 구분한다.
+
+## 2026-10-20 · uncommitted · 열린 junction 원본 재생과 선택 소비 검증
+
+- 변경: 8463 실패·원본 mask 기대값 수정과 native PNG 대조 결과를 동결 기록에 보존했다. 열린 직진로 옆의 선택된 near 출구 소비 후보를 기존 계약 범위에서 검증했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 native replay JSON·PNG 해시, source commit67e0와 관련168 passed/NEW0. station 변화는 producer의 다음 arc admission에서 발생하며 transport 오류로 단정하지 않았다.
+- gate 변화: 없음. 반복 완주 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 1 PASS/1 FAIL 보존과 분리된 출구 재현
+
+- 변경: 열린 junction 후보의 첫 완주와 마지막 구간 이탈 실패, 중간 일시적 HOLD·revision metadata 누락을 함께 보존했다. 마지막 코너의 분리된 opening이 합쳐지는 native 재생과 후속 결속 회귀를 기록했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`에 두 run의 조건 동일성·정지·lease·정리·원본 hash를 기록했다. f47d 관련173 passed/NEW0는 최신 SIM 수용과 구분한다.
+- gate 변화: 없음. 주행 재현 수용 HOLD, 실물·현장 gate 승격 없음.
+
+## 2026-10-20 · uncommitted · 마지막 코너 실패와 실제 픽셀 근거 보존
+
+- 변경: b42의 영향6,900 passed와 마지막 코너 이탈 실패를 함께 동결 기록에 추가했다. 후속 관측 출처 보존·실제 floor 픽셀 정렬 후보와 native RED→GREEN 증거를 결속했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`에 SIM 정지·lease·정리·원본 hash, 001337 mask/replay hash와 생산8a870 관련193 passed/NEW0를 기록했다.
+- gate 변화: 없음. 같은 후보 연속2회 완주 조건 미달이며 이전 e5 첫 PASS를 이월하지 않는다.
+
+## 2026-10-20 · uncommitted · 중반 코너 실패와 근거리 ROI 입장 변경 보존
+
+- 변경: 7a0의 native6,922 passed와 중반 코너 이탈 실패를 동결 기록에 추가했다. 원본 마스크의42개 근거리 행, 도로 끝 판단과 정렬 ROI의 분리, 회전 후 현재 좌표의 연속 prefix와 예산 보존을 기록했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 원본·mask·replay hash, b8e9 관련200 passed/skip0/NEW0 및 독립 최종 소스 검토0/0/0.
+- gate 변화: 없음. 최신 영향 범위·반복 SIM 수용 HOLD, 실물·현장 gate 승격 없음.
+
+## 2026-10-20 · uncommitted · 곡선 진행의 방향 비교와 정렬 수명 회귀 보존
+
+- 변경: dfca의 영향6,914 passed·s5.357 정체 실패와 원본138초 곡선 전진 증거를 기록했다. 가까운 진행 방향과 먼 곡선 목표 방향을 구분하는 수명 종료 수정을 회귀에 결속했다.
+- 증거: `validation/pinky-junction-feasibility-2026-10-20/result.md`의 원본 hash·145개 raw odom·native RED3→eeb3 관련203 passed/skip0/NEW0. 회전량 예산을 늘리지 않고 측정된 전진으로 이전 episode를 종료한다.
+- gate 변화: 없음. 최신 영향 범위·연속2회 SIM 미검증이며 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 반복 실패와 가시 픽셀 곡률 보정 증거
+
+- 변경: d42의1 PASS/1 FAIL, 종단 realign HOLD와 native 원본 재생을 동결 기록에 추가했다. 실제 픽셀로 검증한 같은 band chord에 한정한 source 추정 보정을 기록했다.
+- 증거: 9550 관련210 passed/skip0/NEW0, 독립 safety 및 최종 소스 검토0/0/0. 가시 표본 사이 픽셀 공백·offscreen·정상 곡선 보존 회귀를 포함한다.
+- gate 변화: 없음. 이전 PASS 이월 없이 새 후보의 영향 범위·동일 조건 연속2회 SIM을 확인한다.
+
+## 2026-10-20 · uncommitted · 안내 공백의 정렬 추적 결함과 반복 실패 보존
+
+- 변경: 24cc 영향6,937 passed와1 PASS/1 FAIL, 마지막 코너 종단 spent HOLD 및 정상 odom 중 안내만 사라진3프레임을 동결 기록에 추가했다.
+- 증거: 원본·결과 hash와 native 재생12,168개 odom fixture 및1941 관련12파일 통과/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0. 비선택 경로는 추적만 하며 기존 상태의 생성·종료·출력 변경이 없다.
+- gate 변화: 없음. 최신 영향 범위·반복 SIM을 새 후보에서 검증하며 이전 PASS를 이월하지 않는다.
+
+## 2026-10-20 · uncommitted · 도착 상태와 실제 목표 수용 분리
+
+- 변경: f976의 코너 완주 후 정착0.196729m 실패와 조기 arrived pose0.287m를 보존했다. source SHA 표기의 secret guard 오인은 값 변경 없이 HEAD 단독 문장으로 수정했다.
+- 증거: Fleet stop executing과 실제 hold의 구분,737 관련254 passed와 미포함 문서 guard1 FAIL, 독립 safety·최종 소스 검토0/0/0을 동결 기록에 결속했다.
+- gate 변화: 없음. 기존0.15m 수용 기준을 유지하며 수정 문서 guard·최신 영향 범위·같은 후보 연속2회 SIM 전까지 HOLD다.
+
+## 2026-10-20 · uncommitted · 중간 코너 실패와 곡선 입장 회귀 보존
+
+- 변경: 7956의 spent 정체 실패, native 재생13, 중단된 영향 범위와 ratchet 실패를 보존했다. 테스트 삭제에 따른 ratchet1,748 갱신 뒤 구조40 passed와 새 곡선 입장 증거를 기록했다.
+- 증거: d8 관련235 passed/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0. 최초2b의 기존3FAIL/Important1도 삭제하지 않았다.
+- gate 변화: 없음. 전체 선택 경로를 보존한 영향 범위 분할 실행과 최신 후보 연속2회 SIM 전까지 HOLD다.
+
+## 2026-10-20 · uncommitted · 주행 SIM 수용 완료 증거 정리
+
+- 변경: a24 고정 소스의 연속2회 PASS와 실제 도착 거리, 동일 조건·model/map/source hash, 원본 로그 hash와 정지·lease·정리 증거를 동결 기록에 추가했다.
+- 증거: native12,973 passed/776 skipped/세 로그 NEW0, 목표 오차4.722/7.501mm·via각29mm. metadata 누락과 lane_return SKIP, native model-pose 및 실물 미검증 범위를 함께 기록했다.
+- gate 변화: 전체 모듈·FIELD 승격 없음. 본 고정 조건 주행 SIM 수용을 충족했으며 최종 문서 guard·증거 검토는 후속 HEAD에서 별도 확인한다.
+
 ## 2026-10-20 · uncommitted · 관제 운영자용 AI 에이전트 설계·구현 계획 초안
 
 - 변경: `plans/2026-10-20-operator-ai-design.md`와 `plans/2026-10-20-operator-ai-plan.md`에 Console 오른쪽 패널, Fleet 웹 접수, 기존 conversation 재사용, 음성 입출력과 실행 연결 순서를 적었다.

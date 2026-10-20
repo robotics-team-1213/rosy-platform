@@ -114,7 +114,7 @@ def _route_transition(steer, identity):
     if previous == identity:
         return
     steer._last_out = steer._pending = steer._smoothed = None
-    steer._side = steer._pivot = steer._pivot_yaw = None
+    steer._side = steer._pivot = steer._pivot_yaw = steer._route_exit = None
     steer._misaligned_since = None
     steer._expected_path = None
 
@@ -177,7 +177,7 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
                         confidence=None, target_m=None)
             return None, True
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
-                                               source, current, observed_only=route_prior is not None, **extra)
+            source, current, observed_only=route_prior is not None, current_stamp=stamp, **extra)
         # Missing source odometry drops the hypothesis; cached inferences count once.
         _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp,
                                         current_pose=current))

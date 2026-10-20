@@ -30,8 +30,8 @@ import time
 import numpy as np
 from core_common.robot_body import NOMINAL_BODY
 
-from .target import MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
-from .route_guard import observed_route_candidate
+from .target import CROSS_MIN_ALONG_M, CROSS_TOL_M, MAX_TARGET_CURVATURE, ROW_BAND_M, _centre_target, _col_y, _crosses, _exit_rows, _local_floor, _observed_target, _row_x, _to_current, _to_world, one_edge_centre  # noqa: F401 (re-exported)
+from .route_guard import observed_route_candidate, route_exit_point
 from ..lane_keep_lines import PAINT_HALF_WIDTH_M
 
 LOOKAHEAD_M = 0.25
@@ -79,10 +79,6 @@ EDGE_MEMORY_MAX_X_M = 0.25
 CORRIDOR_NEAR_M = 0.12
 #: URDF body (D-424), base_footprint
 BODY_HALF_M = NOMINAL_BODY.half_width_m
-#: a remembered boundary point this close to the path robot->target blocks that target
-CROSS_TOL_M = 0.015
-#: boundary points nearer than this along the arc are not judged (projection and odometry noise)
-CROSS_MIN_ALONG_M = 0.06
 #: an in-place turn stops after this much rotation (no U-turn without a route; p8 crosswalk)
 PIVOT_MAX_RAD = 1.75
 #: a route prior within this of straight ahead means "keep going" (no exit turn)
@@ -150,6 +146,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     inner = half - PAINT_HALF_M
     centre = np.where(open_left & ~open_right, y_right + inner,
                       np.where(open_right & ~open_left, y_left - inner, (y_left + y_right) / 2.0))
+    out['local_floor_m'] = _local_floor(way, rows, xs, centre, ground, BEND_ON_X_M)
     # ahead: walk up from the nearest row while the corridor columns are on the way
     ahead = 0.0
     for index in range(len(rows) - 1, -1, -1):
@@ -167,17 +164,15 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     # A side exit: the way stays on that frame border for SIDE_EXIT_ROWS rows past the near band.
     # The side whose open border reaches farther wins (a wall corner leaves the floor on the border
     # only near the robot); within EXIT_TIE_M of each other, keep right (D-384 2).
-    above = xs > float(xs.min()) + 0.04
     reach, near_ok = {}, {}
     for side, edge in (("left", open_left), ("right", open_right)):
-        hit = edge & above
-        if int(hit.sum()) >= SIDE_EXIT_ROWS:
-            near_ok[side] = float(xs[hit].min()) <= float(xs.min()) + EXIT_NEAR_M
+        idx, close = _exit_rows(xs, rows, edge, SIDE_EXIT_ROWS, EXIT_NEAR_M)
+        if len(idx):
+            near_ok[side] = close
             # aim at the middle of the opening, not its far end: the far end cut the inside corner
             # (9dfk 20261010T030423Z_rosy_41 left the lane twice at the NE spoke turning right)
-            idx = np.flatnonzero(hit)
             far = int(idx[np.argsort(xs[idx])[len(idx) // 2]])
-            reach[side] = float(xs[hit].max())
+            reach[side] = float(xs[idx].max())
             out["exit_point_m"][side] = (round(float(xs[far]), 3),
                                                        round(float((y_left if side == "left" else y_right)[far]), 3))
     if len(reach) == 2:
@@ -186,7 +181,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         out["exit"] = next(iter(reach))
     # The opening must already reach beside the robot: turning toward a mouth still ahead cuts
     # across the boundary before it (9dfk 20261010T002026Z hit the ring's outer line at the SE exit).
-    out["seen_exit"] = out["exit"]
+    out.update(seen_exit=out["exit"], exit_near=near_ok)
     if out["exit"] is not None and not near_ok[out["exit"]]:
         out["exit"] = None
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
@@ -213,42 +208,18 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
         if one.any() and len(xs) > 1:
             cx, cy = one_edge_centre(xs, edge, sign * inner, seen)
             target_x, target_y = np.where(one, cx, target_x), np.where(one, cy, target_y)
-    point, curvature, band = _centre_target(target_x, target_y, lookahead)
+    point, curvature, band = _centre_target(target_x[::-1], target_y[::-1], lookahead)
+    point, curvature, band = _observed_target((point, curvature, band), target_x[::-1], target_y[::-1], lookahead, way, ground, x_offset)
     if point is not None:
         out["target_m"] = (round(point[0], 3), round(point[1], 3))
         out["curvature_1pm"] = round(curvature, 3)
-        out["both"] = bool(np.mean(~open_left[band] & ~open_right[band]) >= 0.5)
+        out["both"] = bool(np.mean(~open_left[band[::-1]] & ~open_right[band[::-1]]) >= 0.5)
     return out
-
-
-def _crosses(points, tx, ty):
-    """Lateral offset of the nearest remembered boundary point within CROSS_TOL_M of the arc the
-    robot drives to (tx, ty) (tangent to its heading, as a pure-pursuit arc), or None. The chord
-    would cut the inside of every bend."""
-    d2 = tx * tx + ty * ty
-    if d2 < 1e-6 or not points:
-        return None
-    k = 2.0 * ty / d2                                    # signed curvature, left +
-    pts = np.asarray(points, float)
-    if abs(k) < 1e-6:
-        along, across = pts[:, 0], np.abs(pts[:, 1])
-        length = tx
-    else:
-        r = 1.0 / k                                       # circle centre (0, r)
-        dist = np.hypot(pts[:, 0], pts[:, 1] - r)
-        across = np.abs(dist - abs(r))
-        ang = np.arctan2(pts[:, 0], np.sign(r) * (r - pts[:, 1]))   # angle travelled along the arc
-        along = ang * abs(r)
-        length = math.atan2(tx, math.copysign(1.0, r) * (r - ty)) * abs(r)
-    hit = (along > CROSS_MIN_ALONG_M) & (along < length) & (across < CROSS_TOL_M)
-    if not hit.any():
-        return None
-    first = int(np.argmin(np.where(hit, along, np.inf)))
-    return float(pts[first, 1])
 
 
 # Legacy defaults; runtime instances use the effective CORE law.
 CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.08
+MAX_CRUISE_MPS = 0.10
 
 
 def error_for_k(curvature, confidence, *, cruise_speed=CORE_CRUISE_MPS,
@@ -278,14 +249,14 @@ class DrivableSteer:
     @classmethod
     def from_config(cls, raw):
         return cls(cruise_speed=min(float(raw.get('cruise_speed', CORE_CRUISE_MPS)),
-                                    float(raw.get('max_linear', .10))),
+                                    float(raw.get('max_linear', MAX_CRUISE_MPS))),
                    steering_gain=float(raw.get('steering_gain', CORE_STEERING_GAIN)),
                    min_confidence=float(raw.get('min_confidence', CORE_MIN_CONFIDENCE)))
 
     def __init__(self, *, cruise_speed=CORE_CRUISE_MPS, steering_gain=CORE_STEERING_GAIN,
                  min_confidence=CORE_MIN_CONFIDENCE):
         if (not all(math.isfinite(v) for v in (cruise_speed, steering_gain, min_confidence))
-                or not 0. < cruise_speed <= .10 or steering_gain <= 0.
+                or not 0. < cruise_speed <= MAX_CRUISE_MPS or steering_gain <= 0.
                 or not 0. < min_confidence <= 1.):
             raise ValueError('invalid CORE steering law')
         self.steering_law = dict(cruise_speed=cruise_speed, steering_gain=steering_gain,
@@ -297,7 +268,7 @@ class DrivableSteer:
         self._target = None
         self._pivot = None
         self._smoothed = None
-        self._side = None
+        self._side = self._route_exit = None
         self._memory = None
         self._edges = []
         self._pivot_yaw = None
@@ -309,7 +280,9 @@ class DrivableSteer:
         self._last_out = self._pending = None
 
     def _forget_latches(self):
-        self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = None
+        if '_route_bridge' in self.__dict__:
+            self._route_bridge.invalidate_alignment()
+        self._key = self._target = self._pivot = self._smoothed = self._side = self._memory = self._route_exit = None
         self._pivot_yaw = None
         self._crosswalk_pose = None
         self._edges = []
@@ -344,15 +317,17 @@ class DrivableSteer:
             return False
         return True
 
-    def update(self, *args, guide_s=None, guide_fresh=True, observed_only=False, **kw):
+    def update(self, *args, guide_s=None, guide_fresh=True, observed_only=False, current_stamp=None, **kw):
         """_update with the driving context: the realign rule, a strategy switch only after two
         consecutive frames (a HOLD applies at once), and the decision history."""
         here = kw.get("guide_here_deg", kw.get("guide_deg"))
         self._ctx = dict(s=guide_s, fresh=guide_fresh, here=here or 0.0, guide=kw.get("guide_deg") is not None,
-                         ahead=kw.get("guide_deg"))
+                         ahead=kw.get("guide_deg"), stamp=current_stamp)
         error, confidence, info = self._update(*args, **kw)
         error, confidence, info = observed_route_candidate(error, confidence, info, observed_only=observed_only, owner=self,
-                                                           pose=args[6] if len(args) > 6 else kw.get('current_pose'))
+            pose=args[6] if len(args) > 6 else kw.get('current_pose'),
+            source_pose=args[5] if len(args) > 5 else kw.get('source_pose'), current_stamp=current_stamp,
+            observation_stamp=args[1] if len(args) > 1 else kw.get('way_key'))
         guide = kw.get("guide_deg")
         target = info.get("target_now_m")
         if error is not None and guide is not None and guide_fresh and target:
@@ -409,10 +384,10 @@ class DrivableSteer:
                 if info.get(key) is not None and info[key] not in open_sides:
                     info[key] = open_sides[0] if len(open_sides) == 1 and key == "seen_exit" else None
             info["side_clear_m"] = {k: (None if v is None else round(v, 3)) for k, v in side_clear_m.items()}
-            for remembered in (self._memory[0] if self._memory else None, self._side, self._pivot):
+            for remembered in (self._memory[0] if self._memory else None, self._side, self._pivot, self._route_exit[0] if self._route_exit else None):
                 if remembered is not None and side_clear_m.get(remembered) is not None and side_clear_m[remembered] < SIDE_WALL_M:
-                    self._memory = self._side = self._pivot = self._pivot_yaw = None
-        ahead, side = info["ahead_m"], info["exit"]
+                    self._memory = self._side = self._pivot = self._pivot_yaw = self._route_exit = None
+        ahead, side, near = info["ahead_m"], info["exit"], info.get("exit_near", {info["exit"]: info["exit"] is not None})
         bridge, want = False, None
         if guide_deg is not None:
             # Route prior (Fleet guidance, D-511 rev 2: the lane direction ahead minus the heading):
@@ -427,13 +402,13 @@ class DrivableSteer:
             if abs(here) > GUIDE_REVERSE_DEG and not guide_pivot_ok:
                 # facing against the lane where the turn circle does not fit (a 0.16 m lane, not one of
                 # the ring-entry turn spots): no U-turn in the lane, HOLD for Fleet (architect 2026-10-10)
-                self._smoothed = self._pivot = self._side = None
+                self._smoothed = self._pivot = self._side = self._route_exit = None
                 return None, None, dict(info, strategy="none", reason="wrong_way_hold", reorient_deferred=True)
             elif abs(here) > GUIDE_REVERSE_DEG:
                 # facing against the lane: turn in place toward its direction (user 2026-10-10: when
                 # the direction is wrong, set it right; 9dfk 20261010T042913Z_rosy_41 U-turned at the
                 # S-curve top and drove the loop backwards)
-                self._smoothed = self._pivot = self._side = None
+                self._smoothed = self._pivot = self._side = self._route_exit = None
                 error = -PIVOT_ERROR if here > 0 else PIVOT_ERROR
                 return error, self._pivot_confidence, dict(info, strategy="drivable_reorient_" + ("left" if here > 0 else "right"))
             want = None if abs(guide_deg) < EXIT_BEND_DEG or info.get("reorient_deferred") else (
@@ -443,7 +418,7 @@ class DrivableSteer:
                 # is bridged along the lane below (user 2026-10-10: the map is the route reference)
                 side = info["exit"] = None
                 self._pivot = self._side = None
-            elif want in info["exit_reach_m"]:
+            elif want in info["exit_reach_m"] and near.get(want) and (not side_clear_m or want in open_sides):
                 side = info["exit"] = want
             elif side is not None and side != want:
                 side = info["exit"] = None      # an opening against the route is not taken
@@ -457,13 +432,13 @@ class DrivableSteer:
             info["exit_behind_line"] = True
             # The same rejected opening cannot return through the memory or turn latch below.
             info["seen_exit"] = None
-            self._memory = self._side = self._pivot = self._pivot_yaw = None
+            self._memory = self._side = self._pivot = self._pivot_yaw = self._route_exit = None
         # Exit memory: an opening seen on the way in leaves the view near the corner (the camera
         # sees ~+-30 deg and ~0.37 m), so a closed way pivots toward the last opening seen within
         # EXIT_MEMORY_M of travel (8kcn at the SE spoke's foot, 9dfk at the top-left corner).
-        if info.get("seen_exit") is not None:
-            self._memory = (info["seen_exit"], current_pose)
-        elif self._memory is not None and current_pose is not None and self._memory[1] is not None and math.hypot(
+        if near.get(side or info.get("seen_exit")):
+            self._memory = (side or info["seen_exit"], source_pose)
+        if self._memory is not None and current_pose is not None and self._memory[1] is not None and math.hypot(
                 current_pose[0] - self._memory[1][0], current_pose[1] - self._memory[1][1]) > EXIT_MEMORY_M:
             self._memory = None
         # A way whose target runs on ahead is no corner, whatever closed the short straight corridor: on
@@ -474,26 +449,25 @@ class DrivableSteer:
                        and abs(math.degrees(math.atan2(target[1], target[0]))) < TARGET_SIDE_DEG
                        and (wall_ahead_m is None or wall_ahead_m > target[0]))   # a LiDAR wall short of it closes
         info["straight_on"] = straight_on
-        if side is None and ahead < PIVOT_AHEAD_M and self._memory is not None and not straight_on:
-            side = info["exit"] = want or self._memory[0]
+        if (side is None and ahead < PIVOT_AHEAD_M and self._memory is not None and not straight_on
+                and (want is None or want == self._memory[0])):
+            side = info["exit"] = self._memory[0]
             info["exit_from_memory"] = True
         if side is None and ahead < PIVOT_AHEAD_M and info["target_m"] is not None:
-            # A corner whose way turns inside the view (no opening on the frame border, none remembered): the
-            # way's own centre target names the side (v2 lap r8 stood 0.16 m from the wall at an inner corner),
-            # unless it lies beyond a boundary seen earlier, as a rejected opening would. Closed at the body
-            # the side only turns the robot in place, which crosses no line (v2 lap r11: a ~0.06 m radius
-            # corner, the arc to the target clipped the inner line remembered on the way in).
-            bearing = math.degrees(math.atan2(info["target_m"][1], info["target_m"][0]))
+            # No border opening or memory: the pursuit target names the side unless beyond a seen line.
+            # Closed at the body, pivot only: the arc clipped the inner line at v2 lap r11's tight corner.
+            target_now = _to_current(info["target_m"], source_pose, current_pose)
+            bearing = math.degrees(math.atan2(target_now[1], target_now[0]))
+            target_side = "left" if bearing > 0 else "right"
             beyond = info.get("exit_behind_line") or current_pose is not None and _crosses(
                 seen, *_to_current(info["target_m"], source_pose, current_pose)) is not None
-            if abs(bearing) >= TARGET_SIDE_DEG and (not beyond or ahead < PIVOT_AT_BODY_M):
-                side = info["exit"] = want or ("left" if bearing > 0 else "right")
+            if (abs(bearing) >= TARGET_SIDE_DEG and (not beyond or ahead < PIVOT_AT_BODY_M)
+                    and (want is None or want == target_side)):
+                side = info["exit"] = target_side
                 info["exit_point_m"] = dict(info["exit_point_m"], **{side: tuple(info["target_m"])})
                 info["exit_from_target"] = True
         if side is None and want is not None and ahead < PIVOT_AHEAD_M and not straight_on:
-            # Closed at the corner, no opening seen, the route turns: turn in place toward it. The route
-            # prior names sides only; when a turn in place fits is CORE's (rotation clearance), not a
-            # creep-then-hold (that held the v2 lap's corners; user 2026-10-18).
+            # No observed opening: the route names a look direction; CORE checks rotation clearance.
             side = info["exit"] = want
             info["exit_from_guide"] = True
         # The side chosen at a closing bend or junction is kept until the way runs ahead again (9dfk 20261010T001349Z weaved at the ring's SE exit)
@@ -501,19 +475,7 @@ class DrivableSteer:
             self._side = None
         if self._side is None and ahead < LOOKAHEAD_M and side is not None:
             self._side = side
-        if self._side is None:
-            self._route_exit = None
-        elif self._side in info["exit_point_m"]:
-            side = info["exit"] = self._side
-            if self._side == want:
-                self._route_exit = (want, info["exit_point_m"][want], source_pose)
-        elif getattr(self, "_route_exit", None) and self._route_exit[0] == self._side:
-            # the route's exit leaves the ~+-30 deg view at the corner: arc on to it by odometry (v2 lap r25)
-            point = _to_current(self._route_exit[1], self._route_exit[2], source_pose)
-            if point[0] > 0.0:
-                info["exit_point_m"] = dict(info["exit_point_m"], **{self._side: point})
-                side = info["exit"] = self._side
-                info["exit_from_route_memory"] = True
+        side = route_exit_point(self, info, side, want, source_pose, current_pose, way_key, side_clear_m)
         if straight_on and ahead < PIVOT_AHEAD_M:
             side = info["exit"] = None      # no turn in place while the way runs on ahead (see straight_on)
         # CORE stops forward motion for a return in its +-45 deg front sector inside its stop distance (v2 lap
@@ -534,13 +496,13 @@ class DrivableSteer:
             self._smoothed = self._pivot = None
             error = -PIVOT_ERROR if info["straddle"] == "left" else PIVOT_ERROR
             return error, self._pivot_confidence, dict(info, strategy=f"drivable_off_line_{info['straddle']}")
-        if self._in_crosswalk(current_pose) and (guide_deg is None or abs(guide_deg) < EXIT_BEND_DEG):
+        if not front_blocked and self._in_crosswalk(current_pose) and (guide_deg is None or abs(guide_deg) < EXIT_BEND_DEG):
             # (only where the map lane goes straight on: g10-9dfk held 822 frames "crosswalk straight"
             # into the wall at the SW 90-degree corner, the corner's transverse line read as bars)
             # Crosswalk bars, a speed bump or a cable cut the way short there; the lane goes straight
             # across. No pivot or exit turn: centre steering only, and CORE's D-573 gate stops, looks
             # and crosses (p8/p10: pivots at the bottom-road crosswalk became U-turns).
-            side, self._pivot, self._side = None, None, None
+            side = self._pivot = self._side = self._route_exit = None
             info["crosswalk_hold"] = True
             if ahead < LOOKAHEAD_M:
                 self._smoothed = 0.0 if self._smoothed is None else self._smoothed
@@ -549,8 +511,11 @@ class DrivableSteer:
                 < PIVOT_AHEAD_M) and (info.get("near_centre_m") or (0, 0))[1] * (1 if side == "left" else -1) <= -RECENTRE_M:
             side = info["exit"] = self._side = None   # arcs too: the south spoke cut its bend 0.2 m early (r50b)
             info["recentre_first"] = True
+        turn_target = info['exit_point_m'].get(side, target)
         if self._pivot is None and side is not None and (front_blocked or ahead < PIVOT_AHEAD_M and (
-                guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG)):
+                guide_deg is None or abs(guide_deg) >= PIVOT_GUIDE_DEG
+                or any(info.get(f'exit_from_{origin}') for origin in ('guide', 'target', 'memory')) and target is not None
+                and _to_current(turn_target, source_pose, current_pose)[1] * (1 if side == 'left' else -1) < 0.0)):
             self._pivot = side
             self._pivot_yaw = None if current_pose is None else current_pose[2]
         if self._pivot is None:
@@ -559,7 +524,7 @@ class DrivableSteer:
                 math.atan2(math.sin(current_pose[2] - self._pivot_yaw), math.cos(current_pose[2] - self._pivot_yaw))) > PIVOT_MAX_RAD:
             # Budget spent: drop the turn and its memories and carry on with what is in front (a
             # sticky stop here held 9dfk LOST for good, 20261010T040459Z_rosy_41).
-            self._pivot = self._side = self._memory = self._pivot_yaw = None
+            self._pivot = self._side = self._memory = self._pivot_yaw = self._route_exit = None
             side = info["exit"] = None
             info["pivot_limit"] = True
         if self._pivot is not None:
@@ -577,8 +542,12 @@ class DrivableSteer:
             self._smoothed = None
             return None, None, dict(info, strategy="none", reason=info.get("reason") or "drivable_closed")
         strategy, target = "drivable_centre", info["target_m"]
-        if ahead < LOOKAHEAD_M and side is not None:
-            # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
+        opening = info["exit_point_m"].get(side)
+        route_turn = (side == want and near.get(side) and self._ctx.get("fresh") and opening is not None
+                      and source_pose is not None and current_pose is not None
+                      and _to_current(opening, source_pose, current_pose)[0] > 0.0)
+        if side is not None and (ahead < LOOKAHEAD_M or route_turn):
+            # A selected near route branch is taken even when another road runs straight on.
             strategy, target = f"drivable_turn_{side}", info["exit_point_m"].get(side, info["target_m"])   # a remembered side may be out of view
         tx, ty = _to_current(target, source_pose, current_pose)
         # The boundary memory only rejects exits (above). Clamping the target with it made most pivots:

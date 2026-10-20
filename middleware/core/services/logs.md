@@ -1520,3 +1520,9 @@
 - 변경: Preserve source commits ba4868ef59 (energy restriction) and e5f51f5c7 (internal completion naming) with independent scoped static safety reviews, plus attended runbook and validation/station-pack-energy-source-2026-10-17/result.md.
 - 증거: Both official default-three-host pytest requests ended exit1 after600s with no hosts and no tests/report/RED/GREEN. Source request covered ba4868ef59 only; latest naming-only source also remains unexecuted. Changed Python AST/doc links/diff pass; harness lint0errors33warnings; source safety_review/size_range checked both commits successfully. FULL CI remains required and unrun. No simulation, local pytest, deployment, landing or push.
 - gate 변화: None. Actual vendor energy port, hardware factory/Fleet HTTP closure, source-rate capacity/long-run map limits and deferred physical three-cycle/relocation acceptance remain.
+
+## 2026-10-19 · uncommitted · 횡단보도 대기 중 pivot 차단 회귀
+
+- 변경: 인식의 기존 pivot 후보도 CORE의 관찰 대기·사람 감지·관측 불명 대기에서 두 축 모두 정지하는지 검증한다. 사람·불명은 정상 clear window가 지난 뒤 원인까지 확인한다.
+- 증거: 독립 계약 검토에서 인식 전방 정지 수정의 권한 변경은 발견되지 않았다. 원격 회귀 결과는 별도 기록한다.
+- gate 변화: 없음. CORE 실행 코드는 바꾸지 않는다.

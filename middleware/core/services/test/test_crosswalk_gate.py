@@ -301,6 +301,21 @@ def test_gate_never_lifts_a_zero_or_raises_a_speed():
     assert s.m._crosswalk_gate(s.t, slow) == slow
 
 
+@pytest.mark.parametrize("reason,expected", [("looking", None), ("person", "person_present"), ("unknown", "look_unknown")])
+def test_crosswalk_wait_blocks_a_zero_linear_pivot_candidate(reason, expected):
+    s = Sim()
+    if reason == "person":
+        s.objects = [(0.60, 0.0, 0.03)]
+    elif reason == "unknown":
+        s.no_return = lambda angle: abs(angle) < 0.3
+    s.to_stop()
+    s.run(0.2 if reason == "looking" else 5.5)
+    assert s.crosswalk.reason == expected
+    pivot = LineFollowDecision(linear=0.0, angular=0.4, generation=1, mode=LineFollowMode.CAMERA_LINE)
+    stopped = s.m._crosswalk_gate(s.t, pivot)
+    assert stopped.linear == 0.0 and stopped.angular == 0.0
+
+
 def test_estop_and_mode_off_reset_the_gate():
     s = Sim()
     s.objects = [(0.60, 0.0, 0.03)]

@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · 횡단보도 대기 중 pivot 차단 회귀
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) private energy handover naming
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy restriction implementation
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) original energy remote verification not run
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) new energy log formatting correction
