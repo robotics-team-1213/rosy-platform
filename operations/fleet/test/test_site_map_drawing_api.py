@@ -2,6 +2,7 @@
 import asyncio
 import importlib
 import subprocess
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,45 @@ from test_site_map_projection import binary, registration
 
 UPLOAD = '/api/fleet/site-map/drawings'
 DATA = binary([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]])
+
+
+@pytest.mark.parametrize('association', ['active', 'history', 'profile', 'hidden_active'])
+@pytest.mark.parametrize('legacy_restart', [False, True])
+def test_map_identity_cannot_reuse_another_drawing_frame(tmp_path, monkeypatch, association, legacy_restart):
+    client, store, assets = setup_assets(tmp_path, monkeypatch)
+    body = store.active_view()['map']
+    if association == 'history':
+        other = {**body, 'map_id': 'other'}
+        saved = store.save_draft(SiteMap.model_validate(other), expected_revision=None, principal_id='bob')
+        store.activate(expected_revision=saved['revision'], principal_id='bob', route_active=False)
+    elif association == 'profile':
+        body = {**body, 'map_id': 'profile-only'}
+        store.save_profile('template', name='Template', site_map=SiteMap.model_validate(body),
+                           expected_revision=None, principal_id='bob')
+    elif association == 'hidden_active':
+        store.save_draft(SiteMap.model_validate({**body, 'map_id': 'other'}),
+                         expected_revision=None, principal_id='bob')
+    if legacy_restart:
+        path = store.path
+        store.close()
+        with sqlite3.connect(path) as db:
+            db.execute('DROP TABLE IF EXISTS site_map_frames')
+        store = SiteMapStore(path, drawing_assets=assets)
+    uploaded = client.post(UPLOAD, headers=trip.OPERATOR, content=DATA).json()
+    projection = assets.project(uploaded['asset_sha256'], registration())
+    body = {**body, 'drawing': {k: projection[k] for k in ('asset_sha256', 'projection_sha256')},
+            'survey': {'revision': projection['projection_sha256'], 'origin': [0, 0], 'heading_rad': 0,
+                       'scale_source': 'measured', 'measured_distance_m': 1,
+                       'description': 'measured drawing', 'reviewed': False}}
+    candidate = SiteMap.model_validate(body)
+    active, draft = store.active_view(), store.draft_view()
+    with pytest.raises(SiteMapError) as error:
+        store.save_draft(candidate, expected_revision=draft['revision'], principal_id='bob')
+    assert error.value.code == 'SITE_MAP_DRAWING_INVALID'
+    with pytest.raises(SiteMapError):
+        store.save_profile('replacement', name='Replacement', site_map=candidate,
+                           expected_revision=None, principal_id='bob')
+    assert store.active_view() == active and store.draft_view() == draft
 
 
 def asset_module():
