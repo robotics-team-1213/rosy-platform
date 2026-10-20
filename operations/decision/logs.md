@@ -55,3 +55,15 @@
 - 변경: 웹 모델 profile revision과 locale을 구분하고 두 언어의 부정·인용·안전·사생활 사례를 평가했다. 모델 설명문은 고정 값으로 제한하며 Discord처럼 최신 원문을 읽을 수 있게 전달한다.
 - 증거: 실제 고정 Qwen 모델에서 CHAT 사실 주장이 거부되었고, 10/19·15/19 실패를 보존한 뒤 원문 전달 보완으로 19/19 통과했다. 큰 source inventory는 추론 패킷 제한과 별개인 기존 배포 해시 함수로 검증했다.
 - gate 변화: 없음. 고정 사례 통과는 일반 언어 성능·운영 승격·장치 수용을 뜻하지 않는다.
+
+## 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
+
+- 변경: 공통 Decision 정규화·등록 이름 해소·충돌/부정/조건/복합 후보 차단, Console/Discord 새 profile, broker 실제 사용량과 Fleet digest 검사·개인정보 없는 로그를 연결했다. 새 Discord profile은 자동 실행 worker를 설치하지 않는다.
+- 증거: source 8454618b94 원격 전처리/보호 설치 123 passed; NFD+등록 이름 공백 회귀 RED1/36 뒤 d7fedbc9ab GREEN37. 독립 계약 검토의 이름 공백/장소-only STATUS 지적을 수정했다. 실제 모델 전후와 최종 영향 검증은 docs/validation/operator-preprocessing-2026-10-21/result.md에 기록한다.
+- gate: 기존 SOURCE/LOCAL 경계만 다룬다. 새 확인 API·보호 설치·실음성·장치/현장 수용은 미실행. source 통과를 운영 활성화로 표시하지 않는다.
+
+## 2026-10-21 · 5d90c8d670 · D-831 인용·Unicode 검색 경계 보완
+
+- 변경: 원문과 모델용 인용문은 보존하고 검색 사본만 NFC/공백 정규화한다. 유의미한 공백의 등록 이름이 있으면 입력 사본 정규화를 생략해 혼합 조합형도 보존한다.
+- 증거: 추가 RED5/37 및 RED1/42 후 GREEN43, 독립 계약 재검토 지적 해결. 실제 고정 모델 비교군19/19·Console26/26·Discord46/46, 입력 토큰 절감 없음. docs/validation/operator-preprocessing-2026-10-21b/result.md.
+- gate: 보호 설치·실음성·장치/현장 수용·새 자연어 확인 API는 미실행. 새 Discord 자동 실행은 OFF.

@@ -29,11 +29,26 @@
 
 ## 유지보수 위치
 
+### D-831 전처리
+
+인용문 안의 조합형 한글도 검색용 NFC 사본에서 검사한다. 등록 이름에 유의미한 공백이 있으면 입력 사본 정규화를 생략한다. 원문과 모델용 인용문은 보존하며 [추가 Unicode 검증](../../../docs/validation/operator-preprocessing-2026-10-21b/result.md)을 따른다.
+
+Console의 `d831-preprocessing-v1`과 Discord의 `d728-semantic-v3-d831`은 공통 Decision `conversation/preprocessing.py`를 사용한다. 원문·요청 ID·신원·멱등성은 그대로 두고 해석용 사본의 NFC와 제한된 수평 공백만 정리한다. 인용문과 등록 이름의 공백·식별자·부호·단위는 보존한다. 같은 정규화 결과라도 서로 다른 원문을 한 요청으로 합치지 않는다.
+
+등록 이름은 유일한 canonical ID로만 해소한다. 공백 정리로 충돌하는 이름, 미해결 지시어, 부정·조건·인용된 동작, 복합 행동 후보는 재질문한다. 이 규칙은 실행을 허가하지 않는 보수적인 차단이며 완전한 형태소/의미 분석기가 아니다. `A 말고 B 상태`처럼 부정 범위가 있는 조회는 해당 로봇의 근거로 답한다. 현재 사실·관측 시각·최근 이력은 요약으로 버리지 않는다.
+
+새 Discord 프로파일은 자동 실행 worker를 설치하지 않는다. 제안은 원장과 응답에만 기록한다. 자연어 확인 계약은 별도 구현 대상이며 Console의 기존 명시적 좌표 접수 경계는 유지한다. 기존 Discord 프로파일은 기존 입력/실행 경로를 유지한다. 새 프로파일 설치에는 같은 SHA의 독립 ko/en 평가와 전처리 소스가 포함된 보호 snapshot이 필요하다.
+
+broker는 실제 `prompt_eval_count`, `eval_count`, 경과 시간과 전처리 digest를 내부 응답에 붙인다. Fleet는 digest를 다시 검사하고 `operator_inference` 구조화 로그에 입력 hash·profile/source와 사용량만 기록한다. 원문·운영자/채널 ID는 사용량 로그에 넣지 않으며 일반 답변에서 사용량 필드를 제외한다. 모델이 직접 반환한 사용량은 거절한다.
+
+입력은 실제 응답 계측에서 7168토큰, 생성은 1024토큰 이하를 검증한다. 정확한 사전 토크나이저는 없으므로 이 검사는 호출 전 상한이나 backend의 무잘림을 보장하지 않는다. 과다 사용량·잘못된 계측은 결과를 거절하고 자동 재호출하지 않는다. 고정 모델 평가에서 질문 사본 제거가 분류를 악화시켜 JSON 원문과 읽기용 정규화 사본은 유지했다. 절감률은 [검증 기록](../../../docs/validation/operator-preprocessing-2026-10-21/result.md)의 실제 동일 사례 결과만 사용한다.
+
 | 변경 | 소유 위치 |
 |---|---|
 | 입력·응답 계약 | `contracts/foundation/core_common/protocol/assistant.py`, API v1.290 |
 | 문맥·대화·영속 상태 | `operations/fleet/fleet/server/assistant/` |
 | 모델 입력·검증 | `operations/decision/src/rosy/decision/conversation/operator.py` |
+| 공통 정규화·등록 이름·행동 후보 차단 | `operations/decision/src/rosy/decision/conversation/preprocessing.py`, `codec.py` |
 | 고정 추론·평가 | `deploy/ai_pc/operator_broker.py`, `operator_acceptance.py` |
 | 명시적 이동 연결 | `operations/fleet/fleet/server/assistant/execution.py` → 기존 `IntentExecution`/Task owner |
 | 보호 설치 | `deploy/site/install_operator_broker.py`, 기존 D-728 설치기 |

@@ -36,8 +36,9 @@ def test_source_inventory_hash_is_not_limited_like_an_inference_packet():
     files = {f'contracts/source_module_{n:04d}.py':'b'*64 for n in range(400)}
     assert len(json.dumps(files)) > 16384
     def execute(question, *_):
-        kind = next(kinds[0] for _, text, kinds in CASES if text == question.question)
-        return dict(kind=kind, response='Classified', evidence_refs=['robot:r1'] if kind == 'STATUS' else [])
+        name, _, kinds = next(case for case in CASES if case[1] == question.question)
+        reference = 'robot:r2' if name in {'scope-status','en-scope-status'} else 'robot:r1'
+        return dict(kind=kinds[0], response='Classified', evidence_refs=[reference] if kinds[0] == 'STATUS' else [])
     receipt = evaluate(execute, source_commit='a'*40, files=files)
     assert receipt['source_manifest_sha256'] == source_digest(files) and receipt['verdict'] == 'PASS'
     validate_receipt(receipt, dict(source_commit='a'*40, files=files), OperatorProfile())

@@ -1,8 +1,8 @@
 # D-831 관제 자연어 전처리·명령 후보 검증·토큰 예산
 
-**Status:** Proposed (2026-10-21)
+**Status:** Accepted (2026-10-21; 전처리·후보 검증 설계)
 
-사용자가 승인한 검토 방향을 설계로 구체화한다. 전처리·명령 인자 추출·토큰 계측은 후속 구현 대상이며 이 ADR로 운영 활성화나 자연어 자동 실행을 승인하지 않는다.
+사용자가 설계 후 즉시 구현을 요청했다. 첫 구현은 공통 전처리·기존 인자 계약 검증·실제 사용량 계측까지다. 새로운 자연어 확인 계약과 운영 활성화·자동 실행은 별도 수용 대상이다.
 
 ## Context
 
@@ -76,6 +76,12 @@
 | D-728 | Discord 기명 문맥·기존 intent/Task owner와 호출 예산 유지 |
 | D-810/D-821 | Console 조회 분류·독립 승인·별도 명시적 이동 접수 유지 |
 | D-822 | Console 자산은 기존 applications/fleet holder 사용 |
+
+## 첫 구현 경계 (2026-10-21)
+
+Decision의 `conversation/preprocessing.py`를 Console 새 profile과 Discord `d728-semantic-v3-d831`에 연결한다. 등록 이름의 원형과 NFD 등가 표기를 보존하고 공백 정리로 생기는 이름 충돌은 재질문한다. 후보는 기존 `core_common.intent.interpret`의 닫힌 동작·인자 계약으로 검증한다. 사용량은 broker의 실제 추론 응답으로만 만들고 Fleet가 전처리 digest를 검사한다. 입력 7168/생성 1024의 응답 후 검사는 정확한 호출 전 토큰 계산이 아니다.
+
+새 Discord profile에는 자동 실행 worker를 설치하지 않는다. Console의 기존 별도 명시적 좌표 접수는 유지한다. 새 공개 확인 API·후보 확인 수명은 아직 구현하지 않았다. 원문 근거 span이나 범용 형태소 분석기도 추가하지 않았다. 질문 중복 제거/과도한 프롬프트 축약은 실제 의미 회귀가 있어 채택하지 않았으며, 불필요한 인증 식별자·전처리 해시만 모델 문맥에서 제외한다. [운영 안내](../../operations/fleet/docs/operator-assistant.md)와 [실측 기록](../validation/operator-preprocessing-2026-10-21/result.md)을 따른다.
 
 ## Alternatives
 

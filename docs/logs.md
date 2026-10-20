@@ -9868,6 +9868,18 @@ osy-d395-s1d\`.
 - 증거: 격리된 합성 LeRobot 자료로 원본 확인·구간 저장·새로고침 복원·JSON 다운로드·실제 구간 exporter/readback을 실행했다. 원격 RED 두 건 뒤 최종 관련 3 passed, 실제 Edge exit 0, 원본 파일·판정 불변과 train/eval/test 각 4프레임 및 int64 clocks 보존을 확인했다. 상세 근거는 `docs/validation/omx-grasp-ui-2026-10-21/result.md`다.
 - gate 변화: UI/파일 경로 확인만 추가했다. 실물·사람 정답·모델 품질·데이터 절감·배포·원격 push 증거는 추가하지 않았다. 공식 로컬 착지 검사는 별도로 수행한다.
 
+## 2026-10-21 · d7fedbc9ab · D-831 관제 입력 전처리와 제안 경계
+
+- 변경: 공통 Decision 정규화·등록 이름 해소·충돌/부정/조건/복합 후보 차단, Console/Discord 새 profile, broker 실제 사용량과 Fleet digest 검사·개인정보 없는 로그를 연결했다. 새 Discord profile은 자동 실행 worker를 설치하지 않는다.
+- 증거: source 8454618b94 원격 전처리/보호 설치 123 passed; NFD+등록 이름 공백 회귀 RED1/36 뒤 d7fedbc9ab GREEN37. 독립 계약 검토의 이름 공백/장소-only STATUS 지적을 수정했다. 실제 모델 전후와 최종 영향 검증은 docs/validation/operator-preprocessing-2026-10-21/result.md에 기록한다.
+- gate: 기존 SOURCE/LOCAL 경계만 다룬다. 새 확인 API·보호 설치·실음성·장치/현장 수용은 미실행. source 통과를 운영 활성화로 표시하지 않는다.
+
+## 2026-10-21 · 5d90c8d670 · D-831 인용·Unicode 검색 경계 보완
+
+- 변경: 원문과 모델용 인용문은 보존하고 검색 사본만 NFC/공백 정규화한다. 유의미한 공백의 등록 이름이 있으면 입력 사본 정규화를 생략해 혼합 조합형도 보존한다.
+- 증거: 추가 RED5/37 및 RED1/42 후 GREEN43, 독립 계약 재검토 지적 해결. 실제 고정 모델 비교군19/19·Console26/26·Discord46/46, 입력 토큰 절감 없음. docs/validation/operator-preprocessing-2026-10-21b/result.md.
+- gate: 보호 설치·실음성·장치/현장 수용·새 자연어 확인 API는 미실행. 새 Discord 자동 실행은 OFF.
+
 ## 2026-10-21 · uncommitted · 외부 앱 공정 제안과 후보 배정
 
 - 변경: D-836에 공정 문서 ID/digest 소비, Fleet 후보 접수와 재접수, 관측 근거와 업무 완료의 책임을 기록했다. API v1.292의 배타적 단일/후보 지정과 key·본문 결속, 기존 lease/claim transaction 재사용을 구현한다.

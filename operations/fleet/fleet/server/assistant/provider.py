@@ -1,5 +1,7 @@
 """Independently admitted Console requests over the existing fixed broker transport."""
 from pathlib import Path
+import json
+import logging
 import time
 from typing import Literal
 
@@ -7,6 +9,7 @@ from pydantic import Field, FiniteFloat
 from rosy.decision.conversation.codec import Strict
 from rosy.decision.conversation.operator import OperatorProfile, checked_operator_answer, operator_policy
 from rosy.decision.deliberation import canonical
+from rosy.decision.conversation.preprocessing import prepare
 
 from ..channel.broker_transport import exchange
 
@@ -58,4 +61,11 @@ class OperatorProvider:
                 or any(result[k] != v for k, v in binding.items())
                 or type(result['cost_usd']) not in (int, float) or result['cost_usd'] != 0):
             raise ValueError('ASSISTANT_BROKER_IDENTITY_CHANGED')
-        return checked_operator_answer(result['answer'], question).model_dump()
+        answer = checked_operator_answer(result['answer'], question)
+        if answer.usage is not None:
+            if answer.usage.preparation_hash != prepare(question).digest:
+                raise ValueError('ASSISTANT_PREPARATION_CHANGED')
+            logging.getLogger('uvicorn.error').info('operator_inference %s', json.dumps({
+                'input_hash':question.digest, 'profile':OperatorProfile().revision,
+                'source_commit':cfg.source_commit, **answer.usage.model_dump()}, sort_keys=True))
+        return answer.model_dump()
