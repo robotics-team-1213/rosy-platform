@@ -326,7 +326,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI request accepts only action and version')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
-                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration):
+                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration) or omx_web.post(self, path, body, learning, Conflict):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
                 if path.startswith('/api/review-ai/'):
