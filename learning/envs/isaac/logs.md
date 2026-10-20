@@ -320,3 +320,9 @@
 - 변경: OMX-F import의 제한된 조건과 항만 미준비 시나리오, 불변 설정·지문·요청 중복 방지·revision 상태·최종 결과·검증된 산출물 저장을 추가했다. SDK나 HTTP에 의존하지 않는 기록 단위이며 D-834 Proposed로 실행/증거 경계를 연결했다.
 - 증거: 원격 b566945754에서 새 catalog/store 부재로 28개 실패를 먼저 확인했다. GREEN·문서 계약은 최종 커밋으로 별도 확인한다. 모델 PC read-only 점검에서 기존 GPU·SDK 설치와 동일 계정 model-code root를 확인했다.
 - gate 변화: 없음. GPU 실행·웹 연결·실제 import는 후속이며 새 SDK 실행은 NOT RUN이다.
+
+## 2026-10-21 · uncommitted · 제한된 공통 Isaac 실행기
+
+- 변경: 기존 model-code work.lock·학습 gpu.lock과 협력하는 동일 계정 admission, 불변 launch intent·중복 요청 재조회·unit 소유권 대조·중지 요청, 고정 SDK worker와 선택적 import 보고서를 구현했다. 원격 CLI·웹 adapter는 후속 분리 단위다.
+- 증거: admission 부재7실패, controller/report 부재2실패·6오류, worker 부재3실패를 원격 RED로 확인했다. 구현 후 admission7 PASS, controller/report/기존 entrypoint31 PASS, Isaac 전체349 PASS/1 SKIP. 실제 subprocess timeout·stop·출력 제한과 보고서/GPU 잔존 판정 시험을 포함한다.
+- gate 변화: 없음. SDK application·물리 집기·학습/승격은 미실행이며 원격 host 검증과 구분한다. D-834는 Proposed를 유지한다.
