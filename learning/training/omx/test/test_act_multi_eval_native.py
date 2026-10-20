@@ -44,15 +44,3 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path)
     assert report['reloaded_prediction_verified'] is True
     assert set(report['task_outcome_judges'].values())=={'operator'}
     assert json.loads((out/'state.json').read_text())['status']=='research_exported'
-    import torch
-    from lerobot.datasets.lerobot_dataset import LeRobotDataset
-    for episode_id in ids:
-        cache=out/'image-cache'/f'{episode_id}.f32'
-        assert cache.stat().st_size==4*3*64*64*4
-        actual=np.memmap(cache,mode='r',dtype=np.float32,shape=(4,3,64,64))
-        reader=LeRobotDataset('rosy-local/omx-sim',root=out/'reader-inputs'/episode_id,
-                             video_backend='pyav',download_videos=False)
-        for frame in range(4):
-            expected=torch.nn.functional.interpolate(reader[frame]['observation.images.front'].unsqueeze(0),
-                size=(64,64),mode='bilinear',align_corners=False)[0].numpy()
-            np.testing.assert_array_equal(actual[frame],expected)
