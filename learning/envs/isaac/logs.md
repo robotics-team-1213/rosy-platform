@@ -335,6 +335,7 @@
 
 ## 2026-10-21 · uncommitted · 공통 SIM 무점유 성공·실제 중지
 
+- 변경: 무점유 상태의 모델 검사와 웹 실행·CLI 중지의 후속 증거를 추가했다.
 - 증거: 외부 GPU 점유가 자연 해제된 뒤 소스8aa57b3d0e의 새 run981e96c0bd105e38bf8b1923159ad614가 모델 검사120프레임·exit0·GPU 해제와 최종 SUCCEEDED로 끝났다. 웹에서 만든 별도 run83ef940c7e0d553cade26575bc72dffd는 CLI 중지 요청 뒤 STOPPED·exit-15·GPU 해제·최종 fetch를 확인했다.
 - 보존: 이전 UNKNOWN·FAILED와 모든 입력·결과를 유지했다. 외부 프로세스를 종료하지 않았다. frozen 후속 기록은 docs/validation/isaac-shared-runs-2026-10-21b/result.md다.
 - gate 변화: 제한된 import/실행 중지 수용만 추가한다. ROS-SIM·물리 집기·적층·협응·학습/실물 수용의 gate는 이동하지 않는다.

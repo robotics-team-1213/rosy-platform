@@ -9930,5 +9930,7 @@ osy-d395-s1d\`.
 
 ## 2026-10-21 · uncommitted · 공통 SIM 성공·중지 후속 증거
 
+- 변경: 실제 성공·중지 실행의 후속 검증 기록을 추가했다.
 - 증거: 소스8aa57b3d0e의 실제 모델 검사 SUCCEEDED·120프레임·exit0·GPU 해제와 별도 웹 run의 CLI STOP_REQUESTED→STOPPED·최종 fetch를 새 dated record에 기록했다. 앞선 부분 기록을 고치거나 UNKNOWN을 성공으로 바꾸지 않았다.
 - 경계: production rollout·실제 Account·컨테이너 물리 과제·학습/장치 수용은 별도다. D-834 Proposed 유지다.
+- gate 변화: 제한된 import·실행 중지의 후속 증거만 추가하며 기존 gate는 유지한다.

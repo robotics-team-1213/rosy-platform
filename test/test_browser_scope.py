@@ -69,3 +69,12 @@ def test_empty_selection_exits_3_without_targets(capsys):
     assert out.out == "" and "no browser tests" in out.err
     assert browser_scope.main(["test/test_games_board_browser.py"]) == 0
     assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
+
+
+def test_sim_sources_select_sim_browser():
+    for path in (
+        "learning/curation/perception/review_app_web/sim.js",
+        "learning/curation/perception/sim_web.py",
+        "shared/web/ui.js",
+    ):
+        assert "test/learning/perception/test_sim_browser.py" in browser_scope.targets([path])
