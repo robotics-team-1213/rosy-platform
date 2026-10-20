@@ -239,7 +239,9 @@ def run(directory, world, observer_path):
             receipt['capture'] = capture.stop(episode_id, 'failure')
     finally:
         receipt.update(success=success, error=error, recording_end_sim_s=sim_time(),
-                       owner_final=facade.snapshot())
+                       owner_final=facade.snapshot(), camera_final=capture.camera_status(),
+                       camera_error=camera.error,
+                       camera_stream_error=capture.camera.last_error if capture.camera else None)
         write_json(directory/'observations.json', samples)
         write_json(directory/'teacher-phases.json', events)
         write_json(directory/'teacher-commands.json', commands)

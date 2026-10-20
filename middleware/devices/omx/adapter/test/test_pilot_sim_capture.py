@@ -204,3 +204,13 @@ def test_camera_burst_keeps_each_real_frame_until_the_writer_consumes_it(tmp_pat
     assert capture.status()['frame_count'] == 2 and capture.status()['issues'] == []
     rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
     assert [row['capture_time_ns'] for row in rows] == [1_100_000_000, 1_200_000_000]
+
+
+def test_full_camera_queue_marks_incomplete_instead_of_silently_discarding_frames(tmp_path):
+    capture = create_capture(tmp_path)
+    capture.start('bounded camera queue')
+    for _ in range(33):
+        capture.observe_frame(capture.camera.latest_frame)
+    capture.tick()
+    assert capture.status()['status'] == 'incomplete'
+    assert 'camera_queue_overflow' in capture.status()['issues']
