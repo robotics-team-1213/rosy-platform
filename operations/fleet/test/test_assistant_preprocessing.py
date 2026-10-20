@@ -262,6 +262,18 @@ def test_place_only_status_evidence_does_not_claim_a_populated_roster_is_empty()
     assert '로봇' in result and '지정' in result
 
 
+def test_decomposed_registered_name_keeps_significant_spacing():
+    from rosy.decision.conversation.preprocessing import prepare, resolve_reference
+    name = '입구  통로'
+    text = 'r1을 '+unicodedata.normalize('NFD', name)+'로 보내줘'
+    q = semantic_question(text)
+    environment = copy.deepcopy(q.environment)
+    environment['map']['places'][0]['name'] = name
+    q = q.model_copy(update={'environment':environment})
+    assert prepare(q).normalized == text
+    assert resolve_reference(unicodedata.normalize('NFD', name), 'place', environment) == 'east'
+
+
 def test_new_discord_profile_is_not_connected_to_automatic_execution(monkeypatch):
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
