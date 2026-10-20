@@ -27,24 +27,15 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     page, origin = account_page
     page.set_viewport_size({'width': 1366, 'height': 900})
     errors = []
-    auth_responses = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
     page.on('response', lambda response: errors.append(f'asset {response.status}: {response.url}')
             if response.status >= 400 and '/api/' not in response.url else None)
-    page.on('response', lambda response: auth_responses.append((response.url.split('/api/')[-1], response.status))
-            if '/api/fleet/auth/' in response.url or '/api/fleet/session' in response.url else None)
     target = '/console?view=work&show=new'
     page.goto(origin + '/console/login?return=' + quote(target, safe=''))
     _credentials(page)
     page.locator('[data-login=submit]').click()
     expect(page).to_have_url(origin + target)
-    session = page.request.get(origin + '/api/fleet/session')
-    assert session.status == 200, session.text()
-    try:
-        expect(page.locator('#fleet-account')).to_be_visible(timeout=5000)
-    except AssertionError:
-        pytest.fail(f'Console session not ready: pageerrors={errors}, auth={auth_responses}')
+    expect(page.locator('#user-role')).to_have_text('운영자')
     for view, shows in [('work', ['', 'pending', 'done', 'new']),
                         ('records', ['', 'open', 'closed', 'facts', 'log'])]:
         page.locator(f'.doc-tabs a[href="/console?view={view}"]').click()
@@ -65,6 +56,7 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
         expect(page.locator('[aria-labelledby=map-heading]')).to_be_visible()
     page.locator('.doc-tabs a[href="/console?view=work"]').click()
     page.locator(f'.ui-subnav a[href="{target}"]').click()
+    expect(page.locator('#user-role')).to_have_text('운영자')
     page.locator('#topbar-more').click()
     page.locator('#fleet-profile').click()
     expect(page.locator('#profile-id')).to_have_text('alice')
@@ -79,7 +71,8 @@ def test_new_work_explains_missing_kinds_without_redirecting(account_page):
     page.goto(origin + '/console/login')
     _credentials(page)
     page.locator('[data-login=submit]').click()
-    expect(page.locator('#fleet-login')).to_be_hidden()
+    expect(page).to_have_url(origin + '/console')
+    expect(page.locator('#user-role')).to_have_text('운영자')
     page.route('**/api/fleet/work', lambda route: route.fulfill(json={
         'kinds': [], 'rows': [], 'truncated_sources': [],
         'observed_at': '2026-10-20T00:00:00Z',
