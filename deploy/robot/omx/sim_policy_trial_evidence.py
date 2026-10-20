@@ -14,12 +14,12 @@ def goal_succeeded(row):
         and events[-1]['result_code']==0)
 
 
-def object_transition(*,attached,ever_attached,held,released,target_gripper,contact_gripper,
+def object_transition(*,attached,ever_attached,held,released,gripper_position,contact_gripper,
                       xy_error_m,z_error_m):
-    if not all(math.isfinite(x) for x in (target_gripper,contact_gripper,xy_error_m,z_error_m)):
+    if not all(math.isfinite(x) for x in (gripper_position,contact_gripper,xy_error_m,z_error_m)):
         raise ValueError('finite actual gripper/object evidence required')
     if attached:
-        return 'detach' if target_gripper>contact_gripper+.02 else None
+        return 'detach' if gripper_position>contact_gripper+.02 else None
     if ever_attached:
         return 'settle' if released else None
     if held and 0<=xy_error_m<=.01 and 0<=z_error_m<=.01:

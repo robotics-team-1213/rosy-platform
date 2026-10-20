@@ -162,6 +162,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 frame_sha256=result.source.frame_sha256,consumed_current=result.consumed_current,
                 produced_owner_ns=result.produced_at_ns,returned_owner_ns=result.returned_at_ns)
             steps.append(step)
+            Image.frombytes('RGB',(320,240),result.source.rgb).save(frames/f'{index:04d}.png')
             if calibration:
                 with session._lock:
                     doc,now,cameras=session._guard()
@@ -169,11 +170,24 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                     if now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         raise PermissionError('calibration action too old')
                 step['checked_input_age_ms']=(now-min(candidate.observed_at_ns,*candidate.camera_received_at_ns))/1e6
-                Image.frombytes('RGB',(320,240),result.source.rgb).save(frames/f'{index:04d}.png')
                 time.sleep(.1)
                 continue
             if last_observed[0] is None or time.monotonic()-last_observed[0]>.5:
                 raise PermissionError('independent object observation stale')
+            decision=session.submit(candidate)
+            last_submit=time.monotonic()
+            step.update(decision=asdict(decision),command_id=session._active_command)
+            deadline=time.monotonic()+30
+            while True:
+                require_live()
+                row=journal.read(step['command_id'])
+                if row['events'] and row['events'][-1]['kind'] in (
+                        'TERMINAL_RESULT','TERMINAL_UNKNOWN','GOAL_REJECTED','GOAL_ACCEPTANCE_UNKNOWN'):
+                    if not goal_succeeded(row):raise PermissionError('native learned goal did not succeed')
+                    if arm.owner.state=='ready':break
+                if time.monotonic()>deadline:raise TimeoutError('native learned goal terminal result missing')
+                time.sleep(.02)
+            step['native_goal_id']=row['driver_goal_id']
             js=arm.latest_joint_state
             tcp=kin.fk([js.positions[name] for name in ARM_JOINTS]);pose=samples[-1]['model_pose_base']
             q=js.positions[profile.gripper_joint]
@@ -182,7 +196,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             held=q>=close+(contact-close)/2 and q<profile.gripper_open-.05
             released=abs(q-profile.gripper_open)<=.05
             transition=object_transition(attached=attached,ever_attached=ever_attached,held=held,
-                released=released,target_gripper=candidate.positions[config.joint_names.index(profile.gripper_joint)],
+                released=released,gripper_position=q,
                 contact_gripper=contact,xy_error_m=math.hypot(tcp.x-pose['x_m'],tcp.y-pose['y_m']),
                 z_error_m=abs(tcp.z-(pose['z_m']+recipe.box.height/2-recipe.box.grasp_depth)))
             if transition=='settle':
@@ -200,22 +214,6 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 transitions.append(dict(kind=transition,sim_s=samples[-1]['clock'],evidence=proof,ack=ack))
                 if ack.get('confirmed') is not True:raise PermissionError('SIM aid transition unconfirmed')
                 attached=transition=='attach';ever_attached=True
-                continue
-            decision=session.submit(candidate)
-            last_submit=time.monotonic()
-            step.update(decision=asdict(decision),command_id=session._active_command)
-            Image.frombytes('RGB',(320,240),result.source.rgb).save(frames/f'{index:04d}.png')
-            deadline=time.monotonic()+30
-            while True:
-                require_live()
-                row=journal.read(step['command_id'])
-                if row['events'] and row['events'][-1]['kind'] in (
-                        'TERMINAL_RESULT','TERMINAL_UNKNOWN','GOAL_REJECTED','GOAL_ACCEPTANCE_UNKNOWN'):
-                    if not goal_succeeded(row):raise PermissionError('native learned goal did not succeed')
-                    if arm.owner.state=='ready':break
-                if time.monotonic()>deadline:raise TimeoutError('native learned goal terminal result missing')
-                time.sleep(.02)
-            step['native_goal_id']=row['driver_goal_id']
         if calibration:
             receipt['success']=len(steps)==12 and not events
             receipt['policy_goals_sent']=len(events)
