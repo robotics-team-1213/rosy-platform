@@ -17,6 +17,7 @@ The artifact and provenance store plus the model half of the D-356 learned-perce
 | File | Description |
 |------|-------------|
 | `store.py` | Shared content-addressed datasets, evalsets, models and READY inbox storage; physical relocation preserves its paths and signatures |
+| `model_lineage.py` | Read-only private CLI: exact model/files, fixed dataset/eval content and intake/journal links; missing source, human review and training proofs stay missing. No admission or delivery authority. See `docs/plans/2026-10-21-model-lineage-design.md` |
 | `export_onnx.py` | TorchScript to ONNX (opset 17, 1x3x240x320) with a fixed-seed parity check; writes the model folder and manifest |
 | `intake.py` | Shadow-deployment eligibility report for a model folder, `store-inbox:<folder>` (taken only when its READY marker matches its content) or `hf:org/repo@<40-hex sha>`; thresholds come from `intake_gate.yaml` |
 | `drivable_versions.py` / `drivable_versions.yaml` | D-558 ledger of `v13-drivable` model versions (`v<major>.<minor>.<NN>`, one revision each, status candidate/shadow/rejected/retired); intake refuses a missing, malformed, off-lineage or taken version; CLI `show`/`add`/`set-status` |
