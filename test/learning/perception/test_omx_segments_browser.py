@@ -10,6 +10,7 @@ from learning_workspace import Workspace
 from test_omx_web import prepared
 from test_review_return import fixture_inputs
 import omx_web
+import native_segments
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
@@ -28,8 +29,8 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
     rows = [dict(episode_index=e,frame_index=f,timestamp=f/30,task='pick',
                  **{'observation.images.front':np.full((3,32,32),f/12,dtype=np.float32)})
             for e in range(2) for f in range(12)]
-    monkeypatch.setattr(omx_web.segments.native,'dataset_files',lambda p:report['files'])
-    monkeypatch.setattr(omx_web.segments.native,'load_dataset',lambda *a:rows)
+    monkeypatch.setattr(native_segments.native,'dataset_files',lambda p:report['files'])
+    monkeypatch.setattr(native_segments.native,'load_dataset',lambda *a:rows)
     server = make_server(store,free_port())
     thread = threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:

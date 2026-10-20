@@ -8,7 +8,6 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'omx'))
 from native_review import reviewed_splits  # noqa: E402
-import native_segments as segments  # noqa: E402
 
 STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {'/learning/omx': ('omx.html', 'text/html; charset=utf-8'),
@@ -35,6 +34,7 @@ def _verdicts(setup, index):
 
 def prepared_set(row, workspace=None):
     """One registered row as the page shows it, or None when it is not a prepared intake folder."""
+    import native_segments as segments
     root = Path(row['path'])
     try:
         if _read(root, 'intake-receipt.json') is None:
@@ -74,6 +74,7 @@ def get(handler, path, workspace):
         rows = [row for row in workspace.list() if row['kind'] == 'omx']
         handler.send({'sets': [s for row in rows if (s := prepared_set(row, workspace)) is not None]})
     elif path == '/api/learning/omx/frame':
+        import native_segments as segments
         query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
         if set(query) != {'id', 'episode', 'frame', 'camera'} or any(len(v) != 1 for v in query.values()):
             raise ValueError('registered set and one episode/frame/camera required')
@@ -120,10 +121,12 @@ def latest(workspace, identifier):
     return {'version': row[0], 'document': json.loads(row[1])} if row else {'version': 0, 'document': None}
 
 
-def post(handler, path, body, workspace, conflict, actor=None):
+def post(handler, path, body, workspace, conflict):
     """Append reviewed selections after existing token/origin and project manage authorization."""
     if path != '/api/learning/omx/segments':
         return False
+    import native_segments as segments
+    actor = getattr(handler, 'learning_principal', {}).get('user_id')
     if set(body) != {'id', 'version', 'segments'} or type(body['version']) is not int:
         raise ValueError('registered id, integer review version and segments required')
     row = registered(workspace, body['id'])
