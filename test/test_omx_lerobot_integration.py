@@ -257,11 +257,32 @@ loaded.eval()
 with torch.no_grad():
     action = post(loaded.select_action(pre(batch)))
 assert action.shape == (1,6) and torch.isfinite(action).all()
+from native_segments import selection, export_segments
+from native_cycle import validate_split
+segments = []
+for episode, split in zip(report['episodes'], ('train','eval','test')):
+    segment = {key: episode[key] for key in ('episode_index','frames','content_sha256','session_id','cycle_id')}
+    segment.update(start_frame=1,end_frame=3,object='synthetic cube',intervention=False,
+                   outcome='success',reviewer='synthetic-test',reason='fixture only',split=split)
+    segments.append(segment)
+cropped = tmp/'segments'
+segment_receipt = export_segments(source,report,selection(report,segments),cropped)
+assert validate_split(cropped) == segment_receipt
+assert segment_receipt['source']['capture_provenance'] == provenance
+assert segment_receipt['source']['environment_evidence'] == environment
+assert segment_receipt['environment_coverage_scope'] == 'original_parent_episodes'
+assert segment_receipt['decisions'][0]['outcome'] == 'unknown'
+segment_train = LeRobotDataset('local/native-fixture_train',root=cropped/'train',video_backend='pyav',download_videos=False)
+assert [segment_train[i]['action'][0].item() for i in range(2)] == [1.,2.]
+assert float(segment_train.meta.stats['action']['max'][0]) == 2., 'segment eval data leaked into train stats'
+segment_cycle = run_cycle(cropped,tmp/'segment-training',steps=2,batch_size=2,device='cpu',timeout=120)
+assert segment_cycle['evaluation']['samples'] == 2
+assert segment_cycle['evaluation']['physical_task_success'] is None
 print('OFFICIAL_CONFIG_READER_SPLIT_PASS')
 '''
     env = {**os.environ, 'HF_HUB_OFFLINE': '1', 'HF_DATASETS_OFFLINE': '1',
            'HF_HOME': str(tmp_path / 'hf'), 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2'}
     result = subprocess.run([str(PYTHON), '-c', script, str(ROOT), str(tmp_path)],
-                            capture_output=True, text=True, env=env, timeout=180)
+                            capture_output=True, text=True, env=env, timeout=360)
     assert result.returncode == 0, result.stdout + '\n' + result.stderr
     assert 'OFFICIAL_CONFIG_READER_SPLIT_PASS' in result.stdout
