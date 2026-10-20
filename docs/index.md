@@ -236,6 +236,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
+| D-783 | Native adopted-map readback with finite parent evidence |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
 | D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
 | D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
@@ -327,6 +328,7 @@
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
+- [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -341,8 +343,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · sim: drivable v2 원본 판정과 최신 소스 재검증
-- 2026-10-19 · uncommitted · 안내 API 변경 이력 행 보완
-- 2026-10-19 · uncommitted · drivable 성공 원본의 새 초기화 재실행 보존
-- 2026-10-19 · uncommitted · drivable v2 성공 구현의 계약과 선행 변경 정렬
-- 2026-10-19 · uncommitted · test(recovery): preserve historical inputs and host test boundaries
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 원격 main 기준 충전 배포 통합 검사 보완
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) reviewed final station deployment source
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) deployment safety gap remediation
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) station deployment main integration
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) measured charge admission verified

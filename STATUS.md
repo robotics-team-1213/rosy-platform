@@ -24,7 +24,7 @@
 | [palletizing](operations/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
 | [cam](operations/site_ui/cam/progress.md) | SITE | uncommitted (2026-10-04) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](integrations/simulation/gazebo/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
-| [navigation](middleware/drive/planning/nav2/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [navigation](middleware/drive/planning/nav2/progress.md) | NAV | 83db3b1da4 (2026-10-17) | HOLD | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](middleware/devices/pinky/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [emotion](middleware/robot_ui/face/progress.md) | 장치 | 47d3e6ec (2026-09-29) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [led](middleware/drivers/pinky_led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -39,7 +39,7 @@
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [interfaces](contracts/ros_idl/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
+| [interfaces](contracts/ros_idl/progress.md) | 장치 | 8058c3676 (2026-10-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](middleware/devices/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [description](middleware/devices/pinky/description/progress.md) | 로봇 통합 | c0bb0393c (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | PARKED |
@@ -95,7 +95,8 @@
 - rosy_cell ROS-SIM: Recovered 2026-10-17 native evidence exercised canonical topic proposal/admission through Fleet and the OMX owner with the box grasp-depth profile. Independent placement confirmed 3/16 goals and 15 ROS phases succeeded, then insufficient held-object proof caused HOLD before the fourth release. Failure-time gripper evidence, complete box/slip-sheet Job success and the full G2 fault matrix remain unproven. See docs/validation/omx-native-held-proof-2026-10-17/result.md; recovery itself does not rerun Gazebo.
 - palletizing ROS-SIM: Task 8 must verify fixed-cell transfer execution and interrupted recovery in Gazebo
 - palletizing ARTIFACT: The wheel is locally built and installed for validation; a declared installation profile and release provenance are Task 6
-- navigation ROS-SIM: Nav2/SLAM Toolbox 실물 launch 미재실행. 현재는 ament_lint와 조합 계약 시험뿐 — ROS 2 Jazzy 환경에서 hardware.launch.py/gz_*.launch.xml 재실행 필요
+- navigation SOURCE: native AMCL/static은 검증했지만 CORE 연결·운영 failed-config 정리·FULL CI 미완료. branch safety exception ancestry guard 1 FAIL(이번 변경 이전 cb19bf69f도 재현, 현재 main은 PASS)
+- navigation ROS-SIM: 실제 AMCL/static native/DDS와 설치 초기 graph는 검증했다. 전체 Nav2/CORE 운행·charging cycle·station relocation 검증은 남아 있다
 - navigation ARTIFACT: ARM64 로봇 이미지에 포함되나(Dockerfile/compose) 서명 manifest와 immutable digest 발행 전
 - navigation DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음
 - bringup ROS-SIM: Dynamixel/LiDAR/battery publisher 노드의 ROS 2 Jazzy 실물 또는 컨테이너 재실행 증거 없음

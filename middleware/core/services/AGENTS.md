@@ -23,6 +23,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `test/` | `test_docking.py` (DNC-001~003), `test_swarm.py` (SWM follow) |
 | `core_features/<feature>/` | One requirement family per subpackage; split rules in `docs/plans/2026-09-06-module-split-criteria.md` |
 | `core_features/maps.py` | Map read path (not SLAM) |
+| `drive/behaviors/docking` | D-766 size unit: docking phases, relative observations, seating and charging evidence; installed once as `core_features.docking` |
 
 ## Subdirectories
 

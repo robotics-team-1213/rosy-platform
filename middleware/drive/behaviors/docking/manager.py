@@ -1,23 +1,8 @@
-"""core_features.docking.manager — 도킹 상태머신 (DNC-002~003).
-
-**맵은 대략까지, 마지막은 센서가.** 로컬라이제이션 오차는 ±10 cm 이고 접점은
-수 mm 안에서 물린다. 두 자릿수 차이라, 도크의 맵 좌표로 주행해 멈추는 제어기는
-결코 도킹하지 못한다. 스테이징 이후의 모든 단계는 *관측된* 도크에 폐루프를 건다.
-
-이 액션은 Nav2 구간까지 스스로 소유한다. 모드 전이표가 `NAVIGATION → DOCKING`
-을 막고 있어서인데, 표에 간선을 더하는 대신 도킹이 처음부터 끝까지 `DOCKING`
-모드를 쥐면 표를 건드릴 필요가 없고 우선순위도 공짜로 맞는다 — `DOCKING`(4)이
-`NAVIGATION`(5)보다 위라 도크에 반쯤 들어간 로봇을 Fleet 주행 명령이 밀어내지
-못한다.
-
-ROS 무의존 — 시계는 주입되며 테스트가 시간을 직접 전진시킨다.
-
-주차형 기종(`approach="pose"`, 차선망 미션 3단계)은 같은 상태머신을 기종 설정으로
-갈라 쓴다. 그 단계 로직은 `parking_phases.ParkingPhases` 에 있고, 상태·락·순서는
-여기 남는다. 단계·모션 계약·설정 정의는 `model` 에 있다.
-
-설계: docs/plans/2026-09-02-docking-station-design.md,
-      docs/plans/2026-09-23-lane-network-parking-design.md
+"""DNC-002~003: sensor-closed docking, without ROS or an assumed precision.
+Docking owns DOCKING mode through Nav2 staging and local approach; NAVIGATION
+cannot preempt it. ParkingPhases uses this owner's state/lock for pose parking.
+Clock injection supports deterministic tests. Contracts/config live in model;
+designs: 2026-09-02-docking-station and 2026-09-23-lane-network-parking.
 """
 
 from __future__ import annotations
@@ -29,6 +14,8 @@ from typing import Any, Callable, Optional
 from uuid import UUID
 
 from core_common.protocol.native_receipts import NativeReceipts
+from core_features.docking.admission import dock_target, undock_ready
+from core_features.docking.native_status import readback, owner_snapshot
 
 from core_features.docking.charging import ChargingConfirmation
 from core_features.docking.strategies import FullChargeStrategy, VoltageFullCharge
@@ -63,8 +50,10 @@ class DockingManager:
                  line_follow_active_provider: Optional[Callable[[], bool]] = None,
                  take_mode: Optional[Callable[[], None]] = None,
                  release_mode: Optional[Callable[[], None]] = None,
+                 motion_admission: Optional[Callable[..., None]] = None,
                  ) -> None:
         self._db = database
+        self.motion_admission = motion_admission or (lambda *args: None)
         self._safety = safety
         self._cfg = config or DockingConfig()
         self._clock = clock
@@ -91,6 +80,7 @@ class DockingManager:
         # cancel()/abort() 을 부른다.
         self._lock = threading.RLock()
         self.native = NativeReceipts()
+        self._execution_binding = None
 
         self.executor: Optional[DockingExecutor] = None
         #: D-395: may docking drive (LOCALIZED, map frame)? CORE binds the localization
@@ -128,6 +118,14 @@ class DockingManager:
         self._creep_from: Optional[tuple] = None
         self._creep_done_at: Optional[float] = None
         self._backoff_from: Optional[tuple] = None
+
+    def _execution(self, event, *args):
+        return True if self._execution_binding is None else self._execution_binding.check(event, *args)
+
+    def _native_mutate(self, method, *args, **kwargs):
+        if self._execution_binding is not None:
+            return self._execution_binding.mutate(method, *args, **kwargs)
+        return method(*args, **kwargs)
 
     # --- 조회 -----------------------------------------------------------------
 
@@ -193,25 +191,27 @@ class DockingManager:
     def capture_native_operation(self, run_id: UUID | None = None):
         return self.native.capture(self._lock, run_id)
 
+    def native_owner(self, *, wait=True):
+        return owner_snapshot(self.native, self._lock, wait=wait)
+
     def native_readback(self, run_id: UUID | None = None) -> dict:
         with self._lock:
-            snapshot = getattr(self.executor, "native_transport_snapshot", None)
-            before = snapshot() if callable(snapshot) else None
-            after = snapshot() if callable(snapshot) else None
-            stable = before is not None and before == after
-            return self.native.readback(
-                run_id, pending_submission=before[1] if before else True,
-                actuating_callback=before[2] if before else True,
-                lease_active=self._state in (DockState.DOCKING, DockState.UNDOCKING),
-                transport_generation=before[0] if stable else None)
+            return readback(self.native, self.executor, self._state, run_id)
+
+    def bind_station(self, bind, *, expected_boot_id, expected_owner_generation):
+        """Fence the no-motion binding against concurrent local motion admission."""
+        with self._lock:
+            self.native.expect(expected_boot_id, expected_owner_generation)
+            return bind()
 
     # --- 명령 -----------------------------------------------------------------
 
     def dock(self, dock_id: Optional[str] = None, *, correlation_id: str | None = None,
              expected_boot_id: UUID | None = None,
              expected_owner_generation: int | None = None,
-             receipt_sink=None) -> DockInstance:
+             receipt_sink=None, _execution_ticket=None) -> DockInstance:
         with self._lock:
+            self._execution('entry', locals())
             return self._dock_locked(dock_id, correlation_id=correlation_id,
                                      expected_boot_id=expected_boot_id,
                                      expected_owner_generation=expected_owner_generation,
@@ -222,37 +222,17 @@ class DockingManager:
                      expected_owner_generation: int | None = None,
                      receipt_sink=None) -> DockInstance:
         """도킹을 시작한다. 거부는 예외로 나간다 — API 가 그대로 코드에 매핑한다."""
-        if not self._capability_provider():
-            raise DockError("CAPABILITY_NOT_SUPPORTED",
-                            "docking is not supported on this robot")
-        if getattr(self._safety, "estop", False):
-            raise DockError("EMERGENCY_ACTIVE", "e-stop is active")
-        if self._state in (DockState.DOCKING, DockState.UNDOCKING):
-            raise DockError("DOCKING_ACTIVE",
-                            f"docking already in progress ({self._state.value})")
-        # 라인 추종도 같은 nav 슬롯에 20 Hz 로 쓴다. 둘이 번갈아 쓰면 바퀴가 둘 중
-        # 아무것도 따르지 않는다 — 먼저 끄게 한다.
-        if self._line_follow_active():
-            raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
-        if not self.localization_ok():
-            raise DockError("NOT_LOCALIZED", "robot localization is not LOCALIZED")
-
-        if dock_id is None:
-            dock = self._db.only()
-            if dock is None:
-                raise DockError("DOCK_REQUIRED",
-                                "dock id required — zero or several docks configured")
-        else:
-            dock = self._db.get(dock_id)
-
-        dock.require_map(self._map_id_provider())
-        dock_type = self._db.type_of(dock.id)
+        dock, dock_type = dock_target(
+            self._db, self._safety, self._state, dock_id, supported=self._capability_provider,
+            line_active=self._line_follow_active, localized=self.localization_ok, map_id=self._map_id_provider)
+        self.motion_admission('dock', dock, dock_type, correlation_id)
         try:
             self.native.expect(expected_boot_id, expected_owner_generation)
         except ValueError as exc:
             raise DockError(str(exc), str(exc)) from exc
+        self._execution('ready')
         self._take_mode()
-        operation = self.native.admit("dock", correlation_id)
+        operation = self._native_mutate(self.native.admit, "dock", correlation_id)
         if receipt_sink is not None:
             receipt_sink(operation)
 
@@ -263,6 +243,7 @@ class DockingManager:
         self._error = None
         self._charging.reset()
         self._state = DockState.DOCKING
+        self._execution('activate')
         self._emit("docking.started", "info", {"dock_id": dock.id})
         self._begin_staging()
         return dock
@@ -270,8 +251,9 @@ class DockingManager:
     def undock(self, *, correlation_id: str | None = None,
                expected_boot_id: UUID | None = None,
                expected_owner_generation: int | None = None,
-               receipt_sink=None) -> None:
+               receipt_sink=None, _execution_ticket=None) -> None:
         with self._lock:
+            self._execution('entry', locals())
             self._undock_locked(correlation_id=correlation_id,
                                 expected_boot_id=expected_boot_id,
                                 expected_owner_generation=expected_owner_generation,
@@ -281,37 +263,37 @@ class DockingManager:
                        expected_boot_id: UUID | None = None,
                        expected_owner_generation: int | None = None,
                        receipt_sink=None) -> None:
-        if self._state not in (DockState.DOCKED, DockState.CHARGING):
-            raise DockError("NOT_DOCKED", f"not docked ({self._state.value})")
-        if getattr(self._safety, "estop", False):
-            raise DockError("EMERGENCY_ACTIVE", "e-stop is active")
-        if self._line_follow_active():
-            raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
-        available = getattr(self.executor, "odometry_available", None)
-        if callable(available) and not available():
-            # 후진은 오도메트리만 본다. 기준점이 없으면 이동 거리가 0 에 머물러
-            # 벽(57 mm 뒤)에 닿을 때까지 후진한다.
-            raise DockError("NO_ODOMETRY", "no odometry to measure the reverse")
+        undock_ready(self._state, self._safety, self._line_follow_active, self.executor)
+        self.motion_admission('undock', self._dock, self._type(), correlation_id)
         try:
             self.native.expect(expected_boot_id, expected_owner_generation)
         except ValueError as exc:
             raise DockError(str(exc), str(exc)) from exc
+        self._execution('ready')
         self._take_mode()
-        operation = self.native.admit("undock", correlation_id)
+        operation = self._native_mutate(self.native.admit, "undock", correlation_id)
         if receipt_sink is not None:
             receipt_sink(operation)
 
-        # 도크에 반쯤 물린 상태에서는 LiDAR 도 카메라도 벽을 3 cm 앞에서 보고
-        # 있다. 믿을 게 없으므로 검출기를 끄고 오도메트리만으로 빠져나온다.
+        # Leave by odometry: dock proximity makes front sensors unreliable.
         self._stop_detector()
         self._charging.reset()
         self._state = DockState.UNDOCKING
+        self._execution('activate')
         self._phase = None
         self._phase_since = self._clock()
         if self.executor is not None:
             self.executor.reset_odometry_mark()
         self._emit("docking.undock_started", "info",
                    {"dock_id": self._dock.id if self._dock else None})
+
+    def departure_limits(self):
+        """Installed native reverse geometry; callers must reject unmeasured defaults."""
+        with self._lock:
+            dock_type = self._type() if self._dock is not None else None
+            if dock_type is None:
+                raise DockError('NOT_DOCKED', 'departure requires the current dock')
+            return dock_type.undock_distance_m, self._cfg.undock_speed, dock_type.undock_turn_rad
 
     def cancel(self, *, receipt_sink=None) -> None:
         """진행 중인 시퀀스를 접는다. 실패가 아니라 취소다."""
@@ -326,7 +308,7 @@ class DockingManager:
             return
         operation = self.native.current
         if operation is not None:
-            closed = self.native.update(operation.run_id, phase="TERMINAL",
+            closed = self._native_mutate(self.native.update, operation.run_id, phase="TERMINAL",
                                         result="CANCELED", reason="CANCELED")
             if receipt_sink is not None:
                 receipt_sink(closed)
@@ -636,7 +618,7 @@ class DockingManager:
         self._dock = None
         operation = self.native.current
         if operation is not None:
-            self.native.update(operation.run_id, phase="TERMINAL", result="SUCCEEDED")
+            self._native_mutate(self.native.update, operation.run_id, phase="TERMINAL", result="SUCCEEDED")
         self._emit("docking.undocked", "info", {})
 
     def _tick_backoff(self, now: float) -> None:
@@ -716,7 +698,7 @@ class DockingManager:
         self._state = DockState.DOCK_FAILED
         operation = self.native.current
         if operation is not None:
-            self.native.update(operation.run_id, phase="TERMINAL",
+            self._native_mutate(self.native.update, operation.run_id, phase="TERMINAL",
                                result="CANCELED" if safety_stop else "FAILED",
                                reason="SAFETY_STOP" if safety_stop else "BACKEND_ERROR")
         self._phase = None
@@ -731,7 +713,7 @@ class DockingManager:
         self._state = DockState.DOCKED
         operation = self.native.current
         if operation is not None:
-            self.native.update(operation.run_id, phase="TERMINAL", result="SUCCEEDED")
+            self._native_mutate(self.native.update, operation.run_id, phase="TERMINAL", result="SUCCEEDED")
         self._phase = None
         self._full_announced = False
         self._emit("docking.docked", "info", {"dock_id": self._dock.id})
@@ -757,6 +739,7 @@ class DockingManager:
             })
 
     def _enter(self, phase: DockPhase) -> None:
+        self._execution('phase', phase)
         self._phase = phase
         self._phase_since = self._clock()
 

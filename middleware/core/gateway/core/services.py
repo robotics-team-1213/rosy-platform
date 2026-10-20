@@ -26,6 +26,7 @@ from core.system.power import (  # noqa: F401 (legacy parser and sentinel export
     SHUTDOWN_SENTINEL_NAME, _battery_config, _power_config, build_power_and_battery)
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingManager
+from core_features.docking.station_owner import StationDockingOwner
 from core_features.fleet_agent.agent import FleetAgent
 from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
 from core_features.localization.mission import mission_config
@@ -121,6 +122,7 @@ class CoreServices:
     control_adapter: Any = field(default=None, repr=False)
     # control's dock/observation evidence (ros_bridge ingests, docking reads).
     dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
+    station_docking: Optional[StationDockingOwner] = None
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
@@ -225,11 +227,12 @@ class CoreServices:
         )
         power, battery = build_power_and_battery(
             config.get("power", {}), safety_cfg, data_path=waypoints_path.parent, events=events)
-        docking, swarm, dock_feed, leave_docking = build_docking_and_swarm(
+        docking, swarm, dock_feed, leave_docking, station_docking = build_docking_and_swarm(
             simulation_docking=simulation_docking, data_path=waypoints_path.parent,
             events=events, state=state, modes=modes, command=command, safety=safety,
             capability=capability, battery=battery, line_follow=line_follow, nav=nav,
-            robot_id=robot_id)
+            robot_id=robot_id, station_config=(config.get('docking') or {}).get('station'),
+            runtime_mode=(config.get('runtime') or {}).get('mode', 'hardware'))
         def mirror_mode(old: Mode, new: Mode) -> None:
             """D-380 fix: the snapshot's mode is every reader's mode.
 
@@ -268,6 +271,8 @@ class CoreServices:
             state.set_traffic_policy(status)
         safety.estop_listeners.append(reset_traffic_policy)
         trip_lease = build_trip_lease(events, state, modes, safety, line_follow, command, nav)
+        if station_docking is not None:
+            station_docking.return_lease_probe = trip_lease.matches_nowait
         runtime_probe = HostRuntimeProbe(
             host_root=os.environ.get("ROSY_HOST_ROOT", "/"),
             data_path=waypoints_path.parent,
@@ -299,7 +304,7 @@ class CoreServices:
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
-                   dock_feed=dock_feed, localization=localization, loc_mission=loc_mission,
+                   dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,
                    fleet_loss=fleet_loss)
 
     def inventory(self) -> dict[str, Any]:

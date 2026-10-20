@@ -3065,3 +3065,9 @@
 - 변경: `collection_ros.py`·`g2_owner.py`·`run_cell_owner.py`·`probe_cell_transfer.py`(origin #83, 78a4bea23c)와 main 전용 `run_hardware_owner.py`가 `OwnerMultiThreadedExecutor`를 쓴다. owner 진입점은 종료 때 `runtime.destroy()`로 action event 스레드를 정리한다. 수집 graph 검사는 부모 노드와 runtime 소유 action client identity만 허용한다.
 - 증거: docs/validation/omx-owner-executor-port-2026-10-19/result.md.
 - gate 변화: 소스·원격 시험 범위. 실물 owner 기동·DEVICE/FIELD는 미검증이며 독립 Safety-Review 전 착지하지 않는다.
+
+## 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 공개 진단 도구 hash의 정확한 provenance 등록
+
+- 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.
+- 증거: 첫 확장 시험의 release scan FAIL을 재현했고 독립 hash 검토 후 관련 원격 745 PASS/0 skip/NEW 0으로 통과했다. provenance의 stale/변경·비밀 탐지 회귀를 포함한다.
+- gate 변화: 저장소 검사 보완이며 배포·장치 실행·FIELD 수용을 수행하지 않았다.

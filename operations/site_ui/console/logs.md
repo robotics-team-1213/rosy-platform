@@ -375,3 +375,15 @@
 - 변경: 관리자 생성·초기화의 임시 입력만 최소 길이2로 조정했다. 정확한 ID! 예외는 서버가 검증하고 다른 짧은 값은 거절한다. 본인 첫 변경·프로필의8자 조건은 유지한다.
 - 증거: 실제 Chromium에서 짧은 초기값의 관리자 생성이 HTML 검증으로 막힘을 먼저 재현했다. 생성/reset→본인 제한 로그인→변경→프로필 복귀와 외부 변경 뒤 관리자 revision 재조회 검사를 추가했다.103df862b의 서버·실제 Chromium6파일160 passed·skip0·NEW0. 상세 범위는 docs/validation/account-initial-password-2026-10-19/result.md.
 - gate 변화: 없음. 운영 사용자·프로필·설치 화면은 변경하지 않았으며 실제 사용자 로그인 수용은 미확인이다.
+
+## 2026-10-19 · 39f94f151 · (origin #92 2026-10-16) 충전 운행 주체 오류 안내와 Console 회귀
+
+- 변경: TRIP_OWNER_KIND_INVALID에 운영자 안내를 추가했다. 오류 표의 같은 줄 객체 항목도 검사하도록 정적 label 검사를 바로잡았다. 기존 800줄 상한과 화면 경로·배치를 유지한다.
+- 증거: 5a33eabd4의 영향 범위 22개 파일을 ROSY_RUN_BROWSER_TESTS=1로 실행해 실제 Chromium 457개가 통과했고 skip은 0이다(task-7-charge-owner-label-browser/run-1.txt). 같은 명령에 추가한 비브라우저 label 검사 1개는 당시의 줄 시작만 보는 parser로 실패해 명령 종료 코드는 1이다. 이 parser를 8ddf4981f에서 수정했고 39f94f151의 최종 계약/회귀 486개에 해당 검사가 포함되어 통과했다(NEW 0/skip 0). UI source는 browser 실행 이후 바뀌지 않았다. 혼합 명령 전체를 GREEN으로 기록하지 않는다.
+- gate 변화: 관련 UI 회귀 근거를 추가한다. 충전 운영 화면의 전체 상태·주기 정책·이안/재투입과 실기 수용은 미완료다.
+
+## 2026-10-19 · 8c6692128 · (origin #92 2026-10-17) 설치 보정 손잡이의 상단 바 가림 수정
+
+- 변경: 실측 교정 패널로 늘어난 화면에서 기존 사각 보정 손잡이를 스크롤하면 고정 상단 바에 가려졌다. 손잡이의 스크롤 시작 여백에 공용 앱 바 높이와 간격 토큰을 적용했다.
+- 증거: 병합 전 전체 원격 검사 ea71743778의 `test_camera_rectification_direct_manipulation`이 실제 hit test에서 실패했다. 8c6692128의 같은 드래그 검사와 실측 교정 브라우저 두 폭은 3 passed, NEW 0이다. 원본 로그는 저장소 밖 `C:/DevTemp/camera-calibration/landing-handle-fix/`에 있다.
+- gate 변화: 없음. 수정본과 최신 main의 전체 병합 검증은 별도 수행한다.

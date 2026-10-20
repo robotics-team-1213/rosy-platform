@@ -9,12 +9,14 @@
 
 | ID | 제목 |
 |---|---|
+| D-783 | Native adopted-map readback with finite parent evidence |
 
 ## 계획·결과 문서
 
 - [2026-09-12-rosy-os-module-evaluation-maintenance-design.md](../../docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md)
 - [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
 - [2026-09-15-module-harness-design.md](../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-10-17-native-map-adoption.md](../../docs/plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -26,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) same-SHA MapAdoption 생성·직렬화 검증 기록
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 생성된 Python bounded string 표기 검사 수정
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 내부 MapAdoption wire 및 실제 생성 검증 경로
+- 2026-10-19 · uncommitted · (origin #92 2026-10-17) 내부 native 지도 readback 계약 RED 준비
 - 2026-10-04 · uncommitted · interfaces: additive typed recording start options
-- 2026-09-25 · uncommitted · refactor(contracts): move interfaces under src/contracts (D-231)
-- 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-- 2026-09-16 · uncommitted · docs(harness): park interfaces field gate and point at the CI build
-- 2026-09-15 · uncommitted · docs(harness): start the interfaces harness record

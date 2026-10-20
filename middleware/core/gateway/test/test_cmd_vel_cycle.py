@@ -204,7 +204,7 @@ def test_the_motion_gate_holds_both_ways_with_the_hardware_hold():
     assert run(0.2, 0.0, readiness=Gate(False), motion_ready=lambda: True).sent == [(0.0, 0.0)]
 
 
-def test_the_bridge_passes_the_power_motion_gate_to_the_cycle():
+def test_the_bridge_passes_the_composed_power_and_station_gate_to_the_cycle():
     """A gate nobody wires is no gate: the one cmd_vel_cycle call carries it."""
     source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
         encoding="utf-8")
@@ -212,7 +212,7 @@ def test_the_bridge_passes_the_power_motion_gate_to_the_cycle():
              if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "cmd_vel_cycle"]
     assert len(calls) == 1
     gate = {kw.arg: ast.unparse(kw.value) for kw in calls[0].keywords}.get("motion_ready")
-    assert gate == "self._svc.power.motion_ready"
+    assert gate == "lambda: docking_mode.motion_ready(self._svc)"
 
 
 def test_power_module_never_imports_the_motion_path():
@@ -256,6 +256,8 @@ def test_the_bridge_actually_calls_the_cycle():
                  "self._readiness"]]
 
     assert len(calls) == 1, "the bridge does not call the cycle exactly once"
+    callbacks = {kw.arg: ast.unparse(kw.value) for kw in calls[0].keywords}
+    assert callbacks['notify_written'] == 'self._note_wheels'
 
 
 def test_the_bridge_still_owns_the_only_cmd_vel_publisher():

@@ -17,6 +17,7 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, turn_target
 from fleet.server.trip_admission import LOCALIZED
+from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.trip_geometry import arc_newer, bend_fields, junction_fields, next_bend
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
@@ -352,6 +353,8 @@ class TripSteps:
         else:
             x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment["s_to"]))
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
+            return
+        if not await ready_free_goal(self, live):  # D-772 charge-only native readiness
             return
         if not live.open:
             return

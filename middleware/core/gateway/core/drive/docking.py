@@ -14,6 +14,8 @@ from core_features.docking.detector import select_detector
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.swarm import SwarmManager
+from core.drive.station_docking import build_station_owner
+from core_features.docking.station_owner import StationDockingOwner
 
 
 def _simulation_docking(config: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -46,14 +48,31 @@ def _seeded_dock_database(raw: dict[str, Any]) -> DockDatabase:
 
 def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, state, modes,
                             command, safety, capability, battery, line_follow, nav,
-                            robot_id: str) -> tuple[
-                                DockingManager, SwarmManager, DockObservationFeed, Callable[[Mode, Mode], None]]:
+                            robot_id: str, station_config=None, runtime_mode='hardware') -> tuple[
+                                DockingManager, SwarmManager, DockObservationFeed, Callable[[Mode, Mode], None],
+                                Optional[StationDockingOwner]]:
     """Compose the shared Nav2 ownership and return the unchanged mode-exit listener."""
     dock_feed = DockObservationFeed()
+    station_owner = None
 
     def map_pose():
+        if station_owner is not None and station_owner.session is not None:
+            return station_owner.map_pose()
         pose = state.snapshot().pose
         return (pose.x, pose.y, pose.yaw)
+
+    def detector(dock, dock_type):
+        if dock_type.detector == 'station_observation':
+            if station_owner is None:
+                raise DockError('STATION_BINDING_REQUIRED', 'station control profile is disabled')
+            return station_owner.detector()
+        return select_detector(dock, dock_type, feed=dock_feed, clock=docking.now)
+
+    def admit_motion(kind, dock, dock_type, correlation_id):
+        if station_owner is not None:
+            station_owner.admit_motion(kind, dock, dock_type, correlation_id)
+        elif dock_type is not None and dock_type.detector == 'station_observation':
+            raise DockError('STATION_BINDING_REQUIRED', 'station control profile is disabled')
 
     docking = DockingManager(
         database=(_seeded_dock_database(simulation_docking)
@@ -67,8 +86,7 @@ def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, stat
         # 없어서 시뮬레이션으로 떨어진다 (D-138). `detector: observation` 기종은
         # control 의 dock/observation 증거를 `dock_feed` 로 읽는다 (ros_bridge 가
         # 채운다). 신선도는 매니저와 같은 시계로 잰다.
-        detector_factory=lambda dock, dock_type: select_detector(
-            dock, dock_type, feed=dock_feed, clock=docking.now),
+        detector_factory=detector, motion_admission=admit_motion,
         agent_factory=lambda dock: DockAgent(dock.agent_url),
         capability_provider=lambda: capability.supports("docking.supported"),
         map_id_provider=lambda: state.map_id,
@@ -110,6 +128,22 @@ def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, stat
                        data={"from": previous.value, "to": Mode.DOCKING.value,
                              "by": "docking"})
 
+    station_owner = build_station_owner(docking, config=station_config, runtime_mode=runtime_mode,
+                                        state=state, modes=modes, safety=safety, battery=battery)
+    if station_owner is not None:
+        def return_idle():
+            def transfer():
+                if line_follow.active or not station_owner._return_valid():
+                    return False
+                command.clear_navigation()
+                ok, _ = modes.transition(Mode.IDLE, expect=Mode.NAVIGATION)
+                if ok:
+                    events.publish('mode.changed', source='station_return',
+                        data={'from': Mode.NAVIGATION.value, 'to': Mode.IDLE.value, 'by': 'station_return'})
+                return ok
+            return nav.with_terminal_navigation(station_owner.session.boot_id, transfer)
+        station_owner.return_idle = return_idle
+
     def release_docking_mode():
         """IDLE again once docking no longer moves the robot (docked,
         undocked, failed or cancelled). The manager calls this under its
@@ -144,6 +178,11 @@ def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, stat
         """Every exit from DOCKING stops the docking run first — API, line
         follow, e-stop or docking's own release. The docking slot only
         reaches the wheels in DOCKING, and nothing else may keep driving it."""
+        if station_owner is not None and station_owner.session is not None and new in (Mode.MANUAL, Mode.EMERGENCY):
+            try:
+                station_owner.invalidate('STATION_LOCAL_STOP_OR_MANUAL')
+            except Exception:
+                logging.getLogger('core.services').exception('station invalidation on mode exit failed')
         if old is not Mode.DOCKING:
             return
         try:
@@ -154,4 +193,4 @@ def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, stat
         except Exception:
             logging.getLogger("core.services").exception("docking stop on mode exit failed")
         command.clear_docking()
-    return docking, swarm, dock_feed, leave_docking
+    return docking, swarm, dock_feed, leave_docking, station_owner

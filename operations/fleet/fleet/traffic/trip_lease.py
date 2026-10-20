@@ -40,6 +40,7 @@ START_CODES = {"TRIP_LEASED": "TRIP_ROBOT_LEASED", "MANUAL_MODE": "TRIP_ROBOT_MA
 class TripLease:
     #: D-763 rev 2 Q3: ``(job_view, detail)`` opens the incident (person/AI PC) and binds the job's HOLD to it.
     on_job_lost = None
+    on_charge_lost = None
     claimed = staticmethod(lambda robot_id: None)  # the durable D-330 robot claim of a job (trip_guard)
 
     def __init__(self, port, clock, timeout_s: float, on_lost=None, *, required: bool = False,
@@ -53,7 +54,12 @@ class TripLease:
         self.jobs: dict[str, SimpleNamespace] = {}  # robot id -> its job's hold (open=True, job=True, view)
 
     def job_of(self, robot_id: str):  # the job holding this robot: its hold here, else its durable claim
-        return self.jobs[robot_id].view["job_id"] if robot_id in self.jobs else self.claimed(robot_id)
+        owner = self.claimed_owner(robot_id)
+        return self.jobs[robot_id].view["job_id"] if robot_id in self.jobs else (owner or {}).get('owner_id')
+
+    def claimed_owner(self, robot_id):
+        owner = self.claimed(robot_id)
+        return {'owner_id': owner, 'owner_kind': 'mission'} if isinstance(owner, str) else owner
 
     def _job_lease(self, robot_id: str):
         return (self.jobs.get(robot_id) or SimpleNamespace(view={})).view.get("lease")
@@ -70,11 +76,12 @@ class TripLease:
     async def _put(self, robot_id: str, body: dict) -> dict:
         return await asyncio.wait_for(self._port.trip_lease(robot_id, body), self._timeout_s) or {}
 
-    async def open(self, robot_id: str, view: dict, caps) -> dict | None:
+    async def open(self, robot_id: str, view: dict, caps, *, lease_id=None) -> dict | None:
         """The trip's lease (``view``: its trip_id and started_by), None when off, or ``TripError``."""
         job = self.jobs.get(robot_id)
         if job is not None:  # D-763 6: only that job's own step adopts its lease; any other start is refused
-            if view.get("job_id") != job.view["job_id"] or job.view["lease"]["state"] != HELD:
+            if (view.get("job_id") != job.view["job_id"] or job.view["lease"]["state"] != HELD
+                    or job.view.get('owner_kind') == 'charge_session' and view['trip_id'] != job.view['trip_id']):
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             return job.view["lease"]
         if not self.required:
@@ -84,7 +91,7 @@ class TripLease:
         pending = self._releasing.pop(robot_id, None)
         if pending is not None and not pending.done():  # the last trip's DELETE first: one lease per robot
             await asyncio.wait([pending], timeout=self._timeout_s)
-        lease = {"lease_id": uuid.uuid4().hex, "state": HELD, "renewed_at": self._clock()}
+        lease = {"lease_id": lease_id or uuid.uuid4().hex, "state": HELD, "renewed_at": self._clock()}
         try:
             await self._put(robot_id, self._body(lease["lease_id"], view))
         except RobotApiError as exc:
@@ -137,9 +144,11 @@ class TripLease:
         if self._on_lost is not None and not getattr(live, "job", False):
             await self._on_lost(live, detail)
         job = self.jobs.get(live.view["robot_id"])
-        if job is not None and job.view["lease"] is lease and self.on_job_lost is not None:
+        hook = (self.on_charge_lost if job is not None and job.view.get('owner_kind') == 'charge_session'
+                else self.on_job_lost)
+        if job is not None and job.view["lease"] is lease and hook is not None:
             try:  # lost at ttl after the last confirmed renew, before CORE: never assume IDLE now (D-763 10)
-                await self.on_job_lost(job.view, detail)
+                await hook(job.view, detail)
             except Exception:  # noqa: BLE001 — the lease is already lost; the incident path must say so loudly
                 _LOG.exception("job %s lost its lease but the incident hook failed", job.view["job_id"])
 
