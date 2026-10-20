@@ -44,9 +44,9 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
     original=json.loads((policy_root/policy['evaluations'][0]['path']).read_bytes())
     episode_id=paths[0].parent.name
     evaluation_ids=original.get('eval_episodes', [original.get('eval_episode')])
-    expected=original.get('per_episode',{}).get(episode_id,original)
+    expected_metrics=original.get('per_episode',{}).get(episode_id,original)
     if (episode_id not in evaluation_ids or episode_id in original['train_episodes']
-            or len(source['samples'])!=expected['eval_frames']):raise ValueError('source differs from held-out evaluation')
+            or len(source['samples'])!=expected_metrics['eval_frames']):raise ValueError('source differs from held-out evaluation')
     stats=json.loads((policy_root/policy['normalization']['path']).read_bytes())
     if stats['fit_episodes']!=original['train_episodes']:raise ValueError('normalization fit sources differ')
     # The actual evaluation reader must be byte-for-byte covered by the bound Dataset.
@@ -113,7 +113,7 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
         truth=np.asarray([row['action'] for row in source['samples']]);prediction=np.asarray(predictions)
         mae=float(np.abs(truth-prediction).mean())
         baseline=float(np.abs(truth-np.asarray(stats['action_mean'])).mean())
-        if abs(mae-expected['mae_rad'])>1e-6 or abs(baseline-expected['constant_baseline_mae_rad'])>1e-9:
+        if abs(mae-expected_metrics['mae_rad'])>1e-6 or abs(baseline-expected_metrics['constant_baseline_mae_rad'])>1e-9:
             raise ValueError('actual queued prediction metrics differ from bound offline evaluation')
         # Revalidate all referenced source bytes after video decoding/inference.
         validate_policy(json.loads((policy_root/'policy-artifact.json').read_bytes()),root=policy_root)
@@ -130,7 +130,8 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
             action_age_violation_count=sum(not f['action_age_within_budget'] for f in frames),
             mae_rad=mae,constant_baseline_mae_rad=baseline,
             joint_limit_violation_count=int(((prediction<limits[:,0])|(prediction>limits[:,1])).sum()),
-            original_metrics_reproduced=True,original_verdict=original['verdict'],cadence='minimum-period-after-return' if paced else 'unpaced',
+            original_metrics_reproduced=True,original_verdict=expected_metrics['verdict'],
+            aggregate_original_verdict=original['verdict'],cadence='minimum-period-after-return' if paced else 'unpaced',
             requested_period_ns=policy['timing']['period_ns'],minimum_input_after_previous_return_gap_ns=min(gaps) if gaps else None,
             timestamp_basis='replay-input-receipt owner monotonic; original source clocks preserved separately',
             owner_dispatch='not_attempted',operating_authority='none',independent_sim_task='not_executed',

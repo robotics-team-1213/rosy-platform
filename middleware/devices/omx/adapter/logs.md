@@ -567,13 +567,20 @@
 - 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
 - gate 변화: 없음. 동작 변경 없는 경로 이동이다.
 
-## 2026-10-21 · uncommitted · 실제 파생 SIM world 카메라 출처
-
-- 변경: PilotSimCamera의 기본 world 이름은 유지하고, 별도 물체 workcell을 사용할 때 실제 world 이름을 camera identity에 기록한다.
-- 검증: native RGB 시연 수집에서 파생 world hash·이름과 실제 영상 출처를 확인할 예정이다. 장치·학습 gate 변화 없음.
-
 ## 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
 
 - 변경: origin #83(78a4bea23c)의 별도 action event 노드·SingleThreadedExecutor(`ros_trajectory_action.py`)와 owner worker에 실행 기회를 넘기는 `OwnerMultiThreadedExecutor`(`ros_owner_executor.py`)를 main에 옮겼다. 느린 durable event sink가 joint-state intake와 watchdog을 막지 않는다. 즉시 HOLD, event 순서, action 이름 해석, worker 수, freshness 기준은 유지한다. main에만 있는 `run_hardware_owner.py`에도 같은 executor와 `runtime.destroy()`를 적용했다. #69의 별도 프로세스 fake vendor(`test/ros_feedback_peer.py`, adapter 시험 폴더)와 시험 재구성도 함께 옮겼고 main의 선택적 feedback trace hook은 유지했다(같은 프로세스 publish trace만 빠짐).
 - 증거: docs/validation/omx-owner-executor-port-2026-10-19/result.md.
 - gate 변화: 소스·원격 host/native 시험 범위. main의 #68 비재현 판정(docs/validation/omx-feedback-verification-2026-10-18/result.md)은 보존하고, 사용자 결정으로 예방 보완을 채택한다. 착지 전 독립 Safety-Review가 필요하다. 실물·DEVICE/FIELD는 미검증.
+
+## 2026-10-21 · uncommitted · 실제 파생 SIM world 카메라 출처
+
+- 변경: PilotSimCamera의 기본 world 이름은 유지하고, 별도 물체 workcell을 사용할 때 실제 world 이름을 camera identity에 기록한다.
+- 검증: native RGB 시연 수집에서 파생 world hash·이름과 실제 영상 출처를 확인할 예정이다. 장치·학습 gate 변화 없음.
+- gate 변화: 장치·학습 gate 변화 없음.
+
+## 2026-10-21 · uncommitted · 영상 처리와 관절 기록 수신 분리
+
+- 변경: 관절 기록 수신을 카메라 기본 callback group과 분리한다. 이전 카메라 출처 로그의 누락된 gate 필드는 기존 본문의 같은 문장을 옮겨 형식만 보강하고 날짜순으로 배치했다. 이전·수정 블록의 정확한 SHA 쌍을 기존 log repair 원장에 보존한다.
+- 증거: 기본 callback group의 관절 수신 차단을 실제 ROS에서 RED 1 failed/1 passed로 재현했고 분리 후 2 passed다. batch 4 첫 시연의 원본 2650 RGB를 모델 PC에서 export/readback했다.
+- gate 변화: 명시적 보조 SIM의 시연·원본 기록·별도 callback 수신 범위다. 새 수집 재검증·학습·독립 정책 20회·DEVICE/FIELD는 미완료다.

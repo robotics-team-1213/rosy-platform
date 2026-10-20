@@ -93,6 +93,22 @@ def _ref(path, root):
             "bytes": path.stat().st_size}
 
 
+def export_truth(export, source, validated):
+    """A missing automatic proof cannot become an operator judgement."""
+    report = json.loads((export/'rosy_export.json').read_bytes())
+    judge = report.get('task_outcome_judge', 'operator')
+    proof = export/'rosy_sim_truth/truth.json'
+    if report['status'] != 'verified' or judge not in {'operator','sim_ground_truth'}:
+        raise ValueError('verified export with a known source judge required')
+    if judge == 'sim_ground_truth':
+        from rosy.contracts.learning.sim_object_truth import validate_truth
+        validate_truth(proof, validated, source=source)
+        return proof
+    if proof.exists():
+        raise ValueError('export judge contradicts automatic SIM proof')
+    return None
+
+
 def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4):
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
         raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
@@ -121,12 +137,13 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     torch.set_num_threads(4)
     torch.manual_seed(seed)
     np.random.seed(seed)
-    source_paths, sources, original_rows = [], [], []
+    source_paths, sources, original_rows, automatic = [], [], [], []
     for export in exports:
         paths = sorted((export / "rosy_provenance").glob("*/manifest.json"))
         if len(paths) != 1:
             raise ValueError("one original validated Episode per export required")
         validated = validate_omx(paths[0].parent)
+        automatic.append(export_truth(export, paths[0].parent, validated) is not None)
         source_paths.append(paths[0].parent)
         sources.append(validated["manifest"]["provenance"])
         original_rows.append(validated["samples"])
@@ -143,7 +160,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     _write(out / "state.json", {"status": "reading", "steps": steps, "seed": seed, "source_episodes": ids})
     try:
         episodes, arrays = [], []
-        for export, source, rows in zip(exports, source_paths, original_rows):
+        for export, source, rows, was_automatic in zip(exports, source_paths, original_rows, automatic):
             snapshot = out / "reader-inputs" / source.name
             shutil.copytree(export, snapshot)
             source = snapshot / "rosy_provenance" / source.name
@@ -151,8 +168,10 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             if copied["samples"] != rows:
                 raise ValueError("source rows changed during input snapshot")
             common = out / "episodes" / source.name
-            proof = snapshot/'rosy_sim_truth/truth.json'
-            episode = convert(source, common, sim_ground_truth=proof if proof.exists() else None)
+            proof = export_truth(snapshot, source, copied)
+            if (proof is not None) != was_automatic:
+                raise ValueError('source outcome judge changed during snapshot')
+            episode = convert(source, common, sim_ground_truth=proof)
             episodes.append(episode)
             reader = LeRobotDataset("rosy-local/omx-sim", root=snapshot, video_backend="pyav", download_videos=False)
             if reader.num_episodes != 1 or reader.num_frames != len(rows):

@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
+- 2026-10-21 · uncommitted · 영상 처리와 관절 기록 수신 분리
 - 2026-10-21 · uncommitted · 실제 파생 SIM world 카메라 출처
+- 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
 - 2026-10-19 · dc1d3419eb · refactor(omx): pilot-sim 묶음을 omx_adapter/pilot_sim 크기 단위로 이동
 - 2026-10-19 · uncommitted · feat(omx): recover bounded feedback diagnostics
-- 2026-10-19 · uncommitted · refactor(omx): recover canonical contract extraction

@@ -15,3 +15,6 @@
 
 # 812735a7d D-638 heading grammar repair: one hash in the commit slot; body evidence unchanged.
 "947cae00ecb98344aa18eb3ce4767dbd4bd628f596f62dcf335cb61a01376feb": "397c8a6e6638e9c12cf6071f188c5ac7bda0c8bdd55eb1ddc0bbcdd71ec98874" # SHA256 normalized journal block pair
+
+# 8f1913c9ff camera provenance entry: add the missing gate field from its existing body; evidence unchanged.
+"f57a8172df2e62df5014d86cc878d1162b94856bbbf63873de2528ce11d6f559": "8317530f2a2846129e42b6ab8fe8e94bdc8d53aabe743de069223d75131b2dc8"
