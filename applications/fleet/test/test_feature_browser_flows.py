@@ -14,8 +14,10 @@ import test_sample_collaboration as collaboration
 
 
 CASES = {
+    'auth': (flows.test_auth_login_logout_and_rejected_credentials, '/console/login'),
+    'map': (flows.test_map_draft_conflict_activation_and_readback, '/console/site-map'),
     'policy': (flows.test_policy_window_approval_closure_and_expiry, '/console/policy'),
-    'stop': (flows.test_unauthorized_and_stale_changes_do_not_mutate_state, '/console'),
+    'stop': (flows.test_stop_requires_current_generation_to_rearm, '/console'),
     'work': (flows.test_flow_ids_revisions_and_reset_are_consistent, '/console'),
     'monitoring': (flows.test_goal_idempotency_progress_and_terminal_read, '/console'),
     'assistant': (flows.test_assistant_idempotency_and_explicit_terminal_result, '/console'),

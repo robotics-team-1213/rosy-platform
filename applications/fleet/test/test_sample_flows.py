@@ -7,6 +7,59 @@ from test_sample_server import load_engine
 COOKIES = WeakKeyDictionary()
 
 
+def test_auth_login_logout_and_rejected_credentials():
+    engine = load_engine()
+    target = '/api/fleet/auth/login'
+    assert call(engine, 'POST', target, {'login':'sample', 'password':'incorrect'})[0] == 401
+    assert call(engine, 'POST', target, {'login':'sample', 'password':'sample-password'})[0] == 204
+    assert call(engine, 'GET', '/api/fleet/auth/session')[1]['principal_id'] == 'sample'
+    assert call(engine, 'POST', '/api/fleet/auth/logout')[0] == 204
+    assert call(engine, 'GET', '/api/fleet/auth/session')[0] == 401
+
+
+def test_map_draft_conflict_activation_and_readback():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'sample-password'})
+    path = '/api/fleet/site-map/'
+    _, draft = call(engine, 'GET', path + 'draft')
+    body = {'map':draft['map'], 'expected_revision':draft['revision']}
+    status, saved = call(engine, 'PUT', path + 'draft', body)
+    assert status == 200 and saved['revision'] == draft['revision'] + 1
+    assert call(engine, 'PUT', path + 'draft', body)[0] == 409
+    status, active = call(engine, 'POST', path + 'activate', {'expected_revision':saved['revision']})
+    assert status == 200 and active['map'] == saved['map']
+    assert call(engine, 'GET', path + 'active')[1] == active
+
+
+def test_stop_requires_current_generation_to_rearm():
+    engine = load_engine()
+    assert call(engine, 'POST', '/api/fleet/estop')[0] == 401
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'sample-password'})
+    assert call(engine, 'POST', '/api/fleet/estop')[0] == 200
+    _, stopped = call(engine, 'GET', '/api/fleet/dispatch-control')
+    assert stopped['dispatch_enabled'] is False
+    assert call(engine, 'POST', '/api/fleet/dispatch/rearm', {'expected_generation':-1})[0] == 409
+    assert call(engine, 'POST', '/api/fleet/dispatch/rearm', {'expected_generation':stopped['generation']})[0] == 200
+    assert call(engine, 'GET', '/api/fleet/dispatch-control')[1]['dispatch_enabled'] is True
+
+
+def test_created_account_password_reset_and_session_revocation():
+    engine = load_engine()
+    login = '/api/fleet/auth/login'
+    call(engine, 'POST', login, {'login':'sample', 'password':'sample-password'})
+    status, account = call(engine, 'POST', '/api/fleet/auth/accounts',
+                           {'login':'new-user', 'principal_id':'new-user', 'role':'viewer', 'password':'first-password',
+                            'grants':[{'resource':'site:sample', 'capabilities':['fleet.read']}]})
+    assert status == 201
+    assert call(engine, 'POST', login, {'login':'new-user', 'password':'first-password'})[0] == 204
+    assert call(engine, 'GET', '/api/fleet/auth/session')[1]['principal_id'] == 'new-user'
+    call(engine, 'POST', login, {'login':'sample', 'password':'sample-password'})
+    path = '/api/fleet/auth/accounts/' + account['account_id']
+    assert call(engine, 'POST', path + '/reset-password', {'revision':1, 'password':'second-password'})[0] == 200
+    assert call(engine, 'POST', login, {'login':'new-user', 'password':'first-password'})[0] == 401
+    assert call(engine, 'POST', login, {'login':'new-user', 'password':'second-password'})[0] == 204
+
+
 def test_policy_window_approval_closure_and_expiry():
     engine = load_engine()
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
