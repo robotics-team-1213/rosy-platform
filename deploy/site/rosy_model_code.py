@@ -604,15 +604,15 @@ def job_entry(source, script):
                 file.relative_to(perception)
                 return file, perception, script, None
     mapped = JOB_ENTRY_POINTS.get(script) if isinstance(script, str) else None
-    if mapped is not None:
-        file = (source / mapped).resolve(strict=True)
-        if file.relative_to(source) != Path(mapped):
-            raise ValueError("job entry point is not its mapped file")
-        return file, source, mapped, mapped
-    perception = source / PREFIX
-    file = (perception / script).resolve(strict=True)
-    file.relative_to(perception)
-    return file, perception, script, None
+    if mapped and script.startswith("training/") and mapped.startswith("learning/curation/perception/"):
+        current = source / mapped
+        if not current.exists() and not current.is_symlink():
+            mapped = "learning/training/perception/" + Path(mapped).name
+    perception, name = (source, mapped) if mapped is not None else (source / PREFIX, script)
+    file = (perception / name).resolve(strict=True)
+    if file.relative_to(perception) != Path(name) and mapped is not None:
+        raise ValueError("job entry point is not its mapped file")
+    return file, perception, name, mapped
 
 
 def execute(config, script, args):
