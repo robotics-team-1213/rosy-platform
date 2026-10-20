@@ -2,6 +2,7 @@
 import argparse
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 from run_binding import load_binding
@@ -43,7 +44,7 @@ class Runner:
             return self.status(row['run_id'])
         try:
             self.system.launch(unit, self.binding_file, row['run_id'])
-        except (OSError, ValueError, RuntimeError) as exc:
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
             self._unknown(row, 'launch response unavailable; observe existing run')
         return self.store.get(row['run_id'])
 
@@ -63,7 +64,7 @@ class Runner:
                 return self._unknown(row, 'unit is inactive; cleanup and result unconfirmed')
             if row['runtime'].get('invocation_id') and not same_owner(row['runtime'], observed):
                 return self._unknown(row, 'unit ownership changed; automatic restart refused')
-        except (OSError, ValueError, RuntimeError):
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
             return self._unknown(row, 'unit observation unavailable')
         return row
 
@@ -77,7 +78,7 @@ class Runner:
         row = self.store.update(run_id, expected_revision, {'status': 'STOP_REQUESTED'})
         try:
             self.system.stop(owner)
-        except (OSError, ValueError, RuntimeError):
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
             return self._unknown(row, 'stop failed; termination remains unconfirmed')
         return self.store.get(run_id)
 
