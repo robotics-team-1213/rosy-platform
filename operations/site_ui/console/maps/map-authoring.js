@@ -24,7 +24,7 @@ export function createMapAuthoring(host) {
     sync();
   };
   $('drawing-file').addEventListener('change', () => act(async () => {
-    message('도면 원본 확인 중');
+    message('도면 업로드 중');
     const result = await importer.load($('drawing-file').files[0]);
     if (result) message(`원본 확인 · ${result.triangle_count}개 삼각형 · 좌표 범위 ${JSON.stringify(result.bounds_3d)}`);
   }));
@@ -49,7 +49,7 @@ export function createMapAuthoring(host) {
   }));
   $('drawing-cancel').addEventListener('click', () => { importer.cancel(); message('도면 요청을 취소했습니다. 초안은 그대로입니다'); });
   for (const field of $('drawing-tools').querySelectorAll('input:not([type=file]), select'))
-    field.addEventListener('input', importer.cancel);
+    field.addEventListener('input', importer.cancelRegistration);
   $('editor-enabled').addEventListener('change', () => { host.begin(); editor.cancel(); host.render(); });
   const step = operation => {
     if (editReason()) { host.notice(editReason()); return; }
@@ -80,7 +80,11 @@ export function createMapAuthoring(host) {
     else if (JSON.stringify(history.current()) !== JSON.stringify(working)) history.apply(working);
     $('editor-undo').disabled = Boolean(editReason()) || !history.canUndo();
     $('editor-redo').disabled = Boolean(editReason()) || !history.canRedo();
-    for (const id of ['drawing-file', 'drawing-register']) $(id).disabled = Boolean(host.reason());
+    $('drawing-file').disabled = Boolean(host.reason());
+    const registrationReason = host.reason() || (!importer.ready() ? 'STL 원본을 먼저 확인하세요' : '');
+    $('drawing-register').disabled = Boolean(registrationReason);
+    if (registrationReason) $('drawing-register').setAttribute('reason', registrationReason);
+    else $('drawing-register').removeAttribute('reason');
     const hash = host.map()?.drawing?.projection_sha256;
     if (hash !== loadingHash) {
       cacheController?.abort(); projection = null; loadingHash = hash;
