@@ -166,6 +166,7 @@ assert parsed.dataset.push_to_hub is False and parsed.dataset.private is True
 features = {key: {'dtype':'float32','shape':(6,), 'names':JOINTS}
             for key in ('action', 'observation.state')}
 features['observation.images.front'] = {'dtype':'video', 'shape':(32,32,3), 'names':['height','width','channels']}
+features['source.capture_time_ns'] = {'dtype':'int64','shape':(1,),'names':['original_clock']}
 source = tmp / 'source'
 writer = LeRobotDataset.create(repo_id='local/native-fixture', root=source, fps=10,
                                robot_type='omx_follower', features=features, use_videos=True,
@@ -174,6 +175,7 @@ for episode in range(3):
     for frame in range(4):
         vector = np.full(6, episode * 20 + frame, dtype=np.float32)
         writer.add_frame({'observation.state':vector, 'action':vector,
+                          'source.capture_time_ns':np.array([(episode+1)*10**9+frame],dtype=np.int64),
                           'observation.images.front':np.full((32,32,3), episode * 100 + frame, dtype=np.uint8),
                           'task':'Pick cube'})
     writer.save_episode()
@@ -274,6 +276,8 @@ assert segment_receipt['environment_coverage_scope'] == 'original_parent_episode
 assert segment_receipt['decisions'][0]['outcome'] == 'unknown'
 segment_train = LeRobotDataset('local/native-fixture_train',root=cropped/'train',video_backend='pyav',download_videos=False)
 assert [segment_train[i]['action'][0].item() for i in range(2)] == [1.,2.]
+assert [segment_train[i]['source.capture_time_ns'].item() for i in range(2)] == [10**9+1,10**9+2]
+assert segment_train[0]['frame_index'].item() == 0 and segment_train[0]['timestamp'].item() == 0
 assert float(segment_train.meta.stats['action']['max'][0]) == 2., 'segment eval data leaked into train stats'
 segment_cycle = run_cycle(cropped,tmp/'segment-training',steps=2,batch_size=2,device='cpu',timeout=120)
 assert segment_cycle['evaluation']['samples'] == 2
