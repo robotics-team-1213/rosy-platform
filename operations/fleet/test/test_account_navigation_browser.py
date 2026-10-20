@@ -30,12 +30,14 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     auth_responses = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('response', lambda response: auth_responses.append((response.url.split('/api/')[-1], response.status))
-            if '/api/fleet/auth/' in response.url else None)
+            if '/api/fleet/auth/' in response.url or '/api/fleet/session' in response.url else None)
     target = '/console?view=work&show=new'
     page.goto(origin + '/console/login?return=' + quote(target, safe=''))
     _credentials(page)
     page.locator('[data-login=submit]').click()
     expect(page).to_have_url(origin + target)
+    session = page.request.get(origin + '/api/fleet/session')
+    assert session.status == 200, session.text()
     try:
         expect(page.locator('#fleet-account')).to_be_visible(timeout=5000)
     except AssertionError:
