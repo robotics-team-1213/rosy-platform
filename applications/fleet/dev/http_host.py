@@ -105,7 +105,7 @@ def make_server(provider, origin):
             path = urlsplit(self.path)
             if path.scheme or path.netloc or not self.path.startswith('/'):
                 return self.respond(error(400, 'INVALID_TARGET'))
-            if path.path.startswith('/__dev/'):
+            if path.path.startswith('/__dev/') and not path.path.startswith('/__dev/assets/'):
                 response = self.control(path.path, body)
             elif path.path.startswith('/api/fleet/'):
                 response = provider.handle(self.command, self.path, dict(self.headers.items()), body)
