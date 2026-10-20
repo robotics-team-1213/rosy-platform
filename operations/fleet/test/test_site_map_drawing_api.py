@@ -20,6 +20,8 @@ DATA = binary([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]])
 @pytest.mark.parametrize('legacy_restart', [False, True])
 def test_map_identity_cannot_reuse_another_drawing_frame(tmp_path, monkeypatch, association, legacy_restart):
     client, store, assets = setup_assets(tmp_path, monkeypatch)
+    uploaded = client.post(UPLOAD, headers=trip.OPERATOR, content=DATA).json()
+    projection = assets.project(uploaded['asset_sha256'], registration())
     body = store.active_view()['map']
     if association == 'history':
         other = {**body, 'map_id': 'other'}
@@ -38,8 +40,6 @@ def test_map_identity_cannot_reuse_another_drawing_frame(tmp_path, monkeypatch, 
         with sqlite3.connect(path) as db:
             db.execute('DROP TABLE IF EXISTS site_map_frames')
         store = SiteMapStore(path, drawing_assets=assets)
-    uploaded = client.post(UPLOAD, headers=trip.OPERATOR, content=DATA).json()
-    projection = assets.project(uploaded['asset_sha256'], registration())
     body = {**body, 'drawing': {k: projection[k] for k in ('asset_sha256', 'projection_sha256')},
             'survey': {'revision': projection['projection_sha256'], 'origin': [0, 0], 'heading_rad': 0,
                        'scale_source': 'measured', 'measured_distance_m': 1,

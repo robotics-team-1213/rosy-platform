@@ -78,12 +78,32 @@ class SiteMapStore:
             """)
             if "info" not in {row[1] for row in self._db.execute("PRAGMA table_info(site_map_profiles)")}:
                 self._db.execute("ALTER TABLE site_map_profiles ADD COLUMN info TEXT NOT NULL DEFAULT '{}'")
+        self._init_frames()
         self._cached: Optional[tuple[int, SiteMap, Graph, Painted]] = None
         self._publish()
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+    def _init_frames(self) -> None:
+        with self._lock, self._db:
+            self._db.execute('BEGIN IMMEDIATE')
+            if self._db.execute("SELECT 1 FROM sqlite_master WHERE name = 'site_map_frames'").fetchone():
+                return
+            self._db.execute('CREATE TABLE site_map_frames (map_id TEXT PRIMARY KEY, drawing_revision TEXT NOT NULL)')
+            for table in ('site_map_versions', 'site_map_draft', 'site_map_profiles'):
+                for (body,) in self._db.execute(f'SELECT body FROM {table}'):
+                    self._bind_frame(json.loads(body))
+
+    def _bind_frame(self, body: dict) -> None:
+        map_id = body.get('map_id', 'site')
+        revision = (body.get('drawing') or {}).get('projection_sha256', '')
+        previous = self._db.execute('SELECT drawing_revision FROM site_map_frames WHERE map_id = ?',
+                                    (map_id,)).fetchone()
+        if previous is not None and previous[0] != revision:
+            raise SiteMapError(422, 'SITE_MAP_DRAWING_INVALID', 'a changed drawing frame requires a new map_id')
+        self._db.execute('INSERT OR IGNORE INTO site_map_frames VALUES (?, ?)', (map_id, revision))
 
     # ---- active ---------------------------------------------------------------------
 
@@ -155,6 +175,7 @@ class SiteMapStore:
         return [{"action": r[0], "principal_id": r[1], "detail": json.loads(r[2]), "at": r[3]} for r in rows]
 
     def _insert_version(self, site_map: SiteMap, principal_id: str) -> int:
+        self._bind_frame(site_map.body())
         text = json.dumps(site_map.body(), sort_keys=True, ensure_ascii=False)
         cursor = self._db.execute(
             "INSERT INTO site_map_versions (body, sha256, activated_by, activated_at) VALUES (?, ?, ?, ?)",
@@ -193,6 +214,7 @@ class SiteMapStore:
             if (current[0] if current else None) != expected_revision:
                 raise SiteMapError(409, "SITE_MAP_PROFILE_CHANGED", "profile changed; reload first")
             self._drawing_changed(json.loads(current[2]) if current else {}, site_map)
+            self._bind_frame(site_map.body())
             if current is None and self._db.execute("SELECT count(*) FROM site_map_profiles").fetchone()[0] >= 100:
                 raise SiteMapError(409, "SITE_MAP_PROFILE_LIMIT", "at most 100 profiles can be stored")
             info = info or (MapProfileInfo.model_validate_json(current[1]) if current else MapProfileInfo())
@@ -224,6 +246,7 @@ class SiteMapStore:
                 raise SiteMapError(409, "SITE_MAP_DRAFT_CHANGED", "another operator changed the draft; reload first")
             previous = self.draft_view()['map'] or (self.active_view() or {}).get('map') or {}
             self._drawing_changed(previous, site_map)
+            self._bind_frame(site_map.body())
             self._db.execute("INSERT OR REPLACE INTO site_map_draft VALUES (1, ?, ?, ?, ?)",
                              (json.dumps(site_map.body(), ensure_ascii=False), revision, principal_id, self.clock()))
             self._event("draft_saved", principal_id, {"revision": revision})
