@@ -16,6 +16,13 @@ Z 오차는 모두 `4.619359970231551e-08m`였다. native 실제 물체 시연 3
 기존 규칙 teacher와 명시적인 SIM 부착 보조를 사용했으며, 학습 정책의 성공으로
 세지 않는다. 초기 상태는 고정됐고 simulator RNG seed는 기록되지 않았다.
 
+평가 전 접촉 보정에는 batch 7·9의 실제 grasp 종료에 가장 가까운 원본 RGB/state
+6쌍을 사용했다. gripper readback 범위는 `0.41494032740592957–0.4176689386367798rad`,
+고정 profile의 해석 접촉 값은 `0.40689174134023rad`였다. 기존 `+0.005rad` 상한은
+실제 성공 접촉을 모두 거절하므로 `+0.015rad`로 고정했다. 과도하게 열린 `.423rad`
+이상의 테스트 readback은 거절한다. 실제 접촉·원본 수락/완료·TCP/물체 위치 조건을
+함께 요구하며, 이 보정 자료를 새로운 학습 정책 평가로 세지 않는다.
+
 - native source: `45718a83d7432a6cc1ea01ca752b4b9be606d684`
 - native run: `45718a83d7432a6cc1ea01ca752b4b9be606d684-3688b20534b8`
 - 검증 source: `4b710f290e` — MODEL-PC, native 8 CPU/6GiB, exit 0

@@ -48,5 +48,7 @@ def test_hold_requires_width_contact_instead_of_partially_closing_open_jaws(posi
 
 
 def test_fixed_world_actual_successful_contact_readback_is_admitted():
-    assert contact_held(.41494032740592957,close=.38042608841813563,contact=.40689174134023)
+    for actual in (.41494032740592957,.4176689386367798):
+        assert contact_held(actual,close=.38042608841813563,contact=.40689174134023)
+    assert not contact_held(.423,close=.38042608841813563,contact=.40689174134023)
     assert not contact_held(.45,close=.38042608841813563,contact=.40689174134023)
