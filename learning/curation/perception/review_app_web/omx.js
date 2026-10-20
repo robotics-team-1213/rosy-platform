@@ -25,12 +25,14 @@ function field(form,label,name,type='text',value=''){
 }
 function choice(form,label,name,options){
   const wrapper=el('label',label+' '),input=el('select');input.name=name;input.className='ui-field';
+  input.setAttribute('aria-label',label);
   for(const [value,text] of options){const option=el('option',text);option.value=value;input.append(option);}
   wrapper.append(input);form.append(wrapper);return input;
 }
 function segmentReview(set,section){
   const detail=el('details'),summary=el('summary','파지 구간 검수');detail.append(summary);
   const status=el('p',null,'quiet'),list=el('div'),form=el('form');
+  form.className='learning-form ui-form';
   let saved=set.segment_review||{version:0,document:null},rows=structuredClone(saved.document?.segments||[]);
   const episode=choice(form,'원본 Episode','episode',set.episodes.map(e=>[String(e.episode_index),String(e.episode_index)]));
   const cameraKey=choice(form,'카메라','camera',set.camera_keys.map(k=>[k,k.replace('observation.images.','')]));
