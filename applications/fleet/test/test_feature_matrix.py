@@ -1,5 +1,6 @@
 """Pin the app's HTTP consumers to owned, tested backend contracts."""
 
+import ast
 import copy
 import json
 from pathlib import Path
@@ -19,8 +20,46 @@ def load_matrix():
     return json.loads(MATRIX.read_text(encoding="utf-8"))
 
 
+def constant_string(node, names):
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return names.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = constant_string(node.left, names), constant_string(node.right, names)
+        return left + right if left is not None and right is not None else None
+    if isinstance(node, ast.JoinedStr):
+        parts = [constant_string(item.value if isinstance(item, ast.FormattedValue) else item, names)
+                 for item in node.values]
+        return "".join(parts) if all(part is not None for part in parts) else None
+    return None
+
+
+def registrations(path):
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+    names, found = {}, set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    value = constant_string(node.value, names)
+                    if value is not None:
+                        names[target.id] = value
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if (isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute)
+                    and decorator.func.attr in {"get", "post", "put", "patch", "delete"}
+                    and decorator.args):
+                path_value = constant_string(decorator.args[0], names)
+                if path_value:
+                    found.add((decorator.func.attr.upper(), path_value, node.name))
+    return found
+
+
 def problems(document):
-    errors, feature_ids, request_ids, covered = [], set(), set(), set()
+    errors, feature_ids, request_ids, covered, registry = [], set(), set(), set(), {}
     for feature in document["features"]:
         if feature["id"] in feature_ids:
             errors.append("duplicate feature")
@@ -41,8 +80,11 @@ def problems(document):
             implementation = ROOT / request["implementation"]
             if not implementation.is_file():
                 errors.append("missing backend implementation")
-            elif request["handler"] not in implementation.read_text(encoding="utf-8"):
-                errors.append("missing backend handler")
+            else:
+                if implementation not in registry:
+                    registry[implementation] = registrations(implementation)
+                if (request["method"], request["path"], request["handler"]) not in registry[implementation]:
+                    errors.append("unregistered backend route")
             if not request["contract_tests"] or any(
                 not (ROOT / path).is_file() for path in request["contract_tests"]
             ):
@@ -82,6 +124,7 @@ def test_all_supported_features_have_contracts_and_flows():
     ("verification", "unverified contract"),
     ("flow", "missing representative flow"),
     ("call", "unbound frontend call"),
+    ("route", "unregistered backend route"),
 ])
 def test_incomplete_or_stale_contracts_are_rejected(mutation, expected):
     matrix = copy.deepcopy(load_matrix())
@@ -92,6 +135,8 @@ def test_incomplete_or_stale_contracts_are_rejected(mutation, expected):
         feature["requests"][0]["status"] = "unverified"
     elif mutation == "flow":
         feature["flows"] = []
+    elif mutation == "route":
+        feature["requests"][0]["path"] = "/api/fleet/not-implemented"
     else:
         feature["calls"][0]["request_ids"] = []
     assert expected in problems(matrix)
