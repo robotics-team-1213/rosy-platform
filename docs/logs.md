@@ -9849,3 +9849,15 @@ osy-d395-s1d\`.
 - 변경: `application-contract-support.md`에 실제 HTTP route·권한·상태 의미·근거/자원 정본·복구 책임과 후보 배정/물리 milestone의 누락을 기록했다. 분할 계획에서 W0 산출물로 연결했다.
 - 증거: `afa2d0373e`의 API reference v1.290, mission/trip/task route, 진행 투영·claim·통행·에너지 admission을 대조했다. 외부 앱 연결 시험과 실물 수용은 수행한 것으로 표시하지 않는다.
 - gate 변화: 없음. 제품 코드·wire·dispatch profile·기존 Vault는 변경하지 않았다.
+
+## 2026-10-21 · uncommitted · 웹·CLI 공통 SIM 실험 작업공간 설계
+
+- 변경: 사용자 선택에 따라 기존 학습 관리 센터와 CLI가 설정 snapshot·run ID·결과를 공유하는 설계를 작성했다. 첫 실제 연결은 OMX-F import 검사이며 D-826 물리 실험의 준비 조건을 별도로 둔다.
+- 증거: 기존 웹·결과 목록, 원격 실행 도구, Isaac import와 SDK 종료 경계를 읽기 전용으로 조사했다. 동일 v1 문서의 독립 아키텍처·비판 검토에서 차단 사항이 없었다. lint는 오류 0개·경고 32개다. 제품 코드·호스트 설정은 바꾸지 않았으며 새 SDK 실행은 NOT RUN이다.
+- gate 변화: 없음. 사용자 문서 검토와 별도 구현 계획 전의 검토안이다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 실험 작업공간 구현 계획
+
+- 변경: 사용자 설계 승인 후 순수 웹 서버 분리, 공통 run 기록, GPU admission·CLI, 웹 연결, 실제 SDK 교차 검증의 다섯 착지 단위로 계획을 구체화했다. 기존 학습의 두 잠금 경로·동일 계정 제한과 로컬 HTTP 권한 경계를 확인했다.
+- 증거: 웹 서버 756행 ratchet과 학습 gpu.lock·signed owner work.lock 생산/소비 경로를 읽기 전용으로 조사했다. 계획의 인터페이스·시험·설계 대응을 자기 검토했다. 제품 구현·호스트 반영·신규 SDK 실행은 NOT RUN이다.
+- gate 변화: 없음. 구현 계획 검토와 실행 방식 선택을 기다린다.

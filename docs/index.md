@@ -346,8 +346,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 공통 SIM 실험 작업공간 구현 계획
+- 2026-10-21 · uncommitted · 웹·CLI 공통 SIM 실험 작업공간 설계
 - 2026-10-21 · uncommitted · 외부 업무 앱 지원 계약 기준선
 - 2026-10-21 · uncommitted · 관제 자연어 전처리·명령 후보 ADR
 - 2026-10-21 · uncommitted · main 포함 10개 워크트리 운영 예산
-- 2026-10-21 · uncommitted · 관제 AI 현장 사전 점검·전처리 검토
-- 2026-10-21 · uncommitted · 항만 혼합 야드 실험 목적·비교·증거 계획
