@@ -34,7 +34,6 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
 D-808 allocated outside this branch (refs/adr/D-808), absent from its base; remove when its ADR is merged
 D-809 allocated outside this branch (refs/adr/D-809), absent from its base; remove when its ADR is merged
-D-810 allocated outside this branch (refs/adr/D-810), absent from its base; remove when its ADR is merged
 D-811 allocated outside this branch (refs/adr/D-811), absent from its base; remove when its ADR is merged
 D-812 allocated outside this branch (refs/adr/D-812), absent from its base; remove when its ADR is merged
 D-813 allocated outside this branch (refs/adr/D-813), absent from its base; remove when its ADR is merged
@@ -45,7 +44,6 @@ D-817 allocated outside this branch (refs/adr/D-817), absent from its base; remo
 D-818 allocated outside this branch (refs/adr/D-818), absent from its base; remove when its ADR is merged
 D-819 allocated outside this branch (refs/adr/D-819), absent from its base; remove when its ADR is merged
 D-820 allocated outside this branch (refs/adr/D-820), absent from its base; remove when its ADR is merged
-D-821 allocated outside this branch (refs/adr/D-821), absent from its base; remove when its ADR is merged
 D-822 allocated outside this branch (refs/adr/D-822), absent from its base; remove when its ADR is merged
 D-808 reserved by another session for Vault explicit site capabilities (refs/adr/D-808), not present in this base; remove when its ADR lands
 D-809 reserved by another session for Legacy 937 Learning Account boundary and attributed review audit (refs/adr/D-809), not present in this base; remove when its ADR lands
