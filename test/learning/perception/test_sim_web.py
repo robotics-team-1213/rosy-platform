@@ -121,8 +121,11 @@ def test_local_adapter_pins_source_and_workspace_without_importing_sdk(tmp_path,
         'entry_sha256': hashlib.sha256(entry.read_bytes()).hexdigest()}))
     config.chmod(0o600)
     calls = []
+    monkeypatch.setenv('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/test/bus')
     def run(argv, **kwargs):
         calls.append(argv)
+        if argv[0] != 'git':
+            assert kwargs['env']['DBUS_SESSION_BUS_ADDRESS'] == 'unix:path=/run/user/test/bus'
         return SimpleNamespace(stdout=('a' * 40 if 'rev-parse' in argv else '') if argv[0] == 'git' else b'{"ready":true}')
     monkeypatch.setattr(sim_web.subprocess, 'run', run)
     with pytest.raises(ValueError):

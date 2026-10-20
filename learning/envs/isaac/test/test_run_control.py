@@ -77,6 +77,18 @@ def test_changed_input_and_unchecked_fingerprint_refuse_launch(setup):
     assert system.launches == []
 
 
+def test_check_returns_readiness_refusal_without_losing_input_fingerprint(setup):
+    _, runner, system, request = setup
+    def busy(binding):
+        raise ValueError('GPU owner is active')
+    system.check = busy
+    checked = runner.check(request['scenario_id'], request['config'], SHA)
+    assert checked['ready'] is False
+    assert checked['input_sha256'] == request['expected_input_sha256']
+    assert checked['reason']
+    assert system.launches == []
+
+
 def running(setup):
     _, runner, system, request = setup
     row = runner.start(request)
