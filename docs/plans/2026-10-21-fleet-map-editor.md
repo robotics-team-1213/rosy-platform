@@ -18,6 +18,7 @@
 - “현장 교정·활성화 증거는 복사하지 않는다.” 템플릿 복사·도면 변환 변경은 검토 완료 상태를 계승하지 않는다.
 - 기존 trip·대형·teach 진행 중 활성화 거절, revision CAS, 인증·권한·CSRF, 기존 지도 직렬화·해시를 보존한다. 익명·읽기 역할에 쓰기 권한을 주지 않는다.
 - `AGENTS.md`, `docs/reference/pr-pipeline.md`, D-766이 Git·검증·공개 병합의 기준이다. 크기 한도·기존 실패 목록·안전 예외로 이 작업을 통과시키지 않는다.
+- D-430 안전 경로를 바꾸는 커밋은 현행 절차의 독립 검토와 실제 근거를 담은 `Safety-Review:` trailer를 갖춰야 한다. 문서의 계획 승인으로 안전 검토를 대신하지 않는다.
 - 모든 pytest는 커밋된 SHA로 `tools/remote/remote_pytest.py`에서 실행한다. RED 테스트도 먼저 자기 테스트만 커밋하며 그 SHA는 게시하지 않는다. GREEN 구현 커밋 뒤 동일 명령과 `test/known_failures.py`를 실행해 NEW0을 확인한다.
 - 명령의 `<external-log-dir>`는 실행별로 새 저장소 밖 폴더를 사용한다(예: 현재 `$env:TEMP` 아래 task·RED/GREEN·SHA별 하위 폴더). 원격 runner가 출력한 모든 run-N.txt를 공식 classifier로 검사하고 이전 RED 로그를 덮어쓰지 않는다.
 
@@ -35,6 +36,7 @@
 
 - `DrawingTransform`: `plane`=`xy|xz|yz`, `unit`=`m|cm|mm`, `source_origin`=원본 평면상의 유한 2좌표, `map_origin_m`=유한 미터 2좌표, `heading_rad`=기존 survey와 같은 [-2π, 2π]의 유한 라디안, `scale`=유한 양수. `p_map = map_origin_m + R(heading_rad) * (p_source - source_origin) * unit_m * scale`. 측정한 두 점의 거리를 `distance_m`로 맞춰 scale을 계산한다. 0 거리와 변환 후 기존 지도 좌표 한계 밖의 값은 거절한다.
 - `DrawingReference`: 소문자 64자리 `asset_sha256`, `projection_sha256`. `SiteMap.drawing`은 선택 필드이며 없는 지도는 기존 bytes/hash를 보존한다. 도면 지도는 `survey.revision == projection_sha256`이어야 한다. 변환 메타데이터는 projection과 함께 보관한다.
+- 승인된 설계의 도로 이름은 기존 edge ID와 구분한다. `SiteEdge.name`을 선택 문자열(1–64자·공백만인 값 거절)로 추가하고 없는 값은 직렬화에서 생략한다. UI에서 비우면 None/생략으로 저장하며 ID·도로/시설 참조를 변경하지 않는다. 기존 장소·시설 이름 필드는 재사용한다.
 - 원본 16 MiB, 삼각형 200,000개, 투영 후 중복 제거 선분 50,000개, projection JSON 8 MiB, 저장소 총 1 GiB. 업로드 수신은 최대 60초, 변환은 한 번에 1개, 자식 프로세스 wall timeout 5초·메모리 256 MiB. 이 제한은 기존 88,484 bytes/1,768 triangles 샘플을 수용하며, 큰 실제 파일이 거절되면 측정 후 후속 변경으로 조정한다. 임의 단순화나 일부 도면 누락으로 통과시키지 않는다.
 - 제안 경로: `POST /api/fleet/site-map/drawings`는 raw STL bytes를 받아 `{asset_sha256, format, triangle_count, bounds_3d}`를 반환한다. `POST /api/fleet/site-map/drawings/{asset_sha256}/projections`는 `DrawingTransform`을 받고 `{projection_sha256, asset_sha256, transform, bounds_m, segments}`를 반환한다. `segments`는 미터 좌표의 두 끝점을 가진 선분 목록이다.
 - `GET /api/fleet/site-map/drawing-projections/{projection_sha256}`는 기존 지도 읽기 guard, `GET /api/fleet/site-map/drawings/{asset_sha256}/source`는 named operator guard를 사용한다. 쓰기는 기존 named operator·CSRF 경로를 따른다. hash 이외의 파일 경로·외부 URL은 받지 않는다.
@@ -45,7 +47,7 @@
 
 | 책임 | 경로와 인터페이스 |
 |---|---|
-| 계약 | 새 `contracts/foundation/core_common/protocol/site_drawing.py`: `DrawingTransform`, `DrawingReference`; 기존 `operations/fleet/fleet/site_map.py`의 선택 drawing 필드 |
+| 계약 | 새 `contracts/foundation/core_common/protocol/site_drawing.py`: `DrawingTransform`, `DrawingReference`; 기존 `operations/fleet/fleet/site_map.py`의 선택 drawing·도로 name 필드 |
 | 기존 map/teach holder | `operations/fleet/fleet/server/maps/`로 `site_map_store.py`, `site_map_routes.py`, `teach_service.py`, `teach_routes.py`를 이동. `_source_layout.SERVER_HOLDERS`와 manifest `source_packages`로 기존 `fleet.server.*` import 유지 |
 | STL 변환 | 새 holder의 `site_map_projection.py`: `inspect_stl(path: Path) -> dict`, `project_stl(path: Path, transform: DrawingTransform) -> dict`; `python -m fleet.server.site_map_projection` 자식 프로세스 진입점 |
 | 보관·HTTP | 같은 holder의 `site_map_assets.py`: `SiteMapAssetStore(root: Path)`, `put_stl(path: Path) -> dict`, `project(asset_sha256: str, transform: DrawingTransform) -> dict`, `projection(projection_sha256: str) -> dict`, `source(asset_sha256: str) -> Path`, `validate_reference(reference: DrawingReference, survey_revision: str) -> None`; `site_map_drawing_routes.py`: `install_site_map_drawing_routes(app, *, assets, read_guard, require_named_operator)` |
@@ -55,14 +57,14 @@
 
 ## Task 1: 도면 참조 계약과 이전 지도 호환성
 
-**Files:** Create `contracts/foundation/core_common/protocol/site_drawing.py`, `operations/fleet/test/test_site_map_drawing_contract.py`; Modify `docs/reference/ROSY API & Protocol Reference.md`, `docs/spec/ROSY FLEET SRS.md`, 새 ADR와 자신의 ADR Log 행. 구조 ADR에는 D-427·D-429·D-430 관계 표를 넣는다. Fleet 모델의 drawing 연결은 크기 분리와 함께 Task 2에서 수행한다.
+**Files:** Create `contracts/foundation/core_common/protocol/site_drawing.py`, `operations/fleet/test/test_site_map_drawing_contract.py`; Modify `docs/reference/ROSY API & Protocol Reference.md`, `docs/spec/ROSY FLEET SRS.md`, `contracts/foundation/core_common/protocol/schemas.py`와 API reservation/bump 도구가 정렬하는 버전 핀, 새 ADR와 자신의 ADR Log 행. 구조 ADR에는 D-427·D-429·D-430 관계 표를 넣는다. Fleet 모델의 drawing 연결은 크기 분리와 함께 Task 2에서 수행한다.
 
 **Interfaces:** 위 표의 두 Pydantic 모델. 소비자는 Tasks 2–6이다. `SiteMap.drawing` 연결과 survey revision 대조는 Tasks 2·3의 책임이다.
 
 - [ ] RED: `test_legacy_map_dump_is_unchanged`, `test_drawing_hashes_and_transform_are_bounded`를 먼저 작성·커밋한다. 예: `assert SiteMap.model_validate(old).model_dump(by_alias=True, exclude_none=True) == old`; `DrawingReference(asset_sha256='../x', projection_sha256='0'*64)`와 `DrawingTransform(..., scale=0)`는 ValidationError.
 - [ ] 원격 실행: `python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- operations/fleet/test/test_site_map_drawing_contract.py -q`. 새 모델/검증이 없어 실패하는지 확인한다.
 - [ ] ADR/API 번호를 작성 직전에 기존 reservation 도구로 선점한다. 위 제안의 경로·DTO·오류 표·제한을 API reference에 고정하고 두 계약 모델을 구현해 커밋한다. 이 단계에는 기존 Fleet main unit의 생산 코드를 늘리지 않는다.
-- [ ] 같은 원격 명령과 `test_mapless_survey.py`, `test_site_map_v5.py`를 실행한다. GREEN·NEW0, API 버전 정렬·harness lint·whitespace 확인 후 다음 Task로 간다.
+- [ ] 같은 원격 명령과 Fleet의 `test_mapless_survey.py`, `test_site_map_v5.py`, CORE의 `middleware/core/gateway/test/test_protocol_version_alignment.py`를 실행한다. GREEN·NEW0, API 버전 정렬·harness lint·whitespace 확인 후 다음 Task로 간다.
 
 ## Task 2: 제한된 STL 파서·투영과 source holder 분리
 
@@ -71,9 +73,10 @@
 **Interfaces:** Task 1 모델을 받아 표의 `inspect_stl`·`project_stl`을 제공한다. projection hash는 원본 hash·변환기 버전·정규화한 transform·결과의 canonical JSON으로 계산한다. 사용자 원본 이름은 경로에 쓰지 않는다.
 
 - [ ] RED: 코드에서 생성한 작은 ASCII/binary STL fixture로 `test_binary_solid_header_is_not_ascii`, `test_truncated_and_nonfinite_mesh_rejected`, `test_xy_xz_yz_units_and_origins`, `test_triangle_and_segment_budgets`를 작성·커밋한다. 예: 1,000 mm 기준선은 unit=mm·scale=1에서 `math.isclose(length, 1.0)`; 길이가 같은 m/cm fixture도 같은 미터 결과여야 한다. 저장소의 기존 STL bytes는 수정하지 않는다.
-- [ ] 원격 실행: `python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- operations/fleet/test/test_site_map_projection.py -q`. 예상 RED를 확인한다.
+- [ ] 같은 RED 커밋에 Task 1 계약 시험 파일의 `test_optional_road_name_roundtrips_without_changing_legacy_edges`를 추가한다. 한글 이름·64자 경계·공백/65자 거절·없는 이름의 이전 dump/hash 유지와 도로 참조 보존을 단언한다.
+- [ ] 원격 실행: `python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- operations/fleet/test/test_site_map_projection.py operations/fleet/test/test_site_map_drawing_contract.py -q`. 예상 RED를 확인한다.
 - [ ] source-holder 이동과 파서·투영을 함께 구현한다. binary는 `84 + 50 * triangle_count` 길이를 먼저 검사하고 그렇지 않은 입력은 엄격한 ASCII 문법으로 검사한다. 삼각형을 순회하며 유한 좌표·개수·선분 예산을 검사하고 선분은 정확한 끝점 쌍으로 중복 제거한다. STL은 배경일 뿐 도로·목적지를 자동 생성하지 않는다.
-- [ ] 같은 GREEN 커밋에 선택 `SiteMap.drawing`을 연결하고 Task 1의 기존 지도 dump/hash 회귀를 유지한다. `drawing=None`은 dump/hash에 나타나지 않게 한다. 분리 전 Fleet main unit에 먼저 필드를 추가하는 중간 커밋을 만들지 않는다.
+- [ ] 같은 GREEN 커밋에 선택 `SiteMap.drawing`과 `SiteEdge.name`을 연결하고 Task 1의 기존 지도 dump/hash 회귀를 유지한다. 두 None 필드는 dump/hash에 나타나지 않게 한다. 분리 전 Fleet main unit에 먼저 필드를 추가하는 중간 커밋을 만들지 않는다.
 - [ ] `SERVER_HOLDERS += ('maps',)`에 대응하는 현행 등록 방식으로 기존 imports/설치 wheel을 유지한다. 964줄인 기존 map/teach와 실제 변환 구현을 같은 단위로 측정해 D-766 최소 1,000줄·최대 10,000줄을 만족시킨다. 채우기 코드·한도 상향은 금지한다. CLI의 기존 923줄 한도는 위임으로 줄인다.
 - [ ] 같은 원격 명령에 Fleet의 `test_teach_survey.py`, `test_mapless_survey.py`, root의 `test/architecture/test_module_structure.py`, `test/test_size_limits.py`, `test/test_structure_installed_packages.py`, `test/test_io_image_closure.py`를 추가해 GREEN·NEW0을 확인한다. 각 중간 커밋도 `python tools/harness/size_range.py <task-base> HEAD`가 통과해야 한다.
 
@@ -91,14 +94,14 @@
 
 ## Task 4: 기존 편집 연산에 실행 취소·꼭짓점 수정을 연결
 
-**Files:** Move 표의 Console 6파일 into `operations/site_ui/console/maps/`; Create 그 holder의 `edit-history.js`, `operations/fleet/test/web/map-editor.test.mjs`; Modify `server/console/static_routes.py`, 패키징/정적 경로 소비자, `size_units.txt`·낮아지는 ratchet 행. 기존 `shared/site-map-edit.js`는 실제 재사용 불가능한 검증 누락이 있을 때만 수정한다.
+**Files:** Move 표의 Console 6파일 into `operations/site_ui/console/maps/`; Create 그 holder의 `edit-history.js`, `operations/fleet/test/web/map-editor.test.mjs`; Modify `server/console/static_routes.py`, 패키징/정적 경로 소비자, `size_units.txt`·낮아지는 ratchet 행과 `shared/site-map-edit.js`의 선택 도로 이름 보존.
 
 **Interfaces:** `createEditHistory(initialMap)` → `{current(), apply(nextMap), undo(), redo(), reset(savedMap), canUndo(), canRedo()}`. 반환 snapshot은 호출자가 원본을 변경할 수 없게 복사한다. 최대 50 snapshot/직렬화 합계 8 MiB로 오래된 undo부터 제거하며 재접속 시 저장 revision에서 새 이력을 시작한다.
 
 - [ ] RED: `undo_redo_preserves_original_and_clears_redo_on_new_edit`, `history_budget_is_bounded`, `vertex_edit_preserves_road_endpoints_and_facility_links`를 작성·커밋한다. 예: `assert.deepEqual(history.undo(), before)`; 되돌린 뒤 apply하면 `assert.equal(history.canRedo(), false)`.
 - [ ] 원격 실행: `python tools/remote/remote_pytest.py --log-dir <external-log-dir> -- operations/fleet/test/test_site_map_api.py::test_console_web_node_unit_tests_pass -q`. Node 미설치 skip이면 실행 증거가 아니므로 Node가 있는 시험 PC에서 확인한다.
 - [ ] 6파일 이동·기존 `/console/site-map` 및 `/console/assets/site-map*.js` URL 유지·새 module 등록과 history를 같은 GREEN 커밋으로 구현한다. 1,526줄의 기존 지도 화면을 실제 UI 단위로 등록하고 이동 파일의 ratchet은 동일 blob/측정값으로 연결한다. Console main unit에 history를 먼저 늘리는 중간 커밋을 만들지 않는다. `rg`로 이동 전 6개 source 경로의 소비자를 찾아 같은 커밋에서 모두 갱신한다.
-- [ ] 도로·목적지·구역 수정은 기존 `appendSurveyElement`·`editSurveyElement`·`removeSurveyElement`의 `geometry`, `from`, `to`, `yaw`, `approaches` DTO를 사용한다. 도로 끝점이나 참조 중인 시설을 무효화하는 편집은 이유를 표시해 거절하며 silent cascade 삭제하지 않는다.
+- [ ] 도로·목적지·구역 수정은 기존 `appendSurveyElement`·`editSurveyElement`·`removeSurveyElement`의 `geometry`, `from`, `to`, `yaw`, `approaches` DTO를 사용한다. 기존 도로 편집 helpers에 선택 name을 연결하고 geometry 수정이 기존 이름을 잃지 않는 Node 회귀를 추가한다. 도로 끝점이나 참조 중인 시설을 무효화하는 편집은 이유를 표시해 거절하며 silent cascade 삭제하지 않는다.
 - [ ] 동일 원격 Node wrapper와 `test_mapless_survey.py`, `test_site_map_browser.py`, `test/architecture/test_module_structure.py`, `test/test_size_limits.py`가 GREEN·NEW0인지 확인한다. 모든 중간 커밋에 size-range를 확인한다. 편집 이력에는 로봇 요청·API 호출 함수를 넣지 않는다.
 
 ## Task 5: 지도 화면에서 도면 맞춤·직접 그리기·저장까지 연결

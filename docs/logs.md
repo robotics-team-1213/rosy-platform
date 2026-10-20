@@ -9446,3 +9446,4 @@ osy-d395-s1d\`.
 - 변경: 사용자 설계 승인 상태를 기록하고 STL 계약·제한된 변환·원본 보관 API·직접 편집·이력·초안/템플릿/활성화·정상 릴리스의 7단계 계획을 작성했다. source-holder와 실제 코드 크기 제약에 맞춰 기존 Python import·웹 URL을 보존하는 분리와 회귀를 포함했다.
 - 증거: 현행 map/teach 저장·라우트, Console 편집 DTO·좌표 역변환, source holder 등록, Node wrapper와 STL 샘플 크기를 확인했다. 계획 문서 자체의 원격 계약 검사는 별도 기록한다.
 - gate 변화: 없음. 제품 코드·새 API·등록 원장·운영 지도는 변경하지 않았다. 작성된 구현 계획의 사용자 검토와 실행 방식 선택 전에는 구현을 시작하지 않는다.
+- 자체 검토 보완: API reference와 공통 schema/version 핀의 동시 정렬, D-430 검토 trailer, CORE protocol version 회귀를 계획에 명시했다. 문서 첫 커밋의 원격 검사는 통과했으며 보완 후 최종 SHA도 별도 확인한다.
