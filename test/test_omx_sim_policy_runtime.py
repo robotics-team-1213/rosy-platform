@@ -15,8 +15,8 @@ from sim_policy_runtime import bind_sim_runtime
 
 
 @pytest.mark.parametrize('target,readback,accepted', [
-    (.139, .1, True), (.141, .1, False), (.135, .081, False)])
-def test_step_uses_final_owner_readback(tmp_path, target, readback, accepted):
+    (.139, .1, True), (.141, .1, False), (.1399, .0995, False)])
+def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback, accepted):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, client, *_ = setup_session(tmp_path, execution_journal=journal)
     runtime = runtime_methods(session, client)
@@ -25,8 +25,21 @@ def test_step_uses_final_owner_readback(tmp_path, target, readback, accepted):
     message.position = [readback, 0.]
     runtime._on_joint_state(message)
     original = candidate(session, sequence=10)
-    result = session.submit(replace(original, positions=(target, 0.)))
-    assert result.accepted is accepted
+    checked = []
+    check = session._runtime_binding.check_command
+    def trace(command):
+        result = check(command)
+        checked.append(result)
+        return result
+    monkeypatch.setattr(session._runtime_binding, 'check_command', trace)
+    proposed = replace(original, positions=(target, 0.))
+    if accepted:
+        assert session.submit(proposed).accepted
+    else:
+        with pytest.raises(PermissionError):
+            session.submit(proposed)
+        assert session.hold_reason
+    assert checked and checked[-1] is accepted
     assert len(client.commands) == int(accepted)
 
 
