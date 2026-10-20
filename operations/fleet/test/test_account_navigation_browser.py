@@ -29,6 +29,9 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     errors = []
     auth_responses = []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
+    page.on('response', lambda response: errors.append(f'asset {response.status}: {response.url}')
+            if response.status >= 400 and '/api/' not in response.url else None)
     page.on('response', lambda response: auth_responses.append((response.url.split('/api/')[-1], response.status))
             if '/api/fleet/auth/' in response.url or '/api/fleet/session' in response.url else None)
     target = '/console?view=work&show=new'
