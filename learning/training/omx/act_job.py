@@ -103,9 +103,11 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     out = Path(out).resolve()
     if out.exists() or _in_checkout(out):
         raise ValueError("new artifact directory outside the source checkout required")
-    exports = [Path(p).resolve() for p in [*train_exports, eval_export]]
-    if len(exports) < 3 or len(set(exports)) != len(exports):
-        raise ValueError("two train and one disjoint eval Episode exports required")
+    eval_exports = [eval_export] if isinstance(eval_export, (str, Path)) else list(eval_export)
+    train_count = len(train_exports)
+    exports = [Path(p).resolve() for p in [*train_exports, *eval_exports]]
+    if train_count < 2 or not eval_exports or len(set(exports)) != len(exports):
+        raise ValueError("at least two train and one disjoint eval Episode exports required")
     if any(out.is_relative_to(p) or p.is_relative_to(out) for p in exports):
         raise ValueError("output must be separate from source exports")
     import torch
@@ -149,7 +151,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             if copied["samples"] != rows:
                 raise ValueError("source rows changed during input snapshot")
             common = out / "episodes" / source.name
-            episode = convert(source, common)
+            proof = snapshot/'rosy_sim_truth/truth.json'
+            episode = convert(source, common, sim_ground_truth=proof if proof.exists() else None)
             episodes.append(episode)
             reader = LeRobotDataset("rosy-local/omx-sim", root=snapshot, video_backend="pyav", download_videos=False)
             if reader.num_episodes != 1 or reader.num_frames != len(rows):
@@ -172,15 +175,15 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 states.append(actual["observation.state"])
                 actions.append(actual["action"])
             arrays.append((torch.stack(images), torch.stack(states), torch.stack(actions)))
-        train_actions = torch.cat([a[2] for a in arrays[:-1]])
-        train_states = torch.cat([a[1] for a in arrays[:-1]])
+        train_actions = torch.cat([a[2] for a in arrays[:train_count]])
+        train_states = torch.cat([a[1] for a in arrays[:train_count]])
         state_mean, action_mean = train_states.mean(0), train_actions.mean(0)
         state_std, action_std = train_states.std(0, unbiased=False), train_actions.std(0, unbiased=False)
         state_std = torch.where(state_std < 1e-6, torch.ones_like(state_std), state_std)
         action_std = torch.where(action_std < 1e-6, torch.ones_like(action_std), action_std)
         stats = {"state_mean": state_mean.tolist(), "state_std": state_std.tolist(),
                  "action_mean": action_mean.tolist(), "action_std": action_std.tolist(),
-                 "fit_episodes": ids[:-1], "image": {"resize_hw": [64, 64], "color": "rgb", "scale": 1/255},
+                 "fit_episodes": ids[:train_count], "image": {"resize_hw": [64, 64], "color": "rgb", "scale": 1/255},
                  "fixed_source_duration_s": next(iter(durations))}
         _write(out / "normalization.json", stats)
         for i, (images, states, actions) in enumerate(arrays):
@@ -196,7 +199,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         policy = ACTPolicy(config)
         optimizer = torch.optim.AdamW(policy.parameters(), lr=config.optimizer_lr,
                                       weight_decay=config.optimizer_weight_decay)
-        indices = [(e, i) for e, a in enumerate(arrays[:-1]) for i in range(len(a[0]))]
+        indices = [(e, i) for e, a in enumerate(arrays[:train_count]) for i in range(len(a[0]))]
         history = []
         _write(out / "state.json", {"status": "training", "steps": steps, "seed": seed, "source_episodes": ids})
         for step in range(steps):
@@ -224,30 +227,45 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
 
         def predict(model):
             model.eval()
-            model.reset()
-            images, states, _ = arrays[-1]
+            predictions = []
             with torch.no_grad():
-                predictions = [model.select_action({"observation.state": states[i:i+1],
-                               image_key: images[i:i+1]}).squeeze(0)
-                               for i in range(len(states))]
+                for images, states, _ in arrays[train_count:]:
+                    model.reset()
+                    predictions.extend(model.select_action({"observation.state": states[i:i+1],
+                                       image_key: images[i:i+1]}).squeeze(0)
+                                       for i in range(len(states)))
             return (torch.stack(predictions) * action_std + action_mean).numpy()
 
         prediction = predict(policy)
         reloaded = ACTPolicy.from_pretrained(out / "policy", local_files_only=True)
         np.testing.assert_allclose(predict(reloaded), prediction, atol=1e-6, rtol=1e-6)
-        truth = np.asarray([r["action"] for r in original_rows[-1]])
+        truth = np.asarray([r["action"] for rows in original_rows[train_count:] for r in rows])
         limits = [sources[0]["position_limits_rad"][name] for name in names]
         report = offline_report(truth, prediction, action_mean.numpy(), train_actions.numpy(), limits)
         report.update(algorithm="lerobot-act", lerobot_version="0.4.4", torch_version=str(torch.__version__),
                       device="cpu", seed=seed, steps=steps, n_action_steps=n_action_steps,
-                      train_episodes=ids[:-1], eval_episode=ids[-1],
+                      train_episodes=ids[:train_count], eval_episodes=ids[train_count:],
                       optimizer={"type": "AdamW", "parameter_grouping": "all_policy_parameters",
                                  "parameter_groups": [{key: group[key] for key in
                                      ("lr", "weight_decay", "betas", "eps", "amsgrad", "maximize",
                                       "foreach", "capturable", "differentiable", "fused")}
                                      for group in optimizer.param_groups],
                                  "gradient_clip_norm": 1.0},
-                      reloaded_prediction_verified=True, task_outcome_source="operator_source_only")
+                      reloaded_prediction_verified=True,
+                      task_outcome_judges={e['episode_id']:e['outcome']['judge'] for e in episodes})
+        offset = 0
+        per_episode = {}
+        for episode_id, rows in zip(ids[train_count:], original_rows[train_count:]):
+            count = len(rows)
+            per_episode[episode_id] = offline_report(truth[offset:offset+count], prediction[offset:offset+count],
+                action_mean.numpy(), train_actions.numpy(), limits)
+            offset += count
+        report['per_episode'] = per_episode
+        if len(eval_exports) == 1:
+            report['eval_episode'] = ids[-1]
+        judges = set(report['task_outcome_judges'].values())
+        report['task_outcome_source'] = ('operator_source_only' if judges == {'operator'}
+                                         else 'sim_ground_truth' if judges == {'sim_ground_truth'} else 'mixed')
         _write(out / "offline-report.json", report)
         refs = [_ref(p, out) for folder in ("episodes", "reader-inputs")
                 for p in sorted((out / folder).rglob('*')) if p.is_file()]
@@ -290,7 +308,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--train-export", type=Path, nargs='+', required=True)
-    ap.add_argument("--eval-export", type=Path, required=True)
+    ap.add_argument("--eval-export", type=Path, nargs='+', required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)

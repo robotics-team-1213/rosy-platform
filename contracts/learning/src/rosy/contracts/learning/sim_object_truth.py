@@ -66,6 +66,8 @@ def _command_evidence(payload, commands, rows, joints, start, end):
     accepted, terminals = {}, {}
     for event in events:
         key = event['command_id']
+        if type(event['sequence']) is not int or event['sequence'] < 1:
+            raise ValueError('SIM callback sequence invalid')
         if event['kind'] == 'GOAL_ACCEPTED':
             if key in accepted:
                 raise ValueError('duplicate SIM acceptance')
@@ -87,7 +89,8 @@ def _command_evidence(payload, commands, rows, joints, start, end):
     for key, event in accepted.items():
         terminal = terminals[key]
         if (terminal['goal_id'] != event['goal_id'] or terminal['sequence'] <= event['sequence']
-                or terminal['status'] != 4 or terminal['result_code'] != 0):
+                or type(terminal['status']) is not int or terminal['status'] != 4
+                or type(terminal['result_code']) is not int or terminal['result_code'] != 0):
             raise ValueError('SIM command completion unproven')
     position = 0
     for row in rows:

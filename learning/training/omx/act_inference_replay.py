@@ -42,8 +42,11 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
     source=validate_omx(paths[0].parent)
     if len(policy['evaluations'])!=1:raise ValueError('one bound original offline report required')
     original=json.loads((policy_root/policy['evaluations'][0]['path']).read_bytes())
-    if (original['eval_episode']!=paths[0].parent.name or original['eval_episode'] in original['train_episodes']
-            or len(source['samples'])!=original['eval_frames']):raise ValueError('source differs from held-out evaluation')
+    episode_id=paths[0].parent.name
+    evaluation_ids=original.get('eval_episodes', [original.get('eval_episode')])
+    expected=original.get('per_episode',{}).get(episode_id,original)
+    if (episode_id not in evaluation_ids or episode_id in original['train_episodes']
+            or len(source['samples'])!=expected['eval_frames']):raise ValueError('source differs from held-out evaluation')
     stats=json.loads((policy_root/policy['normalization']['path']).read_bytes())
     if stats['fit_episodes']!=original['train_episodes']:raise ValueError('normalization fit sources differ')
     # The actual evaluation reader must be byte-for-byte covered by the bound Dataset.
@@ -87,7 +90,7 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
             if list(image.shape)!=camera['source_shape']:raise ValueError('reader source image dimensions differ')
             rgb=(image.permute(1,2,0).numpy()*255).round().astype(np.uint8).tobytes()
             received=time.monotonic_ns()
-            obs=InferenceObservation(original['eval_episode'],'offline-replay:'+policy_revision,
+            obs=InferenceObservation(episode_id,'offline-replay:'+policy_revision,
                 tuple(policy['joint_names']),tuple(actual['observation.state'].tolist()),row['state_sequence'],received,
                 camera['identity'],camera['calibration_sha256'],tuple(camera['source_shape']),received,rgb)
             result=engine.infer(obs);predictions.append(result.positions)
@@ -110,7 +113,7 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
         truth=np.asarray([row['action'] for row in source['samples']]);prediction=np.asarray(predictions)
         mae=float(np.abs(truth-prediction).mean())
         baseline=float(np.abs(truth-np.asarray(stats['action_mean'])).mean())
-        if abs(mae-original['mae_rad'])>1e-6 or abs(baseline-original['constant_baseline_mae_rad'])>1e-9:
+        if abs(mae-expected['mae_rad'])>1e-6 or abs(baseline-expected['constant_baseline_mae_rad'])>1e-9:
             raise ValueError('actual queued prediction metrics differ from bound offline evaluation')
         # Revalidate all referenced source bytes after video decoding/inference.
         validate_policy(json.loads((policy_root/'policy-artifact.json').read_bytes()),root=policy_root)
@@ -120,7 +123,7 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
         limits=np.asarray(policy['action']['limits'])
         gaps=[frames[i]['input_received_at_owner_monotonic_ns']-frames[i-1]['returned_at_owner_monotonic_ns'] for i in range(1,len(frames))]
         report=dict(schema='rosy.act-inference-replay/1',policy_revision=policy_revision,dataset_revision=dataset['revision'],
-            evaluation_episode=original['eval_episode'],frames=len(frames),actual_model_computations=sum(f['consumed_current'] for f in frames),
+            evaluation_episode=episode_id,frames=len(frames),actual_model_computations=sum(f['consumed_current'] for f in frames),
             queued_candidates=sum(not f['consumed_current'] for f in frames),
             observation_mismatch_count=sum(not f['candidate_matches_current_observation'] for f in frames),
             observation_age_violation_count=sum(not f['observation_age_within_budget'] for f in frames),
