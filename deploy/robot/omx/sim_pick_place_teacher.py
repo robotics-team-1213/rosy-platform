@@ -129,8 +129,9 @@ def run(directory, world, observer_path):
         while time.monotonic() < deadline:
             if episode_id:
                 observe()
-                if capture.status()['status'] == 'incomplete':
-                    raise RuntimeError('capture incomplete: '+str(capture.status()))
+                quality = capture.status()
+                if quality['status'] == 'incomplete' or quality['issues']:
+                    raise RuntimeError('capture incomplete: '+str(quality))
             result = facade.goal(command_id)
             if result['state'] == 'SUCCEEDED':
                 return wait_ready()

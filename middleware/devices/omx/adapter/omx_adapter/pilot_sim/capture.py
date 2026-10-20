@@ -27,7 +27,7 @@ class PilotSimCapture:
         self._states = deque(maxlen=1000)
         self._state_sequence = 0
         self._pending = {}
-        self._action = None
+        self._actions = deque(maxlen=64)
         self._last_frame_sequence = None
         self._events = deque(maxlen=1000)
         self._interrupt_reason = None
@@ -89,7 +89,7 @@ class PilotSimCapture:
                                      "width": metadata.width, "height": metadata.height,
                                      "camera_info_sha256": self.camera.gate.config.camera_info_sha256}}
             self.recorder = DemonstrationRecorder(self.root, provenance)
-            self._action = None
+            self._actions.clear()
             self._pending.clear()
             self._events.clear()
             self._interrupt_reason = None
@@ -164,10 +164,11 @@ class PilotSimCapture:
                     "kind", "command_id", "goal_id", "sequence", "status", "result_code")})
             command = self._pending.get(event.command_id)
             if event.kind == "GOAL_ACCEPTED" and command is not None:
-                self._action = {"command_id": command.command_id, "ros_goal_id": event.goal_id,
+                action = {"command_id": command.command_id, "ros_goal_id": event.goal_id,
                                 "target": dict(command.positions), "duration_s": command.duration_s,
                                 "accepted_sim_time_ns": self.sim_time_ns()}
-                self._events[-1].update(accepted_sim_time_ns=self._action["accepted_sim_time_ns"],
+                self._actions.append(action)
+                self._events[-1].update(accepted_sim_time_ns=action["accepted_sim_time_ns"],
                                         target=dict(command.positions), duration_s=command.duration_s)
             if event.kind == "TERMINAL_RESULT":
                 self._pending.pop(event.command_id, None)
@@ -190,7 +191,7 @@ class PilotSimCapture:
             if not self.camera_status()["fresh"]:
                 reason = reason or "camera_stale"
             frame = self.camera.latest_frame if self.camera else None
-            action = dict(self._action) if self._action else None
+            actions = list(self._actions)
             states = list(self._states)
         # Disk/encoding work runs outside the capture lock and ROS executor.
         for event in events:
@@ -200,9 +201,10 @@ class PilotSimCapture:
             return
         if frame is not None:
             metadata, raw, _ = frame
+            # A frame preceding the newest acceptance still belongs to its earlier accepted goal.
+            action = next((dict(a) for a in reversed(actions)
+                           if a['accepted_sim_time_ns'] <= metadata.capture_time_ns), None)
             if metadata.sequence == self._last_frame_sequence or action is None:
-                return
-            if metadata.capture_time_ns < action["accepted_sim_time_ns"]:
                 return
             self._last_frame_sequence = metadata.sequence
             past = [s for s in states if s[0] <= metadata.capture_time_ns]
