@@ -15,6 +15,47 @@ from omx_adapter.camera_contract import CameraFrameGate, CameraStreamConfig
 from omx_adapter.ros_camera_runtime import RosCameraStreamRuntime
 
 
+def test_sim_joint_capture_is_not_blocked_by_default_camera_callback_group():
+    import threading
+    from types import SimpleNamespace
+    from sensor_msgs.msg import JointState
+    from rclpy.qos import qos_profile_sensor_data
+    from omx_adapter.pilot_sim.camera import PilotSimCamera
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
+    rclpy.init()
+    source, receiver = Node('capture_group_source'), Node('capture_group_receiver')
+    entered, release, received = threading.Event(), threading.Event(), threading.Event()
+    capture = SimpleNamespace(camera=None, tick=lambda: None,
+        observe_joint_state=lambda _: received.set(), interrupt=lambda *_: None)
+    camera = PilotSimCamera(receiver,capture,'a'*64)
+    publisher = source.create_publisher(JointState,'/joint_states',qos_profile_sensor_data)
+    def occupy_camera_group():
+        entered.set()
+        release.wait(3)
+    timer = receiver.create_timer(.01,occupy_camera_group)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(receiver)
+    spinner = threading.Thread(target=executor.spin)
+    spinner.start()
+    try:
+        deadline = time.monotonic()+3
+        while publisher.get_subscription_count() == 0 and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert publisher.get_subscription_count() > 0
+        assert entered.wait(2)
+        publisher.publish(JointState())
+        assert received.wait(.5), 'joint capture waits behind the camera callback group'
+    finally:
+        release.set()
+        receiver.destroy_timer(timer)
+        executor.shutdown(timeout_sec=3)
+        spinner.join(timeout=3)
+        camera.destroy()
+        source.destroy_node()
+        receiver.destroy_node()
+        rclpy.shutdown()
+
+
 def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
     rclpy.init()
     source = Node("omx_camera_test_source")
