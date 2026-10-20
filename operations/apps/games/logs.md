@@ -394,3 +394,15 @@
 - 변경: 계정 권한이 없을 때 custom 정지 버튼의 hidden 속성이 CSS에 덮이지 않게 했다. 계정 조작은 정지 앞에 배치하고 compact 화면의 단계·연결 증거·정지 접근성을 유지했다. 기존 배치 시험에는 명시적 verified-claims fixture를 쓰고 실제 인증 흐름 시험을 분리했다.
 - 증거: 원격 실제 Chromium 38 passed와 Games 단위·정적 계약 115 passed, 각 exit 0 / known_failures NEW 0. HTTPS 인증 리다이렉트, PKCE proof, 실제 AccountClient SQLite와 쿠키를 사용해 미로그인·권한 부족 403, 허용된 board.stop, introspection 회수 후 403과 버튼 숨김을 확인했다. 인증 서버의 token/introspection 응답만 서명 fixture다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/games-browser 및 games-static에 있다.
 - gate 변화: SOURCE/원격 브라우저 증거다. board.stop 접수는 물리 로봇 정지 수용을 대신하지 않으며 운영 계정·현장 설정은 변경하지 않았다.
+
+## 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
+
+- 변경: 앱 이름을 Rosy Games로 정하고 경기 맥락 1v1 피치는 부제로 남겼다. 정지 조작·인증·API·호스트 실행은 유지한다.
+- 증거: 제목 회귀 검사의 수정 전 원격 실행은 2 failed로 기존 불일치를 확인했다. 수정 후 검증은 이 작업의 커밋과 외부 시험 기록으로 확인한다.
+- gate 변화: 없음. 이름·문서·정적 화면 범위이며 설치·실물 실행·DEVICE/FIELD 수용을 바꾸지 않는다.
+
+## 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+
+- 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
+- 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
+- gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.

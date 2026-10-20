@@ -639,7 +639,7 @@ def test_cell_page_and_its_entry_are_served():
     """D-518 — Cell stays at /console/cell. The folder is not part of the public URL."""
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console/cell")
-    assert page.status_code == 200 and "Rosy Fleet · Cell" in page.text
+    assert page.status_code == 200 and "Rosy Fleet — Cell" in page.text
     assert "default-src 'self'" in page.headers["content-security-policy"]
     assert client.get("/console/assets/cell.js").status_code == 200
     assert client.get("/console/assets/cell.css").status_code == 200

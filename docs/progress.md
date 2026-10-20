@@ -31,6 +31,8 @@ gates:
 adrs:
 - D-791
 - D-789
+
+- D-783
 - D-770
 - D-738
 - D-736
@@ -257,7 +259,10 @@ adrs:
 - D-451
 - D-453
 - D-455
+- D-777
+- D-784
 plans:
+- docs/plans/2026-10-17-native-map-adoption.md
 - docs/plans/2026-10-15-omx-learning-operations-design.md
 - docs/plans/2026-10-15-omx-learning-operations.md
 - docs/plans/2026-10-11-core-drive-composition-first.md
@@ -353,7 +358,7 @@ plans:
 - D-164는 Pinky Pro 제품 파일을 ISO가 아닌 서명된 Raspberry Pi raw disk image
   `rosy-os-pinky-pro-<release-id>-arm64.img.xz`로 고정한다. `.img.xz` 생성, offline
   signature, read-only mount 검증과 full-media readback은 서로 다른 증거다.
-- ADR 로그 분리(개별 `docs/adr/D-NNN-*.md`)는 보류한다.
+- ADR 본문은 `docs/adr/D-<n>-<slug>.md`에 있고, 제목·Status 색인은 `reference/ROSY ADR Log.md`가 맡는다. 작성 절차는 `adr/AGENTS.md`를 따른다.
 
 ## 다음 gate
 
@@ -362,12 +367,12 @@ plans:
   실제 영상-camera-CAD projection과 root-owned builder/bridge의 독립 학습 수용은 남아 있다.
 
 1. ARTIFACT/DEVICE는 deploy·rosy_core gate가 소유한다. docs가 GO로 옮기지 않는다.
-2. ADR 개별 파일 분리는 후속이며 이 Log 본문은 유지한다.
+2. ADR 본문과 Log 색인의 일치는 harness로 확인한다. 기존 결정과 날짜별 검증 기록은 당시 근거를 보존한다.
 
 ## 현재 유효한 금지사항
 
 - ADR은 append-only다: 기존 D-n 본문을 고쳐 쓰지 않고 `Superseded`로 표시한 뒤 새 ID를 만든다. 어휘 정정(D-72 S7)은 예외로 기록했다.
-- API 경로·envelope 변경은 `reference/ROSY API & Protocol Reference.md`와 `rosy_core/protocol/schemas.py`를 함께 바꾼다(D-18).
+- API 경로·envelope 변경은 `reference/ROSY API & Protocol Reference.md`와 `contracts/foundation/core_common/protocol/schemas.py`를 함께 바꾼다(D-18).
 - `docs/`에 구현 코드를 두지 않는다.
 - 모듈 `index.md`와 루트 `STATUS.md`는 생성물이다. `tools/harness/rosy_harness.py generate`로만 갱신한다.
 

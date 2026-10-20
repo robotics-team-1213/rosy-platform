@@ -56,7 +56,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-content")).to_be_visible()
                 page.locator("#account-name").fill("bob")
                 page.locator("#account-principal").fill("bob")
-                page.locator("#account-password").fill("temporary secret")
+                page.locator("#account-password").fill("bob!")
                 page.locator("#account-add-grant").click()
                 page.locator("[data-grant=id]").fill("test-site")
                 page.get_by_label("관제 조회", exact=True).check()
@@ -64,9 +64,24 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 expect(page.locator("#account-list")).to_contain_text("bob")
                 expect(page.locator("#account-password")).to_have_value("")
                 page.get_by_role("button", name="bob · 사용 중", exact=True).click()
-                page.locator("#account-reset-password").fill("new temporary secret")
+                page.locator("#account-reset-password").fill("bob!")
                 page.locator("#account-reset").click()
                 expect(page.locator("#account-status")).to_contain_text("처리했습니다")
+                bob_page = browser.new_page()
+                try:
+                    bob_page.goto(origin + "/console/login?return=%2Fconsole%2Fprofile")
+                    bob_page.locator("[data-login=login]").fill("bob")
+                    bob_page.locator("[data-login=password]").fill("bob!")
+                    bob_page.locator("[data-login=submit]").click()
+                    expect(bob_page.locator("[data-login=confirm]")).to_be_visible()
+                    bob_page.locator("[data-login=password]").fill("a permanent secret")
+                    bob_page.locator("[data-login=confirm]").fill("a permanent secret")
+                    bob_page.locator("[data-login=submit]").click()
+                    expect(bob_page).to_have_url(origin + "/console/profile")
+                finally:
+                    bob_page.close()
+                page.locator("#account-reload").click()
+                expect(page.locator("#account-heading")).to_have_text("새 계정")
                 page.get_by_role("button", name="bob · 사용 중", exact=True).click()
                 page.locator("#account-revoke").click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
@@ -84,7 +99,7 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 page.locator("#account-save").click()
                 expect(page.locator("#account-list")).to_contain_text("bob · 정지됨")
                 bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
-                assert bob["enabled"] is False and bob["revision"] == 5
+                assert bob["enabled"] is False and bob["revision"] == 6
                 assert bob["grants"] == [{"resource": "site:test-site", "capabilities": ["fleet.read"]}]
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.goto(origin + "/console")

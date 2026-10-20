@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 from fastapi.testclient import TestClient
 
-from core_common.protocol.account_client import AccountClient, AccountDenied
+from core_common.protocol.account_client import AccountClient, AccountDenied, AccountUnavailable
 
 ROOT = Path(__file__).resolve().parents[4]
 for directory in (ROOT/'operations/fleet', ROOT/'test'):
@@ -116,7 +116,123 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     assert not core.get('/api/account/session').json()['authenticated']
 
 
-def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_path):
+@pytest.fixture
+def authenticated_pipeline(pipeline):
+    core, fleet, _, login, _, _ = pipeline
+    from fleet.server.password_session import COOKIE
+    fleet.cookies.set(COOKIE, login())
+    start = core.get('/api/account/login?return=/dashboard', follow_redirects=False)
+    authorization = fleet.get(start.headers['location'], follow_redirects=False)
+    assert core.get(authorization.headers['location'], follow_redirects=False).status_code == 303
+    return pipeline
+
+
+def test_logout_outage_returns_pending_and_clears_cookie(authenticated_pipeline):
+    core, fleet, sessions, _, receiver, _ = authenticated_pipeline
+    from fleet.server.password_session import COOKIE
+    central_cookie = fleet.cookies[COOKIE]
+    original = receiver.post
+
+    def unavailable(endpoint, fields):
+        raise AccountUnavailable()
+
+    receiver.post = unavailable
+    response = core.post('/api/account/logout', headers={'Origin': str(core.base_url).rstrip('/')})
+    assert response.status_code == 503
+    assert response.json() == {'authenticated': False, 'revocation_pending': True}
+    assert 'Max-Age=0' in response.headers['set-cookie']
+    assert 'rosy_app_account' not in core.cookies
+    assert not core.get('/api/account/session').json()['authenticated']
+    assert core.get('/api/v1/auth/whoami').status_code == 401
+    assert sessions.account_context(central_cookie)
+    receiver.post = original
+    receiver.retry_revocations()
+    assert sessions.account_context(central_cookie) is None
+
+
+def test_core_lifespan_retries_pending_revocation(authenticated_pipeline, monkeypatch):
+    import threading
+    core, fleet, sessions, _, receiver, _ = authenticated_pipeline
+    from fleet.server.password_session import COOKIE
+    central_cookie = fleet.cookies[COOKIE]
+    original = receiver.post
+
+    def unavailable(endpoint, fields):
+        raise AccountUnavailable()
+
+    receiver.post = unavailable
+    assert core.post('/api/account/logout', headers={'Origin': str(core.base_url).rstrip('/')}).status_code == 503
+    receiver.post = original
+    completed = threading.Event()
+    retry = receiver.retry_revocations
+
+    def tracked_retry():
+        retry()
+        completed.set()
+
+    monkeypatch.setattr(receiver, 'retry_revocations', tracked_retry)
+    with TestClient(core.app, base_url=str(core.base_url)):
+        assert completed.wait(5), 'CORE startup must retry the durable revocation queue'
+        assert sessions.account_context(central_cookie) is None
+    with receiver.transaction() as db:
+        assert db.execute('SELECT count(*) FROM app_account_revocations').fetchone()[0] == 0
+
+
+def test_pending_logout_does_not_revoke_new_login_family(authenticated_pipeline):
+    core, fleet, sessions, login, receiver, _ = authenticated_pipeline
+    from fleet.server.password_session import COOKIE
+    old_cookie = fleet.cookies[COOKIE]
+    original = receiver.post
+
+    def unavailable_revoke(endpoint, fields):
+        if endpoint == 'revoke':
+            raise AccountUnavailable()
+        return original(endpoint, fields)
+
+    receiver.post = unavailable_revoke
+    assert core.post('/api/account/logout', headers={'Origin': str(core.base_url).rstrip('/')}).status_code == 503
+    fleet.cookies.set(COOKIE, login())
+    new_cookie = fleet.cookies[COOKIE]
+    assert sessions.account_context(old_cookie)['session_family'] != sessions.account_context(new_cookie)['session_family']
+    start = core.get('/api/account/login?return=/dashboard', follow_redirects=False)
+    authorization = fleet.get(start.headers['location'], follow_redirects=False)
+    assert core.get(authorization.headers['location'], follow_redirects=False).status_code == 303
+    receiver.post = original
+    receiver.retry_revocations()
+    assert sessions.account_context(old_cookie) is None
+    assert sessions.account_context(new_cookie)
+    assert core.get('/api/account/session').json()['authenticated']
+
+
+@pytest.mark.parametrize('authority_state', ['offline', 'revoked'])
+def test_account_media_revalidation_denies_authority_outage_and_revocation(
+        authenticated_pipeline, tmp_path, authority_state):
+    from core_api_web.api.media_binding import install_media
+    from test_media_grant_api import configured_media
+    core, fleet, sessions, _, receiver, _ = authenticated_pipeline
+    from fleet.server.password_session import COOKIE
+    install_media(core.app, {'vision': {'media': configured_media(tmp_path)}}, core.app.state.core)
+    origin = {'Origin': str(core.base_url).rstrip('/')}
+    path = '/api/v1/vision/media/grants'
+    grant = core.post(path, json={'robot_id': core.app.state.core.identity.robot_id}, headers=origin)
+    assert grant.status_code == 201
+    credential = grant.json()
+    if authority_state == 'revoked':
+        sessions.revoke(fleet.cookies[COOKIE])
+    else:
+        def unavailable(endpoint, fields):
+            raise AccountUnavailable()
+        receiver.post = unavailable
+    # Ordinary authentication still has a fresh cache; media must check the authority now.
+    assert core.get('/api/v1/auth/whoami').status_code == 200
+    checked = core.post('/api/v1/vision/media/validate',
+                       headers={'Authorization': 'Bearer ' + credential['token']})
+    assert checked.status_code == 200 and checked.json() == {'active': False}
+    assert core.post(path + '/' + credential['grant_id'] + '/renew', headers=origin).status_code == 403
+
+
+@pytest.mark.parametrize('revocation_outage', [False, True], ids=['normal', 'pending-revocation'])
+def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_path, revocation_outage):
     from browser_harness import browser_tests_enabled, launch_options
     if not browser_tests_enabled(): pytest.skip('opt-in Chromium scenario')
     from playwright.sync_api import sync_playwright, expect
@@ -197,7 +313,16 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
             app = next(c for c in cookies if c['name'] == 'rosy_app_account')
             assert app['httpOnly'] and app['secure'] and app['sameSite'] == 'Lax'
             assert all('refresh' not in c['name'] for c in cookies)
-            page.evaluate("import('/pilot/assets/client.js').then(module => module.accountLogout())")
+            if revocation_outage:
+                def unavailable_revoke(endpoint, fields):
+                    if endpoint == 'revoke':
+                        raise AccountUnavailable()
+                    return original_post(endpoint, fields)
+                receiver.post = unavailable_revoke
+                page.get_by_text('로그아웃', exact=True).click()
+                expect(page.get_by_text('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.', exact=True)).to_be_visible()
+            else:
+                page.get_by_text('로그아웃', exact=True).click()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
             assert not page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
             assert not failures, failures

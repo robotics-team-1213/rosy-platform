@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.273
+**Version:** v1.290
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,202 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.290 Explicit operator navigation and language (D-821)
+
+`AssistantMessage.locale` optionally selects `ko-KR` (default, including pre-v1.290 stored messages) or `en-US`. The locale is bound to immutable request identity and model input. Unsupported locales are 422. `AssistantStatus.execution_enabled` reports the separately configured handoff; dialogue remains `READ_ONLY` and every answer remains `action_admissible=false`.
+
+POST `/api/fleet/assistant/messages/{request_id}/navigation` requires the current named operator and existing Origin/CSRF rules. Input `AssistantNavigation` is exactly robot_id, finite x/y within ±100000 metres, optional finite yaw within ±π (default 0). This is an explicit operator coordinate submission, never a model-generated command. The operator must own an ANSWERED CONTROL request completed within 30 seconds, with the same non-null selected robot. Current authentication and unexpired model admission plus `execution_enabled=true` are rechecked inside Task admission.
+
+The endpoint calls the existing `IntentExecution`/navigation Task owner and returns its accepted/queued/task result. Same principal/request reuses the Task idempotency key; changed coordinates are 409. Another principal sees the same 404 as a missing request; a robot removed from the current roster is 404; expired/non-control/changed selection is 409; disabled/unadmitted execution or unavailable storage is 503; revoked authority is 403. Results use `Cache-Control: no-store`. Actual work state, cancellation and uncertain physical outcomes use the existing Task APIs and dispatch generation. No additional worker, direct robot call or automatic UNKNOWN replay is installed. This additive endpoint supersedes the D-810 no-dispatch boundary only for explicit operator submissions; model replies retain no execution authority.
+
+### v1.289 Console operator assistant (D-810)
+
+Additive, named operator only and read-only. Console credentials and cookie Origin/CSRF rules remain unchanged. Canonical DTOs are `AssistantMessage`, `AssistantFact`, `AssistantResult`, `AssistantStatus`, and `AssistantHistory` in `core_common.protocol.assistant`, following the existing protocol submodule pattern without growing the oversized schemas facade.
+
+| Method/path | Input | Result |
+|---|---|---|
+| GET `/api/fleet/assistant/status` | none | `AssistantStatus`: available, mode=`READ_ONLY`, reason; configuration/admission missing or expired is unavailable |
+| POST `/api/fleet/assistant/messages` | `AssistantMessage`: conversation_id, request_id, text, optional selected_robot_id | 202 `AssistantResult`, or 200 same request on duplicate |
+| GET `/api/fleet/assistant/messages/{request_id}` | path ID | Own `AssistantResult`; other principal or absent is the same 404 |
+| GET `/api/fleet/assistant/conversations/{conversation_id}` | path ID | Own `AssistantHistory`, latest 40 messages in chronological order |
+
+IDs are `[A-Za-z0-9_-]{1,96}`. Original text is retained, 1..2000 characters, nonblank and no control characters except CR/LF/tab. selected_robot_id is optional `[A-Za-z0-9_.:-]{1,96}`; it is rechecked against current Fleet reads. Unknown body fields, including identity/source/Discord fields, are rejected. Principal comes only from authentication, and each site's existing Fleet DB defines site scope. Shared `site-console` and development principals are refused for persistent assistant conversations. Reading or submitting requires the current named operator credential.
+
+Results contain request_id, conversation_id, original text, state (`PENDING`, `RUNNING`, `ANSWERED`, `HOLD`, `UNKNOWN`), nullable response/reason, facts (ref, text, observed_at), created_at, nullable completed_at, and action_admissible=false. These are conversation states, never execution-completion states. Model text does not establish physical facts: STATUS is rendered from verified fact references. CONTROL requests are handed off to the existing work UI; this release never dispatches a command.
+
+Same principal/request ID and same original body returns the existing result without a second model call. Changed body is 409 `ASSISTANT_REQUEST_CHANGED`. Only one pending/running request per principal, 64 site-wide, and at most 1000 stored requests per principal; excess is 429 `ASSISTANT_LIMIT`. No implicit deletion or replay is used to free capacity. Missing/expired admission produces a durable HOLD rather than inference. In-flight restart/cancellation/transport ambiguity is UNKNOWN, never automatically retried. Unknown/foreign request is 404 `ASSISTANT_NOT_FOUND`; unavailable durable storage is 503 `ASSISTANT_STORAGE_UNAVAILABLE`. Invalid input is 422. Current snapshot age limit is five seconds; stale/unavailable observations hold the request. Recent model history is capped at four turns, 120 seconds, same principal/conversation/selection; previous STATUS facts are not reused as current observations. Every result is `Cache-Control: no-store`.
+### v1.286 완료된 native 항법의 수동적 IDLE 인계 (D-772)
+
+2026-10-17 Corrective(API-002): `mode.changed` 표의 기존 `{from, to, by}`를
+`{from, to, by, run_id?, boot_id?}`로 정정한다. 기존 handover 발행 코드가 이미 보내는
+선택 필드의 문서 누락이며 wire 변경이 없어 v1.286를 유지한다. `by=navigation_handover`의
+실제 NAVIGATION→IDLE 전이에서 두 식별자를 보내며, 멱등 재호출은 이벤트를 추가하지 않는다.
+다른 mode 변경의 필수 필드나 물리 정지·착좌 증명을 추가하는 계약이 아니다.
+
+`POST /api/v1/navigation/handover`는 operator의 정확한 `expected_boot_id`/`run_id` UUID,
+정수 `expected_owner_generation`, `correlation_id`를 요구한다. 같은 navigation lock 안에서
+현재 native navigate/home의 SUCCEEDED·ARRIVED와 실제 backend transport의 quiescence,
+빈 owner·admission/lease/moving/mapping 부재를 확인한다. 잠금 대기 뒤에도 calibration/trip
+소유권·수동/비상·line-follow·현재 mode를 재검사하고 기존 CORE navigation candidate를
+지운 뒤 NAVIGATION에서 IDLE로 조건부 전이한다. 다른 실행을 취소하거나 새 이동을 만들지 않는다.
+동일한 현재 terminal proof의 IDLE 재호출만 멱등이다. 불명·불일치·대체 실행은 409이며
+accepted/IDLE는 물리 정지·도착 오차·충전 자원 해제의 증거가 아니다. 새 station binding은
+별도로 원본 motion의 새 정지 dwell을 요구한다. 응답은 accepted, mode, run_id, boot_id,
+owner_generation이다. 기존 cancel/긴급 정지 계약은 유지한다.
+
+Fleet의 충전 조립은 이 인계의 성공 뒤에도 동일한 완료 Task/attempt·원본 정책·dispatch
+세대와 claim 부재를 다시 확인한다. Console의 이전 goal/route/goal-lease projection만
+동일 객체·값·전송/정지 세대가 유지된 경우 정리한다. held·대형·대기 목표·새 전송이나
+클라이언트 교체가 있으면 정리하지 않는다. 장치 상태를 IDLE로 꾸미거나 durable claim을
+해제하는 경로가 아니며 새 복귀는 기존 TripRunner admission을 그대로 거친다.
+
+### v1.285 스테이션 이안 허가와 실측 이탈 근거 (D-772)
+
+Additive DTO: canonical `schemas.StationDeparturePermit`는 robot/station/session/attempt/
+boot/battery/map/pose 버전, correlation, 선택된 work task와 전체 요청 SHA256,
+정책·용량 revision, 기대 native generation 및 원본 유효기간을 결속한다.
+이 DTO는 이동 명령이나 에너지 검증 자체가 아니다.
+`StationDepartureReceipt`는 같은 세션·작업과 실제 native operation/generation,
+odom·로컬 측정 출처·이안 프로필 revision, 원본 정지·접점·공간·절연 표본 시각을
+결속한다. 접점 이탈·출력 절연·경로 여유·정지 플래그는 명시적인 true만 허용한다.
+수신자는 현재 시각과 기대 scope를 재검증해야 하며 ACK나 native 성공을 이 근거로
+대체할 수 없다.
+
+`POST /api/v1/docking/station-undock`는 허가 DTO를 받고 실제 native `undock`
+operation을 반환한다. 고정 Fleet principal·calibration/trip 소유권·capability·localization과
+현재 충전 완료, 명시적 로컬 이안 프로필·출력 절연·무전류·후방 공간을 검증한다.
+중복 시작은 거절하며 응답 유실은 새 시작의 허가가 아니다.
+`PUT /api/v1/docking/station-departure`는 같은 현재 native 실행의 허가만 갱신한다.
+세션/작업/정책·용량 scope는 변경할 수 없고 원래 허가가 유효해야 한다. 같은 capture의
+TTL 연장과 만료 후 부활은 거절한다. accepted는 권한 갱신 ACK다.
+`POST /api/v1/docking/station-departure/finish`는 StationMotionCommand의 정확한
+session/correlation/boot/current native generation을 확인하고 실측 이탈 Receipt를 반환한다.
+native 성공 이후의 새 접점 이탈·정지 dwell·IDLE 없이는 409다. 재호출은 원래
+Receipt의 UTC/monotonic 수명 안에서만 가능하며 새 표본이 수명을 늘리지 않는다.
+기존 `GET /api/v1/docking/station-target`의 nullable `departure_permit`와
+`departure_receipt`는 현재 실행 허가와 실측 완료를 구분한다. 조회는 동작을 tick하거나
+허가를 갱신하지 않으며 원래 UTC/monotonic 기한과 최신 로컬 facts에 수명을 제한한다.
+Receipt는 WORK_AVAILABLE의 정확한 session/boot/battery/correlation/native operation에서만
+노출한다. 완료 응답 유실은 이 readback으로 확인하며 새 이안 요청으로 재시도하지 않는다.
+접점 재발견·움직임·대체 native 세대·기한 만료가 확인되면 같은 과거 Receipt를 되살리지 않는다.
+WORK_AVAILABLE 이후의 새 `PUT station-target`은 새 session/attempt의 RETURN_RESERVED,
+이전 이탈 이후 생성된 요청, 현재 IDLE·부트/배터리/지도/odom·빈 native 소유권과 새 원본
+motion 표본의 정지 dwell을 확인한 뒤 binding을 교체한다. 일반 작업 중 옛 target/Receipt가
+만료돼도 새 정지 근거로 다음 순환을 시작할 수 있다. 과거 Receipt/permit·착좌·operation을
+새 세션으로 옮기지 않으며 설치 피드의 재생 watermark를 보존한다. 교체된 session ID의
+지연 요청은 STATION_SESSION_RETIRED로 거절한다. 교체 검사 실패는 기존 WORK_AVAILABLE을
+움직이거나 새 세션으로 바꾸지 않는다. 새 API나 물리 사실 업로드 경로는 추가하지 않는다.
+로컬 물리 이안 사실을 업로드하는 HTTP 경로는 없다. 명시적인 `departure_profile`은
+simulation 구성에서도 빈 로컬 피드로 시작하며 실측 facts 없이는 거절한다.
+실기 구성과 DEVICE/FIELD 수용, 관제 자동 재투입은 별도 완료 기준이다.
+기존 `POST /api/v1/docking/station-stop`도 정확한 undock native 실행을 중단한다.
+CHARGED_HOLD의 terminal dock 이후에는 새 이안 correlation의 선행 중단이 세션을
+닫아 지연된 시작을 막는다. 현재 boot/generation fence는 유지하며 다른 실행을
+취소하지 않는다. 중단 ACK는 실제 정지·물리 이탈·자원 해제 근거가 아니다.
+
+### 스테이션 충전 근거 계약 (D-772, v1.280)
+
+`core_common.protocol.station_charging`의 DTO는 스테이션 설치 위치 후보/유효성,
+로봇의 위치 버전 수락, 세션별 상대 관측, 실측 정지·착좌, 정상 충전 종단,
+배터리 계측 근거, 에너지 정책 결정, durable 충전 세션을 구분한다.
+canonical export는 `core_common.protocol.schemas`다. 계약 자체는 이동 권한이 아니다.
+CORE 실행 경로는 아래의 명시적 프로필과 인증을 요구하며 실기 자동 도킹은 비활성이다.
+
+`StationPoseRecord`는 station/map/revision/pose_revision, 목표·접근 포즈,
+관측 출처·교정·유효기간·오차를 결속한다. VALID는 검증된 접근 포즈를 요구한다.
+`StationObservation`은 robot/station/session/boot/odom_epoch 및 위치 버전을
+base_link 상대 포즈에 결속한다. 관측 생성 시각은 유효기간보다 앞서야 하며
+수신자는 주입한 현재 시각과 기대 scope를 검증한다. DTO 검증은 인증이 아니다.
+
+D-774의 명시적 `station-vision` 설치 source는 관측 프로세스가 실행 중일 때 기존
+카메라 `demand.wanted`를 요청한다. 종료 시 요청을 해제하고 연결을 닫는다.
+일반 Vision/추적은 D-691의 인증 preview 읽기와 30초 유지 규칙을 따른다.
+설치 프로필의 lens/marker 교정·source·원본 크기/회전을 검증하며 이 요청은
+Fleet 위치 확정이나 CORE 주행·충전 권한을 부여하지 않는다. 새 wire 필드는 없다.
+
+같은 위치 버전의 새 전역 관측은 기존 `PUT /api/v1/docking/station-target`으로
+동기화한다. session/robot/boot/battery/map/attempt와 위치·접근 포즈·출처·교정은
+그대로여야 하며 원래 CORE binding도 아직 유효해야 한다. 새로운 capture 없이
+TTL만 늘리거나 만료/HOLD binding을 되살리는 요청은 거절한다. 기존 native
+boot/generation fence와 현재 operation을 보존하며 이동을 시작하지 않는다.
+현재 유효한 observation scope는 새 프레임 측정 권한이고 기존 영상·착좌·충전
+완료 근거의 갱신이 아니다. ACK의 현재 시각도 전역 위치 관측 시각을 대신하지 않는다.
+현재 충전 세션의 `UNDOCKING` 중에도 같은 검증을 거쳐 새 측정 범위를 제공한다.
+이 범위는 유효한 동일 위치 관측을 CORE에 동기화하는 데 사용할 수 있으며,
+이안 이동·충전 완료·자원 해제를 허가하지 않는다. HOLD 및 WORK_AVAILABLE에서는
+새 측정 범위를 발급하지 않는다.
+
+`BatteryEnergyEvidence`는 미측정 SOH·유효 에너지를 null로 보존한다.
+전압 단독 출처는 건강도 계측값을 주장할 수 없다. `ChargeCompletionEvidence`는
+충전기/BMS 정상 종단과 최신 팩 표본을 충전 session/battery에 결속한다.
+단순 charging=false, 정상 전압, ACK는 만충이나 출발 허가를 입증하지 않는다.
+v1.279은 `SeatingEvidence.position_sample_at`과 정상 종단의 필수
+`ChargeCompletionEvidence.termination_sample_at`을 추가한다. 수신 시각으로
+카메라·충전기 원본 표본의 나이를 갱신하지 않는다. 정상 종단 시각을 모르는 장치는
+UNKNOWN을 보고하며, 이전 세션에서 발생한 종단을 현재 세션의 완료로 사용하지 않는다.
+종단 발생 시각은 현재 접안 시도 시작 이후여야 한다. 완료 대기 중에는 최신 정상
+충전기 상태·접점·팩 표본을 다시 검증하며, 정상 종단 사건 자체가 반복 발생할 필요는 없다.
+기존 docking 명령은 스테이션 전용 기종의 미수락·무효 binding 또는 다른 동작 소유권과
+충돌하면 409 `STATION_BINDING_REQUIRED`, `STATION_BINDING_INVALID`,
+`STATION_SESSION_ACTIVE`로 거절한다. 이 검사는 모드 변경·모터 명령보다 먼저 실행한다.
+공유 필드의 시각은 UTC epoch 초, 위치는 m, 각도는 rad, 에너지는 Wh다.
+
+v1.280의 스테이션 실행 경로는 아래 계약을 따른다. 기본 비활성이며 실기 수용 전에는
+명시적인 simulation 프로필만 구성한다. 사람 operator/admin 역할만으로 제어 근거를
+등록할 수 없다. CORE 쓰기는 설정의 `docking.station.fleet_principals`에 등록된 고정
+principal만 허용하고, 최초 binding의 principal에 세션을 결속한다. 공용 개발 토큰은
+등록 여부와 무관하게 쓰기를 거절한다. 관측 source 자격증명은 Fleet에서만 사용하고
+CORE에는 Fleet의 고유 robot credential로 전달한다.
+
+| 경로 | 입력/출력과 권한 |
+|---|---|
+| CORE `GET /api/v1/docking/station-target` | viewer: `StationTargetStatus`. 현재 유효성·착좌/충전/완료 검증·실행 correlation과 실제 operation ID. 오래된 상태 문자열만으로 출발을 허가하지 않음 |
+| CORE `PUT /api/v1/docking/station-target` | 지정 Fleet principal: `StationTargetBinding` → `StationPoseAck`. 현재 native boot/generation, session/map/pose revision, 로컬 프로필을 확인하며 이동을 시작하지 않음 |
+| CORE `POST /api/v1/docking/station-observation` | binding 소유 principal: `StationObservation` → `{accepted: bool}`. 범위·촬영 시각·순번·교정 검증 실패는 기존 관측도 비움 |
+| CORE `POST /api/v1/docking/station-dock` | binding 소유 principal: `StationMotionCommand` → 실제 native operation. 모드/로컬 안전/관측/현재 owner generation을 동작 직전에 검사 |
+| CORE `PUT /api/v1/docking/station-return` (v1.282) | binding 소유 principal: `StationReturnPermit` → `StationTargetStatus`. 기존 trip lease의 owner·lease ID·trip ID·job_id=session ID에 결속한 복귀 허가. 수락만으로 이동하지 않음 |
+| CORE `POST /api/v1/docking/station-return/finish` (v1.283) | 같은 principal: `StationMotionCommand` → `StationPoseAck`. 정확한 허가·boot/generation·lease를 재검사하고 NAVIGATION이면 terminal navigation owner/quiescence를 lock 아래 증명한 경우에만 IDLE로 인계. 이 호출은 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환하며 RETURNING과 lease를 유지한다. 이후 새 연속 측정 정지 dwell을 확인한 호출만 BOUND로 넘김. 접안 시작·자원 해제·작업 배정을 하지 않음 |
+| Fleet `GET /api/fleet/stations` | viewer: 유효성/위치 버전을 포함한 설치 원장 조회 |
+| Fleet `POST /api/fleet/station-poses` | 등록 source credential: `StationPoseRecord` 후보. source/station/map/calibration 범위 검증, Fleet의 접근 검증·일관성 판정 후 버전 발행 |
+| Fleet `POST /api/fleet/station-observations` | 등록 source credential: `StationObservation`. 활성 session/boot/위치 버전과 출처를 검증한 뒤 CORE로 전달; 모터 명령 권한 없음 |
+| Fleet `GET /api/fleet/station-observation-scope/{robot_id}` (v1.281) | 등록 source credential: `{scope: StationObservation \| null}`. 해당 source에 등록된 로봇의 현재 충전 세션, CORE binding/ACK, 실제 odom epoch를 함께 확인한 생성 범위. pose=null, visible=false, sequence=0인 메타데이터이며 위치·착좌 근거가 아님 |
+
+CORE의 위 네 경로와 명시적 station_ingress 구성의 Fleet 관측·후보·조회 경로를 연결했다.
+source 범위 조회는 v1.281에서 연결했다. 조회 시 CORE 상태가 유효해야 하며, 새 측정 범위의
+만료는 binding ACK·설치 위치·최신 odom과 source 나이 제한으로 한정한다. 이전 카메라
+착좌 근거의 만료를 다음 프레임에 상속하지 않으며 기존 착좌·충전 근거를 연장하지 않는다.
+활성 binding이 없으면 null이다. 카메라는 프레임 원본 시각·순번과 실제 영상
+측정으로 관측을 생성하고, 처리 이후에도 현재 범위를 확인한다. 로봇 자격은 source에
+전달하지 않는다. 기본 app에는 해당 구성이 없으며 전체 충전 사이클 수용은 미완료다.
+
+v1.282의 `StationReturnPermit`은 session/robot/station/battery/boot, map/revision/pose_revision,
+correlation, lease_id/trip_id, 기대 native owner generation과 원본 유효기간을 담는다.
+기존 trip lease를 먼저 열고 허가를 수락한 뒤에만 진입 정렬과 trip 출력을 시작한다.
+최종 출력 검사는 허가와 기존 lease의 현재 소유자·정확한 ID·원래 만료를 비차단으로 확인한다.
+카메라 관측은 귀환 주행 허가를 대신하지 않는다. lease/허가 만료·교체나 로컬 scope 변경은
+출력을 차단하며 같은 허가의 재전송으로 자동 재개하지 않는다. `return_ready`는 현재 주행
+허가만 표시하고 착좌·충전·완료를 주장하지 않는다. 실제 trip terminal과 귀환 예산 검증은
+Fleet 포트의 책임이며, finish의 로컬 정지 확인은 trip 성공 증거를 대신하지 않는다.
+
+`StationTargetBinding`은 immutable 세션 식별, 설치 위치, 상대 관측 scope와
+`expected_boot_id`/`expected_owner_generation`을 담는다. `StationMotionCommand`는
+session ID, 고유 correlation, 기대 native boot/generation을 담는다. 응답 소실 시
+readback의 같은 session/correlation에 있는 operation ID로 기존 native 결과를 읽으며,
+UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/무효화 후 자원 해제는 정지·이안
+증거 확인과 별개다. 이 버전은 임의 교정·배터리 수치·착좌/충전 완료 입력 API를 열지 않는다.
+
+
+### v1.284 충전 접안의 세션 한정 중단 (D-772)
+
+`POST /api/v1/docking/station-stop`은 고정 허용 Fleet principal의 `StationMotionCommand`를 받는다. 현재 session/boot/native generation을 owner lock 아래 검증하며, 접안이 수락되었다면 현재 native run과 저장된 correlation도 일치해야 한다. 아직 BOUND라면 해당 세션을 HOLD로 닫아 지연된 시작을 거부한다. 위치·카메라 근거가 만료되어도 중단할 수 있으며 다른 실행이나 RETURNING을 취소하지 않는다. 응답 `{"accepted":true}`는 권한 폐쇄 ACK이며 측정 정지·물리 이탈·자원 해제 근거가 아니다. Fleet는 기존 영속 의도를 사용하고 응답 유실 시 접안을 재전송하지 않는다.
+
+### v1.283 충전 복귀의 terminal navigation → IDLE 인계 (D-772)
+
+`POST /api/v1/docking/station-return/finish`는 NAVIGATION 상태에서도 제한된 정지 인계를 처리한다. 기존 principal/session/correlation/boot/위치 버전/native generation/정확한 trip lease 검증을 먼저 유지한다. Navigation owner lock 아래 현재 부트의 성공 terminal run, ARRIVED 상태와 실제 transport quiescence, 진행 중 goal/admission/moving session/mapping/goal lease·pending submission·actuating callback 부재를 증명한 경우에만 navigation 후보를 지우고 `expect=NAVIGATION`으로 IDLE 전환한다. MANUAL/E-stop은 덮어쓰지 않고 일반 navigation 취소를 호출하지 않는다.
+
+인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
+
 
 ### v1.273 Stuck evidence as a raw JPEG for `Accept: image/jpeg`
 
@@ -75,6 +271,35 @@ Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 
 - **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
 - **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 아직 없어 거절한다(D-779 열린 질문, fail closed). 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
 - **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
+
+### v1.287 D-769 route-prior compatibility prerequisite
+
+This additive prerequisite prepares the existing drivable-v2 SIM implementation; installing
+the schema alone does not activate a disabled producer, wall clipping or physical deployment.
+It supersedes the one-second wire limits in v1.246/v1.247: `AuthorityRouteGuide.max_age_s`
+and the source-based `SelectedRoutePrior` lifetime accept at most three seconds. Fleet's
+operational producer still sends one second; only the explicit isolated SIM runner uses
+three seconds. Neither value extends the enclosing movement authority's end or TTL,
+and repeated use of the same source cannot refresh its original age budget.
+
+Both shapes add optional finite `wall_left_m` in (0,2], `wall_right_m` in [-2,0), and
+`wall_ahead_m` in (0,2]. They describe map wall faces across the selected directed lane
+from the robot, and their forward coverage, not observed free floor. Omission means no
+map-wall evidence. CORE and the camera consumer must understand these fields before
+an upgraded Fleet serializes them. Existing enabled producers use `model_dump()` and
+already send the new fields as null after a schema-only upgrade. An older CORE with
+`extra="forbid"` rejects the entire enclosing authority request at nested validation,
+not only its guide. Upgrade CORE and the camera receiver before upgrading Fleet's schema.
+The default `crosswalk_map_wall_band_m` is null, so this prerequisite does not clip scans.
+D-573 revision 8 defines the downstream clipping bounds and physical calibration gate.
+
+The corresponding product implementation makes one explicit exception to v1.246's
+accepted-authority-only binding rule: a live, same-scope, newer-sequence extension rejected
+as `reason="shrink"` may refresh a valid exact-pose guide. It keeps the existing movement
+end and expiry unchanged. Actual shrink requests, stale/out-of-order or wrong-scope
+requests do not gain that exception; source-age limits and the FREE authority gate remain.
+Until that consumer implementation is installed, a rejected extension retains the old
+behavior. Envelope 1.0 and final CORE command ownership are unchanged.
 
 ### v1.247 D-769 selected-route production capability
 
@@ -1514,7 +1739,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `auth.development_mode` | warning | 로봇 | `{marker}` — 장치 모드인데 개발 모드 표식이 있어 공용 개발 토큰을 받는다(D-548) |
 | `fleet.link_provisioned` | warning | 로봇 | `{by, expected_hostname}` — D-555 (v1.163). `by` = 호출 토큰 id. 토큰은 싣지 않는다 |
 | `fleet.link_cleared` | warning | 로봇 | `{by, removed}` — D-555 (v1.163) |
-| `mode.changed` | info | 로봇 | `{from, to, by}` |
+| `mode.changed` | info | 로봇 | `{from, to, by, run_id?, boot_id?}` |
 | `trip_lease.opened` | info | 로봇 | `{lease_id, trip_id, holder, operator_name, ttl_s}` — D-541 (v1.157) |
 | `trip_lease.renewed` | info | 로봇 | `{lease_id, trip_id, ttl_s}` — renew 는 0.5 s 마다 오므로 lease 하나에 30 s 에 한 번만 낸다 (v1.157) |
 | `trip_lease.ended` | info, warning | 로봇 | `{lease_id, trip_id, holder, operator_name, reason, by, note}` — `reason` `released` 는 info, 그 밖(`mode_left`·`estop`·`taken_over`·`expired`)은 warning. `note` 는 넘겨받기 `reason`(없으면 빈 문자열) (v1.157) |
@@ -3365,6 +3590,20 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
+| v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
+| v1.288 | 2026-10-19 | Integrate D-772/D-774/D-776/D-783 Station contracts from reserved v1.278–286 with the current v1.287 route-prior contract. Preserve both histories and envelope 1.0; no physical activation. |
+| v1.287 | 2026-10-19 | D-769 rev 3 / D-573 rev 8 route-prior compatibility prerequisite: optional map-wall geometry, at most three-second source lifetime, receiver-first rollout, and the separately installed consumer's ignored-short extension exception. Operational Fleet remains one second; no physical activation. |
+| v1.286 | 2026-10-16 | (origin #92 v1.255, 2026-10-19 port) D-772 완료된 native navigation의 exact boot/run/correlation/generation·quiescent transport를 확인한 수동적 IDLE handover. 새 이동·취소·물리 정지 판정을 추가하지 않음 |
+| v1.285 | 2026-10-16 | (origin #92 v1.254, 2026-10-19 port) D-772 작업·attempt 결속 이안 허가/실측 Receipt. 명시적 로컬 피드·절연·후방 공간 검사와 native 이안·허가 갱신·실측 완료 API, 정확한 선행/진행 중 중단 |
+| v1.284 | 2026-10-16 | (origin #92 v1.253, 2026-10-19 port) D-772 세션·현재 native owner에 한정한 station-stop. 근거 만료 뒤에도 권한을 닫으며 ACK는 물리 정지·자원 해제가 아님 |
+| v1.283 | 2026-10-16 | (origin #92 v1.252, 2026-10-19 port) D-772 성공 terminal navigation/quiescence를 확인한 조건부 IDLE 인계와 이후 새 측정 정지 dwell |
+| v1.282 | 2026-10-16 | (origin #92 v1.251, 2026-10-19 port) D-772 기존 trip lease와 충전 세션을 결속한 CORE 복귀 허가·최종 출력 검사·측정 정지 후 접안 인계 계약. 실기 활성화 없음 |
+| v1.281 | 2026-10-16 | (origin #92 v1.250, 2026-10-19 port) D-772 source 전용 현재 관측 생성 범위 조회. 활성 세션·CORE binding/ACK·odom epoch를 결속하며 pose=null/visible=false 메타데이터만 반환. 로봇 자격과 이동 권한은 전달하지 않음 |
+| v1.280 | 2026-10-16 | (origin #92 v1.249, 2026-10-19 port) D-772 인증된 스테이션 binding·관측·실행 및 근거 유효성을 포함한 상태 계약. native boot/generation과 세션 소유 principal 결속. 실기 자동 활성화 없음 |
+| v1.279 | 2026-10-16 | (origin #92 v1.248, 2026-10-19 port) D-772 안전 검토: 착좌 위치와 충전기 정상 종단의 원본 표본 시각을 분리한다. 이전 표본을 다시 수신해도 신선도가 갱신되지 않는다. 정상 종단 시각 미지원은 UNKNOWN. 새 REST 경로·실기 capability·envelope 1.0 변화 없음 |
+| v1.278 | 2026-10-16 | (origin #92 v1.245, 2026-10-19 port) Additive (D-772): station_charging 공유 DTO와 canonical schema export. 위치 버전·지도 revision·교정·충전 session·boot/odom 세대, 착좌·정상 종단·배터리 계측 근거를 구분한다. 이 단계에서 새 REST 경로·실기 capability는 추가하지 않는다. envelope 1.0 유지 |
+| v1.275 | 2026-10-19 | Additive (D-801, feat/site-console-video): Fleet `POST /api/fleet/robots/{robot_id}/media-grant`·`/renew`·`DELETE`와 미디어 권한 서비스용 `POST /api/fleet/media/validate`. 사이트 로그인 주체(fleet.read)의 로봇별 READ 전용 영상 위임. 상세는 v1.275 절 |
 | v1.273 | 2026-10-19 | Additive (docs/stuck-evidence-jpeg-api): `GET /api/fleet/robots/{robot_id}/line-stuck/evidence` with `Accept: image/jpeg` returns the raw JPEG and its metadata in `X-Stuck-Evidence`; the JSON body is unchanged for other clients. Documents the behaviour shipped in fix(fleet) 0659636cff. |
 | v1.271 | 2026-10-18 | Additive (D-800, feat/omx-core-lerobot): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |
 | v1.268 | 2026-10-18 | Additive (D-793, feat/legacy-policy-admin-flag): users-file `policy_admin`(operator 전용)과 세션 응답 `policy_admin`. envelope 1.0 변경 없음. |
@@ -3984,6 +4223,29 @@ capture, bounds_m, evidence_kind}}`다. 출력은 수치 전용 bundle.json이�
 monotonic 기준 최대 5초의 config lease가 만료되면 적용을 중단한다. 갱신 실패는 lease를 연장하지
 않고 remap 뒤에도 generation/session을 다시 검사한다. 원본·기준 지도를 유지하며 미관측은 mask로
 구분한다. 실측 승인·미리보기는 위치 앵커·마커 높이 보정·주행·DEVICE/FIELD 수용을 부여하지 않는다.
+
+### v1.275 — D-801 관제 콘솔 사이트 발급 영상 위임
+
+D-789 Decision 3을 대체한다. Fleet에 `ROSY_FLEET_MEDIA_CONFIG`(JSON: `site_url`, `audience`=`site:<id>`,
+`key_id`, `signing_key_file`=사이트 전용 Ed25519 PEM, `audit_db`)가 있을 때만 열린다. 없으면 아래 경로는 404다.
+
+| Method | Path | Authorization | Result |
+|---|---|---|---|
+| POST | `/api/fleet/robots/{robot_id}/media-grant` | 사이트 로그인 쿠키 또는 사이트 Bearer, `fleet.read`. LAN 카메라 프록시 주체·ai_observer 불가 | 201 읽기 위임(아래 receipt). 모르는 로봇 404 |
+| POST | `/api/fleet/robots/{robot_id}/media-grant/{grant_id}/renew` | 같은 주체 | 200 같은 grant_id, 새 token. 끝난 위임 403 |
+| DELETE | `/api/fleet/robots/{robot_id}/media-grant/{grant_id}` | 같은 주체 | 204, 감사 종료 `closed` |
+| POST | `/api/fleet/media/validate` | Authorization의 사이트 위임 Bearer(세션 없음) | `{active:false}` 또는 `{active:true, grant_id, robot_id, path, action:"read", audience, expires_at}` |
+
+receipt는 v1.265와 같은 모양(`grant_id`, `token`, `expires_at`, `audience`, `robot_id`, `path`, `action:"read"`,
+`site_url`)이며 `no-store`다. 위임은 `rosy-media+jwt`, iss=aud=`site:<id>`, action은 read만, 최대 60초다.
+validate는 발급 때의 브라우저 자격으로 Fleet 인증·권한을 다시 검사하므로 로그아웃·역할 회수 뒤 inactive다.
+70초 동안 갱신이 없으면 위임은 `expired`로 끝난다. 감사 표 `fleet_media_audit`(grant_id, principal_id, role,
+robot_id, started_at, last_seen_at, ended_at, end_reason)에 위임마다 한 행을 남긴다.
+
+미디어 권한 서비스 설정 `site_issuer`(`fleet_url`, `fleet_ca`, `keys`)가 있으면 사이트 위임을 받는다.
+1초 재확인은 로봇 CORE `POST /api/v1/vision/media/validate`의 영상 설정 상태(200=켜짐, 503=꺼짐; 로봇 거부권)와
+Fleet validate가 모두 활성일 때만 통과한다. 로봇 키로 서명된 위임은 사이트를 대신할 수 없다.
+콘솔 페이지 CSP `connect-src`에는 설정된 site media origin 하나만 추가된다. Fleet은 영상을 중계하지 않는다.
 
 ### v1.265 — D-789 WebRTC 영상 위임 자격
 

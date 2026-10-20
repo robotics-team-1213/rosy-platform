@@ -140,6 +140,39 @@ def test_queue_overflow_revokes_collection_without_waiting_for_storage():
     assert backend.fault and backend.events.qsize()==1
 
 
+@pytest.mark.parametrize('extra_client', [None, ('omx_action_events_other', '/cell'),
+                                         ('owned_action_events', '/other')])
+def test_exclusion_allows_only_the_exact_runtime_owned_action_client(monkeypatch, extra_client):
+    from types import ModuleType
+
+    action = '/cell/arm/trajectory'
+    owned = ('owned_action_events', '/cell')
+    server = ('vendor', '/cell')
+    nodes = [('owner', '/cell'), owned, server]
+    if extra_client is not None:
+        nodes.append(extra_client)
+    graph = ModuleType('rclpy.action.graph')
+    graph.get_action_client_names_and_types_by_node = lambda node, name, ns: (
+        [(action, [])] if (name, ns) != server else [])
+    graph.get_action_server_names_and_types_by_node = lambda node, name, ns: (
+        [(action, [])] if (name, ns) == server else [])
+    for name in ('rclpy', 'rclpy.action'):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    monkeypatch.setitem(sys.modules, 'rclpy.action.graph', graph)
+    cls = _module('collection_ros').RosBackend
+    backend = cls.__new__(cls)
+    backend.profile = dict(ros=dict(trajectory_action=action,
+                                    action_server=dict(node_name=server[0], node_namespace=server[1])))
+    backend.node = NS(get_name=lambda:'owner', get_namespace=lambda:'/cell',
+                      get_node_names_and_namespaces=lambda:nodes)
+    backend.runtime = NS(action_port=NS(client_node_identity=owned))
+    if extra_client is None:
+        backend.verify_exclusion()
+    else:
+        with pytest.raises(ValueError, match='another action owner/client'):
+            backend.verify_exclusion()
+
+
 def test_resource_lock_identity_depends_on_action_and_domain_not_profile_lock_paths():
     module=_module('collection_ros')
     assert module.resource_key('/cell/arm/follow_joint_trajectory','42') == module.resource_key(

@@ -71,10 +71,18 @@ class SigningToolMissing(RuntimeError):
 # plain PowerShell PATH does not include. 2026-09-24: the card writer's release
 # check failed with "openssl not found" while pytest passed, because only
 # test/conftest.py knew these folders.
-_WINDOWS_OPENSSL_DIRS = (
-    r"C:\Program Files\Git\usr\bin",
-    r"C:\Program Files\Git\mingw64\bin",
-)
+def _git_for_windows_dirs() -> tuple[str, ...]:
+    # Git may be a per-user or other-drive install: start from git on PATH
+    # (<Git>\cmd\git.exe or <Git>\<env>\bin\git.exe), then %ProgramFiles%\Git.
+    roots = [os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Git")]
+    git = shutil.which("git")
+    if git:
+        exe = Path(git).resolve()
+        roots[:0] = [str(parent) for parent in exe.parents[1:3]]
+    return tuple(os.path.join(r, s) for r in dict.fromkeys(roots) for s in (r"usr\bin", r"mingw64\bin"))
+
+
+_WINDOWS_OPENSSL_DIRS = _git_for_windows_dirs() if os.name == "nt" else ()
 
 
 def _openssl() -> str:

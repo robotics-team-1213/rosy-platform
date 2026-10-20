@@ -11,14 +11,28 @@ import pytest
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
-from rclpy.action import ActionServer, CancelResponse  # noqa: E402
-from rclpy.executors import MultiThreadedExecutor  # noqa: E402
+from rclpy.action import ActionServer  # noqa: E402
+from rclpy.executors import SingleThreadedExecutor  # noqa: E402
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
 
 from omx_adapter.command_owner import ArmCommandConfig, TrajectoryCommand  # noqa: E402
 from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
+from ros_feedback_peer import external_feedback_vendor, external_timeout_vendor  # noqa: E402
+
+
+@pytest.fixture
+def slow_feedback_peer():
+    with external_feedback_vendor() as peer:
+        yield peer
+
+
+@pytest.fixture
+def timeout_peer():
+    with external_timeout_vendor() as peer:
+        yield peer
 
 
 def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
@@ -92,7 +106,7 @@ def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
             observed.set()
     runtime._policy_binding = SlowBinding()
     publisher = source_node.create_publisher(JointState, topic, 1)
-    executor = MultiThreadedExecutor(num_threads=3)
+    executor = OwnerMultiThreadedExecutor(num_threads=3)
     executor.add_node(owner_node); executor.add_node(source_node)
     spinner = threading.Thread(target=executor.spin, daemon=True)
     spinner.start()
@@ -183,7 +197,7 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
         on_goal_event=goal_events.append,
     )
     phase_port = RosArmPhaseGoalPort(runtime)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
         executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=1)
@@ -271,36 +285,11 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
         rclpy.shutdown()
 
 
-def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_owner():
+def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_owner(timeout_peer):
     rclpy.init()
-    server_node = Node("omx_test_timeout_server")
-    feedback_node = Node("omx_test_timeout_feedback")
     owner_node = Node("omx_test_timeout_owner")
-    server_goal_received = threading.Event()
-    server_cancelled = threading.Event()
+    action_name, feedback_topic, _, server_goal_received, server_cancelled = timeout_peer
     goal_events = []
-
-    def execute(goal_handle):
-        server_goal_received.set()
-        # Keep the accepted ROS goal alive past the local owner's deadline.
-        time.sleep(1.2)
-        if goal_handle.is_cancel_requested:
-            server_cancelled.set()
-            goal_handle.canceled()
-        else:
-            goal_handle.succeed()
-        result = FollowJointTrajectory.Result()
-        result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
-        return result
-
-    action_name = "/test/omx/timeout/arm_controller/follow_joint_trajectory"
-    action_server = ActionServer(
-        server_node, FollowJointTrajectory, action_name,
-        execute_callback=execute,
-        cancel_callback=lambda _goal_handle: CancelResponse.ACCEPT,
-    )
-    feedback_topic = "/test/omx/timeout/joint_states"
-    feedback_publisher = feedback_node.create_publisher(JointState, feedback_topic, 1)
     config = ArmCommandConfig(
         enabled=True,
         workcell_id="test_workcell",
@@ -320,24 +309,10 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         poll_period_s=0.01,
         on_goal_event=goal_events.append,
     )
-    executor = MultiThreadedExecutor(num_threads=4)
-    for node in (server_node, feedback_node, owner_node):
-        executor.add_node(node)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
-    publisher_stop = threading.Event()
-
-    def publish_fresh_state():
-        while not publisher_stop.is_set():
-            message = JointState()
-            message.name = ["joint1"]
-            message.position = [0.0]
-            message.header.stamp = feedback_node.get_clock().now().to_msg()
-            feedback_publisher.publish(message)
-            publisher_stop.wait(0.03)
-
-    publisher = threading.Thread(target=publish_fresh_state, daemon=True)
-    publisher.start()
     try:
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
@@ -390,84 +365,72 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         assert runtime.submit(command).reason == "hold_latched"
         assert [event.kind for event in goal_events].count("TERMINAL_RESULT") == 1
     finally:
-        publisher_stop.set()
-        publisher.join(timeout=1.0)
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
+        spinner.shutdown(wait=True)
         runtime.destroy()
-        action_server.destroy()
-        for node in (server_node, feedback_node, owner_node):
-            node.destroy_node()
+        owner_node.destroy_node()
         rclpy.shutdown()
 
 
-def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
-    """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
-    writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
+@pytest.mark.parametrize("owner_threads", [1, 4])
+@pytest.mark.parametrize("timeout_while_blocked", [False, True])
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
+        slow_feedback_peer, owner_threads, timeout_while_blocked):
+    """Slow durable feedback must not occupy serial or production owner callbacks."""
     rclpy.init()
-    server_node = Node("omx_test_flood_server")
-    feedback_node = Node("omx_test_flood_state")
     owner_node = Node("omx_test_flood_owner")
     slow_feedbacks = []
-
-    def execute(goal_handle):
-        for _ in range(40):  # 40 feedback messages over ~0.8 s
-            feedback = FollowJointTrajectory.Feedback()
-            feedback.joint_names = ["joint1"]
-            goal_handle.publish_feedback(feedback)
-            time.sleep(0.02)
-        goal_handle.succeed()
-        result = FollowJointTrajectory.Result()
-        result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
-        return result
-
-    action_name = "/test/omx/flood/arm_controller/follow_joint_trajectory"
-    action_server = ActionServer(server_node, FollowJointTrajectory, action_name,
-                                 execute_callback=execute)
-    state_topic = "/test/omx/flood/joint_states"
-    state_publisher = feedback_node.create_publisher(JointState, state_topic, 10)
+    action_name, state_topic, publication_stats = slow_feedback_peer
     config = ArmCommandConfig(
         enabled=True, workcell_id="test_workcell", instance_id="test_instance",
         joint_names=("joint1",), position_limits={"joint1": (-1.0, 1.0)},
         allowed_owners=("moveit",), calibration_revision="cal-test",
-        max_joint_state_age_s=0.2, max_goal_duration_s=2.0, action_timeout_s=4.0,
+        # Cloud publication itself has paused for 0.201 s. Give the fixture scheduling
+        # margin, while blocking feedback for at least 3x this freshness allowance.
+        max_joint_state_age_s=0.5, max_goal_duration_s=1.0,
+        action_timeout_s=1.2 if timeout_while_blocked else 6.0,
         max_start_state_tolerances={"joint1": 0.05},
     )
+    goal_events = []
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
-                                   trajectory_action=action_name, poll_period_s=0.01)
-    phase_port = RosArmPhaseGoalPort(runtime)
+                                   trajectory_action=action_name, poll_period_s=0.01,
+                                   on_goal_event=goal_events.append)
+    watchdog_ticks = []
+    original_poll = runtime.owner.poll
+
+    def observed_poll():
+        decision = original_poll()
+        watchdog_ticks.append(time.monotonic())
+        return decision
+
+    runtime.owner.poll = observed_poll
     import os
     trace = None
     if os.environ.get('ROSY_OMX_FEEDBACK_TRACE') == '1':
         from feedback_trace import FeedbackTrace
         trace = FeedbackTrace(runtime)
-    executor = MultiThreadedExecutor(num_threads=4)
-    for node in (server_node, feedback_node, owner_node):
-        executor.add_node(node)
+    sink_times = []
+    sink_entered = threading.Event()
+    release_sink = threading.Event()
+    phase_port = RosArmPhaseGoalPort(runtime)
+    # Jazzy explicitly recommends SingleThreadedExecutor instead of a one-worker
+    # MTE. Keep the original four-worker production regression as well.
+    executor = (SingleThreadedExecutor() if owner_threads == 1
+                else OwnerMultiThreadedExecutor(num_threads=owner_threads))
+    executor.add_node(owner_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
-    stop = threading.Event()
-
-    def publish_states():
-        while not stop.is_set():
-            message = JointState()
-            message.name = ["joint1"]
-            message.position = [0.0]
-            message.header.stamp = feedback_node.get_clock().now().to_msg()
-            if trace is not None:
-                trace.add('publish', stamp_ns=message.header.stamp.sec*10**9+message.header.stamp.nanosec)
-            state_publisher.publish(message)
-            stop.wait(0.01)
-
-    publisher = threading.Thread(target=publish_states, daemon=True)
-    publisher.start()
 
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
             slow_feedbacks.append(event)
             if trace is not None:
                 trace.add('sink_begin')
-            time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+            sink_times.append(time.monotonic())
+            sink_entered.set()
+            release_sink.wait(5.0)
+            sink_times.append(time.monotonic())
             if trace is not None:
                 trace.add('sink_end')
         return True
@@ -486,24 +449,150 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             expected_start_state_positions={"joint1": 0.0}, start_state_tolerances={"joint1": 0.01},
         )
         assert phase_port.submit(command, on_goal_event=slow_sink).dispatched is True
+        assert sink_entered.wait(3.0), "the server never sent feedback"
+        initial = runtime.owner._joint_state
+        owner_samples = []
+        blocked_until = sink_times[0] + 3 * config.max_joint_state_age_s
+        while time.monotonic() < blocked_until:
+            observed = runtime.owner._joint_state
+            owner_samples.append((time.monotonic(), observed.sequence, observed.received_at))
+            time.sleep(0.01)
+        now = time.monotonic()
+        observed = runtime.owner._joint_state
+        with publication_stats.get_lock():
+            published, max_publish_gap, _ = publication_stats[:]
+        received = sorted({at for _, _, at in owner_samples})
+        owner_max_gap = max((b - a for a, b in zip(received, received[1:])), default=float("inf"))
+        evidence = {
+            "decision": runtime.last_terminal_decision,
+            "published": int(published),
+            "max_publish_gap": max_publish_gap,
+            "owner_max_gap": owner_max_gap,
+            "owner_tail": owner_samples[-10:],
+            "owner_age": now - observed.received_at,
+            "slow_sink_times": sink_times,
+        }
+        assert len(sink_times) == 1, evidence  # feedback is still blocked
+        assert any(t > sink_times[0] + config.max_joint_state_age_s and seq > initial.sequence
+                   for t, seq, _ in owner_samples), evidence
+        assert now - observed.received_at < config.max_joint_state_age_s, evidence
+        # Owner intake may lag publisher pauses only by part of the freshness budget.
+        assert owner_max_gap < max_publish_gap + config.max_joint_state_age_s / 2, evidence
+        assert any(t > sink_times[0] + config.max_joint_state_age_s for t in watchdog_ticks), evidence
+        if timeout_while_blocked:
+            assert runtime.owner.state == "hold", evidence
+            assert runtime.last_terminal_decision is not None, evidence
+            assert runtime.last_terminal_decision.reason == "action_timeout", evidence
+            assert any(t > sink_times[0] + config.action_timeout_s for t in watchdog_ticks), evidence
+            assert runtime.submit(command).reason == "hold_latched"
+        release_sink.set()
         deadline = time.monotonic() + 6.0
         while time.monotonic() < deadline and runtime.last_terminal_decision is None:
             time.sleep(0.01)
         assert slow_feedbacks, "the server never sent feedback"
-        assert runtime.last_terminal_decision.reason == "completed", runtime.last_terminal_decision
-        assert runtime.owner.state == "ready"
+        evidence["decision"] = runtime.last_terminal_decision
+        assert runtime.last_terminal_decision is not None, evidence
+        if not timeout_while_blocked:
+            assert runtime.last_terminal_decision.reason == "completed", evidence
+        if timeout_while_blocked:
+            handle = runtime.action_port.last_handle
+            deadline = time.monotonic() + 5.0
+            while (time.monotonic() < deadline and (handle.status is None or not any(
+                    event.kind == "TERMINAL_RESULT" for event in goal_events))):
+                time.sleep(0.01)
+            assert handle.status == 4, evidence  # late SUCCEEDED is not permission to recover
+            assert runtime.owner.poll().reason == "action_timeout"
+            assert runtime.submit(command).reason == "hold_latched"
+            delivered_events = tuple(goal_events)
+            assert [event.kind for event in delivered_events].count("TERMINAL_RESULT") == 1
+            assert [event.sequence for event in delivered_events] == list(range(1, len(delivered_events) + 1))
+        assert runtime.owner.state == ("hold" if timeout_while_blocked else "ready")
     finally:
-        stop.set()
-        publisher.join(timeout=1.0)
+        release_sink.set()
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
+        spinner.shutdown(wait=True)
         runtime.destroy()
-        action_server.destroy()
-        for node in (server_node, feedback_node, owner_node):
-            node.destroy_node()
+        owner_node.destroy_node()
         rclpy.shutdown()
         if trace is not None:
             trace.dump()
+
+
+@pytest.mark.parametrize("scheduler_stopped", [False, True])
+def test_timeout_never_falls_back_to_the_owner_thread_sink(scheduler_stopped):
+    from types import SimpleNamespace
+    from omx_adapter.ros_runtime import RosTrajectoryActionHandle
+
+    queued, events = [], []
+
+    def schedule(callback):
+        if scheduler_stopped:
+            raise RuntimeError("executor stopped")
+        queued.append(callback)
+
+    client = SimpleNamespace(send_goal_async=lambda *a, **kw: SimpleNamespace(
+        add_done_callback=lambda callback: None))
+    command = TrajectoryCommand(
+        workcell_id="w", instance_id="i", command_id="timeout", session_id="s", owner="moveit",
+        positions={"joint1": 0.1}, duration_s=0.5, source_state_sequence=1, calibration_revision="cal",
+    )
+    handle = RosTrajectoryActionHandle(client, command, events.append, defer_owner_event=schedule)
+    handle.mark_timeout()
+    handle.mark_timeout()  # repeated watchdog ticks must not accumulate delivery tasks
+    assert handle.done() and not handle.succeeded()
+    assert events == []
+    assert len(queued) == (0 if scheduler_stopped else 1)
+    if queued:
+        queued.pop()()
+        assert [event.kind for event in events] == ["GOAL_ACCEPTANCE_UNKNOWN"]
+
+
+@pytest.mark.parametrize("mode", ["spin", "spin_once", "future"])
+def test_owner_executor_schedules_callbacks_and_shuts_down(mode, monkeypatch):
+    # The yield lives in a protected Jazzy hook; a release that stops calling it must fail here.
+    hook_calls = []
+    hook = OwnerMultiThreadedExecutor._spin_once_impl
+
+    def counted_hook(self, *args, **kwargs):
+        hook_calls.append(mode)
+        return hook(self, *args, **kwargs)
+
+    monkeypatch.setattr(OwnerMultiThreadedExecutor, "_spin_once_impl", counted_hook)
+    rclpy.init()
+    node = Node("omx_executor_modes")
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+    completed = executor.create_future()
+
+    def tick():
+        if not completed.done():
+            completed.set_result("observed")
+
+    node.create_timer(0.01, tick)
+    spinner = ThreadPoolExecutor(max_workers=1)
+    spinning = None
+    try:
+        deadline = time.monotonic() + 3.0
+        if mode == "spin":
+            spinning = spinner.submit(executor.spin)
+            while not completed.done() and time.monotonic() < deadline:
+                time.sleep(0.01)
+        elif mode == "spin_once":
+            while not completed.done() and time.monotonic() < deadline:
+                executor.spin_once(timeout_sec=0.05)
+        else:
+            executor.spin_until_future_complete(completed, timeout_sec=3.0)
+        assert completed.done() and completed.result() == "observed"
+        assert hook_calls, "OwnerMultiThreadedExecutor._spin_once_impl was never invoked"
+    finally:
+        stopped = executor.shutdown(timeout_sec=2.0)
+        if spinning is not None:
+            spinning.result(timeout=3.0)
+        spinner.shutdown(wait=True)
+        node.destroy_node()
+        rclpy.shutdown()
+    assert stopped
 
 
 def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
@@ -538,6 +627,42 @@ def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
     finally:
         if runtime is not None:
             runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+@pytest.mark.parametrize("action_name", ["relative_arm", "~/private_arm"])
+def test_action_isolation_preserves_owner_namespace_and_remapping(action_name):
+    rclpy.init()
+    node = Node("omx_action_scope", namespace="/test_action_scope", use_global_arguments=False,
+                cli_args=["--ros-args", "-r", "relative_arm:=/test_remapped_arm"])
+    peer = Node("omx_scoped_vendor", use_global_arguments=False)
+    server = ActionServer(peer, FollowJointTrajectory, node.resolve_topic_name(action_name),
+                          execute_callback=lambda _: FollowJointTrajectory.Result())
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="w", instance_id="i", joint_names=("joint1",),
+        position_limits={"joint1": (-1.0, 1.0)}, allowed_owners=("moveit",),
+        calibration_revision="cal",
+    )
+    runtime = None
+    try:
+        runtime = RosArmCommandRuntime(node, config, joint_state_topic="~/joint_states",
+                                       trajectory_action=action_name)
+        client_name, client_namespace = runtime.action_port.client_node_identity
+        assert client_name != node.get_name()
+        assert client_namespace == node.get_namespace()
+        deadline = time.monotonic() + 5.0
+        while not runtime.action_port.server_is_ready() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert runtime.action_port.server_is_ready()
+        runtime.destroy()
+        runtime.destroy()  # repeated cleanup leaves the stopped action executor alone
+        runtime = None
+    finally:
+        if runtime is not None:
+            runtime.destroy()
+        server.destroy()
+        peer.destroy_node()
         node.destroy_node()
         rclpy.shutdown()
 

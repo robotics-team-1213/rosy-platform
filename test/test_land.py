@@ -749,6 +749,100 @@ def test_size_failure_says_how_to_fix_it(repos, monkeypatch, capsys):
     assert "tools/x.py 612 > 600" in err and "never raise a row" in err and f"python {land.SIZE_RANGE} main HEAD" in err
 
 
+# --- land_cache: passed invocations reused across land.py runs ---------------------------------
+
+@pytest.fixture
+def cached(repos, monkeypatch, tmp_path):
+    """run_tests with a known test-environment hash; returns (wt, run(invocations, **args), remote calls)."""
+    main, wt = repos
+    monkeypatch.setattr(land.land_cache, "env_id", lambda wt_, sha: "env1")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
+
+    def run(invocations, **kw):
+        args = land.argparse.Namespace(**{"tests": "auto", "node": False, "no_cache": False, **kw})
+        return land.run_tests(wt, args, invocations, tmp_path / "logs", len(calls) + 1)
+    return wt, run, calls
+
+
+def test_cache_reuses_a_pass_on_the_identical_tree_only(cached, capsys):
+    wt, run, calls = cached
+    assert run([["pkg/test"]]) == ["pytest pkg/test ok (run-1-1.txt)"]
+    tree = git(wt, "rev-parse", "HEAD^{tree}")
+    git(wt, "commit", "-q", "--allow-empty", "-m", "same tree, new commit")  # a retry's re-merge
+    done = run([["pkg/test"]])
+    assert calls == [[["pkg/test"]], []] and done == [f"pytest pkg/test reused: passed on this tree {tree[:10]} (env env1)"]
+    assert "[cache] pytest pkg/test reused" in capsys.readouterr().out
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "changed tree")
+    run([["pkg/test"]])
+    assert calls[-1] == [["pkg/test"]], "another tree reruns (no selector here for a narrow reuse)"
+    assert run([["pkg/test"]], tests="pkg/test") and calls[-1] == []  # explicit --tests reuse too
+
+
+def test_cache_never_keeps_a_failure_or_a_partial_run(cached, monkeypatch):
+    wt, run, calls = cached
+    commit(wt, {"pkg/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red")
+    for _ in range(2):
+        with pytest.raises(land.Stop, match="NEW failure"):
+            run([["pkg/test"]])
+    assert calls.count([["pkg/test"]]) == 2 and land.land_cache.entries(wt) == []  # plus D-790 reruns alone
+    git(wt, "rm", "-q", "pkg/test/test_bad.py")
+    git(wt, "commit", "-q", "-m", "green")
+    real = land.remote_pytest.capture
+    lost = lambda inv, logs, *a, **k: [real([sys.executable, "-m", "pytest", "pkg/test"], logs[0], cwd=wt), 255]
+    monkeypatch.setattr(land.remote_pytest, "run", lost)  # the second invocation's host was lost
+    with pytest.raises(land.Stop, match="exited 255"):
+        run([["pkg/test"], ["pkg/test/test_a.py"]])
+    assert land.land_cache.entries(wt) == [], "the first invocation passed, but the run was partial"
+
+
+def test_cache_ignores_corrupt_lines_and_no_cache_reruns(cached, capsys):
+    wt, run, calls = cached
+    assert land.main(["--no-cache", "--dry-run"]) == 0  # the flag parses (before pytest leaves __pycache__)
+    run([["pkg/test"]])
+    path = land.land_cache.path(wt)
+    good = path.read_text(encoding="utf-8")
+    path.write_text("not json\n{\"tree\": 1}\n[]\n" + good + "{\"truncated", encoding="utf-8")
+    assert len(land.land_cache.entries(wt)) == 1
+    run([["pkg/test"]])
+    assert calls[-1] == []
+    run([["pkg/test"]], no_cache=True)
+    assert calls[-1] == [["pkg/test"]] and "[cache] off (--no-cache)" in capsys.readouterr().out
+
+
+def test_cache_file_is_trimmed_to_its_newest_lines(cached, monkeypatch):
+    wt, run, _ = cached
+    monkeypatch.setattr(land.land_cache, "MAX_LINES", 3)
+    monkeypatch.setattr(land.land_cache, "KEEP", 2)
+    for n in range(4):
+        land.land_cache.record(wt, "a" * 40, "b" * 40, "env1", [f"t{n}"], Path("log"))
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["t2"], ["t3"]]
+
+
+@pytest.mark.parametrize("change, picked, full, reused", [
+    ({"pkg/b.py": "y = 1\n"}, [["other/test"]], False, True),     # the delta selects other tests only
+    ({"pkg/b.py": "y = 1\n"}, [["pkg/test/test_a.py"]], False, False),  # it selects this invocation's tests
+    ({"pkg/b.py": "y = 1\n"}, [["other/test"]], True, False),      # a FULL-class delta
+    ({"test/known_failures.txt": "x\n"}, [["other/test"]], False, False),  # the known-failure list moved
+    (None, [["other/test"]], False, False),                         # the delta deletes a file
+])
+def test_cache_narrow_reuse_across_trees_only_where_the_selector_vouches(cached, change, picked, full, reused):
+    wt, run, calls = cached
+    commit(wt, {"tools/harness/affected_tests.py": "", "pkg/gone.py": ""}, "harness")
+    land.land_cache.record(wt, git(wt, "rev-parse", "HEAD"), git(wt, "rev-parse", "HEAD^{tree}"), "env1",
+                           ["pkg/test"], Path("log"))
+    if change:
+        commit(wt, change, "delta")
+    else:
+        git(wt, "rm", "-q", "pkg/gone.py")
+        git(wt, "commit", "-q", "-m", "delete")
+    select = lambda wt_, base, python, head=None: (picked, "FULL" if full else None)
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    done, todo, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                          select)
+    assert (todo, bool(done)) == (([], True) if reused else ([["pkg/test"]], False))
+    assert all(land.land_cache.NARROW in line for line in done)
+
 def queued(main: Path) -> list[str]:
     return sorted(p.name for p in (main / ".git" / land.land_queue.QUEUE).glob("*"))
 

@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 
 const WEB = new URL("../../../site_ui/console/", import.meta.url);
 const PREFIX = "/console/assets/";
-const FOLDERS = ["shared/", "cell/", "work/", "devices/", "sitemap/", "installation/", "map/", ""];
+const FOLDERS = ["shared/", "cell/", "work/", "devices/", "sitemap/", "installation/", "map/", "assistant/", ""];
 
 function asset(name) {
+  if (name === "assistant.js") return { url: new URL("assistant/panel.js", WEB).href, shortCircuit: true };
   if (!/^[\w.-]+\.(?:js|css)$/.test(name)) return null;
   for (const url of FOLDERS.map((folder) => new URL(`${folder}${name}`, WEB))) {
     if (existsSync(fileURLToPath(url))) return { url: url.href, shortCircuit: true };

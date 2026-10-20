@@ -17,6 +17,7 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, turn_target
 from fleet.server.trip_admission import LOCALIZED
+from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.trip_geometry import arc_newer, bend_fields, junction_fields, next_bend
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
@@ -181,7 +182,7 @@ class TripSteps:
         if (live.view.get("wait") or {}).get("reason") == "link_wait":
             del live.view["wait"]  # a whole step without a link fault: the link_wait ``since`` may start over
         # after the step, so the last place's stop has gone out before "arrived"
-        if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane):
+        if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
             live.view["state"] = "arrived"
             if lane and (live.sent or {}).get("action") == STOP:
                 self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
@@ -352,6 +353,8 @@ class TripSteps:
         else:
             x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment["s_to"]))
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
+            return
+        if not await ready_free_goal(self, live):  # D-772 charge-only native readiness
             return
         if not live.open:
             return

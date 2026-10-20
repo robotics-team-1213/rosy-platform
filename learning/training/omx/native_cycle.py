@@ -58,6 +58,12 @@ def _artifact_files(root):
     return files
 
 
+def policy_revision(artifact_files):
+    """D-793: the stage ledger names a trained model by the hash of its exact file set."""
+    canonical = json.dumps(dict(sorted(artifact_files.items())), separators=(',', ':')).encode()
+    return 'act-' + hashlib.sha256(canonical).hexdigest()[:16]
+
+
 def _invoke(command, output, environment, timeout):
     with output.open('x', encoding='utf-8') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
@@ -149,6 +155,8 @@ def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=
             raise ValueError('split inputs or model bytes changed during training/evaluation')
         result = dict(offline_only=True, source_mode=receipt['source']['source_mode'],
                       split_receipt_sha256=receipt_hash, split_files=receipt['outputs'], artifact_files=before,
+                      policy_revision=policy_revision(before), rig_revision=receipt['source']['rig_revision'],
+                      calibration_revision=receipt['source']['calibration_revision'],
                       evaluation=json.loads((output / 'evaluation.json').read_text()),
                       body_units=receipt['source']['body_units'], gripper_units='normalized_0_100',
                       environment_summary=native.validate_environment(receipt['source']),

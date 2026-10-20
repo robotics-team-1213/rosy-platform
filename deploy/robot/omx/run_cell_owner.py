@@ -2,7 +2,7 @@
 
 One process: the ROS runtime (one ArmCommandOwner), the D-336 UDS socket in a thread and the
 Pilot simulation HTTP app on the main thread, assembled by rosy_agent.omx_cell_owner. It refuses
-to start beside pilot_sim_server or the C3 probe. Simulation only; not a device entrypoint.
+to start beside pilot_sim.server or the C3 probe. Simulation only; not a device entrypoint.
 Wave 1 gaps (see C4b logs): the Pilot HTTP app has no /cell routes yet (G9),
 the Fleet stop chain (G7) still needs live ROS/UDS fault acceptance, while phase
 progression uses the existing locally gated Cell workflow.
@@ -48,12 +48,12 @@ def main() -> None:
 
     import rclpy
     import uvicorn
-    from rclpy.executors import MultiThreadedExecutor
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
 
-    from omx_adapter.pilot_sim_api import create_pilot_sim_app
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.api import create_pilot_sim_app
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
     from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation
 
@@ -90,7 +90,7 @@ def main() -> None:
     )
     holder["owner"] = owner
     workflow_timer = node.create_timer(0.05, owner.advance_pending)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     uds = threading.Thread(target=owner.uds_server.serve_forever, daemon=True)
@@ -104,6 +104,7 @@ def main() -> None:
         owner.uds_server.stop()
         node.destroy_timer(workflow_timer)
         executor.shutdown()
+        owner.runtime.destroy()
         node.destroy_node()
         rclpy.shutdown()
 

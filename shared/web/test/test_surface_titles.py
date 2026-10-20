@@ -2,6 +2,7 @@
 
 - 앱(`surfaces.yaml`에 `app_name`이 있는 행): D-377 — 제목은 표시 이름 `Rosy <Word>`이고,
   한 앱 안의 여러 화면은 `Rosy <Word> — <화면 이름>`이다.
+- 웹 전용 앱: D-806의 `title_prefix`를 쓴다. 런처·패키지 신원을 등록하지 않는다.
 - 그 밖의 표면: D-339 §4 — `Rosy <범위> — <화면 이름>`. 범위는 `surface` 값에서 온다.
 
 등록된 표면의 페이지(HTML 파일 하나, 또는 폴더 안의 `index.html`·`surface.html`)마다
@@ -14,7 +15,11 @@ import surface_registry as registry
 
 SCOPE = {"robot": "로봇", "site": "사이트", "sim": "시뮬", "dev": "개발"}
 LIBRARY = {"web-common"}
-PAGES = ("index.html", "surface.html", "learning.html", "pixels.html", "catalog.html")
+PAGES = (
+    "index.html", "surface.html", "learning.html", "pixels.html", "catalog.html",
+    "camera.html", "accounts.html", "login.html", "profile.html", "install.html",
+    "site-map.html", "cell/cell.html", "work/policy.html",
+)
 TITLE = re.compile(r"<title>(.*?)</title>", re.S | re.I)
 
 
@@ -35,7 +40,7 @@ def test_every_registered_surface_title_names_its_scope():
             checked += 1
             match = TITLE.search(page.read_text(encoding="utf-8"))
             title = match.group(1).strip() if match else None
-            app = row.get("app_name")
+            app = row.get("app_name") or row.get("title_prefix")
             if app:
                 prefix = f"{app} — "
                 ok = title is not None and (title == app or title.startswith(prefix))
@@ -46,3 +51,10 @@ def test_every_registered_surface_title_names_its_scope():
                 wrong.append(f"{page.relative_to(registry.REPO).as_posix()}: {title!r} (want {prefix!r})")
     assert checked, "등록된 표면 페이지가 없다"
     assert wrong == [], wrong
+
+
+def test_web_app_titles_do_not_register_launcher_identities():
+    rows = {row["id"]: row for row in registry.load()}
+    for ident, name in {"pinky-review": "Rosy Learning", "game-board": "Rosy Games"}.items():
+        assert rows[ident].get("title_prefix") == name
+        assert "app_name" not in rows[ident]

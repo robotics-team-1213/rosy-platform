@@ -19,6 +19,9 @@ from fleet._source_layout import console_root
 WEB_ROOT = console_root()
 
 CONSOLE_ASSETS = {
+    "assistant.js": ("assistant/panel.js", "application/javascript"),
+    "assistant-voice.js": ("assistant/assistant-voice.js", "application/javascript"),
+    "assistant.css": ("assistant/panel.css", "text/css"),
     "cell.js": ("cell/cell.js", "application/javascript"),
     "cell-document-editor.js": ("cell/cell-document-editor.js", "application/javascript"),
     "cell.css": ("cell/cell.css", "text/css"),
@@ -105,6 +108,8 @@ CONSOLE_ASSETS = {
     "device-watch.js": ("device-watch.js", "application/javascript"),
     "device-watch.css": ("device-watch.css", "text/css"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
+    "robot-video.js": ("shared/robot-video.js", "application/javascript"),  # D-801
+    "robot-video.css": ("shared/robot-video.css", "text/css"),
     "power-action.js": ("shared/power-action.js", "application/javascript"),
     "area-nav.js": ("shared/area-nav.js", "application/javascript"),
 }

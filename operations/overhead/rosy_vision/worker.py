@@ -27,14 +27,14 @@ logger = logging.getLogger("rosy_vision")
 
 
 class VisionWorker:
-    def __init__(self, *, source_id: str, ingest, camera: CameraMap, publisher,
+    def __init__(self, *, source_id: str, ingest, camera: CameraMap | None, publisher,
                  detector: Callable = detect_markers, clock: Callable[[], float] = time.time,
                  max_age_s: float = 0.75, tracker=None,
                  calibrator: FieldCalibrator | None = None,
                  field_detector: Callable = detect_field_jpeg,
                  field_interval_s: float = FIELD_INTERVAL_S,
                  paint_registrar=None,
-                 paint_retry_s: float = PAINT_RETRY_S) -> None:
+                 paint_retry_s: float = PAINT_RETRY_S, station=None) -> None:
         if not math.isfinite(max_age_s) or max_age_s <= 0:
             raise ValueError("vision max age must be positive and finite")
         if not math.isfinite(field_interval_s) or field_interval_s <= 0:
@@ -62,9 +62,14 @@ class VisionWorker:
         self._paint_task: asyncio.Task | None = None
         self._last_place_at = -math.inf
         self._place_task: asyncio.Task | None = None
+        self.station = station
+        if camera is None and station is None:
+            raise ValueError('VISION_MEASUREMENT_PROFILE_REQUIRED')
+        if station is not None and station.source_id != source_id:
+            raise ValueError('STATION_FRAME_SOURCE_MISMATCH')
 
     async def process_latest(self) -> tuple:
-        if self.source_id != self.camera.source_id:
+        if self.camera is not None and self.source_id != self.camera.source_id:
             return ()
         frame = self.ingest.latest_frame(self.source_id)
         if frame is None:
@@ -76,6 +81,15 @@ class VisionWorker:
 
         age_s = self.clock() - frame.captured_at
         if age_s < -MAX_FUTURE_S or age_s > self.max_age_s:
+            return ()
+
+        if self.station is not None:
+            try:
+                await self.station.process(frame, source_id=self.source_id)
+            except Exception as exc:
+                logger.error('station image step failed source=%s error_type=%s', self.source_id, type(exc).__name__)
+
+        if self.camera is None:
             return ()
 
         markers = self.detector(frame.jpeg)

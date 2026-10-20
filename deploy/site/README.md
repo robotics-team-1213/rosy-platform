@@ -84,6 +84,52 @@ The [Account protocol](../../docs/reference/rosy-account-protocol.md) defines th
 JSON and migration checks. Use the signed candidate deployment path, then read
 back accounts, grants and session revocation. Source tests do not activate SSO.
 
+#### Account rollout and acceptance (D-807)
+
+Use the [rollout plan](../../docs/plans/2026-10-19-account-service-rollout.md)
+and record each app's SOURCE, REMOTE TEST, CI, INSTALLED, RUNTIME and USER
+ACCEPTANCE separately. Prepare these inputs before a maintenance transition:
+
+| Consumer | Existing installation input |
+|---|---|
+| Fleet / Account | protected authority JSON, persistent tasks DB, existing bootstrap login, issuer TLS and signing key |
+| CORE / Robot / Pilot web | `auth.account_client_file`, registered robot resource/callback, trusted public keys, persistent session DB and its encryption key |
+| Review / Learning | collaboration `account_client_file` and explicit `account_subjects` mapping to existing owners |
+| Games board | `--preview-account-config`, registered site resource/callback and its own receiver DB/key |
+| Pilot Android / Cam | `-Prosy.accountConfig=<protected-public-config>`, exact callback, trusted keys, installed APK signer and verified app links |
+
+1. Inventory the current account identities, effective passwords/profiles,
+   machine credentials and config revisions without printing secrets. Preserve
+   a consistent DB/config backup using the existing maintenance procedure.
+   Do not select a new bootstrap administrator implicitly.
+2. Run the existing site TLS preflight, for example
+   `python3 deploy/site/site_preflight.py --site-cert <protected-cert> --json`.
+   This command checks site TLS/TXT/pairing/Caddy; it does **not** validate
+   Account client registrations or prove that the issuer callback works.
+   Reuse the existing authority/receiver startup validators for their protected
+   settings. A valid site certificate alone does not establish Android trust.
+3. Prepare receiver-compatible releases first, then activate the authority,
+   connect each registered receiver, and retire migrated human legacy access.
+   Apply changes through the existing signed candidate/native deployment paths.
+   Keep machine/pairing credentials separate. Do not regenerate keys on restart.
+4. Read the administrator-only `/api/fleet/auth/setup` from the authenticated
+   Console origin and confirm the registered issuer/clients. `configured=true`
+   only describes this process's configuration; test actual login and callback
+   separately for every app and real Android device.
+5. Confirm login, app return, an allowed operation, denied cross-resource access,
+   persisted result readback and logout/revocation of existing sessions. On
+   authority failure, distinguish local logout from pending central revocation.
+   Media follows D-789's stricter online checks and actual connection teardown;
+   the general five-minute Account limit is not a media grace period.
+6. Exercise restart, key rotation and recovery on an isolated copy before
+   production recovery. Never restore a stale ledger that reactivates old
+   passwords, revoked families or consumed refresh tokens. Retain the existing
+   explicit device recovery path; do not make it an automatic auth fallback.
+
+Do not mark a deployment complete while an app's installation/runtime/user
+acceptance remains unverified. Use synthetic/no-motion operations for automated
+checks; physical operation and user consent follow their existing owner gates.
+
 Android callbacks require an approved HTTPS domain with a browser/Android-trusted
 certificate on port443. Existing `.local` site certificates do not prove this.
 For an existing tailnet, read the site machine's MagicDNS name and HTTPS state;
@@ -1876,6 +1922,9 @@ docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-m
   로봇에 `/etc/rosy/media/rosy-media.json`(`deploy/robot/pinky_pro/native/rosy-media.example.json`)이 있으면
   `rosy-media.service`가 발행한다. 둘 다 없으면 기존 JPEG다.
 - 장치·6대 현장 측정은 2026-10-18 사용자 결정으로 생략했다. 이 설치는 DEVICE/FIELD 수용이 아니다.
+- 관제 콘솔 로봇 영상(D-801): `/etc/rosy/fleet-media/`에 사이트 전용 Ed25519 키와 `fleet-media.json`
+  (`fleet-media.example.json` 형식)을 두고 `ROSY_FLEET_MEDIA_CONFIG=/run/rosy-fleet-media/fleet-media.json`을 준다.
+  미디어 권한 서비스 설정에 같은 키의 공개키를 `site_issuer`로 넣는다. 로봇은 CORE `vision.media.enabled: false`로 거부할 수 있다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 

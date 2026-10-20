@@ -1,0 +1,23 @@
+# Robot-internal readback only (D-783). No requested map or command authority.
+uint8[16] challenge
+---
+uint16 CONTRACT_VERSION=1
+uint16 contract_version
+uint8[16] challenge
+uint8[16] instance_id
+uint64 generation
+bool active
+bool adopted
+string<=64 reason
+string<=32 role
+string<=256 node_fqn
+string<=64 build_id
+string<=64 config_digest
+string<=64 grid_digest
+string<=128 frame_id
+uint32 width
+uint32 height
+float64 resolution
+float64[7] origin
+uint64 source_stamp_ns
+uint64 map_load_time_ns

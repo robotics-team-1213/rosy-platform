@@ -42,12 +42,14 @@ class MapPoseService:
                  gather_rest: Optional[Callable[[str], Awaitable[Optional[Mapping]]]] = None,
                  map_id: Optional[Callable[[], Optional[str]]] = None,
                  source_map_ids: Iterable[str] = (),
+                 client_identity=None,
                  wall: Callable[[], float] = time.time,
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.config = config
         self._robot_ids = robot_ids
         self._gather = gather              # hub snapshot when fresh, else REST
         self._gather_rest = gather_rest    # always the robot's REST state (trip loop)
+        self._client_identity = client_identity
         #: The active site map frame id; None (or no provider) accepts any sighting map id.
         self._map_id = map_id
         self._bad_snapshot: set[str] = set()
@@ -59,8 +61,23 @@ class MapPoseService:
         #: (robot_id, force_rest) -> the read in flight (task, number), the last read (start, number, state)
         #: and the number of reads started; hub and REST reads never share.
         self._refreshing: dict[tuple[str, bool], tuple[asyncio.Future, int]] = {}
-        self._kept: dict[tuple[str, bool], tuple[float, int, Mapping]] = {}
+        self._kept: dict[tuple[str, bool], tuple[float, int, tuple]] = {}
         self._numbers: dict[tuple[str, bool], int] = {}
+        from fleet.server.map_pose_scope import MapPoseScopes
+        self._source_scopes = MapPoseScopes(self)
+
+    def begin_source_scope(self, robot_id, *, boot_id, odom_epoch, client):
+        """Trusted, opt-in source declaration after native identity verification; no network API."""
+        return self._source_scopes.begin(robot_id, boot_id=boot_id, odom_epoch=odom_epoch, client=client)
+
+    def observe_qualified_state(self, scope, state):
+        return self._source_scopes.observe(scope, state)
+
+    def qualified_pose(self, scope):
+        return self._source_scopes.pose(scope)
+
+    def retire_source_scope(self, scope):
+        self._source_scopes.retire(scope)
 
     def active_map_id(self) -> Optional[str]:
         """The active site map frame id; warns once per id that no sighting source reports."""
@@ -78,6 +95,7 @@ class MapPoseService:
 
     def _tracker(self, robot_id: str) -> Optional[MapPoseTracker]:
         roster = set(self._robot_ids())
+        self._source_scopes.prune(roster)
         for gone in set(self._trackers) - roster:     # a robot that left starts over if it returns
             del self._trackers[gone]
         for key in [key for key in self._kept if key[0] not in roster]:   # and its kept reads
@@ -93,6 +111,8 @@ class MapPoseService:
         sighting = sighting_from_row(row)
         if sighting is None:
             return
+        if not self._source_scopes.sighting(sighting):
+            return
         tracker = self._tracker(sighting.robot_id)
         if tracker is not None:
             tracker.add_sighting(sighting, self._wall(), self.active_map_id())
@@ -106,6 +126,8 @@ class MapPoseService:
                 logger.exception("map pose: snapshot of %s not usable", robot_id)
 
     def _observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
+        if not self._source_scopes.unqualified(robot_id):
+            return
         if not isinstance(state, Mapping) or state.get("odom_pose") is None:
             return                  # a robot before D-494 2: nothing to count
         tracker = self._tracker(robot_id)
@@ -126,6 +148,11 @@ class MapPoseService:
         A failed read keeps nothing and raises its own exception to every waiter."""
         return await self._read((robot_id, True), self._gather_rest, max_age_s, after)
 
+    async def state_with_source(self, robot_id, max_age_s=TRIP_READ_AGE_S, after=0):
+        if self._client_identity is None:
+            raise ValueError('MAP_STATE_TRANSPORT_IDENTITY_REQUIRED')
+        return await self._read((robot_id, True), self._gather_rest, max_age_s, after, with_source=True)
+
     def read_number(self, robot_id: str) -> int:
         """The number of the robot's newest REST read started so far (0: none)."""
         return self._numbers.get((robot_id, True), 0)
@@ -139,11 +166,23 @@ class MapPoseService:
             await self._read((robot_id, force_rest), gather, max_age_s if force_rest else REFRESH_FRESH_S,
                              after if force_rest else 0)
 
-    async def _read(self, key: tuple[str, bool], gather, max_age_s: float, after: int) -> Mapping:
+    def _read_result(self, key, pair, with_source):
+        state, receipt = pair
+        if receipt is not None and (receipt.client is not self._client_identity(key[0])
+                or receipt.generation != self._source_scopes.generation(key[0])):
+            raise ValueError('MAP_STATE_SOURCE_CHANGED')
+        if with_source and receipt is None:
+            raise ValueError('MAP_STATE_TRANSPORT_IDENTITY_REQUIRED')
+        return receipt if with_source else state
+
+    async def _read(self, key: tuple[str, bool], gather, max_age_s: float, after: int, with_source=False):
         while True:
             kept = self._kept.get(key)
-            if kept is not None and kept[1] > after and self._clock() - kept[0] <= max_age_s:
-                return kept[2]
+            if kept is not None and kept[1] > after and 0 <= self._clock() - kept[0] <= max_age_s:
+                try:
+                    return self._read_result(key, kept[2], with_source)
+                except ValueError:
+                    self._kept.pop(key, None)
             running = self._refreshing.get(key)
             if running is not None and running[1] <= after:
                 await asyncio.wait([running[0]])     # its outcome is its own waiters'; then a new read
@@ -153,13 +192,26 @@ class MapPoseService:
                 task = asyncio.ensure_future(self._fetch(key, gather, self._clock(), number))
                 running = self._refreshing[key] = (task, number)
                 task.add_done_callback(lambda done: self._refresh_done(key, done))
-            return await asyncio.shield(running[0])
+            return self._read_result(key, await asyncio.shield(running[0]), with_source)
 
-    async def _fetch(self, key: tuple[str, bool], gather, started: float, number: int) -> Mapping:
-        state = await gather(key[0])
-        self.observe_state(key[0], state)    # once per read: odom_stamp stays the snapshot's own
-        self._kept[key] = (started, number, state)
-        return state
+    async def _fetch(self, key: tuple[str, bool], gather, started: float, number: int) -> tuple:
+        generation = self._source_scopes.generation(key[0])
+        receipt = None
+        if key[1] and self._client_identity is not None:
+            from fleet.server.map_state_read import StateSourceRead
+            state, receipt = await StateSourceRead.capture(self._client_identity(key[0]),
+                generation=generation, number=number, started_mono=started)
+        else:
+            state = await gather(key[0])
+        pair = (state, receipt)
+        if self._source_scopes.unqualified(key[0], generation):
+            self.observe_state(key[0], state)    # once per read: odom_stamp stays the snapshot's own
+        # Sharing a REST receipt is separate from admitting it to the World tracker.
+        if (generation == self._source_scopes.generation(key[0])
+                and (self._source_scopes.unqualified(key[0]) or receipt is not None)):
+            self._read_result(key, pair, False)
+            self._kept[key] = (started, number, pair)
+        return pair
 
     def _refresh_done(self, key: tuple, done: asyncio.Future) -> None:
         if self._refreshing.get(key, (None,))[0] is done:

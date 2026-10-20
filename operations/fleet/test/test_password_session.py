@@ -505,15 +505,20 @@ CHANGE = "/api/fleet/auth/change-password"
 BOOTSTRAP_PASSWORD_HASH = hash_password("alice")
 
 
-def _bootstrap(tmp_path):
-    app, _ = _app(tmp_path, logins=_accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH))
+def _bootstrap(tmp_path, password="alice"):
+    source = _accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH)
+    if password != "alice":
+        source["alice"]["password_scrypt"] = hash_password(password)
+    app, _ = _app(tmp_path, logins=source)
     client = _client(app)
-    assert _login(client, password="alice").status_code == 204
+    response = _login(client, password=password)
+    assert response.status_code == 204
     return app, client
 
 
-def test_initial_cookie_is_restricted_before_any_fleet_read_or_command(tmp_path):
-    _, client = _bootstrap(tmp_path)
+@pytest.mark.parametrize("password", ["alice", "alice!"])
+def test_initial_cookie_is_restricted_before_any_fleet_read_or_command(tmp_path, password):
+    _, client = _bootstrap(tmp_path, password)
     assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
     for method, path in (("get", "/api/fleet/state"), ("post", "/api/fleet/estop")):
         response = getattr(client, method)(path, headers=ORIGIN)

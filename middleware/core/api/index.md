@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · bfe4e1f601 · docs(api): stuck evidence 문서 버전 pin 정렬
-- 2026-10-18 · abca483966 · OMX 배포 준비 점검 연결
-- 2026-10-18 · 5e3af70e6d · CORE–LeRobot 최종 연동 검증
-- 2026-10-18 · uncommitted · CORE-mediated OMX LeRobot policy I/O
-- 2026-10-17 · uncommitted · D-789 WebRTC 전환의 첫 구현과 원격 검증
+- 2026-10-19 · 560a2ff27 · (origin #92 2026-10-16) v1.255 정확한 항법 인계와 경합 회귀 검증
+- 2026-10-19 · uncommitted · (origin #92 2026-10-16) 정확한 완료 항법의 수동적 IDLE 인계
+- 2026-10-19 · 1216b3f7b · (origin #92 2026-10-16) 이안 계약과 실제 native API 최종 회귀
+- 2026-10-19 · 8674f07fd · (origin #92 2026-10-16) D-772 scoped 이안 API 연결
+- 2026-10-19 · 741c9b95f · (origin #92 2026-10-16) D-772 원래 위치 수명을 넘기는 충전 세션

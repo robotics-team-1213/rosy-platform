@@ -190,6 +190,32 @@ import json  # noqa: E402
 import run_hardware_owner  # noqa: E402
 
 
+@pytest.mark.parametrize('blocked', ['owner', 'action', None])
+def test_cleanup_retains_context_and_lock_until_both_executors_stop(blocked):
+    events = []
+    def destroy_action():
+        events.append('action')
+        if blocked == 'action':
+            raise RuntimeError('action event executor did not stop')
+    def shutdown_owner(**kwargs):
+        assert kwargs == dict(timeout_sec=5, wait_for_threads=False)
+        events.append('owner')
+        return blocked != 'owner'
+    owner = SimpleNamespace(uds_server=SimpleNamespace(stop=lambda: events.append('uds')),
+                            runtime=SimpleNamespace(destroy=destroy_action))
+    executor = SimpleNamespace(shutdown=shutdown_owner)
+    node = SimpleNamespace(destroy_node=lambda: events.append('node'))
+    context = SimpleNamespace(shutdown=lambda: events.append('context'))
+    lock = SimpleNamespace(close=lambda: events.append('lock'))
+    if blocked:
+        with pytest.raises(RuntimeError):
+            run_hardware_owner.close_runtime(owner, executor, node, context, lock)
+        assert not {'node', 'context', 'lock'} & set(events)
+    else:
+        run_hardware_owner.close_runtime(owner, executor, node, context, lock)
+        assert events == ['uds', 'owner', 'action', 'node', 'context', 'lock']
+
+
 def _document(**overrides):
     value = {
         "schema": "rosy.omx-hardware-owner.v1", "workcell_id": "omx_cell_a", "instance_id": "omx_cell_a_01",

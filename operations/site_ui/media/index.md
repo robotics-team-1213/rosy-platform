@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
+| D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
 
 ## 계획·결과 문서
 
@@ -25,5 +26,6 @@
 
 ## 최근 기록
 
+- 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
 - 2026-10-18 · 2190ba6889 · D-789 production kick binding and default-on deployment
 - 2026-10-17 · 683d93218b · D-789 media authority source slice

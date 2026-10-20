@@ -13,11 +13,17 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
-from native_environment import _events, seal_environment
+from native_environment import ROLES, _events, _roles, seal_environment
 from native_review import JOINTS, dataset_files, inspect_dataset, write_json
 
 SCHEMA = 'rosy.omx-collection-session.v1'
 MAX_TIME_NS = 2**63-1
+
+
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def _require(value, message):
@@ -197,7 +203,8 @@ def validate_session(root, *, completed_only=False, require_complete=True):
              and manifest.get('gripper_units') == 'normalized_0_100', 'normalized units required')
     _require(type(manifest.get('fps')) is int and 0 < manifest['fps'], 'positive integer fps required')
     shapes = manifest.get('camera_shapes')
-    _require(isinstance(shapes, dict) and set(shapes) == {'top', 'front'}, 'both camera shapes required')
+    _require(isinstance(shapes, dict) and len(shapes) == 2 and _roles(shapes) == set(ROLES),
+             'both camera shapes required')
     for shape in shapes.values():
         _require(isinstance(shape, list) and len(shape) == 3 and shape[2] == 3
                  and all(type(n) is int and n > 0 for n in shape), 'positive HWC RGB shape required')
@@ -277,12 +284,14 @@ def validate_session(root, *, completed_only=False, require_complete=True):
                 manifest_sha256=hashlib.sha256(blobs['manifest.json']).hexdigest())
 
 
-def prepare(sessions, output, repo_id, *, completed_only=False):
-    """Produce a new, locally read-back dataset; leave all decisions unknown/exclude."""
+def prepare(sessions, output, repo_id, *, completed_only=False, camera_references=None):
+    """Produce a new, locally read-back dataset; leave all decisions unknown/exclude.
+
+    ``camera_references`` (role -> reference JSON path) adds D-792 shadow checks as camera-setup.json."""
     records = [validate_session(path, completed_only=completed_only) for path in sessions]
     _require(bool(records), 'at least one session required')
     output = Path(output).absolute()
-    _require(not output.exists() and output.drive.upper() != 'F:', 'new output outside source drive required')
+    _require(not output.exists() and not _in_checkout(output), 'new output outside the source checkout required')
     for record in records:
         source = record['root']
         _require(not output.resolve().is_relative_to(source) and not source.is_relative_to(output.resolve()),
@@ -319,7 +328,7 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
     features = {key: dict(dtype='float32', shape=(6,), names=JOINTS[:])
                 for key in ('observation.state', 'action')}
     features['source.capture_time_ns'] = dict(dtype='int64', shape=(1,), names=['fleet_host_unix_ns'])
-    for source in ('joint', 'reference', 'top', 'front'):
+    for source in ('joint', 'reference', *baseline['camera_shapes']):
         features[f'source.{source}_time_ns'] = dict(dtype='int64', shape=(1,), names=[source+'_source_unix_ns'])
     features.update({f'observation.images.{role}': dict(dtype='video', shape=tuple(shape),
                      names=['height', 'width', 'channels']) for role, shape in baseline['camera_shapes'].items()})
@@ -376,11 +385,25 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
                    episodes=[dict(episode_index=i, session_id=r['manifest']['session_id'],
                                   attempt_index=e['episode_index'], cycle_id=e['cycle_id'])
                              for i, (r, e) in enumerate(episodes)])
-    for name, document in (('capture.json', capture), ('environment.json', environment),
-                           ('inspection.json', report), ('decisions.json', report['episodes']),
-                           ('intake-receipt.json', receipt)):
+    documents = [('capture.json', capture), ('environment.json', environment),
+                 ('inspection.json', report), ('decisions.json', report['episodes'])]
+    if camera_references:
+        import camera_setup_intake
+        references = {role: camera_setup_intake.load_reference(path) for role, path in camera_references.items()}
+        documents.append(('camera-setup.json', camera_setup_intake.report(records, episodes, references)))
+    for name, document in (*documents, ('intake-receipt.json', receipt)):
         write_json(output / name, document)
     return receipt
+
+
+def camera_references(pairs):
+    """``ROLE=PATH`` options as a role -> path map; one reference per role."""
+    result = {}
+    for pair in pairs:
+        role, sep, path = pair.partition('=')
+        _require(sep and role and path and role not in result, 'camera reference must be ROLE=PATH once per role')
+        result[role] = Path(path)
+    return result
 
 
 def main():
@@ -391,9 +414,12 @@ def main():
     command.add_argument('--out', type=Path, required=True)
     command.add_argument('--repo-id', required=True)
     command.add_argument('--completed-only', action='store_true')
+    command.add_argument('--camera-reference', action='append', default=[], metavar='ROLE=PATH',
+                         help='D-792 camera setup reference JSON per camera role; adds shadow checks')
     args = parser.parse_args()
     try:
-        prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only)
+        prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
+                camera_references=camera_references(args.camera_reference))
     except (ValueError, OSError, ImportError) as exc:
         parser.exit(2, f'refused: {exc}\n')
     print(f'Written: {args.out}; review required, no upload or device action performed.')

@@ -41,10 +41,24 @@ def test_preparation_keeps_official_config_without_connecting(module, config):
     assert config == original
 
 
+@pytest.mark.parametrize("linked", [False, True])
+def test_recording_root_refuses_any_source_checkout(module, config, tmp_path, linked):
+    checkout = tmp_path / "source"
+    checkout.mkdir()
+    if linked:
+        (checkout / ".git").write_text("gitdir: elsewhere\n")
+    else:
+        (checkout / ".git").mkdir()
+    config['dataset']['root'] = str(checkout / "new-recording")
+    with pytest.raises(ValueError, match='outside the source checkout'):
+        module.validate_config(config)
+    assert not Path(config['dataset']['root']).exists()
+
+
 @pytest.mark.parametrize('section,key,value', [
     ('dataset', 'push_to_hub', True), ('dataset', 'private', False),
     ('dataset', 'fps', 0), ('dataset', 'fps', True),
-    ('dataset', 'root', 'F:/recording'), ('dataset', 'root', '../recording'),
+    ('dataset', 'root', str(Path(__file__).resolve().parents[1] / 'recording')), ('dataset', 'root', '../recording'),
     ('dataset', 'repo_id', '<org>/recording'), ('dataset', 'single_task', ''),
     ('robot', 'port', '/dev/ttyACM0'), ('robot', 'id', ''),
     ('robot', 'max_relative_target', None), ('robot', 'max_relative_target', float('nan')),

@@ -25,7 +25,7 @@ from control_msgs.action import FollowJointTrajectory  # noqa: E402
 from controller_manager_msgs.srv import ListControllers  # noqa: E402
 from rclpy.action import ActionServer, CancelResponse  # noqa: E402
 from rclpy.callback_groups import ReentrantCallbackGroup  # noqa: E402
-from rclpy.executors import MultiThreadedExecutor  # noqa: E402
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
 
@@ -96,6 +96,7 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
         message = JointState()
         message.name = ["joint1"]
         message.position = [0.0]
+        message.header.stamp = ros_node.get_clock().now().to_msg()
         state_publisher.publish(message)
 
     if not vendor_sim:
@@ -147,7 +148,7 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
     controllers_client = (ros_node.create_client(
         ListControllers, "/controller_manager/list_controllers",
     ) if vendor_sim else None)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(ros_node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)

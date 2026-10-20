@@ -38,7 +38,7 @@ python tools/worktrees.py status                              # every worktree w
 - One landable concern and one module family per branch. Over ~15 changed files, or `land.py --dry-run` says FULL
   (30-90 min per round): split first. Land FULL-trigger (`tools/harness/**`, `contracts/foundation/**`) and `shared/web`
   parts on their own branch first; land the split of a D-766 unit at >=95% of its limit before adding to it.
-- `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `$ROSY_SCRATCH` (unset: the system temp directory; lab PCs set `ROSY_SCRATCH=X:\DevTemp`).
+- `.worktrees/` is gitignored; do not create worktrees elsewhere. Scratch files go to `$ROSY_SCRATCH` (unset: the system temp directory).
 - Check `ListAgents` (when available) for peers and what they own.
 - Background executors: commit after every step, and the dispatcher runs a commit monitor
   — 40 minutes without a new commit on the branch is a warning to check on the executor.
@@ -65,8 +65,8 @@ Run the relevant suites in your worktree, then compare against the list of failu
 already exist on main:
 
 ```bash
-python -m pytest <paths> -q -rfE -p no:cacheprovider > $ROSY_SCRATCH/<name>/run.txt
-python test/known_failures.py $ROSY_SCRATCH/<name>/run.txt     # exit 1 = a NEW failure
+python -m pytest <paths> -q -rfE -p no:cacheprovider > "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/run.txt"
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/run.txt"     # exit 1 = a NEW failure
 ```
 
 A `NEW` line is yours until proven otherwise (check it on a clean `main` worktree). If

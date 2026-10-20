@@ -28,8 +28,8 @@ for extra in ("middleware/devices/omx/adapter", "contracts/foundation"):
 uvicorn = pytest.importorskip("uvicorn")
 
 from omx_adapter.command_owner import ArmCommandConfig, CommandDecision, JointStateSnapshot  # noqa: E402
-from omx_adapter.pilot_sim_api import create_pilot_sim_app  # noqa: E402
-from omx_adapter.pilot_sim_runtime import (PilotSimRuntime, sim_admission_limits,  # noqa: E402
+from omx_adapter.pilot_sim.api import create_pilot_sim_app  # noqa: E402
+from omx_adapter.pilot_sim.runtime import (PilotSimRuntime, sim_admission_limits,  # noqa: E402
                                            urdf_position_limits, urdf_velocity_limits)
 from omx_adapter.pose_plan import CellPlanningProfile  # noqa: E402
 from omx_adapter.ros_goal_contract import RosGoalEvent  # noqa: E402

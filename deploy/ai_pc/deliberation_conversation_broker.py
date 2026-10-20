@@ -68,8 +68,15 @@ def main():
         signal.setitimer(signal.ITIMER_REAL, 30)
         raw = sys.stdin.buffer.read(65537)
         if len(raw) > 65536:raise ValueError('CONVERSATION_INPUT_LIMIT')
-        cfg, profile = configuration()
-        print(canonical(asyncio.run(dispatch(json.loads(raw), cfg, profile))), flush=True)
+        value = json.loads(raw)
+        if type(value) is dict and value.get('schema') == 'rosy.operator-request/1':
+            from . import operator_broker
+            cfg, profile = operator_broker.configuration()
+            result = asyncio.run(operator_broker.dispatch(value, cfg, profile))
+        else:
+            cfg, profile = configuration()
+            result = asyncio.run(dispatch(value, cfg, profile))
+        print(canonical(result), flush=True)
         return 0
     except Exception:
         print('{"state":"HOLD","reason":"CONVERSATION_BROKER_NOT_ADMITTED_OR_RESULT_UNKNOWN"}', flush=True)

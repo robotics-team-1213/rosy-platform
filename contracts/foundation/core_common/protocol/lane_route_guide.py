@@ -18,7 +18,15 @@ class AuthorityRouteGuide(BaseModel):
     off_route_m: float = Field(ge=0, allow_inf_nan=False)
     #: D-769 rev 2: the same offset signed, + left of the route centre line in the travel direction (optional)
     off_route_left_m: float | None = Field(default=None, ge=-2, le=2, allow_inf_nan=False)
-    max_age_s: float = Field(gt=0, le=1, allow_inf_nan=False)
+    #: D-573 rev 8: the nearest map wall face beside the lane ahead, across the lane from the robot
+    #: (+ left; left > 0 > right); None = no map wall there (optional)
+    wall_left_m: float | None = Field(default=None, gt=0, le=2, allow_inf_nan=False)
+    wall_right_m: float | None = Field(default=None, ge=-2, lt=0, allow_inf_nan=False)
+    #: how far along the lane from the robot those walls run; CORE clips the look only that far
+    wall_ahead_m: float | None = Field(default=None, gt=0, le=2, allow_inf_nan=False)
+    #: Fleet sends 1 s; up to 3 s for a simulator at ~0.3 real time (D-769 rev 3), where 1 s of wall time
+    #: aged every prior out between authorities (v2 lap r37-r41).
+    max_age_s: float = Field(gt=0, le=3, allow_inf_nan=False)
 
 
 class SelectedRoutePrior(BaseModel):
@@ -36,12 +44,15 @@ class SelectedRoutePrior(BaseModel):
     s_m: float = Field(ge=0, allow_inf_nan=False)
     off_route_m: float = Field(ge=0, allow_inf_nan=False)
     off_route_left_m: float | None = Field(default=None, ge=-2, le=2, allow_inf_nan=False)
+    wall_left_m: float | None = Field(default=None, gt=0, le=2, allow_inf_nan=False)
+    wall_right_m: float | None = Field(default=None, ge=-2, lt=0, allow_inf_nan=False)
+    wall_ahead_m: float | None = Field(default=None, gt=0, le=2, allow_inf_nan=False)
     pivot_ok: Literal[False] = False
 
     @model_validator(mode="after")
     def bounded_lifetime(self):
-        if not self.source_stamp_s < self.valid_until_s <= self.source_stamp_s + 1.0:
-            raise ValueError("route prior needs a source-based lifetime of at most one second")
+        if not self.source_stamp_s < self.valid_until_s <= self.source_stamp_s + 3.0:
+            raise ValueError("route prior needs a source-based lifetime of at most three seconds")
         return self
 
 

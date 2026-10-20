@@ -699,7 +699,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
 
 
-@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels', '/learning/camera'])
+@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels', '/learning/camera', '/learning/omx'])
 @pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
 def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
     page, _, _ = browser_workspace
@@ -707,14 +707,14 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     topbar = page.locator('ui-topbar').bounding_box()
     assert topbar['height'] <= height * 0.2, (route, topbar, height)
-    # D-741: the app bar is one row (app, theme); the heading and the five screens (D-792 camera) left it.
+    # D-741: the app bar is one row (app, theme); the heading and the six screens (D-792 camera, imitation) left it.
     assert page.locator('ui-topbar h1, ui-topbar nav').count() == 0
     brand = page.locator('ui-topbar ui-brand').bounding_box()
     theme = page.locator('ui-topbar .theme-label select').bounding_box()
     assert brand['x'] + brand['width'] <= theme['x'], (route, brand, theme)
     rail = page.locator('.ui-rail').bounding_box()
     assert rail['y'] == topbar['y'] + topbar['height'], (route, rail, topbar)
-    assert page.locator('.workspace-tabs a').count() == 5
+    assert page.locator('.workspace-tabs a').count() == 6
     assert page.locator('.workspace-tabs a[aria-current="page"]').count() == 1
     for link in page.locator('.workspace-tabs a').all():
         bounds = link.bounding_box()

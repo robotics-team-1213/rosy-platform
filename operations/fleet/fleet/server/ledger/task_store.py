@@ -16,6 +16,7 @@ from fleet.server.dispatch_admission import release as release_dispatch_claims
 from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 from fleet.server.task_payloads import safe_json as _safe_json
+from fleet.server.task_schema import TaskSchemaMigrations
 
 _TASK_TRANSITIONS = {
     "REQUESTED": {"QUEUED", "ACCEPTED", "FAILED", "UNKNOWN", "HOLD"},
@@ -45,7 +46,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
-class FleetTaskStore:
+class FleetTaskStore(TaskSchemaMigrations):
     """Current task projection plus a transactional, append-only status journal."""
 
     def __init__(self, path: Path | str) -> None:
@@ -389,7 +390,9 @@ class FleetTaskStore:
             )
             if release_pre_dispatch:
                 from fleet.server.cell_job_store import hold_for_site_stop  # Cell Jobs keep claims (D-403)
+                from fleet.server.charge_store import retain_charge_claims_for_stop
                 hold_for_site_stop(connection, now=now, hold_reason=None if advance_authority_epoch else "site_stop")
+                retain_charge_claims_for_stop(connection)
                 rows = connection.execute(
                     """SELECT owner_kind, owner_id FROM fleet_action_claims
                        WHERE phase='CLAIMED'"""
@@ -940,68 +943,6 @@ class FleetTaskStore:
                                      reason)
             connection.commit()
         return task_ids
-
-    @staticmethod
-    def _migrate_dispatch_claims(connection: sqlite3.Connection) -> None:
-        connection.execute("BEGIN IMMEDIATE")
-        connection.execute(
-            """INSERT OR IGNORE INTO fleet_action_claims
-               (resource_key, resource_kind, resource_id, owner_kind, owner_id,
-                generation, phase, lease_until, created_at)
-               SELECT 'robot:' || r.robot_id, 'robot', r.robot_id, 'task', r.task_id,
-                      COALESCE(t.dispatch_generation, 0),
-                      CASE WHEN t.status='UNKNOWN' THEN 'UNKNOWN'
-                           WHEN t.dispatch_phase='DISPATCHING' THEN 'DISPATCHING'
-                           ELSE 'CLAIMED' END,
-                      CASE WHEN t.dispatch_phase='READY' THEN t.lease_until ELSE NULL END,
-                      r.reserved_at
-               FROM fleet_robot_reservations r
-               LEFT JOIN fleet_tasks t ON t.task_id=r.task_id"""
-        )
-        connection.commit()
-
-    @staticmethod
-    def _migrate_task_columns(connection: sqlite3.Connection) -> None:
-        columns = {row[1] for row in connection.execute("PRAGMA table_info(fleet_tasks)")}
-        additions = {
-            "priority_class": "INTEGER NOT NULL DEFAULT 0",
-            "queued_at": "TEXT",
-            "expires_at": "TEXT",
-            "lease_owner": "TEXT",
-            "lease_until": "TEXT",
-            "dispatch_generation": "INTEGER NOT NULL DEFAULT 0",
-            "dispatch_phase": "TEXT NOT NULL DEFAULT 'READY'",
-            "attempt_id": "TEXT",
-            "attempt_seq": "INTEGER NOT NULL DEFAULT 0",
-            "blocked_by": "TEXT",
-            "waiting_on_json": "TEXT NOT NULL DEFAULT '[]'",
-        }
-        connection.execute("BEGIN IMMEDIATE")
-        for name, definition in additions.items():
-            if name not in columns:
-                connection.execute(f"ALTER TABLE fleet_tasks ADD COLUMN {name} {definition}")
-
-    @staticmethod
-    def _migrate_dispatch_control(connection: sqlite3.Connection) -> None:
-        columns = {row[1] for row in connection.execute(
-            "PRAGMA table_info(fleet_dispatch_control)"
-        )}
-        if "authority_epoch" not in columns:
-            connection.execute(
-                "ALTER TABLE fleet_dispatch_control ADD COLUMN authority_epoch "
-                "INTEGER NOT NULL DEFAULT 0"
-            )
-        connection.execute(
-            "CREATE INDEX IF NOT EXISTS fleet_tasks_queue_order "
-            "ON fleet_tasks(status, priority_class, queued_at, task_id)"
-        )
-        connection.execute(
-            "CREATE INDEX IF NOT EXISTS fleet_tasks_dispatch_queue_position "
-            "ON fleet_tasks(priority_class, queued_at, task_id) "
-            "WHERE status='QUEUED' AND lease_owner IS NULL "
-            "AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"
-        )
-        connection.commit()
 
 
 def _parse_time(value: str) -> datetime:

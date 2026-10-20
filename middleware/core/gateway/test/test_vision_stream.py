@@ -197,3 +197,43 @@ def test_spectator_polling_path_is_unchanged(core_client):
                    params={"sequence": status.json()["sequence"]},
                    headers=viewer)
     assert frame.status_code == 200
+
+
+def test_stream_emit_rate_is_capped_and_the_newest_frame_wins(core_client):
+    """vision.stream_max_fps caps parts per second; frames published inside a slot are skipped."""
+    import asyncio
+
+    from core_api_web.api.deps import AuthContext
+    from core_api_web.api.v1 import vision as vision_routes
+
+    assert vision_routes.stream_min_interval_s({}) == 0.2
+    for bad in (0, -1, 31, "5", True, None):
+        assert vision_routes.stream_min_interval_s({"vision": {"stream_max_fps": bad}}) == 0.2
+    tc, svc = core_client(config_overrides={"vision": {"stream_max_fps": 2}})
+    operator = {"Authorization": "Bearer rosy-dev-operator"}
+    _drive(tc, svc, operator)
+    driver = svc.vision_stream.driver()
+    _publish(svc, 1)
+    response = asyncio.run(
+        vision_routes.stream_front_camera(auth=AuthContext(driver, "operator"), svc=svc))
+
+    async def scenario():
+        out = b""
+        async for chunk in response.body_iterator:
+            out += chunk
+            if b"X-Rosy-Camera-Sequence: 1\r\n" in out:
+                break
+        started = time.monotonic()
+        _publish(svc, 2)
+        _publish(svc, 3)
+        async for chunk in response.body_iterator:
+            out += chunk
+            if b"X-Rosy-Camera-Sequence: 3\r\n" in out:
+                break
+        waited = time.monotonic() - started
+        await response.body_iterator.aclose()
+        return out, waited
+
+    out, waited = asyncio.run(scenario())
+    assert waited >= 0.4                                  # 2 fps: one part per 0.5 s slot
+    assert b"X-Rosy-Camera-Sequence: 2\r\n" not in out   # superseded inside the slot

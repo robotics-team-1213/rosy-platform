@@ -235,6 +235,9 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
+| D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
+| D-783 | Native adopted-map readback with finite parent evidence |
+| D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
 | D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
 | D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
 
@@ -325,6 +328,7 @@
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
+- [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -339,8 +343,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · D-804 OMX SIM Fleet policy lease와 CORE 실행 결속
-- 2026-10-19 · bfe4e1f601 · docs(api): 기존 stuck evidence JPEG 응답 계약 정렬
-- 2026-10-19 · uncommitted · 루트 SD 설정과 3장 작업 안내
-- 2026-10-19 · uncommitted · tools: FULL 통과를 다음 land.py 실행도 쓴다 (D-803 6)
-- 2026-10-18 · 6ec7681069 · Specify internal selected-route prior transport v1.245 (D-769) (이식, 원래 2026-10-16)
+- 2026-10-20 · a8bc6debd0 · D-821 운영 구조·실행 연결·다국어·Discord 결과
+- 2026-10-20 · 25b77d00b6 · D-810 전체 회귀 발견 수정과 검증 기록
+- 2026-10-20 · uncommitted · D-810 관제 AI 첫 조회 버전 구현과 검증 경계
+- 2026-10-20 · uncommitted · 관제 AI 기능·상태 소유권과 유지보수 구조 보완
+- 2026-10-20 · uncommitted · 관제 운영자용 AI 에이전트 설계·구현 계획 초안

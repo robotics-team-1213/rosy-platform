@@ -64,7 +64,7 @@ export const TRIP_ERROR_LABEL = {
   // D-603 출발 자동 정렬
   TRIP_ALIGN_REFUSED: '로봇이 제자리 회전을 거절했습니다 · 주변을 비우거나 직접 돌려 세우세요',
   TRIP_ALIGN_ABORTED: '제자리 회전이 중간에 멈췄습니다 · 로봇 주변을 확인하세요',
-  TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
+  TRIP_BUSY: '이 로봇은 이미 운행 중입니다', TRIP_OWNER_KIND_INVALID: '운행을 요청한 작업을 확인할 수 없습니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   // D-517 9 M3 대열
   TRIP_CONVOY_SELF: '자기 자신을 리더로 고를 수 없습니다',

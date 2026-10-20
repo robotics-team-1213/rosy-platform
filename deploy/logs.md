@@ -3029,3 +3029,57 @@
 - 통합: main에서 Accepted로 바뀐 D-798 행을 보존하고 union 병합이 되살린 오래된 Proposed 행만 제거했다.
 - 검증 보정: manifest의 고정 wheel SHA256을 비밀값으로 오탐한 원격 guard 실패 후, 값과 설치 인자는 그대로 두고 같은 행에 공개 무결성 용도만 표시했다. 비밀값 검사는 변경하지 않았다.
 - 적용 전제: 읽기 전용 확인에서 model/site에는 uv가 있으나 AI PC에는 없음. uv-only 원격 시험기로 전환하면 AI PC의 새 환경 생성이 실패하므로 승인된 호스트 적용 전까지 이 후보의 착지는 보류한다. 호스트 설치는 실행하지 않았다.
+
+## 2026-10-19 · uncommitted · D-807 Account 앱별 설치 입력과 인수 절차
+
+- 변경: 기존 site README에 Authority·CORE·Learning·Games·native의 기존 설정 진입점과 호환 receiver→authority→앱 전환·회수·격리 복구 인수 순서를 보충했다. 기존 site preflight가 Account 설정 검증은 하지 않는다는 한계를 명시했다.
+- 증거: 기존 Account protocol·배포 경로와 대조했다. 보호 설정 파일 생성·서비스 재시작·운영 계정 변경·배포는 수행하지 않았다.
+- gate 변화: 없음. 승인된 실제 issuer/callback·보호 설정 입력과 사용자/단말 수용이 남아 있다.
+
+## 2026-10-19 · uncommitted · site updater 호스트 설정 검사 분리
+
+- 변경: 616줄 updater의 기존 설정 검사를 이미 설치·검토되는 site_update_io로 옮겼다. 클래스 진입점과 거절·JSON 처리·Compose 이미지 검사는 유지한다. Account overlay 기능보다 먼저 적용하는 D-766 분리다.
+- 증거: 기존 site updater 회귀 시험으로 이동 전후 동작을 비교한다. Account ingress 후보의 별도 원격 검증은 새 배포 동작에 대한 증거이며 이 이동의 착지를 대신하지 않는다.
+- gate 변화: 없음. 호스트 설치·서비스 변경은 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · feat(omx): recover isolated native simulation host tools
+
+- 변경: Recover the fixed privileged helper, explicit installer, source/input bindings, isolated job preparation and remote CLI with their tests. D-786 remains Proposed. No host provisioning or service activation is performed.
+- 증거: Independent review and committed remote tests are pending; historical SIM records do not prove field acceptance.
+- gate 변화: None.
+
+## 2026-10-19 · uncommitted · feat(omx): recover G2 clock and diagnostic helpers
+
+- 변경: Recover the dedicated SIM clock, terminal/placement/gripper diagnostics and clearance helpers with G2 owner/observer/runner wiring and matching world/layout fixtures. The runner uses the reviewed Fleet topic wrapper. D-788 remains Proposed; existing owner/fence/stop checks remain authoritative.
+- 증거: Independent review and committed remote tests are pending. No simulator or physical service is started by recovery.
+- gate 변화: None; source and host regression checks do not prove successful task placement, physical behavior or field acceptance.
+
+## 2026-10-19 · 0dbc66c10e · 서명 source의 보존 증거와 strict 실행 이식
+
+- 변경: 기존 D-446 lock·idle·환경·checkout guard 안에서 retained Ed25519 manifest/archive와 실제 source 파일을 재검증하고 source·manifest·환경 pin과 활성 sequence가 일치한 뒤에만 strict child를 실행한다. 일반 실행과 과거 payload build는 유지하며 현재 검수 앱의 읽기 전용 의존성 8파일만 허용한다.
+- 증거: 순수 controller 분리143passed. strict handoff 시험4RED 후 실제 import가 드러낸 native_review/camera_setup 누락과 과거 fixture build를 수정했다. 최종0dbc66c10e 원격193passed/skip0, comparator NEW/known/flaky0. 원본 source-proof 변조·shadow·pin·lock·legacy 회귀와 누락8사례 포함. 독립 소스 검토 material finding 없음. 전체 착지 관문은 후속 수행한다.
+- gate 변화: 없음. T4 byte-key backend·reader supervision·운영 서명/설치·장치·FIELD 수용을 수행하지 않았다.
+
+## 2026-10-19 · uncommitted · fix(omx): owner 진입점에 origin #83 executor 적용
+
+- 변경: `collection_ros.py`·`g2_owner.py`·`run_cell_owner.py`·`probe_cell_transfer.py`(origin #83, 78a4bea23c)와 main 전용 `run_hardware_owner.py`가 `OwnerMultiThreadedExecutor`를 쓴다. owner 진입점은 종료 때 `runtime.destroy()`로 action event 스레드를 정리한다. 수집 graph 검사는 부모 노드와 runtime 소유 action client identity만 허용한다.
+- 증거: docs/validation/omx-owner-executor-port-2026-10-19/result.md.
+- gate 변화: 소스·원격 시험 범위. 실물 owner 기동·DEVICE/FIELD는 미검증이며 독립 Safety-Review 전 착지하지 않는다.
+
+## 2026-10-19 · 61e95e784 · (origin #92 2026-10-17) 공개 진단 도구 hash의 정확한 provenance 등록
+
+- 변경: frozen station 현장 기록의 두 공개 소스 hash를 기존 path/line hash/value 정책에 등록했다. 원본 관측과 scanner 동작은 유지한다. hardware_observer는 과거 Git blob, register_probe는 기록 당시 CRLF 바이트와 대조했다.
+- 증거: 첫 확장 시험의 release scan FAIL을 재현했고 독립 hash 검토 후 관련 원격 745 PASS/0 skip/NEW 0으로 통과했다. provenance의 stale/변경·비밀 탐지 회귀를 포함한다.
+- gate 변화: 저장소 검사 보완이며 배포·장치 실행·FIELD 수용을 수행하지 않았다.
+
+## 2026-10-20 · uncommitted · Console AI 독립 broker·평가 소스
+
+- 변경: 기존 강제 명령 ingress 안에 별도 웹 조회 정책·모델 입력·보호된 source/evaluation 결속을 추가했다. 기존 Discord v1 dispatch는 유지한다.
+- 증거: dab629c171 집중 회귀에서 fake broker의 출처·hash·정책 결속과 독립 영수증 필수 사례를 확인했다. 실제 추론·보호 설치를 실행하지 않았다.
+- gate 변화: 없음. 모델 PC 독립 평가와 AI PC 보호 config 설치 지원·승인은 운영 활성화의 선행 조건이다.
+
+## 2026-10-20 · b1f18674b2 · D-821 operator 보호 설치와 기존 Discord 점검
+
+- 변경: 같은 SHA의 기존 Discord 보호 snapshot에 별도 operator 평가를 hash 결속해 원자적으로 설치하는 도구와 signed site optional 설정을 추가했다. 기존 SSH/Discord 설정은 보존한다.
+- 증거: a1f0252d0a 배포/설치 75개와 a57d78c070 해시/provider/설치 64개 통과. --check 무변경과 실패 rollback을 모의 검증했다. 현재 Discord Bot/지정 채널 GET 200 및 Bot/채널/서버 일치를 읽기 전용 확인했다. 실제 모델 b1f18674b2 19사례 PASS 영수증은 비공개 외부 증거에 보존했다.
+- gate 변화: 없음. operator 보호 설정 설치·서명 후보 배포·외부 메시지·실기 실행은 하지 않았다.

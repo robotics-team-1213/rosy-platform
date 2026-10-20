@@ -43,6 +43,8 @@ def validate_config(config):
     if robot.get('use_degrees') is not False or 'use_degrees' in leader:
         raise ValueError('OMX leader uses normalized units; follower use_degrees must be false')
     _positive(robot.get('max_relative_target'), 'max_relative_target')
+    if robot['max_relative_target'] > 20:  # normalized units per frame; a typo must not mean unbounded steps
+        raise ValueError('max_relative_target must be at most 20')
     if dataset.get('push_to_hub') is not False or dataset.get('private') is not True:
         raise ValueError('record locally with push_to_hub=false and private=true')
     repo_id = _text(dataset.get('repo_id'), 'dataset repo_id')
@@ -51,10 +53,11 @@ def validate_config(config):
     _text(dataset.get('single_task'), 'single_task')
     root = _text(dataset.get('root'), 'dataset root')
     windows = PureWindowsPath(root)
-    if windows.drive and windows.drive.upper() != 'X:':
-        raise ValueError('Windows recording output belongs on X:')
     if not (PurePosixPath(root).is_absolute() or windows.is_absolute()):
         raise ValueError('dataset root must be absolute')
+    resolved = Path(root).resolve()
+    if any((p / '.git').exists() for p in (resolved, *resolved.parents)):
+        raise ValueError('recording output belongs outside the source checkout')
     if '..' in PurePosixPath(root.replace('\\', '/')).parts:
         raise ValueError('dataset root must not contain parent traversal')
     if Path(root).exists():

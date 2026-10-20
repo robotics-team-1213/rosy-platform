@@ -40,7 +40,7 @@ Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-process
 Tests are in `middleware/perception/test/`; most run without rclpy. D-584: run the committed-HEAD sensing suite in a separate remote invocation and keep logs in the X session:
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/learned -- middleware/perception/test/test_learned_manifest.py middleware/perception/test/test_learned_lane_mask.py middleware/perception/test/test_learned_runner.py middleware/perception/test/test_learned_shadow.py middleware/perception/test/test_learned_status.py -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/learned" -- middleware/perception/test/test_learned_manifest.py middleware/perception/test/test_learned_lane_mask.py middleware/perception/test/test_learned_runner.py middleware/perception/test/test_learned_shadow.py middleware/perception/test/test_learned_status.py -q
 ```
 
 ### Common Patterns

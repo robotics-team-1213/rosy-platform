@@ -32,7 +32,7 @@ Developer-side simulation helpers that compose several packages: ROS-free host s
 ### Working In This Directory
 
 - Placement: a script that imports several packages belongs here (or another root group), not inside one package, to avoid an undeclared cross-package import (see `../AGENTS.md`).
-- The `.sh` probes and bench need WSL Ubuntu with ROS 2 Jazzy and a built workspace; they do not run on plain Windows. Write their output under `X:\DevTemp` or `/tmp`, never into the repo.
+- The `.sh` probes and bench need WSL Ubuntu with ROS 2 Jazzy and a built workspace; they do not run on plain Windows. Write their output under `$ROSY_SCRATCH` or `/tmp`, never into the repo.
 - Treat the probes as disposable: do not extend them; fold any lasting check into a pytest or `sim_verify.sh`.
 - Shell scripts compute the repo root from their own path; keep it that way.
 - A passing sim run is LOCAL evidence only; do not cite it as device or field acceptance.

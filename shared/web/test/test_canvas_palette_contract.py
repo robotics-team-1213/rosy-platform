@@ -116,6 +116,7 @@ CANVAS_EXEMPT = {
     "middleware/perception/web/diagnostic.html": "PARKED(D-266) 한 파일 진단 표면 — surfaces.yaml raw_colours 예외와 같은 해제 회차에 옮긴다",
     "shared/web/webrtc.js": "D-789 화면에 붙지 않는 128×24 판독 캔버스 — 렌더된 영상 프레임의 촬영 watermark만 읽는다",
     "middleware/robot_ui/pilot/screens/drive-video.js": "D-789 화면에 붙지 않는 변환 캔버스 — WebRTC 프레임을 기존 녹화 경로용 JPEG로 바꾼다",
+    "middleware/robot_ui/robot/vision.js": "D-789 화면에 붙지 않는 변환 캔버스 — 대시보드 WebRTC 프레임을 기존 녹화 경로용 JPEG로 바꾼다",
 }
 DRAWS = re.compile(r"""getContext\(\s*["']2d["']|\.font\s*=""")
 

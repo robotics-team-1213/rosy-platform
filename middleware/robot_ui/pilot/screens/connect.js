@@ -29,10 +29,10 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp, postJson} from "../client.js";
 import {account, authenticated, restoreAccount, accountLogout} from '../client.js';
 import {driverFor} from "../drivers/registry.js";
-import {createVisionPreview} from "../vision.js";
+import {createVisionPreview, createWhepView} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
 import {HeadlessState, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
@@ -53,6 +53,17 @@ function setTag(word) {
 function notice(text) {
   const node = document.querySelector("#pilot-notice");
   if (node) node.textContent = text;
+}
+
+function appendAccountLogout(actions) {
+  if (!account?.authenticated) return;
+  const exit = el('ui-button', '로그아웃', {type:'button'});
+  exit.setAttribute('kind', 'quiet');
+  exit.addEventListener('click', async () => {
+    try { await accountLogout(); window.location.assign('/pilot'); }
+    catch (error) { notice(error.message); }
+  });
+  actions.append(exit);
 }
 
 function readoutPair(pairs) {
@@ -421,7 +432,7 @@ async function check(root, onReady, onEnter) {
     retry.setAttribute("kind", "quiet");
     retry.addEventListener("click", () => check(root, onReady, onEnter));
     actions.append(retry);
-    if (!inPilotApp()) {
+    if (!inPilotApp() && !account?.authenticated) {
       const reset = el("ui-button", "토큰 초기화", {type: "button"});
       reset.setAttribute("kind", "segment");
       reset.addEventListener("click", () => {
@@ -430,6 +441,7 @@ async function check(root, onReady, onEnter) {
       });
       actions.append(reset);
     }
+    appendAccountLogout(actions);
     root.replaceChildren(
       el("ui-head", "접속", {id: "pilot-gate-heading"}),
       readoutPair(pairs), ...statuses, actions,
@@ -477,15 +489,7 @@ async function check(root, onReady, onEnter) {
         "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
     });
   }
-  if (account?.authenticated) {
-    const exit = el('ui-button', '로그아웃', {type:'button'});
-    exit.setAttribute('kind', 'quiet');
-    exit.addEventListener('click', async () => {
-      try { await accountLogout(); window.location.assign('/pilot'); }
-      catch (error) { notice(error.message); }
-    });
-    actions.append(exit);
-  }
+  appendAccountLogout(actions);
   onReady?.({role: me.body?.role});
 }
 
@@ -535,13 +539,22 @@ function showCamera(root, onBack) {
     },
     onUnavailable: (message) => { frame.hidden = true; empty.hidden = false; empty.textContent = message; },
   });
-  const visibility = () => { document.hidden ? preview.stop() : preview.start(); };
+  const video = el("video", null, {"data-drive-video": "", hidden: ""});
+  Object.assign(video, {muted: true, autoplay: true, playsInline: true});
+  frame.after(video);
+  const live = createWhepView({video, jpeg: preview, postJson, api, robotId: async () => (await connectionOffer())?.robotId,
+    onState: ({state, fps}) => {
+      if (state === "live" || state === "stale") {
+        frame.hidden = true; empty.hidden = true; description.textContent = `카메라 · WebRTC ${fps}fps · 조종하지 않는 보기`;
+      } else if (state === "hidden") { empty.hidden = false; empty.textContent = "영상 지연 · 2초 넘게 새 화면 없음"; }
+    }});
+  const visibility = () => { document.hidden ? live.stop() : live.start(); };
   document.addEventListener("visibilitychange", visibility);
   root.__pilotPreviewClose = () => {
-    preview.stop(); layout.close(); document.removeEventListener("visibilitychange", visibility);
+    live.stop(); video.remove(); layout.close(); document.removeEventListener("visibilitychange", visibility);
     document.body.dataset.pilotScreen = "connect"; delete root.__pilotPreviewClose;
   };
-  preview.start();
+  live.start();
 }
 
 export async function mountConnect(root, {onReady, onEnter} = {}) {

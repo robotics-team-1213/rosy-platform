@@ -43,7 +43,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지·D-573 횡단보도 구역)와 `lane_graph.yaml` 가져오기. 순수 |
 | `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`)와 호출자에게 넘길 사실 묶음(`brief`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
 | `fleet/server/sitemap/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
-| `fleet/server/trips/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
+| `fleet/server/trips/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(첫 tick은 바로, 그 뒤 D-432 `start_offset` 한 번; `lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
 | `fleet/traffic/lane_traffic.py` | D-517 3 (M1) `TrafficService`: 열린 trip 전부를 `fleet/traffic/blocks.py` 고정 블록 표로 계산해 `GET /api/fleet/traffic`에 보인다. 로봇에 보내지 않는다(M2). trip 루프의 교차로 보류(`holds`)와 고정 점유 갱신도 여기서 한다. 운행 블록 허가를 쓰는 곳은 이 모듈 하나다 |
 | `fleet/traffic/rule_m.py` | D-550 8 / D-760 3 1단계 규칙 M 판정(순수): 로봇마다 Fleet이 시작한 움직임을 `bounded`·`unbounded`·`idle`로 본다. Fleet이 쥔 TTL(통행권·trip 임대·목표 임대)만 센다. `/api/fleet/state` 행 `rule_m`으로만 쓰인다. 경고만이고 거절하지 않는다 |
 | `fleet/traffic/handover.py` | D-517 5 (M4) Fleet 해결기의 순수 판단: 교착 순환에서 다음 장소 뒤의 막힌 차로를 피해 갈 수 있는 한 대만 `replan`(운영자 확인 `replan_hold`), 나머지 `wait`, 피할 수 없거나 같은 경로 두 번째면 `human`, 30 s 넘는 UNKNOWN은 `human`. `GET /api/fleet/traffic` `resolver` |
@@ -88,8 +88,8 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 | `fleet/fleet/server/tracking` | Existing tracking service, purpose-specific calibration stores/routes and signed Vision preview grants. Static holder preserves `fleet.server.*` imports and resource identity |
 | `fleet/fleet/server/evidence` | D-798 server holder: model proposals and feedback dispatch, goal and policy evidence, learning bundle/receiver, incident deliberation |
 | `fleet/fleet/server/sitemap` | D-798 server holder: site map store/routes, drive teaching, site lanes, lane routes, path history, start points |
-| `fleet/fleet/server/pose` | D-798 server holder: localization service, D-494 `MapPoseService`, D-511 lane compliance monitor |
-| `fleet/fleet/server/recognition` | D-798 server holder: D-472 identity and triggers, sightings and their store/config, ingest routes, discovery, address drift, `SiteRoster` |
+| `fleet/fleet/server/pose` | D-798 server holder: localization service, D-494 `MapPoseService`, D-511 lane compliance monitor, D-772 `MapPoseScopes` ingestion fences and `StateSourceRead` receipts |
+| `fleet/fleet/server/recognition` | D-798 server holder: D-472 identity and triggers, sightings and their store/config, ingest routes, discovery, address drift, `SiteRoster`, D-772 versioned station installation (`station_store`/`station_service`) and source-authenticated station ingress routes (no motor writer) |
 | `fleet/fleet/server/rightofway` | D-798 server holder: signal client/config/routes, junction signal, traffic and reservations, segment store, bays |
 | `decision/src/rosy/decision` | Holder `operations/decision`: proposal-only model adapters (`rosy.decision`) outside its own deliberation/conversation units |
 | `situation` | Holder `operations/situation` (`SOURCE_ROOTS['assessment']`): the D-577 AI PC situation service `rosy_situation` (see its `AGENTS.md`) |

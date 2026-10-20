@@ -301,6 +301,21 @@ def test_gate_never_lifts_a_zero_or_raises_a_speed():
     assert s.m._crosswalk_gate(s.t, slow) == slow
 
 
+@pytest.mark.parametrize("reason,expected", [("looking", None), ("person", "person_present"), ("unknown", "look_unknown")])
+def test_crosswalk_wait_blocks_a_zero_linear_pivot_candidate(reason, expected):
+    s = Sim()
+    if reason == "person":
+        s.objects = [(0.60, 0.0, 0.03)]
+    elif reason == "unknown":
+        s.no_return = lambda angle: abs(angle) < 0.3
+    s.to_stop()
+    s.run(0.2 if reason == "looking" else 5.5)
+    assert s.crosswalk.reason == expected
+    pivot = LineFollowDecision(linear=0.0, angular=0.4, generation=1, mode=LineFollowMode.CAMERA_LINE)
+    stopped = s.m._crosswalk_gate(s.t, pivot)
+    assert stopped.linear == 0.0 and stopped.angular == 0.0
+
+
 def test_estop_and_mode_off_reset_the_gate():
     s = Sim()
     s.objects = [(0.60, 0.0, 0.03)]
@@ -896,3 +911,158 @@ def test_state_snapshot_round_trips_an_unknown_crosswalk_and_refuses_a_malformed
     for bad in ("outside", {"zone_id": "z1"}, 3):
         with pytest.raises(pydantic.ValidationError):
             StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": bad}})
+
+
+def _skewed_then_aligned(person=()):
+    """A zone first seen 0.25 rad off the lane (mid-turn), then again square to it, between walls at
+    +-0.125 m with no lane seen: rev 7 re-anchors to the aligned sighting before the stop."""
+    g, _, geo = _looking_gate()
+    skewed = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=0.25, near=0.30, far=0.45, margin=0.02, lateral=0.01)
+    aligned = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=0.0, near=0.30, far=0.45, margin=0.02, lateral=0.01)
+    stop_x = 0.30 - 0.035 - B.front_x_m
+    walls = [(x / 200, side, 0.002) for x in range(-80, 320) for side in (-0.125, 0.125)] + list(person)
+    far = SimpleNamespace(x=stop_x - 0.5, y=0.0, yaw=0.0)
+    first = _step(g, skewed, geo, far, 0.5, Scan(rays_at(far.x, walls, step_deg=1), 0.05, 0.5))
+    assert g._state == "armed", first
+    pose = SimpleNamespace(x=stop_x, y=0.0, yaw=0.0)
+    reasons = []
+    for i in range(30):
+        t = 1.0 + i * 0.1
+        reasons.append(g.step(t, zones=[skewed, aligned], pose=pose, key=(0, "odom"), still=True,
+                              scan=Scan(rays_at(pose.x, walls, step_deg=1), 0.05, t), geo=geo, cruise=0.08,
+                              look_s=1.0, min_scans=8, report_s=10.0, stale_s=0.5, range_sigma_m=SIGMA,
+                              persist_k=2, persist_n=3)[1])
+    return g, reasons
+
+
+def test_rev7_a_zone_first_seen_mid_turn_takes_the_aligned_sighting_and_clears_between_walls():
+    g, reasons = _skewed_then_aligned()
+    assert abs(g._zone.yaw) < 1e-9 and g._first_yaw == 0.25     # the anchor moved; 'turned away' keeps the first
+    assert "crosswalk_person_present" not in reasons and reasons[-1] is None, reasons[-3:]
+
+
+def test_rev7_a_person_in_the_lane_still_holds_after_the_re_anchor():
+    _, reasons = _skewed_then_aligned(person=[(0.40, 0.03, 0.02)])
+    assert None not in reasons[10:] and "crosswalk_person_present" in reasons
+
+
+def _map_walls(s, right=None, left=None, band=0.01, ahead=1.0):
+    """D-573 rev 8: Fleet's route prior names map walls beside the lane, bound to the odom sample now."""
+    import dataclasses
+    from types import SimpleNamespace
+    s.m._config = dataclasses.replace(s.m._config, crosswalk_map_wall_band_m=band)
+    prior = SimpleNamespace(wall_left_m=left, wall_right_m=right, wall_ahead_m=ahead, heading_here_deg=0.0)
+    # Fleet refreshes the prior every step: bound to the newest odom sample
+    s.m.route_guide_binding = lambda now=None: dict(prior=prior, stamp_ns=s.m._return_evidence.trail.samples[-1].stamp_ns)
+
+
+def _wall(y_face):
+    return [(x / 100, y_face - 0.01, 0.01) for x in range(0, 120)]   # returns on a face at y_face
+
+
+def test_a_map_wall_beside_the_lane_lets_an_empty_crosswalk_be_crossed():
+    """v2 lap r46a/b at the west crosswalk: no seen corridor, A padded past the outer wall on the right."""
+    held = Sim()
+    held.objects = _wall(-0.115)
+    held.to_stop()
+    assert all(d.linear == 0.0 for _, d in held.run(7.0))          # without map walls the wall holds
+    s = Sim()
+    s.objects = _wall(-0.115)
+    s.to_stop()
+    _map_walls(s, right=-0.115)
+    stop_t = s.t
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
+    assert go - stop_t <= 5.6
+
+
+def test_a_person_inside_a_map_wall_still_holds_and_the_body_path_is_never_clipped():
+    s = Sim()
+    s.objects = _wall(-0.115) + [(NEAR + 0.1, -0.09, 0.012)]       # a figure 1.3 cm off the wall
+    s.to_stop()
+    _map_walls(s, right=-0.115)
+    assert all(d.linear == 0.0 for _, d in s.run(7.0))
+    s = Sim()
+    s.objects = [(NEAR + 0.1, -0.03, 0.01)]                        # in the body's own path
+    s.to_stop()
+    _map_walls(s, right=-0.01)                                     # a wrong map wall inside the body path
+    assert all(d.linear == 0.0 for _, d in s.run(7.0))
+
+
+def test_map_walls_are_unused_without_the_band():
+    s = Sim()
+    s.objects = _wall(-0.115)
+    s.to_stop()
+    _map_walls(s, right=-0.115, band=None)
+    assert all(d.linear == 0.0 for _, d in s.run(7.0))
+
+
+def test_a_map_wall_on_the_left_is_clipped_the_same_way():
+    s = Sim()
+    s.objects = [(x, -y, r) for x, y, r in _wall(-0.115)]
+    s.to_stop()
+    _map_walls(s, left=0.115)
+    stop_t = s.t
+    assert next(t for t, d in s.run(7.0) if d.linear > 0) - stop_t <= 5.6
+
+
+def test_a_map_wall_ending_before_the_look_area_does_not_clip_past_its_end():
+    """Review 2026-10-19: an opening past a wall's end is floor; the look there is not clipped."""
+    s = Sim()
+    s.objects = _wall(-0.115)
+    s.to_stop()
+    _map_walls(s, right=-0.115, ahead=0.2)            # Fleet: the wall runs only 0.2 m on from the robot
+    assert all(d.linear == 0.0 for _, d in s.run(7.0))
+
+
+def test_the_clip_lines_follow_the_body_since_the_priors_odom_sample():
+    """Moved 2 cm right and 0.1 m on since Fleet's sample: the wall is 2 cm nearer, drift widens it again."""
+    import dataclasses
+    from types import SimpleNamespace
+    s = Sim()
+    s.frame()
+    m = s.m
+    m._config = dataclasses.replace(m._config, crosswalk_map_wall_band_m=0.01)
+    pose = SimpleNamespace(x=0.5, y=-0.02, yaw=0.0, frame="odom")
+    m._return_evidence._image_pose = lambda ns: SimpleNamespace(x=0.4, y=0.0, yaw=0.0, frame="odom")
+    prior = SimpleNamespace(wall_left_m=0.12, wall_right_m=-0.13, wall_ahead_m=0.6, heading_here_deg=0.0)
+    m.route_guide_binding = lambda now=None: dict(prior=prior, stamp_ns=1)
+    lane, left, right, ahead = m._crosswalk_walls(s.t, pose)
+    drift = m._config.crosswalk_odom_error_fraction * math.hypot(0.1, 0.02)
+    inset = 0.01 + 3 * m._config.crosswalk_range_sigma_m
+    assert lane == 0.0
+    assert left == pytest.approx(0.12 + 0.02 - inset + drift) and right == pytest.approx(-0.13 + 0.02 + inset - drift)
+    assert ahead == pytest.approx(0.6 - 0.1 - drift)
+    m._return_evidence._image_pose = lambda ns: SimpleNamespace(x=0.4, y=0.0, yaw=0.0, frame="other")
+    assert m._crosswalk_walls(s.t, pose) is None       # another odom frame: no clip
+
+
+def test_a_lane_turned_off_the_zone_axis_is_clipped_slice_by_slice():
+    """v2 lap r48a: 5 deg between the lane and the zone axis; one sweep over all of A undid the clip."""
+    from types import SimpleNamespace
+    from core_features.line_follow.crosswalk.kernel import CLIP_SLICE_M, CrosswalkGate, Geometry, Zone
+    gate = CrosswalkGate()
+    skew = math.radians(-5.0)
+    gate._walls = (skew, None, -0.1, 1.0)
+    z = Zone(key=(1, "odom"), x=0.0, y=0.0, yaw=0.0, near=0.1, far=0.35)
+    geo = Geometry(front_x=0.06, rear_x=-0.06, lidar_x=0.0, v_cross=0.04, s_wait=0.1, slow_from=0.2,
+                   lane_half_m=0.1, body_half_m=0.06, strip_m=0.0, exit_m=0.2, end_margin=0.01)
+    boxes = gate._clip(((0.1, 0.35, -0.15, 0.15),), z, geo, SimpleNamespace(x=0.0, y=0.0, yaw=0.0))
+    assert len(boxes) == 5 and all(b[1] - b[0] <= CLIP_SLICE_M + 1e-9 for b in boxes)
+    for x0, x1, lo, hi in boxes:       # each slice at the turned line's outermost point over it, never nearer
+        assert lo == pytest.approx(-0.1 / math.cos(skew) + math.tan(skew) * x1) and hi == 0.15
+
+
+def test_a_body_turned_off_the_zone_axis_keeps_the_clip_at_the_wall_not_at_its_heading_sweep():
+    """v2 lap r50a: the body 0.1 rad off the zone axis; a heading sweep over A put the floor on the wall."""
+    from types import SimpleNamespace
+    from core_features.line_follow.crosswalk.kernel import CrosswalkGate, Geometry, Zone
+    gate = CrosswalkGate()
+    gate._walls = (0.0, None, -0.095, 1.0)
+    z = Zone(key=(1, "odom"), x=0.0, y=0.0, yaw=0.0, near=0.1, far=0.35)
+    geo = Geometry(front_x=0.06, rear_x=-0.06, lidar_x=0.0, v_cross=0.04, s_wait=0.1, slow_from=0.2,
+                   lane_half_m=0.1, body_half_m=0.07, strip_m=0.0, exit_m=0.2, end_margin=0.01)
+    boxes = gate._clip(((0.1, 0.55, -0.15, 0.15),), z, geo, SimpleNamespace(x=0.0, y=0.0, yaw=0.1))
+    assert all(lo == pytest.approx(-0.095) for _, _, lo, _ in boxes)
+    gate._walls = (0.0, None, -0.03, 1.0)                       # a wrong map wall inside the body path
+    boxes = gate._clip(((0.1, 0.55, -0.15, 0.15),), z, geo, SimpleNamespace(x=0.0, y=0.0, yaw=0.1))
+    assert all(lo == pytest.approx(-0.07) for _, _, lo, _ in boxes)

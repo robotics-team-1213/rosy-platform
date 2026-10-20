@@ -30,6 +30,7 @@ import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js"
 import { createConsoleAuth } from "./console-auth.js";
 import { createConsoleGoal } from "./console-goal.js";
 import { createConsoleRefresh } from "./console-refresh.js";
+import { createAssistantPanel } from "/console/assets/assistant.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -168,6 +169,7 @@ async function call(path, options = {}) {
 }
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
+const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
 
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
 // 목표 해제와 카드 열기는 아래에서 만들어지므로 부를 때 찾는다.
@@ -360,7 +362,7 @@ mapView.bindCamera(visionView);
 const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
-const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth,
+const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
   call, fleetClient, render, operatorControls, confirmedAction, connectionView, workView, incidents, visionView,
   trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
   refreshRobotApps, refreshDispatchControl, refreshDiscovery });

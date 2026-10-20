@@ -54,6 +54,7 @@ from fleet.server.background_workers import proposal_expiry_loop as _proposal_ex
 from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
 from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
+from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
@@ -86,6 +87,8 @@ from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재�
 
 _LOG = logging.getLogger(__name__)
 _goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
+_mission_feedback_schedule_loop = partial(mission_feedback_schedule_loop, logger=_LOG)
+_mission_dispatch_loop = partial(mission_dispatch_loop, logger=_LOG)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 
 
@@ -139,7 +142,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
                notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None,
-               conversation_config=None) -> FastAPI:
+               conversation_config=None, assistant_config=None, station_ingress=None,
+               charge_runtime_factory=None) -> FastAPI:
     if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
         raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
@@ -361,6 +365,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if calibration_drift_watch is not None:
             calibration_drift_task = asyncio.create_task(calibration_drift_watch.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
+        charge_task = (asyncio.create_task(app.state.charge_runtime.run())
+                       if app.state.charge_runtime is not None else None)
         lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
                       if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
         identity_task = asyncio.create_task(identity.run())  # also polls CORE's blink answers (D-596)
@@ -395,7 +401,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             async with AsyncExitStack() as cleanup:
                 for resource in (getattr(app.state, "power_health_display", None), notification_http,
-                                 calibration_drift_watch, post_action_observation_source):
+                                 calibration_drift_watch, post_action_observation_source, app.state.charge_runtime):
                     close = getattr(resource, "aclose", None)
                     if callable(close):
                         cleanup.push_async_callback(close)
@@ -406,7 +412,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    goal_evidence_worker, mission_feedback_scheduler,
                                    mission_model_turn_worker_task, localization_task,
                                    signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                                   lease_task, path_task, calibration_drift_task, notification_task, job_task)
+                                   lease_task, path_task, calibration_drift_task, notification_task, job_task, charge_task)
                                if background is not None]
                 for background in backgrounds:
                     background.cancel()
@@ -593,7 +599,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               map_id=_active_map_id,
                               source_map_ids=[source.map_id for source in
                                               (sightings.sources if sightings is not None else ())],
-                              gather=_gather_state, gather_rest=_rest_state)
+                              gather=_gather_state, gather_rest=_rest_state, client_identity=console._client)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     execution_pose = map_pose_port if simulation_pose else map_pose
     if simulation_pose:
@@ -615,7 +621,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
-                          read_guard=read_guard, map_pose=map_pose)
+                          read_guard=read_guard, map_pose=map_pose, station_ingress=station_ingress)
     install_map_pose_routes(app, service=execution_pose, read_guard=read_guard)
     # D-511 M0: lane compliance from the same map pose; observe and notify only.
     from fleet.localization.lane_compliance import LaneComplianceConfig
@@ -854,17 +860,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         console=console, existing_tokens=other_tokens,
         secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
         proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
-    from .channel_model_runtime import install_channel_models
-    install_channel_models(app,channel_model_config)
-    from .channel.conversation.runtime import install_conversation
-    if channel_model_config is not None or conversation_config is not None:
-        from core_common.protocol.channel_requests import ChannelModelResult
-        @app.get('/api/fleet/channel-requests/{request_id}/deliberation',dependencies=read_guard,
-                 response_model=ChannelModelResult,tags=['fleet-work'])
-        def channel_model_result(request_id:str,principal=Depends(require_operator)):
-            jobs = (app.state.channel_conversation_jobs if conversation_config is not None
-                    else app.state.channel_model_jobs)
-            return jobs.read(request_id,principal.principal_id)
     install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
@@ -872,7 +867,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               fanout_local_omx_stops, configured_omx, stop_transport),
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
-    install_conversation(app,conversation_config,site_maps,task_service=task_service)
+    from .channel.conversation.runtime import install_conversation_routes
+    install_conversation_routes(app, conversation_config, channel_model_config, site_maps,
+                                task_service, require_operator, read_guard)
+
+    from .assistant.runtime import install_assistant
+    install_assistant(app, assistant_config, task_service=task_service,
+                      require_named_operator=require_named_operator, authorize=authorize)
 
     from fleet.server.vision_preview_routes import install_vision_preview_routes
     install_vision_preview_routes(app, signer=vision_signer, sources=vision_sources,
@@ -888,6 +889,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 else UnavailableHostHelper()))
 
     install_static_routes(app)
+    from fleet.server.charge_bootstrap import install_charge_runtime
+    install_charge_runtime(app, factory=charge_runtime_factory, runner=trip_runner, plans=site_maps,
+        task_service=task_service, ingress=station_ingress, console=console)
     return app
 
 
@@ -921,23 +925,6 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
         await asyncio.sleep(0.25)
 
 
-async def _mission_feedback_schedule_loop(scheduler: MissionModelTurnScheduler) -> None:
-    """Populate the durable outbox only; this loop never invokes a provider."""
-    while True:
-        try:
-            before = scheduler.turn_store.capacity_dropped_count()
-            await asyncio.to_thread(scheduler.poll_once)
-            dropped = scheduler.turn_store.capacity_dropped_count()
-            if dropped > before:
-                _LOG.error(
-                    "Mission feedback outbox is at capacity; dropped enqueue attempts=%d",
-                    dropped,
-                )
-        except Exception:
-            _LOG.exception("Mission feedback outbox scan failed")
-        await asyncio.sleep(1.0)
-
-
 async def _mission_model_turn_worker_loop(worker) -> None:
     """Consume durable ER 2 turns only when an approved worker is injected."""
     while True:
@@ -947,16 +934,4 @@ async def _mission_model_turn_worker_loop(worker) -> None:
             raise
         except Exception:
             _LOG.exception("Fleet Mission model-turn worker cycle failed")
-        await asyncio.sleep(0.25)
-
-
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher | CellJobDispatcher) -> None:
-    """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
-    while True:
-        try:
-            await asyncio.to_thread(dispatcher.dispatch_next)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _LOG.exception("Fleet Mission dispatcher cycle failed")
         await asyncio.sleep(0.25)

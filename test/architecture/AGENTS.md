@@ -22,6 +22,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 | `test_folder_layout.py` | D-186 script/document ownership, declared deployment and data layout, no retired paths in current developer docs. Module-local helpers stay with their actual install/consumer owner; workspace tools compose owners |
 | `test_document_placement.py` | D-226 publication first: sample secret/internal paths (`private/`, `.env`, keys, images, bags, `data/teleop`, `*.sqlite3`, worktrees) must be git-ignored; templates, public keys and public material must stay trackable; no tracked file under an ignore rule; repo root carries only the listed files; dated evidence stays out of modules; module roots carry only `README AGENTS CLAUDE progress logs index`. Needs `git` on PATH |
 | `test_layer_boundaries.py` | D-229 by AST import scan: perception imports neither decision, vision nor ROS; decision does not import perception; line_follow reads decisions, not pixels; geometry does not import perception |
+| `test_fleet_ledger_writers.py` | D-750: the modules that write Fleet's core ledger tables (`fleet_tasks`, `fleet_task_history`, `fleet_robot_reservations`, `fleet_action_claims`) by literal SQL equal `KNOWN_WRITERS`; a new writer or a dropped one fails, so a new writer needs a reviewed edit of the list |
 | `test_app_identity.py` | D-377 "Rosy + one English word": each `surfaces.yaml` app row must agree on display names, folder name, `rosy_<word>` package, `<word>.svg` icon and Android ids (`io.github.livsbittt.rosy.<word>`). `PENDING` lists rows not yet renamed; a pending row must still break the rule |
 | `test_app_roles.py` | D-370 one role per app: Cam app has no CORE API, Fleet user API, cmd_vel or estop; Vision has no robot command and writes only sightings to Fleet; Fleet vision routes only issue leases; Pilot never calls Fleet; each operation has one owning surface (e-stop and ADR-marked transitional entries excepted) |
 
@@ -44,7 +45,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/architecture-check -- test/architecture -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/architecture-check" -- test/architecture -q
 ```
 
 `test_module_structure.py` is also part of the D-346 pre-push fast gate (`tools/hooks/`).

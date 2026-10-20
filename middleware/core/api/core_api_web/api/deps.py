@@ -100,6 +100,7 @@ class CoreServicesLike(Protocol):
     config: Any
     control_adapter: Any
     docking: Any
+    station_docking: Any
     events: Any
     fleet_agent: Any
     fleet_loss: Any
