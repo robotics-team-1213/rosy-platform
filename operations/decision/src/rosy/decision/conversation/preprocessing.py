@@ -103,7 +103,7 @@ def prepare(question, *, environment=None):
     for alias, identities in aliases.items():
         folded.setdefault(normalize(alias), set()).update(identities)
     for alias, identities in folded.items():
-        if len(identities) > 1 and re.search(alias_pattern(alias), normalize(original)):
+        if len(identities) > 1 and alias not in ambiguous and re.search(alias_pattern(alias), normalize(original)):
             ambiguous.append(alias)
     catalog_hash = hashed({'entries':sorted(catalog), 'map':environment.get('map')})
     # Authentication IDs are verified by Fleet/the broker and are not model reasoning context.
