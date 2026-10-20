@@ -9891,3 +9891,8 @@ osy-d395-s1d\`.
 - 변경: 커밋별 원격 시험과 실제 SDK 보고서·UNKNOWN·웹/CLI admission 거절·교차 fetch를 frozen evidence에 분리해 기록했다. 기존 SDK interpreter의 본인 소유 파일 권한만0775→0755로 바꿨고 파일 bytes·패키지는 유지했다.
 - 증거: 실제120프레임 모델 검사 보고서 hash를 독립 확인했다. 외부 GPU 점유로 무점유 최종 성공·실제 stop은 미수용이며 UNKNOWN을 보존한다. production rollout·실물/학습 성공을 주장하지 않는다.
 - gate 변화: 모델 구조와 운영 경계의 부분 증거이며 D-834 Proposed 유지다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 성공·중지 후속 증거
+
+- 증거: 소스8aa57b3d0e의 실제 모델 검사 SUCCEEDED·120프레임·exit0·GPU 해제와 별도 웹 run의 CLI STOP_REQUESTED→STOPPED·최종 fetch를 새 dated record에 기록했다. 앞선 부분 기록을 고치거나 UNKNOWN을 성공으로 바꾸지 않았다.
+- 경계: production rollout·실제 Account·컨테이너 물리 과제·학습/장치 수용은 별도다. D-834 Proposed 유지다.

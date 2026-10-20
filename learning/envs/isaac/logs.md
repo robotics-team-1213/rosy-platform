@@ -332,3 +332,9 @@
 - 변경: 웹 workspace가 전체 binding 지문을 controller·worker까지 고정한다. 실제 host에서 발견한 UNKNOWN 진단 오인·user bus 누락과 준비 거절 응답을 수정했다.
 - 증거: 소스9dbaca197b의 실제 OMX-F 보고서120프레임·관절·articulation을 독립 검증했다. run은 cleanup/GPU 해제 미확정으로 UNKNOWN이며 외부 llama-server를 종료하지 않았다. 소스c47e8454e3의 웹 start를 CLI가 같은 최종 FAILED/admission_refused/SDK_NOT_STARTED로 조회·재전송·fetch했다. 관련 원격479 PASS/1 SKIP. 상세는 docs/validation/isaac-shared-runs-2026-10-21/result.md.
 - gate 변화: 실제 SDK 부분 증거를 추가했으나 최종 무점유 import·실제 stop·물리 집기·학습 수용은 보류다. UNKNOWN을 성공으로 변경하지 않는다.
+
+## 2026-10-21 · uncommitted · 공통 SIM 무점유 성공·실제 중지
+
+- 증거: 외부 GPU 점유가 자연 해제된 뒤 소스8aa57b3d0e의 새 run981e96c0bd105e38bf8b1923159ad614가 모델 검사120프레임·exit0·GPU 해제와 최종 SUCCEEDED로 끝났다. 웹에서 만든 별도 run83ef940c7e0d553cade26575bc72dffd는 CLI 중지 요청 뒤 STOPPED·exit-15·GPU 해제·최종 fetch를 확인했다.
+- 보존: 이전 UNKNOWN·FAILED와 모든 입력·결과를 유지했다. 외부 프로세스를 종료하지 않았다. frozen 후속 기록은 docs/validation/isaac-shared-runs-2026-10-21b/result.md다.
+- gate 변화: 제한된 import/실행 중지 수용만 추가한다. ROS-SIM·물리 집기·적층·협응·학습/실물 수용의 gate는 이동하지 않는다.
