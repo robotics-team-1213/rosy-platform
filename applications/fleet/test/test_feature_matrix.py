@@ -80,7 +80,7 @@ def problems(document):
                 errors.append("unverified contract")
             receipt = evidence.get(request['id'])
             if (not receipt or receipt['status'] not in request['expected_statuses']
-                    or receipt['test'].split('::')[0] not in request['contract_tests']
+                    or receipt['test'][0] not in request['contract_tests']
                     or not re.fullmatch('[0-9a-f]{40}', receipt['source_revision'])):
                 errors.append('missing HTTP evidence')
             implementation = ROOT / request["implementation"]

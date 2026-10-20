@@ -11,7 +11,7 @@ def test_auth_login_logout_and_rejected_credentials():
     engine = load_engine()
     target = '/api/fleet/auth/login'
     assert call(engine, 'POST', target, {'login':'sample', 'password':'incorrect'})[0] == 401
-    assert call(engine, 'POST', target, {'login':'sample', 'password':'sample-password'})[0] == 204
+    assert call(engine, 'POST', target, {'login':'sample', 'password':'CHANGE_ME'})[0] == 204
     assert call(engine, 'GET', '/api/fleet/auth/session')[1]['principal_id'] == 'sample'
     assert call(engine, 'POST', '/api/fleet/auth/logout')[0] == 204
     assert call(engine, 'GET', '/api/fleet/auth/session')[0] == 401
@@ -19,7 +19,7 @@ def test_auth_login_logout_and_rejected_credentials():
 
 def test_map_draft_conflict_activation_and_readback():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'CHANGE_ME'})
     path = '/api/fleet/site-map/'
     _, draft = call(engine, 'GET', path + 'draft')
     body = {'map':draft['map'], 'expected_revision':draft['revision']}
@@ -34,7 +34,7 @@ def test_map_draft_conflict_activation_and_readback():
 def test_stop_requires_current_generation_to_rearm():
     engine = load_engine()
     assert call(engine, 'POST', '/api/fleet/estop')[0] == 401
-    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'CHANGE_ME'})
     assert call(engine, 'POST', '/api/fleet/estop')[0] == 200
     _, stopped = call(engine, 'GET', '/api/fleet/dispatch-control')
     assert stopped['dispatch_enabled'] is False
@@ -46,14 +46,14 @@ def test_stop_requires_current_generation_to_rearm():
 def test_created_account_password_reset_and_session_revocation():
     engine = load_engine()
     login = '/api/fleet/auth/login'
-    call(engine, 'POST', login, {'login':'sample', 'password':'sample-password'})
+    call(engine, 'POST', login, {'login':'sample', 'password':'CHANGE_ME'})
     status, account = call(engine, 'POST', '/api/fleet/auth/accounts',
                            {'login':'new-user', 'principal_id':'new-user', 'role':'viewer', 'password':'first-password',
                             'grants':[{'resource':'site:sample', 'capabilities':['fleet.read']}]})
     assert status == 201
     assert call(engine, 'POST', login, {'login':'new-user', 'password':'first-password'})[0] == 204
     assert call(engine, 'GET', '/api/fleet/auth/session')[1]['principal_id'] == 'new-user'
-    call(engine, 'POST', login, {'login':'sample', 'password':'sample-password'})
+    call(engine, 'POST', login, {'login':'sample', 'password':'CHANGE_ME'})
     path = '/api/fleet/auth/accounts/' + account['account_id']
     assert call(engine, 'POST', path + '/reset-password', {'revision':1, 'password':'second-password'})[0] == 200
     assert call(engine, 'POST', login, {'login':'new-user', 'password':'first-password'})[0] == 401
@@ -62,7 +62,7 @@ def test_created_account_password_reset_and_session_revocation():
 
 def test_policy_window_approval_closure_and_expiry():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     base = '/api/fleet/workcells/sample-cell/policy'
     body = {'operator_confirmed': True, 'policy_revision': 'p1', 'rig_revision': 'r1',
             'calibration_revision': 'c1', 'evidence_sha256': 'a' * 64, 'note': 'sample evidence'}
@@ -95,7 +95,7 @@ def call(engine, method, path, body=None, headers=None):
 
 def test_flow_ids_revisions_and_reset_are_consistent():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     code, plan = call(engine, 'POST', '/api/fleet/robots/sample-robot/trip', {'to': 'loading'})
     assert code == 200
     code, trip = call(engine, 'POST', f"/api/fleet/trips/{plan['plan_id']}/start", {})
@@ -111,7 +111,7 @@ def test_flow_ids_revisions_and_reset_are_consistent():
 def test_unauthorized_and_stale_changes_do_not_mutate_state():
     engine = load_engine()
     assert call(engine, 'POST', '/api/fleet/estop', {})[0] == 401
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     _, before = call(engine, 'GET', '/api/fleet/dispatch-control')
     assert call(engine, 'POST', '/api/fleet/dispatch/rearm', {'expected_generation': -1})[0] == 409
     assert call(engine, 'GET', '/api/fleet/dispatch-control')[1] == before
@@ -119,7 +119,7 @@ def test_unauthorized_and_stale_changes_do_not_mutate_state():
 
 def test_assistant_idempotency_and_explicit_terminal_result():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     body = {'request_id': 'sample-request', 'conversation_id': 'sample-conversation', 'text': '현재 상태', 'locale': 'ko-KR'}
     code, result = call(engine, 'POST', '/api/fleet/assistant/messages', body)
     assert code == 202 and result['state'] == 'PENDING'
@@ -134,7 +134,7 @@ def test_assistant_idempotency_and_explicit_terminal_result():
 def test_media_grant_renewal_revoke_and_viewer_read_permission():
     engine = load_engine()
     engine.reset('viewer')
-    response = engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    response = engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
     cookie = next(v for k, v in response.headers if k == 'Set-Cookie').split(';')[0]
     def media(method, suffix=''):
         response = engine.handle(method, '/api/fleet/robots/sample-robot/media-grant' + suffix, {'Cookie':cookie}, b'')
@@ -149,7 +149,7 @@ def test_media_grant_renewal_revoke_and_viewer_read_permission():
 
 def test_cell_documents_revision_preview_and_job_recovery():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     refs = {}
     for kind in ('recipe', 'cell'):
         code, row = call(engine, 'GET', f'/api/fleet/cell-app/documents/{kind}/sample')
@@ -166,7 +166,7 @@ def test_cell_documents_revision_preview_and_job_recovery():
     identifier = result['mission']['mission_id']
     assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': -1})[0] == 409
     assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': 1})[0] == 403
-    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample-reviewer', 'password':'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample-reviewer', 'password':'CHANGE_ME'})
     assert call(engine, 'POST', f'/api/fleet/missions/{identifier}/admit', {'expected_generation': 1})[1]['mission']['status'] == 'READY'
     engine.advance('cell_jobs', 'hold')
     assert call(engine, 'GET', f'/api/fleet/cell-jobs/{identifier}')[1]['job']['status'] == 'HOLD'
@@ -177,7 +177,7 @@ def test_cell_documents_revision_preview_and_job_recovery():
 
 def test_enrollment_pairing_and_calibration_readbacks():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     assert call(engine, 'POST', '/api/fleet/enrollment/robots', {'discovery_name': 'sample-new', 'code': 'bad'})[0] == 422
     code, robot = call(engine, 'POST', '/api/fleet/enrollment/robots', {'discovery_name': 'sample-new', 'code': '123456'})
     assert code == 201 and robot['robot_id'] == 'sample-enrolled'
@@ -210,7 +210,7 @@ def test_enrollment_pairing_and_calibration_readbacks():
 
 def test_goal_idempotency_progress_and_terminal_read():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     headers = {'Cookie': 'rosy_sample_session=sample-1', 'Idempotency-Key': 'sample-goal'}
     target = '/api/fleet/robots/sample-robot/goal'
     first = engine.handle('POST', target, headers, b'{"x":2,"y":1,"yaw":0}')
@@ -226,18 +226,18 @@ def test_goal_idempotency_progress_and_terminal_read():
 
 def test_reset_does_not_restore_a_revoked_password_change_cookie():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     response = engine.handle('POST', '/api/fleet/auth/change-password', {'Cookie':'rosy_sample_session=sample-1'},
-                             b'{"current_password":"sample-password","password":"changed-password"}')
+                             b'{"current_password":"CHANGE_ME","password":"changed-password"}')
     old = next(value for key, value in response.headers if key == 'Set-Cookie').split(';')[0]
     engine.reset('normal')
-    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
     assert engine.handle('GET', '/api/fleet/auth/session', {'Cookie':old}, b'').status == 401
 
 
 def test_policy_stage_rules_and_incident_require_another_person():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     base = '/api/fleet/workcells/sample-cell/policy'
     body = {'operator_confirmed': True, 'policy_revision': 'sample-policy', 'to_stage': 'L0',
             'rig_revision': 'sample-rig', 'calibration_revision': 'sample-calibration',
@@ -250,7 +250,7 @@ def test_policy_stage_rules_and_incident_require_another_person():
     _, incident = call(engine, 'POST', base + '/incidents', {'operator_confirmed': True, 'description': '샘플 점검'})
     clear = base + f"/incidents/{incident['incident_id']}/clear"
     assert call(engine, 'POST', clear, {'operator_confirmed': True, 'note': '원인 확인'})[0] == 403
-    response = engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample-reviewer","password":"sample-password"}')
+    response = engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample-reviewer","password":"CHANGE_ME"}')
     assert response.status == 204
     cookie = next(value for key, value in response.headers if key == 'Set-Cookie').split(';')[0]
     response = engine.handle('POST', clear, {'Cookie':cookie}, b'{"operator_confirmed":true,"note":"reviewed"}')
@@ -259,30 +259,30 @@ def test_policy_stage_rules_and_incident_require_another_person():
 
 def test_account_changes_control_login_and_sample_authority():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     target = '/api/fleet/auth/accounts/sample-reviewer-account'
     assert call(engine, 'PATCH', target, {'revision': 1, 'role': 'viewer',
                 'grants': [{'resource':'site:sample', 'capabilities':['fleet.read']}]})[0] == 200
-    assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'sample-password'})[0] == 204
+    assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'CHANGE_ME'})[0] == 204
     assert call(engine, 'POST', '/api/fleet/estop', {})[0] == 403
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     assert call(engine, 'PATCH', target, {'revision': 2, 'enabled': False})[0] == 200
-    assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'sample-password'})[0] == 401
+    assert call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample-reviewer', 'password': 'CHANGE_ME'})[0] == 401
 
 
 def test_profile_change_survives_logout_and_login():
     engine = load_engine()
     assert call(engine, 'GET', '/api/fleet/auth/profile')[0] == 401
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     assert call(engine, 'PATCH', '/api/fleet/auth/profile', {'display_name': '저장한 이름'})[0] == 200
     call(engine, 'POST', '/api/fleet/auth/logout', {})
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     assert call(engine, 'GET', '/api/fleet/auth/profile')[1]['display_name'] == '저장한 이름'
 
 
 def test_failed_trip_is_an_intervention_in_the_work_view():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     _, plan = call(engine, 'POST', '/api/fleet/robots/sample-robot/trip', {'to':'loading'})
     call(engine, 'POST', f"/api/fleet/trips/{plan['plan_id']}/start", {})
     engine.advance('work', 'fail')

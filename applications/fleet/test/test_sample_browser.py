@@ -36,7 +36,7 @@ def test_eight_pages_use_same_frontend_without_unhandled_requests(sample_site, p
         try:
             context = browser.new_context()
             response = context.request.post(origin + '/api/fleet/auth/login',
-                headers={'Origin': origin}, data={'login': 'sample', 'password': 'sample-password'})
+                headers={'Origin': origin}, data={'login': 'sample', 'password': 'CHANGE_ME'})
             assert response.status == 204
             page = context.new_page()
             errors, external, failed = [], [], []
@@ -64,7 +64,7 @@ def test_profile_save_and_logout_use_sample_session(sample_site):
             page = browser.new_page()
             page.goto(origin + '/console/login?return=/console/profile')
             page.locator('[data-login=login]').fill('sample')
-            page.locator('[data-login=password]').fill('sample-password')
+            page.locator('[data-login=password]').fill('CHANGE_ME')
             page.locator('[data-login=submit]').click()
             expect(page.locator('#profile-id')).to_have_text('sample')
             page.locator('#profile-name').fill('프런트 개발자')
@@ -88,7 +88,7 @@ def test_cancel_all_button_keeps_dispatch_enabled(sample_site):
         try:
             page = browser.new_page()
             assert page.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
-                data={'login':'sample', 'password':'sample-password'}).status == 204
+                data={'login':'sample', 'password':'CHANGE_ME'}).status == 204
             page.goto(origin + '/console')
             page.locator('#cancel-all').click()
             expect(page.locator('#cancel-all-result')).to_contain_text('1/1')
@@ -107,7 +107,7 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
         try:
             context = browser.new_context()
             context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
-                                 data={'login':'sample', 'password':'sample-password'})
+                                 data={'login':'sample', 'password':'CHANGE_ME'})
             page = context.new_page()
             page.goto(origin + '/console/cell')
             for kind in ('recipe', 'cell'):
@@ -161,7 +161,7 @@ def test_assistant_synthetic_voice_receipt_and_camera_panel(sample_site):
         try:
             context = browser.new_context()
             context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
-                                 data={'login':'sample', 'password':'sample-password'})
+                                 data={'login':'sample', 'password':'CHANGE_ME'})
             page = context.new_page()
             page.goto(origin + '/console')
             page.locator('#assistant-toggle').click()
@@ -195,7 +195,7 @@ def test_cookie_login_stays_usable_when_camera_pairing_needs_named_token(sample_
         try:
             context = browser.new_context()
             context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
-                                 data={'login':'sample', 'password':'sample-password'})
+                                 data={'login':'sample', 'password':'CHANGE_ME'})
             page = context.new_page()
             calls = []
             page.on('request', lambda request: calls.append(request.url) if '/pairing/v2/pending' in request.url else None)

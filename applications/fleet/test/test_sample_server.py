@@ -1,4 +1,4 @@
-"""The standalone app host must work without Fleet, ROS, or an upstream."""
+"""applications/fleet/dev runs without Fleet, ROS, or an upstream."""
 import importlib.util
 import json
 from pathlib import Path
@@ -21,7 +21,7 @@ def load_engine():
 
 def test_unknown_request_is_error_and_never_generic_success():
     engine = load_engine()
-    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
     response = engine.handle('POST', '/api/fleet/not-implemented',
                              {'Cookie': 'rosy_sample_session=sample-1'}, b'{}')
     assert response.status == 501
@@ -42,7 +42,7 @@ def test_sample_session_ignores_real_fleet_credentials():
                              {'Cookie': 'rosy_fleet_session=real-secret'}, b'')
     assert response.status == 401
     response = engine.handle('POST', '/api/fleet/auth/login', {},
-                             b'{"login":"sample","password":"sample-password"}')
+                             b'{"login":"sample","password":"CHANGE_ME"}')
     assert response.status == 204
     cookie = next(v for k, v in response.headers if k.lower() == 'set-cookie')
     assert cookie.startswith('rosy_sample_session=')
@@ -51,7 +51,7 @@ def test_sample_session_ignores_real_fleet_credentials():
 
 def test_local_vision_frame_needs_its_lease_and_preserves_binary_headers():
     engine = load_engine()
-    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
+    engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"CHANGE_ME"}')
     response = engine.handle('POST', '/api/fleet/vision/lease', {'Cookie':'rosy_sample_session=sample-1'},
                              b'{"source_id":"sample-camera"}')
     assert response.status == 200

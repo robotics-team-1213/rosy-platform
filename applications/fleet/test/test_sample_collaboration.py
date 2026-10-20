@@ -5,7 +5,7 @@ from test_sample_server import load_engine
 
 def test_channel_review_creates_one_task_and_tracks_its_result():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'CHANGE_ME'})
     code, listing = call(engine, 'GET', '/api/fleet/channel-requests')
     assert code == 200 and listing['rows']
     receipt = listing['rows'][0]
@@ -25,7 +25,7 @@ def test_channel_review_creates_one_task_and_tracks_its_result():
 
 def test_formation_hold_resume_stop_and_incident_review():
     engine = load_engine()
-    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'sample-password'})
+    call(engine, 'POST', '/api/fleet/auth/login', {'login':'sample', 'password':'CHANGE_ME'})
     call(engine, 'POST', '/api/fleet/enrollment/robots', {'discovery_name':'sample-new', 'code':'123456'})
     assert call(engine, 'POST', '/api/fleet/formation/resume')[0] == 409
     code, formation = call(engine, 'POST', '/api/fleet/formation/start',

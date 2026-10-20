@@ -11,7 +11,7 @@ class Sessions:
     def __init__(self, epoch, role):
         self.epoch, self.role = epoch, role
         self.active = False
-        self.password = 'sample-password'
+        password = 'CHANGE_ME'
         self.profile = {'login': 'sample', 'principal_id': 'sample', 'role': role,
                         'display_name': '샘플 운영자', 'email': '', 'account_id': 'sample-account',
                         'grants': [{'resource': 'site:sample', 'capabilities': CAPABILITIES if role == 'operator' else ['fleet.read']}]}
@@ -20,7 +20,7 @@ class Sessions:
             'principal_id': 'sample-reviewer', 'account_id': 'sample-reviewer-account', 'display_name': '샘플 검토자',
             'revision': 1, 'enabled': True}
         self.logins = 0
-        self.passwords = {identifier: self.password for identifier in self.accounts}
+        self.passwords = dict.fromkeys(self.accounts, password)
 
     def authorized(self, headers):
         cookie = SimpleCookie()
@@ -53,7 +53,6 @@ class Sessions:
                 self.epoch += 1
             self.logins += 1
             self.profile = {k: v for k, v in account.items() if k not in ('revision', 'enabled')}
-            self.password = self.passwords[account['account_id']]
             self.role = self.profile['role']
             self.active = True
             return reply(status=204, headers=self.cookie())
@@ -71,12 +70,12 @@ class Sessions:
             self.accounts[self.profile['account_id']]['display_name'] = name.strip()
             return reply(self.profile)
         if (method, path) == ('POST', '/auth/change-password'):
-            if body.get('current_password') != self.password:
+            current = self.passwords[self.profile['account_id']]
+            if body.get('current_password') != current:
                 return error(403, 'CURRENT_PASSWORD_INCORRECT')
             password = body.get('password')
-            if not isinstance(password, str) or len(password) < 8 or password in (self.password, 'sample'):
+            if not isinstance(password, str) or len(password) < 8 or password in (current, 'sample'):
                 return error(422, 'INVALID_REQUEST')
-            self.password = password
             self.passwords[self.profile['account_id']] = password
             self.epoch += 1
             return reply(status=204, headers=self.cookie())

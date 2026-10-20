@@ -1,6 +1,6 @@
 const panel = document.createElement('aside'); panel.id = 'rosy-sample-controls'; panel.setAttribute('aria-label', '샘플 개발 제어');
 const label = document.createElement('strong'); label.textContent = 'SAMPLE · 실제 장치와 연결되지 않음'; panel.append(label);
-const hint = document.createElement('span'); hint.textContent = '로그인: sample / sample-password'; panel.append(hint);
+const hint = document.createElement('span'); hint.textContent = '로그인: sample / CHANGE_ME'; panel.append(hint);
 const tokenHint = document.createElement('span'); tokenHint.textContent = '카메라 승인용 고급 접속 토큰: sample-operator'; panel.append(tokenHint);
 const message = document.createElement('output'); message.setAttribute('aria-live', 'polite');
 function button(text, action) {
@@ -22,7 +22,7 @@ for (const [text, event] of [['Cell 보류', 'hold'], ['Cell 동작 완료', 'ac
 button('조회자 시나리오', async () => { await control('reset', {scenario_id:'viewer'}); location.assign('/console/login'); });
 button('검토자로 로그인', async () => {
   const response = await fetch('/api/fleet/auth/login', {method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({login:'sample-reviewer', password:'sample-password'})});
+    body:JSON.stringify({login:'sample-reviewer', password:'CHANGE_ME'})});
   if (!response.ok) throw Error('login refused');
   location.reload();
 });

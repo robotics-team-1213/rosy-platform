@@ -22,7 +22,7 @@ Fleet 앱을 수정할 때는 이 폴더에서 시작한다. 플랫폼 API·원�
 python applications/fleet/dev/serve.py --mode sample --scenario normal --port 4173
 ```
 
-`http://localhost:4173/console`에서 로그인 `sample`, 비밀번호 `sample-password`를 사용한다. 별도 검토자는 `sample-reviewer`와 같은 비밀번호다. 기명 운영자 토큰 전용 카메라 승인 화면에서는 샘플 토큰 `sample-operator`를 사용한다. 이 값들은 샘플 호스트에서만 유효하다.
+`http://localhost:4173/console`에서 로그인 `sample`, 비밀번호 `CHANGE_ME`를 사용한다. 별도 검토자는 `sample-reviewer`와 같은 비밀번호다. 기명 운영자 토큰 전용 카메라 승인 화면에서는 샘플 토큰 `sample-operator`를 사용한다. 이 값들은 샘플 호스트에서만 유효하다.
 
 화면 위 샘플 제어에서 초기화·읽기 전용 사용자·작업 완료/실패/보류·Cell 진행·AI 응답·합성 음성·영상 상태를 선택한다. 새로고침은 상태를 유지하며 초기화나 서버 재시작은 메모리 상태를 지운다. `--scenario viewer`로 권한 거절부터 확인할 수도 있다. 모든 샘플 작업은 로컬 상태 변경이며 실제 장치·마이크·카메라·모델에 연결하지 않는다.
 
