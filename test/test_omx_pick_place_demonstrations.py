@@ -95,11 +95,12 @@ def test_demonstrations_use_the_same_protected_native_entry_and_output_scope():
     assert '--approve-isolated-simulation --approve-startup-home' in script
 
 
-def test_recording_teacher_is_detected_as_a_second_owner(tmp_path):
+@pytest.mark.parametrize('script',['sim_pick_place_teacher.py','sim_pick_place_policy.py'])
+def test_simulation_actor_is_detected_as_a_second_owner(tmp_path,script):
     from cell_sim_tools import refuse_second_owner
     process = tmp_path / '4001'
     process.mkdir()
-    (process / 'cmdline').write_bytes(b'python3\0/deploy/robot/omx/sim_pick_place_teacher.py\0')
+    (process / 'cmdline').write_bytes(('python3\0/deploy/robot/omx/'+script+'\0').encode())
     (process / 'environ').write_bytes(b'ROSY_OMX_ROS_NAMESPACE=/omx_01\0')
     with pytest.raises(RuntimeError, match='4001'):
         refuse_second_owner(proc_root=tmp_path, namespace='/omx_01')
