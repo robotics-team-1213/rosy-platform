@@ -88,7 +88,13 @@ def test_import_register_edit_save_reopen(editor_site, width):
     page.locator('#map-source').select_option('draft')
     expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
     expect(page.locator('#site-map-svg [data-drawing]')).to_have_count(1)
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    layout = page.evaluate('''() => ({overflow: document.documentElement.scrollWidth - innerWidth,
+      outside: [...document.querySelectorAll('body *')].filter(e => {
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.right > innerWidth + 1 && !e.closest('.map-viewport');
+      }).slice(-15).map(e => ({tag: e.tagName, id: e.id, cls: e.className,
+        width: e.getBoundingClientRect().width, minWidth: getComputedStyle(e).minWidth}))})''')
+    assert layout['overflow'] <= 0, layout
 
 
 @pytest.mark.parametrize('page_site', [False], indirect=True)
