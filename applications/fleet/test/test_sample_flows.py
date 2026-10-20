@@ -145,3 +145,25 @@ def test_reset_does_not_restore_a_revoked_password_change_cookie():
     engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample","password":"sample-password"}')
     assert engine.handle('GET', '/api/fleet/auth/session', {'Cookie':old}, b'').status == 401
 
+
+def test_policy_stage_rules_and_incident_require_another_person():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'sample-password'})
+    base = '/api/fleet/workcells/sample-cell/policy'
+    body = {'operator_confirmed': True, 'policy_revision': 'sample-policy', 'to_stage': 'L0',
+            'rig_revision': 'sample-rig', 'calibration_revision': 'sample-calibration',
+            'evidence_sha256': 'a' * 64, 'note': 'sample offline receipt'}
+    code, proposal = call(engine, 'POST', base + '/proposals', body)
+    assert code == 200 and proposal['state'] == 'PENDING'
+    assert call(engine, 'POST', base + f"/proposals/{proposal['proposal_id']}/decision",
+                {'operator_confirmed': True, 'approve': True})[1]['state'] == 'APPROVED'
+    assert call(engine, 'POST', base + '/proposals', {**body, 'to_stage': 'L2'})[0] == 409
+    _, incident = call(engine, 'POST', base + '/incidents', {'operator_confirmed': True, 'description': '샘플 점검'})
+    clear = base + f"/incidents/{incident['incident_id']}/clear"
+    assert call(engine, 'POST', clear, {'operator_confirmed': True, 'note': '원인 확인'})[0] == 403
+    response = engine.handle('POST', '/api/fleet/auth/login', {}, b'{"login":"sample-reviewer","password":"sample-password"}')
+    assert response.status == 204
+    cookie = next(value for key, value in response.headers if key == 'Set-Cookie').split(';')[0]
+    response = engine.handle('POST', clear, {'Cookie':cookie}, b'{"operator_confirmed":true,"note":"reviewed"}')
+    assert response.status == 200 and json.loads(response.body)['cleared_by'] == 'sample-reviewer'
+
