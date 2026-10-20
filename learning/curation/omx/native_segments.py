@@ -110,6 +110,9 @@ def copy_frame(row, features):
         value = np.asarray(row[key])
         if key.startswith('observation.images.'):
             value = np.rint(value.transpose(1, 2, 0) * 255).astype(np.uint8)
+        elif 'shape' in features[key]:
+            # LeRobot readers squeeze singleton numeric features; writers require their declared shape.
+            value = value.reshape(features[key]['shape'])
         result[key] = value.copy()
     result['task'] = row['task']
     return result
