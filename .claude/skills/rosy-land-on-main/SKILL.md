@@ -16,6 +16,10 @@ shared `main` checkout. A path you did not write belongs to another session.
 
 ## Before you start
 
+First apply the operating budget in `docs/reference/shared-checkout.md` section 「워크트리 한도와 슬롯 운영」:
+at most 10 total worktrees including main. Count locked, waiting and orphan worktrees too; free a slot before starting another task.
+The gateway's 50-directory refusal below is a mechanical backstop, not permission to exceed that operating budget.
+
 ```bash
 cd <umbrella>/rosy-platform        # the shared main checkout
 git status --short --branch; git worktree list
@@ -28,7 +32,7 @@ python tools/worktrees.py status                              # every worktree w
   clean, merged into `main`, not locked, no ignored data, idle 1 h when its branch landed a commit of its own
   and 72 h otherwise (D-790), so nothing is left to lose; your own landed worktree needs no wait; orphan directories
   idle 1 h, their files zipped to `$ROSY_SCRATCH/worktree-orphans/` and verified first);
-  `new --prune` applies that first. It refuses at 60 directories under `.worktrees/` and names each worktree
+  `new --prune` applies that first. It refuses at 50 directories under `.worktrees/` and names each worktree
   removable now and by whom; `status` shows each row's owner (`unknown` when none; `new --owner "<who>"` sets it)
   and whether you may remove it. `landed-dirty` = the branch is in `main` but files are uncommitted: move the
   work to a new worktree. `stale-history` = a pre-rewrite branch: never merge or land it (`new --from` refuses it). `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
