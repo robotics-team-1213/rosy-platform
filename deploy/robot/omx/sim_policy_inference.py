@@ -3,14 +3,15 @@ from act_owner_capture import infer_captured
 from rosy.execution.local.omx_policy import PolicyCandidate
 
 
-def infer_for_owner(engine, session, packet):
+def infer_for_owner(engine, session, camera):
     # Keep inference outside the owner's lock; never refresh a queued result's clocks.
     with session._lock:
         lease = session.lease
         doc = session.policy.recheck()
         if engine.metadata != doc:
             raise ValueError('different installed policy')
-        observation = session.capture_inference_input(packet.rgb, packet.metadata)
+        with camera.capture() as packet:
+            observation = session.capture_inference_input(packet.rgb, packet.metadata)
     result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
                             monotonic=session._clock)
     with session._lock:
