@@ -66,3 +66,19 @@ def test_recording_teacher_is_detected_as_a_second_owner(tmp_path):
     with pytest.raises(RuntimeError, match='4001'):
         refuse_second_owner(proc_root=tmp_path, namespace='/omx_01')
     refuse_second_owner(proc_root=tmp_path, namespace='/omx_02')
+
+
+def test_teacher_delivers_each_owner_event_once_to_the_existing_facade():
+    import ast
+    from types import SimpleNamespace
+    source = ROOT / 'deploy/robot/omx/sim_pick_place_teacher.py'
+    callback = next(node for node in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+                    if isinstance(node, ast.FunctionDef) and node.name == 'on_event')
+    delivered = []
+    capture = SimpleNamespace(on_goal_event=delivered.append)
+    facade = SimpleNamespace(capture=capture, on_goal_event=capture.on_goal_event)
+    namespace = {'facade': facade}
+    exec(compile(ast.Module(body=[callback], type_ignores=[]), str(source), 'exec'), namespace)
+    event = object()
+    namespace['on_event'](event)
+    assert delivered == [event]
