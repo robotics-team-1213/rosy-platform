@@ -8,7 +8,7 @@ from response import DevResponse, error
 
 HOP = {'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer',
        'transfer-encoding', 'upgrade', 'content-length'}
-REQUEST_HEADERS = {'accept', 'accept-language', 'content-type', 'authorization', 'x-rosy-session',
+REQUEST_HEADERS = {'accept', 'accept-language', 'content-type', 'authorization', 'x-rosy-session', 'idempotency-key',
                    'range', 'if-none-match', 'if-modified-since', 'last-event-id'}
 
 
