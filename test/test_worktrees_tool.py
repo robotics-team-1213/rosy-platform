@@ -397,6 +397,26 @@ def test_new_creates_below_the_cap_and_refuses_at_it(main, monkeypatch, capsys):
     assert "[t <t@t>; session sess-7]" in capsys.readouterr().out
 
 
+def test_default_fifty_cap_counts_orphans_and_preserves_explicit_exception(main, capsys):
+    assert worktrees.CAP == 50
+    for index in range(49):
+        (main / ".worktrees" / f"orphan-{index}").mkdir(parents=True)
+
+    assert worktrees.main(["new", "fiftieth", "docs/fiftieth", "--no-prune"]) == 0
+    capsys.readouterr()
+    assert worktrees.main(["new", "overflow", "docs/overflow", "--no-prune"]) == 1
+    assert "the cap is 50" in capsys.readouterr().err
+    assert not (main / ".worktrees" / "overflow").exists()
+    assert "refs/heads/docs/overflow" not in refs(main, "refs/heads")
+    assert len(list((main / ".worktrees").iterdir())) == 50
+
+    assert worktrees.main(["new", "overflow", "docs/overflow", "--no-prune",
+                           "--force-over-cap", "user-approved ADR exception"]) == 0
+    description = git(main, "config", "branch.docs/overflow.description")
+    assert "over cap (50 >= 50): user-approved ADR exception" in description
+    assert all((main / ".worktrees" / f"orphan-{index}").is_dir() for index in range(49))
+
+
 def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, monkeypatch, capsys):
     monkeypatch.setattr(worktrees, "CAP", 2)
     done = add(main, "done", commit=True, merge=True)

@@ -80,7 +80,7 @@ rssh 'sudo -n rosy-login-code --role administrator --minutes 10'   # prints "Log
 
 - The code works **once**. Pair it for a token: `POST /api/v1/auth/pair` `{"code": "ABCD-EFGH", "label": "agent"}` → 201 with `token` (administrator: 24 h). Or type it into the dashboard login drawer.
 - Every paired token is listed and revocable. When done: `POST /api/v1/auth/logout` with that token (204). Card tokens cannot log out (409).
-- Never print, commit or log the code or token; keep it in a variable or a file under `X:\DevTemp`.
+- Never print, commit or log the code or token; keep it in a variable or a file under `$ROSY_SCRATCH`.
 
 ## Giving SSH access to another PC or person (D-418)
 

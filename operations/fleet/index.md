@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · 초기값 회귀 fixture 변수 구분과 중단 시험 회수
-- 2026-10-19 · 103df862b · ID 뒤 ! 초기값과 본인 비밀번호 변경
-- 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
-- 2026-10-18 · c11a34f64b · Bind selected-route guidance to fresh Fleet poses (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · c4bf531fd8 · Compute direction from the selected trip (D-769) (이식, 원래 2026-10-16)
+- 2026-10-20 · b1f18674b2 · D-821 명시적 이동 접수와 다국어 운영 경계
+- 2026-10-20 · uncommitted · 통합관제 조회 전용 AI 대화
+- 2026-10-20 · uncommitted · 실제 목표 도달의 연속 SIM 검증
+- 2026-10-20 · uncommitted · lane 도착의 실제 정지 목표 결속
+- 2026-10-20 · 984a170d8e · fix(station): refresh readiness ACK and fence SIM goal admission

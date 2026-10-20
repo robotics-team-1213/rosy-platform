@@ -82,6 +82,7 @@ def test_features_moved_camera_is_measured(features_reference, frame, key, expec
     assert result['verdict'] == 'adjust', result
     assert result[key] == pytest.approx(expected, abs=0.15)
     assert result['px_mean'] > 3
+    assert all(type(v) in (int, float, str, type(None)) for v in result.values()), 'contract-exact types'
 
 
 def test_features_near_darkness_is_unmeasurable_not_ok(features_reference):

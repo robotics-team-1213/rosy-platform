@@ -1,0 +1,26 @@
+{
+  "learning-delivery/2026-10-16-integrated-learning-pipeline.md": {
+    "bytes": 63300,
+    "sha256": "4fcb4c878526117d7f0f61c50046b3ecc26a80aaf9072f24dd196f154d4abeac"
+  },
+  "learning-delivery/2026-10-17-signed-catalog-import.md": {
+    "bytes": 13215,
+    "sha256": "ed45e63c362acef461a1c4b2a29da5619d046743a27898e9ce89232c088ba5a6"
+  },
+  "learning-delivery/2026-10-17-video-reader-staging-and-acceptance.md": {
+    "bytes": 39152,
+    "sha256": "cb07e3b9e70623d7e85e1994af3ea66243cdab20202c630e5a4a290da888d412"
+  },
+  "learning-plan/2026-10-16-integrated-learning-pipeline.md": {
+    "bytes": 38592,
+    "sha256": "31690226e3fc122ab5d81d64cd1f4282b0e0e34aee7ea9d34b76f396714b2216"
+  },
+  "learning-plan/2026-10-17-perception-lineage.md": {
+    "bytes": 22542,
+    "sha256": "463e73b349e6c926e6526319786f3625812141693819bb1381a141cae710dcf2"
+  },
+  "learning-plan/2026-10-17-video-reader-integration.md": {
+    "bytes": 17901,
+    "sha256": "e03ed7b00e3676a02ede619dbdc0cc73a48b6ef5957118d6b00cdd3e36ad33a5"
+  }
+}

@@ -13,6 +13,13 @@ def _optional_float(value) -> Optional[float]:
     return None if value is None else float(value)
 
 
+def _optional_band(value) -> Optional[float]:
+    """D-573 rev 8: null or a number; ``false`` is not "off" (it would read as 0, an exact map pose)."""
+    if isinstance(value, bool):
+        raise ValueError("line_follow.crosswalk_map_wall_band_m must be null or a number of metres, not a boolean")
+    return _optional_float(value)
+
+
 def _flag(raw: dict, key: str, default: bool) -> bool:
     """A YAML boolean only: a quoted "true" or a 1 is an operator typo, not a yes."""
     value = raw.get(key, default)
@@ -101,6 +108,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         crosswalk_approach_default_m=float(raw.get(
             "crosswalk_approach_default_m", defaults.crosswalk_approach_default_m)),
         crosswalk_range_sigma_m=float(raw.get("crosswalk_range_sigma_m", defaults.crosswalk_range_sigma_m)),
+        crosswalk_map_wall_band_m=_optional_band(raw.get("crosswalk_map_wall_band_m", defaults.crosswalk_map_wall_band_m)),
         crosswalk_persist_k=_whole(raw, "crosswalk_persist_k", defaults.crosswalk_persist_k),
         crosswalk_persist_n=_whole(raw, "crosswalk_persist_n", defaults.crosswalk_persist_n),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),

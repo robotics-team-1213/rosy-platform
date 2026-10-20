@@ -41,8 +41,8 @@ D-427 operations part and a `colcon_roots` entry. Site orchestration and ledgers
 D-584 requires pytest on a remote test PC from committed HEAD. Keep logs in the X session and compare known failures. Vision and Cam name their own procedures.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/operations -- operations/fleet/test operations/apps/games/test -q
-python test/known_failures.py X:/DevTemp/<name>/operations/run-1.txt
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/operations" -- operations/fleet/test operations/apps/games/test -q
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/operations/run-1.txt"
 ```
 
 ### Common Patterns

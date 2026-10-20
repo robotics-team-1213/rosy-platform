@@ -122,3 +122,19 @@ def install_conversation(app, config, site_maps, *, task_service=None):
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
     app.router.lifespan_context = lifespan
+
+
+def install_conversation_routes(app, conversation_config, model_config, site_maps,
+                                task_service, require_operator, read_guard):
+    from fastapi import Depends
+    from core_common.protocol.channel_requests import ChannelModelResult
+    from ..model_runtime import install_channel_models
+    install_channel_models(app, model_config)
+    install_conversation(app, conversation_config, site_maps, task_service=task_service)
+    if model_config is not None or conversation_config is not None:
+        @app.get('/api/fleet/channel-requests/{request_id}/deliberation', dependencies=read_guard,
+                 response_model=ChannelModelResult, tags=['fleet-work'])
+        def channel_model_result(request_id: str, principal=Depends(require_operator)):
+            jobs = (app.state.channel_conversation_jobs if conversation_config is not None
+                    else app.state.channel_model_jobs)
+            return jobs.read(request_id, principal.principal_id)

@@ -1,0 +1,50 @@
+name: structure report
+
+# D-773: every Monday 09:00 KST, post the structure report as a GitHub issue (or a comment on the
+# open one). Optional Jira publication remains a separate manually configured CLI.
+# Fixed rules only (tools/harness/structure_report.py); no model, no code change, never gating.
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"   # Monday 00:00 UTC = 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: structure-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          persist-credentials: false
+      - name: Install the report's two imports
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pytest==8.3.3 PyYAML==6.0.2
+      - name: Build the report
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" tools/harness/structure_report.py --issue > "$RUNNER_TEMP/report.md"
+          "$RUNNER_TEMP/venv/bin/python" tools/harness/structure_report.py --picks-json > "$RUNNER_TEMP/picks.json"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Post the GitHub issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="주간 구조 리포트 $(TZ=Asia/Seoul date +%F)"
+          open=$(gh issue list --state open --search '"주간 구조 리포트" in:title' --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file "$RUNNER_TEMP/report.md"
+            url=$(gh issue view "$open" --json url --jq .url)
+          else
+            url=$(gh issue create --title "$title" --body-file "$RUNNER_TEMP/report.md")
+          fi
+          echo "ISSUE_URL=$url" >> "$GITHUB_ENV"

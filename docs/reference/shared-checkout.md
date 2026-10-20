@@ -45,7 +45,7 @@ flowchart TD
    먼저 `$ROSY_SCRATCH/worktree-orphans/<이름>-<날짜>.zip`에 보관하고 그 보관 파일을 다시 열어 확인한 뒤에만 지운다.
    `status`의 `landed-dirty`(착지한 브랜치의 워크트리에 미커밋 파일)는 새 워크트리로 옮기고, `stale-history`(이력 재작성 이전 줄기)는
    병합·착지하지 않는다. 자신이 만든 것(소유자 기록이 같고 세션 id까지 같은 것)은 깨끗하고 `main`에 들어갔고 그 브랜치에 자기 커밋이 있으면 바로 지운다. 더럽거나 `main`에 안 들어간 것은 `--snapshot`의 몫이고 소유자를 가린다.
-   `.worktrees/` 아래가 60개 이상이면 만들지 않는다. `prune --snapshot`은 사람이나
+   `.worktrees/` 아래가 50개 이상이면 만들지 않는다. `prune --snapshot`은 사람이나
    디스패처만 돌린다. 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. 공유
    `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지
    않은 변경을 남기면 다른 세션의 fast-forward가 거절된다. 스크래치, 로그,

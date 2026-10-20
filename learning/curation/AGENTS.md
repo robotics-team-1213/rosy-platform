@@ -20,7 +20,7 @@ Host-side preparation of existing recordings: common Episodes, perception frames
 ### Working In This Directory
 
 - Preserve original bytes and declared clocks. Do not infer Action, Attempt, or Fleet ids.
-- Write outputs on X:. Refuse to overwrite the source or an existing output directory.
+- Write outputs on $ROSY_SCRATCH. Refuse to overwrite the source or an existing output directory.
 
 ### Testing Requirements
 

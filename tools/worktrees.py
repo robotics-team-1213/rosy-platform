@@ -56,7 +56,7 @@ from pathlib import Path
 
 import worktree_rules as rules
 
-CAP = 60  # everything under .worktrees/, orphan directories included
+CAP = 50  # everything under .worktrees/, orphan directories included
 IDLE_HOURS = 72.0
 STALE_LOCK = 30 * 60  # seconds after which another run's prune lock is taken over
 TYPES = ("feat", "fix", "refactor", "docs", "uiux")  # D-372

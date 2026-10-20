@@ -19,6 +19,9 @@ from fleet._source_layout import console_root
 WEB_ROOT = console_root()
 
 CONSOLE_ASSETS = {
+    "assistant.js": ("assistant/panel.js", "application/javascript"),
+    "assistant-voice.js": ("assistant/assistant-voice.js", "application/javascript"),
+    "assistant.css": ("assistant/panel.css", "text/css"),
     "cell.js": ("cell/cell.js", "application/javascript"),
     "cell-document-editor.js": ("cell/cell-document-editor.js", "application/javascript"),
     "cell.css": ("cell/cell.css", "text/css"),

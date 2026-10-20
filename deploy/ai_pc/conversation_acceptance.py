@@ -80,6 +80,8 @@ def source_files(root):
         'operations/decision/src/rosy/decision/conversation/codec.py',
         'operations/decision/src/rosy/decision/__init__.py',
         'deploy/site/requirements-fleet.txt',
+        'deploy/site/install_operator_broker.py',
+        'deploy/site/install_conversation_broker.py',
         'contracts/foundation/core_common/intent.py'))
     return sorted(p.relative_to(root).as_posix() for p in paths)
 

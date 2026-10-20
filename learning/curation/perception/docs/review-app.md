@@ -7,14 +7,15 @@ Python 3.10 이상과 기존 receiver 의존성 `numpy`, `opencv-python`이 필�
 첫 실행은 저장소 루트에서 한다. `--images`는 source JSONL의 상대 image 경로가 시작하는 디렉터리다. 아래 경로는 자신의 저장 위치로 바꾼다. 실험실 PC의 일회성 상태·로그·증거는 X 드라이브에 둔다.
 
 ```powershell
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
 $env:PYTHONDONTWRITEBYTECODE = '1'
-python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --source <source.jsonl> --human <human.jsonl> --images <image-root> --port 8767
+python learning/curation/perception/review_app.py --state $RosyScratch/pinky-review-state --source <source.jsonl> --human <human.jsonl> --images <image-root> --port 8767
 ```
 
 브라우저에서 `http://127.0.0.1:8767`를 연다. 종료는 실행 터미널에서 Ctrl+C다. 재실행에는 초기 입력을 반복하지 않는다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --port 8767
+python learning/curation/perception/review_app.py --state $RosyScratch/pinky-review-state --port 8767
 ```
 
 사진을 선택하고 박스를 그리거나 좌표·클래스·신호를 바꾼다. 유효한 수정은 자동 저장되고 `서버 저장됨 · vN`이 표시된다. 수정한 사진은 검수 대기로 돌아간다. 전체 사진과 모든 박스를 확인한 후 체크하고 승인한다. 제외 사진은 재검수로 돌린 후에만 편집할 수 있다. 신호가 불확실하면 `알 수 없음`을 유지한다.
@@ -51,7 +52,7 @@ SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져
 기본은 loopback이다. 검수자가 SSH 터널 없이 모델 PC의 앱을 Tailscale로 열어야 할 때만 `--host`로 그 주소를 지정한다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --port 8768 --host <model-pc>
+python learning/curation/perception/review_app.py --state $RosyScratch/pinky-review-state --port 8768 --host <model-pc>
 ```
 
 검수자는 `http://<model-pc>:8768/pixels`를 연다. 받는 값은 loopback·사설(RFC1918)·link-local·Tailscale(100.64.0.0/10) 리터럴 IPv4뿐이다. `0.0.0.0`, 공인 주소, 호스트 이름은 시작 때 거부된다. HTTP만 쓰며 tailnet 구간은 이미 암호화된다.
@@ -62,8 +63,8 @@ python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-revie
 
 ```powershell
 $env:PYTHONIOENCODING = 'utf-8'
-python -m pytest test/learning/perception/test_review_app.py test/learning/perception/test_review_return.py test/learning/perception/test_object_boxes.py test/learning/perception/test_review_pack.py -q -rfE -p no:cacheprovider --basetemp X:/DevTemp/pinky-review-tests | Out-File -Encoding utf8 X:/DevTemp/pinky-review-run.txt
-python test/known_failures.py X:/DevTemp/pinky-review-run.txt
+python -m pytest test/learning/perception/test_review_app.py test/learning/perception/test_review_return.py test/learning/perception/test_object_boxes.py test/learning/perception/test_review_pack.py -q -rfE -p no:cacheprovider --basetemp $RosyScratch/pinky-review-tests | Out-File -Encoding utf8 $RosyScratch/pinky-review-run.txt
+python test/known_failures.py $RosyScratch/pinky-review-run.txt
 ```
 
 Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 출력으로 남긴다. pytest의 종료 코드와 출력의 실패 요약도 함께 확인한다.
@@ -204,7 +205,7 @@ AI 보조의 현재 기능과 후속 방법, 의미/현재성 제한은 [AI 검�
 정규분포 가정이나 흐림 필터는 쓰지 않는다.
 
 ```powershell
-python learning/curation/perception/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 > X:/DevTemp/<name>/exposure-preview.json
+python learning/curation/perception/review_quality.py --state $RosyScratch/<name>/state --threshold 0.15 > $RosyScratch/<name>/exposure-preview.json
 ```
 
 모델 PC에서 로컬 Qwen 영상 모델의 **참고 의견**을 만들려면 다음을 실행한다.
@@ -229,7 +230,7 @@ Ollama `qwen3-vl:8b-instruct`는 모델 PC의 `127.0.0.1:11434`에서만 사용�
 객체 클래스는 첫 실행의 `--object-classes <data.yaml>`로 정한다. 파일은 Ultralytics `data.yaml`의 `names`(목록 또는 번호 사전)를 읽고, 선택 항목 `display`(이름별 표시 문구)와 `colors`(이름별 `[r, g, b]`)를 받는다. 생략하면 D-423의 기본 6개 클래스다. 한 작업 공간은 객체 클래스셋 하나와 픽셀 클래스셋 하나에 묶인다. 다른 모델의 클래스로 검수하려면 다른 `--state`로 새 작업 공간을 만든다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state X:/DevTemp/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
+python learning/curation/perception/review_app.py --state $RosyScratch/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
 ```
 
 픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/curation/perception/classes/lane_lr5.yaml`이다. `/catalog`의 「클래스 파일 경로 (classes.yaml)」 칸에 이 파일 경로를 넣는다. 이 칸은 `/api/import` 요청 본문의 `classes`로 간다. 칸을 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 쓴다. 초안 마스크가 없는 카탈로그도 작업 공간에 아직 픽셀 클래스가 없으면 카탈로그 옆 `classes.yaml`로 묶는다. 이미 픽셀 클래스가 묶인 작업 공간에서는 빈 칸이 기존 클래스를 그대로 쓴다. 초안 마스크는 같은 클래스셋으로 만든 것만 가져올 수 있다. labelmap 이름이나 indexed 초안의 classes sha가 묶을 클래스셋과 다르면 등록 전체를 거부하고, 화면은 「초안 마스크가 다른 클래스셋으로 만들어졌습니다」라고 알린다. 이때는 초안 없이 가져오거나 초안과 같은 `classes.yaml`을 지정한다.
@@ -370,6 +371,10 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 | POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256`, `joints`(기준에 확인 자세가 있으면 관절 이름→rad, 아니면 null) → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `features`는 `homography`(기준→지금 3×3), `markers`는 `detected`(마커 ID별 꼭짓점 픽셀) |
 
 화면은 기준의 안쪽 틀·가이드·마커를 점선으로, 같은 윤곽의 지금 위치(호모그래피로 옮긴 것 또는 검출한 마커)를 실선으로 그리고 기준에서 현재로 가는 화살표를 그린다. 맞춘 특징점이 150개 미만이면 측정 불가다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.
+
+### 모방학습 (D-792 S4)
+
+`/learning/omx`는 읽기 전용이다. `GET /api/learning/omx`는 `omx` 종류로 연결한 학습 행 가운데 `intake-receipt.json`이 있는 폴더만 `sets`로 돌려준다. 각 세트는 `id`, `name`, `trainable`(`reviewed_splits` 결과: `ok`와 `counts` 또는 `reason`), `episodes`(검수 결정 필드와 역할별 카메라 판정 `before`·`after`·`pose_error_rad`), `camera_setup`(`mode`, `references`, `camera_info_sha256`)을 가진다. 서버 경로는 넣지 않는다. 쓰기 API는 없다.
 
 # AI 실행과 저장 버전 조회 (D-764)
 

@@ -12,7 +12,7 @@ Supply public deployment JSON using `-Prosy.accountConfig=<absolute-json>`. Requ
 
 Example hosts are not deployment defaults. Register exact client/redirect/resources in Fleet. Publish the deployed APK signer SHA-256 and package name at the callback host's `/.well-known/assetlinks.json`. Verify Android autoVerify with `pm get-app-links` and test actual browser callback delivery. There is no custom-scheme fallback.
 
-Use the existing Gradle wrapper with `testDebugUnitTest assembleDebug --max-workers=1 --no-daemon`. On Windows redirect outputs with `-Prosy.buildRoot=X:/DevTemp/<session>/scratch/<app>-build`, `--project-cache-dir X:/DevTemp/<session>/scratch/<app>-cache`, `-Pkotlin.project.persistent.dir=X:/DevTemp/<session>/scratch/kotlin`, and `-Pkotlin.compiler.execution.strategy=in-process`. Pilot syncs shared Account sources from Cam through sharedContracts.
+Use the existing Gradle wrapper with `testDebugUnitTest assembleDebug --max-workers=1 --no-daemon`. On Windows redirect outputs with `-Prosy.buildRoot=$ROSY_SCRATCH/<session>/scratch/<app>-build`, `--project-cache-dir $ROSY_SCRATCH/<session>/scratch/<app>-cache`, `-Pkotlin.project.persistent.dir=$ROSY_SCRATCH/<session>/scratch/kotlin`, and `-Pkotlin.compiler.execution.strategy=in-process`. Pilot syncs shared Account sources from Cam through sharedContracts.
 
 ## Sessions and revocation
 

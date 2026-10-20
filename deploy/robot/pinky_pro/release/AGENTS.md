@@ -61,24 +61,25 @@ python3 -m pytest test/test_host_agent.py test/test_release_manifest.py \
 기존 로봇의 payload 계층만 바꿀 때. 카드 재기록 없음. `UPDATE_GO`가 HOLD인 동안은 개발용이고 DEVICE 증거가 아니다.
 
 ```powershell
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
 # 1. CI: Actions > "Build Pinky Pro native payload" (release_id) 실행 후 artifact 받기
-gh run download <run-id> -n rosy-native-payload-unsigned-<id>-<sha> -D X:\payload
+gh run download <run-id> -n rosy-native-payload-unsigned-<id>-<sha> -D $RosyScratch\payload
 # 2. 오프라인 서명 (파일럿 키, 이미지 서명과 같은 도구)
-python deploy\robot\pinky_pro\release\sign_image_release.py X:\payload\<id> `
+python deploy\robot\pinky_pro\release\sign_image_release.py $RosyScratch\payload\<id> `
   --private-key <offline key> --public-key deploy\robot\pinky_pro\release\public-keys\rosy-release-2026-01.pem
 # 3. 재포장: --modes-from 이 artifact zip이 잃은 exec bit를 Linux 빌드 tarball에서 되살린다
-python deploy\robot\pinky_pro\release\build_payload_release.py pack --release-dir X:\payload\<id> `
-  --out X:\payload\<id>.tar.gz --modes-from X:\payload\<id>.unsigned.tar.gz `
+python deploy\robot\pinky_pro\release\build_payload_release.py pack --release-dir $RosyScratch\payload\<id> `
+  --out $RosyScratch\payload\<id>.tar.gz --modes-from $RosyScratch\payload\<id>.unsigned.tar.gz `
   --public-key deploy\robot\pinky_pro\release\public-keys\rosy-release-2026-01.pem
 # 4. 전송·전환
-deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <ip> -Tarball X:\payload\<id>.tar.gz
+deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <ip> -Tarball $RosyScratch\payload\<id>.tar.gz
 ```
 
 ROS 의존성: payload는 잠긴 입력이 아니라 **CI 러너에 그 시점 설치된** `ros-jazzy-*` deb에 대고 빌드된다. payload-only 갱신은 로봇 이미지의 deb를 바꾸지 않으므로, 전송 전에 payload의 `ros-packages.txt`(`name=version`)를 로봇 이미지 릴리스의 `deb-packages.txt`(이미지 dist 사이드카, 또는 로봇의 `/opt/rosy/releases/<이미지 release id>/deb-packages.txt`)와 diff 한다. payload 자체의 `deb-packages.txt`는 러너 전체 목록이라 비교 대상이 아니다. 버전이 다르면 이미지 재빌드를 검토한다. 활성화 게이트는 없다(운영자 확인 사항).
 
 ```powershell
 $img = Get-Content <image deb-packages.txt> | ? { $_ -like 'ros-jazzy-*' } | % { $_ -replace "`t", '=' }
-Compare-Object $img (Get-Content X:\payload\<id>\ros-packages.txt)
+Compare-Object $img (Get-Content $RosyScratch\payload\<id>\ros-packages.txt)
 ```
 
 Tests: `python -m pytest test/test_payload_release_build.py test/test_native_payload_workflow.py -q`.

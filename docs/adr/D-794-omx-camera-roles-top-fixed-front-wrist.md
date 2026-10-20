@@ -38,8 +38,8 @@
 | 단계 | 하는 일 | 끝난 기준 |
 |---|---|---|
 | A (이 ADR) | 뜻을 고정한다. 화면·문서는 `front(손목)`으로 적는다. `CONCEPTS.md`에 용어를 둔다 | lint |
-| B | 읽는 쪽이 `front`와 `wrist`를 같은 손목 역할로 받는다. 별칭 표는 `contracts/learning` 한 곳에 둔다. 쓰는 쪽은 바꾸지 않는다 | 계약·내보내기·학습·정책 설치 시험이 두 이름을 모두 받는다 |
-| C | 쓰는 쪽(녹화 설정, collection profile, ROS 토픽, LeRobot 특징 키 `observation.images.wrist`)을 한 착지에서 `wrist`로 바꾼다. OMX 워크트리 담당과 착지 순서를 먼저 맞춘다 | 새 녹화·새 데이터셋이 `wrist`를 쓴다 |
+| B | 읽는 쪽이 `front`와 `wrist`를 같은 손목 역할로 받는다. 별칭 표는 `contracts/learning/.../omx.py`의 `WRIST`·`WRIST_ALIASES`·`camera_role`·`camera_roles` 한 곳이다. 읽는 쪽은 받은 이름을 `WRIST`(지금은 `front`)로 정규화하고, 내보내기·학습·추론의 이미지 키는 기록·학습된 카메라 이름에서 만든다. 장치 이미지 쪽(`deploy/robot/omx`, `middleware/devices/omx` 어댑터 사본)과 실행 대조(`omx_policy.py` 카메라 바인딩)는 학습 계약 wheel 버전 고정(0.1.12)을 함께 올려야 하므로 C로 넘긴다 | 계약·환경·intake·내보내기 시험이 두 이름을 모두 받는다 |
+| C | 쓰는 쪽(녹화 설정, collection profile, ROS 토픽, LeRobot 특징 키 `observation.images.wrist`)과 B에서 넘긴 장치 쪽 읽기·실행 대조를 한 착지에서 바꾸고 `WRIST`를 `"wrist"`로 뒤집는다. 학습 계약 wheel 버전과 고정값을 같이 올린다. OMX 워크트리 담당과 착지 순서를 먼저 맞춘다 | 새 녹화·새 데이터셋이 `wrist`를 쓴다 |
 | D | 승격 원장에 `front` 키를 쓰는 데이터셋·정책이 남지 않으면 별칭을 지운다 | 원장 조회 0건 |
 
 - 정책은 학습 때의 카메라 키로 추론한다. 단계 B의 정책 설치는 별칭으로 키를 맞추되, 정책 산출물의 `cameras` 기록은 바꾸지 않는다.

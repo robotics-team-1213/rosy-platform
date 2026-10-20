@@ -1,5 +1,7 @@
 # 주제에서 ROSY Cell 작업까지 연결
 
+> Historical plan recovered on 2026-10-19. Preserve its original decisions and sequence as context; current repository instructions and independently reviewed recovery commits govern execution. This plan is not approval to deploy or activate hardware.
+
 사용자 요청은 주제를 받아 ROSY가 task를 실행하고 관제와 시뮬레이션이 결과를 주고받는 것이다.
 기존 D-770·D-403의 owner와 승인·결과 의미를 유지한다. 새 모터 writer나 API는 만들지 않는다.
 

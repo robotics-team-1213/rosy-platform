@@ -236,6 +236,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 | D-770 | Fleet PC OMX 자동 시연 수집과 모방학습 파이프라인의 완료 기준 |
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
+| D-783 | Native adopted-map readback with finite parent evidence |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
 | D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
 | D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
@@ -327,6 +328,7 @@
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
+- [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
 
 ## 교훈 (docs/solutions)
 
@@ -341,8 +343,8 @@
 
 ## 최근 기록
 
-- 2026-10-19 · uncommitted · docs: origin의 협업·PR 파이프라인 문서를 로컬 main에 옮김
-- 2026-10-19 · uncommitted · D-793 학습 정책 승인 API를 Mission API 없이도 설치 (origin #106 이식)
-- 2026-10-19 · uncommitted · D-793 학습 결과의 L0 정책 등록 연결 이식
-- 2026-10-19 · uncommitted · D-773 A3 모델 pointer 변경 기록과 revision readback 이식
-- 2026-10-19 · 103df862b · 명시적인 ID! 초기값과 본인 변경 계약
+- 2026-10-20 · uncommitted · 워크트리 기본 상한 50개
+- 2026-10-20 · uncommitted · OMX Leader 운용 중 개입 Proposed ADR
+- 2026-10-20 · 6c1e5a5267 · 관제 AI 소스 착지·공통 브라우저 fixture 검증
+- 2026-10-20 · a8bc6debd0 · D-821 운영 구조·실행 연결·다국어·Discord 결과
+- 2026-10-20 · 25b77d00b6 · D-810 전체 회귀 발견 수정과 검증 기록

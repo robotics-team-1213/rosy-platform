@@ -6,18 +6,35 @@
   <description>Nav2 and SLAM launch files, maps and parameters for the ROSY robot.</description>
   <maintainer email="kyung133851@pinkab.art">mkh</maintainer>
   <license>Apache-2.0</license>
+  <license>LGPL-2.1-or-later</license>
+  <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
   <depend>navigation2</depend>
   <depend>nav2_bringup</depend>
+  <depend>nav2_amcl</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>rclcpp_components</depend>
+  <depend>lifecycle_msgs</depend>
+  <depend>interfaces</depend>
+  <depend>nav_msgs</depend>
+  <depend>openssl</depend>
   <exec_depend>bringup</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>std_srvs</test_depend>
+  <test_depend>nav2_msgs</test_depend>
+  <test_depend>tf2_ros</test_depend>
+  <test_depend>geometry_msgs</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

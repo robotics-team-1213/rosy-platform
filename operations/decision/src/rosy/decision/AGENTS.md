@@ -40,7 +40,7 @@ Actual proposal implementation under `operations/decision/src/rosy/decision`, ca
 D-584: send committed HEAD to a remote test PC and keep logs in the X session. Preserve the existing proposal/catalog/transaction regression suites.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/decision -- operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/decision" -- operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
 ```
 
 Related: `test_model_tool_call_journal.py`, `test_mission_ai_proposal.py`, `test_mission_model_turn_store.py`. `test/test_remaining_platform_installed.py` checks installed namespaces and self-contained sdist delivery in both import orders alongside World/execution/skills. Source-move records: [progress.md](../../../progress.md), [logs.md](../../../logs.md), [index.md](../../../index.md).

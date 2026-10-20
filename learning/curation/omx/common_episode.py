@@ -16,12 +16,18 @@ from rosy.contracts.learning import seal, validate_episode  # noqa: E402
 from rosy.contracts.learning.omx import validate_demonstration as validate_omx, owner_correlations, validate_profile  # noqa: E402
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def convert(source, output, *, owner_receipts=()):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.exists() or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError("a new directory separate from the source Episode is required")
-    if output.drive.upper() == "F:":
-        raise ValueError("artifact output belongs on X:, not the source drive")
+    if _in_checkout(output):
+        raise ValueError("artifact output belongs outside the source checkout")
     validated = validate_omx(source)
     manifest, samples = validated["manifest"], validated["samples"]
     receipt_payloads, receipts = {}, []

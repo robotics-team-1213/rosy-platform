@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
-- 2026-10-18 · 6ec7681069 · Add an ordered source-expiring route-prior inbox (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · a473a5093 · Align route-prior angles with the consuming camera pose (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · dca38984c · Isolate the remaining startup target error (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · 7e49afe20a · Bound drivable tangent estimation by metric support (D-769) (이식, 원래 2026-10-16)
-- 2026-10-18 · uncommitted · docs: CLAUDE.md를 AGENTS.md로 합치고 지운다
+- 2026-10-20 · uncommitted · 고정 조건 주행 SIM 연속2회 수용
+- 2026-10-20 · uncommitted · 곡선 진행의 근거리 입장 추가
+- 2026-10-20 · uncommitted · 선택 안내 유실과 odometry 공백 분리
+- 2026-10-20 · uncommitted · 실제 픽셀로 확인한 source 곡률 보정
+- 2026-10-20 · uncommitted · 곡선 전진 뒤 이전 정렬 상태 종료

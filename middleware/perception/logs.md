@@ -1665,3 +1665,123 @@
 - 변경: Added typed LaneRouteGuideInput with source deadline, local monotonic remaining budget, ordered clears, publisher retirement and capacity fail-closed latch. Repeated source samples cannot renew expiry; typed output retains actual preview distance. Remote inbox/alignment/protocol tests: 14 passed. Independent review found no remaining narrow blocker. Producer and runtime subscription are not wired; no gate change.
 - 증거: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
 - gate 변화: 위 변경 본문 참조 (feat/d769-learned-follow에서 이식)
+
+## 2026-10-19 · uncommitted · 성공 drivable SIM의 중앙 복귀 조건 분리
+
+- 변경: 기존 v2 성공 구현의 recentre 조건과 회귀를 별도 인식 변경으로 복원했다. 열린 출구의 호·회전 또는 route-memory pivot에서 중심이 반대편이면 먼저 중앙으로 돌아오며 전방 정지·관측 경계를 유지한다.
+- 증거: 원본 91f14c997f의 모델 PC 재실행 PASS와 기존 브랜치 관련 159 passed를 확보했다. 현재 split 후보의 원격 회귀·SIM은 별도다.
+- gate 변화: 없음. 카메라 모델·가중치·실물 보정을 바꾸지 않는다.
+
+## 2026-10-19 · uncommitted · 횡단보도 직진 유지의 전방 정지 덮어쓰기 수정
+
+- 변경: 측정한 LiDAR 전방 막힘이 있으면 기존 pivot 판단을 횡단보도 직진 유지가 지우지 않게 했다. 전방이 다시 열리면 기존 직진 유지로 복귀한다.
+- 증거: 통합 반복 SIM 두 번째 실행의 정지와 같은 우선순위 오류를 원격 회귀에서 RED로 재현했다. 수정 후 원격 회귀·SIM 결과는 별도 기록한다.
+- gate 변화: 없음. 장애물·회전 clearance 임계값과 CORE 최종 명령 권한을 유지한다.
+
+## 2026-10-19 · uncommitted · drivable 경계 호 기하 분리
+
+- 변경: 600줄 한도의 steer에서 기존 경계 교차 계산을 기존 target 기하 모듈로 옮겼다. 기존 import 이름은 재노출하고 계산·임계값을 유지한다.
+- 증거: 코너 정렬 수정 전에 파일 크기를 분리하는 선행 변경이다. 원격 기하 회귀 결과는 별도 기록한다.
+- gate 변화: 없음. 주행 후보·CORE 명령·안전 임계값은 바꾸지 않는다.
+
+## 2026-10-19 · uncommitted · 관측 통로 정렬 후보와 소진 예산 보존
+
+- 변경: 미래 선회를 억제한 뒤 전진 목표가 짧아 정지한 경우에만, 현재 좌표로 옮긴 관측 통로와 신선한 현 차로 안내가 동의하는 방향으로 zero-linear 정렬 후보를 낸다. 기존 CORE 권한·회전 clearance·횡단보도 정지를 유지한다.
+- 증거: source120.500/decision120.625 영상 hash 결속과 원격 RED 2건을 확보했다. 누적 절대 yaw·관측 방향 한도를 보존하고, 연속 odom 및 독립 전방 관측과 실제 이동 없이 재충전하지 않는 회귀를 추가했다. GREEN·SIM 결과는 별도다.
+- gate 변화: 없음. 기대 전진 경로로 재사용할 target은 비우고, odom 불연속·reset은 예산을 되살리지 않는다.
+
+## 2026-10-19 · uncommitted · 이미 선택된 반대 pivot의 관측 정렬
+
+- 변경: 신선한 현 차로 안내와 실제 관측 통로가 같은 쪽인데 미래 안내의 zero-linear pivot이 반대를 가리키는 경우도 기존 정렬 예산으로 처리한다. 관측 소실·예산 소진·odom 불연속 뒤 반대 latch로 복귀하지 않는다.
+- 증거: 첫 정렬 후보 SIM은 이전 정체 지점을 통과했지만 ring_s 6.658m에서 실패했다. source173.750/decision173.875 영상과 발행 명령을 결속했고, 이미 잡힌 반대 pivot 경로를 원격 RED 2건으로 재현했다. 수정 후 GREEN·SIM 결과는 별도 기록한다.
+- gate 변화: 없음. front-blocked·straddle·횡단보도·pivot-limit 보호와 CORE 최종 권한을 유지한다. 새 정렬 예산은 기존 실제 관측 전진 조건에서만 부여한다.
+
+## 2026-10-19 · uncommitted · 관측 굽은 통로 전진으로 정렬 장소 종료
+
+- 변경: 정렬 원점을 연속 odom으로 0.14m 넘게 벗어난 새 관측에서 일반 전진 후보·실제 출구·현재 target이 연결된 관측 centre path와 일치하면 이전 정렬 episode를 종료한다. 직선 corridor만 종료로 인정해 다음 코너를 막던 상태 수명을 고친다.
+- 증거: 앞선 SIM의 source50.375/decision50.500 굽은 통로와 원점 대비 약 0.155m 이동을 결속했고 원격 RED 1건을 확보했다. 사용자가 상태 수명 수정 후 재검증을 선택했다. 생성 출구·끊긴 path·먼 target·불확실 odom은 종료하지 않는 회귀를 추가했다. GREEN·SIM은 별도 기록한다.
+- gate 변화: 없음. 일반 전진 후보 자체·CORE 권한·안전 임계값·bridge 예산은 바꾸지 않는다. 관측 깜빡임·제자리 회전·위치 점프로 정렬 예산을 되살리지 않는다.
+
+## 2026-10-19 · uncommitted · 굽은 관측 경로 길이와 전방 x거리 구분
+
+- 변경: episode 종료의 곡선 lookahead를 마지막 점의 x거리 대신 연결 경로 길이의 보수적 하한으로 판단한다. 기존 near-start 범위 아래 몸→첫 점 연결과 첫→끝 chord를 쓰므로 픽셀 지그재그로 누적 길이를 부풀릴 수 없다. 출구 도달의 종료 조건은 0.25m에서 BEND_ON_X_M(0.18m) 전방 x조건으로 구분하고, 실제 현재 목표의 0.18m 조건은 유지한다.
+- 증거: 앞 수명 후보는 2.408m에서 실패했다. 실제 0.308m 연결 경로의 전방 x가 0.202m라 곡선 종료를 놓쳤으며 원격 RED로 재현했다. 관측 연결성·새 위치에서 찍힌 source·실제 이동·불확실 odom 차단과 noisy short path 거부를 함께 확인한다. GREEN·SIM은 별도다.
+- gate 변화: 없음. 종료 조건의 거리 의미를 정정했으며 CORE 안전 임계값과 일반 후보·명령 권한을 바꾸지 않는다.
+
+## 2026-10-20 · uncommitted · 현재 차로와 원본 행 순서 후보 검증
+
+- 변경: 미래 출구와 현재 차로 후보를 구분하는881 후보, 법선 보정 뒤 x 정렬로 영상 행이 섞이는 현상을 고친44f463 후보를 독립 검토와 native 재생으로 확인했다. 목표 행을 뒤집는 caller와 confidence band를 함께 맞췄다. 정렬 수명·회전 예산·CORE 정지 조건을 완화하지 않았다.
+- 증거: 100c 검증 head의 관련·release252 passed, 영향 범위6,668 passed/408 skipped/NEW0. 두 후보의 native SIM은 각각 pose·stall 실패이며 새 판단은0회다. 새 동결 기록 `docs/validation/pinky-junction-feasibility-2026-10-20/result.md`에 source·모델·원본·기각 가설을 결속했다.
+- gate 변화: 없음. source 검토와 원격 회귀 통과를 SIM 수용으로 승격하지 않는다. 앞선 먼 입구의 producer near 거절을 guide/memory가 되살리는 원본 재생을 추가 확인해, side별 near 사실과 관측 source에 결속한 기억을 별도 회귀로 검증한다.
+
+## 2026-10-20 · uncommitted · recentre와 근접 출구 관측 수명 분리
+
+- 변경: 운동 선택 해제가 관측점까지 지우던 결합을 기존 route_guard로 옮겨 분리한다. 실제 near 점·source·관측 시각만 저장하고 기존.5m와 앞쪽 조건, fresh guide, 원본 wall clearance, source 프레임 연속성과 source→current 이동 한도로 만료한다. 경로 변경·reset·안전 거절은 기억을 지운다. 회전량 예산과 CORE 권한은 유지한다.
+- 증거: a10a7d275 native 재현2 failed/4 passed, NEW2. 앞선1b6 SIM은3.421m stall FAIL이나 먼 입구 거절40회와 현재 차로 선택2회가 적용됐다. 후속 GREEN·SIM은 별도 기록한다.
+- gate 변화: 없음. 주행 수용 HOLD. drivable_steer의 기존 수명 블록을 옮겨 파일을 축소했고, capped 파일에 기능을 덧붙이지 않았다.
+
+## 2026-10-20 · uncommitted · 현재 근접 분기의 경로 선택 보존
+
+- 변경: current-lane 보정이 이미 near 수용한 선택 출구와 그 범위 안 관측 기억을 미래 분기로 취급하지 않게 했다. 기존 출구 조향을 보존하는1행 조건이며 회전량 예산은 유지했다.
+- 증거: 4d0 SIM에서 관측 기억 보존은 확인됐으나 centre 보정6회가 현재 오른쪽 분기를 덮었다. d639 원격 재현2 failed/106 passed, 문서 secret guard는 HEAD 표기 교정 후 통과. bd3a 생산 변경은 독립 contract 리뷰 지적 없이 커밋했고 후속 검증 중이다.
+- gate 변화: 없음. SIM 완주 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 열린 junction의 선택된 근접 출구 소비
+
+- 변경: fresh route가 선택한 near 출구가 현재 좌표에서도 앞에 있으면, 다른 도로가 직진으로 열려 있어도 기존 arc 조향에 전달한다. source near만으로 지난 출구를 살리지 않으며 CORE 권한·기존 임계값·회전량 예산을 유지한다.
+- 증거: 8463 SIM3.253m realign·stall 실패 뒤 동일 PNG native 재생으로 centre 계산과 선택 출구를 분리했다. 903560 재현1 failed/7 passed 후67e0 관련168 passed/NEW0. 독립 contract 리뷰 지적 없음. 반복 SIM·최신 영향 범위는 별도 확인한다.
+- gate 변화: 없음. 실제 조향 목표 선택이 바뀌므로 회귀 통과를 완주 수용으로 계산하지 않는다.
+
+## 2026-10-20 · uncommitted · 분리된 출구 관측의 입장·목표 결속
+
+- 변경: 가까운 opening과 별도의 먼 opening이 합쳐지지 않게 border run을 나눠 같은 run에서 near·point·reach를 계산한다. 기존 above·최소4행·이미지 행 간격을 유지하며 넓은 연결 opening은 자르지 않는다.
+- 증거: e5b1 동일 조건1 PASS/1 FAIL 뒤 마지막 코너1356 원본 재생에서 near5행과 far6행의 혼합을 확인했다. 0aaaca 재현1 failed 후f47d 관련173 passed/NEW0. 실제 mask와 기억 저장까지 회귀로 확인했고 독립 contract 검토 지적 없다.
+- gate 변화: 없음. 최신 반복 SIM과 영향 범위 검증 전이며 이전 첫 PASS를 새 후보에 이월하지 않는다.
+
+## 2026-10-20 · uncommitted · 관측 출처와 실제 바닥 정렬 결속
+
+- 변경: 오른쪽 영상 목표·기억을 미래 왼쪽 경로로 다시 명명하지 않는다. guide-only 후보는 현재 좌표에서 반대 target을 따라 전진하지 않으며, 짧은 실제 floor 픽셀 prefix만 기존 bounded 제자리 정렬의 근거로 소비한다. 화면 clip 후 재투영·raw 행/연결 픽셀 지지·source/current 전체 근거리·동일 side를 확인한다.
+- 증거: b42는 native 영향6,900 passed 뒤 SIM 마지막 코너 off_lane0.108m로 실패했다. 원본1337 mask의 화면 밖 중심 추정을 확인하고 a81c RED14개·현재 좌표 RED1개 후8a870 관련193 passed/NEW0, skip0. 독립 contract 검토의 두 P2를 수정 후 재검토했으며 기존 회전량 예산·수명·CORE 권한을 유지한다.
+- gate 변화: 없음. 최신 영향 범위와 동일 조건 연속2회 SIM 검증 전이며 실물 수용을 주장하지 않는다.
+
+## 2026-10-20 · uncommitted · 합성 출구의 현재 좌표 방향 재검증
+
+- 변경: target 승격과 guide·target·memory 유래 후보의 반대 방향 판단을 현재 좌표 및 최종 선택 점에 결속했다. 촬영 이후 회전한 source 방향으로 반대쪽 전진 arc를 만들지 않게 했다.
+- 증거: 8a870 별도 최종 소스 검토 Important1을 native3794606c 회귀2개 NEW로 확인했다. 후속8387은 독립 safety 재검토 후 관련195 passed/skip0/NEW0, b42 이후7커밋 size-range 통과.
+- gate 변화: 없음. 최신 영향 범위·반복 SIM과 실물 수용은 별도이며 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 근거리 정렬 ROI의 source/current 연속성
+
+- 변경: 실제 연결 floor가 멀리 이어져도 검증된 raw prefix의 가까운 구간을 제자리 정렬 ROI로 사용한다. 현재 좌표에서도 최초 범위 이탈 직전까지만 같은 prefix를 유지하며 첫 점·최소4개 raw 지지·기존 회전량 예산을 보존한다. 도로 끝·출구·전진 후보·수명 종료의 증거로 쓰지 않는다.
+- 증거: 7a0 native6,922 passed 뒤 SIM 중반 이탈0.104m/정렬0회. 원본000723 native 재생119행 중 가까운42행을 확인했다. producer RED2→5be197 passed, current 좌표·cached source RED각1→b8e9 관련200 passed/skip0/NEW0. 독립 safety 및 최종 소스 검토 지적0, 7a0 이후5커밋 size-range 통과.
+- gate 변화: 없음. 후속 영향 범위·같은 조건 연속2회 SIM 미검증, 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 곡선 전진 뒤 이전 정렬 상태 종료
+
+- 변경: 관측한 곡선을 따라 전진했다는 증거에서 current-here를 먼 목표 chord 대신 검증된 가까운 첫 segment의 진행 방향과 비교한다. 기존30도·이동·연결·누적 예산 보호를 유지한다.
+- 증거: dfca native6,914 passed 뒤 SIM s5.357 stall60 실패. 실제 odom0.150m 전진 뒤 방향 혼동으로 이전 right episode가 다음 left pivot을 막았다. 원본138초 관측·odom145개를 결속한 eef043 RED3→eeb3 관련203 passed/skip0/NEW0, 독립 safety 검토 지적 없음, dfca 이후2커밋 size-range 통과.
+- gate 변화: 없음. 최신 영향 범위와 반복 SIM 수용 HOLD, 첫 segment 잡음 민감성은 반복 주행에서 별도 확인한다.
+
+## 2026-10-20 · uncommitted · 실제 픽셀로 확인한 source 곡률 보정
+
+- 변경: 기존 source arc가 가시 non-way를 지나고 같은 band의 chord가 가시 floor 픽셀과 사이 연결에 지지될 때만 chord로 교체한다. 화면 밖·불확실 구간은 지지로 간주하지 않는다.
+- 증거: d42 반복 SIM은1 PASS/1 FAIL이었다. 실패 원본000958 native 재생에서 기존 arc 가시13개 중8개 non-way, chord 가시45개 모두 floor였다. 회귀 RED6→9550 관련210 passed/skip0/NEW0, 독립 safety 및 최종 소스 검토0/0/0, d42 이후3커밋 size-range 통과.
+- gate 변화: 없음. 이 검사는 source 후보 보정이며 smoothing/current 최종 궤적 전체의 보장은 아니다. 새 후보 영향 범위·연속2회 SIM 전까지 수용 HOLD.
+
+## 2026-10-20 · uncommitted · 선택 안내 유실과 odometry 공백 분리
+
+- 변경: 선택 안내가 없는 동안에도 기존 정렬 episode의 pose·시각·절대 yaw를 추적한다. 후보와 출력을 바꾸거나 상태를 생성·종료하지 않으며, 안내 복귀 후 기존 관측 전진 조건으로 종료한다. 실제 odom 공백·jump·reset uncertainty는 보존한다.
+- 증거: 24cc 영향6,937 passed 뒤 SIM1 PASS/1 FAIL, 마지막 코너 정체. native 재생에서156.875~157.125 안내 유실이 정상 odom에도157.25의0.5초 공백 오인을 만들었다. 원본168개 odom 회귀 e12 RED4→1941 관련12파일 통과/skip0/NEW0, 독립 safety·최종 소스 검토0/0/0.
+- gate 변화: 없음. 최신 영향 범위·동일 후보 연속2회 SIM 전까지 수용 HOLD. 회전량 예산이나 종료 기하 기준을 완화하지 않는다.
+
+## 2026-10-20 · uncommitted · 곡선 진행의 근거리 입장 추가
+
+- 변경: 기존 중심축0.03m 지지를 보존하고 축 밖인 가까운 점은 선택 current 원호의 short branch와 같은 x에서0.03m 이내일 때 추가 인정한다. 공간 입장은 넓어지며 연결·tangent·target/opening·실제 이동·uncertainty·예산 기준은 유지한다. 저장 경로나 TTL 예외는 없다.
+- 증거: 7956 SIM 중간 코너 stall60 실패. 원본156개 odom·3관측에서 곡선 자체의 bow가 직선 축 기준을 넘었다. native RED14/negative1 passed→2b 기존 곡선3FAIL/최종 Important1→d8 관련235 passed/skip0/NEW0와 별도 safety·최종 소스 검토0/0/0으로 종료했다.
+- gate 변화: 없음. 최신 전체 영향 범위·반복 SIM 수용 HOLD, smoothing/current 최종 궤적의 전역 보장은 아니다.
+
+## 2026-10-20 · uncommitted · 고정 조건 주행 SIM 연속2회 수용
+
+- 변경: a24 고정 후보의 최종 주행·학습 모델 소비·정지·정리 증거를 동결 기록에 추가했다. 이전 실패와 중간3FAIL/Important1은 보존했다.
+- 증거: exact selector86경로를 제외 없이 분할해 native12,973 passed/776 skipped/NEW0. 같은 소스·모델·지도·출발 조건의 연속2회 PASS, 실제 목표 오차0.004722/0.007501m·via각0.029m, 두 실행 final cmd·odom0/lease released/left_running 없음과 회수·정리 완료.
+- gate 변화: 전체 모듈·FIELD 승격 없음. 이번 요청의 고정 조건 주행 SIM 수용을 충족했으며 lane_return·실물·현장 localization은 미검증이다.
