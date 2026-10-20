@@ -9867,3 +9867,9 @@ osy-d395-s1d\`.
 - 변경: 제한된 OMX-F import catalog·공통 run 저장소와 D-834 Proposed를 추가했다. 요청 중복·입력 지문·불변 결과·revision 상태와 산출물 경계를 웹·CLI 공통 실행의 기반으로 둔다.
 - 증거: 원격 RED 28개를 확인한 뒤 구현했으며 GREEN·회귀는 최종 SHA에 연결한다. source/SDK/GPU의 읽기 전용 환경 확인을 실행 성공이나 과제 성공으로 세지 않는다.
 - gate 변화: 없음. 실행기·CLI·웹·신규 SDK 실행은 후속이며 NOT RUN이다.
+
+## 2026-10-21 · uncommitted · 공통 Isaac 실행과 복구 절차
+
+- 변경: 기존 SDK·동일 계정의 두 잠금·transient unit·불변 입력을 이용한 제한 실행과 복구 절차를 deployment runbook에 기록했다. 중지 대상은 확인한 worker pidfd이며 결과는 모델 검사와 물리 과제 성공을 구분한다.
+- 증거: 독립 검토의4 Important·2 Minor를 수용해 오류 중 잠금 유지·GPU 확인·venv 소유권·관리 코드 하위 데이터 배제·프로세스 중지 fence·손상 기록 목록을 수정했다. 원격455 PASS/1 SKIP이며2 harness 실패는 main 반영 뒤 남은 D833 결번 행으로 재현·정리했다.
+- gate 변화: 없음. 실제 SDK·웹/CLI 교차 조회는 다음 검증이며 D-834 Proposed를 유지한다.
