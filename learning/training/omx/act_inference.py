@@ -70,12 +70,37 @@ def action_statistics(stats,size):
         except KeyError as error:raise ValueError('missing action statistics') from error
         return 'absolute',mean,std,mean
     transform=stats['action_transform']
-    if (any(key in stats for key in ('action_mean','action_std')) or type(transform) is not dict
-            or set(transform)!={'type','mean','std','absolute_baseline'}
-            or transform['type']!='joint_delta_from_chunk_source_v1'):
+    if any(key in stats for key in ('action_mean','action_std')) or type(transform) is not dict:
         raise ValueError('unknown or ambiguous action transform')
+    kind=transform.get('type')
+    keys={'type','mean','std','absolute_baseline'}
+    if kind=='joint_delta_tanh_from_chunk_source_v1':
+        keys.add('max_delta_rad')
+        bound=transform.get('max_delta_rad')
+        if type(bound) not in (int,float) or bound!=.035:
+            raise ValueError('exact supported action bound required')
+    elif kind!='joint_delta_from_chunk_source_v1':
+        raise ValueError('unknown or ambiguous action transform')
+    if set(transform)!=keys:raise ValueError('unknown or ambiguous action transform')
     return (transform['type'],_vector(transform['mean'],size),
             _vector(transform['std'],size,positive=True),_vector(transform['absolute_baseline'],size))
+
+
+def install_action_head_transform(policy,stats):
+    """Reconstruct the byte-bound trained activation without changing weight keys."""
+    kind,mean,std,_=action_statistics(stats,len(stats['state_mean']))
+    if kind!='joint_delta_tanh_from_chunk_source_v1':return
+    import torch
+    head=policy.model.action_head
+    if type(head) is not torch.nn.Linear or head.out_features!=len(mean) or head._forward_hooks:
+        raise ValueError('one unmodified ACT linear action head required')
+    mean=head.weight.new_tensor(mean);std=head.weight.new_tensor(std)
+    def bounded_delta(_module,_inputs,output):
+        delta=output*std+mean
+        if not torch.isfinite(output).all() or not torch.isfinite(delta).all():
+            raise ValueError('nonfinite action head')
+        return (.035*torch.tanh(delta/.035)-mean)/std
+    head.register_forward_hook(bounded_delta)
 
 
 def _configuration(doc,buffers):
@@ -119,6 +144,7 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
     if not isinstance(config,ACTConfig):raise ValueError('ACT config required')
     policy=ACTPolicy(config)
     policy.load_state_dict(load(weight_bytes),strict=True)
+    install_action_head_transform(policy,stats)
     policy.eval()
     representation,action_mean,action_std,_=action_statistics(stats,len(metadata['joint_names']))
     means=dict(state_mean=torch.tensor(stats['state_mean'],dtype=torch.float32),

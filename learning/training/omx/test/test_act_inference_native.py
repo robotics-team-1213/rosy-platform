@@ -57,6 +57,13 @@ def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path,rela
         expected=delta+torch.tensor(first.source.positions)
         torch.testing.assert_close(torch.tensor(first.positions),expected[0],rtol=1e-6,atol=1e-6)
         torch.testing.assert_close(torch.tensor(second.positions),expected[1],rtol=1e-6,atol=1e-6)
+        if relative=='bounded':
+            third=engine.infer(observation(sequence=12,positions=(.8,.9)))
+            fourth=engine.infer(observation(sequence=13,positions=(-.8,-.9)))
+            for index,result in enumerate([first,second,third,fourth]):
+                assert result.source==first.source and result.chunk_index==index
+                torch.testing.assert_close(torch.tensor(result.positions),expected[index],rtol=1e-6,atol=1e-6)
+                assert all(abs(a-b)<=.0350001 for a,b in zip(result.positions,first.source.positions))
     assert first.candidate_fields()['camera_received_at_ns']==second.candidate_fields()['camera_received_at_ns']==(10_000_000_000,)
     (root/'policy/model.safetensors').write_bytes(b'corrupt after immutable load')
     engine.reset('episode_change')
@@ -83,6 +90,9 @@ def test_bounded_action_head_is_differentiable_and_rejects_corruption():
     assert torch.all(delta.abs()<=.0350001)
     with torch.no_grad():head.bias.fill_(float('inf'))
     with pytest.raises(ValueError,match='nonfinite'):head(torch.ones(1,2))
+    for invalid in [torch.nn.Linear(2,3),torch.nn.Identity()]:
+        policy.model.action_head=invalid
+        with pytest.raises(ValueError,match='head'):install_action_head_transform(policy,stats)
 
 
 def test_replay_requires_new_output_and_pinned_revision(tmp_path):

@@ -130,7 +130,7 @@ def export_truth(export, source, validated):
 
 def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames',
         action_representation='absolute',state_noise_std_rad=0.):
-    if action_representation not in ('absolute','joint_delta_from_chunk_source_v1'):
+    if action_representation not in ('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'):
         raise ValueError('unknown action representation')
     if (type(state_noise_std_rad) not in (int,float) or not np.isfinite(state_noise_std_rad)
             or state_noise_std_rad<0):
@@ -250,6 +250,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             del stats['action_mean'],stats['action_std']
             stats['action_transform']=dict(type=action_representation,mean=action_mean.tolist(),
                 std=action_std.tolist(),absolute_baseline=absolute_baseline.tolist())
+            if action_representation=='joint_delta_tanh_from_chunk_source_v1':
+                stats['action_transform']['max_delta_rad']=.035
         noise_rng=None
         if state_noise_std_rad:
             noise_rng=torch.Generator().manual_seed(seed+1)
@@ -268,6 +270,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                            pretrained_backbone_weights=None, device="cpu",
                            optimizer_lr=1e-4, optimizer_lr_backbone=1e-5, optimizer_weight_decay=1e-4)
         policy = ACTPolicy(config)
+        from act_inference import install_action_head_transform
+        install_action_head_transform(policy,stats)
         optimizer = torch.optim.AdamW(policy.get_optim_params(), lr=config.optimizer_lr,
                                       weight_decay=config.optimizer_weight_decay)
         indices = [(e, i) for e, chosen in enumerate(selected_indices[:train_count]) for i in chosen]
@@ -325,6 +329,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
 
         prediction = predict(policy)
         reloaded = ACTPolicy.from_pretrained(out / "policy", local_files_only=True)
+        install_action_head_transform(reloaded,stats)
         np.testing.assert_allclose(predict(reloaded), prediction, atol=1e-6, rtol=1e-6)
         truth = np.asarray([r["action"] for rows in original_rows[train_count:] for r in rows])
         limits = [sources[0]["position_limits_rad"][name] for name in names]
@@ -410,7 +415,7 @@ def main():
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
     ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
-    ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1'),default='absolute')
+    ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'),default='absolute')
     ap.add_argument('--state-noise-std-rad',type=float,default=0.)
     args = ap.parse_args()
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,

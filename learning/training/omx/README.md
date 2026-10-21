@@ -32,6 +32,14 @@ python learning/training/omx/act_job.py
 기존 최상위 action_mean/action_std를 두지 않아 구 소비자는 모델 생성 전에 거절한다.
 평가 baseline은 원 절대 train target 평균이다. 기본 `absolute`의 정규화 구조는 그대로다.
 
+`--action-representation joint_delta_tanh_from_chunk_source_v1`은 새 checkpoint용으로
+ACT linear action head의 역정규화 이동량 `d`에 `0.035*tanh(d/0.035)`를 적용한다.
+미분 가능한 같은 activation을 학습·validation·재적재·byte 추론에 설치하며 정규화의
+type과 정확한 `max_delta_rad: 0.035`를 hash로 결속한다. 기존 weight key는 유지된다.
+원 절대 target을 자르지 않으므로 0.035rad 밖의 정답은 정확히 재현할 수 없다.
+chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존
+owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 성공의 증거는 아니다.
+
 상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
 Gaussian 교란을 주는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
 시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
