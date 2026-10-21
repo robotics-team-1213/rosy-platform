@@ -422,7 +422,7 @@ UUID나 event가 없다.
 실측이며 지연 상한이나 일반적인 개선 보장이 아니다. Actor 148.400초 뒤 실패했고
 cleanup true, lift·stable 0·동일 incomplete 위치 오차다. 새 모델은 별도 사전 과제
 0/2, 전체 learned 결과는 0/30이며 새 formal20은 시작하지 않았다. 원 시연의 가까운
-상태와 실제 rollout을 MODEL에서 읽기 전용 대조하며 추가 정책 변경은 아직 하지 않았다.
+상태와 실제 rollout을 MODEL에서 읽기 전용으로 대조한 뒤 아래 학습 실험을 준비했다.
 
 읽기 전용 MODEL 진단 `omx-relative-rollout-neighbors-1`은 train 52,834개 상태와
 실패 과제의 7개 고정 frame을 대조해 exit 0으로 종료됐다. Step110의 실제 그리퍼
@@ -446,6 +446,13 @@ synthetic이며 실제 관측·추가 시연·SIM truth에 합산하지 않는�
 초기 일반 GREEN 요청의 잘못된 파일 경로는 exit4·실행0으로 보존하고 통과에 넣지 않았다.
 독립 코드 검토에서 blocker는 없었다. 실제 시연 25개 전체 재검증·같은 seed42750의
 새 10,000 step 학습을 요청했으며 새 checkpoint와 실제 물체 성공은 아직 확인 전이다.
+
+최신 main d31ec2747f를 반영한 통합 source `301dc82473`는 공식 selector의 관련55경로를
+AI PC에서 실행해 1,085 PASS / 35 SKIP / 0 NEW·exit 0이었다. 실제 ACT가 필요한 생략분을
+이 통과에 넣지 않는다. 이후 test-only source `6ce9091ded`에서 모든 관절의 복원된 학습
+target을 원본 값과 직접 대조하도록 보강했고 MODEL 실제 ACT 6 PASS / 0 SKIP / 0 NEW·
+exit 0을 다시 확인했다. 통합 source의 정식 착지 dry-run은 안전·크기 검사를 통과하고
+같은55경로를 계획했으며 실제 병합을 수행하지 않았다. 최종 물체 목표와 착지는 남았다.
 
 이후 main dc8c3cc2bf를 충돌 없이 반영한 통합 source `9bcca8e7bd`는 공식 selector의
 관련 55개 경로를 AI PC에서 실행해 1,077 PASS / 34 SKIP / 0 NEW를 확인했다.
