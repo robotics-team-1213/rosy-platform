@@ -139,6 +139,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         policy=prepare_install(parent_root,campaign['policy_revision'],directory/'installed',arm.owner,
             normalization_sha256=campaign['normalization_sha256'])
         engine=ACTInference(policy.root,policy.binding.policy_revision,monotonic=arm.monotonic)
+        period_s=engine.metadata['timing']['period_ns']/1e9
+        receipt['policy_cycle_minimum_interval_s']=period_s
         receipt['torch_num_threads']=torch.get_num_threads()
         receipt['torch_num_interop_threads']=torch.get_num_interop_threads()
         receipt['installed_policy_revision']=policy.binding.policy_revision
@@ -167,15 +169,16 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         initial_z=samples[0]['model_pose_base']['z_m']
         aid.watch('infeed_block');aid._robot_entity_id()
         attached=ever_attached=False
-        last_submit=None
+        last_cycle=None
         for index in range(12 if calibration else 600):
             require_live()
-            while last_submit is not None and time.monotonic()-last_submit<.8:
+            while last_cycle is not None and time.monotonic()-last_cycle<period_s:
                 require_live();time.sleep(.01)
             before=time.monotonic()
             timing_ms={}
             candidate,result=infer_for_owner(engine,session,camera,timings=timing_ms)
             step=dict(index=index,candidate=asdict(candidate),inference_ms=(time.monotonic()-before)*1000,
+                cycle_started_owner_s=before,
                 timing_ms=timing_ms,
                 input={key:value for key,value in asdict(result.source).items() if key!='rgb'},
                 frame_sha256=result.source.frame_sha256,consumed_current=result.consumed_current,
@@ -189,12 +192,12 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                     if now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         raise PermissionError('calibration action too old')
                 step['checked_input_age_ms']=(now-min(candidate.observed_at_ns,*candidate.camera_received_at_ns))/1e6
-                time.sleep(.1)
+                last_cycle=time.monotonic()
                 continue
             if last_observed[0] is None or time.monotonic()-last_observed[0]>.5:
                 raise PermissionError('independent object observation stale')
             decision=session.submit(candidate)
-            last_submit=time.monotonic()
+            last_cycle=time.monotonic()
             step.update(decision=asdict(decision),command_id=session._active_command)
             deadline=time.monotonic()+30
             while True:
