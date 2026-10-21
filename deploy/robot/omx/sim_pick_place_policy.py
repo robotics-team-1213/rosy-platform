@@ -39,7 +39,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from rosy_cell.compiler import compile_job
     from act_inference import ACTInference
     from sim_policy_install import prepare_install, WORLD
-    from sim_policy_camera import SimPolicyCamera
+    from sim_policy_camera import MAX_CAPTURE_RECORDS, SimPolicyCamera
     from sim_policy_inference import infer_for_owner
     from sim_policy_runtime import bind_sim_runtime, trace_sim_admission
     from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
@@ -93,6 +93,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         mode='calibration_without_policy_goals' if calibration else 'learned_policy_object_trial',
         parent_policy_revision=campaign['policy_revision'],goal_m=goal,sim_aid=True,
         runtime_poll_period_s=arm.poll_period_s,
+        camera_capture_record_limit=MAX_CAPTURE_RECORDS,
         python_switch_interval_s=sys.getswitchinterval(),
         previous_python_switch_interval_s=previous_switch_interval_s,
         operating_fleet_approval='NOT_CLAIMED',physical_device_authority=False,module_origins=origins)
@@ -285,7 +286,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             receipt['admission_rejection']=session._runtime_binding.admission_rejection
         receipt.update(wall_s=time.monotonic()-started,worker_errors=worker_errors,
             owner_final=arm.owner.state,camera_accepted=camera.accepted,camera_rejected=camera.rejected,
-            camera_error=camera.error,policy_steps=len(steps),native_events=len(events))
+            camera_error=camera.error,camera_capture_records=len(camera.captures),
+            policy_steps=len(steps),native_events=len(events))
         if worker_errors:receipt['success']=False
         write_json(directory/'policy-steps.json',steps)
         write_json(directory/'policy-native-events.json',events)
