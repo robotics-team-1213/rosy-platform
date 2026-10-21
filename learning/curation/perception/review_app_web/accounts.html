@@ -12,12 +12,9 @@
 <main id="accounts-main" class="learning-main" tabindex="-1">
 <ui-status id="account-status" state="pending" role="status">설정을 확인하는 중입니다.</ui-status>
 <ui-status id="account-error" state="error" role="alert" hidden></ui-status>
-<ui-section id="login-panel" class="learning-section" aria-labelledby="project-login-title" hidden><h2 id="project-login-title" class="ui-section-heading">프로젝트 로그인</h2>
-<form id="login-form" class="account-form"><label class="ui-field-label">아이디<input id="username" class="ui-field" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="100"></label>
-<label class="ui-field-label">비밀번호<input id="password" class="ui-field" type="password" autocomplete="current-password" required maxlength="1024"></label>
-<ui-button kind="primary" type="submit" data-action-icon="login">로그인</ui-button></form>
-<ui-button id="hf-login" kind="quiet" data-action-icon="login" hidden>Hugging Face로 로그인</ui-button>
-<p class="quiet">초대받은 계정으로 로그인하면 자료 등록과 검수를 이어갈 수 있습니다.</p></ui-section>
+<ui-section id="login-panel" class="learning-section" aria-labelledby="project-login-title" hidden><h2 id="project-login-title" class="ui-section-heading">Rosy Account 로그인</h2>
+<p>모든 Rosy 앱은 Rosy Account 하나로 로그인합니다. 아이디와 비밀번호는 Rosy Account 로그인 화면에서 입력합니다.</p>
+<ui-actions><a id="account-login" href="/api/account/login?return=/accounts">Rosy Account로 로그인</a></ui-actions></ui-section>
 <div id="signed-in" hidden>
 <ui-section class="learning-section" aria-labelledby="identity-title"><h2 id="identity-title" class="ui-section-heading">현재 작업자</h2><p id="identity"></p><ui-actions><a data-account-profile hidden>프로필</a><a href="/learning">학습 작업으로 돌아가기</a><ui-button id="logout" kind="quiet" data-action-icon="logout">로그아웃</ui-button></ui-actions></ui-section>
 <ui-section class="learning-section" aria-labelledby="connections-title"><h2 id="connections-title" class="ui-section-heading">연결한 Hugging Face 계정</h2><div id="connections" aria-live="polite"></div>

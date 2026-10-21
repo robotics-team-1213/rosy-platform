@@ -202,21 +202,18 @@ def test_configured_https_origin_secure_cookie_and_live_logout(tmp_path, account
     server = make_server(open_store(folder), 0, accounts=accounts)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     base = f'http://127.0.0.1:{server.server_port}'
-    headers = {'Host': 'learning.example', 'Origin': 'https://learning.example'}
+    session, _ = accounts.login('alice', 'alice-password')
+    headers = {'Host': 'learning.example', 'Origin': 'https://learning.example',
+               'Cookie': 'rosy_learning_session=' + session}
     try:
-        req = urllib.request.Request(base + '/api/accounts/login',
-            data=json.dumps({'username': 'alice', 'password': 'alice-password'}).encode(), headers=headers)
-        with urllib.request.urlopen(req) as response:
-            session_cookie = response.headers['Set-Cookie']
-            assert '; Secure' in session_cookie and '; HttpOnly' in session_cookie
-        headers['Cookie'] = session_cookie.split(';')[0]
         with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/session', headers=headers)) as response:
             principal = json.load(response)
             assert principal['project_id'] == 'one'
             assert not any(key.startswith('_') for key in principal)
         headers['X-Pinky-Token'] = principal['token']
-        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/logout', data=b'{}', headers=headers)):
-            pass
+        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/logout', data=b'{}', headers=headers)) as response:
+            cleared = response.headers['Set-Cookie']
+            assert '; Secure' in cleared and '; HttpOnly' in cleared and 'Max-Age=0' in cleared
         with pytest.raises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(urllib.request.Request(base + '/api/workspace', headers=headers))
         assert error.value.code == 401
@@ -224,46 +221,33 @@ def test_configured_https_origin_secure_cookie_and_live_logout(tmp_path, account
         server.shutdown(); server.server_close(); thread.join()
 
 
-def test_oauth_roundtrip_through_http_uses_signed_identity(tmp_path, accounts):
-    import time
-    from urllib.parse import parse_qs, urlsplit
-    from learning_oauth import OAuth
-    from test_learning_oauth import Provider
-    cfg = json.loads(accounts.config_path.read_text())
-    cfg.update(public_origin='https://learning.example', oauth={
-        'client_id': 'client', 'redirect_uri': 'https://learning.example/oauth/huggingface/callback'})
-    accounts.config_path.write_text(json.dumps(cfg))
-    provider = Provider(); oauth = OAuth(accounts, transport=provider)
+@pytest.mark.parametrize('path,body', [
+    ('/api/accounts/login', {'username': 'alice', 'password': 'alice-password'}),
+    ('/api/accounts/oauth', {'purpose': 'login'}),
+])
+def test_app_local_and_provider_sign_in_are_not_served(tmp_path, accounts, path, body):
+    """D-757: people sign in through Rosy Account only."""
     folder = tmp_path / 'review'; folder.mkdir()
-    server = make_server(open_store(folder), 0, accounts=accounts, oauth=oauth)
+    server = make_server(open_store(folder), 0, accounts=accounts)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     base = f'http://127.0.0.1:{server.server_port}'
-    headers = {'Host': 'learning.example', 'Origin': 'https://learning.example'}
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *args):
-            return None
     try:
-        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/oauth',
-            data=b'{"purpose":"login"}', headers=headers)) as response:
-            binding = response.headers['Set-Cookie'].split(';')[0]
-            query = parse_qs(urlsplit(json.load(response)['url']).query)
-        provider.claims = {'iss': 'https://huggingface.co', 'aud': 'client', 'sub': 'invited-alice',
-            'exp': int(time.time()) + 300, 'iat': int(time.time()), 'nonce': query['nonce'][0]}
-        callback = base + '/oauth/huggingface/callback?state=' + query['state'][0] + '&code=test'
-        with pytest.raises(urllib.error.HTTPError) as redirect:
-            urllib.request.build_opener(NoRedirect()).open(urllib.request.Request(callback,
-                headers={**headers, 'Cookie': binding}))
-        assert redirect.value.code == 303
-        cookies = redirect.value.headers.get_all('Set-Cookie')
-        session = next(value.split(';')[0] for value in cookies if value.startswith('rosy_learning_session='))
-        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/session',
-            headers={**headers, 'Cookie': session})) as response:
-            assert json.load(response)['user_id'] == 'alice'
-        with pytest.raises(urllib.error.HTTPError) as replay:
-            urllib.request.urlopen(urllib.request.Request(callback, headers={**headers, 'Cookie': binding}))
-        assert replay.value.code == 403
+        status, _ = request(base, path, body=body)
+        assert status == 403
+        with accounts._db() as db:
+            assert db.execute('SELECT COUNT(*) FROM learning_sessions').fetchone()[0] == 0
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+def test_collaboration_config_without_rosy_account_is_refused(tmp_path, accounts):
+    from learning_collaboration import load
+    config = json.loads(accounts.config_path.read_text())
+    config.update(accounts_db=str(accounts.db_path), key_file=str(accounts.key_path), imports_root=str(tmp_path / 'imports'))
+    path = tmp_path / 'collaboration.json'; path.write_text(json.dumps(config))
+    folder = tmp_path / 'review'; folder.mkdir()
+    with pytest.raises(ValueError, match='Rosy Account'):
+        load(path, open_store(folder))
 
 
 @pytest.mark.parametrize('origin,callback', [

@@ -310,7 +310,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
             path = urlparse(self.path).path
-            login_request = collaboration and path in ('/api/accounts/login', '/api/accounts/oauth', '/api/accounts/logout')
+            login_request = collaboration and path == '/api/accounts/logout'
             expected_token = collaboration.csrf(self, token) if collaboration else token
             if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
                 return deny()

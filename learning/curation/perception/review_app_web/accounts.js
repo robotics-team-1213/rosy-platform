@@ -24,9 +24,9 @@ function empty(parent, text) {
 function signedOut() {
   token=null; session=null; active=false;
   $('login-panel').hidden=false; $('signed-in').hidden=true;
-  status('프로젝트에 로그인하세요.', 'empty');
+  status('Rosy Account로 로그인하세요.', 'empty');
   for(const id of ['identity','connections','connection','imports','repos','repo-connection']) $(id).replaceChildren();
-  for(const id of ['login-form','connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
+  for(const id of ['connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
 }
 async function api(path, body) {
   const response=await accountFetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
@@ -53,25 +53,25 @@ async function perform(action) {
 }
 async function refresh() {
   const options=await api('/api/accounts/options');
-  $('hf-login').hidden=!options.oauth;
-  if(options.rosy_account) $('hf-login').hidden=true;
   if(!options.enabled) {
     signedOut();
-    status('협업 계정이 설정되지 않았습니다. 관리자에게 프로젝트 설정을 요청하세요.', 'unavailable');
+    status('Rosy Account 연결이 설정되지 않았습니다. 관리자에게 이 앱의 Rosy Account 등록을 요청하세요.', 'unavailable');
     $('login-panel').hidden=$('signed-in').hidden=true; active=false; return;
   }
   try { session=await api('/api/accounts/session'); }
   catch(e) {
-    if (e.status !== 401 && e.status !== 403) {
-      throw e;
+    if (e.status === 403) {
+      // Signed in to Rosy Account without this project's grant; another login would loop.
+      signedOut(); $('login-panel').hidden=true; status(e.message, 'unavailable'); return;
     }
+    if (e.status !== 401) throw e;
     if(options.rosy_account) {
       $('login-panel').hidden=true; $('signed-in').hidden=true;
       status('Rosy Account로 연결 중…', 'pending');
       window.location.assign('/api/account/login?return=/accounts'); return;
     }
     token=null; active=false; $('login-panel').hidden=false; $('signed-in').hidden=true;
-    status('프로젝트에 로그인하세요.', 'empty'); return;
+    status('Rosy Account로 로그인하세요.', 'empty'); return;
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
   status('로그인됨', 'ready');
@@ -138,17 +138,13 @@ async function jobs() {
     if(focusId===job.id) [...row.querySelectorAll('ui-button, summary')].find(node=>node.textContent===focusText)?.focus({preventScroll:true});
   }
 }
-$('login-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
-  const password=$('password').value; $('password').value='';
-  await api('/api/accounts/login',{username:$('username').value,password}); await refresh();
-});});
 $('logout').addEventListener('click',()=>perform(async()=>{
   active=false; $('signed-in').hidden=true;
   for(const id of ['connections','imports','connection','repos','repo-connection']) $(id).replaceChildren();
   try { await api('/api/accounts/logout',{}); } finally { signedOut(); }
   await refresh();
 }));
-for(const [id,purpose] of [['hf-login','login'],['hf-link','link'],['hf-manage','manage']]) $(id).addEventListener('click',()=>perform(async()=>{
+for(const [id,purpose] of [['hf-link','link'],['hf-manage','manage']]) $(id).addEventListener('click',()=>perform(async()=>{
   const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
 }));
 $('connect-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{

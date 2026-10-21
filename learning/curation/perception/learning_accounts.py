@@ -167,7 +167,8 @@ class Accounts:
         try:
             cfg = json.loads(self.config_path.read_text(encoding='utf-8')) if self.config_path else json.loads(_json(self._config))
             project = cfg['project_id']; users = cfg['users']
-            if not isinstance(project, str) or not project or not isinstance(users, list) or not users:
+            if (not isinstance(project, str) or not project or not isinstance(users, list)
+                    or not (users or self.central_account)):
                 raise ValueError
             if hasattr(self, 'project_id') and project != self.project_id:
                 raise ValueError

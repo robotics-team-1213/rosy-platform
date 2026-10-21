@@ -95,3 +95,36 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         assert request(base,'/api/frames/0','bob',{'version':1,'action':'exclude'},bob['token'])[0] == 200
     finally:
         server.shutdown(); server.server_close(); worker.join()
+
+
+def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
+    import threading
+    from test_review_app import open_store
+    from test_learning_collaboration import request
+    from review_app import make_server
+    record = SimpleNamespace(sub='central-carol', aud='project:one', permits=lambda resource, cap: cap == 'learning.view')
+    receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
+        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
+    config = accounts.config()
+    config['users'] = []
+    managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    actor = managed.authenticate('browser-session')
+    assert actor['user_id'] == 'central-carol' and actor['capabilities'] == ['view']
+    # An Account subject never takes over an unmapped learning owner by matching its name.
+    named = RosyAccounts(accounts.db_path, accounts.key_path, accounts.config(),
+        receiver=SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: SimpleNamespace(
+            sub='alice', aud='project:one', permits=lambda *args: True)))
+    with pytest.raises(AccountError, match='unmapped learning owner'): named.authenticate('browser-session')
+    (tmp_path / 'workspace').mkdir()
+    server = make_server(open_store(tmp_path / 'workspace'), 0, accounts=managed)
+    worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        assert request(base, '/api/accounts/session', 'browser-session')[0] == 200
+        record.permits = lambda *args: False
+        status, body = request(base, '/api/accounts/session', 'browser-session')
+        assert status == 403 and '권한' in body['error']  # signed in: no redirect back to login
+        managed.receiver.resolve_session_id = lambda sid: None
+        assert request(base, '/api/accounts/session', 'browser-session')[0] == 401
+    finally:
+        server.shutdown(); server.server_close(); worker.join()
