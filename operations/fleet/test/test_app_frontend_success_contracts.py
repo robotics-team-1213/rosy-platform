@@ -118,6 +118,7 @@ def test_named_operator_rejects_a_pending_legacy_camera_request(tmp_path):
 
 
 def test_named_operator_deletes_a_start_point_with_its_current_revision(tmp_path):
+    from fleet.server.sightings import SightingService
     from fleet.server.task_service import FleetTaskService
     from fleet.server.task_store import FleetTaskStore
     from test_start_points import body, service
@@ -126,7 +127,8 @@ def test_named_operator_deletes_a_start_point_with_its_current_revision(tmp_path
     users = {sha256(token.encode()).hexdigest(): {"principal_id": token, "role": role}
              for token, role in (("read", "viewer"), ("write", "operator"))}
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=())
-    app = create_app(FleetConsole([], []), tracking=tracking, site_users=users,
+    sightings = SightingService(tracking.sources, known_robot_ids=())
+    app = create_app(FleetConsole([], []), sightings=sightings, tracking=tracking, site_users=users,
                      task_service=tasks, start_task_dispatcher=False)
     with TestClient(app) as client:
         path = "/api/fleet/start-points/north"
