@@ -43,6 +43,8 @@ def test_denied_login_stays_visible_and_allows_another_account(account_page):
     expect(page.locator('#login-recovery')).to_be_visible()
     expect(page.locator('#login-recovery-status')).to_contain_text('프로젝트 권한')
     expect(page.locator('[data-login=login]')).to_be_visible()
+    for action in ['#login-profile', '#login-retry']:
+        assert page.locator(action).bounding_box()['height'] >= 44
     assert not authorizations
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     page.locator('[data-login=login]').fill('bob')
