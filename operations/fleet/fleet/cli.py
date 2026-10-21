@@ -117,7 +117,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--tls-key", default=None, type=Path, help="HTTPS private key; mount as a runtime secret")
     console.add_argument("--sightings-config", default=None, type=Path,
                          help="source/map/calibration sighting config (secret values stay in env)")
-    console.add_argument("--workcell-observations", default=None, type=Path,
+    console.add_argument("--workcell-observations", default=os.environ.get("ROSY_WORKCELL_OBSERVATIONS") or None, type=Path,
                          help="read-only workcell source manifest; producer credentials stay in env")
     console.add_argument("--site-lane-graph", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane_graph.yaml drawn over the ceiling camera by the D-375 map-fit "
