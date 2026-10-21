@@ -92,6 +92,14 @@ calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에�
 매 관측의 첫 행동만 반환하는 별도 config/평가/PolicyArtifact를 만든다. 허용 값은 1..4이다.
 설정을 바꾸어 기존 artifact의 revision이나 거절 이력을 덮어쓰지 않는다.
 
+기본 학습 표본은 `--sampling all_frames`다. 고정 6관절 OMX SIM 물체 과제의
+`--sampling command_entry`는 각 원 command/goal 쌍에서 팔 target-state 차이
+0.035rad 이하·그리퍼 0.04rad 이하인 첫 원본 frame을 학습 시작점으로 고른다.
+독립 SIM 정답을 요구하며 모든 명령에 표본이 없으면 거절한다. 그리퍼의 학습
+여유는 보장하지 않는다. 원본 arrays·target·시각·chunk 순서·전체 validation은 유지한다.
+선택 indices와 규칙은 `training-index.json` 및 DatasetManifest config SHA에 결속한다.
+학습 표본 선택은 실제 최종 readback 승인이나 물체 성공을 보장하지 않는다.
+
 `act_inference_replay.py`는 bound Dataset 파일에 포함된 실제 LeRobot 평가 reader로
 모델의 입력/행동/큐 provenance·latency를 새 X artifact에 보존하고 기존 offline metrics를
 재현한다. 원래 sim capture/state/wall 시계는 별도 필드로 보존한다.

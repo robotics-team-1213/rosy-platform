@@ -51,6 +51,24 @@ def chunk_indices(count, start, size):
     return [i if i < count else None for i in range(start, start + size)]
 
 
+def training_sample_indices(rows, joint_names, *, sampling):
+    """Select original frames only; action labels and chunk chronology stay unchanged."""
+    if sampling == 'all_frames':
+        return list(range(len(rows)))
+    if sampling != 'command_entry' or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
+        raise ValueError('command_entry sampling requires the fixed six-joint OMX SIM rig')
+    selected = {}
+    commands = {(row['command_id'],row['ros_goal_id']) for row in rows}
+    for index,row in enumerate(rows):
+        bounds = [.035]*5+[.04]  # Arm training margin; preserve the calibrated gripper target.
+        if all(abs(target-state)<=bound for target,state,bound in
+               zip(row['action'],row['observation.state'],bounds)):
+            selected.setdefault((row['command_id'],row['ros_goal_id']),index)
+    if not commands or set(selected) != commands:
+        raise ValueError('command_entry sampling must represent every command')
+    return sorted(selected.values())
+
+
 def compatible_sources(sources):
     keys = ("joint_names", "position_limits_rad", "camera", "fps", "calibration_revision", "world_sha256")
     if not sources or any(any(s.get(k) != sources[0].get(k) for k in keys) for s in sources):
@@ -109,7 +127,9 @@ def export_truth(export, source, validated):
     return None
 
 
-def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4):
+def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames'):
+    if sampling not in ('all_frames','command_entry'):
+        raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
         raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
     if importlib.metadata.version("lerobot") != "0.4.4":
@@ -151,12 +171,23 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     if len(set(ids)) != len(ids):
         raise ValueError("same original Episode cannot straddle train/eval")
     compatible_sources(sources)
+    if sampling == 'command_entry' and not all(automatic):
+        raise ValueError('command_entry sampling requires independently verified SIM object truth')
+    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling)
+                        for rows in original_rows]
     # D-794 B: the image key and the artifact camera name follow the recorded camera name.
     image_key = "observation.images." + sources[0]["camera"]["name"]
     durations = {r["duration_s"] for rows in original_rows for r in rows}
     if len(durations) != 1:
         raise ValueError("joint-only study requires one explicit source duration")
     out.mkdir(parents=True)
+    sampling_ref = None
+    if sampling == 'command_entry':
+        selection = dict(sampling=sampling,arm_margin_rad=.005,gripper_margin_claim='none',
+                         original_arrays_and_chunk_order=True,
+                         train_indices=dict(zip(ids[:train_count],selected_indices[:train_count])))
+        _write(out/'training-index.json',selection)
+        sampling_ref = _ref(out/'training-index.json',out)
     _write(out / "state.json", {"status": "reading", "steps": steps, "seed": seed, "source_episodes": ids})
     try:
         episodes, arrays = [], []
@@ -218,7 +249,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         policy = ACTPolicy(config)
         optimizer = torch.optim.AdamW(policy.get_optim_params(), lr=config.optimizer_lr,
                                       weight_decay=config.optimizer_weight_decay)
-        indices = [(e, i) for e, a in enumerate(arrays[:train_count]) for i in range(len(a[0]))]
+        indices = [(e, i) for e, chosen in enumerate(selected_indices[:train_count]) for i in chosen]
         history = []
         _write(out / "state.json", {"status": "training", "steps": steps, "seed": seed, "source_episodes": ids})
         for step in range(steps):
@@ -280,6 +311,9 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 action_mean.numpy(), train_actions.numpy(), limits)
             offset += count
         report['per_episode'] = per_episode
+        if sampling_ref is not None:
+            report['training_sampling'] = dict(rule=sampling,index=sampling_ref,
+                selected_training_frames=len(indices),all_training_frames=sum(len(rows) for rows in original_rows[:train_count]))
         if len(eval_exports) == 1:
             report['eval_episode'] = ids[-1]
         judges = set(report['task_outcome_judges'].values())
@@ -288,9 +322,13 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         _write(out / "offline-report.json", report)
         refs = [_ref(p, out) for folder in ("episodes", "reader-inputs")
                 for p in sorted((out / folder).rglob('*')) if p.is_file()]
+        transformation_config = stats
+        if sampling_ref is not None:
+            refs.append(sampling_ref)
+            transformation_config = dict(normalization=stats,training_sampling=sampling_ref)
         dataset = seal({"schema": "rosy.dataset-manifest/1", "episodes": [e["revision"] for e in episodes],
                        "transformation": {"tool_revision": "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                                          "config_sha256": hashlib.sha256(json.dumps(stats, sort_keys=True).encode()).hexdigest()},
+                                          "config_sha256": hashlib.sha256(json.dumps(transformation_config, sort_keys=True).encode()).hexdigest()},
                        "files": refs})
         validate_dataset(dataset, root=out)
         _write(out / "dataset-manifest.json", dataset)
@@ -332,9 +370,10 @@ def main():
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
+    ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
     args = ap.parse_args()
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
-                         n_action_steps=args.n_action_steps)))
+                         n_action_steps=args.n_action_steps,sampling=args.sampling)))
 
 
 if __name__ == "__main__":
