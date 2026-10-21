@@ -27,7 +27,7 @@ policy-result SHA256: `f73746f1f5537cccf6b0137224514959469f2f0c63db80ea6de67e427
 결속하고 원 절대 target은 보존한다. 범위 밖 target의 학습 잔차는 제거하지 않는다.
 수정 전 MODEL 실제 ACT 검사3FAIL/6PASS, 수정 후9PASS/0SKIP/0NEW, 일반 원격
 검사78PASS/0NEW를 확인했다. 독립 소스 검토에서 blocker가 없었다. 새10,000step
-학습을 요청했으며 완료·물체 성공은 아직 확인하지 않았다. 사전 과제가 통과해야 새
+학습·재적재·Store 검증은 완료했고 물체 성공은 아직 확인하지 않았다. 사전 과제가 통과해야 새
 정식20회를 시작한다. 로그는 `omx-bounded-head-native-red`,
 `omx-bounded-head-native-green`, `omx-bounded-head-green`에 보존한다.
 
@@ -52,14 +52,17 @@ MAE0.006948906675814038rad보다 커졌으며 offline_only가 과제 성공은 �
 - Dataset revision: `e0b17b890f08519cf419bd75e6ed265fbf09ed313ec8d42d8cb7587b72bd0a06`.
 - Normalization SHA256: `1cf925271b485ed6db4193052066eb7f9291f54ff1d72ecff0af54c35d7eca6e`.
 - Weights SHA256: `4fa0807ff40c1c4cb5bf9396c3367b5f609a1b8322201a90dc837d886acba43d` (45,371,416bytes).
-- Optimizer history SHA256: `73894d8a7adc594ebeaaa7afe628ccb4b71a88b3c7d57978a1ae1c4b0f4ffb65` (10,000件).
+- Optimizer history SHA256: `73894d8a7adc594ebeaaa7afe628ccb4b71a88b3c7d57978a1ae1c4b0f4ffb65` (10,000개).
 - Training-index SHA256: `5e23c544256bfbf17189a37bae6ceb06e9d7a6ec78ed6ce948019ea3a383d7f9` (6,263/52,834 train frames).
 
 변환 type과 bound 외 모든 normalization 필드는 직전 모델과 동일하다. 원 시연·
 선택 index·원 target·train noise0.02/seed42751을 유지했다. 선택 train 시작 frame의
 1,953/6,263개는 원 gripper 이동량이0.035rad를 넘으며 clipping 없이 잔차로 남는다.
 이 수치는 clean 시작 frame 기준이며 noisy 입력·전체 future chunk 분포가 아니다.
-DatasetStore 복사·require와 bundle 전송은 진행 중이다. 새 물체 과제는 아직 시작하지 않았다.
+DatasetStore 복사·require와 bundle 전송이 완료됐고 실제 학습 runner는 exit0으로 종료됐다.
+로컬에 내려받은 모든 artifact 참조의 byte 수·SHA256을 다시 검증했다.
+후속 실행 `omx-policy-candidate-smoke-938791127b-ccbdf33efe96b4cd`가 같은 source/runtime과
+policy로 calibration을 시작했다. 아직 실제 물체 actor 시작이나 결과는 확인하지 않았다.
 
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
