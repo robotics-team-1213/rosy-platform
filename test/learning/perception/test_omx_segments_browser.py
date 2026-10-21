@@ -45,10 +45,21 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 page.get_by_role('button',name='프레임 확인',exact=True).click()
                 playwright.expect(page.locator('details img')).to_be_visible()
                 playwright.expect(page.locator('details img')).to_have_js_property('naturalWidth', 32)
+                for width,height in [(1440,1000),(390,844),(320,568)]:
+                    page.set_viewport_size(dict(width=width,height=height))
+                    page.evaluate('scrollTo(0,0)')
+                    assert page.locator('details img').bounding_box()['y'] < height
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                    for button in page.locator('details [role="button"]').all():
+                        if button.is_visible():
+                            box=button.bounding_box()
+                            assert box['height'] >= 44 and box['width'] >= 44
+                page.set_viewport_size(dict(width=1440,height=1000))
                 page.get_by_label('원본 Episode',exact=True).select_option('1')
                 playwright.expect(page.locator('details img')).to_be_hidden()
                 page.get_by_label('원본 Episode',exact=True).select_option('0')
-                page.get_by_role('button',name='프레임 확인',exact=True).click()
+                page.get_by_role('button',name='프레임 확인',exact=True).focus()
+                page.keyboard.press('Enter')
                 playwright.expect(page.locator('details img')).to_be_visible()
                 page.get_by_role('button',name='현재 프레임을 시작으로').click()
                 page.get_by_label('끝 프레임 (제외)',exact=True).fill('6')
@@ -76,11 +87,13 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 page.get_by_role('button',name='구간 추가',exact=True).click()
                 pending=[]
                 page.route('**/api/learning/omx/segments',lambda route:pending.append(route))
-                page.get_by_role('button',name='검수 저장',exact=True).click()
-                page.wait_for_function('true')
+                with page.expect_request('**/api/learning/omx/segments'):
+                    page.get_by_role('button',name='검수 저장',exact=True).click()
                 assert len(pending) == 1
                 playwright.expect(page.get_by_role('button',name='검수 저장',exact=True)).to_be_disabled()
                 page.get_by_role('button',name='삭제',exact=True).first.click()
+                page.get_by_label('시작 프레임 (포함)',exact=True).fill('7')
+                page.get_by_label('끝 프레임 (제외)',exact=True).fill('9')
                 page.get_by_label('대상 물체',exact=True).fill('pending cube')
                 page.get_by_role('button',name='구간 추가',exact=True).click()
                 pending.pop().continue_()
