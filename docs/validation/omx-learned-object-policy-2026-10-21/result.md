@@ -7,14 +7,47 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/39회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/19회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/40회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/20회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
-최신 동일 checkpoint의 세 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
+최신 동일 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
+
+## 최신 실제 과제와 다음 학습 비교
+
+관측 전달 수정을 병합한 runtime의 과제 `aa1770c5c1a7`은296명령 중295개
+terminal4/code0 뒤 마지막 terminal6/code-5로 HOLD했다. cleanup true,
+Actor422.362초/root494.862초다. 이번 실행은 stale/camera/admission 오류와 raised
+full guard가0이었다. Calibration `4b16233b2003`은12추론·정책goal0·PASS였다.
+Main/runtime revision: `8743393a9939c7f2c5ed514e17ece98293240873`.
+Policy-result SHA256: `031987766d4d49f11b598be261c17f24c5d639fa00ca19409aff5b6908ed2822`.
+
+SIM 부착 보조로 최대101.825mm 들어 운반했다. 마지막 XY3.269mm/Z0.170mm는
+incomplete_trial_observation이며 해제·안정 유지가 없어 성공이나 놓기 정확도로
+계산하지 않는다. Controller joint3/joint4 오차+0.024680/-0.029324rad가
+0.020rad 한도를 넘었다. 실제 TCPz24.638mm에서 모델 목표는21.436mm로3.20mm
+더 낮았다. 접촉 저항과 일치하지만 힘을 직접 측정하지 않아 원인을 확정하지 않는다.
+
+실제 선택된 교사 entry/exit2행에 대한 이미지3종×관절2종의 MODEL 오프라인
+진단12개는 실제 관절에서 목표z21.15–21.44mm, 교사 exit 관절에서23.89–24.02mm를
+보였다. 추가 native 과제·새 정답이 아니며 근처 상태의 학습 편향을 조사할 근거다.
+Cross-result SHA256: `ecdc81dab4144c8e702edb8f45063eaa866a0a75449bff68c97d24634e4370f7`.
+
+다음 통제 실험은 원본 최종 놓기·열기 구간의 적격 내부 행을 endpoint에 추가한다.
+검증된 SIM truth의 마지막 transfer 명령부터 같은 팔 목표가 이어지는 명령만
+고르고 팔 목표가 바뀌면 즉시 끝낸다. 원본 좌표·action·RGB·chunk·train/validation
+분리와 안전 한도는 유지한다. 실제 MODEL 원본52834행에서 기존12526개 보존과
+969개 추가·최종13495개를 검증했다. 새 study `fixed-object-2600eeda8605476e`를
+MODEL에 제출했고 실제 상태는 입력 재검증(curating)이다. 기존 검증 exports를
+재사용하며 새 checkpoint·optimizer 완료·실제 과제 성공은 아직 없다.
+
+Sampling/training source revision: `a0c5dd42c934a880715a48adbcd5e7317dd5a487`.
+수정 전 원격2FAIL, 수정 후133PASS/15SKIP/0NEW를 확인했다. Skip은 학습 환경이
+필요한 별도 검증이며 통과로 계산하지 않는다. 독립 소스 검토에서 발견 사항은 없었다.
+이 증거는 새 checkpoint 품질이나 물체 성공을 뜻하지 않는다.
 
 ## Pending native intake
 
-최신 `c72c82c2bca8`은245개 명령 모두 terminal4/code0 뒤 관절 관측 신선도 초과로
+직전 `c72c82c2bca8`은245개 명령 모두 terminal4/code0 뒤 관절 관측 신선도 초과로
 HOLD했다. Actor365.546초/root427.896초, cleanup true다. 최대 lift101.859mm,
 마지막 XY20.854mm/Z91.848mm는 미완료 관측이며 놓기·해제·안정 유지 성공은 없다.
 Policy-result SHA256: `eddbc32c437b0a25472881d9d8136a36a101906c57e4258b9c765a53a1f64e4f`.
