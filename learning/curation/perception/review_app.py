@@ -57,6 +57,11 @@ def detail_preview(store, index):
     return data.tobytes()
 
 
+# D-478: loopback, RFC1918, link-local and Tailscale only; never wildcard or public.
+BIND_NETWORKS = [ipaddress.ip_network(n) for n in (
+    '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '100.64.0.0/10')]
+
+
 def check_bind_host(host):
     try:
         address = ipaddress.IPv4Address(host)
