@@ -77,3 +77,17 @@ No live integrated Cell display, installed persistent operation, accepted joint
 calibration, learned-policy execution, torque ON, grasp or physical motion is
 established by the checks above. A command owner handoff first stops the passive
 readers and verifies that their serial FDs and buses are released.
+
+## Publication recheck
+
+At `6216f4f4e5`, remote publication checks passed 519 fast, 10,806 common/CORE,
+6,139 Fleet and 5,957 remaining checks, with 1,329 skips across affected suites.
+The remaining suite failed two installation variants because its source asset
+count still expected 112 after the Cell observation module brought it to 113.
+No station scenario failed in this run; earlier timing failures remain unexplained.
+
+At `9b2532a17f`, the existing installation test updates that count and explicitly
+requires `cell/cell-observation.js`. All four focused installation checks passed,
+including wheel and sdist builds, isolated installation, resource hashes and
+installed imports. This is package evidence, not physical deployment. Complete
+publication checks on the final revision remain required.

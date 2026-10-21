@@ -9519,3 +9519,9 @@ osy-d395-s1d\`.
 - Change: integrate native read-only observers, Fleet intake, preview-only Vision sources and existing Cell panels as one deployable change. The independently reviewed contract is published in PR 146; the integrated publication includes its dependent implementation and signed configuration together.
 - Evidence: [source, transport and deployment evidence](validation/omx-workcell-observation-2026-10-22.md). Actual verified HTTPS/WSS test 7c967f44ec passes native arm POST, authenticated viewer GET, camera ingestion, preview lease and Vision frame retrieval. Inputs are synthetic; physical deployment is pending.
 - Gate: unchanged. Fleet-PC services, protected configuration and signed candidate activation remain separate from source publication; no physical motion or grasp acceptance is claimed.
+
+## 2026-10-22 · uncommitted · 설치 자산 폐쇄 검사 갱신
+
+- Change: include the Cell observation module in the existing wheel/sdist asset count and explicit resource assertions; packaging and production behavior are unchanged.
+- Evidence: `6216f4f4e5` passed 519 fast, 10,806 common/CORE, 6,139 Fleet and 5,957 remaining checks, with two installed asset-count failures. `9b2532a17f` passed all four focused installation checks, including both delivery variants. Final publication checks remain required.
+- Gate: unchanged. Existing signing configuration was located; no new key was generated and no candidate was activated.
