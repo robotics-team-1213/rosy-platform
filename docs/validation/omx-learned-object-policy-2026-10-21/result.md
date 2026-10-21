@@ -108,6 +108,21 @@ Main revision: `c17dcedce512b1657b4ac19788873502541d9c18`.
 미병합이다. 복구된 시험 호스트에서 재검증해야 하며 통과로 계산하지 않는다.
 기존25개 시연과 모든 실패는 보존하며 학습 정책에 scripted release나 clamp를 넣지 않는다.
 
+후속 teacher는 transfer waypoint마다 fresh hold receipt와 같은 joint-state의 실제
+gripper q를 읽고 `max(width_matched_close,q-.035)`를 명령한다. 기존 `contact_held`
+하한·contact+0.015rad 상한을 재사용하며 범위 밖이면 멈춘다. 목표와 관측 근거는
+transfer 진단에 기록하고 실제 전송 target은 기존 recorder에 남긴다. helper 보정 중에는
+해당 목표를 고정하며 6축0.04rad admission·진전 없음 중단을 그대로 유지한다.
+release/home·controller/profile·learned runtime 출력은 바꾸지 않는다.
+Teacher contact-hold source revision: `fe04dbfcfaa9ca4f0c89cb53c3ef051272f5ffaf`.
+
+수정 전 예상8FAIL 뒤 관련 원격47PASS/0NEW였다. 독립 검토에서 새q 진단이 기존
+strict gripper evidence 형식과 충돌하는 문제가 발견됐다. 실제 truth reader로 재현한
+1FAIL 뒤 기존 네 필드 evidence를 보존하고 q를 transfer 진단에 분리했다. 최종 관련
+원격47PASS/0NEW·exit0와 독립 재검토에서 blocker 없음을 확인했다. 최초 GREEN
+요청의 잘못된 시험 파일 경로는 exit4·실행0으로 보존하고 통과로 계산하지 않는다.
+이 소스의 실제 시연·clearance·파지 유지·성공 cohort 입고는 아직 검증 전이다.
+
 ## Pending native intake
 
 직전 `c72c82c2bca8`은245개 명령 모두 terminal4/code0 뒤 관절 관측 신선도 초과로
