@@ -107,8 +107,12 @@ class Pair:
                     out.setdefault(barrier_id, []).append(row["released_monotonic"] - row["arrived_monotonic"])
         return out
 
-    def contact_gaps(self):
-        return [b - a for client in self.clients.values() for a, b in zip(client.sent, client.sent[1:])]
+    def contact_gaps(self, starts=None):
+        gaps = []
+        for instance, client in self.clients.items():
+            samples = client.sent[(starts or {}).get(instance, 0):]
+            gaps.extend(b - a for a, b in zip(samples, samples[1:]))
+        return gaps
 
 
 def test_contact_gap_window_excludes_setup_but_keeps_active_delays():
@@ -122,25 +126,37 @@ def test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds(tmp_pat
     steps = pair.two_arm_steps()
     assert len(steps) >= 3
     waits = {}
+    active_gaps, contact_windows = [], []
     for index in steps:
         grants = pair.start(index)
+        # A completed pair's last contact must not span the next pair's synchronous setup.
+        starts = {instance: len(client.sent) for instance, client in pair.clients.items()}
         assert pair.loop(lambda: all(pair.state(role, g) == "SUCCEEDED" for role, g in grants.items())), {
             role: pair.state(role, g) for role, g in grants.items()}
+        active_gaps.extend(pair.contact_gaps(starts))
+        contact_windows.append({"step": index, "actions": {role: g.action_id for role, g in grants.items()},
+                                "starts": starts,
+                                "ends": {instance: len(client.sent) for instance, client in pair.clients.items()}})
         for barrier_id, values in pair.barrier_waits(grants).items():
             waits.setdefault(barrier_id, []).extend(values)
     assert sorted(waits) == ["both_grasped", "both_ready"]
     assert all(len(values) == 2 * len(steps) for values in waits.values())
     for barrier_id, values in waits.items():
         assert max(values) < MAX_WAIT_S[barrier_id]
-    gaps, rtt = quantiles(pair.contact_gaps()), pair.rtt.summary()
-    assert gaps["p99"] < COORDINATOR_LIVENESS_S / 2  # healthy contact never comes near the liveness bound
+    gaps, rtt = quantiles(active_gaps), pair.rtt.summary()
+    all_gaps = quantiles(pair.contact_gaps())
+    assert gaps["p99"] < COORDINATOR_LIVENESS_S / 2, {"active": gaps, "all_contacts": all_gaps,
+        "windows": contact_windows, "samples": {instance: client.sent for instance, client in pair.clients.items()}}
     assert all(summary["p99"] < UDS_BOUND_S for summary in rtt.values())
     for arm in pair.arms.values():
         assert arm.stop_snapshot().state.value == "OPEN"
     record_evidence("timing-pairs", {"pairs": len(steps), "time_scale": 0.002,
                                      "coordinator_period_s": COORDINATOR_PERIOD_S,
                              "barrier_wait_wall_s": {k: quantiles(v) for k, v in waits.items()},
-                             "contact_gap_s": gaps, "rtt_s": rtt})
+                             "contact_gap_s": gaps, "all_contact_gap_s": all_gaps,
+                             "contact_windows": contact_windows,
+                             "contact_samples_s": {instance: client.sent for instance, client in pair.clients.items()},
+                             "rtt_s": rtt})
 
 
 def test_killing_the_coordinator_in_a_tight_segment_holds_both_arms_within_liveness(tmp_path):
