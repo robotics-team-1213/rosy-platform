@@ -14,7 +14,8 @@ import act_inference_replay as replay_module
 
 
 @pytest.mark.parametrize('multi',[False,True])
-def test_reader_file_map_cannot_replace_selected_episode_metrics(tmp_path,monkeypatch,multi):
+@pytest.mark.parametrize('relative',[False,True])
+def test_reader_file_map_cannot_replace_selected_episode_metrics(tmp_path,monkeypatch,multi,relative):
     root = tmp_path/'artifact'
     export = root/'reader-inputs/eval-a'
     source = export/'rosy_provenance/eval-a'
@@ -33,9 +34,11 @@ def test_reader_file_map_cannot_replace_selected_episode_metrics(tmp_path,monkey
         cameras=[dict(name='front',identity='camera',calibration_sha256='c'*64,source_shape=[3,2,2])],
         joint_names=['j1','j2'],action=dict(limits=[[-1,1],[-1,1]]),
         timing=dict(period_ns=100_000_000,max_observation_age_ns=50_000_000,max_action_age_ns=50_000_000))
+    action_stats=(dict(action_transform=dict(type='joint_delta_from_chunk_source_v1',mean=[.7,.8],
+        std=[1.,1.],absolute_baseline=[0.,0.])) if relative else dict(action_mean=[0.,0.],action_std=[1.,1.]))
     for name, document in [('policy-artifact.json',policy),('dataset-manifest.json',dataset),
                            ('offline-report.json',report),('normalization.json',dict(
-                               fit_episodes=report['train_episodes'],action_mean=[0.,0.]))]:
+                               fit_episodes=report['train_episodes'],**action_stats))]:
         (root/name).write_text(json.dumps(document))
     rows = [dict(action=[0.,0.],capture_time_ns=1_000_000_000+i*100_000_000,
                  state_time_ns=1_000_000_000+i*100_000_000,state_sequence=i+1,
@@ -68,6 +71,7 @@ def test_reader_file_map_cannot_replace_selected_episode_metrics(tmp_path,monkey
     monkeypatch.setattr(replay_module,'ACTInference',lambda *_:NS(infer=infer))
     result=replay_module.replay(root,export,tmp_path/'replay',policy['revision'],paced=False)
     assert result['original_metrics_reproduced'] is True
+    assert result['constant_baseline_mae_rad']==0.
     assert result['original_verdict'] == 'reject'
     assert result['aggregate_original_verdict'] == report['verdict']
     assert json.loads((tmp_path/'replay/state.json').read_text())['status'] == 'research_replayed'

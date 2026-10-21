@@ -75,6 +75,6 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
     assert json.loads((out/'state.json').read_text())['status']=='research_exported'
     from act_inference_replay import replay
     policy=json.loads((out/'policy-artifact.json').read_text())
-    replayed=replay(out,exports[2],tmp_path/'replay',policy['revision'],paced=False)
+    replayed=replay(out,out/'reader-inputs'/ids[2],tmp_path/'replay',policy['revision'],paced=False)
     assert replayed['original_metrics_reproduced'] is True
     assert replayed['queued_candidates']==(0 if queue_steps==1 else 2)
