@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/31회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/11회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/32회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/12회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 새 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다. 실행 중인 과제는 없다.
 
@@ -40,7 +40,7 @@ Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint�
 고정한 source938791127b의 bounded head/command_entry/noise0.02를 사용한다.
 시작 요청이나 자료 검증 횟수는 학습 완료·물체 성공으로 계산하지 않는다.
 
-## 최신 bounded checkpoint — 실제 물체 결과 대기
+## 최신 bounded checkpoint — 사전 물체 과제 실패
 
 실제 학습 source revision: `938791127b432cdb1e1e6dd578955e661fd41a38`.
 실행 `omx-object-training-42a03f4605a8a021`의 10,000step(seed42750/n_action_steps1),
@@ -61,8 +61,17 @@ MAE0.006948906675814038rad보다 커졌으며 offline_only가 과제 성공은 �
 이 수치는 clean 시작 frame 기준이며 noisy 입력·전체 future chunk 분포가 아니다.
 DatasetStore 복사·require와 bundle 전송이 완료됐고 실제 학습 runner는 exit0으로 종료됐다.
 로컬에 내려받은 모든 artifact 참조의 byte 수·SHA256을 다시 검증했다.
-후속 실행 `omx-policy-candidate-smoke-938791127b-ccbdf33efe96b4cd`가 같은 source/runtime과
-policy로 calibration을 시작했다. 아직 실제 물체 actor 시작이나 결과는 확인하지 않았다.
+후속 실행 `omx-policy-candidate-smoke-938791127b-ccbdf33efe96b4cd`의 calibration
+`13e7e05307f4`는12추론/0goals/0attempts/cleanuptrue/exit0으로 통과했다.
+사전 물체 과제 `9cf05a67d97b`는40candidate/40intent/40UUID 뒤 카메라 원본 만료로
+HOLD/exit1/cleanuptrue로 종료됐다. Terminal4/code0은39개이고 마지막 goal은
+cancel ACK 뒤 terminal5/code0으로 종료됐다. Attach·lift·stable은0이며 물체 성공은0/1이다.
+마지막 capture 선택 나이92.863ms, numerical17.464ms, 제출 직전 원본 나이112.903ms,
+submit405.159ms였다. 마지막 GOAL_ACCEPTED의 원 카메라 나이는490.817ms였고,
+이후 post-I/O 500ms 검사가 만료를 감지해 취소했다. 시간 제한과 취소 경로를 유지한다.
+XY0.229265m/Z0.010000m는 incomplete_trial_observation이며 놓기 정확도가 아니다.
+policy-result SHA256: `2d00ea9f5a3b35f241ef4352612b109a15527a8e0b69b056c33b844f6c7431ae`.
+새 정식20회는 시작하지 않았다. 같은 checkpoint를 보존하고 제출 경로의 지연 원인을 계측한다.
 
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
