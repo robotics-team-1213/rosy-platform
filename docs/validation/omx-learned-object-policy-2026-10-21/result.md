@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/34회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/14회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/35회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/15회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
 
@@ -26,6 +26,16 @@ Checkpoint는 `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c`
 수정 전 원격 회귀는 예상한 2FAIL이다. 수정 후 관련 네 시험 파일의 원격 검증은
 83PASS/1SKIP/0NEW이며 독립 소스 검토에서 blocker가 없었다. Runtime revision: `016fad24a222361f84a368f07fa13b8bff776c75`.
 같은 모델의 새 calibration·engineering 과제를 요청했다. 새 물체 성공은 아직 확인하지 않았다.
+
+해당 재검증 calibration `90b0b4371650`는 12추론/0정책goal, PASS/cleanup true였다.
+실제 과제 `9447e065dcd2`는 106후보/105intent/105UUID 뒤 106번째 gripper 목표
+−0.1196070462rad가 `policy_action_envelope`로 차단되어 HOLD했다. 원 입력 gripper는
+−0.0846947208rad였다. 카메라 audit 1,039건/상한60,600건으로 이전1,000건을 넘겨
+기록됐으며 이 중단은 진단 cap 소진이 아니다. Actor204.413s/root267.588s,
+cleanup true, attach/lift/stable0이며 XY0.229265m/Z0.010000m는 미완료 관측이다.
+policy-result SHA256: `7180470f4363f694d691e22fac3fb7b27c0ba26e7e103dec60c48a8dc564d093`.
+같은 clean checkpoint는 실제0/2이며 새 정식20회는 시작하지 않았다. 원본 학습 시연과
+실행 상태·목표 비교를 진행한다. 기존 owner 범위와 step 제한을 유지한다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
