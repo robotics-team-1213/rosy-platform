@@ -79,7 +79,7 @@ async def _pipeline(tmp_path):
     def read(url, token=None):
         headers = {"Authorization": f"Bearer {token}"} if token is not None else {}
         with urlopen(Request(url, headers=headers), context=context, timeout=2) as response:
-            return dict(response.headers), response.read()
+            return response.headers, response.read()
 
     try:
         source = bridge.LatestSource()
