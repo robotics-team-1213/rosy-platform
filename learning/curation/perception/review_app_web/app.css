@@ -346,3 +346,5 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .omx-segments li > span{display:block;margin-block-end:var(--space-1)}
 .omx-review ui-actions{flex-wrap:wrap}
 .omx-review{overflow-wrap:anywhere}
+.omx-heading{flex-wrap:nowrap;gap:var(--space-2)}
+.omx-heading h2{margin:0}
