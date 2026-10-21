@@ -70,6 +70,28 @@ def attached(tmp_path, camera=False):
     return session, runtime, client, clock, authority, journal, root
 
 
+@pytest.mark.parametrize('fault', ['installed_bytes', 'stored_bytes'])
+def test_prepared_source_never_bypasses_binding_integrity(tmp_path, fault):
+    import sqlite3
+    from rosy.execution.local.policy_source import capture_source
+
+    journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session, client, _, _, root = setup_session(tmp_path, execution_journal=journal)
+    header, payloads = capture_source(session.policy, session.owner)
+    journal.store_source(header, payloads)
+    if fault == 'installed_bytes':
+        (root/'model.bin').write_bytes(b'changed after preparation')
+    else:
+        with sqlite3.connect(journal.path) as db:
+            db.execute("UPDATE policy_source_files SET payload=? WHERE path='policy/model.bin'",
+                       (b'changed after preparation',))
+    runtime = runtime_methods(session, client)
+    with pytest.raises(ValueError):
+        session.bind_runtime(runtime)
+    assert runtime._policy_binding is None
+    assert not client.commands
+
+
 def test_same_runtime_observes_once_registers_before_send_and_preserves_source_bytes(tmp_path):
     session, runtime, client, clock, authority, journal, root = attached(tmp_path)
     runtime._on_joint_state(joint_message(runtime))

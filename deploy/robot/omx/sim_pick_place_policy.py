@@ -32,6 +32,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from omx_adapter.gripper_contract import GripperObservation, verify_held_object, verify_released_object
     from rosy.execution.local.omx_policy import OwnerPolicySession
     from rosy.execution.local.policy_journal import PolicyExecutionJournal
+    from rosy.execution.local.policy_source import capture_source
     from rosy_cell.cell import load_cell
     from rosy_cell.recipe import load_recipe
     from rosy_cell.compiler import compile_job
@@ -136,16 +137,24 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             normalization_sha256=campaign['normalization_sha256'])
         engine=ACTInference(policy.root,policy.binding.policy_revision,monotonic=arm.monotonic)
         receipt['installed_policy_revision']=policy.binding.policy_revision
+        journal=PolicyExecutionJournal(directory/'policy-execution.sqlite3')
+        prepare_started=time.monotonic()
+        header,payloads=capture_source(policy,arm.owner)
+        prepared_source=journal.store_source(header,payloads)
+        del header,payloads
+        receipt['source_prepare_ms']=(time.monotonic()-prepare_started)*1000
+        require_live()
         authority=NativeSimStudyAuthority(os.environ['OMX_NATIVE_STATE'],policy,arm.owner,str(uuid4()),
             monotonic=arm.monotonic)
         fence=NativeSimStopFence(authority)
-        journal=PolicyExecutionJournal(directory/'policy-execution.sqlite3')
         session=OwnerPolicySession(policy,arm.owner,fence,authority.issue(),authority_current=authority.current,
             owner_identity=lambda:dict(simulation=True,workcell_id=config.workcell_id,
                 instance_id=config.instance_id,profile='sim-world:'+WORLD),monotonic=arm.monotonic,
             enabled=True,camera_current=camera.snapshots,execution_journal=journal)
         bind_started=time.monotonic()
         bind_sim_runtime(session,arm)
+        if session._runtime_binding.source_revision!=prepared_source:
+            raise PermissionError('prepared source changed during runtime binding')
         receipt['runtime_bind_ms']=(time.monotonic()-bind_started)*1000
         renew=threading.Thread(target=renew_worker,daemon=True);renew.start();threads.append(renew)
         sampler=threading.Thread(target=observe_worker,daemon=True);sampler.start();threads.append(sampler)
