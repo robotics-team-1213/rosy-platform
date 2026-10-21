@@ -15,3 +15,7 @@
 - Enter 프레임 확인, Space 구간 추가, 저장 응답 대기 중 추가한 입력 보존, 저장본과 다운로드 JSON 일치, 새로고침 취소, native beforeunload 취소 후 입력 보존, 재조회된 선택을 확인했다. pageerror는0이다.
 - 원본 사진에 SYNTHETIC 표시가 있으며 이 검수는 agent가 생성한 시험 자료다. 학습용 사람 정답이나 실제 파지 성공률을 만들지 않는다.
 - 고정 증거: 작업 공간 밖 `Rosy/artifacts/receipts/omx-grasp-publication-20261021/`의 화면 캡처·walk-ux.json·선택 JSON. 시험 명령과 최종 병합 상태는 해당 PR에도 남긴다.
+
+## 탐색 연결
+
+메뉴 자산 commit d3fc0f70de5d를 격리 서버에 추가했다. headed Edge의1440/390px에서 기존 목록·객체·픽셀·자료 화면 각각 모방학습으로 이동하는 총8개 여정과 현재 메뉴 표시를 확인했고 pageerror는0이었다. 원격의 명시 OMX 진입 회귀와 다섯 화면의 공통 메뉴 계약은 총11 passed / skip0이다. nav-walk.json과 두 화면 크기 캡처를 같은 증거 폴더에 보존한다.
