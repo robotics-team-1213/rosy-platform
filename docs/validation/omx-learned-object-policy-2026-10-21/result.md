@@ -70,8 +70,33 @@ calibration 실제 추론 12회·정책 명령 0회·attempts 0·정리 완료·
 상한이 아니다. 일반 runtime 기본값은 그대로다.
 
 첫 고정 campaign `omx-learned-campaign-bdd38d664bc0340d`는 위 checkpoint와
-runtime, 성공 기준을 고정했다. 현재 확정 prefix는 **4 시작 / 4 종료 / 0 물체 성공**이다.
-계획 분모는 20이며 5회차부터 계속 실행 중이다. 이 cohort는 이미 18/20에 도달할 수 없다.
+runtime, 성공 기준을 고정했고 **20 시작 / 20 종료 / 20 정리 확인 / 0 물체 성공**으로
+종료됐다. 20개 canonical 결과와 수집된 원문이 일치하고 archive·extraction map의
+SHA256 40개를 재검증했다. Fetch receipt는 `OBSERVATION_NOT_ATOMIC`이며 파일
+시스템의 원자 snapshot이라고 주장하지 않는다.
+
+| 전체 20회 기록 | 확인값 |
+|---|---:|
+| 물체 과제 성공 | 0/20 (목표 18/20 미달) |
+| 반환되어 기록된 candidate | 114 |
+| durable command intent | 106 |
+| 실제 accepted goal UUID | 100 |
+| terminal 상태 4 / code 0인 관절 goal | 95 |
+| terminal 상태 5인 관절 goal | 3 |
+| cancel ACK 후 terminal 미기록인 관절 goal | 2 |
+| 원 joint 관측 신선도 실패 | 17회 |
+| 원 camera 관측 신선도 실패 | 2회 |
+| lease 만료 실패 | 1회 |
+
+실패 종료 시 독립 관측의 lift·stable 값은 모두 0, XY 오차 229.265131mm,
+Z 오차 10.000000mm다. 모두 `incomplete_trial_observation`이며 놓기 후 오차나
+해제 후 안정 시간으로 해석하지 않는다. 관절 goal 95회 성공을 물체 성공으로
+합산하지 않으며, cancel ACK만 있는 2개를 terminal 완료로 바꾸지 않는다.
+
+완료 원장 SHA256: `2fac17fce6a55b82199a1a4ef5323c3b9f525bc182f17b709198f84be7c6160f`.
+고정 campaign SHA256: `fa612239c771a2e9442cd6ec5f689143c291ca879bd98233e8e555e8e9d6b660`.
+
+아래는 첫 4회의 상세 사례이며 전체 20회의 시작·실패 원문을 보존한다.
 
 - Trial 1: 실제 관절 goal 24개 완료 뒤 25번째 goal 수락, 이후 원 관측 신선도
   검사로 취소됐다. 마지막 goal 수락은 원 관측 후 448.757ms, cancel ACK는
@@ -79,7 +104,7 @@ runtime, 성공 기준을 고정했다. 현재 확정 prefix는 **4 시작 / 4 �
 - Trial 2: 첫 goal 성공 후 두 번째 intent가 저장됐으나 goal UUID·event 없이
   원 관측 신선도 검사에서 거절됐다. 두 번째 candidate 생성 시 원 관측은 이미
   342.609ms였다. Intent만 있다고 실제 goal 전송을 주장하지 않는다.
-- Trial 3: lease 만료로 추론·정책 goal 0회 종료됐다.
+- Trial 3: lease 만료로 기록된 candidate·정책 goal 0회 종료됐다.
 - Trial 4: 원 관측 신선도 검사로 종료됐다. 4회 모두 실행 정리가 확인됐다.
 
 Trial 4 수집 이후 로컬 관리 명령이 Windows 명령 길이 제한으로 실패했다.
@@ -93,6 +118,39 @@ Trial 4 수집 이후 로컬 관리 명령이 Windows 명령 길이 제한으로
 현재 quota 측정은 10초 동안 100 period 중 3회 throttling, 누적 throttled_usec
 287256을 보였지만 torch가 단독 원인이라는 증거는 아니다. 효과는 별도 native
 calibration과 고정 campaign에서 확인해야 한다.
+
+해당 a2422cff50 calibration은 6개 candidate 기록 후 원 joint 관측 신선도 실패로
+종료됐다. 실제 torch thread는 1, interop은 24였고 정책 goal·물체 과제 시작은 0이다.
+이어 초기 설치 파일 검사를 관절 intake lock 밖으로 옮긴 4dddf3fc2d는 원격
+86 PASS / 1 SKIP / 0 NEW였지만 실제 calibration은 10개 candidate 후 현재 joint
+관측 신선도 실패로 종료됐다. 기록된 원 입력 나이는 103.51–270.48ms였으며,
+이 수치로 종료 시 현재 관측 신선도까지 통과했다고 주장하지 않는다. 두 실행 모두
+정리가 확인됐고 실패 원문은 각 `omx-policy-candidate-smoke-<revision>-<nonce>`에 보존했다.
+
+후속 967dfc3415는 idle calibration을 검증된 설치 metadata의 0.8초 정책 주기에
+맞춘다. 다음 capture 전에 대기하고 매 cycle 시작 시각과 최소 간격을 receipt에 기록한다.
+기존 빠른 calibration 실패는 추가 부하 시험 결과로 보존한다. watchdog과 lease 갱신은
+각 10Hz, 모든 신선도·최종 admission 검사는 유지한다. 실제 loop를 실행하는 회귀
+테스트는 이전 코드에서 간격 위반으로 실패했고, 수정 후 원격 관련 검사 52 PASS /
+0 NEW를 확인했다. 이 idle calibration 통과만으로 submit·journal·이동 중 관측이나
+실제 물체 성공을 주장하지 않으며 별도 engineering 물체 과제로 검증한다.
+실제 967dfc3415 calibration은 9개 candidate 후 원 관측 신선도 실패로 종료됐다.
+정리 확인은 true, 물체 과제 시작과 정책 goal은 모두 0이다. 마지막 기록의 추론
+전체 시간은 464.37ms였고 설치 검사 112.60ms, 초기 lock 대기 146.64ms,
+capture 68.21ms, 최종 lock 대기 42.82ms, 최종 검사 78.90ms가 포함됐다.
+따라서 운용 주기 일치만으로 해결됐다고 판단하지 않는다.
+
+동일 설치 파일의 합성 Python 경쟁 진단 `omx-hash-contention-1`은 실제 물체
+평가와 분리했다. 2회 반복·각 12개 측정에서 1MiB 해시 읽기의 중앙값은
+495.60/498.97ms, 8MiB는 99.34/110.35ms였다. 경쟁 thread가 없을 때는
+각 약 11/12ms였다. 모든 측정에서 전체 파일 SHA를 확인했다. 이 측정은
+실제 ROS 경합의 원인 확정이나 신선도 상한 보장이 아니다.
+
+dc2ae11177은 공통 파일 검증의 읽기 단위만 8MiB로 바꾸며 경로 containment,
+전체 SHA·최종 크기 검사를 유지한다. 검증당 일시 block 메모리는 약 2MiB에서
+16MiB로 늘 수 있다. 빈 파일·8MiB 경계·그 뒤 17바이트 tail의 끝 변조와 크기
+오류를 포함한 원격 관련 검사 72 PASS / 1 SKIP / 0 NEW와 독립 코드 검토를
+마쳤다. 선택 checkpoint는 동일하며 별도 native calibration으로 효과를 확인한다.
 
 ## 유지한 실행·성공 기준과 시험 범위
 
