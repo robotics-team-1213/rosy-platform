@@ -69,6 +69,36 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 page.reload(wait_until='networkidle')
                 page.get_by_text('파지 구간 검수',exact=True).click()
                 playwright.expect(page.locator('details')).to_contain_text('[2, 6)')
+                # Hold the real POST before it reaches the server; edits must survive its late response.
+                page.get_by_label('대상 물체',exact=True).fill('second cube')
+                page.get_by_label('검수자',exact=True).fill('human')
+                page.get_by_label('관찰 근거',exact=True).fill('second observed grasp')
+                page.get_by_role('button',name='구간 추가',exact=True).click()
+                pending=[]
+                page.route('**/api/learning/omx/segments',lambda route:pending.append(route))
+                page.get_by_role('button',name='검수 저장',exact=True).click()
+                page.wait_for_function('true')
+                assert len(pending) == 1
+                playwright.expect(page.get_by_role('button',name='검수 저장',exact=True)).to_be_disabled()
+                page.get_by_role('button',name='삭제',exact=True).first.click()
+                page.get_by_label('대상 물체',exact=True).fill('pending cube')
+                page.get_by_role('button',name='구간 추가',exact=True).click()
+                pending.pop().continue_()
+                page.unroute('**/api/learning/omx/segments')
+                playwright.expect(page.locator('details')).to_contain_text('검수 2 저장됨')
+                playwright.expect(page.locator('details')).to_contain_text('pending cube')
+                playwright.expect(page.locator('details')).not_to_contain_text('· cube ·')
+                playwright.expect(page.get_by_role('button',name='선택 JSON 내려받기')).to_be_disabled()
+                page.get_by_role('button',name='다시 확인',exact=True).click()
+                playwright.expect(page.get_by_role('dialog')).to_be_visible()
+                page.get_by_role('button',name='취소',exact=True).click()
+                playwright.expect(page.locator('details')).to_contain_text('pending cube')
+                page.get_by_role('button',name='검수 저장',exact=True).click()
+                playwright.expect(page.locator('details')).to_contain_text('검수 3 저장됨')
+                page.reload(wait_until='networkidle')
+                page.get_by_text('파지 구간 검수',exact=True).click()
+                playwright.expect(page.locator('details')).to_contain_text('pending cube')
+                playwright.expect(page.locator('details')).to_contain_text('second cube')
                 assert (root/'decisions.json').read_bytes() == before
                 assert not errors
             finally:
