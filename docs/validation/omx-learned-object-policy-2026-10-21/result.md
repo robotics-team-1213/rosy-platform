@@ -31,6 +31,15 @@ policy-result SHA256: `f73746f1f5537cccf6b0137224514959469f2f0c63db80ea6de67e427
 정식20회를 시작한다. 로그는 `omx-bounded-head-native-red`,
 `omx-bounded-head-native-green`, `omx-bounded-head-green`에 보존한다.
 
+이 변경은 공식 `tools/land.py --tests auto --no-prune`로 로컬 main에 착지했다.
+Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint와 원격
+아키텍처267PASS/0NEW, 영향 범위1091PASS/38SKIP/0NEW를 통과했다. 실제 ACT9개는
+별도 MODEL 시험에서0SKIP으로 확인했다. 일반 검사의38SKIP을 통과로 바꾸지 않는다.
+착지 로그는 `%TEMP%/rosy-land/feat-omx-sim-ground-truth/{run-g1-1.txt,run-1-1.txt}`다.
+원격 push는 하지 않았다. 새 학습 실행은 `omx-object-training-42a03f4605a8a021`이며
+고정한 source938791127b의 bounded head/command_entry/noise0.02를 사용한다.
+시작 요청이나 자료 검증 횟수는 학습 완료·물체 성공으로 계산하지 않는다.
+
 ## 실제 데이터와 선택한 checkpoint
 
 선택한 시연은 batch 7·9·10·11·12·14·15·16에서 각 3개, batch 17에서 1개로
