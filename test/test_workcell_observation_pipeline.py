@@ -57,12 +57,12 @@ async def _pipeline(tmp_path):
             "image_topic": "/top/image_raw", "device_path": "/dev/v4l/by-path/example-top",
             "token_env": "EXAMPLE_TOP", "credential_sha256": sha256(b"top-secret").hexdigest()}]}]})
     _, tokens = bridge.select_sources(manifest, "example", {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret"})
-    signing = "preview-signing-" + "x" * 32
+    signing_secret = "preview-signing-" + "x" * 32
     cache = WorkcellObservations(manifest, {"arm_feedback": tokens["arm_feedback"]})
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=())
     app = create_app(FleetConsole([], []), task_service=tasks, start_task_dispatcher=False,
         site_users={sha256(b"viewer-secret").hexdigest(): {"principal_id": "reader", "role": "viewer"}},
-        workcell_observations=cache, vision_lease_secret=signing, cell_job_compiler=None)
+        workcell_observations=cache, vision_lease_secret=signing_secret, cell_job_compiler=None)
     pki = tls._write_pki(tmp_path)
     fleet_port = tls._free_port()
     fleet = tls.FleetThread(app, fleet_port, pki)
@@ -70,7 +70,7 @@ async def _pipeline(tmp_path):
     context = ssl.create_default_context(cafile=pki["ca"])
     server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server_tls.load_cert_chain(pki["chain"], pki["key"])
-    ingest = IngestServer({"top": tokens["top"]}, preview_signer=VisionLeaseSigner(signing))
+    ingest = IngestServer({"top": tokens["top"]}, preview_signer=VisionLeaseSigner(signing_secret))
     ws_server = await ingest.start("127.0.0.1", 0, ssl_context=server_tls)
     vision_port = ws_server.sockets[0].getsockname()[1]
     fleet_url = f"https://127.0.0.1:{fleet_port}"
