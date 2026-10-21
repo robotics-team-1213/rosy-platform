@@ -3068,3 +3068,9 @@
 - 변경: 기존 conversation snapshot/SSH wrapper 위에 독립 operator admission을 검증한다. 사이트 compose는 optional operator 설정 부재 시 OFF를 유지하고 새 Discord profile은 전처리 source closure를 요구한다.
 - 증거: 원본 로컬 구현에서 추출했으며 새 SHA의 설치기·클라이언트·산출물·모델 평가를 커밋 후 검증한다. 현장·AI PC의 비대화형 sudo는 거부돼 보호 설치를 수행하지 않았다.
 - gate 변화: 없음. 서명 후보·관리자 설치·readback과 현장 수용은 별도다.
+
+## 2026-10-21 · uncommitted · OpenRB 재연결·교체 시 serial 접근 권한
+
+- Change: add a tty-only udev rule for OpenRB VID/PID 2f5d:2202, group plugdev and mode 0660. Existing group members retain device access across board replacement and reconnect; no role assignment, port open, motor writes or service activation is added.
+- Evidence: Fleet enumerated four matching boards, three inaccessible to the operator; the operator already belongs to plugdev. The old serial-pinned rule and updater configuration name absent boards. Rule syntax, installed scope and actual permission readback are verified separately.
+- Gate: unchanged. Administrator installation and physical feedback acceptance are separate from source publication; no torque or motion is authorized by a permission rule.

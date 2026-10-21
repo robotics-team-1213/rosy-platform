@@ -772,3 +772,22 @@ XL430에는 Current Limit을 적용하지 않는다. 이 기본값은 `record_se
 종료 시 토크 OFF를 readback으로 확인한 뒤에만 설정을 복원한다. 확인에 실패하면 복원을
 건너뛰고 unsafe end를 보고한다. 낮은 출력이나 토크 OFF 때 하중 관절이 처질 수 있으므로
 실물 첫 구동에는 관절 지지, 외부 정지 수단, 관절별 실측 수용이 필요하다.
+
+## OpenRB USB 접근 권한
+
+기존 `plugdev` 운영자에게 OpenRB USB serial(USB VID/PID `2f5d:2202`) 접근을 부여한다.
+보드별 일회성 ACL과 달리 교체·추가·재연결에도 적용한다. 다른 USB 제품에는 적용하지 않는다.
+실행 계정이 이미 `plugdev`에 속하는지 확인한 뒤 관리자가 한 번 설치한다.
+
+```bash
+id -nG
+udevadm verify deploy/robot/omx/99-rosy-openrb-access.rules
+sudo install -o root -g root -m 0644 deploy/robot/omx/99-rosy-openrb-access.rules /etc/udev/rules.d/99-rosy-openrb-access.rules
+sudo udevadm control --reload-rules
+```
+
+설치 후 연결되는 일치 장치는 `root:plugdev`, `0660`으로 생성된다. 이미 연결된 장치는
+관리자가 VID/PID를 확인한 개별 tty sysfs 경로에 `udevadm trigger --action=change <sysfs-path>`를
+적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
+이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
+시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
