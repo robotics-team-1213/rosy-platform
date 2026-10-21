@@ -50,7 +50,12 @@ Sampling/training source revision: `a0c5dd42c934a880715a48adbcd5e7317dd5a487`.
 나빠졌다. 재적재 prediction 검증true·limit위반0·offline_only이나, 결과를 보기 전
 고정한 전체MAE 비악화 기준에서 탈락했다. 이 후보로 실제 calibration/물체 과제를
 재시도하지 않는다. 전체13,246행 재생으로 저장 MAE를 재현하고 최종놓기 팔MAE·
-열기 그리퍼MAE를 비교하는 별도 MODEL 진단을 시작했으며 구간 결과는 아직 없다.
+열기 그리퍼MAE를 비교한 별도 MODEL 진단도 EXIT0으로 종료했다.
+전체13,246행 MAE는 각 저장 report와1e-7rad 이내로 재현됐다. 최종놓기66행 팔MAE는
+0.0051114565889575775→0.0033878145344675044rad(33.721% 감소), 열기251행
+그리퍼MAE는0.00939452545850687→0.006555951797283353rad(30.215% 감소)다.
+전체MAE는11.807% 증가해4개 gate 중3개 통과·1개 실패이며 실제 재시도 후보false다.
+Comparison SHA256: `b0a3751b60f4b6a7b2636297da868a07046c7f8781441a23ff3da93d1bf23b0f`.
 
 Policy revision: `a76ef35c54b6b25ce5a2136e614a9b736dbc946102112948875e212af8ced652`.
 Dataset revision: `ec339a9bbdc3f2d00dc15cd7088712e67e5907519c8c27d490983fa3727df712`.
@@ -61,6 +66,27 @@ History SHA256: `6d3bea9d83a8c9122f40be729f48a2effca562e2d332a195fbf93d86ae42db8
 모든 policy file bytes/SHA256의 연결을 별도로 검증했다.
 첫100step 평균loss0.01700273566879332, 마지막100평균0.01138702870812267이며
 loss 감소를 물체 성공으로 해석하지 않는다. 원래 부모 BEC의10k와 추가10k를 구분한다.
+
+## 시연의 해제 전 접촉 여유 검증
+
+다음 가설은 시연의 최종 운반 TCP가 물체 바닥과 팔레트가 닿는 공칭 높이에 있다는
+점이다. 팔레트 상면10mm·물체높이30mm·중심GOAL25mm이며 grasp depth15mm라
+공칭 TCP도25mm다. 명령을 더 아래로 내리는 모델 편차가 실제 추종 실패와 부합하지만
+접촉력을 직접 측정하지 않았으므로 원인을 확정하지 않는다.
+
+시연용 teacher의 request.place만5mm 높이고 원래 최종GOAL·recipe/cell/profile·
+judge·runtime/controller·short-goal 한도는 유지한다. 해제 직전 독립 observer의
+원본 pose/회전에서 OBB 바닥을 계산하고 실제 TCP·원본 joint-state와 시각을 기록한다.
+실측 여유가2.5mm 미만·비유한 값이거나 joint-state가 stale이면 detach 전에 멈춘다.
+여유 높이를 과제 성공으로 계산하지 않고 기존 해제 receipt·최종 안정 판정을 유지한다.
+홈 전용 실행은 해당 planning과 검증 전에 반환한다. motion_strategy는 이 경우 구성
+정보이며 실제 물체 동작 증거가 아니다. 새 CLI·설정 옵션은 추가하지 않았다.
+
+Teacher source revision: `0bc501ac85d72ff4ca358c5f0bea0a5f33ad84a6`.
+수정 전 신규7FAIL, 수정 후 원격40PASS/0NEW와 독립 실제diff 검토를 확인했다.
+이는 helper·기존 truth 경로의 소스 검증이다. 실제 clearance·완전 해제·중력 정착은
+아직 미검증이며 보호된 native 시연1회로 확인한 뒤 새20/5 cohort 수집을 판단한다.
+기존25개 시연과 모든 실패는 보존하며 학습 정책에 scripted release나 clamp를 넣지 않는다.
 
 ## Pending native intake
 
