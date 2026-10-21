@@ -26,8 +26,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 화면 사진 검토 후 학습 화면 다듬기
 - 2026-10-21 · uncommitted · 학습 화면 구조 정리
 - 2026-10-21 · uncommitted · SIM 실제 연결 경계 수정
 - 2026-10-21 · uncommitted · 공통 SIM 웹 연결
 - 2026-10-21 · uncommitted · SIM 화면 연결 전 검수 저장 코드 분리
-- 2026-10-19 · 1bcc82a593 · portable catalog와 명시적 legacy 동영상 준비 이식

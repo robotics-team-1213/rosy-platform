@@ -9,16 +9,16 @@
 <p>웹과 CLI가 같은 실험 설정과 결과를 사용합니다. 첫 단계는 OMX-F 모델·관절 연결 검사입니다.</p>
 <ui-status id="sim-notice" state="ready" role="status">실행 연결을 확인하는 중입니다.</ui-status><ui-status id="sim-error" state="error" role="alert" hidden></ui-status>
 <section class="learning-section" aria-labelledby="sim-config-title"><h2 id="sim-config-title">1 · 실험 조건</h2>
-<label class="ui-field-label">시나리오 <select id="sim-scenario" class="ui-field"></select></label>
-<label class="ui-field-label">Seed <input id="sim-seed" class="ui-field" type="number" min="0" max="2147483647" step="1" value="0"></label>
+<div class="ui-form learning-form"><label class="ui-field-label">시나리오 <select id="sim-scenario" class="ui-field"></select></label>
+<label class="ui-field-label">Seed <input id="sim-seed" class="ui-field" type="number" min="0" max="2147483647" step="1" value="0"></label></div>
 <p class="quiet">모델 연결 검사에서는 seed를 사용하지 않습니다. 고정 조건: OMX-F · headless · 120프레임.</p>
 <pre id="sim-source" class="quiet"></pre><ul id="sim-prerequisites"></ul>
-<div class="ui-workspace-bar"><ui-button id="sim-check" kind="quiet" disabled>조건 확인</ui-button><ui-button id="sim-start" kind="primary" disabled>실험 시작</ui-button></div>
+<div class="ui-workspace-bar"><ui-button id="sim-check" data-action-icon="check" kind="quiet" disabled>조건 확인</ui-button><ui-button id="sim-start" data-action-icon="next" kind="primary" disabled>실험 시작</ui-button></div>
 <p id="sim-checked" class="quiet" role="status">조건 확인 후 실행할 수 있습니다.</p></section>
-<section class="learning-section" aria-labelledby="sim-runs-title"><div class="ui-workspace-bar"><h2 id="sim-runs-title">2 · 실행 기록</h2><ui-button id="sim-refresh" kind="quiet">새로고침</ui-button></div>
+<section class="learning-section" aria-labelledby="sim-runs-title"><div class="ui-workspace-bar"><h2 id="sim-runs-title">2 · 실행 기록</h2><ui-button id="sim-refresh" data-action-icon="refresh" kind="quiet">새로고침</ui-button></div>
 <p class="quiet">실패·중단·판정 불가 기록도 보존합니다. UNKNOWN은 자동으로 재시작하지 않습니다.</p><div id="sim-runs" aria-live="polite"></div></section>
 <section class="learning-section" aria-labelledby="sim-detail-title"><h2 id="sim-detail-title">3 · 결과 확인</h2>
-<pre id="sim-selected">기록을 선택하세요.</pre><div class="ui-workspace-bar"><ui-button id="sim-stop" kind="quiet" disabled>이 실험 중지 요청</ui-button><ui-button id="sim-replay" kind="quiet" disabled>새 실험으로 다시 실행</ui-button></div>
+<pre id="sim-selected">기록을 선택하세요.</pre><div class="ui-workspace-bar"><ui-button id="sim-stop" data-action-icon="close" kind="quiet" disabled>이 실험 중지 요청</ui-button><ui-button id="sim-replay" data-action-icon="refresh" kind="quiet" disabled>새 실험으로 다시 실행</ui-button></div>
 <p>모델 검사 성공은 물리 집기·팔레타이징 성공이나 학습 수용을 뜻하지 않습니다. 기본 검사에는 영상이 없습니다.</p>
 <pre id="sim-result" class="quiet"></pre><div id="sim-artifacts"></div></section>
 </main></div></div></ui-shell></body></html>

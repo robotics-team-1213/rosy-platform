@@ -69,6 +69,7 @@ function arrow(ctx,[x0,y0],[x1,y1],head){
 function draw(){
   const ref=selected(),canvas=$('view'),ctx=canvas.getContext('2d');
   const base=photo||still;
+  canvas.hidden=!(ref||photo||still);  // no reference and no photo: nothing to compare, no empty board
   canvas.width=base?.width||ref?.width||640;canvas.height=base?.height||ref?.height||480;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if(photo)ctx.drawImage(photo,0,0);

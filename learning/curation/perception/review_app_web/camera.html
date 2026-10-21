@@ -22,7 +22,7 @@
 <ui-button kind="primary" type="submit" data-action-icon="check">판정</ui-button></form>
 <ui-status id="verdict" state="pending" role="status">기준과 사진을 고르세요.</ui-status>
 <label class="ui-field-label">기준 사진 겹치기 <input id="onion" class="ui-field" type="range" min="0" max="100" value="40"> <output id="onion-value">40%</output></label>
-<canvas id="view" class="camera-view" width="640" height="480" role="img" aria-label="기준 점선과 지금 사진"></canvas>
+<canvas id="view" class="camera-view" width="640" height="480" hidden role="img" aria-label="기준 점선과 지금 사진"></canvas>
 <dl id="numbers" class="camera-numbers"></dl></section>
 <details class="learning-section"><summary>새 촬영 기준 만들기</summary>
 <p class="quiet">움직이지 않는 배경(작업대 가장자리·벽·팔 베이스)이 밝게 보이는 사진 한 장으로 만듭니다. 마커는 필요 없습니다. 작업면 마커(DICT_4X4_50)를 두면 높이·거리도 cm로 봅니다. 기준은 고칠 수 없고, 카메라를 일부러 옮기면 새 기준을 만듭니다.</p>
