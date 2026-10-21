@@ -79,3 +79,14 @@ def test_catalog_explicit_root_overrides_environment(tmp_path):
     )
     assert (chosen / "catalog.jsonl").is_file()
     assert not env_root.exists()
+
+
+def test_legacy_session_suite_isolates_inherited_operator_root(tmp_path):
+    external = tmp_path / "operator-data"
+    result = subprocess.run([
+        sys.executable, "-m", "pytest", str(ROOT / "test/test_run_data.py"),
+        "-q", "--noconftest", "-o", "addopts=", "-p", "no:cacheprovider",
+        "-p", "no:launch_testing", "-p", "no:launch_ros",
+    ], env=dict(os.environ, ROSY_DATA_ROOT=str(external)), capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not external.exists()
