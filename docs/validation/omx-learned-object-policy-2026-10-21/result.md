@@ -41,6 +41,12 @@ Token 소비 뒤 같은 객체나 같은 값의 복사본을 다시 주면 기�
 calibration·만료 lease·기존 HOLD·binding 교체 거절을 검증한다. 실제 수정 효과와 새
 정식20회 수용은 아직 입증되지 않았다.
 
+Source revision: `e665abfde63a414880844ba83dbd45193746c70e`.
+시험 fixture의50ms 상한을 유지해 새 원본 관측은20ms, 이전 session 관측은600ms로
+잠금 대기 재현을 구성했다. 수정 전 이 재현과 future/calibration 경로는3 FAIL,
+나머지7개는 PASS였다. 수정 후 관련 원격 회귀208 PASS/1 SKIP/0 NEW·exit0을
+확인했다. 생략을 통과로 계산하지 않으며 실제 물체 수정 효과는 별도 검증한다.
+
 직전 `ad91d17aa658`은 관절 관측500ms 신선도 감시에서 HOLD했다. 237개 명령 중
 236개는 terminal4/code0, 마지막1개는 취소 terminal5/code0다. Actor395.861초/
 root460.594초다. 최대 lift100.403mm와 마지막 XY30.916mm/Z90.403mm는
