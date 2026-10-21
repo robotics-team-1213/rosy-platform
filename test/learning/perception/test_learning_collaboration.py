@@ -91,6 +91,13 @@ def running(tmp_path):
         thread.join()
 
 
+def test_session_without_view_is_forbidden_not_signed_out(tmp_path):
+    with running(tmp_path) as (base, accounts, _):
+        accounts.require = lambda principal, capability: (_ for _ in ()).throw(PermissionError('denied'))
+        assert request(base, '/api/accounts/session', 'reader')[0] == 403
+        assert request(base, '/api/accounts/session')[0] == 401
+
+
 def request(base, path, session=None, body=None, token=None, *, cookie_name='rosy_learning_session'):
     headers = {'Origin': base}
     if session:
