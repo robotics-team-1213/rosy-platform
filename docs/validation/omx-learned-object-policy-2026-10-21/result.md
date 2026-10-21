@@ -10,9 +10,9 @@
 현재 확정된 실제 learned 물체 성공은 **0/32회**다. 최초 고정 평가 0/20회와
 별도 engineering 사전 과제 0/12회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
-새 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다. 실행 중인 과제는 없다.
+최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
 
-최신 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
+직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
 0.0403985977rad가 기존 0.04rad 제한을 넘어 HOLD했다. 마지막 intent에는 UUID가 없다.
 SIM DetachableJoint 부착 보조의 attach가 확인됐지만 최대 lift 17.898mm로 기준 30mm에
@@ -72,6 +72,14 @@ submit405.159ms였다. 마지막 GOAL_ACCEPTED의 원 카메라 나이는490.817
 XY0.229265m/Z0.010000m는 incomplete_trial_observation이며 놓기 정확도가 아니다.
 policy-result SHA256: `2d00ea9f5a3b35f241ef4352612b109a15527a8e0b69b056c33b844f6c7431ae`.
 새 정식20회는 시작하지 않았다. 같은 checkpoint를 보존하고 제출 경로의 지연 원인을 계측한다.
+
+SIM 계측 source revision: `754c2e2bf553d408a7a00d274dd776f89f5747c2`.
+guard·journal prepare/observe/read·native send/submit·post-I/O의 원 호출을 같은 인자로
+그대로 실행하고 메모리에서 enter/exit·thread·command 식별자를 기록한다. 종료 뒤
+`policy-admission-timings.json`에 저장한다. 모든 FULL commit·durable callback·검사와
+500ms 제한은 유지한다. 수정 전 계측 회귀3FAIL, 수정 후178PASS/0SKIP/0NEW와
+독립 검토를 통과했다. 중첩 duration을 합산하지 않으며 `returned`를 admission 성공으로
+해석하지 않는다. 같은 cb369 checkpoint로 새 calibration·사전 과제 계측을 요청했다.
 
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
