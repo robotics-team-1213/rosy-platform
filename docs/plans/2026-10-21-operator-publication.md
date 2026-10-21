@@ -19,8 +19,8 @@
 
 ## 1. 공유 계약 게시
 
-- [ ] foundation 경계 시험으로 원격에 없는 assistant DTO를 재현한다.
-- [ ] `protocol/assistant.py`, D-810/D-821, ADR Log, API 계약과 고정 버전을 반영한다.
+- [x] foundation 경계 시험으로 원격에 없는 assistant DTO를 재현한다.
+- [x] `protocol/assistant.py`, D-810/D-821, ADR Log, API 계약과 고정 버전을 반영한다.
 - [ ] 관련 원격 시험·필수 검사·독립 검토·pre-push·PR 최신 SHA CI를 확인하고 병합한다.
 
 ## 2. 관제 AI와 전처리 게시
