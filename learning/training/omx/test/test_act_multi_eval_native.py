@@ -12,7 +12,8 @@ sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/o
 
 
 @pytest.mark.parametrize('representation,queue_steps,noise', [('absolute',1,0.),
-    ('joint_delta_from_chunk_source_v1',2,0.),('joint_delta_from_chunk_source_v1',1,.02)])
+    ('joint_delta_from_chunk_source_v1',2,0.),('joint_delta_from_chunk_source_v1',1,.02),
+    ('joint_delta_tanh_from_chunk_source_v1',1,.02)])
 def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,monkeypatch,representation,queue_steps,noise):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
@@ -70,6 +71,8 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
     report=run(exports[:2],exports[2:],out,steps=1,n_action_steps=queue_steps,
                action_representation=representation,**kwargs)
     stats=json.loads((out/'normalization.json').read_text())
+    if representation=='joint_delta_tanh_from_chunk_source_v1':
+        assert stats['action_transform']['max_delta_rad']==.035
     assert stats['fit_episodes']==ids[:2]
     np.testing.assert_allclose(stats['state_mean'],np.mean(training_states,axis=0),atol=1e-7)
     assert evaluated

@@ -7,9 +7,19 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/30회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/10회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/31회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/11회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
+새 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다. 실행 중인 과제는 없다.
+
+최신 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
+gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
+0.0403985977rad가 기존 0.04rad 제한을 넘어 HOLD했다. 마지막 intent에는 UUID가 없다.
+SIM DetachableJoint 부착 보조의 attach가 확인됐지만 최대 lift 17.898mm로 기준 30mm에
+못 미쳤고 release·안정 유지가 없었다. XY 오차 0.242214m, Z 오차 0.007898m는
+`incomplete_trial_observation`이며 놓기 정확도가 아니다. 실제 과제 성공은 0/1이다.
+policy-result SHA256: `f73746f1f5537cccf6b0137224514959469f2f0c63db80ea6de67e427f7dc924`.
+이 단일 실행으로 state noise의 인과 효과를 확정하지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
 
@@ -462,8 +472,10 @@ SHA256: `5dc7d8502c1892c55a933b31d4835207c62d3c9130533514977dbe4494bb54d5`다.
 `offline_only` 판정을 확인했다. 새 Policy revision:
 revision: `746e3b8e7fd8f9b16c7fbc0fd3fdd081fc65d679e6b05108afa5bc073313d109`.
 등록본 복사·재검증·모델 묶음 전송과 실행 exit0을 확인했다. 전체 validation13,246프레임·
-관절 한계 위반0·n_action_steps=1이며 native calibration과 사전 과제를 준비 중이다.
-새 실제 물체 과제는 아직 시작하지 않았다.
+관절 한계 위반0·n_action_steps=1이다. Runtime source301dc82473의 calibration
+`4be4d70b3ecc`는 PASS·exit0·attempts0·cleanup true로 통과했고, 별도 사전 물체 과제
+`869a6d818862`를 실행 중이다. 실제 원장에62intent·62accepted UUID가 관측됐으며
+이는 실행 중의 비원자 관측값이다. 물체 성공이나 최종 terminal 수로 계산하지 않는다.
 
 | 상태 교란 학습 산출물 | 고정 식별자 |
 |---|---|
