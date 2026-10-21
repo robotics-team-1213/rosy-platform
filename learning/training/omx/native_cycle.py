@@ -77,6 +77,13 @@ def _invoke(command, output, environment, timeout):
         raise ValueError(f'pipeline process failed ({result.returncode}): {tail}')
 
 
+def evaluation_joints(train_info, eval_info):
+    names = native.joint_layout(train_info)
+    if native.joint_layout(eval_info) != names:
+        raise ValueError('train/eval joint layouts differ')
+    return names
+
+
 def _evaluate(model, splits, repo_id, output):
     # This function runs only in a fresh child process after the official trainer exited.
     receipt = validate_split(splits)
@@ -89,11 +96,13 @@ def _evaluate(model, splits, repo_id, output):
     torch.set_num_threads(2)
     train = native.load_dataset(splits / 'train', repo_id + '_train')
     evaluation = native.load_dataset(splits / 'eval', repo_id + '_eval')
+    names = evaluation_joints(train.meta.info, evaluation.meta.info)
+    size = len(names)
     policy = ACTPolicy.from_pretrained(model)
     pre, post = make_pre_post_processors(policy.config, pretrained_path=str(model))
     policy.eval()
-    mean = torch.as_tensor(train.meta.stats['action']['mean'], dtype=torch.float32).reshape(1, 6)
-    error, baseline, samples, previous = torch.zeros(6), torch.zeros(6), 0, None
+    mean = torch.as_tensor(train.meta.stats['action']['mean'], dtype=torch.float32).reshape(1, size)
+    error, baseline, samples, previous = torch.zeros(size), torch.zeros(size), 0, None
     with torch.inference_mode():
         for batch in torch.utils.data.DataLoader(evaluation, batch_size=1, shuffle=False):
             episode = int(batch['episode_index'].item())
@@ -102,17 +111,17 @@ def _evaluate(model, splits, repo_id, output):
             previous = episode
             target = batch['action'].detach().clone().cpu()
             action = post(policy.select_action(pre(batch))).detach().cpu()
-            if action.shape != (1, 6) or not torch.isfinite(action).all():
-                raise ValueError('reloaded model returned an invalid six-joint action')
-            error += (action - target).abs().reshape(6)
-            baseline += (mean - target).abs().reshape(6)
+            if action.shape != (1, size) or target.shape != (1, size) or not torch.isfinite(action).all():
+                raise ValueError('reloaded model returned an invalid joint action')
+            error += (action - target).abs().reshape(size)
+            baseline += (mean - target).abs().reshape(size)
             samples += 1
     if not samples:
         raise ValueError('independent evaluation contains no frames')
     native.write_json(output, dict(samples=samples, split='eval', model_reloaded_in_new_process=True,
                                    mae_per_joint=(error / samples).tolist(),
                                    train_mean_baseline_mae_per_joint=(baseline / samples).tolist(),
-                                   joint_names=native.JOINTS, physical_task_success=None,
+                                   joint_names=names, physical_task_success=None,
                                    environment_coverage=native.split_coverage(
                                        native.validate_environment(receipt['source']), receipt['decisions'])))
 
