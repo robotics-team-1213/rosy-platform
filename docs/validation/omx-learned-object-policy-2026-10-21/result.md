@@ -37,6 +37,25 @@ teacher 2/3 성공 뒤 joint-state stale로 전체 제외했다. 이 두 batch�
 합계는 **31 시작 / 30 teacher 성공 / 25 학습 편입**이며 생애 전체 실행 수가 아니다.
 실패 원문·제외 사유를 보존한다. Teacher 위치·lift 지표는 학습 정책 지표가 아니다.
 
+추가 MODEL-PC 수치 진단 `omx-selected-step-margin-1`은 같은 선택 weights와
+원래 validation split의 Episode마다 균등한 64개 frame, 총 320개를 평가했다.
+실제 reader state/action을 원본과 대조하고 PNG hash도 검증했다. 모델을 수정하거나
+명령을 실행하지 않았다. 원본 PNG와 reader의 손실 인코딩 RGB를 따로 비교했다.
+
+| 수치 진단 | Reader RGB | 원본 PNG |
+|---|---:|---:|
+| 표본 MAE (rad) | 0.0052625402 | 0.0052403915 |
+| 현재 state 그대로 예측한 MAE (rad) | 0.0082721692 | 0.0082721692 |
+| 예측 target과 현재 state 차이가 0.04rad 초과 | 56/320 (17.5%) | 59/320 (18.4375%) |
+| 최대 관절 차이 (rad) | 0.0466811657 | 0.0466764569 |
+
+이 계산에서 원시연 target도 7/320개가 0.04rad를 넘었다. 이는 표본 frame의 state와
+target 비교이며 실제 명령 승인 시점의 판정과 구분한다. 낮은 offline MAE만으로
+0.04rad 실행 단계 조건을 만족한다고 주장할 수 없다. 현재 native 실패 원인은
+관측/lease 신선도이며, 이 추가 진단만으로 실제 단계 제한 실패를 확정하지 않는다.
+
+진단 결과 SHA256: `2dafffb7427e73112cbae28153a3f10e922fe9b59f37406df156ce26cfceb363`.
+
 ## 실제 native 연결 검증과 실패 보존
 
 초기 calibration은 원 관측 500ms 제한 또는 1초 lease 만료로 종료됐다.
