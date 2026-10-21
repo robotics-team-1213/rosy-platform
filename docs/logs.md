@@ -9507,3 +9507,9 @@ osy-d395-s1d\`.
 - Change: specify Fleet-native read-only source intake, latest arm cache, existing Vision previews and existing Cell panels. Explicit persistent torque-OFF reader/handoff avoids treating a bounded SSH diagnostic as product integration.
 - Evidence: contract review corrected Vision source length, pre-merge ID/credential collisions and cross-epoch capture advancement/replay limits. Protocol implementation checks follow committed RED tests; product integration and protected deployment remain pending.
 - Gate: unchanged. This records an implementation decision and wire boundary, not a running integrated ROSY UI or admitted motion.
+
+## 2026-10-22 · uncommitted · 픽셀 원본 사진 우선 배치
+
+- 변경: 사진 위의 AI 실행·참고 패널을 사진 뒤로 옮기고 미검수 수와 편집 도구를 가까이 배치했다. 다섯 화면 탐색과 명시 클래스 선택을 기존 브라우저 시험에 반영했다.
+- 증거: [첫 화면 재검증](validation/pixel-first-view-2026-10-22.md). 기준선의 사진 표시 2건을 재현하고 원격 관련 8건 및 보이는 Edge의 두 테마·네 크기 8개 화면을 확인했다. 전체 회귀·최종 커밋 검사와 공개 CI 결과는 게시 기록에 남긴다.
+- gate 변화: 없음. 검수 화면 배치이며 실제 정책·팔 동작 수용은 별도다.

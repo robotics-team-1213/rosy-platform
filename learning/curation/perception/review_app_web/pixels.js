@@ -27,7 +27,6 @@ const pixelResultNote=document.createElement('p');pixelResultNote.id='pixel-resu
 $('pixel-coverage').after(pixelResult,pixelResultNote,$('pixel-legend'),$('pixel-candidate-tools'),$('pixel-candidate-preview'),document.querySelector('.pixel-vlm-feedback'));
 pixelResultNote.after(document.querySelector('.pixel-layout .review-view-bar'));
 const aiPanel=document.querySelector('.pixel-vlm-feedback');
-$('pixel-status').after(aiPanel);
 const aiActions=document.createElement('div');aiActions.className='review-ai-actions';
 const refreshAi=document.createElement('ui-button');refreshAi.id='pixel-vlm-refresh';refreshAi.setAttribute('kind','quiet');refreshAi.setAttribute('data-action-icon','reload');refreshAi.textContent='AI 의견 다시 조회';
 refreshAi.onclick=()=>{if(ready&&!loading)void loadVlm(frame.index,serial);};
@@ -41,7 +40,9 @@ $('pixel-candidate-tools').before(candidateEmpty);
 // Retry must remain reachable when unavailable/empty state hides the editing content.
 pixelContent.after($('pixel-reload'));
 document.querySelector('.pixel-quick-tools').prepend(document.querySelector('.pixel-ribbon-nav'));
-$('pixel-view-status').before($('pixel-coverage'));
+document.querySelector('.pixel-stage').after($('pixel-view-status'));
+toolOptions.before($('pixel-coverage'));
+document.querySelector('.pixel-quick-actions').after($('pixel-tool-hint'));
 pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));
 pixelResultNote.after($('pixel-quick-classes'));
 const pixelTools=document.querySelector('.pixel-quick-tools');
