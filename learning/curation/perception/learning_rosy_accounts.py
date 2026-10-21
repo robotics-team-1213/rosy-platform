@@ -40,12 +40,6 @@ class RosyAccounts(Accounts):
             raise AccountError('Connection owner changed')
         return owner['capabilities']
 
-    def login(self, *args, **kwargs):
-        raise AccountError('Use Rosy Account to sign in')
-
-    def login_subject(self, subject):
-        raise AccountError('External identities do not replace Rosy Account login')
-
     def _authenticate_id(self, session_id):
         claims = self.receiver.resolve_session_id(session_id)
         if claims is None:

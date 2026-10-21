@@ -190,3 +190,9 @@
 - 변경: 학습 앱의 자체 아이디·비밀번호 로그인(`POST /api/accounts/login`)과 HF OAuth 로그인을 HTTP에서 뺐다. `--collaboration` 설정은 `account_client_file`이 없으면 시작을 거절한다(D-757). Account에서 `learning.*` 권한을 받은 사용자는 학습 설정의 초대(`users`/`account_subjects`) 없이 들어온다. 이름만 같은 기존 학습 신원은 넘겨받지 않는다. 학습 권한 없이 로그인한 사용자는 401 대신 403과 권한 요청 안내를 받아 로그인 반복에 빠지지 않는다. `/accounts`의 로그인 칸은 Rosy Account 로그인 링크다. OAuth 연결 요청도 `X-Pinky-Token`을 요구한다.
 - 증거: 원격 pytest는 별도 기록한다.
 - gate 변화: 없음.
+
+## 2026-10-22 · 7ef2366474 · 학습 계정의 비밀번호·HF 로그인 잔재 삭제와 공통 확인 대화상자
+
+- 변경: Rosy Account 단일 로그인(D-757) 뒤 남은 학습 쪽 scrypt 해시, `login()`과 시도 제한, `hash-password` 명령, HF `login_subject`, 호출 없는 `link_subject`/`unlink_subject`, OAuth `login` 목적을 지웠다. HF OAuth는 `link`·`manage`만 남고, 검증된 HF 신원은 여전히 한 사람에게만 묶인다. 시험은 비밀번호 대신 `sign_in` 도우미로 세션을 만든다. 연결 해제 확인은 브라우저 `confirm()` 대신 공통 `confirmIrreversible` 대화상자다(4ce4d054c1).
+- 증거: 원격 pytest는 착지 기록에 남긴다.
+- gate 변화: 없음.

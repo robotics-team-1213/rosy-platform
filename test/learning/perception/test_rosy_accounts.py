@@ -2,11 +2,11 @@ from types import SimpleNamespace
 import pytest
 from learning_rosy_accounts import RosyAccounts
 from learning_accounts import AccountError
-from test_learning_accounts import accounts
+from test_learning_accounts import accounts, sign_in
 
 
 def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
-    old_cookie, _ = accounts.login('alice','alice-password')
+    old_cookie, _ = sign_in(accounts, 'alice')
     record = SimpleNamespace(sub='central-alice', aud='project:one',
         permits=lambda resource, capability: capability in {'learning.view','learning.import'})
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record)
@@ -14,14 +14,11 @@ def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
     config['account_subjects'] = {'central-alice':'alice'}
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
     with pytest.raises(AccountError): accounts.authenticate(old_cookie)
-    with pytest.raises(AccountError): accounts.login('alice','alice-password')
     actor = managed.authenticate('browser-session')
     assert actor['user_id'] == 'alice'
     assert actor['capabilities'] == ['import', 'view']
     assert managed.require(actor, 'import')
     with pytest.raises(AccountError): managed.require(actor, 'manage')
-    with pytest.raises(AccountError): managed.login('alice', 'alice-password')
-    with pytest.raises(AccountError): managed.login_subject('invited-alice')
     record.permits = lambda resource, capability: capability == 'learning.view'
     with pytest.raises(AccountError): managed.require(actor, 'import')
     record.sub = 'unmapped'
