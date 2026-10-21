@@ -13,7 +13,8 @@ sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/o
 
 @pytest.mark.parametrize('representation,queue_steps,noise', [('absolute',1,0.),
     ('joint_delta_from_chunk_source_v1',2,0.),('joint_delta_from_chunk_source_v1',1,.02),
-    ('joint_delta_tanh_from_chunk_source_v1',1,.02),('joint_delta_tanh_from_chunk_source_v1',1,0.)])
+    ('joint_delta_tanh_from_chunk_source_v1',1,.02),('joint_delta_tanh_from_chunk_source_v1',1,0.),
+    ('absolute_tanh_from_chunk_source_v1',1,0.)])
 def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,monkeypatch,representation,queue_steps,noise):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
@@ -38,6 +39,10 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         exports.append(export)
         ids.append(episode['episode_id'])
     out=tmp_path/'study'
+    initial=None
+    if representation=='absolute_tanh_from_chunk_source_v1':
+        initial=tmp_path/'parent'
+        run(exports[:2],exports[2:],initial,steps=1,n_action_steps=queue_steps)
     from lerobot.policies.act.modeling_act import ACTPolicy
     original=ACTPolicy.forward
     checked=[]
@@ -45,7 +50,8 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         if representation!='absolute':
             stats=json.loads((out/'normalization.json').read_text());t=stats['action_transform']
             origin=batch['observation.state']*torch.tensor(stats['state_std'])+torch.tensor(stats['state_mean'])
-            restored=batch['action']*torch.tensor(t['std'])+torch.tensor(t['mean'])+origin[:,None,:]
+            restored=batch['action']*torch.tensor(t['std'])+torch.tensor(t['mean'])
+            if representation.startswith('joint_delta_'):restored=restored+origin[:,None,:]
             gaps=restored[:,1:,0]-restored[:,:-1,0]
             assert torch.all(torch.isclose(gaps,torch.zeros_like(gaps),atol=1e-6)|
                              torch.isclose(gaps,torch.full_like(gaps,.001),atol=1e-6))
@@ -68,10 +74,11 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         return original_predict(model,batch,*args,**kwargs)
     monkeypatch.setattr(ACTPolicy,'predict_action_chunk',clean_validation)
     kwargs=dict(state_noise_std_rad=noise) if noise else {}
+    if initial is not None:kwargs['initial_policy']=initial
     report=run(exports[:2],exports[2:],out,steps=1,n_action_steps=queue_steps,
                action_representation=representation,**kwargs)
     stats=json.loads((out/'normalization.json').read_text())
-    if representation=='joint_delta_tanh_from_chunk_source_v1':
+    if representation in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):
         assert stats['action_transform']['max_delta_rad']==.035
     assert stats['fit_episodes']==ids[:2]
     np.testing.assert_allclose(stats['state_mean'],np.mean(training_states,axis=0),atol=1e-7)
@@ -88,11 +95,48 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         assert 'training_augmentation' not in stats and 'training_augmentation' not in report
     if representation=='absolute':
         np.testing.assert_allclose(stats['action_mean'],np.mean(training_actions,axis=0),atol=1e-7)
-    else:
+    elif representation.startswith('joint_delta_'):
         assert checked and 'action_mean' not in stats and 'action_std' not in stats
         np.testing.assert_allclose(stats['action_transform']['mean'],
             np.mean(np.asarray(training_actions)-np.asarray(training_states),axis=0),atol=1e-7)
         np.testing.assert_allclose(stats['action_transform']['absolute_baseline'],np.mean(training_actions,axis=0),atol=1e-7)
+    else:
+        assert checked and 'action_mean' not in stats and 'action_std' not in stats
+        np.testing.assert_allclose(stats['action_transform']['mean'],np.mean(training_actions,axis=0),atol=1e-7)
+        parent=json.loads((initial/'policy-artifact.json').read_text())
+        initialization=report['training_initialization']
+        assert initialization==stats['training_initialization']
+        assert initialization['policy_revision']==parent['revision']
+        assert initialization['parent_training_steps']==1 and initialization['optimizer_state']=='fresh_AdamW'
+        assert initialization['weights_sha256']==next(v['sha256'] for v in parent['files'] if v['path'].endswith('.safetensors'))
+        import copy
+        from act_job import initialize_absolute_parent
+        camera=parent['cameras'][0]
+        source=dict(joint_names=parent['joint_names'],position_limits_rad=dict(zip(parent['joint_names'],parent['action']['limits'])),
+            camera=dict(name=camera['name'],identity=camera['identity'],camera_info_sha256=camera['calibration_sha256'],
+                height=camera['source_shape'][1],width=camera['source_shape'][2]))
+        model=ACTPolicy.from_pretrained(initial/'policy',local_files_only=True)
+        def never_load(*args,**kwargs):pytest.fail('incompatible parent weights were loaded')
+        monkeypatch.setattr(model,'load_state_dict',never_load)
+        for key in ('state_mean','action_transform'):
+            bad=copy.deepcopy(stats)
+            if key=='state_mean':bad[key][0]+=.001
+            else:bad[key]['std'][0]*=1.001
+            with pytest.raises(ValueError,match='must match'):
+                initialize_absolute_parent(model,bad,source,initial)
+        bad_source=copy.deepcopy(source);bad_source['camera']['camera_info_sha256']='0'*64
+        with pytest.raises(ValueError,match='must match'):
+            initialize_absolute_parent(model,stats,bad_source,initial)
+        model.config.n_action_steps=4
+        with pytest.raises(ValueError,match='must match'):
+            initialize_absolute_parent(model,stats,source,initial)
+        model.config.n_action_steps=queue_steps
+        weights=initial/'policy/model.safetensors';raw=weights.read_bytes()
+        try:
+            weights.write_bytes(b'changed parent')
+            with pytest.raises(ValueError,match='hash/size differs'):
+                initialize_absolute_parent(model,stats,source,initial)
+        finally:weights.write_bytes(raw)
     assert report['train_episodes']==ids[:2] and report['eval_episodes']==ids[2:]
     assert report['eval_frames']==20
     assert set(report['per_episode'])==set(ids[2:])
