@@ -352,6 +352,21 @@ run `0dc9741a9f76`은 94candidate·94intent·93UUID·93terminal 상태4/code0 �
 물체 실패·cleanup 완료이며 새 formal20은 시작하지 않았다. 재학습 후보는 0/2이고
 이전 후보 0/26과 함께 전체 0/28로 보존한다.
 
+다음 학습 실험 source `c3d05862c1`은 내부 `joint_delta_from_chunk_source_v1` 표현을
+추가했다. 같은 chunk의 모든 미래 원 target에서 시작 관측 상태 하나를 빼서 학습하고,
+추론 시 그 원 상태를 더해 절대 target chunk를 한 번 복원한다. 원 label·timestamp·
+대기 출력의 source는 유지하며 clip이나 owner 제한 변경은 없다. 새 정규화의
+`action_transform`은 type·mean·std·absolute_baseline을 결속한다. 필수 legacy 통계를
+두지 않아 구 소비자가 모델 생성 전에 실패하며 혼합·미지정 형식은 새 소비자도 거절한다.
+절대 train target 평균인 평가 baseline은 delta 정규화와 분리했다.
+
+시험 fixture를 보완한 source `d95d6b418c`의 일반 원격 검사는 73 PASS / 5 SKIP /
+0 NEW다. 모델 PC의 실제 ACT 환경에서는 합성 fixture의 학습·재적재·chunk 원점·
+대기 출력·결속 reader replay 검사 5개를 생략 없이 통과했다. 앞선 일반 시험의
+fixture 누락 2건과 native 시험의 reader 경로 오류 2건은 별도 실패 로그로 보존했다.
+실제 ACT 시험도 새 물체 과제 성공이 아니다. 같은 실제 시연 25개의 새로운 10,000 step
+학습을 준비 중이며 이 표현으로 학습된 checkpoint와 물체 성공은 아직 없다.
+
 최신 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
 affected 48개 경로를 지정했다(확대 사유 없음). 해당 선택을 모델 PC에서 실행해
 1,001 PASS / 31 SKIP / 0 NEW를 확인했다. 검사 전 준비 함수의 무실행 반환을

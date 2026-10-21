@@ -24,6 +24,14 @@ python learning/training/omx/act_job.py
 오차와 에피소드별 오차를 함께 보존한다. 고정 물체 과제는 train 20/validation 5를
 분리하고, 새 SIM 과제 20회의 성공률을 별도로 측정한다.
 
+`--action-representation joint_delta_from_chunk_source_v1`은 원 target에서 chunk 시작
+관측 상태를 뺀 이동량을 학습한다. 미래 target도 모두 같은 시작 상태를 기준으로 한다.
+추론 시 그 원 상태를 더해 절대 target chunk를 한 번 복원하고 큐에 저장하며, 이후
+관측으로 다시 기준을 바꾸지 않는다. 외부 profile과 timestamp·owner 검사는 유지한다.
+새 정규화는 `action_transform` 안에 type·mean·std·absolute_baseline을 기록하며
+기존 최상위 action_mean/action_std를 두지 않아 구 소비자는 모델 생성 전에 거절한다.
+평가 baseline은 원 절대 train target 평균이다. 기본 `absolute`의 정규화 구조는 그대로다.
+
 `lerobot_export.py --sim-ground-truth <truth.json>`으로 검증한 고정 물체 과제의
 원본 증거는 `rosy_sim_truth/`에 복사된다. 학습 snapshot과 공통 Episode에도 같은
 bytes를 보존하고 실제 judge를 기록한다. 명시한 증거가 없으면 기존 operator
