@@ -57,6 +57,7 @@ async function perform(action) {
     if($('account-status').getAttribute('state')==='pending') {
       status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
       $('account-retry').hidden=false;
+      if(active) error(e.message);
     } else error(e.message);
   }
   finally { pending=false; $('accounts-main').setAttribute('aria-busy','false'); }
