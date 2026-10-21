@@ -1,6 +1,5 @@
 """Read-only camera monitor refuses stale/replayed observations and remote hosts."""
 import threading
-import os
 import time
 import importlib.util
 from pathlib import Path
@@ -8,6 +7,7 @@ import urllib.error
 import urllib.request
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 
 _spec = importlib.util.spec_from_file_location(
     "commissioning_view", Path(__file__).parents[1] / "deploy" / "robot" / "omx" / "commissioning_view.py")
@@ -75,7 +75,63 @@ def test_dual_arm_camera_configuration_rejects_aliases_and_invalid_sources(entri
         _viewer.parse_camera_topics(entries)
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="opt-in real Chromium")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium")
+def test_browser_three_camera_panels_expire_only_the_disconnected_wrist():
+    from io import BytesIO
+    from PIL import Image
+    from playwright.sync_api import expect, sync_playwright
+    topics = {"top": "/top_camera/image_raw", "arm_a_wrist": "/arm_a_wrist_camera/image_raw",
+              "arm_b_wrist": "/arm_b_wrist_camera/image_raw"}
+    store = ObservationStore(cameras=topics)
+    frames = {}
+    for key, color in zip(topics, ("red", "green", "blue")):
+        encoded = BytesIO()
+        Image.new("RGB", (4, 4), color=color).save(encoded, format="JPEG")
+        frames[key] = encoded.getvalue()
+    stop, disconnect = threading.Event(), threading.Event()
+
+    def feed():
+        while not stop.is_set():
+            for key, frame in frames.items():
+                if key != "arm_b_wrist" or not disconnect.is_set():
+                    store.put(key, time.time(), frame)
+            stop.wait(0.1)
+
+    producer = threading.Thread(target=feed)
+    producer.start()
+    server = make_server(store, port=free_port())
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            expect(page.locator("img[data-camera]")).to_have_count(3)
+            for key in topics:
+                expect(page.locator(f"#{key}")).to_be_visible()
+            disconnect.set()
+            expect(page.locator("#arm_b_wrist")).to_be_hidden(timeout=3500)
+            expect(page.locator("#top")).to_be_visible()
+            expect(page.locator("#arm_a_wrist")).to_be_visible()
+            page.route("**/state.json", lambda route: None)
+            expect(page.locator("#top")).to_be_hidden(timeout=2400)
+            expect(page.locator("#arm_a_wrist")).to_be_hidden()
+            page.unroute_all(behavior="ignoreErrors")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert not errors
+            browser.close()
+    finally:
+        stop.set()
+        producer.join()
+        server.shutdown()
+        server.server_close()
+        worker.join()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium")
 def test_dual_arm_browser_expires_one_arm_while_the_other_keeps_updating():
     from playwright.sync_api import expect, sync_playwright
     store = ObservationStore(arms={"arm_a": "/omx_commissioning/arm_a/joint_states",
@@ -88,7 +144,7 @@ def test_dual_arm_browser_expires_one_arm_while_the_other_keeps_updating():
     producer = threading.Thread(target=feed)
     producer.start()
     store.put("arm:arm_b", time.time(), {"joint1": 0.75})
-    server = make_server(store, port=0)
+    server = make_server(store, port=free_port())
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     try:
@@ -173,11 +229,11 @@ def test_read_only_http_hides_stale_frame_and_rejects_foreign_host():
         worker.join()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="opt-in real Chromium")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium")
 def test_browser_displays_and_removes_disconnected_observations():
     from playwright.sync_api import expect, sync_playwright
     store = ObservationStore()
-    server = make_server(store, port=0)
+    server = make_server(store, port=free_port())
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     try:
@@ -206,7 +262,7 @@ def test_browser_displays_and_removes_disconnected_observations():
         worker.join()
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="opt-in real Chromium")
+@pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium")
 def test_browser_expires_old_image_when_download_stalls_but_metadata_advances():
     from io import BytesIO
     from PIL import Image
@@ -221,7 +277,7 @@ def test_browser_expires_old_image_when_download_stalls_but_metadata_advances():
             stop.wait(0.1)
     producer = threading.Thread(target=feed)
     producer.start()
-    server = make_server(store, port=0)
+    server = make_server(store, port=free_port())
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     try:
