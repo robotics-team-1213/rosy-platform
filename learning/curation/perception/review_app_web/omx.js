@@ -112,7 +112,7 @@ function segmentReview(set,section){
     if(row.split!=='exclude'&&(row.outcome!=='success'||row.intervention)){saveError='미판정·실패·사람 개입 구간은 분할에서 제외·보존을 선택하세요.';show();return;}
     rows.push(row);draftDirty=false;saveError='';editGeneration++;show();
   };
-  save.onclick=async()=>{if(saving||!rowsDirty())return;const submitted=JSON.stringify(rows);saving=true;savesInFlight++;saveError='';show();try{
+  save.onclick=async()=>{if(saving||!rowsDirty())return;const submitted=JSON.stringify(rows);saving=true;savesInFlight++;editGeneration++;saveError='';show();try{
     const response=await accountFetch('/api/learning/omx/segments',{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},
       body:JSON.stringify({id:set.id,version:saved.version,segments:JSON.parse(submitted)})});
     const value=await response.json();if(!response.ok)throw new Error(value.error||'저장 실패');
