@@ -3056,3 +3056,9 @@
 - Change: joint_tune defaults use low raw output/profile values without automatic escalation. Reject time-based and auto-torque Drive Modes, verify command readback and fresh startup position, require a stable hold, and confirm torque OFF before restoring any register.
 - Evidence: committed regression tests exposed the old behavior on the remote model PC (startup-red, startup-drive-red, startup-feedback-red, startup-profile-red). Implementation review and committed-revision green checks follow before publication.
 - Gate: unchanged. These software checks do not accept physical torque limits, a gravity-safe stop, robot deployment or strawberry grasping. Physical commissioning remains pending serial access and supervised acceptance.
+
+## 2026-10-21 · uncommitted · 이미지 도면 worker의 명시적 런타임 의존성
+
+- 변경: Fleet image 입력에 Pillow12.3.0·numpy2.2.6·OpenCV headless4.12.0.88을 pin했다. 모델 프레임워크는 추가하지 않고 기존 Dockerfile의 requirements 설치 경로를 사용한다.
+- 증거: 해당 입력으로 원격 시험 venv 설치/pip check가 완료됐고, 4a2f84e1fa의 실제 raster 자식 worker·HTTP/STL63통과, 2d3ae718e7 추출/API31통과를 확인했다. 최종 site candidate 이미지·운영 설치는 별도다.
+- gate 변화: 없음. 의존성 설치·호스트 시험을 site artifact·서명·장치/현장 수용으로 확대하지 않는다.

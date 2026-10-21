@@ -813,3 +813,9 @@
 - 변경: 이동한 지도 소스를 palette·문서 제목 검사가 계속 읽도록 경로를 갱신했다. 새 편집 버튼의 종류와 실행 취소·다시 실행·파일 입력 비활성 사유도 공용 부품 계약에 맞췄다.
 - 증거: 78e3516e45 원격 지도/브라우저/계약526통과 NEW0 이후 전체 영향 검사에서 공용 UI 계약 누락을 발견했다. 수정 SHA의 공용 UI·브라우저·게시 검사는 별도로 실행한다.
 - gate 변화: 없음. 물리 교정·로봇 이동 수용은 수행하지 않았다.
+
+## 2026-10-21 · uncommitted · 인증 범위를 유지하는 binary 응답 읽기
+
+- 변경: Console 소유 request에 명시적 blob 응답 선택만 추가했다. 기본 JSON·JSON 오류·현재 credential·same-origin·redirect 거절·취소 전파는 유지하며 지도는 이를 통해 이미지 ObjectURL을 만들고 정리한다.
+- 증거: 02d8082c89의 원격 transport/importer RED2실패를 관찰하고, 7ae0f2e05a 원격 shared transport·Node·실제 Chromium·설치17통과와 93f8408f19 후속43통과를 확인했다. NEW0이며 browser skip을 성공으로 세지 않았다.
+- gate 변화: 없음. 새 credential 저장·다른 origin 허용·자동 쓰기 재시도는 추가하지 않았다.

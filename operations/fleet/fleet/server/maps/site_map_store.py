@@ -139,7 +139,8 @@ class SiteMapStore:
         self._drawing_reference(site_map)
         if site_map.survey is not None and not site_map.survey.reviewed:
             raise SiteMapError(422, "SITE_MAP_SURVEY_UNREVIEWED", "review the survey reference before activating")
-        if any(edge.evidence is not None and edge.evidence.status != "reviewed" for edge in site_map.edges):
+        if any(edge.evidence is not None and edge.evidence.status != "reviewed"
+               for edge in [*site_map.edges, *site_map.facilities]):
             raise SiteMapError(422, "SITE_MAP_ROAD_UNREVIEWED", "review observed or inferred roads before activating")
         for facility in site_map.facilities:
             if facility.kind == "exclusion" and any(

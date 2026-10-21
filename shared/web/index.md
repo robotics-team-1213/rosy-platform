@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 인증 범위를 유지하는 binary 응답 읽기
 - 2026-10-21 · uncommitted · 지도 source holder의 공용 UI 계약 연결
 - 2026-10-20 · uncommitted · Console transport 소유 위치 정리
 - 2026-10-19 · uncommitted · D-806 웹 전용 앱 제목 게시
 - 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
-- 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완

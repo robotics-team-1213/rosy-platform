@@ -11,7 +11,8 @@ export function createRequest({origin = globalThis.location?.origin, credential 
     if (target.origin !== base.origin || target.username || target.password) {
       throw new Error('request destination must match its origin and omit URL credentials');
     }
-    const {timeoutMs = 0, signal: parent, signals = [], headers: supplied, ...init} = options;
+    const {timeoutMs = 0, signal: parent, signals = [], headers: supplied, responseType = 'json', ...init} = options;
+    if (!['json', 'blob'].includes(responseType)) throw new TypeError('unsupported response type');
     if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
       throw new RangeError('request timeout must be a finite nonnegative number');
     }
@@ -37,7 +38,8 @@ export function createRequest({origin = globalThis.location?.origin, credential 
         credentials: 'same-origin', redirect: 'error',
       });
       controller.signal.throwIfAborted();
-      const body = response.status === 204 ? null : await response.json().catch(() => null);
+      const body = response.status === 204 ? null : response.ok && responseType === 'blob'
+        ? await response.blob() : await response.json().catch(() => null);
       controller.signal.throwIfAborted();
       return {status: response.status, ok: response.ok, body};
     } finally {

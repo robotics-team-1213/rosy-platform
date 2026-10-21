@@ -1,32 +1,45 @@
 // Page composition: input adapter, local history and Fleet geometry adapter.
 import {confirmIrreversible} from '/common/ui.js';
 import {createEditHistory} from '/console/assets/edit-history.js';
-import {createDrawingImport} from '/console/assets/drawing-import.js';
+import {createDrawingImport, rasterMapPoint} from '/console/assets/drawing-import.js';
 import {createMapEditor, svgElement} from '/console/assets/map-editor.js';
+import {createExtractionPanel} from '/console/assets/extraction-review.js';
+import {siteMapErrorText} from '/console/assets/site-map-model.js';
 
 const $ = id => document.getElementById(id);
 export function createMapAuthoring(host) {
   const history = createEditHistory(null);
-  let projection = null, loadingHash = null, cacheController = null;
+  let projection = null, loadingHash = null, cacheController = null, rasterUrl = null;
   const message = text => { $('drawing-status').textContent = text; };
   const changed = next => { history.apply(next); host.changed(history.current()); };
   const importer = createDrawingImport({request: host.request, map: host.draft,
-    replaceDraft: (next, result) => { projection = result; loadingHash = result.projection_sha256; changed(next); },
+    replaceDraft: next => { changed(next); },
     confirmDiscard: () => !host.dirty() || confirmIrreversible({
       message: '도면 기준을 바꾸고 검토 상태를 초기화할까요? 그린 요소는 보존합니다.',
       action: '도면 기준 바꾸기', opener: $('drawing-register')})});
   const editReason = () => host.reason() || (host.source() !== 'draft' ? '직접 편집은 초안에서 하세요'
     : !host.map()?.survey ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
   const editor = createMapEditor({svg: host.svg, map: host.map, view: host.view, changed, reason: editReason});
+  const extraction = createExtractionPanel({request: host.request, changed,
+    context: () => ({draft: host.draft(), epoch: host.epoch(), projection, reason: editReason()}), render: host.render});
   const act = async operation => {
     if (host.reason()) { message(host.reason()); return; }
-    try { await operation(); } catch (error) { if (error.name !== 'AbortError') message(error.message); }
+    try { await operation(); } catch (error) { if (error.name !== 'AbortError') message(siteMapErrorText(error)); }
     sync();
   };
   $('drawing-file').addEventListener('change', () => act(async () => {
     message('도면 업로드 중');
     const result = await importer.load($('drawing-file').files[0]);
-    if (result) message(`원본 확인 · ${result.triangle_count}개 삼각형 · 좌표 범위 ${JSON.stringify(result.bounds_3d)}`);
+    if (result) {
+      const raster = ['png', 'jpeg'].includes(result.format);
+      for (const id of ['drawing-plane', 'drawing-unit']) {
+        $(id).disabled = raster;
+        if (raster) $(id).setAttribute('reason', '이미지 도면은 정규화 픽셀 좌표를 사용합니다');
+        else $(id).removeAttribute('reason');
+      }
+      message(raster ? `원본 확인 · ${result.width_px} × ${result.height_px} px · 기준점은 정규화 이미지 픽셀입니다`
+        : `원본 확인 · ${result.triangle_count}개 삼각형 · 좌표 범위 ${JSON.stringify(result.bounds_3d)}`);
+    }
   }));
   $('drawing-register').addEventListener('click', () => act(async () => {
     const number = id => {
@@ -40,10 +53,13 @@ export function createMapAuthoring(host) {
     const sourceDistance = Math.hypot(number('drawing-axis-x') - origin[0], number('drawing-axis-y') - origin[1]);
     const unit = $('drawing-unit').value;
     if (!(sourceDistance > 0 && distance > 0)) throw new Error('서로 다른 기준 두 점과 양수 실측 거리가 필요합니다');
-    const result = await importer.register({plane: $('drawing-plane').value, unit, source_origin: origin,
-      map_origin_m: [number('drawing-map-x'), number('drawing-map-y')],
+    const raster = ['png', 'jpeg'].includes(importer.source()?.format);
+    const transform = {map_origin_m: [number('drawing-map-x'), number('drawing-map-y')],
       heading_rad: number('drawing-rotation') * Math.PI / 180,
-      scale: distance / (sourceDistance * {m: 1, cm: .01, mm: .001}[unit])},
+      ...(raster ? {source_origin_px: origin, meters_per_pixel: distance / sourceDistance}
+        : {plane: $('drawing-plane').value, unit, source_origin: origin,
+          scale: distance / (sourceDistance * {m: 1, cm: .01, mm: .001}[unit])})};
+    const result = await importer.register(transform,
       {measured_distance_m: distance, description: $('drawing-description').value});
     if (result) message('맞춤 완료 · 도면은 배경이며 그린 요소는 초안에 보존했습니다. 현장 기준을 다시 검토하세요');
   }));
@@ -81,6 +97,7 @@ export function createMapAuthoring(host) {
   };
   window.addEventListener('beforeunload', leaving);
   function sync() {
+    extraction.sync();
     const working = host.draft();
     if (!host.dirty()) history.reset(working);
     else if (JSON.stringify(history.current()) !== JSON.stringify(working)) history.apply(working);
@@ -93,17 +110,29 @@ export function createMapAuthoring(host) {
       if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');
       $(id).title = reason;
     }
-    const registrationReason = host.reason() || (!importer.ready() ? 'STL 원본을 먼저 확인하세요' : '');
+    const registrationReason = host.reason() || (!importer.ready() ? '도면 원본을 먼저 확인하세요' : '');
     $('drawing-register').disabled = Boolean(registrationReason);
     if (registrationReason) $('drawing-register').setAttribute('reason', registrationReason);
     else $('drawing-register').removeAttribute('reason');
     const hash = host.map()?.drawing?.projection_sha256;
     if (hash !== loadingHash) {
       cacheController?.abort(); projection = null; loadingHash = hash;
+      if (rasterUrl) URL.revokeObjectURL(rasterUrl);
+      rasterUrl = null;
       if (hash) {
         const controller = cacheController = new AbortController();
         host.request(`/api/fleet/site-map/drawing-projections/${hash}`, {signal: controller.signal})
-          .then(result => { if (!controller.signal.aborted && loadingHash === hash) { projection = result; host.render(); } })
+          .then(async result => {
+            if (controller.signal.aborted || loadingHash !== hash) return;
+            if (result.kind === 'raster') {
+              const blob = await host.request(`/api/fleet/site-map/drawing-projections/${hash}/render`,
+                {responseType: 'blob', signal: controller.signal, timeoutMs: 10000});
+              if (controller.signal.aborted || loadingHash !== hash) return;
+              if (blob.type !== 'image/png' || blob.size > 16 * 1024 * 1024) throw new Error('도면 이미지 형식을 확인하세요');
+              rasterUrl = URL.createObjectURL(blob);
+            }
+            projection = result; host.render();
+          })
           .catch(error => { if (error.name !== 'AbortError') message(`도면 배경 확인 실패 · ${error.message}`); });
       }
     }
@@ -114,6 +143,15 @@ export function createMapAuthoring(host) {
     paint() {
       const view = host.view();
       if (projection && view) {
+        if (projection.kind === 'raster' && rasterUrl) {
+          const at = (u, v) => view.toPx(...rasterMapPoint([u, v], projection.transform));
+          const [x, y] = at(0, 0), [xx, xy] = at(1, 0), [yx, yy] = at(0, 1);
+          const image = svgElement('image', {'data-drawing': projection.projection_sha256, href: rasterUrl,
+            width: projection.width_px, height: projection.height_px, preserveAspectRatio: 'none',
+            transform: `matrix(${xx - x} ${xy - y} ${yx - x} ${yy - y} ${x} ${y})`}, host.svg);
+          host.svg.prepend(image);
+          extraction.paint(host.svg, view); editor.sync(); return;
+        }
         const [x, y] = view.toPx(0, 0), [xx, xy] = view.toPx(1, 0), [yx, yy] = view.toPx(0, 1);
         const path = svgElement('path', {'data-drawing': projection.projection_sha256, class: 'drawing-background',
           d: projection.segments.map(([a, b]) => `M${a.join(',')}L${b.join(',')}`).join(''),
@@ -124,6 +162,8 @@ export function createMapAuthoring(host) {
     },
     destroy() {
       importer.cancel(); cacheController?.abort(); editor.destroy();
+      extraction.destroy();
+      if (rasterUrl) URL.revokeObjectURL(rasterUrl);
       document.removeEventListener('keydown', shortcut); window.removeEventListener('beforeunload', leaving);
     },
   };

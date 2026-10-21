@@ -289,9 +289,9 @@ class SiteMap(BaseModel):
                 if approach.stop_s_m is not None and approach.stop_s_m > polyline_length(edge.polyline):
                     raise ValueError(f"facility {facility.id} stop distance exceeds lane length")
         if self.survey is not None:
-            for edge in self.edges:
+            for edge in (*self.edges, *self.facilities):
                 if edge.evidence is not None and edge.evidence.reference_revision != self.survey.revision:
-                    raise ValueError(f"edge {edge.id} evidence names a different survey revision")
+                    raise ValueError(f"map element {edge.id} evidence names a different survey revision")
         self._crosswalks()
         return self
 

@@ -90,22 +90,24 @@ class SiteMapAssetStore:
             except ProcessLookupError:
                 pass
 
-    def _worker(self, path, operation, transform=None):
+    def _worker(self, path, operation, transform=None, *, raster=False):
         if not self._conversion.acquire(blocking=False):
             raise drawing_error(429, 'BUSY', 'another conversion is running')
         process = None
         try:
             if self.cancelled.is_set():
                 raise drawing_error(503, 'UNAVAILABLE', 'conversion cancelled')
-            environment = {**os.environ, 'PYTHONPATH': os.pathsep.join(sys.path)}
-            process = subprocess.Popen([sys.executable, '-m', 'fleet.server.site_map_projection'], env=environment,
+            environment = {**os.environ, 'PYTHONPATH': os.pathsep.join(sys.path),
+                           'OPENBLAS_NUM_THREADS': '1', 'OMP_NUM_THREADS': '1'}
+            module = 'fleet.server.site_map_raster' if raster else 'fleet.server.site_map_projection'
+            process = subprocess.Popen([sys.executable, '-m', module], env=environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self._process = process
             request = {'path': str(path), 'operation': operation}
             if transform is not None:
                 request['transform'] = transform.model_dump(mode='json')
             try:
-                output, _ = process.communicate(input=canonical(request), timeout=5)
+                output, _ = process.communicate(input=canonical(request), timeout=10 if raster else 5)
             except subprocess.TimeoutExpired as exc:
                 process.kill()
                 process.wait()
@@ -149,14 +151,39 @@ class SiteMapAssetStore:
         self._write(metadata, canonical(result))
         return result
 
+    def put_raster(self, path: Path, expected_format=None) -> dict:
+        import base64
+        with Path(path).open('rb') as stream:
+            data = stream.read(MAX_SOURCE_BYTES + 1)
+        if len(data) > MAX_SOURCE_BYTES:
+            raise drawing_error(413, 'LIMIT', 'raster source exceeds 16 MiB')
+        result = self._worker(path, 'inspect', raster=True)
+        digest = hashlib.sha256(data).hexdigest()
+        if result['asset_sha256'] != digest:
+            raise drawing_error(422, 'INVALID', 'source changed while inspecting')
+        if expected_format is not None and result['format'] != expected_format:
+            raise drawing_error(422, 'INVALID', 'source format differs from content type')
+        rendered = base64.b64decode(self._worker(path, 'normalize', raster=True)['png'], validate=True)
+        self._write(self._path(digest, '.raster'), data)
+        self._write(self._path(digest, '.source.json'), canonical(result))
+        self._write(self._path(hashlib.sha256(rendered).hexdigest(), '.png'), rendered)
+        return result
+
     def project(self, asset_sha256, transform) -> dict:
         path = self.source(asset_sha256)
-        result = self._worker(path, 'project', transform)
+        from core_common.protocol.site_drawing import RasterDrawingTransform
+        raster = path.suffix == '.raster'
+        if raster != isinstance(transform, RasterDrawingTransform):
+            raise drawing_error(422, 'INVALID', 'registration type does not match source')
+        result = (self._worker(path, 'project', transform, raster=True) if raster
+                  else self._worker(path, 'project', transform))
         self._write(self._path(result['projection_sha256'], '.projection.json'), canonical(result))
         return result
 
     def source(self, asset_sha256) -> Path:
         path = self._path(asset_sha256, '.stl')
+        if not path.exists():
+            path = self._path(asset_sha256, '.raster')
         if hashlib.sha256(self._read(path, MAX_SOURCE_BYTES)).hexdigest() != asset_sha256:
             raise drawing_error(422, 'INVALID', 'stored source hash mismatch')
         return path
@@ -166,7 +193,9 @@ class SiteMapAssetStore:
         try:
             result = json.loads(self._read(path, 8 * 1024 * 1024))
             body = {k: v for k, v in result.items() if k != 'projection_sha256'}
-            expected = hashlib.sha256(canonical({'version': CONVERTER_VERSION, **body})).hexdigest()
+            from fleet.server.site_map_raster import RASTER_VERSION
+            version = RASTER_VERSION if result.get('kind') == 'raster' else CONVERTER_VERSION
+            expected = hashlib.sha256(canonical({'version': version, **body})).hexdigest()
             if result['projection_sha256'] != projection_sha256 or expected != projection_sha256:
                 raise ValueError('projection hash mismatch')
             self.source(result['asset_sha256'])
@@ -176,7 +205,41 @@ class SiteMapAssetStore:
                 raise
             raise drawing_error(422, 'INVALID', 'stored projection hash mismatch') from exc
 
+    def render(self, projection_sha256) -> Path:
+        result = self.projection(projection_sha256)
+        if result.get('kind') != 'raster':
+            raise drawing_error(404, 'NOT_FOUND', 'projection has no raster render')
+        digest = result['render_sha256']
+        path = self._path(digest, '.png')
+        if hashlib.sha256(self._read(path, MAX_SOURCE_BYTES)).hexdigest() != digest:
+            raise drawing_error(422, 'INVALID', 'render content hash mismatch')
+        return path
+
     def validate_reference(self, reference, survey_revision):
         result = self.projection(reference.projection_sha256)
         if result['asset_sha256'] != reference.asset_sha256 or survey_revision != reference.projection_sha256:
             raise drawing_error(422, 'INVALID', 'drawing and survey references must match')
+
+    def extract(self, projection_sha256, spec) -> dict:
+        projection = self.projection(projection_sha256)
+        result = self._worker(self.render(projection_sha256), 'extract', spec, raster=True)
+        body = {'asset_sha256': projection['asset_sha256'], 'projection_sha256': projection_sha256,
+                'render_sha256': projection['render_sha256'], **spec.model_dump(mode='json'), **result}
+        digest = hashlib.sha256(canonical(body)).hexdigest()
+        result = {'extraction_sha256': digest, **body}
+        self._write(self._path(digest, '.extraction.json'), canonical(result))
+        return result
+
+    def extraction(self, extraction_sha256) -> dict:
+        try:
+            result = json.loads(self._read(self._path(extraction_sha256, '.extraction.json'), 8 * 1024 * 1024))
+            body = {k: v for k, v in result.items() if k != 'extraction_sha256'}
+            if (result['extraction_sha256'] != extraction_sha256
+                    or hashlib.sha256(canonical(body)).hexdigest() != extraction_sha256):
+                raise ValueError('extraction hash mismatch')
+            self.projection(result['projection_sha256'])
+            return result
+        except (ValueError, KeyError) as exc:
+            if isinstance(exc, SiteMapError):
+                raise
+            raise drawing_error(422, 'INVALID', 'stored extraction hash mismatch') from exc
