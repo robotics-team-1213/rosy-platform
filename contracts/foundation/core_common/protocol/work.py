@@ -1,11 +1,27 @@
 """D-664 common read projection; execution state remains owned by each ledger."""
 
+import enum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 _Source = Literal["task", "mission", "trip", "cell_job"]
+
+
+class FleetTaskStatus(str, enum.Enum):
+    """Site Fleet task lifecycle; separate from a robot command ACK."""
+
+    REQUESTED = "REQUESTED"
+    QUEUED = "QUEUED"
+    ACCEPTED = "ACCEPTED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+    HOLD = "HOLD"
+    CANCELED = "CANCELED"
+    EXPIRED = "EXPIRED"
 
 
 class FleetWorkWait(BaseModel):

@@ -37,7 +37,7 @@
 797 fleet/fleet/server/proposal_store.py
 873 fleet/fleet/server/trips/trip_runner.py
 628 fleet/fleet/swarm/session.py
-1234 foundation/core_common/protocol/schemas.py
+1221 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
 629 learning/registry/perception/deliver.py
 1533 middleware/core/events/test/test_audit.py
