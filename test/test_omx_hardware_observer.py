@@ -22,6 +22,56 @@ def rows():
                  torque_enabled=0, hardware_error=0) for i in range(11, 17)]
 
 
+@pytest.mark.parametrize("ending", ["stop", "torque", "fault"])
+def test_persistent_observation_stops_and_releases_bus_without_restarting(monkeypatch, ending):
+    monkeypatch.setenv("RMW_IMPLEMENTATION", "rmw_fastrtps_cpp")
+    module = observer()
+    events, samples, running, clock = [], [], [True], [0.0]
+
+    @contextmanager
+    def port(device):
+        events.append("open")
+        try:
+            yield object()
+        finally:
+            events.append("close")
+
+    def read(_port):
+        events.append("read")
+        data = rows()
+        if events.count("read") == 2 and ending != "stop":
+            data[0]["torque_enabled" if ending == "torque" else "hardware_error"] = 1
+        return data
+
+    def sleep(_seconds):
+        clock[0] += 301
+        if ending == "stop" and len(samples) == 2:
+            running[0] = False
+
+    node = SimpleNamespace(
+        create_publisher=lambda *args: SimpleNamespace(publish=samples.append),
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=lambda: 0)),
+        destroy_node=lambda: events.append("destroy"))
+    monkeypatch.setitem(sys.modules, "register_probe", SimpleNamespace(open_readonly_port=port, read_motors=read))
+    monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(init=lambda **kwargs: None,
+        create_node=lambda *args: node, ok=lambda: running[0], shutdown=lambda: events.append("shutdown")))
+    monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(
+        JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
+    monkeypatch.setattr(module, "time", SimpleNamespace(
+        monotonic=lambda: clock[0], time=lambda: 1700000000 + clock[0], sleep=sleep))
+    result = module.main(["--device", "/test/follower", "--domain-id", "13", "--persistent"])
+    assert result == (0 if ending == "stop" else 2)
+    assert len(samples) == (2 if ending == "stop" else 1)
+    assert events.count("read") == 2 and events.count("open") == events.count("close") == 1
+    assert "destroy" in events
+
+
+def test_persistent_mode_cannot_silently_extend_a_bounded_run():
+    with pytest.raises(SystemExit) as error:
+        observer().main(["--device", "/test/follower", "--domain-id", "13", "--duration", "1", "--persistent"])
+    assert error.value.code == 2
+
+
 @pytest.mark.parametrize("topic", ["/joint_states", "/omx/arm_a/joint_states",
                                     "/omx_commissioning/arm_a/command", "/omx_commissioning//joint_states"])
 def test_dual_arm_observer_cannot_masquerade_as_control_feedback(topic):
