@@ -851,3 +851,9 @@
 - 변경: APIv1.293에 별도 RasterDrawingTransform·bounded 추출 설정/ROI 요청과 기존 RoadEvidence 형태의 선택 시설 근거를 정의했다. 없는 시설 근거는 기존 지도 body/hash에 추가하지 않고 CORE snapshot/envelope는 바꾸지 않는다.
 - 증거: 4a2f84e1fa 원격 계약·기존 STL·새 raster63통과, 93f8408f19 후보 검증·기존 지도 계약·브라우저·설치43통과, NEW0. API 예약 도구로 현행9핀을 맞췄으며 FULL 영향 검사는 별도다.
 - gate 변화: 없음. 도면 기준은 실제 위치·안전·주행 권한을 증명하지 않는다.
+
+## 2026-10-21 · uncommitted · 관제 AI 게시용 공통 계약 (D-810/D-821)
+
+- 변경: 기존 로컬 구현의 assistant DTO만 분리해 원격 API v1.293을 보존한 v1.294에 결속했다. 신원 없는 strict 대화 입력·ko/en locale·기본 실행 OFF·유한 명시 좌표를 계약으로 정의한다. Fleet 구현과 보호 운영 활성화는 후속이다.
+- 증거: tests-only `318ab265ab`의 원격 시험에서 assistant 모듈 부재로 예상한 수집 실패를 확인했다. DTO 적용 후 같은 시험과 영향 선택은 커밋한 SHA로 다시 실행한다.
+- gate 변화: 없음. 공통 계약 추가는 모델·음성·장치·현장 수용을 뜻하지 않는다.
