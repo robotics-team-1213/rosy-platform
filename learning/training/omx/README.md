@@ -86,6 +86,9 @@ revision만 받아 결과를 반환하며 안전 owner 타입을 import하지 �
 Private SIM caller는 추론 뒤 lease 연속성만 재검사하고 미승인 후보를 반환한다.
 추론 중 철회·설치 파일 변경이 생겼어도 후보 반환 자체는 실행 승인이 아니며,
 calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에서 거절해야 한다.
+실제 SIM actor는 새 입력 대기를 기존 `require_live()`의 과제 종료·감시 조건에
+연결한다. 원본 입력의 freshness와 모든 owner 검사는 유지하며 추론·이미지 저장 후와
+제출 전에도 종료를 검사한다. callback 없는 호출의 기존 획득 시간 한도는 유지한다.
 실제 trusted capture/issuer·승인된 모델의 ROS 프로세스 결선은 여전히 별도다.
 
 기본 n_action_steps=4는 유지한다. `--n-action-steps 1`은 chunk_size4를 유지하면서

@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/26회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/6회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/27회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/7회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
@@ -309,8 +309,40 @@ AI 여유 공간은 7,124,279,296→8,763,068,416bytes였다. 이 작업은 실�
 
 재학습 `omx-object-training-623a57360955be00`은
 source `1dda28aa86b3ba989d81836fc0894a133109e37c`와 `command_entry` 표본 선택으로
-실제 MODEL-PC에서 시작했다. 현재 확인한 curation은 14/25개·36,983프레임이며
-optimizer 완료·새 checkpoint 선택·새 native 성공은 아직 확인하지 않았다.
+실제 MODEL-PC에서 수행했다. 기존과 같은 25개·66,080프레임의 curation·전체 reader
+readback과 20/5 분할을 확인하고 10,000 step·재로딩 검증을 완료했다. 전체 validation
+MAE는 0.006172654422396879rad로 이전 모델보다 높으며 물체 성공을 뜻하지 않는다.
+선택한 train 시작점은 전체 52,834프레임 중 명령별 6,263개다. 등록 스냅샷 확정·
+등록본 재검증·평가용 묶음 전송과 실행 exit 0을 확인했다. 이 후보의 새 calibration은
+통과했고 별도 사전 물체 과제는 실패했다. 새 native 성공은 아직 없다.
+
+| 재학습 후보 산출물 | 고정 식별자 |
+|---|---|
+| Policy revision | `bec662e6e7348ff304b660ac388828434972861b797da15d0e12480637058ed0` |
+| Dataset revision | `f810708dfc0915ee5d971c9cc0ae5e5c925a9b56bf36c73096e2672ae1d2dc39` |
+| Model weights SHA256 | `02e35787cd9c1b9af71a6240d2eda8006886e8011089641afac4076d6b30ad52` |
+| 학습 시작점 SHA256 | `5e23c544256bfbf17189a37bae6ceb06e9d7a6ec78ed6ce948019ea3a383d7f9` |
+| 10,000개 loss 이력 SHA256 | `1a5f4e038e48809aba4c0b4e02a7ed85ab2bc6b4ea905a04ef6a4dff4dc8c1f8` |
+
+새 정규화 SHA256은 이전 학습과 동일하다. Loss 첫 100개 평균은 0.4721478450,
+마지막 100개는 0.0122491585이며, 이 감소도 실제 물체 성공 판정을 대신하지 않는다.
+
+재학습 후보는 runtime 5fe39fd8d4에서 calibration 12추론·0정책 명령·0attempts·
+PASS·cleanup을 확인했다. 이어진 사전 과제 run `1b3ee9682411`은 9candidate·9intent·
+9accepted UUID·9terminal 상태4/code0 뒤 내부 fresh-capture 획득 timeout으로
+종료됐다. 원문 camera 수신은 288건·거부0, admission_rejection은 없었으며
+lift·안정 시간은 0, XY 오차 0.2292651311m였다. cleanup을 확인했고 새 formal20은
+시작하지 않았다. 이전 후보의 0/26과 재학습 후보의 0/1을 모두 전체 분모에 남긴다.
+
+실패한 열 번째 capture의 단계별 timing은 저장되지 않아 어느 구간이 전체 획득
+500ms를 소비했는지는 확정하지 않는다. 이 내부 획득 한도와 원 수신→최종 검사
+500ms 신선도 계약을 구분한다. 다음 변경은 원본 timestamp·선택 margin125ms·
+모든 owner guard를 유지하고 새 입력 대기를 기존 actor의 종료·감시 조건에 연결한다.
+source `35bfc824d9`는 callback 없는 기본 동작을 유지하며 실제 actor만 이 경로를
+사용한다. 매 retry 전후·추론 후·이미지 저장 후·제출 직전에 원 actor 종료 조건을
+재검사하고 callback·guard 오류를 즉시 전파한다. 새 시험 7개의 수정 전 실패를 확인한
+뒤 관련 원격 검사 154 PASS / 1 SKIP / 0 NEW와 독립 코드 검토를 통과했다.
+이 검사는 아직 다음 native 실행의 성공을 뜻하지 않는다.
 
 최신 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
 affected 48개 경로를 지정했다(확대 사유 없음). 해당 선택을 모델 PC에서 실행해
