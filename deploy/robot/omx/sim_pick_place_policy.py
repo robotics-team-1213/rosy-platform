@@ -22,6 +22,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx',
         'middleware/robot_execution/local/src','contracts/learning/src','operations/processes/cell')]
     import rclpy
+    import torch
     from PIL import Image
     from rclpy.node import Node
     from rclpy.parameter import Parameter
@@ -138,6 +139,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         policy=prepare_install(parent_root,campaign['policy_revision'],directory/'installed',arm.owner,
             normalization_sha256=campaign['normalization_sha256'])
         engine=ACTInference(policy.root,policy.binding.policy_revision,monotonic=arm.monotonic)
+        receipt['torch_num_threads']=torch.get_num_threads()
+        receipt['torch_num_interop_threads']=torch.get_num_interop_threads()
         receipt['installed_policy_revision']=policy.binding.policy_revision
         journal=PolicyExecutionJournal(directory/'policy-execution.sqlite3')
         prepare_started=time.monotonic()

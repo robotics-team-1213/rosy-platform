@@ -53,7 +53,9 @@ def run(directory,*,calibration=False):
         command=['/usr/bin/python3',str(ROOT/'deploy/robot/omx/sim_pick_place_policy.py'),
             '--evidence',str(directory),'--observer',str(observer),'--deadline-owner-s',str(deadline)]
         if calibration:command.append('--calibration')
-        actor=children.start('policy',command,env=env)
+        # Keep ACT's CPU pool below the quota shared with the native simulator.
+        policy_env=dict(env,OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1')
+        actor=children.start('policy',command,env=policy_env)
         code=actor.wait(timeout=max(.01,deadline-time.monotonic()))
         policy=json.loads((directory/'policy-result.json').read_text())
         result['policy']=policy
