@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · uncommitted · 기존 Cell의 두 팔·세 카메라 관측 패널 (D-837)
 - 2026-10-21 · uncommitted · 범용 이미지 배경·선 편집·후보 검토 (D-835)
 - 2026-10-21 · uncommitted · 새 편집 흐름과 현장 기준 분리 회귀 (D-825)
 - 2026-10-21 · uncommitted · 공통 기하 기반과 지도 편집 연결 (D-825)
 - 2026-10-21 · uncommitted · 지도 화면 holder와 편집 이력 (D-825)
-- 2026-10-20 · uncommitted · Account presentation and Fleet navigation
