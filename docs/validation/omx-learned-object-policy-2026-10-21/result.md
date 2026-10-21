@@ -36,14 +36,31 @@ Cross-result SHA256: `ecdc81dab4144c8e702edb8f45063eaa866a0a75449bff68c97d24634e
 검증된 SIM truth의 마지막 transfer 명령부터 같은 팔 목표가 이어지는 명령만
 고르고 팔 목표가 바뀌면 즉시 끝낸다. 원본 좌표·action·RGB·chunk·train/validation
 분리와 안전 한도는 유지한다. 실제 MODEL 원본52834행에서 기존12526개 보존과
-969개 추가·최종13495개를 검증했다. 새 study `fixed-object-2600eeda8605476e`를
-MODEL에 제출했고 실제 상태는 입력 재검증(curating)이다. 기존 검증 exports를
-재사용하며 새 checkpoint·optimizer 완료·실제 과제 성공은 아직 없다.
+969개 추가·최종13495개를 검증했다. 새 study `fixed-object-2600eeda8605476e`는
+기존 검증 exports를 재사용해 실제 추가10000step·전체5val13246행 평가·재적재·
+DatasetStore snapshot1개·전달 bundle 검증을 완료하고 launcher EXIT0으로 종료했다.
+새 모델의 실제 물체 과제는 시작하지 않았다.
 
 Sampling/training source revision: `a0c5dd42c934a880715a48adbcd5e7317dd5a487`.
 수정 전 원격2FAIL, 수정 후133PASS/15SKIP/0NEW를 확인했다. Skip은 학습 환경이
 필요한 별도 검증이며 통과로 계산하지 않는다. 독립 소스 검토에서 발견 사항은 없었다.
 이 증거는 새 checkpoint 품질이나 물체 성공을 뜻하지 않는다.
+
+새 모델의 전체 MAE는0.004897000449473874rad로 기존0.004379858843572524rad보다
+나빠졌다. 재적재 prediction 검증true·limit위반0·offline_only이나, 결과를 보기 전
+고정한 전체MAE 비악화 기준에서 탈락했다. 이 후보로 실제 calibration/물체 과제를
+재시도하지 않는다. 전체13,246행 재생으로 저장 MAE를 재현하고 최종놓기 팔MAE·
+열기 그리퍼MAE를 비교하는 별도 MODEL 진단을 시작했으며 구간 결과는 아직 없다.
+
+Policy revision: `a76ef35c54b6b25ce5a2136e614a9b736dbc946102112948875e212af8ced652`.
+Dataset revision: `ec339a9bbdc3f2d00dc15cd7088712e67e5907519c8c27d490983fa3727df712`.
+Weights SHA256: `71d472603a0fdb8cfc0a5ae4fef67d79e196c1ee5beb830961d8c2c5ad6157fa`.
+Training-index SHA256: `23ccf4334e9b6dcb35cf4560d4b148c898096fc2dde77909399db930a3de5647`.
+History SHA256: `6d3bea9d83a8c9122f40be729f48a2effca562e2d332a195fbf93d86ae42db80`.
+실제 index157837bytes/13495개와 DatasetManifest config·model/data revision·
+모든 policy file bytes/SHA256의 연결을 별도로 검증했다.
+첫100step 평균loss0.01700273566879332, 마지막100평균0.01138702870812267이며
+loss 감소를 물체 성공으로 해석하지 않는다. 원래 부모 BEC의10k와 추가10k를 구분한다.
 
 ## Pending native intake
 
