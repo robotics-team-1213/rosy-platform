@@ -52,6 +52,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     origins=verify_module_origins({'act_inference':'learning/training/omx',
         'rosy.execution.local.omx_policy':'middleware/robot_execution/local/src',
         'omx_adapter.command_owner':'middleware/devices/omx/adapter'})
+    previous_switch_interval_s=sys.getswitchinterval()
+    sys.setswitchinterval(.001)
     directory=Path(directory)
     frames=directory/'policy-frames';frames.mkdir(mode=0o700)
     parent_root=Path(os.environ['OMX_SIM_POLICY_INPUT'])
@@ -89,6 +91,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         mode='calibration_without_policy_goals' if calibration else 'learned_policy_object_trial',
         parent_policy_revision=campaign['policy_revision'],goal_m=goal,sim_aid=True,
         runtime_poll_period_s=arm.poll_period_s,
+        python_switch_interval_s=sys.getswitchinterval(),
+        previous_python_switch_interval_s=previous_switch_interval_s,
         operating_fleet_approval='NOT_CLAIMED',physical_device_authority=False,module_origins=origins)
 
     def require_live():
