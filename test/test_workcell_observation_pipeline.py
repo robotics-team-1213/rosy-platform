@@ -73,6 +73,17 @@ async def _pipeline(tmp_path):
     server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server_tls.load_cert_chain(pki["chain"], pki["key"])
     ingest = IngestServer({"top": tokens["top"]}, preview_signer=VisionLeaseSigner(SIGNING_SECRET))
+    upgrade_attempts = []
+    process_request = ingest._process_request
+
+    async def delay_first_upgrade(connection, request):
+        if request.path == bridge.protocol.WS_PATH:
+            upgrade_attempts.append(time.monotonic())
+            if len(upgrade_attempts) == 1:
+                await asyncio.sleep(2.2)
+        return await process_request(connection, request)
+
+    ingest._process_request = delay_first_upgrade
     ws_server = await ingest.start("127.0.0.1", 0, ssl_context=server_tls)
     vision_port = ws_server.sockets[0].getsockname()[1]
     fleet_url = f"https://127.0.0.1:{fleet_port}"
