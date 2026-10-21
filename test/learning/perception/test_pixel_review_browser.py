@@ -583,7 +583,10 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     tools = page.locator('.pixel-quick-tools').bounding_box()
     assert tools['x'] < canvas['x'] and tools['y'] < canvas['y']
     assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
-    assert page.locator('#pixel-undo').bounding_box()['y'] < canvas['y']
+    for action in ['#pixel-prev', '#pixel-next', '#pixel-undo']:
+        bounds = page.locator(action).bounding_box()
+        assert bounds['x'] + bounds['width'] < canvas['x']
+        assert 0 <= bounds['y'] < min(800, canvas['y'] + canvas['height'])
     page.locator('#pixel-frame').select_option('1')
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-canvas')).to_be_focused()
