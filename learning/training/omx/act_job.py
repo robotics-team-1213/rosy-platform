@@ -52,13 +52,33 @@ def chunk_indices(count, start, size):
     return [i if i < count else None for i in range(start, start + size)]
 
 
-def training_sample_indices(rows, joint_names, *, sampling):
+def training_sample_indices(rows, joint_names, *, sampling, sim_truth=None):
     """Select original frames only; action labels and chunk chronology stay unchanged."""
     if sampling == 'all_frames':
         return list(range(len(rows)))
-    if sampling not in ('command_entry','command_entry_and_exit') or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
+    place_open = sampling == 'command_entry_exit_and_place_open'
+    if sampling not in ('command_entry','command_entry_and_exit','command_entry_exit_and_place_open') or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
         raise ValueError('command_entry sampling requires the fixed six-joint OMX SIM rig')
+    held_commands = set()
+    if place_open:
+        if sim_truth is None:
+            raise ValueError('place/open sampling requires original verified SIM truth')
+        # run() verifies the proof and its file bytes before reading this metadata.
+        proof = Path(sim_truth)
+        refs = json.loads(proof.read_bytes())['files']
+        phases = json.loads((proof.parent/refs['phases']['path']).read_bytes())
+        commands = json.loads((proof.parent/refs['commands']['path']).read_bytes())
+        transfer, = [p for p in phases if p['phase_id']=='transfer']
+        last = max((i for i,c in enumerate(commands)
+                    if transfer['started_sim_s']<=c['sim_time']<transfer['ended_sim_s']),
+                   key=lambda i:commands[i]['sim_time'])
+        target = commands[last]['target']
+        for command in commands[last:]:
+            if any(abs(command['target'][name]-target[name])>1e-7 for name in joint_names[:5]):
+                break
+            held_commands.add(command['command_id'])
     selected, exits = {}, {}
+    interiors = set()
     commands = {(row['command_id'],row['ros_goal_id']) for row in rows}
     for index,row in enumerate(rows):
         bounds = [.035]*5+[.04]  # Arm training margin; preserve the calibrated gripper target.
@@ -67,11 +87,14 @@ def training_sample_indices(rows, joint_names, *, sampling):
             key=(row['command_id'],row['ros_goal_id'])
             selected.setdefault(key,index)
             exits[key]=index
+            if row['command_id'] in held_commands:
+                interiors.add(index)
     if not commands or set(selected) != commands:
         raise ValueError('command_entry sampling must represent every command')
     indices=set(selected.values())
-    if sampling=='command_entry_and_exit':
+    if sampling in ('command_entry_and_exit','command_entry_exit_and_place_open'):
         indices.update(exits.values())
+    indices.update(interiors)
     return sorted(indices)
 
 
@@ -181,7 +204,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         raise ValueError('state noise standard deviation must be finite and nonnegative')
     if state_noise_std_rad and not relative:
         raise ValueError('state noise requires source-relative targets')
-    if sampling not in ('all_frames','command_entry','command_entry_and_exit'):
+    if sampling not in ('all_frames','command_entry','command_entry_and_exit','command_entry_exit_and_place_open'):
         raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
         raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
@@ -216,7 +239,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         if len(paths) != 1:
             raise ValueError("one original validated Episode per export required")
         validated = validate_omx(paths[0].parent)
-        automatic.append(export_truth(export, paths[0].parent, validated) is not None)
+        automatic.append(export_truth(export, paths[0].parent, validated))
         source_paths.append(paths[0].parent)
         sources.append(validated["manifest"]["provenance"])
         original_rows.append(validated["samples"])
@@ -226,8 +249,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     compatible_sources(sources)
     if sampling != 'all_frames' and not all(automatic):
         raise ValueError('command_entry sampling requires independently verified SIM object truth')
-    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling)
-                        for rows in original_rows]
+    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling,sim_truth=truth)
+                        for rows,truth in zip(original_rows,automatic)]
     # D-794 B: the image key and the artifact camera name follow the recorded camera name.
     image_key = "observation.images." + sources[0]["camera"]["name"]
     durations = {r["duration_s"] for rows in original_rows for r in rows}
@@ -253,7 +276,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 raise ValueError("source rows changed during input snapshot")
             common = out / "episodes" / source.name
             proof = export_truth(snapshot, source, copied)
-            if (proof is not None) != was_automatic:
+            if (proof is not None) != (was_automatic is not None):
                 raise ValueError('source outcome judge changed during snapshot')
             episode = convert(source, common, sim_ground_truth=proof)
             episodes.append(episode)
@@ -462,7 +485,7 @@ def main():
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
-    ap.add_argument("--sampling", choices=('all_frames','command_entry','command_entry_and_exit'), default='all_frames')
+    ap.add_argument("--sampling", choices=('all_frames','command_entry','command_entry_and_exit','command_entry_exit_and_place_open'), default='all_frames')
     ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'),default='absolute')
     ap.add_argument('--initial-policy',type=Path)
     ap.add_argument('--state-noise-std-rad',type=float,default=0.)

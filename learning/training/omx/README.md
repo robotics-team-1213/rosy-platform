@@ -146,6 +146,13 @@ calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에�
 indices를 같은 DatasetManifest 경로에 결속한다. 학습 step 수가 같으면 선택점당
 평균 학습 횟수는 줄어들므로 실제 물체 과제의 개선은 별도로 확인한다.
 
+`--sampling command_entry_exit_and_place_open`는 이 endpoint를 모두 유지하고,
+최종 놓기·열기 구간의 같은 eligibility를 만족하는 원본 내부 frame도 추가한다.
+검증된 SIM truth의 마지막 transfer 명령부터 다섯 팔 목표가 같은 연속 명령을
+선택하며 팔 목표가 바뀌면 즉시 끝낸다. 좌표나 새 정답을 넣지 않고 원본 metadata를
+읽는다. 접촉 정답이나 물체 해제 성공을 뜻하지 않으며 독립 validation과 실제 과제로
+효과를 확인해야 한다. 기본 선택과 action·RGB·chunk 순서는 그대로다.
+
 `act_inference_replay.py`는 bound Dataset 파일에 포함된 실제 LeRobot 평가 reader로
 모델의 입력/행동/큐 provenance·latency를 새 X artifact에 보존하고 기존 offline metrics를
 재현한다. 원래 sim capture/state/wall 시계는 별도 필드로 보존한다.
