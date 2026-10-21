@@ -107,6 +107,21 @@ def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypa
     assert not client.commands
 
 
+def test_fresh_capture_after_attempt_deadline_never_computes(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
+    ticks=[0]
+    monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: ticks[0])
+    capture=session.capture_inference_input
+    def delayed_capture(*args):
+        observation=capture(*args)
+        ticks[0]+=session.policy.binding.timing['max_observation_age_ns']
+        return observation
+    monkeypatch.setattr(session, 'capture_inference_input', delayed_capture)
+    with pytest.raises(TimeoutError, match='capture margin'):
+        infer_for_owner(engine, session, packet)
+    assert not seen and not client.commands
+
+
 def test_install_precheck_allows_joint_intake_before_atomic_capture(tmp_path, monkeypatch):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     original = InstalledPolicy.recheck
