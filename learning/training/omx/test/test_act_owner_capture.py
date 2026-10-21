@@ -122,6 +122,48 @@ def test_fresh_capture_after_attempt_deadline_never_computes(tmp_path, monkeypat
     assert not seen and not client.commands
 
 
+def test_actor_budget_can_wait_for_a_new_fresh_capture(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
+    ticks=[0]
+    monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: ticks[0])
+    capture=session.capture_inference_input
+    def delayed_capture(*args):
+        ticks[0]+=session.policy.binding.timing['max_observation_age_ns']
+        return capture(*args)
+    monkeypatch.setattr(session, 'capture_inference_input', delayed_capture)
+    checks=[]
+    def live():
+        assert not session._lock._is_owned()
+        checks.append(ticks[0])
+    proposed,result=infer_for_owner(engine,session,packet,require_live=live)
+    assert len(checks)>=3 and len(seen)==1 and not client.commands
+    assert proposed.observed_at_ns==result.source.observed_at_ns==10_000_000_000
+    assert session.submit(proposed).accepted
+
+
+@pytest.mark.parametrize('expires_during', ['capture','inference'])
+def test_actor_budget_expiry_drops_input_or_computed_candidate(tmp_path, monkeypatch, expires_during):
+    session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
+    expired=[False]
+    if expires_during=='capture':
+        original=session.capture_inference_input
+        def capture(*args):
+            result=original(*args);expired[0]=True;return result
+        monkeypatch.setattr(session,'capture_inference_input',capture)
+    else:
+        import sim_policy_inference
+        original=sim_policy_inference.infer_captured
+        def compute(*args,**kwargs):
+            result=original(*args,**kwargs);expired[0]=True;return result
+        monkeypatch.setattr(sim_policy_inference,'infer_captured',compute)
+    def live():
+        assert not session._lock._is_owned()
+        if expired[0]:raise TimeoutError('original actor deadline')
+    with pytest.raises(TimeoutError,match='original actor deadline'):
+        infer_for_owner(engine,session,packet,require_live=live)
+    assert len(seen)==int(expires_during=='inference') and not client.commands
+
+
 def test_install_precheck_allows_joint_intake_before_atomic_capture(tmp_path, monkeypatch):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     original = InstalledPolicy.recheck

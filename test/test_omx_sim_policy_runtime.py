@@ -74,7 +74,8 @@ def test_revocation_at_final_native_admission_sends_no_new_goal(tmp_path,monkeyp
 
 
 @pytest.mark.parametrize('calibration', [True, False])
-def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calibration):
+@pytest.mark.parametrize('expire_on_save', [False,True])
+def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calibration,expire_on_save):
     import ast
     from contextlib import nullcontext
     from types import SimpleNamespace
@@ -84,7 +85,11 @@ def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calib
                 and isinstance(node.target, ast.Name) and node.target.id == 'index')
     clock = [0.]
     captures, checks = [], []
+    expired=[False]
+    def require_live():
+        if expired[0]:raise TimeoutError('original actor deadline')
     def infer(*args, **kwargs):
+        assert kwargs['require_live'] is require_live
         captures.append(clock[0])
         clock[0] += .1
         return SimpleNamespace(produced_at_ns=0, observed_at_ns=0,
@@ -96,6 +101,7 @@ def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calib
         return {'timing': {'max_action_age_ns': 10**12}}, 0, ()
     def save_image(*args):
         clock[0] += .01
+        expired[0]=expire_on_save
     def reject(*args):
         clock[0] += .05
         raise PermissionError('controlled submit fault')
@@ -104,12 +110,16 @@ def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calib
                               submit=reject)
     namespace = dict(calibration=calibration, last_submit=None, last_cycle=None, period_s=.8,
         time=SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda delay: clock.__setitem__(0, clock[0]+delay)),
-        require_live=lambda: None, infer_for_owner=infer, engine=None, session=session, camera=None,
+        require_live=require_live, infer_for_owner=infer, engine=None, session=session, camera=None,
         asdict=vars, steps=[], Image=SimpleNamespace(frombytes=lambda *args:
             SimpleNamespace(save=save_image)), frames=Path('/unused'), last_observed=[0.],
         arm=SimpleNamespace(monotonic=lambda: clock[0]))
     code=compile(ast.Module(body=[loop], type_ignores=[]), str(source), 'exec')
-    if calibration:
+    if expire_on_save:
+        with pytest.raises(TimeoutError,match='original actor deadline'):
+            exec(code,namespace)
+        assert len(captures)==1 and not checks
+    elif calibration:
         exec(code, namespace)
         assert len(captures) == len(checks) == 12
         assert all(start-finished >= .8 for start, finished in zip(captures[1:], checks))
