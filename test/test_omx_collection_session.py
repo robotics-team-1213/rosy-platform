@@ -11,11 +11,30 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'deploy/robot/omx'))
 
 
+class RehearsalClock:
+    def __init__(self):
+        self.ns = 1_700_000_000_000_000_000
+
+    def time_ns(self):
+        return self.ns
+
+    def time(self):
+        return self.ns / 1e9
+
+    monotonic = time
+
+    def sleep(self, seconds):
+        self.ns += round(seconds * 1e9)
+
+
 @pytest.fixture
-def module():
+def module(monkeypatch):
     spec = importlib.util.spec_from_file_location('collection_session', ROOT/'deploy/robot/omx/collection_session.py')
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)
+    clock = RehearsalClock()
+    monkeypatch.setattr(result, 'time', clock)
+    monkeypatch.setattr(sys.modules[__name__], 'time', clock)
     return result
 
 
@@ -35,6 +54,7 @@ class Backend:
         self.fault, self.commands, self.stops, self.n = fault, [], [], 0
     def observe(self):
         self.n += 1
+        time.sleep(.001)
         now = time.time_ns()
         conditions = 'UNDEREXPOSED' if self.fault == 'dark' and self.commands else 'NORMAL'
         env = dict(policy='omx-photometric-v3', recorded_ns=now, expires_ns=now+750_000_000,
@@ -77,7 +97,7 @@ def test_rehearsal_records_windows_original_images_and_never_claims_hardware(mod
     backend = Backend()
     result = module.run_session(profile(), teacher(), tmp_path/'capture', backend)
     assert result['mode'] == 'rehearsal' and result['source_mode'] == 'simulation'
-    assert result['episodes'][0]['complete'] is True
+    assert result['episodes'][0]['complete'] is True, result['episodes'][0]['reason']
     assert result['episodes'][0]['frames'] >= 2
     assert result['episodes'][0]['start_ns'] < result['episodes'][0]['end_ns']
     assert result['episodes'][0]['outcome'] == 'unknown'

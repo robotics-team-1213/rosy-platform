@@ -1,0 +1,3 @@
+# OpenRB USB serial access for existing plugdev operators; no controller or torque activation.
+# Match the device family rather than one board serial, so replacement boards retain access.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2f5d", ATTRS{idProduct}=="2202", GROUP="plugdev", MODE="0660"
