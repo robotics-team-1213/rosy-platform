@@ -48,6 +48,8 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
             gaps=restored[:,1:,0]-restored[:,:-1,0]
             assert torch.all(torch.isclose(gaps,torch.zeros_like(gaps),atol=1e-6)|
                              torch.isclose(gaps,torch.full_like(gaps,.001),atol=1e-6))
+            distances=(restored.reshape(-1,1,2)-torch.tensor(training_actions)).abs().amax(dim=-1)
+            assert torch.all(distances.amin(dim=-1)<1e-6)
             torch.testing.assert_close(restored[:,:,1],torch.full_like(restored[:,:,1],-.1))
             if noise:
                 assert torch.all(torch.abs(origin[:,1]+.1)>1e-6)
