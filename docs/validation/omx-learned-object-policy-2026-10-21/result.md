@@ -21,6 +21,16 @@ SIM DetachableJoint 부착 보조의 attach가 확인됐지만 최대 lift 17.89
 policy-result SHA256: `f73746f1f5537cccf6b0137224514959469f2f0c63db80ea6de67e427f7dc924`.
 이 단일 실행으로 state noise의 인과 효과를 확정하지 않는다.
 
+후속 실험 source revision: `938791127b432cdb1e1e6dd578955e661fd41a38`.
+기존 owner 제한을 유지하며 새 `joint_delta_tanh_from_chunk_source_v1` action head를
+학습·재적재·byte 추론에 동일 적용한다. 정확한 0.035rad bound는 normalization hash에
+결속하고 원 절대 target은 보존한다. 범위 밖 target의 학습 잔차는 제거하지 않는다.
+수정 전 MODEL 실제 ACT 검사3FAIL/6PASS, 수정 후9PASS/0SKIP/0NEW, 일반 원격
+검사78PASS/0NEW를 확인했다. 독립 소스 검토에서 blocker가 없었다. 새10,000step
+학습을 요청했으며 완료·물체 성공은 아직 확인하지 않았다. 사전 과제가 통과해야 새
+정식20회를 시작한다. 로그는 `omx-bounded-head-native-red`,
+`omx-bounded-head-native-green`, `omx-bounded-head-green`에 보존한다.
+
 ## 실제 데이터와 선택한 checkpoint
 
 선택한 시연은 batch 7·9·10·11·12·14·15·16에서 각 3개, batch 17에서 1개로
