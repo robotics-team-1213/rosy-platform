@@ -47,9 +47,23 @@ Index60의 최근접 시연 gripper 목표는 open1.0rad였다. 마지막 실제
 두 진단은 weights·normalization hash를 검증했고 실제 과제 분모에 추가하지 않는다.
 원본·합성 입력 구분과 함께 `omx-clean-bounded-rollout-neighbors-1`,
 `omx-clean-bounded-gripper-response-1`, `omx-absolute-gripper-response-1`에 보존한다.
-단일 원인 확정이나 실제 물체 성공의 증거로 쓰지 않는다. Source 기준 smooth bound를
-학습부터 적용한 absolute head와 호환 parent checkpoint 초기화는 다음 실험 검토안이며,
-아직 구현·재학습·성공으로 표시하지 않는다. 안전 제한을 완화한 unchanged 재시도는 하지 않는다.
+단일 원인 확정이나 실제 물체 성공의 증거로 쓰지 않는다. 안전 제한을 완화한 unchanged
+재시도는 하지 않는다.
+
+후속 `absolute_tanh_from_chunk_source_v1`은 구현·검증 단계까지 진행했다.
+Implementation source revision: `3f7972f2a6a597cad76ee5df4d1934b428fa16d5`.
+같은 batch 원 상태 s와 absolute head a에 s+0.035*tanh((a-s)/0.035)를 학습부터
+적용한다. 정답·통계·출력은 absolute이며 source를 다시 더하지 않는다. Source context는
+호출 성공·예외 모두에서 제거한다. 부모의 bytes·전체ACTConfig·관절·카메라·limits·
+train-only 통계가 일치해야 weights를 적재하며 부모 hash·기존 step·새AdamW를 결속한다.
+수정 전 native3FAIL/10PASS, 수정 후 실제ACT13PASS/0SKIP/0NEW와 일반 원격
+96PASS/1SKIP/0NEW를 확인했다. 추가 metadata 검증61PASS/0NEW, 부모 불일치·
+변조 거절과 warm train/reload의 최종 선택 시험1PASS/12DESELECTED/0NEW를 확인했다.
+추가 시험의 최초 실패1건은 정상 integrity 거절의 문구가 예상 regex와 달랐던 것으로,
+기존 hash/size 거절 문구에 맞춘 test-only revision: `f509adfba840e2f2a48a128c1d71b300b4032bf7`.
+독립 소스 검토에서 실행 경계 blocker가 없었다. 실제 recipe는 기존 BEC revision·
+weights·정규화·10k loss 이력을 먼저 대조해 독립 스냅샷으로 고정한다. 실제 추가10k
+학습을 요청했으며 새 checkpoint와 물체 과제 성공은 아직 확인하지 않았다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
