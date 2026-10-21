@@ -39,6 +39,11 @@ def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback,
         with pytest.raises(PermissionError):
             session.submit(proposed)
         assert session.hold_reason
+        rejection=session._runtime_binding.admission_rejection
+        assert rejection['reason']=='readback_step'
+        assert rejection['positions']['joint_1']==readback
+        assert rejection['max_step_rad']==pytest.approx(abs(target-readback))
+        assert rejection['command_id']
     assert checked and checked[-1] is accepted
     assert len(client.commands) == int(accepted)
 
