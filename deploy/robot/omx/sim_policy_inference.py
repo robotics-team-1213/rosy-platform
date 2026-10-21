@@ -40,18 +40,16 @@ def infer_for_owner(engine, session, camera, *, timings=None, require_live=None)
     result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
                             monotonic=session._clock)
     inferred=perf_counter_ns()
-    with session._lock:
-        relocked=perf_counter_ns()
-        current=session.lease
-        if (replace(current,issued_at_ns=lease.issued_at_ns,expires_at_ns=lease.expires_at_ns)!=lease
-                or current.issued_at_ns<lease.issued_at_ns or current.expires_at_ns<lease.expires_at_ns):
-            raise ValueError('lease or model changed during inference')
-        # This is an unadmitted proposal; submit/calibration performs the full final guard.
+    # Read one immutable lease; final admission owns serialization and full guards.
+    current=session.lease
+    if (replace(current,issued_at_ns=lease.issued_at_ns,expires_at_ns=lease.expires_at_ns)!=lease
+            or current.issued_at_ns<lease.issued_at_ns or current.expires_at_ns<lease.expires_at_ns):
+        raise ValueError('lease or model changed during inference')
     finished=perf_counter_ns()
     if require_live is not None:require_live()
     if timings is not None:
         timings.update(capture_times,capture_selected_input_age=age/1e6,
             installed_binding=(checked-started)/1e6,
             numerical_inference=(inferred-frozen)/1e6,
-            final_lock_wait=(relocked-inferred)/1e6,lease_context_check=(finished-relocked)/1e6)
+            lease_context_check=(finished-inferred)/1e6)
     return PolicyCandidate(**result.candidate_fields()), result
