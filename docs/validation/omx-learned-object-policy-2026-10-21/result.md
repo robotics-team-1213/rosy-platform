@@ -802,3 +802,34 @@ CPU 비교 후보의 원격 검사 66 PASS / 0 NEW와 읽기 전용 코드 검�
 이전 학습 수정과 보고서는 로컬 main c3ae44ae3f에 정식 병합됐다. 후속 private native
 runtime과 본 진행 보고서는 아직 최종 착지 전이다. GitHub push·실물 실행은 하지 않았다.
 Road-surface 사람 검수는 사용자 우선순위에 따라 OMX 이후로 보류하며 여전히 0/24다.
+
+## Command endpoint 모델의 실제 시간 예산 실패와 다음 비교
+
+Policy revision: `1e8c8e20dffd82b106169f7e687250b322ad48edf8984d6bcb690d033ef02723`.
+Runtime revision: `dc5db7e1db16637aa200172f6ceee0947d148b19`.
+Policy-result SHA256: `d0855d8ff30967f64acaec23f7ab3bc62e5cc15d05c2605b37936dff75a2378f`.
+
+동일 checkpoint의 calibration은 PASS였지만 새 engineering 물체 과제는 실패했다.
+누적 실제 성공은 **0/37회**(최초 정식0/20 + engineering0/17)이며 새 정식20회는
+시작하지 않았다. candidate/intent/UUID225개 모두 terminal4/code0였지만,
+Actor548.036초에서 고정 전역 시간 예산 TimeoutError가 발생했다. 감독 프로세스도
+원래 전역 기한에 TimeoutExpired로 종료했고 root610.020초/HOLD/cleanup true였다.
+원본 policy-result와 steps는 보존됐다. 감독 결과에 policy가 없어 생긴 wrapper
+KeyError는 2차 오류이며 과제 실패 원인이나 증거 유실을 대신하지 않는다.
+
+SIM 부착 보조 attach는 확인됐고 최대 lift101.687mm다. 마지막 XY55.116mm/
+Z91.259mm는 미완료 관측이다. detach·안정 유지가 없어 놓기 성공이나 정확도로
+계산하지 않으며 이전 모델의 접촉 실패가 해결됐다고 주장하지 않는다.
+
+후보당 전체 추론 평균1260.610ms와 수치 추론21.509ms를 대조했다. 후보당 반복
+guarded capture 누적646.384ms는 단일 capture 시간이 아니다. capture4066회 중
+1998회는 guard 진입 전에 이미 선택 cap50ms보다 오래됐고 동일 receipt 반복은
+1320회였다. Renewal guard3157회/111.2초와 watchdog guard2642회/92.2초도
+관측됐다. 중첩 stage timing은 wall time으로 합산하지 않는다.
+
+다음 통제 비교는 재학습 없이 동일 checkpoint를 사용해 SIM renewal 대기만
+0.1초에서0.2초로 바꾼다. 1초 lease, owner poll0.2초, 모든 binding·authority·stop·
+freshness·최종 admission·journal 검사를 유지한다. 명목 추가 검사 빈도는 줄며,
+lock/I/O 지연의 상한이 없어 expiry 없음이나 동일 stop 지연을 보장하지 않는다.
+늦으면 기존대로 HOLD해야 한다. 실제 갱신 간격·잔여 TTL·lock 대기와 capture 횟수를
+다음 실행 trace에서 확인한다. 실제 과제 통과 전에는 새 정식20회를 시작하지 않는다.
