@@ -45,6 +45,20 @@ def test_unknown_action_representation_fails_before_source_or_model_access(tmp_p
     assert not (tmp_path/'out').exists()
 
 
+@pytest.mark.parametrize('std',[True,-.01,float('inf'),float('nan')])
+def test_invalid_state_noise_fails_before_source_or_model_access(tmp_path,std):
+    with pytest.raises(ValueError,match='state noise'):
+        run([],tmp_path/'absent',tmp_path/'out',state_noise_std_rad=std,
+            action_representation='joint_delta_from_chunk_source_v1')
+    assert not (tmp_path/'out').exists()
+
+
+def test_state_noise_requires_source_relative_targets(tmp_path):
+    with pytest.raises(ValueError,match='relative'):
+        run([],tmp_path/'absent',tmp_path/'out',state_noise_std_rad=.02)
+    assert not (tmp_path/'out').exists()
+
+
 def test_multiple_validation_episodes_cannot_overlap_training(tmp_path, monkeypatch):
     monkeypatch.setattr('act_job.importlib.metadata.version', lambda *_: '0.4.4')
     with pytest.raises(ValueError, match='disjoint'):

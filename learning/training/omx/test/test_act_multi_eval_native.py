@@ -11,8 +11,9 @@ sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/o
     'middleware/devices/omx/adapter','middleware/devices/omx/adapter/test','contracts/foundation')]
 
 
-@pytest.mark.parametrize('representation,queue_steps', [('absolute',1),('joint_delta_from_chunk_source_v1',2)])
-def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,monkeypatch,representation,queue_steps):
+@pytest.mark.parametrize('representation,queue_steps,noise', [('absolute',1,0.),
+    ('joint_delta_from_chunk_source_v1',2,0.),('joint_delta_from_chunk_source_v1',1,.02)])
+def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,monkeypatch,representation,queue_steps,noise):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
     from omx_adapter.demonstration import DemonstrationRecorder
@@ -47,12 +48,39 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
             gaps=restored[:,1:,0]-restored[:,:-1,0]
             assert torch.all(torch.isclose(gaps,torch.zeros_like(gaps),atol=1e-6)|
                              torch.isclose(gaps,torch.full_like(gaps,.001),atol=1e-6))
+            torch.testing.assert_close(restored[:,:,1],torch.full_like(restored[:,:,1],-.1))
+            if noise:
+                assert torch.all(torch.abs(origin[:,1]+.1)>1e-6)
             checked.append(True)
         return original(model,batch,*args,**kwargs)
     monkeypatch.setattr(ACTPolicy,'forward',check_chunk_origin)
-    report=run(exports[:2],exports[2:],out,steps=1,n_action_steps=queue_steps,action_representation=representation)
+    original_predict=ACTPolicy.predict_action_chunk
+    evaluated=[]
+    def clean_validation(model,batch,*args,**kwargs):
+        stats=json.loads((out/'normalization.json').read_text())
+        origin=batch['observation.state']*torch.tensor(stats['state_std'])+torch.tensor(stats['state_mean'])
+        torch.testing.assert_close(origin[:,1],torch.full_like(origin[:,1],-.1))
+        assert all(any(abs(value-item)<1e-6 for item in [.01,.03,.05,.07]) for value in origin[:,0].tolist())
+        evaluated.append(True)
+        return original_predict(model,batch,*args,**kwargs)
+    monkeypatch.setattr(ACTPolicy,'predict_action_chunk',clean_validation)
+    kwargs=dict(state_noise_std_rad=noise) if noise else {}
+    report=run(exports[:2],exports[2:],out,steps=1,n_action_steps=queue_steps,
+               action_representation=representation,**kwargs)
     stats=json.loads((out/'normalization.json').read_text())
     assert stats['fit_episodes']==ids[:2]
+    np.testing.assert_allclose(stats['state_mean'],np.mean(training_states,axis=0),atol=1e-7)
+    assert evaluated
+    if noise:
+        augmentation=stats['training_augmentation']
+        assert augmentation==dict(type='gaussian_state_noise_v1',std_rad=noise,seed=42751,
+            joint_names=['joint1','gripper_joint_1'],train_only=True,source_kind='synthetic_training_inputs')
+        assert report['training_augmentation']==augmentation
+        dataset=json.loads((out/'dataset-manifest.json').read_text())
+        import hashlib
+        assert dataset['transformation']['config_sha256']==hashlib.sha256(json.dumps(stats,sort_keys=True).encode()).hexdigest()
+    else:
+        assert 'training_augmentation' not in stats and 'training_augmentation' not in report
     if representation=='absolute':
         np.testing.assert_allclose(stats['action_mean'],np.mean(training_actions,axis=0),atol=1e-7)
     else:
