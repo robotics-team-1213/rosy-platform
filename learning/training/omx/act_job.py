@@ -214,9 +214,9 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                            chunk_size=4, n_action_steps=n_action_steps, dim_model=64, n_heads=4, dim_feedforward=256,
                            n_encoder_layers=1, n_decoder_layers=1, use_vae=False, dropout=0.0,
                            pretrained_backbone_weights=None, device="cpu",
-                           optimizer_lr=1e-3, optimizer_lr_backbone=1e-3, optimizer_weight_decay=1e-4)
+                           optimizer_lr=1e-4, optimizer_lr_backbone=1e-5, optimizer_weight_decay=1e-4)
         policy = ACTPolicy(config)
-        optimizer = torch.optim.AdamW(policy.parameters(), lr=config.optimizer_lr,
+        optimizer = torch.optim.AdamW(policy.get_optim_params(), lr=config.optimizer_lr,
                                       weight_decay=config.optimizer_weight_decay)
         indices = [(e, i) for e, a in enumerate(arrays[:train_count]) for i in range(len(a[0]))]
         history = []
@@ -264,7 +264,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         report.update(algorithm="lerobot-act", lerobot_version="0.4.4", torch_version=str(torch.__version__),
                       device="cpu", seed=seed, steps=steps, n_action_steps=n_action_steps,
                       train_episodes=ids[:train_count], eval_episodes=ids[train_count:],
-                      optimizer={"type": "AdamW", "parameter_grouping": "all_policy_parameters",
+                      optimizer={"type": "AdamW", "parameter_grouping": "act_get_optim_params",
                                  "parameter_groups": [{key: group[key] for key in
                                      ("lr", "weight_decay", "betas", "eps", "amsgrad", "maximize",
                                       "foreach", "capturable", "differentiable", "fused")}

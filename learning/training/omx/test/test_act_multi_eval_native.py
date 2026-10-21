@@ -42,5 +42,11 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path)
     assert set(report['per_episode'])==set(ids[2:])
     assert all(row['eval_frames']==4 for row in report['per_episode'].values())
     assert report['reloaded_prediction_verified'] is True
+    # Keep the measured backbone rate when constructing the real optimizer.
+    optimizer = report['optimizer']
+    assert [group['lr'] for group in optimizer['parameter_groups']] == [1e-4, 1e-5]
+    config = json.loads((out/'policy/config.json').read_text())
+    assert config['optimizer_lr'] == 1e-4
+    assert config['optimizer_lr_backbone'] == 1e-5
     assert set(report['task_outcome_judges'].values())=={'operator'}
     assert json.loads((out/'state.json').read_text())['status']=='research_exported'
