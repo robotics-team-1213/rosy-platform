@@ -125,6 +125,78 @@ def test_failed_guard_trace_preserves_original_joint_receipts_and_exception(tmp_
         assert facts['after']['intake']['intake_sequence']==11
 
 
+def test_guard_delivers_valid_native_intake_waiting_for_session_lock(tmp_path,monkeypatch):
+    import threading
+    journal=PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session,client,clock,*_=setup_session(tmp_path,execution_journal=journal)
+    runtime=runtime_methods(session,client)
+    bind_sim_runtime(session,runtime)
+    binding=session._runtime_binding
+    waiting=threading.Event()
+    observe=binding.observe
+    def pending(snapshot):
+        waiting.set()
+        return observe(snapshot)
+    monkeypatch.setattr(binding,'observe',pending)
+    clock[0]=10.6
+    message=joint_message(runtime)
+    message.header.stamp.sec=10
+    message.header.stamp.nanosec=500_000_000
+    message.position=[.11,0.]
+    worker=threading.Thread(target=runtime._on_joint_state,args=(message,))
+    try:
+        with session._lock:
+            worker.start()
+            assert waiting.wait(2), 'native callback did not reach session delivery'
+            original=runtime.latest_joint_state
+            assert original is not session._snapshot
+            assert original.received_at==pytest.approx(10.5)
+            session._guard()
+            assert session._snapshot is original
+            assert session.owner._joint_state is original
+            assert session._history[original.sequence] is original
+            assert original.received_at==pytest.approx(10.5)
+    finally:
+        worker.join(2)
+    assert not worker.is_alive()
+    assert session.hold_reason is None and session.owner.state=='ready'
+    assert session._snapshot is original and not client.commands
+
+
+@pytest.mark.parametrize('mode', ['stale','future','calibration','expired','hold'])
+def test_pending_intake_keeps_existing_fail_closed_checks(tmp_path,mode):
+    journal=PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session,client,clock,*_=setup_session(tmp_path,execution_journal=journal)
+    runtime=runtime_methods(session,client)
+    bind_sim_runtime(session,runtime)
+    clock[0]=10.1 if mode in ('future','calibration','hold') else 10.6 if mode=='stale' else 10.95
+    receipt=10.2 if mode=='future' else 10.0 if mode=='stale' else clock[0]
+    latest=replace(session._snapshot,sequence=11,received_at=receipt,
+        calibration_revision='other' if mode=='calibration' else session._snapshot.calibration_revision)
+    runtime.latest_joint_state=latest
+    if mode=='hold':
+        with pytest.raises(PermissionError):session._fail('existing_hold')
+    with pytest.raises(PermissionError):session._guard()
+    assert session.hold_reason and not client.commands
+    assert latest.received_at==receipt
+    if mode=='hold':assert session._snapshot.sequence==10
+
+
+@pytest.mark.parametrize('copy_replay', [False,True])
+def test_native_delivery_skip_is_one_shot_and_preserves_replay_rejection(tmp_path,copy_replay):
+    journal=PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session,client,*_=setup_session(tmp_path,execution_journal=journal)
+    runtime=runtime_methods(session,client)
+    bind_sim_runtime(session,runtime)
+    latest=replace(session._snapshot,sequence=11)
+    runtime.latest_joint_state=latest
+    binding=session._runtime_binding
+    binding.observe(latest)
+    assert session._snapshot is latest and session.hold_reason is None
+    with pytest.raises(PermissionError):binding.observe(replace(latest) if copy_replay else latest)
+    assert session.hold_reason and not client.commands
+
+
 @pytest.mark.parametrize('calibration', [True, False])
 @pytest.mark.parametrize('expire_on_save', [False,True])
 def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calibration,expire_on_save):
