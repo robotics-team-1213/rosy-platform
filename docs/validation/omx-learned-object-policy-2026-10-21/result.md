@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/29회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/9회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/30회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/10회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
@@ -411,7 +411,41 @@ identity·issued/expiry 비감소 비교를 잠금 없이 수행한다. 초기 c
 `require_live`, 최종 submit·post-I/O full guard는 유지한다. 실제 thread 경합 회귀는
 수정 전 잠금 대기로 실패했고 identity·두 시각 rollback 3개는 통과했다. 독립 검토에서
 계약 blocker는 없었으며 수정 후 관련 원격 검사는 149 PASS / 1 SKIP / 0 NEW다.
-같은 실제 모델과 별도 calibration·사전 과제로 native 효과를 확인 중이다.
+같은 실제 모델의 별도 calibration `1d675c55821a`는 PASS·cleanup true·exit 0이었다.
+이어 실제 사전 과제 `727d045efee4`는 113 candidate 뒤 `readback_step`으로 거절됐다.
+원장에는 113 intent·112 accepted UUID·112 terminal 상태4/code0이 남았고 마지막 intent에는
+UUID나 event가 없다.
+그리퍼의 실제 readback 0.3108483553rad와 target 0.2704306543rad의 차이
+0.0404177010rad가 기존 0.04rad 제한을 넘었다. 이번 실패의 admission 시 원 입력
+나이는 약 205ms이며 camera stale의 반복으로 분류하지 않는다. 마지막 추론은
+58.861ms, 제출 직전 입력 나이는 105.772ms, submit은 99.619ms였다. 이는 한 표본의
+실측이며 지연 상한이나 일반적인 개선 보장이 아니다. Actor 148.400초 뒤 실패했고
+cleanup true, lift·stable 0·동일 incomplete 위치 오차다. 새 모델은 별도 사전 과제
+0/2, 전체 learned 결과는 0/30이며 새 formal20은 시작하지 않았다. 원 시연의 가까운
+상태와 실제 rollout을 MODEL에서 읽기 전용 대조하며 추가 정책 변경은 아직 하지 않았다.
+
+읽기 전용 MODEL 진단 `omx-relative-rollout-neighbors-1`은 train 52,834개 상태와
+실패 과제의 7개 고정 frame을 대조해 exit 0으로 종료됐다. Step110의 실제 그리퍼
+0.3789454401rad에서 예측은 0.3382530808rad였다. 가장 가까운 팔 5관절 상태의 거리는
+0.055388rad이고 그 시연의 그리퍼 state/target은 0.4137569368/0.3804260884rad였다.
+이 이웃 target은 실제 rollout의 정답이 아니며 실제 과제 성능으로 계산하지 않는다.
+Teacher는 기존에도 6관절 0.04rad 단계 검사를 수행했고 무제한 그리퍼 시연으로 분류하지 않는다.
+
+후속 source `34967a5996`은 같은 원본·20/5 분할·command_entry 선택으로 train 입력에만
+표준편차 0.02rad의 관절별 독립 Gaussian 교란을 주는 회복 학습 실험을 추가했다.
+원 RGB·절대 target·frame 순서·시각·train-only 정규화 fit을 유지한다. 전용 generator
+seed42751을 쓰고 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. Validation·재적재·
+추론에는 교란을 넣지 않는다. 적용 설정은 normalization·offline report 및 DatasetManifest
+transformation hash에 결속되며 기본0의 metadata·RNG 소비는 유지한다. 교란 입력은
+synthetic이며 실제 관측·추가 시연·SIM truth에 합산하지 않는다. Gaussian은 관절 한계 밖
+입력과 0.04rad 초과 target 차이도 만들 수 있고 clipping하지 않는다. 실제 recovery
+정답이나 native 성공 보장은 아니다.
+
+일반 RED5개와 실제 ACT RED1개는 수정 전 새 인자 미지원으로 실패했다. 수정 후 일반
+원격 72 PASS / 0 SKIP / 0 NEW와 MODEL 실제 ACT 6 PASS / 0 SKIP / 0 NEW를 확인했다.
+초기 일반 GREEN 요청의 잘못된 파일 경로는 exit4·실행0으로 보존하고 통과에 넣지 않았다.
+독립 코드 검토에서 blocker는 없었다. 실제 시연 25개 전체 재검증·같은 seed42750의
+새 10,000 step 학습을 요청했으며 새 checkpoint와 실제 물체 성공은 아직 확인 전이다.
 
 이후 main dc8c3cc2bf를 충돌 없이 반영한 통합 source `9bcca8e7bd`는 공식 selector의
 관련 55개 경로를 AI PC에서 실행해 1,077 PASS / 34 SKIP / 0 NEW를 확인했다.

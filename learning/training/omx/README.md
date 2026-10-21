@@ -32,6 +32,15 @@ python learning/training/omx/act_job.py
 기존 최상위 action_mean/action_std를 두지 않아 구 소비자는 모델 생성 전에 거절한다.
 평가 baseline은 원 절대 train target 평균이다. 기본 `absolute`의 정규화 구조는 그대로다.
 
+상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
+Gaussian 교란을 주는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
+시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
+정규화를 fit하고 validation·추론에는 교란을 넣지 않는다. 분포·std·seed·관절·적용 범위는
+정규화·보고서와 DatasetManifest transformation hash에 결속한다. 교란 입력은 synthetic이며
+실제 관측·추가 시연·SIM truth가 아니다. 관절 한계 밖 상태나 0.04rad 초과 이동량도 만들 수
+있고 clipping하지 않는다. 실제 recovery 정답이나 native 성공을 보장하지 않는다.
+기본값 0에서는 전용 RNG와 추가 augmentation metadata를 만들지 않는다.
+
 `lerobot_export.py --sim-ground-truth <truth.json>`으로 검증한 고정 물체 과제의
 원본 증거는 `rosy_sim_truth/`에 복사된다. 학습 snapshot과 공통 Episode에도 같은
 bytes를 보존하고 실제 judge를 기록한다. 명시한 증거가 없으면 기존 operator
