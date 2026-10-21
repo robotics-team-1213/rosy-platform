@@ -83,6 +83,9 @@ revision만 받아 결과를 반환하며 안전 owner 타입을 import하지 �
 현재 isolated caller 시험이 잠금 밖 추론과 lease 재검사·PolicyCandidate 구성을
 연결한다. 원 관측 재전달·큐 시각 갱신은 없다. 실제 제출·최종 판단은 기존
 `session.submit`에 맡긴다. 기본 runtime·명령·issuer·자동 scheduler·HOLD 해제는 없다.
+Private SIM caller는 추론 뒤 lease 연속성만 재검사하고 미승인 후보를 반환한다.
+추론 중 철회·설치 파일 변경이 생겼어도 후보 반환 자체는 실행 승인이 아니며,
+calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에서 거절해야 한다.
 실제 trusted capture/issuer·승인된 모델의 ROS 프로세스 결선은 여전히 별도다.
 
 기본 n_action_steps=4는 유지한다. `--n-action-steps 1`은 chunk_size4를 유지하면서

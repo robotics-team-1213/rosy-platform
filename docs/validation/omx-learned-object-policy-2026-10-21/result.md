@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/24회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/4회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/25회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/5회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
@@ -228,7 +228,34 @@ Lift·stable 0, incomplete 관측이며 전체 learned 물체 성공은 0/24회�
 회귀는 이전 코드에서 새 관측 선택·관측 미갱신 중단의 두 경우가 실패했고 수정 뒤
 관련 원격 104 PASS / 3 SKIP / 0 NEW였다. 437b01089b는 잠금·검사가 최초 대기
 예산을 소진한 경우 새 관측이어도 계산하지 않는 검사를 추가했다. 실제 native
-calibration과 물체 과제 결과는 별도로 확인해야 한다.
+calibration은 12회 / 0 goals / cleanup true로 통과했고 최종 입력 나이 최대
+330.291ms였다. 실제 물체 사전 과제는 102개 candidate 뒤 camera source stale로
+종료됐고 cleanup true다. 재capture 대기는 13 cycle에서 관측했고 선택 시 원 입력
+나이는 모두 124.026ms 이하였다. 마지막은 선택 시 107.018ms, 수치 추론 32.390ms,
+후속 lock 대기 62.903ms와 전체 검사 98.630ms였으며 제출 직전 310.753ms에
+submit 193.156ms가 더해졌다. 실패 위치는 submit 내부 final_submit의 첫 전체
+검사 뒤 camera source 검사다. Lift·stable 0, incomplete 관측, 전체 물체 성공
+0/25회이며 새 정식 20회는 시작하지 않았다. 입력 선택만으로 해결됐다고 주장하지 않는다.
+
+후속 3d26f72b7a는 미승인 후보를 반환하는 private wrapper의 추론 뒤 전체 guard를
+기존 owner의 최종 admission에 모은다. Wrapper의 lease identity·갱신 시각 비감소
+검사는 유지하고, capture·submit 진입·final_submit·durable intent 뒤·전송 후 전체
+검사 경로는 변경하지 않는다. 추론 중 파일 변경·철회가 생겨도 candidate가 반환될
+수 있으나 이는 권한 부여가 아니며 calibration 또는 최종 submit은 반드시 거절한다.
+기존 caller는 두 경로 중 하나로 이어진다. 계측 이름도 `final_guard` 대신 실제 남은
+검사인 `lease_context_check`로 바꿨다. 새 회귀는 이전 코드에서 후보 반환 시 파일
+검사로 실패했고 수정 뒤 tamper 후보의 최종 submit이 HOLD·무전송임을 확인한다.
+관련 원격 130 PASS / 3 SKIP / 0 NEW와 독립 계약 검토 뒤 별도 native calibration을
+시작했다. 이 중복 정리가 실제 시간 여유나 물체 성공을 확보했는지는 아직 미확인이다.
+
+추가 MODEL 진단 `omx-selected-command-starts-1`은 모델을 바꾸지 않고 validation
+Episode당 unique accepted command의 첫 post-acceptance frame 64개씩, 총 320개를
+비교했다. 원본 RGB의 MAE는 0.00567470rad, 현재 state 예측은 0.01115009rad,
+예측 이동량 중앙값은 0.02799722rad, 정답은 0.03062123rad였다. 예측 63/320개와
+정답 81/320개가 같은 frame의 state 대비 0.04rad를 넘었다. 이 수치도 실제 최종
+admission이나 물체 성공 판정이 아니다. 반복 label이 느린 진행의 원인이라는 가설을
+이 결과만으로 확정하지 않는다. 결과 SHA256:
+`12e809d1e30fccd7927b63b58652800392b8be65b3a07872e916f5c63891a40c`.
 
 최초 20회 archive와 extraction map 총 40개, 1,771,298,280bytes는 두 번째
 호스트에서도 전체 SHA·크기를 검증했다. 부분 전송·39/40 확인·빠진 map 1개 복구
