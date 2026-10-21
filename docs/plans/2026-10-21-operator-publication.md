@@ -6,7 +6,7 @@
 
 **Tech Stack:** Python, Pydantic, Fleet/FastAPI, Console ES modules, 기존 원격 pytest·GitHub CI.
 
-**Spec:** D-810·D-821·D-831 및 기존 `2026-10-21-operator-ai-field-acceptance.md`. 원본 구현은 로컬 `e83e3298293a4ecfaf5185ee7c05b94f7ab4302e`에 검증돼 있다. 원본 SHA의 모델 receipt를 새 게시 SHA에 재사용하지 않는다.
+**Spec:** D-810·D-821·D-831 및 기존 `2026-10-21-operator-ai-field-acceptance.md`. 원본 구현의 source commit은 로컬 `e83e3298293a4ecfaf5185ee7c05b94f7ab4302e`이며 여기서 검증돼 있다. 원본 SHA의 모델 receipt를 새 게시 SHA에 재사용하지 않는다.
 
 ## 제약과 검토점
 
