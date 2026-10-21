@@ -72,7 +72,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     events=[]
     # Leave joint intake turns between full policy checks on the shared owner lock.
     arm=RosArmCommandRuntime(node,config,joint_state_topic=names.joint_state_topic,
-        trajectory_action=names.trajectory_action,poll_period_s=.1,
+        trajectory_action=names.trajectory_action,poll_period_s=.2,
         on_goal_event=lambda event:events.append(asdict(event)))
     camera=SimPolicyCamera(node,arm.monotonic)
     executor=OwnerMultiThreadedExecutor(num_threads=4)
