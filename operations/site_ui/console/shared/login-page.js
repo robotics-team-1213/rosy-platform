@@ -11,7 +11,7 @@ const failures = new Map([
 const failure = failures.get(query.get('error'));
 if (back.startsWith('/api/fleet/auth/authorize?')) {
   document.title = 'Rosy Account — 로그인';
-  document.getElementById('login-title').textContent = 'Rosy Account 로그인';
+  document.getElementById('login-heading').textContent = 'Rosy Account 로그인';
 }
 if (failure) {
   document.getElementById('login-recovery').hidden = false;
