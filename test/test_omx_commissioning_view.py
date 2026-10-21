@@ -45,6 +45,36 @@ def test_dual_arm_configuration_rejects_ambiguous_or_noncommissioning_sources(en
         _viewer.parse_arm_topics(entries)
 
 
+def test_dual_arm_three_cameras_keep_each_wrist_independent_of_the_shared_top():
+    topics = {"top": "/top_camera/image_raw", "arm_a_wrist": "/arm_a_wrist_camera/image_raw",
+              "arm_b_wrist": "/arm_b_wrist_camera/image_raw"}
+    store = ObservationStore(cameras=topics)
+    for key, image in [("top", b"top"), ("arm_a_wrist", b"wrist-a"), ("arm_b_wrist", b"wrist-b")]:
+        store.put(key, 100, image, received=10)
+    assert store.image("arm_a_wrist", now=10.1, wall=100.1) == b"wrist-a"
+    assert store.image("arm_b_wrist", now=10.1, wall=100.1) == b"wrist-b"
+    store.put("top", 102, b"top-new", received=12)
+    store.put("arm_a_wrist", 102, b"a-new", received=12)
+    state = store.snapshot(now=12.1, wall=102.1)
+    assert state["cameras"]["top"]["fresh"]
+    assert state["cameras"]["arm_a_wrist"]["fresh"]
+    assert not state["cameras"]["arm_b_wrist"]["fresh"]
+    assert state["cameras"]["arm_b_wrist"]["sequence"] == 1
+    assert state["cameras"]["arm_b_wrist"]["topic"] == topics["arm_b_wrist"]
+    assert store.image("arm_b_wrist", now=12.1, wall=102.1) is None
+
+
+@pytest.mark.parametrize("entries", [
+    ["top=/top_camera/image_raw", "top=/arm_a_wrist_camera/image_raw"],
+    ["arm_a_wrist=/wrist_camera/image_raw", "arm_b_wrist=/wrist_camera/image_raw"],
+    ["joints=/camera/image_raw"], ["arms=/camera/image_raw"],
+    ["bad<label=/camera/image_raw"], ["top=/top_camera/command"],
+])
+def test_dual_arm_camera_configuration_rejects_aliases_and_invalid_sources(entries):
+    with pytest.raises(ValueError):
+        _viewer.parse_camera_topics(entries)
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="opt-in real Chromium")
 def test_dual_arm_browser_expires_one_arm_while_the_other_keeps_updating():
     from playwright.sync_api import expect, sync_playwright
