@@ -30,11 +30,11 @@ def infer_for_owner(engine, session, camera, *, timings=None, require_live=None)
         capture_times['initial_lock_wait']+=(locked-waiting)/1e6
         capture_times['camera_lock_wait']+=(captured-locked)/1e6
         capture_times['guarded_input_capture']+=(frozen-captured)/1e6
-        # Reserve time for computation and final admission before creating a candidate.
+        # Reserve 90% of freshness budget for computation and measured submit tails.
         # The actor can bound acquisition while original input age stays unchanged.
         if require_live is not None:require_live()
         elif frozen>=capture_deadline:raise TimeoutError('fresh inference capture margin unavailable')
-        if 0<=age<=budget_ns//4:break
+        if 0<=age<=budget_ns//10:break
         sleep(.01)  # Release both locks so real joint/camera intake can advance.
         capture_times['capture_retry_wait']+=(perf_counter_ns()-frozen)/1e6
     result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
@@ -49,6 +49,7 @@ def infer_for_owner(engine, session, camera, *, timings=None, require_live=None)
     if require_live is not None:require_live()
     if timings is not None:
         timings.update(capture_times,capture_selected_input_age=age/1e6,
+            capture_maximum_input_age=(budget_ns//10)/1e6,
             installed_binding=(checked-started)/1e6,
             numerical_inference=(inferred-frozen)/1e6,
             lease_context_check=(finished-inferred)/1e6)
