@@ -36,7 +36,7 @@ function choice(form,label,name,options){
 }
 function segmentReview(set,section){
   const detail=el('details',null,'omx-review'),summary=el('summary','파지 구간 검수');detail.append(summary);
-  const status=el('p','원본을 선택하고 프레임 확인을 누르세요.','quiet'),saveStatus=el('ui-status'),list=el('ol',null,'omx-segments'),form=el('form',null,'omx-editor');
+  const status=el('p','원본을 선택하고 프레임 확인을 누르세요.','quiet'),saveStatus=el('ui-status'),selectionStatus=el('p',null,'quiet'),list=el('ol',null,'omx-segments'),form=el('form',null,'omx-editor');
   status.setAttribute('role','status');saveStatus.setAttribute('role','status');
   let saved=set.segment_review||{version:0,document:null},rows=structuredClone(saved.document?.segments||[]);
   let saving=false,draftDirty=false,saveError='';
@@ -99,6 +99,8 @@ function segmentReview(set,section){
     download.disabled=saving||dirty||!saved.document;download.reason=download.disabled?'구간 변경을 저장한 뒤 내려받을 수 있습니다.':'';
     saveStatus.setAttribute('state',saveError?'error':saving?'pending':dirty||draftDirty?'warning':'ready');
     saveStatus.textContent=saveError||(saving?'저장 중입니다. 추가 편집은 계속할 수 있습니다.':`${base} ${dirty?'미저장 구간 변경이 있습니다.':`구간 ${rows.length}개.`} ${draftDirty?'입력 중인 내용은 구간 추가를 눌러야 저장 대상이 됩니다.':''}`);
+    const counts=Object.fromEntries(Object.keys(SPLIT).map(key=>[key,(saved.document?.segments||[]).filter(row=>row.split===key).length]));
+    selectionStatus.textContent=`저장된 구간 선택: ${Object.entries(counts).map(([key,count])=>`${SPLIT[key]} ${count}`).join(' · ')}. ${counts.train&&counts.eval?'독립 분할·원본 검증은 모델 PC 내보내기에서 수행합니다.':'학습 데이터 내보내기에는 독립 학습·평가 구간이 더 필요합니다.'}`;
   };
   form.onsubmit=event=>{
     event.preventDefault();const source=set.episodes.find(e=>String(e.episode_index)===episode.value),values=new FormData(form);
@@ -121,7 +123,7 @@ function segmentReview(set,section){
     const link=el('a');link.href=url;link.download=`omx-segments-${set.id}-v${saved.version}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const actions=el('ui-actions');actions.append(save,download);
-  detail.append(form,el('h4','3. 구간 저장·내려받기'),saveStatus,list,actions,el('p','선택 JSON은 검수 기록입니다. 실제 학습 데이터 내보내기는 모델 PC에서 수행하며 독립 학습·평가 분할이 필요합니다. 같은 원본·세션·cycle은 한 분할에만 둡니다. 원본 전체 시연의 결과는 바뀌지 않습니다.','quiet'));
+  detail.append(form,el('h4','3. 구간 저장·내려받기'),saveStatus,selectionStatus,list,actions,el('p','선택 JSON은 검수 기록입니다. 실제 학습 데이터 내보내기는 모델 PC에서 수행합니다. 같은 원본·세션·cycle은 한 분할에만 둡니다. 원본 전체 시연의 결과는 바뀌지 않습니다.','quiet'));
   show();section.append(detail);
 }
 function render(set){

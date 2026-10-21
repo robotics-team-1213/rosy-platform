@@ -112,6 +112,35 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 page.get_by_text('파지 구간 검수',exact=True).click()
                 playwright.expect(page.locator('.omx-review')).to_contain_text('pending cube')
                 playwright.expect(page.locator('.omx-review')).to_contain_text('second cube')
+                # An independently saved revision must cause a visible conflict without discarding edits.
+                listing=page.request.get(f'http://127.0.0.1:{server.server_port}/api/learning/omx').json()['sets'][0]
+                external=page.request.post(f'http://127.0.0.1:{server.server_port}/api/learning/omx/segments',
+                    headers={'X-Pinky-Token':page.request.get(f'http://127.0.0.1:{server.server_port}/api/workspace').json()['token']},data=dict(id=listing['id'],version=3,
+                    segments=listing['segment_review']['document']['segments']))
+                assert external.ok
+                page.get_by_role('button',name='삭제',exact=True).first.click()
+                page.get_by_role('button',name='검수 저장',exact=True).click()
+                playwright.expect(page.locator('.omx-review')).to_contain_text('저장하지 못했습니다')
+                playwright.expect(page.locator('.omx-review')).to_contain_text('pending cube')
+                page.get_by_role('button',name='다시 확인',exact=True).click()
+                page.get_by_role('button',name='편집 버리고 다시 확인',exact=True).click()
+                page.get_by_text('파지 구간 검수',exact=True).click()
+                playwright.expect(page.locator('.omx-review')).to_contain_text('검수 4 저장됨')
+                # A refresh snapshot fetched before a newer save may not detach the live editor.
+                page.get_by_role('button',name='삭제',exact=True).first.click()
+                stale=[]
+                page.route('**/api/learning/omx',lambda route:stale.append((route,route.fetch())))
+                page.get_by_role('button',name='다시 확인',exact=True).click()
+                with page.expect_request('**/api/learning/omx'):
+                    page.get_by_role('button',name='편집 버리고 다시 확인',exact=True).click()
+                assert len(stale) == 1
+                page.get_by_role('button',name='검수 저장',exact=True).click()
+                playwright.expect(page.locator('.omx-review')).to_contain_text('검수 5 저장됨')
+                route,response=stale.pop();route.fulfill(response=response)
+                playwright.expect(page.locator('#omx-status')).to_contain_text('기존 화면을 보존했습니다')
+                playwright.expect(page.locator('.omx-review')).to_contain_text('검수 5 저장됨')
+                playwright.expect(page.locator('.omx-review')).not_to_contain_text('second cube')
+                page.unroute('**/api/learning/omx')
                 assert (root/'decisions.json').read_bytes() == before
                 assert not errors
             finally:
