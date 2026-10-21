@@ -196,3 +196,9 @@
 - 변경: Rosy Account 단일 로그인(D-757) 뒤 남은 학습 쪽 scrypt 해시, `login()`과 시도 제한, `hash-password` 명령, HF `login_subject`, 호출 없는 `link_subject`/`unlink_subject`, OAuth `login` 목적을 지웠다. HF OAuth는 `link`·`manage`만 남고, 검증된 HF 신원은 여전히 한 사람에게만 묶인다. 시험은 비밀번호 대신 `sign_in` 도우미로 세션을 만든다. 연결 해제 확인은 브라우저 `confirm()` 대신 공통 `confirmIrreversible` 대화상자다(4ce4d054c1).
 - 증거: 원격 pytest는 착지 기록에 남긴다.
 - gate 변화: 없음.
+
+## 2026-10-22 · aa784c548f · fix: Rosy Account 로그인 실패의 재시도
+
+- 변경: 잘못되거나 만료된 callback과 인증 연결 장애는 흐름 쿠키를 지우고 계정 복구 화면으로 보낸다. callback 오류·프로젝트 권한 거부 뒤 자동 재로그인 반복을 막고 Rosy Account 로그인·상태 재확인 동작을 제공한다. 연속 장애에서도 재시도 버튼을 유지하며 일시적 장애로 기존 사용자나 입력을 로그아웃시키지 않는다.
+- 증거: f2d7ea9d21의 관련 원격 API 회귀 49개와 로그인·계정 Chromium 7개 통과. 반복 장애 버튼 소실은 별도 Chromium red로 재현 후 수정했다. 독립 검토의 해당 지적은 해소됐으며 최종 main 병합 후 실행은 착지 기록에 둔다.
+- gate 변화: 실제 사용자 권한 부여·모델 학습·검수 원본 변경·운영 배포는 수행하지 않았다.

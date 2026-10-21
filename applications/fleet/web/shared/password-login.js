@@ -43,7 +43,7 @@ function failureText(error) {
   return '로그인 결과를 확인할 수 없습니다. 관제 PC 연결을 확인한 뒤 다시 확인하세요.';
 }
 
-export function createPasswordLogin(host, {onChange = () => {}, standalone = false} = {}) {
+export function createPasswordLogin(host, {onChange = () => {}, standalone = false, autoContinue = true} = {}) {
   host.innerHTML = standalone ? FORM : WHO;
   const part = name => host.querySelector(`[data-login="${name}"]`);
   let busy = false, cookie = false, cookiePrincipal = null, cookieRole = null, changing = false;
@@ -79,7 +79,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     button.textContent = cookie ? '로그아웃' : '이 탭 접속 해제';
     actionIcon(button, 'logout');
   };
-  function verified(session) {
+  function verified(session, notify = true) {
     if (session.via !== 'cookie' || !session.principal_id || !session.role) throw new Error('Session not verified');
     if (session.password_change_required === true) {
       if (!changing) {
@@ -90,7 +90,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     if (session.account_id) {
       try { localStorage.setItem('rosy.fleet.account.identity', `${session.account_id}:${session.session_family}:${session.revision}`); } catch {}
     }
-    onChange(true);
+    if (notify) onChange(true);
     return true;
   }
 
@@ -124,7 +124,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       if (profile) profile.hidden = !cookie || session.password_change_required === true;
       if (accounts) accounts.hidden = !canViewAccountSetup(session);
       if (standalone) {
-        if (cookie) return verified(session);
+        if (cookie) return verified(session, autoContinue);
       } else {
         if (cookie && session.password_change_required === true) {
           cookie = false; host.hidden = true;

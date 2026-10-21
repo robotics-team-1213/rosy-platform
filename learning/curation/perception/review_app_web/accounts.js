@@ -4,6 +4,11 @@ import {taskRow} from '/common/workspace.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false;
+const loginFailures = new Map([
+  ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
+  ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
+]);
+let loginFailure = loginFailures.get(new URLSearchParams(location.search).get('error'));
 const states = {queued:'대기',running:'가져오는 중',completed:'가져옴 · 검수 대기',failed:'실패',
   interrupted:'중단됨',cancelled:'취소됨',rights_hold:'이용 권한 확인 필요',blocked:'접근 차단'};
 const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 공간을 확보한 뒤 재시도하세요.',
@@ -48,21 +53,32 @@ async function perform(action) {
   if(pending)return;
   pending=true; error('');
   $('accounts-main').setAttribute('aria-busy','true');
-  try { await action(); } catch(e) { error(e.message); }
+  try { await action(); } catch(e) {
+    if($('account-status').getAttribute('state')==='pending') {
+      status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
+      $('account-retry').hidden=false;
+      if(active) error(e.message);
+    } else error(e.message);
+  }
   finally { pending=false; $('accounts-main').setAttribute('aria-busy','false'); }
 }
 async function refresh() {
+  $('account-retry').hidden=true;
+  status('로그인 상태를 확인하는 중입니다.', 'pending');
   const options=await api('/api/accounts/options');
   if(!options.enabled) {
     signedOut();
     status('Rosy Account 연결이 설정되지 않았습니다. 관리자에게 이 앱의 Rosy Account 등록을 요청하세요.', 'unavailable');
-    $('login-panel').hidden=$('signed-in').hidden=true; active=false; return;
+    $('login-panel').hidden=$('signed-in').hidden=true; $('account-retry').hidden=false; active=false; return;
+  }
+  if(loginFailure) {
+    signedOut(); status(loginFailure[1],loginFailure[0]); $('account-retry').hidden=false; return;
   }
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status === 403) {
-      // Signed in to Rosy Account without this project's grant; another login would loop.
-      signedOut(); $('login-panel').hidden=true; status(e.message, 'unavailable'); return;
+      // A missing project grant must not automatically re-enter Account login.
+      signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
     }
     if (e.status !== 401) throw e;
     if(options.rosy_account) {
@@ -190,5 +206,10 @@ $('repo-delete-form').addEventListener('submit',event=>{event.preventDefault();p
   await loadRepos();
 });});
 $('reload').addEventListener('click',()=>perform(refresh));
+$('account-retry').addEventListener('click',()=>perform(async()=>{
+  loginFailure=null;
+  const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
+  await refresh();
+}));
 setInterval(()=>{if(active&&!pending&&!document.hidden)perform(jobs);},5000);
 perform(refresh);
