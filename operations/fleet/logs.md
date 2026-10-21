@@ -4218,3 +4218,9 @@
 - 변경: assistant 스타일을 기존 페이지별 시트 목록에 등록하고 확인 호출의 총수 4개를 셸 1·목표 2·읽기 갱신 1의 실제 소유 파일에 고정했다. Node의 상태 폴링·현장 경로 검사도 분리된 팩토리와 셸 조립을 함께 확인한다.
 - 증거: source commit a19cf37d7989 원격 Fleet 포함 영향 검사에서 9실패·6274통과·346건너뜀을 확인했다. 앞선 6개 소스 검사 수정은 source commit bfc18d82bbaf의 집중101건 통과이며, 이번 추가 3개 실패의 수정도 커밋 후 검증한다.
 - gate 변화: 없음. 확인 횟수·동작·안전 조건을 바꾸지 않았다.
+
+## 2026-10-22 · uncommitted · Fleet-native 작업 셀 관측 수신 (D-837)
+
+- Change: register private arm/camera sources, authenticate bounded arm captures before reading request bodies, reject replay/stale captures, and expose sanitized latest-only viewer snapshots. Existing Vision preview leases include registered cameras. Fleet stays ROS-free and grants no command authority.
+- Evidence: e03b746015 remote checks: 182 passed, one size-ratchet failure after configuration extraction. c527bca693 updates the measured package row; all 40 architecture checks then passed. These are API/configuration tests, not live producer or physical acceptance.
+- Gate: unchanged. Fleet-PC producer deployment and real Cell observations remain pending.
