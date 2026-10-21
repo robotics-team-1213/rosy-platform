@@ -6,7 +6,7 @@
 <div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="작업 목록">목록</a><a class="ui-rail-item" data-action-icon="box" href="/" aria-label="객체 검수">객체</a><a class="ui-rail-item" data-action-icon="pixels" href="/pixels" aria-label="픽셀 검수" aria-current="page">픽셀</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="image" href="/learning/camera" aria-label="카메라 맞춤">카메라</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/omx" aria-label="모방학습">모방</a></nav></div>
 <div class="ui-app-main"><div class="ui-pathbar"><h1>픽셀 검수</h1></div>
 <main class="learning-main" id="pixel-main" tabindex="-1">
-  <div class="pixel-heading"><h2 id="pixel-title">사진 불러오는 중</h2><ui-button id="pixel-reload" data-action-icon="refresh" kind="quiet" aria-label="최신 픽셀 검수 내용 불러오기">새로고침</ui-button></div><ui-status id="pixel-workspace-mode" role="status"></ui-status>
+  <h2 id="pixel-title">사진 불러오는 중</h2><ui-status id="pixel-workspace-mode" role="status"></ui-status>
   <ui-status id="pixel-status" state="pending">객체 승인과 픽셀 승인은 별개입니다.</ui-status><ui-status id="pixel-decision" state="ready" role="status" hidden></ui-status><ui-status id="pixel-error" state="error" role="alert" hidden></ui-status>
   <ui-empty id="pixel-empty" hidden><h3>이 상태의 픽셀 검수가 없습니다</h3><ui-button id="pixel-all" kind="quiet">전체 보기</ui-button></ui-empty>
   <div id="pixel-content">
@@ -63,4 +63,5 @@
     <nav id="pixel-frames" class="pixel-frame-strip" aria-label="사진 썸네일 선택"></nav>
     <section id="pixel-preparation" class="preparation"><h3>현재 결정으로 학습 자료 준비</h3><p>객체·픽셀 승인 revision과 명시 제외를 동결합니다. 소비자는 최신 결정과 다시 대조해야 합니다.</p><ui-button id="pixel-export" data-action-icon="download" kind="primary">승인 자료 준비</ui-button><p id="pixel-export-result" role="status"></p><details><summary>내보내기와 최신 결정 계약</summary><pre id="pixel-export-details"></pre></details></section>
   </div>
+  <ui-button id="pixel-reload" data-action-icon="refresh" kind="quiet" aria-label="최신 픽셀 검수 내용 불러오기">새로고침</ui-button>
 </main></div></div></ui-shell></body></html>

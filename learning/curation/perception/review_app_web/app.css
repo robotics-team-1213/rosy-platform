@@ -224,7 +224,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 #pixel-main { position: relative; }
 #pixel-title { margin-bottom: 0; }
 #pixel-workspace-mode { font-size: var(--text-label); margin-bottom: var(--space-1); }
-.pixel-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
 #pixel-reload { display: flex; width: fit-content; }
 #frame-progress { margin-top: 0; }
 #object-workspace-mode { font-size: var(--text-label); }
