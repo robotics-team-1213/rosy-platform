@@ -2,12 +2,14 @@
 from hashlib import sha256
 import importlib.util
 import json
+import os
 from pathlib import Path
 import ssl
 import sys
 import threading
 from types import SimpleNamespace
 from urllib.request import HTTPRedirectHandler, HTTPSHandler
+from urllib.error import HTTPError
 
 import pytest
 
@@ -118,6 +120,89 @@ def test_http_arm_request_uses_real_api_auth_tls_and_refuses_redirects(monkeypat
     assert redirect.redirect_request(request, None, 302, "redirect", {}, "https://other.example") is None
 
 
+def test_lost_acceptance_recovers_only_after_conflict_and_new_capture_without_acknowledging_409(monkeypatch):
+    source = bridge.LatestSource(wall=lambda: 100, monotonic=lambda: 10)
+    source.put(99.5, {"joint1": 0.25})
+    sent = []
+
+    def post(url, source_id, token, observation, **kwargs):
+        sent.append(observation)
+        if len(sent) == 1:
+            raise OSError("accepted but response lost")
+        if len(sent) == 2:
+            raise HTTPError(url, 409, "conflict", {}, None)
+
+    monkeypatch.setattr(bridge, "post_arm", post)
+    sender = bridge.ArmSender("https://fleet.example", "arm_feedback", "arm-secret", context=ssl.create_default_context())
+    with pytest.raises(OSError): sender.send(source.latest())
+    with pytest.raises(HTTPError): sender.send(source.latest())
+    with pytest.raises(ValueError): sender.send(source.latest())
+    assert len(sent) == 2 and sender.sequence == 0
+    source.put(100, {"joint1": 0.5})
+    sender.send(source.latest())
+    assert sent[-1].epoch != sent[0].epoch and sent[-1].sequence == 1
+    assert sent[-1].captured_at > sent[0].captured_at
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_rejected_credentials_do_not_rotate_producer_epoch(monkeypatch, status):
+    source = bridge.LatestSource(wall=lambda: 100, monotonic=lambda: 10)
+    source.put(99.5, {"joint1": 0.25})
+    sent = []
+    def post(url, source_id, token, observation, **kwargs):
+        sent.append(observation)
+        raise HTTPError(url, status, "unauthorized", {}, None)
+    monkeypatch.setattr(bridge, "post_arm", post)
+    sender = bridge.ArmSender("https://fleet.example", "arm_feedback", "arm-secret", context=ssl.create_default_context())
+    with pytest.raises(HTTPError): sender.send(source.latest())
+    source.put(100, {"joint1": 0.5})
+    with pytest.raises(HTTPError): sender.send(source.latest())
+    assert sent[0].epoch == sent[1].epoch and sent[0].sequence == sent[1].sequence == 1
+
+
+def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypatch):
+    sent, opened, timeouts = [], [], []
+    class Connection:
+        socket = SimpleNamespace(settimeout=lambda seconds: timeouts.append(seconds))
+        def send(self, value): sent.append(value)
+        def recv(self, timeout): raise TimeoutError()
+        def close(self): pass
+    def connect(url, **kwargs):
+        opened.append((url, kwargs))
+        return Connection()
+    monkeypatch.setitem(sys.modules, "websockets.sync.client", SimpleNamespace(connect=connect))
+    packet = bridge.camera_packet
+    monkeypatch.setattr(bridge, "camera_packet", lambda sample: packet(sample, wall=100.1, monotonic=10.1))
+    source = bridge.LatestSource(wall=lambda: 100, monotonic=lambda: 10)
+    source.put(100, (b"jpeg", 640, 480))
+    context = ssl.create_default_context()
+    sender = bridge.CameraSender("wss://vision.example", "top", "top-secret", context=context)
+    sender.send(source.latest()); sender.send(source.latest()); sender.close()
+    assert len(opened) == 1 and opened[0][0] == "wss://vision.example" + protocol.WS_PATH
+    assert opened[0][1]["ssl"] is context and opened[0][1]["max_queue"] == 1
+    assert opened[0][1]["additional_headers"] == {"Authorization": "Bearer top-secret"}
+    assert timeouts == [2]
+    protocol.validate_hello(json.loads(sent[0]))
+    assert protocol.parse_header(sent[1]).width == 640 and sent[1][protocol.HEADER_SIZE:] == b"jpeg"
+
+
+def test_joint_callback_conversion_rejects_aliases_nonfinite_and_wrong_identity():
+    message = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=100, nanosec=0)),
+                              name=["joint1"], position=[0.25])
+    assert bridge.joint_values(message, ["joint1"]) == {"joint1": 0.25}
+    for names, positions in ((["other"], [0.25]), (["joint1", "joint1"], [0.25, 0.5]),
+                              (["joint1"], [float("nan")]), (["joint1"], [True])):
+        message.name, message.position = names, positions
+        with pytest.raises(ValueError): bridge.joint_values(message, ["joint1"])
+
+
+@pytest.mark.parametrize("changed", [{"encoding": "mono8"}, {"width": 1280}, {"step": 1919}, {"data": b"short"}])
+def test_camera_callback_rejects_unexpected_layout_before_encoding(changed):
+    message = SimpleNamespace(**{"encoding": "bgr8", "width": 640, "height": 480, "step": 1920,
+                                  "data": b"\0" * (1920 * 480), **changed})
+    with pytest.raises(ValueError): bridge.encode_image(message, None, None)
+
+
 def test_camera_packet_uses_canonical_wire_header_and_includes_source_and_queue_age():
     source = bridge.LatestSource(wall=lambda: 100, monotonic=lambda: 10)
     source.put(99.8, (b"jpeg", 640, 480))
@@ -166,3 +251,51 @@ def test_blocked_failed_source_keeps_only_latest_and_does_not_block_other_source
         stop.set(); release.set()
         for thread in threads: thread.join(timeout=3)
     assert not any(thread.is_alive() for thread in threads)
+
+
+def test_native_main_subscribes_only_to_configured_sources_with_localhost_discovery(manifest, tmp_path, monkeypatch):
+    path = tmp_path / "manifest.json"
+    path.write_text(manifest.model_dump_json(by_alias=True), encoding="utf-8")
+    for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE", "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret", "RMW_IMPLEMENTATION": "rmw_fastrtps_cpp",
+                       "ROS_STATIC_PEERS": "", "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST"}.items():
+        monkeypatch.setenv(key, value)
+    subscriptions, delivered, lifecycle = [], [], []
+    done = threading.Event()
+
+    class Sender:
+        def __init__(self, url, source, token, **kwargs): self.source = source
+        def send(self, sample):
+            delivered.append((self.source, sample.value))
+            if len(delivered) == 2: done.set()
+        def close(self): pass
+
+    class Node:
+        def create_subscription(self, kind, topic, callback, qos): subscriptions.append((topic, callback))
+        def destroy_node(self): lifecycle.append("destroyed")
+
+    def spin(node):
+        stamp = bridge.time.time()
+        header = SimpleNamespace(stamp=SimpleNamespace(sec=int(stamp), nanosec=int((stamp % 1) * 1e9)))
+        for topic, callback in subscriptions:
+            message = SimpleNamespace(header=header, name=["joint1"], position=[0.25])
+            callback(message)
+        assert done.wait(3)
+
+    monkeypatch.setattr(bridge, "ArmSender", Sender)
+    monkeypatch.setattr(bridge, "CameraSender", Sender)
+    monkeypatch.setattr(bridge, "encode_image", lambda msg, cv, np: (b"jpeg", 640, 480))
+    monkeypatch.setitem(sys.modules, "cv2", SimpleNamespace(error=RuntimeError))
+    monkeypatch.setitem(sys.modules, "numpy", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(
+        init=lambda **kwargs: lifecycle.append(kwargs), create_node=lambda name: Node(), spin=spin,
+        shutdown=lambda: lifecycle.append("shutdown")))
+    monkeypatch.setitem(sys.modules, "rclpy.qos", SimpleNamespace(qos_profile_sensor_data=object()))
+    monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(Image=object(), JointState=object()))
+    bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
+                 "--vision-url", "wss://vision.example", "--domain-id", "13"])
+    assert {topic for topic, _ in subscriptions} == {"/omx_commissioning/arm_a/joint_states", "/top/image_raw"}
+    assert {source for source, _ in delivered} == {"arm_feedback", "top"}
+    assert lifecycle == [{"args": [], "domain_id": 13}, "destroyed", "shutdown"]
+    assert os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST" and os.environ["ROS_STATIC_PEERS"] == ""
