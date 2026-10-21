@@ -58,6 +58,7 @@ async function perform(action) {
 async function refresh() {
   status('로그인 상태를 확인하는 중입니다.','pending');
   $('account-retry').hidden=true;
+  status('로그인 상태를 확인하는 중입니다.', 'pending');
   const options=await api('/api/accounts/options');
   $('login-form').hidden=!!options.rosy_account;
   $('account-login').hidden=!options.rosy_account;
@@ -78,7 +79,7 @@ async function refresh() {
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status === 403) {
-      // Signed in to Rosy Account without this project's grant; another login would loop.
+      // A missing project grant must not automatically re-enter Account login.
       signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
     }
     if(e.status!==401) throw e;

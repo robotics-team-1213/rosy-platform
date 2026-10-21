@@ -114,3 +114,18 @@ def test_invalid_browser_request_does_not_preserve_untrusted_return(authority):
     assert location.path == '/console/login'
     assert parse_qs(location.query) == {'error': ['invalid_request'], 'return': ['/console']}
     assert 'evil.test' not in response.headers['location']
+
+
+def test_browser_storage_outage_recovers_without_leaking_and_api_stays_503(authority, monkeypatch):
+    client = client_for(authority)
+    client.cookies.set(COOKIE, 'test-cookie')
+    def fail(*args):
+        raise sqlite3.OperationalError('private database secret')
+    monkeypatch.setattr(authority[0], 'authorize', fail)
+    target = '/api/fleet/auth/authorize?' + query()
+    response = client.get(target, headers={'Accept': 'text/html'})
+    assert response.status_code == 303
+    assert parse_qs(urlsplit(response.headers['location']).query) == {
+        'error': ['service_unavailable'], 'return': [target]}
+    assert 'private' not in response.headers['location'] and 'secret' not in response.text
+    assert client.get(target).status_code == 503

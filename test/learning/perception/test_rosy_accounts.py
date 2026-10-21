@@ -6,7 +6,8 @@ from test_learning_accounts import accounts
 
 
 @pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
-                                              ('offline', 'account_unavailable')])
+                                              ('offline', 'account_unavailable'),
+                                              ('malformed', 'account_callback_failed')])
 def test_callback_failure_returns_to_account_recovery_without_credentials(failure, expected):
     from core_common.protocol.account_client import AccountDenied, AccountUnavailable
     from learning_collaboration import Collaboration
@@ -19,6 +20,8 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     sent = []
     handler = SimpleNamespace(path='/api/account/callback?state=s&code=secret', headers={},
                               extra_headers=[], send=lambda body, status: sent.append((body, status)))
+    if failure == 'malformed':
+        handler.path = '/api/account/callback?state=s'
     assert collaboration.get(handler, '/api/account/callback', 'token')
     assert sent == [(b'', 303)]
     assert ('Location', '/accounts?error=' + expected) in handler.extra_headers
