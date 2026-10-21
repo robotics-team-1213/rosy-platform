@@ -94,11 +94,11 @@ def test_collapsed_seats_do_not_stretch_or_overflow():
 
 
 def test_review_documents_share_the_app_bar_and_the_screen_rail():
-    """D-741 3, 6: app and theme in the app bar, the four screens in the shared rail, the heading in the path row."""
+    """D-741 3, 6 and D-833: app/theme in the bar, five screens in the rail, heading in the path row."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
     rails = set()
     for name, here in [('learning.html', '/learning'), ('index.html', '/'),
-                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog')]:
+                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog'), ('omx.html', '/learning/omx')]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
@@ -113,12 +113,13 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
                            r'( aria-current="page")?>([^<]+)</a>', rail)
         assert [(icon, href, full, short) for icon, href, full, _, short in items] == [
             ('list', '/learning', '작업 목록', '목록'), ('box', '/', '객체 검수', '객체'),
-            ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료')]
+            ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료'),
+            ('robot', '/learning/omx', '모방학습', '모방')]
         assert [href for _, href, _, current, _ in items if current] == [here]
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
         assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
         assert html.count('<h1') == 1
         rails.add(re.sub(r' aria-current="page"', '', rail))
-    assert len(rails) == 1, 'the rail is the same in the four documents'
+    assert len(rails) == 1, 'the rail is the same in all five documents'
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'
