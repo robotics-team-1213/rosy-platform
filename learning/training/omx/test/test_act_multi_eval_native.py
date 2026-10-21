@@ -13,7 +13,7 @@ sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx','learning/curation/o
 
 @pytest.mark.parametrize('representation,queue_steps,noise', [('absolute',1,0.),
     ('joint_delta_from_chunk_source_v1',2,0.),('joint_delta_from_chunk_source_v1',1,.02),
-    ('joint_delta_tanh_from_chunk_source_v1',1,.02)])
+    ('joint_delta_tanh_from_chunk_source_v1',1,.02),('joint_delta_tanh_from_chunk_source_v1',1,0.)])
 def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,monkeypatch,representation,queue_steps,noise):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
