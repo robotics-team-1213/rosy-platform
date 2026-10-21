@@ -24,7 +24,7 @@ def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback,
     bind_sim_runtime(session, runtime)
     if traced:
         from sim_policy_runtime import trace_sim_admission
-        trace=trace_sim_admission(session,journal,runtime)
+        admission_trace=trace_sim_admission(session,journal,runtime)
     message = joint_message(runtime)
     message.position = [readback, 0.]
     runtime._on_joint_state(message)
@@ -53,14 +53,14 @@ def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback,
     assert checked and checked[-1] is accepted
     assert len(client.commands) == int(accepted)
     if traced:
-        assert trace and all(row['ended_owner_ns']>=row['started_owner_ns'] for row in trace)
-        assert all(row['thread_id']>0 for row in trace)
-        assert any(row['stage']=='guard' for row in trace)
-        assert any(row['stage']=='journal_prepare' for row in trace)
+        assert admission_trace and all(row['ended_owner_ns']>=row['started_owner_ns'] for row in admission_trace)
+        assert all(row['thread_id']>0 for row in admission_trace)
+        assert any(row['stage']=='guard' for row in admission_trace)
+        assert any(row['stage']=='journal_prepare' for row in admission_trace)
         if accepted:
-            assert any(row['stage']=='native_send' and row['outcome']=='returned' for row in trace)
+            assert any(row['stage']=='native_send' and row['outcome']=='returned' for row in admission_trace)
         else:
-            assert any(row['outcome']=='raised' for row in trace)
+            assert any(row['outcome']=='raised' for row in admission_trace)
 
 
 def test_existing_binding_cannot_be_replaced(tmp_path):
