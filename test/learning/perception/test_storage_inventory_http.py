@@ -57,6 +57,7 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 session, _ = accounts.login('bob', 'bob-password')
                 page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
                 page.goto(url + '/learning', wait_until='networkidle')
+                page.locator('#storage-panel summary').click()
                 expect = playwright.expect
                 expect(page.locator('#storage-roots')).to_contain_text('Incoming media')
                 expect(page.locator('#storage-roots')).to_contain_text('파일 1개')

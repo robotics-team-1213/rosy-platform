@@ -25,6 +25,7 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web
 import review_versions
+import learning_pipeline
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
 from learning_control import Control, ControlConflict
@@ -208,7 +209,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/control':
                     return self.send(control.status() if control else {'available': False})
                 if path == '/api/learning':
-                    frames = store.list_frames()
+                    captured = review_evidence.snapshot(store)
+                    current, frames = captured['authority'], captured['frames']
                     pixel_reviews = [review_masks.get(store, f['index']) for f in frames
                                      if f['status'] != 'excluded']
                     pixel_statuses = [row['status'] for row in pixel_reviews]
@@ -225,7 +227,6 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     latest = next(iter(store.exports()), None)
                     preparation = None
                     if latest:
-                        current = review_evidence.decisions(store)
                         authority = latest.get('authority', {})
                         preparation = {'object_frames': latest['exported_frames'],
                                        'pixel_frames': latest.get('pixel_approved_frames', 0),
@@ -233,11 +234,19 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                        authority.get('workspace_id') == current['workspace_id'] and
                                        authority.get('generation') == current['generation'] and
                                        authority.get('decision_sha256') == current['decision_sha256']}
+                    control_status = control.status() if control else None
+                    counts = {state: sum(f['status'] == state for f in frames)
+                              for state in ('approved', 'pending', 'excluded')}
+                    pixel_counts = {state: sum(row['mask_decision'] == state and not row['frame_excluded']
+                                               for row in current['frames'])
+                                    for state in ('approved', 'pending', 'excluded')}
+                    pipeline = learning_pipeline.project(current, counts=counts, pixel_counts=pixel_counts,
+                                                         preparation=preparation, control=control_status)
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
+                                      'pipeline': pipeline,
                                       'preparation': preparation,
-                                      'control': control.status() if control else None,
-                                      'counts': {state: sum(f['status'] == state for f in frames)
-                                                 for state in ('approved', 'pending', 'excluded')},
+                                      'control': control_status,
+                                      'counts': counts,
                                       'object_drafts': len(object_draft_indices),
                                       'source_video_unverified': sum(
                                           f['status'] != 'excluded'
@@ -246,9 +255,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                           for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
                                       'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
-                                      'pixel_counts': {state: pixel_statuses.count(state)
-                                                       for state in ('approved', 'pending', 'excluded')}
-                                                      | {'drafted': len(pixel_draft_indices),
+                                      'pixel_counts': pixel_counts | {'drafted': len(pixel_draft_indices),
                                                          'candidates': len(pixel_candidate_indices),
                                                          'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
                 if path.startswith('/api/learning/images/'):
