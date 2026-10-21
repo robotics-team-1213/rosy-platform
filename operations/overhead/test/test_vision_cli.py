@@ -82,3 +82,15 @@ def test_preview_secret_check_tolerates_paired_sources_without_a_phone_token(tmp
 def test_vision_track_flag_is_off_by_default():
     assert parse_args(["vision", "--config", "site-cameras.yaml"]).track is False
     assert parse_args(["vision", "--config", "site-cameras.yaml", "--track"]).track is True
+
+
+def test_vision_accepts_workcell_observations_without_calibrated_config():
+    args = parse_args(["vision", "--workcell-observations", "workcell-observations.yaml"])
+    assert args.config is None
+    assert args.workcell_observations.name == "workcell-observations.yaml"
+
+
+def test_vision_requires_at_least_one_source_configuration():
+    with pytest.raises(SystemExit) as caught:
+        parse_args(["vision"])
+    assert caught.value.code == 2

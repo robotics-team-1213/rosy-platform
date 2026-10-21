@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import AsyncExitStack
+from hashlib import sha256
 import ipaddress
 import json
 import logging
@@ -24,7 +25,10 @@ import time
 from pathlib import Path
 from typing import Sequence
 
+import yaml
+
 from core_common.protocol.discovery_txt import HOSTNAME
+from core_common.protocol.workcell_observations import WorkcellObservationManifest
 from rosy_vision import protocol
 from rosy_vision.field_calib import FieldCalibrator
 from rosy_vision.ingest import STATUS_INTERVAL_S, IngestServer
@@ -257,6 +261,30 @@ async def _run_receive(args: argparse.Namespace) -> int:
         await ws_server.wait_closed()
 
 
+def _workcell_preview_tokens(path: Path, configured_sources: set[str], *, environ
+                            ) -> tuple[dict[str, str], set[bytes]]:
+    try:
+        manifest = WorkcellObservationManifest.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError):
+        raise ValueError("cannot load strict workcell observation manifest") from None
+    tokens = {}
+    credential_digests = {bytes.fromhex(source.credential_sha256) for cell in manifest.workcells
+                          for source in [*cell.arms, *cell.cameras]}
+    for cell in manifest.workcells:
+        for camera in cell.cameras:
+            if camera.source_id in configured_sources:
+                raise ValueError("workcell preview source collides with a calibrated source")
+            token = environ.get(camera.token_env)
+            if not token:
+                raise ValueError(f"camera token environment variable {camera.token_env} is required")
+            if sha256(token.encode("utf-8")).hexdigest() != camera.credential_sha256:
+                raise ValueError(f"camera token does not match credential_sha256 for {camera.source_id}")
+            if token in tokens.values():
+                raise ValueError("workcell preview cameras must have unique tokens")
+            tokens[camera.source_id] = token
+    return tokens, credential_digests
+
+
 def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
     """Build the ingest server and the D-341 sync settings, refusing unsafe secret reuse.
 
@@ -265,6 +293,16 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
     """
     known_tokens = {config.sighting_token for config in configs}
     known_tokens |= {config.phone_token for config in configs if config.phone_token is not None}
+    service_tokens = known_tokens.copy()
+    preview_tokens = {}
+    workcell_digests = set()
+    workcells = getattr(args, "workcell_observations", None)
+    if workcells is not None:
+        preview_tokens, workcell_digests = _workcell_preview_tokens(
+            workcells, {config.camera.source_id for config in configs}, environ=environ)
+        if known_tokens & set(preview_tokens.values()):
+            raise ValueError("workcell preview tokens must differ from phone and sighting credentials")
+        known_tokens.update(preview_tokens.values())
     preview_secret = environ.get("ROSY_VISION_PREVIEW_SECRET")
     if preview_secret and preview_secret in known_tokens:
         raise ValueError("vision preview secret must differ from phone and sighting credentials")
@@ -285,18 +323,30 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
         sync = {"url": sync_url, "token": token, "ca_file": str(ca_file) if ca_file else None}
     elif sync_url or sync_env:
         raise ValueError("--pairing-sync-* is set but site-cameras.yaml has no credential: paired source")
+    reserved_tokens = known_tokens | ({preview_secret} if preview_secret else set())
+    if sync is not None:
+        reserved_tokens.add(sync["token"])
+        service_tokens.add(sync["token"])
+    if preview_secret:
+        service_tokens.add(preview_secret)
+    if {sha256(token.encode("utf-8")).digest() for token in service_tokens} & workcell_digests:
+        raise ValueError("workcell credentials must differ from phone, sighting, sync and preview secrets")
+    reserved_digests = workcell_digests | {sha256(token.encode("utf-8")).digest() for token in reserved_tokens}
+    source_tokens = {config.camera.source_id: config.phone_token for config in configs
+                     if config.phone_token is not None}
+    source_tokens.update(preview_tokens)
+    paired = PairedCredentials(paired_sources, forbidden_digests=reserved_digests) if paired_sources else None
     ingest = IngestServer(
-        {config.camera.source_id: config.phone_token for config in configs
-         if config.phone_token is not None},
+        source_tokens,
         preview_signer=VisionLeaseSigner(preview_secret) if preview_secret else None,
         map_paint=load_map_paint(args.map_paint) if args.map_paint else None,
-        paired=PairedCredentials(paired_sources) if paired_sources else None,
+        paired=paired,
     )
     return ingest, sync
 
 
 async def _run_vision(args: argparse.Namespace) -> int:
-    configs = load_vision_sources(args.config)
+    configs = load_vision_sources(args.config) if args.config is not None else []
     ingest, sync_settings = _vision_ingest(args, configs)
     workers = []
     trackers = []
@@ -418,7 +468,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     receive.add_argument("--tls-key", type=Path, default=None)
 
     vision = sub.add_parser("vision", help="receive camera frames and publish display-only sightings")
-    vision.add_argument("--config", required=True, type=Path, help="site-cameras.yaml")
+    vision.add_argument("--config", type=Path, help="site-cameras.yaml")
+    vision.add_argument("--workcell-observations", type=Path, default=os.environ.get("ROSY_WORKCELL_OBSERVATIONS") or None,
+                        help="strict workcell observation manifest; camera preview ingest only")
     vision.add_argument("--host", default="0.0.0.0")
     vision.add_argument("--port", type=int, default=8095)
     vision.add_argument("--tls-cert", type=Path, default=None)
@@ -463,7 +515,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     station.add_argument('--tls-cert', type=Path, default=None)
     station.add_argument('--tls-key', type=Path, default=None)
 
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.command == "vision" and args.config is None and args.workcell_observations is None:
+        parser.error("vision requires --config or --workcell-observations")
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:
