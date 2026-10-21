@@ -469,7 +469,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     vision = sub.add_parser("vision", help="receive camera frames and publish display-only sightings")
     vision.add_argument("--config", type=Path, help="site-cameras.yaml")
-    vision.add_argument("--workcell-observations", type=Path,
+    vision.add_argument("--workcell-observations", type=Path, default=os.environ.get("ROSY_WORKCELL_OBSERVATIONS") or None,
                         help="strict workcell observation manifest; camera preview ingest only")
     vision.add_argument("--host", default="0.0.0.0")
     vision.add_argument("--port", type=int, default=8095)
