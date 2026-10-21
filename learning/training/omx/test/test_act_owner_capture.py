@@ -344,16 +344,53 @@ def test_capture_buffer_is_frozen(tmp_path, monkeypatch):
     assert frozen.rgb == packet.rgb
 
 
-def test_lease_change_during_prediction_cannot_relabel_result(tmp_path, monkeypatch):
+@pytest.mark.parametrize('change', [dict(lease_id='other'),dict(issued_at_ns=9_999_999_999),
+                                  dict(expires_at_ns=10_499_999_999)])
+def test_lease_change_during_prediction_cannot_relabel_result(tmp_path, monkeypatch, change):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     original = engine._predict
     def predict(obs):
         actions = original(obs)
-        session._lease = replace(session.lease, lease_id='other')
+        session._lease = replace(session.lease, **change)
         return actions
     engine._predict = predict
     with pytest.raises(ValueError, match='lease'): infer_for_owner(engine, session, packet)
     assert not client.commands
+
+
+def test_completed_proposal_does_not_wait_for_another_owner_transaction(tmp_path, monkeypatch):
+    session,engine,packet,client,*_=case(tmp_path,monkeypatch)
+    locked,release,finished=threading.Event(),threading.Event(),threading.Event()
+    workers=[];outcome=[]
+    predict=engine._predict
+    def hold_owner():
+        with session._lock:
+            locked.set()
+            assert release.wait(3)
+    def predicting(observation):
+        actions=predict(observation)
+        worker=threading.Thread(target=hold_owner,daemon=True)
+        workers.append(worker);worker.start()
+        assert locked.wait(1)
+        return actions
+    def infer():
+        try:outcome.append(infer_for_owner(engine,session,packet))
+        except Exception as error:outcome.append(error)
+        finally:finished.set()
+    engine._predict=predicting
+    worker=threading.Thread(target=infer,daemon=True);worker.start()
+    try:
+        assert locked.wait(1)
+        assert finished.wait(1), 'unadmitted proposal waited for the owner after numerical inference'
+    finally:
+        release.set();worker.join(2)
+        for holder in workers:holder.join(2)
+    assert not worker.is_alive() and all(not holder.is_alive() for holder in workers)
+    assert len(outcome)==1 and not isinstance(outcome[0],Exception)
+    candidate,result=outcome[0]
+    assert candidate.observed_at_ns==result.source.observed_at_ns==10_000_000_000
+    assert not client.commands
+    assert session.submit(candidate).accepted
 
 
 def test_queued_old_source_is_not_refreshed_to_pass_owner(tmp_path, monkeypatch):
