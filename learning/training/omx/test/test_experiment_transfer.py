@@ -82,7 +82,9 @@ def test_https_requests_use_configured_origin_cookie_csrf_and_default_tls(monkey
             assert handler._context.verify_mode == ssl.CERT_REQUIRED
             assert handler._context.check_hostname
         seen.append(request)
-        return addinfourl(io.BytesIO(b'{"token":"csrf-test"}'), {}, request.full_url, 200)
+        response = addinfourl(io.BytesIO(b'{"token":"csrf-test"}'), {}, request.full_url, 200)
+        response.msg = 'OK'
+        return response
     monkeypatch.setattr(urllib.request.HTTPSHandler, 'https_open', https_open)
     monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.invalid:8080')
     monkeypatch.setenv('ROSY_LEARNING_SESSION_COOKIE', 'session=private-test')
