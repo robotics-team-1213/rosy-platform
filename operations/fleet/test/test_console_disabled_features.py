@@ -43,6 +43,8 @@ def test_console_gates_disabled_feature_pollers():
 
     gate = client.get("/console/assets/poll-gate.js")
     shell = client.get("/console/assets/console.js").text
+    refresh = client.get("/console/assets/console-refresh.js").text
+    auth = client.get("/console/assets/console-auth.js").text
     discovery_response = client.get("/console/assets/device-discovery.js")
     discovery = discovery_response.text
     enrollment = client.get("/console/assets/enrollment.js").text
@@ -51,18 +53,19 @@ def test_console_gates_disabled_feature_pollers():
     assert gate.status_code == 200
     assert discovery_response.status_code == 200
     assert 'createDeviceDiscovery } from "/console/assets/device-discovery.js"' in shell
+    assert "createConsoleRefresh({" in shell and "createConsoleAuth({" in shell
     assert "export function createPollGate" in gate.text
     assert "NO_MAP_RETRY_MS = 30000" in gate.text
 
     # dispatch-control (1 s) and discovery (5 s) stop on a route-absent 404.
-    assert "if (!dispatchGate.due()) return view.dispatchControl;" in shell
-    assert 'dispatchGate.fail(err.status, err.code) === "absent"' in shell
+    assert "if (!dispatchGate.due()) return view.dispatchControl;" in refresh
+    assert 'dispatchGate.fail(err.status, err.code) === "absent"' in refresh
     assert "if (!discoveryGate.due()) return;" in discovery
     assert 'discoveryGate.fail(err.status, err.code) === "absent"' in discovery
     # Login / token save re-asks every disabled feature once.
     for reset in ("dispatchGate.reset();", "discoveryGate.reset();",
                   "mapView.resetPolling();"):
-        assert reset in shell
+        assert reset in auth
 
     assert "if (!gate.due()) return;" in enrollment
     assert "gate.fail(err.status, err.code);" in enrollment

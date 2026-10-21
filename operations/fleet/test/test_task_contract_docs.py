@@ -20,8 +20,10 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     execution = (ROOT / "operations/fleet/fleet/server/intent_execution.py").read_text(encoding="utf-8")
     web_root = ROOT / "operations/site_ui/console"
     web = (web_root / "console.js").read_text(encoding="utf-8")
+    goal = (web_root / "shared/console-goal.js").read_text(encoding="utf-8")
     roster = (web_root / "roster.js").read_text(encoding="utf-8")
-    web_contract = web + roster
+    web_contract = web + goal + roster
+    assert "createConsoleGoal({" in web
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
     assert "**Version:** v1.294" in reference
@@ -63,12 +65,12 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert 'alias="Idempotency-Key"' in intent
     assert 'await execution.step(call, principal, idempotency_key' in intent
     assert 'call.verb == "navigate"' in execution
-    assert '"Idempotency-Key": crypto.randomUUID()' in web
+    assert '"Idempotency-Key": crypto.randomUUID()' in goal
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
     assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web_contract
     assert "`queue_position`" in reference
-    assert "task.queue_position" in web
+    assert "task.queue_position" in goal
     assert "--tasks-db" in compose
     assert "--users-file" in compose
     assert "policy-admin" in reference and "viewer" in reference

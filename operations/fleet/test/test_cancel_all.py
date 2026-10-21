@@ -367,12 +367,14 @@ def test_cancel_all_contract_is_documented_and_wired_to_the_console():
     srs = (root / "docs/spec/ROSY FLEET SRS.md").read_text(encoding="utf-8")
     web = root / "operations/site_ui/console"
     console_js = (web / "console.js").read_text(encoding="utf-8")
+    refresh_js = (web / "shared/console-refresh.js").read_text(encoding="utf-8")
     index = (web / "index.html").read_text(encoding="utf-8")
 
     assert "| POST | `/api/fleet/cancel-all` | `operator` bearer | D-421" in reference
     assert "`FLEET_CANCEL_ALL_DURING_DISPATCH`" in reference and "CORE_REPLY_ONLY" in reference
     assert "D-421" in srs and "전체 주행 취소" in srs and "전체 비상 정지" in srs
-    assert '"/api/fleet/cancel-all"' in console_js and "물리 정지 미확인" in console_js
+    assert "createConsoleRefresh({" in console_js
+    assert '"/api/fleet/cancel-all"' in refresh_js and "물리 정지 미확인" in refresh_js
     assert 'id="cancel-all"' in index and ">비상 정지</span>" in index
     assert "전체 비상 정지" not in index
 
