@@ -9,13 +9,15 @@
 <h1>계정과 외부 자료</h1><nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning">작업 목록</a><a href="/catalog">자료 등록</a><a href="/accounts" aria-current="page">계정·외부 자료</a></nav></ui-topbar>
 <main id="accounts-main" class="learning-main" tabindex="-1">
 <ui-status id="account-status" state="pending" role="status">설정을 확인하는 중입니다.</ui-status>
-<p id="account-error" role="alert" hidden></p>
-<section id="login-panel" class="learning-section" hidden><h2>프로젝트 로그인</h2>
+<ui-status id="account-error" state="error" role="alert" hidden></ui-status>
+<ui-button id="account-retry" kind="quiet" data-action-icon="refresh" hidden>로그인 상태 다시 확인</ui-button>
+<section id="login-panel" class="learning-section" hidden><h2 id="project-login-title">로그인</h2>
+<a id="account-login" href="/api/account/login?return=/accounts" hidden>Rosy Account로 로그인</a>
 <form id="login-form" class="ui-form learning-form"><label class="ui-field-label">아이디<input id="username" class="ui-field" autocomplete="username" required maxlength="100"></label>
 <label class="ui-field-label">비밀번호<input id="password" class="ui-field" type="password" autocomplete="current-password" required maxlength="1024"></label>
 <button class="ui-field" type="submit">로그인</button></form>
 <button id="hf-login" class="ui-field" type="button" hidden>Hugging Face로 로그인</button>
-<p class="quiet">초대된 사용자만 프로젝트에 접근할 수 있습니다.</p></section>
+<p id="account-login-help" class="quiet">프로젝트 계정으로 로그인하세요.</p></section>
 <div id="signed-in" hidden>
 <section class="learning-section"><h2>현재 작업자</h2><p id="identity"></p><a data-account-profile hidden>프로필</a><button id="logout" class="ui-field" type="button">로그아웃</button></section>
 <section class="learning-section"><h2>연결한 Hugging Face 계정</h2><div id="connections" aria-live="polite"></div>

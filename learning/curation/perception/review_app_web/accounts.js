@@ -3,6 +3,11 @@ import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false;
+const loginFailures = new Map([
+  ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
+  ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
+]);
+let loginFailure = loginFailures.get(new URLSearchParams(location.search).get('error'));
 const states = {queued:'대기',running:'가져오는 중',completed:'가져옴 · 검수 대기',failed:'실패',
   interrupted:'중단됨',cancelled:'취소됨',rights_hold:'이용 권한 확인 필요',blocked:'접근 차단'};
 const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 공간을 확보한 뒤 재시도하세요.',
@@ -13,10 +18,11 @@ const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 �
 const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 const scopeLabel={'read-repos':'읽기','gated-repos':'제한 자료 읽기','write-repos':'쓰기','manage-repos':'저장소 생성·삭제'};
 function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
+function status(message, state) { $('account-status').textContent=message; $('account-status').setAttribute('state',state); }
 function signedOut() {
   token=null; session=null; active=false;
   $('login-panel').hidden=false; $('signed-in').hidden=true;
-  $('account-status').textContent='프로젝트에 로그인하세요.';
+  status('로그인 또는 프로젝트 권한을 확인하세요.','signed-out');
   for(const id of ['identity','connections','connection','imports','repos','repo-connection']) $(id).replaceChildren();
   for(const id of ['login-form','connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
 }
@@ -39,23 +45,43 @@ function button(parent,label,action) {
 async function perform(action) {
   if(pending)return;
   pending=true; error('');
-  try { await action(); } catch(e) { error(e.message); }
-  finally { pending=false; }
+  $('accounts-main').setAttribute('aria-busy','true');
+  try { await action(); } catch(e) {
+    if(active) error(e.message);
+    if($('account-status').getAttribute('state')==='pending') {
+      status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
+      $('account-retry').hidden=false;
+    } else error(e.message);
+  }
+  finally { pending=false; $('accounts-main').setAttribute('aria-busy','false'); }
 }
 async function refresh() {
+  status('로그인 상태를 확인하는 중입니다.','pending');
+  $('account-retry').hidden=true;
   const options=await api('/api/accounts/options');
+  $('login-form').hidden=!!options.rosy_account;
+  $('account-login').hidden=!options.rosy_account;
+  $('project-login-title').textContent=options.rosy_account?'Rosy Account 로그인':'프로젝트 로그인';
+  $('account-login-help').textContent=options.rosy_account
+    ?'아이디와 비밀번호는 Rosy Account 로그인 화면에서 입력합니다.'
+    :'프로젝트 계정으로 로그인하세요.';
   $('hf-login').hidden=!options.oauth;
   if(options.rosy_account) $('hf-login').hidden=true;
   if(!options.enabled) {
     signedOut();
-    $('account-status').textContent='협업 계정이 설정되지 않았습니다. 관리자에게 프로젝트 설정을 요청하세요.';
-    $('login-panel').hidden=$('signed-in').hidden=true; active=false; return;
+    status('Rosy Account 연결이 설정되지 않았습니다. 관리자에게 이 앱의 Rosy Account 등록을 요청하세요.', 'unavailable');
+    $('login-panel').hidden=$('signed-in').hidden=true; $('account-retry').hidden=false; active=false; return;
+  }
+  if(loginFailure) {
+    signedOut(); status(loginFailure[1],loginFailure[0]); $('account-retry').hidden=false; return;
   }
   try { session=await api('/api/accounts/session'); }
   catch(e) {
-    if (e.status !== 401 && e.status !== 403) {
-      throw e;
+    if (e.status === 403) {
+      // Signed in to Rosy Account without this project's grant; another login would loop.
+      signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
     }
+    if(e.status!==401) throw e;
     if(options.rosy_account) {
       $('login-panel').hidden=true; $('signed-in').hidden=true;
       $('account-status').textContent='Rosy Account로 연결 중…';
@@ -65,7 +91,7 @@ async function refresh() {
     $('account-status').textContent='프로젝트에 로그인하세요.'; return;
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
-  $('account-status').textContent='로그인됨';
+  status('로그인됨','ready');
   $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.join(', ')}`;
   const canPublish=session.capabilities.includes('publish');
   $('import-panel').hidden=!session.capabilities.includes('import');
@@ -182,5 +208,10 @@ $('repo-delete-form').addEventListener('submit',event=>{event.preventDefault();p
   await loadRepos();
 });});
 $('reload').addEventListener('click',()=>perform(refresh));
+$('account-retry').addEventListener('click',()=>perform(async()=>{
+  loginFailure=null;
+  const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
+  await refresh();
+}));
 setInterval(()=>{if(active&&!pending&&!document.hidden)perform(jobs);},5000);
 perform(refresh);

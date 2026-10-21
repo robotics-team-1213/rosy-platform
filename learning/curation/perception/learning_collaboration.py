@@ -96,8 +96,20 @@ class Collaboration:
         try:
             return self._get(handler, path, token)
         except self.unavailable:
+            if path == '/api/account/callback':
+                return self.callback_failure(handler, 'account_unavailable')
             handler.send({'error':'Rosy Account 연결을 확인하세요.'}, 503)
             return True
+        except ValueError:
+            if self.receiver and path == '/api/account/callback':
+                return self.callback_failure(handler, 'account_callback_failed')
+            raise
+
+    def callback_failure(self, handler, error):
+        self.set_cookie(handler, 'rosy_account_flow', '', clear=True)
+        handler.extra_headers.append(('Location', '/accounts?error=' + error))
+        handler.send(b'', 303)
+        return True
 
     def _get(self, handler, path, token):
         if self.receiver and path == '/api/account/login':
