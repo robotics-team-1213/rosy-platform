@@ -152,6 +152,7 @@ def test_board_page_has_csp_and_stop_refuses_foreign_origins():
         page = urlopen(url, timeout=2)
         csp = page.headers["Content-Security-Policy"]
         assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
+        assert page.headers["X-Content-Type-Options"] == "nosniff"
         foreign = Request(url + "stop", method="POST", data=b"",
                           headers={"Origin": "http://evil.example"})
         with pytest.raises(HTTPError) as error:
