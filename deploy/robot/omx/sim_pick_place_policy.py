@@ -78,6 +78,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     samples,steps,transitions,worker_errors=[],[],[],[]
     stop=threading.Event()
     authority=fence=session=None
+    profiler=None
     threads=[]
     started=time.monotonic()
     last_observed=[None]
@@ -153,6 +154,9 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         aid.watch('infeed_block');aid._robot_entity_id()
         attached=ever_attached=False
         last_submit=None
+        if calibration:
+            import cProfile
+            profiler=cProfile.Profile();profiler.enable()
         for index in range(12 if calibration else 600):
             require_live()
             while last_submit is not None and time.monotonic()-last_submit<.8:
@@ -225,6 +229,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     except Exception as error:
         receipt['error']=type(error).__name__+': '+str(error)
     finally:
+        if profiler:profiler.disable()
         stop.set()
         for thread in threads:thread.join(4)
         if not calibration and samples and 'metrics' not in receipt:
@@ -250,6 +255,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         write_json(directory/'observations.json',samples)
         write_json(directory/'policy-result.json',receipt)
         camera.destroy();executor.shutdown();arm.destroy();node.destroy_node();rclpy.shutdown()
+        if profiler:profiler.dump_stats(str(directory/'calibration.pstats'))
     return 0 if receipt['success'] else 1
 
 
