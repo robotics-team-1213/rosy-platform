@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Mapping
 
@@ -15,6 +16,30 @@ from fleet.server.sightings import SightingSource
 
 #: D-580: `robot_ids: enrolled` = every robot on the live roster (robots.yaml + enrolled).
 ROSTER = "enrolled"
+
+
+def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
+    """D-361 5: disable retired targets, while refusing ids never in the roster."""
+    from dataclasses import replace
+
+    kept = []
+    for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
+        unknown = set(source.robot_ids) - known
+        if unknown - retired:
+            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
+        if unknown:
+            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
+                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
+        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
+        if robot_ids:
+            kept.append(replace(source, robot_ids=robot_ids))
+        else:
+            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
+                  file=sys.stderr)
+    return kept
 
 
 def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
