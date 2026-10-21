@@ -69,8 +69,10 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     config=profile.arm_command_config(workcell_id='omx_cell_sim',instance_id='omx_cell_sim_01',
         calibration_revision='omx-f-gazebo-only-v1',allowed_owners=('learned_policy',))
     events=[]
+    # Leave joint intake turns between full policy checks on the shared owner lock.
     arm=RosArmCommandRuntime(node,config,joint_state_topic=names.joint_state_topic,
-        trajectory_action=names.trajectory_action,on_goal_event=lambda event:events.append(asdict(event)))
+        trajectory_action=names.trajectory_action,poll_period_s=.1,
+        on_goal_event=lambda event:events.append(asdict(event)))
     camera=SimPolicyCamera(node,arm.monotonic)
     executor=OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
@@ -85,6 +87,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     receipt=dict(schema='rosy.omx-fixed-object-policy-trial/1',success=False,
         mode='calibration_without_policy_goals' if calibration else 'learned_policy_object_trial',
         parent_policy_revision=campaign['policy_revision'],goal_m=goal,sim_aid=True,
+        runtime_poll_period_s=arm.poll_period_s,
         operating_fleet_approval='NOT_CLAIMED',physical_device_authority=False,module_origins=origins)
 
     def require_live():
