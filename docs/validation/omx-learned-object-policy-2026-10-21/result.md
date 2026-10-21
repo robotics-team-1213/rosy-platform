@@ -447,6 +447,14 @@ synthetic이며 실제 관측·추가 시연·SIM truth에 합산하지 않는�
 독립 코드 검토에서 blocker는 없었다. 실제 시연 25개 전체 재검증·같은 seed42750의
 새 10,000 step 학습을 요청했으며 새 checkpoint와 실제 물체 성공은 아직 확인 전이다.
 
+실제 후속 MODEL 작업 `omx-object-training-bb0be7241e7ec64e`는 원 시연25개·66,080프레임의
+curation·전체 reader readback과 같은20/5분할을 마치고 optimizer 학습에 들어갔다.
+Curation·split SHA256은 이전 실행과 같고 실제 augmentation은 위 std0.02·seed42751·
+6관절·train 전용 설정과 일치한다. 이를 제외한 정규화 통계 전체가 이전 파일과 정확히
+같음을 대조했다. 새 정규화 SHA256:
+SHA256: `841540d39eacba75e78474520326e7bdb39f462d7b9e4d46d009e7db6d7927e7`.
+새10,000step 완료·checkpoint 재로딩·새 물체 과제 성능은 아직 확인 전이다.
+
 최신 main d31ec2747f를 반영한 통합 source `301dc82473`는 공식 selector의 관련55경로를
 AI PC에서 실행해 1,085 PASS / 35 SKIP / 0 NEW·exit 0이었다. 실제 ACT가 필요한 생략분을
 이 통과에 넣지 않는다. 이후 test-only source `6ce9091ded`에서 모든 관절의 복원된 학습
