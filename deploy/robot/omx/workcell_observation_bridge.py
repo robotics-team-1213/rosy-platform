@@ -18,6 +18,8 @@ from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 from uuid import uuid4
 
+import yaml
+
 from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
 from rosy_vision import protocol
 
@@ -256,11 +258,11 @@ def main(argv=None):
     if os.environ.get('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp') != 'rmw_fastrtps_cpp':
         parser.error('observation bridge requires rmw_fastrtps_cpp')
     try:
-        manifest = WorkcellObservationManifest.model_validate_json(args.manifest.read_bytes())
+        manifest = WorkcellObservationManifest.model_validate(yaml.safe_load(args.manifest.read_text(encoding='utf-8')))
         cell, tokens = select_sources(manifest, args.workcell, os.environ)
         secure_url(args.fleet_url, 'https'); secure_url(args.vision_url, 'wss')
         context = ssl.create_default_context(cafile=args.ca_file)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, yaml.YAMLError) as error:
         parser.error(f'observation configuration invalid: {type(error).__name__}')
     os.environ['RMW_IMPLEMENTATION'] = 'rmw_fastrtps_cpp'
     os.environ['ROS_STATIC_PEERS'] = ''
@@ -268,6 +270,7 @@ def main(argv=None):
     import cv2
     import numpy as np
     import rclpy
+    from rclpy.executors import ExternalShutdownException
     from rclpy.qos import qos_profile_sensor_data
     from sensor_msgs.msg import Image, JointState
     rclpy.init(args=[], domain_id=args.domain_id)
@@ -294,7 +297,7 @@ def main(argv=None):
             subscribe(camera, Image, camera.image_topic, lambda msg: encode_image(msg, cv2, np),
                       CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context))
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         stop.set()
@@ -304,7 +307,7 @@ def main(argv=None):
         for worker in workers:
             worker.join(timeout=3)
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':
