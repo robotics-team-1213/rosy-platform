@@ -20,9 +20,19 @@ separate from this display-only path.
 | `6aebb15368` | Native bridge, reader, register probe, architecture, documents | 110 passed after actual YAML and external-shutdown regressions |
 | `896fc5e4df` | Combined Fleet/Vision/native/Cell checks with Chromium enabled | 182 passed; Console size-unit failure corrected at `4a11450c36` (40 architecture passed) |
 | `7c967f44ec` | Actual verified HTTPS/WSS transport pipeline | 1 passed: native arm POST, viewer 401/authenticated GET, camera ingest, Fleet preview lease and actual Vision frame read |
+| `363de80103` | Missing-header admission, AI role restrictions, Cell asset ownership, transport, architecture | 96 passed after full publication checks identified two integration regressions |
 
 The earlier station-camera lifespan timeout did not recur in focused reruns or
-the broad `e676d0f425` run. Its original storage delay remains unexplained.
+the broad `e676d0f425` run. Its original renewal-worker delay remains unexplained.
+Later publication runs failed different station variants: ordinary-work
+completion in `d6692a3706`, and `CHARGE_MOTION_READBACK_UNAVAILABLE` in the
+`09bdd9c9b6` shutdown-CHARGING variant. The latter traceback shows the inner
+one-second return-renewal deadline expiring while FastAPI waits for a sync
+dependency worker. Host contention is plausible, but not demonstrated. No
+station safety deadline, production behavior, or failure allowlist was changed.
+The same publication run found the missing-header/Cell-asset regressions above
+and fixture-reference secret-scan findings; these require final-head checks
+before publication. No failed head is presented as green.
 The HTTPS/WSS transport test exercises actual servers independently of the
 fixture-backed browser checks. Its arm values and JPEG are test inputs, rather
 than physical device samples. Websockets 17 reports a connection-context
@@ -36,6 +46,13 @@ deprecation warning; the test closes the connection and both servers.
   a disconnected arm or a persistent installation.
 - Three native camera services were active during this review. Wrist cameras
   share a USB serial string, so distinct stable USB port paths identify them.
+- A new five-second bounded read at source `09bdd9c9b6` received 49 Arm A and
+  17 Arm B samples, each containing six motors, torque OFF and zero hardware
+  errors; both readers exited successfully. A separate five-second ROS image
+  check received 50 frames from each of the three cameras, all 640×480 BGR8,
+  with maximum observed capture ages of approximately 3/3/4 milliseconds. These checks were
+  separate, rather than one simultaneous end-to-end run. Readers stopped
+  after the bounded check; no persistent service was activated.
 - The isolated native Python 3.14.4 environment imports system ROS, OpenCV,
   canonical protocol modules, websockets 17.0.1 and Dynamixel SDK 3.8.4.
 - Both new native service units pass `systemd-analyze --user verify`. A warning

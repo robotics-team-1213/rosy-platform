@@ -4224,3 +4224,9 @@
 - Change: register private arm/camera sources, authenticate bounded arm captures before reading request bodies, reject replay/stale captures, and expose sanitized latest-only viewer snapshots. Existing Vision preview leases include registered cameras. Fleet stays ROS-free and grants no command authority.
 - Evidence: e03b746015 remote checks: 182 passed, one size-ratchet failure after configuration extraction. c527bca693 updates the measured package row; all 40 architecture checks then passed. These are API/configuration tests, not live producer or physical acceptance.
 - Gate: unchanged. Fleet-PC producer deployment and real Cell observations remain pending.
+
+## 2026-10-22 · uncommitted · 관측 진입 거절과 Cell 자산 회귀 보완
+
+- Change: reject missing/empty producer headers before unavailable intake, preserving source authentication and the configured body limit. Register the new module in the existing Cell import-ownership assertion. Fixture naming/layout keeps the existing secret scanner unchanged.
+- Evidence: publication head 09bdd9c9b6 failed the AI observer admission and document-import assertions; 363de80103 then passed all 96 focused role, route, composition, actual TLS transport and architecture checks. Final secret-scan and complete publication checks remain required.
+- Gate: unchanged. Existing station scenarios also failed in broad runs and are documented separately; no timing guard was relaxed and no deployment acceptance is claimed.
