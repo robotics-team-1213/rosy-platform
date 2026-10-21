@@ -73,7 +73,17 @@ def teacher():
     return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.2)])
 
 
-def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path):
+@pytest.mark.parametrize('storage_delay', [0, .6])
+def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path, monkeypatch, storage_delay):
+    original = module.RawCollection.environment
+    delayed = False
+    def environment(store, receipt):
+        nonlocal delayed
+        if storage_delay and not delayed:
+            delayed = True
+            time.sleep(storage_delay)
+        return original(store, receipt)
+    monkeypatch.setattr(module.RawCollection, 'environment', environment)
     backend = Backend()
     result = module.run_session(profile(), teacher(), tmp_path/'capture', backend)
     assert result['mode'] == 'rehearsal' and result['source_mode'] == 'simulation'
