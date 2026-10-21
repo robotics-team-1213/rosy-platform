@@ -20,8 +20,9 @@ Policy-result SHA256: `44869941f36db283bef447a92d737f9559219d2004d96635eaf9ede2e
 Policy revision: `1e8c8e20dffd82b106169f7e687250b322ad48edf8984d6bcb690d033ef02723`.
 Runtime revision: `b9f3442ce5d10591cdc5e1bbabfe96f12a13d966`.
 
-코드와 직전 보고서는 로컬main `5e045c21805f95dbab7bc7bca956cfac2d104098`에 정식
-병합됐다. 아키텍처·계약267 PASS와 관련457 PASS/6 SKIP/0 NEW를 확인했다.
+Main revision: `5e045c21805f95dbab7bc7bca956cfac2d104098`.
+코드와 직전 보고서는 해당 로컬main에 정식 병합됐다.
+아키텍처·계약267 PASS와 관련457 PASS/6 SKIP/0 NEW를 확인했다.
 후보당 전체 추론 평균510.039ms/수치추론19.889ms, 반복capture guard 누적
 280.376ms, 초기lock 대기누적103.101ms다. 병합용pytest가 같은 AI PC에서 병행돼
 직전 실행과의 차이를 renewal 변경의 단독 인과 효과로 해석하지 않는다.
