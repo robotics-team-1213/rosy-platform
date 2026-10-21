@@ -3,7 +3,7 @@ import json
 from http.cookies import SimpleCookie, CookieError
 from urllib.parse import parse_qs, urlsplit
 
-from core_common.protocol.account_client import AccountUnavailable
+from core_common.protocol.account_client import AccountUnavailable, browser_session
 
 
 def cookie(handler, name):
@@ -35,8 +35,7 @@ def route(handler, method):
     status, body = 200, {}
     try:
         if method == 'GET' and url.path == '/api/account/session':
-            body, claims = (account.browser_session(cookie(handler, 'rosy_app_account')) if account else
-                            ({'enabled': False, 'authenticated': False, 'profile': None, 'profile_url': None}, None))
+            body, claims = browser_session(account, cookie(handler, 'rosy_app_account'))
             body['can_operate'] = bool(claims and claims.permits(account.resource, 'games.operate'))
         elif method == 'GET' and url.path == '/api/account/login' and account:
             flow, target = account.start('/')

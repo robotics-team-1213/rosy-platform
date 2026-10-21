@@ -159,7 +159,7 @@ token은 exp까지만 유효하며, 검증 실패 token을 새로 허용하지 �
 CORE의 Robot·Pilot 웹은 같은 origin의 `/api/account/login?return=/pilot` 또는
 `return=/dashboard`로 시작하고 `/api/account/callback`에서 state/PKCE를 확인한다.
 `GET /api/account/session`은 enabled/authenticated/account_id/session_family/revision/resource/capabilities와
-profile/profile_url만 반환한다. 이 본문은 `AccountClient.browser_session`이 만들고 Games 보드도 같은 본문에
+profile/profile_url만 반환한다. 이 본문은 `account_client.browser_session`이 만들고 Games 보드도 같은 본문에
 `can_operate`만 더한다. 브라우저 쪽은 `/common/account-session.js` 하나가 세션 확인, 같은 origin 탭의
 신원 표시(`rosy.account.identity`), 로그아웃을 맡는다. `POST /api/account/logout`은 same-origin 요청만 받으며 로컬 세션과
 중앙 family를 회수한다. 중앙 장애면 로컬 로그아웃 후 암호화된 회수 대기열을

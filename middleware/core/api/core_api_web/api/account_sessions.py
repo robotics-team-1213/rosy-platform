@@ -8,7 +8,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
-from core_common.protocol.account_client import AccountDenied, AccountUnavailable
+from core_common.protocol.account_client import AccountDenied, AccountUnavailable, browser_session
 from .errors import ApiError
 
 COOKIE = 'rosy_app_account'
@@ -88,7 +88,7 @@ def install_account_sessions(app):
     @app.get('/api/account/session')
     async def session(request: Request):
         client = getattr(app.state, 'account_client', None)
-        body = (await invoke(client.browser_session, request.cookies.get(COOKIE, '')))[0] if client else             {'enabled': False, 'authenticated': False, 'profile': None, 'profile_url': None}
+        body, _ = await invoke(browser_session, client, request.cookies.get(COOKIE, ''))
         return JSONResponse(body, headers=NO_STORE)
 
     @app.post('/api/account/logout')

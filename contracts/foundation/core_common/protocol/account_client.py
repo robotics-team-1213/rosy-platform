@@ -259,19 +259,6 @@ class AccountClient:
             return None
         return self.profile_session_id(_digest(cookie))
 
-    def browser_session(self, cookie):
-        """The shared /api/account/session body (D-757) and its claims; each route still authorizes."""
-        claims = self.resolve(cookie)
-        profile = self.profile(cookie) if claims else None
-        if profile and profile['account_id'] != claims.sub:
-            profile = None
-        body = {'enabled': True, 'authenticated': claims is not None, 'profile': profile,
-                'profile_url': self.profile_url if claims else None}
-        if claims:
-            body.update(account_id=claims.sub, session_family=claims.sid, revision=claims.rev, resource=claims.aud,
-                        capabilities=[cap for grant in claims.grants for cap in grant.capabilities])
-        return body, claims
-
     def profile_session_id(self, session_id):
         """Read fresh display metadata without caching or changing authorization on failure."""
         if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
@@ -322,6 +309,23 @@ class AccountClient:
                 raise AccountDenied('Invalid local session') from None
             with self.transaction() as db:
                 db.execute('DELETE FROM app_account_revocations WHERE id=?', (row['id'],))
+
+
+def browser_session(client, cookie):
+    """The shared /api/account/session body (D-757) and its claims; each route still authorizes."""
+    if client is None:
+        return {'enabled': False, 'authenticated': False, 'profile': None, 'profile_url': None}, None
+    claims = client.resolve(cookie)
+    profile = client.profile(cookie) if claims else None
+    if profile and profile['account_id'] != claims.sub:
+        profile = None
+    body = {'enabled': True, 'authenticated': claims is not None, 'profile': profile,
+            'profile_url': client.profile_url if claims else None}
+    if claims:
+        body.update(account_id=claims.sub, session_family=getattr(claims, 'sid', None),
+                    revision=getattr(claims, 'rev', None), resource=getattr(claims, 'aud', None),
+                    capabilities=[cap for grant in getattr(claims, 'grants', ()) for cap in grant.capabilities])
+    return body, claims
 
 
 def load_account_client(filename, *, destinations=('/pilot', '/dashboard', '/')):
