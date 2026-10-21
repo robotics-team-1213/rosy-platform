@@ -121,6 +121,30 @@ def test_contact_gap_window_excludes_setup_but_keeps_active_delays():
     assert max(Pair.contact_gaps(pair)) == pytest.approx(4.9)
 
 
+def test_hold_completion_includes_callback_work_but_excludes_later_polling():
+    clock = [1.0]
+    completed = {}
+    grant = SimpleNamespace(instance_id="left")
+
+    def hold(grant, reason):
+        assert not completed
+        clock[0] = 1.2
+
+    measured = measure_hold_completion(hold, completed, clock=lambda: clock[0])
+    measured(grant, "PARTNER_LINK_LOST")
+    clock[0] = 1.8
+    assert completed == {"left": {"entered_at_s": 1.0, "completed_at_s": 1.2,
+                                  "reason": "PARTNER_LINK_LOST"}}
+
+    def failed_hold(grant, reason):
+        raise RuntimeError("HOLD failed")
+
+    failed = {}
+    with pytest.raises(RuntimeError, match="HOLD failed"):
+        measure_hold_completion(failed_hold, failed, clock=lambda: clock[0])(grant, "PARTNER_LINK_LOST")
+    assert not failed
+
+
 def test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds(tmp_path):
     pair = Pair(tmp_path)
     steps = pair.two_arm_steps()
