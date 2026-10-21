@@ -93,7 +93,9 @@ def running(tmp_path):
 
 def test_session_without_view_is_forbidden_not_signed_out(tmp_path):
     with running(tmp_path) as (base, accounts, _):
-        accounts.require = lambda principal, capability: (_ for _ in ()).throw(PermissionError('denied'))
+        def deny(principal, capability):
+            raise PermissionError('denied')
+        accounts.require = deny
         assert request(base, '/api/accounts/session', 'reader')[0] == 403
         assert request(base, '/api/accounts/session')[0] == 401
 

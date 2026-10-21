@@ -22,7 +22,7 @@ function status(message, state) { $('account-status').textContent=message; $('ac
 function signedOut() {
   token=null; session=null; active=false;
   $('login-panel').hidden=false; $('signed-in').hidden=true;
-  status('로그인 또는 프로젝트 권한을 확인하세요.','signed-out');
+  status('로그인 또는 프로젝트 권한을 확인하세요.','empty');
   for(const id of ['identity','connections','connection','imports','repos','repo-connection']) $(id).replaceChildren();
   for(const id of ['login-form','connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
 }
@@ -58,7 +58,6 @@ async function perform(action) {
 async function refresh() {
   status('로그인 상태를 확인하는 중입니다.','pending');
   $('account-retry').hidden=true;
-  status('로그인 상태를 확인하는 중입니다.', 'pending');
   const options=await api('/api/accounts/options');
   $('login-form').hidden=!!options.rosy_account;
   $('account-login').hidden=!options.rosy_account;

@@ -84,7 +84,9 @@ class Collaboration:
         return cookie(handler, name + self.cookie_suffix)
 
     def identity(self, handler):
+        handler.learning_signed_in = False
         principal = self.accounts.authenticate(self.cookie(handler, COOKIE))
+        handler.learning_signed_in = True
         self.accounts.require(principal, 'view')
         handler.learning_principal = principal
         return principal
@@ -158,7 +160,9 @@ class Collaboration:
                 handler.extra_headers.append(('Location', '/accounts'))
                 handler.send(b'', 303)
             else:
-                handler.send({'error': '로그인이 필요합니다.'}, 401)
+                signed_in = handler.learning_signed_in
+                handler.send({'error': '프로젝트 열람 권한이 필요합니다. 다른 계정으로 로그인하거나 관리자에게 권한을 요청하세요.'
+                              if signed_in else '로그인이 필요합니다.'}, 403 if signed_in else 401)
             return True
         if path == '/api/accounts/session':
             public = {key: principal[key] for key in ('user_id', 'project_id', 'capabilities')}
