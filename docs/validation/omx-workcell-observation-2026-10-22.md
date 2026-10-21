@@ -91,3 +91,20 @@ requires `cell/cell-observation.js`. All four focused installation checks passed
 including wheel and sdist builds, isolated installation, resource hashes and
 installed imports. This is package evidence, not physical deployment. Complete
 publication checks on the final revision remain required.
+
+At `5441d27c73`, the final publication run passed 519 fast, 10,806 common/CORE,
+6,139 Fleet and 5,958 remaining checks, with 1,329 skips. Installation variants
+passed. The real transport test instead failed on a two-second WSS upgrade
+response timeout. Its original scheduling cause remains unproven.
+
+The fixture sent one camera sample directly, bypassing the deployed
+`SourceWorker` recovery loop and continuously refreshed capture buffer.
+At `82e9a617d4`, delaying only the first real upgrade response by 2.2 seconds
+reproduced the same timeout. At `feaf710e26`, the fixture exercises the actual
+worker and fresh captures: the first timeout occurs, a later connection delivers
+a newer sequence/capture, and verified TLS, original capture age, JPEG, lease
+readback and worker shutdown assertions pass. All 23 focused bridge, transport
+and existing pairing tests passed. Production timeouts and code are unchanged.
+This demonstrates recovery from the injected fault, rather than identifying
+the original transient cause or establishing physical deployment. Final
+publication checks on the combined revision remain required.

@@ -9525,3 +9525,9 @@ osy-d395-s1d\`.
 - Change: include the Cell observation module in the existing wheel/sdist asset count and explicit resource assertions; packaging and production behavior are unchanged.
 - Evidence: `6216f4f4e5` passed 519 fast, 10,806 common/CORE, 6,139 Fleet and 5,957 remaining checks, with two installed asset-count failures. `9b2532a17f` passed all four focused installation checks, including both delivery variants. Final publication checks remain required.
 - Gate: unchanged. Existing signing configuration was located; no new key was generated and no candidate was activated.
+
+## 2026-10-22 · uncommitted · 실제 전송 시험의 연결 복구 경로 검증
+
+- Change: exercise the deployed native worker and continuously refreshed camera captures after an injected first-upgrade stall, preserving TLS verification and the two-second production deadline. Production code is unchanged.
+- Evidence: `5441d27c73` failed one WSS upgrade in the broad run; its original cause remains unproven. `82e9a617d4` deterministically reproduced that timeout; `feaf710e26` passed 23 focused bridge, transport and pairing checks, proving recovery with a newer capture and clean worker shutdown.
+- Gate: unchanged. The combined final revision still requires publication checks; persistent physical operation is not established.
