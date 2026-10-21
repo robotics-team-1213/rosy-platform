@@ -31,4 +31,6 @@ Bridge와 Fleet는 상주하되 ROS topic을 읽는 역할만 한다. 초기 idl
 
 ### Consequences
 
+첫 배포 전 credential 조립 검증을 위해 위 manifest의 모든 arm/camera 항목은 추가로 `credential_sha256`(lowercase hex64)를 요구한다. 같은 trusted manifest 안에서 전체 producer fingerprint는 유일하며, 각 consumer는 자기 역할의 raw secret SHA-256이 등록 fingerprint와 일치하는지 확인한다. 다른 역할의 raw secret을 공유하지 않는다. Rotation의 raw/fingerprint 불일치는 startup을 거절한다. Fleet는 camera를 포함한 전체 fingerprint와 기존 사이트·로봇·사용자·증거 credential의 중복을 거절한다. Vision의 dynamic paired credential 금지 목록에는 arm을 포함한 전체 manifest fingerprint를 넣는다. Fingerprint도 private 설정에만 두고 GET 관측 응답에는 포함하지 않는다.
+
 Native service와 Fleet/Vision release/configuration까지 배포해야 개발 PC 없이 관측이 유지된다. source/host/browser 시험, 설치된 artifact, 실제 producer→Fleet/Vision→ROSY 화면, 보정·동작·현장 수용을 따로 기록한다. 이 결정의 채택이나 구현만으로 실물 움직임 또는 딸기 파지를 완료했다고 주장하지 않는다.
