@@ -4,6 +4,7 @@ act_job.py --train-export <LeRobot-root>... --eval-export <root> --out <new-dir>
 CPU only; source episode groups are disjoint. No robot, ROS, GPU, or network command.
 """
 import argparse
+from collections import deque
 import hashlib
 import importlib.metadata
 import json
@@ -49,6 +50,24 @@ def chunk_indices(count, start, size):
     if not 0 <= start < count or size < 1:
         raise ValueError("valid episode offset and positive chunk required")
     return [i if i < count else None for i in range(start, start + size)]
+
+
+def training_sample_indices(rows, joint_names, *, sampling):
+    """Select original frames only; action labels and chunk chronology stay unchanged."""
+    if sampling == 'all_frames':
+        return list(range(len(rows)))
+    if sampling != 'command_entry' or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
+        raise ValueError('command_entry sampling requires the fixed six-joint OMX SIM rig')
+    selected = {}
+    commands = {(row['command_id'],row['ros_goal_id']) for row in rows}
+    for index,row in enumerate(rows):
+        bounds = [.035]*5+[.04]  # Arm training margin; preserve the calibrated gripper target.
+        if all(abs(target-state)<=bound for target,state,bound in
+               zip(row['action'],row['observation.state'],bounds)):
+            selected.setdefault((row['command_id'],row['ros_goal_id']),index)
+    if not commands or set(selected) != commands:
+        raise ValueError('command_entry sampling must represent every command')
+    return sorted(selected.values())
 
 
 def compatible_sources(sources):
@@ -109,7 +128,17 @@ def export_truth(export, source, validated):
     return None
 
 
-def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4):
+def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames',
+        action_representation='absolute',state_noise_std_rad=0.):
+    if action_representation not in ('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'):
+        raise ValueError('unknown action representation')
+    if (type(state_noise_std_rad) not in (int,float) or not np.isfinite(state_noise_std_rad)
+            or state_noise_std_rad<0):
+        raise ValueError('state noise standard deviation must be finite and nonnegative')
+    if state_noise_std_rad and action_representation=='absolute':
+        raise ValueError('state noise requires source-relative targets')
+    if sampling not in ('all_frames','command_entry'):
+        raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
         raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
     if importlib.metadata.version("lerobot") != "0.4.4":
@@ -151,12 +180,23 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     if len(set(ids)) != len(ids):
         raise ValueError("same original Episode cannot straddle train/eval")
     compatible_sources(sources)
+    if sampling == 'command_entry' and not all(automatic):
+        raise ValueError('command_entry sampling requires independently verified SIM object truth')
+    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling)
+                        for rows in original_rows]
     # D-794 B: the image key and the artifact camera name follow the recorded camera name.
     image_key = "observation.images." + sources[0]["camera"]["name"]
     durations = {r["duration_s"] for rows in original_rows for r in rows}
     if len(durations) != 1:
         raise ValueError("joint-only study requires one explicit source duration")
     out.mkdir(parents=True)
+    sampling_ref = None
+    if sampling == 'command_entry':
+        selection = dict(sampling=sampling,arm_margin_rad=.005,gripper_margin_claim='none',
+                         original_arrays_and_chunk_order=True,
+                         train_indices=dict(zip(ids[:train_count],selected_indices[:train_count])))
+        _write(out/'training-index.json',selection)
+        sampling_ref = _ref(out/'training-index.json',out)
     _write(out / "state.json", {"status": "reading", "steps": steps, "seed": seed, "source_episodes": ids})
     try:
         episodes, arrays = [], []
@@ -196,14 +236,28 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             arrays.append((torch.stack(images), torch.stack(states), torch.stack(actions)))
         train_actions = torch.cat([a[2] for a in arrays[:train_count]])
         train_states = torch.cat([a[1] for a in arrays[:train_count]])
-        state_mean, action_mean = train_states.mean(0), train_actions.mean(0)
-        state_std, action_std = train_states.std(0, unbiased=False), train_actions.std(0, unbiased=False)
+        absolute_baseline=train_actions.mean(0)
+        action_values=train_actions if action_representation=='absolute' else train_actions-train_states
+        state_mean, action_mean = train_states.mean(0), action_values.mean(0)
+        state_std, action_std = train_states.std(0, unbiased=False), action_values.std(0, unbiased=False)
         state_std = torch.where(state_std < 1e-6, torch.ones_like(state_std), state_std)
         action_std = torch.where(action_std < 1e-6, torch.ones_like(action_std), action_std)
         stats = {"state_mean": state_mean.tolist(), "state_std": state_std.tolist(),
                  "action_mean": action_mean.tolist(), "action_std": action_std.tolist(),
                  "fit_episodes": ids[:train_count], "image": {"resize_hw": [64, 64], "color": "rgb", "scale": 1/255},
                  "fixed_source_duration_s": next(iter(durations))}
+        if action_representation!='absolute':
+            del stats['action_mean'],stats['action_std']
+            stats['action_transform']=dict(type=action_representation,mean=action_mean.tolist(),
+                std=action_std.tolist(),absolute_baseline=absolute_baseline.tolist())
+            if action_representation=='joint_delta_tanh_from_chunk_source_v1':
+                stats['action_transform']['max_delta_rad']=.035
+        noise_rng=None
+        if state_noise_std_rad:
+            noise_rng=torch.Generator().manual_seed(seed+1)
+            stats['training_augmentation']=dict(type='gaussian_state_noise_v1',std_rad=state_noise_std_rad,
+                seed=seed+1,joint_names=sources[0]['joint_names'],train_only=True,
+                source_kind='synthetic_training_inputs')
         _write(out / "normalization.json", stats)
         for i, (images, states, actions) in enumerate(arrays):
             arrays[i] = (images, (states - state_mean) / state_std, (actions - action_mean) / action_std)
@@ -216,9 +270,11 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                            pretrained_backbone_weights=None, device="cpu",
                            optimizer_lr=1e-4, optimizer_lr_backbone=1e-5, optimizer_weight_decay=1e-4)
         policy = ACTPolicy(config)
+        from act_inference import install_action_head_transform
+        install_action_head_transform(policy,stats)
         optimizer = torch.optim.AdamW(policy.get_optim_params(), lr=config.optimizer_lr,
                                       weight_decay=config.optimizer_weight_decay)
-        indices = [(e, i) for e, a in enumerate(arrays[:train_count]) for i in range(len(a[0]))]
+        indices = [(e, i) for e, chosen in enumerate(selected_indices[:train_count]) for i in chosen]
         history = []
         _write(out / "state.json", {"status": "training", "steps": steps, "seed": seed, "source_episodes": ids})
         for step in range(steps):
@@ -227,9 +283,18 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             for e, i in picked:
                 images, states, actions = arrays[e]
                 chunk = chunk_indices(len(actions), i, 4)
-                batch["observation.state"].append(states[i])
+                state=states[i]
+                origin=state*state_std+state_mean
+                if noise_rng is not None:
+                    # Synthetic train input only; all original absolute targets stay fixed.
+                    origin=origin+torch.randn(origin.shape,generator=noise_rng)*state_noise_std_rad
+                    state=(origin-state_mean)/state_std
+                batch["observation.state"].append(state)
                 batch[image_key].append(images[i])
-                batch["action"].append(torch.stack([actions[j] if j is not None else actions[-1] for j in chunk]))
+                targets=torch.stack([actions[j] if j is not None else actions[-1] for j in chunk])
+                if action_representation!='absolute':
+                    targets=targets-origin/action_std
+                batch["action"].append(targets)
                 batch["action_is_pad"].append(torch.tensor([j is None for j in chunk], dtype=torch.bool))
             batch = {k: torch.stack(v) for k, v in batch.items()}
             policy.train()
@@ -250,17 +315,25 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             with torch.no_grad():
                 for images, states, _ in arrays[train_count:]:
                     model.reset()
-                    predictions.extend(model.select_action({"observation.state": states[i:i+1],
-                                       image_key: images[i:i+1]}).squeeze(0)
-                                       for i in range(len(states)))
-            return (torch.stack(predictions) * action_std + action_mean).numpy()
+                    queue=deque()
+                    for i in range(len(states)):
+                        if not queue:
+                            chunk=model.predict_action_chunk({"observation.state":states[i:i+1],
+                                                              image_key:images[i:i+1]})
+                            actions=chunk[0,:n_action_steps]*action_std+action_mean
+                            if action_representation!='absolute':
+                                actions=actions+states[i]*state_std+state_mean
+                            queue.extend(actions)
+                        predictions.append(queue.popleft())
+            return torch.stack(predictions).numpy()
 
         prediction = predict(policy)
         reloaded = ACTPolicy.from_pretrained(out / "policy", local_files_only=True)
+        install_action_head_transform(reloaded,stats)
         np.testing.assert_allclose(predict(reloaded), prediction, atol=1e-6, rtol=1e-6)
         truth = np.asarray([r["action"] for rows in original_rows[train_count:] for r in rows])
         limits = [sources[0]["position_limits_rad"][name] for name in names]
-        report = offline_report(truth, prediction, action_mean.numpy(), train_actions.numpy(), limits)
+        report = offline_report(truth, prediction, absolute_baseline.numpy(), train_actions.numpy(), limits)
         report.update(algorithm="lerobot-act", lerobot_version="0.4.4", torch_version=str(torch.__version__),
                       device="cpu", seed=seed, steps=steps, n_action_steps=n_action_steps,
                       train_episodes=ids[:train_count], eval_episodes=ids[train_count:],
@@ -277,9 +350,14 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         for episode_id, rows in zip(ids[train_count:], original_rows[train_count:]):
             count = len(rows)
             per_episode[episode_id] = offline_report(truth[offset:offset+count], prediction[offset:offset+count],
-                action_mean.numpy(), train_actions.numpy(), limits)
+                absolute_baseline.numpy(), train_actions.numpy(), limits)
             offset += count
         report['per_episode'] = per_episode
+        if noise_rng is not None:
+            report['training_augmentation']=stats['training_augmentation']
+        if sampling_ref is not None:
+            report['training_sampling'] = dict(rule=sampling,index=sampling_ref,
+                selected_training_frames=len(indices),all_training_frames=sum(len(rows) for rows in original_rows[:train_count]))
         if len(eval_exports) == 1:
             report['eval_episode'] = ids[-1]
         judges = set(report['task_outcome_judges'].values())
@@ -288,9 +366,13 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         _write(out / "offline-report.json", report)
         refs = [_ref(p, out) for folder in ("episodes", "reader-inputs")
                 for p in sorted((out / folder).rglob('*')) if p.is_file()]
+        transformation_config = stats
+        if sampling_ref is not None:
+            refs.append(sampling_ref)
+            transformation_config = dict(normalization=stats,training_sampling=sampling_ref)
         dataset = seal({"schema": "rosy.dataset-manifest/1", "episodes": [e["revision"] for e in episodes],
                        "transformation": {"tool_revision": "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                                          "config_sha256": hashlib.sha256(json.dumps(stats, sort_keys=True).encode()).hexdigest()},
+                                          "config_sha256": hashlib.sha256(json.dumps(transformation_config, sort_keys=True).encode()).hexdigest()},
                        "files": refs})
         validate_dataset(dataset, root=out)
         _write(out / "dataset-manifest.json", dataset)
@@ -332,9 +414,13 @@ def main():
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
+    ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
+    ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'),default='absolute')
+    ap.add_argument('--state-noise-std-rad',type=float,default=0.)
     args = ap.parse_args()
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
-                         n_action_steps=args.n_action_steps)))
+                         n_action_steps=args.n_action_steps,sampling=args.sampling,
+                         action_representation=args.action_representation,state_noise_std_rad=args.state_noise_std_rad)))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,34 @@ import sys
 
 import pytest
 
+
+def test_relative_action_statistics_keep_absolute_baseline_and_fail_closed_for_old_consumers():
+    import act_inference
+    stats=dict(action_transform=dict(type='joint_delta_from_chunk_source_v1',
+        mean=[.01,-.02],std=[.03,.04],absolute_baseline=[1.,2.]))
+    assert act_inference.action_statistics(stats,2)==(
+        'joint_delta_from_chunk_source_v1',(.01,-.02),(.03,.04),(1.,2.))
+    assert 'action_mean' not in stats and 'action_std' not in stats
+    assert act_inference.action_statistics(dict(action_mean=[1.,2.],action_std=[.1,.2]),2)==(
+        'absolute',(1.,2.),(.1,.2),(1.,2.))
+
+
+@pytest.mark.parametrize('change', [
+    {'action_mean':[0.,0.]},
+    {'action_transform':None},
+    {'action_transform':dict(type='unknown',mean=[0.,0.],std=[1.,1.],absolute_baseline=[1.,2.])},
+    {'action_transform':dict(type=None,mean=[0.,0.],std=[1.,1.],absolute_baseline=[1.,2.])},
+    {'action_transform':dict(type='joint_delta_from_chunk_source_v1',mean=[float('nan'),0.],std=[1.,1.],absolute_baseline=[1.,2.])},
+    {'action_transform':dict(type='joint_delta_from_chunk_source_v1',mean=[0.,0.],std=[0.,1.],absolute_baseline=[1.,2.])},
+    {'action_transform':dict(type='joint_delta_from_chunk_source_v1',mean=[0.,0.],std=[1.,1.],absolute_baseline=[1.])},
+])
+def test_relative_action_statistics_reject_ambiguous_unknown_or_invalid_metadata(change):
+    import act_inference
+    stats=dict(action_transform=dict(type='joint_delta_from_chunk_source_v1',
+        mean=[0.,0.],std=[1.,1.],absolute_baseline=[1.,2.]))
+    stats.update(change)
+    with pytest.raises(ValueError):act_inference.action_statistics(stats,2)
+
 ROOT=Path(__file__).resolve().parents[4]
 sys.path[:0]=[str(ROOT/'learning/training/omx'),str(ROOT/'contracts/learning/src'),str(ROOT/'test')]
 from act_inference import ACTInference,InferenceObservation
@@ -133,3 +161,18 @@ def test_nonfinite_model_output_latches_until_explicit_reset(tmp_path,monkeypatc
     with pytest.raises(ValueError):engine.infer(observation())
     engine.reset('hold')
     assert engine.infer(observation()).positions==(.1,.2)
+
+
+@pytest.mark.parametrize('change',[{},dict(max_delta_rad=.04),dict(max_delta_rad=True),
+    dict(max_delta_rad=float('nan')),dict(extra=1),dict(type='unknown')])
+def test_bounded_transform_has_one_exact_byte_bound_configuration(change):
+    from act_inference import action_statistics
+    transform=dict(type='joint_delta_tanh_from_chunk_source_v1',mean=[0.,0.],std=[1.,1.],
+                   absolute_baseline=[0.,0.],max_delta_rad=.035)
+    transform.update(change)
+    stats=dict(action_transform=transform)
+    if not change:
+        assert action_statistics(stats,2)[0]=='joint_delta_tanh_from_chunk_source_v1'
+    else:
+        with pytest.raises(ValueError):action_statistics(stats,2)
+    with pytest.raises(ValueError):action_statistics(dict(stats,action_mean=[0.,0.]),2)

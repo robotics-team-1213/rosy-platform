@@ -24,6 +24,31 @@ python learning/training/omx/act_job.py
 오차와 에피소드별 오차를 함께 보존한다. 고정 물체 과제는 train 20/validation 5를
 분리하고, 새 SIM 과제 20회의 성공률을 별도로 측정한다.
 
+`--action-representation joint_delta_from_chunk_source_v1`은 원 target에서 chunk 시작
+관측 상태를 뺀 이동량을 학습한다. 미래 target도 모두 같은 시작 상태를 기준으로 한다.
+추론 시 그 원 상태를 더해 절대 target chunk를 한 번 복원하고 큐에 저장하며, 이후
+관측으로 다시 기준을 바꾸지 않는다. 외부 profile과 timestamp·owner 검사는 유지한다.
+새 정규화는 `action_transform` 안에 type·mean·std·absolute_baseline을 기록하며
+기존 최상위 action_mean/action_std를 두지 않아 구 소비자는 모델 생성 전에 거절한다.
+평가 baseline은 원 절대 train target 평균이다. 기본 `absolute`의 정규화 구조는 그대로다.
+
+`--action-representation joint_delta_tanh_from_chunk_source_v1`은 새 checkpoint용으로
+ACT linear action head의 역정규화 이동량 `d`에 `0.035*tanh(d/0.035)`를 적용한다.
+미분 가능한 같은 activation을 학습·validation·재적재·byte 추론에 설치하며 정규화의
+type과 정확한 `max_delta_rad: 0.035`를 hash로 결속한다. 기존 weight key는 유지된다.
+원 절대 target을 자르지 않으므로 0.035rad 밖의 정답은 정확히 재현할 수 없다.
+chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존
+owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 성공의 증거는 아니다.
+
+상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
+Gaussian 교란을 주는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
+시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
+정규화를 fit하고 validation·추론에는 교란을 넣지 않는다. 분포·std·seed·관절·적용 범위는
+정규화·보고서와 DatasetManifest transformation hash에 결속한다. 교란 입력은 synthetic이며
+실제 관측·추가 시연·SIM truth가 아니다. 관절 한계 밖 상태나 0.04rad 초과 이동량도 만들 수
+있고 clipping하지 않는다. 실제 recovery 정답이나 native 성공을 보장하지 않는다.
+기본값 0에서는 전용 RNG와 추가 augmentation metadata를 만들지 않는다.
+
 `lerobot_export.py --sim-ground-truth <truth.json>`으로 검증한 고정 물체 과제의
 원본 증거는 `rosy_sim_truth/`에 복사된다. 학습 snapshot과 공통 Episode에도 같은
 bytes를 보존하고 실제 judge를 기록한다. 명시한 증거가 없으면 기존 operator
@@ -83,11 +108,25 @@ revision만 받아 결과를 반환하며 안전 owner 타입을 import하지 �
 현재 isolated caller 시험이 잠금 밖 추론과 lease 재검사·PolicyCandidate 구성을
 연결한다. 원 관측 재전달·큐 시각 갱신은 없다. 실제 제출·최종 판단은 기존
 `session.submit`에 맡긴다. 기본 runtime·명령·issuer·자동 scheduler·HOLD 해제는 없다.
+Private SIM caller는 추론 뒤 lease 연속성만 재검사하고 미승인 후보를 반환한다.
+추론 중 철회·설치 파일 변경이 생겼어도 후보 반환 자체는 실행 승인이 아니며,
+calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에서 거절해야 한다.
+실제 SIM actor는 새 입력 대기를 기존 `require_live()`의 과제 종료·감시 조건에
+연결한다. 원본 입력의 freshness와 모든 owner 검사는 유지하며 추론·이미지 저장 후와
+제출 전에도 종료를 검사한다. callback 없는 호출의 기존 획득 시간 한도는 유지한다.
 실제 trusted capture/issuer·승인된 모델의 ROS 프로세스 결선은 여전히 별도다.
 
 기본 n_action_steps=4는 유지한다. `--n-action-steps 1`은 chunk_size4를 유지하면서
 매 관측의 첫 행동만 반환하는 별도 config/평가/PolicyArtifact를 만든다. 허용 값은 1..4이다.
 설정을 바꾸어 기존 artifact의 revision이나 거절 이력을 덮어쓰지 않는다.
+
+기본 학습 표본은 `--sampling all_frames`다. 고정 6관절 OMX SIM 물체 과제의
+`--sampling command_entry`는 각 원 command/goal 쌍에서 팔 target-state 차이
+0.035rad 이하·그리퍼 0.04rad 이하인 첫 원본 frame을 학습 시작점으로 고른다.
+독립 SIM 정답을 요구하며 모든 명령에 표본이 없으면 거절한다. 그리퍼의 학습
+여유는 보장하지 않는다. 원본 arrays·target·시각·chunk 순서·전체 validation은 유지한다.
+선택 indices와 규칙은 `training-index.json` 및 DatasetManifest config SHA에 결속한다.
+학습 표본 선택은 실제 최종 readback 승인이나 물체 성공을 보장하지 않는다.
 
 `act_inference_replay.py`는 bound Dataset 파일에 포함된 실제 LeRobot 평가 reader로
 모델의 입력/행동/큐 provenance·latency를 새 X artifact에 보존하고 기존 offline metrics를

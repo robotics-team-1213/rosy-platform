@@ -9,6 +9,56 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from act_job import chunk_indices, offline_report, compatible_sources, run
 
 
+def test_command_entry_sampling_keeps_every_command_and_original_labels():
+    import copy
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id=command,ros_goal_id=goal,
+               **{'observation.state':[0.]*6,'action':[arm,0.,0.,0.,0.,gripper]})
+          for command,goal,arm,gripper in [('a','ga',.041,.0399),('a','ga',.034,.0399),
+              ('a','ga',.001,.0399),('b','gb',.03,.0399),('b','gb',.001,.0399)]]
+    original=copy.deepcopy(rows)
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry')==[1,3]
+    assert rows==original
+    assert chunk_indices(len(rows),1,4)==[1,2,3,4]  # Chunk still follows original frames.
+    assert act_job.training_sample_indices(rows,names,sampling='all_frames')==list(range(5))
+
+
+def test_command_entry_sampling_refuses_to_drop_unrepresented_commands():
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id='a',ros_goal_id='ga',
+               **{'observation.state':[0.]*6,'action':[0.,0.,0.,0.,0.,.0401]})]
+    with pytest.raises(ValueError,match='every command'):
+        act_job.training_sample_indices(rows,names,sampling='command_entry')
+
+
+def test_invalid_training_sampling_fails_before_source_or_model_access(tmp_path):
+    with pytest.raises(ValueError,match='sampling'):
+        run([],tmp_path/'absent',tmp_path/'out',sampling='unknown')
+    assert not (tmp_path/'out').exists()
+
+
+def test_unknown_action_representation_fails_before_source_or_model_access(tmp_path):
+    with pytest.raises(ValueError,match='action representation'):
+        run([],tmp_path/'absent',tmp_path/'out',action_representation='unknown')
+    assert not (tmp_path/'out').exists()
+
+
+@pytest.mark.parametrize('std',[True,-.01,float('inf'),float('nan')])
+def test_invalid_state_noise_fails_before_source_or_model_access(tmp_path,std):
+    with pytest.raises(ValueError,match='state noise'):
+        run([],tmp_path/'absent',tmp_path/'out',state_noise_std_rad=std,
+            action_representation='joint_delta_from_chunk_source_v1')
+    assert not (tmp_path/'out').exists()
+
+
+def test_state_noise_requires_source_relative_targets(tmp_path):
+    with pytest.raises(ValueError,match='relative'):
+        run([],tmp_path/'absent',tmp_path/'out',state_noise_std_rad=.02)
+    assert not (tmp_path/'out').exists()
+
+
 def test_multiple_validation_episodes_cannot_overlap_training(tmp_path, monkeypatch):
     monkeypatch.setattr('act_job.importlib.metadata.version', lambda *_: '0.4.4')
     with pytest.raises(ValueError, match='disjoint'):

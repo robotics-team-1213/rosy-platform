@@ -39,6 +39,13 @@ def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback,
         with pytest.raises(PermissionError):
             session.submit(proposed)
         assert session.hold_reason
+        rejection=session._runtime_binding.admission_rejection
+        assert rejection['reason']=='readback_step'
+        assert rejection['positions']['joint_1']==readback
+        assert rejection['max_step_rad']==pytest.approx(abs(target-readback))
+        assert rejection['command_id']
+        assert session._runtime_binding.check_command(object()) is False
+        assert session._runtime_binding.admission_rejection is rejection
     assert checked and checked[-1] is accepted
     assert len(client.commands) == int(accepted)
 
@@ -64,3 +71,64 @@ def test_revocation_at_final_native_admission_sends_no_new_goal(tmp_path,monkeyp
     monkeypatch.setattr(runtime,'_submit_policy',revoke_at_edge)
     with pytest.raises(PermissionError):session.submit(candidate(session))
     assert not client.commands and session.hold_reason
+
+
+@pytest.mark.parametrize('calibration', [True, False])
+@pytest.mark.parametrize('expire_on_save', [False,True])
+def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calibration,expire_on_save):
+    import ast
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    source = ROOT/'deploy/robot/omx/sim_pick_place_policy.py'
+    tree = ast.parse(source.read_text(encoding='utf-8'))
+    loop = next(node for node in ast.walk(tree) if isinstance(node, ast.For)
+                and isinstance(node.target, ast.Name) and node.target.id == 'index')
+    clock = [0.]
+    captures, checks = [], []
+    expired=[False]
+    def require_live():
+        if expired[0]:raise TimeoutError('original actor deadline')
+    def infer(*args, **kwargs):
+        assert kwargs['require_live'] is require_live
+        captures.append(clock[0])
+        clock[0] += .1
+        return SimpleNamespace(produced_at_ns=0, observed_at_ns=0,
+                               camera_received_at_ns=(0,)), SimpleNamespace(
+            source=SimpleNamespace(rgb=b'', frame_sha256='frame'), consumed_current=True,
+            produced_at_ns=0, returned_at_ns=0)
+    def guard():
+        checks.append(clock[0])
+        return {'timing': {'max_action_age_ns': 10**12}}, 0, ()
+    def save_image(*args):
+        clock[0] += .01
+        expired[0]=expire_on_save
+    def reject(*args):
+        clock[0] += .05
+        raise PermissionError('controlled submit fault')
+    session = SimpleNamespace(_lock=nullcontext(), _guard=guard,
+                              _source=lambda *args: None, _camera_source=lambda *args: None,
+                              submit=reject)
+    namespace = dict(calibration=calibration, last_submit=None, last_cycle=None, period_s=.8,
+        time=SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda delay: clock.__setitem__(0, clock[0]+delay)),
+        require_live=require_live, infer_for_owner=infer, engine=None, session=session, camera=None,
+        asdict=vars, steps=[], Image=SimpleNamespace(frombytes=lambda *args:
+            SimpleNamespace(save=save_image)), frames=Path('/unused'), last_observed=[0.],
+        arm=SimpleNamespace(monotonic=lambda: clock[0]))
+    code=compile(ast.Module(body=[loop], type_ignores=[]), str(source), 'exec')
+    if expire_on_save:
+        with pytest.raises(TimeoutError,match='original actor deadline'):
+            exec(code,namespace)
+        assert len(captures)==1 and not checks
+    elif calibration:
+        exec(code, namespace)
+        assert len(captures) == len(checks) == 12
+        assert all(start-finished >= .8 for start, finished in zip(captures[1:], checks))
+    else:
+        with pytest.raises(PermissionError, match='controlled submit fault'):
+            exec(code, namespace)
+        assert namespace['steps'][0]['submit_ms'] == pytest.approx(50.)
+        assert namespace['steps'][0]['pre_submit_original_input_age_ms'] == pytest.approx(110.)
+    for step in namespace['steps']:
+        assert step['frame_save_ms'] == pytest.approx(10.)
+        assert step['candidate']['observed_at_ns'] == 0
+        assert step['candidate']['camera_received_at_ns'] == (0,)

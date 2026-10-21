@@ -22,6 +22,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     sys.path[:0]=[str(ROOT/p) for p in ('learning/training/omx',
         'middleware/robot_execution/local/src','contracts/learning/src','operations/processes/cell')]
     import rclpy
+    import torch
     from PIL import Image
     from rclpy.node import Node
     from rclpy.parameter import Parameter
@@ -32,6 +33,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from omx_adapter.gripper_contract import GripperObservation, verify_held_object, verify_released_object
     from rosy.execution.local.omx_policy import OwnerPolicySession
     from rosy.execution.local.policy_journal import PolicyExecutionJournal
+    from rosy.execution.local.policy_source import capture_source
     from rosy_cell.cell import load_cell
     from rosy_cell.recipe import load_recipe
     from rosy_cell.compiler import compile_job
@@ -50,6 +52,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     origins=verify_module_origins({'act_inference':'learning/training/omx',
         'rosy.execution.local.omx_policy':'middleware/robot_execution/local/src',
         'omx_adapter.command_owner':'middleware/devices/omx/adapter'})
+    previous_switch_interval_s=sys.getswitchinterval()
+    sys.setswitchinterval(.001)
     directory=Path(directory)
     frames=directory/'policy-frames';frames.mkdir(mode=0o700)
     parent_root=Path(os.environ['OMX_SIM_POLICY_INPUT'])
@@ -68,8 +72,10 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     config=profile.arm_command_config(workcell_id='omx_cell_sim',instance_id='omx_cell_sim_01',
         calibration_revision='omx-f-gazebo-only-v1',allowed_owners=('learned_policy',))
     events=[]
+    # Leave joint intake turns between full policy checks on the shared owner lock.
     arm=RosArmCommandRuntime(node,config,joint_state_topic=names.joint_state_topic,
-        trajectory_action=names.trajectory_action,on_goal_event=lambda event:events.append(asdict(event)))
+        trajectory_action=names.trajectory_action,poll_period_s=.2,
+        on_goal_event=lambda event:events.append(asdict(event)))
     camera=SimPolicyCamera(node,arm.monotonic)
     executor=OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
@@ -78,12 +84,16 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     samples,steps,transitions,worker_errors=[],[],[],[]
     stop=threading.Event()
     authority=fence=session=None
+    failed_traceback=None
     threads=[]
     started=time.monotonic()
     last_observed=[None]
     receipt=dict(schema='rosy.omx-fixed-object-policy-trial/1',success=False,
         mode='calibration_without_policy_goals' if calibration else 'learned_policy_object_trial',
         parent_policy_revision=campaign['policy_revision'],goal_m=goal,sim_aid=True,
+        runtime_poll_period_s=arm.poll_period_s,
+        python_switch_interval_s=sys.getswitchinterval(),
+        previous_python_switch_interval_s=previous_switch_interval_s,
         operating_fleet_approval='NOT_CLAIMED',physical_device_authority=False,module_origins=origins)
 
     def require_live():
@@ -134,17 +144,29 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         policy=prepare_install(parent_root,campaign['policy_revision'],directory/'installed',arm.owner,
             normalization_sha256=campaign['normalization_sha256'])
         engine=ACTInference(policy.root,policy.binding.policy_revision,monotonic=arm.monotonic)
+        period_s=engine.metadata['timing']['period_ns']/1e9
+        receipt['policy_cycle_minimum_interval_s']=period_s
+        receipt['torch_num_threads']=torch.get_num_threads()
+        receipt['torch_num_interop_threads']=torch.get_num_interop_threads()
         receipt['installed_policy_revision']=policy.binding.policy_revision
+        journal=PolicyExecutionJournal(directory/'policy-execution.sqlite3')
+        prepare_started=time.monotonic()
+        header,payloads=capture_source(policy,arm.owner)
+        prepared_source=journal.store_source(header,payloads)
+        del header,payloads
+        receipt['source_prepare_ms']=(time.monotonic()-prepare_started)*1000
+        require_live()
         authority=NativeSimStudyAuthority(os.environ['OMX_NATIVE_STATE'],policy,arm.owner,str(uuid4()),
             monotonic=arm.monotonic)
         fence=NativeSimStopFence(authority)
-        journal=PolicyExecutionJournal(directory/'policy-execution.sqlite3')
         session=OwnerPolicySession(policy,arm.owner,fence,authority.issue(),authority_current=authority.current,
             owner_identity=lambda:dict(simulation=True,workcell_id=config.workcell_id,
                 instance_id=config.instance_id,profile='sim-world:'+WORLD),monotonic=arm.monotonic,
             enabled=True,camera_current=camera.snapshots,execution_journal=journal)
         bind_started=time.monotonic()
         bind_sim_runtime(session,arm)
+        if session._runtime_binding.source_revision!=prepared_source:
+            raise PermissionError('prepared source changed during runtime binding')
         receipt['runtime_bind_ms']=(time.monotonic()-bind_started)*1000
         renew=threading.Thread(target=renew_worker,daemon=True);renew.start();threads.append(renew)
         sampler=threading.Thread(target=observe_worker,daemon=True);sampler.start();threads.append(sampler)
@@ -152,19 +174,25 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         initial_z=samples[0]['model_pose_base']['z_m']
         aid.watch('infeed_block');aid._robot_entity_id()
         attached=ever_attached=False
-        last_submit=None
+        last_cycle=None
         for index in range(12 if calibration else 600):
             require_live()
-            while last_submit is not None and time.monotonic()-last_submit<.8:
+            while last_cycle is not None and time.monotonic()-last_cycle<period_s:
                 require_live();time.sleep(.01)
             before=time.monotonic()
-            candidate,result=infer_for_owner(engine,session,camera)
+            timing_ms={}
+            candidate,result=infer_for_owner(engine,session,camera,timings=timing_ms,require_live=require_live)
             step=dict(index=index,candidate=asdict(candidate),inference_ms=(time.monotonic()-before)*1000,
+                cycle_started_owner_s=before,
+                timing_ms=timing_ms,
                 input={key:value for key,value in asdict(result.source).items() if key!='rgb'},
                 frame_sha256=result.source.frame_sha256,consumed_current=result.consumed_current,
                 produced_owner_ns=result.produced_at_ns,returned_owner_ns=result.returned_at_ns)
             steps.append(step)
+            save_started=time.monotonic()
             Image.frombytes('RGB',(320,240),result.source.rgb).save(frames/f'{index:04d}.png')
+            step['frame_save_ms']=(time.monotonic()-save_started)*1000
+            require_live()
             if calibration:
                 with session._lock:
                     doc,now,cameras=session._guard()
@@ -172,12 +200,19 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                     if now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         raise PermissionError('calibration action too old')
                 step['checked_input_age_ms']=(now-min(candidate.observed_at_ns,*candidate.camera_received_at_ns))/1e6
-                time.sleep(.1)
+                last_cycle=time.monotonic()
                 continue
             if last_observed[0] is None or time.monotonic()-last_observed[0]>.5:
                 raise PermissionError('independent object observation stale')
-            decision=session.submit(candidate)
-            last_submit=time.monotonic()
+            step['pre_submit_original_input_age_ms']=(int(arm.monotonic()*1e9)-min(
+                candidate.observed_at_ns,*candidate.camera_received_at_ns))/1e6
+            submit_started=time.monotonic()
+            try:
+                require_live()
+                decision=session.submit(candidate)
+            finally:
+                step['submit_ms']=(time.monotonic()-submit_started)*1000
+            last_cycle=time.monotonic()
             step.update(decision=asdict(decision),command_id=session._active_command)
             deadline=time.monotonic()+30
             while True:
@@ -224,6 +259,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             raise RuntimeError('fixed object task did not satisfy independent judge')
     except Exception as error:
         receipt['error']=type(error).__name__+': '+str(error)
+        failed_traceback=error.__traceback__
     finally:
         stop.set()
         for thread in threads:thread.join(4)
@@ -239,6 +275,12 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         if session:
             try:session._fail('isolated_study_ended')
             except PermissionError:pass
+        if failed_traceback is not None:
+            import traceback
+            receipt['error_stack']=[dict(file=Path(frame.filename).name,line=frame.lineno,function=frame.name)
+                for frame in traceback.extract_tb(failed_traceback,limit=12)]
+        if session and session._runtime_binding is not None:
+            receipt['admission_rejection']=session._runtime_binding.admission_rejection
         receipt.update(wall_s=time.monotonic()-started,worker_errors=worker_errors,
             owner_final=arm.owner.state,camera_accepted=camera.accepted,camera_rejected=camera.rejected,
             camera_error=camera.error,policy_steps=len(steps),native_events=len(events))

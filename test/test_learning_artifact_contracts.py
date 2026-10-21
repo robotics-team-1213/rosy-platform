@@ -83,6 +83,25 @@ def test_episode_verifies_actual_bytes_and_then_refuses_tamper(tmp_path):
         validate_episode(doc, root=tmp_path)
 
 
+@pytest.mark.parametrize('size', [0, 8 << 20, (8 << 20) + 17])
+def test_file_verification_reads_the_tail_and_checks_exact_size(tmp_path, size):
+    from rosy.contracts.learning.artifacts import _ref
+    payload = bytearray(size)
+    path = tmp_path/'weights.bin'
+    path.write_bytes(payload)
+    ref = dict(path=path.name, bytes=size, sha256=hashlib.sha256(payload).hexdigest())
+    _ref(ref, tmp_path)
+    with pytest.raises(ValueError, match='hash/size'):
+        _ref({**ref, 'bytes': size+1}, tmp_path)
+    if payload:
+        payload[-1] = 1
+    else:
+        payload.append(1)
+    path.write_bytes(payload)
+    with pytest.raises(ValueError, match='hash/size'):
+        _ref(ref, tmp_path)
+
+
 def test_stage_jump_and_different_policy_cannot_use_promotion_evidence():
     candidate = policy()
     checks = [{"kind": kind, "verdict": "pass", "report": REF} for kind in
