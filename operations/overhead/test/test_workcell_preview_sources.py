@@ -11,6 +11,17 @@ from rosy_vision import cli
 from test_vision_cli import SYNC_FLAGS, _configs
 
 
+def test_manifest_environment_default_and_explicit_cli_precedence(tmp_path, monkeypatch):
+    configured = tmp_path / "configured.yaml"
+    monkeypatch.setenv("ROSY_WORKCELL_OBSERVATIONS", str(configured))
+    assert cli.parse_args(["vision"]).workcell_observations == configured
+    other = tmp_path / "explicit.yaml"
+    assert cli.parse_args(["vision", "--workcell-observations", str(other)]).workcell_observations == other
+    monkeypatch.setenv("ROSY_WORKCELL_OBSERVATIONS", "")
+    with pytest.raises(SystemExit):
+        cli.parse_args(["vision"])
+
+
 @pytest.fixture
 def manifest(tmp_path):
     data = {
