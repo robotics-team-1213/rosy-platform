@@ -82,9 +82,10 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
     (state/'learning-control.json').write_text('{}')
     (state/'review-ai.json').write_text('{}')
+    (state/'omx-center.json').write_text('{}')
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -94,10 +95,41 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     assert '--learning-control' not in unit.read_text()
     assert '--decisions-port' not in unit.read_text()
     assert '--review-ai-config' not in unit.read_text()
+    assert '--omx-center-config' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
     assert '--decisions-port 18774' in unit.read_text()
     assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
+    assert f'--omx-center-config {state}/omx-center.json' in unit.read_text()
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
+@pytest.mark.parametrize('prior_release', [False, True])
+@pytest.mark.parametrize('supports_center', [False, True])
+def test_new_release_uses_target_cli_for_center_binding(tmp_path, monkeypatch, prior_release, supports_center):
+    source = tmp_path/'source'
+    source_tree(source)
+    (source/release.APP).write_text("parser.add_argument('--omx-center-config')" if supports_center else 'pass')
+    root = tmp_path/'root'
+    root.mkdir()
+    state = tmp_path/'state'
+    state.mkdir()
+    (state/'reviews.sqlite3').touch()
+    (state/'omx-center.json').write_text('{}')
+    if prior_release:
+        old = root/'releases/old'
+        source_tree(old)
+        (old/release.APP).write_text('pass' if supports_center else "parser.add_argument('--omx-center-config')")
+        (root/'current').symlink_to(old)
+    unit = tmp_path/'review.service'
+    unit.write_text('[Service]\nExecStart=/existing/review\n')
+    monkeypatch.setattr(release, 'run_systemctl', lambda *args: None)
+    monkeypatch.setattr(release, 'check_live', lambda *args: None)
+    monkeypatch.setattr(release.subprocess, 'run', lambda *args, **kwargs: None)
+    release.install(source, 'new', root, state, Path(sys.executable), '127.0.0.1', 8774, unit)
+    assert ('--omx-center-config' in unit.read_text()) is supports_center
+    assert str(root/'current'/release.APP) in unit.read_text()
+    assert str(source/release.APP) not in unit.read_text()
 
 
 def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
@@ -212,12 +244,17 @@ def test_collaboration_unit_is_loopback_and_has_no_unprotected_decisions_port(tm
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
-def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypatch):
+@pytest.mark.parametrize('supports_center', [False, True])
+def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypatch, supports_center):
     source = tmp_path / 'source'; source_tree(source)
-    (source / release.APP).write_text("parser.add_argument('--collaboration')")
+    cli = "parser.add_argument('--collaboration')"
+    if supports_center:
+        cli += "; parser.add_argument('--omx-center-config')"
+    (source / release.APP).write_text(cli)
     state = tmp_path / 'state'; state.mkdir()
     (state / 'reviews.sqlite3').write_bytes(b'human decisions')
     (state / 'learning-collaboration.json').write_text('{}')
+    (state / 'omx-center.json').write_text('{}')
     root = tmp_path / 'root'; unit = tmp_path / 'rosy-edge-review.service'
     unit.write_text('original unit')
     calls = []
@@ -231,6 +268,7 @@ def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypa
     release.install(None, 'first', root, None, None, '127.0.0.1', 8768, unit, service)
     assert unit.read_text() == text
     assert '--collaboration' in text and '--decisions-port' not in text
+    assert ('--omx-center-config' in text) is supports_center
     assert ('restart', service) in calls
     assert (root / (service + '.before-managed')).read_text() == 'original unit'
     old = root / 'releases/old'; source_tree(old)

@@ -44,8 +44,9 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
             errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
             try:
                 page.goto(f'http://127.0.0.1:{server.server_port}/learning',wait_until='networkidle')
-                page.get_by_role('link', name='모방학습', exact=True).click()
+                page.get_by_role('link', name='로봇암 학습', exact=True).click()
                 playwright.expect(page).to_have_url(f'http://127.0.0.1:{server.server_port}/learning/omx')
+                page.locator('#omx-sections a[href="#dataset-section"]').click()
                 playwright.expect(page.get_by_text('등록 자료가 불완전하거나 손상됐습니다. 원본 검증을 다시 실행하세요.', exact=True)).to_be_visible()
                 page.get_by_text('파지 구간 검수',exact=True).click()
                 page.get_by_label('확인 프레임',exact=True).fill('2')
@@ -54,7 +55,7 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 playwright.expect(page.locator('details img')).to_have_js_property('naturalWidth', 32)
                 for width,height in [(1440,1000),(390,844),(320,568)]:
                     page.set_viewport_size(dict(width=width,height=height))
-                    page.evaluate('scrollTo(0,0)')
+                    page.locator('.omx-stage').scroll_into_view_if_needed()
                     assert page.locator('details img').bounding_box()['y'] <= height*0.7
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                     for button in page.locator('details [role="button"]').all():

@@ -124,7 +124,8 @@ def digest_tree(source: Path) -> str:
     return digest.hexdigest()
 
 
-def unit_contents(current: Path, state: Path, python: Path, host: str, port: int) -> str:
+def unit_contents(current: Path, state: Path, python: Path, host: str, port: int,
+                  *, source: Path | None = None) -> str:
     collaboration = state / 'learning-collaboration.json'
     if collaboration.is_file() and not ipaddress.ip_address(host).is_loopback:
         raise ValueError('collaboration requires a loopback listener behind HTTPS')
@@ -145,6 +146,9 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     control = f" --learning-control {state / 'learning-control.json'}" if (state / 'learning-control.json').is_file() else ''
     if (state / 'review-ai.json').is_file():
         control += f" --review-ai-config {state / 'review-ai.json'}"
+    if ((state / 'omx-center.json').is_file()
+            and '--omx-center-config' in ((source or current) / APP).read_text(encoding='utf-8')):
+        control += f" --omx-center-config {state / 'omx-center.json'}"
     control += (f' --collaboration {collaboration}' if collaboration.is_file()
                 else f' --decisions-port {port + 10000}')
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
@@ -248,7 +252,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         check_source(source, root, state)
         if target.exists():
             raise ValueError(f"release already exists: {target}")
-        unit_text = unit_contents(current, state, python, host, port)
+        unit_text = unit_contents(current, state, python, host, port, source=source)
         binding = state / 'learning-collaboration.json'
         if b' --collaboration ' in old_unit and not binding.is_file():
             raise ValueError('bound collaboration configuration is missing')
@@ -310,6 +314,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
             if line.startswith('ExecStart='):
                 line = re.sub(r' --learning-control [^\s]+', '', line)
                 line = re.sub(r' --review-ai-config [^\s]+', '', line)
+                line = re.sub(r' --omx-center-config [^\s]+', '', line)
                 line = re.sub(r' --decisions-port [^\s]+', '', line)
                 cli = app.read_text(encoding='utf-8')
                 port_arg = re.search(r' --port ([0-9]+)', line)
@@ -332,6 +337,9 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 if state_arg and '--review-ai-config' in cli:
                     binding = Path(state_arg[1]) / 'review-ai.json'
                     if binding.is_file(): line = line.rstrip('\n') + f' --review-ai-config {binding}\n'
+                if state_arg and '--omx-center-config' in cli:
+                    binding = Path(state_arg[1]) / 'omx-center.json'
+                    if binding.is_file(): line = line.rstrip('\n') + f' --omx-center-config {binding}\n'
             lines.append(line)
         adjusted = ''.join(lines)
         if adjusted != text: unit_text = adjusted

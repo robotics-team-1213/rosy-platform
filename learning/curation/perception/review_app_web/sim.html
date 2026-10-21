@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — SIM 실험</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<script type="module" src="/sim.js"></script></head><body><a class="skip-link" href="#sim-main">SIM 실험으로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-learning-account-entry href="/accounts">로그인·계정</a><label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="작업 목록" aria-current="page">목록</a><a class="ui-rail-item" data-action-icon="box" href="/" aria-label="객체 검수">객체</a><a class="ui-rail-item" data-action-icon="pixels" href="/pixels" aria-label="픽셀 검수">픽셀</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="image" href="/learning/camera" aria-label="카메라 맞춤">카메라</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/omx" aria-label="로봇암 학습">로봇암</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><h1>SIM 실험</h1></div><main id="sim-main" class="learning-main" tabindex="-1">
+<p>웹과 CLI가 같은 실험 설정과 결과를 사용합니다. 첫 단계는 OMX-F 모델·관절 연결 검사입니다.</p>
+<ui-status id="sim-notice" state="ready" role="status">실행 연결을 확인하는 중입니다.</ui-status><ui-status id="sim-error" state="error" role="alert" hidden></ui-status>
+<section class="learning-section" aria-labelledby="sim-config-title"><h2 id="sim-config-title">1 · 실험 조건</h2>
+<div class="ui-form learning-form"><label class="ui-field-label">시나리오 <select id="sim-scenario" class="ui-field"></select></label>
+<label class="ui-field-label">Seed <input id="sim-seed" class="ui-field" type="number" min="0" max="2147483647" step="1" value="0"></label></div>
+<p class="quiet">모델 연결 검사에서는 seed를 사용하지 않습니다. 고정 조건: OMX-F · headless · 120프레임.</p>
+<pre id="sim-source" class="quiet"></pre><ul id="sim-prerequisites"></ul>
+<div class="ui-workspace-bar"><ui-button id="sim-check" data-action-icon="check" kind="quiet" disabled>조건 확인</ui-button><ui-button id="sim-start" data-action-icon="next" kind="primary" disabled>실험 시작</ui-button></div>
+<p id="sim-checked" class="quiet" role="status">조건 확인 후 실행할 수 있습니다.</p></section>
+<section class="learning-section" aria-labelledby="sim-runs-title"><div class="ui-workspace-bar"><h2 id="sim-runs-title">2 · 실행 기록</h2><ui-button id="sim-refresh" data-action-icon="refresh" kind="quiet">새로고침</ui-button></div>
+<p class="quiet">실패·중단·판정 불가 기록도 보존합니다. UNKNOWN은 자동으로 재시작하지 않습니다.</p><div id="sim-runs" aria-live="polite"></div></section>
+<section class="learning-section" aria-labelledby="sim-detail-title"><h2 id="sim-detail-title">3 · 결과 확인</h2>
+<pre id="sim-selected">기록을 선택하세요.</pre><div class="ui-workspace-bar"><ui-button id="sim-stop" data-action-icon="close" kind="quiet" disabled>이 실험 중지 요청</ui-button><ui-button id="sim-replay" data-action-icon="refresh" kind="quiet" disabled>새 실험으로 다시 실행</ui-button></div>
+<p>모델 검사 성공은 물리 집기·팔레타이징 성공이나 학습 수용을 뜻하지 않습니다. 기본 검사에는 영상이 없습니다.</p>
+<pre id="sim-result" class="quiet"></pre><div id="sim-artifacts"></div></section>
+</main></div></div></ui-shell></body></html>

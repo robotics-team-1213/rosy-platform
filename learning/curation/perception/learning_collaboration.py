@@ -91,6 +91,13 @@ class Collaboration:
         handler.learning_principal = principal
         return principal
 
+    def signed_in(self, handler):
+        try:
+            self.accounts.authenticate(cookie(handler, COOKIE))
+            return True
+        except PermissionError:
+            return False
+
     def csrf(self, handler, token):
         return hmac.new(token.encode(), self.cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
 
@@ -159,6 +166,9 @@ class Collaboration:
             if not path.startswith('/api/'):
                 handler.extra_headers.append(('Location', '/accounts'))
                 handler.send(b'', 303)
+            elif self.signed_in(handler):
+                # 401 would send a signed-in Account user back to login in a loop.
+                handler.send({'error': '이 프로젝트의 학습 권한이 없습니다. 계정 관리자에게 권한을 요청하세요.'}, 403)
             else:
                 signed_in = handler.learning_signed_in
                 handler.send({'error': '프로젝트 열람 권한이 필요합니다. 다른 계정으로 로그인하거나 관리자에게 권한을 요청하세요.'
@@ -257,21 +267,6 @@ class Collaboration:
             self.accounts.logout(self.cookie(handler, COOKIE))
             handler.send({'ok':True})
             return True
-        if path == '/api/accounts/login':
-            session, _ = self.accounts.login(body.get('username'), body.get('password'),
-                                              address=handler.client_address[0])
-            self.set_cookie(handler, COOKIE, session)
-            handler.send({'ok': True})
-            return True
-        if path == '/api/accounts/oauth' and body.get('purpose') == 'login':
-            if self.receiver:
-                raise PermissionError('Use Rosy Account to sign in')
-            if not self.oauth:
-                raise ValueError('Hugging Face OAuth is not configured')
-            url, binding = self.oauth.begin('login')
-            self.set_cookie(handler, BINDING, binding)
-            handler.send({'url': url})
-            return True
         principal = self.authorize_write(handler, path, body)
         if path == '/api/accounts/logout':
             self.accounts.logout(self.cookie(handler, COOKIE))
@@ -324,7 +319,6 @@ def load(config_path, store):
     """Private configuration is opened only when explicitly enabled by the operator."""
     import json
     from pathlib import Path
-    from learning_accounts import Accounts
     from learning_imports import LearningImports
     from learning_oauth import OAuth
     path = Path(config_path).resolve()
@@ -336,15 +330,15 @@ def load(config_path, store):
             raise ValueError(f'{name} must be an absolute private path')
         return value
 
-    if config.get('account_client_file'):
-        from core_common.protocol.account_client import load_account_client
-        from learning_rosy_accounts import RosyAccounts
-        receiver = load_account_client(private_path('account_client_file'), destinations=('/accounts','/'))
-        if receiver.callback != config.get('public_origin', '') + '/api/account/callback':
-            raise ValueError('Account callback must match public_origin')
-        accounts = RosyAccounts(private_path('accounts_db'), private_path('key_file'), path, receiver=receiver)
-    else:
-        accounts = Accounts(private_path('accounts_db'), private_path('key_file'), path)
+    # D-757: people sign in only through Rosy Account; app-local passwords are not served.
+    if not config.get('account_client_file'):
+        raise ValueError('collaboration requires account_client_file (Rosy Account sign-in)')
+    from core_common.protocol.account_client import load_account_client
+    from learning_rosy_accounts import RosyAccounts
+    receiver = load_account_client(private_path('account_client_file'), destinations=('/accounts','/'))
+    if receiver.callback != config.get('public_origin', '') + '/api/account/callback':
+        raise ValueError('Account callback must match public_origin')
+    accounts = RosyAccounts(private_path('accounts_db'), private_path('key_file'), path, receiver=receiver)
     oauth = OAuth(accounts) if config.get('oauth') else None
 
     def credential(actor, project, connection, generation=None, resource=None):

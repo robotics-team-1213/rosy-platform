@@ -9531,3 +9531,8 @@ osy-d395-s1d\`.
 - Change: exercise the deployed native worker and continuously refreshed camera captures after an injected first-upgrade stall, preserving TLS verification and the two-second production deadline. Production code is unchanged.
 - Evidence: `5441d27c73` failed one WSS upgrade in the broad run; its original cause remains unproven. `82e9a617d4` deterministically reproduced that timeout; `feaf710e26` passed 23 focused bridge, transport and pairing checks, proving recovery with a newer capture and clean worker shutdown.
 - Gate: unchanged. The combined final revision still requires publication checks; persistent physical operation is not established.
+
+## 2026-10-22 - Shared multi-robot Learning Center decisions
+- Change: record D-832 OMX profile support and D-840 shared multi-robot project/compute separation with actual-public-source deployment plan.
+- Evidence: user chose one existing Learning project for Model and AI and multiple robot kinds/instances as the center scope.
+- Gate: unchanged; unsupported adapters, hardware acceptance and production deployment remain explicit.

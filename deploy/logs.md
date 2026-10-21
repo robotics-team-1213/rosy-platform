@@ -3087,3 +3087,8 @@
 - Evidence: 0733786644 observer/probe checks: 41 passed. fe2765d67a site deployment, signing, update, firewall, preflight and architecture checks: 278 passed, 2 skipped. Actual Fleet Docker Compose renders the overlay with public placeholder inputs and confirms role-isolated read-only mounts; protected production site.env was not accessible. YAML/shutdown regressions first failed, then 6aebb15368 native/observer/probe/architecture/document checks passed all 110.
 - Evidence: Fleet Python 3.14.4 isolated environment imports native ROS, canonical protocol modules and pinned websockets 17.0.1/SDK 3.8.4 successfully. The two service units pass systemd-analyze verification; an unrelated installed spice-vdagent unit warns. Import/unit validation did not subscribe or open serial devices.
 - Gate: unchanged. Signed candidate build/activation, installed persistent services, normal-origin live Cell display and physical motion remain pending. No torque writes, grasp or learned policy acceptance is established.
+
+## 2026-10-22 - Learning Center publication source port
+- Change: bind center lifecycle to the hardened official review installer and extend the signed model-code dependency closure. Fleet receives a fixed protected Learning entry configuration.
+- Evidence: syntax and required-member inventory checked; committed-source remote regression is pending. Earlier development-branch tests do not certify this publication port.
+- Gate: unchanged; signed image activation, authenticated acceptance and physical training remain pending.

@@ -2,7 +2,7 @@ import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
-let token, session, active = false, pending = false;
+let token, session, active = false, pending = false, loginOptions = null;
 const loginFailures = new Map([
   ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
   ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
@@ -18,13 +18,20 @@ const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 �
 const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 const scopeLabel={'read-repos':'읽기','gated-repos':'제한 자료 읽기','write-repos':'쓰기','manage-repos':'저장소 생성·삭제'};
 function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
-function status(message, state) { $('account-status').textContent=message; $('account-status').setAttribute('state',state); }
+function status(text, state) {
+  $('account-status').textContent=text; $('account-status').setAttribute('state',state);
+}
+function loginControls() {
+  $('account-login').hidden=!loginOptions?.enabled || !loginOptions?.rosy_account;
+}
 function signedOut() {
   token=null; session=null; active=false;
   $('login-panel').hidden=false; $('signed-in').hidden=true;
-  status('로그인 또는 프로젝트 권한을 확인하세요.','empty');
+  status(loginOptions?.enabled?'Rosy Account로 로그인하세요.':'계정 서버 연결 준비 중입니다.', loginOptions?.enabled?'empty':'unavailable');
+  $('login-help').textContent=loginOptions?.enabled?'아래 버튼으로 Rosy Account 로그인 화면을 여세요. 로그인 후 이 Learning 화면으로 돌아옵니다.':'계정 서버 연결 준비 중입니다. 연결 후 Rosy Account로 로그인할 수 있습니다.';
+  loginControls();
   for(const id of ['identity','connections','connection','imports','repos','repo-connection']) $(id).replaceChildren();
-  for(const id of ['login-form','connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
+  for(const id of ['connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
 }
 async function api(path, body) {
   const response=await accountFetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
@@ -57,20 +64,20 @@ async function perform(action) {
 }
 async function refresh() {
   status('로그인 상태를 확인하는 중입니다.','pending');
-  $('account-retry').hidden=true;
-  const options=await api('/api/accounts/options');
-  $('login-form').hidden=!!options.rosy_account;
-  $('account-login').hidden=!options.rosy_account;
-  $('project-login-title').textContent=options.rosy_account?'Rosy Account 로그인':'프로젝트 로그인';
-  $('account-login-help').textContent=options.rosy_account
-    ?'아이디와 비밀번호는 Rosy Account 로그인 화면에서 입력합니다.'
-    :'프로젝트 계정으로 로그인하세요.';
-  $('hf-login').hidden=!options.oauth;
-  if(options.rosy_account) $('hf-login').hidden=true;
+  let options;
+  try { options=await api('/api/accounts/options'); }
+  catch(e) {
+    loginOptions=null; loginControls();
+    status('로그인 상태를 확인할 수 없습니다. 연결을 확인하고 다시 시도하세요.', 'unavailable');
+    $('login-help').textContent='로그인 연결을 확인할 수 없습니다. 연결 상태를 확인한 뒤 다시 확인하세요.';
+    throw e;
+  }
+  loginOptions=options; loginControls();
+  $('account-setup').hidden=!!options.enabled;
   if(!options.enabled) {
     signedOut();
     status('Rosy Account 연결이 설정되지 않았습니다. 관리자에게 이 앱의 Rosy Account 등록을 요청하세요.', 'unavailable');
-    $('login-panel').hidden=$('signed-in').hidden=true; $('account-retry').hidden=false; active=false; return;
+    return;
   }
   if(loginFailure) {
     signedOut(); status(loginFailure[1],loginFailure[0]); $('account-retry').hidden=false; return;
@@ -78,20 +85,14 @@ async function refresh() {
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status === 403) {
-      // A missing project grant must not automatically re-enter Account login.
+      // Signed in to Rosy Account without this project's grant; another login would loop.
       signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
     }
-    if(e.status!==401) throw e;
-    if(options.rosy_account) {
-      $('login-panel').hidden=true; $('signed-in').hidden=true;
-      $('account-status').textContent='Rosy Account로 연결 중…';
-      window.location.assign('/api/account/login?return=/accounts'); return;
-    }
-    token=null; active=false; $('login-panel').hidden=false; $('signed-in').hidden=true;
-    $('account-status').textContent='프로젝트에 로그인하세요.'; return;
+    if (e.status !== 401) throw e;
+    signedOut(); return;
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
-  status('로그인됨','ready');
+  status('로그인됨', 'ready');
   $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.join(', ')}`;
   const canPublish=session.capabilities.includes('publish');
   $('import-panel').hidden=!session.capabilities.includes('import');
@@ -151,10 +152,6 @@ async function jobs() {
     if(focusId===job.id) [...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)?.focus({preventScroll:true});
   }
 }
-$('login-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
-  const password=$('password').value; $('password').value='';
-  await api('/api/accounts/login',{username:$('username').value,password}); await refresh();
-});});
 $('logout').addEventListener('click',()=>perform(async()=>{
   active=false; $('signed-in').hidden=true;
   for(const id of ['connections','imports','connection','repos','repo-connection']) $(id).replaceChildren();
@@ -164,7 +161,7 @@ $('logout').addEventListener('click',()=>perform(async()=>{
 async function connectOAuth(purpose) {
   const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
 }
-for(const [id,purpose] of [['hf-login','login'],['hf-link','link']]) $(id).addEventListener('click',()=>perform(()=>connectOAuth(purpose)));
+for(const [id,purpose] of [['hf-link','link']]) $(id).addEventListener('click',()=>perform(()=>connectOAuth(purpose)));
 $('connect-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
   const secret=$('provider-token').value; $('provider-token').value='';
   await api('/api/accounts/connect',{token:secret,sharing:$('sharing').value,

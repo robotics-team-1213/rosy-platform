@@ -208,3 +208,17 @@ rehearsal 데이터는 실물 intake가 거부한다. [Fleet 수집·전송·검
 다른 검수자가 먼저 저장하면 다시 불러와 충돌을 해결한다. 입력이 남아 있으면 새로고침·이탈 시 확인한다.
 구간 선택 JSON을 내려받은 뒤 위 `native_segments.py` CLI로 새 child dataset을 만든다.
 이 화면은 학습 작업이나 로봇 동작을 시작하지 않는다.
+
+### 검토한 수집 자료를 학습센터로 가져오기
+
+학습센터의 폴더 업로드는 native LeRobot 디렉터리를 직접 읽지 않는다. 생산 수집 intake를 준비하고 사람이 `inspection.json`과 영상을 검토해 별도 결정 파일에 성공·독립 session/cycle 분할을 기록한 다음 아래 명령을 사용한다. 기본 unknown/exclude나 fixture_only intake는 출력 생성 전에 거절된다.
+
+```text
+python learning/curation/omx/collection_pipeline.py export-experiment <prepared-intake> --decisions <human-review.json> --profile <learning-profile.json> --out <new-export-directory>
+```
+
+LeRobot 0.4.4/PyAV가 있는 학습 호스트의 전용 Python으로 실행한다. 기존 native 분할/reader 검증 후 실제 배열을 변환하고 `experiment-export-receipt.json`에 원본·검토·프로필·분할·변환 해시를 기록한다. 검토 증거는 실행 폴더에 복사하며 원본을 수정하지 않는다. 출력의 `dataset/` 폴더만 작업 PC로 복사한 뒤 `/learning/omx`에서 올린다. 상위 export 폴더 전체를 선택하면 평면 업로드 검증에서 거절된다. 이 명령은 학습·업로드·정책 활성화를 실행하지 않는다.
+
+현재 native 변환은 정확한 순서의 여섯 관절을 가진 단일 팔, normalized_-100_100 body/normalized_0_100 gripper와 원본 metadata의 정확한 키·영상 크기에 일치하는 카메라 프로필을 요구한다. 추가 카메라 키도 변환하며 역할·배치·용도는 명시한 프로필을 보존한다. wrist 역할은 팔 소속을 요구하고 과거 키의 별칭 재작성은 하지 않는다. 예제 프로필의 카메라 identity/placement를 추측해서 채우지 않는다. 여러 팔의 원본을 합치거나 보상·다음 상태·개입을 생성하지 않으며 HIL-SERL 전이로 사용할 수 없다. 이 변환 지원은 기존 raw 수집기의 카메라 설정 범위를 확대하지 않는다.
+
+생산 intake를 Learning 작업 목록에 OMX 자료로 등록한 경우 `/learning/omx`의 ‘검수 열기’에서 원본 프레임과 판정을 확인하고 별도 검토 버전을 저장할 수 있다. 원래 수집 판정은 덮어쓰지 않는다. 명시 선택한 검토 버전과 프로필 JSON으로 분할/변환 작업을 실행한다. 원본 경로를 변환 요청에 직접 넣지 않는다. 작업은 단일 호스트 실행 슬롯을 학습과 공유하고 검증/변환·중단·재접속 상태를 보존한다. 완료 후 실제 배열·revision 검증을 거쳐 데이터 목록에 자동 등록한다. 기존 raw-session 준비는 위 CLI 절차를 따른다. 현재 화면의 프레임 검토와 명시 확인은 실제 사람의 전체 영상 관찰·물체 성공·다중 카메라 시각 정합을 자동 입증하지 않는다.

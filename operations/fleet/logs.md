@@ -4235,3 +4235,8 @@
 - 변경: HTML 승인 거부·잘못된 요청·저장소 장애를 검증된 로그인 복구 화면으로 연결한다. JSON API 상태, client/redirect 검증, PKCE와 권한 확인은 유지한다.
 - 증거: c13aeb8d71 원격 Authority·Learning 집중 53개 통과. ff01e057a6 실제 Chromium 복구·계정 전환 2개 통과. 게시 전 최종 SHA와 CI는 별도 확인한다.
 - gate 변화: 운영 설치·실제 계정 권한 변경은 별도 승인 범위에서 확인한다.
+
+## 2026-10-22 - Shared robot Learning entry
+- Change: add fixed Model/AI protected origin links under the existing work navigation, targeting the generic Learning home; missing configuration fails closed. Preserve public Console routes and image assets.
+- Evidence: scoped launcher regressions ported; this publication source requires remote verification before activation.
+- Gate: unchanged; no image or device runtime activated.

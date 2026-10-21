@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from fleet._source_layout import console_root
+from fleet.server.console.learning_entry import install_learning_routes
 
 WEB_ROOT = console_root()
 
@@ -139,6 +140,8 @@ def shared_assets(root: Optional[Path]) -> dict[str, str]:
 
 
 def install_static_routes(app: FastAPI) -> None:
+    install_learning_routes(app, WEB_ROOT, CONSOLE_CSP)
+
     @app.get("/console/accounts", include_in_schema=False)
     def console_accounts_page():
         return FileResponse(WEB_ROOT / "accounts.html", media_type="text/html",

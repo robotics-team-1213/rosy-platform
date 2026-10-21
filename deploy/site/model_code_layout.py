@@ -1,7 +1,8 @@
 """Signed model-code path inventory; imported by the installed controller."""
 from model_code_jobs import PREFIX, LEGACY_LEARNING_PREFIXES
 LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/perception/",
-                          "learning/training/perception/", "learning/evaluation/perception/", PREFIX)
+                          "learning/training/perception/", "learning/evaluation/perception/",
+                          "learning/curation/omx/", "learning/training/omx/", PREFIX)
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
                      PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
                      "learning/curation/perception/review_app.py",
@@ -11,7 +12,22 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                      "learning/curation/perception/classes/lane_lr6_drivable.yaml",
                      "learning/curation/perception/classes/object_review_obstacle_v1.yaml",
                      "learning/curation/perception/review_app_web/index.html",
-                     "learning/curation/perception/review_app_web/pixels.html")
+                     "learning/curation/perception/review_app_web/pixels.html",
+                     *("learning/curation/perception/" + name for name in
+                       ("omx_web.py", "omx_center_web.py", "camera_setup.py", "camera_setup_web.py",
+                        "learning_pipeline.py", "review_app_web/omx.html", "review_app_web/omx.js",
+                        "review_app_web/omx-review.js", "review_app_web/omx-profiles.js",
+                        "review_app_web/camera.html", "review_app_web/camera.js")),
+                     *("learning/curation/omx/" + name for name in
+                       ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py",
+                        "collection_intake.py", "collection_pipeline.py")),
+                     "learning/training/omx/native_cycle.py",
+                     *("learning/training/omx/experiment_" + name + ".py" for name in
+                       ("artifact", "catalog", "center", "dataset", "evaluation", "export", "inbox", "io",
+                        "jobs", "native", "online", "owner_status", "preview", "process", "profile",
+                        "profiles", "reviews", "scope", "smoke", "train", "transfer")),
+                     *("contracts/learning/src/rosy/contracts/learning/" + name for name in
+                       ("__init__.py", "artifacts.py", "digest.py", "omx.py", "png.py", "camera_setup.py")))
 CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/overhead/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
@@ -86,14 +102,14 @@ SPLIT_REQUIRED = (
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
+                 "contracts/learning/src/", "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
-                "middleware/perception", "contracts/foundation", "operations/overhead",
+                "middleware/perception", "contracts/foundation", "contracts/learning/src", "operations/overhead",
                 *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"

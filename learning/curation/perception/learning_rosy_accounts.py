@@ -40,12 +40,6 @@ class RosyAccounts(Accounts):
             raise AccountError('Connection owner changed')
         return owner['capabilities']
 
-    def login(self, *args, **kwargs):
-        raise AccountError('Use Rosy Account to sign in')
-
-    def login_subject(self, subject):
-        raise AccountError('External identities do not replace Rosy Account login')
-
     def _authenticate_id(self, session_id):
         claims = self.receiver.resolve_session_id(session_id)
         if claims is None:
@@ -56,7 +50,14 @@ class RosyAccounts(Accounts):
                        or not isinstance(v, str) for k, v in mappings.items())
                 or len(set(mappings.values())) != len(mappings)):
             raise AccountError('Invalid Account subject mapping')
-        user = self._user(mappings.get(claims.sub))
+        user_id = mappings.get(claims.sub)
+        if user_id is None:
+            # Account grants decide access; a learning-side invitation is not a second gate.
+            if any(u['user_id'] == claims.sub for u in self.config()['users']):
+                raise AccountError('Account subject matches an unmapped learning owner')
+            user = {'user_id': claims.sub, 'username': claims.sub}
+        else:
+            user = self._user(user_id)
         with self._db() as db:
             old = db.execute('SELECT user_id FROM rosy_account_owners WHERE subject=?', (claims.sub,)).fetchone()
             if old and old['user_id'] != user['user_id']:

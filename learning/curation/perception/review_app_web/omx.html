@@ -1,17 +1,125 @@
 <!doctype html>
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rosy 개발 — 모방학습</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<title>Rosy Learning — 로봇암 학습</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
 <link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/omx.js"></script></head>
-<body><a class="skip-link" href="#omx-main">모방학습으로 이동</a>
-<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span>
+<body><a class="skip-link" href="#omx-main">로봇암 학습으로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-learning-account-entry href="/accounts">로그인·계정</a>
 <label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
-<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="작업 목록">목록</a><a class="ui-rail-item" data-action-icon="box" href="/" aria-label="객체 검수">객체</a><a class="ui-rail-item" data-action-icon="pixels" href="/pixels" aria-label="픽셀 검수">픽셀</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/omx" aria-label="모방학습" aria-current="page">모방</a></nav></div>
-<div class="ui-app-main"><div class="ui-pathbar"><h1>모방학습</h1></div>
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="작업 목록">목록</a><a class="ui-rail-item" data-action-icon="box" href="/" aria-label="객체 검수">객체</a><a class="ui-rail-item" data-action-icon="pixels" href="/pixels" aria-label="픽셀 검수">픽셀</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="image" href="/learning/camera" aria-label="카메라 맞춤">카메라</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/omx" aria-label="로봇암 학습" aria-current="page">로봇암</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><h1>로봇암 학습</h1></div>
 <main id="omx-main" class="learning-main" tabindex="-1">
-<div class="workspace-heading omx-heading"><div><h2>OMX 구간 검수</h2></div>
+<div class="workspace-heading"><div><h2>한 과제를 배우고, 개선을 확인하기</h2><p>같은 과제에서 ACT+교정과 HIL-SERL을 비교합니다. 먼저 성공 조건을 정하고, 시범과 평가 근거를 연결하세요.</p></div>
 <ui-button id="refresh" data-action-icon="refresh" kind="quiet">다시 확인</ui-button></div>
 <ui-status id="omx-status" state="pending" role="status">불러오는 중입니다.</ui-status>
-<div id="sets"></div>
+<section class="learning-section learning-panel" aria-labelledby="journey-heading"><h2 id="journey-heading">지금 진행할 과제</h2>
+<p id="journey-goal">과제는 아직 선택하지 않았습니다.</p><p id="journey-data" class="quiet">학습 데이터를 확인하는 중입니다.</p>
+<label class="ui-field-label">이번 과제의 학습 데이터 <select id="dataset" class="ui-field" disabled><option value="">데이터를 불러오는 중</option></select></label>
+<h3>다음으로 할 일</h3><p id="journey-reason" role="status">과제와 자료를 확인하는 중입니다.</p><a id="journey-next" class="workspace-link" href="#profile-panel">과제와 성공 조건 정하기</a>
+<details open><summary id="learning-entry-heading">로그인·외부 자료 연결 상태</summary>
+<p id="learning-account-state" role="status">로그인과 계정 연결을 확인하는 중입니다.</p>
+<div class="learning-next-actions"><a id="learning-account-link" class="workspace-link" href="/accounts">로그인·Hugging Face 연결 확인</a><a id="learning-task-link" class="workspace-link" href="#profile-panel">과제·팔·카메라 설정</a></div>
+</details></section>
+<div class="learning-workflow-layout"><nav id="omx-sections" class="learning-step-menu" aria-label="로봇암 학습 단계">
+<h2>과제 작업</h2>
+<a href="#profile-panel">1 · 과제·팔·카메라</a><a href="#owner-section">2 · 현장 상태</a><a href="#capture-section">3 · 시범·교정 수집</a><a href="#dataset-section">4 · 검수·학습 데이터</a><a href="#reward-section">5 · 성공 판정·초기화</a><a href="#train-section">6 · ACT / HIL-SERL</a><a href="#comparison-section">7 · 평가·실물 적용</a><a href="/accounts">계정·Hugging Face</a>
+</nav><div class="learning-workflow-content">
+<section class="learning-section learning-panel" aria-labelledby="stage-question"><h2 id="stage-question">무엇을 성공으로 볼까요?</h2><p id="stage-purpose"></p><p id="stage-done" class="quiet"></p><a id="stage-next" class="workspace-link" href="#owner-section">이후 현장 상태 확인</a><p class="quiet">단계 이동은 작업 완료나 승인을 기록하지 않습니다. 저장하지 않은 설정은 이 화면의 메뉴 이동 동안만 유지됩니다.</p><a id="workflow-view" class="workspace-link" href="?view=all">전체 도구 펼쳐 보기</a></section>
+<details id="profile-panel" class="learning-section learning-panel"><summary>1 · 과제·팔·카메라 설정</summary>
+<p class="quiet">학습할 작업 팔을 등록합니다. 리더 팔은 시범·교정 입력 장치로 구분합니다. 입력 순서·단위·카메라 출처와 배치를 확인하세요. 장치 연결·교정·실행 승인은 별도이며, 협동 학습 결과도 실제 협동 동작의 검증이 필요합니다. 현재 native 자료 변환은 팔 1대·6관절을 지원합니다.</p>
+<label class="ui-field-label">저장 프로필 <select id="profile-record" class="ui-field" disabled></select></label>
+<ui-button kind="quiet" id="profiles-refresh" class="ui-field" type="button">프로필 목록 다시 확인</ui-button><ui-button kind="quiet" id="profile-clone" class="ui-field" type="button" disabled>선택 프로필 복사·새 버전 편집</ui-button>
+<ui-button kind="quiet" id="profile-new" class="ui-field" type="button">빈 프로필 작성</ui-button><ui-button kind="quiet" id="profile-import-dataset" class="ui-field" type="button" disabled>현재 데이터 프로필 가져오기</ui-button>
+<p id="profiles-status" role="status"></p><details><summary>저장 설정의 식별자·검증 범위</summary><p id="profile-record-meta" class="quiet"></p></details>
+<a id="profile-download" class="ui-field" aria-disabled="true">저장 JSON 내려받기</a><ui-button kind="quiet" id="profile-use" class="ui-field" type="button" disabled>이 저장 프로필로 학습·변환 준비</ui-button>
+<form id="profile-form"><fieldset id="profile-fields"><legend>새 불변 버전의 입력</legend>
+<label class="ui-field-label">프로필 이름 <input id="profile-name" class="ui-field" required></label><label class="ui-field-label">학습 과제 <input id="profile-task" class="ui-field" required maxlength="2048" aria-describedby="profile-task-help" placeholder="물체와 목표 · 성공 조건 · 실패 조건 · 초기화 방법"></label>
+<p id="profile-task-help" class="quiet">예: 접시 위 물체를 집어 유지하기. 실제 유지 시간·높이, 놓침·시간 초과 조건과 원위치 복원 방법을 정해 적으세요. 수용된 장치 한계와 실행 준비도는 별도로 확인합니다.</p>
+<label class="ui-field-label">팔 사용 방식 <select id="profile-mode" class="ui-field" required><option value="">직접 선택</option><option value="independent">독립</option><option value="cooperative">협동</option></select></label>
+<label class="ui-check"><input id="profile-bounds" class="ui-field" type="checkbox">지속 SAC용 schema 2 · 모든 관절의 고정 하한·상한을 직접 선언</label>
+<p class="quiet">관절 이름은 쉼표로 구분하며 입력 순서를 유지합니다. 범위는 장치나 자료에서 추정하지 않습니다. 카메라의 팔 ID를 비우면 공유 카메라(null)이며, 팔을 지워도 기존 카메라 연결은 자동 변경되지 않습니다. RGB shape은 CHW [3, 높이, 너비]입니다.</p>
+<h3>순서가 있는 팔 (1–32)</h3><div id="profile-arms"></div><ui-button kind="quiet" id="profile-add-arm" class="ui-field" type="button">팔 추가</ui-button>
+<h3>순서가 있는 카메라 (1–64)</h3><div id="profile-cameras"></div><ui-button kind="quiet" id="profile-add-camera" class="ui-field" type="button">카메라 추가</ui-button>
+<h3>부모 버전과의 변경</h3><pre id="profile-diff"></pre><ui-button kind="quiet" id="profile-save" class="ui-field" type="submit">새 프로필 버전 저장</ui-button>
+</fieldset></form></details>
+<section id="owner-section" class="learning-section learning-panel" aria-labelledby="owner-heading"><h2 id="owner-heading">2 · 현장 팔 상태</h2>
+<p id="owner-control-status" class="quiet">상태 조회 전용입니다. 실물 학습 제어는 연결되지 않았습니다. 조회 성공은 관절 상태의 신선도나 실제 정지를 보증하지 않습니다.</p>
+<label class="ui-field-label">연결된 작업대 <select id="owner-target" class="ui-field" disabled><option value="">상태 연결 설정 없음</option></select></label>
+<ui-button kind="quiet" id="owner-refresh" type="button" class="ui-field" disabled>현장 상태 다시 확인</ui-button>
+<ui-status id="owner-status" state="pending" role="status">상태 연결 설정을 확인하는 중입니다.</ui-status>
+<p id="owner-details" class="quiet"></p></section>
+<section id="capture-section" class="learning-section learning-panel" aria-labelledby="capture-heading"><h2 id="capture-heading">3 · 시범·교정 수집</h2>
+<p>기본 조작기는 리더 팔입니다. 게임패드는 선택 가능한 입력 방식으로 준비하며, 작업 팔과 조작기를 구분합니다.</p>
+<ol><li>과제와 장치 설정에서 작업 팔·관절 순서·단위, 카메라의 소속과 배치를 저장합니다.</li><li>상단·손목·측면 시야에 물체와 그리퍼가 보이는지 확인합니다. 카메라를 옮겼다면 배치와 촬영 기준을 다시 확인합니다.</li><li>한 시도마다 영상·관절 상태·실제로 적용한 행동을 같은 기록에 남깁니다. 교정 입력과 개입 시점, 성공·실패·종료·초기화도 함께 기록해야 합니다.</li><li>기록을 연결하고 다음 메뉴에서 프레임·결과를 검수합니다. 영상 파일만으로는 행동을 배우는 데이터가 되지 않습니다.</li></ol>
+<ui-empty><h3>현장 수집·교정 제어는 아직 연결되지 않았습니다</h3><p>이 화면에서 팔을 움직이거나 수집을 시작할 수 없습니다. 장치 연결·교정과 제어 전환을 검증한 뒤 현장 수집 기능을 연결해야 합니다. 이미 수집한 자료는 OMX 시연 준비 결과 폴더로 연결한 뒤 검수할 수 있습니다.</p><div class="learning-next-actions"><a class="workspace-link" href="/learning/camera">카메라 촬영 기준 확인</a><a class="workspace-link" href="/learning?connect=omx#connection-panel">기존 OMX 시연 폴더 연결</a><a class="workspace-link" href="#dataset-section">등록 자료 검수</a></div></ui-empty>
+</section>
+<section id="dataset-section" class="learning-section learning-panel" aria-labelledby="dataset-heading"><h2 id="dataset-heading">4 · 검수·학습 데이터</h2>
+<section class="learning-section learning-panel" aria-labelledby="prepared-heading"><h2 id="prepared-heading">연결된 시연 세트 요약</h2>
+<p class="quiet">작업 목록에서 연결한 기존 시연의 검수·분할·카메라 판정입니다. 아래 학습 가능 판정과 현재 실행기의 데이터 등록은 별도입니다.</p>
+<div id="sets" aria-live="polite"></div>
+</section>
+<ui-empty id="empty-prepared" hidden><h3>등록된 검수 시연이 없습니다</h3><p>시범의 영상·행동·시도별 결과를 준비한 OMX 시연 폴더를 연결하세요. 연결 화면의 필수 결과 파일을 확인합니다.</p><a class="workspace-link" href="/learning?connect=omx#connection-panel">OMX 시연 폴더 연결</a></ui-empty>
+<h3>검수한 native 시연에서 ACT 데이터 만들기</h3>
+<form id="native-export-form" class="ui-form learning-form"><label class="ui-field-label">등록된 검수 시연 <select id="prepared-set" class="ui-field" required disabled><option value="">등록 자료를 불러오는 중</option></select></label>
+<p id="prepared-status" role="status"></p>
+<label class="ui-field-label">변환 데이터 이름 <input id="export-name" class="ui-field" maxlength="100" required></label>
+<label class="ui-field-label">팔·카메라 프로필 JSON <input id="export-profile" class="ui-field" type="file" accept=".json,application/json" required></label>
+<label class="ui-check"><input id="export-saved-review" class="ui-field" type="checkbox" disabled> 현재 불러온 저장 검수 사용</label><p id="export-review-status" class="quiet">선택하지 않으면 원본 검수 결정을 사용합니다.</p>
+<p class="quiet">단일 6관절 팔, normalized_-100_100 단위와 원본에 기록된 모든 카메라의 입력 키·영상 크기가 일치하는 프로필 파일이 필요합니다(1 MiB 이하). 추가 카메라도 원본 그대로 변환합니다. 서버가 시연·분할·영수증과 대응을 검증합니다. 미상·시험 fixture 자료는 변환 실행이 거절됩니다.</p>
+<ui-button kind="quiet" id="native-export" type="submit" class="ui-field" disabled>시연 검증하고 ACT 데이터 만들기</ui-button><p id="export-status" role="status"></p></form>
+<section aria-labelledby="native-review-heading"><h3 id="native-review-heading">시연 프레임과 결과 직접 검수</h3>
+<ui-button kind="quiet" id="review-open" class="ui-field" type="button" disabled>선택 자료 검수 열기 / 다시 불러오기</ui-button>
+<p id="review-status" role="status"></p><div id="review-editor" hidden>
+<pre id="review-meta"></pre><p id="review-identity" role="status"></p>
+<section id="review-viewer" tabindex="0" aria-label="시연 프레임 뷰어 · 화살표 탐색과 스페이스 자동 넘김" aria-busy="false">
+<label class="ui-field-label">프레임 보기 <select id="review-view" class="ui-field"><option value="single">단일 카메라</option><option value="group">같은 기록 행의 카메라 묶음</option></select></label>
+<label class="ui-field-label">시도 <select id="review-episode" class="ui-field"></select></label>
+<label class="ui-field-label">카메라 <select id="review-camera" class="ui-field"></select></label>
+<label class="ui-field-label">프레임 <input id="review-frame" class="ui-field" type="range" min="0" value="0" step="1"></label>
+<p id="review-frame-label" role="status"></p>
+<ui-button kind="quiet" id="review-first" class="ui-field" type="button">첫 프레임</ui-button><ui-button kind="quiet" id="review-previous" class="ui-field" type="button">이전 프레임</ui-button><ui-button kind="quiet" id="review-next" class="ui-field" type="button">다음 프레임</ui-button><ui-button kind="quiet" id="review-last" class="ui-field" type="button">마지막 프레임</ui-button>
+<label class="ui-field-label">요청 넘김 속도 (프레임/초, 1–10) <input id="review-rate" class="ui-field" type="number" min="1" max="10" value="2" step="1"></label>
+<ui-button kind="quiet" id="review-play" class="ui-field" type="button" aria-pressed="false" disabled>자동 넘김 시작</ui-button><p class="quiet">한 프레임을 읽고 표시한 뒤 다음 프레임을 요청합니다. 실제 속도는 읽기 시간에 따라 느려질 수 있습니다. 뷰어에 초점을 두면 화살표로 탐색하고 스페이스로 시작·정지합니다.</p>
+<img id="review-image" alt="선택한 시도·카메라의 실제 RGB 프레임" hidden style="max-width:100%;height:auto"><div id="review-gallery" class="omx-review-gallery" hidden></div><p id="review-frame-status" role="status"></p>
+</section>
+<p class="quiet">표시한 프레임은 재생 영상 전체를 확인했다는 증거가 아닙니다. 실패·제외 결정을 유지하며 시도별 결과를 직접 편집하세요. 저장은 원본을 바꾸지 않는 검수 스냅샷이며, 학습·현장 성공 승인은 별도입니다.</p>
+<form id="native-review-form"><fieldset id="review-fields"><legend>시도별 사람 검수</legend><div id="review-decisions"></div>
+<label class="ui-field-label">검수자 이름 <input id="reviewer" class="ui-field" maxlength="100" required></label>
+<label class="ui-check"><input id="review-confirmed" class="ui-field" type="checkbox" required> 영상과 결과를 직접 확인했습니다</label>
+<ui-button kind="quiet" id="review-save" class="ui-field" type="submit" disabled>원본과 분리된 검수 저장</ui-button></fieldset></form>
+</div></section>
+<h3>이미 변환한 데이터 폴더 올리기</h3>
+<form id="upload-form" class="ui-form learning-form"><label class="ui-field-label">데이터 폴더 <input id="dataset-folder" class="ui-field" type="file" webkitdirectory multiple required></label>
+<label class="ui-field-label">표시 이름 <input id="dataset-name" class="ui-field" maxlength="100" required></label>
+<p class="quiet">데이터 설명 파일과 시도별 기록 파일이 있는 폴더를 선택하세요. 업로드 후 입력과 분할을 검증합니다.</p>
+<ui-button kind="quiet" id="upload" type="submit" class="ui-field">폴더 올리고 검증</ui-button></form><p id="upload-status" role="status"></p>
+<ui-empty id="empty-datasets" hidden><h3>등록된 학습 데이터가 없습니다</h3><p>위에서 검수 시연을 변환하거나 이미 변환한 데이터 폴더를 올리세요. 데이터가 검증된 뒤 학습을 시작할 수 있습니다.</p></ui-empty>
+<div id="dataset-profile" aria-live="polite"></div></section>
+<section id="reward-section" class="learning-section learning-panel" aria-labelledby="reward-heading"><h2 id="reward-heading">5 · 성공 판정·초기화</h2>
+<p>HIL-SERL에는 매 시도의 보상·종료와 다음 시도의 시작 상태가 필요합니다. ACT의 시범 검수와 구분해 준비하세요.</p>
+<ul><li>성공: 지정한 물체를 집어 과제에서 정한 높이·시간 동안 유지하는지 확인합니다.</li><li>실패: 빈 그리퍼 상승, 물체 가림, 들었다가 낙하, 시간 초과를 성공으로 잘못 판정하지 않는지 확인합니다.</li><li>초기화: 팔과 물체를 정한 시작 상태로 되돌리는 방법과 사람의 소요 시간을 기록합니다.</li></ul>
+<ui-empty><h3>자동 성공 판정기·현장 초기화는 아직 연결되지 않았습니다</h3><p>현재는 데이터 검수에서 사람이 확인한 시도 결과를 저장할 수 있습니다. 자동 판정기를 학습·검증하고 현장 보상·종료·초기화에 연결하는 단계가 남아 있습니다.</p><a class="workspace-link" href="#native-review-heading">시도별 결과 검수로 이동</a></ui-empty>
+</section>
+<section id="train-section" class="learning-section learning-panel" aria-labelledby="train-heading"><h2 id="train-heading">6 · ACT / HIL-SERL 학습</h2>
+<p id="selected-profile-status" role="status">저장 프로필 선택 없음 · 등록 데이터의 입력 프로필을 사용합니다.</p><ui-button kind="quiet" id="profile-clear" class="ui-field" type="button" disabled>저장 프로필 선택 해제</ui-button>
+<form id="train-form" class="ui-form learning-form"><label class="ui-field-label">실행 방식 <select id="execution-mode" class="ui-field"><option value="offline">오프라인 · 저장 자료 재학습</option><option value="online_experience">지속 SAC·경험 수신</option></select></label>
+<label id="arm-target-field" class="ui-field-label" hidden>학습할 개별 팔 <select id="arm-target" class="ui-field" disabled><option value="">학습 팔을 선택하세요</option></select></label><p id="arm-target-status" role="status"></p>
+<label class="ui-field-label">방법 <select id="method" class="ui-field"><option value="act">ACT · 시범/교정 학습</option><option value="hilserl">HIL-SERL SAC · 오프라인 경험 재학습</option></select></label>
+<p id="method-status" role="status"></p>
+<label class="ui-field-label">학습 단계 <input id="steps" class="ui-field" type="number" min="1" max="100000" value="100" required></label>
+<label class="ui-field-label">배치 크기 <input id="batch-size" class="ui-field" type="number" min="1" max="64" value="8" required></label>
+<p id="execution-description" class="quiet">저장된 시범·교정·전이를 CPU로 재학습합니다.</p>
+<p class="quiet">현장 actor 미연결 · 호스트 학습기에서만 실행합니다. 학습 결과는 실물 과제 성공이나 정책 배포 승인을 뜻하지 않습니다.</p>
+<ui-button kind="quiet" id="start" class="ui-field" type="submit" disabled>학습 시작</ui-button></form>
+<form id="experience-form" class="ui-form learning-form"><label class="ui-field-label">경험을 받을 지속 SAC 작업 <select id="experience-run" class="ui-field" disabled><option value="">실행 중인 지속 SAC 작업 없음</option></select></label>
+<ui-button kind="quiet" id="add-experience" class="ui-field" type="submit" disabled>선택 자료를 경험으로 추가</ui-button><p id="experience-status" role="status"></p></form>
+<ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status>
+<p id="center-error" role="alert" hidden></p><div id="runs" aria-live="polite"></div></section>
+<section id="comparison-section" class="learning-section learning-panel" aria-labelledby="comparison-heading"><h2 id="comparison-heading">7 · 평가·실물 적용 준비</h2>
+<p class="quiet">저장된 평가 기록을 비교합니다. 지속 SAC는 추가 경험과 누적 학습 예산이 다릅니다. 행동 MAE는 기록된 동작과의 오차이며, 과제 성공률이나 현장 성능 순위가 아닙니다.</p>
+<div id="comparison" aria-live="polite"></div>
+<h3>같은 과제에서 확인할 항목</h3><p>작업 성공률 · 사람 개입 횟수와 시간 · 초기화 시간 · 낙하 횟수 · 작업 소요 시간을 함께 기록합니다. 팔별 독립 학습과 여러 팔 협동 학습은 따로 평가합니다.</p>
+<ui-empty><h3>실물 정책 적용은 아직 연결되지 않았습니다</h3><p>학습 결과와 버전을 확인한 뒤 장치 한계·제어 전환·중단·관측 연결을 검증해야 합니다. 이 화면의 학습 완료는 실제 팔 실행 승인을 의미하지 않습니다.</p></ui-empty></section>
+</div></div>
 </main></div></div></ui-shell></body></html>

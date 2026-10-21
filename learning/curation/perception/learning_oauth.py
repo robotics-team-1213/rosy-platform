@@ -69,26 +69,23 @@ class OAuth:
     def begin(self, purpose, *, session=None):
         cfg = self._config()
         repo_scopes = 'openid profile read-repos gated-repos write-repos manage-repos'
-        requested = {'login': 'openid profile', 'link': repo_scopes, 'manage': repo_scopes}
+        requested = {'link': repo_scopes, 'manage': repo_scopes}
         if purpose not in requested:
             raise AccountError('invalid authorization purpose')
-        principal = None
-        if purpose != 'login':
-            principal = self.accounts.require(self.accounts.authenticate(session), 'import')
+        principal = self.accounts.require(self.accounts.authenticate(session), 'import')
         state, binding, nonce, verifier = [secrets.token_urlsafe(32) for _ in range(4)]
         pending = {'purpose': purpose, 'nonce': nonce, 'verifier': verifier, 'config': _digest(_json(cfg)),
                    'project_id': self.accounts.project_id}
         with self.accounts._db() as db:
             db.execute('DELETE FROM learning_oauth_flows WHERE expires<=?', (self.accounts.clock(),))
             db.execute('INSERT INTO learning_oauth_flows VALUES(?,?,?,?,?)',
-                       (_digest(state), _digest(binding), principal['_session_id'] if principal else None,
+                       (_digest(state), _digest(binding), principal['_session_id'],
                         self.accounts.clock() + 600, self.accounts.cipher.encrypt(_json(pending).encode()).decode()))
         query = {'response_type': 'code', 'client_id': cfg['client_id'], 'redirect_uri': cfg['redirect_uri'],
                  'scope': requested[purpose], 'state': state, 'nonce': nonce, 'code_challenge_method': 'S256',
                  'code_challenge': _b64(hashlib.sha256(verifier.encode()).digest())}
         # Explicit account selection avoids silently linking whichever HF account was last used.
-        if purpose != 'login':
-            query['prompt'] = 'select_account'
+        query['prompt'] = 'select_account'
         return AUTHORIZE + '?' + urlencode(query), binding
 
     def _consume(self, query, binding, session):
@@ -144,9 +141,9 @@ class OAuth:
     def complete(self, query, binding, *, session=None):
         cfg = self._config(); pending = self._consume(query, binding, session)
         if not hmac.compare_digest(pending['config'], _digest(_json(cfg))): raise AccountError('OAuth configuration changed')
-        if pending['purpose'] not in ('login', 'link', 'manage'):
+        if pending['purpose'] not in ('link', 'manage'):
             raise AccountError('invalid authorization purpose')
-        principal = self.accounts.authenticate(session) if pending['purpose'] in ('link', 'manage') else None
+        principal = self.accounts.authenticate(session)
         data = {'grant_type': 'authorization_code', 'code': query['code'], 'client_id': cfg['client_id'],
                 'redirect_uri': cfg['redirect_uri'], 'code_verifier': pending['verifier']}
         headers = {}
@@ -168,7 +165,6 @@ class OAuth:
         try: profile = self.transport('GET', USERINFO, headers={'Authorization': 'Bearer ' + token})
         except Exception: raise AccountError('Hugging Face profile verification failed') from None
         if profile.get('sub') != claims['sub']: raise AccountError('Hugging Face profile identity mismatch')
-        if pending['purpose'] == 'login': return self.accounts.login_subject(claims['sub'])
         granted = set(str(response.get('scope', '')).split())
         allowed = ('read-repos', 'gated-repos', 'write-repos', 'manage-repos')
         scopes = [scope for scope in allowed if scope in granted]
