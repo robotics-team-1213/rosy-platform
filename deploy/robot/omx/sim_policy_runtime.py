@@ -1,6 +1,8 @@
 """SIM-only additional step fence over the existing serialized policy admission."""
+from dataclasses import asdict
 import threading
 
+from omx_adapter.watchdog_observation import JointIntakeObservation
 from rosy.execution.local.policy_runtime import PolicyRuntimeBinding
 
 
@@ -61,19 +63,36 @@ def trace_sim_admission(session,journal,runtime):
     """Measure unchanged SIM calls in memory; the stopped actor writes the trace."""
     records=[]
     binding=session._runtime_binding
+    def joint_refs():
+        return (session._snapshot,runtime.latest_joint_state,
+                getattr(runtime.owner,'joint_intake_observation',None))
+    def joint_facts(refs):
+        if refs is None:return None
+        snapshot,latest,intake=refs
+        def receipt(value):
+            return None if value is None else dict(sequence=value.sequence,received_owner_s=value.received_at)
+        return dict(session=receipt(snapshot),latest=receipt(latest),
+            intake=asdict(intake) if type(intake) is JointIntakeObservation else None)
     def measured(stage,call):
         def invoke(*args,**kwargs):
             command_id=next((arg.command_id for arg in args if hasattr(arg,'command_id')),None)
             if stage=='journal_read' and args:command_id=args[0]
             if command_id is None:
                 command_id=getattr(getattr(binding._local,'command',None),'command_id',None)
+            # Freeze existing immutable references; diagnostics never refresh intake.
+            try:before=joint_refs() if stage=='guard' else None
+            except Exception:before=None
             started=int(runtime.monotonic()*1e9);outcome='raised'
             try:
                 value=call(*args,**kwargs);outcome='returned'
                 return value
             finally:
-                records.append(dict(stage=stage,command_id=command_id,thread_id=threading.get_ident(),
-                    started_owner_ns=started,ended_owner_ns=int(runtime.monotonic()*1e9),outcome=outcome))
+                record=dict(stage=stage,command_id=command_id,thread_id=threading.get_ident(),
+                    started_owner_ns=started,ended_owner_ns=int(runtime.monotonic()*1e9),outcome=outcome)
+                if stage=='guard' and outcome=='raised':
+                    try:record['joint_delivery']=dict(before=joint_facts(before),after=joint_facts(joint_refs()))
+                    except Exception as error:record['joint_diagnostic_error']=type(error).__name__
+                records.append(record)
         return invoke
     for stage,target,name in [('session_submit',session,'submit'),('guard',session,'_guard'),
             ('journal_prepare',journal,'prepare'),('journal_observe',journal,'observe'),
