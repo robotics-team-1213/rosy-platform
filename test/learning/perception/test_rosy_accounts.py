@@ -17,6 +17,7 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     collaboration.receiver = SimpleNamespace(finish=finish)
     collaboration.unavailable = (AccountUnavailable,)
     collaboration.origin = 'https://learning.example.test'
+    collaboration.cookie_suffix = '_fixture'
     sent = []
     handler = SimpleNamespace(path='/api/account/callback?state=s&code=secret', headers={},
                               extra_headers=[], send=lambda body, status: sent.append((body, status)))
@@ -25,7 +26,8 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     assert collaboration.get(handler, '/api/account/callback', 'token')
     assert sent == [(b'', 303)]
     assert ('Location', '/accounts?error=' + expected) in handler.extra_headers
-    assert any(name == 'Set-Cookie' and 'Max-Age=0' in value for name, value in handler.extra_headers)
+    assert any(name == 'Set-Cookie' and value.startswith('rosy_account_flow_fixture=')
+               and 'Max-Age=0' in value for name, value in handler.extra_headers)
     assert 'credential' not in repr(sent) + repr(handler.extra_headers)
 
 
