@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · Console 인증 분리 후 캔버스 검사 유지
 - 2026-10-21 · uncommitted · 인증 범위를 유지하는 binary 응답 읽기
 - 2026-10-21 · uncommitted · 지도 source holder의 공용 UI 계약 연결
 - 2026-10-20 · uncommitted · Console transport 소유 위치 정리
 - 2026-10-19 · uncommitted · D-806 웹 전용 앱 제목 게시
-- 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
