@@ -390,3 +390,8 @@
 - Change: Cell uses the existing authenticated Fleet client and Vision frame leases to display registered joint feedback and camera previews. Per-source age, failures, logout, token replacement and late responses have independent cleanup; observation adds no motion controls.
 - Evidence: 0615263626 remote browser-scope and real Chromium checks: 11 passed, including one-source expiry, total outage and late authenticated responses. HTTP and JPEG fixtures stand in for the producer.
 - Gate: unchanged. This verifies the actual Cell page with test data; deployed Fleet-PC hardware observations remain pending.
+## 2026-10-22 · ff01e057a6 · fix: Account 로그인에서 승인 거부 안내와 재시도 제공
+
+- 변경: 기존 쿠키로 거부된 앱 요청을 자동 반복하지 않고, 계정·권한 확인과 다른 계정 로그인·명시적 재시도를 제공한다. 기존 공통 컴포넌트와 터치 스타일을 사용한다.
+- 증거: ff01e057a6 원격 Chromium에서 legacy/managed 복구 2개 통과. 원격 최신 화면의 기존 heading ID와 복귀 경로를 보존했다. 최종 게시 SHA는 CI에서 재검증한다.
+- gate 변화: 실제 운영 화면 반영은 서명 릴리스 설치 후 확인한다.

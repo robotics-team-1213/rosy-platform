@@ -104,3 +104,9 @@
 - 변경: 기존 별도 검수 웹의 HTTP 앞단에 D-757 개인 세션·project 권한·보호 감사 원장을 적용하고 D-809로 보존 경계를 기록했다. 운영 검수 파일을 변경하지 않았다.
 - 증거: `1bcd83ba3a` 원격 합성 시험 35 passed, known_failures NEW 0. 최종 통합 SHA·게시 검사·실제 HTTPS/사용자 수용은 별도다.
 - gate 변화: None. SOURCE and remote synthetic tests only; installation and user/device/field acceptance remain separate.
+
+## 2026-10-22 · ff01e057a6 · fix: Learning Account callback 오류에서 로그인 복구
+
+- 변경: 거부·연결 실패·잘못된 callback에서 고정된 계정 안내로 복귀하고 프로젝트별 flow 쿠키만 지운다. 반복 장애에도 재시도 동작을 유지한다. Rosy Account 구성에서는 중앙 로그인 링크를 제공하며, 기존 비SSO 설정의 API와 폼은 보존한다.
+- 증거: c13aeb8d71 원격 집중 53개 통과. 앞선 callback 단위 검사의 project cookie fixture 누락을 수정했다. 4e18d4a956 Chromium 기존 로그인·Learning 5개 통과, Auth heading 오류 2개는 ff01e057a6에서 수정 후 2개 통과했다. 최종 SHA의 게시 검사는 별도 수행한다.
+- gate 변화: 계정 원장·라벨을 수정하거나 권한을 우회하지 않았다. 운영 배포·실제 사용자의 project grant는 별도 확인한다.
