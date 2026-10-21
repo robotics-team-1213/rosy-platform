@@ -246,7 +246,13 @@ submit 193.156ms가 더해졌다. 실패 위치는 submit 내부 final_submit의
 검사인 `lease_context_check`로 바꿨다. 새 회귀는 이전 코드에서 후보 반환 시 파일
 검사로 실패했고 수정 뒤 tamper 후보의 최종 submit이 HOLD·무전송임을 확인한다.
 관련 원격 130 PASS / 3 SKIP / 0 NEW와 독립 계약 검토 뒤 별도 native calibration을
-시작했다. 이 중복 정리가 실제 시간 여유나 물체 성공을 확보했는지는 아직 미확인이다.
+준비했다. 첫 시도는 새 release의 6GiB 디스크 사전 기준 미달로 deploy 전에 HOLD였고
+실제 시작은 0회다. 원문을 보존한 뒤 자체 종료 run이 참조한 staged weight 중복
+15개만 원본 local tar·MODEL checkpoint SHA·실제 종료/정리/비활성 상태를 재대조해
+퇴거했다. 현재 입력과 미참조 입력은 제외했고 intent·퇴거 marker를 보존한다.
+마지막 3개 적용 뒤 여유 공간 6,532,743,168bytes를 확인하고 기존 staging으로
+같은 준비 원장을 재개했다. 이 중복 정리가 실제 시간 여유나 물체 성공을 확보했는지는
+아직 미확인이다.
 
 추가 MODEL 진단 `omx-selected-command-starts-1`은 모델을 바꾸지 않고 validation
 Episode당 unique accepted command의 첫 post-acceptance frame 64개씩, 총 320개를
