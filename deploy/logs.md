@@ -3074,3 +3074,9 @@
 - Change: add a tty-only udev rule for OpenRB VID/PID 2f5d:2202, group plugdev and mode 0660. Existing group members retain device access across board replacement and reconnect; no role assignment, port open, motor writes or service activation is added.
 - Evidence: Fleet enumerated four matching boards, three inaccessible to the operator; the operator already belongs to plugdev. The old serial-pinned rule and updater configuration name absent boards. Rule syntax, installed scope and actual permission readback are verified separately.
 - Gate: unchanged. Administrator installation and physical feedback acceptance are separate from source publication; no torque or motion is authorized by a permission rule.
+
+## 2026-10-21 · uncommitted · 두 팔과 세 카메라의 독립 관측
+
+- Change: each follower has its own commissioning observer topic; the local viewer separates both six-joint streams and the overhead/two wrist camera sources. Repeated labels/topics are refused and each source expires independently. Persistent USB port paths distinguish wrist cameras with duplicate serials.
+- Evidence: 14 dual-stream and 7 camera tests first failed at committed revisions; 72 observer/viewer/probe/browser-scope checks passed at 7daa8fbabb, including real Chromium. Camera path tests failed 4/20 at 509466f0be and all 20 passed at a694060ead. On Fleet, both six-joint streams and three fresh images were observed simultaneously with torque OFF. One observer was externally stopped after 840 samples; its values expired while the other stream continued. The caller of that stop request is unknown.
+- Gate: unchanged. This is a separate local read-only diagnostic viewer, not integrated ROSY product UI, accepted calibration, CORE motion or strawberry grasping. The bounded observers do not restart automatically.

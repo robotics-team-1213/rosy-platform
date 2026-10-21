@@ -123,7 +123,7 @@ for the remaining native runtime and physical acceptance work.
 
 ## Local camera preview recovery
 
-`omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
+`omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/` or `/dev/v4l/by-path/`
 camera through V4L2 MJPEG at 640×480, publishing at most 10 Hz with a one-image
 queue. It refuses raw-format fallback, reopens failed capture, and notifies the
 `rosy-omx-camera@.service` watchdog so a blocked driver read is restarted.
@@ -552,6 +552,29 @@ on the development PC. It subscribes to existing top/front images and the
 commissioning joint topic, opens no devices, and issues no actuator commands.
 Source/receipt age, decoded picture expiry and disconnected joint feedback are
 checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
+
+For two followers, run one bounded `hardware_observer.py` process per confirmed
+USB serial, with separate `--joint-topic /omx_commissioning/arm_a/joint_states`
+and `--joint-topic /omx_commissioning/arm_b/joint_states`. Both retain exclusive
+serial access, torque-OFF checks and the duration limit. Names such as `arm_a`
+are diagnostic labels; they do not assign physical left/right or calibration.
+The viewer subscribes to both streams and three cameras:
+
+```bash
+python3 deploy/robot/omx/commissioning_view.py \
+  --arm-topic arm_a=/omx_commissioning/arm_a/joint_states \
+  --arm-topic arm_b=/omx_commissioning/arm_b/joint_states \
+  --camera-topic top=/top_camera/image_raw \
+  --camera-topic arm_a_wrist=/arm_a_wrist_camera/image_raw \
+  --camera-topic arm_b_wrist=/front_camera/image_raw
+```
+
+Each source expires independently; one arm cannot refresh the other arm's
+feedback. Shared joint names remain in separate panels. The overhead camera is
+shared, with one wrist camera per follower. Cameras with duplicate USB serials
+need distinct persistent USB port paths rather than their colliding `by-id`
+alias. Keep an explicit device-to-topic manifest and verify the actual images
+before assigning physical arm names. This viewer does not admit CORE motion.
 
 ### Prepare an initialization-description candidate
 

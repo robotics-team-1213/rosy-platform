@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 두 팔과 세 카메라의 독립 관측
 - 2026-10-21 · uncommitted · OpenRB 재연결·교체 시 serial 접근 권한
 - 2026-10-21 · uncommitted · 관제 AI 보호 설치와 사이트 옵션 분리 적용
 - 2026-10-21 · uncommitted · 이미지 도면 worker의 명시적 런타임 의존성
 - 2026-10-20 · uncommitted · OMX 첫 관절 시운전의 출력·피드백 검사
-- 2026-10-20 · uncommitted · Fleet helper 변경의 후보 빌드 트리거 동기화
