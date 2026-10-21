@@ -176,12 +176,13 @@ def run(directory, world, observer_path, *, home_only=False):
 
     def dispatch(target,*,holding=False):
         if holding:
-            evidence=grip('held')
+            evidence,position=grip('held')
             target=dict(target)
-            target[profile.gripper_joint]=contact_hold_target(evidence['position_rad'],
+            target[profile.gripper_joint]=contact_hold_target(position,
                 close=profile.gripper_close_for_width(recipe.box.width),
                 contact=profile.gripper_contact_for_width(recipe.box.width))
-            event.setdefault('hold_commands',[]).append(dict(evidence=evidence,target=dict(target)))
+            event.setdefault('hold_commands',[]).append(dict(evidence=evidence,position_rad=position,
+                                                           target=dict(target)))
         dispatch_readback_target(target, lambda: wait_ready()['positions'], dispatch_once)
 
     def grip(expect):
@@ -199,8 +200,8 @@ def run(directory, world, observer_path, *, home_only=False):
         checked = arm.monotonic()
         verified = verifier(observation, object_id='box', now=checked,
                             max_age_s=profile.max_joint_state_age_s)
-        return {'observation': vars(observation), 'receipt': vars(verified),
-                'position_rad': q, 'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s}
+        return ({'observation': vars(observation), 'receipt': vars(verified),
+                 'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s},q)
 
     try:
         state = wait_ready()
@@ -265,7 +266,7 @@ def run(directory, world, observer_path, *, home_only=False):
             for point in targets:
                 dispatch(dict(zip(phase.joint_names, point)),holding=phase.phase_id=='transfer')
             if phase.phase_id == 'grasp':
-                event['hold_evidence'] = grip('held')
+                event['hold_evidence'],_ = grip('held')
                 event['hold_receipt'] = event['hold_evidence']['receipt']
                 tcp = kin.fk([arm.latest_joint_state.positions[n] for n in ARM_JOINTS])
                 pose = observe()['model_pose_base']
@@ -275,7 +276,7 @@ def run(directory, world, observer_path, *, home_only=False):
                 if not event['attach']['confirmed']:
                     raise RuntimeError('attach unconfirmed')
             if phase.phase_id == 'release':
-                event['release_evidence'] = grip('open')
+                event['release_evidence'],_ = grip('open')
                 event['release_receipt'] = event['release_evidence']['receipt']
             event['ended_sim_s'] = sim_time()
             event['ended_owner_s'] = arm.monotonic()

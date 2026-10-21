@@ -177,7 +177,7 @@ def test_teacher_dispatch_records_contact_hold_only_when_requested(holding):
     sent=[];checks=[];event={}
     def grip(expect):
         checks.append(expect)
-        return evidence
+        return evidence,actual['gripper_joint_1']
     namespace=dict(wait_ready=lambda:{'positions':actual},dispatch_once=sent.append,
         dispatch_readback_target=dispatch_readback_target,grip=grip,event=event,
         contact_hold_target=getattr(teacher,'contact_hold_target',None),
@@ -308,7 +308,7 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
         GripperObservation=GripperObservation, verify_held_object=verify_held_object,
         verify_released_object=verify_released_object,contact_held=contact_held)
     exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
-    evidence = namespace['grip']('held')
+    evidence,position = namespace['grip']('held')
     assert evidence['observation']['received_at'] == 20.
     assert evidence['checked_owner_s'] == 20.1 and evidence['max_age_s'] == .5
     assert evidence['receipt']['sequence'] == evidence['observation']['sequence'] == 12
@@ -318,7 +318,7 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
     identity=_gripper_evidence(dict(hold_evidence=evidence,hold_receipt=evidence['receipt'],
         started_owner_s=19.,ended_owner_s=21.),'hold')
     assert identity==('omx_cell_sim','omx_cell_sim_01','omx-sim-width-matched-position-v2',1)
-    assert evidence['position_rad']==.42
+    assert position==.42
     arm.monotonic = lambda: 20.6
     with pytest.raises(GripperReadbackError, match='stale'):
         namespace['grip']('held')
