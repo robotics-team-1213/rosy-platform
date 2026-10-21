@@ -83,19 +83,23 @@ curation과20/5분할을 재확인했다. 부모 weights는 별도 읽기전용0
 확인했다. 최신 code 착지와 실제 물체 목표 달성은 별개이며 현재0/35를 유지한다.
 
 Study `fixed-object-6cdde72b23679868`의 실제 추가10,000step과 전체 validation·
-checkpoint 재적재는 완료했다. 실제 history10,000개의 첫100평균 loss0.0147409435,
+checkpoint 재적재는 완료했다. 실제 history10,000개의 첫100평균 정규화L1 loss0.0147409435,
 마지막100평균0.0087995281이다. 전체13,246프레임 MAE0.005778079426253098rad,
 상수 baseline0.29584911500909206rad, limit위반0, 재적재 일치이며 `offline_only`다.
-부모BEC의 기존10k와 이번추가10k를 구분한다. 이전 delta 모델보다 offline MAE가
-낮아졌다고 주장하지 않는다. 새 모델의 실제 물체 과제 성공은 아직 미확인이다.
+부모BEC의 기존10k와 이번추가10k를 구분한다. 이전 delta 모델 MAE0.00404918rad보다
+크다. 새 모델의 실제 물체 과제 성공은 아직 미확인이다.
 Policy revision: `fa953bf0ae64134ca2f6e7299adf5f5c9b04af8f10e13b4341532d567ae34ebc`.
 Dataset revision: `a70d61a690a7fb10bfdef48a05a80d81999146c6b02d6fe861e82cf4e9541117`.
 Weights SHA256: `a12b15619f1e27e6b1389dae899de6c5ce39456f8c86713614e1051902d72e23`.
 Normalization SHA256: `0b5092f410c5a36eea190d308e0fb216eccd9c724de28c843ccc1eedbf345f69`.
 Additional10k history SHA256: `8dc465f72b02694421852ead75fd80cb47b14e036a09b48e699fca064330d05b`.
 ACTConfig SHA256: `183fbe61c0971a1f0b16a2611e3da8ac787f7d90a1208aae564ea45ffaf74423`.
-Store登録·공식전달bundle 검증과 전체launcher EXIT0은 별도 완료 조건이다. 해당 검증 뒤
-연결된 supervisor가 착지 runtime으로 새calibration·engineering1회를 실행한다.
+Store finalized snapshot1개·공식전달bundle 검증·전체launcher EXIT0을 확인했다.
+연결된 supervisor의 새 calibration은 배포 READY 뒤 자원 예약에서 거절됐다.
+공유 시험의 메모리 예약으로 기존6CPU/8GiB 여유 기준에 미달했다. Durable status는
+intent null·unit not-found·NOT_RUN이며 물체 과제는 미시작이다. 동료 작업과 기준을
+유지하고 자원 여유·미실행 상태를 재확인한 뒤 새 calibration을 요청한다.
+원래의 자원 거절과 미실행 영수증은 보존한다.
 사전 물체 과제가 통과해야 같은 checkpoint/runtime의 새정식20회를 시작한다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
