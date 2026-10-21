@@ -78,6 +78,8 @@ def test_source_credentials_and_joint_set_cannot_change_an_existing_sample(setup
 
 def test_restarts_require_sequence_one_and_newer_capture_and_retire_old_epochs(setup):
     service, _, _, _ = setup
+    with pytest.raises(ValueError):
+        service.ingest("feedback_a", "arm-a-secret", sample(sequence=2))
     service.ingest("feedback_a", "arm-a-secret", sample(epoch="0" * 32, captured_at=99.5))
     service.ingest("feedback_a", "arm-a-secret", sample())
     before = service.snapshot()
