@@ -453,7 +453,26 @@ Curation·split SHA256은 이전 실행과 같고 실제 augmentation은 위 std
 6관절·train 전용 설정과 일치한다. 이를 제외한 정규화 통계 전체가 이전 파일과 정확히
 같음을 대조했다. 새 정규화 SHA256:
 SHA256: `841540d39eacba75e78474520326e7bdb39f462d7b9e4d46d009e7db6d7927e7`.
-새10,000step 완료·checkpoint 재로딩·새 물체 과제 성능은 아직 확인 전이다.
+실제10,000개 loss 이력이 저장됐고 SHA256은
+SHA256: `5dc7d8502c1892c55a933b31d4835207c62d3c9130533514977dbe4494bb54d5`다.
+첫100개 평균2.1346675861·마지막100개 평균0.8952426803이며 교란이 있는 loss를
+이전 무교란 loss와 직접 성능 비교하지 않는다. 전체 validation MAE는
+0.006948906675814038rad로 무교란 상대 표현 후보의 0.0037910785653385267rad보다
+높고 상수 baseline은0.29584911500909206rad다. Checkpoint 재로딩 예측 일치와
+`offline_only` 판정을 확인했다. 새 Policy revision:
+revision: `746e3b8e7fd8f9b16c7fbc0fd3fdd081fc65d679e6b05108afa5bc073313d109`.
+등록본 복사·재검증·모델 묶음 전송과 실행 exit0을 확인했다. 전체 validation13,246프레임·
+관절 한계 위반0·n_action_steps=1이며 native calibration과 사전 과제를 준비 중이다.
+새 실제 물체 과제는 아직 시작하지 않았다.
+
+| 상태 교란 학습 산출물 | 고정 식별자 |
+|---|---|
+| 학습 source revision | `34967a59969d90806aa3ec77e694c126bad1426d` |
+| Dataset revision | `0360c0bccf2277e094006264a4fc8181f5c79ba8b3fa988d2e47d7b94d89e094` |
+| Model weights SHA256 | `e8dec34c5f820ccc819f75f48807d9c8c8a74e8fda2121f190f4afebb2ccb284` |
+
+실제 전송된 weights45,371,416bytes의 전체 SHA256을 로컬에서도 대조했다. 이 증거와
+offline 지표를 새 물체 과제 성공에 합산하지 않는다.
 
 최신 main d31ec2747f를 반영한 통합 source `301dc82473`는 공식 selector의 관련55경로를
 AI PC에서 실행해 1,085 PASS / 35 SKIP / 0 NEW·exit 0이었다. 실제 ACT가 필요한 생략분을
