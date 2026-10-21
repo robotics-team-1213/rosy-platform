@@ -44,10 +44,6 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   outline-offset: var(--focus-ring-offset);
 }
 
-/* `display`를 지정한 요소에는 [hidden]의 display:none이 지고 만다. 숨긴 뷰가
-   그대로 레이아웃을 차지해 콘솔이 스크롤하게 되는 고전적 버그다. */
-[hidden] { display: none !important; }
-
 /* ---- 증거 — 값은 자기가 얼마나 믿을 만한지 같이 말한다(D-72 S4) ---------- */
 [data-evidence="delayed"],
 [data-evidence="disconnected"],
@@ -220,7 +216,6 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 /* 인증 브리지의 목적지 — 역할 화면의 스위치와 같은 문법, 이 페이지의 배치다.
    목록은 서버 매니페스트가 역할로 걸러 준다(D-335 뒤의 비평 P1 회차). */
 .surface-bridge { display: flex; align-items: center; gap: var(--space-1); }
-.surface-bridge[hidden] { display: none; }
 .surface-bridge a {
   display: inline-flex;
   align-items: center;
@@ -237,17 +232,8 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .view-switch { display: inline-flex; border: 1px solid var(--control-line); border-radius: var(--radius-button); overflow: hidden; }
-.view-tab {
-  min-height: var(--target-secondary);
-  padding: 0 var(--space-4);
-  border: 0;
-  background: transparent;
-  color: var(--nominal-quiet);
-  font-size: var(--text-label);
-  cursor: pointer;
-}
-.view-tab[aria-pressed="true"],
-.view-tab[aria-selected="true"] { background: var(--ink); color: var(--button-primary-ink); font-weight: var(--weight-strong); }
+/* Paint comes from the shared segment kind; the switch only spaces its tabs. */
+.view-tab { padding: 0 var(--space-4); }
 
 .auth-drawer {
   position: fixed;
@@ -268,25 +254,12 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .auth-row { display: flex; gap: var(--space-2); }
 .auth-row input { flex: 1; }
 .auth-drawer form { display: grid; gap: var(--space-2); }
-.auth-drawer form[hidden] { display: none; }
 .auth-tabs { justify-self: start; }
 /* The checkbox row keeps its sentence case inside the drawer's label rule. */
 .auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: 0; font-weight: var(--weight-regular); }
 .auth-row input#code-input { text-transform: uppercase; letter-spacing: var(--track-label); }
 .whoami-badge b { color: var(--text-primary); }
-.drawer-close {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  min-height: var(--target-secondary);
-  min-width: var(--target-secondary);
-  border: 0;
-  border-radius: var(--radius-button);
-  color: var(--text-secondary);
-  background: none;
-  font-size: var(--text-title);
-  cursor: pointer;
-}
+.drawer-close { position: absolute; top: var(--space-2); right: var(--space-2); }
 .form-message { min-height: 1.4em; margin: var(--space-2) 0 0; font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); }
 
 /* 레이아웃은 뷰가 소유한다 — 컨테이너가 열을 정하면 두 문법이 섞인다. */
@@ -394,7 +367,6 @@ body[data-view="operate"] .page-footer { display: none; }
   line-height: var(--leading-body);
   list-style: decimal inside;
 }
-.summary-todos[hidden] { display: none; }
 
 /* ---- 분류 — 한 줄이다(Law 1) ---------------------------------------------
    머리에 하나, 나머지는 색 없는 맥락. 세로로 쌓으면 160px을 가져가고 그만큼

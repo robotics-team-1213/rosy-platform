@@ -9,6 +9,11 @@
  * 48px 누름 면이 된다.
  */
 
+/* One rule for every surface: `hidden` always hides. A surface `display` rule would otherwise
+ * outrank the browser's own [hidden] style, so surfaces wrote ~60 per-element copies. Show with
+ * `:not([hidden])` selectors, never by overriding this. */
+[hidden] { display: none !important; }
+
 /* Native disclosure keeps its marker and keyboard/expanded semantics. */
 .ui-page-heading {
   margin: 0;
@@ -111,7 +116,6 @@
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--body);
   overflow-wrap: anywhere;
 }
-.ui-tooltip[hidden] { display: none; }
 
 .skip-link {
   position: fixed;
@@ -502,8 +506,6 @@ ui-tag {
   white-space: nowrap;
 }
 
-ui-tag[hidden] { display: none; }
-
 /* D-461: task-first workspace compositions. Opt-in; no existing surface override. */
 .ui-workspace-bar {
   display: flex;
@@ -621,8 +623,6 @@ ui-status {
   scrollbar-color: var(--ground-card-2) var(--ground);
   scrollbar-width: thin;
 }
-
-ui-status[hidden] { display: none; }
 
 ui-actions {
   display: flex;
@@ -940,4 +940,3 @@ ui-empty {
 }
 /* Account context stays outside command bars and wraps long display names. */
 [data-account-profile] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-[data-account-profile][hidden] { display: none; }

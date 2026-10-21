@@ -74,6 +74,8 @@ def client(endpoint):
                 ssl.create_default_context(cafile=endpoint["ca_file"]), tls_host=url.hostname)
 
 
+SHARED_WEB = Path(__file__).resolve().parents[2] / "shared" / "web"
+
 class SiteClient:
     """Use CORE's verified TLS connection helper, without the robot API prefix."""
     def __init__(self, endpoint):
@@ -176,6 +178,11 @@ class Session:
         """)
         self.event(None, "session_started", None)
         (self.out / "index.html").write_bytes(Path(__file__).with_name("multi_record.html").read_bytes())
+        # The wall takes its colours and theme from the shared tokens, copied beside it (served from this folder).
+        common = self.out / "common"
+        common.mkdir(exist_ok=True)
+        for name in ("tokens.css", "theme.js"):
+            (common / name).write_bytes((SHARED_WEB / name).read_bytes())
         self.publish()
 
     def event(self, sid, kind, detail):

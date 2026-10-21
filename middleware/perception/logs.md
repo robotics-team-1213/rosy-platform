@@ -1785,3 +1785,15 @@
 - 변경: a24 고정 후보의 최종 주행·학습 모델 소비·정지·정리 증거를 동결 기록에 추가했다. 이전 실패와 중간3FAIL/Important1은 보존했다.
 - 증거: exact selector86경로를 제외 없이 분할해 native12,973 passed/776 skipped/NEW0. 같은 소스·모델·지도·출발 조건의 연속2회 PASS, 실제 목표 오차0.004722/0.007501m·via각0.029m, 두 실행 final cmd·odom0/lease released/left_running 없음과 회수·정리 완료.
 - gate 변화: 전체 모듈·FIELD 승격 없음. 이번 요청의 고정 조건 주행 SIM 수용을 충족했으며 lane_return·실물·현장 localization은 미검증이다.
+
+## 2026-10-21 · uncommitted · 진단 화면 표시 전환과 회전 아이콘
+
+- 변경: 진단 화면의 `style="display:none"`과 `.style.display` 토글 11곳을 `hidden` 속성으로 바꿨다(CSP 친화, 공용 `[hidden]` 규칙 사용). 지도 회전 `↶ ↷`는 공용 아이콘(left·right) 단독 단추로, 위험 깃발의 `⚠`는 낱말 `감지 ·`로 바꿨다.
+- 증거: 정적 점검. 원격 검사는 별도 기록한다.
+- gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · 진단 화면 색을 토큰으로
+
+- 변경: 진단 화면이 tokens.css를 싣고도 같은 색을 hex로 다시 적고 `--ink`·`--ink-quiet`를 덮어쓰던 것을 역할→토큰 참조로 바꿨다. 본문 rgba 20여 곳은 역할의 알파(color-mix)로, 캔버스 색표 `T`는 hex 사본 대신 CSS 속성 이름(`T_VARS`)을 그리는 순간 RosyPalette로 푼다. 토큰이 없는 지도 래스터(render_png와 같은 값)와 대안 경로·핀 두 색만 역할 블록에 남는다. 주행 화살표 엔티티는 공용 아이콘, 정적 인라인 style은 클래스로 옮겼다.
+- 증거: 정적 점검(역할 블록 밖 원시 색 0, T 속성 20개 모두 선언됨). 원격 검사는 별도 기록한다.
+- gate 변화: 없음. 화면은 여전히 dark 고정(data-theme-pin)이며 색 값의 출처만 바뀌었다.

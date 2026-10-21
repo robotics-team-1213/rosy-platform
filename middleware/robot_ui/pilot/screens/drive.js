@@ -105,12 +105,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (velocityState === "fresh" || velocityState === "delayed") {
       element.speed.textContent = Math.abs(velocity.linear).toFixed(2);
       const turn = velocity.angular * DEG;
-      const direction = turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·";
-      element.turn.textContent = `${direction} ${Math.abs(turn).toFixed(0)}°/s`
+      const direction = turn > 0.5 ? "좌 " : turn < -0.5 ? "우 " : "";
+      element.turn.textContent = `${direction}${Math.abs(turn).toFixed(0)}°/s`
         + (velocityState === "delayed" ? ` · 지연${ageText(frame, "velocity")}` : "");
     } else {
       element.speed.textContent = "—";
-      element.turn.textContent = velocityState === "disconnected" ? "· 속도 연결 끊김" : "· 속도 정보 없음";
+      element.turn.textContent = velocityState === "disconnected" ? "속도 연결 끊김" : "속도 정보 없음";
     }
 
     const percent = frame?.battery?.percent;

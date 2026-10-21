@@ -25,6 +25,7 @@
     "brand/mark.svg": "image/svg+xml",
     "brand/platform.svg": "image/svg+xml",
     "task-chooser.js": "text/javascript",
+    "ui-wiring.js": "text/javascript",
     "task-chooser.css": "text/css",
     "account-profile.js": "text/javascript"
   }

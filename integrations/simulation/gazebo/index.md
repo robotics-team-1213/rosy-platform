@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 라이브 뷰어 색을 공용 토큰으로
 - 2026-10-19 · uncommitted · fix(gz_sim): recover OMX workcell layout fixtures
 - 2026-10-15 · 5eb721d11 · 두 로봇 Fleet+Gazebo 차선 trip을 커밋된 구성으로
 - 2026-10-15 · 271f923283 · select the default profile in remote build composition
 - 2026-10-15 · cbf3ab55bd · restore native SIM profile and contract installation
-- 2026-10-12 · uncommitted · Validate optional ROS launch environment and normalized parameters

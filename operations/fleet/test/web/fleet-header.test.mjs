@@ -33,21 +33,13 @@ function fakeHeader() {
   return nodes;
 }
 
-test("one theme button cycles the shared choices; one status click toggles once", () => {
+test("one status click toggles once; the theme button is wired by the shared ui.js", () => {
   const nodes = fakeHeader();
-  let preference = "dark";
-  const choices = [{value: "dark", label: "dark", icon: "theme-dark"},
-    {value: "light", label: "light", icon: "theme-light"},
-    {value: "system", label: "system", icon: "theme-system"}];
-  globalThis.window = {RosyTheme: {choices, get: () => preference, set: value => {preference = value;}}};
   globalThis.MutationObserver = class { observe() {} };
   bindTopbarToggle();
   assert.match(nodes["topbar-more"].getAttribute("aria-label"), /^계정과 접속/);
   assert.equal(typeof nodes["fleet-inbox"].listeners.click, "function");
-  for (const value of ["light", "system", "dark"]) {
-    nodes["fleet-theme"].listeners.click();
-    assert.equal(preference, value);
-  }
+  assert.equal(nodes["fleet-theme"].listeners.click, undefined);
   nodes["topbar-more"].listeners.click();
   assert.equal(nodes["topbar-extra"].dataset.open, "true");
   nodes["topbar-more"].listeners.click();

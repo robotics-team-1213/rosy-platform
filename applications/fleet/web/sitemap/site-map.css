@@ -15,7 +15,6 @@ ui-section { display: grid; gap: var(--space-3); }
 .plane-tools summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-.form[hidden] { display: none; }
 label { display: grid; gap: var(--space-2); }
 label.inline { display: inline-flex; flex: none; max-width: 100%; align-items: center; gap: var(--space-2); }
 ui-head:has(label.inline) { flex-wrap: wrap; align-items: center; }
@@ -27,7 +26,6 @@ a { color: var(--text-primary); }
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .map-scroll-hint { display: none; }
-.map-scroll-hint[hidden] { display: none; }
 #site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
 #site-map-svg.picking { cursor: crosshair; }
 #site-map-svg .plane-border { fill: none; stroke: var(--ink-quiet); stroke-width: 1px; pointer-events: none; }

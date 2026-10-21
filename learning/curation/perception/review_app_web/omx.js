@@ -12,8 +12,6 @@ let editGeneration=0,loading=false,savesInFlight=0;
 const pendingEdits=()=>[...editors].some(editor=>editor());
 window.addEventListener('beforeunload',event=>{if(pendingEdits()){event.preventDefault();event.returnValue='';}});
 
-$('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 
 function el(tag,text,cls){const node=document.createElement(tag);if(text!=null)node.textContent=text;if(cls)node.className=cls;return node;}
 function button(text,kind='quiet'){

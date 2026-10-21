@@ -105,7 +105,7 @@ def test_shared_status_component_owns_accessibility_and_palette_states():
     assert 'if (!this.hasAttribute("role")) this.setAttribute("role", "status")' in script
     assert 'if (!this.hasAttribute("aria-live")) this.setAttribute("aria-live", "polite")' in script
     assert "ui-status[state=\"warning\"]" in css
-    assert "ui-status[hidden] { display: none; }" in css
+    assert "[hidden] { display: none !important; }" in css
     assert "color: var(--status-warn)" in css
     assert not RAW_COLOR.findall(css)
 
@@ -320,6 +320,57 @@ def test_surfaces_do_not_repaint_shared_controls():
     assert not offenders, offenders
 
 
+def _surface_files(root):
+    return [root] if root.is_file() else [
+        child for child in sorted(root.rglob("*")) if child.suffix in STYLE_SUFFIXES and "test" not in child.parts]
+
+
+def class_repaints(files):
+    """A class written on a surface's own `<ui-button>` is placement only, like `ui-button` itself."""
+    texts = {path: path.read_text(encoding="utf-8") for path in files if path.suffix in {".css", ".html"}}
+    classes = {name for path, text in texts.items() if path.suffix == ".html" for attrs in TAG.findall(text)
+               for found in [re.search(r'\bclass="([^"]+)"', attrs)] if found for name in found.group(1).split()}
+    offenders = []
+    for path, text in texts.items():
+        if path.suffix == ".html":
+            text = "\n".join(re.findall(r"<style>(.*?)</style>", text, re.S))
+        for selector, body in RULE.findall(re.sub(r"/\*.*?\*/", "", text, flags=re.S)):
+            for part in selector.split(","):
+                target = part.split()[-1] if part.split() else ""  # the element the rule paints, not its children
+                hit = [name for name in classes if re.search(rf"\.{re.escape(name)}(?![\w-])", target)]
+                if hit and PAINT.findall(body):
+                    offenders.append(f"{path.name} {part.strip()[:60]} -> {PAINT.findall(body)}")
+    return offenders
+
+
+def test_surfaces_do_not_repaint_shared_buttons_through_their_class():
+    offenders = [hit for root in registry.for_contract(registry.REPO, "shared_controls")
+                 for hit in class_repaints(_surface_files(root))]
+    assert not offenders, offenders
+
+
+def test_class_repaint_check_sees_the_class_and_spares_children(tmp_path):
+    page, sheet = tmp_path / "index.html", tmp_path / "surface.css"
+    page.write_text('<ui-button kind="segment" class="view-tab">운용</ui-button>', encoding="utf-8")
+    sheet.write_text(".view-tab[aria-pressed=\"true\"] { background: var(--ink); }", encoding="utf-8")
+    assert class_repaints([page, sheet])
+    sheet.write_text(".view-tab { padding: 0 var(--space-4); } .view-tab small { color: var(--ink); }", encoding="utf-8")
+    assert not class_repaints([page, sheet])
+
+
+def test_hidden_hides_through_the_one_shared_rule():
+    """components.css owns `[hidden]`; a surface copy per element is how one gets forgotten."""
+    copies = []
+    for path in _surface_texts():
+        if path.suffix not in {".css", ".html"}:
+            continue
+        for selector, body in RULE.findall(path.read_text(encoding="utf-8")):
+            hides_itself = all(part.strip().endswith("[hidden]") for part in selector.split(","))
+            if re.fullmatch(r"\s*display:\s*none(?:\s*!important)?;?\s*", body) and hides_itself:
+                copies.append(f"{path.name} {selector.strip()[:60]}")
+    assert not copies, copies
+
+
 def test_new_shared_role_classes_reject_surface_repaint(tmp_path, monkeypatch):
     stylesheet = tmp_path / "surface.css"
     monkeypatch.setitem(globals(), "_surface_texts", lambda: [stylesheet])
@@ -401,16 +452,14 @@ _MEASURE = re.compile(
 )
 _LENGTH = re.compile(r"(?<![\w.-])(\d*\.?\d+)(px|rem)")
 
-# Diagnostic names that are the shared palette, written as hex so the canvas
-# mirror can read them. Raster and the two colours with no token stay local.
-_DIAGNOSTIC_TWINS = {
+# Diagnostic roles that are the shared palette. They reference the token, so a token change reaches
+# the page and its canvases (read at paint time through RosyPalette). Only these have no token.
+_DIAGNOSTIC_ROLES = {
     "bg": "--ground-deep",
     "observe": "--ground",
     "act": "--ground-card",
     "act-2": "--ground-card-2",
-    "ink": "--ink",
     "ink-2": "--ink-quiet",
-    "ink-quiet": "--ink-quiet",
     "route": "--series-primary",
     "goal": "--series-goal",
     "good": "--status-good",
@@ -418,6 +467,7 @@ _DIAGNOSTIC_TWINS = {
     "crit": "--status-crit",
     "hist": "--ink-quiet",
 }
+_DIAGNOSTIC_LOCAL = {"unk", "grid", "free", "wall", "alt", "pin"}  # map raster (render_png) and two overlays
 
 
 def test_measure_comes_from_the_scale():
@@ -442,17 +492,17 @@ def test_measure_comes_from_the_scale():
     assert not offenders, offenders
 
 
-def test_diagnostic_palette_matches_the_token_hex():
-    tokens = _dark_tokens()
+def test_diagnostic_palette_references_the_tokens():
     page = (ROOT / "middleware" / "perception" / "web" / "diagnostic.html").read_text(encoding="utf-8")
-    declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
-    mismatch = []
-    for local, token in _DIAGNOSTIC_TWINS.items():
-        got = declared.get(local)
-        expected = tokens.get(token)
-        if got != expected:
-            mismatch.append(f"--{local} #{got} != {token} #{expected}")
+    declared = dict(re.findall(r"--([a-z0-9-]+):\s*([^;]+);", page.split("<style>", 1)[1].split("}", 1)[0]))
+    mismatch = [f"--{local}: {declared.get(local)} != var({token})" for local, token in _DIAGNOSTIC_ROLES.items()
+                if declared.get(local, "").strip() != f"var({token})"]
     assert not mismatch, mismatch
+    raw = {name for name, value in declared.items() if RAW_COLOR.search(value)}
+    assert raw == _DIAGNOSTIC_LOCAL, raw ^ _DIAGNOSTIC_LOCAL
+    assert "--ink:" not in page and "--ink-quiet:" not in page, "the page must not redefine a shared token"
+    rest = page.split("<style>", 1)[1].split("}", 1)[1]
+    assert not RAW_COLOR.findall(rest), "colours past the role block come from a role, not a literal"
 
 
 def test_a_browser_page_starts_from_the_shell():

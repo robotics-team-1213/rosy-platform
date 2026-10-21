@@ -710,7 +710,7 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     # D-741: the app bar is one row (app, theme); the heading and the six screens (D-792 camera, imitation) left it.
     assert page.locator('ui-topbar h1, ui-topbar nav').count() == 0
     brand = page.locator('ui-topbar ui-brand').bounding_box()
-    theme = page.locator('ui-topbar .theme-label select').bounding_box()
+    theme = page.locator('ui-topbar [data-theme-cycle]').bounding_box()
     assert brand['x'] + brand['width'] <= theme['x'], (route, brand, theme)
     rail = page.locator('.ui-rail').bounding_box()
     assert rail['y'] == topbar['y'] + topbar['height'], (route, rail, topbar)
@@ -1336,10 +1336,10 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
 
 def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
     page, store, expect = browser_workspace
-    chip = page.locator('#object-quick-classes button[value="obstacle_box"]')
+    chip = page.locator('#object-quick-classes ui-button[value="obstacle_box"]')
     expect(chip).to_be_disabled()
     expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
-        page.locator('#object-quick-classes button').count())
+        page.locator('#object-quick-classes ui-button').count())
     assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
     assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
     expect(page.locator('#view-original .ui-icon')).to_have_count(1)
@@ -1395,7 +1395,7 @@ def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
-    icon = page.locator('#object-quick-classes button[value="car"] .ui-icon')
+    icon = page.locator('#object-quick-classes ui-button[value="car"] .ui-icon')
     assert icon.evaluate('node => getComputedStyle(node).color') == 'rgb(12, 34, 56)'
     select = page.locator('#boxes .box-top select').first
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])

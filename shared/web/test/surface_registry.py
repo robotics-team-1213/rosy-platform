@@ -342,6 +342,11 @@ _HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _JS_LINE_COMMENT = re.compile(r"(?:(?<=^)|(?<=[\s;{}(),]))//[^\n]*", re.M)
 _THEME_COLOUR_VALUE = re.compile(r'(<meta\s+name="theme-color"\s+content=")([^"]*)(")', re.I)
 _TOP_RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")
+
+
+def _selector(raw: str) -> str:
+    """A rule's selector; in an HTML page the first rule's text also carries the markup before <style>."""
+    return re.sub(r"(?s)^.*<style[^>]*>", "", raw).strip()
 #: 라이브러리 예외 — 저장소 상대 파일 → 그대로 지울 조각. 각 조각의 이유:
 #: ui.js `cssColor`는 RosyPalette가 풀어 낸 [r,g,b,a] 바이트를 캔버스 fillStyle 문자열로
 #: 옮기는 형식기다. 값은 tokens.css에서 오고 이 글자에는 색 리터럴이 없다.
@@ -410,7 +415,7 @@ def _raw_colour_entries(base: Path, row: dict, label: str) -> tuple[list[str], l
         if not isinstance(name, str) or name not in sources:
             found.append(f"colour: {label} raw_colours {name}가 표면 파일이 아니다")
             continue
-        if block is not None and block not in [sel.strip() for sel, _ in _TOP_RULE.findall(sources[name])]:
+        if block is not None and block not in [_selector(sel) for sel, _ in _TOP_RULE.findall(sources[name])]:
             found.append(f"colour: {label} raw_colours {name}에 {block} 블록이 없다")
             continue
         if not isinstance(reason, str) or not reason.strip():
@@ -441,7 +446,7 @@ def _colour_hits(base: Path, row: dict, usable: list[dict]) -> tuple[list[str], 
                 spans.append((0, len(text), index))
             else:
                 spans += [(m.start(2), m.end(2), index) for m in _TOP_RULE.finditer(text)
-                          if m.group(1).strip() == entry["block"]]
+                          if _selector(m.group(1)) == entry["block"]]
         for match in RAW_COLOUR.finditer(text):
             cover = [owner for start, end, owner in spans if start <= match.start() < end]
             if cover:

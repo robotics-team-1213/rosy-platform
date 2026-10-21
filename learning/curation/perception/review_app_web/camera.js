@@ -2,7 +2,7 @@
 // features (default, no markers): reference outlines mapped by the measured homography.
 // markers (optional): reference marker squares against the detected ones.
 import {accountFetch} from '/account-session.js';
-import {cssColor, clearPalette} from '/common/ui.js';
+import {cssColor} from '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
 const MOUNT=[['height_cm','높이','cm'],['distance_cm','거리','cm'],['tilt_deg','tilt','°'],['pan_deg','pan','°'],['roll_deg','roll','°']];
@@ -10,8 +10,7 @@ const VERDICT={ok:['ready','맞음 — 이 위치로 녹화할 수 있습니다.
   unmeasurable:['error','측정 불가 — 너무 어둡거나 장면이 많이 바뀌어 기준과 맞출 수 없습니다(마커 방식은 마커 3개 이상). 손목 카메라는 팔을 확인 자세로 보냈는지, 교정 지문과 해상도도 확인하세요.']};
 let token, references=[], still=null, photo=null, result=null;
 
-$('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} clearPalette();document.dispatchEvent(new CustomEvent('rosy:theme'));draw();};
+document.addEventListener('rosy:theme',draw);
 $('intrinsics').value=JSON.stringify({camera_info_sha256:'',revision:'',k:[600,600,320,240],dist:[0,0,0,0,0]});
 $('layout').value=JSON.stringify([[-20,0],[20,0],[-20,30],[20,30]].map((c,id)=>({id,size_cm:6,center_cm:c})));
 $('method').onchange=()=>{$('layout-field').hidden=$('method').value!=='markers';};

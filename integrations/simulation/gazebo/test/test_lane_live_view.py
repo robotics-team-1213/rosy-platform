@@ -6,6 +6,7 @@ same pattern as junction_harness.py / test_junction_harness_contract.py."""
 import importlib.util
 import json
 import math
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,12 +69,13 @@ def test_index_html_has_the_required_panels_and_endpoints():
     assert "NO DATA" in html
 
 
-def test_index_html_is_self_contained_dark_and_legible():
+def test_index_html_loads_only_the_shared_common_assets():
     mod = _mod()
     html = mod.render_index_html()
-    assert "<script src=" not in html
-    assert "<link rel=\"stylesheet\"" not in html
-    assert "background: #111318" in html or "color-scheme: dark" in html
+    assert '<link rel="stylesheet" href="/common/tokens.css">\n<script src="/common/theme.js"></script>' in html
+    assert re.findall(r'(?:src|href)="(/common/[^"]+)"', html) == [
+        "/common/tokens.css", "/common/theme.js", "/common/components.css", "/common/ui.js"]
+    assert 'src="http' not in html and 'href="http' not in html
 
 
 # ---------------------------------------------------------------------
@@ -362,3 +364,28 @@ def test_core_poll_runs_off_the_ros_callback_thread():
     assert "target=core_poll_loop, args=(state, args.core_url, stop_event)" in source
     poll_source = source.split("def core_poll_loop(", 1)[1].split("\ndef ", 1)[0]
     assert "spin_once" not in poll_source
+
+
+def test_common_serves_only_the_shared_manifest():
+    """/common/<name> is the shared-assets.json allowlist; anything else, traversal included, is 404."""
+    import http.client
+    import threading
+    from http.server import ThreadingHTTPServer
+    mod = _mod()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), mod.make_handler(mod.ViewerState({"segments": {}, "nodes": {}})))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        def get(path):
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+            connection.request("GET", path)  # raw path: no client-side normalisation of ../
+            response = connection.getresponse()
+            body, kind = response.read(), response.getheader("Content-Type", "")
+            connection.close()
+            return response.status, kind, body
+        status, kind, body = get("/common/tokens.css")
+        assert status == 200 and kind.startswith("text/css") and b"--ground" in body
+        for path in ("/common/AGENTS.md", "/common/../lane_live_view.py", "/common/%2e%2e/tokens.css", "/common/"):
+            assert get(path)[0] == 404, path
+    finally:
+        server.shutdown()
+        server.server_close()

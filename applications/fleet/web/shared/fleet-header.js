@@ -1,7 +1,7 @@
 // D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
 // markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
-import {actionIcon} from "/common/ui.js";
+import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 
 export const SESSION_REASON = "접속이 필요합니다";
@@ -47,23 +47,6 @@ export function showInboxCount(count) {
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
 }
 
-function bindThemeCycle(listen) {
-  const button = $("fleet-theme"), theme = window.RosyTheme;
-  const current = () => theme.choices.findIndex(choice => choice.value === theme.get());
-  const next = () => theme.choices[(current() + 1) % theme.choices.length];
-  function render() {
-    const choice = theme.choices[current()];
-    const label = `테마: ${choice.label} · 클릭하면 ${next().label}`;
-    button.setAttribute("aria-label", label);
-    button.setAttribute("data-ui-tooltip", label);
-    button.setAttribute("data-action-icon", choice.icon);
-    actionIcon(button, choice.icon);
-  }
-  listen(button, "click", () => theme.set(next().value));
-  listen(document, "rosy:theme", render);
-  render();
-}
-
 export const roleLabel = role => ROLE[role] || "권한 없음";
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
@@ -90,7 +73,6 @@ export function setTopbarOpen(open) {
 }
 export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
   listen($("fleet-inbox"), "click", openInbox);
-  bindThemeCycle(listen);
   const entry = $("topbar-more");
   function summarize() {
     const development = $("development-badge").hidden ? "" : " · 개발 연결 모드";

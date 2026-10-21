@@ -47,7 +47,7 @@
 1857 perception/web/diagnostic.html
 676 robot_ui/face/emotion/info_screen.py
 732 robot_ui/pilot/screens/drive.js
-956 robot_ui/pilot/styles.css
+947 robot_ui/pilot/styles.css
 898 robot_ui/robot/app.js
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py
@@ -55,7 +55,7 @@
 755 fleet/web/line-stuck.js
 709 fleet/web/roster.js
 788 fleet/web/shared/site-map-model.js
-856 fleet/web/shared/styles.css
+834 fleet/web/shared/styles.css
 788 fleet/web/shared/vision-view.js
 771 fleet/web/sitemap/site-map.js
 1531 test/learning/perception/test_review_flow_browser.py
@@ -68,5 +68,5 @@
 858 tools/harness/rosy_harness.py
 749 tools/perception/rosy_ml.py
 697 tools/release/publish_payload_release.py
-943 web/components.css
+942 web/components.css
 814 web/ui.js

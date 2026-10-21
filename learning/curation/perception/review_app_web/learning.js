@@ -242,6 +242,4 @@ $('kind').onchange=fileHint;
 for(const id of ['search','kind-filter','state-filter']) $(id).addEventListener(id==='search'?'input':'change',render);
 $('reset-filters').onclick=()=> {$('search').value='';$('kind-filter').value='all';$('state-filter').value='all';render();$('search').focus();};
 $('refresh').onclick=()=> {if(busy) return;message('learning-error','');load().catch(()=>{});};
-$('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 load().catch(()=>{});

@@ -192,7 +192,7 @@ function renderRobotState(state) {
     const active = ["PLANNING", "NAVIGATING"].includes(state.navigation)
       && new HeadlessState(state).isFresh("navigation") && goalPoseReady() && state.mode !== "SAFE_STOP";
     if (active && session.lastGoal) {
-      navGoal.textContent = `→ (${session.lastGoal.x.toFixed(1)}, ${session.lastGoal.y.toFixed(1)})`;
+      navGoal.textContent = `목표 (${session.lastGoal.x.toFixed(1)}, ${session.lastGoal.y.toFixed(1)})`;
     } else {
       navGoal.textContent = "";
       if (!active && session.lastGoal) {

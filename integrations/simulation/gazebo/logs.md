@@ -432,3 +432,9 @@
 - 변경: Recover preserved OMX workcell model coordinates and SIM AID layout with the matching analytic clearance tests. Source worlds remain simulation fixtures.
 - 증거: Committed remote layout regression tests are pending; no new Gazebo run is claimed.
 - gate 변화: None; historical partial native simulation is not field acceptance.
+
+## 2026-10-21 · uncommitted · 라이브 뷰어 색을 공용 토큰으로
+
+- 변경: `lane_live_view.html`이 `/common/tokens.css`·`theme.js`·`components.css`·`ui.js`를 싣고, 자기 팔레트(주황 강조·회색 단계·웹폰트 이름) 대신 역할 변수가 공용 토큰만 가리킨다. 원시 색은 CSS·JS·인라인 style 어디에도 없다. 지도·궤적 그림은 SVG style의 CSS 변수로 칠해 테마가 바뀌면 다시 그리지 않아도 따라간다. `data-theme-pin`을 지워 사용자 테마를 따른다. 장식 glow·blur·맥동·흐름·전환 효과를 지웠고 탭은 공용 `ui-button kind="segment"`다. 오버레이 범례는 서버가 영상에 그린 고정 색이라 견본 대신 색 이름으로 적는다. `lane_live_view.py`는 `/common/<name>`을 web_common의 `shared-assets.json` 목록으로만 내준다(폴더를 훑지 않는다, 없으면 404).
+- 증거: 정적 검사만 했다. 원시 색 정규식 0건, 인라인 스크립트 `node --check` 통과, 서버 `/common/` 허용·404(목록 밖 이름, `..`, `%2e%2e`)를 cv2를 대신한 평범한 Python으로 확인. pytest·브라우저·Gazebo는 이 노트북에서 돌리지 않았다(D-584).
+- gate 변화: 없음. 화면 G2 확인과 원격 회귀가 남았다.

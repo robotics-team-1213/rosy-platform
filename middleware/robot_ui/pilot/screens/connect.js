@@ -159,8 +159,10 @@ function renderRecentList(root, onConnect) {
       if (token()) onConnect();
       else renderTokenForm(root, onConnect, `${entry.label || entry.host} — 로그인 코드를 입력하세요.`);
     });
-    const remove = el("ui-button", "✕", {type: "button", "data-recent-remove": entry.host, "aria-label": "최근 접속에서 지우기"});
+    const remove = el("ui-button", null, {type: "button", "data-recent-remove": entry.host, "data-icon-only": "",
+                                          "aria-label": "최근 접속에서 지우기"});
     remove.setAttribute("kind", "quiet");
+    actionIcon(remove, "close");
     remove.addEventListener("click", (e) => {
       e.stopPropagation();
       removeRecentEntry(entry.host);

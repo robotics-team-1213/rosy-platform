@@ -46,7 +46,7 @@ function detail(row){
 async function refresh(){
   const data=await api('runs');$('sim-runs').replaceChildren();
   for(const row of data.runs){
-    const button=document.createElement('button');button.type='button';button.className='ui-field';
+    const button=document.createElement('ui-button');button.setAttribute('kind','quiet');
     button.textContent=`${labels[row.status]||row.status} · ${row.run_id.slice(0,12)}`;
     button.addEventListener('click',()=>work(async()=>detail(await api('runs/'+row.run_id))));
     $('sim-runs').append(button);
@@ -70,7 +70,6 @@ async function start(parent){
   notice('sim-notice','같은 요청 재전송은 이 실행을 다시 조회합니다.');
 }
 $('sim-seed').addEventListener('input',invalidate);$('sim-scenario').addEventListener('change',invalidate);
-$('theme').value=window.RosyTheme.get();$('theme').addEventListener('change',()=>window.RosyTheme.set($('theme').value));
 $('sim-check').addEventListener('click',()=>work(check));
 $('sim-start').addEventListener('click',()=>work(()=>start()));
 $('sim-refresh').addEventListener('click',()=>work(refresh));
