@@ -18,7 +18,7 @@ from test_act_inference import artifact
 from act_inference import ACTInference
 from act_owner_capture import infer_captured
 from rosy.execution.local.omx_policy import PolicyCandidate
-from rosy.execution.local.policy_install import InstallBinding, load_policy
+from rosy.execution.local.policy_install import InstallBinding, InstalledPolicy, load_policy
 from rosy.contracts.learning import seal
 
 
