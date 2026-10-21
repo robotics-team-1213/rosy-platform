@@ -50,6 +50,11 @@ def prepared_set(row, workspace=None):
                 or not isinstance(decisions, list) or not all(isinstance(e, dict) for e in decisions)
                 or (setup is not None and not isinstance(setup, dict))):
             raise ValueError('invalid intake metadata shape')
+        keys = inspection.get('camera_keys', [])
+        if (not isinstance(keys, list) or not all(isinstance(key, str) and key for key in keys)
+                or not decisions or any(type(e.get('episode_index')) is not int or e['episode_index'] < 0
+                                        or type(e.get('frames')) is not int or e['frames'] < 1 for e in decisions)):
+            raise ValueError('invalid camera keys or episode identity')
         try:
             splits = reviewed_splits(inspection, decisions)
             trainable = {'ok': True, 'counts': {name: len(splits[name]) for name in ('train', 'eval', 'test')

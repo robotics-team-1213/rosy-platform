@@ -14,6 +14,11 @@ from test_review_return import fixture_inputs
     ('inspection.json', None), ('inspection.json', 'null'),
     ('inspection.json', '{'), ('decisions.json', '{}'),
     ('decisions.json', '[null]'), ('camera-setup.json', '[]'),
+    *[('inspection.json', json.dumps(dict(episodes=[], camera_keys=value)))
+      for value in (None, 42, 'front', [42])],
+    ('decisions.json', '[]'),
+    ('decisions.json', '[{"episode_index":0}]'),
+    ('decisions.json', '[{"episode_index":null,"frames":12}]'),
     ('camera-setup.json', '{"episodes":[{"episode_index":0,"checks":{"top":null}}]}'),
 ])
 def test_bad_registered_intake_does_not_hide_other_sets_or_leak_paths(tmp_path, file, contents):
