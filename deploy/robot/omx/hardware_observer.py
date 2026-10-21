@@ -4,10 +4,17 @@ import argparse
 import json
 import math
 import os
+import re
 import time
 
 JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"]
 TOPIC = "/omx_commissioning/joint_states"
+
+
+def joint_topic(value):
+    if value != TOPIC and not re.fullmatch(r"/omx_commissioning/[A-Za-z_][A-Za-z0-9_]*/joint_states", value):
+        raise ValueError("joint topic must stay in the OMX commissioning namespace")
+    return value
 
 
 def positions(rows, elapsed):
@@ -29,6 +36,7 @@ def main(argv=None):
     parser.add_argument("--device", required=True)
     parser.add_argument("--domain-id", type=int, required=True)
     parser.add_argument("--duration", type=float, required=True, help="bounded observation, 1..300 seconds")
+    parser.add_argument("--joint-topic", type=joint_topic, default=TOPIC)
     args = parser.parse_args(argv)
     if not 0 <= args.domain_id <= 232 or not math.isfinite(args.duration) or not 1 <= args.duration <= 300:
         parser.error("domain-id must be 0..232 and duration 1..300 seconds")
@@ -50,8 +58,11 @@ def main(argv=None):
     result = 2
     try:
         rclpy.init(domain_id=args.domain_id)
-        node = rclpy.create_node("rosy_omx_readonly_observer")
-        publisher = node.create_publisher(JointState, TOPIC, 1)
+        suffix = "" if args.joint_topic == TOPIC else "_" + args.joint_topic.split("/")[2]
+        node = rclpy.create_node("rosy_omx_readonly_observer" + suffix)
+        publisher = node.create_publisher(JointState, args.joint_topic, 1)
+        print(json.dumps({"event": "observer_start", "device": args.device,
+                          "joint_topic": args.joint_topic, "motion_admitted": False}), flush=True)
         deadline = time.monotonic() + args.duration
         with open_readonly_port(args.device) as port:
             while rclpy.ok() and time.monotonic() < deadline:
@@ -65,6 +76,7 @@ def main(argv=None):
                 publisher.publish(message)
                 count += 1
                 print(json.dumps({"sample": count, "captured_at": time.time(),
+                                  "device": args.device, "joint_topic": args.joint_topic,
                                   "motors": rows, "motion_admitted": False}), flush=True)
                 time.sleep(max(0, .1 - (time.monotonic() - started)))
         result = 0 if count and time.monotonic() >= deadline else 2
@@ -83,7 +95,8 @@ def main(argv=None):
         except Exception as error:
             result = 2
             print(json.dumps({"cleanup_error": str(error), "motion_admitted": False}), flush=True)
-        print(json.dumps({"samples": count, "exit_code": result, "motion_admitted": False}), flush=True)
+        print(json.dumps({"samples": count, "exit_code": result, "motion_admitted": False,
+                          "device": args.device, "joint_topic": args.joint_topic}), flush=True)
     return result
 
 

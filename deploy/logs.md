@@ -3068,3 +3068,9 @@
 - 변경: 기존 conversation snapshot/SSH wrapper 위에 독립 operator admission을 검증한다. 사이트 compose는 optional operator 설정 부재 시 OFF를 유지하고 새 Discord profile은 전처리 source closure를 요구한다.
 - 증거: 원본 로컬 구현에서 추출했으며 새 SHA의 설치기·클라이언트·산출물·모델 평가를 커밋 후 검증한다. 현장·AI PC의 비대화형 sudo는 거부돼 보호 설치를 수행하지 않았다.
 - gate 변화: 없음. 서명 후보·관리자 설치·readback과 현장 수용은 별도다.
+
+## 2026-10-21 · uncommitted · 두 팔과 세 카메라의 독립 관측
+
+- Change: each follower has its own commissioning observer topic; the local viewer separates both six-joint streams and the overhead/two wrist camera sources. Repeated labels/topics are refused and each source expires independently. Persistent USB port paths distinguish wrist cameras with duplicate serials.
+- Evidence: 14 dual-stream and 7 camera tests first failed at committed revisions; 72 observer/viewer/probe/browser-scope checks passed at 7daa8fbabb, including real Chromium. Camera path tests failed 4/20 at 509466f0be and all 20 passed at a694060ead. On Fleet, both six-joint streams and three fresh images were observed simultaneously with torque OFF. One observer was externally stopped after 840 samples; its values expired while the other stream continued. The caller of that stop request is unknown.
+- Gate: unchanged. This is a separate local read-only diagnostic viewer, not integrated ROSY product UI, accepted calibration, CORE motion or strawberry grasping. The bounded observers do not restart automatically.
