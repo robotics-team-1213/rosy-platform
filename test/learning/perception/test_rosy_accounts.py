@@ -5,6 +5,32 @@ from learning_accounts import AccountError
 from test_learning_accounts import accounts
 
 
+@pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
+                                              ('offline', 'account_unavailable'),
+                                              ('malformed', 'account_callback_failed')])
+def test_callback_failure_returns_to_account_recovery_without_credentials(failure, expected):
+    from core_common.protocol.account_client import AccountDenied, AccountUnavailable
+    from learning_collaboration import Collaboration
+    def finish(*args):
+        raise (AccountDenied if failure == 'denied' else AccountUnavailable)('private credential')
+    collaboration = object.__new__(Collaboration)
+    collaboration.receiver = SimpleNamespace(finish=finish)
+    collaboration.unavailable = (AccountUnavailable,)
+    collaboration.origin = 'https://learning.example.test'
+    collaboration.cookie_suffix = '_fixture'
+    sent = []
+    handler = SimpleNamespace(path='/api/account/callback?state=s&code=secret', headers={},
+                              extra_headers=[], send=lambda body, status: sent.append((body, status)))
+    if failure == 'malformed':
+        handler.path = '/api/account/callback?state=s'
+    assert collaboration.get(handler, '/api/account/callback', 'token')
+    assert sent == [(b'', 303)]
+    assert ('Location', '/accounts?error=' + expected) in handler.extra_headers
+    assert any(name == 'Set-Cookie' and value.startswith('rosy_account_flow_fixture=')
+               and 'Max-Age=0' in value for name, value in handler.extra_headers)
+    assert 'credential' not in repr(sent) + repr(handler.extra_headers)
+
+
 def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
     old_cookie, _ = accounts.login('alice','alice-password')
     record = SimpleNamespace(sub='central-alice', aud='project:one',

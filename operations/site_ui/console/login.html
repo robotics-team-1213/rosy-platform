@@ -19,6 +19,11 @@
       <h1 id="login-heading" class="ui-page-heading">관제 로그인</h1>
       <p>ROSY 계정으로 로그인하세요.</p>
       <p id="login-context">로그인 후 원래 업무로 돌아갑니다.</p>
+      <ui-section id="login-recovery" aria-labelledby="login-recovery-title" hidden>
+        <h2 id="login-recovery-title" class="ui-section-heading">앱 접근을 확인해 주세요</h2>
+        <ui-status id="login-recovery-status" state="forbidden" role="alert"></ui-status>
+        <ui-actions><a id="login-profile" class="ui-disclosure-row" href="/console/profile">내 계정·권한 확인</a><a id="login-retry" class="ui-disclosure-row">접근 다시 확인</a></ui-actions>
+      </ui-section>
       <div id="password-login" class="password-login"></div>
       <ui-status id="login-availability" state="pending" role="status">로그인 설정을 확인하고 있습니다.</ui-status>
       <a id="login-back" class="ui-disclosure-row" href="/console">원래 업무로 돌아가기</a>

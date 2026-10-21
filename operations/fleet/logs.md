@@ -4230,3 +4230,8 @@
 - Change: reject missing/empty producer headers before unavailable intake, preserving source authentication and the configured body limit. Register the new module in the existing Cell import-ownership assertion. Fixture naming/layout keeps the existing secret scanner unchanged.
 - Evidence: publication head 09bdd9c9b6 failed the AI observer admission and document-import assertions; 363de80103 then passed all 96 focused role, route, composition, actual TLS transport and architecture checks. Final secret-scan and complete publication checks remain required.
 - Gate: unchanged. Existing station scenarios also failed in broad runs and are documented separately; no timing guard was relaxed and no deployment acceptance is claimed.
+## 2026-10-22 · ff01e057a6 · fix: 브라우저 Account 승인 실패 복구
+
+- 변경: HTML 승인 거부·잘못된 요청·저장소 장애를 검증된 로그인 복구 화면으로 연결한다. JSON API 상태, client/redirect 검증, PKCE와 권한 확인은 유지한다.
+- 증거: c13aeb8d71 원격 Authority·Learning 집중 53개 통과. ff01e057a6 실제 Chromium 복구·계정 전환 2개 통과. 게시 전 최종 SHA와 CI는 별도 확인한다.
+- gate 변화: 운영 설치·실제 계정 권한 변경은 별도 승인 범위에서 확인한다.
