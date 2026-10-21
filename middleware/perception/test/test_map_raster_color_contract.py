@@ -69,29 +69,19 @@ class MapRasterColorContractTest(unittest.TestCase):
             'OCCUPANCY_BGR은 OCCUPANCY_RGB에서 뒤집어 파생해야 한다',
         )
 
-    def test_the_javascript_mirror_agrees_with_its_own_css_token(self):
-        """`const T`는 :root 사본이다. 교차 패키지 시험은 D-73 거처가 없고,
-        이 파일 안의 CSS↔JS만 이 모듈이 지킨다(D-77)."""
+    def test_the_canvas_reads_its_colours_from_the_css_roles(self):
+        """캔버스 색은 사본이 아니라 :root 속성 이름이다(D-77). 값은 그리는 순간 RosyPalette가 푼다."""
         text = CONSOLE.read_text(encoding='utf-8')
-        css = {
-            name: value.lower()
-            for name, value in re.findall(r'--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})', text)
-        }
-        block = re.search(r'const T = \{([^}]+)\}', text)
-        self.assertIsNotNone(block, 'diagnostic.html에 const T 표가 없다')
-        js = dict(re.findall(r"(\w+):\s*'#([0-9a-fA-F]{6})'", block.group(1)))
-        alias = {'ink2': 'ink-2', 'inkQuiet': 'ink-quiet'}
-        missing = []
-        mismatch = []
-        for name, value in js.items():
-            token = alias.get(name, name)
-            if token not in css:
-                missing.append(name)
-                continue
-            if css[token] != value.lower():
-                mismatch.append((name, value.lower(), css[token]))
-        self.assertFalse(missing, f':root에 없는 T 키: {missing}')
-        self.assertFalse(mismatch, f'CSS와 JS 값이 다른 T 키: {mismatch}')
+        root = text.split('<style>', 1)[1].split('}', 1)[0]
+        declared = set(re.findall(r'--([a-z0-9-]+):', root))
+        block = re.search(r'const T_VARS = \{([^}]+)\}', text)
+        self.assertIsNotNone(block, 'diagnostic.html에 const T_VARS 표가 없다')
+        self.assertNotRegex(block.group(1), r'#[0-9a-fA-F]{3,8}', 'T_VARS에 원시 색이 있다')
+        names = re.findall(r"\w+:\s*'--([a-z0-9-]+)'", block.group(1))
+        shared = {'ink', 'ink-quiet', 'line-06', 'line-50'}  # tokens.css, loaded before the page sheet
+        missing = [name for name in names if name not in declared | shared]
+        self.assertTrue(names)
+        self.assertFalse(missing, f':root에 없는 T 속성: {missing}')
 
 
 if __name__ == '__main__':

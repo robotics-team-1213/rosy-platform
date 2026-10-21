@@ -12,7 +12,7 @@ Usage (WSL, `~/rosy_mapv2_ws` install sourced; runs straight from source):
   python3 lane_live_view.py --graph <lane_graph.yaml> --demo   # no ROS, canned run
 
 Endpoints (GET only): / (page), /overlay.mjpg, /camera.mjpg, /status.json,
-/graph.json, /runs.json, /run/<id>.json.
+/graph.json, /runs.json, /run/<id>.json, /common/<name> (shared-assets.json).
 
 Observation only: this node creates no publishers and no service clients,
 and only ever GETs CORE's API; it never touches motion authority. It
@@ -85,6 +85,24 @@ MJPEG_CONTENT_TYPE = f"multipart/x-mixed-replace; boundary={BOUNDARY}"
 #: How often the MJPEG stream loop checks for a new frame to push.
 MJPEG_POLL_S = 0.05
 PAGE_PATH = Path(__file__).resolve().with_name("lane_live_view.html")
+
+
+def web_common_dir():
+    """Installed web_common share when it ships shared-assets.json, else the source tree."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        share = Path(get_package_share_directory("web_common"))
+    except (ImportError, LookupError):
+        share = None
+    if share and (share / "shared-assets.json").is_file():
+        return share
+    return Path(__file__).resolve().parents[4] / "shared" / "web"
+
+
+COMMON = web_common_dir()
+_MANIFEST = COMMON / "shared-assets.json"
+#: name -> media type: the only /common allowlist (never scan the folder). No web_common -> all 404.
+COMMON_ASSETS = json.loads(_MANIFEST.read_text(encoding="utf-8"))["shared_assets"] if _MANIFEST.is_file() else {}
 _RUN_PATH = re.compile(r"^/run/([^/]+)\.json$")
 
 
@@ -94,9 +112,8 @@ _RUN_PATH = re.compile(r"^/run/([^/]+)\.json$")
 
 
 class FrameStream:
-    """Latest-frame-wins store for one MJPEG source, with an fps/staleness
-    health check. Thread-safe: `publish` runs on the ROS callback thread,
-    `latest`/`health` run on HTTP handler threads."""
+    """Latest-frame-wins store for one MJPEG source, with an fps/staleness health check.
+    Thread-safe: `publish` runs on the ROS callback thread, `latest`/`health` on HTTP threads."""
 
     def __init__(self):
         self._lock = threading.Lock()
@@ -129,9 +146,8 @@ class FrameStream:
 
 
 class Trail:
-    """Odometry trail (last `maxlen` points), reset when a new scenario is
-    detected: a pose jump bigger than POSE_JUMP_RESET_M, or an odom gap
-    longer than ODOM_SILENCE_RESET_S since the previous point."""
+    """Odometry trail (last `maxlen` points), reset when a new scenario is detected: a pose
+    jump bigger than POSE_JUMP_RESET_M, or an odom gap longer than ODOM_SILENCE_RESET_S."""
 
     def __init__(self, maxlen=DEFAULT_TRAIL):
         self.points = deque(maxlen=maxlen)
@@ -159,13 +175,9 @@ class Trail:
 
 
 def mjpeg_part(jpeg_bytes):
-    """One multipart/x-mixed-replace part: boundary, Content-Type and a
-    Content-Length matching the payload, terminated by the frame bytes."""
-    header = (
-        f"--{BOUNDARY}\r\n"
-        "Content-Type: image/jpeg\r\n"
-        f"Content-Length: {len(jpeg_bytes)}\r\n\r\n"
-    ).encode("ascii")
+    """One multipart/x-mixed-replace part: boundary, Content-Type, Content-Length, frame bytes."""
+    header = (f"--{BOUNDARY}\r\nContent-Type: image/jpeg\r\n"
+              f"Content-Length: {len(jpeg_bytes)}\r\n\r\n").encode("ascii")
     return header + jpeg_bytes + b"\r\n"
 
 
@@ -185,14 +197,12 @@ def _polylines(raw):
 
 
 def load_graph(path):
-    """Lane-graph polylines for the map: segment name -> [[x, y]...] and
-    node name -> [x, y], read from lane_graph.yaml (§ segments/nodes)."""
+    """Map polylines from lane_graph.yaml: segment name -> [[x, y]...], node name -> [x, y]."""
     return _polylines(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
 
 
 def graph_payload(raw, route=None):
-    """/graph.json: the polylines plus parking spur and spot, the dock
-    marker, each segment's direction, and the route keys and length."""
+    """/graph.json: polylines, parking spur and spot, dock marker, directions, route keys/length."""
     graph = _polylines(raw)
     parking = raw.get("parking") or {}
     if parking.get("points"):
@@ -230,15 +240,12 @@ def _get_json(url, timeout=CORE_TIMEOUT_S):
 
 
 def poll_core(core_url, timeout=CORE_TIMEOUT_S):
-    """GET CORE's line-follow status; returns None on any failure (a stale
-    launch, a not-yet-booted CORE, a network blip) so the poll loop can keep
-    retrying instead of raising."""
+    """GET CORE's line-follow status; None on any failure so the poll loop keeps retrying."""
     return _get_json(core_url.rstrip("/") + STATUS_PATH, timeout)
 
 
 def poll_core_status(core_url, get=_get_json, timeout=CORE_TIMEOUT_S):
-    """GET line-follow, robot state and docking status (read-only viewer
-    token). `ok` is True when CORE answered at least one of them."""
+    """GET line-follow, robot state and docking (viewer token); `ok` if CORE answered any."""
     base = core_url.rstrip("/")
     out = {"line_follow": get(base + STATUS_PATH, timeout),
            "robot": get(base + ROBOT_STATE_PATH, timeout),
@@ -248,8 +255,7 @@ def poll_core_status(core_url, get=_get_json, timeout=CORE_TIMEOUT_S):
 
 
 def _wall_offset():
-    """Realtime minus monotonic: constant unless the wall clock is stepped
-    (junction_harness.wall_clock_offset)."""
+    """Realtime minus monotonic: constant unless the wall clock steps (junction_harness)."""
     return time.time() - time.monotonic()
 
 
@@ -472,8 +478,7 @@ def _alert(docking, robot, line):
 
 
 def render_index_html():
-    """The single-page UI (lane_live_view.html next to this script):
-    self-contained HTML/CSS/JS, no external resources."""
+    """lane_live_view.html next to this script; its only external resources are /common/ assets."""
     return PAGE_PATH.read_text(encoding="utf-8")
 
 
@@ -491,9 +496,11 @@ def make_handler(state):
 
         def do_GET(self):
             path = urlsplit(self.path).path
-            run = _RUN_PATH.match(path)
+            run, asset = _RUN_PATH.match(path), path.removeprefix("/common/")
             if path in ("/", "/index.html"):
-                self._send_html(render_index_html())
+                self._send(render_index_html().encode("utf-8"), "text/html; charset=utf-8")
+            elif path.startswith("/common/") and asset in COMMON_ASSETS and (COMMON / asset).is_file():
+                self._send((COMMON / asset).read_bytes(), f"{COMMON_ASSETS[asset]}; charset=utf-8")
             elif path == "/overlay.mjpg":
                 self._stream_mjpeg(state.overlay)
             elif path == "/camera.mjpg":
@@ -514,19 +521,12 @@ def make_handler(state):
             else:
                 self.send_error(404)
 
-        def _send_html(self, html):
-            body = html.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self.wfile.write(body)
-
         def _send_json(self, obj):
-            body = json.dumps(obj).encode("utf-8")
+            self._send(json.dumps(obj).encode("utf-8"), "application/json")
+
+        def _send(self, body, ctype):
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-cache")
             self.end_headers()

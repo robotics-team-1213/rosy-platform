@@ -39,7 +39,7 @@ export async function loadStorage(request){
 $('storage-refresh').onclick=()=>{if(send)loadStorage(send);};
 $('storage-preflight').onsubmit=async event=>{
   event.preventDefault();if(busy||!send)return;
-  busy=true;const button=event.target.querySelector('button');button.disabled=true;
+  busy=true;const button=event.target.querySelector('ui-button');button.disabled=true;
   $('storage-error').hidden=true;$('storage-result').textContent='공간을 점검하는 중입니다.';
   const current=epoch;
   try{

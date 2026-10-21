@@ -3,4 +3,3 @@
 .measured-calibration p { overflow-wrap: anywhere; }
 .measured-calibration .measured-limits { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .measured-calibration img { display: block; width: 100%; max-width: 100%; height: auto; }
-.measured-calibration img[hidden] { display: none; }

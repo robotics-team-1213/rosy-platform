@@ -116,8 +116,8 @@ export function intentView(lf, DEG = 180 / Math.PI) {
     dir,
     guard: edge,
     text: lf.state !== "TRACKING" ? "멈춤"
-      : dir === "left" ? `◀ 왼쪽 ${rate}°/s`
-      : dir === "right" ? `오른쪽 ${rate}°/s ▶`
-      : "▲ 직진",
+      : dir === "left" ? `왼쪽 ${rate}°/s`
+      : dir === "right" ? `오른쪽 ${rate}°/s`
+      : "직진",
   };
 }

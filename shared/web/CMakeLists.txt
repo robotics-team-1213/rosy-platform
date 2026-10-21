@@ -18,6 +18,7 @@ install(FILES
   confirmation.js
   live-dialog-geometry.js
   task-chooser.js
+  ui-wiring.js
   task-chooser.css
   theme.js
   evidence.js

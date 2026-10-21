@@ -1,8 +1,8 @@
 // 빌드 없는 공용 조작 부품. 그림자는 쓰지 않는다 — 자식 글자와 기존 리스너가
 // 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
-
 import { createConfirmIrreversible } from "/common/confirmation.js";
 import { disjointRectangles } from "/common/live-dialog-geometry.js";
+import "/common/ui-wiring.js";  // document-level wiring: theme cycle button, Enter submits a form
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };

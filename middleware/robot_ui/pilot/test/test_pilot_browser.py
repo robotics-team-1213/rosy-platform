@@ -1236,7 +1236,7 @@ def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
             page.route_web_socket("**/ws/state", lambda route: route.on_message(lambda raw: None))
             _enter_drive(page, base_url)
             assert page.locator("[data-drive-fact=speed]").inner_text() == "—"
-            assert page.locator("[data-drive-fact=turn]").inner_text() != "· 0°/s"
+            assert page.locator("[data-drive-fact=turn]").inner_text() != "0°/s"
             assert page.locator("[data-drive-fact=battery]").inner_text() == "—"
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         finally:
@@ -1696,7 +1696,7 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.mouse.down()
     page.wait_for_selector("[data-drive-intent]:not([hidden])", timeout=5_000)
-    page.wait_for_function("document.querySelector('[data-intent-steer]').textContent.includes('▶')")
+    page.wait_for_function("document.querySelector('[data-intent-steer]').textContent.includes('오른쪽')")
     got = page.evaluate("""(() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
       const track = r('[data-intent-track]'), dot = r('[data-intent-target]'), view = r('[data-drive-view]');
@@ -1709,7 +1709,7 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
               inside: strip.left >= Math.max(view.left, picL) - 1 && strip.right <= Math.min(view.right, picR) + 1 && strip.bottom <= view.bottom + 1};
     })()""")
     page.screenshot(path=str(Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp")) / "pilot-intent-tracking.png"))
-    assert got["steer"] == "오른쪽 18°/s ▶" and got["state"] == "tracking"
+    assert got["steer"] == "오른쪽 18°/s" and got["state"] == "tracking"
     assert abs(got["at"] - 0.70) < 0.03 and got["inside"], got
     script({"state": "HOLD", "error": None, "linear": 0.0, "angular": 0.0, "reason": "obstacle_ahead"})
     page.wait_for_function("document.querySelector('[data-drive-intent]').dataset.state === 'hold'")

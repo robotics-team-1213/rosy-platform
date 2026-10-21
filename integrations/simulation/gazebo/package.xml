@@ -23,6 +23,8 @@
   <exec_depend>core</exec_depend>
   <!-- launch/gz_multi_parts.py 가 CORE가 읽은 line_follow 법칙을 시뮬 관찰자에게 넘긴다. -->
   <exec_depend>core_common</exec_depend>
+  <!-- scripts/lane_live_view.py 가 /common/(tokens·components·ui.js)을 web_common share에서 내보낸다. -->
+  <exec_depend>web_common</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>

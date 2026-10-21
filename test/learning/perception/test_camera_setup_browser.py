@@ -38,20 +38,20 @@ def test_camera_page_checks_a_photo_against_the_reference(tmp_path, width, heigh
                 page.set_input_files('#reference-photo', str(home))
                 page.fill('#camera-identity', 'omx-front-usb-1')
                 page.fill('#intrinsics', json.dumps(K))
-                page.locator('#reference-form button[type=submit]').click()
+                page.locator('#reference-form ui-button[type=submit]').click()
                 expect(page.locator('#reference-result')).to_contain_text('마커 없이', timeout=15000)
                 expect(page.locator('#layout-field')).to_be_hidden()
                 assert len(list((store.state / 'camera-setup').glob('*.json'))) == 1
                 expect(page.locator('#fingerprint')).to_have_value(K['camera_info_sha256'])
 
                 page.set_input_files('#check-photo', str(home))
-                page.locator('#check-form button[type=submit]').click()
+                page.locator('#check-form ui-button[type=submit]').click()
                 expect(page.locator('#verdict')).to_contain_text('맞음', timeout=15000)
                 expect(page.locator('#verdict')).to_have_attribute('state', 'ready')
                 expect(page.locator('#numbers dt')).to_have_count(10)
 
                 page.set_input_files('#check-photo', str(moved))
-                page.locator('#check-form button[type=submit]').click()
+                page.locator('#check-form ui-button[type=submit]').click()
                 expect(page.locator('#verdict')).to_contain_text('조정 필요', timeout=15000)
                 expect(page.locator('#numbers')).to_contain_text('pan 차이')
                 assert page.evaluate("document.getElementById('view').width") == 640

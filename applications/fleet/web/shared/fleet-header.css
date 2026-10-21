@@ -8,7 +8,6 @@ body { margin: 0; }
 
 /* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 .token { width: 11rem; }
-#console-token[hidden], #token-save[hidden] { display: none; }
 /* 현장 지도·Cell 시트의 전역 `input { width: 100% }`가 머리의 "이 브라우저 기억" 칸을 늘이지 않게 한다. */
 ui-topbar input[type="checkbox"] { width: auto; }
 
@@ -61,7 +60,6 @@ ui-topbar {
 #user-role { min-width: 0; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* D-741 3: 알림, 로그인, 나(계정 단추). 30rem 아래에서 계정 단추는 아이콘만 남고 정지는 밀리지 않는다. */
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
-.fleet-header-actions [hidden], .topbar-extra [hidden] { display: none; }
 #fleet-inbox { flex: none; }
 #fleet-login:not([hidden]) { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 /* 계정 정보는 계정 단추 아래 펼침 칸의 한 묶음이다. 떠 있는 패널이 아니라 흐름 안에 있다. */

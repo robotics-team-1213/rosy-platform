@@ -1,88 +1,87 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="dark" data-theme-pin="dark">
+<html lang="ko" data-theme="dark">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Rosy 시뮬 — 라이브 미션</title>
+<link rel="stylesheet" href="/common/tokens.css">
+<script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css">
+<script type="module" src="/common/ui.js"></script>
 <style>
+/* 이 페이지의 역할 이름 → 공용 토큰(shared/web/tokens.css). 원시 색은 두지 않는다 —
+ * 색·테마는 tokens.css 한 곳에서 바뀐다. status는 임계(정지·끊김·판정)에만, series는
+ * 경로·궤적 같은 데이터 계열에만 쓴다(D-624). 브랜드 색은 ROSY 글자에만 쓴다. */
 :root {
-  color-scheme: dark;
-  --bg: #0a0d12;
-  --panel: #10151e;
-  --panel-2: #151b26;
-  --line: #1f2835;
-  --line-2: #2b3648;
-  --text: #e7ecf3;
-  --ink-quiet: #8592a6;
-  --dim: #5a6678;
-  --accent: #ff8a3d;
-  --accent-soft: rgba(255, 138, 61, 0.14);
-  --both: #34d399;
-  --one: #38bdf8;
-  --memory: #fbbf24;
-  --stop: #f87171;
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --bad: #f87171;
-  --road: #3a475c;
-  --done: #2fb887;
-  --radius: 10px;
-  --font-ui: "Pretendard Variable", Pretendard, "SUIT Variable", "Noto Sans KR",
-             "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
-  --font-num: "JetBrains Mono", "Cascadia Mono", "D2Coding", "SF Mono", Consolas,
-              ui-monospace, monospace;
+  --bg: var(--surface-recessed);
+  --panel: var(--surface-canvas);
+  --panel-2: var(--ground-raise);
+  --line: var(--border-default);
+  --line-2: var(--border-strong);
+  --text: var(--text-primary);
+  --dim: var(--text-secondary);
+  /* 선택·현재 위치 — 상호작용 강조는 계열 색이다(브랜드가 아니다). */
+  --accent: var(--series-primary);
+  --accent-soft: color-mix(in oklab, var(--series-primary) 14%, transparent);
+  --ok: var(--status-good); --warn: var(--status-warn); --bad: var(--status-crit);
+  --both: var(--status-good); --one: var(--series-primary);
+  --memory: var(--status-warn); --stop: var(--status-crit);
+  /* 지도 — 남은 길은 바탕, 지나온 길은 같은 계열의 짙은 쪽, 주차 칸·마커는 목표 계열. */
+  --road: var(--ground-card-2);
+  --done: var(--series-secondary);
+  --partial: color-mix(in oklab, var(--series-secondary) 50%, var(--ground-card-2));
+  --spur: color-mix(in oklab, var(--series-goal) 35%, var(--ground-card-2));
+  --spot: var(--series-goal);
+  --radius: var(--radius-panel); --font-ui: var(--body); --font-num: var(--mono);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
-body { font: 14px/1.45 var(--font-ui); -webkit-font-smoothing: antialiased; }
+body { font: var(--text-label)/var(--leading-body) var(--font-ui); -webkit-font-smoothing: antialiased; }
 .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .muted { color: var(--ink-quiet); }
-button { font: inherit; color: inherit; }
 
 /* ---------- header ---------- */
 .top {
   position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 10px 20px; background: rgba(10, 13, 18, 0.92);
-  border-bottom: 1px solid var(--line); backdrop-filter: blur(6px);
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  padding: 10px 20px; background: var(--scrim-solid);
+  border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
-.brand b { font: 800 15px/1 var(--font-num); letter-spacing: 0.18em; color: var(--accent); }
-.brand span { font-weight: 600; font-size: 15px; }
+.brand b { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--font-num);
+           letter-spacing: var(--track-label); color: var(--brand-rose); }
+.brand span { font-weight: var(--weight-label); font-size: var(--text-label); }
 .tabs { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line);
-        border-radius: 8px; padding: 2px; }
-.tabs button { background: none; border: 0; padding: 5px 14px; border-radius: 6px;
-               cursor: pointer; color: var(--ink-quiet); font-weight: 600; }
-.tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text);
-                                     box-shadow: inset 0 0 0 1px var(--line-2); }
-.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.clock { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.kv { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 10px;
-      border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
-.kv small { color: var(--ink-quiet); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
-.kv.warn { border-color: rgba(251, 191, 36, 0.5); color: var(--warn); }
-.kv.bad { border-color: rgba(248, 113, 113, 0.55); color: var(--bad); }
+        border-radius: var(--radius-button); padding: 2px; }
+.clock { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.kv { display: inline-flex; gap: 6px; align-items: baseline; padding: var(--space-1) 10px;
+      border: 1px solid var(--line); border-radius: var(--radius-flag); background: var(--panel); }
+.kv small { color: var(--ink-quiet); font-size: var(--text-micro); font-weight: var(--weight-label);
+            letter-spacing: var(--track-wide); }
+.kv.warn { border-color: var(--status-warn-a45); color: var(--warn); }
+.kv.bad { border-color: var(--bad); background: var(--bad); color: var(--text-on-danger); }
+.kv.bad small { color: inherit; }
 
 /* ---------- health strip ---------- */
 .health { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 20px;
-          border-bottom: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+          border-bottom: 1px solid var(--line); background: var(--panel); font-size: var(--text-micro); }
 .hp { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-quiet); }
 .hp i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
-.hp.ok i { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.hp.ok i { background: var(--ok); }
 .hp.bad i { background: var(--bad); }
 .hp.warn i { background: var(--warn); }
-.hp b { color: var(--text); font-weight: 600; }
+.hp b { color: var(--text); font-weight: var(--weight-label); }
 .hp .num { color: var(--text); }
 
-main { padding: 16px 20px 40px; max-width: 1600px; margin: 0 auto; }
+main { padding: var(--space-4) 20px 40px; max-width: 1600px; margin: 0 auto; }
 
 /* ---------- offline banner ---------- */
 .banner { display: none; align-items: center; gap: 14px; margin-bottom: 14px;
           padding: 14px 18px; border-radius: var(--radius);
-          border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.07); }
+          border: 1px solid var(--status-crit-a45); background: var(--status-crit-a07); }
 .banner.show { display: flex; }
-.banner strong { font-size: 16px; }
-.banner p { margin: 2px 0 0; color: var(--ink-quiet); font-size: 13px; }
+.banner strong { font-size: var(--text-body); }
+.banner p { margin: 2px 0 0; color: var(--ink-quiet); font-size: var(--text-label); }
 .banner .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--bad); flex: none; }
 body.offline .live-panel { opacity: 0.45; filter: saturate(0.4); }
 
@@ -90,204 +89,200 @@ body.offline .live-panel { opacity: 0.45; filter: saturate(0.4); }
 .rail { display: flex; align-items: stretch; gap: 0; margin-bottom: 14px;
         background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
         padding: 10px; overflow-x: auto; }
-.phase { flex: 1 1 0; min-width: 92px; position: relative; padding: 8px 12px 8px 14px;
-         border-radius: 8px; color: var(--dim); }
+.phase { flex: 1 1 0; min-width: 92px; position: relative; padding: var(--space-2) var(--space-3) var(--space-2) 14px;
+         border-radius: var(--radius-button); color: var(--dim); }
 .phase + .phase::before { content: ""; position: absolute; left: -6px; top: 50%;
          width: 12px; height: 2px; background: var(--line-2); }
-.phase .name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.phase .name { font-weight: var(--weight-strong); font-size: var(--text-label); display: flex;
+               align-items: center; gap: var(--space-2); }
 .phase .name i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; }
-.phase .when { font-size: 11px; margin-top: 2px; min-height: 16px; }
+.phase .when { font-size: var(--text-micro); margin-top: 2px; min-height: 16px; }
 .phase.done { color: var(--ink-quiet); }
 .phase.done .name i { background: var(--done); border-color: var(--done); }
 .phase.current { background: var(--accent-soft); color: var(--text);
-                 box-shadow: inset 0 0 0 1px rgba(255, 138, 61, 0.55); }
-.phase.current .name i { border-color: var(--accent); background: var(--accent);
-                         animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 138, 61, 0.6); }
-                   50% { box-shadow: 0 0 0 5px rgba(255, 138, 61, 0); } }
+                 outline: 1px solid color-mix(in oklab, var(--accent) 55%, transparent); outline-offset: -1px; }
+.phase.current .name i { border-color: var(--accent); background: var(--accent); }
 .rail-meta { display: flex; flex-direction: column; justify-content: center; gap: 2px;
-             padding: 0 8px 0 16px; margin-left: 8px; border-left: 1px solid var(--line);
-             min-width: 150px; }
-.rail-meta .big { font: 700 22px/1 var(--font-num); }
-.alert { display: none; margin-bottom: 14px; padding: 10px 16px; border-radius: var(--radius);
-         background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.5);
-         color: #fecaca; font-weight: 700; }
+             padding: 0 var(--space-2) 0 var(--space-4); margin-left: var(--space-2);
+             border-left: 1px solid var(--line); min-width: 150px; }
+.rail-meta .big { font: var(--weight-strong) var(--text-title)/var(--leading-flat) var(--font-num); } .micro { font-size: var(--text-micro); } figure.cam { margin: 0; } .dist-head { margin: 0 0 6px; } .track u.mid { left: 50%; }
+.alert { display: none; margin-bottom: 14px; padding: 10px var(--space-4); border-radius: var(--radius);
+         background: var(--bad); color: var(--text-on-danger); font-weight: var(--weight-strong); }
 .alert.show { display: block; }
 
 /* ---------- grid + cards ---------- */
 .grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 14px; }
 .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-        padding: 14px 16px; min-width: 0; }
-.card h2 { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
-           color: var(--ink-quiet); display: flex; align-items: center; gap: 8px; }
-.card h2 .src { margin-left: auto; font: 500 11px var(--font-num); color: var(--dim);
+        padding: 14px var(--space-4); min-width: 0; }
+.card h2 { margin: 0 0 10px; font-size: var(--text-micro); font-weight: var(--weight-strong);
+           letter-spacing: var(--track-state); color: var(--ink-quiet); display: flex;
+           align-items: center; gap: var(--space-2); }
+.card h2 .src { margin-left: auto; font: var(--weight-medium) var(--text-micro) var(--font-num); color: var(--dim);
                 letter-spacing: 0; text-align: right; overflow-wrap: anywhere; }
 .card h2 > :first-child, .card h2 { white-space: nowrap; }
 .card h2 .src { white-space: normal; }
 
 /* ---------- cameras ---------- */
 .cams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.cam figcaption { font-size: 12px; color: var(--ink-quiet); margin-bottom: 5px;
-                  display: flex; justify-content: space-between; gap: 8px; }
-.frame { position: relative; aspect-ratio: 4 / 3; background: #05070a; border-radius: 7px;
-         overflow: hidden; border: 1px solid var(--line); }
+.cam figcaption { font-size: var(--text-micro); color: var(--ink-quiet); margin-bottom: 5px;
+                  display: flex; justify-content: space-between; gap: var(--space-2); }
+.frame { position: relative; aspect-ratio: 4 / 3; background: var(--surface-recessed);
+         border-radius: var(--radius-control); overflow: hidden; border: 1px solid var(--line); }
 .frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
              display: block; }
 .frame .nodata { position: absolute; inset: 0; display: none; place-items: center;
-                 text-align: center; color: var(--ink-quiet); font-size: 13px;
-                 background: repeating-linear-gradient(135deg, #0b0e13 0 12px, #0e1218 12px 24px); }
+                 text-align: center; color: var(--ink-quiet); font-size: var(--text-label);
+                 background: repeating-linear-gradient(135deg, var(--ground-deep) 0 12px, var(--ground) 12px 24px); }
 .frame.stale .nodata { display: grid; }
-.frame .nodata b { display: block; font: 700 13px var(--font-num); color: var(--bad);
-                   letter-spacing: 0.1em; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px;
-          color: var(--ink-quiet); }
+.frame .nodata b { display: block; font: var(--weight-strong) var(--text-label) var(--font-num);
+                   color: var(--text); letter-spacing: var(--track-label); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px var(--space-4); margin-top: 10px;
+          font-size: var(--text-micro); color: var(--ink-quiet); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { color: var(--text); font-weight: var(--weight-label); }
 .sw { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
-.sw.box { width: 14px; height: 10px; border-radius: 2px; }
+.sw.box { width: 14px; height: 10px; border-radius: 2px; } .sw-done { background: var(--done); } .sw-now { background: var(--accent); } .sw-road { background: var(--road); } .sw-spur { background: var(--spur); } .sw-spot { background: var(--spot); }
 .legend .note { display: block; flex-basis: 100%; color: var(--dim); }
 
 /* ---------- map ---------- */
 .mapwrap { position: relative; }
-#map { width: 100%; height: auto; display: block; background: #0b1017; border-radius: 8px;
-       border: 1px solid var(--line); }
+#map { width: 100%; height: auto; display: block; background: var(--surface-recessed);
+       border-radius: var(--radius-button); border: 1px solid var(--line); }
 #map .seg { fill: none; stroke: var(--road); stroke-width: 7; stroke-linecap: round;
             stroke-linejoin: round; }
 #map .seg.done { stroke: var(--done); }
-#map .seg.partial { stroke: #2a6b58; }
+#map .seg.partial { stroke: var(--partial); }
 #map .seg.current { stroke: var(--accent); }
-#map .centre { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 1;
-               stroke-dasharray: 3 4; }
-#map .cur { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 6 6;
-            animation: flow 1s linear infinite; }
-@keyframes flow { to { stroke-dashoffset: -12; } }
-#map .spur { fill: none; stroke: #4b3d63; stroke-width: 7; stroke-linecap: round; }
-#map .trail { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5;
-              stroke-linejoin: round; }
-#map .node { fill: #0b1017; stroke: var(--line-2); stroke-width: 1.5; }
-#map .lbl { fill: var(--dim); font: 600 11px var(--font-num); }
-#map .spot { fill: none; stroke: #c4b5fd; stroke-width: 1.5; stroke-dasharray: 3 2; }
-#map .tag { fill: #c4b5fd; }
-.progress { margin-top: 12px; }
+#map .centre { fill: none; stroke: var(--line-14); stroke-width: 1; stroke-dasharray: 3 4; }
+#map .cur { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 6 6; }
+#map .spur { fill: none; stroke: var(--spur); stroke-width: 7; stroke-linecap: round; }
+#map .trail { fill: none; stroke: var(--line-50); stroke-width: 1.5; stroke-linejoin: round; }
+#map .node { fill: var(--surface-recessed); stroke: var(--line-2); stroke-width: 1.5; }
+#map .lbl { fill: var(--dim); font: var(--weight-label) var(--text-micro) var(--font-num); }
+#map .spot { fill: none; stroke: var(--spot); stroke-width: 1.5; stroke-dasharray: 3 2; }
+#map .tag { fill: var(--spot); }
+#map .halo { fill: var(--accent-soft); }
+#map .arrow { fill: var(--ink); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.progress { margin-top: var(--space-3); }
 .progress .row { display: flex; justify-content: space-between; align-items: baseline;
                  gap: 10px; flex-wrap: wrap; }
-.progress .row b { font-size: 16px; }
+.progress .row b { font-size: var(--text-body); }
 .bar { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2);
-       border: 1px solid var(--line); overflow: hidden; margin-top: 8px; }
-.bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--done), var(--accent));
-           width: 0; transition: width 0.4s ease; }
-.keys { display: flex; gap: 3px; margin-top: 8px; }
+       border: 1px solid var(--line); overflow: hidden; margin-top: var(--space-2); }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--done); width: 0; }
+.keys { display: flex; gap: 3px; margin-top: var(--space-2); }
 .keys i { flex: 1; height: 6px; border-radius: 2px; background: var(--road); }
 .keys i.done { background: var(--done); }
 .keys i.current { background: var(--accent); }
-.maplegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px;
-             color: var(--ink-quiet); }
+.maplegend { display: flex; flex-wrap: wrap; gap: var(--space-1) 14px; margin-top: var(--space-2);
+             font-size: var(--text-micro); color: var(--ink-quiet); }
 .maplegend span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------- perception ---------- */
 .tier { display: flex; align-items: center; gap: 14px; }
-.chip-tier { padding: 12px 18px; border-radius: 10px; font-weight: 800; font-size: 26px;
-             line-height: 1; min-width: 150px; text-align: center; color: #0a0d12;
-             background: var(--dim); transition: background 0.2s; }
-.chip-tier small { display: block; font: 700 11px var(--font-num); letter-spacing: 0.12em;
-                   margin-top: 6px; opacity: 0.7; }
+/* 채움 위 글자는 가장 깊은 바탕 — 두 테마에서 채움과 반대 밝기다. */
+.chip-tier { padding: var(--space-3) 18px; border-radius: var(--radius-panel); font-weight: var(--weight-strong);
+             font-size: var(--text-display); line-height: var(--leading-flat); min-width: 150px;
+             text-align: center; color: var(--ground-deep); background: var(--dim); }
+.chip-tier small { display: block; font: var(--weight-strong) var(--text-micro) var(--font-num);
+                   letter-spacing: var(--track-label); margin-top: 6px; opacity: 0.7; }
 .t-BOTH { background: var(--both); } .t-ONE { background: var(--one); }
-.t-MEMORY { background: var(--memory); } .t-STOP { background: var(--stop); }
+.t-MEMORY { background: var(--memory); } .t-STOP { background: var(--stop); color: var(--text-on-danger); }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; flex: 1; }
-.stat small { display: block; font-size: 11px; color: var(--ink-quiet); }
-.stat .num { font-size: 18px; font-weight: 600; }
-#spark { width: 100%; height: 78px; display: block; margin-top: 12px; background: var(--panel-2);
-         border-radius: 6px; border: 1px solid var(--line); }
-.spark-cap { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
-             margin-top: 4px; }
-.dist { margin-top: 12px; }
+.stat small { display: block; font-size: var(--text-micro); color: var(--ink-quiet); }
+.stat .num { font-size: var(--text-value); font-weight: var(--weight-label); }
+#spark { width: 100%; height: 78px; display: block; margin-top: var(--space-3); background: var(--panel-2);
+         border-radius: var(--radius-control); border: 1px solid var(--line); }
+#spark .mid { stroke: var(--line-2); }
+#spark .err { fill: none; stroke: var(--text); }
+#spark .cap { fill: var(--dim); }
+.spark-cap { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--dim);
+             margin-top: var(--space-1); }
+.dist { margin-top: var(--space-3); }
 .dist .stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden;
                background: var(--panel-2); border: 1px solid var(--line); }
-.dist .stack i { display: block; height: 100%; transition: width 0.4s ease; }
+.dist .stack i { display: block; height: 100%; }
 .dist .rows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
-              margin-top: 8px; }
-.dist .rows div { font-size: 12px; color: var(--ink-quiet); }
-.dist .rows b { display: block; font: 600 16px var(--font-num); color: var(--text); }
-.hint { font-size: 11px; color: var(--dim); margin-top: 8px; }
+              margin-top: var(--space-2); }
+.dist .rows div { font-size: var(--text-micro); color: var(--ink-quiet); }
+.dist .rows b { display: block; font: var(--weight-label) var(--text-body) var(--font-num); color: var(--text); }
+.hint { font-size: var(--text-micro); color: var(--dim); margin-top: var(--space-2); }
 
 /* ---------- core + parking ---------- */
 .pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
-.pair small { display: block; font-size: 11px; color: var(--ink-quiet); margin-bottom: 2px; }
-.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-weight: 700;
-        font-size: 13px; background: var(--panel-2); border: 1px solid var(--line-2); }
-.pill.ok { color: var(--ok); border-color: rgba(52, 211, 153, 0.45); }
-.pill.warn { color: var(--warn); border-color: rgba(251, 191, 36, 0.45); }
-.pill.bad { color: var(--bad); border-color: rgba(248, 113, 113, 0.5); }
-.pill.accent { color: var(--accent); border-color: rgba(255, 138, 61, 0.5); }
-.reason { font-size: 12px; color: var(--ink-quiet); margin-top: 3px; font-family: var(--font-num);
+.pair small { display: block; font-size: var(--text-micro); color: var(--ink-quiet); margin-bottom: 2px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: var(--radius-flag); font-weight: var(--weight-strong);
+        font-size: var(--text-label); background: var(--panel-2); border: 1px solid var(--line-2); }
+.pill.ok { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 45%, transparent); }
+.pill.warn { color: var(--warn); border-color: var(--status-warn-a45); }
+.pill.bad { color: var(--text-on-danger); background: var(--bad); border-color: var(--bad); }
+.pill.accent { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+.reason { font-size: var(--text-micro); color: var(--ink-quiet); margin-top: 3px; font-family: var(--font-num);
           word-break: break-word; }
 .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
-.gauge small { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-quiet); }
+.gauge small { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--ink-quiet); }
 .gauge .track { position: relative; height: 8px; border-radius: 4px; background: var(--panel-2);
                 border: 1px solid var(--line); margin-top: 5px; overflow: hidden; }
-.gauge .track i { position: absolute; top: 0; bottom: 0; background: var(--accent);
-                  transition: all 0.25s ease; }
+.gauge .track i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
 .gauge .track.centered::after { content: ""; position: absolute; left: 50%; top: -2px;
                                 bottom: -2px; width: 1px; background: var(--line-2); }
-.park-idle { color: var(--dim); font-size: 13px; }
+.park-idle { color: var(--dim); font-size: var(--text-label); }
 .meter { margin-top: 10px; }
-.meter small { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-quiet); }
+.meter small { display: flex; justify-content: space-between; font-size: var(--text-micro); color: var(--ink-quiet); }
 .meter .track { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2);
                 border: 1px solid var(--line); margin-top: 5px; overflow: hidden; }
-.meter .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad);
-                  transition: width 0.3s ease; }
+.meter .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad); }
 .meter .track i.in { background: var(--ok); }
-.meter .track u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; opacity: 0.8; }
+.meter .track u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: 0.8; }
 
 /* ---------- results ---------- */
 #results { display: none; }
 body.tab-results #results { display: block; }
 body.tab-results #live { display: none; }
 .runs-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 14px; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; font-size: 11px; color: var(--ink-quiet); font-weight: 700;
-     letter-spacing: 0.06em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
+th { text-align: left; font-size: var(--text-micro); color: var(--ink-quiet); font-weight: var(--weight-strong);
+     letter-spacing: var(--track-state); padding: 6px var(--space-2); border-bottom: 1px solid var(--line); }
+td { padding: var(--space-2); border-bottom: 1px solid var(--line); vertical-align: top; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--panel-2); }
 tbody tr.sel { background: var(--accent-soft); }
-tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.kind { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px;
+tbody tr:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.kind { font-size: var(--text-micro); font-weight: var(--weight-strong); padding: 1px 7px; border-radius: 4px;
         background: var(--panel-2); border: 1px solid var(--line-2); white-space: nowrap; }
-.verdict { font: 700 12px var(--font-num); letter-spacing: 0.06em; }
-.verdict.pass { color: var(--ok); } .verdict.fail { color: var(--bad); }
+.verdict { font: var(--weight-strong) var(--text-micro) var(--font-num); letter-spacing: var(--track-state); }
+.verdict.pass { color: var(--ok); }
+.verdict.fail { color: var(--text-on-danger); background: var(--bad); padding: 1px 6px; border-radius: 4px; }
 .verdict.none { color: var(--dim); }
-.metrics { font-family: var(--font-num); font-size: 12px; color: var(--ink-quiet); }
-.metrics b { color: var(--text); font-weight: 600; }
-#runplot { width: 100%; height: auto; display: block; background: #0b1017; border-radius: 8px;
-           border: 1px solid var(--line); }
-#runplot .seg { fill: none; stroke: #263142; stroke-width: 6; stroke-linecap: round; }
+.metrics { font-family: var(--font-num); font-size: var(--text-micro); color: var(--ink-quiet); }
+.metrics b { color: var(--text); font-weight: var(--weight-label); }
+#runplot { width: 100%; height: auto; display: block; background: var(--surface-recessed);
+           border-radius: var(--radius-button); border: 1px solid var(--line); }
+#runplot .seg { fill: none; stroke: var(--ground-card); stroke-width: 6; stroke-linecap: round; }
 #runplot .tr { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
-.rundetail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 12px 0 0;
-                font-size: 13px; }
+.rundetail dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) 14px;
+                margin: var(--space-3) 0 0; font-size: var(--text-label); }
 .rundetail dt { color: var(--ink-quiet); }
 .rundetail dd { margin: 0; font-family: var(--font-num); }
-.empty { color: var(--dim); padding: 20px 4px; }
+.empty { color: var(--dim); padding: 20px var(--space-1); }
 
 @media (width <= 1000px) {
   .grid, .runs-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (width <= 640px) {
-  .top { padding: 8px 12px; gap: 10px; }
+  .top { padding: var(--space-2) var(--space-3); gap: 10px; }
   .clock { margin-left: 0; width: 100%; }
-  .health { padding: 6px 12px; }
-  main { padding: 12px 12px 32px; }
+  .health { padding: 6px var(--space-3); }
+  main { padding: var(--space-3) var(--space-3) var(--space-6); }
   .cams { grid-template-columns: 1fr; }
-  .rail { flex-wrap: wrap; gap: 4px; }
+  .rail { flex-wrap: wrap; gap: var(--space-1); }
   .phase { min-width: 30%; flex: 1 1 30%; }
   .phase + .phase::before { display: none; }
-  .rail-meta { border-left: 0; margin-left: 0; padding: 6px 12px; width: 100%; }
-  .chip-tier { min-width: 120px; font-size: 21px; }
+  .rail-meta { border-left: 0; margin-left: 0; padding: 6px var(--space-3); width: 100%; }
+  .chip-tier { min-width: 120px; font-size: var(--text-title); }
   .tier { flex-wrap: wrap; }
   .metrics-col { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 </style>
 </head>
@@ -295,13 +290,13 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
 <header class="top">
   <div class="brand"><b>ROSY</b><span>라이브 미션</span></div>
   <nav class="tabs" role="tablist" aria-label="보기">
-    <button role="tab" id="tab-live" aria-controls="live" aria-selected="true" tabindex="0" data-tab="live">라이브</button>
-    <button role="tab" id="tab-results" aria-controls="results" aria-selected="false" tabindex="-1" data-tab="results">지난 결과</button>
+    <ui-button kind="segment" role="tab" id="tab-live" aria-controls="live" aria-selected="true" tabindex="0" data-tab="live">라이브</ui-button>
+    <ui-button kind="segment" role="tab" id="tab-results" aria-controls="results" aria-selected="false" tabindex="-1" data-tab="results">지난 결과</ui-button>
   </nav>
   <div class="clock">
     <span class="kv"><small>SIM</small><span class="num" id="simTime">--</span></span>
     <span class="kv" id="rtfBox"><small>실시간 배율</small><span class="num" id="rtf">--</span></span>
-    <span class="kv" id="stepBox"><small>시계 점프</small><span class="num" id="step">--</span></span>
+    <span class="kv" id="stepBox"><small>시계 점프</small><span class="num" id="step">--</span></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
   </div>
 </header>
 
@@ -331,14 +326,14 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
       <div class="card live-panel">
         <h2>카메라 · 인식 오버레이 <span class="src">camera/front · line/debug/compressed</span></h2>
         <div class="cams">
-          <figure class="cam" style="margin:0">
+          <figure class="cam">
             <figcaption><span>원본 카메라</span><span class="num" id="cam-meta"></span></figcaption>
             <div class="frame stale" id="frame-camera">
               <img id="camera" src="/camera.mjpg" alt="원본 카메라 영상"/>
               <div class="nodata"><div><b>NO DATA</b>카메라 신호 없음</div></div>
             </div>
           </figure>
-          <figure class="cam" style="margin:0">
+          <figure class="cam">
             <figcaption><span>인식 오버레이</span><span class="num" id="ov-meta"></span></figcaption>
             <div class="frame stale" id="frame-overlay">
               <img id="overlay" src="/overlay.mjpg" alt="차선 인식 오버레이"/>
@@ -346,11 +341,12 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
             </div>
           </figure>
         </div>
+        <!-- 오버레이 색은 서버가 영상에 그려 넣은 고정 값이라 테마를 따르지 않는다 — 견본 대신 색 이름으로 적는다. -->
         <div class="legend" aria-label="오버레이 범례">
-          <span><i class="sw" style="background:#50dc50"></i>왼쪽 차선</span>
-          <span><i class="sw" style="background:#288cff"></i>오른쪽 차선</span>
-          <span><i class="sw" style="background:#f0d228"></i>따라갈 경로</span>
-          <span><i class="sw box" style="background:#121214;border:1px solid #333"></i>아래 어두운 띠 = 로봇 몸체</span>
+          <span><b>초록 선</b>왼쪽 차선</span>
+          <span><b>파랑 선</b>오른쪽 차선</span>
+          <span><b>노랑 선</b>따라갈 경로</span>
+          <span><b>아래 어두운 띠</b>로봇 몸체</span>
           <span class="note">그려진 선은 이번 프레임에서 본 것만이 아니라 <b>기억</b>(최근에 본 차선)도 포함합니다. 선이 보이는데 인식 등급이 ‘기억’이면 지금은 페인트를 보지 못하고 있다는 뜻입니다.</span>
         </div>
       </div>
@@ -363,11 +359,11 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
           </svg>
         </div>
         <div class="maplegend">
-          <span><i class="sw" style="background:var(--done)"></i>완료</span>
-          <span><i class="sw" style="background:var(--accent)"></i>지금 구간</span>
-          <span><i class="sw" style="background:var(--road)"></i>남은 구간</span>
-          <span><i class="sw" style="background:#4b3d63"></i>주차 진입로</span>
-          <span><i class="sw box" style="background:#c4b5fd"></i>주차 칸 · 마커</span>
+          <span><i class="sw sw-done"></i>완료</span>
+          <span><i class="sw sw-now"></i>지금 구간</span>
+          <span><i class="sw sw-road"></i>남은 구간</span>
+          <span><i class="sw sw-spur"></i>주차 진입로</span>
+          <span><i class="sw box sw-spot"></i>주차 칸 · 마커</span>
         </div>
         <div class="progress">
           <div class="row">
@@ -396,7 +392,7 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
         <svg id="spark" viewBox="0 0 600 78" preserveAspectRatio="none" aria-label="최근 60초 차선 오차와 인식 등급"></svg>
         <div class="spark-cap"><span>-60 s</span><span>차선 오차 (선) · 인식 등급 (띠)</span><span>지금</span></div>
         <div class="dist">
-          <h2 style="margin:0 0 6px">이번 실행 순회 중 인식 분포 <span class="src" id="distN"></span></h2>
+          <h2 class="dist-head">이번 실행 순회 중 인식 분포 <span class="src" id="distN"></span></h2>
           <div class="stack" id="distStack"></div>
           <div class="rows" id="distRows"></div>
         </div>
@@ -430,9 +426,9 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
             <div class="pair"><small>마커 기준 x · y · yaw</small><span class="num" id="kXY">--</span></div>
           </div>
           <div class="meter"><small><span>칸까지 거리 (목표 ≤ 20 mm)</span><span class="num" id="kDist">--</span></small>
-            <div class="track"><i id="kDistBar"></i><u style="left:50%"></u></div></div>
+            <div class="track"><i id="kDistBar"></i><u class="mid"></u></div></div>
           <div class="meter"><small><span>방향 오차 (목표 ≤ 5°)</span><span class="num" id="kHead">--</span></small>
-            <div class="track"><i id="kHeadBar"></i><u style="left:50%"></u></div></div>
+            <div class="track"><i id="kHeadBar"></i><u class="mid"></u></div></div>
         </div>
       </div>
     </div>
@@ -462,6 +458,7 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
 "use strict";
 const $ = (id) => document.getElementById(id);
 const SVGNS = "http://www.w3.org/2000/svg";
+/* 그림 색은 모두 CSS 변수다 — SVG style·인라인 style로 넣어 테마가 바뀌면 다시 그리지 않아도 따라간다. */
 const TIER_COLOR = { BOTH: "var(--both)", ONE: "var(--one)", MEMORY: "var(--memory)", STOP: "var(--stop)" };
 const TIER_LABEL = { BOTH: "양쪽", ONE: "한쪽", MEMORY: "기억", STOP: "정지" };
 const PHASE_ORDER = ["boot", "confirm", "undock", "tour", "park", "done"];
@@ -486,10 +483,11 @@ function setPill(node, text, cls) { node.textContent = text; node.className = "p
 function setHp(id, cls, text) { const n = $(id); n.className = "hp " + cls; n.querySelector(".num").textContent = text; }
 
 /* ---------- tabs ---------- */
+const TAB_SELECTOR = ".tabs [role=tab]";
 function showTab(tab) {
   if (tab !== "live" && tab !== "results") tab = "live";
   document.body.classList.toggle("tab-results", tab === "results");
-  for (const b of document.querySelectorAll(".tabs button")) {
+  for (const b of document.querySelectorAll(TAB_SELECTOR)) {
     const selected = b.dataset.tab === tab;
     b.setAttribute("aria-selected", String(selected));
     b.tabIndex = selected ? 0 : -1;
@@ -499,10 +497,10 @@ function showTab(tab) {
   if (tab === "results") loadRuns();
   try { localStorage.setItem("rosyTab", tab); } catch (e) { /* storage unavailable */ }
 }
-for (const b of document.querySelectorAll(".tabs button")) {
+for (const b of document.querySelectorAll(TAB_SELECTOR)) {
   b.addEventListener("click", () => showTab(b.dataset.tab));
   b.addEventListener("keydown", (event) => {
-    const tabs = [...document.querySelectorAll(".tabs button")];
+    const tabs = [...document.querySelectorAll(TAB_SELECTOR)];
     const current = tabs.indexOf(b);
     const target = event.key === "Home" ? tabs[0]
       : event.key === "End" ? tabs[tabs.length - 1]
@@ -602,9 +600,8 @@ function drawRobot(odom, trail) {
     const [x, y] = view.P(odom.x, odom.y), deg = -((odom.yaw || 0) * 180) / Math.PI;
     const s = 0.05 * view.scale;
     const grp = el("g", { transform: `translate(${x},${y}) rotate(${deg.toFixed(1)})` }, rg);
-    el("circle", { r: s * 1.1, fill: "rgba(255,138,61,0.18)" }, grp);
-    el("path", { d: `M${s},0 L${-s * 0.7},${s * 0.65} L${-s * 0.35},0 L${-s * 0.7},${-s * 0.65} Z`,
-                 fill: "#fff", stroke: "var(--accent)", "stroke-width": 2, "stroke-linejoin": "round" }, grp);
+    el("circle", { r: s * 1.1, class: "halo" }, grp);
+    el("path", { d: `M${s},0 L${-s * 0.7},${s * 0.65} L${-s * 0.35},0 L${-s * 0.7},${-s * 0.65} Z`, class: "arrow" }, grp);
   }
 }
 
@@ -613,7 +610,7 @@ function renderRail(m, clock) {
   const rail = $("rail");
   if (!rail.children.length) {
     rail.innerHTML = PHASE_ORDER.map((p) => `<div class="phase" id="ph-${p}"><div class="name"><i></i>${PHASE_KO[p]}</div><div class="when num"></div></div>`).join("")
-      + `<div class="rail-meta"><span class="muted" style="font-size:12px">경과 시뮬 시간</span><span class="big" id="elapsed">--</span><span class="muted num" id="phaseSince" style="font-size:12px"></span></div>`;
+      + `<div class="rail-meta"><span class="muted micro">경과 시뮬 시간</span><span class="big" id="elapsed">--</span><span class="muted num micro" id="phaseSince"></span></div>`;
   }
   for (const p of m.phases) {
     const n = $("ph-" + p.key);
@@ -676,18 +673,18 @@ function renderProgress(r) {
 function renderSpark(history) {
   const svg = $("spark"); svg.innerHTML = "";
   const W = 600, H = 78, band = 10, mid = (H - band) / 2, amp = 0.05;
-  el("line", { x1: 0, x2: W, y1: mid, y2: mid, stroke: "#2b3648", "stroke-width": 1 }, svg);
+  el("line", { x1: 0, x2: W, y1: mid, y2: mid, class: "mid", "stroke-width": 1 }, svg);
   const X = (t) => ((t + 60) / 60) * W;
   for (let i = 0; i < history.length; i++) {
     const [t, , , tier] = history[i];
     const t2 = i + 1 < history.length ? history[i + 1][0] : 0;
     if (!tier) continue;
-    el("rect", { x: X(t), y: H - band, width: Math.max(1, X(t2) - X(t)), height: band, fill: TIER_COLOR[tier] }, svg);
+    el("rect", { x: X(t), y: H - band, width: Math.max(1, X(t2) - X(t)), height: band, style: `fill:${TIER_COLOR[tier]}` }, svg);
   }
   const pts = history.filter((h) => h[1] !== null && h[1] !== undefined)
     .map((h) => `${X(h[0]).toFixed(1)},${(mid - (Math.max(-amp, Math.min(amp, h[1])) / amp) * (mid - 4)).toFixed(1)}`);
-  if (pts.length > 1) el("polyline", { points: pts.join(" "), fill: "none", stroke: "#e7ecf3", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke" }, svg);
-  const lab = el("text", { x: 4, y: 12, fill: "#5a6678", "font-size": 10 }, svg); lab.textContent = "±50 mm";
+  if (pts.length > 1) el("polyline", { points: pts.join(" "), class: "err", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke" }, svg);
+  const lab = el("text", { x: 4, y: 12, class: "cap", "font-size": 10 }, svg); lab.textContent = "±50 mm";
 }
 
 function renderPerception(p) {
@@ -815,8 +812,9 @@ async function loadRuns() {
     $("runRows").innerHTML = `<tr><td colspan="5" class="empty">실행 목록을 불러올 수 없습니다.</td></tr>`;
   }
 }
-const TRACK_COLORS = { confirm: "#c4b5fd", undock: "#38bdf8", tour: "#ff8a3d", park: "#34d399" };
-const PALETTE = ["#ff8a3d", "#38bdf8", "#34d399", "#fbbf24", "#c4b5fd", "#f87171", "#5eead4", "#f0abfc"];
+/* 궤적은 데이터 계열이다 — series 토큰만 쓴다. 정체성은 범례의 단계 이름이 나르고 색은 순환한다(D-82). */
+const TRACK_COLORS = { confirm: "var(--ink-quiet)", undock: "var(--series-secondary)", tour: "var(--series-primary)", park: "var(--series-goal)" };
+const PALETTE = ["var(--series-primary)", "var(--series-secondary)", "var(--series-goal)", "var(--ink-quiet)"];
 async function openRun(id) {
   selected = id;
   for (const tr of document.querySelectorAll("#runRows tr")) tr.classList.toggle("sel", tr.dataset.id === id);
@@ -833,7 +831,7 @@ async function openRun(id) {
     run.tracks.forEach((t, i) => {
       if (t.points.length < 2) return;
       const c = TRACK_COLORS[t.label] || PALETTE[i % PALETTE.length];
-      el("path", { d: pathD(v, t.points), class: "tr", stroke: c }, svg);
+      el("path", { d: pathD(v, t.points), class: "tr", style: `stroke:${c}` }, svg);
     });
   }
   const labels = run.tracks.map((t, i) => `<span><i class="sw" style="background:${TRACK_COLORS[t.label] || PALETTE[i % PALETTE.length]}"></i>${esc(PHASE_KO[t.label] || t.label)}</span>`);
@@ -851,6 +849,8 @@ loadGraph().then(poll);
 let initialTab = "live";
 try { initialTab = localStorage.getItem("rosyTab") || "live"; } catch (e) { /* storage unavailable */ }
 showTab(initialTab);
+/* ui-button이 정의되며 tabIndex를 0으로 되돌린다 — 탭의 로빙 tabindex를 다시 맞춘다. */
+customElements.whenDefined("ui-button").then(() => showTab(document.body.classList.contains("tab-results") ? "results" : "live"));
 </script>
 </body>
 </html>

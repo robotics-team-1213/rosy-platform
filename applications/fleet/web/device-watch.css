@@ -24,8 +24,6 @@
   border-radius: var(--radius-button);
 }
 
-.watch-front[hidden] { display: none; }
-
 .watch-front img {
   display: block;
   width: 100%;

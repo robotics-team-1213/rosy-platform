@@ -1301,3 +1301,9 @@
 - 변경: 기존 만료 토큰·CSP 정지·보정 표시 실패의 실제 원격 성공을 확보해 목록 해제를 진행한다.
 - 증거: focused 19 passed 중 토큰 삭제·익명 조회·실제 CORE 정지 상태를 확인했고 보정 표시는 별도 invocation 1 passed, skip 0, 각 로그 NEW 0이다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
 - gate 변화: 없음. 호스트 모의 CORE·합성 lease 검사이며 물리 정지·실측·DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-21 · uncommitted · 저속 주행판과 접속 창 닫기 아이콘
+
+- 변경: 저속 주행판의 `↑ ← ↓ →`와 접속 창 닫기 `×`를 공용 actionIcon(forward·left·reverse·right·close)으로 바꿨다. `.drawer-close`가 공용 단추에 덧칠하던 테두리·색·배경·글자 크기를 지우고 위치만 남겼다. 전송 중 문구는 단추의 aria-label에서 이름을 읽는다.
+- 증거: 정적 점검. 원격 브라우저 검사는 별도 기록한다.
+- gate 변화: 없음. 주행 명령 값(0.03 m/s, 0.10 rad/s, 2초)은 그대로다.

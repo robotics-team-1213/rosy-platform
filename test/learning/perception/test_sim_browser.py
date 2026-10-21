@@ -65,10 +65,10 @@ def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
             try:
                 page.goto(base + '/learning/sim', wait_until='networkidle')
                 expect = playwright.expect
-                expect(page.locator('#sim-runs button')).to_have_count(1)
+                expect(page.locator('#sim-runs ui-button')).to_have_count(1)
                 expect(page.locator('#sim-prerequisites')).to_contain_text('E0 필요')
                 assert page.locator('#sim-scenario option[value="port-mixed-stacking"]').evaluate('option=>option.disabled')
-                page.locator('#sim-runs button').first.click()
+                page.locator('#sim-runs ui-button').first.click()
                 expect(page.locator('#sim-selected')).to_contain_text('b' * 32)
                 page.locator('#sim-check').click()
                 expect(page.locator('#sim-start')).to_be_enabled()
@@ -81,15 +81,15 @@ def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
                 page.locator('#sim-check').click()
                 expect(page.locator('#sim-start')).to_be_enabled()
                 page.locator('#sim-start').click()
-                expect(page.locator('#sim-runs button')).to_have_count(2)
+                expect(page.locator('#sim-runs ui-button')).to_have_count(2)
                 page.locator('#sim-start').click()
-                expect(page.locator('#sim-runs button')).to_have_count(2)
+                expect(page.locator('#sim-runs ui-button')).to_have_count(2)
                 assert len(runs.requests) == 1
                 page.locator('#sim-stop').click()
                 expect(page.locator('#sim-selected')).to_contain_text('중단')
                 parent = next(key for key in runs.rows if key != 'b' * 32)
                 page.locator('#sim-replay').click()
-                expect(page.locator('#sim-runs button')).to_have_count(3)
+                expect(page.locator('#sim-runs ui-button')).to_have_count(3)
                 assert any(row.get('parent_run_id') == parent for row in runs.rows.values())
                 assert runs.rows['b' * 32] == original
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

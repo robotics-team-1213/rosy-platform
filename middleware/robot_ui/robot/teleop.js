@@ -140,7 +140,7 @@ export function startTeleop(button, event) {
 
   teleopCommand = { linear, angular };
   button.setAttribute("aria-pressed", "true");
-  setText("teleop-message", `${button.querySelector("small")?.textContent || "주행"} 명령 전송 중…`);
+  setText("teleop-message", `${button.getAttribute("aria-label") || "주행"} 명령 전송 중…`);
   holdTicker.start();
   teleopHoldTimeout = setTimeout(() => stopTeleop("2초 한도에 도달해 정지했습니다.", true), 2_000);
 }

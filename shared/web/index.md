@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · `[hidden]` 규칙 하나
+- 2026-10-21 · uncommitted · class로 공용 단추를 덧칠하는 경로 차단
+- 2026-10-21 · uncommitted · 공용 테마 순환 단추와 ui-button 암묵 제출
 - 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
 - 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
-- 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
-- 2026-10-16 · uncommitted · Fleet devices 이동의 공통 UI 검사 경로
-- 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완

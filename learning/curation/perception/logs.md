@@ -172,3 +172,9 @@
 - 변경: private workspace 설정에 binding 전체 SHA-256을 추가하고 controller/worker에서도 같은 바이트를 검증한다. 모델 PC에서 XDG_RUNTIME_DIR 없이 user bus 주소로 접근하는 경우를 재현해 고정 subprocess에 해당 운영 환경만 전달한다. GPU 준비가 다시 거절되면 이전 ready 상태를 버린다.
 - 증거: 독립 검토의 binding 교체를 원격 RED2실패→GREEN477 PASS/1 SKIP로 검증했다. 실제 격리 웹에서 CLI run 조회·동일 요청·새 run의 CLI 회수와 private runtime 제외를 확인했다. production 서비스·실제 Account 로그인·기존 사람 라벨은 수정하지 않았다.
 - gate 변화: 웹/CLI 교차 연결의 부분 수용이다. 실제 GPU 무점유 종료·stop 수용은 별도다.
+
+## 2026-10-21 · uncommitted · 학습 화면 구조 정리
+
+- 변경: 객체·픽셀 검수의 최종 배치를 HTML에 직접 적고 app.js·pixels.js의 DOM 이동 20여 건과 CSS `order` 재배열을 지웠다(좁은 폭의 픽셀 도구 이동만 남김). 테마 select와 페이지별 저장 코드 6벌을 공용 `[data-theme-cycle]` 아이콘 단추로 바꿨다. 계정 화면을 같은 셸·레일에 넣고, 입력칸처럼 그려지던 `<button class="ui-field">`를 `ui-button`으로 바꿨다. 버튼 글자에 붙은 단축키는 aria-keyshortcuts·툴팁으로, 세 번 반복되던 단축키 설명은 `?` 한 곳으로 모았다. 없는 아이콘 이름 `reload`를 `refresh`로 고쳤다.
+- 증거: 정적 점검(중복 id 0, 미등록 아이콘 0, 원시 button 0). pytest·브라우저 검사는 원격 시험 PC에서 별도 기록한다.
+- gate 변화: 없음. 검수 결정·저장 API·승인 규칙은 바뀌지 않는다.

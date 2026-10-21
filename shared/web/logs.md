@@ -813,3 +813,21 @@
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-21 · uncommitted · 공용 테마 순환 단추와 ui-button 암묵 제출
+
+- 변경: `[data-theme-cycle]` 단추 배선을 Fleet 머리(fleet-header.js)에서 ui.js로 옮겨 모든 앱이 같은 단추를 쓴다. 폼 안의 첫 `ui-button type="submit"`이 입력칸 Enter의 기본 단추가 된다(사용자 정의 요소는 브라우저 암묵 제출 대상이 아니다).
+- 증거: Fleet 머리 Node 시험 11 passed. 테마 선택지 시험은 ui.js와 학습 문서를 보도록 고쳤다. 원격 pytest는 별도 기록한다.
+- gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · class로 공용 단추를 덧칠하는 경로 차단
+
+- 변경: 표면이 자기 `<ui-button>`에 단 class(예: `.view-tab`, `.drawer-close`)로 면·글자·테두리를 칠하는 규칙을 `test_shared_controls.py`가 거절한다. 기존 시험은 선택자에 `ui-button` 글자가 있을 때만 보았다. 걸린 Robot 콘솔 `.view-tab`(공용 segment를 잉크 채움으로 덧칠)은 배치만 남겼다.
+- 증거: 표면 여섯 곳의 건식 점검에서 남은 위반 0. 원격 pytest는 별도 기록한다.
+- gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · `[hidden]` 규칙 하나
+
+- 변경: components.css에 `[hidden] { display: none !important; }` 하나를 두고 Fleet·학습·Robot·Pilot·진단·Games 시트의 요소별 사본 60개를 지웠다. 표면의 `display` 규칙이 브라우저 기본 [hidden]을 이겨 숨긴 요소가 보이는 버그를 막으려 요소마다 사본을 적던 구조였다. 사본을 다시 쓰면 `test_shared_controls.py`가 거절한다. Pilot 영상 바탕 `#000`은 기존 역할 `--surface-recessed`로 바꿨다.
+- 증거: 표면 규칙 중 숨긴 요소를 보이게 하는 것은 없고 모두 `:not([hidden])` 형태다(정적 점검). 원격 브라우저 검사는 별도 기록한다.
+- gate 변화: 없음.

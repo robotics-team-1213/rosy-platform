@@ -1,7 +1,6 @@
 * { box-sizing: border-box; }
 .connection-guide { margin: var(--space-3) var(--space-5); }
 .connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-flat); }
-.connection-guide[hidden] { display: none; }
 .connection-guide > div { flex: 1 1 16rem; min-width: 0; }
 .connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
 .connection-guide p { margin: 0; color: var(--text-secondary); }
@@ -23,13 +22,11 @@
 #install-main { grid-template-columns: minmax(0, 1fr); }
 .install-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .install-workspace, .install-task { min-width: 0; }
-.install-task[hidden], #discovery-list[hidden], #discovery-empty[hidden] { display: none; }
 .install-task > h2 { margin-top: 0; }
 .peer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .peer-toolbar select { min-width: 0; max-width: 100%; }
 #peer-status { min-width: 0; max-width: 100%; white-space: normal; }
 .peer-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
-.peer-list[hidden] { display: none; }
 .peer-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border-subtle); }
 .peer-identity { min-width: 0; flex: 1 1 14rem; display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
 .peer-identity small, .peer-owner-note { color: var(--text-secondary); }
@@ -47,7 +44,6 @@
 .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .console-context, .context-panel { min-width: 0; display: grid; gap: var(--space-3); align-content: start; }
-.context-panel[hidden] { display: none; }
 .context-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
 .context-tabs ui-button { min-width: 0; white-space: normal; }
 .context-panel > .panel { padding: var(--space-3) 0; border: 0; border-radius: 0; background: transparent; }
@@ -85,7 +81,6 @@ body {
 .vision-controls select { flex: 1; min-width: 0; }
 .vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-panel); }
 .vision-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.vision-frame img[hidden], .vision-image-stage[hidden], .vision-corner-overlay[hidden], .vision-corner-modes[hidden], #vision-corner-hint[hidden] { display: none; }
 .vision-image-stage { position: relative; width: 100%; line-height: 0; }
 /* D-513 7: 설치 회전만큼 썸네일을 돌린다. 모서리 편집은 원본 좌표라 돌리지 않는다. */
 .vision-frame:not([data-editing="true"]):is([data-turn="90"], [data-turn="270"]) { container-type: size; }
@@ -121,16 +116,12 @@ body {
 
 /* D-360 경기장 제안·보정 뷰·레이어. 색은 토큰만 쓴다. */
 .vision-corner-overlay .vision-proposal-polygon { fill: none; stroke: var(--series-goal); stroke-width: 1.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
-.vision-corner-overlay .vision-proposal-polygon[hidden] { display: none; }
 .field-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
-#field-accept[hidden], #field-dismiss[hidden], #vision-frame[hidden] { display: none; }
 .field-rectified { margin: var(--space-2) 0 0; }
-.field-rectified[hidden] { display: none; }
 .field-rectified canvas { display: block; width: 100%; height: auto; max-height: 50vh; object-fit: contain; background: var(--surface-recessed); border: 1px solid var(--border-default); border-radius: var(--radius-panel); }
 .field-rectified figcaption { margin-top: var(--space-1); }
 /* D-375 지도 맞춤: 겹침 캔버스는 원본 img 와 같은 object-fit 으로 같은 자리에 놓인다. */
 .vision-lane-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-.vision-lane-overlay[hidden], #map-fit-accept[hidden], #map-fit-dismiss[hidden], #map-fit-clear[hidden], .map-fit-guidance[hidden] { display: none; }
 .map-fit-state[data-tone="warn"], .map-fit-guidance { color: var(--status-warn); }
 .map-fit-guidance { margin: var(--space-1) 0 0; font-size: var(--text-label); }
 .field-options { margin-top: var(--space-2); }
@@ -141,10 +132,8 @@ body {
 .field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--text-secondary); font-size: var(--text-micro); }
 .field-size input { width: 6rem; }
 .field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-flat); border: 1px solid var(--flag-caution); border-radius: var(--radius-button); font-size: var(--text-micro); }
-.field-mismatch[hidden] { display: none; }
 /* 사이트 설정이 없어서 비어 있을 때만 W×H 안내가 빈 지도 안내를 대신한다. 불러오는 중·연결 실패는 그대로 보인다. */
 .map-stage[data-site-map="none"][data-map-state="unavailable"]:has(> .field-mismatch[data-state="unconfigured"]:not([hidden])) > .map-empty { display: none; }
-.field-storage-state[hidden], .layer-hint[hidden] { display: none; }
 .field-storage-state { color: var(--status-warn); }
 .layer-hint { margin: 0; font-size: var(--text-micro); }
 
@@ -176,10 +165,8 @@ body {
 .dispatch-control small { color: var(--text-secondary); line-height: var(--leading-body); }
 #cancel-all-result { margin: 0; color: var(--text-primary); }
 #cancel-all-details { color: var(--text-primary); }
-#dispatch-rearm[hidden], #work-admit[hidden] { display: none; }
 /* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
 .dispatch-control > div { margin-right: auto; }
-.dispatch-control[hidden] { display: none; }
 /* D-493 — 발행 제어가 없는 Fleet·확인 중에는 알릴 상태가 없다. 띠는 전체 주행 취소 버튼 한 줄로 준다. */
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) { justify-content: flex-end; padding: 0; border: 0; background: none; }
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) :is(#dispatch-control-title, #dispatch-control-detail) { display: none; }
@@ -270,7 +257,6 @@ main {
    운영자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
 .map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--surface-recessed); border-radius: var(--radius-button); }
 .camera-corrected { display: block; width: 100%; background: var(--surface-recessed); }
-.camera-corrected[hidden] { display: none; }
 .map-stage[data-view="camera"] > #map-canvas { display: none; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden]) { display: block; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]):has(> .map-birdseye:not([hidden])) > #map-canvas { display: none; }
@@ -304,7 +290,6 @@ main {
   text-align: center;
   pointer-events: none;
 }
-.map-empty[hidden], .legend[hidden] { display: none; }
 .map-empty strong { color: var(--text-primary); font-size: var(--text-label); font-weight: var(--weight-label); letter-spacing: var(--track-label); }
 .map-empty p { max-width: 34ch; margin: 0; color: var(--text-secondary); font-size: var(--text-micro); line-height: var(--leading-copy); }
 .map-empty-icon { width: var(--text-display); height: var(--text-display); opacity: var(--disabled-opacity); }
@@ -347,7 +332,6 @@ main {
 .legend i { width: 0.7rem; height: 0.7rem; padding: 0; border-radius: var(--radius-control); border: 1px solid var(--border-default); }
 /* D-257 카메라 관측은 CORE pose(채운 색)와 달리 점선 고리다. */
 .sw.sighting { background: transparent; border: 1px dashed var(--ink); border-radius: 50%; }
-.legend [hidden] { display: none; }
 /* D-517 10 교통 층 견본 — 캔버스와 같은 닫힌 어휘: 점유는 로봇 색 채움, 허가는 로봇 색 테두리, 위치 불명은 경고 빗금과 점선 테두리(견본은 점선만). */
 .sw.traffic-occupied { background: var(--robot-1); }
 .sw.traffic-granted { background: transparent; border: 2px solid var(--robot-1); }
@@ -611,7 +595,7 @@ main {
 .member-list input:disabled + * { opacity: var(--disabled-opacity); }
 .queue-group > p { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
 /* Many robots (10, 100): the follower boxes are a bounded list like a multi-select; 로봇 찾기 narrows it. */
-.member-list { max-height: 12rem; overflow-y: auto; } .member-list label[hidden] { display: none; }
+.member-list { max-height: 12rem; overflow-y: auto; }
 .robot-filter { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--space-2); align-items: center;
   margin-top: var(--space-2); font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--text-secondary); }
 /* ADR-1000: Warning / Critical Queues */
@@ -658,7 +642,6 @@ main {
 .queue-row:focus-visible, .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .queue-decision { padding: 0 var(--space-2) var(--space-2); }
-.queue-decision[hidden] { display: none; }
 .queue-decision > .stuck-item { border-left-width: 1px; }
 
 /* D-407 판단 요청 — 큐 행의 펼침. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
@@ -726,9 +709,7 @@ main {
   .site-path ul { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
   .site-path li { justify-content: flex-start; gap: var(--space-2); }
 }
-.address-drift[hidden] { display: none; }
 .address-drift .enroll-alarm { margin: 0; }
-.enroll-move-check[hidden] { display: none; }
 .enroll-move-check p { margin: var(--space-1) 0; }
 .enroll-move-address-label { font-size: var(--text-label); color: var(--text-secondary); }
 .enroll-move-address { font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-label); color: var(--text-primary); }
@@ -840,9 +821,7 @@ main {
 .workspace-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
 .workspace-heading h3, .workspace-heading .hint { margin: 0; font-size: var(--text-body); }
 #robot-workspace { min-width: 0; margin-top: var(--space-3); }
-#robot-workspace-empty[hidden] { display: none; }
 .trip-mode { display: grid; gap: var(--space-2); }
-.trip-mode[hidden] { display: none; }
 .console-secondary > .dispatch-control { flex-wrap: wrap; }
 .console-secondary > .dispatch-control small { white-space: normal; }
 .map-head > #map-display-mode { flex: 0 1 auto; min-width: 0; max-width: 100%; }
@@ -853,4 +832,3 @@ main {
 .robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
 .robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
 .robot-list-details { margin-top: var(--space-3); }
-#work-overview[hidden], #work-new[hidden], #work-move[hidden], #fleet-main [aria-labelledby="map-heading"][hidden], #fleet-main [aria-labelledby="roster-heading"][hidden] { display: none !important; }
