@@ -12,6 +12,10 @@
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 동일 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
 
+후속 teacher 전략은 실제 물체 시연1회와 독립정답·전체RGB2619장 검증을 통과했다.
+이는 학습 정책 성공이 아니다. 새25시연 cohort의 검증본1개를 확보했고 잔여24개를
+수집 중이다. 학습은 수집 완료를 기다리며 새 정식20회는 아직 시작하지 않았다.
+
 ## 최신 실제 과제와 다음 학습 비교
 
 관측 전달 수정을 병합한 runtime의 과제 `aa1770c5c1a7`은296명령 중295개
@@ -104,8 +108,9 @@ Teacher-result SHA256: `707f9f3d517d1087d3203067b88e5eebe6da5a79b8045829eca111c7
 Source와 보고서는 로컬main에 정식 병합됐으며 architecture267PASS/관련353PASS/
 0NEW를 확인했다. 새20/5 cohort는 해당 시연 결과를 검증한 뒤 판단한다.
 Main revision: `c17dcedce512b1657b4ac19788873502541d9c18`.
-추가 release 회귀·관측 단절 문서의 후속 착지는 연결 중단 중pytest143으로 종료돼
-미병합이다. 복구된 시험 호스트에서 재검증해야 하며 통과로 계산하지 않는다.
+추가 release 회귀·관측 단절 문서의 첫 후속 착지는 연결 중단 중pytest143으로 종료됐다.
+해당143은 보존하고 복구된 호스트에서 재검증했다. 후속main464a54d187의 정식 착지는
+architecture267PASS/affected324PASS/0NEW로 통과했다.
 기존25개 시연과 모든 실패는 보존하며 학습 정책에 scripted release나 clamp를 넣지 않는다.
 
 후속 teacher는 transfer waypoint마다 fresh hold receipt와 같은 joint-state의 실제
@@ -121,7 +126,41 @@ strict gripper evidence 형식과 충돌하는 문제가 발견됐다. 실제 tr
 1FAIL 뒤 기존 네 필드 evidence를 보존하고 q를 transfer 진단에 분리했다. 최종 관련
 원격47PASS/0NEW·exit0와 독립 재검토에서 blocker 없음을 확인했다. 최초 GREEN
 요청의 잘못된 시험 파일 경로는 exit4·실행0으로 보존하고 통과로 계산하지 않는다.
-이 소스의 실제 시연·clearance·파지 유지·성공 cohort 입고는 아직 검증 전이다.
+당시 실제 시연·clearance·파지 유지·성공 cohort 입고는 검증 전이었으며 아래 실행으로
+별도 확인했다.
+
+## 새 teacher 시연의 실제 물체 성공과 전체 RGB 검증
+
+Native run `bf2ca6346b9be0821249740a0cc8bd4fbf454e47-c7dedb9bfcfd`는
+EXIT0/PASS/cleanup true로 끝났다. 이 소스의 prototype1/1성공이며 직전 실패를 포함한
+종료 prototype은1/2다. 이후 cohort 수집 실행은 별도 원장에 보존한다. learned0/40과
+구분하고 실물 집기나 힘 센서 검증으로 주장하지 않는다. SIM 부착 보조를 사용했다.
+
+| 독립 재계산 지표 | 실측 |
+|---|---:|
+| 최대 lift | 102.018379606mm |
+| 최종 XY 오차 | 0.159223386mm |
+| 최종 Z 오차 | 0.000046194mm |
+| 안정 유지 | 2.242 SIM초 |
+| 해제 전 object-bottom 여유 | 5.475801182mm |
+
+원 teacher 안정값은2.240초로 별도 보존했다. 운반 hold102개와 해제 receipt·분리·
+팔 퇴각 뒤 정착을 확인했다. MODEL의 독립 proof 생성·strict gripper reader·전송
+UUID/terminal 결속·원 RGB2619장·LeRobot0.4.4 전체영상 readback은 EXIT0/PASS다.
+검증 영상은10fps/261.9초이며 최대 frame 평균절대픽셀오차1.7923/255다. 실제 영상과
+원본4프레임을 기존 작업 보고서에 첨부하고 다운로드 byte를 원본과 대조했다.
+
+Source/main revision: `bf2ca6346b9be0821249740a0cc8bd4fbf454e47`.
+Teacher-result SHA256: `204eb89f5dad6aefdd620af55633958300b344cf40a2f2509c4a7490f8668f0e`.
+Independent-result SHA256: `58f4b4051f67468a0d4c06c91ccce87b1108a12cac145a7c21a9770229740a15`.
+MP4 SHA256: `9465e6c04312ad456bbcdab918c0c3e88dac322ff1031ae89b2c20a87cc1a5ab`.
+해당 소스는 architecture267PASS/affected366PASS/0NEW로 정식 착지를 완료했다.
+
+새 고정소스25시연 cohort는 검증본1개를 확보하고 나머지24개를3개씩 수집 중이다.
+완료 후 모든 에피소드의 독립정답·RGB를 재검증하고, 수집순 앞20개train/뒤5개
+validation으로 seed42750/n_action_steps1/ACT10000step을 실행한다. 새cohort의train전용
+통계로 bounded relative 모델을 처음부터 학습하며 옛checkpoint 통계를 재사용하지 않는다.
+현재는 학습 대기이며 미실행 학습이나 새20회 평가를 완료에 합산하지 않는다.
 
 ## Pending native intake
 
