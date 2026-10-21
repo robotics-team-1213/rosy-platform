@@ -261,12 +261,15 @@ async def _run_receive(args: argparse.Namespace) -> int:
         await ws_server.wait_closed()
 
 
-def _workcell_preview_tokens(path: Path, configured_sources: set[str], *, environ) -> dict[str, str]:
+def _workcell_preview_tokens(path: Path, configured_sources: set[str], *, environ
+                            ) -> tuple[dict[str, str], set[bytes]]:
     try:
         manifest = WorkcellObservationManifest.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
     except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError):
         raise ValueError("cannot load strict workcell observation manifest") from None
     tokens = {}
+    credential_digests = {bytes.fromhex(source.credential_sha256) for cell in manifest.workcells
+                          for source in [*cell.arms, *cell.cameras]}
     for cell in manifest.workcells:
         for camera in cell.cameras:
             if camera.source_id in configured_sources:
@@ -274,10 +277,12 @@ def _workcell_preview_tokens(path: Path, configured_sources: set[str], *, enviro
             token = environ.get(camera.token_env)
             if not token:
                 raise ValueError(f"camera token environment variable {camera.token_env} is required")
+            if sha256(token.encode("utf-8")).hexdigest() != camera.credential_sha256:
+                raise ValueError(f"camera token does not match credential_sha256 for {camera.source_id}")
             if token in tokens.values():
                 raise ValueError("workcell preview cameras must have unique tokens")
             tokens[camera.source_id] = token
-    return tokens
+    return tokens, credential_digests
 
 
 def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
@@ -288,10 +293,12 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
     """
     known_tokens = {config.sighting_token for config in configs}
     known_tokens |= {config.phone_token for config in configs if config.phone_token is not None}
+    service_tokens = known_tokens.copy()
     preview_tokens = {}
+    workcell_digests = set()
     workcells = getattr(args, "workcell_observations", None)
     if workcells is not None:
-        preview_tokens = _workcell_preview_tokens(
+        preview_tokens, workcell_digests = _workcell_preview_tokens(
             workcells, {config.camera.source_id for config in configs}, environ=environ)
         if known_tokens & set(preview_tokens.values()):
             raise ValueError("workcell preview tokens must differ from phone and sighting credentials")
@@ -319,11 +326,16 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
     reserved_tokens = known_tokens | ({preview_secret} if preview_secret else set())
     if sync is not None:
         reserved_tokens.add(sync["token"])
+        service_tokens.add(sync["token"])
+    if preview_secret:
+        service_tokens.add(preview_secret)
+    if {sha256(token.encode("utf-8")).digest() for token in service_tokens} & workcell_digests:
+        raise ValueError("workcell credentials must differ from phone, sighting, sync and preview secrets")
+    reserved_digests = workcell_digests | {sha256(token.encode("utf-8")).digest() for token in reserved_tokens}
     source_tokens = {config.camera.source_id: config.phone_token for config in configs
                      if config.phone_token is not None}
     source_tokens.update(preview_tokens)
-    paired = PairedCredentials(paired_sources, forbidden_digests={sha256(token.encode("utf-8")).digest()
-                               for token in reserved_tokens}) if paired_sources else None
+    paired = PairedCredentials(paired_sources, forbidden_digests=reserved_digests) if paired_sources else None
     ingest = IngestServer(
         source_tokens,
         preview_signer=VisionLeaseSigner(preview_secret) if preview_secret else None,
