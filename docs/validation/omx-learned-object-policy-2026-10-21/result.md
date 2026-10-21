@@ -35,7 +35,8 @@ policy-result SHA256: `f73746f1f5537cccf6b0137224514959469f2f0c63db80ea6de67e427
 Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint와 원격
 아키텍처267PASS/0NEW, 영향 범위1091PASS/38SKIP/0NEW를 통과했다. 실제 ACT9개는
 별도 MODEL 시험에서0SKIP으로 확인했다. 일반 검사의38SKIP을 통과로 바꾸지 않는다.
-착지 로그는 `%TEMP%/rosy-land/feat-omx-sim-ground-truth/{run-g1-1.txt,run-1-1.txt}`다.
+착지 도구의 임시 로그 경로는 다음 착지에서 재사용된다. 초기 SHA의 원래55경로 검사를
+동일0c706e831a로 다시 실행해 `omx-land-0c-reverification/run-1.txt`에 보존했다.
 원격 push는 하지 않았다. 새 학습 실행은 `omx-object-training-42a03f4605a8a021`이며
 고정한 source938791127b의 bounded head/command_entry/noise0.02를 사용한다.
 시작 요청이나 자료 검증 횟수는 학습 완료·물체 성공으로 계산하지 않는다.
@@ -127,6 +128,14 @@ Capture source revision: `8f728fb5e0aa86fed0951f0256ef622f02670063`.
 수정 전 회귀2FAIL, 수정 후114PASS/1SKIP/0NEW와 독립 검토를 통과했다. 이 변경이
 controller 도달 오차를 해결했다는 증거는 없고, 다음 native 평가는 noise0 checkpoint와
 새 capture runtime을 합친 후보로 평가한다. 학습 모델만의 인과 비교로 주장하지 않는다.
+
+최신 공식 main revision: `91897eadf030de531ac8f37045d38497934979fb`.
+실제 `tools/land.py --tests auto --no-prune`가 안전·크기·lint, 원격 architecture267PASS,
+영향 범위408PASS/6SKIP/0NEW를 확인한 뒤 착지했다. 완료 로그와 landing record는
+`official-land-91897eadf0/{run-g1-1.txt,run-1-1.txt,land-record.json}`에 별도 복사했다.
+초기0c706e831a의 재검증도1091PASS/38SKIP/0NEW로 종료됐다. 임시 경로 재사용 중
+잘못 복사한 일부 새 로그는 `official-land-0c706e831a/NOT-AUTHORITATIVE.md`로 표시하고
+완료 증거에서 제외했다. 현재 원격 push는 없고 실제 물체 성공 조건도 아직 미달성이다.
 
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
