@@ -6,6 +6,7 @@
 - 저장소 분리 PR #140, commit d9620015a202: 기존 클래스와 나머지 서버 AST 동일성, 기존 import·오류 처리·접근 범위 상수 보존. 기본 계약 519 passed, 관련 검사 2214 passed / 272 skipped, NEW 0. 최신 head의 개별 CI 5개 모두 성공 후 병합했다.
 - UI PR #141, 검사 commit ed283f5e3fe6: 공식 원격 명시 Chromium과 API 총18 passed / skip0. 손상 자료 격리, manager 권한·검수자 위조 거절, 버전 충돌, 실제 이미지 디코딩, 모바일·키보드·저장 중 입력·다운로드·늦은 새로고침을 검사했다.
 - 같은 UI commit의 pre-push 기본 계약519 passed, 관련2336 passed / 273 skipped. 각각 NEW0 / known0 / flaky0. 기본 skip은 위 명시 실행과 구분한다.
+- 기존 관련 명시 브라우저202개는200 passed / 2 failed / skip0이다. 두 실패는 픽셀 사진의 짧은 데스크톱 첫 화면 배치 검사 `test_short_desktop_view_keeps_entire_photo_in_view`와 `test_review_photo_and_result_are_in_first_view`다. known 비교 NEW0 / known2 / flaky0이며 변경 전 commit d9620015a202에서도 동일한 두 실패를 공식 원격으로 재현했다. 실패 목록이나 허용 기준을 변경하지 않았다.
 
 ## 실제 화면
 
