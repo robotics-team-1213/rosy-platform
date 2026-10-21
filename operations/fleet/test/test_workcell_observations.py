@@ -1,5 +1,6 @@
 """Latest-only physical arm evidence stays source-bound and expires independently."""
 import json
+from hashlib import sha256
 from types import SimpleNamespace
 
 import pytest
@@ -12,14 +13,16 @@ from fleet.server.workcell_observations import WorkcellObservations
 def setup():
     arms = [{"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"Arm {side}",
              "board_id": f"EXAMPLE-BOARD-{side}", "joint_topic": f"/omx_commissioning/arm_{side}/joint_states",
-             "joint_names": [f"joint{i}" for i in range(6)], "token_env": f"EXAMPLE_ARM_{side.upper()}"}
+             "joint_names": [f"joint{i}" for i in range(6)], "token_env": f"EXAMPLE_ARM_{side.upper()}",
+             "credential_sha256": sha256(f"arm-{side}-secret".encode()).hexdigest()}
             for side in ("a", "b")]
     cameras = [{"source_id": "top", "label": "Top", "role": "overhead", "arm_id": None,
                 "image_topic": "/top_camera/image_raw", "device_path": "/dev/v4l/by-id/example-top",
-                "token_env": "EXAMPLE_TOP"}]
+                "token_env": "EXAMPLE_TOP", "credential_sha256": sha256(b"top-secret").hexdigest()}]
     cameras += [{"source_id": f"wrist_{side}", "label": f"Wrist {side}", "role": "wrist",
                  "arm_id": f"arm_{side}", "image_topic": f"/wrist_{side}/image_raw",
-                 "device_path": f"/dev/v4l/by-path/example-{side}", "token_env": f"EXAMPLE_WRIST_{side.upper()}"}
+                 "device_path": f"/dev/v4l/by-path/example-{side}", "token_env": f"EXAMPLE_WRIST_{side.upper()}",
+                 "credential_sha256": sha256(f"wrist-{side}-secret".encode()).hexdigest()}
                 for side in ("a", "b")]
     manifest = WorkcellObservationManifest.model_validate({"schema": "rosy.workcell-observations/1", "workcells": [
         {"workcell_id": "example_cell", "label": "Example", "arms": arms, "cameras": cameras}]})
@@ -51,7 +54,8 @@ def test_registered_sources_are_visible_before_any_samples_without_private_bindi
                        {"source_id": "wrist_a", "label": "Wrist a", "role": "wrist", "arm_id": "arm_a"},
                        {"source_id": "wrist_b", "label": "Wrist b", "role": "wrist", "arm_id": "arm_b"}]
     rendered = json.dumps(state)
-    assert not any(private in rendered for private in ("secret", "token_env", "board_id", "device_path", "/dev/"))
+    assert not any(private in rendered for private in ("secret", "token_env", "board_id", "device_path", "/dev/",
+                                                      "credential_sha256", sha256(b"top-secret").hexdigest()))
 
 
 @pytest.mark.parametrize("tokens", [{}, {"feedback_a": "a"}, {"feedback_a": "", "feedback_b": "b"},
@@ -60,6 +64,24 @@ def test_constructor_requires_exact_distinct_arm_credentials(setup, tokens):
     _, clock, manifest, _ = setup
     with pytest.raises(ValueError):
         WorkcellObservations(manifest, tokens, wall=lambda: clock.wall, monotonic=lambda: clock.monotonic)
+
+
+def test_arm_raw_credential_must_match_manifest_fingerprint(setup):
+    _, _, manifest, tokens = setup
+    tokens["feedback_a"] = "different-but-unique-secret"
+    with pytest.raises(ValueError, match="credential|fingerprint"):
+        WorkcellObservations(manifest, tokens)
+
+
+def test_all_producer_fingerprints_are_available_for_private_isolation_without_camera_tokens(setup):
+    service, _, manifest, _ = setup
+    expected = frozenset(source.credential_sha256 for cell in manifest.workcells
+                         for source in [*cell.arms, *cell.cameras])
+    assert service.credential_fingerprints() == expected
+    assert service.uses_token("top-secret")
+    assert service.uses_token("wrist-a-secret")
+    assert not service.uses_token("unregistered-secret")
+    assert service.credential_values() == ("arm-a-secret", "arm-b-secret")
 
 
 def test_source_credentials_and_joint_set_cannot_change_an_existing_sample(setup):

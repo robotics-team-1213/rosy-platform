@@ -1,6 +1,7 @@
 """Fleet viewer reads and source-scoped bounded observation ingestion."""
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
+from hashlib import sha256
 import pytest
 
 from core_common.protocol.workcell_observations import WorkcellObservationManifest
@@ -25,10 +26,11 @@ def client():
         "workcell_id": "example", "label": "Example", "arms": [
             {"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"Arm {side}",
              "board_id": f"EXAMPLE-BOARD-{side}", "joint_topic": f"/omx_commissioning/arm_{side}/joint_states",
-             "joint_names": ["joint1"], "token_env": f"EXAMPLE_{side.upper()}"} for side in ("a", "b")],
+             "joint_names": ["joint1"], "token_env": f"EXAMPLE_{side.upper()}",
+             "credential_sha256": sha256(f"{side}-secret".encode()).hexdigest()} for side in ("a", "b")],
         "cameras": [{"source_id": "top", "label": "Top", "role": "overhead", "arm_id": None,
                      "image_topic": "/top_camera/image_raw", "device_path": "/dev/v4l/by-path/example-top",
-                     "token_env": "EXAMPLE_TOP"}]}]})
+                     "token_env": "EXAMPLE_TOP", "credential_sha256": sha256(b"top-secret").hexdigest()}]}]})
     return client_for(WorkcellObservations(manifest, {"feedback_a": "a-secret", "feedback_b": "b-secret"},
                                          wall=lambda: 100.0, monotonic=lambda: 10.0))
 
@@ -48,6 +50,7 @@ def test_read_requires_viewer_and_disables_caching(client):
     assert response.json()["read_only"] is True
     assert response.json()["workcells"][0]["arms"][0]["positions"] is None
     assert "EXAMPLE-BOARD" not in response.text and "a-secret" not in response.text
+    assert "credential_sha256" not in response.text and sha256(b"top-secret").hexdigest() not in response.text
 
 
 def test_source_token_cannot_write_another_arm_and_payload_is_strict(client):

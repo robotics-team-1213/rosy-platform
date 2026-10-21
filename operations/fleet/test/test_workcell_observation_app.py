@@ -21,15 +21,15 @@ VIEWER = {"Authorization": "Bearer viewer-secret"}
 SIGNING = "preview-signing-" + "x" * 32
 
 
-def service(token="arm-observation-secret"):
+def service(token="arm-observation-secret", *, camera_secret="camera-observation-secret"):
     manifest = WorkcellObservationManifest.model_validate({"schema": "rosy.workcell-observations/1", "workcells": [{
         "workcell_id": "example", "label": "Example", "arms": [{
             "source_id": "arm_feedback", "arm_id": "arm_a", "label": "Arm A", "board_id": "EXAMPLE-BOARD",
             "joint_topic": "/omx_commissioning/arm_a/joint_states", "joint_names": ["joint1"],
-            "token_env": "EXAMPLE_ARM"}], "cameras": [{
+            "token_env": "EXAMPLE_ARM", "credential_sha256": sha256(token.encode()).hexdigest()}], "cameras": [{
                 "source_id": "workcell_top", "label": "Top", "role": "overhead", "arm_id": None,
                 "image_topic": "/top/image_raw", "device_path": "/dev/v4l/by-id/example-top",
-                "token_env": "EXAMPLE_TOP"}]}]})
+                "token_env": "EXAMPLE_TOP", "credential_sha256": sha256(camera_secret.encode()).hexdigest()}]}]})
     return WorkcellObservations(manifest, {"arm_feedback": token}, wall=lambda: 100.0, monotonic=lambda: 10.0)
 
 
@@ -58,12 +58,13 @@ def test_real_fleet_viewer_guard_applies_without_a_cell_compiler(fleet, configur
         assert response.json()["workcells"][0]["arms"][0]["source_id"] == "arm_feedback"
 
 
-@pytest.mark.parametrize("credential", ["console", "site-user", "robot", "discovery", "vision", "pairing", "goal"])
-def test_observation_producer_cannot_reuse_an_existing_product_credential(fleet, tmp_path, credential):
+@pytest.mark.parametrize("source", ["arm", "camera"])
+@pytest.mark.parametrize("credential", ["console", "site-user", "robot", "discovery", "vision", "pairing", "goal", "policy", "sighting"])
+def test_observation_producer_cannot_reuse_an_existing_product_credential(fleet, tmp_path, credential, source):
     console, kwargs = fleet
     shared = {"console": "console-secret", "site-user": "viewer-secret", "robot": "robot-secret",
               "discovery": "discovery-secret", "vision": SIGNING, "pairing": "pairing-sync-secret",
-              "goal": "goal-producer-secret"}[credential]
+              "goal": "goal-producer-secret", "policy": "policy-source-secret", "sighting": "sighting-source-secret"}[credential]
     if credential == "discovery":
         from fleet.server.discovery import DiscoveryStore
         kwargs.update(discovery=DiscoveryStore(), discovery_token=shared)
@@ -91,8 +92,20 @@ def test_observation_producer_cannot_reuse_an_existing_product_credential(fleet,
             valid_until=datetime(2099, 1, 1, tzinfo=timezone.utc))
         kwargs.update(mission_service=missions, proposal_store=ProposalStore(db),
             goal_evidence_service=GoalEvidenceService(missions, GoalEvidenceRegistry((producer,)), GoalEvidenceStore(db)))
+    elif credential == "policy":
+        from fleet.server.policy_evidence import PolicyEvidenceStore
+        from fleet.server.policy_evidence_config import PolicyEvidenceSource
+        policy = PolicyEvidenceSource("example-policy", shared, ("workcell",), ("navigate",),
+                                      "example-map", "example-calibration", ("example-model",))
+        kwargs.update(policy_evidence=PolicyEvidenceStore([policy], tmp_path / "policy.sqlite3"))
+    elif credential == "sighting":
+        from fleet.server.sightings import SightingService, SightingSource
+        sighting = SightingSource("example-sighting", shared, ("rosy_01",), "example-map", "example-calibration",
+                                  (30, 31, 32, 33))
+        kwargs.update(sightings=SightingService([sighting], known_robot_ids=("rosy_01",)))
     with pytest.raises(ValueError, match="credential|token"):
-        create_app(console, **kwargs, workcell_observations=service(shared))
+        create_app(console, **kwargs, workcell_observations=service(shared) if source == "arm"
+                   else service(camera_secret=shared))
 
 
 def test_preview_only_camera_joins_existing_source_list_and_lease_without_sightings(fleet):

@@ -1,5 +1,6 @@
 """Configured native observation intake starts without inventing map calibration."""
 import json
+from hashlib import sha256
 
 import pytest
 
@@ -14,10 +15,10 @@ def configured(tmp_path):
         "workcell_id": "example", "label": "Example", "arms": [{
             "source_id": "arm_a", "arm_id": "arm_a", "label": "Arm A", "board_id": "EXAMPLE-BOARD",
             "joint_topic": "/omx_commissioning/arm_a/joint_states", "joint_names": ["joint1"],
-            "token_env": "EXAMPLE_ARM_TOKEN"}], "cameras": [{
+            "token_env": "EXAMPLE_ARM_TOKEN", "credential_sha256": sha256(b"producer-secret").hexdigest()}], "cameras": [{
                 "source_id": "top", "label": "Top", "role": "overhead", "arm_id": None,
                 "image_topic": "/top/image_raw", "device_path": "/dev/v4l/by-id/example-top",
-                "token_env": "EXAMPLE_TOP_TOKEN"}]}]}), encoding="utf-8")
+                "token_env": "EXAMPLE_TOP_TOKEN", "credential_sha256": sha256(b"camera-secret").hexdigest()}]}]}), encoding="utf-8")
     return path
 
 
@@ -25,6 +26,7 @@ def test_manifest_resolves_only_arm_credentials_for_fleet(configured):
     service = load_workcell_observations(configured, environ={"EXAMPLE_ARM_TOKEN": "producer-secret"})
     assert service.camera_source_ids() == ("top",)
     assert "producer-secret" not in json.dumps(service.snapshot())
+    assert "credential_sha256" not in json.dumps(service.snapshot())
     assert service.snapshot()["workcells"][0]["arms"][0]["positions"] is None
 
 
