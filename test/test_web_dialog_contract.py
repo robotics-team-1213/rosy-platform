@@ -56,7 +56,9 @@ PINNED_CONFIRMS = {
     "operations/site_ui/console/confirmed-action.js": 1,
     "operations/site_ui/console/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
     # D-593 console pin asks first; 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision).
-    "operations/site_ui/console/console.js": 4,  # includes the channel review bridge to the same confirmedAction owner
+    "operations/site_ui/console/console.js": 1,  # channel review bridge to the same confirmedAction owner
+    "operations/site_ui/console/shared/console-goal.js": 2,
+    "operations/site_ui/console/shared/console-refresh.js": 1,
     "operations/site_ui/console/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "operations/site_ui/console/host-services.js": 1,  # named operator host control, shared confirmation
     "operations/site_ui/console/roster.js": 1,

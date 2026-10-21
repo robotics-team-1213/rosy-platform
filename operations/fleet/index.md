@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 전체 Fleet 회귀의 자산·확인 소유 경로 갱신
 - 2026-10-21 · uncommitted · Console 팩토리 분리의 기존 계약 검사 유지
 - 2026-10-21 · uncommitted · 관제 AI와 D-831의 원격 구조 분리 적용
 - 2026-10-21 · uncommitted · 이미지 등록과 검토 가능한 추출 후보 (D-835)
 - 2026-10-21 · uncommitted · 도면 API와 기존 실행 경계 검증 (D-825)
-- 2026-10-21 · uncommitted · 지도 holder와 제한된 STL 투영 (D-825)
