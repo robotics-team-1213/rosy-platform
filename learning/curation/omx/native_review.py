@@ -21,6 +21,19 @@ JOINTS = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
 OBJECT_RESULTS = ('moved_as_intended', 'grasp_missed', 'dropped', 'displaced', 'untouched', 'unknown')
 
 
+def joint_layout(info):
+    layouts = {'omx_follower': JOINTS,
+               'bi_omx_follower': [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in JOINTS]}
+    if info.get('robot_type') not in layouts or info.get('codebase_version') != 'v3.0':
+        raise ValueError('expected native OMX LeRobot v3 data, not ROSY SIM')
+    names = layouts[info['robot_type']]
+    for key in ('action', 'observation.state'):
+        feature = info.get('features', {}).get(key, {})
+        if feature.get('names') != names or tuple(feature.get('shape', ())) != (len(names),):
+            raise ValueError('native OMX joint order and position feature count must match the robot type')
+    return names[:]
+
+
 def _integer(value, name):
     array = np.asarray(value)
     if array.size != 1 or array.dtype.kind not in 'iu':
@@ -29,12 +42,8 @@ def _integer(value, name):
 
 
 def inspect_frames(info, frames):
-    if info.get('robot_type') != 'omx_follower' or info.get('codebase_version') != 'v3.0':
-        raise ValueError('expected native omx_follower LeRobot v3 data, not ROSY SIM')
+    names = joint_layout(info)
     features = info.get('features', {})
-    for key in ('action', 'observation.state'):
-        if features.get(key, {}).get('names') != JOINTS or tuple(features[key].get('shape', ())) != (6,):
-            raise ValueError('native OMX joint order and six position features are required')
     cameras = {key: value for key, value in features.items() if key.startswith('observation.images.')}
     if not cameras:
         raise ValueError('camera observations are required')
@@ -69,7 +78,7 @@ def inspect_frames(info, frames):
             value = np.asarray(row[key], dtype='<f4')
             if not np.isfinite(value).all():
                 raise ValueError(f'nonfinite {key}')
-            shape = (6,)
+            shape = (len(names),)
             if key in cameras:
                 declared = cameras[key].get('shape', [])
                 if len(declared) != 3 or declared[2] != 3:
@@ -89,8 +98,8 @@ def inspect_frames(info, frames):
     if not episodes or count != info.get('total_frames') or len(episodes) != info.get('total_episodes'):
         raise ValueError('incomplete dataset: frame/episode counts differ')
     episodes[-1]['content_sha256'] = digest.hexdigest()
-    return dict(robot_type='omx_follower', lerobot_version='0.4.4', frame_count=count,
-                joint_names=JOINTS[:], camera_keys=sorted(cameras), episodes=episodes)
+    return dict(robot_type=info['robot_type'], lerobot_version='0.4.4', frame_count=count,
+                joint_names=names, camera_keys=sorted(cameras), episodes=episodes)
 
 
 def reviewed_splits(report, decisions):
