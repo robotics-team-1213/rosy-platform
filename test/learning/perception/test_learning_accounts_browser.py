@@ -98,7 +98,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 expect = playwright.expect
                 expect(page.locator('#account-status')).to_contain_text('로그인 연결을 완료하지 못했습니다')
                 expect(page.locator('#login-panel')).to_be_visible()
-                page.locator('#central-login').click()
+                page.locator('#account-login').click()
                 link = page.locator('[data-account-profile]')
                 expect = playwright.expect
                 try:
