@@ -845,3 +845,9 @@
 - 변경: ROS-free drawing DTO에 명시적 평면·단위·원점·방향·축척과 원본/projection SHA-256 참조를 정의했다. extra 필드·비유한 값·범위 밖 지도 원점·잘못된 해시를 거절하며 CORE snapshot/envelope나 실행 권한은 확장하지 않는다.
 - 증거: tests-only2efb13fc82의 원격 RED에서 기존 지도 body1개 통과, 신규 계약20개 실패를 확인했다. 현재 DTO와 v1.291 계약의 GREEN·공통 protocol 회귀는 커밋 후 원격에서 확인한다.
 - gate 변화: 없음. 호스트 DTO 시험은 도면 변환·현장 교정·주행 수용 증거가 아니다.
+
+## 2026-10-21 · uncommitted · Raster 등록·추출 요청과 선택 시설 근거 (D-835)
+
+- 변경: APIv1.293에 별도 RasterDrawingTransform·bounded 추출 설정/ROI 요청과 기존 RoadEvidence 형태의 선택 시설 근거를 정의했다. 없는 시설 근거는 기존 지도 body/hash에 추가하지 않고 CORE snapshot/envelope는 바꾸지 않는다.
+- 증거: 4a2f84e1fa 원격 계약·기존 STL·새 raster63통과, 93f8408f19 후보 검증·기존 지도 계약·브라우저·설치43통과, NEW0. API 예약 도구로 현행9핀을 맞췄으며 FULL 영향 검사는 별도다.
+- gate 변화: 없음. 도면 기준은 실제 위치·안전·주행 권한을 증명하지 않는다.

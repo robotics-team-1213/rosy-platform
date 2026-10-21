@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 이미지 등록과 검토 가능한 추출 후보 (D-835)
 - 2026-10-21 · uncommitted · 도면 API와 기존 실행 경계 검증 (D-825)
 - 2026-10-21 · uncommitted · 지도 holder와 제한된 STL 투영 (D-825)
 - 2026-10-21 · uncommitted · 도면 참조 계약 테스트 (D-825)
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
-- 2026-10-19 · uncommitted · ID 뒤 ! 임시 비밀번호와 본인 변경

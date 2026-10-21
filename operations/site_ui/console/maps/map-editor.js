@@ -1,6 +1,7 @@
 // Fleet adapter: generic point edits enter the existing draft validators here.
 import {appendSurveyElement, editSurveyElement, removeSurveyElement} from '/console/assets/site-map-edit.js';
-import {replaceVertex, removeVertex, mapPoint} from '/console/assets/geometry-edit.js';
+import {replaceVertex, removeVertex, mapPoint, nearestVertex} from '/console/assets/geometry-edit.js';
+import {splitRoad, joinRoads} from '/console/assets/map-topology.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -37,7 +38,19 @@ export function createMapEditor({svg, map, view, changed, reason}) {
     if (!enabled()) { message(reason() || '직접 편집을 먼저 켜세요'); return; }
     try { operation(); } catch (error) { message(error.message); }
   };
-  const coordinate = event => mapPoint(svg, view(), new DOMPoint(event.clientX, event.clientY));
+  const coordinate = event => {
+    if ($('editor-snap').checked && $('editor-kind').value === 'road') {
+      const candidates = [$('editor-from').value, $('editor-to').value]
+        .filter((id, i, all) => all.indexOf(id) === i).map(id => map()?.places.find(p => p.id === id)).filter(Boolean);
+      const screen = candidates.map(p => {
+        const [x, y] = view().toPx(p.x, p.y);
+        const at = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM()); return [at.x, at.y];
+      });
+      const index = nearestVertex([event.clientX, event.clientY], screen);
+      if (index !== null) return [candidates[index].x, candidates[index].y];
+    }
+    return mapPoint(svg, view(), new DOMPoint(event.clientX, event.clientY));
+  };
   const item = (row, geometry) => ({...row, name: row.name || (row.kind === 'road' ? '' : row.id), geometry});
   const changedGeometry = geometry => {
     const row = current();
@@ -94,9 +107,12 @@ export function createMapEditor({svg, map, view, changed, reason}) {
     options('editor-from', (siteMap?.places || []).map(p => [p.id, p.name]));
     options('editor-to', (siteMap?.places || []).map(p => [p.id, p.name]));
     options('editor-element', [['', '요소 선택'], ...rows().map(r => [`${r.key}:${r.id}`, r.name || r.id])]);
+    options('editor-join-target', [['', '연결할 다음 도로'], ...(siteMap?.edges || [])
+      .filter(e => e.id !== selected?.id).map(e => [e.id, e.name || e.id])]);
     $('editor-element').value = selected ? `${selected.key}:${selected.id}` : '';
     const blocked = reason() || (!$('editor-enabled').checked ? '직접 편집을 먼저 켜세요' : '');
-    for (const id of ['editor-finish', 'editor-add-point', 'editor-apply', 'editor-delete', 'editor-delete-vertex']) {
+    for (const id of ['editor-finish', 'editor-add-point', 'editor-apply', 'editor-delete', 'editor-delete-vertex',
+      'editor-split', 'editor-join']) {
       $(id).disabled = Boolean(blocked);
       if (blocked) $(id).setAttribute('reason', blocked); else $(id).removeAttribute('reason');
     }
@@ -185,6 +201,19 @@ export function createMapEditor({svg, map, view, changed, reason}) {
   $('editor-vertex').addEventListener('change', () => { selectedVertex = Number($('editor-vertex').value); sync(); });
   $('editor-delete').addEventListener('click', () => act(() => erase()));
   $('editor-delete-vertex').addEventListener('click', () => act(() => erase(true)));
+  $('editor-split').addEventListener('click', () => act(() => {
+    const row = current();
+    if (row?.kind !== 'road') throw new Error('분할할 도로를 고르세요');
+    const id = () => `e_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    const next = splitRoad(map(), row.id, selectedVertex, id(), id());
+    selectedVertex = 0; changed(next); message('도로와 새 분할점을 초안에 만들었습니다. 검토 후 저장하세요');
+  }));
+  $('editor-join').addEventListener('click', () => act(() => {
+    const row = current();
+    if (row?.kind !== 'road') throw new Error('먼저 시작 도로를 고르세요');
+    const next = joinRoads(map(), row.id, $('editor-join-target').value);
+    selectedVertex = 0; changed(next); message('선택한 두 도로를 연결했습니다. 중간 장소는 유지되며 연결 관계를 다시 검토하세요');
+  }));
   const listeners = [[svg, 'click', click, true], [svg, 'pointerdown', down], [svg, 'pointermove', move],
     [svg, 'pointerup', up], [svg, 'pointercancel', () => { drag = null; sync(); }], [document, 'keydown', key, true]];
   for (const [target, name, handler, capture] of listeners) target.addEventListener(name, handler, capture);

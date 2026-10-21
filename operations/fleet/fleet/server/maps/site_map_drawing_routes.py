@@ -6,7 +6,7 @@ import tempfile
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from core_common.protocol.site_drawing import DrawingTransform
+from core_common.protocol.site_drawing import DrawingTransform, RasterDrawingTransform
 from fleet.server.site_map_assets import drawing_error
 from fleet.server.site_map_projection import MAX_SOURCE_BYTES
 from fleet.server.site_map_store import SiteMapError
@@ -54,7 +54,12 @@ def install_site_map_drawing_routes(app, *, assets, read_guard, require_named_op
                         if size > MAX_SOURCE_BYTES:
                             raise drawing_error(413, 'LIMIT', 'STL source exceeds 16 MiB')
                         stream.write(chunk)
-            result = await converted(assets.put_stl, temporary)
+            media_type = request.headers.get('content-type', '').split(';')[0].strip().lower()
+            if media_type not in ('', 'application/octet-stream', 'image/png', 'image/jpeg'):
+                raise drawing_error(422, 'INVALID', 'unsupported drawing content type')
+            raster = media_type in ('image/png', 'image/jpeg')
+            result = (await converted(assets.put_raster, temporary, media_type.split('/')[1]) if raster else
+                      await converted(assets.put_stl, temporary))
             app.state.site_maps.record_event('drawing_uploaded', principal.principal_id,
                                               {'asset_sha256': result['asset_sha256'], 'result': 'stored'})
             return result
@@ -74,7 +79,7 @@ def install_site_map_drawing_routes(app, *, assets, read_guard, require_named_op
                 assets.slot.release()
 
     @app.post('/api/fleet/site-map/drawings/{asset_sha256}/projections', tags=['site-map'])
-    async def drawing_project(asset_sha256: str, transform: DrawingTransform,
+    async def drawing_project(asset_sha256: str, transform: DrawingTransform | RasterDrawingTransform,
                               principal=Depends(require_named_operator)):
         acquired = False
         try:
@@ -98,11 +103,24 @@ def install_site_map_drawing_routes(app, *, assets, read_guard, require_named_op
         except SiteMapError as exc:
             raise fail(exc) from exc
 
+    @app.get('/api/fleet/site-map/drawing-projections/{projection_sha256}/render', dependencies=read_guard,
+             tags=['site-map'])
+    def drawing_render(projection_sha256: str):
+        try:
+            return FileResponse(available().render(projection_sha256), media_type='image/png',
+                                headers={'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store'})
+        except SiteMapError as exc:
+            raise fail(exc) from exc
+
     @app.get('/api/fleet/site-map/drawings/{asset_sha256}/source', tags=['site-map'])
     def drawing_source(asset_sha256: str, principal=Depends(require_named_operator)):
         try:
             source = available().source(asset_sha256)
-            return FileResponse(source, media_type='application/octet-stream', filename=asset_sha256 + '.stl',
+            return FileResponse(source, media_type='application/octet-stream', filename=asset_sha256 + source.suffix,
                                 headers={'X-Content-Type-Options': 'nosniff'})
         except SiteMapError as exc:
             raise fail(exc) from exc
+
+    from fleet.server.site_map_extraction_routes import install_extraction_routes
+    install_extraction_routes(app, assets=assets, read_guard=read_guard, require_named_operator=require_named_operator,
+                              converted=converted, take_slot=take_slot, fail=fail)

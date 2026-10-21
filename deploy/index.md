@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 이미지 도면 worker의 명시적 런타임 의존성
 - 2026-10-20 · uncommitted · OMX 첫 관절 시운전의 출력·피드백 검사
 - 2026-10-20 · uncommitted · Fleet helper 변경의 후보 빌드 트리거 동기화
 - 2026-10-20 · uncommitted · Fleet 소스 이미지의 순수 평가 의존성 복구
 - 2026-10-20 · uncommitted · Account 상태를 되돌리는 DB 복원 거부
-- 2026-10-20 · uncommitted · Account 컨테이너 issuer DNS

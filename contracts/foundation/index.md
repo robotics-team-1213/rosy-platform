@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · Raster 등록·추출 요청과 선택 시설 근거 (D-835)
 - 2026-10-21 · uncommitted · STL 도면 좌표 등록 계약 (D-825)
 - 2026-10-20 · 3a1392d2e · Account HTTP 전송 불명 수정 원격 GREEN
 - 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 회귀와 공통 예외 정규화
 - 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
-- 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.264)

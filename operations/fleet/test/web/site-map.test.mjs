@@ -1,4 +1,14 @@
 import {test} from 'node:test';
+
+test('drawing and candidate failures explain the next action in operator language', async () => {
+  const {siteMapErrorText} = await import('../../../site_ui/console/shared/site-map-model.js');
+  for (const [status, code] of [[422, 'SITE_MAP_DRAWING_INVALID'], [413, 'SITE_MAP_DRAWING_LIMIT'],
+    [429, 'SITE_MAP_DRAWING_BUSY'], [404, 'SITE_MAP_DRAWING_NOT_FOUND']]) {
+    const message = siteMapErrorText({status, code, message: code});
+    assert.notEqual(message, code);
+    assert.match(message, /도면|후보|요청/);
+  }
+});
 import assert from 'node:assert/strict';
 import {
   arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,

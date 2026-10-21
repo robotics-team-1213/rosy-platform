@@ -7,7 +7,7 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 from __future__ import annotations
 
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
-
+from .site_drawing import RasterDrawingTransform, DrawingExtractionRequest, ExtractionSettings  # noqa: F401
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
     ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,

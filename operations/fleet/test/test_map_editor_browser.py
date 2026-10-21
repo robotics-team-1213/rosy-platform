@@ -49,6 +49,103 @@ def point(page, x, y):
     }''', [x, y])
 
 
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_raster_register_draw_and_reopen_with_token(editor_site):
+    from test_site_map_raster import image_bytes
+    page, store, robot = editor_site
+    page.locator('#drawing-file').set_input_files({'name': 'floor.png', 'mimeType': 'image/png',
+                                                  'buffer': image_bytes()})
+    expect(page.locator('#drawing-status')).to_contain_text('100 × 50')
+    page.locator('#drawing-axis-x').fill('100')
+    page.locator('#drawing-distance').fill('2')
+    page.locator('#drawing-description').fill('실측 2 m 평면 기준선')
+    page.locator('#drawing-register').click()
+    expect(page.locator('#drawing-status')).to_contain_text('맞춤 완료')
+    image = page.locator('#site-map-svg image[data-drawing]')
+    expect(image).to_have_count(1)
+    expect(image).to_have_attribute('href', re.compile('^blob:'))
+    page.locator('#editor-tools > summary').click()
+    page.locator('#editor-enabled').check()
+    page.locator('#editor-kind').select_option('park')
+    point(page, 300, 200)
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    assert len(store.draft_view()['map']['places']) == 1
+    page.reload()
+    page.locator('#map-source').select_option('draft')
+    expect(page.locator('#site-map-svg image[data-drawing]')).to_have_attribute('href', re.compile('^blob:'))
+
+
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_explicit_split_join_are_single_undoable_draft_changes(editor_site):
+    page, store, robot = editor_site
+    register(page)
+    page.locator('#editor-tools > summary').click()
+    page.locator('#editor-enabled').check()
+    page.locator('#editor-kind').select_option('park')
+    point(page, 300, 200)
+    point(page, 500, 200)
+    page.locator('#editor-kind').select_option('road')
+    page.locator('#editor-to').select_option(index=1)
+    for x, y in ((300, 200), (400, 250), (500, 200)):
+        point(page, x, y)
+    page.locator('#editor-finish').click()
+    first = page.locator('#site-map-svg [data-edge]').first.get_attribute('data-edge')
+    page.locator('#editor-kind').select_option('select')
+    page.locator('#editor-element').select_option('edges:' + first)
+    page.locator('#editor-vertex').select_option('1')
+    page.locator('#editor-split').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(2)
+    expect(page.locator('#site-map-svg [data-place]')).to_have_count(3)
+    page.locator('#editor-undo').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    page.locator('#editor-redo').click()
+    page.locator('#editor-element').select_option('edges:' + first)
+    page.locator('#editor-join-target').select_option(index=1)
+    page.locator('#editor-join').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(1)
+    page.locator('#editor-undo').click()
+    expect(page.locator('#site-map-svg [data-edge]')).to_have_count(2)
+
+
+@pytest.mark.parametrize('page_site', [False], indirect=True)
+def test_extract_edit_select_accept_undo_save_and_reopen(editor_site):
+    from test_site_map_extraction import diagram
+    page, store, robot = editor_site
+    page.locator('#drawing-file').set_input_files({'name': 'floor.png', 'mimeType': 'image/png', 'buffer': diagram()})
+    expect(page.locator('#drawing-status')).to_contain_text('160 × 120')
+    page.locator('#drawing-axis-x').fill('100')
+    page.locator('#drawing-distance').fill('1')
+    page.locator('#drawing-description').fill('실측 1 m 평면 기준선')
+    page.locator('#drawing-register').click()
+    expect(page.locator('#site-map-svg image[data-drawing]')).to_have_count(1)
+    page.locator('#extraction-tools > summary').click()
+    page.locator('#extract-run').click()
+    expect(page.locator('#extract-status')).to_contain_text('개 후보')
+    page.locator('#extract-candidate').select_option(index=1)
+    expect(page.locator('#site-map-svg .extraction-preview')).to_have_count(1)
+    page.locator('#extract-geometry').fill('20,29\n130,29')
+    page.locator('#extract-preview').click()
+    page.locator('#extract-kind').select_option('stop_line')
+    page.locator('#extract-name').fill('검토한 정지선')
+    page.locator('#extract-accept').click()
+    expect(page.locator('#extract-status')).to_contain_text('초안에 반영')
+    expect(page.locator('#site-map-svg [data-facility]')).to_have_count(1)
+    page.locator('#editor-tools > summary').click()
+    page.locator('#editor-undo').click()
+    expect(page.locator('#site-map-svg [data-facility]')).to_have_count(0)
+    page.locator('#editor-redo').click()
+    page.locator('#save-draft').click()
+    expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
+    saved = store.draft_view()['map']
+    assert saved['facilities'][0]['geometry'][0] == pytest.approx([.2, -.29])
+    assert saved['facilities'][0]['evidence']['note'].startswith('extraction:')
+    assert saved['survey']['reviewed'] is False
+    page.reload()
+    page.locator('#map-source').select_option('draft')
+    expect(page.locator('#site-map-svg [data-facility]')).to_have_count(1)
+
+
 @pytest.mark.parametrize('width', [1366, 320])
 @pytest.mark.parametrize('page_site', [False], indirect=True)
 def test_import_register_edit_save_reopen(editor_site, width, tmp_path):
@@ -155,7 +252,7 @@ def test_import_failure_and_unsaved_navigation_preserve_draft(editor_site):
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
     before = store.draft_view()
     page.locator('#drawing-file').set_input_files({'name': 'bad.stl', 'mimeType': 'application/octet-stream', 'buffer': b'<svg onload=alert(1)>'})
-    expect(page.locator('#drawing-status')).to_contain_text('INVALID')
+    expect(page.locator('#drawing-status')).to_contain_text('도면·좌표·후보 도형을 확인하세요')
     assert store.draft_view() == before
     expect(page.locator('#site-map-svg [data-drawing]')).to_have_count(1)
     expect(page.locator('#drawing-register')).to_be_disabled()
