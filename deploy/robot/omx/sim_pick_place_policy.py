@@ -277,6 +277,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             import traceback
             receipt['error_stack']=[dict(file=Path(frame.filename).name,line=frame.lineno,function=frame.name)
                 for frame in traceback.extract_tb(failed_traceback,limit=12)]
+        if session and session._runtime_binding is not None:
+            receipt['admission_rejection']=session._runtime_binding.admission_rejection
         receipt.update(wall_s=time.monotonic()-started,worker_errors=worker_errors,
             owner_final=arm.owner.state,camera_accepted=camera.accepted,camera_rejected=camera.rejected,
             camera_error=camera.error,policy_steps=len(steps),native_events=len(events))

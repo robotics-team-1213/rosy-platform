@@ -44,6 +44,8 @@ def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback,
         assert rejection['positions']['joint_1']==readback
         assert rejection['max_step_rad']==pytest.approx(abs(target-readback))
         assert rejection['command_id']
+        assert session._runtime_binding.check_command(object()) is False
+        assert session._runtime_binding.admission_rejection is rejection
     assert checked and checked[-1] is accepted
     assert len(client.commands) == int(accepted)
 
