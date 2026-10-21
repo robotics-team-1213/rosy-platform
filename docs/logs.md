@@ -9952,3 +9952,10 @@ osy-d395-s1d\`.
 - 변경: 실제 물체 시연·원본 SIM 증거·모델 PC export/readback 지표와 반복 수집 실패를 별도 validation 기록으로 남겼다. 25 시연·checkpoint·독립 정책 평가 목표는 미달성으로 보존했다.
 - 증거: 원본 검증 시연 1개, 실제 영상 2650/2650장 readback·exit0. 소비자/원장/harness 174 passed/NEW0, 재생 제어 흐름 2 passed. 실제 ROS에서 depth 5의 과거 샘플 소실을 재현했고 최신 depth 수정 GREEN은 양쪽 시험 PC의 SSH 접속 불가로 미실행이다.
 - gate 변화: 시연 정답 편입 범위만 실제 확인했다. 반복 수집·학습·정책 실행 binding·20회 평가·최신 원격 검증·병합은 완료하지 않았다.
+
+## 2026-10-21 · uncommitted · OMX 구간 검수 저장·사용 흐름
+
+- 변경: 원본 프레임·구간 선택 → 사람 결과 → 저장·JSON 순서로 재배치하고 공용 조작 부품을 적용했다. 제출 snapshot과 현재 편집을 구분해 늦은 저장·조회 응답, 버전 충돌, 미저장 새로고침에서 입력 유실을 막는다. D-833 부록과 OMX 안내를 갱신했다.
+- 증거: `bd9df32739` 저장·조회 경합과 실제 409 충돌 GREEN 3 passed/NEW 0; `634000231b` 원격 화면/API 3 passed. `a24e421a09` 실제 Edge 두 테마·세 viewport에서 48px 조작 영역, 모바일 원본 위치 1907→394px, 키보드·미저장 이탈 보호를 확인했다. 실제 LeRobot 10프레임 내보내기·이미지/state/action/int64 시계 readback·원본 bytes 불변은 [검증 기록](validation/omx-grasp-ux-2026-10-21/result.md)에 있다.
+- gate 변화: UI·원본 계보 검증 범위다. 에이전트가 입력한 합성 구간은 사람 정답·실물 파지 성공·모델 품질·데이터 절감 수용이 아니다. 원격 push·배포·정책 활성화는 하지 않았다.
+- 후속 증거: 공용 버튼 종류 명시 검사에서 발견한 factory를 `4907175f24`로 수정했다. 공용 규칙·OMX 브라우저/API 34 passed와 실제 Edge 전체 흐름·10프레임 readback 재확인 exit 0. 첫 착지는 검사 중 HEAD 변경으로 중단됐으며, 그 재실행의 LOAD-FLAKY 표시는 소스 수정 결과여서 flaky 수용으로 사용하지 않는다.
