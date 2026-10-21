@@ -7,12 +7,41 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/38회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/18회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/39회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/19회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
-최신 동일 checkpoint의 두 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
+최신 동일 checkpoint의 세 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
 
-최신 `ad91d17aa658`은 관절 관측500ms 신선도 감시에서 HOLD했다. 237개 명령 중
+## Pending native intake
+
+최신 `c72c82c2bca8`은245개 명령 모두 terminal4/code0 뒤 관절 관측 신선도 초과로
+HOLD했다. Actor365.546초/root427.896초, cleanup true다. 최대 lift101.859mm,
+마지막 XY20.854mm/Z91.848mm는 미완료 관측이며 놓기·해제·안정 유지 성공은 없다.
+Policy-result SHA256: `eddbc32c437b0a25472881d9d8136a36a101906c57e4258b9c765a53a1f64e4f`.
+Runtime revision: `ce04e5de98d629fd8cf5f3e40e6f787a81b4349d`.
+Policy revision: `1e8c8e20dffd82b106169f7e687250b322ad48edf8984d6bcb690d033ef02723`.
+
+이번 진단은 실패 guard 시작 전에 도착한 native intake를 기록했다. Session이 사용한
+sequence29708의 source age는448.228ms에서511.068ms로 늘었지만, 이미 도착한
+유효 최신29709의 age는88.120ms에서150.960ms였다. 원본 intake는accepted true이고
+callback 진입도 guard 시작 전이다. 이는 session 전달을 기다리는 실제 관측이 있었음을
+뒷받침하며, 실패 후에만 도착한 값으로 원인을 추정한 결과가 아니다.
+
+수정은 private SIM binding의 session RLock 안에서 기존 binding/HOLD 검사를 먼저
+하고, 더 최신인 원본 snapshot을 기존 `session.observe()`에 전달한다. Owner의
+sequence·시각·관절·calibration·limit 검사와 history 기록을 재사용한다. 원본 receipt를
+갱신하거나 owner 상태를 직접 쓰지 않는다. 전용 mutually-exclusive native callback의
+뒤늦은 전달은 수용한 원본 객체와 일회용 token이 모두 일치할 때만 한 번 생략한다.
+Token 소비 뒤 같은 객체나 같은 값의 복사본을 다시 주면 기존 replay 거절을 유지한다.
+
+독립 계약 검토 lane `current_lane_final_review`는 실제19줄 생산 diff의 잠금 순서,
+원본 시각·객체, 일회용 replay 경계와 기존 최종 authority/0.04rad 검사를 확인하고
+소스 계약을 승인했다. 이는 원격 시험 통과나 실제 과제 성공을 뜻하지 않는다.
+회귀는 잠금 대기 중인 실제 runtime callback의 전달, attach 경쟁, replay, stale/future/
+calibration·만료 lease·기존 HOLD·binding 교체 거절을 검증한다. 실제 수정 효과와 새
+정식20회 수용은 아직 입증되지 않았다.
+
+직전 `ad91d17aa658`은 관절 관측500ms 신선도 감시에서 HOLD했다. 237개 명령 중
 236개는 terminal4/code0, 마지막1개는 취소 terminal5/code0다. Actor395.861초/
 root460.594초다. 최대 lift100.403mm와 마지막 XY30.916mm/Z90.403mm는
 미완료 관측이다. SIM 부착 보조 attach는 있었지만 놓기·해제·안정 유지는 입증하지 못했다.

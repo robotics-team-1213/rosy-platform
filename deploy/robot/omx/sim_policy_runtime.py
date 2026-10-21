@@ -9,7 +9,26 @@ from rosy.execution.local.policy_runtime import PolicyRuntimeBinding
 class SimPolicyRuntimeBinding(PolicyRuntimeBinding):
     def __init__(self,*args,**kwargs):
         self.admission_rejection=None
+        self._coalesced_snapshot=None
         super().__init__(*args,**kwargs)
+
+    def guard(self):
+        with self.session._lock:
+            super().guard()
+            self.session._check_hold()
+            latest=self.runtime.latest_joint_state
+            # The exclusive native state callback may wait here after valid intake.
+            if latest is not None and latest.sequence>self.session._snapshot.sequence:
+                self.session.observe(latest)
+                self._coalesced_snapshot=latest
+
+    def observe(self,snapshot):
+        with self.session._lock:
+            self.guard()
+            if snapshot is self._coalesced_snapshot and snapshot is self.session._snapshot:
+                self._coalesced_snapshot=None
+                return
+            self.session.observe(snapshot)
 
     def _rejected(self,reason,command,current=None):
         # Latch the original failed comparison in memory; the actor flushes it after HOLD.
