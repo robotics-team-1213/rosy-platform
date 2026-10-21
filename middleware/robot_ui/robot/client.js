@@ -2,6 +2,7 @@
 
 import { elements, tagStatus } from "./dom.js";
 import { classifyOperation } from "./camera-capture.js";
+import { createAccountSession } from "/common/account-session.js";
 
 // D-193 6 storage rule. A token without an expiry (card, manual) lives only in
 // sessionStorage. A paired token may go to localStorage, and only when the
@@ -70,50 +71,24 @@ export const authHeaders = () => ({
   ...(session.token ? {Authorization: `Bearer ${session.token}`} : {}),
 });
 
-let accountRead = 0;
-function publishProfile(value) {
-  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rosy:account-profile', {detail:value}));
-}
-
-export async function restoreAccount() {
-  const read = ++accountRead;
-  const previous = session.account?.authenticated ? session.authKey : '';
-  try {
-    const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-    if (!response.ok) { if (read === accountRead) publishProfile(null); return session.account; }
-    const result = await response.json();
-    if (read !== accountRead) return session.account;
-    session.account = result;
-    publishProfile(session.account);
-    if (session.account?.authenticated) {
+const account = createAccountSession({
+  current: () => session.account,
+  apply: value => {
+    session.account = value;
+    if (value?.authenticated) {
       session.token = '';
       storageRemove(sessionStorage, SESSION_KEY);
       storageRemove(localStorage, PAIRED_KEY);
-      announceAccount(session.authKey);
     }
-    if (previous && previous !== session.authKey) {
-      announceAccount(session.authKey);
-      document.body.hidden = true;
-      window.location.reload();
-    }
-  } catch { if (read === accountRead) publishProfile(null); /* A failed probe never opens the development login path. */ }
-  return session.account;
-}
-
-function announceAccount(key) {
-  try { localStorage.setItem('rosy.account.identity', key); } catch {}
-}
-if (typeof window !== 'undefined') window.addEventListener('storage', event => {
-  if (event.key === 'rosy.account.identity' && session.account?.authenticated && event.newValue !== session.authKey) {
+  },
+  changed: () => {
     forgetToken();
     window.dispatchEvent(new Event('rosy:account-changed'));
     document.body.hidden = true;
     window.location.reload();
-  }
+  },
 });
-if (typeof window !== 'undefined') window.setInterval(() => {
-  if (session.account?.enabled) restoreAccount();
-}, 10000);
+export const restoreAccount = account.restore;
 
 export function setConnection(kind, label) {
   const badge = elements["connection-badge"];
@@ -128,9 +103,8 @@ export function setConnection(kind, label) {
 
 /** Keep `token` for this browser. `persist` applies only to a token that expires within 7 days. */
 export function rememberToken(token, { expiresAt = null, persist = false } = {}) {
-  accountRead++;
+  account.invalidate();
   session.account = null;
-  publishProfile(null);
   session.token = token;
   const left = expiresAt ? Date.parse(expiresAt) - Date.now() : NaN;
   if (persist && left > 0 && left <= REMEMBER_MAX_MS) {
@@ -148,9 +122,8 @@ export function rememberToken(token, { expiresAt = null, persist = false } = {})
 
 export function forgetToken() {
   session.token = "";
-  accountRead++;
+  account.invalidate();
   session.account = null;
-  publishProfile(null);
   session.identity = null;
   session.role = "";
   storageRemove(sessionStorage, SESSION_KEY);
@@ -297,10 +270,7 @@ function devFailure(status, _body, retryAfter) {
 export async function logout({ signal } = {}) {
   let deleted = false;
   if (session.account?.authenticated) {
-    const response = await fetch('/api/account/logout', {method:'POST', signal});
-    forgetToken();
-    announceAccount('');
-    if (!response.ok) throw new Error('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.');
+    await account.logout(forgetToken, {signal});
     return true;
   }
   if (session.token) {

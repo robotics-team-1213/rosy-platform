@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as client from '../client.js';
+import {register} from 'node:module';
+
+// Node cannot resolve the browser's absolute /common/ imports; map them to shared/web.
+const shared = new URL('../../../../shared/web/', import.meta.url).href;
+register('data:text/javascript,' + encodeURIComponent(`export async function resolve(specifier, context, next) {
+  return next(specifier.startsWith('/common/') ? new URL(specifier.slice(8), ${JSON.stringify(shared)}).href : specifier, context);
+}`));
+const client = await import('../client.js');
 
 test('Account session restores without putting credentials into browser storage', async () => {
   const values = new Map();

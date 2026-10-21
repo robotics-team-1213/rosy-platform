@@ -837,3 +837,9 @@
 - 변경: 사유가 붙은 비활성 단추는 아이콘·이름을 한 줄에 두고 사유만 아래 줄로 내린다(전에는 통째로 세로로 쌓여 사유를 숨긴 자리에서도 이웃 단추와 얼굴이 달랐다). 파일 선택 단추에 조용한 단추 얼굴을, 표면이 칠하지 않은 링크에 기본 잉크를 준다(Robot 콘솔의 Pilot 링크가 브라우저 파랑이었다). 줄 수는 크기 행(942) 그대로다.
 - 증거: 시험 PC 캡처(학습 8화면·Robot 3표면, 두 테마). 원격 pytest는 착지에서 기록한다.
 - gate 변화: 없음.
+
+## 2026-10-22 · uncommitted · Account 브라우저 세션을 공통 모듈 하나로
+
+- 변경: Robot·Pilot·Games가 각자 복사해 쓰던 Account 세션 확인(순번으로 늦은 응답 버리기, 프로필 발행, 같은 origin 탭 신원 표시 `rosy.account.identity`, 10초 확인, 로그아웃)을 `account-session.js` 하나로 모았다. 앱은 자기 상태를 `current`/`apply`/`changed` 훅으로 넘기며 `restoreAccount` 등 기존 export는 그대로다. Games는 첫 확인 실패 뒤에도 계속 확인하도록 자체 주기를 유지한다. 서버 쪽 `/api/account/session` 본문은 `AccountClient.browser_session` 하나가 만들고 CORE와 Games가 쓴다(Games는 `can_operate`만 더함). 공유 자산 목록·CMake·Pilot 오프라인 캐시에 등록했다.
+- 증거: `test/transport/account-session.test.mjs`(늦은 응답, 신원 변경, 확인 실패, 회수 대기 로그아웃). 원격 pytest는 착지 기록에 남긴다.
+- gate 변화: 없음. Robot·Pilot 화면은 기기 배포본으로 확인해야 한다.
