@@ -127,6 +127,16 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 expect(link).to_contain_text('Updated Alice', timeout=15000)
                 old_cookie = next(item['value'] for item in page.context.cookies()
                                   if item['name'].startswith('rosy_learning_session_'))
+                page.route('**/api/accounts/session', lambda route: route.fulfill(status=403,
+                    content_type='application/json', body='{"error":"Project view permission required"}'))
+                page.goto(origin + '/accounts')
+                expect(page.locator('#account-status')).to_have_attribute('state', 'forbidden')
+                expect(page.locator('#account-login')).to_be_visible()
+                assert page.url == origin + '/accounts'
+                assert page.locator('[data-state-missing]').count() == 0
+                page.unroute('**/api/accounts/session')
+                page.goto(origin + '/accounts')
+                expect(link).to_contain_text('Updated Alice')
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
                 page.locator('#logout').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')
