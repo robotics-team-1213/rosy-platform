@@ -5,7 +5,6 @@ from hashlib import sha256
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_auth import SitePrincipal, build_authorize, build_role_guards
 from test_policy_governance import client as policy_client
@@ -118,27 +117,22 @@ def test_named_operator_rejects_a_pending_legacy_camera_request(tmp_path):
 
 
 def test_named_operator_deletes_a_start_point_with_its_current_revision(tmp_path):
-    from fleet.server.sightings import SightingService
-    from fleet.server.task_service import FleetTaskService
-    from fleet.server.task_store import FleetTaskStore
-    from test_start_points import body, service
+    from test_overhead_tracking_api import APPROVAL, OPERATOR_TOKEN, VIEWER_TOKEN, _auth, _client
 
-    _, tracking = service(tmp_path)
-    users = {sha256(token.encode()).hexdigest(): {"principal_id": token, "role": role}
-             for token, role in (("read", "viewer"), ("write", "operator"))}
-    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=())
-    sightings = SightingService(tracking.sources, known_robot_ids=())
-    app = create_app(FleetConsole([], []), sightings=sightings, tracking=tracking, site_users=users,
-                     task_service=tasks, start_task_dispatcher=False)
-    with TestClient(app) as client:
-        path = "/api/fleet/start-points/north"
-        auth = {"Authorization": "Bearer write"}
-        saved = client.put(path, headers=auth, json=body(tracking))
+    with _client(tmp_path, calibration_path=tmp_path / "cal.sqlite3") as client:
+        auth = _auth(OPERATOR_TOKEN)
+        approved = client.post("/api/fleet/calibrations", headers=auth, json=APPROVAL)
+        assert approved.status_code == 200, approved.text
+        path = "/api/fleet/start-points/ceiling_north"
+        saved = client.put(path, headers=auth, json={
+            "map_id": "map_v2_fleet", "calibration_revision": approved.json()["calibration_revision"],
+            "expected_revision": None, "x": 1.0, "y": 0.5, "yaw": 0.0,
+        })
         assert saved.status_code == 200, saved.text
         query = {"expected_revision": saved.json()["revision"]}
-        assert client.delete(path, headers={"Authorization": "Bearer read"}, params=query).status_code == 403
+        assert client.delete(path, headers=_auth(VIEWER_TOKEN), params=query).status_code == 403
         assert client.delete(path, headers=auth, params={"expected_revision": "old"}).status_code == 409
         response = client.delete(path, headers=auth, params=query)
         assert response.status_code == 200, response.text
-        assert response.json() == {"deleted": True, "source_id": "north"}
+        assert response.json() == {"deleted": True, "source_id": "ceiling_north"}
         assert client.get("/api/fleet/start-points", headers=auth).json()["start_points"] == []
