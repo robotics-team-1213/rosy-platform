@@ -16,6 +16,76 @@ _spec.loader.exec_module(_viewer)
 ObservationStore, make_server = _viewer.ObservationStore, _viewer.make_server
 
 
+def test_dual_arm_samples_keep_identical_joint_names_and_freshness_separate():
+    store = ObservationStore(arms={"arm_a": "/omx_commissioning/arm_a/joint_states",
+                                   "arm_b": "/omx_commissioning/arm_b/joint_states"})
+    assert store.put("arm:arm_a", 100, {"joint1": 0.25}, received=10)
+    assert store.put("arm:arm_b", 100, {"joint1": 0.75}, received=10)
+    assert not store.put("arm:arm_b", 99, {"joint1": 9}, received=11.9)
+    store.put("arm:arm_a", 102, {"joint1": 0.5}, received=12)
+    state = store.snapshot(now=12.1, wall=102.1)
+    assert state["arms"]["arm_a"]["fresh"]
+    assert state["arms"]["arm_a"]["values"] == {"joint1": 0.5}
+    assert state["arms"]["arm_a"]["sequence"] == 2
+    assert not state["arms"]["arm_b"]["fresh"]
+    assert state["arms"]["arm_b"]["values"] is None
+    assert state["arms"]["arm_b"]["sequence"] == 1
+    assert state["joint_topic"] is None
+    assert not state["joints"]["fresh"]
+
+
+@pytest.mark.parametrize("entries", [
+    ["arm_a=/omx_commissioning/arm_a/joint_states", "arm_a=/omx_commissioning/arm_b/joint_states"],
+    ["arm_a=/omx_commissioning/arm_a/joint_states", "arm_b=/omx_commissioning/arm_a/joint_states"],
+    ["arm_a=/joint_states"], ["arm_a=/omx/arm_a/joint_states"],
+    ["arm_a=/omx_commissioning/arm_a/command"], ["bad<label=/omx_commissioning/arm_a/joint_states"],
+])
+def test_dual_arm_configuration_rejects_ambiguous_or_noncommissioning_sources(entries):
+    with pytest.raises(ValueError):
+        _viewer.parse_arm_topics(entries)
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="opt-in real Chromium")
+def test_dual_arm_browser_expires_one_arm_while_the_other_keeps_updating():
+    from playwright.sync_api import expect, sync_playwright
+    store = ObservationStore(arms={"arm_a": "/omx_commissioning/arm_a/joint_states",
+                                   "arm_b": "/omx_commissioning/arm_b/joint_states"})
+    stop = threading.Event()
+    def feed():
+        while not stop.is_set():
+            store.put("arm:arm_a", time.time(), {"joint1": 0.25})
+            stop.wait(0.1)
+    producer = threading.Thread(target=feed)
+    producer.start()
+    store.put("arm:arm_b", time.time(), {"joint1": 0.75})
+    server = make_server(store, port=0)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            expect(page.locator("#arm-arm_a")).to_contain_text("0.25")
+            expect(page.locator("#arm-arm_b")).to_contain_text("0.75")
+            expect(page.locator("#arm-arm_b")).to_contain_text("피드백 없음", timeout=3000)
+            expect(page.locator("#arm-arm_a")).to_contain_text("0.25")
+            page.route("**/state.json", lambda route: None)
+            expect(page.locator("#arm-arm_a")).to_contain_text("피드백 없음", timeout=2400)
+            page.unroute_all(behavior="ignoreErrors")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert not errors
+            browser.close()
+    finally:
+        stop.set()
+        producer.join()
+        server.shutdown()
+        server.server_close()
+        worker.join()
+
+
 def test_repeated_source_stamp_does_not_refresh_picture():
     store = ObservationStore()
     store.put("top", 100.0, b"jpeg", received=10.0)
