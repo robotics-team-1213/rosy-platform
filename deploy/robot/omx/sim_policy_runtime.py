@@ -1,4 +1,6 @@
 """SIM-only additional step fence over the existing serialized policy admission."""
+import threading
+
 from rosy.execution.local.policy_runtime import PolicyRuntimeBinding
 
 
@@ -53,3 +55,29 @@ def bind_sim_runtime(session, runtime):
         if session._runtime_binding is not None:
             raise ValueError('runtime already bound')
         session._runtime_binding = SimPolicyRuntimeBinding(session, runtime)
+
+
+def trace_sim_admission(session,journal,runtime):
+    """Measure unchanged SIM calls in memory; the stopped actor writes the trace."""
+    records=[]
+    binding=session._runtime_binding
+    def measured(stage,call):
+        def invoke(*args,**kwargs):
+            command_id=next((arg.command_id for arg in args if hasattr(arg,'command_id')),None)
+            if stage=='journal_read' and args:command_id=args[0]
+            if command_id is None:
+                command_id=getattr(getattr(binding._local,'command',None),'command_id',None)
+            started=int(runtime.monotonic()*1e9);outcome='raised'
+            try:
+                value=call(*args,**kwargs);outcome='returned'
+                return value
+            finally:
+                records.append(dict(stage=stage,command_id=command_id,thread_id=threading.get_ident(),
+                    started_owner_ns=started,ended_owner_ns=int(runtime.monotonic()*1e9),outcome=outcome))
+        return invoke
+    for stage,target,name in [('session_submit',session,'submit'),('guard',session,'_guard'),
+            ('journal_prepare',journal,'prepare'),('journal_observe',journal,'observe'),
+            ('journal_read',journal,'read'),('native_send',runtime.action_port,'send_goal'),
+            ('native_submit',binding,'submit'),('post_submission',binding,'check_after_submission')]:
+        setattr(target,name,measured(stage,getattr(target,name)))
+    return records

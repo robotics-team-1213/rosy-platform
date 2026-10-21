@@ -41,7 +41,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from sim_policy_install import prepare_install, WORLD
     from sim_policy_camera import SimPolicyCamera
     from sim_policy_inference import infer_for_owner
-    from sim_policy_runtime import bind_sim_runtime
+    from sim_policy_runtime import bind_sim_runtime, trace_sim_admission
     from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
     from sim_pick_place_task import judge_episode
     from sim_study_authority import NativeSimStudyAuthority
@@ -82,6 +82,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     spinner=threading.Thread(target=executor.spin,daemon=True);spinner.start()
     observer,aid=ObserverClient(observer_path),SimAid()
     samples,steps,transitions,worker_errors=[],[],[],[]
+    admission_timings=[]
     stop=threading.Event()
     authority=fence=session=None
     failed_traceback=None
@@ -168,6 +169,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         if session._runtime_binding.source_revision!=prepared_source:
             raise PermissionError('prepared source changed during runtime binding')
         receipt['runtime_bind_ms']=(time.monotonic()-bind_started)*1000
+        admission_timings=trace_sim_admission(session,journal,arm)
         renew=threading.Thread(target=renew_worker,daemon=True);renew.start();threads.append(renew)
         sampler=threading.Thread(target=observe_worker,daemon=True);sampler.start();threads.append(sampler)
         while not samples:require_live();time.sleep(.01)
@@ -291,7 +293,10 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         write_json(directory/'policy-camera-captures.json',camera.captures)
         write_json(directory/'observations.json',samples)
         write_json(directory/'policy-result.json',receipt)
-        camera.destroy();executor.shutdown();arm.destroy();node.destroy_node();rclpy.shutdown()
+        try:
+            camera.destroy();executor.shutdown();arm.destroy();node.destroy_node();rclpy.shutdown()
+        finally:
+            write_json(directory/'policy-admission-timings.json',admission_timings)
     return 0 if receipt['success'] else 1
 
 
