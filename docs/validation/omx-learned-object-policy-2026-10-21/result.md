@@ -75,8 +75,8 @@ weights·정규화·10k loss 이력을 먼저 대조해 독립 스냅샷으로 �
 Affected log SHA256: `cfe295cb7d26043f41862259573d9af122d35134d351f327d07af46aa97c07b5`.
 Architecture log SHA256: `cc70d81a6038daf3117bd8b7091845a9c485d3e8c09c90d09b8e2ca5c8c9d20f`.
 Land record SHA256: `b990f6114e42a855f4fc68cef89325de27fb1f2d9f6931c89833318843c0e262`.
-새 실제 학습 study는 `fixed-object-6cdde72b23679868`이며 현재 source revision은
-`f509adfba840e2f2a48a128c1d71b300b4032bf7`로 고정했다. 실제25개/66,080프레임의
+새 실제 학습 study는 `fixed-object-6cdde72b23679868`이다.
+Training source revision: `f509adfba840e2f2a48a128c1d71b300b4032bf7`. 실제25개/66,080프레임의
 curation과20/5분할을 재확인했다. 부모 weights는 별도 읽기전용0400 스냅샷이며
 기존10k loss 이력을 보존했다. 모델 내부 reader 검증과 추가10k 완료는 구분한다.
 학습·추론·SIM 호출 주요6파일은 학습 source와 착지 source에서 byte-identical임을
