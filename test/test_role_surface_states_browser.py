@@ -23,6 +23,9 @@ def _module_page(playwright, modules: dict[str, Path], width: int = 390):
     geometry = ROOT / "shared" / "web" / "live-dialog-geometry.js"
     page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=geometry.read_text(encoding="utf-8")))
+    wiring = ROOT / "shared" / "web" / "ui-wiring.js"
+    page.route("http://rosy.test/common/ui-wiring.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=wiring.read_text(encoding="utf-8")))
     page.route(
         "http://rosy.test/panel-test",
         lambda route: route.fulfill(
