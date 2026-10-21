@@ -9502,8 +9502,32 @@ osy-d395-s1d\`.
 - 증거: 메뉴 변경은 커밋 후 공식 원격 공유 웹 계약과 명시 브라우저로 확인한다. 선행 UI commit ed283f5e3fe6은 API·브라우저 18 passed와 pre-push 기본 519 passed / 관련 2336 passed, 273 skipped를 확인했다.
 - gate 변화: 없음. 탐색 연결이며 로봇 동작이나 정책 활성화 권한은 추가하지 않는다.
 
+## 2026-10-21 · uncommitted · Fleet 작업 셀 관측 계약과 통합 순서 (D-837)
+
+- Change: specify Fleet-native read-only source intake, latest arm cache, existing Vision previews and existing Cell panels. Explicit persistent torque-OFF reader/handoff avoids treating a bounded SSH diagnostic as product integration.
+- Evidence: contract review corrected Vision source length, pre-merge ID/credential collisions and cross-epoch capture advancement/replay limits. Protocol implementation checks follow committed RED tests; product integration and protected deployment remain pending.
+- Gate: unchanged. This records an implementation decision and wire boundary, not a running integrated ROSY UI or admitted motion.
+
 ## 2026-10-22 · uncommitted · 픽셀 원본 사진 우선 배치
 
 - 변경: 사진 위의 AI 실행·참고 패널을 사진 뒤로 옮기고 미검수 수와 편집 도구를 가까이 배치했다. 다섯 화면 탐색과 명시 클래스 선택을 기존 브라우저 시험에 반영했다.
 - 증거: [첫 화면 재검증](validation/pixel-first-view-2026-10-22.md). 기준선의 사진 표시 2건을 재현하고 원격 관련 8건 및 보이는 Edge의 두 테마·네 크기 8개 화면을 확인했다. 전체 회귀·최종 커밋 검사와 공개 CI 결과는 게시 기록에 남긴다.
 - gate 변화: 없음. 검수 화면 배치이며 실제 정책·팔 동작 수용은 별도다.
+
+## 2026-10-22 · uncommitted · Fleet PC 작업 셀 관측의 기존 Cell 연결
+
+- Change: integrate native read-only observers, Fleet intake, preview-only Vision sources and existing Cell panels as one deployable change. The independently reviewed contract is published in PR 146; the integrated publication includes its dependent implementation and signed configuration together.
+- Evidence: [source, transport and deployment evidence](validation/omx-workcell-observation-2026-10-22.md). Actual verified HTTPS/WSS test 7c967f44ec passes native arm POST, authenticated viewer GET, camera ingestion, preview lease and Vision frame retrieval. Inputs are synthetic; physical deployment is pending.
+- Gate: unchanged. Fleet-PC services, protected configuration and signed candidate activation remain separate from source publication; no physical motion or grasp acceptance is claimed.
+
+## 2026-10-22 · uncommitted · 설치 자산 폐쇄 검사 갱신
+
+- Change: include the Cell observation module in the existing wheel/sdist asset count and explicit resource assertions; packaging and production behavior are unchanged.
+- Evidence: `6216f4f4e5` passed 519 fast, 10,806 common/CORE, 6,139 Fleet and 5,957 remaining checks, with two installed asset-count failures. `9b2532a17f` passed all four focused installation checks, including both delivery variants. Final publication checks remain required.
+- Gate: unchanged. Existing signing configuration was located; no new key was generated and no candidate was activated.
+
+## 2026-10-22 · uncommitted · 실제 전송 시험의 연결 복구 경로 검증
+
+- Change: exercise the deployed native worker and continuously refreshed camera captures after an injected first-upgrade stall, preserving TLS verification and the two-second production deadline. Production code is unchanged.
+- Evidence: `5441d27c73` failed one WSS upgrade in the broad run; its original cause remains unproven. `82e9a617d4` deterministically reproduced that timeout; `feaf710e26` passed 23 focused bridge, transport and pairing checks, proving recovery with a newer capture and clean worker shutdown.
+- Gate: unchanged. The combined final revision still requires publication checks; persistent physical operation is not established.

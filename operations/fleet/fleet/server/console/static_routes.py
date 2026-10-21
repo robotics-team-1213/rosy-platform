@@ -27,6 +27,7 @@ CONSOLE_ASSETS = {
     "console-goal.js": ("shared/console-goal.js", "application/javascript"),
     "console-refresh.js": ("shared/console-refresh.js", "application/javascript"),
     "cell.js": ("cell/cell.js", "application/javascript"),
+    "cell-observation.js": ("cell/cell-observation.js", "application/javascript"),
     "cell-document-editor.js": ("cell/cell-document-editor.js", "application/javascript"),
     "cell.css": ("cell/cell.css", "text/css"),
     "doc-tabs.css": ("shared/doc-tabs.css", "text/css"),

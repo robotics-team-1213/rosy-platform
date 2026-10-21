@@ -7,6 +7,7 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 from __future__ import annotations
 
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
+from .workcell_observations import ArmObservation, WorkcellObservationManifest  # noqa: F401 (D-837)
 from .site_drawing import RasterDrawingTransform, DrawingExtractionRequest, ExtractionSettings  # noqa: F401
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
@@ -36,7 +37,8 @@ from core_common.protocol.power import (  # noqa: F401 (PWR-001~005, D-440)
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
-from core_common.protocol.work import FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait  # noqa: F401
+from core_common.protocol.work import (  # noqa: F401
+    FleetTaskStatus, FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait)
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
@@ -109,21 +111,6 @@ class AckStatus(str, enum.Enum):
     STARTED = "STARTED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
-
-
-class FleetTaskStatus(str, enum.Enum):
-    """Site Fleet task lifecycle; separate from a robot command ACK."""
-
-    REQUESTED = "REQUESTED"
-    QUEUED = "QUEUED"
-    ACCEPTED = "ACCEPTED"
-    RUNNING = "RUNNING"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-    UNKNOWN = "UNKNOWN"
-    HOLD = "HOLD"
-    CANCELED = "CANCELED"
-    EXPIRED = "EXPIRED"
 
 
 class DeviceActionState(str, enum.Enum):

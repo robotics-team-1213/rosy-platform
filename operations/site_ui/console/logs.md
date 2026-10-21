@@ -384,3 +384,9 @@
 - 변경: 인증된 이미지 배경·픽셀 실측 등록, 화면 거리의 명시적 끝점 붙이기·분할·연결과 단일 undo 이력을 추가했다. 추출 후보는 수정·용도 지정·서버 도형 검증 후 초안에만 반영하며 원본/계정 epoch/초안/요청 세대가 달라지면 거절한다.
 - 증거: 7ae0f2e05a 원격 transport·브라우저·Node·설치17통과, fdf4c60827 topology/browser/설치15통과, 93f8408f19 후보 선택·수정·반영·undo·저장·재접속 포함43통과. 모두 실제 Chromium opt-in 및 skip0/NEW0다.
 - gate 변화: 없음. 일반 추출이며 AI 모델·현장 자료 정확도·로봇 이동을 검증한 것은 아니다.
+
+## 2026-10-22 · uncommitted · 기존 Cell의 두 팔·세 카메라 관측 패널 (D-837)
+
+- Change: Cell uses the existing authenticated Fleet client and Vision frame leases to display registered joint feedback and camera previews. Per-source age, failures, logout, token replacement and late responses have independent cleanup; observation adds no motion controls.
+- Evidence: 0615263626 remote browser-scope and real Chromium checks: 11 passed, including one-source expiry, total outage and late authenticated responses. HTTP and JPEG fixtures stand in for the producer.
+- Gate: unchanged. This verifies the actual Cell page with test data; deployed Fleet-PC hardware observations remain pending.

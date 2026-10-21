@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.server.sightings_config import _relax_retired_sighting_targets
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -116,6 +117,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--tls-key", default=None, type=Path, help="HTTPS private key; mount as a runtime secret")
     console.add_argument("--sightings-config", default=None, type=Path,
                          help="source/map/calibration sighting config (secret values stay in env)")
+    console.add_argument("--workcell-observations", default=os.environ.get("ROSY_WORKCELL_OBSERVATIONS") or None, type=Path,
+                         help="read-only workcell source manifest; producer credentials stay in env")
     console.add_argument("--site-lane-graph", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane_graph.yaml drawn over the ceiling camera by the D-375 map-fit "
                               "view; without MAP_ID it applies to every map. Display only")
@@ -664,7 +667,13 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
+    workcell_observations = None
+    observation_config = getattr(args, "workcell_observations", None)
+    if observation_config is not None:
+        from fleet.server.workcell_observation_config import load_workcell_observations
+        workcell_observations = load_workcell_observations(observation_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
+                     workcell_observations=workcell_observations,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -833,31 +842,6 @@ def _lane_compliance_config(args):
         return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"lane_compliance config: {exc}")
-
-
-def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
-    """D-361 5: a mapping to an unenrolled/pending-logout robot is disabled with a warning;
-    an id never seen in robots.yaml or the register still refuses start (a typo)."""
-    from dataclasses import replace
-
-    kept = []
-    for source in sources:
-        if source.follow_roster:  # D-580: targets come from the roster, never a typo
-            kept.append(source)
-            continue
-        unknown = set(source.robot_ids) - known
-        if unknown - retired:
-            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
-        if unknown:
-            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
-                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
-        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
-        if robot_ids:
-            kept.append(replace(source, robot_ids=robot_ids))
-        else:
-            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
-                  file=sys.stderr)
-    return kept
 
 
 def _main_impl(argv: Optional[Sequence[str]] = None) -> None:

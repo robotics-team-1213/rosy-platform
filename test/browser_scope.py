@@ -20,6 +20,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",

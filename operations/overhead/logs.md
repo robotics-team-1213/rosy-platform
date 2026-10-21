@@ -523,3 +523,9 @@
 - 변경: station의 ingest_preview sibling에 main의 measured-status·measured frame 분기를 보존하고 map plane은 main preview_plane helper로 위임한다. 두 구현의 관측/인증 경로와 기존 source identity를 유지한다.
 - 증거: 독립 정적 검토에서 합성 preview 함수 AST가 main과 일치함을 확인했다. 통합 원격 시험은 merge 커밋 후 수행하며 현재 장치/영상 수용을 주장하지 않는다.
 - gate 변화: 없음. 실제 기동·FIELD 및 배포는 별도다.
+
+## 2026-10-22 · uncommitted · 작업 셀 카메라 preview-only 등록 (D-837)
+
+- Change: an explicit private workcell manifest adds camera ingress credentials without calibrated tracking workers or map sightings. Verify camera token fingerprints and reserve every manifest producer fingerprint against paired credentials without reading arm secrets.
+- Evidence: c25dce219d remote CLI, manifest, pairing and architecture checks: 101 passed. Independent source review confirms the prior cross-role credential collision finding is resolved.
+- Gate: unchanged. Real camera ingress through the deployed site origin and optical calibration remain unverified.

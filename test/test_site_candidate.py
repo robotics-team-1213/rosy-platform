@@ -29,7 +29,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
@@ -76,6 +76,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
+    assert "compose.workcell.yaml" in manifest["deployment_file_sha256"]
     assert (output / "release.json").is_file()
     assert (output / "images.tar").is_file()
     assert (output / "deploy" / "site" / "compose.yaml").is_file()
@@ -100,7 +101,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
@@ -152,7 +153,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
-                 "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
+                 "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")

@@ -5,6 +5,7 @@ import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
+import {createCellObservation} from '/console/assets/cell-observation.js';
 
 const $ = id => document.getElementById(id);
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
@@ -33,6 +34,9 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
+const observations = createCellObservation({request, root: $('workcell-observations')});
+window.addEventListener('pagehide', event => event.persisted ? observations.clear() : observations.dispose());
+window.addEventListener('pageshow', event => { if (event.persisted) $('token-save').click(); });
 bindEstop(request);
 bindTopbarToggle();
 tickClock();
@@ -69,6 +73,7 @@ function invalidate() {
   $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); $('layout-preview').hidden = true; refreshControls();
 }
 function clearSession() {
+  observations.clear();
   channelReceipt = channelReview = null;
   $('cell-channel-original').textContent = ''; $('cell-channel-request').hidden = true;
   role = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate();
@@ -332,6 +337,7 @@ $('console-token').addEventListener('input', () => {
 $('token-save').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   showSession(session);
+  observations.clear(); void observations.refresh();
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
