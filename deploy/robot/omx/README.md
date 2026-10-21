@@ -814,3 +814,34 @@ sudo udevadm control --reload-rules
 적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
+
+## Fleet PC의 상시 관측과 기존 Cell 화면
+
+두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.
+`hardware_observer.py --persistent`는 명시적으로 선택한 토크 OFF 관측이다.
+기존 `--duration 1..300`은 시간 제한을 유지한다. 관측 실패·토크 ON·모터 오류가
+발견되면 종료하며 `rosy-omx-observer@.service`는 자동 재시작하지 않는다.
+`observer.env.example`을 팔마다 다른 by-id 장치와 commissioning 토픽에 결속한다.
+이 관절값은 원시 엔코더 변환이며, 보정된 제어 좌표나 실물 구동 수용 증거가 아니다.
+
+`workcell_observation_bridge.py`는 같은 호스트의 관측 토픽만 구독한다.
+원본 capture 시간과 source별 최신값을 Fleet HTTPS와 기존 Vision WSS에 보낸다.
+설정은 `observation-bridge.env.example`, source 결속은
+`../../site/workcell-observations.yaml.example`을 참고한다. 예제 장치와 digest는
+자리 표시자다. private manifest의 다섯 토큰은 서로 달라야 하며 실제 SHA-256과
+일치해야 한다. 별도 로컬 뷰어나 SSH 포트 전달은 이 제품 경로에 필요하지 않다.
+
+Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하고, 해당 Python의
+격리 환경에서 시스템 `rclpy`, `sensor_msgs`, OpenCV와 canonical
+`core_common.protocol.workcell_observations`, `rosy_vision.protocol`을 확인한다.
+기존 사이트 pin의 `websockets==17.0.1`, SDK `dynamixel-sdk==3.8.4`를 사용한다.
+다른 Python minor 버전의 compiled site-packages를 통째로 연결하지 않는다.
+
+서버에는 서명·검증된 `compose.workcell.yaml`이 적용된 Fleet/Vision 이미지와
+역할별 private 파일이 먼저 필요하다. 정상 사이트 origin의 `/console/cell`에서
+인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
+[사이트 배포 안내](../../site/README.md)를 따른다.
+
+실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고
+각 포트의 FD/버스 해제를 확인한 뒤 별도로 수용된 CORE/OMX owner만 시작한다.
+관측 서비스 설치·활성화는 토크 ON, 정책 활성화, 파지 실행을 승인하지 않는다.

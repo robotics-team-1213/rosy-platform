@@ -52,7 +52,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 112  # Includes assistant assets and the three Console composition factories.
+    assert len(expected) == 113  # Includes assistant assets and the Cell observation factory.
+    assert 'cell/cell-observation.js' in expected
     assert {'assistant/panel.js', 'assistant/assistant-voice.js', 'assistant/panel.css',
             'shared/console-auth.js', 'shared/console-goal.js', 'shared/console-refresh.js'} <= expected.keys()
     assert {'shared/fleet-client.js', 'shared/request.js'} <= expected.keys()

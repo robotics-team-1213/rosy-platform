@@ -4,6 +4,36 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ## 공유 인터페이스 계약서
 
+### v1.295 Fleet workcell observation (D-837)
+
+Additive read-only observation boundary; [D-837](../adr/D-837-workcell-observation.md)
+defines the source manifest, bounded latest cache, source identity and freshness.
+It does not enable a physical owner, command, calibration or motion admission.
+
+| Method/path | Authentication and body | Response |
+|---|---|---|
+| `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions}`; cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
+| `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
+
+Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
+UNIX capture seconds and exact registered joint→number positions are finite JSON
+numbers excluding bool/string. New epoch starts at sequence1; capture time
+advances even across epoch changes. Ingest capture age is -0.25..2s. Display
+requires source and server-monotonic receipt ages both within2s. Latest-only
+memory and64 retired epochs do not provide durable replay history across server
+restart; original age checks remain mandatory. Rejected updates preserve prior
+valid observations. Each source expires separately and logout clears the UI.
+Preview-only camera IDs reuse existing authenticated Vision ingestion and frame
+leases, with no map/sighting/calibration registration. ID/credential collisions
+with existing sources are rejected before merge.
+
+Private manifest arm/camera entries also require globally unique
+`credential_sha256` (lowercase hex64). Each server verifies its own raw producer
+secret against that fingerprint; other-role secrets are not shared. Fleet checks
+all fingerprints against existing site credentials and Vision reserves all of
+them against dynamic paired credential reuse. Rotation mismatch refuses startup.
+Fingerprints are excluded from GET responses.
+
 ### v1.277 CORE OMX policy I/O (D-800)
 
 Additive, operator-authenticated `/api/v1/arm/*`. No new TaskKind or Fleet grant.
@@ -213,7 +243,7 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.294
+**Version:** v1.295
 
 ### v1.294 Console operator assistant and explicit navigation (D-810/D-821)
 
@@ -3512,6 +3542,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.295 | 2026-10-21 | D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
 | v1.294 | 2026-10-21 | D-810/D-821 shared operator assistant DTOs, isolated named dialogue, ko-KR/en-US and separately OFF explicit coordinate handoff. Implementation and protected operational activation remain separate. |
 | v1.293 | 2026-10-21 | Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
 | v1.291 | 2026-10-21 | Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |

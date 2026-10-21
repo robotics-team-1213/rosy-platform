@@ -42,6 +42,7 @@ perception/front_camera/perception
 perception/front_camera/perception/learned
 perception/front_camera/perception/drivable small
 site_ui/console
+site_ui/console/cell
 site_ui/console/maps
 site_ui/console/devices
 fleet/fleet/server/ledger

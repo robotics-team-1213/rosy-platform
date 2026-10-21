@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · uncommitted · 실제 전송 시험의 연결 복구 경로 검증
+- 2026-10-22 · uncommitted · 설치 자산 폐쇄 검사 갱신
+- 2026-10-22 · uncommitted · Fleet PC 작업 셀 관측의 기존 Cell 연결
 - 2026-10-22 · uncommitted · 픽셀 원본 사진 우선 배치
-- 2026-10-21 · uncommitted · 학습센터 모방학습 진입 경로 연결
-- 2026-10-21 · uncommitted · OMX 파지 구간 검수 화면 공개 연결
-- 2026-10-21 · uncommitted · 학습 검수 저장소와 HTTP 서버 분리
-- 2026-10-21 · uncommitted · native OMX 구간 내보내기 공개 기준 분리
+- 2026-10-21 · uncommitted · Fleet 작업 셀 관측 계약과 통합 순서 (D-837)

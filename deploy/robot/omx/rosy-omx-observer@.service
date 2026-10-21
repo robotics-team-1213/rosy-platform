@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSY OMX %i persistent torque-OFF observation
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/rosy/omx-observer-%i.env
+ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; exec "$ROSY_OBSERVER_PYTHON" "$ROSY_OBSERVER_SOURCE" --device "$ROSY_OBSERVER_DEVICE" --domain-id "$ROS_DOMAIN_ID" --joint-topic "$ROSY_OBSERVER_TOPIC" --persistent'
+Restart=no
+KillSignal=SIGTERM
+TimeoutStopSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
