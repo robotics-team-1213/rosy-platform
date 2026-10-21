@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qs, urlsplit
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -86,3 +86,31 @@ def test_userinfo_storage_failure_is_503(authority, monkeypatch):
     monkeypatch.setattr(authority[0], 'userinfo', fail)
     response = client.post('/api/fleet/auth/userinfo', data={'token':'test'})
     assert response.status_code == 503 and 'secret' not in response.text
+
+
+def test_denied_browser_authorization_recovers_in_login_but_api_stays_403(authority):
+    engine, context, families = authority
+    families[context['session_family']]['grants'] = []
+    client = client_for(authority)
+    client.cookies.set(COOKIE, 'test-cookie')
+    target = '/api/fleet/auth/authorize?' + query()
+    api = client.get(target)
+    assert api.status_code == 403 and api.json() == {'error': 'access_denied'}
+    response = client.get(target, headers={'Accept': 'text/html'})
+    assert response.status_code == 303
+    location = urlsplit(response.headers['location'])
+    assert location.path == '/console/login'
+    assert parse_qs(location.query) == {'error': ['access_denied'], 'return': [target]}
+    assert response.headers['cache-control'] == 'no-store'
+    assert families[context['session_family']]['grants'] == []
+
+
+def test_invalid_browser_request_does_not_preserve_untrusted_return(authority):
+    client = client_for(authority)
+    response = client.get('/api/fleet/auth/authorize?' + query(redirect_uri='https://evil.test'),
+                          headers={'Accept': 'text/html'})
+    assert response.status_code == 303
+    location = urlsplit(response.headers['location'])
+    assert location.path == '/console/login'
+    assert parse_qs(location.query) == {'error': ['invalid_request'], 'return': ['/console']}
+    assert 'evil.test' not in response.headers['location']
