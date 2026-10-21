@@ -365,9 +365,22 @@ run `0dc9741a9f76`은 94candidate·94intent·93UUID·93terminal 상태4/code0 �
 대기 출력·결속 reader replay 검사 5개를 생략 없이 통과했다. 앞선 일반 시험의
 fixture 누락 2건과 native 시험의 reader 경로 오류 2건은 별도 실패 로그로 보존했다.
 실제 ACT 시험도 새 물체 과제 성공이 아니다. 같은 실제 시연 25개의 새로운 10,000 step
-학습을 준비 중이며 이 표현으로 학습된 checkpoint와 물체 성공은 아직 없다.
+학습을 시작했으며 이 표현으로 완료된 checkpoint와 물체 성공은 아직 없다.
 
-최신 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
+후속 실제 MODEL 실행 `omx-object-training-14d92ea309083414`는 같은 25개·
+66,080프레임의 curation·전체 reader readback과 20/5 분할을 확인하고 optimizer
+학습 중이다. Curation·분할 해시는 이전 실행과 같고 학습 시작점 6,263개도 동일하다.
+원 절대 평가 baseline과 state 통계도 이전 파일과 대조해 같음을 확인했다.
+실제 정규화 SHA256: `de4d107ed599eeb8b6c90b48d6dc3559f7a31aed96ce3a66f17b89bfb209a0a1`.
+그 파일의 nested 표현과 legacy 필수 통계 부재를 확인했다. 새 10,000 step 완료·
+checkpoint 재로딩·DatasetStore 등록·물체 성공은 아직 확인 전이다.
+
+이후 main dc8c3cc2bf를 충돌 없이 반영한 통합 source `9bcca8e7bd`는 공식 selector의
+관련 55개 경로를 AI PC에서 실행해 1,077 PASS / 34 SKIP / 0 NEW를 확인했다.
+안전·크기 검사도 통과했다. 생략한 ML 검사를 통과에 넣지 않으며 실제 ACT의 합성
+fixture 5 PASS는 별도 증거다. 새 실제 물체 평가와 최종 main 착지는 여전히 남았다.
+
+당시 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
 affected 48개 경로를 지정했다(확대 사유 없음). 해당 선택을 모델 PC에서 실행해
 1,001 PASS / 31 SKIP / 0 NEW를 확인했다. 검사 전 준비 함수의 무실행 반환을
 FULL 통과로 계산하지 않으며, 생략한 검사를 통과 수에 포함하지 않는다.
