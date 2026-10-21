@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/32회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/12회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/33회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/13회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
 
@@ -80,6 +80,37 @@ guard·journal prepare/observe/read·native send/submit·post-I/O의 원 호출�
 500ms 제한은 유지한다. 수정 전 계측 회귀3FAIL, 수정 후178PASS/0SKIP/0NEW와
 독립 검토를 통과했다. 중첩 duration을 합산하지 않으며 `returned`를 admission 성공으로
 해석하지 않는다. 같은 cb369 checkpoint로 새 calibration·사전 과제 계측을 요청했다.
+
+계측 calibration `1d051a0f8b13`은 통과했고 실제 물체 과제 `632cf5c3265d`도
+실패/HOLD/cleanuptrue/exit1로 종료됐다.141candidate/141intent/141UUID,
+140terminal4/code0 뒤 마지막 goal은 terminal6/code-5로 중단됐다. 이 실행의 실패는
+카메라 만료가 아니다. 컨트롤러 원문은 `State tolerances failed for joint 4`와
+위치 오차-0.095309rad/허용0.020000rad, goal_time_tolerance 초과1.01초를 기록한다.
+로그의 joint index를 gripper 이름으로 추정하지 않는다. Attach0/lift0.007796m/stable0,
+XY0.244500m/Z0.002652m는 incomplete_trial_observation이다. cb369의 물체 결과는0/2다.
+
+| 계측 구간 | 횟수 | 평균 ms | p95 ms | 최대 ms |
+|---|---:|---:|---:|---:|
+| Full guard |3193|33.262|67.966|201.234|
+| Journal prepare |141|18.882|95.291|236.004|
+| Native send |141|0.346|0.459|0.508|
+| Durable journal observe |3257|11.897|54.057|226.629|
+| Post-submission |141|36.647|69.814|202.941|
+| Session submit |141|166.917|258.442|388.518|
+| Journal read |7164|2.553|11.883|180.291|
+
+중첩 구간을 합산하지 않는다. 마지막 session submit은253.687ms로 정상 반환했고,
+실제 controller goal의 후속 도달 실패를 구분한다. Native send가 제출 지연 전체를
+차지했다는 가설은 이 실행에서 지지되지 않는다. 원장 지연은 확인됐지만 최종 과제 실패의
+원인이라고 단정하지 않는다. 모든 durable 저장·실행 시간·관절 허용 오차는 유지한다.
+policy-result SHA256: `ead07c04c67cf5bc33acc43634b97c26a6fb513e624d94e21d6b088c07cd3d40`.
+Admission trace SHA256: `abee4664ad392c220fd329068ed7184e940dcb882da8dfd4a1c7f7a9cc4b7686`.
+
+다음 비교는 bounded head를 유지하고 synthetic state noise만0.02에서0으로 뺀다.
+원 시연25개·20/5 분할·원 target·선택 index·seed·step 수는 유지한다. 원 입력을 사용하는
+bounded ACT의 실제 학습·재적재·replay 검사를 포함해10PASS/0SKIP/0NEW를 확인했다.
+비교 학습 source revision: `5f471d5c7913715368bcc10cbed3c7af8267c112`.
+새 학습을 요청했고 아직 완료나 실제 물체 성공은 확인하지 않았다.
 
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
