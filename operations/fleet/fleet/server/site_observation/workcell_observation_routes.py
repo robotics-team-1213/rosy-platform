@@ -31,6 +31,8 @@ def install_workcell_observation_routes(app, *, service, require_viewer):
               tags=["workcell-observations"])
     async def ingest(source_id: str, request: Request,
                      token: str | None = Header(None, alias="X-Workcell-Observation-Token")):
+        if not token:
+            raise HTTPException(401, detail={"code": "WORKCELL_OBSERVATION_UNAUTHORIZED"})
         intake = available()
         try:
             intake.authorize(source_id, token)

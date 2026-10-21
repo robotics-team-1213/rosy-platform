@@ -103,4 +103,6 @@ def test_replay_conflict_preserves_the_accepted_snapshot(client):
 def test_unconfigured_observations_report_unavailable():
     client = client_for(None)
     assert client.get(PATH, headers=VIEWER).status_code == 503
+    assert client.post(PATH + "/arms/feedback_a", headers=VIEWER, json=PAYLOAD).status_code == 401
+    assert client.post(PATH + "/arms/feedback_a", json=PAYLOAD).status_code == 401
     assert client.post(PATH + "/arms/feedback_a", headers=PRODUCER, json=PAYLOAD).status_code == 503
