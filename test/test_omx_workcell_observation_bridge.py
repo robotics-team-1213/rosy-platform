@@ -254,7 +254,8 @@ def test_blocked_failed_source_keeps_only_latest_and_does_not_block_other_source
     assert not any(thread.is_alive() for thread in threads)
 
 
-def test_native_main_subscribes_only_to_configured_sources_with_localhost_discovery(manifest, tmp_path, monkeypatch):
+@pytest.mark.parametrize("external_shutdown", [False, True])
+def test_native_main_subscribes_only_to_configured_sources_with_localhost_discovery(manifest, tmp_path, monkeypatch, external_shutdown):
     path = tmp_path / "manifest.yaml"
     path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
     for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE", "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
@@ -264,6 +265,7 @@ def test_native_main_subscribes_only_to_configured_sources_with_localhost_discov
         monkeypatch.setenv(key, value)
     subscriptions, delivered, lifecycle = [], [], []
     done = threading.Event()
+    class ExternalShutdown(Exception): pass
 
     class Sender:
         def __init__(self, url, source, token, **kwargs): self.source = source
@@ -283,6 +285,13 @@ def test_native_main_subscribes_only_to_configured_sources_with_localhost_discov
             message = SimpleNamespace(header=header, name=["joint1"], position=[0.25])
             callback(message)
         assert done.wait(3)
+        if external_shutdown:
+            raise ExternalShutdown()
+
+    def shutdown():
+        if external_shutdown:
+            raise RuntimeError("context already shut down by SIGTERM")
+        lifecycle.append("shutdown")
 
     monkeypatch.setattr(bridge, "ArmSender", Sender)
     monkeypatch.setattr(bridge, "CameraSender", Sender)
@@ -291,7 +300,8 @@ def test_native_main_subscribes_only_to_configured_sources_with_localhost_discov
     monkeypatch.setitem(sys.modules, "numpy", SimpleNamespace())
     monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(
         init=lambda **kwargs: lifecycle.append(kwargs), create_node=lambda name: Node(), spin=spin,
-        shutdown=lambda: lifecycle.append("shutdown")))
+        shutdown=shutdown, try_shutdown=lambda: lifecycle.append("shutdown")))
+    monkeypatch.setitem(sys.modules, "rclpy.executors", SimpleNamespace(ExternalShutdownException=ExternalShutdown))
     monkeypatch.setitem(sys.modules, "rclpy.qos", SimpleNamespace(qos_profile_sensor_data=object()))
     monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(Image=object(), JointState=object()))
     bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
