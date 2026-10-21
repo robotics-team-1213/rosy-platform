@@ -13,7 +13,7 @@ from test_act_inference import artifact,observation
 from rosy.contracts.learning import seal
 
 
-@pytest.mark.parametrize('relative', [False,True,'bounded'])
+@pytest.mark.parametrize('relative', [False,True,'bounded','bounded_absolute'])
 def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path,relative):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
@@ -35,6 +35,8 @@ def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path,rela
             std=[.1,.2],absolute_baseline=[.7,.8])
         if relative=='bounded':
             stats['action_transform'].update(type='joint_delta_tanh_from_chunk_source_v1',max_delta_rad=.035)
+        if relative=='bounded_absolute':
+            stats['action_transform'].update(type='absolute_tanh_from_chunk_source_v1',max_delta_rad=.035)
         p.write_text(json.dumps(stats),encoding='utf-8')
         doc['normalization']=dict(path='normalization.json',bytes=p.stat().st_size,
             sha256=hashlib.sha256(p.read_bytes()).hexdigest())
@@ -54,10 +56,12 @@ def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path,rela
                                              'observation.images.front':image})[0]
         delta=chunk*torch.tensor([.1,.2])+torch.tensor([.01,-.02])
         if relative=='bounded':delta=.035*torch.tanh(delta/.035)
-        expected=delta+torch.tensor(first.source.positions)
+        source=torch.tensor(first.source.positions)
+        expected=(source+.035*torch.tanh((delta-source)/.035) if relative=='bounded_absolute'
+                  else delta+source)
         torch.testing.assert_close(torch.tensor(first.positions),expected[0],rtol=1e-6,atol=1e-6)
         torch.testing.assert_close(torch.tensor(second.positions),expected[1],rtol=1e-6,atol=1e-6)
-        if relative=='bounded':
+        if relative in ('bounded','bounded_absolute'):
             third=engine.infer(observation(sequence=12,positions=(.8,.9)))
             fourth=engine.infer(observation(sequence=13,positions=(-.8,-.9)))
             for index,result in enumerate([first,second,third,fourth]):
@@ -100,3 +104,41 @@ def test_replay_requires_new_output_and_pinned_revision(tmp_path):
     out=tmp_path/'exists';out.mkdir()
     with pytest.raises(ValueError,match='new artifact'):
         replay(tmp_path,tmp_path,out,'a'*64)
+
+
+def test_absolute_bounded_head_uses_each_batch_source_and_clears_failed_context():
+    torch=pytest.importorskip('torch')
+    from types import SimpleNamespace
+    from act_inference import install_action_head_transform
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__();self.action_head=torch.nn.Linear(2,2)
+        def forward(self,batch):
+            if batch.get('fail_before'):raise RuntimeError('before head')
+            result=self.action_head(torch.zeros(len(batch['observation.state']),4,2))
+            if batch.get('fail_after'):raise RuntimeError('after head')
+            return result
+    model=Model();policy=SimpleNamespace(model=model)
+    stats=dict(state_mean=[.5,-.5],state_std=[.2,.3],action_transform=dict(
+        type='absolute_tanh_from_chunk_source_v1',mean=[0.,0.],std=[1.,1.],
+        absolute_baseline=[0.,0.],max_delta_rad=.035))
+    with torch.no_grad():model.action_head.weight.zero_();model.action_head.bias.zero_()
+    install_action_head_transform(policy,stats)
+    source=torch.tensor([[.01,-.01],[.02,-.02]])
+    batch={'observation.state':(source-torch.tensor(stats['state_mean']))/torch.tensor(stats['state_std'])}
+    output=model(batch)
+    expected=source[:,None,:]+.035*torch.tanh(-source[:,None,:]/.035)
+    torch.testing.assert_close(output,expected.expand(-1,4,-1),atol=1e-7,rtol=1e-5)
+    output.sum().backward()
+    assert torch.isfinite(model.action_head.bias.grad).all() and torch.all(model.action_head.bias.grad>0)
+    with pytest.raises(ValueError,match='source'):model.action_head(torch.zeros(2,4,2))
+    with pytest.raises(ValueError,match='head'):install_action_head_transform(policy,stats)
+    for flag in ('fail_before','fail_after'):
+        with pytest.raises(RuntimeError):model(dict(batch,**{flag:True}))
+        torch.testing.assert_close(model(batch),output)
+    with pytest.raises(ValueError,match='source'):model({})
+    torch.testing.assert_close(model(batch),output)
+    with torch.no_grad():model.action_head.bias.fill_(float('inf'))
+    with pytest.raises(ValueError,match='nonfinite'):model(batch)
+    with torch.no_grad():model.action_head.bias.zero_()
+    torch.testing.assert_close(model(batch),output)

@@ -59,6 +59,14 @@ def test_state_noise_requires_source_relative_targets(tmp_path):
     assert not (tmp_path/'out').exists()
 
 
+@pytest.mark.parametrize('mode,parent',[('absolute_tanh_from_chunk_source_v1',None),
+    ('absolute','unused-parent'),('joint_delta_tanh_from_chunk_source_v1','unused-parent')])
+def test_parent_initialization_is_explicit_and_only_for_bounded_absolute(tmp_path,mode,parent):
+    with pytest.raises(ValueError,match='initial policy'):
+        run([],tmp_path/'absent',tmp_path/'out',action_representation=mode,initial_policy=parent)
+    assert not (tmp_path/'out').exists()
+
+
 def test_multiple_validation_episodes_cannot_overlap_training(tmp_path, monkeypatch):
     monkeypatch.setattr('act_job.importlib.metadata.version', lambda *_: '0.4.4')
     with pytest.raises(ValueError, match='disjoint'):

@@ -74,7 +74,7 @@ def action_statistics(stats,size):
         raise ValueError('unknown or ambiguous action transform')
     kind=transform.get('type')
     keys={'type','mean','std','absolute_baseline'}
-    if kind=='joint_delta_tanh_from_chunk_source_v1':
+    if kind in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):
         keys.add('max_delta_rad')
         bound=transform.get('max_delta_rad')
         if type(bound) not in (int,float) or bound!=.035:
@@ -89,16 +89,42 @@ def action_statistics(stats,size):
 def install_action_head_transform(policy,stats):
     """Reconstruct the byte-bound trained activation without changing weight keys."""
     kind,mean,std,_=action_statistics(stats,len(stats['state_mean']))
-    if kind!='joint_delta_tanh_from_chunk_source_v1':return
+    if kind not in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):return
     import torch
     head=policy.model.action_head
     if type(head) is not torch.nn.Linear or head.out_features!=len(mean) or head._forward_hooks:
         raise ValueError('one unmodified ACT linear action head required')
     mean=head.weight.new_tensor(mean);std=head.weight.new_tensor(std)
+    source=[None]
+    if kind=='absolute_tanh_from_chunk_source_v1':
+        model=policy.model
+        if model._forward_pre_hooks or model._forward_hooks:
+            raise ValueError('one unmodified ACT model head source required')
+        state_mean=head.weight.new_tensor(_vector(stats['state_mean'],len(mean)))
+        state_std=head.weight.new_tensor(_vector(stats['state_std'],len(mean),positive=True))
+        def capture_source(_model,inputs):
+            if source[0] is not None or len(inputs)!=1 or not isinstance(inputs[0],dict):
+                raise ValueError('one model call source required')
+            state=inputs[0].get('observation.state')
+            if (not isinstance(state,torch.Tensor) or state.ndim!=2 or state.shape[-1]!=len(mean)
+                    or not torch.isfinite(state).all()):
+                raise ValueError('finite batch source required')
+            original=state*state_std+state_mean
+            if not torch.isfinite(original).all():raise ValueError('nonfinite source')
+            source[0]=original[:,None,:]
+        def clear_source(_model,_inputs,_output):
+            source[0]=None
+        model.register_forward_pre_hook(capture_source)
+        model.register_forward_hook(clear_source,always_call=True)
     def bounded_delta(_module,_inputs,output):
         delta=output*std+mean
         if not torch.isfinite(output).all() or not torch.isfinite(delta).all():
             raise ValueError('nonfinite action head')
+        if kind=='absolute_tanh_from_chunk_source_v1':
+            origin=source[0]
+            if origin is None or output.ndim!=3 or output.shape[0]!=origin.shape[0]:
+                raise ValueError('same batch model source required for absolute head')
+            return (origin+.035*torch.tanh((delta-origin)/.035)-mean)/std
         return (.035*torch.tanh(delta/.035)-mean)/std
     head.register_forward_hook(bounded_delta)
 
@@ -162,7 +188,8 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
         with torch.inference_mode():
             chunk=policy.predict_action_chunk({'observation.state':state.unsqueeze(0),key:image})
             actions=chunk[0,:config.n_action_steps]*stds['action_std']+means['action_mean']
-            if representation!='absolute':actions=actions+torch.tensor(obs.positions,dtype=torch.float32)
+            if representation in ('joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'):
+                actions=actions+torch.tensor(obs.positions,dtype=torch.float32)
         return actions.tolist()
     return predict
 

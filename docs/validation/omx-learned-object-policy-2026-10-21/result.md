@@ -7,10 +7,63 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/33회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/13회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/35회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/15회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
+
+최신 clean checkpoint의 실제 과제 `4c893c74b5b0`는 66 candidate/intent/UUID와
+66 terminal4/code0 뒤 `bounded policy capture limit`로 종료됐다. 1,000건의
+카메라 audit 중 원본 receipt tuple은 652개였다. 새 입력 선택 재시도가 진단 한도를
+소진했다. 마지막 선택 입력 나이 34.204ms, 추론 11.250ms, 제출 전 47.707ms,
+제출 90.231ms였고 owner 검증은 통과했다. Actor 160.244s, root 223.523s,
+HOLD/cleanup true, attach/lift/stable 성공 없음이다. XY 0.229265m/Z 0.010000m는
+`incomplete_trial_observation`이다. policy-result SHA256: `87cec786e6a516dc0effe31fc7b4a484d24c81ce310d188ce0e1cfde1810ab44`.
+Policy revision: `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c` (유지).
+진단 기록만 600s/10ms 재시도와 600 outer cycle을 수용하는 60,600건으로 제한한다.
+모든 원 SHA와 두 timestamp를 보존하며 RGB를 audit에 복사하지 않는다. 500ms 신선도,
+0.04rad 제한, 600s budget, owner lease와 controller tolerance는 유지한다.
+수정 전 원격 회귀는 예상한 2FAIL이다. 수정 후 관련 네 시험 파일의 원격 검증은
+83PASS/1SKIP/0NEW이며 독립 소스 검토에서 blocker가 없었다. Runtime revision: `016fad24a222361f84a368f07fa13b8bff776c75`.
+같은 모델의 새 calibration·engineering 과제를 요청했다. 새 물체 성공은 아직 확인하지 않았다.
+
+해당 재검증 calibration `90b0b4371650`는 12추론/0정책goal, PASS/cleanup true였다.
+실제 과제 `9447e065dcd2`는 106후보/105intent/105UUID 뒤 106번째 gripper 목표
+−0.1196070462rad가 `policy_action_envelope`로 차단되어 HOLD했다. 원 입력 gripper는
+−0.0846947208rad였다. 카메라 audit 1,039건/상한60,600건으로 이전1,000건을 넘겨
+기록됐으며 이 중단은 진단 cap 소진이 아니다. Actor204.413s/root267.588s,
+cleanup true, attach/lift/stable0이며 XY0.229265m/Z0.010000m는 미완료 관측이다.
+policy-result SHA256: `7180470f4363f694d691e22fac3fb7b27c0ba26e7e103dec60c48a8dc564d093`.
+같은 clean checkpoint는 실제0/2이며 새 정식20회는 시작하지 않았다. 원본 학습 시연과
+실행 상태·목표 비교를 진행한다. 기존 owner 범위와 step 제한을 유지한다.
+
+후속 원격 read-only 진단은 종료됐다. 20개 train 원본52,834상태와 비교한 최근접 L2
+거리는 실행 index30에서0.05078rad, index60에서0.19807rad, 마지막105에서0.50919rad였다.
+Index60의 최근접 시연 gripper 목표는 open1.0rad였다. 마지막 실제 RGB·arm을 고정한
+합성 gripper sweep에서 현재 accdc 모델은 입력−0.1~0.4rad에도 약−0.035rad의 closing을
+반복했다. 원 입력의 실제 예측은2e-6rad 이내로 재현됐으며 매 입력마다 새 모델을
+생성해 queue를 사용하지 않았다. 기존 absolute BEC 모델은 같은 낮은 gripper 입력에서
+복원 방향을 냈지만 과거 실제94후보 과제에서0.0418019rad step으로 거절된 이력이 있다.
+두 진단은 weights·normalization hash를 검증했고 실제 과제 분모에 추가하지 않는다.
+원본·합성 입력 구분과 함께 `omx-clean-bounded-rollout-neighbors-1`,
+`omx-clean-bounded-gripper-response-1`, `omx-absolute-gripper-response-1`에 보존한다.
+단일 원인 확정이나 실제 물체 성공의 증거로 쓰지 않는다. 안전 제한을 완화한 unchanged
+재시도는 하지 않는다.
+
+후속 `absolute_tanh_from_chunk_source_v1`은 구현·검증 단계까지 진행했다.
+Implementation source revision: `3f7972f2a6a597cad76ee5df4d1934b428fa16d5`.
+같은 batch 원 상태 s와 absolute head a에 s+0.035*tanh((a-s)/0.035)를 학습부터
+적용한다. 정답·통계·출력은 absolute이며 source를 다시 더하지 않는다. Source context는
+호출 성공·예외 모두에서 제거한다. 부모의 bytes·전체ACTConfig·관절·카메라·limits·
+train-only 통계가 일치해야 weights를 적재하며 부모 hash·기존 step·새AdamW를 결속한다.
+수정 전 native3FAIL/10PASS, 수정 후 실제ACT13PASS/0SKIP/0NEW와 일반 원격
+96PASS/1SKIP/0NEW를 확인했다. 추가 metadata 검증61PASS/0NEW, 부모 불일치·
+변조 거절과 warm train/reload의 최종 선택 시험1PASS/12DESELECTED/0NEW를 확인했다.
+추가 시험의 최초 실패1건은 정상 integrity 거절의 문구가 예상 regex와 달랐던 것으로,
+기존 hash/size 거절 문구에 맞춘 test-only revision: `f509adfba840e2f2a48a128c1d71b300b4032bf7`.
+독립 소스 검토에서 실행 경계 blocker가 없었다. 실제 recipe는 기존 BEC revision·
+weights·정규화·10k loss 이력을 먼저 대조해 독립 스냅샷으로 고정한다. 실제 추가10k
+학습을 요청했으며 새 checkpoint와 물체 과제 성공은 아직 확인하지 않았다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
@@ -35,12 +88,35 @@ policy-result SHA256: `f73746f1f5537cccf6b0137224514959469f2f0c63db80ea6de67e427
 Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint와 원격
 아키텍처267PASS/0NEW, 영향 범위1091PASS/38SKIP/0NEW를 통과했다. 실제 ACT9개는
 별도 MODEL 시험에서0SKIP으로 확인했다. 일반 검사의38SKIP을 통과로 바꾸지 않는다.
-착지 로그는 `%TEMP%/rosy-land/feat-omx-sim-ground-truth/{run-g1-1.txt,run-1-1.txt}`다.
+착지 도구의 임시 로그 경로는 다음 착지에서 재사용된다. 초기 SHA의 원래55경로 검사를
+동일0c706e831a로 다시 실행해 `omx-land-0c-reverification/run-1.txt`에 보존했다.
 원격 push는 하지 않았다. 새 학습 실행은 `omx-object-training-42a03f4605a8a021`이며
 고정한 source938791127b의 bounded head/command_entry/noise0.02를 사용한다.
 시작 요청이나 자료 검증 횟수는 학습 완료·물체 성공으로 계산하지 않는다.
 
-## 최신 bounded checkpoint — 사전 물체 과제 실패
+## 최신 원본 입력 bounded checkpoint — 실제 과제 대기
+
+학습 source revision: `5f471d5c7913715368bcc10cbed3c7af8267c112`.
+`omx-object-training-ad8d25650f879643`에서 원 시연25개/66,080프레임 검증과20/5 분할,
+전체 RGB reader 대조, 실제10,000step(seed42750/n_action_steps1), validation13,246프레임과
+재적재 일치를 확인했다. MAE0.004049183405391603rad/관절 한계 위반0/offline_only다.
+직전 bounded noise0.02 모델의 MAE0.00728356909769362rad보다 낮아졌으나 실제 과제는 미검증이다.
+
+- Policy revision: `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c`.
+- Dataset revision: `92c27ac0ba0cbff65c318579bb652a83dc3c2e478f50530489a3376ee010fcf4`.
+- Normalization SHA256: `2f2a89bb39ba73f513d761323a6da901093ba40ff32de9074bfe1fbf08c63a68`.
+- Weights SHA256: `f40f1c59a37f4f2faa957c3f82bbfc973a9a2a12c8b0fd08ca0863a9821b7124` (45,371,416bytes).
+- Optimizer history SHA256: `008d1a0688feb2125c9ac442eb83b8c234b3f2237d644dba28d751bf129e7893` (10,000개).
+
+Normalization 전체는 직전 모델에서 training_augmentation만 제거한 것과 동일하다.
+Training index도 동일한6,263/52,834 train frames이며 원 target은 유지했다. Synthetic
+상태 교란을 사용하지 않았음을 실제 normalization·offline-report에서 확인했다.
+DatasetStore 복사·require와 bundle 전송을 완료했고 실제 runner는 exit0으로 종료됐다.
+로컬의 모든 artifact 참조 bytes·SHA256을 다시 대조했다. Source91897eadf0의50ms capture
+runtime과 같은 checkpoint로 새 calibration·사전 물체 과제 실행을 요청했다.
+아직 실제 물체 actor 시작이나 새 성공 결과는 확인하지 않았다.
+
+## 직전 bounded noise0.02 checkpoint — 사전 물체 과제 실패
 
 실제 학습 source revision: `938791127b432cdb1e1e6dd578955e661fd41a38`.
 실행 `omx-object-training-42a03f4605a8a021`의 10,000step(seed42750/n_action_steps1),
@@ -127,6 +203,14 @@ Capture source revision: `8f728fb5e0aa86fed0951f0256ef622f02670063`.
 수정 전 회귀2FAIL, 수정 후114PASS/1SKIP/0NEW와 독립 검토를 통과했다. 이 변경이
 controller 도달 오차를 해결했다는 증거는 없고, 다음 native 평가는 noise0 checkpoint와
 새 capture runtime을 합친 후보로 평가한다. 학습 모델만의 인과 비교로 주장하지 않는다.
+
+최신 공식 main revision: `91897eadf030de531ac8f37045d38497934979fb`.
+실제 `tools/land.py --tests auto --no-prune`가 안전·크기·lint, 원격 architecture267PASS,
+영향 범위408PASS/6SKIP/0NEW를 확인한 뒤 착지했다. 완료 로그와 landing record는
+`official-land-91897eadf0/{run-g1-1.txt,run-1-1.txt,land-record.json}`에 별도 복사했다.
+초기0c706e831a의 재검증도1091PASS/38SKIP/0NEW로 종료됐다. 임시 경로 재사용 중
+잘못 복사한 일부 새 로그는 `official-land-0c706e831a/NOT-AUTHORITATIVE.md`로 표시하고
+완료 증거에서 제외했다. 현재 원격 push는 없고 실제 물체 성공 조건도 아직 미달성이다.
 
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
