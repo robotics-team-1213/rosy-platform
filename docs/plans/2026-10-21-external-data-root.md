@@ -12,6 +12,7 @@
 - 현재 main `cd0bd49383`에서 시작한다. 사용자는 2026-10-21 이번 작업 공간 1개 추가를 승인했고 검증·착지 후 회수한다.
 - Ruling: `rosy-data/platform/` 아래 기존 `teleop/drive/perception/calibration` 상대 구조를 유지한다 — store manifest와 catalog의 기존 결속을 보존 — 임의 분류 이동은 reader와 content identity를 깨뜨릴 수 있다.
 - Ruling: 배포·운영 설정이 명시한 store·모델 경로는 환경변수로 덮지 않는다 — 장치 pointer나 승인 자료를 이동으로 바꾸지 않기 위해 — 기존 배포 CLI는 명시적 경로를 계속 요구할 수 있다.
+- Ruling: 새 host helper 한 파일을 signed learning payload의 정확한 허용 경로에 포함한다 — 실제 격리 payload 회귀에서 누락으로 실패했음 — tools 전체 허용이나 과거 payload의 새 필수 파일 요구는 추가하지 않는다.
 - env 미지정·빈값·상대 경로, symlink 이탈, 명시적 CLI override, 기존 영상·catalog·보정 조회를 검증한다.
 - 플랫폼 pytest는 커밋 SHA의 공식 원격 실행만 인정한다. 로컬 실제 데이터를 시험 fixture로 사용하지 않는다.
 

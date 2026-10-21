@@ -130,7 +130,7 @@ OMX_REVIEW_FILES = (
     *("contracts/learning/src/rosy/contracts/learning/" + name for name in
       ("__init__.py", "omx.py", "artifacts.py", "png.py", "camera_setup.py")))
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
+                 "shared/web/", "tools/data_paths.py", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
                  *OMX_REVIEW_FILES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",

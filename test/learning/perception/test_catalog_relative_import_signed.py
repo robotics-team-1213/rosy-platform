@@ -98,7 +98,7 @@ def signed_catalog(tmp_path, keys):
     archive = root / 'inbox/1/code.tar'
     assert hashlib.sha256(archive.read_bytes()).hexdigest() == setup.manifest['archive_sha256']
     with tarfile.open(archive) as payload:
-        for relative in (ENTRY, IMPORTER):
+        for relative in (ENTRY, IMPORTER, 'tools/data_paths.py'):
             committed = subprocess.check_output(['git', '-C', str(ROOT), 'show', f'{commit}:{relative}'])
             assert payload.extractfile(relative).read() == committed
             assert (setup.source / relative).read_bytes() == committed
