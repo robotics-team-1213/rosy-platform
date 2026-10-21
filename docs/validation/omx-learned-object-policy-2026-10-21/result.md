@@ -84,8 +84,16 @@ judge·runtime/controller·short-goal 한도는 유지한다. 해제 직전 독�
 
 Teacher source revision: `0bc501ac85d72ff4ca358c5f0bea0a5f33ad84a6`.
 수정 전 신규7FAIL, 수정 후 원격40PASS/0NEW와 독립 실제diff 검토를 확인했다.
-이는 helper·기존 truth 경로의 소스 검증이다. 실제 clearance·완전 해제·중력 정착은
-아직 미검증이며 보호된 native 시연1회로 확인한 뒤 새20/5 cohort 수집을 판단한다.
+이는 helper·기존 truth 경로의 소스 검증이다. 이어 실제 release 분기의 stale/future/
+접촉·observer 오류 시 detach 차단과 정상 원본 시각 보존을 실행한 원격 회귀28PASS/
+0NEW도 확인했다. 실제 clearance·완전 해제·중력 정착은 아직 미검증이다.
+보호된 native 시연1회는 배포 READY·시작 ACK와 서비스 active/running까지 확인했으나,
+이후 시험 호스트가 VPN offline·SSH timeout이 돼 종료 결과를 회수하지 못했다.
+마지막 runtime은UNKNOWN이었다. 관찰 연결이 끊긴 것을 과제 종료나 실패로 계산하지
+않고 같은 실행을 재확인해야 한다. 새 native 실행을 시작하지 않는다.
+Source와 보고서는 로컬main에 정식 병합됐으며 architecture267PASS/관련353PASS/
+0NEW를 확인했다. 새20/5 cohort는 해당 시연 결과를 검증한 뒤 판단한다.
+Main revision: `c17dcedce512b1657b4ac19788873502541d9c18`.
 기존25개 시연과 모든 실패는 보존하며 학습 정책에 scripted release나 clamp를 넣지 않는다.
 
 ## Pending native intake
