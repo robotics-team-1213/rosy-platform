@@ -86,6 +86,45 @@ def test_revocation_at_final_native_admission_sends_no_new_goal(tmp_path,monkeyp
     assert not client.commands and session.hold_reason
 
 
+@pytest.mark.parametrize('broken_diagnostic', [False, True])
+def test_failed_guard_trace_preserves_original_joint_receipts_and_exception(tmp_path,monkeypatch,broken_diagnostic):
+    from sim_policy_runtime import trace_sim_admission
+    from omx_adapter.watchdog_observation import JointIntakeObservation
+    journal=PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session,client,*_=setup_session(tmp_path,execution_journal=journal)
+    runtime=runtime_methods(session,client)
+    bind_sim_runtime(session,runtime)
+    original=session._snapshot
+    runtime.latest_joint_state=original
+    intake=JointIntakeObservation(10,11,10.,10.,10.,10.,True,10,None)
+    runtime.owner.joint_intake_observation=intake
+    failure=PermissionError('original stale failure')
+    class BrokenSnapshot:
+        @property
+        def sequence(self):raise RuntimeError('diagnostic unavailable')
+    def fail():
+        runtime.latest_joint_state=(BrokenSnapshot() if broken_diagnostic else
+            replace(original,sequence=11,received_at=10.1))
+        runtime.owner.joint_intake_observation=replace(intake,intake_sequence=11,received_at=10.1)
+        raise failure
+    monkeypatch.setattr(session,'_guard',fail)
+    records=trace_sim_admission(session,journal,runtime)
+    with pytest.raises(PermissionError) as raised:session._guard()
+    assert raised.value is failure
+    assert session._snapshot is original
+    row=next(row for row in records if row['stage']=='guard')
+    assert row['outcome']=='raised'
+    if broken_diagnostic:
+        assert row['joint_diagnostic_error']=='RuntimeError'
+    else:
+        facts=row['joint_delivery']
+        assert facts['before']['session']==facts['after']['session']==dict(sequence=10,received_owner_s=10.)
+        assert facts['before']['latest']==dict(sequence=10,received_owner_s=10.)
+        assert facts['after']['latest']==dict(sequence=11,received_owner_s=10.1)
+        assert facts['before']['intake']['intake_sequence']==10
+        assert facts['after']['intake']['intake_sequence']==11
+
+
 @pytest.mark.parametrize('calibration', [True, False])
 @pytest.mark.parametrize('expire_on_save', [False,True])
 def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calibration,expire_on_save):
