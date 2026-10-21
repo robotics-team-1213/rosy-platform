@@ -35,10 +35,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True)
     parser.add_argument("--domain-id", type=int, required=True)
-    parser.add_argument("--duration", type=float, required=True, help="bounded observation, 1..300 seconds")
+    lifetime = parser.add_mutually_exclusive_group(required=True)
+    lifetime.add_argument("--duration", type=float, help="bounded observation, 1..300 seconds")
+    lifetime.add_argument("--persistent", action="store_true", help="explicit torque-OFF observation until stopped")
     parser.add_argument("--joint-topic", type=joint_topic, default=TOPIC)
     args = parser.parse_args(argv)
-    if not 0 <= args.domain_id <= 232 or not math.isfinite(args.duration) or not 1 <= args.duration <= 300:
+    if (not 0 <= args.domain_id <= 232 or (not args.persistent and
+            (not math.isfinite(args.duration) or not 1 <= args.duration <= 300))):
         parser.error("domain-id must be 0..232 and duration 1..300 seconds")
     for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE",
                 "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
@@ -62,10 +65,11 @@ def main(argv=None):
         node = rclpy.create_node("rosy_omx_readonly_observer" + suffix)
         publisher = node.create_publisher(JointState, args.joint_topic, 1)
         print(json.dumps({"event": "observer_start", "device": args.device,
-                          "joint_topic": args.joint_topic, "motion_admitted": False}), flush=True)
-        deadline = time.monotonic() + args.duration
+                          "joint_topic": args.joint_topic, "persistent": args.persistent,
+                          "motion_admitted": False}), flush=True)
+        deadline = None if args.persistent else time.monotonic() + args.duration
         with open_readonly_port(args.device) as port:
-            while rclpy.ok() and time.monotonic() < deadline:
+            while rclpy.ok() and (deadline is None or time.monotonic() < deadline):
                 started = time.monotonic()
                 stamp = node.get_clock().now().to_msg()
                 rows = read_motors(port)
@@ -79,7 +83,7 @@ def main(argv=None):
                                   "device": args.device, "joint_topic": args.joint_topic,
                                   "motors": rows, "motion_admitted": False}), flush=True)
                 time.sleep(max(0, .1 - (time.monotonic() - started)))
-        result = 0 if count and time.monotonic() >= deadline else 2
+        result = 0 if count and (deadline is None or time.monotonic() >= deadline) else 2
     except (Exception, KeyboardInterrupt) as error:
         print(json.dumps({"error": str(error), "motion_admitted": False}), flush=True)
     finally:
