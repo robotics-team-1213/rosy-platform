@@ -80,9 +80,10 @@ def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize('refresh', [True, False])
-def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypatch, refresh):
+@pytest.mark.parametrize('input_age_s',[.01,.02])
+def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypatch, refresh,input_age_s):
     session, engine, packet, client, clock, _, cameras, seen, _ = case(tmp_path, monkeypatch)
-    clock[0] += .02  # Valid under 50ms admission, but leaves little computation margin.
+    clock[0] += input_age_s  # Admission-valid; reserve time for measured submit tails.
     pauses=[]
     class LiveCamera:
         def capture(self):
