@@ -87,13 +87,25 @@ Teacher source revision: `0bc501ac85d72ff4ca358c5f0bea0a5f33ad84a6`.
 이는 helper·기존 truth 경로의 소스 검증이다. 이어 실제 release 분기의 stale/future/
 접촉·observer 오류 시 detach 차단과 정상 원본 시각 보존을 실행한 원격 회귀28PASS/
 0NEW도 확인했다. 실제 clearance·완전 해제·중력 정착은 아직 미검증이다.
-보호된 native 시연1회는 배포 READY·시작 ACK와 서비스 active/running까지 확인했으나,
-이후 시험 호스트가 VPN offline·SSH timeout이 돼 종료 결과를 회수하지 못했다.
-마지막 runtime은UNKNOWN이었다. 관찰 연결이 끊긴 것을 과제 종료나 실패로 계산하지
-않고 같은 실행을 재확인해야 한다. 새 native 실행을 시작하지 않는다.
+보호된 native 시연1회는 배포 READY·시작 ACK 뒤 관측 연결이 끊겼다. 재접속 후
+원본 teacher 결과를 회수했으며 approach·grasp 뒤 transfer 중
+`bounded_readback_step_no_progress`로 실패했다. 실제RGB1202장·capture complete·
+task_outcome failure이며 시연 전략0/1이다. learned 누적0/40과 구분하고 성공 학습
+cohort에 편입하지 않는다. Release에 도달하지 않아5mm 여유의 효과는 미검증이다.
+Teacher-result SHA256: `707f9f3d517d1087d3203067b88e5eebe6da5a79b8045829eca111c7c01b071c`.
+
+마지막 gripper readback0.4212091565rad와 원 닫힘 목표0.3804260884rad의 차이는
+0.0407830681rad였다. 중간 목표0.3862091565rad 뒤 실제0.4212312996rad로
+잔차0.0408052112rad가 돼 진전 조건을 충족하지 못했다. 팔joint1과 물체는 이동했고
+기록된 accepted137개는 모두terminal4/code0다. 접촉력은 측정하지 않았다.
+재접속 호스트 uptime은 실행 당시 owner monotonic보다 짧아 재부팅을 확인했다.
+해당 native cgroup의 잔여 프로세스는0개지만 외부result와 graceful cleanup 영수증은
+없어 cleanup 성공을 주장하지 않는다. 같은 실행은 중복 시작하지 않았다.
 Source와 보고서는 로컬main에 정식 병합됐으며 architecture267PASS/관련353PASS/
 0NEW를 확인했다. 새20/5 cohort는 해당 시연 결과를 검증한 뒤 판단한다.
 Main revision: `c17dcedce512b1657b4ac19788873502541d9c18`.
+추가 release 회귀·관측 단절 문서의 후속 착지는 연결 중단 중pytest143으로 종료돼
+미병합이다. 복구된 시험 호스트에서 재검증해야 하며 통과로 계산하지 않는다.
 기존25개 시연과 모든 실패는 보존하며 학습 정책에 scripted release나 clamp를 넣지 않는다.
 
 ## Pending native intake
