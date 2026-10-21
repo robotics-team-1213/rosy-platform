@@ -1,5 +1,5 @@
 import {accountFetch} from '/account-session.js';
-import '/common/ui.js';
+import {confirmIrreversible} from '/common/ui.js';
 import {taskRow} from '/common/workspace.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
@@ -107,7 +107,7 @@ async function refresh() {
       status:account.sharing==='project'?'프로젝트 연결':'개인 연결',
       subtitle:names.length?names.join(' · '):'기록된 저장소 권한 없음'}); list.append(row);
     if(account.sharing==='project' ? session.capabilities.includes('manage') : account.owner_id===session.user_id) button(row,'연결 해제',async()=>{
-      if(!confirm('연결을 해제하면 이 계정을 사용하는 새 가져오기가 중단됩니다. 해제할까요?'))return;
+      if(!await confirmIrreversible({message:'연결을 해제하면 이 계정을 사용하는 새 가져오기가 중단됩니다. 해제할까요?', action:'연결 해제'}))return;
       await api('/api/accounts/disconnect',{connection_id:account.connection_id}); await refresh();
     });
     const option=document.createElement('option'); option.value=account.connection_id;

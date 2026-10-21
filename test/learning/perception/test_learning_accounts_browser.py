@@ -8,7 +8,7 @@ import pytest
 from browser_harness import browser_tests_enabled, free_port, open_page
 from learning_imports import LearningImports
 from review_app import make_server
-from test_learning_accounts import accounts  # noqa: F401 — shared real encrypted account fixture
+from test_learning_accounts import accounts, sign_in as account_session  # noqa: F401 — shared real encrypted account fixture
 from test_learning_collaboration import request
 from test_learning_imports import SHA, Transport
 from test_review_app import open_store
@@ -139,9 +139,9 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
         server.shutdown(); server.server_close(); thread.join(timeout=5)
 
 
-def sign_in(page, url, accounts, name, password):
+def sign_in(page, url, accounts, name):
     """Stand-in for the Rosy Account return: the server session cookie, then a fresh page."""
-    session, _ = accounts.login(name, password)
+    session, _ = account_session(accounts, name)
     page.context.add_cookies([{'name': 'rosy_learning_session', 'value': session, 'url': url}])
     page.reload(wait_until='networkidle')
 
@@ -188,7 +188,7 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 expect(page.get_by_role('region', name='Rosy Account 로그인')).to_be_visible()
                 expect(page.locator('#account-login')).to_have_attribute('href', '/api/account/login?return=/accounts')
                 assert page.locator('#login-panel input').count() == 0
-                sign_in(page, url, accounts, 'alice', 'alice-password')
+                sign_in(page, url, accounts, 'alice')
                 expect(page.locator('#identity')).to_contain_text('작업자 alice')
                 expect(page.locator('#identity')).to_contain_text('프로젝트 one')
                 expect(page.locator('#identity')).to_contain_text('자료 가져오기')
@@ -203,6 +203,13 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                     expect(page.locator('#provider-token')).to_have_value('')
                 expect(page.locator('#connections')).to_contain_text('account-a')
                 expect(page.locator('#connections')).to_contain_text('account-b')
+                expect(page.locator('#connections > .ui-task-row')).to_have_count(2)
+                first_row = page.locator('#connections > .ui-task-row').first
+                first_row.get_by_role('button', name='연결 해제').click()
+                dialog = page.locator('dialog.ui-confirm')
+                expect(dialog).to_be_visible()
+                dialog.get_by_role('button', name='취소').click()
+                expect(dialog).to_be_hidden()
                 expect(page.locator('#connections > .ui-task-row')).to_have_count(2)
                 page.keyboard.press('Control+k')
                 page.get_by_role('textbox', name='기능 검색어').fill('사용 계정')
@@ -253,6 +260,10 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 assert 'hf_browser_' not in json.dumps(job)
                 assert 'hf_browser_' not in page.evaluate('JSON.stringify(localStorage)')
                 assert 'hf_browser_' not in page.evaluate('JSON.stringify(sessionStorage)')
+                page.locator('#connections > .ui-task-row', has_text='account-a').get_by_role('button', name='연결 해제').click()
+                page.locator('dialog.ui-confirm').get_by_role('button', name='연결 해제').click()
+                expect(page.locator('#connections > .ui-task-row')).to_have_count(1)
+                expect(page.locator('#connections')).not_to_contain_text('account-a')
                 old_session = next(item['value'] for item in page.context.cookies()
                                    if item['name'] == 'rosy_learning_session')
                 page.locator('#logout').click()
@@ -271,10 +282,9 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
 def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accounts):
     playwright = pytest.importorskip('playwright.sync_api')
     cfg = json.loads(accounts.config_path.read_text())
-    cfg['users'].append({'user_id': 'viewer', 'username': 'viewer',
-        'password_hash': cfg['users'][1]['password_hash'], 'memberships': {'one': ['view']}})
+    cfg['users'].append({'user_id': 'viewer', 'username': 'viewer', 'memberships': {'one': ['view']}})
     accounts.config_path.write_text(json.dumps(cfg))
-    _, alice = accounts.login('alice', 'alice-password')
+    _, alice = account_session(accounts, 'alice')
     connection = accounts.connect_token(alice, 'hf_team', transport=lambda _: {'id': 'team', 'name': 'team', 'type': 'user'},
         sharing='project', resources=['dataset:org/data'])
     def credential(actor, project, connection_id, generation=None, resource=None):
@@ -295,7 +305,7 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 expect = playwright.expect
                 page.goto(url + '/accounts', wait_until='networkidle')
                 def login(name):
-                    sign_in(page, url, accounts, name, 'bob-password')
+                    sign_in(page, url, accounts, name)
                     expect(page.locator('#identity')).to_contain_text('작업자 ' + name)
                 login('viewer')
                 expect(page.locator('#import-panel')).to_be_hidden()
