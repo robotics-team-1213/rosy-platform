@@ -9477,3 +9477,9 @@ osy-d395-s1d\`.
 - 변경: 배포 소스 a724865c38da와 기존 SAM3 사본을 합성 도면6종·5방식·3회 반복으로 비교하고 고정 증거를 docs/validation/map-extraction-2026-10-21/ai-evaluation.md에 남겼다. 후보는 미선정이며 운영 연결을 추가하지 않는다.
 - 증거: 모델 PC의 기존 환경에서 총90회 관측했다. 품질 기준 통과는 일반6/6·대화형박스4/6·점1/6·텍스트2/6·박스예시2/6이다. 원본 receipt·입력·스크립트·가중치·소스 묶음 해시와 환경 차이·위상 손실·추가 검증 경계를 기록했다. 문서 계약 검증은 최종 커밋의 원격 결과로 확인한다.
 - gate 변화: 없음. 합성 탐색 측정이며 모델 승격·AI PC 적재·실제 CAD·실기 주행·FIELD 인수를 뜻하지 않는다.
+
+## 2026-10-21 · uncommitted · native OMX 구간 내보내기 공개 기준 분리
+
+- 변경: D-833 구간 선택·원본 계보를 보존한 child Episode 내보내기·기존 ACT receipt 검증 분기를 공개 origin/main 기준으로 분리했다. 이번에 추가한 D-833의 선점 gap만 제거했고 다른 미게시 코드·장치 실행·SIM 변경은 포함하지 않는다.
+- 증거: `e7ba4f29eb` 공식 원격 관련 검사 44 passed/1 skipped, NEW 0. 고정 LeRobot 0.4.4 환경에서 별도 합성 native 파일 10프레임을 실제 내보내고 state/action/int64 시계·이미지·원본 hash·receipt를 확인했다. [공개 기준 검증](validation/omx-grasp-publication-2026-10-21/foundation.md).
+- gate 변화: offline 데이터/receipt 검증 범위다. 화면 연결·실물 성공·모델 품질·데이터 절감 효과 수용은 이 기록으로 만들지 않는다.
