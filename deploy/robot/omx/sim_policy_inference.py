@@ -1,6 +1,6 @@
 """Explicit SIM caller: preserve original ACT input and return an unadmitted candidate."""
 from dataclasses import replace
-from time import perf_counter_ns
+from time import perf_counter_ns, sleep
 from act_owner_capture import infer_captured
 from rosy.execution.local.omx_policy import PolicyCandidate
 
@@ -13,13 +13,27 @@ def infer_for_owner(engine, session, camera, *, timings=None):
     if engine.metadata != doc:
         raise ValueError('different installed policy')
     checked=perf_counter_ns()
-    with session._lock:
-        locked=perf_counter_ns()
-        lease = session.lease
-        with camera.capture() as packet:
-            captured=perf_counter_ns()
-            observation = session.capture_inference_input(packet.rgb, packet.metadata)
-    frozen=perf_counter_ns()
+    budget_ns=doc['timing']['max_observation_age_ns']
+    capture_deadline=started+budget_ns
+    capture_times=dict(initial_lock_wait=0.,camera_lock_wait=0.,guarded_input_capture=0.,capture_retry_wait=0.)
+    while True:
+        waiting=perf_counter_ns()
+        with session._lock:
+            locked=perf_counter_ns()
+            lease = session.lease
+            with camera.capture() as packet:
+                captured=perf_counter_ns()
+                observation = session.capture_inference_input(packet.rgb, packet.metadata)
+            age=int(session._clock()*1e9)-min(observation.observed_at_ns,observation.camera_received_at_ns)
+        frozen=perf_counter_ns()
+        capture_times['initial_lock_wait']+=(locked-waiting)/1e6
+        capture_times['camera_lock_wait']+=(captured-locked)/1e6
+        capture_times['guarded_input_capture']+=(frozen-captured)/1e6
+        # Reserve time for computation and final admission before creating a candidate.
+        if frozen>=capture_deadline:raise TimeoutError('fresh inference capture margin unavailable')
+        if 0<=age<=budget_ns//4:break
+        sleep(.01)  # Release both locks so real joint/camera intake can advance.
+        capture_times['capture_retry_wait']+=(perf_counter_ns()-frozen)/1e6
     result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
                             monotonic=session._clock)
     inferred=perf_counter_ns()
@@ -34,8 +48,8 @@ def infer_for_owner(engine, session, camera, *, timings=None):
             raise ValueError('lease or model changed during inference')
     finished=perf_counter_ns()
     if timings is not None:
-        stamps=(started,checked,locked,captured,frozen,inferred,relocked,finished)
-        timings.update(zip(('installed_binding','initial_lock_wait','camera_lock_wait',
-            'guarded_input_capture','numerical_inference','final_lock_wait','final_guard'),
-            ((end-begin)/1e6 for begin,end in zip(stamps,stamps[1:]))))
+        timings.update(capture_times,capture_selected_input_age=age/1e6,
+            installed_binding=(checked-started)/1e6,
+            numerical_inference=(inferred-frozen)/1e6,
+            final_lock_wait=(relocked-inferred)/1e6,final_guard=(finished-relocked)/1e6)
     return PolicyCandidate(**result.candidate_fields()), result
