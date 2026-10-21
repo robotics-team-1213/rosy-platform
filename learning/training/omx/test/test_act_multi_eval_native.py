@@ -134,7 +134,7 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         weights=initial/'policy/model.safetensors';raw=weights.read_bytes()
         try:
             weights.write_bytes(b'changed parent')
-            with pytest.raises(ValueError,match='changed'):
+            with pytest.raises(ValueError,match='hash/size differs'):
                 initialize_absolute_parent(model,stats,source,initial)
         finally:weights.write_bytes(raw)
     assert report['train_episodes']==ids[:2] and report['eval_episodes']==ids[2:]
