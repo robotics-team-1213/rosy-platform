@@ -185,7 +185,7 @@
 - 증거: 시험 PC 캡처(전·후)와 정적 점검. 원격 pytest는 별도 기록한다.
 - gate 변화: 없음.
 
-## 2026-10-21 · fix/learning-rosy-account-only · 학습 앱 로그인을 Rosy Account 하나로
+## 2026-10-21 · fa16d35617 · 학습 앱 로그인을 Rosy Account 하나로
 
 - 변경: 학습 앱의 자체 아이디·비밀번호 로그인(`POST /api/accounts/login`)과 HF OAuth 로그인을 HTTP에서 뺐다. `--collaboration` 설정은 `account_client_file`이 없으면 시작을 거절한다(D-757). Account에서 `learning.*` 권한을 받은 사용자는 학습 설정의 초대(`users`/`account_subjects`) 없이 들어온다. 이름만 같은 기존 학습 신원은 넘겨받지 않는다. 학습 권한 없이 로그인한 사용자는 401 대신 403과 권한 요청 안내를 받아 로그인 반복에 빠지지 않는다. `/accounts`의 로그인 칸은 Rosy Account 로그인 링크다. OAuth 연결 요청도 `X-Pinky-Token`을 요구한다.
 - 증거: 원격 pytest는 별도 기록한다.
