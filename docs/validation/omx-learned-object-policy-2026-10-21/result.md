@@ -40,7 +40,28 @@ Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint�
 고정한 source938791127b의 bounded head/command_entry/noise0.02를 사용한다.
 시작 요청이나 자료 검증 횟수는 학습 완료·물체 성공으로 계산하지 않는다.
 
-## 실제 데이터와 선택한 checkpoint
+## 최신 bounded checkpoint — 실제 물체 결과 대기
+
+실제 학습 source revision: `938791127b432cdb1e1e6dd578955e661fd41a38`.
+실행 `omx-object-training-42a03f4605a8a021`의 10,000step(seed42750/n_action_steps1),
+전체 validation13,246프레임과 재적재 일치를 확인했다. MAE0.00728356909769362rad,
+상수 baseline0.29584911500909206rad, 관절 한계 위반0이다. 직전 noise 모델의
+MAE0.006948906675814038rad보다 커졌으며 offline_only가 과제 성공은 아니다.
+
+- Policy revision: `cb369406aff1996107a57b3837ca5d780d3722b03f193550556e77563da8bde2`.
+- Dataset revision: `e0b17b890f08519cf419bd75e6ed265fbf09ed313ec8d42d8cb7587b72bd0a06`.
+- Normalization SHA256: `1cf925271b485ed6db4193052066eb7f9291f54ff1d72ecff0af54c35d7eca6e`.
+- Weights SHA256: `4fa0807ff40c1c4cb5bf9396c3367b5f609a1b8322201a90dc837d886acba43d` (45,371,416bytes).
+- Optimizer history SHA256: `73894d8a7adc594ebeaaa7afe628ccb4b71a88b3c7d57978a1ae1c4b0f4ffb65` (10,000件).
+- Training-index SHA256: `5e23c544256bfbf17189a37bae6ceb06e9d7a6ec78ed6ce948019ea3a383d7f9` (6,263/52,834 train frames).
+
+변환 type과 bound 외 모든 normalization 필드는 직전 모델과 동일하다. 원 시연·
+선택 index·원 target·train noise0.02/seed42751을 유지했다. 선택 train 시작 frame의
+1,953/6,263개는 원 gripper 이동량이0.035rad를 넘으며 clipping 없이 잔차로 남는다.
+이 수치는 clean 시작 frame 기준이며 noisy 입력·전체 future chunk 분포가 아니다.
+DatasetStore 복사·require와 bundle 전송은 진행 중이다. 새 물체 과제는 아직 시작하지 않았다.
+
+## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
 선택한 시연은 batch 7·9·10·11·12·14·15·16에서 각 3개, batch 17에서 1개로
 총 25개다. 독립 SIM 정답과 실제 RGB 66,080프레임의 변환·전체 readback을
