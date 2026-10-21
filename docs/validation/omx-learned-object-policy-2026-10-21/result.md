@@ -19,7 +19,7 @@
 제출 90.231ms였고 owner 검증은 통과했다. Actor 160.244s, root 223.523s,
 HOLD/cleanup true, attach/lift/stable 성공 없음이다. XY 0.229265m/Z 0.010000m는
 `incomplete_trial_observation`이다. policy-result SHA256: `87cec786e6a516dc0effe31fc7b4a484d24c81ce310d188ce0e1cfde1810ab44`.
-Checkpoint는 `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c`를 유지한다.
+Policy revision: `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c` (유지).
 진단 기록만 600s/10ms 재시도와 600 outer cycle을 수용하는 60,600건으로 제한한다.
 모든 원 SHA와 두 timestamp를 보존하며 RGB를 audit에 복사하지 않는다. 500ms 신선도,
 0.04rad 제한, 600s budget, owner lease와 controller tolerance는 유지한다.
