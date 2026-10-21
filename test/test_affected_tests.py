@@ -418,6 +418,19 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
         assert entry["ros"] in {"none", "base", "overlay"}, entry["name"]
 
 
+def test_standalone_app_tests_are_required_in_full_and_affected_ci():
+    repo = affected.Repo.load(ROOT)
+    path = 'applications/fleet/test'
+    for selection in (affected.Selection('full', []), affected.select(repo, [path + '/test_sample_browser.py'])):
+        matrix = affected.ci_matrix(repo, selection)['include']
+        owners = [entry for entry in matrix if any(
+            p == path or p.startswith(path + '/') for inv in entry['invocations'] for p in inv)]
+        assert owners and all(entry['gating'] and entry['ros'] == 'none' for entry in owners)
+        if selection.mode == 'full':
+            assert len(owners) == 1
+            assert owners[0]['invocations'] == [[path]]
+
+
 def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # Main CI 38807338775 (2026-10-15) took 224/528/168/275 s with the 2026-10-10 weights;
     # the measured table must keep the slowest shard near a quarter of the suite.
