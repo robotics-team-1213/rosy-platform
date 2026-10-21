@@ -1,6 +1,7 @@
 """Native Cell observations use Fleet auth and expire without a developer viewer."""
 from io import BytesIO
 import json
+from pathlib import Path
 import threading
 import time
 from types import SimpleNamespace
@@ -18,7 +19,8 @@ def cell_url():
     import uvicorn
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
-    app = create_app(FleetConsole([], []), console_token="viewer-token", cell_job_compiler=None)
+    app = create_app(FleetConsole([], []), console_token="viewer-token", cell_job_compiler=None,
+                     web_common=Path(__file__).resolve().parents[1] / "shared" / "web")
     listener = safe_listener()
     port = listener.getsockname()[1]
     server = uvicorn.Server(uvicorn.Config(app, log_level="error"))
@@ -38,7 +40,9 @@ def cell_url():
 
 def observation_feed(page):
     from PIL import Image
-    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[])
+    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], failed_assets=[])
+    page.on("response", lambda response: state.failed_assets.append(f"{response.status} {response.url}")
+            if response.request.resource_type in ("script", "stylesheet") and not response.ok else None)
     encoded = BytesIO()
     Image.new("RGB", (4, 4), color="green").save(encoded, format="JPEG")
     jpeg = encoded.getvalue()
@@ -104,6 +108,8 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, _ = observation_feed(page)
         page.goto(cell_url)
+        assert not state.failed_assets, state.failed_assets
+        assert not errors, errors
         root = page.locator("#workcell-observations")
         expect(root.locator("[data-arm-source]")).to_have_count(2)
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
@@ -135,6 +141,8 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
         state, snapshot = observation_feed(page)
         page.goto(cell_url)
+        assert not state.failed_assets, state.failed_assets
+        assert not errors, errors
         root = page.locator("#workcell-observations")
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
         expect(root.locator('[data-camera-source="top"] img')).to_be_visible()
