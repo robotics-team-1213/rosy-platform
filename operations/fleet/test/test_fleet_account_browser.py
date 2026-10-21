@@ -3,6 +3,7 @@ import threading
 import os
 import json
 import time
+from urllib.parse import urlencode
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,38 @@ from fleet.swarm.robots import RobotEndpoint
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium scenario')
 ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize('account_page', ['multi'], indirect=True)
+def test_denied_login_stays_visible_and_allows_another_account(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    page.goto(origin + '/console/login')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    target = '/api/fleet/auth/authorize?' + urlencode({
+        'response_type': 'code', 'client_id': 'learning', 'redirect_uri': 'https://learning.test/callback',
+        'scope': 'project:one', 'state': 'test-state', 'code_challenge': 'x' * 43,
+        'code_challenge_method': 'S256'})
+    authorizations = []
+    def authorized(route):
+        authorizations.append(route.request.url)
+        route.fulfill(content_type='text/html', body='<h1>Application authorization</h1>')
+    page.route('**/api/fleet/auth/authorize?**', authorized)
+    with page.expect_response('**/api/fleet/auth/session'):
+        page.goto(origin + '/console/login?' + urlencode({'error': 'access_denied', 'return': target}))
+    expect(page.locator('#login-recovery')).to_be_visible()
+    expect(page.locator('#login-recovery-status')).to_contain_text('프로젝트 권한')
+    expect(page.locator('[data-login=login]')).to_be_visible()
+    assert not authorizations
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.locator('[data-login=login]').fill('bob')
+    page.locator('[data-login=password]').fill('pw-1234')
+    page.locator('[data-login=submit]').click()
+    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible()
+    assert len(authorizations) == 1 and authorizations[0] == origin + target
+    assert page.request.get(origin + '/api/fleet/auth/session').json()['principal_id'] == 'bob'
 
 
 @pytest.fixture
