@@ -52,6 +52,33 @@ def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
             app.shutdown()
 
 
+@pytest.mark.parametrize('cookie_scope,expected', [('own', 403), ('legacy', 401), ('other', 401)])
+def test_central_session_without_project_grant_uses_scoped_cookie(tmp_path, cookie_scope, expected):
+    from learning_collaboration import Collaboration, COOKIE
+
+    class NoGrant(Accounts):
+        def authenticate(self, session):
+            principal = super().authenticate(session)
+            principal['capabilities'] = []
+            return principal
+
+    account = NoGrant()
+    account.public_origin = 'https://learning.example:9444'
+    account.receiver = SimpleNamespace(retry_revocations=lambda: None)
+    app = Collaboration(account, open_store(tmp_path))
+    try:
+        name = COOKIE + (app.cookie_suffix if cookie_scope == 'own' else '_other' if cookie_scope == 'other' else '')
+        responses = []
+        handler = SimpleNamespace(headers={'Cookie': name + '=reader'}, extra_headers=[],
+                                  path='/api/accounts/session',
+                                  send=lambda body, status=200: responses.append((body, status)))
+        assert app.get(handler, '/api/accounts/session', 'csrf-token')
+        assert responses[0][1] == expected
+        assert not handler.extra_headers  # No login redirect or session replacement.
+    finally:
+        app.shutdown()
+
+
 class Accounts:
     project_id = 'alpha'
     public_origin = None

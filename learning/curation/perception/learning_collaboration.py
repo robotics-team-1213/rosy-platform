@@ -93,7 +93,7 @@ class Collaboration:
 
     def signed_in(self, handler):
         try:
-            self.accounts.authenticate(cookie(handler, COOKIE))
+            self.accounts.authenticate(self.cookie(handler, COOKIE))
             return True
         except PermissionError:
             return False

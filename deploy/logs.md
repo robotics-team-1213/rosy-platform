@@ -3088,7 +3088,7 @@
 - Evidence: Fleet Python 3.14.4 isolated environment imports native ROS, canonical protocol modules and pinned websockets 17.0.1/SDK 3.8.4 successfully. The two service units pass systemd-analyze verification; an unrelated installed spice-vdagent unit warns. Import/unit validation did not subscribe or open serial devices.
 - Gate: unchanged. Signed candidate build/activation, installed persistent services, normal-origin live Cell display and physical motion remain pending. No torque writes, grasp or learned policy acceptance is established.
 
-## 2026-10-22 - Learning Center publication source port
+## 2026-10-22 · uncommitted · Learning Center publication source port
 - Change: bind center lifecycle to the hardened official review installer and extend the signed model-code dependency closure. Fleet receives a fixed protected Learning entry configuration.
 - Evidence: syntax and required-member inventory checked; committed-source remote regression is pending. Earlier development-branch tests do not certify this publication port.
 - Gate: unchanged; signed image activation, authenticated acceptance and physical training remain pending.

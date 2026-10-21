@@ -1213,3 +1213,8 @@ The existing dataset review writer keeps its original human results behind a loo
 
 원문을 보존한 전처리와 등록 대상·의미 검증을 Console/Discord의 기존 Decision 경계에 둔다. 모델 사용량은 실제 응답으로 계측하고 새 Discord profile은 제안 전용을 유지한다. 전문은 [D-831](../adr/D-831-operator-command-preprocessing.md).
 
+## D-840 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다
+
+**Status:** Accepted for implementation (2026-10-22).
+
+기존 중앙 Account 프로젝트에서 로봇·참여 구성·과제·학습 방식·계산 자원을 구분한다. Fleet의 공통 Learning 진입은 보호된 `/learning`으로 연결하며 OMX는 첫 지원 어댑터다. 전문은 [D-840](../adr/D-840-shared-multi-robot-learning-center.md).
