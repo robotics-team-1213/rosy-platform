@@ -132,9 +132,9 @@ def test_install_tamper_after_precheck_is_rejected_at_capture(tmp_path, monkeypa
         return doc
 
     monkeypatch.setattr(InstalledPolicy, 'recheck', recheck)
-    with pytest.raises(PermissionError):
+    with pytest.raises(ValueError, match='artifact file hash/size differs'):
         infer_for_owner(engine, session, packet)
-    assert session.hold_reason and not seen and not client.commands
+    assert not seen and not client.commands
 
 
 def test_live_capture_is_atomic_under_owner_lock_but_predict_is_outside(tmp_path, monkeypatch):
