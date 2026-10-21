@@ -40,6 +40,44 @@ def test_command_entry_and_exit_keeps_last_eligible_original_frame_and_order():
     assert chunk_indices(len(rows),2,4)==[2,3,4,5]
 
 
+def test_place_open_sampling_adds_only_eligible_original_interiors_until_arm_moves(tmp_path):
+    import copy
+    import json
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    commands=[dict(command_id=key,sim_time=stamp,
+                   target=dict(zip(names,[arm,0.,0.,0.,0.,grip])))
+              for key,stamp,arm,grip in [('a',1.,.1,.4),('b',2.,.2,.4),
+                  ('c',3.,.2,.3),('d',4.,.3,.3),('e',5.,.2,.2)]]
+    phases=[dict(phase_id='transfer',started_sim_s=.5,ended_sim_s=2.5)]
+    proof=tmp_path/'truth.json'
+    for name,value in [('phases',phases),('commands',commands)]:
+        (tmp_path/(name+'.json')).write_text(json.dumps(value))
+    proof.write_text(json.dumps(dict(files={key:dict(path=key+'.json')
+                                           for key in ('phases','commands')})))
+    rows=[]
+    for command in commands:
+        action=list(command['target'].values())
+        for _ in range(4):
+            rows.append(dict(command_id=command['command_id'],ros_goal_id='g'+command['command_id'],
+                             **{'action':action[:],'observation.state':action[:]}))
+    rows[5]['observation.state'][0]-=.0351
+    original=copy.deepcopy(rows)
+    endpoints=[0,3,4,7,8,11,12,15,16,19]
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_and_exit')==endpoints
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_exit_and_place_open',
+        sim_truth=proof)==sorted(endpoints+[6,9,10])
+    assert rows==original
+    assert chunk_indices(len(rows),6,4)==[6,7,8,9]
+
+
+def test_place_open_sampling_requires_original_sim_truth_metadata():
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    with pytest.raises(ValueError,match='SIM truth'):
+        act_job.training_sample_indices([],names,sampling='command_entry_exit_and_place_open')
+
+
 @pytest.mark.parametrize('sampling',['command_entry','command_entry_and_exit'])
 def test_command_entry_sampling_refuses_to_drop_unrepresented_commands(sampling):
     import act_job
