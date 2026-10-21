@@ -172,7 +172,7 @@ jobs:
           echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Fleet browser verification tools
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
         run: |
           python3 -m playwright install --with-deps chromium
 
