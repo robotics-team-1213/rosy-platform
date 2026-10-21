@@ -112,13 +112,46 @@ def test_preview_loader_uses_the_strict_shared_manifest(manifest, invalid):
         cli._vision_ingest(_args(path), [], environ=env)
 
 
-def test_dynamic_paired_credential_cannot_reuse_a_preview_camera_bearer(manifest, tmp_path):
+@pytest.mark.parametrize("secret", [
+    "ROSY_CAMERA_BENCH", "ROSY_CAMERA_WRIST", "ROSY_PHONE_BENCH", "ROSY_FLEET_BENCH",
+    "ROSY_FLEET_NORTH", "ROSY_PAIRING_SYNC", "ROSY_VISION_PREVIEW_SECRET",
+])
+def test_dynamic_paired_credential_cannot_reuse_another_vision_bearer(manifest, tmp_path, secret):
     path, _, env = manifest
     configs, calibrated_env = _configs(tmp_path)
-    ingest, _ = cli._vision_ingest(_args(path, *SYNC_FLAGS), configs, environ=env | calibrated_env)
-    digest = hashlib.sha256(b"bench-camera-token").digest()
+    env |= calibrated_env | {"ROSY_VISION_PREVIEW_SECRET": "preview-" + "x" * 32}
+    ingest, _ = cli._vision_ingest(_args(path, *SYNC_FLAGS), configs, environ=env)
+    digest = hashlib.sha256(env[secret].encode("utf-8")).digest()
     ingest.paired.replace_rows([("ceiling_north", digest, "issued-camera", time.time() + 3600)])
     assert ingest.paired.check("ceiling_north", digest)[0] != "ok"
+
+
+def test_reserved_paired_digest_rejects_its_source_and_keeps_other_sources():
+    from rosy_vision.pairing_sync import PairedCredentials
+
+    reserved = hashlib.sha256(b"preview-camera-token").digest()
+    good = hashlib.sha256(b"issued-phone-token").digest()
+    credentials = PairedCredentials(["north", "south"], forbidden_digests={reserved})
+    credentials.replace_rows([
+        ("north", good, "north-good", time.time() + 3600),
+        ("north", reserved, "north-reused", time.time() + 3600),
+        ("south", good, "south-good", time.time() + 3600),
+        ("unconfigured", good, "unknown", time.time() + 3600),
+    ])
+    assert credentials.available()
+    assert credentials.check("north", reserved) == ("unknown", None)
+    assert credentials.check("north", good) == ("unknown", None)
+    assert credentials.check("south", good) == ("ok", "south-good")
+    assert credentials.check("unconfigured", good) == ("unknown", None)
+
+
+def test_paired_digest_guard_is_optional_for_existing_callers():
+    from rosy_vision.pairing_sync import PairedCredentials
+
+    digest = hashlib.sha256(b"issued-phone-token").digest()
+    credentials = PairedCredentials(["north"])
+    credentials.replace_rows([("north", digest, "issued", time.time() + 3600)])
+    assert credentials.check("north", digest) == ("ok", "issued")
 
 
 @pytest.mark.parametrize("combined", [False, True])
