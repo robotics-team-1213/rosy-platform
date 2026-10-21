@@ -87,6 +87,46 @@ def test_teacher_refuses_detach_without_measured_clearance(height):
             NS(length=.04,width=.03,height=.03),(0.,0.,.025))
 
 
+@pytest.mark.parametrize('fault',[None,'stale','future','contact','observer'])
+def test_release_branch_detaches_only_after_fresh_measured_clearance(fault):
+    import ast
+    from types import SimpleNamespace as NS
+    from sim_pick_place_teacher import release_clearance_evidence
+    source=ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
+    branch=next(n for n in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+        if isinstance(n,ast.If) and ast.unparse(n.test)=="phase.phase_id == 'release'"
+        and any(isinstance(c,ast.Constant) and c.value=='pre_detach_geometry' for c in ast.walk(n)))
+    observation=dict(model_pose_base=dict(z_m=.025 if fault=='contact' else .03,
+                                          roll_rad=0.,pitch_rad=0.))
+    def observe():
+        if fault=='observer':raise RuntimeError('independent observation stale')
+        return observation
+    detaches=[]
+    def detach(model):
+        detaches.append(model)
+        return dict(confirmed=True)
+    names=[f'joint{i}' for i in range(1,6)]
+    received=9. if fault=='stale' else 10.2 if fault=='future' else 10.
+    state=NS(positions=dict.fromkeys(names,0.),sequence=12,received_at=received)
+    event={}
+    namespace=dict(phase=NS(phase_id='release'),event=event,observe=observe,
+        arm=NS(latest_joint_state=state,monotonic=lambda:10.1),profile=NS(max_joint_state_age_s=.5),
+        kin=NS(fk=lambda _:NS(x=0.,y=0.,z=.03)),ARM_JOINTS=names,
+        recipe=NS(box=NS(length=.04,width=.03,height=.03)),goal=(0.,0.,.025),
+        aid=NS(detach=detach),release_clearance_evidence=release_clearance_evidence)
+    code=compile(ast.Module(body=[branch],type_ignores=[]),str(source),'exec')
+    if fault is not None:
+        with pytest.raises(RuntimeError):exec(code,namespace)
+        assert detaches==[]
+    else:
+        exec(code,namespace)
+        assert detaches==['infeed_block']
+        evidence=event['pre_detach_geometry']
+        assert evidence['observation'] is observation
+        assert evidence['joint_state']==dict(positions=state.positions,sequence=12,
+                                             received_at=10.,checked_owner_s=10.1)
+
+
 def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_waypoint():
     from sim_pick_place_demonstrations import readback_target
     current={'joint3':.22406642138957977,'gripper_joint_1':.41159433126449585}
