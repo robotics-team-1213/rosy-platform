@@ -941,12 +941,14 @@
           "implementation": "operations/fleet/fleet/server/missions/policy_governance_routes.py",
           "handler": "close_window",
           "expected_statuses": [
+            200,
             403
           ],
           "status": "verified",
-          "verification_scope": "Refusal response only; successful configured path remains unverified",
+          "verification_scope": "Observed passing HTTP test; successful configured response and authorization refusal",
           "contract_tests": [
-            "operations/fleet/test/test_ai_facts.py"
+            "operations/fleet/test/test_ai_facts.py",
+            "operations/fleet/test/test_app_frontend_success_contracts.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/workcells/{workcell_id}/policy/windows/{window_id}/close"
@@ -2055,12 +2057,14 @@
           "implementation": "operations/fleet/fleet/server/trips/trip_routes.py",
           "handler": "fleet_trip_confirm_replan",
           "expected_statuses": [
+            200,
             403
           ],
           "status": "verified",
-          "verification_scope": "Refusal response only; successful configured path remains unverified",
+          "verification_scope": "Observed passing HTTP test; successful configured response and authorization refusal",
           "contract_tests": [
-            "operations/fleet/test/test_ai_facts.py"
+            "operations/fleet/test/test_ai_facts.py",
+            "operations/fleet/test/test_app_frontend_success_contracts.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/trips/{trip_id}/confirm-replan"
@@ -2776,12 +2780,15 @@
           "implementation": "operations/fleet/fleet/server/cell/cell_job_routes.py",
           "handler": "cell_job_reconcile",
           "expected_statuses": [
+            200,
+            403,
             503
           ],
           "status": "verified",
-          "verification_scope": "Refusal response only; successful configured path remains unverified",
+          "verification_scope": "Observed passing HTTP test; successful configured response and authorization refusal",
           "contract_tests": [
-            "operations/fleet/test/test_cell_job_recovery.py"
+            "operations/fleet/test/test_cell_job_recovery.py",
+            "operations/fleet/test/test_app_frontend_success_contracts.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-jobs/{mission_id}/reconcile"
@@ -3399,12 +3406,14 @@
           "implementation": "operations/fleet/fleet/server/auth/enrollment_routes.py",
           "handler": "enrollment_delete",
           "expected_statuses": [
+            200,
             403
           ],
           "status": "verified",
-          "verification_scope": "Refusal response only; successful configured path remains unverified",
+          "verification_scope": "Observed passing HTTP test; successful configured response and authorization refusal",
           "contract_tests": [
-            "operations/fleet/test/test_enrollment_api.py"
+            "operations/fleet/test/test_enrollment_api.py",
+            "operations/fleet/test/test_app_frontend_success_contracts.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#DELETE:/api/fleet/enrollment/robots/{robot_id}"
@@ -3853,12 +3862,14 @@
           "implementation": "operations/fleet/fleet/server/auth/pairing_routes.py",
           "handler": "pairing_reject",
           "expected_statuses": [
+            200,
             403
           ],
           "status": "verified",
-          "verification_scope": "Refusal response only; successful configured path remains unverified",
+          "verification_scope": "Observed passing HTTP test; successful configured response and authorization refusal",
           "contract_tests": [
-            "operations/fleet/test/test_pairing_api.py"
+            "operations/fleet/test/test_pairing_api.py",
+            "operations/fleet/test/test_app_frontend_success_contracts.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pairing/v1/requests/{request_id}/reject"
@@ -4257,12 +4268,15 @@
           "implementation": "operations/fleet/fleet/server/sitemap/start_point_routes.py",
           "handler": "delete",
           "expected_statuses": [
-            403
+            200,
+            403,
+            409
           ],
           "status": "verified",
-          "verification_scope": "Refusal response only; successful configured path remains unverified",
+          "verification_scope": "Observed passing HTTP test; successful configured response and authorization refusal",
           "contract_tests": [
-            "operations/fleet/test/test_start_points.py"
+            "operations/fleet/test/test_start_points.py",
+            "operations/fleet/test/test_app_frontend_success_contracts.py"
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#DELETE:/api/fleet/start-points/{source_id}"
