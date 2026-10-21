@@ -365,15 +365,33 @@ run `0dc9741a9f76`은 94candidate·94intent·93UUID·93terminal 상태4/code0 �
 대기 출력·결속 reader replay 검사 5개를 생략 없이 통과했다. 앞선 일반 시험의
 fixture 누락 2건과 native 시험의 reader 경로 오류 2건은 별도 실패 로그로 보존했다.
 실제 ACT 시험도 새 물체 과제 성공이 아니다. 같은 실제 시연 25개의 새로운 10,000 step
-학습을 시작했으며 이 표현으로 완료된 checkpoint와 물체 성공은 아직 없다.
+학습은 아래와 같이 완료했으며 이 표현의 실제 물체 과제 성공은 아직 없다.
 
 후속 실제 MODEL 실행 `omx-object-training-14d92ea309083414`는 같은 25개·
-66,080프레임의 curation·전체 reader readback과 20/5 분할을 확인하고 optimizer
-학습 중이다. Curation·분할 해시는 이전 실행과 같고 학습 시작점 6,263개도 동일하다.
+66,080프레임의 curation·전체 reader readback과 20/5 분할을 확인하고 실제 10,000 step,
+checkpoint 재로딩·DatasetStore 등록·등록본 재검증·모델 묶음 전송을 exit 0으로 완료했다.
+Curation·분할 해시는 이전 실행과 같고 학습 시작점 6,263개도 동일하다.
 원 절대 평가 baseline과 state 통계도 이전 파일과 대조해 같음을 확인했다.
 실제 정규화 SHA256: `de4d107ed599eeb8b6c90b48d6dc3559f7a31aed96ce3a66f17b89bfb209a0a1`.
-그 파일의 nested 표현과 legacy 필수 통계 부재를 확인했다. 새 10,000 step 완료·
-checkpoint 재로딩·DatasetStore 등록·물체 성공은 아직 확인 전이다.
+그 파일의 nested 표현과 legacy 필수 통계 부재를 확인했다. 전체 validation 13,246프레임의
+MAE는 0.0037910785653385267rad, 상수 baseline은 0.29584911500909206rad,
+관절 한계 위반은 0이다. Seed 42750·n_action_steps=1이며 판정은 `offline_only`다.
+실제 물체 과제 성공은 아직 확인 전이다.
+
+| 상대 표현 모델 산출물 | 고정 식별자 |
+|---|---|
+| Policy revision | `5814ad548c19236ce74677679477fcaac38f2d12b351e359d3dd95a3293a681e` |
+| Dataset revision | `bbca52f6f53add7c2e51850f5900f2f7015462420ff2dcdcbecb8d039b99e9fb` |
+| Model weights SHA256 | `926eeef12d14b96f147c8d3f71b17459974a51786bf72f4b865d1c91ba4c2177` |
+| 10,000개 loss 이력 SHA256 | `cf496fbe2d6d0cb9dbfc4c013e5b03ee60100bc063eecb8c468c8937d31162e0` |
+
+새 calibration 배포 준비 `85d66545afb4`는 기존 공용 SDK 환경 경로 부재로
+`FAILED_OR_UNKNOWN`을 반환했다. 원 receipt와 HOLD를 보존하며 이 시도에서 calibration·
+물체 과제는 시작하지 않았다. 새 모델을 실제 물체 평가 완료로 계산하지 않는다.
+원격 상태 디렉터리·staging 부재와 unit not-found/inactive·PID 0을 재대조하고
+원 HOLD를 별도 보존했다. 동일 소스의 공식 시험 의존 환경으로 SDK import·고정
+profile 검사를 수행해 exit 0·ROS init false·정책 goal 0을 확인했다. 복구 배포
+`08e7e2e8a9ce`는 READY 뒤 calibration 시작을 요청했으며 아직 종료 결과는 없다.
 
 이후 main dc8c3cc2bf를 충돌 없이 반영한 통합 source `9bcca8e7bd`는 공식 selector의
 관련 55개 경로를 AI PC에서 실행해 1,077 PASS / 34 SKIP / 0 NEW를 확인했다.
