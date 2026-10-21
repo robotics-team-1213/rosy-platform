@@ -188,6 +188,7 @@ def _verifier(calls):
         manifest = json.loads((Path(folder) / 'release.json').read_text())
         manifest.setdefault('account_https', True)
         manifest.setdefault('omx', True)
+        manifest.setdefault('workcell', True)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
     return verify
@@ -579,6 +580,30 @@ def test_omx_overlay_from_the_candidate_is_allowed(host, overlay):
         stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("pairing", [False, True])
+@pytest.mark.parametrize("omx", [False, True])
+@pytest.mark.parametrize("account", [False, True])
+def test_signed_workcell_overlay_composes_with_existing_optional_overlays(host, pairing, omx, account):
+    names = (["pairing"] if pairing else []) + (["omx"] if omx else []) + ["workcell"]
+    names += ["account"] if account else []
+    overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
+    with host.paths.site_env.open("a", encoding="utf-8") as stream:
+        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_legacy_candidate_cannot_enable_unsigned_workcell_overlay(host, loaded):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "workcell": False}))
+    (old / "deploy/site/compose.workcell.yaml").write_text("services: {}\n")
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.workcell.yaml"}
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=loaded, env=env)
 
 
 def test_legacy_candidate_cannot_enable_unsigned_account_overlay(host):
