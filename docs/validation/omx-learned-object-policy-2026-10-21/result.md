@@ -112,6 +112,22 @@ bounded ACT의 실제 학습·재적재·replay 검사를 포함해10PASS/0SKIP/
 비교 학습 source revision: `5f471d5c7913715368bcc10cbed3c7af8267c112`.
 새 학습을 요청했고 아직 완료나 실제 물체 성공은 확인하지 않았다.
 
+원장 연결 축소는 제품에 적용하지 않았다. 종료된 실제141명령/3257callback을 원장
+복사본에 재생한 ABBA 비교에서 기존 prepare 평균2.324/2.314ms, 단일 transaction
+후보8.259/5.876ms였다. 각 복사본의 본 DB를 WAL 없이 다시 열어 모든 사실의 저장과
+integrity_check를 확인했다. 이는 ROS 명령 없는 재생이며 실제 과제 분모에 넣지 않는다.
+첫 비교는 benchmark의 미닫힌 SQLite 연결 때문에 base DB 자기 검증이 실패해 미채택했고,
+연결을 닫도록 고친 `omx-prepare-connection-measurement-2`만 유효한 비교로 보존했다.
+
+호출자의 입력 선택 cap은 원 max_observation_age의1/4에서1/10로 강화했다.
+SIM의500ms 계약에서는125ms 대신50ms 이내의 실제 새 capture를 기다린다. 원 sequence·
+receipt·RGB를 그대로 보존하고 최종500ms/600초 deadline 검사를 유지한다. 실제 선택 cap과
+나이·대기 시간은 step timing에 기록한다. 이 여유는 최종 freshness 통과를 보장하지 않는다.
+Capture source revision: `8f728fb5e0aa86fed0951f0256ef622f02670063`.
+수정 전 회귀2FAIL, 수정 후114PASS/1SKIP/0NEW와 독립 검토를 통과했다. 이 변경이
+controller 도달 오차를 해결했다는 증거는 없고, 다음 native 평가는 noise0 checkpoint와
+새 capture runtime을 합친 후보로 평가한다. 학습 모델만의 인과 비교로 주장하지 않는다.
+
 ## 최초 checkpoint — 실패한 고정20회 평가의 데이터
 
 선택한 시연은 batch 7·9·10·11·12·14·15·16에서 각 3개, batch 17에서 1개로
