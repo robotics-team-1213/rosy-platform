@@ -8,6 +8,7 @@ An entry that reaches another document's module fails this test.
 
 import re
 from pathlib import Path
+from fleet.server.static_routes import CONSOLE_ASSETS
 
 
 WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
@@ -41,6 +42,8 @@ SHARED = {
 OWN = {
     "account-page.js": set(),
     "console.js": {
+        "assistant.js", "assistant-voice.js",
+        "console-auth.js", "console-goal.js", "console-refresh.js",
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "inbox.js",  # D-632: console notification and context view owner
@@ -109,11 +112,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell", "work", "devices", "maps"):
-        path = WEB / folder / name
-        if path.is_file():
-            return path
-    return WEB / name
+    return WEB / CONSOLE_ASSETS.get(name, (name, None))[0]
 
 
 def _imports(name):

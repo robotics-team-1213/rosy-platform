@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
+  <link rel="stylesheet" href="/console/assets/assistant.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <link rel="stylesheet" href="/console/assets/device-watch.css">
@@ -96,6 +97,8 @@
     <a id="connection-guide-action" class="ui-disclosure-row" href="#console-token" data-action-icon="login">관제 접속</a>
   </section>
 
+  <div class="assistant-tools"><ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button></div>
+  <div class="assistant-layout">
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <div class="console-primary">
@@ -493,6 +496,21 @@
       </section>
     </aside>
   </main>
+  <aside id="assistant-panel" class="assistant-panel" aria-labelledby="assistant-heading" hidden>
+    <div class="map-head"><h2 id="assistant-heading">관제 AI</h2><span class="spacer"></span><ui-button id="assistant-close" data-work-read="" kind="quiet" type="button">닫기</ui-button></div>
+    <p class="hint">관제 상태를 조회하고 설명합니다. 실행 요청은 <a href="/console?view=work&amp;show=new">작업 화면</a>에서 진행해 주세요.</p>
+    <p id="assistant-state" class="hint" role="status">기명 운영자로 로그인해 주세요.</p>
+    <ol id="assistant-messages" class="assistant-messages" aria-label="관제 AI 대화" aria-live="polite"></ol>
+    <label for="assistant-input">관제 AI에게 물어보기</label>
+    <label for="assistant-locale">대화·음성 언어 / Language</label>
+    <select id="assistant-locale" class="ui-field" data-work-read=""><option value="ko-KR">한국어</option><option value="en-US">English</option></select>
+    <textarea id="assistant-input" class="ui-field" rows="3" maxlength="2000" placeholder="현재 로봇 상태 알려줘" disabled></textarea>
+    <div class="map-head"><ui-button id="assistant-send" data-work-read="" kind="primary" type="button" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">전송</ui-button><ui-button id="assistant-retry" data-work-read="" kind="quiet" type="button" hidden>같은 요청 확인</ui-button></div>
+    <div class="map-head"><ui-button id="assistant-dictate" data-work-read="" kind="quiet" type="button">말하기</ui-button><ui-button id="assistant-dictate-stop" data-work-read="" kind="quiet" type="button">인식 마치기</ui-button><ui-button id="assistant-voice-prepare" data-work-read="" kind="quiet" type="button">음성 입력 준비</ui-button></div>
+    <p id="assistant-voice-state" class="hint" role="status">음성 입력은 지원되는 브라우저의 한국어 음성이 필요합니다.</p>
+    <div class="map-head"><ui-button id="assistant-read" data-work-read="" kind="quiet" type="button">답변 읽기</ui-button><ui-button id="assistant-read-stop" data-work-read="" kind="quiet" type="button">읽기 중단</ui-button></div>
+  </aside>
+  </div>
 
   </div>
   </div>

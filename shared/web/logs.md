@@ -819,3 +819,9 @@
 - 변경: Console 소유 request에 명시적 blob 응답 선택만 추가했다. 기본 JSON·JSON 오류·현재 credential·same-origin·redirect 거절·취소 전파는 유지하며 지도는 이를 통해 이미지 ObjectURL을 만들고 정리한다.
 - 증거: 02d8082c89의 원격 transport/importer RED2실패를 관찰하고, 7ae0f2e05a 원격 shared transport·Node·실제 Chromium·설치17통과와 93f8408f19 후속43통과를 확인했다. NEW0이며 browser skip을 성공으로 세지 않았다.
 - gate 변화: 없음. 새 credential 저장·다른 origin 허용·자동 쓰기 재시도는 추가하지 않았다.
+
+## 2026-10-21 · uncommitted · Console 인증 분리 후 캔버스 검사 유지
+
+- 변경: Console 인증 팩토리로 이동한 지도 캔버스 초기화도 기존 색상·글꼴 검사 목록에 포함했다. 면제나 검사 완화는 추가하지 않았다.
+- 증거: source commit 27d4576f4230의 원격 영향 검사에서 미등록 캔버스 파일 1개를 발견했다. 수정 커밋에서 공용 UI 계약과 최종 게시 검사를 다시 실행한다.
+- gate 변화: 없음. 운영 배포와 실제 장치 수용은 별도 확인한다.

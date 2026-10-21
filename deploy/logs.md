@@ -3062,3 +3062,9 @@
 - 변경: Fleet image 입력에 Pillow12.3.0·numpy2.2.6·OpenCV headless4.12.0.88을 pin했다. 모델 프레임워크는 추가하지 않고 기존 Dockerfile의 requirements 설치 경로를 사용한다.
 - 증거: 해당 입력으로 원격 시험 venv 설치/pip check가 완료됐고, 4a2f84e1fa의 실제 raster 자식 worker·HTTP/STL63통과, 2d3ae718e7 추출/API31통과를 확인했다. 최종 site candidate 이미지·운영 설치는 별도다.
 - gate 변화: 없음. 의존성 설치·호스트 시험을 site artifact·서명·장치/현장 수용으로 확대하지 않는다.
+
+## 2026-10-21 · uncommitted · 관제 AI 보호 설치와 사이트 옵션 분리 적용
+
+- 변경: 기존 conversation snapshot/SSH wrapper 위에 독립 operator admission을 검증한다. 사이트 compose는 optional operator 설정 부재 시 OFF를 유지하고 새 Discord profile은 전처리 source closure를 요구한다.
+- 증거: 원본 로컬 구현에서 추출했으며 새 SHA의 설치기·클라이언트·산출물·모델 평가를 커밋 후 검증한다. 현장·AI PC의 비대화형 sudo는 거부돼 보호 설치를 수행하지 않았다.
+- gate 변화: 없음. 서명 후보·관리자 설치·readback과 현장 수용은 별도다.

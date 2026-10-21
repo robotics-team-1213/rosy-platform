@@ -35,6 +35,7 @@ CANVAS_FILES = [
     FLEET / "shared" / "field-warp.js",
     FLEET / "maps" / "site-map.js",
     FLEET / "console.js",
+    FLEET / "shared" / "console-auth.js",
     GAMES / "board.js",
     SRC.parent / "learning/curation/perception/review_app_web/app.js",
     SRC.parent / "learning/curation/perception/review_app_web/pixels.js",

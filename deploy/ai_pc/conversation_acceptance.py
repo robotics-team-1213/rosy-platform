@@ -6,6 +6,7 @@ import time
 
 from core_common.intent import interpret
 from rosy.decision.conversation.codec import AcceptedContext, History, conversation_input, digest, semantic_answer
+from rosy.decision.conversation.preprocessing import DISCORD_REVISION
 
 
 CASES = (
@@ -69,6 +70,26 @@ EXPECTED = {
 }
 
 
+def cases_for(profile):
+    if profile.revision != DISCORD_REVISION:
+        return CASES
+    return tuple((name, text, ('CLARIFY',) if name == 'multistep' else kinds)
+                 for name, text, kinds in CASES) + (
+        ('en-greeting', 'Hello', ('CHAT',)),
+        ('en-status', 'What is the status of rosy_40?', ('STATUS',)),
+        ('en-navigate', 'Move rosy_40 to A', ('CONTROL',)),
+        ('en-negated', 'Do not move rosy_40 to A', ('CHAT','CLARIFY','REFUSE')),
+        ('en-quoted', 'Explain "move rosy_40 to A"', ('CHAT','CLARIFY')),
+        ('en-conditional', 'If rosy_40 moves to A, what happens?', ('CHAT','CLARIFY')),
+        ('en-compound', 'Move rosy_40 to A and then cancel it', ('CLARIFY',)),
+        ('scope-status', '40번 말고 41번 상태 알려줘', ('STATUS',)),
+    )
+
+
+def expected_for(profile):
+    return EXPECTED | ({'en-navigate':EXPECTED['navigate']} if profile.revision == DISCORD_REVISION else {})
+
+
 def source_files(root):
     folders = ('deploy/ai_pc', 'operations/decision/src/rosy/decision',
                'contracts/foundation/core_common')
@@ -80,6 +101,8 @@ def source_files(root):
         'operations/decision/src/rosy/decision/conversation/codec.py',
         'operations/decision/src/rosy/decision/__init__.py',
         'deploy/site/requirements-fleet.txt',
+        'deploy/site/install_operator_broker.py',
+        'deploy/site/install_conversation_broker.py',
         'contracts/foundation/core_common/intent.py'))
     return sorted(p.relative_to(root).as_posix() for p in paths)
 
@@ -126,6 +149,7 @@ def question(case, observed_at):
 
 
 def validate(value, cfg, profile):
+    cases, expected_plans = cases_for(profile), expected_for(profile)
     fields = {'schema', 'verdict', 'evaluation_owner', 'source_commit', 'profile',
               'policy', 'suite_sha256', 'source_manifest_sha256', 'evaluated_at', 'cases'}
     if (type(value) is not dict or set(value) != fields
@@ -133,23 +157,23 @@ def validate(value, cfg, profile):
             or value['verdict'] != 'PASS' or value['evaluation_owner'] != 'model_pc'
             or value['source_commit'] != cfg['source_commit']
             or digest(value['profile']) != digest(profile.model_dump()) or value['policy'] != cfg['policy']
-            or value['suite_sha256'] != digest({'cases': CASES, 'expected': EXPECTED})
+            or value['suite_sha256'] != digest({'cases': cases, 'expected': expected_plans})
             or value['source_manifest_sha256'] != source_digest({name: sha for name, sha
                 in cfg['files'].items() if sha != cfg['semantic_evidence_sha256']})
             or type(value['evaluated_at']) not in (int, float)
             or not math.isfinite(value['evaluated_at'])
             or not 0 <= time.time()-value['evaluated_at'] <= 7*86400
-            or type(value['cases']) is not list or len(value['cases']) != len(CASES)):
+            or type(value['cases']) is not list or len(value['cases']) != len(cases)):
         raise ValueError('CONVERSATION_SEMANTIC_EVALUATION_REQUIRED')
-    for case, row in zip(CASES, value['cases']):
+    for case, row in zip(cases, value['cases']):
         expected = question(case, value['evaluated_at'])
         if (type(row) is not dict or set(row) != {'case', 'input', 'input_hash', 'answer'}
                 or row['case'] != case[0] or digest(row['input']) != expected.digest
                 or row['input_hash'] != expected.digest):
             raise ValueError('CONVERSATION_EVALUATION_INPUT_CHANGED')
-        answer = semantic_answer(row['answer'], expected)
+        answer = semantic_answer(row['answer'], expected, preprocessing=profile.revision == DISCORD_REVISION)
         if answer.kind not in case[2]:
             raise ValueError('CONVERSATION_EVALUATION_FAILED')
         if answer.kind == 'CONTROL':
-            if interpret(answer.intent) != interpret(EXPECTED[case[0]]):
+            if interpret(answer.intent) != interpret(expected_plans[case[0]]):
                 raise ValueError('CONVERSATION_EVALUATION_COMMAND_CHANGED')

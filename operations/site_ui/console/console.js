@@ -15,21 +15,22 @@ import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
-import { pinPrefill } from "./localization-badge.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
-import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/console/assets/fleet-client.js";
-import { issueDevelopmentSession } from "/console/assets/development-auth.js";
-import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
+import { createAssistantPanel } from "/console/assets/assistant.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
-import { bindEstop, noteLink, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
+import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
+// D-798 3.2 — 접속·잠금, 목표 지정, 읽기 갱신은 각자의 팩토리 파일이 가진다.
+import { createConsoleAuth } from "./console-auth.js";
+import { createConsoleGoal } from "./console-goal.js";
+import { createConsoleRefresh } from "./console-refresh.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -101,60 +102,13 @@ const auth = {
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
   locked: false,
 };
+// D-540 9: 움직이는 조작의 잠금 사유. 멈춤(비상 정지·취소·대형 해제·막힘 대기/중단)에는 쓰지 않는다.
+const namedReason = () => namedOperatorReason(auth.role, auth.principal);
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
-function cancelAllNotice(message = "", details = false) {
-  const result = el("cancel-all-result"), link = el("cancel-all-details");
-  result.textContent = message;
-  result.hidden = !message;
-  link.hidden = !details;
-}
 
 // D-359 §6.4 — compact·medium에서 접속·역할·테마는 토글 뒤에 접힌다(세로 예산).
 // 넓은 창에서는 CSS가 토글을 숨기고 항목을 줄에 세운다. 잠기면 토큰 칸을 연다.
 const connectionView = createConnectionView({scope: pageScope, el});
-
-function markLocked(reason = "auth") {
-  resetRobotApps();
-  confirmedAction.cancel();
-  stopNotice();
-  cancelAllNotice();
-  const firstLock = !auth.locked;
-  auth.locked = true;
-  workView.reset();
-  connectionView.open();
-  auth.role = null;
-  incidents.reset();
-  showSignedOut({fold: false, refused: reason === "auth"});
-  applyRoleToControls(null, operatorControls());
-  const pill = el("online-pill");
-  pill.textContent = "접속 전";
-  pill.setAttribute("status", "neutral");
-  pill.dataset.locked = "true"; // 해제 때 문구가 아니라 이 표시로 잠금 pill을 알아본다
-  if (auth.token && reason === "auth") el("console-token").setAttribute("aria-invalid", "true");
-  const canvas = el("map-canvas"); canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
-  // D-493 — 잠기면 지도 칸의 큰 영상과 크게 보기 선택을 같이 내린다. 지난 프레임을 살아 있는 듯 두지 않는다.
-  el("map-birdseye").hidden = true;
-  delete el("map-stage").dataset.view;
-  el("birdseye-toggle").setAttribute("aria-pressed", "false");
-  connectionView.show(reason, auth.token);
-  if (firstLock) {
-    Object.assign(view, {robots: [], robotPeers: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
-      stateLoaded: false, stateUnavailable: false, focusRobot: null, selected: null, pinning: null, cursor: null, formation: null, signals: {},
-      traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
-    visionView.reset(); visionView.refreshSources(); trackingView.reset();
-  }
-  render();
-  // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
-  if (firstLock && reason === "auth") renewDevelopmentSession();
-  // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
-  if (firstLock && reason === "auth") loginForm.refresh(true);
-}
-
-function markUnlocked() {
-  auth.locked = false;
-  connectionView.hide();
-  el("console-token").removeAttribute("aria-invalid");
-}
 
 function operatorControls() {
   // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling)는 표시 선호라 권한과 무관하다(D-359 §2.5).
@@ -187,9 +141,6 @@ const view = {
   receivedAtMs: null,  // D-493: 마지막 state 응답을 받은 브라우저 시각
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
 };
-// A chooser deep link only reveals/focuses an existing card; it never arms a goal.
-let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
-
 const log = inbox.log;
 
 const fleetApi = createFleetClient({ credential: () => auth.token });
@@ -218,75 +169,13 @@ async function call(path, options = {}) {
 }
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
+const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
 
-async function refreshDispatchControl(life = pageScope.capture()) {
-  life.check();
-  const title = el("dispatch-control-title");
-  const detail = el("dispatch-control-detail");
-  const rearm = el("dispatch-rearm");
-  if (!dispatchGate.due()) return view.dispatchControl;
-  try {
-    const state = await call("/api/fleet/dispatch-control", {signals: [life.signal]});
-    life.check();
-    dispatchGate.ok();
-    view.dispatchControl = state;
-    // D-493 — 띠의 글은 알릴 상태가 있을 때만 보인다(styles.css가 data-state로 접는다).
-    el("dispatch-control").dataset.state = state.dispatch_enabled ? "enabled"
-      : state.reason === "PROCESS_RESTARTED" ? "restarted" : "latched";
-    if (state.dispatch_enabled) {
-      title.textContent = "발행 허용";
-      detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개`;
-    } else if (state.reason === "PROCESS_RESTARTED") {
-      title.textContent = "재시작 뒤 발행 대기";
-      detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
-    } else {
-      title.textContent = "정지 래치로 발행 차단";
-      detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
-    }
-    rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
-    // D-540 9: 재허가는 대기 작업을 다시 움직이므로 이름 있는 운영자만.
-    const rearmNamed = namedOperatorReason(auth.role, auth.principal);
-    rearm.disabled = auth.locked || !state.rearm_available || Boolean(rearmNamed);
-    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : rearmNamed || "재허가 조건 미충족");
-    else rearm.removeAttribute("reason");
-    return state;
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    if (auth.locked) return;
-    view.dispatchControl = null;
-    const absent = dispatchGate.fail(err.status, err.code) === "absent";
-    el("dispatch-control").dataset.state = absent ? "absent" : "error";
-    if (absent) {
-      // 작업 대기열이 없는 Fleet — 발행 래치 자체가 없다. 오류가 아니다.
-      title.textContent = "발행 제어 미설정";
-      detail.textContent = "이 Fleet에는 작업 대기열이 설정되지 않았습니다.";
-    } else {
-      title.textContent = "발행 상태를 확인할 수 없음";
-      detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
-    }
-    rearm.hidden = true;
-    rearm.disabled = true;
-    rearm.setAttribute("reason", "발행 상태 확인 불가");
-    return null;
-  }
-}
-
-pageScope.listen(el("dispatch-rearm"), "click", async () => {
-  const state = view.dispatchControl;
-  await confirmedAction.run({message: `세대 ${state?.generation}의 대기 발행을 재허가할까요?`, opener: el("dispatch-rearm"),
-    eligible: () => state?.rearm_available && view.dispatchControl?.rearm_available && state.generation === view.dispatchControl.generation,
-    request: async owner => {
-    await call("/api/fleet/dispatch/rearm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expected_generation: state.generation }),
-      signals: [owner.signal],
-    });
-    if (!owner.current()) return;
-    log("대기 작업 발행을 재허가했습니다.", "good");
-    await refreshDispatchControl(owner);
-  }, onError: err => log(`발행 재허가 거부: ${err.message}`, "bad")});
-});
+// 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
+// 목표 해제와 카드 열기는 아래에서 만들어지므로 부를 때 찾는다.
+const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refreshHealthz, refreshState } = createConsoleRefresh({
+  pageScope, el, view, auth, call, fleetApi, log, render, confirmedAction, dispatchGate, resetRobotApps,
+  disarmGoal: (reason) => disarmGoal(reason), openCard: (robotId) => roster.openCard(robotId) });
 
 
 // --- 로봇 목록 --------------------------------------------------------------
@@ -356,380 +245,20 @@ function render() {
   refreshDiagnostics();
 }
 
-let pathSample = { proxy: null, fleet: null, vision: null };
-let statePollInFlight = false;
-
-function paintSitePath() {
-  const list = el("site-path-list");
-  const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)];
-  const summary = sitePathSummary(rows);
-  const summaryNode = el("site-path-summary");
-  if (summaryNode.textContent !== summary) summaryNode.textContent = summary;
-  summaryNode.dataset.kind = rows.find((row) => row.kind === "crit")?.kind
-    || rows.find((row) => row.kind === "warn")?.kind || "good";
-  list.replaceChildren(...rows.map((row) => {
-    const item = document.createElement("li");
-    const name = document.createElement("b");
-    name.textContent = row.name;
-    const word = document.createElement("ui-tag");
-    // ui-tag's nominal status is active. kind "good" is that word; "good" itself has no rule.
-    word.setAttribute("status", row.kind === "good" ? "active" : row.kind);
-    word.textContent = row.word;
-    item.append(name, word);
-    return item;
-  }));
-}
-
-async function refreshHealthz() {
-  const life = pageScope.capture();
-  try {
-    const response = await fetch("/healthz", { cache: "no-store", signal: life.signal });
-    const body = await response.json();
-    if (!life.current()) return;
-    pathSample.proxy = { finished: true, status: response.status, body };
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    pathSample.proxy = { finished: false };
-  }
-  paintSitePath();
-}
-pageScope.onDispose(() => {
-  resetRobotApps();
-  statePollInFlight = false;
-  view.focusRobot = null;
-  view.pinning = null;
-  view.selected = null;
-  view.cursor = null;
-  document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close("cancel"));
-});
-async function refreshState() {
-  const life = pageScope.capture();
-  life.check();
-  // A signed-out console still asks Fleet's open endpoint, so the link word does not drift to 지연.
-  if (auth.locked) return void fleetApi("/api/fleet/auth/connection", {signals: [life.signal]}).then(() => noteLink(), noteLink);
-  if (statePollInFlight) return;
-  statePollInFlight = true;
-  let fleetAnswered = false;
-  try {
-    const snapshot = await call("/api/fleet/state");
-    life.check();
-    pathSample.fleet = { finished: true, status: 200 };
-    fleetAnswered = true;
-    paintSitePath();
-    view.robots = snapshot.robots;
-    view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
-    if (requestedRobotFocus) roster.openCard(requestedRobotFocus);
-    view.stateUnavailable = false;
-    view.stateLoaded = true;
-    if (view.selected) {
-      const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-      if (!selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
-        disarmGoal("안전·연결 상태가 바뀌어 목표 지정 취소");
-      }
-    }
-    view.signals = snapshot.signals || {};
-    showFleet(snapshot.fleet, snapshot.robots);
-    render();
-    if (requestedRobotFocus) {
-      const card = [...el("roster").querySelectorAll("article")]
-        .find(node => node.dataset.robotId === requestedRobotFocus);
-      if (card) card.focus();
-      requestedRobotFocus = null;
-    }
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    if (!fleetAnswered) {
-      pathSample.fleet = typeof err.status === "number"
-        ? { finished: true, status: err.status }
-        : { finished: false };
-      paintSitePath();
-    }
-    // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
-    if (auth.locked) return;
-    view.stateUnavailable = true;
-    if (view.selected) disarmGoal("Fleet 상태를 확인할 수 없어 목표 지정 취소");
-    render();
-    const pill = el("online-pill");
-    pill.textContent = "Fleet 서버 없음";
-    pill.setAttribute("status", "crit");
-  } finally {
-    if (life.current()) statePollInFlight = false;
-  }
-}
-
-function disarmGoal(reason) {
-  view.selected = null;
-  view.cursor = null;
-  const canvas = el("map-canvas");
-  canvas.classList.add("idle");
-  canvas.tabIndex = -1;
-  log(reason, "bad");
-}
-
 const deviceDirectory = createDeviceDiscovery({pageScope, auth, discoveryGate, view, call, render, incidents, el, log});
 const refreshDiscovery = () => deviceDirectory.refreshDiscovery();
 const refreshRobotApps = () => deviceDirectory.refreshRobotApps();
 function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 
-async function refreshAuthorization() {
-  const life = pageScope.capture();
-  life.check();
-  // 로그인·토큰 저장마다 꺼진 기능을 한 번씩 다시 묻는다.
-  dispatchGate.reset();
-  discoveryGate.reset();
-  mapView.resetPolling();
-  try {
-    const identity = await call("/api/fleet/session");
-    life.check();
-    if (auth.role !== identity.role || auth.principal !== identity.principal_id) {
-      resetRobotApps(); confirmedAction.cancel(); workView.reset();
-    }
-    auth.role = identity.role;
-    auth.principal = identity.principal_id;
-    showSession(identity);
-    // The session already proves the token: unlock now. The state gather can take seconds
-    // when a robot times out, and must not hold the operator's controls locked behind it.
-    const pill = el("online-pill");
-    if (pill.dataset.locked === "true") {
-      delete pill.dataset.locked;
-      pill.textContent = "상태 확인 중";
-      pill.setAttribute("status", "neutral");
-    }
-    applyRoleToControls(auth.role, operatorControls());
-    loginForm.refresh(false);
-    render();
-    // Independent panels refresh side by side; one slow source does not delay the rest.
-    // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
-    await Promise.allSettled([
-      incidents.refresh(),
-      workView.refresh(),
-      mapView.refresh(),
-      refreshState(),
-      refreshRobotApps(),
-      refreshDispatchControl(),
-      refreshDiscovery(),
-      formation.refreshFormation(),
-    ]);
-    life.check();
-    render();
-  } catch (_err) {
-    if (_err.name === "AbortError") return;
-    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
-  }
-}
-
 // --- 조작 ------------------------------------------------------------------
 
-// D-224 — 예외 문법의 키보드 어휘(§7.3 "keyboard-first" 의 실현).
-// ↑/↓ 로 로스터를 순회하고, Enter 로 그 로봇의 작업 패널을 선택한다.
-// Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
-// 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
-pageScope.listen(document, "keydown", (event) => {
-  if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas, summary")) return;
-  const cards = [...document.querySelectorAll("#roster article")];
-  if (!cards.length) return;
-  const active = document.activeElement;
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-    event.preventDefault();
-    inbox.select("status");
-    const idx = cards.indexOf(active);
-    const next = idx < 0
-      ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
-      : cards[(idx + (event.key === "ArrowDown" ? 1 : -1) + cards.length) % cards.length];
-    next.focus();
-  } else if (event.key === "Enter" && cards.includes(active)) {
-    const choose = active.querySelector("ui-button[data-select-robot-id]");
-    if (choose && !choose.disabled) {
-      event.preventDefault();
-      choose.click();
-    }
-  } else if (event.key === "Escape" && view.selected) {
-    const robotId = view.selected;
-    disarmGoal("목표 지정 취소");
-    render();
-    focusGoalButton(robotId);
-  }
-});
-
-async function commitGoal(col, row) {
-  const life = pageScope.capture();
-  life.check();
-  if (!view.selected || !view.map) return;
-  const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-  if (view.stateUnavailable || auth.role !== "operator" || namedReason() || motionCommandReason(view, view.selected, 'goal') ||
-      !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
-    disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
-    render();
-    return;
-  }
-  const point = mapView.toWorld(view.map, col, row);
-  const robotId = view.selected;
-  const mapSnapshot = JSON.stringify([view.map.map_id, view.map.width, view.map.height, view.map.resolution, view.map.origin]);
-  await confirmedAction.run({message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`, opener: el("map-canvas"),
-    eligible: () => !view.stateUnavailable && view.selected === robotId && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
-      && !motionCommandReason(view, robotId, 'goal')
-      && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
-    request: async owner => {
-  view.selected = null;
-  view.cursor = null;
-  const canvas = el("map-canvas");
-  canvas.classList.add("idle");
-  canvas.tabIndex = -1;
-  render();
-  focusGoalButton(robotId);
-    const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-      body: JSON.stringify({ x: point.x, y: point.y, yaw: 0 }),
-      signals: [owner.signal],
-    });
-    if (!owner.current()) return;
-    const task = result && result.task ? result.task : null;
-    if (task && task.status === "QUEUED") {
-      view.pendingTasks[robotId] = task;
-      const why = task.reason || result.reason || "READY";
-      const blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
-      const position = task.queue_position ? `#${task.queue_position}` : "순번 대기";
-      log(`${robotId} task ${task.task_id} QUEUED · ${position} · ${why}${blockedBy} · 취소 가능`, "good");
-      return;
-    }
-    if (task && task.status === "UNKNOWN") {
-      view.pendingTasks[robotId] = task;
-      log(`${robotId} task ${task.task_id} UNKNOWN · CORE 결과 수동 확인 필요`, "bad");
-      return;
-    }
-    if (task && task.status !== "ACCEPTED") {
-      log(`${robotId} task ${task.task_id} ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
-      return;
-    }
-    if (task) delete view.pendingTasks[robotId];
-    const receipt = task ? task.receipt : result;
-    const where = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
-    if (receipt && receipt.queued) {
-      log(`${robotId} → ${where} ${roster.queuedReason(result)}`,
-          receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
-    } else {
-      log(`${robotId} → ${where} 미션 하달`, "good");
-    }
-  }, onError: err => log(`${robotId} 미션 거절 — ${err.message}`, "bad")});
-}
-
-function focusGoalButton(robotId) {
-  inbox.select("status");
-  [...document.querySelectorAll("#robot-workspace ui-button[data-goal-robot-id]")]
-    .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
-}
-
-// D-593 운영자 핀: 누른 점 = 위치, 끈 방향 = 로봇 앞(3 px 미만이면 지금 지도 자세의 방향, 없으면 0).
-let pinStart = null;
-function canvasWorld(event) {
-  const rect = el("map-canvas").getBoundingClientRect();
-  if (!view.map) {
-    const world = view.siteToWorld?.(event.clientX - rect.left, event.clientY - rect.top);
-    return world ? { ...world, px: event.clientX, py: event.clientY } : null;
-  }
-  const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
-  const offX = (rect.width - view.map.width * scale) / 2, offY = (rect.height - view.map.height * scale) / 2;
-  const col = (event.clientX - rect.left - offX) / scale, rowFromTop = (event.clientY - rect.top - offY) / scale;
-  if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) return null;
-  const row = view.map.height - rowFromTop;
-  return { x: view.map.origin.x + col * view.map.resolution, y: view.map.origin.y + row * view.map.resolution,
-    px: event.clientX, py: event.clientY };
-}
-pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-  if (!view.pinning || (!view.map && !view.siteMap)) return;
-  pinStart = canvasWorld(event);
-});
-pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
-  const life = pageScope.capture();
-  const start = pinStart, end = canvasWorld(event);
-  pinStart = null;
-  const robotId = view.pinning;
-  if (!robotId || !start) return;
-  const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
-  const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robotId);
-  const current = guideRow?.pose;
-  const yaw = dragged ? Math.atan2(end.y - start.y, end.x - start.x) : (typeof current?.yaw === "number" ? current.yaw : 0);
-  view.pinning = null;
-  el("map-canvas").classList.add("idle");
-  render();
-  // D-596 amendment (b): an LED-confirmed blob is the place; the press and drag only set the heading.
-  let led = null;
-  try {
-    led = pinPrefill(await call("/api/fleet/tracking/identity", { signals: [life.signal] }), guideRow, robotId);
-  } catch (error) {
-    if (error.name === "AbortError") return;
-  }
-  if (!life.current()) return;
-  const place = led || start;
-  const deg = (yaw * 180 / Math.PI).toFixed(0);
-  const where = led ? "LED로 확인된 자리" : "지도 위치";
-  await confirmedAction.run({message: `${robotId}의 ${where}를 (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) m, 방향 ${deg}°로 찍을까요? 로봇에는 아무것도 보내지 않습니다.`,
-    opener: el("map-canvas"), eligible: () => !view.stateUnavailable && !namedReason(),
-    request: async (owner) => {
-      const pose = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/map-pin`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ x: place.x, y: place.y, yaw }), signals: [owner.signal] });
-      if (!owner.current() || !life.current()) return;
-      log(`${robotId} 운영자 핀 (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) ${deg}° · ${{ LOCALIZED: "확정", DEGRADED: "추정" }[pose?.state] || "위치 모름"}`, "good");
-      mapView.refreshGuide?.();
-    }, onError: (err) => log(`${robotId} 위치 찍기 거절 — ${err.message}`, "bad")});
-});
-
-pageScope.listen(el("map-canvas"), "click", async (event) => {
-  const life = pageScope.capture();
-  life.check();
-  if (!view.selected || !view.map) return;
-  const canvas = el("map-canvas");
-  const rect = canvas.getBoundingClientRect();
-  // D-201 — 캔버스는 object-fit: contain 으로 그려진다. 레터박스(빈 여백)를
-  // 제외한 그려진 영역 안에서만 셀 좌표가 성립한다.
-  const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
-  const drawnW = view.map.width * scale;
-  const drawnH = view.map.height * scale;
-  const offX = (rect.width - drawnW) / 2;
-  const offY = (rect.height - drawnH) / 2;
-  const col = ((event.clientX - rect.left - offX) / drawnW) * view.map.width;
-  const rowFromTop = ((event.clientY - rect.top - offY) / drawnH) * view.map.height;
-  if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) {
-    return; // 여백을 찍은 것 — 목표가 아니다.
-  }
-  view.cursor = { col: Math.floor(col), row: view.map.height - 1 - Math.floor(rowFromTop) };
-  render();
-  await commitGoal(view.cursor.col, view.cursor.row);
-  life.check();
-});
-
-pageScope.listen(el("map-canvas"), "keydown", async (event) => {
-  const life = pageScope.capture();
-  life.check();
-  if (view.pinning && event.key === "Escape") {  // D-593: 위치 찍기 취소
-    event.preventDefault(); view.pinning = null; el("map-canvas").classList.add("idle"); render(); return;
-  }
-  if (!view.selected || !view.map || !view.cursor) return;
-  const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
-  if (event.key in moves) {
-    event.preventDefault();
-    const [dx, dy] = moves[event.key];
-    view.cursor.col = Math.max(0, Math.min(view.map.width - 1, view.cursor.col + dx));
-    view.cursor.row = Math.max(0, Math.min(view.map.height - 1, view.cursor.row + dy));
-    render();
-  } else if (event.key === "Enter") {
-    event.preventDefault();
-    await commitGoal(view.cursor.col, view.cursor.row);
-    life.check();
-  } else if (event.key === "Escape") {
-    event.preventDefault();
-    const robotId = view.selected;
-    view.selected = null;
-    view.cursor = null;
-    const canvas = el("map-canvas");
-    canvas.classList.add("idle");
-    canvas.tabIndex = -1;
-    render();
-    focusGoalButton(robotId);
-  }
-});
+// 로스터 키보드·지도 목표 지정·운영자 핀은 console-goal.js 팩토리가 가진다(D-798 3.2).
+// 지도 좌표와 큐 사유는 아래의 mapView·roster가 답하므로 부를 때 찾는다.
+const { disarmGoal, focusGoalButton, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
+  render, confirmedAction, namedReason,
+  toWorld: (grid, col, row) => mapView.toWorld(grid, col, row),
+  refreshGuide: () => mapView.refreshGuide?.(),
+  queuedReason: (result) => roster.queuedReason(result) });
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
 // D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
@@ -737,51 +266,8 @@ bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), l
   after: () => refreshDispatchControl()});
 
 
-// D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
-const CANCEL_ALL_RESULT = { failed: "실패", unreachable: "응답 없음" };
-const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션", line_follow: "차선 추종" };
-// D-540 6 (user decision 2026-10-10): a stop — no confirm, any operator, no latch; the line says it was sent.
-pageScope.listen(el("cancel-all"), "click", async () => {
-  if (auth.locked) return;
-  const life = pageScope.capture();
-  cancelAllNotice(`전체 주행 취소를 보냈습니다 · ${view.robots.length}대 · 응답 기다리는 중`);
-  try {
-    const result = await call("/api/fleet/cancel-all", { method: "POST", signals: [life.signal] });
-    if (!life.current()) return;
-    // 0/0 은 성공이 아니다 — 취소할 로봇이 없었다.
-    const allAnswered = result.total > 0 && result.cancelled === result.total;
-    const summary = result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
-      : `주행 취소 요청 응답: ${result.cancelled}/${result.total} · 물리 정지 미확인`;
-    cancelAllNotice(result.total === 0 ? summary : `전체 주행 취소를 보냈습니다 · ${result.total}대 · ${summary}`,
-      result.total > 0 && !allAnswered);
-    log(summary, allAnswered ? undefined : "bad");
-    result.robots.filter((r) => r.result !== "cancelled").forEach((r) => {
-      const steps = Object.entries(r.steps).filter(([, step]) => !step.ok).map(([name, step]) =>
-        step.error?.sent === false && name === "line_follow" ? "주소 미확인 — 차선 추종 끄기 미전송"
-          : `${CANCEL_ALL_STEP[name] || name} ${step.error?.code || "—"}`);
-      log(`  ${r.robot_id} 주행 취소 ${CANCEL_ALL_RESULT[r.result] || r.result} — ${steps.join(" · ")}`, "bad");
-    });
-    const awaiting = result.robots.reduce((n, r) => n + r.tasks.awaiting_core_result.length, 0);
-    log(result.tasks.error ? "대기 작업 취소 실패 — 작업 저장소를 확인하세요"
-      : `대기 작업 ${result.tasks.canceled.length}개 취소 · 로봇 취소 확인 대기 작업 ${awaiting}개`,
-    result.tasks.error ? "bad" : undefined);
-    // CORE 가 취소를 확인하면 그 로봇은 다시 배정되고, 확인이 없으면 작업은 대조가 필요하다.
-    if (awaiting) log("  확인 대기 작업: 로봇이 취소를 알리면 다시 배정, 알리지 않으면 대조 필요", "bad");
-    await refreshDispatchControl(life);
-  } catch (err) {
-    if (err.name === "AbortError" || !life.current()) return;
-    cancelAllNotice(err.status >= 500 || !err.status
-      ? "주행 취소 결과 확인 불가 — Fleet 연결과 로봇 상태를 다시 확인하세요."
-      : `주행 취소 요청 거절 — ${err.message}`);
-    log(`전체 주행 취소 실패 — ${err.message}`, "bad");
-  }
-});
-
-
 // D-262: 대형 패널은 formation.js 팩토리가 가진다. 셸은 지도 오버레이와
 // 명렬 렌더를 쥐고, 대형 상태는 view.formation 으로 공유한다.
-// D-540 9: 움직이는 조작의 잠금 사유. 멈춤(비상 정지·취소·대형 해제·막힘 대기/중단)에는 쓰지 않는다.
-const namedReason = () => namedOperatorReason(auth.role, auth.principal);
 const formation = createFormation({ scope: pageScope, el, view, log, call, render, namedReason });
 formation.bind();
 
@@ -802,14 +288,14 @@ const mapView = createMapView({ scope: pageScope,
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction,
-  onSelectionChanged: () => { pinStart = null; } });
+  onSelectionChanged: () => { clearPinStart(); } });
 if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   roster.openCard(el("robot-choice").value || null);
   render();
 });
 view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
 view.openFormationWorkspace = () => {
-  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; pinStart = null;
+  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; clearPinStart();
   if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
   render();
   inbox.select('tools');
@@ -875,68 +361,11 @@ mapView.bindCamera(visionView);
 
 const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
-// 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
-el("console-token").value = auth.token;
-function saveToken() {
-  useToken(el("console-token").value.trim());
-}
-
-function useToken(token) {
-  workView.reset();
-  stopNotice();
-  cancelAllNotice();
-  pageScope.invalidate();
-  auth.token = token;
-  // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
-  auth.role = null;
-  applyRoleToControls(null, operatorControls());
-  incidents.reset();
-  if (auth.token) {
-    sessionStorage.setItem("rosy-console-token", auth.token);
-  } else {
-    sessionStorage.removeItem("rosy-console-token");
-  }
-  visionView.reset();
-  trackingView.reset();
-  trackingView.refresh();
-  refreshAuthorization();
-  visionView.refreshSources();
-}
-pageScope.listen(el("token-save"), "click", saveToken);
-// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
-const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
-  el("console-token").value = "";
-  useToken("");
-}});
-pageScope.listen(el("console-token"), "keydown", (event) => {
-  if (event.key === "Enter") saveToken();
-});
-
-// D-473 — development connection mode. The badge is on only while the server says development;
-// paired, 404 (an older Fleet) or an error leaves the token field as the way in.
-async function connectionMode() {
-  try {
-    const info = await fleetClient("/api/fleet/auth/connection");
-    el("development-badge").hidden = info?.mode !== "development";
-    el("token-access").hidden = info?.mode === "development";
-    return info?.mode === "development";
-  } catch (_err) {
-    return false;
-  }
-}
-
-// Called on the first 401 of a lock only, so a refused or rate-limited issue (403/429) is one
-// request, not a loop. useToken() invalidates in-flight polls so their stale 401s are dropped.
-async function renewDevelopmentSession() {
-  if (!(await connectionMode())) return;
-  let token;
-  try {
-    token = await issueDevelopmentSession(fleetClient);  // at most one per minute per page
-  } catch (_err) {
-    return;
-  }
-  if (token) useToken(token);
-}
+// 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
+const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
+  call, fleetClient, render, operatorControls, confirmedAction, connectionView, workView, incidents, visionView,
+  trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
+  refreshRobotApps, refreshDispatchControl, refreshDiscovery });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
 // 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).

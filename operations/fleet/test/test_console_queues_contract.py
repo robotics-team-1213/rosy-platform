@@ -75,7 +75,8 @@ def test_queue_flags_stale_state_from_the_server_age_plus_receive_time():
     roster = QUEUES.read_text(encoding="utf-8")
     assert "staleAgeS(robot, view.receivedAtMs, Date.now())" in roster
     assert "상태 오래됨 — ${staleS}초 전 값" in roster
-    assert "view.receivedAtMs = Date.now();" in CONSOLE.read_text(encoding="utf-8")
+    assert "createConsoleRefresh({" in CONSOLE.read_text(encoding="utf-8")
+    assert "view.receivedAtMs = Date.now();" in (CONSOLE.parent / "shared/console-refresh.js").read_text(encoding="utf-8")
     assert "gathered_at" not in roster
 
 

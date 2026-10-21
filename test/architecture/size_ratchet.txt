@@ -26,9 +26,9 @@
 691 drive/behaviors/swarm/manager.py
 630 drive/behaviors/traffic_policy/manager.py
 842 drive/motion_limits/adapter/node.py
-13382 fleet
-896 fleet/fleet/cli.py
-939 fleet/fleet/server/app.py
+13370 fleet
+888 fleet/fleet/cli.py
+935 fleet/fleet/server/app.py
 847 fleet/fleet/server/auth/enrollment.py
 943 fleet/fleet/server/cell/cell_job_store.py
 1325 fleet/fleet/server/console/console.py
@@ -57,8 +57,7 @@
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
-10579 site_ui/console
-981 site_ui/console/console.js
+10310 site_ui/console
 756 site_ui/console/line-stuck.js
 952 site_ui/console/map-view.js
 709 site_ui/console/roster.js
@@ -68,7 +67,7 @@
 767 site_ui/console/maps/site-map.js
 1531 test/learning/perception/test_review_flow_browser.py
 3049 test/test_dashboard_browser.py
-3884 test/test_fleet_console_browser.py
+3883 test/test_fleet_console_browser.py
 2632 test/test_rosy_auto_update.py
 2484 test/test_rosy_face.py
 2725 test/test_sd_writer_contract.py

@@ -52,7 +52,9 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 106  # Input, geometry, topology, review and messages retain separate resources.
+    assert len(expected) == 112  # Includes assistant assets and the three Console composition factories.
+    assert {'assistant/panel.js', 'assistant/assistant-voice.js', 'assistant/panel.css',
+            'shared/console-auth.js', 'shared/console-goal.js', 'shared/console-refresh.js'} <= expected.keys()
     assert {'shared/fleet-client.js', 'shared/request.js'} <= expected.keys()
     assert 'shared/device-request.js' in expected
     assert 'shared/host-health.js' in expected
@@ -312,6 +314,9 @@ with TestClient(app) as client:
 print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
+               'core_common.protocol.assistant', 'fleet.server.assistant.runtime',
+               'fleet.server.assistant.routes', 'rosy.decision.conversation.operator',
+               'rosy.decision.conversation.preprocessing',
                'rosy.decision.conversation.codec', 'fleet.server.channel.conversation.jobs',
                'fleet.server.channel.conversation.worker', 'fleet.server.channel.conversation.runtime',
                'fleet.server.channel.execution.instructions', 'fleet.server.channel.execution.journal',
