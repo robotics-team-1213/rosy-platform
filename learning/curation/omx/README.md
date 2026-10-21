@@ -198,3 +198,13 @@ session/cycle 분할 뒤 ACT 학습과 별도 process model/pre/post 재적재�
 기본 unknown/exclude는 학습할 수 없다. 실패·중단 원본은 보존하며 `--completed-only`는 명시적으로만 사용한다.
 rehearsal 데이터는 실물 intake가 거부한다. [Fleet 수집·전송·검토·학습 절차](../../../docs/plans/2026-10-17-omx-next-day-collection.md).
 물리 시연 수집과 학습 정책의 실물 평가는 각각 현장 수용 후 진행한다.
+
+## 학습센터에서 파지 구간 검수
+
+학습센터 `/learning/omx`에서 자료 등록에 연결한 prepared intake를 선택한다.
+원본 Episode와 확인 프레임을 골라 사진을 확인하고, 시작·끝 프레임과 물체·성공 여부·검토자를 기록한다.
+끝 프레임은 범위에서 제외한다. 성공이 확인되지 않은 구간은 `unknown` 또는 `failure`로 보존하고
+학습 분할에서 제외한다. 저장은 검수 버전을 추가하며 원본 Episode 판정을 덮어쓰지 않는다.
+다른 검수자가 먼저 저장하면 다시 불러와 충돌을 해결한다. 입력이 남아 있으면 새로고침·이탈 시 확인한다.
+구간 선택 JSON을 내려받은 뒤 위 `native_segments.py` CLI로 새 child dataset을 만든다.
+이 화면은 학습 작업이나 로봇 동작을 시작하지 않는다.

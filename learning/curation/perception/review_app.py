@@ -29,6 +29,7 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 import review_versions
+import omx_web
 from review_ai_jobs import Jobs
 from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
@@ -131,6 +132,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             path = urlparse(self.path).path
             try:
                 if collaboration and collaboration.get(self, path, token):
+                    return
+                if omx_web.get(self, path, learning):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -331,6 +334,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.post(self, path, body, token):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
+                if omx_web.post(self, path, body, learning, Conflict):
+                    return
                 if path.startswith('/api/review-ai/'):
                     match = re.fullmatch(r'/api/review-ai/(\d+)', path)
                     if not match or body['action'] not in ('object_draft', 'pixel_draft', 'mask_check') or type(body['version']) is not int:
