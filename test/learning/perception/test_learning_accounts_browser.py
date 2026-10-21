@@ -94,6 +94,16 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
             navigation_errors = []
             page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
             try:
+                expect = playwright.expect
+                page.route('**/api/accounts/options', lambda route: route.fulfill(status=503,
+                    content_type='application/json', body='{"error":"Account unavailable"}'))
+                page.goto(origin + '/accounts')
+                expect(page.locator('#account-retry')).to_be_visible()
+                with page.expect_response('**/api/accounts/options'):
+                    page.locator('#account-retry').click()
+                expect(page.locator('#account-status')).to_contain_text('로그인 상태를 확인할 수 없습니다')
+                expect(page.locator('#account-retry')).to_be_visible()
+                page.unroute('**/api/accounts/options')
                 page.goto(origin + '/api/account/callback?state=expired&code=expired')
                 expect = playwright.expect
                 expect(page.locator('#account-status')).to_contain_text('로그인 연결을 완료하지 못했습니다')
