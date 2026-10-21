@@ -31,15 +31,17 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/foundation'))  # core_common, imported by control (D-424)
 
 import labels as L  # noqa: E402
+from data_paths import data_root  # noqa: E402
 from frames import FrameSelector  # noqa: E402
 from geometry import Camera, Lidar, PoseSeries, labeller_lidar_yaw_deg, to_frame  # noqa: E402
 from object_boxes import lidar_object_boxes  # noqa: E402  (D-423 candidate object boxes)
 
-DATA = Path(__file__).resolve().parents[3] / 'data/perception'
+DATA = data_root(Path(__file__).resolve().parents[3]) / 'perception'
 MAX_SCAN_DT_S = 0.2
 JPEG_Q = 95
 

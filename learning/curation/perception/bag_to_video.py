@@ -56,6 +56,8 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
+from data_paths import data_root  # noqa: E402
 import cv2
 import numpy as np
 
@@ -88,7 +90,7 @@ CODECS = {
              "extra": ["-tag:v", "hvc1", "-x265-params", "log-level=error"]},
     "h264": {"encoder": "libx264", "crf": 23, "preset": "slow", "extra": []},
 }
-DEFAULT_OUT = Path(__file__).resolve().parents[3] / 'data/teleop/learning'
+DEFAULT_OUT = data_root(Path(__file__).resolve().parents[3]) / 'teleop/learning'
 # Moving vs idle: odom displacement over MOTION_WINDOW_S around the frame, or a command.
 # Teleop runs at 0.03 m/s and 0.1 rad/s; idle odom noise on 8kcn stays below
 # 0.005 m/s and 0.008 rad/s at p99 (2026-09-30 sessions).

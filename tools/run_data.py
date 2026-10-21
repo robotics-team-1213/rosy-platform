@@ -14,6 +14,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from data_paths import data_root  # noqa: E402
 
 KINDS = ("teleop", "drive")
 _LABEL = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
@@ -23,14 +25,14 @@ class RunDataError(ValueError):
     """The requested session is not inside the data folders."""
 
 
-def data_root(repo: Path) -> Path:
-    return repo / "data"
-
-
 def kind_root(repo: Path, kind: str) -> Path:
     if kind not in KINDS:
         raise RunDataError(f"kind must be teleop or drive, not {kind}")
-    return data_root(repo) / kind
+    data = data_root(repo)
+    root = data / kind
+    if data.resolve() not in root.resolve().parents:
+        raise RunDataError("kind path leaves the data folder")
+    return root
 
 
 def _label(text: str) -> str:

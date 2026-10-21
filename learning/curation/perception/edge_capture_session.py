@@ -37,6 +37,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / 'tools'))
+from data_paths import data_root  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools/perception'))
 
 import fetch_http  # noqa: E402
@@ -153,7 +155,7 @@ def main(argv=None):
     ap.add_argument("--robot", help="robot address for step 1 (operator SSH)")
     ap.add_argument("--recordings-root", default=RECORDINGS_ROOT)
     operator_ssh.add_arguments(ap)
-    ap.add_argument("--work", type=Path, default=REPO / "data" / "perception" / "edge-capture")
+    ap.add_argument("--work", type=Path, default=data_root(REPO) / "perception" / "edge-capture")
     ap.add_argument("--model-host", help="ssh destination of the model PC (an ssh config alias)")
     ap.add_argument("--model-repo", default="rosy-ml/repo", help="model-PC checkout of this repo")
     ap.add_argument("--model-root", default="rosy-ml/edge-capture", help="model-PC work folder")
