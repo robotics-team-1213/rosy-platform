@@ -8,33 +8,33 @@ const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
   ?? sessionStorage.getItem('rosy-console-token') ?? ''});
 const FORM = `
-  <form class="password-login-form" data-login="form" aria-label="관제 로그인">
-    <label for="fleet-login-name">아이디</label>
+  <form class="password-login-form ui-form" data-login="form" aria-label="관제 로그인">
+    <label class="ui-field-label" for="fleet-login-name">아이디
     <input id="fleet-login-name" class="ui-field password-login-field" data-login="login" autocomplete="username"
-           autocapitalize="none" spellcheck="false" required>
-    <label for="fleet-login-password">비밀번호</label>
+           autocapitalize="none" spellcheck="false" required></label>
+    <label class="ui-field-label" for="fleet-login-password">비밀번호
     <input id="fleet-login-password" class="ui-field password-login-field" data-login="password" type="password"
-           autocomplete="current-password" required>
+           autocomplete="current-password" required></label>
     <label class="ui-check password-login-remember"><input class="ui-field" type="checkbox" data-login="remember"> 이 브라우저 기억(30일)</label>
     <ui-button kind="primary" type="button" data-login="submit">로그인</ui-button>
-    <span class="password-login-error" data-login="error" role="alert" hidden></span>
+    <ui-status state="error" data-login="error" role="alert" hidden></ui-status>
   </form>`;
 const WHO = `<div class="password-login-who" data-login="who">
   <span data-login="principal"></span>
   <ui-button kind="quiet" type="button" data-login="logout" data-action-icon="logout">로그아웃</ui-button>
-  <span class="password-login-error" data-login="error" role="alert" hidden></span>
+  <ui-status state="error" data-login="error" role="alert" hidden></ui-status>
 </div>`;
 const CHANGE = `
-  <form class="password-login-form" data-login="form" aria-label="첫 로그인 비밀번호 변경">
+  <form class="password-login-form ui-form" data-login="form" aria-label="첫 로그인 비밀번호 변경">
     <p>첫 로그인입니다. 새 비밀번호를 설정해야 현장 업무를 사용할 수 있습니다.</p>
-    <label for="fleet-new-password">새 비밀번호 · 8자 이상, 아이디와 다르게</label>
+    <label class="ui-field-label" for="fleet-new-password">새 비밀번호 · 8자 이상, 아이디와 다르게
     <input id="fleet-new-password" class="ui-field password-login-field" data-login="password" type="password"
-           autocomplete="new-password" minlength="8" maxlength="1024" required>
-    <label for="fleet-confirm-password">새 비밀번호 확인</label>
+           autocomplete="new-password" minlength="8" maxlength="1024" required></label>
+    <label class="ui-field-label" for="fleet-confirm-password">새 비밀번호 확인
     <input id="fleet-confirm-password" class="ui-field password-login-field" data-login="confirm" type="password"
-           autocomplete="new-password" minlength="8" maxlength="1024" required>
+           autocomplete="new-password" minlength="8" maxlength="1024" required></label>
     <ui-button kind="primary" type="button" data-login="submit">비밀번호 변경</ui-button>
-    <span class="password-login-error" data-login="error" role="alert" hidden></span>
+    <ui-status state="error" data-login="error" role="alert" hidden></ui-status>
   </form>`;
 
 function failureText(error) {
@@ -111,6 +111,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         host.hidden = !offered;
         const availability = document.getElementById('login-availability');
         availability.hidden = offered;
+        availability.setAttribute('state', 'unavailable');
         availability.textContent = connection.mode === 'development'
           ? '현재 현장은 개발 연결 모드입니다. 원래 업무 화면에서 개발 접속 상태를 확인하세요.'
           : '이 현장에는 사람 로그인이 설정되지 않았습니다. 현장 관리자에게 계정 설정을 요청하세요.';

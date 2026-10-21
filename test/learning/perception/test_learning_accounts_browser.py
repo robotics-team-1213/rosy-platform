@@ -125,6 +125,13 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
         server.shutdown(); server.server_close(); thread.join(timeout=5)
 
 
+def sign_in(page, url, accounts, name, password):
+    """Stand-in for the Rosy Account return: the server session cookie, then a fresh page."""
+    session, _ = accounts.login(name, password)
+    page.context.add_cookies([{'name': 'rosy_learning_session', 'value': session, 'url': url}])
+    page.reload(wait_until='networkidle')
+
+
 class SelectedAccountTransport(Transport):
     def __init__(self):
         super().__init__()
@@ -163,11 +170,17 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 page.goto(url + '/accounts', wait_until='networkidle')
                 expect = playwright.expect
                 expect(page.locator('#login-panel')).to_be_visible()
-                page.locator('#username').fill('alice')
-                page.locator('#password').fill('alice-password')
-                page.locator('#login-form ui-button[type=submit]').click()
+                expect(page.locator('#account-status')).to_have_attribute('state', 'empty')
+                expect(page.get_by_role('region', name='Rosy Account 로그인')).to_be_visible()
+                expect(page.locator('#account-login')).to_have_attribute('href', '/api/account/login?return=/accounts')
+                assert page.locator('#login-panel input').count() == 0
+                sign_in(page, url, accounts, 'alice', 'alice-password')
                 expect(page.locator('#identity')).to_contain_text('작업자 alice')
                 expect(page.locator('#identity')).to_contain_text('프로젝트 one')
+                expect(page.locator('#identity')).to_contain_text('자료 가져오기')
+                expect(page.locator('#identity')).not_to_contain_text('import')
+                expect(page.locator('#account-status')).to_have_attribute('state', 'ready')
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 page.get_by_text('읽기 토큰으로 연결', exact=True).click()
                 for index, name in enumerate(('a', 'b'), 1):
                     page.locator('#provider-token').fill('hf_browser_' + name)
@@ -176,6 +189,7 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                     expect(page.locator('#provider-token')).to_have_value('')
                 expect(page.locator('#connections')).to_contain_text('account-a')
                 expect(page.locator('#connections')).to_contain_text('account-b')
+                expect(page.locator('#connections > .ui-task-row')).to_have_count(2)
                 page.keyboard.press('Control+k')
                 page.get_by_role('textbox', name='기능 검색어').fill('사용 계정')
                 page.keyboard.press('Enter')
@@ -188,6 +202,7 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 page.locator('#internal-use').check()
                 page.locator('#import-form ui-button[type=submit]').click()
                 expect(page.locator('#imports')).to_contain_text('실패', timeout=20000)
+                expect(page.locator('#imports > .ui-task-row')).to_have_count(1)
                 expect(page.locator('#imports')).to_contain_text('진행')
                 expect(page.locator('#imports')).to_contain_text('clip.mp4')
                 summary = page.locator('#imports summary')
@@ -266,9 +281,7 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 expect = playwright.expect
                 page.goto(url + '/accounts', wait_until='networkidle')
                 def login(name):
-                    page.locator('#username').fill(name)
-                    page.locator('#password').fill('bob-password')
-                    page.locator('#login-form ui-button[type=submit]').click()
+                    sign_in(page, url, accounts, name, 'bob-password')
                     expect(page.locator('#identity')).to_contain_text('작업자 ' + name)
                 login('viewer')
                 expect(page.locator('#import-panel')).to_be_hidden()

@@ -72,7 +72,16 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 개발용 순수 좌표 기하 시험은 Node 24 이상에서 `node --test test/learning/perception/review_box_geometry.test.mjs`로 실행한다. Node는 앱 실행 의존성이 아니다.
 ### 공통 학습 작업 화면 (D-458)
 
-같은 서버의 `/learning`에서 사진 검수 상태와 기존 학습 도구의 결과를 확인한다.
+같은 서버의 `/learning`에서 현재 자료의 검수 → 승인 자료 준비 → 데이터셋 생성 → 학습 → 평가 → 적용 검토를 이어간다.
+상단의 `다음 작업`으로 필요한 검수 화면을 열거나 이 화면에서 승인 자료를 준비한다.
+소유 실행기를 `--learning-control <binding.json>`으로 연결한 작업대는 결과 폴더를 수동 등록하지 않아도
+현재 검수 결정과 연결된 데이터셋·학습 시도·모델 버전을 표시하고 시작·중지·재시도를 요청할 수 있다.
+실행기 연결이 없으면 연결 안내를 표시한다. binding 설정은 기존 소유 실행기 설치 절차를 따른다.
+작업대 ID·검수 generation·decision digest를 대조하며, 현재 선택된 학습 시도의 데이터셋도 일치해야 한다.
+검수 결정을 바꾸면 이전 결과를 현재 완료로 표시하지 않는다. 후보 생성과 평가·READY 기록은 별도로 표시한다.
+화면은 5초마다 현황을 확인하고, 조회·권한 실패 시 완료 표시를 지우고 변경 요청을 막는다.
+현재 자료·모델의 연결 근거를 펼쳐 검수 버전·데이터셋·모델·실패 이유를 확인한다.
+저장 공간 점검과 과거 결과 연결은 별도 펼침 영역에서 사용한다.
 객체·픽셀 검수 건수와 각 대기 목록은 따로 표시한다. 객체 사진에서 픽셀 검수로 이동하면 같은 사진을 연다.
 작업 종류·이름·결과 폴더 전체 경로를 입력하면 SQLite에 연결 목록을 저장한다.
 지원 JSON 파일은 종류 선택 시 표시한다. JSONL 다운로드나 수동 파일 이동 없이
@@ -80,7 +89,8 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 
 Perception 단계 job, Pinky 원본 검증·행동 비교, OMX ACT, 영역 검수 반환,
 정책 산출물과 Isaac 환경을 구분한다. 보고서의 선언 상태·SHA와 등록 후 변경 여부만 확인한다.
-이 화면은 원본 closure나 승인 receipt를 검증하지 않으며, 학습 시작·정책 승격·로봇 활성화 기능은 없다.
+수동 연결한 보고서의 선언만으로 원본 closure나 승인 receipt를 검증하지 않는다.
+학습 수용은 기존 소유 실행기가 확인하며, 이 화면의 완료 표시는 정책 승격·로봇 활성화를 허가하지 않는다.
 새 결과 버전의 기준을 등록하려면 기존 연결을 해제하고 새 이름으로 연결한다.
 ### 작업 화면 사용 (D-461)
 
@@ -257,19 +267,20 @@ python learning/registry/perception/export_class_names.py best.pt --out data.yam
 
 ### 공동 계정과 Hugging Face 가져오기 (D-755)
 
-`--collaboration <private-config.json>`은 기존 검수 작업공간에 사용자 로그인과 프로젝트 권한을 적용한다. `/accounts`에서 로그인, 개인별 복수 HF 연결, 계정 선택, dataset/model 가져오기와 같은 고정 버전 재시도를 수행한다. 기존 단일 사용자 이력은 신원 미확인으로 남는다. 협업 모드의 새 객체·픽셀 이벤트는 인증된 사용자와 revision을 기록하며 요청 본문에 적은 검수자 이름은 신원으로 쓰지 않는다.
+`--collaboration <private-config.json>`은 기존 검수 작업공간에 Rosy Account 로그인과 프로젝트 권한을 적용한다. 사람의 로그인은 모든 앱과 같은 Rosy Account 하나뿐이며(D-757), 이 앱은 자체 아이디·비밀번호나 HF 로그인을 받지 않는다. `/accounts`에서 Rosy Account 로그인, 개인별 복수 HF 연결, 계정 선택, dataset/model 가져오기와 같은 고정 버전 재시도를 수행한다. 기존 단일 사용자 이력은 신원 미확인으로 남는다. 협업 모드의 새 객체·픽셀 이벤트는 인증된 사용자와 revision을 기록하며 요청 본문에 적은 검수자 이름은 신원으로 쓰지 않는다.
 
-설정 예제는 [`learning-collaboration.example.json`](../learning-collaboration.example.json)이다. 실제 설정·DB·키·OAuth 비밀·가져온 자료는 Git 밖의 private 경로에 둔다. 예제의 `password_hash` 자리표시자는 시작 가능한 계정이 아니며 사용자별 명령 출력으로 바꾼다. 모델 PC의 검수 앱 환경에서 다음을 준비한다. 비밀번호를 명령행 인자나 로그에 적지 않는다.
+설정 예제는 [`learning-collaboration.example.json`](../learning-collaboration.example.json)이다. 실제 설정·DB·키·OAuth 비밀·가져온 자료는 Git 밖의 private 경로에 둔다. `account_client_file`이 없는 설정은 시작을 거절한다. 모델 PC의 검수 앱 환경에서 다음을 준비한다.
 
 ```bash
 python -m pip install -r learning/curation/perception/requirements-collaboration.txt
 python learning/curation/perception/learning_accounts.py generate-key /private/learning/learning-accounts.key
-python learning/curation/perception/learning_accounts.py hash-password
 ```
 
-Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./contracts/foundation`도
-설치한다. collaboration 설정의 `account_client_file`은 보호된 수신 설정의 절대 경로,
-`account_subjects`는 중앙 account_id와 기존 user_id의 명시적 일대일 매핑이다.
+저장소 루트에서 `python -m pip install ./contracts/foundation`도 설치한다. collaboration 설정의
+`account_client_file`은 보호된 수신 설정의 절대 경로다. 새 사용자는 Rosy Account 계정 관리(`/console/accounts`)에서
+이 프로젝트의 `learning.*` 권한을 받으면 바로 들어온다. 학습 앱에 따로 초대하지 않는다. `account_subjects`는
+기존 학습 user_id의 HF 연결을 이어받을 중앙 account_id와의 선택적 일대일 매핑이며, 매핑 없이 기존 user_id와 같은
+account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로그인 화면으로 되돌리지 않고 권한 요청 안내를 본다.
 수신 resource는 `project:<project_id>`, callback은 `public_origin + /api/account/callback`이다.
 원장에 최초 연결을 기록한 뒤 소유자를 바꾸거나 중앙 설정을 빼고 이전 비밀번호로 돌아갈 수 없다.
 기존 HF 연결·암호화 키·학습 자료를 교체하지 않는다. 자세한 필드는
@@ -277,7 +288,7 @@ Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./co
 
 키 생성은 기존 파일을 덮어쓰지 않는다. Linux 키 파일, 설정, DB, 부모 폴더와 백업은 소유자만 접근하도록 관리한다. 암호화 키는 DB와 함께 복구할 수 있도록 별도로 보관한다. 키 파일 교체만으로 기존 연결 비밀이 이전되지는 않는다.
 
-`users[].user_id`는 내부의 안정적인 신원이며 이메일로 계정을 합치지 않는다. `memberships`는 프로젝트 ID별 `view`, `edit`, `approve`, `import`, `manage` 목록이다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리를 각각 허용한다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.
+권한은 Rosy Account 원장의 `project:<project_id>` 자원에 부여한 `learning.view`, `learning.edit`, `learning.approve`, `learning.import`, `learning.manage`, `learning.publish`다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리, 외부 게시를 각각 허용한다. `users`는 기존 학습 신원의 연결 보존용이며 비워 둘 수 있다. 이메일로 계정을 합치지 않는다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.
 
 개인 연결은 소유자 작업에만 사용한다. 프로젝트 연결에는 `manage` 권한과 `dataset:namespace/repo` 또는 `model:namespace/repo` 형식의 자원 허용 목록이 필요하다. 프로젝트 관리자 권한은 호스트 파일시스템 관리자 권한이 아니다. 협업 HTTP에서 임의 서버 경로를 받는 기존 `/api/import`, `/api/cad`, `/api/learning/register`는 사용할 수 없다.
 
@@ -291,7 +302,7 @@ python learning/curation/perception/review_app.py \
 
 위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 기존 자동화가 그 포트를 쓴다면 인증된 소비 경로를 마련하기 전까지 운영 협업 전환을 활성화하지 않는다.
 
-HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비되지 않았으면 `oauth: null`을 유지한다. 내부 비밀번호 로그인 후 제한된 HF 읽기 토큰을 데이터 연결로 등록할 수 있다. PAT는 ROSY 로그인 수단이 아니다. OAuth를 구성할 때 private 설정의 `oauth`를 다음 모양으로 바꾼다.
+HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비되지 않았으면 `oauth: null`을 유지한다. Rosy Account 로그인 후 제한된 HF 읽기 토큰을 데이터 연결로 등록할 수 있다. HF OAuth와 PAT는 데이터 연결 수단이며 로그인 수단이 아니다. OAuth를 구성할 때 private 설정의 `oauth`를 다음 모양으로 바꾼다.
 
 ```json
 {
@@ -301,7 +312,7 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 }
 ```
 
-실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. 저장소 관리 연결은 `read-repos write-repos manage-repos`를 요청하고, 쓰기와 저장소 관리가 모두 있을 때만 저장한다. 요청하지 않은 범위는 저장하지 않는다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
+실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. HF 연결은 로그인한 사용자가 명시적으로 시작한 경우만 허용한다. 자료 연결은 `openid profile read-repos gated-repos`를 요청한다. 저장소 관리 연결은 `read-repos write-repos manage-repos`를 요청하고, 쓰기와 저장소 관리가 모두 있을 때만 저장한다. 요청하지 않은 범위는 저장하지 않는다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
 
 가져오기는 branch/tag를 최초 요청에서 immutable commit으로 고정한다. 재시도도 같은 commit과 계정 세대를 유지하며 다른 계정으로 자동 대체하지 않는다. gated 개인 접근 승인은 팀 이용 허가가 아니므로 팀 이용 근거가 없으면 `rights_hold`다. 크기·경로·해시 검증 후 원자적으로 등록하며 중간 파일을 완료 자료로 노출하지 않는다. 다운로드한 Python 코드·pickle·모델 코드를 실행하지 않는다.
 
@@ -317,16 +328,16 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 
 전환 전 앱과 관련 쓰기를 멈추고 state, DB, 설정의 일관된 백업을 보관한다. 협업 바인딩 후 `--collaboration`만 제거하거나 DB의 바인딩 행을 지워 인증을 해제하지 않는다. 되돌릴 때도 협업을 유지하는 지원 버전을 쓰거나, 서비스를 멈추고 전환 전 백업을 별도 위치에 복원하여 기존 접근 범위를 다시 검토한다. 전환 후 이력은 별도로 보존하며 원본 백업을 덮어쓰지 않는다. 실제 외부 인증 수용은 등록된 앱과 사용자 동의로 로그인·연결·private/gated 접근·철회까지 확인해야 하며 가짜 provider 시험은 이를 대신하지 않는다.
 
-협업 로컬 HTTP 경로는 아래와 같으며 CORE `/api/v1`이나 로봇 명령 프로토콜이 아니다. JSON POST는 정확한 Origin이 필요하며 로그인/OAuth 시작 외에는 세션과 `X-Pinky-Token`도 요구한다. 세션 응답은 현재 사용자·프로젝트·권한·공개 연결 메타데이터와 요청 토큰을 반환하며 provider 비밀을 반환하지 않는다.
+협업 로컬 HTTP 경로는 아래와 같으며 CORE `/api/v1`이나 로봇 명령 프로토콜이 아니다. JSON POST는 정확한 Origin이 필요하며 로그아웃 외에는 세션과 `X-Pinky-Token`도 요구한다. 로그인은 `GET /api/account/login`이 Rosy Account로 보낸다. 세션 응답은 현재 사용자·프로젝트·권한·공개 연결 메타데이터와 요청 토큰을 반환하며 provider 비밀을 반환하지 않는다.
 
 | 메서드 | 경로 | 요청 또는 동작 |
 |---|---|---|
 | GET | `/accounts` | 계정·가져오기 화면 |
 | GET | `/api/accounts/options` | 협업/OAuth 사용 가능 여부 |
 | GET | `/api/accounts/session` | 현재 세션·프로젝트·연결 |
-| POST | `/api/accounts/login` | `username`, `password` |
+| GET | `/api/account/login` | Rosy Account 로그인으로 이동, 복귀는 `/api/account/callback` |
 | POST | `/api/accounts/logout` | `{}`; 현재 세션 철회 |
-| POST | `/api/accounts/oauth` | `purpose: login`, `link`, 또는 `manage` |
+| POST | `/api/accounts/oauth` | `purpose: link` 또는 `manage` |
 | GET | `/oauth/huggingface/callback` | provider의 `code`, `state` |
 | POST | `/api/accounts/connect` | `token`, `sharing: personal|project`, `resources` |
 | POST | `/api/accounts/disconnect` | `connection_id` |
