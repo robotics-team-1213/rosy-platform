@@ -95,20 +95,25 @@ def test_frame_copy_preserves_action_state_images_and_source_clocks(module, scal
 
 
 @pytest.mark.parametrize('corrupt', [None, 'action', 'image', 'source'])
-def test_export_checks_matching_child_frames_and_original_bytes(module, tmp_path, monkeypatch, corrupt):
+@pytest.mark.parametrize('bimanual', [False, True])
+def test_export_checks_matching_child_frames_and_original_bytes(module, tmp_path, monkeypatch, corrupt, bimanual):
     import json
     import sys
     from types import SimpleNamespace
     import numpy as np
     native = module.native
-    features = {key: dict(dtype='float32', shape=[6], names=native.JOINTS)
+    names = ([f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in native.JOINTS]
+             if bimanual else native.JOINTS)
+    size = len(names)
+    robot_type = 'bi_omx_follower' if bimanual else 'omx_follower'
+    features = {key: dict(dtype='float32', shape=[size], names=names)
                 for key in ('action', 'observation.state')}
     features['observation.images.front'] = dict(dtype='video', shape=[2, 4, 3])
-    info = dict(robot_type='omx_follower', codebase_version='v3.0', fps=30,
+    info = dict(robot_type=robot_type, codebase_version='v3.0', fps=30,
                 total_frames=16, total_episodes=2, features=features)
     rows = [dict(episode_index=episode, frame_index=frame, timestamp=frame/30,
-                 action=np.full(6, episode*10+frame, dtype=np.float32),
-                 **{'observation.state': np.full(6, episode*20+frame, dtype=np.float32),
+                 action=np.full(size, episode*10+frame, dtype=np.float32),
+                 **{'observation.state': np.full(size, episode*20+frame, dtype=np.float32),
                     'observation.images.front': np.full((3,2,4), frame/8, dtype=np.float32)}, task='pick')
             for episode in range(2) for frame in range(8)]
     report = native.inspect_frames(info, rows)
@@ -123,6 +128,7 @@ def test_export_checks_matching_child_frames_and_original_bytes(module, tmp_path
     written = {}
     class Writer:
         def __init__(self, **kwargs):
+            assert kwargs['robot_type'] == robot_type
             self.root, self.rows, self.buffer, self.episode = kwargs['root'], [], [], 0
             (self.root/'meta').mkdir(parents=True)
             (self.root/'data').mkdir()
