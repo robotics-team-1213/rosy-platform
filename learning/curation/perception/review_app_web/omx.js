@@ -16,7 +16,12 @@ $('theme').value=document.documentElement.dataset.theme||'dark';
 $('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 
 function el(tag,text,cls){const node=document.createElement(tag);if(text!=null)node.textContent=text;if(cls)node.className=cls;return node;}
-function button(text,kind='quiet'){const node=el('ui-button',text);node.setAttribute('kind',kind);return node;}
+function button(text,kind='quiet'){
+  const node=el('ui-button',text);
+  if(kind==='primary')node.setAttribute('kind','primary');
+  else node.setAttribute('kind','quiet');
+  return node;
+}
 function camera(checks){
   const roles=Object.entries(checks||{});
   if(!roles.length)return '기록 없음';
