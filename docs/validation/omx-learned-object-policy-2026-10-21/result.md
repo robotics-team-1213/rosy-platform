@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/35회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/15회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/36회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/16회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
 
@@ -101,6 +101,26 @@ intent null·unit not-found·NOT_RUN이며 물체 과제는 미시작이다. 동
 유지하고 자원 여유·미실행 상태를 재확인한 뒤 새 calibration을 요청한다.
 원래의 자원 거절과 미실행 영수증은 보존한다.
 사전 물체 과제가 통과해야 같은 checkpoint/runtime의 새정식20회를 시작한다.
+
+자원 확보 후 두 번째 READY 배포의 미실행 상태를 확인하고 시작했다. 새 calibration
+`46e355eb21cd`는 12추론/0정책goal/0attempts, PASS/EXIT0/cleanup true였다.
+Actor35.521s/root99.397s이며 같은 부모 checkpoint와 runtime을 확인했다.
+실제 과제 `5eea4d206c94`는 202후보/intent/UUID, 201 terminal4/code0 뒤 마지막
+terminal6/code−5로 HOLD했다. Controller는 joint index2의 위치 오차0.032028rad가
+허용0.020000rad를 넘고 goal_time_tolerance를1.010s 초과했다고 기록했다.
+Camera stale나 owner admission 거절이 아니다. Actor377.521s/root440.529s,
+cleanup true, camera audit1,959/60,600이다. SIM DetachableJoint 부착 보조의 attach가
+확인됐고 최대 lift98.020mm였지만 detach/release와 안정 유지가 없었다. 마지막 XY오차
+5.678mm/Z오차1.385mm는 `incomplete_trial_observation`이며 놓기 정확도가 아니다.
+policy-result SHA256: `11980caf3e5ae7357ef6ebdcea00ed3f47c9514cd4db1445d6a8dae9bcdee3d7`.
+새 absolute bounded checkpoint는 실제0/1이며 누적0/36이다. 새 정식20회는 미시작이다.
+
+종료 후 train-only 최근접 상태 비교는52,834개 원본 상태만 사용했다. Index185의
+L2거리는0.007127rad, 마지막201은0.025249rad였다. 마지막 근접 시연의 joint3/joint4
+목표는−0.039679/1.284402rad였고 실제 예측은−0.016816/1.249773rad였다. 이는 모델
+출력의 말단 구간 편차를 보여주며 접촉 원인이나 필요한 수정 하나를 확정하지 않는다.
+비교는 실제 새 과제·새 정답·학습이 아니며 `omx-bounded-absolute-rollout-neighbors-1`에
+보존했다. Controller tolerance·owner 안전 범위를 유지하고 후속 원인을 검토한다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
