@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import threading
 
 import pytest
 
@@ -67,13 +68,73 @@ def case(tmp_path, monkeypatch, *, enabled=True):
 
 def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatch):
     session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
-    candidate, result = infer_for_owner(engine, session, packet)
+    timings = {}
+    candidate, result = infer_for_owner(engine, session, packet, timings=timings)
+    assert timings and all(value >= 0 for value in timings.values())
     assert seen == [result.source]
     assert result.source.positions == (.1, 0.)
     assert result.source.frame_sha256 == packet.metadata.frame_sha256
     assert not client.commands  # Adapter never submits or mints authority.
     assert session.submit(candidate).accepted
     assert client.commands[0].source_state_sequence == result.source.sequence == 10
+
+
+def test_install_precheck_allows_joint_intake_before_atomic_capture(tmp_path, monkeypatch):
+    session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
+    original = InstalledPolicy.recheck
+    delivered, workers, failures = threading.Event(), [], []
+    first = True
+    snapshot = replace(session._snapshot, sequence=11)
+
+    def observe():
+        try:
+            session.observe(snapshot)
+        except Exception as error:
+            failures.append(error)
+        finally:
+            delivered.set()
+
+    def recheck(policy):
+        nonlocal first
+        if policy is session.policy and first:
+            first = False
+            worker = threading.Thread(target=observe, daemon=True)
+            workers.append(worker)
+            worker.start()
+            assert delivered.wait(1), 'installed verification blocked live joint intake'
+            assert not failures
+        return original(policy)
+
+    monkeypatch.setattr(InstalledPolicy, 'recheck', recheck)
+    try:
+        candidate, result = infer_for_owner(engine, session, packet)
+    finally:
+        for worker in workers:
+            worker.join(2)
+            assert not worker.is_alive()
+    assert candidate.sequence == result.source.sequence == 11
+    assert result.source.observed_at_ns == int(snapshot.received_at * 1e9)
+    assert not client.commands
+
+
+def test_install_tamper_after_precheck_is_rejected_at_capture(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, root = case(tmp_path, monkeypatch)
+    original = InstalledPolicy.recheck
+    first = True
+
+    def recheck(policy):
+        nonlocal first
+        doc = original(policy)
+        if policy is session.policy and first:
+            first = False
+            path = root / doc['files'][0]['path']
+            path.write_bytes(path.read_bytes() + b'tampered after precheck')
+        return doc
+
+    monkeypatch.setattr(InstalledPolicy, 'recheck', recheck)
+    with pytest.raises(PermissionError):
+        infer_for_owner(engine, session, packet)
+    assert session.hold_reason and not seen and not client.commands
 
 
 def test_live_capture_is_atomic_under_owner_lock_but_predict_is_outside(tmp_path, monkeypatch):
