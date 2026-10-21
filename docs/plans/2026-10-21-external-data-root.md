@@ -13,6 +13,9 @@
 - Ruling: `rosy-data/platform/` 아래 기존 `teleop/drive/perception/calibration` 상대 구조를 유지한다 — store manifest와 catalog의 기존 결속을 보존 — 임의 분류 이동은 reader와 content identity를 깨뜨릴 수 있다.
 - Ruling: 배포·운영 설정이 명시한 store·모델 경로는 환경변수로 덮지 않는다 — 장치 pointer나 승인 자료를 이동으로 바꾸지 않기 위해 — 기존 배포 CLI는 명시적 경로를 계속 요구할 수 있다.
 - Ruling: 새 host helper 한 파일을 signed learning payload의 정확한 허용 경로에 포함한다 — 실제 격리 payload 회귀에서 누락으로 실패했음 — tools 전체 허용이나 과거 payload의 새 필수 파일 요구는 추가하지 않는다.
+- Ruling: 과거 커밋의 archive 입력은 helper 존재 여부로 선택한다 — 최종 검토에서 과거 커밋의 pathspec 실패를 재현 — 잘못 처리하면 과거 릴리스 재구성이 막힌다.
+- Ruling: 기존 session 시험은 상속된 운영 data root를 fixture에서 해제한다 — 가짜 세션이 운영 root에 기록되는 문제를 재현 — 누락하면 시험이 운영 자료를 오염시킨다.
+- Ruling: 비정상 환경변수는 CLI override보다 먼저 거절하는 현재 동작을 문서화한다 — 잘못된 host 설정으로 쓰기를 시작하지 않음 — 명시적 출력만 사용하는 경우에도 env 해제/수정이 필요하다. 이 사용성 한계는 유보한다.
 - env 미지정·빈값·상대 경로, symlink 이탈, 명시적 CLI override, 기존 영상·catalog·보정 조회를 검증한다.
 - 플랫폼 pytest는 커밋 SHA의 공식 원격 실행만 인정한다. 로컬 실제 데이터를 시험 fixture로 사용하지 않는다.
 

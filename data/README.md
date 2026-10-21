@@ -9,6 +9,8 @@ host 도구는 `ROSY_DATA_ROOT`가 설정되면 그 **절대 경로** 아래의 
 
 지원 범위는 `tools/run_data.py`와 perception의 autolabel·bag_to_video·catalog·geometry·fetch_http·harvest·reclaim/media_pipeline·map_projected_drivable·edge_capture_session의 host 기본 경로다. 개별 `--root`·`--out`·`--dest`·`--work`와 설정에 명시한 store/보정 경로는 그대로 사용한다. model intake/deliver, watcher, `rosy_ml`의 모델 출력·store는 기존 명시적 CLI/설정을 사용하며 이 환경변수가 장치 모델 pointer나 운영 profile을 바꾸지 않는다.
 
+환경변수 값이 비정상인 경우에는 기본 경로를 해석하는 도구의 시작을 거절한다. 명시적 CLI 경로를 사용하더라도 먼저 이 환경변수를 해제하거나 올바른 절대 경로로 고친다. 정상 설정에서 명시적 CLI 옵션이 기본값보다 우선한다.
+
 이관 전 쓰기 상태·백업을 확인하고 원본과 새 위치의 파일 목록·bytes·SHA-256, catalog·manifest·실제 reader를 대조한다. store 내부 상대 경로·사람 판정·train/eval 계보를 바꾸거나 symlink로 우회하지 않는다. 환경변수 지원만으로 운영 state 이관이 완료되지는 않는다.
 
 | 폴더 | 담는 것 |
