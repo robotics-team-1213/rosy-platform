@@ -37,6 +37,20 @@ policy-result SHA256: `7180470f4363f694d691e22fac3fb7b27c0ba26e7e103dec60c48a8dc
 같은 clean checkpoint는 실제0/2이며 새 정식20회는 시작하지 않았다. 원본 학습 시연과
 실행 상태·목표 비교를 진행한다. 기존 owner 범위와 step 제한을 유지한다.
 
+후속 원격 read-only 진단은 종료됐다. 20개 train 원본52,834상태와 비교한 최근접 L2
+거리는 실행 index30에서0.05078rad, index60에서0.19807rad, 마지막105에서0.50919rad였다.
+Index60의 최근접 시연 gripper 목표는 open1.0rad였다. 마지막 실제 RGB·arm을 고정한
+합성 gripper sweep에서 현재 accdc 모델은 입력−0.1~0.4rad에도 약−0.035rad의 closing을
+반복했다. 원 입력의 실제 예측은2e-6rad 이내로 재현됐으며 매 입력마다 새 모델을
+생성해 queue를 사용하지 않았다. 기존 absolute BEC 모델은 같은 낮은 gripper 입력에서
+복원 방향을 냈지만 과거 실제94후보 과제에서0.0418019rad step으로 거절된 이력이 있다.
+두 진단은 weights·normalization hash를 검증했고 실제 과제 분모에 추가하지 않는다.
+원본·합성 입력 구분과 함께 `omx-clean-bounded-rollout-neighbors-1`,
+`omx-clean-bounded-gripper-response-1`, `omx-absolute-gripper-response-1`에 보존한다.
+단일 원인 확정이나 실제 물체 성공의 증거로 쓰지 않는다. Source 기준 smooth bound를
+학습부터 적용한 absolute head와 호환 parent checkpoint 초기화는 다음 실험 검토안이며,
+아직 구현·재학습·성공으로 표시하지 않는다. 안전 제한을 완화한 unchanged 재시도는 하지 않는다.
+
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
 0.0403985977rad가 기존 0.04rad 제한을 넘어 HOLD했다. 마지막 intent에는 UUID가 없다.
