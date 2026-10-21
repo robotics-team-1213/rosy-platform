@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.server.sightings_config import _relax_retired_sighting_targets
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -841,31 +842,6 @@ def _lane_compliance_config(args):
         return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"lane_compliance config: {exc}")
-
-
-def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
-    """D-361 5: a mapping to an unenrolled/pending-logout robot is disabled with a warning;
-    an id never seen in robots.yaml or the register still refuses start (a typo)."""
-    from dataclasses import replace
-
-    kept = []
-    for source in sources:
-        if source.follow_roster:  # D-580: targets come from the roster, never a typo
-            kept.append(source)
-            continue
-        unknown = set(source.robot_ids) - known
-        if unknown - retired:
-            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
-        if unknown:
-            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
-                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
-        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
-        if robot_ids:
-            kept.append(replace(source, robot_ids=robot_ids))
-        else:
-            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
-                  file=sys.stderr)
-    return kept
 
 
 def _main_impl(argv: Optional[Sequence[str]] = None) -> None:

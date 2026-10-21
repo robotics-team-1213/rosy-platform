@@ -27,7 +27,6 @@ from typing import Mapping, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
-from core_common.protocol.vision_preview import VisionLeaseSigner
 from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
@@ -92,7 +91,7 @@ _mission_dispatch_loop = partial(mission_dispatch_loop, logger=_LOG)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 
 
-from fleet.server.vision_preview_routes import VisionLeaseRequest, install_vision_preview_routes
+from fleet.server.vision_preview_routes import VisionLeaseRequest, configure_vision_previews, install_vision_preview_routes
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
@@ -292,29 +291,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if configured_source is not None and configured_source is not post_action_observation_source:
             raise ValueError("Mission worker and app must share one post-action observation source")
         tool_dispatcher.post_action_observation_source = post_action_observation_source
-    if workcell_observations is not None:
-        preview_sources = workcell_observations.camera_source_ids()
-        if set(preview_sources).intersection(vision_sources):
-            raise ValueError("Workcell preview source collision with an existing Vision source")
-        vision_sources = (*vision_sources, *preview_sources)
-    vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
-    if vision_signer is not None:
-        if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
-            raise ValueError("vision preview secret must differ from Fleet credentials")
-        if (console.uses_rest_token(vision_lease_secret)
-                or console.uses_agent_pairing_token(vision_lease_secret)):
-            raise ValueError("vision preview secret must differ from robot credentials")
-        if discovery_token is not None and hmac.compare_digest(vision_lease_secret, discovery_token):
-            raise ValueError("vision preview secret must differ from discovery credentials")
-        if sightings is not None and sightings.uses_token(vision_lease_secret):
-            raise ValueError("vision preview secret must differ from sighting credentials")
-        vision_secret_digest = sha256(vision_lease_secret.encode("utf-8")).hexdigest()
-        if site_users is not None and any(
-                hmac.compare_digest(vision_secret_digest, digest) for digest in site_users):
-            raise ValueError("vision preview secret must differ from site user credentials")
-        if len(set(vision_sources)) != len(vision_sources) or any(
-                not isinstance(source, str) or not source for source in vision_sources):
-            raise ValueError("vision preview sources must be unique non-empty ids")
+    vision_signer, vision_sources = configure_vision_previews(
+        console, console_token=console_token, vision_lease_secret=vision_lease_secret,
+        vision_sources=vision_sources, discovery_token=discovery_token, sightings=sightings,
+        site_users=site_users, workcell_observations=workcell_observations)
 
     # The drift watch's verdicts ride the tracking snapshot's source rows, so it is a
     # misconfiguration to start one without the tracking service it is meant to inform.

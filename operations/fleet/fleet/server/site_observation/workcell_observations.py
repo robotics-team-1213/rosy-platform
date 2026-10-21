@@ -1,6 +1,7 @@
 """Source-bound, latest-only workcell observations; no command or hardware access."""
 from collections import deque
 from copy import deepcopy
+from hashlib import sha256
 import hmac
 import math
 import threading
@@ -18,6 +19,12 @@ class WorkcellObservations:
                 or any(type(token) is not str or not token for token in tokens.values())
                 or len(set(tokens.values())) != len(tokens)):
             raise ValueError("each registered arm source requires a distinct nonempty token")
+        for cell in manifest.workcells:
+            for arm in cell.arms:
+                if not hmac.compare_digest(sha256(tokens[arm.source_id].encode()).hexdigest(), arm.credential_sha256):
+                    raise ValueError("arm credential does not match its registered fingerprint")
+        self._credential_fingerprints = frozenset(source.credential_sha256 for cell in manifest.workcells
+                                                  for source in [*cell.arms, *cell.cameras])
         self._tokens = dict(tokens)
         self._wall, self._monotonic = wall, monotonic
         self._lock = threading.Lock()
@@ -38,9 +45,11 @@ class WorkcellObservations:
     def camera_source_ids(self) -> tuple[str, ...]:
         return tuple(camera["source_id"] for cell in self._workcells for camera in cell["cameras"])
 
+    def credential_fingerprints(self) -> frozenset[str]:
+        return self._credential_fingerprints
+
     def uses_token(self, token: str) -> bool:
-        return isinstance(token, str) and any(hmac.compare_digest(token.encode(), expected.encode())
-                                             for expected in self._tokens.values())
+        return isinstance(token, str) and sha256(token.encode()).hexdigest() in self._credential_fingerprints
 
     def authorize(self, source_id: str, token: str) -> None:
         expected = self._tokens.get(source_id)
