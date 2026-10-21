@@ -146,6 +146,57 @@ def test_contact_readback_within_original_admission_bound_keeps_the_exact_goal()
     assert readback_target({'gripper':.42},{'gripper':.38})=={'gripper':.38}
 
 
+@pytest.mark.parametrize('position',[.405,.4212312996])
+def test_teacher_transfer_hold_keeps_bounded_nonzero_contact_squeeze(position):
+    from sim_pick_place_teacher import contact_hold_target
+    close,contact=.3804260884,.4072
+    target=contact_hold_target(position,close=close,contact=contact)
+    assert target==max(close,position-.035)
+    assert close<=target<position and position-target<=.035+1e-12
+
+
+@pytest.mark.parametrize('position',[.38,.423,1.,float('nan')])
+def test_teacher_transfer_hold_refuses_lost_or_nonfinite_contact(position):
+    from sim_pick_place_teacher import contact_hold_target
+    with pytest.raises((ValueError,RuntimeError)):
+        contact_hold_target(position,close=.3804260884,contact=.4072)
+
+
+@pytest.mark.parametrize('holding',[False,True])
+def test_teacher_dispatch_records_contact_hold_only_when_requested(holding):
+    import ast
+    from types import SimpleNamespace as NS
+    import sim_pick_place_teacher as teacher
+    from sim_pick_place_demonstrations import dispatch_readback_target
+    source=ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
+    function=next(n for n in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+                  if isinstance(n,ast.FunctionDef) and n.name=='dispatch')
+    desired={'joint1':1.46546,'gripper_joint_1':.3804260884}
+    actual={'joint1':1.4883,'gripper_joint_1':.4212312996}
+    evidence={'position_rad':actual['gripper_joint_1'],'receipt':{'sequence':12}}
+    sent=[];checks=[];event={}
+    def grip(expect):
+        checks.append(expect)
+        return evidence
+    namespace=dict(wait_ready=lambda:{'positions':actual},dispatch_once=sent.append,
+        dispatch_readback_target=dispatch_readback_target,grip=grip,event=event,
+        contact_hold_target=getattr(teacher,'contact_hold_target',None),
+        profile=NS(gripper_joint='gripper_joint_1',gripper_close_for_width=lambda _: .3804260884,
+                   gripper_contact_for_width=lambda _: .4072),recipe=NS(box=NS(width=.03)))
+    exec(compile(ast.Module(body=[function],type_ignores=[]),str(source),'exec'),namespace)
+    if holding:
+        namespace['dispatch'](desired,holding=True)
+        assert len(sent)==1 and sent[0]['joint1']==desired['joint1']
+        assert sent[0]['gripper_joint_1']==pytest.approx(.3862312996)
+        assert max(abs(sent[0][n]-actual[n]) for n in actual)<=.04
+        assert event['hold_commands'][0]['evidence'] is evidence and checks==['held']
+        assert event['hold_commands'][0]['target']==sent[0]
+        assert desired['gripper_joint_1']==.3804260884
+    else:
+        with pytest.raises(RuntimeError,match='no_progress'):namespace['dispatch'](desired)
+        assert checks==[] and event=={}
+
+
 def test_readback_correction_stops_when_actual_motion_makes_no_progress():
     from sim_pick_place_demonstrations import dispatch_readback_target
     commands=[]
@@ -244,6 +295,7 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
     sys.path.insert(0, str(ROOT/'middleware/devices/omx/adapter'))
     from omx_adapter.gripper_contract import (
         GripperObservation, GripperReadbackError, verify_held_object, verify_released_object)
+    from sim_policy_trial_evidence import contact_held
     source = ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
     function = next(node for node in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
                     if isinstance(node, ast.FunctionDef) and node.name == 'grip')
@@ -254,13 +306,14 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
         max_joint_state_age_s=.5), recipe=NS(box=NS(width=.03)),
         config=NS(workcell_id='omx_cell_sim', instance_id='omx_cell_sim_01'),
         GripperObservation=GripperObservation, verify_held_object=verify_held_object,
-        verify_released_object=verify_released_object)
+        verify_released_object=verify_released_object,contact_held=contact_held)
     exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
     evidence = namespace['grip']('held')
     assert evidence['observation']['received_at'] == 20.
     assert evidence['checked_owner_s'] == 20.1 and evidence['max_age_s'] == .5
     assert evidence['receipt']['sequence'] == evidence['observation']['sequence'] == 12
     assert evidence['observation']['object_present'] is True
+    assert evidence['position_rad']==.42
     arm.monotonic = lambda: 20.6
     with pytest.raises(GripperReadbackError, match='stale'):
         namespace['grip']('held')
