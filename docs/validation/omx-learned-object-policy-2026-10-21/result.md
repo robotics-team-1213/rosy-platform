@@ -58,8 +58,10 @@ Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint�
 Normalization 전체는 직전 모델에서 training_augmentation만 제거한 것과 동일하다.
 Training index도 동일한6,263/52,834 train frames이며 원 target은 유지했다. Synthetic
 상태 교란을 사용하지 않았음을 실제 normalization·offline-report에서 확인했다.
-현재 DatasetStore 복사·require 및 bundle 전송을 진행 중이며 새 물체 과제는 시작 전이다.
-완료 후 source91897eadf0의50ms capture runtime과 같은 checkpoint로 평가한다.
+DatasetStore 복사·require와 bundle 전송을 완료했고 실제 runner는 exit0으로 종료됐다.
+로컬의 모든 artifact 참조 bytes·SHA256을 다시 대조했다. Source91897eadf0의50ms capture
+runtime과 같은 checkpoint로 새 calibration·사전 물체 과제 실행을 요청했다.
+아직 실제 물체 actor 시작이나 새 성공 결과는 확인하지 않았다.
 
 ## 직전 bounded noise0.02 checkpoint — 사전 물체 과제 실패
 
