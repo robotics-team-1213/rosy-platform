@@ -1208,3 +1208,9 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted (2026-10-21).
 
 원문을 보존한 전처리와 등록 대상·의미 검증을 Console/Discord의 기존 Decision 경계에 둔다. 모델 사용량은 실제 응답으로 계측하고 새 Discord profile은 제안 전용을 유지한다. 전문은 [D-831](../adr/D-831-operator-command-preprocessing.md).
+
+## D-833 원본 계보를 보존한 native OMX 파지 구간 검수와 학습
+
+**Status:** Accepted for implementation (2026-10-21).
+
+사람이 확인한 파지 구간을 원본 identity·session·cycle·이미지·state/action·clock과 결속해 새 child Episode로 내보낸다. 같은 원본 그룹은 한 분할에만 두고 원본 전체 성공·환경 coverage를 구간으로 추정하지 않는다. 전문은 [D-833](../adr/D-833-native-omx-grasp-segments.md).

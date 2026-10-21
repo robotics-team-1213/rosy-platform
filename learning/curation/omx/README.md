@@ -1,5 +1,18 @@
 # OMX 실물 모방학습 준비
 
+## 필요한 파지 구간만 내보내기
+
+[D-833](../../../docs/adr/D-833-native-omx-grasp-segments.md)의 `rosy.omx-native-segments.v1` 선택 JSON은 원본 inspection의 SHA-256, 원본 Episode의 identity·session·cycle, 시작 포함·끝 제외 프레임과 사람의 대상·결과·개입·검수자·근거·분할을 기록한다. 성공을 직접 확인하고 개입이 없는 구간만 학습에 포함한다. 실패·미판정·개입은 제외로 보존한다.
+
+```text
+python learning/curation/omx/native_segments.py <intake-root> --report <intake-root>/inspection.json --segments <selection.json> --out <new-segment-splits>
+python learning/training/omx/native_cycle.py run --splits <new-segment-splits> --out <new-act-run> --steps 100 --device cpu
+```
+
+각 구간은 별도 child Episode다. 원본 state/action·대응 카메라·source clocks를 보존하고 child index/time만 다시 매긴다. 같은 원본·content hash·session·cycle의 후손은 한 분할에만 두며 독립 train/eval이 필요하다. 원본에 session/cycle이 없으면 독립성을 추정하지 않는다. 원본 전체 outcome과 환경 coverage도 구간 결과로 바꾸지 않는다. 출력은 기존 자료와 분리된 새 폴더여야 한다. native 정규화 단위를 SIM rad와 혼합하지 않는다.
+
+`split-receipt.json`은 선택 JSON·원본 hashes·child frame 계보·실제 reader readback·출력 hashes를 묶는다. ACT 실행 전에도 이 기록과 출력 파일을 다시 확인한다. 실제 장치 성공·모델 품질·다른 작업자에 대한 일반화와 데이터 절감 효과는 별도 평가다.
+
 수집 대상은 Fleet PC, 학습·독립 평가는 모델 PC다. HF 조직은 미정이며 로컬 수집의 선행 조건이 아니다.
 현재 도구는 host 주소를 고정하지 않고 장치를 시작하거나 기존 ROSY 실물 profile을 활성화하지 않는다.
 첫 수집 목표는 D-770의 제한된 자동 교사다. 공식 LeRobot leader recorder는 사람 시연 경로로 유지한다.
