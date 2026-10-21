@@ -7,6 +7,10 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
+현재 확정된 실제 learned 물체 성공은 **0/24회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/4회를 구분한다. 후속 사전 과제가 통과하기 전에는
+새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
+
 ## 실제 데이터와 선택한 checkpoint
 
 선택한 시연은 batch 7·9·10·11·12·14·15·16에서 각 3개, batch 17에서 1개로
@@ -150,7 +154,96 @@ dc2ae11177은 공통 파일 검증의 읽기 단위만 8MiB로 바꾸며 경로 
 전체 SHA·최종 크기 검사를 유지한다. 검증당 일시 block 메모리는 약 2MiB에서
 16MiB로 늘 수 있다. 빈 파일·8MiB 경계·그 뒤 17바이트 tail의 끝 변조와 크기
 오류를 포함한 원격 관련 검사 72 PASS / 1 SKIP / 0 NEW와 독립 코드 검토를
-마쳤다. 선택 checkpoint는 동일하며 별도 native calibration으로 효과를 확인한다.
+마쳤다. 선택 checkpoint는 동일하다. 실제 dc2ae11177 calibration은 12회 추론 /
+0 policy goals / cleanup true로 통과했다. 입력 나이 중앙값 262.65ms·최대 492.71ms,
+cycle 시작 간격은 0.931–1.298초였다. 신선도 여유가 작으므로 실제 이동 중
+성공으로 확대 해석하지 않는다. 이어 실행한 engineering 물체 과제 1회는 8개
+candidate 후 원 관측 신선도 실패로 종료됐다. 정리 확인은 true, lift·안정 시간은
+0이며 incomplete 관측이다. 따라서 실제 learned 물체 시작은 기존 20회와 이 1회를
+합한 21회, 물체 성공은 0회다. 이 사전 과제를 새 정식 20회에 합산하지 않는다.
+결과 수집 뒤 디스크 여유 약 7.88GiB가 로컬 관리 스크립트의 임시 8GiB 기준보다
+작아 추가 시작도 차단됐다. 해당 HOLD와 과제 실패는 서로 구분해 보존한다.
+
+후속 98b548e36b는 private actor의 poll 검사 간격만 100→200ms로 바꾼다.
+이는 기존 250ms 허용 범위 안이지만 명목 watchdog 간격은 100ms 늘어난다.
+Lease 갱신 100ms와 500ms 신선도·원 timestamp·모든 admission 검사는 유지한다.
+관련 원격 검사 60 PASS / 0 NEW 및 독립 코드 검토 후 실제 calibration
+12회 / 0 goals / cleanup true로 통과했다. 입력 나이 중앙값은 192.55ms, 최대
+295.27ms였다. 실제 사전 과제는 38개 candidate 후 원 camera 신선도 실패로
+종료됐다. durable intent 38개·accepted UUID 37개·terminal 4/code 0인 goal 37개를
+확인했고 마지막 intent는 UUID·event가 없다. Lift·stable은 0, incomplete 관측이며
+cleanup true다. 전체 learned 물체 시작은 22회·물체 성공은 0회다.
+
+종료 뒤 합성 진단 `omx-gil-interval-1`은 같은 8MiB 읽기와 실제 마지막 frame의
+PNG 메모리 인코딩을 Python thread 경쟁 유무·전환 간격 5/1ms 조건에서 비교했다.
+경쟁이 있는 2회 반복의 해시 중앙값은 5ms 조건 100.73/104.25ms, 1ms 조건
+33.99/34.62ms였고 PNG는 약 11.63ms에서 3.54–3.60ms였다. 각 조건 16개 표본의
+전체 해시와 PNG 복원 pixels를 확인했다. 합성 경쟁·메모리 인코딩 결과이며 실제
+파일 저장 시간·ROS 원인 확정·명령 성공 증거가 아니다.
+
+후속 1eb43e374f는 private actor의 Python 전환 간격만 1ms로 설정하고 이전 값과
+실제 값을 receipt에 기록한다. 이 값은 scheduling 지연 상한이 아니며 actor의
+모든 Python thread에 적용돼 전환 비용이 늘 수 있다. Poll 200ms·renewal 100ms·
+원 timestamp·모델·모든 guard와 PNG 저장 순서는 유지한다. 원격 관련 검사
+56 PASS / 1 SKIP / 0 NEW와 독립 코드 검토 후 별도 native calibration을 시작했다.
+실제 calibration은 12회 / 0 goals / cleanup true로 통과했고 입력 나이 중앙값
+179.06ms·최대 268.94ms, 전환 간격 실제 1ms·이전 5ms를 확인했다. 원본 수집의
+SSH 180초 timeout 후 같은 run을 다시 조회해 종료·PASS를 확인하고 fetch만
+재시도했다. 복구 스크립트의 receipt pointer 읽기 오류도 새 실행 전에 중단됐으며
+포인터를 해제해 archive·map SHA와 94개 추출 파일·108,085,807bytes를 대조했다.
+두 HOLD 원문을 별도 보존하고 같은 calibration을 재시작하지 않았다.
+
+이후 실제 engineering 과제는 13개 candidate 뒤 원 camera 신선도 실패로 종료됐다.
+물체 lift·안정 시간은 0이고 incomplete 관측이며 실행 정리를 확인했다.
+전체 learned 물체 시작은 23회·물체 성공은 0회다. 1ms 설정의 실제 해결을
+주장하지 않으며 후속 계측에서 capture 이후 제출 구간을 확인한다.
+
+디스크 관리는 peer cache·원본 증거 삭제 대신 자체 시작 기준을 조정했다.
+새 deploy 전에 home/state 여유가 4GiB와 다음 작업 allowance(새 release 2GiB,
+재사용 1GiB)의 합 이상인지 확인하며 완료·fetch·자기 소스 cache 정리 뒤
+4GiB 기준을 다시 확인한다. 이는 작업 중 남는 용량이나 최대 사용량 보장이
+아니며 부족하면 HOLD·원 receipt를 보존하고 deploy/start를 자동 재시도하지 않는다.
+
+019b96ade9는 capture 뒤 PNG 저장·제출 직전 원 입력 나이·실패한 submit 시간과
+stop 이후 traceback 위치를 기록하는 계측 수정이다. 원격 57 PASS / 1 SKIP /
+0 NEW 뒤 calibration 12회 / 0 goals / cleanup true로 통과했다. 실제 사전 과제는
+82개 candidate / 82 durable intent / 81 accepted UUID 후 원 joint 관측 신선도
+실패로 종료됐고 cleanup true다. 마지막 intent에는 UUID가 없으며 traceback은
+durable intent 뒤 전체 guard를 재수행한 다음의 `_source`를 가리킨다. 마지막
+원 입력 나이 344.245ms에 submit 180.701ms가 더해졌고 PNG 저장은 2.860ms였다.
+Lift·stable 0, incomplete 관측이며 전체 learned 물체 성공은 0/24회다.
+
+같은 실행의 47→56 PNG 파일 구간 10.030초 관측에서 cgroup CPU 사용량은
+20.063 CPU초, quota throttling 증가는 0이었다. 이 구간에 quota가 원인이었다는
+증거는 없으며 전체 실행이나 다른 부하 구간의 scheduling 상한을 보장하지 않는다.
+81개 완료 goal에 약 97.9초가 걸렸고 attach·lift는 아직 없었다. 신선도 해결과
+별개로 600초 전체 예산에서 정책의 물체 과제 진행률도 계속 확인해야 한다.
+
+후속 fb8d68a4dc는 수치 추론 전에 원 입력 나이가 설치 신선도 예산의 1/4 이하인
+실제 capture를 선택한다. 초기 파일 검사부터 고정한 전체 capture 대기 예산은
+설치 신선도 예산과 같으며, 두 잠금을 풀고 새 실제 관측을 기다린다. Guard 실패는
+그대로 전파하고 선택 뒤 모델은 한 번만 호출한다. 생성된 candidate나 queued ACT
+결과의 원시각을 바꾸지 않으며 기존 제출·durable intent·후속 검사를 유지한다.
+이는 계산·제출 여유를 확보하는 보수적 입력 선택이며 end-to-end 500ms 보장이 아니다.
+회귀는 이전 코드에서 새 관측 선택·관측 미갱신 중단의 두 경우가 실패했고 수정 뒤
+관련 원격 104 PASS / 3 SKIP / 0 NEW였다. 437b01089b는 잠금·검사가 최초 대기
+예산을 소진한 경우 새 관측이어도 계산하지 않는 검사를 추가했다. 실제 native
+calibration과 물체 과제 결과는 별도로 확인해야 한다.
+
+최초 20회 archive와 extraction map 총 40개, 1,771,298,280bytes는 두 번째
+호스트에서도 전체 SHA·크기를 검증했다. 부분 전송·39/40 확인·빠진 map 1개 복구
+원문과 최종 40/40 대조를 보존했고 보관 디렉터리 23개의 fsync도 완료했다.
+종료·정리·unit 비활성·WAL 없음과 archive의 원본 byte 일치를 확인한 뒤 AI의
+각 이전 run에서 설치 weights 복사본과 execution journal 복사본만 퇴거했다.
+원본 byte는 로컬 raw·로컬 archive·두 번째 호스트 archive에 보존한다. 처음 1·2회와
+후속 3–20회 퇴거는 별도 proof이며 두 번째 호스트 copy 작업의 `ai_evictions=0`과
+구분한다. 후속 18회 퇴거에서 여유 공간은 5,870,911,488→7,507,722,240bytes였다.
+이전 run은 재시작하지 않으며 canonical 결과·계측·원 fetch receipt·퇴거 marker는 유지한다.
+
+최신 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
+affected 48개 경로를 지정했다(확대 사유 없음). 해당 선택을 모델 PC에서 실행해
+1,001 PASS / 31 SKIP / 0 NEW를 확인했다. 검사 전 준비 함수의 무실행 반환을
+FULL 통과로 계산하지 않으며, 생략한 검사를 통과 수에 포함하지 않는다.
 
 ## 유지한 실행·성공 기준과 시험 범위
 
