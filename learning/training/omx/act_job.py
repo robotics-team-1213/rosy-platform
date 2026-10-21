@@ -4,6 +4,7 @@ act_job.py --train-export <LeRobot-root>... --eval-export <root> --out <new-dir>
 CPU only; source episode groups are disjoint. No robot, ROS, GPU, or network command.
 """
 import argparse
+from collections import deque
 import hashlib
 import importlib.metadata
 import json
@@ -127,7 +128,10 @@ def export_truth(export, source, validated):
     return None
 
 
-def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames'):
+def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames',
+        action_representation='absolute'):
+    if action_representation not in ('absolute','joint_delta_from_chunk_source_v1'):
+        raise ValueError('unknown action representation')
     if sampling not in ('all_frames','command_entry'):
         raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
@@ -227,14 +231,20 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             arrays.append((torch.stack(images), torch.stack(states), torch.stack(actions)))
         train_actions = torch.cat([a[2] for a in arrays[:train_count]])
         train_states = torch.cat([a[1] for a in arrays[:train_count]])
-        state_mean, action_mean = train_states.mean(0), train_actions.mean(0)
-        state_std, action_std = train_states.std(0, unbiased=False), train_actions.std(0, unbiased=False)
+        absolute_baseline=train_actions.mean(0)
+        action_values=train_actions if action_representation=='absolute' else train_actions-train_states
+        state_mean, action_mean = train_states.mean(0), action_values.mean(0)
+        state_std, action_std = train_states.std(0, unbiased=False), action_values.std(0, unbiased=False)
         state_std = torch.where(state_std < 1e-6, torch.ones_like(state_std), state_std)
         action_std = torch.where(action_std < 1e-6, torch.ones_like(action_std), action_std)
         stats = {"state_mean": state_mean.tolist(), "state_std": state_std.tolist(),
                  "action_mean": action_mean.tolist(), "action_std": action_std.tolist(),
                  "fit_episodes": ids[:train_count], "image": {"resize_hw": [64, 64], "color": "rgb", "scale": 1/255},
                  "fixed_source_duration_s": next(iter(durations))}
+        if action_representation!='absolute':
+            del stats['action_mean'],stats['action_std']
+            stats['action_transform']=dict(type=action_representation,mean=action_mean.tolist(),
+                std=action_std.tolist(),absolute_baseline=absolute_baseline.tolist())
         _write(out / "normalization.json", stats)
         for i, (images, states, actions) in enumerate(arrays):
             arrays[i] = (images, (states - state_mean) / state_std, (actions - action_mean) / action_std)
@@ -260,7 +270,10 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 chunk = chunk_indices(len(actions), i, 4)
                 batch["observation.state"].append(states[i])
                 batch[image_key].append(images[i])
-                batch["action"].append(torch.stack([actions[j] if j is not None else actions[-1] for j in chunk]))
+                targets=torch.stack([actions[j] if j is not None else actions[-1] for j in chunk])
+                if action_representation!='absolute':
+                    targets=targets-(states[i]*state_std+state_mean)/action_std
+                batch["action"].append(targets)
                 batch["action_is_pad"].append(torch.tensor([j is None for j in chunk], dtype=torch.bool))
             batch = {k: torch.stack(v) for k, v in batch.items()}
             policy.train()
@@ -281,17 +294,24 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             with torch.no_grad():
                 for images, states, _ in arrays[train_count:]:
                     model.reset()
-                    predictions.extend(model.select_action({"observation.state": states[i:i+1],
-                                       image_key: images[i:i+1]}).squeeze(0)
-                                       for i in range(len(states)))
-            return (torch.stack(predictions) * action_std + action_mean).numpy()
+                    queue=deque()
+                    for i in range(len(states)):
+                        if not queue:
+                            chunk=model.predict_action_chunk({"observation.state":states[i:i+1],
+                                                              image_key:images[i:i+1]})
+                            actions=chunk[0,:n_action_steps]*action_std+action_mean
+                            if action_representation!='absolute':
+                                actions=actions+states[i]*state_std+state_mean
+                            queue.extend(actions)
+                        predictions.append(queue.popleft())
+            return torch.stack(predictions).numpy()
 
         prediction = predict(policy)
         reloaded = ACTPolicy.from_pretrained(out / "policy", local_files_only=True)
         np.testing.assert_allclose(predict(reloaded), prediction, atol=1e-6, rtol=1e-6)
         truth = np.asarray([r["action"] for rows in original_rows[train_count:] for r in rows])
         limits = [sources[0]["position_limits_rad"][name] for name in names]
-        report = offline_report(truth, prediction, action_mean.numpy(), train_actions.numpy(), limits)
+        report = offline_report(truth, prediction, absolute_baseline.numpy(), train_actions.numpy(), limits)
         report.update(algorithm="lerobot-act", lerobot_version="0.4.4", torch_version=str(torch.__version__),
                       device="cpu", seed=seed, steps=steps, n_action_steps=n_action_steps,
                       train_episodes=ids[:train_count], eval_episodes=ids[train_count:],
@@ -308,7 +328,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         for episode_id, rows in zip(ids[train_count:], original_rows[train_count:]):
             count = len(rows)
             per_episode[episode_id] = offline_report(truth[offset:offset+count], prediction[offset:offset+count],
-                action_mean.numpy(), train_actions.numpy(), limits)
+                absolute_baseline.numpy(), train_actions.numpy(), limits)
             offset += count
         report['per_episode'] = per_episode
         if sampling_ref is not None:
@@ -371,9 +391,11 @@ def main():
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
     ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
+    ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1'),default='absolute')
     args = ap.parse_args()
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
-                         n_action_steps=args.n_action_steps,sampling=args.sampling)))
+                         n_action_steps=args.n_action_steps,sampling=args.sampling,
+                         action_representation=args.action_representation)))
 
 
 if __name__ == "__main__":

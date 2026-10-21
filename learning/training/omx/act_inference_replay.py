@@ -11,7 +11,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path[:0]=[str(ROOT/'contracts/learning/src'),str(ROOT/'learning/curation/omx')]
-from act_inference import ACTInference,InferenceObservation,image_key
+from act_inference import ACTInference,InferenceObservation,image_key,action_statistics
 from rosy.contracts.learning import validate_dataset,validate_policy
 
 
@@ -112,7 +112,7 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
                 action_age_within_budget=action_age<=policy['timing']['max_action_age_ns'],positions=list(result.positions)))
         truth=np.asarray([row['action'] for row in source['samples']]);prediction=np.asarray(predictions)
         mae=float(np.abs(truth-prediction).mean())
-        baseline=float(np.abs(truth-np.asarray(stats['action_mean'])).mean())
+        baseline=float(np.abs(truth-np.asarray(action_statistics(stats,len(policy['joint_names']))[3])).mean())
         if abs(mae-expected_metrics['mae_rad'])>1e-6 or abs(baseline-expected_metrics['constant_baseline_mae_rad'])>1e-9:
             raise ValueError('actual queued prediction metrics differ from bound offline evaluation')
         # Revalidate all referenced source bytes after video decoding/inference.

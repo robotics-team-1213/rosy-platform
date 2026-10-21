@@ -61,6 +61,23 @@ def _snapshot(root,pin):
     return doc,buffers
 
 
+def action_statistics(stats,size):
+    """Decode the representation before model loading; old consumers reject nested statistics."""
+    if 'action_transform' not in stats:
+        try:
+            mean=_vector(stats['action_mean'],size)
+            std=_vector(stats['action_std'],size,positive=True)
+        except KeyError as error:raise ValueError('missing action statistics') from error
+        return 'absolute',mean,std,mean
+    transform=stats['action_transform']
+    if (any(key in stats for key in ('action_mean','action_std')) or type(transform) is not dict
+            or set(transform)!={'type','mean','std','absolute_baseline'}
+            or transform['type']!='joint_delta_from_chunk_source_v1'):
+        raise ValueError('unknown or ambiguous action transform')
+    return (transform['type'],_vector(transform['mean'],size),
+            _vector(transform['std'],size,positive=True),_vector(transform['absolute_baseline'],size))
+
+
 def _configuration(doc,buffers):
     paths={ref['path'] for ref in doc['files']}
     if paths!={'policy/config.json','policy/model.safetensors'}:raise ValueError('exact ACT config and safetensors files required')
@@ -77,8 +94,9 @@ def _configuration(doc,buffers):
     steps=config.get('n_action_steps');chunk=config.get('chunk_size')
     if type(steps) is not int or type(chunk) is not int or not 1<=steps<=chunk<=1024:
         raise ValueError('bounded positive ACT chunk configuration required')
-    for name in ('state_mean','state_std','action_mean','action_std'):
+    for name in ('state_mean','state_std'):
         _vector(stats[name],size,positive=name.endswith('_std'))
+    action_statistics(stats,size)
     expected=dict(resize_hw=camera['model_shape'][1:],color='rgb',scale=camera['scale'])
     if stats['image']!=expected:raise ValueError('image normalization differs from policy metadata')
     duration=stats['fixed_source_duration_s']
@@ -102,8 +120,11 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
     policy=ACTPolicy(config)
     policy.load_state_dict(load(weight_bytes),strict=True)
     policy.eval()
-    means={name:torch.tensor(stats[name],dtype=torch.float32) for name in ('state_mean','action_mean')}
-    stds={name:torch.tensor(stats[name],dtype=torch.float32) for name in ('state_std','action_std')}
+    representation,action_mean,action_std,_=action_statistics(stats,len(metadata['joint_names']))
+    means=dict(state_mean=torch.tensor(stats['state_mean'],dtype=torch.float32),
+               action_mean=torch.tensor(action_mean,dtype=torch.float32))
+    stds=dict(state_std=torch.tensor(stats['state_std'],dtype=torch.float32),
+              action_std=torch.tensor(action_std,dtype=torch.float32))
     camera=metadata['cameras'][0];key=image_key(metadata)
 
     def predict(obs):
@@ -115,6 +136,7 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
         with torch.inference_mode():
             chunk=policy.predict_action_chunk({'observation.state':state.unsqueeze(0),key:image})
             actions=chunk[0,:config.n_action_steps]*stds['action_std']+means['action_mean']
+            if representation!='absolute':actions=actions+torch.tensor(obs.positions,dtype=torch.float32)
         return actions.tolist()
     return predict
 
