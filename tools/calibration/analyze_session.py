@@ -32,6 +32,8 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "tools"))
+from data_paths import data_root  # noqa: E402
 sys.path.insert(0, str(REPO / "learning" / "training" / "perception" / "dataset"))
 sys.path.insert(0, str(REPO / "middleware" / "perception"))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
@@ -392,9 +394,9 @@ def report(candidate, runs):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sessions", nargs="+", type=Path)
-    ap.add_argument("--out", type=Path, default=REPO / "data" / "calibration",
+    ap.add_argument("--out", type=Path, default=data_root(REPO) / "calibration",
                     help="reports go to <out>/<robot>/reports/<utc>/ (data/ is gitignored)")
-    ap.add_argument("--store", type=Path, default=REPO / "data" / "calibration",
+    ap.add_argument("--store", type=Path, default=data_root(REPO) / "calibration",
                     help="PC mirror of the calibration store; each run adds candidate records")
     ap.add_argument("--lidar-yaw-deg", type=float, default=None,
                     help="configured LiDAR yaw; default: lidar_yaw_offset in robot.yaml")

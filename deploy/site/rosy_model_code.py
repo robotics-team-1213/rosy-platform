@@ -392,6 +392,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
         map_job = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
                                            CAMERA_MAP_ENTRY]).strip()
         paths = CODE_PREFIXES if map_job else tuple(p for p in CODE_PREFIXES if p not in CAMERA_MAP_FILES)
+        data_helper = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
+                                               "tools/data_paths.py"]).strip()
+        if not data_helper:
+            paths = tuple(p for p in paths if p != "tools/data_paths.py")
         split_layout = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
                                                 "middleware/perception/control/_source_layout.py"]).strip()
         if not split_layout:

@@ -22,15 +22,18 @@ from __future__ import annotations
 
 import functools
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / 'tools'))
+from data_paths import data_root  # noqa: E402
 PROFILE_PATH = REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
 ROBOT_YAML = REPO / "middleware" / "perception" / "config" / "robot.yaml"
-CALIBRATION_STORE = REPO / "data" / "calibration"
+CALIBRATION_STORE = data_root(REPO) / "calibration"
 LIDAR_FORWARD_DEG = 180.0
 
 # rosy.urdf.xacro: 0.028 + 0.067 + 0.030; x of rplidar_mount in base_link.

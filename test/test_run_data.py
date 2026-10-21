@@ -14,6 +14,11 @@ run_data = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(run_data)
 
 
+@pytest.fixture(autouse=True)
+def isolate_operator_data_root(monkeypatch):
+    monkeypatch.delenv("ROSY_DATA_ROOT", raising=False)
+
+
 def _repo(tmp_path: Path) -> Path:
     for kind in run_data.KINDS:
         (tmp_path / "data" / kind).mkdir(parents=True)

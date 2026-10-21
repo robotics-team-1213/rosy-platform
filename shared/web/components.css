@@ -13,7 +13,7 @@
  * outrank the browser's own [hidden] style, so surfaces wrote ~60 per-element copies. Show with
  * `:not([hidden])` selectors, never by overriding this. */
 [hidden] { display: none !important; }
-
+a { color: var(--text-primary); text-underline-offset: 0.2em; } /* 칠하지 않은 링크가 브라우저 파랑·보라로 남지 않게; 클래스 규칙이 이긴다 */
 /* Native disclosure keeps its marker and keyboard/expanded semantics. */
 .ui-page-heading {
   margin: 0;
@@ -330,10 +330,9 @@ ui-button:is([kind="primary"], [kind="irreversible"], [aria-pressed="true"], [ar
 /* 비활성 사유(D-359 §5.3). ui.js가 reason 속성을 버튼 안의 <small data-reason>으로
    그리고 aria-describedby로 잇는다. 사유가 있는 비활성은 흐리지 않는다 — 흐리면
    사유 글자까지 읽히지 않는다. 대신 채움을 빼고 점선 테와 조용한 글자로 말한다. */
-ui-button[reason]:not([reason=""]) {
-  flex-direction: column;
-  gap: 0;
-}
+/* 아이콘과 이름은 한 줄에 남고 사유만 아래 줄로 내려간다. 사유를 숨긴 자리에서도 단추 얼굴이 이웃과 같다. */
+ui-button[reason]:not([reason=""]) { display: inline-grid; grid-template-columns: auto auto; justify-content: center; align-items: center; row-gap: 0; } /* 폭 = 가장 넓은 줄(줄바꿈 flex는 합이라 단추가 넓어진다) */
+ui-button[reason]:not([reason=""]) > small[data-reason] { grid-column: 1 / -1; text-align: center; }
 
 ui-button[disabled][reason]:not([reason=""]) {
   color: var(--text-secondary);
@@ -353,6 +352,7 @@ ui-button[kind] > small[data-reason] {
   white-space: normal;
 }
 
+input.ui-field[type="file"]::file-selector-button { /* 브라우저 기본 대신 조용한 단추 얼굴 */ margin-inline-end: var(--gap-section); padding: var(--inset-chip); color: var(--button-secondary-ink); background: var(--button-secondary-bg); border: 1px solid var(--control-line); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
 ui-button:focus-visible,
 ui-field:focus-visible,
 ui-field input:focus-visible,

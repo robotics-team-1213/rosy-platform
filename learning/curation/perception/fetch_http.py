@@ -42,6 +42,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
+from data_paths import data_root  # noqa: E402
+
 EXIT_NOT_IDLE = 4
 EXIT_TOKEN = 2
 TOKEN_ENV = "ROSY_CORE_OPERATOR_TOKEN_FILE"
@@ -51,7 +54,7 @@ MANIFEST_NAME = "manifest.json"
 INTENT_TOPIC = "teleop/intent"
 RECORDING_ID = re.compile(r"\d{8}T\d{6}Z_[A-Za-z0-9_.-]{1,64}")
 CHUNK = 1 << 20
-DEFAULT_DEST = "data/perception/raw"
+DEFAULT_DEST = str(data_root(Path(__file__).resolve().parents[3]) / 'perception/raw') if 'ROSY_DATA_ROOT' in os.environ else "data/perception/raw"
 LIST_TIMEOUT_S = 15.0
 #: Network load: recording downloads are paced to this many Mbit/s by default (0 = unlimited).
 DEFAULT_LIMIT_MBPS = 2.0
