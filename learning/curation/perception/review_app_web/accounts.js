@@ -13,6 +13,7 @@ const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 �
   import_failed:'가져오기에 실패했습니다. 연결과 자료 접근을 확인한 뒤 재시도하세요.'};
 const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 const scopeLabel={'read-repos':'읽기','gated-repos':'제한 자료 읽기','write-repos':'쓰기','manage-repos':'저장소 생성·삭제'};
+const capabilityLabel={view:'조회',edit:'라벨 수정',approve:'검수 승인',manage:'프로젝트 관리',import:'자료 가져오기',publish:'외부 게시'};
 function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
 function status(text, state) {
   $('account-status').textContent=text; $('account-status').setAttribute('state',state);
@@ -74,7 +75,7 @@ async function refresh() {
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
   status('로그인됨', 'ready');
-  $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.join(', ')}`;
+  $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.map(cap=>capabilityLabel[cap] || '미지원 권한').join(' · ')}`;
   const canPublish=session.capabilities.includes('publish');
   $('import-panel').hidden=!session.capabilities.includes('import');
   $('connect-panel').hidden=!session.capabilities.includes('import');
@@ -98,7 +99,8 @@ async function refresh() {
     option.textContent=account.username || account.subject; select.append(option);
     managed.append(option.cloneNode(true));
   }
-  if(!session.connections.length) empty(list,'연결된 계정이 없습니다. 외부 자료를 가져오려면 계정을 연결하세요.');
+  if(!session.connections.length) empty(list,session.capabilities.includes('import')
+    ? '연결된 계정이 없습니다. 외부 자료를 가져오려면 계정을 연결하세요.' : '연결된 계정이 없습니다.');
   await jobs();
 }
 async function jobs() {
@@ -110,7 +112,8 @@ async function jobs() {
   const focused=document.activeElement, focusId=focused.closest('article')?.dataset.job;
   const focusText=root.contains(focused)?focused.textContent:null;
   root.replaceChildren();
-  if(!result.jobs.length) empty(root,'가져오기 작업이 없습니다. 위에서 계정과 자료를 선택해 등록하세요.');
+  if(!result.jobs.length) empty(root,session.capabilities.includes('import')
+    ? '가져오기 작업이 없습니다. 위에서 계정과 자료를 선택해 등록하세요.' : '가져오기 작업이 없습니다.');
   for(const job of result.jobs) {
     const row=taskRow({title:job.repo_id, status:states[job.status] || job.status,
       attention:['failed','interrupted','rights_hold','blocked'].includes(job.status),
