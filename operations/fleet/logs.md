@@ -4200,3 +4200,9 @@
 - 변경: 기존 maps holder에서 원본/정규화 PNG·미터 등록·bounded 일반 추출·immutable 후보 보관을 연결했다. 후보 검증은 기존 SiteMap validator를 사용하고 저장/활성화는 하지 않는다. 시설 근거도 기존 검토·참조 revision 경계를 적용한다.
 - 증거: 4a2f84e1fa 원격 raster/STL/계약63통과, 2d3ae718e7 추출/API31통과, 93f8408f19 후보 검토·실제 Chromium·설치43통과, 624114525e 합성 도면 기준선/API8통과. 각 실행 NEW0이며 겹치는 시험 수는 합산하지 않는다.
 - gate 변화: 없음. 후보 생성/검증은 로봇 명령이나 현장 수용 증거가 아니다. 최종 broad/CI/배포는 별도다.
+
+## 2026-10-21 · uncommitted · 관제 AI와 D-831의 원격 구조 분리 적용
+
+- 변경: 기존 Console holder·정적 allowlist·로그인 소유자에 기명 대화를 연결했다. 기존 Fleet 원장/Task 인계를 유지하고 Console·Discord 전처리/계측을 공통 Decision에서 검증한다. 새 Discord profile의 실행 worker는 OFF다.
+- 증거: 원본 로컬 `e83e329829`에서 기능을 추출했다. 원격 구조에 적용한 새 SHA의 원격 시험·브라우저·독립 모델 평가·게시 검증은 커밋 후 별도로 수행한다. 과거 receipt를 재사용하지 않는다.
+- gate 변화: 없음. 실제 보호 설치·발화·장치/현장 수용은 별도다.

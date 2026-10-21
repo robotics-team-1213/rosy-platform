@@ -14,6 +14,7 @@ from setuptools.command.develop import develop
 layout = runpy.run_path('fleet/_source_layout.py')
 roots = layout['SOURCE_ROOTS']
 package_dirs = {
+    'fleet.server.assistant': Path('fleet/server/work/assistant'),
     'rosy.decision': roots['decision'] / 'src/rosy/decision',
     'rosy.decision.conversation': roots['decision'] / 'src/rosy/decision/conversation',
     'rosy.decision.deliberation': roots['decision'] / 'src/rosy/decision/deliberation',

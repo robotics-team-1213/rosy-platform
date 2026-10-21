@@ -42,6 +42,8 @@ services:
       - /run/rosy-deliberation/status.json
       - --conversation-config-optional
       - /run/rosy-deliberation/conversation.json
+      - --assistant-config-optional
+      - /run/rosy-deliberation/operator.json
       - --sightings-config
       - /run/rosy-config/site-cameras.yaml
       - --sightings-db

@@ -99,10 +99,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--users-file", default=None, type=Path, help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--account-config", default=os.environ.get('ROSY_ACCOUNT_CONFIG') or None, type=Path,
                          help="protected Rosy Account authority JSON; requires --tasks-db")
-    console.add_argument('--conversation-config-optional',default=None,type=Path,
-                         help='optional independently admitted natural conversation broker config')
-    console.add_argument('--deliberation-config-optional',default=None,type=Path,
-                         help='optional private D-720 fixed read-only status broker config')
+    from fleet.server.channel.options import add_conversation_options
+    add_conversation_options(console)
     discord = console.add_mutually_exclusive_group()
     discord.add_argument("--discord-intake-config", default=None, type=Path,
                          help="D-671 private named Discord intake configuration; absent disables intake")
@@ -661,14 +659,8 @@ def run_console(args: argparse.Namespace) -> None:
     elif getattr(args, 'discord_intake_config_optional', None) is not None:
         from fleet.server.channel_requests import ChannelConfig
         channel_config = ChannelConfig.load(args.discord_intake_config_optional, optional=True)
-    model_config=None
-    conversation_config=None
-    if getattr(args,'conversation_config_optional',None) is not None:
-        from fleet.server.channel.conversation.runtime import ConversationConfig
-        conversation_config=ConversationConfig.load(args.conversation_config_optional,optional=True)
-    if getattr(args,'deliberation_config_optional',None) is not None:
-        from fleet.server.channel_model_runtime import BrokerConfig
-        model_config=BrokerConfig.load(args.deliberation_config_optional,optional=True)
+    from fleet.server.channel.options import load_conversation_options
+    model_config, conversation_config, assistant_config = load_conversation_options(args)
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
@@ -705,7 +697,7 @@ def run_console(args: argparse.Namespace) -> None:
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config,
                      channel_config=channel_config,channel_model_config=model_config,
-                     conversation_config=conversation_config, omx_instances=_omx_instances())
+                     conversation_config=conversation_config, assistant_config=assistant_config, omx_instances=_omx_instances())
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

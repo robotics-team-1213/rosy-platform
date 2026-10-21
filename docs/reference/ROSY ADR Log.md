@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
 | D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
 | D-825 | STL 도면 참조와 Fleet 평면 지도 편집 | Accepted (2026-10-21) |
@@ -1201,3 +1202,9 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted for implementation (2026-10-20). 실제 운영 수용은 별도다.
 
 별도 기명 이동 접수는 기존 Task owner를 사용하고 웹 모델은 조회 권한을 유지한다. 보호 설치와 두 언어 수용은 Discord와 독립 결속한다. 전문은 [D-821](../adr/D-821-operator-deployment-execution-languages.md).
+
+## D-831 관제 자연어 전처리·명령 후보 검증·토큰 예산
+
+**Status:** Accepted (2026-10-21).
+
+원문을 보존한 전처리와 등록 대상·의미 검증을 Console/Discord의 기존 Decision 경계에 둔다. 모델 사용량은 실제 응답으로 계측하고 새 Discord profile은 제안 전용을 유지한다. 전문은 [D-831](../adr/D-831-operator-command-preprocessing.md).
