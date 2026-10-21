@@ -21,15 +21,18 @@ def manifest(tmp_path):
                 "source_id": "arm_left", "arm_id": "left", "label": "Left arm",
                 "board_id": "board-left", "joint_topic": "/omx_commissioning/left/joint_states",
                 "joint_names": ["joint1"], "token_env": "ROSY_ARM_LEFT",
+                "credential_sha256": hashlib.sha256(b"left-arm-token").hexdigest(),
             }],
             "cameras": [{
                 "source_id": "bench_overhead", "label": "Bench overhead", "role": "overhead",
                 "arm_id": None, "image_topic": "/bench/image_raw",
                 "device_path": "/dev/v4l/by-id/bench-camera", "token_env": "ROSY_CAMERA_BENCH",
+                "credential_sha256": hashlib.sha256(b"bench-camera-token").hexdigest(),
             }, {
                 "source_id": "left_wrist", "label": "Left wrist", "role": "wrist",
                 "arm_id": "left", "image_topic": "/left/image_raw",
                 "device_path": "/dev/v4l/by-id/wrist-camera", "token_env": "ROSY_CAMERA_WRIST",
+                "credential_sha256": hashlib.sha256(b"wrist-camera-token").hexdigest(),
             }],
         }],
     }
@@ -78,12 +81,48 @@ def test_preview_source_collision_refuses_start_before_overwriting_credentials(m
     "ROSY_VISION_PREVIEW_SECRET", "ROSY_CAMERA_WRIST",
 ])
 def test_preview_camera_token_cannot_reuse_any_other_vision_secret(manifest, tmp_path, secret):
-    path, _, env = manifest
+    path, data, env = manifest
     configs, calibrated_env = _configs(tmp_path)
     env |= calibrated_env | {"ROSY_VISION_PREVIEW_SECRET": "preview-" + "x" * 32}
     env["ROSY_CAMERA_BENCH"] = env[secret]
-    with pytest.raises(ValueError, match="differ|unique|reuse"):
+    data["workcells"][0]["cameras"][0]["credential_sha256"] = hashlib.sha256(env[secret].encode()).hexdigest()
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    with pytest.raises(ValueError, match="differ|unique|reuse|manifest"):
         cli._vision_ingest(_args(path, *SYNC_FLAGS), configs, environ=env)
+
+
+@pytest.mark.parametrize("camera_env", ["ROSY_CAMERA_BENCH", "ROSY_CAMERA_WRIST"])
+def test_camera_raw_token_must_match_its_declared_fingerprint(manifest, camera_env):
+    path, _, env = manifest
+    env[camera_env] = "wrong-camera-secret"
+    with pytest.raises(ValueError) as caught:
+        cli._vision_ingest(_args(path), [], environ=env)
+    assert "wrong-camera-secret" not in str(caught.value)
+
+
+@pytest.mark.parametrize("secret", [
+    "ROSY_PHONE_BENCH", "ROSY_FLEET_BENCH", "ROSY_FLEET_NORTH",
+    "ROSY_PAIRING_SYNC", "ROSY_VISION_PREVIEW_SECRET",
+])
+def test_arm_fingerprint_cannot_reuse_a_known_vision_secret_without_arm_env(manifest, tmp_path, secret):
+    path, data, env = manifest
+    configs, calibrated_env = _configs(tmp_path)
+    env |= calibrated_env | {"ROSY_VISION_PREVIEW_SECRET": "preview-" + "x" * 32}
+    data["workcells"][0]["arms"][0]["credential_sha256"] = hashlib.sha256(env[secret].encode()).hexdigest()
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert "ROSY_ARM_LEFT" not in env
+    with pytest.raises(ValueError):
+        cli._vision_ingest(_args(path, *SYNC_FLAGS), configs, environ=env)
+
+
+def test_future_paired_credential_cannot_reuse_arm_fingerprint_without_arm_env(manifest, tmp_path):
+    path, _, env = manifest
+    configs, calibrated_env = _configs(tmp_path)
+    assert "ROSY_ARM_LEFT" not in env
+    ingest, _ = cli._vision_ingest(_args(path, *SYNC_FLAGS), configs, environ=env | calibrated_env)
+    digest = hashlib.sha256(b"left-arm-token").digest()
+    ingest.paired.replace_rows([("ceiling_north", digest, "reused-arm", time.time() + 3600)])
+    assert ingest.paired.check("ceiling_north", digest) == ("unknown", None)
 
 
 def test_preview_camera_token_is_required_without_exposing_credentials(manifest):
