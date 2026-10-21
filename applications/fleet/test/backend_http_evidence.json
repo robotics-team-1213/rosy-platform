@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563",
+      "result": "6 passed; configured HTTP success and authorization refusals, fake device transports",
+      "pytest_root": "operations/fleet"
+    },
+    {
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40",
       "result": "6046 passed, 323 skipped, 3 failed; only passing test cases retained",
       "pytest_root": "operations/fleet"
@@ -249,12 +254,12 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "POST:/api/fleet/workcells/{workcell_id}/policy/windows/{window_id}/close": {
-      "status": 403,
+      "status": 200,
       "test": [
-        "operations/fleet/test/test_ai_facts.py",
-        "test_ai_observer_reads_like_a_viewer_and_posts_only_facts_and_heartbeats"
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_closes_an_approved_policy_window"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
     },
     "DELETE:/api/fleet/robots/{robot_id}/hub-link": {
       "status": 200,
@@ -497,12 +502,12 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "POST:/api/fleet/trips/{trip_id}/confirm-replan": {
-      "status": 403,
+      "status": 200,
       "test": [
-        "operations/fleet/test/test_ai_facts.py",
-        "test_ai_observer_reads_like_a_viewer_and_posts_only_facts_and_heartbeats"
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_confirms_a_real_trip_replan"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
     },
     "GET:/api/fleet/channel-requests": {
       "status": 200,
@@ -665,12 +670,12 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "POST:/api/fleet/cell-jobs/{mission_id}/reconcile": {
-      "status": 503,
+      "status": 200,
       "test": [
-        "operations/fleet/test/test_cell_job_recovery.py",
-        "test_operator_routes_need_a_named_operator"
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_reconciles_a_lost_cell_action_without_resubmitting"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
     },
     "POST:/api/fleet/cell-jobs/{mission_id}/resume": {
       "status": 200,
@@ -785,12 +790,12 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "DELETE:/api/fleet/enrollment/robots/{robot_id}": {
-      "status": 403,
+      "status": 200,
       "test": [
-        "operations/fleet/test/test_enrollment_api.py",
-        "test_single_console_token_cannot_write_and_each_route_says_what_it_needs"
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_unenrolls_an_idle_robot_and_records_the_actor"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
     },
     "GET:/api/fleet/discovery": {
       "status": 200,
@@ -945,12 +950,12 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "POST:/api/fleet/pairing/v1/requests/{request_id}/reject": {
-      "status": 403,
+      "status": 200,
       "test": [
-        "operations/fleet/test/test_pairing_api.py",
-        "test_single_console_token_gets_the_route_specific_403"
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_rejects_a_pending_legacy_camera_request"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
     },
     "POST:/api/fleet/pairing/v1/requests/{request_id}/reveal": {
       "status": 200,
@@ -1017,12 +1022,12 @@
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
     "DELETE:/api/fleet/start-points/{source_id}": {
-      "status": 403,
+      "status": 200,
       "test": [
-        "operations/fleet/test/test_start_points.py",
-        "test_start_point_write_refuses_the_unnamed_shared_token"
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_deletes_a_start_point_with_its_current_revision"
       ],
-      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
     },
     "GET:/api/fleet/calibrations": {
       "status": 200,

@@ -52,4 +52,6 @@ python tools/remote/remote_pytest.py --log-dir private/frontend-browser -- ROSY_
 
 Python 시험은 커밋한 SHA를 원격 시험 PC에서 실행한다. 브라우저 시험은 opt-in이며 skip은 통과 증거가 아니다. `test/feature_matrix.json`에서 API 소유자·관찰된 응답·대표 흐름의 증거를 찾는다. 샘플 브라우저 시험, 실제 백엔드의 HTTP 계약 시험, 배포 환경/장치 인수는 서로 다른 증거다.
 
+초기 기록에서 거절 응답만 확인했던 여섯 API도 정상 설정의 HTTP 성공 경로를 검증했다. [후속 검증 기록](../../docs/validation/fleet-frontend-http-success-2026-10-21.md)에 실행 SHA·상태 변경·장치 검증과의 경계를 적었다.
+
 운영 Fleet은 기존 wheel·이미지·URL로 배포하며 native `runtime.js`와 등록된 자산을 포함한다. `dev/`와 샘플 제어는 운영 패키지에 포함하지 않는다. gateway는 공개 `fleet.cli.run(argv)`을 사용한다. [D-830](../../docs/adr/D-830-fleet-independent-frontend-development.md)과 [개발 분리 계획](../../docs/plans/2026-10-21-fleet-frontend-separation.md)을 따른다.
