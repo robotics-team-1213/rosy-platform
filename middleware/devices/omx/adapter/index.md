@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 동일 일련번호 손목 카메라의 포트 구분
 - 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
 - 2026-10-17 · uncommitted · fix: 수집 client 식별 연결과 계측 없는 최종 회귀
 - 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
 - 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
-- 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약

@@ -6,14 +6,18 @@ import socket
 import time
 
 
+PERSISTENT_CAMERA_DIRECTORIES = (Path('/dev/v4l/by-id'), Path('/dev/v4l/by-path'))
+PERSISTENT_CAMERA_ERROR = 'a persistent /dev/v4l/by-id or /dev/v4l/by-path camera is required'
+
+
 def selected_device(value):
     path = Path(value)
-    if path.parent != Path('/dev/v4l/by-id'):
-        raise ValueError('a persistent /dev/v4l/by-id camera is required')
+    if path.parent not in PERSISTENT_CAMERA_DIRECTORIES:
+        raise ValueError(PERSISTENT_CAMERA_ERROR)
     if not path.exists():
         raise OSError('selected camera is unavailable')
     if not path.is_symlink():
-        raise ValueError('a persistent /dev/v4l/by-id camera is required')
+        raise ValueError(PERSISTENT_CAMERA_ERROR)
     if not path.is_char_device():
         raise OSError('selected camera is unavailable')
     return str(path)
@@ -65,8 +69,8 @@ def main():
             or not args.frame_id or any(c.isspace() for c in args.frame_id)):
         parser.error('explicit image topic and frame id are required')
     # Missing USB devices are retried, but numeric or unstable selectors never start.
-    if Path(args.device).parent != Path('/dev/v4l/by-id'):
-        parser.error('a persistent /dev/v4l/by-id camera is required')
+    if Path(args.device).parent not in PERSISTENT_CAMERA_DIRECTORIES:
+        parser.error(PERSISTENT_CAMERA_ERROR)
     import cv2
     from cv_bridge import CvBridge
     import rclpy
