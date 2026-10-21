@@ -122,6 +122,25 @@ L2거리는0.007127rad, 마지막201은0.025249rad였다. 마지막 근접 시�
 비교는 실제 새 과제·새 정답·학습이 아니며 `omx-bounded-absolute-rollout-neighbors-1`에
 보존했다. Controller tolerance·owner 안전 범위를 유지하고 후속 원인을 검토한다.
 
+동일 checkpoint의 후속 원격 교차 진단은 actual RGB/q 예측을2e−6rad 이내로 재현했다.
+Teacher reader RGB만 바꾼 출력 TCP Z는0.020685m, teacher q만 바꾼 값은0.022597m,
+둘 다 바꾸면0.023285m였다. Teacher 원본 PNG 대조는0.023195m로 reader와 비슷했다.
+원 teacher q TCP Z0.024847m와 목표0.025000m에 비해 여전히 하강 편차가 있었다.
+이는 합성 입력 조합의 진단이며 실제 과제나 새 정답에 합산하지 않는다.
+Cross-result SHA256: `87dc4293c7c244e283b8ff37b157b848cc77b7383ef064d9fd8de54beacdb9d2`.
+원본 train 선택 audit에서52,834행 중6,263개 첫 유효 행만 선택됐고, near-place1,347행
+중140개가 선택됐다. 근접 시연1820행은 미선택이며 해당 명령의 첫1812행은 이동 중,
+마지막 유효1825행은 원 목표에 가까웠다. 첫·마지막 유효 원행을 함께 쓰면12,526행이다.
+
+새 `command_entry_and_exit`는 기존 첫 표본과 같은 eligibility를 유지하며 마지막
+유효 원행을 추가하고 중복 제거·시간순 정렬한다. 독립 SIM 정답·전체 command coverage,
+원 arrays·chunk 순서·train-only 통계·전체 validation과 선택 index/manifest 결속을
+유지한다. 수정 전 원격 예상2FAIL, 수정 후 관련 job/inference63PASS/0NEW이며 독립
+소스 검토에서 blocker가 없었다. Implementation source revision: `1b16ce6ba0e96691ea4e532dad178da8ab462aad`.
+같은 BEC 부모·seed42750·추가10k·n_action_steps1·noise0의 단일 변수 학습을 요청했다.
+새 체크포인트나 실제 물체 과제 성공은 아직 확인하지 않았다. 같은 step 수에서는
+선택점당 평균 학습 횟수가 줄어들므로 개선을 보장하지 않는다.
+
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
 0.0403985977rad가 기존 0.04rad 제한을 넘어 HOLD했다. 마지막 intent에는 UUID가 없다.
