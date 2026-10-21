@@ -239,7 +239,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                        authority.get('generation') == current['generation'] and
                                        authority.get('decision_sha256') == current['decision_sha256']}
                     control_status = control.status() if control else None
-                    counts = {state: sum(f['status'] == state for f in frames)
+                    counts = {state: sum(row['object_decision'] == state for row in current['frames'])
                               for state in ('approved', 'pending', 'excluded')}
                     pixel_counts = {state: sum(row['mask_decision'] == state and not row['frame_excluded']
                                                for row in current['frames'])
@@ -250,8 +250,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                       'pipeline': pipeline,
                                       'preparation': preparation,
                                       'control': control_status,
-                                      'counts': {state: sum(f['status'] == state for f in frames)
-                                                 for state in ('approved', 'pending', 'excluded')},
+                                      'counts': counts,
                                       'object_drafts': len(object_draft_indices),
                                       'source_video_unverified': sum(
                                           f['status'] != 'excluded'
@@ -260,9 +259,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                           for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
                                       'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
-                                      'pixel_counts': {state: pixel_statuses.count(state)
-                                                       for state in ('approved', 'pending', 'excluded')}
-                                                      | {'drafted': len(pixel_draft_indices),
+                                      'pixel_counts': pixel_counts | {'drafted': len(pixel_draft_indices),
                                                          'candidates': len(pixel_candidate_indices),
                                                          'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
                 if path.startswith('/api/learning/images/'):

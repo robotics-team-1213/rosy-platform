@@ -146,11 +146,11 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     control = f" --learning-control {state / 'learning-control.json'}" if (state / 'learning-control.json').is_file() else ''
     if (state / 'review-ai.json').is_file():
         control += f" --review-ai-config {state / 'review-ai.json'}"
+    control += (f' --collaboration {collaboration}' if collaboration.is_file()
+                else f' --decisions-port {port + 10000}')
     if ((state / 'omx-center.json').is_file()
             and '--omx-center-config' in ((source or current) / APP).read_text(encoding='utf-8')):
         control += f" --omx-center-config {state / 'omx-center.json'}"
-    control += (f' --collaboration {collaboration}' if collaboration.is_file()
-                else f' --decisions-port {port + 10000}')
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
