@@ -27,6 +27,13 @@ Preview-only camera IDs reuse existing authenticated Vision ingestion and frame
 leases, with no map/sighting/calibration registration. ID/credential collisions
 with existing sources are rejected before merge.
 
+Private manifest arm/camera entries also require globally unique
+`credential_sha256` (lowercase hex64). Each server verifies its own raw producer
+secret against that fingerprint; other-role secrets are not shared. Fleet checks
+all fingerprints against existing site credentials and Vision reserves all of
+them against dynamic paired credential reuse. Rotation mismatch refuses startup.
+Fingerprints are excluded from GET responses.
+
 ### v1.277 CORE OMX policy I/O (D-800)
 
 Additive, operator-authenticated `/api/v1/arm/*`. No new TaskKind or Fleet grant.

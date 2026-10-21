@@ -1,5 +1,6 @@
 """Pure read-only workcell manifests and arm payloads, without ROS or devices."""
 from copy import deepcopy
+from hashlib import sha256
 
 import pytest
 from pydantic import ValidationError
@@ -13,14 +14,16 @@ def manifest():
              "board_id": f"EXAMPLE-BOARD-{side.upper()}",
              "joint_topic": f"/omx_commissioning/arm_{side}/joint_states",
              "joint_names": [f"joint{number}" for number in range(1, 7)],
-             "token_env": f"EXAMPLE_ARM_{side.upper()}_TOKEN"} for side in ("a", "b")]
+             "token_env": f"EXAMPLE_ARM_{side.upper()}_TOKEN",
+             "credential_sha256": sha256(f"example-arm-{side}".encode()).hexdigest()} for side in ("a", "b")]
     cameras = [{"source_id": "shared_top", "label": "Shared top", "role": "overhead", "arm_id": None,
                 "image_topic": "/top_camera/image_raw", "device_path": "/dev/v4l/by-id/example-top",
-                "token_env": "EXAMPLE_TOP_TOKEN"}]
+                "token_env": "EXAMPLE_TOP_TOKEN", "credential_sha256": sha256(b"example-top").hexdigest()}]
     cameras += [{"source_id": f"wrist_{side}", "label": f"Wrist {side}", "role": "wrist",
                  "arm_id": f"arm_{side}", "image_topic": f"/wrist_{side}_camera/image_raw",
                  "device_path": f"/dev/v4l/by-path/example-port-{side}",
-                 "token_env": f"EXAMPLE_WRIST_{side.upper()}_TOKEN"} for side in ("a", "b")]
+                 "token_env": f"EXAMPLE_WRIST_{side.upper()}_TOKEN",
+                 "credential_sha256": sha256(f"example-wrist-{side}".encode()).hexdigest()} for side in ("a", "b")]
     return {"schema": "rosy.workcell-observations/1", "workcells": [
         {"workcell_id": "example_cell", "label": "Example cell", "arms": arms, "cameras": cameras}]}
 
@@ -44,7 +47,7 @@ def test_manifest_refuses_ambiguous_source_binding(manifest, group, field):
 
 
 def test_manifest_refuses_source_and_credential_aliases_between_arms_and_cameras(manifest):
-    for field in ("source_id", "token_env"):
+    for field in ("source_id", "token_env", "credential_sha256"):
         changed = deepcopy(manifest)
         cell = changed["workcells"][0]
         cell["cameras"][0][field] = cell["arms"][0][field]
@@ -60,6 +63,7 @@ def test_manifest_refuses_source_and_credential_aliases_between_arms_and_cameras
     ("cameras", 1, "device_path", "/dev/v4l/by-path/../camera"),
     ("cameras", 1, "token_env", "secret-value"), ("arms", 0, "label", "unsafe\nlabel"),
     ("arms", 0, "source_id", "a" * 33), ("cameras", 0, "source_id", "b" * 33),
+    ("arms", 0, "credential_sha256", "f" * 63), ("cameras", 0, "credential_sha256", "F" * 64),
 ])
 def test_manifest_rejects_unbound_or_untrusted_configuration(manifest, group, index, field, value):
     manifest["workcells"][0][group][index][field] = value

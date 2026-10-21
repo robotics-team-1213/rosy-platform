@@ -10,6 +10,7 @@ SourceId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,32}$")]
 JointName = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")]
 Label = Annotated[str, Field(min_length=1, max_length=80, pattern=r"^[^\x00-\x1f\x7f-\x9f]+$")]
 TokenEnv = Annotated[str, Field(pattern=r"^[A-Z_][A-Z0-9_]*$", max_length=128)]
+CredentialSha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
 def _json_number(value):
@@ -60,6 +61,7 @@ class WorkcellArm(_StrictModel):
     joint_topic: JointTopic
     joint_names: Annotated[list[JointName], Field(min_length=1, max_length=8)]
     token_env: TokenEnv
+    credential_sha256: CredentialSha256
 
     @model_validator(mode="after")
     def unique_joints(self):
@@ -76,6 +78,7 @@ class WorkcellCamera(_StrictModel):
     image_topic: ImageTopic
     device_path: DevicePath
     token_env: TokenEnv
+    credential_sha256: CredentialSha256
 
 
 class WorkcellObservation(_StrictModel):
@@ -100,7 +103,8 @@ class WorkcellObservationManifest(_StrictModel):
 
     @model_validator(mode="after")
     def unique_sources(self):
-        seen = {field: set() for field in ("workcell_id", "arm_id", "source_id", "topic", "device", "token_env")}
+        seen = {field: set() for field in (
+            "workcell_id", "arm_id", "source_id", "topic", "device", "token_env", "credential_sha256")}
 
         def remember(field, value):
             if value in seen[field]:
@@ -115,9 +119,11 @@ class WorkcellObservationManifest(_StrictModel):
                 remember("topic", arm.joint_topic)
                 remember("device", arm.board_id)
                 remember("token_env", arm.token_env)
+                remember("credential_sha256", arm.credential_sha256)
             for camera in cell.cameras:
                 remember("source_id", camera.source_id)
                 remember("topic", camera.image_topic)
                 remember("device", camera.device_path)
                 remember("token_env", camera.token_env)
+                remember("credential_sha256", camera.credential_sha256)
         return self
