@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-21 · uncommitted · 범용 지도 따라 그리기·추출 결정 (D-835)
 - 2026-10-21 · uncommitted · 도메인 독립 지도 편집 기반 우선 (D-825)
 - 2026-10-21 · uncommitted · Fleet 도면 편집 계약 확정 (D-825)
 - 2026-10-21 · uncommitted · 승인된 지도 편집 설계의 구현 계획
 - 2026-10-20 · uncommitted · Fleet 평면 지도 편집 설계 제안
-- 2026-10-20 · uncommitted · 일회성 WSL 진단 도구 보관
