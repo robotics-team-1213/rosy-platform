@@ -41,6 +41,14 @@ UI 실행 revision은 `a24e421a09aaae539c2ba79b94fab590fd99c051`이다. 외부 `
 
 `synthetic-ux.tar.gz`는 원본 LeRobot 파일, 실제 10프레임 출력, 일관된 SQLite backup, 선택 JSON, 사용한 UI 자산과 합성 교사 원본을 포함한다. 98,933 bytes, SHA-256 `f537c8e382519c33e9e1464807c76a68617ad9aefaff58ef8d018f926ce36218`. 보관 파일을 다시 열어 필수 항목과 JSON/receipt 일치를 확인했다.
 
+### 공용 버튼 규칙 보완과 최종 화면 재확인
+
+첫 착지 검사 `70ed9dd545`는 공용 `test_helper_created_buttons_name_their_kind`에서 실패했다. 동적 버튼 factory의 종류를 변수로 지정했기 때문이다. `4907175f24`는 주동작 `primary`와 기본 `quiet`를 분기에서 명시한다. 테스트나 허용 목록은 바꾸지 않았다. `button-green/run-1.txt`에서 공용 버튼 규칙·실제 OMX 브라우저·API가 34 passed로 통과했다.
+
+첫 착지 검사의 별도 재실행은 수정된 HEAD를 읽어 `LOAD-FLAKY`로 출력했지만 원인은 소스 수정이다. flaky 증거로 사용하지 않는다. 관문은 검사 중 브랜치 SHA가 바뀌었음을 확인해 병합하지 않고 중단했다. 첫 회차의 아키텍처 267 passed, 영향 검사 2649 passed/283 skipped/1 failed, 명시적 브라우저 210 passed는 `land-red/`에 보존하고 수정 HEAD로 공식 착지를 다시 실행한다.
+
+`4907175f2479d2541183e2844b2508fd06ecd1e2`의 실제 Edge 조작·두 테마·세 viewport·키보드·저장 중 편집·미저장 이탈 보호를 재실행해 exit 0, 동일 위치·48px 누름 면·page error 0을 확인했다. 최종 화면 JSON과 다운로드를 기존 10프레임 출력의 receipt·실제 reader와 다시 비교해 일치했고 원본 모든 파일 hash도 유지됐다. 후속 증거는 보존 폴더의 `final/`에 둔다. 최종 source·선택·출력·DB backup은 `synthetic-ux-final.tar.gz` (99,087 bytes, SHA-256 `154493896d6cbb8489ae21fcf660145dd9a60d352fc0d33d5c96c27dea5e2395`)로 별도 보관한다.
+
 ## 남은 수용 범위
 
 실물 장치·전류 임계값·카메라/LLM 파지 판정, 학습 모델 성능·사람 간 일반화·데이터 절감 효과는 이번 UI 검증의 수용이 아니다. 탭 강제 종료·브라우저 충돌 후 임시 편집 복구는 제공하지 않는다. 원격 push·배포·정책 활성화는 실행하지 않는다.
