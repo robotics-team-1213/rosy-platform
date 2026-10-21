@@ -1927,6 +1927,44 @@ exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없�
 `optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
 
+## Workcell observations
+
+작업대 팔 상태와 카메라 미리보기는 사이트 PC의 Fleet·Vision에서 받는다.
+`compose.workcell.yaml`은 선택 오버레이이며 기존 서비스 명령과 pairing 자격 증명을 유지한다.
+팔 토큰은 Fleet에만, 카메라 토큰은 Vision에만 마운트한다. 관측과 미리보기는
+팔 명령 권한이나 지도 교정을 만들지 않는다.
+
+사이트 관리자는 `ROSY_SITE_CONFIG_DIR` 밖에 아래 입력을 준비한다. 예를 들어
+`/etc/rosy/workcell/` 아래 manifest와 서로 다른 두 secret 디렉터리를 둔다.
+
+| 입력 | 파일/환경 변수 |
+|---|---|
+| 공유 manifest | `ROSY_SITE_WORKCELL_MANIFEST`: 엄격한 `rosy.workcell-observations/1` YAML |
+| Fleet 전용 디렉터리 | `ROSY_SITE_WORKCELL_ARM_SECRETS_DIR`: `arm_a_token`, `arm_b_token` |
+| Vision 전용 디렉터리 | `ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR`: `overhead_token`, `wrist_a_token`, `wrist_b_token` |
+
+Manifest의 토큰 환경 변수는 팔 `ROSY_ARM_A_TOKEN`, `ROSY_ARM_B_TOKEN`, 카메라
+`ROSY_CAMERA_OVERHEAD_TOKEN`, `ROSY_CAMERA_WRIST_A_TOKEN`, `ROSY_CAMERA_WRIST_B_TOKEN`으로 맞춘다.
+각 `credential_sha256`는 해당 토큰 값의 SHA256이며 모두 달라야 한다. 토큰 파일의
+끝 개행은 bootstrap이 제거하므로 digest 계산에 포함하지 않는다. Manifest에는 원문 토큰을 쓰지 않는다.
+Secret 디렉터리와 파일은 root 소유 0700/0600으로 관리하고 manifest는 앱 UID 10001이
+읽을 수 있게 둔다. 두 secret 디렉터리를 합치거나 기존 config 디렉터리 안에 두지 않는다.
+Manifest와 secret이 없으면 시작을 거절한다.
+
+`/etc/rosy/site/site.env`의 세 경로를 채우고 `ROSY_SITE_PAIRING_COMPOSE`에
+`-f /opt/rosy/candidate/deploy/site/compose.workcell.yaml`을 추가한다. 순서는
+pairing → omx → workcell → Account이며 사용하지 않는 항목은 생략한다.
+오버레이는 `ROSY_WORKCELL_OBSERVATIONS`로 두 CLI의 manifest 경로를 지정하고,
+`ROSY_ADDITIONAL_CREDENTIAL_PATHS`로 역할별 토큰 파일을 기존 secret bootstrap에 추가한다.
+기존 자격 증명 이름을 덮어쓰는 추가 매핑은 거절한다.
+
+이 기능에는 변경 소스로 다시 빌드한 Fleet·Vision 이미지와 오버레이 해시를 포함한
+새 서명 candidate가 필요하다. 새 오버레이와 서명 coverage를 지원하는 host verifier·updater를
+신뢰한 관리 경로로 먼저 갱신한다. 기존 candidate 안의 파일이나 이미지를 직접 수정하지 않는다.
+자동 갱신은 현재·staged·loaded candidate의 서명 coverage를 확인하며 이전 candidate 검증은
+유지한다. 기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
+실제 장비 관측과 브라우저 미리보기 확인은 별도 검증 기록으로 남긴다.
+
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 
 관제 PC는 운영 전용이다. 사용자 결정(2026-10-09, "관제 PC는 시뮬레이션에서 제외")에 따라 Gazebo나 다른 시뮬레이션을 이 PC에서 돌리지 않고, ROS나 시뮬 이미지도 설치하지 않는다. `tools/remote/remote_sim.py`는 이 PC를 후보에 넣지 않고 `--host site`를 거절하며, `~/rosy-jobs/site` 표시가 있는 호스트(D-568 3항)도 쓰지 않는다. 호스트 pytest는 D-568대로 맨 뒤 순서로 받는다. 시뮬레이션은 모델 PC와, 소유자가 동의한 뒤의 AI PC에서 돈다.
