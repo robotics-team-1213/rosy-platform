@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -108,6 +109,12 @@ class Pair:
 
     def contact_gaps(self):
         return [b - a for client in self.clients.values() for a, b in zip(client.sent, client.sent[1:])]
+
+
+def test_contact_gap_window_excludes_setup_but_keeps_active_delays():
+    pair = SimpleNamespace(clients={"left": SimpleNamespace(sent=[0.0, 0.1, 5.0, 5.1, 6.0])})
+    assert Pair.contact_gaps(pair, {"left": 2}) == pytest.approx([0.1, 0.9])
+    assert max(Pair.contact_gaps(pair)) == pytest.approx(4.9)
 
 
 def test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds(tmp_path):
