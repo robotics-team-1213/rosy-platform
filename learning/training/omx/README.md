@@ -139,6 +139,13 @@ calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에�
 선택 indices와 규칙은 `training-index.json` 및 DatasetManifest config SHA에 결속한다.
 학습 표본 선택은 실제 최종 readback 승인이나 물체 성공을 보장하지 않는다.
 
+`--sampling command_entry_and_exit`는 같은 조건을 만족하는 마지막 원본 frame도
+각 command/goal 쌍에서 고른다. 첫·마지막이 같으면 한 번만 쓰고 원본 index의 시간순으로
+정렬한다. 마지막 유효 frame이 정착 상태임을 보장하지 않는다. 기존 시작 표본·허용 범위·
+독립 SIM 정답 요구와 원본 chunk 순서·전체 validation을 유지하며 새 선택 규칙과
+indices를 같은 DatasetManifest 경로에 결속한다. 학습 step 수가 같으면 선택점당
+평균 학습 횟수는 줄어들므로 실제 물체 과제의 개선은 별도로 확인한다.
+
 `act_inference_replay.py`는 bound Dataset 파일에 포함된 실제 LeRobot 평가 reader로
 모델의 입력/행동/큐 provenance·latency를 새 X artifact에 보존하고 기존 offline metrics를
 재현한다. 원래 sim capture/state/wall 시계는 별도 필드로 보존한다.

@@ -56,18 +56,23 @@ def training_sample_indices(rows, joint_names, *, sampling):
     """Select original frames only; action labels and chunk chronology stay unchanged."""
     if sampling == 'all_frames':
         return list(range(len(rows)))
-    if sampling != 'command_entry' or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
+    if sampling not in ('command_entry','command_entry_and_exit') or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
         raise ValueError('command_entry sampling requires the fixed six-joint OMX SIM rig')
-    selected = {}
+    selected, exits = {}, {}
     commands = {(row['command_id'],row['ros_goal_id']) for row in rows}
     for index,row in enumerate(rows):
         bounds = [.035]*5+[.04]  # Arm training margin; preserve the calibrated gripper target.
         if all(abs(target-state)<=bound for target,state,bound in
                zip(row['action'],row['observation.state'],bounds)):
-            selected.setdefault((row['command_id'],row['ros_goal_id']),index)
+            key=(row['command_id'],row['ros_goal_id'])
+            selected.setdefault(key,index)
+            exits[key]=index
     if not commands or set(selected) != commands:
         raise ValueError('command_entry sampling must represent every command')
-    return sorted(selected.values())
+    indices=set(selected.values())
+    if sampling=='command_entry_and_exit':
+        indices.update(exits.values())
+    return sorted(indices)
 
 
 def compatible_sources(sources):
@@ -176,7 +181,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         raise ValueError('state noise standard deviation must be finite and nonnegative')
     if state_noise_std_rad and not relative:
         raise ValueError('state noise requires source-relative targets')
-    if sampling not in ('all_frames','command_entry'):
+    if sampling not in ('all_frames','command_entry','command_entry_and_exit'):
         raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
         raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
@@ -219,7 +224,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     if len(set(ids)) != len(ids):
         raise ValueError("same original Episode cannot straddle train/eval")
     compatible_sources(sources)
-    if sampling == 'command_entry' and not all(automatic):
+    if sampling != 'all_frames' and not all(automatic):
         raise ValueError('command_entry sampling requires independently verified SIM object truth')
     selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling)
                         for rows in original_rows]
@@ -230,7 +235,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         raise ValueError("joint-only study requires one explicit source duration")
     out.mkdir(parents=True)
     sampling_ref = None
-    if sampling == 'command_entry':
+    if sampling != 'all_frames':
         selection = dict(sampling=sampling,arm_margin_rad=.005,gripper_margin_claim='none',
                          original_arrays_and_chunk_order=True,
                          train_indices=dict(zip(ids[:train_count],selected_indices[:train_count])))
@@ -457,7 +462,7 @@ def main():
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
-    ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
+    ap.add_argument("--sampling", choices=('all_frames','command_entry','command_entry_and_exit'), default='all_frames')
     ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'),default='absolute')
     ap.add_argument('--initial-policy',type=Path)
     ap.add_argument('--state-noise-std-rad',type=float,default=0.)
