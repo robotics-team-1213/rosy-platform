@@ -151,7 +151,7 @@ def export_segments(root, report, document, output):
     outputs, lineage = {}, {}
     for name, indices in splits.items():
         child = LeRobotDataset.create(repo_id=report['repo_id']+'_'+name, root=output/name,
-            fps=dataset.meta.info['fps'], features=copy.deepcopy(features), robot_type='omx_follower',
+            fps=dataset.meta.info['fps'], features=copy.deepcopy(features), robot_type=report['robot_type'],
             use_videos=True, video_backend='pyav', vcodec='h264', batch_encoding_size=1)
         try:
             for index in indices:
