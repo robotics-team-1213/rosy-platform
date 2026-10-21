@@ -1,8 +1,21 @@
 """Authenticated observation reads and source-bound ingestion, without commands."""
+import hmac
+from hashlib import sha256
+
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import ValidationError
 
 from core_common.protocol.workcell_observations import ArmObservation
+
+
+def assert_workcell_observation_credentials_isolated(service, *, console, principals,
+                                                      other_tokens=(), other_services=()):
+    for token in service.credential_values():
+        digest = sha256(token.encode()).hexdigest()
+        if (any(other is not None and hmac.compare_digest(token.encode(), other.encode()) for other in other_tokens)
+                or digest in principals or console.user_credential_overlaps_robot_secret((digest,))
+                or any(other is not None and other.uses_token(token) for other in other_services)):
+            raise ValueError("Workcell observation credential must differ from every other site credential")
 
 
 def install_workcell_observation_routes(app, *, service, require_viewer):

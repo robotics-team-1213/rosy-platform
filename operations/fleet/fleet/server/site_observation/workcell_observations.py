@@ -35,6 +35,9 @@ class WorkcellObservations:
         """Server-side startup isolation checks only; never include these in read responses."""
         return tuple(self._tokens.values())
 
+    def camera_source_ids(self) -> tuple[str, ...]:
+        return tuple(camera["source_id"] for cell in self._workcells for camera in cell["cameras"])
+
     def uses_token(self, token: str) -> bool:
         return isinstance(token, str) and any(hmac.compare_digest(token.encode(), expected.encode())
                                              for expected in self._tokens.values())

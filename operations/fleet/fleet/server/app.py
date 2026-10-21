@@ -113,6 +113,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
                vision_sources: tuple[str, ...] = (),
+               workcell_observations=None,
                lan_camera_proxy: bool = False,
                omx_instances: Optional[Mapping[str, str]] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
@@ -291,6 +292,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if configured_source is not None and configured_source is not post_action_observation_source:
             raise ValueError("Mission worker and app must share one post-action observation source")
         tool_dispatcher.post_action_observation_source = post_action_observation_source
+    if workcell_observations is not None:
+        preview_sources = workcell_observations.camera_source_ids()
+        if set(preview_sources).intersection(vision_sources):
+            raise ValueError("Workcell preview source collision with an existing Vision source")
+        vision_sources = (*vision_sources, *preview_sources)
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
         if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
@@ -497,6 +503,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.account_authority_routes import install_account_authority_routes
         install_account_authority_routes(app, sessions=password_sessions, authority=authority)
     other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
+    if workcell_observations is not None:
+        from fleet.server.workcell_observation_routes import assert_workcell_observation_credentials_isolated
+        evidence_tokens = tuple(producer.token for registry in (
+            goal_evidence_service.registry if goal_evidence_service is not None else None, cell_goal_registry)
+            if registry is not None for producer in registry.producers)
+        assert_workcell_observation_credentials_isolated(
+            workcell_observations, console=console, principals=principals,
+            other_tokens=other_tokens + evidence_tokens, other_services=(sightings, policy_evidence))
+        other_tokens += workcell_observations.credential_values()
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
@@ -532,6 +547,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_password_routes(app, sessions=password_sessions, authorize=authorize, task_service=task_service,
                             trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
+    from fleet.server.workcell_observation_routes import install_workcell_observation_routes
+    install_workcell_observation_routes(app, service=workcell_observations, require_viewer=require_viewer)
 
     def require_camera_viewer(request: Request) -> SitePrincipal:
         # Enable only behind the site proxy; its other routes strip client copies.
