@@ -16,11 +16,15 @@ from sim_policy_runtime import bind_sim_runtime
 
 @pytest.mark.parametrize('target,readback,accepted', [
     (.139, .1, True), (.141, .1, False), (.1399, .0995, False)])
-def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback, accepted):
+@pytest.mark.parametrize('traced',[False,True])
+def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback, accepted,traced):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, client, *_ = setup_session(tmp_path, execution_journal=journal)
     runtime = runtime_methods(session, client)
     bind_sim_runtime(session, runtime)
+    if traced:
+        from sim_policy_runtime import trace_sim_admission
+        trace=trace_sim_admission(session,journal,runtime)
     message = joint_message(runtime)
     message.position = [readback, 0.]
     runtime._on_joint_state(message)
@@ -48,6 +52,15 @@ def test_step_uses_final_owner_readback(tmp_path, monkeypatch, target, readback,
         assert session._runtime_binding.admission_rejection is rejection
     assert checked and checked[-1] is accepted
     assert len(client.commands) == int(accepted)
+    if traced:
+        assert trace and all(row['ended_owner_ns']>=row['started_owner_ns'] for row in trace)
+        assert all(row['thread_id']>0 for row in trace)
+        assert any(row['stage']=='guard' for row in trace)
+        assert any(row['stage']=='journal_prepare' for row in trace)
+        if accepted:
+            assert any(row['stage']=='native_send' and row['outcome']=='returned' for row in trace)
+        else:
+            assert any(row['outcome']=='raised' for row in trace)
 
 
 def test_existing_binding_cannot_be_replaced(tmp_path):
