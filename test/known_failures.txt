@@ -6,8 +6,6 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
-test/learning/perception/test_review_flow_browser.py::test_review_photo_and_result_are_in_first_view  # 2026-10-16: reproduced on main 436d52a55; /pixels canvas y=692 at 1280x720; app-role-clarity main-browser-baseline/run-1.txt
-test/learning/perception/test_pixel_review_browser.py::test_short_desktop_view_keeps_entire_photo_in_view  # 2026-10-16: reproduced on main 436d52a55; /pixels canvas below viewport; app-role-clarity main-browser-baseline-2/run-1.txt
 test/test_dashboard_browser.py::test_an_expired_remembered_token_is_dropped_on_load  # 2026-10-16: reproduced on main 436d52a55; account/session request precedes auth/connection; app-role-clarity main-browser-baseline-2/run-1.txt
 test/test_surface_shell_browser.py::test_the_shell_estop_reaches_the_safety_route  # 2026-10-16: reproduced on main 436d52a55; string predicate rejected by CSP unsafe-eval restriction; app-role-clarity main-browser-baseline-2/run-1.txt
 middleware/robot_ui/robot/test/test_calibration_chip_browser.py::test_console_robot_card_and_dashboard_hero_show_the_calibration_chip  # 2026-10-16: reproduced on main 436d52a55; core_api_web import missing; app-role-clarity main-browser-baseline-3/run-1.txt

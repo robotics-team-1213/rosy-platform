@@ -863,3 +863,9 @@
 - Change: strict arm capture and two-arm/three-camera manifest models define source identity, finite encoder data and preview-only registration without command authority. API v1.295 records producer authentication, original/receipt age, replay limits and native Fleet ownership.
 - Evidence: committed tests aa25b11d72 failed remotely because the new protocol module was absent. Implementation and canonical exports are verified at the next committed revision; source/host/browser/deployment evidence remain separate.
 - Gate: unchanged. Schemas do not establish an installed persistent reader, Fleet ingestion, native UI integration or physical acceptance.
+
+## 2026-10-22 · uncommitted · 작업 셀 producer credential fingerprint 검증
+
+- Change: require globally unique credential SHA-256 declarations, so role-specific consumers detect reuse without receiving another role's raw secret. Extract FleetTaskStatus into the existing work protocol module while retaining the canonical schema export.
+- Evidence: ada14033b9 remote protocol and architecture checks: 86 passed. Independent source review found no remaining scoped credential-contract finding. Earlier pre-push encountered a station-camera lifespan timeout; a focused rerun passed, but its original storage delay remains unexplained and the publication checks must run again.
+- Gate: unchanged. Live Fleet ingestion and physical motion remain unverified.

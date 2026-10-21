@@ -63,7 +63,6 @@
 856 site_ui/console/shared/styles.css
 788 site_ui/console/shared/vision-view.js
 767 site_ui/console/maps/site-map.js
-1531 test/learning/perception/test_review_flow_browser.py
 3049 test/test_dashboard_browser.py
 3883 test/test_fleet_console_browser.py
 2632 test/test_rosy_auto_update.py
