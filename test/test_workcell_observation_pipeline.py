@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import ssl
 import sys
+import threading
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -88,6 +89,7 @@ async def _pipeline(tmp_path):
     vision_port = ws_server.sockets[0].getsockname()[1]
     fleet_url = f"https://127.0.0.1:{fleet_port}"
     camera = bridge.CameraSender(f"wss://127.0.0.1:{vision_port}", "top", tokens["top"], context=context)
+    stop, worker, producer = threading.Event(), None, None
 
     def read(url, token=None):
         headers = {"Authorization": f"Bearer {token}"} if token is not None else {}
@@ -124,19 +126,51 @@ async def _pipeline(tmp_path):
         image_source = bridge.LatestSource()
         camera_capture = time.time() - 0.4
         image_source.put(camera_capture, (jpeg, 640, 480))
-        image_sample = image_source.latest()
-        await asyncio.to_thread(camera.send, image_sample)
-        frame = await tls._wait_for(lambda: ingest.latest_frame("top"), 3, "native camera frame")
+        failures, delivered = [], []
+
+        def send(sample):
+            try:
+                camera.send(sample)
+            except Exception as error:
+                failures.append((sample, error))
+                raise
+            delivered.append(sample)
+            stop.set()
+
+        async def produce():
+            while not stop.is_set():
+                image_source.put(time.time() - 0.4, (jpeg, 640, 480))
+                await asyncio.sleep(0.05)
+
+        producer = asyncio.create_task(produce())
+        worker = threading.Thread(target=bridge.SourceWorker(image_source, send).run,
+                                  args=(stop,), name="pipeline-camera", daemon=True)
+        worker.start()
+        frame = await tls._wait_for(lambda: delivered and ingest.latest_frame("top"), 6, "camera recovery after upgrade stall")
+        assert len(upgrade_attempts) >= 2 and isinstance(failures[0][1], TimeoutError)
+        assert len(delivered) == 1
+        image_sample = delivered[0]
+        assert image_sample.sequence > failures[0][0].sequence
+        assert image_sample.captured_at > failures[0][0].captured_at
         assert frame.jpeg == jpeg and frame.header.seq == image_sample.sequence
         assert (frame.header.width, frame.header.height) == (640, 480)
         assert frame.header.age_ms >= 399
-        assert abs(frame.captured_at - camera_capture) < 0.25
+        assert abs(frame.captured_at - image_sample.captured_at) < 0.25
 
         headers, body = await asyncio.to_thread(read, f"https://127.0.0.1:{vision_port}" + issued["frame_path"], issued["lease"])
         assert body == jpeg and headers["Cache-Control"] == "no-store"
         assert int(headers["X-Frame-Seq"]) == image_sample.sequence
     finally:
-        await asyncio.to_thread(camera.close)
-        ws_server.close()
-        await ws_server.wait_closed()
-        await asyncio.to_thread(fleet.stop)
+        stop.set()
+        if producer is not None:
+            producer.cancel()
+            await asyncio.gather(producer, return_exceptions=True)
+        try:
+            await asyncio.to_thread(camera.close)
+            if worker is not None:
+                await asyncio.to_thread(worker.join, 3)
+        finally:
+            ws_server.close()
+            await ws_server.wait_closed()
+            await asyncio.to_thread(fleet.stop)
+        assert worker is None or not worker.is_alive(), "camera worker did not stop"
