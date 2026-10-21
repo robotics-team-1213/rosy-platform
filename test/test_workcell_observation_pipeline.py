@@ -62,7 +62,9 @@ async def _pipeline(tmp_path):
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=())
     app = create_app(FleetConsole([], []), task_service=tasks, start_task_dispatcher=False,
         site_users={sha256(b"viewer-secret").hexdigest(): {"principal_id": "reader", "role": "viewer"}},
-        workcell_observations=cache, vision_lease_secret=SIGNING_SECRET, cell_job_compiler=None)
+        workcell_observations=cache,
+        vision_lease_secret=SIGNING_SECRET,
+        cell_job_compiler=None)
     pki = tls._write_pki(tmp_path)
     fleet_port = tls._free_port()
     fleet = tls.FleetThread(app, fleet_port, pki)
