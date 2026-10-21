@@ -127,3 +127,9 @@
 - 변경: 공개 원격 main의 검수·계정 권한 경계를 유지하며 공통 로봇·과제 Learning 진입점과 OMX 과제·입력 설정, 단계별 검수·학습 화면을 옮겼다. 카메라 기준 검증, 현재 검수 결정의 학습 계보, SIM 웹 어댑터에 필요한 소스와 회귀 시험을 함께 추가했다. SIM 실행 소스·운영 binding은 제공하지 않으며 미설정 상태에서는 실행할 수 없다.
 - 증거: 옮긴 소스의 Python 구문, 브라우저 JavaScript 구문, DOM 식별자와 화면 구조를 확인했다. 이 게시 소스의 커밋된 SHA에 대한 원격 pytest·Chromium·독립 검토는 대기 중이다. 보존한 개발 브랜치의 과거 시험 결과를 이 포트의 검증 결과로 사용하지 않는다.
 - gate 변화: 없음. 실제 학습 실행, 정책 배포, 장치·현장 수용은 확인하지 않았다.
+
+## 2026-10-22 · uncommitted · 게시 소스의 원격 학습센터 회귀
+
+- 변경: 검수 snapshot과 표시 수치를 결속하고 중앙 계정 cookie 범위를 보존했다. 운영 HTTPS 전송과 별도 학습 Python의 제한된 영상 reader를 연결했다.
+- 증거: source commit 1d9bce11ac의 백엔드 전체는 2366통과·78건너뜀·새 테스트 fixture 1실패였고, source commit 1dd36577a5의 해당 전송 모음 28건이 수정 후 통과했다. 앞선 게시 UI source commit b2af171cc5의 선택 전체 Chromium은 exit 0이다. 출처별 범위와 독립 검토 수정은 [검증 기록](../../../docs/validation/learning-center-publication-port-2026-10-22/result.md)에 묶었다.
+- gate 변화: 없음. 일반 로봇 identity 수용, 실제 사용자/HF 동의, 운영 이미지·서비스 배포와 실물 학습은 별도다.

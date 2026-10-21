@@ -3092,3 +3092,9 @@
 - Change: bind center lifecycle to the hardened official review installer and extend the signed model-code dependency closure. Fleet receives a fixed protected Learning entry configuration.
 - Evidence: syntax and required-member inventory checked; committed-source remote regression is pending. Earlier development-branch tests do not certify this publication port.
 - Gate: unchanged; signed image activation, authenticated acceptance and physical training remain pending.
+
+## 2026-10-22 · uncommitted · Learning 배포 계약의 게시 소스 검증
+
+- 변경: 공개 Fleet 모듈 경로를 보존하고 공식 설치기의 center/collaboration 플래그 순서를 왕복 전환에서 유지했다. 서명 코드에는 필요한 OMX·카메라 소스만 포함한다.
+- 증거: source commit 1d9bce11ac의 원격 Fleet 진입·공식 설치기·서명 코드·browser scope 258건이 건너뜀 없이 통과했다. 기존 실패 비교 NEW 0. 상세는 [검증 기록](../docs/validation/learning-center-publication-port-2026-10-22/result.md).
+- gate 변화: 없음. 빌드·서명·운영 이미지 전환, 별도 controller 배포 및 보호된 두 호스트 수용은 수행하지 않았다.
