@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import pytest
 from browser_harness import browser_tests_enabled
-from fleet.server.console.static_routes import CONSOLE_ASSETS
+from fleet.server.static_routes import CONSOLE_ASSETS
 
 pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(),
