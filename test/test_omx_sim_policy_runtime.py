@@ -141,7 +141,7 @@ def test_guard_delivers_valid_native_intake_waiting_for_session_lock(tmp_path,mo
     clock[0]=10.6
     message=joint_message(runtime)
     message.header.stamp.sec=10
-    message.header.stamp.nanosec=500_000_000
+    message.header.stamp.nanosec=580_000_000
     message.position=[.11,0.]
     worker=threading.Thread(target=runtime._on_joint_state,args=(message,))
     try:
@@ -150,12 +150,12 @@ def test_guard_delivers_valid_native_intake_waiting_for_session_lock(tmp_path,mo
             assert waiting.wait(2), 'native callback did not reach session delivery'
             original=runtime.latest_joint_state
             assert original is not session._snapshot
-            assert original.received_at==pytest.approx(10.5)
+            assert original.received_at==pytest.approx(10.58)
             session._guard()
             assert session._snapshot is original
             assert session.owner._joint_state is original
             assert session._history[original.sequence] is original
-            assert original.received_at==pytest.approx(10.5)
+            assert original.received_at==pytest.approx(10.58)
     finally:
         worker.join(2)
     assert not worker.is_alive()
@@ -178,7 +178,10 @@ def test_pending_intake_keeps_existing_fail_closed_checks(tmp_path,mode):
         with pytest.raises(PermissionError):session._fail('existing_hold')
     if mode=='binding':runtime._policy_binding=None
     with pytest.raises(PermissionError):session._guard()
-    assert session.hold_reason and not client.commands
+    expected=dict(stale='policy_observation_stale',future='owner_observation_rejected',
+        calibration='owner_observation_rejected',expired='policy_lease_expired_or_invalid',
+        hold='existing_hold',binding='policy_runtime_binding_or_callback_fault')
+    assert session.hold_reason==expected[mode] and not client.commands
     assert latest.received_at==receipt
     if mode in ('hold','binding'):assert session._snapshot.sequence==10
 
