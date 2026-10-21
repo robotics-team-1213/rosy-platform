@@ -141,6 +141,19 @@ Cross-result SHA256: `87dc4293c7c244e283b8ff37b157b848cc77b7383ef064d9fd8de54bea
 새 체크포인트나 실제 물체 과제 성공은 아직 확인하지 않았다. 같은 step 수에서는
 선택점당 평균 학습 횟수가 줄어들므로 개선을 보장하지 않는다.
 
+실제 새 study `fixed-object-bee3152739d55f8e`는25개/66,080RGB·20/5분할과 전체 reader
+검증을 마치고 model state가 `training`으로 전환됐다. 원본 curation과 split hash는
+기준 실험과 같다. 실제 training-index12,526개를 원본 train52,834행과 독립 대조했으며,
+각 명령의 첫·마지막 eligible 행, 중복 제거·시간순 정렬·전체 명령 coverage를 확인했다.
+20개 train source JSON bytes도 기준 실험과 일치했다.
+Training-index SHA256: `c6c8dc8992b015d6963b295e434d161b05e8691c87ff63769e0bc3f205daeea9` (146,198bytes).
+실제 정규화 hash는 앞서 확인한0b5092이며 같은 BEC 부모 weights·config·기존10k와
+freshAdamW를 결속했다. 복사한 부모 weights는 hash가 일치하고0400 읽기 전용이다.
+현재 추가10k의 완료 history와 새 checkpoint는 아직 없으므로 완료 step 수를 추정하지 않는다.
+비교 runtime은 기존 DC5로 고정한다. 학습 source와의 차이는 sampler·테스트·문서 네
+파일뿐이며 실행 코드가 동일함을 확인했다. 새 모델 결과·전체 validation·재적재·Store
+전달·launcher EXIT0과 선택 수·부모 검증 뒤 새 평가로 이어가도록 연결했다.
+
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
 0.0403985977rad가 기존 0.04rad 제한을 넘어 HOLD했다. 마지막 intent에는 UUID가 없다.
