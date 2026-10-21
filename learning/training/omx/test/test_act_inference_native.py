@@ -13,7 +13,8 @@ from test_act_inference import artifact,observation
 from rosy.contracts.learning import seal
 
 
-def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path):
+@pytest.mark.parametrize('relative', [False,True])
+def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path,relative):
     torch=pytest.importorskip('torch')
     pytest.importorskip('lerobot')
     from lerobot.policies.act.configuration_act import ACTConfig
@@ -27,14 +28,31 @@ def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path):
         dim_model=64,n_heads=4,dim_feedforward=256,n_encoder_layers=1,n_decoder_layers=1,
         use_vae=False,dropout=0.,pretrained_backbone_weights=None,device='cpu')
     model=ACTPolicy(config);model.save_pretrained(root/'policy')
+    if relative:
+        p=root/'normalization.json';stats=json.loads(p.read_text())
+        del stats['action_mean'],stats['action_std']
+        stats['action_transform']=dict(type='joint_delta_from_chunk_source_v1',mean=[.01,-.02],
+            std=[.1,.2],absolute_baseline=[.7,.8])
+        p.write_text(json.dumps(stats),encoding='utf-8')
+        doc['normalization']=dict(path='normalization.json',bytes=p.stat().st_size,
+            sha256=hashlib.sha256(p.read_bytes()).hexdigest())
     doc['files']=[dict(path=p.relative_to(root).as_posix(),bytes=p.stat().st_size,
                        sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted((root/'policy').iterdir())]
     doc=seal(doc);(root/'policy-artifact.json').write_text(json.dumps(doc),encoding='utf-8')
     engine=ACTInference(root,doc['revision'],monotonic=lambda:10.)
     first=engine.infer(observation())
-    second=engine.infer(observation(sequence=11,rgb=b'\x00'*192))
+    second=engine.infer(observation(sequence=11,rgb=b'\x00'*192,positions=(.4,.2)))
     assert first.consumed_current and not second.consumed_current
     assert first.source==second.source and second.chunk_index==1
+    if relative:
+        model.eval()
+        image=torch.tensor(list(first.source.rgb),dtype=torch.float32).reshape(8,8,3).permute(2,0,1).unsqueeze(0)/255
+        with torch.inference_mode():
+            chunk=model.predict_action_chunk({'observation.state':torch.tensor([first.source.positions]),
+                                             'observation.images.front':image})[0]
+        expected=chunk*torch.tensor([.1,.2])+torch.tensor([.01,-.02])+torch.tensor(first.source.positions)
+        torch.testing.assert_close(torch.tensor(first.positions),expected[0],rtol=1e-6,atol=1e-6)
+        torch.testing.assert_close(torch.tensor(second.positions),expected[1],rtol=1e-6,atol=1e-6)
     assert first.candidate_fields()['camera_received_at_ns']==second.candidate_fields()['camera_received_at_ns']==(10_000_000_000,)
     (root/'policy/model.safetensors').write_bytes(b'corrupt after immutable load')
     engine.reset('episode_change')

@@ -39,6 +39,12 @@ def test_invalid_training_sampling_fails_before_source_or_model_access(tmp_path)
     assert not (tmp_path/'out').exists()
 
 
+def test_unknown_action_representation_fails_before_source_or_model_access(tmp_path):
+    with pytest.raises(ValueError,match='action representation'):
+        run([],tmp_path/'absent',tmp_path/'out',action_representation='unknown')
+    assert not (tmp_path/'out').exists()
+
+
 def test_multiple_validation_episodes_cannot_overlap_training(tmp_path, monkeypatch):
     monkeypatch.setattr('act_job.importlib.metadata.version', lambda *_: '0.4.4')
     with pytest.raises(ValueError, match='disjoint'):
