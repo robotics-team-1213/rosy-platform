@@ -15,9 +15,16 @@ from g2_common import ROOT, configure_imports
 from g2_ports import ObserverClient, isolation_guard, write_json
 from sim_pick_place_demonstrations import short_targets, dispatch_readback_target
 from sim_pick_place_task import judge_episode
+from sim_policy_trial_evidence import contact_held
 
 
 PLACE_CLEARANCE_M = .005
+
+
+def contact_hold_target(position,*,close,contact):
+    if not contact_held(position,close=close,contact=contact):
+        raise RuntimeError('teacher_hold_contact_not_confirmed')
+    return max(close,position-.035)
 
 
 def teacher_place_pose(pose):
@@ -165,15 +172,21 @@ def run(directory, world, observer_path, *, home_only=False):
             time.sleep(.02)
         raise TimeoutError('teacher goal result unknown')
 
-    def dispatch(target):
+    def dispatch(target,*,holding=False):
+        if holding:
+            evidence=grip('held')
+            target=dict(target)
+            target[profile.gripper_joint]=contact_hold_target(evidence['position_rad'],
+                close=profile.gripper_close_for_width(recipe.box.width),
+                contact=profile.gripper_contact_for_width(recipe.box.width))
+            event.setdefault('hold_commands',[]).append(dict(evidence=evidence,target=dict(target)))
         dispatch_readback_target(target, lambda: wait_ready()['positions'], dispatch_once)
 
     def grip(expect):
         js = arm.latest_joint_state
         q = js.positions[profile.gripper_joint]
         close = profile.gripper_close_for_width(recipe.box.width)
-        threshold = (profile.gripper_contact_for_width(recipe.box.width)-close)/2
-        held = q >= close+threshold
+        held = contact_held(q,close=close,contact=profile.gripper_contact_for_width(recipe.box.width))
         opened = abs(q-profile.gripper_open) <= .05
         observation = GripperObservation(config.workcell_id, config.instance_id,
             'omx-sim-width-matched-position-v2', js.sequence, js.received_at,
@@ -185,7 +198,7 @@ def run(directory, world, observer_path, *, home_only=False):
         verified = verifier(observation, object_id='box', now=checked,
                             max_age_s=profile.max_joint_state_age_s)
         return {'observation': vars(observation), 'receipt': vars(verified),
-                'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s}
+                'position_rad': q, 'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s}
 
     try:
         state = wait_ready()
@@ -248,7 +261,7 @@ def run(directory, world, observer_path, *, home_only=False):
                     raise RuntimeError('detach unconfirmed')
             targets = short_targets([phase.start_state_positions, *[p.positions for p in phase.points]])
             for point in targets:
-                dispatch(dict(zip(phase.joint_names, point)))
+                dispatch(dict(zip(phase.joint_names, point)),holding=phase.phase_id=='transfer')
             if phase.phase_id == 'grasp':
                 event['hold_evidence'] = grip('held')
                 event['hold_receipt'] = event['hold_evidence']['receipt']
