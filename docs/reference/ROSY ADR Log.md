@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
@@ -1209,3 +1210,9 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted (2026-10-21).
 
 원문을 보존한 전처리와 등록 대상·의미 검증을 Console/Discord의 기존 Decision 경계에 둔다. 모델 사용량은 실제 응답으로 계측하고 새 Discord profile은 제안 전용을 유지한다. 전문은 [D-831](../adr/D-831-operator-command-preprocessing.md).
+
+## D-837 Fleet 작업 셀의 읽기 전용 관측과 화면 연결
+
+**Status:** Accepted for implementation (2026-10-21).
+
+Fleet PC의 native intake와 기존 Fleet/Vision 인증 경로를 통해 두 팔·세 카메라를 기존 Cell 화면에 연결한다. 관측은 command owner·보정·motion admission과 분리하며 지속 idle reader는 토크 OFF·독점 접근과 명시적 handoff를 유지한다. 전문은 [D-837](../adr/D-837-workcell-observation.md). 구현·배포·실물 수용은 별도다.

@@ -9501,3 +9501,9 @@ osy-d395-s1d\`.
 - 변경: 기존 목록·객체·픽셀·자료 화면의 공통 탐색에 모방학습을 추가하고 다섯 화면의 메뉴·현재 위치 일치를 검증한다. [공개 UI 검증](validation/omx-grasp-publication-2026-10-21/ui.md)에 실제 화면과 원격 근거를 기록했다.
 - 증거: 메뉴 변경은 커밋 후 공식 원격 공유 웹 계약과 명시 브라우저로 확인한다. 선행 UI commit ed283f5e3fe6은 API·브라우저 18 passed와 pre-push 기본 519 passed / 관련 2336 passed, 273 skipped를 확인했다.
 - gate 변화: 없음. 탐색 연결이며 로봇 동작이나 정책 활성화 권한은 추가하지 않는다.
+
+## 2026-10-21 · uncommitted · Fleet 작업 셀 관측 계약과 통합 순서 (D-837)
+
+- Change: specify Fleet-native read-only source intake, latest arm cache, existing Vision previews and existing Cell panels. Explicit persistent torque-OFF reader/handoff avoids treating a bounded SSH diagnostic as product integration.
+- Evidence: contract review corrected Vision source length, pre-merge ID/credential collisions and cross-epoch capture advancement/replay limits. Protocol implementation checks follow committed RED tests; product integration and protected deployment remain pending.
+- Gate: unchanged. This records an implementation decision and wire boundary, not a running integrated ROSY UI or admitted motion.

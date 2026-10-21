@@ -26,7 +26,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert "createConsoleGoal({" in web
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.294" in reference
+    assert "**Version:** v1.295" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -93,7 +93,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.294" in reference
+    assert "**Version:** v1.295" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (

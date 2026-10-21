@@ -59,6 +59,7 @@ def test_manifest_refuses_source_and_credential_aliases_between_arms_and_cameras
     ("cameras", 1, "device_path", "/dev/video2"), ("cameras", 1, "image_topic", "/control/image_raw"),
     ("cameras", 1, "device_path", "/dev/v4l/by-path/../camera"),
     ("cameras", 1, "token_env", "secret-value"), ("arms", 0, "label", "unsafe\nlabel"),
+    ("arms", 0, "source_id", "a" * 33), ("cameras", 0, "source_id", "b" * 33),
 ])
 def test_manifest_rejects_unbound_or_untrusted_configuration(manifest, group, index, field, value):
     manifest["workcells"][0][group][index][field] = value

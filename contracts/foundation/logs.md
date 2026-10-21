@@ -857,3 +857,9 @@
 - 변경: 기존 로컬 구현의 assistant DTO만 분리해 원격 API v1.293을 보존한 v1.294에 결속했다. 신원 없는 strict 대화 입력·ko/en locale·기본 실행 OFF·유한 명시 좌표를 계약으로 정의한다. Fleet 구현과 보호 운영 활성화는 후속이다.
 - 증거: tests-only `318ab265ab`의 원격 시험에서 assistant 모듈 부재로 예상한 수집 실패를 확인했다. `fd531b6803`의 원격 assistant 계약·protocol 버전 정렬·line-follow 문서 계약 세 파일은 exit 0이다. 전체 영향 선택·pre-push·CI는 별도다.
 - gate 변화: 없음. 공통 계약 추가는 모델·음성·장치·현장 수용을 뜻하지 않는다.
+
+## 2026-10-21 · uncommitted · 작업 셀 관측의 source 결속 계약 (D-837)
+
+- Change: strict arm capture and two-arm/three-camera manifest models define source identity, finite encoder data and preview-only registration without command authority. API v1.295 records producer authentication, original/receipt age, replay limits and native Fleet ownership.
+- Evidence: committed tests aa25b11d72 failed remotely because the new protocol module was absent. Implementation and canonical exports are verified at the next committed revision; source/host/browser/deployment evidence remain separate.
+- Gate: unchanged. Schemas do not establish an installed persistent reader, Fleet ingestion, native UI integration or physical acceptance.
