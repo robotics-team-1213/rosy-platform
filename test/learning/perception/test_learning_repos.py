@@ -8,10 +8,10 @@ import urllib.request
 import pytest
 from cryptography.fernet import Fernet
 
-from learning_accounts import AccountError, Accounts, hash_password, token_scopes
+from learning_accounts import AccountError, Accounts, token_scopes
 from learning_repos import create_private, delete_private, hub_transport, list_repos
 from review_app import make_server
-from test_learning_accounts import accounts, identity
+from test_learning_accounts import accounts, identity, sign_in
 from test_review_app import open_store
 
 
@@ -21,7 +21,7 @@ def publisher(accounts):
     if 'publish' not in membership:
         membership.append('publish')
     accounts.config_path.write_text(json.dumps(cfg))
-    return accounts.login('alice', 'alice-password')
+    return sign_in(accounts, 'alice')
 
 
 def identified(role, scopes=None, gated=False):
@@ -97,7 +97,7 @@ def test_missing_scope_proof_keeps_import_and_refuses_management(accounts):
 
 def test_personal_create_and_delete_use_that_connection_only(accounts):
     _session, alice = publisher(accounts)
-    _session, bob = accounts.login('bob', 'bob-password')
+    _session, bob = sign_in(accounts, 'bob')
     conn = accounts.connect_token(alice, 'hf_write_x', transport=identified('write'))
     hub = Hub()
     with pytest.raises(ValueError, match='그 계정의 저장소만'):
@@ -115,7 +115,7 @@ def test_personal_create_and_delete_use_that_connection_only(accounts):
     cfg = json.loads(accounts.config_path.read_text())
     cfg['users'][1]['memberships']['one'].append('publish')
     accounts.config_path.write_text(json.dumps(cfg))
-    _session, bob = accounts.login('bob', 'bob-password')
+    _session, bob = sign_in(accounts, 'bob')
     with pytest.raises(AccountError, match='connection access denied'):
         accounts.management_credential(bob, conn['connection_id'], scope='write-repos')
     hub.private = False
@@ -167,7 +167,7 @@ def test_project_management_stays_on_the_allowlist(accounts):
 
 
 def test_publish_is_required_and_http_confirm_is_exact(accounts, tmp_path):
-    session, alice = accounts.login('alice', 'alice-password')
+    session, alice = sign_in(accounts, 'alice')
     conn = accounts.connect_token(alice, 'hf_write_x', transport=identified('write'))
     hub = Hub()
     folder = tmp_path / 'review'
@@ -229,7 +229,7 @@ def test_old_connection_table_gains_scopes(tmp_path):
             id TEXT PRIMARY KEY, project_id TEXT, owner TEXT, subject TEXT, username TEXT,
             sharing TEXT, resources TEXT, secret TEXT, generation INTEGER, active INTEGER, expires REAL)''')
     config = {'project_id': 'one', 'users': [
-        {'user_id': 'alice', 'username': 'alice', 'password_hash': hash_password('alice-password'),
+        {'user_id': 'alice', 'username': 'alice',
          'memberships': {'one': ['view', 'import', 'publish']}}]}
     path = tmp_path / 'config.json'
     path.write_text(json.dumps(config))
@@ -237,7 +237,7 @@ def test_old_connection_table_gains_scopes(tmp_path):
     with opened._db() as db:
         columns = {row[1] for row in db.execute('PRAGMA table_info(learning_connections)')}
     assert 'scopes' in columns
-    _session, alice = opened.login('alice', 'alice-password')
+    _session, alice = sign_in(opened, 'alice')
     conn = opened.connect_token(alice, 'hf_write_x', transport=identified('write'))
     assert 'manage-repos' in conn['scopes']
 

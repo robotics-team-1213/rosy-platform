@@ -8,7 +8,7 @@ from contextlib import contextmanager
 import pytest
 from test_review_app import open_store
 from review_app import make_server
-from test_learning_accounts import accounts
+from test_learning_accounts import accounts, sign_in
 
 
 class Accounts:
@@ -69,7 +69,7 @@ def test_cancel_retry_waits_for_previous_worker_then_runs_via_http(tmp_path, acc
     import time
     from learning_imports import LearningImports
     from test_learning_imports import Transport, RIGHTS
-    session, actor = accounts.login('alice', 'alice-password')
+    session, actor = sign_in(accounts, 'alice')
     connection = accounts.connect_token(actor, 'hf_test', transport=lambda _: {'id': 'id', 'name': 'test', 'type': 'user'})
     transport = Transport()
     entered, release = threading.Event(), threading.Event()
@@ -202,7 +202,7 @@ def test_configured_https_origin_secure_cookie_and_live_logout(tmp_path, account
     server = make_server(open_store(folder), 0, accounts=accounts)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     base = f'http://127.0.0.1:{server.server_port}'
-    session, _ = accounts.login('alice', 'alice-password')
+    session, _ = sign_in(accounts, 'alice')
     headers = {'Host': 'learning.example', 'Origin': 'https://learning.example',
                'Cookie': 'rosy_learning_session=' + session}
     try:

@@ -5,7 +5,7 @@ import pytest
 
 from review_app import make_server
 from storage_inventory import StorageInventory
-from test_learning_accounts import accounts  # noqa: F401
+from test_learning_accounts import accounts, sign_in  # noqa: F401
 from test_learning_collaboration import request
 from test_review_app import open_store
 
@@ -20,7 +20,7 @@ def test_storage_http_read_permissions_paths_and_revocation(tmp_path, accounts):
     url = f'http://127.0.0.1:{server.server_port}'
     try:
         assert request(url, '/api/learning/storage')[0] == 401
-        session, _ = accounts.login('bob', 'bob-password')
+        session, _ = sign_in(accounts, 'bob')
         token = request(url, '/api/accounts/session', session)[1]['token']
         status, data = request(url, '/api/learning/storage', session)
         assert status == 200 and data['roots'][0]['logical_bytes'] == 3
@@ -54,7 +54,7 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
         with playwright.sync_playwright() as runtime:
             browser, page, errors = open_page(runtime, width, 900, url=url)
             try:
-                session, _ = accounts.login('bob', 'bob-password')
+                session, _ = sign_in(accounts, 'bob')
                 page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
                 page.goto(url + '/learning', wait_until='networkidle')
                 page.locator('#storage-panel summary').click()
