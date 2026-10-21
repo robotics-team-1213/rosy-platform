@@ -66,7 +66,8 @@ def test_revocation_at_final_native_admission_sends_no_new_goal(tmp_path,monkeyp
     assert not client.commands and session.hold_reason
 
 
-def test_idle_calibration_waits_operating_period_before_each_fresh_capture():
+@pytest.mark.parametrize('calibration', [True, False])
+def test_idle_calibration_waits_operating_period_before_each_fresh_capture(calibration):
     import ast
     from contextlib import nullcontext
     from types import SimpleNamespace
@@ -86,13 +87,31 @@ def test_idle_calibration_waits_operating_period_before_each_fresh_capture():
     def guard():
         checks.append(clock[0])
         return {'timing': {'max_action_age_ns': 10**12}}, 0, ()
+    def save_image(*args):
+        clock[0] += .01
+    def reject(*args):
+        clock[0] += .05
+        raise PermissionError('controlled submit fault')
     session = SimpleNamespace(_lock=nullcontext(), _guard=guard,
-                              _source=lambda *args: None, _camera_source=lambda *args: None)
-    namespace = dict(calibration=True, last_submit=None, last_cycle=None, period_s=.8,
+                              _source=lambda *args: None, _camera_source=lambda *args: None,
+                              submit=reject)
+    namespace = dict(calibration=calibration, last_submit=None, last_cycle=None, period_s=.8,
         time=SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda delay: clock.__setitem__(0, clock[0]+delay)),
         require_live=lambda: None, infer_for_owner=infer, engine=None, session=session, camera=None,
         asdict=vars, steps=[], Image=SimpleNamespace(frombytes=lambda *args:
-            SimpleNamespace(save=lambda *args: None)), frames=Path('/unused'))
-    exec(compile(ast.Module(body=[loop], type_ignores=[]), str(source), 'exec'), namespace)
-    assert len(captures) == len(checks) == 12
-    assert all(start-finished >= .8 for start, finished in zip(captures[1:], checks))
+            SimpleNamespace(save=save_image)), frames=Path('/unused'), last_observed=[0.],
+        arm=SimpleNamespace(monotonic=lambda: clock[0]))
+    code=compile(ast.Module(body=[loop], type_ignores=[]), str(source), 'exec')
+    if calibration:
+        exec(code, namespace)
+        assert len(captures) == len(checks) == 12
+        assert all(start-finished >= .8 for start, finished in zip(captures[1:], checks))
+    else:
+        with pytest.raises(PermissionError, match='controlled submit fault'):
+            exec(code, namespace)
+        assert namespace['steps'][0]['submit_ms'] == pytest.approx(50.)
+        assert namespace['steps'][0]['pre_submit_original_input_age_ms'] == pytest.approx(110.)
+    for step in namespace['steps']:
+        assert step['frame_save_ms'] == pytest.approx(10.)
+        assert step['candidate']['observed_at_ns'] == 0
+        assert step['candidate']['camera_received_at_ns'] == (0,)
