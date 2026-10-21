@@ -287,7 +287,7 @@ Episode당 unique accepted command의 첫 post-acceptance frame 64개씩, 총 32
 정답 81/320개가 같은 frame의 state 대비 0.04rad를 넘었다. 이 수치도 실제 최종
 admission이나 물체 성공 판정이 아니다. 반복 label이 느린 진행의 원인이라는 가설을
 이 결과만으로 확정하지 않는다. 결과 SHA256:
-`12e809d1e30fccd7927b63b58652800392b8be65b3a07872e916f5c63891a40c`.
+SHA256: `12e809d1e30fccd7927b63b58652800392b8be65b3a07872e916f5c63891a40c`.
 
 최초 20회 archive와 extraction map 총 40개, 1,771,298,280bytes는 두 번째
 호스트에서도 전체 SHA·크기를 검증했다. 부분 전송·39/40 확인·빠진 map 1개 복구
@@ -307,8 +307,8 @@ admission이나 물체 성공 판정이 아니다. 반복 label이 느린 진행
 AI 여유 공간은 7,124,279,296→8,763,068,416bytes였다. 이 작업은 실패나 실행 수를
 제외하지 않으며 최신 3d26 실행과 최초 formal20은 이 추가 목록에 포함하지 않는다.
 
-재학습 `omx-object-training-623a57360955be00`은 source
-`1dda28aa86b3ba989d81836fc0894a133109e37c`와 `command_entry` 표본 선택으로
+재학습 `omx-object-training-623a57360955be00`은
+source `1dda28aa86b3ba989d81836fc0894a133109e37c`와 `command_entry` 표본 선택으로
 실제 MODEL-PC에서 시작했다. 현재 확인한 curation은 14/25개·36,983프레임이며
 optimizer 완료·새 checkpoint 선택·새 native 성공은 아직 확인하지 않았다.
 
