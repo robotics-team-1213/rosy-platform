@@ -40,6 +40,17 @@ type과 정확한 `max_delta_rad: 0.035`를 hash로 결속한다. 기존 weight 
 chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존
 owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 성공의 증거는 아니다.
 
+`--action-representation absolute_tanh_from_chunk_source_v1 --initial-policy <parent-root>`는
+검증한 absolute checkpoint를 초기값으로 사용한다. Linear head의 절대 예측 `a`와
+같은 batch 원 관측 `s`로 `s + 0.035*tanh((a-s)/0.035)`를 학습부터 적용한다.
+통계·정답·출력은 절대 위치이며 source를 다시 더하지 않는다. 각 sample의 원점을
+같은 chunk 전체에 적용하고 model 호출 성공·예외 모두에서 원점 context를 지운다.
+부모의 전체 파일 SHA, ACTConfig, 관절·카메라·limits와 train-only 통계가 일치해야
+weights를 읽는다. 부모 revision·weights/config/정규화 SHA와 기존 학습 step을
+정규화·평가 보고서에 결속하고 새 AdamW로 지정한 step을 추가 학습한다. 기존10k와
+추가10k는 구분한다. 원 target을 자르지 않으며, source 밖 정답의 잔차와 기존 owner
+절대 범위·readback 0.04rad fence는 유지한다. 실제 recovery 정답을 추가한 것은 아니다.
+
 상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
 Gaussian 교란을 주는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
 시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
