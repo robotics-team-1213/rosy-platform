@@ -40,3 +40,13 @@ def test_console_cli_binds_opt_in_manifest(configured, tmp_path):
     args = cli.parse_args(["console", "--robots", str(tmp_path / "robots.yaml"),
                            "--workcell-observations", str(configured)])
     assert args.workcell_observations == configured
+
+
+def test_manifest_environment_default_and_explicit_cli_precedence(configured, tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_WORKCELL_OBSERVATIONS", str(configured))
+    base = ["console", "--robots", str(tmp_path / "robots.yaml")]
+    assert cli.parse_args(base).workcell_observations == configured
+    other = tmp_path / "explicit.yaml"
+    assert cli.parse_args(base + ["--workcell-observations", str(other)]).workcell_observations == other
+    monkeypatch.setenv("ROSY_WORKCELL_OBSERVATIONS", "")
+    assert cli.parse_args(base).workcell_observations is None
