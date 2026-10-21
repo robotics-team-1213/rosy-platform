@@ -5,7 +5,7 @@ from act_owner_capture import infer_captured
 from rosy.execution.local.omx_policy import PolicyCandidate
 
 
-def infer_for_owner(engine, session, camera, *, timings=None):
+def infer_for_owner(engine, session, camera, *, timings=None, require_live=None):
     # Keep inference outside the owner's lock; never refresh a queued result's clocks.
     started=perf_counter_ns()
     # Let joint intake advance during the initial installed-file verification.
@@ -17,6 +17,7 @@ def infer_for_owner(engine, session, camera, *, timings=None):
     capture_deadline=started+budget_ns
     capture_times=dict(initial_lock_wait=0.,camera_lock_wait=0.,guarded_input_capture=0.,capture_retry_wait=0.)
     while True:
+        if require_live is not None:require_live()
         waiting=perf_counter_ns()
         with session._lock:
             locked=perf_counter_ns()
@@ -30,7 +31,9 @@ def infer_for_owner(engine, session, camera, *, timings=None):
         capture_times['camera_lock_wait']+=(captured-locked)/1e6
         capture_times['guarded_input_capture']+=(frozen-captured)/1e6
         # Reserve time for computation and final admission before creating a candidate.
-        if frozen>=capture_deadline:raise TimeoutError('fresh inference capture margin unavailable')
+        # The actor can bound acquisition while original input age stays unchanged.
+        if require_live is not None:require_live()
+        elif frozen>=capture_deadline:raise TimeoutError('fresh inference capture margin unavailable')
         if 0<=age<=budget_ns//4:break
         sleep(.01)  # Release both locks so real joint/camera intake can advance.
         capture_times['capture_retry_wait']+=(perf_counter_ns()-frozen)/1e6
@@ -45,6 +48,7 @@ def infer_for_owner(engine, session, camera, *, timings=None):
             raise ValueError('lease or model changed during inference')
         # This is an unadmitted proposal; submit/calibration performs the full final guard.
     finished=perf_counter_ns()
+    if require_live is not None:require_live()
     if timings is not None:
         timings.update(capture_times,capture_selected_input_age=age/1e6,
             installed_binding=(checked-started)/1e6,

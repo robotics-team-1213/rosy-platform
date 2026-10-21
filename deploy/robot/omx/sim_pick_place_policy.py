@@ -181,7 +181,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 require_live();time.sleep(.01)
             before=time.monotonic()
             timing_ms={}
-            candidate,result=infer_for_owner(engine,session,camera,timings=timing_ms)
+            candidate,result=infer_for_owner(engine,session,camera,timings=timing_ms,require_live=require_live)
             step=dict(index=index,candidate=asdict(candidate),inference_ms=(time.monotonic()-before)*1000,
                 cycle_started_owner_s=before,
                 timing_ms=timing_ms,
@@ -192,6 +192,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             save_started=time.monotonic()
             Image.frombytes('RGB',(320,240),result.source.rgb).save(frames/f'{index:04d}.png')
             step['frame_save_ms']=(time.monotonic()-save_started)*1000
+            require_live()
             if calibration:
                 with session._lock:
                     doc,now,cameras=session._guard()
@@ -207,6 +208,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 candidate.observed_at_ns,*candidate.camera_received_at_ns))/1e6
             submit_started=time.monotonic()
             try:
+                require_live()
                 decision=session.submit(candidate)
             finally:
                 step['submit_ms']=(time.monotonic()-submit_started)*1000
