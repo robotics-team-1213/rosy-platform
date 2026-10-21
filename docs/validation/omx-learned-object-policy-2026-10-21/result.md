@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/27회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/7회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/28회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/8회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
@@ -343,6 +343,14 @@ source `35bfc824d9`는 callback 없는 기본 동작을 유지하며 실제 acto
 재검사하고 callback·guard 오류를 즉시 전파한다. 새 시험 7개의 수정 전 실패를 확인한
 뒤 관련 원격 검사 154 PASS / 1 SKIP / 0 NEW와 독립 코드 검토를 통과했다.
 이 검사는 아직 다음 native 실행의 성공을 뜻하지 않는다.
+
+이후 runtime35bfc824d9의 calibration도 PASS·cleanup을 확인했으나 실제 사전 과제
+run `0dc9741a9f76`은 94candidate·94intent·93UUID·93terminal 상태4/code0 뒤
+실패했다. 최초 admission 거절 증거는 `readback_step`이며 joint4의 실제 readback
+1.3134999275rad와 target1.2716979980rad의 차이 0.0418019295rad가 0.04rad를 넘었다.
+이번에는 단계 제한을 추정하지 않고 실제 비교값으로 확인했다. lift·안정 시간0,
+물체 실패·cleanup 완료이며 새 formal20은 시작하지 않았다. 재학습 후보는 0/2이고
+이전 후보 0/26과 함께 전체 0/28로 보존한다.
 
 최신 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
 affected 48개 경로를 지정했다(확대 사유 없음). 해당 선택을 모델 PC에서 실행해

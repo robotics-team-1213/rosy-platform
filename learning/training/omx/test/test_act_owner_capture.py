@@ -123,21 +123,24 @@ def test_fresh_capture_after_attempt_deadline_never_computes(tmp_path, monkeypat
 
 
 def test_actor_budget_can_wait_for_a_new_fresh_capture(tmp_path, monkeypatch):
-    session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
+    session, engine, packet, client, clock, _, cameras, seen, _ = case(tmp_path, monkeypatch)
     ticks=[0]
     monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: ticks[0])
-    capture=session.capture_inference_input
-    def delayed_capture(*args):
-        ticks[0]+=session.policy.binding.timing['max_observation_age_ns']
-        return capture(*args)
-    monkeypatch.setattr(session, 'capture_inference_input', delayed_capture)
+    class LiveCamera:
+        def capture(self):
+            elapsed=session.policy.binding.timing['max_observation_age_ns']
+            ticks[0]+=elapsed;clock[0]+=elapsed/1e9
+            session.observe(replace(session._snapshot,sequence=11,received_at=clock[0]))
+            cameras[0]=replace(cameras[0],received_at_ns=int(clock[0]*1e9))
+            return nullcontext(CapturedRGB(cameras[0],packet.rgb))
     checks=[]
     def live():
         assert not session._lock._is_owned()
         checks.append(ticks[0])
-    proposed,result=infer_for_owner(engine,session,packet,require_live=live)
+    proposed,result=infer_for_owner(engine,session,LiveCamera(),require_live=live)
     assert len(checks)>=3 and len(seen)==1 and not client.commands
-    assert proposed.observed_at_ns==result.source.observed_at_ns==10_000_000_000
+    assert proposed.observed_at_ns==result.source.observed_at_ns==int(clock[0]*1e9)
+    assert proposed.sequence==11 and proposed.camera_received_at_ns==(cameras[0].received_at_ns,)
     assert session.submit(proposed).accepted
 
 
