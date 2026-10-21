@@ -76,11 +76,11 @@ def teacher():
 @pytest.mark.parametrize('storage_delay', [0, .6])
 def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path, monkeypatch, storage_delay):
     original = module.RawCollection.environment
-    delayed = False
+    receipts = 0
     def environment(store, receipt):
-        nonlocal delayed
-        if storage_delay and not delayed:
-            delayed = True
+        nonlocal receipts
+        receipts += 1
+        if storage_delay and receipts == 2:
             time.sleep(storage_delay)
         return original(store, receipt)
     monkeypatch.setattr(module.RawCollection, 'environment', environment)
