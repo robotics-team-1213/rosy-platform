@@ -123,7 +123,7 @@ for the remaining native runtime and physical acceptance work.
 
 ## Local camera preview recovery
 
-`omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
+`omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/` or `/dev/v4l/by-path/`
 camera through V4L2 MJPEG at 640×480, publishing at most 10 Hz with a one-image
 queue. It refuses raw-format fallback, reopens failed capture, and notifies the
 `rosy-omx-camera@.service` watchdog so a blocked driver read is restarted.
