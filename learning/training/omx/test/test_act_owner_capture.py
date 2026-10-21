@@ -262,6 +262,22 @@ def test_changes_during_inference_rejected_by_final_owner(tmp_path, monkeypatch,
     assert len(seen) == 1
 
 
+def test_candidate_return_defers_install_admission_to_existing_owner(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, root = case(tmp_path, monkeypatch)
+    predict=engine._predict
+    def changed_install(observation):
+        actions=predict(observation)
+        (root/'policy/model.safetensors').write_bytes(b'changed after numerical inference')
+        return actions
+    engine._predict=changed_install
+    proposed, result=infer_for_owner(engine, session, packet)
+    assert len(seen)==1 and not client.commands
+    assert proposed.observed_at_ns==result.source.observed_at_ns
+    with pytest.raises(PermissionError):
+        session.submit(proposed)
+    assert session.hold_reason and not client.commands
+
+
 def test_same_clock_and_exact_policy_required(tmp_path, monkeypatch):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     engine._clock = lambda: 10.
