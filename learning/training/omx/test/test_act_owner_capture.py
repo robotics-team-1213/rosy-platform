@@ -79,6 +79,34 @@ def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatc
     assert client.commands[0].source_state_sequence == result.source.sequence == 10
 
 
+@pytest.mark.parametrize('refresh', [True, False])
+def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypatch, refresh):
+    session, engine, packet, client, clock, _, cameras, seen, _ = case(tmp_path, monkeypatch)
+    clock[0] += .02  # Valid under 50ms admission, but leaves little computation margin.
+    pauses=[]
+    class LiveCamera:
+        def capture(self):
+            return nullcontext(CapturedRGB(cameras[0], packet.rgb))
+    def pause(delay):
+        pauses.append(delay)
+        clock[0] += delay
+        if refresh:
+            session.observe(replace(session._snapshot, sequence=11, received_at=clock[0]))
+            cameras[0]=replace(cameras[0], received_at_ns=int(clock[0]*1e9))
+    monkeypatch.setattr('sim_policy_inference.sleep', pause, raising=False)
+    if refresh:
+        candidate, result=infer_for_owner(engine, session, LiveCamera())
+        assert pauses and len(seen)==1
+        assert result.source.sequence==candidate.sequence==11
+        assert candidate.observed_at_ns==int(clock[0]*1e9)
+        assert candidate.camera_received_at_ns==(cameras[0].received_at_ns,)
+    else:
+        with pytest.raises((PermissionError, TimeoutError)):
+            infer_for_owner(engine, session, LiveCamera())
+        assert pauses and not seen
+    assert not client.commands
+
+
 def test_install_precheck_allows_joint_intake_before_atomic_capture(tmp_path, monkeypatch):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     original = InstalledPolicy.recheck
