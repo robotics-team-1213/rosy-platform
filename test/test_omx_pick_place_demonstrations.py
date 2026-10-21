@@ -42,6 +42,50 @@ def test_short_targets_keep_every_planned_waypoint_without_enlarging_steps():
                for left,right in zip([points[0]] + targets[:-1], targets))
 
 
+def test_teacher_place_pose_adds_clearance_without_changing_the_task_goal():
+    from dataclasses import dataclass
+    from sim_pick_place_teacher import teacher_place_pose
+    @dataclass(frozen=True)
+    class Pose:
+        x: float
+        y: float
+        z: float
+        yaw: float
+    goal=Pose(.2075,.0725,.025,.3)
+    planned=teacher_place_pose(goal)
+    assert planned==Pose(.2075,.0725,.030,.3)
+    assert goal.z==.025
+
+
+@pytest.mark.parametrize('roll,pitch',[(0.,0.),(.2,.3),(0.,1.5707963267948966)])
+def test_release_clearance_uses_measured_rotated_object_bottom(roll,pitch):
+    import math
+    from types import SimpleNamespace as NS
+    from sim_pick_place_teacher import release_clearance_evidence
+    pose=dict(x_m=.2075,y_m=.0725,z_m=.05,roll_rad=roll,pitch_rad=pitch,yaw_rad=.4)
+    observation=dict(model_pose_base=pose,observation_id='actual-observation',clock=25.)
+    tcp=NS(x=.2074,y=.0726,z=.0501)
+    box=NS(length=.04,width=.03,height=.03)
+    evidence=release_clearance_evidence(observation,tcp,box,(.2075,.0725,.025))
+    half_height=(abs(math.sin(pitch))*.04+abs(math.cos(pitch)*math.sin(roll))*.03
+                 +abs(math.cos(pitch)*math.cos(roll))*.03)/2
+    assert evidence['object_bottom_z_m']==pytest.approx(.05-half_height)
+    assert evidence['support_surface_z_m']==pytest.approx(.01)
+    assert evidence['clearance_m']==pytest.approx(.05-half_height-.01)
+    assert evidence['observation'] is observation
+    assert evidence['tcp_m']==dict(x=tcp.x,y=tcp.y,z=tcp.z)
+
+
+@pytest.mark.parametrize('height',[.025,.0274,float('nan')])
+def test_teacher_refuses_detach_without_measured_clearance(height):
+    from types import SimpleNamespace as NS
+    from sim_pick_place_teacher import release_clearance_evidence
+    observation=dict(model_pose_base=dict(z_m=height,roll_rad=0.,pitch_rad=0.))
+    with pytest.raises(RuntimeError,match='measured_release_clearance'):
+        release_clearance_evidence(observation,NS(x=0.,y=0.,z=.03),
+            NS(length=.04,width=.03,height=.03),(0.,0.,.025))
+
+
 def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_waypoint():
     from sim_pick_place_demonstrations import readback_target
     current={'joint3':.22406642138957977,'gripper_joint_1':.41159433126449585}
