@@ -13,7 +13,7 @@
  * outrank the browser's own [hidden] style, so surfaces wrote ~60 per-element copies. Show with
  * `:not([hidden])` selectors, never by overriding this. */
 [hidden] { display: none !important; }
-
+a { color: var(--text-primary); text-underline-offset: 0.2em; } /* 칠하지 않은 링크가 브라우저 파랑·보라로 남지 않게; 클래스 규칙이 이긴다 */
 /* Native disclosure keeps its marker and keyboard/expanded semantics. */
 .ui-page-heading {
   margin: 0;
