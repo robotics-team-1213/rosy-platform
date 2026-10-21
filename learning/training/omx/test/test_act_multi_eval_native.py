@@ -109,6 +109,34 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         assert initialization['policy_revision']==parent['revision']
         assert initialization['parent_training_steps']==1 and initialization['optimizer_state']=='fresh_AdamW'
         assert initialization['weights_sha256']==next(v['sha256'] for v in parent['files'] if v['path'].endswith('.safetensors'))
+        import copy
+        from act_job import initialize_absolute_parent
+        camera=parent['cameras'][0]
+        source=dict(joint_names=parent['joint_names'],position_limits_rad=dict(zip(parent['joint_names'],parent['action']['limits'])),
+            camera=dict(name=camera['name'],identity=camera['identity'],camera_info_sha256=camera['calibration_sha256'],
+                height=camera['source_shape'][1],width=camera['source_shape'][2]))
+        model=ACTPolicy.from_pretrained(initial/'policy',local_files_only=True)
+        def never_load(*args,**kwargs):pytest.fail('incompatible parent weights were loaded')
+        monkeypatch.setattr(model,'load_state_dict',never_load)
+        for key in ('state_mean','action_transform'):
+            bad=copy.deepcopy(stats)
+            if key=='state_mean':bad[key][0]+=.001
+            else:bad[key]['std'][0]*=1.001
+            with pytest.raises(ValueError,match='must match'):
+                initialize_absolute_parent(model,bad,source,initial)
+        bad_source=copy.deepcopy(source);bad_source['camera']['camera_info_sha256']='0'*64
+        with pytest.raises(ValueError,match='must match'):
+            initialize_absolute_parent(model,stats,bad_source,initial)
+        model.config.n_action_steps=4
+        with pytest.raises(ValueError,match='must match'):
+            initialize_absolute_parent(model,stats,source,initial)
+        model.config.n_action_steps=queue_steps
+        weights=initial/'policy/model.safetensors';raw=weights.read_bytes()
+        try:
+            weights.write_bytes(b'changed parent')
+            with pytest.raises(ValueError,match='changed'):
+                initialize_absolute_parent(model,stats,source,initial)
+        finally:weights.write_bytes(raw)
     assert report['train_episodes']==ids[:2] and report['eval_episodes']==ids[2:]
     assert report['eval_frames']==20
     assert set(report['per_episode'])==set(ids[2:])
