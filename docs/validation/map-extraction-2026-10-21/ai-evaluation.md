@@ -4,7 +4,7 @@
 
 ## 비교 범위
 
-기준 소스는 PR135의 `a724865c38daf7a056c6409fa312c160b913892c`다. [D-835](../../adr/D-835-generic-map-tracing-and-assisted-extraction.md)의 후속 측정이며, [앞선 소스 검증](source-verification.md)을 대체하지 않는다.
+기준 소스는 PR135의 SHA `a724865c38daf7a056c6409fa312c160b913892c`다. [D-835](../../adr/D-835-generic-map-tracing-and-assisted-extraction.md)의 후속 측정이며, [앞선 소스 검증](source-verification.md)을 대체하지 않는다.
 
 512×512 합성 도면 6종에 일반 윤곽 추출, SAM3 대화형 박스·점, 개념 탐지기 텍스트·박스 예시를 비교했다. 방식별 3회 반복으로 총 90회 관측했다. 독립 도면 90개가 아니며 실제 CAD·현장 사진·사람 정답 세트도 아니다.
 
