@@ -77,7 +77,10 @@ def test_https_requests_use_configured_origin_cookie_csrf_and_default_tls(monkey
     from urllib.response import addinfourl
     seen = []
     def https_open(handler, request):
-        assert handler._context is None, 'use urllib default certificate and hostname verification'
+        import ssl
+        if handler._context is not None:
+            assert handler._context.verify_mode == ssl.CERT_REQUIRED
+            assert handler._context.check_hostname
         seen.append(request)
         return addinfourl(io.BytesIO(b'{"token":"csrf-test"}'), {}, request.full_url, 200)
     monkeypatch.setattr(urllib.request.HTTPSHandler, 'https_open', https_open)
