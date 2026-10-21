@@ -313,6 +313,11 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
     assert evidence['checked_owner_s'] == 20.1 and evidence['max_age_s'] == .5
     assert evidence['receipt']['sequence'] == evidence['observation']['sequence'] == 12
     assert evidence['observation']['object_present'] is True
+    sys.path.insert(0,str(ROOT/'contracts/learning/src'))
+    from rosy.contracts.learning.sim_object_truth import _gripper_evidence
+    identity=_gripper_evidence(dict(hold_evidence=evidence,hold_receipt=evidence['receipt'],
+        started_owner_s=19.,ended_owner_s=21.),'hold')
+    assert identity==('omx_cell_sim','omx_cell_sim_01','omx-sim-width-matched-position-v2',1)
     assert evidence['position_rad']==.42
     arm.monotonic = lambda: 20.6
     with pytest.raises(GripperReadbackError, match='stale'):
