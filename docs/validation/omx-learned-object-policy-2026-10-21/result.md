@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/28회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/8회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/29회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/9회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
@@ -391,7 +391,27 @@ MAE는 0.0037910785653385267rad, 상수 baseline은 0.29584911500909206rad,
 원격 상태 디렉터리·staging 부재와 unit not-found/inactive·PID 0을 재대조하고
 원 HOLD를 별도 보존했다. 동일 소스의 공식 시험 의존 환경으로 SDK import·고정
 profile 검사를 수행해 exit 0·ROS init false·정책 goal 0을 확인했다. 복구 배포
-`08e7e2e8a9ce`는 READY 뒤 calibration 시작을 요청했으며 아직 종료 결과는 없다.
+`08e7e2e8a9ce`는 실제 추론 12회·goals 0·attempts 0·cleanup true·exit 0으로 통과했다.
+
+이어 같은 상대 표현 모델의 실제 사전 과제 `c36d124ac1de`는 96 candidate·96 intent·
+96 accepted UUID 뒤 camera 원 관측 신선도 실패로 종료됐다. 관절 terminal 상태4/code0은
+95개이며 마지막 goal은 cancel ACK 뒤 상태5/code0으로 끝났다. Cleanup true, lift·
+stable 0, XY 오차 229.265131mm·Z 오차 10.000000mm이며 `incomplete_trial_observation`이다.
+Actor 136.388초·전체 199.021초로 600초 종료는 아니다. 최초 admission 거절 값은 없고
+traceback은 전송 후 full guard 경로의 camera source 검사를 가리킨다. 이 모델은 0/1,
+이전 모델들의 0/28과 합해 전체 0/29다. 새 formal20은 시작하지 않았다.
+
+마지막 candidate는 선택 시 입력 나이 116.872ms, numerical 57.383ms, 추론 후 owner
+잠금 대기 81.292ms였다. 제출 직전 원 입력 나이는 259.618ms, submit은 244.540ms였다.
+실제 goal 수락은 원 camera 수신 후 453.209192ms였고 이후 post-I/O 재검사에서 중단됐다.
+원 결과 SHA256: `d335a419baa3c46842e0470e4cc16aff04168f8556984a5c2fd55393bd6f50c6`.
+
+후속 source `536e0b5d47`은 numerical 뒤 immutable lease 참조를 한 번 읽어 기존
+identity·issued/expiry 비감소 비교를 잠금 없이 수행한다. 초기 capture의 잠금과
+`require_live`, 최종 submit·post-I/O full guard는 유지한다. 실제 thread 경합 회귀는
+수정 전 잠금 대기로 실패했고 identity·두 시각 rollback 3개는 통과했다. 독립 검토에서
+계약 blocker는 없었으며 수정 후 관련 원격 검사는 149 PASS / 1 SKIP / 0 NEW다.
+같은 실제 모델과 별도 calibration·사전 과제로 native 효과를 확인 중이다.
 
 이후 main dc8c3cc2bf를 충돌 없이 반영한 통합 source `9bcca8e7bd`는 공식 selector의
 관련 55개 경로를 AI PC에서 실행해 1,077 PASS / 34 SKIP / 0 NEW를 확인했다.
