@@ -116,6 +116,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--tls-key", default=None, type=Path, help="HTTPS private key; mount as a runtime secret")
     console.add_argument("--sightings-config", default=None, type=Path,
                          help="source/map/calibration sighting config (secret values stay in env)")
+    console.add_argument("--workcell-observations", default=None, type=Path,
+                         help="read-only workcell source manifest; producer credentials stay in env")
     console.add_argument("--site-lane-graph", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane_graph.yaml drawn over the ceiling camera by the D-375 map-fit "
                               "view; without MAP_ID it applies to every map. Display only")
@@ -664,7 +666,13 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
+    workcell_observations = None
+    observation_config = getattr(args, "workcell_observations", None)
+    if observation_config is not None:
+        from fleet.server.workcell_observation_config import load_workcell_observations
+        workcell_observations = load_workcell_observations(observation_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
+                     workcell_observations=workcell_observations,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
