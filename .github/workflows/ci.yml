@@ -172,7 +172,7 @@ jobs:
           echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Fleet browser verification tools
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
         run: |
           python3 -m playwright install --with-deps chromium
 
@@ -261,7 +261,7 @@ jobs:
           import subprocess
           import sys
 
-          # Enable only Fleet and the explicit account SSO journey; leave other CORE browsers opt-in.
+          # Enable Fleet backend/app and the explicit account SSO journey; leave other CORE browsers opt-in.
           account_browser = "middleware/core/gateway/test/test_account_pipeline.py"
           native_ros = {
               "middleware/devices/omx/adapter/test/test_omx_ros_runtime.py": "113",
@@ -277,7 +277,7 @@ jobs:
                   if any(target.startswith(p.rstrip("/") + "/") for p in paths if not p.startswith("-")):
                       paths.append("--ignore=" + target)
                       isolated.append(target)
-              browser = [p for p in paths if p.startswith("operations/fleet/test") or p == account_browser]
+              browser = [p for p in paths if p.startswith(("operations/fleet/test", "applications/fleet/test")) or p == account_browser]
               rest = [p for p in paths if p not in browser]
               runs += [(rest, {}), (browser, {"ROSY_RUN_BROWSER_TESTS": "1"})]
               for target in isolated:

@@ -62,6 +62,7 @@ CI_FULL_MATRIX = (
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
+    {"name": "app-fleet", "invocations": [["applications/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
         ["operations/overhead/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
         ["operations/world/test"],
