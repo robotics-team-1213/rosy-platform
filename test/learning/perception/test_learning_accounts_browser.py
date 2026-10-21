@@ -170,6 +170,8 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 page.locator('#login-form ui-button[type=submit]').click()
                 expect(page.locator('#identity')).to_contain_text('작업자 alice')
                 expect(page.locator('#identity')).to_contain_text('프로젝트 one')
+                expect(page.locator('#identity')).to_contain_text('자료 가져오기')
+                expect(page.locator('#identity')).not_to_contain_text('import')
                 expect(page.locator('#account-status')).to_have_attribute('state', 'ready')
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 page.get_by_text('읽기 토큰으로 연결', exact=True).click()
