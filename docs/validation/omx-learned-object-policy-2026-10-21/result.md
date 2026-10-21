@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/25회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/5회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/26회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/6회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 
 ## 실제 데이터와 선택한 checkpoint
@@ -55,8 +55,9 @@ teacher 2/3 성공 뒤 joint-state stale로 전체 제외했다. 이 두 batch�
 
 이 계산에서 원시연 target도 7/320개가 0.04rad를 넘었다. 이는 표본 frame의 state와
 target 비교이며 실제 명령 승인 시점의 판정과 구분한다. 낮은 offline MAE만으로
-0.04rad 실행 단계 조건을 만족한다고 주장할 수 없다. 현재 native 실패 원인은
-관측/lease 신선도이며, 이 추가 진단만으로 실제 단계 제한 실패를 확정하지 않는다.
+0.04rad 실행 단계 조건을 만족한다고 주장할 수 없다. Native 실패는
+초기 실행의 관측/lease 신선도 실패와 후속 admission 거절을 구분하며, 이 추가
+진단만으로 실제 단계 제한 실패를 확정하지 않는다.
 
 진단 결과 SHA256: `2dafffb7427e73112cbae28153a3f10e922fe9b59f37406df156ce26cfceb363`.
 
@@ -252,7 +253,32 @@ submit 193.156ms가 더해졌다. 실패 위치는 submit 내부 final_submit의
 퇴거했다. 현재 입력과 미참조 입력은 제외했고 intent·퇴거 marker를 보존한다.
 마지막 3개 적용 뒤 여유 공간 6,532,743,168bytes를 확인하고 기존 staging으로
 같은 준비 원장을 재개했다. 이 중복 정리가 실제 시간 여유나 물체 성공을 확보했는지는
-아직 미확인이다.
+아직 미확인이다. 실제 calibration은 12회 / 0 goals / cleanup true로 통과했고
+최종 입력 나이 중앙값 162.955ms·최대 213.447ms였다. 이어 실제 물체 사전 과제
+1회는 366 candidate·366 durable intent·365 accepted UUID와 terminal status4/code0
+후 실패 종료됐다. 마지막 intent에는 native event·UUID가 없고 cleanup true다.
+Lift·stable 0, incomplete 관측이며 전체 성공은 0/26회다. Actor 449.978초·전체
+514.050초에 종료됐으며 600초 기한 도달은 아니었다. 표면 오류는
+`local_stop_or_authority_closed`다. 마지막 source 대비 예측 joint1 차이는
+0.041170955rad, 제출 직전 나이와 submit 합은 약 300.399ms였다. 최종 native
+readback은 보존되지 않아 0.04rad step fence 거절인지 확정하지 않는다. Stop 원장은
+정리 단계의 `SIM_STUDY_FAILED`만 보여 선행 외부 stop의 증거도 찾지 못했다.
+
+71e213bb40은 private admission의 최초 False 분기와 그때 사용한 실제 readback,
+command·원 candidate 시각·계산 delta를 메모리에 한 번 기록하고 HOLD 이후 저장한다.
+실제 승인 기준이나 모델 출력을 바꾸지 않는다. 관련 원격 55 PASS / 1 SKIP /
+0 NEW를 확인했다. 기존 실행에 없던 값을 사후 복원한 것으로 표시하지 않는다.
+
+다음 학습 후보 1dda28aa86의 `command_entry` 표본 규칙은 원 command/goal 쌍마다
+팔 target-state 차이 0.035rad 이하·그리퍼 0.04rad 이하인 최초 원본 frame을 선택한다.
+전체 25개 자료에서 7,828개 명령을 모두 포함할 수 있음을 MODEL 읽기 전용 조회로
+확인했다. 전체 관절에 0.035rad를 요구한 검토안은 2,425개 명령을 놓쳐 채택하지 않았다.
+검증된 SIM truth와 고정 6관절을 요구하고 명령 누락은 실패한다. 원본 arrays·목표·시각·
+chunk 순서·20/5 split·train 전체 정규화·전체 RGB 검증과 validation은 유지한다.
+선택 indices/config는 DatasetManifest 파일 목록·변환 SHA에 결속한다. 그리퍼의
+학습 margin과 최종 readback 승인은 보장하지 않는다. 원격 35 PASS / 2 SKIP /
+0 NEW와 독립 검토 후 같은 원본으로 새로운 10,000 step 학습 준비를 시작했다.
+기존 checkpoint와 26회 실패 이력은 보존하며 새 모델의 품질·실제 과제 성공은 미확인이다.
 
 추가 MODEL 진단 `omx-selected-command-starts-1`은 모델을 바꾸지 않고 validation
 Episode당 unique accepted command의 첫 post-acceptance frame 64개씩, 총 320개를
@@ -272,6 +298,19 @@ admission이나 물체 성공 판정이 아니다. 반복 label이 느린 진행
 후속 3–20회 퇴거는 별도 proof이며 두 번째 호스트 copy 작업의 `ai_evictions=0`과
 구분한다. 후속 18회 퇴거에서 여유 공간은 5,870,911,488→7,507,722,240bytes였다.
 이전 run은 재시작하지 않으며 canonical 결과·계측·원 fetch receipt·퇴거 marker는 유지한다.
+
+추가 종료 진단 18개 job의 archive/map 36개, 1,597,119,409bytes도 MODEL-PC에
+전체 SHA·크기 검증 및 디렉터리 fsync를 마쳐 보관했다. 검토·dry-run 후 각 job의
+설치 weights와 journal 중복본 두 파일만 퇴거했다. 적용 proof는
+`omx-ended-diagnostic-retirement-abcf20716b4a.json`이며 18개 모두 `RETIRED`다.
+원본 byte의 로컬 raw·로컬 archive·MODEL archive와 canonical 결과는 유지한다.
+AI 여유 공간은 7,124,279,296→8,763,068,416bytes였다. 이 작업은 실패나 실행 수를
+제외하지 않으며 최신 3d26 실행과 최초 formal20은 이 추가 목록에 포함하지 않는다.
+
+재학습 `omx-object-training-623a57360955be00`은 source
+`1dda28aa86b3ba989d81836fc0894a133109e37c`와 `command_entry` 표본 선택으로
+실제 MODEL-PC에서 시작했다. 현재 확인한 curation은 14/25개·36,983프레임이며
+optimizer 완료·새 checkpoint 선택·새 native 성공은 아직 확인하지 않았다.
 
 최신 main을 병합한 2e33820d21의 공식 selector는 알려진 소비 경로를 따라
 affected 48개 경로를 지정했다(확대 사유 없음). 해당 선택을 모델 PC에서 실행해
