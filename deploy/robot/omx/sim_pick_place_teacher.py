@@ -119,7 +119,9 @@ def run(directory, world, observer_path, *, home_only=False):
                'profile_revision': profile.revision, 'training': 'NOT_RUN',
                'motion_strategy': {'type':'release_above_support_v1',
                    'place_clearance_m':PLACE_CLEARANCE_M,
-                   'min_measured_clearance_m':PLACE_CLEARANCE_M/2}}
+                   'min_measured_clearance_m':PLACE_CLEARANCE_M/2,
+                   'transfer_hold':'verified_contact_bounded_squeeze_v1',
+                   'max_gripper_squeeze_rad':.035}}
 
     def sim_time():
         return node.get_clock().now().nanoseconds / 1_000_000_000
