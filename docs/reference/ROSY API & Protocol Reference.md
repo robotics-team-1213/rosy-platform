@@ -213,7 +213,29 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.293
+**Version:** v1.294
+
+### v1.294 Console operator assistant and explicit navigation (D-810/D-821)
+
+Additive named-operator contract. Canonical DTOs are `AssistantMessage`, `AssistantFact`, `AssistantResult`, `AssistantStatus`, `AssistantHistory`, and `AssistantNavigation` in `core_common.protocol.assistant`. The shared contract is published before its Fleet implementation; schema availability alone does not activate these routes or grant execution. Existing Console credentials and cookie Origin/CSRF rules remain unchanged.
+
+| Method/path | Input | Result |
+|---|---|---|
+| GET `/api/fleet/assistant/status` | none | `AssistantStatus`: available, mode=`READ_ONLY`, reason, execution_enabled=false by default |
+| POST `/api/fleet/assistant/messages` | `AssistantMessage`: conversation_id, request_id, text, optional selected_robot_id and locale | 202 `AssistantResult`, or 200 same request on duplicate |
+| GET `/api/fleet/assistant/messages/{request_id}` | path ID | Own `AssistantResult`; other principal or absent is the same 404 |
+| GET `/api/fleet/assistant/conversations/{conversation_id}` | path ID | Own `AssistantHistory`, latest 40 messages in chronological order |
+| POST `/api/fleet/assistant/messages/{request_id}/navigation` | `AssistantNavigation`: robot_id, finite x/y, optional finite yaw | Existing navigation Task admission result; explicit operator coordinates only |
+
+IDs are `[A-Za-z0-9_-]{1,96}`. Original text is retained, 1..2000 characters, nonblank and no control characters except CR/LF/tab. selected_robot_id is optional `[A-Za-z0-9_.:-]{1,96}` and rechecked against current Fleet reads. Unknown fields, including principal/source/Discord identity, are rejected. Principal comes only from authentication; the existing Fleet DB defines site scope. Shared `site-console` and development principals are refused. Reading or submitting requires the current named operator credential.
+
+Locale optionally selects `ko-KR` (default, including stored messages without locale) or `en-US`; unsupported locales are 422. Locale is bound to immutable request identity and model input. Results contain request_id, conversation_id, original text, state (`PENDING`, `RUNNING`, `ANSWERED`, `HOLD`, `UNKNOWN`), nullable response/reason, facts (ref, text, observed_at), created_at, nullable completed_at, and action_admissible=false. These are conversation states, never physical completion. STATUS is rendered from verified fact references; model text cannot establish physical facts. Dialogue remains `READ_ONLY` even when a separate explicit coordinate handoff is enabled.
+
+Same principal/request ID and original body returns the existing result without another model call. Changed body is 409 `ASSISTANT_REQUEST_CHANGED`. Limits are one pending/running request per principal, 64 site-wide, and 1000 stored requests per principal; excess is 429 `ASSISTANT_LIMIT`. No implicit deletion or replay frees capacity. Missing/expired admission creates durable HOLD. In-flight restart/cancellation/transport ambiguity is UNKNOWN and never automatically retried. Unknown/foreign request is 404 `ASSISTANT_NOT_FOUND`; unavailable storage is 503 `ASSISTANT_STORAGE_UNAVAILABLE`; invalid input is 422. Snapshot age limit is five seconds; stale/unavailable observations hold the request. History is capped at four turns, 120 seconds, same principal/conversation/selection; previous STATUS facts are not reused as current observations. Responses use `Cache-Control: no-store`.
+
+Explicit navigation requires the current named operator and existing Origin/CSRF rules. `AssistantNavigation` is exactly robot_id, finite x/y within ±100000 metres, optional finite yaw within ±π (default 0). The operator must own an ANSWERED CONTROL request completed within 30 seconds, with the same non-null selected robot. Current authentication, unexpired model admission and separately configured `execution_enabled=true` are rechecked inside Task admission. This is an operator submission, never a model-generated command.
+
+The handoff calls existing `IntentExecution`/navigation Task ownership. Same principal/request reuses its Task idempotency key; changed coordinates are 409. Other principals see the same 404 as a missing request; expired/non-control/changed selection is 409; disabled/unadmitted execution is 503; revoked authority is 403. Actual state, cancellation and uncertain outcomes use existing Task APIs and dispatch generation. No additional worker, direct robot call or automatic UNKNOWN replay is installed. Model replies retain no execution authority.
 
 ### v1.293 이미지 도면 등록과 범용 추출 후보 (D-835)
 
@@ -3490,6 +3512,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.294 | 2026-10-21 | D-810/D-821 shared operator assistant DTOs, isolated named dialogue, ko-KR/en-US and separately OFF explicit coordinate handoff. Implementation and protected operational activation remain separate. |
 | v1.293 | 2026-10-21 | Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
 | v1.291 | 2026-10-21 | Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
 | v1.277 | 2026-10-19 | Additive (D-800, feat/omx-policy-chain-publish): operator-authenticated CORE `/api/v1/arm/policy`, `/observations`, `/actions`, `/stop`; single-use guarded source IDs and the existing OMX owner/fence. Default unbound, SIM-only, no lease issuance, rearm or physical activation. |

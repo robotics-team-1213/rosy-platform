@@ -10,6 +10,8 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
+| D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
 | D-825 | STL 도면 참조와 Fleet 평면 지도 편집 | Accepted (2026-10-21) |
 | D-835 | 도메인 독립 지도 따라 그리기와 검토 가능한 선·영역 추출 | Accepted (2026-10-21) |
 | D-808 | Vault 권한은 명시적 site grant로 부여한다 | Accepted (2026-10-20) |
@@ -1187,3 +1189,15 @@ Approved local measurement facts preserve original source/time and durable repla
 ## D-809 - Legacy 937 Learning Account boundary
 
 The existing dataset review writer keeps its original human results behind a loopback-only Account boundary. Project grants and a protected server-attributed audit bind review writes; uncertain writes are never retried automatically. Details: [D-809](../adr/D-809-legacy-learning-account-boundary.md).
+
+## D-810 통합관제 운영자 AI 대화의 출처와 조회 권한
+
+**Status:** Accepted for implementation (2026-10-20). 운영 모델 승인·음성 수용·배포는 별도다.
+
+웹 대화를 기존 Discord 신원과 분리하고 근거에 따른 조회를 제공한다. 전문은 [D-810](../adr/D-810-console-operator-assistant.md).
+
+## D-821 관제 AI 보호 배포·명시적 이동 연결·다국어 평가
+
+**Status:** Accepted for implementation (2026-10-20). 실제 운영 수용은 별도다.
+
+별도 기명 이동 접수는 기존 Task owner를 사용하고 웹 모델은 조회 권한을 유지한다. 보호 설치와 두 언어 수용은 Discord와 독립 결속한다. 전문은 [D-821](../adr/D-821-operator-deployment-execution-languages.md).
