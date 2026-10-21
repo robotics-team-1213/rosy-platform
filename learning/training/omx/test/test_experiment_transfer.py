@@ -58,12 +58,41 @@ def test_retry_after_ack_loss_preserves_one_dataset_and_experience(tmp_path, mon
         transfer(root, checkpoint, **options)
 
 
-@pytest.mark.parametrize('url', ['http://example.com:8769', 'https://127.0.0.1:8769',
+@pytest.mark.parametrize('url', ['http://example.com:8769', 'http://127.0.0.1',
     'http://user:secret@127.0.0.1:8769', 'http://127.0.0.1:8769/path',
-    'http://127.0.0.1:8769?key=secret'])
-def test_transport_requires_an_explicit_loopback_tunnel_without_url_credentials(url):
-    with pytest.raises(ValueError, match='loopback'):
+    'http://127.0.0.1:8769?key=secret', 'https://user:secret@learning.example',
+    'https://learning.example/path', 'https://learning.example?', 'https://learning.example#',
+    'https://learning.example:0', 'https://learning.example:', 'https://learning.example:65536',
+    'https://learning..example', 'https://-learning.example', 'https://learning.example\\other',
+    'https://learning.example\n', ' https://learning.example', 'https://learning.example\x00',
+    'https://[invalid]', '//learning.example', 'ftp://learning.example'])
+def test_transport_rejects_unsafe_or_non_origin_urls(url):
+    with pytest.raises(ValueError):
         Http(url)
+
+
+def test_https_requests_use_configured_origin_cookie_csrf_and_default_tls(monkeypatch):
+    import io
+    import urllib.request
+    from urllib.response import addinfourl
+    seen = []
+    def https_open(handler, request):
+        assert handler._context is None, 'use urllib default certificate and hostname verification'
+        seen.append(request)
+        return addinfourl(io.BytesIO(b'{"token":"csrf-test"}'), {}, request.full_url, 200)
+    monkeypatch.setattr(urllib.request.HTTPSHandler, 'https_open', https_open)
+    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.invalid:8080')
+    monkeypatch.setenv('ROSY_LEARNING_SESSION_COOKIE', 'session=private-test')
+    client = Http('https://learning.example')
+    client.post('/api/learning/omx/center/publish', {'upload_id': 'fixture'})
+    assert len(seen) == 2
+    for request in seen:
+        assert request.host == 'learning.example' and not request.has_proxy()
+        assert request.get_header('Origin') == 'https://learning.example'
+        assert request.get_header('Cookie') == 'session=private-test'
+        assert 'private-test' not in request.full_url
+    assert seen[1].get_header('X-pinky-token') == 'csrf-test'
+    assert json.loads(seen[1].data) == {'upload_id': 'fixture'}
 
 
 def test_real_http_transport_binds_cookie_origin_csrf_and_refuses_redirect(tmp_path, monkeypatch):

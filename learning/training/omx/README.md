@@ -117,7 +117,7 @@ owner dispatch·독립 SIM 과제·물리 수용을 증명하지 않는다.
 
 ## 현장 PC의 봉인 자료 전달
 
-`experiment_transfer.py`는 완성된 `dataset.json`·NPZ 폴더를 기존 학습센터 upload/publish로 전달한다. 학습 PC로 연결한 HTTP loopback 터널과 Linux 현장 PC의 Python 표준 라이브러리를 사용한다. 인증 모드에서는 기존 manage 세션 쿠키를 `ROSY_LEARNING_SESSION_COOKIE` 환경으로 전달하며 쿠키·CSRF 토큰은 체크포인트에 저장하지 않는다. 공개 주소·URL 자격 증명·프록시·리디렉션을 허용하지 않는다.
+`experiment_transfer.py`는 완성된 `dataset.json`·NPZ 폴더를 기존 학습센터 upload/publish로 전달한다. 운영자가 지정한 HTTPS origin에 직접 연결하고 기본 인증서·호스트 검증을 사용한다. HTTP는 bench의 명시적 포트가 있는 loopback 터널만 허용한다. 인증 모드에서는 기존 manage 세션 쿠키를 `ROSY_LEARNING_SESSION_COOKIE` 환경으로 전달하며 쿠키·CSRF 토큰은 체크포인트에 저장하지 않는다. URL 자격 증명·하위 경로·query·fragment·프록시·리디렉션을 허용하지 않는다. 중앙 인증 운영 서버는 허용된 HTTPS origin을 사용해야 한다.
 
 ```bash
 python learning/training/omx/experiment_transfer.py /data/sealed-batch \

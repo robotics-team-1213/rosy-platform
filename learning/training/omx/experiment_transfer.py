@@ -1,4 +1,4 @@
-"""Restartable sealed dataset delivery through an existing loopback Learning tunnel."""
+"""Restartable sealed dataset delivery to HTTPS Learning or a bench loopback tunnel."""
 import argparse
 import base64
 import hashlib
@@ -25,11 +25,19 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 class Http:
     def __init__(self, origin):
+        if (not isinstance(origin, str) or any(ord(c) <= 32 or ord(c) == 127 for c in origin)
+                or any(c in origin for c in '\\?#')):
+            raise ValueError('HTTPS origin or explicit HTTP loopback origin required')
         url = urllib.parse.urlsplit(origin)
-        if (url.scheme != 'http' or url.hostname not in ('127.0.0.1', 'localhost', '::1')
+        port = url.port
+        if (url.scheme not in ('https', 'http') or not url.hostname
+                or (':' not in url.hostname and not all(
+                    re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?', label)
+                    for label in url.hostname.split('.')))
                 or url.username is not None or url.password is not None
-                or url.path not in ('', '/') or url.query or url.fragment or not url.port):
-            raise ValueError('explicit HTTP loopback tunnel without URL credentials required')
+                or url.path not in ('', '/') or url.netloc.endswith(':') or port == 0
+                or (url.scheme == 'http' and (url.hostname not in ('127.0.0.1', 'localhost', '::1') or not port))):
+            raise ValueError('HTTPS origin or explicit HTTP loopback origin without URL credentials required')
         self.origin = origin.rstrip('/')
         self.cookie = os.environ.get('ROSY_LEARNING_SESSION_COOKIE', '')
         if len(self.cookie) > 16384 or any(c in self.cookie for c in '\r\n'):
@@ -156,7 +164,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('dataset', type=Path)
     parser.add_argument('--checkpoint', type=Path, required=True)
-    parser.add_argument('--origin', required=True)
+    parser.add_argument('--origin', required=True, help='operator-configured HTTPS origin, or HTTP loopback with port for bench use')
     parser.add_argument('--name', required=True)
     parser.add_argument('--run-id')
     args = parser.parse_args(argv)
