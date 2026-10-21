@@ -7,10 +7,25 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/33회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/13회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/34회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/14회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
+
+최신 clean checkpoint의 실제 과제 `4c893c74b5b0`는 66 candidate/intent/UUID와
+66 terminal4/code0 뒤 `bounded policy capture limit`로 종료됐다. 1,000건의
+카메라 audit 중 원본 receipt tuple은 652개였다. 새 입력 선택 재시도가 진단 한도를
+소진했다. 마지막 선택 입력 나이 34.204ms, 추론 11.250ms, 제출 전 47.707ms,
+제출 90.231ms였고 owner 검증은 통과했다. Actor 160.244s, root 223.523s,
+HOLD/cleanup true, attach/lift/stable 성공 없음이다. XY 0.229265m/Z 0.010000m는
+`incomplete_trial_observation`이다. policy-result SHA256: `87cec786e6a516dc0effe31fc7b4a484d24c81ce310d188ce0e1cfde1810ab44`.
+Checkpoint는 `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c`를 유지한다.
+진단 기록만 600s/10ms 재시도와 600 outer cycle을 수용하는 60,600건으로 제한한다.
+모든 원 SHA와 두 timestamp를 보존하며 RGB를 audit에 복사하지 않는다. 500ms 신선도,
+0.04rad 제한, 600s budget, owner lease와 controller tolerance는 유지한다.
+수정 전 원격 회귀는 예상한 2FAIL이다. 수정 후 관련 네 시험 파일의 원격 검증은
+83PASS/1SKIP/0NEW이며 독립 소스 검토에서 blocker가 없었다. Runtime revision: `016fad24a222361f84a368f07fa13b8bff776c75`.
+같은 모델의 새 calibration·engineering 과제를 요청했다. 새 물체 성공은 아직 확인하지 않았다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
