@@ -1,16 +1,59 @@
 """Read exact native RGB views from one row bound to a preparation revision."""
 import base64
 import io
+import json
 import math
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+if __name__ == '__main__':
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
-from PIL import Image
 
 from experiment_native import native
 
 MAX_CAMERAS = 8
 MAX_PIXELS = 16_000_000
 MAX_JPEG_BYTES = 8 * 1024 * 1024
+WORKER_BYTES = 12 * 1024 * 1024
+WORKER_TIMEOUT = 30
+
+
+def read_in_worker(python, prepared, revision, episode, local_frame, cameras, *, grouped=False):
+    """Fixed source worker and interpreter; no client command or module selection."""
+    request = dict(prepared={key: prepared[key] for key in ('id', 'kind', 'path')},
+                   revision=revision, episode=episode, local_frame=local_frame, cameras=cameras, grouped=grouped)
+    raw = json.dumps(request, allow_nan=False).encode()
+    if len(raw) > 65536:
+        raise ValueError('bounded preview request required')
+    env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME') if key in os.environ}
+    env.update(PATH='/usr/bin:/bin', HF_HUB_OFFLINE='1', HF_DATASETS_OFFLINE='1',
+               PYTHONDONTWRITEBYTECODE='1')
+    try:
+        with tempfile.TemporaryFile() as output:
+            subprocess.run([python, '-I', '-B', str(Path(__file__).resolve()), '--worker'], input=raw,
+                           stdout=output, stderr=subprocess.DEVNULL, cwd=str(Path(__file__).resolve().parent),
+                           env=env, timeout=WORKER_TIMEOUT, check=True)
+            output.seek(0)
+            raw = output.read(WORKER_BYTES + 1)
+        if len(raw) > WORKER_BYTES:
+            raise ValueError('oversized preview response')
+        result = json.loads(raw)
+        if grouped:
+            if not isinstance(result, dict) or not isinstance(result.get('frames'), list):
+                raise ValueError('invalid grouped preview')
+            return result
+        image = base64.b64decode(result['jpeg_base64'], validate=True)
+        if not image or len(image) > MAX_JPEG_BYTES:
+            raise ValueError('invalid preview image')
+        return image
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        raise ValueError('Native preview reader unavailable; check the configured ACT environment '
+                         'and reload.') from None
 
 
 def _read(reviews, prepared, revision, episode, local_frame, cameras):
@@ -46,6 +89,7 @@ def _read(reviews, prepared, revision, episode, local_frame, cameras):
 
 
 def _encode(row, key, remaining_pixels=None):
+    from PIL import Image
     pixels = np.asarray(row.get(key))
     if (pixels.ndim != 3 or pixels.shape[0] != 3 or min(pixels.shape[1:]) < 1
             or max(pixels.shape[1:]) > 4096 or not np.issubdtype(pixels.dtype, np.floating)
@@ -67,7 +111,9 @@ def _check_source(reviews, prepared, revision):
 
 def frame(reviews, prepared, revision, episode, local_frame, camera):
     source, reader, row, index = _read(reviews, prepared, revision, episode, local_frame, [camera])
-    result, _, _ = _encode(row, source['inspection']['camera_keys'][camera])
+    result, _, _ = _encode(row, source['inspection']['camera_keys'][camera], MAX_PIXELS)
+    if len(result) > MAX_JPEG_BYTES:
+        raise ValueError('frame exceeds 8 MiB JPEG')
     _check_source(reviews, prepared, revision)
     return result
 
@@ -95,3 +141,35 @@ def frame_set(reviews, prepared, revision, episode, local_frame, cameras):
     _check_source(reviews, prepared, revision)
     return dict(prepared_id=prepared['id'], source_revision=revision, episode_index=episode,
                 frame_index=local_frame, index=index, timestamp_seconds=stamp, fps=float(fps), frames=images)
+
+
+def main():
+    import contextlib
+    import resource
+    from experiment_reviews import Reviews
+    if sys.argv[1:] != ['--worker']:
+        raise ValueError('fixed preview worker invocation required')
+    resource.setrlimit(resource.RLIMIT_FSIZE, (WORKER_BYTES, WORKER_BYTES))
+    raw = sys.stdin.buffer.read(65537)
+    if len(raw) > 65536:
+        raise ValueError('bounded preview request required')
+    request = json.loads(raw)
+    if (not isinstance(request, dict) or set(request) != {
+            'prepared', 'revision', 'episode', 'local_frame', 'cameras', 'grouped'}
+            or type(request['grouped']) is not bool):
+        raise ValueError('fixed preview request required')
+    prepared = request['prepared']
+    reviews = Reviews(Path(prepared['path']), None, None)
+    with contextlib.redirect_stdout(sys.stderr):
+        args = (reviews, prepared, request['revision'], request['episode'], request['local_frame'])
+        if request['grouped']:
+            result = frame_set(*args, request['cameras'])
+        else:
+            if not isinstance(request['cameras'], list) or len(request['cameras']) != 1:
+                raise ValueError('one camera required')
+            result = {'jpeg_base64': base64.b64encode(frame(*args, request['cameras'][0])).decode('ascii')}
+    json.dump(result, sys.stdout, allow_nan=False)
+
+
+if __name__ == '__main__':
+    main()

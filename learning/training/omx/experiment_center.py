@@ -249,14 +249,14 @@ class Center:
         return self.reviews.save(body, prepared, actor)
 
     def review_frame(self, prepared, revision, episode, frame, camera):
-        from experiment_preview import frame as preview
+        from experiment_preview import read_in_worker
         with self.lock:
-            return preview(self.reviews, prepared, revision, episode, frame, camera)
+            return read_in_worker(self.python['act'], prepared, revision, episode, frame, [camera])
 
     def review_frame_set(self, prepared, revision, episode, frame, cameras):
-        from experiment_preview import frame_set
+        from experiment_preview import read_in_worker
         with self.lock:
-            return frame_set(self.reviews, prepared, revision, episode, frame, cameras)
+            return read_in_worker(self.python['act'], prepared, revision, episode, frame, cameras, grouped=True)
 
     def experience(self, body):
         with self.lock, self.connect() as db:

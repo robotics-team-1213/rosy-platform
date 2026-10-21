@@ -12,6 +12,48 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def test_center_preview_uses_configured_act_interpreter(tmp_path, monkeypatch):
+    import json
+    import threading
+    import experiment_preview as module
+    from experiment_center import Center
+    center = Center.__new__(Center)
+    center.python = {'act': '/isolated/act/bin/python'}
+    center.lock = threading.RLock()
+    prepared = {'id': 'a'*32, 'kind': 'omx', 'path': str(tmp_path), 'ignored': 'not sent'}
+    seen = []
+    def run(argv, **options):
+        seen.append((argv, options))
+        payload = json.loads(options['input'])
+        assert payload['prepared'] == {key: prepared[key] for key in ('id', 'kind', 'path')}
+        assert options['cwd'] == str(Path(module.__file__).resolve().parent)
+        assert options['env']['HF_HUB_OFFLINE'] == '1'
+        assert 'PYTHONPATH' not in options['env']
+        assert options['timeout'] == module.WORKER_TIMEOUT
+        options['stdout'].write(json.dumps({'jpeg_base64': base64.b64encode(b'jpeg').decode()}).encode())
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    monkeypatch.setattr(module, 'frame', lambda *a: pytest.fail('reader must run outside server Python'))
+    assert center.review_frame(prepared, 'b'*64, 0, 1, 0) == b'jpeg'
+    assert seen[0][0] == ['/isolated/act/bin/python', '-I', '-B', str(Path(module.__file__).resolve()), '--worker']
+
+
+@pytest.mark.parametrize('fault', ['timeout', 'oversize', 'invalid', 'error'])
+def test_preview_worker_failure_is_bounded_and_hides_private_errors(tmp_path, monkeypatch, fault):
+    import subprocess
+    import experiment_preview as module
+    def run(argv, **options):
+        if fault == 'timeout':
+            raise subprocess.TimeoutExpired(argv, 30)
+        if fault == 'error':
+            raise subprocess.CalledProcessError(1, argv, stderr=b'/private/credentials')
+        options['stdout'].write(b'x' * (module.WORKER_BYTES + 1) if fault == 'oversize' else b'not json')
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    with pytest.raises(ValueError, match='preview reader unavailable') as exc:
+        module.read_in_worker('/isolated/python', {'id': 'a'*32, 'kind': 'omx', 'path': str(tmp_path)},
+                              'b'*64, 0, 0, [0])
+    assert '/private' not in str(exc.value)
+
+
 def setup(tmp_path, monkeypatch):
     import experiment_preview as module
     inspection = dict(repo_id='local/recording', frame_count=4,
@@ -42,6 +84,27 @@ def test_exact_episode_frame_encodes_real_rgb_and_rechecks_source(tmp_path, monk
     image = Image.open(io.BytesIO(result))
     assert image.format == 'JPEG' and image.size == (5, 4)
     np.testing.assert_allclose(np.asarray(image), 191, atol=2)
+
+
+def test_fixed_worker_cli_reuses_exact_source_and_frame_checks(tmp_path, monkeypatch):
+    import json
+    import experiment_reviews
+    resource = pytest.importorskip('resource')
+    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    limits = []
+    monkeypatch.setattr(resource, 'setrlimit', lambda key, bound: limits.append((key, bound)))
+    monkeypatch.setattr(experiment_reviews, 'Reviews', lambda *args: reviews)
+    payload = dict(prepared={'id': 'registered', 'kind': 'omx', 'path': str(tmp_path)},
+                   revision='a'*64, episode=1, local_frame=1, cameras=[0], grouped=True)
+    output = io.StringIO()
+    monkeypatch.setattr(sys, 'argv', ['trusted-preview.py', '--worker'])
+    monkeypatch.setattr(sys, 'stdin', SimpleNamespace(buffer=io.BytesIO(json.dumps(payload).encode())))
+    monkeypatch.setattr(sys, 'stdout', output)
+    module.main()
+    result = json.loads(output.getvalue())
+    assert result['frame_index'] == 1 and result['episode_index'] == 1
+    assert positions == [3] and len(calls) == 2
+    assert limits == [(resource.RLIMIT_FSIZE, (module.WORKER_BYTES, module.WORKER_BYTES))]
 
 
 @pytest.mark.parametrize('fault', ['revision', 'frame', 'camera', 'episode', 'wrong_row', 'pixel', 'source_change'])
