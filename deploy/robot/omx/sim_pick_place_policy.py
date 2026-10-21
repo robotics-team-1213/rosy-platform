@@ -117,7 +117,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
 
     def renew_worker():
         try:
-            while not stop.wait(.1):session.renew(authority.issue())
+            while not stop.wait(.2):session.renew(authority.issue())
         except Exception as error:worker_errors.append('lease_renewal:'+str(error))
 
     def gripper_evidence(expect):

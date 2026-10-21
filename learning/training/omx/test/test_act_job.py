@@ -24,13 +24,30 @@ def test_command_entry_sampling_keeps_every_command_and_original_labels():
     assert act_job.training_sample_indices(rows,names,sampling='all_frames')==list(range(5))
 
 
-def test_command_entry_sampling_refuses_to_drop_unrepresented_commands():
+def test_command_entry_and_exit_keeps_last_eligible_original_frame_and_order():
+    import copy
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id=command,ros_goal_id=goal,
+               **{'observation.state':[0.]*6,'action':[arm,0.,0.,0.,0.,gripper]})
+          for command,goal,arm,gripper in [('a','ga',.041,.0399),('a','ga',.034,.0399),
+              ('a','ga',.001,.0399),('a','ga',.001,.0401),('b','gb',.03,.0399),
+              ('b','gb',.001,.0401),('c','gc',.02,.0399),('c','gc',.001,.0399)]]
+    original=copy.deepcopy(rows)
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_and_exit')==[1,2,4,6,7]
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry')==[1,4,6]
+    assert rows==original
+    assert chunk_indices(len(rows),2,4)==[2,3,4,5]
+
+
+@pytest.mark.parametrize('sampling',['command_entry','command_entry_and_exit'])
+def test_command_entry_sampling_refuses_to_drop_unrepresented_commands(sampling):
     import act_job
     names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
     rows=[dict(command_id='a',ros_goal_id='ga',
                **{'observation.state':[0.]*6,'action':[0.,0.,0.,0.,0.,.0401]})]
     with pytest.raises(ValueError,match='every command'):
-        act_job.training_sample_indices(rows,names,sampling='command_entry')
+        act_job.training_sample_indices(rows,names,sampling=sampling)
 
 
 def test_invalid_training_sampling_fails_before_source_or_model_access(tmp_path):

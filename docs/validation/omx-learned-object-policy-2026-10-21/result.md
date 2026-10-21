@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/35회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/15회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/36회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/16회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
 
@@ -64,6 +64,95 @@ train-only 통계가 일치해야 weights를 적재하며 부모 hash·기존 st
 독립 소스 검토에서 실행 경계 blocker가 없었다. 실제 recipe는 기존 BEC revision·
 weights·정규화·10k loss 이력을 먼저 대조해 독립 스냅샷으로 고정한다. 실제 추가10k
 학습을 요청했으며 새 checkpoint와 물체 과제 성공은 아직 확인하지 않았다.
+
+공식 후속 로컬 main 착지 revision: `dc5db7e1db16637aa200172f6ceee0947d148b19`.
+안전·크기·lint, architecture267PASS/0NEW, affected531PASS/14SKIP/0NEW를 확인했다.
+일반 suite의 skip은 실제 MODEL ACT13PASS와 부모 guard 선택1PASS를 대체하지 않는다.
+처음 착지는 공개 policy revision의 용도를 표시하지 않은 문서 한 줄로 secret scan이
+실패했으며, 줄에 `Policy revision`을 명시한 뒤 실제 scanner1PASS/0NEW와 공식 검증을
+다시 통과했다. 검사·allowlist는 완화하지 않았다. 실패 로그도 별도로 보존했다.
+확정 착지 로그·record는 `official-land-dc5db7e1db`에 즉시 복사했다.
+Affected log SHA256: `cfe295cb7d26043f41862259573d9af122d35134d351f327d07af46aa97c07b5`.
+Architecture log SHA256: `cc70d81a6038daf3117bd8b7091845a9c485d3e8c09c90d09b8e2ca5c8c9d20f`.
+Land record SHA256: `b990f6114e42a855f4fc68cef89325de27fb1f2d9f6931c89833318843c0e262`.
+새 실제 학습 study는 `fixed-object-6cdde72b23679868`이다.
+Training source revision: `f509adfba840e2f2a48a128c1d71b300b4032bf7`. 실제25개/66,080프레임의
+curation과20/5분할을 재확인했다. 부모 weights는 별도 읽기전용0400 스냅샷이며
+기존10k loss 이력을 보존했다. 모델 내부 reader 검증과 추가10k 완료는 구분한다.
+학습·추론·SIM 호출 주요6파일은 학습 source와 착지 source에서 byte-identical임을
+확인했다. 최신 code 착지와 실제 물체 목표 달성은 별개이며 현재0/35를 유지한다.
+
+Study `fixed-object-6cdde72b23679868`의 실제 추가10,000step과 전체 validation·
+checkpoint 재적재는 완료했다. 실제 history10,000개의 첫100평균 정규화L1 loss0.0147409435,
+마지막100평균0.0087995281이다. 전체13,246프레임 MAE0.005778079426253098rad,
+상수 baseline0.29584911500909206rad, limit위반0, 재적재 일치이며 `offline_only`다.
+부모BEC의 기존10k와 이번추가10k를 구분한다. 이전 delta 모델 MAE0.00404918rad보다
+크다. 새 모델의 실제 물체 과제 성공은 아직 미확인이다.
+Policy revision: `fa953bf0ae64134ca2f6e7299adf5f5c9b04af8f10e13b4341532d567ae34ebc`.
+Dataset revision: `a70d61a690a7fb10bfdef48a05a80d81999146c6b02d6fe861e82cf4e9541117`.
+Weights SHA256: `a12b15619f1e27e6b1389dae899de6c5ce39456f8c86713614e1051902d72e23`.
+Normalization SHA256: `0b5092f410c5a36eea190d308e0fb216eccd9c724de28c843ccc1eedbf345f69`.
+Additional10k history SHA256: `8dc465f72b02694421852ead75fd80cb47b14e036a09b48e699fca064330d05b`.
+ACTConfig SHA256: `183fbe61c0971a1f0b16a2611e3da8ac787f7d90a1208aae564ea45ffaf74423`.
+Store finalized snapshot1개·공식전달bundle 검증·전체launcher EXIT0을 확인했다.
+연결된 supervisor의 새 calibration은 배포 READY 뒤 자원 예약에서 거절됐다.
+공유 시험의 메모리 예약으로 기존6CPU/8GiB 여유 기준에 미달했다. Durable status는
+intent null·unit not-found·NOT_RUN이며 물체 과제는 미시작이다. 동료 작업과 기준을
+유지하고 자원 여유·미실행 상태를 재확인한 뒤 새 calibration을 요청한다.
+원래의 자원 거절과 미실행 영수증은 보존한다.
+사전 물체 과제가 통과해야 같은 checkpoint/runtime의 새정식20회를 시작한다.
+
+자원 확보 후 두 번째 READY 배포의 미실행 상태를 확인하고 시작했다. 새 calibration
+`46e355eb21cd`는 12추론/0정책goal/0attempts, PASS/EXIT0/cleanup true였다.
+Actor35.521s/root99.397s이며 같은 부모 checkpoint와 runtime을 확인했다.
+실제 과제 `5eea4d206c94`는 202후보/intent/UUID, 201 terminal4/code0 뒤 마지막
+terminal6/code−5로 HOLD했다. Controller는 joint index2의 위치 오차0.032028rad가
+허용0.020000rad를 넘고 goal_time_tolerance를1.010s 초과했다고 기록했다.
+Camera stale나 owner admission 거절이 아니다. Actor377.521s/root440.529s,
+cleanup true, camera audit1,959/60,600이다. SIM DetachableJoint 부착 보조의 attach가
+확인됐고 최대 lift98.020mm였지만 detach/release와 안정 유지가 없었다. 마지막 XY오차
+5.678mm/Z오차1.385mm는 `incomplete_trial_observation`이며 놓기 정확도가 아니다.
+policy-result SHA256: `11980caf3e5ae7357ef6ebdcea00ed3f47c9514cd4db1445d6a8dae9bcdee3d7`.
+새 absolute bounded checkpoint는 실제0/1이며 누적0/36이다. 새 정식20회는 미시작이다.
+
+종료 후 train-only 최근접 상태 비교는52,834개 원본 상태만 사용했다. Index185의
+L2거리는0.007127rad, 마지막201은0.025249rad였다. 마지막 근접 시연의 joint3/joint4
+목표는−0.039679/1.284402rad였고 실제 예측은−0.016816/1.249773rad였다. 이는 모델
+출력의 말단 구간 편차를 보여주며 접촉 원인이나 필요한 수정 하나를 확정하지 않는다.
+비교는 실제 새 과제·새 정답·학습이 아니며 `omx-bounded-absolute-rollout-neighbors-1`에
+보존했다. Controller tolerance·owner 안전 범위를 유지하고 후속 원인을 검토한다.
+
+동일 checkpoint의 후속 원격 교차 진단은 actual RGB/q 예측을2e−6rad 이내로 재현했다.
+Teacher reader RGB만 바꾼 출력 TCP Z는0.020685m, teacher q만 바꾼 값은0.022597m,
+둘 다 바꾸면0.023285m였다. Teacher 원본 PNG 대조는0.023195m로 reader와 비슷했다.
+원 teacher q TCP Z0.024847m와 목표0.025000m에 비해 여전히 하강 편차가 있었다.
+이는 합성 입력 조합의 진단이며 실제 과제나 새 정답에 합산하지 않는다.
+Cross-result SHA256: `87dc4293c7c244e283b8ff37b157b848cc77b7383ef064d9fd8de54beacdb9d2`.
+원본 train 선택 audit에서52,834행 중6,263개 첫 유효 행만 선택됐고, near-place1,347행
+중140개가 선택됐다. 근접 시연1820행은 미선택이며 해당 명령의 첫1812행은 이동 중,
+마지막 유효1825행은 원 목표에 가까웠다. 첫·마지막 유효 원행을 함께 쓰면12,526행이다.
+
+새 `command_entry_and_exit`는 기존 첫 표본과 같은 eligibility를 유지하며 마지막
+유효 원행을 추가하고 중복 제거·시간순 정렬한다. 독립 SIM 정답·전체 command coverage,
+원 arrays·chunk 순서·train-only 통계·전체 validation과 선택 index/manifest 결속을
+유지한다. 수정 전 원격 예상2FAIL, 수정 후 관련 job/inference63PASS/0NEW이며 독립
+소스 검토에서 blocker가 없었다. Implementation source revision: `1b16ce6ba0e96691ea4e532dad178da8ab462aad`.
+같은 BEC 부모·seed42750·추가10k·n_action_steps1·noise0의 단일 변수 학습을 요청했다.
+새 체크포인트나 실제 물체 과제 성공은 아직 확인하지 않았다. 같은 step 수에서는
+선택점당 평균 학습 횟수가 줄어들므로 개선을 보장하지 않는다.
+
+실제 새 study `fixed-object-bee3152739d55f8e`는25개/66,080RGB·20/5분할과 전체 reader
+검증을 마치고 model state가 `training`으로 전환됐다. 원본 curation과 split hash는
+기준 실험과 같다. 실제 training-index12,526개를 원본 train52,834행과 독립 대조했으며,
+각 명령의 첫·마지막 eligible 행, 중복 제거·시간순 정렬·전체 명령 coverage를 확인했다.
+20개 train source JSON bytes도 기준 실험과 일치했다.
+Training-index SHA256: `c6c8dc8992b015d6963b295e434d161b05e8691c87ff63769e0bc3f205daeea9` (146,198bytes).
+실제 정규화 hash는 앞서 확인한0b5092이며 같은 BEC 부모 weights·config·기존10k와
+freshAdamW를 결속했다. 복사한 부모 weights는 hash가 일치하고0400 읽기 전용이다.
+현재 추가10k의 완료 history와 새 checkpoint는 아직 없으므로 완료 step 수를 추정하지 않는다.
+비교 runtime은 기존 DC5로 고정한다. 학습 source와의 차이는 sampler·테스트·문서 네
+파일뿐이며 실행 코드가 동일함을 확인했다. 새 모델 결과·전체 validation·재적재·Store
+전달·launcher EXIT0과 선택 수·부모 검증 뒤 새 평가로 이어가도록 연결했다.
 
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
@@ -713,3 +802,34 @@ CPU 비교 후보의 원격 검사 66 PASS / 0 NEW와 읽기 전용 코드 검�
 이전 학습 수정과 보고서는 로컬 main c3ae44ae3f에 정식 병합됐다. 후속 private native
 runtime과 본 진행 보고서는 아직 최종 착지 전이다. GitHub push·실물 실행은 하지 않았다.
 Road-surface 사람 검수는 사용자 우선순위에 따라 OMX 이후로 보류하며 여전히 0/24다.
+
+## Command endpoint 모델의 실제 시간 예산 실패와 다음 비교
+
+Policy revision: `1e8c8e20dffd82b106169f7e687250b322ad48edf8984d6bcb690d033ef02723`.
+Runtime revision: `dc5db7e1db16637aa200172f6ceee0947d148b19`.
+Policy-result SHA256: `d0855d8ff30967f64acaec23f7ab3bc62e5cc15d05c2605b37936dff75a2378f`.
+
+동일 checkpoint의 calibration은 PASS였지만 새 engineering 물체 과제는 실패했다.
+누적 실제 성공은 **0/37회**(최초 정식0/20 + engineering0/17)이며 새 정식20회는
+시작하지 않았다. candidate/intent/UUID225개 모두 terminal4/code0였지만,
+Actor548.036초에서 고정 전역 시간 예산 TimeoutError가 발생했다. 감독 프로세스도
+원래 전역 기한에 TimeoutExpired로 종료했고 root610.020초/HOLD/cleanup true였다.
+원본 policy-result와 steps는 보존됐다. 감독 결과에 policy가 없어 생긴 wrapper
+KeyError는 2차 오류이며 과제 실패 원인이나 증거 유실을 대신하지 않는다.
+
+SIM 부착 보조 attach는 확인됐고 최대 lift101.687mm다. 마지막 XY55.116mm/
+Z91.259mm는 미완료 관측이다. detach·안정 유지가 없어 놓기 성공이나 정확도로
+계산하지 않으며 이전 모델의 접촉 실패가 해결됐다고 주장하지 않는다.
+
+후보당 전체 추론 평균1260.610ms와 수치 추론21.509ms를 대조했다. 후보당 반복
+guarded capture 누적646.384ms는 단일 capture 시간이 아니다. capture4066회 중
+1998회는 guard 진입 전에 이미 선택 cap50ms보다 오래됐고 동일 receipt 반복은
+1320회였다. Renewal guard3157회/111.2초와 watchdog guard2642회/92.2초도
+관측됐다. 중첩 stage timing은 wall time으로 합산하지 않는다.
+
+다음 통제 비교는 재학습 없이 동일 checkpoint를 사용해 SIM renewal 대기만
+0.1초에서0.2초로 바꾼다. 1초 lease, owner poll0.2초, 모든 binding·authority·stop·
+freshness·최종 admission·journal 검사를 유지한다. 명목 추가 검사 빈도는 줄며,
+lock/I/O 지연의 상한이 없어 expiry 없음이나 동일 stop 지연을 보장하지 않는다.
+늦으면 기존대로 HOLD해야 한다. 실제 갱신 간격·잔여 TTL·lock 대기와 capture 횟수를
+다음 실행 trace에서 확인한다. 실제 과제 통과 전에는 새 정식20회를 시작하지 않는다.
