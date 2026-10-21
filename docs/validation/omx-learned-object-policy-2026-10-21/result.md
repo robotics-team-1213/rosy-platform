@@ -41,7 +41,27 @@ Main revision: `0c706e831aa8e01122bcc2dc3a1e0d8faabdbf16`. 안전·크기·lint�
 고정한 source938791127b의 bounded head/command_entry/noise0.02를 사용한다.
 시작 요청이나 자료 검증 횟수는 학습 완료·물체 성공으로 계산하지 않는다.
 
-## 최신 bounded checkpoint — 사전 물체 과제 실패
+## 최신 원본 입력 bounded checkpoint — 실제 과제 대기
+
+학습 source revision: `5f471d5c7913715368bcc10cbed3c7af8267c112`.
+`omx-object-training-ad8d25650f879643`에서 원 시연25개/66,080프레임 검증과20/5 분할,
+전체 RGB reader 대조, 실제10,000step(seed42750/n_action_steps1), validation13,246프레임과
+재적재 일치를 확인했다. MAE0.004049183405391603rad/관절 한계 위반0/offline_only다.
+직전 bounded noise0.02 모델의 MAE0.00728356909769362rad보다 낮아졌으나 실제 과제는 미검증이다.
+
+- Policy revision: `accdc288e3a61874156aa67dc34fa52e48e50fb86677182382dab9759c9e5e2c`.
+- Dataset revision: `92c27ac0ba0cbff65c318579bb652a83dc3c2e478f50530489a3376ee010fcf4`.
+- Normalization SHA256: `2f2a89bb39ba73f513d761323a6da901093ba40ff32de9074bfe1fbf08c63a68`.
+- Weights SHA256: `f40f1c59a37f4f2faa957c3f82bbfc973a9a2a12c8b0fd08ca0863a9821b7124` (45,371,416bytes).
+- Optimizer history SHA256: `008d1a0688feb2125c9ac442eb83b8c234b3f2237d644dba28d751bf129e7893` (10,000개).
+
+Normalization 전체는 직전 모델에서 training_augmentation만 제거한 것과 동일하다.
+Training index도 동일한6,263/52,834 train frames이며 원 target은 유지했다. Synthetic
+상태 교란을 사용하지 않았음을 실제 normalization·offline-report에서 확인했다.
+현재 DatasetStore 복사·require 및 bundle 전송을 진행 중이며 새 물체 과제는 시작 전이다.
+완료 후 source91897eadf0의50ms capture runtime과 같은 checkpoint로 평가한다.
+
+## 직전 bounded noise0.02 checkpoint — 사전 물체 과제 실패
 
 실제 학습 source revision: `938791127b432cdb1e1e6dd578955e661fd41a38`.
 실행 `omx-object-training-42a03f4605a8a021`의 10,000step(seed42750/n_action_steps1),
