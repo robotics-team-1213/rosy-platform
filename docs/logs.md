@@ -9483,3 +9483,9 @@ osy-d395-s1d\`.
 - 변경: D-833 구간 선택·원본 계보를 보존한 child Episode 내보내기·기존 ACT receipt 검증 분기를 공개 origin/main 기준으로 분리했다. 이번에 추가한 D-833의 선점 gap만 제거했고 다른 미게시 코드·장치 실행·SIM 변경은 포함하지 않는다.
 - 증거: `e7ba4f29eb` 공식 원격 관련 검사 44 passed/1 skipped, NEW 0. 고정 LeRobot 0.4.4 환경에서 별도 합성 native 파일 10프레임을 실제 내보내고 state/action/int64 시계·이미지·원본 hash·receipt를 확인했다. [공개 기준 검증](validation/omx-grasp-publication-2026-10-21/foundation.md).
 - gate 변화: offline 데이터/receipt 검증 범위다. 화면 연결·실물 성공·모델 품질·데이터 절감 효과 수용은 이 기록으로 만들지 않는다.
+
+## 2026-10-21 · uncommitted · 학습 검수 저장소와 HTTP 서버 분리
+
+- 변경: 기존 `Conflict`와 `ReviewStore` 정의를 `review_store.py`로 옮기고 `review_app`의 import 경로를 유지했다. HTTP 서버가 파일 크기 상한 아래로 내려가 해당 크기 예외만 제거했다.
+- 증거: 이동 전후 두 클래스의 AST가 일치한다. 기존 검수·계정·협업·학습 회귀 검사는 커밋 후 공식 원격 실행과 PR CI로 확인한다.
+- gate 변화: 없음. 저장 형식·검수 판정·장치 권한은 바뀌지 않는다.
