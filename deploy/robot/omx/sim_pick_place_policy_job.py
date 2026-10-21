@@ -52,7 +52,9 @@ def run(directory,*,calibration=False):
         result['startup_owner_exited']=True
         command=['/usr/bin/python3',str(ROOT/'deploy/robot/omx/sim_pick_place_policy.py'),
             '--evidence',str(directory),'--observer',str(observer),'--deadline-owner-s',str(deadline)]
-        if calibration:command.append('--calibration')
+        if calibration:
+            command[1:1]=['-m','cProfile','-o',str(directory/'calibration.pstats')]
+            command.append('--calibration')
         actor=children.start('policy',command,env=env)
         code=actor.wait(timeout=max(.01,deadline-time.monotonic()))
         policy=json.loads((directory/'policy-result.json').read_text())
