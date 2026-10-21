@@ -12,6 +12,7 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler
 from urllib.error import HTTPError
 
 import pytest
+import yaml
 
 from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
 
@@ -254,8 +255,8 @@ def test_blocked_failed_source_keeps_only_latest_and_does_not_block_other_source
 
 
 def test_native_main_subscribes_only_to_configured_sources_with_localhost_discovery(manifest, tmp_path, monkeypatch):
-    path = tmp_path / "manifest.json"
-    path.write_text(manifest.model_dump_json(by_alias=True), encoding="utf-8")
+    path = tmp_path / "manifest.yaml"
+    path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
     for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE", "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
         monkeypatch.delenv(key, raising=False)
     for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret", "RMW_IMPLEMENTATION": "rmw_fastrtps_cpp",
