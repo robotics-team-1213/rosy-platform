@@ -173,4 +173,4 @@ def test_collaboration_requires_manage_and_owns_segment_reviewer(tmp_path):
         assert status == 200 and saved['document']['segments'][0]['reviewer'] == 'reviewer'
         accounts.active = False
         body['version'] = 1
-        assert request(url, '/api/learning/omx/segments', 'reviewer', body, workspace['token'])[0] == 401
+        assert request(url, '/api/learning/omx/segments', 'reviewer', body, workspace['token'])[0] == 403
