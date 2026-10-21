@@ -65,6 +65,23 @@ train-only 통계가 일치해야 weights를 적재하며 부모 hash·기존 st
 weights·정규화·10k loss 이력을 먼저 대조해 독립 스냅샷으로 고정한다. 실제 추가10k
 학습을 요청했으며 새 checkpoint와 물체 과제 성공은 아직 확인하지 않았다.
 
+공식 후속 로컬 main 착지 revision: `dc5db7e1db16637aa200172f6ceee0947d148b19`.
+안전·크기·lint, architecture267PASS/0NEW, affected531PASS/14SKIP/0NEW를 확인했다.
+일반 suite의 skip은 실제 MODEL ACT13PASS와 부모 guard 선택1PASS를 대체하지 않는다.
+처음 착지는 공개 policy revision의 용도를 표시하지 않은 문서 한 줄로 secret scan이
+실패했으며, 줄에 `Policy revision`을 명시한 뒤 실제 scanner1PASS/0NEW와 공식 검증을
+다시 통과했다. 검사·allowlist는 완화하지 않았다. 실패 로그도 별도로 보존했다.
+확정 착지 로그·record는 `official-land-dc5db7e1db`에 즉시 복사했다.
+Affected log SHA256: `cfe295cb7d26043f41862259573d9af122d35134d351f327d07af46aa97c07b5`.
+Architecture log SHA256: `cc70d81a6038daf3117bd8b7091845a9c485d3e8c09c90d09b8e2ca5c8c9d20f`.
+Land record SHA256: `b990f6114e42a855f4fc68cef89325de27fb1f2d9f6931c89833318843c0e262`.
+새 실제 학습 study는 `fixed-object-6cdde72b23679868`이며 현재 source revision은
+`f509adfba840e2f2a48a128c1d71b300b4032bf7`로 고정했다. 실제25개/66,080프레임의
+curation과20/5분할을 재확인했다. 부모 weights는 별도 읽기전용0400 스냅샷이며
+기존10k loss 이력을 보존했다. 모델 내부 reader 검증과 추가10k 완료는 구분한다.
+학습·추론·SIM 호출 주요6파일은 학습 source와 착지 source에서 byte-identical임을
+확인했다. 최신 code 착지와 실제 물체 목표 달성은 별개이며 현재0/35를 유지한다.
+
 직전 noise 모델 과제 `869a6d818862`는 candidate/intent 109개, ROS UUID/terminal 성공 108개 뒤
 gripper readback 0.4211009741rad와 target 0.3807023764rad의 차이
 0.0403985977rad가 기존 0.04rad 제한을 넘어 HOLD했다. 마지막 intent에는 UUID가 없다.
