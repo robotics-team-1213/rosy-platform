@@ -131,7 +131,7 @@ strict gripper evidence 형식과 충돌하는 문제가 발견됐다. 실제 tr
 
 ## 새 teacher 시연의 실제 물체 성공과 전체 RGB 검증
 
-Native run `bf2ca6346b9be0821249740a0cc8bd4fbf454e47-c7dedb9bfcfd`는
+아래 고정 source의 native run `c7dedb9bfcfd`는
 EXIT0/PASS/cleanup true로 끝났다. 이 소스의 prototype1/1성공이며 직전 실패를 포함한
 종료 prototype은1/2다. 이후 cohort 수집 실행은 별도 원장에 보존한다. learned0/40과
 구분하고 실물 집기나 힘 센서 검증으로 주장하지 않는다. SIM 부착 보조를 사용했다.
