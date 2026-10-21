@@ -18,7 +18,7 @@ PC 보정 mirror의 소비자인 `tools/calibration/{store_cli,run_calibration,c
 | 폴더 | 담는 것 |
 |---|---|
 | `teleop/` | 수동 주행으로 확인하면서 적은 명령과 메모. 세션은 커밋하지 않음 |
-| `teleop/learning/` | 학습용으로 남기는 텔레옵 영상. 이 폴더만 커밋한다 |
+| `teleop/learning/` | 기존 공개 예제 영상. 새 원본은 외부 data root에 보관하며 Git에 일괄 추가하지 않음 |
 | `drive/` | 주행 기록. 궤적 줄과 rosbag/MCAP. 세션은 커밋하지 않음 |
 
 세션을 만들 때:
@@ -29,5 +29,7 @@ python tools/run_data.py new drive map-loop
 python tools/run_data.py list teleop
 python tools/run_data.py write data/teleop/<session> "{\"linear\":0.1,\"angular\":0}"
 ```
+
+위 `write` 예시는 환경변수가 없는 기본 경로 기준이다. `ROSY_DATA_ROOT`를 설정했다면 `list`가 보여준 실제 외부 세션 경로를 `write`에 전달한다.
 
 각 세션에는 `session.json`과 `notes.md`가 생긴다. 텔레옵 세션은 `commands.jsonl`, 주행 세션은 `trace.jsonl`과 `bags/`를 가진다.

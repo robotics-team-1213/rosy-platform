@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,9 +34,10 @@ class Backend:
     mode = 'rehearsal'
     def __init__(self, fault=None):
         self.fault, self.commands, self.stops, self.n = fault, [], [], 0
+        self.clock = time
     def observe(self):
         self.n += 1
-        now = time.time_ns()
+        now = self.clock.time_ns()
         conditions = 'UNDEREXPOSED' if self.fault == 'dark' and self.commands else 'NORMAL'
         env = dict(policy='omx-photometric-v3', recorded_ns=now, expires_ns=now+750_000_000,
                    run_id='fixture-run', profile_sha256='a'*64, physical_acceptance=False,
@@ -73,8 +75,28 @@ def teacher():
     return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.2)])
 
 
-def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path):
+@pytest.mark.parametrize('storage_delay', [0, .6])
+def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path, monkeypatch, storage_delay):
+    original = module.RawCollection.environment
+    receipts = 0
+    def environment(store, receipt):
+        nonlocal receipts
+        receipts += 1
+        if storage_delay and receipts == 2:
+            time.sleep(storage_delay)
+        return original(store, receipt)
+    monkeypatch.setattr(module.RawCollection, 'environment', environment)
     backend = Backend()
+    # Advance rehearsal time explicitly so host fsync latency cannot age fixture images.
+    clock_ns = [1_000_000_000]
+    def now():
+        clock_ns[0] += 1_000_000
+        return clock_ns[0]
+    def sleep(seconds):
+        clock_ns[0] += int(seconds * 1e9)
+    clock = SimpleNamespace(time_ns=now, monotonic=lambda: clock_ns[0] / 1e9, sleep=sleep)
+    backend.clock = clock
+    monkeypatch.setattr(module, 'time', clock)
     result = module.run_session(profile(), teacher(), tmp_path/'capture', backend)
     assert result['mode'] == 'rehearsal' and result['source_mode'] == 'simulation'
     assert result['episodes'][0]['complete'] is True
