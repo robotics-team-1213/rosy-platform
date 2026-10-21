@@ -134,6 +134,9 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 page.get_by_role('button',name='다시 확인',exact=True).click()
                 with page.expect_request('**/api/learning/omx'):
                     page.get_by_role('button',name='편집 버리고 다시 확인',exact=True).click()
+                for _ in range(100):
+                    if stale:break
+                    page.wait_for_timeout(20)
                 assert len(stale) == 1
                 page.get_by_role('button',name='검수 저장',exact=True).click()
                 playwright.expect(page.locator('.omx-review')).to_contain_text('검수 5 저장됨')
