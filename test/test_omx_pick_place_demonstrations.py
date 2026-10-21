@@ -53,7 +53,8 @@ def test_teacher_place_pose_adds_clearance_without_changing_the_task_goal():
         yaw: float
     goal=Pose(.2075,.0725,.025,.3)
     planned=teacher_place_pose(goal)
-    assert planned==Pose(.2075,.0725,.030,.3)
+    assert (planned.x,planned.y,planned.yaw)==(.2075,.0725,.3)
+    assert planned.z==pytest.approx(.030)
     assert goal.z==.025
 
 

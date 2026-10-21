@@ -1,5 +1,6 @@
 """Private native SIM teacher: real short goals, RGB frames and object observations."""
 import argparse
+from dataclasses import replace
 import hashlib
 import json
 import math
@@ -14,6 +15,27 @@ from g2_common import ROOT, configure_imports
 from g2_ports import ObserverClient, isolation_guard, write_json
 from sim_pick_place_demonstrations import short_targets, dispatch_readback_target
 from sim_pick_place_task import judge_episode
+
+
+PLACE_CLEARANCE_M = .005
+
+
+def teacher_place_pose(pose):
+    return replace(pose,z=pose.z+PLACE_CLEARANCE_M)
+
+
+def release_clearance_evidence(observation,tcp,box,goal):
+    pose=observation['model_pose_base']
+    roll,pitch=pose['roll_rad'],pose['pitch_rad']
+    half_height=(abs(math.sin(pitch))*box.length+abs(math.cos(pitch)*math.sin(roll))*box.width
+                 +abs(math.cos(pitch)*math.cos(roll))*box.height)/2
+    bottom=pose['z_m']-half_height
+    surface=goal[2]-box.height/2
+    clearance=bottom-surface
+    if not math.isfinite(clearance) or clearance<PLACE_CLEARANCE_M/2:
+        raise RuntimeError('measured_release_clearance_too_small')
+    return dict(observation=observation,tcp_m=dict(x=tcp.x,y=tcp.y,z=tcp.z),
+                object_bottom_z_m=bottom,support_surface_z_m=surface,clearance_m=clearance)
 
 
 def run(directory, world, observer_path, *, home_only=False):
@@ -87,7 +109,10 @@ def run(directory, world, observer_path, *, home_only=False):
     episode_id, success, error = None, False, None
     receipt = {'sim_aid': True, 'sim_gripper_sensor': True, 'source': source,
                'goal_m': goal, 'cell_sha256': job.cell_hash, 'recipe_sha256': job.recipe_hash,
-               'profile_revision': profile.revision, 'training': 'NOT_RUN'}
+               'profile_revision': profile.revision, 'training': 'NOT_RUN',
+               'motion_strategy': {'type':'release_above_support_v1',
+                   'place_clearance_m':PLACE_CLEARANCE_M,
+                   'min_measured_clearance_m':PLACE_CLEARANCE_M/2}}
 
     def sim_time():
         return node.get_clock().now().nanoseconds / 1_000_000_000
@@ -194,7 +219,7 @@ def run(directory, world, observer_path, *, home_only=False):
         request = CellTransferRequest(job_id='sim-object-demonstration', recipe_sha256=job.recipe_hash,
             cell_sha256=job.cell_hash, step_index=0, item='box', home=home,
             pick=TopDownPose(pick.target.x,pick.target.y,pick.target.z,pick.target.yaw),
-            place=TopDownPose(place.target.x,place.target.y,place.target.z,place.target.yaw),
+            place=teacher_place_pose(TopDownPose(place.target.x,place.target.y,place.target.z,place.target.yaw)),
             pick_approach_z=pick.approach_z, place_approach_z=place.approach_z, carry_z=job.carry_z,
             grasp_depth_m=recipe.box.grasp_depth, grasp_width_m=recipe.box.width)
         plan = planner.plan_transfer(request, profile, snapshot)
@@ -209,6 +234,15 @@ def run(directory, world, observer_path, *, home_only=False):
                      'started_owner_s': arm.monotonic()}
             events.append(event)
             if phase.phase_id == 'release':
+                observation=observe()
+                js=arm.latest_joint_state
+                checked=arm.monotonic()
+                if not 0<=checked-js.received_at<=profile.max_joint_state_age_s:
+                    raise RuntimeError('release joint-state stale')
+                tcp=kin.fk([js.positions[n] for n in ARM_JOINTS])
+                event['pre_detach_geometry']=release_clearance_evidence(observation,tcp,recipe.box,goal)
+                event['pre_detach_geometry']['joint_state']=dict(positions=dict(js.positions),
+                    sequence=js.sequence,received_at=js.received_at,checked_owner_s=checked)
                 event['detach'] = aid.detach('infeed_block')
                 if not event['detach']['confirmed']:
                     raise RuntimeError('detach unconfirmed')
