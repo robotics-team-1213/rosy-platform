@@ -7,10 +7,34 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/36회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/16회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/38회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/18회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
-최신 bounded 모델의 사전 과제도 실패로 종료됐고 cleanup은 확인됐다.
+최신 동일 checkpoint의 두 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
+
+최신 `ad91d17aa658`은 관절 관측500ms 신선도 감시에서 HOLD했다. 237개 명령 중
+236개는 terminal4/code0, 마지막1개는 취소 terminal5/code0다. Actor395.861초/
+root460.594초다. 최대 lift100.403mm와 마지막 XY30.916mm/Z90.403mm는
+미완료 관측이다. SIM 부착 보조 attach는 있었지만 놓기·해제·안정 유지는 입증하지 못했다.
+Policy-result SHA256: `44869941f36db283bef447a92d737f9559219d2004d96635eaf9ede2e658e26c`.
+Policy revision: `1e8c8e20dffd82b106169f7e687250b322ad48edf8984d6bcb690d033ef02723`.
+Runtime revision: `b9f3442ce5d10591cdc5e1bbabfe96f12a13d966`.
+
+코드와 직전 보고서는 로컬main `5e045c21805f95dbab7bc7bca956cfac2d104098`에 정식
+병합됐다. 아키텍처·계약267 PASS와 관련457 PASS/6 SKIP/0 NEW를 확인했다.
+후보당 전체 추론 평균510.039ms/수치추론19.889ms, 반복capture guard 누적
+280.376ms, 초기lock 대기누적103.101ms다. 병합용pytest가 같은 AI PC에서 병행돼
+직전 실행과의 차이를 renewal 변경의 단독 인과 효과로 해석하지 않는다.
+
+실패 guard 직전 renewal217.6ms, watchdog62.7ms, 실패 guard83.9ms가 이어졌다.
+실행 중 현재 관측을 검사한 executor thread의 실패이며 새 후보의 admission 거절은 아니다.
+당시 최신 intake와 session snapshot은 보존되지 않아 메시지 도착 지연과 잠금 전달 지연을
+확정할 수 없다. SIM 실패 trace에 guard 직전·직후 불변 snapshot/latest/intake receipt를
+추가한다. 새 관측을 만들거나 timestamp를 갱신하지 않으며 진단 오류는 원 예외를 보존한다.
+해당 진단은 원격 RED2 FAIL 뒤 GREEN45 PASS/0 NEW를 확인했다. 다음 실행은 같은
+checkpoint와 기존 안전 한도를 사용하고 자체 병합 검증을 마친 뒤 시작한다.
+
+## 이전 실행 경과
 
 최신 clean checkpoint의 실제 과제 `4c893c74b5b0`는 66 candidate/intent/UUID와
 66 terminal4/code0 뒤 `bounded policy capture limit`로 종료됐다. 1,000건의
