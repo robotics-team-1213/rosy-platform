@@ -618,3 +618,9 @@
 - 변경: `capability_current`, `transfer_provider` 계획기 요청, SIM 그리퍼 판정이 grant의 `item_key`로 승인된 형상을 찾는다. sku가 없으면 키는 지금처럼 `box`다. `PalletizingCellDocumentValidator`는 recipe/3를 cell/3 문서에 대해 혼합 컴파일러로 검증하고, sku마다 `box:<sku>` 형상(잡는 폭 = `width`)을 낸다. owner는 아직 cell/3를 승인하지 않는다(`validate_cell`은 cell/1 로더다). 그래서 실제 owner에서 recipe/3 승인은 거절된다. 이 승인에는 ADR이 필요하다. safety 모듈은 건드리지 않았다.
 - 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
 - gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · 동일 일련번호 손목 카메라의 포트 구분
+
+- Change: the preview source accepts persistent by-path symlinks as well as by-id, preserving symlink/character-device checks and rejecting numeric selectors. Capture, retry and watchdog behavior are unchanged.
+- Evidence: committed tests failed 4/20 before the change; all 20 passed remotely at a694060ead. Two physical Innomaker cameras sharing SN0001 produced separate fresh previews through different USB port paths on Fleet.
+- Gate: unchanged. Preview identity does not establish CameraInfo, arm pairing calibration or physical command authority.
