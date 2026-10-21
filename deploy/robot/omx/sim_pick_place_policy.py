@@ -84,6 +84,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     samples,steps,transitions,worker_errors=[],[],[],[]
     stop=threading.Event()
     authority=fence=session=None
+    failed_traceback=None
     threads=[]
     started=time.monotonic()
     last_observed=[None]
@@ -188,7 +189,9 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 frame_sha256=result.source.frame_sha256,consumed_current=result.consumed_current,
                 produced_owner_ns=result.produced_at_ns,returned_owner_ns=result.returned_at_ns)
             steps.append(step)
+            save_started=time.monotonic()
             Image.frombytes('RGB',(320,240),result.source.rgb).save(frames/f'{index:04d}.png')
+            step['frame_save_ms']=(time.monotonic()-save_started)*1000
             if calibration:
                 with session._lock:
                     doc,now,cameras=session._guard()
@@ -200,7 +203,13 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
                 continue
             if last_observed[0] is None or time.monotonic()-last_observed[0]>.5:
                 raise PermissionError('independent object observation stale')
-            decision=session.submit(candidate)
+            step['pre_submit_original_input_age_ms']=(int(arm.monotonic()*1e9)-min(
+                candidate.observed_at_ns,*candidate.camera_received_at_ns))/1e6
+            submit_started=time.monotonic()
+            try:
+                decision=session.submit(candidate)
+            finally:
+                step['submit_ms']=(time.monotonic()-submit_started)*1000
             last_cycle=time.monotonic()
             step.update(decision=asdict(decision),command_id=session._active_command)
             deadline=time.monotonic()+30
@@ -248,6 +257,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             raise RuntimeError('fixed object task did not satisfy independent judge')
     except Exception as error:
         receipt['error']=type(error).__name__+': '+str(error)
+        failed_traceback=error.__traceback__
     finally:
         stop.set()
         for thread in threads:thread.join(4)
@@ -263,6 +273,10 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         if session:
             try:session._fail('isolated_study_ended')
             except PermissionError:pass
+        if failed_traceback is not None:
+            import traceback
+            receipt['error_stack']=[dict(file=Path(frame.filename).name,line=frame.lineno,function=frame.name)
+                for frame in traceback.extract_tb(failed_traceback,limit=12)]
         receipt.update(wall_s=time.monotonic()-started,worker_errors=worker_errors,
             owner_final=arm.owner.state,camera_accepted=camera.accepted,camera_rejected=camera.rejected,
             camera_error=camera.error,policy_steps=len(steps),native_events=len(events))
