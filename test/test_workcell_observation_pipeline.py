@@ -22,7 +22,11 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.server.workcell_observations import WorkcellObservations
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "operations" / "overhead"))
+# Match the source-only closure of the reused overhead test harness.
+for relative in ("operations/overhead", "middleware/core/services", "operations/apps/games"):
+    path = str(ROOT / relative)
+    if path not in sys.path:
+        sys.path.insert(0, path)
 from rosy_vision.ingest import IngestServer
 
 
