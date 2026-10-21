@@ -164,6 +164,11 @@ def test_collaboration_requires_manage_and_owns_segment_reviewer(tmp_path):
             assert request(url, '/api/learning/omx', session)[0] == 200
             assert request(url, '/api/learning/omx/segments', session, body, workspace['token'])[0] == 403
         _, workspace = request(url, '/api/workspace', 'reviewer')
+        for invalid in (None, 42):
+            assert request(url, '/api/learning/omx/segments', 'reviewer',
+                           dict(body, segments=invalid), workspace['token'])[0] == 400
+        _, listed = request(url, '/api/learning/omx', 'reviewer')
+        assert listed['sets'][0]['segment_review']['version'] == 0
         status, saved = request(url, '/api/learning/omx/segments', 'reviewer', body, workspace['token'])
         assert status == 200 and saved['document']['segments'][0]['reviewer'] == 'reviewer'
         accounts.active = False

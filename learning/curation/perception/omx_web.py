@@ -147,7 +147,7 @@ def post(handler, path, body, workspace, conflict):
     root = Path(row['path'])
     report = _read(root, 'inspection.json')
     document = segments.selection(report, body['segments'])
-    if actor:
+    if actor and isinstance(document['segments'], list):
         for segment in document['segments']:
             if not isinstance(segment, dict):
                 raise ValueError('segment object required')
