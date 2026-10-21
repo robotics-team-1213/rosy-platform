@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from fleet._source_layout import console_root
-from fleet.server.console.learning_entry import install_learning_routes
+from fleet.server.learning_entry import install_learning_routes
 
 WEB_ROOT = console_root()
 
