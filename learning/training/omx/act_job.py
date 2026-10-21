@@ -129,9 +129,14 @@ def export_truth(export, source, validated):
 
 
 def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames',
-        action_representation='absolute'):
+        action_representation='absolute',state_noise_std_rad=0.):
     if action_representation not in ('absolute','joint_delta_from_chunk_source_v1'):
         raise ValueError('unknown action representation')
+    if (type(state_noise_std_rad) not in (int,float) or not np.isfinite(state_noise_std_rad)
+            or state_noise_std_rad<0):
+        raise ValueError('state noise standard deviation must be finite and nonnegative')
+    if state_noise_std_rad and action_representation=='absolute':
+        raise ValueError('state noise requires source-relative targets')
     if sampling not in ('all_frames','command_entry'):
         raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
@@ -245,6 +250,12 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             del stats['action_mean'],stats['action_std']
             stats['action_transform']=dict(type=action_representation,mean=action_mean.tolist(),
                 std=action_std.tolist(),absolute_baseline=absolute_baseline.tolist())
+        noise_rng=None
+        if state_noise_std_rad:
+            noise_rng=torch.Generator().manual_seed(seed+1)
+            stats['training_augmentation']=dict(type='gaussian_state_noise_v1',std_rad=state_noise_std_rad,
+                seed=seed+1,joint_names=sources[0]['joint_names'],train_only=True,
+                source_kind='synthetic_training_inputs')
         _write(out / "normalization.json", stats)
         for i, (images, states, actions) in enumerate(arrays):
             arrays[i] = (images, (states - state_mean) / state_std, (actions - action_mean) / action_std)
@@ -268,11 +279,17 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             for e, i in picked:
                 images, states, actions = arrays[e]
                 chunk = chunk_indices(len(actions), i, 4)
-                batch["observation.state"].append(states[i])
+                state=states[i]
+                origin=state*state_std+state_mean
+                if noise_rng is not None:
+                    # Synthetic train input only; all original absolute targets stay fixed.
+                    origin=origin+torch.randn(origin.shape,generator=noise_rng)*state_noise_std_rad
+                    state=(origin-state_mean)/state_std
+                batch["observation.state"].append(state)
                 batch[image_key].append(images[i])
                 targets=torch.stack([actions[j] if j is not None else actions[-1] for j in chunk])
                 if action_representation!='absolute':
-                    targets=targets-(states[i]*state_std+state_mean)/action_std
+                    targets=targets-origin/action_std
                 batch["action"].append(targets)
                 batch["action_is_pad"].append(torch.tensor([j is None for j in chunk], dtype=torch.bool))
             batch = {k: torch.stack(v) for k, v in batch.items()}
@@ -331,6 +348,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 absolute_baseline.numpy(), train_actions.numpy(), limits)
             offset += count
         report['per_episode'] = per_episode
+        if noise_rng is not None:
+            report['training_augmentation']=stats['training_augmentation']
         if sampling_ref is not None:
             report['training_sampling'] = dict(rule=sampling,index=sampling_ref,
                 selected_training_frames=len(indices),all_training_frames=sum(len(rows) for rows in original_rows[:train_count]))
@@ -392,10 +411,11 @@ def main():
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
     ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
     ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1'),default='absolute')
+    ap.add_argument('--state-noise-std-rad',type=float,default=0.)
     args = ap.parse_args()
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
                          n_action_steps=args.n_action_steps,sampling=args.sampling,
-                         action_representation=args.action_representation)))
+                         action_representation=args.action_representation,state_noise_std_rad=args.state_noise_std_rad)))
 
 
 if __name__ == "__main__":
