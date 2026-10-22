@@ -2,6 +2,12 @@
 
 **Status:** Accepted for implementation (2026-10-22, 사용자 지시). 범용 로봇 지원·운영 배포 수용은 별도다.
 
+2026-10-22 구현 구체화: 기존 검수 DB의 불변 학습 대상·과제·자료 결속을 사용한다. 호스트는
+과제 정의가 아닌 실행의 속성이고, 같은 프로젝트 사이의 명시적 메타데이터 전달로 과제 identity를
+보존한다. 입력 프로필과 참여 로봇/device/component/role의 순서를 검증하고 run·평가·다운로드에
+같은 snapshot을 남긴다. 역사 자료는 명시 사후 연결로 표시한다. 등록 자체는 장치 연결 증거가 아니다.
+로컬 HTTP 계약과 준비 조건은 [학습 앱 문서](../../learning/curation/perception/docs/review-app.md)에 둔다.
+
 ## Context
 
 사용자는 기존 Learning 프로젝트 하나를 Model·AI PC에서 함께 사용하며 여러 종류·여러 개체의

@@ -461,3 +461,43 @@ SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경
 조회는 view, check/start/stop은 manage 권한과 기존 CSRF·Origin 검사가 필요하다. 로컬 비협업 검수에서는 실행·중지를 허용하지 않는다. 브라우저는 accountFetch로 다른 탭의 신원 변경 뒤 응답 적용을 막는다. 응답이 유실되면 같은 start 요청을 sessionStorage에 보존하고 자동 재시작하지 않는다. 조건을 다시 확인한 뒤 같은 요청을 재전송하거나 목록의 run을 조회한다. **새 실험으로 다시 실행**은 새 요청/run과 parent_run_id를 만들고 원본을 보존한다.
 
 원시 SDK 로그·환경변수·private 경로는 웹으로 보내지 않는다. 최종 모델 검사 JSON만 manifest의 해시·크기를 확인해 제공하며 기본 검사는 영상이 없음을 표시한다. UNKNOWN·중지 요청·실제 종료·모델 검사 결과를 구분한다. `test_sim_web.py`, 명시적 `ROSY_RUN_BROWSER_TESTS=1`의 `test_sim_browser.py`와 공통 셸·서명 payload 누락 거절 시험으로 검증한다. 실제 SDK 실행은 별도 증거다.
+
+## 공통 로봇·과제 학습 (D-840)
+
+`/learning/tasks`는 학습 대상 등록 → 과제·참여 구성 → 자료·방법·실행 → 결과를 연결한다.
+등록은 기존 device ID에 대한 학습 참조이며 실제 장치 연결·보정·실행 권한을 만들지 않는다.
+여러 종류를 등록할 수 있고, 현재 실행 어댑터는 OMX다. 미지원 종류는 준비 사유를 표시한다.
+리더·게임패드, 여러 팔·카메라의 설정은 기존 OMX 프로필 화면에서 준비한다.
+
+| 경로 | 계약 |
+|---|---|
+| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token. |
+| POST `/api/learning/robots` | `request_id` UUID, `name`, `kind`, `model_revision`, `device_id`. 불변 학습 대상이며 `device_verified=false`. |
+| POST `/api/learning/tasks` | `request_id`, `name`, `objective`, `success`, `failure`, `reset`, `mode`, `adapter`, 순서 있는 `participants=[{robot_id,component_id,role}]`. OMX에는 서버가 읽을 `profile_id`가 필요하다. |
+| GET `/api/learning/tasks/export?id=<UUID>` | 같은 프로젝트 안에서 전달할 과제·참여 로봇·프로필 메타데이터. 단일 identity만 허용한다. |
+| POST `/api/learning/tasks/import` | `rosy.learning.task-transfer/1` 패키지. 프로젝트·과제 revision·실제 OMX 프로필 스키마·참여 구성을 검증한 뒤 원자적으로 반영한다. |
+
+조회는 기존 view, 생성·가져오기는 manage 권한을 요구한다. POST는 기존 세션·CSRF·Origin과
+1 MiB 본문 제한을 사용하며 작성자는 서버 신원이다. 비협업 loopback 작업은 `local_unverified`다.
+다른 사용자·프로젝트 신원, 실행 명령·소스 경로·자격을 입력해 권위를 만들 수 없다.
+전달 파일은 계정·세션·HF 연결·키를 포함하지 않으며 가져온 관리자의 로컬 신원을 기록한다.
+
+계산 호스트는 불변 과제가 아닌 각 실행의 속성이다. private `omx-center.json`의 선택적
+`host_id`를 `model` 또는 `ai`로 설정한다. 미설정이면 기존 과거 OMX 경로는 유지하되
+과제 결속 실행은 거절한다. 같은 과제를 다른 호스트에서 사용하려면 먼저 같은 프로젝트의
+보호된 원본에 과제 메타데이터와 검증된 자료를 명시적으로 전달한다. 자동 동기화는 없다.
+
+기존 run/online-run 요청에 `task_id`와 `compute_host`를 함께 넣으면 서버가 실제 호스트,
+전체 프로필 revision, 로봇/device/component/role 순서와 선택 팔을 검증한다. 자료 ID와
+revision은 한 과제에 결속하며 다른 참여 그룹으로 암묵적으로 재사용하지 않는다. 과거 자료를
+처음 연결할 때는 `historical_dataset_attachment`로 기록하며 원래 과제별 촬영 증거로 표시하지 않는다.
+같은 과제에서 ACT와 HIL-SERL을 비교하거나 독립 팔별로 학습하는 것은 허용한다.
+지속 경험의 추가 자료에도 같은 검사를 적용한다. 작업별 경험 추가와 중지는 host worker에만
+적용하며 저장된 결과를 보존한다. 실물 로봇 actor·사람 개입·보상·초기화 연결은 별도 수용이다.
+
+worker request, run, 평가 결과에 같은 과제 snapshot을 남긴다. 완료 모델 ZIP의
+`learning-task.json`은 과제·참여 구성·실제 호스트와 평가 파일 SHA256을 포함한다.
+평가·요청·완료 결과의 snapshot이 다르면 다운로드를 거절한다. 과제 없는 기존 작업은 그대로 읽는다.
+코드 전환 전에는 새 실행·추가 경험 게시를 중단하고 활성 학습 작업을 끝내거나 중지한다.
+공식 설치기는 활성 작업·손상된 학습 상태를 사전 검사하며, 이 검사가 동시 요청에 대한
+배포 잠금을 대신하지는 않는다. 구버전 rollback 중에는 과제 결속 지속 작업을 재개하지 않는다.

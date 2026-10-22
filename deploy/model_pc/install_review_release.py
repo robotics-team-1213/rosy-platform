@@ -6,12 +6,14 @@ Run as the same user that owns rosy-review-v13.service. See README.md.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import hashlib
 import ipaddress
 import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import time
 import urllib.error
@@ -214,6 +216,40 @@ def switch(current: Path, target: Path) -> None:
     os.replace(candidate, current)
 
 
+def check_learning_idle(config: Path) -> None:
+    """Preflight only: the operator must keep new jobs quiesced during switching."""
+    if not config.exists() and not config.is_symlink():
+        return
+    try:
+        if config.is_symlink() or not config.is_file() or config.stat().st_size > 1024 * 1024:
+            raise ValueError('bounded regular learning center configuration required')
+        document = json.loads(config.read_bytes())
+        if not isinstance(document, dict) or not isinstance(document.get('root'), str):
+            raise ValueError('learning center root configuration required')
+        root = Path(document['root'])
+        if not root.is_absolute() or root.is_symlink() or (root.exists() and not root.is_dir()):
+            raise ValueError('absolute owned learning center root required')
+        database = root / 'center.sqlite'
+        if not database.exists() and not database.is_symlink():
+            return
+        if database.is_symlink() or not database.is_file():
+            raise ValueError('regular learning center database required')
+        # mode=ro also prevents accidentally creating a database at a wrong path.
+        with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=1)) as db:
+            db.execute('PRAGMA query_only=ON')
+            for raw, in db.execute('SELECT document FROM runs'):
+                if not isinstance(raw, str) or len(raw.encode('utf-8')) > 1024 * 1024:
+                    raise ValueError('bounded learning run state required')
+                run = json.loads(raw)
+                if not isinstance(run, dict) or run.get('status') not in (
+                        'launching', 'running', 'stopping', 'succeeded', 'failed', 'cancelled', 'interrupted'):
+                    raise ValueError('valid learning run state required')
+                if run['status'] in ('launching', 'running', 'stopping'):
+                    raise ValueError('active learning jobs must finish or be stopped before a release switch')
+    except (OSError, sqlite3.Error, json.JSONDecodeError, UnicodeError, RecursionError, TypeError) as exc:
+        raise ValueError('learning center state could not be verified') from exc
+
+
 def install(source: Path | None, release: str, root: Path, state: Path | None,
             python: Path | None, host: str, port: int, unit: Path, service: str = SERVICE) -> Path:
     validate_service(service)
@@ -239,12 +275,24 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         raise ValueError("a release switch is already pending")
     old_target = current.resolve() if current.is_symlink() else None
     old_unit = unit.read_bytes()
+    for line in old_unit.decode('utf-8').splitlines():
+        if line.startswith('ExecStart='):
+            bound = re.search(r' --omx-center-config ([^\s]+)', line)
+            state_arg = re.search(r' --state ([^\s]+)', line)
+            if bound:
+                config = Path(bound[1])
+                if not config.is_absolute() or not config.is_file():
+                    raise ValueError('configured learning center file is missing or invalid')
+                check_learning_idle(config)
+            elif state_arg:
+                check_learning_idle(Path(state_arg[1]) / 'omx-center.json')
     collaboration = None
     if source is not None:
         if state is None or python is None:
             raise ValueError("new releases require --state and --python")
         source = source.expanduser().resolve(strict=True)
         state = state.expanduser().resolve(strict=True)
+        check_learning_idle(state / 'omx-center.json')
         # Keep the venv entrypoint: resolving it can silently select system Python.
         python = python.expanduser().absolute()
         if not (state / "reviews.sqlite3").is_file() or not python.is_file():
