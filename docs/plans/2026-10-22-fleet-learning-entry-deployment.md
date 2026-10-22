@@ -86,6 +86,9 @@ AI 학습은 시작 전 GPU 상태 확인만으로 허용하지 않는다. 운�
    학습 Python과 LeRobot/torch 환경은 코드 후보와 별도로 준비·지문 확인한다. 서명 후보 적용만으로
    controller나 환경이 갱신됐다고 보지 않는다. 새 보호 원본을 설치할 기존 운영 설치 경로가 없으면
    이를 먼저 확정하며 `install_learning_center.py`의 별도 loopback 후보로 대체하지 않는다.
+   Model 코드 controller 설치에는 `rosy_model_code.py`, `model_code_jobs.py`,
+   `model_code_layout.py`, `candidate_signing.py`가 함께 있어야 한다. 기존 설치기와
+   분리된 sidecar의 hash까지 대조하며 서명된 학습 소스 수용과 구분한다.
 5. 커밋/이미지/manifest/서명/실제 Compose 조합을 결속해 후보를 검증한다. 기존
    `deploy/site/rosy_site_autoupdate.py`의 서명 검증·전환·rollback 경로로 실제 운영 stack에
    설치하고 running Fleet image ID/digest, source SHA, signed manifest, effective Compose,

@@ -133,3 +133,9 @@
 - 변경: 검수 snapshot과 표시 수치를 결속하고 중앙 계정 cookie 범위를 보존했다. 운영 HTTPS 전송과 별도 학습 Python의 제한된 영상 reader를 연결했다.
 - 증거: source commit 1d9bce11ac의 백엔드 전체는 2366통과·78건너뜀·새 테스트 fixture 1실패였고, source commit 1dd36577a5의 해당 전송 모음 28건이 수정 후 통과했다. 앞선 게시 UI source commit b2af171cc5의 선택 전체 Chromium은 exit 0이다. 출처별 범위와 독립 검토 수정은 [검증 기록](../../../docs/validation/learning-center-publication-port-2026-10-22/result.md)에 묶었다.
 - gate 변화: 없음. 일반 로봇 identity 수용, 실제 사용자/HF 동의, 운영 이미지·서비스 배포와 실물 학습은 별도다.
+
+## 2026-10-22 · fd889ea429 · 공통 로봇·과제 학습 흐름 검증
+
+- 변경: 프로젝트별 불변 로봇·과제 원장과 개별/협동 참여 구성을 추가했다. 과제 화면에서 자료·방법·실제 host를 선택하고 지속 경험·평가·모델 receipt까지 같은 계보를 확인한다. 과제 전달은 자료 소유권을 보존하며 자격은 전달하지 않는다. 최신 중앙 로그인·HF 연결을 보존했다.
+- 증거: f5cb33bda891 원격 백엔드 2422통과·78건너뜀, Chromium 167통과. fd889ea429 Model·AI 실제 고정 CPU 환경에서 각각 ACT/HIL-SERL 합성 양팔·3카메라 자료 학습·저장·재적재 검사가 통과했다. 같은 SHA의 OAuth·Account·과제 브라우저 30통과. 각 로그의 NEW 0. 출처·한계는 [검증 기록](../../../docs/validation/learning-tasks-2026-10-22/result.md)에 명시했다.
+- gate 변화: 없음. 일반 로봇 실행 어댑터, 실제 HF 동의, 공식 이미지 활성화와 실물 actor·개입·보상·초기화 수용은 별도다.

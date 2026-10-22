@@ -9536,3 +9536,9 @@ osy-d395-s1d\`.
 - Change: record D-832 OMX profile support and D-840 shared multi-robot project/compute separation with actual-public-source deployment plan.
 - Evidence: user chose one existing Learning project for Model and AI and multiple robot kinds/instances as the center scope.
 - Gate: unchanged; unsupported adapters, hardware acceptance and production deployment remain explicit.
+
+## 2026-10-22 · fd889ea429 · Learning Center implementation evidence
+
+- Change: document common task/robot identity, host-bound runs, source-specific remote evidence and the installed controller sidecar closure.
+- Evidence: full backend 2422 passed/78 skipped, Chromium 167 passed, final Account integration 30 passed; Model and AI each passed actual pinned synthetic ACT/HIL-SERL checks. Independent implementation/delta reviews have no remaining required changes. See [record](validation/learning-tasks-2026-10-22/result.md).
+- Gate: unchanged. Source verification is separate from official signed deployment, actual user/HF consent and physical online learning.

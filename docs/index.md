@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · fd889ea429 · Learning Center implementation evidence
 - 2026-10-22 · uncommitted · Shared multi-robot Learning Center decisions
 - 2026-10-22 · uncommitted · 실제 전송 시험의 연결 복구 경로 검증
 - 2026-10-22 · uncommitted · 설치 자산 폐쇄 검사 갱신
 - 2026-10-22 · uncommitted · Fleet PC 작업 셀 관측의 기존 Cell 연결
-- 2026-10-22 · uncommitted · 픽셀 원본 사진 우선 배치

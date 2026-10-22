@@ -26,8 +26,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · fd889ea429 · 공통 로봇·과제 학습 흐름 검증
+- 2026-10-22 · uncommitted · 게시 소스의 원격 학습센터 회귀
+- 2026-10-22 · uncommitted · Published-source Learning Center port
 - 2026-10-22 · 08e1b34f33 · fix: HF 연결의 읽기/쓰기 분리 제거
 - 2026-10-22 · 0f3084afcf · fix: 열람 권한 부족과 로그아웃 구분
-- 2026-10-22 · ff01e057a6 · fix: Learning Account callback 오류에서 로그인 복구
-- 2026-10-20 · 1bcd83ba3a · Legacy 937 Account boundary
-- 2026-10-19 · uncommitted · D-806 Learning 표시 이름 게시
