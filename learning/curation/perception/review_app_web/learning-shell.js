@@ -29,7 +29,11 @@ if (shell && body && main) {
   const nav = document.createElement('nav');
   nav.className = 'learning-primary-nav';
   nav.setAttribute('aria-label', 'Learning 주 메뉴');
-  for (const [key, label, href, icon] of destinations) nav.append(link(label, href, icon, key === current));
+  for (const [key, label, href, icon] of destinations) {
+    const anchor = link(label, href, icon, key === current);
+    if (key === 'data') anchor.setAttribute('aria-label', '자료 등록');
+    nav.append(anchor);
+  }
   rail.replaceChildren(nav);
   const tools = document.createElement('details');
   tools.className = 'learning-tools';
@@ -84,6 +88,17 @@ if (shell && body && main) {
     syncSelection();
     // Editors replace the URL after each selection without reloading the shell.
     for (const event of ['pointerdown', 'focusin', 'click']) subnav.addEventListener(event, syncSelection);
-    main.prepend(subnav);
+    const pathbar = main.querySelector('.ui-pathbar');
+    if (pathbar) {
+      pathbar.querySelector('h1')?.classList.add('sr-only');
+      pathbar.append(subnav);
+    } else main.prepend(subnav);
+  }
+  const pathbar = main.querySelector('.ui-pathbar');
+  if (pathbar) {
+    const compact = matchMedia('(width < 64rem)');
+    const placeTools = () => (compact.matches ? pathbar : rail).append(tools);
+    compact.addEventListener('change', placeTools);
+    placeTools();
   }
 }

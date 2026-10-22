@@ -122,7 +122,10 @@ function updateControls() {
     $('training-controls').open=true;
     $('training-controls').dataset.initialized='true';
   }
-  $('pipeline-setup').hidden=!!control?.available;
+  $('pipeline-setup').hidden=!!control?.available&&!control.error;
+  $('pipeline-setup').querySelector('p').textContent=control?.available
+    ? control.error?`실행기 응답을 확인하지 못했습니다. ${control.error} · 최신 결과 확인으로 다시 시도하세요.`:'실행기가 연결되어 있습니다. 위 실행 상태와 작업 조건을 확인하세요.'
+    : '연결된 학습 실행기가 없습니다. 이 작업대의 실행기를 연결한 후 시작할 수 있습니다.';
   for(const action of ['start','stop','retry']) {
     const button=$(`owner-control-${action}`);
     button.disabled=busy||!control?.available||!control[`can_${action}`];
@@ -161,10 +164,10 @@ setInterval(async()=> {
 },5000);
 async function request(path,body) {
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});
-  if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
+  if(response.status>=500){await response.text();const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 거부되었습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===401||response.status===403)showUnavailable(error);throw error;}return value;
 }
-function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
+function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('pipeline-status').textContent=$('learning-status').textContent;$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
 function updateReadAge(){
   if(!checkedAt)return;
   const minutes=Math.floor(Math.max(0,Date.now()-checkedAt)/60000);
@@ -290,7 +293,7 @@ function renderReview() {
   $('workspace-review').hidden=trainingView||!total;
   $('pipeline-stages').hidden=!total;
   $('pipeline-evidence').hidden=!total&&!workspace.items.length;
-  $('workspace-results').hidden=!trainingView&&!workspace.items.length&&!workspace.control?.available;
+  $('workspace-results').hidden=!trainingView&&!workspace.items.length&&!workspace.control?.available&&workspace.pipeline?.next?.href!=='#pipeline-setup';
   $('work-summary').textContent=total?`자료 ${total}장 · 픽셀 검수 대기 ${workspace.pixel_counts.pending}장 · 승인 ${workspace.pixel_counts.approved}장`:'';
   $('work-preview').hidden=!total;
   if(total) {
@@ -341,7 +344,7 @@ $('pipeline-link').addEventListener('click',()=> {
   const target=$('pipeline-link').getAttribute('href');
   if(!target)return;
   const hash=new URL(target,location.href).hash;
-  if(hash==='#pipeline-setup'){$('training-controls').open=true;$('pipeline-setup').open=true;}
+  if(hash==='#pipeline-setup'){$('workspace-results').hidden=false;$('training-controls').open=true;$('pipeline-setup').hidden=false;$('pipeline-setup').open=true;}
   if(hash==='#pipeline-evidence')$('pipeline-evidence').open=true;
 });
 $('work-preview-image').addEventListener('error',()=>{$('work-preview').hidden=true;});
