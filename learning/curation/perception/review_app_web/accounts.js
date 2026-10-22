@@ -1,8 +1,13 @@
 import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {taskRow} from '/common/workspace.js';
+import {connectHuggingFace, rememberLearningLogin, readyConnection, restoreLearningTask} from '/learning-connections.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
+$('account-login').addEventListener('click',event=>{
+  try { rememberLearningLogin(); }
+  catch(e) { event.preventDefault(); error(e.message); }
+});
 let token, session, active = false, pending = false;
 const loginFailures = new Map([
   ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
@@ -85,12 +90,13 @@ async function refresh() {
     if(options.rosy_account) {
       $('login-panel').hidden=true; $('signed-in').hidden=true;
       status('Rosy Account로 연결 중…', 'pending');
-      window.location.assign('/api/account/login?return=/accounts'); return;
+      rememberLearningLogin(); window.location.assign($('account-login').href); return;
     }
     token=null; active=false; $('login-panel').hidden=false; $('signed-in').hidden=true;
     status('Rosy Account로 로그인하세요.', 'empty'); return;
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
+  restoreLearningTask(session);
   status('로그인됨', 'ready');
   $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.map(cap=>capabilityLabel[cap] || '미지원 권한').join(' · ')}`;
   const canPublish=session.capabilities.includes('publish');
@@ -98,7 +104,9 @@ async function refresh() {
   $('connect-panel').hidden=!session.capabilities.includes('import');
   $('hf-link').hidden=!options.oauth || !session.capabilities.includes('import');
   $('repo-panel').hidden=!canPublish;
-  $('hf-manage').hidden=!options.oauth || !canPublish;
+  $('hf-link').textContent=session.connections.length?'Hugging Face 다시 연결':'Hugging Face 연결';
+  $('connection-readiness').textContent=readyConnection(session)?'읽기 · 쓰기 · 저장소 관리 가능':session.connections.length?'다시 연결해 읽기 · 쓰기 · 저장소 관리 권한을 확인하세요.':'Hugging Face 계정을 연결하세요.';
+  $('connection-readiness').setAttribute('state',readyConnection(session)?'ready':'empty');
   $('sharing').querySelector('[value=project]').disabled=!session.capabilities.includes('manage');
   if(!session.capabilities.includes('manage')) $('sharing').value='personal';
   const list=$('connections'), select=$('connection'), managed=$('repo-connection');
@@ -161,9 +169,7 @@ $('logout').addEventListener('click',()=>perform(async()=>{
   try { await api('/api/accounts/logout',{}); } finally { signedOut(); }
   await refresh();
 }));
-for(const [id,purpose] of [['hf-link','link'],['hf-manage','manage']]) $(id).addEventListener('click',()=>perform(async()=>{
-  const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
-}));
+$('hf-link').addEventListener('click',()=>perform(()=>connectHuggingFace(session)));
 $('connect-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
   const secret=$('provider-token').value; $('provider-token').value='';
   await api('/api/accounts/connect',{token:secret,sharing:$('sharing').value,
