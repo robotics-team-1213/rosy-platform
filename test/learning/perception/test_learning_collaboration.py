@@ -65,6 +65,23 @@ def request(base, path, session=None, body=None, token=None):
         return error.code, json.load(error)
 
 
+@pytest.mark.parametrize('path', ['/learning?view=training', '/pixels?frame=1&filter=pending'])
+def test_login_redirect_preserves_learning_task(tmp_path, path):
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    from urllib.parse import parse_qs, urlparse
+    with running(tmp_path) as (base, _accounts, _store):
+        opener = urllib.request.build_opener(NoRedirect)
+        with pytest.raises(urllib.error.HTTPError) as error:
+            opener.open(base + path)
+        assert error.value.code == 303
+        redirect = urlparse(error.value.headers['Location'])
+        assert redirect.path == '/accounts'
+        assert parse_qs(redirect.query) == {'return': [path]}
+
+
 def test_cancel_retry_waits_for_previous_worker_then_runs_via_http(tmp_path, accounts):
     import time
     from learning_imports import LearningImports

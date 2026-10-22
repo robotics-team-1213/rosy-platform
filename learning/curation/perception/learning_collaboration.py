@@ -4,7 +4,7 @@ from http.cookies import SimpleCookie
 import hashlib
 import hmac
 import threading
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from learning_accounts import _digest
 from learning_repos import create_private, delete_private, list_repos
@@ -135,7 +135,9 @@ class Collaboration:
             handler.extra_headers.append(('Location', target))
             handler.send(b'',303)
             return True
-        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css') or path.startswith('/common/'):
+        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css',
+                    '/learning-shell.js', '/learning-shell.css', '/learning-connections.js',
+                    '/learning-connections.css', '/learning-workspace.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,
@@ -158,7 +160,13 @@ class Collaboration:
             principal = self.identity(handler)
         except PermissionError:
             if not path.startswith('/api/'):
-                handler.extra_headers.append(('Location', '/accounts'))
+                task = path
+                query = urlparse(handler.path).query
+                if query:
+                    task += '?' + query
+                destination = '/accounts?return=' + quote(task, safe='') if path in (
+                    '/', '/pixels', '/catalog', '/learning', '/learning/camera', '/learning/omx', '/learning/sim') else '/accounts'
+                handler.extra_headers.append(('Location', destination))
                 handler.send(b'', 303)
             elif self.signed_in(handler):
                 # 401 would send a signed-in Account user back to login in a loop.

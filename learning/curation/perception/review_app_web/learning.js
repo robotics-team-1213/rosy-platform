@@ -4,6 +4,11 @@ import '/commands.js';
 import { loadStorage, clearStorage } from '/storage.js';
 const $=id=>document.getElementById(id);
 let workspace, busy=false, checkedAt=0, readSequence=0;
+const trainingView=new URL(location.href).searchParams.get('view')==='training';
+$('workspace-title').textContent=trainingView?'학습·결과':'작업';
+document.title=`Rosy Learning — ${trainingView?'학습·결과':'작업'}`;
+$('workspace-review').hidden=trainingView;
+if(trainingView)$('training-controls').open=true;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
 const states={running:'진행 중',reading:'자료 읽는 중',training:'학습 중',failed:'실패',rejected:'품질 거절',reject:'품질 거절',
   ready:'자료 준비 완료',done:'완료',candidate:'학습 후보 저장됨',pass:'보고서 통과',research_only:'연구 결과',research_exported:'연구 결과 저장됨',
@@ -33,7 +38,7 @@ function text(parent,tag,value,cls) {
 function message(id,value) {$(id).textContent=value;$(id).hidden=!value;}
 function setBusy(value) {
   busy=value;
-  for(const button of document.querySelectorAll('ui-button')) {
+  for(const button of $('learning-main').querySelectorAll('ui-button')) {
     button.reason=value?'결과를 확인하는 중입니다':!workspace&&button.id!=='refresh'?'작업 결과를 다시 확인한 뒤 사용하세요.':'';
     button.disabled=value||(!workspace&&button.id!=='refresh');
   }
@@ -55,12 +60,21 @@ function renderPipeline() {
   $('pipeline-stages').replaceChildren();$('pipeline-records').replaceChildren();
   $('pipeline').setAttribute('aria-busy', 'false');
   if(!pipeline) {
+    $('work-summary').textContent='';
+    $('work-preview').hidden=true;
+    $('work-preview-image').removeAttribute('src');
+    $('pipeline-title').textContent='작업 상태를 확인하지 못했습니다';
     $('pipeline-status').textContent='현재 자료의 상태를 확인할 수 없습니다. 최신 결과 확인으로 다시 시도하세요.';
     $('pipeline-action').hidden=false;$('pipeline-action').textContent='진행 상태 확인 불가';
     updatePipelineAction();return;
   }
   const next=pipeline.next;
-  $('pipeline-status').textContent=`다음 작업 · ${next.label}`;
+  const headline=next.href==='/catalog'?'첫 자료를 등록하세요':next.href?.startsWith('/pixels')?'검수할 자료가 있습니다':
+    next.action==='prepare'?'승인한 자료를 학습에 준비하세요':next.action==='start'?'학습을 시작할 수 있습니다':
+    next.action==='retry'?'학습을 다시 진행할 수 있습니다':workspace.control?.active?'학습이 진행 중입니다':
+    pipeline.stages.find(row=>row.id==='training')?.state==='done'?'모델과 평가 결과를 확인하세요':'현재 작업을 이어가세요';
+  $('pipeline-title').textContent=headline;
+  $('pipeline-status').textContent=pipeline.stages.find(row=>row.state!=='done')?.detail||'현재 자료의 처리 결과를 확인하세요.';
   let current=false;
   for(const step of pipeline.stages) {
     const row=text($('pipeline-stages'),'li','','pipeline-stage');
@@ -76,6 +90,7 @@ function renderPipeline() {
     $('pipeline-link').textContent=next.label;
   }
   const records=$('pipeline-records'),identity=pipeline.identity;
+  for(const step of pipeline.stages)text(records,'p',`${step.label} · ${step.detail}`);
   text(records,'p',`검수 버전 ${identity.generation} · 작업대 ${identity.workspace_id}`);
   text(records,'p',`검수 결정 ${identity.decision_sha256}`,'quiet');
   if(pipeline.dataset)text(records,'p',`현재 데이터셋 · ${pipeline.dataset}`);
@@ -103,6 +118,14 @@ function updateControls() {
     ? ({running:'실행기 처리 중',stopping:'중지 요청 처리 중',waiting:'자동 확인 켜짐 · 조건 대기',stopped:'자동 확인 중지됨'}[control.state]||control.state)
     : '학습 실행기 연결 필요';
   if(control?.error)status.textContent+=` · ${control.error}`;
+  if(control?.available&&!$('training-controls').dataset.initialized) {
+    $('training-controls').open=true;
+    $('training-controls').dataset.initialized='true';
+  }
+  $('pipeline-setup').hidden=!!control?.available&&!control.error;
+  $('pipeline-setup').querySelector('p').textContent=control?.available
+    ? control.error?`실행기 응답을 확인하지 못했습니다. ${control.error} · 최신 결과 확인으로 다시 시도하세요.`:'실행기가 연결되어 있습니다. 위 실행 상태와 작업 조건을 확인하세요.'
+    : '연결된 학습 실행기가 없습니다. 이 작업대의 실행기를 연결한 후 시작할 수 있습니다.';
   for(const action of ['start','stop','retry']) {
     const button=$(`owner-control-${action}`);
     button.disabled=busy||!control?.available||!control[`can_${action}`];
@@ -141,10 +164,10 @@ setInterval(async()=> {
 },5000);
 async function request(path,body) {
   const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});
-  if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
+  if(response.status>=500){await response.text();const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 거부되었습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===401||response.status===403)showUnavailable(error);throw error;}return value;
 }
-function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
+function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('pipeline-status').textContent=$('learning-status').textContent;$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
 function updateReadAge(){
   if(!checkedAt)return;
   const minutes=Math.floor(Math.max(0,Date.now()-checkedAt)/60000);
@@ -190,8 +213,9 @@ function render() {
   const active=query||$('kind-filter').value!=='all'||$('state-filter').value!=='all';
   $('work-filters').hidden=workspace.items.length<=1&&!active;
   $('updated').textContent=`${new Date(checkedAt).toLocaleString('ko-KR')} 확인 · ${active ? `${workspace.items.length}개 중 ${filtered.length}개 표시` : `${filtered.length}개 작업`}`;
-  $('empty-title').textContent=active?'조건에 맞는 작업이 없습니다':'연결한 작업이 없습니다';
-  $('empty-description').textContent=active?'검색어나 필터를 바꾸면 다른 작업을 볼 수 있습니다.':'작업 결과 연결에서 기존 결과 폴더를 연결하세요.';
+  $('empty-title').textContent=active?'조건에 맞는 결과가 없습니다':'아직 실행 결과가 없습니다';
+  $('empty-description').textContent=active?'검색어나 필터를 바꿔 다시 확인하세요.':'자료 검수를 마치면 현재 작업에서 학습을 이어갈 수 있습니다.';
+  $('empty-data-link').hidden=!!active;
   $('reset-filters').hidden=!active;
   for(const item of filtered) {
     const status=summary(item),kind=workspace.workflows.find(row=>row.id===item.kind);
@@ -266,6 +290,17 @@ async function load() {
 function renderReview() {
   const {approved,pending,excluded}=workspace.counts;
   const total=approved+pending+excluded;
+  $('workspace-review').hidden=trainingView||!total;
+  $('pipeline-stages').hidden=!total;
+  $('pipeline-evidence').hidden=!total&&!workspace.items.length;
+  $('workspace-results').hidden=!trainingView&&!workspace.items.length&&!workspace.control?.available&&workspace.pipeline?.next?.href!=='#pipeline-setup';
+  $('work-summary').textContent=total?`자료 ${total}장 · 픽셀 검수 대기 ${workspace.pixel_counts.pending}장 · 승인 ${workspace.pixel_counts.approved}장`:'';
+  $('work-preview').hidden=!total;
+  if(total) {
+    const frame=workspace.pixel_draft_first??workspace.object_draft_first??0;
+    const preview=$('work-preview-image'),src=`/api/images/${frame}`;
+    if(preview.getAttribute('src')!==src)preview.src=src;
+  }
   $('review-stage-summary').textContent=`등록 ${total}장 · 객체 승인 ${approved}장 · 픽셀 승인 ${workspace.pixel_counts.approved}장`;
   $('training-data-state').textContent=workspace.pixel_counts.approved===0?'현재 검수분의 픽셀 승인 0장 · 픽셀 학습 데이터 입력 전입니다.':'승인 자료 준비 후 세션 분리·고정 평가 제외·최신 결정 대조를 거쳐야 학습 데이터로 수용됩니다.';
   if(workspace.source_video_unverified>0)$('training-data-state').textContent+=` 원본 영상 ${workspace.source_video_unverified}장의 출처 검증이 필요합니다.`;
@@ -280,8 +315,8 @@ function renderReview() {
   $('pixel-counts').textContent=`승인 ${workspace.pixel_counts.approved}장 · 검수 대기 ${workspace.pixel_counts.pending}장 · 선택 가능한 초안 ${workspace.pixel_counts.candidates}장 · 라벨이 있는 대기 자료 ${workspace.pixel_counts.drafted}장`;
   $('object-review-link').href=workspace.object_draft_first==null?'/?filter=pending':`/?filter=pending&frame=${workspace.object_draft_first}`;
   $('pixel-review-link').href=workspace.pixel_draft_first==null?'/pixels?filter=pending':`/pixels?filter=pending&frame=${workspace.pixel_draft_first}`;
-  $('object-review-link').querySelector('span').textContent=workspace.object_draft_first==null?'객체 검수·승인 열기':'객체 초안 검수·승인';
-  $('pixel-review-link').querySelector('span').textContent=workspace.pixel_draft_first==null?'픽셀 검수·승인 열기':'픽셀 초안 검수·승인';
+  ($('object-review-link').querySelector('span')||$('object-review-link')).textContent=workspace.object_draft_first==null?'객체 검수 열기':'객체 초안 확인';
+  ($('pixel-review-link').querySelector('span')||$('pixel-review-link')).textContent=workspace.pixel_draft_first==null?'픽셀 검수 열기':'픽셀 초안 확인';
 }
 async function register(event) {
   event.preventDefault();if(busy||!workspace||!$('register').reportValidity()) return;setBusy(true);message('learning-error','');
@@ -305,4 +340,12 @@ $('pipeline-action').onclick=()=> {
   else if(action==='refresh')$('refresh').click();
   else if(['start','retry'].includes(action))controlAction(action);
 };
+$('pipeline-link').addEventListener('click',()=> {
+  const target=$('pipeline-link').getAttribute('href');
+  if(!target)return;
+  const hash=new URL(target,location.href).hash;
+  if(hash==='#pipeline-setup'){$('workspace-results').hidden=false;$('training-controls').open=true;$('pipeline-setup').hidden=false;$('pipeline-setup').open=true;}
+  if(hash==='#pipeline-evidence')$('pipeline-evidence').open=true;
+});
+$('work-preview-image').addEventListener('error',()=>{$('work-preview').hidden=true;});
 load().catch(()=>{});
