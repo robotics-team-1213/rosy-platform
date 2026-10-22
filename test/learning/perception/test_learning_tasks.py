@@ -80,6 +80,8 @@ def test_two_robots_bind_dataset_durably_and_allow_same_task_methods(store, tmp_
     assert binding['task_revision'] == task['revision']
     assert binding['participants'] == [p for p in body['participants'] if p['component_id'] in components]
     assert binding['component_ids'] == components and binding['compute_host'] == 'model'
+    assert [r['id'] for r in binding['robots']] == [p['robot_id'] for p in body['participants']]
+    assert all(set(r) == {'id', 'kind', 'model_revision', 'device_id', 'revision'} for r in binding['robots'])
     assert Tasks(tmp_path / 'review.sqlite', 'project-a').resolve(*args) == binding
     other = store.task(dict(body, request_id=uid()), ACTOR, profile)
     for dataset_id, revision in [('dataset-a', 'b' * 64), ('dataset-b', 'a' * 64)]:
@@ -92,6 +94,16 @@ def test_two_robots_bind_dataset_durably_and_allow_same_task_methods(store, tmp_
 def test_one_robot_can_expose_two_distinct_components(store):
     body, profile = setup(store, same_robot=True)
     assert store.task(body, ACTOR, profile)['runnable'] is True
+
+
+def test_independent_arms_share_one_task_dataset_without_rebinding(store):
+    body, profile = setup(store, 'independent')
+    task = store.task(body, ACTOR, profile)
+    first = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a'], 'model')
+    second = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_b'], 'ai')
+    assert first['task_participants'] == second['task_participants'] == body['participants']
+    assert first['participants'] == body['participants'][:1]
+    assert second['participants'] == body['participants'][1:]
 
 
 @pytest.mark.parametrize('change', ['host', 'profile', 'reverse', 'subset', 'unknown'])
@@ -186,6 +198,7 @@ def test_task_transfer_keeps_semantic_identity_and_local_attribution(store, tmp_
     assert imported['id'] == task['id'] and imported['revision'] == task['revision']
     assert imported['created_by'] == {'kind': 'authenticated', 'id': 'bob'}
     assert other.import_task(package, ACTOR) == imported
+    assert other.export_task(task['id']) == package
     model = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
     ai = other.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'ai')
     assert model['participants'] == ai['participants']
