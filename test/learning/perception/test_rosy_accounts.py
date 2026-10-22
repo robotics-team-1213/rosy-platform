@@ -5,6 +5,14 @@ from learning_accounts import AccountError
 from test_learning_accounts import accounts, sign_in
 
 
+def receiver_request(accounts):
+    from functools import partial
+    from learning_collaboration import Collaboration, COOKIE
+    from test_learning_collaboration import request
+    scope = SimpleNamespace(receiver=accounts.receiver, accounts=accounts, origin=accounts.config().get('public_origin'))
+    return partial(request, cookie_name=Collaboration.cookie_name(scope, COOKIE))
+
+
 @pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
                                               ('offline', 'account_unavailable'),
                                               ('malformed', 'account_callback_failed')])
@@ -17,6 +25,7 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     collaboration.receiver = SimpleNamespace(finish=finish)
     collaboration.unavailable = (AccountUnavailable,)
     collaboration.origin = 'https://learning.example.test'
+    collaboration.accounts = SimpleNamespace(project_id='one')
     sent = []
     handler = SimpleNamespace(path='/api/account/callback?state=s&code=secret', headers={},
                               extra_headers=[], send=lambda body, status: sent.append((body, status)))
@@ -85,7 +94,6 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
     import threading
     from hashlib import sha256
     from test_review_app import open_store
-    from test_learning_collaboration import request
     from review_app import make_server
     config = accounts.config()
     config['account_subjects'] = {'central-alice':'alice','central-bob':'bob'}
@@ -95,6 +103,7 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         profile_url='https://account.test/console/profile',
         profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'})
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
+    request = receiver_request(managed)
     (tmp_path/'workspace').mkdir()
     store = open_store(tmp_path/'workspace')
     server = make_server(store,0,accounts=managed)
@@ -121,7 +130,6 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
 def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
     import threading
     from test_review_app import open_store
-    from test_learning_collaboration import request
     from review_app import make_server
     record = SimpleNamespace(sub='central-carol', aud='project:one', permits=lambda resource, cap: cap == 'learning.view')
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
@@ -129,6 +137,7 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
     config = accounts.config()
     config['users'] = []
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    request = receiver_request(managed)
     actor = managed.authenticate('browser-session')
     assert actor['user_id'] == 'central-carol' and actor['capabilities'] == ['view']
     # An Account subject never takes over an unmapped learning owner by matching its name.
@@ -154,12 +163,12 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
 def test_first_unmapped_sign_in_can_be_mapped_later_and_conflicts_are_403(accounts, tmp_path):
     import threading
     from test_review_app import open_store
-    from test_learning_collaboration import request
     from review_app import make_server
     record = SimpleNamespace(sub='central-alice', aud='project:one', permits=lambda *args: True)
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
         profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
     managed = RosyAccounts(accounts.db_path, accounts.key_path, accounts.config(), receiver=receiver)
+    request = receiver_request(managed)
     assert managed.authenticate('browser-session')['user_id'] == 'central-alice'
     # The legacy owner signed in once before the operator mapped them; the mapping still applies.
     managed._config['account_subjects'] = {'central-alice': 'alice'}

@@ -50,10 +50,10 @@ def running(tmp_path):
         thread.join()
 
 
-def request(base, path, session=None, body=None, token=None):
+def request(base, path, session=None, body=None, token=None, *, cookie_name='rosy_learning_session'):
     headers = {'Origin': base}
     if session:
-        headers['Cookie'] = 'rosy_learning_session=' + session
+        headers['Cookie'] = cookie_name + '=' + session
     if token:
         headers['X-Pinky-Token'] = token
     raw = None if body is None else json.dumps(body).encode()

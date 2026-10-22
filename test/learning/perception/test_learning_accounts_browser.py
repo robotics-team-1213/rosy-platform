@@ -65,6 +65,9 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     config['account_subjects'] = {'central-alice': 'alice'}
     config['public_origin'] = origin
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    from types import SimpleNamespace
+    from learning_collaboration import Collaboration, COOKIE
+    session_cookie_name = Collaboration.cookie_name(SimpleNamespace(receiver=receiver, accounts=managed, origin=origin), COOKIE)
     folder = tmp_path/'central-review'; folder.mkdir()
     server = make_server(open_store(folder), port, accounts=managed)
     class AuthorityHandler(server.RequestHandlerClass):
@@ -126,7 +129,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 state['offline'] = False
                 expect(link).to_contain_text('Updated Alice', timeout=15000)
                 old_cookie = next(item['value'] for item in page.context.cookies()
-                                  if item['name'] == 'rosy_learning_session')
+                                  if item['name'] == session_cookie_name)
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
                 page.locator('#logout').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')

@@ -294,6 +294,8 @@ account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로�
 
 운영 앱은 HTTPS reverse proxy 뒤의 loopback에 바인딩한다. `public_origin`은 경로와 끝 슬래시 없는 정확한 HTTPS origin이다. 프록시는 공개 Host를 보존하여 `127.0.0.1:<review-port>`로 전달하고 외부에서 backend에 직접 접근하게 만들지 않는다. Host·Origin과 `Secure; HttpOnly; SameSite=Lax` 쿠키를 함께 사용한다. 프록시 로그에도 callback code/state와 요청 본문을 기록하지 않는다.
 
+중앙 Account 수신 모드의 Learning 세션·Account 로그인 바인딩·HF 연결 바인딩 쿠키는 `project_id`와 `public_origin`의 해시 접미사를 쓴다. 브라우저 쿠키는 포트로 격리되지 않으므로 같은 호스트의 다른 Learning 포트도 서로 다른 이름을 가져야 한다. 중앙 Account의 공통 SSO 쿠키는 바꾸지 않는다. 접미사 없는 예전 Learning 쿠키는 중앙 수신 모드에서 읽지 않으며, 적용 후 기존 브라우저는 다시 로그인한다. 중앙 수신기를 쓰지 않는 시험·개발 모드는 기존 쿠키 이름을 유지한다.
+
 ```bash
 python learning/curation/perception/review_app.py \
   --state /private/learning/review-state --host 127.0.0.1 --port 8767 \
