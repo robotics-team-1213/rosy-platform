@@ -11,6 +11,8 @@ from native_review import reviewed_splits  # noqa: E402
 
 STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {'/learning/omx': ('omx.html', 'text/html; charset=utf-8'),
+         '/omx-profiles.js': ('omx-profiles.js', 'text/javascript; charset=utf-8'),
+         '/omx-review.js': ('omx-review.js', 'text/javascript; charset=utf-8'),
          '/omx.js': ('omx.js', 'text/javascript; charset=utf-8')}
 LIMIT = 8 * 1024 * 1024
 
@@ -36,7 +38,7 @@ def _verdicts(setup, index):
             for role, check in rows.get(index, {}).items()}
 
 
-def prepared_set(row, workspace=None):
+def prepared_set(row, workspace=None, center=None):
     """One registered row as the page shows it, or None when it is not a prepared intake folder."""
     import native_segments as segments
     root = Path(row['path'])
@@ -65,13 +67,22 @@ def prepared_set(row, workspace=None):
                                                         'object_result', 'reviewer', 'reason')}
                     | {'camera': _verdicts(setup, decision.get('episode_index'))}
                     for decision in decisions or []]
+        review_fields = {}
+        if center:
+            try:
+                review = center.review(row)
+                trainable = review['trainable']
+                review_fields = {key: review[key] for key in ('latest_review_id', 'source_revision', 'fixture_only')}
+                episodes = [dict(decision, camera=_verdicts(setup, decision['episode_index'])) for decision in review['decisions']]
+            except (ValueError, OSError) as exc:
+                trainable = {'ok': False, 'reason': str(exc)}
         review = latest(workspace, row['id']) if workspace else {'version': 0, 'document': None}
         if review['document'] is not None:
             try:
                 segments.validate_selection(inspection, review['document'], require_splits=False)
             except ValueError:
                 return {'id': row['id'], 'name': row['name'], 'error': '원본이 바뀌어 기존 구간 검수와 일치하지 않습니다.'}
-        return {'id': row['id'], 'name': row['name'], 'trainable': trainable, 'episodes': episodes,
+        return {'id': row['id'], 'name': row['name'], 'trainable': trainable, 'episodes': episodes, **review_fields,
                 'segment_review': review, 'camera_keys': inspection.get('camera_keys', []),
                 'camera_setup': None if setup is None else {'mode': setup.get('mode'), 'references': setup.get('references'),
                                                             'camera_info_sha256': setup.get('camera_info_sha256')}}
@@ -79,14 +90,14 @@ def prepared_set(row, workspace=None):
         return {'id': row['id'], 'name': row['name'], 'error': '등록 자료가 불완전하거나 손상됐습니다. 원본 검증을 다시 실행하세요.'}
 
 
-def get(handler, path, workspace):
+def get(handler, path, workspace, center=None):
     """Serve the OMX page and its read; False leaves the path to review_app."""
     if path in PAGES:
         name, mime = PAGES[path]
         handler.send((STATIC / name).read_bytes(), mime=mime)
     elif path == '/api/learning/omx':
         rows = [row for row in workspace.list() if row['kind'] == 'omx']
-        handler.send({'sets': [s for row in rows if (s := prepared_set(row, workspace)) is not None]})
+        handler.send({'sets': [s for row in rows if (s := prepared_set(row, workspace, center)) is not None]})
     elif path == '/api/learning/omx/frame':
         import native_segments as segments
         query = parse_qs(urlparse(handler.path).query, strict_parsing=True)

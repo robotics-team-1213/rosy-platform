@@ -1,13 +1,11 @@
 """D-755 project accounts and encrypted HF connections, independent of Fleet roles.
 
-Provision private files with ``python learning_accounts.py hash-password`` or
+People sign in through Rosy Account (D-757). Provision the connection key with
 ``python learning_accounts.py generate-key /private/learning.key``.
 """
 from __future__ import annotations
 
-import base64
 from contextlib import contextmanager
-import getpass
 import hashlib
 import hmac
 import json
@@ -16,7 +14,6 @@ from pathlib import Path
 import re
 import secrets
 import sqlite3
-import threading
 import time
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
@@ -24,7 +21,6 @@ from cryptography.fernet import Fernet, InvalidToken
 
 CAPABILITIES = {'view', 'edit', 'approve', 'manage', 'import', 'publish'}
 REPO_SCOPES = ('read-repos', 'gated-repos', 'write-repos', 'manage-repos')
-_PASSWORD_SLOTS = threading.BoundedSemaphore(2)
 
 
 class AccountError(PermissionError):
@@ -37,31 +33,6 @@ def _digest(value):
 
 def _json(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
-
-
-def _password_parts(encoded):
-    try:
-        scheme, n, r, p, salt, expected = encoded.split('$')
-        n, r, p = int(n), int(r), int(p)
-        salt, expected = base64.b64decode(salt, validate=True), base64.b64decode(expected, validate=True)
-        if scheme != 'scrypt' or (n, r, p) != (32768, 8, 1) or len(salt) != 16 or len(expected) != 32:
-            raise ValueError
-        return salt, expected
-    except (ValueError, TypeError, AttributeError):
-        raise AccountError('invalid password hash configuration') from None
-
-
-def _scrypt(password, salt):
-    with _PASSWORD_SLOTS:
-        return hashlib.scrypt(password.encode('utf-8'), salt=salt, n=32768, r=8, p=1,
-                              maxmem=40 * 1024 * 1024, dklen=32)
-
-
-def hash_password(password):
-    if not isinstance(password, str) or not 12 <= len(password) <= 1024:
-        raise AccountError('password must contain 12 to 1024 characters')
-    salt = secrets.token_bytes(16)
-    return 'scrypt$32768$8$1$' + base64.b64encode(salt).decode() + '$' + base64.b64encode(_scrypt(password, salt)).decode()
 
 
 def public_principal(principal):
@@ -135,7 +106,6 @@ class Accounts:
                     scopes TEXT);
                 CREATE TABLE IF NOT EXISTS learning_audit (
                     id INTEGER PRIMARY KEY,created REAL,project_id TEXT,user_id TEXT,action TEXT,object_id TEXT);
-                CREATE TABLE IF NOT EXISTS learning_login_attempts (key TEXT,created REAL);
                 CREATE TABLE IF NOT EXISTS learning_oauth_flows (
                     state TEXT PRIMARY KEY,binding TEXT,session_id TEXT,expires REAL,secret TEXT);
             ''')
@@ -144,7 +114,6 @@ class Accounts:
                 db.execute('ALTER TABLE learning_connections ADD COLUMN scopes TEXT')
         if os.name != 'nt':
             self.db_path.chmod(0o600)
-        self._dummy = hash_password(secrets.token_urlsafe(24))
         self._legacy_authority()
 
     def _legacy_authority(self):
@@ -167,7 +136,8 @@ class Accounts:
         try:
             cfg = json.loads(self.config_path.read_text(encoding='utf-8')) if self.config_path else json.loads(_json(self._config))
             project = cfg['project_id']; users = cfg['users']
-            if not isinstance(project, str) or not project or not isinstance(users, list) or not users:
+            if (not isinstance(project, str) or not project or not isinstance(users, list)
+                    or not (users or self.central_account)):
                 raise ValueError
             if hasattr(self, 'project_id') and project != self.project_id:
                 raise ValueError
@@ -179,7 +149,6 @@ class Accounts:
                 if uid in ids or username in names or 'password' in user:
                     raise ValueError
                 ids.add(uid); names.add(username)
-                if user.get('password_hash'): _password_parts(user['password_hash'])
                 for subject in user.get('hf_subjects', []):
                     if not isinstance(subject, str) or not subject or subject in subjects:
                         raise ValueError
@@ -209,30 +178,6 @@ class Accounts:
                        (_digest(token), user['user_id'], self.project_id, _digest(_json(user)), self.clock() + 12 * 3600, csrf, subject))
             self._audit(db, user['user_id'], 'login')
         return token, self.authenticate(token)
-
-    def login(self, username, password, *, address='local'):
-        self._legacy_authority()
-        if not isinstance(username, str) or not isinstance(password, str) or len(username) > 80 or len(password) > 1024:
-            raise AccountError('invalid login')
-        # Count attempted checks before scrypt so concurrent failures cannot bypass the bound.
-        keys = (_digest('address:' + address), _digest('username:' + username))
-        with self._db() as db:
-            db.execute('BEGIN IMMEDIATE')
-            db.execute('DELETE FROM learning_login_attempts WHERE created<?', (self.clock() - 60,))
-            for key in keys:
-                if db.execute('SELECT COUNT(*) FROM learning_login_attempts WHERE key=?', (key,)).fetchone()[0] >= 5:
-                    raise AccountError('login rate limit; wait one minute')
-            db.executemany('INSERT INTO learning_login_attempts VALUES(?,?)', [(key, self.clock()) for key in keys])
-        user = next((u for u in self.config()['users'] if u['username'] == username), None)
-        salt, expected = _password_parts((user or {}).get('password_hash') or self._dummy)
-        matched = hmac.compare_digest(_scrypt(password, salt), expected)
-        if not matched or not user or not user.get('password_hash'):
-            raise AccountError('invalid login')
-        current = self._user(user['user_id'])
-        if current != user: raise AccountError('login configuration changed')
-        with self._db() as db:
-            db.executemany('DELETE FROM learning_login_attempts WHERE key=?', [(key,) for key in keys])
-        return self._session(current)
 
     def authenticate(self, token):
         if not isinstance(token, str) or len(token) > 256: raise AccountError('login required')
@@ -281,12 +226,6 @@ class Accounts:
             return row['user_id']
         return invited
 
-    def login_subject(self, subject):
-        self._legacy_authority()
-        owner = self._subject_owner(subject)
-        if not owner: raise AccountError('Hugging Face account has not been invited')
-        return self._session(self._user(owner), subject)
-
     def _link(self, db, principal, subject):
         if not isinstance(subject, str) or not 1 <= len(subject) <= 256: raise AccountError('invalid provider subject')
         owner = self._subject_owner(subject, db)
@@ -297,25 +236,6 @@ class Accounts:
         db.execute('INSERT INTO learning_identities VALUES(?,?,1) ON CONFLICT(subject) DO UPDATE SET active=1',
                    (subject, principal['user_id']))
         self._audit(db, principal['user_id'], 'identity_link', subject)
-
-    def link_subject(self, principal, subject):
-        principal = self.require(principal, 'view')
-        with self._db() as db:
-            db.execute('BEGIN IMMEDIATE')
-            self.require(principal, 'view'); self._link(db, principal, subject)
-
-    def unlink_subject(self, principal, subject):
-        principal = self.require(principal, 'view'); user = self._user(principal['user_id'])
-        with self._db() as db:
-            db.execute('BEGIN IMMEDIATE')
-            self.require(principal, 'view')
-            if self._subject_owner(subject, db) != principal['user_id']: raise AccountError('identity access denied')
-            others = [s for s in user.get('hf_subjects', []) if s != subject and self._subject_owner(s, db) == user['user_id']]
-            others += [r[0] for r in db.execute('SELECT subject FROM learning_identities WHERE user_id=? AND active=1 AND subject!=?', (user['user_id'], subject))]
-            if not user.get('password_hash') and not others: raise AccountError('cannot remove the last login method')
-            db.execute('INSERT INTO learning_identities VALUES(?,?,0) ON CONFLICT(subject) DO UPDATE SET active=0', (subject, user['user_id']))
-            db.execute('DELETE FROM learning_sessions WHERE user_id=? AND subject=?', (user['user_id'], subject))
-            self._audit(db, user['user_id'], 'identity_unlink', subject)
 
     def _save_connection(self, db, principal, subject, username, token, *, subject_kind, sharing, resources, expires=None, scopes):
         # whoami IDs and OIDC subjects are different identity namespaces, even when their text matches.
@@ -475,15 +395,9 @@ class Accounts:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['hash-password', 'generate-key'])
+    parser.add_argument('command', choices=['generate-key'])
     parser.add_argument('path', nargs='?')
     args = parser.parse_args()
-    if args.command == 'hash-password':
-        entered = getpass.getpass('Password: ')
-        if entered != getpass.getpass('Repeat password: '):
-            parser.error('passwords do not match')
-        print(hash_password(entered))
-    else:
-        if not args.path: parser.error('key path required')
-        fd = os.open(args.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, 'wb') as output: output.write(Fernet.generate_key())
+    if not args.path: parser.error('key path required')
+    fd = os.open(args.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'wb') as output: output.write(Fernet.generate_key())

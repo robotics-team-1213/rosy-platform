@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · 2d38309d3a · Work-menu Learning browser expectation
+- 2026-10-22 · uncommitted · Shared robot Learning entry
 - 2026-10-22 · ff01e057a6 · fix: 브라우저 Account 승인 실패 복구
 - 2026-10-22 · uncommitted · 관측 진입 거절과 Cell 자산 회귀 보완
 - 2026-10-22 · uncommitted · Fleet-native 작업 셀 관측 수신 (D-837)
-- 2026-10-21 · uncommitted · 전체 Fleet 회귀의 자산·확인 소유 경로 갱신
-- 2026-10-21 · uncommitted · Console 팩토리 분리의 기존 계약 검사 유지

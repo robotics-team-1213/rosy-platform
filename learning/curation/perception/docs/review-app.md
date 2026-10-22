@@ -256,21 +256,22 @@ python learning/registry/perception/export_class_names.py best.pt --out data.yam
 
 ### 공동 계정과 Hugging Face 가져오기 (D-755)
 
-`--collaboration <private-config.json>`은 기존 검수 작업공간에 사용자 로그인과 프로젝트 권한을 적용한다. `/accounts`에서 로그인, 개인별 복수 HF 연결, 계정 선택, dataset/model 가져오기와 같은 고정 버전 재시도를 수행한다. 기존 단일 사용자 이력은 신원 미확인으로 남는다. 협업 모드의 새 객체·픽셀 이벤트는 인증된 사용자와 revision을 기록하며 요청 본문에 적은 검수자 이름은 신원으로 쓰지 않는다.
+`--collaboration <private-config.json>`은 기존 검수 작업공간에 Rosy Account 로그인과 프로젝트 권한을 적용한다. 사람의 로그인은 모든 앱과 같은 Rosy Account 하나뿐이며(D-757), 이 앱은 자체 아이디·비밀번호나 HF 로그인을 받지 않는다. `/accounts`에서 Rosy Account 로그인, 개인별 복수 HF 연결, 계정 선택, dataset/model 가져오기와 같은 고정 버전 재시도를 수행한다. 기존 단일 사용자 이력은 신원 미확인으로 남는다. 협업 모드의 새 객체·픽셀 이벤트는 인증된 사용자와 revision을 기록하며 요청 본문에 적은 검수자 이름은 신원으로 쓰지 않는다.
 
 중앙 Account 모드의 세션·PKCE·HF 쿠키 이름은 설정의 프로젝트와 공개 HTTPS origin별로 구분한다. 같은 DNS 이름의 다른 포트에서도 서로 덮어쓰지 않는다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 업데이트 후 한 번 다시 로그인한다. 관리 설치기는 `state/learning-collaboration.json`을 코드 업데이트와 지원되는 보관 릴리스 전환에서 유지하며, loopback·HTTPS 프록시와 무인증 decisions-port 제외를 요구한다. 서비스별 설치 방법은 [Model PC 배포 설명](../../../../deploy/model_pc/README.md#account-프로젝트별-설치-d-757)을 따른다.
 
-설정 예제는 [`learning-collaboration.example.json`](../learning-collaboration.example.json)이다. 실제 설정·DB·키·OAuth 비밀·가져온 자료는 Git 밖의 private 경로에 둔다. 예제의 `password_hash` 자리표시자는 시작 가능한 계정이 아니며 사용자별 명령 출력으로 바꾼다. 모델 PC의 검수 앱 환경에서 다음을 준비한다. 비밀번호를 명령행 인자나 로그에 적지 않는다.
+설정 예제는 [`learning-collaboration.example.json`](../learning-collaboration.example.json)이다. 실제 설정·DB·키·OAuth 비밀·가져온 자료는 Git 밖의 private 경로에 둔다. `account_client_file`이 없는 설정은 시작을 거절한다. 모델 PC의 검수 앱 환경에서 다음을 준비한다.
 
 ```bash
 python -m pip install -r learning/curation/perception/requirements-collaboration.txt
 python learning/curation/perception/learning_accounts.py generate-key /private/learning/learning-accounts.key
-python learning/curation/perception/learning_accounts.py hash-password
 ```
 
-Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./contracts/foundation`도
-설치한다. collaboration 설정의 `account_client_file`은 보호된 수신 설정의 절대 경로,
-`account_subjects`는 중앙 account_id와 기존 user_id의 명시적 일대일 매핑이다.
+저장소 루트에서 `python -m pip install ./contracts/foundation`도 설치한다. collaboration 설정의
+`account_client_file`은 보호된 수신 설정의 절대 경로다. 새 사용자는 Rosy Account 계정 관리(`/console/accounts`)에서
+이 프로젝트의 `learning.*` 권한을 받으면 바로 들어온다. 학습 앱에 따로 초대하지 않는다. `account_subjects`는
+기존 학습 user_id의 HF 연결을 이어받을 중앙 account_id와의 선택적 일대일 매핑이며, 매핑 없이 기존 user_id와 같은
+account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로그인 화면으로 되돌리지 않고 권한 요청 안내를 본다.
 수신 resource는 `project:<project_id>`, callback은 `public_origin + /api/account/callback`이다.
 원장에 최초 연결을 기록한 뒤 소유자를 바꾸거나 중앙 설정을 빼고 이전 비밀번호로 돌아갈 수 없다.
 기존 HF 연결·암호화 키·학습 자료를 교체하지 않는다. 자세한 필드는
@@ -278,7 +279,7 @@ Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./co
 
 키 생성은 기존 파일을 덮어쓰지 않는다. Linux 키 파일, 설정, DB, 부모 폴더와 백업은 소유자만 접근하도록 관리한다. 암호화 키는 DB와 함께 복구할 수 있도록 별도로 보관한다. 키 파일 교체만으로 기존 연결 비밀이 이전되지는 않는다.
 
-`users[].user_id`는 내부의 안정적인 신원이며 이메일로 계정을 합치지 않는다. `memberships`는 프로젝트 ID별 `view`, `edit`, `approve`, `import`, `manage` 목록이다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리를 각각 허용한다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.
+권한은 Rosy Account 원장의 `project:<project_id>` 자원에 부여한 `learning.view`, `learning.edit`, `learning.approve`, `learning.import`, `learning.manage`, `learning.publish`다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리, 외부 게시를 각각 허용한다. `users`는 기존 학습 신원의 연결 보존용이며 비워 둘 수 있다. 이메일로 계정을 합치지 않는다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.
 
 개인 연결은 소유자 작업에만 사용한다. 프로젝트 연결에는 `manage` 권한과 `dataset:namespace/repo` 또는 `model:namespace/repo` 형식의 자원 허용 목록이 필요하다. 프로젝트 관리자 권한은 호스트 파일시스템 관리자 권한이 아니다. 협업 HTTP에서 임의 서버 경로를 받는 기존 `/api/import`, `/api/cad`, `/api/learning/register`는 사용할 수 없다.
 
@@ -292,7 +293,7 @@ python learning/curation/perception/review_app.py \
 
 위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 기존 자동화가 그 포트를 쓴다면 인증된 소비 경로를 마련하기 전까지 운영 협업 전환을 활성화하지 않는다.
 
-HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비되지 않았으면 `oauth: null`을 유지한다. 내부 비밀번호 로그인 후 제한된 HF 읽기 토큰을 데이터 연결로 등록할 수 있다. PAT는 ROSY 로그인 수단이 아니다. OAuth를 구성할 때 private 설정의 `oauth`를 다음 모양으로 바꾼다.
+HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비되지 않았으면 `oauth: null`을 유지한다. Rosy Account 로그인 후 제한된 HF 읽기 토큰을 데이터 연결로 등록할 수 있다. HF OAuth와 PAT는 데이터 연결 수단이며 로그인 수단이 아니다. OAuth를 구성할 때 private 설정의 `oauth`를 다음 모양으로 바꾼다.
 
 ```json
 {
@@ -302,7 +303,7 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 }
 ```
 
-실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. 저장소 관리 연결은 `read-repos write-repos manage-repos`를 요청하고, 쓰기와 저장소 관리가 모두 있을 때만 저장한다. 요청하지 않은 범위는 저장하지 않는다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
+실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. HF 연결은 로그인한 사용자가 명시적으로 시작한 경우만 허용한다. 자료 연결은 `openid profile read-repos gated-repos`를 요청한다. 저장소 관리 연결은 `read-repos write-repos manage-repos`를 요청하고, 쓰기와 저장소 관리가 모두 있을 때만 저장한다. 요청하지 않은 범위는 저장하지 않는다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
 
 가져오기는 branch/tag를 최초 요청에서 immutable commit으로 고정한다. 재시도도 같은 commit과 계정 세대를 유지하며 다른 계정으로 자동 대체하지 않는다. gated 개인 접근 승인은 팀 이용 허가가 아니므로 팀 이용 근거가 없으면 `rights_hold`다. 크기·경로·해시 검증 후 원자적으로 등록하며 중간 파일을 완료 자료로 노출하지 않는다. 다운로드한 Python 코드·pickle·모델 코드를 실행하지 않는다.
 
@@ -318,16 +319,16 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 
 전환 전 앱과 관련 쓰기를 멈추고 state, DB, 설정의 일관된 백업을 보관한다. 협업 바인딩 후 `--collaboration`만 제거하거나 DB의 바인딩 행을 지워 인증을 해제하지 않는다. 되돌릴 때도 협업을 유지하는 지원 버전을 쓰거나, 서비스를 멈추고 전환 전 백업을 별도 위치에 복원하여 기존 접근 범위를 다시 검토한다. 전환 후 이력은 별도로 보존하며 원본 백업을 덮어쓰지 않는다. 실제 외부 인증 수용은 등록된 앱과 사용자 동의로 로그인·연결·private/gated 접근·철회까지 확인해야 하며 가짜 provider 시험은 이를 대신하지 않는다.
 
-협업 로컬 HTTP 경로는 아래와 같으며 CORE `/api/v1`이나 로봇 명령 프로토콜이 아니다. JSON POST는 정확한 Origin이 필요하며 로그인/OAuth 시작 외에는 세션과 `X-Pinky-Token`도 요구한다. 세션 응답은 현재 사용자·프로젝트·권한·공개 연결 메타데이터와 요청 토큰을 반환하며 provider 비밀을 반환하지 않는다.
+협업 로컬 HTTP 경로는 아래와 같으며 CORE `/api/v1`이나 로봇 명령 프로토콜이 아니다. JSON POST는 정확한 Origin이 필요하며 로그아웃 외에는 세션과 `X-Pinky-Token`도 요구한다. 로그인은 `GET /api/account/login`이 Rosy Account로 보낸다. 세션 응답은 현재 사용자·프로젝트·권한·공개 연결 메타데이터와 요청 토큰을 반환하며 provider 비밀을 반환하지 않는다.
 
 | 메서드 | 경로 | 요청 또는 동작 |
 |---|---|---|
 | GET | `/accounts` | 계정·가져오기 화면 |
 | GET | `/api/accounts/options` | 협업/OAuth 사용 가능 여부 |
 | GET | `/api/accounts/session` | 현재 세션·프로젝트·연결 |
-| POST | `/api/accounts/login` | `username`, `password` |
+| GET | `/api/account/login` | Rosy Account 로그인으로 이동, 복귀는 `/api/account/callback` |
 | POST | `/api/accounts/logout` | `{}`; 현재 세션 철회 |
-| POST | `/api/accounts/oauth` | `purpose: login`, `link`, 또는 `manage` |
+| POST | `/api/accounts/oauth` | `purpose: link` 또는 `manage` |
 | GET | `/oauth/huggingface/callback` | provider의 `code`, `state` |
 | POST | `/api/accounts/connect` | `token`, `sharing: personal|project`, `resources` |
 | POST | `/api/accounts/disconnect` | `connection_id` |
@@ -403,3 +404,100 @@ SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopba
 `test_review_ai_http.py`, `test_review_versions.py`, `test_review_ai_browser.py`다.
 pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROSY_RUN_BROWSER_TESTS=1이
 필요하다. 모의 모델 연결 시험은 실제 GPU 모델 실행이나 정답 기반 정확도를 증명하지 않는다.
+
+## 로봇 학습센터의 OMX 어댑터
+
+`/learning`은 로봇·과제별 자료와 학습을 연결하는 기존 Learning 프로젝트의 공통 진입점이며, `/learning/omx`는 첫 로봇암 어댑터다. Model PC와 AI PC는 같은 프로젝트의 계산 호스트이며 새 OMX 전용 프로젝트를 만들지 않는다. 다른 로봇의 학습에는 해당 어댑터와 실행기 준비가 필요하다.
+
+`--omx-center-config <private.json>`은 `/learning/omx`의 호스트 전용 오프라인·지속 학습을 활성화한다. 설정은 `schema=rosy.omx.center-config/1`, 소스·검수 상태와 겹치지 않는 절대 `root`, `python={act:<실행 파일>,hilserl:<실행 파일>}`다. 운영 설치·업데이트는 기존 보호된 검수 서비스의 `deploy/model_pc/install_review_release.py` 경로를 따른다. private 설정을 기존 `state/omx-center.json`에 두면 설치기가 대상 소스의 CLI 지원을 확인해 연결하며, 지원하지 않는 보관 릴리스로 전환할 때 플래그를 제거한다. 중앙 Account 협업 설정·loopback·HTTPS 보호와 기존 계정·라벨 DB는 유지한다. 처음 연결한 검수 프로젝트를 학습 root에 영속 바인딩하며 다른 프로젝트로 같은 root를 열면 거절한다.
+
+| 경로 | 계약 |
+|---|---|
+| GET `/api/learning/omx/center` | 데이터·실제 작업·실행기 상태. 미설정이면 `not_configured`. |
+| POST `…/upload` | UUID `upload_id`, 평면 `name`, 연속 `offset`, 256 KiB 이하 base64 `data`. 같은 offset/bytes의 재전송은 같은 끝 offset 반환, 다른 겹침은 거절. 부분 write의 일치 prefix 뒤만 append. 파일·디렉터리 sync 후 응답. 폴더당 512 MiB/1000개 파일 제한. 게시 후에는 같은 바이트 확인만 허용. |
+| POST `…/publish` | `upload_id`, 표시 `name`. 데이터 해시·배열·분할 검증 후 등록. 이동 후 SQL 전 중단은 재검증해 복구하며 이동 디렉터리 sync 후 commit. 같은 identity 재시도는 기존 등록을 반환하되 실제 폴더 누락은 거절. |
+| GET `…/profiles` | 현재 프로젝트 학습 root에 저장된 불변 팔·카메라 프로필 버전 목록. |
+| GET `…/profile/<UUID>` | 저장 당시의 정확한 프로필 JSON 다운로드. |
+| POST `…/profile` | 검증할 `profile`, 멱등 UUID `request_id`, 선택적 `parent_id`. 작성 신원은 서버가 바인딩하며 기존 버전을 수정하지 않음. |
+| POST `…/export` | 등록된 OMX `prepared_id`(32자리 소문자 hex), `name`, `profile` 객체, 멱등 UUID `request_id`, 선택적 `review_id`, `profile_id`. 저장 선택 시 같은 입력인지 확인하고 서버의 정확한 저장 JSON 사용. 등록 root와 선택한 불변 검토 버전만 해석해 고정 native 변환 worker를 실행. 생산 검토·원본 해시·단위/카메라 매핑이 맞아야 함. |
+| GET `…/review/<prepared-id>` | 원본 지문·episode identity·현재 검토 버전·판정·생산 학습 가능 여부. 원본 판정 파일은 변경하지 않음. |
+| GET `…/review-frame/<prepared-id>/<source-revision>/<episode>/<frame>/<camera-index>` | 현재 원본에 묶인 실제 RGB JPEG. episode 경계와 공식 reader 행 identity를 검증하고 변경·대체 프레임은 거절. |
+| GET `…/review-frame-set/<prepared-id>/<source-revision>/<episode>/<frame>/<camera-indices>` | 쉼표로 나열한 서로 다른 1~8개 카메라를 공식 reader의 한 기록 행에서 읽음. prepared_id/source_revision/episode_index/frame_index/index/timestamp_seconds/fps와 frames(camera_index,camera_key,jpeg_base64,width,height) 반환. 총 16M pixels/8MiB JPEG 제한, 누락·변경·잘못된 시각 거절. |
+| POST `…/review` | `prepared_id`, `source_revision`, 전체 episode 순서의 `decisions`(`episode_index,outcome,split,object_result,reason`), `reviewer`, `confirmed=true`, 멱등 `request_id`. 인증 모드 reviewer는 서버 신원으로 대체. 미완성 분할은 draft로 보존하며 학습 가능으로 표시하지 않음. |
+| POST `…/run` | `dataset_id`, `method=act\|hilserl`, `steps=1..100000`, `batch_size=1..64`, `device=cpu`, `seed`, 멱등 `request_id`, 선택적 `profile_id`, `arm_id`. 저장 프로필은 원래 전체 데이터와 비교. 독립 다중 팔은 `arm_id` 필수이며 선택 팔 정책을 학습, 공동 모드는 단일 팔 선택 거절. 고정된 worker만 실행. |
+| POST `…/online-run` | 같은 요청 형식, `method=hilserl`만 허용. schema 2의 고정 관절별 행동 범위 필요. `steps`는 입력 하나당 업데이트 예산이며 새 경험을 기다리는 같은 worker를 유지. |
+| POST `…/experience` | 실행 중 작업의 `id`, 등록된 `dataset_id`, 멱등 UUID `request_id`. 서버 경로·명령은 받지 않음. 영속 예약 후 연속 번호 큐로 전달. |
+| POST `…/stop` | `id`. 저장한 Linux 프로세스 시작 시각·boot·명령 인자를 확인한 소유 그룹만 중단. |
+| GET `…/artifact/<run-id>` | 완료·weights 해시를 검증한 모델·프로필·정규화·평가 ZIP. 지속 작업은 실행 중에도 마지막으로 완료한 immutable 버전을 제공. |
+
+POST는 기존 Host/Origin·토큰·본문 크기 검사를, 협업 모드는 `manage` 권한을 거친다. 데이터 업로드 출처는 사용자가 선언하며 합성 시험은 `synthetic_smoke`로 보존한다. 실제 팔 제어·운영 모델 승격·현장 경험 생성은 이 API에 없다. 실패한 작업은 새 요청 identity로 재요청하며 같은 요청 identity의 재시도는 같은 기록을 돌려준다. 지속 작업 화면은 대기/학습·정책 버전·입력별 queued/consumed/rejected를 표시한다. 최초 train 정규화와 eval을 고정하고 새 입력의 프로필·원본 분할·해시를 재검증한다. 누출·변경·중복 입력은 추가 업데이트를 일으키지 않는다.
+
+Native export는 `execution_mode=native_export`로 학습과 구분한다. 화면에서 등록 세트와 프로필 파일을 선택하고 실제 progress phase·오류·중단·완료 데이터 ID를 본다. 성공 시 배열과 변환 revision을 검증한 데이터만 자동 등록하며 이동 후 SQL commit 전 장애도 복원한다. 변환 결과에는 모델 ZIP이나 학습 평가가 없다. 현재 단일 native 팔을 요구하며 카메라는 원본 metadata의 정확한 키·크기와 프로필을 대조해 추가 키도 보존한다. raw-session 준비는 연결하지 않았다.
+
+검수 열기는 원본 지문과 세션/cycle·frame/camera를 표시하며 원래 판정을 기본값으로 유지한다. 저장은 별도 `reviews/<UUID>/decisions.json,review.json` 및 DB의 불변 버전을 만들고 기존 원본을 덮어쓰지 않는다. 로컬 이름은 `local_unverified`, 인증된 사용자는 `authenticated`로 구분한다. 최종 파일은 완성된 임시 파일에서 원자적으로 게시해 부분 쓰기 실패 후 같은 요청으로 복구한다. 원본이 바뀌면 다시 불러와야 한다. 일반 새로고침은 작성 중 판정을 지우지 않는다. 저장한 검토를 변환에 쓸 때 체크박스로 명시 선택하며, worker는 원본 지문·스냅샷 해시·생산 분할을 다시 검증한다. Fixture 자료는 볼 수 있어도 production 학습용으로 변환할 수 없다. 프레임 확인/명시 체크박스가 실제 사람의 전체 관찰이나 실물 성공을 자동 증명하지 않는다.
+
+여러 카메라 보기는 같은 원본·시도·프레임·기록 시각의 묶음을 한 번에 표시한다. 카메라가 8개를 넘으면 선택 카메라를 포함한 묶음으로 이동하며 원래 영상 비율을 유지한다. 자동 프레임 넘김은 직전 조회가 끝난 뒤 다음 행을 읽고 오류·마지막 프레임·자료/시도/보기 변경에서 멈춘다. 실제 재생 속도는 읽기 시간의 영향을 받는다. 표시 시각은 episode 상대 기록 행의 timestamp이며 촬영 장치의 물리 동기화 증거는 별도다. 검토 재생이 사람의 결과·교정 라벨을 자동 작성하지 않는다.
+## SIM 실험 (D-834 Proposed)
+
+SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경로다. 현재 공개 소스에는 실행에 필요한 `learning/envs/isaac/run_control.py`가 포함되어 있지 않다. 운영자가 검증된 외부 실행 소스·SDK·workspace binding을 준비하기 전에는 실행 연결 미설정으로 표시하고 실행을 허용하지 않는다. 이 화면의 추가나 모의 실행 시험을 실제 SIM 실행·로봇 학습 수용 근거로 쓰지 않는다.
+
+작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
+
+서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
+
+```json
+{
+  "workspace_id": "CURRENT_REVIEW_WORKSPACE_ID",
+  "source_sha": "FULL_COMMITTED_SHA",
+  "source_root": "/ABSOLUTE/PINNED/ISAAC_SOURCE",
+  "binding_file": "/ABSOLUTE/OPERATOR/ISAAC_BINDING.json",
+  "binding_sha256": "SHA256_OF_COMPLETE_OPERATOR_BINDING_BYTES",
+  "entry_sha256": "SHA256_OF_SOURCE_learning/envs/isaac/run_control.py"
+}
+```
+
+웹 프로세스는 외부 source에서 모듈이나 SDK를 import하지 않는다. 고정 entrypoint를 별도 `/usr/bin/python3`로 실행해 bounded JSON 요청을 전달하며 source·binding 지문을 대조한다. 동일 workspace binding은 모델 PC CLI가 사용하는 외부 run root를 가리킨다. 기존 Isaac SDK 준비는 [Isaac 환경 안내](../../../envs/isaac/README.md)를 참고하되, 웹 실행용 외부 소스와 binding은 별도 검증해야 한다. 서명된 웹 payload에는 `sim_web.py`·SIM HTML/JS를 포함해야 한다.
+
+조회는 view, check/start/stop은 manage 권한과 기존 CSRF·Origin 검사가 필요하다. 로컬 비협업 검수에서는 실행·중지를 허용하지 않는다. 브라우저는 accountFetch로 다른 탭의 신원 변경 뒤 응답 적용을 막는다. 응답이 유실되면 같은 start 요청을 sessionStorage에 보존하고 자동 재시작하지 않는다. 조건을 다시 확인한 뒤 같은 요청을 재전송하거나 목록의 run을 조회한다. **새 실험으로 다시 실행**은 새 요청/run과 parent_run_id를 만들고 원본을 보존한다.
+
+원시 SDK 로그·환경변수·private 경로는 웹으로 보내지 않는다. 최종 모델 검사 JSON만 manifest의 해시·크기를 확인해 제공하며 기본 검사는 영상이 없음을 표시한다. UNKNOWN·중지 요청·실제 종료·모델 검사 결과를 구분한다. `test_sim_web.py`, 명시적 `ROSY_RUN_BROWSER_TESTS=1`의 `test_sim_browser.py`와 공통 셸·서명 payload 누락 거절 시험으로 검증한다. 실제 SDK 실행은 별도 증거다.
+
+## 공통 로봇·과제 학습 (D-840)
+
+`/learning/tasks`는 학습 대상 등록 → 과제·참여 구성 → 자료·방법·실행 → 결과를 연결한다.
+등록은 기존 device ID에 대한 학습 참조이며 실제 장치 연결·보정·실행 권한을 만들지 않는다.
+여러 종류를 등록할 수 있고, 현재 실행 어댑터는 OMX다. 미지원 종류는 준비 사유를 표시한다.
+리더·게임패드, 여러 팔·카메라의 설정은 기존 OMX 프로필 화면에서 준비한다.
+
+| 경로 | 계약 |
+|---|---|
+| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token. |
+| POST `/api/learning/robots` | `request_id` UUID, `name`, `kind`, `model_revision`, `device_id`. 불변 학습 대상이며 `device_verified=false`. |
+| POST `/api/learning/tasks` | `request_id`, `name`, `objective`, `success`, `failure`, `reset`, `mode`, `adapter`, 순서 있는 `participants=[{robot_id,component_id,role}]`. OMX에는 서버가 읽을 `profile_id`가 필요하다. |
+| GET `/api/learning/tasks/export?id=<UUID>` | 같은 프로젝트 안에서 전달할 과제·참여 로봇·프로필 메타데이터. 단일 identity만 허용한다. |
+| POST `/api/learning/tasks/import` | `rosy.learning.task-transfer/1` 패키지. 프로젝트·과제 revision·실제 OMX 프로필 스키마·참여 구성을 검증한 뒤 원자적으로 반영한다. |
+
+조회는 기존 view, 생성·가져오기는 manage 권한을 요구한다. POST는 기존 세션·CSRF·Origin과
+1 MiB 본문 제한을 사용하며 작성자는 서버 신원이다. 비협업 loopback 작업은 `local_unverified`다.
+다른 사용자·프로젝트 신원, 실행 명령·소스 경로·자격을 입력해 권위를 만들 수 없다.
+전달 파일은 계정·세션·HF 연결·키를 포함하지 않으며 가져온 관리자의 로컬 신원을 기록한다.
+
+계산 호스트는 불변 과제가 아닌 각 실행의 속성이다. private `omx-center.json`의 선택적
+`host_id`를 `model` 또는 `ai`로 설정한다. 미설정이면 기존 과거 OMX 경로는 유지하되
+과제 결속 실행은 거절한다. 같은 과제를 다른 호스트에서 사용하려면 먼저 같은 프로젝트의
+보호된 원본에 과제 메타데이터와 검증된 자료를 명시적으로 전달한다. 자동 동기화는 없다.
+
+기존 run/online-run 요청에 `task_id`와 `compute_host`를 함께 넣으면 서버가 실제 호스트,
+전체 프로필 revision, 로봇/device/component/role 순서와 선택 팔을 검증한다. 자료 ID와
+revision은 한 과제에 결속하며 다른 참여 그룹으로 암묵적으로 재사용하지 않는다. 과거 자료를
+처음 연결할 때는 `historical_dataset_attachment`로 기록하며 원래 과제별 촬영 증거로 표시하지 않는다.
+같은 과제에서 ACT와 HIL-SERL을 비교하거나 독립 팔별로 학습하는 것은 허용한다.
+지속 경험의 추가 자료에도 같은 검사를 적용한다. 작업별 경험 추가와 중지는 host worker에만
+적용하며 저장된 결과를 보존한다. 실물 로봇 actor·사람 개입·보상·초기화 연결은 별도 수용이다.
+
+worker request, run, 평가 결과에 같은 과제 snapshot을 남긴다. 완료 모델 ZIP의
+`learning-task.json`은 과제·참여 구성·실제 호스트와 평가 파일 SHA256을 포함한다.
+평가·요청·완료 결과의 snapshot이 다르면 다운로드를 거절한다. 과제 없는 기존 작업은 그대로 읽는다.
+코드 전환 전에는 새 실행·추가 경험 게시를 중단하고 활성 학습 작업을 끝내거나 중지한다.
+공식 설치기는 활성 작업·손상된 학습 상태를 사전 검사하며, 이 검사가 동시 요청에 대한
+배포 잠금을 대신하지는 않는다. 구버전 rollback 중에는 과제 결속 지속 작업을 재개하지 않는다.

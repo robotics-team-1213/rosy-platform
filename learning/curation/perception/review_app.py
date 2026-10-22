@@ -27,9 +27,11 @@ import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback
-import review_versions
-import omx_web
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web
+import review_versions, omx_center_web
+import learning_pipeline
+import learning_tasks_web
+from learning_tasks import Tasks
 from review_ai_jobs import Jobs
 from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
@@ -73,7 +75,7 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None):
     check_bind_host(host)
     if ai_jobs is not None and ai_jobs.store.db != store.db:
         raise ValueError('AI jobs must belong to the review workspace')
@@ -83,6 +85,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     if bound and not accounts:
         raise ValueError('collaboration-bound workspace requires its account configuration')
     project = accounts.project_id if accounts else review_evidence.metadata(store, 'workspace_id')
+    tasks = Tasks(store.db, project)
+    if omx_center is not None:
+        omx_center.bind_workspace(project)
+        omx_center.tasks = tasks
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
     if accounts:
@@ -133,7 +139,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             try:
                 if collaboration and collaboration.get(self, path, token):
                     return
-                if omx_web.get(self, path, learning):
+                if learning_tasks_web.get(self, path, tasks, omx_center, token):
+                    return
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -229,8 +237,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                                and row['draft_candidates']]
                     latest = next(iter(store.exports()), None)
                     preparation = None
+                    current = review_evidence.decisions(store)
                     if latest:
-                        current = review_evidence.decisions(store)
                         authority = latest.get('authority', {})
                         preparation = {'object_frames': latest['exported_frames'],
                                        'pixel_frames': latest.get('pixel_approved_frames', 0),
@@ -238,11 +246,19 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                        authority.get('workspace_id') == current['workspace_id'] and
                                        authority.get('generation') == current['generation'] and
                                        authority.get('decision_sha256') == current['decision_sha256']}
+                    control_status = control.status() if control else None
+                    counts = {state: sum(row['object_decision'] == state for row in current['frames'])
+                              for state in ('approved', 'pending', 'excluded')}
+                    pixel_counts = {state: sum(row['mask_decision'] == state and not row['frame_excluded']
+                                               for row in current['frames'])
+                                    for state in ('approved', 'pending', 'excluded')}
+                    pipeline = learning_pipeline.project(current, counts=counts, pixel_counts=pixel_counts,
+                                                         preparation=preparation, control=control_status)
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
+                                      'pipeline': pipeline,
                                       'preparation': preparation,
-                                      'control': control.status() if control else None,
-                                      'counts': {state: sum(f['status'] == state for f in frames)
-                                                 for state in ('approved', 'pending', 'excluded')},
+                                      'control': control_status,
+                                      'counts': counts,
                                       'object_drafts': len(object_draft_indices),
                                       'source_video_unverified': sum(
                                           f['status'] != 'excluded'
@@ -251,9 +267,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                           for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
                                       'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
-                                      'pixel_counts': {state: pixel_statuses.count(state)
-                                                       for state in ('approved', 'pending', 'excluded')}
-                                                      | {'drafted': len(pixel_draft_indices),
+                                      'pixel_counts': pixel_counts | {'drafted': len(pixel_draft_indices),
                                                          'candidates': len(pixel_candidate_indices),
                                                          'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
                 if path.startswith('/api/learning/images/'):
@@ -308,7 +322,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
             path = urlparse(self.path).path
-            login_request = collaboration and path in ('/api/accounts/login', '/api/accounts/oauth', '/api/accounts/logout')
+            login_request = collaboration and path == '/api/accounts/logout'
             expected_token = collaboration.csrf(self, token) if collaboration else token
             if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
                 return deny()
@@ -332,6 +346,14 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
                 if collaboration and collaboration.post(self, path, body, token):
+                    return
+                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
+                    return
+                if omx_center_web.post(self, path, body, omx_center, learning):
+                    return
+                if camera_setup_web.post(self, path, body, store.state, collaboration):
+                    return
+                if sim_web.post(self, path, body, sim_runs, collaboration):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
                 if omx_web.post(self, path, body, learning, Conflict):
@@ -424,12 +446,15 @@ def main():
     parser.add_argument('--images', type=Path)
     parser.add_argument('--empty-eval', action='store_true', help='initialize a separate empty evaluation workspace once')
     parser.add_argument('--empty-training', action='store_true', help='initialize a separate verified-import review workspace once')
+    parser.add_argument('--init-only', action='store_true', help='initialize the requested workspace and exit without serving')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--decisions-port', type=int, help='optional loopback-only current-decisions readback')
     parser.add_argument('--learning-control', type=Path, help='private binding for owned signed pipeline controls')
     parser.add_argument('--collaboration', type=Path, help='private project account/OAuth configuration')
     parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
     parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
+    parser.add_argument('--omx-center-config', type=Path, help='private isolated OMX learning root and pinned host learner interpreters')
+    parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -448,6 +473,8 @@ def main():
                             empty_eval=args.empty_eval, empty_training=args.empty_training)
     except (OSError, ValueError) as exc:   # startup refusals are usage errors, not crashes
         parser.error(str(exc))
+    if args.init_only:
+        return
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
@@ -468,8 +495,15 @@ def main():
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
     ai_jobs = Jobs(store, args.review_ai_config)
+    omx_center = None
+    if args.omx_center_config:
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'training' / 'omx'))
+        from experiment_center import Center
+        omx_center = Center(json.loads(args.omx_center_config.read_text(encoding='utf-8')))
+    sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
-                         storage=storage, ai_jobs=ai_jobs)
+                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

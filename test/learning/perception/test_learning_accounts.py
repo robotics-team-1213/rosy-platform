@@ -2,39 +2,43 @@
 import json
 import pytest
 from cryptography.fernet import Fernet
-from learning_accounts import Accounts, AccountError, hash_password
+from learning_accounts import Accounts, AccountError
 
 
 @pytest.fixture
 def accounts(tmp_path):
     key = tmp_path / 'key'; key.write_bytes(Fernet.generate_key()); key.chmod(0o600)
     config = {'project_id': 'one', 'users': [
-        {'user_id': 'alice', 'username': 'alice', 'password_hash': hash_password('alice-password'),
+        {'user_id': 'alice', 'username': 'alice',
          'hf_subjects': ['invited-alice'], 'memberships': {'one': ['view', 'edit', 'approve', 'manage', 'import']}},
-        {'user_id': 'bob', 'username': 'bob', 'password_hash': hash_password('bob-password'),
+        {'user_id': 'bob', 'username': 'bob',
          'memberships': {'one': ['view', 'import'], 'two': ['view', 'import']}}]}
     path = tmp_path / 'config.json'; path.write_text(json.dumps(config)); path.chmod(0o600)
     return Accounts(tmp_path / 'accounts.db', key, path)
+
+
+def sign_in(accounts, name):
+    """A configured user's session; production sessions come from Rosy Account (D-757)."""
+    return accounts._session(accounts._user(name))
 
 
 def identity(token, **kwargs):
     return {'id': 'subject-' + token[-1], 'name': 'account-' + token[-1], 'type': 'user'}
 
 
-def test_named_login_expiry_logout_and_live_membership_revoke(accounts):
-    token, principal = accounts.login('alice', 'alice-password')
+def test_session_logout_and_live_membership_revoke(accounts):
+    token, principal = sign_in(accounts, 'alice')
     assert principal['user_id'] == 'alice'
     assert accounts.authenticate(token)['project_id'] == 'one'
-    with pytest.raises(AccountError): accounts.login('alice', 'wrong')
     cfg = json.loads(accounts.config_path.read_text()); cfg['users'][0]['memberships'] = {}
     accounts.config_path.write_text(json.dumps(cfg))
     with pytest.raises(AccountError): accounts.require(principal, 'view')
-    token, bob = accounts.login('bob', 'bob-password'); accounts.logout(token)
+    token, bob = sign_in(accounts, 'bob'); accounts.logout(token)
     with pytest.raises(AccountError): accounts.require(bob, 'view')
 
 
 def test_multiple_encrypted_personal_connections_and_generation_fence(accounts):
-    _, alice = accounts.login('alice', 'alice-password'); _, bob = accounts.login('bob', 'bob-password')
+    _, alice = sign_in(accounts, 'alice'); _, bob = sign_in(accounts, 'bob')
     first = accounts.connect_token(alice, 'hf_private_one', transport=identity)
     second = accounts.connect_token(alice, 'hf_private_two', transport=identity)
     assert first['connection_id'] != second['connection_id']
@@ -51,7 +55,7 @@ def test_multiple_encrypted_personal_connections_and_generation_fence(accounts):
 
 
 def test_project_connection_resource_scope_and_cross_project_access(accounts):
-    _, alice = accounts.login('alice', 'alice-password'); _, bob = accounts.login('bob', 'bob-password')
+    _, alice = sign_in(accounts, 'alice'); _, bob = sign_in(accounts, 'bob')
     with pytest.raises(AccountError): accounts.connect_token(bob, 'hf_x', sharing='project', resources=['dataset:org/data'], transport=identity)
     conn = accounts.connect_token(alice, 'hf_x', sharing='project', resources=['dataset:org/data'], transport=identity)
     assert accounts.credential(bob, conn['connection_id'], resource='dataset:org/data')['token'] == 'hf_x'
@@ -59,30 +63,22 @@ def test_project_connection_resource_scope_and_cross_project_access(accounts):
     with pytest.raises(AccountError): accounts.authorize(bob, 'two', 'view')
 
 
-def test_pat_does_not_create_login_identity_and_last_login_cannot_unlink(accounts):
-    _, alice = accounts.login('alice', 'alice-password')
+def test_pat_does_not_claim_a_provider_identity(accounts):
+    _, alice = sign_in(accounts, 'alice'); _, bob = sign_in(accounts, 'bob')
     accounts.connect_token(alice, 'hf_x', transport=identity)
-    with pytest.raises(AccountError): accounts.login_subject('subject-x')
-    session, principal = accounts.login_subject('invited-alice')
-    assert accounts.authenticate(session)['user_id'] == 'alice'
-    cfg = json.loads(accounts.config_path.read_text()); cfg['users'][0].pop('password_hash')
-    accounts.config_path.write_text(json.dumps(cfg))
-    _, principal = accounts.login_subject('invited-alice')
-    with pytest.raises(AccountError): accounts.unlink_subject(principal, 'invited-alice')
+    assert accounts._subject_owner('subject-x') is None
+    assert accounts.connect_oauth(bob, 'subject-x', 'X', 'oauth-x', accounts.clock() + 300)['subject'] == 'subject-x'
 
 
-def test_identity_link_conflict_not_email_and_login_throttling(accounts):
-    _, alice = accounts.login('alice', 'alice-password'); _, bob = accounts.login('bob', 'bob-password')
-    accounts.link_subject(alice, 'new-subject')
-    with pytest.raises(AccountError): accounts.link_subject(bob, 'new-subject')
-    assert accounts.login_subject('new-subject')[1]['user_id'] == 'alice'
-    for _ in range(6):
-        with pytest.raises(AccountError): accounts.login('nobody', 'wrong', address='same')
-    with pytest.raises(AccountError, match='rate'): accounts.login('bob', 'bob-password', address='same')
+def test_provider_identity_belongs_to_one_person_not_by_email(accounts):
+    _, alice = sign_in(accounts, 'alice'); _, bob = sign_in(accounts, 'bob')
+    accounts.connect_oauth(alice, 'new-subject', 'Alice', 'oauth-a', accounts.clock() + 300)
+    with pytest.raises(AccountError): accounts.connect_oauth(bob, 'new-subject', 'Alice', 'oauth-b', accounts.clock() + 300)
+    with pytest.raises(AccountError): accounts.connect_oauth(bob, 'invited-alice', 'Alice', 'oauth-c', accounts.clock() + 300)
 
 
 def test_expired_session_and_replaced_credential_are_fenced(accounts):
-    token, alice = accounts.login('alice', 'alice-password')
+    token, alice = sign_in(accounts, 'alice')
     conn = accounts.connect_token(alice, 'hf_private_x', transport=identity)
     old_generation = conn['generation']
     replaced = accounts.connect_token(alice, 'hf_new_x', transport=identity)
@@ -94,7 +90,7 @@ def test_expired_session_and_replaced_credential_are_fenced(accounts):
 
 
 def test_ciphertext_cannot_be_transplanted_between_connections(accounts):
-    _, alice = accounts.login('alice', 'alice-password')
+    _, alice = sign_in(accounts, 'alice')
     first = accounts.connect_token(alice, 'hf_a', transport=identity)
     second = accounts.connect_token(alice, 'hf_b', transport=identity)
     with accounts._db() as db:
@@ -106,16 +102,16 @@ def test_ciphertext_cannot_be_transplanted_between_connections(accounts):
 def test_shared_database_keeps_project_sessions_and_connections_separate(accounts):
     cfg = json.loads(accounts.config_path.read_text()); cfg['project_id'] = 'two'
     other = Accounts(accounts.db_path, accounts.key_path, cfg)
-    token, bob = accounts.login('bob', 'bob-password')
+    token, bob = sign_in(accounts, 'bob')
     conn = accounts.connect_token(bob, 'hf_b', transport=identity)
     with pytest.raises(AccountError): other.authenticate(token)
-    _, other_bob = other.login('bob', 'bob-password')
+    _, other_bob = sign_in(other, 'bob')
     assert other.connections(other_bob) == []
     with pytest.raises(AccountError): other.credential(other_bob, conn['connection_id'])
 
 
 def test_pat_and_oidc_subject_namespaces_cannot_overwrite_each_other(accounts):
-    _, alice = accounts.login('alice', 'alice-password')
+    _, alice = sign_in(accounts, 'alice')
     pat = accounts.connect_token(alice, 'hf_pat', transport=lambda token: {'id': 'same-id', 'name': 'Alice', 'type': 'user'})
     oauth = accounts.connect_oauth(alice, 'same-id', 'Alice', 'oauth-secret', accounts.clock() + 300)
     assert pat['connection_id'] != oauth['connection_id']

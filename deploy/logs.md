@@ -3087,3 +3087,26 @@
 - Evidence: 0733786644 observer/probe checks: 41 passed. fe2765d67a site deployment, signing, update, firewall, preflight and architecture checks: 278 passed, 2 skipped. Actual Fleet Docker Compose renders the overlay with public placeholder inputs and confirms role-isolated read-only mounts; protected production site.env was not accessible. YAML/shutdown regressions first failed, then 6aebb15368 native/observer/probe/architecture/document checks passed all 110.
 - Evidence: Fleet Python 3.14.4 isolated environment imports native ROS, canonical protocol modules and pinned websockets 17.0.1/SDK 3.8.4 successfully. The two service units pass systemd-analyze verification; an unrelated installed spice-vdagent unit warns. Import/unit validation did not subscribe or open serial devices.
 - Gate: unchanged. Signed candidate build/activation, installed persistent services, normal-origin live Cell display and physical motion remain pending. No torque writes, grasp or learned policy acceptance is established.
+
+## 2026-10-22 · uncommitted · Learning Center publication source port
+- Change: bind center lifecycle to the hardened official review installer and extend the signed model-code dependency closure. Fleet receives a fixed protected Learning entry configuration.
+- Evidence: syntax and required-member inventory checked; committed-source remote regression is pending. Earlier development-branch tests do not certify this publication port.
+- Gate: unchanged; signed image activation, authenticated acceptance and physical training remain pending.
+
+## 2026-10-22 · uncommitted · Learning 배포 계약의 게시 소스 검증
+
+- 변경: 공개 Fleet 모듈 경로를 보존하고 공식 설치기의 center/collaboration 플래그 순서를 왕복 전환에서 유지했다. 서명 코드에는 필요한 OMX·카메라 소스만 포함한다.
+- 증거: source commit 1d9bce11ac의 원격 Fleet 진입·공식 설치기·서명 코드·browser scope 258건이 건너뜀 없이 통과했다. 기존 실패 비교 NEW 0. 상세는 [검증 기록](../docs/validation/learning-center-publication-port-2026-10-22/result.md).
+- gate 변화: 없음. 빌드·서명·운영 이미지 전환, 별도 controller 배포 및 보호된 두 호스트 수용은 수행하지 않았다.
+
+## 2026-10-22 · fd889ea429 · 과제 학습의 서명 배포 폐쇄·전환 전 검사
+
+- 변경: 공통 과제 소스와 화면을 서명 코드 폐쇄에 포함했다. 공식 설치기는 active/corrupt center 상태를 변경 전에 거절한다. Model controller 레이아웃 상수를 sidecar로 분리하고 기존 설치기에 포함했다. 전환 중 신규 작업 접수 차단은 운영 절차로 명시했다.
+- 증거: f5cb33bda891 배포·Fleet·browser scope 276통과. sidecar 분리 후 930d4b201d 배포 회귀 233통과, d062ab0caa 소유·문서 배치 28통과. fd889ea429 전체 미게시 26커밋 크기·안전 검사가 통과했다. [검증 기록](../docs/validation/learning-tasks-2026-10-22/result.md).
+- gate 변화: 없음. 사전 검사는 원자적 배포 잠금이 아니다. 공식 서명 이미지·보호 AI 원본·동일 프로젝트·AI 자원 배제의 운영 수용은 대기 중이다.
+
+## 2026-10-22 · 18f0277fba · 기존 Account 중계와 코드 갱신 공존
+
+- 변경: 장기 실행 Account 중계를 실제 Python 진입 스크립트일 때만 비학습 monitor로 구분한다. 학습 인수에 같은 파일명이 들어가도 갱신 차단은 유지한다. 기존 중계를 중단하거나 권한을 바꾸지 않는다.
+- 증거: Model의 실제 갱신 보류가 Account 중계 프로세스를 지목함을 읽기 전용으로 확인했다. 새 원격 회귀에서 수정 전 2 NEW를 재현했고 18f0277fba 갱신기·preview·과제 251건 통과, 기존 실패 비교 NEW 0.
+- gate 변화: 없음. 새 controller 설치·서명 코드 전환과 운영 수용은 별도 확인한다.

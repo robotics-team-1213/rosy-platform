@@ -432,8 +432,8 @@ LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
     # rollback. New archives use canonical roots; only pinned bootstrap paths
     # and the regression fixture retain the old layout.
     # D-446 dirty-code guard observes the enrolled pre-wave-1 checkout too.
-    ("deploy/site/rosy_model_code.py", "src/runtime/sensing/control/"),
-    ("deploy/site/rosy_model_code.py", "src/contracts/foundation/core_common/"),
+    ("deploy/site/model_code_layout.py", "src/runtime/sensing/control/"),
+    ("deploy/site/model_code_layout.py", "src/contracts/foundation/core_common/"),
     ("test/test_model_pc_autoupdate.py", "src/runtime/sensing/control/model.py"),
     ("test/test_model_pc_autoupdate.py", "src/contracts/foundation/core_common/model.py"),
     # This closed registry names the same intentional guard/fixture strings.
@@ -441,8 +441,8 @@ LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
     ("test/architecture/test_platform_parts.py", "src/contracts/foundation/core_common/"),
     ("test/architecture/test_platform_parts.py", "src/runtime/sensing/control/model.py"),
     ("test/architecture/test_platform_parts.py", "src/contracts/foundation/core_common/model.py"),
-    ("deploy/site/rosy_model_code.py", "src/runtime/sensing"),
-    ("deploy/site/rosy_model_code.py", "src/contracts/foundation"),
+    ("deploy/site/model_code_layout.py", "src/runtime/sensing"),
+    ("deploy/site/model_code_layout.py", "src/contracts/foundation"),
     ("test/test_model_pc_autoupdate.py", "src/runtime/sensing"),
     ("test/test_model_pc_autoupdate.py", "src/contracts/foundation"),
     ("test/architecture/test_platform_parts.py", "src/runtime/sensing"),

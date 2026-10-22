@@ -1,31 +1,12 @@
 {
   "project_id": "example-project",
   "public_origin": "https://review.example.invalid",
+  "account_client_file": "/private/learning/account-client.json",
   "accounts_db": "/private/learning/accounts.sqlite3",
   "key_file": "/private/learning/learning-accounts.key",
   "imports_root": "/private/learning/imports",
   "import_limits": {"max_file_bytes": 2147483648, "max_total_bytes": 8589934592, "reserve_bytes": 1073741824},
   "oauth": null,
-  "users": [
-    {
-      "user_id": "example-admin",
-      "username": "example-admin",
-      "display_name": "Example administrator",
-      "password_hash": "REPLACE_WITH_HASH_PASSWORD_OUTPUT",
-      "hf_subjects": [],
-      "memberships": {
-        "example-project": ["view", "edit", "approve", "import", "manage", "publish"]
-      }
-    },
-    {
-      "user_id": "example-reviewer",
-      "username": "example-reviewer",
-      "display_name": "Example reviewer",
-      "password_hash": "REPLACE_WITH_HASH_PASSWORD_OUTPUT",
-      "hf_subjects": [],
-      "memberships": {
-        "example-project": ["view", "edit", "approve"]
-      }
-    }
-  ]
+  "users": [],
+  "account_subjects": {}
 }

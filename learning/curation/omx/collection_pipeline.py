@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'training/omx'))
 import collection_intake as intake
 import native_cycle as cycle
 import native_review as native
+import experiment_native
+from experiment_io import read_json
 
 PREPARED_FILES = ('intake-receipt.json', 'inspection.json', 'capture.json', 'environment.json', 'decisions.json')
 
@@ -34,6 +36,22 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
                 uploaded=False, device_execution=False)
 
 
+def _review_inputs(prepared, decisions):
+    originals = {name: (prepared/name).read_bytes() for name in PREPARED_FILES}
+    return _validate_review_inputs(originals, decisions.read_bytes())
+
+
+def _validate_review_inputs(originals, decision_bytes):
+    intake_receipt = json.loads(originals['intake-receipt.json'])
+    if intake_receipt.get('reader_verified') is not True or intake_receipt.get('fixture_only') is True:
+        raise ValueError('verified production collection intake is required')
+    report = json.loads(originals['inspection.json'])
+    reviewed = json.loads(decision_bytes)
+    # This gate runs before creating output or invoking any dataset writer/trainer.
+    native.reviewed_splits(report, reviewed)
+    return originals, report, decision_bytes, reviewed
+
+
 def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu'):
     """Preflight all review decisions, then preserve and compose existing split/train receipts."""
     prepared, decisions = Path(prepared).resolve(), Path(decisions).resolve()
@@ -41,15 +59,7 @@ def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu')
     if (type(steps) is not int or steps < 1 or type(batch_size) is not int or batch_size < 1
             or device not in ('cpu', 'cuda')):
         raise ValueError('positive training budgets and cpu/cuda device are required')
-    originals = {name: (prepared/name).read_bytes() for name in PREPARED_FILES}
-    intake_receipt = json.loads(originals['intake-receipt.json'])
-    if intake_receipt.get('reader_verified') is not True or intake_receipt.get('fixture_only') is True:
-        raise ValueError('verified production collection intake is required')
-    report = json.loads(originals['inspection.json'])
-    decision_bytes = decisions.read_bytes()
-    reviewed = json.loads(decision_bytes)
-    # This gate runs before creating output or invoking any dataset writer/trainer.
-    native.reviewed_splits(report, reviewed)
+    originals, report, decision_bytes, reviewed = _review_inputs(prepared, decisions)
     output.mkdir(parents=True)
     evidence = output/'prepared-evidence'
     evidence.mkdir()
@@ -74,6 +84,39 @@ def train(prepared, decisions, output, *, steps=100, batch_size=8, device='cpu')
     return receipt
 
 
+def export_experiment(prepared, decisions, profile, output):
+    """Reviewed intake -> sealed native splits -> uploadable ACT arrays, without training."""
+    prepared, decisions, profile = (Path(value).resolve() for value in (prepared, decisions, profile))
+    output = native._new_output(output, prepared)
+    originals, report, decision_bytes, reviewed = _review_inputs(prepared, decisions)
+    profile_bytes = profile.read_bytes()
+    profile_document = read_json(profile)
+    if profile.read_bytes() != profile_bytes:
+        raise ValueError('profile changed during validation')
+    output.mkdir(parents=True)
+    evidence = output/'prepared-evidence'
+    evidence.mkdir()
+    for name, raw in originals.items():
+        (evidence/name).write_bytes(raw)
+    (output/'reviewed-decisions.json').write_bytes(decision_bytes)
+    (output/'profile.json').write_bytes(profile_bytes)
+    splits, dataset = output/'splits', output/'dataset'
+    native.split_reviewed(prepared, report, reviewed, splits)
+    converted = experiment_native.convert_native(splits, dataset, profile=profile_document)
+    if (any((prepared/name).read_bytes() != raw for name, raw in originals.items())
+            or decisions.read_bytes() != decision_bytes or profile.read_bytes() != profile_bytes):
+        raise ValueError('prepared evidence, human decisions or profile changed during export')
+    receipt = dict(schema='rosy.omx-experiment-export/1', dataset_root=str(dataset),
+                   dataset_revision=converted['dataset_revision'], prepared_root=str(prepared),
+                   prepared_files={name: _hash(raw) for name, raw in originals.items()},
+                   decisions_sha256=_hash(decision_bytes), profile_sha256=_hash(profile_bytes),
+                   split_receipt_sha256=_hash((splits/'split-receipt.json').read_bytes()),
+                   conversion_receipt_sha256=_hash((dataset/'conversion-receipt.json').read_bytes()),
+                   act_only=True, uploaded=False, device_execution=False, promotion=False)
+    native.write_json(output/'experiment-export-receipt.json', receipt)
+    return receipt
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -89,10 +132,17 @@ def main():
     training.add_argument('--steps', type=int, default=100)
     training.add_argument('--batch-size', type=int, default=8)
     training.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
+    export = commands.add_parser('export-experiment', help='reviewed intake to Learning upload folder')
+    export.add_argument('prepared', type=Path)
+    export.add_argument('--decisions', type=Path, required=True)
+    export.add_argument('--profile', type=Path, required=True)
+    export.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
             result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only)
+        elif args.command == 'export-experiment':
+            result = export_experiment(args.prepared, args.decisions, args.profile, args.out)
         else:
             result = train(args.prepared, args.decisions, args.out, steps=args.steps,
                            batch_size=args.batch_size, device=args.device)

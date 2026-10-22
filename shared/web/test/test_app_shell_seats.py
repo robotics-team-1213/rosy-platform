@@ -94,17 +94,19 @@ def test_collapsed_seats_do_not_stretch_or_overflow():
 
 
 def test_review_documents_share_the_app_bar_and_the_screen_rail():
-    """D-741 3, 6 and D-833: app/theme in the bar, five screens in the rail, heading in the path row."""
+    """D-741 3, 6 and D-833: app/theme in the bar, six screens in the rail, heading in the path row."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
     rails = set()
     for name, here in [('learning.html', '/learning'), ('index.html', '/'),
-                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog'), ('omx.html', '/learning/omx')]:
+                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog'), ('omx.html', '/learning/omx'),
+                       ('camera.html', '/learning/camera'), ('sim.html', '/learning')]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
         bar = re.search(r'<ui-topbar role="banner">(.*?)</ui-topbar>', html, re.S).group(1)
         assert bar.startswith('<ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand>')
         assert '<h1' not in bar and '<nav' not in bar and 'class="theme-label"' in bar
+        assert 'data-learning-account-entry href="/accounts"' in bar
         assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
         body = html.split('</ui-topbar>', 1)[1]
         rail = re.search(r'<div class="ui-app-body" data-seats="rail"><div class="ui-rail">'
@@ -114,8 +116,8 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(icon, href, full, short) for icon, href, full, _, short in items] == [
             ('list', '/learning', '작업 목록', '목록'), ('box', '/', '객체 검수', '객체'),
             ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료'),
-            ('robot', '/learning/omx', '모방학습', '모방')]
-        assert [href for _, href, _, current, _ in items if current] == [here]
+            ('image', '/learning/camera', '카메라 맞춤', '카메라'), ('robot', '/learning/omx', '로봇암 학습', '로봇암')]
+        assert [href for _, href, _, current, _ in items if current] == ([here] if here else [])
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
         assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
         assert html.count('<h1') == 1

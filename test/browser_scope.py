@@ -59,10 +59,18 @@ REVIEW = [
     "test/learning/perception/test_pixel_review_browser.py",
     "test/learning/perception/test_review_app_smoke.py",
 ]
+OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
+                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments")]
+CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
+SIM = ["test/learning/perception/test_sim_browser.py"]
+PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
+ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py"]
+TASKS = ["test/learning/perception/test_learning_tasks_browser.py"]
+LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED + COMMISSIONING
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING
 
 SCOPE: dict[str, list[str]] = {
     "operations/fleet/fleet/server/": FLEET,
@@ -73,10 +81,33 @@ SCOPE: dict[str, list[str]] = {
     "middleware/devices/omx/adapter/": PILOT[1:],
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
+    "learning/curation/perception/review_app.py": LEARNING,
+    "learning/curation/perception/review_app_web/app.css": LEARNING,
+    "learning/curation/perception/review_app_web/commands.js": LEARNING,
+    "learning/curation/perception/review_app_web/account-session.js": LEARNING,
+    **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING for name in
+       ("omx.html", "omx.js", "omx-profiles.js", "omx-review.js")},
+    "learning/curation/perception/omx_web.py": OMX_LEARNING,
+    "learning/curation/perception/omx_center_web.py": OMX_LEARNING,
+    "learning/training/omx/": OMX_LEARNING + TASKS,
+    **{f"learning/curation/perception/{name}": TASKS for name in
+       ("learning_tasks.py", "learning_tasks_web.py", "review_app_web/tasks.html", "review_app_web/tasks.js")},
+    **{f"learning/curation/perception/{name}": CAMERA for name in
+       ("camera_setup.py", "camera_setup_web.py", "review_app_web/camera.html", "review_app_web/camera.js")},
+    "contracts/learning/src/rosy/contracts/learning/camera_setup.py": CAMERA,
+    **{f"learning/curation/perception/{name}": SIM for name in
+       ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
+    **{f"learning/curation/perception/{name}": PIPELINE for name in
+       ("learning_control.py", "learning_pipeline.py")},
+    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS
+       for name in ("learning.html", "learning.js")},
+    **{f"learning/curation/perception/{name}": ACCOUNTS for name in
+       ("learning_accounts.py", "learning_collaboration.py", "learning_oauth.py", "learning_rosy_accounts.py",
+        "review_app_web/accounts.html", "review_app_web/accounts.js")},
     "integrations/simulation/gazebo/scripts/": GAZEBO,
     "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING,
     "test/browser_harness.py": EVERYTHING,
 }
 

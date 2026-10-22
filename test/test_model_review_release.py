@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -27,6 +28,13 @@ def source_tree(path):
         file = path / name
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(name.as_posix(), encoding="utf-8")
+
+
+def center_config(state):
+    root = state.parent / 'learning-center'
+    root.mkdir(exist_ok=True)
+    (state / 'omx-center.json').write_text(json.dumps({'root': str(root)}))
+    return root / 'center.sqlite'
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows account cannot create POSIX symlinks")
@@ -82,9 +90,10 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
     (state/'learning-control.json').write_text('{}')
     (state/'review-ai.json').write_text('{}')
+    center_config(state)
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -94,10 +103,41 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     assert '--learning-control' not in unit.read_text()
     assert '--decisions-port' not in unit.read_text()
     assert '--review-ai-config' not in unit.read_text()
+    assert '--omx-center-config' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
     assert '--decisions-port 18774' in unit.read_text()
     assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
+    assert f'--omx-center-config {state}/omx-center.json' in unit.read_text()
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
+@pytest.mark.parametrize('prior_release', [False, True])
+@pytest.mark.parametrize('supports_center', [False, True])
+def test_new_release_uses_target_cli_for_center_binding(tmp_path, monkeypatch, prior_release, supports_center):
+    source = tmp_path/'source'
+    source_tree(source)
+    (source/release.APP).write_text("parser.add_argument('--omx-center-config')" if supports_center else 'pass')
+    root = tmp_path/'root'
+    root.mkdir()
+    state = tmp_path/'state'
+    state.mkdir()
+    (state/'reviews.sqlite3').touch()
+    center_config(state)
+    if prior_release:
+        old = root/'releases/old'
+        source_tree(old)
+        (old/release.APP).write_text('pass' if supports_center else "parser.add_argument('--omx-center-config')")
+        (root/'current').symlink_to(old)
+    unit = tmp_path/'review.service'
+    unit.write_text('[Service]\nExecStart=/existing/review\n')
+    monkeypatch.setattr(release, 'run_systemctl', lambda *args: None)
+    monkeypatch.setattr(release, 'check_live', lambda *args: None)
+    monkeypatch.setattr(release.subprocess, 'run', lambda *args, **kwargs: None)
+    release.install(source, 'new', root, state, Path(sys.executable), '127.0.0.1', 8774, unit)
+    assert ('--omx-center-config' in unit.read_text()) is supports_center
+    assert str(root/'current'/release.APP) in unit.read_text()
+    assert str(source/release.APP) not in unit.read_text()
 
 
 def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
@@ -212,12 +252,17 @@ def test_collaboration_unit_is_loopback_and_has_no_unprotected_decisions_port(tm
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
-def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypatch):
+@pytest.mark.parametrize('supports_center', [False, True])
+def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypatch, supports_center):
     source = tmp_path / 'source'; source_tree(source)
-    (source / release.APP).write_text("parser.add_argument('--collaboration')")
+    cli = "parser.add_argument('--collaboration')"
+    if supports_center:
+        cli += "; parser.add_argument('--omx-center-config')"
+    (source / release.APP).write_text(cli)
     state = tmp_path / 'state'; state.mkdir()
     (state / 'reviews.sqlite3').write_bytes(b'human decisions')
     (state / 'learning-collaboration.json').write_text('{}')
+    center_config(state)
     root = tmp_path / 'root'; unit = tmp_path / 'rosy-edge-review.service'
     unit.write_text('original unit')
     calls = []
@@ -231,6 +276,7 @@ def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypa
     release.install(None, 'first', root, None, None, '127.0.0.1', 8768, unit, service)
     assert unit.read_text() == text
     assert '--collaboration' in text and '--decisions-port' not in text
+    assert ('--omx-center-config' in text) is supports_center
     assert ('restart', service) in calls
     assert (root / (service + '.before-managed')).read_text() == 'original unit'
     old = root / 'releases/old'; source_tree(old)
@@ -283,3 +329,79 @@ def test_bound_central_account_refuses_source_without_account_bridge(tmp_path):
         release.check_collaboration(app, binding, '127.0.0.1')
     (tmp_path / 'learning_rosy_accounts.py').write_text('bridge')
     assert release.check_collaboration(app, binding, '127.0.0.1')['account_client_file'] == '/private/client.json'
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
+@pytest.mark.parametrize('retained', [False, True])
+@pytest.mark.parametrize('status', ['launching', 'running', 'stopping'])
+def test_active_learning_refuses_update_and_rollback_before_any_switch(tmp_path, monkeypatch, retained, status):
+    source = tmp_path / 'source'
+    source_tree(source)
+    root = tmp_path / 'root'
+    active = root / 'releases/active'
+    older = root / 'releases/older'
+    source_tree(active)
+    source_tree(older)
+    (root / 'current').symlink_to(active)
+    state = tmp_path / 'state'
+    state.mkdir()
+    (state / 'reviews.sqlite3').write_bytes(b'human decisions')
+    database = center_config(state)
+    with sqlite3.connect(database) as db:
+        db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+        db.execute('INSERT INTO runs VALUES (?)', (json.dumps({'status': status,
+            'execution_mode': 'online_experience', 'learning_task': {'task_id': 'bound-task'}}),))
+    unit = tmp_path / 'review.service'
+    unit.write_text(release.unit_contents(root / 'current', state, Path(sys.executable), '127.0.0.1', 8774))
+    old_unit = unit.read_bytes()
+    calls = []
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: calls.append(a))
+    monkeypatch.setattr(release, 'check_live', lambda *a: None)
+    monkeypatch.setattr(release.subprocess, 'run', lambda *a, **kw: calls.append(a))
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.install(None if retained else source, 'older' if retained else 'new', root,
+            None if retained else state, None if retained else Path(sys.executable), '127.0.0.1', 8774, unit)
+    assert (root / 'current').resolve() == active
+    assert unit.read_bytes() == old_unit and calls == []
+    assert not (root / 'releases/new').exists()
+    assert not (root / (release.SERVICE + '.before-managed')).exists()
+    assert (state / 'reviews.sqlite3').read_bytes() == b'human decisions'
+
+
+@pytest.mark.parametrize('fault', ['config_json', 'config_root', 'config_oversized', 'database', 'run_json', 'run_status'])
+def test_corrupt_learning_state_fails_closed_without_creating_or_changing_files(tmp_path, fault):
+    state = tmp_path / 'state'
+    state.mkdir()
+    database = center_config(state)
+    config = state / 'omx-center.json'
+    if fault == 'config_json':
+        config.write_text('{')
+    elif fault == 'config_root':
+        config.write_text('{"root":"relative"}')
+    elif fault == 'config_oversized':
+        config.write_text(' ' * (1024 * 1024 + 1))
+    elif fault == 'database':
+        database.write_bytes(b'corrupt SQLite')
+    else:
+        with sqlite3.connect(database) as db:
+            db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+            db.execute('INSERT INTO runs VALUES (?)', ('{' if fault == 'run_json' else '{}',))
+    before = database.read_bytes() if database.exists() else None
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.check_learning_idle(config)
+    assert (database.read_bytes() if database.exists() else None) == before
+
+
+def test_finished_learning_and_missing_center_database_allow_switch_check_read_only(tmp_path):
+    state = tmp_path / 'state'
+    state.mkdir()
+    database = center_config(state)
+    release.check_learning_idle(state / 'omx-center.json')
+    assert not database.exists()
+    with sqlite3.connect(database) as db:
+        db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+        for status in ('succeeded', 'failed', 'cancelled', 'interrupted'):
+            db.execute('INSERT INTO runs VALUES (?)', (json.dumps({'status': status}),))
+    before = database.read_bytes()
+    release.check_learning_idle(state / 'omx-center.json')
+    assert database.read_bytes() == before

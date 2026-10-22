@@ -20,6 +20,12 @@ JOINTS = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
 OBJECT_RESULTS = ('moved_as_intended', 'grasp_missed', 'dropped', 'displaced', 'untouched', 'unknown')
 
 
+def _in_checkout(path):
+    """Artifacts stay outside Git checkouts, including linked worktrees, on any drive."""
+    path = Path(path).resolve()
+    return any((parent / '.git').exists() for parent in (path, *path.parents))
+
+
 def _integer(value, name):
     array = np.asarray(value)
     if array.size != 1 or array.dtype.kind not in 'iu':
@@ -187,8 +193,9 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
 
 def _new_output(path, source):
     path, source = Path(path).resolve(), Path(source).resolve()
-    if path.drive.upper() == 'F:' or path == source or path.is_relative_to(source) or source.is_relative_to(path):
-        raise ValueError('output must be separate from source and outside F:')
+    if (path.drive.upper() == 'F:' or _in_checkout(path)
+            or path == source or path.is_relative_to(source) or source.is_relative_to(path)):
+        raise ValueError('output must be separate from source, outside F: and outside source checkouts')
     if path.exists():
         raise ValueError('output already exists')
     return path

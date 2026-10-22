@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import pytest
 from learning_rosy_accounts import RosyAccounts
 from learning_accounts import AccountError
-from test_learning_accounts import accounts
+from test_learning_accounts import accounts, sign_in
 
 
 @pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
@@ -32,7 +32,7 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
 
 
 def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
-    old_cookie, _ = accounts.login('alice','alice-password')
+    old_cookie, _ = sign_in(accounts, 'alice')
     record = SimpleNamespace(sub='central-alice', aud='project:one',
         permits=lambda resource, capability: capability in {'learning.view','learning.import'})
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record)
@@ -40,14 +40,11 @@ def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
     config['account_subjects'] = {'central-alice':'alice'}
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
     with pytest.raises(AccountError): accounts.authenticate(old_cookie)
-    with pytest.raises(AccountError): accounts.login('alice','alice-password')
     actor = managed.authenticate('browser-session')
     assert actor['user_id'] == 'alice'
     assert actor['capabilities'] == ['import', 'view']
     assert managed.require(actor, 'import')
     with pytest.raises(AccountError): managed.require(actor, 'manage')
-    with pytest.raises(AccountError): managed.login('alice', 'alice-password')
-    with pytest.raises(AccountError): managed.login_subject('invited-alice')
     record.permits = lambda resource, capability: capability == 'learning.view'
     with pytest.raises(AccountError): managed.require(actor, 'import')
     record.sub = 'unmapped'
@@ -121,5 +118,38 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         assert request(base,'/api/frames/0','bob',{'version':1,'action':'exclude'},alice['token'])[0] == 403
         assert store.get(0) == before
         assert request(base,'/api/frames/0','bob',{'version':1,'action':'exclude'},bob['token'])[0] == 200
+    finally:
+        server.shutdown(); server.server_close(); worker.join()
+
+
+def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
+    import threading
+    from test_review_app import open_store
+    from test_learning_collaboration import request
+    from review_app import make_server
+    record = SimpleNamespace(sub='central-carol', aud='project:one', permits=lambda resource, cap: cap == 'learning.view')
+    receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
+        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
+    config = accounts.config()
+    config['users'] = []
+    managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    actor = managed.authenticate('browser-session')
+    assert actor['user_id'] == 'central-carol' and actor['capabilities'] == ['view']
+    # An Account subject never takes over an unmapped learning owner by matching its name.
+    named = RosyAccounts(accounts.db_path, accounts.key_path, accounts.config(),
+        receiver=SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: SimpleNamespace(
+            sub='alice', aud='project:one', permits=lambda *args: True)))
+    with pytest.raises(AccountError, match='unmapped learning owner'): named.authenticate('browser-session')
+    (tmp_path / 'workspace').mkdir()
+    server = make_server(open_store(tmp_path / 'workspace'), 0, accounts=managed)
+    worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        assert request(base, '/api/accounts/session', 'browser-session')[0] == 200
+        record.permits = lambda *args: False
+        status, body = request(base, '/api/accounts/session', 'browser-session')
+        assert status == 403 and '권한' in body['error']  # signed in: no redirect back to login
+        managed.receiver.resolve_session_id = lambda sid: None
+        assert request(base, '/api/accounts/session', 'browser-session')[0] == 401
     finally:
         server.shutdown(); server.server_close(); worker.join()
