@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from omx_output_paths import in_source_checkout
 import hashlib
 import importlib.metadata
 import json
@@ -18,12 +19,6 @@ from native_review import JOINTS, dataset_files, inspect_dataset, write_json
 
 SCHEMA = 'rosy.omx-collection-session.v1'
 MAX_TIME_NS = 2**63-1
-
-
-def _in_checkout(path) -> bool:
-    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
-    path = Path(path).resolve()
-    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def _require(value, message):
@@ -291,7 +286,7 @@ def prepare(sessions, output, repo_id, *, completed_only=False, camera_reference
     records = [validate_session(path, completed_only=completed_only) for path in sessions]
     _require(bool(records), 'at least one session required')
     output = Path(output).absolute()
-    _require(not output.exists() and not _in_checkout(output), 'new output outside the source checkout required')
+    _require(not output.exists() and not in_source_checkout(output), 'new output outside the source checkout required')
     for record in records:
         source = record['root']
         _require(not output.resolve().is_relative_to(source) and not source.is_relative_to(output.resolve()),

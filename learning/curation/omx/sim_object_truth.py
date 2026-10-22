@@ -9,13 +9,13 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT/'contracts/learning/src'))
 from rosy.contracts.learning.omx import validate_demonstration
 from rosy.contracts.learning.sim_object_truth import SCHEMA, TASK, validate_truth
-from common_episode import _in_checkout
+from omx_output_paths import in_source_checkout
 
 
 def build(run, native_manifest, output, *, source_root=ROOT):
     run, output, source_root = Path(run).resolve(), Path(output).resolve(), Path(source_root).resolve()
     native_manifest = Path(native_manifest).resolve()
-    if output.exists() or _in_checkout(output) or output.is_relative_to(run) or run.is_relative_to(output):
+    if output.exists() or in_source_checkout(output) or output.is_relative_to(run) or run.is_relative_to(output):
         raise ValueError('new proof directory outside recording and source checkout required')
     result = json.loads((run/'teacher-result.json').read_bytes())
     source = run/'recordings'/result['episode_id']

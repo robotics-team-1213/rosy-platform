@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from omx_output_paths import in_source_checkout
 import importlib.metadata
 import json
 import shutil
@@ -17,12 +18,6 @@ from rosy.contracts.learning.omx import validate_demonstration as validate_episo
 
 
 LEROBOT_VERSION = "0.4.4"
-
-
-def _in_checkout(path) -> bool:
-    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
-    path = Path(path).resolve()
-    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def image_key(manifest: dict) -> str:
@@ -81,7 +76,7 @@ def export_episode(episode: Path, output: Path, repo_id: str, *, sim_ground_trut
     validated = validate_episode(episode)
     if output.exists() or output.is_relative_to(episode) or episode.is_relative_to(output):
         raise ValueError("export requires a new directory separate from the source episode")
-    if _in_checkout(output):
+    if in_source_checkout(output):
         raise ValueError("export output belongs outside the source checkout")
     truth = None
     if sim_ground_truth is not None:
