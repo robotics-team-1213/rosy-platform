@@ -54,7 +54,7 @@ def test_preview_worker_failure_is_bounded_and_hides_private_errors(tmp_path, mo
     assert '/private' not in str(exc.value)
 
 
-def setup(tmp_path, monkeypatch):
+def preview_fixture(tmp_path, monkeypatch):
     import experiment_preview as module
     inspection = dict(repo_id='local/recording', frame_count=4,
                       camera_keys=['observation.images.top'],
@@ -78,7 +78,7 @@ def setup(tmp_path, monkeypatch):
 
 
 def test_exact_episode_frame_encodes_real_rgb_and_rechecks_source(tmp_path, monkeypatch):
-    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    module, reviews, current, rows, positions, calls = preview_fixture(tmp_path, monkeypatch)
     result = module.frame(reviews, {'id': 'registered'}, 'a'*64, 1, 1, 0)
     assert positions == [3] and len(calls) == 2
     image = Image.open(io.BytesIO(result))
@@ -90,7 +90,7 @@ def test_fixed_worker_cli_reuses_exact_source_and_frame_checks(tmp_path, monkeyp
     import json
     import experiment_reviews
     resource = pytest.importorskip('resource')
-    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    module, reviews, current, rows, positions, calls = preview_fixture(tmp_path, monkeypatch)
     limits = []
     monkeypatch.setattr(resource, 'setrlimit', lambda key, bound: limits.append((key, bound)))
     monkeypatch.setattr(experiment_reviews, 'Reviews', lambda *args: reviews)
@@ -109,7 +109,7 @@ def test_fixed_worker_cli_reuses_exact_source_and_frame_checks(tmp_path, monkeyp
 
 @pytest.mark.parametrize('fault', ['revision', 'frame', 'camera', 'episode', 'wrong_row', 'pixel', 'source_change'])
 def test_stale_or_invalid_preview_never_uses_a_neighbor_frame(tmp_path, monkeypatch, fault):
-    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    module, reviews, current, rows, positions, calls = preview_fixture(tmp_path, monkeypatch)
     args = ['a'*64, 1, 1, 0]
     if fault == 'revision': args[0] = 'b'*64
     if fault == 'frame': args[2] = 2
@@ -128,7 +128,7 @@ def test_stale_or_invalid_preview_never_uses_a_neighbor_frame(tmp_path, monkeypa
 
 
 def test_frame_set_reads_one_exact_row_and_binds_all_camera_images_and_time(tmp_path, monkeypatch):
-    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    module, reviews, current, rows, positions, calls = preview_fixture(tmp_path, monkeypatch)
     current['inspection']['camera_keys'].append('observation.images.wrist')
     for row in rows:
         row['observation.images.wrist'] = 1 - row['observation.images.top']
@@ -146,7 +146,7 @@ def test_frame_set_reads_one_exact_row_and_binds_all_camera_images_and_time(tmp_
 
 @pytest.mark.parametrize('cameras', [[], [0, 0], [True], [-1], [1], list(range(9)), '0'])
 def test_frame_set_refuses_ambiguous_or_unbounded_camera_selection(tmp_path, monkeypatch, cameras):
-    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    module, reviews, current, rows, positions, calls = preview_fixture(tmp_path, monkeypatch)
     with pytest.raises(ValueError):
         module.frame_set(reviews, {'id': 'registered'}, 'a'*64, 0, 0, cameras)
     assert positions == []
@@ -154,7 +154,7 @@ def test_frame_set_refuses_ambiguous_or_unbounded_camera_selection(tmp_path, mon
 
 @pytest.mark.parametrize('fault', ['timestamp', 'time_shape', 'time_mismatch', 'fps', 'pixels', 'jpeg_size', 'source_change', 'missing_camera'])
 def test_frame_set_never_publishes_a_partial_or_invalid_time_group(tmp_path, monkeypatch, fault):
-    module, reviews, current, rows, positions, calls = setup(tmp_path, monkeypatch)
+    module, reviews, current, rows, positions, calls = preview_fixture(tmp_path, monkeypatch)
     if fault == 'timestamp': rows[3]['timestamp'] = float('nan')
     if fault == 'time_shape': rows[3]['timestamp'] = [0.5, 0.5]
     if fault == 'time_mismatch': rows[3]['timestamp'] = 3.5

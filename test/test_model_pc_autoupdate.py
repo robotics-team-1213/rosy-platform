@@ -599,19 +599,26 @@ def test_unrelated_sandboxed_process_does_not_block_updates(tmp_path, monkeypatc
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
 
 
-def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkeypatch):
+@pytest.mark.parametrize('argv', [
+    ['python', '/app/learning/training/perception/dataset/review_app.py'],
+    ['python', '/app/learning/curation/perception/legacy_review_account.py'],
+    ['python', '-I', '-B', '/app/learning/curation/perception/legacy_review_account.py'],
+])
+def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkeypatch, argv):
     m = module()
     proc = tmp_path / "proc"
     entry = proc / "999999"
     entry.mkdir(parents=True)
     (entry / "comm").write_text("python", encoding="utf-8")
-    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/dataset/review_app.py\x00")
+    (entry / "cmdline").write_bytes(('\x00'.join(argv) + '\x00').encode())
     monkeypatch.setattr(m.os, "getuid", lambda: entry.stat().st_uid, raising=False)
     original = Path.resolve
     monkeypatch.setattr(Path, "resolve", lambda path, *a, **kw:
                         tmp_path if path == entry / "cwd" else original(path, *a, **kw))
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
     (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00")
+    assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
+    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00--input\x00/app/legacy_review_account.py\x00")
     assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
 
 
