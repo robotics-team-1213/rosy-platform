@@ -35,6 +35,13 @@ def connected_fleet(tmp_path):
     console = FleetConsole([RobotEndpoint('rosy_01', 'http://robot.invalid', 'test')], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite3'), robot_ids=console.robot_ids)
     app = create_app(console, task_service=tasks, site_logins=_accounts(), start_task_dispatcher=False)
+    @app.middleware('http')
+    async def reject_cancel(request, call_next):
+        if request.url.path.endswith('/cancel'):
+            from starlette.responses import JSONResponse
+            return JSONResponse({'detail': 'intentional cancellation fault'}, status_code=503)
+        return await call_next(request)
+
     listener = safe_listener()
     endpoint = f'https://localhost:{listener.getsockname()[1]}'
     server = uvicorn.Server(uvicorn.Config(app, ssl_certfile=str(certificate), ssl_keyfile=str(key),
