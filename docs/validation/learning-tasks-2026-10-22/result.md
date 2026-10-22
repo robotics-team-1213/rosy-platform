@@ -119,7 +119,15 @@ regression passed all 251 checks; the existing CI dependency guard suite passed 
 The new monitor cases first reproduced two NEW failures before the controller change.
 Final PR CI, installed controller identity and actual signed activation must still be
 checked at the subsequent publication head. These local-host reports do not stand in
-for the failed earlier GitHub CI run.
+for the failed earlier GitHub CI run. Commit `8d938372a6` additionally passed the
+117 remote document, release-boundary and CI dependency checks.
+
+The same initial CI's Fleet browser job found an old four-link work-menu expectation
+after the Learning link was added. Commit `2d38309d3a` includes Learning in that exact
+menu inventory and verifies its `/console/learning` destination. The four actual Chromium
+cases (operator/viewer, desktop/mobile) passed with the rest of their work-filter,
+refresh-failure and accessibility assertions intact. This is a test expectation fix;
+the production navigation is unchanged.
 
 ## Deployment and physical acceptance still pending
 

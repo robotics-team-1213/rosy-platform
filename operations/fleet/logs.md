@@ -4240,3 +4240,9 @@
 - Change: add fixed Model/AI protected origin links under the existing work navigation, targeting the generic Learning home; missing configuration fails closed. Preserve public Console routes and image assets.
 - Evidence: scoped launcher regressions ported; this publication source requires remote verification before activation.
 - Gate: unchanged; no image or device runtime activated.
+
+## 2026-10-22 · 2d38309d3a · Work-menu Learning browser expectation
+
+- Change: include the Learning link in the exact work-menu browser inventory and check its fixed destination. Keep operator/viewer, filter, refresh-failure and accessibility checks.
+- Evidence: PR151 initial CI found the stale menu expectation. At 2d38309d3a all four affected desktop/mobile Chromium cases passed remotely, NEW 0.
+- Gate: unchanged; official image activation and authenticated Learning acceptance remain pending.
