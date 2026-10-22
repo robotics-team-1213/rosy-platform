@@ -15,7 +15,7 @@
 <ui-button id="account-retry" kind="quiet" data-action-icon="refresh" hidden>로그인 상태 다시 확인</ui-button>
 <ui-section id="login-panel" class="learning-section" aria-labelledby="project-login-title" hidden><h2 id="project-login-title" class="ui-section-heading">Rosy Account 로그인</h2>
 <p>모든 Rosy 앱은 Rosy Account 하나로 로그인합니다. 아이디와 비밀번호는 Rosy Account 로그인 화면에서 입력합니다.</p>
-<ui-actions><a id="account-login" href="/api/account/login?return=/accounts">Rosy Account로 로그인</a></ui-actions></ui-section>
+<ui-actions><a id="account-login" href="/api/account/login?return=/accounts">Rosy Account로 로그인</a><ui-button id="account-switch" kind="quiet" data-action-icon="logout" hidden>다른 계정으로 로그인</ui-button></ui-actions></ui-section>
 <div id="signed-in" hidden>
 <ui-section class="learning-section" aria-labelledby="identity-title"><h2 id="identity-title" class="ui-section-heading">현재 작업자</h2><p id="identity"></p><ui-actions><a data-account-profile hidden>프로필</a><a href="/learning">학습 작업으로 돌아가기</a><ui-button id="logout" kind="quiet" data-action-icon="logout">로그아웃</ui-button></ui-actions></ui-section>
 <ui-section class="learning-section" aria-labelledby="connections-title"><h2 id="connections-title" class="ui-section-heading">연결한 Hugging Face 계정</h2><div id="connections" aria-live="polite"></div>

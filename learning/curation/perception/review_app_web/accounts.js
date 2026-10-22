@@ -28,7 +28,7 @@ function empty(parent, text) {
 }
 function signedOut() {
   token=null; session=null; active=false;
-  $('login-panel').hidden=false; $('signed-in').hidden=true;
+  $('login-panel').hidden=false; $('signed-in').hidden=true; $('account-switch').hidden=true;
   status('Rosy Account로 로그인하세요.', 'empty');
   for(const id of ['identity','connections','connection','imports','repos','repo-connection']) $(id).replaceChildren();
   for(const id of ['connect-form','import-form','repo-list-form','repo-create-form','repo-delete-form']) $(id).reset();
@@ -78,7 +78,8 @@ async function refresh() {
   catch(e) {
     if (e.status === 403) {
       // A missing project grant must not automatically re-enter Account login.
-      signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; return;
+      // Signed in without this project's grant: offer the way out to another account.
+      signedOut(); status(e.message, 'forbidden'); $('account-retry').hidden=false; $('account-switch').hidden=false; return;
     }
     if (e.status !== 401) throw e;
     if(options.rosy_account) {
@@ -206,6 +207,7 @@ $('repo-delete-form').addEventListener('submit',event=>{event.preventDefault();p
   await loadRepos();
 });});
 $('reload').addEventListener('click',()=>perform(refresh));
+$('account-switch').addEventListener('click',()=>$('logout').click());
 $('account-retry').addEventListener('click',()=>perform(async()=>{
   loginFailure=null;
   const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
