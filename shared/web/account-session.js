@@ -30,7 +30,7 @@ export function createAccountSession({current, apply, changed, failed = () => {}
       apply(value);
       publish(value);
       const key = accountKey(value);
-      if (key) announce(key);
+      if (key || previous) announce(key);  // an ended session also tells the other tabs at once
       if (previous && previous !== key) changed();
     } catch {
       // A failed probe never opens a fallback login path.

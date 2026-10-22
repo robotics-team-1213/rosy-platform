@@ -44,7 +44,7 @@ class _LayoutAccount:
 
     def resolve(self, _cookie):
         from types import SimpleNamespace
-        return SimpleNamespace(sub='layout-account', permits=lambda resource, capability:
+        return SimpleNamespace(sub='layout-account', sid='family', rev=1, aud='site:one', grants=[], permits=lambda resource, capability:
                                (resource, capability) == (self.resource, 'games.operate'))
 
     def retry_revocations(self):
