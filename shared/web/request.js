@@ -1,5 +1,5 @@
 // D-425 HTTP mechanics. Credential storage, service errors and replay belong to callers.
-export function createRequest({origin = globalThis.location?.origin, credential = () => '', fetchImpl} = {}) {
+export function createRequest({origin = globalThis.location?.origin, credential = () => '', fetchImpl, readResponse} = {}) {
   const base = new URL(origin);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) {
     throw new Error('request origin must be an HTTP origin without credentials');
@@ -37,8 +37,10 @@ export function createRequest({origin = globalThis.location?.origin, credential 
         credentials: 'same-origin', redirect: 'error',
       });
       controller.signal.throwIfAborted();
-      // blob: a binary answer (e.g. a JPEG) comes back as {blob, headers}; an error stays JSON.
-      const body = response.status === 204 ? null : blob && response.ok
+      // Service readers keep header-first denial and strict decoding inside the request lifetime.
+      let body;
+      if (readResponse) body = await readResponse(response);
+      else body = response.status === 204 ? null : blob && response.ok
         ? {blob: await response.blob(), headers: response.headers} : await response.json().catch(() => null);
       controller.signal.throwIfAborted();
       return {status: response.status, ok: response.ok, body};

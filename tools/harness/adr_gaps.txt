@@ -77,3 +77,11 @@ D-837 absent from this base while peer work is in flight; remove when its ADR la
 D-838 reserved in another session (refs/adr/D-838), absent from this branch; remove when its ADR lands
 D-839 reserved in another session (refs/adr/D-839), absent from this branch; remove when its ADR lands
 D-840 reserved in another session (refs/adr/D-840), absent from this branch; remove when its ADR lands
+D-837 reserved outside this branch; remove when its ADR lands
+D-838 reserved outside this branch; remove when its ADR lands
+D-839 reserved outside this branch; remove when its ADR lands
+D-840 reserved outside this branch; remove when its ADR lands
+D-841 reserved on refactor/shared-module-reuse, preserved at c2e930c8d7; remove when its ADR lands
+D-842 reserved outside this branch; remove when its ADR lands
+D-843 reserved outside this branch; remove when its ADR lands
+D-844 reserved outside this branch; remove when its ADR lands

@@ -843,3 +843,9 @@
 - 변경: Robot·Pilot·Games가 각자 복사해 쓰던 Account 세션 확인(순번으로 늦은 응답 버리기, 프로필 발행, 같은 origin 탭 신원 표시 `rosy.account.identity`, 10초 확인, 로그아웃)을 `account-session.js` 하나로 모았다. 앱은 자기 상태를 `current`/`apply`/`changed` 훅으로 넘기며 `restoreAccount` 등 기존 export는 그대로다. Games는 첫 확인 실패 뒤에도 계속 확인하도록 자체 주기를 유지한다. 서버 쪽 `/api/account/session` 본문은 `AccountClient.browser_session` 하나가 만들고 CORE와 Games가 쓴다(Games는 `can_operate`만 더함). 공유 자산 목록·CMake·Pilot 오프라인 캐시에 등록했다.
 - 증거: `test/transport/account-session.test.mjs`(늦은 응답, 신원 변경, 확인 실패, 회수 대기 로그아웃). 원격 pytest는 착지 기록에 남긴다.
 - gate 변화: 없음. Robot·Pilot 화면은 기기 배포본으로 확인해야 한다.
+
+## 2026-10-22 · uncommitted · D-845 요청 수명 안의 서비스 응답 해석
+
+- 변경: createRequest factory의 선택적 readResponse가 raw Response를 해석하도록 했다. 헤더 우선 거절·엄격 JSON은 소비자에 남기고, 기본 JSON/204/blob와 인증·origin·timeout·취소·단일 전송은 보존한다. Fleet 소비자는 이 커밋에 포함하지 않는다.
+- 증거: 이전 committed transport에 새 시험을 적용하면 7개 RED, 구현 뒤 request Node 31 passed/skip 0. reader 결과·오류와 본문 미소비 거절, malformed/empty/204 거절, body 중 부모 취소·timeout, 오류 시 구독 정리와 기본 blob을 확인했다. 공식 원격·FULL 검증은 커밋 후 수행한다.
+- gate 변화: 기존 gate의 물리 수용 범위를 넓히지 않는다. camera-peer 전환·장치·배포 완료를 주장하지 않는다.
