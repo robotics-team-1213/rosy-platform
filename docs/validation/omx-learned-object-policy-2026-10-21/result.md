@@ -63,10 +63,8 @@ MODEL에서25개 각각의 독립 SIM 물체 정답·실제 gripper 증거와 �
 | offline report SHA256 | `b82b3616e9888e54c202b86b7140ffe20ca52aa18f4cdfd5e8595af3f309599c` |
 | MODEL 결과 SHA256 | `fc323566390ed325af125e9f911b18d0ee1baf668a08342a8c3b0b571fd48867` |
 
-전송 요청 원본 SHA256은
-`c73ce3439e959cdae303d980fce04a5f8d75341d74bd2dc1af5810c8b320c07b`,
-MODEL의 LF 재기록 요청 SHA256은
-`f47d792ab60f638518de5de6fc01c9e03f2f1b0b97bb984f13985716b78ce443`다.
+전송 요청 원본 SHA256: `c73ce3439e959cdae303d980fce04a5f8d75341d74bd2dc1af5810c8b320c07b`.
+MODEL의 LF 재기록 요청 SHA256: `f47d792ab60f638518de5de6fc01c9e03f2f1b0b97bb984f13985716b78ce443`.
 전송 영수증의 원본 해시·바이트 수와 재기록의 CRLF→LF 외 동일 바이트를 확인했다.
 요청의 수집 원장 해시·내용 결속을 유지했고 두 파일 해시를 혼동하지 않는다.
 
