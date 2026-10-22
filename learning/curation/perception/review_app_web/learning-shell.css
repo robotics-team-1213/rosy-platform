@@ -44,7 +44,7 @@
 .learning-shell .ui-pathbar:has(.learning-review-nav) { padding-block: 0; }
 .ui-pathbar .learning-review-nav { padding: 0; border: 0; background: none; }
 .learning-shell ui-topbar { flex-wrap: wrap; }
-.learning-shell learning-connections { min-width: 0; }
+.learning-shell .learning-connections { min-width: 0; }
 @container (width < 64rem) {
   .learning-primary-nav {
     display: grid;

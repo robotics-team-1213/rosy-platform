@@ -58,7 +58,6 @@
 834 fleet/web/shared/styles.css
 788 fleet/web/shared/vision-view.js
 771 fleet/web/sitemap/site-map.js
-1514 test/learning/perception/test_review_flow_browser.py
 3049 test/test_dashboard_browser.py
 3835 test/test_fleet_console_browser.py
 2484 test/test_rosy_face.py

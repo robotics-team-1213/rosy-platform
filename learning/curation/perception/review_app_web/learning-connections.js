@@ -63,28 +63,29 @@ export async function connectHuggingFace(session) {
 }
 
 let serial = 0;
-class LearningConnections extends HTMLElement {
-  connectedCallback() {
-    if (this.trigger) return;
+class LearningConnections {
+  constructor(host) {
+    this.host = host;
     if (!document.querySelector('link[href="/learning-connections.css"]')) {
       const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = '/learning-connections.css';
       document.head.append(style);
     }
-    this.innerHTML = '<ui-button kind="quiet" data-action-icon="account" aria-label="계정과 Hugging Face 연결" aria-haspopup="dialog">연결 확인 중</ui-button>';
-    this.trigger = this.querySelector('ui-button');
+    host.innerHTML = '<ui-button kind="quiet" aria-label="계정과 Hugging Face 연결" aria-haspopup="dialog">연결 확인 중</ui-button>';
+    this.trigger = host.querySelector('ui-button');
     this.trigger.addEventListener('click', () => this.open());
     this.refresh();
   }
 
   async refresh() {
+    const previous = JSON.stringify([this.options, this.session, this.failure, this.denied]);
     this.failure = ''; this.denied = false;
     try {
       const optionsResponse = await accountFetch('/api/accounts/options', {credentials:'same-origin', cache:'no-store'});
       const options = await optionsResponse.json();
       if (!optionsResponse.ok) throw new Error('계정 설정을 확인할 수 없습니다. 다시 시도하세요.');
       this.options = options;
-      this.hidden = !this.options.enabled;
-      if (this.hidden) return;
+      this.host.hidden = !this.options.enabled;
+      if (this.host.hidden) return;
       const response = await accountFetch('/api/accounts/session', {credentials:'same-origin', cache:'no-store'});
       const result = await response.json();
       this.session = response.ok ? result : null;
@@ -95,16 +96,16 @@ class LearningConnections extends HTMLElement {
       restoreLearningTask(this.session);
     } catch (error) { this.session = null; this.failure = error.message; }
     this.trigger.textContent = this.failure ? '연결 확인 필요' : !this.session ? '로그인' : readyConnection(this.session) ? '연결됨' : 'HF 연결 필요';
-    if (this.dialog?.open) this.render();
+    if (this.dialog?.open && previous !== JSON.stringify([this.options, this.session, this.failure, this.denied])) this.render();
   }
 
   open() {
-    if (this.dialog?.open || this.hidden) return;
+    if (this.dialog?.open || this.host.hidden) return;
     const titleId = `learning-connections-title-${++serial}`;
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'learning-connections-dialog';
     this.dialog.setAttribute('aria-labelledby', titleId);
-    this.dialog.innerHTML = `<div class="ui-workspace-bar"><h2 id="${titleId}" class="ui-section-heading">계정과 연결</h2><span data-spacer></span><ui-button kind="quiet" data-icon-only data-action-icon="close" aria-label="닫기"></ui-button></div><div data-connection-content></div>`;
+    this.dialog.innerHTML = `<div class="ui-workspace-bar"><h2 id="${titleId}" class="ui-section-heading">계정과 연결</h2><span data-spacer></span><ui-button kind="quiet" aria-label="닫기">닫기</ui-button></div><div data-connection-content></div>`;
     this.dialog.querySelector('[aria-label="닫기"]').addEventListener('click', () => this.closeDialog());
     this.render();
     this.closeDialog = openLiveDialog(this.dialog, {opener:this.trigger});
@@ -118,8 +119,9 @@ class LearningConnections extends HTMLElement {
       const node = document.createElement(tag); node.textContent = text; content.append(node); return node;
     };
     const actions = document.createElement('ui-actions');
-    const action = (label, handler, kind = 'quiet') => {
-      const button = document.createElement('ui-button'); button.textContent = label; button.setAttribute('kind', kind);
+    const action = (label, handler, primary = false) => {
+      const button = document.createElement('ui-button'); button.textContent = label; button.setAttribute('kind', 'quiet');
+      if (primary) button.setAttribute('kind', 'primary');
       button.addEventListener('click', async () => {
         button.disabled = true;
         try { await handler(); }
@@ -149,7 +151,7 @@ class LearningConnections extends HTMLElement {
       state.setAttribute('state', ready ? 'ready' : 'empty'); state.setAttribute('role', 'status');
       if (ready) line(ready.username || ready.subject);
       if (!this.session.capabilities?.includes('import')) line('자료 가져오기 권한이 필요합니다. 계정 관리자에게 권한을 요청하세요.');
-      else if (this.options?.oauth) action(hasConnections ? 'Hugging Face 다시 연결' : 'Hugging Face 연결', () => connectHuggingFace(this.session), ready ? 'quiet' : 'primary');
+      else if (this.options?.oauth) action(hasConnections ? 'Hugging Face 다시 연결' : 'Hugging Face 연결', () => connectHuggingFace(this.session), !ready);
       else line('Hugging Face 연결을 사용할 수 없습니다. 계정과 자료에서 연결을 확인하세요.');
       const accounts = document.createElement('a'); accounts.href = '/accounts'; accounts.textContent = '계정과 자료 관리'; actions.append(accounts);
       action('로그아웃', async () => {
@@ -161,4 +163,6 @@ class LearningConnections extends HTMLElement {
     content.append(actions);
   }
 }
-customElements.define('learning-connections', LearningConnections);
+export function mountLearningConnections(host) {
+  return new LearningConnections(host);
+}

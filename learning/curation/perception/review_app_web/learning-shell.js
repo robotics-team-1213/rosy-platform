@@ -1,5 +1,5 @@
 import {actionIcon} from '/common/ui.js';
-import '/learning-connections.js';
+import {mountLearningConnections} from '/learning-connections.js';
 
 const shell = document.querySelector('ui-shell');
 const body = shell?.querySelector('.ui-app-body');
@@ -64,10 +64,12 @@ if (shell && body && main) {
     context.className = 'learning-context';
     context.textContent = destinations.find(([key]) => key === current)[1];
     brand?.after(context);
-    const connections = document.createElement('learning-connections');
+    const connections = document.createElement('div');
+    connections.className = 'learning-connections';
     const theme = topbar.querySelector('[data-theme-cycle]');
     if (theme) theme.before(connections);
     else topbar.append(connections);
+    mountLearningConnections(connections);
   }
 
   if (review) {

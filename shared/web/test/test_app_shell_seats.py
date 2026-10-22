@@ -94,34 +94,31 @@ def test_collapsed_seats_do_not_stretch_or_overflow():
 
 
 def test_review_documents_share_the_app_bar_and_the_screen_rail():
-    """D-741 3, 6: app and theme in the app bar, the screens in the shared rail, the heading in the path row."""
+    """Learning supplies the shared seats; one module owns their navigation."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
-    rails = set()
-    for name, here in [('learning.html', '/learning'), ('index.html', '/'),
-                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog'),
-                       ('camera.html', '/learning/camera'), ('omx.html', '/learning/omx'),
-                       ('sim.html', '/learning'), ('accounts.html', None)]:
+    for name in ['learning.html', 'index.html', 'pixels.html', 'catalog.html',
+                 'camera.html', 'omx.html', 'sim.html', 'accounts.html']:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
+        assert html.index('/app.css') < html.index('/learning-shell.css')
+        assert html.count('<script type="module" src="/learning-shell.js"></script>') == 1
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
         bar = re.search(r'<ui-topbar role="banner">(.*?)</ui-topbar>', html, re.S).group(1)
         assert bar.startswith('<ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand>')
         assert '<h1' not in bar and '<nav' not in bar and 'data-theme-cycle=""' in bar
         assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
         body = html.split('</ui-topbar>', 1)[1]
-        rail = re.search(r'<div class="ui-app-body" data-seats="rail"><div class="ui-rail">'
-                         r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
-        items = re.findall(r'<a class="ui-rail-item" data-action-icon="(\w+)" href="([^"]+)" aria-label="([^"]+)"'
-                           r'( aria-current="page")?>([^<]+)</a>', rail)
-        assert [(icon, href, full, short) for icon, href, full, _, short in items] == [
-            ('list', '/learning', '작업 목록', '목록'), ('box', '/', '객체 검수', '객체'),
-            ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료'),
-            ('image', '/learning/camera', '카메라 맞춤', '카메라'), ('robot', '/learning/omx', '모방학습', '모방')]
-        assert [href for _, href, _, current, _ in items if current] == ([here] if here else [])
-        assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
-        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
+        assert '<div class="ui-app-body" data-seats="rail"><div class="ui-rail"></div>' in body
+        assert 'workspace-tabs' not in html, 'page templates must not duplicate shell navigation'
+        assert re.search(r'<div class="ui-app-main">\s*<div class="ui-pathbar"><h1(?: [^>]*)?>[^<]+</h1>', body)
         assert html.count('<h1') == 1
-        rails.add(re.sub(r' aria-current="page"', '', rail))
-    assert len(rails) == 1, 'the rail is the same in every document'
+    shell = (web / 'learning-shell.js').read_text(encoding='utf-8')
+    assert "from '/common/ui.js'" in shell
+    assert "import {mountLearningConnections} from '/learning-connections.js'" in shell
+    destinations = shell.split('const destinations = [', 1)[1].split('];', 1)[0]
+    assert re.findall(r"\['([^']+)', '([^']+)', '([^']+)'", destinations) == [
+        ('work', '작업', '/learning'), ('data', '자료', '/catalog'),
+        ('review', '검수', '/pixels?filter=pending'),
+        ('training', '학습·결과', '/learning?view=training')]
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'

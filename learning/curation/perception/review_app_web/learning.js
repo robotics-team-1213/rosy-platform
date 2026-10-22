@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id);
 let workspace, busy=false, checkedAt=0, readSequence=0;
 const trainingView=new URL(location.href).searchParams.get('view')==='training';
 $('workspace-title').textContent=trainingView?'학습·결과':'작업';
-document.title=`${trainingView?'학습·결과':'작업'} · Rosy Learning`;
+document.title=`Rosy Learning — ${trainingView?'학습·결과':'작업'}`;
 $('workspace-review').hidden=trainingView;
 if(trainingView)$('training-controls').open=true;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};

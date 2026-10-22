@@ -41,10 +41,12 @@
 .workspace-block #jobs { display: grid; gap: 0; }
 .workspace-tools { margin-block-start: var(--space-6); padding-block-start: var(--space-3); border-block-start: 1px solid var(--surface-line); color: var(--text-secondary); font-size: var(--text-label); }
 .workspace-tools > details + details { border-block-start: 1px solid var(--surface-line); }
-.workspace-page [hidden] { display: none; }
 @media (width < 64rem) {
   .workspace-page { padding: var(--space-3) var(--space-4) var(--space-6); }
   .work-focus h2 { font-size: var(--text-title); }
+  .work-focus-copy { inline-size: 100%; }
+  .work-focus-actions { flex-direction: column; align-items: stretch; }
+  .work-focus-actions > *, .workspace-section-heading > ui-button { inline-size: 100%; }
   .work-preview { display: none; }
   .work-stage-track { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: var(--space-2); }
   .workspace-block .work-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

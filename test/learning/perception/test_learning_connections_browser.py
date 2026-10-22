@@ -38,13 +38,27 @@ def test_connection_dialog_recovers_in_context(tmp_path, accounts, width):
                 trigger = page.get_by_role('button', name='계정과 Hugging Face 연결')
                 expect(trigger).to_be_visible()
                 assert page.url == origin + destination
+                page.evaluate("""() => document.addEventListener('click', event => {
+                    if (event.target.closest('a[href="/api/account/login?return=/accounts"]')) event.preventDefault();
+                })""")
+
+                def focus_before_refresh_completes(route):
+                    response = route.fetch()
+                    page.get_by_role('dialog', name='계정과 연결').get_by_role(
+                        'link', name='Rosy Account로 로그인').evaluate(
+                            "node => { node.dataset.refreshFocus = 'preserved'; node.focus(); }")
+                    route.fulfill(response=response)
+
+                page.route('**/api/accounts/session', focus_before_refresh_completes, times=1)
                 trigger.click()
                 dialog = page.get_by_role('dialog', name='계정과 연결')
                 expect(dialog).to_be_visible()
                 expect(dialog.get_by_role('link', name='Rosy Account로 로그인')).to_have_attribute(
                     'href', '/api/account/login?return=/accounts')
                 login = dialog.get_by_role('link', name='Rosy Account로 로그인')
-                login.evaluate("node => node.addEventListener('click', event => event.preventDefault())")
+                page.wait_for_load_state('networkidle')
+                expect(login).to_have_attribute('data-refresh-focus', 'preserved')
+                expect(login).to_be_focused()
                 login.click()
                 assert page.evaluate("sessionStorage.getItem('rosy.learning.login-return')") == '/pixels?frame=0'
                 page.keyboard.press('Escape')
