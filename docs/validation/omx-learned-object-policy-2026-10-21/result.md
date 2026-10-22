@@ -7,8 +7,8 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 종료된 실제 learned 물체 성공은 **0/42회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/22회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 종료된 실제 learned 물체 성공은 **0/43회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/23회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 직전 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
 
@@ -20,6 +20,68 @@
 
 후속 state-noise0.02rad 실험도10000단계·재적재·독립 평가·보관 검증을 마쳤다.
 그 새 checkpoint의 실제 물체 사전 과제도0/1회 실패했고 새 정식20회는 미시작이다.
+
+## 2026-10-22 noise0.01rad 비교의 학습 완료와 실제 사전 과제 실패
+
+후속 study bc1467a7cbf9cbc6의 실제 MODEL 실행은 EXIT0다. 같은25개·65557프레임·
+20train/5validation·sampling·cold start·ACT10000단계·seed42750·n_action_steps1·
+runtime을 유지하고 train-only noise 크기만0.02→0.01rad로 바꿨다. 실제 MODEL
+request 전체가 study_name과 noise를 제외하고 이전 실험과 같은지 검증했다.
+Normalization도 training_augmentation.std_rad 외 모든 값이 같다. Noise RNG42751과
+train_only=true를 유지하며, validation과 추론에는 교란을 넣지 않는다.
+
+실제10000개 loss history와 checkpoint·재적재·독립 평가·DatasetStore 등록 및
+재검증을 완료했다. 회수한 artifact 포함5개 파일·4개 참조의 해시와 크기를 대조했고
+weights/config/normalization은 앞서 저장한 실제10k 기록의 해시와도 일치했다.
+독립 validation5개·13111프레임의 MAE는0.003963902rad, 관절 제한 위반0건,
+reloaded_prediction_verified=true, verdict=offline_only다. MAE는0.02 실험보다
+낮지만 무교란 모델0.002872736rad보다 높다. 물체 성공으로 계산하지 않는다.
+Loss 처음100개 평균1.449213405·마지막100개 평균0.668550865는 다른 noise의
+학습 목표 분포와 직접 개선율을 비교하지 않는다.
+
+이전 실제 정체 입력5653/350의 RGB/q에서 세 고정 모델을 비교했다. 실제 native
+출력의1e-6rad 재현은0.02 모델에 해당한다. 새0.01 모델은 같은 입력에서 jaw
+delta−0.012521rad를 냈지만, joint1 delta−0.001238rad는 해당 teacher 상태에서
+멀어지는 방향이다. Teacher 파지 RGB/q의 jaw delta−0.012710rad도 원본
+−0.023232rad와 차이가 있다. 전반적 개선이나 정체 복구로 주장하지 않는다.
+수치 결과·모든 assertion 통과 표식을 회수했지만, 도구 호출 중단으로 상위 subprocess
+종료코드는 회수하지 못했다. 원격 scope·lock·checkout·out 정리를 확인했고 같은
+비교를 다시 제출하지 않았다. 새 모델의 실제 native 출력을 재현한 결과가 아니다.
+
+새 보정 nonce3c07de071a65는 EXIT0/PASS/cleanup true, 정책 goal0개·물체 attempts0이다.
+고정된 새 모델/runtime의 engineering 과제 nonce d918e51b9ff8은 EXIT1/HOLD,
+cleanup true, 성공0/1회로 끝났다. 실제162개 명령이 admission을 통과했으며161개는
+terminal4/code0, 마지막은 terminal6/code−5다. 정책 오류는
+`PermissionError: native learned goal did not succeed`이며 worker errors와
+admission rejection은 없다. 종료된 전체 learned 물체 성과는0/43회다.
+새 정식20회는 시작하지 않았다. SIM 부착 보조와 모든 실패 원장을 보존한다.
+
+Controller 로그는 zero-based joint index3/4의 오차−0.037563/−0.068085rad가
+각0.020rad 허용치를 넘고 goal-time1.010초를 초과한 tolerance abort를 기록한다.
+실제 TCP Z는120단계21.450mm→150단계13.561mm→161단계6.778mm로 내려갔다.
+마지막 제안 target은(14.794,178.403,6.021)mm로 공칭 pick보다 XY약17.01mm
+벗어나고 Z약8.98mm 낮다. 마지막 입력 jaw0.58558→target0.55682rad도 확인된
+contact 범위에 도달하지 못했다. Abort 순간의 전체 q와 접촉력은 없어 정확한
+충돌 부위·인과는 미확정이다. 이를 camera/lease 실패나0.02 모델의 정체로 분류하지 않는다.
+
+독립 물체 관측의 peak lift4.779mm·안정0SIM초·목표 XY오차217.342mm는 미완료
+관측이다. 물체가 밀리거나 기울었지만 attach/detach 전이는0건이며 파지·운반·놓기를
+완료하지 못했다. 다음 작업은 noise 조정이나 unchanged 재시도 대신 pick 이탈·접촉
+구간에서 실제 bounded teacher 교정과 RGB/q를 수집할 수 있는 경로를 설계하는 것이다.
+실패 RGB에 기존 teacher 라벨을 붙이거나 정책 실행 중 teacher로 전환하지 않는다.
+Controller 허용치·시간·authority를 완화할 근거는 없다.
+
+Policy revision SHA256: `1b3891e4c03445c732585dc02ea8294a754ccd8f9b894bab9d4a181b964bbe33`.
+Dataset revision SHA256: `924f4a0b9e987d9b09755c54e0c5ff12b2a5bdc65df9a59584f2d32c60a1f9a1`.
+Weights SHA256: `8b0352165eef5b6c4f02dee6a3d647f2432683d15bc91ead72ed40e984025ef1`.
+Normalization SHA256: `f9ae1b179816d18ec419efa7072ff29d7ee5eaf92ffd29d497d5beb837602cca`.
+History SHA256: `ab92d051f35a350a979f942f98918b8b53f7952f0c493e2e0a49acedf62744ac`.
+Offline report SHA256: `304a4aa5548a05801976bb7fbefd4a9dd169769e4f65a3b52c0269f441024f23`.
+Comparison JSON SHA256: `f38f60734fe5f1205bd6e428fdce8e7b1842098027019fb8e0e5cb525b3e7490`.
+Frozen campaign SHA256: `a4f05d85d898e691a215576f59e449b7faa7044ab64bc9fd0a6079a3f8ae9e9f`.
+Native policy result SHA256: `3b90bcb30c160c040f09c2f70277ce095d4a593cd14af9c2307586cb3e937fbc`.
+Native raw archive SHA256: `6435908203b14d67a25c9c8023a69ebec2980a23c932549c69736ecb470a3cca`.
+Runtime/training source commit: `bf2ca6346b9be0821249740a0cc8bd4fbf454e47`.
 
 ## 2026-10-22 state-noise 단일 변수 실험 완료와 실제 시험
 
@@ -83,7 +145,7 @@ Normalization SHA256: `09feb19cad4d7d775802641b72a56261e89c629a2603e552d4ddd680e
 History SHA256: `7c0819f82e9ddee08da459162408c6a3159267a7881fc6c823df1a028f805444`.
 Offline report SHA256: `b2197e4484675b9bed291477366c55f654bc4b8ee629299fd0bcbeea49410526`.
 비교 JSON SHA256: `19f8c660520bc59de6ddea7ca48cabc97f86c27aa66c601d978d1918231b79c1`.
-Runtime/training source: `bf2ca6346b9be0821249740a0cc8bd4fbf454e47`.
+Runtime/training source commit: `bf2ca6346b9be0821249740a0cc8bd4fbf454e47`.
 
 ## 2026-10-22 정체 입력의 실제 MODEL 재현
 
