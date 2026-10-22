@@ -23,14 +23,14 @@ The external log name identifies its directory; the file is `run-1.txt`.
 
 | Source commit | External log | Observed result |
 |---|---|---|
-| `f5cb33bda891c15ba8f21917ade7be29925ff811` | `learning-tasks-final-backend` | 2,422 passed, 78 skipped; perception backend, OMX training and curation. |
-| `f5cb33bda891c15ba8f21917ade7be29925ff811` | `learning-tasks-final-release` | 276 passed; signed closure, official installer, Fleet entry and browser selection. Two dependency warnings. |
-| `f5cb33bda891c15ba8f21917ade7be29925ff811` | `learning-tasks-final-browser` | 167 passed, zero skipped; actual Chromium against test servers, including tasks, accounts, center, playback and pipeline. Workers are controlled fixtures. |
-| `930d4b201d0a1c43ebc6877bc73d4555b89b3350` | `learning-tasks-layout-release` | 233 passed after the controller constants were extracted into its installed sidecar. |
-| `d062ab0caae96d8c7d530955248b9df6d0aedda2` | `learning-tasks-structure-final` | 28 passed; part ownership and document placement. |
-| `fd889ea429cf33cd4fabb838305a4e9c6405c02f` | `learning-tasks-pinned-model-reviewed` | Model host: 1 passed in 14.14 s; real pinned CPU ACT and HIL-SERL learner check. |
-| `fd889ea429cf33cd4fabb838305a4e9c6405c02f` | `learning-tasks-pinned-ai-reviewed` | AI host: 1 passed in 11.23 s; the same real learner check. |
-| `fd889ea429cf33cd4fabb838305a4e9c6405c02f` | `learning-tasks-account-integration` | 30 passed, zero skipped; OAuth, Account and actual Account/task Chromium after the upstream HF merge. |
+| commit `f5cb33bda891c15ba8f21917ade7be29925ff811` | `learning-tasks-final-backend` | 2,422 passed, 78 skipped; perception backend, OMX training and curation. |
+| commit `f5cb33bda891c15ba8f21917ade7be29925ff811` | `learning-tasks-final-release` | 276 passed; signed closure, official installer, Fleet entry and browser selection. Two dependency warnings. |
+| commit `f5cb33bda891c15ba8f21917ade7be29925ff811` | `learning-tasks-final-browser` | 167 passed, zero skipped; actual Chromium against test servers, including tasks, accounts, center, playback and pipeline. Workers are controlled fixtures. |
+| commit `930d4b201d0a1c43ebc6877bc73d4555b89b3350` | `learning-tasks-layout-release` | 233 passed after the controller constants were extracted into its installed sidecar. |
+| commit `d062ab0caae96d8c7d530955248b9df6d0aedda2` | `learning-tasks-structure-final` | 28 passed; part ownership and document placement. |
+| commit `fd889ea429cf33cd4fabb838305a4e9c6405c02f` | `learning-tasks-pinned-model-reviewed` | Model host: 1 passed in 14.14 s; real pinned CPU ACT and HIL-SERL learner check. |
+| commit `fd889ea429cf33cd4fabb838305a4e9c6405c02f` | `learning-tasks-pinned-ai-reviewed` | AI host: 1 passed in 11.23 s; the same real learner check. |
+| commit `fd889ea429cf33cd4fabb838305a4e9c6405c02f` | `learning-tasks-account-integration` | 30 passed, zero skipped; OAuth, Account and actual Account/task Chromium after the upstream HF merge. |
 
 The pinned test uses the existing isolated LeRobot 0.4.4 environment, synthetic two-arm,
 three-camera episodes and two optimizer steps per method. It checks train/save/reload,
