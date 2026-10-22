@@ -46,11 +46,18 @@ python applications/fleet/dev/serve.py --mode connected --origin https://localho
 
 ```powershell
 python applications/fleet/dev/serve.py --check
-python tools/remote/remote_pytest.py --log-dir private/frontend-checks -- applications/fleet/test
-python tools/remote/remote_pytest.py --log-dir private/frontend-browser -- ROSY_RUN_BROWSER_TESTS=1 applications/fleet/test/test_sample_browser.py applications/fleet/test/test_feature_browser_flows.py applications/fleet/test/test_browser_adapters.py
+python tools/remote/remote_pytest.py --log-dir "$env:TEMP/fleet-frontend-checks" -- applications/fleet/test
+python tools/remote/remote_pytest.py --log-dir "$env:TEMP/fleet-frontend-browser" -- ROSY_RUN_BROWSER_TESTS=1 applications/fleet/test
+python tools/remote/remote_pytest.py --log-dir "$env:TEMP/fleet-connected-browser" -- ROSY_RUN_BROWSER_TESTS=1 operations/fleet/test/test_app_connected_integration.py operations/fleet/test/test_app_connected_browser.py
 ```
 
 Python 시험은 커밋한 SHA를 원격 시험 PC에서 실행한다. 브라우저 시험은 opt-in이며 skip은 통과 증거가 아니다. `test/feature_matrix.json`에서 API 소유자·관찰된 응답·대표 흐름의 증거를 찾는다. 샘플 브라우저 시험, 실제 백엔드의 HTTP 계약 시험, 배포 환경/장치 인수는 서로 다른 증거다.
+
+CI의 FULL 실행은 `app-fleet` 필수 작업에서 앱 시험을 실행한다. FULL과 affected 실행 모두 앱 시험에 Chromium을 설치하고 브라우저 opt-in을 활성화한다. 다른 CORE 브라우저의 opt-in 범위는 기존대로 유지한다.
+
+실제 API 화면 시험은 개발용 connected HTTPS 호스트와 실제 Fleet 서버·임시 SQLite·가상 로봇을 사용한다. 화면에서 로그인·프로필 저장·목표 요청·대기 작업 취소·로그아웃을 조작하고 API에서 `QUEUED → CANCELED`와 세션 종료를 확인한다. 인증서와 서버는 시험 중 생성·정리하며 운영 서버나 실제 로봇은 필요하지 않다. 가상 로봇에 목표를 전송하지 않은 대기 작업 취소 흐름이므로 실장치 주행·정지 검증을 대신하지 않는다.
+
+[CI·실제 API 화면 검증 기록](../../docs/validation/fleet-frontend-ci-connected-2026-10-22.md)에 소스 SHA, 실행 결과와 장애 주입으로 확인한 실패 검출 범위를 적었다.
 
 초기 기록에서 거절 응답만 확인했던 여섯 API도 정상 설정의 HTTP 성공 경로를 검증했다. [후속 검증 기록](../../docs/validation/fleet-frontend-http-success-2026-10-21.md)에 실행 SHA·상태 변경·장치 검증과의 경계를 적었다.
 
