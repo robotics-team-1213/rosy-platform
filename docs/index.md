@@ -352,4 +352,3 @@
 - 2026-10-22 · fcdf36bdc1 · docs: Fleet CI와 실제 API 화면 검증 기록
 - 2026-10-21 · uncommitted · 워크트리 운영 상한 15개
 - 2026-10-21 · a4fe41374e · Fleet 프런트 API 성공 경로 후속 증거
-- 2026-10-21 · uncommitted · OMX 구간 검수 저장·사용 흐름
