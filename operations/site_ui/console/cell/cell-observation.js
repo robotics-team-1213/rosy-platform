@@ -1,5 +1,6 @@
 import {createScope} from '/common/scope.js';
 import {frameBadge} from '/console/assets/vision-view.js';
+import {createMotorHealthState, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
 
 const element = (tag, text = '') => {
   const node = document.createElement(tag); node.textContent = text; return node;
@@ -18,6 +19,12 @@ export function createCellObservation({request, root}) {
   let life = null, pending = false, layout = '', disposed = false;
   const arms = new Map(), cameras = new Map();
   root.replaceChildren(empty);
+  function paintHealth(entry) {
+    const health = entry.health.read();
+    renderMotorHealthSummary(entry.healthSummary, health);
+    if (entry.healthDetails.open) renderMotorHealth(entry.healthView, health);
+    entry.healthPaintedAt = performance.now();
+  }
 
   function reset() {
     for (const entry of cameras.values()) if (entry.url) URL.revokeObjectURL(entry.url);
@@ -43,8 +50,12 @@ export function createCellObservation({request, root}) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.armSource = arm.source_id;
         const status = element('ui-status'); status.setAttribute('state', 'unavailable');
         const values = element('pre');
-        const entry = {status, values, expires: 0}; staleArm(entry); arms.set(arm.source_id, entry);
-        card.append(element('h4', arm.label), element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
+        const healthDetails = element('details'), healthSummary = element('summary'), healthView = element('section');
+        healthSummary.className = 'ui-disclosure-row'; healthDetails.append(healthSummary, healthView);
+        const entry = {status, values, expires: 0, health: createMotorHealthState(), healthDetails, healthSummary, healthView};
+        healthDetails.addEventListener('toggle', () => paintHealth(entry));
+        paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry);
+        card.append(element('h4', arm.label), healthDetails, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
       }
       for (const camera of cell.cameras) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id;
@@ -121,7 +132,10 @@ export function createCellObservation({request, root}) {
       life = createScope();
       const poll = setInterval(refresh, 500);
       const expiry = setInterval(() => {
-        for (const entry of arms.values()) if (performance.now() >= entry.expires) staleArm(entry);
+        for (const entry of arms.values()) {
+          if (performance.now() >= entry.expires) staleArm(entry);
+          if (performance.now() - entry.healthPaintedAt >= 200) paintHealth(entry);
+        }
         for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
       }, 100);
       life.onDispose(() => { clearInterval(poll); clearInterval(expiry); });
@@ -129,6 +143,7 @@ export function createCellObservation({request, root}) {
     const scope = life;
     pending = true;
     const observedAt = performance.now();
+    const requestedAtMs = Date.now();
     try {
       const state = await request('/api/fleet/workcell-observations', {signal: scope.signal, timeoutMs: 1500});
       if (life !== scope || scope.signal.aborted) return;
@@ -137,6 +152,9 @@ export function createCellObservation({request, root}) {
       empty.textContent = '등록된 작업 셀 관측이 없습니다.';
       for (const cell of state.workcells) for (const arm of cell.arms) {
         const entry = arms.get(arm.source_id);
+        // motor_health ages already include source/receipt aging; add only this browser request's transit.
+        entry.health.accept(arm.motor_health, {requestedAtMs, receivedAtMs: Date.now()});
+        paintHealth(entry);
         const age = Math.max(0, arm.source_age_s, arm.receipt_age_s);
         entry.expires = arm.fresh && Number.isFinite(age) ? observedAt + (2 - age) * 1000 : 0;
         if (!arm.positions || performance.now() >= entry.expires) { staleArm(entry); continue; }
@@ -149,6 +167,7 @@ export function createCellObservation({request, root}) {
       if (life !== scope || scope.signal.aborted) return;
       if (error.status === 401 || error.status === 403) clear();
       else {
+        for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry); }
         empty.hidden = false;
         empty.textContent = error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.';
       }

@@ -57,7 +57,7 @@
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
 756 site_ui/console/line-stuck.js
 952 site_ui/console/map-view.js
-709 site_ui/console/roster.js
+694 site_ui/console/roster.js
 800 site_ui/console/shared/site-map-model.js
 856 site_ui/console/shared/styles.css
 788 site_ui/console/shared/vision-view.js

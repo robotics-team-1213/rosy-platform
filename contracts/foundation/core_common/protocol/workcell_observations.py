@@ -2,7 +2,8 @@
 import math
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, model_serializer, model_validator
+from .motor_health import MotorHealthResponse
 
 
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")]
@@ -50,7 +51,21 @@ class ArmObservation(_StrictModel):
     epoch: Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]
     sequence: Annotated[int, Field(gt=0)]
     captured_at: Annotated[JsonNumber, Field(gt=0)]
-    positions: Annotated[dict[JointName, JsonNumber], Field(min_length=1, max_length=8)]
+    positions: Annotated[dict[JointName, JsonNumber], Field(min_length=1, max_length=8)] | None
+    motor_health: MotorHealthResponse | None = None
+
+    @model_serializer(mode='wrap')
+    def omit_absent_health(self, handler):
+        result = handler(self)
+        if self.motor_health is None:
+            result.pop('motor_health', None)
+        return result
+
+    @model_validator(mode='after')
+    def terminal_health_without_positions(self):
+        if self.positions is None and (self.motor_health is None or self.motor_health.status not in ('fault', 'ended')):
+            raise ValueError('positions may be absent only for terminal motor health')
+        return self
 
 
 class WorkcellArm(_StrictModel):

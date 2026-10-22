@@ -26,6 +26,38 @@ sys.modules[_spec.name] = bridge
 _spec.loader.exec_module(bridge)
 
 
+def test_terminal_health_file_advances_without_new_ros_positions_and_never_refreshes(monkeypatch, tmp_path):
+    from core_common.protocol.motor_health import MotorHealthResponse
+    health = MotorHealthResponse(status='fault', evidence='disconnected', owner_id='arm_a',
+        session_id='11111111-1111-4111-8111-111111111111', sample_age_s=.1,
+        motors=[dict(group='arm_a', joint='joint1', id=11, sample_age_s=.1, command_raw=2028.,
+            present_raw=2028., error_deg=0., pwm=0., pwm_limit=330., pwm_utilization=0., temperature_c=43.,
+            temperature_limit_c=70., voltage_v=11.6, min_voltage_v=6., max_voltage_v=14., hardware_error=32,
+            fault=True)])
+    clock, terminal = SimpleNamespace(wall=100., monotonic=10.), [False]
+    source = bridge.LatestSource(wall=lambda: clock.wall, monotonic=lambda: clock.monotonic)
+    source.put(100., {'joint1': .2})
+    def read(*args, **kwargs):
+        if not terminal[0]:
+            raise FileNotFoundError()
+        return health, 100.2
+    monkeypatch.setattr(bridge, 'read_motor_health_snapshot', read)
+    combined = bridge.ArmHealthSource(source, tmp_path / 'health.json', 'arm_a')
+    first = combined.latest()
+    assert first.value == {'joint1': .2}
+    clock.wall, clock.monotonic, terminal[0] = 100.2, 10.2, True
+    last = combined.latest()
+    assert last.sequence > first.sequence and last.value is None and last.motor_health.status == 'fault'
+    assert combined.latest().sequence == last.sequence
+    clock.wall, clock.monotonic = 103., 13.
+    assert combined.latest() is None
+    delivered = []
+    monkeypatch.setattr(bridge, 'post_arm', lambda url, source, token, observation, **kwargs: delivered.append(observation))
+    sender = bridge.ArmSender('https://fleet.example', 'arm_feedback', 'private', context=ssl.create_default_context())
+    sender.send(last)
+    assert delivered[0].positions is None and delivered[0].motor_health.motors[0].hardware_error == 32
+
+
 @pytest.fixture
 def manifest():
     return WorkcellObservationManifest.model_validate({"schema": "rosy.workcell-observations/1", "workcells": [{

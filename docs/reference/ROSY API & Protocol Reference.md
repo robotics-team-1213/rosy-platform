@@ -4,6 +4,43 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ## 공유 인터페이스 계약서
 
+### v1.296 읽기 전용 모터 상태
+
+`GET /api/v1/motors/health`는 기존 CORE viewer 인증을 요구하고
+`rosy.motor-health.v1`을 반환한다. 서버가 지정한 절대 파일 경로와 소유자만
+읽으며 HTTP 입력으로 파일·장치·소유자를 바꾸지 않는다. 파일 부재·검증 실패는
+`evidence:unavailable,status:unavailable`이며 모터 값을 추정하지 않는다.
+
+응답은 `{schema_version,evidence,status,owner_id,session_id,sample_age_s,
+stale_after_s:2,motors,stop_reasons,support_reason}`이다. 모터 행에는
+`{group,joint,id,sample_age_s,command_raw,present_raw,error_deg,pwm,pwm_limit,
+pwm_utilization,temperature_c,temperature_limit_c,voltage_v,min_voltage_v,
+max_voltage_v,warnings}`가 있다. 선택적 `hardware_error`(0..255), `fault`,
+`torque_enabled`는 실제 읽은 오류 코드·관절 고장·토크 상태이며 누락값은 모름이다.
+PWM 비율은 설정 상한 대비 사용률이며 물리
+토크가 아니다. 관측 나이·전체 모터 범위·소유자·세션을 검증해야 실시간이다.
+고장·종료 기록은 `evidence:disconnected,status:fault|ended`로 보존하고
+현재 정상 상태로 간주하지 않는다. 장치 경로와 원시 SDK 예외는 공개하지 않는다.
+
+Fleet 로봇 상태 행은 선택적 `motor_health`와 `motor_health_age_s`를 제공한다.
+CORE→Fleet 조회 시작부터의 경과 시간과 브라우저 HTTP 전송 시간을 보수적으로
+더한다. 통합 관제 요약과 로봇별 상세는 같은 공용 표시기를 사용하며 확인 불가를
+정상으로 표시하지 않는다. 조회 실패는 다른 로봇의 조회를 중단시키지 않는다.
+이 정보는 표시 전용이며 torque·고장 해제·명령 admission을 부여하지 않는다.
+
+D-837의 `ArmObservation`은 선택적 `motor_health`를 같은 출처 인증으로
+받고 GET의 해당 팔에 반환한다. 소유자·그룹은 등록 `arm_id`, 관절은 정확한
+등록 관절 집합에 결속한다. 표준 OMX follower는 joint1..joint5,
+gripper_joint_1과 모터 11..16의 순서를 검증한다. source·receipt 경과 시간은
+원래 모터 표본의 나이에 더하며 재전송으로 신선해지지 않는다.
+`positions:null`은 결속된 `status:fault|ended` 모터 기록이 있을 때만 허용한다.
+이때 위치는 항상 확인 불가이며 고장 전 위치를 현재 위치로 만들지 않는다.
+고장 시각과 모터 측정 시각을 구분하고 기존 2초 capture·epoch·sequence·크기
+검사와 출처별 인증을 유지한다. 비공개 bridge 인수
+`--arm-health-file SOURCE_ID=/absolute/file`은 등록 출처의 명시적 파일만 읽는다.
+관측기 `--health-file`·`--health-owner`는 기존 단일 버스 소유자가 이미 읽은
+레지스터 블록을 기록하며 두 번째 직렬 포트 독자를 만들지 않는다.
+
 ### v1.295 Fleet workcell observation (D-837)
 
 Additive read-only observation boundary; [D-837](../adr/D-837-workcell-observation.md)
@@ -243,7 +280,7 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.295
+**Version:** v1.296
 
 ### v1.294 Console operator assistant and explicit navigation (D-810/D-821)
 

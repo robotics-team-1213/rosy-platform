@@ -1289,3 +1289,10 @@
 - 변경: 상태 패널에 same-origin /pilot 진입을 추가했다. 기존 조작·정지 계약은 유지하고 중복 저속 조종 제거는 대상·릴리스별 실기 증거 예외로 남긴다.
 - 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
 - gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
+
+
+## 2026-10-22 · 79a11a4a54 · 로봇 콘솔의 모터 상세 연결
+
+- 변경: 같은 출처의 CORE viewer API를 읽고 HTTP 요청 시작부터의 시간을 관측 나이에 반영한다.
+- 증거: 8e8861fc39 원격 UI/D-837 회귀 15 passed/skip0/NEW0에 로봇 화면·전송 지연 회귀 포함.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.

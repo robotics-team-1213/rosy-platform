@@ -8,6 +8,7 @@ import threading
 import time
 
 from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.protocol.motor_health import age_motor_health
 
 
 class WorkcellObservations:
@@ -15,6 +16,7 @@ class WorkcellObservations:
                  wall=time.time, monotonic=time.monotonic):
         self._joints = {arm.source_id: frozenset(arm.joint_names)
                         for cell in manifest.workcells for arm in cell.arms}
+        self._arm_ids = {arm.source_id: arm.arm_id for cell in manifest.workcells for arm in cell.arms}
         if (set(tokens) != self._joints.keys()
                 or any(type(token) is not str or not token for token in tokens.values())
                 or len(set(tokens.values())) != len(tokens)):
@@ -61,8 +63,19 @@ class WorkcellObservations:
     def ingest(self, source_id: str, token: str, observation: ArmObservation) -> None:
         self.authorize(source_id, token)
         observation = ArmObservation.model_validate(observation.model_dump())
-        if observation.positions.keys() != self._joints[source_id]:
+        if observation.positions is not None and observation.positions.keys() != self._joints[source_id]:
             raise ValueError("joint positions must match the registered arm exactly")
+        health = observation.motor_health
+        if health is not None:
+            motors = health.motors
+            owner = self._arm_ids[source_id]
+            if (health.owner_id != owner or not motors or any(m.group != owner for m in motors)
+                    or {m.joint for m in motors} != self._joints[source_id]
+                    or len(motors) != len(self._joints[source_id]) or len({m.id for m in motors}) != len(motors)):
+                raise ValueError('motor health must match the registered arm owner and joint coverage')
+            omx = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1']
+            if self._joints[source_id] == set(omx) and any(m.id != 11 + omx.index(m.joint) for m in motors):
+                raise ValueError('OMX motor health IDs must match registered joint identity')
         with self._lock:
             source_age = self._wall() - observation.captured_at
             received = self._monotonic()
@@ -93,13 +106,18 @@ class WorkcellObservations:
                     sample = self._samples.get(arm["source_id"])
                     if sample is None:
                         arm.update(fresh=False, epoch=None, sequence=0, captured_at=None,
-                                   source_age_s=None, receipt_age_s=None, positions=None)
+                                   source_age_s=None, receipt_age_s=None, positions=None, motor_health=None)
                         continue
                     observation, received = sample
                     source_age, receipt_age = wall - observation.captured_at, now - received
-                    fresh = -0.25 <= source_age <= 2 and 0 <= receipt_age <= 2
+                    health_elapsed = (max(0, source_age, receipt_age)
+                        if math.isfinite(source_age) and math.isfinite(receipt_age)
+                        and source_age >= -.25 and receipt_age >= 0 else -1)
+                    fresh = observation.positions is not None and -0.25 <= source_age <= 2 and 0 <= receipt_age <= 2
                     arm.update(fresh=fresh, epoch=observation.epoch, sequence=observation.sequence,
                                captured_at=observation.captured_at, source_age_s=source_age,
                                receipt_age_s=receipt_age,
-                               positions=dict(observation.positions) if fresh else None)
+                               positions=dict(observation.positions) if fresh else None,
+                               motor_health=(age_motor_health(observation.motor_health, health_elapsed)
+                                   .model_dump() if observation.motor_health is not None else None))
             return {"read_only": True, "physical_acceptance": False, "workcells": workcells}

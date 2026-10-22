@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · 79a11a4a54 · 출처에 결속된 모터 상태 계약
 - 2026-10-22 · uncommitted · 작업 셀 producer credential fingerprint 검증
 - 2026-10-21 · uncommitted · 작업 셀 관측의 source 결속 계약 (D-837)
 - 2026-10-21 · uncommitted · 관제 AI 게시용 공통 계약 (D-810/D-821)
 - 2026-10-21 · uncommitted · Raster 등록·추출 요청과 선택 시설 근거 (D-835)
-- 2026-10-21 · uncommitted · STL 도면 좌표 등록 계약 (D-825)

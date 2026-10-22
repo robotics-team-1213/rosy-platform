@@ -14,6 +14,8 @@
     "live-dialog-geometry.js": "text/javascript",
     "theme.js": "text/javascript",
     "evidence.js": "text/javascript",
+    "motor-health.js": "text/javascript",
+    "motor-health.css": "text/css",
     "scope.js": "text/javascript",
     "icons/cam.svg": "image/svg+xml",
     "icons/pilot.svg": "image/svg+xml",

@@ -4246,3 +4246,10 @@
 - Change: include the Learning link in the exact work-menu browser inventory and check its fixed destination. Keep operator/viewer, filter, refresh-failure and accessibility checks.
 - Evidence: PR151 initial CI found the stale menu expectation. At 2d38309d3a all four affected desktop/mobile Chromium cases passed remotely, NEW 0.
 - Gate: unchanged; official image activation and authenticated Learning acceptance remain pending.
+
+
+## 2026-10-22 · 79a11a4a54 · 모터 상태 캐시와 Cell 관측 연결
+
+- 변경: 인증된 로봇별 캐시와 같은 출처별 D-837 ingest에 모터 상태를 연결했다. 측정 나이는 줄이지 않는다.
+- 증거: 79a11a4a54 공식 원격 producer/ingest 관련 154 passed/skip0/NEW0; transport/cache 독립 검토에서 차단 결함 없음.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
