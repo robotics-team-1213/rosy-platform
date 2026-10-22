@@ -9970,3 +9970,9 @@ osy-d395-s1d\`.
 - 변경: 필수 CI 연결과 실제 API 화면 시험의 소스·원격 실행 결과·실패 검출·한계를 동결 기록으로 남겼다. 기존 프런트·HTTP 성공 기록은 보존했다.
 - 증거: CI 착지 2b6f93281b FULL 30,551 passed/1,999 skipped 및 G1 267 passed, 별도 앱 Chromium 79 passed/skip 0. 후속 fcdf36bdc1은 실제 API 화면·HTTP·샘플 합동 81 passed/skip 0/NEW 0. 의도한 취소·goal 주입 실패와 제거 후 재통과를 구분했다. validation/fleet-frontend-ci-connected-2026-10-22.md.
 - gate 변화: 코드 검증 기록만 추가했다. 공개 GitHub 실행·배포·실장치·현장 수용 결과를 주장하지 않는다.
+
+## 2026-10-22 · a4ff8c3ee3 · docs: 검증 기록의 Git 식별자 출처 보완
+
+- 변경: 동결 기록의 본문은 유지하고 공개 Git 식별자 네 행을 기존 exact-line 출처 목록에 연결했다. 실제 스캔으로 발견한 등록 누락을 보완했다.
+- 증거: 3b79313477 tracked-file scan 실패·main 통과를 확인했다. 독립 검토와 a4ff8c3ee3 원격 scanner·출처 회귀 28 passed/skip 0/NEW 0. 앞선 합동 화면 81건은 최신 shared session과 합친 3b79313477에서도 skip 없이 통과했다.
+- gate 변화: 문서 메타데이터만 수정했다. scanner 규칙·실패 기준선·이전 검증 결과는 변경하지 않았다.
