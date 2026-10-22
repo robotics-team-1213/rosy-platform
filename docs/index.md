@@ -347,8 +347,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · uncommitted · D-845 공유 HTTP 응답 reader 계약
 - 2026-10-22 · a4ff8c3ee3 · docs: 검증 기록의 Git 식별자 출처 보완
 - 2026-10-22 · fcdf36bdc1 · docs: Fleet CI와 실제 API 화면 검증 기록
 - 2026-10-21 · a4fe41374e · Fleet 프런트 API 성공 경로 후속 증거
 - 2026-10-21 · uncommitted · OMX 구간 검수 저장·사용 흐름
-- 2026-10-21 · uncommitted · OMX 실제 RGB 정답 편입 결과와 수집 중단

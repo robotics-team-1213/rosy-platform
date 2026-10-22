@@ -73,3 +73,11 @@ D-825 reserved in another session (refs/adr/D-825), absent from this base; remov
 D-832 reserved outside this branch (refs/adr/D-832), absent from this base; remove when its ADR lands
 D-832 reserved on peer branch feat/omx-learning-flow (8967d9484b), absent from this branch; remove when its ADR lands
 D-835 reserved in another session (refs/adr/D-835), absent from this branch; remove when its ADR lands
+D-837 reserved outside this branch; remove when its ADR lands
+D-838 reserved outside this branch; remove when its ADR lands
+D-839 reserved outside this branch; remove when its ADR lands
+D-840 reserved outside this branch; remove when its ADR lands
+D-841 reserved on refactor/shared-module-reuse, preserved at c2e930c8d7; remove when its ADR lands
+D-842 reserved outside this branch; remove when its ADR lands
+D-843 reserved outside this branch; remove when its ADR lands
+D-844 reserved outside this branch; remove when its ADR lands

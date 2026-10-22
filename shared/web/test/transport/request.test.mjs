@@ -189,3 +189,65 @@ for (const timeoutMs of [-1, Infinity, NaN]) {
     assert.equal(sends, 0);
   });
 }
+
+test('custom response reader preserves its result and the HTTP envelope', async () => {
+  const request = createRequest({origin, fetchImpl: async () => new Response('plain text'),
+    readResponse: response => response.text()});
+  assert.deepEqual(await request('/state'), {status: 200, ok: true, body: 'plain text'});
+});
+
+test('custom header-first denial preserves the error without reading or replaying a write', async () => {
+  const parent = new AbortController();
+  const failure = Object.assign(new Error('service denied'), {status: 403});
+  let reads = 0, sends = 0, listeners = 0;
+  const add = parent.signal.addEventListener.bind(parent.signal);
+  const remove = parent.signal.removeEventListener.bind(parent.signal);
+  parent.signal.addEventListener = (...args) => { listeners++; add(...args); };
+  parent.signal.removeEventListener = (...args) => { listeners--; remove(...args); };
+  const request = createRequest({origin, fetchImpl: async () => {
+    sends++;
+    return {status: 403, ok: false, json: async () => { reads++; return {}; }};
+  }, readResponse: response => {
+    if (!response.ok) throw failure;
+    return response.json();
+  }});
+  await assert.rejects(request('/write', {method: 'POST', signal: parent.signal, timeoutMs: 10_000}),
+    error => error === failure);
+  assert.equal(reads, 0);
+  assert.equal(sends, 1);
+  assert.equal(listeners, 0);
+});
+
+for (const [status, body] of [[200, 'not JSON'], [200, ''], [204, null]]) {
+  test(`strict response reader propagates invalid JSON for ${status}/${body}`, async () => {
+    let reads = 0;
+    const request = createRequest({origin, fetchImpl: async () => new Response(body, {status}),
+      readResponse: response => { reads++; return response.json(); }});
+    await assert.rejects(request('/write', {method: 'POST'}), SyntaxError);
+    assert.equal(reads, 1);
+  });
+}
+
+for (const timeout of [false, true]) {
+  test(`custom body reader remains inside ${timeout ? 'timeout' : 'parent cancellation'}`, async () => {
+    const parent = new AbortController();
+    let finish;
+    const request = createRequest({origin, fetchImpl: async () => json({}),
+      readResponse: () => new Promise(resolve => { finish = resolve; })});
+    const pending = request('/state', {signal: parent.signal, timeoutMs: timeout ? 5 : 0});
+    await Promise.resolve();
+    assert.equal(typeof finish, 'function');
+    if (timeout) await new Promise(resolve => setTimeout(resolve, 20));
+    else parent.abort();
+    finish({late: true});
+    await assert.rejects(pending, {name: 'AbortError'});
+  });
+}
+
+test('default binary reader still returns the blob and response headers', async () => {
+  const response = new Response(new Uint8Array([1, 2, 3]), {headers: {'Content-Type': 'image/png'}});
+  const request = createRequest({origin, fetchImpl: async () => response});
+  const result = await request('/image', {blob: true});
+  assert.equal(result.body.headers.get('Content-Type'), 'image/png');
+  assert.deepEqual(new Uint8Array(await result.body.blob.arrayBuffer()), new Uint8Array([1, 2, 3]));
+});
