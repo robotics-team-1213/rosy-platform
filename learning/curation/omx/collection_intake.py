@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-from omx_output_paths import in_source_checkout
 import hashlib
 import importlib.metadata
 import json
@@ -13,6 +12,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from omx_output_paths import in_source_checkout
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
 from native_environment import ROLES, _events, _roles, seal_environment
 from native_review import JOINTS, dataset_files, inspect_dataset, write_json

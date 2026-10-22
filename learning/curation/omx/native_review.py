@@ -1,6 +1,5 @@
 """Offline native OMX dataset inspection and reviewed episode splits; no robot or upload."""
 import argparse
-from omx_output_paths import in_source_checkout
 import copy
 import hashlib
 import importlib.metadata
@@ -13,6 +12,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from omx_output_paths import in_source_checkout
 from native_capture import bind_capture, check_capture_groups
 from native_environment import bind_environment, seal_environment, split_coverage, validate_environment
 
