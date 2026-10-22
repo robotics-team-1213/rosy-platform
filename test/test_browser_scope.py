@@ -76,3 +76,11 @@ def test_empty_selection_exits_3_without_targets(capsys):
     assert out.out == "" and "no browser tests" in out.err
     assert browser_scope.main(["test/test_games_board_browser.py"]) == 0
     assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
+
+
+def test_common_robot_tasks_select_real_browser_flow():
+    expected = 'test/learning/perception/test_learning_tasks_browser.py'
+    for source in ('learning_tasks.py', 'learning_tasks_web.py', 'review_app.py',
+                   'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
+        assert expected in browser_scope.targets(['learning/curation/perception/' + source])
+    assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])

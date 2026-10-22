@@ -182,6 +182,10 @@ def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
     "learning/training/omx/experiment_preview.py",
     "learning/curation/omx/collection_pipeline.py",
     "learning/curation/perception/camera_setup_web.py",
+    "learning/curation/perception/learning_tasks.py",
+    "learning/curation/perception/learning_tasks_web.py",
+    "learning/curation/perception/review_app_web/tasks.html",
+    "learning/curation/perception/review_app_web/tasks.js",
     "learning/curation/perception/review_app_web/omx.html",
     "contracts/learning/src/rosy/contracts/learning/camera_setup.py",
 ])

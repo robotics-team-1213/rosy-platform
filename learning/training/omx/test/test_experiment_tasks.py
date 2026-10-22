@@ -27,12 +27,15 @@ class Registry:
         if self.reject or task_id != self.task_id or profile_revision != self.profile_revision:
             raise ValueError('task dataset/profile binding differs')
         self.calls.append((dataset_id, dataset_revision, list(component_ids), host_id))
-        participants = [dict(robot_id='robot-' + part, component_id=part, role='arm') for part in component_ids]
+        robot_id = str(uuid.uuid4())
+        participants = [dict(robot_id=robot_id, component_id=part, role='arm') for part in component_ids]
         return dict(task_id=task_id, task_revision='a' * 64, project_id='project',
                     dataset_id=dataset_id, dataset_revision=dataset_revision,
                     profile_id=str(uuid.uuid4()), profile_revision=profile_revision,
                     compute_host=host_id, component_ids=list(component_ids),
-                    task_participants=participants, participants=participants)
+                    task_participants=participants, participants=participants,
+                    robots=[dict(id=robot_id, kind='omx', model_revision='model-v1',
+                                 device_id='registered-device', revision='c' * 64)])
 
 
 @pytest.fixture
@@ -73,10 +76,17 @@ def test_task_scope_worker_request_retry_and_evaluation_archive(owned, mode, arm
     registry.profile_revision = profile_revision(checked.profile)
     if mode == 'independent':
         body['arm_id'] = 'arm_b'
+    source = c.root / 'datasets' / body['dataset_id']
+    source.mkdir()
+    receipt_bytes = b'{"source_revision":"reviewed-source-r1"}'
+    (source / 'conversion-receipt.json').write_bytes(receipt_bytes)
     row = c.start(body)
     binding = row['learning_task']
     assert binding == launches[0]['learning_task']
     assert binding['component_ids'] == arm_ids and binding['compute_host'] == 'model'
+    assert binding['attachment_kind'] == 'historical_dataset_attachment'
+    assert binding['source_receipts'] == [{'name': 'conversion-receipt.json',
+                                         'sha256': hashlib.sha256(receipt_bytes).hexdigest()}]
     assert registry.calls == [(body['dataset_id'], checked.revision, arm_ids, 'model')]
     assert c.start(body) == row and len(launches) == 1
     root = c.root / 'runs' / row['id'] / 'output'
@@ -152,3 +162,31 @@ def test_cross_task_continuous_experience_never_reaches_inbox(owned, monkeypatch
     with pytest.raises(ValueError, match='task'):
         c.experience(dict(id=row['id'], dataset_id=did, request_id=str(uuid.uuid4())))
     assert admitted == []
+
+
+def test_training_entry_preserves_task_binding_and_checks_source_before_updates(owned, tmp_path, monkeypatch):
+    import experiment_train as trainer
+    c, _, checked, body, _ = owned
+    row = c.start(body)
+    binding = row['learning_task']
+    monkeypatch.setattr(trainer, 'load_dataset', lambda *a, **k: checked)
+    calls = []
+    monkeypatch.setattr(trainer, 'train_dataset', lambda *a, **k: calls.append(k))
+    trainer.train(tmp_path / 'source', tmp_path / 'trained', learning_task=binding)
+    assert calls[0]['learning_task'] == binding
+    wrong = copy.deepcopy(binding)
+    wrong['dataset_revision'] = 'd' * 64
+    with pytest.raises(ValueError, match='task|revision'):
+        trainer.train(tmp_path / 'source', tmp_path / 'trained', learning_task=wrong)
+    assert len(calls) == 1
+
+
+def test_worker_task_metadata_is_fixed_and_bounded(owned):
+    from experiment_jobs import check_learning_task
+    c, _, _, body, _ = owned
+    binding = c.start(body)['learning_task']
+    assert check_learning_task(binding) == binding
+    for changed in (dict(binding, command='anything'), dict(binding, project_id='x' * 65536),
+                    dict(binding, component_ids=['not-in-participants']), dict(binding, compute_host='other')):
+        with pytest.raises(ValueError):
+            check_learning_task(changed)
