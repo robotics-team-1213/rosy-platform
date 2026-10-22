@@ -10,13 +10,69 @@
 현재 확정된 실제 learned 물체 성공은 **0/40회**다. 최초 고정 평가 0/20회와
 별도 engineering 사전 과제 0/20회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
-최신 동일 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
+직전 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
 
-후속 teacher 전략은 실제 물체 시연1회와 독립정답·전체RGB2619장 검증을 통과했다.
-이는 학습 정책 성공이 아니다. 새25시연 cohort의 검증본1개를 확보했고 잔여24개를
-수집 중이다. 학습은 수집 완료를 기다리며 새 정식20회는 아직 시작하지 않았다.
+후속 teacher 전략의 새25개 시연과 전체RGB65557장 독립정답·영상 검증이 끝났다.
+그 자료로 새 ACT checkpoint의10,000단계 학습·재적재와 offline 검증도 완료했다.
+새 checkpoint는 native 보정·사전 과제 평가를 준비 중이며, 새 정식20회 성공은
+아직 입증되지 않았다. 시연 성공과 offline MAE를 실제 learned 성공에 합산하지 않는다.
 
-## 최신 실제 과제와 다음 학습 비교
+## 2026-10-22 새25개 시연과 새 checkpoint
+
+Source revision/runtime: `bf2ca6346b9be0821249740a0cc8bd4fbf454e47`.
+직전25개 자료와 실패한 teacher prototype을 보존하고 별도 cohort를 수집했다.
+Prototype1개와3개씩8묶음이 모두 정상 종료·cleanup 검증을 마쳤다. 새25개는
+고유 episode ID와 실제 teacher source가 일치하며 모든 원본 archive를 보존했다.
+
+MODEL에서25개 각각의 독립 SIM 물체 정답·실제 gripper 증거와 성공 판정을
+재계산하고 전체65557프레임의 export/readback을 검증했다. 원본 수집 순서의
+앞20개 train/뒤5개 validation과 검증 원장의 ID 순서·프레임 수가 정확히 일치한다.
+고정 초기 상태 과제이며 randomization이나 기록되지 않은 simulation seed를
+주장하지 않는다. 모든 시연은 SIM 부착 보조를 사용했다.
+
+| 검증 항목 | 실제 결과 |
+| --- | --- |
+| 새 시연과 독립 정답·전체 영상 | 25/25개, 65557프레임 |
+| 시연 XY 오차 | 0.046480–0.877541mm |
+| 시연 lift | 101.657585–102.021554mm |
+| 시연 안정 유지 | 2.204–2.260 SIM초 |
+| ACT 설정 | cold start, seed42750, n_action_steps1, 10000단계 |
+| 학습 입력 | command_entry_and_exit, joint_delta_tanh_from_chunk_source_v1 |
+| 실제 optimizer history | 10000단계; 처음100 loss평균0.925346, 마지막100평균0.189565 |
+| checkpoint 재적재 | reloaded_prediction_verified=true |
+| 독립 validation | 5개·13111프레임, MAE0.002872736rad, 관절 제한 위반0 |
+| 등록·번들 검증 | DatasetStore register/require, 번들5개 참조의 해시·크기 검증 통과 |
+| MODEL 실행 결과 | 종료코드0, trained_reloaded_offline_verified |
+| 새 native 평가 | 보정 입력 전달; 사전 과제·정식20회 결과 미확인 |
+
+서로 다른 자료·action 표현으로 만든 이전 후보와 MAE를 직접 개선율로 비교하지
+않는다. 이 checkpoint의 offline 결과는 실제 물체 집기·놓기 성공률이 아니다.
+기존 learned 누적0/40은 그대로이며 calibration을 이 분모에 넣지 않는다.
+새 사전 과제 통과 후에만 동일 checkpoint·runtime으로 새 정식20회를 실행한다.
+
+| 결속 증거 | SHA256 |
+| --- | --- |
+| 수집 원장 SHA256 | `ea919d299bfafd2f3914a25cd90b708decc4aeec4c09cdb1d2122d43a8371d66` |
+| 독립 검증 원장 SHA256 | `555842f3dbebb6d7fdca1160209029105708760490d65af9b5ed15d37f9e8c0c` |
+| 20/5 분리 SHA256 | `1cc5065a445468d67c1dc0e0508a1f0c21f2242605a8c404da5539cb1f19d759` |
+| optimizer history SHA256 | `7cf8efdc70f5794278cf6dc95490af7d8455473d6bc1df7f32528767dc4c9f54` |
+| policy revision SHA256 | `7f238383fc77298643a002ae24b1ca742b5d50b0f5ed6e58e9eeabf70bf81059` |
+| dataset revision SHA256 | `74d0db52459ecf66c2cc0d21066e3ad3b36b1b4d9560b645a589044458392a02` |
+| normalization SHA256 | `790675668e9198e4c5d466775e50c8baf0fbf5df4dd3ba631285d44b6a9aeec2` |
+| weights SHA256 | `3a01df366f8cdef6d7f917ae11451f0c4c144e276cd45b87e7a52704f0db9a65` |
+| offline report SHA256 | `b82b3616e9888e54c202b86b7140ffe20ca52aa18f4cdfd5e8595af3f309599c` |
+| MODEL 결과 SHA256 | `fc323566390ed325af125e9f911b18d0ee1baf668a08342a8c3b0b571fd48867` |
+
+전송 요청 원본 SHA256은
+`c73ce3439e959cdae303d980fce04a5f8d75341d74bd2dc1af5810c8b320c07b`,
+MODEL의 LF 재기록 요청 SHA256은
+`f47d792ab60f638518de5de6fc01c9e03f2f1b0b97bb984f13985716b78ce443`다.
+전송 영수증의 원본 해시·바이트 수와 재기록의 CRLF→LF 외 동일 바이트를 확인했다.
+요청의 수집 원장 해시·내용 결속을 유지했고 두 파일 해시를 혼동하지 않는다.
+
+## 이전 실제 과제와 학습 비교
+
+이하 기록은 새25개 cohort 이전 후보의 실패와 통제 비교 이력이다.
 
 관측 전달 수정을 병합한 runtime의 과제 `aa1770c5c1a7`은296명령 중295개
 terminal4/code0 뒤 마지막 terminal6/code-5로 HOLD했다. cleanup true,
