@@ -80,19 +80,23 @@ def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize('refresh', [True, False])
-def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypatch, refresh):
+@pytest.mark.parametrize('input_age_s',[.01,.02])
+def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypatch, refresh,input_age_s):
     session, engine, packet, client, clock, _, cameras, seen, _ = case(tmp_path, monkeypatch)
-    clock[0] += .02  # Valid under 50ms admission, but leaves little computation margin.
+    clock[0] += input_age_s  # Admission-valid; reserve time for measured submit tails.
     pauses=[]
+    rgb=[packet.rgb]
     class LiveCamera:
         def capture(self):
-            return nullcontext(CapturedRGB(cameras[0], packet.rgb))
+            return nullcontext(CapturedRGB(cameras[0], rgb[0]))
     def pause(delay):
         pauses.append(delay)
         clock[0] += delay
         if refresh:
             session.observe(replace(session._snapshot, sequence=11, received_at=clock[0]))
-            cameras[0]=replace(cameras[0], received_at_ns=int(clock[0]*1e9))
+            rgb[0]=bytes(reversed(packet.rgb))
+            cameras[0]=replace(cameras[0], received_at_ns=int(clock[0]*1e9),
+                               frame_sha256=hashlib.sha256(rgb[0]).hexdigest())
     monkeypatch.setattr('sim_policy_inference.sleep', pause, raising=False)
     if refresh:
         candidate, result=infer_for_owner(engine, session, LiveCamera())
@@ -100,6 +104,7 @@ def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypa
         assert result.source.sequence==candidate.sequence==11
         assert candidate.observed_at_ns==int(clock[0]*1e9)
         assert candidate.camera_received_at_ns==(cameras[0].received_at_ns,)
+        assert result.source.rgb==rgb[0]!=bytes(packet.rgb)
     else:
         with pytest.raises((PermissionError, TimeoutError)):
             infer_for_owner(engine, session, LiveCamera())

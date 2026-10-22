@@ -70,8 +70,11 @@ def assert_storage_rule(bundle: str) -> None:
     client = (WEB_ROOT / "client.js").read_text(encoding="utf-8")
     others = dashboard_js(without=("client.js",))
     assert "localStorage" not in others
-    assert client.count("localStorage.setItem(") == 2
-    assert "localStorage.setItem('rosy.account.identity', key)" in client
+    assert client.count("localStorage.setItem(") == 1
+    # The identity marker is written by the shared Account session module only.
+    assert 'import { createAccountSession } from "/common/account-session.js";' in client
+    shared = (COMMON_ROOT / "account-session.js").read_text(encoding="utf-8")
+    assert "localStorage.setItem(KEY, key)" in shared and shared.count("localStorage") == 1
     assert "localStorage.setItem(PAIRED_KEY, JSON.stringify({ token, expires_at: expiresAt }))" in client
     guarded = client.split("export function rememberToken", 1)[1].split("localStorage.setItem(", 1)[0]
     assert "if (persist && left > 0 && left <= REMEMBER_MAX_MS)" in guarded

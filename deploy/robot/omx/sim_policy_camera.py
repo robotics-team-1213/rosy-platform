@@ -8,6 +8,9 @@ from omx_adapter.camera_contract import CameraFrameGate
 from rosy.execution.local.omx_policy import CameraSnapshot
 from sim_policy_install import CAMERA_INFO, WORLD
 
+# Retain every retry: 600 s / 10 ms plus 600 outer policy cycles, without RGB copies.
+MAX_CAPTURE_RECORDS=60_600
+
 
 @dataclass(frozen=True)
 class CameraPacket:
@@ -80,7 +83,7 @@ class SimPolicyCamera:
         with self._lock:
             if self._latest is None or self.error:
                 raise PermissionError('original fixed SIM camera unavailable')
-            if len(self.captures)>=1000:
+            if len(self.captures)>=MAX_CAPTURE_RECORDS:
                 raise RuntimeError('bounded policy capture limit')
             packet=self._latest
             self.captures.append(dict(frame_sha256=packet.metadata.frame_sha256,

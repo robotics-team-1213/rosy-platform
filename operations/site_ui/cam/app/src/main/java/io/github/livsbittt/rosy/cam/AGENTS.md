@@ -36,6 +36,7 @@ All Rosy Cam app code: capture, encode, and push latest-only JPEG frames to the 
 - `FirstContactTrust` (pairing) must never be reused for the frame link, which trusts the pinned site CA via `PinnedTrust` (D-341 3, 8, 9).
 - Keep wire constants (`rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`) identical to `operations/overhead/rosy_vision/protocol.py`; change both against the shared vectors.
 - Put non-Android logic in plain Kotlin classes so tests run on the JVM.
+- `ui/` is the D-766 size unit for Compose presentation, recovery guidance and user-action callbacks. Keep camera, transport and credential ownership in their existing packages; the size-unit registration does not create a Gradle module or change those interfaces. Exercise rendered recovery behavior through `app/src/androidTest/`, separately from the pure JVM tests in `app/src/test/`.
 
 ### Testing Requirements
 

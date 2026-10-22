@@ -18,6 +18,7 @@
         "applications/fleet/web/installation/install.js",
         "applications/fleet/web/shared/account-page.js",
         "applications/fleet/web/shared/development-auth.js",
+        "applications/fleet/web/shared/login-page.js",
         "applications/fleet/web/shared/login-return.js",
         "applications/fleet/web/shared/password-login.js",
         "applications/fleet/web/shared/profile-page.js",
@@ -104,6 +105,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/session"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/login-page.js",
+          "expression": "/api/fleet/auth/authorize?",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/authorize"
           ]
         },
         {

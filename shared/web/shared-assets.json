@@ -27,6 +27,7 @@
     "task-chooser.js": "text/javascript",
     "ui-wiring.js": "text/javascript",
     "task-chooser.css": "text/css",
-    "account-profile.js": "text/javascript"
+    "account-profile.js": "text/javascript",
+    "account-session.js": "text/javascript"
   }
 }

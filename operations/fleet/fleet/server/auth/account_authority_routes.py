@@ -21,6 +21,10 @@ def install_account_authority_routes(app, *, sessions, authority):
         headers, body, status = result
         return Response(body, status_code=status, headers={**headers, **NO_STORE})
 
+    def recovery(error, target='/console'):
+        return RedirectResponse('/console/login?' + urlencode({'error': error, 'return': target}),
+                                status_code=303, headers=NO_STORE)
+
     async def form(request):
         if request.headers.get('content-type', '').split(';')[0].strip().lower() != 'application/x-www-form-urlencoded':
             raise HTTPException(415, 'Form content required', headers=NO_STORE)
@@ -37,19 +41,28 @@ def install_account_authority_routes(app, *, sessions, authority):
     @app.get('/api/fleet/auth/authorize')
     async def authorize(request: Request):
         query = request.url.query
+        browser = 'text/html' in request.headers.get('accept', '').lower()
         try:
             authority.authorization_fields(query)
         except ValueError:
-            return protocol(authority.error())
+            return recovery('invalid_request') if browser else protocol(authority.error())
+        target = '/api/fleet/auth/authorize?' + query
         try:
-            context = await call(sessions.account_context, request.cookies.get(COOKIE, ''))
-        except StalePasswordCheck:
-            context = None
-        if context is None:
-            target = '/api/fleet/auth/authorize?' + query
-            return RedirectResponse('/console/login?' + urlencode({'return': target}),
-                                    status_code=303, headers=NO_STORE)
-        return protocol(await call(authority.authorize, query, context))
+            try:
+                context = await call(sessions.account_context, request.cookies.get(COOKIE, ''))
+            except StalePasswordCheck:
+                context = None
+            if context is None:
+                return RedirectResponse('/console/login?' + urlencode({'return': target}),
+                                        status_code=303, headers=NO_STORE)
+            result = await call(authority.authorize, query, context)
+        except HTTPException as error:
+            if browser and error.status_code == 503:
+                return recovery('service_unavailable', target)
+            raise
+        if browser and result[2] in (400, 403):
+            return recovery('access_denied' if result[2] == 403 else 'invalid_request', target)
+        return protocol(result)
 
     @app.post('/api/fleet/auth/token')
     async def token(request: Request):

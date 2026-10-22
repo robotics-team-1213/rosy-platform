@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes
 from learning_oauth import OAuth
 from learning_accounts import AccountError
-from test_learning_accounts import accounts
+from test_learning_accounts import accounts, sign_in
 
 
 def b64(value): return base64.urlsafe_b64encode(value).rstrip(b'=').decode()
@@ -17,7 +17,7 @@ def b64(value): return base64.urlsafe_b64encode(value).rstrip(b'=').decode()
 class Provider:
     def __init__(self):
         self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        self.claims = {}; self.calls = []; self.scope = 'openid profile read-repos'
+        self.claims = {}; self.calls = []; self.scope = 'openid profile read-repos gated-repos write-repos manage-repos'
 
     def __call__(self, method, url, *, data=None, headers=None):
         self.calls.append((method, url, data))
@@ -35,7 +35,9 @@ class Provider:
         raise AssertionError(url)
 
 
-def setup_flow(accounts, purpose='login', session=None):
+def setup_flow(accounts, purpose='link', session=None):
+    if session is None:
+        session, _ = sign_in(accounts, 'alice')
     cfg = json.loads(accounts.config_path.read_text())
     cfg['oauth'] = {'client_id': 'client', 'redirect_uri': 'https://review.example/oauth/callback'}
     accounts.config_path.write_text(json.dumps(cfg))
@@ -44,34 +46,40 @@ def setup_flow(accounts, purpose='login', session=None):
     query = parse_qs(urlsplit(url).query)
     provider.claims = {'iss': 'https://huggingface.co', 'aud': 'client', 'sub': 'invited-alice',
                        'exp': int(time.time()) + 300, 'iat': int(time.time()), 'nonce': query['nonce'][0]}
-    return oauth, provider, query, binding
+    return oauth, provider, query, binding, session
 
 
-def test_pkce_login_callback_replay_and_browser_binding(accounts):
-    oauth, provider, query, binding = setup_flow(accounts)
+def test_pkce_link_callback_replay_and_browser_binding(accounts):
+    oauth, provider, query, binding, session = setup_flow(accounts)
     assert query['code_challenge_method'] == ['S256']
-    assert query['scope'] == ['openid profile']
-    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, 'wrong')
+    assert query['prompt'] == ['select_account']
+    callback = {'state': query['state'][0], 'code': 'x'}
+    with pytest.raises(AccountError): oauth.complete(callback, 'wrong', session=session)
     # Wrong browser must not destroy the legitimate browser's pending flow.
-    session, principal = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
-    assert principal['user_id'] == 'alice'
-    assert accounts.authenticate(session)['user_id'] == 'alice'
+    new_session, connection = oauth.complete(callback, binding, session=session)
+    assert new_session is None and connection['subject'] == 'invited-alice'
     token_call = next(call for call in provider.calls if call[1].endswith('/token'))
     assert token_call[2]['code_verifier']
-    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+    with pytest.raises(AccountError): oauth.complete(callback, binding, session=session)
+
+
+def test_provider_sign_in_is_not_a_purpose(accounts):
+    session, _ = sign_in(accounts, 'alice')
+    with pytest.raises(AccountError):
+        setup_flow(accounts, 'login', session)
 
 
 @pytest.mark.parametrize('field,value', [('nonce', 'wrong'), ('iss', 'https://evil.example'),
-    ('aud', 'other'), ('exp', 0), ('sub', 'uninvited')])
-def test_invalid_claims_never_login(accounts, field, value):
-    oauth, provider, query, binding = setup_flow(accounts)
+    ('aud', 'other'), ('exp', 0)])
+def test_invalid_claims_never_connect(accounts, field, value):
+    oauth, provider, query, binding, session = setup_flow(accounts)
     provider.claims[field] = value
-    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
+    assert accounts.connections(accounts.authenticate(session)) == []
 
 
 def test_explicit_link_is_session_bound(accounts):
-    session, _ = accounts.login('alice', 'alice-password')
-    oauth, provider, query, binding = setup_flow(accounts, 'link', session)
+    oauth, provider, query, binding, session = setup_flow(accounts)
     provider.claims['sub'] = 'second-subject'
     assert 'read-repos' in query['scope'][0]
     accounts.logout(session)
@@ -79,79 +87,77 @@ def test_explicit_link_is_session_bound(accounts):
 
 
 def test_oidc_signature_is_checked(accounts):
-    oauth, provider, query, binding = setup_flow(accounts)
-    old = provider.key
+    oauth, provider, query, binding, session = setup_flow(accounts)
     def transport(method, url, **kwargs):
         result = provider(method, url, **kwargs)
         if url.endswith('/token'): provider.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         return result
     oauth.transport = transport
-    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
 
 
-def test_explicit_oauth_link_retains_independent_login_and_expires_connection(accounts):
-    session, alice = accounts.login('alice', 'alice-password')
-    oauth, provider, query, binding = setup_flow(accounts, 'link', session)
+def test_explicit_oauth_link_keeps_identity_and_expires_connection(accounts):
+    oauth, provider, query, binding, session = setup_flow(accounts)
+    alice = accounts.authenticate(session)
     provider.claims['sub'] = 'another-hf-account'
     new_session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
     assert new_session is None
     assert connection['subject'] == 'another-hf-account'
     assert accounts.credential(alice, connection['connection_id'])['token'] == 'oauth-private'
-    assert accounts.login_subject('another-hf-account')[1]['user_id'] == 'alice'
     now = accounts.clock(); accounts.clock = lambda: now + 3601
     with pytest.raises(AccountError, match='expired'): accounts.credential(alice, connection['connection_id'])
-    # Repository token expiry does not remove the verified ROSY login identity.
-    assert accounts.login_subject('another-hf-account')[1]['user_id'] == 'alice'
+    # Repository token expiry does not release the verified provider identity to someone else.
+    assert accounts._subject_owner('another-hf-account') == 'alice'
 
 
-def publisher(accounts):
-    cfg = json.loads(accounts.config_path.read_text())
-    membership = cfg['users'][0]['memberships']['one']
-    if 'publish' not in membership:
-        membership.append('publish')
-    accounts.config_path.write_text(json.dumps(cfg))
-    return accounts.login('alice', 'alice-password')
-
-
-def test_manage_oauth_keeps_only_requested_repo_scopes(accounts):
-    session, alice = publisher(accounts)
-    oauth, provider, query, binding = setup_flow(accounts, 'manage', session)
-    assert query['scope'] == ['openid profile read-repos write-repos manage-repos']
+@pytest.mark.parametrize('purpose', ['link', 'manage'])
+def test_oauth_keeps_only_requested_repo_scopes_without_publish_grant(accounts, purpose):
+    session, alice = sign_in(accounts, 'alice')
+    assert 'import' in alice['capabilities'] and 'publish' not in alice['capabilities']
+    oauth, provider, query, binding, _ = setup_flow(accounts, purpose, session)
+    assert query['scope'] == ['openid profile read-repos gated-repos write-repos manage-repos']
     assert query['prompt'] == ['select_account']
-    provider.scope = 'openid profile read-repos write-repos manage-repos inference-api'
+    provider.scope = 'openid profile read-repos gated-repos write-repos manage-repos inference-api'
     provider.claims['sub'] = 'manage-subject'
     _session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
-    assert connection['scopes'] == ['manage-repos', 'read-repos', 'write-repos']
+    assert connection['scopes'] == ['gated-repos', 'manage-repos', 'read-repos', 'write-repos']
     assert 'token' not in connection
     assert accounts.credential(alice, connection['connection_id'])['token'] == 'oauth-private'
 
 
-def test_read_link_does_not_store_write_scopes(accounts):
-    session, _alice = accounts.login('alice', 'alice-password')
-    oauth, provider, query, binding = setup_flow(accounts, 'link', session)
-    assert 'write-repos' not in query['scope'][0]
-    provider.scope = 'openid profile read-repos gated-repos write-repos manage-repos'
-    provider.claims['sub'] = 'read-link-subject'
+def test_link_can_connect_without_optional_gated_scope(accounts):
+    session, _alice = sign_in(accounts, 'alice')
+    oauth, provider, query, binding, _ = setup_flow(accounts, 'link', session)
+    provider.scope = 'openid profile read-repos write-repos manage-repos'
+    provider.claims['sub'] = 'link-subject'
     _session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
-    assert connection['scopes'] == ['gated-repos', 'read-repos']
+    assert connection['scopes'] == ['manage-repos', 'read-repos', 'write-repos']
 
 
-def test_manage_oauth_requires_publish_and_both_write_scopes(accounts):
-    session, _alice = accounts.login('alice', 'alice-password')
-    with pytest.raises(AccountError):
-        setup_flow(accounts, 'manage', session)
-    session, _alice = publisher(accounts)
-    oauth, provider, query, binding = setup_flow(accounts, 'manage', session)
-    provider.scope = 'openid profile write-repos'
-    provider.claims['sub'] = 'write-only-subject'
+@pytest.mark.parametrize('purpose', ['link', 'manage'])
+@pytest.mark.parametrize('missing', ['read-repos', 'write-repos', 'manage-repos'])
+def test_oauth_requires_each_repository_scope(accounts, purpose, missing):
+    session, _alice = sign_in(accounts, 'alice')
+    oauth, provider, query, binding, _ = setup_flow(accounts, purpose, session)
+    provider.scope = ' '.join(scope for scope in provider.scope.split() if scope != missing)
+    provider.claims['sub'] = 'insufficient-scopes-subject'
     with pytest.raises(AccountError, match='management permission'):
         oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
     assert accounts.connections(_alice) == []
 
 
-def test_expired_oauth_state_makes_no_provider_request(accounts):
-    oauth, provider, query, binding = setup_flow(accounts)
-    now = accounts.clock(); accounts.clock = lambda: now + 601
-    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
-    assert provider.calls == []
+@pytest.mark.parametrize('purpose', ['link', 'manage'])
+def test_oauth_still_requires_import_permission(accounts, purpose):
+    cfg = accounts.config()
+    cfg['users'][0]['memberships']['one'] = ['view']
+    accounts.config_path.write_text(json.dumps(cfg))
+    session, _ = sign_in(accounts, 'alice')
+    with pytest.raises(AccountError):
+        setup_flow(accounts, purpose, session)
 
+
+def test_expired_oauth_state_makes_no_provider_request(accounts):
+    oauth, provider, query, binding, session = setup_flow(accounts)
+    now = accounts.clock(); accounts.clock = lambda: now + 601
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
+    assert provider.calls == []

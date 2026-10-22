@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 import threading
+from learning_pipeline import snapshot
 
 
 class ControlConflict(ValueError):
@@ -102,6 +103,7 @@ class Control:
         ledger_error = None
         try:
             ledger = json.loads(_bytes(state, 16 * 1024 * 1024)) if state.exists() else {}
+            evidence = snapshot(ledger)
             cycles = ledger.get('cycles', {})
             pipeline = ledger.get('review_autobuild', {})
             keys = pipeline.get('cycle_keys')
@@ -112,6 +114,7 @@ class Control:
                 and type(row.get('attempts')) is int and row['attempts'] < self.max_attempts for row in rows)
         except (ValueError, KeyError, TypeError, AttributeError, OSError):
             retry = False
+            evidence = None
             ledger_error = '학습 실행 기록을 읽지 못했습니다. 중지는 가능하며 재시도 전에 기록을 확인하세요.'
         reasons = {'start': '실행 중이거나 자동 확인이 이미 켜져 있습니다.',
                    'stop': '현재 실행기와 자동 확인이 모두 중지되어 있습니다.',
@@ -122,7 +125,7 @@ class Control:
             state='stopping' if service['ActiveState'] == 'deactivating' else
                   'running' if active else 'waiting' if automatic else 'stopped',
             can_start=not active and not automatic and not ledger_error, can_stop=active or automatic,
-            can_retry=not active and retry, reasons=reasons, error=ledger_error)
+            can_retry=not active and retry, reasons=reasons, error=ledger_error, pipeline=evidence)
         result['version'] = hashlib.sha256(json.dumps({'service': {k: service.get(k) for k in
             ('ActiveState', 'SubState', 'Result', 'ExecMainStatus', 'InvocationID')},
             'automatic': automatic, 'retry': retry, 'ledger_valid': not ledger_error}, sort_keys=True).encode()).hexdigest()

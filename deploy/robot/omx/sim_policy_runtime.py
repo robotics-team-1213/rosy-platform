@@ -1,11 +1,34 @@
 """SIM-only additional step fence over the existing serialized policy admission."""
+from dataclasses import asdict
+import threading
+
+from omx_adapter.watchdog_observation import JointIntakeObservation
 from rosy.execution.local.policy_runtime import PolicyRuntimeBinding
 
 
 class SimPolicyRuntimeBinding(PolicyRuntimeBinding):
     def __init__(self,*args,**kwargs):
         self.admission_rejection=None
+        self._coalesced_snapshot=None
         super().__init__(*args,**kwargs)
+
+    def guard(self):
+        with self.session._lock:
+            super().guard()
+            self.session._check_hold()
+            latest=self.runtime.latest_joint_state
+            # The exclusive native state callback may wait here after valid intake.
+            if latest is not None and latest.sequence>self.session._snapshot.sequence:
+                self.session.observe(latest)
+                self._coalesced_snapshot=latest
+
+    def observe(self,snapshot):
+        with self.session._lock:
+            self.guard()
+            if snapshot is self._coalesced_snapshot and snapshot is self.session._snapshot:
+                self._coalesced_snapshot=None
+                return
+            self.session.observe(snapshot)
 
     def _rejected(self,reason,command,current=None):
         # Latch the original failed comparison in memory; the actor flushes it after HOLD.
@@ -53,3 +76,46 @@ def bind_sim_runtime(session, runtime):
         if session._runtime_binding is not None:
             raise ValueError('runtime already bound')
         session._runtime_binding = SimPolicyRuntimeBinding(session, runtime)
+
+
+def trace_sim_admission(session,journal,runtime):
+    """Measure unchanged SIM calls in memory; the stopped actor writes the trace."""
+    records=[]
+    binding=session._runtime_binding
+    def joint_refs():
+        return (session._snapshot,runtime.latest_joint_state,
+                getattr(runtime.owner,'joint_intake_observation',None))
+    def joint_facts(refs):
+        if refs is None:return None
+        snapshot,latest,intake=refs
+        def receipt(value):
+            return None if value is None else dict(sequence=value.sequence,received_owner_s=value.received_at)
+        return dict(session=receipt(snapshot),latest=receipt(latest),
+            intake=asdict(intake) if type(intake) is JointIntakeObservation else None)
+    def measured(stage,call):
+        def invoke(*args,**kwargs):
+            command_id=next((arg.command_id for arg in args if hasattr(arg,'command_id')),None)
+            if stage=='journal_read' and args:command_id=args[0]
+            if command_id is None:
+                command_id=getattr(getattr(binding._local,'command',None),'command_id',None)
+            # Freeze existing immutable references; diagnostics never refresh intake.
+            try:before=joint_refs() if stage=='guard' else None
+            except Exception:before=None
+            started=int(runtime.monotonic()*1e9);outcome='raised'
+            try:
+                value=call(*args,**kwargs);outcome='returned'
+                return value
+            finally:
+                record=dict(stage=stage,command_id=command_id,thread_id=threading.get_ident(),
+                    started_owner_ns=started,ended_owner_ns=int(runtime.monotonic()*1e9),outcome=outcome)
+                if stage=='guard' and outcome=='raised':
+                    try:record['joint_delivery']=dict(before=joint_facts(before),after=joint_facts(joint_refs()))
+                    except Exception as error:record['joint_diagnostic_error']=type(error).__name__
+                records.append(record)
+        return invoke
+    for stage,target,name in [('session_submit',session,'submit'),('guard',session,'_guard'),
+            ('journal_prepare',journal,'prepare'),('journal_observe',journal,'observe'),
+            ('journal_read',journal,'read'),('native_send',runtime.action_port,'send_goal'),
+            ('native_submit',binding,'submit'),('post_submission',binding,'check_after_submission')]:
+        setattr(target,name,measured(stage,getattr(target,name)))
+    return records

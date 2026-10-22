@@ -39,9 +39,9 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from rosy_cell.compiler import compile_job
     from act_inference import ACTInference
     from sim_policy_install import prepare_install, WORLD
-    from sim_policy_camera import SimPolicyCamera
+    from sim_policy_camera import MAX_CAPTURE_RECORDS, SimPolicyCamera
     from sim_policy_inference import infer_for_owner
-    from sim_policy_runtime import bind_sim_runtime
+    from sim_policy_runtime import bind_sim_runtime, trace_sim_admission
     from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
     from sim_pick_place_task import judge_episode
     from sim_study_authority import NativeSimStudyAuthority
@@ -82,6 +82,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     spinner=threading.Thread(target=executor.spin,daemon=True);spinner.start()
     observer,aid=ObserverClient(observer_path),SimAid()
     samples,steps,transitions,worker_errors=[],[],[],[]
+    admission_timings=[]
     stop=threading.Event()
     authority=fence=session=None
     failed_traceback=None
@@ -92,6 +93,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         mode='calibration_without_policy_goals' if calibration else 'learned_policy_object_trial',
         parent_policy_revision=campaign['policy_revision'],goal_m=goal,sim_aid=True,
         runtime_poll_period_s=arm.poll_period_s,
+        camera_capture_record_limit=MAX_CAPTURE_RECORDS,
         python_switch_interval_s=sys.getswitchinterval(),
         previous_python_switch_interval_s=previous_switch_interval_s,
         operating_fleet_approval='NOT_CLAIMED',physical_device_authority=False,module_origins=origins)
@@ -115,7 +117,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
 
     def renew_worker():
         try:
-            while not stop.wait(.1):session.renew(authority.issue())
+            while not stop.wait(.2):session.renew(authority.issue())
         except Exception as error:worker_errors.append('lease_renewal:'+str(error))
 
     def gripper_evidence(expect):
@@ -168,6 +170,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         if session._runtime_binding.source_revision!=prepared_source:
             raise PermissionError('prepared source changed during runtime binding')
         receipt['runtime_bind_ms']=(time.monotonic()-bind_started)*1000
+        admission_timings=trace_sim_admission(session,journal,arm)
         renew=threading.Thread(target=renew_worker,daemon=True);renew.start();threads.append(renew)
         sampler=threading.Thread(target=observe_worker,daemon=True);sampler.start();threads.append(sampler)
         while not samples:require_live();time.sleep(.01)
@@ -283,7 +286,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             receipt['admission_rejection']=session._runtime_binding.admission_rejection
         receipt.update(wall_s=time.monotonic()-started,worker_errors=worker_errors,
             owner_final=arm.owner.state,camera_accepted=camera.accepted,camera_rejected=camera.rejected,
-            camera_error=camera.error,policy_steps=len(steps),native_events=len(events))
+            camera_error=camera.error,camera_capture_records=len(camera.captures),
+            policy_steps=len(steps),native_events=len(events))
         if worker_errors:receipt['success']=False
         write_json(directory/'policy-steps.json',steps)
         write_json(directory/'policy-native-events.json',events)
@@ -291,7 +295,10 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         write_json(directory/'policy-camera-captures.json',camera.captures)
         write_json(directory/'observations.json',samples)
         write_json(directory/'policy-result.json',receipt)
-        camera.destroy();executor.shutdown();arm.destroy();node.destroy_node();rclpy.shutdown()
+        try:
+            camera.destroy();executor.shutdown();arm.destroy();node.destroy_node();rclpy.shutdown()
+        finally:
+            write_json(directory/'policy-admission-timings.json',admission_timings)
     return 0 if receipt['success'] else 1
 
 

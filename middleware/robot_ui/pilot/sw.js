@@ -2,7 +2,7 @@
 // /api/*·/ws/* 는 절대 캐시하지 않는다 — 명령과 상태는 네트워크 전용이고,
 // 오프라인에서 조종 경로를 열지 않는 것이 이 앱의 안전 계약이다(D-323 §7).
 
-const CACHE = "rosy-pilot-shell-2026-10-21-ui-wiring";   // 캐시 키 = 이미지 버전. 바뀌면 이 이름을 올린다.
+const CACHE = "rosy-pilot-shell-2026-10-22-long-robot-names";   // 캐시 키 = 이미지 버전. 바뀌면 이 이름을 올린다.
 const SHELL = [
   "/common/account-profile.js",
   "/pilot",
@@ -42,6 +42,7 @@ const SHELL = [
   "/common/evidence.js",
   "/common/webrtc.js",
   "/common/core_ui_logic.js",
+  "/common/account-session.js",
 ];
 
 self.addEventListener("install", (event) => {

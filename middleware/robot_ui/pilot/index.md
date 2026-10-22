@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · uncommitted · 접속 목록의 긴 로봇 이름 줄바꿈
 - 2026-10-21 · uncommitted · 글자 기호 아이콘 정리
 - 2026-10-19 · 4a5d5eef7f · 보관 Account 통합의 버튼 선언과 검증 해시 표기
 - 2026-10-19 · 212a8b51b2 · Account 앱 변경을 독립 착지 단위로 재적용
 - 2026-10-19 · 30acdffbfb · Account 로그아웃과 native fixture 원격 검증
-- 2026-10-19 · uncommitted · 조회 전용 Account도 조종 차단 화면에서 로그아웃

@@ -311,6 +311,22 @@ class AccountClient:
                 db.execute('DELETE FROM app_account_revocations WHERE id=?', (row['id'],))
 
 
+def browser_session(client, cookie):
+    """The shared /api/account/session body (D-757) and its claims; each route still authorizes."""
+    if client is None:
+        return {'enabled': False, 'authenticated': False, 'profile': None, 'profile_url': None}, None
+    claims = client.resolve(cookie)
+    profile = client.profile(cookie) if claims else None
+    if profile and profile['account_id'] != claims.sub:
+        profile = None
+    body = {'enabled': True, 'authenticated': claims is not None, 'profile': profile,
+            'profile_url': client.profile_url if claims else None}
+    if claims:
+        body.update(account_id=claims.sub, session_family=claims.sid, revision=claims.rev, resource=claims.aud,
+                    capabilities=[cap for grant in claims.grants for cap in grant.capabilities])
+    return body, claims
+
+
 def load_account_client(filename, *, destinations=('/pilot', '/dashboard', '/')):
     def read(path, secret=False):
         path = Path(path)

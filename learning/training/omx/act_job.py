@@ -52,22 +52,50 @@ def chunk_indices(count, start, size):
     return [i if i < count else None for i in range(start, start + size)]
 
 
-def training_sample_indices(rows, joint_names, *, sampling):
+def training_sample_indices(rows, joint_names, *, sampling, sim_truth=None):
     """Select original frames only; action labels and chunk chronology stay unchanged."""
     if sampling == 'all_frames':
         return list(range(len(rows)))
-    if sampling != 'command_entry' or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
+    place_open = sampling == 'command_entry_exit_and_place_open'
+    if sampling not in ('command_entry','command_entry_and_exit','command_entry_exit_and_place_open') or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
         raise ValueError('command_entry sampling requires the fixed six-joint OMX SIM rig')
-    selected = {}
+    held_commands = set()
+    if place_open:
+        if sim_truth is None:
+            raise ValueError('place/open sampling requires original verified SIM truth')
+        # run() verifies the proof and its file bytes before reading this metadata.
+        proof = Path(sim_truth)
+        refs = json.loads(proof.read_bytes())['files']
+        phases = json.loads((proof.parent/refs['phases']['path']).read_bytes())
+        commands = json.loads((proof.parent/refs['commands']['path']).read_bytes())
+        transfer, = [p for p in phases if p['phase_id']=='transfer']
+        last = max((i for i,c in enumerate(commands)
+                    if transfer['started_sim_s']<=c['sim_time']<transfer['ended_sim_s']),
+                   key=lambda i:commands[i]['sim_time'])
+        target = commands[last]['target']
+        for command in commands[last:]:
+            if any(abs(command['target'][name]-target[name])>1e-7 for name in joint_names[:5]):
+                break
+            held_commands.add(command['command_id'])
+    selected, exits = {}, {}
+    interiors = set()
     commands = {(row['command_id'],row['ros_goal_id']) for row in rows}
     for index,row in enumerate(rows):
         bounds = [.035]*5+[.04]  # Arm training margin; preserve the calibrated gripper target.
         if all(abs(target-state)<=bound for target,state,bound in
                zip(row['action'],row['observation.state'],bounds)):
-            selected.setdefault((row['command_id'],row['ros_goal_id']),index)
+            key=(row['command_id'],row['ros_goal_id'])
+            selected.setdefault(key,index)
+            exits[key]=index
+            if row['command_id'] in held_commands:
+                interiors.add(index)
     if not commands or set(selected) != commands:
         raise ValueError('command_entry sampling must represent every command')
-    return sorted(selected.values())
+    indices=set(selected.values())
+    if sampling in ('command_entry_and_exit','command_entry_exit_and_place_open'):
+        indices.update(exits.values())
+    indices.update(interiors)
+    return sorted(indices)
 
 
 def compatible_sources(sources):
@@ -128,16 +156,55 @@ def export_truth(export, source, validated):
     return None
 
 
+def initialize_absolute_parent(policy,stats,source,root):
+    """Load only a byte-verified, configuration/statistics-compatible absolute parent."""
+    import draccus
+    from safetensors.torch import load
+    from lerobot.configs.policies import PreTrainedConfig
+    from act_inference import _snapshot, _configuration, action_statistics
+    root=Path(root)
+    revision=json.loads((root/'policy-artifact.json').read_bytes())['revision']
+    doc,buffers=_snapshot(root,revision)
+    _configuration(doc,buffers)
+    parent=json.loads(buffers[doc['normalization']['path']])
+    names=source['joint_names'];camera=source['camera']
+    expected_camera=dict(name=camera['name'],identity=camera['identity'],
+        calibration_sha256=camera['camera_info_sha256'],source_shape=[3,camera['height'],camera['width']],
+        model_shape=[3,64,64],color='rgb',scale=1/255)
+    kind,mean,std,_=action_statistics(parent,len(names))
+    _,new_mean,new_std,_=action_statistics(stats,len(names))
+    if (kind!='absolute' or doc['joint_names']!=names or doc['cameras']!=[expected_camera]
+            or doc['action']['limits']!=[source['position_limits_rad'][name] for name in names]
+            or any(parent.get(key)!=stats.get(key) for key in
+                   ('state_mean','state_std','fit_episodes','image','fixed_source_duration_s'))
+            or mean!=new_mean or std!=new_std
+            or draccus.decode(PreTrainedConfig,json.loads(buffers['policy/config.json']))!=policy.config):
+        raise ValueError('absolute parent rig, configuration and train statistics must match')
+    report=json.loads(buffers[doc['evaluations'][0]['path']])
+    if type(report.get('steps')) is not int or not 1<=report['steps']<=10000:
+        raise ValueError('parent training steps required')
+    policy.load_state_dict(load(buffers['policy/model.safetensors']),strict=True)
+    return dict(type='absolute_policy_warm_start_v1',policy_revision=revision,
+        weights_sha256=hashlib.sha256(buffers['policy/model.safetensors']).hexdigest(),
+        config_sha256=hashlib.sha256(buffers['policy/config.json']).hexdigest(),
+        normalization_sha256=doc['normalization']['sha256'],parent_training_steps=report['steps'],
+        optimizer_state='fresh_AdamW')
+
+
 def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4, sampling='all_frames',
-        action_representation='absolute',state_noise_std_rad=0.):
-    if action_representation not in ('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'):
+        action_representation='absolute',state_noise_std_rad=0.,initial_policy=None):
+    bounded_absolute=action_representation=='absolute_tanh_from_chunk_source_v1'
+    relative=action_representation in ('joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1')
+    if action_representation!='absolute' and not relative and not bounded_absolute:
         raise ValueError('unknown action representation')
+    if bounded_absolute!=(initial_policy is not None):
+        raise ValueError('bounded absolute training requires an explicit absolute initial policy only')
     if (type(state_noise_std_rad) not in (int,float) or not np.isfinite(state_noise_std_rad)
             or state_noise_std_rad<0):
         raise ValueError('state noise standard deviation must be finite and nonnegative')
-    if state_noise_std_rad and action_representation=='absolute':
+    if state_noise_std_rad and not relative:
         raise ValueError('state noise requires source-relative targets')
-    if sampling not in ('all_frames','command_entry'):
+    if sampling not in ('all_frames','command_entry','command_entry_and_exit','command_entry_exit_and_place_open'):
         raise ValueError('unknown training sampling')
     if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
         raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
@@ -172,7 +239,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         if len(paths) != 1:
             raise ValueError("one original validated Episode per export required")
         validated = validate_omx(paths[0].parent)
-        automatic.append(export_truth(export, paths[0].parent, validated) is not None)
+        automatic.append(export_truth(export, paths[0].parent, validated))
         source_paths.append(paths[0].parent)
         sources.append(validated["manifest"]["provenance"])
         original_rows.append(validated["samples"])
@@ -180,10 +247,10 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     if len(set(ids)) != len(ids):
         raise ValueError("same original Episode cannot straddle train/eval")
     compatible_sources(sources)
-    if sampling == 'command_entry' and not all(automatic):
+    if sampling != 'all_frames' and not all(automatic):
         raise ValueError('command_entry sampling requires independently verified SIM object truth')
-    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling)
-                        for rows in original_rows]
+    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling,sim_truth=truth)
+                        for rows,truth in zip(original_rows,automatic)]
     # D-794 B: the image key and the artifact camera name follow the recorded camera name.
     image_key = "observation.images." + sources[0]["camera"]["name"]
     durations = {r["duration_s"] for rows in original_rows for r in rows}
@@ -191,7 +258,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         raise ValueError("joint-only study requires one explicit source duration")
     out.mkdir(parents=True)
     sampling_ref = None
-    if sampling == 'command_entry':
+    if sampling != 'all_frames':
         selection = dict(sampling=sampling,arm_margin_rad=.005,gripper_margin_claim='none',
                          original_arrays_and_chunk_order=True,
                          train_indices=dict(zip(ids[:train_count],selected_indices[:train_count])))
@@ -209,7 +276,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 raise ValueError("source rows changed during input snapshot")
             common = out / "episodes" / source.name
             proof = export_truth(snapshot, source, copied)
-            if (proof is not None) != was_automatic:
+            if (proof is not None) != (was_automatic is not None):
                 raise ValueError('source outcome judge changed during snapshot')
             episode = convert(source, common, sim_ground_truth=proof)
             episodes.append(episode)
@@ -237,7 +304,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         train_actions = torch.cat([a[2] for a in arrays[:train_count]])
         train_states = torch.cat([a[1] for a in arrays[:train_count]])
         absolute_baseline=train_actions.mean(0)
-        action_values=train_actions if action_representation=='absolute' else train_actions-train_states
+        action_values=train_actions-train_states if relative else train_actions
         state_mean, action_mean = train_states.mean(0), action_values.mean(0)
         state_std, action_std = train_states.std(0, unbiased=False), action_values.std(0, unbiased=False)
         state_std = torch.where(state_std < 1e-6, torch.ones_like(state_std), state_std)
@@ -250,7 +317,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             del stats['action_mean'],stats['action_std']
             stats['action_transform']=dict(type=action_representation,mean=action_mean.tolist(),
                 std=action_std.tolist(),absolute_baseline=absolute_baseline.tolist())
-            if action_representation=='joint_delta_tanh_from_chunk_source_v1':
+            if action_representation in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):
                 stats['action_transform']['max_delta_rad']=.035
         noise_rng=None
         if state_noise_std_rad:
@@ -258,7 +325,6 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
             stats['training_augmentation']=dict(type='gaussian_state_noise_v1',std_rad=state_noise_std_rad,
                 seed=seed+1,joint_names=sources[0]['joint_names'],train_only=True,
                 source_kind='synthetic_training_inputs')
-        _write(out / "normalization.json", stats)
         for i, (images, states, actions) in enumerate(arrays):
             arrays[i] = (images, (states - state_mean) / state_std, (actions - action_mean) / action_std)
         names = sources[0]["joint_names"]
@@ -270,6 +336,9 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                            pretrained_backbone_weights=None, device="cpu",
                            optimizer_lr=1e-4, optimizer_lr_backbone=1e-5, optimizer_weight_decay=1e-4)
         policy = ACTPolicy(config)
+        if initial_policy is not None:
+            stats['training_initialization']=initialize_absolute_parent(policy,stats,sources[0],initial_policy)
+        _write(out / "normalization.json", stats)
         from act_inference import install_action_head_transform
         install_action_head_transform(policy,stats)
         optimizer = torch.optim.AdamW(policy.get_optim_params(), lr=config.optimizer_lr,
@@ -292,7 +361,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 batch["observation.state"].append(state)
                 batch[image_key].append(images[i])
                 targets=torch.stack([actions[j] if j is not None else actions[-1] for j in chunk])
-                if action_representation!='absolute':
+                if relative:
                     targets=targets-origin/action_std
                 batch["action"].append(targets)
                 batch["action_is_pad"].append(torch.tensor([j is None for j in chunk], dtype=torch.bool))
@@ -321,7 +390,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                             chunk=model.predict_action_chunk({"observation.state":states[i:i+1],
                                                               image_key:images[i:i+1]})
                             actions=chunk[0,:n_action_steps]*action_std+action_mean
-                            if action_representation!='absolute':
+                            if relative:
                                 actions=actions+states[i]*state_std+state_mean
                             queue.extend(actions)
                         predictions.append(queue.popleft())
@@ -355,6 +424,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         report['per_episode'] = per_episode
         if noise_rng is not None:
             report['training_augmentation']=stats['training_augmentation']
+        if initial_policy is not None:
+            report['training_initialization']=stats['training_initialization']
         if sampling_ref is not None:
             report['training_sampling'] = dict(rule=sampling,index=sampling_ref,
                 selected_training_frames=len(indices),all_training_frames=sum(len(rows) for rows in original_rows[:train_count]))
@@ -414,13 +485,15 @@ def main():
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
     ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
-    ap.add_argument("--sampling", choices=('all_frames','command_entry'), default='all_frames')
-    ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'),default='absolute')
+    ap.add_argument("--sampling", choices=('all_frames','command_entry','command_entry_and_exit','command_entry_exit_and_place_open'), default='all_frames')
+    ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'),default='absolute')
+    ap.add_argument('--initial-policy',type=Path)
     ap.add_argument('--state-noise-std-rad',type=float,default=0.)
     args = ap.parse_args()
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
                          n_action_steps=args.n_action_steps,sampling=args.sampling,
-                         action_representation=args.action_representation,state_noise_std_rad=args.state_noise_std_rad)))
+                         action_representation=args.action_representation,state_noise_std_rad=args.state_noise_std_rad,
+                         initial_policy=args.initial_policy)))
 
 
 if __name__ == "__main__":

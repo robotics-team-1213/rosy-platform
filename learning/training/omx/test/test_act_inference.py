@@ -165,14 +165,15 @@ def test_nonfinite_model_output_latches_until_explicit_reset(tmp_path,monkeypatc
 
 @pytest.mark.parametrize('change',[{},dict(max_delta_rad=.04),dict(max_delta_rad=True),
     dict(max_delta_rad=float('nan')),dict(extra=1),dict(type='unknown')])
-def test_bounded_transform_has_one_exact_byte_bound_configuration(change):
+@pytest.mark.parametrize('kind',['joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'])
+def test_bounded_transform_has_one_exact_byte_bound_configuration(change,kind):
     from act_inference import action_statistics
-    transform=dict(type='joint_delta_tanh_from_chunk_source_v1',mean=[0.,0.],std=[1.,1.],
+    transform=dict(type=kind,mean=[0.,0.],std=[1.,1.],
                    absolute_baseline=[0.,0.],max_delta_rad=.035)
     transform.update(change)
     stats=dict(action_transform=transform)
     if not change:
-        assert action_statistics(stats,2)[0]=='joint_delta_tanh_from_chunk_source_v1'
+        assert action_statistics(stats,2)[0]==kind
     else:
         with pytest.raises(ValueError):action_statistics(stats,2)
     with pytest.raises(ValueError):action_statistics(dict(stats,action_mean=[0.,0.]),2)

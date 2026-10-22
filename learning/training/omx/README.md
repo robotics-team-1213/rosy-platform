@@ -40,6 +40,17 @@ type과 정확한 `max_delta_rad: 0.035`를 hash로 결속한다. 기존 weight 
 chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존
 owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 성공의 증거는 아니다.
 
+`--action-representation absolute_tanh_from_chunk_source_v1 --initial-policy <parent-root>`는
+검증한 absolute checkpoint를 초기값으로 사용한다. Linear head의 절대 예측 `a`와
+같은 batch 원 관측 `s`로 `s + 0.035*tanh((a-s)/0.035)`를 학습부터 적용한다.
+통계·정답·출력은 절대 위치이며 source를 다시 더하지 않는다. 각 sample의 원점을
+같은 chunk 전체에 적용하고 model 호출 성공·예외 모두에서 원점 context를 지운다.
+부모의 전체 파일 SHA, ACTConfig, 관절·카메라·limits와 train-only 통계가 일치해야
+weights를 읽는다. 부모 revision·weights/config/정규화 SHA와 기존 학습 step을
+정규화·평가 보고서에 결속하고 새 AdamW로 지정한 step을 추가 학습한다. 기존10k와
+추가10k는 구분한다. 원 target을 자르지 않으며, source 밖 정답의 잔차와 기존 owner
+절대 범위·readback 0.04rad fence는 유지한다. 실제 recovery 정답을 추가한 것은 아니다.
+
 상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
 Gaussian 교란을 주는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
 시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
@@ -127,6 +138,20 @@ calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에�
 여유는 보장하지 않는다. 원본 arrays·target·시각·chunk 순서·전체 validation은 유지한다.
 선택 indices와 규칙은 `training-index.json` 및 DatasetManifest config SHA에 결속한다.
 학습 표본 선택은 실제 최종 readback 승인이나 물체 성공을 보장하지 않는다.
+
+`--sampling command_entry_and_exit`는 같은 조건을 만족하는 마지막 원본 frame도
+각 command/goal 쌍에서 고른다. 첫·마지막이 같으면 한 번만 쓰고 원본 index의 시간순으로
+정렬한다. 마지막 유효 frame이 정착 상태임을 보장하지 않는다. 기존 시작 표본·허용 범위·
+독립 SIM 정답 요구와 원본 chunk 순서·전체 validation을 유지하며 새 선택 규칙과
+indices를 같은 DatasetManifest 경로에 결속한다. 학습 step 수가 같으면 선택점당
+평균 학습 횟수는 줄어들므로 실제 물체 과제의 개선은 별도로 확인한다.
+
+`--sampling command_entry_exit_and_place_open`는 이 endpoint를 모두 유지하고,
+최종 놓기·열기 구간의 같은 eligibility를 만족하는 원본 내부 frame도 추가한다.
+검증된 SIM truth의 마지막 transfer 명령부터 다섯 팔 목표가 같은 연속 명령을
+선택하며 팔 목표가 바뀌면 즉시 끝낸다. 좌표나 새 정답을 넣지 않고 원본 metadata를
+읽는다. 접촉 정답이나 물체 해제 성공을 뜻하지 않으며 독립 validation과 실제 과제로
+효과를 확인해야 한다. 기본 선택과 action·RGB·chunk 순서는 그대로다.
 
 `act_inference_replay.py`는 bound Dataset 파일에 포함된 실제 LeRobot 평가 reader로
 모델의 입력/행동/큐 provenance·latency를 새 X artifact에 보존하고 기존 offline metrics를

@@ -1,5 +1,6 @@
 """Private native SIM teacher: real short goals, RGB frames and object observations."""
 import argparse
+from dataclasses import replace
 import hashlib
 import json
 import math
@@ -14,6 +15,34 @@ from g2_common import ROOT, configure_imports
 from g2_ports import ObserverClient, isolation_guard, write_json
 from sim_pick_place_demonstrations import short_targets, dispatch_readback_target
 from sim_pick_place_task import judge_episode
+from sim_policy_trial_evidence import contact_held
+
+
+PLACE_CLEARANCE_M = .005
+
+
+def contact_hold_target(position,*,close,contact):
+    if not contact_held(position,close=close,contact=contact):
+        raise RuntimeError('teacher_hold_contact_not_confirmed')
+    return max(close,position-.035)
+
+
+def teacher_place_pose(pose):
+    return replace(pose,z=pose.z+PLACE_CLEARANCE_M)
+
+
+def release_clearance_evidence(observation,tcp,box,goal):
+    pose=observation['model_pose_base']
+    roll,pitch=pose['roll_rad'],pose['pitch_rad']
+    half_height=(abs(math.sin(pitch))*box.length+abs(math.cos(pitch)*math.sin(roll))*box.width
+                 +abs(math.cos(pitch)*math.cos(roll))*box.height)/2
+    bottom=pose['z_m']-half_height
+    surface=goal[2]-box.height/2
+    clearance=bottom-surface
+    if not math.isfinite(clearance) or clearance<PLACE_CLEARANCE_M/2:
+        raise RuntimeError('measured_release_clearance_too_small')
+    return dict(observation=observation,tcp_m=dict(x=tcp.x,y=tcp.y,z=tcp.z),
+                object_bottom_z_m=bottom,support_surface_z_m=surface,clearance_m=clearance)
 
 
 def run(directory, world, observer_path, *, home_only=False):
@@ -87,7 +116,12 @@ def run(directory, world, observer_path, *, home_only=False):
     episode_id, success, error = None, False, None
     receipt = {'sim_aid': True, 'sim_gripper_sensor': True, 'source': source,
                'goal_m': goal, 'cell_sha256': job.cell_hash, 'recipe_sha256': job.recipe_hash,
-               'profile_revision': profile.revision, 'training': 'NOT_RUN'}
+               'profile_revision': profile.revision, 'training': 'NOT_RUN',
+               'motion_strategy': {'type':'release_above_support_v1',
+                   'place_clearance_m':PLACE_CLEARANCE_M,
+                   'min_measured_clearance_m':PLACE_CLEARANCE_M/2,
+                   'transfer_hold':'verified_contact_bounded_squeeze_v1',
+                   'max_gripper_squeeze_rad':.035}}
 
     def sim_time():
         return node.get_clock().now().nanoseconds / 1_000_000_000
@@ -140,15 +174,22 @@ def run(directory, world, observer_path, *, home_only=False):
             time.sleep(.02)
         raise TimeoutError('teacher goal result unknown')
 
-    def dispatch(target):
+    def dispatch(target,*,holding=False):
+        if holding:
+            evidence,position=grip('held')
+            target=dict(target)
+            target[profile.gripper_joint]=contact_hold_target(position,
+                close=profile.gripper_close_for_width(recipe.box.width),
+                contact=profile.gripper_contact_for_width(recipe.box.width))
+            event.setdefault('hold_commands',[]).append(dict(evidence=evidence,position_rad=position,
+                                                           target=dict(target)))
         dispatch_readback_target(target, lambda: wait_ready()['positions'], dispatch_once)
 
     def grip(expect):
         js = arm.latest_joint_state
         q = js.positions[profile.gripper_joint]
         close = profile.gripper_close_for_width(recipe.box.width)
-        threshold = (profile.gripper_contact_for_width(recipe.box.width)-close)/2
-        held = q >= close+threshold
+        held = contact_held(q,close=close,contact=profile.gripper_contact_for_width(recipe.box.width))
         opened = abs(q-profile.gripper_open) <= .05
         observation = GripperObservation(config.workcell_id, config.instance_id,
             'omx-sim-width-matched-position-v2', js.sequence, js.received_at,
@@ -159,8 +200,8 @@ def run(directory, world, observer_path, *, home_only=False):
         checked = arm.monotonic()
         verified = verifier(observation, object_id='box', now=checked,
                             max_age_s=profile.max_joint_state_age_s)
-        return {'observation': vars(observation), 'receipt': vars(verified),
-                'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s}
+        return ({'observation': vars(observation), 'receipt': vars(verified),
+                 'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s},q)
 
     try:
         state = wait_ready()
@@ -194,7 +235,7 @@ def run(directory, world, observer_path, *, home_only=False):
         request = CellTransferRequest(job_id='sim-object-demonstration', recipe_sha256=job.recipe_hash,
             cell_sha256=job.cell_hash, step_index=0, item='box', home=home,
             pick=TopDownPose(pick.target.x,pick.target.y,pick.target.z,pick.target.yaw),
-            place=TopDownPose(place.target.x,place.target.y,place.target.z,place.target.yaw),
+            place=teacher_place_pose(TopDownPose(place.target.x,place.target.y,place.target.z,place.target.yaw)),
             pick_approach_z=pick.approach_z, place_approach_z=place.approach_z, carry_z=job.carry_z,
             grasp_depth_m=recipe.box.grasp_depth, grasp_width_m=recipe.box.width)
         plan = planner.plan_transfer(request, profile, snapshot)
@@ -209,14 +250,23 @@ def run(directory, world, observer_path, *, home_only=False):
                      'started_owner_s': arm.monotonic()}
             events.append(event)
             if phase.phase_id == 'release':
+                observation=observe()
+                js=arm.latest_joint_state
+                checked=arm.monotonic()
+                if not 0<=checked-js.received_at<=profile.max_joint_state_age_s:
+                    raise RuntimeError('release joint-state stale')
+                tcp=kin.fk([js.positions[n] for n in ARM_JOINTS])
+                event['pre_detach_geometry']=release_clearance_evidence(observation,tcp,recipe.box,goal)
+                event['pre_detach_geometry']['joint_state']=dict(positions=dict(js.positions),
+                    sequence=js.sequence,received_at=js.received_at,checked_owner_s=checked)
                 event['detach'] = aid.detach('infeed_block')
                 if not event['detach']['confirmed']:
                     raise RuntimeError('detach unconfirmed')
             targets = short_targets([phase.start_state_positions, *[p.positions for p in phase.points]])
             for point in targets:
-                dispatch(dict(zip(phase.joint_names, point)))
+                dispatch(dict(zip(phase.joint_names, point)),holding=phase.phase_id=='transfer')
             if phase.phase_id == 'grasp':
-                event['hold_evidence'] = grip('held')
+                event['hold_evidence'],_ = grip('held')
                 event['hold_receipt'] = event['hold_evidence']['receipt']
                 tcp = kin.fk([arm.latest_joint_state.positions[n] for n in ARM_JOINTS])
                 pose = observe()['model_pose_base']
@@ -226,7 +276,7 @@ def run(directory, world, observer_path, *, home_only=False):
                 if not event['attach']['confirmed']:
                     raise RuntimeError('attach unconfirmed')
             if phase.phase_id == 'release':
-                event['release_evidence'] = grip('open')
+                event['release_evidence'],_ = grip('open')
                 event['release_receipt'] = event['release_evidence']['receipt']
             event['ended_sim_s'] = sim_time()
             event['ended_owner_s'] = arm.monotonic()

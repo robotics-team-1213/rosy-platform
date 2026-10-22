@@ -111,6 +111,34 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .workspace-heading p { color: var(--text-secondary); margin-bottom: 0; max-width: 70ch; }
 .workspace-heading h2 { font-size: var(--text-title); }
 .learning-section { margin-top: var(--space-6); }
+/* Account pages compose shared sections and fields; only placement lives here. */
+#accounts-main { max-width: 64rem; container-type: inline-size; }
+#accounts-main ui-section > p { margin: 0; }
+#accounts-main #login-panel { max-width: 30rem; }
+.account-form { display: grid; gap: var(--gap-form); min-width: 0; }
+.account-form .ui-field-label { min-width: 0; }
+.account-form .ui-field { width: 100%; box-sizing: border-box; min-width: 0; }
+.account-form > ui-button { justify-self: start; }
+.account-fields { min-width: 0; margin: 0; padding: var(--space-3) 0; border: 0; }
+.account-fields > legend { padding: 0; }
+.account-fields > .ui-field-label { flex: 1 1 16rem; }
+.account-fields > .ui-check, .account-fields > p, .account-fields > details { flex-basis: 100%; margin: 0; }
+#accounts-main #repo-panel > ui-section { margin-top: var(--space-3); }
+.pipeline-stages { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,14rem),1fr)); gap: var(--space-3); padding: 0; list-style: none; counter-reset: pipeline; }
+.pipeline-stage { min-width: 0; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-button); counter-increment: pipeline; }
+.pipeline-stage-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); align-items: baseline; }
+.pipeline-stage h3 { margin: 0; font-size: var(--text-body); }
+.pipeline-stage h3::before { content: counter(pipeline) " · "; color: var(--text-secondary); }
+.pipeline-stage span, .pipeline-stage p { font-size: var(--text-label); }
+.pipeline-stage p { margin-bottom: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.pipeline-stage[data-state="done"] span { color: var(--status-good); }
+.pipeline-stage[data-state="attention"] span, .pipeline-stage[data-state="connection"] span { color: var(--status-warn); }
+.pipeline-stage[aria-current="step"] { border-color: var(--control-line); background: var(--surface-flat); }
+.pipeline-next { margin-block: var(--space-4); }
+.owner-controls { margin-bottom: var(--space-4); }
+.owner-controls p { flex: 1 1 100%; margin: 0; }
+#pipeline-evidence, #pipeline-setup { margin-top: var(--space-3); }
+#pipeline-records p { overflow-wrap: anywhere; }
 .heading-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .learning-form { padding-block: var(--space-4); }
 .learning-form > label:last-of-type { flex: 1; min-width: min(100%, 24rem); }

@@ -122,6 +122,7 @@ def test_dashboard_api_preserves_structured_http_errors_and_network_failures():
                 "/assets/camera-capture.js": WEB / "camera-capture.js",
                 # camera-capture.js re-exports the promoted web_common module (D-323 T9).
                 "/common/evidence.js": ROOT / "shared" / "web" / "evidence.js",
+                "/common/account-session.js": ROOT / "shared" / "web" / "account-session.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

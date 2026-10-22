@@ -42,6 +42,91 @@ def test_short_targets_keep_every_planned_waypoint_without_enlarging_steps():
                for left,right in zip([points[0]] + targets[:-1], targets))
 
 
+def test_teacher_place_pose_adds_clearance_without_changing_the_task_goal():
+    from dataclasses import dataclass
+    from sim_pick_place_teacher import teacher_place_pose
+    @dataclass(frozen=True)
+    class Pose:
+        x: float
+        y: float
+        z: float
+        yaw: float
+    goal=Pose(.2075,.0725,.025,.3)
+    planned=teacher_place_pose(goal)
+    assert (planned.x,planned.y,planned.yaw)==(.2075,.0725,.3)
+    assert planned.z==pytest.approx(.030)
+    assert goal.z==.025
+
+
+@pytest.mark.parametrize('roll,pitch',[(0.,0.),(.2,.3),(0.,1.5707963267948966)])
+def test_release_clearance_uses_measured_rotated_object_bottom(roll,pitch):
+    import math
+    from types import SimpleNamespace as NS
+    from sim_pick_place_teacher import release_clearance_evidence
+    pose=dict(x_m=.2075,y_m=.0725,z_m=.05,roll_rad=roll,pitch_rad=pitch,yaw_rad=.4)
+    observation=dict(model_pose_base=pose,observation_id='actual-observation',clock=25.)
+    tcp=NS(x=.2074,y=.0726,z=.0501)
+    box=NS(length=.04,width=.03,height=.03)
+    evidence=release_clearance_evidence(observation,tcp,box,(.2075,.0725,.025))
+    half_height=(abs(math.sin(pitch))*.04+abs(math.cos(pitch)*math.sin(roll))*.03
+                 +abs(math.cos(pitch)*math.cos(roll))*.03)/2
+    assert evidence['object_bottom_z_m']==pytest.approx(.05-half_height)
+    assert evidence['support_surface_z_m']==pytest.approx(.01)
+    assert evidence['clearance_m']==pytest.approx(.05-half_height-.01)
+    assert evidence['observation'] is observation
+    assert evidence['tcp_m']==dict(x=tcp.x,y=tcp.y,z=tcp.z)
+
+
+@pytest.mark.parametrize('height',[.025,.0274,float('nan')])
+def test_teacher_refuses_detach_without_measured_clearance(height):
+    from types import SimpleNamespace as NS
+    from sim_pick_place_teacher import release_clearance_evidence
+    observation=dict(model_pose_base=dict(z_m=height,roll_rad=0.,pitch_rad=0.))
+    with pytest.raises(RuntimeError,match='measured_release_clearance'):
+        release_clearance_evidence(observation,NS(x=0.,y=0.,z=.03),
+            NS(length=.04,width=.03,height=.03),(0.,0.,.025))
+
+
+@pytest.mark.parametrize('fault',[None,'stale','future','contact','observer'])
+def test_release_branch_detaches_only_after_fresh_measured_clearance(fault):
+    import ast
+    from types import SimpleNamespace as NS
+    from sim_pick_place_teacher import release_clearance_evidence
+    source=ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
+    branch=next(n for n in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+        if isinstance(n,ast.If) and ast.unparse(n.test)=="phase.phase_id == 'release'"
+        and any(isinstance(c,ast.Constant) and c.value=='pre_detach_geometry' for c in ast.walk(n)))
+    observation=dict(model_pose_base=dict(z_m=.025 if fault=='contact' else .03,
+                                          roll_rad=0.,pitch_rad=0.))
+    def observe():
+        if fault=='observer':raise RuntimeError('independent observation stale')
+        return observation
+    detaches=[]
+    def detach(model):
+        detaches.append(model)
+        return dict(confirmed=True)
+    names=[f'joint{i}' for i in range(1,6)]
+    received=9. if fault=='stale' else 10.2 if fault=='future' else 10.
+    state=NS(positions=dict.fromkeys(names,0.),sequence=12,received_at=received)
+    event={}
+    namespace=dict(phase=NS(phase_id='release'),event=event,observe=observe,
+        arm=NS(latest_joint_state=state,monotonic=lambda:10.1),profile=NS(max_joint_state_age_s=.5),
+        kin=NS(fk=lambda _:NS(x=0.,y=0.,z=.03)),ARM_JOINTS=names,
+        recipe=NS(box=NS(length=.04,width=.03,height=.03)),goal=(0.,0.,.025),
+        aid=NS(detach=detach),release_clearance_evidence=release_clearance_evidence)
+    code=compile(ast.Module(body=[branch],type_ignores=[]),str(source),'exec')
+    if fault is not None:
+        with pytest.raises(RuntimeError):exec(code,namespace)
+        assert detaches==[]
+    else:
+        exec(code,namespace)
+        assert detaches==['infeed_block']
+        evidence=event['pre_detach_geometry']
+        assert evidence['observation'] is observation
+        assert evidence['joint_state']==dict(positions=state.positions,sequence=12,
+                                             received_at=10.,checked_owner_s=10.1)
+
+
 def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_waypoint():
     from sim_pick_place_demonstrations import readback_target
     current={'joint3':.22406642138957977,'gripper_joint_1':.41159433126449585}
@@ -59,6 +144,57 @@ def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_
 def test_contact_readback_within_original_admission_bound_keeps_the_exact_goal():
     from sim_pick_place_demonstrations import readback_target
     assert readback_target({'gripper':.42},{'gripper':.38})=={'gripper':.38}
+
+
+@pytest.mark.parametrize('position',[.405,.4212312996])
+def test_teacher_transfer_hold_keeps_bounded_nonzero_contact_squeeze(position):
+    from sim_pick_place_teacher import contact_hold_target
+    close,contact=.3804260884,.4072
+    target=contact_hold_target(position,close=close,contact=contact)
+    assert target==max(close,position-.035)
+    assert close<=target<position and position-target<=.035+1e-12
+
+
+@pytest.mark.parametrize('position',[.38,.423,1.,float('nan')])
+def test_teacher_transfer_hold_refuses_lost_or_nonfinite_contact(position):
+    from sim_pick_place_teacher import contact_hold_target
+    with pytest.raises((ValueError,RuntimeError)):
+        contact_hold_target(position,close=.3804260884,contact=.4072)
+
+
+@pytest.mark.parametrize('holding',[False,True])
+def test_teacher_dispatch_records_contact_hold_only_when_requested(holding):
+    import ast
+    from types import SimpleNamespace as NS
+    import sim_pick_place_teacher as teacher
+    from sim_pick_place_demonstrations import dispatch_readback_target
+    source=ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
+    function=next(n for n in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
+                  if isinstance(n,ast.FunctionDef) and n.name=='dispatch')
+    desired={'joint1':1.46546,'gripper_joint_1':.3804260884}
+    actual={'joint1':1.4883,'gripper_joint_1':.4212312996}
+    evidence={'position_rad':actual['gripper_joint_1'],'receipt':{'sequence':12}}
+    sent=[];checks=[];event={}
+    def grip(expect):
+        checks.append(expect)
+        return evidence,actual['gripper_joint_1']
+    namespace=dict(wait_ready=lambda:{'positions':actual},dispatch_once=sent.append,
+        dispatch_readback_target=dispatch_readback_target,grip=grip,event=event,
+        contact_hold_target=getattr(teacher,'contact_hold_target',None),
+        profile=NS(gripper_joint='gripper_joint_1',gripper_close_for_width=lambda _: .3804260884,
+                   gripper_contact_for_width=lambda _: .4072),recipe=NS(box=NS(width=.03)))
+    exec(compile(ast.Module(body=[function],type_ignores=[]),str(source),'exec'),namespace)
+    if holding:
+        namespace['dispatch'](desired,holding=True)
+        assert len(sent)==1 and sent[0]['joint1']==desired['joint1']
+        assert sent[0]['gripper_joint_1']==pytest.approx(.3862312996)
+        assert max(abs(sent[0][n]-actual[n]) for n in actual)<=.04
+        assert event['hold_commands'][0]['evidence'] is evidence and checks==['held']
+        assert event['hold_commands'][0]['target']==sent[0]
+        assert desired['gripper_joint_1']==.3804260884
+    else:
+        with pytest.raises(RuntimeError,match='no_progress'):namespace['dispatch'](desired)
+        assert checks==[] and event=={}
 
 
 def test_readback_correction_stops_when_actual_motion_makes_no_progress():
@@ -159,6 +295,7 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
     sys.path.insert(0, str(ROOT/'middleware/devices/omx/adapter'))
     from omx_adapter.gripper_contract import (
         GripperObservation, GripperReadbackError, verify_held_object, verify_released_object)
+    from sim_policy_trial_evidence import contact_held
     source = ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
     function = next(node for node in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
                     if isinstance(node, ast.FunctionDef) and node.name == 'grip')
@@ -169,13 +306,19 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
         max_joint_state_age_s=.5), recipe=NS(box=NS(width=.03)),
         config=NS(workcell_id='omx_cell_sim', instance_id='omx_cell_sim_01'),
         GripperObservation=GripperObservation, verify_held_object=verify_held_object,
-        verify_released_object=verify_released_object)
+        verify_released_object=verify_released_object,contact_held=contact_held)
     exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
-    evidence = namespace['grip']('held')
+    evidence,position = namespace['grip']('held')
     assert evidence['observation']['received_at'] == 20.
     assert evidence['checked_owner_s'] == 20.1 and evidence['max_age_s'] == .5
     assert evidence['receipt']['sequence'] == evidence['observation']['sequence'] == 12
     assert evidence['observation']['object_present'] is True
+    sys.path.insert(0,str(ROOT/'contracts/learning/src'))
+    from rosy.contracts.learning.sim_object_truth import _gripper_evidence
+    identity=_gripper_evidence(dict(hold_evidence=evidence,hold_receipt=evidence['receipt'],
+        started_owner_s=19.,ended_owner_s=21.),'hold')
+    assert identity==('omx_cell_sim','omx_cell_sim_01','omx-sim-width-matched-position-v2',1)
+    assert position==.42
     arm.monotonic = lambda: 20.6
     with pytest.raises(GripperReadbackError, match='stale'):
         namespace['grip']('held')
