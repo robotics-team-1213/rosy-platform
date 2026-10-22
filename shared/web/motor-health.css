@@ -23,7 +23,7 @@
 }
 .motor-health-empty { border: 1px dashed var(--border-default); padding: var(--space-3); }
 .motor-health-scroll { max-width: 100%; min-width: 0; overflow-x: auto; }
-.motor-health-scroll:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.motor-health-scroll:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .motor-health-table { width: 100%; min-width: 52rem; border-collapse: collapse; font-size: var(--text-label); }
 .motor-health-table caption { text-align: start; color: var(--text-secondary); padding-block: var(--space-2) var(--space-3); }
 .motor-health-table th, .motor-health-table td { text-align: start; vertical-align: top; padding: var(--space-3) var(--space-2); border-bottom: 1px solid var(--border-default); }

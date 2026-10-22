@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · uncommitted · 모터 표 포커스 공용 치수
 - 2026-10-22 · 79a11a4a54 · 모터 상태 공용 표시와 하드웨어 오류 신원
 - 2026-10-22 · c95916b97d · Learning 카메라 캔버스 계약 포함
 - 2026-10-22 · uncommitted · Published-source Learning shell coverage
 - 2026-10-21 · uncommitted · Console 인증 분리 후 캔버스 검사 유지
-- 2026-10-21 · uncommitted · 인증 범위를 유지하는 binary 응답 읽기
