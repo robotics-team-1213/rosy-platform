@@ -417,3 +417,9 @@
 - 변경: 로그인 화면에서 판별하는 authorize 복귀 경로를 기존 GET authorize 계약과 연결했다.
 - 증거: 전체 회귀에서 대응표 누락을 재현했다. 기존 원격 HTTP 계약과 회귀 검사를 그대로 사용하며 착지에서 재검증한다.
 - gate 변화: API와 권한 동작 변경 없음.
+
+## 2026-10-22 · uncommitted · D-841 등록·페어링의 공통 HTTP 전송 소비
+
+- 변경: enrollment·camera-pairing이 기존 request.js를 사용한다. 화면별 detail·자격·수명 처리는 유지하고 camera-peer는 제외한다.
+- 증거: 새 소비자 회귀 9개 중 기존 코드의 2개 실패를 확인한 뒤 전체 Fleet Node 352개 통과, skip 0. 원격 브라우저 회귀는 후속 검증한다.
+- gate 변화: 소스·Node 범위이며 장치·현장 수용은 아니다.

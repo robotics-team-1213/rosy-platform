@@ -3,6 +3,7 @@
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createEnrollmentPanel 이 화면 배선이다.
 
 import { createPollGate } from "/console/assets/poll-gate.js";
+import { createRequest } from "/common/request.js";
 
 const ALARM_TEXT = {
   ROBOT_ADDRESS_UNVERIFIED: "주행 중 로봇의 주소가 바뀜 — 상태를 모름",
@@ -190,6 +191,7 @@ export const HELP = [
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
 export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, onMoved, candidateAddress }) {
   const el = (id) => document.getElementById(id);
+  const request = createRequest({credential: () => new Headers(headers()).get("Authorization")?.slice(7) || ""});
   const state = { listing: null, blockedUntil: 0, target: null, busy: false, candidatePending: false, candidateEpoch: 0 };
   function cancelCandidate() { state.candidateEpoch++; state.candidatePending = false; }
   scope.onDispose(() => {
@@ -212,22 +214,13 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    const resp = await fetch(path, {...init, signal: life.signal});
+    const {ok, status, body: payload} = await request(path, {...init, signal: life.signal});
     life.check();
-    let payload = null;
-    try {
-      payload = await resp.json();
-      life.check();
-    } catch (_err) {
-      life.check();
-      if (_err.name === "AbortError") throw _err;
-      payload = null;
-    }
-    if (!resp.ok) {
-      const error = new Error(`HTTP ${resp.status}`);
-      error.status = resp.status;
+    if (!ok) {
+      const error = new Error(`HTTP ${status}`);
+      error.status = status;
       error.code = typeof payload?.detail === "object" ? payload.detail?.code : undefined;
-      error.detail = payload && payload.detail ? payload.detail : { code: `HTTP_${resp.status}` };
+      error.detail = payload && payload.detail ? payload.detail : { code: `HTTP_${status}` };
       throw error;
     }
     return payload;

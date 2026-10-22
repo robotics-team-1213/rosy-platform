@@ -3,6 +3,7 @@
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createCameraPairingPanel 이 화면 배선이다.
 
 import { createPollGate } from "/console/assets/poll-gate.js";
+import { createRequest } from "/common/request.js";
 import { canManage } from "./enrollment.js";
 
 const BASE = "/api/fleet/pairing/v1";
@@ -128,6 +129,7 @@ export function credentialActions(row, manage) {
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
 export function createCameraPairingPanel({ scope, headers, identity, locked, log, dialogs }) {
   const el = (id) => document.getElementById(id);
+  const request = createRequest({credential: () => new Headers(headers()).get("Authorization")?.slice(7) || ""});
   const state = {
     pending: null, pendingAt: 0, credentials: null, ticks: 0,
     target: null, busy: false, approved: null, approvedAt: 0, inView: true,
@@ -142,23 +144,14 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    const resp = await fetch(path, {...init, signal: life.signal});
+    const {ok, status, body: payload} = await request(path, {...init, signal: life.signal});
     life.check();
-    let payload = null;
-    try {
-      payload = await resp.json();
-      life.check();
-    } catch (_err) {
-      life.check();
-      if (_err.name === "AbortError") throw _err;
-      payload = null;
-    }
-    if (!resp.ok) {
-      const error = new Error(`HTTP ${resp.status}`);
-      error.status = resp.status;
+    if (!ok) {
+      const error = new Error(`HTTP ${status}`);
+      error.status = status;
       error.code = typeof payload?.detail === "object" ? payload.detail?.code : undefined;
       error.detail = typeof payload?.detail === "object" && payload.detail
-        ? payload.detail : { code: `HTTP_${resp.status}` };
+        ? payload.detail : { code: `HTTP_${status}` };
       throw error;
     }
     return payload;
