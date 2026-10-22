@@ -123,7 +123,7 @@ for the failed earlier GitHub CI run.
 
 ## Deployment and physical acceptance still pending
 
-This branch is not yet published or installed on the official Fleet image. Preserve all
+This branch is published in PR #151; installation on the official Fleet image is pending. Preserve all
 effective base, Workcell and Account Compose overlays during the signed update.
 Model's protected Learning service exists; AI still needs its protected origin, central
 Account client, the same actual existing project binding and enforced separation from
