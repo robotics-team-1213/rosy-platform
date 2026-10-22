@@ -68,18 +68,13 @@ class OAuth:
 
     def begin(self, purpose, *, session=None):
         cfg = self._config()
-        requested = {'login': 'openid profile',
-                     'link': 'openid profile read-repos gated-repos',
-                     'manage': 'openid profile read-repos write-repos manage-repos'}
+        repo_scopes = 'openid profile read-repos gated-repos write-repos manage-repos'
+        requested = {'login': 'openid profile', 'link': repo_scopes, 'manage': repo_scopes}
         if purpose not in requested:
             raise AccountError('invalid authorization purpose')
         principal = None
-        if purpose == 'link':
+        if purpose != 'login':
             principal = self.accounts.require(self.accounts.authenticate(session), 'import')
-        elif purpose == 'manage':
-            # Storing the credential still requires import. Publish alone cannot keep a token.
-            principal = self.accounts.require(self.accounts.authenticate(session), 'publish')
-            self.accounts.require(principal, 'import')
         state, binding, nonce, verifier = [secrets.token_urlsafe(32) for _ in range(4)]
         pending = {'purpose': purpose, 'nonce': nonce, 'verifier': verifier, 'config': _digest(_json(cfg)),
                    'project_id': self.accounts.project_id}
@@ -175,13 +170,9 @@ class OAuth:
         if profile.get('sub') != claims['sub']: raise AccountError('Hugging Face profile identity mismatch')
         if pending['purpose'] == 'login': return self.accounts.login_subject(claims['sub'])
         granted = set(str(response.get('scope', '')).split())
-        allowed = {'link': ('read-repos', 'gated-repos'),
-                   'manage': ('read-repos', 'write-repos', 'manage-repos')}[pending['purpose']]
-        # Keep only scopes this purpose requested. A read link cannot store write.
+        allowed = ('read-repos', 'gated-repos', 'write-repos', 'manage-repos')
         scopes = [scope for scope in allowed if scope in granted]
-        if pending['purpose'] == 'link' and 'read-repos' not in scopes:
-            raise AccountError('repository read permission was not granted')
-        if pending['purpose'] == 'manage' and not {'write-repos', 'manage-repos'} <= set(scopes):
+        if not {'read-repos', 'write-repos', 'manage-repos'} <= set(scopes):
             raise AccountError('repository management permission was not granted')
         expires = response.get('expires_in')
         if type(expires) not in (int, float) or not math.isfinite(expires) or not 0 < expires <= 366 * 86400:

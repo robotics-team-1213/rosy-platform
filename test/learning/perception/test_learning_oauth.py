@@ -17,7 +17,7 @@ def b64(value): return base64.urlsafe_b64encode(value).rstrip(b'=').decode()
 class Provider:
     def __init__(self):
         self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        self.claims = {}; self.calls = []; self.scope = 'openid profile read-repos'
+        self.claims = {}; self.calls = []; self.scope = 'openid profile read-repos gated-repos write-repos manage-repos'
 
     def __call__(self, method, url, *, data=None, headers=None):
         self.calls.append((method, url, data))
@@ -116,7 +116,7 @@ def publisher(accounts):
 def test_manage_oauth_keeps_only_requested_repo_scopes(accounts):
     session, alice = publisher(accounts)
     oauth, provider, query, binding = setup_flow(accounts, 'manage', session)
-    assert query['scope'] == ['openid profile read-repos write-repos manage-repos']
+    assert query['scope'] == ['openid profile read-repos gated-repos write-repos manage-repos']
     assert query['prompt'] == ['select_account']
     provider.scope = 'openid profile read-repos write-repos manage-repos inference-api'
     provider.claims['sub'] = 'manage-subject'
@@ -126,23 +126,21 @@ def test_manage_oauth_keeps_only_requested_repo_scopes(accounts):
     assert accounts.credential(alice, connection['connection_id'])['token'] == 'oauth-private'
 
 
-def test_read_link_does_not_store_write_scopes(accounts):
+def test_account_link_requests_and_keeps_write_scopes(accounts):
     session, _alice = accounts.login('alice', 'alice-password')
     oauth, provider, query, binding = setup_flow(accounts, 'link', session)
-    assert 'write-repos' not in query['scope'][0]
+    assert query['scope'] == ['openid profile read-repos gated-repos write-repos manage-repos']
     provider.scope = 'openid profile read-repos gated-repos write-repos manage-repos'
     provider.claims['sub'] = 'read-link-subject'
     _session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
-    assert connection['scopes'] == ['gated-repos', 'read-repos']
+    assert connection['scopes'] == ['gated-repos', 'manage-repos', 'read-repos', 'write-repos']
 
 
-def test_manage_oauth_requires_publish_and_both_write_scopes(accounts):
+@pytest.mark.parametrize('purpose', ['link', 'manage'])
+def test_repo_connection_needs_no_second_publish_approval_but_requires_provider_write(accounts, purpose):
     session, _alice = accounts.login('alice', 'alice-password')
-    with pytest.raises(AccountError):
-        setup_flow(accounts, 'manage', session)
-    session, _alice = publisher(accounts)
-    oauth, provider, query, binding = setup_flow(accounts, 'manage', session)
-    provider.scope = 'openid profile write-repos'
+    oauth, provider, query, binding = setup_flow(accounts, purpose, session)
+    provider.scope = 'openid profile read-repos'
     provider.claims['sub'] = 'write-only-subject'
     with pytest.raises(AccountError, match='management permission'):
         oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
