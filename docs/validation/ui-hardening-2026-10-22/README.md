@@ -20,7 +20,23 @@ Cam은 실제 StreamScreen에 가짜 Unauthorized 상태를 주입했다. 320·3
 
 Cam의 값 상태를 mutableIntStateOf로 바꾸고 minSdk 26에서 불필요한 SDK 분기를 지웠다. BouncyCastle 1.83은 버전을 유지해 카탈로그로 옮겼다. 기존 경고 두 건·정보 한 건을 해결했으나 시험 runner 의존성의 업데이트 알림 세 건이 추가되어 최종 lint는 오류 0·경고 43·정보 0이다. 버전 일괄 갱신과 LAN·인증서·백업·wake lock 정책 변경은 하지 않았다.
 
-Android 표준 src/androidTest를 시험으로 분류하되 파일당 1,500줄 제한은 유지한다. 기존 Cam ui Kotlin 패키지를 크기 단위로 등록하고 경로와 package 선언의 일치를 검증한다. Pilot의 로비 시험은 공통 fixture를 사용해 별도 파일로 이동했다. 한도를 높이지 않았다. 최종 하네스·분리 후 재검증은 아래에 추가한다.
+Android 표준 src/androidTest를 시험으로 분류하되 파일당 1,500줄 제한은 유지한다. 기존 Cam ui Kotlin 패키지를 크기 단위로 등록하고 경로와 package 선언의 일치를 검증한다. Pilot의 로비 시험은 공통 fixture를 사용해 별도 파일로 이동했다. 한도를 높이지 않았다.
+
+## 최종 재검증
+
+| 소스 | 실행 | 결과 |
+| --- | --- | --- |
+| 5cce9acaaf | Pilot 두 브라우저 파일·Games·Robot 접속 홈, ROSY_RUN_BROWSER_TESTS=1 | 222 passed, skipped 0, 400.76초, NEW 0 |
+| 5cce9acaaf | 크기·모듈 구조·하네스·브라우저 선택기 | 181 passed, NEW 0 |
+| 0312f5a9b9 | Pilot 상태 폴링 브라우저 회귀, ROSY_RUN_BROWSER_TESTS=1 | 1 passed, 7.04초, NEW 0 |
+| 0312f5a9b9 | mapped affected 1 | 1,214 passed, 334 skipped, 125.87초, NEW 0 |
+| 0312f5a9b9 | mapped affected 2 (overhead) | 736 passed, 51.24초, NEW 0 |
+
+시험 중 누락도 수정했다. 분리한 로비 파일을 자동 브라우저 선택기에 등록하고 OMX의 기존 선택 범위를 유지했다. 전체 affected 수집에서 발견한 상태 폴링 시험의 옛 fixture import도 공통 conftest 사용으로 고쳤다. 독립 코드 검토 승인 후 후자의 실제 브라우저 실행까지 확인했다. 원본 실행 로그는 위 TEMP 경로의 final-browser·final-guards·final-pilot-poll·final-affected-fixed에 있다. 334 skipped는 이 선택 실행의 결과이며 별도 브라우저 실행이 모든 선택적 시험의 수용을 뜻하지 않는다.
+
+중간 RED 커밋들은 로컬 archive/ui-hardening-trials-20261022에 보존하고 제품 변경을 5cce9acaaf로 합쳤다. 합친 직후 보존 참조와 tree 차이 0을 확인했다. 뒤이은 fixture import 수정은 0312f5a9b9다. 원래 기준 9d13caf9ba504ea5a009120f9506399d69d7c553부터 두 커밋 모두 size_range를 통과했다. 마지막 기록 추가는 문서만 바꾼다.
+
+하네스·구조 변경으로 CI FULL 선택이 필요하다. 위 mapped affected 통과는 CI FULL 증거를 대신하지 않으며 이번에는 전체 CI·착지를 요청하지 않았다. 기존 PRODUCT.md의 혼합 Platform 값과 원문을 확보하지 못한 설치 경고는 해결된 것으로 기록하지 않는다. Cam 평가는 별도 Android 지침과 네이티브 실행 증거를 사용했다.
 
 ## 수용 범위
 
