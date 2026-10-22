@@ -26,7 +26,7 @@ def robot_body(**changes):
         model_revision='omx-r1', device_id=uid()), **changes)
 
 
-def setup(store, mode='cooperative', same_robot=False):
+def task_fixture(store, mode='cooperative', same_robot=False):
     first = store.robot(robot_body(), ACTOR)
     second = first if same_robot else store.robot(robot_body(), ACTOR)
     profile = dict(schema='rosy.omx.learning-profile/2', name='Two bench arms',
@@ -60,7 +60,7 @@ def test_durable_immutable_references_and_actor_bound_retries(store, tmp_path):
     for changed, actor in [(dict(body, name='Changed'), ACTOR), (body, {'user_id': 'bob'})]:
         with pytest.raises(ValueError):
             store.robot(changed, actor)
-    task_body, profile = setup(store)
+    task_body, profile = task_fixture(store)
     task = store.task(task_body, ACTOR, profile)
     assert task['runnable'] is True and task['profile_revision'] == profile['revision']
     assert store.task(copy.deepcopy(task_body), ACTOR, profile) == task
@@ -78,7 +78,7 @@ def test_durable_immutable_references_and_actor_bound_retries(store, tmp_path):
 @pytest.mark.parametrize('mode,components', [('independent', ['arm_b']),
     ('cooperative', ['arm_a', 'arm_b'])])
 def test_two_robots_bind_dataset_durably_and_allow_same_task_methods(store, tmp_path, mode, components):
-    body, profile = setup(store, mode)
+    body, profile = task_fixture(store, mode)
     task = store.task(body, ACTOR, profile)
     args = (task['id'], 'dataset-a', 'a' * 64, profile['revision'], components, 'model')
     binding = store.resolve(*args)
@@ -97,12 +97,12 @@ def test_two_robots_bind_dataset_durably_and_allow_same_task_methods(store, tmp_
 
 
 def test_one_robot_can_expose_two_distinct_components(store):
-    body, profile = setup(store, same_robot=True)
+    body, profile = task_fixture(store, same_robot=True)
     assert store.task(body, ACTOR, profile)['runnable'] is True
 
 
 def test_independent_arms_share_one_task_dataset_without_rebinding(store):
-    body, profile = setup(store, 'independent')
+    body, profile = task_fixture(store, 'independent')
     task = store.task(body, ACTOR, profile)
     first = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a'], 'model')
     second = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_b'], 'ai')
@@ -113,7 +113,7 @@ def test_independent_arms_share_one_task_dataset_without_rebinding(store):
 
 @pytest.mark.parametrize('change', ['host', 'profile', 'reverse', 'subset', 'unknown'])
 def test_resolve_refuses_host_signature_or_group_mismatch(store, change):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     task = store.task(body, ACTOR, profile)
     revision, components, host = profile['revision'], ['arm_a', 'arm_b'], 'model'
     if change == 'host':
@@ -133,7 +133,7 @@ def test_resolve_refuses_host_signature_or_group_mismatch(store, change):
 @pytest.mark.parametrize('change', ['unknown_robot', 'duplicate_component', 'duplicate_role',
     'mode', 'profile_order', 'profile_content', 'one_cooperative', 'unknown_field'])
 def test_task_refuses_invalid_participants_and_profile(store, change):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     if change == 'unknown_robot':
         body['participants'][0]['robot_id'] = uid()
     elif change == 'duplicate_component':
@@ -160,7 +160,7 @@ def test_duplicate_device_references_and_request_namespace_collisions(store):
     store.robot(body, ACTOR)
     with pytest.raises(ValueError):
         store.robot(dict(body, request_id=uid()), ACTOR)
-    task, profile = setup(store)
+    task, profile = task_fixture(store)
     task['request_id'] = body['request_id']
     with pytest.raises(ValueError):
         store.task(task, ACTOR, profile)
@@ -175,7 +175,7 @@ def test_robot_rejects_untrusted_or_oversized_fields(store, changes):
 
 
 def test_cross_project_robot_is_rejected_even_if_database_contains_it(store, tmp_path):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     # Separate project registries cannot resolve each other's reference IDs.
     other = Tasks(tmp_path / 'other.sqlite', 'project-b')
     with pytest.raises(ValueError):
@@ -195,7 +195,7 @@ def test_unsupported_adapter_or_robot_is_registered_as_blocked(store):
 
 
 def test_task_transfer_keeps_semantic_identity_and_local_attribution(store, tmp_path):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     task = store.task(body, ACTOR, profile)
     package = store.export_task(task['id'])
     other = Tasks(tmp_path / 'ai.sqlite', 'project-a')
@@ -220,7 +220,7 @@ def test_task_transfer_keeps_semantic_identity_and_local_attribution(store, tmp_
 @pytest.mark.parametrize('invalid', ['minimal', 'joints', 'cameras', 'action_limits'])
 def test_invalid_profile_with_recomputed_transfer_hashes_is_rejected_before_writes(
         store, tmp_path, monkeypatch, invalid):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     task = store.task(body, ACTOR, profile)
     package = store.export_task(task['id'])
     content = package['profile']['profile']
@@ -249,7 +249,7 @@ def test_invalid_profile_with_recomputed_transfer_hashes_is_rejected_before_writ
 
 
 def test_transfer_preserves_dataset_ownership_on_second_host(store, tmp_path):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     task = store.task(body, ACTOR, profile)
     binding = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
     package = store.export_task(task['id'])
@@ -265,12 +265,12 @@ def test_transfer_preserves_dataset_ownership_on_second_host(store, tmp_path):
 
 
 def test_transfer_dataset_collision_rolls_back_new_task_and_robot_references(store, tmp_path):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     task = store.task(body, ACTOR, profile)
     store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
     package = store.export_task(task['id'])
     other = Tasks(tmp_path / 'ai.sqlite', 'project-a')
-    other_body, other_profile = setup(other)
+    other_body, other_profile = task_fixture(other)
     other_task = other.task(other_body, ACTOR, other_profile)
     other.resolve(other_task['id'], 'data', 'b' * 64, other_profile['revision'], ['arm_a', 'arm_b'], 'ai')
     before = other.snapshot()
@@ -280,7 +280,7 @@ def test_transfer_dataset_collision_rolls_back_new_task_and_robot_references(sto
 
 
 def test_tampered_transfer_dataset_group_is_rejected_before_writes(store, tmp_path, monkeypatch):
-    body, profile = setup(store)
+    body, profile = task_fixture(store)
     task = store.task(body, ACTOR, profile)
     store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
     package = store.export_task(task['id'])

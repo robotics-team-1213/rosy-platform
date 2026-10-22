@@ -191,7 +191,9 @@ def legacy_busy(roots, *, proc=Path("/proc")):
             relevant = comm.startswith("python") or "isaac" in comm or "jupyter" in comm or comm in {"uv", "pip", "pip3"}
             if not relevant: continue
             args = (entry / "cmdline").read_bytes().decode(errors="replace").split("\x00")
+            script = next((arg for arg in args[1:] if arg and not arg.startswith('-')), '')
             monitor = any(Path(a).name in {"tensorboard", "rosy_model_code.py", "review_app.py"} for a in args)
+            monitor = monitor or Path(script).name == 'legacy_review_account.py'
             if monitor: continue
             cwd = (entry / "cwd").resolve(strict=True)
             if (any(cwd.is_relative_to(Path(r).resolve()) for r in roots)
