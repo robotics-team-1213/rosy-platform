@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · c95916b97d · Learning 카메라 캔버스 계약 포함
 - 2026-10-22 · uncommitted · Published-source Learning shell coverage
 - 2026-10-21 · uncommitted · Console 인증 분리 후 캔버스 검사 유지
 - 2026-10-21 · uncommitted · 인증 범위를 유지하는 binary 응답 읽기
 - 2026-10-21 · uncommitted · 지도 source holder의 공용 UI 계약 연결
-- 2026-10-20 · uncommitted · Console transport 소유 위치 정리
