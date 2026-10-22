@@ -84,6 +84,8 @@ CONSOLE_ASSETS = {
     "map-datum.js": ("map-datum.js", "application/javascript"),
     "poll-gate.js": ("shared/poll-gate.js", "application/javascript"),
     "roster.js": ("roster.js", "application/javascript"),
+    "roster-cards.js": ("roster-cards.js", "application/javascript"),
+    "motor-health-view.js": ("motor-health-view.js", "application/javascript"),
     "queues.js": ("queues.js", "application/javascript"),
     "card-trip.js": ("card-trip.js", "application/javascript"),
     "power-health-view.js": ("power-health-view.js", "application/javascript"),

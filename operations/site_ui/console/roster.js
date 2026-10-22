@@ -14,6 +14,8 @@ import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from 
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
+import { createFleetMotorHealth } from "./motor-health-view.js";
+import { placeRosterCards as place } from "./roster-cards.js";
 import { createQueues } from "./queues.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 
@@ -81,6 +83,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
   const { attentionItems, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
   const trip = createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason });
+  const motorHealth = createFleetMotorHealth({view, scope});
   function openCard(robotId) {
     if (selectRobot(view, robotId)) {
       confirmedAction?.cancel();
@@ -155,7 +158,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
     const battery = nodeWithText("span", "robot-line-battery", `배터리 ${powerHealthView(robot, view.receivedAtMs, Date.now()).battery}`);
     battery.dataset.fact = "battery";
-    facts.append(battery);
+    facts.append(battery, motorHealth.summary(robot));
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     const position = tag(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
@@ -384,6 +387,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       facts.appendChild(cellEl);
     });
     node.appendChild(facts);
+    node.appendChild(motorHealth.detail(robot));
 
     if (!view.stateUnavailable) {
       if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));
@@ -684,25 +688,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       node.appendChild(why);
     }
     return node;
-  }
-
-  // D-540 (d): a card whose picker has focus stays where it is — a rebuilt <select> closes its list mid-pick.
-  function place(box, cards) {
-    const focused = document.activeElement?.tagName === "SELECT" ? document.activeElement.closest("#robot-workspace article") : null;
-    const keep = focused?.parentElement === box ? focused : null;
-    if (keep) {
-      const current = cards.find(node => node.dataset.robotId === keep.dataset.robotId);
-      const form = keep.querySelector(".card-trip"), previous = form?.querySelector(".stuck-result");
-      const note = current?.querySelector(".card-trip .stuck-result");
-      if (previous?.textContent !== note?.textContent) {
-        previous?.remove();
-        if (form && note) form.append(note);
-      }
-    }
-    const nodes = cards.map((node) => (keep && node.dataset.robotId === keep.dataset.robotId ? keep : node));
-    if (!nodes.includes(keep)) { box.replaceChildren(...nodes); return; }
-    for (const node of [...box.children]) if (node !== keep) node.remove();
-    nodes.forEach((node, i) => { if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null); });
   }
 
   return { card, summary, workspace, place, trip, fillQueues, queuedReason, needsAttention, attentionItems, openCard };

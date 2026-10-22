@@ -113,6 +113,8 @@ class FakeRobot:
         self.state_error: Optional[BaseException] = None
         self.power_health_value: Optional[dict] = None
         self.power_health_error: Optional[BaseException] = None
+        self.motor_health_value: Optional[dict] = None
+        self.motor_health_error: Optional[BaseException] = None
         self.swarm_state_error: Optional[BaseException] = None
         self.pose_frames: asyncio.Queue = asyncio.Queue()
         self.event_frames: asyncio.Queue = asyncio.Queue()
@@ -165,6 +167,12 @@ class FakeRobot:
         if self.power_health_error is not None:
             raise self.power_health_error
         return dict(self.power_health_value or {})
+
+    async def motor_health(self) -> dict:
+        self._record('motor_health')
+        if self.motor_health_error is not None:
+            raise self.motor_health_error
+        return dict(self.motor_health_value or {})
 
     async def map(self) -> dict:
         self._record("map")

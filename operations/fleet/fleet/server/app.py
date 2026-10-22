@@ -389,10 +389,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             yield
         finally:
             async with AsyncExitStack() as cleanup:
-                for resource in (getattr(app.state, "power_health_display", None), notification_http,
+                for resource in (getattr(app.state, "power_health_display", None),
+                                 getattr(app.state, "motor_health_display", None), notification_http,
                                  calibration_drift_watch, post_action_observation_source, app.state.charge_runtime):
-                    close = getattr(resource, "aclose", None)
-                    if callable(close):
+                    if callable(close := getattr(resource, "aclose", None)):
                         cleanup.push_async_callback(close)
                 start_points = getattr(app.state, "start_points", None)
                 if start_points is not None:

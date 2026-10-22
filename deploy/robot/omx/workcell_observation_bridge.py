@@ -21,6 +21,8 @@ from uuid import uuid4
 import yaml
 
 from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.motor_health import read_motor_health_snapshot
+from core_common.protocol.motor_health import MotorHealthResponse
 from rosy_vision import protocol
 
 
@@ -61,6 +63,7 @@ class Sample:
     received_at: float
     sequence: int
     value: object
+    motor_health: MotorHealthResponse | None = None
 
 
 def sample_age(sample, wall, monotonic):
@@ -102,6 +105,44 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
+class ArmHealthSource:
+    """One latest-value stream; terminal files can advance without inventing ROS positions."""
+    def __init__(self, source, path, owner):
+        self.source, self.path, self.owner = source, path, owner
+        self.last, self.position_sequence, self.terminal_key = None, None, None
+
+    def latest(self):
+        position = self.source.latest()
+        wall, mono = self.source.wall(), self.source.monotonic()
+        health, captured = None, None
+        try:
+            health, captured = read_motor_health_snapshot(self.path, self.owner, now=wall)
+        except (OSError, ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            pass  # Position delivery remains independent; absence is never healthy telemetry.
+        terminal = health is not None and health.status in ('fault', 'ended')
+        key = (health.session_id, health.status, captured) if terminal else None
+        sequence = self.last.sequence + 1 if self.last else 1
+        if terminal and key != self.terminal_key and (self.last is None or captured > self.last.captured_at):
+            candidate = Sample(captured, mono, sequence, None, health)
+            try:
+                sample_age(candidate, wall, mono)
+            except ValueError:
+                candidate = None
+            if candidate is not None:
+                self.last, self.terminal_key = candidate, key
+        elif (position is not None and position.sequence != self.position_sequence
+              and (self.last is None or position.captured_at > self.last.captured_at)):
+            self.last = Sample(position.captured_at, position.received_at, sequence, position.value, health)
+            self.position_sequence = position.sequence
+        if self.last is None:
+            return None
+        try:
+            sample_age(self.last, wall, mono)
+        except ValueError:
+            return None
+        return self.last
+
+
 def post_arm(fleet_url, source_id, token, observation, *, context):
     url = secure_url(fleet_url, 'https') + '/api/fleet/workcell-observations/arms/' + quote(source_id, safe='')
     request = Request(url, data=observation.model_dump_json().encode(), method='POST',
@@ -125,7 +166,8 @@ class ArmSender:
             # A lost 202 may leave the server ahead; a fresh epoch still requires capture advance.
             self.epoch, self.sequence, self.conflict_stamp = uuid4().hex, 0, None
         observation = ArmObservation(epoch=self.epoch, sequence=self.sequence + 1,
-                                     captured_at=sample.captured_at, positions=sample.value)
+                                     captured_at=sample.captured_at, positions=sample.value,
+                                     motor_health=sample.motor_health)
         try:
             post_arm(self.url, self.source_id, self.token, observation, context=self.context)
         except HTTPError as error:
@@ -248,6 +290,8 @@ def main(argv=None):
     parser.add_argument('--vision-url', required=True)
     parser.add_argument('--domain-id', type=int, required=True)
     parser.add_argument('--ca-file', type=Path)
+    parser.add_argument('--arm-health-file', action='append', default=[], metavar='SOURCE_ID=/absolute/file',
+                        help='private trusted health file for a registered arm; owner derives from its arm_id')
     args = parser.parse_args(argv)
     if not 0 <= args.domain_id <= 232:
         parser.error('domain-id must be 0..232')
@@ -260,6 +304,14 @@ def main(argv=None):
     try:
         manifest = WorkcellObservationManifest.model_validate(yaml.safe_load(args.manifest.read_text(encoding='utf-8')))
         cell, tokens = select_sources(manifest, args.workcell, os.environ)
+        health_files = {}
+        for binding in args.arm_health_file:
+            source, separator, file = binding.partition('=')
+            path = Path(file)
+            if (not separator or source not in {arm.source_id for arm in cell.arms} or source in health_files
+                    or not path.is_absolute() or path.resolve() != path or path.is_symlink()):
+                raise ValueError('health file must be bound once to a registered source and canonical path')
+            health_files[source] = path
         secure_url(args.fleet_url, 'https'); secure_url(args.vision_url, 'wss')
         context = ssl.create_default_context(cafile=args.ca_file)
     except (OSError, ValueError, yaml.YAMLError) as error:
@@ -277,7 +329,7 @@ def main(argv=None):
     node = rclpy.create_node('rosy_workcell_observation_' + uuid4().hex[:12])
     stop, workers, senders = threading.Event(), [], []
 
-    def subscribe(source, message_type, topic, convert, sender):
+    def subscribe(source, message_type, topic, convert, sender, *, health_file=None):
         buffer = LatestSource()
         def receive(message):
             try:
@@ -285,14 +337,16 @@ def main(argv=None):
             except (ValueError, TypeError, OverflowError, cv2.error):
                 node.get_logger().warning(f'ignored invalid observation from {source.source_id}')
         node.create_subscription(message_type, topic, receive, qos_profile_sensor_data)
-        worker = threading.Thread(target=SourceWorker(buffer, sender.send).run, args=(stop,),
+        delivery = ArmHealthSource(buffer, health_file, source.arm_id) if health_file is not None else buffer
+        worker = threading.Thread(target=SourceWorker(delivery, sender.send).run, args=(stop,),
                                   name=source.source_id, daemon=True)
         worker.start(); workers.append(worker); senders.append(sender)
 
     try:
         for arm in cell.arms:
             subscribe(arm, JointState, arm.joint_topic, lambda msg, names=arm.joint_names: joint_values(msg, names),
-                      ArmSender(args.fleet_url, arm.source_id, tokens[arm.source_id], context=context))
+                      ArmSender(args.fleet_url, arm.source_id, tokens[arm.source_id], context=context),
+                      health_file=health_files.get(arm.source_id))
         for camera in cell.cameras:
             subscribe(camera, Image, camera.image_topic, lambda msg: encode_image(msg, cv2, np),
                       CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context))

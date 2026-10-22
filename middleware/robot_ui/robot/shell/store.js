@@ -148,8 +148,9 @@ export function createStore(api, deps = {}) {
           const tick = () => {
             if (pending) return;
             pending = true;
+            const requestedAtMs = Date.now();
             api(path, { signal: AbortSignal.timeout(Math.max(intervalMs * 2, 5_000)) }).then(
-              (data) => { if (live()) onData(data); },
+              (data) => { if (live()) onData(data, {requestedAtMs, receivedAtMs: Date.now()}); },
               (error) => { if (live()) onError(error); },
             ).finally(() => { pending = false; });
           };

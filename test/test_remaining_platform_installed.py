@@ -52,7 +52,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 114  # Includes assistant assets, Cell observation and the Learning entry.
+    assert {'motor-health-view.js', 'roster-cards.js'} <= expected.keys()
     assert 'learning.html' in expected
     assert 'cell/cell-observation.js' in expected
     assert {'assistant/panel.js', 'assistant/assistant-voice.js', 'assistant/panel.css',

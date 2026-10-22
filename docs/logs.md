@@ -9542,3 +9542,10 @@ osy-d395-s1d\`.
 - Change: document common task/robot identity, host-bound runs, source-specific remote evidence and the installed controller sidecar closure.
 - Evidence: full backend 2422 passed/78 skipped, Chromium 167 passed, final Account integration 30 passed; Model and AI each passed actual pinned synthetic ACT/HIL-SERL checks. Independent implementation/delta reviews have no remaining required changes. See [record](validation/learning-tasks-2026-10-22/result.md).
 - Gate: unchanged. Source verification is separate from official signed deployment, actual user/HF consent and physical online learning.
+
+
+## 2026-10-22 · 79a11a4a54 · 현재 운영 기준 모터 상태 연결 검증
+
+- 변경: 운영 기준에서 기능만 분리하고 API v1.296·원격 검증·읽기 전용 소유 경로와 배포 조건을 기록한다.
+- 증거: 모듈별 정확한 SHA·실행 수·독립 검토와 미실행 범위를 docs/validation/motor-health-runtime-2026-10-22.md에 기록한다.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.

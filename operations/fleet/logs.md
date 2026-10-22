@@ -4246,3 +4246,16 @@
 - Change: include the Learning link in the exact work-menu browser inventory and check its fixed destination. Keep operator/viewer, filter, refresh-failure and accessibility checks.
 - Evidence: PR151 initial CI found the stale menu expectation. At 2d38309d3a all four affected desktop/mobile Chromium cases passed remotely, NEW 0.
 - Gate: unchanged; official image activation and authenticated Learning acceptance remain pending.
+
+
+## 2026-10-22 · 79a11a4a54 · 모터 상태 캐시와 Cell 관측 연결
+
+- 변경: 인증된 로봇별 캐시와 같은 출처별 D-837 ingest에 모터 상태를 연결했다. 측정 나이는 줄이지 않는다.
+- 증거: 79a11a4a54 공식 원격 producer/ingest 관련 154 passed/skip0/NEW0; transport/cache 독립 검토에서 차단 결함 없음.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
+## 2026-10-22 · uncommitted · 지도 화면 모터 조회 시험 목록
+
+- 변경: 지도·조사 화면의 읽기 전용 호출 목록에 motor_health를 추가했다. 이동·정지 명령 금지는 유지한다.
+- 증거: PR152의 Fleet 브라우저 실행에서 기존 목록 누락으로 10개 사례가 실패했다. 수정 커밋의 공식 원격 Chromium 재검증과 최신 CI 결과를 게시 근거로 확인한다.
+- gate 변화: 제품 실행 코드는 동일하며, 이 기록은 배포나 장치 수용을 주장하지 않는다.

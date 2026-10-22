@@ -869,3 +869,10 @@
 - Change: require globally unique credential SHA-256 declarations, so role-specific consumers detect reuse without receiving another role's raw secret. Extract FleetTaskStatus into the existing work protocol module while retaining the canonical schema export.
 - Evidence: ada14033b9 remote protocol and architecture checks: 86 passed. Independent source review found no remaining scoped credential-contract finding. Earlier pre-push encountered a station-camera lifespan timeout; a focused rerun passed, but its original storage delay remains unexplained and the publication checks must run again.
 - Gate: unchanged. Live Fleet ingestion and physical motion remain unverified.
+
+
+## 2026-10-22 · 79a11a4a54 · 출처에 결속된 모터 상태 계약
+
+- 변경: 읽기 전용 모터 DTO·명시 파일 검증과 D-837의 선택적 건강 기록·종료 전용 null 위치를 추가했다.
+- 증거: 79a11a4a54 공식 원격 154 passed/skip0/NEW0에 신원·나이·실제 TLS 파이프라인 회귀 포함.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.

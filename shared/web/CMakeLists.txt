@@ -21,6 +21,8 @@ install(FILES
   task-chooser.css
   theme.js
   evidence.js
+  motor-health.js
+  motor-health.css
   scope.js
   account-profile.js
   DESTINATION share/${PROJECT_NAME}

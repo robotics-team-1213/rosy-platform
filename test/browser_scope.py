@@ -20,6 +20,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
@@ -31,6 +32,7 @@ FLEET = [
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [
+    "test/test_motor_health_ui_browser.py",
     "test/test_dashboard_browser.py",
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",

@@ -52,6 +52,8 @@ OWN = {
         "formation.js",
         "map-view.js",
         "roster.js",
+        "roster-cards.js",  # Retains focused cards only within the robot workspace.
+        "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
