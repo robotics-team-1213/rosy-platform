@@ -80,15 +80,16 @@ class LearningConnections extends HTMLElement {
     this.failure = ''; this.denied = false;
     try {
       const optionsResponse = await accountFetch('/api/accounts/options', {credentials:'same-origin', cache:'no-store'});
+      const options = await optionsResponse.json();
       if (!optionsResponse.ok) throw new Error('계정 설정을 확인할 수 없습니다. 다시 시도하세요.');
-      this.options = await optionsResponse.json();
+      this.options = options;
       this.hidden = !this.options.enabled;
       if (this.hidden) return;
       const response = await accountFetch('/api/accounts/session', {credentials:'same-origin', cache:'no-store'});
-      this.session = response.ok ? await response.json() : null;
+      const result = await response.json();
+      this.session = response.ok ? result : null;
       this.denied = response.status === 403;
       if (!response.ok && response.status !== 401) {
-        const result = await response.json();
         throw new Error(result.error || '계정 상태를 확인할 수 없습니다. 다시 시도하세요.');
       }
       restoreLearningTask(this.session);
@@ -147,7 +148,8 @@ class LearningConnections extends HTMLElement {
       const state = line(ready ? '읽기 · 쓰기 · 저장소 관리 가능' : hasConnections ? 'Hugging Face 재연결 필요' : 'Hugging Face 연결 필요', 'ui-status');
       state.setAttribute('state', ready ? 'ready' : 'empty'); state.setAttribute('role', 'status');
       if (ready) line(ready.username || ready.subject);
-      if (this.options?.oauth) action(hasConnections ? 'Hugging Face 다시 연결' : 'Hugging Face 연결', () => connectHuggingFace(this.session), ready ? 'quiet' : 'primary');
+      if (!this.session.capabilities?.includes('import')) line('자료 가져오기 권한이 필요합니다. 계정 관리자에게 권한을 요청하세요.');
+      else if (this.options?.oauth) action(hasConnections ? 'Hugging Face 다시 연결' : 'Hugging Face 연결', () => connectHuggingFace(this.session), ready ? 'quiet' : 'primary');
       else line('Hugging Face 연결을 사용할 수 없습니다. 계정과 자료에서 연결을 확인하세요.');
       const accounts = document.createElement('a'); accounts.href = '/accounts'; accounts.textContent = '계정과 자료 관리'; actions.append(accounts);
       action('로그아웃', async () => {

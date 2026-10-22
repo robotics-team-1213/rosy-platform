@@ -136,6 +136,15 @@ def test_hf_connection_returns_to_exact_review_task(tmp_path, accounts):
                 assert 'oauth-private' not in page.evaluate('JSON.stringify({...localStorage, ...sessionStorage})')
                 page.goto(origin + '/accounts', wait_until='networkidle')
                 assert page.url == origin + '/accounts'
+                config['users'].append({'user_id':'viewer', 'username':'viewer', 'memberships':{'one':['view']}})
+                accounts.config_path.write_text(json.dumps(config))
+                sign_in(page, origin, accounts, 'viewer')
+                page.get_by_role('button', name='계정과 Hugging Face 연결').click()
+                expect = playwright.expect
+                dialog = page.get_by_role('dialog', name='계정과 연결')
+                expect(dialog).to_contain_text('자료 가져오기 권한이 필요합니다')
+                expect(dialog.get_by_role('button', name='Hugging Face 연결', exact=True)).to_have_count(0)
+                expect(dialog.get_by_role('button', name='Hugging Face 다시 연결', exact=True)).to_have_count(0)
             finally:
                 browser.close()
     finally:
