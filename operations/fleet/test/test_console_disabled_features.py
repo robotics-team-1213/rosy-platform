@@ -69,7 +69,7 @@ def test_console_gates_disabled_feature_pollers():
 
     assert "if (!gate.due()) return;" in enrollment
     assert "gate.fail(err.status, err.code);" in enrollment
-    assert "error.status = resp.status;" in enrollment
+    # panel-request.test.mjs verifies 404 polling and login reset through the real panels.
 
     assert "createPollGate({ slowCodes: { NO_MAP: NO_MAP_RETRY_MS } })" in map_view
     assert "if (auth.locked || !mapGate.due()) return;" in map_view

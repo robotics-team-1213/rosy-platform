@@ -78,6 +78,23 @@ for (const factory of [createEnrollmentPanel, createCameraPairingPanel]) {
     assert.equal(get('enroll-controls').hidden, true);
     assert.equal(get('camera-link-controls').hidden, true);
   });
+
+  test(`${factory.name}: an unconfigured 404 stops polling until login resets it`, async t => {
+    const {instance} = panel(t, factory);
+    let now = 1000, calls = 0;
+    t.mock.method(Date, 'now', () => now);
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response(JSON.stringify({detail: 'Not Found'}), {status: 404});
+    };
+    await instance.refresh();
+    now += 120000;
+    await instance.refresh();
+    assert.equal(calls, 1);
+    instance.resetPolling();
+    await instance.refresh();
+    assert.equal(calls, 2);
+  });
 }
 
 test('enrollment sends one POST and preserves server error detail', async t => {
