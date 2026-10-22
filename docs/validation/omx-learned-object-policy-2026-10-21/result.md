@@ -7,16 +7,111 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/41회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/21회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 종료된 실제 learned 물체 성공은 **0/42회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/22회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 직전 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
 
 후속 teacher 전략의 새25개 시연과 전체RGB65557장 독립정답·영상 검증이 끝났다.
 그 자료로 새 ACT checkpoint의10,000단계 학습·재적재와 offline 검증도 완료했다.
-새 checkpoint의 native 보정은 PASS지만, 사전 물체 과제는0/1회 실패했다.
+무교란 checkpoint의 native 보정은 PASS지만, 사전 물체 과제는0/1회 실패했다.
 새 정식20회는 시작하지 않았다. 시연 성공과 offline MAE를 실제 learned 성공에
 합산하지 않는다.
+
+후속 state-noise0.02rad 실험도10000단계·재적재·독립 평가·보관 검증을 마쳤다.
+그 새 checkpoint의 실제 물체 사전 과제도0/1회 실패했고 새 정식20회는 미시작이다.
+
+## 2026-10-22 state-noise 단일 변수 실험 완료와 실제 시험
+
+새 실험5a4bcb0f34424770은 MODEL 실행 EXIT0로 끝났다. 같은25개·65557프레임·
+20train/5validation·source·sampling·cold start·seed42750·n_action_steps1·
+ACT10000단계를 유지하고 기존 train-only state noise만0→0.02rad로 바꿨다.
+원본 RGB/state/absolute target과 held-out 입력은 유지했다. 실제 request에서
+study_name과 noise를 제외한 모든 필드의 동등성을 확인했다.
+
+Dataset manifest의132215개 파일 참조와25개 episode revision이 baseline과 같다.
+바뀐 normalization 필드는 training_augmentation 하나다. 이 설정이 transformation
+configuration hash에 포함돼 dataset revision은 달라졌다. 새로 수집한 데이터나
+원본 파일의 내용 변경으로 해석하지 않는다. 독립 정답·전체 영상 재검증의 curation과
+20/5 split 해시도 기존과 같다. DatasetStore 등록·재검증을 마쳤고 회수한 artifact
+포함5개 파일·4개 참조를 크기와 해시로 대조했다.
+
+| 항목 | 실제 결과 |
+| --- | --- |
+| 독립 validation | 같은5개·13111프레임, noise 없음 |
+| 새 MAE | 0.006452267rad |
+| 기존 무교란 모델 MAE | 0.002872736rad; 새 MAE가 더 큼 |
+| 관절 제한 위반 | 0건 |
+| Checkpoint 재적재 검증 | true |
+| Offline verdict | offline_only; 실제 과제 성공 아님 |
+| 실제10000개 loss history | 처음100 평균2.182275958, 마지막100 평균0.995013800 |
+
+Noise 유무에 따라 학습 목표 분포가 달라지므로 두 loss의 직접 개선율은 계산하지
+않는다. 동일 held-out MAE는 악화했으며 이를 상태 오차 보정 가설과 구분한다.
+
+MODEL의 고정 입력 비교는 EXIT0다. 기존 실제0/170/180/194단계의 baseline 출력을
+1e-6rad 이내 재현했다. 같은 실제 RGB/q에서170/180/194단계의 새 gripper delta는
++0.026826/+0.024986/+0.004299rad이며 기존−0.003908/−0.005616/−0.027708rad와
+방향이 다르다. 0단계는+0.000119→−0.002804rad이므로 네 입력 모두 개선됐다고
+판정하지 않는다. 별도±0.005/±0.02rad 입력은 synthetic 진단이다. 국소 보정 반응과
+혼합된 출력 부호를 실제 target 복원·물체 복구 성공이나 별도의 수용 기준으로 삼지 않는다.
+
+같은 runtimebf2에서 한 번의 새 보정·engineering 사전 과제 워크플로를 제출했다.
+보정 nonce cefb3da7c4be의 실제 결과는 EXIT0/PASS/cleanup true, 정책 goal0개다.
+물체 attempts0이므로 성공 분모에 넣지 않는다. 이어 새 물체 사전 과제
+nonce5653cec77ed1은 EXIT1/HOLD/cleanup true, 성공0/1회로 끝났다. 원장에는
+351개 정책 입력과 wall budget TimeoutError가 남았고 worker_errors는 비어 있다.
+부착·해제 전이는0개, 관측 lift0mm·안정0SIM초·XY오차229.265mm다. 마지막
+목표 오차는 미완료 관측이며 놓기 정확도나 성공으로 계산하지 않는다.
+
+168단계와350단계의 실제 q는 각각
+`[1.47044,-0.12443,0.60148,1.10112,-0.04437,0.89422]`와
+`[1.47037,-0.12445,0.60145,1.10120,-0.04436,0.89356]`rad다.
+끝의 제안 delta는 수 micro-rad 수준으로 줄어들었고 물체는 원래 위치에 남았다.
+물체 과제의 진행 정체를 관측했으며, 원인과 다음 학습 변경은 실제 상태·목표와
+teacher 인접 구간을 대조해 판단한다. 실행 시간을 늘려 성공으로 만들지 않는다.
+
+상위 job에는 TimeoutExpired가 기록됐지만 하위 policy 결과·351개 입력·관측
+9978개·timing trace·원본 RGB와 원장을 모두 회수했다. 상세 기록 유실로 판정하지
+않는다. 이 실패까지 전체0/42회에 보존하고, 사전 과제 통과 뒤에만 같은 고정
+checkpoint/runtime으로 새 정식20회를 수행한다. SIM 부착 보조 조건을 유지한다.
+
+Parent policy revision SHA256: `3cdc59af64f4942d121f81d68664a203c7d634042123d062c211b730c45208d4`.
+새 dataset revision SHA256: `4c6fcdb5b017be2d464cad797ef45d3e57b479fecc9754636dde6786968412a0`.
+Weights SHA256: `718a3963fc220b31edf4dcd62ed60fa201824f321fc4651efee2271fd93beabb`.
+Normalization SHA256: `09feb19cad4d7d775802641b72a56261e89c629a2603e552d4ddd680ec2bc21d`.
+History SHA256: `7c0819f82e9ddee08da459162408c6a3159267a7881fc6c823df1a028f805444`.
+Offline report SHA256: `b2197e4484675b9bed291477366c55f654bc4b8ee629299fd0bcbeea49410526`.
+비교 JSON SHA256: `19f8c660520bc59de6ddea7ca48cabc97f86c27aa66c601d978d1918231b79c1`.
+Runtime/training source: `bf2ca6346b9be0821249740a0cc8bd4fbf454e47`.
+
+## 2026-10-22 정체 입력의 실제 MODEL 재현
+
+별도 MODEL 진단은 EXIT0이며 새 native 과제나 학습을 실행하지 않았다.
+실제350단계의 RGB와6축 q를 고정하고 새 모델의 제안을1e-6rad 이내 재현했다.
+그 입력에서 새 모델의 모든 축 delta는6.08micro-rad 이하이고, 기존 무교란 모델의
+gripper delta는−0.012744rad다. 같은 입력에서 두 고정 모델의 반응이 다르다.
+
+첫 train 시연의 원본 teacher phase 시각 안에서5축 arm L2 거리로 선택한
+접근722·파지732·운반960단계를 각각 대조했다. 접근·파지 행은 실제 학습 표본에
+포함됐고 운반960은 제외됐다. 여섯 관절 전체 상태와 원본 RGB를 교차 입력했다.
+새 모델에 파지732의 RGB와 q를 함께 넣으면 gripper delta−0.023301rad로
+원본 target delta−0.023232rad에 가깝다(차이 약0.000069rad).
+실제 q에 파지 RGB만 넣으면−0.014328,
+실제 RGB에 파지 q만 넣으면−0.012882rad다. 파지 라벨 부재나 전반적인 닫힘
+학습 실패를 지지하지 않으며, 실제 RGB/q 조합에서의 진행 정체를 뒷받침한다.
+
+실제350단계 q의 jaw에만±0.005/±0.02rad를 더한 입력은 synthetic 진단이다.
+새 모델의 jaw delta는 여전히−0.000467~+0.000071rad 범위다. 이를 실제 복구
+또는 성공 기준으로 삼지 않는다. Noise 크기와 정체 사이 인과관계는 아직 미입증이다.
+
+다음 사전 고정 비교는 같은25개·20/5·sampling·cold start·seed42750·10000단계·
+n_action_steps1·runtime에서 train-only noise만0.02→0.01rad로 낮추는 한 번의
+실험이다. Offline 무결성 검증 후 별도 실제 사전 과제로 판단한다. 여기서도 정체가
+지속되면 noise 수치 조정을 반복하지 않고 실제 회복 시연 수집의 필요성을 검토한다.
+현재0/42와 새 정식20회 미시작 상태는 그대로다.
+
+Plateau 진단 JSON SHA256: `d0b3317365a61e82b55adcdecca344de60d36847e02e2e1eacb1246d3be31130`.
 
 ## 2026-10-22 새 checkpoint의 실제 실패와 입력 교차 진단
 
