@@ -74,6 +74,7 @@ def test_connected_ui_login_goal_cancel_readback_and_logout(connected_fleet):
                     with page.expect_response(lambda response: response.url.endswith('/auth/logout')) as logged_out:
                         page.locator('[data-login=logout]').click()
                     assert logged_out.value.status == 204
+                    page.get_by_role('link', name='로그인', exact=True).click()
                     expect(page.locator('[data-login=login]')).to_be_visible()
                     assert page.request.get(origin + '/api/fleet/auth/session').status == 401
                     assert not errors, errors
