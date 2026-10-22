@@ -234,6 +234,27 @@ class Tasks:
             return dict(robots=list(self._robots(db).values()), tasks=[self._get(db, row[0], 'task')[1]
                 for row in db.execute("SELECT id FROM learning_task_records WHERE kind='task' ORDER BY rowid")])
 
+    def _dataset_binding(self, task, robots, dataset_id, dataset_revision):
+        return dict(task_id=task['id'], task_revision=task['revision'],
+            project_id=self.project_id, dataset_id=_identifier(dataset_id),
+            dataset_revision=_revision(dataset_revision), profile_id=task['profile_id'],
+            profile_revision=task['profile_revision'], task_participants=task['participants'],
+            robots=[{key: robots[uid][key] for key in
+                ('id', 'kind', 'model_revision', 'device_id', 'revision')}
+                for uid in dict.fromkeys(p['robot_id'] for p in task['participants'])])
+
+    @staticmethod
+    def _bind_dataset(db, binding):
+        encoded = _json(binding)
+        prior = db.execute('SELECT binding FROM learning_task_datasets '
+            'WHERE dataset_id=? OR dataset_revision=?',
+            (binding['dataset_id'], binding['dataset_revision'])).fetchall()
+        if any(item[0] != encoded for item in prior):
+            raise ValueError('dataset identity or revision is already bound to another task or revision')
+        if not prior:
+            db.execute('INSERT INTO learning_task_datasets VALUES (?,?,?)',
+                       (binding['dataset_id'], binding['dataset_revision'], encoded))
+
     def resolve(self, task_id, dataset_id, dataset_revision, profile_revision, component_ids, host_id):
         _identifier(dataset_id)
         _revision(dataset_revision)
@@ -254,21 +275,8 @@ class Tasks:
                     or (task['mode'] == 'independent' and (len(component_ids) != 1
                         or component_ids[0] not in all_components))):
                 raise ValueError('selected ordered component group differs from task')
-            dataset = dict(task_id=task_id, task_revision=task['revision'],
-                project_id=self.project_id, dataset_id=dataset_id, dataset_revision=dataset_revision,
-                profile_id=task['profile_id'], profile_revision=profile_revision,
-                task_participants=task['participants'],
-                robots=[{key: robots[uid][key] for key in
-                    ('id', 'kind', 'model_revision', 'device_id', 'revision')}
-                    for uid in dict.fromkeys(p['robot_id'] for p in task['participants'])])
-            encoded = _json(dataset)
-            prior = db.execute('SELECT binding FROM learning_task_datasets '
-                'WHERE dataset_id=? OR dataset_revision=?', (dataset_id, dataset_revision)).fetchall()
-            if any(item[0] != encoded for item in prior):
-                raise ValueError('dataset identity or revision is already bound to another task or revision')
-            if not prior:
-                db.execute('INSERT INTO learning_task_datasets VALUES (?,?,?)',
-                           (dataset_id, dataset_revision, encoded))
+            dataset = self._dataset_binding(task, robots, dataset_id, dataset_revision)
+            self._bind_dataset(db, dataset)
             return dict(dataset, compute_host=host_id, component_ids=list(component_ids),
                 participants=[p for p in task['participants'] if p['component_id'] in component_ids])
 
@@ -277,14 +285,21 @@ class Tasks:
             row, task = self._get(db, task_id, 'task')
             ids = list(dict.fromkeys(p['robot_id'] for p in task['participants']))
             robots = [json.loads(self._get(db, uid, 'robot')[0][1]) for uid in ids]
+            bindings = [json.loads(row[0]) for row in db.execute(
+                'SELECT binding FROM learning_task_datasets '
+                "WHERE json_extract(binding,'$.task_id')=? ORDER BY dataset_id LIMIT 1025", (task_id,))]
+            if len(bindings) > 1024:
+                raise ValueError('bounded task transfer must not exceed 1024 dataset bindings')
             package = dict(schema='rosy.learning.task-transfer/1', project_id=self.project_id,
-                robots=robots, task=json.loads(row[1]), profile=task['profile'], task_revision=task['revision'])
+                robots=robots, task=json.loads(row[1]), profile=task['profile'],
+                task_revision=task['revision'], dataset_bindings=bindings)
             if len(_json(package).encode('utf-8')) > 1024 * 1024:
                 raise ValueError('bounded task transfer must not exceed 1 MiB')
             return package
 
     def import_task(self, package, actor):
-        _fields(package, ('schema', 'project_id', 'robots', 'task', 'profile', 'task_revision'))
+        _fields(package, ('schema', 'project_id', 'robots', 'task', 'profile', 'task_revision'),
+                ('dataset_bindings',))
         _creator(actor)
         if package['schema'] != 'rosy.learning.task-transfer/1' or package['project_id'] != self.project_id:
             raise ValueError('task transfer schema or project differs')
@@ -297,13 +312,31 @@ class Tasks:
                 raise ValueError('duplicate task transfer robot or device identity')
             robots[body['request_id']] = dict(body, id=body['request_id'],
                                             project_id=self.project_id, revision=revision)
-        revision, _, _ = self._task(package['task'], package['profile'], robots)
+        revision, pinned, runnable = self._task(package['task'], package['profile'], robots)
         if _revision(package['task_revision']) != revision:
             raise ValueError('task transfer semantic revision differs')
         if set(robots) != {p['robot_id'] for p in package['task']['participants']}:
             raise ValueError('task transfer includes unrelated robot references')
+        bindings = package.get('dataset_bindings', [])
+        if not isinstance(bindings, list) or len(bindings) > 1024 or (bindings and not runnable):
+            raise ValueError('bounded dataset bindings require a runnable task')
+        task = dict(package['task'], id=package['task']['request_id'], revision=revision,
+                    profile_revision=pinned['revision'] if pinned else None)
+        dataset_ids, dataset_revisions = set(), set()
+        for binding in bindings:
+            _fields(binding, ('task_id', 'task_revision', 'project_id', 'dataset_id',
+                'dataset_revision', 'profile_id', 'profile_revision', 'task_participants', 'robots'))
+            expected = self._dataset_binding(task, robots, binding['dataset_id'], binding['dataset_revision'])
+            if (binding != expected or binding['dataset_id'] in dataset_ids
+                    or binding['dataset_revision'] in dataset_revisions):
+                raise ValueError('task transfer dataset ownership or ordered group differs')
+            dataset_ids.add(binding['dataset_id'])
+            dataset_revisions.add(binding['dataset_revision'])
         with self._db() as db:
             for body in package['robots']:
                 self._save(db, 'robot', body, robots[body['request_id']]['revision'], actor,
                            {'device_verified': False}, importing=True)
-            return self._save_task(db, package['task'], actor, package['profile'], importing=True)
+            task = self._save_task(db, package['task'], actor, package['profile'], importing=True)
+            for binding in bindings:
+                self._bind_dataset(db, binding)
+            return task
