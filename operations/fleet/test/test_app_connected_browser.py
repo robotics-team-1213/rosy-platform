@@ -66,7 +66,7 @@ def test_connected_ui_login_goal_cancel_readback_and_logout(connected_fleet):
                     expect(page.locator('#log')).to_contain_text('QUEUED 취소')
                     readback = page.request.get(origin + '/api/fleet/tasks/' + identifier)
                     assert readback.status == 200 and readback.json()['task']['status'] == 'CANCELED'
-                    assert not any(call[0] == 'goal' for call in robot.calls)
+                    assert not any(call[0] == 'navigation_goal' for call in robot.calls)
 
                     toggle = page.locator('#topbar-more')
                     if toggle.get_attribute('aria-expanded') != 'true':
