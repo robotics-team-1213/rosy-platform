@@ -41,7 +41,7 @@ MODEL에서25개 각각의 독립 SIM 물체 정답·실제 gripper 증거와 �
 | 실제 optimizer history | 10000단계; 처음100 loss평균0.925346, 마지막100평균0.189565 |
 | checkpoint 재적재 | reloaded_prediction_verified=true |
 | 독립 validation | 5개·13111프레임, MAE0.002872736rad, 관절 제한 위반0 |
-| 등록·번들 검증 | DatasetStore register/require, 번들5개 참조의 해시·크기 검증 통과 |
+| 등록·번들 검증 | DatasetStore register/require, artifact 포함5개 파일·4개 참조의 해시·크기 검증 통과 |
 | MODEL 실행 결과 | 종료코드0, trained_reloaded_offline_verified |
 | 새 native 평가 | 보정 입력 전달; 사전 과제·정식20회 결과 미확인 |
 
