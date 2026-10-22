@@ -46,8 +46,6 @@ def connected_fleet(tmp_path):
         while not server.started and thread.is_alive() and time.monotonic() < deadline:
             time.sleep(.01)
         assert server.started
-        from fakes import run
-        run(robot.navigation_goal(0, 0, 0))
         yield endpoint, certificate, key, robot
     finally:
         server.should_exit = True
