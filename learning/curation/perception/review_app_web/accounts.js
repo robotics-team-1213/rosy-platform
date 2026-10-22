@@ -98,7 +98,6 @@ async function refresh() {
   $('connect-panel').hidden=!session.capabilities.includes('import');
   $('hf-link').hidden=!options.oauth || !session.capabilities.includes('import');
   $('repo-panel').hidden=!canPublish;
-  $('hf-manage').hidden=!options.oauth || !canPublish;
   $('sharing').querySelector('[value=project]').disabled=!session.capabilities.includes('manage');
   if(!session.capabilities.includes('manage')) $('sharing').value='personal';
   const list=$('connections'), select=$('connection'), managed=$('repo-connection');
@@ -107,6 +106,7 @@ async function refresh() {
     const row=document.createElement('article'); list.append(row);
     const names=(account.scopes||[]).map(scope=>scopeLabel[scope]).filter(Boolean);
     line(row,`${account.username || account.subject} · ${account.sharing==='project'?'프로젝트 연결':'개인 연결'} · ${names.length?names.join(' · '):'기록된 저장소 권한 없음'}`);
+    if(options.oauth && !(account.scopes||[]).includes('write-repos')) button(row,'쓰기 권한으로 다시 연결',()=>$('hf-link').click());
     if(account.sharing==='project' ? session.capabilities.includes('manage') : account.owner_id===session.user_id) button(row,'연결 해제',async()=>{
       if(!confirm('연결을 해제하면 이 계정을 사용하는 새 가져오기가 중단됩니다. 해제할까요?'))return;
       await api('/api/accounts/disconnect',{connection_id:account.connection_id}); await refresh();
@@ -161,7 +161,7 @@ $('logout').addEventListener('click',()=>perform(async()=>{
   try { await api('/api/accounts/logout',{}); } finally { signedOut(); }
   await refresh();
 }));
-for(const [id,purpose] of [['hf-login','login'],['hf-link','link'],['hf-manage','manage']]) $(id).addEventListener('click',()=>perform(async()=>{
+for(const [id,purpose] of [['hf-login','login'],['hf-link','link']]) $(id).addEventListener('click',()=>perform(async()=>{
   const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
 }));
 $('connect-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{

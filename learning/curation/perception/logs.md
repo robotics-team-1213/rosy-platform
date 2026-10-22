@@ -1,5 +1,11 @@
 ﻿# perception_curation verification log
 
+## 2026-10-22 · HF 연결의 읽기/쓰기 분리 제거
+
+- 일반 HF 연결에서 자료 읽기·결과 쓰기·저장소 관리 권한을 함께 요청하고 공급자가 승인한 쓰기 권한을 보존한다. 별도의 게시 권한을 요구하던 관리 연결 분기와 두 번째 연결 버튼을 제거했다.
+- 기존 읽기 전용 연결에는 쓰기 권한으로 다시 연결하는 동작을 제공한다. 공급자의 실제 권한·토큰 소유권·세션 검증은 유지한다.
+- 원격 실패 재현: 5f298be9a3의 새 회귀 3개가 기존 읽기 전용 요청·쓰기 권한 유실·추가 게시 승인 요구 때문에 실패했다. 수정본의 원격 검증과 운영 설치는 별도 확인한다.
+
 2026-10-11: D-637 folder move in progress; committed-SHA verification pending.
 
 2026-10-11: source d4988bffba landed on local main after independent review, remote regressions/known_failures 0 NEW and installed wheel/sdist/HTTP proof. SOURCE/LOCAL GO only; CI FULL and ROS-SIM/ARM64/device/field remain unverified. See docs/validation/d637-remaining-folders-2026-10-11/result.md.

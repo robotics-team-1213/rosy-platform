@@ -21,10 +21,10 @@
 <div id="signed-in" hidden>
 <section class="learning-section"><h2>현재 작업자</h2><p id="identity"></p><a data-account-profile hidden>프로필</a><button id="logout" class="ui-field" type="button">로그아웃</button></section>
 <section class="learning-section"><h2>연결한 Hugging Face 계정</h2><div id="connections" aria-live="polite"></div>
-<button id="hf-link" class="ui-field" type="button" hidden>Hugging Face 계정 추가</button>
-<details id="connect-panel"><summary>읽기 토큰으로 연결</summary><p class="quiet">저장소에 필요한 읽기 권한만 있는 토큰을 사용하세요. 연결 후 화면에 다시 표시하지 않습니다. 쓰기 토큰은 외부 게시 권한이 있을 때 비공개 저장소 관리에도 쓰입니다.</p>
+<button id="hf-link" class="ui-field" type="button" hidden>Hugging Face 연결</button>
+<details id="connect-panel"><summary>토큰으로 연결</summary><p class="quiet">학습 결과를 저장하려면 쓰기 권한이 있는 Hugging Face 토큰을 연결하세요. 토큰은 연결 후 다시 표시하지 않습니다.</p>
 <form id="connect-form" class="ui-form learning-form">
-<label class="ui-field-label">읽기 토큰<input id="provider-token" class="ui-field" type="password" autocomplete="off" required maxlength="4096"></label>
+<label class="ui-field-label">Hugging Face 토큰<input id="provider-token" class="ui-field" type="password" autocomplete="off" required maxlength="4096"></label>
 <label class="ui-field-label">사용 범위<select id="sharing" class="ui-field"><option value="personal">내 작업만</option><option value="project">프로젝트 작업 — 관리자</option></select></label>
 <label class="ui-field-label">프로젝트 연결의 허용 저장소<textarea id="resources" class="ui-field" rows="2" placeholder="dataset:조직/자료&#10;model:조직/모델"></textarea></label>
 <button class="ui-field" type="submit">계정 확인 후 연결</button></form></details></section>
@@ -45,7 +45,6 @@
 <button class="ui-field" type="submit">접근 확인 후 가져오기</button></form></section>
 <section id="repo-panel" class="learning-section" hidden><h2>비공개 저장소</h2>
 <p class="quiet">외부 게시 권한으로 비공개 데이터셋과 모델 저장소를 만들고 지웁니다. 파일을 올리거나 공개로 바꾸지 않습니다.</p>
-<button id="hf-manage" class="ui-field" type="button" hidden>Hugging Face 저장소 관리 연결</button>
 <form id="repo-list-form" class="ui-form learning-form">
 <label class="ui-field-label">관리 계정<select id="repo-connection" class="ui-field" required></select></label>
 <label class="ui-field-label">관리할 종류<select id="manage-repo-type" class="ui-field"><option value="dataset">데이터셋</option><option value="model">모델</option></select></label>
