@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from browser_harness import browser_tests_enabled
 
-playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright ??")
+playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
 
 
 @pytest.mark.skipif(not browser_tests_enabled(),

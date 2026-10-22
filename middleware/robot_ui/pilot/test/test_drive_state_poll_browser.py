@@ -7,11 +7,11 @@ import json
 import pytest
 from browser_harness import browser_tests_enabled
 
-from test_pilot_browser import _enter_drive, base_url, playwright_sync  # noqa: F401  (module fixture)
+from test_pilot_browser import _enter_drive, playwright_sync
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_drive_skips_rest_state_poll_while_state_socket_is_live(base_url):  # noqa: F811
+def test_drive_skips_rest_state_poll_while_state_socket_is_live(base_url):
     stamp = "2026-10-07T06:00:00Z"
     frame = {"type": "state", "mode": "MANUAL", "timestamp": stamp, "velocity": {"linear": 0.12, "angular": 0.1},
              "evidence": {"velocity": {"evidence": "fresh", "received_at": stamp}}}
