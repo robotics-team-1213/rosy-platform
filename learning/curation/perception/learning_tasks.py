@@ -62,6 +62,8 @@ def _fields(body, required, optional=()):
 
 
 def _creator(actor):
+    if actor is None:
+        return {'kind': 'local_unverified', 'id': 'local'}
     if not isinstance(actor, dict):
         raise ValueError('authenticated learning creator required')
     return {'kind': 'authenticated', 'id': _text(actor.get('user_id'), 128)}
@@ -117,6 +119,8 @@ class Tasks:
         if (record.get('project_id') != self.project_id or record.get('id') != uid
                 or record.get('revision') != row[2]
                 or any(record.get(key) != value for key, value in body.items())
+                or record.get('created_by') != json.loads(row[3])
+                or (kind == 'robot' and record.get('device_verified') is not False)
                 or (kind == 'robot' and self._robot(body) != row[2])):
             raise ValueError('learning reference project or identity changed')
         return row, record

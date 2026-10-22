@@ -30,6 +30,8 @@ from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web
 import review_versions, omx_center_web
 import learning_pipeline
+import learning_tasks_web
+from learning_tasks import Tasks
 from review_ai_jobs import Jobs
 from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
@@ -83,8 +85,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     if bound and not accounts:
         raise ValueError('collaboration-bound workspace requires its account configuration')
     project = accounts.project_id if accounts else review_evidence.metadata(store, 'workspace_id')
+    tasks = Tasks(store.db, project)
     if omx_center is not None:
         omx_center.bind_workspace(project)
+        omx_center.tasks = tasks
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
     if accounts:
@@ -133,7 +137,11 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if (collaboration and collaboration.get(self, path, token)) or omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs):
+                if collaboration and collaboration.get(self, path, token):
+                    return
+                if learning_tasks_web.get(self, path, tasks, omx_center, token):
+                    return
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -338,6 +346,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
                 if collaboration and collaboration.post(self, path, body, token):
+                    return
+                if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
                     return
                 if omx_center_web.post(self, path, body, omx_center, learning):
                     return
