@@ -57,6 +57,8 @@ CI의 FULL 실행은 `app-fleet` 필수 작업에서 앱 시험을 실행한다.
 
 실제 API 화면 시험은 개발용 connected HTTPS 호스트와 실제 Fleet 서버·임시 SQLite·가상 로봇을 사용한다. 화면에서 로그인·프로필 저장·목표 요청·대기 작업 취소·로그아웃을 조작하고 API에서 `QUEUED → CANCELED`와 세션 종료를 확인한다. 인증서와 서버는 시험 중 생성·정리하며 운영 서버나 실제 로봇은 필요하지 않다. 가상 로봇에 목표를 전송하지 않은 대기 작업 취소 흐름이므로 실장치 주행·정지 검증을 대신하지 않는다.
 
+[CI·실제 API 화면 검증 기록](../../docs/validation/fleet-frontend-ci-connected-2026-10-22.md)에 소스 SHA, 실행 결과와 장애 주입으로 확인한 실패 검출 범위를 적었다.
+
 초기 기록에서 거절 응답만 확인했던 여섯 API도 정상 설정의 HTTP 성공 경로를 검증했다. [후속 검증 기록](../../docs/validation/fleet-frontend-http-success-2026-10-21.md)에 실행 SHA·상태 변경·장치 검증과의 경계를 적었다.
 
 운영 Fleet은 기존 wheel·이미지·URL로 배포하며 native `runtime.js`와 등록된 자산을 포함한다. `dev/`와 샘플 제어는 운영 패키지에 포함하지 않는다. gateway는 공개 `fleet.cli.run(argv)`을 사용한다. [D-830](../../docs/adr/D-830-fleet-independent-frontend-development.md)과 [개발 분리 계획](../../docs/plans/2026-10-21-fleet-frontend-separation.md)을 따른다.
