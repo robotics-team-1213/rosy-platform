@@ -7,15 +7,50 @@
 아직 입증되지 않았다. 원격 단위 시험, offline MAE, 관절 goal 성공은 물체 과제
 성공 수에 합산하지 않는다. 본 문서는 진행 중인 증거이며 최종 수용 보고서가 아니다.
 
-현재 확정된 실제 learned 물체 성공은 **0/40회**다. 최초 고정 평가 0/20회와
-별도 engineering 사전 과제 0/20회를 구분한다. 후속 사전 과제가 통과하기 전에는
+현재 확정된 실제 learned 물체 성공은 **0/41회**다. 최초 고정 평가 0/20회와
+별도 engineering 사전 과제 0/21회를 구분한다. 후속 사전 과제가 통과하기 전에는
 새 정식 20회 평가를 시작하지 않는다. Calibration은 이 분모나 물체 성공에 넣지 않는다.
 직전 checkpoint의 네 runtime 과제는 모두 실패했고 cleanup은 확인됐다.
 
 후속 teacher 전략의 새25개 시연과 전체RGB65557장 독립정답·영상 검증이 끝났다.
 그 자료로 새 ACT checkpoint의10,000단계 학습·재적재와 offline 검증도 완료했다.
-새 checkpoint는 native 보정·사전 과제 평가를 준비 중이며, 새 정식20회 성공은
-아직 입증되지 않았다. 시연 성공과 offline MAE를 실제 learned 성공에 합산하지 않는다.
+새 checkpoint의 native 보정은 PASS지만, 사전 물체 과제는0/1회 실패했다.
+새 정식20회는 시작하지 않았다. 시연 성공과 offline MAE를 실제 learned 성공에
+합산하지 않는다.
+
+## 2026-10-22 새 checkpoint의 실제 실패와 입력 교차 진단
+
+Native nonce61f579e073b8은 EXIT1/HOLD, cleanup_verified=true다. 기록한 정책 입력은
+195개이며 마지막 submit은 성공 반환하지 않았다. 중단 오류는
+`PermissionError: policy_camera_source_stale`이고 lease worker도 같은 HOLD를 기록했다.
+물체 lift0mm, 안정0SIM초, 마지막 XY오차229.265mm는 미완료 관측이다.
+별도 보정 nonce ed75ac750938의 PASS는 물체 attempts0으로 분모에서 제외한다.
+
+마지막 선택 RGB는 submit 직전63.796ms였고, submit439.607ms와 최종 검사를 지나
+약503.210ms로500ms 한계를 넘었다. native_send 자체는0.310ms였다.
+이는 원래 입력이 처리 중 오래된 경로의 증거이며 카메라 publisher 중단을 입증하지 않는다.
+AI PC의 동일 installed 파일을20회 읽은 검사 중앙값26.970ms 중 약96%는 참조 파일
+검사에 쓰였다. 메모리 재사용 비교는 약5% 개선에 그쳐 공통 계약 코드를 수정하지 않았다.
+이 읽기 전용 측정은 실행 중인 Gazebo 부하를 재현하지 않았으며 안전 기준은 유지했다.
+
+MODEL의 고정 checkpoint 교차 진단은 EXIT0다. 원본 RGB·실제 q의0/170/180/194단계
+출력을 각각1e-6rad 이내로 재현한 뒤, 첫 성공 train 시연에서5축 arm 거리로 선택한
+teacher 관절 상태와 RGB를 교차 입력했다. 194단계에서 실제 q의 gripper delta는−0.027708rad였고
+RGB만 teacher 것으로 바꾸면−0.027959rad였다. 같은 실제 RGB에 teacher q를 넣으면
++0.000945rad였다. 가까운 teacher는 그리퍼가 열린 접근 구간이다. 상태 의존적인
+조기 닫힘을 뒷받침하지만 특정 관절 하나의 원인이나 과제 성공을 입증하지 않는다.
+Nearest arm 거리는0.1658rad, jaw 차이는 약0.316rad로 이미 큰 이탈이다.
+
+다음 단일 변수 실험은 같은25개·20/5·source·sampling·cold start·ACT10000단계·
+seed42750·n_action_steps1을 유지하고 기존 train-only state noise만0에서0.02rad로
+바꾼다. 원본 RGB/state와 absolute target은 보존하며 perturbed origin에 대해 상대
+target을 다시 계산한다. Validation·추론에는 noise를 넣지 않는다. 초기 이탈 억제
+가설이며 이미 멀어진 상태 복구나 카메라 지연 해결을 주장하지 않는다.
+
+교차 진단 JSON SHA256: `ed24d964381292724c5a1789ffcd0117c6116f2501ddeb5e9731056a2bb0aaf0`.
+읽기 전용 프로파일 JSON SHA256: `a9bae7acc3ffac581dac736dda5d755b87db7a512bf759f3561fa24ae22ad0d9`.
+실제 실패와 원본 RGB3장은 기존 Jira KAN-61·Confluence3538946(v36)에 반영하고
+다운로드 바이트를 대조했다. 이전 시연 성공 영상과 구분한다.
 
 ## 2026-10-22 새25개 시연과 새 checkpoint
 
@@ -43,7 +78,7 @@ MODEL에서25개 각각의 독립 SIM 물체 정답·실제 gripper 증거와 �
 | 독립 validation | 5개·13111프레임, MAE0.002872736rad, 관절 제한 위반0 |
 | 등록·번들 검증 | DatasetStore register/require, artifact 포함5개 파일·4개 참조의 해시·크기 검증 통과 |
 | MODEL 실행 결과 | 종료코드0, trained_reloaded_offline_verified |
-| 새 native 평가 | 보정 입력 전달; 사전 과제·정식20회 결과 미확인 |
+| 새 native 평가 | 보정PASS·사전 과제0/1실패·새 정식20회 미시작 |
 
 서로 다른 자료·action 표현으로 만든 이전 후보와 MAE를 직접 개선율로 비교하지
 않는다. 이 checkpoint의 offline 결과는 실제 물체 집기·놓기 성공률이 아니다.
