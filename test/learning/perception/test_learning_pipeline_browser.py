@@ -36,6 +36,9 @@ def test_learning_pipeline_prepares_current_reviews_in_app(browser_workspace, wi
     action.click()
     expect(page.locator('[data-stage="preparation"]')).to_have_attribute('data-state', 'done')
     expect(page.locator('#pipeline-link')).to_have_text('학습 실행기 연결 안내')
+    page.locator('#pipeline-link').click()
+    expect(page.locator('#pipeline-setup p')).to_be_visible()
+    expect(page.locator('#pipeline-setup p')).to_contain_text('실행기를 연결')
     assert store.exports()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 

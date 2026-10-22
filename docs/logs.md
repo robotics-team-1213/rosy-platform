@@ -9959,11 +9959,24 @@ osy-d395-s1d\`.
 - 증거: `bd9df32739` 저장·조회 경합과 실제 409 충돌 GREEN 3 passed/NEW 0; `634000231b` 원격 화면/API 3 passed. `a24e421a09` 실제 Edge 두 테마·세 viewport에서 48px 조작 영역, 모바일 원본 위치 1907→394px, 키보드·미저장 이탈 보호를 확인했다. 실제 LeRobot 10프레임 내보내기·이미지/state/action/int64 시계 readback·원본 bytes 불변은 [검증 기록](validation/omx-grasp-ux-2026-10-21/result.md)에 있다.
 - gate 변화: UI·원본 계보 검증 범위다. 에이전트가 입력한 합성 구간은 사람 정답·실물 파지 성공·모델 품질·데이터 절감 수용이 아니다. 원격 push·배포·정책 활성화는 하지 않았다.
 - 후속 증거: 공용 버튼 종류 명시 검사에서 발견한 factory를 `4907175f24`로 수정했다. 공용 규칙·OMX 브라우저/API 34 passed와 실제 Edge 전체 흐름·10프레임 readback 재확인 exit 0. 첫 착지는 검사 중 HEAD 변경으로 중단됐으며, 그 재실행의 LOAD-FLAKY 표시는 소스 수정 결과여서 flaky 수용으로 사용하지 않는다.
+
 ## 2026-10-21 · a4fe41374e · Fleet 프런트 API 성공 경로 후속 증거
 
 - 변경: 초기 기록에서 거절 응답만 확인된 여섯 API의 정상 설정 HTTP 성공, viewer 거절, 상태 변경과 감사 주체를 검증 기록·기능표·수신 기록으로 연결했다. 이전 검증 기록은 보존했다.
 - 증거: 원격에서 6개 시험 모두 통과, skip 0, NEW 0. Trip은 실제 router/guard와 planner/runner 조립 범위이며 나머지는 기존 전체 앱 fixture를 사용한다. 장치 transport는 fake이다.
 - gate 변화: 코드의 HTTP 성공 경로 증거만 보완했다. 장치·모델·운영 배포·현장 수용·공개 게시를 완료로 표시하지 않는다. validation/fleet-frontend-http-success-2026-10-21.md.
+
+## 2026-10-22 · fcdf36bdc1 · docs: Fleet CI와 실제 API 화면 검증 기록
+
+- 변경: 필수 CI 연결과 실제 API 화면 시험의 소스·원격 실행 결과·실패 검출·한계를 동결 기록으로 남겼다. 기존 프런트·HTTP 성공 기록은 보존했다.
+- 증거: CI 착지 2b6f93281b FULL 30,551 passed/1,999 skipped 및 G1 267 passed, 별도 앱 Chromium 79 passed/skip 0. 후속 fcdf36bdc1은 실제 API 화면·HTTP·샘플 합동 81 passed/skip 0/NEW 0. 의도한 취소·goal 주입 실패와 제거 후 재통과를 구분했다. validation/fleet-frontend-ci-connected-2026-10-22.md.
+- gate 변화: 코드 검증 기록만 추가했다. 공개 GitHub 실행·배포·실장치·현장 수용 결과를 주장하지 않는다.
+
+## 2026-10-22 · a4ff8c3ee3 · docs: 검증 기록의 Git 식별자 출처 보완
+
+- 변경: 동결 기록의 본문은 유지하고 공개 Git 식별자 네 행을 기존 exact-line 출처 목록에 연결했다. 실제 스캔으로 발견한 등록 누락을 보완했다.
+- 증거: 3b79313477 tracked-file scan 실패·main 통과를 확인했다. 독립 검토와 a4ff8c3ee3 원격 scanner·출처 회귀 28 passed/skip 0/NEW 0. 앞선 합동 화면 81건은 최신 shared session과 합친 3b79313477에서도 skip 없이 통과했다.
+- gate 변화: 문서 메타데이터만 수정했다. scanner 규칙·실패 기준선·이전 검증 결과는 변경하지 않았다.
 
 ## 2026-10-22 · uncommitted · D-841 공통 모듈 재사용과 독립 앱 계약 검증
 

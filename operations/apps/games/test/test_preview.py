@@ -173,7 +173,7 @@ def test_stop_uses_exact_account_capability_and_origin():
     from urllib.error import HTTPError
     from urllib.request import Request, urlopen
     from games.host.preview import PreviewBoard, PreviewServer
-    claims = SimpleNamespace(sub='games-user', permits=lambda resource, cap: resource == 'site:one' and cap == 'games.operate')
+    claims = SimpleNamespace(sub='games-user', sid='family', rev=1, aud='site:one', grants=[], permits=lambda resource, cap: resource == 'site:one' and cap == 'games.operate')
     class Account:
         callback = 'https://games.test/api/account/callback'
         resource = 'site:one'

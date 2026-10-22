@@ -58,3 +58,20 @@ test('logout clears locally even when central revocation is pending', async () =
   assert.equal(reset, true);
   assert.equal(stored.get('rosy.account.identity'), '');
 });
+
+test('an ended session clears the marker so other tabs follow at once', async () => {
+  const {kit, state, stored} = harness();
+  globalThis.fetch = async () => ({ok: true, json: async () => signedIn('one')});
+  await kit.restore();
+  globalThis.fetch = async () => ({ok: true, json: async () => ({enabled: true, authenticated: false})});
+  await kit.restore();
+  assert.equal(stored.get('rosy.account.identity'), '');
+  assert.equal(state.changed, 1);
+});
+
+test('a first sign-in is not reported as a change', async () => {
+  const {kit, state} = harness();
+  globalThis.fetch = async () => ({ok: true, json: async () => signedIn('one')});
+  await kit.restore();
+  assert.equal(state.changed, 0);
+});

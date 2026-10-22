@@ -38,6 +38,15 @@ def test_windows_separators_are_accepted():
     assert found and found == browser_scope.targets(["middleware/robot_ui/pilot/styles.css"])
 
 
+def test_pilot_and_shared_styles_select_moved_lobby_tests_without_widening_omx():
+    lobby = "middleware/robot_ui/pilot/test/test_lobby_browser.py"
+    for path in ("middleware/robot_ui/pilot/styles.css", "shared/web/components.css"):
+        assert lobby in browser_scope.targets([path])
+    assert browser_scope.targets(["middleware/devices/omx/adapter/example.py"]) == [
+        "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"
+    ]
+
+
 def test_every_scope_target_exists():
     for patterns in browser_scope.SCOPE.values():
         for pattern in patterns:

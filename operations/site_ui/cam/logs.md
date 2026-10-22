@@ -332,3 +332,17 @@
 - 시험: 끊긴 연결과 빈 이름의 직접 사례를 더했고, 소스를 읽는 세 시험은 잡으려는 실수를 이름에 적었다. 심볼의 뷰포트를 SVG viewBox와 대조한다. D-741 부기에 Android 벡터가 `mark.svg`의 허용된 옮김임을 적었다.
 - 증거: 66321009d를 원격 시험 PC에서 `testDebugUnitTest --no-daemon`으로 돌려 438 passed, failures/errors 0. 로그 X: `DevTemp/cam-app-bar/fix-1.txt`.
 - gate 변화: 없음(SOURCE/JVM). 화면을 렌더하거나 폰에 설치하지 않았다. 가로 화면의 미리보기 높이와 TalkBack 읽기는 기기에서 확인하지 않았다. DEVICE/FIELD는 PARKED.
+
+## 2026-10-22 · d297635cd4 · refactor(cam): 오류 복구 조작 배치 정리
+
+- 변경: 촬영 오류 안내의 설정 버튼 두 선언을 하나로 합쳤다. 정지가 필요한 오류는 기존 판정에 따라 카메라 정지 후 설정으로 이동한다. 설정·자세히 버튼은 FlowRow로 배치해 폭이 부족하면 줄을 바꾸고 기존 간격·누름면 토큰을 유지한다.
+- 범위: Cam의 StreamScreen만 변경했다. Learning·공용 토큰·연결 및 촬영 정책은 변경하지 않았다.
+- 검증: commit d297635cd4의 Cam·공용 웹 자산·공유 벡터를 git archive로 원격 시험 PC에 전달했다. JDK 21/SDK 35에서 testDebugUnitTest·assembleDebug·lintDebug BUILD SUCCESSFUL, JVM 440 tests / failures 0 / errors 0 / skipped 0(57 suites), debug APK 존재를 확인했다. lint는 오류 0·경고 42·정보 1이며 경고의 기준 브랜치 비교는 수행하지 않았다. 원격 역할·아이콘 계약시험 22 passed, known_failures NEW 0. 독립 코드 검토 승인. 로그·JUnit XML·lint XML은 시스템 TEMP의 rosy-cam-ui-refactor/에 보존했다.
+- gate 변화: 없음. 실제 폰의 큰 글꼴·좁은 폭·TalkBack은 미확인이다. Learning·전체 제품·DEVICE/FIELD 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 UI 배치와 중복 코드 정리이며 장치·운영 장애 해결을 주장하지 않는다.
+
+## 2026-10-22 · dadf5eed1f · Cam 복구 화면 렌더링과 안전한 lint 정리
+
+- 변경: 동일 버전의 의존성을 카탈로그로 이동하고 정수 상태·불필요한 SDK 분기를 정리했다. 실제 StreamScreen을 검증하는 Android instrumentation 시험을 추가했다. 기존 ui 패키지를 크기 단위로 등록하며 Gradle 모듈·런타임 소유권은 바꾸지 않았다.
+- 증거: 원격 JVM 440 passed, debug·androidTest APK 빌드 성공. 격리한 API 35 에뮬레이터에서 320·390·800dp/글꼴 1.3 복구 조작 3 passed. lint 오류 0·경고 43·정보 0(기존 경고 2·정보 1 해결, 새 시험 의존성 업데이트 알림 3 추가). 자세한 범위와 캡처는 docs/validation/ui-hardening-2026-10-22/README.md.
+- gate 변화: 없음. 실제 폰·촬영 서비스·음성 TalkBack·DEVICE/FIELD 수용은 미확인. CE: 해당 없음 — 코드와 회귀 시험으로 설명되는 변경이다.

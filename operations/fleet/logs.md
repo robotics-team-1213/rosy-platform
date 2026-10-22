@@ -4318,3 +4318,9 @@
 - 변경: 등록된 요청의 HTML 승인 거부와 서비스 장애를 공통 로그인 복구로 보낸다. 잘못된 등록 정보는 복귀 대상으로 반영하지 않으며 JSON API 오류·PKCE·현재 세션과 resource grant 검사는 유지한다. 권한을 자동 부여하지 않는다.
 - 증거: 원격 red에서 HTML 승인 거부·잘못된 요청 및 Learning callback 실패 4건을 재현했다. f2d7ea9d21의 Auth/Account/협업 49개 회귀가 통과했다. 후속 서비스 장애 사례와 통합 검증은 착지 기록에 남긴다.
 - gate 변화: 운영 인증 서비스·원장·계정 권한은 변경하지 않았다.
+
+## 2026-10-22 · fcdf36bdc1 · test: 실제 API에 연결한 Fleet 화면 흐름
+
+- 변경: 기존 HTTPS 통합 서버를 공유 fixture로 추출하고 로그인·프로필 저장·목표 요청·QUEUED 작업 취소·로그아웃을 실제 화면과 API readback으로 확인하는 Chromium 시험을 추가했다. 실행 안내에 CI 필수 앱 검사와 재현 명령을 연결했다.
+- 증거: 원격 합동 81 passed, skip 0, NEW 0. 취소 503과 실제 FakeRobot navigation_goal 호출을 각각 주입해 실패 검출을 확인한 뒤 제거하고 재통과했다. 독립 검토의 호출 기록 키 지적을 수정했다. docs/validation/fleet-frontend-ci-connected-2026-10-22.md.
+- gate 변화: 서비스·API·장치 권한 변경 없음. 임시 DB·가상 장치와 대기 작업 취소 범위이며 실장치·배포·현장 수용은 포함하지 않는다.

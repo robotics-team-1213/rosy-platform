@@ -65,6 +65,9 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     config['account_subjects'] = {'central-alice': 'alice'}
     config['public_origin'] = origin
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    from types import SimpleNamespace
+    from learning_collaboration import Collaboration, COOKIE
+    session_cookie_name = Collaboration.cookie_name(SimpleNamespace(receiver=receiver, accounts=managed, origin=origin), COOKIE)
     folder = tmp_path/'central-review'; folder.mkdir()
     server = make_server(open_store(folder), port, accounts=managed)
     class AuthorityHandler(server.RequestHandlerClass):
@@ -126,7 +129,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 state['offline'] = False
                 expect(link).to_contain_text('Updated Alice', timeout=15000)
                 old_cookie = next(item['value'] for item in page.context.cookies()
-                                  if item['name'] == 'rosy_learning_session')
+                                  if item['name'] == session_cookie_name)
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
                 page.locator('#logout').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')
@@ -195,7 +198,7 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 expect(page.locator('#identity')).not_to_contain_text('import')
                 expect(page.locator('#account-status')).to_have_attribute('state', 'ready')
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-                page.get_by_text('읽기 토큰으로 연결', exact=True).click()
+                page.get_by_text('토큰으로 직접 연결', exact=True).click()
                 for index, name in enumerate(('a', 'b'), 1):
                     page.locator('#provider-token').fill('hf_browser_' + name)
                     page.locator('#connect-form ui-button[type=submit]').click()
@@ -309,7 +312,7 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                     expect(page.locator('#identity')).to_contain_text('작업자 ' + name)
                 login('viewer')
                 expect(page.locator('#import-panel')).to_be_hidden()
-                expect(page.locator('summary', has_text='읽기 토큰으로 연결')).to_be_hidden()
+                expect(page.locator('summary', has_text='토큰으로 직접 연결')).to_be_hidden()
                 expect(page.locator('#connections ui-button')).to_have_count(0)
                 expect(page.locator('#imports')).to_contain_text('org/data')
                 expect(page.locator('#imports ui-button')).to_have_count(0)
@@ -318,7 +321,7 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 expect(page.locator('#identity')).to_have_text('')
                 expect(page.locator('#connections')).to_have_text('')
                 login('bob')
-                page.get_by_text('읽기 토큰으로 연결', exact=True).click()
+                page.get_by_text('토큰으로 직접 연결', exact=True).click()
                 page.locator('#sharing').focus()
                 page.keyboard.press('End')
                 expect(page.locator('#sharing')).to_have_value('personal')

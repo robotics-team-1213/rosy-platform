@@ -322,9 +322,8 @@ def browser_session(client, cookie):
     body = {'enabled': True, 'authenticated': claims is not None, 'profile': profile,
             'profile_url': client.profile_url if claims else None}
     if claims:
-        body.update(account_id=claims.sub, session_family=getattr(claims, 'sid', None),
-                    revision=getattr(claims, 'rev', None), resource=getattr(claims, 'aud', None),
-                    capabilities=[cap for grant in getattr(claims, 'grants', ()) for cap in grant.capabilities])
+        body.update(account_id=claims.sub, session_family=claims.sid, revision=claims.rev, resource=claims.aud,
+                    capabilities=[cap for grant in claims.grants for cap in grant.capabilities])
     return body, claims
 
 

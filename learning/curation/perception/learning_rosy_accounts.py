@@ -58,6 +58,8 @@ class RosyAccounts(Accounts):
             user = {'user_id': claims.sub, 'username': claims.sub}
         else:
             user = self._user(user_id)
+        # Only an explicit mapping pins ownership, so a legacy owner can still be mapped
+        # after that person's first unmapped sign-in.
         with self._db() as db:
             old = db.execute('SELECT user_id FROM rosy_account_owners WHERE subject=?', (claims.sub,)).fetchone()
             if old and old['user_id'] != user['user_id']:
@@ -65,7 +67,7 @@ class RosyAccounts(Accounts):
             occupied = db.execute('SELECT subject FROM rosy_account_owners WHERE user_id=?', (user['user_id'],)).fetchone()
             if occupied and occupied['subject'] != claims.sub:
                 raise AccountError('Learning owner already belongs to another Account')
-            if old is None:
+            if old is None and user_id is not None:
                 db.execute('INSERT OR IGNORE INTO rosy_account_owners VALUES(?,?)', (claims.sub, user['user_id']))
                 bound = db.execute('SELECT user_id FROM rosy_account_owners WHERE subject=?', (claims.sub,)).fetchone()
                 if not bound or bound['user_id'] != user['user_id']:

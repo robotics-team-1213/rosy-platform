@@ -4,8 +4,9 @@ from http.cookies import SimpleCookie
 import hashlib
 import hmac
 import threading
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
+from learning_accounts import _digest
 from learning_repos import create_private, delete_private, list_repos
 
 
@@ -71,26 +72,41 @@ class Collaboration:
         if self.pool:
             self.pool.shutdown(wait=True, cancel_futures=True)
 
+    def cookie_name(self, name):
+        if not self.receiver:
+            return name
+        # Cookies ignore ports; each Learning receiver owns its origin's session and bindings.
+        namespace = hashlib.sha256((self.accounts.project_id + '\0' + (self.origin or '')).encode()).hexdigest()[:24]
+        return name + '_' + namespace
+
+    def read_cookie(self, handler, name):
+        return cookie(handler, self.cookie_name(name))
+
     def set_cookie(self, handler, name, value, *, clear=False):
+        name = self.cookie_name(name)
         suffix = '; Secure' if self.origin else ''
         handler.extra_headers.append(('Set-Cookie', f'{name}={value}; Path=/; HttpOnly; SameSite=Lax'
                                      + ('; Max-Age=0' if clear else '') + suffix))
 
     def identity(self, handler):
-        principal = self.accounts.authenticate(cookie(handler, COOKIE))
+        principal = self.accounts.authenticate(self.read_cookie(handler, COOKIE))
         self.accounts.require(principal, 'view')
         handler.learning_principal = principal
         return principal
 
     def signed_in(self, handler):
+        """A live sign-in, even when learning access is refused (403, not a login loop)."""
+        session = self.read_cookie(handler, COOKIE)
+        if self.receiver:
+            return 0 < len(session) <= 256 and self.receiver.resolve_session_id(_digest(session)) is not None
         try:
-            self.accounts.authenticate(cookie(handler, COOKIE))
+            self.accounts.authenticate(session)
             return True
         except PermissionError:
             return False
 
     def csrf(self, handler, token):
-        return hmac.new(token.encode(), cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
+        return hmac.new(token.encode(), self.read_cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
 
     def get(self, handler, path, token):
         try:
@@ -124,13 +140,15 @@ class Collaboration:
             query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
             if set(query) != {'code','state'} or any(len(v) != 1 for v in query.values()):
                 raise ValueError('invalid Account callback')
-            session, target = self.receiver.finish(cookie(handler, 'rosy_account_flow'), query['state'][0], query['code'][0])
+            session, target = self.receiver.finish(self.read_cookie(handler, 'rosy_account_flow'), query['state'][0], query['code'][0])
             self.set_cookie(handler, 'rosy_account_flow', '', clear=True)
             self.set_cookie(handler, COOKIE, session)
             handler.extra_headers.append(('Location', target))
             handler.send(b'',303)
             return True
-        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css') or path.startswith('/common/'):
+        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css',
+                    '/learning-shell.js', '/learning-shell.css', '/learning-connections.js',
+                    '/learning-connections.css', '/learning-workspace.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,
@@ -143,11 +161,9 @@ class Collaboration:
             query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
             if any(len(v) != 1 for v in query.values()):
                 raise ValueError('duplicate OAuth callback parameters')
-            session, _ = self.oauth.complete({k: v[0] for k, v in query.items()},
-                                             cookie(handler, BINDING), session=cookie(handler, COOKIE) or None)
+            self.oauth.complete({k: v[0] for k, v in query.items()},
+                                             self.read_cookie(handler, BINDING), session=self.read_cookie(handler, COOKIE) or None)
             self.set_cookie(handler, BINDING, '', clear=True)
-            if session:
-                self.set_cookie(handler, COOKIE, session)
             handler.extra_headers.append(('Location', '/accounts'))
             handler.send(b'', 303)
             return True
@@ -155,7 +171,13 @@ class Collaboration:
             principal = self.identity(handler)
         except PermissionError:
             if not path.startswith('/api/'):
-                handler.extra_headers.append(('Location', '/accounts'))
+                task = path
+                query = urlparse(handler.path).query
+                if query:
+                    task += '?' + query
+                destination = '/accounts?return=' + quote(task, safe='') if path in (
+                    '/', '/pixels', '/catalog', '/learning', '/learning/camera', '/learning/omx', '/learning/sim') else '/accounts'
+                handler.extra_headers.append(('Location', destination))
                 handler.send(b'', 303)
             elif self.signed_in(handler):
                 # 401 would send a signed-in Account user back to login in a loop.
@@ -253,19 +275,19 @@ class Collaboration:
             raise PermissionError('Account session changed')
         if self.receiver and path == '/api/accounts/logout':
             self.set_cookie(handler, COOKIE, '', clear=True)
-            self.accounts.logout(cookie(handler, COOKIE))
+            self.accounts.logout(self.read_cookie(handler, COOKIE))
             handler.send({'ok':True})
             return True
         principal = self.authorize_write(handler, path, body)
         if path == '/api/accounts/logout':
-            self.accounts.logout(cookie(handler, COOKIE))
+            self.accounts.logout(self.read_cookie(handler, COOKIE))
             self.set_cookie(handler, COOKIE, '', clear=True)
             handler.send({'ok': True})
         elif path == '/api/accounts/oauth':
             purpose = body.get('purpose')
             if not self.oauth or purpose not in ('link', 'manage'):
                 raise ValueError('Hugging Face account linking is unavailable')
-            url, binding = self.oauth.begin(purpose, session=cookie(handler, COOKIE))
+            url, binding = self.oauth.begin(purpose, session=self.read_cookie(handler, COOKIE))
             self.set_cookie(handler, BINDING, binding)
             handler.send({'url': url})
         elif path == '/api/accounts/connect':

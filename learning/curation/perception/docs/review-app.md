@@ -294,6 +294,8 @@ account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로�
 
 운영 앱은 HTTPS reverse proxy 뒤의 loopback에 바인딩한다. `public_origin`은 경로와 끝 슬래시 없는 정확한 HTTPS origin이다. 프록시는 공개 Host를 보존하여 `127.0.0.1:<review-port>`로 전달하고 외부에서 backend에 직접 접근하게 만들지 않는다. Host·Origin과 `Secure; HttpOnly; SameSite=Lax` 쿠키를 함께 사용한다. 프록시 로그에도 callback code/state와 요청 본문을 기록하지 않는다.
 
+중앙 Account 수신 모드의 Learning 세션·Account 로그인 바인딩·HF 연결 바인딩 쿠키는 `project_id`와 `public_origin`의 해시 접미사를 쓴다. 브라우저 쿠키는 포트로 격리되지 않으므로 같은 호스트의 다른 Learning 포트도 서로 다른 이름을 가져야 한다. 중앙 Account의 공통 SSO 쿠키는 바꾸지 않는다. 접미사 없는 예전 Learning 쿠키는 중앙 수신 모드에서 읽지 않으며, 적용 후 기존 브라우저는 다시 로그인한다. 중앙 수신기를 쓰지 않는 시험·개발 모드는 기존 쿠키 이름을 유지한다.
+
 ```bash
 python learning/curation/perception/review_app.py \
   --state /private/learning/review-state --host 127.0.0.1 --port 8767 \
@@ -351,7 +353,7 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 
 `rights`는 `internal_use: true`와 비어 있지 않은 `evidence`를 요구한다. gated 팀 이용은 `gated_team_use: true`, `team_use_evidence`를 별도로 기록한다. 사용자 선언은 검수·학습 권리 승인으로 승격되지 않는다. 기존 검수 version 충돌은 409, 인증·권한 실패는 401/403, 입력 오류는 400이다.
 
-데이터 연결 해제는 해당 토큰을 철회하며 이미 연결된 HF 로그인 신원까지 제거하지 않는다. 내부 사용자 탈퇴·권한 변경은 private 설정에서 관리하고 로그인 수단 제거는 별도 신원 절차로 처리한다.
+데이터 연결 해제는 해당 토큰을 철회하며, 검증된 HF 신원이 그 사람에게 묶인 기록은 남겨 다른 사람에게 넘어가지 않게 한다. 사람의 탈퇴·권한 변경은 Rosy Account 계정 관리에서 한다.
 
 계정 화면은 현재 권한에 맞춰 연결·가져오기·해제 버튼을 표시한다. 프로젝트 연결 해제는 관리자, 작업 취소·재시도는 가져오기 권한을 가진 요청자에게만 표시하며 서버에서도 같은 조건을 검사한다. 세션 만료·철회가 다음 요청이나 상태 조회에서 확인되면 사용자·작업 목록과 입력 중인 토큰·자료 요청을 지우고 로그인 화면으로 돌아간다. 서버의 일시적 오류는 로그아웃으로 처리하지 않으며 `최신 상태 확인`으로 재시도한다.
 
