@@ -6,6 +6,7 @@ import hmac
 import threading
 from urllib.parse import parse_qs, urlparse
 
+from learning_accounts import _digest
 from learning_repos import create_private, delete_private, list_repos
 
 
@@ -83,8 +84,12 @@ class Collaboration:
         return principal
 
     def signed_in(self, handler):
+        """A live sign-in, even when learning access is refused (403, not a login loop)."""
+        session = cookie(handler, COOKIE)
+        if self.receiver:
+            return 0 < len(session) <= 256 and self.receiver.resolve_session_id(_digest(session)) is not None
         try:
-            self.accounts.authenticate(cookie(handler, COOKIE))
+            self.accounts.authenticate(session)
             return True
         except PermissionError:
             return False
@@ -143,11 +148,9 @@ class Collaboration:
             query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
             if any(len(v) != 1 for v in query.values()):
                 raise ValueError('duplicate OAuth callback parameters')
-            session, _ = self.oauth.complete({k: v[0] for k, v in query.items()},
+            self.oauth.complete({k: v[0] for k, v in query.items()},
                                              cookie(handler, BINDING), session=cookie(handler, COOKIE) or None)
             self.set_cookie(handler, BINDING, '', clear=True)
-            if session:
-                self.set_cookie(handler, COOKIE, session)
             handler.extra_headers.append(('Location', '/accounts'))
             handler.send(b'', 303)
             return True

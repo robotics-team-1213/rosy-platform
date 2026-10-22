@@ -149,3 +149,29 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
         assert request(base, '/api/accounts/session', 'browser-session')[0] == 401
     finally:
         server.shutdown(); server.server_close(); worker.join()
+
+
+def test_first_unmapped_sign_in_can_be_mapped_later_and_conflicts_are_403(accounts, tmp_path):
+    import threading
+    from test_review_app import open_store
+    from test_learning_collaboration import request
+    from review_app import make_server
+    record = SimpleNamespace(sub='central-alice', aud='project:one', permits=lambda *args: True)
+    receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
+        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
+    managed = RosyAccounts(accounts.db_path, accounts.key_path, accounts.config(), receiver=receiver)
+    assert managed.authenticate('browser-session')['user_id'] == 'central-alice'
+    # The legacy owner signed in once before the operator mapped them; the mapping still applies.
+    managed._config['account_subjects'] = {'central-alice': 'alice'}
+    assert managed.authenticate('browser-session')['user_id'] == 'alice'
+    managed._config['account_subjects'] = {'central-alice': 'bob'}
+    with pytest.raises(AccountError, match='reassigned'): managed.authenticate('browser-session')
+    (tmp_path / 'workspace').mkdir()
+    server = make_server(open_store(tmp_path / 'workspace'), 0, accounts=managed)
+    worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        # A live Account session with a refused owner binding must not bounce back to login.
+        assert request(base, '/api/accounts/session', 'browser-session')[0] == 403
+    finally:
+        server.shutdown(); server.server_close(); worker.join()
