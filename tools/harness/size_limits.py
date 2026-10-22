@@ -90,7 +90,8 @@ _SKIP = ("test", "tests", "build", "install", "log")
 
 
 def is_prod(parts) -> bool:
-    return not any(part in _SKIP or part.startswith(".") for part in parts)
+    return (not any(part in _SKIP or part.startswith(".") for part in parts)
+            and ("src", "androidTest") not in zip(parts, parts[1:]))
 
 
 def _under(path: str, folder: str) -> bool:
@@ -99,7 +100,8 @@ def _under(path: str, folder: str) -> bool:
 
 def is_test(path: str) -> bool:
     parts = PurePosixPath(path).parts
-    return (PurePosixPath(path).suffix in OPS_SUFFIXES and any(p in ("test", "tests") for p in parts)
+    return (PurePosixPath(path).suffix in OPS_SUFFIXES
+            and (any(p in ("test", "tests") for p in parts) or ("src", "androidTest") in zip(parts, parts[1:]))
             and not any(p in ("build", "install", "log") or p.startswith(".") for p in parts))
 
 

@@ -1072,3 +1072,46 @@ def test_board_evidence_matrix_on_declared_widths(width, height):
             browser.close()
     finally:
         server.close()
+
+
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
+def test_board_long_robot_ids_keep_score_columns_inside_viewport(width, height):
+    from playwright.sync_api import expect, sync_playwright
+
+    payload = _play_payload()
+    home_id = "home_" + "robot" * 24
+    away_id = "away_" + "robot" * 12
+    payload["field"].update(home_id=home_id, away_id=away_id)
+    payload["score"] = {home_id: 2, away_id: 1}
+    board = PreviewBoard(clock=lambda: 100.0)
+    board.publish(payload, jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, width, height, url=url)
+            page.goto(url, wait_until="domcontentloaded")
+            expect(page.locator("#home-name")).to_have_text(home_id)
+            expect(page.locator("#away-name")).to_have_text(away_id)
+            expect(page.locator("#home-score")).to_have_text("2")
+            expect(page.locator("#away-score")).to_have_text("1")
+            layout = page.evaluate("""() => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              score: document.querySelector('.score').getBoundingClientRect().toJSON(),
+              columns: [...document.querySelectorAll('.score > div')].map(node => ({
+                box: node.getBoundingClientRect().toJSON(),
+                scrollWidth: node.scrollWidth, clientWidth: node.clientWidth,
+              })),
+            })""")
+            save_temp_screenshot(page, f"games_board_long_ids_{width}x{height}.png")
+            assert layout["overflow"] <= 0, layout
+            assert layout["score"]["right"] <= width, layout
+            home, away = layout["columns"]
+            assert abs(home["box"]["width"] - away["box"]["width"]) <= 1, layout
+            for column in layout["columns"]:
+                assert column["scrollWidth"] <= column["clientWidth"], layout
+                assert column["box"]["right"] <= layout["score"]["right"] + 1, layout
+            assert not errors, errors
+            browser.close()
+    finally:
+        server.close()

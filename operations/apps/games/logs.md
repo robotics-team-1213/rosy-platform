@@ -406,3 +406,9 @@
 - 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
+## 2026-10-22 · uncommitted · 긴 로봇 ID의 점수판 넘침 방지
+
+- 변경: 점수판의 두 열을 같은 폭으로 줄일 수 있게 하고 긴 로봇 ID를 줄바꿈한다. ID 원문과 점수는 유지한다.
+- 증거: 시험만 추가한 `70087db1c9`에서 세 폭 모두 실패했고 320px에서 1001px 넘쳤다. 수정 `a4d2200d86`의 원격 Chromium Pilot·Games 전체 206 passed, skipped 0, NEW 0. 세 폭 캡처를 보존하고 320px에서 이름 줄바꿈과 점수를 확인했다.
+- gate 변화: 없음. 정지·인증·호스트·실물 수용은 변경하지 않았다. CE: 해당 없음 — 원인과 해결은 CSS 및 공개 payload를 이용한 브라우저 회귀 시험으로 설명된다.

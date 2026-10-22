@@ -98,6 +98,21 @@ def test_revision_2_test_files_are_held_to_1500_wherever_they_live():
     assert any("over 1500" in p for p in _problems(over, {}, base={}))
 
 
+@pytest.mark.parametrize("test_lines", [1500, 1501])
+def test_android_instrumentation_sources_are_tests_not_package_code(test_lines):
+    app = "operations/site_ui/cam/app"
+    instrumented = f"{app}/src/androidTest/java/cam/RecoveryTest.kt"
+    main = f"{app}/src/main/java/cam/StreamScreen.kt"
+    lookalike = f"{app}/src/main/java/androidTest/Camera.kt"
+    files = {instrumented: test_lines, main: 600, lookalike: 1}
+    counts, over, owner = s.measure(files, {"rosy-cam": "operations/site_ui/cam"}, ("operations",), [])
+    assert counts == {"rosy-cam": 601}
+    assert owner == {main: "rosy-cam", lookalike: "rosy-cam"}
+    assert over == ({instrumented: 1501} if test_lines == 1501 else {})
+    if test_lines == 1501:
+        assert any("over 1500" in p for p in _problems(over, {}, base={}))
+
+
 def test_units_floor_applies_to_new_units_of_large_parents_only():
     counts = {"pkg": 2500, "pkg/unit": 400}
     owner = {"pkg/unit": "pkg"}

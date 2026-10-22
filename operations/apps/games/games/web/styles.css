@@ -54,7 +54,7 @@ h1 {
 .score {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   margin: 0 var(--space-5) var(--space-3);
   background: var(--score-gap);
@@ -67,6 +67,7 @@ h1 {
 
 .score span {
   display: block;
+  overflow-wrap: anywhere;
   font-size: var(--text-label);
   color: var(--mute);
 }

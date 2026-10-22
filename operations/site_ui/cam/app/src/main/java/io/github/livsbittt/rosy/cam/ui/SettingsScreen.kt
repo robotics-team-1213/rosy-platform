@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -93,7 +94,7 @@ fun SettingsScreen(
     var robotServices by remember { mutableStateOf(emptyList<RobotCoreServiceRecord>()) }
     var scanning by remember { mutableStateOf(false) }
     var wifiConnected by remember { mutableStateOf(false) }
-    var scanGeneration by remember { mutableStateOf(0) }
+    var scanGeneration by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val discovery = remember(context, scanGeneration, locked) {
         OverheadServerDiscovery(context) { overhead, robots, active, onWifi ->

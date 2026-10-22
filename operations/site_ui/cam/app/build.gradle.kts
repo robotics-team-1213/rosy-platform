@@ -17,6 +17,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -77,7 +78,7 @@ android {
 apply(from = "../../../../shared/web/native-tokens.gradle")
 
 dependencies {
-    implementation("org.bouncycastle:bcprov-jdk18on:1.83")
+    implementation(libs.bouncycastle.bcprov)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -99,6 +100,10 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     // HeldCertificate: a throwaway site CA and leaf for the pinned-trust tests.
     testImplementation(libs.okhttp.tls)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
 apply(from = "../account-config.gradle")

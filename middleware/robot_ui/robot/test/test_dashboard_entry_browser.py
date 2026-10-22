@@ -121,6 +121,30 @@ def test_entry_loads_only_identity_and_destinations_with_stop_on_demand(entry):
     assert page.locator('[data-state-missing]').count() == 0
 
 
+@pytest.mark.parametrize('width', [320, 390])
+def test_entry_long_identity_keeps_destinations_inside_screen(entry, width):
+    page, state = entry
+    label = 'robot-' + 'x' * 90
+    state['identity']['label'] = label
+    page.set_viewport_size({'width': width, 'height': 844})
+    _open(page)
+    identity = page.locator('#entry-identity')
+    expect(identity).to_contain_text(label)
+    links = page.locator('#entry-navigation a')
+    expect(links).to_have_text(['운용', '작업 준비'])
+    if shot_dir := os.environ.get('ROSY_SHOT_DIR'):
+        Path(shot_dir).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(Path(shot_dir) / f'robot_entry_long_identity_{width}.png'))
+    main = page.locator('.entry-main').bounding_box()
+    for content in (identity, page.locator('#entry-navigation'), *links.all()):
+        box = content.bounding_box()
+        assert box and main['x'] - 1 <= box['x'], (width, box, main)
+        assert box['x'] + box['width'] <= main['x'] + main['width'] + 1, (width, box, main)
+        assert content.evaluate('node => node.scrollWidth <= node.clientWidth + 1'), (width, content.text_content())
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert state['errors'] == []
+
+
 def test_entry_invalid_session_clears_links_but_manifest_error_retries(entry):
     page, state = entry
     state['whoami_status'] = 401

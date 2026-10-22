@@ -53,6 +53,7 @@ fleet/fleet/server/trip_progress small
 devices/omx/adapter/omx_adapter/pilot_sim
 foundation/core_common/protocol
 robot_ui/robot/panels
+site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui
 fleet/fleet/server/auth
 fleet/fleet/server/console
 fleet/fleet/server/cell

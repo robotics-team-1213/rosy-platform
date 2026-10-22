@@ -53,6 +53,7 @@ API_WEB = [
 ]
 PILOT = [
     "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+    "middleware/robot_ui/pilot/test/test_lobby_browser.py",
     "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py",
 ]
 GAMES = ["test/test_games_board_browser.py"]
@@ -76,7 +77,7 @@ SCOPE: dict[str, list[str]] = {
     "middleware/robot_ui/robot/": ROBOT,
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
-    "middleware/devices/omx/adapter/": PILOT[1:],
+    "middleware/devices/omx/adapter/": PILOT[2:],
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "integrations/simulation/gazebo/scripts/": GAZEBO,
