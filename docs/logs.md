@@ -10001,3 +10001,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 두 화면이 기존 공통 request를 소비하고 학습 여덟 경로 검사 정의를 소유 범위의 두 helper로 합쳤다. Port 시험 launcher는 기존 Vault 서버 조립을 재사용하며 앱 runtime 의존성은 추가하지 않는다.
 - 증거: [검증 기록](validation/2026-10-22-shared-module-reuse.md)에 각 코드 SHA·원격 범위·원본 로그 해시를 묶었다. 화면 43 passed, 학습 330 passed/3 skipped, 파일 로더 회귀 57 passed/1 skipped, 최종 폴링·Node wrapper 3 tests 통과. Port 실제 HTTP 2 tests와 Vault 별도 환경 실제 HTTP 4 tests는 skip 0. 독립 검토에서 찾은 import 순서 회귀와 오래된 변수명 문자열 검사를 수정·재검증했다.
 - gate 변화: 해당 소스·시험 범위의 증거다. 전체 영향 실행 결과와 skip은 검증 기록에서 구분한다. 물리 관측 producer·장치·현장 수용, main 착지·push·배포는 수행하지 않았다.
+
+## 2026-10-22 · uncommitted · 공유 요청 후속 소비자 통합
+
+- 변경: 먼저 main에 반영한 D-845 reader 위에 기존 D-841 구현을 통합하고 camera-peer도 공통 전송으로 전환한다. D-841이 존재하므로 해당 ADR gap 한 행만 제거했다. 동결 검증 기록과 provenance는 보존한다.
+- 증거: 공유 reader의 공식 전체 23묶음은 중복 포함 30,661 passed/2,028 skipped/0 failed이며 실제 Chromium 착지를 별도로 마쳤다. 소비자 실제 파일의 RED 1건 확인 후 전체 Fleet Node 363 passed/skip0. 후속 원격·착지 결과는 2차 검증 기록에 구분한다.
+- gate 변화: 공유 모듈은 로컬 main 반영 완료다. 소비자 통합·원격 push·배포·실물 수용은 아직 완료로 주장하지 않는다.

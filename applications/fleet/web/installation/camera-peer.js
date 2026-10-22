@@ -1,4 +1,5 @@
 // D456 receiver-screen approval. A remembered camera is not a running stream or lease.
+import {createRequest} from '/common/request.js';
 const BASE = '/api/fleet/pairing/v2';
 
 export function approvalBody(row, source, remember, who) {
@@ -21,18 +22,25 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
   async function call(path,{method='GET',body}={}) {
     const life = scope.capture();
     life.check();
-    const response = await fetch(path,{method,headers:{...headers(),...(body ? {'Content-Type':'application/json'} : {})},
+    const requestHeaders = {...headers(),...(body ? {'Content-Type':'application/json'} : {})};
+    const request = createRequest({
+      credential: () => new Headers(requestHeaders).get('Authorization')?.slice(7) || '',
+      readResponse: async response => {
+        life.check();
+        if (response.status===401 || response.status===403 || response.status===404) {
+          deniedOwner=ownerKey(); clear();
+          if (response.status===401) onUnauthorized();
+        }
+        if (!response.ok) { const error = new Error('카메라 연결 요청을 처리하지 못했습니다. 목록을 다시 확인하세요.'); error.status = response.status;
+          if (error.status===401) error.message='현재 인증을 확인할 수 없습니다. 로그인 정보를 다시 확인하세요.';
+          if (error.status===403) error.message='현재 운영자에게 카메라 연결 승인 권한이 없습니다.';
+          throw error; }
+        return response.json();
+      },
+    });
+    const {body: value} = await request(path,{method,headers:requestHeaders,
       signal:life.signal, ...(body ? {body:JSON.stringify(body)} : {})});
-    life.check();
-    if (response.status===401 || response.status===403 || response.status===404) {
-      deniedOwner=ownerKey(); clear();
-      if (response.status===401) onUnauthorized();
-    }
-    if (!response.ok) { const error = new Error('카메라 연결 요청을 처리하지 못했습니다. 목록을 다시 확인하세요.'); error.status = response.status;
-      if (error.status===401) error.message='현재 인증을 확인할 수 없습니다. 로그인 정보를 다시 확인하세요.';
-      if (error.status===403) error.message='현재 운영자에게 카메라 연결 승인 권한이 없습니다.';
-      throw error; }
-    const value = await response.json(); life.check(); return value;
+    life.check(); return value;
   }
   const text = (tag,value) => {const node = document.createElement(tag); node.textContent=value; return node;};
   function button(label,action) {

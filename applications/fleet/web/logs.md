@@ -423,3 +423,9 @@
 - 변경: enrollment·camera-pairing이 기존 request.js를 사용한다. 화면별 detail·자격·수명 처리는 유지하고 camera-peer는 제외한다.
 - 증거: 새 소비자 회귀 9개 중 기존 코드의 2개 실패를 확인한 뒤 전체 Fleet Node 352개 통과, skip 0. 원격 브라우저 회귀는 후속 검증한다.
 - gate 변화: 소스·Node 범위이며 장치·현장 수용은 아니다.
+
+## 2026-10-22 · uncommitted · D-845 camera-peer 공통 요청 전환
+
+- 변경: camera-peer가 main에 먼저 반영된 createRequest의 요청별 readResponse를 소비한다. 기존 헤더 시점 권한 처리·엄격 JSON·화면 수명 검사·단일 승인을 유지한다.
+- 증거: 실제 파일과 기존 Node loader로 전환 전 8 passed/1 expected failure, 전환 후 새 9개와 기존 2개 모두 통과했다. 원격 소비자·브라우저 검증은 후속 기록으로 구분한다.
+- gate 변화: 공통 전송 소비 범위다. 장치·현장 수용은 추가하지 않는다.

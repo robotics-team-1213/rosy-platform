@@ -4324,3 +4324,9 @@
 - 변경: 기존 HTTPS 통합 서버를 공유 fixture로 추출하고 로그인·프로필 저장·목표 요청·QUEUED 작업 취소·로그아웃을 실제 화면과 API readback으로 확인하는 Chromium 시험을 추가했다. 실행 안내에 CI 필수 앱 검사와 재현 명령을 연결했다.
 - 증거: 원격 합동 81 passed, skip 0, NEW 0. 취소 503과 실제 FakeRobot navigation_goal 호출을 각각 주입해 실패 검출을 확인한 뒤 제거하고 재통과했다. 독립 검토의 호출 기록 키 지적을 수정했다. docs/validation/fleet-frontend-ci-connected-2026-10-22.md.
 - gate 변화: 서비스·API·장치 권한 변경 없음. 임시 DB·가상 장치와 대기 작업 취소 범위이며 실장치·배포·현장 수용은 포함하지 않는다.
+
+## 2026-10-22 · uncommitted · camera-peer 전송 소비자 회귀
+
+- 변경: 실제 camera-peer와 공통 PageScope를 사용하는 Node 회귀 9개를 추가했다. 권한 헤더·본문 미소비, 엄격 JSON, 종료 후 늦은 응답, 현재 자격·단일 POST를 확인한다.
+- 증거: 전환 전 공통 전송 옵션 누락 1건 RED, 전환 후 기존 helper 2개를 포함해 11 passed/skip0. 실제 브라우저와 공식 원격 결과는 별도 기록한다.
+- gate 변화: 시험 범위이며 권한·장치 명령을 추가하지 않는다.
