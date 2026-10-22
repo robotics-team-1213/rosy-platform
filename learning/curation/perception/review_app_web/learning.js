@@ -60,6 +60,9 @@ function renderPipeline() {
   $('pipeline-stages').replaceChildren();$('pipeline-records').replaceChildren();
   $('pipeline').setAttribute('aria-busy', 'false');
   if(!pipeline) {
+    $('work-summary').textContent='';
+    $('work-preview').hidden=true;
+    $('work-preview-image').removeAttribute('src');
     $('pipeline-title').textContent='작업 상태를 확인하지 못했습니다';
     $('pipeline-status').textContent='현재 자료의 상태를 확인할 수 없습니다. 최신 결과 확인으로 다시 시도하세요.';
     $('pipeline-action').hidden=false;$('pipeline-action').textContent='진행 상태 확인 불가';
@@ -115,7 +118,11 @@ function updateControls() {
     ? ({running:'실행기 처리 중',stopping:'중지 요청 처리 중',waiting:'자동 확인 켜짐 · 조건 대기',stopped:'자동 확인 중지됨'}[control.state]||control.state)
     : '학습 실행기 연결 필요';
   if(control?.error)status.textContent+=` · ${control.error}`;
-  if(control?.available)$('training-controls').open=true;
+  if(control?.available&&!$('training-controls').dataset.initialized) {
+    $('training-controls').open=true;
+    $('training-controls').dataset.initialized='true';
+  }
+  $('pipeline-setup').hidden=!!control?.available;
   for(const action of ['start','stop','retry']) {
     const button=$(`owner-control-${action}`);
     button.disabled=busy||!control?.available||!control[`can_${action}`];
@@ -280,6 +287,10 @@ async function load() {
 function renderReview() {
   const {approved,pending,excluded}=workspace.counts;
   const total=approved+pending+excluded;
+  $('workspace-review').hidden=trainingView||!total;
+  $('pipeline-stages').hidden=!total;
+  $('pipeline-evidence').hidden=!total&&!workspace.items.length;
+  $('workspace-results').hidden=!trainingView&&!workspace.items.length&&!workspace.control?.available;
   $('work-summary').textContent=total?`자료 ${total}장 · 픽셀 검수 대기 ${workspace.pixel_counts.pending}장 · 승인 ${workspace.pixel_counts.approved}장`:'';
   $('work-preview').hidden=!total;
   if(total) {

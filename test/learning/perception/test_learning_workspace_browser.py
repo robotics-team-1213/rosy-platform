@@ -1,5 +1,6 @@
 """The next real task stays above the fold and training has its own app view."""
 import pytest
+from urllib.parse import urlsplit
 
 from browser_harness import browser_tests_enabled
 from test_review_flow_browser import browser_workspace  # noqa: F401
@@ -10,7 +11,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires ex
 @pytest.mark.parametrize('width', [1440, 320])
 def test_workspace_next_action_and_training_navigation(browser_workspace, width):
     page, _store, expect = browser_workspace
-    origin = page.url.rstrip('/')
+    address = urlsplit(page.url)
+    origin = f'{address.scheme}://{address.netloc}'
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(origin + '/learning', wait_until='networkidle')
     expect(page.get_by_role('heading', name='작업', exact=True)).to_be_visible()
@@ -26,3 +28,11 @@ def test_workspace_next_action_and_training_navigation(browser_workspace, width)
     expect(page.locator('#workspace-results')).to_be_visible()
     expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width == 1440:
+        expect(page.locator('#work-preview')).to_be_visible()
+    page.route('**/api/learning', lambda route: route.fulfill(
+        status=503, content_type='application/json', body='{}'))
+    page.locator('#refresh').click()
+    expect(page.locator('#pipeline-title')).to_have_text('작업 상태를 확인하지 못했습니다')
+    expect(page.locator('#work-preview')).to_be_hidden()
+    expect(page.locator('#work-summary')).to_be_empty()
