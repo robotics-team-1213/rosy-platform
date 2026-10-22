@@ -184,6 +184,14 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
         with playwright.sync_playwright() as runtime:
             browser, page, errors = open_page(runtime, width, 900, url=url)
             try:
+                def enable_oauth(route):
+                    response = route.fetch()
+                    options = response.json()
+                    options['oauth'] = True
+                    route.fulfill(response=response, json=options)
+                page.route('**/api/accounts/options', enable_oauth)
+                page.route('**/api/accounts/oauth', lambda route: route.fulfill(
+                    json={'url': url + '/accounts?hf-write-reconnected=1'}))
                 page.goto(url + '/accounts', wait_until='networkidle')
                 expect = playwright.expect
                 expect(page.locator('#login-panel')).to_be_visible()
@@ -200,6 +208,12 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                     expect(page.locator('#provider-token')).to_have_value('')
                 expect(page.locator('#connections')).to_contain_text('account-a')
                 expect(page.locator('#connections')).to_contain_text('account-b')
+                expect(page.locator('#hf-manage')).to_have_count(0)
+                with page.expect_request('**/api/accounts/oauth') as reconnect:
+                    page.get_by_role('button', name='쓰기 권한으로 다시 연결').first.click()
+                assert reconnect.value.post_data_json == {'purpose': 'link'}
+                expect(page).to_have_url(url + '/accounts?hf-write-reconnected=1')
+                expect(page.locator('#connection option')).to_have_count(2)
                 page.keyboard.press('Control+k')
                 page.get_by_role('textbox', name='기능 검색어').fill('사용 계정')
                 page.keyboard.press('Enter')
