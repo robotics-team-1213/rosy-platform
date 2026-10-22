@@ -13,6 +13,7 @@ from experiment_dataset import Episode, ExperimentDataset, load_dataset
 from experiment_profile import action_bounds
 from experiment_scope import select_dataset
 from experiment_train import train_dataset, write_json
+from experiment_jobs import check_learning_task
 
 MAX_INPUTS = 128
 MAX_REPLAY_BYTES = 512 * 1024 * 1024
@@ -21,7 +22,7 @@ MAX_REPLAY_BYTES = 512 * 1024 * 1024
 class OnlineLearner:
     def __init__(self, request, output):
         if (not isinstance(request, dict)
-                or set(request) - {'arm_id'} != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}
+                or set(request) - {'arm_id', 'learning_task'} != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}
                 or request['method'] != 'hilserl' or request['device'] != 'cpu'):
             raise ValueError('explicit CPU hilserl online request required')
         for key, low, high in [('steps', 1, 100000), ('batch_size', 1, 256), ('seed', 0, 2**32 - 1)]:
@@ -34,6 +35,9 @@ class OnlineLearner:
             raise ValueError('new output outside dataset and source checkout required')
         self.request = dict(request)
         initial = load_dataset(root, method='hilserl')
+        if 'learning_task' in request:
+            _, scope = select_dataset(initial, request.get('arm_id'), method='hilserl')
+            check_learning_task(request['learning_task'], initial, scope)
         self.bounds = np.asarray(action_bounds(initial.profile), dtype=np.float32)
         if not np.isfinite(self.bounds).all() or np.any(self.bounds[:, 0] >= self.bounds[:, 1]):
             raise ValueError('declared action limits collapse or overflow in float32')
@@ -96,6 +100,8 @@ class OnlineLearner:
         options = {key: self.request[key] for key in ('method', 'steps', 'batch_size', 'device', 'seed')}
         if 'arm_id' in self.request:
             options['arm_id'] = self.request['arm_id']
+        if 'learning_task' in self.request:
+            options['learning_task'] = self.request['learning_task']
         result = train_dataset(replay, destination, state=self.state,
             action_bounds=self.bounds.tolist(), execution_mode='online_experience',
             progress=lambda event: self._progress('training', event), **options)

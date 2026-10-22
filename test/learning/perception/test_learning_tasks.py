@@ -29,7 +29,12 @@ def robot_body(**changes):
 def setup(store, mode='cooperative', same_robot=False):
     first = store.robot(robot_body(), ACTOR)
     second = first if same_robot else store.robot(robot_body(), ACTOR)
-    profile = {'mode': mode, 'arms': [{'id': 'arm_a'}, {'id': 'arm_b'}]}
+    profile = dict(schema='rosy.omx.learning-profile/2', name='Two bench arms',
+        mode=mode, task='Move block', arms=[dict(id=arm, joint_names=['shoulder', 'gripper'],
+            units='rad', action_limits=[[-2, 2], [0, 1]]) for arm in ('arm_a', 'arm_b')],
+        cameras=[dict(id='top', input_key='observation.images.top', arm_id=None,
+            role='top', source_identity='bench-camera-r1', placement='overhead',
+            shape=[3, 64, 64], purposes=['policy', 'record'])])
     saved = dict(id=uid(), revision=digest(profile), profile=profile)
     body = dict(request_id=uid(), name='Transfer', objective='Move block',
         success='Block at target', failure='Dropped block', reset='Return to start',
@@ -210,3 +215,34 @@ def test_task_transfer_keeps_semantic_identity_and_local_attribution(store, tmp_
         with pytest.raises(ValueError):
             clean.import_task(dict(package, **changes), ACTOR)
         assert clean.snapshot() == {'robots': [], 'tasks': []}
+
+
+@pytest.mark.parametrize('invalid', ['minimal', 'joints', 'cameras', 'action_limits'])
+def test_invalid_profile_with_recomputed_transfer_hashes_is_rejected_before_writes(
+        store, tmp_path, monkeypatch, invalid):
+    body, profile = setup(store)
+    task = store.task(body, ACTOR, profile)
+    package = store.export_task(task['id'])
+    content = package['profile']['profile']
+    if invalid == 'minimal':
+        package['profile']['profile'] = {'mode': content['mode'],
+            'arms': [{'id': arm['id']} for arm in content['arms']]}
+    elif invalid == 'joints':
+        content['arms'][0]['joint_names'] = []
+    elif invalid == 'cameras':
+        content['cameras'] = []
+    else:
+        content['arms'][0]['action_limits'][0] = [2, -2]
+    package['profile']['revision'] = digest(package['profile']['profile'])
+    robot_revisions = {robot['request_id']: digest({'project_id': 'project-a', 'robot': robot})
+                       for robot in package['robots']}
+    package['task_revision'] = digest(dict(project_id='project-a', task=package['task'],
+        profile=package['profile'], robots=[robot_revisions[p['robot_id']]
+            for p in package['task']['participants']]))
+    clean = Tasks(tmp_path / 'clean.sqlite', 'project-a')
+    monkeypatch.setattr(clean, '_save', lambda *args, **kwargs: pytest.fail('invalid transfer attempted a write'))
+    with pytest.raises(ValueError):
+        clean.import_task(package, ACTOR)
+    assert clean.snapshot() == {'robots': [], 'tasks': []}
+    with pytest.raises(ValueError):
+        store.task(dict(body, request_id=uid()), ACTOR, package['profile'])

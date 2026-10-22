@@ -404,3 +404,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .camera-view{display:block;max-width:100%;height:auto;margin-block:var(--space-3);background:var(--surface-recessed)}
 #camera-main input[type="range"]{max-width:24rem}
 .camera-numbers{display:grid;grid-template-columns:max-content 1fr;gap:var(--space-1) var(--space-4);font-variant-numeric:tabular-nums}
+.task-participants{inline-size:100%;display:grid;gap:var(--gap-form)}
+.task-participant{display:flex;flex-wrap:wrap;align-items:end;gap:var(--gap-form);border:1px solid var(--field-line);padding:var(--space-3);margin:0}
+#selected-task,#task-runs,#robots{overflow-wrap:anywhere}

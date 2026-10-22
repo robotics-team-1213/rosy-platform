@@ -22,16 +22,18 @@ class Registry:
         self.task_id = str(uuid.uuid4())
         self.calls = []
         self.reject = False
+        self.robot_id = str(uuid.uuid4())
+        self.profile_id = str(uuid.uuid4())
 
     def resolve(self, task_id, dataset_id, dataset_revision, profile_revision, component_ids, host_id):
         if self.reject or task_id != self.task_id or profile_revision != self.profile_revision:
             raise ValueError('task dataset/profile binding differs')
         self.calls.append((dataset_id, dataset_revision, list(component_ids), host_id))
-        robot_id = str(uuid.uuid4())
+        robot_id = self.robot_id
         participants = [dict(robot_id=robot_id, component_id=part, role='arm') for part in component_ids]
         return dict(task_id=task_id, task_revision='a' * 64, project_id='project',
                     dataset_id=dataset_id, dataset_revision=dataset_revision,
-                    profile_id=str(uuid.uuid4()), profile_revision=profile_revision,
+                    profile_id=self.profile_id, profile_revision=profile_revision,
                     compute_host=host_id, component_ids=list(component_ids),
                     task_participants=participants, participants=participants,
                     robots=[dict(id=robot_id, kind='omx', model_revision='model-v1',
@@ -91,10 +93,12 @@ def test_task_scope_worker_request_retry_and_evaluation_archive(owned, mode, arm
     assert c.start(body) == row and len(launches) == 1
     root = c.root / 'runs' / row['id'] / 'output'
     (root / 'policy').mkdir(parents=True)
-    result = dict(policy_sha256=hashlib.sha256(b'weights').hexdigest(), learning_task=binding)
+    evaluation = {'frames': 6, 'learning_task': binding}
+    result = dict(policy_sha256=hashlib.sha256(b'weights').hexdigest(), learning_task=binding,
+                  evaluation=evaluation)
     for name, value in {'normalization.json': {}, 'profile.json': checked.profile,
                         'request.json': {'learning_task': binding}, 'result.json': result,
-                        'evaluation.json': {'frames': 6, 'learning_task': binding}, 'policy/config.json': {}}.items():
+                        'evaluation.json': evaluation, 'policy/config.json': {}}.items():
         (root / name).write_text(json.dumps(value))
     (root / 'policy/model.safetensors').write_bytes(b'weights')
     row.update(status='succeeded', result=result)
@@ -104,6 +108,9 @@ def test_task_scope_worker_request_retry_and_evaluation_archive(owned, mode, arm
         receipt = json.loads(archive.read('learning-task.json'))
         assert receipt['learning_task'] == binding
         assert receipt['evaluation_sha256'] == hashlib.sha256(archive.read('evaluation.json')).hexdigest()
+    (root / 'evaluation.json').write_text(json.dumps(dict(evaluation, frames=999)))
+    with pytest.raises(ValueError, match='evaluation'):
+        c.artifact(row['id'])
     changed = copy.deepcopy(binding)
     changed['task_id'] = str(uuid.uuid4())
     (root / 'evaluation.json').write_text(json.dumps({'learning_task': changed}))
@@ -162,6 +169,22 @@ def test_cross_task_continuous_experience_never_reaches_inbox(owned, monkeypatch
     with pytest.raises(ValueError, match='task'):
         c.experience(dict(id=row['id'], dataset_id=did, request_id=str(uuid.uuid4())))
     assert admitted == []
+
+
+def test_continuous_experience_resolves_new_bytes_before_existing_inbox_admission(owned, monkeypatch):
+    c, registry, checked, body, _ = owned
+    body['method'] = 'hilserl'
+    row = c.start_online(body)
+    checked.revision = 'd' * 64
+    did = str(uuid.uuid4())
+    with c.connect() as db:
+        db.execute('INSERT INTO datasets VALUES (?,?)', (did, json.dumps(dict(id=did, revision=checked.revision, profile=checked.profile))))
+    admitted = []
+    monkeypatch.setattr(c.inbox, 'add', lambda db, request: admitted.append(request) or {'status': 'queued'})
+    request = dict(id=row['id'], dataset_id=did, request_id=str(uuid.uuid4()))
+    assert c.experience(request) == {'status': 'queued'}
+    assert admitted == [request]
+    assert registry.calls[-1] == (did, checked.revision, row['training_scope']['arm_ids'], 'model')
 
 
 def test_training_entry_preserves_task_binding_and_checks_source_before_updates(owned, tmp_path, monkeypatch):

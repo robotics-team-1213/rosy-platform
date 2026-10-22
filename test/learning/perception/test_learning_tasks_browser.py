@@ -96,6 +96,20 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                 page.locator('#task-select').select_option(task_id)
                 expect(page.locator('#task-runs')).to_contain_text(center.runs[0]['id'])
                 expect(page.locator('#task-runs')).to_contain_text('0.25')
+                page.get_by_text('다른 호스트로 과제 메타데이터 전달', exact=True).click()
+                with page.expect_download() as downloaded:
+                    page.locator('#task-export').click()
+                transfer = tmp_path / 'task-transfer.json'
+                downloaded.value.save_as(transfer)
+                package = json.loads(transfer.read_text())
+                assert package['task']['request_id'] == task_id
+                assert 'token' not in package
+                page.locator('#task-import-file').set_input_files(transfer)
+                with page.expect_response('**/api/learning/tasks/import') as imported:
+                    page.locator('#task-import').click()
+                assert imported.value.ok
+                expect(page.locator('#task-select')).to_have_value(task_id)
+                expect(page.locator('#selected-task')).to_contain_text(task_id)
                 page.locator('#task-name').fill('Unsaved next task')
                 page.locator('#tasks-refresh').click()
                 expect(page.locator('#task-name')).to_have_value('Unsaved next task')

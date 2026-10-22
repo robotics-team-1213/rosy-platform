@@ -13,6 +13,7 @@ import numpy as np
 
 from experiment_dataset import chunk_indices, load_dataset
 from experiment_profile import action_names, policy_cameras, profile_revision
+from experiment_jobs import check_learning_task
 
 
 def write_json(path, value):
@@ -57,7 +58,7 @@ def transform_action(values, normal, *, inverse=False, declared=False):
 
 
 def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_size=8,
-          device='cpu', seed=42750, progress=None, arm_id=None):
+          device='cpu', seed=42750, progress=None, arm_id=None, learning_task=None):
     for label, value, low, high in (('steps', steps, 1, 100000),
             ('batch_size', batch_size, 1, 256), ('seed', seed, 0, 2**32 - 1)):
         if type(value) is not int or not low <= value <= high:
@@ -70,17 +71,24 @@ def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_siz
             or any((parent / '.git').exists() for parent in (output, *output.parents))):
         raise ValueError('new output directory outside dataset and source checkout required')
     dataset = load_dataset(dataset_root, method=method)
+    if learning_task is not None:
+        from experiment_scope import select_dataset
+        _, scope = select_dataset(dataset, arm_id, method=method)
+        check_learning_task(learning_task, dataset, scope)
     return train_dataset(dataset, output, method=method, steps=steps, batch_size=batch_size,
-                         device=device, seed=seed, progress=progress, arm_id=arm_id)
+                         device=device, seed=seed, progress=progress, arm_id=arm_id, learning_task=learning_task)
 
 
 def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,
-                  progress=None, state=None, action_bounds=None, execution_mode='offline_replay', arm_id=None):
+                  progress=None, state=None, action_bounds=None, execution_mode='offline_replay', arm_id=None,
+                  learning_task=None):
     """Update one model/optimizer set; supplied state retains frozen initial normalization."""
     state = {} if state is None else state
     from experiment_scope import select_dataset
     source_width = len(action_names(dataset.profile))
     dataset, scope = select_dataset(dataset, arm_id, method=method)
+    if learning_task is not None:
+        check_learning_task(learning_task, scope=scope)
     if state and state.get('training_scope') != scope:
         raise ValueError('retained model training scope differs from requested arm/profile')
     if action_bounds is not None:
@@ -172,12 +180,13 @@ def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,
     output.mkdir(parents=True)
     write_json(output / 'profile.json', dataset.profile)
     write_json(output / 'normalization.json', stats)
+    lineage = {'learning_task': learning_task} if learning_task is not None else {}
     write_json(output / 'request.json', dict(method=method, steps=steps, batch_size=batch_size,
         device=device, seed=seed, dataset_revision=dataset.revision,
         profile_revision=profile_revision(dataset.profile), action_names=action_names(dataset.profile),
         policy_cameras=cameras, resize_chw=list(image_shape), execution_mode=execution_mode,
         source=dataset.source, lerobot_version='0.4.4', training_scope=scope,
-        episodes=[episode.metadata for episode in dataset.episodes]))
+        episodes=[episode.metadata for episode in dataset.episodes], **lineage))
 
     def observation(episode, index, *, next_observation=False):
         values = tensors[episode.metadata['id']]
@@ -242,6 +251,7 @@ def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,
     from experiment_evaluation import evaluate_reloaded
     evaluation = evaluate_reloaded(reloaded, dataset, tensors, features, stats,
                                    method=method, declared_bounds=action_bounds is not None)
+    evaluation.update(lineage)
     result = dict(method=method, steps=steps, source=dataset.source,
         optimizer_steps=state['total_steps'], optimizer_step_counts=dict(state['optimizer_step_counts']),
         execution_mode=execution_mode, physical_learning_verified=False,
@@ -250,7 +260,7 @@ def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,
         profile_revision=profile_revision(dataset.profile), evaluation=evaluation,
         replay=dict(demonstration_frames=len(demonstration), rollout_frames=len(rollout)),
         supervised_frames=len(indices) if method == 'act' else 0,
-        policy_sha256=hashlib.sha256((output / 'policy/model.safetensors').read_bytes()).hexdigest())
+        policy_sha256=hashlib.sha256((output / 'policy/model.safetensors').read_bytes()).hexdigest(), **lineage)
     write_json(output / 'history.json', history)
     write_json(output / 'evaluation.json', evaluation)
     write_json(output / 'result.json', result)
@@ -268,8 +278,10 @@ def main(argv=None):
     try:
         request = json.loads(args.request.read_text(encoding='utf-8'))
         if (not isinstance(request, dict)
-                or set(request) - {'arm_id'} != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}):
+                or set(request) - {'arm_id', 'learning_task'} != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}):
             raise ValueError('training request fields differ from schema')
+        if 'learning_task' in request:
+            check_learning_task(request['learning_task'])
         train(output=args.out, **request)
     except Exception as error:
         args.out.mkdir(parents=True, exist_ok=True)

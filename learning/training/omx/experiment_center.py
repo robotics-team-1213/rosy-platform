@@ -1,5 +1,6 @@
 """Persistent host-only OMX learning jobs; never dispatches or activates a policy."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -15,7 +16,8 @@ from experiment_io import identifier, read_json, write_json
 from experiment_catalog import Catalog
 from experiment_inbox import Inbox, check_action_space
 from experiment_artifact import model_archive, version_root
-from experiment_jobs import check_request, launch
+from experiment_jobs import check_request, check_learning_task, launch
+from experiment_profile import profile_revision
 from experiment_scope import select_dataset
 from experiment_reviews import Reviews
 from experiment_profiles import Profiles
@@ -25,10 +27,14 @@ from experiment_owner_status import OwnerStatus
 class Center:
     def __init__(self, config):
         if (not isinstance(config, dict) or not {'schema', 'root', 'python'} <= set(config)
-                or set(config) - {'schema', 'root', 'python', 'owner_status'}
+                or set(config) - {'schema', 'root', 'python', 'owner_status', 'host_id'}
                 or config['schema'] != 'rosy.omx.center-config/1'
                 or set(config['python']) != {'act', 'hilserl'}):
             raise ValueError('unsupported learning center configuration')
+        self.host_id = config.get('host_id')
+        if self.host_id is not None and self.host_id not in ('model', 'ai'):
+            raise ValueError('trusted learning host must be model or ai')
+        self.tasks = None
         self.owner_status = OwnerStatus(config.get('owner_status'))
         self.root = Path(config['root'])
         if not self.root.is_absolute() or self.root.is_symlink():
@@ -186,12 +192,28 @@ class Center:
             _, scope = select_dataset(checked, body.get('arm_id'), method=body['method'])
             if mode == 'online_experience':
                 check_action_space(checked)
+            binding = None
+            if 'task_id' in body:
+                if self.host_id is None or self.host_id != body['compute_host'] or self.tasks is None:
+                    raise ValueError('registered task and matching trusted compute host required')
+                binding = self.tasks.resolve(body['task_id'], body['dataset_id'], checked.revision,
+                                             profile_revision(checked.profile), scope['arm_ids'], self.host_id)
+                receipts = []
+                for name in ('native-split-receipt.json', 'conversion-receipt.json'):
+                    receipt = dataset_root / name
+                    if receipt.exists() or receipt.is_symlink():
+                        read_json(receipt)
+                        receipts.append(dict(name=name, sha256=hashlib.sha256(receipt.read_bytes()).hexdigest()))
+                binding = dict(binding, attachment_kind='historical_dataset_attachment', source_receipts=receipts)
+                check_learning_task(binding, checked, scope)
             rid = str(uuid.uuid4())
             root = self.root / 'runs' / rid
             root.mkdir()
             if mode == 'online_experience':
                 (root / 'inbox').mkdir()
             worker_request = {key: body[key] for key in ('method', 'steps', 'batch_size', 'device', 'seed', 'arm_id') if key in body}
+            if binding is not None:
+                worker_request['learning_task'] = binding
             write_json(root / 'request.json', dict(worker_request, dataset_root=str(dataset_root)))
             row = dict(id=rid, status='launching', created_at=time.time(), dataset_id=body['dataset_id'],
                        dataset_revision=checked.revision, source=checked.source, execution_mode=mode,
@@ -262,6 +284,34 @@ class Center:
         with self.lock, self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             self._refresh(db)
+            # Existing accepted identities keep Inbox's acknowledgement-loss retry behavior.
+            if isinstance(body, dict) and set(body) == {'id', 'dataset_id', 'request_id'}:
+                rid, did, request_id = (identifier(body[key]) for key in ('id', 'dataset_id', 'request_id'))
+                prior = db.execute('SELECT 1 FROM inputs WHERE id=?', (request_id,)).fetchone()
+                found = db.execute('SELECT document FROM runs WHERE id=?', (rid,)).fetchone()
+                row = json.loads(found[0]) if found else {}
+                if not prior and row.get('learning_task') is not None:
+                    if row.get('execution_mode') != 'online_experience' or row.get('status') != 'running':
+                        raise ValueError('active continuous learning run required')
+                    binding = check_learning_task(row['learning_task'])
+                    if self.tasks is None or self.host_id != binding['compute_host']:
+                        raise ValueError('trusted task compute host changed')
+                    registered = db.execute('SELECT document FROM datasets WHERE id=?', (did,)).fetchone()
+                    if not registered:
+                        raise ValueError('unknown registered task experience dataset')
+                    checked = load_dataset(self.root / 'datasets' / did, method='hilserl')
+                    if checked.revision != json.loads(registered[0])['revision']:
+                        raise ValueError('registered task experience dataset changed')
+                    _, scope = select_dataset(checked, row.get('arm_id'), method='hilserl')
+                    if scope != row['training_scope']:
+                        raise ValueError('task experience training scope differs')
+                    resolved = self.tasks.resolve(binding['task_id'], did, checked.revision,
+                        profile_revision(checked.profile), scope['arm_ids'], self.host_id)
+                    check_learning_task(resolved, checked, scope)
+                    for key in ('task_id', 'task_revision', 'project_id', 'profile_id', 'profile_revision',
+                                'task_participants', 'compute_host', 'component_ids', 'participants', 'robots'):
+                        if resolved[key] != binding[key]:
+                            raise ValueError('experience task lineage differs from learning run')
             return self.inbox.add(db, body)
 
     def artifact(self, rid):
@@ -279,7 +329,7 @@ class Center:
             if online:
                 root = version_root(root, row)
                 row['result'] = read_json(root / 'result.json')
-            return model_archive(root, row['result'])
+            return model_archive(root, row['result'], learning_task=row.get('learning_task'))
 
     def stop(self, body):
         if set(body) != {'id'}:
