@@ -1,12 +1,24 @@
 """Project-scoped immutable learning references, without device or execution authority."""
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
+import importlib.util
 import json
+from pathlib import Path
 import re
 import sqlite3
 import unicodedata
 import uuid
+
+
+@lru_cache(maxsize=1)
+def _profile_api():
+    path = Path(__file__).resolve().parents[2] / 'training' / 'omx' / 'experiment_profile.py'
+    spec = importlib.util.spec_from_file_location('rosy_learning_task_profile', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _json(value):
@@ -164,12 +176,13 @@ class Tasks:
             if profile['id'] != body['profile_id']:
                 raise ValueError('stored profile identity differs from task')
             _revision(profile['revision'])
-            content = profile['profile']
-            if (not isinstance(content, dict) or _hash(content) != profile['revision']
-                    or content.get('mode') != body['mode'] or not isinstance(content.get('arms'), list)
-                    or [arm.get('id') if isinstance(arm, dict) else None for arm in content['arms']] != components):
+            api = _profile_api()
+            content = api.validate_profile(profile['profile'])
+            if (api.profile_revision(content) != profile['revision']
+                    or content['mode'] != body['mode']
+                    or [arm['id'] for arm in content['arms']] != components):
                 raise ValueError('stored profile revision, mode or ordered components differ from task')
-            pinned = {key: profile[key] for key in ('id', 'revision', 'profile')}
+            pinned = dict(id=profile['id'], revision=profile['revision'], profile=content)
         elif profile is not None or 'profile_id' in body:
             raise ValueError('unsupported learning adapter cannot bind an OMX profile')
         semantic = dict(project_id=self.project_id, task=body, profile=pinned,
