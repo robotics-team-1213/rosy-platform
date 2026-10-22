@@ -29,6 +29,7 @@ def test_robot_task_launch_and_reconnect(tmp_path):
 
         def __init__(self):
             self.runs, self.requests = [], []
+            self.experience_requests, self.stops = [], []
             self.profiles = SimpleNamespace(list=lambda: [record], get=lambda key: record)
 
         def bind_workspace(self, project):
@@ -36,8 +37,10 @@ def test_robot_task_launch_and_reconnect(tmp_path):
 
         def snapshot(self):
             return {'datasets': [{'id': 'fixture-data', 'name': 'Synthetic fixture data',
-                'revision': 'c' * 64, 'source': 'synthetic_smoke', 'profile': profile}],
-                'runs': self.runs, 'methods': {'act': {'available': True}}}
+                'revision': 'c' * 64, 'source': 'synthetic_smoke', 'profile': profile},
+                {'id': 'extra-data', 'name': 'Additional synthetic experience',
+                    'revision': 'd' * 64, 'source': 'synthetic_smoke', 'profile': profile}],
+                'runs': self.runs, 'methods': {m: {'available': True} for m in ('act', 'hilserl')}}
 
         def start(self, body):
             self.requests.append(body)
@@ -45,6 +48,26 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                 'dataset_id': body['dataset_id'], 'learning_task': {'task_id': body['task_id']},
                 'result': {'evaluation': {'action_mae': 0.25, 'frames': 4}, 'source': 'synthetic_smoke'}}
             self.runs.append(row)
+            return row
+
+        def start_online(self, body):
+            row = self.start(body)
+            row.update(status='running', execution_mode='online_experience',
+                inputs=[{'dataset_id': body['dataset_id']}], progress={'phase': 'waiting_for_experience'})
+            return row
+
+        def experience(self, body):
+            self.experience_requests.append(body)
+            row = next(run for run in self.runs if run['id'] == body['id'])
+            if not any(item.get('id') == body['request_id'] for item in row['inputs']):
+                row['inputs'].append({'id': body['request_id'], 'dataset_id': body['dataset_id']})
+                raise ValueError('reply lost after enqueue')
+            return row['inputs'][-1]
+
+        def stop(self, body):
+            self.stops.append(body)
+            row = next(run for run in self.runs if run['id'] == body['id'])
+            row['status'] = 'cancelled'
             return row
 
     center = Center()
@@ -95,6 +118,32 @@ def test_robot_task_launch_and_reconnect(tmp_path):
                 page.reload(wait_until='networkidle')
                 page.locator('#task-select').select_option(task_id)
                 expect(page.locator('#task-runs')).to_contain_text(center.runs[0]['id'])
+                expect(page.locator('#task-runs')).to_contain_text('0.25')
+                page.locator('#run-dataset').select_option('fixture-data')
+                page.locator('#run-execution').select_option('online')
+                page.locator('#run-start').click()
+                expect(page.locator('[data-continuous-run]')).to_have_count(1)
+                online_id = center.runs[-1]['id']
+                page.reload(wait_until='networkidle')
+                page.locator('#task-select').select_option(task_id)
+                controls = page.locator(f'[data-continuous-run="{online_id}"]')
+                expect(controls).to_be_visible()
+                expect(controls.locator('option[value="fixture-data"]')).to_have_count(0)
+                controls.locator('select').select_option('extra-data')
+                controls.get_by_role('button', name='추가 경험 입력').click()
+                expect(page.locator('#tasks-error')).to_contain_text('reply lost after enqueue')
+                page.locator('#tasks-refresh').click()
+                expect(controls.locator('select')).to_have_value('extra-data')
+                controls.get_by_role('button', name='추가 경험 입력').click()
+                expect(controls).to_contain_text('입력 대기열에 추가했습니다')
+                assert len(center.experience_requests) == 2
+                assert center.experience_requests[0] == center.experience_requests[1]
+                assert center.experience_requests[0]['id'] == online_id
+                assert len(center.runs[-1]['inputs']) == 2
+                controls.get_by_role('button', name='이 지속 학습 중지').click()
+                expect(page.locator('[data-continuous-run]')).to_have_count(0)
+                assert center.stops == [{'id': online_id}]
+                expect(page.locator('#task-runs')).to_contain_text('취소됨')
                 expect(page.locator('#task-runs')).to_contain_text('0.25')
                 page.get_by_text('다른 호스트로 과제 메타데이터 전달', exact=True).click()
                 with page.expect_download() as downloaded:
