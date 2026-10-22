@@ -1,16 +1,11 @@
 """Preview selected artifact files, then explicitly sync to an existing private HF repo."""
 import argparse
+from policy_output_paths import in_source_checkout
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
-
-
-def _in_checkout(path) -> bool:
-    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
-    path = Path(path).resolve()
-    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def _selection(relative, repo_type):
@@ -59,7 +54,7 @@ def prepare_bundle(source, output, repo_id, repo_type, files):
     if not files or len(set(files)) != len(files):
         raise ValueError('select unique artifact files explicitly')
     source, output = Path(source).resolve(), Path(output).resolve()
-    if output.exists() or _in_checkout(output) or output.is_relative_to(source) or source.is_relative_to(output):
+    if output.exists() or in_source_checkout(output) or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError('bundle requires a new separate output outside the source checkout')
     selected = {relative: _file(source, relative, repo_type) for relative in sorted(files)}
     output.mkdir(parents=True)
@@ -78,7 +73,7 @@ def prepare_bundle(source, output, repo_id, repo_type, files):
 
 def upload_bundle(bundle, *, api=None, operation=None, downloader=None):
     bundle = Path(bundle).resolve()
-    if _in_checkout(bundle):
+    if in_source_checkout(bundle):
         raise ValueError('upload receipt and download belong outside the source checkout')
     manifest = json.loads((bundle / 'manifest.json').read_text(encoding='utf-8'))
     repo_id, repo_type = manifest['repo_id'], manifest['repo_type']

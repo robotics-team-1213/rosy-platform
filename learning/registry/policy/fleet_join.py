@@ -5,6 +5,7 @@ Input receipts must come from an independently acquired owner/Fleet export.
 Hash verification proves preserved bytes, not receipt authenticity or task success.
 """
 import argparse
+from policy_output_paths import in_source_checkout
 import json
 import os
 from pathlib import Path
@@ -21,12 +22,6 @@ from rosy.contracts.learning.fleet_export import join_metadata, export_metadata 
 from rosy.contracts.learning.omx import validate_profile as validate_omx  # noqa: E402
 from rosy.contracts.learning.pinky import validate_profile as validate_pinky  # noqa: E402
 from rosy.contracts.learning.omx_execution import validate_profile as validate_execution  # noqa: E402
-
-
-def _in_checkout(path) -> bool:
-    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
-    path = Path(path).resolve()
-    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def _profile(episode, root):
@@ -46,7 +41,7 @@ def join(episode, receipt):
 def export(episode_file, receipt_file, output):
     """Validate source file closure, preserve input hashes, and never replace an export."""
     episode_file, receipt_file, output = map(Path, (episode_file, receipt_file, output))
-    if _in_checkout(output):
+    if in_source_checkout(output):
         raise ValueError('artifact output belongs outside the source checkout')
     episode_bytes, receipt_bytes = episode_file.read_bytes(), receipt_file.read_bytes()
     episode = json.loads(episode_bytes)

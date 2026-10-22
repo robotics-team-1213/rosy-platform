@@ -1,5 +1,6 @@
 """Immutable DatasetManifest/Episode closure and OMX v1 body checks; no task certification."""
 import argparse
+from policy_output_paths import in_source_checkout
 from contextlib import closing
 import json
 import os
@@ -14,12 +15,6 @@ sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
 from rosy.contracts.learning import validate_dataset, validate_episode  # noqa: E402
 from rosy.contracts.learning.omx import validate_profile  # noqa: E402
 from rosy.contracts.learning.pinky import validate_profile as validate_pinky  # noqa: E402
-
-
-def _in_checkout(path) -> bool:
-    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
-    path = Path(path).resolve()
-    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def closure(root, *, policy=None):
@@ -64,7 +59,7 @@ def closure(root, *, policy=None):
 class DatasetStore:
     def __init__(self, root, *, read_only=False):
         self.root = Path(root).resolve()
-        if _in_checkout(self.root):
+        if in_source_checkout(self.root):
             raise ValueError('dataset output belongs outside the source checkout')
         if not isinstance(read_only, bool):
             raise ValueError('read_only must be boolean')

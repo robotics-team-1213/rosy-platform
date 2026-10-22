@@ -7,9 +7,10 @@ import pytest
 
 
 @pytest.fixture
-def module():
+def module(monkeypatch):
     path = Path(__file__).resolve().parents[1] / 'hub_sync.py'
     assert path.is_file(), 'reviewed Hub bundle sync is not implemented'
+    monkeypatch.syspath_prepend(str(path.parent))
     spec = importlib.util.spec_from_file_location('omx_hub_sync', path)
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)
