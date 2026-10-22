@@ -1,6 +1,6 @@
 # 현재 운영 버전 기반 모터 상태 연결
 
-기존 구현은 `feat/omx-safe-native-teleop`에 보존했다. 동일한 승인된 작업 공간에서 현재 운영 소스 `3cdfd40ac2abb05e0630a49a09e762d8f86472aa`를 기준으로 `feat/omx-motor-health-runtime`을 만들고 모터 상태 기능만 옮겼다. 운영 인증·D-837 위치/카메라 관측·Learning 변경을 되돌리지 않았다. 이 기록은 배포 완료 증거가 아니다.
+기존 구현은 `feat/omx-safe-native-teleop`에 보존했다. 동일한 승인된 작업 공간에서 현재 운영 commit `3cdfd40ac2abb05e0630a49a09e762d8f86472aa`를 기준으로 `feat/omx-motor-health-runtime`을 만들고 모터 상태 기능만 옮겼다. 운영 인증·D-837 위치/카메라 관측·Learning 변경을 되돌리지 않았다. 이 기록은 배포 완료 증거가 아니다.
 
 ## 연결한 경로
 
@@ -20,7 +20,7 @@ A12의 오류 32 때문에 위치 관측이 시작 전에 끝나는 경우에도
 
 ## 원격 검증
 
-- `79a11a4a54b956344b47bc81fd968fbc26565653`: 공식 모델 PC의 producer·observer·bridge·출처 인증 ingest·DTO·실제 TLS Vision 파이프라인 관련 8개 suite, 154 passed/skip0/NEW0. `rosy-safe-native-20261022/passive-clock-green/run-1.txt`.
+- commit `79a11a4a54b956344b47bc81fd968fbc26565653`: 공식 모델 PC의 producer·observer·bridge·출처 인증 ingest·DTO·실제 TLS Vision 파이프라인 관련 8개 suite, 154 passed/skip0/NEW0. `rosy-safe-native-20261022/passive-clock-green/run-1.txt`.
 - `8e8861fc39`: 공식 원격 UI 및 기존 D-837 관측 회귀 15 passed/skip0. `omx-motor-ui-current-green/run-1.txt`.
 - `921062fb1c`: 공용 자산 설치·색상·부품·패널·기존 Node 계약 84 passed/skip0. `omx-motor-ui-current-contracts/run-1.txt`.
 - `5a9b17c5d9`: 최종 관절 이름·오류 신원 유지·Cell 두 폭의 집중 검증 3 passed/skip0. 후속 `78a7c8b7bf`는 캡처 표시 위치만 바꾸고 1개 브라우저 시험 통과. 모두 NEW0. 수치는 겹치므로 합산하지 않는다.
