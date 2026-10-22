@@ -246,3 +246,47 @@ def test_invalid_profile_with_recomputed_transfer_hashes_is_rejected_before_writ
     assert clean.snapshot() == {'robots': [], 'tasks': []}
     with pytest.raises(ValueError):
         store.task(dict(body, request_id=uid()), ACTOR, package['profile'])
+
+
+def test_transfer_preserves_dataset_ownership_on_second_host(store, tmp_path):
+    body, profile = setup(store)
+    task = store.task(body, ACTOR, profile)
+    binding = store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
+    package = store.export_task(task['id'])
+    assert package['dataset_bindings'] == [{key: value for key, value in binding.items()
+        if key not in ('compute_host', 'component_ids', 'participants')}]
+    other = Tasks(tmp_path / 'ai.sqlite', 'project-a')
+    other.import_task(package, ACTOR)
+    assert other.export_task(task['id']) == package
+    competing = other.task(dict(body, request_id=uid()), ACTOR, profile)
+    for dataset_id, revision in [('data', 'b' * 64), ('other-data', 'a' * 64)]:
+        with pytest.raises(ValueError):
+            other.resolve(competing['id'], dataset_id, revision, profile['revision'], ['arm_a', 'arm_b'], 'ai')
+
+
+def test_transfer_dataset_collision_rolls_back_new_task_and_robot_references(store, tmp_path):
+    body, profile = setup(store)
+    task = store.task(body, ACTOR, profile)
+    store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
+    package = store.export_task(task['id'])
+    other = Tasks(tmp_path / 'ai.sqlite', 'project-a')
+    other_body, other_profile = setup(other)
+    other_task = other.task(other_body, ACTOR, other_profile)
+    other.resolve(other_task['id'], 'data', 'b' * 64, other_profile['revision'], ['arm_a', 'arm_b'], 'ai')
+    before = other.snapshot()
+    with pytest.raises(ValueError):
+        other.import_task(package, ACTOR)
+    assert other.snapshot() == before
+
+
+def test_tampered_transfer_dataset_group_is_rejected_before_writes(store, tmp_path, monkeypatch):
+    body, profile = setup(store)
+    task = store.task(body, ACTOR, profile)
+    store.resolve(task['id'], 'data', 'a' * 64, profile['revision'], ['arm_a', 'arm_b'], 'model')
+    package = store.export_task(task['id'])
+    package['dataset_bindings'][0]['task_participants'].reverse()
+    clean = Tasks(tmp_path / 'clean.sqlite', 'project-a')
+    monkeypatch.setattr(clean, '_save', lambda *args, **kwargs: pytest.fail('invalid binding attempted a write'))
+    with pytest.raises(ValueError):
+        clean.import_task(package, ACTOR)
+    assert clean.snapshot() == {'robots': [], 'tasks': []}
