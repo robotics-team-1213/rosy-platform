@@ -10007,3 +10007,9 @@ osy-d395-s1d\`.
 - 변경: 먼저 main에 반영한 D-845 reader 위에 기존 D-841 구현을 통합하고 camera-peer도 공통 전송으로 전환한다. D-841이 존재하므로 해당 ADR gap 한 행만 제거했다. 동결 검증 기록과 provenance는 보존한다.
 - 증거: 공유 reader의 공식 전체 23묶음은 중복 포함 30,661 passed/2,028 skipped/0 failed이며 실제 Chromium 착지를 별도로 마쳤다. 소비자 실제 파일의 RED 1건 확인 후 전체 Fleet Node 363 passed/skip0. 후속 원격·착지 결과는 2차 검증 기록에 구분한다.
 - gate 변화: 공유 모듈은 로컬 main 반영 완료다. 소비자 통합·원격 push·배포·실물 수용은 아직 완료로 주장하지 않는다.
+
+## 2026-10-22 · 35a98bc84d · 공유 모듈 2차 소프트웨어 검증
+
+- 변경: [2차 검증 기록](validation/shared-module-reuse-phase2-2026-10-22.md)에 공유 FULL·실제 브라우저·소비자 소스의 범위와 원본 로그 SHA-256을 연결했다. 1차 동결 기록은 유지한다.
+- 증거: 소비자 집중 원격220 passed/skip0, 전체 Fleet Node363 passed/skip0. 독립 검토 Critical/Important 없음. 공유 Chromium 두 실패의 단독 통과·LOAD-FLAKY와 기본 FULL의 skip을 구분했다.
+- gate 변화: 공유 reader 로컬 main 반영과 소비자 소스의 검증 증거다. 소비자 공식 착지·push·배포·실물 수용을 대신하지 않는다.
