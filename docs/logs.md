@@ -9970,3 +9970,9 @@ osy-d395-s1d\`.
 - 변경: 기존 계약·웹 요청을 소비하고 같은 학습 하위 모듈 안의 경로 정책부터 합친다. camera-peer는 엄격 JSON·헤더 단계 권한 처리 차이 때문에 제외한다.
 - 증거: 구조·critic 독립 검토 2라운드 합의. 외부 앱 시험의 전달·SHA·서버 수명 조건을 명시했다. 사용자의 구현 지시와 작업용 worktree 1개 추가 예외를 적용한다.
 - gate 변화: 결정 등록이며 구현·원격 시험·장치·현장 수용 완료는 아니다. main 착지·push는 하지 않았다.
+
+## 2026-10-22 · f048fe9471 · 공유 요청·학습 경로 통합과 독립 앱 HTTP 증거
+
+- 변경: Fleet 두 화면이 기존 공통 request를 소비하고 학습 여덟 경로 검사 정의를 소유 범위의 두 helper로 합쳤다. Port 시험 launcher는 기존 Vault 서버 조립을 재사용하며 앱 runtime 의존성은 추가하지 않는다.
+- 증거: [검증 기록](validation/2026-10-22-shared-module-reuse.md)에 각 코드 SHA·원격 범위·원본 로그 해시를 묶었다. 화면 43 passed, 학습 330 passed/3 skipped, 파일 로더 회귀 57 passed/1 skipped, 최종 폴링·Node wrapper 3 tests 통과. Port 실제 HTTP 2 tests와 Vault 별도 환경 실제 HTTP 4 tests는 skip 0. 독립 검토에서 찾은 import 순서 회귀와 오래된 변수명 문자열 검사를 수정·재검증했다.
+- gate 변화: 해당 소스·시험 범위의 증거다. 전체 영향 실행 결과와 skip은 검증 기록에서 구분한다. 물리 관측 producer·장치·현장 수용, main 착지·push·배포는 수행하지 않았다.
