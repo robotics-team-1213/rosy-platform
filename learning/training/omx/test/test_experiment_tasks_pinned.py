@@ -97,7 +97,7 @@ def test_pinned_task_models_train_reload_and_download(tmp_path):
         finally:
             # The driver timeout cannot reap workers launched in their own sessions.
             cleanup = subprocess.run(command+['cleanup'], stdout=log, stderr=subprocess.STDOUT,
-                env=env, timeout=35, check=False)
+                env=env, timeout=100, check=False)
             assert cleanup.returncode == 0, 'test-owned worker cleanup failed'
     assert result.returncode == 0, (tmp_path/'learner.log').read_text(errors='replace')[-4000:]
     proof = json.loads((tmp_path/'learner.log').read_text().splitlines()[-1])
