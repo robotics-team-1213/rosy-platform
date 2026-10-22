@@ -1,6 +1,8 @@
 """The curation output policy resolves paths without touching source bytes."""
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -41,3 +43,17 @@ def test_output_policy_follows_symlink_destination(tmp_path, target_inside):
         pytest.skip(f'symlink creation unavailable: {exc}')
     assert inside(link / 'new') is target_inside
     assert not (target / 'new').exists()
+
+
+@pytest.mark.parametrize('name', ['collection_intake.py', 'native_review.py'])
+def test_standalone_file_loader_initializes_its_sibling_imports(tmp_path, name):
+    source = Path(__file__).resolve().parents[1] / name
+    script = (
+        'import importlib.util,sys; '
+        'spec=importlib.util.spec_from_file_location("loader_probe",sys.argv[1]); '
+        'module=importlib.util.module_from_spec(spec); '
+        'sys.modules[spec.name]=module; spec.loader.exec_module(module)'
+    )
+    loaded = subprocess.run([sys.executable, '-c', script, str(source)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=30)
+    assert loaded.returncode == 0, loaded.stderr
