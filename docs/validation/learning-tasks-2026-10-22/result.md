@@ -97,6 +97,30 @@ These late fixes change test inventories and documentation only. Publication sti
 requires the fast/affected hook and CI at the actual published head; this record does
 not assert that the complete expanded gate was rerun green after these fixes.
 
+## PR CI and installed Account gateway follow-up
+
+PR #151 at commit `25cd64dc97cb36171fabf9ae55aac1ab9a9a8599` passed the actual
+push hook: fast 519 passed; affected groups 4,363 passed/61 skipped,
+9,185 passed/951 skipped and 621 passed/two skipped. Each report compared NEW0.
+GitHub CI run `39720000886` subsequently found plain `setup` helper names in the
+preview and task tests: apt pytest 7.4 interprets these as nose initialization hooks.
+The existing CI dependency guard found the same naming issue. Those helpers were
+renamed without disabling that guard, changing fixtures' data or changing test semantics.
+
+Read-only Model deployment inspection also found that the long-running Account gateway
+`legacy_review_account.py` was classified as legacy training and held code updates.
+The controller now recognizes that gateway only as the actual Python entry script,
+including isolated Python flags. Training stays protected, including a training process
+whose input argument merely names the gateway file. The Account gateway is not stopped
+or reconfigured to get past the update hold.
+
+At commit `18f0277fbaf77e7f62c1db057243a5d08d317b96`, the remote updater/preview/task
+regression passed all 251 checks; the existing CI dependency guard suite passed all 29.
+The new monitor cases first reproduced two NEW failures before the controller change.
+Final PR CI, installed controller identity and actual signed activation must still be
+checked at the subsequent publication head. These local-host reports do not stand in
+for the failed earlier GitHub CI run.
+
 ## Deployment and physical acceptance still pending
 
 This branch is not yet published or installed on the official Fleet image. Preserve all

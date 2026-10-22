@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-22 · 18f0277fba · 기존 Account 중계와 코드 갱신 공존
 - 2026-10-22 · fd889ea429 · 과제 학습의 서명 배포 폐쇄·전환 전 검사
 - 2026-10-22 · uncommitted · Learning 배포 계약의 게시 소스 검증
 - 2026-10-22 · uncommitted · Learning Center publication source port
 - 2026-10-22 · uncommitted · Fleet-native 관측 서비스와 서명 사이트 설정 (D-837)
-- 2026-10-21 · uncommitted · 두 팔과 세 카메라의 독립 관측
