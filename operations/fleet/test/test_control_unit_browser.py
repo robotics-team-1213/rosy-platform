@@ -37,6 +37,10 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             expect(panel).to_contain_text("위임 R / job-1")
             approve = panel.get_by_text("이 관제에서 승인", exact=True)
             expect(approve).to_be_enabled()
+            approve.focus()
+            page.locator("#work-refresh").evaluate("node => node.click()")
+            page.clock.run_for(1500)
+            expect(panel.get_by_text("이 관제에서 승인", exact=True)).to_be_focused()
             approve.click()
             assert posts[-1][0] == prefix + "/delegations/R/job-1/approve"
             assert json.loads(posts[-1][1]) == {"expected_revision": 7}
@@ -49,6 +53,44 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             expect(panel).to_contain_text("실제 정지 확인과 별개")
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             _shot(page, f"control-unit-{size[0]}.png", full_page=True)
+            assert not errors
+        finally:
+            browser.close()
+
+
+def test_unknown_submission_keeps_its_body_and_identity_across_reload(site):
+    from playwright.sync_api import expect, sync_playwright
+    prefix = "/api/fleet/control-unit"
+    api = {**API, prefix: {"unit_id": "R", "config_revision": "v1", "parent": None,
+                          "children": ["A"], "resources": []}, prefix + "/delegations": {"delegations": []},
+           "/api/fleet/work": {"rows": [], "kinds": [], "observed_at": "2026-10-23T00:00:00Z",
+                               "tasks_available": True, "missions_available": False, "truncated_sources": []}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts,
+            answers={prefix + "/delegations": (503, {"detail": {"code": "UNAVAILABLE"}})})
+        try:
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(1500)
+            page.locator("#control-unit-work summary").click()
+            page.locator("#control-unit-target_unit").fill("A")
+            page.locator("#control-unit-robot_id").fill("a")
+            page.locator("#control-unit-x").fill("1")
+            page.locator("#control-unit-y").fill("2")
+            page.locator("#control-unit-yaw").fill("0")
+            send = page.get_by_text("대상 관제에 요청", exact=True)
+            send.click()
+            expect(page.locator("#control-unit-work")).to_contain_text("요청 결과 미확인")
+            first = posts[-1]
+            page.reload()
+            page.clock.run_for(1500)
+            page.locator("#control-unit-work summary").click()
+            expect(page.locator("#control-unit-target_unit")).to_have_value("A")
+            expect(page.locator("#control-unit-x")).to_have_value("1")
+            expect(page.get_by_text("새 요청 작성", exact=True)).to_be_disabled()
+            page.get_by_text("대상 관제에 요청", exact=True).click()
+            expect(page.locator("#control-unit-work")).to_contain_text("요청 결과 미확인")
+            assert posts[-1] == first
             assert not errors
         finally:
             browser.close()
