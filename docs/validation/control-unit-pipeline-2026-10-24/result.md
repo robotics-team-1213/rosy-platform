@@ -20,14 +20,19 @@
 | `26bba0703f` | store·위임 서비스·인증 routes·고정 HTTP·3곳 재시작 | 47 PASS, 종료 0, NEW 0 | `rosy-control-simplified` |
 | `a7aaaed472` | 잘못된 peer port 거절·실제 앱/CLI·CORE 종단 | 16 PASS, 종료 0, NEW 0 | `rosy-control-peer-port-green` |
 | `290c8344a0` | 실제 Chromium, 1366/320 × dark/light·미확인 요청 재적재·확정 거절 복구 | 6 PASS, 종료 0, NEW 0 | `rosy-control-browser-retained` |
+| `49eb597185` | 새 구성/store/서비스/HTTP·재시작·CORE 종단·조건부 취소·기존 lease/transport/CLI/앱 16개 파일 | 384 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-final-proof` |
 
 ```text
 rosy-scoped-final-green       a977dd587e2d461c239631727a974a02fd80b5c2cc86e02235d2f8ac5f7dc3b3
+rosy-control-bootstrap-green  1bf5cc93e88a47134a71941f0b97e0a33d3b345d61a3b4bc656d3dbd2b7c7815
 rosy-control-root-green       54712af26765b35fe9dc4fca1781a4256d5dd1124ef5b35cb6fd0cd68121c98a
 rosy-control-simplified       41bf5e5767fecdf2f21472ca7c3fcc78cc6dfd60dde6dffc696113c6ff79130d
 rosy-control-peer-port-green  b1800f92c8ddc434c5a037617648ba21207ad83f00e82f582abc0bd5b7549a0f
 rosy-control-browser-retained d17e625821906363d3501a1abb4c949d5f767b1bc1f1286b0be6af291bb6c3d8
+rosy-control-final-proof      7016cb6ce55fe597dd3a815949a6b4ac5522b3116386997567d9ce12f28198f5
 ```
+
+최종 집중 실행은 `--sha`를 명시하고 runner 출력 전체를 외부 `runner-transcript.txt`로 함께 보존했다. [실행 메타데이터 색인](focused-invocation.json)은 그 출력의 SHA·실제 시험 인자·종료 코드·기존 실패 비교와 두 파일 hash를 연결한다. 이는 자동 생성 CI receipt가 아니라 보존된 runner 출력에서 작성한 색인이며, 원본의 private host/path는 공개 기록에 복사하지 않았다. 앞의 개별 집중 실행을 최종 검사로 대체해 과장하지 않는다.
 
 기반 원장·구성의 먼저 착지한 범위는 [별도 기록](../control-unit-foundation-2026-10-23/result.md)에 있다. 공유 wire의 FULL 검증과 착지 상태는 별도 의존성이다. 이 표의 집중 GREEN이 그 검사나 최종 통합 검사를 대신하지 않는다.
 
