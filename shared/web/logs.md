@@ -888,3 +888,11 @@
 - 변경: 단계 스트립(`.ui-stage-track`·`.ui-stage`) 규칙을 `components.css`에서 `/common/stage-strip.css`로 옮겼다. `components.css`는 D-766 한도(942줄)에서 동결인데 이 묶음이 59줄을 더해 1001줄이 됐고, 착지 크기 게이트가 STOP했다(4개 커밋이 `grew 942 -> 1001`). 어휘·선택자·상태·기하학은 그대로이고 사는 시트만 바뀐다. `shared-assets.json`·`CMakeLists.txt`에 시트를 등록하고, `/styleguide`가 `components.css` 뒤에 링크하며, `DESIGN.md`가 쓰는 화면의 링크 순서를 적는다.
 - 증거: `test_content_vocabulary.py`의 `stage_rules()`·`declared()`가 두 시트를 함께 읽고, `components.css`에 `ui-stage`가 없어야 한다는 단언을 더했다(분할이 되돌아가면 실패). `test_asset_manifest.py`가 manifest와 install 목록의 일치를 계속 지킨다.
 - gate 변화: 없음.
+
+## 2026-10-23 · 050c0da738 · 입력·목록·복구 조합과 상호작용 견본
+
+- 변경: 네이티브 폼 오류, 파일·검색 선택·날짜·미저장 이탈, 목록·선택·페이지·상세, 탭·접힘·보조 동작·패널, 상태·동작 모음·결과·진행·이력·로그를 역할별 모듈로 추가했다. 기존 스타일 갤러리에서 `/common/component-gallery.html`로 연결한다. API·권한·실행 판단은 표면에 남긴다.
+- 증거: 원격 `050c0da738`의 shared/web 390 passed, 1 native-token export skipped. Fleet 채택 `1cc26ebd37` 33 passed, Robot 채택 `006787ecb7` 3 passed. 독립 검토 5항목은 각각 실패 재현 후 수정했다. 전체 영향 시험·화면 근거와 현재 한계는 검증 기록을 따른다.
+- gate 변화: 없음. 합성 견본·브라우저 검증은 제품 G2/G3·실물 수용을 대신하지 않는다.
+- 결정: D-425·D-359의 표현/권한 경계를 유지한다. 기존 frozen ui.js/components.css 줄 수는 늘리지 않았다.
+- 교훈: 새 라이브러리 구현의 회귀 시험으로 드러나는 내용이며 별도 해결 교훈은 추가하지 않았다.
