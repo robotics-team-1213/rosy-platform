@@ -647,11 +647,13 @@
 - 변경: 확인창 스크림 구멍은 data-clip을 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나로 토큰과 color-mix를 푼다.
 - 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium에서 구멍은 정지 버튼을 맞추고 바깥은 스크림을 맞춘다. 팔레트 브라우저 시험 통과. 장치 수용은 없다.
 - gate 변화: 없음.
+
 ## 2026-10-06 · uncommitted · uiux(pilot): 320px 전용 폭 선언
 
 - 변경: Pilot의 기존 22rem 미만 머리·제자리 회전·짧은 화면 배치를 `surfaces.yaml`의 선언된 breakpoint로 기록했다. 렌더링 규칙은 바꾸지 않았다.
 - 증거: `shared/web/test/test_responsive_tiers.py` 9 passed, `known_failures.py` 0 NEW.
 - gate 변화: 현재 브랜치의 반응형 계약 실패를 제거했다. Pilot 실제 운전자 G3와 장치 수용은 HOLD.
+
 ## 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
 
 - 변경: Fleet compact 머리의 현재 격자를 정적 계약에 반영하고, 비활성 사유 검사기가 `setOff(false)`·`setEnabled(true)`를 활성화로 읽도록 고쳤다. D-329 `matrix.json` 검사는 유지하고 다른 형식의 역할 기록 이름을 분리했다.
@@ -687,6 +689,7 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
 ## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
@@ -849,6 +852,18 @@
 - 변경: createRequest factory의 선택적 readResponse가 raw Response를 해석하도록 했다. 헤더 우선 거절·엄격 JSON은 소비자에 남기고, 기본 JSON/204/blob와 인증·origin·timeout·취소·단일 전송은 보존한다. Fleet 소비자는 이 커밋에 포함하지 않는다.
 - 증거: 이전 committed transport에 새 시험을 적용하면 7개 RED, 구현 뒤 request Node 31 passed/skip 0. reader 결과·오류와 본문 미소비 거절, malformed/empty/204 거절, body 중 부모 취소·timeout, 오류 시 구독 정리와 기본 blob을 확인했다. 공식 원격·FULL 검증은 커밋 후 수행한다.
 - gate 변화: 기존 gate의 물리 수용 범위를 넓히지 않는다. camera-peer 전환·장치·배포 완료를 주장하지 않는다.
+
+## 2026-10-23 · uncommitted · Fleet 머리 계정 메뉴를 한 줄로 접는다
+
+- 변경: 계정 상세(`#topbar-extra`)를 흐름 안 두 번째 행에서 계정 단추 아래 메뉴로 옮겼다. `ui-topbar`를 position:relative 기준으로 두고 메뉴는 absolute·`width:max-content`·`max-width:calc(100% - 2 * var(--space-3))`로 띄우며, 열림 표시는 기존 `[data-open="true"]` 규칙을 그대로 쓴다. `grid-column:1/-1`·`padding-top`·`border-top`을 없애 앱 바 높이를 한 줄로 고정했다. 로그인 전에는 `#fleet-inbox`·`#user-role`을 전 폭에서 숨겨 "나" 자리를 `#fleet-login` 하나로 모은다(D-741 3항, 기존 30rem 전용 규칙의 전 폭 확장). 마크업과 시험은 바꾸지 않았다.
+- 증거: `test_fleet_header.py`(4문서 동일·순서·@media 0·container query 3·min-height), `test_ui_token_contracts.py`(표면 그림자 금지 → 그림자 대신 `--surface-raised`+`--border-strong`+`--radius-panel`), `test_site_map_api.py`(`.topbar-extra[data-open="true"]`와 "identity status actions safety" 문자열 유지), `test_fleet_header_browser.py`(161/163), `test_development_console_browser.py`(123 열기 전 hidden, 149 연 뒤 visible). 원격 pytest 결과는 착지 기록에 남긴다. 브라우저 실행은 fastapi 미설치 환경이라 정적으로만 확인했다.
+- gate 변화: 없음. 실제 화면 정렬과 높이는 브라우저·기기 실행으로 확인해야 한다.
+
+## 2026-10-23 · uncommitted · Fleet 머리 메뉴는 흐름 안 제 줄에 둔다
+
+- 변경: 앞 항목의 띄운 메뉴를 되돌려 `#topbar-extra`를 다시 `grid-column:1/-1` 제 줄로 두고(`padding-top`과 위 테두리는 `--border-subtle`) `ui-topbar`의 `position:relative`를 지웠다. 띄운 메뉴는 main 최상단 잠금 띠의 `관제 접속` 단추를 덮어 그 클릭을 `#console-token`이 가로챘고, 시험은 잠금 띠가 보이는 동안 토큰 칸에 다시 입력하라고 요구한다(`test_start_point_browser.py` 274·289). 또 sticky는 이미 위치 지정 값이라 `position:relative`가 `ui-topbar`의 sticky를 이겨 세로 예산 시험이 깨졌다. 로그인 전 `#fleet-inbox`·`#user-role` 숨김(`:has` 규칙)은 그대로 둔다.
+- 증거: 착지 실행 로그 `run-1-2`·`alone-1-2-1~3`. `test_compact_header_budget_keeps_the_stop_in_view` 두 폭이 `sticky: 'relative'`로 실패했고(`test_fleet_console_browser.py:2546`), `test_start_point_browser.py::test_console_has_no_setup_tools_and_connection_guide_recovers`는 `#console-token`이 포인터를 가로채 60회 재시도 뒤 TimeoutError였다. 정적 시험은 바뀐 시트에서 다시 돌린다.
+- gate 변화: 없음. 메뉴를 펼치면 앱 바가 그 줄만큼 높아진다(닫으면 한 줄).
 
 ## 2026-10-23 · uncommitted · 조합 어휘를 문서·부품·계약 시험 한 곳에 묶는다
 

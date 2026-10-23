@@ -16,11 +16,14 @@ from ..demonstration import DemonstrationRecorder, MAX_FRAMES, MAX_SKEW_NS
 
 
 class PilotSimCapture:
-    def __init__(self, runtime, root: Path, source: dict, *, sim_time_ns) -> None:
+    def __init__(self, runtime, root: Path, source: dict, *, sim_time_ns, recording_fps=10) -> None:
+        if type(recording_fps) is not int or recording_fps not in (5, 10):
+            raise ValueError('recording fps must be 5 or 10 for the fixed 10Hz camera')
         self.runtime = runtime
         self.root = Path(root).resolve()
         self.source = source
         self.sim_time_ns = sim_time_ns
+        self.recording_fps = recording_fps
         self.camera = None
         self.recorder = None
         self._lock = threading.RLock()
@@ -93,7 +96,7 @@ class PilotSimCapture:
                 raise ValueError("episode already active")
             config = self.runtime.arm.owner.config
             metadata = self.camera.latest_frame[0]
-            provenance = {**self.source, "simulation": True, "clock_domain": "gazebo_sim", "fps": 10,
+            provenance = {**self.source, "simulation": True, "clock_domain": "gazebo_sim", "fps": self.recording_fps,
                           "instance_id": self.runtime.instance_id, "joint_names": list(config.joint_names),
                           "position_limits_rad": dict(config.position_limits),
                           # D-411 C: the gripper takes absolute goals, recorded as action.gripper.
@@ -112,6 +115,7 @@ class PilotSimCapture:
             self._interrupt_reason = None
             self._sealed_recorder = None
             self._last_frame_sequence = metadata.sequence
+            self._last_sample_ns = None
             result = self.recorder.start(task)
             self._episode_id = result["episode_id"]
             return result
@@ -280,7 +284,12 @@ class PilotSimCapture:
                 recorder.issue('state_camera_skew')
                 return
             self._waiting_pair = None
+            # Keep source stamps; gaps in the selected 5Hz stream still fail recorder validation.
+            if (self.recording_fps == 5 and self._last_sample_ns is not None
+                    and 0 < metadata.capture_time_ns-self._last_sample_ns < 195_000_000):
+                return
             self._last_frame_sequence = metadata.sequence
+            self._last_sample_ns = metadata.capture_time_ns
             source_ns, sequence, positions, received_at = selected
             output = io.BytesIO()
             if raw.encoding not in {"rgb8", "bgr8"}:

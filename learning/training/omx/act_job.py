@@ -52,9 +52,34 @@ def chunk_indices(count, start, size):
     return [i if i < count else None for i in range(start, start + size)]
 
 
-def training_sample_indices(rows, joint_names, *, sampling, sim_truth=None):
+def _supported_chunk(rows, index, bound):
+    return all(abs(target-state)<=bound
+               for i in chunk_indices(len(rows),index,4) if i is not None
+               for target,state in zip(rows[i]['action'],rows[index]['observation.state']))
+
+
+def augment_training_origin(origin, targets, noise, *, max_delta_rad=None):
+    """Perturb synthetic inputs only; preserve absolute labels within head support."""
+    origin,targets,noise=map(np.asarray,(origin,targets,noise))
+    if (origin.ndim!=1 or noise.shape!=origin.shape or targets.ndim!=2
+            or not len(targets) or targets.shape[1:]!=origin.shape
+            or not all(np.isfinite(x).all() for x in (origin,targets,noise))):
+        raise ValueError('finite same-joint source, chunk and noise required')
+    perturbed=origin+noise
+    if max_delta_rad is not None:
+        if (type(max_delta_rad) not in (int,float) or not np.isfinite(max_delta_rad)
+                or max_delta_rad<=0 or np.any(np.abs(targets-origin)>max_delta_rad+1e-7)):
+            raise ValueError('original chunk must fit the action head bound')
+        perturbed=np.clip(perturbed,targets.max(axis=0)-max_delta_rad,
+                          targets.min(axis=0)+max_delta_rad)
+    return perturbed
+
+
+def training_sample_indices(rows, joint_names, *, sampling, sim_truth=None,max_delta_rad=None):
     """Select original frames only; action labels and chunk chronology stay unchanged."""
     if sampling == 'all_frames':
+        if max_delta_rad is not None and any(not _supported_chunk(rows,i,max_delta_rad) for i in range(len(rows))):
+            raise ValueError('all_frames includes a chunk outside the action head bound')
         return list(range(len(rows)))
     place_open = sampling == 'command_entry_exit_and_place_open'
     if sampling not in ('command_entry','command_entry_and_exit','command_entry_exit_and_place_open') or list(joint_names) != [f'joint{i}' for i in range(1,6)]+['gripper_joint_1']:
@@ -81,6 +106,8 @@ def training_sample_indices(rows, joint_names, *, sampling, sim_truth=None):
     interiors = set()
     commands = {(row['command_id'],row['ros_goal_id']) for row in rows}
     for index,row in enumerate(rows):
+        if max_delta_rad is not None and not _supported_chunk(rows,index,max_delta_rad):
+            continue
         bounds = [.035]*5+[.04]  # Arm training margin; preserve the calibrated gripper target.
         if all(abs(target-state)<=bound for target,state,bound in
                zip(row['action'],row['observation.state'],bounds)):
@@ -195,6 +222,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         action_representation='absolute',state_noise_std_rad=0.,initial_policy=None):
     bounded_absolute=action_representation=='absolute_tanh_from_chunk_source_v1'
     relative=action_representation in ('joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1')
+    action_bound=.035 if bounded_absolute or action_representation=='joint_delta_tanh_from_chunk_source_v1' else None
     if action_representation!='absolute' and not relative and not bounded_absolute:
         raise ValueError('unknown action representation')
     if bounded_absolute!=(initial_policy is not None):
@@ -249,7 +277,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     compatible_sources(sources)
     if sampling != 'all_frames' and not all(automatic):
         raise ValueError('command_entry sampling requires independently verified SIM object truth')
-    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling,sim_truth=truth)
+    selected_indices = [training_sample_indices(rows,sources[0]['joint_names'],sampling=sampling,sim_truth=truth,
+                                               max_delta_rad=action_bound)
                         for rows,truth in zip(original_rows,automatic)]
     # D-794 B: the image key and the artifact camera name follow the recorded camera name.
     image_key = "observation.images." + sources[0]["camera"]["name"]
@@ -260,6 +289,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
     sampling_ref = None
     if sampling != 'all_frames':
         selection = dict(sampling=sampling,arm_margin_rad=.005,gripper_margin_claim='none',
+                         chunk_size=4,chunk_support_bound_rad=action_bound,
                          original_arrays_and_chunk_order=True,
                          train_indices=dict(zip(ids[:train_count],selected_indices[:train_count])))
         _write(out/'training-index.json',selection)
@@ -322,9 +352,12 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         noise_rng=None
         if state_noise_std_rad:
             noise_rng=torch.Generator().manual_seed(seed+1)
-            stats['training_augmentation']=dict(type='gaussian_state_noise_v1',std_rad=state_noise_std_rad,
+            noise_kind='gaussian_state_noise_clamped_to_chunk_support_v1' if action_bound else 'gaussian_state_noise_v1'
+            stats['training_augmentation']=dict(type=noise_kind,std_rad=state_noise_std_rad,
                 seed=seed+1,joint_names=sources[0]['joint_names'],train_only=True,
                 source_kind='synthetic_training_inputs')
+            if action_bound is not None:
+                stats['training_augmentation']['max_delta_rad']=action_bound
         for i, (images, states, actions) in enumerate(arrays):
             arrays[i] = (images, (states - state_mean) / state_std, (actions - action_mean) / action_std)
         names = sources[0]["joint_names"]
@@ -354,13 +387,15 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                 chunk = chunk_indices(len(actions), i, 4)
                 state=states[i]
                 origin=state*state_std+state_mean
+                targets=torch.stack([actions[j] if j is not None else actions[-1] for j in chunk])
                 if noise_rng is not None:
                     # Synthetic train input only; all original absolute targets stay fixed.
-                    origin=origin+torch.randn(origin.shape,generator=noise_rng)*state_noise_std_rad
+                    noise=torch.randn(origin.shape,generator=noise_rng)*state_noise_std_rad
+                    origin=origin.new_tensor(augment_training_origin(origin.numpy(),
+                        (targets*action_std+action_mean).numpy(),noise.numpy(),max_delta_rad=action_bound))
                     state=(origin-state_mean)/state_std
                 batch["observation.state"].append(state)
                 batch[image_key].append(images[i])
-                targets=torch.stack([actions[j] if j is not None else actions[-1] for j in chunk])
                 if relative:
                     targets=targets-origin/action_std
                 batch["action"].append(targets)

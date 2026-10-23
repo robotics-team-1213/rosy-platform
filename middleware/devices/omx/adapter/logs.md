@@ -584,3 +584,27 @@
 - 변경: 관절 기록 수신을 카메라 기본 callback group과 분리한다. 이전 카메라 출처 로그의 누락된 gate 필드는 기존 본문의 같은 문장을 옮겨 형식만 보강하고 날짜순으로 배치했다. 이전·수정 블록의 정확한 SHA 쌍을 기존 log repair 원장에 보존한다.
 - 증거: 기본 callback group의 관절 수신 차단을 실제 ROS에서 RED 1 failed/1 passed로 재현했고 분리 후 2 passed다. batch 4 첫 시연의 원본 2650 RGB를 모델 PC에서 export/readback했다.
 - gate 변화: 명시적 보조 SIM의 시연·원본 기록·별도 callback 수신 범위다. 새 수집 재검증·학습·독립 정책 20회·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · a3a75e6fd2 · 긴 교사 시연의 원본 시각 기반 5fps 기록
+
+- 변경: 고정 10Hz 카메라에서 교사 시연만 5fps로 선택하고 원본 capture/state 시각과 명령을 보존한다. 기본 Pilot은 10fps이며 3,000프레임 한도·선택 프레임 간격·과거 state 대응·실패 이벤트 검사는 유지한다.
+- 증거: 새 회귀 8개가 수정 전 실패했고 수정 후 기존 capture·교사 시험과 함께 원격 66 passed, 새 실패 0이다. 같은 소스의 실제 격리 SIM 한 시연은 진행 중이며 완료를 주장하지 않는다.
+- gate 변화: SOURCE 회귀 확인만 추가한다. 완결 시연·학습 입력 적격성·독립 정책 평가·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · a3a75e6fd2 · 5fps 보조 SIM 교사 시연 종료
+
+- 변경: 추가 소스 변경 없이 동일 교사 소스의 실행 결과를 회수했다.
+- 증거: 같은 소스의 격리 native 시연은 EXITED/0, PASS, cleanup true이며 1,587프레임을 누락 issue 없이 기록했다. 물체 상승 0.1020m, 위치 오차 약 0.0000513m, release 후 안정 2.242 simulated seconds다.
+- gate 변화: 이 한 번의 보조 교사 시연만 확인했다. 모델 PC의 기존 독립 truth 검증은 10fps 고정 때문에 거절했고 원본은 보존했다. 주기 계약 정합·전체 RGB 재독출·ACT 명령 coverage·학습·독립 정책·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · db4d8f87ca · Pilot readback와 제출의 owner transaction
+
+- 변경: owner 전달 안에서 runtime snapshot을 게시하고 일반 Pilot 제출·자동 gripper hold의 상태 선택과 제출을 같은 owner RLock으로 묶는다. 기존 admission helper의 ROS I/O 금지 계약은 유지하며 새 command transaction은 action 완료를 기다리지 않는다. 순번·freshness·seat·범위 검사는 그대로다.
+- 증거: 실제 교사 수집 batch 3이 첫 기록 명령에서 순번 불일치로 거부돼 실패 원본을 보존하고 학습을 시작하지 않았다. 실제 owner 동시성 회귀 2개 RED 후 관련 원격 검사 140 passed/0 NEW. 실제 ROS snapshot 선게시 회귀도 RED 후 3 passed/0 skipped. 상세 환경·실패 실행은 docs/validation/omx-pilot-readback-2026-10-23/result.md에 구분했다.
+- gate 변화: SOURCE와 원격 ROS 회귀 범위다. 수정 source의 새 SIM 시연은 실행 중이며 완결 수집·학습·독립 정책 평가·실물 DEVICE/FIELD 수용은 미완료다.
+
+## 2026-10-23 · 187d5b758b · Pilot admitted readback와 policy pending intake 분리
+
+- 변경: 최초 runtime 게시 지연안은 확장 검사에서 기존 policy attach/coalescing 의존성을 깨뜨려 착지하지 않았다. native intake 선게시를 복원하고 readonly owner.joint_state를 Pilot 읽기 5곳에서 사용한다. command transaction과 기존 순번·freshness·seat 검사는 유지한다. 시험용 owner도 같은 명시적 계약을 제공한다.
+- 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
+- gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.

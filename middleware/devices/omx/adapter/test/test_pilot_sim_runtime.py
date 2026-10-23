@@ -1,4 +1,5 @@
 import time
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -13,6 +14,12 @@ from omx_adapter.ros_goal_contract import RosGoalEvent
 ROOT = Path(__file__).resolve().parents[5]
 
 
+class FakeOwner(SimpleNamespace):
+    @property
+    def joint_state(self):
+        return self.arm.latest_joint_state
+
+
 class Arm:
     def __init__(self):
         config = ArmCommandConfig(
@@ -20,7 +27,8 @@ class Arm:
             position_limits={"joint1": (-1, 1), "gripper_joint_1": (-0.1, 0.1)},
             allowed_owners=("pilot_sim",), calibration_revision="sim",
         )
-        self.owner = SimpleNamespace(config=config, state="ready", session_id="session")
+        self.owner = FakeOwner(arm=self, config=config, state="ready", session_id="session")
+        self.owner.command_transaction = threading.RLock
         self.latest_joint_state = JointStateSnapshot(
             positions={"joint1": 0.0, "gripper_joint_1": 0.0}, sequence=8,
             received_at=time.monotonic(), calibration_revision="sim",
@@ -41,6 +49,58 @@ class Arm:
 def jog(sequence=8):
     return OmxSimJog(instance_id="instance", seat_id="seat", request_id="request", joint="joint1",
                      delta_rad=0.02, duration_s=0.4, state_sequence=sequence, expires_at_ms=9999999999999)
+
+
+@pytest.mark.parametrize('automatic_hold', [False, True])
+def test_feedback_cannot_advance_between_target_build_and_owner_submission(automatic_hold):
+    from omx_adapter.command_owner import ArmCommandOwner
+    from test_omx_command_owner import FakeActionClient
+
+    arm = Arm()
+    port = FakeActionClient()
+    port.server_is_ready = lambda: True
+    arm.owner = ArmCommandOwner(arm.owner.config, port)
+    arm.owner.observe_joint_state(arm.latest_joint_state)
+    arm.submit = arm.owner.submit
+    runtime = PilotSimRuntime(arm, **GRIPPER)
+    runtime.snapshot()
+    attempted, delivered = threading.Event(), threading.Event()
+    next_state = JointStateSnapshot(positions=dict(arm.latest_joint_state.positions), sequence=9,
+                                   received_at=time.monotonic(), calibration_revision='sim')
+
+    def feedback():
+        attempted.set()
+        def deliver(_):
+            arm.owner.observe_joint_state(next_state)
+            arm.latest_joint_state = next_state
+        arm.owner.run_admission_policy(deliver)
+        delivered.set()
+
+    worker = threading.Thread(target=feedback)
+
+    def build_target(*args):
+        worker.start()
+        assert attempted.wait(1)
+        assert not delivered.wait(.1), 'feedback advanced between source selection and submission'
+        return .02 if automatic_hold else ''
+
+    try:
+        if automatic_hold:
+            runtime._hold_pending = True
+            runtime._gripper_goal = ('prior', 0.)
+            runtime._held_gripper_target = build_target
+            runtime._issue_hold()
+            command_id = 'hold-prior'
+        else:
+            result = runtime._dispatch('request', 'instance', 8, .4, build_target, '', '')
+            assert result['state'] == 'LOCAL_ACCEPTED'
+            command_id = 'request'
+        assert len(port.commands) == 1
+        assert port.commands[0].source_state_sequence == 8
+        assert runtime.goal(command_id)['state'] == 'LOCAL_ACCEPTED'
+    finally:
+        worker.join(2)
+    assert not worker.is_alive() and delivered.is_set()
 
 
 def event(kind, goal_id=None, sequence=1, **facts):

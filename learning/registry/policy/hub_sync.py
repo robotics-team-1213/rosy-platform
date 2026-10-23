@@ -6,6 +6,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import sys
 
 
 def _selection(relative, repo_type):
@@ -21,6 +22,14 @@ def _selection(relative, repo_type):
         allowed |= path.parts[0] == 'meta' and path.suffix in ('.json', '.parquet')
         allowed |= path.parts[0] == 'data' and path.suffix == '.parquet'
         allowed |= path.parts[0] == 'videos' and path.suffix == '.mp4'
+        allowed |= relative in ('rosy_export.json', 'rosy_sim_truth/truth.json')
+        allowed |= bool(re.fullmatch(r'rosy_provenance/[0-9a-f-]{36}/(manifest\.json|events\.jsonl|samples\.jsonl|'
+                                    r'images/[A-Za-z0-9_-]+/[0-9]{6}\.png)', relative))
+        allowed |= (len(path.parts) == 3 and path.parts[:2] == ('rosy_sim_truth', 'files')
+                    and path.name in {'camera_source.sdf', 'cell.yaml', 'commands.json', 'events.jsonl',
+                        'native_manifest.json', 'observations.json', 'phases.json', 'profile.yaml',
+                        'recipe.yaml', 'result.json', 'samples.jsonl', 'source-manifest.json',
+                        'source_world.sdf', 'world.sdf'})
     elif repo_type == 'model':
         allowed |= path.suffix in ('.safetensors', '.json')
     if not allowed:
@@ -48,6 +57,25 @@ def _write(path, doc):
         stream.write('\n')
 
 
+def _omx_selection(root, files, repo_type):
+    if repo_type != 'dataset' or not ((root/'rosy_export.json').exists()
+            or any(name.startswith(('rosy_provenance/', 'rosy_sim_truth/')) for name in files)):
+        return False
+    visible = {p.relative_to(root).as_posix() for p in root.rglob('*')
+               if p.is_file() and not any(part.startswith('.') for part in p.relative_to(root).parts)}
+    if 'rosy_export.json' not in files or set(files) != visible:
+        raise ValueError('complete OMX export selection including original evidence required')
+    return True
+
+
+def _verify_omx(root, files, repo_id, repo_type):
+    if not _omx_selection(root, files, repo_type):
+        return None
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]/'learning/curation/omx'))
+    from lerobot_export import verify_export
+    return verify_export(root, repo_id)
+
+
 def prepare_bundle(source, output, repo_id, repo_type, files):
     if repo_type not in ('dataset', 'model') or not re.fullmatch(r'[\w-]+/[\w.-]+', repo_id) or '..' in repo_id:
         raise ValueError('explicit namespace/repository and dataset/model type required')
@@ -56,6 +84,7 @@ def prepare_bundle(source, output, repo_id, repo_type, files):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.exists() or in_source_checkout(output) or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError('bundle requires a new separate output outside the source checkout')
+    _omx_selection(source, files, repo_type)
     selected = {relative: _file(source, relative, repo_type) for relative in sorted(files)}
     output.mkdir(parents=True)
     hashes = {}
@@ -67,6 +96,7 @@ def prepare_bundle(source, output, repo_id, repo_type, files):
         if _hash(target) != expected or _hash(path) != expected:
             raise ValueError('source changed while preparing bundle')
         hashes[relative] = expected
+    _verify_omx(output/'payload', hashes, repo_id, repo_type)
     _write(output / 'manifest.json', dict(repo_id=repo_id, repo_type=repo_type, files=hashes))
     return output
 
@@ -87,6 +117,7 @@ def upload_bundle(bundle, *, api=None, operation=None, downloader=None):
             raise ValueError('payload hash differs from preview')
     if (bundle / 'receipt.json').exists():
         raise ValueError('bundle already has a success receipt')
+    _verify_omx(bundle/'payload', selected, repo_id, repo_type)
     if api is None:
         from huggingface_hub import HfApi, CommitOperationAdd, snapshot_download
         api, operation, downloader = HfApi(), CommitOperationAdd, snapshot_download
@@ -118,10 +149,13 @@ def upload_bundle(bundle, *, api=None, operation=None, downloader=None):
     for name, expected in manifest['files'].items():
         if _hash(_file(download_root, name, repo_type)) != expected:
             raise ValueError('download hash differs from reviewed payload')
+    reader = _verify_omx(download_root, selected, repo_id, repo_type)
     if api.repo_info(repo_id=repo_id, repo_type=repo_type).private is not True:
         raise ValueError('repository visibility changed during sync')
     receipt = dict(repo_id=repo_id, repo_type=repo_type, revision=revision, files=manifest['files'],
-                   bytes_verified=True, reader_verified=False)
+                   bytes_verified=True, reader_verified=reader is not None)
+    if reader is not None:
+        receipt['reader'] = reader
     _write(bundle / 'receipt.json', receipt)
     return receipt
 
@@ -134,13 +168,18 @@ def main():
     prepare.add_argument('--out', type=Path, required=True)
     prepare.add_argument('--repo-id', required=True)
     prepare.add_argument('--repo-type', choices=('dataset', 'model'), required=True)
-    prepare.add_argument('--file', action='append', required=True)
+    selection = prepare.add_mutually_exclusive_group(required=True)
+    selection.add_argument('--file', action='append')
+    selection.add_argument('--file-list', type=Path, help='JSON array of explicitly reviewed relative files')
     upload = commands.add_parser('upload')
     upload.add_argument('bundle', type=Path)
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
-            output = prepare_bundle(args.source, args.out, args.repo_id, args.repo_type, args.file)
+            files = json.loads(args.file_list.read_text(encoding='utf-8')) if args.file_list else args.file
+            if not isinstance(files, list):
+                raise ValueError('file selection must be a JSON array')
+            output = prepare_bundle(args.source, args.out, args.repo_id, args.repo_type, files)
             print((output / 'manifest.json').read_text(encoding='utf-8'))
         else:
             print(json.dumps(upload_bundle(args.bundle), indent=2))

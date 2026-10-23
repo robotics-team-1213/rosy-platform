@@ -62,12 +62,13 @@ def test_explicit_companion_is_required_and_missing_bytes_fail_before_conversion
     assert not output.exists()
 
 
-def test_ground_truth_roundtrip_keeps_original_bytes_and_all_proof_dependencies(tmp_path):
+@pytest.mark.parametrize('fps', [5, 10])
+def test_ground_truth_roundtrip_keeps_original_bytes_and_all_proof_dependencies(tmp_path, fps):
     from sim_object_truth_fixture import fixture
     from sim_object_truth import build
     from common_episode import convert
     from rosy.contracts.learning.omx import validate_profile
-    run, native, source = fixture(tmp_path)
+    run, native, source = fixture(tmp_path, recording_fps=fps)
     proof = build(run,native,tmp_path/'proof')
     assert proof['metrics']['success'] is True
     output = tmp_path/'common'
@@ -79,6 +80,25 @@ def test_ground_truth_roundtrip_keeps_original_bytes_and_all_proof_dependencies(
     (output/'sim-truth/files/phases.json').write_text('[]')
     with pytest.raises(ValueError,match='hash|size'):
         validate_profile(episode,root=output)
+
+
+def test_truth_does_not_relabel_five_fps_source_frames_as_ten_fps(tmp_path):
+    from sim_object_truth_fixture import fixture, write
+    from sim_object_truth import build
+    run, native, source = fixture(tmp_path, recording_fps=5)
+    manifest = json.loads((source/'manifest.json').read_bytes())
+    manifest['provenance']['fps'] = 10
+    write(source/'manifest.json', manifest)
+    with pytest.raises(ValueError, match='frame_gap'):
+        build(run, native, tmp_path/'proof')
+
+
+def test_truth_keeps_other_recording_rates_outside_the_fixed_rig_contract(tmp_path):
+    from sim_object_truth_fixture import fixture
+    from sim_object_truth import build
+    run, native, _ = fixture(tmp_path, recording_fps=2)
+    with pytest.raises(ValueError, match='SIM rig identity differs'):
+        build(run, native, tmp_path/'proof')
 
 
 def test_act_intake_never_turns_a_missing_automatic_proof_into_operator_judgement(tmp_path):

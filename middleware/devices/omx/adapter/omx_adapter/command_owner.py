@@ -8,6 +8,7 @@ path before enabling any workcell profile.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import secrets
 import threading
 import time
@@ -87,6 +88,18 @@ class ArmCommandOwner:
         """Serialize short seat/journal decisions with canonical owner state, without ROS I/O."""
         with self._lock:
             return operation(self._state)
+
+    @contextmanager
+    def command_transaction(self):
+        """Keep readback selection and synchronous submit together; never await action completion."""
+        with self._lock:
+            yield
+
+    @property
+    def joint_state(self) -> JointStateSnapshot | None:
+        """Immutable owner-admitted readback; native intake may still await delivery."""
+        with self._lock:
+            return self._joint_state
 
     @property
     def state(self) -> str:
