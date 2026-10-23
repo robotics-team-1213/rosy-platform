@@ -17,7 +17,8 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
   const form = node("form", "", "ui-form"), fields = {};
   for (const [name, label, numeric] of [["target_unit", "대상 관제", false], ["robot_id", "담당 로봇", false],
     ["x", "목표 X (m)", true], ["y", "목표 Y (m)", true], ["yaw", "목표 방향 (rad)", true]]) {
-    const field = node("label", label, "ui-field-label"), input = node("input", "", "ui-field");
+    const field = node("label", label, "ui-field-label"), input = document.createElement("input");
+    input.className = "ui-field";
     input.id = "control-unit-" + name; input.name = name; input.required = true;
     input.type = numeric ? "number" : "text";
     if (numeric) { input.step = "any"; input.value = "0"; }
@@ -26,7 +27,9 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
   }
   function button(text, kind = "quiet") {
     const control = node("ui-button", text);
-    control.setAttribute("kind", kind); control.setAttribute("type", "button"); return control;
+    if (kind === "primary") control.setAttribute("kind", "primary");
+    else control.setAttribute("kind", "quiet");
+    control.setAttribute("type", "button"); return control;
   }
   function guard(control, reason) {
     control.disabled = Boolean(reason);
