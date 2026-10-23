@@ -93,7 +93,7 @@ JEV·SemIf(구 OpenJev)는 글을 생성하지 않고 선택지 토큰의 확률
 
 ## 데이터
 
-- 로봇암: `learning/curation/omx/native_review.py`의 사람 `outcome`(success·failure·unknown)과 `native_segments.py`의 구간별 결과·개입 기록이 있는 실물 녹화를 쓴다. 질문별 사실 정답은 따로 단다. 시뮬레이션 정답(`sim_object_truth.py`)은 하네스 확인용이고, 시뮬레이션 손목 카메라가 64×64라 정확도 근거로 쓰지 않는다.
+- 로봇암: `learning/curation/omx/native_review.py`의 사람 `outcome`(success·failure·unknown)과 `native_segments.py`의 구간별 결과·개입 기록이 있는 실물 녹화를 쓴다. 질문별 사실 정답은 따로 단다. 시뮬레이션 정답(`sim_object_truth.py`)은 하네스 확인용이고, 정확도 근거로 쓰지 않는다. 2026-10-23 확인: top·wrist 두 장과 사람 `outcome`이 함께 있는 실물 녹화는 시험 PC 세 대에 없다(아래 실험 계획 「데이터 확인」).
 - 모바일 첫 실험: D-610 재생 세트(D-607 막힘 39건, 9dfk·8kcn 횡단보도 주행, 2026-10-09–10 현장 기록). 사람 정답은 결정 하나가 아니라 **질문별 사실**로 단다.
 - 39건은 방향 확인용이다. 질문별 보정과 승격 증거로는 부족하다.
 - 현장 사진은 지금 보관하지 않는다(D-610: AI PC는 sha256만, Fleet은 메모리만). 정답셋을 늘리려면 사례 사진을 모델 PC로 보내 보관하는 경로가 필요하고, 이는 별도 ADR과 사용자 결정이다.
