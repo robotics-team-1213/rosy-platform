@@ -31,9 +31,12 @@ echo "gate $gate"
 for u in $(systemctl --user list-unit-files --no-legend 'rosy-*' 2>/dev/null | awk '{print $1}' | grep -E '(autoupdate|-update)\.service$'); do
   result=$(systemctl --user show "$u" -p Result --value)
   timer=$(systemctl --user is-enabled "${u%.service}.timer" 2>/dev/null || echo none)
-  log=$(journalctl --user -u "$u" --no-pager -n 400 -o short-unix 2>/dev/null | grep '{')
-  healthy=$(printf '%s\n' "$log" | grep -E '"(step|result)": "(switched|up_to_date|idle|active)"' | tail -1 | cut -d' ' -f1)
-  echo "unit $u $result $timer ${healthy:--} $(printf '%s\n' "$log" | tail -1)"
+  log=$(journalctl --user -u "$u" --no-pager -n 400 -o short-unix 2>/dev/null | grep -v -E ' systemd\[|rosy-update-gate:')
+  # JSON updaters log a step; the review release updater (auto_review_release.py) logs plain text
+  healthy=$(printf '%s\n' "$log" | grep -E '"(step|result)": "(switched|up_to_date|idle|active)"|]: (already active|activated): |]: waiting for a newer accepted' | tail -1 | cut -d' ' -f1)
+  last=$(printf '%s\n' "$log" | grep '{' | tail -1)
+  [ -z "$last" ] && last=$(printf '%s\n' "$log" | tail -1)
+  echo "unit $u $result $timer ${healthy:--} $last"
 done
 for f in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
 for u in $(systemctl --user list-units --no-legend --plain --type=service --state=active 'rosy-*' 2>/dev/null | awk '{print $1}'); do
@@ -93,6 +96,8 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
             unit, result, timer, healthy = (fields + ['', '', '', ''])[:4]
             last = fields[5] if len(fields) > 5 else ''
             step = {}
+            if '{' not in last and ']: ' in last:  # plain-text updater: "already active: <release>"
+                step = {'step': last.split(']: ', 1)[1].split(':', 1)[0].strip()[:40]}
             if '{' in last:
                 try:
                     step = json.loads(last[last.index('{'):])

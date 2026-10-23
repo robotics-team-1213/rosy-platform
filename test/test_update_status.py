@@ -53,3 +53,9 @@ def test_service_sources_name_adhoc_copies_pinned_releases_and_updated_links():
     assert [(s['kind'], s['where']) for s in host['sources']] == [
         ('ADHOC', 'omx-camera-environment-c6c9366d8'), ('release', 'd227b0c2c50a'),
         ('release', 'c643281c4493'), ('current', 'review-v13-code'), ('other', '-')]
+
+
+def test_the_review_release_updater_plain_text_results_count_as_healthy():
+    line = f'unit rosy-review-release-update.service success enabled {NOW - 120:.3f} {NOW - 60:.3f} host python3[9]: already active: model-code-31-3cdfd40ac2ab'
+    found, host = verdicts(line)
+    assert found == ['ok'] and host['channels'][0]['step'] == 'already active'
