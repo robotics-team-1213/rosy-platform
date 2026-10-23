@@ -64,8 +64,29 @@ def test_owner_snapshot_is_bounded_and_explicit():
         "owner_unit": "A1", "config_revision": "lab-1", "status": "PENDING",
         "revision": 1, "owner_revision": 0, "local_actor": None, "local_task_id": None,
         "cancel_requested": False, "result": {}, "updated_at": "2026-10-23T12:00:00+00:00"}
-    assert Reply(unit_id="A", config_revision="lab-1", delegation=snapshot).delegation.revision == 1
+    assert Reply(unit_id="A", config_revision="lab-1", stale=False, delegation=snapshot).delegation.revision == 1
     for changes in [{"revision": True}, {"status": "STOP_CONFIRMED"},
                     {"result": {"raw": "x" * 70_000}}, {"result": {"x": float("nan")}}]:
         with pytest.raises(ValidationError):
-            Reply(unit_id="A", config_revision="lab-1", delegation=dict(snapshot, **changes))
+            Reply(unit_id="A", config_revision="lab-1", stale=False, delegation=dict(snapshot, **changes))
+    with pytest.raises(ValidationError):
+        Reply(unit_id="A", config_revision="lab-1", delegation=snapshot)
+
+
+def test_ssh_schema_split_preserves_canonical_identity_and_validation():
+    from core_common.protocol import schemas, ssh
+    assert schemas.SshKeyAddRequest is ssh.SshKeyAddRequest
+    assert schemas.SshPasswordRequest is ssh.SshPasswordRequest
+    key = schemas.SshKeyAddRequest(public_key=" ssh-ed25519 QUJDRA== synthetic ",
+                                   label="unit-test", expires_days=1)
+    assert key.public_key == "ssh-ed25519 QUJDRA== synthetic"
+    for public_key in ["command=unsafe ssh-ed25519 QUJDRA==", "ssh-ed25519 QUJDRA==\nsecond-line"]:
+        with pytest.raises(ValidationError):
+            schemas.SshKeyAddRequest(public_key=public_key, label="unit-test", expires_days=1)
+    with pytest.raises(ValidationError):
+        schemas.SshPasswordRequest(minutes=True)
+    with pytest.raises(ValidationError):
+        schemas.SshPasswordRequest(minutes=61)
+    for name in ["SshKeyAdded", "SshKeyInfo", "SshKeyList", "SshHostKeys",
+                 "SshPasswordIssued", "SshPasswordStatus"]:
+        assert getattr(schemas, name).model_json_schema() == getattr(ssh, name).model_json_schema()

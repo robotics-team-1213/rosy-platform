@@ -5,9 +5,35 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.292
+**Version:** v1.297
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.297 Control-unit delegation and scoped cancellation (D-855)
+
+독립·상하위·3수준 중첩 관제의 첫 범위는 유한한 navigation 후보 1개다. 정적 관제 manifest와 같은 Fleet SQLite journal, 직접 관계별 service principal이 설정된 경우에만 연다. 상위 서비스는 후보·조회·취소 요청만 보내며, 실제 장치 제출은 하위 인증 named operator와 기존 admission·claim을 거친다. production dispatch·새 실행 profile·모델 권한을 추가하지 않는다. Envelope protocol_version은 1.0이다.
+
+공유 모델 정본은 `core_common.protocol.schemas`의 `ControlNavigationCandidate`, `ControlWorkRequest`, `ControlIngressRequest`, `ControlApproveRequest`, `ControlDelegationSnapshot`, `ControlUnitReply`, `ScopedNavigationCancelRequest`다. 추가 필드는 거절한다. ID는 영숫자로 시작하는 영숫자·`_.:-` 문자열이며 unit/robot/revision은 1~64자, delegation ID는 1~128자다. 좌표 x/y/yaw는 bool을 제외한 유한 수다.
+
+| 경로 | 권한·요청·결과 |
+|---|---|
+| `GET /api/fleet/control-unit` | viewer. 자기 unit ID·구성 revision·직접 부모/자식·직접 자원. peer 주소·비밀은 반환하지 않음 |
+| `GET /api/fleet/control-unit/delegations` | viewer. 최대 100개 최근 위임과 출처·stale. 서비스 전체 원장 조회는 허용하지 않음 |
+| `POST /api/fleet/control-unit/delegations` | named operator. `{delegation_id,target_unit,robot_id,goal:{x,y,yaw?}}`. 발행 origin은 서버의 자기 unit으로 고정. 후보 접수 응답이며 자동 실행 승인이 아님 |
+| `POST /api/fleet/control-unit/inbox` | 직접 부모의 별도 `service` principal만. 위 요청에 `{origin_id,config_revision}` 추가. origin은 부모 또는 그 조상, target은 자기 또는 자기 하위, robot 자원은 최종 target의 직접 소유여야 함 |
+| `GET /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}` | viewer 또는 검증된 직접 부모 service. 서비스는 자기가 요청할 수 있는 origin 범위의 위임만 조회. 등록된 직접 자식에게 같은 identity로 조회·재전달 가능 |
+| `POST /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}/approve` | 최종 target의 named operator. `{expected_revision}`는 strict 양의 정수. 현재 revision·범위·기존 작업 admission 재검증. 승인 신원은 영속 결속하며 같은 위임을 다른 신원/작업에 바인딩하지 않음 |
+| `POST /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}/cancel` | local named operator 또는 위 범위의 직접 부모 service. 같은 위임의 취소 요청만 기록·전달. 미제출 후보는 취소할 수 있고, 제출 작업은 원래 task/attempt의 owner 결과를 기다림 |
+
+단일 위임 응답은 `{unit_id,config_revision,stale,delegation}`다. `delegation`은 origin/delegation ID, 불변 request `{target_unit,robot_id,goal}`, 직접 결과 소유 `owner_unit`, 최초 config revision, status, 자체 단조 revision, owner_revision, nullable local_actor/local_task_id, cancel_requested, result, updated_at을 포함한다. result는 유한 JSON 최대64KiB다. 상태 값은 PENDING/APPROVING과 기존 REQUESTED/QUEUED/ACCEPTED/RUNNING/UNKNOWN/HOLD/COMPLETED/FAILED/CANCELED/EXPIRED다. cancel_requested는 정지 완료나 상태 전이를 뜻하지 않는다. COMPLETED는 실행 결과이며 앱의 물리 업무 완료를 대신하지 않는다.
+
+같은 발행 관제·delegation ID·정규화 본문은 같은 기록을 반환한다. 구성 revision·재시작·전송 재시도가 identity를 바꾸지 않는다. 다른 본문·owner 결속은 409 충돌이다. 위임 binding·history와 로컬 task 생성은 기존 TaskStore admission transaction 안에서 함께 커밋한다. 인증·관계·본문·현재 안전 검사는 항상 유지하고 이전 권한을 재전달로 복원하지 않는다.
+
+접수·조회 응답 유실은 새 key나 다른 자식에 재배정하지 않는다. 기존 기록과 같은 identity로 직접 자식을 재조회한다. stale 응답·잘못된 origin/request/owner/revision·낮은 owner_revision으로 현재 사실을 덮지 않는다. 상위 링크 단절에서는 신규 상위 위임과 다음 Action을 막고 현재 admission된 유한 Action의 기존 장치 정책만 유지한다. 재연결 대조 없이 자동 재시작·점유 해제·rearm을 하지 않는다. 오래된 구성·scope·수정된 본문·잘못된 승인 revision은 409, 권한/관계 위반은 403, 미등록 위임은 404, 미설정/DB 불가/불명 peer 응답은 503 또는 stale 읽기 결과로 보존한다. 빈 조회 목록을 장애의 성공 응답으로 만들지 않는다.
+
+`POST /api/v1/navigation/cancel-scoped`는 operator 전용의 새 CORE 경로다. 요청은 UUID `expected_boot_id`, UUID `run_id`, 비어 있지 않은 1~128자 `correlation_id`를 모두 요구한다. 세 값이 현재 owner 실행과 맞을 때 기존 NavigationManager 잠금 안에서만 cancel을 수행한다. 결과는 `{navigation,operation}`이며 operation은 해당 실행의 native receipt다. scope 불일치·이미 다른/종단 실행이면 409 `NAVIGATION_SCOPE_CHANGED`이고 다른 목표·trip lease를 바꾸지 않는다. 잘못된 body는 기존 CORE ERR-101 규약의 400 `VALIDATION_ERROR`다. 기존 `/navigation/cancel`은 바꾸지 않는다. 구버전의 scoped 경로 404는 미지원으로 남기며 무조건 취소로 fallback하지 않는다. Fleet은 owner receipt의 boot/run/attempt 결속이 없으면 이 요청을 만들지 않고 결과 불명으로 보존한다.
+
+이 절은 공유 계약이며 HTTP·runtime·UI·배치 및 실물 수용은 각 구현 증거로 닫는다. schema 등록·원격 모델 시험만으로 파이프라인이 완성됐다고 주장하지 않는다.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -3600,6 +3626,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
 | v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
