@@ -206,6 +206,9 @@
   --target-primary: 48px;
   --target-irreversible: 48px;
 
+  /* 단계 표식 지름 — 누름 면이 아니라 글자 옆 표식이다. */
+  --size-stage-mark: 22px;
+
   /* ---- 컴포넌트 간격 역할 — 기본 척도에 연결(D-292) ------------------ */
   --inset-button: var(--space-3);
   --inset-skip-link: var(--space-2) var(--space-3);
@@ -236,6 +239,8 @@
   --inset-workspace-bar: var(--space-4);
   --inset-task-row: var(--space-5);
   --gap-task-detail: var(--space-3);
+  --gap-stage-track: var(--space-3);
+  --gap-stage-mark: var(--space-2);
   --inset-topbar: 0 var(--space-4);
   --inset-topbar-focal: var(--space-4) var(--space-5) var(--space-2);
   --gap-button-detail: var(--space-1);
