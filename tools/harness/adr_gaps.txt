@@ -81,3 +81,8 @@ D-846 reserved in another in-flight branch (refs/adr/D-846), absent from origin/
 D-847 reserved in another in-flight branch (refs/adr/D-847), absent from origin/main at D-848; remove when its ADR lands
 D-850 reserved in another in-flight branch (refs/adr/D-850), absent from origin/main at D-852; remove when its ADR lands
 D-851 reserved in another in-flight branch (refs/adr/D-851), absent from origin/main at D-852; remove when its ADR lands
+D-853 reserved in another in-flight branch (refs/adr/D-853), absent from origin/main at D-858; remove when its ADR lands
+D-854 reserved in another in-flight branch (refs/adr/D-854), absent from origin/main at D-858; remove when its ADR lands
+D-855 reserved in another in-flight branch (refs/adr/D-855), absent from origin/main at D-858; remove when its ADR lands
+D-856 reserved in another in-flight branch (refs/adr/D-856), absent from origin/main at D-858; remove when its ADR lands
+D-857 reserved in another in-flight branch (refs/adr/D-857), absent from origin/main at D-858; remove when its ADR lands

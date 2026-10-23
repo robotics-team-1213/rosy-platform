@@ -624,3 +624,21 @@
 - Change: the preview source accepts persistent by-path symlinks as well as by-id, preserving symlink/character-device checks and rejecting numeric selectors. Capture, retry and watchdog behavior are unchanged.
 - Evidence: committed tests failed 4/20 before the change; all 20 passed remotely at a694060ead. Two physical Innomaker cameras sharing SN0001 produced separate fresh previews through different USB port paths on Fleet.
 - Gate: unchanged. Preview identity does not establish CameraInfo, arm pairing calibration or physical command authority.
+
+## 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
+
+- 변경: `omx_adapter/dynamixel_port.py`에 `LocalActionPort` 실물 구현을 두었다. 은퇴한 device-core(rosy-vault 9a744a3)의 시작 HOLD, 정지 래치와 현 위치 버팀, RAM 쓰기만(EEPROM 없음), 추종 오차·하드웨어 오류·포즈 미도달·빈손 파지 HOLD를 옮기고, 관절 위치·속도 한계는 `ArmCommandConfig`에서 읽는다. 래치 해제는 `local_stop` 펜스가 그 세대에서 열려 있을 때만 한다. D-858 §4 관문(측정 한계·그리퍼 실측·정지 시험)과 정책 기술 거부를 둔다. 같은 팔 인스턴스·같은 시리얼 장치의 두 번째 writer를 거부한다. safety_modules에 등록했다.
+- 증거: 가짜 버스 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다.
+- gate 변화: 없음. owner는 `enabled=False`·`goals_enabled: false` 그대로이고 port는 어디에도 연결되지 않았다(S4). DEVICE 수용이 아니다.
+
+## 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
+
+- 변경: port의 모든 HOLD·정지·cancel이 주입된 `LocalStopController.trip`을 불러 플랫폼 펜스를 닫는다. `rearm`은 래치 세대보다 엄격히 새 세대, 그 세대에서 열린 펜스, HW 오류 없음을 모두 요구하고 토크 레지스터를 다시 읽는다. `stop()`은 잠금 없이 래치를 먼저 세우고, planner는 state 잠금 밖에서 돈다. 동작 중 매 주기 펜스를 다시 읽는다. 플랫폼 FK로 끝단 작업 공간 상자를 계획과 매 명령에서 검사하고, 상자가 없으면 §4 관문에서 거부한다. 그리퍼 값은 (-π, π)·서로 다름을 요구하고, 쓰기 전 HW 오류와 변화량을 확인한다. 정지 때 관절만 버티고 그리퍼 목표는 유지한다. `SdkBus`도 RAM 주소만 쓰고, TIOCEXCL 실패 시 포트를 닫는다.
+- 증거: 가짜 버스·가짜 SDK 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다. 재검토 대기(D-430 §5).
+- gate 변화: 없음. port는 여전히 어디에도 연결되지 않았다(S4).
+
+## 2026-10-24 · uncommitted · fix(omx): D-858 S1 재검토 지적 반영 (N1-N4, 재-trip)
+
+- 변경: port는 `_state_lock`을 잡은 채 펜스(`is_open`·`snapshot`·`trip`)를 부르지 않는다(`run_if_open`이 펜스 잠금을 잡고 `submit`을 부르는 순서와 맞춤). 시작 시 펜스 세대를 래치 세대로 기록해 시작 HOLD도 사람 rearm(더 새 세대)으로만 풀린다. 펜스가 이미 닫혀 있으면 다시 trip하지 않아 원래 정지 기록을 남긴다. submit은 정지 요청 플래그를 덮지 않고, rearm 도중 들어온 정지는 정지 카운터로 잡아 래치를 유지한다.
+- 증거: 실제 `LocalStopController`·실제 스레드 교착 회귀 시험 두 개가 수정 전 커밋에서 join 시간 초과로 실패하고 수정 후 통과한다(원격). 실물 팔은 쓰지 않았다.
+- gate 변화: 없음. 재검토 대기(D-430 §5).
