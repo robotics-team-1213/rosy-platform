@@ -80,7 +80,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
     expect(page.locator('#frame-title')).to_have_text('사진 2')
-    expect(page.locator('a[href="/pixels?frame=1"]')).to_have_count(3)
+    expect(page.locator('a[href="/pixels?frame=1"]')).to_have_count(2)  # sub-menu and page link; 정답 opens objects
     page.get_by_role('navigation', name='정답 화면', exact=True).get_by_role('link', name='픽셀 검수', exact=True).click()
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
@@ -162,12 +162,12 @@ def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, wid
     page.set_viewport_size({'width': width, 'height': 844})
     for stage, sub, target in STAGE_PAGES:
         page.goto(base + '/learning/evaluate', wait_until='networkidle')
-        page.get_by_role('navigation', name='Learning 주 메뉴', exact=True).get_by_role('link', name=stage, exact=True).click()
-        page.wait_for_load_state('networkidle')
+        with page.expect_navigation(wait_until='load'):
+            page.get_by_role('navigation', name='Learning 주 메뉴', exact=True).get_by_role('link', name=stage, exact=True).click()
         if sub:
             subnav = page.get_by_role('navigation', name=f'{stage} 화면', exact=True)
-            subnav.get_by_role('link', name=sub, exact=True).click()
-            page.wait_for_load_state('networkidle')
+            with page.expect_navigation(wait_until='load'):
+                subnav.get_by_role('link', name=sub, exact=True).click()
             expect(page.get_by_role('navigation', name=f'{stage} 화면', exact=True).locator('[aria-current="page"]')).to_have_text(sub)
         address, wanted = urlsplit(page.url), urlsplit(target)  # editors add their own frame/filter keys
         assert address.path == wanted.path and parse_qs(address.query).get('view') == parse_qs(wanted.query).get('view'), page.url
