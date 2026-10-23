@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_native_cycle import module, splits
-from test_experiment_native import capture
+from test_experiment_native import bimanual, capture
 
 
 @pytest.fixture
@@ -66,6 +66,31 @@ def test_export_admission_accepts_exact_additional_native_camera(prepared):
     assert request['profile'] == body['profile']
     body['profile']['cameras'][-1]['input_key'] = 'observation.images.other'
     with pytest.raises(ValueError, match='camera'):
+        export.prepare_export(body, row)
+
+
+def test_export_admission_accepts_a_two_arm_preparation_only_with_both_arms(capture, tmp_path):
+    import experiment_export as export
+    _, profile, readers = bimanual(capture)
+    receipt = json.loads((capture[0] / 'split-receipt.json').read_bytes())
+    root = tmp_path / 'prepared'
+    (root / 'meta').mkdir(parents=True)
+    (root / 'meta/info.json').write_text(json.dumps(readers['train'].meta.info))
+    report = copy.deepcopy(receipt['source'])
+    report['files'] = export.pipeline.native.dataset_files(root)
+    report['capture_provenance']['files'] = report['files']
+    for name, value in {'intake-receipt.json': {'reader_verified': True}, 'inspection.json': report,
+                        'capture.json': report['capture_provenance'], 'environment.json': {},
+                        'decisions.json': receipt['decisions']}.items():
+        (root / name).write_text(json.dumps(value))
+    row = dict(id=uuid.uuid4().hex, kind='omx', path=str(root), name='Two-arm preparation')
+    body = dict(prepared_id=row['id'], name='Two-arm export', profile=profile, request_id=str(uuid.uuid4()))
+    request, _ = export.prepare_export(body, row)
+    assert [arm['id'] for arm in request['profile']['arms']] == ['arm_a', 'arm_b']
+    body['profile'] = copy.deepcopy(profile)
+    body['profile']['arms'] = body['profile']['arms'][:1]
+    body['profile']['cameras'][1]['arm_id'] = 'arm_a'
+    with pytest.raises(ValueError, match='joint order'):
         export.prepare_export(body, row)
 
 

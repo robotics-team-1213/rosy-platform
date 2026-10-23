@@ -48,15 +48,17 @@ def _source(raw, profile, review=None):
         originals, report, _, _ = pipeline._validate_review_inputs(originals, decision_bytes)
     else:
         originals, report, _, _ = pipeline._review_inputs(root, root / 'decisions.json')
-    checked = _profile(profile, report)
+    checked, layout = _profile(profile, report)
     files = native.dataset_files(root)
     if files != report.get('files'):
         raise ValueError('native preparation source bytes differ from inspection')
     info = read_json(root / 'meta/info.json')
     features = info.get('features', {})
-    if (info.get('robot_type') != 'omx_follower' or info.get('codebase_version') != 'v3.0'
-            or any(features.get(key, {}).get('names') != native.JOINTS
-                   or features[key].get('shape') != [6] for key in ('action', 'observation.state'))):
+    try:
+        actual = native.joint_layout(info)
+    except ValueError:
+        actual = None
+    if actual != layout:
         raise ValueError('native preparation joint order or metadata differs')
     cameras = {key: value.get('shape') for key, value in features.items()
                if key.startswith('observation.images.')}
