@@ -10031,3 +10031,9 @@ osy-d395-s1d\`.
 - 변경: [검증 기록](validation/omx-bimanual-native-cycle-2026-10-23/result.md)에 현행 main 기반 native reader·분할·평가의 6/12관절 지원과 실제 SDK 근거를 묶었다.
 - 증거: 원격 회귀73 passed/1 skipped/0 NEW. 별도 모델 PC의 실제 LeRobot 0.4.4 합성 변환→ACT2-step→새 프로세스 재적재 종료0. 회수한 모델7개·분할12개 파일 SHA와 12관절 평가를 확인했다. 이전 SHA가 고정된 첫 fixture 결과는 제외·보존했다.
 - gate 변화: 소프트웨어 연결 근거다. 사람 라벨·실물 과제 성공·장치 수용·정책 승격을 주장하지 않는다. CE 해당 없음: 판단과 범위는 코드·검사·검증 기록에 남아 있다.
+
+## 2026-10-23 · c4d6f20cbb · VLM 닫힌 질문 벤치
+
+- 변경: [	ools/vlm_question_bench.py](../tools/vlm_question_bench.py)를 추가했다(전처리, 사진 prefix 1회, 질문별 선택지 토큰 확률, 캐시·전체 forward 비교, Ollama 비교). [벤치 기록](validation/vlm-question-bench-2026-10-23/result.md)과 설계·실험 계획의 실행기·질문 규칙을 갱신했다.
+- 증거: 모델 PC에서 Qwen3-VL-8B(nf4)·Qwen3-VL-4B·Qwen3.5-4B, front·top·wrist 40장씩. Ollama 0.35.1 확률 읽기로 질문 전부 p50 0.10–0.18 s, 현행 설명 호출 1회 p50 1.66–1.87 s. 사람 정답 전이라 정확도는 미판정이다.
+- gate 변화: 없음. 운영 ision.py·AI PC·로봇은 바꾸지 않았다.
