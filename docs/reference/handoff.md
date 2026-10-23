@@ -10,13 +10,14 @@
 
 관측한 세계 상태(World), 현장 작업 조정(Fleet), 장치별 안전한 실행(CORE·OMX), 오프라인 학습·평가(모델 PC → AI PC)를 잇는다. 목표 범위 전체는 [Vision and Definition](../architecture/00_ROSY_OS_Vision_and_Definition.md)에 있고, 그 문서가 스스로 말하듯 "구현됐다는 주장이 아니다".
 
-지금 붙잡고 있는 구체 목표는 셋이다.
+최상위 목표와 완료 조건은 [PRODUCT.md 「Product Purpose」](../../PRODUCT.md#product-purpose)가 정본이다(2026-10-24: 범용 실행 플랫폼, 첫 적용 사례 Harbor). 아래는 그 목표의 능력 증명 마일스톤이다.
 
-| 목표 | 무엇이 되면 끝인가 | 근거 |
+| 마일스톤 | 무엇이 되면 끝인가 | 근거 |
 |---|---|---|
 | **Pinky 두 대의 차로 주행** | Fleet 아래 두 대가 횡단보도·신호를 지키며 코스를 연속으로 돈다 | [Gazebo 차로 한 바퀴](../plans/2026-10-12-gazebo-lane-lap.md), [차로 규칙 시뮬 인계](../plans/2026-10-15-lane-regulation-sim-handoff.md) |
 | **OMX 팔 모방 학습** | 흰 원형 용기에서 딸기를 꺼내 임시 위치에 놓고 다시 돌려놓는다 | [OMX 미완 인계](../plans/2026-10-15-omx-integration-unfinished-handoff.md) |
-| **고정 셀 작업(Rosy Cell)** | AI 없이 Cell → 계획 → OMX 실행 → 결과 확인을 Gazebo에서 잇는다 | [계층 아키텍처 로드맵](../plans/2026-10-01-rosy-layered-architecture-roadmap.md) |
+
+고정 셀 작업(Rosy Cell 팔레타이징)은 별도 목표에서 내려 Harbor 흐름에 흡수했다.
 
 변하지 않는 원칙은 [README 「핵심 계약」](../../README.md#핵심-계약)이다. 특히 **외부는 CORE API로만 말하고, 최종 `/cmd_vel`은 CORE 하나만 낸다.**
 
