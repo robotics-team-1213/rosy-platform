@@ -195,6 +195,7 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
     page.set_viewport_size({"width": width, "height": height})
     status = page.locator("#saved-status")
     expect(status).to_contain_text("접속하면 저장된 문서를 확인할 수 있습니다")
+    open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
     expect(status).to_contain_text("저장된 문서가 없습니다")
@@ -296,6 +297,7 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(status=503, body="unavailable"))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
     status = page.locator("#saved-status")
@@ -674,6 +676,7 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
+    open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
@@ -727,6 +730,7 @@ def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):
     expect(page.locator("#summary")).to_contain_text("16회 전송")
     assert "slip_sheet" not in json.loads(page.locator("#recipe-document").input_value())
     page.reload()
+    open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")

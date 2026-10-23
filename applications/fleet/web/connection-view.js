@@ -2,13 +2,9 @@ import {bindTopbarToggle, setTopbarOpen} from "/console/assets/fleet-header.js";
 
 // Connection guidance owns presentation; authorization remains in console.js.
 export function createConnectionView({scope, el}) {
-  let openedForLock = false;
   bindTopbarToggle(scope.listen);
-  scope.listen(el("topbar-more"), "click", () => {
-    openedForLock = false;
-  });
+  // The account row is on demand only (D-741 3): this strip's 관제 접속 is the way in, and it opens the row.
   scope.listen(el("connection-guide-action"), "click", event => {
-    openedForLock = false;
     event.preventDefault(); setTopbarOpen(true);
     el("fleet-login").click();
   });
@@ -32,15 +28,8 @@ export function createConnectionView({scope, el}) {
     el("dispatch-control").hidden = true;
     el("dispatch-rearm").hidden = true;
   }
-  return {open: () => {
-    if (el("topbar-more").getAttribute("aria-expanded") !== "true") {
-      setTopbarOpen(true);
-      openedForLock = true;
-    }
-  }, show, hide: () => {
+  return {show, hide: () => {
     el("connection-guide").hidden = true;
-    if (openedForLock) setTopbarOpen(false);
-    openedForLock = false;
     // 지난 세션의 발행 문구를 살아 있는 상태처럼 보이지 않는다. 다음 조회가 덮어쓴다.
     el("dispatch-control-title").textContent = "발행 상태 확인 중";
     el("dispatch-control-detail").textContent = "대기 작업과 정지 세대를 읽고 있습니다.";

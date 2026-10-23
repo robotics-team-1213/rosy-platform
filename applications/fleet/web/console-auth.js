@@ -18,10 +18,9 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     const firstLock = !auth.locked;
     auth.locked = true;
     workView.reset();
-    connectionView.open();
     auth.role = null;
     incidents.reset();
-    showSignedOut({fold: false, refused: reason === "auth"});
+    showSignedOut({refused: reason === "auth"});
     applyRoleToControls(null, operatorControls());
     const pill = el("online-pill");
     pill.textContent = "접속 전";

@@ -429,3 +429,15 @@
 - 변경: camera-peer가 main에 먼저 반영된 createRequest의 요청별 readResponse를 소비한다. 기존 헤더 시점 권한 처리·엄격 JSON·화면 수명 검사·단일 승인을 유지한다.
 - 증거: 실제 파일과 기존 Node loader로 전환 전 8 passed/1 expected failure, 전환 후 새 9개와 기존 2개 모두 통과했다. 원격 소비자·브라우저 검증은 후속 기록으로 구분한다.
 - gate 변화: 공통 전송 소비 범위다. 장치·현장 수용은 추가하지 않는다.
+
+## 2026-10-23 · uncommitted · 계정 칸은 사용자가 열 때만 열린다
+
+- 변경: 잠금·401에서 계정 칸(`#topbar-extra`)을 스스로 열던 길을 없앴다. `showSignedOut`의 `fold` 옵션, `connectionView.open()`, `openedForLock` 추적을 지우고, 관제는 안내 띠의 `관제 접속`으로만 연다.
+- 증거: 노드 계약 시험 `fleet-header.test.mjs` 11 passed — 잠금 뒤 `data-open`이 `false`로 남는 단언을 넣었다. 브라우저 회귀는 착지 검증에서 다시 본다.
+- gate 변화: 화면 동작 변경(로그인 전·잠금 화면이 닫힌 계정 칸으로 시작). API·권한 동작 변화 없음.
+
+## 2026-10-23 · uncommitted · 세션은 들어온 계정 줄을 다시 접는다
+
+- 변경: 접속이 서면 `showSession`이 계정 칸을 접는다. 자동 열림을 지운 뒤에는 줄을 열어 토큰을 넣은 사용자가 머리 두 줄을 계속 보게 되므로, 접속이 증명되면 말로 바뀐다(D-741 3).
+- 증거: `fleet-header.test.mjs`에서 줄을 연 뒤 `showSession`을 지나 `data-open`이 `false`가 되는 단언으로 고정했다. 셀 브라우저 시험은 토큰 칸을 만지는 곳마다 기존 `open_token_access`를 거치게 했다(4곳).
+- gate 변화: 화면 동작 변경(접속 뒤 한 줄 머리 복귀). API·권한 동작 변화 없음.

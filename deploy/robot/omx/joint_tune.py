@@ -99,16 +99,18 @@ def no_interrupts():
 
 
 class SerialBus:
-    """The confirmed follower bus, opened exclusively; reads and the WRITES whitelist on one motor."""
+    """Confirmed follower bus; motor 0 lets session cleanup select its existing IDs."""
 
     def __init__(self, device: str, motor: int) -> None:
+        if motor != 0 and motor not in FOLLOWER:
+            raise ValueError("only follower IDs 11-16 may be tuned")
         import fcntl, termios
         import serial
         from dynamixel_sdk import PacketHandler, PortHandler
 
         path = Path(device)
         if path.parent != Path("/dev/serial/by-id") or not path.is_symlink():
-            raise SystemExit("a physically confirmed /dev/serial/by-id symlink is required")
+            raise RuntimeError("a physically confirmed /dev/serial/by-id symlink is required")
         resolved = str(path.resolve(strict=True))
         self.motor = motor
         self.port = PortHandler(resolved)
@@ -136,6 +138,41 @@ class SerialBus:
         comm, error = fn(self.port, self.motor, address, value)
         if comm or error:
             raise RuntimeError(f"write {name}: comm {comm} error {error}")
+
+    def _cleanup_check(self, comm: int, error: int) -> None:
+        # An Alert carries usable payload only when transport and instruction status succeeded.
+        if comm or error & 0x7f:
+            raise RuntimeError(f"cleanup: comm {comm} error {error}")
+        if error & 0x80:
+            if not hasattr(self, "cleanup_alerts"):
+                self.cleanup_alerts = {}
+            self.cleanup_alerts[self.motor] = True
+
+    def cleanup_read(self, name: str) -> int:
+        """Fault-preserving evidence for torque OFF and baseline-cap restoration only."""
+        if name not in ("model", "mode", "torque", "hw_error", "pwm_limit", "current_limit"):
+            raise ValueError("register is not cleanup evidence")
+        address, size = READS[name]
+        fn = {1: self.packet.read1ByteTxRx, 2: self.packet.read2ByteTxRx}[size]
+        value, comm, error = fn(self.port, self.motor, address)
+        self._cleanup_check(comm, error)
+        return value
+
+    def cleanup_write(self, name: str, value: int) -> None:
+        """Only torque OFF or verified follower baseline EEPROM writes; never clears a fault."""
+        if not ((name == "torque" and type(value) is int and value == 0)
+                or (name in BASELINE and type(value) is int and value == BASELINE[name])):
+            raise ValueError("cleanup permits only torque OFF and baseline caps")
+        if name in BASELINE:
+            expected = FOLLOWER.get(self.motor)
+            if (expected is None or (name == "current_limit" and expected[0] != 1200)
+                    or (self.cleanup_read("model"), self.cleanup_read("mode")) != expected
+                    or self.cleanup_read("torque") != 0):
+                raise RuntimeError("baseline caps require confirmed follower model/mode and torque OFF")
+        address, size = WRITES[name]
+        fn = {1: self.packet.write1ByteTxRx, 2: self.packet.write2ByteTxRx}[size]
+        comm, error = fn(self.port, self.motor, address, value)
+        self._cleanup_check(comm, error)
 
     def close(self) -> None:
         self.port.ser.close()

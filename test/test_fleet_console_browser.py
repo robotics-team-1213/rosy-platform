@@ -3792,8 +3792,8 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.getElementById('online-pill').textContent === '접속 전'",
                                timeout=8000)
-
         assert page.is_hidden("#development-badge")
+        _open_token_access(page)
         assert page.is_visible("#console-token")
         assert posts == []
         assert not errors, f"페이지 오류: {errors}"

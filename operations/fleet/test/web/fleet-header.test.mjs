@@ -29,6 +29,7 @@ function fakeHeader() {
     "fleet-login", "fleet-account", "fleet-account-identity", "link-state"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
+  nodes["topbar-extra"].dataset.open = "false";  // the markup ships closed (D-741 3)
   globalThis.document = {getElementById: id => nodes[id], addEventListener() {}};
   return nodes;
 }
@@ -99,7 +100,7 @@ test("a session shows its Korean role and title identity; a development session 
   assert.equal(nodes.estop.getAttribute("reason"), OPERATOR_REASON);
 });
 
-test("a refused session locks the E-stop and opens the fold once; a lost Fleet does not lock it", () => {
+test("a refused session locks the E-stop but leaves the account row closed; a lost Fleet does not lock it", () => {
   const nodes = fakeHeader();
   showSignedOut({refused: false});
   assert.equal(nodes["user-role"].textContent, "인증 필요");
@@ -109,12 +110,14 @@ test("a refused session locks the E-stop and opens the fold once; a lost Fleet d
   assert.equal(nodes["user-role"].getAttribute("status"), "crit");
   assert.equal(nodes.estop.disabled, true);
   assert.equal(nodes.estop.getAttribute("reason"), SESSION_REASON);
-  assert.equal(nodes["topbar-extra"].dataset.open, "true");
+  // D-741 3: the row stays closed; the guide strip's 관제 접속 opens it.
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
 
+  nodes["topbar-extra"].dataset.open = "true";  // the operator opened it to enter access
   showSession({principal_id: "bob", role: "operator"});
   assert.equal(nodes.estop.disabled, false);
   assert.equal(nodes.estop.getAttribute("reason"), null);
-  assert.equal(nodes["topbar-extra"].dataset.open, "false");  // closed again: it opened for the lock
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");  // a session folds it again
 });
 
 test("the shared press posts once and reports partial stops as an error", async () => {

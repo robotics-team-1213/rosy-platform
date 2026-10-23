@@ -133,7 +133,7 @@ async function action(fn) {
     if (error.code === 'CELL_APP_UNCONFIGURED') cellServiceUnavailable = true;
     if (error.status === 401 || error.status === 403) clearSession();
     // A 403 here is one Cell action refused, not a lost session: the words change, the E-stop stays live.
-    if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({fold: false, refused: false});
+    if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({refused: false});
     if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') { showSignedOut(); loginForm.refresh(true); }
     else if (error.status === 409) clearJobSnapshot();
     $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED'
