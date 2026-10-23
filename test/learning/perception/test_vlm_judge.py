@@ -158,9 +158,9 @@ def test_http_permissions_conflict_and_hidden_model_answers(tmp_path):
         _, editor = request(base, '/api/learning/vlm/summary', 'editor')
         assert request(base, '/api/learning/vlm/import', 'editor', body, editor['token'])[0] == 403
         _, manager = request(base, '/api/learning/vlm/summary', 'reviewer')
-        assert request(base, '/api/learning/vlm/import', 'reviewer', body, 'bad')[0] == 403
-        code, result = request(base, '/api/learning/vlm/import', 'reviewer', body, manager['token'])
-        assert code == 200 and result['items_added'] == 4
+        assert request(base, '/api/learning/vlm/import', 'reviewer', body, manager['token'])[0] == 403
+        assert vlm_judge.items(store) == []  # server paths are imported by the CLI on that server only
+        vlm_judge.import_rows(store, body)
         code, listed = request(base, '/api/learning/vlm/items?view=wrist&status=pending', 'reader')
         assert code == 200 and [row['id'] for row in listed['items']] == [1, 2, 3]
         code, one = request(base, '/api/learning/vlm/items/1', 'reader')

@@ -470,7 +470,7 @@ python tools/vlm_question_bench.py --dump-questions <questions.json>
 python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --rows <bench-out>/rows.jsonl --questions <questions.json> --model <model>
 ```
 
-두 번째 시작부터는 `--state`만 준다. 가져오기는 화면의 **가져오기** 탭(협업에서는 manage)이나 위 CLI로 한다. rows에는 모델 이름이 없으므로 `--model`로 준다. `long_side`가 0이 아닌 행은 `<model>@<px>`로 구분한다. 같은 사진(sha256·view·question_set)은 다시 만들지 않고 새 모델 답만 더하며 사람 정답은 건드리지 않는다. 같은 question_set에 다른 질문 문장이 오면 거절하므로 문장을 바꾸면 새 version을 쓴다. Ollama의 `none_in_top`은 모델 답 없음으로 세고 선택지로 바꾸지 않는다.
+두 번째 시작부터는 `--state`만 준다. 가져오기는 로컬 모드의 **가져오기** 탭이나 위 CLI로 한다. 협업 모드는 `/api/import`처럼 서버 파일 경로 가져오기를 거절하므로 서버에서 CLI를 쓴다. rows에는 모델 이름이 없으므로 `--model`로 준다. `long_side`가 0이 아닌 행은 `<model>@<px>`로 구분한다. 같은 사진(sha256·view·question_set)은 다시 만들지 않고 새 모델 답만 더하며 사람 정답은 건드리지 않는다. 같은 question_set에 다른 질문 문장이 오면 거절하므로 문장을 바꾸면 새 version을 쓴다. Ollama의 `none_in_top`은 모델 답 없음으로 세고 선택지로 바꾸지 않는다.
 
 | 경로 | 내용 |
 |---|---|
@@ -481,6 +481,6 @@ python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --ro
 | `GET /api/learning/vlm/evaluation` | 정답 있는 사진만의 비교 |
 | `GET /api/learning/vlm/export` | `labelled`·`excluded` 정답 JSONL과 그 sha256 |
 | `POST /api/learning/vlm/items/<id>` | `{version, status, answers}`. `labelled`는 모든 질문 답 필요, `excluded`는 null 허용. 버전이 다르면 409 |
-| `POST /api/learning/vlm/import` | `{rows_path, question_set, questions, model}`. 서버 파일 경로를 읽는다 |
+| `POST /api/learning/vlm/import` | `{rows_path, question_set, questions, model}`. 서버 파일 경로를 읽으므로 로컬 모드 전용(협업 403) |
 
-저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit, 가져오기에 manage가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.

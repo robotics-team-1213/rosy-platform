@@ -15,7 +15,7 @@
 3. 평가는 `labelled` 사진만으로 계산한다. 일치율·balanced accuracy·혼동표·모순 답 수는 측정값이며 모델 답을 승인하거나 정답으로 바꾸지 않는다(D-514, D-542).
 4. 이 정답은 평가 진실이며 객체·픽셀 검수 결정, export, 인식 학습 자료로 들어가지 않는다(D-475의 취지). 운영 검수와 섞지 않도록 별도 `--empty-eval` state에서 운영한다.
 5. 질문 문장·선택지는 가져오기 요청이 가져온다. learning은 `tools/`를 import하지 않으며, `tools/vlm_question_bench.py --dump-questions`가 같은 question_set의 JSON을 만든다. 같은 question_set에 다른 문장이 오면 거절한다.
-6. 권한은 기존 앱을 따른다. 협업에서는 정답 저장에 edit, 가져오기에 manage가 필요하다. 로컬 비협업에서는 다른 저장처럼 actor가 null이다.
+6. 권한은 기존 앱을 따른다. 협업에서는 정답 저장에 edit가 필요하고, 서버 파일 경로를 읽는 가져오기는 `/api/import`처럼 거절해 서버의 CLI로만 한다. 로컬 비협업에서는 다른 저장처럼 actor가 null이다.
 
 ### Consequences
 

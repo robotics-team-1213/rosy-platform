@@ -172,7 +172,8 @@ document.addEventListener('keydown',event=>{
 });
 work(async()=>{
   const session=await accountFetch('/api/accounts/session',{cache:'no-store'});
-  if(session.ok){const account=await session.json();editor=account.capabilities.includes('edit');manager=account.capabilities.includes('manage');}
+  // Collaboration refuses server-path imports (as /api/import); managers use the CLI on the server.
+  if(session.ok){const account=await session.json();editor=account.capabilities.includes('edit');manager=false;}
   $('tab-import').hidden=!manager;
   await load(null);
   for(const view of Object.keys(summary.views).sort())$('vlm-view').append(new Option(view,view));

@@ -1,7 +1,7 @@
 """/learning/vlm routes for review_app.py: human VLM question truth and its evaluation; never approves.
 
-Collaboration: labels need `edit`, import needs `manage`, actor is the signed-in user. Local mode keeps the
-app's existing unidentified editor (actor null, D-478 bind rules); evaluation reads labelled photos only.
+Collaboration: labels need `edit` and actor is the signed-in user; import reads server paths, so like `/api/import`
+it is refused there (use the CLI on the server). Local mode keeps the app's unidentified editor (actor null, D-478).
 """
 import re
 from pathlib import Path
@@ -55,8 +55,8 @@ def post(handler, path, body, store, collaboration, conflict):
         return False
     principal = handler.learning_principal if collaboration else None
     if path == PREFIX + 'import':
-        if collaboration:
-            collaboration.accounts.require(principal, 'manage')
+        if collaboration:  # authorize_write refuses it first; kept so the plugin never depends on that order
+            raise PermissionError('project users cannot import arbitrary server filesystem paths')
         handler.send(vlm_judge.import_rows(store, body))
     elif match := re.fullmatch(PREFIX + r'items/(\d{1,9})', path):
         if collaboration:
