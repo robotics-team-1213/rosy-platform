@@ -10073,3 +10073,9 @@ osy-d395-s1d\`.
 - 변경: D-851과 [상세 설계](plans/2026-10-23-composable-control-design.md)를 등록하고 기존 목표에 연결했다. 독립·3수준 중첩, 상태 정본·불변 위임 식별·하위 승인·단절 복구·배치·P0–P5 수용 기준을 구체화했다.
 - 증거: 독립 설계 검토 지적 4건을 수정하고 재검토에서 닫았다. 최종 커밋은 공식 착지 도구의 lint·원격 시험·known failures 비교 후 병합한다.
 - gate 변화: 없음. 세부 계약은 Proposed이며 기능 구현·API 개방·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 새 장애 해결이 아닌 구조 설계 기록이다.
+
+## 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
+
+- 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
+- 증거: `test_vlm_judge.py`, `test_vlm_judge_browser.py`(원격 시험 PC). 실제 정답 품질·모델 PC 운영은 아직이다.
+- gate 변화: 없음. 평가 전용 정답이며 검수 승인·export·학습 자료가 아니다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.

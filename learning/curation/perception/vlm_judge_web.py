@@ -1,0 +1,68 @@
+"""/learning/vlm routes for review_app.py: human VLM question truth and its evaluation; never approves.
+
+Collaboration: labels need `edit`, import needs `manage`, actor is the signed-in user. Local mode keeps the
+app's existing unidentified editor (actor null, D-478 bind rules); evaluation reads labelled photos only.
+"""
+import re
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+import vlm_judge
+
+STATIC = Path(__file__).with_name('review_app_web')
+PREFIX = '/api/learning/vlm/'
+PAGES = {'/learning/vlm': ('vlm.html', 'text/html; charset=utf-8'),
+         '/vlm.js': ('vlm.js', 'text/javascript; charset=utf-8'),
+         '/vlm.css': ('vlm.css', 'text/css; charset=utf-8')}
+
+
+def get(handler, path, store, token):
+    if path in PAGES:
+        name, mime = PAGES[path]
+        handler.send((STATIC / name).read_bytes(), mime=mime)
+    elif not path.startswith(PREFIX):
+        return False
+    elif path == PREFIX + 'summary':
+        handler.send(dict(vlm_judge.summary(store), token=token))
+    elif path == PREFIX + 'items':
+        query = parse_qs(urlparse(handler.path).query, keep_blank_values=True)
+        if set(query) - {'view', 'status'} or any(len(v) != 1 for v in query.values()):
+            raise ValueError('items accepts one view and one status filter')
+        view, status = query.get('view', [''])[0], query.get('status', [''])[0]
+        if (view and not vlm_judge.NAME.fullmatch(view)) or (status and status not in vlm_judge.STATUSES):
+            raise ValueError('unknown view or status filter')
+        handler.send({'items': vlm_judge.items(store, view or None, status or None)})
+    elif match := re.fullmatch(PREFIX + r'items/(\d{1,9})', path):
+        handler.send(vlm_judge.item(store, int(match[1])))
+    elif match := re.fullmatch(PREFIX + r'images/(\d{1,9})', path):
+        data, mime, digest = vlm_judge.image(store, int(match[1]))
+        etag = '"' + digest + '"'
+        if handler.headers.get('If-None-Match') == etag:  # bytes were re-hashed above; only the transfer is skipped
+            handler.send(b'', 304, etag=etag, cache='no-cache')
+        else:
+            handler.send(data, mime=mime, etag=etag, cache='no-cache')
+    elif path == PREFIX + 'evaluation':
+        handler.send(vlm_judge.evaluation(store))
+    elif path == PREFIX + 'export':
+        handler.send(vlm_judge.export(store))
+    else:
+        handler.send({'error': 'VLM 경로를 확인하세요.'}, 404)
+    return True
+
+
+def post(handler, path, body, store, collaboration, conflict):
+    if not path.startswith(PREFIX):
+        return False
+    principal = handler.learning_principal if collaboration else None
+    if path == PREFIX + 'import':
+        if collaboration:
+            collaboration.accounts.require(principal, 'manage')
+        handler.send(vlm_judge.import_rows(store, body))
+    elif match := re.fullmatch(PREFIX + r'items/(\d{1,9})', path):
+        if collaboration:
+            collaboration.accounts.require(principal, 'edit')
+        handler.send(vlm_judge.save(store, int(match[1]), body, conflict,
+                                    actor=principal['user_id'] if principal else None))
+    else:
+        handler.send({'error': 'VLM 경로를 확인하세요.'}, 404)
+    return True

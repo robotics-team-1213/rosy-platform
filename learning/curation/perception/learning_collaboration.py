@@ -176,7 +176,7 @@ class Collaboration:
                 if query:
                     task += '?' + query
                 destination = '/accounts?return=' + quote(task, safe='') if path in (
-                    '/', '/pixels', '/catalog', '/learning', '/learning/camera', '/learning/omx', '/learning/sim') else '/accounts'
+                    '/', '/pixels', '/catalog', '/learning', '/learning/camera', '/learning/omx', '/learning/sim', '/learning/vlm') else '/accounts'
                 handler.extra_headers.append(('Location', destination))
                 handler.send(b'', 303)
             elif self.signed_in(handler):
