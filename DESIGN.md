@@ -403,7 +403,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 48px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
 - `readonly`는 점선 테·조용한 글자, `:user-invalid`·`aria-invalid="true"`는 `--field-invalid` 테, 비활성은 `--disabled-opacity`.
 - 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 48px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` **점선** 테 — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 되고, 실선이면 꺼진 빈 상자가 켜진 빈 상자와 같아 보인다. 테와 체크는 두 테마에서 3:1 이상이다.
-- `<ui-field>` 감싸개도 같은 얼굴이지만 제품 화면은 클래스 방식을 쓴다.
+- `<ui-field>` 감싸개는 견본·스캐폴드 전용이다. 같은 얼굴을 내지만 제품 화면은 클래스 방식을 쓰고, `test_content_vocabulary.py`가 등록 표면에서 `<ui-field>` 엘리먼트 사용을 막는다.
 
 ### 태그 — `<ui-tag status="…">`
 - 깃발 모양, mono 라벨, `--track-state`. 상태 어휘: `neutral`(조용한 글자) · `active`(정상 진행 — ink 테, 색 아님) · `warn`(주의 글자·테) · `crit`(위험 채움 + `ink-on-crit`).
@@ -411,14 +411,22 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 ### 상태 글 — `<ui-status state="…">`
 - 화면 알림 한 줄. `warning`/`error`/`unavailable`/`forbidden`은 주의색 글자. `state`가 없으면 계약 표지가 그려진다.
 
-### 오버레이 칩 — `<ui-chip>`
+### 오버레이 칩 — `<ui-chip>` (폐기 예정)
 - 지도·영상 위에 얹는 한 줄. 장막 바탕 + 표면선 테두리. 지도 조작은 무대의 높이를 훔치지 않는다.
+- 남은 소비자는 스타일 갤러리 하나다. 새 화면은 쓰지 않는다. 지도·영상 위 한 줄이 필요하면 `.ui-pane` 안의 `ui-tag`·`ui-status`로 조합한다.
 
 ### 분류 머리 — `<ui-triage status="…">`
 - 한 줄 머리. 색을 가진 것은 언제나 하나이고 맥락은 색 없이 따라간다. Fleet 예외 큐(주의·최우선)가 대표 소비자다.
 
 ### 증거 · 빈 상태 — `<ui-evidence state="…">` · `<ui-empty>`
 - 증거 네 상태의 한국어와 나이는 공용 표(`core_ui_logic.js`)가 단일 출처다(운용자 말 참조). 빈 목록·읽기 실패는 목록 밖 한 줄 `ui-empty`다(목록은 숨긴다).
+
+### 단계 스트립 — `<ol class="ui-stage-track">` · `.ui-stage`
+- 절차(`procedure` 문법)가 몇 번째 단계인지 한 줄로 말한다. JS가 없다: `<ol class="ui-stage-track">` 안에 `<li class="ui-stage" data-state="done|now|blocked|todo">순번이 붙은 라벨</li>`을 두고, 지금 단계에 `aria-current="step"`을 단다.
+- 표식은 `--size-stage-mark` 원이고 순번은 `--mono`다. 긴 절차는 줄바꿈해 흐르며 한 단계의 라벨만 `overflow-wrap: anywhere`로 접힌다.
+- 상태는 `ui-tag`와 같은 어휘다. `done`은 지난 단계(조용한 글자, `--surface-raised` 채움 — 빈 테인 `todo`와 라이트에서도 구분된다), `now`는 지금(가장 밝은 중립 글자와 그 잉크로 채운 표식 — 정상은 색이 아니다, D-82), `blocked`는 주의 글자·테(`--status-warn`), `todo`는 남은 단계(빈 테). `data-state`가 없으면 `todo`다.
+- 지금 단계의 뜻은 색 하나가 아니라 `aria-current`, 순번, 채움 셋이 함께 나른다.
+- 규칙은 `/common/stage-strip.css`에 산다 — `components.css`는 D-766 한도(942줄)에서 동결됐으므로 쓰는 화면은 `components.css` 뒤에 이 시트를 링크한다.
 
 ### 아이콘 — `class="ui-icon"`
 - 24 viewBox · 실선 2 · `currentColor`. 크기는 `--text-value` 박스 토큰이 정하고(D-405), 식별은 라벨이 나르며 아이콘은 보조다.
@@ -428,6 +436,18 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **`.ui-form` / `.ui-field-label`**: 네이티브 폼의 필드 묶음. 좁은 칸에서 한 열.
 - **`.ui-readout`**: `dl` 이름–값 두 열. 값은 등폭. 좁은 칸에서 한 열.
 - **`.ui-readback`**: 쓰기 뒤 되읽기 결과 묶음.
+
+### 조합 어휘
+표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다.
+
+| 개념 | 정본 이름 | 지금 쓰는 곳 |
+| --- | --- | --- |
+| 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
+| 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
+| 절차 단계 | `.ui-stage-track` · `.ui-stage` | 견본 — 표면 채택 전 |
+| 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
+| 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
+| 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.

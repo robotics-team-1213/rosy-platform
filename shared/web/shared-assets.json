@@ -3,6 +3,7 @@
   "shared_assets": {
     "tokens.css": "text/css",
     "components.css": "text/css",
+    "stage-strip.css": "text/css",
     "template.html": "text/html",
     "template.css": "text/css",
     "app-shell.css": "text/css",

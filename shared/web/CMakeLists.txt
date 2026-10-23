@@ -8,6 +8,7 @@ install(FILES
   shared-assets.json
   tokens.css
   components.css
+  stage-strip.css
   template.html
   template.css
   app-shell.css
