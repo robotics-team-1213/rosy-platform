@@ -9549,3 +9549,9 @@ osy-d395-s1d\`.
 - 변경: 운영 기준에서 기능만 분리하고 API v1.296·원격 검증·읽기 전용 소유 경로와 배포 조건을 기록한다.
 - 증거: 모듈별 정확한 SHA·실행 수·독립 검토와 미실행 범위를 docs/validation/motor-health-runtime-2026-10-22.md에 기록한다.
 - gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
+## 2026-10-23 · 5c74a6e25b · 모델 제어 근거의 범위 연결
+
+- 변경: [검증 기록](validation/model-control-evidence-2026-10-23/result.md)에 원자적 Mission 문맥, 불변 추론 결과, source/명령 결과/독립 목표 근거의 차이와 남은 수용 조건을 연결했다. 공개 배포 브랜치에서는 검토한 세 개선을 최신 origin/main 위에 모은다.
+- 증거: 독립 작업 브랜치의 Fleet affected 10,692 passed/513 skipped, 추론 affected 955 passed/36 skipped는 각각 NEW 0이다. 공개 통합 커밋 검증은 별도로 실행하며 이전 결과를 대신 쓰지 않는다.
+- gate 변화: 호스트 회귀 범위. 실제 모델·SIM·장치·현장 수용은 승격하지 않는다. CE 해당 없음: 원인과 방지는 코드·회귀 및 검증 기록으로 확인할 수 있다.

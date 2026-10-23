@@ -13,6 +13,7 @@
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
 | D-832 | OMX 학습 작업공간과 다중 팔·다중 카메라 프로필 | Accepted for implementation (2026-10-21) |
+| D-849 | 팔레타이징 제출 검증은 공정이 소유하고 Fleet은 주입된 제출 경계를 소비한다 | Accepted for implementation (2026-10-23) |
 | D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
 | D-852 | 실험실 PC 사용자 서비스 목록과 대조 | Accepted for implementation (2026-10-23) |

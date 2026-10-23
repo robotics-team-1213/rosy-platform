@@ -5,7 +5,7 @@ import sys
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[3]
-for relative in ("contracts/skill/src", "operations/site_execution/src", "middleware/skills/api/src"):
+for relative in ("contracts/skill/src", "operations/site_execution/src", "middleware/skills/api/src", "operations/processes/palletizing/src"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -20,7 +20,7 @@ from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from rosy.execution.api import PlanBundle, PlanStep
-from rosy.execution.site.cell_submission import CellJobCompilation
+from rosy.processes.palletizing.submission import CellJobCompilation, compile_cell_submission
 from rosy.skills.api import SkillInvocation
 
 
@@ -29,6 +29,10 @@ CELL_SHA = "c" * 64
 
 
 class FixedCellCompiler:
+    def compile_submission(self, candidate, *, workcell_id, instance_id):
+        return compile_cell_submission(
+            candidate, compiler=self, workcell_id=workcell_id, instance_id=instance_id).as_store_document()
+
     def __init__(self):
         self.calls = 0
         self.destination_x = 0.4
