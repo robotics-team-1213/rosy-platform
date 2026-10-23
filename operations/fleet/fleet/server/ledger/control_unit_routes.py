@@ -43,7 +43,7 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
             if not re.fullmatch(r"[A-Z_]+", code):
                 code = "CONTROL_UNIT_REQUEST_CONFLICT"
             raise HTTPException(409, detail={"code": code}) from None
-        except (ConnectionError, OSError, RobotApiError, httpx.RequestError):
+        except (ConnectionError, OSError, RobotApiError, httpx.HTTPError):
             raise HTTPException(503, detail={"code": "CONTROL_UNIT_PEER_UNAVAILABLE"}) from None
 
     @app.get(prefix)

@@ -170,7 +170,7 @@ class ControlUnitService:
                 self.store.project(*self._key(row), owner_unit=row["owner_unit"], owner_revision=child["revision"],
                                    status=child["status"], result=child["result"])
             self._stale.discard(self._key(row))
-        except (ConnectionError, OSError, ValueError, KeyError, RobotApiError, httpx.RequestError):
+        except (ConnectionError, OSError, ValueError, KeyError, RobotApiError, httpx.HTTPError):
             self._stale.add(self._key(row))
 
     async def refresh(self):
