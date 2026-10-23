@@ -28,7 +28,7 @@ def module(monkeypatch):
 
 def pairs(module):
     clock = [10.0]
-    motions = {name: module.GuardedMotion(fakes.Bus(), fakes.Bus(leader=True), clock=lambda: clock[0])
+    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True), clock=lambda: clock[0])
                for name in ("arm_a", "arm_b")}
     action = {name + "." + key: value for name, motion in motions.items()
               for key, value in fakes.action(motion.leader).items()}
@@ -85,7 +85,7 @@ def test_pair_offsets_and_rate_limits_stay_independent(module):
 
 def test_one_arm_sustained_effort_stops_both_followers_and_passive_leaders(module):
     clock = [10.0]
-    motions = {name: module.GuardedMotion(fakes.Bus(), fakes.Bus(leader=True), 
+    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True),
                                          clock=lambda: clock[0]) for name in ('arm_a', 'arm_b')}
     together = module.BimanualMotion(motions)
     action = {name + '.' + key: value for name, motion in motions.items()
@@ -111,7 +111,7 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
     import math
 
     clock = [10.0]
-    motions = {name: module.GuardedMotion(fakes.Bus(), fakes.Bus(leader=True), 
+    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True),
                                          clock=lambda: clock[0], label=name)
                for name in ('arm_a', 'arm_b')}
     together = module.BimanualMotion(motions)

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from guarded_native import GuardedMotion, NAMES, close_device, connect_passive, finite_values, torque_off
+from guarded_native import NativeJointMotion, NAMES, close_device, connect_passive, finite_values, torque_off
 from motor_health import MotorHealth
 
 ARMS = ("arm_a", "arm_b")
@@ -130,7 +130,7 @@ def make_adapters(robot_base, teleop_base, robot_factory, leader_factory, camera
             if self.motion is None:
                 if self.leader is None or not self.leader.is_connected:
                     raise ValueError("both passive leaders must be connected")
-                self.motion = BimanualMotion({name: GuardedMotion(self.arms[name].bus, self.leader.arms[name].bus,
+                self.motion = BimanualMotion({name: NativeJointMotion(self.arms[name].bus, self.leader.arms[name].bus,
                                                                label=name, monitor=self.monitor)
                                              for name in ARMS})
             return self.motion.send(action)

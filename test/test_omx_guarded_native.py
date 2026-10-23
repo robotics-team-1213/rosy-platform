@@ -106,7 +106,7 @@ class Bus:
 def pair(guard):
     follower, leader = Bus(), Bus(leader=True)
     clock = [10.0]
-    motion = guard.GuardedMotion(follower, leader, clock=lambda: clock[0])
+    motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0])
     return motion, follower, leader, clock
 
 
@@ -495,7 +495,7 @@ def test_effort_guard_resets_on_clear(guard):
 def test_body_invalid_actual_pwm_limit_refuses_before_enable(guard, limit):
     follower, leader, clock = Bus(), Bus(leader=True), [10.0]
     effort_read(follower, limit=limit)
-    motion = guard.GuardedMotion(follower, leader, clock=lambda: clock[0])
+    motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0])
     with pytest.raises(ValueError, match='PWM_Limit'):
         motion.send(action(leader))
     assert ('on',) not in follower.events
@@ -504,7 +504,7 @@ def test_body_invalid_actual_pwm_limit_refuses_before_enable(guard, limit):
 @pytest.mark.parametrize('error_ticks,pwm,stop', [(23, 297, True), (22, 330, False), (25, 296, False)])
 def test_effort_boundaries_apply_to_commanded_body(guard, error_ticks, pwm, stop):
     follower, leader, clock = Bus(), Bus(leader=True), [10.0]
-    motion = guard.GuardedMotion(follower, leader, clock=lambda: clock[0])
+    motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0])
     motion.send(action(leader))
     effort_read(follower, pwm=pwm)
     def run():
@@ -602,7 +602,7 @@ class Monitor:
 @pytest.mark.parametrize('failure', ['latency', 'exception'])
 def test_monitor_io_fails_closed_before_any_next_command_and_reports_after_off(guard, phase, failure):
     follower, leader, clock, monitor = Bus(), Bus(leader=True), [10.0], Monitor()
-    motion = guard.GuardedMotion(follower, leader, clock=lambda: clock[0], monitor=monitor)
+    motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0], monitor=monitor)
     if phase == 'sample':
         motion.send(action(leader))
     def fail(*args):
@@ -625,7 +625,7 @@ def test_monitor_fault_logging_failure_preserves_original_guard_error(guard, fai
         assert not any(follower.torque.values())
         raise failure
     monitor.fault = failed_log
-    motion = guard.GuardedMotion(follower, leader, monitor=monitor)
+    motion = guard.NativeJointMotion(follower, leader, monitor=monitor)
     leader.raw['wrist_roll'] += 1200
     with pytest.raises(ValueError, match='difference >=100'):
         motion.send(action(leader))

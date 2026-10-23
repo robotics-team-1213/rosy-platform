@@ -84,7 +84,7 @@ def normalized(bus, raw):
     return {n + ".pos": values[bus.motors[n].id] for n in raw}
 
 
-class GuardedMotion:
+class NativeJointMotion:
     def __init__(self, follower, leader, *, clock=time.monotonic, label="follower", monitor=None):
         self.follower, self.leader, self.clock = follower, leader, clock
         self.active = NAMES
@@ -284,7 +284,7 @@ def run_native(module, follower_type, leader_type):
         def send_action(self, action):
             if "motion" not in shared:
                 from motor_health import MotorHealth
-                shared["motion"] = GuardedMotion(self.bus, shared["leader"].bus, monitor=MotorHealth())
+                shared["motion"] = NativeJointMotion(self.bus, shared["leader"].bus, monitor=MotorHealth())
             sent = shared["motion"].send(action)
             shared["sent"] = sent
             return sent
