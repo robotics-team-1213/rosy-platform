@@ -5,7 +5,6 @@ Input receipts must come from an independently acquired owner/Fleet export.
 Hash verification proves preserved bytes, not receipt authenticity or task success.
 """
 import argparse
-from policy_output_paths import in_source_checkout
 import json
 import os
 from pathlib import Path
@@ -13,9 +12,10 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT / 'contracts/learning/src'),
+sys.path[:0] = [str(Path(__file__).resolve().parent), str(ROOT / 'contracts/learning/src'),
                str(ROOT / 'contracts/foundation')]
 
+from policy_output_paths import in_source_checkout  # noqa: E402
 from core_common.protocol.schemas import DeviceActionReceipt  # noqa: E402
 from rosy.contracts.learning import validate_episode  # noqa: E402
 from rosy.contracts.learning.fleet_export import join_metadata, export_metadata  # noqa: E402
