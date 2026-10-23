@@ -188,6 +188,11 @@ def import_rows(store, body):
                 item = row['id']
                 existing += 1
             for value in found:  # a later debate round replaces the earlier one; other runtimes are kept once
+                # A debate revises a model's own opinion; it must not add a model to the question (D-857 §4).
+                if value[1] == 'debate' and not db.execute(
+                        "SELECT 1 FROM vlm_model_answers WHERE item=? AND question=? AND runtime!='debate' "
+                        "AND (model=? OR model LIKE ?)", (item, value[2], _base(value[0]), _base(value[0]) + '@%')).fetchone():
+                    raise ValueError(f'{value[0]} has no earlier answer to debate for {value[2]}')
                 verb = 'INSERT OR REPLACE' if value[1] == 'debate' else 'INSERT OR IGNORE'
                 answers += db.execute(f'{verb} INTO vlm_model_answers VALUES (?,?,?,?,?,?)', (item, *value)).rowcount
     return {'items_added': added, 'items_existing': existing, 'answers_added': answers,

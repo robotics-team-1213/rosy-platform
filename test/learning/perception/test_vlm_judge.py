@@ -418,6 +418,8 @@ def test_debate_import_replaces_the_same_models_runtimes_and_never_adds_a_model(
         assert vlm_judge.provisional(db, debated)[1] == {empty: 'no'} and debated == {(1, empty)}
     with pytest.raises(ValueError, match='question set'):
         argue('other-model', 'no', {'front.lane_tape': {'answer': 'both', 'p': [1, 0, 0, 0]}})
+    with pytest.raises(ValueError, match='no earlier answer'):
+        argue('third-model', 'no')  # a model that never answered cannot join through a debate
     bare = tmp_path / 'bare.jsonl'
     bare.write_text(json.dumps({'frame': str(photo), 'view': 'wrist', 'long_side': 0}) + '\n')
     with pytest.raises(ValueError, match='no model answers'):

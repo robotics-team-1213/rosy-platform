@@ -228,6 +228,8 @@ def debate_note(line: dict, me: str, previous=None) -> str:
 
 def debate(args) -> int:
     lines = [json.loads(line) for line in args.debate_input.read_text(encoding="utf-8").splitlines() if line.strip()]
+    # Only questions this model already answered: a debate revises an opinion, it never adds a model.
+    lines = [line for line in lines if any(a["model"] == args.debate_as for a in line["answers"])]
     photos = {}
     for line in lines:
         photos.setdefault((line["image"], line["view"]), []).append(line)
