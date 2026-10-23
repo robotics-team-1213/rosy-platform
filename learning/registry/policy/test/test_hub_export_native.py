@@ -10,6 +10,7 @@ from test_hub_sync import FakeHub, module  # noqa: F401
 
 ROOT = Path(__file__).resolve().parents[4]
 for relative in ('learning/curation/omx', 'learning/curation/omx/test',
+                 'contracts/foundation',
                  'middleware/devices/omx/adapter', 'middleware/devices/omx/adapter/test'):
     sys.path.insert(0, str(ROOT/relative))
 
