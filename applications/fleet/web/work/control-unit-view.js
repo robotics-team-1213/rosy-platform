@@ -21,7 +21,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     input.className = "ui-field";
     input.id = "control-unit-" + name; input.name = name; input.required = true;
     input.type = numeric ? "number" : "text";
-    if (numeric) { input.step = "any"; input.value = "0"; }
+    if (numeric) { input.step = "any"; input.defaultValue = "0"; }
     else { input.maxLength = 64; input.pattern = "[A-Za-z0-9][A-Za-z0-9_.:-]*"; }
     field.htmlFor = input.id; field.append(input); form.append(field); fields[name] = input;
   }
