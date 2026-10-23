@@ -176,7 +176,7 @@ class Collaboration:
                 if query:
                     task += '?' + query
                 destination = '/accounts?return=' + quote(task, safe='') if path in (
-                    '/', '/pixels', '/catalog', '/learning', '/learning/camera', '/learning/omx', '/learning/sim') else '/accounts'
+                    '/', '/pixels', '/catalog', '/learning', '/learning/camera', '/learning/omx', '/learning/sim', '/learning/vlm') else '/accounts'
                 handler.extra_headers.append(('Location', destination))
                 handler.send(b'', 303)
             elif self.signed_in(handler):
@@ -210,12 +210,14 @@ class Collaboration:
 
     def authorize_write(self, handler, path, body):
         principal = self.identity(handler)
-        if path in ('/api/import', '/api/cad', '/api/learning/register'):
+        if path in ('/api/import', '/api/cad', '/api/learning/register', '/api/learning/vlm/import'):
             raise PermissionError('project users cannot import arbitrary server filesystem paths')
         if path.startswith(('/api/review-ai/', '/api/review-ai-cancel/')):
             capability = 'edit'
         elif path.startswith(('/api/frames/', '/api/masks/', '/api/mask-preview/')):
             capability = 'approve' if body.get('action') == 'approve' else 'edit'
+        elif path.startswith('/api/learning/vlm/items/'):
+            capability = 'edit'
         elif path == '/api/prepare':
             capability = 'approve'
         elif path == '/api/learning/storage/preflight':
