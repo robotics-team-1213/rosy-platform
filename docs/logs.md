@@ -10235,3 +10235,11 @@ osy-d395-s1d\`.
 - 증거: calibration 종료0/95파일 검증, engineering 종료1/253파일 검증. 170수락 목표 중169성공·마지막1개 JTC 목표 허용오차 초과, owner HOLD·cleanup확인. 허용치·모델·기준을 변경하거나 실패를 대체하지 않았다.
 - gate 변화: 모델 작업 성공은 HOLD다. 학습/offline/reload 수용을 SIM 작업 성공·운영·실물·HF 수용으로 확대하지 않는다.
 - CE: 미해결 — 실제 추종 오차의 물리 원인을 아직 구분하지 못했다.
+
+## 2026-10-24 · 521529fe5f · 관제 역할·직계 네트워크와 목표 현황 정렬
+
+- 변경: [기동 안내](deployment/control-units.md)에 독립·통합·중간·대상 관제 및 화면/장치/모델 PC의 책임표, R/A/B/A1 연결도, 요청·결과·승인 확인·취소의 실제 호출 방향, 방향별 service 자격과 실제 PC 연결 확인 순서를 보완했다.
+- 목표: [후속 목표](plans/2026-10-23-composable-control-goals.md)에 D-855 소프트웨어 완료와 미확인 실제 배치·LAN/TLS·현장 수용을 구분했다. 최초 전체 설계 체크리스트는 이력으로 보존한다.
+- 소스 대조: Fleet의 topology/runtime/routes/service, CLI, site Caddy·Compose를 확인했다. 기본 site Compose에는 control-unit 인자·mount가 없고 peer client의 기본 TLS 신뢰에 site `SSL_CERT_FILE`이 자동 적용되지 않으므로 설치만으로 중첩 연결 완료를 주장하지 않는다. 새 API·장치 권한·배포 변경은 없다.
+- 검증: 독립 계약 검토와 커밋된 revision의 공식 원격 회귀·known failures 비교 후 착지한다. 기존 소프트웨어 검증은 동결된 pipeline 기록을 참조하며 현장 검증으로 확대하지 않는다.
+- CE: 해당 없음 — 역할·배치 제약과 다음 수용 기준을 해당 정본에 직접 남겼다. 실제 네트워크 장애를 해결한 사례는 아니다.
