@@ -602,3 +602,9 @@
 - 변경: owner 전달 안에서 runtime snapshot을 게시하고 일반 Pilot 제출·자동 gripper hold의 상태 선택과 제출을 같은 owner RLock으로 묶는다. 기존 admission helper의 ROS I/O 금지 계약은 유지하며 새 command transaction은 action 완료를 기다리지 않는다. 순번·freshness·seat·범위 검사는 그대로다.
 - 증거: 실제 교사 수집 batch 3이 첫 기록 명령에서 순번 불일치로 거부돼 실패 원본을 보존하고 학습을 시작하지 않았다. 실제 owner 동시성 회귀 2개 RED 후 관련 원격 검사 140 passed/0 NEW. 실제 ROS snapshot 선게시 회귀도 RED 후 3 passed/0 skipped. 상세 환경·실패 실행은 docs/validation/omx-pilot-readback-2026-10-23/result.md에 구분했다.
 - gate 변화: SOURCE와 원격 ROS 회귀 범위다. 수정 source의 새 SIM 시연은 실행 중이며 완결 수집·학습·독립 정책 평가·실물 DEVICE/FIELD 수용은 미완료다.
+
+## 2026-10-23 · 187d5b758b · Pilot admitted readback와 policy pending intake 분리
+
+- 변경: 최초 runtime 게시 지연안은 확장 검사에서 기존 policy attach/coalescing 의존성을 깨뜨려 착지하지 않았다. native intake 선게시를 복원하고 readonly owner.joint_state를 Pilot 읽기 5곳에서 사용한다. command transaction과 기존 순번·freshness·seat 검사는 유지한다. 시험용 owner도 같은 명시적 계약을 제공한다.
+- 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
+- gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.
