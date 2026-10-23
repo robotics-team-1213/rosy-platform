@@ -42,7 +42,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/site_ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
-                     'operations/site_execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
+                     'operations/site_execution', 'operations/processes/palletizing', 'applications/fleet/gateway',
+                     'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
