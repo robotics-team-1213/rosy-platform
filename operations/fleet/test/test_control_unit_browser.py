@@ -35,19 +35,19 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             expect(panel).to_contain_text("상위 관제 A")
             expect(panel).to_contain_text("목표 X 1 m · Y 2 m · 방향 0 rad")
             expect(panel).to_contain_text("위임 R / job-1")
-            approve = panel.get_by_text("이 관제에서 승인", exact=True)
+            approve = panel.get_by_role("button", name="이 관제에서 승인", exact=True)
             expect(approve).to_be_enabled()
             approve.focus()
             page.locator("#work-refresh").evaluate("node => node.click()")
             page.clock.run_for(1500)
-            expect(panel.get_by_text("이 관제에서 승인", exact=True)).to_be_focused()
+            expect(panel.get_by_role("button", name="이 관제에서 승인", exact=True)).to_be_focused()
             approve.click()
             assert posts[-1][0] == prefix + "/delegations/R/job-1/approve"
             assert json.loads(posts[-1][1]) == {"expected_revision": 7}
             reply["stale"] = True
             page.locator("#work-refresh").click()
             page.clock.run_for(1500)
-            approve = panel.get_by_text("이 관제에서 승인", exact=True)
+            approve = panel.get_by_role("button", name="이 관제에서 승인", exact=True)
             expect(approve).to_be_disabled()
             expect(panel).to_contain_text("소유 관제 연결을 확인하세요")
             expect(panel).to_contain_text("실제 정지 확인과 별개")
@@ -87,7 +87,7 @@ def test_unknown_submission_keeps_its_body_and_identity_across_reload(site):
             page.locator("#control-unit-work summary").click()
             expect(page.locator("#control-unit-target_unit")).to_have_value("A")
             expect(page.locator("#control-unit-x")).to_have_value("1")
-            expect(page.get_by_text("새 요청 작성", exact=True)).to_be_disabled()
+            expect(page.get_by_role("button", name="새 요청 작성", exact=True)).to_be_disabled()
             page.get_by_text("대상 관제에 요청", exact=True).click()
             expect(page.locator("#control-unit-work")).to_contain_text("요청 결과 미확인")
             assert posts[-1] == first

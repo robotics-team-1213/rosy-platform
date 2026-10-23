@@ -51,6 +51,7 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
+  principal: () => auth.principal,
   approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
 const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? "work-new" : "work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");

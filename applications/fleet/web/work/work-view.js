@@ -15,13 +15,13 @@ export const workKind = row => ({task: "주행", trip: "운행", cell_job: "Cell
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 
-export function createWorkView({scope, call, el, channelRequestView, approveReason}) {
+export function createWorkView({scope, call, el, channelRequestView, approveReason, principal}) {
   const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
-  const units = createControlUnitView({scope, call, parent: el("work-overview"), active, approveReason});
+  const units = createControlUnitView({scope, call, parent: el("work-overview"), active, approveReason, principal});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
   function showKinds(kinds = []) {
@@ -40,8 +40,8 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     el("work-context").hidden = fresh;
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
-  function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
-    units.reset();
+  function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
+    if (!preserveUnits) units.reset();
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
@@ -160,7 +160,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       await refreshRequests(life);
       await channelRequestView.refresh();
     } catch (error) {
-      if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.");
+      if (life.current()) reset(error.status === 401 || error.status === 403 ? "작업 조회 권한을 확인하세요." : "작업 조회 실패 · 이전 목록을 사용할 수 없습니다.", true);
     } finally { inFlight = false; }
   }
   async function refreshRequests(life) {

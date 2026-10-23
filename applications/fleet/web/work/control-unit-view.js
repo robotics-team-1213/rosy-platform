@@ -6,7 +6,7 @@ const terminal = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED"]);
 const node = (tag, text, className) => Object.assign(document.createElement(tag),
   {textContent: text || "", ...(className ? {className} : {})});
 
-export function createControlUnitView({scope, call, parent, active, approveReason}) {
+export function createControlUnitView({scope, call, parent, active, approveReason, principal}) {
   const panel = node("section"), heading = node("h2", "관제 간 작업"), context = node("p"),
     state = node("p"), list = node("ul", "", "work-list"), notice = node("p");
   panel.id = "control-unit-work"; heading.id = "control-unit-heading";
@@ -38,13 +38,40 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
     node("p", "취소 요청은 실제 정지 확인과 별개입니다. 소유 관제의 작업 결과와 장치 근거를 확인하세요.", "hint"));
   parent.append(panel);
   let revision = 0, inFlight = false, busy = false, available = false, unit = null, identity = crypto.randomUUID();
+  let draft = null, draftKey = null;
+  function saveDraft() {
+    sessionStorage.setItem(draftKey, JSON.stringify(draft));
+  }
+  function draftControls() {
+    for (const field of Object.values(fields)) field.readOnly = Boolean(draft);
+  }
+  function loadDraft() {
+    const owner = principal();
+    if (!owner) throw new Error("named identity required");
+    const key = "rosy.control-unit.pending:" + JSON.stringify([owner, unit.unit_id]);
+    if (key === draftKey) return;
+    draftKey = key; draft = null;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key));
+      if (saved?.body && typeof saved.body.delegation_id === "string" && saved.body.goal
+          && typeof saved.body.target_unit === "string" && typeof saved.body.robot_id === "string") {
+        draft = saved; identity = saved.body.delegation_id;
+        for (const name of ["target_unit", "robot_id"]) fields[name].value = saved.body[name];
+        for (const name of ["x", "y", "yaw"]) fields[name].value = saved.body.goal[name];
+        notice.textContent = saved.confirmed ? "이전 요청을 복원했습니다. 새 의도는 새 요청 작성으로 시작하세요."
+          : "요청 결과 미확인 · 같은 요청을 다시 확인합니다.";
+      }
+    } catch { notice.textContent = "브라우저의 요청 저장 상태를 확인하세요."; }
+    draftControls();
+  }
   function reset() {
     revision++; available = false; unit = null; panel.hidden = true; list.replaceChildren(); notice.textContent = "";
     identity = crypto.randomUUID(); form.reset();
+    draft = null; draftKey = null; draftControls();
   }
   function controls() {
     guard(send, busy ? "요청 결과를 확인하고 있습니다" : !available ? "관제 연결을 확인하세요" : approveReason());
-    guard(fresh, busy ? "요청 결과를 확인하고 있습니다" : "");
+    guard(fresh, busy ? "요청 결과를 확인하고 있습니다" : draft && !draft.confirmed ? "미확인 요청의 원장을 먼저 확인하세요" : "");
   }
   async function change(path, body, message) {
     if (busy || !available || approveReason()) return;
@@ -52,7 +79,11 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
     notice.textContent = "요청 결과를 확인하고 있습니다.";
     try {
       await call(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-      life.check(); if (version === revision) notice.textContent = message;
+      life.check();
+      if (version === revision) {
+        if (path === "/api/fleet/control-unit/delegations" && draft) { draft.confirmed = true; saveDraft(); }
+        notice.textContent = message;
+      }
     } catch (error) {
       if (life.current() && version === revision) notice.textContent = error.status >= 400 && error.status < 500
         ? "요청이 거절됐습니다. 대상과 최신 원장을 확인하세요."
@@ -64,26 +95,38 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
   }
   scope.listen(send, "click", () => {
     if (!form.reportValidity()) return;
-    change("/api/fleet/control-unit/delegations", {delegation_id: identity,
+    if (!draft) draft = {confirmed: false, body: {delegation_id: identity,
       target_unit: fields.target_unit.value, robot_id: fields.robot_id.value,
-      goal: {x: Number(fields.x.value), y: Number(fields.y.value), yaw: Number(fields.yaw.value)}},
+      goal: {x: Number(fields.x.value), y: Number(fields.y.value), yaw: Number(fields.yaw.value)}}};
+    try { saveDraft(); } catch { notice.textContent = "요청 식별을 보존하지 못했습니다. 브라우저 저장 설정을 확인하세요."; return; }
+    draftControls(); controls();
+    change("/api/fleet/control-unit/delegations", draft.body,
     "요청을 접수했습니다. 최종 대상 관제에서 별도로 승인합니다.");
   });
   scope.listen(form, "submit", event => event.preventDefault());
-  scope.listen(fresh, "click", () => { if (!busy) { identity = crypto.randomUUID(); form.reset(); notice.textContent = "새 요청을 작성하세요."; } });
+  scope.listen(fresh, "click", () => {
+    if (busy || (draft && !draft.confirmed)) return;
+    try { if (draftKey) sessionStorage.removeItem(draftKey); } catch { return; }
+    draft = null; identity = crypto.randomUUID(); form.reset(); draftControls(); controls();
+    notice.textContent = "새 요청을 작성하세요.";
+  });
   function paint(replies) {
+    const focused = document.activeElement?.closest("[data-delegation-action]")?.dataset.delegationAction;
     list.replaceChildren(); list.hidden = !replies.length;
     state.textContent = replies.length ? `${replies.length}건 · 최근 위임 기록` : "관제 간 작업 요청이 없습니다.";
     for (const reply of replies) {
       const row = reply.delegation, item = node("li"), actions = node("div", "", "ui-actions");
       item.append(node("h3", `${row.request.target_unit} · ${row.request.robot_id}`),
         node("p", `요청 관제 ${row.origin_id} · 실행 담당 관제 ${row.owner_unit}`),
+        node("p", `목표 X ${row.request.goal.x} m · Y ${row.request.goal.y} m · 방향 ${row.request.goal.yaw} rad`),
+        node("p", `위임 ${row.origin_id} / ${row.delegation_id}`, "hint"),
         node("p", `${labels[row.status] || "상태 확인 필요"}${row.cancel_requested ? " · 취소 요청 전달 중" : ""}`),
         node("p", reply.stale ? "소유 관제 연결을 확인하세요 · 이전 결과입니다." :
           `원장 확인 ${new Date(row.updated_at).toLocaleString()}`, "hint"));
       const path = `/api/fleet/control-unit/delegations/${encodeURIComponent(row.origin_id)}/${encodeURIComponent(row.delegation_id)}`;
       if (row.request.target_unit === unit.unit_id && !row.local_task_id && !terminal.has(row.status)) {
         const approve = button("이 관제에서 승인", "primary");
+        approve.dataset.delegationAction = JSON.stringify([row.origin_id, row.delegation_id, "approve"]);
         guard(approve, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "취소 요청된 작업입니다" :
           busy ? "요청 결과를 확인하고 있습니다" : approveReason());
         approve.addEventListener("click", () => change(path + "/approve", {expected_revision: row.revision},
@@ -92,6 +135,7 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
       }
       if (!terminal.has(row.status)) {
         const cancel = button("취소 요청");
+        cancel.dataset.delegationAction = JSON.stringify([row.origin_id, row.delegation_id, "cancel"]);
         guard(cancel, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "소유 관제의 결과를 기다립니다" :
           busy ? "요청 결과를 확인하고 있습니다" : approveReason());
         cancel.addEventListener("click", () => change(path + "/cancel", {}, "취소를 요청했습니다. 소유 관제의 결과를 기다립니다."));
@@ -100,6 +144,7 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
       if (row.local_actor) item.append(node("p", `현장 승인 ${row.local_actor}`, "hint"));
       if (row.result?.task_id) item.append(node("p", `연결된 작업 ${row.result.task_id}`, "hint"));
       item.append(actions); list.append(item);
+      for (const action of actions.children) if (action.dataset.delegationAction === focused) action.focus({preventScroll: true});
     }
   }
   async function refresh() {
@@ -110,6 +155,14 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
       const result = await call("/api/fleet/control-unit/delegations"); life.check();
       if (version !== revision) return;
       unit = summary; available = true; panel.hidden = false;
+      loadDraft();
+      if (draft && !draft.confirmed) {
+        try {
+          await call(`/api/fleet/control-unit/delegations/${encodeURIComponent(unit.unit_id)}/${encodeURIComponent(identity)}`);
+          life.check(); if (version !== revision) return;
+          draft.confirmed = true; saveDraft(); notice.textContent = "같은 요청의 원장을 확인했습니다.";
+        } catch { life.check(); if (version !== revision) return; }
+      }
       context.textContent = `${unit.unit_id} · ${unit.parent ? "상위 관제 " + unit.parent : "독립 관제"} · 하위 관제 ${unit.children.join(", ") || "없음"}`;
       if (!fields.target_unit.value) fields.target_unit.value = unit.unit_id;
       paint(result.delegations); controls();
