@@ -4344,3 +4344,9 @@
 - 증거: guard 273 passed, 영향 범위 4,819 passed/219 skipped 및 6,228 passed/326 skipped, 브라우저 묶음 118 passed. 전체 Node wrapper도 별도 원격 실행에서 통과·skip0이다. 조사 상태 대기 1건은 단독 재검사 통과 후 공식 LOAD-FLAKY로 남았다. [통합 기록](../../docs/validation/fleet-account-visibility-2026-10-23/integration.md).
 - gate 변화: 없음. 동시 실행으로 공유 로그가 겹친 범위의 전체 합계는 주장하지 않으며, 실물·배포·현장 수용과 push는 수행하지 않았다.
 - CE: 해당 없음. 화면 준비 보완은 기존 helper로 설명되며, 남은 대기 불안정 원인은 해결된 교훈으로 기록하지 않는다.
+
+## 2026-10-23 · 56762a179e · 독립·중첩 관제 구성과 영속 위임 기반
+
+- 변경: 구성·직접 소유 검증과 영속 위임 identity·로컬 승인·owner 결과·취소 요청 기록을 추가했다. 기존 TaskStore admission transaction 안에서 위임과 작업을 함께 결속한다.
+- 증거: 구성·저장·결속·null 승인 RED/GREEN을 공식 원격 실행했다. 최종 세 파일 30 cases 종료 0, known failures 0 NEW. [검증 기록](../../docs/validation/control-unit-foundation-2026-10-23/result.md).
+- gate 변화: 없음. HTTP·화면·복구 종단·장치 수용은 후속이며 파이프라인 완성을 주장하지 않는다. CE 해당 없음: 검증한 판단은 코드·시험에 남는다.

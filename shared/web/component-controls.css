@@ -1,0 +1,41 @@
+/* Opt-in compositions. Existing controls retain their shared appearance and semantics. */
+.ui-control-stack { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
+.ui-control-stack > :is(h2, h3, p) { margin: 0; }
+.ui-field-error { color: var(--status-crit); font-size: var(--text-label); overflow-wrap: anywhere; }
+.ui-state-panel { display: grid; gap: var(--space-2); padding-block: var(--space-3); border-block: 1px solid var(--border-subtle); }
+.ui-state-panel > p { margin: 0; overflow-wrap: anywhere; }
+.ui-action-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ui-action-bar > ui-button { flex: 1 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.ui-action-bar > ui-button .ui-icon-label { white-space: normal; overflow-wrap: anywhere; }
+.ui-list-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; }
+.ui-list-toolbar > label { flex: 1 1 10rem; min-width: 0; }
+.ui-list-toolbar > ui-status { flex-basis: 100%; }
+.ui-pagination, .ui-selection-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.ui-pagination > span, .ui-selection-bar > ui-status { flex: 1; min-width: 0; }
+.ui-table-scroll { max-width: 100%; overflow-x: auto; }
+.ui-data-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ui-data-table caption { text-align: start; padding-block: var(--space-2); color: var(--text-secondary); font-size: var(--text-label); }
+.ui-data-table :is(th, td) { text-align: start; padding: var(--space-2); border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.ui-data-table th { font-size: var(--text-label); font-weight: var(--weight-strong); }
+.ui-data-table tr[aria-selected="true"] { background: var(--surface-raised); }
+.ui-primary-detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); min-width: 0; }
+.ui-primary-detail > section { min-width: 0; }
+.ui-primary-detail[data-open] { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.ui-primary-detail[data-open] > section + section { padding-inline-start: var(--space-4); border-inline-start: 1px solid var(--border-default); }
+.ui-tab-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ui-disclosure { min-width: 0; }
+.ui-disclosure > summary, .ui-log-view > summary { min-height: var(--target-secondary); display: list-item; align-content: center; cursor: pointer; }
+.ui-disclosure > :not(summary), .ui-log-view > :not(summary) { margin-block-start: var(--space-3); }
+.ui-supplement-panel { padding: var(--space-4); border: 1px solid var(--border-default); background: var(--surface-flat); }
+.ui-supplement-panel > h3 { margin-block-start: 0; }
+.ui-timeline { display: grid; gap: var(--space-3); padding-inline-start: var(--space-4); }
+.ui-timeline time, .ui-timeline li > span { display: block; font-size: var(--text-label); color: var(--text-secondary); }
+.ui-timeline p { margin-block: var(--space-2); }
+.ui-log-view pre { max-height: 20rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-label)/var(--leading-copy) var(--mono); }
+.ui-control-stack progress { inline-size: 100%; accent-color: var(--nominal); }
+.ui-control-stack progress:indeterminate { visibility: hidden; }
+@media (width < 64rem) {
+  .ui-primary-detail[data-open] { grid-template-columns: minmax(0, 1fr); }
+  .ui-primary-detail[data-open] > section:first-child { display: none; }
+  .ui-primary-detail[data-open] > section + section { padding-inline-start: 0; border-inline-start: 0; }
+}
