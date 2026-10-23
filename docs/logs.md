@@ -10092,6 +10092,12 @@ osy-d395-s1d\`.
 - 증거: 각 문서의 SHA·실패와 후속 통과·검토 범위·화면 해시 보관 위치를 유지한다. 새 main 통합의 결과는 별도 후속 기록으로 추가한다.
 - gate 변화: 없음. 이력 보존이며 장치·현장 수용이나 새 독립 검토를 뜻하지 않는다.
 
+## 2026-10-23 · uncommitted · D-855 관제 wire와 조건부 취소 계약
+
+- 변경: 관제 위임·owner 응답·하위 승인과 별도 navigation/cancel-scoped 계약을 API v1.297·공유 schema·D-855에 함께 기록했다. 기존 무조건 취소와 새 경로를 분리해 구버전 body 무시가 다른 목표를 취소하지 않게 한다.
+- 증거: 새 모델 원격 RED를 확인했다. schema/API와 모든 live-version pin은 하나의 공유 계약으로 변경해야 하므로 파일 수만 줄이기 위한 불완전한 버전 변경으로 나누지 않았다. 실제 runtime·종단·장치 수용은 후속이다.
+- gate 변화: 없음. D-851 전체를 일괄 Accepted로 바꾸지 않는다. CE 해당 없음: 새 계약과 회귀가 판단을 보존한다.
+
 ## 2026-10-24 · 1fd406e367 · Rosy Learning 제품 지도
 
 - 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md)를 추가했다. 정의, 사용자 네 역할, 공통 학습 루프 일곱 단계, 도메인×단계 현황, 현재 메뉴와 목표 메뉴(단계=메뉴, 도메인=필터), 우선순위 P0–P3, 모델 PC 인스턴스 여섯 개의 정리안, 결정할 것 여섯 가지.
@@ -10115,3 +10121,21 @@ osy-d395-s1d\`.
 - 변경: 사용자 결정으로 [PRODUCT.md 「Product Purpose」](../PRODUCT.md#product-purpose)에 목표(업무 앱이 플랫폼을 고치지 않고 로봇에 작업을 맡기는 범용 실행 플랫폼, 첫 적용 사례 Harbor)와 완료 조건 3개를 정본으로 적었다. README는 한 줄로 가리키고, handoff 1절의 구체 목표 셋은 능력 증명 마일스톤 둘로 바꾸고 Rosy Cell 팔레타이징은 Harbor 흐름에 흡수했다.
 - 증거: 2026-10-21 모듈 경계 합의와 2026-10-24 사용자 확인.
 - gate 변화: 없음. 목표 선언이며 기능 구현·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 장애 해결이 아닌 목표 문서 변경이다.
+
+## 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
+
+- 변경: `app-names-and-roles.md`에 외부 업무 앱 절을 추가해 Harbor(HarborLogi)를 등록하고 은퇴한 rosy-vault의 Rosy Vault·Rosy Device·device-core 행을 정리했다. README 문서 지도와 `docs/reference/AGENTS.md`에 `application-contract-support.md`를 색인하고 PRODUCT.md의 앱 구분 문장을 갱신했다.
+- 증거: 공개 팀 저장소 kernel-robot-repo-2의 README·CONTRIBUTING·platform-contract와 이 저장소의 D-806·D-836·지원 계약 표를 대조했다. Harbor가 쓰는 경로·권한은 지원 계약 표와 일치한다. 제품 코드·wire·권한은 바꾸지 않았다.
+- gate 변화: 없음. 문서 색인·카탈로그 등록이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음: 새 장애 해결이 아닌 문서 정리다.
+
+## 2026-10-24 · bd746466aa · 닫힌 VLM 질문 설계 교훈
+
+- 변경: [교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md) 추가 — 종류마다 yes/no, 사진 단위 평가셋, 모든 사람 대기열에 상한, 정답 전 답 분포 확인.
+- 증거: 다지선다 40/40 `wall`, 질문별 평가셋 합집합 132/135, 상한 없는 의견 갈림. 각각 고친 뒤 4/60, 보기당 30, 보기당 50·대기 수.
+- gate 변화: 없음. 애매한 질문(v3)은 확인 중이며 결과 후 덧붙인다.
+
+## 2026-10-24 · 1fd406e367 · D-857 Rosy Learning 제품 정의
+
+- 변경: [D-857](adr/D-857-rosy-learning-product-definition.md) Accepted(사용자 결정 6건): 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답, 사람 확인 한도 시작값, VLM 별도 평가 state. D-449·D-792·D-834에 개정 메모, `app-responsibilities.md` Learning 행 갱신.
+- 증거: Learning 관련 Proposed 20건 분류 — 대체 0, 일부 개정 4(D-449·D-792·D-834·D-853), 유지 9, 범위 밖 7. D-853 개정 메모는 그 ADR이 착지한 뒤 단다.
+- gate 변화: 없음. 코드·배포·인스턴스 퇴역은 별도 조각이다.
