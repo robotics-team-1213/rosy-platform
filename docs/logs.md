@@ -10061,3 +10061,9 @@ osy-d395-s1d\`.
 - 변경: [시크릿 스캔 교훈](solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)에 허용 단어는 같은 줄에 있어야 한다는 점(표 머리글만으로는 통과하지 않음)과 노트북에서 pytest 없이 확인하는 방법을 더했다.
 - 증거: vlm-question-bench 회차의 머리글만 적은 해시 표 9행이 `test_no_secrets_in_tracked_files`에서 걸렸고, 행마다 `sha256`을 적은 뒤 `scan_text`가 빈 목록을 냈다.
 - gate 변화: 없음.
+
+## 2026-10-23 · uncommitted · 독립·상하위 관제 상세 설계와 최종 목표 등록
+
+- 변경: D-851과 [상세 설계](plans/2026-10-23-composable-control-design.md)를 등록하고 기존 목표에 연결했다. 독립·3수준 중첩, 상태 정본·불변 위임 식별·하위 승인·단절 복구·배치·P0–P5 수용 기준을 구체화했다.
+- 증거: 독립 설계 검토 지적 4건을 수정하고 재검토에서 닫았다. 최종 커밋은 공식 착지 도구의 lint·원격 시험·known failures 비교 후 병합한다.
+- gate 변화: 없음. 세부 계약은 Proposed이며 기능 구현·API 개방·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 새 장애 해결이 아닌 구조 설계 기록이다.

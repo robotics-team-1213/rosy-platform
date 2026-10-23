@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 | Proposed (2026-10-23) |
 | D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 | Accepted (2026-10-23) |
 | D-846 | OMX Leader를 코드 구동 기준으로 삼는 두팔 파이프라인 | Accepted for implementation (2026-10-22) |
 | D-847 | OMX 팔로워 PWM 캡은 관절별로 둔다 | Accepted for implementation (2026-10-23) |
