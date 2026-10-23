@@ -17,7 +17,7 @@ import secrets
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 import cv2
 import numpy as np
@@ -72,8 +72,18 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, sim_runs=None):
+def check_link(url):
+    """--vlm-eval-url: an http(s) address without credentials, shown as a link only (D-857 §2)."""
+    parts = urlsplit(url)
+    if parts.scheme not in ('http', 'https') or not parts.hostname or parts.username or parts.password or len(url) > 300:
+        raise ValueError('--vlm-eval-url must be an http(s) address without credentials')
+    return url
+
+
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, sim_runs=None, vlm_eval_url=None):
     check_bind_host(host)
+    if vlm_eval_url is not None:
+        check_link(vlm_eval_url)
     if ai_jobs is not None and ai_jobs.store.db != store.db:
         raise ValueError('AI jobs must belong to the review workspace')
     collaboration = None
@@ -261,9 +271,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                         omx_reviewed, vlm_counts = learning_domains.stored(db)
                     domains = learning_domains.domains(
                         pipeline=pipeline, counts=counts, preparation=preparation, items=items,
-                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts)
+                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts, vlm_eval_url=vlm_eval_url)
                     return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
-                                      'pipeline': pipeline, 'domains': domains,
+                                      'pipeline': pipeline, 'domains': domains, 'vlm_eval_url': vlm_eval_url,
                                       'preparation': preparation,
                                       'control': control_status,
                                       'counts': counts,
@@ -455,6 +465,7 @@ def main():
     parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
     parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
     parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
+    parser.add_argument('--vlm-eval-url', help='link from 평가·승격 to a separate VLM evaluation state instance (D-857)')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -462,6 +473,11 @@ def main():
     args = parser.parse_args()
     if args.empty_eval and args.empty_training:
         parser.error('choose one empty workspace kind')
+    if args.vlm_eval_url:
+        try:
+            check_link(args.vlm_eval_url)
+        except ValueError as exc:
+            parser.error(str(exc))
     object_classes = None
     if args.object_classes:
         try:
@@ -495,7 +511,7 @@ def main():
     ai_jobs = Jobs(store, args.review_ai_config)
     sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
-                         storage=storage, ai_jobs=ai_jobs, sim_runs=sim_runs)
+                         storage=storage, ai_jobs=ai_jobs, sim_runs=sim_runs, vlm_eval_url=args.vlm_eval_url)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

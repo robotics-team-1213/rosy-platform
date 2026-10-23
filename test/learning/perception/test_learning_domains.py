@@ -58,12 +58,12 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
                          omx_reviewed=['a', 'zzz'], sim_runs={'runs': [
                              {'status': 'FAILED', 'updated_at': '2026-10-24T01:00:00'},
                              {'status': 'SUCCEEDED', 'updated_at': '2026-10-23T01:00:00'}]},
-                         vlm_counts={'total': 4, 'labelled': 1, 'excluded': 1}))
+                         vlm_counts={'total': 4, 'labelled': 1, 'excluded': 1, 'provisional': 1}))
     assert states(rows['object'])[:4] == ['done', 'active', 'blocked', 'not_available']
     assert rows['object']['stages'][1]['evidence'] == '객체 승인 2 · 대기 1 · 제외 0'
     assert rows['omx']['stages'][1]['evidence'] == '구간 검수 1/2' and states(rows['omx'])[2] == 'not_available'
     assert rows['sim']['stages'][0]['state'] == 'blocked' and '실험 2회 · 최근 FAILED' in rows['sim']['stages'][0]['evidence']
-    assert rows['vlm']['stages'][1]['evidence'] == '확정 1 · 대기 2'
+    assert rows['vlm']['stages'][1]['evidence'] == '확정 1 · 미확정 2 (임시 정답 1)'
     assert rows['vlm']['stages'][4]['state'] == 'done'
     failed = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'error': 'x'})))['sim']
     assert failed['blocked'] == 'SIM 실행 연결을 확인하세요.'

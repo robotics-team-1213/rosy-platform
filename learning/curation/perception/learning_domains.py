@@ -113,7 +113,7 @@ def vlm(counts, eval_url=None):
     total, labelled = counts['total'], counts['labelled']
     pending = total - labelled - counts['excluded']
     return {'collect': ('done', f'질문 사진 {total}장', None),
-            'label': ('active' if pending else 'done', f'확정 {labelled} · 대기 {pending}',
+            'label': ('active' if pending else 'done', f"확정 {labelled} · 미확정 {pending} (임시 정답 {counts['provisional']})",
                       go('VLM 정답 달기', '/learning/vlm') if pending else None),
             'dataset': ('not_available', 'VLM 정답은 평가용입니다(D-853).', None),
             'train': ('not_available', '질문·프롬프트 보정은 아직 화면 밖입니다.', None),
@@ -136,5 +136,12 @@ def stored(db):
         return reviewed, None
     status = ({row[0]: row[1] for row in db.execute('SELECT status, COUNT(*) FROM vlm_labels GROUP BY status')}
               if 'vlm_labels' in tables else {})
-    return reviewed, {'total': db.execute('SELECT COUNT(*) FROM vlm_items').fetchone()[0],
+    provisional = 0
+    if {'vlm_model_answers', 'vlm_labels', 'vlm_audits'} <= tables:
+        import vlm_judge  # only workspaces that hold VLM questions pay for the consensus
+        paused = {qid for qid, entry in vlm_judge.audits(db).items() if entry['paused']}
+        decided = {row[0] for row in db.execute('SELECT item FROM vlm_labels')}
+        provisional = sum(1 for item, answers in vlm_judge.provisional(db).items()
+                          if item not in decided and set(answers) - paused)
+    return reviewed, {'total': db.execute('SELECT COUNT(*) FROM vlm_items').fetchone()[0], 'provisional': provisional,
                       'labelled': status.get('labelled', 0), 'excluded': status.get('excluded', 0)}

@@ -2,6 +2,9 @@
 
 Labels are people's answers per photo. Model answers are stored beside them for evaluation and never fill,
 approve or change a label; nothing here is exported into perception training (D-475, D-514, D-542).
+D-857 §4-5: a model consensus is a *provisional* answer, derived on read and never stored; a person's answer is
+*confirmed*. People see only a small queue: a fixed evaluation set and disputed photos (both blind), plus a weekly
+audit of provisional answers (shown, 맞음/고침). Consensus never approves or promotes anything (D-514 §5, D-853 §3).
 Design: docs/plans/2026-10-23-vlm-fast-judge-design.md. Screen and routes: docs/review-app.md.
 
 CLI: python vlm_judge.py import --state <review-state> --rows <bench rows.jsonl>
@@ -10,6 +13,7 @@ questions.json is ``tools/vlm_question_bench.py --dump-questions`` output: {ques
 --model names the bench run (rows carry no model name); a row's long_side other than 0 is appended as @<px>.
 """
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -17,6 +21,11 @@ import re
 from pathlib import Path
 
 STATUSES = ('pending', 'labelled', 'excluded')
+# D-857 §5 start values, tuned in operation.
+CONSENSUS_MODELS, CONSENSUS_P = 2, 0.8  # distinct models that agree, each with p >= CONSENSUS_P
+EVAL_SET_SIZE, QUEUE_CAP, AUDIT_PER_WEEK = 30, 50, 10  # per view×question; open items per view; audits per view
+AUDIT_PAUSE_RATE, AUDIT_PAUSE_MIN = 0.10, 5  # pause a question's provisional answers above this audit error rate
+KINDS = ('eval', 'disputed', 'audit')
 RUNTIMES = (('answers', 'transformers'), ('ollama_questions', 'ollama'))
 CONTRADICTION = ('wrist.object_in_gripper', 'wrist.gripper_empty')
 IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png'}
@@ -46,7 +55,10 @@ def configure(store):
             actor TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
             CREATE TABLE IF NOT EXISTS vlm_label_events (
             id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP, item INTEGER, version INTEGER,
-            status TEXT, answers TEXT, actor TEXT);''')
+            status TEXT, answers TEXT, actor TEXT);
+            CREATE TABLE IF NOT EXISTS vlm_audits (
+            item INTEGER NOT NULL, question TEXT NOT NULL, week TEXT NOT NULL, provisional TEXT NOT NULL,
+            answer TEXT, actor TEXT, ts TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(item, question));''')
 
 
 def check_questions(questions):
@@ -185,6 +197,111 @@ SELECT = ('SELECT i.id, i.view, i.image_sha256, i.image_name, i.question_set, i.
           'l.status, l.version, l.actor, l.updated_at, l.answers FROM vlm_items i LEFT JOIN vlm_labels l ON l.item=i.id')
 
 
+def _base(model):
+    """Runtimes and long sides of one model are one opinion: the model name before '@'."""
+    return model.split('@', 1)[0]
+
+
+def provisional(db):
+    """{item: {question: answer}} where models agree (D-857 §4); derived on every read, never stored as truth."""
+    options = {row['id']: {q['id']: q['options'] for q in json.loads(row['questions'])}
+               for row in db.execute('SELECT id, questions FROM vlm_items')}
+    best = {}
+    for row in db.execute('SELECT item, model, question, answer, p FROM vlm_model_answers WHERE answer IS NOT NULL'):
+        p = json.loads(row['p'])[options[row['item']][row['question']].index(row['answer'])]
+        key = (row['item'], row['question'], _base(row['model']))
+        if key not in best or p > best[key][1]:  # the model's most confident runtime speaks for it
+            best[key] = (row['answer'], p)
+    votes, result = {}, {}
+    for (identifier, qid, _), pick in best.items():
+        votes.setdefault((identifier, qid), []).append(pick)
+    for (identifier, qid), picks in votes.items():
+        # Any model answering otherwise is a disagreement, however unsure it is.
+        if len({answer for answer, _ in picks}) == 1 and sum(p >= CONSENSUS_P for _, p in picks) >= CONSENSUS_MODELS:
+            result.setdefault(identifier, {})[qid] = picks[0][0]
+    return result
+
+
+def audits(db):
+    """{question: {n, errors, rate, paused}} over every audit so far (D-857 §5)."""
+    stats = {}
+    for row in db.execute('SELECT question, provisional, answer FROM vlm_audits'):
+        entry = stats.setdefault(row['question'], {'n': 0, 'errors': 0})
+        entry['n'] += 1
+        entry['errors'] += row['answer'] != row['provisional']
+    for entry in stats.values():
+        entry['rate'] = round(entry['errors'] / entry['n'], 4)
+        entry['paused'] = entry['n'] >= AUDIT_PAUSE_MIN and entry['errors'] / entry['n'] > AUDIT_PAUSE_RATE
+    return stats
+
+
+def week():
+    year, number, _ = datetime.date.today().isocalendar()
+    return f'{year}-W{number:02d}'
+
+
+def _rank(*parts):
+    return hashlib.sha256(':'.join(map(str, parts)).encode()).hexdigest()
+
+
+def _state(db):
+    """Rows, provisional answers that may be used (paused questions removed), audit stats and paused questions."""
+    rows = db.execute(SELECT + ' ORDER BY i.id').fetchall()
+    stats = audits(db)
+    paused = {qid for qid, entry in stats.items() if entry['paused']}
+    usable = {identifier: {qid: answer for qid, answer in answers.items() if qid not in paused}
+              for identifier, answers in provisional(db).items()}
+    return rows, usable, stats, paused
+
+
+def queue(store, view=None):
+    """What people see (D-857 §5): open photos of the fixed evaluation set, disputed photos and this week's audit."""
+    # shortcut: recomputed from all model answers on each read; cache by answer/label counts if it gets slow.
+    configure(store)
+    current = week()
+    with store.connect() as db:
+        rows, usable, _, paused = _state(db)
+        done = {row[0]: row[1] for row in db.execute(
+            'SELECT i.view, COUNT(DISTINCT a.item) FROM vlm_audits a JOIN vlm_items i ON i.id=a.item '
+            'WHERE a.week=? GROUP BY i.view', (current,))}
+    views, result, counts = {}, [], {}
+    for row in rows:
+        if not view or row['view'] == view:
+            views.setdefault(row['view'], []).append(row)
+    for name, group in sorted(views.items()):
+        questions = {row['id']: [q['id'] for q in json.loads(row['questions'])] for row in group}
+        kinds = {}
+        for qid in sorted({qid for ids in questions.values() for qid in ids}):
+            # Seeded order per question, taken round-robin over provisional answers so each answer is represented.
+            pools = {}
+            for row in sorted(group, key=lambda r: _rank('eval', qid, r['image_sha256'])):
+                if row['status'] != 'excluded' and qid in questions[row['id']]:
+                    pools.setdefault(usable.get(row['id'], {}).get(qid, ''), []).append(row)
+            order, picked = [pools[key] for key in sorted(pools)], 0
+            while picked < EVAL_SET_SIZE and any(order):
+                for pool in order:
+                    if pool and picked < EVAL_SET_SIZE:
+                        kinds.setdefault(pool.pop(0)['id'], 'eval')
+                        picked += 1
+        pending = [row for row in group if row['status'] is None]
+        for row in pending:
+            if row['id'] not in kinds and any(qid not in paused and qid not in usable.get(row['id'], {})
+                                              for qid in questions[row['id']]):
+                kinds[row['id']] = 'disputed'
+        opened = [row for row in pending if row['id'] in kinds]
+        room = max(0, min(AUDIT_PER_WEEK - done.get(name, 0), QUEUE_CAP - len(opened)))
+        candidates = [row for row in pending if row['id'] not in kinds
+                      and set(questions[row['id']]) <= set(usable.get(row['id'], {}))]
+        for row in sorted(candidates, key=lambda r: _rank('audit', current, r['image_sha256']))[:room]:
+            kinds[row['id']] = 'audit'
+            opened.append(row)
+        counts[name] = {kind: sum(kinds[row['id']] == kind for row in opened) for kind in KINDS}
+        result += [{'id': row['id'], 'view': name, 'image_name': row['image_name'], 'question_set': row['question_set'],
+                    'kind': kinds[row['id']]} for row in opened]
+    result.sort(key=lambda row: (KINDS.index(row['kind']), row['id']))
+    return {'items': result, 'counts': counts, 'paused': sorted(paused), 'week': current, 'cap': QUEUE_CAP}
+
+
 def items(store, view=None, status=None):
     """Item list for navigation; no questions, labels' answers or model answers."""
     configure(store)
@@ -211,8 +328,13 @@ def item(store, identifier):
     label = _label(row)
     if label['answers'] is None:
         label['answers'] = {q['id']: None for q in questions}
-    return {'id': row['id'], 'view': row['view'], 'image_sha256': row['image_sha256'],
-            'image_name': row['image_name'], 'question_set': row['question_set'], 'questions': questions, **label}
+    kind = next((entry['kind'] for entry in queue(store, row['view'])['items'] if entry['id'] == identifier), None)
+    result = {'id': row['id'], 'view': row['view'], 'image_sha256': row['image_sha256'], 'kind': kind,
+              'image_name': row['image_name'], 'question_set': row['question_set'], 'questions': questions, **label}
+    if kind == 'audit':  # only an audit shows the consensus; the evaluation set and disputed photos stay blind
+        with store.connect() as db:
+            result['provisional'] = provisional(db)[identifier]
+    return result
 
 
 def save(store, identifier, body, conflict, *, actor=None):
@@ -236,6 +358,10 @@ def save(store, identifier, body, conflict, *, actor=None):
             if (row['version'] if row else 0) != body['version']:
                 raise conflict('다른 사람이 먼저 저장했습니다. 다시 불러오세요.')
             version, answers = body['version'] + 1, json.dumps(body['answers'], ensure_ascii=False)
+            if current['kind'] == 'audit' and body['status'] == 'labelled':  # 맞음 or 고침 of a shown consensus
+                for qid, value in current['provisional'].items():
+                    db.execute('INSERT OR REPLACE INTO vlm_audits (item, question, week, provisional, answer, actor) '
+                               'VALUES (?,?,?,?,?,?)', (identifier, qid, week(), value, body['answers'][qid], actor))
             db.execute('INSERT OR REPLACE INTO vlm_labels (item, answers, status, version, actor, updated_at) '
                        'VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)', (identifier, answers, body['status'], version, actor))
             db.execute('INSERT INTO vlm_label_events (item, version, status, answers, actor) VALUES (?,?,?,?,?)',
@@ -270,12 +396,20 @@ def summary(store):
 
 
 def evaluation(store):
-    """Agreement with people on labelled photos only. Agreement is a measurement, never an approval."""
+    """Agreement with confirmed (human) answers only, plus provisional coverage and audits; never an approval."""
     configure(store)
     with store.connect() as db:
         rows = db.execute(SELECT + " WHERE l.status='labelled'").fetchall()
         answers = db.execute("SELECT a.* FROM vlm_model_answers a JOIN vlm_labels l ON l.item=a.item "
                              "WHERE l.status='labelled' ORDER BY a.model, a.runtime, a.question").fetchall()
+        everything, usable, stats, paused = _state(db)
+    coverage = {}
+    for row in everything:
+        if row['status'] is None:
+            for question in json.loads(row['questions']):
+                entry = coverage.setdefault((row['question_set'], question['id']), {'pending': 0, 'provisional': 0})
+                entry['pending'] += 1
+                entry['provisional'] += question['id'] in usable.get(row['id'], {})
     truth = {row['id']: json.loads(row['answers']) for row in rows}
     meta = {row['id']: (row['question_set'], {q['id']: q for q in json.loads(row['questions'])}) for row in rows}
     human = {}
@@ -310,19 +444,35 @@ def evaluation(store):
             'confusion': {h: {m: sum(p == (h, m) for p in pairs) for m in options} for h in options}})
     return {'labelled': len(rows), 'models': list(models.values()),
             'human': [{'question_set': key[0], 'question': key[1], 'n': value['n'],
-                       'unclear_rate': round(value['unclear'] / value['n'], 4)} for key, value in sorted(human.items())]}
+                       'unclear_rate': round(value['unclear'] / value['n'], 4)} for key, value in sorted(human.items())],
+            'provisional': [{'question_set': key[0], 'question': key[1], **value,
+                             'coverage': round(value['provisional'] / value['pending'], 4)}
+                            for key, value in sorted(coverage.items())],
+            'audits': [{'question': qid, **entry} for qid, entry in sorted(stats.items())], 'paused': sorted(paused)}
 
 
 def export(store):
-    """Decided labels as JSONL with its sha256; pending photos are not truth and are left out."""
+    """JSONL with its sha256: decided photos (answers tier `confirmed`) and undecided photos with a usable model
+    consensus (status and tier `provisional`). Every answer names its tier; only `confirmed` is truth (D-857 §4)."""
     configure(store)
     with store.connect() as db:
-        rows = db.execute(SELECT + " WHERE l.status IN ('labelled','excluded') ORDER BY i.id").fetchall()
-    text = ''.join(json.dumps({'image_sha256': row['image_sha256'], 'view': row['view'],
-                               'question_set': row['question_set'], 'answers': json.loads(row['answers']),
-                               'status': row['status'], 'actor': row['actor'], 'version': row['version']},
-                              ensure_ascii=False, sort_keys=True) + '\n' for row in rows)
-    return {'count': len(rows), 'sha256': sha(text.encode('utf-8')), 'jsonl': text}
+        rows, usable, _, _ = _state(db)
+    lines = []
+    for row in rows:
+        if row['status'] in ('labelled', 'excluded'):
+            answers, tier, status = json.loads(row['answers']), 'confirmed', row['status']
+        elif usable.get(row['id']):
+            answers = {q['id']: usable[row['id']].get(q['id']) for q in json.loads(row['questions'])}
+            tier, status = 'provisional', 'provisional'
+        else:
+            continue
+        lines.append(json.dumps({'image_sha256': row['image_sha256'], 'view': row['view'],
+                                 'question_set': row['question_set'], 'answers': answers, 'status': status,
+                                 'tiers': {qid: None if value is None else tier for qid, value in answers.items()},
+                                 'actor': row['actor'], 'version': row['version'] or 0},
+                                ensure_ascii=False, sort_keys=True) + '\n')
+    text = ''.join(lines)
+    return {'count': len(lines), 'sha256': sha(text.encode('utf-8')), 'jsonl': text}
 
 
 def main(argv=None):
