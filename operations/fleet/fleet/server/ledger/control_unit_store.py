@@ -149,17 +149,20 @@ class ControlUnitStore:
                 return self._document(row)
             return self._update(connection, row, {"local_actor": actor_id, "status": "APPROVING"}, "APPROVED")
 
-    def bind_task(self, origin_id, delegation_id, *, task_id):
-        _identifier(task_id, limit=128)
-        with self._transaction() as connection:
+    def task_admission(self, origin_id, delegation_id, *, actor_id):
+        """Bind inside FleetTaskStore.create_task's transaction, before dispatch."""
+        def bind(connection, task_id):
             row = self._read(connection, origin_id, delegation_id)
-            if not row["local_actor"] or row["owner_unit"] != self.unit_id:
+            if row["local_actor"] != actor_id or row["owner_unit"] != self.unit_id:
                 raise ValueError("LOCAL_APPROVAL_REQUIRED")
             if row["local_task_id"] == task_id:
-                return self._document(row)
+                return
             if row["local_task_id"]:
                 raise ValueError("LOCAL_TASK_IDENTITY_CONFLICT")
-            return self._update(connection, row, {"local_task_id": task_id}, "TASK_BOUND")
+            if row["cancel_requested"] or row["status"] in TERMINAL:
+                raise ValueError("LOCAL_APPROVAL_REFUSED")
+            self._update(connection, row, {"local_task_id": task_id}, "TASK_BOUND")
+        return bind
 
     def request_cancel(self, origin_id, delegation_id):
         with self._transaction() as connection:
