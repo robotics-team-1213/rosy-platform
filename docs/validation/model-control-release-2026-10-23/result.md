@@ -16,6 +16,8 @@
 
 시험 명령은 아래와 같다. 로그는 저장소 밖 `<scratch>/rosy-model-control-release/targeted/run-1.txt`에 보존하며 known_failures와 비교한다.
 
+`f33869fbc0`의 공개 guard는 357 passed/1 failed였다. 실행부 814줄의 부모 합산으로 이미 한도를 넘은 Fleet 부모가 13,351→14,165줄이 된 것이 원인이었다. 제한을 높이는 대신 선행 PR #169에서 기존 Python 서버 패키지를 독립 측정 단위로 등록했다. 서버 9,792줄, Fleet 부모 3,559줄이며 전체 측정 264,701줄과 측정 파일 집합은 동일하다. 원격 구조·harness 140 passed와 native pre-push 519+123 passed/NEW0, GitHub CI `39972660344`의 scope·affected 두 묶음·build-smoke·ci-result가 모두 성공한 뒤 `e3bb7aa395`로 squash 병합했다. 이 변경을 본 브랜치에 merge하여 부모의 증가 금지를 지켰다. 검사 로직·상한·예외는 수정하지 않았다.
+
 ```text
 python tools/remote/remote_pytest.py --sha 2697d56dc1 --log-dir <scratch>/rosy-model-control-release/targeted -- test/test_process_submission_installed.py test/test_remaining_platform_installed.py test/test_inference_result_contract.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_mission_progress.py operations/fleet/test/test_cell_compiler.py test/test_platform_cell_submission.py
 ```
