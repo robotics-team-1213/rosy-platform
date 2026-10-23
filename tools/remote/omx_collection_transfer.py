@@ -53,7 +53,7 @@ def verify_tree(root):
     manifest = json.loads(raw, object_pairs_hook=unique)
     if (not isinstance(manifest, dict) or manifest.get('schema') != 'rosy.omx-collection-session.v1'
             or manifest.get('state') != 'CLOSED' or manifest.get('mode') != 'hardware'
-            or manifest.get('source_mode') != 'scripted_teacher'):
+            or manifest.get('source_mode') not in ('scripted_teacher', 'leader_native')):
         raise ValueError('closed hardware collection manifest required')
     files = manifest.get('files')
     if not isinstance(files, dict) or not files or 'manifest.json' in files:
