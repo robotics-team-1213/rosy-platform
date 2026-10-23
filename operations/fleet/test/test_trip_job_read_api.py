@@ -44,7 +44,7 @@ def client_for(tmp_path, *, profile="simulation"):
 
 def create(rows, *, key=KEY):
     digest = sha256(json.dumps({"candidates": [ROBOT], "steps": STEPS}, sort_keys=True,
-                               separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+                               separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
     return rows.create("transport-job", ROBOT, "owner", STEPS,
                        request_key="trip-pool:" + key, request_digest=digest)
 

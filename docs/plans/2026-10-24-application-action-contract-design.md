@@ -56,6 +56,8 @@ P1에서 발견한 누락은 TRIP job의 공개 단건/요청-key 조회다. 현
 
 ## 구현과 검증
 
+Harbor의 새 내부 소비자는 `TripIntent(request_key, candidates, destination, via=())`와 `TransportLedger(path)`다. 후자는 기존 업무 DB에 이송 의도·Fleet 참조 전용 표를 추가하며 실행 상태의 별도 정본이 아니다. `prepare(intent)`로 원본 key/body를 보존하고 `submit(key, client, operator_confirmed=True)`는 명시적인 운영자 동의 뒤 딱 한 번 POST한다. 접수 불명·재시작은 UNCERTAIN이며 `reconcile(key, client)`의 GET 대조만 허용한다. ACKNOWLEDGED는 일치하는 Fleet 참조를 읽었다는 뜻이고 업무 완료가 아니다. 한 장부는 같은 Fleet origin/principal 설정에만 사용하며 앱의 화물·공급암 퇴피 조건은 호출자가 먼저 확인한다. 첫 simulation 예제는 화물 없는 운송 검증이며 S 출발 gate를 대체하지 않는다.
+
 1. `contracts/foundation/core_common/protocol/trip_jobs.py`에 snapshot/step/read response와 query-key validation 타입을 추가하고 `schemas.py`에서 재수출한다. API 버전은 적용 직전 기존 관문으로 선점한다.
 2. `TripJobRows.read(principal_id, *, mission_id=None, request_key=None)`는 하나의 읽기 transaction으로 해당 소유자·TRIP 전용 행을 확인하고 중립 projection을 반환한다. 정확히 하나의 조회 identity만 받는다. 기존 DB를 재사용하며 새 테이블·migration을 만들지 않는다.
 3. `trip_job_routes.py`에 읽기 두 경로를 설치한다. profile gate 밖에서 read를 설치하되 closed profile의 기존 HOLD 복구와 write route 설치 조건을 바꾸지 않는다. SQLite 읽기는 `asyncio.to_thread`로 실행한다.
