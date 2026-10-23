@@ -1,6 +1,7 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
 import { createNode } from "/assets/dom.js";
+import { createFormErrors } from "/common/form-controls.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 export function mount(el, ctx) {
@@ -8,6 +9,7 @@ export function mount(el, ctx) {
   const help = createNode("p", "", "현재 위치를 웨이포인트로 저장합니다. 위치 정보가 들어오면 저장할 수 있습니다.");
   const form = createNode("form", "ui-form");
   const input = createNode("input", "ui-field");
+  input.id = "waypoint-panel-name";
   input.name = "name";
   input.maxLength = 64;
   input.autocomplete = "off";
@@ -18,6 +20,9 @@ export function mount(el, ctx) {
   save.type = "submit";
   save.textContent = "현재 위치 저장";
   save.disabled = true;
+  const errorSummary = createNode("div");
+  errorSummary.hidden = true;
+  const errors = createFormErrors(form, errorSummary);
   const message = document.createElement("p");
   message.setAttribute("role", "status");
   message.textContent = "현재 위치의 최신 상태를 기다리는 중입니다.";
@@ -78,8 +83,9 @@ export function mount(el, ctx) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (pending) return;
+    errors.clear();
     const name = input.value.trim();
-    if (!name) { setStatus(saveStatus, "이름을 입력하세요."); input.focus(); return; }
+    if (!name) { errors.show({name: "이름을 입력하세요."}); return; }
     if (!poseReady()) {
       setStatus(saveStatus, "현재 위치가 최신이 아니어서 저장을 막았습니다.");
       return;
@@ -100,7 +106,7 @@ export function mount(el, ctx) {
       setStatus(saveStatus, `저장하지 못했습니다: ${error.message}`);
     } finally { pending = false; syncSave(); }
   });
-  form.append(input, save);
+  form.append(errorSummary, input, save);
   el.append(head, help, form, message, saveStatus, listStatus, list, emptyNote);
-  return () => { stopState(); stopWaypoints(); };
+  return () => { errors.clear(); stopState(); stopWaypoints(); };
 }
