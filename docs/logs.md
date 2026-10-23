@@ -10079,3 +10079,8 @@ osy-d395-s1d\`.
 - 변경: 관제 위임·owner 응답·하위 승인과 별도 navigation/cancel-scoped 계약을 API v1.297·공유 schema·D-855에 함께 기록했다. 기존 무조건 취소와 새 경로를 분리해 구버전 body 무시가 다른 목표를 취소하지 않게 한다.
 - 증거: 새 모델 원격 RED를 확인했다. schema/API와 모든 live-version pin은 하나의 공유 계약으로 변경해야 하므로 파일 수만 줄이기 위한 불완전한 버전 변경으로 나누지 않았다. 실제 runtime·종단·장치 수용은 후속이다.
 - gate 변화: 없음. D-851 전체를 일괄 Accepted로 바꾸지 않는다. CE 해당 없음: 새 계약과 회귀가 판단을 보존한다.
+## 2026-10-23 · 56762a179e · 관제 구성·영속 위임 기반 검증 기록
+
+- 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
+- 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
+- gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
