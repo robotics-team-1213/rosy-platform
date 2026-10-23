@@ -83,3 +83,32 @@ def test_missing_scope_and_read_only_credentials_cannot_cancel(navigation):
     assert invalid.json()["error"]["code"] == "VALIDATION_ERROR"
     assert client.post("/api/v1/navigation/cancel-scoped", headers=VIEWER, json=scope).status_code == 403
     assert executor.cancelled == 0
+
+
+def test_successful_old_cancel_cannot_halt_a_replacement_run_or_trip_lease(navigation, monkeypatch):
+    client, services, executor = navigation
+    scope = goal(client, services, "old-attempt")
+    original_cancel = services.nav.cancel
+    replacement = []
+
+    def cancel_then_admit_replacement(*args, **kwargs):
+        canceled = original_cancel(*args, **kwargs)
+        if canceled and not replacement:
+            replacement.append(True)
+            services.trip_lease.open(lease_id="replacement-lease", trip_id="replacement-trip",
+                                    holder="other-fleet", operator_name="other-operator",
+                                    ttl_s=5, owner_id="replacement-owner")
+            spec = services.nav.resolve_goal(x=2.0, y=0.0, yaw=0.0, waypoint=None)
+            services.nav.goal(spec, source="replacement-owner", correlation_id="new-attempt")
+            services.nav.on_goal_accepted()
+        return canceled
+
+    monkeypatch.setattr(services.nav, "cancel", cancel_then_admit_replacement)
+    response = client.post("/api/v1/navigation/cancel-scoped", headers=OPERATOR, json=scope)
+    assert response.status_code == 200, response.text
+    assert response.json()["operation"]["run_id"] == scope["run_id"]
+    assert executor.cancelled == 1
+    assert services.nav.native.current.correlation_id == "new-attempt"
+    assert services.nav.native.current.phase != "TERMINAL"
+    assert services.trip_lease.current()["lease_id"] == "replacement-lease"
+    assert response.json()["navigation"] == services.nav.nav_state.value

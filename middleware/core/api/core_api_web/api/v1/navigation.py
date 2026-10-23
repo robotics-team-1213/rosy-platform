@@ -118,7 +118,7 @@ def navigation_cancel_scoped(body: ScopedNavigationCancelRequest,
                               receipt_sink=receipt.append)
     if not canceled:
         raise ApiError("NAVIGATION_SCOPE_CHANGED", 409, "the exact active navigation owner has changed")
-    stop_ends_trip_lease(svc, auth)
+    # Ending a current trip lease here could halt a replacement run admitted after this exact cancel.
     return {"navigation": svc.nav.nav_state.value,
             "operation": receipt[0].model_dump(mode="json") if receipt else None}
 
