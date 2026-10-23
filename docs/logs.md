@@ -10043,3 +10043,9 @@ osy-d395-s1d\`.
 - 변경: [`tools/vlm_question_bench.py`](../tools/vlm_question_bench.py)를 추가했다(전처리, 사진 prefix 1회, 질문별 선택지 토큰 확률, 캐시·전체 forward 비교, Ollama 비교). [벤치 기록](validation/vlm-question-bench-2026-10-23/result.md)과 설계·실험 계획의 실행기·질문 규칙을 갱신했다.
 - 증거: 모델 PC에서 Qwen3-VL-8B(nf4)·Qwen3-VL-4B·Qwen3.5-4B, front·top·wrist 40장씩. Ollama 0.35.1 확률 읽기로 질문 전부 p50 0.10–0.18 s, 현행 설명 호출 1회 p50 1.66–1.87 s. 사람 정답 전이라 정확도는 미판정이다.
 - gate 변화: 없음. 운영 `vision.py`·AI PC·로봇은 바꾸지 않았다.
+
+## 2026-10-23 · 2df7fdcc35 · 해시 표의 시크릿 스캔 교훈 보강
+
+- 변경: [시크릿 스캔 교훈](solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)에 허용 단어는 같은 줄에 있어야 한다는 점(표 머리글만으로는 통과하지 않음)과 노트북에서 pytest 없이 확인하는 방법을 더했다.
+- 증거: vlm-question-bench 회차의 머리글만 적은 해시 표 9행이 `test_no_secrets_in_tracked_files`에서 걸렸고, 행마다 `sha256`을 적은 뒤 `scan_text`가 빈 목록을 냈다.
+- gate 변화: 없음.
