@@ -10103,3 +10103,9 @@ osy-d395-s1d\`.
 - 변경: 공통 라이브러리·Fleet 적용·Robot 폼 적용을 분리해 main에 반영하고 [통합 기록](validation/shared-component-kit-2026-10-23/2026-10-24-local-integration.md)에 SHA와 검증 범위를 묶었다.
 - 증거: 각 착지의 브라우저 1,292·527·253 passed, 모두 skip 0/0 NEW. 같은 최종 실행 SHA의 캡처 회귀 407 passed/1 native export skipped와 전체 Robot UI 셸 1 passed, 새 PNG 36장 원격·회수 SHA-256 일치를 확인했다. 실행 자산 19개·핵심 시험 4개는 기존 최종 검증본과 같은 Git 내용이다.
 - gate 변화: 없음. push·배포·실물·실제 사용자 과업 수용은 미실시다. CE 미해결: 작업 공간은 복구했으나 외부 제거 원인은 확인하지 못해 관측·가설·다음 확인을 작업 기록에 남겼다.
+
+## 2026-10-24 · 2d9acbfa51 · UI 통합 근거 JSON 형식 정정
+
+- 변경: [정정 기록](validation/shared-component-kit-2026-10-23/2026-10-24-manifest-format-correction.md)에 원본 manifest의 패치 표시 문자 오류와 v2 위치·해시를 추가했다. 기존 동결 기록·원본 파일을 보존한다.
+- 증거: 문자 1개만 제거됐고 v2 JSON 파싱·근거 파일 71개의 SHA-256 대조를 통과했다. 실행 코드와 앞선 시험·캡처의 근거를 그대로 확인했다.
+- gate 변화: 없음. UI 구현과 호스트 검증 범위는 통합 기록을 따르며 작업 공간 제거의 CE 미해결 상태도 유지한다.

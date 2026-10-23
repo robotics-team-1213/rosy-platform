@@ -349,8 +349,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 2d9acbfa51 · UI 통합 근거 JSON 형식 정정
 - 2026-10-24 · 2d9acbfa51 · 공통 UI 부품과 Fleet·Robot 로컬 통합 검증
 - 2026-10-24 · 1fd406e367 · Rosy Learning 제품 지도
 - 2026-10-23 · uncommitted · 공통 UI 부품 구현 검증 이력 보존
 - 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
-- 2026-10-23 · 56762a179e · 관제 구성·영속 위임 기반 검증 기록
