@@ -362,3 +362,80 @@ def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
         assert vlm['stages'][1]['evidence'] == '확정 0 · 미확정 3 (임시 정답 3)'
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+# D-857 §4: an offline debate round re-asks a model on disputed questions; its answer stays provisional.
+def test_export_disputes_lists_only_disputed_unpaused_questions_with_every_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
+    store = consensus_store(tmp_path, 40, models=(('m1', 'transformers', 0.9), ('m2', 'transformers', 0.6),
+                                                  ('m2', 'ollama', 0.55)))
+    lines = vlm_judge.disputes(store)  # also freezes the evaluation set
+    with store.connect() as db:
+        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
+    outside = sorted(set(range(1, 41)) - frozen)
+    assert [line['item'] for line in lines] == outside and len(outside) == 10
+    first = lines[0]
+    assert first['answers'] == [{'model': 'm1', 'runtime': 'transformers', 'answer': first['answers'][0]['answer'], 'p': 0.9},
+                                {'model': 'm2', 'runtime': 'transformers', 'answer': first['answers'][0]['answer'], 'p': 0.6}]
+    assert first['options'] == ['yes', 'no', 'unclear'] and first['image'].endswith(f"{first['item']:064x}.jpg")
+    with store.connect() as db:  # one photo reaches consensus, one is decided by a person
+        put(db, outside[0], 'm2', 'transformers', first['answers'][0]['answer'], 0.85)
+    label(store, outside[1], **{HELD: 'no'})
+    assert [line['item'] for line in vlm_judge.disputes(store)] == outside[2:]
+    with store.connect() as db:  # a paused question is not debated
+        db.executemany('INSERT INTO vlm_audits (item, question, week, provisional, answer) VALUES (?,?,?,?,?)',
+                       [(n, HELD, '2026-W43', 'yes', 'no') for n in range(1, 6)])
+    assert vlm_judge.disputes(store) == []
+
+
+def test_debate_import_replaces_the_same_models_runtimes_and_never_adds_a_model(tmp_path):
+    store, body = open_store(tmp_path), bench(tmp_path, ROWS)
+    vlm_judge.import_rows(store, body)
+    vlm_judge.import_rows(store, dict(body, model='other-model'))
+    photo = store.state / 'vlm' / 'images' / (vlm_judge.item(store, 1)['image_sha256'] + '.jpg')
+    empty = 'wrist.gripper_empty'
+
+    def argue(model, value, extra=None):
+        rows = tmp_path / 'debate.jsonl'
+        p = {'yes': [0.9, 0.05, 0.05], 'no': [0.05, 0.9, 0.05]}[value]
+        rows.write_text(json.dumps({'frame': str(photo), 'view': 'wrist', 'long_side': 0, 'debate_round': 1,
+                                    'debate': {empty: {'answer': value, 'p': p}, **(extra or {})}}) + '\n')
+        return vlm_judge.import_rows(store, dict(body, rows_path=str(rows), model=model))
+
+    assert argue('qwen3-vl-8b', 'yes')['answers_added'] == 1
+    second = argue('qwen3-vl-8b', 'no')
+    assert (second['items_added'], second['items_existing'], second['answers_added']) == (0, 1, 1)
+    with store.connect() as db:
+        rows = db.execute("SELECT answer FROM vlm_model_answers WHERE item=1 AND runtime='debate'").fetchall()
+        assert [row[0] for row in rows] == ['no']  # round 2 replaced round 1
+        picks = vlm_judge._picks(db)[(1, empty)]
+        assert set(picks) == {'qwen3-vl-8b', 'other-model'} and picks['qwen3-vl-8b'][1:3] == ('debate', 'no')
+        # The ollama runtime also said no; one model with two runtimes and a debate is still one vote.
+        assert 1 not in vlm_judge.provisional(db)
+    argue('other-model', 'no')
+    debated = set()
+    with store.connect() as db:
+        assert vlm_judge.provisional(db, debated)[1] == {empty: 'no'} and debated == {(1, empty)}
+    with pytest.raises(ValueError, match='question set'):
+        argue('other-model', 'no', {'front.lane_tape': {'answer': 'both', 'p': [1, 0, 0, 0]}})
+    bare = tmp_path / 'bare.jsonl'
+    bare.write_text(json.dumps({'frame': str(photo), 'view': 'wrist', 'long_side': 0}) + '\n')
+    with pytest.raises(ValueError, match='no model answers'):
+        vlm_judge.import_rows(store, dict(body, rows_path=str(bare)))
+
+
+def test_debate_consensus_moves_a_photo_out_of_the_disputed_queue(tmp_path, monkeypatch):
+    monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
+    store = consensus_store(tmp_path, 40, models=(('m1', 'transformers', 0.9), ('m2', 'transformers', 0.6)))
+    before = vlm_judge.queue(store)
+    disputed = [row['id'] for row in before['items'] if row['kind'] == 'disputed']
+    assert len(disputed) == 10
+    with store.connect() as db:
+        put(db, disputed[0], 'm2', 'debate', 'yes' if disputed[0] % 2 else 'no', 0.85)
+        put(db, disputed[1], 'm2', 'debate', 'unclear', 0.95)  # a debate that still disagrees keeps it disputed
+    after = vlm_judge.queue(store)
+    assert [row['id'] for row in after['items'] if row['kind'] == 'disputed'] == disputed[1:]
+    assert any(row['id'] == disputed[0] for row in after['items'] if row['kind'] == 'audit') or \
+        disputed[0] not in [row['id'] for row in after['items']]
+    coverage = vlm_judge.evaluation(store)['provisional'][0]
+    assert (coverage['provisional'], coverage['debate']) == (1, 1)

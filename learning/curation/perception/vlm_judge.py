@@ -9,6 +9,10 @@ Design: docs/plans/2026-10-23-vlm-fast-judge-design.md. Screen and routes: docs/
 
 CLI: python vlm_judge.py import --state <review-state> --rows <bench rows.jsonl>
      --questions <questions.json> --model <model name>
+     python vlm_judge.py export-disputes --state <review-state> --out <debate.jsonl>
+Debate (D-857 §4): export-disputes lists disputed (photo, question) pairs with every model's current answer;
+``tools/vlm_question_bench.py --debate-input`` re-asks one model offline on the model PC (D-459: this app never
+calls a model) and its rows' ``debate`` block imports as runtime ``debate`` of the same model name.
 questions.json is ``tools/vlm_question_bench.py --dump-questions`` output: {question_set, questions}.
 --model names the bench run (rows carry no model name); a row's long_side other than 0 is appended as @<px>.
 """
@@ -26,7 +30,7 @@ CONSENSUS_MODELS, CONSENSUS_P = 2, 0.8  # distinct models that agree, each with 
 EVAL_SET_SIZE, QUEUE_CAP, AUDIT_PER_WEEK = 30, 50, 10  # items per view (frozen); open disputed+audit per view; audits
 AUDIT_PAUSE_RATE, AUDIT_PAUSE_MIN = 0.10, 5  # pause a question's provisional answers above this audit error rate
 KINDS = ('eval', 'disputed', 'audit')
-RUNTIMES = (('answers', 'transformers'), ('ollama_questions', 'ollama'))
+RUNTIMES = (('answers', 'transformers'), ('ollama_questions', 'ollama'), ('debate', 'debate'))
 CONTRADICTION = ('wrist.object_in_gripper', 'wrist.gripper_empty')
 IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png'}
 ROWS_LIMIT, IMAGE_LIMIT, ITEM_LIMIT = 64 * 1024 * 1024, 32 * 1024 * 1024, 20000
@@ -85,17 +89,22 @@ def check_questions(questions):
 
 def _model_answers(row, view_questions, model):
     found = []
+    ids = {q['id'] for q in view_questions}
     for key, runtime in RUNTIMES:
         block = row.get(key)
-        if block is None and runtime == 'ollama':
+        if block is None:
             continue
         answers = block.get('answers') if runtime == 'ollama' and isinstance(block, dict) else block
-        if not isinstance(answers, dict) or set(answers) != {q['id'] for q in view_questions}:
+        # A debate re-asks only a photo's disputed questions; the other runtimes answer the whole set.
+        if (not isinstance(answers, dict) or not answers
+                or (not set(answers) <= ids if runtime == 'debate' else set(answers) != ids)):
             raise ValueError(f'{key} must answer exactly the question set of view {row["view"]!r}')
         for question in view_questions:
+            if question['id'] not in answers:
+                continue
             entry = answers[question['id']]
             answer = entry.get('answer') if isinstance(entry, dict) else None
-            if runtime == 'ollama' and answer == 'none_in_top':
+            if runtime in ('ollama', 'debate') and answer == 'none_in_top':
                 answer = None  # no option among Ollama's top tokens; counted as missing, never as an option
             elif answer not in question['options']:
                 raise ValueError(f'{question["id"]} answer {answer!r} is not one of its options')
@@ -104,6 +113,8 @@ def _model_answers(row, view_questions, model):
                     or any(type(x) not in (int, float) or not 0 <= x <= 1 for x in p)):
                 raise ValueError(f'{question["id"]} needs one probability per option')
             found.append((model, runtime, question['id'], answer, json.dumps(p)))
+    if not found:
+        raise ValueError(f'row of view {row["view"]!r} carries no model answers')
     return found
 
 
@@ -176,9 +187,9 @@ def import_rows(store, body):
             else:
                 item = row['id']
                 existing += 1
-            for value in found:
-                answers += db.execute('INSERT OR IGNORE INTO vlm_model_answers VALUES (?,?,?,?,?,?)',
-                                      (item, *value)).rowcount
+            for value in found:  # a later debate round replaces the earlier one; other runtimes are kept once
+                verb = 'INSERT OR REPLACE' if value[1] == 'debate' else 'INSERT OR IGNORE'
+                answers += db.execute(f'{verb} INTO vlm_model_answers VALUES (?,?,?,?,?,?)', (item, *value)).rowcount
     return {'items_added': added, 'items_existing': existing, 'answers_added': answers,
             'rows_sha256': sha(raw)}
 
@@ -204,24 +215,60 @@ def _base(model):
     return model.split('@', 1)[0]
 
 
-def provisional(db):
-    """{item: {question: answer}} where models agree (D-857 §4); derived on every read, never stored as truth."""
+def _picks(db):
+    """{(item, question): {model: (model, runtime, answer, p)}}: one opinion per model (D-857 §4).
+
+    A model's runtimes and long sides are one opinion, its most confident answer; once it has debated the question
+    its debate answer replaces the others, so a debate never adds a model."""
     options = {row['id']: {q['id']: q['options'] for q in json.loads(row['questions'])}
                for row in db.execute('SELECT id, questions FROM vlm_items')}
-    best = {}
-    for row in db.execute('SELECT item, model, question, answer, p FROM vlm_model_answers WHERE answer IS NOT NULL'):
+    picks = {}
+    for row in db.execute('SELECT item, model, runtime, question, answer, p FROM vlm_model_answers '
+                          'WHERE answer IS NOT NULL'):
         p = json.loads(row['p'])[options[row['item']][row['question']].index(row['answer'])]
-        key = (row['item'], row['question'], _base(row['model']))
-        if key not in best or p > best[key][1]:  # the model's most confident runtime speaks for it
-            best[key] = (row['answer'], p)
-    votes, result = {}, {}
-    for (identifier, qid, _), pick in best.items():
-        votes.setdefault((identifier, qid), []).append(pick)
-    for (identifier, qid), picks in votes.items():
+        mine, base = picks.setdefault((row['item'], row['question']), {}), _base(row['model'])
+        old = mine.get(base)
+        if old is None or (row['runtime'] == 'debate', p) > (old[1] == 'debate', old[3]):
+            mine[base] = (row['model'], row['runtime'], row['answer'], p)
+    return picks
+
+
+def provisional(db, debated=None):
+    """{item: {question: answer}} where models agree (D-857 §4); derived on every read, never stored as truth.
+
+    ``debated`` (a set) collects the (item, question) pairs whose consensus includes a debate answer."""
+    result = {}
+    for (identifier, qid), mine in _picks(db).items():
+        picks = list(mine.values())
         # Any model answering otherwise is a disagreement, however unsure it is.
-        if len({answer for answer, _ in picks}) == 1 and sum(p >= CONSENSUS_P for _, p in picks) >= CONSENSUS_MODELS:
-            result.setdefault(identifier, {})[qid] = picks[0][0]
+        if len({pick[2] for pick in picks}) == 1 and sum(pick[3] >= CONSENSUS_P for pick in picks) >= CONSENSUS_MODELS:
+            result.setdefault(identifier, {})[qid] = picks[0][2]
+            if debated is not None and any(pick[1] == 'debate' for pick in picks):
+                debated.add((identifier, qid))
     return result
+
+
+def disputes(store):
+    """Disputed (photo, question) pairs for an offline debate round: pending, outside the evaluation set (people
+    answer those), question not paused, no consensus. Each carries every model's current opinion."""
+    queue(store)  # freeze the evaluation set first
+    with store.connect() as db:
+        rows, usable, _, paused = _state(db)
+        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
+        picks = _picks(db)
+    lines = []
+    for row in rows:
+        if row['status'] is not None or row['id'] in frozen:
+            continue
+        for question in json.loads(row['questions']):
+            if question['id'] in paused or question['id'] in usable.get(row['id'], {}):
+                continue
+            lines.append({'item': row['id'], 'view': row['view'], 'question_set': row['question_set'],
+                          'image': str(store.state / 'vlm' / 'images' / (row['image_sha256'] + _ext(row['image_name']))),
+                          'question': question['id'], 'text': question['text'], 'options': question['options'],
+                          'answers': [{'model': model, 'runtime': pick[1], 'answer': pick[2], 'p': round(pick[3], 4)}
+                                      for model, pick in sorted(picks.get((row['id'], question['id']), {}).items())]})
+    return lines
 
 
 def audits(db):
@@ -425,13 +472,18 @@ def evaluation(store):
         answers = db.execute("SELECT a.* FROM vlm_model_answers a JOIN vlm_labels l ON l.item=a.item "
                              "WHERE l.status='labelled' ORDER BY a.model, a.runtime, a.question").fetchall()
         everything, usable, stats, paused = _state(db)
+        debated = set()
+        provisional(db, debated)
     coverage = {}
     for row in everything:
         if row['status'] is None:
             for question in json.loads(row['questions']):
-                entry = coverage.setdefault((row['question_set'], question['id']), {'pending': 0, 'provisional': 0})
+                entry = coverage.setdefault((row['question_set'], question['id']),
+                                            {'pending': 0, 'provisional': 0, 'debate': 0})
                 entry['pending'] += 1
-                entry['provisional'] += question['id'] in usable.get(row['id'], {})
+                used = question['id'] in usable.get(row['id'], {})
+                entry['provisional'] += used
+                entry['debate'] += used and (row['id'], question['id']) in debated
     truth = {row['id']: json.loads(row['answers']) for row in rows}
     meta = {row['id']: (row['question_set'], {q['id']: q for q in json.loads(row['questions'])}) for row in rows}
     human = {}
@@ -505,10 +557,21 @@ def main(argv=None):
     command.add_argument('--rows', type=Path, required=True)
     command.add_argument('--questions', type=Path, required=True, help='vlm_question_bench.py --dump-questions output')
     command.add_argument('--model', required=True, help='model name the rows were produced with')
+    command = sub.add_parser('export-disputes', help='write disputed (photo, question) pairs for a debate round')
+    command.add_argument('--state', type=Path, required=True)
+    command.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     from review_store import ReviewStore
     if not (args.state / 'reviews.sqlite3').is_file():
         parser.error('--state must be an existing review state (start review_app.py once first)')
+    if args.command == 'export-disputes':
+        lines = disputes(ReviewStore(args.state))
+        args.out.write_text(''.join(json.dumps(line, ensure_ascii=False) + '\n' for line in lines), encoding='utf-8')
+        counts = {}
+        for line in lines:
+            counts[line['question']] = counts.get(line['question'], 0) + 1
+        print(json.dumps({'pairs': len(lines), 'questions': counts}, indent=2))
+        return 0
     dumped = json.loads(args.questions.read_text(encoding='utf-8'))
     result = import_rows(ReviewStore(args.state), {'rows_path': str(args.rows), 'model': args.model,
                                                    'question_set': dumped.get('question_set'),

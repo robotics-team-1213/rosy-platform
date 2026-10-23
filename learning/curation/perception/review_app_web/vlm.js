@@ -126,7 +126,7 @@ async function evaluate(){
   const data=await api('evaluation');const box=$('vlm-eval');box.replaceChildren();$('vlm-confusion').hidden=true;
   const count=document.createElement('p');count.textContent=`정답 있는 사진 ${data.labelled}장 기준`;box.append(count);
   const tiers=document.createElement('h2');tiers.textContent='임시 정답 범위(대기 사진)';box.append(tiers);
-  box.append(table(['질문','대기','임시 정답','범위'],data.provisional.map(row=>[row.question,String(row.pending),String(row.provisional),percent(row.coverage)])));
+  box.append(table(['질문','대기','임시 정답','토론으로 합의','범위'],data.provisional.map(row=>[row.question,String(row.pending),String(row.provisional),String(row.debate),percent(row.coverage)])));
   const audit=document.createElement('h2');audit.textContent='임시 정답 점검';box.append(audit);
   if(data.audits.length)box.append(table(['질문','점검','틀림','오류율','상태'],data.audits.map(row=>[row.question,String(row.n),String(row.errors),percent(row.rate),row.paused?'멈춤':'사용'])));
   else{const none=document.createElement('p');none.textContent='아직 점검한 임시 정답이 없습니다.';box.append(none);}
