@@ -498,6 +498,16 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
 | 의견 갈림 | 평가셋 밖에서 어떤 질문이든 합의가 없는 사진 | 모델 답 비표시 |
 | 점검 | 평가셋 밖에서 모든 질문이 합의된 사진 중 ISO 주마다 보기당 최대 10장(주와 sha256으로 정한 순서). 열린 의견 갈림+점검이 50을 넘으면 더 넣지 않는다 | 임시 정답과 큰 「맞음 A」·「고침 E」. 고침은 선택지를 열고 임시 정답을 미리 고른다 |
 
+**모델 토론(D-857 §4).** 의견이 갈린 질문은 모델 PC에서 오프라인 토론 한 판으로 다시 물을 수 있다. 웹앱은 모델을 부르지 않는다(D-459).
+
+```bash
+python learning/curation/perception/vlm_judge.py export-disputes --state <VLM_STATE> --out debate.jsonl
+python tools/vlm_question_bench.py --debate-input debate.jsonl --debate-as <가져온 모델 이름> --model <HF id> [--quant 4bit] [--long-side 448] [--debate-rounds 2] [--ollama http://127.0.0.1:11434] --out <dir>
+python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --rows <dir>/rows.jsonl --questions <questions.json> --model <같은 모델 이름>
+```
+
+`export-disputes`는 대기 중이고 평가셋 밖이며 멈추지 않은 질문 중 합의가 없는 (사진, 질문)마다 상태 안 사진 경로, 보기, question_set, 질문 id·문장·선택지와 모든 모델의 지금 의견(모델, 런타임, 답, p)을 한 줄로 쓴다. 벤치의 토론 모드는 같은 사진과 닫힌 질문에 다른 모델의 답과 확률을 「model A/B」로 익명화한 짧은 메모를 붙여 다시 묻고, 선택지 확률은 지금처럼 읽는다(transformers prefix/suffix 또는 Ollama top_logprobs). 이 모델이 전에 답한 질문만 묻는다. 결과 행은 `frame`·`view`·`long_side`와 `debate:{질문: {answer, p}}`를 가진다. 기본 한 판, `--debate-rounds 2`는 둘째 판에 자기 첫 판 답을 보이고, 다른 모델의 토론 답은 다시 내보낸 `debate.jsonl`에서 「after debate」로 보인다. 가져오기는 이를 같은 모델 이름의 런타임 `debate`로 저장하고 뒤 판이 앞 판을 바꾼다. 그 모델이 그 질문에 답한 적이 없으면 거절한다. 합의에서 토론 답은 그 모델의 다른 런타임 답을 대신하므로 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 그대로 따르고, 평가 탭은 토론으로 합의한 임시 정답 수를 따로 센다.
+
 점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
 
 운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).

@@ -10109,3 +10109,9 @@ osy-d395-s1d\`.
 - 변경: 의견 갈림 사진도 보기마다 오래된 것부터 50장까지만 연다(`QUEUE_CAP`). 나머지는 `disputed_waiting`으로 세고 화면에 「대기 n」으로 보인다(D-857 §5).
 - 증거: 모델 PC 8790 배포에서 front 평가셋 밖 30장이 모두 의견 갈림이었다. 자료가 늘면 상한이 없어 사람 확인이 끝없이 쌓인다.
 - gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · VLM 의견 갈림 질문의 오프라인 모델 토론(D-857 §4)
+
+- 변경: `vlm_judge.py export-disputes`가 평가셋 밖·멈추지 않은 의견 갈림 (사진, 질문)을 모든 모델의 지금 답과 함께 내보내고, `tools/vlm_question_bench.py --debate-input`이 한 모델에 다른 모델 답을 「model A/B」로 익명화한 메모를 붙여 다시 묻는다. 가져오기는 같은 모델 이름의 런타임 `debate`로 저장하고(그 모델이 전에 답한 질문만), 합의에서 그 모델의 다른 런타임을 대신해 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 따른다. 웹앱은 모델을 부르지 않는다(D-459).
+- 증거: `test_vlm_judge.py`(원격 시험 PC 25건 통과). 모델 PC 실제 상태(사진 135장, `reviews.sqlite3`는 먼저 백업)에서 Qwen3-VL-8B-Instruct-nf4·Qwen3-VL-4B-Instruct·Qwen3.5-4B 한 판: 의견 갈림 62쌍 중 7쌍이 합의(front.shape 2/2, front.wall_ahead 1/1, wrist.gripper_empty 4/5, front.lane_tape 0/27, front.lane_obstruction 0/17, top.robots_close 0/10). 대기열 의견 갈림 사진은 front 30→29, top 10→10, wrist 5→1, 점검 0→5(front 1, wrist 4). 모델별 토론 시간은 8B 74초, 4B 48초, Qwen3.5-4B 32초(로드 포함).
+- gate 변화: 없음. 토론 합의는 임시 정답이며 승인·승격이 아니다(D-514 §5, D-853 §3). CE 해당 없음: 새 기능이며 해결한 장애가 없다.
