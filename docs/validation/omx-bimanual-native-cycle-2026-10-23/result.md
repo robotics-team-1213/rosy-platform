@@ -1,6 +1,7 @@
 # 양팔 native 12관절 변환·ACT 재적재 검증
 
-제품 소스 `e2e2b062c1c5af3a2b47d3d267f8ff49cd5720e9`에서 실제 LeRobot 0.4.4의
+제품 소스 commit: `e2e2b062c1c5af3a2b47d3d267f8ff49cd5720e9`.
+이 소스에서 실제 LeRobot 0.4.4의
 12관절 데이터 읽기 → 검토 구간 분할 → 공식 ACT 2-step 학습 → 새 Python 프로세스
 재적재 → 별도 eval 재생이 통과했다. 합성 연결 시험이며 사람 라벨·실물 양팔 성공 근거는 아니다.
 
