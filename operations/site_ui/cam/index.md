@@ -25,7 +25,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [Rosy Cam 디버그 APK는 빌드한 PC마다 서명이 달라 재설치하면 연결이 지워진다](../../../docs/solutions/deployment/rosy-cam-apk-signer-differs-per-dev-pc.md)
 
 ## 시험
 
