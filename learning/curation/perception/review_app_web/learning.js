@@ -5,9 +5,13 @@ import { loadStorage, clearStorage } from '/storage.js';
 const $=id=>document.getElementById(id);
 let workspace, busy=false, checkedAt=0, readSequence=0;
 const trainingView=new URL(location.href).searchParams.get('view')==='training';
-$('workspace-title').textContent=trainingView?'학습·결과':'작업';
-document.title=`Rosy Learning — ${trainingView?'학습·결과':'작업'}`;
+$('workspace-title').textContent=trainingView?'학습':'홈';
+document.title=`Rosy Learning — ${trainingView?'학습':'홈'}`;
+// The settings menu links storage here; open it on arrival and on a same-page hash change.
+const openStorage=()=>{if(location.hash==='#storage-panel'){$('storage-panel').open=true;$('storage-panel').scrollIntoView({block:'start'});}};
+addEventListener('hashchange',openStorage);
 $('workspace-review').hidden=trainingView;
+$('domain-home').hidden=trainingView;
 if(trainingView)$('training-controls').open=true;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
 const states={running:'진행 중',reading:'자료 읽는 중',training:'학습 중',failed:'실패',rejected:'품질 거절',reject:'품질 거절',
@@ -104,6 +108,26 @@ function renderPipeline() {
   if(pipeline.cycles.length)text(records,'p','표시한 모델의 실행 기록입니다. 비교 지표와 장치 적용 근거는 별도로 검토하세요.','quiet');
   updatePipelineAction();
 }
+const domainNames={lane:'Pinky 차로·픽셀',object:'Pinky 객체',omx:'OMX 모방학습',sim:'Isaac SIM',vlm:'VLM 판단',decision:'판단 모델'};
+const domainFilter=domainNames[new URLSearchParams(location.search).get('domain')]?new URLSearchParams(location.search).get('domain'):null;
+const domainStates={done:'완료',active:'진행',blocked:'막힘',waiting:'대기',not_available:'없음'};
+function renderDomains() {
+  // D-857 §3: one row per domain, six loop stages and one next action; ?domain= narrows the rows.
+  const list=$('domain-rows');list.replaceChildren();
+  $('domain-filter').textContent=domainFilter?`${domainNames[domainFilter]}만 보는 중`:'모든 도메인 · 배포는 Learning 밖입니다.';
+  if(domainFilter){const all=text($('domain-filter'),'a',' · 전체 보기');all.href='/learning';}
+  for(const domain of (workspace?.domains||[]).filter(row=>!domainFilter||row.id===domainFilter)) {
+    const item=text(list,'li','','domain-row');item.dataset.domain=domain.id;
+    text(item,'h3',domain.name);
+    const chips=text(item,'ol','','domain-stages');chips.setAttribute('aria-label',`${domain.name} 단계`);
+    for(const stage of domain.stages) {
+      const chip=text(chips,'li','','domain-stage');chip.dataset.stage=stage.stage;chip.dataset.state=stage.state;chip.title=stage.evidence;
+      text(chip,'span',stage.label);text(chip,'small',domainStates[stage.state]||stage.state);text(chip,'span',` · ${stage.evidence}`,'sr-only');
+    }
+    text(item,'p',domain.blocked||'막힌 단계가 없습니다.','domain-blocked');
+    if(domain.next){const next=text(item,'a',domain.next.label,'workspace-link domain-next');next.href=domain.next.href;}
+  }
+}
 async function prepareCurrent() {
   if(busy||workspace?.pipeline?.next?.action!=='prepare')return;
   setBusy(true);message('learning-error','');
@@ -153,7 +177,7 @@ setInterval(async()=> {
     const value=await request('/api/learning');
     if(busy||sequence!==readSequence)return;
     pendingReportRefresh ||= JSON.stringify(workspace.items)!==JSON.stringify(value.items);
-    workspace=value;renderReview();renderPipeline();updateControls();
+    workspace=value;renderReview();renderPipeline();renderDomains();updateControls();
     if(pendingReportRefresh&&!document.querySelector('dialog[open]')&&!$('connection-panel').open
         &&!$('jobs').contains(document.activeElement)) {
       checkedAt=Date.now();render();pendingReportRefresh=false;
@@ -272,7 +296,7 @@ async function load() {
   $('pipeline').setAttribute('aria-busy','true');$('pipeline-stages').replaceChildren();$('pipeline-records').replaceChildren();$('pipeline-status').textContent='현재 자료와 학습 결과를 연결하는 중입니다.';
   const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(seconds>=3)$('learning-status').textContent=`서버 응답 대기 ${seconds}초 · 현재 작업과 보고서 상태를 확인하고 있습니다.`;},1000);
   try {workspace=await request('/api/learning');checkedAt=Date.now();
-  renderReview();renderPipeline();
+  renderReview();renderPipeline();renderDomains();
   if(!$('kind').options.length) {
     for(const row of workspace.workflows) {
       text($('capabilities'),'h3',row.name);text($('capabilities'),'p',row.support);text($('capabilities'),'p',row.next);
@@ -349,3 +373,4 @@ $('pipeline-link').addEventListener('click',()=> {
 });
 $('work-preview-image').addEventListener('error',()=>{$('work-preview').hidden=true;});
 load().catch(()=>{});
+openStorage();

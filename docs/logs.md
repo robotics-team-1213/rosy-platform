@@ -10139,3 +10139,58 @@ osy-d395-s1d\`.
 - 변경: [D-857](adr/D-857-rosy-learning-product-definition.md) Accepted(사용자 결정 6건): 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답, 사람 확인 한도 시작값, VLM 별도 평가 state. D-449·D-792·D-834에 개정 메모, `app-responsibilities.md` Learning 행 갱신.
 - 증거: Learning 관련 Proposed 20건 분류 — 대체 0, 일부 개정 4(D-449·D-792·D-834·D-853), 유지 9, 범위 밖 7. D-853 개정 메모는 그 ADR이 착지한 뒤 단다.
 - gate 변화: 없음. 코드·배포·인스턴스 퇴역은 별도 조각이다.
+
+## 2026-10-24 · 64fd9ad65c · Learning 지도 결정 반영과 VLM 질문 교훈 갱신
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md) §9를 D-857 결정으로 바꿨다. [닫힌 질문 교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md)에 v3 결과를 덧붙였다.
+- 증거: 모델 PC v3 벤치·토론 — 기준을 적은 `tape_left`·`tape_right`는 의견 갈림 0/1(이전 0/27 합의), `object_between_tapes` 1/26, `robot_count` 0/10.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · Learning 다섯 단계 메뉴(D-857 §3)
+
+- 변경: Learning 주 메뉴를 홈·자료·정답·학습·평가·승격 다섯 단계로 바꾸고 「작업 도구」 펼침을 없앴다. 화면이 여럿인 단계(자료·정답·학습)는 경로 줄 하위 메뉴로 기존 화면을 두 번 안에 연다. 계정·저장 공간은 상단 「설정」으로 옮겼다. 새 `/learning/evaluate`(`evaluate.html/js`)는 학습 실행기 평가 단계와 VLM 모델 대 확정 정답을 읽기 전용으로 모으고, `?domain=` 필터를 따르며, 승격 요청은 비활성(다음 조각)이다. 기존 URL은 그대로다.
+- 증거: `test_learning_shell_browser.py`(다섯 단계·두 번 안 도달·설정), `test_app_shell_seats.py`, `test_learning_workspace_browser.py`, `test_vlm_judge.py`(원격 시험 PC).
+- gate 변화: 없음. 승격 승인·배포는 Fleet·사람(D-793)이며 이 화면은 근거만 보인다. CE 해당 없음: 화면 구조 변경이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · Learning 홈의 도메인별 단계(D-857 §3)
+
+- 변경: `learning_domains.py`가 차로·객체·OMX·SIM·VLM·판단 모델 여섯 도메인을 루프 여섯 칸(수집~승격 기록)과 다음 할 일 하나로 묶어 `/api/learning`의 `domains`로 준다(기존 키 유지). 작업대가 이미 가진 자료(`project()`, 객체 수·준비본, `learning_links`·`omx_segment_reviews`, SIM 목록, VLM 표)만 읽고, 모르는 칸은 이유를 적은 `not_available`이다. 홈은 도메인마다 한 줄을 보이고 `?domain=`을 따르며, 평가·승격 화면은 각 도메인의 평가·승격 기록 칸을 보인다.
+- 증거: `test_learning_domains.py`, `test_sim_web.py`, `test_learning_workspace_browser.py`(390·1280 가로 스크롤 없음, 원격 시험 PC).
+- gate 변화: 없음. 읽기 전용 표시이며 승인·승격·실행을 바꾸지 않는다. CE 해당 없음: 새 표시 기능이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 임시·확정 정답과 작은 사람 확인 대기열(D-857 §4–5)
+
+- 변경: `vlm_judge.py`가 모델 합의(서로 다른 모델 2개 이상 같은 답·각 p ≥ 0.8·반대 답 없음, 같은 모델의 런타임·크기는 하나로 셈)를 읽을 때마다 임시 정답으로 만든다(저장하지 않음). 사람 대기열은 보기×질문별 고정 평가셋(최대 30, 임시 정답별로 번갈아 뽑음)·의견 갈림(둘 다 모델 답 비표시)과 주마다 보기당 최대 10건의 점검(임시 정답과 「맞음」·「고침」)이며, 열린 건이 50을 넘으면 점검을 더하지 않는다. 점검 5건 이상에서 오류율이 10%를 넘은 질문은 임시 정답을 멈춘다. 평가 탭은 확정 정답만으로 계산하고 범위·점검 오류율·멈춘 질문을 보이며, 내보내기는 답마다 `tier`를 적는다. `review_app.py --vlm-eval-url`은 평가·승격 화면과 홈 VLM 줄에서 별도 VLM 평가 인스턴스로 가는 링크만 준다. 홈 VLM 줄은 임시 정답 수를 더한다.
+- 증거: `test_vlm_judge.py`(합의 규칙·같은 모델 한 번·대기열 결정성과 상한·점검 멈춤·비표시와 표시 응답·링크 검사), `test_vlm_judge_browser.py`(점검 맞음·고침 흐름), `test_learning_domains.py`(원격 시험 PC). 실제 모델 답에서의 합의 비율·점검 오류율은 아직 없다.
+- gate 변화: 없음. 모델 합의는 승인·승격이 아니며(D-514 §5, D-853 §3) 승격 평가는 확정 정답만 쓴다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 고정 평가셋을 보기당 30장으로 줄임(D-857 §5)
+
+- 변경: 모델 PC 인스턴스(사진 135장)에서 대기열이 「평가셋 132 · 의견 갈림 2 · 점검 0」이었다. 보기×질문마다 30장을 뽑아 합치면 거의 모든 사진이 평가셋이 됐기 때문이다. 이제 평가셋은 보기마다 최대 30장이고 그 사진의 모든 질문을 모델 답 없이 단다. 합의 모양별로 번갈아 뽑아 `vlm_eval_set`에 고정하며, 모델이 더해져도 바뀌지 않고 제외로 줄 때만 채운다. 보기당 50건 상한은 의견 갈림·점검만 세고, 화면은 「평가셋 n/30」을 따로 보인다.
+- 증거: `test_vlm_judge.py`(보기당 30장·고정·제외 뒤 채움·상한), `test_vlm_judge_browser.py`(원격 시험 PC). 모델 PC 인스턴스 재확인은 아직이다.
+- gate 변화: 없음. CE 해당 없음: 착지 전 기능 조각의 선택 규칙 수정이며 운영 장애 복구가 아니다.
+
+## 2026-10-24 · f256684c37 · VLM 의견 갈림 대기열 상한
+
+- 변경: 의견 갈림 사진도 보기마다 오래된 것부터 50장까지만 연다(`QUEUE_CAP`). 나머지는 `disputed_waiting`으로 세고 화면에 「대기 n」으로 보인다(D-857 §5).
+- 증거: 모델 PC 8790 배포에서 front 평가셋 밖 30장이 모두 의견 갈림이었다. 자료가 늘면 상한이 없어 사람 확인이 끝없이 쌓인다.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · VLM 의견 갈림 질문의 오프라인 모델 토론(D-857 §4)
+
+- 변경: `vlm_judge.py export-disputes`가 평가셋 밖·멈추지 않은 의견 갈림 (사진, 질문)을 모든 모델의 지금 답과 함께 내보내고, `tools/vlm_question_bench.py --debate-input`이 한 모델에 다른 모델 답을 「model A/B」로 익명화한 메모를 붙여 다시 묻는다. 가져오기는 같은 모델 이름의 런타임 `debate`로 저장하고(그 모델이 전에 답한 질문만), 합의에서 그 모델의 다른 런타임을 대신해 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 따른다. 웹앱은 모델을 부르지 않는다(D-459).
+- 증거: `test_vlm_judge.py`(원격 시험 PC 25건 통과). 모델 PC 실제 상태(사진 135장, `reviews.sqlite3`는 먼저 백업)에서 Qwen3-VL-8B-Instruct-nf4·Qwen3-VL-4B-Instruct·Qwen3.5-4B 한 판: 의견 갈림 62쌍 중 7쌍이 합의(front.shape 2/2, front.wall_ahead 1/1, wrist.gripper_empty 4/5, front.lane_tape 0/27, front.lane_obstruction 0/17, top.robots_close 0/10). 대기열 의견 갈림 사진은 front 30→29, top 10→10, wrist 5→1, 점검 0→5(front 1, wrist 4). 모델별 토론 시간은 8B 74초, 4B 48초, Qwen3.5-4B 32초(로드 포함).
+- gate 변화: 없음. 토론 합의는 임시 정답이며 승인·승격이 아니다(D-514 §5, D-853 §3). CE 해당 없음: 새 기능이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 질문 세트 v3와 새 평가 state(D-857 §4)
+
+- 변경: v2 토론이 0건 정한 `front.lane_tape`(0/27)·`front.lane_obstruction`(0/17)·`top.robots_close`(0/10)를 `front.tape_left`·`front.tape_right`, `front.object_between_tapes`, `top.robot_count`(zero·one·two·many)로 바꿨다(`tools/vlm_question_bench.py`, QUESTION_SET v3). 천장 프레임에는 로봇별 화면 위치가 없어 로봇별 잘라 묻기는 미뤘다. 모델 PC 서비스는 사람 정답 0건을 확인한 뒤 새 `state-v3`로 옮겼고, 옛 `state`는 v2 백업으로 그대로 둔다.
+- 증거: `test_vlm_judge.py` 26건 통과(원격 시험 PC). 모델 PC에서 v3 앞(60장)·위(40장, 448) 벤치를 Qwen3-VL-8B-nf4(+Ollama)·Qwen3-VL-4B·Qwen3.5-4B로 돌리고 v2 손목 행과 함께 가져온 뒤 토론 한 판: 의견 갈림 82쌍 중 18쌍 합의(front.tape_left 0쌍 갈림, front.tape_right 0/1, front.object_between_tapes 1/26, front.wall_ahead 12/25, front.shape 1/15, top.robot_count 0/10, wrist.gripper_empty 4/5). front.wall_ahead·front.shape의 갈림이 늘어난 것은 Qwen3.5-4B가 v3에서 처음 앞 사진에 답한 탓이다. 대기열 의견 갈림 사진 front 27, top 10, wrist 5→1, 점검 front 3·wrist 4.
+- gate 변화: 없음. 토론 합의는 임시 정답이다. CE 해당 없음: 질문 문장 개정이며 해결한 장애가 없다.
+
+## 2026-10-24 · 8d119665da8f · teacher 진단의 실제 native 실행 기록
+
+- 변경: [새 날짜 검증 기록](validation/omx-teacher-gripper-native-diagnostic-2026-10-24/result.md)에 공식 착지와 단 한 번의 native 진단 원본을 연결했다. 이전 날짜의 동결 결과는 유지했다.
+- 증거: source8d 공식 guard273/영향490PASS·NEW0, 실제 native EXITED0/PASS3·전체4,889파일 바이트 대조·정리 확인과 독립 검토. 실패 근거 필드는 null이며 거부는 재현되지 않았다.
+- gate 변화: 없음. 진단 성공 경로의 근거이며 물리 원인 해결·학습·정책 평가·실물 수용 근거가 아니다. 두 HOLD cohort와 진단3개 제외를 유지한다.
+- CE: 미해결 — 과거 held/stale 물리 원인이 확인되지 않아 해결 교훈으로 기록하지 않는다.

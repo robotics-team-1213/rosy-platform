@@ -10,20 +10,23 @@
 <ui-status id="vlm-error" state="error" role="alert" hidden></ui-status>
 <section id="panel-label" aria-label="정답 달기">
 <p class="vlm-progress"><span id="vlm-progress" role="status">불러오는 중입니다.</span> <span id="vlm-name" class="quiet"></span></p>
+<p id="vlm-queue" class="vlm-queue quiet" role="status"></p>
+<ui-status id="vlm-paused" state="warning" hidden></ui-status>
 <div class="vlm-work">
 <figure class="vlm-photo"><img id="vlm-image" alt="판단할 사진"><figcaption id="vlm-image-message" class="quiet">사진이 없습니다. 가져오기에서 벤치 결과를 등록하세요.</figcaption></figure>
 <div class="vlm-side">
 <div class="ui-workspace-bar vlm-nav"><ui-button id="vlm-prev" kind="quiet" data-action-icon="back" aria-keyshortcuts="ArrowLeft">이전 ←</ui-button><ui-button id="vlm-next" kind="quiet" data-action-icon="next" aria-keyshortcuts="ArrowRight">다음 →</ui-button><ui-button id="vlm-next-pending" kind="quiet" aria-keyshortcuts="N">다음 대기 N</ui-button></div>
+<p id="vlm-audit-note" class="vlm-audit-note" hidden>점검 사진입니다. 모델 합의로 만든 <b>임시 정답</b>을 보입니다. 모두 맞으면 「맞음」, 하나라도 틀리면 「고침」으로 고르세요.</p>
 <div id="vlm-questions" class="vlm-questions"></div>
-<div class="ui-workspace-bar vlm-decide"><ui-button id="vlm-save" kind="primary" data-action-icon="check" aria-keyshortcuts="Enter" disabled>저장하고 다음</ui-button><ui-button id="vlm-exclude" kind="quiet" disabled>판단 불가로 제외</ui-button></div>
+<div class="ui-workspace-bar vlm-decide"><ui-button id="vlm-confirm" class="vlm-big" kind="primary" data-action-icon="check" aria-keyshortcuts="A Enter" hidden>맞음 A</ui-button><ui-button id="vlm-fix" class="vlm-big" kind="quiet" aria-keyshortcuts="E" hidden>고침 E</ui-button><ui-button id="vlm-save" kind="primary" data-action-icon="check" aria-keyshortcuts="Enter" disabled>저장하고 다음</ui-button><ui-button id="vlm-exclude" kind="quiet" disabled>판단 불가로 제외</ui-button></div>
 <p id="vlm-save-status" class="quiet" role="status"></p>
 <div class="ui-form vlm-filters"><label class="ui-field-label">사진 종류 <select id="vlm-view" class="ui-field"><option value="">전체</option></select></label>
-<label class="ui-field-label">상태 <select id="vlm-status" class="ui-field"><option value="">전체</option><option value="pending" selected>대기</option><option value="labelled">정답 있음</option><option value="excluded">제외</option></select></label></div>
-<p class="quiet">모델 답은 이 화면에 보이지 않습니다. 질문은 모델에게 묻는 영어 문장 그대로입니다. <ui-button id="vlm-help-open" kind="quiet" aria-keyshortcuts="?">단축키 ?</ui-button></p>
-<ul id="vlm-help" class="quiet" hidden><li>←/→ 이전·다음 사진 · N 다음 대기</li><li>↑/↓ 질문 이동 · 1–9 선택지 고르기</li><li>Enter 저장하고 다음 · ? 이 안내</li><li>입력칸·한글 조합·Ctrl/Alt/Meta 중에는 동작하지 않습니다.</li></ul>
+<label class="ui-field-label">대기열 <select id="vlm-kind" class="ui-field"><option value="" selected>사람 확인 전체</option><option value="eval">평가셋</option><option value="disputed">의견 갈림</option><option value="audit">점검</option><option value="labelled">정답 있음</option></select></label></div>
+<p class="quiet">평가셋·의견 갈림 사진에는 모델 답을 보이지 않습니다. 점검 사진만 임시 정답을 보입니다. 모델끼리 합의한 다른 사진은 사람 확인 없이 임시 정답으로 남습니다. 질문은 모델에게 묻는 영어 문장 그대로입니다. <ui-button id="vlm-help-open" kind="quiet" aria-keyshortcuts="?">단축키 ?</ui-button></p>
+<ul id="vlm-help" class="quiet" hidden><li>←/→ 이전·다음 사진 · N 다음 대기</li><li>↑/↓ 질문 이동 · 1–9 선택지 고르기</li><li>Enter 저장하고 다음 · ? 이 안내</li><li>점검 사진: A 또는 Enter 맞음 · E 고침</li><li>입력칸·한글 조합·Ctrl/Alt/Meta 중에는 동작하지 않습니다.</li></ul>
 </div></div></section>
 <section id="panel-eval" aria-label="평가" hidden>
-<p>정답이 있는 사진만 셉니다(제외·대기 사진은 빠집니다). 일치율은 측정값이며 모델 답의 승인이 아닙니다. 사람 정답만 기준입니다.</p>
+<p>확정 정답(사람이 단 답과 점검에서 확인·고친 답)만 기준입니다. 제외·대기 사진은 빠집니다. 일치율과 모델 합의(임시 정답)는 측정값이며 승인·승격이 아닙니다(D-514 §5, D-853 §3). 승격 평가에는 확정 정답만 씁니다(D-857).</p>
 <div class="ui-workspace-bar"><ui-button id="vlm-eval-refresh" kind="quiet" data-action-icon="refresh">다시 계산</ui-button><ui-button id="vlm-export" kind="quiet">정답 JSONL 받기</ui-button></div>
 <p id="vlm-export-status" class="quiet" role="status"></p>
 <div id="vlm-eval" class="vlm-eval" aria-live="polite"></div>

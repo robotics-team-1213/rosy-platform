@@ -6,6 +6,9 @@ options' first tokens, read from logits without generating text. ``--check`` com
 probabilities with a full forward of the same tokens. ``--ollama`` times the current per-image observation call
 (operations/situation/rosy_situation/incidents/vision.py) on the same frames as a lower bound for that method.
 Frames are read only; results are JSON lines and a summary. No labels: this measures latency and answer spread.
+``--debate-input`` (D-857 §4) re-asks one model the disputed questions from ``vlm_judge.py export-disputes`` with a
+short note of the other models' anonymised answers; its rows carry a ``debate`` block that imports as runtime
+``debate`` of the same model name. A debate answer stays provisional.
 """
 
 import argparse
@@ -30,18 +33,24 @@ INSTRUCTION = ("You check one {view} camera picture from a small robot. Answer t
 #: Question id -> (question, options). Ids and options follow the design; QUESTION_SET versions them.
 QUESTIONS = {
     "front": {
-        "front.lane_obstruction": ("Is there an object on the floor inside the lane ahead?", ("yes", "no", "unclear")),
+        # v3: "inside the lane ahead" split the models (debate 0/17); the region is now named in image terms.
+        "front.object_between_tapes": ("In the lower half of the image, is there an object on the floor between the two "
+                                       "lane tapes?", ("yes", "no", "unclear")),
         # v2: v1's multi-way "what is ahead" answered wall on nearly every frame; one yes/no per kind instead.
         "front.wall_ahead": ("Is a wall or upright panel blocking the lane directly ahead?", ("yes", "no", "unclear")),
         "front.robot_ahead": ("Is another robot in the lane directly ahead?", ("yes", "no", "unclear")),
         "front.person_ahead": ("Is a person or a person's legs in the lane directly ahead?", ("yes", "no", "unclear")),
-        "front.lane_tape": ("Which lane boundary tapes are visible on the floor?", ("both", "left", "right", "none")),
+        # v3: one four-way tape question (debate 0/27) became one yes/no per image half.
+        "front.tape_left": ("Is a white lane tape visible on the floor in the LEFT half of the image?", ("yes", "no", "unclear")),
+        "front.tape_right": ("Is a white lane tape visible on the floor in the RIGHT half of the image?", ("yes", "no", "unclear")),
         "front.shape": ("Is the lane ahead a bend, blocked, or straight?", ("bend", "blocked", "straight", "unclear")),
     },
-    # shortcut: full ceiling frames have no target-robot crop, so ahead_space/robot_adjacent become scene-level
-    # questions; switch to the design's per-robot questions once frames come with a crop around the robot.
+    # shortcut: ceiling frames carry one ArUco world pose per frame (poses.jsonl), not a pixel position per robot,
+    # so there is no robot crop; ask the design's per-robot top.robot_adjacent/top.ahead_space once frames come
+    # with per-robot image positions. v3: "within one robot length" split the models (debate 0/10); count instead.
     "top": {
-        "top.robots_close": ("Are any two small robots within one robot length of each other?", ("yes", "no", "unclear")),
+        "top.robot_count": ("How many small robots are visible on the floor? Answer many for three or more.",
+                            ("zero", "one", "two", "many")),
         "top.person_present": ("Is a person visible on the floor area?", ("yes", "no", "unclear")),
     },
     "wrist": {
@@ -49,7 +58,9 @@ QUESTIONS = {
         "wrist.gripper_empty": ("Is the gripper empty?", ("yes", "no", "unclear")),
     },
 }
-QUESTION_SET = "v2"
+QUESTION_SET = "v3"
+DEBATE_NOTE = ("Other models answered this question: {others}. They can be wrong. Look at the picture again "
+               "and give your own answer.\n")
 OBSERVE_PROMPT = ("Describe only visible physical surfaces and floor markings in this {view} image in one short "
                   "sentence. Do not assume a corner or free path. Do not identify a target robot. Answer JSON with "
                   "observation.")
@@ -97,8 +108,8 @@ class Scorer:
         # Recurrent (linear-attention) layers cannot be cropped back to the prefix; copy the prefix cache instead.
         self.rollback = "copy" if any("linear" in str(t) for t in getattr(text_config, "layer_types", None) or ()) else "crop"
 
-    def _texts(self, view: str, question: str, options) -> tuple:
-        ask = f"Question: {question}\nOptions: {', '.join(options)}."
+    def _texts(self, view: str, question: str, options, note: str = "") -> tuple:
+        ask = f"{note}Question: {question}\nOptions: {', '.join(options)}."
         messages = [{"role": "user", "content": [{"type": "image"},
                                                  {"type": "text", "text": INSTRUCTION.format(view=view) + "\n" + ask}]}]
         text = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False,
@@ -110,9 +121,9 @@ class Scorer:
         self.torch.cuda.synchronize()
         return time.perf_counter()
 
-    def frame(self, image: Image.Image, view: str, check: bool) -> dict:
+    def frame(self, image: Image.Image, view: str, check: bool, questions=None, notes=None) -> dict:
         torch = self.torch
-        questions = QUESTIONS[view]
+        questions, notes = questions or QUESTIONS[view], notes or {}
         t0 = self._sync()
         prefix, _ = self._texts(view, *next(iter(questions.values())))
         inputs = self.processor(text=[prefix], images=[image], return_tensors="pt").to("cuda")
@@ -124,7 +135,7 @@ class Scorer:
             t2 = self._sync()
             answers, timings = {}, {"processor_s": t1 - t0, "prefix_s": t2 - t1, "image_tokens": int(length)}
             for qid, (question, options) in questions.items():
-                p, suffix = self._texts(view, question, options)
+                p, suffix = self._texts(view, question, options, notes.get(qid, ""))
                 if p != prefix:
                     raise AssertionError("questions must share the image prefix")
                 ids = self.tokenizer(suffix, add_special_tokens=False, return_tensors="pt").input_ids.to("cuda")
@@ -180,17 +191,18 @@ def ollama_observe(image: Image.Image, view: str, url: str, model: str) -> dict:
             "prompt_eval_count": reply.get("prompt_eval_count")}
 
 
-def ollama_questions(image: Image.Image, view: str, url: str, model: str) -> dict:
+def ollama_questions(image: Image.Image, view: str, url: str, model: str, questions=None, notes=None) -> dict:
     """Same questions through Ollama: one token per question, options read from top_logprobs (prefix cache is Ollama's)."""
+    questions, notes = questions or QUESTIONS[view], notes or {}
     buffer = io.BytesIO()
     image.convert("RGB").save(buffer, "JPEG", quality=90)
     jpeg = base64.b64encode(buffer.getvalue()).decode()
     answers, started = {}, time.perf_counter()
-    for qid, (question, options) in QUESTIONS[view].items():
+    for qid, (question, options) in questions.items():
         body = {"model": model, "stream": False, "logprobs": True, "top_logprobs": 20,
                 "options": {"temperature": 0, "num_ctx": 8192, "seed": 42, "num_predict": 1},
                 "messages": [{"role": "user", "images": [jpeg], "content": INSTRUCTION.format(view=view)
-                              + f"\nQuestion: {question}\nOptions: {', '.join(options)}."}]}
+                              + f"\n{notes.get(qid, '')}Question: {question}\nOptions: {', '.join(options)}."}]}
         tq = time.perf_counter()
         request = urllib.request.Request(f"{url}/api/chat", data=json.dumps(body).encode(), method="POST",
                                          headers={"Content-Type": "application/json"})
@@ -209,17 +221,68 @@ def ollama_questions(image: Image.Image, view: str, url: str, model: str) -> dic
     return {"answers": answers, "wall_s": round(time.perf_counter() - started, 4)}
 
 
+def debate_note(line: dict, me: str, previous=None) -> str:
+    """The other models' answers, anonymised in a fixed order as model A, B, ...; never this model's own name."""
+    others = [a for a in line["answers"] if a["model"] != me]
+    parts = [f"model {chr(65 + i)}: {a['answer']} (p={a['p']:.2f}{', after debate' if a['runtime'] == 'debate' else ''})"
+             for i, a in enumerate(others)]
+    note = DEBATE_NOTE.format(others="; ".join(parts) or "none")
+    if previous:  # round 2: this model's own round-1 debate answer
+        note += f"Your answer in the first debate round was {previous['answer']} (p={max(previous['p']):.2f}).\n"
+    return note
+
+
+def debate(args) -> int:
+    lines = [json.loads(line) for line in args.debate_input.read_text(encoding="utf-8").splitlines() if line.strip()]
+    # Only questions this model already answered: a debate revises an opinion, it never adds a model.
+    lines = [line for line in lines if any(a["model"] == args.debate_as for a in line["answers"])]
+    photos = {}
+    for line in lines:
+        photos.setdefault((line["image"], line["view"]), []).append(line)
+    scorer = None if args.ollama else Scorer(args.model, args.quant)
+    previous, started = {}, time.perf_counter()
+    long_side = (args.long_side or [0])[0]  # the size this model was benched at; the import names it <model>@<px>
+    for number in range(1, args.debate_rounds + 1):
+        rows = []
+        for (path, view), group in photos.items():
+            image = Image.open(path).convert("RGB")
+            questions = {line["question"]: (line["text"], tuple(line["options"])) for line in group}
+            notes = {line["question"]: debate_note(line, args.debate_as, previous.get((path, line["question"])))
+                     for line in group}
+            if scorer:
+                image = image.resize(grid_size(*image.size, long_side or max(image.size), scorer.factor), Image.BICUBIC)
+                answers = scorer.frame(image, view, False, questions, notes)["answers"]
+            else:
+                answers = ollama_questions(image, view, args.ollama, args.ollama_model, questions, notes)["answers"]
+            previous.update({(path, qid): answer for qid, answer in answers.items()})
+            rows.append({"frame": path, "view": view, "long_side": long_side, "debate_round": number,
+                         "debate": {qid: {"answer": a["answer"], "p": a["p"]} for qid, a in answers.items()}})
+    args.out.mkdir(parents=True, exist_ok=True)
+    with open(args.out / "rows.jsonl", "w", encoding="utf-8") as sink:
+        sink.writelines(json.dumps(row) + "\n" for row in rows)
+    changed = sum(previous[(line["image"], line["question"])]["answer"] != next(
+        (a["answer"] for a in line["answers"] if a["model"] == args.debate_as), None) for line in lines)
+    print(json.dumps({"debate_as": args.debate_as, "pairs": len(lines), "photos": len(photos),
+                      "rounds": args.debate_rounds, "changed_own_answer": changed,
+                      "wall_s": round(time.perf_counter() - started, 1)}, indent=2))
+    return 0
+
+
 def _selftest():
     assert grid_size(1280, 720, 448, 32) == (448, 256)
     assert grid_size(320, 240, 320, 28) == (308, 252)
     flat = quality(Image.new("L", (16, 16), 0))
     assert flat["sharpness"] == 0 and flat["dark"] == 1.0
     assert pct([1, 2, 3, 4], 0.5) == 2 and pct([1, 2, 3, 4], 0.95) == 4
+    line = {"answers": [{"model": "me", "runtime": "transformers", "answer": "no", "p": 0.6},
+                        {"model": "x", "runtime": "debate", "answer": "yes", "p": 0.91}]}
+    assert debate_note(line, "me").startswith("Other models answered this question: model A: yes (p=0.91, after debate)")
+    assert "model B" not in debate_note(line, "me") and "(p=0.60" not in debate_note(line, "me")
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--frames", action="append", required=True, metavar="VIEW=GLOB",
+    parser.add_argument("--frames", action="append", metavar="VIEW=GLOB",
                         help="view (front, top, wrist) and a glob of JPEG frames; repeatable")
     parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     parser.add_argument("--quant", choices=("bf16", "4bit"), default="bf16")
@@ -230,6 +293,9 @@ def main(argv=None) -> int:
     parser.add_argument("--ollama", default="", help="loopback Ollama URL to time the observation call")
     parser.add_argument("--ollama-model", default="qwen3-vl:8b-instruct")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--debate-input", type=Path, help="vlm_judge.py export-disputes output; re-ask --model")
+    parser.add_argument("--debate-as", help="the imported model name of --model, left out of the others' answers")
+    parser.add_argument("--debate-rounds", type=int, choices=(1, 2), default=1)
     parser.add_argument("--dump-questions", type=Path, metavar="FILE",
                         help="write {question_set, questions} for learning/curation/perception/vlm_judge.py and exit")
     known = argparse.ArgumentParser(add_help=False)
@@ -241,6 +307,12 @@ def main(argv=None) -> int:
     _selftest()
     if args.ollama and not args.ollama.startswith(("http://127.0.0.1:", "http://localhost:")):
         raise SystemExit("--ollama must be a loopback URL")
+    if args.debate_input:
+        if not args.debate_as:
+            raise SystemExit("--debate-input needs --debate-as <imported model name>")
+        return debate(args)
+    if not args.frames:
+        raise SystemExit("--frames is required")
     pools = {}
     for spec in args.frames:
         view, _, pattern = spec.partition("=")

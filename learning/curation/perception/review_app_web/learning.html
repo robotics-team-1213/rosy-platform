@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rosy Learning — 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<title>Rosy Learning — 홈</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
 <link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/learning-shell.css"><link rel="stylesheet" href="/learning-workspace.css">
 <script type="module" src="/learning-shell.js"></script><script type="module" src="/learning.js"></script></head>
-<body><a class="skip-link" href="#learning-main">작업으로 이동</a>
+<body><a class="skip-link" href="#learning-main">본문으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
 <div class="ui-app-body" data-seats="rail"><div class="ui-rail"></div><div class="ui-app-main">
-<div class="ui-pathbar"><h1 id="workspace-title">작업</h1><span id="updated" class="quiet" role="status"></span></div>
+<div class="ui-pathbar"><h1 id="workspace-title">홈</h1><span id="updated" class="quiet" role="status"></span></div>
 <main id="learning-main" class="learning-main workspace-page" tabindex="-1">
 <ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
 <section id="pipeline" class="work-focus" aria-labelledby="pipeline-title" aria-busy="true">
@@ -19,6 +19,10 @@
 <ol id="pipeline-stages" class="pipeline-stages work-stage-track" aria-label="자료부터 결과까지 진행 단계"></ol>
 <details id="pipeline-evidence" class="work-evidence"><summary>진행 상세와 결과 근거</summary><div id="pipeline-records"></div></details>
 </section>
+
+<section id="domain-home" class="workspace-block" aria-labelledby="domain-title">
+<div class="workspace-section-heading"><div><h2 id="domain-title">도메인별 진행</h2><p id="domain-filter" class="quiet" role="status">도메인 상태를 불러오는 중입니다.</p></div></div>
+<ol id="domain-rows" class="domain-rows"></ol></section>
 
 <section id="workspace-review" class="workspace-block" aria-labelledby="next-review-title">
 <div class="workspace-section-heading"><div><h2 id="next-review-title">검수할 자료</h2><p id="review-stage-summary" class="quiet" role="status">자료를 확인하고 있습니다.</p></div><a class="workspace-link" href="/catalog" data-action-icon="plus">자료 추가</a></div>
