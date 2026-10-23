@@ -96,6 +96,12 @@ class ArmCommandOwner:
             yield
 
     @property
+    def joint_state(self) -> JointStateSnapshot | None:
+        """Immutable owner-admitted readback; native intake may still await delivery."""
+        with self._lock:
+            return self._joint_state
+
+    @property
     def state(self) -> str:
         with self._lock:
             return self._state

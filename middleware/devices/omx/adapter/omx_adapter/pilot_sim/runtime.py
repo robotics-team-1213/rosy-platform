@@ -127,7 +127,7 @@ class PilotSimRuntime:
         return self._offered[name]
 
     def snapshot(self) -> dict:
-        state = self.arm.latest_joint_state
+        state = self.arm.owner.joint_state
         age = None if state is None else time.monotonic() - state.received_at
         action_server_ready = self.arm.action_port.server_is_ready()
         fresh = state is not None and 0 <= age <= self.arm.owner.config.max_joint_state_age_s
@@ -155,7 +155,7 @@ class PilotSimRuntime:
 
     def _sample_gripper(self) -> None:
         """Record gripper readback per joint_states sequence (watchdog 10 Hz and every /state)."""
-        state = self.arm.latest_joint_state
+        state = self.arm.owner.joint_state
         if self._gripper_spec is None or state is None or self.gripper not in state.positions:
             return
         with self._lock:
@@ -284,7 +284,7 @@ class PilotSimRuntime:
                   place: Callable[[dict, Mapping], str], not_admitted: str, seat_id: str) -> dict:
         """Shared checks (instance, admission, single active goal, ready, served readback) and dispatch."""
         with self._lock, self.arm.owner.command_transaction():
-            state = self.arm.latest_joint_state
+            state = self.arm.owner.joint_state
             config = self.arm.owner.config
             reason = ""
             if instance_id != self.instance_id:
@@ -397,7 +397,7 @@ class PilotSimRuntime:
                     receipt.update(state="SUCCEEDED", ros_goal_id=event.goal_id)
                     if self._gripper_goal is not None and self._gripper_goal[0] == event.command_id:
                         # The stall position a holding squeeze is bounded from (never closed itself).
-                        state = self.arm.latest_joint_state
+                        state = self.arm.owner.joint_state
                         self._record_stall(None if state is None else state.positions.get(self.gripper))
                 elif event.status == 5:
                     receipt.update(state="CANCELED", ros_goal_id=event.goal_id)
@@ -425,7 +425,7 @@ class PilotSimRuntime:
         with self._lock, self.arm.owner.command_transaction():
             if not self._hold_pending or self._active is not None or self.arm.owner.state != "ready":
                 return
-            state = self.arm.latest_joint_state
+            state = self.arm.owner.joint_state
             if state is None or not 0 <= time.monotonic() - state.received_at <= self.arm.owner.config.max_joint_state_age_s:
                 return
             self._hold_pending = False

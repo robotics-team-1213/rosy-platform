@@ -14,6 +14,12 @@ from omx_adapter.ros_goal_contract import RosGoalEvent
 ROOT = Path(__file__).resolve().parents[5]
 
 
+class FakeOwner(SimpleNamespace):
+    @property
+    def joint_state(self):
+        return self.arm.latest_joint_state
+
+
 class Arm:
     def __init__(self):
         config = ArmCommandConfig(
@@ -21,7 +27,7 @@ class Arm:
             position_limits={"joint1": (-1, 1), "gripper_joint_1": (-0.1, 0.1)},
             allowed_owners=("pilot_sim",), calibration_revision="sim",
         )
-        self.owner = SimpleNamespace(config=config, state="ready", session_id="session")
+        self.owner = FakeOwner(arm=self, config=config, state="ready", session_id="session")
         self.owner.command_transaction = threading.RLock
         self.latest_joint_state = JointStateSnapshot(
             positions={"joint1": 0.0, "gripper_joint_1": 0.0}, sequence=8,
