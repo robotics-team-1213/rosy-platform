@@ -149,9 +149,9 @@ def upload_bundle(bundle, *, api=None, operation=None, downloader=None):
     for name, expected in manifest['files'].items():
         if _hash(_file(download_root, name, repo_type)) != expected:
             raise ValueError('download hash differs from reviewed payload')
+    reader = _verify_omx(download_root, selected, repo_id, repo_type)
     if api.repo_info(repo_id=repo_id, repo_type=repo_type).private is not True:
         raise ValueError('repository visibility changed during sync')
-    reader = _verify_omx(download_root, selected, repo_id, repo_type)
     receipt = dict(repo_id=repo_id, repo_type=repo_type, revision=revision, files=manifest['files'],
                    bytes_verified=True, reader_verified=reader is not None)
     if reader is not None:
