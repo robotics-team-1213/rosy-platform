@@ -42,6 +42,54 @@ def test_short_targets_keep_every_planned_waypoint_without_enlarging_steps():
                for left,right in zip([points[0]] + targets[:-1], targets))
 
 
+def test_teacher_waypoints_leave_margin_for_the_bounded_action_head():
+    from sim_pick_place_demonstrations import short_targets
+    points=[(0.,0.),(.07,.04)]
+    targets=short_targets(points)
+    assert targets[-1]==points[-1]
+    assert all(max(abs(b-a) for a,b in zip(left,right))<=.03+1e-12
+               for left,right in zip([points[0]]+targets[:-1],targets))
+
+
+def test_teacher_readback_does_not_record_a_gripper_target_the_head_cannot_reach():
+    from sim_pick_place_demonstrations import readback_target
+    current={'gripper':.4199}
+    desired={'gripper':.3809}
+    target=readback_target(current,desired)
+    assert target!=desired
+    assert 0<current['gripper']-target['gripper']<=.03+1e-12
+
+
+def test_contact_squeeze_leaves_source_readback_margin_below_the_model_bound():
+    from sim_pick_place_teacher import contact_hold_target
+    current=.4199
+    target=contact_hold_target(current,close=.3804,contact=.4072)
+    assert 0<current-target<=.03+1e-12
+
+
+def test_teacher_readback_accepts_contact_pressure_within_head_support():
+    from sim_pick_place_demonstrations import readback_target
+    desired={'gripper':.385}
+    assert readback_target({'gripper':.416},desired)==desired
+
+
+@pytest.mark.parametrize('position,expected',[(1.,False),(.416,True)])
+def test_teacher_grasp_stops_closing_on_verified_contact_not_the_blocked_close_target(position,expected):
+    from sim_pick_place_teacher import grasp_contact_reached
+    assert grasp_contact_reached({'arm':.2,'gripper':position},
+        {'arm':.2,'gripper':.38},gripper='gripper',close=.3804,contact=.4072,
+        arm_tolerance=.02) is expected
+
+
+@pytest.mark.parametrize('position',[.1,float('nan')])
+def test_grasp_contact_cannot_hide_an_unreached_or_invalid_arm_waypoint(position):
+    from sim_pick_place_teacher import grasp_contact_reached
+    with pytest.raises(RuntimeError,match='arm'):
+        grasp_contact_reached({'arm':position,'gripper':.416},
+            {'arm':.2,'gripper':.38},gripper='gripper',close=.3804,contact=.4072,
+            arm_tolerance=.02)
+
+
 def test_teacher_place_pose_adds_clearance_without_changing_the_task_goal():
     from dataclasses import dataclass
     from sim_pick_place_teacher import teacher_place_pose
@@ -133,17 +181,26 @@ def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_
     desired={'joint3':.18370857317041256,'gripper_joint_1':.38042608841813563}
     intermediate=readback_target(current,desired)
     assert intermediate != desired
-    assert max(abs(intermediate[n]-current[n]) for n in current) == pytest.approx(.035)
+    assert max(abs(intermediate[n]-current[n]) for n in current) == pytest.approx(.03)
     assert all(min(current[n],desired[n]) <= intermediate[n] <= max(current[n],desired[n]) for n in current)
     arrived=dict(intermediate,joint3=intermediate['joint3']+.007,
                  gripper_joint_1=current['gripper_joint_1'])
-    assert readback_target(arrived,desired)==desired
+    corrected=readback_target(arrived,desired)
+    assert max(abs(corrected[n]-arrived[n]) for n in arrived)<=.035
+    assert corrected['gripper_joint_1']<arrived['gripper_joint_1']
     assert desired['joint3']==.18370857317041256
 
 
-def test_contact_readback_within_original_admission_bound_keeps_the_exact_goal():
-    from sim_pick_place_demonstrations import readback_target
-    assert readback_target({'gripper':.42},{'gripper':.38})=={'gripper':.38}
+def test_contact_readback_keeps_the_exact_goal_after_supported_intermediates():
+    from sim_pick_place_demonstrations import dispatch_readback_target
+    current={'gripper':.42}
+    commands=[]
+    def send(target):
+        commands.append(target)
+        current.update(target)
+    dispatch_readback_target({'gripper':.38},lambda:dict(current),send)
+    assert len(commands)==2 and commands[-1]=={'gripper':.38}
+    assert commands[0]['gripper']==pytest.approx(.39)
 
 
 @pytest.mark.parametrize('position',[.405,.4212312996])
@@ -151,8 +208,8 @@ def test_teacher_transfer_hold_keeps_bounded_nonzero_contact_squeeze(position):
     from sim_pick_place_teacher import contact_hold_target
     close,contact=.3804260884,.4072
     target=contact_hold_target(position,close=close,contact=contact)
-    assert target==max(close,position-.035)
-    assert close<=target<position and position-target<=.035+1e-12
+    assert target==max(close,position-.03)
+    assert close<=target<position and position-target<=.03+1e-12
 
 
 @pytest.mark.parametrize('position',[.38,.423,1.,float('nan')])
@@ -187,7 +244,7 @@ def test_teacher_dispatch_records_contact_hold_only_when_requested(holding):
     if holding:
         namespace['dispatch'](desired,holding=True)
         assert len(sent)==1 and sent[0]['joint1']==desired['joint1']
-        assert sent[0]['gripper_joint_1']==pytest.approx(.3862312996)
+        assert sent[0]['gripper_joint_1']==pytest.approx(.3912312996)
         assert max(abs(sent[0][n]-actual[n]) for n in actual)<=.04
         assert event['hold_commands'][0]['evidence'] is evidence and checks==['held']
         assert event['hold_commands'][0]['target']==sent[0]
@@ -202,7 +259,7 @@ def test_readback_correction_stops_when_actual_motion_makes_no_progress():
     commands=[]
     with pytest.raises(RuntimeError,match='no_progress'):
         dispatch_readback_target({'joint':.1},lambda:{'joint':0.},commands.append)
-    assert commands==[{'joint':.035}]
+    assert commands==[{'joint':.03}]
 
 
 def test_readback_correction_never_retries_an_unknown_transport_outcome():
@@ -213,7 +270,7 @@ def test_readback_correction_never_retries_an_unknown_transport_outcome():
         raise RuntimeError('actual goal outcome unknown')
     with pytest.raises(RuntimeError,match='outcome unknown'):
         dispatch_readback_target({'joint':.1},lambda:{'joint':0.},send)
-    assert commands==[{'joint':.035}]
+    assert commands==[{'joint':.03}]
 
 
 @pytest.mark.parametrize('points', [[], [(0.,), (float('nan'),)], [(0.,), (0., 1.)]])
