@@ -4,6 +4,10 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 
 ## Platform and execution roles
 
+### Control Unit, Integrated Control and Sub-control
+
+A Control Unit coordinates work within its own scope. It can operate independently or participate as a Sub-control unit under a parent. Integrated Control names its role when coordinating child units; the same unit may coordinate children while participating under another parent. These are logical roles, not PC or process counts. Hierarchical delegation remains a target; device execution authority stays with the existing owners (D-850).
+
 ### App names and supporting surfaces
 
 Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device live in the separate `rosy-vault` repository. Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
