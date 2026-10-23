@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/stage-strip.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
@@ -333,6 +334,22 @@
         <p class="ui-task-next">다음: 최신 증거를 확인한 뒤 조치를 선택합니다.</p>
         <details><summary>판단 근거</summary><ui-evidence state="unavailable">이 항목은 공용 부품 견본입니다.</ui-evidence></details>
       </article>
+    </section>
+
+    <section class="entry" id="stage-track">
+      <h2>단계 스트립</h2>
+      <ol class="ui-stage-track" aria-label="절차 단계">
+        <li class="ui-stage" data-state="done">도킹 확인</li>
+        <li class="ui-stage" data-state="done">지도 점검</li>
+        <li class="ui-stage" data-state="now" aria-current="step">자율 주행 시험</li>
+        <li class="ui-stage" data-state="todo">현장 기록</li>
+      </ol>
+      <ol class="ui-stage-track" aria-label="막힌 절차 단계">
+        <li class="ui-stage" data-state="done">전원 확인</li>
+        <li class="ui-stage" data-state="blocked">배터리 교체</li>
+        <li class="ui-stage" data-state="todo">재시동</li>
+      </ol>
+      <p class="rule">단계는 class-only 조합이다. 상태는 태그와 같은 done·now·blocked·todo 넷이고, 지금 단계는 <code>aria-current="step"</code>과 채운 표식이 함께 나른다.</p>
     </section>
 
     <section class="entry" id="task-choice">
