@@ -148,3 +148,7 @@ compatibility 파일은 과제 평가·승격 기록에 합산하지 않는다. 
 FleetLeaseConsumer/SimPolicyChain, 외부 Action wire와 물리 장치에는 연결하지 않는다.
 이 절은 연구 경계의 초안이며 실제 구현·시간 측정·철회/격리 실패 차단·새 학습 정책
 물체 평가 증거가 제출되기 전까지 실행 완료나 DEVICE/FIELD 수용을 뜻하지 않는다.
+
+## Amendment by D-857 (2026-10-24)
+
+PromotionRecord의 평가 증거는 사람이 단 정답 또는 사람이 확인한 정답(확정 정답)만 쓴다. 모델 합의로 만든 임시 정답은 증거가 아니다. [D-857](D-857-rosy-learning-product-definition.md)

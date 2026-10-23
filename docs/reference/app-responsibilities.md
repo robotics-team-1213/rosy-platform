@@ -1,6 +1,6 @@
 # 앱별 작업과 책임
 
-Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은 **직접 운전**, Rosy Cam은 **카메라 송신**, Rosy Learning은 **학습 자료 검수**를 맡는다. 앱 화면, API, 사실을 저장하는 정본과 실제 장치 실행 권한은 서로 구별한다.
+Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은 **직접 운전**, Rosy Cam은 **카메라 송신**, Rosy Learning은 **학습 루프(수집 → 정답 → 데이터셋 → 학습 → 평가 → 승격 기록)**를 맡는다(D-857). 앱 화면, API, 사실을 저장하는 정본과 실제 장치 실행 권한은 서로 구별한다.
 
 ## 사용자 진입
 
@@ -10,7 +10,7 @@ Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은
 | 로봇 웹 앱 | Rosy Robot, `middleware/robot_ui/robot` | 상세 상태·전방 영상·작업 준비·로컬 조작·영구 설정·정비 | 직접 운전은 Pilot, 현장 작업 조정은 Fleet |
 | 조종 웹/PWA/Android | Rosy Pilot, `middleware/robot_ui/pilot` | 직접 운전·운전 영상·현재 조종 세션·세션별 설정·기록 | 영구 설정·정비는 같은 대상의 Robot |
 | Android 앱 | Rosy Cam, `operations/site_ui/cam` | 캡처·송신·물리 설치와 연결 안내 | 사이트 승인·좌표 보정은 Fleet 설치 |
-| 학습 작업 화면 | Rosy Learning, `learning/curation/perception/review_app_web` | 객체·픽셀 자료 검수와 승인 export | 학습·평가·모델 활성화는 학습 pipeline owner |
+| 학습 센터 화면 | Rosy Learning, `learning/curation/perception/review_app_web` | 5단계 메뉴(홈·자료·정답·학습·평가·승격): 정답 달기·확인, 학습 실행 요청, 평가 결과, 승격 요청(D-857) | 학습·평가 실행은 각 pipeline owner, 승격 승인·배포·모델 활성화는 Fleet·사람·배포 owner |
 | 표시 전용 | Face, `middleware/robot_ui/face` | 이름·표정·부팅·연결 상태 | 입력·운동 명령 없음 |
 | 관측 서비스 | Rosy Vision, `operations/overhead` | 프레임 수신·관측 생성·허가된 preview | 명령·현장 원장은 Fleet/장치 owner |
 | 공통 신원 | Rosy Account, 기존 Fleet auth 배포 | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
