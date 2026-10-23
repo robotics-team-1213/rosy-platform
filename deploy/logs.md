@@ -3148,3 +3148,17 @@
 - gate 변화: 없음. 시간 경계·명령 권한·실물 수용을 변경하지 않는다.
 - 실행: 검증된 후보에서 별도 engineering NativeSIM 1회 PASS·RGB1584프레임·전체 정리 확인. watchdog 중단은 재현되지 않아 관측은 null이며, 기존 고정 수집본에 추가하지 않았다. 전체 회수·소스 바이트·무결한 녹화·정리 증거를 독립 검토했다.
 - CE: 미해결. 단일 팔 수집 중단 원인을 진단할 근거만 보완했다.
+
+## 2026-10-23 · 90b4bb3d0e · teacher 그리퍼 실패 표본 보존
+
+- 변경: 기존 gripper verifier가 거부한 관측·전체 관절 위치·각도·범위·시각·phase·선행 command를 결과에 보존한다. 원래 읽은 표본만 사용하며 진단 직렬화 실패는 오류 종류만 남기고 원래 예외를 다시 던진다.
+- 근거: 고정 새 수집9완료 뒤 다음 시도에서 held predicate HOLD, 원본1023프레임·정리 확인. 실패 아카이브1,091파일 바이트 대조와 원격 tests-only7RED/2PASS, 독립 안전 검토. [관측 기록](../docs/validation/omx-teacher-gripper-observation-2026-10-23/result.md).
+- gate 변화: 없음. 판정 범위·freshness·명령·정리·admission을 변경하지 않고 두 고정 수집본을 HOLD로 보존한다. 새 native 진단·학습·정책 평가는 실행하지 않았다.
+- CE: 미해결. 실패 순간 관측이 없어 물리 원인을 확정하지 않으며 최종 각도를 실패 표본으로 대체하지 않는다.
+
+## 2026-10-23 · dec8962001 · teacher 그리퍼 진단 회귀 검증
+
+- 변경: 그리퍼 진단 보완의 실제 원격 회귀 결과와 실행 범위를 별도 검증 기록에 연결했다.
+- 증거: 커밋 source의 원격 진단·종료 처리14PASS와 기존 gripper/Pilot 계약18PASS, 두 로그 모두 known_failures NEW0. [회귀 검증](../docs/validation/omx-teacher-gripper-observation-2026-10-23/verification.md)에 실행 범위와 로그 해시를 보존했다.
+- gate 변화: 없음. 새 native 실행·그리퍼 물리 원인 해결·학습·정책 평가 증거가 아니며 두 고정 수집본은 HOLD로 유지한다.
+- CE: 미해결. 정확한 실패 표본의 보존 회귀만 통과했고 실제 실패 순간 물리 상태는 아직 확인하지 못했다.
