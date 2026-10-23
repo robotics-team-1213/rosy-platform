@@ -327,3 +327,23 @@ def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
     assert call(engine, 'GET', prefix)[0] == 200
     assert call(engine, 'POST', prefix + '/delegations', body)[0] == 403
 
+
+def test_control_unit_sample_refuses_bad_candidates_and_cancels_the_bound_task():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
+    prefix = '/api/fleet/control-unit/delegations'
+    body = {'delegation_id': 'bound-cancel', 'target_unit': 'sample-unit', 'robot_id': 'sample-robot',
+            'goal': {'x': 1, 'y': 2, 'yaw': 0}}
+    assert call(engine, 'POST', prefix, body | {'actor_id': 'other'})[0] == 422
+    assert call(engine, 'POST', prefix, body | {'goal': {'x': True, 'y': 2, 'yaw': 0}})[0] == 422
+    assert call(engine, 'POST', prefix, body | {'target_unit': 'other'})[0] == 409
+    _, submitted = call(engine, 'POST', prefix, body)
+    path = prefix + '/sample-unit/bound-cancel'
+    _, approved = call(engine, 'POST', path + '/approve',
+                       {'expected_revision': submitted['delegation']['revision']})
+    task_id = approved['delegation']['local_task_id']
+    status, canceled = call(engine, 'POST', path + '/cancel', {})
+    assert status == 200 and canceled['delegation']['status'] == 'CANCELED'
+    assert call(engine, 'GET', '/api/fleet/tasks/' + task_id)[1]['task']['status'] == 'CANCELED'
+    assert call(engine, 'POST', path + '/cancel', {})[1] == canceled
+
