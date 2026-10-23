@@ -1,5 +1,4 @@
 """Actual LeRobot reader; Hub transport is an in-memory immutable-byte fixture."""
-import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
