@@ -209,3 +209,38 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert 'commissioning_view.py' in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
     assert 'rosy-omx-camera@front.service' in view['Unit']['After']
+
+
+def _producer_world(runtime, monkeypatch, owners_by_call):
+    """systemctl reports the preview active; fuser answers from the given sequence."""
+    import subprocess
+    calls = {'fuser': 0}
+
+    def command(args):
+        if args[0] == 'systemctl':
+            return 'ActiveState=active\nMainPID=4242\nInvocationID=abc\n'
+        owners = owners_by_call[min(calls['fuser'], len(owners_by_call)-1)]
+        calls['fuser'] += 1
+        if owners is None:
+            raise subprocess.CalledProcessError(1, args)
+        return owners
+    clock = {'t': 0.0}
+    monkeypatch.setattr(runtime, 'command', command)
+    monkeypatch.setattr(runtime.time, 'monotonic', lambda: clock['t'])
+    monkeypatch.setattr(runtime.time, 'sleep', lambda s: clock.__setitem__('t', clock['t']+s))
+    return calls
+
+
+def test_producer_waits_for_the_preview_to_open_the_camera_at_boot(monkeypatch):
+    runtime = load('camera_readiness')
+    calls = _producer_world(runtime, monkeypatch, [None, None, ' 4242'])
+    assert runtime.producer('top', '/dev/video0')['MainPID'] == '4242'
+    assert calls['fuser'] == 3
+
+
+@pytest.mark.parametrize('owners', [None, ' 4242 999', ' 999'])
+def test_producer_still_refuses_a_missing_or_shared_owner_after_the_wait(monkeypatch, owners):
+    runtime = load('camera_readiness')
+    _producer_world(runtime, monkeypatch, [owners])
+    with pytest.raises(RuntimeError, match='sole camera owner'):
+        runtime.producer('top', '/dev/video0', wait_s=2.0)
