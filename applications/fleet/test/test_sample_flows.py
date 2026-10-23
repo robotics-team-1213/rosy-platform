@@ -301,7 +301,7 @@ def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
     status, submitted = call(engine, 'POST', prefix + '/delegations', body)
     assert status == 200 and submitted['delegation']['status'] == 'PENDING'
     assert call(engine, 'POST', prefix + '/delegations', body)[1] == submitted
-    assert call(engine, 'POST', prefix + '/delegations', body | {'robot_id': 'other'})[0] == 409
+    assert call(engine, 'POST', prefix + '/delegations', body | {'goal': {'x': 3, 'y': 2, 'yaw': 0}})[0] == 409
     path = prefix + '/delegations/sample-unit/sample-intent'
     assert call(engine, 'GET', path)[1] == submitted
     assert call(engine, 'POST', path + '/approve', {'expected_revision': 0})[0] == 409
@@ -311,7 +311,7 @@ def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
     assert status == 200 and row['local_actor'] == 'sample' and row['status'] == 'QUEUED'
     task_id = row['local_task_id']
     assert call(engine, 'GET', '/api/fleet/tasks/' + task_id)[1]['task']['status'] == 'QUEUED'
-    engine.advance('control_units', 'complete')
+    engine.advance('monitoring', 'complete')
     completed = call(engine, 'GET', path)[1]
     assert completed['delegation']['status'] == 'COMPLETED'
     assert completed['delegation']['result']['task_id'] == task_id
