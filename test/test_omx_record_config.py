@@ -124,3 +124,13 @@ def test_bimanual_children_cannot_reopen_shared_camera(module, config):
     config['robot']['arm_a']['cameras'] = config['robot']['cameras']
     with pytest.raises(ValueError, match='camera'):
         module.validate_config(config)
+
+
+@pytest.mark.parametrize('paired', [False, True])
+@pytest.mark.parametrize('video', [False, None, 0, 'true'])
+def test_native_sdk_camera_omission_is_rejected_before_recording(module, config, paired, video):
+    if paired:
+        config = bimanual(config)
+    config['dataset']['video'] = video
+    with pytest.raises(ValueError, match='video'):
+        module.validate_config(config)
