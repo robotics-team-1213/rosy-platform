@@ -75,14 +75,14 @@
 
 모델 PC `~/rosy-test/vlm-bench/out/<모델>-<사진>/{rows.jsonl,summary.json,*.log}`, 실행 스크립트 `run.sh`·`rerun.sh`. 실행 환경: torch 2.11.0+cu128, torchvision 0.26.0, transformers 5.20.2.
 
-| 파일 | sha256 |
+| 파일 | 해시 |
 | --- | --- |
-| Qwen3-VL-8B-Instruct-front/rows.jsonl | `c5603c8eb89530a9523271599ed7027bab4ca4d66af580addb815ae65ce8ec93` |
-| Qwen3-VL-8B-Instruct-top/rows.jsonl | `9127e1ea3028a1a34ef176423f1efde12307c351ea8cd7816530cd79ddbbb20a` |
-| Qwen3-VL-8B-Instruct-wrist/rows.jsonl | `180a61b0d247b43bdba7c18b1221e7b3f37c9c9bdb21050e295dc77123d98688` |
-| Qwen3-VL-4B-Instruct-front/rows.jsonl | `491f12a643b624d7f62a64400b90337ead0ab69eccbca88684c40c3d660b2e4d` |
-| Qwen3-VL-4B-Instruct-top/rows.jsonl | `f58ac11bc1c63deee6164a519930247b256758c1bba70872079fa27f260df34a` |
-| Qwen3-VL-4B-Instruct-wrist/rows.jsonl | `c3913706df4c81dabb63a7d33d0a5b2d7051ec44a6e23728be7a8b84c02e40d5` |
-| Qwen3.5-4B-front/rows.jsonl | `097c1f0313b7f48012a505c69aae1cf5ee9b1e0c8c6107eb25b0a2121cb1d2f3` |
-| Qwen3.5-4B-top/rows.jsonl | `1ff50f15a8da1701d547afb01988ef644da0a9368906e37aed7a347c6c263a30` |
-| Qwen3.5-4B-wrist/rows.jsonl | `6a110928e6005feed12dd30f82dc6a780a08bfb10f8dcae7d3543fccf142cd94` |
+| Qwen3-VL-8B-Instruct-front/rows.jsonl | sha256 `c5603c8eb89530a9523271599ed7027bab4ca4d66af580addb815ae65ce8ec93` |
+| Qwen3-VL-8B-Instruct-top/rows.jsonl | sha256 `9127e1ea3028a1a34ef176423f1efde12307c351ea8cd7816530cd79ddbbb20a` |
+| Qwen3-VL-8B-Instruct-wrist/rows.jsonl | sha256 `180a61b0d247b43bdba7c18b1221e7b3f37c9c9bdb21050e295dc77123d98688` |
+| Qwen3-VL-4B-Instruct-front/rows.jsonl | sha256 `491f12a643b624d7f62a64400b90337ead0ab69eccbca88684c40c3d660b2e4d` |
+| Qwen3-VL-4B-Instruct-top/rows.jsonl | sha256 `f58ac11bc1c63deee6164a519930247b256758c1bba70872079fa27f260df34a` |
+| Qwen3-VL-4B-Instruct-wrist/rows.jsonl | sha256 `c3913706df4c81dabb63a7d33d0a5b2d7051ec44a6e23728be7a8b84c02e40d5` |
+| Qwen3.5-4B-front/rows.jsonl | sha256 `097c1f0313b7f48012a505c69aae1cf5ee9b1e0c8c6107eb25b0a2121cb1d2f3` |
+| Qwen3.5-4B-top/rows.jsonl | sha256 `1ff50f15a8da1701d547afb01988ef644da0a9368906e37aed7a347c6c263a30` |
+| Qwen3.5-4B-wrist/rows.jsonl | sha256 `6a110928e6005feed12dd30f82dc6a780a08bfb10f8dcae7d3543fccf142cd94` |
