@@ -12,7 +12,7 @@
 | **Rosy Cam** | 카메라 폰에서 천장 영상 캡처·전송 | `operations/site_ui/cam`의 Android 앱. 관측 처리는 Vision 서비스가 담당 |
 | **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출. 별도 미게시 화면을 이름 변경과 함께 추가하지 않음 |
 | **Rosy Games** | 경기 운영과 게임 호스트 상태 확인 | `operations/apps/games`의 노트북 호스트·경기 보드. Fleet 관제나 CORE 로봇 모드가 아님 |
-| **Rosy Vault** | (은퇴 2026-10-24) 보관고 입고·출고·장부·보류 작업 처리 | `rosy-vault` 저장소가 GitHub archived로 은퇴해 개발하지 않는다. 보관고 도메인은 선정되지 않았다 |
+| **Rosy Vault** | (은퇴 2026-10-24) 보관고 입고·출고·장부·보류 작업 처리 | `rosy-vault` 저장소가 GitHub archived로 은퇴해 개발하지 않는다 |
 | **Rosy Device** | (은퇴 2026-10-24) 로봇팔 등 연결 기기의 상태·보정·설정·복구 | `rosy-vault`의 `device_core/web`이었다. 실물 팔 실행 경로는 플랫폼 OMX owner로 흡수한다(D-858). Robot의 `/device` 역할 화면과는 다른 구현이었다 |
 
 ## 외부 업무 앱
