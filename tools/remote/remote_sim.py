@@ -5,6 +5,13 @@
                                       swarm_bench|map_v2_runner|fleet_trips [-- <bench args>]
     python tools/remote/remote_sim.py [...] cmd -- <shell command>
 
+Use ``--durable`` for a long command that must survive an observer's SSH loss. The same
+bounded native run detaches and reconnects; ``remote-run.json`` identifies it. On exhausted
+contact or a missing terminal code, keep that run rather than submitting another. Its
+``<run>.sim-job`` journal retains rc/log after successful source/output cleanup. To follow
+the same actor later, load that metadata and call ``remote_sim_job.follow`` with its host,
+name and a separate local log path; this never places, ships or starts a run.
+
 Hosts: ``ROSY_SIM_HOSTS`` (space separated ``user@addr[=role]``), else ``sim_hosts`` in the
 gitignored ``private/lab-hosts.json`` (D-226), else the pytest hosts of ``remote_pytest.py``.
 The role (``model`` or ``ai``, default ``ai``) only picks the run's caps. The site PC is
