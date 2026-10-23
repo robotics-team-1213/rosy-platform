@@ -47,10 +47,15 @@ def load_control_unit(path):
         url = entry["url"]
         if not isinstance(url, str) or any(ord(c) < 33 or ord(c) == 127 for c in url):
             raise ValueError("INVALID_CONTROL_UNIT_PEER_URL")
-        parsed = urlsplit(url)
-        if (parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password
-                or parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
-            raise ValueError("INVALID_CONTROL_UNIT_PEER_URL")
+        try:
+            parsed = urlsplit(url)
+            httpx.URL(url)
+            if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                    or parsed.username is not None or parsed.password is not None or parsed.port == 0
+                    or parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
+                raise ValueError("INVALID_CONTROL_UNIT_PEER_URL")
+        except (ValueError, httpx.InvalidURL):
+            raise ValueError("INVALID_CONTROL_UNIT_PEER_URL") from None
         if not isinstance(entry["token_file"], str) or not entry["token_file"]:
             raise ValueError("CONTROL_UNIT_SERVICE_TOKEN_FILE_REQUIRED")
         token_path = path.parent / entry["token_file"]

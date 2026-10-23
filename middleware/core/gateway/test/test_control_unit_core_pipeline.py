@@ -25,7 +25,7 @@ def test_delegated_task_dispatches_through_core_and_projects_exact_terminal_resu
     from fleet.swarm.transport import HttpRobotClient
     from test_control_unit_service import cluster, WORK
 
-    core, services = core_client()
+    core, services = core_client(config_overrides={"robot": {"id": "a1", "model": "pinky_pro"}})
     # The CORE-only simulator bench proves a base with synthetic odometry (D-32).
     services.state.set_velocity(0.0, 0.0)
 
