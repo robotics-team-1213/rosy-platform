@@ -12,6 +12,7 @@ import tarfile
 import zipfile
 
 import pytest
+import yaml
 from setuptools.command.develop import develop
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -313,7 +314,30 @@ with TestClient(app) as client:
         assert client.get('/console/assets/' + name).status_code == 200, name
     assert client.get('/console/assets/not-allowed.js').status_code == 404
     assert client.get('/console/assets/%2e%2e/package.xml').status_code == 404
-print('installed namespace, resources and HTTP guards verified')
+from fleet.server.cell_compiler import PalletizingCellJobCompiler
+from fleet.server.cell_goal_evidence import make_cell_job_resolver
+import rosy.processes.palletizing.submission as process_submission
+assert Path(process_submission.__file__).resolve().is_relative_to(installed)
+recipe, cell = json.loads(sys.argv[7])
+compiler = PalletizingCellJobCompiler(tol_m=.001)
+compilation = compiler.compile(recipe, cell)
+candidate = dict(kind='cell_job', recipe=recipe, cell=cell, job=compilation.job,
+                 recipe_sha256=compilation.plan_bundle.recipe_digest,
+                 cell_sha256=compilation.plan_bundle.cell_digest)
+resolve = make_cell_job_resolver(compiler, None)
+document = resolve(candidate, workcell_id='cell-1', instance_id='arm-1')
+assert document['resources'] == [['workcell', 'cell-1'], ['pallet', 'A'], ['pallet', 'B']]
+assert len(document['steps']) == 18
+assert document['ledger_markers'] == [{'after_step_ordinal': 9, 'pallet_id': 'A'},
+                                     {'after_step_ordinal': 18, 'pallet_id': 'B'}]
+candidate['job']['steps'][1]['target']['x'] += .001
+try:
+    resolve(candidate, workcell_id='cell-1', instance_id='arm-1')
+except ValueError as exc:
+    assert 'differs from the recompiled Job' in str(exc)
+else:
+    raise AssertionError('installed Fleet accepted tampered process Job')
+print('installed namespace, resources, HTTP guards and Fleet Cell submission verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
                'core_common.protocol.assistant', 'fleet.server.assistant.runtime',
@@ -362,9 +386,12 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
                'rosy.execution.site.workflow']
+    examples = ROOT / 'operations/processes/cell/examples/omx_sim'
+    documents = json.dumps([yaml.safe_load((examples / name).read_text(encoding='utf-8'))
+                            for name in ('recipe.yaml', 'cell.yaml')])
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected),
-             json.dumps(signed(kind=APPROVE)), json.dumps(binding()), KEY.hex()], tmp_path)
+             json.dumps(signed(kind=APPROVE)), json.dumps(binding()), KEY.hex(), documents], tmp_path)
     if delivery == 'wheel':
         native = tmp_path / 'native/lib/python3.12/site-packages'
         excluded = ('rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')
