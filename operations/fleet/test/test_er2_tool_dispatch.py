@@ -318,9 +318,10 @@ def test_async_replan_tool_uses_trusted_post_action_frame_and_fenced_candidate_w
 
     class ProgressService:
         def snapshot(self, _mission_id):
-            return {"progress": {"snapshot_event_id": 19}}
+            return {"mission": MissionService().get(_mission_id),
+                    "progress": {"snapshot_event_id": 19}}
 
-        def model_context(self, _mission_id, *, principal_id, workcell_id):
+        def model_context_from_snapshot(self, snapshot, *, principal_id, workcell_id):
             assert (principal_id, workcell_id) == ("operator-1", "omx_01")
             return context.model_dump(mode="json")
 
@@ -488,9 +489,9 @@ def test_async_replan_rechecks_scope_after_capture_before_image_egress():
 
     class ProgressService:
         def snapshot(self, _mission_id):
-            return {"progress": {"snapshot_event_id": 19}}
+            return {"mission": dict(mission), "progress": {"snapshot_event_id": 19}}
 
-        def model_context(self, _mission_id, **_scope):
+        def model_context_from_snapshot(self, snapshot, **_scope):
             return context.model_dump(mode="json")
 
     observation = ImageObservation(

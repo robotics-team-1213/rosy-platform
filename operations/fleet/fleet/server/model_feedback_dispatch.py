@@ -373,21 +373,21 @@ class MissionFeedbackToolDispatcher:
         return self._result(tool_name, "unavailable", "REPLAN_OBSERVATION_UNAVAILABLE")
 
     def _current_context(self, scope: MissionFeedbackTurnScope):
-        mission = self.mission_service.get(scope.mission_id)
-        if mission is None:
+        snapshot = self.progress_service.snapshot(scope.mission_id)
+        if snapshot is None:
             return None
+        mission = snapshot["mission"]
         if (mission["principal_id"] != scope.principal_id
                 or mission["workcell_id"] != scope.workcell_id
                 or mission.get("action_id") != scope.action_id
                 or mission.get("attempt_id") != scope.attempt_id
                 or mission.get("dispatch_generation") != scope.dispatch_generation):
             return None
-        snapshot = self.progress_service.snapshot(scope.mission_id)
-        context = self.progress_service.model_context(
-            scope.mission_id, principal_id=scope.principal_id,
+        context = self.progress_service.model_context_from_snapshot(
+            snapshot, principal_id=scope.principal_id,
             workcell_id=scope.workcell_id,
         )
-        if snapshot is None or context is None:
+        if context is None:
             return None
         plan = mission.get("plan") or {}
         task_summary = plan.get("instruction")
