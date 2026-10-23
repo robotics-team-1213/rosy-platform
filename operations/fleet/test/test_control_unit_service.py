@@ -1,6 +1,7 @@
 """Control-unit orchestration uses the real durable Fleet task admission path."""
 
 import asyncio
+from types import SimpleNamespace
 import pytest
 
 from core_common.protocol.control_units import ControlWorkRequest, ControlIngressRequest
@@ -140,3 +141,30 @@ def test_disconnected_ancestor_also_blocks_leaf_admission(tmp_path):
     with pytest.raises((ValueError, ConnectionError)):
         asyncio.run(nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=1))
     assert nodes["A1"].store.get("R", "job-1")["local_task_id"] is None
+
+
+@pytest.mark.parametrize("failure", ["refused", "timeout"])
+def test_scoped_cancel_failure_marks_only_its_row_stale_and_recovery_continues(tmp_path, failure):
+    import httpx
+    from fleet.swarm.transport import RobotApiError
+    nodes, _ = cluster(tmp_path)
+    asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(WORK)))
+    leaf = nodes["A1"]
+    asyncio.run(leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=1))
+    task_id = leaf.store.get("R", "job-1")["local_task_id"]
+    operation = {"boot_id": "00000000-0000-0000-0000-000000000001",
+                 "run_id": "00000000-0000-0000-0000-000000000002", "correlation_id": "attempt-1"}
+    leaf.tasks.store.transition(task_id, "ACCEPTED", actor_id="core", source="operator",
+                                receipt={"accepted": True, "operation": operation})
+    async def failed_cancel(**scope):
+        assert scope["run_id"] == operation["run_id"]
+        if failure == "refused":
+            raise RobotApiError("a1", 409, "NAVIGATION_SCOPE_CHANGED", "scope changed")
+        raise httpx.ReadTimeout("test timeout")
+    leaf.console._client = lambda robot: SimpleNamespace(navigation_cancel_scoped=failed_cancel)
+    leaf.store.request_cancel("R", "job-1")
+    leaf.store.create("A1", "later", WORK | {"target_unit": "A1"}, owner_unit="A1", config_revision="v1")
+    leaf.store.request_cancel("A1", "later")
+    asyncio.run(leaf.refresh())
+    assert leaf.reply("R", "job-1")["stale"] is True
+    assert leaf.store.get("A1", "later")["status"] == "CANCELED"
