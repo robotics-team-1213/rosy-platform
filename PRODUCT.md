@@ -6,7 +6,7 @@
 
 웹, Android 앱, 로봇 LCD
 
-앱 이름과 현재 구현·소유의 기준은 [앱 이름과 역할](docs/reference/app-names-and-roles.md)이다(D-806). Robot·Fleet·Pilot·Cam·Learning·Games, 별도 저장소의 Vault·Device를 구분한다. Cell은 Fleet의 팔레타이징 작업 준비, Account는 공용 계정 기능이며 얼굴 LCD와 Pilot 연결 로비는 상위 앱의 하위 화면이다.
+앱 이름과 현재 구현·소유의 기준은 [앱 이름과 역할](docs/reference/app-names-and-roles.md)이다(D-806). Robot·Fleet·Pilot·Cam·Learning·Games를 구분한다. 별도 저장소 업무 앱이던 Vault·Device는 rosy-vault 은퇴(2026-10-24, D-858)로 개발하지 않으며, 외부 업무 앱은 공개 Fleet HTTP 계약만 소비한다(첫 사례 항만 앱 Harbor). Cell은 Fleet의 팔레타이징 작업 준비, Account는 공용 계정 기능이며 얼굴 LCD와 Pilot 연결 로비는 상위 앱의 하위 화면이다.
 
 ## Users
 
