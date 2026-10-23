@@ -54,7 +54,7 @@ def test_teacher_waypoints_leave_margin_for_the_bounded_action_head():
 def test_teacher_readback_does_not_record_a_gripper_target_the_head_cannot_reach():
     from sim_pick_place_demonstrations import readback_target
     current={'gripper':.4199}
-    desired={'gripper':.3849}
+    desired={'gripper':.3809}
     target=readback_target(current,desired)
     assert target!=desired
     assert 0<current['gripper']-target['gripper']<=.03+1e-12
@@ -65,6 +65,29 @@ def test_contact_squeeze_leaves_source_readback_margin_below_the_model_bound():
     current=.4199
     target=contact_hold_target(current,close=.3804,contact=.4072)
     assert 0<current-target<=.03+1e-12
+
+
+def test_teacher_readback_accepts_contact_pressure_within_head_support():
+    from sim_pick_place_demonstrations import readback_target
+    desired={'gripper':.385}
+    assert readback_target({'gripper':.416},desired)==desired
+
+
+@pytest.mark.parametrize('position,expected',[(1.,False),(.416,True)])
+def test_teacher_grasp_stops_closing_on_verified_contact_not_the_blocked_close_target(position,expected):
+    from sim_pick_place_teacher import grasp_contact_reached
+    assert grasp_contact_reached({'arm':.2,'gripper':position},
+        {'arm':.2,'gripper':.38},gripper='gripper',close=.3804,contact=.4072,
+        arm_tolerance=.02) is expected
+
+
+@pytest.mark.parametrize('position',[.1,float('nan')])
+def test_grasp_contact_cannot_hide_an_unreached_or_invalid_arm_waypoint(position):
+    from sim_pick_place_teacher import grasp_contact_reached
+    with pytest.raises(RuntimeError,match='arm'):
+        grasp_contact_reached({'arm':position,'gripper':.416},
+            {'arm':.2,'gripper':.38},gripper='gripper',close=.3804,contact=.4072,
+            arm_tolerance=.02)
 
 
 def test_teacher_place_pose_adds_clearance_without_changing_the_task_goal():
