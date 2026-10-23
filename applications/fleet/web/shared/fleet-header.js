@@ -65,8 +65,7 @@ function gateEstop(session) {
   else estop.removeAttribute("reason");
 }
 
-// The fold opens itself when access is lost (the token field is inside) and closes again only if it did so.
-let openedForLock = false;
+// The fold is on demand only: losing access rewrites the words and the E-stop, never the row's open state.
 export function setTopbarOpen(open) {
   $("topbar-more").setAttribute("aria-expanded", String(open));
   $("topbar-extra").dataset.open = String(open);
@@ -87,7 +86,6 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
     if (event.key === "Escape") { setTopbarOpen(false); $("topbar-more").focus(); }
   });
   listen($("topbar-more"), "click", () => {
-    openedForLock = false;
     setTopbarOpen($("topbar-more").getAttribute("aria-expanded") !== "true");
   });
 }
@@ -105,13 +103,11 @@ export function showSession(identity) {
   tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
   if (development) $("development-badge").hidden = false;
   gateEstop(identity);
-  if (openedForLock) setTopbarOpen(false);
-  openedForLock = false;
 }
 
 // `refused` is false when the session probe failed for another reason (Fleet down): the words change,
-// the E-stop stays live. `fold` is false on 관제, whose connection view owns the fold.
-export function showSignedOut({fold = true, refused = true} = {}) {
+// the E-stop stays live. A lock never opens the account row (D-741 3): the guide strip's 관제 접속 does.
+export function showSignedOut({refused = true} = {}) {
   $('fleet-account').hidden = true;
   $('fleet-login').hidden = false;
   const tag = $("user-role");
@@ -119,10 +115,6 @@ export function showSignedOut({fold = true, refused = true} = {}) {
   tag.removeAttribute("title");
   tag.setAttribute("status", "crit");
   gateEstop(refused ? null : undefined);
-  if (fold && $("topbar-more").getAttribute("aria-expanded") !== "true") {
-    setTopbarOpen(true);
-    openedForLock = true;
-  }
 }
 
 export function showFleet(fleet, robots = null) {
