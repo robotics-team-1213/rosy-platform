@@ -29,7 +29,7 @@ roles:
     rosy-model-code-watch.service: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
     rosy-model-code-watch.timer: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
     rosy-ollama.service: {run: active, channel: host, doc: deploy/model_pc/README.md}
-    rosy-pilot-fetch@.service: {run: oneshot, channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.service, known_drift: "PYTHONPATH still names the pre-restructure perception dataset folder of the 10-03 work_dir ~/rosy-ml/rosy-platform; install the template when that checkout reaches the learning/curation/perception layout", copies: {rosy-ml/bin/fetch_http.py: learning/curation/perception/fetch_http.py}, doc: deploy/model_pc/README.md}
+    rosy-pilot-fetch@.service: {run: oneshot, channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.service, copies: {rosy-ml/bin/fetch_http.py: learning/curation/perception/fetch_http.py}, note: "modules from the signed model-code release", doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.timer: {run: timer, instances: [9dfk], channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.timer, doc: deploy/model_pc/README.md}
     rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, doc: deploy/model_pc/README.md}
     rosy-review-bridge.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-bridge.timer, doc: deploy/model_pc/README.md}
@@ -73,8 +73,8 @@ roles:
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-v11-sam-worker.service: {run: active, channel: external, dropins: [autostart.conf], note: "SAM benchmark worker outside this repository", doc: deploy/ai_pc/README.md}
   site:
-    rosy-account-tls-renew.service: {run: oneshot, channel: adhoc, source: "rosy-account-preparation-20261019", note: "runs from a preparation folder; move into a release", doc: deploy/site/README.md}
-    rosy-account-tls-renew.timer: {run: timer, channel: adhoc, doc: deploy/site/README.md}
+    rosy-account-tls-renew.service: {run: oneshot, channel: snapshot, template: deploy/site/rosy-account-tls-renew.service, source: ".local/share/rosy/account-tls/releases/*", note: "certificates stay in their data folder", doc: deploy/site/README.md}
+    rosy-account-tls-renew.timer: {run: timer, channel: snapshot, template: deploy/site/rosy-account-tls-renew.timer, doc: deploy/site/README.md}
     rosy-cam-stream.service: {run: oneshot, channel: snapshot, template: deploy/site/rosy-cam-stream.service, source: ".local/share/rosy/cam-screen", doc: deploy/site/README.md}
     rosy-cam-stream.timer: {run: timer, channel: snapshot, template: deploy/site/rosy-cam-stream.timer, doc: deploy/site/README.md}
     rosy-omx-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.service, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
