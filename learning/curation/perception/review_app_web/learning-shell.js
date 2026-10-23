@@ -38,7 +38,11 @@ if (shell && body && main) {
   const nav = document.createElement('nav');
   nav.className = 'learning-primary-nav';
   nav.setAttribute('aria-label', 'Learning 주 메뉴');
-  for (const [key, label, href, icon] of destinations) nav.append(link(label, href, icon, key === current));
+  for (const [key, label, href, icon] of destinations) {
+    const anchor = link(label, href, icon, key === current);
+    if (key === 'data') anchor.setAttribute('aria-label', '자료 등록');  // command search finds it from every page
+    nav.append(anchor);
+  }
   rail.replaceChildren(nav);
   body.prepend(rail);
   body.dataset.seats = 'rail';

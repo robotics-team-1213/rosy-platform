@@ -163,7 +163,9 @@ def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, wid
     for stage, sub, target in STAGE_PAGES:
         page.goto(base + '/learning/evaluate', wait_until='networkidle')
         with page.expect_navigation(wait_until='load'):
-            page.get_by_role('navigation', name='Learning 주 메뉴', exact=True).get_by_role('link', name=stage, exact=True).click()
+            # The 자료 link keeps main's accessible name 자료 등록 so command search finds it on every page.
+            name = {'자료': '자료 등록'}.get(stage, stage)
+            page.get_by_role('navigation', name='Learning 주 메뉴', exact=True).get_by_role('link', name=name, exact=True).click()
         if sub:
             subnav = page.get_by_role('navigation', name=f'{stage} 화면', exact=True)
             with page.expect_navigation(wait_until='load'):
