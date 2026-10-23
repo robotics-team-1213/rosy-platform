@@ -9,6 +9,54 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from act_job import chunk_indices, offline_report, compatible_sources, run
 
 
+def test_bounded_sampling_checks_the_whole_chunk_without_changing_labels():
+    import copy
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id='a',ros_goal_id='ga',
+               **{'observation.state':[state]+[0.]*5,'action':[action]+[0.]*5})
+          for state,action in [(0.,.02),(.01,.02),(.02,.04),(.03,.04),(.04,.04)]]
+    original=copy.deepcopy(rows)
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_and_exit',
+        max_delta_rad=.035)==[1,4]
+    assert rows==original
+
+
+@pytest.mark.parametrize('sampling',['all_frames','command_entry','command_entry_and_exit'])
+def test_bounded_sampling_refuses_an_unrepresentable_gripper_command(sampling):
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id='a',ros_goal_id='ga',
+               **{'observation.state':[0.]*6,'action':[0.]*5+[.039]})]
+    with pytest.raises(ValueError,match='bound|every command'):
+        act_job.training_sample_indices(rows,names,sampling=sampling,max_delta_rad=.035)
+
+
+def test_bounded_state_noise_preserves_all_absolute_chunk_targets():
+    import act_job
+    origin=np.array([0.,0.])
+    targets=np.array([[.02,-.01],[.03,.01]])
+    original=targets.copy()
+    noisy=act_job.augment_training_origin(origin,targets,np.array([-.1,.1]),max_delta_rad=.035)
+    np.testing.assert_allclose(noisy,[-.005,.025])
+    assert np.max(np.abs(targets-noisy))<=.035+1e-12
+    np.testing.assert_array_equal(targets,original)
+    np.testing.assert_array_equal(origin,[0.,0.])
+
+
+def test_state_noise_without_a_bounded_head_remains_gaussian_input_only():
+    import act_job
+    np.testing.assert_allclose(act_job.augment_training_origin(
+        np.array([.1]),np.array([[.9]]),np.array([.02])),[.12])
+
+
+def test_bounded_state_noise_refuses_original_targets_outside_the_head_support():
+    import act_job
+    with pytest.raises(ValueError,match='bound'):
+        act_job.augment_training_origin(np.array([0.]),np.array([[.04]]),
+            np.array([0.]),max_delta_rad=.035)
+
+
 def test_command_entry_sampling_keeps_every_command_and_original_labels():
     import copy
     import act_job
