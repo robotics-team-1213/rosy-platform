@@ -69,3 +69,20 @@ def test_request_cannot_supply_actor_origin_or_peer_address(tmp_path):
     for extra in [{"actor_id": "someone"}, {"origin_id": "B"}, {"url": "http://elsewhere.invalid"}]:
         assert root.post("/api/fleet/control-unit/delegations", headers=headers(),
                          json=WORK | extra).status_code == 422
+
+
+@pytest.mark.parametrize("path,token,method", [
+    ("/api/fleet/control-unit/delegations", "view-token", "list"),
+    ("/api/fleet/control-unit/delegations/R/job-1", "view-token", "get"),
+    ("/api/fleet/control-unit/delegations/R/job-1", "peer-A", "get"),
+])
+def test_unavailable_journal_returns_stable_503(tmp_path, monkeypatch, path, token, method):
+    import sqlite3
+    nodes, _ = cluster(tmp_path)
+    root = client_for(nodes, "R")
+    def unavailable(*args, **kwargs):
+        raise sqlite3.OperationalError("injected journal unavailable")
+    monkeypatch.setattr(nodes["R"].store, method, unavailable)
+    response = root.get(path, headers=headers(token))
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "CONTROL_UNIT_JOURNAL_UNAVAILABLE"
