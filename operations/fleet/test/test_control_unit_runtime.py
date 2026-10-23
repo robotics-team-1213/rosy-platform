@@ -63,13 +63,15 @@ def test_peer_transport_uses_scoped_paths_auth_and_bounded_reply(tmp_path):
     assert json.loads(requests[1].content) == {"origin_id": "R"}
 
 
-@pytest.mark.parametrize("response", [httpx.Response(302, headers={"Location": "http://other.invalid"}),
-                                      httpx.Response(200, content=b"x" * 131073)])
-def test_peer_transport_refuses_redirects_and_oversized_replies(tmp_path, response):
+@pytest.mark.parametrize("response,error,code", [
+    (httpx.Response(302, headers={"Location": "http://other.invalid"}), httpx.HTTPStatusError, None),
+    (httpx.Response(200, json={"data": "x" * 131073}), ValueError, "CONTROL_UNIT_PEER_RESPONSE_TOO_LARGE"),
+])
+def test_peer_transport_refuses_redirects_and_oversized_replies(tmp_path, response, error, code):
     from fleet.server.control_unit_runtime import load_control_unit, ControlUnitPeers
     async def exercise():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: response)) as client:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: response), follow_redirects=True) as client:
             peer = ControlUnitPeers(load_control_unit(config_file(tmp_path)), client)
-            with pytest.raises((ValueError, httpx.HTTPStatusError)):
+            with pytest.raises(error, match=code):
                 await peer("A", "GET", "R/job-1")
     asyncio.run(exercise())

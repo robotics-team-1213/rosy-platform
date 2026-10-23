@@ -63,8 +63,7 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
         if principal.role == "service":
             raise HTTPException(403, detail={"code": "FORBIDDEN"})
         try:
-            return {"delegations": [service.reply(row["origin_id"], row["delegation_id"])
-                                    for row in service.store.list(limit=100)]}
+            return {"delegations": [service.snapshot(row) for row in service.store.list(limit=100)]}
         except sqlite3.Error:
             raise HTTPException(503, detail={"code": "CONTROL_UNIT_JOURNAL_UNAVAILABLE"}) from None
 

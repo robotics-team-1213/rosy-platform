@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 import sqlite3
 
+from core_common.protocol.control_units import ControlDelegationState
 from fleet.server.control_unit_config import _identifier
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
 
-STATES = frozenset({"PENDING", "APPROVING", "REQUESTED", "QUEUED", "ACCEPTED",
-                    "RUNNING", "UNKNOWN", "HOLD", "COMPLETED", "FAILED", "CANCELED", "EXPIRED"})
+STATES = frozenset(state.value for state in ControlDelegationState)
 TERMINAL = frozenset({"COMPLETED", "FAILED", "CANCELED", "EXPIRED"})
 
 
@@ -53,6 +53,11 @@ class ControlUnitStore:
                     created_at TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS fleet_control_delegation_tasks
                     ON fleet_control_delegations(local_task_id);
+                CREATE INDEX IF NOT EXISTS fleet_control_delegation_recent
+                    ON fleet_control_delegations(updated_at DESC,origin_id,delegation_id);
+                CREATE INDEX IF NOT EXISTS fleet_control_delegation_active
+                    ON fleet_control_delegations(updated_at,origin_id,delegation_id)
+                    WHERE status NOT IN ('COMPLETED','FAILED','CANCELED','EXPIRED');
             """)
         with self._transaction() as connection:
             connection.execute("INSERT OR IGNORE INTO fleet_control_unit_identity VALUES (1, ?)",

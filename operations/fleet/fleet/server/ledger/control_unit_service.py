@@ -62,8 +62,10 @@ class ControlUnitService:
         return self.reply(*self._key(row))
 
     def reply(self, origin, identity):
-        row = self.store.get(origin, identity)
-        key = origin, identity
+        return self.snapshot(self.store.get(origin, identity))
+
+    def snapshot(self, row):
+        key = self._key(row)
         projected = row["owner_unit"] != self.unit.unit_id or row["local_task_id"] is not None
         # Immutable terminal outcomes survive disconnect; active projections expire after five seconds.
         stale = row["status"] not in TERMINAL and (key in self._stale or (
@@ -190,5 +192,6 @@ class ControlUnitService:
         active = {self._key(row) for row in rows}
         self._stale.intersection_update(active)
         self._fresh_at = {key: value for key, value in self._fresh_at.items() if key in active}
+        # shortcut: refresh is serial; add per-owner concurrency if work exceeds the five-second freshness window.
         for row in rows:
             await self._sync(row)
