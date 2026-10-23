@@ -44,7 +44,7 @@ def cluster(tmp_path):
             origin, identity = path.split("/")
             if method == "POST":
                 await node.cancel(origin, identity)
-            return node.reply(origin, identity)
+            return await node.read(origin, identity, for_child=sender if method == "GET" else None)
 
         nodes[unit_id] = ControlUnitService(topology, ControlUnitStore(path, unit_id=unit_id),
                                            tasks, Console(), peer=peer)
@@ -119,3 +119,24 @@ def test_active_recovery_does_not_starve_behind_recent_terminal_history(tmp_path
         store.create("A", identity, body, owner_unit="A", config_revision="v1")
         store.project("A", identity, owner_unit="A", owner_revision=1, status="COMPLETED", result={})
     assert [row["delegation_id"] for row in store.active()] == ["old"]
+
+
+def test_active_capacity_preserves_retries_and_terminal_history(tmp_path):
+    store = ControlUnitStore(tmp_path / "unit.db", unit_id="A")
+    for index in range(256):
+        store.create("A", str(index), {}, owner_unit="A", config_revision="v1")
+    with pytest.raises(ValueError, match="CAPACITY"):
+        store.create("A", "overflow", {}, owner_unit="A", config_revision="v1")
+    assert store.create("A", "0", {}, owner_unit="A", config_revision="v1")["revision"] == 1
+    store.project("A", "0", owner_unit="A", owner_revision=1, status="CANCELED", result={})
+    store.create("A", "overflow", {}, owner_unit="A", config_revision="v1")
+    assert len(store.active()) == 256
+
+
+def test_disconnected_ancestor_also_blocks_leaf_admission(tmp_path):
+    nodes, disconnected = cluster(tmp_path)
+    asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(WORK)))
+    disconnected.add("R")
+    with pytest.raises((ValueError, ConnectionError)):
+        asyncio.run(nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=1))
+    assert nodes["A1"].store.get("R", "job-1")["local_task_id"] is None
