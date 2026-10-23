@@ -876,3 +876,11 @@
 - 변경: API v1.290에 ko-KR/en-US, execution_enabled 상태와 기명 운영자 좌표 제출용 AssistantNavigation을 추가했다. 모델의 action_admissible=false와 READ_ONLY 대화는 유지한다.
 - 증거: b0675386a1 집중 94개에 finite/좌표 범위/추가 도구 거부, 자기 CONTROL 요청·현재 권한 재확인, 기존 Task owner 결속을 포함했다. FULL은 별도 결과 기록을 따른다.
 - gate 변화: 없음. CORE 최종 명령 권한·로봇 envelope·Discord 신원은 변경하지 않았다.
+
+## 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약
+
+- 변경: API v1.297에 엄격한 관제 후보·부모 inbox·승인 revision·owner snapshot과 별도 scoped navigation cancel 모델을 등록했다. Envelope 1.0은 유지한다.
+- 증거: 모델 미구현으로 원격 RED를 확인한 뒤 schema·canonical export·API reference를 함께 변경했다. strict identity·finite 좌표·승인 revision·유한 result·boot/run/correlation 필수 결속을 검증한다. 최종 GREEN·공식 전체 범위 결과는 실행 SHA에 결속한다.
+- gate 변화: 없음. 이 변경은 wire 계약이며 HTTP runtime·실행·브라우저·장치 수용 완료가 아니다. 코드 소비 경로는 후속 구현에서 연결한다.
+
+구현 보완: oversized schemas.py의 SSH 모델을 독립 `protocol/ssh.py`로 옮기고 기존 canonical export·필드·검증을 유지했다. 루트 스키마의 크기 상한을 늘리거나 검사를 약하게 하지 않고 새 wire 모델을 추가하기 위한 책임 분리다. 중간 크기 위반 커밋은 보존하고 새 브랜치에서 모델 이동과 export를 같은 커밋으로 구성한다.
