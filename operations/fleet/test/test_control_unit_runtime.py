@@ -30,6 +30,8 @@ def test_runtime_config_has_only_direct_neighbors_and_hides_secrets(tmp_path):
     {}, {"R": {"url": "http://root.invalid", "token_file": "parent.token"}},
     {"A": {"url": "http://user:password@parent.invalid", "token_file": "parent.token"}},
     {"A": {"url": "http://parent.invalid/path?token=secret", "token_file": "parent.token"}},
+    {"A": {"url": "http://parent.invalid:invalid", "token_file": "parent.token"}},
+    {"A": {"url": "http://parent.invalid:65536", "token_file": "parent.token"}},
 ])
 def test_rejects_missing_foreign_or_credential_bearing_peer_config(tmp_path, peers):
     from fleet.server.control_unit_runtime import load_control_unit
