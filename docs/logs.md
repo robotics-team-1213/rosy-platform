@@ -10200,3 +10200,10 @@ osy-d395-s1d\`.
 - 변경: [독립·중첩 관제 기동 절차](deployment/control-units.md)와 [소프트웨어 검증](validation/control-unit-pipeline-2026-10-24/result.md)을 기록했다. 직접 자식의 exact 배정 조회는 승인 직전 조상 연결 확인에만 한정한다.
 - 증거: 실제 HTTP 응답 유실/3곳 재시작, 기존 Task→CORE native 결과와 상위 투영, 실제 Chromium·CLI·원장 회귀를 SHA·로그 hash로 구분했다.
 - gate 변화: 최종 통합 검사·착지는 대기하며 D-851 전체·장치/현장 수용을 완료로 바꾸지 않는다. CE 해당 없음.
+
+## 2026-10-24 · d154853fc8 · 관제 위임 소프트웨어 공식 검증·착지
+
+- 변경: [최종 검증 기록](validation/control-unit-pipeline-2026-10-24b/result.md)에 FULL candidate·최신 main 통합·실행별 source와 hash·로컬 착지를 연결했다. 이전 집중 기록은 유지했다.
+- 증거: 공식 FULL 27개 호출과 SVG 단독 재시도, 통합 guard 273 PASS·영향 505 PASS·NEW 0, 구현의 main ancestry와 독립 재검토를 확인했다. `land_exit=0`, push 안 함.
+- gate 변화: D-855 유한 이동 위임의 소프트웨어 범위다. D-851 전체·실물·배포·원격 CI 수용을 열지 않는다.
+- CE: 미해결 — 기존 SVG label 측정의 간헐 0px 원인은 미확인이다. 단독 재시도 통과와 다음 관측을 기록하고 기준·quarantine은 바꾸지 않았다.
