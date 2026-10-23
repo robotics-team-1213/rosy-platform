@@ -21,7 +21,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
-  const units = createControlUnitView({scope, call, parent: el("work-overview"), active, approveReason, principal});
+  const units = createControlUnitView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
   function showKinds(kinds = []) {

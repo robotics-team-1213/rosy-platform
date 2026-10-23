@@ -8,7 +8,7 @@ const unadmitted = new Set(["UNKNOWN_CONTROL_UNIT", "CONTROL_UNIT_OUTSIDE_SCOPE"
 const node = (tag, text, className) => Object.assign(document.createElement(tag),
   {textContent: text || "", ...(className ? {className} : {})});
 
-export function createControlUnitView({scope, call, parent, active, approveReason, principal}) {
+export function createControlUnitView({scope, call, anchor, active, approveReason, principal}) {
   const panel = node("section"), heading = node("h2", "관제 간 작업"), context = node("p"),
     state = node("p"), list = node("ul", "", "work-list"), notice = node("p");
   panel.id = "control-unit-work"; heading.id = "control-unit-heading";
@@ -33,12 +33,12 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
     if (reason) control.setAttribute("reason", reason); else control.removeAttribute("reason");
   }
   const send = button("대상 관제에 요청", "primary"), fresh = button("새 요청 작성"),
-    actions = node("div", "", "ui-actions"), disclosure = node("details");
+    actions = node("div", "", "ui-actions"), disclosure = node("details", "", "ui-disclosure");
   actions.append(send, fresh); form.append(actions);
   disclosure.append(node("summary", "관제에 작업 요청"), form);
   panel.append(heading, context, state, list, disclosure, notice,
     node("p", "취소 요청은 실제 정지 확인과 별개입니다. 소유 관제의 작업 결과와 장치 근거를 확인하세요.", "hint"));
-  parent.append(panel);
+  anchor.before(panel);
   let revision = 0, inFlight = false, busy = false, available = false, unit = null, identity = crypto.randomUUID();
   let draft = null, draftKey = null;
   function saveDraft() {
