@@ -9,7 +9,7 @@ if (shell && body && main) {
   const url = new URL(location.href);
   const review = url.pathname === '/' || url.pathname === '/pixels';
   const current = review ? 'review' : url.pathname === '/catalog' || url.pathname === '/accounts' ? 'data'
-    : url.searchParams.get('view') === 'training' || url.pathname === '/learning/sim' ? 'training' : 'work';
+    : url.searchParams.get('view') === 'training' || url.pathname === '/learning/sim' || url.pathname === '/learning/vlm' ? 'training' : 'work';
   const destinations = [
     ['work', '작업', '/learning', 'list'],
     ['data', '자료', '/catalog', 'folder'],
@@ -45,6 +45,7 @@ if (shell && body && main) {
     ['카메라 맞춤', '/learning/camera', 'image'],
     ['OMX 구간 검수', '/learning/omx', 'robot'],
     ['SIM 실험', '/learning/sim', 'cell'],
+    ['VLM 판단', '/learning/vlm', 'check'],
   ]) toolNav.append(link(label, href, icon, url.pathname === href));
   tools.append(summary, toolNav);
   rail.append(tools);

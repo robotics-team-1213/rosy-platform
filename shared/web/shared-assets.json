@@ -29,6 +29,15 @@
     "ui-wiring.js": "text/javascript",
     "task-chooser.css": "text/css",
     "account-profile.js": "text/javascript",
-    "account-session.js": "text/javascript"
+    "account-session.js": "text/javascript",
+    "control-dom.js": "text/javascript",
+    "form-controls.js": "text/javascript",
+    "collection-controls.js": "text/javascript",
+    "interaction-controls.js": "text/javascript",
+    "workflow-controls.js": "text/javascript",
+    "component-controls.css": "text/css",
+    "component-gallery.css": "text/css",
+    "component-gallery.html": "text/html",
+    "component-gallery.js": "text/javascript"
   }
 }

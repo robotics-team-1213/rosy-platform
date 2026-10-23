@@ -91,7 +91,7 @@ class UiButton extends HTMLElement {
     if (BUTTON_SIZES.includes(size)) delete this.dataset.sizeMissing;
     else this.dataset.sizeMissing = "true";
     const off = this.disabled;
-    this.tabIndex = off ? -1 : 0;
+    this.tabIndex = off || this.matches('[role="tab"][aria-selected="false"]') ? -1 : 0;
     this.setAttribute("aria-disabled", off ? "true" : "false");
     this._syncReason();
   }
