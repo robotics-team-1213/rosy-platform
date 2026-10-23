@@ -1,6 +1,6 @@
 # D-856 첫 동작 계약: simulation TRIP의 독립 조회와 접수 대조
 
-**Status:** P1 상세 설계, 구현 전 계약 검토 대상 (2026-10-24). 상위 목표는 [D-856](../adr/D-856-application-action-boundary.md), 실행 순서는 [P0–P5](2026-10-24-harbor-rosy-application-action-boundary.md)다. 이 문서는 API reference가 갱신되고 공급자 구현이 검증되기 전까지 현행 기능 선언이 아니다.
+**Status:** P1 상세 계약 검토 승인 (2026-10-24). 독립 검토에서 material contradiction이 없음을 확인했다. 상위 목표는 [D-856](../adr/D-856-application-action-boundary.md), 실행 순서는 [P0–P5](2026-10-24-harbor-rosy-application-action-boundary.md)다. 공급자 구현 검증이 끝나기 전까지 운영 활성화 증거로 사용하지 않는다. 대응 API reference는 v1.298이다.
 
 ## 첫 범위와 남는 범위
 

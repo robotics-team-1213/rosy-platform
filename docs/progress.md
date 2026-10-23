@@ -269,6 +269,7 @@ adrs:
 - D-777
 - D-784
 plans:
+- docs/plans/2026-10-24-application-action-contract-design.md
 - docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md
 - docs/plans/2026-10-17-native-map-adoption.md
 - docs/plans/2026-10-15-omx-learning-operations-design.md

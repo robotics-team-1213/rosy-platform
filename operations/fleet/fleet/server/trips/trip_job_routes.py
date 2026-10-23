@@ -6,8 +6,9 @@ import asyncio
 import logging
 import uuid
 
-from fastapi import Depends, HTTPException
-from core_common.protocol.schemas import TripJobRequest, TripJobStep  # noqa: F401 (legacy route exports)
+from fastapi import Depends, HTTPException, Path
+from core_common.protocol.schemas import (TripJobRequest, TripJobStep,  # noqa: F401 (legacy route exports)
+                                         TripJobReadResponse, TripRequestKey)
 
 from fleet.server.job_trip_rows import ACTIVE, TripJobRows
 from fleet.server.job_trip_steps import KIND, JobTripSteps
@@ -42,12 +43,30 @@ async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str, *
 
 
 def install_trip_job_routes(app, *, store, runner, console, deployment_profile: str, episodes,
-                            require_named_operator, operator_guard):
-    """The route and the loop (``app.state.job_trips``); nothing at all outside a profile the registry opens."""
+                            require_named_operator, operator_guard, require_viewer, read_guard):
+    """Scoped facts remain readable when a profile closes; only open profiles install the writer and loop."""
     if store is None:
         return None
+    rows = TripJobRows(store)
+
+    async def read(principal, **identity):
+        job = await asyncio.to_thread(rows.read, principal.principal_id, **identity)
+        if job is None:
+            raise HTTPException(404, detail={"code": "TRIP_JOB_NOT_FOUND"})
+        return {"job": job}
+
+    @app.get("/api/fleet/trip-jobs", dependencies=read_guard, response_model=TripJobReadResponse,
+             tags=["fleet-work"])
+    async def trip_job_request(request_key: TripRequestKey, principal=Depends(require_viewer)):
+        return await read(principal, request_key=request_key)
+
+    @app.get("/api/fleet/trip-jobs/{mission_id}", dependencies=read_guard, response_model=TripJobReadResponse,
+             tags=["fleet-work"])
+    async def trip_job_read(mission_id: str = Path(min_length=1, max_length=192),
+                            principal=Depends(require_viewer)):
+        return await read(principal, mission_id=mission_id)
+
     if not dispatch_open(deployment_profile, KIND):  # a TRIP ledger opened here: its open jobs keep no robot moving
-        rows = TripJobRows(store)
         for mission_id in rows.ids(ACTIVE):
             rows.hold(mission_id, "FLEET_PROFILE_CLOSED", {})
             _LOG.warning("trip job %s held: the %s profile does not run trip steps", mission_id, deployment_profile)

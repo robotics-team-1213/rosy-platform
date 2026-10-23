@@ -54,7 +54,7 @@ from fleet.server.background_workers import proposal_expiry_loop as _proposal_ex
 from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
 from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
-from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop
+from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop, task_dispatch_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
@@ -377,7 +377,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         job_task = asyncio.create_task(app.state.job_trips.run()) if getattr(app.state, "job_trips", None) else None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
-                _task_dispatch_loop(console, task_service, drive_cancel))
+                task_dispatch_loop(console, task_service, drive_cancel))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store, _LOG))
         if mission_dispatcher is not None:
@@ -848,7 +848,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_job_routes import install_trip_job_routes  # D-763 7: trip steps, SIM profile only
     install_trip_job_routes(app, store=cell_job_store, runner=trip_runner, console=console,
                             deployment_profile=deployment_profile, episodes=app.state.ai_episodes,
-                            require_named_operator=require_named_operator, operator_guard=operator_guard)
+                            require_named_operator=require_named_operator, operator_guard=operator_guard,
+                            require_viewer=require_viewer, read_guard=read_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
     cell_prepare = install_cell_app_routes(
         app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,
@@ -893,36 +894,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_charge_runtime(app, factory=charge_runtime_factory, runner=trip_runner, plans=site_maps,
         task_service=task_service, ingress=station_ingress, console=console)
     return app
-
-
-async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService,
-                              drive_cancel: DriveCancelFence) -> None:
-    """Dispatch one eligible task at a time from the app-owned background worker."""
-    while True:
-        try:
-            task_service.scheduler.expire_queued()
-            from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
-            await reconcile_tasks(task_service, console)
-            snapshot = await console.snapshot()
-            console.prune_task_queue_entries(task_service.store.queued_task_ids())
-            available = {
-                row["robot_id"] for row in snapshot["robots"]
-                if row["online"] and row["queued"] is None and row["goal"] is None
-                and row["state"] is not None
-                and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
-                and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
-                and not row["state"].get("capabilities_degraded")
-                and not console.trip_busy(row["robot_id"])  # D-494 5: the trip loop drives it
-                and row["state"].get("safety", {}).get("estop") is False
-            }
-            await task_service.dispatch_next(
-                available, dispatch=lambda task: drive_cancel.fenced_goal(console, task))
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            # A status read failure cannot establish availability. Leave work queued.
-            pass
-        await asyncio.sleep(0.25)
 
 
 async def _mission_model_turn_worker_loop(worker) -> None:

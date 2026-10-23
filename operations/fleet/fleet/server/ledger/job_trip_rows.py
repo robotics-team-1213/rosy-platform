@@ -10,6 +10,7 @@ run these in a worker thread, never on the trip loop's event loop.
 from __future__ import annotations
 
 import hashlib
+import json
 from contextlib import closing
 
 from fleet.server.cell_job_store import CANCELLED_REASON, CellJobStore
@@ -51,6 +52,33 @@ class TripJobRows:
             if row["request_digest"] != request_digest:
                 raise TripError(409, "TRIP_REQUEST_CONFLICT")
             return CellJobStore._get(connection, row["mission_id"])
+
+    def read(self, principal_id: str, *, mission_id: str | None = None,
+             request_key: str | None = None) -> dict | None:
+        """Read a principal's transport-only job in one consistent SQLite snapshot."""
+        if (mission_id is None) == (request_key is None):
+            raise ValueError("Supply exactly one mission ID or candidate request key")
+        field, value = ("mission_id", mission_id) if mission_id is not None else ("request_key", "trip-pool:" + request_key)
+        with closing(self.store._connect()) as connection:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                f"SELECT j.* FROM fleet_cell_jobs j WHERE j.proposal_principal_id=? AND j.{field}=? "
+                "AND EXISTS (SELECT 1 FROM fleet_cell_steps s WHERE s.mission_id=j.mission_id AND s.action_kind=?) "
+                "AND NOT EXISTS (SELECT 1 FROM fleet_cell_steps s WHERE s.mission_id=j.mission_id AND s.action_kind!=?)",
+                (principal_id, value, KIND, KIND)).fetchone()
+            if row is None:
+                return None
+            steps = [dict(step) for step in connection.execute(
+                "SELECT step_index,step_json,status,action_id,attempt_id,reason FROM fleet_cell_steps "
+                "WHERE mission_id=? ORDER BY step_index", (row["mission_id"],))]
+            for step in steps:
+                step["step"] = json.loads(step.pop("step_json"))
+            key = row["request_key"]
+            return {"mission_id": row["mission_id"],
+                    "request_key": key.removeprefix("trip-pool:") if key.startswith("trip-pool:") else None,
+                    "request_digest": row["request_digest"], "robot_id": row["instance_id"],
+                    "status": row["status"], "current_step_index": row["current_step_index"],
+                    "steps": steps, "reason": row["reason"], "updated_at": row["updated_at"]}
 
     def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list, *,
                request_key: str | None = None, request_digest: str | None = None) -> dict:

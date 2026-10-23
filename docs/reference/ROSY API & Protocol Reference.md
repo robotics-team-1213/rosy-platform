@@ -5,9 +5,19 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.292
+**Version:** v1.298
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.298 Scoped transport execution snapshots (D-856)
+
+`GET /api/fleet/trip-jobs/{mission_id}` and `GET /api/fleet/trip-jobs?request_key=...` return `TripJobReadResponse`: `{job: TripJobSnapshot}`. Existing read guards and viewer authentication apply. Only the job's creating principal may read it through these routes. A missing identity, another principal's job, a Cell Job or a mixed-kind job is 404 `TRIP_JOB_NOT_FOUND`. Authentication/permission errors remain 401/403. Request-key lookup accepts the original candidate key (1–128 characters, trimmed, no control characters), URL-query encoded; invalid query input is 422. The internal `trip-pool:` prefix is not exposed.
+
+`TripJobSnapshot` contains `mission_id, request_key, request_digest, robot_id, status, current_step_index, steps, reason, updated_at`. A legacy single-robot job has `request_key: null`. Each ordered step contains `step_index, step: {to, via}, status, action_id, attempt_id, reason`. Unstarted action/attempt IDs are null; existing TRIP identity and ledger state are preserved. No recipe/cell/process documents, pallet/layer metadata, credentials, grants or other principal identity are returned. Schemas are exported from `core_common.protocol.schemas`.
+
+For candidate jobs, `request_digest` is the existing SHA-256 of canonical JSON `{candidates: ordered_candidate_ids, steps: normalized_steps}` (sorted keys, compact separators, UTF-8, `ensure_ascii=False`). A consumer reconciles key, digest, steps and selected robot membership. A 404 is a point-in-time absence and does not prove a delayed POST cannot commit: it must not trigger automatic resubmission, a fresh key, reassignment or occupancy release.
+
+Reads stay installed when the deployment profile closes, provided the persistent store is configured. They do not resume jobs or alter claims/leases/state. Existing startup HOLD remains; POST admission stays simulation-only and is a named operator's explicit approval/start, not an application proposal. `GOAL_CONFIRMED` here means the TRIP reached its destination, never cargo placement, arm retreat or business completion. Envelope 1.0 and existing POST responses are unchanged.
 
 ### v1.292 Candidate trip admission (D-836)
 
@@ -3600,6 +3610,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
 | v1.289 | 2026-10-20 | D-810 Console operator assistant: source-isolated strict intake, own conversation reads, durable model attempts, read-only facts and explicit unavailable/UNKNOWN states. No device execution authority. |
