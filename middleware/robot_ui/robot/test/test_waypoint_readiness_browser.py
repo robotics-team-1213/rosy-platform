@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
@@ -143,3 +144,51 @@ def test_short_waypoint_list_sits_under_the_status_line():
 
     assert "현재 위치를 읽었습니다" in gaps["above"], gaps
     assert gaps["between"] <= gaps["gap"] + 1, gaps
+
+
+def test_waypoint_errors_describe_the_field_and_preserve_failed_save_input():
+    server = safe_http_server(_Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            result = page.evaluate("""async () => {
+              await import('/common/ui.js');
+              const {mount} = await import('/middleware/robot_ui/robot/panels/setup/waypoints.js');
+              const root = document.createElement('main'); document.body.append(root);
+              const callbacks = {}; let calls = 0;
+              const cleanup = mount(root, {role:'operator', store: {
+                poll(path, interval, onData) { callbacks[path] = onData; return () => {}; }
+              }, api: async () => {calls++; throw new Error('save refused');}});
+              callbacks['/api/v1/robot/state']({pose:{x:1,y:2,yaw:0}, evidence:{pose:{evidence:'fresh'}}});
+              const form = root.querySelector('form'), field = form.querySelector('input');
+              form.dispatchEvent(new Event('submit', {cancelable:true}));
+              const described = (field.getAttribute('aria-describedby') || '').split(/\\s+/)
+                .map(id => document.getElementById(id)?.textContent || '').join(' ');
+              const invalid = field.getAttribute('aria-invalid');
+              field.value = 'keep this waypoint';
+              form.dispatchEvent(new Event('submit', {cancelable:true}));
+              await new Promise(resolve => setTimeout(resolve, 50));
+              const saved = {invalid, described, value:field.value, calls,
+                retryEnabled:!form.querySelector('ui-button').disabled, text:root.textContent};
+              cleanup(); return saved;
+            }""")
+            assert result["invalid"] == "true"
+            assert "이름을 입력하세요" in result["described"]
+            assert result["value"] == "keep this waypoint"
+            assert result["calls"] == 1 and result["retryEnabled"]
+            assert "저장하지 못했습니다" in result["text"]
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                for sheet in ("tokens.css", "components.css", "component-controls.css"):
+                    page.add_style_tag(path=str(REPO / "shared/web" / sheet))
+                Path(output).mkdir(parents=True, exist_ok=True)
+                page.set_viewport_size({"width": 390, "height": 844})
+                page.screenshot(path=str(Path(output) / "robot-waypoint-save-error-390.png"))
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

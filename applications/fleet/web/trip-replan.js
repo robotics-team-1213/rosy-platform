@@ -77,7 +77,7 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
       box.append(line);
     }
     const actions = document.createElement("div");
-    actions.className = "stuck-actions";
+    actions.className = "stuck-actions ui-action-bar";
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-label", `${robotId} ${label}`);
     for (const [node, key, reason, click] of buttons) {
