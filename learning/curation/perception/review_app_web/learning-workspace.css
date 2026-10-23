@@ -53,3 +53,9 @@
   .workspace-block .search-field { grid-column: 1 / -1; }
   .learning-shell .ui-pathbar #updated { display: none; }
 }
+.evaluate-sources { display: grid; gap: var(--space-4); }
+.evaluate-source { min-width: 0; padding-block: var(--space-3); border-block-start: 1px solid var(--surface-line); }
+.evaluate-source h3 { margin: 0 0 var(--space-2); font-size: var(--text-body); }
+.evaluate-source p { margin-block: 0 var(--space-2); }
+.evaluate-source table { display: block; max-inline-size: 100%; overflow-x: auto; border-collapse: collapse; margin-block-end: var(--space-2); font-size: var(--text-label); }
+.evaluate-source th, .evaluate-source td { text-align: start; padding: var(--space-1) var(--space-2); border-block-end: 1px solid var(--border-subtle); }

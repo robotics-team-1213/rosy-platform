@@ -283,7 +283,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                          '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
                          '/learning-shell.js':'learning-shell.js', '/learning-shell.css':'learning-shell.css',
                          '/learning-connections.js':'learning-connections.js', '/learning-connections.css':'learning-connections.css',
-                         '/learning-workspace.css':'learning-workspace.css'}
+                         '/learning-workspace.css':'learning-workspace.css',
+                         '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name

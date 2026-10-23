@@ -197,6 +197,7 @@ def test_local_mode_has_no_actor_and_serves_the_page(tmp_path):
                               token=summary['token'])
         assert code == 200 and saved['actor'] is None
         for path, marker in [('/learning/vlm', 'Rosy Learning — VLM 판단'), ('/vlm.js', '/api/learning/vlm/'),
-                             ('/vlm.css', '.vlm-work'), ('/learning-shell.js', '/learning/vlm')]:
+                             ('/vlm.css', '.vlm-work'), ('/learning-shell.js', '/learning/vlm'),
+                             ('/learning/evaluate', 'Rosy Learning — 평가·승격'), ('/evaluate.js', '/api/learning/vlm/evaluation')]:
             with urllib.request.urlopen(base + path) as response:
                 assert marker in response.read().decode('utf-8')

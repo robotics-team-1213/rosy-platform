@@ -70,6 +70,19 @@ python test/known_failures.py $RosyScratch/pinky-review-run.txt
 Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 출력으로 남긴다. pytest의 종료 코드와 출력의 실패 요약도 함께 확인한다.
 
 개발용 순수 좌표 기하 시험은 Node 24 이상에서 `node --test test/learning/perception/review_box_geometry.test.mjs`로 실행한다. Node는 앱 실행 의존성이 아니다.
+### 다섯 단계 메뉴 (D-857)
+
+주 메뉴는 학습 루프의 단계다: **홈** `/learning` · **자료** `/catalog` · **정답** `/` · **학습** `/learning?view=training` · **평가·승격** `/learning/evaluate`. 도메인(차로·객체·OMX·SIM·VLM·판단 모델)은 메뉴가 아니라 `?domain=` 필터다(값 `lane`·`object`·`omx`·`sim`·`vlm`·`decision`). 여러 도메인을 나열하는 홈과 평가·승격만 이 값을 따르고 다른 화면은 무시한다. 화면이 여럿인 단계는 경로 줄에 작은 하위 메뉴를 보인다. 모든 기존 화면은 주 메뉴 한 번과 하위 메뉴 한 번 안에 닿고, 기존 URL은 그대로다.
+
+| 단계 | 화면 |
+|---|---|
+| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`. Hugging Face 가져오기는 상단 **설정 › 계정과 외부 자료** `/accounts` |
+| 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, OMX 구간 `/learning/omx`, VLM 판단 `/learning/vlm` |
+| 학습 | 학습 실행 `/learning?view=training`, SIM 실험 `/learning/sim` |
+| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 실행기의 평가 단계, VLM 모델 대 확정 정답). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
+
+계정과 저장 공간은 메뉴가 아니라 상단 **설정**에 있다(`/accounts`, `/learning#storage-panel`). 화면 제목은 `Rosy Learning — <화면>`이다.
+
 ### 공통 학습 작업 화면 (D-458)
 
 같은 서버의 `/learning`에서 현재 자료의 검수 → 승인 자료 준비 → 데이터셋 생성 → 학습 → 평가 → 적용 검토를 이어간다.
@@ -460,7 +473,7 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
 
 ## VLM 판단 (D-853 Proposed)
 
-작업 도구의 **VLM 판단**(`/learning/vlm`)에서 닫힌 VLM 질문(`tools/vlm_question_bench.py`)의 사람 정답을 사진마다 단다(T1, `docs/plans/2026-10-23-vlm-fast-judge-design.md`). 정답 달기 화면에는 모델 답을 보내지 않는다. 평가 탭은 정답 있는 사진만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
+정답 메뉴의 **VLM 판단**(`/learning/vlm`)에서 닫힌 VLM 질문(`tools/vlm_question_bench.py`)의 사람 정답을 사진마다 단다(T1, `docs/plans/2026-10-23-vlm-fast-judge-design.md`). 정답 달기 화면에는 모델 답을 보내지 않는다. 평가 탭은 정답 있는 사진만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
 
 운영 검수 state와 섞지 않도록 별도 state를 만든다.
 

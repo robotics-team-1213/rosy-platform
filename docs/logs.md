@@ -10079,3 +10079,9 @@ osy-d395-s1d\`.
 - 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
 - 증거: `test_vlm_judge.py`, `test_vlm_judge_browser.py`(원격 시험 PC). 실제 정답 품질·모델 PC 운영은 아직이다.
 - gate 변화: 없음. 평가 전용 정답이며 검수 승인·export·학습 자료가 아니다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · Learning 다섯 단계 메뉴(D-857 §3)
+
+- 변경: Learning 주 메뉴를 홈·자료·정답·학습·평가·승격 다섯 단계로 바꾸고 「작업 도구」 펼침을 없앴다. 화면이 여럿인 단계(자료·정답·학습)는 경로 줄 하위 메뉴로 기존 화면을 두 번 안에 연다. 계정·저장 공간은 상단 「설정」으로 옮겼다. 새 `/learning/evaluate`(`evaluate.html/js`)는 학습 실행기 평가 단계와 VLM 모델 대 확정 정답을 읽기 전용으로 모으고, `?domain=` 필터를 따르며, 승격 요청은 비활성(다음 조각)이다. 기존 URL은 그대로다.
+- 증거: `test_learning_shell_browser.py`(다섯 단계·두 번 안 도달·설정), `test_app_shell_seats.py`, `test_learning_workspace_browser.py`, `test_vlm_judge.py`(원격 시험 PC).
+- gate 변화: 없음. 승격 승인·배포는 Fleet·사람(D-793)이며 이 화면은 근거만 보인다. CE 해당 없음: 화면 구조 변경이며 해결한 장애가 없다.

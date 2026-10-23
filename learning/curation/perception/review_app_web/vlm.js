@@ -180,6 +180,7 @@ work(async()=>{
   if(session.ok){editor=account.capabilities.includes('edit');manager=false;}
   $('tab-import').hidden=!manager;
   await load(null);
+  if(location.hash==='#eval')tab('eval');  // the 평가·승격 page links here
   for(const view of Object.keys(summary.views).sort())$('vlm-view').append(new Option(view,view));
   if(!editor)notice('vlm-save-status','조회 화면입니다. 정답 저장은 편집 권한이 필요합니다.');
 });

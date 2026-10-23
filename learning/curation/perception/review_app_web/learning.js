@@ -5,8 +5,11 @@ import { loadStorage, clearStorage } from '/storage.js';
 const $=id=>document.getElementById(id);
 let workspace, busy=false, checkedAt=0, readSequence=0;
 const trainingView=new URL(location.href).searchParams.get('view')==='training';
-$('workspace-title').textContent=trainingView?'학습·결과':'작업';
-document.title=`Rosy Learning — ${trainingView?'학습·결과':'작업'}`;
+$('workspace-title').textContent=trainingView?'학습':'홈';
+document.title=`Rosy Learning — ${trainingView?'학습':'홈'}`;
+// The settings menu links storage here; open it on arrival and on a same-page hash change.
+const openStorage=()=>{if(location.hash==='#storage-panel'){$('storage-panel').open=true;$('storage-panel').scrollIntoView({block:'start'});}};
+addEventListener('hashchange',openStorage);
 $('workspace-review').hidden=trainingView;
 if(trainingView)$('training-controls').open=true;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
@@ -349,3 +352,4 @@ $('pipeline-link').addEventListener('click',()=> {
 });
 $('work-preview-image').addEventListener('error',()=>{$('work-preview').hidden=true;});
 load().catch(()=>{});
+openStorage();
