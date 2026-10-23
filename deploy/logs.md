@@ -3126,3 +3126,10 @@
 - 증거: 독립 안전 검토 후 원격 221 passed/skip 0/NEW 0. 실제 LeRobot 0.4.4의 record·teleoperate 설정 호출 PASS, 원본 설정 보존. 핵심 경계 7개 mutation RED 확인 후 원복 221 passed. [동결 검증 기록](../docs/validation/omx-paired-recording-2026-10-23/result.md).
 - gate 변화: 없음. 합성 bus·typed dispatch 증거이며 실제 SDK 녹화 loop·실물 정지/보정·카메라 시간·학습 정책 성공 수용을 대신하지 않는다. HF 인증은 사용자 지시에 따라 연기했다.
 - CE: 해당 없음. 통합 판단은 코드·회귀·검증 기록으로 복구 가능하며, 별도 단일 팔 수집의 상태 지연은 미해결 작업 기록에 보존한다.
+
+## 2026-10-23 · 625329a2e0 · 실제 SDK 녹화에서 RGB 누락 설정 거부
+
+- 변경: 실제 LeRobot 0.4.4 recorder가 `video=false`에서 카메라 필드를 버리는 것을 관측해, 녹화 설정을 SDK 기본값 또는 boolean true로 제한했다. 기존 dispatch 검증은 이 집계를 실행하지 않았다.
+- 증거: 수정 전 단일/양팔 8 RED, 수정 후 원격 231 passed/skip0/NEW0. 합성 장치를 연결한 실제 SDK record loop·writer·reload에서 RGB 영상과 실제 보낸 12 action을 9프레임 확인했고 네 bus OFF·연결 정리 PASS. [새 동결 검증 기록](../docs/validation/omx-paired-sdk-record-loop-2026-10-23/result.md).
+- gate 변화: 없음. 실물 연결·정지·보정·작업 성공·정책 학습 증거가 아니다. 실패 probe와 image-free 데이터셋은 보존하고 학습에서 제외했다.
+- CE: 해당 없음. 비직관적인 SDK 집계 동작을 코드 주석·회귀·검증에 남겼다. 단일 팔 수집 지연은 계속 미해결이다.
