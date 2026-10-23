@@ -4337,3 +4337,10 @@
 - 증거: 실제 수정 전 검사에서 hidden token 입력의 55 NEW를 확인했다. 수정 커밋의 데스크톱·모바일 로그인/재연결 5 cases가 원격 Chromium에서 passed/skip0/NEW0이며, helper 호출을 제외한 AST는 동등하다. [검증 기록](../../docs/validation/fleet-account-visibility-2026-10-23/result.md).
 - gate 변화: 없음. 인증·권한·명령·실물 장치 동작을 변경하지 않는다. 전체 공식 병합 검증은 별도 기록한다.
 - CE: 해당 없음. 기존 helper 사용과 실제 실패·회귀 근거로 판단을 복구할 수 있다.
+
+## 2026-10-23 · 24856e823e · 계정 화면 변경의 로컬 main 통합 근거
+
+- 변경: 계정 화면 준비 보완이 포함된 main 착지와 검증 한계를 별도 기록했다.
+- 증거: guard 273 passed, 영향 범위 4,819 passed/219 skipped 및 6,228 passed/326 skipped, 브라우저 묶음 118 passed. 전체 Node wrapper도 별도 원격 실행에서 통과·skip0이다. 조사 상태 대기 1건은 단독 재검사 통과 후 공식 LOAD-FLAKY로 남았다. [통합 기록](../../docs/validation/fleet-account-visibility-2026-10-23/integration.md).
+- gate 변화: 없음. 동시 실행으로 공유 로그가 겹친 범위의 전체 합계는 주장하지 않으며, 실물·배포·현장 수용과 push는 수행하지 않았다.
+- CE: 해당 없음. 화면 준비 보완은 기존 helper로 설명되며, 남은 대기 불안정 원인은 해결된 교훈으로 기록하지 않는다.
