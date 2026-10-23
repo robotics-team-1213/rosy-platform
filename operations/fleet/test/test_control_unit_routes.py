@@ -42,7 +42,7 @@ def test_submission_uses_server_origin_and_leaf_named_approval(tmp_path):
     assert approved.json()["delegation"]["local_actor"] == "operator-A1"
 
 
-@pytest.mark.parametrize("token", [None, "view-token", "peer-A", "peer-B", "op-token"])
+@pytest.mark.parametrize("token", [None, "view-token", "peer-R", "peer-A", "peer-B", "op-token"])
 def test_inbox_only_accepts_direct_parent_service(tmp_path, token):
     nodes, _ = cluster(tmp_path)
     leaf = client_for(nodes, "A")

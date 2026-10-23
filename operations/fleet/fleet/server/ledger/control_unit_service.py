@@ -2,8 +2,11 @@
 
 from hashlib import sha256
 
+import httpx
+
 from core_common.protocol.control_units import ControlIngressRequest, ControlUnitReply
 from fleet.server.control_unit_store import TERMINAL
+from fleet.swarm.transport import RobotApiError
 
 
 class ControlUnitService:
@@ -167,7 +170,7 @@ class ControlUnitService:
                 self.store.project(*self._key(row), owner_unit=row["owner_unit"], owner_revision=child["revision"],
                                    status=child["status"], result=child["result"])
             self._stale.discard(self._key(row))
-        except (ConnectionError, OSError, ValueError, KeyError):
+        except (ConnectionError, OSError, ValueError, KeyError, RobotApiError, httpx.RequestError):
             self._stale.add(self._key(row))
 
     async def refresh(self):
