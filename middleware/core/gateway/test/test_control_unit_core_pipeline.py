@@ -65,8 +65,15 @@ def test_delegated_task_dispatches_through_core_and_projects_exact_terminal_resu
             control = leaf.tasks.store.dispatch_control()
             leaf.tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-a1")
             fence = DriveCancelFence()
-            task = await leaf.tasks.dispatch_next({"a1"}, dispatch=lambda task: fence.fenced_goal(console, task))
-            assert task["status"] == "ACCEPTED", task
+            dispatch_errors = []
+            async def dispatch(attempt):
+                try:
+                    return await fence.fenced_goal(console, attempt)
+                except Exception as exc:
+                    dispatch_errors.append((type(exc).__name__, str(exc)))
+                    raise
+            task = await leaf.tasks.dispatch_next({"a1"}, dispatch=dispatch)
+            assert task["status"] == "ACCEPTED", (task["reason"], task["receipt"], dispatch_errors)
             assert len(executor.goals) == 1
             operation = task["receipt"]["operation"]
             assert executor.goals[0][1] == task["attempt_id"] == operation["correlation_id"]
