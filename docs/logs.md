@@ -10013,3 +10013,9 @@ osy-d395-s1d\`.
 - 변경: [2차 검증 기록](validation/shared-module-reuse-phase2-2026-10-22.md)에 공유 FULL·실제 브라우저·소비자 소스의 범위와 원본 로그 SHA-256을 연결했다. 1차 동결 기록은 유지한다.
 - 증거: 소비자 집중 원격220 passed/skip0, 전체 Fleet Node363 passed/skip0. 독립 검토 Critical/Important 없음. 공유 Chromium 두 실패의 단독 통과·LOAD-FLAKY와 기본 FULL의 skip을 구분했다.
 - gate 변화: 공유 reader 로컬 main 반영과 소비자 소스의 검증 증거다. 소비자 공식 착지·push·배포·실물 수용을 대신하지 않는다.
+
+## 2026-10-23 · eb22989039 · VLM 빠른 판단 설계와 실험 계획
+
+- 변경: [설계](plans/2026-10-23-vlm-fast-judge-design.md)와 [실험 계획](plans/2026-10-23-vlm-fast-judge-experiment.md)을 추가했다. 모바일 로봇 막힘 판단과 OMX 파지·배치 확인을 전처리 → 닫힌 질문 확률 → 규칙 표로 나눈다.
+- 증거: 문서만. 지연·정확도 수치는 아직 측정하지 않았다.
+- gate 변화: 없음. 코드·모델 설치·AI PC 활성화·사진 보관·vault 관측기 구현을 승인하지 않는다.
