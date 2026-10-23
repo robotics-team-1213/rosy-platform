@@ -33,6 +33,8 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 `POST /api/v1/navigation/cancel-scoped`는 operator 전용의 새 CORE 경로다. 요청은 UUID `expected_boot_id`, UUID `run_id`, 비어 있지 않은 1~128자 `correlation_id`를 모두 요구한다. 세 값이 현재 owner 실행과 맞을 때 기존 NavigationManager 잠금 안에서만 cancel을 수행한다. 결과는 `{navigation,operation}`이며 operation은 해당 실행의 native receipt다. scope 불일치·이미 다른/종단 실행이면 409 `NAVIGATION_SCOPE_CHANGED`이고 다른 목표·trip lease를 바꾸지 않는다. 잘못된 body는 기존 CORE ERR-101 규약의 400 `VALIDATION_ERROR`다. 기존 `/navigation/cancel`은 바꾸지 않는다. 구버전의 scoped 경로 404는 미지원으로 남기며 무조건 취소로 fallback하지 않는다. Fleet은 owner receipt의 boot/run/attempt 결속이 없으면 이 요청을 만들지 않고 결과 불명으로 보존한다.
 
+scoped 취소는 결속된 navigation run만 취소하며 trip lease를 자동 종료하거나 IDLE로 전환하지 않는다. lease 수명·해제는 기존 소유자 경로에 남는다. 응답 `navigation`은 응답 시점의 현재 facade 상태여서 새 run의 상태일 수 있다. 성공 판단은 `operation`의 원래 boot/run/correlation과 TERMINAL/CANCELED에 결속하고 facade 상태를 원래 run의 결과로 해석하지 않는다. native 취소 receipt도 물리 정지 측정 증거는 아니다.
+
 이 절은 공유 계약이며 HTTP·runtime·UI·배치 및 실물 수용은 각 구현 증거로 닫는다. schema 등록·원격 모델 시험만으로 파이프라인이 완성됐다고 주장하지 않는다.
 
 ### v1.292 Candidate trip admission (D-836)

@@ -16,6 +16,8 @@ CORE에 새 `POST /api/v1/navigation/cancel-scoped` 경로를 둔다. expected_b
 
 CORE가 실행과 결과를 소유하며 상위 관제가 최종 명령을 발행하지 않는다. 취소 요청 접수와 물리 정지 완료는 구별한다. 부모는 출처·identity·구성 revision·owner revision이 맞는 응답만 투영하고 stale·불명·부분 응답을 성공으로 덮지 않는다.
 
+scoped 취소 뒤 현재 trip lease를 종료하지 않는다. 그런 후처리는 잠금 해제 뒤 admission된 새 run/lease를 다시 무조건 정지시킬 수 있다. lease 해제는 기존 소유자 경로에 남기고 원래 run의 취소 결과는 결속된 operation receipt로만 판단한다. 응답의 현재 navigation facade는 이미 새 run의 상태일 수 있다.
+
 ### 기존 결정과의 관계
 
 | 결정 | 관계 |
