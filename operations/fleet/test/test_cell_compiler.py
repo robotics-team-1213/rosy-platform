@@ -130,3 +130,44 @@ def test_goal_predicates_need_explicit_geometry():
     from fleet.server.cell_goal_evidence import attach_goal_predicates
     with pytest.raises(KeyError):
         attach_goal_predicates({"steps": [{"inputs": {"item": "box"}}]}, {"box": {"height_m": 0.03}}, None)
+
+
+def test_resolver_accepts_a_process_owned_submission_without_cell_compilation():
+    from fleet.server.cell_goal_evidence import make_cell_job_resolver
+
+    class ProcessCompiler:
+        def compile_submission(self, candidate, *, workcell_id, instance_id):
+            if candidate != {"kind": "cell_job", "job": "checked-by-process"}:
+                raise ValueError("process rejected candidate")
+            return {"job_id": "process-job", "workcell_id": workcell_id, "instance_id": instance_id}
+
+    resolve = make_cell_job_resolver(ProcessCompiler(), None)
+    assert resolve({"kind": "cell_job", "job": "checked-by-process"},
+                   workcell_id="cell-1", instance_id="arm-1") == {
+        "job_id": "process-job", "workcell_id": "cell-1", "instance_id": "arm-1"}
+    with pytest.raises(ValueError, match="process rejected"):
+        resolve({"kind": "cell_job", "job": "tampered"}, workcell_id="cell-1", instance_id="arm-1")
+
+
+def test_resolver_rejects_missing_process_submission_boundary_at_composition():
+    from fleet.server.cell_goal_evidence import make_cell_job_resolver
+
+    assert make_cell_job_resolver(None, None) is None
+    with pytest.raises(ValueError, match="compile_submission"):
+        make_cell_job_resolver(object(), None)
+
+
+def test_process_submission_port_preserves_claims_and_rejects_tampered_jobs():
+    recipe, cell = _documents()
+    adapter = PalletizingCellJobCompiler(tol_m=TOL_M)
+    candidate = _candidate(recipe, cell)
+    result = adapter.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01")
+    assert result["resources"] == [["workcell", "omx_sim"], ["pallet", "A"], ["pallet", "B"]]
+    assert len(result["steps"]) == 18
+    assert result["ledger_markers"] == [
+        {"after_step_ordinal": 9, "pallet_id": "A"},
+        {"after_step_ordinal": 18, "pallet_id": "B"},
+    ]
+    candidate["job"]["steps"][1]["target"]["x"] += 0.001
+    with pytest.raises(ValueError, match="differs from the recompiled Job"):
+        adapter.compile_submission(candidate, workcell_id="omx_sim", instance_id="omx_sim_01")
