@@ -88,14 +88,25 @@ def test_reused_pid_is_not_alive_and_cannot_be_cancelled(tmp_path, transport):
     assert actual([], 'model.example', jobs.KILL, name, digest).returncode != 0
 
 
-def test_claim_without_a_live_actor_never_starts_a_replacement(tmp_path, transport):
+@pytest.mark.parametrize('has_log', [False, True])
+def test_claim_without_a_live_actor_never_starts_a_replacement(tmp_path, transport, has_log):
     home, name, binding, calls, actual = transport
     journal = home / 'rosy-test' / 'runs' / (name + '.sim-job')
     journal.mkdir()
     (journal / 'submitted').mkdir()
-    assert jobs.run('model.example', name, [name], '', 'touch "$HOME/replacement"',
-                    tmp_path / 'run.txt', binding, ssh=[], call=actual,
-                    sleep=lambda _: None, budget=1) == remote_job.VANISHED_EXIT
+    if has_log:
+        (journal / '0.log').write_text('')
+
+    def attempted():
+        return jobs.run('model.example', name, [name], '', 'touch "$HOME/replacement"',
+                        tmp_path / 'run.txt', binding, ssh=[], call=actual,
+                        sleep=lambda _: None, budget=1)
+
+    if has_log:
+        assert attempted() == remote_job.VANISHED_EXIT
+    else:
+        with pytest.raises(remote_job.Lost, match='identity/log mismatch'):
+            attempted()
     assert not (home / 'replacement').exists()
 
 
