@@ -22,6 +22,9 @@
 | `290c8344a0` | 실제 Chromium, 1366/320 × dark/light·미확인 요청 재적재·확정 거절 복구 | 6 PASS, 종료 0, NEW 0 | `rosy-control-browser-retained` |
 | `49eb597185` | 새 구성/store/서비스/HTTP·재시작·CORE 종단·조건부 취소·기존 lease/transport/CLI/앱 16개 파일 | 384 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-final-proof` |
 | `952d50bbad` | 최신 main 통합 후 실제 Chromium: 위임 6·기존 작업 화면 33·공통 컴포넌트 4 | 43 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-ui-main-integrated` |
+| `0cadc26686` | 실제 설정된 routes·앱 생애와 TestClient HTTP 응답 수집 | 17 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-feature-evidence` |
+| `0cadc26686` | 독립 합성 sample unit·기존 sample Task·실제 폼 제출·상태 재조회·viewer 거절 | 52 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-sample-final` |
+| `0cadc26686` | 공통 controls 34·실제 Chromium 43, 초기화·focus·stale·기존 작업 회귀 | 77 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-ui-final-proof` |
 
 ```text
 rosy-scoped-final-green       sha256=a977dd587e2d461c239631727a974a02fd80b5c2cc86e02235d2f8ac5f7dc3b3
@@ -42,6 +45,8 @@ rosy-control-ui-main-integrated sha256=1db530925f8a49ab6adc0066bb767e3406d89db74
 
 ## 실제로 확인한 것
 
+후속 통합의 실행 인자·명시 commit·각 로그와 native transcript hash는 [통합 실행 색인](integration-invocations.json)에 연결했다. 실제 HTTP 관측 6개만 기능 matrix에 verified로 등록하고 기존 receipt를 보존했다. 독립 process-local sample unit의 합성 Task 흐름은 중첩 네트워크 복구·실물 정지의 증거가 아니다. 최신 화면 12장은 [final-ui](evidence/final-ui/)에 추가했으며 앞의 capture를 대체하지 않았다.
+
 - 독립 unit의 자기 작업 승인·대기 취소, 무로봇 aggregate의 실제 CLI 기동을 확인했다. 중첩에서 다른 자식·조상 직통·잘못된 자원·순환·중복 소유·초과 깊이를 거절한다.
 - R→A→A1의 실제 HTTP 경로에서 inbox DB 커밋 뒤 ACK 유실을 주입했다. 같은 identity 재전달 후 한 행·한 Task·같은 승인자를 유지하며 R/A/A1 각각의 재시작에서도 같은 결속을 조회한다. B는 호출하지 않는다.
 - 별도 종단은 R/A/A1 서비스, 실제 FleetConsole·Task scheduler·HTTP RobotClient·CORE API·NavigationManager·native readback·claim 해제를 연결한다. odometry와 localization 관측, actuator 및 transport quiescence는 합성이다. CORE의 readiness 검사를 우회하지 않고 simulator용 odometry 증거를 제공한다. 완료와 취소 모두 원래 boot/run/attempt 결과를 상위까지 보존한다. 이 종단의 관제 peer는 통제된 직접 호출이며, 관제 HTTP 직렬화·인증 왕복은 앞의 HTTP 종단이 별도로 검증한다.
@@ -53,6 +58,8 @@ rosy-control-ui-main-integrated sha256=1db530925f8a49ab6adc0066bb767e3406d89db74
 ## 독립 검토와 한계
 
 계약 검토에서 찾은 새 run/trip lease 취소 경쟁, 복구를 끊는 transport 예외, journal 장애의 500, 승인 목표 누락·미확인 identity 유실·포커스 유실·접수 전 거절 잠금을 각각 회귀로 재현하고 수정했다. 구현·표시·물리 정지를 구분해 검토했다. 공유 SSH 모델 책임 분리는 기존 정의와 AST 동등성을 확인하고 canonical export와 크기 기준을 같은 커밋에 유지했다.
+
+공식 통합은 별도 정적 계약 누락도 찾았다. 새 Console 모듈의 소유 목록, 이동한 worker의 검사 위치, 공통 필드·button kind의 명시적 표기, 소비 API의 feature matrix와 sample producer를 보완했다. 검사를 약하게 바꾸지 않았다. 실제 sample 페이지는 `form.reset()` 뒤 숫자 기본값이 사라져 제출하지 못하는 동작을 재현했으며 `defaultValue`와 초기화 회귀로 고쳤다. 수집기 원본의 method/status/통과 test/source revision에 따라 HTTP receipt를 등록했고, 합성 sample과 실제 backend 응답을 서로의 증거로 대체하지 않았다.
 
 활성 복구는 직렬이며 256개 슬롯 전체의 처리율을 보장한 시험은 아니다. 느린 이웃에서 5초를 넘기면 stale로 보존한다. 기존 순서를 바꾸는 동시 실행 최적화는 이 검증의 범위에 없다. 실제 네트워크·서비스 배포·actuator 동작·물리 정지·ARM64 이미지·현장 화면 수용은 실행하지 않았다. 정책·모델 dispatch의 권한이나 활성 상태를 열지 않았다.
 

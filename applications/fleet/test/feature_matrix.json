@@ -60,12 +60,13 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending configured TestClient observation; SQLite and fake task/device transports",
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
           "contract_tests": [
-            "operations/fleet/test/test_control_unit_routes.py"
+            "operations/fleet/test/test_control_unit_routes.py",
+            "operations/fleet/test/test_control_unit_bootstrap.py"
           ],
-          "test_reference_kind": "pending passing HTTP test capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit"
         },
         {
@@ -77,12 +78,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending configured TestClient observation; SQLite and fake task/device transports",
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
           "contract_tests": [
             "operations/fleet/test/test_control_unit_routes.py"
           ],
-          "test_reference_kind": "pending passing HTTP test capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/delegations"
         },
         {
@@ -94,12 +95,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending configured TestClient observation; SQLite and fake task/device transports",
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
           "contract_tests": [
             "operations/fleet/test/test_control_unit_routes.py"
           ],
-          "test_reference_kind": "pending passing HTTP test capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/delegations"
         },
         {
@@ -111,12 +112,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending configured TestClient observation; SQLite and fake task/device transports",
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
           "contract_tests": [
             "operations/fleet/test/test_control_unit_routes.py"
           ],
-          "test_reference_kind": "pending passing HTTP test capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/delegations/{origin}/{identity}"
         },
         {
@@ -128,12 +129,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending configured TestClient observation; SQLite and fake task/device transports",
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
           "contract_tests": [
             "operations/fleet/test/test_control_unit_routes.py"
           ],
-          "test_reference_kind": "pending passing HTTP test capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve"
         },
         {
@@ -145,12 +146,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending configured TestClient observation; SQLite and fake task/device transports",
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
           "contract_tests": [
             "operations/fleet/test/test_control_unit_routes.py"
           ],
-          "test_reference_kind": "pending passing HTTP test capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel"
         }
       ],
@@ -171,8 +172,9 @@
           ],
           "scenario_id": "control_units.happy",
           "browser_test": "applications/fleet/test/test_sample_browser.py::test_control_unit_form_approves_then_reads_existing_task_result",
-          "sample_status": "pending",
-          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence"
+          "sample_status": "verified",
+          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence",
+          "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
         },
         {
           "id": "control_units.refused",
@@ -188,8 +190,9 @@
           ],
           "scenario_id": "control_units.refused",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[control_units]",
-          "sample_status": "pending",
-          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence"
+          "sample_status": "verified",
+          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence",
+          "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
         },
         {
           "id": "control_units.terminal",
@@ -206,8 +209,9 @@
           ],
           "scenario_id": "control_units.terminal",
           "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[control_units]",
-          "sample_status": "pending",
-          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence"
+          "sample_status": "verified",
+          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence",
+          "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
         }
       ]
     },
