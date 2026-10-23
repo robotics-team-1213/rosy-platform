@@ -854,3 +854,9 @@
 - 변경: 계정 상세(`#topbar-extra`)를 흐름 안 두 번째 행에서 계정 단추 아래 메뉴로 옮겼다. `ui-topbar`를 position:relative 기준으로 두고 메뉴는 absolute·`width:max-content`·`max-width:calc(100% - 2 * var(--space-3))`로 띄우며, 열림 표시는 기존 `[data-open="true"]` 규칙을 그대로 쓴다. `grid-column:1/-1`·`padding-top`·`border-top`을 없애 앱 바 높이를 한 줄로 고정했다. 로그인 전에는 `#fleet-inbox`·`#user-role`을 전 폭에서 숨겨 "나" 자리를 `#fleet-login` 하나로 모은다(D-741 3항, 기존 30rem 전용 규칙의 전 폭 확장). 마크업과 시험은 바꾸지 않았다.
 - 증거: `test_fleet_header.py`(4문서 동일·순서·@media 0·container query 3·min-height), `test_ui_token_contracts.py`(표면 그림자 금지 → 그림자 대신 `--surface-raised`+`--border-strong`+`--radius-panel`), `test_site_map_api.py`(`.topbar-extra[data-open="true"]`와 "identity status actions safety" 문자열 유지), `test_fleet_header_browser.py`(161/163), `test_development_console_browser.py`(123 열기 전 hidden, 149 연 뒤 visible). 원격 pytest 결과는 착지 기록에 남긴다. 브라우저 실행은 fastapi 미설치 환경이라 정적으로만 확인했다.
 - gate 변화: 없음. 실제 화면 정렬과 높이는 브라우저·기기 실행으로 확인해야 한다.
+
+## 2026-10-23 · uncommitted · Fleet 머리 메뉴는 흐름 안 제 줄에 둔다
+
+- 변경: 앞 항목의 띄운 메뉴를 되돌려 `#topbar-extra`를 다시 `grid-column:1/-1` 제 줄로 두고(`padding-top`과 위 테두리는 `--border-subtle`) `ui-topbar`의 `position:relative`를 지웠다. 띄운 메뉴는 main 최상단 잠금 띠의 `관제 접속` 단추를 덮어 그 클릭을 `#console-token`이 가로챘고, 시험은 잠금 띠가 보이는 동안 토큰 칸에 다시 입력하라고 요구한다(`test_start_point_browser.py` 274·289). 또 sticky는 이미 위치 지정 값이라 `position:relative`가 `ui-topbar`의 sticky를 이겨 세로 예산 시험이 깨졌다. 로그인 전 `#fleet-inbox`·`#user-role` 숨김(`:has` 규칙)은 그대로 둔다.
+- 증거: 착지 실행 로그 `run-1-2`·`alone-1-2-1~3`. `test_compact_header_budget_keeps_the_stop_in_view` 두 폭이 `sticky: 'relative'`로 실패했고(`test_fleet_console_browser.py:2546`), `test_start_point_browser.py::test_console_has_no_setup_tools_and_connection_guide_recovers`는 `#console-token`이 포인터를 가로채 60회 재시도 뒤 TimeoutError였다. 정적 시험은 바뀐 시트에서 다시 돌린다.
+- gate 변화: 없음. 메뉴를 펼치면 앱 바가 그 줄만큼 높아진다(닫으면 한 줄).
