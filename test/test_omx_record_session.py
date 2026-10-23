@@ -377,6 +377,19 @@ def test_bimanual_native_child_config_avoids_recursive_choice_registry(tmp_path,
             assert native[section][name]['port'] == json.loads(public)[section][name]['port']
 
 
+def test_body_only_is_explicit_manual_flag_and_recording_is_rejected_before_open(tmp_path):
+    path = bi_config(tmp_path)
+    command = m.Session.command(path, teleop_only=True, body_only=True)
+    assert '--body-only' in command
+    assert '--body-only' not in m.Session.command(path, teleop_only=True)
+    with pytest.raises(ValueError, match='manual'):
+        m.Session.command(path, teleop_only=False, body_only=True)
+    s = m.Session(open_bus=lambda which: pytest.fail('must reject before serial open'),
+                  systemctl=lambda *args: '', run=lambda command: 0, log=lambda **row: None)
+    with pytest.raises(ValueError, match='manual'):
+        s.execute(path, CAPS, teleop_only=False, body_only=True)
+
+
 def gain_session(tmp_path, *, run=lambda command: 0):
     devices = {name + '.' + role: (follower({12: {'p_gain': 640 if name == 'arm_a' else 4000},
                                           14: {'p_gain': 430 if name == 'arm_a' else 550}})
@@ -386,8 +399,8 @@ def gain_session(tmp_path, *, run=lambda command: 0):
     return session, devices, bi_config(tmp_path)
 
 
-@pytest.mark.parametrize('teleop_only', [False, True])
-def test_sessions_preserve_all_pid_gains(tmp_path, teleop_only):
+@pytest.mark.parametrize('teleop_only,body_only', [(False, False), (True, False), (True, True)])
+def test_sessions_preserve_all_pid_gains(tmp_path, teleop_only, body_only):
     session, devices, path = gain_session(tmp_path)
     originals = {arm: {motor: dict(state) for motor, state in devices[arm + '.follower'].motors.items()}
                  for arm in ('arm_a', 'arm_b')}
@@ -397,7 +410,7 @@ def test_sessions_preserve_all_pid_gains(tmp_path, teleop_only):
                 motor: state['p_gain'] for motor, state in originals[arm].items()}
         return 0
     session.run_command = run
-    record = session.execute(path, CAPS, teleop_only=teleop_only)
+    record = session.execute(path, CAPS, teleop_only=teleop_only, body_only=body_only)
     assert record['safe_end']
     assert all(name not in ('p_gain', 'i_gain', 'd_gain') for arm in originals
                for _, name, _ in devices[arm + '.follower'].writes)
@@ -520,7 +533,7 @@ def test_faulted_first_board_never_skips_second_board_cleanup(tmp_path, failure)
         return 1
     s = m.Session(open_bus=devices.__getitem__, systemctl=lambda *args: '', run=run, log=lambda **row: None,
                   clock=lambda: clock[0], sleep=lambda dt: clock.__setitem__(0, clock[0] + dt))
-    record = s.execute(bi_config(tmp_path), CAPS, teleop_only=True)
+    record = s.execute(bi_config(tmp_path), CAPS, teleop_only=True, body_only=True)
     assert not record['safe_end'] and not record['pairs']['arm_a']['safe_end']
     assert record['pairs']['arm_b']['safe_end']
     assert_restored(devices['arm_b.follower'], devices['arm_b.leader'])

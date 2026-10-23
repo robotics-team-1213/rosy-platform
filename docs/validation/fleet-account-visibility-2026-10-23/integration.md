@@ -1,0 +1,11 @@
+# Local main integration — 2026-10-23
+
+Local main fast-forwarded to fix commit `24856e823e2f7f8daa99b7d0b4ba2581d9a93c54`, including the existing account/menu presentation feature and the [browser setup correction](result.md). No push occurred.
+
+The official verification recorded **273 guard passes**, broad groups of **4,819 passed / 219 skipped** and **6,228 passed / 326 skipped**, and **118 browser passes** with browser opt-in enabled. These skipped counts are not browser acceptance. A separate committed remote invocation of `operations/fleet/test/test_site_map_api.py::test_console_web_node_unit_tests_pass -q -rs` returned exit zero with one passing marker and no skips. That wrapper executes every `operations/fleet/test/web/*.test.mjs`, including `fleet-header.test.mjs`, with the existing asset loader. Its log is `C:/DevTemp/learning-execution-20261023/front-node-wrapper/run-1.txt`.
+
+One mobile survey case, `test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft[False-390]`, failed waiting for the second survey point under the broad browser load and passed alone. The official common-Git `rosy-flaky-candidates.txt` binds both results to commit `24856e823e2f` as **LOAD-FLAKY**. This remains a timing risk, not a clean first-run pass or a diagnosed production defect. No assertion, timeout, quarantine or production behavior was changed to accept it.
+
+The official cache binds the other accepted invocations to this source/tree, but concurrent landing controllers reused the same local log paths. In particular, `run-1-4.txt` contains both a 180-pass/one-failure result and a separate 181-pass result; another browser log was overwritten by live progress. Those mutable files cannot establish a single final aggregate browser count. No such total is claimed, and no reusable landing receipt was written for this LOAD-FLAKY landing. The bounded five-case clean regression in the preceding record remains separate evidence.
+
+These checks cover fake-device UI behavior. Authentication, authorization and command assertions were preserved; no hardware, deployment or field acceptance was performed. CE: 해당 없음 — the correction uses the existing opening helper, and the remaining timing failure is explicitly unresolved rather than documented as a solved lesson.

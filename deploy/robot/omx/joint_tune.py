@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OMX follower joint tuning (IDs 11-16): move one joint, or sweep the gripper to find its ends.
+"""OMX joint tuning: follower IDs 11-16, or bounded leader wrist-roll ID 5 only.
 
 Commissioning tool, not an actuator owner: run it only while no owner or controller holds the bus
 and a person watches the arm. Only the chosen motor and the registers below are ever written, and
@@ -40,6 +40,8 @@ from pathlib import Path
 GRIPPER = 16
 #: id -> (model number, operating mode); XL430-W250 = 1060, XL330-M288 = 1200
 FOLLOWER = {11: (1060, 4), 12: (1060, 4), 13: (1060, 4), 14: (1200, 4), 15: (1200, 4), 16: (1200, 5)}
+LEADER_WRIST = 5
+TUNABLE = {LEADER_WRIST: (1200, 4), **FOLLOWER}
 CAP_MAX = 400  # trial ceiling for PWM and Current Limit (PWM max 885)
 WRITES = {"torque": (64, 1), "goal_current": (102, 2), "profile_acc": (108, 4), "profile_vel": (112, 4),
           "goal_pos": (116, 4), "pwm_limit": (36, 2), "current_limit": (38, 2), "p_gain": (84, 2),
@@ -99,11 +101,11 @@ def no_interrupts():
 
 
 class SerialBus:
-    """Confirmed follower bus; motor 0 lets session cleanup select its existing IDs."""
+    """Confirmed bus opened exclusively; motor 0 lets session cleanup select its existing IDs."""
 
     def __init__(self, device: str, motor: int) -> None:
-        if motor != 0 and motor not in FOLLOWER:
-            raise ValueError("only follower IDs 11-16 may be tuned")
+        if motor != 0 and motor not in TUNABLE:
+            raise ValueError("only follower IDs 11-16 or confirmed leader wrist 5 may be tuned")
         import fcntl, termios
         import serial
         from dynamixel_sdk import PacketHandler, PortHandler
@@ -180,8 +182,10 @@ class SerialBus:
 
 class Run:
     def __init__(self, bus, motor: int, *, log, grab, clock=time.monotonic, sleep=time.sleep) -> None:
+        if motor not in TUNABLE:
+            raise ValueError("only follower IDs 11-16 or confirmed leader wrist 5 may be tuned")
         self.bus, self.motor, self.log, self.grab, self.clock, self.sleep = bus, motor, log, grab, clock, sleep
-        self.xl330 = FOLLOWER[motor][0] == 1200
+        self.xl330 = TUNABLE[motor][0] == 1200
 
     def state(self) -> dict:
         return {name: self.bus.read(name) for name in STATE}
@@ -227,16 +231,28 @@ class Run:
         model, mode = self.bus.read("model"), self.bus.read("mode")
         self.log(step="before", motor=self.motor, model=model, mode=mode, **before)
         self.grab("before")
-        if ((model, mode) != FOLLOWER[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
-            raise SystemExit(f"precondition failed: motor {self.motor} must be {FOLLOWER[self.motor]} "
+        if ((model, mode) != TUNABLE[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
+            raise SystemExit(f"precondition failed: motor {self.motor} must be {TUNABLE[self.motor]} "
                              f"(model, mode), torque OFF, no hardware error")
         limits = ("pwm_limit", "current_limit") if self.xl330 else ("pwm_limit",)
         found = {name: self.bus.read(name) for name in limits}
-        if any(found[name] != BASELINE[name] for name in limits):
+        leader_wrist = self.motor == LEADER_WRIST
+        if leader_wrist:
+            if any(found[name] < BASELINE[name] for name in limits):
+                raise SystemExit(f"leader wrist caps {found} below baseline; refusing to raise them")
+            target = args.to if args.to is not None else before["present_pos"] + args.delta
+            if args.command != "move" or abs(target - before["present_pos"]) > args.max_delta:
+                raise SystemExit("leader wrist permits bounded move only")
+        elif any(found[name] != BASELINE[name] for name in limits):
             raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
                              "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
+            if leader_wrist:
+                restore.update({name: BASELINE[name] for name in limits})
+                for name in limits:
+                    if found[name] != BASELINE[name]:
+                        self.set(name, BASELINE[name])
             for name, value in (("pwm_limit", args.pwm),
                                 ("current_limit", args.current_limit if self.xl330 else None),
                                 ("p_gain", args.p_gain), ("i_gain", args.i_gain)):
@@ -249,8 +265,8 @@ class Run:
                 target = args.to if args.to is not None else start + args.delta
                 if self.motor != GRIPPER and abs(target - start) > args.max_delta:
                     raise SystemExit(f"joint {self.motor}: {target - start} ticks exceeds --max-delta {args.max_delta}")
-            self.set("profile_acc", args.acceleration)
-            self.set("profile_vel", args.velocity)
+            self.set("profile_acc", 1 if leader_wrist else args.acceleration)
+            self.set("profile_vel", 1 if leader_wrist else args.velocity)
             if self.motor == GRIPPER:
                 self.set("goal_current", args.goal_current)
             self.set("goal_pos", start)
@@ -307,7 +323,7 @@ class Run:
 def parse(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--device", required=True)
-    parser.add_argument("--id", type=int, default=GRIPPER, choices=sorted(FOLLOWER))
+    parser.add_argument("--id", type=int, default=GRIPPER, choices=sorted(TUNABLE))
     parser.add_argument("--viewer", default="http://127.0.0.1:8767", help="local camera viewer ('' to skip frames)")
     parser.add_argument("command", choices=("move", "sweep"))
     parser.add_argument("--to", type=int)
@@ -324,6 +340,8 @@ def parse(argv=None):
     parser.add_argument("--max-delta", type=int, default=200, help="non-gripper move limit in ticks")
     parser.add_argument("--reach", type=int, default=1700, help="gripper sweep: push this far each way")
     args = parser.parse_args(argv)
+    if args.id == LEADER_WRIST:
+        args.velocity = args.acceleration = 1
     if not (1 <= args.pwm <= CAP_MAX and 1 <= args.current_limit <= CAP_MAX
             and 1 <= args.goal_current <= args.current_limit):
         parser.error(f"caps must be 1..{CAP_MAX} and the goal current at most the current limit")

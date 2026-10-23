@@ -10,6 +10,8 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-846 | OMX Leader를 코드 구동 기준으로 삼는 두팔 파이프라인 | Accepted for implementation (2026-10-22) |
+| D-847 | OMX 팔로워 PWM 캡은 관절별로 둔다 | Accepted for implementation (2026-10-23) |
 | D-841 | 공통 모듈 재사용과 독립 앱의 계약 검증 범위를 정한다 | Accepted for implementation (2026-10-22) |
 | D-845 | 공통 HTTP 전송 안에서 화면의 응답 해석을 유지한다 | Accepted for implementation (2026-10-22) |
 | D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 | Accepted for implementation (2026-10-21) |

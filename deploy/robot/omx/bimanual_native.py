@@ -74,6 +74,7 @@ def make_adapters(robot_base, teleop_base, robot_factory, leader_factory, camera
     class Follower(robot_base):
         name = "bi_omx_follower"
         config_class = None
+        body_only = False
 
         def __init__(self, config):
             super().__init__(config)
@@ -89,7 +90,8 @@ def make_adapters(robot_base, teleop_base, robot_factory, leader_factory, camera
 
         @property
         def action_features(self):
-            return {key: value for name in ARMS for key, value in prefixed(name, self.arms[name].action_features).items()}
+            return {key: value for name in ARMS for key, value in prefixed(name, self.arms[name].action_features).items()
+                    if not self.body_only or not key.endswith('.gripper.pos')}
 
         @property
         def observation_features(self):
@@ -131,7 +133,7 @@ def make_adapters(robot_base, teleop_base, robot_factory, leader_factory, camera
                 if self.leader is None or not self.leader.is_connected:
                     raise ValueError("both passive leaders must be connected")
                 self.motion = BimanualMotion({name: NativeJointMotion(self.arms[name].bus, self.leader.arms[name].bus,
-                                                               label=name, monitor=self.monitor)
+                                                               body_only=self.body_only, label=name, monitor=self.monitor)
                                              for name in ARMS})
             return self.motion.send(action)
 
@@ -219,6 +221,8 @@ def register_types():
 
 
 def run_native(module, follower_type, leader_type, invoke=None):
+    if getattr(follower_type, "body_only", False) and hasattr(module, "record"):
+        raise ValueError("body-only mode is manual teleoperation only")
     devices = {}
     original_robot, original_leader = module.make_robot_from_config, module.make_teleoperator_from_config
     original_frame = getattr(module, "build_dataset_frame", None)
@@ -289,8 +293,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("record", "teleoperate"))
     parser.add_argument("--config_path", required=True, type=Path)
+    parser.add_argument("--body-only", action="store_true")
     args = parser.parse_args()
+    if args.body_only and args.mode != "teleoperate":
+        parser.error("body-only mode is manual teleoperation only")
     Follower, Leader = register_types()
+    Follower.body_only = args.body_only
     module = importlib.import_module("lerobot.scripts.lerobot_" + args.mode)
     import draccus
     config_type = module.RecordConfig if args.mode == "record" else module.TeleoperateConfig

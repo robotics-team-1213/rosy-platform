@@ -1,4 +1,4 @@
-﻿# docs logs
+# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -10032,8 +10032,14 @@ osy-d395-s1d\`.
 - 증거: 원격 회귀73 passed/1 skipped/0 NEW. 별도 모델 PC의 실제 LeRobot 0.4.4 합성 변환→ACT2-step→새 프로세스 재적재 종료0. 회수한 모델7개·분할12개 파일 SHA와 12관절 평가를 확인했다. 이전 SHA가 고정된 첫 fixture 결과는 제외·보존했다.
 - gate 변화: 소프트웨어 연결 근거다. 사람 라벨·실물 과제 성공·장치 수용·정책 승격을 주장하지 않는다. CE 해당 없음: 판단과 범위는 코드·검사·검증 기록에 남아 있다.
 
+## 2026-10-23 · 3516c33031 · 두팔 파이프라인과 리더 구동을 OMX 단일 주제로 착지
+
+- 변경: `leader_actuator.py`(관절별 PWM·전류 캡, 위치 게인, 쓰는 목표에만 더하는 중력 편향, 하중·하드웨어 오류 정지)와 `two_arm_pipeline.py`(`health`·`preflight`·`gap`·`park`·`align`·`drive`·`verify`, 단계별 JSON 영수증, 실패 영수증에 `error`)를 추가했다. 가드는 핸드셰이크 실패 뒤 close 실패가 원인을 덮지 않게 하고, body-only 모드에서 두 집게를 수동으로 남긴다. `joint_tune`은 확인된 리더 손목(ID 5)만 제한 이동한다.
+- 증거: AI PC pytest 293 passed(`bc98829f68/run-1.txt`). 앞선 실물 근거: `align` 통과 영수증(`pipeline-receipts/align-20261023T123020.json`, `gap_degrees` -2.461°/-0.352°), 리더 `health` 실패 영수증이 `Missing motor IDs: 2, 6`과 래치된 전압 오류를 함께 기록(`pipeline-receipts/health-20261023T171447.json`). 두팔 `drive`는 리더 전원 재투입과 중력 보상 값 실측 전까지 미통과다.
+- gate 변화: 없음. Fleet·CORE 권한, DEVICE/FIELD 수용, D-430 safety review는 그대로다. 두팔 브랜치의 fleet·core 변경은 착지하지 않았다.
+
 ## 2026-10-23 · c4d6f20cbb · VLM 닫힌 질문 벤치
 
-- 변경: [	ools/vlm_question_bench.py](../tools/vlm_question_bench.py)를 추가했다(전처리, 사진 prefix 1회, 질문별 선택지 토큰 확률, 캐시·전체 forward 비교, Ollama 비교). [벤치 기록](validation/vlm-question-bench-2026-10-23/result.md)과 설계·실험 계획의 실행기·질문 규칙을 갱신했다.
+- 변경: [`tools/vlm_question_bench.py`](../tools/vlm_question_bench.py)를 추가했다(전처리, 사진 prefix 1회, 질문별 선택지 토큰 확률, 캐시·전체 forward 비교, Ollama 비교). [벤치 기록](validation/vlm-question-bench-2026-10-23/result.md)과 설계·실험 계획의 실행기·질문 규칙을 갱신했다.
 - 증거: 모델 PC에서 Qwen3-VL-8B(nf4)·Qwen3-VL-4B·Qwen3.5-4B, front·top·wrist 40장씩. Ollama 0.35.1 확률 읽기로 질문 전부 p50 0.10–0.18 s, 현행 설명 호출 1회 p50 1.66–1.87 s. 사람 정답 전이라 정확도는 미판정이다.
-- gate 변화: 없음. 운영 ision.py·AI PC·로봇은 바꾸지 않았다.
+- gate 변화: 없음. 운영 `vision.py`·AI PC·로봇은 바꾸지 않았다.

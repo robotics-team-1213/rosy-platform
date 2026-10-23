@@ -133,8 +133,10 @@ class Session:
         self.hardware_faults = {}
 
     @staticmethod
-    def command(config_path: Path, teleop_only: bool) -> list:
+    def command(config_path: Path, teleop_only: bool, *, body_only=False) -> list:
         """Both native CLI routes share the same guarded hardware runner."""
+        if body_only and not teleop_only:
+            raise ValueError("body-only mode is manual teleoperation only")
         config = json.loads(config_path.read_text(encoding="utf-8-sig"))
         script = "bimanual_native.py" if config["robot"]["type"] == "bi_omx_follower" else "guarded_native.py"
         runner = [sys.executable, str(Path(__file__).with_name(script))]
@@ -151,7 +153,7 @@ class Session:
         teleop = config_path.with_name(config_path.stem + ".teleop.json")
         teleop.write_text(json.dumps({"robot": config["robot"], "teleop": config["teleop"],
                                       "fps": config["dataset"]["fps"], "display_data": False}, indent=2))
-        return [*runner, "teleoperate", f"--config_path={teleop}"]
+        return [*runner, "teleoperate", f"--config_path={teleop}", *(["--body-only"] if body_only else [])]
 
     def _with_follower(self, action):
         bus = self.open_bus("follower")
@@ -247,9 +249,12 @@ class Session:
                 failures.append(f"follower {motor}: {exc}")
         return failures
 
-    def execute(self, config_path: Path, caps: dict, *, teleop_only: bool, task_card: Path | None = None) -> dict:
+    def execute(self, config_path: Path, caps: dict, *, teleop_only: bool, task_card: Path | None = None,
+                body_only=False) -> dict:
+        if body_only and not teleop_only:
+            raise ValueError("body-only mode is manual teleoperation only")
         record = {"config": str(config_path), "caps": caps, "teleop_only": teleop_only, "started": time.time(),
-                  "release": release()}
+                  "release": release(), "body_only": body_only}
         if task_card is not None:
             text = task_card.read_bytes()
             record["task_card"] = {"path": str(task_card), "sha256": hashlib.sha256(text).hexdigest(),
@@ -267,7 +272,7 @@ class Session:
                     self.systemctl("stop", unit)
                     stopped.append(unit)
             record["stopped_services"] = stopped
-            command = self.command(config_path, teleop_only)
+            command = self.command(config_path, teleop_only, body_only=body_only)
             self.log(step="run", command=command)
             try:
                 record["exit_code"] = self.run_command(command)
@@ -374,8 +379,11 @@ def main(argv=None):
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--caps", required=True, type=Path)
     parser.add_argument("--teleop-only", action="store_true")
+    parser.add_argument("--body-only", action="store_true", help="manual body joints only; grippers remain passive")
     parser.add_argument("--task-card", type=Path, help="task design card to embed in session.json")
     args = parser.parse_args(argv)
+    if args.body_only and not args.teleop_only:
+        parser.error("--body-only requires --teleop-only")
     caps = load_caps(args.caps)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     if args.task_card is not None:
@@ -430,7 +438,8 @@ def main(argv=None):
     lock = session_lock()
     record = {}
     try:
-        record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
+        record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card,
+                                 body_only=args.body_only)
     finally:
         try:
             from motor_health import finish_snapshot
