@@ -233,6 +233,7 @@ def debate(args) -> int:
         photos.setdefault((line["image"], line["view"]), []).append(line)
     scorer = None if args.ollama else Scorer(args.model, args.quant)
     previous, started = {}, time.perf_counter()
+    long_side = (args.long_side or [0])[0]  # the size this model was benched at; the import names it <model>@<px>
     for number in range(1, args.debate_rounds + 1):
         rows = []
         for (path, view), group in photos.items():
@@ -241,12 +242,12 @@ def debate(args) -> int:
             notes = {line["question"]: debate_note(line, args.debate_as, previous.get((path, line["question"])))
                      for line in group}
             if scorer:
-                image = image.resize(grid_size(*image.size, max(image.size), scorer.factor), Image.BICUBIC)
+                image = image.resize(grid_size(*image.size, long_side or max(image.size), scorer.factor), Image.BICUBIC)
                 answers = scorer.frame(image, view, False, questions, notes)["answers"]
             else:
                 answers = ollama_questions(image, view, args.ollama, args.ollama_model, questions, notes)["answers"]
             previous.update({(path, qid): answer for qid, answer in answers.items()})
-            rows.append({"frame": path, "view": view, "long_side": 0, "debate_round": number,
+            rows.append({"frame": path, "view": view, "long_side": long_side, "debate_round": number,
                          "debate": {qid: {"answer": a["answer"], "p": a["p"]} for qid, a in answers.items()}})
     args.out.mkdir(parents=True, exist_ok=True)
     with open(args.out / "rows.jsonl", "w", encoding="utf-8") as sink:
