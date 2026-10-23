@@ -301,10 +301,11 @@ def queue(store, view=None):
         questions = {row['id']: [q['id'] for q in json.loads(row['questions'])] for row in group}
         kinds = dict.fromkeys(sets[name], 'eval')
         pending = [row for row in group if row['status'] is None]
-        for row in pending:
-            if row['id'] not in kinds and any(qid not in paused and qid not in usable.get(row['id'], {})
-                                              for qid in questions[row['id']]):
-                kinds[row['id']] = 'disputed'
+        disputes = [row for row in pending if row['id'] not in kinds and any(
+            qid not in paused and qid not in usable.get(row['id'], {}) for qid in questions[row['id']])]
+        for row in sorted(disputes, key=lambda r: r['id'])[:QUEUE_CAP]:  # oldest first; the rest wait (D-857 §5)
+            kinds[row['id']] = 'disputed'
+        waiting = max(0, len(disputes) - QUEUE_CAP)
         opened = [row for row in pending if row['id'] in kinds]
         # The cap counts the recurring queues only; the one-time evaluation set has its own progress.
         disputed = sum(kinds[row['id']] == 'disputed' for row in opened)
@@ -315,7 +316,8 @@ def queue(store, view=None):
             kinds[row['id']] = 'audit'
             opened.append(row)
         counts[name] = {kind: sum(kinds[row['id']] == kind for row in opened) for kind in KINDS}
-        counts[name].update(eval_size=len(sets[name]), eval_done=len(sets[name]) - counts[name]['eval'])
+        counts[name].update(eval_size=len(sets[name]), eval_done=len(sets[name]) - counts[name]['eval'],
+                            disputed_waiting=waiting)
         result += [{'id': row['id'], 'view': name, 'image_name': row['image_name'], 'question_set': row['question_set'],
                     'kind': kinds[row['id']]} for row in opened]
     result.sort(key=lambda row: (KINDS.index(row['kind']), row['id']))

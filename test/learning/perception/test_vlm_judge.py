@@ -249,7 +249,7 @@ def test_queue_is_deterministic_balanced_capped_and_blind(tmp_path, monkeypatch)
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
     store = consensus_store(tmp_path, 120)
     first = vlm_judge.queue(store)
-    full = {'eval': 30, 'disputed': 0, 'audit': 10, 'eval_size': 30, 'eval_done': 0}
+    full = {'eval': 30, 'disputed': 0, 'audit': 10, 'eval_size': 30, 'eval_done': 0, 'disputed_waiting': 0}
     assert first == vlm_judge.queue(store) and first['counts'] == {'wrist': full}
     evaluation = [row['id'] for row in first['items'] if row['kind'] == 'eval']
     assert sum(identifier % 2 for identifier in evaluation) == 15  # balanced over the provisional yes/no patterns
@@ -268,6 +268,11 @@ def test_queue_is_deterministic_balanced_capped_and_blind(tmp_path, monkeypatch)
     assert vlm_judge.queue(store)['counts']['wrist'] == dict(full, disputed=12, audit=3)
     monkeypatch.setattr(vlm_judge, 'QUEUE_CAP', 12)
     assert vlm_judge.queue(store)['counts']['wrist']['audit'] == 0
+    monkeypatch.setattr(vlm_judge, 'QUEUE_CAP', 5)  # disputed photos are capped too; the oldest open first
+    capped = vlm_judge.queue(store)
+    assert capped['counts']['wrist'] == dict(full, disputed=5, audit=0, disputed_waiting=7)
+    opened = [row['id'] for row in capped['items'] if row['kind'] == 'disputed']
+    assert opened == sorted(row['id'] for row in queue['items'] if row['kind'] == 'disputed')[:5]
     monkeypatch.setattr(vlm_judge, 'QUEUE_CAP', 50)
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W44')
     assert vlm_judge.queue(store)['counts']['wrist']['audit'] == 10
@@ -345,7 +350,7 @@ def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
     base = f'http://127.0.0.1:{server.server_port}'
     try:
         code, queue = request(base, '/api/learning/vlm/queue?view=wrist')
-        assert code == 200 and queue['counts'] == {'wrist': {'eval': 1, 'disputed': 0, 'audit': 2, 'eval_size': 1, 'eval_done': 0}}
+        assert code == 200 and queue['counts'] == {'wrist': {'eval': 1, 'disputed': 0, 'audit': 2, 'eval_size': 1, 'eval_done': 0, 'disputed_waiting': 0}}
         assert request(base, '/api/learning/vlm/queue?view=Bad%20View')[0] == 400
         assert request(base, '/api/learning/vlm/queue?other=1')[0] == 400
         kinds = {row['kind']: row['id'] for row in queue['items']}

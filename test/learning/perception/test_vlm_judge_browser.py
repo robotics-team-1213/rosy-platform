@@ -93,7 +93,7 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
     for model in ('model-one', 'model-two'):
         vlm_judge.import_rows(store, {'rows_path': str(rows), 'question_set': 'v2', 'questions': QUESTIONS, 'model': model})
     counts = vlm_judge.queue(store)['counts']['wrist']
-    assert counts == {'eval': 1, 'disputed': 0, 'audit': 2, 'eval_size': 1, 'eval_done': 0}
+    assert counts == {'eval': 1, 'disputed': 0, 'audit': 2, 'eval_size': 1, 'eval_done': 0, 'disputed_waiting': 0}
     server = make_server(store, free_port())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
