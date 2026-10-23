@@ -72,5 +72,5 @@ def test_reader_rejects_parquet_clocks_that_disagree_with_preserved_source(modul
     values = table.column(index).to_pylist()
     values[0] = [values[0][0]+1]
     pq.write_table(table.set_column(index, field, pa.array(values, type=field.type)), parquet)
-    with pytest.raises((ValueError, AssertionError)):
+    with pytest.raises(AssertionError, match='Arrays are not equal'):
         module.prepare_bundle(exported, tmp_path/'bundle', 'team/omx', 'dataset', selected(exported))
