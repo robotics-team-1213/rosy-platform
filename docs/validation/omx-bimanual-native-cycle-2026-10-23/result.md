@@ -21,10 +21,12 @@ reader는 명시된 `omx_follower` 6관절 또는 `bi_omx_follower` 12관절 순
 
 승인된 `remote_sim.py --host model --sha e2e2b062c1 --minutes 30 cmd -- <fixture-command>`로
 고정 모델 PC 환경에서 실행했다. ROS·실물 장치에는 접속하지 않았고 Hub는 offline이었다.
-완전한 명령·동결 generator payload는 아래 출력의 `inner.sh`와 `run.txt`에 있다.
+공통 환경 wrapper는 아래 출력의 `out/inner.sh`, 실행 로그는 `run.txt`다.
+실제 generator와 명령 구성 helper의 동결 복사본은 `source-evidence/`에 별도로 보존했다.
+wrapper와 로그에 전체 generator payload가 있다고 해석하지 않는다.
 
 외부 출력: `C:/DevTemp/learning-execution-20261023/bimanual-main-native-reader-bound-revision/`.
-실행 helper: `run_existing_bimanual_native_check.py --sha e2e2b062c1 --log-dir <새 출력>`.
+재현: `python <위 출력>/source-evidence/run_existing_bimanual_native_check.py --sha e2e2b062c1 --log-dir <새 출력>`.
 종료 코드0, `out/result.json`의 source_revision이 위 전체 SHA와 일치한다.
 
 | 확인 | 관측 |
@@ -43,6 +45,7 @@ reader는 명시된 `omx_follower` 6관절 또는 `bi_omx_follower` 12관절 순
 | 파일 | SHA-256 |
 |---|---|
 | generator | `f70c4a45faf331ccdd957a8473d96e9e9c386859f26fc8fd4dd3ca09bf4f910a` |
+| command helper | `f99f90230b7aa86c46b691b55268d24c2b7ed16be21087594e5f3d80964da998` |
 | `out/result.json` | `da0e3b3e620156b8a14dccbf2d0aecb853ad695483af11f2b454e407a2555ad3` |
 | `out/cycle/cycle-receipt.json` | `1c24fd26205c7e4d3a23b646ca4a23c10efa6d3f12017677c62e6e0149a42f35` |
 | `out/cycle/evaluation.json` | `261bd1f7e630c510ad75c0addf3c1f4a059551d76b84fc3cf5f764d1a2f101c4` |
