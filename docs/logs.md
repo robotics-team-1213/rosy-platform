@@ -10085,11 +10085,6 @@ osy-d395-s1d\`.
 - 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
 - gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
 
-## 2026-10-24 · a7aaaed472 · 관제 위임의 실행 경로·배치·집중 검증 기록
-
-- 변경: [독립·중첩 관제 기동 절차](deployment/control-units.md)와 [소프트웨어 검증](validation/control-unit-pipeline-2026-10-24/result.md)을 기록했다. 직접 자식의 exact 배정 조회는 승인 직전 조상 연결 확인에만 한정한다.
-- 증거: 실제 HTTP 응답 유실/3곳 재시작, 기존 Task→CORE native 결과와 상위 투영, 실제 Chromium·CLI·원장 회귀를 SHA·로그 hash로 구분했다.
-- gate 변화: 최종 통합 검사·착지는 대기하며 D-851 전체·장치/현장 수용을 완료로 바꾸지 않는다. CE 해당 없음.
 ## 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
 
 - 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
@@ -10107,3 +10102,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 결정으로 [PRODUCT.md 「Product Purpose」](../PRODUCT.md#product-purpose)에 목표(업무 앱이 플랫폼을 고치지 않고 로봇에 작업을 맡기는 범용 실행 플랫폼, 첫 적용 사례 Harbor)와 완료 조건 3개를 정본으로 적었다. README는 한 줄로 가리키고, handoff 1절의 구체 목표 셋은 능력 증명 마일스톤 둘로 바꾸고 Rosy Cell 팔레타이징은 Harbor 흐름에 흡수했다.
 - 증거: 2026-10-21 모듈 경계 합의와 2026-10-24 사용자 확인.
 - gate 변화: 없음. 목표 선언이며 기능 구현·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 장애 해결이 아닌 목표 문서 변경이다.
+
+## 2026-10-24 · a7aaaed472 · 관제 위임의 실행 경로·배치·집중 검증 기록
+
+- 변경: [독립·중첩 관제 기동 절차](deployment/control-units.md)와 [소프트웨어 검증](validation/control-unit-pipeline-2026-10-24/result.md)을 기록했다. 직접 자식의 exact 배정 조회는 승인 직전 조상 연결 확인에만 한정한다.
+- 증거: 실제 HTTP 응답 유실/3곳 재시작, 기존 Task→CORE native 결과와 상위 투영, 실제 Chromium·CLI·원장 회귀를 SHA·로그 hash로 구분했다.
+- gate 변화: 최종 통합 검사·착지는 대기하며 D-851 전체·장치/현장 수용을 완료로 바꾸지 않는다. CE 해당 없음.
