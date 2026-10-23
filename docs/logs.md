@@ -10121,3 +10121,10 @@ osy-d395-s1d\`.
 - 변경: [D-857](adr/D-857-rosy-learning-product-definition.md) Accepted(사용자 결정 6건): 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답, 사람 확인 한도 시작값, VLM 별도 평가 state. D-449·D-792·D-834에 개정 메모, `app-responsibilities.md` Learning 행 갱신.
 - 증거: Learning 관련 Proposed 20건 분류 — 대체 0, 일부 개정 4(D-449·D-792·D-834·D-853), 유지 9, 범위 밖 7. D-853 개정 메모는 그 ADR이 착지한 뒤 단다.
 - gate 변화: 없음. 코드·배포·인스턴스 퇴역은 별도 조각이다.
+
+## 2026-10-24 · 8d119665da8f · teacher 진단의 실제 native 실행 기록
+
+- 변경: [새 날짜 검증 기록](validation/omx-teacher-gripper-native-diagnostic-2026-10-24/result.md)에 공식 착지와 단 한 번의 native 진단 원본을 연결했다. 이전 날짜의 동결 결과는 유지했다.
+- 증거: source8d 공식 guard273/영향490PASS·NEW0, 실제 native EXITED0/PASS3·전체4,889파일 바이트 대조·정리 확인과 독립 검토. 실패 근거 필드는 null이며 거부는 재현되지 않았다.
+- gate 변화: 없음. 진단 성공 경로의 근거이며 물리 원인 해결·학습·정책 평가·실물 수용 근거가 아니다. 두 HOLD cohort와 진단3개 제외를 유지한다.
+- CE: 미해결 — 과거 held/stale 물리 원인이 확인되지 않아 해결 교훈으로 기록하지 않는다.
