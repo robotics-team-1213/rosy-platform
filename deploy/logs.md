@@ -3133,3 +3133,10 @@
 - 증거: 수정 전 단일/양팔 8 RED, 수정 후 원격 231 passed/skip0/NEW0. 합성 장치를 연결한 실제 SDK record loop·writer·reload에서 RGB 영상과 실제 보낸 12 action을 9프레임 확인했고 네 bus OFF·연결 정리 PASS. [새 동결 검증 기록](../docs/validation/omx-paired-sdk-record-loop-2026-10-23/result.md).
 - gate 변화: 없음. 실물 연결·정지·보정·작업 성공·정책 학습 증거가 아니다. 실패 probe와 image-free 데이터셋은 보존하고 학습에서 제외했다.
 - CE: 해당 없음. 비직관적인 SDK 집계 동작을 코드 주석·회귀·검증에 남겼다. 단일 팔 수집 지연은 계속 미해결이다.
+
+## 2026-10-23 · d4a03f554b · native 제어기 이름과 명령 권한 타입 구분
+
+- 변경: native 수동 관절 제어기를 `NativeJointMotion`으로 명명했다. 기존 이름이 D-442 sealed token 생성 검사와 충돌했으며 검사·허용 목록은 유지했다. 네 파일의 식별자 정규화 AST는 동등하다.
+- 증거: 이전 착지에서 단독 branch FAIL/main PASS. 새 커밋에서 변경 없는 권한 경계 검사 포함 원격 238 passed/NEW0. 같은 실제 SDK 녹화 프로그램을 새 커밋으로 재실행해 RGB9프레임·12 action 재읽기·전 bus OFF/연결 정리 PASS, 전체 증거 회수 완료. [통합 검증](../docs/validation/omx-paired-sdk-record-loop-2026-10-23/integration.md).
+- gate 변화: 없음. 실물 수용·정책 학습 증거는 추가하지 않는다.
+- CE: 해당 없음. 명명과 기존 검사·검증 기록으로 판단을 복구할 수 있다.
