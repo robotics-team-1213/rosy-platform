@@ -24,14 +24,14 @@
 | `952d50bbad` | 최신 main 통합 후 실제 Chromium: 위임 6·기존 작업 화면 33·공통 컴포넌트 4 | 43 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-ui-main-integrated` |
 
 ```text
-rosy-scoped-final-green       a977dd587e2d461c239631727a974a02fd80b5c2cc86e02235d2f8ac5f7dc3b3
-rosy-control-bootstrap-green  1bf5cc93e88a47134a71941f0b97e0a33d3b345d61a3b4bc656d3dbd2b7c7815
-rosy-control-root-green       54712af26765b35fe9dc4fca1781a4256d5dd1124ef5b35cb6fd0cd68121c98a
-rosy-control-simplified       41bf5e5767fecdf2f21472ca7c3fcc78cc6dfd60dde6dffc696113c6ff79130d
-rosy-control-peer-port-green  b1800f92c8ddc434c5a037617648ba21207ad83f00e82f582abc0bd5b7549a0f
-rosy-control-browser-retained d17e625821906363d3501a1abb4c949d5f767b1bc1f1286b0be6af291bb6c3d8
-rosy-control-final-proof      7016cb6ce55fe597dd3a815949a6b4ac5522b3116386997567d9ce12f28198f5
-rosy-control-ui-main-integrated 1db530925f8a49ab6adc0066bb767e3406d89db7451240e43fe9db8b7252fad4
+rosy-scoped-final-green       sha256=a977dd587e2d461c239631727a974a02fd80b5c2cc86e02235d2f8ac5f7dc3b3
+rosy-control-bootstrap-green  sha256=1bf5cc93e88a47134a71941f0b97e0a33d3b345d61a3b4bc656d3dbd2b7c7815
+rosy-control-root-green       sha256=54712af26765b35fe9dc4fca1781a4256d5dd1124ef5b35cb6fd0cd68121c98a
+rosy-control-simplified       sha256=41bf5e5767fecdf2f21472ca7c3fcc78cc6dfd60dde6dffc696113c6ff79130d
+rosy-control-peer-port-green  sha256=b1800f92c8ddc434c5a037617648ba21207ad83f00e82f582abc0bd5b7549a0f
+rosy-control-browser-retained sha256=d17e625821906363d3501a1abb4c949d5f767b1bc1f1286b0be6af291bb6c3d8
+rosy-control-final-proof      sha256=7016cb6ce55fe597dd3a815949a6b4ac5522b3116386997567d9ce12f28198f5
+rosy-control-ui-main-integrated sha256=1db530925f8a49ab6adc0066bb767e3406d89db7451240e43fe9db8b7252fad4
 ```
 
 최종 집중 실행은 `--sha`를 명시하고 runner 출력 전체를 외부 `runner-transcript.txt`로 함께 보존했다. [실행 메타데이터 색인](focused-invocation.json)은 그 출력의 SHA·실제 시험 인자·종료 코드·기존 실패 비교와 두 파일 hash를 연결한다. 이는 자동 생성 CI receipt가 아니라 보존된 runner 출력에서 작성한 색인이며, 원본의 private host/path는 공개 기록에 복사하지 않았다. 앞의 개별 집중 실행을 최종 검사로 대체해 과장하지 않는다.
