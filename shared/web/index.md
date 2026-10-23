@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-10-23 · uncommitted · Fleet 머리 메뉴는 흐름 안 제 줄에 둔다
+- 2026-10-23 · uncommitted · Fleet 머리 계정 메뉴를 한 줄로 접는다
 - 2026-10-22 · uncommitted · D-845 요청 수명 안의 서비스 응답 해석
 - 2026-10-22 · uncommitted · Account 브라우저 세션을 공통 모듈 하나로
 - 2026-10-21 · uncommitted · 사진 검토로 찾은 공용 부품 결함
-- 2026-10-21 · uncommitted · `[hidden]` 규칙 하나
-- 2026-10-21 · uncommitted · class로 공용 단추를 덧칠하는 경로 차단
