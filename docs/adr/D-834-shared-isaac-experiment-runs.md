@@ -28,3 +28,7 @@
 브라우저와 CLI에서 같은 run의 설정·실패·결과를 확인할 수 있다. 연결 단절·중지 실패·부분 결과를 보존해야 하므로 exit code만으로 성공을 표시할 수 없다. SDK·동일 계정의 잠금·고정 source/binding이 준비되지 않으면 실행은 HOLD다.
 
 이번 기록 단위는 catalog·run 저장소와 host-only 계약 시험이다. GPU 실행기·CLI·웹·실제 SDK 검증은 [구현 계획](../plans/2026-10-21-sim-learning-workspace.md)의 후속 단위다. Proposed 기록이나 파일 추가를 구현 완료·ROS-SIM·DEVICE·FIELD 수용으로 해석하지 않는다.
+
+## Amendment by D-857 (2026-10-24)
+
+SIM 실험 화면은 Rosy Learning 「학습」 메뉴 아래에 둔다. 실행 경계는 그대로다. [D-857](D-857-rosy-learning-product-definition.md)

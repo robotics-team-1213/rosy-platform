@@ -22,3 +22,7 @@
 - 정적 시트 `tools/vlm_label_sheet.py`는 새 정답 작업에 쓰지 않는다. 파일 정리는 별도 변경이다.
 - 현장 사진 보관 경로([D-610](D-610-ai-first-problem-resolution.md))는 바꾸지 않는다. 모델 PC에 이미 있는 벤치 사진만 가져온다.
 - 화면·경로·저장소 세부는 `learning/curation/perception/docs/review-app.md` 「VLM 판단」이 소유한다.
+
+## Amendment by D-857 (2026-10-24)
+
+§2 「정답은 사람만 단다」는 임시·확정 두 단계로 바뀐다. 모델 합의·토론으로 만든 답은 「임시」로 표시하고 학습 자료·질문 보정에만 쓴다. 승격 평가에는 사람이 단 답 또는 사람이 확인한 답(확정)만 쓴다. §3 「지표는 승인이 아니다」와 §4 별도 평가 state는 그대로다. [D-857](D-857-rosy-learning-product-definition.md)

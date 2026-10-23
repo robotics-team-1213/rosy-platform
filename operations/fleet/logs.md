@@ -4350,3 +4350,9 @@
 - 변경: 구성·직접 소유 검증과 영속 위임 identity·로컬 승인·owner 결과·취소 요청 기록을 추가했다. 기존 TaskStore admission transaction 안에서 위임과 작업을 함께 결속한다.
 - 증거: 구성·저장·결속·null 승인 RED/GREEN을 공식 원격 실행했다. 최종 세 파일 30 cases 종료 0, known failures 0 NEW. [검증 기록](../../docs/validation/control-unit-foundation-2026-10-23/result.md).
 - gate 변화: 없음. HTTP·화면·복구 종단·장치 수용은 후속이며 파이프라인 완성을 주장하지 않는다. CE 해당 없음: 검증한 판단은 코드·시험에 남는다.
+
+## 2026-10-23 · uncommitted · 공통 조합 CSS의 닫힌 목록과 Fleet 적용 회귀
+
+- 변경: 공통 동작 모음 CSS만 정확히 허용하고 다른 제품 CSS는 계속 거절하는 대조 검사를 추가했다. 로봇 선택 이동·긴 라벨 회귀를 별도 착지 단위로 보존한다.
+- 증거: `37951c2501`의 검증된 두 시험 파일을 그대로 옮겼다. 이전 스타일 계약 4 passed·후속 영향 선택 707 passed 근거를 유지하고 새 main 조합은 착지 도구로 확인한다.
+- gate 변화: 없음. API·명령·원장·물리 운전 변경 없음.
