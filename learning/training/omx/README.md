@@ -3,6 +3,8 @@
 공식 native recorder/자동 교사 데이터는 [native 실행 안내](../../curation/omx/README.md)의
 `native_cycle.py` 경로를 사용한다. byte-bound 검토 분할 → 공식 ACT CLI → 별도 프로세스
 model/processor 재적재 → eval 재생을 연결한다. 아래 `act_job.py`의 SIM rad 계약과 혼합하지 않는다.
+단일 팔 6관절과 양팔 12관절은 native 데이터의 명시된 robot_type·관절 순서로 구분하며,
+train/eval layout이 다르면 평가를 거절한다. 양팔 지원은 실물 과제 성공이나 실행 권한을 뜻하지 않는다.
 
 `act_job.py`는 기존 LeRobot 0.4.4 export의 원본 OMX 시연을 검증하고,
 episode 단위 train/eval → ACT 학습 → weights 저장·재독출 → offline 평가 →

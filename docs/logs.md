@@ -10019,3 +10019,9 @@ osy-d395-s1d\`.
 - 변경: [설계](plans/2026-10-23-vlm-fast-judge-design.md)와 [실험 계획](plans/2026-10-23-vlm-fast-judge-experiment.md)을 추가했다. 모바일 로봇 막힘 판단과 OMX 파지·배치 확인을 전처리 → 닫힌 질문 확률 → 규칙 표로 나눈다.
 - 증거: 문서만. 지연·정확도 수치는 아직 측정하지 않았다.
 - gate 변화: 없음. 코드·모델 설치·AI PC 활성화·사진 보관·vault 관측기 구현을 승인하지 않는다.
+
+## 2026-10-23 · e2e2b062c1 · native 양팔 12관절 연결 검증
+
+- 변경: [검증 기록](validation/omx-bimanual-native-cycle-2026-10-23/result.md)에 현행 main 기반 native reader·분할·평가의 6/12관절 지원과 실제 SDK 근거를 묶었다.
+- 증거: 원격 회귀73 passed/1 skipped/0 NEW. 별도 모델 PC의 실제 LeRobot 0.4.4 합성 변환→ACT2-step→새 프로세스 재적재 종료0. 회수한 모델7개·분할12개 파일 SHA와 12관절 평가를 확인했다. 이전 SHA가 고정된 첫 fixture 결과는 제외·보존했다.
+- gate 변화: 소프트웨어 연결 근거다. 사람 라벨·실물 과제 성공·장치 수용·정책 승격을 주장하지 않는다. CE 해당 없음: 판단과 범위는 코드·검사·검증 기록에 남아 있다.

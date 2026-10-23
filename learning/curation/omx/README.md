@@ -62,6 +62,11 @@ gripper는 0..100이며 ROSY SIM rad와 다르다.
 다음 명령은 로컬 LeRobotDataset을 읽으며 네트워크를 사용하지 않는다.
 해당 venv에 LeRobot 0.4.4·PyAV가 필요하다. 장치 identity와 보정값을 추정하지 않는다.
 
+native reader는 `omx_follower`의 6관절과 `bi_omx_follower`의 12관절을 지원한다.
+양팔은 `arm_a.*` 6개 다음 `arm_b.*` 6개의 동일한 관절 순서를 사용해야 한다.
+state/action 이름·개수·순서가 robot_type과 다르면 거절하며 분할 출력도 원래 robot_type을 보존한다.
+실제 SDK의 양팔 합성 연결 범위와 한계는 [검증 기록](../../../docs/validation/omx-bimanual-native-cycle-2026-10-23/result.md)을 따른다.
+
 ```text
 python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id local/omx-pick --body-units normalized_-100_100 --rig-revision <rig-revision> --calibration-revision <calibration-revision> --source-mode leader_native --out <new-review-directory>
 ```
@@ -120,6 +125,7 @@ final test는 학습·eval 지표 계산에서 제외한다. 모델은 예시의
 원본을 다시 검증하고 새 디렉터리에 분할해야 한다.
 
 `evaluation.json`은 native 단위의 관절별 MAE와 train 평균 상수 기준선이다.
+train/eval의 관절 layout이 같아야 하며 결과의 `joint_names`와 MAE 배열은 해당 6/12관절 순서다.
 실물 과제 성공률은 `null`로 유지한다. 결과는 offline-only이며 장치 실행·승격·업로드를 하지 않는다.
 
 ## 학습과 저장된 모델 확인
