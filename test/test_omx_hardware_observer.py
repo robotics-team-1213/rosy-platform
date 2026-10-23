@@ -228,3 +228,16 @@ def test_external_discovery_overrides_are_rejected_before_ros_or_serial_import(m
     with pytest.raises(SystemExit) as error:
         observer().main(["--device", "/test", "--domain-id", "13", "--duration", "1"])
     assert error.value.code == 2
+
+
+def test_observer_unit_restarts_only_into_an_idle_cell():
+    import configparser
+    from pathlib import Path
+    unit = configparser.ConfigParser(interpolation=None, strict=False)
+    unit.read(Path(__file__).resolve().parents[1] / 'deploy/robot/omx/rosy-omx-observer@.service')
+    service = unit['Service']
+    assert service['Restart'] == 'on-failure' and int(service['RestartSec']) >= 10
+    assert unit['Unit']['StartLimitIntervalSec'] == '0'
+    guard = service['ExecStartPre']
+    assert 'flock -n 9' in guard and '%h/rosy-omx/session.lock' in guard  # the lock joint_tune.session_lock takes
+    assert 'fuser "$ROSY_OBSERVER_DEVICE"' in guard and 'exit 1' in guard
