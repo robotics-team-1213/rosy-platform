@@ -45,6 +45,7 @@ OWN = {
         "assistant.js", "assistant-voice.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
+        "control-unit-view.js",  # D-855: delegation review belongs to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
