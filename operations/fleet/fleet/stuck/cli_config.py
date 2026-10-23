@@ -10,6 +10,18 @@ import sys
 from pathlib import Path
 
 
+def _realign_config(args):
+    """D-622 opt-in standalone recovery; empty areas and robot list by default."""
+    import yaml
+    from fleet.stuck.realign import RealignConfig
+    try:
+        site = (yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+                if getattr(args, "site_config", None) else {})
+        return RealignConfig.from_mapping((site.get("fleet") or {}).get("stuck_resolver"))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"realign config: {exc}")
+
+
 def _ai_first(args):
     """D-610 3: ``fleet.ai_first`` of ``--site-config`` (robots default empty, keep_gates default trip_wait_only)."""
     import yaml

@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
+from hashlib import sha256
 from types import MappingProxyType
 from urllib.parse import urlsplit
 
@@ -98,3 +99,33 @@ class ControlUnitPeers:
             if not isinstance(value, dict):
                 raise ValueError("INVALID_CONTROL_UNIT_PEER_RESPONSE")
             return value
+
+
+def install_control_unit(app, path, *, tasks, console, principals, named_logins,
+                         console_token, authorize, require_viewer, require_named_operator):
+    from fleet.server.control_unit_routes import install_control_unit_routes
+    from fleet.server.control_unit_service import ControlUnitService
+    from fleet.server.control_unit_store import ControlUnitStore
+    app.state.control_unit = app.state.control_unit_http = None
+    if path is None:
+        return
+    if tasks is None:
+        raise ValueError("CONTROL_UNIT_DURABLE_JOURNAL_REQUIRED")
+    if not principals and not named_logins:
+        raise ValueError("CONTROL_UNIT_NAMED_CREDENTIALS_REQUIRED")
+    config = load_control_unit(path)
+    peer_principals = {p.principal_id for p in principals.values() if p.role == "service"}
+    if any("control-unit:" + unit not in peer_principals for unit in config.peers):
+        raise ValueError("CONTROL_UNIT_NEIGHBOR_PRINCIPAL_REQUIRED")
+    for peer in config.peers.values():
+        local = principals.get(sha256(peer.token.encode()).hexdigest())
+        if (peer.token == console_token or console.uses_rest_token(peer.token)
+                or (local is not None and local.role != "service")):
+            raise ValueError("CONTROL_UNIT_SERVICE_CREDENTIAL_NOT_ISOLATED")
+    store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
+    service = ControlUnitService(config.topology, store, tasks, console, peer=None)
+    http = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=3.0)
+    service.peer = ControlUnitPeers(config, http)
+    app.state.control_unit, app.state.control_unit_http = service, http
+    install_control_unit_routes(app, service, authorize=authorize, require_viewer=require_viewer,
+                                require_named_operator=require_named_operator)
