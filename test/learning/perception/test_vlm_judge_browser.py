@@ -29,7 +29,7 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
     try:
         with playwright.sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={'width': 390, 'height': 844})
+            page = browser.new_page(viewport={'width': 1280, 'height': 720})
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             try:
@@ -37,6 +37,14 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
                 page.goto(f'http://127.0.0.1:{server.server_port}/learning/vlm', wait_until='networkidle')
                 expect(page.locator('#vlm-progress')).to_contain_text('목록 1 / 2')
                 expect(page.locator('#vlm-image-message')).to_be_hidden()
+                in_view = '''id => { const r = document.getElementById(id).getBoundingClientRect();
+                                     return r.top >= 0 && r.bottom <= innerHeight && r.height > 0; }'''
+                option = page.locator('.vlm-question').first.locator('ui-button').first
+                for width, height in ((1280, 720), (390, 844)):
+                    page.set_viewport_size({'width': width, 'height': height})
+                    assert page.evaluate(in_view, 'vlm-save') and page.evaluate(in_view, 'vlm-exclude'), width
+                    assert option.bounding_box()['height'] >= 44 and option.get_attribute('kind') == 'toggle'
+                expect(option).to_contain_text('키 1')
                 assert page.evaluate('document.getElementById("vlm-image").getBoundingClientRect().top < innerHeight')
                 assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
                 assert 'qwen' not in page.content()

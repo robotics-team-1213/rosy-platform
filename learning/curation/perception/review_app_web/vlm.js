@@ -43,9 +43,12 @@ function renderQuestions(){
     const options=document.createElement('div');options.className='vlm-options';options.setAttribute('role','group');
     options.setAttribute('aria-labelledby',title.id);
     question.options.forEach((option,number)=>{
-      const button=document.createElement('ui-button');button.setAttribute('kind','segment');
+      const button=document.createElement('ui-button');button.setAttribute('kind','toggle');
       button.setAttribute('aria-pressed',String(choices[question.id]===option));button.dataset.option=option;
-      button.textContent=`${number+1} ${option}`;
+      button.setAttribute('aria-keyshortcuts',String(number+1));
+      const name=document.createElement('span');name.textContent=option;
+      const key=document.createElement('small');key.textContent=`키 ${number+1}`;key.setAttribute('aria-hidden','true');
+      button.append(name,key);
       button.addEventListener('click',()=>pick(index,option));
       options.append(button);
     });
