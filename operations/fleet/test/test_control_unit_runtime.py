@@ -1,5 +1,3 @@
-"""Static neighbor config and bounded HTTP transport; no device access."""
-
 import asyncio
 import json
 

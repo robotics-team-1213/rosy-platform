@@ -1,5 +1,3 @@
-"""The real Fleet app and CLI own optional control-unit startup and shutdown."""
-
 from hashlib import sha256
 from pathlib import Path
 

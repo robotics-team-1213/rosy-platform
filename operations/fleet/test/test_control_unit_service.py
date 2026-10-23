@@ -1,5 +1,3 @@
-"""Control-unit orchestration uses the real durable Fleet task admission path."""
-
 import asyncio
 from types import SimpleNamespace
 import pytest

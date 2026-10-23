@@ -1,5 +1,3 @@
-"""Actual HTTP producer/consumer chain with a lost ACK and durable restart."""
-
 import asyncio
 
 import httpx

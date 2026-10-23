@@ -1,5 +1,3 @@
-"""Synthetic UI fixture; real Chromium checks local approval and uncertain results."""
-
 import json
 import os
 from pathlib import Path

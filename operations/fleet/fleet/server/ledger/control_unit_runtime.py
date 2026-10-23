@@ -1,5 +1,3 @@
-"""Static direct-neighbor configuration and bounded control-unit HTTP transport."""
-
 from dataclasses import dataclass, field
 import json
 from pathlib import Path

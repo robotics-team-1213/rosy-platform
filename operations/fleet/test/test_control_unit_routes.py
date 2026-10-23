@@ -1,5 +1,3 @@
-"""Real Fleet credential guards protect each control-unit HTTP operation."""
-
 from hashlib import sha256
 
 from fastapi import FastAPI

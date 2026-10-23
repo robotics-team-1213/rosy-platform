@@ -1,5 +1,3 @@
-"""An old delegation cancel must never stop the next navigation owner."""
-
 from uuid import uuid4
 
 import pytest
