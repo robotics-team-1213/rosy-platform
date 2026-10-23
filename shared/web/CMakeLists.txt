@@ -29,6 +29,15 @@ install(FILES
   fleet-client.js
   account-profile.js
   account-session.js
+  control-dom.js
+  form-controls.js
+  collection-controls.js
+  interaction-controls.js
+  workflow-controls.js
+  component-controls.css
+  component-gallery.css
+  component-gallery.html
+  component-gallery.js
   DESTINATION share/${PROJECT_NAME}
 )
 

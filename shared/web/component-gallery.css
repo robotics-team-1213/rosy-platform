@@ -1,0 +1,18 @@
+/* Gallery placement only; the compositions own their appearance. */
+body { margin: 0; color: var(--text-primary); background: var(--surface-canvas); font: var(--text-body)/var(--leading-copy) var(--body); }
+.kit-topbar { position: sticky; top: 0; z-index: 5; background: var(--surface-canvas); }
+.kit-topbar > [data-spacer] { flex: 1; }
+.kit-nav { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border-block-end: 1px solid var(--border-default); }
+.kit-nav a { min-height: var(--target-secondary); display: inline-flex; align-items: center; }
+.kit-main { max-width: 100rem; margin-inline: auto; padding: var(--space-4); display: grid; gap: var(--space-6); }
+.kit-main > section { min-width: 0; scroll-margin-top: calc(var(--appbar-height) + var(--space-4)); }
+.kit-main :is(h1, h2) { margin-block: 0 var(--space-3); }
+.kit-main h1 { font-size: var(--text-title); }
+.kit-main h2 { font-size: var(--text-value); }
+.kit-main > section > p { max-width: 70ch; margin-block: 0 var(--space-4); }
+.kit-examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+.kit-example { min-width: 0; padding-block: var(--space-4); border-block-start: 1px solid var(--border-default); }
+.kit-example :is(input, select, textarea) { max-width: 100%; box-sizing: border-box; }
+.kit-code { font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+.kit-main [hidden] { display: none; }
+@media (width < 64rem) { .kit-examples { grid-template-columns: minmax(0, 1fr); } }
