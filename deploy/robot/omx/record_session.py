@@ -38,12 +38,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
+from uuid import uuid4
 
 from joint_tune import BASELINE, CAP_MAX, FOLLOWER, SerialBus, no_interrupts, protect_signals, session_lock
 from record_config import validate_config
@@ -128,18 +130,28 @@ class Session:
     def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
         self.sleep, self.clock = sleep, clock
+        self.hardware_faults = {}
 
     @staticmethod
     def command(config_path: Path, teleop_only: bool) -> list:
-        """lerobot-record on the record config, or lerobot-teleoperate on its robot/teleop part."""
-        bin_dir = Path(sys.executable).parent
-        if not teleop_only:
-            return [str(bin_dir / "lerobot-record"), f"--config_path={config_path}"]
+        """Both native CLI routes share the same guarded hardware runner."""
         config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        script = "bimanual_native.py" if config["robot"]["type"] == "bi_omx_follower" else "guarded_native.py"
+        runner = [sys.executable, str(Path(__file__).with_name(script))]
+        if script == "bimanual_native.py":
+            # Concrete OMX child types avoid recursive CLI choice discovery; only parents need tags.
+            for section in ("robot", "teleop"):
+                for arm in ("arm_a", "arm_b"):
+                    config[section][arm].pop("type")
+            native = config_path.with_name(config_path.stem + ".native.json")
+            native.write_text(json.dumps(config, indent=2))
+            config_path = native
+        if not teleop_only:
+            return [*runner, "record", f"--config_path={config_path}"]
         teleop = config_path.with_name(config_path.stem + ".teleop.json")
         teleop.write_text(json.dumps({"robot": config["robot"], "teleop": config["teleop"],
                                       "fps": config["dataset"]["fps"], "display_data": False}, indent=2))
-        return [str(bin_dir / "lerobot-teleoperate"), f"--config_path={teleop}"]
+        return [*runner, "teleoperate", f"--config_path={teleop}"]
 
     def _with_follower(self, action):
         bus = self.open_bus("follower")
@@ -184,8 +196,9 @@ class Session:
         for motor in FOLLOWER:
             bus.motor = motor
             try:
-                bus.write("torque", 0)
-                state[motor] = bus.read("torque")
+                bus.cleanup_write("torque", 0)
+                state[motor] = bus.cleanup_read("torque")
+                self.note_fault(bus)
             except Exception as exc:  # keep turning the others off
                 state[motor] = f"error: {exc}"
         return state
@@ -206,12 +219,30 @@ class Session:
                 return False, last
             self.sleep(1.0)
 
+    def note_fault(self, bus, *, leader=False):
+        error = bus.cleanup_read("hw_error")
+        alert = getattr(bus, "cleanup_alerts", {}).get(bus.motor, False)
+        if error or alert:
+            key = f"leader {bus.motor}" if leader else bus.motor
+            self.hardware_faults[key] = {"hw_error": error, "packet_alert": alert}
+
     def restore_caps(self) -> list:
-        """Each motor back to the baseline; a failure on one motor never skips the others."""
+        """Attempt every cap independently, including after a faulted motor's OFF confirmation."""
         failures = []
         for motor, values in self.baseline().items():
+            def restore(bus, motor=motor, values=values):
+                bus.motor = motor
+                for name, value in values.items():
+                    try:
+                        bus.cleanup_write(name, value)
+                        after = bus.cleanup_read(name)
+                        self.note_fault(bus)
+                        if after != value:
+                            raise RuntimeError(f"{name} readback {after} != {value}")
+                    except Exception as exc:
+                        failures.append(f"follower {motor} {name}: {exc}")
             try:
-                self._with_follower(lambda bus, m=motor, v=values: self.write_caps(bus, {m: v}))
+                self._with_follower(restore)
             except Exception as exc:
                 failures.append(f"follower {motor}: {exc}")
         return failures
@@ -223,11 +254,14 @@ class Session:
             text = task_card.read_bytes()
             record["task_card"] = {"path": str(task_card), "sha256": hashlib.sha256(text).hexdigest(),
                                    "text": text.decode("utf-8")}
-        validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
-        self._with_follower(self.check_idle)
+        config = validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
+        pairs = self.pair_sessions(config)
+        for session in pairs.values():
+            session._with_follower(session.check_idle)
         stopped = []
         try:
-            self._with_follower(lambda bus: self.write_caps(bus, caps))
+            for session in pairs.values():
+                session._with_follower(lambda bus, s=session: s.write_caps(bus, caps))
             for unit in SERVICES:
                 if self.systemctl("is-active", unit) == "active":
                     self.systemctl("stop", unit)
@@ -241,8 +275,64 @@ class Session:
                 record["interrupted"] = True
         finally:
             with no_interrupts():
-                self.finish(record, stopped)
+                if pairs.get("single") is self:
+                    self.finish(record, stopped)
+                else:
+                    self.finish_pairs(record, stopped, pairs)
         return record
+
+    def pair_sessions(self, config):
+        if config["robot"]["type"] != "bi_omx_follower":
+            return {"single": self}
+        return {name: Session(open_bus=lambda which, arm=name: self.open_bus(arm + "." + which),
+                              systemctl=self.systemctl, run=self.run_command, log=self.log,
+                              sleep=self.sleep, clock=self.clock) for name in ("arm_a", "arm_b")}
+
+    def finish_pairs(self, record, stopped, pairs):
+        # Reach every follower before one disconnected USB consumes its retry deadline.
+        record["initial_torque_off"] = {}
+        for name, session in pairs.items():
+            try:
+                record["initial_torque_off"][name] = session._with_follower(session.all_torque_off)
+            except Exception as exc:
+                record["initial_torque_off"][name] = str(exc)
+        leader_errors = []
+        for name, session in pairs.items():
+            try:
+                bus = session.open_bus("leader")
+                try:
+                    for motor in range(1, 7):
+                        bus.motor = motor
+                        try:
+                            bus.cleanup_write("torque", 0)
+                            session.note_fault(bus, leader=True)
+                            if bus.cleanup_read("torque") != 0:
+                                raise RuntimeError("torque OFF readback mismatch")
+                        except Exception as exc:
+                            leader_errors.append(f"{name} leader {motor}: {exc}")
+                finally:
+                    bus.close()
+            except Exception as exc:
+                leader_errors.append(f"{name} leader: {exc}")
+        record["pairs"] = {}
+        for name, session in pairs.items():
+            state = record["pairs"][name] = {}
+            try:
+                session.finish(state, [])
+            except Exception as exc:
+                state.update(safe_end=False, cleanup_error=str(exc))
+        for unit in stopped:
+            try:
+                self.systemctl("start", unit)
+            except Exception as exc:
+                record.setdefault("service_errors", []).append(f"{unit}: {exc}")
+        record["restarted_services"] = stopped
+        record["leader_torque_errors"] = leader_errors
+        record["safe_end"] = not leader_errors and all(
+            state.get("safe_end") and state.get("leader_gripper_torque_after") == 0
+            for state in record["pairs"].values())
+        record["ended"] = time.time()
+        self.log(step="session", **record)
 
     def finish(self, record: dict, stopped: list) -> None:
         torque_ok, record["torque_after"] = self.torque_off_until_confirmed()
@@ -250,26 +340,33 @@ class Session:
             leader = self.open_bus("leader")
             try:
                 leader.motor = LEADER_GRIPPER
-                leader.write("torque", 0)
-                record["leader_gripper_torque_after"] = leader.read("torque")
+                leader.cleanup_write("torque", 0)
+                record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
+                self.note_fault(leader, leader=True)
             finally:
                 leader.close()
         except Exception as exc:
             record["leader_gripper_torque_after"] = f"error: {exc}"
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures
+        record["torque_off_confirmed"] = torque_ok
+        record["hardware_faults"] = self.hardware_faults
+        record["manual_attention_required"] = (bool(self.hardware_faults) or not torque_ok or bool(failures)
+                                               or record["leader_gripper_torque_after"] != 0)
         for unit in stopped:
             try:
                 self.systemctl("start", unit)
             except Exception as exc:
                 record.setdefault("service_errors", []).append(f"{unit}: {exc}")
         record["restarted_services"] = stopped
-        record["safe_end"] = torque_ok and not failures
+        record["safe_end"] = (torque_ok and not failures and not self.hardware_faults
+                              and record["leader_gripper_torque_after"] == 0)
         record["ended"] = time.time()
         self.log(step="session", **record)
         if not record["safe_end"]:
             self.log(step="UNSAFE_END", torque_after=record["torque_after"], caps_restored=record["caps_restored"],
-                     action="switch off the follower power and restore the caps before the next session")
+                     hardware_faults=self.hardware_faults,
+                     action="manual attention required: keep torque OFF, verify caps and diagnose latched faults before restart")
 
 
 def main(argv=None):
@@ -286,8 +383,16 @@ def main(argv=None):
         config = compose(config, card, stamp=time.strftime("%Y%m%d-%H%M%S"))
         args.config = args.config.with_name(f"{args.config.stem}.{card['task_id']}.json")
         args.config.write_text(json.dumps(config, indent=2))
-    ports = {"follower": config["robot"]["port"], "leader": config["teleop"]["port"]}
+    if config["robot"]["type"] == "bi_omx_follower":
+        ports = {arm + "." + role: config[section][arm]["port"] for arm in ("arm_a", "arm_b")
+                 for role, section in (("follower", "robot"), ("leader", "teleop"))}
+    else:
+        ports = {"follower": config["robot"]["port"], "leader": config["teleop"]["port"]}
     out = Path("session.jsonl")
+    monitor_path = Path(f"motor-health-{time.time_ns()}.jsonl").absolute()
+    monitor_state = Path(os.environ.get('ROSY_OMX_MONITOR_STATE', 'motor-health-current.json')).absolute()
+    monitor_owner = config['robot']['id']
+    monitor_session = str(uuid4())
 
     def log(**row):
         row["t"] = round(time.time(), 3)
@@ -303,7 +408,11 @@ def main(argv=None):
     def run(command):
         """The recorder in its own session: our Ctrl-C/SIGTERM/SIGHUP reaches it only as one SIGINT,
         with 10 s to save the episode, then it is killed."""
-        child = subprocess.Popen(command, start_new_session=True, preexec_fn=interrupt_on_parent_death)
+        child = subprocess.Popen(command, start_new_session=True, preexec_fn=interrupt_on_parent_death,
+                                 env={**os.environ, "ROSY_OMX_MONITOR_LOG": str(monitor_path),
+                                      'ROSY_OMX_MONITOR_STATE': str(monitor_state),
+                                      'ROSY_OMX_MONITOR_OWNER': monitor_owner,
+                                      'ROSY_OMX_MONITOR_SESSION': monitor_session})
         try:
             return child.wait()
         except KeyboardInterrupt:
@@ -323,8 +432,19 @@ def main(argv=None):
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
     finally:
-        lock.close()
+        try:
+            from motor_health import finish_snapshot
+            finish_snapshot(monitor_state, monitor_owner, monitor_session, safe_end=bool(record.get('safe_end')))
+        except Exception as exc:
+            record['motor_health_snapshot_error'] = str(exc)
+        finally:
+            lock.close()
         if record:
+            record["motor_health_log"] = str(monitor_path)
+            record["motor_health_log_created"] = monitor_path.is_file()
+            record['motor_health_state'] = str(monitor_state)
+            record['motor_health_owner'] = monitor_owner
+            record['motor_health_session'] = monitor_session
             Path("session.json").write_text(json.dumps(record, indent=2, default=str))
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
