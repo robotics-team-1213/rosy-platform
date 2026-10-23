@@ -21,7 +21,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 | `GET /api/fleet/control-unit/delegations` | viewer. 최대 100개 최근 위임과 출처·stale. 서비스 전체 원장 조회는 허용하지 않음 |
 | `POST /api/fleet/control-unit/delegations` | named operator. `{delegation_id,target_unit,robot_id,goal:{x,y,yaw?}}`. 발행 origin은 서버의 자기 unit으로 고정. 후보 접수 응답이며 자동 실행 승인이 아님 |
 | `POST /api/fleet/control-unit/inbox` | 직접 부모의 별도 `service` principal만. 위 요청에 `{origin_id,config_revision}` 추가. origin은 부모 또는 그 조상, target은 자기 또는 자기 하위, robot 자원은 최종 target의 직접 소유여야 함 |
-| `GET /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}` | viewer 또는 검증된 직접 부모 service. 서비스는 자기가 요청할 수 있는 origin 범위의 위임만 조회. 등록된 직접 자식에게 같은 identity로 조회·재전달 가능 |
+| `GET /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}` | viewer 또는 검증된 직접 이웃 service. 직접 부모는 자기가 요청할 수 있는 origin 범위만 조회한다. 직접 자식은 이 노드가 그 자식에게 배정한 동일 identity만 읽어 승인 직전 취소·상위 연결을 재확인한다. 자식의 조회는 조상 연결까지 검사하며, 다른 자식의 작업·전체 원장·취소·승인 권한을 주지 않는다. 등록된 직접 자식에게 같은 identity로 조회·재전달 가능 |
 | `POST /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}/approve` | 최종 target의 named operator. `{expected_revision}`는 strict 양의 정수. 현재 revision·범위·기존 작업 admission 재검증. 승인 신원은 영속 결속하며 같은 위임을 다른 신원/작업에 바인딩하지 않음 |
 | `POST /api/fleet/control-unit/delegations/{origin_id}/{delegation_id}/cancel` | local named operator 또는 위 범위의 직접 부모 service. 같은 위임의 취소 요청만 기록·전달. 미제출 후보는 취소할 수 있고, 제출 작업은 원래 task/attempt의 owner 결과를 기다림 |
 
