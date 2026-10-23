@@ -46,6 +46,7 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             page.clock.run_for(1500)
             expect(panel.get_by_role("button", name="이 관제에서 승인", exact=True)).to_be_focused()
             approve.click()
+            expect(panel).to_contain_text("승인을 접수했습니다")
             assert posts[-1][0] == prefix + "/delegations/R/job-1/approve"
             assert json.loads(posts[-1][1]) == {"expected_revision": 7}
             reply["stale"] = True
