@@ -30,10 +30,10 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 
 ## v13 검수 앱 코드 릴리스
 
-승인된 모델 코드 후보가 적용된 뒤에는 [D-561](../../docs/adr/D-561-model-review-ui-signed-code-follow.md)의 별도 사용자 타이머가 검수 UI도 버전별 릴리스로 전환한다. 모델 PC에서 설치된 D-446 `state.json`의 현재 sequence를 `MINIMUM_SEQUENCE`에 기록한다. 기존 화면보다 오래된 후보가 처음 실행될 때 활성화되지 않게 하는 기준이다. `REVIEW_HOST`는 현재 검수 서비스가 바인딩하는 사설 IPv4다. 먼저 타이머를 한 번 수동 실행해 `waiting for a newer accepted model-code release`를 확인한 뒤 활성화한다.
+승인된 모델 코드 후보가 적용된 뒤에는 [D-561](../../docs/adr/D-561-model-review-ui-signed-code-follow.md)의 별도 사용자 타이머가 검수 UI도 버전별 릴리스로 전환한다. 모델 PC에서 설치된 D-446 `state.json`의 현재 sequence를 `MINIMUM_SEQUENCE`에 기록한다. 기존 화면보다 오래된 후보가 처음 실행될 때 활성화되지 않게 하는 기준이다. `REVIEW_HOST`와 `REVIEW_PYTHON`은 현재 `rosy-review-v13.service`의 `--host`와 실행 Python이다. 상태 폴더에 `learning-collaboration.json`이 있으면(계정 연동) 검수 앱은 HTTPS 뒤 loopback으로만 열리므로 `REVIEW_HOST=127.0.0.1`이다. 값이 다르면 업데이터가 계정 연동이 빠진 서비스 파일을 쓰거나 거절한다. 활성화 전에 `install_review_release.unit_contents(...)`가 지금 서비스 파일과 같은 내용을 만드는지 확인한다. 먼저 타이머를 한 번 수동 실행해 `waiting for a newer accepted model-code release`를 확인한 뒤 활성화한다.
 
 ```bash
-install -m 0755 deploy/model_pc/auto_review_release.py ~/rosy-ml/bin/auto_review_release.py
+install -m 0755 deploy/model_pc/auto_review_release.py deploy/model_pc/install_review_release.py ~/rosy-ml/bin/
 install -m 0644 deploy/model_pc/rosy-review-release-update.{service,timer} ~/.config/systemd/user/
 printf 'REVIEW_HOST=%s\nMINIMUM_SEQUENCE=%s\n' '<model-pc-private-ip>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
 chmod 600 ~/.config/rosy/review-release.env
