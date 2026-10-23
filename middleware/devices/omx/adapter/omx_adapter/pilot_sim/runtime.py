@@ -283,7 +283,7 @@ class PilotSimRuntime:
     def _dispatch(self, request_id: str, instance_id: str, state_sequence: int, duration_s: float,
                   place: Callable[[dict, Mapping], str], not_admitted: str, seat_id: str) -> dict:
         """Shared checks (instance, admission, single active goal, ready, served readback) and dispatch."""
-        with self._lock:
+        with self._lock, self.arm.owner.command_transaction():
             state = self.arm.latest_joint_state
             config = self.arm.owner.config
             reason = ""
@@ -422,7 +422,7 @@ class PilotSimRuntime:
 
     def _issue_hold(self) -> None:
         """One goal that moves only the gripper target to stall + preload (D-411 C review L1)."""
-        with self._lock:
+        with self._lock, self.arm.owner.command_transaction():
             if not self._hold_pending or self._active is not None or self.arm.owner.state != "ready":
                 return
             state = self.arm.latest_joint_state

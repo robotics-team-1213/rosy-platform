@@ -35,6 +35,42 @@ def timeout_peer():
         yield peer
 
 
+def test_runtime_snapshot_is_not_published_before_owner_delivery():
+    rclpy.init()
+    node = Node('omx_snapshot_publication_test')
+    config = ArmCommandConfig(enabled=True, workcell_id='w', instance_id='i', joint_names=('joint1',),
+                             position_limits={'joint1': (-1., 1.)}, allowed_owners=('pilot_sim',),
+                             calibration_revision='cal')
+    runtime = RosArmCommandRuntime(node, config)
+    entered, release = threading.Event(), threading.Event()
+    original = runtime.owner.observe_joint_state
+
+    def paused(snapshot):
+        entered.set()
+        assert release.wait(3)
+        return original(snapshot)
+
+    runtime.owner.observe_joint_state = paused
+    message = JointState()
+    message.name, message.position = ['joint1'], [0.]
+    message.header.stamp = node.get_clock().now().to_msg()
+    worker = threading.Thread(target=runtime._on_joint_state, args=(message,))
+    try:
+        worker.start()
+        assert entered.wait(2)
+        assert runtime.latest_joint_state is None, 'runtime exposed a future owner sequence'
+        release.set()
+        worker.join(2)
+        assert not worker.is_alive()
+        assert runtime.latest_joint_state == runtime.owner._joint_state
+    finally:
+        release.set()
+        worker.join(3)
+        runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
 def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
     rclpy.init()
     node = Node("omx_source_replay_test")

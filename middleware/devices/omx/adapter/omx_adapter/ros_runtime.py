@@ -127,11 +127,11 @@ class RosArmCommandRuntime:
             # feedback reaches the existing stale-state HOLD and cancel path.
             return
         self._record_joint_intake(callback_entered, prior_attempt)
-        self.latest_joint_state = snapshot
         def deliver_owner(state):
             binding = self._policy_binding
             if binding is None:
                 self.owner.observe_joint_state(snapshot)
+            self.latest_joint_state = snapshot
             return binding
         binding = self.owner.run_admission_policy(deliver_owner)
         if binding is not None:

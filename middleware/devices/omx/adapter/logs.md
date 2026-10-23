@@ -596,3 +596,9 @@
 - 변경: 추가 소스 변경 없이 동일 교사 소스의 실행 결과를 회수했다.
 - 증거: 같은 소스의 격리 native 시연은 EXITED/0, PASS, cleanup true이며 1,587프레임을 누락 issue 없이 기록했다. 물체 상승 0.1020m, 위치 오차 약 0.0000513m, release 후 안정 2.242 simulated seconds다.
 - gate 변화: 이 한 번의 보조 교사 시연만 확인했다. 모델 PC의 기존 독립 truth 검증은 10fps 고정 때문에 거절했고 원본은 보존했다. 주기 계약 정합·전체 RGB 재독출·ACT 명령 coverage·학습·독립 정책·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · db4d8f87ca · Pilot readback와 제출의 owner transaction
+
+- 변경: owner 전달 안에서 runtime snapshot을 게시하고 일반 Pilot 제출·자동 gripper hold의 상태 선택과 제출을 같은 owner RLock으로 묶는다. 기존 admission helper의 ROS I/O 금지 계약은 유지하며 새 command transaction은 action 완료를 기다리지 않는다. 순번·freshness·seat·범위 검사는 그대로다.
+- 증거: 실제 교사 수집 batch 3이 첫 기록 명령에서 순번 불일치로 거부돼 실패 원본을 보존하고 학습을 시작하지 않았다. 실제 owner 동시성 회귀 2개 RED 후 관련 원격 검사 140 passed/0 NEW. 실제 ROS snapshot 선게시 회귀도 RED 후 3 passed/0 skipped. 상세 환경·실패 실행은 docs/validation/omx-pilot-readback-2026-10-23/result.md에 구분했다.
+- gate 변화: SOURCE와 원격 ROS 회귀 범위다. 수정 source의 새 SIM 시연은 실행 중이며 완결 수집·학습·독립 정책 평가·실물 DEVICE/FIELD 수용은 미완료다.
