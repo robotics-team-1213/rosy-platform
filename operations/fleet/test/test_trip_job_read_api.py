@@ -1,6 +1,9 @@
 """D-856: read transport execution facts without Cell or application semantics."""
 from hashlib import sha256
 import json
+import os
+import subprocess
+import sys
 
 from fastapi.testclient import TestClient
 import pytest
@@ -97,11 +100,16 @@ def test_legacy_robot_request_is_readable_without_inventing_a_candidate_key(tmp_
     assert response.json()["job"]["request_key"] is None
 
 
-def test_cell_and_mixed_jobs_do_not_leak_through_transport_reads(tmp_path):
+@pytest.mark.parametrize("mixed", [False, True])
+def test_cell_and_mixed_jobs_do_not_leak_through_transport_reads(tmp_path, mixed):
     client, rows = client_for(tmp_path)
     create(rows)
     with rows.store._connect() as connection:
-        connection.execute("UPDATE fleet_cell_steps SET action_kind='CELL_TRANSFER' WHERE mission_id='transport-job'")
+        if mixed:
+            connection.execute("INSERT INTO fleet_cell_steps(mission_id,step_index,step_id,action_kind,step_json,status,updated_at) "
+                               "VALUES('transport-job',1,'cell-step','CELL_TRANSFER','{}','WAITING','now')")
+        else:
+            connection.execute("UPDATE fleet_cell_steps SET action_kind='CELL_TRANSFER' WHERE mission_id='transport-job'")
         connection.commit()
     assert get(client).status_code == 404
     assert get(client, "/api/fleet/trip-jobs", params={"request_key": KEY}).status_code == 404
@@ -135,3 +143,25 @@ def test_reads_preserve_attempt_identity_and_do_not_write_the_ledger(tmp_path):
     assert arrived["steps"][0]["attempt_id"] == running["steps"][0]["attempt_id"]
     with rows.store._connect() as connection:
         assert list(connection.iterdump()) == before
+
+
+def test_transport_server_works_when_palletizing_and_cell_app_imports_are_blocked(tmp_path):
+    script = """
+import builtins
+from pathlib import Path
+import sys
+original = builtins.__import__
+def guarded(name, *args, **kwargs):
+    if name.startswith(('rosy.processes', 'rosy_cell')) or name == 'fleet.server.cell_compiler':
+        raise ImportError('A transport-only server must not require a process application')
+    return original(name, *args, **kwargs)
+builtins.__import__ = guarded
+from test_trip_job_read_api import client_for, create, get
+client, rows = client_for(Path(sys.argv[1]))
+create(rows)
+assert get(client).status_code == 200
+assert client.app.state.cell_job_compiler is None
+"""
+    result = subprocess.run([sys.executable, "-c", script, str(tmp_path)], capture_output=True, text=True,
+                            timeout=30, env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)})
+    assert result.returncode == 0, result.stderr
