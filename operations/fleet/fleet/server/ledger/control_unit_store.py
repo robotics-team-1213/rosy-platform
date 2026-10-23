@@ -151,9 +151,11 @@ class ControlUnitStore:
 
     def task_admission(self, origin_id, delegation_id, *, actor_id):
         """Bind inside FleetTaskStore.create_task's transaction, before dispatch."""
+        if not isinstance(actor_id, str) or not actor_id.strip() or len(actor_id) > 96:
+            raise ValueError("INVALID_LOCAL_APPROVAL")
         def bind(connection, task_id):
             row = self._read(connection, origin_id, delegation_id)
-            if row["local_actor"] != actor_id or row["owner_unit"] != self.unit_id:
+            if not row["local_actor"] or row["local_actor"] != actor_id or row["owner_unit"] != self.unit_id:
                 raise ValueError("LOCAL_APPROVAL_REQUIRED")
             if row["local_task_id"] == task_id:
                 return
