@@ -90,6 +90,10 @@
     <string name="guide_corners_none">코너 마커 0/%1$d 보임 — 네 모서리 마커가 화면에 들어오게 휴대폰 방향을 맞추세요</string>
     <string name="guide_corners_partial">코너 마커 %1$d/%2$d 보임 (%3$s) — 나머지 마커가 화면에 들어오게 방향을 맞추세요</string>
     <string name="guide_corners_complete">코너 마커 %1$d/%2$d 보임 — 설치 위치가 맞습니다</string>
+    <string name="guide_field_none">바닥 경계를 찾지 못했습니다 — 바닥 테두리 네 변이 모두 화면에 들어오게 휴대폰을 바닥과 평행하게 맞추세요</string>
+    <string name="guide_field_orientation">바닥 경계를 찾았습니다 · 지도 방향을 맞추는 중입니다</string>
+    <string name="guide_field_calibrated">바닥 경계 보정됨 — 설치 위치가 맞습니다</string>
+    <string name="guide_field_stale">카메라가 움직인 것 같습니다 · 바닥 경계를 다시 맞추는 중입니다</string>
     <string name="guide_robots">로봇 보임: %1$s</string>
     <string name="guide_robots_none">보이는 로봇 없음</string>
 
