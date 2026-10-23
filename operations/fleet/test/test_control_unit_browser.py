@@ -54,7 +54,12 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             page.locator("#work-refresh").evaluate("node => node.click()")
             page.clock.run_for(1500)
             expect(panel.get_by_role("button", name="이 관제에서 승인", exact=True)).to_be_focused()
-            _shot(page, f"control-unit-focused-{size[0]}-{theme}.png", full_page=True)
+            approve.focus()
+            page.keyboard.press("Tab")
+            page.keyboard.press("Shift+Tab")
+            expect(approve).to_be_focused()
+            page.evaluate("window.scrollTo(0, 0)")
+            page.screenshot(path=str(capture / f"control-unit-focused-{size[0]}-{theme}.png"), full_page=True)
             approve.click()
             expect(panel).to_contain_text("승인을 접수했습니다")
             assert posts[-1][0] == prefix + "/delegations/R/job-1/approve"
