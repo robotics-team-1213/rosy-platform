@@ -75,6 +75,8 @@ def install_learning_routes(app, web_root, csp):
     def document(status_code):
         html = template
         for host in ('model', 'ai'):
+            state = 'active' if host in apps else 'neutral'
+            html = html.replace('{{' + host + '_state}}', state)
             html = html.replace('{{' + host + '_status}}',
                                 '운영 연결 등록됨' if host in apps else '운영 연결 준비 중')
         return HTMLResponse(html, status_code=status_code, headers=headers)

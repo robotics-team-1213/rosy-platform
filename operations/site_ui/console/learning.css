@@ -1,0 +1,55 @@
+/* 학습 진입 문서 배치 — 색·글자·부품 계약은 /common(tokens·components)이 소유하고
+   이 시트는 문서 폭·호스트 격자·카드 면만 정의한다(D-624 표면 배치 규칙).
+   카드는 솟은 면(--surface-raised) + 선 1장으로 깊이를 표현한다(그림자 없음). */
+
+.learning-main {
+  box-sizing: border-box;
+  width: min(100%, 48rem);
+  margin: var(--space-6) auto;
+  padding: 0 var(--space-4);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.learning-main p {
+  margin: 0;
+}
+
+.learning-hosts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.learning-host {
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+  padding: var(--space-5);
+  gap: var(--space-3);
+}
+
+.learning-host-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.learning-host > p {
+  color: var(--text-secondary);
+}
+
+.learning-host-hint {
+  display: none;
+}
+
+.learning-host[data-host-state="neutral"] .learning-host-hint {
+  display: block;
+}
+
+@media (width < 30rem) {
+  .learning-hosts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
