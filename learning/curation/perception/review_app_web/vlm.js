@@ -84,7 +84,7 @@ async function open(id){
 }
 function showQueue(queue){
   const total=kind=>Object.values(queue.counts).reduce((sum,row)=>sum+row[kind],0);
-  $('vlm-queue').textContent=`사람 확인 대기 · ${Object.entries(KINDS).map(([kind,name])=>`${name} ${total(kind)}`).join(' · ')} · 보기당 최대 ${queue.cap}건`;
+  $('vlm-queue').textContent=`평가셋 ${total('eval_done')}/${total('eval_size')} · 의견 갈림 ${total('disputed')} · 점검 ${total('audit')} · 의견 갈림·점검은 보기당 최대 ${queue.cap}건`;
   $('vlm-paused').textContent=queue.paused.length?`점검 오류가 많아 임시 정답을 멈춘 질문: ${queue.paused.join(', ')}`:'';
   $('vlm-paused').hidden=!queue.paused.length;
 }

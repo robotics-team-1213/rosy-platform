@@ -249,26 +249,58 @@ def test_queue_is_deterministic_balanced_capped_and_blind(tmp_path, monkeypatch)
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
     store = consensus_store(tmp_path, 120)
     first = vlm_judge.queue(store)
-    assert first == vlm_judge.queue(store) and first['counts'] == {'wrist': {'eval': 30, 'disputed': 0, 'audit': 10}}
+    full = {'eval': 30, 'disputed': 0, 'audit': 10, 'eval_size': 30, 'eval_done': 0}
+    assert first == vlm_judge.queue(store) and first['counts'] == {'wrist': full}
     evaluation = [row['id'] for row in first['items'] if row['kind'] == 'eval']
-    assert sum(identifier % 2 for identifier in evaluation) == 15  # balanced over the provisional yes/no answers
+    assert sum(identifier % 2 for identifier in evaluation) == 15  # balanced over the provisional yes/no patterns
     with store.connect() as db:  # a third model dissents on 12 photos outside that set
         for number in [n for n in range(1, 121) if n not in evaluation][:12]:
             put(db, number, 'm3', 'transformers', 'unclear', 0.6)
-    queue = vlm_judge.queue(store)  # the set now draws 10 of them as their own 'no consensus' share
-    assert queue['counts'] == {'wrist': {'eval': 30, 'disputed': 2, 'audit': 10}}
+    queue = vlm_judge.queue(store)  # the frozen set does not move when a model is added
+    assert [row['id'] for row in queue['items'] if row['kind'] == 'eval'] == evaluation
+    assert queue['counts'] == {'wrist': dict(full, disputed=12)}
     for kind in ('eval', 'disputed'):
         shown = vlm_judge.item(store, next(row['id'] for row in queue['items'] if row['kind'] == kind))
         assert shown['kind'] == kind and 'provisional' not in shown  # blind
     audit = vlm_judge.item(store, next(row['id'] for row in queue['items'] if row['kind'] == 'audit'))
     assert audit['provisional'] == {HELD: 'yes' if audit['id'] % 2 else 'no'} and audit['answers'] == {HELD: None}
-    monkeypatch.setattr(vlm_judge, 'EVAL_SET_SIZE', 47)  # 47 open: room for 3 audits under the cap of 50
-    assert vlm_judge.queue(store)['counts']['wrist'] == {'eval': 47, 'disputed': 0, 'audit': 3}
-    monkeypatch.setattr(vlm_judge, 'EVAL_SET_SIZE', 60)
+    monkeypatch.setattr(vlm_judge, 'QUEUE_CAP', 15)  # 12 disputed open: room for 3 audits; the set is not counted
+    assert vlm_judge.queue(store)['counts']['wrist'] == dict(full, disputed=12, audit=3)
+    monkeypatch.setattr(vlm_judge, 'QUEUE_CAP', 12)
     assert vlm_judge.queue(store)['counts']['wrist']['audit'] == 0
-    monkeypatch.setattr(vlm_judge, 'EVAL_SET_SIZE', 30)
+    monkeypatch.setattr(vlm_judge, 'QUEUE_CAP', 50)
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W44')
     assert vlm_judge.queue(store)['counts']['wrist']['audit'] == 10
+
+
+def test_evaluation_set_is_30_photos_per_view_frozen_and_topped_up_after_exclusion(tmp_path):
+    store = consensus_store(tmp_path, 135, models=())  # no model answers yet: every photo is one pattern
+    with store.connect() as db:  # a front view whose 40 photos each have two questions
+        question = json.dumps([{'id': 'front.a', 'text': 'a?', 'options': ['yes', 'no']},
+                               {'id': 'front.b', 'text': 'b?', 'options': ['yes', 'no']}])
+        for number in range(136, 176):
+            db.execute('INSERT INTO vlm_items (view, image_sha256, image_name, question_set, questions, source) '
+                       'VALUES (?,?,?,?,?,?)', ('front', f'{number:064x}', f'{number}.jpg', 'v2', question, '{}'))
+    first = vlm_judge.queue(store)
+    sets = {view: [row['id'] for row in first['items'] if row['view'] == view and row['kind'] == 'eval']
+            for view in ('front', 'wrist')}
+    assert {view: len(ids) for view, ids in sets.items()} == {'front': 30, 'wrist': 30}
+    assert all(row['kind'] == 'disputed' for row in first['items'] if row['id'] not in sets['front'] + sets['wrist'])
+    with store.connect() as db:  # models arrive afterwards and agree on everything
+        for number in range(1, 136):
+            for model in ('m1', 'm2'):
+                put(db, number, model, 'transformers', 'yes', 0.9)
+    again = vlm_judge.queue(store, 'wrist')
+    assert sorted(row['id'] for row in again['items'] if row['kind'] == 'eval') == sorted(sets['wrist'])
+    gone = sets['wrist'][0]
+    label(store, gone, 'excluded', **{HELD: None})
+    label(store, sets['wrist'][1], **{HELD: 'yes'})
+    topped = vlm_judge.queue(store, 'wrist')
+    members = [row['id'] for row in topped['items'] if row['kind'] == 'eval']
+    assert gone not in members and len(members) == 29 and set(sets['wrist'][2:]) <= set(members)
+    assert topped['counts']['wrist']['eval_size'] == 30 and topped['counts']['wrist']['eval_done'] == 1
+    with store.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM vlm_eval_set WHERE view='wrist'").fetchone()[0] == 31
 
 
 def test_audits_confirm_or_fix_and_pause_a_question(tmp_path, monkeypatch):
@@ -313,7 +345,7 @@ def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
     base = f'http://127.0.0.1:{server.server_port}'
     try:
         code, queue = request(base, '/api/learning/vlm/queue?view=wrist')
-        assert code == 200 and queue['counts'] == {'wrist': {'eval': 1, 'disputed': 0, 'audit': 2}}
+        assert code == 200 and queue['counts'] == {'wrist': {'eval': 1, 'disputed': 0, 'audit': 2, 'eval_size': 1, 'eval_done': 0}}
         assert request(base, '/api/learning/vlm/queue?view=Bad%20View')[0] == 400
         assert request(base, '/api/learning/vlm/queue?other=1')[0] == 400
         kinds = {row['kind']: row['id'] for row in queue['items']}

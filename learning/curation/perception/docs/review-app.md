@@ -490,13 +490,13 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
 
 **정답 두 단계(D-857 §4–5).** 사진×질문의 정답은 **임시**(모델 합의)와 **확정**(사람)이다. 사람이 단 답과 점검에서 「맞음」·「고침」으로 저장한 답이 확정이다. 임시 정답은 저장하지 않고 읽을 때마다 모델 답에서 만든다. 합의 규칙(시작값, `vlm_judge.py` 맨 위 상수): 서로 다른 모델 2개 이상이 같은 답을 내고 각각 p ≥ 0.8이며, 답을 낸 어떤 모델도 다른 답을 내지 않아야 한다. 같은 모델의 Ollama·transformers 런타임과 `@<px>` 크기는 한 모델로 세고 가장 확신 높은 런타임을 쓴다. 합의는 승인·승격이 아니다(D-514 §5, D-853 §3).
 
-사람은 대기열만 본다(보기마다 열린 건 최대 50).
+사람은 대기열만 본다. 평가셋은 한 번 끝내는 일이고, 의견 갈림·점검은 계속 들어오는 일이다(점검은 보기마다 열린 의견 갈림+점검이 50건 미만일 때만 더한다).
 
 | 종류 | 고르는 법 | 화면 |
 |---|---|---|
-| 평가셋 | 보기×질문마다 최대 30장. 사진 sha256과 질문으로 정한 순서에서 임시 정답(합의 없음 포함)별로 번갈아 뽑아 같은 상태에서는 늘 같다 | 모델 답 비표시 |
+| 평가셋 | 보기(front·top·wrist)마다 최대 **30장**이고 그 사진의 모든 질문에 답한다. 처음 고를 때 보기와 sha256으로 정한 순서에서 합의 모양(질문별 임시 정답, 합의 없음은 빈칸)마다 번갈아 뽑아 `vlm_eval_set`에 고정한다. 모델이 더해져도 바뀌지 않고, 제외로 30장보다 줄 때만 새 사진을 채운다. 화면은 「평가셋 12/30」처럼 진행을 따로 보인다 | 모델 답 비표시 |
 | 의견 갈림 | 평가셋 밖에서 어떤 질문이든 합의가 없는 사진 | 모델 답 비표시 |
-| 점검 | 평가셋 밖에서 모든 질문이 합의된 사진 중 ISO 주마다 보기당 최대 10장(주와 sha256으로 정한 순서). 열린 건이 50을 넘으면 더 넣지 않는다 | 임시 정답과 큰 「맞음 A」·「고침 E」. 고침은 선택지를 열고 임시 정답을 미리 고른다 |
+| 점검 | 평가셋 밖에서 모든 질문이 합의된 사진 중 ISO 주마다 보기당 최대 10장(주와 sha256으로 정한 순서). 열린 의견 갈림+점검이 50을 넘으면 더 넣지 않는다 | 임시 정답과 큰 「맞음 A」·「고침 E」. 고침은 선택지를 열고 임시 정답을 미리 고른다 |
 
 점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
 
@@ -513,7 +513,7 @@ python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --ro
 | 경로 | 내용 |
 |---|---|
 | `GET /api/learning/vlm/summary` | view·상태별 수, question set, 정답 단 사람, POST용 token |
-| `GET /api/learning/vlm/queue?view=` | 사람 확인 대기열 `{items:[{id, view, image_name, question_set, kind}], counts:{view:{eval, disputed, audit}}, paused, week, cap}` |
+| `GET /api/learning/vlm/queue?view=` | 사람 확인 대기열 `{items:[{id, view, image_name, question_set, kind}], counts:{view:{eval, disputed, audit, eval_size, eval_done}}, paused, week, cap}`. 첫 읽기가 평가셋을 고정한다 |
 | `GET /api/learning/vlm/items?view=&status=` | 사진 목록(질문·모델 답 없음) |
 | `GET /api/learning/vlm/items/<id>` | 질문과 현재 사람 정답, `version`, 대기열 `kind`. `kind=audit`일 때만 `provisional`(임시 정답)을 더한다 |
 | `GET /api/learning/vlm/images/<id>` | 매 요청 sha256 재확인 후 원본, ETag `no-cache`(D-469) |
@@ -522,4 +522,4 @@ python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --ro
 | `POST /api/learning/vlm/items/<id>` | `{version, status, answers}`. `labelled`는 모든 질문 답 필요, `excluded`는 null 허용. 버전이 다르면 409. 점검 사진을 `labelled`로 저장하면 점검 기록이 남는다(서버가 판단) |
 | `POST /api/learning/vlm/import` | `{rows_path, question_set, questions, model}`. 서버 파일 경로를 읽으므로 로컬 모드 전용(협업 403) |
 
-저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력), `vlm_audits`(점검)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내, 점검 사진에서 `A`·`Enter` 맞음과 `E` 고침. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력), `vlm_audits`(점검), `vlm_eval_set`(고정 평가셋)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내, 점검 사진에서 `A`·`Enter` 맞음과 `E` 고침. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.

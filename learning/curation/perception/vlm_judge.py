@@ -23,7 +23,7 @@ from pathlib import Path
 STATUSES = ('pending', 'labelled', 'excluded')
 # D-857 §5 start values, tuned in operation.
 CONSENSUS_MODELS, CONSENSUS_P = 2, 0.8  # distinct models that agree, each with p >= CONSENSUS_P
-EVAL_SET_SIZE, QUEUE_CAP, AUDIT_PER_WEEK = 30, 50, 10  # per view×question; open items per view; audits per view
+EVAL_SET_SIZE, QUEUE_CAP, AUDIT_PER_WEEK = 30, 50, 10  # items per view (frozen); open disputed+audit per view; audits
 AUDIT_PAUSE_RATE, AUDIT_PAUSE_MIN = 0.10, 5  # pause a question's provisional answers above this audit error rate
 KINDS = ('eval', 'disputed', 'audit')
 RUNTIMES = (('answers', 'transformers'), ('ollama_questions', 'ollama'))
@@ -58,7 +58,9 @@ def configure(store):
             status TEXT, answers TEXT, actor TEXT);
             CREATE TABLE IF NOT EXISTS vlm_audits (
             item INTEGER NOT NULL, question TEXT NOT NULL, week TEXT NOT NULL, provisional TEXT NOT NULL,
-            answer TEXT, actor TEXT, ts TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(item, question));''')
+            answer TEXT, actor TEXT, ts TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(item, question));
+            CREATE TABLE IF NOT EXISTS vlm_eval_set (
+            view TEXT NOT NULL, item INTEGER NOT NULL, added_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(view, item));''')
 
 
 def check_questions(questions):
@@ -254,48 +256,66 @@ def _state(db):
     return rows, usable, stats, paused
 
 
+def _evaluation_set(db, name, group, questions, usable):
+    """The view's frozen evaluation photos (D-857 §5): chosen once, topped up only when exclusions leave it short.
+
+    New photos are seeded by sha256 and taken round-robin over consensus patterns (the provisional answer per
+    question, '' where models disagree), so later model imports do not move photos already chosen."""
+    excluded = {row['id'] for row in group if row['status'] == 'excluded'}
+    chosen = [row[0] for row in db.execute('SELECT item FROM vlm_eval_set WHERE view=? ORDER BY rowid', (name,))]
+    members = [item for item in chosen if item not in excluded]
+    if len(members) < EVAL_SET_SIZE:
+        pools = {}
+        for row in sorted(group, key=lambda r: _rank('eval', name, r['image_sha256'])):
+            if row['id'] not in excluded and row['id'] not in chosen:
+                pattern = tuple(usable.get(row['id'], {}).get(qid, '') for qid in questions[row['id']])
+                pools.setdefault(pattern, []).append(row['id'])
+        order, added = [pools[key] for key in sorted(pools)], []
+        while len(members) + len(added) < EVAL_SET_SIZE and any(order):
+            for pool in order:
+                if pool and len(members) + len(added) < EVAL_SET_SIZE:
+                    added.append(pool.pop(0))
+        db.executemany('INSERT OR IGNORE INTO vlm_eval_set (view, item) VALUES (?,?)', [(name, item) for item in added])
+        members += added
+    return set(members)
+
+
 def queue(store, view=None):
     """What people see (D-857 §5): open photos of the fixed evaluation set, disputed photos and this week's audit."""
     # shortcut: recomputed from all model answers on each read; cache by answer/label counts if it gets slow.
     configure(store)
     current = week()
-    with store.connect() as db:
+    views, result, counts = {}, [], {}
+    with store.lock, store.connect() as db:  # the lock keeps two first reads from both topping up the set
         rows, usable, _, paused = _state(db)
         done = {row[0]: row[1] for row in db.execute(
             'SELECT i.view, COUNT(DISTINCT a.item) FROM vlm_audits a JOIN vlm_items i ON i.id=a.item '
             'WHERE a.week=? GROUP BY i.view', (current,))}
-    views, result, counts = {}, [], {}
-    for row in rows:
-        if not view or row['view'] == view:
-            views.setdefault(row['view'], []).append(row)
+        for row in rows:
+            if not view or row['view'] == view:
+                views.setdefault(row['view'], []).append(row)
+        sets = {name: _evaluation_set(db, name, group, {row['id']: [q['id'] for q in json.loads(row['questions'])]
+                                                         for row in group}, usable)
+                for name, group in sorted(views.items())}
     for name, group in sorted(views.items()):
         questions = {row['id']: [q['id'] for q in json.loads(row['questions'])] for row in group}
-        kinds = {}
-        for qid in sorted({qid for ids in questions.values() for qid in ids}):
-            # Seeded order per question, taken round-robin over provisional answers so each answer is represented.
-            pools = {}
-            for row in sorted(group, key=lambda r: _rank('eval', qid, r['image_sha256'])):
-                if row['status'] != 'excluded' and qid in questions[row['id']]:
-                    pools.setdefault(usable.get(row['id'], {}).get(qid, ''), []).append(row)
-            order, picked = [pools[key] for key in sorted(pools)], 0
-            while picked < EVAL_SET_SIZE and any(order):
-                for pool in order:
-                    if pool and picked < EVAL_SET_SIZE:
-                        kinds.setdefault(pool.pop(0)['id'], 'eval')
-                        picked += 1
+        kinds = dict.fromkeys(sets[name], 'eval')
         pending = [row for row in group if row['status'] is None]
         for row in pending:
             if row['id'] not in kinds and any(qid not in paused and qid not in usable.get(row['id'], {})
                                               for qid in questions[row['id']]):
                 kinds[row['id']] = 'disputed'
         opened = [row for row in pending if row['id'] in kinds]
-        room = max(0, min(AUDIT_PER_WEEK - done.get(name, 0), QUEUE_CAP - len(opened)))
+        # The cap counts the recurring queues only; the one-time evaluation set has its own progress.
+        disputed = sum(kinds[row['id']] == 'disputed' for row in opened)
+        room = max(0, min(AUDIT_PER_WEEK - done.get(name, 0), QUEUE_CAP - disputed))
         candidates = [row for row in pending if row['id'] not in kinds
                       and set(questions[row['id']]) <= set(usable.get(row['id'], {}))]
         for row in sorted(candidates, key=lambda r: _rank('audit', current, r['image_sha256']))[:room]:
             kinds[row['id']] = 'audit'
             opened.append(row)
         counts[name] = {kind: sum(kinds[row['id']] == kind for row in opened) for kind in KINDS}
+        counts[name].update(eval_size=len(sets[name]), eval_done=len(sets[name]) - counts[name]['eval'])
         result += [{'id': row['id'], 'view': name, 'image_name': row['image_name'], 'question_set': row['question_set'],
                     'kind': kinds[row['id']]} for row in opened]
     result.sort(key=lambda row: (KINDS.index(row['kind']), row['id']))

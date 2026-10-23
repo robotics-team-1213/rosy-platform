@@ -81,7 +81,7 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
     import json
     import numpy as np
     from test_vlm_judge import answer
-    monkeypatch.setattr(vlm_judge, 'EVAL_SET_SIZE', 1)  # four photos: one or two blind evaluation photos, two audits
+    monkeypatch.setattr(vlm_judge, 'EVAL_SET_SIZE', 1)  # four photos: one blind evaluation photo, two audits
     monkeypatch.setattr(vlm_judge, 'AUDIT_PER_WEEK', 2)
     store = open_store(tmp_path)
     for name, shade in (('a.jpg', 60), ('b.jpg', 120), ('c.jpg', 200), ('d.jpg', 30)):
@@ -93,7 +93,7 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
     for model in ('model-one', 'model-two'):
         vlm_judge.import_rows(store, {'rows_path': str(rows), 'question_set': 'v2', 'questions': QUESTIONS, 'model': model})
     counts = vlm_judge.queue(store)['counts']['wrist']
-    assert counts['audit'] == 2 and counts['eval'] in (1, 2)
+    assert counts == {'eval': 1, 'disputed': 0, 'audit': 2, 'eval_size': 1, 'eval_done': 0}
     server = make_server(store, free_port())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -106,7 +106,7 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
             try:
                 expect = playwright.expect
                 page.goto(f'http://127.0.0.1:{server.server_port}/learning/vlm', wait_until='networkidle')
-                expect(page.locator('#vlm-queue')).to_contain_text(f"평가셋 {counts['eval']} · 의견 갈림 0 · 점검 2")
+                expect(page.locator('#vlm-queue')).to_contain_text('평가셋 0/1 · 의견 갈림 0 · 점검 2')
                 expect(page.locator('#vlm-audit-note')).to_be_hidden()  # the evaluation photo comes first and is blind
                 assert 'model-one' not in page.content() and page.locator('.vlm-provisional').count() == 0
                 page.locator('#vlm-kind').select_option('audit')

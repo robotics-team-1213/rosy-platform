@@ -349,8 +349,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · VLM 고정 평가셋을 보기당 30장으로 줄임(D-857 §5)
 - 2026-10-24 · uncommitted · VLM 임시·확정 정답과 작은 사람 확인 대기열(D-857 §4–5)
 - 2026-10-24 · uncommitted · Learning 홈의 도메인별 단계(D-857 §3)
 - 2026-10-24 · uncommitted · Learning 다섯 단계 메뉴(D-857 §3)
 - 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
-- 2026-10-23 · uncommitted · 독립·상하위 관제 상세 설계와 최종 목표 등록
