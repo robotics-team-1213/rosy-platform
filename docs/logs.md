@@ -10228,3 +10228,10 @@ osy-d395-s1d\`.
 - 증거: 동일 native63bc43/로컬 runner 종료0,100파일 회수, finite loss10000개, dataset80547파일·36export58109파일 대조와 두 reload/stdout 일치. 실제 증거·payload의 독립 검토 Important 없음.
 - gate 변화: 학습·offline·reload만 확인했다. 독립 SIM 정책 성공·운영 승격·실물·HF 업로드 수용은 별도다.
 - CE: 해당 없음 — 동결 코드와 실제 검증 기록이 판단을 보존한다. 원래 중단의 상세 원인은 미해결이다.
+
+## 2026-10-24 · 8d119665da8f · 복구 정책의 calibration 통과와 engineering HOLD
+
+- 변경: [실제 평가 기록](validation/omx-recovered-policy-engineering-2026-10-24/result.md)에 calibration PASS·engineering1회 실패·formal0회를 구분하고 사전 manifest/원본 archive·map·안전 종료를 남겼다.
+- 증거: calibration 종료0/95파일 검증, engineering 종료1/253파일 검증. 170수락 목표 중169성공·마지막1개 JTC 목표 허용오차 초과, owner HOLD·cleanup확인. 허용치·모델·기준을 변경하거나 실패를 대체하지 않았다.
+- gate 변화: 모델 작업 성공은 HOLD다. 학습/offline/reload 수용을 SIM 작업 성공·운영·실물·HF 수용으로 확대하지 않는다.
+- CE: 미해결 — 실제 추종 오차의 물리 원인을 아직 구분하지 못했다.

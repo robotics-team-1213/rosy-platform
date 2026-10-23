@@ -3181,3 +3181,9 @@
 - 변경: [학습 완료 기록](../docs/validation/omx-recovered-teacher-training-2026-10-24/result.md)에 source8d·검증된 durable 전송ed473·same native63bc43의 종료/회수와 영구 study 무결성을 구분했다.
 - 증거: MODEL8CPU/6GiB/120분 고정 실행의 terminal0·로컬 종료0·100파일 회수, scope inactive/dead·빈 cgroup·lock/예약 없음·terminal journal 보존. 실제10k history·dataset25episodes·36export·두 fresh reload의 독립 검토 Important 없음.
 - gate 변화: 학습·offline·reload 증거만 추가했다. 운영 배포·실물 동작·HF 전달은 수행하지 않았다. CE 해당 없음.
+
+## 2026-10-24 · 8d119665da8f · 고정 정책 engineering 실패와 종료 정리
+
+- 변경: [정책 평가 기록](../docs/validation/omx-recovered-policy-engineering-2026-10-24/result.md)에 AI calibration5e00180bfe37 종료0·engineering791f6a0c8160 종료1과 원본 회수·cgroup/lock 정리를 남겼다.
+- 증거: 두 archive 각각95/253파일 byte대조. engineering의 JTC 허용오차 초과를 owner HOLD로 보존했고 main PID0·빈 cgroup·lock/예약 없음·cleanupverified를 확인했다. formal20회는 시작하지 않았다.
+- gate 변화: 실제 모델 작업 성공은 HOLD다. 별도 서비스 운영 승격·실물 동작·HF 업로드는 없다. CE 미해결 — 추종 오차의 물리 원인은 미확정이다.
