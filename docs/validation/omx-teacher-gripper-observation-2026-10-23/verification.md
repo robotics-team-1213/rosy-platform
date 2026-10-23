@@ -1,7 +1,7 @@
 # 그리퍼 실패 관측 보완의 원격 회귀 검증
 
 검증 source `dec89620017b673719429abd09461dacc9f57f19`.
-기준 `ef04e5999d8c3ba506332c90a928eae6f4f2900c`의 teacher·contact predicate·gripper
+기준 commit `ef04e5999d8c3ba506332c90a928eae6f4f2900c`의 teacher·contact predicate·gripper
 contract는 실패 native source a566과 동일했다. 다른 세션의 main 변경은 보존했다.
 
 ## 변경과 독립 검토

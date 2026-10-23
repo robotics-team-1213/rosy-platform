@@ -353,6 +353,7 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
     from omx_adapter.gripper_contract import (
         GripperObservation, GripperReadbackError, verify_held_object, verify_released_object)
     from sim_policy_trial_evidence import contact_held
+    from sim_teacher_gripper_evidence import gripper_failure_evidence
     source = ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'
     function = next(node for node in ast.walk(ast.parse(source.read_text(encoding='utf-8')))
                     if isinstance(node, ast.FunctionDef) and node.name == 'grip')
@@ -363,7 +364,9 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
         max_joint_state_age_s=.5), recipe=NS(box=NS(width=.03)),
         config=NS(workcell_id='omx_cell_sim', instance_id='omx_cell_sim_01'),
         GripperObservation=GripperObservation, verify_held_object=verify_held_object,
-        verify_released_object=verify_released_object,contact_held=contact_held)
+        verify_released_object=verify_released_object,contact_held=contact_held,
+        gripper_failure_evidence=gripper_failure_evidence,
+        receipt={'gripper_verification_failure': None}, event={'phase_id': 'transfer'}, commands=[])
     exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
     evidence,position = namespace['grip']('held')
     assert evidence['observation']['received_at'] == 20.
@@ -379,3 +382,6 @@ def test_gripper_evidence_keeps_raw_observation_and_its_actual_owner_clock_check
     arm.monotonic = lambda: 20.6
     with pytest.raises(GripperReadbackError, match='stale'):
         namespace['grip']('held')
+    failure = namespace['receipt']['gripper_verification_failure']
+    assert failure['observation']['received_at'] == 20.
+    assert failure['checked_owner_s'] == 20.6 and failure['max_age_s'] == .5

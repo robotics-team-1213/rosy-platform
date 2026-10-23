@@ -1,7 +1,7 @@
 # 고정 teacher 수집의 그리퍼 유지 판정 HOLD
 
-2026-10-23. source `a5661aa3f58a31f5369f84a1177a06ba17043473`, native run
-`a5661aa3f58a31f5369f84a1177a06ba17043473-ded681887bcc`.
+2026-10-23. source `a5661aa3f58a31f5369f84a1177a06ba17043473`.
+Native run (source revision + nonce): `a5661aa3f58a31f5369f84a1177a06ba17043473-ded681887bcc`.
 
 새 고정 cohort `CT20261023a566`는 앞선 9개 완료 뒤 네 번째 배치의 첫 시도에서
 EXITED1/HOLD했다. 이번 시도는 실패1개이며 나머지15개 슬롯은 실행하지 않았다.
