@@ -51,6 +51,8 @@ class ControlUnitStore:
                     origin_id TEXT NOT NULL, delegation_id TEXT NOT NULL,
                     revision INTEGER NOT NULL, event TEXT NOT NULL, status TEXT NOT NULL,
                     created_at TEXT NOT NULL);
+                CREATE INDEX IF NOT EXISTS fleet_control_delegation_tasks
+                    ON fleet_control_delegations(local_task_id);
             """)
         with self._transaction() as connection:
             connection.execute("INSERT OR IGNORE INTO fleet_control_unit_identity VALUES (1, ?)",
@@ -121,6 +123,11 @@ class ControlUnitStore:
     def get(self, origin_id, delegation_id):
         with closing(self._connect()) as connection:
             return self._document(self._read(connection, origin_id, delegation_id))
+
+    def owns_task(self, task_id):
+        with closing(self._connect()) as connection:
+            return connection.execute("SELECT 1 FROM fleet_control_delegations "
+                                      "WHERE local_task_id=? LIMIT 1", (task_id,)).fetchone() is not None
 
     def list(self, *, limit=100):
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:

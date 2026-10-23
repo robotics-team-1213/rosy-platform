@@ -1,6 +1,7 @@
 """Control-unit HTTP boundary: neighbor services propose; named humans admit."""
 
 import re
+import sqlite3
 
 import httpx
 from fastapi import Depends, HTTPException
@@ -38,6 +39,8 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
             return await operation
         except KeyError:
             raise HTTPException(404, detail={"code": "CONTROL_UNIT_DELEGATION_NOT_FOUND"}) from None
+        except sqlite3.Error:
+            raise HTTPException(503, detail={"code": "CONTROL_UNIT_JOURNAL_UNAVAILABLE"}) from None
         except ValueError as exc:
             code = str(exc)
             if not re.fullmatch(r"[A-Z_]+", code):
@@ -59,8 +62,11 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
     async def listing(principal=Depends(require_viewer)):
         if principal.role == "service":
             raise HTTPException(403, detail={"code": "FORBIDDEN"})
-        return {"delegations": [service.reply(row["origin_id"], row["delegation_id"])
-                                for row in service.store.list(limit=100)]}
+        try:
+            return {"delegations": [service.reply(row["origin_id"], row["delegation_id"])
+                                    for row in service.store.list(limit=100)]}
+        except sqlite3.Error:
+            raise HTTPException(503, detail={"code": "CONTROL_UNIT_JOURNAL_UNAVAILABLE"}) from None
 
     @app.post(prefix + "/delegations")
     async def submit(body: ControlWorkRequest, principal=Depends(human)):
@@ -85,6 +91,8 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
                     row = service.store.get(origin, identity)
                 except KeyError:
                     raise HTTPException(404, detail={"code": "CONTROL_UNIT_DELEGATION_NOT_FOUND"}) from None
+                except sqlite3.Error:
+                    raise HTTPException(503, detail={"code": "CONTROL_UNIT_JOURNAL_UNAVAILABLE"}) from None
                 if row["owner_unit"] != peer:
                     raise HTTPException(403, detail={"code": "CONTROL_UNIT_CHILD_READ_OUTSIDE_SCOPE"})
                 return await execute(service.read(origin, identity, for_child=peer))

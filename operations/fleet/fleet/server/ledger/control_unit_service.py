@@ -20,6 +20,7 @@ class ControlUnitService:
         active = store.active()
         if any(row["config_revision"] != topology.revision for row in active):
             raise ValueError("CONTROL_UNIT_ACTIVE_CONFIGURATION_CHANGED")
+        tasks.control_units = store
         self._stale = {(row["origin_id"], row["delegation_id"]) for row in active
                        if row["owner_unit"] != self.unit.unit_id}
 

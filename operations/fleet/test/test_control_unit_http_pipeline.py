@@ -61,5 +61,5 @@ def test_nested_http_pipeline_survives_lost_reply_and_leaf_restart_without_new_t
             assert tasks.native_required(task_id) is True
             assert tasks.store.get_task(task_id)["actor_id"] == "operator-A1"
             assert all(host != "B" for host, _, _ in calls)
-            assert not tasks.store.dispatch_control()["armed"]
+            assert tasks.store.dispatch_control()["dispatch_enabled"] is False
     asyncio.run(exercise())
