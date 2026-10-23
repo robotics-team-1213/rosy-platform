@@ -4265,3 +4265,9 @@
 - 변경: learning_entry가 카드 상태 토큰({host}_state active/neutral)을 문서에 채우고 learning.css를 콘솔 자산 허가목록에 추가했다. 이동·보안 계약(고정 origin·쿼리 거부·미설정 503)은 그대로다.
 - 증거: test_learning_entry.py 확장(상태별 카드·시트 계약). 원격 시험 기록은 커밋 참조.
 - gate 변화: 없음 — 문서 표현 변경.
+
+## 2026-10-23 · uncommitted · 학습 진입 초점 문서와 원본 readout
+
+- 변경: document()가 초점(host)과 원본 호스트(등록 시 실명)를 문서에 채운다. 미설정 하위 진입은 이제 해당 호스트의 초점 문서로 503을 낸다.
+- 증거: test_learning_entry.py 확장(초점·원본·토큰 잔여 없음). 원격 시험 기록은 커밋 참조.
+- gate 변화: 없음 — 같은 경로·같은 503/303 계약.
