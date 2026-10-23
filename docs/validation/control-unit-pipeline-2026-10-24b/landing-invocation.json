@@ -1,6 +1,7 @@
 {
   "record_kind": "agent-compiled index of completed official tools/land.py output; not CI receipt",
-  "full_tier_candidate_commit": "d2d7f57d78b1ddc40a3311ae76af137b8d5a1068",
+  "starting_commit": "d2d7f57d78b1ddc40a3311ae76af137b8d5a1068",
+  "full_tier_tested_commit": "f1088a54725559b68e8ad46c323751a8b8556a7d",
   "full_tier_reference_main_commit": "c440db31f3e59f686c15d162f3bfa3462c1a3310",
   "integrated_main_parent_commit": "992242d14d2c042eb2df902725164939f85cbbb8",
   "landed_implementation_commit": "d154853fc894711dffd080f610e7ad41e09af189",
@@ -203,6 +204,6 @@
     "sha256": "1660a45cce8eeb4aa381aede6c06f4c74db67b54f6823bd0ea81b485fc557abf"
   },
   "pytest_log_directory": "<external>/rosy-land/feat-control-unit-pipeline",
-  "scope": "FULL candidate and post-main-merge checks are separate sources. Invocations overlap; do not sum. Skipped checks are not passing evidence.",
+  "scope": "Starting branch commit, actual FULL tested merge commit and post-main-merge tested commit are distinct. Invocations overlap; do not sum. Skipped checks are not passing evidence.",
   "limits": "Host software verification and local main landing only. No push CI, deployment, physical-stop, ARM64 image or field acceptance."
 }

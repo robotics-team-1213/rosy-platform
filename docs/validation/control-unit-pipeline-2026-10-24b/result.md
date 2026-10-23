@@ -12,13 +12,15 @@
 
 | 단계 | 실제 source와 범위 | 관측 |
 |---|---|---|
-| FULL 사전 검사 | commit `d2d7f57d78b1ddc40a3311ae76af137b8d5a1068`, 기준 main commit `c440db31f3e59f686c15d162f3bfa3462c1a3310` | 공식 선택의 27개 호출, 로그별 인자·결과·sha256을 색인에 보존 |
+| FULL 사전 검사 | 실제 시험 commit `f1088a54725559b68e8ad46c323751a8b8556a7d`, 기준 main commit `c440db31f3e59f686c15d162f3bfa3462c1a3310` | 공식 선택의 27개 호출, 로그별 인자·결과·sha256을 색인에 보존 |
 | 최신 main 통합 | main commit `992242d14d2c042eb2df902725164939f85cbbb8`을 합친 구현 commit `d154853fc894711dffd080f610e7ad41e09af189` | 양쪽 누적 기록을 보존하고 생성 색인을 갱신 |
 | 통합 guard | 같은 통합 commit, architecture·harness | 273 PASS, NEW 0 |
 | main 변경 영향 검사 | 같은 통합 commit, 도구가 선택한 17개 경로 | 505 PASS, NEW 0 |
 | 로컬 착지 | 위 구현 commit을 main에 fast-forward | 공식 종료 0, ancestry 확인, push 안 함 |
 
-FULL의 주요 개별 결과는 root 9,666 PASS/1,132 SKIP, Fleet 6,212 PASS/336 SKIP, CORE·공유 묶음 7,290 PASS/91 SKIP이다. 호출 범위가 겹치므로 합산하지 않는다. SKIP은 실행·통과·장치 검증으로 세지 않는다. FULL candidate와 통합 뒤 검사 source를 한 SHA의 전체 재실행으로 바꿔 쓰지 않는다.
+실행을 시작한 branch commit `d2d7f57d78b1ddc40a3311ae76af137b8d5a1068`에 기준 main을 병합한 뒤 runner가 실제로 받은 source가 commit `f1088a54725559b68e8ad46c323751a8b8556a7d`다. 시작 SHA를 시험 SHA로 대체하지 않는다.
+
+FULL의 주요 개별 결과는 root 9,666 PASS/1,132 SKIP, Fleet 6,212 PASS/336 SKIP, CORE·공유 묶음 7,290 PASS/91 SKIP이다. 호출 범위가 겹치므로 합산하지 않는다. SKIP은 실행·통과·장치 검증으로 세지 않는다. FULL 시험과 통합 뒤 검사 source를 한 SHA의 전체 재실행으로 바꿔 쓰지 않는다.
 
 FULL 이후 main 변화에는 영향 범위 검사를 적용했다(D-803). 검토한 Fleet runtime·UI·sample·matrix·위임/scoped schema·CORE 취소 경로는 앞서 독립 검토한 commit `0adf983ba22a2e1af9a911edb3acc4ac4e760755`와 동일했다. 고정 통합 head의 독립 재검토에서 추가 중대 finding은 없었다.
 
