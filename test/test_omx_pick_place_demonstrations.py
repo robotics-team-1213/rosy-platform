@@ -186,7 +186,7 @@ def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_
     arrived=dict(intermediate,joint3=intermediate['joint3']+.007,
                  gripper_joint_1=current['gripper_joint_1'])
     corrected=readback_target(arrived,desired)
-    assert max(abs(corrected[n]-arrived[n]) for n in arrived)<=.03+1e-12
+    assert max(abs(corrected[n]-arrived[n]) for n in arrived)<=.035
     assert corrected['gripper_joint_1']<arrived['gripper_joint_1']
     assert desired['joint3']==.18370857317041256
 

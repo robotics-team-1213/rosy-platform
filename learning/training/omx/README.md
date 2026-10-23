@@ -41,8 +41,9 @@ bounded head의 표본 선택은 미래 4개 target 전체와 집게까지 같�
 ±0.035rad 안에 드는 원본 frame만 고른다. 모든 command가 남아야 하며, 표현 가능한
 frame이 없는 command는 학습 전에 거절한다. `all_frames`는 하나라도 범위 밖이면
 거절한다. 선택한 index와 chunk bound는 `training-index.json`에 기록한다.
-SIM 교사는 계획 보간·실측 readback 보정·접촉 유지 압착을 최대 0.03rad로 제한해
-head의 0.035rad까지 여유를 둔다. 이 여유가 모든 관측을 보장하지는 않으므로 새
+SIM 교사는 계획 보간·접촉 유지 압착과 readback 보정의 중간 이동을 최대 0.03rad로
+제한하고 최종 readback 목표도 0.035rad 안에서만 보낸다. grasp는 팔 목표 도달과
+신선한 접촉 증거를 확인하면 막힌 닫힘 목표를 더 추종하지 않는다. 이 여유가 모든 관측을 보장하지는 않으므로 새
 원본에도 동일한 chunk 검사를 적용한다. 범위 밖 정답만 있는 기존 command를
 삭제하거나 라벨을 줄여 통과시키지 않고 적격 시연을 새로 수집한다.
 chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존

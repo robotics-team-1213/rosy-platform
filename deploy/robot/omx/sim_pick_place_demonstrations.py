@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 
 TEACHER_STEP_RAD = .03
+TEACHER_READBACK_LIMIT_RAD = .035
 
 
 def camera_world(source, camera, output):
@@ -51,7 +52,7 @@ def readback_target(current, desired):
             or not math.isfinite(value) for values in (current,desired) for value in values.values())):
         raise ValueError('finite matching readback and target joint maps required')
     distance = max(abs(desired[n]-current[n]) for n in current)
-    if distance <= TEACHER_STEP_RAD + 1e-12:
+    if distance <= TEACHER_READBACK_LIMIT_RAD:
         return dict(desired)
     fraction = TEACHER_STEP_RAD/distance
     return {name: current[name]+fraction*(desired[name]-current[name]) for name in current}
