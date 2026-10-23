@@ -97,7 +97,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     """Learning supplies the shared seats; one module owns their navigation."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
     for name in ['learning.html', 'index.html', 'pixels.html', 'catalog.html',
-                 'camera.html', 'omx.html', 'sim.html', 'vlm.html', 'accounts.html']:
+                 'camera.html', 'omx.html', 'sim.html', 'vlm.html', 'accounts.html', 'evaluate.html']:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert html.index('/app.css') < html.index('/learning-shell.css')
@@ -117,8 +117,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     assert "import {mountLearningConnections} from '/learning-connections.js'" in shell
     destinations = shell.split('const destinations = [', 1)[1].split('];', 1)[0]
     assert re.findall(r"\['([^']+)', '([^']+)', '([^']+)'", destinations) == [
-        ('work', '작업', '/learning'), ('data', '자료', '/catalog'),
-        ('review', '검수', '/pixels?filter=pending'),
-        ('training', '학습·결과', '/learning?view=training')]
+        ('home', '홈', '/learning'), ('data', '자료', '/catalog'), ('truth', '정답', '/'),
+        ('training', '학습', '/learning?view=training'), ('evaluate', '평가·승격', '/learning/evaluate')]
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'

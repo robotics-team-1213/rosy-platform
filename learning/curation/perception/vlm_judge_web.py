@@ -1,4 +1,4 @@
-"""/learning/vlm routes for review_app.py: human VLM question truth and its evaluation; never approves.
+"""/learning/vlm routes for review_app.py: human VLM question truth, its small queue and evaluation; never approves.
 
 Collaboration: labels need `edit` and actor is the signed-in user; import reads server paths, so like `/api/import`
 it is refused there (use the CLI on the server). Local mode keeps the app's unidentified editor (actor null, D-478).
@@ -32,6 +32,14 @@ def get(handler, path, store, token):
         if (view and not vlm_judge.NAME.fullmatch(view)) or (status and status not in vlm_judge.STATUSES):
             raise ValueError('unknown view or status filter')
         handler.send({'items': vlm_judge.items(store, view or None, status or None)})
+    elif path == PREFIX + 'queue':
+        query = parse_qs(urlparse(handler.path).query, keep_blank_values=True)
+        if set(query) - {'view'} or any(len(v) != 1 for v in query.values()):
+            raise ValueError('queue accepts one view filter')
+        view = query.get('view', [''])[0]
+        if view and not vlm_judge.NAME.fullmatch(view):
+            raise ValueError('unknown view filter')
+        handler.send(vlm_judge.queue(store, view or None))
     elif match := re.fullmatch(PREFIX + r'items/(\d{1,9})', path):
         handler.send(vlm_judge.item(store, int(match[1])))
     elif match := re.fullmatch(PREFIX + r'images/(\d{1,9})', path):

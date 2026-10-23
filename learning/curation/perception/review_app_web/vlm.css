@@ -1,7 +1,10 @@
 .vlm-main { word-break: keep-all; overflow-wrap: anywhere; }
 .vlm-main > *, .vlm-work > *, .vlm-side > *, .vlm-question { min-width: 0; }
 .vlm-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-2); }
-.vlm-progress { margin: 0 0 var(--space-2); }
+.vlm-progress, .vlm-queue { margin: 0 0 var(--space-2); }
+.vlm-audit-note { margin: 0; padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--status-warn); background: var(--surface-recessed); }
+.vlm-provisional { margin: 0; font-size: var(--text-title); font-weight: var(--weight-strong); }
+.vlm-decide .vlm-big { min-block-size: var(--target-primary); min-inline-size: 7rem; }
 .vlm-work { display: grid; gap: var(--space-4); }
 .vlm-photo { margin: 0; }
 .vlm-photo img { display: block; width: 100%; max-height: 52vh; object-fit: contain; background: var(--surface-recessed); }
