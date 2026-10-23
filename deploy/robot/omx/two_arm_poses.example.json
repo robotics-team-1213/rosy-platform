@@ -1,0 +1,37 @@
+{
+  "schema": "rosy.omx-two-arm-poses/1",
+  "poses": {
+    "arm_a": {
+      "park": {
+        "shoulder_pan": 2000,
+        "shoulder_lift": 700,
+        "elbow_flex": 3100,
+        "wrist_flex": 3000,
+        "wrist_roll": 2050
+      },
+      "pan_left": {
+        "shoulder_pan": 1800,
+        "shoulder_lift": 700,
+        "elbow_flex": 3100,
+        "wrist_flex": 3000,
+        "wrist_roll": 2050
+      }
+    },
+    "arm_b": {
+      "park": {
+        "shoulder_pan": 2100,
+        "shoulder_lift": 700,
+        "elbow_flex": 3100,
+        "wrist_flex": 3000,
+        "wrist_roll": 2050
+      },
+      "pan_left": {
+        "shoulder_pan": 1900,
+        "shoulder_lift": 700,
+        "elbow_flex": 3100,
+        "wrist_flex": 3000,
+        "wrist_roll": 2050
+      }
+    }
+  }
+}

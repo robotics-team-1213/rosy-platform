@@ -31,16 +31,24 @@ def torque_off(bus):
 
 
 def close_device(device):
+    failures = []
     try:
         if device.bus.is_connected:
             try:
                 torque_off(device.bus)
-            finally:
+            except BaseException as exc:
+                failures.append(exc)
+            try:
                 device.bus.disconnect()
+            except BaseException as exc:
+                failures.append(exc)
     finally:
         for camera in getattr(device, "cameras", {}).values():
             if camera.is_connected:
                 camera.disconnect()
+    if failures:
+        # one message, not the last failure: the first is usually the cause
+        raise RuntimeError("; ".join(str(failure) for failure in failures))
 
 
 def connect_passive(device, *, follower):
@@ -68,8 +76,14 @@ def connect_passive(device, *, follower):
                         raise ValueError(f"{name}: {register} readback mismatch")
         for camera in getattr(device, "cameras", {}).values():
             camera.connect()
-    except BaseException:
-        close_device(device)
+    except BaseException as exc:
+        try:
+            close_device(device)
+        except BaseException as close_exc:
+            # A latched motor error makes the closing torque-OFF fail too. Without this the
+            # close error replaced the handshake error and the receipt named the wrong cause.
+            if isinstance(exc, Exception):
+                raise RuntimeError(f"{exc}; the close after it also failed: {close_exc}") from exc
         raise
 
 
@@ -85,11 +99,20 @@ def normalized(bus, raw):
 
 
 class NativeJointMotion:
-    def __init__(self, follower, leader, *, clock=time.monotonic, label="follower", monitor=None):
+    def __init__(self, follower, leader, *, clock=time.monotonic, body_only=False, label="follower", monitor=None,
+                 offsets=None):
         self.follower, self.leader, self.clock = follower, leader, clock
-        self.active = NAMES
+        self.body_only = body_only
+        self.active = BODY if body_only else NAMES
         self.label = label
-        self.offsets = None
+        #: An explicit per-joint seed makes the Follower copy the Leader's *relative* motion
+        #: instead of its absolute pose: target = leader + offset. Without it the offset is
+        #: measured once from the first sample, which aligns the absolute poses.
+        self.offsets = offsets
+        self.velocity = dict.fromkeys(self.active, 0.0)
+        self.tracking = False
+        self.aligned_since = None
+        self.last_alignment_report = None
         self.last_time = None
         self.command = None
         self.failed = False
@@ -97,6 +120,7 @@ class NativeJointMotion:
         self.effort_pwm = {}
         self.effort_since = dict.fromkeys(BODY)
         self.last_effort_time = None
+        self.alignment_deadline = None
         self.monitor = monitor
         self.monitor_admitted = False
 
@@ -133,6 +157,8 @@ class NativeJointMotion:
         current = self.follower.sync_read("Present_Position", normalize=False)
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
+        if self.body_only and self.follower.read("Torque_Enable", "gripper"):
+            raise ValueError("passive gripper torque must remain OFF")
         if self.command is not None:
             for name in self.active:
                 sent = int(self.command[name])  # the bus serialized the previous fractional target as integer ticks
@@ -153,14 +179,15 @@ class NativeJointMotion:
                 if not calibration.range_min <= value <= calibration.range_max:
                     raise ValueError(f"{name}: outside calibrated range")
         # Use the installed SDK's calibrated gripper conversion, including drive inversion.
-        grip = normalized(self.leader, {"gripper": leader["gripper"]})["gripper.pos"]
-        grip_id = self.follower.motors["gripper"].id
-        target["gripper"] = self.follower._unnormalize({grip_id: grip})[grip_id]
+        if not self.body_only:
+            grip = normalized(self.leader, {"gripper": leader["gripper"]})["gripper.pos"]
+            grip_id = self.follower.motors["gripper"].id
+            target["gripper"] = self.follower._unnormalize({grip_id: grip})[grip_id]
         for name, value in target.items():
             calibration = self.follower.calibration[name]
             if not calibration.range_min <= value <= calibration.range_max:
                 raise ValueError(f"{name}: target outside follower calibrated range")
-        if abs(target["gripper"] - current["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9:
+        if not self.body_only and abs(target["gripper"] - current["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9:
             raise ValueError("gripper motor travel >=100 degrees; align manually with torque OFF")
         for name in NAMES:
             if self.follower.read("Hardware_Error_Status", name):
@@ -186,9 +213,14 @@ class NativeJointMotion:
         if self.last_time is not None and not 0 <= now - self.last_time <= MAX_GAP_S:
             raise ValueError("stale control loop including sampling (>0.5 seconds)")
         if self.command is None:
+            deadline = started + min(105, max(5, max(abs(target[n] - current[n]) for n in BODY)
+                                               / TICKS_PER_DEGREE + 5))
             current = self._seed({n: current[n] for n in self.active}, target, started)
-            return {"started": started, "seed": current}
+            return {"started": started, "seed": current, "alignment_deadline": deadline}
         elapsed = min(now - self.last_time, MAX_STEP_S)
+        if self.body_only:
+            command, state = self._body_command(target, current, elapsed, now)
+            return {"started": started, "command": command, "time": now, "body_state": state}
         step = elapsed * TICKS_PER_DEGREE  # one degree/second, independent of loop frequency
         command = {n: self.command[n] + max(-step, min(step, target[n] - self.command[n])) for n in self.active}
         return {"started": started, "command": command, "time": now}
@@ -218,20 +250,71 @@ class NativeJointMotion:
                                  f"error_deg={error:.2f} duration={now - since:.2f}s")
         self.effort_pwm, self.last_effort_time = pwm, now
 
+    def _body_command(self, target, current, elapsed, now):
+        tracking, since = self.tracking, self.aligned_since
+        if not tracking and now >= self.alignment_deadline:
+            raise ValueError(f"{self.label}: alignment deadline exceeded; current={current}, "
+                             f"target={target}, command={self.command}")
+        if not tracking and (self.last_alignment_report is None or now - self.last_alignment_report >= 1):
+            actual_joint = max(self.active, key=lambda n: abs(current[n] - target[n]))
+            command_joint = max(self.active, key=lambda n: abs(self.command[n] - target[n]))
+            present_pwm = self.effort_pwm[actual_joint]
+            pwm_limit = self.pwm_limits[actual_joint]
+            print(f"{self.label}: phase=aligning; actual_joint={actual_joint} actual={current[actual_joint]} "
+                  f"target={target[actual_joint]} error_deg={abs(current[actual_joint] - target[actual_joint]) / TICKS_PER_DEGREE:.2f} "
+                  f"Present_PWM={present_pwm} PWM_Limit={pwm_limit}; "
+                  f"command_joint={command_joint} command={self.command[command_joint]} target={target[command_joint]} "
+                  f"error_deg={abs(self.command[command_joint] - target[command_joint]) / TICKS_PER_DEGREE:.2f}", flush=True)
+            self.last_alignment_report = now
+        if not tracking:
+            aligned = all(abs(target[n] - current[n]) <= 2.5 * TICKS_PER_DEGREE
+                          and abs(target[n] - self.command[n]) <= 0.5 * TICKS_PER_DEGREE for n in self.active)
+            since = (now if since is None else since) if aligned else None
+            tracking = since is not None and now - since >= 0.5 - 1e-9
+        acceleration = 10 * TICKS_PER_DEGREE
+        limit = (10 if tracking else 1) * TICKS_PER_DEGREE
+        command, velocity = {}, {}
+        for name in self.active:
+            error = target[name] - self.command[name]
+            # Leave enough distance for this step and subsequent braking; moving targets may still be passed.
+            brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
+            desired = math.copysign(min(limit, brake), error)
+            change = max(-acceleration * elapsed, min(acceleration * elapsed, desired - self.velocity[name]))
+            velocity[name] = self.velocity[name] + change
+            command[name] = self.command[name] + velocity[name] * elapsed
+            calibration = self.follower.calibration[name]
+            if not calibration.range_min <= command[name] <= calibration.range_max:
+                raise ValueError(f"{name}: streamed command outside calibrated range")
+        return command, (velocity, tracking, since)
+
     def commit(self, prepared):
+        if self.body_only and self.follower.read("Torque_Enable", "gripper"):
+            raise ValueError("passive gripper torque must remain OFF before body command")
         now = self.clock()
         if (self.failed or not 0 <= now - prepared["started"] <= MAX_GAP_S
                 or (self.last_time is not None and not 0 <= now - self.last_time <= MAX_GAP_S)):
             raise ValueError("stale or stopped prepared action")
+        deadline = prepared.get("alignment_deadline", self.alignment_deadline)
+        if self.body_only and not self.tracking and now >= deadline:
+            raise ValueError(f"{self.label}: alignment deadline exceeded before command commit")
         if "seed" in prepared:
-            self.follower.enable_torque()
+            if self.body_only:
+                self.follower.enable_torque(list(BODY))
+            else:
+                self.follower.enable_torque()
             self.command = dict(prepared["seed"])
+            self.alignment_deadline = prepared["alignment_deadline"]
             self.last_time = self.clock()
             return normalized(self.follower, self.command)
         goals = {n: int(v) for n, v in prepared["command"].items()}
         self.follower.sync_write("Goal_Position", goals, normalize=False)
         self.command = prepared["command"]
         self.last_time = prepared["time"]
+        if "body_state" in prepared:
+            was_tracking = self.tracking
+            self.velocity, self.tracking, self.aligned_since = prepared["body_state"]
+            if self.tracking and not was_tracking:
+                print(f"{self.label}: aligned; body tracking limit 10 deg/s, acceleration 10 deg/s^2", flush=True)
         return normalized(self.follower, goals)
 
     def _seed(self, current, target, started):
@@ -270,9 +353,11 @@ class NativeJointMotion:
         raise ValueError(detail)
 
 
-def run_native(module, follower_type, leader_type):
+def run_native(module, follower_type, leader_type, *, body_only=False):
     """Keep native factories/recording; replace only hardware lifecycle and action guard."""
     devices = []
+    if body_only and hasattr(module, "record"):
+        raise ValueError("body-only mode is manual teleoperation only")
     shared = {}
     original_robot = module.make_robot_from_config
     original_teleop = module.make_teleoperator_from_config
@@ -284,7 +369,8 @@ def run_native(module, follower_type, leader_type):
         def send_action(self, action):
             if "motion" not in shared:
                 from motor_health import MotorHealth
-                shared["motion"] = NativeJointMotion(self.bus, shared["leader"].bus, monitor=MotorHealth())
+                shared["motion"] = NativeJointMotion(self.bus, shared["leader"].bus, body_only=body_only,
+                                                 monitor=MotorHealth())
             sent = shared["motion"].send(action)
             shared["sent"] = sent
             return sent
@@ -355,12 +441,17 @@ def run_native(module, follower_type, leader_type):
 
 def main():
     mode = sys.argv.pop(1)
+    body_only = "--body-only" in sys.argv
+    if body_only:
+        sys.argv.remove("--body-only")
+        if mode != "teleoperate":
+            raise SystemExit("body-only mode is manual teleoperation only")
     if mode not in ("record", "teleoperate"):
         raise SystemExit("expected record or teleoperate")
     from lerobot.robots.omx_follower.omx_follower import OmxFollower
     from lerobot.teleoperators.omx_leader.omx_leader import OmxLeader
     module = importlib.import_module("lerobot.scripts.lerobot_" + mode)
-    run_native(module, OmxFollower, OmxLeader)
+    run_native(module, OmxFollower, OmxLeader, body_only=body_only)
 
 
 if __name__ == "__main__":
