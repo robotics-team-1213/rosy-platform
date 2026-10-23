@@ -493,5 +493,10 @@
     "commit": "815e5027483cb49ceacc4c562d83cb1439692cbe",
     "original_commit": "eddf756d3bfb93ac0d1879f4c1685f6f13859b91",
     "reason": "PR #126 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only /root/shared_http_review, 2026-10-20: exact source tree 752742953a12466d766080443de9729101b47ed5 reviewed with no supported findings; main squash has that identical tree. Four D-762 station classifications retain same-source fail/pass evidence, explicit environment caveats, unknown causes and twice-fail NEW; unpublished fixture lifespan excluded. Source native policy/scanner 170 passed, normal push 785 passed, PR CI39336986634 493 passed/0 skipped; main CI39337638405 failed its trailer gate before pytest. Exact squash provenance retention using the existing reviewed-history mechanism only; no production code, scanner, safety policy or device/field acceptance change."
+  },
+  {
+    "commit": "bb6a4e38c22714e05eeb601351c69a52f250a960",
+    "original_commit": "82c3bff42e31f13ee213b6bf782919a822b68971",
+    "reason": "PR #167 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only review agent, 2026-10-23: APPROVE for bc6edabfe0/82c3bff42e against base d227b0c2c5; traced report_field/src.field -> _status_message -> _status_loop -> Rosy Cam parseStatus/CornerGuide/StreamScreen; the change only adds the phone-facing status field_state and corners_needed 0 and does not touch sightings, homography, authentication, motion or connection lifecycle. The squash diff equals the reviewed branch diff (same 17 files, identical ingest.py patch-id); PR CI 39963705171 passed. Provenance only; no production code, safety policy or device/field acceptance change."
   }
 ]
