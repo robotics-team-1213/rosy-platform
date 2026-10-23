@@ -10062,6 +10062,12 @@ osy-d395-s1d\`.
 - 증거: vlm-question-bench 회차의 머리글만 적은 해시 표 9행이 `test_no_secrets_in_tracked_files`에서 걸렸고, 행마다 `sha256`을 적은 뒤 `scan_text`가 빈 목록을 냈다.
 - gate 변화: 없음.
 
+## 2026-10-23 · 118425b1b5 · VLM 질문 세트 v2와 T1 정답 화면
+
+- 변경: `tools/vlm_question_bench.py` 질문 세트 v2(`front.thing` → `front.wall_ahead`·`robot_ahead`·`person_ahead`), 같은 사진 종류 `--frames` 합치기. `tools/vlm_label_sheet.py` 추가(벤치 사진을 정적 HTML 정답 화면으로, 모델 답 숨김). [기록](validation/vlm-question-bench-2026-10-23b/result.md)·설계·실험 계획 갱신.
+- 증거: 모델 PC front 60장, `wall` 쏠림 해소(8B 4/60). Ollama 질문 6개 p50 0.25 s. 정답 화면 140장, headless Chromium 390 px에서 선택·내려받기 확인. 사람 정답 전이라 정확도는 미판정이다.
+- gate 변화: 없음.
+
 ## 2026-10-23 · uncommitted · 독립·상하위 관제 상세 설계와 최종 목표 등록
 
 - 변경: D-851과 [상세 설계](plans/2026-10-23-composable-control-design.md)를 등록하고 기존 목표에 연결했다. 독립·3수준 중첩, 상태 정본·불변 위임 식별·하위 승인·단절 복구·배치·P0–P5 수용 기준을 구체화했다.

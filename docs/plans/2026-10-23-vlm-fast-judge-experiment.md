@@ -24,7 +24,8 @@
 
 ## 진행
 
-- 2026-10-23: T3·T4와 A2 배선을 짝 없는 front·top·wrist 프레임 40장씩으로 실행했다. 결과는 [벤치 기록](../validation/vlm-question-bench-2026-10-23/result.md). 지연은 목표를 만족한다(Ollama 질문 전부 p50 0.10–0.18 s). 정확도는 T1 정답 전이라 미판정이다. T1 전에 `front.thing` 문구를 고친다.
+- 2026-10-23: T3·T4와 A2 배선을 짝 없는 front·top·wrist 프레임 40장씩으로 실행했다. 결과는 [벤치 기록](../validation/vlm-question-bench-2026-10-23/result.md). 지연은 목표를 만족한다(Ollama 질문 전부 p50 0.10–0.18 s). 정확도는 T1 정답 전이라 미판정이다.
+- 2026-10-23(b): 질문 세트 v2(`front.thing` → 종류별 yes/no)로 `wall` 쏠림을 풀었다. T1 정답 화면 140장(front 60·top 40·wrist 40)을 모델 PC에 만들었다([기록](../validation/vlm-question-bench-2026-10-23b/result.md)). **다음은 사람이 답을 다는 것이다.** 로봇·사람이 앞에 있는 장면은 표본에 없으므로 따로 골라 더한다.
 
 ## 과제
 
