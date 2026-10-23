@@ -13,7 +13,7 @@
 .vlm-question .vlm-en { color: var(--text-secondary); }
 .vlm-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: var(--space-2); }
 /* The decision bar stays on screen while the page scrolls through the questions (D-542 §2-3). */
-.vlm-decide { position: sticky; bottom: 0; z-index: 1; padding-block: var(--space-2); background: var(--ground); border-top: 1px solid var(--border-subtle); }
+.vlm-decide { position: sticky; bottom: 0; z-index: 1; padding-block: var(--space-2); background: var(--surface-canvas); border-top: 1px solid var(--border-subtle); }
 .vlm-eval table { width: 100%; border-collapse: collapse; margin-block-end: var(--space-4); }
 .vlm-eval th, .vlm-eval td { text-align: start; padding: var(--space-1) var(--space-2); border-block-end: 1px solid var(--border-subtle); }
 .vlm-eval { overflow-x: auto; }
