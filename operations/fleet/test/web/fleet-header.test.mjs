@@ -113,10 +113,11 @@ test("a refused session locks the E-stop but leaves the account row closed; a lo
   // D-741 3: the row stays closed; the guide strip's 관제 접속 opens it.
   assert.equal(nodes["topbar-extra"].dataset.open, "false");
 
+  nodes["topbar-extra"].dataset.open = "true";  // the operator opened it to enter access
   showSession({principal_id: "bob", role: "operator"});
   assert.equal(nodes.estop.disabled, false);
   assert.equal(nodes.estop.getAttribute("reason"), null);
-  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");  // a session folds it again
 });
 
 test("the shared press posts once and reports partial stops as an error", async () => {

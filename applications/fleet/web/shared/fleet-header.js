@@ -97,6 +97,9 @@ export function showSession(identity) {
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
   const token = $('token-access');
   if (token) token.open = false;
+  // A session is stated in words, so the row it was entered through folds again (D-741 3):
+  // one header line is what the operator reads after connecting.
+  setTopbarOpen(false);
   const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = `${identity.principal_id} · ${identity.role}`;
