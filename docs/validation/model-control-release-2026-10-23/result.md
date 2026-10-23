@@ -42,4 +42,6 @@ Docker COPY와 PYTHONPATH에 palletizing 공정과 Skill 계약 소스가 누락
 
 공개 base `29ec6ca93e` 위의 후속 수정은 두 소스의 COPY·PYTHONPATH·dockerignore·후속 build 트리거를 연결하고, 이미지 빌드에서 실제 Fleet compiler·Mission 피드백·InferenceResult를 import한다. 격리 payload 시험은 주요 타입이 복사된 이미지 트리에서 로드됐는지 검사하므로 테스트 호스트의 설치 wheel이 누락을 가리지 못한다. 실패 시험 head `7ef0b7fc70`에서 1 failed/NEW1, 수정 head `4e05ccbae2`에서 해당 시험·후보·workflow·추론 계약 52 passed/0 skipped/NEW0을 확인했다. 독립 읽기 검토에서 추가 지적은 없다. 실제 수정 이미지 빌드·설치 검증은 아직 진행 중이다. 운영 설정·owner 권한·정책 활성화는 변경하지 않는다.
 
+이미지 수정 PR #178의 첫 전체 CI `39989430189`는 CORE 모터 health route 시험 한 건이 fresh 대신 delayed여서 실패했다(같은 묶음 7,196 passed/64 skipped). 모터 표본을 저장한 뒤 전체 API를 구성하는 실제 시간이 reader의 2초 표본 나이에 섞이는 시험이었다. 테스트 helper에서 producer·reader 모듈의 시계 참조만 같은 고정 시각으로 주입하고 미래 표본은 원래 시각에 20초를 더하도록 했다. 전역 time/monotonic·실행 loop·운영 2초 기준·부정 입력·fault/ended/3초 stale 검사는 유지했다. 수정 head `5ca70d83c9`의 원격 API·native 모터 health 44 passed/0 skipped/NEW0. 새 게시 head의 전체 CI는 별도로 확인한다.
+
 CE: 미해결. 작업 워크트리 제거의 수행자·의도는 확인하지 못했다. 데이터 손실 없이 공개 작업을 복구한 사실과 검증 중단을 보존하며, 원인 해결을 주장하지 않는다. 이미지 의존성 누락은 설치 위치 검사 교훈의 적용 대상으로 추적하며 최종 설치 성공을 확인하기 전에는 해결 완료로 기록하지 않는다.
