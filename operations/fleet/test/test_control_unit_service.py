@@ -1,5 +1,6 @@
 """Control-unit orchestration uses the real durable Fleet task admission path."""
 
+import asyncio
 import pytest
 
 from core_common.protocol.control_units import ControlWorkRequest, ControlIngressRequest
@@ -50,65 +51,63 @@ def cluster(tmp_path):
     return nodes, disconnected
 
 
-@pytest.mark.asyncio
-async def test_three_levels_forward_one_identity_and_only_leaf_creates_task(tmp_path):
+def test_three_levels_forward_one_identity_and_only_leaf_creates_task(tmp_path):
     nodes, _ = cluster(tmp_path)
     request = ControlWorkRequest.model_validate(WORK)
-    await nodes["R"].submit(request)
-    await nodes["R"].submit(request)
+    asyncio.run(nodes["R"].submit(request))
+    asyncio.run(nodes["R"].submit(request))
     leaf = nodes["A1"]
     row = leaf.store.get("R", "job-1")
     assert row["local_task_id"] is None
-    await leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=row["revision"])
+    asyncio.run(leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=row["revision"]))
     task_id = leaf.store.get("R", "job-1")["local_task_id"]
     assert leaf.tasks.store.get_task(task_id)["actor_id"] == "operator-a1"
     assert len(leaf.tasks.store.history(task_id)) == 2
-    await nodes["R"].refresh()
+    asyncio.run(nodes["A"].refresh())
+    asyncio.run(nodes["R"].refresh())
     assert nodes["R"].store.get("R", "job-1")["result"]["task_id"] == task_id
-    for unit in ["R", "A", "B"]:
-        assert nodes[unit].store.list()[0]["local_task_id"] is None if unit != "B" else not nodes[unit].store.list()
+    for unit in ["R", "A"]:
+        assert nodes[unit].store.list()[0]["local_task_id"] is None
+    assert not nodes["B"].store.list()
 
 
-@pytest.mark.asyncio
-async def test_parent_cannot_approve_leaf_and_sibling_scope_is_refused(tmp_path):
+def test_parent_cannot_approve_leaf_and_sibling_scope_is_refused(tmp_path):
     nodes, _ = cluster(tmp_path)
-    await nodes["R"].submit(ControlWorkRequest.model_validate(WORK))
+    asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(WORK)))
     with pytest.raises(ValueError, match="LOCAL"):
-        await nodes["R"].approve("R", "job-1", actor_id="root-op", expected_revision=1)
+        asyncio.run(nodes["R"].approve("R", "job-1", actor_id="root-op", expected_revision=1))
     with pytest.raises(ValueError, match="SCOPE"):
-        await nodes["B"].submit(ControlWorkRequest.model_validate(WORK))
+        asyncio.run(nodes["B"].submit(ControlWorkRequest.model_validate(WORK)))
     incoming = ControlIngressRequest.model_validate(dict(WORK, origin_id="R", config_revision="v1"))
     with pytest.raises(ValueError, match="PARENT"):
-        await nodes["A1"].receive(incoming, parent_id="R")
+        asyncio.run(nodes["A1"].receive(incoming, parent_id="R"))
 
 
-@pytest.mark.asyncio
-async def test_disconnected_parent_blocks_new_approval_then_cancel_closes_candidate(tmp_path):
+def test_disconnected_parent_blocks_new_approval_then_cancel_closes_candidate(tmp_path):
     nodes, disconnected = cluster(tmp_path)
-    await nodes["R"].submit(ControlWorkRequest.model_validate(WORK))
+    asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(WORK)))
     leaf = nodes["A1"]
     row = leaf.store.get("R", "job-1")
     disconnected.add("A")
     with pytest.raises(ConnectionError):
-        await leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=row["revision"])
+        asyncio.run(leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=row["revision"]))
     assert leaf.store.get("R", "job-1")["local_actor"] is None
-    await nodes["R"].cancel("R", "job-1")
+    asyncio.run(nodes["R"].cancel("R", "job-1"))
     disconnected.clear()
-    await nodes["R"].refresh()
-    await nodes["A"].refresh()
+    asyncio.run(nodes["R"].refresh())
+    asyncio.run(nodes["A"].refresh())
     assert leaf.store.get("R", "job-1")["status"] == "CANCELED"
     with pytest.raises(ValueError):
-        await leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=row["revision"])
+        asyncio.run(leaf.approve("R", "job-1", actor_id="operator-a1", expected_revision=row["revision"]))
 
 
-@pytest.mark.asyncio
-async def test_stale_approval_and_changed_identity_never_admit(tmp_path):
+def test_stale_approval_and_changed_identity_never_admit(tmp_path):
     nodes, _ = cluster(tmp_path)
-    await nodes["R"].submit(ControlWorkRequest.model_validate(WORK))
+    asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(WORK)))
     with pytest.raises(ValueError, match="REVISION"):
-        await nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=99)
+        asyncio.run(nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=99))
     with pytest.raises(ValueError, match="CONFLICT"):
-        await nodes["R"].submit(ControlWorkRequest.model_validate(dict(WORK, goal={"x": 4.0, "y": 2.0})))
+        asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(dict(WORK, goal={"x": 4.0, "y": 2.0}))))
 
 
 def test_active_recovery_does_not_starve_behind_recent_terminal_history(tmp_path):
