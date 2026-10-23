@@ -10079,3 +10079,9 @@ osy-d395-s1d\`.
 - 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
 - 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
 - gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
+
+## 2026-10-24 · bd746466aa · 닫힌 VLM 질문 설계 교훈
+
+- 변경: [교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md) 추가 — 종류마다 yes/no, 사진 단위 평가셋, 모든 사람 대기열에 상한, 정답 전 답 분포 확인.
+- 증거: 다지선다 40/40 `wall`, 질문별 평가셋 합집합 132/135, 상한 없는 의견 갈림. 각각 고친 뒤 4/60, 보기당 30, 보기당 50·대기 수.
+- gate 변화: 없음. 애매한 질문(v3)은 확인 중이며 결과 후 덧붙인다.
