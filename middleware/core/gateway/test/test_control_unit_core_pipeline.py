@@ -1,4 +1,4 @@
-"""Real Fleet dispatch/CORE receipt chain; sensors, readiness and actuator are synthetic."""
+"""Real Fleet dispatch/CORE receipt chain with synthetic odometry and actuator."""
 
 import asyncio
 from pathlib import Path
@@ -26,8 +26,8 @@ def test_delegated_task_dispatches_through_core_and_projects_exact_terminal_resu
     from test_control_unit_service import cluster, WORK
 
     core, services = core_client()
-    # As in scoped-cancel API tests, the fake backend supplies no live Nav2 readiness.
-    monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)
+    # The CORE-only simulator bench proves a base with synthetic odometry (D-32).
+    services.state.set_velocity(0.0, 0.0)
 
     class Executor:
         def __init__(self):
