@@ -129,7 +129,10 @@ def _stamped(stamp):
     return before
 
 
-def test_a_map_entry_robot_gets_the_lane_heading_at_the_arc_start_and_the_located_yaw_pair():
+def test_a_map_entry_robot_gets_the_lane_heading_at_the_arc_start_and_the_located_yaw_pair(monkeypatch):
+    from fleet.server import trip_ports
+    # Compare both synthetic trips at the same read-to-send latency.
+    monkeypatch.setattr(trip_ports, "_monotonic", lambda: 100.0)
     runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))
     fields = ports.expects[0]
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m", "map_entry"}
