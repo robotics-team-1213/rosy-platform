@@ -1,4 +1,5 @@
 """Actual LeRobot reader; Hub transport is an in-memory immutable-byte fixture."""
+import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -73,4 +74,13 @@ def test_reader_rejects_parquet_clocks_that_disagree_with_preserved_source(modul
     values[0] = [values[0][0]+1]
     pq.write_table(table.set_column(index, field, pa.array(values, type=field.type)), parquet)
     with pytest.raises(AssertionError, match='Arrays are not equal'):
+        module.prepare_bundle(exported, tmp_path/'bundle', 'team/omx', 'dataset', selected(exported))
+
+
+def test_reader_rejects_mislabeled_joint_order(module, exported, tmp_path):
+    info = exported/'meta/info.json'
+    document = json.loads(info.read_bytes())
+    document['features']['action']['names'].reverse()
+    info.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match='source feature metadata differs: action'):
         module.prepare_bundle(exported, tmp_path/'bundle', 'team/omx', 'dataset', selected(exported))

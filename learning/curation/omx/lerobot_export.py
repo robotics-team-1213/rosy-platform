@@ -86,9 +86,8 @@ def _readback(episode, validated, output, repo_id):
     features = dataset_features(manifest)
     for key, expected in features.items():
         actual = info['features'].get(key, {})
-        if any(actual.get(field) != (list(value) if field == 'shape' else value)
-               for field, value in expected.items()):
-            raise ValueError('LeRobot source feature metadata differs')
+        if any(actual.get(field) != value for field, value in expected.items()):
+            raise ValueError('LeRobot source feature metadata differs: '+key)
     max_image_error = 0.0
     for index, expected in enumerate(iter_dataset_frames(episode, validated)):
         actual = reader[index]
