@@ -10079,3 +10079,9 @@ osy-d395-s1d\`.
 - 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
 - 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
 - gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
+
+## 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
+
+- 변경: `app-names-and-roles.md`에 외부 업무 앱 절을 추가해 Harbor(HarborLogi)를 등록하고 은퇴한 rosy-vault의 Rosy Vault·Rosy Device·device-core 행을 정리했다. README 문서 지도와 `docs/reference/AGENTS.md`에 `application-contract-support.md`를 색인하고 PRODUCT.md의 앱 구분 문장을 갱신했다.
+- 증거: 공개 팀 저장소 kernel-robot-repo-2의 README·CONTRIBUTING·platform-contract와 이 저장소의 D-806·D-836·지원 계약 표를 대조했다. Harbor가 쓰는 경로·권한은 지원 계약 표와 일치한다. 제품 코드·wire·권한은 바꾸지 않았다.
+- gate 변화: 없음. 문서 색인·카탈로그 등록이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음: 새 장애 해결이 아닌 문서 정리다.
