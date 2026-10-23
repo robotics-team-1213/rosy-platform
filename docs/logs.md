@@ -10122,6 +10122,12 @@ osy-d395-s1d\`.
 - 증거: Learning 관련 Proposed 20건 분류 — 대체 0, 일부 개정 4(D-449·D-792·D-834·D-853), 유지 9, 범위 밖 7. D-853 개정 메모는 그 ADR이 착지한 뒤 단다.
 - gate 변화: 없음. 코드·배포·인스턴스 퇴역은 별도 조각이다.
 
+## 2026-10-24 · 64fd9ad65c · Learning 지도 결정 반영과 VLM 질문 교훈 갱신
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md) §9를 D-857 결정으로 바꿨다. [닫힌 질문 교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md)에 v3 결과를 덧붙였다.
+- 증거: 모델 PC v3 벤치·토론 — 기준을 적은 `tape_left`·`tape_right`는 의견 갈림 0/1(이전 0/27 합의), `object_between_tapes` 1/26, `robot_count` 0/10.
+- gate 변화: 없음.
+
 ## 2026-10-24 · uncommitted · Learning 다섯 단계 메뉴(D-857 §3)
 
 - 변경: Learning 주 메뉴를 홈·자료·정답·학습·평가·승격 다섯 단계로 바꾸고 「작업 도구」 펼침을 없앴다. 화면이 여럿인 단계(자료·정답·학습)는 경로 줄 하위 메뉴로 기존 화면을 두 번 안에 연다. 계정·저장 공간은 상단 「설정」으로 옮겼다. 새 `/learning/evaluate`(`evaluate.html/js`)는 학습 실행기 평가 단계와 VLM 모델 대 확정 정답을 읽기 전용으로 모으고, `?domain=` 필터를 따르며, 승격 요청은 비활성(다음 조각)이다. 기존 URL은 그대로다.
