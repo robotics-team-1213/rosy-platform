@@ -173,14 +173,22 @@ def identity(device):
     return dict(realpath=str(path.resolve()), rdev=info.st_rdev)
 
 
-def producer(role, device):
-    raw = command(['systemctl', '--user', 'show', 'rosy-omx-camera@'+role+'.service',
-                   '-p', 'ActiveState', '-p', 'MainPID', '-p', 'InvocationID'])
-    props = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
-    owners = command(['fuser', device]).split()
-    if props['ActiveState'] != 'active' or owners != [props['MainPID']] or props['MainPID'] == '0':
-        raise RuntimeError('existing producer must be the sole camera owner')
-    return props
+def producer(role, device, wait_s=15.0):
+    # The preview unit is Type=simple: at boot it is active before it opens the camera.
+    deadline = time.monotonic()+wait_s
+    while True:
+        raw = command(['systemctl', '--user', 'show', 'rosy-omx-camera@'+role+'.service',
+                       '-p', 'ActiveState', '-p', 'MainPID', '-p', 'InvocationID'])
+        props = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
+        try:
+            owners = command(['fuser', device]).split()
+        except subprocess.CalledProcessError:
+            owners = []  # fuser exits 1 while no process holds the device
+        if props['ActiveState'] == 'active' and props['MainPID'] != '0' and owners == [props['MainPID']]:
+            return props
+        if time.monotonic() >= deadline:
+            raise RuntimeError('existing producer must be the sole camera owner')
+        time.sleep(0.5)
 
 
 def prepare(profile, root, digest):
@@ -230,7 +238,7 @@ def restore(root):
         try:
             if identity(spec['device']) != spec['identity']:
                 raise RuntimeError('camera identity changed; refusing wrong device')
-            producer(role, spec['device'])
+            producer(role, spec['device'], wait_s=5.0)  # two cameras stay inside TimeoutStopSec=20
             errors = restore_controls(spec['original'], lambda n, v: write_control(spec['device'], n, v))
             actual = get_controls(spec['device'], spec['original'])
             results[role] = dict(errors=errors, actual=actual, restored=actual == spec['original'] and not errors)
