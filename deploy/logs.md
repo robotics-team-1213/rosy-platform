@@ -3175,3 +3175,9 @@
 - 변경: 합성 R→A→A1 manifest·고정 이웃과 별도 service token 파일의 예제를 추가하고 각 인스턴스의 DB·로봇 목록·수신 principal을 분리하는 기동 절차를 기록했다.
 - 증거: 실제 CLI의 무로봇 독립 aggregate와 기존 CLI52 PASS, 잘못된 peer URL/port 시작 거절 및 앱 transport 종료 회귀. [관제 구성](../docs/deployment/control-units.md).
 - gate 변화: 예시와 소프트웨어 기동 검증이다. 실제 서비스 배포·네트워크 변경·장치 운행은 실행하지 않았다. CE 해당 없음.
+
+## 2026-10-24 · 8d119665da8f · MODEL 고정 예산 복구 학습 완료 관측
+
+- 변경: [학습 완료 기록](../docs/validation/omx-recovered-teacher-training-2026-10-24/result.md)에 source8d·검증된 durable 전송ed473·same native63bc43의 종료/회수와 영구 study 무결성을 구분했다.
+- 증거: MODEL8CPU/6GiB/120분 고정 실행의 terminal0·로컬 종료0·100파일 회수, scope inactive/dead·빈 cgroup·lock/예약 없음·terminal journal 보존. 실제10k history·dataset25episodes·36export·두 fresh reload의 독립 검토 Important 없음.
+- gate 변화: 학습·offline·reload 증거만 추가했다. 운영 배포·실물 동작·HF 전달은 수행하지 않았다. CE 해당 없음.

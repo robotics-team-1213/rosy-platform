@@ -10221,3 +10221,10 @@ osy-d395-s1d\`.
 - 증거: [검증 기록](validation/omx-durable-learning-transport-2026-10-24/result.md). 실제 원격 98 PASS, MODEL native 경로에서 첫 START 응답을 숨겨도 RPC 2회·실행 1회·종료 0, source/OUT 정리 뒤 같은 terminal rc/log 재조회까지 확인했다.
 - gate 변화: 실행 계약만 검증했다. 기존 interrupted 학습과 동결 자료는 유지하며 새 학습·정책 평가·실물·HF 업로드를 수용하지 않는다.
 - CE: 해당 없음 — 재발 방지 동작과 증거를 코드·회귀 검사·검증 기록에 직접 남겼다. 원래 정지 주체와 물리 원인은 미해결이다.
+
+## 2026-10-24 · 8d119665da8f · 고정 예산 복구 학습의 실제 완료와 재로딩
+
+- 변경: [복구 학습 기록](validation/omx-recovered-teacher-training-2026-10-24/result.md)에 별도 사전 고정 시도1회·실제10k 완료·원본 데이터와 모델 해시·두 fresh process 검증을 남겼다.
+- 증거: 동일 native63bc43/로컬 runner 종료0,100파일 회수, finite loss10000개, dataset80547파일·36export58109파일 대조와 두 reload/stdout 일치. 실제 증거·payload의 독립 검토 Important 없음.
+- gate 변화: 학습·offline·reload만 확인했다. 독립 SIM 정책 성공·운영 승격·실물·HF 업로드 수용은 별도다.
+- CE: 해당 없음 — 동결 코드와 실제 검증 기록이 판단을 보존한다. 원래 중단의 상세 원인은 미해결이다.
