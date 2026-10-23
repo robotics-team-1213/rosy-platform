@@ -144,14 +144,22 @@ python learning/registry/policy/hub_sync.py upload <new-bundle>
 
 `prepare`는 선택 파일만 snapshot하고 manifest를 출력한다. 목록·대상·내용을 검토한 후에만
 `upload`를 실행한다. 완전한 LeRobot dataset은 meta/data/videos의 필요한 파일을 전부 선택해야 한다.
-도구는 dataset의 완결성을 대신 판단하지 않으며, 부분 파일 전송도 byte receipt만 발급한다.
+일반 dataset의 완결성은 별도로 검사하며 부분 파일 전송은 byte receipt만 발급한다.
+`lerobot_export.py`의 OMX export는 `rosy_export.json`, 원본 `rosy_provenance/`, SIM이면
+`rosy_sim_truth/`까지 전체 파일을 선택해야 한다. 누락된 원본 증거는 전송 전에 거부한다.
+파일이 많으면 검토한 상대 POSIX 경로 문자열의 JSON 배열을 `--file-list <files.json>`으로
+전달한다(`--file`과 함께 사용하지 않는다). 이 목록은 export 밖에 보존한다.
 기존 private 저장소만 허용하고 새 저장소 생성·가시성 변경은 하지 않는다.
 commit SHA를 고정해 재다운로드·hash 비교 후 `receipt.json`을 만든다.
 중단된 다운로드는 동일 bundle로 재시도한다. `upload.json`이 있으면 같은 commit을 재검증한다.
 성공 receipt가 있는 bundle은 다시 전송하지 않는다. 원본·이전 receipt는 보존한다.
-`bytes_verified=true`는 형식/품질 검증이 아니다. reader 검증 필드는 false로 남는다.
-다운로드한 `readback/`을 다시 `native_review.py inspect`에 넣거나 공식 model loader로 읽는다.
-이 별도 보고서를 Hub receipt와 함께 보존해야 왕복 검증이 완료된다.
+`bytes_verified=true`는 형식/품질 검증이 아니다. OMX export는 준비·전송 직전·고정 commit
+재다운로드 후에 원본 시연과 SIM 과제 증거를 다시 검사하고 LeRobot 0.4.4 reader로 모든
+RGB·원본 시각·state/action·관절 순서를 비교한다. 통과한 receipt만 `reader_verified=true`와
+`reader_report`를 가진다. 전용 LeRobot 환경에서 실행하며 ROS 환경에 설치하지 않는다.
+그 밖의 dataset/model은 `reader_verified=false`다. 다운로드한 `readback/`을
+`native_review.py inspect` 또는 공식 model loader로 읽고 별도 보고서를 receipt와 보존한다.
+reader 통과는 독립 정책 과제 성공·승격·장치 실행 승인이 아니다.
 
 ## Spaces와 Pilot
 
