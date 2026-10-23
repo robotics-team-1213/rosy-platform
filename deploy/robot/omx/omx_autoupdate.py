@@ -14,7 +14,9 @@ atomic `current` symlink, not containers. One run (a user systemd timer calls it
    is smoke-checked with that venv (its tools import);
 5. switch only when the cell is idle: no recording session holds `session.lock`, no process has the
    follower or leader serial device open, and every follower motor reports torque OFF; otherwise the
-   prepared release waits for the next run;
+   prepared release waits for the next run. With `observers` ({unit, device, health} per follower),
+   the active torque-OFF observer may be the bus's only owner and its fresh motor-health snapshot
+   (within `observer_max_age_s`, default 10 s) is the torque evidence;
 6. move `current` and `current-env` atomically, re-run the smoke check through them, and roll back on
    failure;
 7. keep the newest `keep` releases and the venvs they use (always the current and previous ones).
@@ -155,14 +157,28 @@ class Host:
             return None
         return handle
 
+    def _observer_pid(self, unit: str) -> str | None:
+        shown = subprocess.run(["systemctl", "--user", "show", unit, "-p", "ActiveState", "-p", "MainPID"],
+                               capture_output=True, text=True, timeout=10).stdout
+        props = dict(line.split("=", 1) for line in shown.splitlines() if "=" in line)
+        return props["MainPID"] if props.get("ActiveState") == "active" and props.get("MainPID", "0") != "0" else None
+
     def device_in_use(self) -> bool:
+        # A configured torque-OFF observer may hold its follower bus permanently; any other owner is a session.
+        observed = {os.path.realpath(o["device"]): o["unit"] for o in self.cfg.get("observers", [])}
         for device in self.cfg["devices"]:
             resolved = os.path.realpath(device)
-            if subprocess.run(["fuser", resolved], capture_output=True).returncode == 0:
-                return True
+            found = subprocess.run(["fuser", resolved], capture_output=True, text=True)
+            if found.returncode == 0:
+                owners = found.stdout.split()
+                if resolved not in observed or owners != [self._observer_pid(observed[resolved])]:
+                    return True
         return False
 
     def follower_torque_off(self, release: Path, python: Path) -> bool:
+        observers = self.cfg.get("observers")
+        if observers:
+            return all(self._observed_torque_off(o) for o in observers)
         code = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
                 f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
                 "try:\n    on = []\n    for m in FOLLOWER:\n        bus.motor = m\n        on.append(bus.read('torque'))\n"
@@ -170,6 +186,20 @@ class Host:
         done = subprocess.run([str(python), "-c", code], cwd=release, capture_output=True, text=True,
                               timeout=60)
         return done.returncode == 0 and done.stdout.strip() == "torque 0"
+
+    def _observed_torque_off(self, observer: dict) -> bool:
+        """The observer's own fresh motor-health snapshot: every expected motor reports torque OFF."""
+        try:
+            health = json.loads(Path(observer["health"]).read_text(encoding="utf-8"))
+            motors = health["motors"]
+            fresh = time.time() - float(health["observed_at"]) <= float(self.cfg.get("observer_max_age_s", 10))
+            return (fresh and isinstance(motors, list) and len(motors) == health["expected_motor_count"] > 0
+                    and all(m.get("torque_enabled") is False for m in motors))
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+
+    def follower_missing(self) -> bool:
+        return not self.cfg.get("observers") and not os.path.exists(self.cfg["follower_device"])
 
 
 class Updater:
@@ -234,6 +264,8 @@ class Updater:
             return None
         if self.host.device_in_use():
             return "device_in_use"
+        if getattr(self.host, "follower_missing", lambda: False)():
+            return "follower_device_missing"  # a replaced board, not a powered arm: fix follower_device
         if not self.host.follower_torque_off(release, self.python(env)):
             return "follower_torque_not_off"
         return None
