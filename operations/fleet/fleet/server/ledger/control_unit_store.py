@@ -98,6 +98,13 @@ class ControlUnitStore:
         owner_unit, config_revision = _identifier(owner_unit), _identifier(config_revision)
         payload = _json(request)
         with self._transaction() as connection:
+            existing = connection.execute("SELECT 1 FROM fleet_control_delegations "
+                                          "WHERE origin_id=? AND delegation_id=?",
+                                          (origin_id, delegation_id)).fetchone()
+            if existing is None and connection.execute(
+                    "SELECT COUNT(*) FROM fleet_control_delegations "
+                    "WHERE status NOT IN ('COMPLETED','FAILED','CANCELED','EXPIRED')").fetchone()[0] >= 256:
+                raise ValueError("CONTROL_UNIT_ACTIVE_CAPACITY")
             connection.execute("INSERT OR IGNORE INTO fleet_control_delegations "
                                "(origin_id,delegation_id,request_json,owner_unit,config_revision,status,revision,updated_at) "
                                "VALUES (?,?,?,?,?,'PENDING',1,?)",
@@ -123,6 +130,13 @@ class ControlUnitStore:
                                       "ORDER BY updated_at DESC,origin_id,delegation_id LIMIT ?", (limit,)).fetchall()
             return [self._document(row) for row in rows]
 
+    def active(self):
+        with closing(self._connect()) as connection:
+            return [self._document(row) for row in connection.execute(
+                "SELECT * FROM fleet_control_delegations "
+                "WHERE status NOT IN ('COMPLETED','FAILED','CANCELED','EXPIRED') "
+                "ORDER BY updated_at,origin_id,delegation_id")]
+
     def _update(self, connection, row, values, event):
         values = dict(values, revision=row["revision"] + 1,
                       updated_at=datetime.now(timezone.utc).isoformat())
@@ -135,11 +149,14 @@ class ControlUnitStore:
         self._event(connection, changed, event)
         return self._document(changed)
 
-    def approve(self, origin_id, delegation_id, *, actor_id):
+    def approve(self, origin_id, delegation_id, *, actor_id, expected_revision=None):
         if not isinstance(actor_id, str) or not actor_id.strip() or len(actor_id) > 96:
             raise ValueError("INVALID_LOCAL_APPROVAL")
         with self._transaction() as connection:
             row = self._read(connection, origin_id, delegation_id)
+            if expected_revision is not None and (type(expected_revision) is not int
+                                                  or expected_revision != row["revision"]):
+                raise ValueError("CONTROL_UNIT_REVISION_CHANGED")
             if row["local_actor"] and row["local_actor"] != actor_id:
                 raise ValueError("LOCAL_APPROVAL_IDENTITY_CONFLICT")
             if (row["owner_unit"] != self.unit_id or row["cancel_requested"]
