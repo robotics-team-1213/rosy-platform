@@ -10074,11 +10074,29 @@ osy-d395-s1d\`.
 - 증거: 독립 설계 검토 지적 4건을 수정하고 재검토에서 닫았다. 최종 커밋은 공식 착지 도구의 lint·원격 시험·known failures 비교 후 병합한다.
 - gate 변화: 없음. 세부 계약은 Proposed이며 기능 구현·API 개방·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 새 장애 해결이 아닌 구조 설계 기록이다.
 
+## 2026-10-23 · 56762a179e · 관제 구성·영속 위임 기반 검증 기록
+
+- 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
+- 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
+- gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
+
+## 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
+
+- 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
+- 증거: `test_vlm_judge.py`, `test_vlm_judge_browser.py`(원격 시험 PC). 실제 정답 품질·모델 PC 운영은 아직이다.
+- gate 변화: 없음. 평가 전용 정답이며 검수 승인·export·학습 자료가 아니다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.
+
 ## 2026-10-23 · uncommitted · 공통 UI 부품 구현 검증 이력 보존
 
 - 변경: [구현 기록](validation/shared-component-kit-2026-10-23/result.md)과 [후속 수정 검증](validation/shared-component-kit-2026-10-23/2026-10-23-final-checks.md)을 원래 `37951c2501`의 동결 내용 그대로 보존한다. 공통 라이브러리와 제품 적용은 별도 착지 단위다.
 - 증거: 각 문서의 SHA·실패와 후속 통과·검토 범위·화면 해시 보관 위치를 유지한다. 새 main 통합의 결과는 별도 후속 기록으로 추가한다.
 - gate 변화: 없음. 이력 보존이며 장치·현장 수용이나 새 독립 검토를 뜻하지 않는다.
+
+## 2026-10-24 · 1fd406e367 · Rosy Learning 제품 지도
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md)를 추가했다. 정의, 사용자 네 역할, 공통 학습 루프 일곱 단계, 도메인×단계 현황, 현재 메뉴와 목표 메뉴(단계=메뉴, 도메인=필터), 우선순위 P0–P3, 모델 PC 인스턴스 여섯 개의 정리안, 결정할 것 여섯 가지.
+- 증거: 앱 화면·파이프라인·의도 문서·배포 기록 조사. 한 바퀴를 끝까지 돈 도메인은 없고, 자동 루프는 Pinky 차로 하나이며 승인 정답 0건으로 멈춰 있다.
+- gate 변화: 없음. 문서만이며 ADR로 옮기기 전 제안이다.
 
 ## 2026-10-24 · 2d9acbfa51 · 공통 UI 부품과 Fleet·Robot 로컬 통합 검증
 

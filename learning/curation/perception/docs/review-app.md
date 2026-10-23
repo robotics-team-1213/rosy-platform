@@ -457,3 +457,30 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
 조회는 view, check/start/stop은 manage 권한과 기존 CSRF·Origin 검사가 필요하다. 로컬 비협업 검수에서는 실행·중지를 허용하지 않는다. 브라우저는 accountFetch로 다른 탭의 신원 변경 뒤 응답 적용을 막는다. 응답이 유실되면 같은 start 요청을 sessionStorage에 보존하고 자동 재시작하지 않는다. 조건을 다시 확인한 뒤 같은 요청을 재전송하거나 목록의 run을 조회한다. **새 실험으로 다시 실행**은 새 요청/run과 parent_run_id를 만들고 원본을 보존한다.
 
 원시 SDK 로그·환경변수·private 경로는 웹으로 보내지 않는다. 최종 모델 검사 JSON만 manifest의 해시·크기를 확인해 제공하며 기본 검사는 영상이 없음을 표시한다. UNKNOWN·중지 요청·실제 종료·모델 검사 결과를 구분한다. `test_sim_web.py`, 명시적 `ROSY_RUN_BROWSER_TESTS=1`의 `test_sim_browser.py`와 공통 셸·서명 payload 누락 거절 시험으로 검증한다. 실제 SDK 실행은 별도 증거다.
+
+## VLM 판단 (D-853 Proposed)
+
+작업 도구의 **VLM 판단**(`/learning/vlm`)에서 닫힌 VLM 질문(`tools/vlm_question_bench.py`)의 사람 정답을 사진마다 단다(T1, `docs/plans/2026-10-23-vlm-fast-judge-design.md`). 정답 달기 화면에는 모델 답을 보내지 않는다. 평가 탭은 정답 있는 사진만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
+
+운영 검수 state와 섞지 않도록 별도 state를 만든다.
+
+```bash
+python learning/curation/perception/review_app.py --state <VLM_STATE> --empty-eval --host <tailscale-ip> --port <port>   # 첫 시작
+python tools/vlm_question_bench.py --dump-questions <questions.json>
+python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --rows <bench-out>/rows.jsonl --questions <questions.json> --model <model>
+```
+
+두 번째 시작부터는 `--state`만 준다. 가져오기는 로컬 모드의 **가져오기** 탭이나 위 CLI로 한다. 협업 모드는 `/api/import`처럼 서버 파일 경로 가져오기를 거절하므로 서버에서 CLI를 쓴다. rows에는 모델 이름이 없으므로 `--model`로 준다. `long_side`가 0이 아닌 행은 `<model>@<px>`로 구분한다. 같은 사진(sha256·view·question_set)은 다시 만들지 않고 새 모델 답만 더하며 사람 정답은 건드리지 않는다. 같은 question_set에 다른 질문 문장이 오면 거절하므로 문장을 바꾸면 새 version을 쓴다. Ollama의 `none_in_top`은 모델 답 없음으로 세고 선택지로 바꾸지 않는다.
+
+| 경로 | 내용 |
+|---|---|
+| `GET /api/learning/vlm/summary` | view·상태별 수, question set, 정답 단 사람, POST용 token |
+| `GET /api/learning/vlm/items?view=&status=` | 사진 목록(질문·모델 답 없음) |
+| `GET /api/learning/vlm/items/<id>` | 질문과 현재 사람 정답, `version`(모델 답 없음) |
+| `GET /api/learning/vlm/images/<id>` | 매 요청 sha256 재확인 후 원본, ETag `no-cache`(D-469) |
+| `GET /api/learning/vlm/evaluation` | 정답 있는 사진만의 비교 |
+| `GET /api/learning/vlm/export` | `labelled`·`excluded` 정답 JSONL과 그 sha256 |
+| `POST /api/learning/vlm/items/<id>` | `{version, status, answers}`. `labelled`는 모든 질문 답 필요, `excluded`는 null 허용. 버전이 다르면 409 |
+| `POST /api/learning/vlm/import` | `{rows_path, question_set, questions, model}`. 서버 파일 경로를 읽으므로 로컬 모드 전용(협업 403) |
+
+저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.

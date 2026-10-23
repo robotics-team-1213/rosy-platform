@@ -1,0 +1,26 @@
+.vlm-main { word-break: keep-all; overflow-wrap: anywhere; }
+.vlm-main > *, .vlm-work > *, .vlm-side > *, .vlm-question { min-width: 0; }
+.vlm-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-2); }
+.vlm-progress { margin: 0 0 var(--space-2); }
+.vlm-work { display: grid; gap: var(--space-4); }
+.vlm-photo { margin: 0; }
+.vlm-photo img { display: block; width: 100%; max-height: 52vh; object-fit: contain; background: var(--surface-recessed); }
+.vlm-side { display: grid; gap: var(--space-3); align-content: start; }
+.vlm-questions { display: grid; gap: var(--space-2); }
+.vlm-question { border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); padding: var(--space-2) var(--space-3); }
+.vlm-question[data-focus="true"] { border-color: var(--focus-ring); }
+.vlm-question p { margin: 0 0 var(--space-2); }
+.vlm-question .vlm-en { color: var(--text-secondary); }
+.vlm-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: var(--space-2); }
+/* The decision bar stays on screen while the page scrolls through the questions (D-542 §2-3). */
+.vlm-decide { position: sticky; bottom: 0; z-index: 1; padding-block: var(--space-2); background: var(--surface-canvas); border-top: 1px solid var(--border-subtle); }
+.vlm-eval table { width: 100%; border-collapse: collapse; margin-block-end: var(--space-4); }
+.vlm-eval th, .vlm-eval td { text-align: start; padding: var(--space-1) var(--space-2); border-block-end: 1px solid var(--border-subtle); }
+.vlm-eval { overflow-x: auto; }
+.vlm-confusion { white-space: pre-wrap; }
+@media (width >= 64rem) {
+  .vlm-work { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .vlm-work { align-items: start; }
+  .vlm-photo { position: sticky; top: var(--space-3); }
+  .vlm-photo img { max-height: calc(100dvh - 2 * var(--space-3)); }
+}
