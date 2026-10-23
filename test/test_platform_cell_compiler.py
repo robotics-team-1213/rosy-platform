@@ -11,7 +11,7 @@ for relative in ("contracts/skill/src", "operations/apps/fleet/src", "operations
     sys.path.insert(0, str(ROOT / relative))
 
 from rosy_gateway.cell_compiler import PalletizingCellCompiler
-from rosy.execution.site.cell_submission import compile_cell_submission
+from rosy.processes.palletizing.submission import compile_cell_submission
 
 
 def documents():

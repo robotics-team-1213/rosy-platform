@@ -14,7 +14,7 @@ for relative in ("contracts/skill/src", "operations/site_execution/src", "middle
         sys.path.insert(0, path)
 
 from fleet.server.cell_compiler import PalletizingCellJobCompiler  # noqa: E402
-from rosy.execution.site.cell_submission import CellJobCompilation, compile_cell_submission  # noqa: E402
+from rosy.processes.palletizing.submission import CellJobCompilation, compile_cell_submission  # noqa: E402
 from rosy.processes.palletizing import compiler as process_compiler  # noqa: E402
 from rosy.processes.palletizing.cell import load_cell  # noqa: E402
 from rosy.processes.palletizing.compiler import compile_job, job_document  # noqa: E402

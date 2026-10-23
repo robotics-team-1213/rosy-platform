@@ -19,7 +19,7 @@ sys.path[:0] = [
 ]
 
 from fleet.server.cell_compiler import PalletizingCellJobCompiler  # noqa: E402
-from rosy.execution.site.cell_submission import compile_cell_submission  # noqa: E402
+from rosy.processes.palletizing.submission import compile_cell_submission  # noqa: E402
 from rosy.processes.palletizing.recipe import load_recipe, RecipeError  # noqa: E402
 
 
