@@ -100,8 +100,8 @@
 
 ## 최근 기록
 
+- 2026-10-23 · uncommitted · 학습 진입 로그 SHA 정정
+- 2026-10-23 · uncommitted · 학습 진입 초점 문서와 원본 readout
+- 2026-10-23 · c17c221de7 · 학습 진입 카드 상태 토큰
 - 2026-10-22 · uncommitted · 지도 화면 모터 조회 시험 목록
 - 2026-10-22 · 79a11a4a54 · 모터 상태 캐시와 Cell 관측 연결
-- 2026-10-22 · 2d38309d3a · Work-menu Learning browser expectation
-- 2026-10-22 · uncommitted · Shared robot Learning entry
-- 2026-10-22 · ff01e057a6 · fix: 브라우저 Account 승인 실패 복구

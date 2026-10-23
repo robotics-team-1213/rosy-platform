@@ -63,6 +63,7 @@ CONSOLE_ASSETS = {
     "account-permissions.js": ("shared/account-permissions.js", "application/javascript"),
     "login-return.js": ("shared/login-return.js", "application/javascript"),
     "password-login.css": ("shared/password-login.css", "text/css"),
+    "learning.css": ("learning.css", "text/css"),
     "camera-pairing.js": ("devices/camera-pairing.js", "application/javascript"),
     "device-request.js": ("shared/device-request.js", "application/javascript"),
     "camera-peer.js": ("camera-peer.js", "application/javascript"),
