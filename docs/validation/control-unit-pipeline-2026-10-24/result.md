@@ -25,6 +25,7 @@
 | `0cadc26686` | 실제 설정된 routes·앱 생애와 TestClient HTTP 응답 수집 | 17 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-feature-evidence` |
 | `0cadc26686` | 독립 합성 sample unit·기존 sample Task·실제 폼 제출·상태 재조회·viewer 거절 | 52 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-sample-final` |
 | `0cadc26686` | 공통 controls 34·실제 Chromium 43, 초기화·focus·stale·기존 작업 회귀 | 77 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-ui-final-proof` |
+| `0adf983ba2` | 최신 main 통합 후 Fleet 앱 전체·공통 controls·release boundary, 실제 Chromium 활성 | 197 PASS, 0 SKIP, 종료 0, NEW 0 | `rosy-control-app-gates` |
 
 ```text
 rosy-scoped-final-green       sha256=a977dd587e2d461c239631727a974a02fd80b5c2cc86e02235d2f8ac5f7dc3b3
@@ -46,6 +47,8 @@ rosy-control-ui-main-integrated sha256=1db530925f8a49ab6adc0066bb767e3406d89db74
 ## 실제로 확인한 것
 
 후속 통합의 실행 인자·명시 commit·각 로그와 native transcript hash는 [통합 실행 색인](integration-invocations.json)에 연결했다. 실제 HTTP 관측 6개만 기능 matrix에 verified로 등록하고 기존 receipt를 보존했다. 독립 process-local sample unit의 합성 Task 흐름은 중첩 네트워크 복구·실물 정지의 증거가 아니다. 최신 화면 12장은 [final-ui](evidence/final-ui/)에 추가했으며 앞의 capture를 대체하지 않았다.
+
+추가 게이트는 명시 commit `0adf983ba22a2e1af9a911edb3acc4ac4e760755`에서 `ROSY_RUN_BROWSER_TESTS=1 applications/fleet/test shared/web/test/test_shared_controls.py test/test_release_boundary_guards.py -q`를 실행했다. 외부 `rosy-control-app-gates/run-1.txt`의 sha256은 `ea6dd0118e5cd9889a41fb3090257bf005897c926871284ce75c404aa6c10069`, native `runner-transcript.txt`(UTF-16LE BOM)의 sha256은 `5a479a73b762540ba60cfca6c95f234792ffbf205ecaaff06d782a97b9bf4160`이다. runner·기존 실패 비교 종료는 모두 0이다. 기능 matrix·sample과 공통 UI/비밀 경계 검사를 포함하지만 정식 FULL·main 착지를 대신하지 않는다.
 
 - 독립 unit의 자기 작업 승인·대기 취소, 무로봇 aggregate의 실제 CLI 기동을 확인했다. 중첩에서 다른 자식·조상 직통·잘못된 자원·순환·중복 소유·초과 깊이를 거절한다.
 - R→A→A1의 실제 HTTP 경로에서 inbox DB 커밋 뒤 ACK 유실을 주입했다. 같은 identity 재전달 후 한 행·한 Task·같은 승인자를 유지하며 R/A/A1 각각의 재시작에서도 같은 결속을 조회한다. B는 호출하지 않는다.
