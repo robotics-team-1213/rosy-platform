@@ -34,7 +34,7 @@ fi
 """ + IDENTITY + r"""
 if [ -f "$D/0.rc" ] || [ "$alive" = 1 ]; then exit 0; fi
 # A claimed launch without a live identity or rc is uncertain, never a reason to replace it.
-mkdir "$D/submitted" 2>/dev/null || exit 254
+mkdir "$D/submitted" 2>/dev/null || exit 0
 : > "$D/0.log"
 setsid nohup bash -c "$J" remote "$@" 9>&- >> "$D/0.log" 2>&1 < /dev/null &
 """
@@ -44,8 +44,8 @@ D=~/rosy-test/runs/$1.sim-job
 trap 'c=$?; trap - EXIT; printf "%s" "$c" > "$D/0.rc.tmp"; mv "$D/0.rc.tmp" "$D/0.rc"; exit "$c"' EXIT
 trap 'exit 143' TERM INT
 stat=$(cat /proc/$$/stat); stat=${stat##*) }; read -ra fields <<< "$stat"
-printf '%s' "${fields[19]}" > "$D/0.starttime"
-printf '%s' "$$" > "$D/0.pid.tmp"; mv "$D/0.pid.tmp" "$D/0.pid"
+printf '%s\n' "${fields[19]}" > "$D/0.starttime"
+printf '%s\n' "$$" > "$D/0.pid.tmp"; mv "$D/0.pid.tmp" "$D/0.pid"
 """
 
 POLL = r"""set -euo pipefail

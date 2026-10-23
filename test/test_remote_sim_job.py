@@ -2,8 +2,10 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -43,9 +45,9 @@ def test_lost_start_reply_tracks_one_actor_and_recovers_complete_log(tmp_path, t
         return result
 
     code = jobs.run('model.example', name, [name], '',
-                    'printf "launch\\n" >> "$HOME/launches"; printf "complete\\n"; exit 7',
+                    'printf "launch\\n" >> "$HOME/launches"; sleep 0.1; printf "complete\\n"; exit 7',
                     tmp_path / 'run.txt', binding, ssh=[], call=dropped_reply,
-                    sleep=lambda _: None, budget=2)
+                    sleep=lambda _: time.sleep(.02), budget=2)
     assert code == 7
     assert (home / 'launches').read_text() == 'launch\n'
     assert (tmp_path / 'run.txt').read_bytes() == b'complete\n'
@@ -78,8 +80,8 @@ def test_reused_pid_is_not_alive_and_cannot_be_cancelled(tmp_path, transport):
     journal.mkdir()
     digest = 'c' * 64
     (journal / 'binding.sha256').write_text(digest)
-    (journal / '0.pid').write_text(str(os.getpid()))
-    (journal / '0.starttime').write_text('0')
+    (journal / '0.pid').write_text(str(os.getpid()) + '\n')
+    (journal / '0.starttime').write_text('0\n')
     (journal / '0.log').write_text('partial\n')
     result = actual([], 'model.example', jobs.POLL, name, digest, '0')
     assert remote_job.parse_poll(result.stdout) == (None, False, b'partial\n')
@@ -91,9 +93,9 @@ def test_claim_without_a_live_actor_never_starts_a_replacement(tmp_path, transpo
     journal = home / 'rosy-test' / 'runs' / (name + '.sim-job')
     journal.mkdir()
     (journal / 'submitted').mkdir()
-    with pytest.raises(remote_job.Lost, match='uncertain start'):
-        jobs.run('model.example', name, [name], '', 'touch "$HOME/replacement"',
-                 tmp_path / 'run.txt', binding, ssh=[], call=actual, budget=1)
+    assert jobs.run('model.example', name, [name], '', 'touch "$HOME/replacement"',
+                    tmp_path / 'run.txt', binding, ssh=[], call=actual,
+                    sleep=lambda _: None, budget=1) == remote_job.VANISHED_EXIT
     assert not (home / 'replacement').exists()
 
 
@@ -110,3 +112,30 @@ def test_durable_observer_loss_skips_simulation_stop_and_cleanup(tmp_path, monke
     assert remote_sim.run_sim('model.example', 'model', 'true', [], 'a' * 40,
                               tmp_path, tmp_path / 'logs', 1, durable=True) == 255
     assert calls == []
+
+
+def test_cancellation_records_terminal_rc_only_after_child_cleanup(transport):
+    home, name, binding, calls, actual = transport
+    digest = 'c' * 64
+    child = r'''trap 'touch "$HOME/cleaning"; sleep .2; touch "$HOME/cleaned"' EXIT
+trap 'exit 143' TERM
+touch "$HOME/ready"
+sleep 5
+'''
+    body = jobs.SUPERVISOR + '\nbash -c ' + shlex.quote(child) + '\n'
+    assert actual([], 'model.example', jobs.START, name, digest, body, name).returncode == 0
+    journal = home / 'rosy-test' / 'runs' / (name + '.sim-job')
+    deadline = time.monotonic() + 3
+    while not (home / 'ready').exists():
+        assert time.monotonic() < deadline
+        time.sleep(.01)
+    assert actual([], 'model.example', jobs.KILL, name, digest).returncode == 0
+    while not (home / 'cleaning').exists():
+        assert time.monotonic() < deadline
+        time.sleep(.01)
+    assert not (journal / '0.rc').exists()
+    while not (journal / '0.rc').exists():
+        assert time.monotonic() < deadline
+        time.sleep(.01)
+    assert (home / 'cleaned').exists()
+    assert (journal / '0.rc').read_text() == '143'
