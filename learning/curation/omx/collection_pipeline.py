@@ -126,7 +126,7 @@ def main():
     preparation.add_argument('--repo-id', required=True)
     preparation.add_argument('--completed-only', action='store_true')
     native_prep = commands.add_parser('prepare-native', help='sealed leader recording to a prepared intake (D-848)')
-    native_prep.add_argument('collection', type=Path)
+    native_prep.add_argument('collections', nargs='+', type=Path)
     native_prep.add_argument('--out', type=Path, required=True)
     native_prep.add_argument('--repo-id', required=True)
     training = commands.add_parser('train')
@@ -146,7 +146,7 @@ def main():
         if args.command == 'prepare':
             result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only)
         elif args.command == 'prepare-native':
-            receipt = intake.prepare_native(args.collection, args.out, args.repo_id)
+            receipt = intake.prepare_native(args.collections, args.out, args.repo_id)
             result = dict(prepared_root=str(args.out.resolve()), episodes=len(receipt['episodes']),
                           reader_verified=receipt['reader_verified'], review_required=True,
                           uploaded=False, device_execution=False)
