@@ -1,5 +1,4 @@
 """A dropped observer must not replace or terminate a bounded simulation job."""
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -52,8 +51,7 @@ def test_lost_start_reply_tracks_one_actor_and_recovers_complete_log(tmp_path, t
     assert (tmp_path / 'run.txt').read_bytes() == b'complete\n'
     assert calls.count(jobs.START) == 2
     meta = json.loads((tmp_path / 'remote-run.json').read_bytes())
-    digest = hashlib.sha256(json.dumps(meta, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    assert jobs.follow('model.example', name, tmp_path / 'again.txt', digest,
+    assert jobs.follow('model.example', name, tmp_path / 'again.txt', meta,
                        ssh=[], call=actual, sleep=lambda _: None, budget=2) == 7
     assert (tmp_path / 'again.txt').read_bytes() == b'complete\n'
 
@@ -86,3 +84,29 @@ def test_reused_pid_is_not_alive_and_cannot_be_cancelled(tmp_path, transport):
     result = actual([], 'model.example', jobs.POLL, name, digest, '0')
     assert remote_job.parse_poll(result.stdout) == (None, False, b'partial\n')
     assert actual([], 'model.example', jobs.KILL, name, digest).returncode != 0
+
+
+def test_claim_without_a_live_actor_never_starts_a_replacement(tmp_path, transport):
+    home, name, binding, calls, actual = transport
+    journal = home / 'rosy-test' / 'runs' / (name + '.sim-job')
+    journal.mkdir()
+    (journal / 'submitted').mkdir()
+    with pytest.raises(remote_job.Lost, match='uncertain start'):
+        jobs.run('model.example', name, [name], '', 'touch "$HOME/replacement"',
+                 tmp_path / 'run.txt', binding, ssh=[], call=actual, budget=1)
+    assert not (home / 'replacement').exists()
+
+
+def test_durable_observer_loss_skips_simulation_stop_and_cleanup(tmp_path, monkeypatch):
+    import remote_sim
+    calls = []
+    monkeypatch.setattr(remote_sim.rp, 'ship', lambda *a: None)
+    monkeypatch.setattr(remote_sim.rp, 'remote', lambda *a, **k: calls.append(a))
+
+    def lost(*args, **kwargs):
+        raise remote_job.Lost('observer disconnected')
+
+    monkeypatch.setattr(jobs, 'run', lost)
+    assert remote_sim.run_sim('model.example', 'model', 'true', [], 'a' * 40,
+                              tmp_path, tmp_path / 'logs', 1, durable=True) == 255
+    assert calls == []
