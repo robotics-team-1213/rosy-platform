@@ -34,7 +34,7 @@ def test_label_by_keyboard_and_mouse_at_phone_width(tmp_path):
             page.on('pageerror', lambda error: errors.append(str(error)))
             try:
                 expect = playwright.expect
-                page.goto(f'http://127.0.0.1:{server.server_port}/learning/vlm', wait_until='networkidle')
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning/vlm', wait_until='domcontentloaded')
                 expect(page.locator('#vlm-progress')).to_contain_text('목록 1 / 2')
                 expect(page.locator('#vlm-image-message')).to_be_hidden()
                 assert page.evaluate('document.getElementById("vlm-image").getBoundingClientRect().top < innerHeight')
