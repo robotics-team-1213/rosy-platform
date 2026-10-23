@@ -10074,6 +10074,12 @@ osy-d395-s1d\`.
 - 증거: 독립 설계 검토 지적 4건을 수정하고 재검토에서 닫았다. 최종 커밋은 공식 착지 도구의 lint·원격 시험·known failures 비교 후 병합한다.
 - gate 변화: 없음. 세부 계약은 Proposed이며 기능 구현·API 개방·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 새 장애 해결이 아닌 구조 설계 기록이다.
 
+## 2026-10-23 · 56762a179e · 관제 구성·영속 위임 기반 검증 기록
+
+- 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
+- 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
+- gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
+
 ## 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
 
 - 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
