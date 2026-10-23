@@ -3,6 +3,8 @@ const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · �
   QUEUED: "실행 대기", ACCEPTED: "장치 수락", RUNNING: "실행 중", UNKNOWN: "실행 결과 미확인",
   HOLD: "보류", COMPLETED: "작업 완료", FAILED: "실패", CANCELED: "취소", EXPIRED: "만료"};
 const terminal = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED"]);
+const unadmitted = new Set(["UNKNOWN_CONTROL_UNIT", "CONTROL_UNIT_OUTSIDE_SCOPE",
+  "CONTROL_UNIT_RESOURCE_OUTSIDE_SCOPE", "CONTROL_UNIT_ACTIVE_CAPACITY"]);
 const node = (tag, text, className) => Object.assign(document.createElement(tag),
   {textContent: text || "", ...(className ? {className} : {})});
 
@@ -58,7 +60,8 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
         draft = saved; identity = saved.body.delegation_id;
         for (const name of ["target_unit", "robot_id"]) fields[name].value = saved.body[name];
         for (const name of ["x", "y", "yaw"]) fields[name].value = saved.body.goal[name];
-        notice.textContent = saved.confirmed ? "이전 요청을 복원했습니다. 새 의도는 새 요청 작성으로 시작하세요."
+        notice.textContent = saved.rejected ? "요청이 접수 전에 거절됐습니다. 새 요청 작성에서 대상을 수정하세요."
+          : saved.confirmed ? "이전 요청을 복원했습니다. 새 의도는 새 요청 작성으로 시작하세요."
           : "요청 결과 미확인 · 같은 요청을 다시 확인합니다.";
       }
     } catch { notice.textContent = "브라우저의 요청 저장 상태를 확인하세요."; }
@@ -70,7 +73,8 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
     draft = null; draftKey = null; draftControls();
   }
   function controls() {
-    guard(send, busy ? "요청 결과를 확인하고 있습니다" : !available ? "관제 연결을 확인하세요" : approveReason());
+    guard(send, busy ? "요청 결과를 확인하고 있습니다" : !available ? "관제 연결을 확인하세요" :
+      draft?.rejected ? "접수 전 거절된 요청입니다. 새 요청을 작성하세요" : approveReason());
     guard(fresh, busy ? "요청 결과를 확인하고 있습니다" : draft && !draft.confirmed ? "미확인 요청의 원장을 먼저 확인하세요" : "");
   }
   async function change(path, body, message) {
@@ -85,9 +89,15 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
         notice.textContent = message;
       }
     } catch (error) {
-      if (life.current() && version === revision) notice.textContent = error.status >= 400 && error.status < 500
-        ? "요청이 거절됐습니다. 대상과 최신 원장을 확인하세요."
-        : "요청 결과 미확인 · 자동으로 다시 보내지 않았습니다. 같은 요청의 원장을 확인하세요.";
+      if (life.current() && version === revision) {
+        // Only validation/refusals known to occur before journal creation settle a missing candidate.
+        const refused = path === "/api/fleet/control-unit/delegations" && draft
+          && (error.status === 422 || unadmitted.has(error.code));
+        if (refused) { draft.confirmed = true; draft.rejected = true; saveDraft(); }
+        notice.textContent = refused ? "요청이 접수 전에 거절됐습니다. 새 요청 작성에서 대상을 수정하세요."
+          : error.status >= 400 && error.status < 500 ? "요청이 거절됐습니다. 대상과 최신 원장을 확인하세요."
+          : "요청 결과 미확인 · 자동으로 다시 보내지 않았습니다. 같은 요청의 원장을 확인하세요.";
+      }
     } finally {
       busy = false;
       if (life.current() && version === revision) { controls(); await refresh(); }
