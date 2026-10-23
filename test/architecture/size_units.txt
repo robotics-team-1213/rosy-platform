@@ -73,5 +73,4 @@ drive/recovery
 perception/sensors/line_observation
 site_ui/console/shared
 situation
-site_execution
 devices/omx/adapter/omx_adapter/pick_place
