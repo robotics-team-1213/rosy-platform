@@ -338,3 +338,9 @@
 - 변경: Accepted the Vault site capabilities in strict access-token validation. JVM coverage checks Vault-only and combined camera grants without granting camera.manage implicitly.
 - 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
 - gate 변화: none.
+
+## 2026-10-23 · bc6edabfe0 · 원격 송출 제어와 바닥 경계 설치 안내
+
+- 변경: 관제 PC CLI `deploy/site/rosy_cam_screen.py`에 `stream-status`·`stream-start`·`stream-stop`·`snapshot`을 더했다(조명 버튼과 같은 신원·포커스·잠금·새 UI 덤프 검사). 멈춘 송출을 다시 켜는 사용자 타이머 `rosy-cam-stream.timer`. Vision `status`에 `field_state`를 싣고 field_boundary 소스는 `corners_needed` 0을 보낸다. 앱은 그때 코너 마커 대신 바닥 경계 상태(no_field/orientation_pending/calibrated/stale)를 보여준다. `field_state`가 없는 옛 수신기에서는 기존 코너 마커 안내 그대로다.
+- 증거: 현장 S21에서 CLI 정지·상태·캡처, 강제 종료 뒤 `stream-start` 약 10 s 확인. 새 APK(JDK 21, 노트북)는 `testDebugUnitTest assembleDebug` 443 passed, failures 0. Python `operations/overhead/test`·`test/test_site_cam_screen.py`는 원격 시험 PC 통과. 설치된 앱의 v2 서명자(다른 개발 PC 디버그 키)와 달라 재설치했고, 컨테이너 안에서 만든 고정 토큰 링크로 다시 연결해 `송출 중` 2.5 fps를 확인했다.
+- gate 변화: 없음. 현장 Vision은 아직 옛 이미지라 앱은 코너 마커 안내를 보인다. 바닥 경계 안내의 기기 확인은 서명 배포 뒤. 타이머는 설치하지 않았다.
