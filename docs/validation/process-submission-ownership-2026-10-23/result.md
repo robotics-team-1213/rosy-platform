@@ -1,5 +1,7 @@
 # 공정 소유 제출 검증 분리 — 구현·검증 기록
 
+공개 이관 시 범위 안내: 아래 결과·경로·gap·샘플 fixture는 독립 로컬 브랜치 `refactor/process-submission-ownership`의 당시 기록이다. 공개 통합 head의 시험 결과가 아니다. 당시 `FULL` 표기는 selector의 승격과 원격 mapped invocations의 결과를 가리키며, `tools/land.py`의 전체 모듈·명시적 브라우저 tier가 완료됐다는 증거로 사용하지 않는다. 공개 이관에서는 `operations/apps/fleet` 설치 경로를 사용하며, 공개에 없는 개발 sample fixture와 D-827·D-836 및 다른 세션의 ADR gap을 추가하지 않았다. 공개 통합 검증·배포는 별도 새 기록으로 남긴다.
+
 상태: 이번 책임 분리의 코드·대상 회귀·설치·최종 FULL 원격 검증 완료. main 반영·배포·장치 수용 기록이 아니다.
 
 ## 최종 목표와 이번 완료 단위
