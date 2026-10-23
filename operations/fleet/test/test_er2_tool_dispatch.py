@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from datetime import datetime, timezone
+
+import pytest
 
 from core_common.protocol.schemas import MissionFeedbackContext, MissionFeedbackTurnScope
 from rosy.decision.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
@@ -70,6 +73,42 @@ def test_get_mission_status_reads_only_the_durable_turn_mission(tmp_path):
     assert "principal_id" not in result.payload
     assert "history" not in result.payload
     assert client.app.state.mission_service.get(mission_id)["status"] == "RUNNING"
+
+
+def test_status_context_uses_one_progress_snapshot(tmp_path, monkeypatch):
+    client, mission_id = _running_mission(tmp_path)
+    scope = _scope(client, mission_id)
+    progress = client.app.state.mission_progress
+    original = progress.snapshot
+    reads = []
+
+    def snapshot(identity):
+        reads.append(identity)
+        return original(identity)
+
+    monkeypatch.setattr(progress, "snapshot", snapshot)
+    result = _dispatcher(client).dispatch(
+        scope=scope, call_id="single-snapshot", tool_name="get_mission_status", arguments={},
+    )
+    assert result.status == "accepted"
+    assert reads == [mission_id]
+
+
+@pytest.mark.parametrize("field", ["action_id", "attempt_id", "dispatch_generation"])
+def test_status_rejects_attempt_replaced_before_snapshot(tmp_path, monkeypatch, field):
+    client, mission_id = _running_mission(tmp_path)
+    scope = _scope(client, mission_id)
+    progress = client.app.state.mission_progress
+    newer = deepcopy(progress.snapshot(mission_id))
+    newer["mission"][field] = (scope.dispatch_generation + 1
+                                if field == "dispatch_generation" else "replacement")
+    monkeypatch.setattr(progress, "snapshot", lambda _: newer)
+
+    result = _dispatcher(client).dispatch(
+        scope=scope, call_id="replaced-attempt", tool_name="get_mission_status", arguments={},
+    )
+    assert result.status == "rejected"
+    assert result.reason_code == "TURN_SCOPE_STALE"
 
 
 def test_status_call_replay_returns_its_durable_result_snapshot(tmp_path):
