@@ -51,6 +51,9 @@ def validate_config(config):
         _pair(robot, leader)
     if dataset.get('push_to_hub') is not False or dataset.get('private') is not True:
         raise ValueError('record locally with push_to_hub=false and private=true')
+    # LeRobot 0.4.4's recorder feature aggregation drops camera fields when video is false.
+    if dataset.get('video', True) is not True:
+        raise ValueError('dataset video must be true to preserve camera observations')
     repo_id = _text(dataset.get('repo_id'), 'dataset repo_id')
     if not re.fullmatch(r'[\w-]+/[\w.-]+', repo_id) or '..' in repo_id:
         raise ValueError('dataset repo_id must be namespace/name')

@@ -134,3 +134,11 @@ def test_native_sdk_camera_omission_is_rejected_before_recording(module, config,
     config['dataset']['video'] = video
     with pytest.raises(ValueError, match='video'):
         module.validate_config(config)
+
+
+@pytest.mark.parametrize('paired', [False, True])
+def test_explicit_native_video_recording_remains_admissible(module, config, paired):
+    if paired:
+        config = bimanual(config)
+    config['dataset']['video'] = True
+    assert module.validate_config(config) == config
