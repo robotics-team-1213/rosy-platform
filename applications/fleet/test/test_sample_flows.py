@@ -289,3 +289,41 @@ def test_failed_trip_is_an_intervention_in_the_work_view():
     _, work = call(engine, 'GET', '/api/fleet/work')
     assert work['rows'][0]['status'] == 'failed' and work['rows'][0]['visible_state'] == 'intervention'
 
+
+def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
+    engine = load_engine()
+    login = '/api/fleet/auth/login'
+    call(engine, 'POST', login, {'login': 'sample', 'password': 'CHANGE_ME'})
+    prefix = '/api/fleet/control-unit'
+    assert call(engine, 'GET', prefix)[1]['unit_id'] == 'sample-unit'
+    body = {'delegation_id': 'sample-intent', 'target_unit': 'sample-unit', 'robot_id': 'sample-robot',
+            'goal': {'x': 1, 'y': 2, 'yaw': 0}}
+    status, submitted = call(engine, 'POST', prefix + '/delegations', body)
+    assert status == 200 and submitted['delegation']['status'] == 'PENDING'
+    assert call(engine, 'POST', prefix + '/delegations', body)[1] == submitted
+    assert call(engine, 'POST', prefix + '/delegations', body | {'robot_id': 'other'})[0] == 409
+    path = prefix + '/delegations/sample-unit/sample-intent'
+    assert call(engine, 'GET', path)[1] == submitted
+    assert call(engine, 'POST', path + '/approve', {'expected_revision': 0})[0] == 409
+    status, approved = call(engine, 'POST', path + '/approve',
+                            {'expected_revision': submitted['delegation']['revision']})
+    row = approved['delegation']
+    assert status == 200 and row['local_actor'] == 'sample' and row['status'] == 'QUEUED'
+    task_id = row['local_task_id']
+    assert call(engine, 'GET', '/api/fleet/tasks/' + task_id)[1]['task']['status'] == 'QUEUED'
+    engine.advance('control_units', 'complete')
+    completed = call(engine, 'GET', path)[1]
+    assert completed['delegation']['status'] == 'COMPLETED'
+    assert completed['delegation']['result']['task_id'] == task_id
+    assert call(engine, 'GET', prefix + '/delegations')[1]['delegations'] == [completed]
+    assert call(engine, 'POST', prefix + '/delegations', body)[1] == completed
+    cancel_body = body | {'delegation_id': 'sample-cancel'}
+    assert call(engine, 'POST', prefix + '/delegations', cancel_body)[0] == 200
+    cancel_path = prefix + '/delegations/sample-unit/sample-cancel'
+    assert call(engine, 'POST', cancel_path + '/cancel', {})[1]['delegation']['status'] == 'CANCELED'
+    assert call(engine, 'POST', cancel_path + '/approve', {'expected_revision': 2})[0] == 409
+    engine.reset('viewer')
+    call(engine, 'POST', login, {'login': 'sample', 'password': 'CHANGE_ME'})
+    assert call(engine, 'GET', prefix)[0] == 200
+    assert call(engine, 'POST', prefix + '/delegations', body)[0] == 403
+

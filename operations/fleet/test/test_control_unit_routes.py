@@ -69,6 +69,24 @@ def test_request_cannot_supply_actor_origin_or_peer_address(tmp_path):
                          json=WORK | extra).status_code == 422
 
 
+def test_http_summary_listing_read_and_canceled_task_projection(tmp_path):
+    nodes, _ = cluster(tmp_path)
+    root, leaf = client_for(nodes, "R"), client_for(nodes, "A1")
+    summary = root.get("/api/fleet/control-unit", headers=headers())
+    assert summary.status_code == 200 and summary.json()["children"] == ["A", "B"]
+    listing = root.get("/api/fleet/control-unit/delegations", headers=headers())
+    assert listing.status_code == 200 and listing.json()["delegations"] == []
+    assert root.post("/api/fleet/control-unit/delegations", headers=headers(), json=WORK).status_code == 200
+    path = "/api/fleet/control-unit/delegations/R/job-1"
+    read = leaf.get(path, headers=headers())
+    assert read.status_code == 200 and read.json()["delegation"]["request"]["robot_id"] == "a1"
+    approved = leaf.post(path + "/approve", headers=headers(), json={"expected_revision": 1})
+    assert approved.status_code == 200 and approved.json()["delegation"]["local_task_id"]
+    canceled = leaf.post(path + "/cancel", headers=headers(), json={})
+    assert canceled.status_code == 200 and canceled.json()["delegation"]["cancel_requested"]
+    assert leaf.get(path, headers=headers()).json()["delegation"]["status"] == "CANCELED"
+
+
 @pytest.mark.parametrize("path,token,method", [
     ("/api/fleet/control-unit/delegations", "view-token", "list"),
     ("/api/fleet/control-unit/delegations/R/job-1", "view-token", "get"),

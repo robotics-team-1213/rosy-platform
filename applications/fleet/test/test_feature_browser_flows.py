@@ -20,6 +20,7 @@ CASES = {
     'stop': (flows.test_stop_requires_current_generation_to_rearm, '/console'),
     'work': (flows.test_flow_ids_revisions_and_reset_are_consistent, '/console'),
     'monitoring': (flows.test_goal_idempotency_progress_and_terminal_read, '/console'),
+    'control_units': (flows.test_control_unit_review_keeps_identity_task_and_terminal_readbacks, '/console?view=work'),
     'assistant': (flows.test_assistant_idempotency_and_explicit_terminal_result, '/console'),
     'vision': (flows.test_media_grant_renewal_revoke_and_viewer_read_permission, '/console'),
     'cell_documents': (flows.test_cell_documents_revision_preview_and_job_recovery, '/console/cell'),
