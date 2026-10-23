@@ -42,6 +42,31 @@ def test_short_targets_keep_every_planned_waypoint_without_enlarging_steps():
                for left,right in zip([points[0]] + targets[:-1], targets))
 
 
+def test_teacher_waypoints_leave_margin_for_the_bounded_action_head():
+    from sim_pick_place_demonstrations import short_targets
+    points=[(0.,0.),(.07,.04)]
+    targets=short_targets(points)
+    assert targets[-1]==points[-1]
+    assert all(max(abs(b-a) for a,b in zip(left,right))<=.03+1e-12
+               for left,right in zip([points[0]]+targets[:-1],targets))
+
+
+def test_teacher_readback_does_not_record_a_gripper_target_the_head_cannot_reach():
+    from sim_pick_place_demonstrations import readback_target
+    current={'gripper':.4199}
+    desired={'gripper':.3849}
+    target=readback_target(current,desired)
+    assert target!=desired
+    assert 0<current['gripper']-target['gripper']<=.03+1e-12
+
+
+def test_contact_squeeze_leaves_source_readback_margin_below_the_model_bound():
+    from sim_pick_place_teacher import contact_hold_target
+    current=.4199
+    target=contact_hold_target(current,close=.3804,contact=.4072)
+    assert 0<current-target<=.03+1e-12
+
+
 def test_teacher_place_pose_adds_clearance_without_changing_the_task_goal():
     from dataclasses import dataclass
     from sim_pick_place_teacher import teacher_place_pose
