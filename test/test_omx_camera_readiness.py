@@ -207,6 +207,7 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     view = configparser.ConfigParser(interpolation=None, strict=False)
     view.read(REPO / 'deploy/robot/omx/rosy-omx-camera-view.service')
     assert 'commissioning_view.py' in view['Service']['ExecStart']
+    assert 'FASTDDS_DEFAULT_PROFILES_FILE="$ROSY_CAMERA_PIPELINE_ROOT/camera-view-receive.xml"' in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
     assert 'rosy-omx-camera@front.service' in view['Unit']['After']
 
@@ -260,3 +261,15 @@ def test_a_reused_baseline_guards_the_current_preview_not_the_one_that_recorded_
     baseline = runtime.prepare({}, tmp_path, 'p')
     assert baseline['cameras']['top']['producer'] == now
     assert json.loads((tmp_path/'baseline.json').read_text())['cameras']['top']['producer'] == old  # file unchanged
+
+
+def test_viewer_receive_profile_is_the_measured_4mib_udp_buffer_only():
+    import xml.etree.ElementTree as ET
+    ns = {'p': 'http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles'}
+    root = ET.parse(REPO / 'deploy/robot/omx/camera-view-receive.xml').getroot()
+    transport = root.find('p:transport_descriptors/p:transport_descriptor', ns)
+    assert transport.find('p:type', ns).text == 'UDPv4'
+    assert int(transport.find('p:receiveBufferSize', ns).text) == 4 * 1024 * 1024
+    participant = root.find('p:participant', ns)
+    assert participant.get('is_default_profile') == 'true'
+    assert participant.find('p:rtps/p:userTransports/p:transport_id', ns).text == transport.find('p:transport_id', ns).text

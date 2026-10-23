@@ -705,8 +705,13 @@ existing camera configuration's persistent paths. The candidates are examples
 for the measured cameras, not universal camera defaults. The tuner checks the
 actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
 in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
-`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, and `camera_readiness.py` from the
-same revision. Keep the existing two preview environment files and producers.
+`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, `camera_readiness.py` and
+`camera-view-receive.xml` from the same revision. Use a release directory such as
+`~/.local/share/rosy/omx-camera-pipeline/releases/<full sha>/`, not a `~/rosy-test` copy:
+`tools/remote/update_status.py` reports a `~/rosy-test` source as `ADHOC`. The viewer loads
+`camera-view-receive.xml`, a Fast DDS profile with a 4 MiB UDP receive buffer. On 2026-10-17 it
+kept 236 of 236 top/front samples fresh (maximum source age 0.107 s) without any device command.
+Keep the existing two preview environment files and producers.
 
 Install the two user units in `~/.config/systemd/user/`, then run:
 
