@@ -330,3 +330,54 @@ def test_the_real_restart_installs_the_live_units_reloads_and_checks_they_stay_a
 
 
 real_run = m.subprocess.run
+
+
+def observed_host(tmp_path, monkeypatch, *, owners, pid='4242', active='active', torque=False, age=1.0, count=6):
+    import json
+    import subprocess as sp
+    health = tmp_path / 'arm_a.json'
+    now = 1000.0
+    health.write_text(json.dumps(dict(expected_motor_count=6, observed_at=now - age,
+                                      motors=[dict(torque_enabled=torque)] * count)))
+    device = tmp_path / 'follower'
+    device.write_text('')
+    cfg = dict(devices=[str(device)], follower_device=str(device),
+               observers=[dict(unit='rosy-omx-observer@arm_a.service', device=str(device), health=str(health))])
+
+    def run(args, **kwargs):
+        if args[0] == 'fuser':
+            return sp.CompletedProcess(args, 0 if owners else 1, stdout=' '.join(owners), stderr='')
+        return sp.CompletedProcess(args, 0, stdout=f'ActiveState={active}\nMainPID={pid}\n', stderr='')
+    monkeypatch.setattr(m.subprocess, 'run', run)
+    monkeypatch.setattr(m.time, 'time', lambda: now)
+    return m.Host(cfg)
+
+
+def test_the_torque_off_observer_alone_on_the_bus_counts_as_an_idle_cell(tmp_path, monkeypatch):
+    host = observed_host(tmp_path, monkeypatch, owners=['4242'])
+    assert host.device_in_use() is False
+    assert host.follower_torque_off(tmp_path, tmp_path) is True
+    assert host.follower_missing() is False
+
+
+@pytest.mark.parametrize('kwargs', [dict(owners=['4242', '999']), dict(owners=['999']),
+                                    dict(owners=['4242'], active='inactive')])
+def test_any_other_bus_owner_is_still_a_running_session(tmp_path, monkeypatch, kwargs):
+    assert observed_host(tmp_path, monkeypatch, **kwargs).device_in_use() is True
+
+
+@pytest.mark.parametrize('kwargs', [dict(torque=True), dict(age=30.0), dict(count=5)])
+def test_stale_partial_or_torque_on_snapshots_never_admit_a_switch(tmp_path, monkeypatch, kwargs):
+    assert observed_host(tmp_path, monkeypatch, owners=['4242'], **kwargs).follower_torque_off(tmp_path, tmp_path) is False
+
+
+def test_a_replaced_follower_board_is_reported_as_missing_not_as_torque_on(tmp_path):
+    host = m.Host(dict(devices=[], follower_device=str(tmp_path / 'gone')))
+    assert host.follower_missing() is True
+
+
+def test_a_missing_follower_board_defers_with_its_own_reason(tmp_path, capsys):
+    host = FakeHost()
+    host.follower_missing = lambda: True
+    assert updater(tmp_path, host).run() == "deferred"
+    assert "follower_device_missing" in capsys.readouterr().out
