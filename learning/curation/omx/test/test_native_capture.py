@@ -113,3 +113,39 @@ def test_excluded_attempts_do_not_leak_into_another_split(module, source):
     episodes[1]['cycle_id'] = episodes[0]['cycle_id']
     decisions = [{'split': name} for name in ('train', 'exclude', 'eval')]
     module.check_capture_groups(episodes, decisions)
+
+
+def leader(source):
+    provenance = dict(source[2], source_mode='leader_native', collection_manifest_sha256='f' * 64)
+    del provenance['teacher_sha256']
+    return provenance
+
+
+def bind_leader(module, source, provenance):
+    files, episodes, _ = source
+    return module.bind_capture(episodes, files, source_mode='leader_native', body_units='normalized_-100_100',
+                               rig_revision='rig-r1', calibration_revision='cal-r2', provenance=provenance)
+
+
+def test_sealed_leader_recording_binds_session_and_cycle_lineage(module, source):
+    result = bind_leader(module, source, leader(source))
+    assert result['source_mode'] == 'leader_native'
+    assert [e['session_id'] for e in result['episodes']] == ['session-0', 'session-1', 'session-2']
+
+
+@pytest.mark.parametrize('fault', ['teacher', 'no_manifest', 'bytes', 'missing'])
+def test_leader_lineage_must_name_its_sealed_manifest_and_cover_the_bytes(module, source, fault):
+    provenance = leader(source)
+    if fault == 'teacher': provenance['teacher_sha256'] = 'c' * 64
+    if fault == 'no_manifest': del provenance['collection_manifest_sha256']
+    if fault == 'bytes': provenance['files']['data/part.parquet'] = 'e' * 64
+    if fault == 'missing': provenance['episodes'].pop()
+    with pytest.raises(ValueError):
+        bind_leader(module, source, provenance)
+
+
+def test_leader_recording_without_lineage_stays_ungrouped(module, source):
+    files, episodes, _ = source
+    result = module.bind_capture(episodes, files, source_mode='leader_native', body_units='normalized_-100_100',
+                                 rig_revision='rig-r1', calibration_revision='cal-r2', provenance=None)
+    assert result == dict(source_mode='leader_native', episodes=episodes)

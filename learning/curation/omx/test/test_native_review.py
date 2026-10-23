@@ -76,6 +76,33 @@ def test_reader_tuple_shapes_are_supported(module, recording):
     assert module.inspect_frames(info, rows)['frame_count'] == 4
 
 
+@pytest.mark.parametrize('fault', [None, 'arm_order', 'state_order', 'short_frame', 'wrong_type'])
+def test_bimanual_native_layout_is_explicit_and_ordered(module, recording, fault):
+    info, rows = recording
+    names = [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in module.JOINTS]
+    info['robot_type'] = 'bi_omx_follower'
+    for key in ('action', 'observation.state'):
+        info['features'][key].update(names=names[:], shape=[12])
+        for row in rows:
+            row[key] = row[key] * 2
+    if fault == 'arm_order':
+        info['features']['action']['names'] = names[6:] + names[:6]
+    if fault == 'state_order':
+        info['features']['observation.state']['names'] = list(reversed(names))
+    if fault == 'short_frame':
+        rows[0]['action'].pop()
+    if fault == 'wrong_type':
+        info['robot_type'] = 'omx_follower'
+    if fault:
+        with pytest.raises(ValueError):
+            module.inspect_frames(info, rows)
+    else:
+        report = module.inspect_frames(info, rows)
+        assert report['robot_type'] == 'bi_omx_follower'
+        assert report['joint_names'] == names
+        assert report['frame_count'] == 4
+
+
 @pytest.mark.parametrize('fault', ['nan', 'missing_camera', 'time', 'order', 'length', 'sim'])
 def test_review_rejects_incomplete_or_incompatible_data(module, recording, fault):
     info, rows = recording

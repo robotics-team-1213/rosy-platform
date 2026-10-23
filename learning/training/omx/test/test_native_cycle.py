@@ -77,6 +77,20 @@ def test_training_output_cannot_overlap_input_or_overwrite_prior_run(module, spl
             module.run_cycle(root, output, steps=2, batch_size=2, device='cpu')
 
 
+@pytest.mark.parametrize('bimanual', [False, True])
+def test_evaluation_requires_same_explicit_joint_layout(module, bimanual):
+    names = ([f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in module.native.JOINTS]
+             if bimanual else module.native.JOINTS)
+    info = dict(robot_type='bi_omx_follower' if bimanual else 'omx_follower', codebase_version='v3.0',
+                features={key: dict(names=names[:], shape=[len(names)])
+                          for key in ('action', 'observation.state')})
+    assert module.evaluation_joints(info, copy.deepcopy(info)) == names
+    invalid = copy.deepcopy(info)
+    invalid['features']['action']['names'].reverse()
+    with pytest.raises(ValueError, match='joint'):
+        module.evaluation_joints(info, invalid)
+
+
 @pytest.mark.parametrize('fault', ['missing', 'teacher', 'files', 'semantics', 'groups'])
 def test_trainer_revalidates_capture_provenance_even_with_unchanged_split_bytes(module, splits, fault):
     root, receipt = splits

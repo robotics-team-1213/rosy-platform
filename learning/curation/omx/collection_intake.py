@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
 from native_environment import _events, seal_environment
-from native_review import JOINTS, dataset_files, inspect_dataset, write_json
+from native_review import JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset, write_json
 
 SCHEMA = 'rosy.omx-collection-session.v1'
 MAX_TIME_NS = 2**63-1
@@ -382,6 +382,100 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
         write_json(output / name, document)
     return receipt
 
+
+
+def _sealed_collection(root):
+    """Re-hash a record_seal.py collection; the manifest must cover every file exactly."""
+    root = Path(root).absolute()
+    raw = (root/'manifest.json').read_bytes()
+    manifest = json.loads(raw)
+    _require(manifest.get('schema') == 'rosy.omx-collection-session.v1' and manifest.get('state') == 'CLOSED'
+             and manifest.get('mode') == 'hardware' and manifest.get('source_mode') == 'leader_native',
+             'sealed leader collection required')
+    actual = {}
+    for path in sorted(root.rglob('*')):
+        _require(not path.is_symlink() and (path.is_dir() or path.is_file()), 'links and special files refused')
+        if path.is_file() and path != root/'manifest.json':
+            with path.open('rb') as stream:
+                actual[path.relative_to(root).as_posix()] = hashlib.file_digest(stream, 'sha256').hexdigest()
+    _require(actual == manifest.get('files'), 'collection bytes differ from its manifest')
+    rows = sorted((k, v) for k, v in actual.items() if k.startswith('calibration/'))
+    _require(bool(rows) and manifest.get('calibration_revision')
+             == hashlib.sha256(json.dumps(rows).encode('utf-8')).hexdigest(), 'calibration revision differs')
+    for key in ('session_id', 'rig_revision'):
+        _require(isinstance(manifest.get(key), str) and manifest[key].strip() == manifest[key] != '',
+                 f'sealed {key} required')
+    _require(manifest['session_id'] == root.name, 'collection name differs from its sealed session id')
+    return manifest, hashlib.sha256(raw).hexdigest()
+
+
+def _source_episodes(root, repo_id):
+    dataset = load_dataset(root, repo_id)
+    return inspect_frames(dataset.meta.info, (dataset[i] for i in range(len(dataset))))['episodes']
+
+
+def prepare_native(collections, output, repo_id):
+    """D-848: sealed leader recordings -> one prepared intake; one session per recording, one cycle per episode.
+
+    The official LeRobot 0.4.4 aggregate joins recordings without re-encoding. Every aggregated
+    episode must carry the content hash its source recording had, in sealed order. Decisions start unknown.
+    """
+    import shutil
+    from lerobot.datasets.aggregate import aggregate_datasets
+    collections = [Path(path).absolute() for path in collections]
+    _require(bool(collections) and len({c.name for c in collections}) == len(collections),
+             'distinct sealed collections required')
+    sealed = [(c, *_sealed_collection(c)) for c in collections]
+    sealed.sort(key=lambda row: row[1].get('sealed_ns', 0))
+    first = sealed[0][1]
+    _require(all(m['rig_revision'] == first['rig_revision'] and m['calibration_revision'] == first['calibration_revision']
+                 and m.get('robot_type') == first.get('robot_type') for _, m, _ in sealed),
+             'recordings with different rig, calibration or robot type cannot share one intake')
+    output = Path(output).absolute()
+    _require(not output.exists() and output.drive.upper() != 'F:', 'new output outside source drive required')
+    for collection, _, _ in sealed:
+        _require(not output.resolve().is_relative_to(collection.resolve())
+                 and not collection.resolve().is_relative_to(output.resolve()), 'output must be separate from every source')
+    expected, groups = [], []
+    for collection, manifest, _ in sealed:
+        for episode in _source_episodes(collection/'dataset', 'local/' + manifest['session_id']):
+            expected.append(episode['content_sha256'])
+            groups.append((manifest['session_id'], f"{manifest['session_id']}-ep{episode['episode_index']:04d}"))
+    aggregate_datasets([f"local/{m['session_id']}" for _, m, _ in sealed], repo_id,
+                       roots=[c/'dataset' for c, _, _ in sealed], aggr_root=output)
+    for i, (collection, manifest, _) in enumerate(sealed):
+        provenance = output/'rosy_provenance'/f'session-{i:06d}'
+        provenance.mkdir(parents=True)
+        for name in ('session.json', 'record-config.json', 'manifest.json'):
+            shutil.copyfile(collection/name, provenance/name)
+        shutil.copytree(collection/'calibration', provenance/'calibration')
+    files = dataset_files(output)
+    digests = [d for _, _, d in sealed]
+    capture = dict(schema=CAPTURE_SCHEMA, source_mode='leader_native', action_semantics=ACTION,
+                   body_units='normalized_-100_100', gripper_units='normalized_0_100',
+                   rig_revision=first['rig_revision'], calibration_revision=first['calibration_revision'],
+                   collection_manifest_sha256=digests[0] if len(digests) == 1
+                   else hashlib.sha256(json.dumps(digests).encode('utf-8')).hexdigest(),
+                   collection_manifests=[dict(session_id=m['session_id'], manifest_sha256=d) for _, m, d in sealed],
+                   files=files, episodes=[dict(episode_index=i, session_id=session, cycle_id=cycle)
+                                          for i, (session, cycle) in enumerate(groups)])
+    report = inspect_dataset(output, repo_id, body_units='normalized_-100_100', rig_revision=first['rig_revision'],
+                             calibration_revision=first['calibration_revision'],
+                             source_mode='leader_native', capture_provenance=capture)
+    _require([e['content_sha256'] for e in report['episodes']] == expected,
+             'aggregated episodes differ from their sealed recordings')
+    _require([_sealed_collection(c)[1] for c, _, _ in sealed] == digests, 'source changed during intake')
+    receipt = dict(schema='rosy.omx-collection-intake.v1', reader_verified=True, uploaded=False,
+                   completed_only=False, fixture_only=False, source_mode='leader_native',
+                   sessions=[dict(session_id=m['session_id'], manifest_sha256=d, provenance_path=f'rosy_provenance/session-{i:06d}')
+                             for i, (_, m, d) in enumerate(sealed)],
+                   episodes=[dict(episode_index=i, session_id=session, attempt_index=int(cycle.rsplit('-ep', 1)[1]),
+                                  cycle_id=cycle) for i, (session, cycle) in enumerate(groups)])
+    for name, document in (('capture.json', capture), ('environment.json', report['environment_summary']),
+                           ('inspection.json', report), ('decisions.json', report['episodes']),
+                           ('intake-receipt.json', receipt)):
+        write_json(output / name, document)
+    return receipt
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

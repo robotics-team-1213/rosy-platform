@@ -162,3 +162,47 @@ def test_native_wrist_camera_requires_explicit_arm_binding(capture, tmp_path):
     profile['cameras'][1]['arm_id'] = None
     with pytest.raises(ValueError, match='wrist'):
         bridge.convert_native(root, tmp_path/'unbound-wrist', profile=profile)
+
+
+def bimanual(capture):
+    """The same sealed fixture recorded as bi_omx_follower: arm_a then arm_b, twelve joints."""
+    root, receipt, profile, readers = capture
+    names = [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in bridge.native.JOINTS]
+    for index, split in enumerate(('train', 'eval', 'test')):
+        info, rows = readers[split].meta.info, readers[split].rows
+        info['robot_type'] = 'bi_omx_follower'
+        for key in ('action', 'observation.state'):
+            info['features'][key] = {'names': names, 'shape': [12]}
+            for row in rows:
+                row[key] = np.concatenate([row[key], row[key] + 50])
+        inspected = bridge.native.inspect_frames(info, rows)['episodes'][0]
+        for row in (receipt['source']['episodes'][index], receipt['decisions'][index]):
+            row['content_sha256'] = inspected['content_sha256']
+    (root / 'split-receipt.json').write_text(json.dumps(receipt))
+    profile['arms'] = [dict(id=arm, joint_names=bridge.native.JOINTS[:], units='normalized_-100_100')
+                       for arm in ('arm_a', 'arm_b')]
+    profile['cameras'][1]['arm_id'] = 'arm_a'
+    return root, profile, readers
+
+
+def test_two_arm_recording_converts_in_arm_a_then_arm_b_order(capture, tmp_path):
+    root, profile, readers = bimanual(capture)
+    result = bridge.convert_native(root, tmp_path / 'converted', profile=profile)
+    data = load_dataset(tmp_path / 'converted')
+    episode = data.split('train')[0]
+    assert episode.arrays['action'].shape == (4, 12)
+    np.testing.assert_array_equal(episode.arrays['action'][1], readers['train'].rows[1]['action'])
+    assert result['act_only'] and [arm['id'] for arm in data.profile['arms']] == ['arm_a', 'arm_b']
+
+
+@pytest.mark.parametrize('fault', ['one_arm_profile', 'swapped_ids', 'renamed_ids'])
+def test_two_arm_recording_rejects_a_profile_that_does_not_name_both_arms_in_order(capture, tmp_path, fault):
+    root, profile, _ = bimanual(capture)
+    if fault == 'one_arm_profile':
+        profile['arms'] = profile['arms'][:1]
+    elif fault == 'swapped_ids':
+        profile['arms'].reverse()
+    else:
+        profile['arms'][1]['id'] = 'follower_2'
+    with pytest.raises(ValueError, match='arm'):
+        bridge.convert_native(root, tmp_path / 'converted', profile=profile)
