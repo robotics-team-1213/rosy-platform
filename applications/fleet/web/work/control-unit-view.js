@@ -127,7 +127,7 @@ export function createControlUnitView({scope, call, parent, active, approveReaso
     for (const reply of replies) {
       const row = reply.delegation, item = node("li"), actions = node("div", "", "ui-actions");
       item.append(node("h3", `${row.request.target_unit} · ${row.request.robot_id}`),
-        node("p", `요청 관제 ${row.origin_id} · 실행 담당 관제 ${row.owner_unit}`),
+        node("p", `요청 관제 ${row.origin_id} · 직접 위임 담당 관제 ${row.owner_unit}`),
         node("p", `목표 X ${row.request.goal.x} m · Y ${row.request.goal.y} m · 방향 ${row.request.goal.yaw} rad`),
         node("p", `위임 ${row.origin_id} / ${row.delegation_id}`, "hint"),
         node("p", `${labels[row.status] || "상태 확인 필요"}${row.cancel_requested ? " · 취소 요청 전달 중" : ""}`),

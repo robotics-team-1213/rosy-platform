@@ -186,3 +186,22 @@ def test_cached_owner_projection_expires_and_fresh_reconciliation_restores_admis
     asyncio.run(nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=1))
     now[0] += 6
     assert nodes["A1"].reply("R", "job-1")["stale"] is True
+
+
+def test_standalone_unit_admits_and_cancels_its_own_work_without_any_peer(tmp_path):
+    from fleet.server.control_unit_service import ControlUnitService
+    topology = ControlUnitTopology.from_mapping({"revision": "v1", "units": [{"id": "A", "resources": ["robot:a"]}]})
+    path = tmp_path / "standalone.db"
+    tasks = FleetTaskService(FleetTaskStore(path), robot_ids={"a"})
+    async def unexpected_peer(*args):
+        raise AssertionError("standalone unit must not contact a peer")
+    service = ControlUnitService(topology, ControlUnitStore(path, unit_id="A"), tasks, Console(), peer=unexpected_peer)
+    work = ControlWorkRequest.model_validate(dict(WORK, target_unit="A", robot_id="a"))
+    asyncio.run(service.submit(work))
+    approved = asyncio.run(service.approve("A", "job-1", actor_id="operator-a", expected_revision=1))
+    task_id = approved["delegation"]["local_task_id"]
+    assert tasks.native_required(task_id)
+    assert tasks.store.get_task(task_id)["status"] == "QUEUED"
+    canceled = asyncio.run(service.cancel("A", "job-1"))
+    assert canceled["delegation"]["status"] == "CANCELED"
+    assert tasks.store.get_task(task_id)["status"] == "CANCELED"
