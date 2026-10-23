@@ -244,3 +244,19 @@ def test_producer_still_refuses_a_missing_or_shared_owner_after_the_wait(monkeyp
     _producer_world(runtime, monkeypatch, [owners])
     with pytest.raises(RuntimeError, match='sole camera owner'):
         runtime.producer('top', '/dev/video0', wait_s=2.0)
+
+
+def test_a_reused_baseline_guards_the_current_preview_not_the_one_that_recorded_it(monkeypatch, tmp_path):
+    import json
+    runtime = load('camera_readiness')
+    original = {'gain': 4}
+    old = {'ActiveState': 'active', 'MainPID': '2153151', 'InvocationID': 'a'*32}
+    now = {'ActiveState': 'active', 'MainPID': '2463', 'InvocationID': 'f'*32}
+    (tmp_path/'baseline.json').write_text(json.dumps(dict(profile_sha256='p', recorded_ns=1, cameras={
+        'top': dict(device='/dev/video0', identity={'rdev': 1}, producer=old, original=original)})))
+    monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': 1})
+    monkeypatch.setattr(runtime, 'producer', lambda role, device, wait_s=15.0: now)
+    monkeypatch.setattr(runtime, 'get_controls', lambda device, names: dict(original))
+    baseline = runtime.prepare({}, tmp_path, 'p')
+    assert baseline['cameras']['top']['producer'] == now
+    assert json.loads((tmp_path/'baseline.json').read_text())['cameras']['top']['producer'] == old  # file unchanged
