@@ -117,7 +117,7 @@ def run(directory, world, observer_path, *, home_only=False):
         gripper_closed=profile.gripper_closed, gripper_velocity=profile.velocity_limits[profile.gripper_joint],
         gripper_preload=profile.gripper_preload_rad)
     capture = facade.capture = PilotSimCapture(facade, directory/'recordings', source,
-        sim_time_ns=lambda: node.get_clock().now().nanoseconds)
+        sim_time_ns=lambda: node.get_clock().now().nanoseconds, recording_fps=5)
     camera = PilotSimCamera(node, capture, source['world_sha256'], world_name='omx_cell_workcell')
     executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
