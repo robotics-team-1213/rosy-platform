@@ -135,3 +135,18 @@ def test_binding_rolls_back_with_a_failed_task_creation(tmp_path):
                           request={"goal": {}}, evidence=None, admission=fail_after_binding)
     assert tasks.get_task("task-1") is None
     assert open_store(path).get("R", "job-1")["local_task_id"] is None
+
+
+@pytest.mark.parametrize("actor_id", [None, "", True])
+def test_missing_approval_identity_cannot_match_an_unapproved_row(tmp_path, actor_id):
+    from fleet.server.task_store import FleetTaskStore
+    path = tmp_path / "fleet.db"
+    tasks, store = FleetTaskStore(path), open_store(path)
+    create(store)
+    with pytest.raises(ValueError, match="APPROVAL"):
+        tasks.create_task(task_id="unapproved-task", robot_id="a", task_type="navigate",
+                          source="operator", actor_id="operator-a", request_key="unapproved",
+                          request={"goal": {}}, evidence=None,
+                          admission=store.task_admission("R", "job-1", actor_id=actor_id))
+    assert tasks.get_task("unapproved-task") is None
+    assert store.get("R", "job-1")["local_task_id"] is None
