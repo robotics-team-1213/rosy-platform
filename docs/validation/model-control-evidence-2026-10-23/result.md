@@ -25,7 +25,7 @@ Fleet은 기존 읽기 트랜잭션을 재사용한다. 재계획 전후의 최�
 | owner 수락 → 명령 결과 → 작업 결과 | [정책 parent](../../../middleware/robot_execution/local/src/rosy/execution/local/policy_parent.py)와 [episode](../../../middleware/robot_execution/local/src/rosy/execution/local/policy_episode.py)는 journal/source/receipt를 대조한다. 파일 출처가 맞아도 추론 소비와 작업 성공은 별도로 남긴다. | 승인된 설치에서 cancel·정지·연결 유실·재시작과 실제 목표를 관측해야 한다. API 수락이나 Action 성공만으로 완료하지 않는다. |
 | 현재 World → 완료 판정 | [ArmState](../../../operations/world/src/rosy/world/state/projections/arm_state.py)의 물체 상태는 `unobserved`다. 현재 자세·이미지·행동 결과·목표 근거를 각각의 소유 경로에서 소비한다. | live 물체 관측 producer와 보정을 수용하기 전에는 보유/배치 완료를 추정하지 않는다. `bridged` 자세와 prediction `NO_OBJECTION`도 완료 근거가 아니다. |
 
-실제 모델 출처 조회의 기존 검증은 [model lineage](../pipeline-model-lineage-2026-10-21/result.md), 학습 입력과 SIM teacher의 별도 수정은 [learning execution](../learning-execution-2026-10-23/result.md)을 참조한다. 각 문서에 기록된 revision과 실행 범위만 유효하다. 모듈 progress의 과거 `last_verified`를 이번 회귀만으로 전체 live 지원 검증 날짜로 갱신하지 않는다.
+실제 모델 출처 조회와 학습 입력·SIM teacher의 별도 기록은 독립 작업 브랜치의 `pipeline-model-lineage-2026-10-21/result.md`, `learning-execution-2026-10-23/result.md`에 보존되어 있다. 해당 구현·기록을 이번 공개 변경에 포함하지 않으며 그 실행을 이번 통합 커밋의 검증으로 세지 않는다. 모듈 progress의 과거 `last_verified`를 이번 회귀만으로 전체 live 지원 검증 날짜로 갱신하지 않는다.
 
 ## 브랜치와 원격 검증
 

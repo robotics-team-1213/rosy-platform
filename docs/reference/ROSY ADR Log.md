@@ -14,11 +14,6 @@
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
 | D-832 | OMX 학습 작업공간과 다중 팔·다중 카메라 프로필 | Accepted for implementation (2026-10-21) |
 | D-849 | 팔레타이징 제출 검증은 공정이 소유하고 Fleet은 주입된 제출 경계를 소비한다 | Accepted for implementation (2026-10-23) |
-| D-841 | 공통 모듈 재사용과 독립 앱의 계약 검증 범위를 정한다 | Accepted for implementation (2026-10-22) |
-| D-845 | 공통 HTTP 전송 안에서 화면의 응답 해석을 유지한다 | Accepted for implementation (2026-10-22) |
-| D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 | Accepted for implementation (2026-10-21) |
-| D-830 | Fleet 프런트 개발은 샘플·실제 API 공급과 앱 소유 자산 목록으로 분리한다 | Accepted (2026-10-21) |
-| D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |
 | D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
 | D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |

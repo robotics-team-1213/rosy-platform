@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-23 · 5c74a6e25b · 모델 제어 근거의 범위 연결
 - 2026-10-22 · 79a11a4a54 · 현재 운영 기준 모터 상태 연결 검증
 - 2026-10-22 · fd889ea429 · Learning Center implementation evidence
 - 2026-10-22 · uncommitted · Shared multi-robot Learning Center decisions
 - 2026-10-22 · uncommitted · 실제 전송 시험의 연결 복구 경로 검증
-- 2026-10-22 · uncommitted · 설치 자산 폐쇄 검사 갱신
