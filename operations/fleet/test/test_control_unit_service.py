@@ -168,3 +168,21 @@ def test_scoped_cancel_failure_marks_only_its_row_stale_and_recovery_continues(t
     asyncio.run(leaf.refresh())
     assert leaf.reply("R", "job-1")["stale"] is True
     assert leaf.store.get("A1", "later")["status"] == "CANCELED"
+
+
+def test_cached_owner_projection_expires_and_fresh_reconciliation_restores_admission(tmp_path, monkeypatch):
+    import fleet.server.control_unit_service as module
+    now = [10.0]
+    monkeypatch.setattr(module, "monotonic", lambda: now[0], raising=False)
+    nodes, _ = cluster(tmp_path)
+    asyncio.run(nodes["R"].submit(ControlWorkRequest.model_validate(WORK)))
+    assert nodes["R"].reply("R", "job-1")["stale"] is False
+    now[0] += 6
+    assert nodes["R"].reply("R", "job-1")["stale"] is True
+    with pytest.raises(ValueError):
+        asyncio.run(nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=1))
+    asyncio.run(nodes["R"].refresh())
+    assert nodes["R"].reply("R", "job-1")["stale"] is False
+    asyncio.run(nodes["A1"].approve("R", "job-1", actor_id="operator-a1", expected_revision=1))
+    now[0] += 6
+    assert nodes["A1"].reply("R", "job-1")["stale"] is True
