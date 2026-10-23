@@ -4330,3 +4330,10 @@
 - 변경: 실제 camera-peer와 공통 PageScope를 사용하는 Node 회귀 9개를 추가했다. 권한 헤더·본문 미소비, 엄격 JSON, 종료 후 늦은 응답, 현재 자격·단일 POST를 확인한다.
 - 증거: 전환 전 공통 전송 옵션 누락 1건 RED, 전환 후 기존 helper 2개를 포함해 11 passed/skip0. 실제 브라우저와 공식 원격 결과는 별도 기록한다.
 - gate 변화: 시험 범위이며 권한·장치 명령을 추가하지 않는다.
+
+## 2026-10-23 · 24856e823e · 계정 입력 전 화면 열기 회귀 보완
+
+- 변경: 기본으로 접히는 계정 입력란을 사용하는 site-map 검사 24곳에서 기존 `open_token_access`를 먼저 호출한다. fixture와 assertions는 그대로 유지한다.
+- 증거: 실제 수정 전 검사에서 hidden token 입력의 55 NEW를 확인했다. 수정 커밋의 데스크톱·모바일 로그인/재연결 5 cases가 원격 Chromium에서 passed/skip0/NEW0이며, helper 호출을 제외한 AST는 동등하다. [검증 기록](../../docs/validation/fleet-account-visibility-2026-10-23/result.md).
+- gate 변화: 없음. 인증·권한·명령·실물 장치 동작을 변경하지 않는다. 전체 공식 병합 검증은 별도 기록한다.
+- CE: 해당 없음. 기존 helper 사용과 실제 실패·회귀 근거로 판단을 복구할 수 있다.
