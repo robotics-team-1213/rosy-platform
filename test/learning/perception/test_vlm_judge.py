@@ -441,3 +441,22 @@ def test_debate_consensus_moves_a_photo_out_of_the_disputed_queue(tmp_path, monk
         disputed[0] not in [row['id'] for row in after['items']]
     coverage = vlm_judge.evaluation(store)['provisional'][0]
     assert (coverage['provisional'], coverage['debate']) == (1, 1)
+
+
+def test_bench_question_set_v3_imports_and_splits_the_ambiguous_questions():
+    import importlib.util
+    from pathlib import Path
+    pytest.importorskip('PIL')
+    path = Path(__file__).resolve().parents[3] / 'tools' / 'vlm_question_bench.py'
+    spec = importlib.util.spec_from_file_location('vlm_question_bench_v3', path)
+    bench_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bench_module)
+    assert bench_module.QUESTION_SET == 'v3'
+    checked = vlm_judge.check_questions(json.loads(json.dumps(bench_module.QUESTIONS)))  # as --dump-questions writes it
+    ids = {view: [q['id'] for q in questions] for view, questions in checked.items()}
+    assert ids['front'] == ['front.object_between_tapes', 'front.wall_ahead', 'front.robot_ahead', 'front.person_ahead',
+                            'front.tape_left', 'front.tape_right', 'front.shape']
+    assert ids['top'] == ['top.robot_count', 'top.person_present']
+    assert ids['wrist'] == list(vlm_judge.CONTRADICTION)  # wrist is unchanged, so v2 wrist rows import into v3
+    count = next(q for q in checked['top'] if q['id'] == 'top.robot_count')
+    assert count['options'] == ['zero', 'one', 'two', 'many']

@@ -33,18 +33,24 @@ INSTRUCTION = ("You check one {view} camera picture from a small robot. Answer t
 #: Question id -> (question, options). Ids and options follow the design; QUESTION_SET versions them.
 QUESTIONS = {
     "front": {
-        "front.lane_obstruction": ("Is there an object on the floor inside the lane ahead?", ("yes", "no", "unclear")),
+        # v3: "inside the lane ahead" split the models (debate 0/17); the region is now named in image terms.
+        "front.object_between_tapes": ("In the lower half of the image, is there an object on the floor between the two "
+                                       "lane tapes?", ("yes", "no", "unclear")),
         # v2: v1's multi-way "what is ahead" answered wall on nearly every frame; one yes/no per kind instead.
         "front.wall_ahead": ("Is a wall or upright panel blocking the lane directly ahead?", ("yes", "no", "unclear")),
         "front.robot_ahead": ("Is another robot in the lane directly ahead?", ("yes", "no", "unclear")),
         "front.person_ahead": ("Is a person or a person's legs in the lane directly ahead?", ("yes", "no", "unclear")),
-        "front.lane_tape": ("Which lane boundary tapes are visible on the floor?", ("both", "left", "right", "none")),
+        # v3: one four-way tape question (debate 0/27) became one yes/no per image half.
+        "front.tape_left": ("Is a white lane tape visible on the floor in the LEFT half of the image?", ("yes", "no", "unclear")),
+        "front.tape_right": ("Is a white lane tape visible on the floor in the RIGHT half of the image?", ("yes", "no", "unclear")),
         "front.shape": ("Is the lane ahead a bend, blocked, or straight?", ("bend", "blocked", "straight", "unclear")),
     },
-    # shortcut: full ceiling frames have no target-robot crop, so ahead_space/robot_adjacent become scene-level
-    # questions; switch to the design's per-robot questions once frames come with a crop around the robot.
+    # shortcut: ceiling frames carry one ArUco world pose per frame (poses.jsonl), not a pixel position per robot,
+    # so there is no robot crop; ask the design's per-robot top.robot_adjacent/top.ahead_space once frames come
+    # with per-robot image positions. v3: "within one robot length" split the models (debate 0/10); count instead.
     "top": {
-        "top.robots_close": ("Are any two small robots within one robot length of each other?", ("yes", "no", "unclear")),
+        "top.robot_count": ("How many small robots are visible on the floor? Answer many for three or more.",
+                            ("zero", "one", "two", "many")),
         "top.person_present": ("Is a person visible on the floor area?", ("yes", "no", "unclear")),
     },
     "wrist": {
@@ -52,7 +58,7 @@ QUESTIONS = {
         "wrist.gripper_empty": ("Is the gripper empty?", ("yes", "no", "unclear")),
     },
 }
-QUESTION_SET = "v2"
+QUESTION_SET = "v3"
 DEBATE_NOTE = ("Other models answered this question: {others}. They can be wrong. Look at the picture again "
                "and give your own answer.\n")
 OBSERVE_PROMPT = ("Describe only visible physical surfaces and floor markings in this {view} image in one short "
