@@ -18,6 +18,7 @@ from sim_pick_place_demonstrations import (
 )
 from sim_pick_place_task import judge_episode
 from sim_policy_trial_evidence import contact_held
+from sim_teacher_gripper_evidence import gripper_failure_evidence
 
 
 PLACE_CLEARANCE_M = .005
@@ -144,6 +145,7 @@ def run(directory, world, observer_path, *, home_only=False):
     receipt = {'sim_aid': True, 'sim_gripper_sensor': True, 'source': source,
                'goal_m': goal, 'cell_sha256': job.cell_hash, 'recipe_sha256': job.recipe_hash,
                'profile_revision': profile.revision, 'training': 'NOT_RUN',
+               'gripper_verification_failure': None,
                'motion_strategy': {'type':'release_above_support_v1',
                    'place_clearance_m':PLACE_CLEARANCE_M,
                    'min_measured_clearance_m':PLACE_CLEARANCE_M/2,
@@ -219,7 +221,8 @@ def run(directory, world, observer_path, *, home_only=False):
         js = arm.latest_joint_state
         q = js.positions[profile.gripper_joint]
         close = profile.gripper_close_for_width(recipe.box.width)
-        held = contact_held(q,close=close,contact=profile.gripper_contact_for_width(recipe.box.width))
+        contact = profile.gripper_contact_for_width(recipe.box.width)
+        held = contact_held(q,close=close,contact=contact)
         opened = abs(q-profile.gripper_open) <= .05
         observation = GripperObservation(config.workcell_id, config.instance_id,
             'omx-sim-width-matched-position-v2', js.sequence, js.received_at,
@@ -228,8 +231,17 @@ def run(directory, world, observer_path, *, home_only=False):
             'box' if expect == 'held' and held else None, 1)
         verifier = verify_held_object if expect == 'held' else verify_released_object
         checked = arm.monotonic()
-        verified = verifier(observation, object_id='box', now=checked,
-                            max_age_s=profile.max_joint_state_age_s)
+        try:
+            verified = verifier(observation, object_id='box', now=checked,
+                                max_age_s=profile.max_joint_state_age_s)
+        except Exception:
+            receipt['gripper_verification_failure'] = gripper_failure_evidence(observation,
+                position_rad=q, joint_positions_rad=js.positions, expected=expect,
+                close_rad=close, contact_rad=contact,
+                checked_owner_s=checked, max_age_s=profile.max_joint_state_age_s,
+                phase_id=event.get('phase_id'),
+                preceding_command_id=commands[-1]['command_id'] if commands else None)
+            raise
         return ({'observation': vars(observation), 'receipt': vars(verified),
                  'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s},q)
 
