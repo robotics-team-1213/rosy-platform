@@ -83,6 +83,19 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 
 계정과 저장 공간은 메뉴가 아니라 상단 **설정**에 있다(`/accounts`, `/learning#storage-panel`). 화면 제목은 `Rosy Learning — <화면>`이다.
 
+**홈의 도메인 줄.** `/api/learning`은 기존 키를 그대로 두고 `domains`를 더한다(`learning_domains.py`). 도메인마다 루프 여섯 칸(수집·정답·데이터셋·학습·평가·승격 기록, ⑦ 배포는 Learning 밖이라 없음)을 `{stage, label, state, evidence, next}`로 주고, `state`는 `done`·`active`·`blocked`·`waiting`·`not_available`이다. 도메인마다 `next`(`{label, href}` 하나)와 `blocked`(처음 막히거나 없는 칸의 이유)가 있다. 이 작업대가 이미 가진 자료만 읽는다.
+
+| 도메인 | 근거 |
+|---|---|
+| `lane` | 기존 `project()` 단계를 여섯 칸에 맞춘다(자료→수집, 픽셀 검수→정답, 준비+데이터셋→데이터셋, 학습, 평가, 적용 검토→승격 기록) |
+| `object` | 객체 승인·대기·제외 수와 최신 준비본(`exports`). 학습·평가는 학습기가 없어 `not_available` |
+| `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수 |
+| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태(홈은 1분에 한 번만 읽는다) |
+| `vlm` | VLM 표가 있을 때 사진·확정·제외 수. 확정이 1장 이상이면 평가 칸이 열린다 |
+| `decision` | 모두 `not_available`(「Learning에 연결 전」) |
+
+모르는 칸은 숫자를 만들지 않고 이유를 적은 `not_available`이다. 표를 만들지 않고 읽으므로 홈을 열어도 VLM·OMX 표가 생기지 않는다. 홈(`/learning`)은 현재 작업 아래에 도메인마다 한 줄(이름, 여섯 칸, 막힌 이유, 다음 할 일 하나)을 보이고 `?domain=`을 따른다. 평가·승격 화면은 같은 `domains`의 평가·승격 기록 칸을 도메인별로 보인다. 390px에서는 줄이 세로로 쌓이고 가로 스크롤이 없다.
+
 ### 공통 학습 작업 화면 (D-458)
 
 같은 서버의 `/learning`에서 현재 자료의 검수 → 승인 자료 준비 → 데이터셋 생성 → 학습 → 평가 → 적용 검토를 이어간다.

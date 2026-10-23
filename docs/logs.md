@@ -10085,3 +10085,9 @@ osy-d395-s1d\`.
 - 변경: Learning 주 메뉴를 홈·자료·정답·학습·평가·승격 다섯 단계로 바꾸고 「작업 도구」 펼침을 없앴다. 화면이 여럿인 단계(자료·정답·학습)는 경로 줄 하위 메뉴로 기존 화면을 두 번 안에 연다. 계정·저장 공간은 상단 「설정」으로 옮겼다. 새 `/learning/evaluate`(`evaluate.html/js`)는 학습 실행기 평가 단계와 VLM 모델 대 확정 정답을 읽기 전용으로 모으고, `?domain=` 필터를 따르며, 승격 요청은 비활성(다음 조각)이다. 기존 URL은 그대로다.
 - 증거: `test_learning_shell_browser.py`(다섯 단계·두 번 안 도달·설정), `test_app_shell_seats.py`, `test_learning_workspace_browser.py`, `test_vlm_judge.py`(원격 시험 PC).
 - gate 변화: 없음. 승격 승인·배포는 Fleet·사람(D-793)이며 이 화면은 근거만 보인다. CE 해당 없음: 화면 구조 변경이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · Learning 홈의 도메인별 단계(D-857 §3)
+
+- 변경: `learning_domains.py`가 차로·객체·OMX·SIM·VLM·판단 모델 여섯 도메인을 루프 여섯 칸(수집~승격 기록)과 다음 할 일 하나로 묶어 `/api/learning`의 `domains`로 준다(기존 키 유지). 작업대가 이미 가진 자료(`project()`, 객체 수·준비본, `learning_links`·`omx_segment_reviews`, SIM 목록, VLM 표)만 읽고, 모르는 칸은 이유를 적은 `not_available`이다. 홈은 도메인마다 한 줄을 보이고 `?domain=`을 따르며, 평가·승격 화면은 각 도메인의 평가·승격 기록 칸을 보인다.
+- 증거: `test_learning_domains.py`, `test_sim_web.py`, `test_learning_workspace_browser.py`(390·1280 가로 스크롤 없음, 원격 시험 PC).
+- gate 변화: 없음. 읽기 전용 표시이며 승인·승격·실행을 바꾸지 않는다. CE 해당 없음: 새 표시 기능이며 해결한 장애가 없다.

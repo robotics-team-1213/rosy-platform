@@ -349,8 +349,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · Learning 홈의 도메인별 단계(D-857 §3)
 - 2026-10-24 · uncommitted · Learning 다섯 단계 메뉴(D-857 §3)
 - 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
 - 2026-10-23 · uncommitted · 독립·상하위 관제 상세 설계와 최종 목표 등록
 - 2026-10-23 · 118425b1b5 · VLM 질문 세트 v2와 T1 정답 화면
-- 2026-10-23 · 2df7fdcc35 · 해시 표의 시크릿 스캔 교훈 보강

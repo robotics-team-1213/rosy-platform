@@ -14,6 +14,7 @@ import json
 import mimetypes
 import re
 import secrets
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -25,7 +26,7 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
 import review_versions
-import learning_pipeline
+import learning_domains, learning_pipeline
 from review_ai_jobs import Jobs
 from review_decisions import make_decisions_server, serve_review
 from learning_control import Control, ControlConflict
@@ -91,6 +92,19 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
     ai_jobs = ai_jobs if ai_jobs is not None else Jobs(store)
+    sim_seen = {}
+
+    def sim_status():
+        # shortcut: the home row reads the SIM list at most once a minute; the SIM page itself reads live.
+        if sim_runs is None:
+            return None
+        if time.monotonic() - sim_seen.get('at', -60.0) >= 60:
+            try:
+                value = {'runs': sim_runs.call({'action': 'list'})}
+            except ValueError:
+                value = {'error': 'unavailable'}
+            sim_seen.update(at=time.monotonic(), value=value)
+        return sim_seen['value']
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None, cache='no-store'):
@@ -242,8 +256,14 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                     for state in ('approved', 'pending', 'excluded')}
                     pipeline = learning_pipeline.project(current, counts=counts, pixel_counts=pixel_counts,
                                                          preparation=preparation, control=control_status)
-                    return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
-                                      'pipeline': pipeline,
+                    items = learning.list()
+                    with store.connect() as db:
+                        omx_reviewed, vlm_counts = learning_domains.stored(db)
+                    domains = learning_domains.domains(
+                        pipeline=pipeline, counts=counts, preparation=preparation, items=items,
+                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts)
+                    return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
+                                      'pipeline': pipeline, 'domains': domains,
                                       'preparation': preparation,
                                       'control': control_status,
                                       'counts': counts,
