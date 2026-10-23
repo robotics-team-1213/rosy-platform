@@ -1,5 +1,12 @@
 # deploy logs
 
+## 2026-10-23 · 8ca63bb880 · teacher 중단 시각 근거 보존
+
+- 변경: teacher 최종 결과에 기존 immutable watchdog 관측과 intake/steady 시각을 보존한다. 진단 오류는 원래 결과·정리 경로를 유지하고 오류 종류만 남긴다.
+- 증거: 수정 전 5 RED, 수정 후 원격 65 passed/NEW0, 독립 안전 검토. [검증](../docs/validation/omx-teacher-watchdog-2026-10-23/result.md). [완료 입력 20개 감사](../docs/validation/omx-closed-teacher-input-audit-2026-10-23/result.md)는 고정 25개 수집 묶음의 완료·학습 승인이 아니다.
+- gate 변화: 없음. 시간 경계·명령 권한·실물 수용을 변경하지 않는다.
+- CE: 미해결. 단일 팔 수집 중단 원인을 진단할 근거만 보완했다.
+
 추가만 한다. 형식: [module harness 설계](../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 [Device 검증 계획](../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)과 `git log -- deploy`를 본다.
 

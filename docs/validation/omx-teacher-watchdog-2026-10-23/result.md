@@ -1,0 +1,9 @@
+# Teacher watchdog receipt — 2026-10-23
+
+Production commit: `8ca63bb880`. The native SIM teacher previously omitted the owner's immutable decision-time watchdog observation from its final result. It now copies that observation, including nested intake facts and steady-clock brackets, without acquiring new control authority, sampling providers, polling again or changing freshness bounds. Missing observations remain null; invalid/nonfinite observations or diagnostic exceptions produce only an exception class. The original success/error and shutdown sequence remain intact.
+
+Test-only commit `54db017621` produced five expected remote failures because the receipt lacked the new field. The same tests execute the actual teacher finalization slice with an exact frozen observation, null, malformed values, a failing accessor and nonfinite data. On the production commit the new suite plus demonstration, watchdog and intake regressions passed remotely: **65 passed, 0 NEW**. The omission RED demonstrates that this check detects the prior behavior. Independent safety review found no Important issues. Test logs are external under `C:/DevTemp/learning-execution-20261023/teacher-watchdog-{red,green}/`.
+
+The preserved collection has 20 complete episodes followed by one incomplete episode at `joint_state_stale`; the planned 25-episode cohort remains HOLD. Recorder and owner sequence counters come from independent subscriptions and cannot be compared to infer delivery ordering. This change adds evidence for a subsequent separately named engineering SIM attempt; it does not resolve the stale-state cause, replace failed data, admit a training split or demonstrate policy quality. Physical acceptance and genuine human review remain separate.
+
+CE: 미해결 — stale-state 원인은 아직 분리되지 않았다. 기존 startup/admission 교훈을 확인했으며, 진단 보완을 해결된 장애 교훈으로 기록하지 않는다.
