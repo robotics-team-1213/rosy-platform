@@ -21,15 +21,15 @@ def test_workspace_next_action_and_training_navigation(browser_workspace, width)
     origin = f'{address.scheme}://{address.netloc}'
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(origin + '/learning', wait_until='networkidle')
-    expect(page.get_by_role('heading', name='작업', exact=True)).to_be_visible()
+    expect(page.get_by_role('heading', name='홈', exact=True)).to_be_visible()
     action = page.locator('#pipeline-link')
     expect(action).to_have_text('픽셀 검수 시작')
     expect(action).to_be_visible()
     box = action.bounding_box()
     assert box['y'] + box['height'] <= 844
     expect(page.locator('#workspace-review')).to_be_visible()
-    page.get_by_role('navigation', name='Learning 주 메뉴').get_by_role('link', name='학습·결과', exact=True).click()
-    expect(page.get_by_role('heading', name='학습·결과', exact=True)).to_be_visible()
+    page.get_by_role('navigation', name='Learning 주 메뉴').get_by_role('link', name='학습', exact=True).click()
+    expect(page.locator('#workspace-title')).to_have_text('학습')
     expect(page.locator('#workspace-review')).to_be_hidden()
     expect(page.locator('#workspace-results')).to_be_visible()
     expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_disabled()
@@ -147,7 +147,7 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
     (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning?view=training', wait_until='networkidle')
-    expect(page.get_by_role('heading', name='학습·결과', exact=True)).to_be_visible()
+    expect(page.locator('#workspace-title')).to_have_text('학습')
     page.locator('#new-task').click()
     page.locator('#name').fill('검수할 결과')
     page.locator('#path').fill(str(report))
@@ -174,3 +174,37 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
     page.locator('#reset-filters').click()
     expect(page.locator('#updated')).to_contain_text('2개 작업')
 
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_home_shows_every_domain_row_without_sideways_scroll(browser_workspace, width):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    base = page.url.split('?')[0].rstrip('/')
+    page.goto(base + '/learning', wait_until='networkidle')
+    rows = page.locator('#domain-rows .domain-row')
+    expect(rows).to_have_count(6)
+    assert [row.get_attribute('data-domain') for row in rows.all()] == ['lane', 'object', 'omx', 'sim', 'vlm', 'decision']
+    for row in rows.all():
+        expect(row.locator('.domain-stage')).to_have_count(6)
+    expect(page.locator('[data-domain="decision"] .domain-blocked')).to_have_text('Learning에 연결 전')
+    expect(page.locator('[data-domain="object"] [data-stage="collect"]')).to_have_attribute('data-state', 'done')
+    next_action = page.locator('[data-domain="lane"] .domain-next')
+    expect(next_action).to_have_text('픽셀 검수 시작')
+    assert next_action.bounding_box()['height'] >= 44
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    for stage in page.locator('.domain-stage').all():
+        box = stage.bounding_box()
+        assert box['x'] >= 0 and box['x'] + box['width'] <= width
+    if width == 390:  # the name, stages and next action stack in one column
+        lane = page.locator('[data-domain="lane"]')
+        assert lane.locator('h3').bounding_box()['y'] < lane.locator('.domain-stages').bounding_box()['y'] < next_action.bounding_box()['y']
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        Path(output).mkdir(parents=True, exist_ok=True)
+        page.locator('#domain-home').screenshot(path=str(Path(output) / f'learning-home-domains-{width}.png'))
+    page.goto(base + '/learning?domain=vlm', wait_until='networkidle')
+    expect(rows).to_have_count(1)
+    expect(rows.first).to_have_attribute('data-domain', 'vlm')
+    expect(page.locator('#domain-filter')).to_contain_text('VLM 판단만')
+    page.goto(base + '/learning?view=training', wait_until='networkidle')
+    expect(page.locator('#domain-home')).to_be_hidden()

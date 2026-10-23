@@ -2,14 +2,22 @@
 
 Labels are people's answers per photo. Model answers are stored beside them for evaluation and never fill,
 approve or change a label; nothing here is exported into perception training (D-475, D-514, D-542).
+D-857 §4-5: a model consensus is a *provisional* answer, derived on read and never stored; a person's answer is
+*confirmed*. People see only a small queue: a fixed evaluation set and disputed photos (both blind), plus a weekly
+audit of provisional answers (shown, 맞음/고침). Consensus never approves or promotes anything (D-514 §5, D-853 §3).
 Design: docs/plans/2026-10-23-vlm-fast-judge-design.md. Screen and routes: docs/review-app.md.
 
 CLI: python vlm_judge.py import --state <review-state> --rows <bench rows.jsonl>
      --questions <questions.json> --model <model name>
+     python vlm_judge.py export-disputes --state <review-state> --out <debate.jsonl>
+Debate (D-857 §4): export-disputes lists disputed (photo, question) pairs with every model's current answer;
+``tools/vlm_question_bench.py --debate-input`` re-asks one model offline on the model PC (D-459: this app never
+calls a model) and its rows' ``debate`` block imports as runtime ``debate`` of the same model name.
 questions.json is ``tools/vlm_question_bench.py --dump-questions`` output: {question_set, questions}.
 --model names the bench run (rows carry no model name); a row's long_side other than 0 is appended as @<px>.
 """
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -17,7 +25,12 @@ import re
 from pathlib import Path
 
 STATUSES = ('pending', 'labelled', 'excluded')
-RUNTIMES = (('answers', 'transformers'), ('ollama_questions', 'ollama'))
+# D-857 §5 start values, tuned in operation.
+CONSENSUS_MODELS, CONSENSUS_P = 2, 0.8  # distinct models that agree, each with p >= CONSENSUS_P
+EVAL_SET_SIZE, QUEUE_CAP, AUDIT_PER_WEEK = 30, 50, 10  # items per view (frozen); open disputed+audit per view; audits
+AUDIT_PAUSE_RATE, AUDIT_PAUSE_MIN = 0.10, 5  # pause a question's provisional answers above this audit error rate
+KINDS = ('eval', 'disputed', 'audit')
+RUNTIMES = (('answers', 'transformers'), ('ollama_questions', 'ollama'), ('debate', 'debate'))
 CONTRADICTION = ('wrist.object_in_gripper', 'wrist.gripper_empty')
 IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png'}
 ROWS_LIMIT, IMAGE_LIMIT, ITEM_LIMIT = 64 * 1024 * 1024, 32 * 1024 * 1024, 20000
@@ -46,7 +59,12 @@ def configure(store):
             actor TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
             CREATE TABLE IF NOT EXISTS vlm_label_events (
             id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP, item INTEGER, version INTEGER,
-            status TEXT, answers TEXT, actor TEXT);''')
+            status TEXT, answers TEXT, actor TEXT);
+            CREATE TABLE IF NOT EXISTS vlm_audits (
+            item INTEGER NOT NULL, question TEXT NOT NULL, week TEXT NOT NULL, provisional TEXT NOT NULL,
+            answer TEXT, actor TEXT, ts TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(item, question));
+            CREATE TABLE IF NOT EXISTS vlm_eval_set (
+            view TEXT NOT NULL, item INTEGER NOT NULL, added_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(view, item));''')
 
 
 def check_questions(questions):
@@ -71,17 +89,22 @@ def check_questions(questions):
 
 def _model_answers(row, view_questions, model):
     found = []
+    ids = {q['id'] for q in view_questions}
     for key, runtime in RUNTIMES:
         block = row.get(key)
-        if block is None and runtime == 'ollama':
+        if block is None:
             continue
         answers = block.get('answers') if runtime == 'ollama' and isinstance(block, dict) else block
-        if not isinstance(answers, dict) or set(answers) != {q['id'] for q in view_questions}:
+        # A debate re-asks only a photo's disputed questions; the other runtimes answer the whole set.
+        if (not isinstance(answers, dict) or not answers
+                or (not set(answers) <= ids if runtime == 'debate' else set(answers) != ids)):
             raise ValueError(f'{key} must answer exactly the question set of view {row["view"]!r}')
         for question in view_questions:
+            if question['id'] not in answers:
+                continue
             entry = answers[question['id']]
             answer = entry.get('answer') if isinstance(entry, dict) else None
-            if runtime == 'ollama' and answer == 'none_in_top':
+            if runtime in ('ollama', 'debate') and answer == 'none_in_top':
                 answer = None  # no option among Ollama's top tokens; counted as missing, never as an option
             elif answer not in question['options']:
                 raise ValueError(f'{question["id"]} answer {answer!r} is not one of its options')
@@ -90,6 +113,8 @@ def _model_answers(row, view_questions, model):
                     or any(type(x) not in (int, float) or not 0 <= x <= 1 for x in p)):
                 raise ValueError(f'{question["id"]} needs one probability per option')
             found.append((model, runtime, question['id'], answer, json.dumps(p)))
+    if not found:
+        raise ValueError(f'row of view {row["view"]!r} carries no model answers')
     return found
 
 
@@ -162,9 +187,14 @@ def import_rows(store, body):
             else:
                 item = row['id']
                 existing += 1
-            for value in found:
-                answers += db.execute('INSERT OR IGNORE INTO vlm_model_answers VALUES (?,?,?,?,?,?)',
-                                      (item, *value)).rowcount
+            for value in found:  # a later debate round replaces the earlier one; other runtimes are kept once
+                # A debate revises a model's own opinion; it must not add a model to the question (D-857 §4).
+                if value[1] == 'debate' and not db.execute(
+                        "SELECT 1 FROM vlm_model_answers WHERE item=? AND question=? AND runtime!='debate' "
+                        "AND (model=? OR model LIKE ?)", (item, value[2], _base(value[0]), _base(value[0]) + '@%')).fetchone():
+                    raise ValueError(f'{value[0]} has no earlier answer to debate for {value[2]}')
+                verb = 'INSERT OR REPLACE' if value[1] == 'debate' else 'INSERT OR IGNORE'
+                answers += db.execute(f'{verb} INTO vlm_model_answers VALUES (?,?,?,?,?,?)', (item, *value)).rowcount
     return {'items_added': added, 'items_existing': existing, 'answers_added': answers,
             'rows_sha256': sha(raw)}
 
@@ -183,6 +213,167 @@ def _label(row):
 
 SELECT = ('SELECT i.id, i.view, i.image_sha256, i.image_name, i.question_set, i.questions, '
           'l.status, l.version, l.actor, l.updated_at, l.answers FROM vlm_items i LEFT JOIN vlm_labels l ON l.item=i.id')
+
+
+def _base(model):
+    """Runtimes and long sides of one model are one opinion: the model name before '@'."""
+    return model.split('@', 1)[0]
+
+
+def _picks(db):
+    """{(item, question): {model: (model, runtime, answer, p)}}: one opinion per model (D-857 §4).
+
+    A model's runtimes and long sides are one opinion, its most confident answer; once it has debated the question
+    its debate answer replaces the others, so a debate never adds a model."""
+    options = {row['id']: {q['id']: q['options'] for q in json.loads(row['questions'])}
+               for row in db.execute('SELECT id, questions FROM vlm_items')}
+    picks = {}
+    for row in db.execute('SELECT item, model, runtime, question, answer, p FROM vlm_model_answers '
+                          'WHERE answer IS NOT NULL'):
+        p = json.loads(row['p'])[options[row['item']][row['question']].index(row['answer'])]
+        mine, base = picks.setdefault((row['item'], row['question']), {}), _base(row['model'])
+        old = mine.get(base)
+        if old is None or (row['runtime'] == 'debate', p) > (old[1] == 'debate', old[3]):
+            mine[base] = (row['model'], row['runtime'], row['answer'], p)
+    return picks
+
+
+def provisional(db, debated=None):
+    """{item: {question: answer}} where models agree (D-857 §4); derived on every read, never stored as truth.
+
+    ``debated`` (a set) collects the (item, question) pairs whose consensus includes a debate answer."""
+    result = {}
+    for (identifier, qid), mine in _picks(db).items():
+        picks = list(mine.values())
+        # Any model answering otherwise is a disagreement, however unsure it is.
+        if len({pick[2] for pick in picks}) == 1 and sum(pick[3] >= CONSENSUS_P for pick in picks) >= CONSENSUS_MODELS:
+            result.setdefault(identifier, {})[qid] = picks[0][2]
+            if debated is not None and any(pick[1] == 'debate' for pick in picks):
+                debated.add((identifier, qid))
+    return result
+
+
+def disputes(store):
+    """Disputed (photo, question) pairs for an offline debate round: pending, outside the evaluation set (people
+    answer those), question not paused, no consensus. Each carries every model's current opinion."""
+    queue(store)  # freeze the evaluation set first
+    with store.connect() as db:
+        rows, usable, _, paused = _state(db)
+        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
+        picks = _picks(db)
+    lines = []
+    for row in rows:
+        if row['status'] is not None or row['id'] in frozen:
+            continue
+        for question in json.loads(row['questions']):
+            if question['id'] in paused or question['id'] in usable.get(row['id'], {}):
+                continue
+            lines.append({'item': row['id'], 'view': row['view'], 'question_set': row['question_set'],
+                          'image': str(store.state / 'vlm' / 'images' / (row['image_sha256'] + _ext(row['image_name']))),
+                          'question': question['id'], 'text': question['text'], 'options': question['options'],
+                          'answers': [{'model': model, 'runtime': pick[1], 'answer': pick[2], 'p': round(pick[3], 4)}
+                                      for model, pick in sorted(picks.get((row['id'], question['id']), {}).items())]})
+    return lines
+
+
+def audits(db):
+    """{question: {n, errors, rate, paused}} over every audit so far (D-857 §5)."""
+    stats = {}
+    for row in db.execute('SELECT question, provisional, answer FROM vlm_audits'):
+        entry = stats.setdefault(row['question'], {'n': 0, 'errors': 0})
+        entry['n'] += 1
+        entry['errors'] += row['answer'] != row['provisional']
+    for entry in stats.values():
+        entry['rate'] = round(entry['errors'] / entry['n'], 4)
+        entry['paused'] = entry['n'] >= AUDIT_PAUSE_MIN and entry['errors'] / entry['n'] > AUDIT_PAUSE_RATE
+    return stats
+
+
+def week():
+    year, number, _ = datetime.date.today().isocalendar()
+    return f'{year}-W{number:02d}'
+
+
+def _rank(*parts):
+    return hashlib.sha256(':'.join(map(str, parts)).encode()).hexdigest()
+
+
+def _state(db):
+    """Rows, provisional answers that may be used (paused questions removed), audit stats and paused questions."""
+    rows = db.execute(SELECT + ' ORDER BY i.id').fetchall()
+    stats = audits(db)
+    paused = {qid for qid, entry in stats.items() if entry['paused']}
+    usable = {identifier: {qid: answer for qid, answer in answers.items() if qid not in paused}
+              for identifier, answers in provisional(db).items()}
+    return rows, usable, stats, paused
+
+
+def _evaluation_set(db, name, group, questions, usable):
+    """The view's frozen evaluation photos (D-857 §5): chosen once, topped up only when exclusions leave it short.
+
+    New photos are seeded by sha256 and taken round-robin over consensus patterns (the provisional answer per
+    question, '' where models disagree), so later model imports do not move photos already chosen."""
+    excluded = {row['id'] for row in group if row['status'] == 'excluded'}
+    chosen = [row[0] for row in db.execute('SELECT item FROM vlm_eval_set WHERE view=? ORDER BY rowid', (name,))]
+    members = [item for item in chosen if item not in excluded]
+    if len(members) < EVAL_SET_SIZE:
+        pools = {}
+        for row in sorted(group, key=lambda r: _rank('eval', name, r['image_sha256'])):
+            if row['id'] not in excluded and row['id'] not in chosen:
+                pattern = tuple(usable.get(row['id'], {}).get(qid, '') for qid in questions[row['id']])
+                pools.setdefault(pattern, []).append(row['id'])
+        order, added = [pools[key] for key in sorted(pools)], []
+        while len(members) + len(added) < EVAL_SET_SIZE and any(order):
+            for pool in order:
+                if pool and len(members) + len(added) < EVAL_SET_SIZE:
+                    added.append(pool.pop(0))
+        db.executemany('INSERT OR IGNORE INTO vlm_eval_set (view, item) VALUES (?,?)', [(name, item) for item in added])
+        members += added
+    return set(members)
+
+
+def queue(store, view=None):
+    """What people see (D-857 §5): open photos of the fixed evaluation set, disputed photos and this week's audit."""
+    # shortcut: recomputed from all model answers on each read; cache by answer/label counts if it gets slow.
+    configure(store)
+    current = week()
+    views, result, counts = {}, [], {}
+    with store.lock, store.connect() as db:  # the lock keeps two first reads from both topping up the set
+        rows, usable, _, paused = _state(db)
+        done = {row[0]: row[1] for row in db.execute(
+            'SELECT i.view, COUNT(DISTINCT a.item) FROM vlm_audits a JOIN vlm_items i ON i.id=a.item '
+            'WHERE a.week=? GROUP BY i.view', (current,))}
+        for row in rows:
+            if not view or row['view'] == view:
+                views.setdefault(row['view'], []).append(row)
+        sets = {name: _evaluation_set(db, name, group, {row['id']: [q['id'] for q in json.loads(row['questions'])]
+                                                         for row in group}, usable)
+                for name, group in sorted(views.items())}
+    for name, group in sorted(views.items()):
+        questions = {row['id']: [q['id'] for q in json.loads(row['questions'])] for row in group}
+        kinds = dict.fromkeys(sets[name], 'eval')
+        pending = [row for row in group if row['status'] is None]
+        disputes = [row for row in pending if row['id'] not in kinds and any(
+            qid not in paused and qid not in usable.get(row['id'], {}) for qid in questions[row['id']])]
+        for row in sorted(disputes, key=lambda r: r['id'])[:QUEUE_CAP]:  # oldest first; the rest wait (D-857 §5)
+            kinds[row['id']] = 'disputed'
+        waiting = max(0, len(disputes) - QUEUE_CAP)
+        opened = [row for row in pending if row['id'] in kinds]
+        # The cap counts the recurring queues only; the one-time evaluation set has its own progress.
+        disputed = sum(kinds[row['id']] == 'disputed' for row in opened)
+        room = max(0, min(AUDIT_PER_WEEK - done.get(name, 0), QUEUE_CAP - disputed))
+        candidates = [row for row in pending if row['id'] not in kinds
+                      and set(questions[row['id']]) <= set(usable.get(row['id'], {}))]
+        for row in sorted(candidates, key=lambda r: _rank('audit', current, r['image_sha256']))[:room]:
+            kinds[row['id']] = 'audit'
+            opened.append(row)
+        counts[name] = {kind: sum(kinds[row['id']] == kind for row in opened) for kind in KINDS}
+        counts[name].update(eval_size=len(sets[name]), eval_done=len(sets[name]) - counts[name]['eval'],
+                            disputed_waiting=waiting)
+        result += [{'id': row['id'], 'view': name, 'image_name': row['image_name'], 'question_set': row['question_set'],
+                    'kind': kinds[row['id']]} for row in opened]
+    result.sort(key=lambda row: (KINDS.index(row['kind']), row['id']))
+    return {'items': result, 'counts': counts, 'paused': sorted(paused), 'week': current, 'cap': QUEUE_CAP}
 
 
 def items(store, view=None, status=None):
@@ -211,8 +402,13 @@ def item(store, identifier):
     label = _label(row)
     if label['answers'] is None:
         label['answers'] = {q['id']: None for q in questions}
-    return {'id': row['id'], 'view': row['view'], 'image_sha256': row['image_sha256'],
-            'image_name': row['image_name'], 'question_set': row['question_set'], 'questions': questions, **label}
+    kind = next((entry['kind'] for entry in queue(store, row['view'])['items'] if entry['id'] == identifier), None)
+    result = {'id': row['id'], 'view': row['view'], 'image_sha256': row['image_sha256'], 'kind': kind,
+              'image_name': row['image_name'], 'question_set': row['question_set'], 'questions': questions, **label}
+    if kind == 'audit':  # only an audit shows the consensus; the evaluation set and disputed photos stay blind
+        with store.connect() as db:
+            result['provisional'] = provisional(db)[identifier]
+    return result
 
 
 def save(store, identifier, body, conflict, *, actor=None):
@@ -236,6 +432,10 @@ def save(store, identifier, body, conflict, *, actor=None):
             if (row['version'] if row else 0) != body['version']:
                 raise conflict('다른 사람이 먼저 저장했습니다. 다시 불러오세요.')
             version, answers = body['version'] + 1, json.dumps(body['answers'], ensure_ascii=False)
+            if current['kind'] == 'audit' and body['status'] == 'labelled':  # 맞음 or 고침 of a shown consensus
+                for qid, value in current['provisional'].items():
+                    db.execute('INSERT OR REPLACE INTO vlm_audits (item, question, week, provisional, answer, actor) '
+                               'VALUES (?,?,?,?,?,?)', (identifier, qid, week(), value, body['answers'][qid], actor))
             db.execute('INSERT OR REPLACE INTO vlm_labels (item, answers, status, version, actor, updated_at) '
                        'VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)', (identifier, answers, body['status'], version, actor))
             db.execute('INSERT INTO vlm_label_events (item, version, status, answers, actor) VALUES (?,?,?,?,?)',
@@ -270,12 +470,25 @@ def summary(store):
 
 
 def evaluation(store):
-    """Agreement with people on labelled photos only. Agreement is a measurement, never an approval."""
+    """Agreement with confirmed (human) answers only, plus provisional coverage and audits; never an approval."""
     configure(store)
     with store.connect() as db:
         rows = db.execute(SELECT + " WHERE l.status='labelled'").fetchall()
         answers = db.execute("SELECT a.* FROM vlm_model_answers a JOIN vlm_labels l ON l.item=a.item "
                              "WHERE l.status='labelled' ORDER BY a.model, a.runtime, a.question").fetchall()
+        everything, usable, stats, paused = _state(db)
+        debated = set()
+        provisional(db, debated)
+    coverage = {}
+    for row in everything:
+        if row['status'] is None:
+            for question in json.loads(row['questions']):
+                entry = coverage.setdefault((row['question_set'], question['id']),
+                                            {'pending': 0, 'provisional': 0, 'debate': 0})
+                entry['pending'] += 1
+                used = question['id'] in usable.get(row['id'], {})
+                entry['provisional'] += used
+                entry['debate'] += used and (row['id'], question['id']) in debated
     truth = {row['id']: json.loads(row['answers']) for row in rows}
     meta = {row['id']: (row['question_set'], {q['id']: q for q in json.loads(row['questions'])}) for row in rows}
     human = {}
@@ -310,19 +523,35 @@ def evaluation(store):
             'confusion': {h: {m: sum(p == (h, m) for p in pairs) for m in options} for h in options}})
     return {'labelled': len(rows), 'models': list(models.values()),
             'human': [{'question_set': key[0], 'question': key[1], 'n': value['n'],
-                       'unclear_rate': round(value['unclear'] / value['n'], 4)} for key, value in sorted(human.items())]}
+                       'unclear_rate': round(value['unclear'] / value['n'], 4)} for key, value in sorted(human.items())],
+            'provisional': [{'question_set': key[0], 'question': key[1], **value,
+                             'coverage': round(value['provisional'] / value['pending'], 4)}
+                            for key, value in sorted(coverage.items())],
+            'audits': [{'question': qid, **entry} for qid, entry in sorted(stats.items())], 'paused': sorted(paused)}
 
 
 def export(store):
-    """Decided labels as JSONL with its sha256; pending photos are not truth and are left out."""
+    """JSONL with its sha256: decided photos (answers tier `confirmed`) and undecided photos with a usable model
+    consensus (status and tier `provisional`). Every answer names its tier; only `confirmed` is truth (D-857 §4)."""
     configure(store)
     with store.connect() as db:
-        rows = db.execute(SELECT + " WHERE l.status IN ('labelled','excluded') ORDER BY i.id").fetchall()
-    text = ''.join(json.dumps({'image_sha256': row['image_sha256'], 'view': row['view'],
-                               'question_set': row['question_set'], 'answers': json.loads(row['answers']),
-                               'status': row['status'], 'actor': row['actor'], 'version': row['version']},
-                              ensure_ascii=False, sort_keys=True) + '\n' for row in rows)
-    return {'count': len(rows), 'sha256': sha(text.encode('utf-8')), 'jsonl': text}
+        rows, usable, _, _ = _state(db)
+    lines = []
+    for row in rows:
+        if row['status'] in ('labelled', 'excluded'):
+            answers, tier, status = json.loads(row['answers']), 'confirmed', row['status']
+        elif usable.get(row['id']):
+            answers = {q['id']: usable[row['id']].get(q['id']) for q in json.loads(row['questions'])}
+            tier, status = 'provisional', 'provisional'
+        else:
+            continue
+        lines.append(json.dumps({'image_sha256': row['image_sha256'], 'view': row['view'],
+                                 'question_set': row['question_set'], 'answers': answers, 'status': status,
+                                 'tiers': {qid: None if value is None else tier for qid, value in answers.items()},
+                                 'actor': row['actor'], 'version': row['version'] or 0},
+                                ensure_ascii=False, sort_keys=True) + '\n')
+    text = ''.join(lines)
+    return {'count': len(lines), 'sha256': sha(text.encode('utf-8')), 'jsonl': text}
 
 
 def main(argv=None):
@@ -333,10 +562,21 @@ def main(argv=None):
     command.add_argument('--rows', type=Path, required=True)
     command.add_argument('--questions', type=Path, required=True, help='vlm_question_bench.py --dump-questions output')
     command.add_argument('--model', required=True, help='model name the rows were produced with')
+    command = sub.add_parser('export-disputes', help='write disputed (photo, question) pairs for a debate round')
+    command.add_argument('--state', type=Path, required=True)
+    command.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     from review_store import ReviewStore
     if not (args.state / 'reviews.sqlite3').is_file():
         parser.error('--state must be an existing review state (start review_app.py once first)')
+    if args.command == 'export-disputes':
+        lines = disputes(ReviewStore(args.state))
+        args.out.write_text(''.join(json.dumps(line, ensure_ascii=False) + '\n' for line in lines), encoding='utf-8')
+        counts = {}
+        for line in lines:
+            counts[line['question']] = counts.get(line['question'], 0) + 1
+        print(json.dumps({'pairs': len(lines), 'questions': counts}, indent=2))
+        return 0
     dumped = json.loads(args.questions.read_text(encoding='utf-8'))
     result = import_rows(ReviewStore(args.state), {'rows_path': str(args.rows), 'model': args.model,
                                                    'question_set': dumped.get('question_set'),
