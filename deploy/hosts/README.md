@@ -30,6 +30,23 @@ swap 용량과 우선순위, 로컬 SSH 복구 제한(`/etc/default/rosy-ssh-wat
 `kernel.softlockup_panic=1`, 복구·점검 타이머 활성 상태를 다시 확인한다.
 이 확인은 실제 장애 복구 시험을 대신하지 않는다.
 
+## 업데이트 상태 확인과 새 PC 연결 (D-805)
+
+모든 PC의 업데이트 경로는 개발 PC에서 한 번에 확인한다. 읽기만 하며, 멈춘 경로가 있으면 exit 1이다.
+
+```bash
+git fetch origin && python tools/remote/update_status.py
+```
+
+`STUCK`은 업데이트 유닛이 실패했거나 6시간 안에 정상 판정(`switched`·`up_to_date`·`idle`·`active`)이 없다는 뜻이다. 2026-10-23에는 관제 PC OMX 도구가 4일(교체된 OpenRB 시리얼), AI PC 상황 서비스가 3일(끊긴 fetch가 남긴 `mirror.git/shallow.lock`) 멈춰 있었다. `OFF`는 타이머가 꺼진 경로이고, 누가 왜 껐는지 확인하기 전에 켜지 않는다.
+
+새 PC를 붙이거나 장치를 바꿀 때:
+
+1. `private/lab-hosts.json`에 SSH 주소를 넣고, 위 「PC 설치와 갱신」의 host-state를 역할에 맞게 설치한다(`/usr/local/bin/rosy-update-gate` 포함).
+2. 업데이트 경로를 D-805에서 고른다. OMX 셀은 `deploy/robot/omx/omx_autoupdate.py`, 네이티브 서비스는 같은 업데이터의 `"kind": "service"`, 모델 PC 코드는 서명 후보(D-446)를 따른다. 타이머 유닛은 관문(`ExecCondition`)을 거쳐야 한다.
+3. OMX 셀 설정의 `devices`·`follower_device`는 실제 `/dev/serial/by-id/` 경로로 적는다. 상시 토크 OFF 관측기가 버스를 잡는 셀은 `observers`(`unit`·`device`·`health`)를 함께 적는다. 보드를 바꾸면 이 설정과 관측기 env를 같은 날 고친다.
+4. 설치한 날 업데이트를 한 번 직접 실행(`systemctl --user start <unit>`)하고 `update_status.py`에서 `ok`를 확인한다.
+
 ## PC별 모니터링 연결
 
 관제 PC에서 기존 `deploy/site/install-host-guard.sh`로 가드 계정을 준비한다.
