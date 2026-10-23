@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-23 · 74c4cc61ab · OMX 양팔 native 녹화 producer 통합
 - 2026-10-22 · 6b7dd87628 · D-841 동결 검증 기록의 Git 출처 바인딩
 - 2026-10-22 · a4ff8c3ee3 · docs: Fleet 검증 기록의 공개 Git 출처 등록
 - 2026-10-21 · uncommitted · 실제 RGB 물체 시연 수집 연결
 - 2026-10-21 · 27ce202bd1 · OMX 독립 물체 판정과 native SIM baseline
-- 2026-10-21 · 5d90c8d670 · D-831 인용·Unicode 검색 경계 보완

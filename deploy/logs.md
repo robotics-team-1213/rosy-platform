@@ -3119,3 +3119,10 @@
 - 변경: 공통 모듈 검증 기록 세 행의 Git commit ID를 기존 공개 출처 목록에 경로·행 SHA256·정확한 값으로 묶었다. 기록 본문·scanner 규칙·운영 이미지의 기본 검사 정책은 바꾸지 않았다.
 - 증거: 착지 시 전체 검사와 단독 재실행이 해당 메타데이터를 탐지했고 변경 전 main의 동일 검사는 통과했다. 일곱 값의 소유 저장소 commit 객체와 실제 행 해시를 독립 리뷰어가 대조했다. 제안 tuple을 메모리에 적용한 순수 전체 tracked scan은 0 findings였으며, 수정 커밋의 공식 원격 검증은 별도로 수행한다.
 - gate 변화: 기존 검증 기록을 보존하는 메타데이터 보완이다. 새 비밀값 종류의 예외·배포·장치·현장 수용을 추가하지 않는다.
+
+## 2026-10-23 · 74c4cc61ab · OMX 양팔 native 녹화 producer 통합
+
+- 변경: 네 장치·부모 카메라 설정, 양팔 passive 보정·seed·1도/초 제한, 실제 보낸 12 action 기록과 전 장치 OFF·baseline cap 복구를 연결했다. 수동 body-only·가속 추종·gain 변경은 포함하지 않는다.
+- 증거: 독립 안전 검토 후 원격 221 passed/skip 0/NEW 0. 실제 LeRobot 0.4.4의 record·teleoperate 설정 호출 PASS, 원본 설정 보존. 핵심 경계 7개 mutation RED 확인 후 원복 221 passed. [동결 검증 기록](../docs/validation/omx-paired-recording-2026-10-23/result.md).
+- gate 변화: 없음. 합성 bus·typed dispatch 증거이며 실제 SDK 녹화 loop·실물 정지/보정·카메라 시간·학습 정책 성공 수용을 대신하지 않는다. HF 인증은 사용자 지시에 따라 연기했다.
+- CE: 해당 없음. 통합 판단은 코드·회귀·검증 기록으로 복구 가능하며, 별도 단일 팔 수집의 상태 지연은 미해결 작업 기록에 보존한다.

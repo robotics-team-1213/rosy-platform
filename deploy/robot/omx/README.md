@@ -447,6 +447,10 @@ host HTTP tests are not Gazebo or physical acceptance.
 
 녹화 설정 검사, native 검토·분할, ACT, private Hub 동기화는 [실행 안내](../../../learning/curation/omx/README.md)를 따른다. 실행 PC와 HF 조직은 미정이며 Pilot 실물 활성화는 별도다.
 
+`record_session.py`는 단일 팔과 `bi_omx_follower`/`bi_omx_leader` 양팔 설정을 받는다. 양팔은 서로 다른 네 개의 영구 serial 경로·장치 ID를 지정하고, 카메라는 follower 부모 설정에만 둔다. 각 자식 follower는 빈 `cameras`와 `use_degrees=false`를 사용한다. 기존 설정 검사 뒤 `Session.command()`가 원본을 보존한 native 설정을 만들고, 구체적인 자식 OMX 설정의 `type` 태그를 SDK 진입 전에 제거한다.
+
+native runner는 보정된 passive leader·follower를 확인하고 현재 자세에서 seed한 뒤 최대 1도/초로 모든 12관절을 전달한다. 데이터의 action은 실제 보낸 값이며, 한 팔의 상태 지연·추종 오차·지속 부하·열/전압 오류가 발생하면 양쪽 leader와 follower 모두 torque OFF를 시도한다. 부모 세션은 오류가 난 장치도 확인 가능한 정상 통신 응답에 한해 OFF와 검증된 baseline cap 복구를 시도하고, 미확인 상태를 안전 종료로 기록하지 않는다. 실제 SDK 설정 호출·합성 bus 회귀의 범위는 [검증 기록](../../../docs/validation/omx-paired-recording-2026-10-23/result.md)을 본다. 실물 보정·정지·카메라 시간 및 작업 성공 수용은 별도다.
+
 `record_session.py`로 녹화를 마친 뒤에는 현장 PC에서 `python record_seal.py --session-dir <녹화를 실행한 폴더> --name <새 이름>`을 실행한다. 이 명령은 안전 종료(`safe_end`)·녹화 모드·종료 코드 0인 세션만 받는다. 1팔(`omx_follower`)·2팔(`bi_omx_follower`) LeRobot v3 데이터셋을 `~/rosy-test/omx-collections/<이름>/`에 해시 목록과 함께 복사하고, 원본 녹화는 건드리지 않는다. 그다음 개발 PC에서 `python tools/remote/omx_collection_transfer.py --session <이름>`으로 모델 PC의 `~/rosy-test/omx-il-data/collections/`에 옮긴다. 이 단계는 장치를 움직이지 않고 Hub에 올리지 않는다.
 
 ## 재현 가능한 Pilot SIM 준비
