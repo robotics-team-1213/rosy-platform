@@ -14,6 +14,8 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 검증한다. 원본 영상·명령 수락/완료·물체 관측·gripper owner 시계와 신선도·고정 장면을
 파일 해시에 연결하고 성공을 재계산한다. 공통 Episode의 `sim_ground_truth`는 이 증거를
 모두 보존하며, 기본 operator 기록과 사람 검수·운영 승격 기준은 그대로 둔다.
+고정 10Hz 카메라의 기록은 10fps 또는 교사 시연용 5fps만 받는다. 원본 capture/state
+시각과 선택한 기록 주기의 간격을 그대로 검증하며, 주기 표기만 바꾼 원본은 거절한다.
 
 ```python
 from rosy.contracts.learning import seal, validate_episode

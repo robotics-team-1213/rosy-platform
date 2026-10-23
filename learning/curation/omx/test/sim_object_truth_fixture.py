@@ -19,7 +19,7 @@ def write(path, value):
     path.write_text(json.dumps(value), encoding='utf-8')
 
 
-def fixture(tmp_path):
+def fixture(tmp_path, *, recording_fps=10):
     run = tmp_path/'run'
     run.mkdir()
     assets = {
@@ -43,7 +43,7 @@ def fixture(tmp_path):
         'vendor_revision': '0a4af6a923b8b7d80b8c20506d1839c54d2e993e', 'world_sha256': world_hash,
         'source_tree_sha256': hashlib.sha256(json.dumps(inventory,sort_keys=True,separators=(',',':')).encode()).hexdigest(),
         'calibration_revision': 'omx-f-gazebo-only-v1', 'clock_domain': 'gazebo_sim',
-        'joint_names': joints, 'position_limits_rad': limits, 'gripper_joint': joints[-1], 'fps': 10,
+        'joint_names': joints, 'position_limits_rad': limits, 'gripper_joint': joints[-1], 'fps': recording_fps,
         'camera': {'name': 'front', 'identity': 'gazebo:omx_cell_workcell:front:'+world_hash,
                    'width': 320, 'height': 240,
                    'camera_info_sha256': 'd1b538c8a736b665e05433276033d8722519e8ff1533310f8d6ede6ae8ce00bc'}}
@@ -93,10 +93,11 @@ def fixture(tmp_path):
         command = commands[phase_index+1]
         positions = dict(command['target'])
         if phase_index in (1,2): positions['gripper_joint_1'] = .42
-        recorder.sample(capture_time_ns=stamp,state_time_ns=stamp-2_000_000,positions=positions,
-            target=command['target'],state_sequence=index+1,command_id=command['command_id'],
-            ros_goal_id=str(UUID(int=phase_index+1)),duration_s=.8,image_png=image.getvalue(),
-            received_at_ns=1_700_000_000_000_000_000+stamp)
+        if index % (10//recording_fps) == 0:
+            recorder.sample(capture_time_ns=stamp,state_time_ns=stamp-2_000_000,positions=positions,
+                target=command['target'],state_sequence=index+1,command_id=command['command_id'],
+                ros_goal_id=str(UUID(int=phase_index+1)),duration_s=.8,image_png=image.getvalue(),
+                received_at_ns=1_700_000_000_000_000_000+stamp)
         xyz = (0.,.17,.015) if index < 16 else (0.,.17,.115) if index < 24 else (.2075,.0725,.025)
         observations.append(dict(model_id='infeed_block',clock=stamp/1e9,
             model_pose_base=dict(zip(('x_m','y_m','z_m'),xyz)),gripper_position=positions['gripper_joint_1']))
