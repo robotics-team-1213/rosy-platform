@@ -36,6 +36,8 @@ sealed interface ServerMessage {
         val robotsSeen: List<String>,
         val rxFps: Double,
         val dropped: Long,
+        /** D-484 field-boundary calibration state; null for corner-marker sources and older receivers. */
+        val fieldState: String? = null,
     ) : ServerMessage
 
     /**
@@ -183,6 +185,7 @@ object Protocol {
             robotsSeen = obj.getJSONArray("robots_seen").let { a -> List(a.length()) { a.getString(it) } },
             rxFps = obj.getDouble("rx_fps"),
             dropped = obj.getLong("dropped"),
+            fieldState = if (obj.isNull("field_state")) null else obj.getString("field_state"),
         )
     } catch (e: JSONException) {
         ServerMessage.Invalid("status")
