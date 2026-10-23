@@ -10115,3 +10115,9 @@ osy-d395-s1d\`.
 - 변경: `vlm_judge.py export-disputes`가 평가셋 밖·멈추지 않은 의견 갈림 (사진, 질문)을 모든 모델의 지금 답과 함께 내보내고, `tools/vlm_question_bench.py --debate-input`이 한 모델에 다른 모델 답을 「model A/B」로 익명화한 메모를 붙여 다시 묻는다. 가져오기는 같은 모델 이름의 런타임 `debate`로 저장하고(그 모델이 전에 답한 질문만), 합의에서 그 모델의 다른 런타임을 대신해 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 따른다. 웹앱은 모델을 부르지 않는다(D-459).
 - 증거: `test_vlm_judge.py`(원격 시험 PC 25건 통과). 모델 PC 실제 상태(사진 135장, `reviews.sqlite3`는 먼저 백업)에서 Qwen3-VL-8B-Instruct-nf4·Qwen3-VL-4B-Instruct·Qwen3.5-4B 한 판: 의견 갈림 62쌍 중 7쌍이 합의(front.shape 2/2, front.wall_ahead 1/1, wrist.gripper_empty 4/5, front.lane_tape 0/27, front.lane_obstruction 0/17, top.robots_close 0/10). 대기열 의견 갈림 사진은 front 30→29, top 10→10, wrist 5→1, 점검 0→5(front 1, wrist 4). 모델별 토론 시간은 8B 74초, 4B 48초, Qwen3.5-4B 32초(로드 포함).
 - gate 변화: 없음. 토론 합의는 임시 정답이며 승인·승격이 아니다(D-514 §5, D-853 §3). CE 해당 없음: 새 기능이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 질문 세트 v3와 새 평가 state(D-857 §4)
+
+- 변경: v2 토론이 0건 정한 `front.lane_tape`(0/27)·`front.lane_obstruction`(0/17)·`top.robots_close`(0/10)를 `front.tape_left`·`front.tape_right`, `front.object_between_tapes`, `top.robot_count`(zero·one·two·many)로 바꿨다(`tools/vlm_question_bench.py`, QUESTION_SET v3). 천장 프레임에는 로봇별 화면 위치가 없어 로봇별 잘라 묻기는 미뤘다. 모델 PC 서비스는 사람 정답 0건을 확인한 뒤 새 `state-v3`로 옮겼고, 옛 `state`는 v2 백업으로 그대로 둔다.
+- 증거: `test_vlm_judge.py` 26건 통과(원격 시험 PC). 모델 PC에서 v3 앞(60장)·위(40장, 448) 벤치를 Qwen3-VL-8B-nf4(+Ollama)·Qwen3-VL-4B·Qwen3.5-4B로 돌리고 v2 손목 행과 함께 가져온 뒤 토론 한 판: 의견 갈림 82쌍 중 18쌍 합의(front.tape_left 0쌍 갈림, front.tape_right 0/1, front.object_between_tapes 1/26, front.wall_ahead 12/25, front.shape 1/15, top.robot_count 0/10, wrist.gripper_empty 4/5). front.wall_ahead·front.shape의 갈림이 늘어난 것은 Qwen3.5-4B가 v3에서 처음 앞 사진에 답한 탓이다. 대기열 의견 갈림 사진 front 27, top 10, wrist 5→1, 점검 front 3·wrist 4.
+- gate 변화: 없음. 토론 합의는 임시 정답이다. CE 해당 없음: 질문 문장 개정이며 해결한 장애가 없다.
