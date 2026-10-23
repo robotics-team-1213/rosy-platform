@@ -76,6 +76,8 @@ def test_export_admission_accepts_a_two_arm_preparation_only_with_both_arms(capt
     root = tmp_path / 'prepared'
     (root / 'meta').mkdir(parents=True)
     (root / 'meta/info.json').write_text(json.dumps(readers['train'].meta.info))
+    (root / 'data').mkdir()
+    (root / 'data/part.parquet').write_bytes(b'native fixture bytes')
     report = copy.deepcopy(receipt['source'])
     report['files'] = export.pipeline.native.dataset_files(root)
     report['capture_provenance']['files'] = report['files']
