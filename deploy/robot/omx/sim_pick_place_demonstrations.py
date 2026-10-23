@@ -10,6 +10,9 @@ import time
 import xml.etree.ElementTree as ET
 
 
+TEACHER_STEP_RAD = .03
+
+
 def camera_world(source, camera, output):
     tree, pilot = ET.parse(source), ET.parse(camera)
     world = tree.getroot().find('world')
@@ -36,7 +39,7 @@ def short_targets(points):
         raise ValueError('finite equal-dimensional waypoints required')
     targets = []
     for left, right in zip(points, points[1:]):
-        count = max(1, math.ceil(max(abs(b-a) for a, b in zip(left, right)) / .035))
+        count = max(1, math.ceil(max(abs(b-a) for a, b in zip(left, right)) / TEACHER_STEP_RAD))
         targets.extend(tuple(a+(b-a)*step/count for a,b in zip(left,right))
                        for step in range(1, count))
         targets.append(tuple(right))
@@ -48,9 +51,9 @@ def readback_target(current, desired):
             or not math.isfinite(value) for values in (current,desired) for value in values.values())):
         raise ValueError('finite matching readback and target joint maps required')
     distance = max(abs(desired[n]-current[n]) for n in current)
-    if distance <= .04:
+    if distance <= TEACHER_STEP_RAD + 1e-12:
         return dict(desired)
-    fraction = .035/distance
+    fraction = TEACHER_STEP_RAD/distance
     return {name: current[name]+fraction*(desired[name]-current[name]) for name in current}
 
 

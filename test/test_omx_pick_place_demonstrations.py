@@ -158,17 +158,26 @@ def test_measured_tracking_error_gets_a_bounded_intermediate_without_losing_the_
     desired={'joint3':.18370857317041256,'gripper_joint_1':.38042608841813563}
     intermediate=readback_target(current,desired)
     assert intermediate != desired
-    assert max(abs(intermediate[n]-current[n]) for n in current) == pytest.approx(.035)
+    assert max(abs(intermediate[n]-current[n]) for n in current) == pytest.approx(.03)
     assert all(min(current[n],desired[n]) <= intermediate[n] <= max(current[n],desired[n]) for n in current)
     arrived=dict(intermediate,joint3=intermediate['joint3']+.007,
                  gripper_joint_1=current['gripper_joint_1'])
-    assert readback_target(arrived,desired)==desired
+    corrected=readback_target(arrived,desired)
+    assert max(abs(corrected[n]-arrived[n]) for n in arrived)<=.03+1e-12
+    assert corrected['gripper_joint_1']<arrived['gripper_joint_1']
     assert desired['joint3']==.18370857317041256
 
 
-def test_contact_readback_within_original_admission_bound_keeps_the_exact_goal():
-    from sim_pick_place_demonstrations import readback_target
-    assert readback_target({'gripper':.42},{'gripper':.38})=={'gripper':.38}
+def test_contact_readback_keeps_the_exact_goal_after_supported_intermediates():
+    from sim_pick_place_demonstrations import dispatch_readback_target
+    current={'gripper':.42}
+    commands=[]
+    def send(target):
+        commands.append(target)
+        current.update(target)
+    dispatch_readback_target({'gripper':.38},lambda:dict(current),send)
+    assert len(commands)==2 and commands[-1]=={'gripper':.38}
+    assert commands[0]['gripper']==pytest.approx(.39)
 
 
 @pytest.mark.parametrize('position',[.405,.4212312996])
@@ -176,8 +185,8 @@ def test_teacher_transfer_hold_keeps_bounded_nonzero_contact_squeeze(position):
     from sim_pick_place_teacher import contact_hold_target
     close,contact=.3804260884,.4072
     target=contact_hold_target(position,close=close,contact=contact)
-    assert target==max(close,position-.035)
-    assert close<=target<position and position-target<=.035+1e-12
+    assert target==max(close,position-.03)
+    assert close<=target<position and position-target<=.03+1e-12
 
 
 @pytest.mark.parametrize('position',[.38,.423,1.,float('nan')])
@@ -212,7 +221,7 @@ def test_teacher_dispatch_records_contact_hold_only_when_requested(holding):
     if holding:
         namespace['dispatch'](desired,holding=True)
         assert len(sent)==1 and sent[0]['joint1']==desired['joint1']
-        assert sent[0]['gripper_joint_1']==pytest.approx(.3862312996)
+        assert sent[0]['gripper_joint_1']==pytest.approx(.3912312996)
         assert max(abs(sent[0][n]-actual[n]) for n in actual)<=.04
         assert event['hold_commands'][0]['evidence'] is evidence and checks==['held']
         assert event['hold_commands'][0]['target']==sent[0]
@@ -227,7 +236,7 @@ def test_readback_correction_stops_when_actual_motion_makes_no_progress():
     commands=[]
     with pytest.raises(RuntimeError,match='no_progress'):
         dispatch_readback_target({'joint':.1},lambda:{'joint':0.},commands.append)
-    assert commands==[{'joint':.035}]
+    assert commands==[{'joint':.03}]
 
 
 def test_readback_correction_never_retries_an_unknown_transport_outcome():
@@ -238,7 +247,7 @@ def test_readback_correction_never_retries_an_unknown_transport_outcome():
         raise RuntimeError('actual goal outcome unknown')
     with pytest.raises(RuntimeError,match='outcome unknown'):
         dispatch_readback_target({'joint':.1},lambda:{'joint':0.},send)
-    assert commands==[{'joint':.035}]
+    assert commands==[{'joint':.03}]
 
 
 @pytest.mark.parametrize('points', [[], [(0.,), (float('nan'),)], [(0.,), (0., 1.)]])

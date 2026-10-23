@@ -13,7 +13,7 @@ import uuid
 
 from g2_common import ROOT, configure_imports
 from g2_ports import ObserverClient, isolation_guard, write_json
-from sim_pick_place_demonstrations import short_targets, dispatch_readback_target
+from sim_pick_place_demonstrations import TEACHER_STEP_RAD, short_targets, dispatch_readback_target
 from sim_pick_place_task import judge_episode
 from sim_policy_trial_evidence import contact_held
 
@@ -24,7 +24,7 @@ PLACE_CLEARANCE_M = .005
 def contact_hold_target(position,*,close,contact):
     if not contact_held(position,close=close,contact=contact):
         raise RuntimeError('teacher_hold_contact_not_confirmed')
-    return max(close,position-.035)
+    return max(close,position-TEACHER_STEP_RAD)
 
 
 def teacher_place_pose(pose):
@@ -121,7 +121,8 @@ def run(directory, world, observer_path, *, home_only=False):
                    'place_clearance_m':PLACE_CLEARANCE_M,
                    'min_measured_clearance_m':PLACE_CLEARANCE_M/2,
                    'transfer_hold':'verified_contact_bounded_squeeze_v1',
-                   'max_gripper_squeeze_rad':.035}}
+                   'max_readback_step_rad':TEACHER_STEP_RAD,
+                   'max_gripper_squeeze_rad':TEACHER_STEP_RAD}}
 
     def sim_time():
         return node.get_clock().now().nanoseconds / 1_000_000_000
