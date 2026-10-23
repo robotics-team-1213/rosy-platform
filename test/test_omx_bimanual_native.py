@@ -85,7 +85,7 @@ def test_pair_offsets_and_rate_limits_stay_independent(module):
 
 def test_one_arm_sustained_effort_stops_both_followers_and_passive_leaders(module):
     clock = [10.0]
-    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True),
+    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True), body_only=True,
                                          clock=lambda: clock[0]) for name in ('arm_a', 'arm_b')}
     together = module.BimanualMotion(motions)
     action = {name + '.' + key: value for name, motion in motions.items()
@@ -100,9 +100,37 @@ def test_one_arm_sustained_effort_stops_both_followers_and_passive_leaders(modul
     assert all(not any(bus.torque.values()) for m in motions.values() for bus in (m.follower, m.leader))
 
 
+def test_other_arm_preparation_crossing_alignment_deadline_cannot_commit_handoff(module):
+    clock = [10.0]
+    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True), body_only=True,
+                                         clock=lambda: clock[0]) for name in ('arm_a', 'arm_b')}
+    together = module.BimanualMotion(motions)
+    action = {name + '.' + key: value for name, motion in motions.items()
+              for key, value in fakes.action(motion.leader).items()}
+    together.send(action)
+    # Both arms have completed the dwell just before their fixed 15s deadlines.
+    clock[0] = 14.9
+    for motion in motions.values():
+        motion.last_time = 14.85
+        motion.aligned_since = 14.35
+    prepare = motions['arm_b'].prepare
+    def delayed_prepare(action):
+        prepared = prepare(action)
+        clock[0] += 0.2  # still fresh, but crosses the absolute alignment deadline
+        return prepared
+    motions['arm_b'].prepare = delayed_prepare
+    before = {name: len([e for e in m.follower.events if e[0] == 'goal']) for name, m in motions.items()}
+    with pytest.raises(ValueError, match='alignment deadline'):
+        together.send(action)
+    for name, motion in motions.items():
+        assert not motion.tracking
+        assert len([e for e in motion.follower.events if e[0] == 'goal']) == before[name]
+        assert not any(motion.follower.torque.values()) and not any(motion.leader.torque.values())
+
+
 @pytest.mark.parametrize('scenario,expected', [
     ('normal', None), ('sustained_load', 'overload risk'),
-    ('transient_load', None),
+    ('transient_load', None), ('alignment_stall', 'alignment deadline'),
     ('mapping_jump', '100 degrees'),
 ])
 def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
@@ -111,7 +139,7 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
     import math
 
     clock = [10.0]
-    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True),
+    motions = {name: module.NativeJointMotion(fakes.Bus(), fakes.Bus(leader=True), body_only=True,
                                          clock=lambda: clock[0], label=name)
                for name in ('arm_a', 'arm_b')}
     together = module.BimanualMotion(motions)
@@ -124,7 +152,7 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
             return load['pwm'] if motor == 'shoulder_lift' else 0
         return read(register, motor, **kwargs)
     motions['arm_a'].follower.read = simulated_read
-    reason, stopped_at = None, None
+    reason, stopped_at, tracked_before_fault = None, None, False
     for frame in range(241):
         elapsed = frame / 30
         clock[0] = 10.0 + elapsed
@@ -140,12 +168,16 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
             if name == 'arm_a' and frame:
                 if loaded:
                     motion.follower.raw['shoulder_lift'] = motion.follower.goals['shoulder_lift'] - 25
+                elif scenario == 'alignment_stall':
+                    motion.follower.raw['shoulder_lift'] = motion.follower.goals['shoulder_lift'] - 34
             direction = 1 if name == 'arm_a' else -1
             motion.leader.raw['wrist_roll'] = 2028 + round(direction * 40 * math.sin(max(0, elapsed - 1)))
         if scenario == 'mapping_jump' and elapsed >= 2:
             motions['arm_a'].leader.raw['wrist_roll'] += 1200
         action = {name + '.' + key: value for name, motion in motions.items()
                   for key, value in fakes.action(motion.leader).items()}
+        if elapsed < 2:
+            tracked_before_fault |= all(m.tracking for m in motions.values())
         try:
             together.send(action)
         except ValueError as exc:
@@ -156,12 +188,14 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
         assert all(not any(bus.torque.values()) for m in motions.values()
                    for bus in (m.follower, m.leader))
         if scenario == 'sustained_load':
-            assert 3 <= stopped_at <= 3.3
+            assert tracked_before_fault and 3 <= stopped_at <= 3.3
+        elif scenario == 'alignment_stall':
+            assert 5 <= stopped_at <= 5.1
         else:
             assert stopped_at == 2
     else:
-        assert reason is None and all(not m.failed for m in motions.values())
-        assert all(all(m.follower.torque.values()) and not any(m.leader.torque.values())
+        assert reason is None and all(m.tracking for m in motions.values())
+        assert all(not m.follower.torque['gripper'] and not any(m.leader.torque.values())
                    for m in motions.values())
     for motion in motions.values():
         for bus in (motion.follower, motion.leader):
@@ -170,7 +204,7 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
                for bus in (m.follower, m.leader))
     print('sensor_simulation=' + json.dumps({'scenario': scenario, 'hz': 30,
           'stopped_at_s': stopped_at, 'reason': reason,
-          'all_off_after_cleanup': True}))
+          'tracked_before_fault': tracked_before_fault, 'all_off_after_cleanup': True}))
 
 
 class Device:
@@ -318,6 +352,29 @@ def test_cli_enters_native_typed_function_without_recursive_argument_discovery(m
     monkeypatch.setattr(sys, 'argv', ['bimanual_native.py', mode, '--config_path=' + str(cfg)])
     module.main()
     assert calls == [{'sentinel': 'typed_config'}]
+
+
+def test_body_only_bimanual_commands_ten_joints_and_preserves_twelve_observations(module):
+    robot, leader, followers, leaders, camera = adapters(module)
+    robot.body_only = True
+    robot.leader = leader
+    robot.connect()
+    leader.connect()
+    sent = robot.send_action(leader.get_action())
+    assert len(sent) == len(robot.action_features) == 10
+    assert len(robot.observation_features) == 13 and len(leader.get_action()) == 12
+    assert all(d.bus.torque['gripper'] == 0 for d in followers.values())
+    assert all('gripper' not in e[1] for d in followers.values() for e in d.bus.events if e[0] == 'goal')
+    robot.disconnect()
+    leader.disconnect()
+
+
+def test_native_body_only_record_mode_rejects_before_sdk_import(module, monkeypatch):
+    monkeypatch.setattr(module, 'register_types', lambda: pytest.fail('must not import SDK for rejected mode'))
+    monkeypatch.setattr(sys, 'argv', ['bimanual_native.py', 'record', '--config_path=x', '--body-only'])
+    with pytest.raises(SystemExit):
+        module.main()
+
 
 
 def test_bimanual_fault_monitor_runs_only_after_every_bus_off_and_preserves_cause(module):

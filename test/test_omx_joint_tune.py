@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,7 +28,7 @@ class Motor:
     `sag` ticks per 0.1 s pull a loaded joint down while its PWM Limit is below `holds_at`."""
 
     def __init__(self, motor=16, position=2028, torque=0, mode=None, model=None, fail_at=None, sag=0, holds_at=0):
-        default_model, default_mode = m.FOLLOWER[motor]
+        default_model, default_mode = m.FOLLOWER.get(motor, (1200, 4))
         self.motor = motor
         self.reg = {"model": model or default_model, "mode": mode or default_mode, "torque": torque, "hw_error": 0,
                     "moving": 0, "present_load": 0, "present_pos": position, "pwm_limit": 20,
@@ -176,3 +177,105 @@ def test_one_failed_restore_never_skips_the_others():
         run(bus, ["move", "--to", "2100", "--p-gain", "600", "--i-gain", "200"])
     assert bus.reg["torque"] == 0
     assert (bus.reg["current_limit"], bus.reg["p_gain"], bus.reg["i_gain"]) == (50, 250, 0)
+
+
+def test_only_confirmed_leader_wrist_is_added_and_uses_slow_profiles():
+    args = m.parse(["--device", "x", "--id", "5", "move", "--delta", "20"])
+    assert (args.velocity, args.acceleration) == (1, 1)
+    assert set(m.FOLLOWER) == {11, 12, 13, 14, 15, 16}
+    for motor in (1, 2, 3, 4, 6):
+        with pytest.raises(SystemExit):
+            m.parse(["--device", "x", "--id", str(motor), "move", "--delta", "20"])
+        with pytest.raises((SystemExit, ValueError)):
+            m.Run(Motor(motor=motor), motor, log=lambda **row: None, grab=lambda label: None)
+
+
+def leader(high_caps=True):
+    bus = Motor(motor=5)
+    if high_caps:
+        bus.reg.update(pwm_limit=885, current_limit=1750)
+    return bus
+
+
+def test_leader_high_caps_are_lowered_before_trial_and_seed_precedes_torque():
+    bus = leader()
+    write = bus.write
+    def checked_write(name, value):
+        if name in m.EEPROM:
+            assert bus.reg["torque"] == 0
+        write(name, value)
+    bus.write = checked_write
+    result, _, _ = run(bus, ["move", "--delta", "40"])
+    assert result["reached"] == 2068
+    assert bus.writes[:2] == [("pwm_limit", 20), ("current_limit", 50)]
+    assert bus.writes.index(("goal_pos", 2028)) < bus.writes.index(("torque", 1))
+    assert ("profile_acc", 1) in bus.writes and ("profile_vel", 1) in bus.writes
+    assert_restored(bus)
+
+
+@pytest.mark.parametrize("state", [{"model": 1060}, {"mode": 5}, {"torque": 1}, {"hw_error": 4},
+                                   {"pwm_limit": 19}, {"current_limit": 49}])
+def test_bad_leader_validation_never_writes(state):
+    bus = leader()
+    bus.reg.update(state)
+    with pytest.raises(SystemExit):
+        run(bus, ["move", "--delta", "40"])
+    assert bus.writes == []
+
+
+def test_leader_unbounded_target_refused_without_changing_caps():
+    bus = leader()
+    with pytest.raises(SystemExit):
+        run(bus, ["move", "--delta", "500"])
+    assert bus.writes == []
+
+
+@pytest.mark.parametrize("failure", ["interrupt", "hardware", "readback"])
+def test_leader_failure_restores_only_safe_caps_and_torque_off(failure):
+    bus = leader()
+    if failure == "interrupt":
+        def interrupted_sleep(seconds):
+            raise KeyboardInterrupt
+        bus.sleep = interrupted_sleep
+    elif failure == "hardware":
+        bus.fail_at = 0.5
+    else:
+        original = bus.read
+        failed = [False]
+        def wrong_readback(name):
+            value = original(name)
+            if name == "pwm_limit" and value == 20 and not failed[0]:
+                failed[0] = True
+                return 21
+            return value
+        bus.read = wrong_readback
+    with pytest.raises((KeyboardInterrupt, RuntimeError)):
+        run(bus, ["move", "--delta", "40"])
+    assert_restored(bus)
+
+
+def test_disconnected_persistent_serial_identity_is_recoverable_transport_failure(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'serial', SimpleNamespace())
+    monkeypatch.setitem(sys.modules, 'dynamixel_sdk', SimpleNamespace(PacketHandler=None, PortHandler=None))
+    with pytest.raises(RuntimeError, match='physically confirmed'):
+        m.SerialBus('/dev/serial/by-id/rosy-unit-test-device-disconnected-7c1a', 0)
+
+
+@pytest.mark.parametrize('name,value', [('torque', 1), ('goal_pos', 0), ('goal_current', 0),
+                                        ('pwm_limit', 21), ('current_limit', 51), ('p_gain', 640),
+                                        ('mode', 4), ('reboot', 0)])
+def test_cleanup_write_rejects_every_operation_except_off_and_baseline_caps(name, value):
+    bus = object.__new__(m.SerialBus)
+    bus.motor = 12
+    bus.packet = SimpleNamespace()
+    with pytest.raises(ValueError):
+        bus.cleanup_write(name, value)
+
+
+@pytest.mark.parametrize('name', ['present_pos', 'p_gain', 'i_gain', 'goal_pos'])
+def test_cleanup_read_is_limited_to_stop_and_caps_evidence(name):
+    bus = object.__new__(m.SerialBus)
+    bus.motor = 12
+    bus.packet = SimpleNamespace()
+    with pytest.raises(ValueError):
+        bus.cleanup_read(name)
