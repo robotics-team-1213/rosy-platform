@@ -39,9 +39,9 @@ The corrected sampler rejects all 25 original episodes while retaining the requi
 
 ## Actual isolated SIM teacher
 
-One episode from `f6e88c0bf5534473124fa316967d0dfd046aef06` ran under the existing approved native simulation helper. Run `f6e88c0bf5534473124fa316967d0dfd046aef06-7d0f84ac0395` ended EXITED/1, HOLD, zero successes, cleanup true. It recorded 1,292 frames and 267 commands before `bounded_readback_step_no_progress` during grasp. Physical contact blocked the fixed close target. Evidence is retained under `teacher-probe/`, and that failed episode is excluded from learning.
+One episode from commit `f6e88c0bf5` ran under the existing approved native simulation helper. Its run suffix `7d0f84ac0395` ended EXITED/1, HOLD, zero successes, cleanup true. It recorded 1,292 frames and 267 commands before `bounded_readback_step_no_progress` during grasp. Physical contact blocked the fixed close target. Evidence is retained under `teacher-probe/`, and that failed episode is excluded from learning.
 
-The contact-gate correction is `bff46a3f280f9432cbda59338746f65b1cf83f8a`. Run `bff46a3f280f9432cbda59338746f65b1cf83f8a-4cda0062f7d5`, retained under `teacher-contact-probe/`, ended EXITED/1, HOLD, cleanup true. It passed the contact-limited grasp and transfer but reached the recorder's 3,000-frame limit during release. This failed episode is excluded from learning. Matching the teacher's longer trajectory to the recording budget remains unresolved; neither the frame cap nor acceptance checks were relaxed.
+The contact-gate correction is commit `bff46a3f28`. Its run suffix `4cda0062f7d5`, retained under `teacher-contact-probe/`, ended EXITED/1, HOLD, cleanup true. It passed the contact-limited grasp and transfer but reached the recorder's 3,000-frame limit during release. This failed episode is excluded from learning. Matching the teacher's longer trajectory to the recording budget remains unresolved; neither the frame cap nor acceptance checks were relaxed.
 
 Independent code review found the native fixture issue, which was reproduced and fixed. Follow-up review through `bff46a3f28` reported no remaining Important findings. Review does not establish runtime success.
 
