@@ -562,7 +562,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     const pending = confirming.get(robotId);
     const specs = decisionButtons(stuck, { operator: isOperator(), namedReason: namedReason(), busy: busy.has(robotId) });
     const actions = document.createElement("div");
-    actions.className = "stuck-actions";
+    actions.className = "stuck-actions ui-action-bar";
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-label", `${robotId} 판단`);
     for (const spec of specs) {

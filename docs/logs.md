@@ -10080,6 +10080,30 @@ osy-d395-s1d\`.
 - 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
 - gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
 
+## 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
+
+- 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
+- 증거: `test_vlm_judge.py`, `test_vlm_judge_browser.py`(원격 시험 PC). 실제 정답 품질·모델 PC 운영은 아직이다.
+- gate 변화: 없음. 평가 전용 정답이며 검수 승인·export·학습 자료가 아니다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.
+
+## 2026-10-23 · uncommitted · D-855 관제 wire와 조건부 취소 계약
+
+- 변경: 관제 위임·owner 응답·하위 승인과 별도 navigation/cancel-scoped 계약을 API v1.297·공유 schema·D-855에 함께 기록했다. 기존 무조건 취소와 새 경로를 분리해 구버전 body 무시가 다른 목표를 취소하지 않게 한다.
+- 증거: 새 모델 원격 RED를 확인했다. schema/API와 모든 live-version pin은 하나의 공유 계약으로 변경해야 하므로 파일 수만 줄이기 위한 불완전한 버전 변경으로 나누지 않았다. 실제 runtime·종단·장치 수용은 후속이다.
+- gate 변화: 없음. D-851 전체를 일괄 Accepted로 바꾸지 않는다. CE 해당 없음: 새 계약과 회귀가 판단을 보존한다.
+
+## 2026-10-24 · 1fd406e367 · Rosy Learning 제품 지도
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md)를 추가했다. 정의, 사용자 네 역할, 공통 학습 루프 일곱 단계, 도메인×단계 현황, 현재 메뉴와 목표 메뉴(단계=메뉴, 도메인=필터), 우선순위 P0–P3, 모델 PC 인스턴스 여섯 개의 정리안, 결정할 것 여섯 가지.
+- 증거: 앱 화면·파이프라인·의도 문서·배포 기록 조사. 한 바퀴를 끝까지 돈 도메인은 없고, 자동 루프는 Pinky 차로 하나이며 승인 정답 0건으로 멈춰 있다.
+- gate 변화: 없음. 문서만이며 ADR로 옮기기 전 제안이다.
+
+## 2026-10-24 · uncommitted · 플랫폼 최상위 목표를 범용 실행 플랫폼으로 확정
+
+- 변경: 사용자 결정으로 [PRODUCT.md 「Product Purpose」](../PRODUCT.md#product-purpose)에 목표(업무 앱이 플랫폼을 고치지 않고 로봇에 작업을 맡기는 범용 실행 플랫폼, 첫 적용 사례 Harbor)와 완료 조건 3개를 정본으로 적었다. README는 한 줄로 가리키고, handoff 1절의 구체 목표 셋은 능력 증명 마일스톤 둘로 바꾸고 Rosy Cell 팔레타이징은 Harbor 흐름에 흡수했다.
+- 증거: 2026-10-21 모듈 경계 합의와 2026-10-24 사용자 확인.
+- gate 변화: 없음. 목표 선언이며 기능 구현·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 장애 해결이 아닌 목표 문서 변경이다.
+
 ## 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
 
 - 변경: `app-names-and-roles.md`에 외부 업무 앱 절을 추가해 Harbor(HarborLogi)를 등록하고 은퇴한 rosy-vault의 Rosy Vault·Rosy Device·device-core 행을 정리했다. README 문서 지도와 `docs/reference/AGENTS.md`에 `application-contract-support.md`를 색인하고 PRODUCT.md의 앱 구분 문장을 갱신했다.
