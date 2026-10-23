@@ -16,7 +16,10 @@
   margin: 0;
 }
 
-.learning-main > ui-section > p {
+/* 보조 글: 공용 부품 이름을 선택자에 두지 않는 표면 소유 클래스만 칠한다(D-624) */
+.learning-hub-note,
+.learning-focus-note,
+.learning-prep-note {
   color: var(--text-secondary);
 }
 
