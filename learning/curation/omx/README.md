@@ -156,7 +156,7 @@ commit SHA를 고정해 재다운로드·hash 비교 후 `receipt.json`을 만�
 `bytes_verified=true`는 형식/품질 검증이 아니다. OMX export는 준비·전송 직전·고정 commit
 재다운로드 후에 원본 시연과 SIM 과제 증거를 다시 검사하고 LeRobot 0.4.4 reader로 모든
 RGB·원본 시각·state/action·관절 순서를 비교한다. 통과한 receipt만 `reader_verified=true`와
-`reader_report`를 가진다. 전용 LeRobot 환경에서 실행하며 ROS 환경에 설치하지 않는다.
+`reader` 보고서를 가진다. 전용 LeRobot 환경에서 실행하며 ROS 환경에 설치하지 않는다.
 그 밖의 dataset/model은 `reader_verified=false`다. 다운로드한 `readback/`을
 `native_review.py inspect` 또는 공식 model loader로 읽고 별도 보고서를 receipt와 보존한다.
 reader 통과는 독립 정책 과제 성공·승격·장치 실행 승인이 아니다.
