@@ -230,6 +230,13 @@ def main(argv=None) -> int:
     parser.add_argument("--ollama", default="", help="loopback Ollama URL to time the observation call")
     parser.add_argument("--ollama-model", default="qwen3-vl:8b-instruct")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--dump-questions", type=Path, metavar="FILE",
+                        help="write {question_set, questions} for learning/curation/perception/vlm_judge.py and exit")
+    known = argparse.ArgumentParser(add_help=False)
+    known.add_argument("--dump-questions", type=Path)
+    if (target := known.parse_known_args(argv)[0].dump_questions):
+        target.write_text(json.dumps({"question_set": QUESTION_SET, "questions": QUESTIONS}, indent=2), encoding="utf-8")
+        return 0
     args = parser.parse_args(argv)
     _selftest()
     if args.ollama and not args.ollama.startswith(("http://127.0.0.1:", "http://localhost:")):
