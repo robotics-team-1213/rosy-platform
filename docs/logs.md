@@ -10122,6 +10122,12 @@ osy-d395-s1d\`.
 - 증거: Learning 관련 Proposed 20건 분류 — 대체 0, 일부 개정 4(D-449·D-792·D-834·D-853), 유지 9, 범위 밖 7. D-853 개정 메모는 그 ADR이 착지한 뒤 단다.
 - gate 변화: 없음. 코드·배포·인스턴스 퇴역은 별도 조각이다.
 
+## 2026-10-24 · 64fd9ad65c · Learning 지도 결정 반영과 VLM 질문 교훈 갱신
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md) §9를 D-857 결정으로 바꿨다. [닫힌 질문 교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md)에 v3 결과를 덧붙였다.
+- 증거: 모델 PC v3 벤치·토론 — 기준을 적은 `tape_left`·`tape_right`는 의견 갈림 0/1(이전 0/27 합의), `object_between_tapes` 1/26, `robot_count` 0/10.
+- gate 변화: 없음.
+
 ## 2026-10-24 · a7aaaed472 · 관제 위임의 실행 경로·배치·집중 검증 기록
 
 - 변경: [독립·중첩 관제 기동 절차](deployment/control-units.md)와 [소프트웨어 검증](validation/control-unit-pipeline-2026-10-24/result.md)을 기록했다. 직접 자식의 exact 배정 조회는 승인 직전 조상 연결 확인에만 한정한다.
