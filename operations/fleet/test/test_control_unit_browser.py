@@ -41,13 +41,20 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             expect(panel).to_contain_text("상위 관제 A")
             expect(panel).to_contain_text("목표 X 1 m · Y 2 m · 방향 0 rad")
             expect(panel).to_contain_text("위임 R / job-1")
+            disclosure = panel.locator("summary")
+            assert disclosure.bounding_box()["height"] >= 48
+            bounds = page.locator("#work-overview").bounding_box()
+            action_bounds = panel.get_by_role("button", name="이 관제에서 승인", exact=True).bounding_box()
+            assert action_bounds["y"] + action_bounds["height"] <= bounds["y"] + bounds["height"]
+            page.locator(".console-primary").evaluate("node => node.scrollTop = 0")
+            _shot(page, f"control-unit-fresh-{size[0]}-{theme}.png", full_page=True)
             approve = panel.get_by_role("button", name="이 관제에서 승인", exact=True)
             expect(approve).to_be_enabled()
             approve.focus()
             page.locator("#work-refresh").evaluate("node => node.click()")
             page.clock.run_for(1500)
             expect(panel.get_by_role("button", name="이 관제에서 승인", exact=True)).to_be_focused()
-            _shot(page, f"control-unit-fresh-{size[0]}-{theme}.png", full_page=True)
+            _shot(page, f"control-unit-focused-{size[0]}-{theme}.png", full_page=True)
             approve.click()
             expect(panel).to_contain_text("승인을 접수했습니다")
             assert posts[-1][0] == prefix + "/delegations/R/job-1/approve"
