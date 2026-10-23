@@ -462,19 +462,28 @@ class IngestServer:
             self._map_done.pop(source_name, None)
             self._plane_cache.pop(source_name, None)
 
+    def _status_message(self, src: _Source) -> dict:
+        snap = src.stats.snapshot()
+        corners_seen, robots_seen = self._marker_status(src)
+        # A field_boundary source calibrates from the floor boundary (D-484), not four
+        # corner markers: report its calibration state so the phone stops asking for markers.
+        field = src.field
+        field_state = (field[0].get("state") if field is not None
+                       and time.monotonic() - field[1] <= MARKER_REPORT_TTL_S else None)
+        return {
+            "type": "status",
+            "corners_seen": corners_seen,
+            "corners_needed": 0 if field_state is not None else 4,
+            "robots_seen": robots_seen,
+            "rx_fps": snap["rx_fps"],
+            "dropped": snap["dropped_bad_header"] + snap["oversize"],
+            "field_state": field_state,
+        }
+
     async def _status_loop(self, src: _Source) -> None:
         while True:
             await asyncio.sleep(STATUS_INTERVAL_S)
-            snap = src.stats.snapshot()
-            corners_seen, robots_seen = self._marker_status(src)
-            status = {
-                "type": "status",
-                "corners_seen": corners_seen,
-                "corners_needed": 4,
-                "robots_seen": robots_seen,
-                "rx_fps": snap["rx_fps"],
-                "dropped": snap["dropped_bad_header"] + snap["oversize"],
-            }
+            status = self._status_message(src)
             try:
                 await src.connection.send(json.dumps(status))
                 await self._send_demand(src)
