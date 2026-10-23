@@ -22,16 +22,18 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
     from test_demonstration import provenance, sample
     from lerobot_export import export_episode
     from act_job import run
-    exports,ids,training_actions,training_states=[],[],[],[]
+    exports,ids,training_actions,training_states,validation_states=[],[],[],[],[]
     for index,base in enumerate([-.2,0.,.5,.6,.7,.8,.9]):
         recorder=DemonstrationRecorder(tmp_path/f'raw-{index}',provenance())
         episode=recorder.start('synthetic integration fixture')
         for frame in range(4):
             target={'joint1':base+.001*frame,'gripper_joint_1':-.1}
-            state={'joint1':.01+.02*frame,'gripper_joint_1':-.1}
+            state={'joint1':base+.001*frame+.01,'gripper_joint_1':-.1}
             sample(recorder,1_000_000_000+frame*100_000_000,target=target,positions=state)
             if index<2:
                 training_actions.append(list(target.values()));training_states.append(list(state.values()))
+            else:
+                validation_states.append(list(state.values()))
         recorder.stop('success')
         source=tmp_path/f'raw-{index}'/episode['episode_id']
         export=tmp_path/f'export-{index}'
@@ -52,6 +54,8 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
             origin=batch['observation.state']*torch.tensor(stats['state_std'])+torch.tensor(stats['state_mean'])
             restored=batch['action']*torch.tensor(t['std'])+torch.tensor(t['mean'])
             if representation.startswith('joint_delta_'):restored=restored+origin[:,None,:]
+            if representation in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):
+                assert torch.all(torch.abs(restored-origin[:,None,:])<=.035+1e-6)
             gaps=restored[:,1:,0]-restored[:,:-1,0]
             assert torch.all(torch.isclose(gaps,torch.zeros_like(gaps),atol=1e-6)|
                              torch.isclose(gaps,torch.full_like(gaps,.001),atol=1e-6))
@@ -69,7 +73,7 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
         stats=json.loads((out/'normalization.json').read_text())
         origin=batch['observation.state']*torch.tensor(stats['state_std'])+torch.tensor(stats['state_mean'])
         torch.testing.assert_close(origin[:,1],torch.full_like(origin[:,1],-.1))
-        assert all(any(abs(value-item)<1e-6 for item in [.01,.03,.05,.07]) for value in origin[:,0].tolist())
+        assert all(any(abs(value-item[0])<1e-6 for item in validation_states) for value in origin[:,0].tolist())
         evaluated.append(True)
         return original_predict(model,batch,*args,**kwargs)
     monkeypatch.setattr(ACTPolicy,'predict_action_chunk',clean_validation)
@@ -85,8 +89,11 @@ def test_actual_act_keeps_all_five_validation_episodes_out_of_training(tmp_path,
     assert evaluated
     if noise:
         augmentation=stats['training_augmentation']
-        assert augmentation==dict(type='gaussian_state_noise_v1',std_rad=noise,seed=42751,
+        bounded=representation=='joint_delta_tanh_from_chunk_source_v1'
+        expected=dict(type='gaussian_state_noise_clamped_to_chunk_support_v1' if bounded else 'gaussian_state_noise_v1',std_rad=noise,seed=42751,
             joint_names=['joint1','gripper_joint_1'],train_only=True,source_kind='synthetic_training_inputs')
+        if bounded:expected['max_delta_rad']=.035
+        assert augmentation==expected
         assert report['training_augmentation']==augmentation
         dataset=json.loads((out/'dataset-manifest.json').read_text())
         import hashlib
