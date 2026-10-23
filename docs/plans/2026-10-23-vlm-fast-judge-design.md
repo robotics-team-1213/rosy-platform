@@ -40,7 +40,7 @@ JEV·SemIf(구 OpenJev)는 글을 생성하지 않고 선택지 토큰의 확률
 | 사진 | 질문 id | 선택지 |
 | --- | --- | --- |
 | 전면 | `front.lane_obstruction` | yes / no / unclear |
-| 전면 | `front.thing` | wall / object / robot / person / none |
+| 전면 | `front.wall_ahead` · `front.robot_ahead` · `front.person_ahead` | 각각 yes / no / unclear (v2. v1 다지선다 `front.thing`은 `wall`로 쏠렸다) |
 | 전면 | `front.lane_tape` | both / left / right / none |
 | 전면 | `front.shape` | bend / blocked / straight / unclear |
 | 천장 | `top.robot_adjacent` | yes / no / unclear |
@@ -57,9 +57,9 @@ JEV·SemIf(구 OpenJev)는 글을 생성하지 않고 선택지 토큰의 확률
 | 조건 | stuck 결정 |
 | --- | --- |
 | EMERGENCY 상태 | WAIT |
-| `front.thing=person` 또는 `top.robot_adjacent=yes` | WAIT / YIELD |
+| `front.person_ahead=yes` 또는 `front.robot_ahead=yes` 또는 `top.robot_adjacent=yes` | WAIT / YIELD |
 | `front.shape=bend` 이고 `front.lane_obstruction=no` | RESUME |
-| `front.lane_obstruction=yes` 이고 `front.thing∈{object,wall}` | BACK_AND_RETRY 후보, 최근 시도 실패면 MANUAL |
+| `front.lane_obstruction=yes` 또는 `front.wall_ahead=yes`, 사람·로봇은 no | BACK_AND_RETRY 후보, 최근 시도 실패면 MANUAL |
 | 어느 결정 질문이든 기준 미달 | unknown → analyzer 제안 유지 |
 
 표 자체는 실험에서 사람 답과 맞춰 고친다. 위험한 움직이는 답(D-610: 동료·물체 쪽 후진, 사람·물체가 있는 횡단보도 `RESUME`)은 표가 만들 수 없게 한다.

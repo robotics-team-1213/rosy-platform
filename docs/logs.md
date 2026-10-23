@@ -10061,3 +10061,9 @@ osy-d395-s1d\`.
 - 변경: [시크릿 스캔 교훈](solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)에 허용 단어는 같은 줄에 있어야 한다는 점(표 머리글만으로는 통과하지 않음)과 노트북에서 pytest 없이 확인하는 방법을 더했다.
 - 증거: vlm-question-bench 회차의 머리글만 적은 해시 표 9행이 `test_no_secrets_in_tracked_files`에서 걸렸고, 행마다 `sha256`을 적은 뒤 `scan_text`가 빈 목록을 냈다.
 - gate 변화: 없음.
+
+## 2026-10-23 · 118425b1b5 · VLM 질문 세트 v2와 T1 정답 화면
+
+- 변경: `tools/vlm_question_bench.py` 질문 세트 v2(`front.thing` → `front.wall_ahead`·`robot_ahead`·`person_ahead`), 같은 사진 종류 `--frames` 합치기. `tools/vlm_label_sheet.py` 추가(벤치 사진을 정적 HTML 정답 화면으로, 모델 답 숨김). [기록](validation/vlm-question-bench-2026-10-23b/result.md)·설계·실험 계획 갱신.
+- 증거: 모델 PC front 60장, `wall` 쏠림 해소(8B 4/60). Ollama 질문 6개 p50 0.25 s. 정답 화면 140장, headless Chromium 390 px에서 선택·내려받기 확인. 사람 정답 전이라 정확도는 미판정이다.
+- gate 변화: 없음.

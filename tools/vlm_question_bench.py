@@ -27,11 +27,14 @@ from PIL import Image
 
 INSTRUCTION = ("You check one {view} camera picture from a small robot. Answer the question with exactly one "
                "word from the options. Answer unclear when the picture does not show it.")
-#: Question id -> (question, options). Ids and options follow the design; v1 freezes them.
+#: Question id -> (question, options). Ids and options follow the design; QUESTION_SET versions them.
 QUESTIONS = {
     "front": {
         "front.lane_obstruction": ("Is there an object on the floor inside the lane ahead?", ("yes", "no", "unclear")),
-        "front.thing": ("What is directly ahead of the robot?", ("wall", "object", "robot", "person", "none")),
+        # v2: v1's multi-way "what is ahead" answered wall on nearly every frame; one yes/no per kind instead.
+        "front.wall_ahead": ("Is a wall or upright panel blocking the lane directly ahead?", ("yes", "no", "unclear")),
+        "front.robot_ahead": ("Is another robot in the lane directly ahead?", ("yes", "no", "unclear")),
+        "front.person_ahead": ("Is a person or a person's legs in the lane directly ahead?", ("yes", "no", "unclear")),
         "front.lane_tape": ("Which lane boundary tapes are visible on the floor?", ("both", "left", "right", "none")),
         "front.shape": ("Is the lane ahead a bend, blocked, or straight?", ("bend", "blocked", "straight", "unclear")),
     },
@@ -46,7 +49,7 @@ QUESTIONS = {
         "wrist.gripper_empty": ("Is the gripper empty?", ("yes", "no", "unclear")),
     },
 }
-QUESTION_SET = "v1"
+QUESTION_SET = "v2"
 OBSERVE_PROMPT = ("Describe only visible physical surfaces and floor markings in this {view} image in one short "
                   "sentence. Do not assume a corner or free path. Do not identify a target robot. Answer JSON with "
                   "observation.")
@@ -231,15 +234,16 @@ def main(argv=None) -> int:
     _selftest()
     if args.ollama and not args.ollama.startswith(("http://127.0.0.1:", "http://localhost:")):
         raise SystemExit("--ollama must be a loopback URL")
-    sets = {}
+    pools = {}
     for spec in args.frames:
         view, _, pattern = spec.partition("=")
         if view not in QUESTIONS or not pattern:
             raise SystemExit(f"bad --frames {spec!r}")
         files = sorted(glob.glob(pattern))
-        sets[view] = random.Random(7).sample(files, min(args.limit, len(files)))
-        if not sets[view]:
+        if not files:
             raise SystemExit(f"no frames for {spec!r}")
+        pools.setdefault(view, []).extend(files)  # repeated views pool their globs
+    sets = {view: random.Random(7).sample(files, min(args.limit, len(files))) for view, files in pools.items()}
     scorer = Scorer(args.model, args.quant)
     args.out.mkdir(parents=True, exist_ok=True)
     rows = []
