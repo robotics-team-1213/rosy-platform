@@ -22,7 +22,7 @@ def test_nested_http_pipeline_survives_lost_reply_and_leaf_restart_without_new_t
 
         class Network(httpx.AsyncBaseTransport):
             async def handle_async_request(self, request):
-                unit = request.url.host
+                unit = request.url.host.upper()
                 calls.append((unit, request.method, request.url.path))
                 response = await httpx.ASGITransport(app=apps[unit]).handle_async_request(request)
                 if unit in drop and request.url.path.endswith("/inbox"):
