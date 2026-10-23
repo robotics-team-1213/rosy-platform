@@ -7,11 +7,11 @@ import json
 import math
 import re
 
-from rosy.execution.site.cell_submission import CellJobCompilation
 from rosy.processes.palletizing.cell import load_cell
 from rosy.processes.palletizing.compiler import compile_job, job_document
 from rosy.processes.palletizing.plan_bundle import compile_plan_bundle
 from rosy.processes.palletizing.recipe import load_recipe
+from rosy.processes.palletizing.submission import CellJobCompilation, compile_cell_submission
 
 
 class PalletizingCellCompiler:
@@ -51,3 +51,7 @@ class PalletizingCellCompiler:
             plan_bundle=plan.bundle,
             ledger_markers=tuple(asdict(marker) for marker in plan.ledger_markers),
         )
+
+    def compile_submission(self, candidate: Mapping, *, workcell_id: str, instance_id: str) -> dict:
+        return compile_cell_submission(
+            candidate, compiler=self, workcell_id=workcell_id, instance_id=instance_id).as_store_document()

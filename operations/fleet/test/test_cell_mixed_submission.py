@@ -20,7 +20,7 @@ from fleet.server.cell_compiler import PalletizingCellJobCompiler  # noqa: E402
 from fleet.server.cell_goal_evidence import make_cell_job_resolver  # noqa: E402
 from fleet.server.cell_job_store import CellJobStore  # noqa: E402
 from fleet.server.cell_mixed_submission import compile_mixed_submission, is_mixed  # noqa: E402
-from rosy.execution.site.cell_submission import compile_cell_submission  # noqa: E402
+from rosy.processes.palletizing.submission import compile_cell_submission  # noqa: E402
 from rosy.processes.palletizing.cell import load_cell  # noqa: E402
 from rosy.processes.palletizing.compiler import compile_job, job_document  # noqa: E402
 from rosy.processes.palletizing.mixed_planner import PLANNER_VERSION  # noqa: E402

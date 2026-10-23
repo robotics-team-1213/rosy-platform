@@ -1,8 +1,4 @@
-"""Validate a Rosy Cell proposal through an injected process compiler port.
-
-This module owns the execution-facing submission boundary. It deliberately does
-not import a palletizing implementation: the application supplies the compiler.
-"""
+"""Recompile and validate palletizing proposals without granting execution authority."""
 
 from __future__ import annotations
 
