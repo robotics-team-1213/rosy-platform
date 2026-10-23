@@ -19,6 +19,7 @@ from sample.channel import Channel
 from sample.traffic import Traffic
 from sample.incidents import Incidents
 from sample.work import Work
+from sample.control_units import ControlUnits
 
 
 class SampleEngine:
@@ -36,6 +37,7 @@ class SampleEngine:
             self.scenario_id = scenario_id
             self.sessions = Sessions(self.epoch, 'viewer' if scenario_id == 'viewer' else 'operator')
             self.work = Work()
+            self.control_units = ControlUnits(self.work)
             self.spatial = Spatial()
             self.governance = Governance()
             self.assistant = Assistant()
@@ -106,7 +108,7 @@ class SampleEngine:
         response = self.governance.handle(method, path, payload, actor)
         if response is not None:
             return response
-        for feature in (self.channel, self.incidents):
+        for feature in (self.channel, self.control_units, self.incidents):
             response = feature.handle(method, path, payload, actor)
             if response is not None:
                 return response

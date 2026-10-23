@@ -304,7 +304,7 @@ def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
     assert call(engine, 'POST', prefix + '/delegations', body | {'goal': {'x': 3, 'y': 2, 'yaw': 0}})[0] == 409
     path = prefix + '/delegations/sample-unit/sample-intent'
     assert call(engine, 'GET', path)[1] == submitted
-    assert call(engine, 'POST', path + '/approve', {'expected_revision': 0})[0] == 409
+    assert call(engine, 'POST', path + '/approve', {'expected_revision': 2})[0] == 409
     status, approved = call(engine, 'POST', path + '/approve',
                             {'expected_revision': submitted['delegation']['revision']})
     row = approved['delegation']
