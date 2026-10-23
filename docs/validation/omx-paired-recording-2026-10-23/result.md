@@ -28,9 +28,9 @@ Evidence root outside Git: `C:/DevTemp/learning-execution-20261023/paired-record
 
 | File | SHA256 |
 |---|---|
-| `sdk-probe-program.py` | `093b871bacf665f8d793f909e29ed924b3919779b6d6f79a59d41b7a0a751727` |
-| `sdk-probe-result-record.json` | `f57b58855d8654ad54e94f68df3bd173e8ebe1bef84f929359cca9cc02181ce5` |
-| `sdk-probe-result-teleoperate.json` | `00cdbf15478da4c112f40be04a78b8dc0a00d1fd7941b263edc2efb902c91350` |
+| `sdk-probe-program.py` | sha256: `093b871bacf665f8d793f909e29ed924b3919779b6d6f79a59d41b7a0a751727` |
+| `sdk-probe-result-record.json` | sha256: `f57b58855d8654ad54e94f68df3bd173e8ebe1bef84f929359cca9cc02181ce5` |
+| `sdk-probe-result-teleoperate.json` | sha256: `00cdbf15478da4c112f40be04a78b8dc0a00d1fd7941b263edc2efb902c91350` |
 
 ## Limits and CE gate
 

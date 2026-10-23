@@ -28,11 +28,11 @@ External evidence: `C:/DevTemp/learning-execution-20261023/paired-actual-sdk-rec
 
 | File relative to OUT | SHA256 |
 |---|---|
-| `actual-record-loop-program.py` | `fb53b400776ba91158f5f39254fef80d09b5295d40666cdd26349d420395998c` |
-| `actual-record-loop-result.json` | `6a991cc5571c2b64e6fb825dd61092d5aed22bd4cf4d075ad0ae0eeeac648643` |
-| `dataset/meta/info.json` | `c95908563babbf2e8c815157671b21b21dd7898cb05bb9aa89ddcc93ca069519` |
-| `dataset/data/chunk-000/file-000.parquet` | `1ba7187794e4f50d17253fcc6d61512d7a6c2f474d22f421a197b0316f5b853f` |
-| `dataset/videos/observation.images.front/chunk-000/file-000.mp4` | `e4773070ae043a5dbce2a652e50f315f0b56ee432627b14f893da5b99cdd30c5` |
+| `actual-record-loop-program.py` | sha256: `fb53b400776ba91158f5f39254fef80d09b5295d40666cdd26349d420395998c` |
+| `actual-record-loop-result.json` | sha256: `6a991cc5571c2b64e6fb825dd61092d5aed22bd4cf4d075ad0ae0eeeac648643` |
+| `dataset/meta/info.json` | sha256: `c95908563babbf2e8c815157671b21b21dd7898cb05bb9aa89ddcc93ca069519` |
+| `dataset/data/chunk-000/file-000.parquet` | sha256: `1ba7187794e4f50d17253fcc6d61512d7a6c2f474d22f421a197b0316f5b853f` |
+| `dataset/videos/observation.images.front/chunk-000/file-000.mp4` | sha256: `e4773070ae043a5dbce2a652e50f315f0b56ee432627b14f893da5b99cdd30c5` |
 
 The failed first and image-free second probes remain in `paired-actual-sdk-record-loop` and `paired-actual-sdk-record-loop-v2`; no failed dataset is admitted for learning. The latter's metadata SHA256 is `ea846a48696f1299a235befe62a400a49a614e1af5f364cb26e173150b0d6e3e`. Headless `pynput` warnings are expected with injected keyboard events; they are not physical keyboard/stop acceptance.
 

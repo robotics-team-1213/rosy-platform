@@ -14,9 +14,9 @@ External evidence is `C:/DevTemp/learning-execution-20261023/paired-actual-sdk-r
 
 | File | SHA256 |
 |---|---|
-| `actual-record-loop-program.py` | `fb53b400776ba91158f5f39254fef80d09b5295d40666cdd26349d420395998c` |
-| `actual-record-loop-result.json` | `408c6128ea8a617e2c929948cf0943fc54759485c41c45b0a70757f76e18e2a5` |
-| `dataset/meta/info.json` | `c95908563babbf2e8c815157671b21b21dd7898cb05bb9aa89ddcc93ca069519` |
-| `dataset/videos/observation.images.front/chunk-000/file-000.mp4` | `e4773070ae043a5dbce2a652e50f315f0b56ee432627b14f893da5b99cdd30c5` |
+| `actual-record-loop-program.py` | sha256: `fb53b400776ba91158f5f39254fef80d09b5295d40666cdd26349d420395998c` |
+| `actual-record-loop-result.json` | sha256: `408c6128ea8a617e2c929948cf0943fc54759485c41c45b0a70757f76e18e2a5` |
+| `dataset/meta/info.json` | sha256: `c95908563babbf2e8c815157671b21b21dd7898cb05bb9aa89ddcc93ca069519` |
+| `dataset/videos/observation.images.front/chunk-000/file-000.mp4` | sha256: `e4773070ae043a5dbce2a652e50f315f0b56ee432627b14f893da5b99cdd30c5` |
 
 CE: 해당 없음 — the role distinction is captured by the class name, unchanged architecture test and this integration evidence. No runtime or field gate moved. The single-arm collection watchdog failure remains unresolved in workspace evidence.
