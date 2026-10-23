@@ -40,6 +40,7 @@ fleet console --robots /etc/rosy/robots.yaml \
 - 취소는 같은 위임의 요청으로 전달한다. 미제출 후보는 닫을 수 있다. 제출된 Task는 원래 boot/run/correlation의 조건부 취소만 사용하며 구형 무조건 취소로 대체하지 않는다.
 - 취소 receipt는 실제 정지나 자원 해제 증거가 아니다. 기존 native 결과·quiescence 재조정이 Task claim을 해제한다. 현재 facade가 새 실행을 가리킬 수도 있으므로 원래 receipt의 범위를 확인한다.
 - 승인 직전 직접 부모부터 조상까지 같은 배정의 취소 여부와 연결을 확인한다. 단절 때 새 승인을 막는다. 이미 admission을 마친 유한 Action은 기존 owner가 처리한다. 자동 대체·재배정·재무장은 없다.
+- 미완료 owner 투영은 마지막 성공 조회 뒤 5초가 지나면 stale이다. 원장 상태가 바뀌지 않아도 재대조로 신선도를 확인한다. 확정된 종단 결과는 단절 뒤에도 원래 결과로 보존한다.
 - 재시작해도 위임·승인자·Task identity를 유지하며 dispatch는 기존 startup 정책대로 닫힌다. Task 없는 승인 중 기록은 운영자가 최신 상태로 다시 확인한다.
 - 미완료 위임이 있는 구성 revision 변경은 시작을 거절한다. 기존 구성에서 원래 작업을 조정·해결한 뒤 계획된 변경을 수행한다. DB를 새 unit ID에 재사용하지 않는다.
 

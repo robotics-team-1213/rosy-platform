@@ -1,6 +1,7 @@
 """Durable direct-neighbor delegation; only local approval enters Fleet admission."""
 
 from hashlib import sha256
+from time import monotonic
 
 import httpx
 
@@ -21,6 +22,7 @@ class ControlUnitService:
         if any(row["config_revision"] != topology.revision for row in active):
             raise ValueError("CONTROL_UNIT_ACTIVE_CONFIGURATION_CHANGED")
         tasks.control_units = store
+        self._fresh_at = {}
         self._stale = {(row["origin_id"], row["delegation_id"]) for row in active
                        if row["owner_unit"] != self.unit.unit_id}
 
@@ -60,9 +62,14 @@ class ControlUnitService:
         return self.reply(*self._key(row))
 
     def reply(self, origin, identity):
+        row = self.store.get(origin, identity)
+        key = origin, identity
+        projected = row["owner_unit"] != self.unit.unit_id or row["local_task_id"] is not None
+        # Immutable terminal outcomes survive disconnect; active projections expire after five seconds.
+        stale = row["status"] not in TERMINAL and (key in self._stale or (
+            projected and not 0 <= monotonic() - self._fresh_at.get(key, float("-inf")) <= 5.0))
         return ControlUnitReply(unit_id=self.unit.unit_id, config_revision=self.topology.revision,
-                                stale=(origin, identity) in self._stale,
-                                delegation=self.store.get(origin, identity)).model_dump(mode="json")
+                                stale=stale, delegation=row).model_dump(mode="json")
 
     def _peer_row(self, unit_id, row, response):
         reply = ControlUnitReply.model_validate(response)
@@ -171,9 +178,17 @@ class ControlUnitService:
                 self.store.project(*self._key(row), owner_unit=row["owner_unit"], owner_revision=child["revision"],
                                    status=child["status"], result=child["result"])
             self._stale.discard(self._key(row))
+            if self.store.get(*self._key(row))["status"] in TERMINAL:
+                self._fresh_at.pop(self._key(row), None)
+            else:
+                self._fresh_at[self._key(row)] = monotonic()
         except (ConnectionError, OSError, ValueError, KeyError, RobotApiError, httpx.HTTPError):
             self._stale.add(self._key(row))
 
     async def refresh(self):
-        for row in self.store.active():
+        rows = self.store.active()
+        active = {self._key(row) for row in rows}
+        self._stale.intersection_update(active)
+        self._fresh_at = {key: value for key, value in self._fresh_at.items() if key in active}
+        for row in rows:
             await self._sync(row)
