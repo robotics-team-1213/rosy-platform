@@ -3140,3 +3140,11 @@
 - 증거: 이전 착지에서 단독 branch FAIL/main PASS. 새 커밋에서 변경 없는 권한 경계 검사 포함 원격 238 passed/NEW0. 같은 실제 SDK 녹화 프로그램을 새 커밋으로 재실행해 RGB9프레임·12 action 재읽기·전 bus OFF/연결 정리 PASS, 전체 증거 회수 완료. [통합 검증](../docs/validation/omx-paired-sdk-record-loop-2026-10-23/integration.md).
 - gate 변화: 없음. 실물 수용·정책 학습 증거는 추가하지 않는다.
 - CE: 해당 없음. 명명과 기존 검사·검증 기록으로 판단을 복구할 수 있다.
+
+## 2026-10-23 · 8ca63bb880 · teacher 중단 시각 근거 보존
+
+- 변경: teacher 최종 결과에 기존 immutable watchdog 관측과 intake/steady 시각을 보존한다. 진단 오류는 원래 결과·정리 경로를 유지하고 오류 종류만 남긴다.
+- 증거: 수정 전 5 RED, 수정 후 원격 65 passed/NEW0, 독립 안전 검토. [검증](../docs/validation/omx-teacher-watchdog-2026-10-23/result.md). [완료 입력 20개 감사](../docs/validation/omx-closed-teacher-input-audit-2026-10-23/result.md)는 고정 25개 수집 묶음의 완료·학습 승인이 아니다.
+- gate 변화: 없음. 시간 경계·명령 권한·실물 수용을 변경하지 않는다.
+- 실행: 검증된 후보에서 별도 engineering NativeSIM 1회 PASS·RGB1584프레임·전체 정리 확인. watchdog 중단은 재현되지 않아 관측은 null이며, 기존 고정 수집본에 추가하지 않았다. 전체 회수·소스 바이트·무결한 녹화·정리 증거를 독립 검토했다.
+- CE: 미해결. 단일 팔 수집 중단 원인을 진단할 근거만 보완했다.

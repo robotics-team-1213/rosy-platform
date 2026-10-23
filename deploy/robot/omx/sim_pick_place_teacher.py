@@ -1,6 +1,6 @@
 """Private native SIM teacher: real short goals, RGB frames and object observations."""
 import argparse
-from dataclasses import replace
+from dataclasses import asdict, replace
 import hashlib
 import json
 import math
@@ -21,6 +21,22 @@ from sim_policy_trial_evidence import contact_held
 
 
 PLACE_CLEARANCE_M = .005
+
+
+def teacher_watchdog_evidence(owner):
+    try:
+        from omx_adapter.watchdog_observation import WatchdogObservation
+        observation = owner.watchdog_observation
+        if observation is None:
+            return None
+        if type(observation) is not WatchdogObservation:
+            raise TypeError('invalid watchdog observation')
+        evidence = asdict(observation)
+        json.dumps(evidence, allow_nan=False)
+        return evidence
+    except Exception as exc:
+        # Diagnostic failure must preserve the original outcome and shutdown path.
+        return {'error': type(exc).__name__}
 
 
 def contact_hold_target(position,*,close,contact):
@@ -319,6 +335,7 @@ def run(directory, world, observer_path, *, home_only=False):
         if episode_id and capture.recorder.active:
             receipt['capture'] = capture.stop(episode_id, 'failure')
     finally:
+        receipt['watchdog_observation'] = teacher_watchdog_evidence(arm.owner)
         receipt.update(success=success, error=error, recording_end_sim_s=sim_time(),
                        owner_final=facade.snapshot(), camera_final=capture.camera_status(),
                        camera_error=camera.error,
