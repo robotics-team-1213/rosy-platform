@@ -246,6 +246,7 @@
 | D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 |
 | D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 |
 | D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 |
+| D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 |
 
 ## 계획·결과 문서
 
@@ -335,6 +336,7 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-harbor-rosy-application-action-boundary.md](plans/2026-10-24-harbor-rosy-application-action-boundary.md)
 
 ## 교훈 (docs/solutions)
 
@@ -349,8 +351,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · D-856 업무 공정과 로봇 동작 실행 경계
 - 2026-10-23 · uncommitted · 독립·상하위 관제 상세 설계와 최종 목표 등록
 - 2026-10-23 · 118425b1b5 · VLM 질문 세트 v2와 T1 정답 화면
 - 2026-10-23 · 2df7fdcc35 · 해시 표의 시크릿 스캔 교훈 보강
 - 2026-10-23 · uncommitted · 관제 구성 후속 목표와 착지 준비
-- 2026-10-23 · uncommitted · 독립 운영과 하위 구성을 지원하는 관제 단위
