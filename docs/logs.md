@@ -10038,6 +10038,12 @@ osy-d395-s1d\`.
 - 증거: AI PC pytest 293 passed(`bc98829f68/run-1.txt`). 앞선 실물 근거: `align` 통과 영수증(`pipeline-receipts/align-20261023T123020.json`, `gap_degrees` -2.461°/-0.352°), 리더 `health` 실패 영수증이 `Missing motor IDs: 2, 6`과 래치된 전압 오류를 함께 기록(`pipeline-receipts/health-20261023T171447.json`). 두팔 `drive`는 리더 전원 재투입과 중력 보상 값 실측 전까지 미통과다.
 - gate 변화: 없음. Fleet·CORE 권한, DEVICE/FIELD 수용, D-430 safety review는 그대로다. 두팔 브랜치의 fleet·core 변경은 착지하지 않았다.
 
+## 2026-10-23 · c4d6f20cbb · VLM 닫힌 질문 벤치
+
+- 변경: [`tools/vlm_question_bench.py`](../tools/vlm_question_bench.py)를 추가했다(전처리, 사진 prefix 1회, 질문별 선택지 토큰 확률, 캐시·전체 forward 비교, Ollama 비교). [벤치 기록](validation/vlm-question-bench-2026-10-23/result.md)과 설계·실험 계획의 실행기·질문 규칙을 갱신했다.
+- 증거: 모델 PC에서 Qwen3-VL-8B(nf4)·Qwen3-VL-4B·Qwen3.5-4B, front·top·wrist 40장씩. Ollama 0.35.1 확률 읽기로 질문 전부 p50 0.10–0.18 s, 현행 설명 호출 1회 p50 1.66–1.87 s. 사람 정답 전이라 정확도는 미판정이다.
+- gate 변화: 없음. 운영 `vision.py`·AI PC·로봇은 바꾸지 않았다.
+
 ## 2026-10-23 · uncommitted · 독립 운영과 하위 구성을 지원하는 관제 단위
 
 - 변경: D-850에 독립 운영·서브 관제·중첩 구성의 목표와 책임 경계를 기록하고 용어·ADR 색인을 연결했다. PC 배치와 실행 계약의 미결 사항을 구분했다.
