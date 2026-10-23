@@ -40,6 +40,8 @@ on:
       - operations/apps/games/**
       - contracts/foundation/core_common/**
       - contracts/learning/src/**
+      - contracts/skill/src/**
+      - operations/processes/palletizing/src/**
       - operations/apps/fleet/**
       - shared/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml
