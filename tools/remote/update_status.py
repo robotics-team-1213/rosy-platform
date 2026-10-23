@@ -7,6 +7,10 @@ update unit (`*autoupdate*`, `*-update`), its last JSON step and result, and the
 systemd lists as failed. A channel is `STUCK` when its unit failed or it logged no healthy step
 (switched, up_to_date, idle, active) within `--stale-hours` (default 6); a disabled timer is `OFF`.
 Exit 1 when any channel is STUCK or a host is unreachable. Nothing is started, stopped or changed.
+
+It also lists where each running rosy service's code comes from (its ExecStart and environment
+files): an auto-updated `current` link, a pinned `release` commit, or `ADHOC` (a `~/rosy-test`
+copy, which no updater or installer owns). Pinned and ad hoc sources do not change the exit code.
 """
 from __future__ import annotations
 
@@ -32,6 +36,12 @@ for u in $(systemctl --user list-unit-files --no-legend 'rosy-*' 2>/dev/null | a
   echo "unit $u $result $timer ${healthy:--} $(printf '%s\n' "$log" | tail -1)"
 done
 for f in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
+for u in $(systemctl --user list-units --no-legend --plain --type=service --state=active 'rosy-*' 2>/dev/null | awk '{print $1}'); do
+  envs=$(systemctl --user show "$u" -p EnvironmentFiles --value | grep -oE '/[^ ]+' | grep -v '^/dev')
+  text="$(systemctl --user show "$u" -p ExecStart --value) $(cat $envs 2>/dev/null)"
+  src=$(printf '%s' "$text" | grep -oE '/home/[^ "=:;]*(/rosy-test/[^/ "]+|/releases/[^/ "]+|/source/[0-9a-f]{40}|/current)' | head -1)
+  echo "svc $u ${src:--}"
+done
 '''
 HEALTHY = {'switched', 'up_to_date', 'idle', 'active'}
 
@@ -43,19 +53,34 @@ def _number(text):
         return None
 
 
+def classify(source: str) -> dict:
+    """Name a service's code source: ADHOC rosy-test copy, auto-updated current link, or pinned release."""
+    name = source.rstrip('/').rsplit('/', 1)[-1]
+    if '/rosy-test/' in source:
+        return dict(kind='ADHOC', where=name)
+    if source.endswith('/current'):
+        return dict(kind='current', where=source.rsplit('/', 2)[-2])
+    if '/releases/' in source or '/source/' in source:
+        return dict(kind='release', where=name[:12])
+    return dict(kind='other', where='-')
+
+
 def parse(text: str, now: float, stale_hours: float) -> dict:
     """One host's probe output -> channels; a channel is STUCK when it has not been healthy recently.
 
     A short deferral (a running job, waiting for CI) is normal; the same deferral for longer than
     `stale_hours` is what hid the field PC (4 days) and AI PC (3 days) stalls in October.
     """
-    host = dict(gate='unknown', channels=[], failed=[])
+    host = dict(gate='unknown', channels=[], failed=[], sources=[])
     for raw in text.splitlines():
         kind, _, rest = raw.partition(' ')
         if kind == 'gate':
             host['gate'] = rest.strip()
         elif kind == 'failed':
             host['failed'].append(rest.strip())
+        elif kind == 'svc':
+            unit, _, source = rest.strip().partition(' ')
+            host['sources'].append(dict(unit=unit, **classify(source)))
         elif kind == 'unit':
             fields = rest.split(' ', 5)
             unit, result, timer, healthy = (fields + ['', '', '', ''])[:4]
@@ -107,6 +132,9 @@ def main() -> None:
             print('  (no rosy update unit)')
         for unit in host['failed']:
             print(f'  failed unit: {unit}')
+        for src in host['sources']:
+            if src['kind'] != 'other':
+                print(f'  {src["kind"]:7} {src["unit"]}: {src["where"]}')
     sys.exit(1 if stuck else 0)
 
 
