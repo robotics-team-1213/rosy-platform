@@ -95,3 +95,43 @@ def test_database_cannot_change_its_control_unit_identity(tmp_path):
     open_store(path)
     with pytest.raises(ValueError, match="IDENTITY"):
         open_store(path, unit_id="other")
+
+
+def test_task_binding_uses_the_existing_task_transaction(tmp_path):
+    from fleet.server.task_store import FleetTaskStore
+    path = tmp_path / "fleet.db"
+    tasks, store = FleetTaskStore(path), open_store(path)
+    create(store)
+    def submit(task_id, key="control:R:job-1"):
+        return tasks.create_task(task_id=task_id, robot_id="a", task_type="navigate",
+                                 source="operator", actor_id="operator-a", request_key=key,
+                                 request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None,
+                                 admission=store.task_admission("R", "job-1", actor_id="operator-a"))
+    with pytest.raises(ValueError, match="APPROVAL"):
+        submit("task-1")
+    store.approve("R", "job-1", actor_id="operator-a")
+    assert submit("task-1")["created"] is True
+    assert submit("task-2")["task"]["task_id"] == "task-1"
+    reopened = open_store(path)
+    assert reopened.get("R", "job-1")["local_task_id"] == "task-1"
+    with pytest.raises(ValueError, match="CONFLICT"):
+        submit("task-2", key="different-intent")
+    assert tasks.get_task("task-2") is None
+
+
+def test_binding_rolls_back_with_a_failed_task_creation(tmp_path):
+    from fleet.server.task_store import FleetTaskStore
+    path = tmp_path / "fleet.db"
+    tasks, store = FleetTaskStore(path), open_store(path)
+    create(store)
+    store.approve("R", "job-1", actor_id="operator-a")
+    bind = store.task_admission("R", "job-1", actor_id="operator-a")
+    def fail_after_binding(connection, task_id):
+        bind(connection, task_id)
+        raise RuntimeError("injected insert failure")
+    with pytest.raises(RuntimeError):
+        tasks.create_task(task_id="task-1", robot_id="a", task_type="navigate",
+                          source="operator", actor_id="operator-a", request_key="stable-key",
+                          request={"goal": {}}, evidence=None, admission=fail_after_binding)
+    assert tasks.get_task("task-1") is None
+    assert open_store(path).get("R", "job-1")["local_task_id"] is None
