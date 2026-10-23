@@ -126,7 +126,7 @@ FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 OMX_REVIEW_FILES = (
     *("learning/curation/omx/" + name for name in
-      ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py")),
+      ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py", "omx_output_paths.py")),
     *("contracts/learning/src/rosy/contracts/learning/" + name for name in
       ("__init__.py", "omx.py", "artifacts.py", "png.py", "camera_setup.py")))
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",

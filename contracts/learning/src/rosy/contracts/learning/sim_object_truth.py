@@ -193,7 +193,7 @@ def _validate(path, validated, source):
         raise ValueError('SIM camera geometry differs from pinned source')
     joints = ['joint'+str(i) for i in range(1,6)] + ['gripper_joint_1']
     limits = dict(zip(joints, [[-2.6,2.6],[-1.7,1.2],[-1.3,1.7],[-.3,2.3],[-2.,2.],[-.1,1.1]]))
-    if (provenance['fps'] != 10 or provenance['instance_id'] != 'omx_cell_sim_01'
+    if (provenance['fps'] not in (5, 10) or provenance['instance_id'] != 'omx_cell_sim_01'
             or provenance['calibration_revision'] != 'omx-f-gazebo-only-v1'
             or provenance['joint_names'] != joints or provenance['position_limits_rad'] != limits
             or provenance['camera']['identity'] != 'gazebo:omx_cell_workcell:front:'+provenance['world_sha256']
