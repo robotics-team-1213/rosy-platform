@@ -37,6 +37,10 @@ ACT linear action head의 역정규화 이동량 `d`에 `0.035*tanh(d/0.035)`를
 미분 가능한 같은 activation을 학습·validation·재적재·byte 추론에 설치하며 정규화의
 type과 정확한 `max_delta_rad: 0.035`를 hash로 결속한다. 기존 weight key는 유지된다.
 원 절대 target을 자르지 않으므로 0.035rad 밖의 정답은 정확히 재현할 수 없다.
+bounded head의 표본 선택은 미래 4개 target 전체와 집게까지 같은 시작 상태의
+±0.035rad 안에 드는 원본 frame만 고른다. 모든 command가 남아야 하며, 표현 가능한
+frame이 없는 command는 학습 전에 거절한다. `all_frames`는 하나라도 범위 밖이면
+거절한다. 선택한 index와 chunk bound는 `training-index.json`에 기록한다.
 chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존
 owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 성공의 증거는 아니다.
 
@@ -48,16 +52,19 @@ owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 
 부모의 전체 파일 SHA, ACTConfig, 관절·카메라·limits와 train-only 통계가 일치해야
 weights를 읽는다. 부모 revision·weights/config/정규화 SHA와 기존 학습 step을
 정규화·평가 보고서에 결속하고 새 AdamW로 지정한 step을 추가 학습한다. 기존10k와
-추가10k는 구분한다. 원 target을 자르지 않으며, source 밖 정답의 잔차와 기존 owner
-절대 범위·readback 0.04rad fence는 유지한다. 실제 recovery 정답을 추가한 것은 아니다.
+추가10k는 구분한다. 원 target을 자르지 않으며, 같은 bounded chunk 선택과 기존 owner
+절대 범위·readback 0.04rad fence를 적용한다. 실제 recovery 정답을 추가한 것은 아니다.
 
 상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
-Gaussian 교란을 주는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
+Gaussian 교란을 만드는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
 시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
 정규화를 fit하고 validation·추론에는 교란을 넣지 않는다. 분포·std·seed·관절·적용 범위는
 정규화·보고서와 DatasetManifest transformation hash에 결속한다. 교란 입력은 synthetic이며
-실제 관측·추가 시연·SIM truth가 아니다. 관절 한계 밖 상태나 0.04rad 초과 이동량도 만들 수
-있고 clipping하지 않는다. 실제 recovery 정답이나 native 성공을 보장하지 않는다.
+실제 관측·추가 시연·SIM truth가 아니다. bounded head에서는 미래 원본 target 모두가
+±0.035rad에 남도록 synthetic 시작 상태만 가능한 구간으로 제한하고, 이 분포를
+`gaussian_state_noise_clamped_to_chunk_support_v1`로 기록한다. 원 action 정답은
+자르거나 바꾸지 않는다. unbounded 상대 head는 기존 Gaussian 교란을 유지한다.
+교란 상태의 실물 도달성이나 recovery 정답·native 성공을 보장하지 않는다.
 기본값 0에서는 전용 RNG와 추가 augmentation metadata를 만들지 않는다.
 
 `lerobot_export.py --sim-ground-truth <truth.json>`으로 검증한 고정 물체 과제의
