@@ -44,3 +44,22 @@ def test_control_unit_refuses_start_without_a_durable_task_journal(tmp_path):
     console = FleetConsole([], [])
     with pytest.raises(ValueError, match="JOURNAL"):
         create_app(console, control_unit_config=config_file(tmp_path))
+
+
+def test_cli_starts_an_independent_aggregate_without_direct_robots(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from fleet.cli import parse_args, run_console
+    robots, users, config = tmp_path / "robots.yaml", tmp_path / "users.yaml", tmp_path / "unit.yaml"
+    robots.write_text("robots: []\n", encoding="utf-8")
+    users.write_text(yaml.safe_dump({"users": [{"principal_id": "operator-r", "role": "operator",
+        "token_sha256": sha256(b"human-token").hexdigest()}]}), encoding="utf-8")
+    config.write_text(yaml.safe_dump({"unit_id": "R", "manifest": {"revision": "v1", "units": [{"id": "R"}]},
+                                     "peers": {}}), encoding="utf-8")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    run_console(parse_args(["console", "--robots", str(robots), "--users-file", str(users),
+                            "--tasks-db", str(tmp_path / "fleet.db"), "--control-unit-config", str(config)]))
+    assert captured["app"].state.control_unit.unit.unit_id == "R"
+    assert captured["app"].state.task_service.robot_ids == frozenset()
+    asyncio.run(captured["app"].state.control_unit_http.aclose())
