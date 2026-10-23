@@ -407,7 +407,7 @@ host HTTP tests are not Gazebo or physical acceptance.
 
 녹화 설정 검사, native 검토·분할, ACT, private Hub 동기화는 [실행 안내](../../../learning/curation/omx/README.md)를 따른다. 실행 PC와 HF 조직은 미정이며 Pilot 실물 활성화는 별도다.
 
-`record_session.py`로 녹화를 마친 뒤에는 현장 PC에서 `python record_seal.py --session-dir <녹화를 실행한 폴더> --name <새 이름>`을 실행한다. 이 명령은 안전 종료(`safe_end`)·녹화 모드·종료 코드 0인 세션만 받는다. 1팔(`omx_follower`)·2팔(`bi_omx_follower`) LeRobot v3 데이터셋을 `~/rosy-test/omx-collections/<이름>/`에 해시 목록과 함께 복사하고, 원본 녹화는 건드리지 않는다. 그다음 개발 PC에서 `python tools/remote/omx_collection_transfer.py --session <이름>`으로 모델 PC의 `~/rosy-test/omx-il-data/collections/`에 옮긴다. 이 단계는 장치를 움직이지 않고 Hub에 올리지 않는다.
+`record_session.py`로 녹화를 마친 뒤에는 현장 PC에서 `python record_seal.py --session-dir <녹화를 실행한 폴더> --name <새 이름> --rig-revision <작업대 배치 이름> --calibration <사용한 보정 JSON>...`을 실행한다. 이름이 세션 ID가 되고 Episode마다 독립 사이클 ID가 붙는다(D-848). 이 명령은 안전 종료(`safe_end`)·녹화 모드·종료 코드 0인 세션만 받는다. 1팔(`omx_follower`)·2팔(`bi_omx_follower`) LeRobot v3 데이터셋을 `~/rosy-test/omx-collections/<이름>/`에 해시 목록과 함께 복사하고, 원본 녹화는 건드리지 않는다. 그다음 개발 PC에서 `python tools/remote/omx_collection_transfer.py --session <이름>`으로 모델 PC의 `~/rosy-test/omx-il-data/collections/`에 옮긴다. 이 단계는 장치를 움직이지 않고 Hub에 올리지 않는다.
 
 ## 재현 가능한 Pilot SIM 준비
 

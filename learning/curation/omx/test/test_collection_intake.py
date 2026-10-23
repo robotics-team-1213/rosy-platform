@@ -220,3 +220,76 @@ def test_real_lerobot_roundtrip_keeps_independent_capture_groups(module, tmp_pat
     from native_review import reviewed_splits
     with pytest.raises(ValueError, match='nonempty'):
         reviewed_splits(report, decisions)
+
+
+def sealed_two_arm_recording(tmp_path, episodes=2):
+    """A real bi_omx_follower LeRobot v3 recording sealed by deploy/robot/omx/record_seal.py."""
+    import numpy as np
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+    names = [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in
+             ('shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
+              'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos')]
+    features = {key: dict(dtype='float32', shape=(12,), names=names) for key in ('observation.state', 'action')}
+    features['observation.images.top'] = dict(dtype='video', shape=(32, 32, 3), names=['height', 'width', 'channels'])
+    root = tmp_path/'recordings'/'two-arm-r1'
+    dataset = LeRobotDataset.create(repo_id='local/two-arm', fps=10, root=root, robot_type='bi_omx_follower',
+                                    features=features, use_videos=True, video_backend='pyav', vcodec='h264',
+                                    batch_encoding_size=1)
+    try:
+        for episode in range(episodes):
+            for frame in range(3):
+                dataset.add_frame({'observation.state': np.full(12, episode + frame, np.float32),
+                                   'action': np.full(12, episode + frame + .5, np.float32),
+                                   'observation.images.top': np.full((32, 32, 3), 40 * frame, np.uint8),
+                                   'task': 'Hand the block over'})
+            dataset.save_episode(parallel_encoding=False)
+    finally:
+        dataset.finalize()
+    run = tmp_path/'run'
+    run.mkdir()
+    (run/'record.json').write_text(json.dumps(dict(dataset=dict(root=str(root)))))
+    (run/'session.json').write_text(json.dumps(dict(config='record.json', teleop_only=False,
+                                                    exit_code=0, safe_end=True)))
+    calibration = tmp_path/'arm_a_follower.json'
+    calibration.write_text('{"shoulder_pan": {"homing_offset": 0}}')
+    spec = importlib.util.spec_from_file_location(
+        'record_seal', Path(__file__).resolve().parents[4]/'deploy/robot/omx/record_seal.py')
+    seal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seal)
+    seal.seal(run, 'bench-two-arm-001', tmp_path/'collections', rig_revision='bench-a-b-r1',
+              calibrations=[calibration])
+    return tmp_path/'collections'/'bench-two-arm-001'
+
+
+def test_real_sealed_leader_recording_becomes_a_prepared_intake_with_one_session(module, tmp_path):
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    collection = sealed_two_arm_recording(tmp_path)
+    output = tmp_path/'prepared'
+    receipt = module.prepare_native(collection, output, 'local/two-arm')
+    report = json.loads((output/'inspection.json').read_text())
+    decisions = json.loads((output/'decisions.json').read_text())
+    assert receipt['reader_verified'] is True and receipt['fixture_only'] is False
+    assert report['robot_type'] == 'bi_omx_follower' and report['source_mode'] == 'leader_native'
+    assert [(e['session_id'], e['cycle_id']) for e in report['episodes']] == [
+        ('bench-two-arm-001', 'bench-two-arm-001-ep0000'), ('bench-two-arm-001', 'bench-two-arm-001-ep0001')]
+    assert all(e['outcome'] == 'unknown' and e['split'] == 'exclude' for e in decisions)
+    for name in ('intake-receipt.json', 'inspection.json', 'capture.json', 'environment.json', 'decisions.json'):
+        assert (output/name).is_file()
+    from native_capture import check_capture_groups
+    with pytest.raises(ValueError, match='session_id crosses'):
+        check_capture_groups(report['episodes'], [dict(split='train'), dict(split='eval')])
+
+
+@pytest.mark.parametrize('fault', ['bytes', 'calibration', 'name'])
+def test_altered_or_renamed_sealed_collection_is_refused_before_output(module, tmp_path, fault):
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    collection = sealed_two_arm_recording(tmp_path, episodes=1)
+    if fault == 'bytes':
+        (collection/'session.json').write_text('{}')
+    elif fault == 'calibration':
+        (collection/'calibration'/'arm_a_follower.json').write_text('{}')
+    else:
+        collection = collection.rename(collection.with_name('other-name'))
+    with pytest.raises(ValueError):
+        module.prepare_native(collection, tmp_path/'prepared', 'local/two-arm')
+    assert not (tmp_path/'prepared').exists()

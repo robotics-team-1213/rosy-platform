@@ -383,6 +383,79 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
     return receipt
 
 
+
+def _sealed_collection(root):
+    """Re-hash a record_seal.py collection; the manifest must cover every file exactly."""
+    root = Path(root).absolute()
+    raw = (root/'manifest.json').read_bytes()
+    manifest = json.loads(raw)
+    _require(manifest.get('schema') == 'rosy.omx-collection-session.v1' and manifest.get('state') == 'CLOSED'
+             and manifest.get('mode') == 'hardware' and manifest.get('source_mode') == 'leader_native',
+             'sealed leader collection required')
+    actual = {}
+    for path in sorted(root.rglob('*')):
+        _require(not path.is_symlink() and (path.is_dir() or path.is_file()), 'links and special files refused')
+        if path.is_file() and path != root/'manifest.json':
+            with path.open('rb') as stream:
+                actual[path.relative_to(root).as_posix()] = hashlib.file_digest(stream, 'sha256').hexdigest()
+    _require(actual == manifest.get('files'), 'collection bytes differ from its manifest')
+    rows = sorted((k, v) for k, v in actual.items() if k.startswith('calibration/'))
+    _require(bool(rows) and manifest.get('calibration_revision')
+             == hashlib.sha256(json.dumps(rows).encode('utf-8')).hexdigest(), 'calibration revision differs')
+    for key in ('session_id', 'rig_revision'):
+        _require(isinstance(manifest.get(key), str) and manifest[key].strip() == manifest[key] != '',
+                 f'sealed {key} required')
+    _require(manifest['session_id'] == root.name, 'collection name differs from its sealed session id')
+    return manifest, hashlib.sha256(raw).hexdigest()
+
+
+def prepare_native(collection, output, repo_id):
+    """D-848: sealed leader recording -> prepared intake; one session, one cycle per episode, decisions unknown."""
+    import shutil
+    collection = Path(collection).absolute()
+    manifest, manifest_sha256 = _sealed_collection(collection)
+    output = Path(output).absolute()
+    _require(not output.exists() and output.drive.upper() != 'F:', 'new output outside source drive required')
+    _require(not output.resolve().is_relative_to(collection.resolve())
+             and not collection.resolve().is_relative_to(output.resolve()), 'output must be separate from the source')
+    shutil.copytree(collection/'dataset', output)
+    provenance = output/'rosy_provenance'/'session-000000'
+    for name in ('session.json', 'record-config.json', 'manifest.json'):
+        provenance.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(collection/name, provenance/name)
+    shutil.copytree(collection/'calibration', provenance/'calibration')
+    files = dataset_files(output)
+    sealed = {k.removeprefix('dataset/'): v for k, v in manifest['files'].items() if k.startswith('dataset/')}
+    _require({k: v for k, v in sealed.items() if k.split('/')[0] in ('meta', 'data', 'videos')
+              and PurePosixPath(k).suffix in ('.json', '.parquet', '.mp4')} == files,
+             'copied dataset differs from the sealed collection')
+    episodes = json.loads((output/'meta'/'info.json').read_text(encoding='utf-8')).get('total_episodes')
+    _require(type(episodes) is int and episodes > 0, 'recorded episode count required')
+    session = manifest['session_id']
+    capture = dict(schema=CAPTURE_SCHEMA, source_mode='leader_native', action_semantics=ACTION,
+                   body_units='normalized_-100_100', gripper_units='normalized_0_100',
+                   rig_revision=manifest['rig_revision'], calibration_revision=manifest['calibration_revision'],
+                   collection_manifest_sha256=manifest_sha256, files=files,
+                   episodes=[dict(episode_index=i, session_id=session, cycle_id=f'{session}-ep{i:04d}')
+                             for i in range(episodes)])
+    report = inspect_dataset(output, repo_id, body_units='normalized_-100_100',
+                             rig_revision=manifest['rig_revision'],
+                             calibration_revision=manifest['calibration_revision'],
+                             source_mode='leader_native', capture_provenance=capture)
+    _require(_sealed_collection(collection)[1] == manifest_sha256, 'source changed during intake')
+    receipt = dict(schema='rosy.omx-collection-intake.v1', reader_verified=True, uploaded=False,
+                   completed_only=False, fixture_only=False, source_mode='leader_native',
+                   sessions=[dict(session_id=session, manifest_sha256=manifest_sha256,
+                                  provenance_path='rosy_provenance/session-000000')],
+                   episodes=[dict(episode_index=i, session_id=session, attempt_index=i,
+                                  cycle_id=f'{session}-ep{i:04d}') for i in range(episodes)])
+    for name, document in (('capture.json', capture), ('environment.json', report['environment_summary']),
+                           ('inspection.json', report), ('decisions.json', report['episodes']),
+                           ('intake-receipt.json', receipt)):
+        write_json(output / name, document)
+    return receipt
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)

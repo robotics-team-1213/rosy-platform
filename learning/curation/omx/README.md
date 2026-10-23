@@ -199,6 +199,14 @@ session/cycle 분할 뒤 ACT 학습과 별도 process model/pre/post 재적재�
 rehearsal 데이터는 실물 intake가 거부한다. [Fleet 수집·전송·검토·학습 절차](../../../docs/plans/2026-10-17-omx-next-day-collection.md).
 물리 시연 수집과 학습 정책의 실물 평가는 각각 현장 수용 후 진행한다.
 
+## 봉인한 리더 녹화의 intake (D-848)
+
+현장 PC에서 `record_seal.py`로 봉인하고 `omx_collection_transfer.py`로 옮긴 1팔·2팔 리더 녹화는
+`collection_pipeline.py prepare-native <rosy-test/omx-il-data/collections/<이름>> --out <새 prepared 폴더> --repo-id <local/id>`로
+prepared intake를 만든다. 봉인 manifest와 보정 revision을 다시 해시하고 실제 LeRobot reader로 검사한다.
+녹화 하나가 세션 하나라서 그 Episode들은 한 분할에만 들어간다. 학습·평가를 나누려면 녹화가 둘 이상 필요하다.
+판정은 모두 `unknown`/`exclude`로 시작하며 사람 검수 뒤 학습센터 ‘등록된 검수 시연’과 기존 export·학습 경로를 따른다.
+
 ## 학습센터에서 파지 구간 검수
 
 학습센터 `/learning/omx`에서 자료 등록에 연결한 prepared intake를 선택한다.
