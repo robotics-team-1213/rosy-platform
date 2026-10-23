@@ -35,7 +35,7 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 ```bash
 install -m 0755 deploy/model_pc/auto_review_release.py deploy/model_pc/install_review_release.py ~/rosy-ml/bin/
 install -m 0644 deploy/model_pc/rosy-review-release-update.{service,timer} ~/.config/systemd/user/
-printf 'REVIEW_HOST=%s\nMINIMUM_SEQUENCE=%s\n' '<model-pc-private-ip>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
+printf 'REVIEW_HOST=%s\nREVIEW_PYTHON=%s\nMINIMUM_SEQUENCE=%s\n' '<current --host>' '<current review Python>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
 chmod 600 ~/.config/rosy/review-release.env
 systemctl --user daemon-reload
 systemctl --user start rosy-review-release-update.service
