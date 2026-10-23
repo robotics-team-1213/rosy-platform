@@ -584,3 +584,9 @@
 - 변경: 관절 기록 수신을 카메라 기본 callback group과 분리한다. 이전 카메라 출처 로그의 누락된 gate 필드는 기존 본문의 같은 문장을 옮겨 형식만 보강하고 날짜순으로 배치했다. 이전·수정 블록의 정확한 SHA 쌍을 기존 log repair 원장에 보존한다.
 - 증거: 기본 callback group의 관절 수신 차단을 실제 ROS에서 RED 1 failed/1 passed로 재현했고 분리 후 2 passed다. batch 4 첫 시연의 원본 2650 RGB를 모델 PC에서 export/readback했다.
 - gate 변화: 명시적 보조 SIM의 시연·원본 기록·별도 callback 수신 범위다. 새 수집 재검증·학습·독립 정책 20회·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · a3a75e6fd2 · 긴 교사 시연의 원본 시각 기반 5fps 기록
+
+- 변경: 고정 10Hz 카메라에서 교사 시연만 5fps로 선택하고 원본 capture/state 시각과 명령을 보존한다. 기본 Pilot은 10fps이며 3,000프레임 한도·선택 프레임 간격·과거 state 대응·실패 이벤트 검사는 유지한다.
+- 증거: 새 회귀 8개가 수정 전 실패했고 수정 후 기존 capture·교사 시험과 함께 원격 66 passed, 새 실패 0이다. 같은 소스의 실제 격리 SIM 한 시연은 진행 중이며 완료를 주장하지 않는다.
+- gate 변화: SOURCE 회귀 확인만 추가한다. 완결 시연·학습 입력 적격성·독립 정책 평가·DEVICE/FIELD는 미완료다.

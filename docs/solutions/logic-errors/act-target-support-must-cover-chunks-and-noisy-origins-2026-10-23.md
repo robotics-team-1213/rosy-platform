@@ -22,7 +22,7 @@ tags: [act, lerobot, training, chunk, bounded-action, provenance]
 
 Stored OMX ACT models passed training/reload checks yet failed separate native object trials. A source-data audit of one actual training selection found 3,843 of 12,444 selected chunks contained a label outside the model head's support. This is a verified training-input validation defect. It is not proof that this defect alone caused every controller, camera or task failure.
 
-The fix is pending on `fix/omx-learning-execution`; it has not been merged or installed on a physical robot. See the [verification record](../../validation/learning-execution-2026-10-23/result.md) for source revisions and the actual test environments.
+The source fix landed on local main at commit `d54c33a8da`; it has not been installed on a physical robot. See the [verification record](../../validation/learning-execution-2026-10-23/result.md) for source revisions and the actual test environments.
 
 ## Why the previous checks missed it
 
