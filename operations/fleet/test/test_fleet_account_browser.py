@@ -452,7 +452,9 @@ def test_empty_cell_token_uses_cookie_despite_stale_storage(account_page):
     open_token_access(page)
     page.locator('#console-token').fill('')
     page.locator('#token-save').click()
-    expect(page.locator('#fleet-account')).to_be_visible()  # open_token_access가 계정 단추를 이미 열었다
+    # A session folds the row it was entered through (D-741 3); the account words are one press away.
+    open_token_access(page)
+    expect(page.locator('#fleet-account')).to_be_visible()
     expect(page.locator('[data-login=logout]')).to_be_visible()
     expect(page.locator('[data-login=logout]')).to_have_text('로그아웃')
     expect(page.locator('[data-login=logout]')).to_be_enabled()
