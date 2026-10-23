@@ -476,7 +476,7 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--robots is required unless --robot-credential-key-file is set")
     endpoints = []
     if args.robots is not None:
-        endpoints = load_robots(args.robots, allow_empty=key_file is not None)
+        endpoints = load_robots(args.robots, allow_empty=bool(key_file or getattr(args, "control_unit_config", None)))
         _warn_if_world_readable(args.robots)
     enrollment_store = robot_key = robot_key_text = robot_key_error = None
     if key_file is not None:
