@@ -58,6 +58,11 @@ const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? 
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
+pageScope.listen(el("focus-robot-choice"), "click", () => {
+  inbox.select("status");
+  el("robot-choice").scrollIntoView({block: "center"});
+  el("robot-choice").focus({preventScroll: true});
+});
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;

@@ -106,7 +106,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
 
 
-@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels', '/learning/camera', '/learning/omx'])
+@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels', '/learning/camera', '/learning/omx', '/learning/vlm'])
 @pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
 def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
     page, _, _ = browser_workspace
@@ -130,7 +130,7 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     assert title['y'] + title['height'] <= height, (route, title)
     page.locator('.learning-tools summary').click()
     tools = page.get_by_role('navigation', name='Learning 작업 도구', exact=True)
-    assert tools.locator('a').count() == 3
+    assert tools.locator('a').count() == 4
     for link in tools.locator('a').all():
         bounds = link.bounding_box()
         assert bounds['height'] >= 44 and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width

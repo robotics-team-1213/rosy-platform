@@ -4356,3 +4356,8 @@
 - 변경: 직접 이웃 위임 HTTP·기명 현장 승인·동일 Task transaction 결속·고정 peer 자격과 앱 생애를 연결했다. stale·취소 요청·단절/재시작을 원래 identity로 조정하며 기존 dispatch와 native 결과 검사를 사용한다. 무로봇 독립 aggregate도 CLI에서 연다.
 - 증거: 집중 store/서비스/routes/HTTP/재시작47 PASS, 실제 앱/CLI132 PASS, 독립 aggregate/기존 CLI52 PASS, port/앱/CORE 종단16 PASS(서로 겹치는 별도 실행). [검증 기록](../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 최종 통합 검증·로컬 main 착지는 대기한다. 실물·FIELD 수용은 열지 않는다. CE 해당 없음: 판단을 코드·회귀·검증 기록에 보존했다.
+## 2026-10-23 · uncommitted · 공통 조합 CSS의 닫힌 목록과 Fleet 적용 회귀
+
+- 변경: 공통 동작 모음 CSS만 정확히 허용하고 다른 제품 CSS는 계속 거절하는 대조 검사를 추가했다. 로봇 선택 이동·긴 라벨 회귀를 별도 착지 단위로 보존한다.
+- 증거: `37951c2501`의 검증된 두 시험 파일을 그대로 옮겼다. 이전 스타일 계약 4 passed·후속 영향 선택 707 passed 근거를 유지하고 새 main 조합은 착지 도구로 확인한다.
+- gate 변화: 없음. API·명령·원장·물리 운전 변경 없음.

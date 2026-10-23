@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/assistant.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
@@ -175,6 +176,7 @@
         <!-- D-741 3 — 로봇 연결 수는 앱 바가 아니라 관제 화면의 내용이다. -->
         <span class="map-robots"><span data-action-icon="connect" data-icon-only="" aria-label="로봇 연결"></span><ui-tag id="online-pill" variant="inline" status="neutral">연결 대기</ui-tag></span>
         <div class="spacer"></div>
+        <ui-button id="focus-robot-choice" kind="quiet" type="button">로봇 선택으로 이동</ui-button>
         <label for="map-display-mode">표시</label>
         <select class="ui-field" id="map-display-mode" aria-label="지도 표시 방식">
           <option value="coordinates">2D 좌표·선</option>
