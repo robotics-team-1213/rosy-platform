@@ -33,6 +33,8 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             panel = page.locator("#control-unit-work")
             expect(panel).to_be_visible()
             expect(panel).to_contain_text("상위 관제 A")
+            expect(panel).to_contain_text("목표 X 1 m · Y 2 m · 방향 0 rad")
+            expect(panel).to_contain_text("위임 R / job-1")
             approve = panel.get_by_text("이 관제에서 승인", exact=True)
             expect(approve).to_be_enabled()
             approve.click()
