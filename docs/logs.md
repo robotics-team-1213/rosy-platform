@@ -10084,3 +10084,9 @@ osy-d395-s1d\`.
 - 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
 - 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
 - gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
+
+## 2026-10-24 · a7aaaed472 · 관제 위임의 실행 경로·배치·집중 검증 기록
+
+- 변경: [독립·중첩 관제 기동 절차](deployment/control-units.md)와 [소프트웨어 검증](validation/control-unit-pipeline-2026-10-24/result.md)을 기록했다. 직접 자식의 exact 배정 조회는 승인 직전 조상 연결 확인에만 한정한다.
+- 증거: 실제 HTTP 응답 유실/3곳 재시작, 기존 Task→CORE native 결과와 상위 투영, 실제 Chromium·CLI·원장 회귀를 SHA·로그 hash로 구분했다.
+- gate 변화: 최종 통합 검사·착지는 대기하며 D-851 전체·장치/현장 수용을 완료로 바꾸지 않는다. CE 해당 없음.

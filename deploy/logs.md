@@ -3162,3 +3162,9 @@
 - 증거: 커밋 source의 원격 진단·종료 처리14PASS와 기존 gripper/Pilot 계약18PASS, 두 로그 모두 known_failures NEW0. [회귀 검증](../docs/validation/omx-teacher-gripper-observation-2026-10-23/verification.md)에 실행 범위와 로그 해시를 보존했다.
 - gate 변화: 없음. 새 native 실행·그리퍼 물리 원인 해결·학습·정책 평가 증거가 아니며 두 고정 수집본은 HOLD로 유지한다.
 - CE: 미해결. 정확한 실패 표본의 보존 회귀만 통과했고 실제 실패 순간 물리 상태는 아직 확인하지 못했다.
+
+## 2026-10-24 · a7aaaed472 · 독립·중첩 관제의 격리 설정 예제
+
+- 변경: 합성 R→A→A1 manifest·고정 이웃과 별도 service token 파일의 예제를 추가하고 각 인스턴스의 DB·로봇 목록·수신 principal을 분리하는 기동 절차를 기록했다.
+- 증거: 실제 CLI의 무로봇 독립 aggregate와 기존 CLI52 PASS, 잘못된 peer URL/port 시작 거절 및 앱 transport 종료 회귀. [관제 구성](../docs/deployment/control-units.md).
+- gate 변화: 예시와 소프트웨어 기동 검증이다. 실제 서비스 배포·네트워크 변경·장치 운행은 실행하지 않았다. CE 해당 없음.

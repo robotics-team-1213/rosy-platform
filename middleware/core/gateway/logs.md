@@ -1583,3 +1583,9 @@
 - 증거: source53c7d91367 native RED2FAIL/11PASS와 실제 generated DDS RED exit1 뒤 sourceed405d1ecf native137PASS/0SKIP/NEW0 및 실제 DDS exit0. 기본 parent64/global nonce65536의 빠른 합성 clock 용량 경계와 frame 복구 후 새 Budget/ACK/navigation 성공을 추가 검증했다.
 - 검토: native_map_cleanup_review 독립 안전 검토 승인, Safety-Review trailer 기록. 정본 docs/validation/pipeline-native-map-cleanup-2026-10-21/result.md. 운영 factory·장시간 운행·장치/현장 수용은 HOLD다.
 - gate 변화: 없음. SOURCE/native 정리·합성 수명 경계와 복구 회귀 범위이며 운영 factory·장시간 운행·장치/현장 수용은 별도다.
+
+## 2026-10-24 · a7aaaed472 · 원래 실행에 한정한 관제 취소와 결과 종단
+
+- 변경: boot/run/correlation이 현재 owner와 일치할 때만 잠금 안에서 취소하는 별도 경로를 추가했다. 기존 trip lease의 수명을 바꾸지 않아 취소 직후 새 owner가 들어오는 경쟁에서도 새 실행을 보존한다.
+- 증거: receiver·lease·Fleet sender/transport201 PASS, 별도 실제 Fleet dispatch→CORE→native 완료/취소 재조정2 PASS. odometry·localization·actuator는 합성이고 실제 정지 증거가 아니다. [검증 기록](../../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
+- gate 변화: 기존 장치/FIELD gate는 유지한다. 최종 통합 검사와 공식 착지는 대기한다. CE 해당 없음: 경쟁과 receipt 범위를 회귀로 보존했다.
