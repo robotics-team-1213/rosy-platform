@@ -21,13 +21,13 @@ roles:
     rosy-dataset-review.service: {run: active, channel: external, source: "dataset-review-937*", dropins: [90-account-loopback.conf], doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-edge-review.service: {run: active, channel: signed, source: "rosy-ml/edge-capture/review-code/current", doc: docs/adr/D-545-model-pc-review-versioned-release.md}
     rosy-learning-center.service: {run: active, channel: installer, source: ".local/share/rosy-learning-center/source/*", doc: docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md}
-    rosy-learning-redesign.service: {run: off, channel: installer, note: "earlier Learning candidate (ac50d6330e)", doc: deploy/model_pc/README.md}
-    rosy-learning-cycle-20261004.service: {run: off, channel: retired, doc: deploy/model_pc/README.md}
-    rosy-model-advertise.service: {run: off, channel: retired, doc: deploy/site/README.md}
+    rosy-learning-redesign.service: {run: "off", channel: installer, note: "earlier Learning candidate (ac50d6330e)", doc: deploy/model_pc/README.md}
+    rosy-learning-cycle-20261004.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-model-advertise.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-model-code-update.service: {run: oneshot, channel: updater, doc: docs/adr/D-446-model-pc-code-auto-update.md}
     rosy-model-code-update.timer: {run: timer, channel: updater, doc: docs/adr/D-446-model-pc-code-auto-update.md}
-    rosy-model-code-watch.service: {run: off, channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
-    rosy-model-code-watch.timer: {run: off, channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
+    rosy-model-code-watch.service: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
+    rosy-model-code-watch.timer: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
     rosy-ollama.service: {run: active, channel: host, doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.service: {run: oneshot, channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.service, known_drift: "PYTHONPATH still names the 10-03 work_dir layout (tools/perception/dataset) that ~/rosy-ml/rosy-platform has; install the template when that checkout moves to learning/curation/perception", copies: {rosy-ml/bin/fetch_http.py: learning/curation/perception/fetch_http.py}, doc: deploy/model_pc/README.md}
     rosy-pilot-fetch@.timer: {run: timer, instances: [9dfk], channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.timer, doc: deploy/model_pc/README.md}
@@ -35,10 +35,10 @@ roles:
     rosy-review-bridge.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-bridge.timer, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-pipeline.service, doc: deploy/model_pc/README.md}
     rosy-review-pipeline.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-pipeline.timer, doc: deploy/model_pc/README.md}
-    rosy-review-pipeline-e2e-49cb36.service: {run: off, channel: retired, doc: deploy/model_pc/README.md}
-    rosy-review-pipeline-e2e-49cb36.timer: {run: off, channel: retired, doc: deploy/model_pc/README.md}
-    rosy-review-pipeline-e2e49cb36.service: {run: off, channel: retired, doc: deploy/model_pc/README.md}
-    rosy-review-pipeline-e2e49cb36.timer: {run: off, channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e-49cb36.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e-49cb36.timer: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e49cb36.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e49cb36.timer: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
     rosy-review-release-update.service:
       run: oneshot
       channel: updater
@@ -57,18 +57,18 @@ roles:
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-nav2.service: {run: off, channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d12.service: {run: off, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d13.service: {run: off, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d12.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d13.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
     rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
-    rosy-decision-laya.service: {run: off, channel: copy, doc: deploy/ai_pc/README.md}
+    rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
     rosy-learning-center.service: {run: active, channel: installer, source: ".local/share/rosy-learning-center/source/*", doc: docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md}
     rosy-ollama.service: {run: active, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded", doc: deploy/ai_pc/README.md}
     rosy-situation.service: {run: active, channel: autoupdate, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-situation-autoupdate.service: {run: oneshot, channel: updater, dropins: [bootstrap.conf], note: "bootstrap.conf falls back to ~/rosy-situation/bootstrap before the first switch; harmless afterwards", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-situation-autoupdate.timer: {run: timer, channel: updater, template: deploy/ai_pc/rosy-situation-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    rosy-situation-model-tunnel.service: {run: off, channel: retired, doc: deploy/ai_pc/README.md}
+    rosy-situation-model-tunnel.service: {run: "off", channel: retired, doc: deploy/ai_pc/README.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-v11-sam-worker.service: {run: active, channel: external, dropins: [autostart.conf], note: "SAM benchmark worker outside this repository", doc: deploy/ai_pc/README.md}
@@ -82,12 +82,12 @@ roles:
     rosy-omx-camera-readiness.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-camera-pipeline/releases/*", doc: deploy/robot/omx/README.md}
     rosy-omx-camera-view.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-camera-pipeline/releases/*", doc: deploy/robot/omx/README.md}
     rosy-omx-camera@.service: {run: active, instances: [top, front, arm_a_wrist], channel: snapshot, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-camera/releases/*", doc: deploy/robot/omx/README.md}
-    rosy-omx-collection.service: {run: off, channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
+    rosy-omx-collection.service: {run: "off", channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
     rosy-omx-observation-bridge.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-observation/releases/*", dropins: [95-motor-health-d227b0c2c50a.conf], doc: deploy/robot/omx/README.md}
     rosy-omx-observer@.service: {run: active, instances: [arm_a, arm_b], channel: snapshot, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-observation/releases/*", dropins: [95-motor-health-d227b0c2c50a.conf], doc: deploy/robot/omx/README.md}
-    rosy-site-config-reload.service: {run: off, channel: retired, doc: deploy/site/README.md}
-    rosy-site-fleet-mdns.service: {run: off, channel: retired, doc: deploy/site/README.md}
-    rosy-site-overhead-mdns.service: {run: off, channel: retired, doc: deploy/site/README.md}
+    rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-user-fleet-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
     rosy-user-overhead-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
     rosy-user-mdns-bridge.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}

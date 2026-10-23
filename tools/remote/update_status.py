@@ -162,6 +162,10 @@ def load_inventory(path: Path | None = None) -> dict:
     data = yaml.safe_load(path.read_text(encoding='utf-8'))
     if data.get('schema') != 'rosy.host-services/1':
         raise SystemExit(f'{path}: unsupported schema')
+    for units in data['roles'].values():
+        for name, entry in units.items():
+            if not isinstance(entry.get('run'), str):  # YAML 1.1 reads a bare off as false
+                raise SystemExit(f'{path}: {name} run must be a quoted string')
     return data['roles']
 
 
@@ -242,7 +246,8 @@ def audit(declared: dict, host: dict, digest) -> list:
                 findings.append(('DRIFT', unit, f'code from {path}, declared {entry["source"]}'))
         if entry['channel'] == 'adhoc':
             findings.append(('ADHOC', name, entry.get('note', 'declared adhoc')))
-    reasons = {name: entry['known_drift'] for name, entry in declared.items() if entry.get('known_drift')}
+    reasons = {unit: entry['known_drift'] for name, entry in declared.items() if entry.get('known_drift')
+               for unit in [name, *(name.replace('@.', f'@{i}.') for i in entry.get('instances', []))]}
     return [('KNOWN', unit, f'{detail} ({reasons[unit]})') if verdict == 'DRIFT' and unit in reasons
             else (verdict, unit, detail) for verdict, unit, detail in findings]
 
