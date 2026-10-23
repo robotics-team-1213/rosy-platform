@@ -10079,3 +10079,9 @@ osy-d395-s1d\`.
 - 변경: [구현 기록](validation/shared-component-kit-2026-10-23/result.md)과 [후속 수정 검증](validation/shared-component-kit-2026-10-23/2026-10-23-final-checks.md)을 원래 `37951c2501`의 동결 내용 그대로 보존한다. 공통 라이브러리와 제품 적용은 별도 착지 단위다.
 - 증거: 각 문서의 SHA·실패와 후속 통과·검토 범위·화면 해시 보관 위치를 유지한다. 새 main 통합의 결과는 별도 후속 기록으로 추가한다.
 - gate 변화: 없음. 이력 보존이며 장치·현장 수용이나 새 독립 검토를 뜻하지 않는다.
+
+## 2026-10-24 · 2d9acbfa51 · 공통 UI 부품과 Fleet·Robot 로컬 통합 검증
+
+- 변경: 공통 라이브러리·Fleet 적용·Robot 폼 적용을 분리해 main에 반영하고 [통합 기록](validation/shared-component-kit-2026-10-23/2026-10-24-local-integration.md)에 SHA와 검증 범위를 묶었다.
+- 증거: 각 착지의 브라우저 1,292·527·253 passed, 모두 skip 0/0 NEW. 같은 최종 실행 SHA의 캡처 회귀 407 passed/1 native export skipped와 전체 Robot UI 셸 1 passed, 새 PNG 36장 원격·회수 SHA-256 일치를 확인했다. 실행 자산 19개·핵심 시험 4개는 기존 최종 검증본과 같은 Git 내용이다.
+- gate 변화: 없음. push·배포·실물·실제 사용자 과업 수용은 미실시다. CE 미해결: 작업 공간은 복구했으나 외부 제거 원인은 확인하지 못해 관측·가설·다음 확인을 작업 기록에 남겼다.
