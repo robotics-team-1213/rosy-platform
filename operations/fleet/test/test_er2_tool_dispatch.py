@@ -94,7 +94,9 @@ def test_status_context_uses_one_progress_snapshot(tmp_path, monkeypatch):
     assert reads == [mission_id]
 
 
-@pytest.mark.parametrize("field", ["action_id", "attempt_id", "dispatch_generation"])
+@pytest.mark.parametrize("field", [
+    "principal_id", "workcell_id", "action_id", "attempt_id", "dispatch_generation",
+])
 def test_status_rejects_attempt_replaced_before_snapshot(tmp_path, monkeypatch, field):
     client, mission_id = _running_mission(tmp_path)
     scope = _scope(client, mission_id)
@@ -108,7 +110,7 @@ def test_status_rejects_attempt_replaced_before_snapshot(tmp_path, monkeypatch, 
         scope=scope, call_id="replaced-attempt", tool_name="get_mission_status", arguments={},
     )
     assert result.status == "rejected"
-    assert result.reason_code == "TURN_SCOPE_STALE"
+    assert result.reason_code == "TURN_SCOPE_FORBIDDEN"
 
 
 def test_status_call_replay_returns_its_durable_result_snapshot(tmp_path):
