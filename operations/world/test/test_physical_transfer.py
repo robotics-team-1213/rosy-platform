@@ -64,12 +64,18 @@ def test_invalid_pose_units_shape_or_quaternion_are_not_normalized_into_evidence
         api().PhysicalPose(position, orientation)
 
 
-def test_invalid_bounds_and_unmeasured_velocity_are_rejected():
+def test_invalid_bounds_and_nonfinite_velocity_are_rejected():
     module = api()
     with pytest.raises(ValueError):
         module.Bounds3((2, 0, 0), (1, 1, 1))
     with pytest.raises(ValueError):
         module.LinkPhysicalState(module.Bounds3((0, 0, 0), (1, 1, 1)), (float("inf"), 0, 0), (0, 0, 0))
+
+
+def test_unmeasured_velocity_remains_unknown_instead_of_becoming_zero():
+    module = api()
+    value = module.LinkPhysicalState(module.Bounds3((0, 0, 0), (1, 1, 1)), None, None)
+    assert value.linear_velocity_m_s is None and value.angular_velocity_rad_s is None
 
 
 @pytest.mark.parametrize("changes", [
