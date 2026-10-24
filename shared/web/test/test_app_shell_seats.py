@@ -118,8 +118,8 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert 'data-learning-account-entry href="/accounts"' in bar, 'accounts stay in the top bar (D-857 §3)'
         assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
         body = html.split('</ui-topbar>', 1)[1]
-        # D-542 §2: the two editors carry the 정답 pages in one nav after the editor (title row on wide screens,
-        # after the editor on phones), not in an extra sub-menu row above the photo.
+        # D-542 §2: the two editors carry the 정답 pages in one nav right after the title (shown in the title row on
+        # wide screens and after the editor on phones), not in an extra sub-menu row above the photo.
         merged = name in ('index.html', 'pixels.html')
         seats = ' data-seats="rail"' if subs[stage] is None or merged else ''
         rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
@@ -131,8 +131,8 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(href, current) for _, href, _, current, _ in items if current] == [
             (stage, 'page' if here in (None, stage) else 'true')], name
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
-        sub = (re.search(r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav></div></div></ui-shell>',
-                         body, re.S) if merged else
+        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1></div>'
+                         r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
                re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
                          r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S))
         assert (sub is None) == (subs[stage] is None), name

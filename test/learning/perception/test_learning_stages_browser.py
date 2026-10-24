@@ -51,3 +51,20 @@ def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, wid
     assert page.locator('.evaluate-source[data-domain="lane"]').count() == 0
     expect(page.locator('#promote-request')).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('route', ['/', '/pixels'])
+def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspace, route):
+    """WCAG 2.4.3: Tab from the title row reaches the 정답 links before the editor and canvas controls."""
+    page, _, _ = browser_workspace
+    origin = urlsplit(page.url)
+    page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
+    links = page.locator('.review-kinds a').evaluate_all('links => links.map(link => link.getAttribute("href"))')
+    page.locator('.ui-pathbar h1').evaluate('title => { title.tabIndex = -1; title.focus(); }')
+    focused = []
+    for _ in links:
+        page.keyboard.press('Tab')
+        focused.append(page.evaluate('document.activeElement.closest(".review-kinds") && document.activeElement.getAttribute("href")'))
+    assert focused == links == ['/', '/pixels', '/learning/omx', '/learning/vlm'], (route, focused)
+    page.keyboard.press('Tab')
+    assert page.evaluate('!document.activeElement.closest(".review-kinds") && !!document.activeElement.closest(".ui-app-main")'), route
