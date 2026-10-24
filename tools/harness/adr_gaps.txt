@@ -90,3 +90,5 @@ D-852 reserved outside this branch (refs/adr/D-852); remove when its ADR lands
 D-852 reserved outside this branch; remove when its ADR lands
 D-858 reserved by another session outside this branch; remove when its ADR lands
 D-860 reserved by another session outside this branch; remove when its ADR lands
+D-867 reserved outside this branch (refs/adr/D-867); remove when its ADR lands
+D-868 reserved outside this branch (refs/adr/D-868); remove when its ADR lands
