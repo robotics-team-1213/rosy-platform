@@ -537,8 +537,10 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                 (evidence / relative).write_bytes(files[relative])
             (evidence / 'current-decisions.json').write_text(json.dumps(current, sort_keys=True), encoding='utf-8')
             hf_frames = [hf_of[i] for i in selected if hf_of[i]]
+            # An own frame linked to an HF frame (e.g. by a shared representation hash) is forced into train too.
+            forced = sum(1 for c in external for i in c if i in selected and not hf_of[i])
             share = dict(huggingface_frames=len(hf_frames), percent=round(100 * len(hf_frames) / len(entries), 1),
-                         groups=sorted(set(hf_frames)), split='train_only')
+                         groups=sorted(set(hf_frames)), split='train_only', own_forced_train=forced)
             manifest = dict(schema='rosy.perception.dataset/1', builder='review_dataset.py (D-464)',
                             classes=load_classes('captured', require_color=False, source_bytes=files['pixel-classes.yaml']),
                             frames=entries, sources=sources, ignore_index=255, disjoint_from=refs,

@@ -179,8 +179,9 @@ def test_whole_video_connects_adjacent_frames_even_different_group_aliases():
     assert target.source_components(rows, {}) == [[0, 1]]
 
 
-def build_fixture(tmp_path, shared_group=False, with_drivable=False, hf=()):
-    """`hf`: one upstream change per extra HF still frame (a None value drops that field)."""
+def build_fixture(tmp_path, shared_group=False, with_drivable=False, hf=(), own=2):
+    """`own` own-camera frames; `hf`: one upstream change per extra HF still frame (None drops that field,
+    `_pixels` reuses an own frame's pixel value)."""
     from test_review_authority import encoded, refs, reseal
     from build import load_classes, content_sha
     from store import Store
@@ -217,7 +218,7 @@ def build_fixture(tmp_path, shared_group=False, with_drivable=False, hf=()):
         app.append(dict(index=i, source=source, review=review, status='approved', version=1))
         for relative, raw in [(f'inputs/images/{i:06d}.png', image_raw), (f'pixel-masks/{i:06d}.png', mask_raw)]:
             path = bundle / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
-    for i in range(3):
+    for i in range(own + 1):
         pixels = np.full((16, 16, 3), 40 + i * 40, np.uint8)
         video_path = tmp_path / ('video' + str(i) + '.avi')
         writer = cv2.VideoWriter(str(video_path), cv2.VideoWriter_fourcc(*'FFV1'), 5, (16, 16))
@@ -231,11 +232,11 @@ def build_fixture(tmp_path, shared_group=False, with_drivable=False, hf=()):
         proof_path.write_text(json.dumps(dict(schema='rosy.pinky-review-source-proof/1', source_session='session' + str(i),
                                              capture_group='group' + str(0 if shared_group and i < 2 else i), video_path=str(video_path), video_sha256=video_sha)))
         proofs.append(proof_path)
-        if i == 2:
+        if i == own:
             stage = store.evalsets_dir / 'held' / 'stage'; stage.mkdir(parents=True)
             (stage / 'image.png').write_bytes(image_raw)
             (stage / 'manifest.json').write_text(json.dumps(dict(purpose='eval', frames=[dict(
-                session='session2', capture_group='group2', source_video_sha256=video_sha, video_frame=0, image='image.png')])))
+                session=f'session{i}', capture_group=f'group{i}', source_video_sha256=video_sha, video_frame=0, image='image.png')])))
             eval_root = stage.with_name(content_sha(stage)); stage.rename(eval_root)
             break
         source = dict(index=i, image=f'images/{i:06d}.png', image_sha256=image_sha, width=16, height=16,
@@ -243,7 +244,8 @@ def build_fixture(tmp_path, shared_group=False, with_drivable=False, hf=()):
                       video=video_path.name, video_frame=0, fixed_eval_overlap=False, objects=[])
         add(i, source, image_raw, f'video:{video_sha}:0')
     for k, change in enumerate(hf):
-        ok, image = cv2.imencode('.png', np.full((16, 16, 3), 200 + k * 10, np.uint8)); assert ok
+        change = dict(change); value = change.pop('_pixels', 200 + k * 10)
+        ok, image = cv2.imencode('.png', np.full((16, 16, 3), value, np.uint8)); assert ok
         image_raw = image.tobytes(); image_sha = hashlib.sha256(image_raw).hexdigest()
         up = {key: value for key, value in dict(dict(provider='huggingface', repo_type='dataset', repo_id='org/data',
               revision='a' * 40, path=f'img/{k}.png', sha256=image_sha), **change).items() if value is not None}
@@ -736,7 +738,7 @@ def test_approved_hf_frames_train_only_with_visible_share(tmp_path):
     assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED', result
     manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
     groups = ['hf:dataset/org/data@' + 'a' * 40, 'hf:dataset/org/data@' + 'b' * 40]
-    share = dict(huggingface_frames=3, percent=60.0, groups=groups, split='train_only')
+    share = dict(huggingface_frames=3, percent=60.0, groups=groups, split='train_only', own_forced_train=0)
     assert manifest['external_sources'] == share and result['external_sources'] == share
     own, external = manifest['frames'][:2], manifest['frames'][2:]
     assert {f['split'] for f in external} == {'train'}   # never val, eval or promotion (D-857)
@@ -748,9 +750,9 @@ def test_approved_hf_frames_train_only_with_visible_share(tmp_path):
     assert all(s['source_proof'] is None and s['group_basis'] == 'huggingface_revision' for s in manifest['sources'][2:])
 
 
-@pytest.mark.parametrize('missing', ['revision', 'sha256'])
-def test_hf_frame_without_full_provenance_keeps_the_video_refusal(tmp_path, missing):
-    args, _ = build_fixture(tmp_path, hf=[{missing: None}])
+@pytest.mark.parametrize('change', [{'revision': None}, {'sha256': None}, {'sha256': 'f' * 64}])
+def test_hf_frame_without_full_provenance_keeps_the_video_refusal(tmp_path, change):
+    args, _ = build_fixture(tmp_path, hf=[change])
     report = target.inspect_candidates(args['export_root'], fetch_current=args['fetch_current'],
                                        workspace_id=args['workspace_id'], eval_folders=args['eval_folders'], now=args['now'])
     assert 'source_video_hash_unknown' in report['frames'][2]['blockers']
@@ -764,4 +766,25 @@ def test_own_only_dataset_has_no_external_share_field(tmp_path):
     result = target.build_dataset(**args)
     manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
     assert 'external_sources' not in manifest
-    assert result['external_sources'] == dict(huggingface_frames=0, percent=0.0, groups=[], split='train_only')
+    assert result['external_sources'] == dict(huggingface_frames=0, percent=0.0, groups=[], split='train_only', own_forced_train=0)
+
+
+def test_hf_only_dataset_is_refused(tmp_path):
+    args, _ = build_fixture(tmp_path, own=0, hf=[{}, {'revision': 'b' * 40}])
+    result = target.build_dataset(**args)
+    assert result['status'] == 'HOLD'
+    assert result['blockers'] == ['at least two disconnected source components required']
+    assert args['store'].datasets() == {}
+
+
+def test_own_frame_linked_to_an_hf_frame_is_forced_into_train_and_counted(tmp_path):
+    args, _ = build_fixture(tmp_path, own=3, hf=[{'_pixels': 40}])   # same bytes as own frame 0
+    result = target.build_dataset(**args)
+    assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED', result
+    manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
+    frames = manifest['frames']
+    assert frames[0]['source_component'] == frames[3]['source_component']
+    assert frames[0]['split'] == frames[3]['split'] == 'train'
+    assert {frames[1]['split'], frames[2]['split']} == {'train', 'val'}
+    assert manifest['external_sources']['own_forced_train'] == 1
+    assert result['external_sources']['own_forced_train'] == 1

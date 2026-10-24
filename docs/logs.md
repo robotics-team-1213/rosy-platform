@@ -9657,3 +9657,9 @@ osy-d395-s1d\`.
 - 변경: `review_dataset.hf_group`이 사람이 승인한 HF 사진의 출처(저장소·고정 revision·경로·sha256=사진 해시)를 검증된 묶음 `inputs/source.jsonl`에서 읽어 `hf:<repo_type>/<repo_id>@<revision>` 묶음을 준다. 그런 사진만 `source_video_hash_unknown`·영상 증명 요구를 건너뛰고, 다른 검사는 그대로다. HF 묶음은 늘 `train`이고 val은 우리 카메라 묶음만으로 `assign_splits`가 나눈다(우리 사진의 묶음·분할은 그대로). manifest `external_sources`(HF가 있을 때만, 우리 사진만의 데이터셋 내용은 그대로)와 빌드 보고에 장수·%·묶음, 홈 학습 기록에 「외부(HF) 사진 N장 · P% (학습에만)」.
 - 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 0 NEW. 실제 HF 자료로 학습·평가까지 돈 수용은 하지 않았다.
 - gate 변화: 없음. HF 사진은 평가셋·승격 증거에 들어가지 않는다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · HF 학습 사진 검토 반영 (own_forced_train)
+
+- 변경: 독립 검토 지적 반영. HF 사진과 한 묶음이 된 우리 사진을 보고·manifest `external_sources.own_forced_train`으로 센다(학습에만 넣는 동작은 그대로). 시험 추가: HF만 있는 데이터셋 거절, sha256이 사진 해시와 다르면 거절, 카탈로그가 적은 `source_kind`·`upstream`은 버려 `hf_group`을 통과하지 못함, 평가 bootstrap이 HF 행을 거절, 표현 해시로 묶인 우리 사진의 학습 고정과 집계. `review-app.md`에 그 동작을 적었다.
+- 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
