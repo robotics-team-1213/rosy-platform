@@ -5,6 +5,7 @@ the base model is untrained. The probe proves the execution contract on the VLA 
 stale action refused, stop and in-motion lease withdrawal ending in HOLD, and reconnects refused.
 """
 from collections import deque
+from dataclasses import replace
 from contextlib import ExitStack, contextmanager, closing
 import argparse
 import base64
@@ -52,7 +53,7 @@ SHAPE = (3, 240, 320)
 TIMING = dict(period_ns=1_500_000_000, max_observation_age_ns=3_000_000_000, max_action_age_ns=2_000_000_000)
 CAMERAS = (('front', '/front_camera/image_raw'), ('top', '/top_camera/image_raw'))
 RIG = 'sim-rig-vla-p0'
-MAX_STEP_RAD, PRELUDE_STEPS, STALE_DELAY_S = .04, 3, 2.5
+MAX_STEP_RAD, PRELUDE_STEPS, STALE_DELAY_S, JOINT_STATE_AGE_S = .04, 3, 2.5, 1.0
 TASK = 'pick up the cube and place it on the pallet'
 
 
@@ -332,6 +333,10 @@ def main():
         profile = CellPlanningProfile.load(ROOT/'deploy/robot/omx/sim/cell_profile.yaml')
         cfg = profile.arm_command_config(workcell_id='sim_policy_cell', instance_id='sim_policy_arm',
             calibration_revision='sim-cal-'+calibration[:12], allowed_owners=('learned_policy',))
+        # SIM-only: with two rendered cameras Gazebo paused joint_states up to 0.53 s of sim time (2026-10-25
+        # intake trace), past the profile's 0.5 s. The owner's staleness check is unchanged; only this probe's
+        # bound is 1.0 s. Real and production owners keep their own values.
+        cfg = replace(cfg, max_joint_state_age_s=JOINT_STATE_AGE_S)
         runtime = RosArmCommandRuntime(node, cfg, poll_period_s=.01, owner_clock='steady')
         intake_trace = deque(maxlen=4000)  # Same joint intake trace as policy_chain_gazebo.py, to tell gaps apart.
         intake = runtime._joint_state_intake
