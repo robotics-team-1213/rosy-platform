@@ -3255,3 +3255,8 @@
 - 변경: 별도 Compose overlay가 승인 private 관제 디렉터리를 Fleet에만 읽기 전용으로 mount하고 ROSY_CONTROL_UNIT_CONFIG를 전달한다. CLI의 명시 옵션이 환경 기본값보다 우선하며 기본 site 배치는 그대로다.
 - 증거: CA/hostname/encoding 실제 synthetic TLS 회귀는 root test에, Fleet의 fake transport/CLI 구성 회귀는 Fleet test에 분리했다. 원격 실행과 실제 배포 수용은 구분한다.
 - gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+## 2026-10-25 · uncommitted · 여러 Pinky 카드의 사전 용량 확인과 결과 보존
+
+- 변경: 순차 SD 준비는 카드 검색 전에 자동 번호 40–49의 여유를 요청 장수와 비교하고, 카드별 번호·장치명·UUID 재사용과 공통 이미지 checksum 변경을 작성기 앞에서 거부한다. 비밀값 없이 batch.json에 검증 완료·미확인 수와 카드별 증거 경로를 보존한다.
+- 증거: 실제 Windows PowerShell에서 가짜 디스크·서명·분리 작성기를 사용하는 기존 두 자체 점검을 실행했다. 번호 부족 red→green, 3장 순차 완료, 식별자 중복 3종, 작성기·readback·영수증 식별자·등록부 실패, 두 번째 카드 취소와 단일 PrepareOnly/Configure 경로를 확인했다.
+- gate 변화: SOURCE 운영 도구 보강이며 실물 쓰기·부팅·장치 수용은 하지 않았다. CE: 해당 없음 — 원인과 방지책이 코드·회귀 시험·운영 절차에 직접 드러난다.

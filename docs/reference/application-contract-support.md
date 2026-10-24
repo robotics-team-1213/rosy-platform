@@ -4,6 +4,21 @@
 
 후속 D-836 구현은 API reference **v1.292**에서 후보 운송 요청을 추가하고 기존 cell-app 문서 계약의 외부 소비를 구현했다. 아래 후보 배정 항목은 이 구현 범위이며 운영 배포·실물 수용 확인은 아니다.
 
+2026-10-25 보강: 첫 업무 앱 Harbor의 확정 용어 대응표와 승인 권한 소유(D-865 방향)를 추가했다. 승인 소유 항목은 방향이며 활성화가 아니다.
+
+## 업무 앱 용어 대응 (Harbor)
+
+Harbor 용어의 정본은 팀 저장소 `harborlogi/CONTEXT.md`(2026-10-24 확정)다. 플랫폼은 중립 용어를 유지하고 아래 대응으로만 읽는다. 플랫폼 문서·API를 항만 용어로 바꾸지 않는다.
+
+| Harbor 용어 | 플랫폼 중립 표현 | 연결 |
+|---|---|---|
+| 이송 (안벽↔야드 수평 운반, Pinky) | 운송·trip | `POST /api/fleet/trip-jobs`, trip 원장·lease |
+| 이송 후보 | 후보 운송 요청 | v1.292 `candidate_robot_ids`+`request_key` |
+| 반출·재취급 (업무 순서) | mission 제안·공정 문서 | `POST /api/fleet/proposals` → mission, `cell-app/compile` |
+| 장치 칸·단 / 임시 장치 칸 / 반출대 | 셀 위치(물리)·플랫폼 기하 | site-map, compile 사전 검증(D-856 P1 예정) |
+| 업무 위치(본선·야드·반출 지점) | 업무 앱 내부 값 | 플랫폼이 복제하지 않는다 |
+| 퇴피 | zone claim 해제 + 측정 자세 근거 | Fleet 원장·owner 관측 |
+
 ## 외부 HTTP 소비
 
 | 목적 | 현재 경로·producer | 권한·의미 | 소비 제한 |
@@ -34,6 +49,15 @@
 | 통행 공간 | `rightofway/traffic_reservations.py` 및 현장 관측 | lease와 실제 통행/점유를 구별한다. 앱에 별도 전역 lock 서버를 만들지 않는다. |
 | 에너지 admission | Fleet `ledger/charge_policy_admission.py` + `rosy.execution.site.charge_policy` | 검증된 예산·관측이 없으면 대기한다. 임의 SOC 기준으로 허가하지 않는다. |
 | 수동 충전·정비 제외 | 앱의 운영 제약, 실제 가용성은 Fleet/owner | 후보에서 제외할 수 있으나 후보 포함이 실행 허가는 아니다. 도착을 충전 시작으로 보지 않는다. |
+
+## 승인 권한과 자동 승인 (2026-10-25, D-865 방향)
+
+승인(admit) 권한은 Fleet이 소유한다(사용자 2026-10-25 확정). 업무 앱의 제안은 사람의 직접 승인 또는 사람이 정한 승인 범위 안의 Fleet 정책으로만 실행 허가를 받는다. 결정 정본은 [D-865](../adr/D-865-fleet-policy-admission.md).
+
+- 업무 앱은 자기 제안을 스스로 승인하지 않는다(기존 계약 유지). 승인 범위 정의·정책 설정 화면도 앱이 갖지 않는다.
+- 자동 승인은 사람 승인과 같은 admission 검사를 전부 통과한 뒤에만 admit한다. 규칙집 law(FL-*)는 자동 승인으로 우회하지 않는다.
+- 현재 상태: mission admit은 사람 operator 승인이고 정책 Task 경로는 `POLICY_DISPATCH_ENABLED=False`로 닫혀 있다. 이 절은 방향이며 활성화가 아니다.
+- Harbor 쪽 대응 결정은 팀 저장소 `harborlogi` ADR 0004 A11(2026-10-25)이다.
 
 ## 구현 판정과 후속 작업
 
