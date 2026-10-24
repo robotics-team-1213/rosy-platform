@@ -31,6 +31,8 @@ ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map I
 
 typed 정지는 journal/fence를 확보하지 못하면 새 fanout 없이503 JOURNAL_UNAVAILABLE/UNKNOWN이다. 기존 `/api/fleet/estop`의 새 로컬 사람 긴급 정지는 DB 장애에도 원래 best-effort fanout을 유지한다. bad credentials401, 범위/권한 거절403, 없는 unit/map/record404, revision/identity/fence 충돌409, malformed422, 저장소/producer/transport 실패503이며 부분 연결 실패를 전체 성공으로 덮지 않는다. peer CA는 명시 tls_ca_file로 연결하고 hostname/체인 검증·redirect 거절·환경 proxy 미사용을 유지한다.
 
+정지 body의 불변성은 관제별 최초 배정 projection을 기준으로 한다. origin/stop/config는 유지하되 target이 자기이면 자식 target과 해당 subtree fence로 제한하고, 더 깊은 target이면 next hop으로 중계한다. 최초 child target/fence를 저장한 뒤 재시도·조회에서 바꾸지 않으며 자식 응답도 그 범위로 검증한다. 빈 fence projection에는 POST하지 않고 미전달/미확인으로 남긴다. sibling fence/결과를 다른 자식에게 공개하지 않는다.
+
 ### v1.298 Scoped transport execution snapshots (D-856)
 
 `GET /api/fleet/trip-jobs/{mission_id}` and `GET /api/fleet/trip-jobs?request_key=...` return `TripJobReadResponse`: `{job: TripJobSnapshot}`. Existing read guards and viewer authentication apply. Only the job's creating principal may read it through these routes. A missing identity, another principal's job, a Cell Job or a mixed-kind job is 404 `TRIP_JOB_NOT_FOUND`. Authentication/permission errors remain 401/403. Request-key lookup accepts the original candidate key (1–128 characters, trimmed, no control characters), URL-query encoded; invalid query input is 422. The internal `trip-pool:` prefix is not exposed.

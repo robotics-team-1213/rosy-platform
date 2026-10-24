@@ -60,3 +60,9 @@ peer URL은 기존 고정 origin을 사용한다. `tls_ca_file`은 명시적 신
 기존 owner와 원장을 유지한 채 실제 관제 정보가 상위까지 전달된다. 그 대가로 지도 좌표계는 소유 관제별로 표시하고, 통합 정지는 원격 물리 E-stop이나 자동 복구를 보장하지 않는다. 연결 복구로 권한·정지 해제·재무장을 자동 승격하지 않는다.
 
 wire strictness·크기/소유 범위·신선도·권한/개인정보, R/A/B/A1 수집과 한 자식 장애, TLS 신뢰 실패, stop 중복/응답 유실/재시작/재무장 경합·DB 장애·살아 있는 send·로컬 재시운전 확인을 회귀한다. 프론트·sample·실제 HTTP/TCP/TLS·합성 CORE/OMX 경로의 source SHA와 실행 결과를 별도로 남긴다. 이 ADR 등록만으로 runtime·화면·현장 완료를 표시하지 않는다.
+
+### 관제별 정지 범위 배정의 구체화
+
+immutable body는 각 관제에 최초 배정된 projection이다. origin_id/stop_id/config_revision은 같게 유지한다. 대상이 자기 관제이면 각 직접 자식에게 target_unit을 그 자식으로, expected_controls를 그 자식 subtree의 기존 fence로 제한한다. 대상이 더 깊은 관제이면 해당 next hop으로 같은 target을 전달한다. 부모가 원래 전체 의도를 보존하고 각 관제는 자기에게 배정된 범위만 기록·실행하므로 sibling의 fence나 결과를 전달하지 않는다.
+
+자식 projection은 최초 전송 전에 고정·저장한다. 같은 identity의 다른 projection은 충돌이며 재시도·재연결에서 새 fence를 보충하지 않는다. 부모는 자식 snapshot의 target/result unit을 저장한 배정 범위와 검증한다. 원문 전체가 동일해야 하는 navigation delegation helper로 이 검증을 대체하지 않는다. 필터 뒤 fence가 없는 자식은 POST하지 않고 NOT_REACHED/UNKNOWN으로 보존한다. 조회도 같은 배정 범위로 제한한다. 실제 중첩·targeted relay·빈 fence·사칭/중복 회귀로 확인한다.
