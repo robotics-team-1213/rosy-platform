@@ -10336,3 +10336,27 @@ osy-d395-s1d\`.
 - 변경: 단독 verify의 필수 checkpoint/processor·링크 검사와 실제6/12관절 모델의 fixture Hub 왕복·새 프로세스 재적재 시험. [검증 기록](validation/native-model-readback-2026-10-24/result.md).
 - 증거: RED5FAIL→GREEN39PASS/SDK2SKIP/NEW0. 별도 고정 CPU SDK 실행은 단일 팔·양팔 각각1PASS/0SKIP·EXIT0, eval3·배열6/12·processor 누락 거부. 회수 모델·payload·readback7파일과 원본/분할 해시를 별도 대조했다.
 - gate 변화: 실제 HF·장치 실행·승격0, 기존 SIM HOLD 유지. CE 새 교훈 — 임시 패키지 prefix가 고정 SDK 환경을 덮을 수 있어 전체 요구 버전을 시험 전에 검사한다.
+
+## 2026-10-24 · afd400b7bc · SIM 정책 articulation 관측 검증
+
+- 변경: [7관절 관측 기록](validation/omx-policy-articulation-2026-10-24/result.md)에 원본 state·launch freshness·종료 검증과 합성 ROS transport의 수용 경계를 남겼다.
+- 증거: 원격52PASS/SDK1SKIP/NEW0; 별도 실제 SDK1PASS0SKIP/EXIT0,100메시지85샘플, 원본 JSON hash와 정리true. 독립 구현 검토2건 Important0.
+- gate 변화: 실제 정책 episode/formal/물리/HF0. 기존 정책 HOLD 유지. CE 미해결 — 관측 보강은 원인 해결·학습 품질 수용을 뜻하지 않는다.
+
+## 2026-10-24 · b2421f9f7b · articulation 최종 source 시각 검증
+
+- 변경: [관측 기록](validation/omx-policy-articulation-2026-10-24/result.md)을 첫·마지막 source stamp를 포함한 최종 source와 별도 SDK 결과로 갱신했다. 이전 실행 원본은 보존했다.
+- 증거: 원격53PASS/SDK1SKIP/NEW0, 실제 SDK1PASS0SKIP/EXIT0·93메시지93샘플, 양쪽 capture hash와 cleanuptrue 대조.
+- gate 변화: 관절 transport 수용이며 실제 event geometry·정책 성공은 미수용이다. CE 미해결.
+
+## 2026-10-24 · e79c1fe0e2 · 실제 SIM 7관절·접촉 진단
+
+- 변경: [별도 실제 실행 기록](validation/omx-policy-articulation-native-2026-10-24/result.md)에 고정 입력, 원본 해시, producer 시간·좌표 경로와 종료 근거를 남겼다.
+- 증거: calibration PASS, 정책 HOLD(status6/−5), 7관절19049표본/invalid0, archive96/264파일 대조·종료 확인. 독립 검토2건과 실제 관절값을 사용한 FK 대조.
+- gate 변화: 관측 확보이며 task success=false, formal/물리/HF0. 약10mm 명목 기하 차이는 실패 원인으로 확정하지 않았다. CE 미해결.
+
+## 2026-10-24 · 29d3f2e1d8 · 로봇 없는 충돌 표현 대조
+
+- 변경: [충돌 표현 pilot 기록](validation/omx-collision-envelope-pilot-2026-10-24/result.md)에 고정2조건의 원본·수치 기준·종료와 수용 한계를 남겼다.
+- 증거: 별도 실제 SDK EXIT0, fixture2개 관측·정리 확인, endpoint 대조8.401100mm. 독립 검토2건이 원본과 STL 계산을 재현했다.
+- gate 변화: fixture 차이만 확인했다. 정책 HOLD·로봇 실패 인과·제품 형상·실물 수용 미해결, formal/HF0. CE 미해결.

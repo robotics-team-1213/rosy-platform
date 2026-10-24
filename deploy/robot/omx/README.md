@@ -112,6 +112,16 @@ observer/bridge loss or failed cleanup keeps the diagnostic on HOLD.
 The opt-in `test/test_omx_sim_contacts_ros.py` checks the installed SDK without
 spawning a robot. It does not establish policy success or hardware acceptance.
 
+The contact diagnostic also records `policy-articulation.json` from the instance's
+existing JointState topic: seven original joint positions, optional velocities,
+source stamps and monotonic receipt times, sampled at most every10ms. Invalid
+messages and truncation remain sticky. Before homing and again before policy
+launch, the observer must be alive with clean state and a source-stamp advance
+received within500ms; a frozen source stamp cannot refresh readiness. Closure
+verifies and hashes both artifacts. Sampled state does not guarantee continuous
+pose coverage. The SDK test's seven-joint publisher is explicitly synthetic;
+actual event geometry still requires producer, clock, frame and time brackets.
+
 ### Supervised register inspection
 
 After physically identifying the follower cable, use the pinned DynamixelSDK

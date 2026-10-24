@@ -159,15 +159,21 @@ def main():
     from rclpy.signals import SignalHandlerOptions
     from rclpy.qos import qos_profile_sensor_data
     from ros_gz_interfaces.msg import Contacts
+    from sensor_msgs.msg import JointState
+    from instance_names import names_from_environment
+    from sim_policy_articulation import ArticulationCapture
     from g2_ports import write_json
     stop=threading.Event();capture=ContactCapture(clock=time.monotonic)
+    articulation=ArticulationCapture(clock=time.monotonic)
     rclpy.init(args=[],signal_handler_options=SignalHandlerOptions.NO)
     node=rclpy.create_node('omx_contact_diagnostic')
+    node.create_subscription(JointState,names_from_environment().joint_state_topic,
+        articulation.observe,qos_profile_sensor_data)
     for label in CHANNELS:
         node.create_subscription(Contacts,topic(label),lambda message,label=label:capture.observe(label,message),
             qos_profile_sensor_data)
     for number in (signal.SIGTERM,signal.SIGINT):signal.signal(number,lambda *_:stop.set())
-    ready=False
+    ready=False;articulation_status_written=False;last_status=0.
     try:
         while rclpy.ok() and not stop.is_set():
             rclpy.spin_once(node,timeout_sec=.1)
@@ -176,10 +182,17 @@ def main():
                 write_json(pending,dict(positive_control_channels=sorted(capture.positive)))
                 pending.rename(args.evidence/'contact-ready.json')
                 ready=True
+            now=time.monotonic()
+            if (articulation.ready or articulation_status_written) and now-last_status>=.1:
+                pending=args.evidence/'articulation-ready.pending.json'
+                write_json(pending,articulation.status())
+                pending.replace(args.evidence/'articulation-ready.json')
+                articulation_status_written=True;last_status=now
     finally:
         node.destroy_node()
         if rclpy.ok():rclpy.shutdown()
-        write_json(args.evidence/'policy-contacts.json',capture.finish())
+        try:write_json(args.evidence/'policy-contacts.json',capture.finish())
+        finally:write_json(args.evidence/'policy-articulation.json',articulation.finish())
 
 
 if __name__=='__main__':main()
