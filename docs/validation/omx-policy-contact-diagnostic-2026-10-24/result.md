@@ -14,11 +14,11 @@
 
 raw는 `C:/DevTemp/learning-execution-20261023/contact-diagnostic-20261024/`에 보존한다. 저장소에는 호스트 주소·원본 관측을 게시하지 않는다.
 
-| 보존 파일 | SHA256 |
+| 보존 파일 | SHA-256 |
 |---|---|
-| sensor-probe/.../policy-contacts.json | `5c17d681701e005fa57c89a3d90c46281ab7e41367064f1deb02f8ffa2d402b1` |
-| sensor-probe/.../contact-probe-closure.json | `5a9dfa55284c1413b96fbe3178b1656fd8bf8edf6ea4c94f0bc7e381dd3d0f36` |
-| sensor-probe/.../process-cleanup.json | `abfe6596d5581fd7e043ca19f08c4d75ba07363e3210b26362a8b498a2b2320e` |
+| sensor-probe/.../policy-contacts.json | sha256: `5c17d681701e005fa57c89a3d90c46281ab7e41367064f1deb02f8ffa2d402b1` |
+| sensor-probe/.../contact-probe-closure.json | sha256: `5a9dfa55284c1413b96fbe3178b1656fd8bf8edf6ea4c94f0bc7e381dd3d0f36` |
+| sensor-probe/.../process-cleanup.json | sha256: `abfe6596d5581fd7e043ca19f08c4d75ba07363e3210b26362a8b498a2b2320e` |
 
 ## 해석과 다음 확인
 
