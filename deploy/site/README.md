@@ -143,6 +143,37 @@ and the actual installed APK signing certificate SHA256 fingerprints. Never use
 a debug/test signing identity for the production registration. Verify the exact
 callback host and Android app-link verification before activating the clients.
 
+For an existing tailnet, the signed `compose.account.yaml` overlay adds port443
+to the same proxy. Append `-f /opt/rosy/candidate/deploy/site/compose.account.yaml`
+after any pairing/OMX overlays in `ROSY_SITE_PAIRING_COMPOSE`. Set the approved
+DNS hostname in `ROSY_ACCOUNT_HTTPS_HOST` and the authority path in
+`ROSY_ACCOUNT_CONFIG`. Install the frontend chain/key as
+`/etc/rosy/account-tls/account-frontend.crt` and `account-frontend.key`, readable
+only by the proxy runtime UID10001. These keys are separate from site backend
+TLS and Account signing keys. The candidate's `Caddyfile.account` retains
+verified Fleet backend TLS and serves the existing public app-link statements.
+
+The firewall reconciles both listeners together: the existing site port keeps
+its configured LAN interfaces, while443 admits only loopback and `tailscale0`.
+The wildcard is IPv4 only; no literal host address or public ingress is needed.
+Discovery continues advertising the primary site port. Before activation,
+install the matching reviewed verifier/updater, verify the signed assets,
+apply both firewall policies, and run `site-firewall.py check --verify-certs`.
+The frontend chain/key/hostname must pass system trust verification as well as
+the existing site CA checks. Confirm both8443 and443 from their intended clients
+and deny443 from LAN. Certificate renewal must reload the same proxy only after
+validating the replacement pair (`caddy reload --force` when the config is
+unchanged). Mount the certificate directory, keep that directory in place, and
+atomically replace its two files; file-only binds retain old certificate inodes.
+Preflight verifies the files in that same read-only directory bind.
+An optional frontend is still subject to the
+same maintenance, backup, signature and user acceptance gates.
+To disable this frontend, stop the proxy before removing the Account overlay,
+apply the primary-only firewall, then recreate the proxy. The firewall refuses
+to remove its443 protection while Docker still publishes443. The verifier
+continues accepting the previous signed format for rollback; an Account-enabled
+environment requires both new frontend assets in its verified manifest.
+
 | Role | Installation and current responsibility |
 |---|---|
 | Ubuntu site host | Runs this Compose stack: Caddy, Fleet `/console` and task SQLite, and Vision. It is the current site control server. |

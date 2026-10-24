@@ -20,7 +20,7 @@ from g1_layout import G1_FIXTURE, read_documents
 from g1_sim_harness import (InProcessOwnerClient, Rtt, SimArm, arm_grant, compile_submission, pair_grants,
                             quantiles, record_evidence, submit_as_fleet)
 
-from fleet.server.local_action_transport import UnixLocalActionTransport
+from fleet.server.local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
 from rosy_agent.workcell_coordinator import WorkcellCoordinator
 
 # Proposed start values (D-780 §3-4, README "Proposed values").
@@ -200,11 +200,17 @@ def test_real_uds_round_trip_stays_inside_the_bound(tmp_path):
     server = threading.Thread(target=arm.owner.uds_server.serve_forever, daemon=True)
     server.start()
     try:
-        socket_path = root / arm.instance_id / "control.sock"
-        deadline = time.monotonic() + 5
-        while not socket_path.exists() and time.monotonic() < deadline:
-            time.sleep(0.01)
         transport, rtt = UnixLocalActionTransport(root, timeout_s=UDS_BOUND_S), Rtt()
+        deadline = time.monotonic() + 5
+        # bind creates the path before listen; readiness needs a real read-only reply.
+        while time.monotonic() < deadline:
+            try:
+                transport.owner_identity(arm.instance_id)
+                break
+            except LocalActionUnavailable:
+                time.sleep(0.01)
+        else:
+            pytest.fail("owner UDS did not become ready within five seconds")
         for _ in range(100):
             start = time.perf_counter()
             transport.owner_identity(arm.instance_id)

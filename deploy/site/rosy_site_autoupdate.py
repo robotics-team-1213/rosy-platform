@@ -260,13 +260,18 @@ class SiteUpdater:
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 
-    def _verify(self, folder: Path, *, loaded: bool, expected_commit: str | None = None) -> dict:
+    def _verify(self, folder: Path, *, loaded: bool, expected_commit: str | None = None,
+                env: dict | None = None) -> dict:
         try:
             manifest = self.verifier(folder, trusted_key_id=self.config["key_id"],
                                      trusted_public_key=self.config["public_key"],
                                      runner=self.runner, inspect_loaded_images=loaded)
             if manifest.get('source_commit') != (expected_commit or folder.name):
                 raise Rejected('signed manifest commit differs from candidate commit')
+            overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
+            for name, field in (('account', 'account_https'), ('omx', 'omx')):
+                if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
+                    raise Rejected(f'{name} overlay is not covered by this signed candidate')
             if loaded:
                 self._accepted_images[manifest['source_commit']] = manifest.get('accepted_image_ids', {})
             return manifest
@@ -356,7 +361,8 @@ class SiteUpdater:
                 or read_env(self.paths.env_backup).get('ROSY_SITE_IMAGE_TAG') != transaction['current']):
             raise Refused('rollback backup does not match journal commit')
         verification_path = previous if previous.exists() else self.paths.link
-        self._verify(verification_path, loaded=True, expected_commit=transaction['current'])
+        self._verify(verification_path, loaded=True, expected_commit=transaction['current'],
+                     env=read_env(self.paths.env_backup))
         if (transaction.get('migration') and not previous.exists()
                 and self.paths.link.is_dir() and not self.paths.link.is_symlink()):
             os.rename(self.paths.link, previous)
@@ -456,7 +462,8 @@ class SiteUpdater:
             state["last_run"]["result"] = "refused"
             return EXIT_FAILED
         try:
-            self._verify(self.paths.link, loaded=True, expected_commit=current)
+            self._verify(self.paths.link, loaded=True, expected_commit=current,
+                         env=env)
             reason = self._containers_reason(env, current)
             if not reason:
                 self._functional_baseline, missing = functional_inventory(self.config, self.http)
@@ -503,12 +510,14 @@ class SiteUpdater:
                 return EXIT_OK
             log("staging", tag=tag, commit=commit)
             target = self.stage(release, commit, sums)
-            self._verify(target, loaded=False)
+            self._verify(target, loaded=False,
+                         env=env)
             load = self._run(["docker", "image", "load", "--input", str(target / "images.tar")],
                              timeout=1800, check=False)
             if load.returncode != 0:
                 raise Rejected("docker image load failed")
-            self._verify(target, loaded=True)
+            self._verify(target, loaded=True,
+                         env=env)
             previous = self._prior_target()
             ok, reason = self.switch(env, previous, target, commit, current)
         except Refused as error:
