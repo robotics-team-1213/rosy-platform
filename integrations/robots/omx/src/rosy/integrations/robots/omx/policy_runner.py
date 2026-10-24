@@ -17,6 +17,8 @@ import time
 ALLOWED_POLICY_TYPES = frozenset({'act'})
 #: The latency bench may also time these before they are allowed for execution (D-854 step 5).
 BENCH_POLICY_TYPES = ALLOWED_POLICY_TYPES | {'smolvla'}
+#: D-866 P0 only: types the Gazebo contract probe may send to a SIM CORE before D-854 step 6 allows them.
+SIM_PROBE_POLICY_TYPES = BENCH_POLICY_TYPES
 #: Policy and target units. The first two are rosy.contracts.learning.action_space names; CORE speaks ROS joint rad.
 UNITS = frozenset({'lerobot_norm_v1', 'dynamixel_rad_v1', 'ros_joint_rad'})
 STAGES = ('observe', 'preprocess', 'infer', 'postprocess', 'submit')
@@ -123,6 +125,9 @@ def check_binding(adapter, target, space):
         raise ValueError('policy, action space and target units differ')
     if list(adapter.joint_names) != list(target.joint_names):
         raise ValueError('policy joint order differs from the target')
+    declared = getattr(target, 'policy_type', None)
+    if declared is not None and declared != adapter.policy_type:
+        raise ValueError('target was opened for another policy type')
 
 
 def step(adapter, target, space, task, clock=time.perf_counter_ns):
@@ -149,10 +154,17 @@ class CoreArmTarget:
     """
     unit = 'ros_joint_rad'
 
-    def __init__(self, client):
+    def __init__(self, client, *, policy_type='act', sim_probe=False):
         import numpy as np
         if not client.is_connected:
             raise ValueError('connect the CORE client first')
+        # Execution allows only ALLOWED_POLICY_TYPES. The D-866 P0 probe may send a bench type to a CORE that
+        # reports simulation; the owner session still enforces its own SIM-only install (D-800).
+        if not (policy_type in ALLOWED_POLICY_TYPES
+                or (sim_probe is True and policy_type in SIM_PROBE_POLICY_TYPES
+                    and client.info.get('simulation') is True)):
+            raise PermissionError(f'policy type {policy_type} may not drive this CORE')
+        self.policy_type = policy_type
         self.client, self._np, self.joint_names = client, np, list(client.info['joint_names'])
 
     def observe(self):

@@ -10420,6 +10420,14 @@ osy-d395-s1d\`.
 - 결정: D-865 P0 산출물.
 - 교훈: 없음
 
+## 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
+
+- 변경: SIM 시험 대상 관문(`SIM_PROBE_POLICY_TYPES`, `CoreArmTarget(sim_probe=True)`), `SimPolicyChain` 설치 카메라 1대 이상, D-867 시뮬레이션 상한(AI PC 12코어·10GB, 모델 PC 16코어·10GB), Gazebo 시험 `policy_chain_vla_gazebo.py`·`policy_chain_vla_child.py`, [검증 기록](validation/omx-vla-policy-chain-2026-10-25/result.md), [실행기 굶주림 교훈](solutions/runtime-errors/stock-rclpy-executor-starves-sim-lease-renewal-2026-10-25.md), D-864·D-866 Gazebo 카메라 정정.
+- 증거: AI PC Gazebo 3회차 stale·stop·revoke 9/9 통과(3회차는 GIL 전환 간격 변경 없이). lease 갱신 최대 249ms(예산 750ms), Fleet 교환 중앙값 5~6ms. 독립 검토 1회, 지적 반영. lease 1s·교환 0.25s는 그대로다.
+- gate 변화: P0 실행 계약 확인. 모델 성능·지연 한계·실물은 별도다.
+- 결정: D-867 Accepted.
+- 교훈: 새 교훈 기록(기본 `MultiThreadedExecutor`가 갱신 스레드를 굶김, 실험실 디스크 fsync).
+
 ## 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
 
 - 변경: 통합관제 runtime이 main9b10086126에 착지해 I1–I6 소프트웨어 목표를 닫았다. 최종 동결 기록에 선행 Chromium 포함 FULL27과 최신 main 기준 guard273·기본 FULL23, 동일 SHA quarantine 재실행2건을 구분했다.
