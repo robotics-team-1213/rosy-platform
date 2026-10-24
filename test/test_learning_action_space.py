@@ -171,3 +171,18 @@ def test_ros_declarations_separate_sim_data_from_converted_data():
                 {"unit": NORM, "motor_order": list(MOTORS), "calibration_sha256": None}):
         with pytest.raises(ValueError):
             validate_declaration(bad)
+
+
+def test_recorded_s_cell_verdict_opens_only_its_own_arm():
+    """End to end: the committed joint_map_check.py verdict against B's gate (D-864 §2)."""
+    import json
+    path = Path(__file__).resolve().parents[1] / "docs/validation/omx-joint-map-check-2026-10-24/evidence/verdict.json"
+    recorded = json.loads(path.read_text(encoding="utf-8"))
+    # The S cell's omx_follower_arm calibration (not in the repo): full range, homing 0, drive 0.
+    s_cell = {m: {"id": 11 + i, "drive_mode": 0, "homing_offset": 0, "range_min": 0, "range_max": 4095}
+              for i, m in enumerate(MOTORS)}
+    assert recorded["calibration_sha256"] == calibration_sha256(s_cell)
+    assert len(validate_joint_map(recorded, s_cell, "omx-cell-s-follower")) == 64
+    for other in ("arm_a", arm_identity("omx-cell-s-follower", "arm_a")):
+        with pytest.raises(ValueError):
+            validate_joint_map(recorded, s_cell, other)
