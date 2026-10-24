@@ -478,3 +478,9 @@
 - 변경: 통합 화면의 읽기 버튼에 기존 data-work-read 표기를 적용했다. 공통 operatorControls가 동적 버튼을 운영 조작으로 잠그던 원인을 수정하며 정지 쓰기·재시운전 버튼의 운영자 제한은 유지한다.
 - 증거: source10fc372212 실제 Chromium에서 UNKNOWN/PARTIAL viewer2건이 이력 버튼의 운영자 잠금으로 실패했다. 해당 시험에 viewer의 관제 선택·지도·같은 정지 기록 조회와 쓰기 금지를 함께 추가해 수정 source를 원격 검증한다.
 - gate 변화: 읽기 권한과 운영 조작을 구분하는 UI 수정이며 backend 권한·실제 장치 수용은 바꾸지 않는다. CE 해당 없음 — 원인을 코드의 공통 잠금 표기와 실제 browser 회귀에 직접 남긴다.
+
+## 2026-10-25 · uncommitted · 정지 응답이 overview보다 먼저 갱신되는 경우의 로컬 세대 선택
+
+- 변경: 신선한 overview를 전제로 같은 authority epoch의 더 최신 로컬 정지 응답 세대를 재시운전 확인에 사용한다. 이전 응답으로 세대를 내리거나 다른 epoch·오래된 overview를 통과시키지 않으며 원래 정지 body와 자동 전송 정책은 유지한다.
+- 증거: source0b30c65d59의 실제 standalone sample browser가 정지 직후 이전 overview 세대를 보내 복구 결과를 갱신하지 못했다. 직접 API 회귀39건과 CORE 연계21건은 별도 source에서 통과했으며, UI에 최신 응답/이전 응답/다른 epoch/stale overview4회귀를 추가했다. 수정 source의 실제 sample/browser 통과는 후속 실행이다.
+- gate 변화: 재시운전 확인은 현재 backend generation 검사와 사람의 두 확인·근거를 계속 요구한다. 물리 정지나 자동 재무장 증거가 아니다. CE 해당 없음 — 원인을 코드 주석과 실제 sample/browser 회귀에 남긴다.

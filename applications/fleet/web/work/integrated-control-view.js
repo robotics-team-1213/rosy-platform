@@ -104,7 +104,12 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   const localFence = () => {
     if (!overview) return null;
     const fences = stopControls(overview, overview.unit_id, elapsed());
-    return Object.hasOwn(fences, overview.unit_id) ? fences[overview.unit_id] : null;
+    const current = Object.hasOwn(fences, overview.unit_id) ? fences[overview.unit_id] : null;
+    if (!current) return null;
+    const observed = snapshot?.results.find(row => row.unit_id === overview.unit_id)?.dispatch;
+    // The stop receipt can arrive before the next overview poll reports its consumed generation.
+    return observed?.authority_epoch === current.authority_epoch
+      && Number.isSafeInteger(observed.generation) && observed.generation > current.generation ? observed : current;
   };
   function controls() {
     const reason = busy ? "요청 결과를 확인하고 있습니다" : approveReason();
@@ -225,7 +230,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       item.append(state, node("p", "로봇 응답 " + row.acknowledged_robots + " · 미확인 " + row.unknown_robots
         + " · OMX " + (omxStates[row.omx_state] || "미확인"), "hint"),
       node("p", "물리 정지 미확인 · 수신 응답은 실제 정지 확인과 별개입니다.", "hint"));
-      if (row.dispatch) item.append(node("p", "원래 관제 세대 " + row.dispatch.authority_epoch + " / " + row.dispatch.generation, "hint"));
+      if (row.dispatch) item.append(node("p", "처리 관제 세대 " + row.dispatch.authority_epoch + " / " + row.dispatch.generation, "hint"));
       results.append(item);
     }
     controls();

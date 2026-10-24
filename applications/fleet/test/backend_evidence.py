@@ -34,14 +34,27 @@ def matching(method, path):
 
 @pytest.fixture(autouse=True)
 def fleet_contract_probe(monkeypatch, request):
+    import httpx
     from starlette.testclient import TestClient
     original = TestClient.request
-    def observe(client, method, url, *args, **kwargs):
-        response = original(client, method, url, *args, **kwargs)
+    original_async = httpx.AsyncClient.send
+
+    def record(method, response):
         for identifier in matching(method.upper(), urlsplit(str(response.request.url)).path):
             OBSERVED[identifier][response.status_code].add(request.node.nodeid)
+
+    def observe(client, method, url, *args, **kwargs):
+        response = original(client, method, url, *args, **kwargs)
+        record(method, response)
         return response
+
+    async def observe_async(client, http_request, *args, **kwargs):
+        response = await original_async(client, http_request, *args, **kwargs)
+        record(http_request.method, response)
+        return response
+
     monkeypatch.setattr(TestClient, 'request', observe)
+    monkeypatch.setattr(httpx.AsyncClient, 'send', observe_async)
 
 
 def pytest_runtest_logreport(report):
