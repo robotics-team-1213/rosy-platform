@@ -10379,3 +10379,9 @@ osy-d395-s1d\`.
 - 변경: [모델 왕복 기록](validation/omx-hf-model-roundtrip-2026-10-24/result.md)과 [교차 플랫폼 byte 결속 교훈](solutions/workflow-issues/cross-platform-manifest-pins-must-separate-payload-from-serialization-2026-10-24.md)을 추가했다.
 - 증거: private Hub 고정 commit의6파일 SHA, fresh-process ACTInference 숫자 출력1회, 원래 fixture/정규화/출력 일치, 원격·회수 EXIT0·잠금 해제. 두 pre-write 중단과 미제출 요청도 보존했다.
 - gate 변화: 실제 모델 전달·숫자 재적재 수용. 정책 task 성공·실물/양팔/주행·서비스 배포는 별도다. CE 새 교훈 기록; 추가 학습·로봇 명령 없음.
+
+## 2026-10-25 · 7d0cfcd6e9 · Isaac 정지 적재면·컨베이어 접촉 왕복
+
+- 변경: [왕복 검증 기록](validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md), 실행 안내와 [혼합 drive 방식 교훈](solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)을 추가했다.
+- 증거: 실제 SDK의 양방향 접촉 파지·이송·안착과 소유 GPU 해제, FINAL6파일 해시·원격377 PASS/1 SKIP·독립 이미지 검토. 이전4개 SDK 실패를 유지했다.
+- gate 변화: 합성 정지 지지면 간 단일 물리 SIM 스모크 수용이다. 실제 카메라 맵·Pinky 전체·learned AI·실물 수용은 미검증. CE 새 교훈 기록.
