@@ -14,7 +14,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
 from native_environment import _events, seal_environment
-from native_review import JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset, write_json
+from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
+                           refuse_untrainable, write_json)
 
 SCHEMA = 'rosy.omx-collection-session.v1'
 MAX_TIME_NS = 2**63-1
@@ -425,6 +426,8 @@ def prepare_native(collections, output, repo_id):
     collections = [Path(path).absolute() for path in collections]
     _require(bool(collections) and len({c.name for c in collections}) == len(collections),
              'distinct sealed collections required')
+    for collection in collections:
+        refuse_untrainable(collection/'dataset')
     sealed = [(c, *_sealed_collection(c)) for c in collections]
     sealed.sort(key=lambda row: row[1].get('sealed_ns', 0))
     first = sealed[0][1]

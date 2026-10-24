@@ -174,3 +174,94 @@ def test_collaboration_requires_manage_and_owns_segment_reviewer(tmp_path):
         accounts.active = False
         body['version'] = 1
         assert request(url, '/api/learning/omx/segments', 'reviewer', body, workspace['token'])[0] == 403
+
+
+def saved_review(tmp_path, root, segments):
+    """Register a prepared folder and save one segment review the way /learning/omx does."""
+    from types import SimpleNamespace
+    from learning_workspace import Workspace
+    import omx_web
+    workspace = Workspace(tmp_path/'reviews.sqlite3')
+    row = workspace.register(dict(kind='omx', name='source', path=str(root)))
+    sent = []
+    omx_web.post(SimpleNamespace(send=sent.append), '/api/learning/omx/segments',
+                 dict(id=row['id'], version=0, segments=segments), workspace, ValueError)
+    return workspace, row['id'], sent[0]
+
+
+def test_dataset_step_reads_the_latest_saved_review_and_refuses_marked_or_missing(tmp_path, monkeypatch, capsys):
+    import omx_web
+    import native_segments
+    root = tmp_path/'prepared'
+    prepared(root)
+    decision = json.loads((root/'decisions.json').read_text())[0]
+    segment = {key: decision[key] for key in ('episode_index', 'frames', 'content_sha256', 'session_id', 'cycle_id')}
+    segment.update(start_frame=2, end_frame=6, object='cube', intervention=False,
+                   outcome='failure', split='exclude', reviewer='person', reason='dropped')
+    workspace, identifier, saved = saved_review(tmp_path, root, [segment])
+    # omx.js download bytes; the manual path json.loads this file
+    downloaded = json.dumps(saved['document'], indent=2, ensure_ascii=False) + '\n'
+    calls = []
+    monkeypatch.setattr(native_segments, 'export_segments', lambda *args: calls.append(args))
+    omx_web.export_saved(workspace, identifier, tmp_path/'out')
+    assert calls == [(root, json.loads((root/'inspection.json').read_text()), json.loads(downloaded), tmp_path/'out')]
+    monkeypatch.undo()
+    (root/'DO_NOT_TRAIN.txt').write_text('leader never moved\n')
+    with pytest.raises(SystemExit) as refused:
+        omx_web.main(['export-segments', '--db', str(workspace.db), '--id', identifier, '--out', str(tmp_path/'out')])
+    assert refused.value.code == 2 and 'untrainable' in capsys.readouterr().err and not (tmp_path/'out').exists()
+    other = tmp_path/'other'
+    prepared(other)
+    row = workspace.register(dict(kind='omx', name='unsaved', path=str(other)))
+    with pytest.raises(ValueError, match='saved segment review required'):
+        omx_web.export_saved(workspace, row['id'], tmp_path/'out')
+
+
+def test_db_export_is_byte_identical_to_the_downloaded_json_export(tmp_path):
+    """D-857 P0: the review DB path writes the same receipt and dataset bytes as the manual CLI."""
+    pytest.importorskip('lerobot')
+    import subprocess
+    import sys
+    from pathlib import Path
+    import numpy as np
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+    import omx_web  # noqa: F401  puts learning/curation/omx on the import path
+    import native_segments
+    native = native_segments.native
+    features = {key: dict(dtype='float32', shape=(6,), names=native.JOINTS) for key in ('action', 'observation.state')}
+    features['observation.images.front'] = dict(dtype='video', shape=(32, 32, 3), names=['height', 'width', 'channels'])
+    root = tmp_path/'prepared'
+    writer = LeRobotDataset.create(repo_id='local/segment-source', root=root, fps=30, robot_type='omx_follower',
+        features=features, use_videos=True, video_backend='pyav', vcodec='h264', batch_encoding_size=1)
+    try:
+        for episode in range(2):
+            for frame in range(8):
+                writer.add_frame(dict(action=np.full(6, episode*10+frame, dtype=np.float32),
+                    **{'observation.state': np.full(6, episode*10+frame-1, dtype=np.float32),
+                       'observation.images.front': np.full((32, 32, 3), frame*20, dtype=np.uint8)}, task='pick'))
+            writer.save_episode(parallel_encoding=False)
+    finally:
+        writer.finalize()
+    report = native.inspect_dataset(root, 'local/segment-source', body_units='normalized_-100_100',
+                                    rig_revision='rig', calibration_revision='cal', source_mode='leader_native')
+    native.write_json(root/'inspection.json', report)
+    native.write_json(root/'intake-receipt.json', dict(schema='rosy.omx-collection-intake.v1'))
+    segments = [dict(**{k: e[k] for k in ('episode_index', 'content_sha256', 'frames', 'session_id', 'cycle_id') if k in e},
+                     start_frame=2, end_frame=5, object='큐브', intervention=False, outcome='success',
+                     reviewer='human', reason='observed grasp', split=split)
+                for e, split in zip(report['episodes'], ('train', 'eval'))]
+    workspace, identifier, saved = saved_review(tmp_path, root, segments)
+    download = tmp_path/f'omx-segments-v{saved["version"]}.json'
+    download.write_text(json.dumps(saved['document'], indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    repo = Path(native_segments.__file__).resolve().parents[3]
+    for command in ([repo/'learning/curation/omx/native_segments.py', root, '--report', root/'inspection.json',
+                     '--segments', download, '--out', tmp_path/'manual'],
+                    [repo/'learning/curation/perception/omx_web.py', 'export-segments', '--db', workspace.db,
+                     '--id', identifier, '--out', tmp_path/'db']):
+        subprocess.run([sys.executable, *map(str, command)], check=True, timeout=600)
+    manual, db = (tmp_path/'manual'/'split-receipt.json').read_bytes(), (tmp_path/'db'/'split-receipt.json').read_bytes()
+    assert manual == db  # the receipt holds every child dataset file hash, so the datasets match byte for byte
+    receipt = json.loads(db)
+    assert receipt['splits'] == {'train': [0], 'eval': [1]} and receipt['outputs']['train']
+    for name in ('train', 'eval'):
+        assert native.dataset_files(tmp_path/'manual'/name) == native.dataset_files(tmp_path/'db'/name)

@@ -200,6 +200,14 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
     return report
 
 
+def refuse_untrainable(root):
+    """record_session marks recordings whose leader never moved; those never become training data."""
+    marked = [name for name in ('DO_NOT_TRAIN.txt', 'static_episodes.json')
+              if os.path.lexists(Path(root) / name)]
+    if marked:
+        raise ValueError(f'dataset is marked untrainable: {", ".join(marked)}')
+
+
 def _new_output(path, source):
     path, source = Path(path).resolve(), Path(source).resolve()
     if (path.drive.upper() == 'F:' or _in_checkout(path)
@@ -220,6 +228,7 @@ def write_json(path, document):
 
 def split_reviewed(root, report, decisions, output):
     output = _new_output(output, root)
+    refuse_untrainable(root)
     current = inspect_dataset(root, report['repo_id'], body_units=report['body_units'],
                               rig_revision=report['rig_revision'],
                               calibration_revision=report['calibration_revision'],

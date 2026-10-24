@@ -205,3 +205,25 @@ def test_real_lerobot_segment_readback(module, tmp_path):
     reader = module.native.load_dataset(tmp_path/'segments/train','local/segment-source_train')
     assert len(reader) == 3
     assert [reader[i]['action'][0].item() for i in range(3)] == [2,3,4]
+
+
+@pytest.mark.parametrize('marker', ['DO_NOT_TRAIN.txt', 'static_episodes.json'])
+def test_marked_static_recordings_are_refused_for_every_export(module, report, tmp_path, monkeypatch, marker):
+    import sys
+    from types import SimpleNamespace
+    source = tmp_path/'source'
+    source.mkdir()
+    (source/marker).write_text('leader never moved\n')
+    with pytest.raises(ValueError, match='untrainable'):
+        module.export_segments(source, report, module.selection(report, selections(report)), tmp_path/'segments')
+    with pytest.raises(ValueError, match='untrainable'):
+        module.native.split_reviewed(source, report, report['episodes'], tmp_path/'split')
+    spec = importlib.util.spec_from_file_location('collection_intake', Path(__file__).resolve().parents[1]/'collection_intake.py')
+    intake = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(intake)
+    monkeypatch.setitem(sys.modules, 'lerobot.datasets.aggregate', SimpleNamespace(aggregate_datasets=None))
+    (source/'dataset').mkdir()
+    (source/'dataset'/marker).write_text('leader never moved\n')
+    with pytest.raises(ValueError, match='untrainable'):
+        intake.prepare_native([source], tmp_path/'prepared', 'local/native')
+    assert not any((tmp_path/name).exists() for name in ('segments', 'split', 'prepared'))

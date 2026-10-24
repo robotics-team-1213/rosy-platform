@@ -143,6 +143,7 @@ def frame_at(dataset, report, episode, frame):
 
 def export_segments(root, report, document, output):
     output = native._new_output(output, root)
+    native.refuse_untrainable(root)
     splits = validate_selection(report, document)
     dataset = verified_source(root, report)
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
