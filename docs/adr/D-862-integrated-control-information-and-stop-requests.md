@@ -66,3 +66,7 @@ wire strictness·크기/소유 범위·신선도·권한/개인정보, R/A/B/A1 
 immutable body는 각 관제에 최초 배정된 projection이다. origin_id/stop_id/config_revision은 같게 유지한다. 대상이 자기 관제이면 각 직접 자식에게 target_unit을 그 자식으로, expected_controls를 그 자식 subtree의 기존 fence로 제한한다. 대상이 더 깊은 관제이면 해당 next hop으로 같은 target을 전달한다. 부모가 원래 전체 의도를 보존하고 각 관제는 자기에게 배정된 범위만 기록·실행하므로 sibling의 fence나 결과를 전달하지 않는다.
 
 자식 projection은 최초 전송 전에 고정·저장한다. 같은 identity의 다른 projection은 충돌이며 재시도·재연결에서 새 fence를 보충하지 않는다. 부모는 자식 snapshot의 target/result unit을 저장한 배정 범위와 검증한다. 원문 전체가 동일해야 하는 navigation delegation helper로 이 검증을 대체하지 않는다. 필터 뒤 fence가 없는 자식은 POST하지 않고 NOT_REACHED/UNKNOWN으로 보존한다. 조회도 같은 배정 범위로 제한한다. 실제 중첩·targeted relay·빈 fence·사칭/중복 회귀로 확인한다.
+
+### 착지 통합의 reference 버전
+
+초기 구현 브랜치에서 선점·검증한 v1.309 뒤에 main의 v1.310이 먼저 착지했다. 해당 계약을 보존하고 새로 선점한 **v1.313**에 이 ADR의 동일 wire를 통합한다. API reference·9개 현재 버전 pin·자기 changelog 제목/행을 공식 도구와 함께 정렬하며, 위 모델·권한·실행 범위 결정은 바꾸지 않는다. 초기 RED/GREEN의 v1.309 source와 최종 통합 source를 검증 기록에서 구분한다.

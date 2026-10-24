@@ -53,6 +53,7 @@ def test_core_observation_and_action_reach_existing_owner(tmp_path):
     assert info.json()['joint_names'] == ['joint_1', 'joint_2']
     source = observation(client, session)
     assert base64.b64decode(source['camera']['rgb_base64']) == bytes(range(12))
+    assert source['cameras'] == [source['camera']] and info.json()['cameras'] == [info.json()['camera']]
     assert source['positions'] == {'joint_1': 0.1, 'joint_2': 0.0}
     result = client.post('/api/v1/arm/actions', json=action(source, session))
     assert result.status_code == 202, result.text
@@ -241,3 +242,68 @@ def test_client_stops_on_uncertain_action_without_resubmitting(tmp_path, monkeyp
         robot.send_action({'joint_1': 0.101, 'joint_2': 0.001})
     assert len(driver.commands) == 1 and driver.handles[0].cancel_calls == 1
     assert calls[-1] == ('POST', '/api/v1/arm/stop')
+
+
+def test_two_installed_cameras_reach_owner_in_installed_order(tmp_path):
+    """D-854: N cameras; the one-camera ``camera`` field is absent and every frame binds the action."""
+    session, runtime, driver, clock, authority, *_ = attached(tmp_path, camera=2)
+    front, top = bytes(range(12)), bytes(range(12, 24))
+    cameras = (CameraSnapshot('front', 'cam-front', 'a' * 64, (3, 2, 2), 10_000_000_000, hashlib.sha256(front).hexdigest()),
+               CameraSnapshot('top', 'cam-top', 'b' * 64, (3, 2, 2), 10_000_000_000, hashlib.sha256(top).hexdigest()))
+    session._cameras = lambda: cameras
+    from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
+    port = CoreArmPolicyPort(session, capture=lambda: nullcontext(((front, cameras[0]), (top, cameras[1]))),
+                             principal='operator-a')
+    app = create_app({}, SimpleNamespace(arm_policy=port, safety=SimpleNamespace(estop=False, estop_listeners=[])))
+    app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='operator-a', role='operator')
+    client = TestClient(app)
+    info = client.get('/api/v1/arm/policy').json()
+    assert [c['name'] for c in info['cameras']] == ['front', 'top'] and 'camera' not in info
+    source = observation(client, session)
+    assert 'camera' not in source
+    assert [base64.b64decode(c['rgb_base64']) for c in source['cameras']] == [front, top]
+    result = client.post('/api/v1/arm/actions', json=action(source, session))
+    assert result.status_code == 202 and result.json()['accepted'] is True
+    assert len(driver.commands) == 1
+
+
+def test_camera_capture_must_match_every_installed_camera(tmp_path):
+    session, *_ = attached(tmp_path, camera=2)
+    front = bytes(range(12))
+    camera = CameraSnapshot('front', 'cam-front', 'a' * 64, (3, 2, 2), 10_000_000_000, hashlib.sha256(front).hexdigest())
+    session._cameras = lambda: (camera, CameraSnapshot('top', 'cam-top', 'b' * 64, (3, 2, 2), 10_000_000_000, 'd' * 64))
+    with pytest.raises(ValueError):
+        session.capture_inference_inputs(((front, camera),))
+    with pytest.raises(ValueError):
+        session.capture_inference_input(front, camera)
+
+
+def two_camera_api(tmp_path, *, swap=False):
+    session, runtime, driver, clock, authority, *_ = attached(tmp_path, camera=2)
+    clock[0] = 10.01
+    front, top = bytes(range(12)), bytes(range(12, 24))
+    # top arrives after the joint snapshot (10.0 s): only the latest receipt time keeps action causality.
+    cameras = (CameraSnapshot('front', 'cam-front', 'a' * 64, (3, 2, 2), 9_995_000_000, hashlib.sha256(front).hexdigest()),
+               CameraSnapshot('top', 'cam-top', 'b' * 64, (3, 2, 2), 10_005_000_000, hashlib.sha256(top).hexdigest()))
+    session._cameras = lambda: cameras
+    pairs = ((front, cameras[0]), (top, cameras[1]))
+    from rosy.execution.local.core_arm_policy import CoreArmPolicyPort
+    port = CoreArmPolicyPort(session, capture=lambda: nullcontext(pairs[::-1] if swap else pairs), principal='operator-a')
+    app = create_app({}, SimpleNamespace(arm_policy=port, safety=SimpleNamespace(estop=False, estop_listeners=[])))
+    app.dependency_overrides[operator] = lambda: SimpleNamespace(token_id='operator-a', role='operator')
+    return TestClient(app), session, driver, cameras
+
+
+def test_latest_camera_receipt_bounds_action_causality(tmp_path):
+    client, session, driver, cameras = two_camera_api(tmp_path)
+    source = observation(client, session)
+    assert [(c['received_at_ns'], c['frame_sha256']) for c in source['cameras']] == [
+        (c.received_at_ns, c.frame_sha256) for c in cameras]
+    result = client.post('/api/v1/arm/actions', json=action(source, session))
+    assert result.status_code == 202 and result.json()['accepted'] is True and len(driver.commands) == 1
+
+
+def test_cameras_out_of_installed_order_are_refused(tmp_path):
+    client, session, driver, _ = two_camera_api(tmp_path, swap=True)
+    reply = client.post('/api/v1/arm/observations', json={'policy_revision': session.lease.policy_revision})
+    assert reply.status_code == 409 and driver.commands == []

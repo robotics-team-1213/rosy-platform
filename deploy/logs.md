@@ -3224,3 +3224,9 @@
 - 변경: Windows 설치기가 registry 백업과 도메인/정책 가드 뒤 networkon/networkoff 시작·중지 트리거를 설정한다. Automatic 서비스가 멈춘 실제 관측과 Microsoft KB2385818을 근거로 했다.
 - 증거: [최신 운영 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 새 조건 red→green 원격 33개 통과·NEW 0, PowerShell 구문·독립 검토 통과. 관리자 실행 exit 0 뒤 서비스 Running, 동일 관제 Source·stratum 4·최근 동기 성공·Last Sync Error 0을 관측했다.
 - gate 변화: Windows의 공통 서버 실제 적용만 확인했다. 정밀 오차/재부팅 수용과 모델·AI sudo·오프라인 로봇은 남았다. main 착지는 타 작업 대기열에서 timeout으로 보류했고 push하지 않았다. CE 미해결 — 전체 기기 수용은 아직 HOLD다.
+
+## 2026-10-24 · c50c268c1410 · 공통 NTP 시간원 선택과 정밀도 수용 분리
+
+- 변경: `maxdistance`를 chrony 기본 3초로 복구해 WAN root distance가 100ms를 넘는 공통 서버도 시계를 보정하도록 했다. 50ms UTC 정밀도·stale 검사는 유지했다. 모델·AI 설정은 백업·구문 검사 및 step 없는 재시작으로 복구했고, 관제는 기존 NTS를 유지한 채 최대 polling 64초를 적용했다.
+- 증거: [후속 검증](../docs/validation/shared-time-sync-source-selection-2026-10-24/result.md). 원격 red 재현→34개/영향 354개 통과·NEW 0, 독립 검토 주요 지적 없음. 두 PC가 같은 source를 실제 선택, stratum 4/Normal/enabled 및 남은 correction 1ms 미만을 관측했다.
+- gate 변화: PC 공통 NTP 실제 동기는 복구했다. 보고 UTC 상한 약 140ms로 정밀도 수용은 HOLD, 오프라인 Pinky 두 대·모바일/MCU·재부팅 수용도 남는다. 임시 워크트리 한 개는 사용자 예외 승인 범위다. CE 미해결 — 전체 장치 수용 전이며 원인·회귀·운영 안내는 보존했다.
