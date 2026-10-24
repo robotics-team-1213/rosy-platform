@@ -7,7 +7,8 @@ What the hardware can break is the register state the motors apply before Presen
 homing offset or the reverse bit. This tool checks only that, from read-only register_probe.py outputs taken
 with no driver running (the vendor driver writes EEPROM and enables torque on start, so it is not used here).
 It does not show that the physical zero matches the URDF zero.
-The verdict names the arm and each probe file's sha256; a converter must check that binding.
+The verdict names the arm (the rig_revision its datasets are reviewed under), the LeRobot calibration's range
+digest and each probe file's sha256; a converter must check that binding.
 Exit 0: every probe (two or more) agrees and the hypothesis holds; 3: it does not; 2: invalid input.
 """
 import argparse
@@ -16,6 +17,9 @@ import json
 import math
 from pathlib import Path
 import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning.action_space import calibration_sha256  # noqa: E402
 
 #: Motor ID -> ROS joint (open_manipulator omx_f.ros2_control.xacro at the pinned revision).
 JOINTS = {11: 'joint1', 12: 'joint2', 13: 'joint3', 14: 'joint4', 15: 'joint5', 16: 'gripper_joint_1'}
@@ -36,12 +40,14 @@ def motors(probe):
     return rows
 
 
-def check(probes, *, still_ticks=4, arm=None, probe_sha256=()):
+def check(probes, *, still_ticks=4, arm=None, probe_files=(), calibration_digest=None):
     """Pure comparison over two or more probes of a resting arm; returns the verdict document."""
     if len(probes) < 2:
         raise ValueError('at least two probes required: one snapshot cannot show the arm and registers held still')
     if not isinstance(arm, str) or not arm.strip():
-        raise ValueError('the probed arm identity is required (by-id path or calibration revision)')
+        raise ValueError('the probed arm identity is required (the rig_revision of its datasets)')
+    if not isinstance(calibration_digest, str) or len(calibration_digest) != 64:
+        raise ValueError('the LeRobot calibration range digest is required')
     readings = [motors(probe) for probe in probes]
     rows, holds = [], True
     for motor_id, joint in JOINTS.items():
@@ -61,16 +67,20 @@ def check(probes, *, still_ticks=4, arm=None, probe_sha256=()):
                          drive_mode=first['drive_mode'], operating_mode=first['operating_mode'],
                          position_raw=raw, ros_rad=ros_rad(raw), reasons=reasons, holds=not reasons))
         holds &= not reasons
-    return dict(schema='rosy.omx-joint-map-check/2', hypothesis='ros_joint_rad == dynamixel_rad_v1',
+    return dict(schema='rosy.omx-joint-map-check/3', hypothesis='ros_joint_rad == dynamixel_rad_v1',
                 proves='register state only; physical zero vs URDF zero is not checked',
-                arm=arm, probes=len(probes), probe_sha256=list(probe_sha256), still_ticks=still_ticks,
-                holds=holds, joints=rows)
+                arm=arm, calibration_sha256=calibration_digest, probes=len(probes),
+                probe_files=[dict(file=name, sha256=digest) for name, digest in probe_files],
+                still_ticks=still_ticks, holds=holds, joints=rows)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('probes', type=Path, nargs='+', help='two or more register_probe.py JSON outputs of a resting arm')
-    parser.add_argument('--arm', required=True, help='probed follower: /dev/serial/by-id path or calibration revision')
+    parser.add_argument('--arm', required=True,
+                        help="this follower's identity: its datasets' rig_revision, plus /arm_a or /arm_b on a two-arm rig "
+                             "(action_space.arm_identity); an operator-declared label, not hardware-proven")
+    parser.add_argument('--calibration', type=Path, required=True, help='LeRobot follower calibration JSON in use')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -79,8 +89,10 @@ def main(argv=None):
         if len({path.resolve() for path in args.probes}) != len(args.probes):
             raise ValueError('each probe must be a separate file')  # one snapshot named twice proves nothing
         raw = [path.read_bytes() for path in args.probes]
+        calibration = json.loads(args.calibration.read_text(encoding='utf-8'))
         verdict = check([json.loads(data.decode('utf-8')) for data in raw], arm=args.arm,
-                        probe_sha256=[hashlib.sha256(data).hexdigest() for data in raw])
+                        probe_files=[(path.name, hashlib.sha256(data).hexdigest()) for path, data in zip(args.probes, raw)],
+                        calibration_digest=calibration_sha256(calibration))
         with args.out.open('x', encoding='utf-8') as stream:
             json.dump(verdict, stream, indent=2)
     except (OSError, ValueError, AttributeError, TypeError) as exc:
