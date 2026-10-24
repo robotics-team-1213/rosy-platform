@@ -75,3 +75,4 @@ perception/sensors/line_observation
 site_ui/console/shared
 situation
 devices/omx/adapter/omx_adapter/pick_place
+devices/omx/adapter/omx_adapter/real

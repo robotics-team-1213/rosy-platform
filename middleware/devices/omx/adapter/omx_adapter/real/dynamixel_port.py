@@ -16,6 +16,11 @@ Absorbed from the retired device-core driver and safety wrapper (rosy-vault 9a74
 - Tracking error, motor hardware error, missed pose, or an empty grasp HOLD the arm.
 - Motion goals are refused until measured limits, measured gripper values and a passed stop
   test exist (D-858 §4). Learned-policy steps are refused (D-793).
+- The port loads its evidence from the commissioning store itself (S3, no other source).
+  When the stored record's revision moves away from the loaded one (checked at submit, before
+  each step and at rearm), the port HOLDs; a person reloads (``reload_evidence``) and rearms.
+- ``submit_stop_test`` is measurement mode: gate without the stop-test item, at most 20 poses
+  that move only joint1 within 0.2 rad of where it is, at 0.15..0.2 rad/s.
 - One bus writer: a port claims its arm instance and its serial device in this process; the
   real bus also opens the device exclusively. The claim is per instance, never a wildcard over
   other arms' owners (device-core ``lock.py:64`` defect, D-773).
@@ -32,15 +37,19 @@ from typing import Callable, Mapping, Protocol, Sequence
 
 from core_common.protocol.schemas import LocalStopRequest, LocalStopSnapshot, StopRequestSource
 
-from .action_runner import ActionGrant, DriverSubmission, StopFence
-from .command_owner import ArmCommandConfig
-from .kinematics import OmxKinematics
+from ..action_runner import ActionGrant, DriverSubmission, StopFence
+from ..command_owner import ArmCommandConfig
+from ..kinematics import OmxKinematics
 from .dynamixel_bus import (
     ADDR_GOAL, ADDR_HW_ERROR, ADDR_MODEL, ADDR_OPERATING_MODE, ADDR_PRESENT,
     ADDR_PRESENT_CURRENT, ADDR_TORQUE, BUS_CLAIMS, Bus, Hardware, HardwareMismatch, SdkBus,
     WRITABLE, _BusClaims, _signed, to_rad, to_raw,
 )
-from .dynamixel_gates import MotionEvidence, Tracking, _validate_grasp
+from .commissioning_record import CommissioningStore, load_motion_evidence
+from .dynamixel_gates import (
+    STOP_TEST_MAX_AMPLITUDE_RAD, STOP_TEST_MAX_SPEED_RAD_S, STOP_TEST_MAX_STEPS,
+    STOP_TEST_MIN_SPEED_RAD_S, STOP_TEST_POSE_TOLERANCE_RAD, Tracking, _finite, _validate_grasp,
+)
 
 
 class TrippableFence(StopFence, Protocol):
@@ -71,7 +80,7 @@ class DynamixelPort:
     """
 
     def __init__(self, bus: Bus, *, device: str, config: ArmCommandConfig,
-                 evidence: MotionEvidence, planner: Planner, stop_fence: TrippableFence,
+                 store: CommissioningStore, planner: Planner, stop_fence: TrippableFence,
                  hardware: Hardware = Hardware(), tracking: Tracking = Tracking(),
                  kinematics: OmxKinematics | None = None,
                  sleep: Callable[[float], None] | None = None,
@@ -89,8 +98,10 @@ class DynamixelPort:
         claims.acquire(self.instance, device)
         try:
             self.bus, self.hw, self.config = bus, hardware, config
-            self.evidence, self.planner, self.stop_fence = evidence, planner, stop_fence
+            self.store, self.planner, self.stop_fence = store, planner, stop_fence
+            self.evidence = load_motion_evidence(store, config)
             self.tracking = tracking
+            self._vel = config.velocity_limits  # capped only while a stop test runs
             self.kinematics = kinematics or OmxKinematics.load()
             self.sleep = sleep or time.sleep
             self.start = start or (lambda fn: threading.Thread(target=fn, daemon=True).start())
@@ -218,27 +229,57 @@ class DynamixelPort:
         return None
 
     def submit(self, grant: ActionGrant) -> DriverSubmission:
+        return self._submit((grant.workcell_id, grant.instance_id),
+                            (grant.authority_epoch, grant.dispatch_generation),
+                            lambda: self.planner(grant), self.config.velocity_limits, False)
+
+    def submit_stop_test(self, poses: Sequence[Sequence[float]], *, authority_epoch: int,
+                         dispatch_generation: int, max_speed_rad_s: float) -> DriverSubmission:
+        """Commissioning stop-test motion (D-858 S3 measurement mode): the §4 gate without the
+        stop-test item, joint poses only, every joint capped at a slow V-016 speed."""
+        if not (_finite(max_speed_rad_s)
+                and STOP_TEST_MIN_SPEED_RAD_S <= max_speed_rad_s <= STOP_TEST_MAX_SPEED_RAD_S):
+            return self._refuse("STOP_TEST_SPEED")
+        present, tol = self._read_joints(), STOP_TEST_POSE_TOLERANCE_RAD
+        if not 0 < len(poses) <= STOP_TEST_MAX_STEPS:
+            return self._refuse("STOP_TEST_STEPS")
+        for q in poses:
+            if (len(q) != len(present) or not all(_finite(v) for v in q)
+                    or abs(q[0] - present[0]) > STOP_TEST_MAX_AMPLITUDE_RAD + tol
+                    or any(abs(a - b) > tol for a, b in zip(q[1:], present[1:]))):
+                return self._refuse("STOP_TEST_POSE: joint1 only, within the stop-test amplitude")
+        steps = [{"pose": list(q)} for q in poses]
+        vel = {name: min(v, max_speed_rad_s) for name, v in self.config.velocity_limits.items()}
+        return self._submit(self.instance, (authority_epoch, dispatch_generation),
+                            lambda: steps, vel, True)
+
+    def _submit(self, instance: tuple[str, str], gen: tuple[int, int],
+                plan: Callable[[], Sequence[Mapping[str, object]]],
+                vel: Mapping[str, float], stop_test: bool) -> DriverSubmission:
         with self._state_lock:
             if self._running:
                 return self._refuse("BUSY")
-            if (grant.workcell_id, grant.instance_id) != self.instance:
+            if instance != self.instance:
                 return self._refuse("WRONG_INSTANCE")
             if self.latched or self._stop_requested:
                 return self._refuse(f"LATCHED: {self.reason}")
-            self._gen = (grant.authority_epoch, grant.dispatch_generation)
-            self._running = True  # reserved; fence and planner calls run outside the lock
+            self._gen = gen
+            self._running = True  # reserved; fence, record and planner calls run outside the lock
             stops = self._stops
-        if not self.stop_fence.is_open(authority_epoch=grant.authority_epoch,
-                                       dispatch_generation=grant.dispatch_generation):
+        refusal = self._record_changed()
+        if refusal:
+            self._halt(refusal)
+        elif not self.stop_fence.is_open(authority_epoch=gen[0], dispatch_generation=gen[1]):
             self._halt("STOP_FENCE_CLOSED")
             refusal = "STOP_FENCE_CLOSED"
         else:
-            blockers = self.evidence.blockers()
+            blockers = self.evidence.blockers(config_revision=self.config.calibration_revision,
+                                              include_stop_test=not stop_test)
             refusal = "MOTION_GATE: " + "; ".join(blockers) if blockers else None
         steps: list = []
         if refusal is None:
             try:
-                steps = list(self.planner(grant))
+                steps = list(plan())
                 refusal = self._plan_refusal(steps)
             except Exception as exc:
                 refusal = f"PLAN_UNAVAILABLE: {type(exc).__name__}"
@@ -249,9 +290,33 @@ class DynamixelPort:
             self.goal_id = f"dxl-{uuid.uuid4().hex}"
             self.state, self.reason, self.last_refusal = "RUNNING", None, None
             self._last_command = None  # _stop_requested is cleared only by rearm
+            self._vel = vel
             goal_id = self.goal_id
         self.start(lambda: self._run(goal_id, steps))
         return DriverSubmission(accepted=True, driver_goal_id=goal_id)
+
+    def _record_changed(self) -> str | None:
+        """The stored commissioning record is no longer the loaded one (D-858 S3 HOLD after
+        save). Reads a file: never call it under the state lock."""
+        try:
+            current = self.store.revision()
+        except Exception as exc:  # unreadable record: fail closed
+            return f"COMMISSIONING_RECORD_UNREADABLE: {type(exc).__name__}"
+        return None if current == self.evidence.revision else "COMMISSIONING_RECORD_CHANGED"
+
+    def reload_evidence(self) -> None:
+        """Re-read the store while HOLD and idle; the latch stays until a person rearms."""
+        with self._state_lock:
+            if self._running or not self.latched:
+                raise PermissionError("reload the commissioning record only while HOLD and idle")
+        evidence = load_motion_evidence(self.store, self.config)  # file read: outside the lock
+        with self._state_lock:
+            if self._running or not self.latched:
+                raise PermissionError("reload the commissioning record only while HOLD and idle")
+            self.evidence = evidence
+
+    def present_joints(self) -> list[float]:
+        return self._read_joints()
 
     def cancel(self, action: Mapping[str, object]) -> bool | None:
         self.stop()
@@ -325,6 +390,9 @@ class DynamixelPort:
         if not self.stop_fence.is_open(authority_epoch=authority_epoch,
                                        dispatch_generation=dispatch_generation):
             raise PermissionError("platform stop fence is not open at this generation")
+        changed = self._record_changed()
+        if changed:
+            raise PermissionError(f"{changed}: reload the commissioning record before rearm")
         fault = self._fault()
         if fault:
             raise PermissionError(f"hardware error present: {fault}")
@@ -347,7 +415,8 @@ class DynamixelPort:
         with self._state_lock:
             return {"state": self.state, "reason": self.reason, "latched": self.latched,
                     "goal_id": self.goal_id, "last_refusal": self.last_refusal,
-                    "last_stop_error": self.last_stop_error, "fence_error": self.fence_error}
+                    "last_stop_error": self.last_stop_error, "fence_error": self.fence_error,
+                    "record_revision": self.evidence.revision}
 
     def close(self) -> None:
         try:
@@ -370,7 +439,7 @@ class DynamixelPort:
 
     def _send(self, q: Sequence[float]) -> None:
         self._check_fence()
-        limits, vel = self.config.position_limits, self.config.velocity_limits
+        limits, vel = self.config.position_limits, self._vel
         for name, value in zip(self.config.joint_names, q):
             lower, upper = limits[name]
             if not lower <= value <= upper:
@@ -399,7 +468,7 @@ class DynamixelPort:
 
     def _move(self, goal: Sequence[float]) -> None:
         start = self._read_joints() if self._last_command is None else self._last_command
-        vel = self.config.velocity_limits
+        vel = self._vel
         steps = max(1, math.ceil(max(
             abs(g - s) / (vel[name] * self.tracking.period_s * 0.95)
             for name, g, s in zip(self.config.joint_names, goal, start))))
@@ -455,6 +524,9 @@ class DynamixelPort:
         result, reason = "SUCCEEDED", None
         try:
             for step in steps:
+                changed = self._record_changed()
+                if changed:
+                    raise _Hold(changed)
                 (kind, value), = step.items()
                 if kind == "grip":
                     self._grip(value == "close")
@@ -477,6 +549,7 @@ class DynamixelPort:
             if result == "SUCCEEDED" and not self.latched and self.goal_id == goal_id:
                 self.state, self.reason = "IDLE", None
             self.outcome = {"goal_id": goal_id, "result": result, "reason": reason}
+            self._vel = self.config.velocity_limits
             self._running = False
 
 
