@@ -1480,6 +1480,26 @@ so it receives a different named `sighting_data` volume. The installed site
 configuration and secret files must be available to Compose, but this one-off
 command does not start the services or contact robots:
 
+The empty-volume example below applies only to databases without Account or
+Console credential tables. Account-bearing restores require a readable current
+database whose complete credential schemas and rows match the backup. The tool
+compares `rosy_account*`, `account_oauth_*` and `fleet_console_*` tables, their
+indexes and triggers using read-only SQLite snapshots, including committed WAL
+data. Differences are refused before archiving or replacing the destination.
+This includes consumed codes/refresh tokens, revoked families, changed passwords,
+disabled accounts and profiles. Even harmless differences such as session touch
+timestamps require retaining the current database; there is no override flag.
+
+For an isolated Account restore drill, first seed the test volume with a separate,
+fresh consistent copy of the current authority database, then test the chosen
+backup against that reference. Do not seed it from the backup being evaluated:
+that would compare the same old state to itself. Keep the copied keys and
+configuration isolated and do not start robot connections. A successful recovery
+must preserve current passwords, profiles, account status and revocation state.
+If the current security state is missing or corrupt, ordinary restore refuses;
+retain the evidence and arrange a reviewed offline Account recovery. This utility
+does not reconstruct the latest authority state from an older backup.
+
 ```sh
 restore_test() { docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
 restore_test run --rm --no-deps --user 10001:10001 \

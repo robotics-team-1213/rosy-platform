@@ -103,6 +103,23 @@ def test_refresh_rotation_replay_revokes_family(authority):
     assert instance.introspect(rotated['access_token']) == {'active': False}
 
 
+def test_db_restore_cannot_make_consumed_refresh_reusable(authority, tmp_path):
+    from deploy.site.site_db import DatabaseError, backup_database, restore_database
+
+    instance, context, _ = authority
+    tokens = json.loads(exchange(instance, get_code(instance, context))[1])
+    backup = tmp_path / 'unspent-refresh.sqlite3'
+    backup_database(instance.path, backup)
+    form = urlencode({'grant_type': 'refresh_token', 'client_id': 'robot-app',
+                      'refresh_token': tokens['refresh_token']})
+    assert instance.token(form)[2] == 200
+
+    with pytest.raises(DatabaseError, match='Account security state'):
+        restore_database(backup, instance.path, replace=True, assume_stopped=True)
+
+    assert instance.token(form)[2] == 400
+
+
 def test_revision_change_and_family_logout_invalidate_access(authority):
     instance, context, families = authority
     tokens = json.loads(exchange(instance, get_code(instance, context))[1])
