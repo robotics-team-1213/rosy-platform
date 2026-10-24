@@ -49,6 +49,8 @@ Task 정책 경로(`policy_evidence`, `POLICY_DISPATCH_ENABLED`)는 이미 만�
 
 ### P0 — SRS 보완안
 
+**상태:** 착지(2026-10-25) — MSN-008 신설, MSN-006·MSN-007·UI-WORK-001 보강.
+
 **Owner:** 이 계획 담당 · **산출물:** MSN-006(정책 승인 경로), MSN-007(범위와 lease의 관계 불변), UI-WORK-001(자동 승인 표시) 보강 초안 · **Exit:** SRS 편집이 계약 위반이 아닌지 `docs/spec` 기준 확인.
 
 ### P1 — API·스키마
