@@ -10,7 +10,10 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
   jog <joint> <delta>     move one joint target by at most JOG_MAX units
   grip <value>            set the gripper target
   state                   report the current state
-  stop                    end; record_session then turns torque OFF and restores the caps
+  stop                    end; torque goes OFF where the arm is, so run the home chunk first
+
+Commands apply one per control tick, and a jog may not put its target more than JOG_MAX + SETTLE_TOL
+from the joint's present position, so a burst of commands cannot add up to one large step.
 
 A grasp chunk (name starting with "grasp") reports `holding`: false when the gripper closed to within
 EMPTY_MARGIN of the library's closed value, i.e. there was nothing between the jaws. The run stops by
@@ -25,6 +28,7 @@ import json
 import math
 import os
 import select
+import stat
 import time
 from pathlib import Path
 
@@ -62,6 +66,8 @@ class Runner:
         self.chunk = None
         self.settle_since = None
         self.far_since = None
+        self.last_grip = None
+        self.pending: list = []
 
     def present(self) -> list:
         observation = self.robot.get_observation()
@@ -98,7 +104,10 @@ class Runner:
                 if not abs(delta) <= JOG_MAX:
                     raise ValueError(f"jog is limited to {JOG_MAX}")
                 index = NAMES.index(words[1])
-                self.target[index] = max(-100.0, min(100.0, self.target[index] + delta))
+                moved = max(-100.0, min(100.0, self.target[index] + delta))
+                if abs(moved - self.present()[index]) > JOG_MAX + SETTLE_TOL:
+                    raise ValueError(f"jog would put the target more than {JOG_MAX + SETTLE_TOL} from the joint")
+                self.target[index] = moved
             elif verb == "grip" and len(words) == 2:
                 self.target[5] = max(0.0, min(100.0, float(words[1])))
             elif verb != "state":
@@ -114,20 +123,25 @@ class Runner:
         self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
         error = max(abs(a - b) for a, b in zip(present[:5], self.target[:5]))
+        # Load-bearing joints only: the taught wrist roll lagged its leader by 66 units (2026-10-24 teach r2).
+        loaded = max(abs(a - b) for a, b in zip(present[:4], self.target[:4]))
         now = self.clock()
-        if error > FOLLOW_STOP:
+        if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
-                raise RuntimeError(f"following error {error:.1f} for {FOLLOW_STOP_S} s: blocked or colliding")
+                raise RuntimeError(f"following error {loaded:.1f} for {FOLLOW_STOP_S} s: blocked or colliding")
         else:
             self.far_since = None
         if self.chunk is not None and not self.queue:
             self.settle_since = self.settle_since if self.settle_since is not None else now
-            if error <= SETTLE_TOL or now - self.settle_since >= SETTLE_S:
+            grasp = self.chunk.startswith("grasp")
+            gripper_still = self.last_grip is not None and abs(present[5] - self.last_grip) < 0.3
+            self.last_grip = present[5]
+            if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL)
-                if self.chunk.startswith("grasp"):
-                    fields["holding"] = present[5] > self.library["gripper_closed"] + EMPTY_MARGIN
-                self.chunk = None
+                if grasp:  # jaws stopped short of this chunk's closed target: something is between them
+                    fields["holding"] = present[5] > self.target[5] + EMPTY_MARGIN
+                self.chunk, self.last_grip = None, None
                 self.report(**fields)
 
     def run(self, lines) -> None:
@@ -137,9 +151,10 @@ class Runner:
         period = 1.0 / self.fps
         while True:
             started = self.clock()
-            for line in lines():
-                if not self.command(line):
-                    return
+            self.pending += lines()
+            # one command per tick: a burst of jogs must not move the target by more than one jog at once
+            if self.pending and not self.command(self.pending.pop(0)):
+                return
             self.tick()
             self.sleep(max(0.0, period - (self.clock() - started)))
 
@@ -147,6 +162,8 @@ class Runner:
 def fifo_lines(path: Path):
     if not path.exists():
         os.mkfifo(path, 0o600)
+    if not stat.S_ISFIFO(os.stat(path).st_mode):  # a stale regular file would replay old commands
+        raise SystemExit(f"{path} exists and is not a FIFO")
     fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
     keep = os.open(path, os.O_WRONLY | os.O_NONBLOCK)  # stays open so readers never see EOF between writers
     buffer = b""
@@ -161,7 +178,7 @@ def fifo_lines(path: Path):
             buffer += chunk
         while b"\n" in buffer:
             line, buffer = buffer.split(b"\n", 1)
-            out.append(line.decode().strip())
+            out.append(line.decode(errors="replace").strip())  # a bad byte is a refused command, not an exit
         return out
 
     lines.close = lambda: (os.close(fd), os.close(keep))
@@ -176,6 +193,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    if library.get("fps") != config["dataset"]["fps"]:  # one frame per tick: another fps replays at another speed
+        raise SystemExit(f"chunk library fps {library.get('fps')} differs from the recorder fps {config['dataset']['fps']}")
     from lerobot.robots.omx_follower import OmxFollower, OmxFollowerConfig
 
     robot_cfg = {k: v for k, v in config["robot"].items() if k not in ("type", "cameras")}

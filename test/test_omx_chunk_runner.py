@@ -93,6 +93,29 @@ def test_a_small_jog_and_grip_move_only_their_joint():
     assert robot.pos[3] == 41.0 and robot.pos[5] == 55.0 and robot.pos[:3] == HOME[:3]
 
 
+def test_an_empty_grasp_is_judged_after_the_slow_jaws_stop():
+    class SlowJaws(Robot):  # the real gripper closes over many ticks after its last target
+        def send_action(self, action):
+            target = action["gripper.pos"]
+            super().send_action({**action, "gripper.pos": self.pos[5]})
+            self.pos[5] += max(-0.5, min(0.5, target - self.pos[5]))
+
+    status = runner(SlowJaws(), ["run approach_pinky", "run grasp_pinky", "stop"])
+    done = by_command(status, "run grasp_pinky")[0]
+    assert done["holding"] is False and done["state"][5] == pytest.approx(46.6)
+
+
+def test_a_burst_of_jogs_against_a_joint_that_does_not_follow_is_refused():
+    robot = Robot(blocked=(1,))
+    status, clock = [], [0.0]
+    burst = [["jog shoulder_lift.pos 5", "jog shoulder_lift.pos 5", "jog shoulder_lift.pos 5", "stop"]]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: burst.pop() if burst else [])  # all four lines arrive in one read
+    assert [s["ok"] for s in status[1:4]] == [True, False, False]
+    assert max(a["shoulder_lift.pos"] for a in robot.sent) == -55.0
+
+
 def test_a_blocked_arm_stops_the_runner():
     far = library()
     far["chunks"]["approach_pinky"] = [[k * 3.0, -60.0, 50.0, 45.0, 10.0, 46.6] for k in range(20)]
