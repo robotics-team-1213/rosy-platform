@@ -614,3 +614,9 @@
 - 변경: pose_plan의 승인 recipe/cell 검증은 호환 adapter에 남기고 물리 입력/profile/기하/plan을 transfer_motion, 궤적 계산을 transfer_planner로 나눴다. 새 요청은 home/pick/place와 접근·운반 높이만 가지며 job·recipe·pallet·layer·업무 완료를 해석하지 않는다. 기존 import/type alias, profile 파일·hash, callback 순서, owner/그리퍼/fence 검증을 유지한다.
 - 증거: commit 67389d0a03의 새 중립 API 시험 10개 RED 후 구현했다. 첫 회귀에서 옮긴 단계 상수 import 누락을 확인해 수정했다. commit 613c6b1b20의 공식 원격 물리/기존 Cell/owner/레이아웃 회귀는 135 passed, skip 0이다. 크기 검사는 통과했고 기존 728줄 예외는 제거했다. 코드 검토·최종 metadata 검증은 후속 결과와 구분한다.
 - gate 변화: simulation 내부 순수 계산 분리다. 충돌 장면·비대칭 물체·실물·새 wire/dispatch를 열지 않는다. 등록 기하를 승인하는 책임은 owner 측 binding에 남으며 후속 중립 preflight/실행 계약이 필요하다. CE 해당 없음: 코드·회귀 시험에서 판단을 복원할 수 있는 구조 분리다.
+
+## 2026-10-24 · uncommitted · D-856 owner 물리 catalog와 사전검사
+
+- 변경: 불변 물리 catalog에 설치 scope·revision·자세/접근 높이·물체 기하를 결속하고 중립 check_transfer 서비스를 추가했다. owner가 admission한 측정 상태와 같은 monotonic clock을 주입받아 계산 전후 freshness·revision·계획 출력을 검증하며 궤적·permit·업무 완료를 반환하지 않는다. submit·claim·journal·driver 포트는 없다.
+- 증거: a1a6b6cb19의 새 API 시험 17개 RED 후 구현했다. 독립 계약 검토의 중간 clock 역행 지적은 a62a360ce2의 정확한 sequence에서 RED 1개로 재현하고 d8e20d980e에서 수정했다. 최종 관련 원격 회귀 117 passed, skip 0, 0 NEW이며 재검토의 필수 finding은 닫혔다.
+- gate 변화: 내부 simulation 계산 서비스만 검증했다. owner 조립·인증된 공개 HTTP/UDS·중립 grant·Harbor 공정 변환은 미완료이며 기존 Cell 실행 경로와 실물 capability는 바꾸지 않았다. CE 해당 없음: clock 조건과 회귀가 판단을 직접 보존한다.

@@ -4369,3 +4369,15 @@
 - 계약: API v1.298과 schema·버전 핀을 함께 갱신했다. POST 응답 유실 뒤 404는 미접수 증명이 아니며 자동 재접수 근거로 사용하지 않는다.
 - 증거: RED commit 8cea2b26cb에서 새 시험 12개가 누락 route로 실패했다. commit 95664a6496의 공식 원격 관련 회귀는 77 passed, skip 0이다. 최초 회귀의 두 기존 호출자 시험은 새 읽기/기존 쓰기 경계를 구분하도록 보완했다. 공정 import 금지 subprocess에서도 읽기 동작을 확인했다. 최종 변경과 외부 앱 HTTP 검증은 후속 결과로 구분한다.
 - gate 변화: 실물·production dispatch 활성화 없음. 첫 TRIP 흐름이며 팔 동작 중립화·Harbor 도달 검증 계약은 남는다. CE 해당 없음: 기존 실행·조회 구조와 회귀 시험으로 판단을 복구할 수 있다.
+
+## 2026-10-24 · uncommitted · Fleet task worker 기동 이름 보존
+
+- 변경: worker 분리 병합 뒤 lifespan이 import하지 않은 task_dispatch_loop를 호출하던 오류를 실제 import인 _task_dispatch_loop로 교정했다. 기존 monkeypatch와 task dispatcher 구현은 유지한다.
+- 증거: 고정 f3d7d3fba5 전체 원격 회귀의 app ownership 시험 7개가 NameError로 실패했다. 수정 commit 477948a415에서 app ownership·CLI·link-address 기존 시험 76 passed, skip 0, 0 NEW다. 전체 회귀의 다른 run과 최종 head 증거는 별도로 분류한다.
+- gate 변화: 기동 회귀 수정이며 실행 권한·profile 변경은 없다. CE 해당 없음: 원인과 교정은 코드·기존 회귀 시험으로 복원할 수 있다.
+
+## 2026-10-24 · uncommitted · D-856 전체 회귀 발견 사항 교정
+
+- 변경: TRIP_JOB_NOT_FOUND를 운영자 오류 문구 표에 추가했다. 없는 요청과 권한 밖 요청을 같은 조회 불가 문구로 표현한다.
+- 증거: 고정 f3d7d3fba5 전체 회귀에서 worker NameError 34건과 문구 누락 1건을 분류했다. 수정 commit 52a9ccf6b5에서 해당 파일의 전체 suite와 기존 CLI/link-address/app ownership을 원격 실행해 261 passed, skip 0을 확인했다. 이는 수정 범위의 회귀이며 이전 FULL 실행 전체를 통과로 바꾸지 않는다.
+- gate 변화: dispatch/권한 변경 없음. CE 해당 없음: 오류 문구 coverage와 기존 기동 시험이 회귀를 검증한다.

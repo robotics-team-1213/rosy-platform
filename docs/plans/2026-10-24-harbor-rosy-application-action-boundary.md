@@ -12,9 +12,21 @@
 
 ## 실행 상태와 선행 조건
 
-2026-10-24 작성. 이번 요청은 계획·ADR 기록 범위다. P0 문서 등록 뒤에도 제품 구현을 시작했다는 뜻이 아니다. P1은 상세 동작 계약을 확정하는 단계이며, 그 산출물 승인 전 P2–P5의 제품 구현을 시작하지 않는다. 아직 정하지 않은 public path·wire 필드를 이 문서에서 이미 존재하는 API처럼 선언하지 않는다.
+2026-10-24 실행 중. 사용자의 “목표잡고 진행” 지시로 문서 등록 뒤 구현·원격 검증을 진행한다. P0는 완료했다. P1의 첫 TRIP 계약과 P2/P4/P5의 해당 slice는 구현·HTTP 검증했지만, 팔 중립 실행과 Harbor 공정 변환까지 포함한 전체 단계는 미완료다. 각 상세 계약을 검토한 뒤 그 범위의 구현을 진행하며 아직 정하지 않은 public path·wire 필드를 제공 API로 선언하지 않는다.
 
 문서 등록은 사용자의 2026-10-24 “바로 처리” 지시로 `docs/application-action-boundary` 작업용 worktree 1개 일회 추가 예외를 사용한다. 기존 등록 15개·고아 디렉터리 3개를 보존했다. 예외는 문서 등록과 검증용이며 추가 제품 구현 슬롯·착지·push 승인으로 확대하지 않는다. 검증 후 다음 실행 전까지 브랜치·증거를 보존하고 소유자 정리 절차로 슬롯을 회수한다.
+
+이후 기존 브랜치는 `feat/application-action-boundary`로 전환됐다. 동료의 병합이 끝나고 슬롯이 9개로 줄어든 뒤 정규 예산 안에서 `app-neutral-actions`/`feat/neutral-arm-actions`를 생성했다(base `ba256ec45d`). 팔 구현은 이 격리 작업 공간이 소유한다. 과거 문서 슬롯 예외를 확대하지 않았으며 착지·push·배포·실물은 수행하지 않는다.
+
+| 산출물 | 확인한 상태 | 남은 범위 |
+|---|---|---|
+| P0 ADR·Log·계획 | `f14d00748e` 문서 원격 552 passed | 없음 |
+| [TRIP 상세 계약](2026-10-24-application-action-contract-design.md) | 조회/응답 유실 대조 구현, Harbor와 독립 HTTP 1 passed, 기존 Cell HTTP 3 passed | 팔 공정 변환을 대신하지 않음 |
+| [중립 팔 계산](2026-10-24-neutral-arm-planning-design.md) | 기존 Cell provenance 보존, 관련 원격 135 passed, 독립 검토 | public wire/실행 조립 |
+| [팔 catalog·사전검사](2026-10-24-neutral-arm-preflight-design.md) | 내부 서비스 구현·검토, `d8e20d980e` 관련 원격 117 passed/skip0 | 인증된 owner/Fleet HTTP 연결, 중립 grant·원장 경계 분리 |
+| 전체 P3–P5 | 진행 중 | 중립 팔 실행, Harbor 공정 변환, 복구·독립성 통합 증거 |
+
+첫 HTTP 증거는 플랫폼 `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.
 
 ## Global Constraints
 
@@ -44,13 +56,13 @@
 
 **Files:** 플랫폼 신규 `docs/adr/D-<선점번호>-application-action-boundary.md`, 수정 `docs/reference/ROSY ADR Log.md`, `docs/logs.md`; 이 계획의 Spec 링크. 생성 index는 생성기로만 갱신한다.
 
-- [ ] 슬롯 운영 규칙으로 작업 슬롯을 확보한다. main의 `git status --short --branch`, `git worktree list`, `python tools/worktrees.py status`로 점유와 동료 변경을 확인한다.
-- [ ] `python tools/worktrees.py new app-action-boundary docs/application-action-boundary`로 생성하고 등록된 non-main 브랜치인지 확인한다. 일회성 예외가 있으면 사유·회수 조건을 인계에 남긴다.
-- [ ] worktree의 `README.md` 핵심 계약, `docs/AGENTS.md`, `docs/adr/AGENTS.md`, `docs/progress.md`, `docs/index.md`를 읽는다. D-827~829·D-836·D-841 및 병행 작업의 최신 상태를 다시 확인한다.
-- [ ] `tools/harness/adr_reserve.py`를 읽고 작성 직전 `python tools/harness/adr_reserve.py next "업무 공정 해석과 로봇 동작 실행의 분리"`를 실행한다.
-- [ ] D-856을 정식 ADR로 기록한다. 제목을 선점 번호 형식으로 바꾸고 구조 경계의 사용자 결정과 상세 wire 미확정을 구분한다. 현재 링크는 소유 저장소의 상대 경로로 바꾼다. Log 상태도 일치시킨다.
-- [ ] `docs/logs.md`에 이번 문서 등록과 미실행 검사를 남긴다. `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`를 실행한다. 새 ADR과 Log 항목의 쌍·번호 충돌·링크를 확인한다.
-- [ ] 자신의 경로만 커밋하고 공식 원격 runner로 `test/test_harness_contracts.py`를 검증한다. 실제 경로가 변경되면 `rg --files test`로 현행 시험을 먼저 확인한다. 생성 문서 변경이 있으면 그 변경도 같은 검증 SHA에 포함한다.
+- [x] 슬롯 운영 규칙으로 작업 슬롯을 확보한다. main의 `git status --short --branch`, `git worktree list`, `python tools/worktrees.py status`로 점유와 동료 변경을 확인한다.
+- [x] `python tools/worktrees.py new app-action-boundary docs/application-action-boundary`로 생성하고 등록된 non-main 브랜치인지 확인한다. 일회성 예외가 있으면 사유·회수 조건을 인계에 남긴다.
+- [x] worktree의 `README.md` 핵심 계약, `docs/AGENTS.md`, `docs/adr/AGENTS.md`, `docs/progress.md`, `docs/index.md`를 읽는다. D-827~829·D-836·D-841 및 병행 작업의 최신 상태를 다시 확인한다.
+- [x] `tools/harness/adr_reserve.py`를 읽고 작성 직전 `python tools/harness/adr_reserve.py next "업무 공정 해석과 로봇 동작 실행의 분리"`를 실행한다.
+- [x] D-856을 정식 ADR로 기록한다. 제목을 선점 번호 형식으로 바꾸고 구조 경계의 사용자 결정과 상세 wire 미확정을 구분한다. 현재 링크는 소유 저장소의 상대 경로로 바꾼다. Log 상태도 일치시킨다.
+- [x] `docs/logs.md`에 이번 문서 등록과 미실행 검사를 남긴다. `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`를 실행한다. 새 ADR과 Log 항목의 쌍·번호 충돌·링크를 확인한다.
+- [x] 자신의 경로만 커밋하고 공식 원격 runner로 `test/test_harness_contracts.py`를 검증한다. 실제 경로가 변경되면 `rg --files test`로 현행 시험을 먼저 확인한다. 생성 문서 변경이 있으면 그 변경도 같은 검증 SHA에 포함한다.
 
 **Exit:** ADR·Log·계획 링크가 정본을 가리키고 lint와 해당 문서 계약 검사의 결과·SHA가 있다. Git 밖 초안과 계획은 이 정본으로 가는 안내로 바꾼다.
 
@@ -135,4 +147,4 @@ python test/known_failures.py X:/DevTemp/harbor-action-boundary/<단계>/run-1.t
 
 이번 문서 작성의 CE 판정은 **해당 없음**이다. 운영 장애 해결이나 비자명한 검증된 복구를 수행하지 않았다. 구현 단계에서 장애·데이터 무결성·권한 경계 문제가 실제로 해결되면 workspace CE 게이트를 적용한다.
 
-현재 다음 행동은 P0 검증 결과를 확인하고 P1의 첫 동작 계약을 확정하는 것이다. P1 계약 설계 뒤에 제품 구현 순서와 시험명을 보완한다. 이번 계획 기록은 push·병합·배포·장치 실행 승인이 아니다.
+현재 다음 행동은 팔 사전검사의 공개 framing·인증된 owner 상태 투영·Fleet HTTP 계약을 검토하고 구현하는 것이다. 이후 Cell 원장의 공통 실행/공정 provenance 경계를 분리해 중립 팔 grant와 Harbor 변환을 연결한다. 전체 D-856 목표는 계속 진행 중이다. 이번 계획 기록은 push·병합·배포·장치 실행 승인이 아니다.

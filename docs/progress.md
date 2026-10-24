@@ -419,3 +419,8 @@ plans:
 ## 공통 판단 목표 구조와 분리 계획 (2026-10-11)
 
 - D-648 Proposed와 목표 트리/의존/사례표·분리 계획을 작성했다. Situation assessment, Decision 후보, execution/site 순수 규칙, 현재 Fleet 원장 어댑터와 coordination을 구별했다. 실제 소스 이동·설치·장치 gate 변화는 없다.
+
+## D-856 애플리케이션 업무와 동작 경계 (2026-10-24)
+
+- 정식 ADR·Log·전체 계획을 등록했다. 첫 중립 TRIP 조회/대조는 Harbor 독립 HTTP로 검증했다. 팔은 공정 없는 물리 계획기를 분리한 뒤 owner 설치 catalog·내부 사전검사까지 구현했다. 관련 원격 117 passed/skip0와 독립 검토로 내부 범위를 확인했다.
+- 전체 목표는 진행 중이다. 공개 팔 사전검사/실행 계약, owner 조립, 중립 원장 경계와 Harbor 공정 변환·독립성/복구 통합 증거가 남는다. 기존 Cell 호환과 실물 비활성 상태를 유지한다. 실행 상세와 SHA는 docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md를 따른다.
