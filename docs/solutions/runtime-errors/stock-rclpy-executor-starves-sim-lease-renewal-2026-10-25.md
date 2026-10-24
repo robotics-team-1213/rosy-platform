@@ -26,7 +26,7 @@ The D-866 P0 probe runs the OMX owner, CORE's policy port, two Gazebo cameras an
 
 ## What Didn't Work
 - Relaxing contract timing, thread limits, 5 Hz cameras, recording from port return values: each removed a real cost but the lease still expired.
-- `sys.setswitchinterval(0.0005)`: client exchange median went from 21-25 ms to 31-43 ms. Reverted.
+- `sys.setswitchinterval(0.0005)`: client exchange median went from 21-25 ms to 31-43 ms. Its revert commit failed silently (the amend only renamed it), so it stayed on until review; the third round passed without it.
 - Reading `PermissionError('SIM lease renewal failed closed')`: `renew()` raises `from None`. The real check is in `error.__context__`; record it.
 
 ## Root Cause
@@ -42,7 +42,7 @@ Two separate costs, found by measuring each one instead of guessing:
 A side effect: the owner executor raised joint intake to ~97 Hz. The session keeps 64 observations (~0.66 s), so a 2.5 s late action was refused as `policy_candidate_scope_or_observation` (source evicted) instead of `policy_action_stale`. The stale case now uses action age 0.4 s and a 0.5 s delay; normal steps measured 0.12-0.15 s observe-to-submit.
 
 ## Verification
-AI PC, 12-core/10 GB scope, NVIDIA EGL, RTF 0.75-0.80. After the fix all three cases passed: Fleet exchange median 5-6 ms, worst renewal 0.25 s (budget 0.75 s), 4 heartbeat stalls over 50 ms per run (was 33). Before: renewals to 0.98 s, stalls to 0.11 s. Evidence: `docs/validation/omx-vla-policy-chain-2026-10-25/`.
+AI PC, 12-core/10 GB scope, NVIDIA EGL, RTF 0.75-0.80. After the fix all three cases passed in three rounds (the last without the switch-interval change): Fleet exchange median 5-6 ms, worst renewal 0.25 s (budget 0.75 s), 1-11 heartbeat stalls over 50 ms per run, none over 0.1 s (was 33, up to 0.11 s). Before: renewals to 0.98 s, stalls to 0.11 s. Evidence: `docs/validation/omx-vla-policy-chain-2026-10-25/`.
 
 ## Prevention
 - Any process that hosts a lease worker or other deadline thread next to rclpy uses `OwnerMultiThreadedExecutor` (or a single-threaded/events executor), never the stock `MultiThreadedExecutor`.
