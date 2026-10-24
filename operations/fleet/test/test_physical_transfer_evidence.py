@@ -185,3 +185,19 @@ def test_policy_and_context_are_closed_immutable_and_digest_covers_thresholds(po
                     {"max_age_ns": 10, "min_separation_ns": 100}, {"outside_zone": True}):
         with pytest.raises(ValueError):
             api().PhysicalTransferPolicy(**{**dict(policy), **changes})
+
+
+def test_resource_policy_pins_owner_workcells_arm_aliases_zones_and_object(policy):
+    participants = tuple(api().TransferParticipant(**{**dict(p), "arm_resource_id": f"w-1.arm-{i}"})
+                         for i, p in enumerate(policy.participants))
+    bound = api().PhysicalTransferPolicy(**{**dict(policy), "participants": participants,
+        "zone_resource_ids": ("w-1.shared",), "object_resource_id": "object-1"})
+    assert set(bound.resources) == {("workcell", "w-1"), ("arm", "w-1.arm-0"), ("arm", "w-1.arm-1"),
+                                   ("zone", "w-1.shared"), ("object", "object-1")}
+    assert bound.digest != bound.model_copy(update={"zone_resource_ids": ("w-1.other",)}).digest
+    for changes in ({"zone_resource_ids": ()}, {"zone_resource_ids": ("w-1.shared", "extra")},
+                    {"object_resource_id": "invalid/key"},
+                    {"participants": (participants[0], participants[1].model_copy(
+                        update={"arm_resource_id": participants[0].arm_resource_id}))}):
+        with pytest.raises(ValueError):
+            api().PhysicalTransferPolicy(**{**dict(bound), **changes})
