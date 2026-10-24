@@ -218,6 +218,14 @@ def checkpoint_digest(path):
     return digest.hexdigest()
 
 
+def checkpoint_identity(path):
+    """A Hugging Face cache snapshot is named by repo and revision; any other checkpoint by its path."""
+    parts = Path(path).resolve().parts
+    if len(parts) >= 3 and parts[-2] == 'snapshots' and parts[-3].startswith('models--'):
+        return dict(hub_repo='/'.join(parts[-3].split('--')[1:]), hub_revision=parts[-1])
+    return dict(checkpoint=str(path))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='D-854 policy latency bench on synthetic frames (no CORE, no robot)')
     parser.add_argument('checkpoint', type=Path)
@@ -248,7 +256,7 @@ def main(argv=None):
     report.update(policy_type=adapter.policy_type, n_action_steps=adapter.n_action_steps,
                   saved_n_action_steps=adapter.saved_n_action_steps, use_amp=adapter.use_amp, device=str(device),
                   gpu=torch.cuda.get_device_name(device) if device.type == 'cuda' else None,
-                  checkpoint=str(args.checkpoint), checkpoint_sha256=checkpoint_sha256,
+                  **checkpoint_identity(args.checkpoint), checkpoint_sha256=checkpoint_sha256,
                   versions={k: metadata.version(k) for k in ('lerobot', 'torch')}, cameras=shapes,
                   target='synthetic: observe/submit stages exclude CORE and network')
     with args.out.open('x', encoding='utf-8') as stream:

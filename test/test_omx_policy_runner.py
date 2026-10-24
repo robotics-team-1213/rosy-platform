@@ -108,6 +108,13 @@ def test_checkpoint_digest_works_inside_a_cache_directory(tmp_path):
     assert runner.checkpoint_digest(snapshot) == first
 
 
+def test_hub_snapshot_is_recorded_by_repo_and_revision(tmp_path):
+    snapshot = tmp_path / 'models--lerobot--smolvla_base' / 'snapshots' / ('5e8d' * 10)
+    snapshot.mkdir(parents=True)
+    assert runner.checkpoint_identity(snapshot) == dict(hub_repo='lerobot/smolvla_base', hub_revision='5e8d' * 10)
+    assert runner.checkpoint_identity(tmp_path) == dict(checkpoint=str(tmp_path))
+
+
 def test_output_must_match_installed_joints():
     assert runner.check_output([0.1, 0.2], ['a', 'b']) == [0.1, 0.2]
     for bad in ([0.1], [0.1, float('nan')]):

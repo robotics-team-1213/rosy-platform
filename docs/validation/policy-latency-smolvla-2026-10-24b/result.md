@@ -7,7 +7,7 @@
 
 - 카메라 2대(`camera1`, `camera2`) 480×640 합성 프레임. 기본 모델은 3대로 학습되었고 세 번째 입력은 비어 있다.
 - 측정 코드는 `fix/policy-runner-cache-digest` 커밋 `54050a2786`의 `policy_runner.py`와 같은 파일이다(줄 끝 문자만 다름). 이 수정 전 코드는 Hugging Face 캐시 아래 체크포인트를 빈 디렉터리로 잘못 거부했다.
-- 보고서에 체크포인트 해시(`b2e1a3df9c1df678cb88df85a5fee23e982953c947ac3bc9af36af8d14ece5ad`)와 `use_amp: false`가 기록되어 있다.
+- 보고서에 체크포인트 파일 sha256(`b2e1a3df9c1df678cb88df85a5fee23e982953c947ac3bc9af36af8d14ece5ad`)와 `use_amp: false`가 기록되어 있다.
 - 측정 직후 AI PC 부하 평균은 약 5~6이었다. 다른 사용자 작업과 CPU를 함께 썼고, GPU 메모리도 1차처럼 다른 프로세스가 점유하고 있었다.
 
 ## 결과 (ms, nearest-rank)
@@ -18,7 +18,7 @@
 | 추론 | 103.1 | 138.1 | 146.4 | 150.9 | 106.4 |
 | 종단 | 139.6 | 180.2 | 193.6 | 218.2 | 143.8 |
 
-첫 걸음은 전처리 59.9ms, 추론 880.6ms였다. 원본 보고서는 `smolvla-base-2cam-480x640.json`(sha256 `93b936833fba2c6b01d4f65cacec476c4398c291d1e4184d77c05bec999a6a7d`)이다.
+첫 걸음은 전처리 59.9ms, 추론 880.6ms였다. 원본 보고서는 AI PC의 `~/rosy-test/policy-latency/smolvla-2cam.json`(sha256 `93b936833fba2c6b01d4f65cacec476c4398c291d1e4184d77c05bec999a6a7d`)이다. 보고서에 체크포인트의 로컬 HF 캐시 경로가 들어 있어서 저장소에는 넣지 않았다. 그 경로의 snapshot 이름은 1차 기록의 Hub revision과 같다.
 
 ## 해석
 
