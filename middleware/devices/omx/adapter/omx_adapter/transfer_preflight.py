@@ -153,7 +153,7 @@ class TransferPreflight:
                                         pick.approach_z, place.approach_z, catalog.carry_z)
         plan = self.planner.plan_transfer(request, self.profile, state, geometry=catalog.geometries[geometry])
         checked = self._clock()
-        if checked < started or checked < plan.planned_at_monotonic_s:
+        if not started <= plan.planned_at_monotonic_s <= checked:
             raise TransferPlanRejected(STATE_INVALID, "owner monotonic clock moved backwards")
         self._check_state(state, checked)
         validate_transfer_motion_plan(plan, self.profile, kinematics_revision=self.kinematics.revision,
