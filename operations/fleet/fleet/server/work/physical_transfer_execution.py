@@ -1,16 +1,19 @@
 """Durable physical preparation; no device submission or claim release."""
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import json
 from uuid import uuid4
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from core_common.protocol.device_actions import DeviceActionReceipt
 from core_common.resource_keys import normalize_resources
+from rosy.world.state.projections.physical_transfer import TransferObservation
 from .mission_store import MissionConflict, _json
 from .action_receipts import verify_phase_receipt
+from .dispatch_admission import release
 from .physical_transfer_evidence import TransferEvidenceContext, TransferOwnerTarget, validate_transfer_observations
-from .physical_transfer_observations import record
+from .physical_transfer_observations import evidence_document, record
 from .physical_transfer_store import PhysicalTransferRequest
 from .step_action_kinds import step_grant_digest
 
@@ -113,6 +116,84 @@ class PhysicalTransferExecution:
                      request_digest=grant.request_digest, prepared_at_ns=now_ns))
             row = connection.execute("SELECT * FROM fleet_physical_transfer_attempts WHERE mission_id=?", (mission_id,)).fetchone()
             result = self._view(row, job)
+            connection.commit()
+            return result
+
+    def _physical_receipt(self, row, grant):
+        policy = self.store.installation.policy
+        return dict(receipt_id=row["record_id"], mission_id=grant.mission_id, action_id=grant.action_id,
+            attempt_id=grant.attempt_id, request_digest=grant.request_digest, workcell_id=grant.workcell_id,
+            instance_id=grant.instance_id, policy_digest=policy.digest, evidence_digest=row["evidence_digest"],
+            object_ref=policy.object_ref, source=grant.arm_transfer.source, target=grant.arm_transfer.target,
+            authority_epoch=grant.authority_epoch, dispatch_generation=grant.dispatch_generation,
+            validated_at_ns=row["validated_at_ns"], physical_status="AT_TARGET_AND_CLEAR")
+
+    def confirm_physical(self, mission_id, *, expected_request_digest, observations,
+                         authenticated_producer_id, capabilities, capabilities_observed_at_ns):
+        if not isinstance(observations, (tuple, list)):
+            raise ValueError("physical observations require a bounded sample sequence")
+        observations = tuple(observations)
+        if len(observations) != 2 or any(not isinstance(sample, TransferObservation) for sample in observations):
+            raise ValueError("physical closure requires two immutable World observations")
+        store = self.store
+        policy = store.installation.policy
+        if authenticated_producer_id != policy.producer_id:
+            raise ValueError("physical producer does not match the installed policy")
+        with closing(store._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = self._state(connection, mission_id)
+            grant = FleetArmTransferGrant.model_validate(current["grant"])
+            if expected_request_digest != grant.request_digest:
+                raise MissionConflict("physical receipt targets a different request")
+            job = store._read(connection, mission_id)
+            context = TransferEvidenceContext.model_validate_json(_json(current["context"]))
+            prior = connection.execute("SELECT * FROM fleet_physical_transfer_observations "
+                "WHERE mission_id=? AND phase='POST_ACTION'", (mission_id,)).fetchone()
+            document = evidence_document(context, observations)
+            if prior is not None:
+                if (job["status"] != "GOAL_CONFIRMED" or prior["request_digest"] != grant.request_digest
+                        or prior["evidence_json"] != document
+                        or prior["evidence_digest"] != sha256(document.encode()).hexdigest()):
+                    raise MissionConflict("confirmed physical evidence cannot be replaced")
+                return self._physical_receipt(prior, grant)
+            if (job["status"] != "ACTION_SUCCEEDED" or current["status"] != "ACTION_SUCCEEDED"
+                    or current["action_succeeded_at_ns"] is None or context.phase != "POST_ACTION"
+                    or store._document(PhysicalTransferRequest.model_validate(job["request"]))
+                       != _json({"request": job["request"], "installation": job["installation"]})):
+                raise MissionConflict("physical closure requires the exact successful Action and installation")
+            control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            if (control is None or not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
+                    or control["generation"] != grant.dispatch_generation
+                    or not self._owns_claims(connection, job, phases={"HELD"})):
+                raise MissionConflict("physical closure requires the current fence and every original claim")
+            now_ns = store._now_ns()
+            store._check_capabilities(capabilities, capabilities_observed_at_ns, now_ns)
+            validate_transfer_observations(policy, context, observations, now_ns=now_ns,
+                                           authenticated_producer_id=authenticated_producer_id)
+            pre = json.loads(connection.execute("SELECT evidence_json FROM fleet_physical_transfer_observations "
+                "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone()[0])["samples"]
+            if ({s.evidence_id for s in observations} & {s["evidence_id"] for s in pre}
+                    or observations[0].sequence <= max(s["sequence"] for s in pre)):
+                raise MissionConflict("physical closure requires new ordered observations after the preconditions")
+            record(connection, mission_id=mission_id, grant=grant, context=context,
+                   observations=observations, validated_at_ns=now_ns)
+            final_ns = store._now_ns()
+            if final_ns < now_ns:
+                raise MissionConflict("physical closure clock moved backwards")
+            store._check_capabilities(capabilities, capabilities_observed_at_ns, final_ns)
+            validate_transfer_observations(policy, context, observations, now_ns=final_ns,
+                                           authenticated_producer_id=authenticated_producer_id)
+            connection.execute("UPDATE fleet_physical_transfer_observations SET validated_at_ns=? "
+                               "WHERE mission_id=? AND phase='POST_ACTION'", (final_ns, mission_id))
+            if release(connection, owner_kind="mission", owner_id=mission_id,
+                       generation=grant.dispatch_generation) != len(policy.resources):
+                raise MissionConflict("physical closure did not release exactly the approved claim set")
+            connection.execute("UPDATE fleet_cell_jobs SET status='GOAL_CONFIRMED',reason=NULL,updated_at=? WHERE mission_id=?",
+                (datetime.fromtimestamp(final_ns / 1e9, timezone.utc).isoformat(), mission_id))
+            row = connection.execute("SELECT * FROM fleet_physical_transfer_observations "
+                "WHERE mission_id=? AND phase='POST_ACTION'", (mission_id,)).fetchone()
+            result = self._physical_receipt(row, grant)
+            store._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_CONFIRMED", "fleet", result)
             connection.commit()
             return result
 

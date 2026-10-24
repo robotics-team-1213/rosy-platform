@@ -17,8 +17,12 @@ def _document(value):
     return value
 
 
+def evidence_document(context, observations):
+    return _json(dict(context=context.model_dump(mode="json"), samples=_document(observations)))
+
+
 def record(connection, *, mission_id, grant, context, observations, validated_at_ns):
-    document = _json(dict(context=context.model_dump(mode="json"), samples=_document(observations)))
+    document = evidence_document(context, observations)
     evidence_digest = sha256(document.encode()).hexdigest()
     connection.execute("""INSERT INTO fleet_physical_transfer_observations
         (mission_id,phase,record_id,request_digest,evidence_digest,evidence_json,validated_at_ns)
