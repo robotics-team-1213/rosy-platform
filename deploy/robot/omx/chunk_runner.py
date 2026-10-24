@@ -79,6 +79,9 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
     return transit_path(start, list(home[:5]) + [closed], closed, fps, transit)
 
 
+SCHEMA = "rosy.omx-chunk-library.v1"
+
+
 def load_library(path: Path) -> dict:
     library = json.loads(Path(path).read_text())
     if library.get("schema") != SCHEMA or library.get("names") != NAMES:
