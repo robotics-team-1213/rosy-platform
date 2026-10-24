@@ -20,6 +20,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_integrated_control_backend_browser.py",
     "applications/fleet/test/test_sample_browser.py",
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_browser_adapters.py",

@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
+- 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
 - 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
 - 2026-10-25 · uncommitted · 로컬 main과 origin/main 이력 합치기, D-868 게시 순서
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
-- 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
-- 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영

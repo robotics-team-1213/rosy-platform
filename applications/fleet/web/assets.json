@@ -115,6 +115,10 @@
       "path": "work/work-view.js",
       "media_type": "application/javascript"
     },
+    "integrated-control-view.js": {
+      "path": "work/integrated-control-view.js",
+      "media_type": "application/javascript"
+    },
     "control-unit-view.js": {
       "path": "work/control-unit-view.js",
       "media_type": "application/javascript"

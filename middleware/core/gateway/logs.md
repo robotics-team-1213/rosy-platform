@@ -1971,3 +1971,10 @@
 - 변경: boot/run/correlation이 현재 owner와 일치할 때만 잠금 안에서 취소하는 별도 경로를 추가했다. 기존 trip lease의 수명을 바꾸지 않아 취소 직후 새 owner가 들어오는 경쟁에서도 새 실행을 보존한다.
 - 증거: receiver·lease·Fleet sender/transport201 PASS, 별도 실제 Fleet dispatch→CORE→native 완료/취소 재조정2 PASS. odometry·localization·actuator는 합성이고 실제 정지 증거가 아니다. [검증 기록](../../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 기존 장치/FIELD gate는 유지한다. 최종 통합 검사와 공식 착지는 대기한다. CE 해당 없음: 경쟁과 receipt 범위를 회귀로 보존했다.
+
+
+## 2026-10-25 · uncommitted · D-862 typed Fleet 정지의 기존 CORE 경로 회귀
+
+- 변경: 새 시험이 Fleet journal과 실제 Console/HttpRobotClient를 거쳐 기존 CORE safety HTTP에 도달하는지 확인한다. 정상 응답과 응답 유실, 중복 identity, Fleet 재무장 후 CORE latch 보존을 검증하며 물리 정지는 UNVERIFIED다.
+- 증거: 기존 core_client와 합성 actuator를 사용한다. CORE 제품 route/최종 명령 권한은 변경하지 않았다. 구현 source의 공식 원격 회귀는 다음 단계다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
