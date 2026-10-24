@@ -84,7 +84,8 @@ def _install(destination: Path) -> None:
         atexit.register(shutil.rmtree, scratch, True)
         once = Path(scratch) / "native"
         completed = subprocess.run([BASH, INSTALLER.as_posix(), once.as_posix()],
-                                   capture_output=True, text=True, cwd=ROOT)
+                                   capture_output=True, text=True, cwd=ROOT,
+                                   env={**os.environ, "ROSY_BOOT_SUPPORT": "bridge"})
         assert completed.returncode == 0, completed.stderr
         _INSTALLED.append(once)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -103,7 +104,7 @@ def _fresh_image_layer(device: Path, native: Path) -> None:
     units = device / "etc/systemd/system"
     units.mkdir(parents=True)
     for unit in sync_mod.UNITS:
-        if unit in sync_mod.RETIRED_UNITS:
+        if unit in sync_mod.RETIRED_UNITS or (unit in sync_mod.boot.FEATURE_UNITS and not (native / unit).exists()):
             continue  # D-433: a new image never installs a retired unit
         shutil.copy2(native / unit, units / unit)
     for folder, destination in (("udev", "etc/udev/rules.d"), ("modprobe", "etc/modprobe.d")):

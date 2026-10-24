@@ -9,7 +9,7 @@ import os
 import secrets
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
@@ -17,7 +17,8 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
 from core_common import face_screen, robot_state
 from core_common.protocol.evidence import EvidenceState
-from core_common.protocol.schemas import HostStatusEvidence, SshPairRequest
+from core_common.protocol.schemas import SshPairRequest
+from .host_evidence import HOST_STATUS_STALE_AFTER_S, status_evidence as _status_evidence
 from . import host_hardware as _host_hardware
 from . import host_ssh as _host_ssh
 
@@ -64,30 +65,10 @@ def _agent(svc: CoreServicesLike) -> HostAgentClient:
     )
 
 
-HOST_STATUS_STALE_AFTER_S = 15.0
-
-
-def _status_evidence(reply) -> HostStatusEvidence:
-    base = {"stale_after_s": HOST_STATUS_STALE_AFTER_S}
-    if reply.code in {UNAVAILABLE, TIMEOUT}:
-        return HostStatusEvidence(evidence=EvidenceState.DISCONNECTED,
-                                  reason="Host Agent에 연결되지 않았거나 응답이 시간 안에 오지 않았습니다.", **base)
-    if not reply.reachable or not reply.ok:
-        return HostStatusEvidence(reason="Host Agent가 완전한 상태 조회 결과를 주지 않았습니다.", **base)
-    try:
-        observed = datetime.fromisoformat(reply.observed_at) if reply.observed_at else None
-    except (TypeError, ValueError):
-        observed = None
-    if observed is None or observed.tzinfo is None or observed.utcoffset().total_seconds() != 0:
-        return HostStatusEvidence(reason="Host Agent 원본 조회 완료 시각이 없습니다.", **base)
-    age = (datetime.now(timezone.utc) - observed).total_seconds()
-    if age < 0:
-        return HostStatusEvidence(reason="Host Agent 원본 시각이 CORE 시각보다 미래입니다.", **base)
-    state = EvidenceState.DELAYED if age > HOST_STATUS_STALE_AFTER_S else EvidenceState.FRESH
-    return HostStatusEvidence(evidence=state, observed_at=reply.observed_at,
-                              age_s=round(age, 1),
-                              reason="Host Agent 원본 조회가 지연되었습니다." if state is EvidenceState.DELAYED
-                              else "Host Agent 원본 조회 완료 시각을 확인했습니다.", **base)
+def _network_agent(svc: CoreServicesLike) -> HostAgentClient:
+    config = (svc.config or {}).get("network_agent", {})
+    return HostAgentClient(socket_path=config.get("socket_path", "/run/rosy-network-agent/core.sock"),
+                           timeout_s=float(config.get("timeout_s", 5.0)))
 
 
 def _relay(reply, *, absent_detail: str, status_read: bool = False) -> dict:
@@ -123,9 +104,12 @@ def _relay(reply, *, absent_detail: str, status_read: bool = False) -> dict:
 
 
 @host_router.get("/network")
-def host_network(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+def host_network(request_id: str | None = Query(default=None, min_length=1, max_length=64,
+                                               pattern=r"^[A-Za-z0-9._-]+$"),
+                 _: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """현재 네트워크 모드와 도달성. SSID 는 표시하되 secret 은 절대 싣지 않는다."""
-    reply = _agent(svc).request("network.status", role="viewer")
+    reply = _network_agent(svc).request("network.status", role="viewer",
+                                        params={"request_id": request_id} if request_id else None)
     return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 상태를 알 수 없습니다.",
                   status_read=True)
 
@@ -200,11 +184,13 @@ def _without_secrets(payload: dict) -> dict:
 @host_router.post("/network/connect")
 def host_network_connect(
     body: NetworkConnectRequest,
+    background_tasks: BackgroundTasks,
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
     """Join a site SSID. PSK transits once and is never returned or stored."""
-    reply = _agent(svc).request(
+    agent = _network_agent(svc)
+    reply = agent.request(
         "network.connect",
         role="administrator",
         user_id=auth.token_id,
@@ -212,6 +198,12 @@ def host_network_connect(
         params={"ssid": body.ssid, "psk": body.psk},
         idempotency_key=body.idempotency_key,
     )
+    if reply.ok and isinstance(reply.data, dict) and reply.data.get("state") == "prepared":
+        job_id = reply.data.get("request_id") or reply.data.get("job_id")
+        if isinstance(job_id, str) and job_id and (not body.idempotency_key or job_id == body.idempotency_key):
+            background_tasks.add_task(agent.request, "network.start", role="administrator",
+                                      user_id=auth.token_id, confirmed=body.confirmed,
+                                      params={"request_id": job_id})
     return _without_secrets(
         _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 Wi-Fi에 연결하지 못했습니다.")
     )

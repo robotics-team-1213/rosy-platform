@@ -193,10 +193,17 @@ def keys(tmp_path, monkeypatch):
     return {"private": private, "public": public}
 
 
-def _tarball(path: Path, private: Path, release_id=RELEASE_ID, revision=REVISION, tamper=False) -> Path:
+def _tarball(path: Path, private: Path, release_id=RELEASE_ID, revision=REVISION, tamper=False,
+             boot=False, bad_catalog=False) -> Path:
     """A signed release tarball shaped like build_payload_release.py pack: no top-level directory."""
     files = {"manifest.json": json.dumps({"release_id": release_id}) + "\n",
              "source-revision.txt": revision + "\n", "install/.rosy-release": release_id + "\n"}
+    if boot:
+        source = "# signed first boot\n"
+        files["deploy/robot/native/image-layer/boot/rosy-first-boot.py"] = source
+        files["deploy/robot/native/image-layer/boot/catalog.json"] = json.dumps({"schema": 1, "files": {
+            "rosy-first-boot.py": "0" * 64 if bad_catalog else hashlib.sha256(source.encode()).hexdigest(),
+        }})
     sums = "".join(f"{hashlib.sha256(text.encode()).hexdigest()}  {name}\n"
                    for name, text in sorted(files.items())).encode()
     files["SHA256SUMS"] = sums.decode()
@@ -245,6 +252,63 @@ def _signed_release(gh, keys, tmp_path, **changes) -> None:
     gh.releases[TAG] = {"target": REVISION, "title": TAG, "notes": "",
                         "assets": {f"{RELEASE_ID}.tar.gz": b"x", "rollout.json": data,
                                    "rollout.json.sig": signing.sign_checksums(data, keys["private"]).encode()}}
+
+
+def test_verified_boot_catalog_selects_feature_tag(tmp_path, keys):
+    archive = _tarball(tmp_path / "out" / f"{RELEASE_ID}.tar.gz", keys["private"], boot=True)
+    gh = FakeGh()
+    assert _publish(archive, keys, tmp_path, gh, FakeSsh()) == 0
+    feature_tag = f"payload-v2-{RELEASE_ID}"
+    assert gh.tags == {feature_tag}
+    assert _verified(gh, keys, feature_tag)["canary_ok"] is True
+
+
+def test_signed_but_invalid_boot_catalog_is_not_published(tmp_path, keys):
+    archive = _tarball(tmp_path / "out" / f"{RELEASE_ID}.tar.gz", keys["private"],
+                       boot=True, bad_catalog=True)
+    gh, ssh = FakeGh(), FakeSsh()
+    assert _publish(archive, keys, tmp_path, gh, ssh) == 1
+    assert not gh.calls and not ssh.calls
+
+
+@pytest.mark.parametrize("action", ["resume", "withdraw"])
+def test_existing_feature_tag_is_resolved_without_local_tarball(tmp_path, keys, action):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    feature_tag = f"payload-v2-{RELEASE_ID}"
+    gh.tags = {feature_tag}
+    gh.releases[feature_tag] = gh.releases.pop(TAG)
+    args = ["--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "out")]
+    args += ["--resume", "--canary", CANARY_IP] if action == "resume" else ["--withdraw", "--reason", "test"]
+    assert _run(args, keys, tmp_path, gh, FakeSsh()) == 0
+    assert gh.rollout(feature_tag)["withdrawn"] is (action == "withdraw")
+
+
+@pytest.mark.parametrize("action", ["publish", "resume", "withdraw"])
+def test_duplicate_release_id_across_tag_generations_is_refused(tmp_path, keys, tarball, action):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    feature_tag = f"payload-v2-{RELEASE_ID}"
+    gh.tags.add(feature_tag)
+    gh.releases[feature_tag] = gh.releases[TAG].copy()
+    ssh = FakeSsh()
+    if action == "publish":
+        code = _publish(tarball, keys, tmp_path, gh, ssh)
+    else:
+        args = ["--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "out")]
+        args += ["--resume", "--canary", CANARY_IP] if action == "resume" else ["--withdraw", "--reason", "test"]
+        code = _run(args, keys, tmp_path, gh, ssh)
+    assert code == 1
+    assert not ssh.calls
+    assert not any(call[1:3] in (["release", "create"], ["release", "upload"]) for call in gh.calls)
+
+
+def test_feature_publication_rejects_a_legacy_tag_with_same_id(tmp_path, keys):
+    archive = _tarball(tmp_path / "out" / f"{RELEASE_ID}.tar.gz", keys["private"], boot=True)
+    gh = FakeGh()
+    gh.tags.add(TAG)
+    assert _publish(archive, keys, tmp_path, gh, FakeSsh()) == 1
+    assert not any(call[1:3] == ["release", "create"] for call in gh.calls)
 
 
 # --- rollout bytes and signature --------------------------------------------

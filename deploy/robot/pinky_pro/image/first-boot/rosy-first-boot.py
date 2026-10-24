@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,6 @@ import sys
 import tempfile
 import time
 from typing import Callable
-from urllib.parse import urlsplit
 
 
 try:
@@ -32,6 +32,31 @@ except ModuleNotFoundError:  # Installed image layout.
 
 
 SERIAL = re.compile(r"^[0-9a-f]{8,32}$")
+NETWORK_HANDOFF_SCHEMA = 1
+
+
+def _native_helper(name: str):
+    script = Path(__file__).resolve()
+    candidates = (script.parents[1] / 'native-runtime', script.parents[2] / 'native')
+    for candidate in candidates:
+        if (candidate / f'{name}.py').is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            source_helpers = candidate.parent / 'release'
+            if (source_helpers / 'network_transaction.py').is_file():
+                sys.path.insert(0, str(source_helpers))
+            break
+    return importlib.import_module(name)
+
+
+def _handoff():
+    return _native_helper('network_handoff')
+
+
+def _observe_network(_profile_uuid: str) -> dict:
+    _handoff()
+    from nm_network import NMNetworkBackend
+    return NMNetworkBackend().observe()
 
 
 def _write_atomic(path: Path, content: str, mode: int) -> None:
@@ -268,9 +293,11 @@ class FirstBootProvisioner:
         operator_account: Callable[[str], None] | None = None,
         operator_lookup: Callable[[str], dict | None] | None = None,
         core_lookup: Callable[[str], dict | None] | None = None,
+        network_observe: Callable[[str], dict] = _observe_network,
     ) -> None:
         self.root = Path(root).resolve()
         self.network_activate = network_activate
+        self.network_observe = network_observe
         # Only the real root may rename the running host; a fixture or chroot
         # root must never rename the machine running the tool.
         if hostname_apply is None and self.root == Path("/").resolve():
@@ -436,57 +463,7 @@ class FirstBootProvisioner:
 
     @staticmethod
     def _merge_core_overlay(text: str | None, record: dict, fleet_bootstrap: dict | None = None) -> str:
-        """Return CORE's overlay with the card's record as its only credential.
-
-        Other overlay keys are kept. The overlay's auth.tokens list replaces the
-        package default list as a whole, which is what shuts the shared
-        rosy-dev-* credentials out. A credential that is not this card's own
-        (another id, or CORE's legacy plaintext map) holds provisioning: first
-        boot never decides what to do with a credential it did not issue.
-        """
-        import yaml  # python3-yaml ships in the image; only this step needs it.
-
-        overlay: dict = {}
-        if text is not None:
-            try:
-                loaded = yaml.safe_load(text) or {}
-            except yaml.YAMLError as exc:
-                raise ValueError("CORE config overlay is unreadable") from exc
-            if not isinstance(loaded, dict):
-                raise ValueError("CORE config overlay is not a mapping")
-            overlay = loaded
-        auth = overlay.get("auth", {})
-        if auth is None:
-            auth = {}
-        if not isinstance(auth, dict):
-            raise ValueError("CORE config overlay auth is not a mapping")
-        records = auth.get("tokens") or []
-        if not isinstance(records, list) or any(
-                not isinstance(item, dict) or item.get("id") != record["id"] for item in records):
-            raise ValueError("CORE config overlay already holds another API credential")
-        # D-193 5: the card's credential is listed (and whoami answers) as `card`.
-        overlay["auth"] = {**auth, "tokens": [{**record, "source": "card"}]}
-        if fleet_bootstrap:
-            try:
-                endpoint = urlsplit(fleet_bootstrap.get("endpoint", ""))
-            except ValueError:
-                endpoint = urlsplit("")
-            hostname = (endpoint.hostname or "").lower()
-            profile = fleet_bootstrap.get("trust_profile", "")
-            if (endpoint.scheme == "https" and hostname.endswith(".local")
-                    and re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local", hostname)
-                    and isinstance(profile, str)
-                    and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", profile)):
-                fleet = overlay.get("fleet") or {}
-                if not isinstance(fleet, dict):
-                    raise ValueError("CORE config overlay fleet is not a mapping")
-                # The SD's one-time pairing_credential is never an Agent token.
-                fleet["discovery"] = {
-                    "expected_hostname": hostname,
-                    "ca_file": f"/etc/rosy/trust/{profile}.crt",
-                }
-                overlay["fleet"] = fleet
-        return yaml.safe_dump(overlay, allow_unicode=True, sort_keys=False)
+        return _native_helper('first_boot_support').merge_core_overlay(text, record, fleet_bootstrap)
 
     def _core_api(self, record: dict, fleet_bootstrap: dict | None = None) -> None:
         """Install the card's CORE API record into CORE's persisted overlay (D-191).
@@ -661,6 +638,10 @@ class FirstBootProvisioner:
         ])
 
     def apply(self, *, bundle: Path, hardware_serial: str) -> dict:
+        with _handoff().first_boot_network(self.root):
+            return self._apply_locked(bundle=bundle, hardware_serial=hardware_serial)
+
+    def _apply_locked(self, *, bundle: Path, hardware_serial: str) -> dict:
         hardware_serial = hardware_serial.strip().lower()
         if not SERIAL.fullmatch(hardware_serial):
             raise ValueError("hardware serial is unavailable or malformed")
@@ -698,7 +679,11 @@ class FirstBootProvisioner:
             self._inside("etc/rosy/runtime.env"), self._runtime_env(payload), 0o640
         )
         network_path = self._inside(SITE_PROFILE_PATH)
-        _write_atomic(network_path, self._network_profile(payload), 0o600)
+        recovered = _handoff().resolve_override(self.root,
+            device_uid=identity['device_uid'], hardware_serial=hardware_serial,
+            bundle_checksum=payload['payload_checksum'], inspect_profile=self.network_observe)
+        if recovered is None:
+            _write_atomic(network_path, self._network_profile(payload), 0o600)
         _json_atomic(self._inside("etc/rosy/fleet-bootstrap.json"), payload["fleet"], 0o600)
         operator_fingerprints = self._operator(payload.get("operator"))
         if "ap" in payload["network"]:
@@ -719,7 +704,7 @@ class FirstBootProvisioner:
                 0o600,
             )
 
-        if not self.network_activate(SITE_PROFILE):
+        if recovered is None and not self.network_activate(SITE_PROFILE):
             # The site profile stays (0600, the bundle on the card holds the same
             # secret): NM autoconnect keeps trying it, rosy-network (D-176) hands
             # the radio back to it after the fallback AP, and
@@ -737,7 +722,7 @@ class FirstBootProvisioner:
             "requested_preset": payload["runtime"]["requested_preset"],
             "active_runtime": "core",
             "network": {
-                "ssid": payload["network"]["ssid"],
+                "ssid": recovered['ssid'] if recovered else payload["network"]["ssid"],
                 "country_code": payload["network"]["country_code"],
             },
             "fleet": {
@@ -759,6 +744,8 @@ class FirstBootProvisioner:
             }
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
+        if recovered is not None:
+            _handoff().consume_override(self.root)
         bundle.unlink()
         return {"ok": True, "state": "PROVISIONED", "device_name": identity["device_name"]}
 
