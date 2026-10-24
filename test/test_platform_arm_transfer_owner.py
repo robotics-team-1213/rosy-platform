@@ -32,7 +32,7 @@ def api():
         pytest.fail("installed neutral arm phase factory is missing")
 
 
-def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False):
+def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, wall_clock=None):
     catalog = _catalog(kin, profile, workcell_id="omx-1", instance_id="omx-1-control")
     installation = api().ArmTransferInstallation(
         TransferObjectBindings(catalog, {"object-1": "g1"}), "arm-cap-1", "cfg-1", "d" * 64)
@@ -97,6 +97,7 @@ def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False):
         goal_port=port, submission_fence=runner.submission_fence, phase_gate=lambda *_: True,
         current_fence=runner.current_fence, gripper_readback=readback, gripper_sensor_revision="sensor-1",
         monotonic=lambda: 100.1,
+        now=wall_clock,
         control_admission=runner.control_admission if managed else None)
     if install:
         runner.phase_runner_factories["ARM_TRANSFER"] = factory
@@ -148,6 +149,26 @@ def test_managed_factory_rejects_a_port_bound_to_another_final_owner(tmp_path, k
     assert receipt["state"] in {"HOLD", "UNKNOWN"}
     assert store.get_action(grant.action_id)["state"] in {"HOLD", "UNKNOWN"}
     assert not port.submissions
+
+
+def test_managed_expiry_is_checked_again_at_the_final_writer(tmp_path, kin, profile):
+    clock = [datetime.now(timezone.utc)]
+    grant, _, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True,
+                                            wall_clock=lambda: clock[0])
+    clock[0] = grant.issued_at + timedelta(seconds=1)
+    decisions = []
+
+    def expire_before_writer(command, *_):
+        admission = runner.control_admission
+        assert admission.check_command(command)
+        clock[0] = grant.expires_at
+        decisions.append(admission.owner.submit(command))
+        raise PermissionError("grant expired before the final writer")
+
+    port.on_submit = expire_before_writer
+    runner.submit(grant, peer_uid=1001)
+    assert len(decisions) == 1
+    assert not decisions[0].accepted and decisions[0].reason == "control_seat_fenced"
 
 
 def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_driver(tmp_path, kin, profile):
