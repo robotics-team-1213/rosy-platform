@@ -332,6 +332,8 @@ account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로�
 
 개인 연결은 소유자 작업에만 사용한다. 프로젝트 연결에는 `manage` 권한과 `dataset:namespace/repo` 또는 `model:namespace/repo` 형식의 자원 허용 목록이 필요하다. 프로젝트 관리자 권한은 호스트 파일시스템 관리자 권한이 아니다. 협업 HTTP에서 임의 서버 경로를 받는 기존 `/api/import`, `/api/cad`, `/api/learning/register`는 사용할 수 없다.
 
+끝난 HF 가져오기는 자료 화면(`/catalog`)의 「검수로 보내기」(`POST /api/learning/imports/review`, `{"id": ...}`, `import` 권한)로 정답 대기열에 들어간다. 서버 경로가 아니라 가져오기 id만 받으므로 협업 모드에서도 쓸 수 있다. 서버는 `completed` 작업의 공개 산출물 manifest·크기·SHA-256·media sidecar를 디스크에서 다시 검증하고, 작업 공간에 픽셀 클래스셋이 없거나 가져온 `classes.yaml`(원본 sha)·`data.yaml`(객체 클래스셋 sha)이 작업 공간 것과 다르면 거절한다(D-485). JPEG/PNG만 객체·픽셀 `pending`으로 등록하며 초안·승인은 만들지 않는다. 각 사진의 source에는 `source_kind: huggingface`와 `upstream`(저장소·고정 revision·경로·파일 해시·가져오기 id·요청자·보낸 사람)이 남고, 가져오기 작업에는 첫 등록 기록 `review`가 남는다. 다시 보내면 첫 기록을 돌려준다. 영상 원본이 없는 사진이라 데이터셋 빌드는 `source_video_hash_unknown`으로 막는다.
+
 운영 앱은 HTTPS reverse proxy 뒤의 loopback에 바인딩한다. `public_origin`은 경로와 끝 슬래시 없는 정확한 HTTPS origin이다. 프록시는 공개 Host를 보존하여 `127.0.0.1:<review-port>`로 전달하고 외부에서 backend에 직접 접근하게 만들지 않는다. Host·Origin과 `Secure; HttpOnly; SameSite=Lax` 쿠키를 함께 사용한다. 프록시 로그에도 callback code/state와 요청 본문을 기록하지 않는다.
 
 ```bash

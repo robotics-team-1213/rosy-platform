@@ -9,6 +9,7 @@ import numpy as np
 import yaml
 
 import build
+import class_sets
 import edge_review
 import review_evidence
 import review_masks
@@ -49,7 +50,8 @@ def freeze_image(store, raw, suffix):
     return file.relative_to(store.state).as_posix()
 
 
-def import_frames(store, body):
+def import_frames(store, body, upstream=None):
+    """`upstream` maps image path to server-verified provider provenance; catalogs never declare it."""
     root = Path(body['path']).resolve()
     catalog = root / 'verified-inputs.jsonl' if root.is_dir() else root
     raw = bounded(catalog)
@@ -121,7 +123,12 @@ def import_frames(store, body):
     for row in rows:
         if not all(isinstance(row.get(k), str) and row[k].strip() for k in ('source_session', 'capture_group')):
             raise ValueError('source_session and capture_group required')
-        if row.get('source_kind') == 'mcap':
+        hf = upstream.get(row.get('image')) if upstream is not None else None
+        if upstream is not None and (hf is None or row.get('source_kind')):
+            raise ValueError('verified upstream provenance required')
+        if hf:
+            pass  # A provider still image has no capture video; the dataset build keeps it blocked.
+        elif row.get('source_kind') == 'mcap':
             mcap = row.get('mcap')
         else:
             if type(row.get('video_frame')) is not int or row['video_frame'] < 0:
@@ -180,7 +187,9 @@ def import_frames(store, body):
                     raise ValueError(f'bounded {key} required')
                 normalized[key] = row[key]
         normalized['source_session_declared'] = row['source_session']
-        if row.get('source_kind') == 'mcap':
+        if hf:
+            normalized.update(source_kind='huggingface', upstream=hf)
+        elif row.get('source_kind') == 'mcap':
             normalized.update(source_kind='mcap', mcap=mcap)
         else:
             try:
@@ -215,7 +224,7 @@ def import_frames(store, body):
                     # Link only an exact primary image plus the same declared video/frame.
                     # Never match by pixels alone across captures or replace human decisions.
                     matches = []
-                    for candidate in db.execute('SELECT id,source FROM frames') if source.get('source_kind') != 'mcap' else ():
+                    for candidate in db.execute('SELECT id,source FROM frames') if not source.get('source_kind') else ():
                         old = json.loads(candidate['source'])
                         if (not old.get('source_video_sha256') and
                                 old['image_sha256'] == source['image_sha256'] and
@@ -294,3 +303,39 @@ def import_frames(store, body):
             'object_draft_candidates_queued': object_queued,
             'legacy_primary_bindings': legacy_linked,
             'catalog_sha256': review_masks.sha(raw), 'original_video_verified': False}
+
+
+def import_hf(store, job, files, registered_by):
+    """A completed, re-verified HF import (`LearningImports.verified`) into the pending review queue."""
+    binding = review_masks.classes(store)
+    if not binding:
+        raise ValueError('이 작업 공간에 픽셀 클래스셋이 없습니다. 클래스셋을 정한 작업 공간에서 검수로 보내세요.')
+    for name, path in files.items():   # D-485: a declared class set must be this workspace's own
+        base = name.rsplit('/', 1)[-1]
+        if base == 'classes.yaml' and review_masks.sha(bounded(path, 1024 * 1024)) != binding['sha256']:
+            raise ValueError(f'가져온 {name}이 이 작업 공간의 픽셀 클래스셋과 다릅니다.')
+        if base == 'data.yaml' and (class_sets.from_data_yaml(bounded(path, 1024 * 1024), 'detect')['sha256']
+                                    != class_sets.object_set(store)['sha256']):
+            raise ValueError(f'가져온 {name}이 이 작업 공간의 객체 클래스셋과 다릅니다.')
+    source = f"hf:{job['repo_type']}/{job['repo_id']}@{job['revision']}"
+    rows, upstream = [], {}
+    for entry in job['files']:
+        if not entry['path'].lower().endswith(('.jpg', '.jpeg', '.png')):
+            continue
+        path = str(files[entry['path']])
+        pixels = cv2.imdecode(np.frombuffer(bounded(path), np.uint8), cv2.IMREAD_COLOR)
+        if pixels is None:
+            raise ValueError(f"가져온 사진을 읽을 수 없습니다: {entry['path']}")
+        rows.append({'image': path, 'image_sha256': entry['sha256'], 'width': pixels.shape[1],
+                     'height': pixels.shape[0], 'source_session': source, 'capture_group': source})
+        upstream[path] = {'provider': 'huggingface', 'repo_type': job['repo_type'], 'repo_id': job['repo_id'],
+                          'revision': job['revision'], 'path': entry['path'], 'sha256': entry['sha256'],
+                          'expected_sha256': entry['expected_sha256'], 'bytes': entry['bytes'],
+                          'import_id': job['id'], 'media_revision': job.get('media_revision'),
+                          'requester_id': job['requester_id'], 'registered_by': registered_by}
+    if not rows:
+        raise ValueError('가져온 자료에 검수할 JPEG/PNG 사진이 없습니다.')
+    catalog = store.state / 'hf-imports' / (job['id'] + '.jsonl')
+    catalog.parent.mkdir(exist_ok=True)
+    catalog.write_text('\n'.join(json.dumps(row, sort_keys=True) for row in rows), encoding='utf-8')
+    return import_frames(store, {'path': str(catalog)}, upstream)

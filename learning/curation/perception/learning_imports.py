@@ -470,7 +470,7 @@ class LearningImports:
         LearningImports._safe(sidecar)
         sidecar.write_text(json.dumps(doc, sort_keys=True), encoding='utf-8')
 
-    def _recover(self, actor, job, final):
+    def _published(self, job, final, tick):
         self._safe(final)
         manifest = final / 'manifest.json'
         self._safe(manifest)
@@ -493,7 +493,7 @@ class LearningImports:
                 raise ValueError('published size mismatch')
             with path.open('rb') as stream:
                 for chunk in iter(lambda: stream.read(1024 ** 2), b''):
-                    self._checkpoint(actor, job)
+                    tick()
                     digest.update(chunk)
             if (digest.hexdigest() != row['sha256'] or (expected['expected_sha256'] is not None
                     and digest.hexdigest() != expected['expected_sha256'])):
@@ -510,6 +510,33 @@ class LearningImports:
             doc = validate_media(json.loads(sidecar.read_text(encoding='utf-8')), root=final)
             if doc['revision'] != published['media_revision']:
                 raise ValueError('published media revision mismatch')
+        return published
+
+    def verified(self, actor, project_id, job_id):
+        """A completed import re-read from disk: (job, {selected path: published file})."""
+        job = self.get(actor, project_id, job_id)
+        self.authorize(actor, project_id, 'import')
+        if job['status'] != 'completed':
+            raise ValueError('import is not completed')
+        final = self.root / 'artifacts' / job['id']
+        published = self._published(job, final, lambda: None)
+        if [row['sha256'] for row in published['files']] != [row.get('sha256') for row in job['files']]:
+            raise ValueError('published checksum mismatch')
+        return job, {row['path']: final / 'files' / _filename(row['path']) for row in published['files']}
+
+    def record_review(self, actor, project_id, job_id, review):
+        """Keep the first registration; the review store deduplicates repeated frames itself."""
+        self.authorize(actor, project_id, 'import')
+        with self.lock, self._db() as db:
+            job = self._load(job_id, db)
+            if job['project_id'] != project_id or job['status'] != 'completed':
+                raise ValueError('import is not completed')
+            job.setdefault('review', review)
+            self._write(db, job)
+        return job
+
+    def _recover(self, actor, job, final):
+        published = self._published(job, final, lambda: self._checkpoint(actor, job))
         with self.lock, self._db() as db:
             self._checkpoint(actor, job, db)
             published.pop('schema', None)
