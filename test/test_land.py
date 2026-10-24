@@ -767,6 +767,28 @@ def test_incomplete_isolated_results_cannot_create_flaky_receipt(repos, tmp_path
         tested_sha=git(wt, "rev-parse", "HEAD"))
     assert not ids and "incomplete" in why
     assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+def test_head_move_during_isolated_check_cannot_publish_verdict_or_cache(repos, monkeypatch, tmp_path):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    original, kept = land.remote_pytest.run, []
+
+    def run(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if len(calls) == 2:
+            commit(wt, {"test/known_failures.txt": "pkg/test/test_a.py::test_a  # later classification\n"},
+                   "change classification while isolated check runs")
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    monkeypatch.setattr(land.land_cache, "split", lambda wt_, args, inv, *a:
+                        ([], inv, lambda *item: kept.append(item)))
+    with pytest.raises(land.Stop, match="HEAD changed"):
+        land.run_tests(wt, land.argparse.Namespace(tests="auto", no_cache=False, node=False),
+                       [["pkg/test"], ["pkg/test"]], tmp_path, "drift")
+    assert not kept
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
