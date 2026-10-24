@@ -95,3 +95,31 @@ def test_outcome_event_failure_rolls_back_parent_attempt_and_claims(submitted):
         observe(submitted, receipt(submitted))
     assert claims(path) == before
     assert store.get(job["mission_id"], principal=PROPOSER)["status"] == "RUNNING"
+
+
+@pytest.mark.parametrize("early", ["receipt", "phase", "equal-boundary"])
+def test_receipt_and_every_phase_must_follow_the_final_first_send_intent(submitted, early):
+    value = receipt(submitted)
+    moment = NOW + (350_000_000 if early == "equal-boundary" else 200_000_000)
+    timestamp = datetime.fromtimestamp(moment / 1e9, timezone.utc)
+    if early == "phase":
+        value = value.model_copy(update={"phase_summaries": (value.phase_summaries[0].model_copy(
+            update={"observed_at": timestamp}), *value.phase_summaries[1:])})
+    else:
+        value = value.model_copy(update={"observed_at": timestamp, "phase_summaries": tuple(
+            p.model_copy(update={"observed_at": timestamp}) for p in value.phase_summaries)})
+    before = claims(submitted[0])
+    with pytest.raises((ValueError, MissionConflict)):
+        observe(submitted, value)
+    assert claims(submitted[0]) == before
+
+
+@pytest.mark.parametrize("initial", ["UNKNOWN", "CANCEL_REQUESTED"])
+@pytest.mark.parametrize("later", ["RUNNING", "SUCCEEDED"])
+def test_later_owner_facts_do_not_automatically_resume_a_held_operation(submitted, initial, later):
+    path, _, store, _, job, _ = submitted
+    observe(submitted, receipt(submitted, state=initial, event_id=4))
+    result = observe(submitted, receipt(submitted, state=later, event_id=5))
+    assert result["status"] == "UNKNOWN" and result["action_succeeded_at_ns"] is None
+    assert store.get(job["mission_id"], principal=PROPOSER)["status"] == "HOLD"
+    assert {c["phase"] for c in claims(path)} == {"UNKNOWN"}
