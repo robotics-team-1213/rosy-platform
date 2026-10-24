@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -11002,6 +11002,13 @@ osy-d395-s1d\`.
 - 증거: 별도 실제 SDK EXIT0, fixture2개 관측·정리 확인, endpoint 대조8.401100mm. 독립 검토2건이 원본과 STL 계산을 재현했다.
 - gate 변화: fixture 차이만 확인했다. 정책 HOLD·로봇 실패 인과·제품 형상·실물 수용 미해결, formal/HF0. CE 미해결.
 
+## 2026-10-24 · uncommitted · D-862 실제 통합관제의 공유 계약과 수용 목표
+
+- 변경: D-862와 API v1.309에 직접 소유 정보·subtree 조회·단위별 지도·영속 정지 요청/로컬 재시운전 확인 계약을 기록했다. 기존 navigation 위임 완료와 새 수집/화면/정지/TLS 구현 목표를 구분한다.
+- 증거: 실제 SharedGather·Task 최소 읽기·활성 지도·Fleet/CORE/OMX 정지 경로의 독립 조사·설계 검토를 반영했다. 기존 구현 audit88 PASS, 선행 schema 분리 FULL23호출과 통합892 PASS/6 SKIP·NEW0은 각각 해당 source 증거이며 새 통합 기능의 완료 증거가 아니다.
+- gate 변화: wire 구현 대상만 확정한다. runtime·통합 화면·실제 PC 간 TLS·배포·실물 정지·현장 수용은 후속 검증이다.
+- CE: 해당 없음 — 책임과 receiver 제약을 해당 ADR·회귀에 직접 남긴다.
+
 ## 2026-10-24 · 73fc8b2b09 · 실제 private HF 데이터 왕복
 
 - 변경: [HF 검증 기록](validation/omx-hf-private-roundtrip-2026-10-24/result.md)과 [읽기 전용 복구 교훈](solutions/workflow-issues/hf-readback-resume-keeps-commit-and-short-fetch-path-2026-10-24.md)을 추가했다.
@@ -11097,3 +11104,10 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+## 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
+
+- 변경: ADR D-865(정책 승인 — 승인 범위 안 작업 자동 승인, Proposed), [실행 설계](plans/2026-10-25-fleet-policy-admission-design.md), [업무 앱 지원 계약](reference/application-contract-support.md)에 Harbor 용어 대응표·승인 권한 소유 절 추가, ADR Log 행.
+- 증거: 미실행 — 문서 변경. lint·generate는 커밋 전 실행으로 확인. 방향 확정 근거: 사용자 2026-10-25(자동 승인 주체 Fleet 정책, Harbor 제안만). Harbor 쪽 대응 ADR은 팀 저장소 PR(robotics-team-1213/harborlogi#2).
+- gate 변화: 없음. 구현·활성화·현장 수용은 D-865 실행 계획 P1~P5의 별도 단계다.
+- 결정: D-865 Proposed.
+- 교훈: 없음

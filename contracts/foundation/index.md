@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · D-862 통합관제 정보·정지 요청 공유 계약
 - 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리
 - 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약
 - 2026-10-22 · uncommitted · 작업 셀 producer credential fingerprint 검증
 - 2026-10-22 · 79a11a4a54 · 출처에 결속된 모터 상태 계약
-- 2026-10-21 · uncommitted · STL 도면 좌표 등록 계약 (D-825)

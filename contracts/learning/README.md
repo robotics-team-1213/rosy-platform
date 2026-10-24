@@ -23,6 +23,14 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 0.4.4 Dynamixel 버스는 `apply_drive_mode = False`라 `drive_mode`를 읽지 않으며, 보정 digest는 `range_min`·`range_max`만 쓴다. `dynamixel_rad_v1`이 설치된 ROS 관절 rad와 같은지는
 보증하지 않는다. 다음 wheel 버전은 첫 소비자(정책 실행기)가 붙을 때 올린다.
 
+[D-864](../../docs/adr/D-864-d854-units-trajectory-and-simulator-roles.md)의 `ros_joint_rad`는 CORE·Gazebo·Isaac Sim이 쓰는
+ROS 관절 rad(`joint1..5`, `gripper_joint_1`)다. 이 단위로 바꾸려면 `validate_joint_map()`이 받아들이는 관절 대응 판정이 필요하다.
+판정은 통과해야 하고, 판정의 팔이 데이터의 팔 정체(`arm_identity()`: rig revision, 두 팔이면 `/arm_a`·`/arm_b`)와 같아야 하며,
+판정이 기록한 보정 range digest와 보정 파일의 homing offset·drive mode(0)도 맞아야 한다. 작업대의 보정은 모두 range가 같을 수 있어
+팔 구분은 팔 정체가 맡는다. 팔 정체는 운영자가 정하는 이름이라 배선을 바꾸거나 팔을 교체하면 새 이름과 새 판정이 필요하다.
+`ros_joint_rad` 선언은 `joint_map_revision`을 더 가진다. 보정과 판정이 둘 다 `null`이면 SIM 데이터이고, 실물 데이터를 바꾼 것이면
+`ros_declaration()`이 둘을 채운다.
+
 ```python
 from rosy.contracts.learning import seal, validate_episode
 

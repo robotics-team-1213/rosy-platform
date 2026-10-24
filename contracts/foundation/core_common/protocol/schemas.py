@@ -13,6 +13,13 @@ from .control_units import (  # noqa: F401
     ControlGoal, ControlNavigationCandidate, ControlWorkRequest, ControlIngressRequest,
     ControlApproveRequest, ControlDelegationState, ControlDelegationSnapshot, ControlUnitReply,
 )
+from .integrated_control import (  # noqa: F401
+    ControlDispatchFence, ControlMapRef, ControlUnitSummary, ControlOverview,
+    ControlRobotPose, ControlRobotInfo, ControlTaskInfo, ControlUnitDetail,
+    ControlMapPoint, ControlMapPlace, ControlMapLane, ControlMapSnapshot,
+    ControlStopRequest, ControlStopIngress, ControlStopUnitResult, ControlStopSnapshot,
+    ControlStopReconcile, ControlStopReference, ControlStopHistory,
+)
 from .navigation_cancel import ScopedNavigationCancelRequest  # noqa: F401
 from .lamp import LampIdentifyRequest  # noqa: F401
 from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
@@ -43,8 +50,7 @@ from core_common.protocol.power import (  # noqa: F401 (PWR-001~005, D-440)
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
-from core_common.protocol.work import (  # noqa: F401
-    FleetTaskStatus, FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait)
+from core_common.protocol.work import FleetTaskStatus, FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext

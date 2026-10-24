@@ -1268,6 +1268,12 @@
 - 변경: v1.296 viewer API가 서버 지정 파일·소유자·세션만 읽고 장치나 호출자 경로를 열지 않는다.
 - 증거: 기존 소스 검증과 현재 운영 인증을 독립 읽기 전용 검토했다. 최종 원격 영향 선택 결과는 연결 기록에 확정한다.
 - gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+## 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
+
+- 변경: 공식 api_reserve bump 도구로 API app의 공통 reference pin을 v1.309로 옮겼다. CORE route·최종 명령·안전·정지 해제 동작은 변경하지 않는다.
+- 증거: 통합관제 정보/정지 요청은 Fleet 소유의 additive wire 계약이며 D-862·canonical schema와 함께 등록한다. 버전 정합성은 커밋된 source의 공식 원격 회귀에서 확인한다.
+- gate 변화: 없음. 버전 정렬이며 CORE 실행·ARM64 이미지·DEVICE/FIELD 수용의 승격이 아니다.
+- CE: 해당 없음 — 공식 버전 pin과 정합성 회귀로 설명된다.
 
 ## 2026-10-24 · c60d6046bb · network-only 호스트 작업 중계
 
