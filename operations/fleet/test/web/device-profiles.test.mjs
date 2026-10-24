@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-const source = new URL('../../../../applications/fleet/web/devices/device-profiles.js', import.meta.url);
-const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
+const source = new URL('../../../../operations/site_ui/console/devices/device-profiles.js', import.meta.url);
+const gate = new URL('../../../../operations/site_ui/console/shared/poll-gate.js', import.meta.url);
 const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href);
 const {profilePayload, createDeviceProfiles} = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
@@ -61,8 +61,10 @@ test('save prevents duplicate submission and verifies saved metadata without con
   f.setRows([saved]);
   const first=f.nodes.save.handlers.click();await f.nodes.save.handlers.click();
   assert.equal(f.calls.filter(([,opts])=>opts.method==='PUT').length,1);
+  assert.equal('device_id' in JSON.parse(f.calls.find(([,opts])=>opts.method==='PUT')[1].body),false);
   finish(saved);await first;
   assert.match(f.nodes.status.textContent,/저장/);
   assert.match(f.nodes.saved.textContent,/연결 미확인/);
   assert.equal(f.nodes.save.disabled,false);
+  assert.equal(f.nodes.device_id.disabled,true);
 });

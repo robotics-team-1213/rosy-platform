@@ -1,5 +1,4 @@
 """Device metadata editing stays on the existing Fleet installation surface."""
-import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -8,7 +7,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-WEB = ROOT / 'applications/fleet/web'
+WEB = ROOT / 'operations/site_ui/console'
 
 
 def test_device_profile_web_behavior():
@@ -22,11 +21,12 @@ def test_device_profile_web_behavior():
 
 
 def test_device_profiles_are_mounted_in_installation():
-    html = (WEB / 'installation/install.html').read_text(encoding='utf-8')
-    script = (WEB / 'installation/install.js').read_text(encoding='utf-8')
+    from fleet.server.static_routes import CONSOLE_ASSETS
+
+    html = (WEB / 'install.html').read_text(encoding='utf-8')
+    script = (WEB / 'install.js').read_text(encoding='utf-8')
     assert 'id="device-profiles"' in html
     assert '장치 정보' in html
     assert 'createDeviceProfiles' in script
     assert 'device-profiles.js' in script
-    manifest = json.loads((WEB / 'assets.json').read_text(encoding='utf-8'))
-    assert 'devices/device-profiles.js' in json.dumps(manifest)
+    assert CONSOLE_ASSETS['device-profiles.js'] == ('devices/device-profiles.js', 'application/javascript')

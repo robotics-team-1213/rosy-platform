@@ -4,6 +4,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ## 공유 인터페이스 계약서
 
+### v1.308 Descriptive device information (D-860)
+
+When the persistent Fleet task database is configured, `GET /api/fleet/device-profiles` returns `{profiles: [...]}` sorted by `device_id`, and `GET /api/fleet/device-profiles/{device_id}` returns one record (404 `DEVICE_PROFILE_NOT_FOUND` if absent). Both require Viewer. `PUT /api/fleet/device-profiles/{device_id}` creates or fully replaces descriptive metadata and requires a named Operator. The stable path ID matches `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`; changing a display name does not change it.
+
+Body: required `display_name` (nonblank, at most 80 characters), `device_kind` (`manipulator`, `mobile`, `other`); optional `manufacturer` and `model` (at most 80 characters, default empty), `arm_count` (null or strict integer 0..16; a manipulator's nonnull count is at least one), `hardware_ids` (default empty, at most sixteen unique nonblank opaque strings of at most 200 characters). Control characters, unknown fields and invalid values are rejected with 422 before replacement. Device identifiers and hardware IDs are descriptive metadata, never commands or authority. Authentication and permissions retain 401/403 behavior; database failures return 503 rather than an empty successful result.
+
+Response adds `device_id`, server `updated_at` (Unix seconds), named `updated_by`, `connection_status: "not_checked"`, `control_enabled: false`. Saving does not enroll devices, change the operational roster, open serial ports, update calibration, clear faults or enable motion. Connection verification, measured hardware acceptance and physical command admission remain separate. Envelope protocol version is unchanged.
+
 ### v1.296 읽기 전용 모터 상태
 
 `GET /api/v1/motors/health`는 기존 CORE viewer 인증을 요구하고
@@ -280,7 +288,7 @@ UNKNOWN을 같은 명령의 재시도로 처리하지 않는다. 동작 취소/�
 인계 성공도 복귀 완료가 아니다. 해당 호출은 RETURNING과 lease를 유지하며 명시적인 409 `STATION_RETURN_STANDSTILL_REQUIRED`를 반환한다. 기존 정지 누적을 초기화하고, 이후 새 원본 odom 표본의 연속 정지 dwell을 확인한 호출만 `StationPoseAck`와 BOUND를 반환한다. 활성·불명 backend, 일관되지 않은 transport 또는 현재 부트/owner 근거 부족은 409 `STATION_RETURN_NAVIGATION_UNVERIFIED`이며 IDLE 전환하지 않는다. 잘못된 native generation은 모드 변경 전에 거부한다. Fleet은 정지 미충족의 명시적 부정 ACK만 대기 재검사하고, 응답 유실·그 밖의 거절은 재제출 가능한 완료로 바꾸지 않는다.
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.296
+**Version:** v1.308
 
 ### v1.294 Console operator assistant and explicit navigation (D-810/D-821)
 

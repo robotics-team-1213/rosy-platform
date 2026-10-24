@@ -1239,3 +1239,12 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted for implementation (2026-10-22).
 
 기존 중앙 Account 프로젝트에서 로봇·참여 구성·과제·학습 방식·계산 자원을 구분한다. Fleet의 공통 Learning 진입은 보호된 `/learning`으로 연결하며 OMX는 첫 지원 어댑터다. 전문은 [D-840](../adr/D-840-shared-multi-robot-learning-center.md).
+## D-776 - Installed station charge facts
+
+Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
+
+## D-860 - Descriptive device profiles independent of enrollment and control
+
+**Status:** Accepted (2026-10-24)
+
+Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).

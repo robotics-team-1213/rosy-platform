@@ -49,6 +49,7 @@ CONSOLE_ASSETS = {
     "host-health.js": ("shared/host-health.js", "application/javascript"),
     "peer-picker.js": ("peer-picker.js", "application/javascript"),
     "device-discovery.js": ("devices/device-discovery.js", "application/javascript"),
+    "device-profiles.js": ("devices/device-profiles.js", "application/javascript"),
     "address-drift.js": ("shared/address-drift.js", "application/javascript"),
     "state-age.js": ("state-age.js", "application/javascript"),
     "authorization.js": ("shared/authorization.js", "application/javascript"),
