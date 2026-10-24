@@ -192,6 +192,18 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
 
 
+def test_chunk_mode_runs_the_chunk_runner_and_keeps_the_cameras_for_the_judge(tmp_path):
+    seen = []
+    arm, leader = follower(), leader_arm()
+    s, calls = session(arm, leader, active=m.SERVICES, run=lambda command: seen.append(command) or 0)
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"}
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert Path(seen[0][1]).name == "chunk_runner.py" and f"--io={tmp_path / 'io'}" in seen[0]
+    assert not [u for v, u in calls if v == "stop"] and record["source_mode"] == "scripted_teacher"
+    assert record["safe_end"] is True
+    assert_restored(arm, leader)
+
+
 def test_services_stop_dependents_first_and_start_in_reverse(tmp_path):
     # Stopping camera-view first cascades into readiness's ExecStopPost restore and timed out (2026-10-24).
     arm, leader = follower(), leader_arm()
