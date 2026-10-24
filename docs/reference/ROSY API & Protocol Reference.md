@@ -5,9 +5,76 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.298
+**Version:** v1.299
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.299 Neutral arm transfer preflight (D-856)
+
+Implementation target; simulation-only and disabled on an owner without an installed
+physical catalog. This adds read-only planning, not Action admission or dispatch.
+The existing envelope protocol_version remains 1.0 and local Action IPC remains v2.
+
+`POST /api/fleet/arm-transfers/preflight` requires existing `require_proposer`
+authorization (`fleet.operate`, operator/service), including the normal POST Origin
+and audit rules. Viewer, policy-admin and device/ingest credentials cannot call it.
+The exact `ArmTransferCheckRequest` fields are `workcell_id`, `instance_id`,
+`catalog_digest`, `source`, `target`, `geometry`; unknown fields are forbidden.
+References are strict, trimmed, control-free strings of 1..192 characters;
+`instance_id` additionally matches `[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}` and cannot
+escape the configured socket root. `catalog_digest` is lowercase SHA-256.
+No raw pose, joint trajectory, job, recipe, pallet, layer or business evidence is accepted.
+
+Fleet checks the existing workcell→instance `omx_instances` installation mapping.
+The route does not require or enable a Mission dispatcher, Cell compiler or new
+execution ledger. A non-simulation deployment answers 503 `ARM_PREFLIGHT_CLOSED`;
+an unconfigured/mismatched target answers 404 `ARM_PREFLIGHT_TARGET_UNAVAILABLE`.
+Both decisions precede owner I/O.
+
+The bounded local frame is `{version: 2, operation: "CheckTransfer", transfer: request}`.
+The owner's optional `TransferPreflightApi` checks the Unix peer UID allowlist,
+target scope, installed catalog digest/references, and owner-admitted measured
+state. It uses the same owner monotonic clock for observation and planning,
+checks freshness and installation revisions before and after calculation, and
+validates the resulting physical plan. It has no submit, claim, journal-write or
+driver port. Existing Action operations and two-person arm approval are unchanged.
+
+Local success is `{version: 2, status: 200, check: ArmTransferCheckResult}`.
+`check` contains the exact original `request`, `journal_id`, `profile_revision`,
+`kinematics_revision`, `calibration_revision`, `transform_revision`,
+`planning_scene_revision`, `source_state_sequence`, `state_age_s`,
+`simulation: true`, `collision_checked: false`. Profile/kinematics revisions are
+lowercase SHA-256; the remaining identity/revision strings are bounded references.
+The sequence is a strict nonnegative integer, age is finite/nonnegative, and the
+two boolean flags are required with those exact boolean values. Journal identity
+does not identify a boot, clock epoch or execution attempt. No trajectory or permit
+is returned. The planner only supports 180-degree symmetric geometry and provides
+no collision scene.
+
+Fleet validates v2, status, typed result and equality of the complete returned
+request before returning `{check, received_at}` (`ArmTransferCheckResponse`).
+`received_at` is Fleet's aware UTC receipt time, not the owner's observation time.
+`state_age_s` is the owner's calculation-time age in its own clock domain; network
+latency is additional. Raw monotonic timestamps are not exposed for comparison
+between hosts. A cached result is never an execution permit, resource reservation,
+busy/stop verdict, full-arm clearance or cargo/business completion fact.
+
+Supported owner rejections have exact `error: {code, reason}` and are forwarded
+with the status below. A request scope mismatch is rejected before planning.
+
+| Status | code | reason |
+|---|---|---|
+| 409 | `ARM_CATALOG_CHANGED` | `CATALOG_MISMATCH` |
+| 404 | `ARM_REFERENCE_UNAVAILABLE` | `REFERENCE_UNAVAILABLE` |
+| 409 | `ARM_STATE_UNAVAILABLE` | `STATE_INVALID` |
+| 422 | `ARM_TRANSFER_UNPLANNABLE` | existing typed physical planner rejection reason |
+
+An unavailable/unsupported owner, rejected peer, timeout, invalid framing/version,
+malformed response or substituted request yields 503 `ARM_PREFLIGHT_UNAVAILABLE`.
+Internal exceptions and paths are not exposed. No error retries POST, switches an
+arm, starts execution, releases a resource claim or rearms a stop latch.
+The installed physical binding and execution-time checks remain owner/Fleet
+responsibilities. Harbor owns candidate policy and all business interpretation.
 
 ### v1.298 Scoped transport execution snapshots (D-856)
 

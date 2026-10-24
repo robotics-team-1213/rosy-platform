@@ -59,3 +59,44 @@ Harbor의 `CargoMove`/outbound 변환은 source/target와 geometry를 설치 bin
 5. Harbor 변환과 응답 유실 대조를 연결하고 공정 미설치 서버/플랫폼 Python 미설치 클라이언트/두 번째 최소 HTTP 소비자를 고정 SHA로 시험한다. 업무 관측이 없으면 성공한 action 뒤에도 업무가 진행되지 않아야 한다.
 
 전체 D-856은 팔 HTTP·Harbor 변환·복구/독립성 증거까지 닫아야 한다. 내부 사전검사나 TRIP 통과만으로 완료 처리하지 않는다. 실물 실행·배포·push는 이 설계의 승인 범위가 아니다.
+
+## 공개 사전검사 상세 계약 제안
+
+다음 항목은 구현 전 검토 대상이다. 내부 서비스 구현 승인을 새 wire 승인으로 확대하지 않는다. 공개 API reference와 foundation schema를 함께 등록한 뒤 구현한다.
+
+### 생산자와 인증 경로
+
+외부 경로는 `POST /api/fleet/arm-transfers/preflight` 한 개로 한다. 이 요청은 계획 계산이며 proposal·승인·실행을 만들지 않는다. Fleet의 기존 `require_proposer`를 사용해 `fleet.operate` 권한을 가진 operator/service만 호출한다. viewer·policy-admin·discovery·camera/장치 credential은 거절한다. 기존 POST Origin·자격·감사 처리를 유지한다. service의 계산 권한이 named operator의 실행 승인 권한으로 승격되지 않는다.
+
+대상은 기존 `omx_instances`의 workcell → instance 설정을 재사용한다. 별도 앱 제공 자원 목록이나 새 전역 registry를 만들지 않는다. simulation profile에서 설치 대응이 정확히 일치한 요청만 기존 owner socket으로 전달한다. `enable_mission_dispatcher`를 켜거나 Cell compiler/원장을 설치할 필요가 없다. 다른 profile은 503 `ARM_PREFLIGHT_CLOSED`, 미설치/다른 대응은 같은 404 `ARM_PREFLIGHT_TARGET_UNAVAILABLE`이며 owner를 호출하지 않는다.
+
+Fleet `UnixLocalActionTransport.check_transfer(request)`는 기존 bounded newline JSON/UDS·경로 검증·timeout을 재사용한다. framing은 `{version: 2, operation: "CheckTransfer", transfer: request}`다. owner `ActionApi`는 선택적으로 설치한 읽기 전용 `TransferPreflightApi`에 이 operation만 위임한다. 이 API는 SO_PEERCRED에서 얻은 Fleet peer UID allowlist를 먼저 확인한다. coordinator UID나 외부 앱 ID 문자열을 읽기 권한으로 재사용하지 않는다. 미설치 owner는 새 operation을 지원하지 않는 것으로 답하며 기존 v1/v2 Action 의미는 바뀌지 않는다.
+
+### 요청·결과와 오류
+
+foundation `ArmTransferCheckRequest`는 정확히 `workcell_id`, `instance_id`, `catalog_digest`, `source`, `target`, `geometry`를 갖는다. 앞의 두 값은 기존 scope, 뒤의 세 값은 독립 물리 catalog 참조다. 모든 참조는 길이 1..192의 trimmed/control-free 문자열이며 instance는 기존 UDS 식별자 문자·경로 규칙을 따른다. catalog digest는 소문자 SHA-256이다. extra field·bool/숫자 식별자·raw pose/관절/업무 문서는 거절한다.
+
+owner 성공 응답은 v2/status200과 typed `check`다. `ArmTransferCheckResult`는 정확한 원래 request, owner journal ID, profile·kinematics·calibration·transform·scene revision, source state sequence, `state_age_s`, `simulation: true`, `collision_checked: false`를 담는다. 나이는 같은 owner monotonic clock에서 checked minus observed로 계산한 유한 비음수다. monotonic 원시 시각을 HTTP로 전달해 다른 호스트 시계와 비교하지 않는다. journal ID는 장부 정체성일 뿐 owner boot/clock epoch나 실행 attempt가 아니다.
+
+Fleet는 반환 request 전체와 설치 scope, v2·status·typed 필드·simulation 지원 범위를 검증한다. 잘못된/과거 scope나 refs를 현재 요청의 결과로 내보내지 않는다. HTTP 성공은 `{check, received_at}`이며 received_at은 Fleet가 결과를 받은 UTC aware 시각이다. 이는 owner의 관측 시각이 아니고 전송 지연을 감추는 fresh 관측으로 쓰지 않는다. timeout·비정상 framing·version·잘못된 typed 결과는 503 `ARM_PREFLIGHT_UNAVAILABLE`이며 재시도·다른 팔 자동 선택·실행을 발생시키지 않는다.
+
+owner의 지원 거절은 다음 안정된 code/reason만 Fleet가 전달한다. 임의 예외나 내부 파일명·주소는 외부 응답에 넣지 않는다.
+
+| HTTP/UDS status | code | reason과 의미 |
+|---|---|---|
+| 409 | `ARM_CATALOG_CHANGED` | catalog digest 불일치, 설치 binding 갱신 필요 |
+| 404 | `ARM_REFERENCE_UNAVAILABLE` | source/target/geometry가 설치본에 없음 |
+| 409 | `ARM_STATE_UNAVAILABLE` | 상태 없음·오래됨·미래·clock 역행·revision/관절 불일치 |
+| 422 | `ARM_TRANSFER_UNPLANNABLE` | 기존 typed IK/workspace/home/gripper/높이/시간 계획 거절 reason |
+
+권한 밖 peer·지원하지 않는 owner operation·그 외 backend/transport 오류는 Fleet에서 `ARM_PREFLIGHT_UNAVAILABLE`로 취급한다. 이 오류들로 실행 접수 여부를 추론할 필요가 없는 읽기 operation이다. 어떠한 오류도 latch/rearm·claim 해제·중복 동작 재접수로 연결하지 않는다.
+
+### owner 조립과 구현 단위
+
+새 `rosy_agent.omx_transfer_preflight` 조립 helper는 기존 runtime owner의 `joint_state`만 읽고 `JointStateSnapshot`의 실제 calibration revision을 보존한다. runtime.latest_joint_state·desired home에서 상태를 만들지 않는다. profile/kinematics/catalog의 고정 transform/scene 대응과 같은 runtime.monotonic clock으로 내부 서비스를 구성한다. 상태 없음은 준비 불가다. helper는 ROS·palletizing·Cell compiler를 import하거나 두 번째 owner를 만들지 않는다.
+
+기존 `build_cell_owner`에는 선택적인 설치 catalog 인수만 추가해 같은 runtime·journal의 읽기 API를 연결한다. 기존 호출자는 None으로 새 operation이 닫힌다. 독립 simulation 시험은 같은 helper와 기존 `ArmCommandOwner`/ActionApi를 조립하고 palletizing import를 차단해 계산 경로를 검증한다. 이 시험은 새 실물 capability나 neutral grant dispatch의 증거가 아니다.
+
+변경 대상은 foundation의 새 `arm_transfer_preflight.py`/schemas exports와 API reference, adapter의 새 `transfer_preflight_api.py`와 기존 ActionApi, agent helper와 선택적 Cell 조립, Fleet transport와 새 `arm_transfer_preflight_routes.py`/app 설치다. 새 dependency·owner server·자동 등록/수정 API·catalog discovery API를 추가하지 않는다. Harbor는 설치 binding에 기록한 catalog digest/refs를 사용하며 binding이 없으면 임의 좌표로 대체하지 않는다.
+
+시험은 계약 strictness·cross-field result 결속, owner peer/v1/unsupported/참조 거절과 admitted-vs-latest 상태, Fleet role/profile/설치 scope/timeout/응답 교체를 포함한다. 커밋된 RED를 원격 확인한 뒤 구현하고 기존 ActionApi/Cell owner 회귀를 실행한다. 마지막에 임시 UDS owner → 실제 Fleet HTTP → 플랫폼 import 없는 최소 클라이언트를 같은 고정 SHA로 검증한다.
