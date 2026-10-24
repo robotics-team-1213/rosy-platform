@@ -902,3 +902,9 @@
 - 변경: 중립 팔 grant 등록과 DTO 이동의 검증 결과를 기록했다.
 - 증거: foundation 전체와 신규·기존 소비자 공식 원격 1385 passed/skip0/0 NEW, 독립 검토에서 material finding 없음. docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md를 따른다.
 - gate 변화: DTO 소비자 집중 검증이며 실제 runtime·원장·물리 종료와 Harbor 연결은 후속이다.
+
+## 2026-10-24 · 76a173b5fd · D-856 공유 자원 키의 contract leaf
+
+- 변경: 기존 순수 자원 정규화를 stdlib-only core_common.resource_keys로 옮겼다. safety와 decision 양쪽이 계약 leaf를 소비하며 Fleet의 기존 normalize_resources 재수출과 normalize/reserve/release AST는 유지한다. 새 wire shape·API version·writer·권한은 추가하지 않았다.
+- 증거: 공유 leaf 누락 RED7 뒤 Foundation 전체·Fleet 중립/Cell 원장·점유·writer/safety 구조의 공식 원격1292 passed/skip0/known0 NEW, source76 FULL23개 각각exit0/known0 NEW, 독립 안전 검토와 source9 commits size/safety exit0를 확인했다. 원본 실패와 skip 한계는 docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
+- gate 변화: 라이브러리와 host 집중 검증이다. 실제 HTTP producer·장치 제출·관측 credential·물리 점유 해제·Harbor 연결은 후속이다. CE 해당 없음: 코드·회귀·기존 D-430 의존 규칙과 검증 문서가 판단 근거를 보존한다.

@@ -228,3 +228,9 @@ c3ac314b5 원격 CORE/HTTP 144개, 3f44891bd Fleet 회귀 149개 통과, 각 NEW
 source205의 내부 validator는 World 사실과 설치 정책/durable attempt context를 대조한다. 물체 model origin의 source/target pose, 전체 참가자9개 링크의 정지·엄격한 구역 이탈, 두 표본 freshness/순서/경계 이후 조건을 검사한다. quaternion norm 오차와 직접 축소 descriptor를 회귀로 보완했다. 집중67 passed/skip0, affected 전체 두 묶음4587 passed/189 skipped와6312 passed/336 skipped·각exit0/known0 NEW와 독립 재검토를 확인했다. 범위 중복과 skips는 합산/수용으로 세지 않는다.
 
 credential ingress·현재 원장에서 만든 context/fence·physical create/approval·claim 해제 transaction·Harbor ARM은 아직 연결하지 않았다. validator 성공은 receipt나 점유 해제 권한이 아니다. [검증과 한계](../../docs/validation/harbor-physical-evaluator-2026-10-24/result.md)를 따른다. 기존 모듈/현장 gate의 수용 범위를 넓히지 않는다.
+
+## 2026-10-24 · D-856 중립 물리 제안과 승인 원장
+
+source3c는 simulation 내부 physical create/read/two-person approval과 공통 claims를 같은 DB transaction으로 처리한다. 자원 키를 정책 digest에 포함하고 모든 owner workcell도 잠근다. schema version6 승인 테이블과 idempotency index는 기존 migration에 포함한다. stop/startup은 HELD/UNKNOWN 점유를 보존한다. 새 Cell 완료 파일로 이동한 메서드의 AST/호출 의미는 그대로이며 physical 완료에 재사용하지 않는다.
+
+자원 정규화를 공용 contracts leaf로 옮긴 최종source76의 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW와 독립 안전 검토를 확인했다. 원본9d FULL의 구조/G1 timing 실패는 별도로 보존한다. source76 G1 timing4 passed/skip0도 확인했지만 원본 접촉 간격 실패의 원인은 미확정이다. HTTP/DTO·live SDK capability·prepared action/attempt·관측 credential ingress·dispatcher·물리 receipt/claim 종료·Harbor ARM은 후속이다. READY를 실행 제출로 보지 않는다. [검증 기록](../../docs/validation/harbor-physical-proposals-2026-10-24/result.md)을 따른다.

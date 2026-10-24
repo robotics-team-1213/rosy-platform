@@ -8,6 +8,8 @@
 
 두 표본 정책 소비자는 source `205cd08767`에서 구현했다. [검증 기록](../validation/harbor-physical-evaluator-2026-10-24/result.md)의 집중67 passed/skip0, affected 두 묶음4587 passed/189 skipped와6312 passed/336 skipped·각0 NEW와 독립 재검토를 확인했다. 최초 소스에서 발견한 quaternion norm/축소 descriptor 누락은 RED 재현 뒤 보완했다. 이 첫 profile은 모든 참가자의 gripper가 열려 있고 비어 있어야 한다. credential ingress·현재 원장 context/fence·atomic claim 종료는 후속이며 validator 성공을 그 권한으로 사용하지 않는다.
 
+단계2의 내부 physical create/read/two-person approval·공통 claims/schema version6은 source `3c95937a56`에서 구현했다. 자원 키도 정책 digest에 결속하고 legacy owner workcell을 함께 잠근다. source76에서는 자원 키를 공용 contracts leaf로 옮겨 safety/decision 의존 방향을 지켰다. [검증 기록](../validation/harbor-physical-proposals-2026-10-24/result.md)의 최신 집중1292 passed/skip0·최종FULL23개 모두0 NEW·동일source G1 timing4 passed/skip0와 독립 안전 검토를 확인했다. 원본9d FULL의 구조/G1 실패는 따로 보존하며 G1 원인은 미확정이다. 공개 HTTP/DTO·live capability 수집·prepared action/attempt·관측 credential ingress·dispatcher·physical receipt/claim 종료는 아직 연결되지 않았다. READY는 장치 제출을 뜻하지 않는다.
+
 ## 목표와 소유권
 
 첫 독립 HTTP 팔 흐름에서 Harbor는 CargoMove를 물리 참조로 변환하고 업무 완료를 판단한다. ROSY는 설치된 정책, 두 사람 승인, 실행·점유, 물리 관측의 검증과 receipt를 소유한다. 물체가 목표에 놓이고 전체 로봇 링크가 공유 구역 밖에서 정지했다는 근거가 없으면 동작 성공 뒤에도 점유를 보존한다. 새 broker/DB/장치 writer를 만들지 않는다.

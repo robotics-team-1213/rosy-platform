@@ -4429,3 +4429,9 @@
 - 변경: World 사실을 설치 정책·durable attempt context와 대조하는 내부 pure validator. 모든 참가자의 전체9개 링크·속도/그리퍼·엄격한 expanded-zone 이탈, object-origin source/target pose, 두 관측의 순서/경계 이후/age를 검사한다. 원장/claim/dispatch 쓰기는 없다.
 - 증거: 최초 RED25 뒤 집중63 passed, 독립 검토의 quaternion norm/축소 descriptor 두 누락을 RED4로 재현하고 보완했다. source205 집중67 passed/skip0, affected 전체 두 묶음4587 passed/189 skipped와6312 passed/336 skipped, 각각exit0/known0 NEW·고정 SHA 독립 재검토 finding 없음, source size/safety exit0. 범위 중복과 skips는 합산/수용으로 세지 않는다. 상세는 docs/validation/harbor-physical-evaluator-2026-10-24/result.md다.
 - gate 변화: credential ingress·실제 current context/fence·physical create/approval·atomic claim 종료·Harbor ARM은 미완료다. CE 해당 없음: source·회귀·검증 문서가 두 검토 finding의 원인/수정을 보존한다. 과거 e26 G1 timing 원인 미확정은 별도다.
+
+## 2026-10-24 · 76a173b5fd · D-856 중립 물리 제안과 두 사람 승인
+
+- 변경: 같은 Fleet DB에 physical create/read/approval을 추가했다. 정책에 arm/zone/object 키를 결속하고 legacy owner workcell도 함께 claim한다. 정확한 proposal/설치/capability와 두 사람·dispatch control을 확인해 approval/READY/claims를 원자 기록한다. schema version6·old-host 거절, stop/startup HELD/UNKNOWN 보존, 무관 DB/권위 필드 덮어쓰기/역행 시각 거절을 포함한다. legacy 완료 메서드는 AST 동일 이동하고 기존 호출을 보존했다.
+- 증거: 초기 RED21, 검토 네 finding은 RED5 failed/24 passed 뒤 보완했다. 원본3c 회귀의 구조 검사2건·기존 version 기대값1건과9d FULL의 구조/G1 2 NEW를 보존했다. source76 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW(Fleet6343 passed/336 skipped, root9707 passed/1135 skipped), 동일source G1 timing4 passed/skip0와 독립 안전 검토, source9 commits size/safety exit0다. 기존 normalize/reserve/release AST는 유지했고 중복/skip은 합산·수용으로 세지 않는다. docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
+- gate 변화: public HTTP/DTO·실제 capability 수집·prepared context/dispatcher·관측 ingress·물리 claim 종료·Harbor ARM은 미완료다. CE 미해결: 원본G1 접촉 간격 p99 0.525457s의 원인은 미확정이며 최신 strict 통과를 해결로 보지 않는다. 코드 검토 finding은 source·회귀·검증 기록에 남긴다.

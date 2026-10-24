@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 76a173b5fd · D-856 공유 자원 키의 contract leaf
 - 2026-10-24 · 1258314f51 · 중립 팔 grant 소비자 검증
 - 2026-10-24 · uncommitted · D-856 중립 팔 실행 grant 모델
 - 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 공유 계약
 - 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약
-- 2026-10-20 · 37c3907d3 · D-821 명시적 이동과 locale 추가 계약

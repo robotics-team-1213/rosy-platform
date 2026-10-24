@@ -47,3 +47,7 @@ plans:
 기존 tracking/sighting 승인과 World/CORE 권한은 유지한다. 원격 시험의 커밋·실행·실패 수정·skipped와
 실측 근거의 한계는 [구현 검증 기록](../../docs/validation/measured-camera-lifecycle-2026-10-16/result.md)에 모은다. 기존 모듈 gate의 물리 수용 범위를
 넓히지 않는다. D-598의 현재 현장 readback·로봇별 오차 계수는 아직 확보하지 못했다.
+
+## 2026-10-24 · D-856 공유 자원 키의 contract leaf
+
+source76의 core_common.resource_keys는 stdlib-only 자원 식별자 정규화다. safety/decision 양쪽이 이 leaf를 소비하고 기존 Fleet import는 같은 함수 재수출로 보존한다. wire·API 버전·writer 권한은 바꾸지 않는다. Foundation 전체와 관련 Fleet/구조 집중 원격1292 passed/skip0와 FULL23개 각각exit0/known0 NEW·독립 안전 검토를 확인했다. [원본 실패·skip·물리 수용의 한계](../../docs/validation/harbor-physical-proposals-2026-10-24/result.md)를 따른다. runtime/물리 수용 gate는 그대로다.
