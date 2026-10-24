@@ -1,7 +1,10 @@
 """A completed process or plausible final pose cannot prove contact transport."""
 import importlib
+import hashlib
+import json
 from pathlib import Path
 import sys
+import uuid
 
 import pytest
 
@@ -73,3 +76,25 @@ def test_two_contact_lifts_and_unassisted_settles_are_required():
             if broken == 'no_transport' and row['phase'] == 'out_transport': row['position'][:2] = list(implementation().PINKY[:2])
         if broken == 'missing': rows = rows[:-31]
         assert mod.evaluate(rows)['task_success'] is False, broken
+
+
+def test_contact_worker_finalizes_its_scenario_and_keeps_failed_evidence(tmp_path):
+    import run_store
+    import run_worker
+    for passed in (True, False):
+        store = run_store.RunStore(tmp_path/str(passed))
+        row = store.create(uuid.uuid4().hex, 'pinky-conveyor-roundtrip', {'seed': 0}, 'a'*40)
+        row = store.update(row['run_id'], 0, {'status': 'RUNNING'})
+        report = dict(completed_frames=4000, task_success=passed,
+                      judgement=dict(evidence_class='PHYSICS_GRASP' if passed else 'INCOMPLETE_CONTACT_TASK', failures=[] if passed else ['slip']))
+        artifacts = []
+        for name in ['contact-report.json', 'pinky_initial.png', 'out_lift.png', 'conveyor_settle.png', 'back_lift.png', 'pinky_settle.png']:
+            raw = json.dumps(report).encode() if name.endswith('.json') else b'\x89PNG\r\n\x1a\nfixture'
+            (store.root/'runs'/row['run_id']/name).write_bytes(raw)
+            artifacts.append(dict(id=Path(name).stem, name=name, bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                                  media_type='application/json' if name.endswith('.json') else 'image/png'))
+        run_worker._finish(store, row['run_id'], dict(exit_code=0, reason='process_exited'), report, artifacts, False)
+        final = store.get(row['run_id'])
+        assert final['status'] == ('SUCCEEDED' if passed else 'FAILED')
+        assert final['result']['task_success'] is passed
+        assert store.artifact(row['run_id'], 'contact-report')['bytes'] > 0
