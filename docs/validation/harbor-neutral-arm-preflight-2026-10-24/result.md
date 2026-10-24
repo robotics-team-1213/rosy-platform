@@ -41,4 +41,20 @@ python tools/remote/remote_pytest.py --sha 1c66d5cfa5 --log-dir <external-log-di
 
 clock·관절 상태·profile은 합성 simulation fixture다. 충돌 장면, 실물 기하/하중·보정, 실제 ROS 상태, 장치 정지와 현장 수용은 확인하지 않았다. 과거 `f3d7d3fba5` FULL은 실패 기록이며 이번 집중 GREEN으로 FULL 통과로 바꾸지 않는다. 기존 기동 회귀 수정의 충전 HTTP pipeline은 별도 `34ff5f55c1`에서 10 passed/skip0로 확인했다.
 
-CE: 해당 없음 — 판단과 수정 조건을 코드·회귀·이 검증 기록에서 복원할 수 있다. 운영 장애나 장치 수용을 해결한 기록은 아니다.
+## 후속 공식 FULL 실행과 미해결 항목
+
+고정 commit `754d5ca7bfb5d94429c0a5ad3176ffcd646a87d1`에서 clean selection과 명시적 `--sha`로 공식 runner를 실행했다. 이 소스에는 이후 step grant 경계 이동이 포함되지 않는다. 외부 로그 위치는 `rosy-neutral-arm-preflight-full`이다.
+
+| 로그 | 결과 | known_failures 비교 |
+|---|---|---|
+| run-1 | 9303 passed / 294 skipped / 2 failed | 2 NEW |
+| run-2 | 7728 passed / 598 skipped / 1 failed | 1 NEW |
+| run-3 | 6523 passed / 340 skipped | 0 NEW |
+
+전체 실행은 exit1이며 FULL 통과로 기록하지 않는다. 문서의 live API 버전 변경 이력 행 누락은 commit `1b9ed965ab`에서 보완했다. 커밋 SHA 두 줄의 비밀값 오탐은 commit `30105bc09a`에서 값이 commit임을 명시해 기존 scanner의 integrity 문맥 규칙을 따르도록 고쳤다. scanner·검사는 바꾸지 않았다. 두 문서 검사 모두 commit `1b9ed965ab`의 별도 152개 회귀에서 통과했다.
+
+나머지 실패는 `test_station_camera_pipeline`의 `shutdown_UNDOCKING`이다. 캡처된 stack은 ASGI 인증 의존성의 worker-thread 진입을 기다리던 docking status 조회가 기존 1.5초 제한을 넘었음을 보여 준다. Fleet는 이 불명 조회를 HOLD로 처리해 시험의 CHARGING 기대값과 달랐다. 같은 고정 commit `754d5ca7bf`의 해당 native source node만 재실행한 결과는 1 passed/skip0, 0 NEW, 57.64초였다(`rosy-preflight-station-undocking-repro`).
+
+단독 재실행 통과는 FULL 실패의 해결 증거가 아니다. 최초 결과와 단독 결과를 함께 보존하며, 재현 조건과 추가 전체 검증이 남는다. production timeout·HOLD·안전 정지와 해당 시험의 기대값을 약화시키지 않았다. 기존 실패나 알려진 flaky로 분류하지 않는다.
+
+CE: 해당 없음 — 해결한 코드·문서 조건은 source·회귀·이 기록에서 복원할 수 있다. 미해결 FULL 타임아웃은 위와 작업 기록에 증상·관측·다음 확인을 구분해 남겼다. 운영 장애나 장치 수용을 해결한 기록은 아니다.

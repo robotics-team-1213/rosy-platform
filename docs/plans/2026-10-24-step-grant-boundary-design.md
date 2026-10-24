@@ -1,6 +1,6 @@
 # D-856 공통 step 시작과 Cell grant 검증 경계
 
-**Status:** 구현 전 검토. [전체 계획](2026-10-24-harbor-rosy-application-action-boundary.md)의 중립 팔 실행 선행 단계다. 공개 사전검사 구현은 [별도 증거](../validation/harbor-neutral-arm-preflight-2026-10-24/result.md)이며, 여기서는 새 kind·wire·dispatch를 열지 않는다.
+**Status:** 독립 설계/구현 검토와 원격 집중 회귀 완료(2026-10-24). [전체 계획](2026-10-24-harbor-rosy-application-action-boundary.md)의 중립 팔 실행 선행 단계다. 공개 사전검사 구현은 [별도 증거](../validation/harbor-neutral-arm-preflight-2026-10-24/result.md)이며, 여기서는 새 kind·wire·dispatch를 열지 않는다.
 
 ## 확인한 결합과 사용할 기존 경계
 
@@ -28,3 +28,13 @@ registry는 이미 종류별 승인·허용 profile·typed grant·phase와 body 
 5. 독립 계약 검토로 기존 payload 결속이 빠지지 않았는지 확인한다. 실제 중립 kind의 생성·DB provenance·owner capability·phase 실행과 Harbor 변환은 후속 별도 계약으로 연결한다.
 
 이번 단계에서는 fleet_cell_jobs의 recipe/cell/process 필수 column을 바꾸거나 다른 digest로 채우지 않는다. 성공한 action 뒤의 업무 관측·GOAL_CONFIRMED·claim 해제 의미도 바꾸지 않는다. 그 경계와 schema migration은 실제 producer/consumer와 데이터 보존 검토가 필요한 다음 단계다.
+
+## 확인한 구현과 증거
+
+commit `9830a33738`의 RED는 경계 함수 누락 12건, 기존 보존 시험 6 passed와 잘못된 enum fixture 1건이었다. item 변조 fixture를 허용되는 `slip_sheet`로 바꿔 실제로 재서명한 유효 모델의 payload 불일치를 검사하도록 고쳤다. 잘못된 enum을 새 허용값으로 구현하지 않았다.
+
+commit `f3213debe8`에서 Cell store/recovery/API·multi-arm ledger·sheet checkpoint·단일 grant digest·release guard를 원격 검증해 **184 passed, skip0, 0 NEW**를 확인했다. commit `1b9ed965ab`의 별도 dispatcher/multi-arm dispatcher·owner identity/transport·API version·release guard 회귀는 **152 passed, skip0, 0 NEW**다. 두 실행에는 중복 검사가 있으며 수를 합쳐 독립 사례 수로 주장하지 않는다.
+
+구현은 공통 검증의 transaction 위치와 기존 registry body를 유지했다. 독립 구현 검토는 typed kind/class·모든 공통 identity/fence·Cell의 전체 payload 결속이 남음을 확인했다. Store는 943→928줄로 줄이고 ratchet을 낮췄다. 검증 로그는 저장소 밖 `rosy-step-grant-boundary-green`, `rosy-step-grant-dispatch`에 보존했다.
+
+이 결과는 새 neutral kind의 실제 DB 생성이나 실행 증거가 아니다. 선행 공개 사전검사 head의 FULL 결과와 이후 이 변경의 집중 회귀는 별도로 관리한다.

@@ -424,3 +424,4 @@ plans:
 
 - 정식 ADR·Log·전체 계획을 등록했다. 첫 중립 TRIP 조회/대조는 Harbor 독립 HTTP로 검증했다. 팔의 중립 계획기·owner 설치 catalog와 API v1.299 읽기 사전검사를 연결했다. 신규/기존 관련 원격 213 passed/skip0와 실제 stdlib-only HTTP→UDS 및 독립 검토를 확인했다. SHA·이력 metadata·합성 상태/설치 검증 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 기록했다.
 - 전체 목표는 진행 중이다. 중립 팔 grant/실행과 공통 원장/Cell provenance 경계, Harbor 공정 변환·업무 관측·복구/설치 독립성 증거가 남는다. 기존 Cell 호환과 실물 비활성 상태를 유지한다. 실행 상세는 docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md를 따른다.
+- step 시작의 typed grant 파싱·공통 identity·종류별 전체 payload 검증을 분리했다. Cell 원장/복구 184개와 dispatcher/transport 등 152개 별도 원격 회귀가 통과했으며 새 kind는 열지 않았다. 선행 공개 사전검사 FULL의 충전 조회 타임아웃은 단독 통과와 구별해 미해결로 기록했다. docs/plans/2026-10-24-step-grant-boundary-design.md와 위 validation을 따른다.

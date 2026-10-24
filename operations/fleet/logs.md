@@ -4387,3 +4387,9 @@
 - 변경: 기존 proposer 인증과 workcell→instance 설치 대응으로 simulation preflight만 전달한다. dispatcher·Cell compiler·새 원장을 요구하지 않으며 응답 version/status·요청 전체 결속·typed code/reason을 검증한다. Fleet 수신 시각과 owner의 계산 시점 상태 나이를 구별한다.
 - 증거: 신규 계약 RED 뒤 API v1.299를 구현했다. 전체 관련 원격 213 passed/skip0/0 NEW이며 독립 stdlib-only HTTP client→Fleet→UDS→owner admitted state를 검증했다. 최종 소스·이력 metadata 보완과 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 기록했다. 기존 충전 HTTP pipeline은 별도 34ff5f55c1에서 10 passed/skip0다.
 - gate 변화: 공개 simulation 읽기다. 기존 두 사람 승인·원장·claim·stop/rearm·출력 writer는 변경하지 않는다. 새 팔 실행·Harbor 공정 변환은 남는다. CE 해당 없음: 검증과 소스가 처리 조건을 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 step grant의 종류별 검증 경계
+
+- 변경: Store의 고정 Cell 파싱과 직접 Cell 속성 검사를 registry의 typed 파싱·common identity/fence·전체 payload 대조로 분리했다. Cell body가 recipe/cell/job/step·자세·item·pallet/layer·선택 SKU를 계속 결속한다. DB 생성·등록 kind·승인/profile·owner dispatch·claim 상태 전이는 유지한다.
+- 증거: 경계 함수 누락 RED12 후 구현했다. 유효하게 재서명한 Cell payload 변조와 원장/claim 불변, 비활성 시험 kind의 Cell 없는 helper 검사를 포함해 commit f3213debe8 원격 184 passed/skip0/0 NEW다. commit 1b9ed965ab의 별도 dispatcher/transport/문서·release 회귀는 152 passed/skip0/0 NEW이며 중복 사례가 있다. 독립 검토의 material finding은 없었다. Store ratchet은 943→928줄로 낮췄다.
+- gate 변화: 중립 실행의 내부 선행 단계다. 새 kind·wire·DB producer·실행 권한을 열지 않았다. CE 해당 없음: 검증 책임과 거절 조건을 source·회귀·docs/plans/2026-10-24-step-grant-boundary-design.md에 남겼다.
