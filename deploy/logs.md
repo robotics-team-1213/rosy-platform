@@ -3187,3 +3187,10 @@
 - 변경: [정책 평가 기록](../docs/validation/omx-recovered-policy-engineering-2026-10-24/result.md)에 AI calibration5e00180bfe37 종료0·engineering791f6a0c8160 종료1과 원본 회수·cgroup/lock 정리를 남겼다.
 - 증거: 두 archive 각각95/253파일 byte대조. engineering의 JTC 허용오차 초과를 owner HOLD로 보존했고 main PID0·빈 cgroup·lock/예약 없음·cleanupverified를 확인했다. formal20회는 시작하지 않았다.
 - gate 변화: 실제 모델 작업 성공은 HOLD다. 별도 서비스 운영 승격·실물 동작·HF 업로드는 없다. CE 미해결 — 추종 오차의 물리 원인은 미확정이다.
+
+## 2026-10-24 · bbf2af074bb7 · SIM 정책의 passive controller 추종 증거
+
+- 변경: SIM 실행기가 종료 정리 뒤 bounded controller-state JSON을 보존한다. [검증 기록](../docs/validation/omx-policy-controller-tracking-2026-10-24/result.md)에 source와 회귀를 연결했다.
+- 증거: 새 수집기·기존 runtime/camera/evidence/config/demonstration 원격116개 통과·NEW0, 독립 권한 경계 검토 Important 없음.
+- gate 변화: 제어 권한·목표·허용치·실패 HOLD 판정을 유지한다. 정책·실물 수용은 기존 HOLD이며 CE 미해결이다.
+- 실제 실행: source 동일 calibration eb3932d8a7be 종료0/331샘플, 정책1cb9bea72585 종료1/748샘플. 두 archive96/126파일과 PID0·빈 cgroup·lock/예약 없음을 검증했다. 정책은41목표 성공 뒤 lease 만료로42번째 제출을 막았으며 새 formal·학습·실물 실행은 없다. journal 세부 지연 원인은 미확정이다.
