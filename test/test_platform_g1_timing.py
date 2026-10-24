@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,8 +107,51 @@ class Pair:
                     out.setdefault(barrier_id, []).append(row["released_monotonic"] - row["arrived_monotonic"])
         return out
 
-    def contact_gaps(self):
-        return [b - a for client in self.clients.values() for a, b in zip(client.sent, client.sent[1:])]
+    def contact_gaps(self, starts=None):
+        gaps = []
+        for instance, client in self.clients.items():
+            samples = client.sent[(starts or {}).get(instance, 0):]
+            gaps.extend(b - a for a, b in zip(samples, samples[1:]))
+        return gaps
+
+
+def test_contact_gap_window_excludes_setup_but_keeps_active_delays():
+    pair = SimpleNamespace(clients={"left": SimpleNamespace(sent=[0.0, 0.1, 5.0, 5.1, 6.0])})
+    assert Pair.contact_gaps(pair, {"left": 2}) == pytest.approx([0.1, 0.9])
+    assert max(Pair.contact_gaps(pair)) == pytest.approx(4.9)
+
+
+def measure_hold_completion(hold, completed, *, clock=time.monotonic):
+    def measured(grant, reason):
+        entered = clock()
+        hold(grant, reason)
+        completed.setdefault(grant.instance_id, {"entered_at_s": entered, "completed_at_s": clock(),
+                                                "reason": str(reason)})
+    return measured
+
+
+def test_hold_completion_includes_callback_work_but_excludes_later_polling():
+    clock = [1.0]
+    completed = {}
+    grant = SimpleNamespace(instance_id="left")
+
+    def hold(grant, reason):
+        assert not completed
+        clock[0] = 1.2
+
+    measured = measure_hold_completion(hold, completed, clock=lambda: clock[0])
+    measured(grant, "PARTNER_LINK_LOST")
+    clock[0] = 1.8
+    assert completed == {"left": {"entered_at_s": 1.0, "completed_at_s": 1.2,
+                                  "reason": "PARTNER_LINK_LOST"}}
+
+    def failed_hold(grant, reason):
+        raise RuntimeError("HOLD failed")
+
+    failed = {}
+    with pytest.raises(RuntimeError, match="HOLD failed"):
+        measure_hold_completion(failed_hold, failed, clock=lambda: clock[0])(grant, "PARTNER_LINK_LOST")
+    assert not failed
 
 
 def test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds(tmp_path):
@@ -115,25 +159,37 @@ def test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds(tmp_pat
     steps = pair.two_arm_steps()
     assert len(steps) >= 3
     waits = {}
+    active_gaps, contact_windows = [], []
     for index in steps:
         grants = pair.start(index)
+        # A completed pair's last contact must not span the next pair's synchronous setup.
+        starts = {instance: len(client.sent) for instance, client in pair.clients.items()}
         assert pair.loop(lambda: all(pair.state(role, g) == "SUCCEEDED" for role, g in grants.items())), {
             role: pair.state(role, g) for role, g in grants.items()}
+        active_gaps.extend(pair.contact_gaps(starts))
+        contact_windows.append({"step": index, "actions": {role: g.action_id for role, g in grants.items()},
+                                "starts": starts,
+                                "ends": {instance: len(client.sent) for instance, client in pair.clients.items()}})
         for barrier_id, values in pair.barrier_waits(grants).items():
             waits.setdefault(barrier_id, []).extend(values)
     assert sorted(waits) == ["both_grasped", "both_ready"]
     assert all(len(values) == 2 * len(steps) for values in waits.values())
     for barrier_id, values in waits.items():
         assert max(values) < MAX_WAIT_S[barrier_id]
-    gaps, rtt = quantiles(pair.contact_gaps()), pair.rtt.summary()
-    assert gaps["p99"] < COORDINATOR_LIVENESS_S / 2  # healthy contact never comes near the liveness bound
+    gaps, rtt = quantiles(active_gaps), pair.rtt.summary()
+    all_gaps = quantiles(pair.contact_gaps())
+    assert gaps["p99"] < COORDINATOR_LIVENESS_S / 2, {"active": gaps, "all_contacts": all_gaps,
+        "windows": contact_windows, "samples": {instance: client.sent for instance, client in pair.clients.items()}}
     assert all(summary["p99"] < UDS_BOUND_S for summary in rtt.values())
     for arm in pair.arms.values():
         assert arm.stop_snapshot().state.value == "OPEN"
     record_evidence("timing-pairs", {"pairs": len(steps), "time_scale": 0.002,
                                      "coordinator_period_s": COORDINATOR_PERIOD_S,
                              "barrier_wait_wall_s": {k: quantiles(v) for k, v in waits.items()},
-                             "contact_gap_s": gaps, "rtt_s": rtt})
+                             "contact_gap_s": gaps, "all_contact_gap_s": all_gaps,
+                             "contact_windows": contact_windows,
+                             "contact_samples_s": {instance: client.sent for instance, client in pair.clients.items()},
+                             "rtt_s": rtt})
 
 
 def test_killing_the_coordinator_in_a_tight_segment_holds_both_arms_within_liveness(tmp_path):
@@ -144,7 +200,10 @@ def test_killing_the_coordinator_in_a_tight_segment_holds_both_arms_within_liven
     assert pair.loop(lambda: pair.in_tight_transfer(grants))
     pair.alive = False
     killed = time.monotonic()
-    held = {}
+    held, completed = {}, {}
+    for arm in pair.by_role.values():
+        supervisor = arm.owner.barriers
+        supervisor.hold_owner = measure_hold_completion(supervisor.hold_owner, completed)
 
     def both_held():
         for role, arm in pair.by_role.items():
@@ -153,13 +212,20 @@ def test_killing_the_coordinator_in_a_tight_segment_holds_both_arms_within_liven
                 held[role] = (time.monotonic() - killed, snapshot.reason)
         return len(held) == 2
     assert pair.loop(both_held, timeout_s=COORDINATOR_LIVENESS_S + 5)
-    for role, (after, reason) in held.items():
+    assert len(completed) == 2, {"completed": completed, "observed": held}
+    for role, arm in pair.by_role.items():
+        sample = completed[arm.instance_id]
+        after, reason = sample["completed_at_s"] - killed, held[role][1]
         assert reason == "PARTNER_LINK_LOST"
-        assert COORDINATOR_LIVENESS_S - COORDINATOR_PERIOD_S - 0.05 <= after <= COORDINATOR_LIVENESS_S + 0.25
+        assert COORDINATOR_LIVENESS_S - COORDINATOR_PERIOD_S - 0.05 <= after <= COORDINATOR_LIVENESS_S + 0.25, {
+            "completed": completed, "observed": held, "killed_at_s": killed}
         assert pair.state(role, grants[role]) == "HOLD"
-        assert pair.by_role[role].port.cancelled  # the hanging transfer goal was cancelled
+        assert arm.port.cancelled  # the hanging transfer goal was cancelled
     record_evidence("timing-coordinator-kill", {"liveness_s": COORDINATOR_LIVENESS_S,
-                                        "hold_after_kill_s": {r: round(v[0], 3) for r, v in held.items()}})
+        "hold_after_kill_s": {r: round(completed[a.instance_id]["completed_at_s"] - killed, 3)
+                              for r, a in pair.by_role.items()},
+        "observed_after_kill_s": {r: round(v[0], 3) for r, v in held.items()},
+        "killed_at_s": killed, "hold_completions": completed})
 
 
 def test_a_failure_in_a_tight_segment_holds_the_partner_with_a_coordinator_stop(tmp_path):

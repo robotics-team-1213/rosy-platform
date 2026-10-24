@@ -16,6 +16,7 @@
 - 현재 panel의 미게시 `app-runtime.js` 의존성을 복사하지 않는다. 원격 정적 자산·설치 wheel/sdist와 브라우저를 검증한다.
 - 신원 위조·부정문·유한 수치·동일 요청 멱등성·권한 철회·기존 Discord 경로를 확인한다.
 - 소스 변경은 커밋한 SHA로 원격 시험한다. selector의 FULL을 축소하지 않는다.
+- 원격의 과대 Fleet/Console에 행을 더할 수 없어 assistant 소스는 기존 `server/work` holder에 두고 기존 Python 신원을 명시적으로 패키징한다. Console은 기존 D-798 auth/goal/refresh 팩토리를 shared holder로 분리한다. 동작·공개 자산 URL은 유지하고 size ceiling은 낮춘다.
 
 ## 1. 공유 계약 게시
 
@@ -25,8 +26,8 @@
 
 ## 2. 관제 AI와 전처리 게시
 
-- [ ] 원격 기준에서 Fleet assistant·기존 UI 연결·broker·보호 설치·ko/en·명시적 좌표 인계를 적용한다.
-- [ ] D-831 공통 전처리·해석 검증·계측·source closure·새 Discord 실행 OFF를 적용한다.
+- [x] 원격 기준에서 Fleet assistant·기존 UI 연결·broker·보호 설치·ko/en·명시적 좌표 인계를 적용한다.
+- [x] D-831 공통 전처리·해석 검증·계측·source closure·새 Discord 실행 OFF를 적용한다.
 - [ ] 원격 전체 선택·설치 산출물·브라우저·고정 모델 Console/Discord를 검증한다.
 - [ ] 독립 검토한 최신 head를 PR로 게시하고 모든 개별 CI 결과를 확인해 병합한다.
 
