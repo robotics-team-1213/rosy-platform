@@ -345,5 +345,5 @@
 - 2026-10-25 · uncommitted · HF 학습 사진 검토 반영 (own_forced_train)
 - 2026-10-25 · uncommitted · 승인한 HF 사진을 학습 데이터셋에만 (D-857)
 - 2026-10-25 · uncommitted · HF 가져오기를 검수 대기열로 보내기 (D-857 P1)
-- 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
-- 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지
+- 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
+- 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용

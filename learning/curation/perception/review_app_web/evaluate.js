@@ -51,12 +51,29 @@ async function vlm(workspace){
   }
   go(block,'VLM 평가 자세히','/learning/vlm#eval');
 }
+async function sim(){
+  // Recent SIM runs, only fields sim_web.public() sends; each opens its run on /learning/sim.
+  const block=source('sim');text(block,'h4','최근 SIM 실험');
+  text(block,'p','SIM 판정과 과제 성공은 실험 근거일 뿐 승인·승격이 아닙니다(D-793, D-857).','quiet');
+  let runs;
+  try{runs=(await read('/api/learning/sim/runs')).runs;}catch(error){text(block,'p',`없음 · ${error.message}`).dataset.state='not_available';return;}
+  if(!runs.length){text(block,'p','SIM 실험 기록이 없습니다.');return;}
+  const when=run=>String(run.updated_at||run.created_at||'');
+  const success={true:'성공',false:'실패'};
+  const list=text(block,'ul','','evaluate-runs');
+  for(const run of [...runs].sort((a,b)=>when(b).localeCompare(when(a))).slice(0,10)){
+    const result=run.result||{};
+    go(text(list,'li',''),`${run.run_id.slice(0,12)} · ${run.status} · 단계 ${result.stage||'없음'} · 과제 성공 ${success[result.task_success]||'기록 없음'} · 판정 ${result.status||'없음'}`,
+      '/learning/sim?run='+encodeURIComponent(run.run_id));
+  }
+}
 async function load(){
   $('evaluate-filter').textContent=domain?`${DOMAINS[domain]}만 보는 중`:'모든 도메인';
   if(domain){const all=go($('evaluate-filter'),' · 전체 보기','/learning/evaluate');all.classList.remove('workspace-link');}
   const workspace=await read('/api/learning');
   stages(workspace);
   if(!domain||domain==='vlm')await vlm(workspace);
+  if(!domain||domain==='sim')await sim();
   if(!$('evaluate-sources').children.length)text($('evaluate-sources'),'p','이 도메인에는 아직 Learning에 연결된 평가 근거가 없습니다.');
 }
 load().catch(error=>{$('evaluate-error').textContent=error.message;$('evaluate-error').hidden=false;$('evaluate-filter').textContent='';});
