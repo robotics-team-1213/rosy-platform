@@ -9,6 +9,7 @@ symptoms:
   - "rosy-omx-camera-readiness.service failed at boot: CalledProcessError fuser /dev/v4l/by-id/...-video-index0 exit 1"
   - "ExecStopPost restore then failed too: 'camera restore incomplete; inspect restoration.json' with the same fuser error per camera"
   - "after the fix, the first manual start refused: 'camera settings changed since baseline; refusing overwrite'"
+  - "hours later, on the first lighting recovery: 'camera producer changed during environmental recovery' with no preview restart in the journal"
 root_cause: startup_ordering
 resolution_type: code_fix
 severity: medium
@@ -31,6 +32,9 @@ applies_when: "a service must confirm that another Type=simple unit owns a devic
 4. The second start passed: `state: READY` with both cameras `NORMAL`.
 
 Verify with `v4l2-ctl --get-ctrl=...` against `baseline.json` `original`. Do not edit or remove `baseline.json` to get past step 2.
+
+## Second failure: a reused baseline guarded the wrong preview
+`baseline.json` survives restarts and reboots on purpose, because it holds the original settings that restore writes back. It also stored the `producer` (preview PID and InvocationID) of the run that first recorded it on 10-19. `prepare()` checked that today's preview owned the camera, but did not replace that stored identity. The monitor's recovery step then compared today's preview with the 10-19 one. So the first lighting recovery after a reboot always stopped the service, even though no preview had restarted. That happened at 15:22 on 2026-10-23, after 3 h 47 min READY. `prepare()` now keeps this run's verified producer in memory and leaves the file unchanged. A preview restart during a run is still refused. To diagnose, compare `baseline.json` `cameras.*.producer` with `systemctl --user show rosy-omx-camera@<role> -p MainPID -p InvocationID`.
 
 ## Evidence
 Fleet PC journal 2026-10-23 06:10 (boot failure) and 11:33–11:34 (refusal, restore, READY). Fix commit on `fix/omx-camera-readiness-producer-wait`. The deployed file was replaced only after its SHA-256 matched the pre-fix repository version, and a backup `.bak-20261023` was kept.

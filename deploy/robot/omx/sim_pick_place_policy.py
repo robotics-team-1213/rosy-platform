@@ -43,6 +43,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     from sim_policy_inference import infer_for_owner
     from sim_policy_runtime import bind_sim_runtime, trace_sim_admission
     from sim_policy_trial_evidence import goal_succeeded, object_transition, contact_held
+    from sim_policy_tracking import ControllerTracking
     from sim_pick_place_task import judge_episode
     from sim_study_authority import NativeSimStudyAuthority
     from sim_study_stop import NativeSimStopFence
@@ -87,6 +88,8 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
     authority=fence=session=None
     failed_traceback=None
     threads=[]
+    tracking=ControllerTracking(config.joint_names,clock=arm.monotonic,
+        command_reference=lambda:getattr(session,'_active_command',None))
     started=time.monotonic()
     last_observed=[None]
     receipt=dict(schema='rosy.omx-fixed-object-policy-trial/1',success=False,
@@ -138,6 +141,13 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
         return dict(observation=vars(observation),receipt=vars(proof),checked_owner_s=checked)
 
     try:
+        try:
+            from control_msgs.msg import JointTrajectoryControllerState
+            from rclpy.qos import qos_profile_sensor_data
+            node.create_subscription(JointTrajectoryControllerState,
+                names.trajectory_action.rsplit('/',1)[0]+'/controller_state',
+                tracking.observe,qos_profile_sensor_data)
+        except Exception as error:tracking.failure(error)
         deadline=time.monotonic()+90
         while arm.owner.state!='ready' or arm.latest_joint_state is None or not camera.snapshots():
             require_live()
@@ -289,6 +299,7 @@ def run(directory,observer_path,*,deadline_owner_s,calibration=False):
             camera_error=camera.error,camera_capture_records=len(camera.captures),
             policy_steps=len(steps),native_events=len(events))
         if worker_errors:receipt['success']=False
+        receipt['controller_tracking']=tracking.finish(directory/'policy-controller-tracking.json',write_json)
         write_json(directory/'policy-steps.json',steps)
         write_json(directory/'policy-native-events.json',events)
         write_json(directory/'policy-object-transitions.json',transitions)

@@ -200,7 +200,8 @@ def prepare(profile, root, digest):
         for role, spec in baseline['cameras'].items():
             if identity(spec['device']) != spec['identity']:
                 raise RuntimeError('camera identity changed')
-            producer(role, spec['device'])
+            # The baseline keeps the original settings; the owner to guard is this run's preview, not the first one.
+            spec['producer'] = producer(role, spec['device'])
             if get_controls(spec['device'], spec['original']) != spec['original']:
                 raise RuntimeError('camera settings changed since baseline; refusing overwrite')
         return baseline
