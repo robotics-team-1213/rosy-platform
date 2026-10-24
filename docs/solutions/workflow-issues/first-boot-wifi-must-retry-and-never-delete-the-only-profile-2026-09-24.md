@@ -1,6 +1,7 @@
 ---
 title: First boot gave up on one Wi-Fi attempt and deleted the only profile back to it
 date: 2026-09-24
+last_updated: 2026-10-24
 category: workflow-issues
 module: deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py (Pinky Pro release 2026.09.24-010, real device rosy-pinky-e4us)
 problem_type: logic_error
@@ -92,6 +93,32 @@ its next boot or its background retry timer, exactly the same path to the site n
 with — first-boot's job is to keep trying, not to conclude the network is gone.
 
 ## Prevention
+
+### Recovery after an operator changes the network
+
+Keeping the original profile is necessary but does not complete recovery. A retry
+that rebuilds the profile from the original provisioning bundle can overwrite the
+operator's newly working SSID. Waiting longer on that old SSID repeats the failure.
+
+The D-863 change (pending landing) binds a recovery handoff to the device identity,
+hardware binding, original bundle checksum, transaction ID and candidate UUID.
+First boot skips the original Wi-Fi write only after the committed journal and
+current NetworkManager SSID/UUID/IPv4 agree; it records that actual SSID in completion.
+An unverified override or a card moved to another board remains blocked. Do not
+replace this with an unconditional “skip provisioning” marker.
+
+The software regression is `test_recovered_wifi_survives_first_boot_retry_and_records_actual_ssid`
+in `test/test_first_boot_provisioning.py`, alongside rejected foreign/mismatched
+handoff cases in `test/test_network_handoff.py`. Remote revision `9198a18c7b` passed
+the combined boundary selection (332 tests); `797d58a9a0` passed installed import,
+launcher and display checks (41 tests). These prove source and installed dependency
+closure with fake NM, not a real radio, reboot, or card acceptance.
+
+When diagnosing a recovered unit, reconcile its existing request ID and actual
+profile before another write. If rollback cannot verify the previous connection,
+keep the job held and use the local recovery path; do not delete the only profile
+or claim completion from an API acknowledgement. Apply this extension whenever a
+first-boot retry and a separate network editor share the same device profile.
 
 - Any first-contact step a device runs against real-world Wi-Fi (as opposed to a lab AP) needs a
   bounded retry against the actual state machine (`GENERAL.STATE`), not a single timed attempt.

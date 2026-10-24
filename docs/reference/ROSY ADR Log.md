@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-863 | 장치 네트워크 복구와 서명 업데이트 연속성 | Accepted for implementation (2026-10-24) |
 | D-864 | D-854 보완 — 공통 행동 단위 ros_joint_rad, 목표 묶음은 궤적 하나, Isaac은 학습 데이터·Gazebo는 실행 확인 | Proposed (2026-10-24) |
 | D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 | Accepted (2026-10-24) |
 | D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 | Accepted (2026-10-24) |
@@ -1243,3 +1244,9 @@ Dedicated D-772 measurement sources request the existing demand while their inst
 ## D-776 - Installed station charge facts
 
 Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
+
+## D-863 장치 네트워크 복구와 서명 업데이트 연속성
+
+**Status:** Accepted for implementation (2026-10-24). 실물 장치·ARM64 산출물 수용은 별도다.
+
+전용 network authority, 응답 후 실행되는 Wi-Fi 복구 작업, 첫 부팅 인계와 서명 boot catalog를 정의한다. 전문은 [D-863](../adr/D-863-device-network-recovery-and-update-continuity.md).
