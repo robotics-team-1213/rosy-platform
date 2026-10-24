@@ -180,6 +180,10 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
              'assets_sha256': hashlib.sha256((ASSETS / 'manifest.json').read_bytes()).hexdigest(),
              'verifier_sha256': hashlib.sha256(Path(__file__).with_name('import_omx.py').read_bytes()).hexdigest(),
              'scene': None, 'scene_not_applicable_reason': 'model_import_has_no_cargo_scene'}
+    if scenario_id == 'pinky-conveyor-roundtrip':
+        from conveyor_fixture import FIXTURE, fixture_sha256
+        value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
+            verifier_sha256=hashlib.sha256(Path(__file__).with_name('conveyor_report.py').read_bytes()).hexdigest())
     return {'input': value, 'input_sha256': hashlib.sha256(_bytes(value)).hexdigest()}
 
 
