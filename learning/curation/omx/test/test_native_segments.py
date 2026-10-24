@@ -283,7 +283,7 @@ def test_static_episodes_are_excluded_and_recorded_through_inspection_splits_and
     episodes = [dict(episode_index=i, frames=8, content_sha256=str(i)*64, session_id=f's{i}', cycle_id=f'c{i}')
                 for i in range(3)]
     for name, value in (('dataset_files', lambda root: {}),
-                        ('load_dataset', lambda *a: SimpleNamespace(meta=SimpleNamespace(info={}))),
+                        ('load_dataset', lambda *a: type('Dataset', (list,), dict(meta=SimpleNamespace(info={})))()),
                         ('inspect_frames', lambda *a: dict(episodes=copy.deepcopy(episodes))),
                         ('bind_capture', lambda *a, **k: {}), ('bind_environment', lambda *a, **k: {})):
         monkeypatch.setattr(native, name, value)
