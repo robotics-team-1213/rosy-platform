@@ -58,8 +58,6 @@ roles:
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d12.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d13.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
     rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
     rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
@@ -75,8 +73,8 @@ roles:
   site:
     rosy-account-tls-renew.service: {run: oneshot, channel: snapshot, template: deploy/site/rosy-account-tls-renew.service, source: ".local/share/rosy/account-tls/releases/*", note: "certificates stay in their data folder", doc: deploy/site/README.md}
     rosy-account-tls-renew.timer: {run: timer, channel: snapshot, template: deploy/site/rosy-account-tls-renew.timer, doc: deploy/site/README.md}
-    rosy-cam-stream.service: {run: oneshot, channel: snapshot, template: deploy/site/rosy-cam-stream.service, source: ".local/share/rosy/cam-screen", doc: deploy/site/README.md}
-    rosy-cam-stream.timer: {run: timer, channel: snapshot, template: deploy/site/rosy-cam-stream.timer, doc: deploy/site/README.md}
+    rosy-cam-stream.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/cam-screen", doc: deploy/site/README.md}
+    rosy-cam-stream.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}
     rosy-omx-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.service, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-omx-camera-readiness.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-camera-pipeline/releases/*", doc: deploy/robot/omx/README.md}

@@ -22,7 +22,7 @@ def _run(args, cwd):
 def test_installed_submission_preserves_process_validation_and_execution_independence(tmp_path, delivery):
     sources = []
     for relative in ("contracts/skill", "operations/site_execution", "operations/processes/palletizing",
-                     "operations/apps/fleet"):
+                     "applications/fleet/gateway"):
         target = tmp_path / "source" / relative
         shutil.copytree(ROOT / relative, target,
                         ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "build", "dist"))

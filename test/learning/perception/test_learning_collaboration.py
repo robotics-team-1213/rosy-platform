@@ -37,7 +37,7 @@ def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
                 jar.load(value)
         assert len(jar) == 9
         for app, port in zip(apps, (9444, 9445, 9446)):
-            assert app.cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
+            assert app.read_cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
             seen = []
             app.accounts.authenticate = lambda value: seen.append(value) or {'capabilities': ['view']}
             handler = SimpleNamespace(headers={'Cookie': jar.output(header='', sep=';')})
