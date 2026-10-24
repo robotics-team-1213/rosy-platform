@@ -95,3 +95,12 @@ def test_snapshot_alone_does_not_prove_a_completed_neutral_action_after_restart(
     snapshot.update(state="ACTION_SUCCEEDED", object_held=False)
     recovered = PickPlaceTransaction.recover(snapshot)
     assert recovered.state is PickPlaceState.HOLD
+
+
+def test_stripping_both_neutral_tags_cannot_turn_the_snapshot_into_legacy_success():
+    snapshot = transaction().snapshot()
+    del snapshot["action_kind"]
+    del snapshot["arm_grant"]
+    snapshot.update(state="ACTION_SUCCEEDED", object_held=False)
+    with pytest.raises(ValueError):
+        PickPlaceTransaction.recover(snapshot)
