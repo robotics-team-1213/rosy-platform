@@ -10312,3 +10312,9 @@ osy-d395-s1d\`.
 - 변경: `remote_pytest.py`가 시작할 때 `sys.stdout`·`sys.stderr`의 인코딩 오류 정책을 `replace`로 둔다. Windows 콘솔·파이프의 cp1252로 한국어 운영자 문구가 섞인 UTF-8 시험 꼬리를 인쇄하다 `UnicodeEncodeError`로 끝난 회차 전체를 버리던 것을 막는다. 디스크 로그는 바이트 그대로 유지된다.
 - 증거: 자식 프로세스 재현 — 수정 전 `print('방향 어긋남')` cp1252 exit 1(UnicodeEncodeError), reconfigure 후 exit 0. 2026-10-24 D-856 착지 회차에서 같은 충돌로 FULL 티어 35분 결과가 폐기됐고 `PYTHONIOENCODING=utf-8`로 회피했었다.
 - gate 변화: 없음. 도구 출력 정책만 바꾸며 시험 판정·로그 보존 규칙은 그대로다. CE 해결 — 증상·원인·회피·근본 수정을 이 행과 코드 주석으로 남긴다.
+
+## 2026-10-24 · 7521075353 · 수신 전용 정책 접촉 진단
+
+- 변경: native study `pick-place-policy-contact`와 bounded 접촉 수집·종료 검증. [검증 기록](validation/omx-policy-contact-diagnostic-2026-10-24/result.md).
+- 증거: 원격 RED13FAIL 뒤 계약132통과/NEW0, AI4CPU·4GiB·5분의 로봇 없는 실제 SDK1PASS. 양 채널 접촉·유한 nonzero force와 수집 종료·프로세스 부재를 확인했다.
+- gate 변화: 정책 재실행·학습·실물0. 무수신은 unknown이다. CE 미해결 — 기존 정책 추종 실패의 원인은 별도 실제 관측이 필요하다.
