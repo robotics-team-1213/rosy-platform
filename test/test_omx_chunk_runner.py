@@ -66,7 +66,7 @@ def by_command(status, command):
 
 def test_a_chunk_plays_then_holds_and_reports_the_settled_state():
     robot = Robot()
-    status = runner(robot, ["run approach_pinky", "state", "stop"])
+    status = runner(robot, ["run approach_pinky", "state", "state", "state", "stop"])
     done = by_command(status, "run approach_pinky")[0]
     assert done["ok"] and done["settled"] and done["state"][0] == 18.0
     assert by_command(status, "state")[0]["state"][0] == 18.0  # held after the chunk, not dropped
