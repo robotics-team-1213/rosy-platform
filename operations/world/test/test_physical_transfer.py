@@ -56,6 +56,7 @@ def test_facts_are_deeply_frozen_and_do_not_follow_mutable_producer_maps():
 
 @pytest.mark.parametrize("position,orientation", [
     ((True, 0, 0), (0, 0, 0, 1)), ((float("nan"), 0, 0), (0, 0, 0, 1)),
+    ((10**400, 0, 0), (0, 0, 0, 1)),
     ((0, 0), (0, 0, 0, 1)), ((0, 0, 0), (0, 0, 0, 0)), ((0, 0, 0), (0, 0, 0, 2)),
 ])
 def test_invalid_pose_units_shape_or_quaternion_are_not_normalized_into_evidence(position, orientation):
@@ -86,7 +87,7 @@ def test_missing_links_and_unknown_hold_are_preserved_as_incomplete_facts():
     assert not state.links and state.held_state == "UNKNOWN"
 
 
-def test_duplicate_participant_and_replayed_or_untyped_header_are_rejected():
+def test_duplicate_participant_and_untyped_header_are_rejected():
     with pytest.raises(ValueError):
         observation(owners=(owner(), owner()))
     with pytest.raises(ValueError):

@@ -54,6 +54,7 @@ assert str(dependency.specifier) == '>=0.0.1'
 assert dependency.marker is None and not dependency.extras
 from rosy.world.api import ObservationSnapshot
 from rosy.world.state.projections import map_pose
+from rosy.world.state.projections import physical_transfer
 from rosy.world.state.projections.road_region import road_region_input_errors
 from core_common import observation
 assert ObservationSnapshot is observation.ObservationSnapshot
@@ -61,6 +62,9 @@ assert road_region_input_errors is observation.road_region_input_errors
 assert callable(road_region_input_errors)
 assert pathlib.Path(map_pose.__file__).is_relative_to(pathlib.Path(sys.argv[1]))
 assert map_pose.MapPoseTracker('robot').pose(1800000000.0).state == map_pose.UNKNOWN
+assert pathlib.Path(physical_transfer.__file__).is_relative_to(pathlib.Path(sys.argv[1]))
+assert physical_transfer.PhysicalPose((1, 2, 3), (0, 0, 0, 1)).position_m == (1., 2., 3.)
 assert not any(name == 'fleet' or name.startswith('fleet.') for name in sys.modules)
+assert not any(name == 'omx_adapter' or name.startswith('omx_adapter.') for name in sys.modules)
 """, str(installed)], check=True, capture_output=True, text=True, cwd=tmp_path)
     assert result.returncode == 0
