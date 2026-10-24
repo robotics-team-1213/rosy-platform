@@ -38,6 +38,7 @@ def test_site_serves_only_explicit_networks(sync):
     config = sync.configuration("site", ["a.example.invalid", "b.example.invalid", "c.example.invalid"], ["192.0.2.0/24"])
     assert "allow 192.0.2.0/24\n" in config
     assert "port 0" not in config and "local " not in config
+    assert "server a.example.invalid iburst minpoll 6 maxpoll 6" in config
 
 
 @pytest.mark.parametrize("role,sources,networks", [
@@ -148,3 +149,5 @@ def test_windows_uses_ntp_client_mode_and_preserves_domain_policy():
     assert "PartOfDomain" in source and "ShouldProcess" in source
     assert "/query" in source and "/resync" in source
     assert "start/networkon" in source and "stop/networkoff" in source
+    assert "-Name MinPollInterval -Value 6" in source
+    assert "-Name MaxPollInterval -Value 6" in source
