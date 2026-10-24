@@ -62,7 +62,7 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
     assert states(rows['object'])[:4] == ['done', 'active', 'blocked', 'not_available']
     assert rows['object']['stages'][1]['evidence'] == '객체 승인 2 · 대기 1 · 제외 0'
     assert rows['omx']['stages'][1]['evidence'] == '구간 검수 1/2' and states(rows['omx'])[2] == 'not_available'
-    assert rows['omx']['stages'][3]['evidence'] == '학습 과제 2개'  # the #151 task page is where OMX training starts
+    assert rows['omx']['stages'][3]['evidence'] == 'OMX 학습 과제 2개'  # the #151 task page is where OMX training starts
     assert rows['omx']['stages'][3]['next'] == {'label': '학습 과제', 'href': '/learning/tasks'}
     assert rows['sim']['stages'][0]['state'] == 'blocked' and '실험 2회 · 최근 FAILED' in rows['sim']['stages'][0]['evidence']
     assert rows['vlm']['stages'][1]['evidence'] == '확정 1 · 미확정 2 (임시 정답 1)'

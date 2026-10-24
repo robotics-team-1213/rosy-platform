@@ -6,8 +6,7 @@ from browser_harness import browser_tests_enabled, free_port
 
 import vlm_judge
 from review_app import make_server
-from test_review_app import open_store
-from test_vlm_judge import QUESTIONS, wrist
+from test_vlm_judge import QUESTIONS, open_store, wrist
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 

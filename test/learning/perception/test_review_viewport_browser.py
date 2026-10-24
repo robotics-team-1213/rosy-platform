@@ -53,7 +53,7 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     assert set(page.locator('.workspace-tabs a').evaluate_all('links => links.map(link => new URL(link.href).pathname)')) == {
         '/learning', '/catalog', '/', '/learning/tasks', '/learning/evaluate',
     }
-    assert page.locator('.workspace-tabs a[aria-current="page"]').count() == 1
+    assert page.locator('.workspace-tabs a[aria-current]').count() == 1
     for link in page.locator('.workspace-tabs a').all():
         bounds = link.bounding_box()
         assert bounds['height'] >= 44 and bounds['y'] + bounds['height'] <= rail['y'] + rail['height'], (route, bounds)

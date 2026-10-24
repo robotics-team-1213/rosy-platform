@@ -78,10 +78,10 @@ def objects(counts, preparation):
 
 def omx(items, reviewed, tasks=0):
     """items: linked results (learning_links); reviewed: linked ids with a saved segment review;
-    tasks: robot·task records of the task page (learning_tasks), where OMX policy training starts."""
+    tasks: OMX-adapter task records of the task page (learning_tasks), where OMX policy training starts."""
     sets = {item['id'] for item in items if item['kind'] == 'omx'}
-    train = (('active', f'학습 과제 {tasks}개', go('학습 과제', '/learning/tasks')) if tasks
-             else ('waiting', '등록한 학습 과제가 없습니다.', go('학습 과제 등록', '/learning/tasks')))
+    train = (('active', f'OMX 학습 과제 {tasks}개', go('학습 과제', '/learning/tasks')) if tasks
+             else ('waiting', '등록한 OMX 학습 과제가 없습니다.', go('학습 과제 등록', '/learning/tasks')))
     if not sets:
         return {'collect': ('active', '연결한 OMX 결과 폴더가 없습니다.', go('OMX 구간 검수', '/learning/omx')),
                 'label': ('waiting', 'OMX 결과를 연결하면 구간을 검수합니다.', None), 'train': train}
@@ -135,7 +135,8 @@ def stored(db):
     tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     reviewed = ([row[0] for row in db.execute('SELECT DISTINCT id FROM omx_segment_reviews')]
                 if 'omx_segment_reviews' in tables else [])
-    tasks = (db.execute("SELECT COUNT(*) FROM learning_task_records WHERE kind='task'").fetchone()[0]
+    tasks = (db.execute("SELECT COUNT(*) FROM learning_task_records WHERE kind='task' "
+                        "AND json_extract(body, '$.adapter')='omx'").fetchone()[0]
              if 'learning_task_records' in tables else 0)
     if 'vlm_items' not in tables:
         return reviewed, None, tasks

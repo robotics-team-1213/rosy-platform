@@ -71,7 +71,7 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 개발용 순수 좌표 기하 시험은 Node 24 이상에서 `node --test test/learning/perception/review_box_geometry.test.mjs`로 실행한다. Node는 앱 실행 의존성이 아니다.
 ### 다섯 단계 메뉴 (D-857)
 
-모든 화면의 왼쪽 레일(전화에서는 위 한 줄)은 학습 루프의 단계다: **홈** `/learning` · **자료** `/catalog` · **정답** `/` · **학습** `/learning/tasks` · **평가·승격** `/learning/evaluate`. 화면이 여럿인 단계는 레일 옆(전화에서는 그 아래 한 줄)에 공용 하위 메뉴(`ui-subnav`)를 보인다. 모든 기존 화면은 레일 한 번과 하위 메뉴 한 번 안에 닿고, 기존 URL은 그대로다. 자료 칸의 접근 이름은 기능 검색이 찾는 「자료 등록」이다. 도메인(차로·객체·OMX·SIM·VLM·판단 모델)은 메뉴가 아니라 `?domain=` 필터다(값 `lane`·`object`·`omx`·`sim`·`vlm`·`decision`). 여러 도메인을 나열하는 홈과 평가·승격만 이 값을 따른다.
+모든 화면의 왼쪽 레일(전화에서는 위 한 줄)은 학습 루프의 단계다: **홈** `/learning` · **자료** `/catalog` · **정답** `/` · **학습** `/learning/tasks` · **평가·승격** `/learning/evaluate`. 화면이 여럿인 단계는 레일 옆(전화에서는 그 아래 한 줄)에 공용 하위 메뉴(`ui-subnav`)를 보인다. 모든 기존 화면은 레일 한 번과 하위 메뉴 한 번 안에 닿고, 기존 URL은 그대로다. 자료 칸의 접근 이름은 기능 검색이 찾는 「자료 등록」이다. 레일 칸은 지금 화면 자체일 때만 `aria-current="page"`이고, 지금 화면을 품은 단계일 때는 `aria-current="true"`다. 전화에서 하위 메뉴 줄은 위아래 여백 없이 48px 누름 칸만 차지한다. 도메인(차로·객체·OMX·SIM·VLM·판단 모델)은 메뉴가 아니라 `?domain=` 필터다(값 `lane`·`object`·`omx`·`sim`·`vlm`·`decision`). 여러 도메인을 나열하는 홈과 평가·승격만 이 값을 따른다.
 
 | 단계 | 화면 |
 |---|---|
@@ -89,7 +89,7 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 |---|---|
 | `lane` | 기존 `project()` 단계를 여섯 칸에 맞춘다(자료→수집, 픽셀 검수→정답, 준비+데이터셋→데이터셋, 학습, 평가, 적용 검토→승격 기록) |
 | `object` | 객체 승인·대기·제외 수와 최신 준비본(`exports`). 학습·평가는 학습기가 없어 `not_available` |
-| `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수. 학습 칸은 학습 과제 화면의 과제 수(`learning_task_records`의 `task`) |
+| `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수. 학습 칸은 학습 과제 화면의 OMX 과제 수(`learning_task_records`의 `task` 중 `adapter`가 `omx`) |
 | `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태(홈은 1분에 한 번만 읽는다) |
 | `vlm` | VLM 표가 있을 때 사진·확정·제외·임시 정답 수. 확정이 1장 이상이면 평가 칸이 열린다 |
 | `decision` | 모두 `not_available`(「Learning에 연결 전」) |
@@ -551,13 +551,13 @@ python tools/vlm_question_bench.py --debate-input debate.jsonl --debate-as <가�
 python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --rows <dir>/rows.jsonl --questions <questions.json> --model <같은 모델 이름>
 ```
 
-`export-disputes`는 대기 중이고 평가셋 밖이며 멈추지 않은 질문 중 합의가 없는 (사진, 질문)마다 상태 안 사진 경로, 보기, question_set, 질문 id·문장·선택지와 모든 모델의 지금 의견(모델, 런타임, 답, p)을 한 줄로 쓴다. 벤치의 토론 모드는 같은 사진과 닫힌 질문에 다른 모델의 답과 확률을 「model A/B」로 익명화한 짧은 메모를 붙여 다시 묻고, 선택지 확률은 지금처럼 읽는다(transformers prefix/suffix 또는 Ollama top_logprobs). 이 모델이 전에 답한 질문만 묻는다. 결과 행은 `frame`·`view`·`long_side`와 `debate:{질문: {answer, p}}`를 가진다. 기본 한 판, `--debate-rounds 2`는 둘째 판에 자기 첫 판 답을 보이고, 다른 모델의 토론 답은 다시 내보낸 `debate.jsonl`에서 「after debate」로 보인다. 가져오기는 이를 같은 모델 이름의 런타임 `debate`로 저장하고 뒤 판이 앞 판을 바꾼다. 그 모델이 그 질문에 답한 적이 없으면 거절한다. 합의에서 토론 답은 그 모델의 다른 런타임 답을 대신하므로 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 그대로 따르고, 평가 탭은 토론으로 합의한 임시 정답 수를 따로 센다.
+`export-disputes`는 대기 중이고 평가셋 밖이며 멈추지 않은 질문 중 합의가 없는 (사진, 질문)마다 상태 안 사진 경로, 보기, question_set, 질문 id·문장·선택지와 모든 모델의 지금 의견(모델, 런타임, 답, p)을 한 줄로 쓴다. 벤치의 토론 모드는 같은 사진과 닫힌 질문에 다른 모델의 답과 확률을 「model A/B」로 익명화한 짧은 메모를 붙여 다시 묻고, 선택지 확률은 지금처럼 읽는다(transformers prefix/suffix 또는 Ollama top_logprobs). 이 모델이 전에 답한 질문만 묻는다. 결과 행은 `frame`·`view`·`long_side`와 `debate:{질문: {answer, p}}`를 가진다. 기본 한 판, `--debate-rounds 2`는 둘째 판에 자기 첫 판 답을 보이고, 다른 모델의 토론 답은 다시 내보낸 `debate.jsonl`에서 「after debate」로 보인다. 가져오기는 이를 같은 모델 이름의 런타임 `debate`로 저장하고 뒤 판이 앞 판을 바꾼다. 그 모델이 그 질문에 답한 적이 없으면 거절한다. 합의에서 토론 답은 그 모델의 다른 런타임 답을 대신하므로 모델 수가 늘지 않는다. 토론 답이 `none_in_top`(선택지 없음)이면 그 모델의 그 질문은 「답 없음」으로 바뀌어 합의를 막고, 앞 런타임의 답은 다시 세지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 그대로 따르고, 평가 탭은 토론으로 합의한 임시 정답 수를 따로 센다.
 
 **질문 세트 v3.** v2 토론이 하나도 정하지 못한 세 질문은 뜻이 모호했다. v3는 `front.lane_tape`를 화면 왼쪽·오른쪽 절반의 테이프 `front.tape_left`·`front.tape_right`로, `front.lane_obstruction`을 화면 아래쪽 절반의 두 테이프 사이 물체 `front.object_between_tapes`로, `top.robots_close`를 `top.robot_count`(zero·one·two·many)로 바꾼다. 천장 프레임에는 프레임마다 ArUco 세계 좌표 하나(`poses.jsonl`)만 있고 로봇별 화면 위치가 없어, 설계의 로봇별 잘라 묻기(`top.robot_adjacent`·`top.ahead_space`)는 로봇별 위치가 생긴 뒤로 미룬다. 질문 문장이 바뀌면 새 question_set이므로 v3 정답은 새 state(`state-v3`)에 둔다. 손목 질문은 같아 v2 손목 행을 그대로 가져온다.
 
-점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
+점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 질문과 모델을 고친 뒤 관리자가 서버에서 `python learning/curation/perception/vlm_judge.py unpause --state <VLM_STATE> --question <질문 id> --actor <이름>` 또는 `POST /api/learning/vlm/unpause {question}`(협업은 manage)으로 다시 켠다. 누가·언제 켰는지 `vlm_unpauses`에 남고, 그 질문의 점검 수는 그 뒤 점검부터 다시 센다(이전 `vlm_audits`는 이력으로 남는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 같은 비교를 고정 평가셋만으로도 따로 보인다(`eval_set`). 평가셋은 모델 답 없이 달았고, 점검은 임시 정답을 보고 달았기 때문이다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
 
-운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).
+운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 가져오기·정답 저장·다시 켜기는 `--empty-eval`이 만든 state(`metadata.workspace_kind=evaluation`)에서만 되고 다른 state에서는 거절한다. 읽기는 VLM 표가 없으면 빈 결과를 주고 표를 만들지 않는다. 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).
 
 ```bash
 python learning/curation/perception/review_app.py --state <VLM_STATE> --empty-eval --host <tailscale-ip> --port <port>   # 첫 시작
@@ -574,9 +574,10 @@ python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --ro
 | `GET /api/learning/vlm/items?view=&status=` | 사진 목록(질문·모델 답 없음) |
 | `GET /api/learning/vlm/items/<id>` | 질문과 현재 사람 정답, `version`, 대기열 `kind`. `kind=audit`일 때만 `provisional`(임시 정답)을 더한다 |
 | `GET /api/learning/vlm/images/<id>` | 매 요청 sha256 재확인 후 원본, ETag `no-cache`(D-469) |
-| `GET /api/learning/vlm/evaluation` | 확정 정답만의 비교와 `provisional`(범위), `audits`, `paused` |
-| `GET /api/learning/vlm/export` | JSONL과 그 sha256. `labelled`·`excluded` 사진(답 `tier` `confirmed`)과 멈추지 않은 임시 정답이 있는 대기 사진(`status`·`tier` `provisional`). 줄마다 `tiers:{질문: confirmed/provisional/null}` |
+| `GET /api/learning/vlm/evaluation` | 확정 정답만의 비교, 고정 평가셋만의 비교 `eval_set`, `provisional`(범위), `audits`, `paused` |
+| `GET /api/learning/vlm/export` | JSONL과 그 sha256. `labelled`·`excluded` 사진(답 `tier` `confirmed`)과, 고정 평가셋 밖에서 멈추지 않은 모든 질문이 합의된 대기 사진(`status`·`tier` `provisional`). 평가셋·의견 갈림 사진은 사람이 정할 때까지 빠진다(블라인드). 줄마다 `tiers:{질문: confirmed/provisional/null}`. 협업은 manage |
 | `POST /api/learning/vlm/items/<id>` | `{version, status, answers}`. `labelled`는 모든 질문 답 필요, `excluded`는 null 허용. 버전이 다르면 409. 점검 사진을 `labelled`로 저장하면 점검 기록이 남는다(서버가 판단) |
+| `POST /api/learning/vlm/unpause` | `{question}`. 멈춘 질문을 다시 켠다(협업 manage, actor 기록) |
 | `POST /api/learning/vlm/import` | `{rows_path, question_set, questions, model}`. 서버 파일 경로를 읽으므로 로컬 모드 전용(협업 403) |
 
-저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력), `vlm_audits`(점검), `vlm_eval_set`(고정 평가셋)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내, 점검 사진에서 `A`·`Enter` 맞음과 `E` 고침. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력), `vlm_audits`(점검), `vlm_eval_set`(고정 평가셋), `vlm_unpauses`(다시 켜기)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내, 점검 사진에서 `A`·`Enter` 맞음과 `E` 고침. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.

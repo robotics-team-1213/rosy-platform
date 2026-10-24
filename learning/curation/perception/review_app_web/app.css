@@ -428,3 +428,5 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .evaluate-source table{display:block;max-inline-size:100%;overflow-x:auto;border-collapse:collapse;margin-block-end:var(--space-2);font-size:var(--text-label)}
 .evaluate-source th,.evaluate-source td{text-align:start;padding:var(--space-1) var(--space-2);border-block-end:1px solid var(--border-subtle)}
 @media (width < 64rem){.domain-row{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "stages" "blocked" "next"}.domain-stages{grid-template-columns:repeat(3,minmax(0,1fr))}}
+/* D-857 §3: on phones the stage sub-menu row is only its 48px targets, so the review photo keeps its first view. */
+@container (width < 64rem){.ui-subnav-nav{padding-block:0}}

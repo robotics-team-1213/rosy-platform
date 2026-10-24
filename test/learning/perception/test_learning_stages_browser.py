@@ -34,7 +34,10 @@ def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, wid
                 subnav.get_by_role('link', name=sub, exact=True).click()
         assert urlsplit(page.url).path == target, page.url  # editors add their own frame/filter keys
         assert page.title().startswith('Rosy Learning — '), (target, page.title())
-        link = rail.locator('[aria-current="page"]')
+        link = rail.locator('[aria-current]')
+        # "page" only when the rail link is this very page; a stage that holds it is "true".
+        entries = ('/learning', '/catalog', '/', '/learning/tasks', '/learning/evaluate')
+        assert link.get_attribute('aria-current') == ('page' if target in entries else 'true'), target
         assert link.bounding_box()['height'] >= 44
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), target
     page.goto(base + '/learning', wait_until='networkidle')

@@ -122,9 +122,11 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
                          r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
         items = re.findall(r'<a class="ui-rail-item" data-action-icon="(\w+)" href="([^"]+)" aria-label="([^"]+)"'
-                           r'( aria-current="page")?>([^<]+)</a>', rail)
+                           r'(?: aria-current="(page|true)")?>([^<]+)</a>', rail)
         assert [(icon, href, full, short) for icon, href, full, _, short in items] == stages, name
-        assert [href for _, href, _, current, _ in items if current] == [stage], name
+        # "page" only on the link to this very page; a stage that merely holds it is "true".
+        assert [(href, current) for _, href, _, current, _ in items if current] == [
+            (stage, 'page' if here in (None, stage) else 'true')], name
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
         sub = re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
                         r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S)
@@ -135,7 +137,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
             assert [href for href, current in links if current] == [here], name
         assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
         assert html.count('<h1') == 1
-        rails.add(re.sub(r' aria-current="page"', '', rail))
+        rails.add(re.sub(r' aria-current="(?:page|true)"', '', rail))
     assert len(rails) == 1, 'the rail is the same in every document'
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'
