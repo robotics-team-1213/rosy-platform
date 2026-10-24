@@ -128,6 +128,33 @@ def compose(config: dict, card: dict, *, stamp: str) -> dict:
     return {**config, "dataset": dataset}
 
 
+STATIC_RANGE = 1.0  # largest per-joint action range (LeRobot units) that still counts as an untouched leader
+
+
+def static_episodes(root: Path, threshold: float = STATIC_RANGE) -> dict:
+    """Episodes whose leader action never moved beyond `threshold` on any joint. 2026-10-24: ten
+    recorded episodes had range 0.0 because nobody held the leader. Listed in static_episodes.json;
+    a dataset with no moving episode also gets DO_NOT_TRAIN.txt."""
+    import numpy as np
+    import pandas as pd
+
+    static, total = [], 0
+    for path in sorted(root.glob("data/**/*.parquet")):
+        frame = pd.read_parquet(path, columns=["episode_index", "action"])
+        for episode, rows in frame.groupby("episode_index"):
+            total += 1
+            action = np.stack(rows["action"].to_numpy())
+            if float((action.max(0) - action.min(0)).max()) <= threshold:
+                static.append(int(episode))
+    result = {"episodes": total, "static": static, "threshold": threshold}
+    if static:
+        (root / "static_episodes.json").write_text(json.dumps(result, indent=2))
+    if total and len(static) == total:
+        (root / "DO_NOT_TRAIN.txt").write_text(f"every episode is static (leader action range <= {threshold}); "
+                                               "the leader was not moved - do not train on this dataset\n")
+    return result
+
+
 class Session:
     def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
@@ -480,6 +507,11 @@ def main(argv=None):
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card,
                                  body_only=args.body_only)
+        if not args.teleop_only:
+            try:
+                record["static_episodes"] = static_episodes(Path(config["dataset"]["root"]))
+            except Exception as exc:  # the check must never hide a safe ending
+                record["static_episodes"] = f"error: {exc}"
     finally:
         try:
             from motor_health import finish_snapshot
