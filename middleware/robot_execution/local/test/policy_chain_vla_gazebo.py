@@ -4,6 +4,7 @@ Six joints and two cameras (front, plus a top camera added to the world variant)
 the base model is untrained. The probe proves the execution contract on the VLA path: both frames bound, a
 stale action refused, stop and in-motion lease withdrawal ending in HOLD, and reconnects refused.
 """
+from collections import deque
 from contextlib import ExitStack, contextmanager, closing
 import argparse
 import base64
@@ -332,6 +333,21 @@ def main():
         cfg = profile.arm_command_config(workcell_id='sim_policy_cell', instance_id='sim_policy_arm',
             calibration_revision='sim-cal-'+calibration[:12], allowed_owners=('learned_policy',))
         runtime = RosArmCommandRuntime(node, cfg, poll_period_s=.01, owner_clock='steady')
+        intake_trace = deque(maxlen=4000)  # Same joint intake trace as policy_chain_gazebo.py, to tell gaps apart.
+        intake = runtime._joint_state_intake
+        snapshot = intake.snapshot
+        def traced_snapshot(*args, **kwargs):
+            entry = dict(callback_s=time.monotonic(), previous_stamp_ns=intake._last_stamp_ns, **kwargs)
+            try:
+                value = snapshot(*args, **kwargs)
+                entry.update(sequence=value.sequence, adjusted_received_at=value.received_at)
+                return value
+            except Exception as error:
+                entry['rejected'] = str(error)[:200]
+                raise
+            finally:
+                intake_trace.append(entry)
+        intake.snapshot = traced_snapshot
         rig = Rig(node, runtime.monotonic, calibration)
         controllers = node.create_client(ListControllers, '/controller_manager/list_controllers')
         started = (node.get_clock().now().nanoseconds, time.monotonic())
@@ -364,6 +380,7 @@ def main():
                 real_time_factor=(node.get_clock().now().nanoseconds-started[0])/1e9/max(1e-9, time.monotonic()-started[1]),
                 primary_error=repr(errors[0]) if errors else None,
                 memory_peak=memory_peak.read_text().strip() if memory_peak.exists() else None), indent=2))
+            (out/'joint-intake.json').write_text(json.dumps(list(intake_trace), default=str))
             assert stopped and workers_stopped, 'own executor/workers did not drain'
             runtime.destroy()
             node.destroy_node()
