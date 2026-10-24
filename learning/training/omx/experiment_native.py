@@ -11,18 +11,22 @@ from native_cycle import native, validate_split
 
 
 def _profile(profile, source):
+    """Return the profile and the native joint layout it maps; two arms are exactly arm_a then arm_b."""
     profile = validate_profile(profile)
     arms = profile['arms']
-    if (len(arms) != 1 or profile['mode'] != 'independent'
-            or arms[0]['joint_names'] != native.JOINTS
-            or arms[0]['units'] != source.get('body_units')
-            or arms[0]['units'] != 'normalized_-100_100'
+    ids = [arm['id'] for arm in arms]
+    if (ids not in ([ids[0]], ['arm_a', 'arm_b']) or profile['mode'] != 'independent'
+            or any(arm['joint_names'] != native.JOINTS or arm['units'] != source.get('body_units')
+                   for arm in arms)
+            or source.get('body_units') != 'normalized_-100_100'
             or source.get('gripper_units') != 'normalized_0_100'):
-        raise ValueError('native conversion requires one exact ordered six-joint normalized arm')
+        raise ValueError('native conversion requires one arm, or arm_a then arm_b, '
+                         'each with the exact ordered six-joint normalized layout')
     for camera in profile['cameras']:
-        if camera['role'] == 'wrist' and camera['arm_id'] != arms[0]['id']:
+        if camera['role'] == 'wrist' and camera['arm_id'] not in ids:
             raise ValueError('native wrist camera requires its explicit arm binding')
-    return profile
+    layout = native.JOINTS[:] if len(arms) == 1 else [f'{arm}.{joint}' for arm in ids for joint in native.JOINTS]
+    return profile, layout
 
 
 def convert_native(splits: Path, output: Path, *, profile: dict) -> dict:
@@ -33,7 +37,7 @@ def convert_native(splits: Path, output: Path, *, profile: dict) -> dict:
         receipt_bytes = (splits / 'split-receipt.json').read_bytes()
         receipt = validate_split(splits)
         source = receipt['source']
-        profile = _profile(profile, source)
+        profile, layout = _profile(profile, source)
         cameras = {camera['input_key']: camera['shape'] for camera in profile['cameras']}
         originals = {episode['episode_index']: episode for episode in source['episodes']}
         document = {'schema': 'rosy.omx.experiment-dataset/1', 'profile': profile,
@@ -46,6 +50,8 @@ def convert_native(splits: Path, output: Path, *, profile: dict) -> dict:
                         if key.startswith('observation.images.')}
             if declared != cameras:
                 raise ValueError('profile camera keys/shapes differ from actual native reader')
+            if native.joint_layout(reader.meta.info) != layout:
+                raise ValueError('profile arms differ from the actual native joint layout')
             # inspect_frames also verifies contiguous frame/episode order and normalized RGB.
             rows = [reader[index] for index in range(len(reader))]
             inspected = native.inspect_frames(reader.meta.info, rows)

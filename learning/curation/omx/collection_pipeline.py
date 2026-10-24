@@ -128,6 +128,10 @@ def main():
     preparation.add_argument('--completed-only', action='store_true')
     preparation.add_argument('--camera-reference', action='append', default=[], metavar='ROLE=PATH',
                              help='D-792 camera setup reference JSON per camera role; adds shadow checks')
+    native_prep = commands.add_parser('prepare-native', help='sealed leader recording to a prepared intake (D-848)')
+    native_prep.add_argument('collections', nargs='+', type=Path)
+    native_prep.add_argument('--out', type=Path, required=True)
+    native_prep.add_argument('--repo-id', required=True)
     training = commands.add_parser('train')
     training.add_argument('prepared', type=Path)
     training.add_argument('--decisions', type=Path, required=True)
@@ -145,6 +149,11 @@ def main():
         if args.command == 'prepare':
             result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
                              camera_references=intake.camera_references(args.camera_reference))
+        elif args.command == 'prepare-native':
+            receipt = intake.prepare_native(args.collections, args.out, args.repo_id)
+            result = dict(prepared_root=str(args.out.resolve()), episodes=len(receipt['episodes']),
+                          reader_verified=receipt['reader_verified'], review_required=True,
+                          uploaded=False, device_execution=False)
         elif args.command == 'export-experiment':
             result = export_experiment(args.prepared, args.decisions, args.profile, args.out)
         else:
