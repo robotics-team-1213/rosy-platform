@@ -4362,3 +4362,10 @@
 - 변경: 직접 이웃 위임 HTTP·기명 현장 승인·동일 Task transaction 결속·고정 peer 자격과 앱 생애를 연결했다. stale·취소 요청·단절/재시작을 원래 identity로 조정하며 기존 dispatch와 native 결과 검사를 사용한다. 무로봇 독립 aggregate도 CLI에서 연다.
 - 증거: 집중 store/서비스/routes/HTTP/재시작47 PASS, 실제 앱/CLI132 PASS, 독립 aggregate/기존 CLI52 PASS, port/앱/CORE 종단16 PASS(서로 겹치는 별도 실행). [검증 기록](../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 최종 통합 검증·로컬 main 착지는 대기한다. 실물·FIELD 수용은 열지 않는다. CE 해당 없음: 판단을 코드·회귀·검증 기록에 보존했다.
+
+## 2026-10-24 · uncommitted · D-856 중립 운송 snapshot과 요청 대조
+
+- 변경: 기존 TRIP 원장에서 생성 principal 전용 GET 두 경로를 추가했다. 원본 요청 key·본문 digest·로봇·step/attempt와 수행 상태만 반환하고 Cell 공정 문서는 노출하지 않는다. 닫힌 profile에서도 읽되 쓰기·재시작 HOLD·claim·lease·안전 권한은 유지한다.
+- 계약: API v1.298과 schema·버전 핀을 함께 갱신했다. POST 응답 유실 뒤 404는 미접수 증명이 아니며 자동 재접수 근거로 사용하지 않는다.
+- 증거: RED commit 8cea2b26cb에서 새 시험 12개가 누락 route로 실패했다. commit 95664a6496의 공식 원격 관련 회귀는 77 passed, skip 0이다. 최초 회귀의 두 기존 호출자 시험은 새 읽기/기존 쓰기 경계를 구분하도록 보완했다. 공정 import 금지 subprocess에서도 읽기 동작을 확인했다. 최종 변경과 외부 앱 HTTP 검증은 후속 결과로 구분한다.
+- gate 변화: 실물·production dispatch 활성화 없음. 첫 TRIP 흐름이며 팔 동작 중립화·Harbor 도달 검증 계약은 남는다. CE 해당 없음: 기존 실행·조회 구조와 회귀 시험으로 판단을 복구할 수 있다.

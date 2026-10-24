@@ -860,7 +860,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_job_routes import install_trip_job_routes  # D-763 7: trip steps, SIM profile only
     install_trip_job_routes(app, store=cell_job_store, runner=trip_runner, console=console,
                             deployment_profile=deployment_profile, episodes=app.state.ai_episodes,
-                            require_named_operator=require_named_operator, operator_guard=operator_guard)
+                            require_named_operator=require_named_operator, operator_guard=operator_guard,
+                            require_viewer=require_viewer, read_guard=read_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
     cell_prepare = install_cell_app_routes(
         app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,
@@ -905,5 +906,3 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_charge_runtime(app, factory=charge_runtime_factory, runner=trip_runner, plans=site_maps,
         task_service=task_service, ingress=station_ingress, console=console)
     return app
-
-

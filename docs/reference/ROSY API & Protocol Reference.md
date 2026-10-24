@@ -119,6 +119,18 @@ Raster 원본과 정규화 PNG는 각각 16 MiB 이하, 축별 8192 px 이하·�
 | 404 | `SITE_MAP_DRAWING_NOT_FOUND` | 존재하지 않는 유효한 해시 |
 
 도면 생성/변환은 지도 저장이나 활성화를 하지 않는다. 잘못된 참조는 저장·활성화 전에 거절한다. 교체·템플릿 복사는 검토 완료와 교정 근거를 자동 계승하지 않는다. 기존 revision/CAS·named operator·trip/formation/teach busy 거절을 유지한다. 편집/저장/복사는 이동 명령을 보내지 않는다. 활성화와 실제 주행·현장 교정 수용은 별도다.
+**Status:** Approved
+**대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.298 Scoped transport execution snapshots (D-856)
+
+`GET /api/fleet/trip-jobs/{mission_id}` and `GET /api/fleet/trip-jobs?request_key=...` return `TripJobReadResponse`: `{job: TripJobSnapshot}`. Existing read guards and viewer authentication apply. Only the job's creating principal may read it through these routes. A missing identity, another principal's job, a Cell Job or a mixed-kind job is 404 `TRIP_JOB_NOT_FOUND`. Authentication/permission errors remain 401/403. Request-key lookup accepts the original candidate key (1–128 characters, trimmed, no control characters), URL-query encoded; invalid query input is 422. The internal `trip-pool:` prefix is not exposed.
+
+`TripJobSnapshot` contains `mission_id, request_key, request_digest, robot_id, status, current_step_index, steps, reason, updated_at`. A legacy single-robot job has `request_key: null`. Each ordered step contains `step_index, step: {to, via}, status, action_id, attempt_id, reason`. Unstarted action/attempt IDs are null; existing TRIP identity and ledger state are preserved. No recipe/cell/process documents, pallet/layer metadata, credentials, grants or other principal identity are returned. Schemas are exported from `core_common.protocol.schemas`.
+
+For candidate jobs, `request_digest` is the existing SHA-256 of canonical JSON `{candidates: ordered_candidate_ids, steps: normalized_steps}` (sorted keys, compact separators, UTF-8, `ensure_ascii=True`). A consumer reconciles key, digest, steps and selected robot membership. A 404 is a point-in-time absence and does not prove a delayed POST cannot commit: it must not trigger automatic resubmission, a fresh key, reassignment or occupancy release.
+
+Reads stay installed when the deployment profile closes, provided the persistent store is configured. They do not resume jobs or alter claims/leases/state. Existing startup HOLD remains; POST admission stays simulation-only and is a named operator's explicit approval/start, not an application proposal. `GOAL_CONFIRMED` here means the TRIP reached its destination, never cargo placement, arm retreat or business completion. Envelope 1.0 and existing POST responses are unchanged.
 
 ### v1.297 Control-unit delegation and scoped cancellation (D-855)
 
@@ -3755,6 +3767,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.302 | 2026-10-24 | (origin #148 v1.295, 2026-10-24 port) D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
 | v1.301 | 2026-10-24 | (origin #135 v1.293, 2026-10-24 port) Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
 | v1.300 | 2026-10-24 | (origin #133 v1.291, 2026-10-24 port) Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
+| v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |
