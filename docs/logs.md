@@ -10263,3 +10263,9 @@ osy-d395-s1d\`.
 - 변경: 설치 catalog의 기하와 물체 참조를 불변 map·별도 digest로 결속했다. requester가 기하를 바꾸거나 데이터 생성으로 실행 권한을 얻는 통로는 없다.
 - 증거: 누락 모듈 RED 14 failed 후 결속·사전검사·기존 pose/Cell acceptance 원격 112 passed, skip0, 0 NEW. 독립 계약 검토에서 material finding은 없었다.
 - gate 변화: 내부 데이터 경계만 검증했다. 중립 grant·실제 owner 소비·원장 migration·물리 자원 해제·Harbor 연결은 계속 진행한다. CE 해당 없음: 구현과 회귀가 판단 근거를 보존한다.
+
+## 2026-10-24 · 1258314f51 · D-856 비활성 중립 팔 grant 계약
+
+- 변경: v1.303에 물리 참조와 공통 권한 envelope만 받는 grant DTO를 등록했다. 기존 Action/stop DTO 14개는 AST를 그대로 옮겨 canonical export를 유지하고 facade 크기를 줄였다.
+- 증거: 공식 원격 1385 passed, skip0, 0 NEW. 독립 계약 검토와 size_range/safety_review 통과. 정확한 소스·시험·한계는 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md를 따른다.
+- gate 변화: 실제 runtime 종류·submit은 아직 거절한다. 원장 provenance·owner phase/recovery·물리 자원 종료와 Harbor 업무 변환을 다음으로 연결한다. CE 해당 없음: 계약과 시험이 판단 근거를 보존한다.

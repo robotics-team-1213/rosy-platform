@@ -426,3 +426,4 @@ plans:
 - 전체 목표는 진행 중이다. 중립 팔 grant/실행과 공통 원장/Cell provenance 경계, Harbor 공정 변환·업무 관측·복구/설치 독립성 증거가 남는다. 기존 Cell 호환과 실물 비활성 상태를 유지한다. 실행 상세는 docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md를 따른다.
 - step 시작의 typed grant 파싱·공통 identity·종류별 전체 payload 검증을 분리했다. Cell 원장/복구 184개와 dispatcher/transport 등 152개 별도 원격 회귀가 통과했으며 새 kind는 열지 않았다. 선행 공개 사전검사 FULL의 충전 조회 타임아웃은 단독 통과와 구별해 미해결로 기록했다. docs/plans/2026-10-24-step-grant-boundary-design.md와 위 validation을 따른다.
 - owner 설치 물체 참조→기하 결속을 불변 catalog/revision으로 검증한다. d0d7f4616d의 원격 112 passed/skip0/0 NEW와 독립 검토를 기록했다. 실행 소비자와 중립 grant는 후속이며 docs/plans/2026-10-24-neutral-arm-execution-design.md를 따른다.
+- 중립 팔 grant DTO를 v1.303에 등록했다. commit 1258314f51의 신규·기존 소비자 원격 1385 passed/skip0/0 NEW, 독립 검토와 크기·안전 trailer 검사를 통과했다. runtime 접수는 비활성이며 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md의 한계를 따른다.
