@@ -13,6 +13,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from omx_output_paths import in_source_checkout
+_in_checkout = in_source_checkout  # origin #151/#154 callers use this name
 from native_capture import bind_capture, check_capture_groups
 from native_environment import bind_environment, seal_environment, split_coverage, validate_environment
 
