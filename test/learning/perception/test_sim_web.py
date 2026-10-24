@@ -34,6 +34,48 @@ class Runs:
         return self.row
 
 
+@pytest.mark.parametrize('artifact_id,media_type,raw', [
+    ('contact-report', 'application/json', b'{"task_success":true}'),
+    *[(name, 'image/png', b'\x89PNG\r\n\x1a\n') for name in (
+        'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle')],
+])
+def test_contact_evidence_is_readable_through_learning_routes(tmp_path, artifact_id, media_type, raw):
+    import base64
+    import hashlib
+    with running(tmp_path) as (base, runs):
+        original = runs.call
+        def call(payload):
+            if payload['action'] == 'artifact':
+                assert payload == {'action': 'artifact', 'run_id': 'b' * 32, 'artifact_id': artifact_id}
+                return {'media_type': media_type, 'bytes': len(raw),
+                        'sha256': hashlib.sha256(raw).hexdigest(), 'data_base64': base64.b64encode(raw).decode()}
+            return original(payload)
+        runs.call = call
+        url = base + '/api/learning/sim/runs/' + 'b' * 32 + '/artifacts/' + artifact_id
+        req = urllib.request.Request(url, headers={'Cookie': 'rosy_learning_session=reader'})
+        with urllib.request.urlopen(req) as response:
+            assert response.headers.get_content_type() == media_type
+            assert response.read() == raw
+
+
+@pytest.mark.parametrize('corruption', ['hash', 'type', 'size'])
+def test_contact_evidence_rejects_changed_or_mistyped_bytes(tmp_path, corruption):
+    import base64
+    import hashlib
+    with running(tmp_path) as (base, runs):
+        raw = b'\x89PNG\r\n\x1a\n'
+        blob = {'media_type': 'image/png', 'bytes': len(raw),
+                'sha256': hashlib.sha256(raw).hexdigest(), 'data_base64': base64.b64encode(raw).decode()}
+        blob.update({'hash': {'sha256': '0' * 64}, 'type': {'media_type': 'text/html'},
+                     'size': {'bytes': 1048577}}[corruption])
+        runs.call = lambda payload: blob
+        url = base + '/api/learning/sim/runs/' + 'b' * 32 + '/artifacts/pinky_initial'
+        req = urllib.request.Request(url, headers={'Cookie': 'rosy_learning_session=reader'})
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(req)
+        assert caught.value.code == 400
+
+
 @contextmanager
 def running(tmp_path, *, authenticated=True):
     assert 'sim_runs' in inspect.signature(make_server).parameters, 'SIM injection is missing'
