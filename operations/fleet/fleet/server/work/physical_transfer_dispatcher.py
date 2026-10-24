@@ -1,0 +1,98 @@
+"""Single installed simulation profile: persisted first send, then SDK lookup only."""
+from threading import RLock
+
+from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTransferGrant
+from .local_action_transport import LocalActionUnavailable
+
+
+class PhysicalTransferDispatcher:
+    def __init__(self, execution, transport, task_store, *, deployment_profile):
+        if deployment_profile != "simulation":
+            raise ValueError("physical SDK dispatch requires the simulation profile")
+        if execution.store._journal.path.resolve() != task_store.path.resolve():
+            raise ValueError("physical SDK dispatch requires the shared Fleet journal")
+        if any(not callable(getattr(transport, name, None)) for name in (
+                "owner_identity", "transfer_capability", "submit", "get", "cancel")):
+            raise ValueError("physical SDK dispatch requires the complete owner SDK")
+        self.execution, self.transport, self.task_store = execution, transport, task_store
+        # Serialize this profile's RPCs so refresh cannot query an unsent intent.
+        self._io_lock = RLock()
+
+    def _capabilities(self):
+        store = self.execution.store
+        observed_at_ns = store._now_ns()
+        capabilities = []
+        for participant in store.installation.policy.participants:
+            identity = self.transport.owner_identity(participant.instance_id)
+            cap = ArmTransferCapability.model_validate(self.transport.transfer_capability(
+                participant.instance_id, workcell_id=participant.workcell_id))
+            if (identity.get("simulation") is not True
+                    or (identity.get("workcell_id"), identity.get("instance_id"), identity.get("journal_id"))
+                       != (participant.workcell_id, participant.instance_id, cap.journal_id)
+                    or (cap.workcell_id, cap.instance_id) != (participant.workcell_id, participant.instance_id)):
+                raise LocalActionUnavailable("physical owner simulation identity changed")
+            capabilities.append(cap)
+        store._check_capabilities(capabilities, observed_at_ns, store._now_ns())
+        return tuple(capabilities), observed_at_ns
+
+    def prepare(self, mission_id):
+        with self._io_lock:
+            try:
+                capabilities, observed_at_ns = self._capabilities()
+                return self.execution.prepare(mission_id, capabilities=capabilities,
+                    capabilities_observed_at_ns=observed_at_ns)
+            except Exception:
+                self.execution.hold(mission_id, reason="PHYSICAL_PREPARATION_UNAVAILABLE")
+                raise
+
+    def submit(self, mission_id, *, observations, authenticated_producer_id):
+        with self._io_lock:
+            current = self.execution.snapshot(mission_id)
+            if current["status"] != "PREPARED":
+                return current
+            try:
+                capabilities, observed_at_ns = self._capabilities()
+            except Exception:
+                return self.execution.hold(mission_id, reason="PHYSICAL_OWNER_UNAVAILABLE_BEFORE_SEND")
+            intent = self.execution.authorize_submission(mission_id,
+                expected_request_digest=current["grant"]["request_digest"], observations=observations,
+                authenticated_producer_id=authenticated_producer_id, capabilities=capabilities,
+                capabilities_observed_at_ns=observed_at_ns)
+            grant = FleetArmTransferGrant.model_validate(intent["grant"])
+            try:
+                control = self.task_store.dispatch_control()
+                if (not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
+                        or control["generation"] != grant.dispatch_generation):
+                    return self.execution.hold(mission_id, reason="PHYSICAL_FENCE_CHANGED_BEFORE_SEND")
+                return self.execution.record_receipt(mission_id, self.transport.submit(grant))
+            except Exception:
+                return self.execution.hold(mission_id, reason="PHYSICAL_SUBMIT_OUTCOME_UNKNOWN")
+
+    def refresh(self, mission_id):
+        with self._io_lock:
+            current = self.execution.snapshot(mission_id)
+            if not current["first_send_committed"] or current["status"] == "ACTION_SUCCEEDED":
+                return current
+            try:
+                self._capabilities()
+                response = self.transport.get(FleetArmTransferGrant.model_validate(current["grant"]))
+                if response is None:
+                    raise LocalActionUnavailable("physical action absence is not clearance proof")
+                return self.execution.record_receipt(mission_id, response)
+            except Exception:
+                return self.execution.hold(mission_id, reason="PHYSICAL_LOOKUP_OUTCOME_UNKNOWN")
+
+    def cancel(self, mission_id, *, reason):
+        with self._io_lock:
+            current = self.execution.snapshot(mission_id)
+            if current["status"] == "ACTION_SUCCEEDED":
+                return current
+            held = self.execution.hold(mission_id, reason="PHYSICAL_CANCEL_REQUESTED")
+            if not current["first_send_committed"]:
+                return held
+            try:
+                self._capabilities()
+                response = self.transport.cancel(FleetArmTransferGrant.model_validate(current["grant"]), reason=reason)
+                return self.execution.record_receipt(mission_id, response)
+            except Exception:
+                return held

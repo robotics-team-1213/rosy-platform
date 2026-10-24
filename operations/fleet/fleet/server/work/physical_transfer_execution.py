@@ -251,6 +251,8 @@ class PhysicalTransferExecution:
         if job is None or row is None:
             raise KeyError(mission_id)
         result = self._view(row, job)
+        result["first_send_committed"] = connection.execute("SELECT 1 FROM fleet_physical_transfer_observations "
+            "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone() is not None
         latest = self._last_receipt(connection, mission_id)
         boundary = None if latest is None else latest.get("action_succeeded_at_ns")
         result["action_succeeded_at_ns"] = boundary
@@ -261,6 +263,31 @@ class PhysicalTransferExecution:
     def snapshot(self, mission_id):
         with closing(self.store._journal._connect()) as connection:
             return self._state(connection, mission_id)
+
+    def hold(self, mission_id, *, reason):
+        store = self.store
+        with closing(store._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            job = store._read(connection, mission_id)
+            if job is None:
+                raise KeyError(mission_id)
+            row = connection.execute("SELECT * FROM fleet_physical_transfer_attempts WHERE mission_id=?", (mission_id,)).fetchone()
+            if job["status"] not in {"READY", "RUNNING"}:
+                return None if row is None else self._state(connection, mission_id)
+            in_flight = row is not None and row["status"] == "SUBMITTING"
+            connection.execute("UPDATE fleet_cell_jobs SET status='HOLD',reason=?,updated_at=? WHERE mission_id=?",
+                (reason, datetime.fromtimestamp(store._now_ns() / 1e9, timezone.utc).isoformat(), mission_id))
+            if row is not None:
+                connection.execute("UPDATE fleet_physical_transfer_attempts SET status=? WHERE mission_id=?",
+                                   ("UNKNOWN" if in_flight else "HOLD", mission_id))
+            connection.execute("UPDATE fleet_action_claims SET phase=?,lease_until=NULL WHERE owner_kind='mission' AND owner_id=?",
+                               ("UNKNOWN" if in_flight else "HELD", mission_id))
+            store._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_HELD", "fleet",
+                dict(reason=reason, action_id=None if row is None else row["action_id"],
+                     attempt_id=None if row is None else row["attempt_id"]))
+            result = None if row is None else self._state(connection, mission_id)
+            connection.commit()
+            return result
 
     def record_receipt(self, mission_id, response):
         store = self.store

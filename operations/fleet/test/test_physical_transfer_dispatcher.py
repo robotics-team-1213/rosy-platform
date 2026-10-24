@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from importlib import import_module
 import sqlite3
 from types import SimpleNamespace
+from threading import Event
 
 import pytest
 
@@ -199,3 +200,61 @@ def test_cancel_preserves_occupancy_and_only_targets_an_already_submitted_grant(
 def test_dispatcher_cannot_be_opened_in_a_production_profile(driver):
     with pytest.raises(ValueError, match="simulation"):
         api().PhysicalTransferDispatcher(driver.execution, driver.port, driver.tasks, deployment_profile="production")
+
+
+@pytest.mark.parametrize("after_control", [NOW + 340_000_000, NOW + 2_350_000_000])
+def test_delayed_control_read_cannot_send_with_regressed_or_stale_facts(driver, monkeypatch, after_control):
+    measured = ready(driver)
+    original = driver.tasks.dispatch_control
+    def delayed_control():
+        driver.clock[0] = after_control
+        return original()
+    monkeypatch.setattr(driver.tasks, "dispatch_control", delayed_control)
+    assert submit(driver, measured)["status"] == "UNKNOWN"
+    assert driver.port.submitted == []
+    assert {c["phase"] for c in claims(driver.path)} == {"UNKNOWN"}
+
+
+def test_a_second_dispatcher_hold_between_intent_and_send_prevents_submission(driver, monkeypatch):
+    measured = ready(driver)
+    another = api().PhysicalTransferDispatcher(execution(driver.store), driver.port, driver.tasks,
+                                               deployment_profile="simulation")
+    original = driver.execution.authorize_submission
+    def cancel_after_intent(*args, **kwargs):
+        result = original(*args, **kwargs)
+        another.cancel(driver.job["mission_id"], reason="operator cancel")
+        return result
+    monkeypatch.setattr(driver.execution, "authorize_submission", cancel_after_intent)
+    assert submit(driver, measured)["status"] == "UNKNOWN"
+    assert driver.port.submitted == []
+
+
+def test_overlapping_dispatchers_serialize_rpcs_for_the_same_journal(driver, monkeypatch):
+    measured = ready(driver)
+    another = api().PhysicalTransferDispatcher(execution(driver.store), driver.port, driver.tasks,
+                                               deployment_profile="simulation")
+    reached_intent, continue_send, cancel_started, cancel_done = Event(), Event(), Event(), Event()
+    original = driver.execution.authorize_submission
+    def pause_after_intent(*args, **kwargs):
+        result = original(*args, **kwargs)
+        reached_intent.set()
+        assert continue_send.wait(3)
+        return result
+    monkeypatch.setattr(driver.execution, "authorize_submission", pause_after_intent)
+    def cancel():
+        cancel_started.set()
+        result = another.cancel(driver.job["mission_id"], reason="operator cancel")
+        cancel_done.set()
+        return result
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        sent = pool.submit(submit, driver, measured)
+        assert reached_intent.wait(3)
+        canceled = pool.submit(cancel)
+        try:
+            assert cancel_started.wait(3)
+            assert not cancel_done.wait(.1)
+        finally:
+            continue_send.set()
+        sent.result()
+        canceled.result()
+    assert len(driver.port.submitted) == 1 and len(driver.port.cancels) == 1
