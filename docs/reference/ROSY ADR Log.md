@@ -1227,15 +1227,13 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).
 
 
-## D-859 — 현장 NTP 계층과 공통 UTC 시간 동기화
-
 ## D-861 — 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다
 
 **Status:** Accepted (2026-10-24)
 
 모든 Linux·Windows·로봇·모바일/MCU에 동일한 현장 NTP endpoint 하나를 적용한다. 개별 공용 pool·DHCP·복수 fallback을 금지하며 미적용 기기는 미완료로 보존한다. [D-861](../adr/D-861-one-identical-ntp-endpoint-for-all-devices.md).
 
-### D-859 상세
+## D-859 — 현장 NTP 계층과 공통 UTC 시간 동기화
 
 **Status:** Accepted (2026-10-24)
 

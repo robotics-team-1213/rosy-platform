@@ -3,7 +3,8 @@
 ## 공통 시간 동기화 (D-859)
 
 관제 PC가 현장 NTP 서버이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
-기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md)다.
+기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md),
+전체 기기의 동일한 단일 endpoint 결정은 [D-861](../../docs/adr/D-861-one-identical-ntp-endpoint-for-all-devices.md)다.
 실제 서버 이름·주소·CIDR은 호스트에만 둔다. 아래 자리표시자는 운영 값으로 바꾼다.
 표시 시간대(예: Asia/Seoul)는 UTC 동기화와 별개이며 바꿀 필요가 없다.
 
@@ -24,7 +25,7 @@
 
 3. **각 Linux PC·로봇:** 관제 서버가 먼저 동기된 뒤 같은 도구로 등록한다. 서버는 DHCP가
    바뀌어도 유지되는 승인된 DNS/mDNS 이름을 쓴다. 서로 다른 공용 pool로 우회하지 않는다.
-   필요하면 `--source`로 승인된 두 번째 현장 서버를 추가한다.
+   모든 기기에 같은 `--source` 하나를 사용한다. 두 번째 source와 개별 공용 fallback은 거부한다.
 
    ```bash
    sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role client --source <site-ntp-name>

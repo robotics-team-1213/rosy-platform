@@ -37,6 +37,8 @@ def configuration(role, sources, networks):
         raise ValueError("site needs at least three distinct upstream sources and an allowed CIDR")
     if role == "client" and networks:
         raise ValueError("clients cannot serve NTP")
+    if role == "client" and len(sources) != 1:
+        raise ValueError("all clients must use the same single site NTP endpoint (D-861)")
     allowed = []
     for network in networks:
         parsed = ipaddress.ip_network(network, strict=True)
