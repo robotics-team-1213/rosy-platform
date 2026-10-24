@@ -22,16 +22,16 @@ def fixture_sha256():
 
 
 def forward(q):
-    """Pinned OMX-F end_effector_link, base=world, roll joint5=0 (metres/radians)."""
+    """Pinned OMX-F end_effector_link in base=world, including measured roll."""
     yaw, a, b, c, roll = q
-    if abs(roll) > 1e-10:
-        raise ValueError('This fixed vertical grasp requires joint5=0')
     pitch = a+b+c
     radial = (.0415*math.cos(a)+.11315*math.sin(a)+.162*math.cos(a+b)
-              +.12063*math.cos(pitch))
-    z = .0975+.11315*math.cos(a)-.0415*math.sin(a)-.162*math.sin(a+b)-.12063*math.sin(pitch)
-    return [math.cos(yaw)*radial+.0016*math.sin(yaw)-.01125,
-            math.sin(yaw)*radial-.0016*math.cos(yaw), z]
+              +.12063*math.cos(pitch)-.0016*math.sin(roll)*math.sin(pitch))
+    side = -.0016*math.cos(roll)
+    z = (.0975+.11315*math.cos(a)-.0415*math.sin(a)-.162*math.sin(a+b)
+         -.12063*math.sin(pitch)-.0016*math.sin(roll)*math.cos(pitch))
+    return [math.cos(yaw)*radial-math.sin(yaw)*side-.01125,
+            math.sin(yaw)*radial+math.cos(yaw)*side, z]
 
 
 def solve(position):
