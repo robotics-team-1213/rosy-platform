@@ -20,6 +20,9 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
+  const newStatus = Object.assign(document.createElement("p"), {id: "work-new-status", role: "status",
+    textContent: "만들 수 있는 작업을 확인하고 있습니다."});
+  el("work-new").querySelector("ul").before(newStatus);
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
   const units = createControlUnitView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
@@ -27,6 +30,9 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   function showKinds(kinds = []) {
     el("work-new-move-item").hidden = !kinds.includes("trip");
     el("work-new-cell-item").hidden = !kinds.includes("CELL_TRANSFER");
+    newStatus.textContent = kinds.includes("trip") || kinds.includes("CELL_TRANSFER")
+      ? "작업 종류를 선택하세요. 실행 전 장치 상태와 권한을 다시 확인합니다."
+      : "현재 만들 수 있는 작업이 없습니다. 장치 연결과 작업 설정을 확인하세요.";
   }
   el("work-overview").hidden = !active;
   // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
@@ -45,6 +51,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
+    newStatus.textContent = message;
     list.replaceChildren(); clear();
     el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;
