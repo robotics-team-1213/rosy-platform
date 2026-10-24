@@ -1842,6 +1842,26 @@ python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.js
 python3 deploy/site/rosy_cam_screen.py light-status --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py light-request --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py light-cancel --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py stream-status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py stream-start --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py stream-stop --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py snapshot --out /tmp/rosy-cam.png --config /private/path/cam-screen.json
+```
+
+`stream-start`·`stream-stop`은 앱의 `카메라 켜기`·`카메라 끄기` 버튼만 누른다. 앱이 수신기
+목록 화면에서 열리면 저장된 페어링의 `연결 기록 · 촬영 화면`을 한 번 거친다(켜기만).
+이미 원하는 상태면 화면을 깨우지도 누르지도 않고 `unchanged`를 돌려준다. 누르기 직전
+serial·model·포커스·잠금·상태를 다시 읽고, 서비스 상태가 바뀐 것이 확인될 때만
+`started`/`stopped`다. 이 상태는 카메라 세션이며 Vision의 프레임 수신 증거가 아니다.
+`snapshot`은 폰 화면(미리보기·상태 문구)을 PNG로 받아 화각을 원격으로 확인할 때 쓴다.
+
+멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 스크립트와
+개인 설정은 `~/.local/share/rosy/cam-screen/`에 있어야 한다. 일부러 끄는 동안에는
+타이머를 먼저 멈춘다(`systemctl --user stop rosy-cam-stream.timer`).
+
+```bash
+install -m 0644 deploy/site/rosy-cam-stream.service deploy/site/rosy-cam-stream.timer ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now rosy-cam-stream.timer
 ```
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의

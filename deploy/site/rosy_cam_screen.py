@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Status or display wake for one explicitly identified, already paired Android camera."""
+"""Status, wake, light, stream start/stop or screen snapshot for one explicitly identified, already paired Android camera."""
 
 import argparse
 import ipaddress
@@ -17,6 +17,10 @@ PACKAGE = "io.github.livsbittt.rosy.cam"
 LIGHT_FIELDS = {"running", "light_supported", "light_requested", "torch_on", "dark",
                 "light_limited", "photo_saving", "photo_saved", "photo_failed"}
 LIGHT_BUTTONS = {True: "촬영 조명 요청", False: "조명 요청 취소"}
+STREAM_BUTTONS = {True: "카메라 켜기", False: "카메라 끄기"}
+STREAM_ROUTE = "연결 기록 · 촬영 화면"
+ACTIONS = {"status", "wake", "light-status", "light-request", "light-cancel",
+           "stream-status", "stream-start", "stream-stop", "snapshot"}
 
 
 class ScreenError(RuntimeError):
@@ -253,10 +257,10 @@ def bounds(node, size, visible=True):
     return left, top, right, bottom
 
 
-def light_button(root, desired, size):
-    nodes = [n for n in root.iter("node") if n.get("package") == PACKAGE and n.get("text") == LIGHT_BUTTONS[desired]]
+def labeled_button(root, text, size):
+    nodes = [n for n in root.iter("node") if n.get("package") == PACKAGE and n.get("text") == text]
     if len(nodes) > 1:
-        raise ScreenError("Duplicate light buttons; refused")
+        raise ScreenError("Duplicate buttons; refused")
     if not nodes:
         return None
     parents = {child: parent for parent in root.iter() for child in parent}
@@ -264,19 +268,23 @@ def light_button(root, desired, size):
     label = bounds(node, size)
     while node.get("clickable") != "true":
         if node.get("package") != PACKAGE or node.get("enabled") != "true":
-            raise ScreenError("Untrusted light button")
+            raise ScreenError("Untrusted button")
         node = parents.get(node)
         if node is None or node.tag != "node":
-            raise ScreenError("Light button is not actionable")
+            raise ScreenError("Button is not actionable")
     if node.get("package") != PACKAGE or node.get("enabled") != "true":
-        raise ScreenError("Untrusted light button")
+        raise ScreenError("Untrusted button")
     # Compose may expose a clipped clickable ancestor whose center is outside
     # the visible control. Tap only the visible exact-label rect, inside it.
     ancestor = bounds(node, size, visible=False)
     if not (ancestor[0] <= label[0] < label[2] <= ancestor[2] and
             ancestor[1] <= label[1] < label[3] <= ancestor[3]):
-        raise ScreenError("Light label outside its clickable ancestor")
+        raise ScreenError("Label outside its clickable ancestor")
     return label
+
+
+def light_button(root, desired, size):
+    return labeled_button(root, LIGHT_BUTTONS[desired], size)
 
 
 def check_request(state):
@@ -296,15 +304,7 @@ def light_action(config, target, action, runner):
         return {"status": "unchanged", **state}  # Never renew an existing request.
     if not state["running"]:
         raise ScreenError("Camera session is not running")
-    guard = keyguard(shell, runner)
-    if guard["showing"] and guard["secure"]:
-        raise ScreenError("Secure keyguard locked; local unlock required")
-    command([*shell, "input", "keyevent", "KEYCODE_WAKEUP"], runner)
-    if guard["showing"]:
-        command([*shell, "wm", "dismiss-keyguard"], runner)
-    wait_keyguard_dismissed(shell, runner)
-    command([*shell, "am", "start", "-W", "-n", PACKAGE + "/.MainActivity"], runner)
-    prepare_camera_focus(shell, runner)
+    open_camera_app(shell, runner)
     size = display_size(shell, runner)
     button = None
     for attempt in range(4):
@@ -338,8 +338,7 @@ def light_action(config, target, action, runner):
     # A fresh second UI dump must agree, avoiding stale coordinates after a scroll/layout change.
     if light_button(ui_tree(shell, runner), desired, size) != button:
         raise ScreenError("Camera UI changed; refused")
-    left, top, right, bottom = button
-    command([*shell, "input", "tap", str((left + right) // 2), str((top + bottom) // 2)], runner)
+    tap(shell, button, runner)
     for attempt in range(10):
         after = light_state(shell, runner)
         if after["running"] and after["light_requested"] == desired:
@@ -349,10 +348,92 @@ def light_action(config, target, action, runner):
     raise ScreenError("Observed light request was not confirmed")
 
 
-def execute(config, action, runner=subprocess.run):
+def stream_running(shell, runner):
+    raw = command([*shell, "dumpsys", "activity", "service", PACKAGE + "/.service.StreamService"], runner)
+    # A stopped camera has no StreamService record at all; anything else must parse.
+    if "rosy_cam_state=" not in raw and re.search(r"(?m)^No services match", raw):
+        return False
+    return light_state(shell, runner)["running"]
+
+
+def open_camera_app(shell, runner):
+    guard = keyguard(shell, runner)
+    if guard["showing"] and guard["secure"]:
+        raise ScreenError("Secure keyguard locked; local unlock required")
+    command([*shell, "input", "keyevent", "KEYCODE_WAKEUP"], runner)
+    if guard["showing"]:
+        command([*shell, "wm", "dismiss-keyguard"], runner)
+    wait_keyguard_dismissed(shell, runner)
+    command([*shell, "am", "start", "-W", "-n", PACKAGE + "/.MainActivity"], runner)
+    prepare_camera_focus(shell, runner)
+
+
+def tap(shell, rect, runner):
+    left, top, right, bottom = rect
+    command([*shell, "input", "tap", str((left + right) // 2), str((top + bottom) // 2)], runner)
+
+
+def stream_action(config, target, action, runner):
+    shell = [config["adb_path"], "-s", target, "shell"]
+    running = stream_running(shell, runner)
+    if action == "stream-status":
+        return {"status": "connected", "running": running}
+    desired = action == "stream-start"
+    if running == desired:
+        return {"status": "unchanged", "running": running}
+    open_camera_app(shell, runner)
+    size = display_size(shell, runner)
+    button = None
+    for attempt in range(3):
+        focused(shell, runner)
+        tree = ui_tree(shell, runner)
+        button = labeled_button(tree, STREAM_BUTTONS[desired], size)
+        if button is not None:
+            break
+        # The app opens on its receiver list; the saved pairing's stream screen is one tap away.
+        route = labeled_button(tree, STREAM_ROUTE, size) if desired else None
+        if route is None or attempt == 2:
+            raise ScreenError("Unique camera start/stop control unavailable")
+        tap(shell, route, runner)
+        time.sleep(0.5)
+    if identity(config, target, runner) != (config["expected_serial"], config["expected_model"]):
+        raise ScreenError("Device identity changed")
+    focused(shell, runner)
+    if keyguard(shell, runner)["showing"]:
+        raise ScreenError("Keyguard appeared; refused")
+    if stream_running(shell, runner) == desired:
+        return {"status": "unchanged", "running": desired}
+    if labeled_button(ui_tree(shell, runner), STREAM_BUTTONS[desired], size) != button:
+        raise ScreenError("Camera UI changed; refused")
+    tap(shell, button, runner)
+    # Camera open and the receiver handshake take a few seconds on the S21.
+    for attempt in range(30):
+        if stream_running(shell, runner) == desired:
+            return {"status": "started" if desired else "stopped", "running": desired}
+        if attempt < 29:
+            time.sleep(0.5)
+    raise ScreenError("Camera start/stop was not confirmed")
+
+
+def snapshot(config, target, out, runner):
+    shell = [config["adb_path"], "-s", target, "shell"]
+    open_camera_app(shell, runner)
+    focused(shell, runner)
+    remote = "/data/local/tmp/rosy-cam-shot-" + uuid.uuid4().hex + ".png"
+    try:
+        command([*shell, "screencap", "-p", remote], runner)
+        command([config["adb_path"], "-s", target, "pull", remote, str(out)], runner)
+    finally:
+        command([*shell, "rm", "-f", remote], runner, optional=True)
+    return {"status": "saved", "running": stream_running(shell, runner)}
+
+
+def execute(config, action, runner=subprocess.run, out=None):
     validate(config)
-    if action not in {"status", "wake", "light-status", "light-request", "light-cancel"}:
+    if action not in ACTIONS:
         raise ScreenError("Unsupported action")
+    if action == "snapshot" and out is None:
+        raise ScreenError("snapshot needs --out")
     target = verified(config, runner)
     if target is None:
         discovered = candidates(config, runner)
@@ -380,6 +461,10 @@ def execute(config, action, runner=subprocess.run):
         return {"status": "wake_sent", "model": config["expected_model"]}
     if action.startswith("light-"):
         return light_action(config, target, action, runner)
+    if action.startswith("stream-"):
+        return stream_action(config, target, action, runner)
+    if action == "snapshot":
+        return snapshot(config, target, out, runner)
     power = command([config["adb_path"], "-s", target, "shell", "dumpsys", "power"], runner)
     match = re.search(r"\bmWakefulness=(\w+)", power)
     return {"status": "connected", "model": config["expected_model"],
@@ -388,12 +473,13 @@ def execute(config, action, runner=subprocess.run):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["status", "wake", "light-status", "light-request", "light-cancel"])
+    parser.add_argument("action", choices=sorted(ACTIONS))
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--out", type=Path, help="snapshot: PNG path for the phone screen")
     args = parser.parse_args(argv)
     try:
         config = json.loads(args.config.read_text(encoding="utf-8"))
-        result = execute(config, args.action)
+        result = execute(config, args.action, out=args.out)
     except (ScreenError, OSError, ValueError):
         # Never print config, ADB output, endpoint, pairing code or exception details.
         print(json.dumps({"status": "refused", "message": "Check private config, pairing and unique device identity"}))
