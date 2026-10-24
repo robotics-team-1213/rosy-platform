@@ -5,9 +5,59 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.306
+**Version:** v1.307
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.307 Neutral ARM transfer job proposals and approval (D-856)
+
+Fleet adds simulation-only proposal/read/admit HTTP for an explicitly installed
+physical transfer profile. Default/unbound and non-simulation profiles return503;
+no ARM dispatcher, device submission, observer ingress or physical claim release
+is activated by these endpoints. READY means a durable approval and claims.
+It does not mean the robot ran, the object arrived or application work completed.
+
+Canonical closed/frozen DTOs live in core_common.protocol.arm_transfer_jobs and
+are re-exported by schemas. ArmTransferRequest contains exactly workcell_id,
+instance_id, object_ref, source and target; source and target differ. Scope IDs
+use ArmScopeId, physical references use ArmPhysicalRef. ArmTransferRequestKey
+is a trimmed control-free string of1..160 characters.
+
+| Method/path | Input | Access/result |
+|---|---|---|
+| POST /api/fleet/arm-transfers/jobs | ArmTransferJobCreate: five physical fields + request_key | existing proposer role;200 ArmTransferJobResponse |
+| GET /api/fleet/arm-transfers/jobs?request_key=... | caller-scoped key | existing viewer authentication; own record only |
+| GET /api/fleet/arm-transfers/jobs/{mission_id} | ArmActionId | creator or a different named site operator |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/admit | ArmTransferJobAdmit: expected_proposal_digest, expected_generation | named operator different from proposer;200 |
+
+ArmTransferJobResponse has exactly job: ArmTransferJobSnapshot. The snapshot has
+mission_id, action_kind=ARM_TRANSFER, proposal_principal_id, request_key,
+request_digest, proposal_digest, transfer: ArmTransferRequest,
+resource_policy_digest, status, authority_epoch, dispatch_generation,
+approved_by and reason. Status is PROPOSED/READY/RUNNING/ACTION_SUCCEEDED/
+GOAL_CONFIRMED/HOLD; only proposal, approval and HOLD are provided in this slice.
+GOAL_CONFIRMED is physical closure, never application completion. The nullable
+epoch/generation pair and approved_by are absent in a PROPOSED state (JSON null);
+READY and later active states require all three. HOLD can preserve prior approval.
+
+request_digest hashes compact sorted ASCII-escaped JSON of the five physical
+fields, independent of request_key. proposal_digest is an opaque digest of the
+request and installed robot/configuration snapshot. Reusing a caller's key with
+different physical input is409; the same input reads the existing snapshot even
+after installation changes. Unknown jobs/keys are404, unavailable profile/storage
+or capability reads are503. Scope/role/self-approval refusal is403; stale
+proposal/installation/owner identity/control or resource contention is409.
+Stable codes use ARM_TRANSFER_JOB_NOT_FOUND/UNAVAILABLE/FORBIDDEN/CONFLICT.
+Malformed/extra body/query values are422. Unbound503 must not be treated as404.
+
+Applications cannot supply resources, capabilities, owner bindings, policy bounds,
+producer identity, completion flags or grants. The server supplies its installed
+snapshot and reads fresh capability from every required owner through the existing
+Fleet-authenticated SDK before admission; network I/O is outside the SQLite write
+transaction. The store rechecks snapshot/CAS, capability freshness, control and
+claims atomically. Repeated READY approval also verifies current capability and
+preserves the original approval and boundary. Existing Origin/auth/audit guards
+apply. Reads do not submit; creating/admitting never invokes an Action writer.
 
 ### v1.306 Managed transfer capability and target-owner binding (D-856)
 
@@ -3795,6 +3845,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.307 | 2026-10-24 | D-856: closed simulation ARM job proposal/read/two-person admission HTTP, host-read current capabilities and scoped idempotency; dispatcher/observer/physical closure remain closed. |
 | v1.306 | 2026-10-24 | D-856: Fleet-authenticated live managed transfer capability, mandatory ARM target journal/session, canonical receipt matching and fenced 404 reconciliation; no physical producer or claim release. |
 | v1.305 | 2026-10-24 | D-856: explicitly installed neutral arm owner phase execution through IPC v2, mandatory shared control/gripper/fence and durable workflow completion; no Fleet producer or business/zone completion. |
 | v1.303 | 2026-10-24 | D-856: inactive physical arm transfer grant DTO and unchanged Action/stop DTO extraction; no runtime kind or submit activation, envelope 1.0 unchanged. |
