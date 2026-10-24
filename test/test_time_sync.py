@@ -66,6 +66,15 @@ def test_readiness_bounds_clock_error_and_freshness(sync):
     assert sync.assess(tracking(dispersion="0.06"), now=1010)["synchronized"] is False
 
 
+def test_wan_root_distance_can_discipline_clock_without_claiming_precision(sync):
+    # Observed site packets were valid but rejected at 100ms before the clock could converge.
+    config = sync.configuration("client", ["site.example.invalid"], [])
+    limit = float(next(line.split()[1] for line in config.splitlines() if line.startswith("maxdistance ")))
+    report = sync.assess(tracking(delay="0.242", dispersion="0.014"), now=1010)
+    assert report["error_bound_s"] < limit
+    assert report["synchronized"] is False
+
+
 @pytest.mark.parametrize("csv", [
     "", "200 OK", tracking(leap="Not synchronised"), tracking(stratum="0"),
     tracking(stamp="100"), tracking(stamp="2000"),
