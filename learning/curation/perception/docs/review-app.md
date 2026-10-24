@@ -320,6 +320,22 @@ python learning/curation/perception/review_app.py \
 
 위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 기존 자동화가 그 포트를 쓴다면 인증된 소비 경로를 마련하기 전까지 운영 협업 전환을 활성화하지 않는다.
 
+같은 PC의 `review_bridge.py`는 협업 모드에서 `authority.endpoint` 대신 `authority.state`를 쓴다. 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 열어 `/api/decisions`와 같은 문서(`review_evidence.decisions`)를 읽고, 표를 만들거나 쓰지 않는다. `endpoint`와 `state` 중 정확히 하나만 둔다. `state`는 링크 없는 절대 경로여야 하고, DB의 `workspace_id`가 설정값과 다르면 거절한다. 무인증 loopback 포트는 같은 PC의 모든 사용자에게 열리지만, state 읽기는 파일 권한으로 소유 사용자에게만 허용되므로 범위가 더 좁다.
+
+```json
+{
+  "source": "~/review-state/exports",
+  "peer": "local",
+  "transport": "local",
+  "remote_reviews": "~/rosy-ml/reviews",
+  "interval_s": 60,
+  "max_attempts": 3,
+  "authority": {"state": "~/review-state", "workspace_id": "<review-workspace-id>"}
+}
+```
+
+`~/...`는 자리표시다. 실제 설정에는 확장된 절대 경로를 쓴다.
+
 HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비되지 않았으면 `oauth: null`을 유지한다. Rosy Account 로그인 후 제한된 HF 읽기 토큰을 데이터 연결로 등록할 수 있다. HF OAuth와 PAT는 데이터 연결 수단이며 로그인 수단이 아니다. OAuth를 구성할 때 private 설정의 `oauth`를 다음 모양으로 바꾼다.
 
 ```json
