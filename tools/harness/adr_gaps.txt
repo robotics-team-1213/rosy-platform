@@ -88,17 +88,3 @@ D-848 reserved outside this branch; remove when its ADR lands
 D-849 reserved outside this branch; remove when its ADR lands
 D-852 reserved outside this branch; remove when its ADR lands
 D-856 reserved outside this branch; remove when its ADR lands
-D-772 reserved on branch docs/station-charge-lifecycle (refs/adr/D-772), not yet on main; remove when it lands
-
-D-774 reserved in another worktree (refs/adr/D-774), absent from origin/main; remove when its ADR lands
-
-D-775 reserved in another worktree (refs/adr/D-775), absent from origin/main; remove when its ADR lands
-
-D-776 reserved in another worktree (refs/adr/D-776), absent from origin/main; remove when its ADR lands
-
-D-778 reserved in another worktree (refs/adr/D-778), absent from origin/main; remove when its ADR lands
-D-779 reserved in another worktree (refs/adr/D-779), absent from origin/main; remove when its ADR lands
-D-780 reserved in another worktree (refs/adr/D-780), absent from origin/main; remove when its ADR lands
-D-781 reserved in another worktree (refs/adr/D-781), absent from origin/main; remove when its ADR lands
-D-782 reserved in another worktree (refs/adr/D-782), absent from origin/main; remove when its ADR lands
-D-783 reserved in another worktree (refs/adr/D-783), absent from origin/main; remove when its ADR lands
