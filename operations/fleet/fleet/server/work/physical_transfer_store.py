@@ -10,6 +10,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
+import sqlite3
 import time
 from typing import Annotated
 from uuid import uuid4
@@ -77,11 +78,34 @@ def _principal(principal, *, propose=False, operator=False):
     return principal.principal_id
 
 
+def _matches(request, installed):
+    policy = installed.policy
+    return ((request.workcell_id, request.instance_id) == policy.primary and request.object_ref == policy.object_ref
+            and request.source == installed.source and request.target == installed.target)
+
+
 class PhysicalTransferStore:
     def __init__(self, path, *, installation, deployment_profile, clock_ns=time.time_ns):
         if deployment_profile != "simulation" or not Path(path).is_file():
             raise ValueError("physical transfers require an existing simulation Fleet journal")
         self.installation = TransferInstallation.model_validate(installation)
+        expected = {
+            "fleet_tasks": ("task_id", {"task_id"}),
+            "fleet_missions": ("mission_id", {"mission_id"}),
+            "fleet_dispatch_control": ("control_id", {"control_id", "authority_epoch", "generation", "dispatch_enabled"}),
+            "fleet_action_claims": ("resource_key", {"resource_key", "owner_kind", "owner_id", "generation", "phase"}),
+        }
+        try:
+            with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as connection:
+                for table, (primary, required) in expected.items():
+                    columns = list(connection.execute(f'PRAGMA table_info("{table}")'))
+                    if (not required.issubset({c[1] for c in columns})
+                            or [c[1] for c in columns if c[5]] != [primary]):
+                        raise ValueError("an initialized Fleet journal and exclusive claim schema are required")
+                if connection.execute("SELECT 1 FROM fleet_dispatch_control WHERE control_id=1").fetchone() is None:
+                    raise ValueError("an initialized Fleet journal control row is required")
+        except sqlite3.Error as exc:
+            raise ValueError("an initialized Fleet journal is required") from exc
         self._clock_ns = clock_ns
         # Shared initializer owns the version guard and all schema changes atomically.
         self._journal = CellJobStore(path)
@@ -106,7 +130,17 @@ class PhysicalTransferStore:
             return None
         result = {key: row[key] for key in ("mission_id", "proposal_principal_id", "request_key", "request_digest",
             "status", "authority_epoch", "dispatch_generation", "reason", "approved_by", "approved_at_ns", "claims_acquired_at_ns")}
-        result.update(json.loads(row["job_json"]))
+        document = json.loads(row["job_json"])
+        if not isinstance(document, dict) or set(document) != {"request", "installation"}:
+            raise ValueError("physical snapshot has unsupported fields")
+        request = PhysicalTransferRequest.model_validate(document["request"])
+        installed = TransferInstallation.model_validate_json(_json(document["installation"]))
+        if (not _matches(request, installed) or (request.workcell_id, request.instance_id) != (row["workcell_id"], row["instance_id"])
+                or sha256(_json(request.model_dump(mode="json")).encode()).hexdigest() != row["request_digest"]
+                or _json(installed.policy.resources) != row["resources_json"]):
+            raise ValueError("physical snapshot does not match its journal binding")
+        result["request"] = request.model_dump(mode="json")
+        result["installation"] = installed.model_dump(mode="json")
         result["proposal_digest"] = sha256(row["job_json"].encode()).hexdigest()
         result["resources"] = json.loads(row["resources_json"])
         return result
@@ -141,8 +175,7 @@ class PhysicalTransferStore:
                     raise MissionConflict("physical request key was reused with a different request")
                 return self._read(connection, prior["mission_id"])
             installed, policy = self.installation, self.installation.policy
-            if ((request.workcell_id, request.instance_id) != policy.primary or request.object_ref != policy.object_ref
-                    or request.source != installed.source or request.target != installed.target):
+            if not _matches(request, installed):
                 raise MissionConflict("physical references are not in the installed transfer profile")
             mission_id = "physical-" + uuid4().hex
             timestamp = datetime.fromtimestamp(self._now_ns() / 1e9, timezone.utc).isoformat()
@@ -190,6 +223,8 @@ class PhysicalTransferStore:
             control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
             if control is None or not control["dispatch_enabled"] or control["generation"] != expected_generation:
                 raise MissionConflict("physical dispatch generation is closed or changed")
+            checked_at = self._now_ns()
+            self._check_capabilities(capabilities, capabilities_observed_at_ns, checked_at)
             if row["status"] == "READY" and result["approved_by"] == actor:
                 owned = connection.execute("SELECT resource_key,generation,phase FROM fleet_action_claims "
                     "WHERE owner_kind='mission' AND owner_id=?", (mission_id,)).fetchall()
@@ -200,11 +235,12 @@ class PhysicalTransferStore:
                     return result
             if row["status"] != "PROPOSED":
                 raise MissionConflict("physical operation was already admitted or held")
-            self._check_capabilities(capabilities, capabilities_observed_at_ns, self._now_ns())
             if not reserve(connection, owner_kind="mission", owner_id=mission_id, generation=expected_generation,
                            resources=self.installation.policy.resources, phase="CLAIMED"):
                 raise MissionConflict("physical resource claim conflicts with another operation")
             boundary = self._now_ns()  # Capture after reservation; preconditions must be observed later.
+            if boundary < checked_at:
+                raise MissionConflict("server clock moved backwards during physical reservation")
             self._check_capabilities(capabilities, capabilities_observed_at_ns, boundary)
             connection.execute("INSERT INTO fleet_physical_transfer_approvals VALUES(?,?,?,?,?,?,?)",
                 (mission_id, expected_proposal_digest, actor, boundary, boundary, control["authority_epoch"], expected_generation))
