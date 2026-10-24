@@ -57,3 +57,8 @@
 - 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
 - 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
 - 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
+- 2026-10-17 · uncommitted · fix: 수집 client 식별 연결과 계측 없는 최종 회귀
+- 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
+- 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
+- 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
+- 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
