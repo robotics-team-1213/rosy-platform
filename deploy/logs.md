@@ -3218,3 +3218,9 @@
 - 변경: Linux client source를 하나로 제한하고 D-861에 개별 fallback 금지를 결정했다. 관제의 기존 NTS를 유지한 채 승인된 LAN/VPN 클라이언트의 NTP 응답 ACL을 적용했다.
 - 증거: [후속 실행 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 복수 source 거부 red→green, 시간/harness 원격 exit 0, 독립 검토 주요 지적 없음. 모델·AI·Windows에서 동일 endpoint의 실제 UDP NTP 응답을 확인했다. 서버/관제 재시작과 clock step은 없었다.
 - gate 변화: 전체 시간 동기 수용은 HOLD다. 모델·AI sudo, Windows 관리자 실행, 오프라인 Pinky 두 대와 관제 UTC 오차 상한 검증이 남았다. 설치 파일을 준비했고 CE 미해결로 보존했다.
+
+## 2026-10-24 · 528962cb8d · 공통 NTP Windows 실제 적용과 workgroup 트리거
+
+- 변경: Windows 설치기가 registry 백업과 도메인/정책 가드 뒤 networkon/networkoff 시작·중지 트리거를 설정한다. Automatic 서비스가 멈춘 실제 관측과 Microsoft KB2385818을 근거로 했다.
+- 증거: [최신 운영 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 새 조건 red→green 원격 33개 통과·NEW 0, PowerShell 구문·독립 검토 통과. 관리자 실행 exit 0 뒤 서비스 Running, 동일 관제 Source·stratum 4·최근 동기 성공·Last Sync Error 0을 관측했다.
+- gate 변화: Windows의 공통 서버 실제 적용만 확인했다. 정밀 오차/재부팅 수용과 모델·AI sudo·오프라인 로봇은 남았다. main 착지는 타 작업 대기열에서 timeout으로 보류했고 push하지 않았다. CE 미해결 — 전체 기기 수용은 아직 HOLD다.

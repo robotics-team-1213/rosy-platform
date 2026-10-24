@@ -54,3 +54,15 @@ CE: 해당 없음 — CSV 출력 가정과 실제 형식의 차이는 최종 회
 모델·AI PC의 `~/rosy-test/maintenance/time-sync/`에 같은 endpoint가 들어 있는 `apply.sh`, 검증된 Python 도구와 설정 미리보기를 준비했다. 실제 값은 공개 저장소로 복사하지 않았다. 각 PC의 관리자 유지보수 창에서 `sudo bash ~/rosy-test/maintenance/time-sync/apply.sh`를 실행해야 한다. 실행 중 시험·학습이나 알려진 런타임을 감지하면 설치를 거부한다. Windows는 gitignored `private/network/apply-time-sync-windows.ps1 -Maintenance`를 관리자 PowerShell에서 실행한다. 현재는 WhatIf만 통과했다.
 
 남은 확인: 관리자 실행 → 단일 source 설정/실제 선택 서버 검사 → 오차·stale 검사 → 로봇 네트워크 복구와 같은 endpoint 적용 → 모바일/MCU별 OS/펌웨어 지원·망 연결 확인. 전체 완료는 이 확인 전까지 HOLD다. CE: 미해결 — 운영 권한·오프라인 기기·관제 UTC 오차 상한의 수용이 남았으며 해결 교훈으로 쓰지 않는다.
+
+### Windows 실제 적용 및 최신 상태
+
+관리자 실행을 실제 진행했다. 첫 실행은 exit 1이었으며 peer는 공통 서버로 설정됐지만 서비스가 Stopped였다. 최초 오류 출력은 수집하지 못해 정확한 실패 명령은 미확정이다. 읽기 전용 `sc.exe qtriggerinfo w32time`에서 DOMAIN JOINED 및 custom-state 시작 트리거를 확인했다. [Microsoft KB2385818](https://learn.microsoft.com/en-us/troubleshoot/windows-client/active-directory/w32time-not-start-on-workgroup)은 작업 그룹에서 Automatic만으로 서비스가 유지되지 않을 수 있음을 설명하고 networkon/networkoff 트리거를 제시한다.
+
+원본 registry 백업·도메인/정책 거부 뒤 `sc.exe triggerinfo W32Time start/networkon stop/networkoff`를 적용하도록 설치기를 고쳤다. 새 검사 조건은 `265febbb5f` 원격 시험에서 실패했고, 수정한 `528962cb8d`는 시간 동기 시험 33개 통과·NEW 0, PowerShell 구문 검사 및 독립 검토 주요 지적 없음이었다.
+
+두 번째 관리자 실행은 **exit 0**이었다. 실행 프로세스가 종료한 뒤 읽기 전용 관측에서 W32Time Running/Automatic, 새 network 트리거, `w32tm /query /status /verbose`의 동일 관제 Source 하나, leap 0, stratum 4, 최근 성공한 동기와 Last Sync Error 0을 확인했다. 초기 Phase Offset 약 -0.51초·Root Dispersion 약 8.28초가 보고돼 Windows의 정밀 오차 수용을 완료했다고 주장하지 않는다. 재부팅·망 단절 복구는 미시험이다. 실제 출력과 registry 백업 경로를 담은 transcript는 gitignored `private/network/windows-time-sync-install.log`에 둔다.
+
+따라서 위 현황 표의 Windows는 이제 **공통 서버 설정·서비스 실행·최근 동기 성공 확인**, 정밀 오차와 재부팅 수용은 미완료다. 모델·AI PC의 설치 파일은 `bash -n`과 배포된 Python SHA256 일치를 확인했으며 비밀번호 sudo 실행이 남았다. 로봇 두 대는 관제 PC에서도 SSH TCP 접속이 timeout이었다.
+
+main 착지는 `tools/land.py --tests auto --queue-timeout 3`으로 요청했지만 다른 작업 두 건이 앞서 있어 3분 후 STOP했다. 대기열을 우회하지 않았고 main 병합·push는 하지 않았다. 소스·결정·운영 증거는 `feat/shared-time-sync`에 보존한다. CE: 미해결 — 전체 기기의 관리자 적용·오프라인 장치·정밀 시간 수용이 남는다. Windows 관측과 트리거 선택 근거는 코드 주석·회귀 조건·이 기록에 남겨 별도 해결 교훈을 늘리지 않는다.
