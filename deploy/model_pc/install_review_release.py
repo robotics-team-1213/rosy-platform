@@ -153,9 +153,10 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     if ((state / 'omx-center.json').is_file()
             and '--omx-center-config' in ((source or current) / APP).read_text(encoding='utf-8')):
         control += f" --omx-center-config {state / 'omx-center.json'}"
-    if ((state / 'workspace-links.json').is_file()
+    links = state / 'workspace-links.json'
+    if ((links.exists() or links.is_symlink())
             and '--workspace-links' in ((source or current) / APP).read_text(encoding='utf-8')):
-        control += f" --workspace-links {check_workspace_links(state / 'workspace-links.json')}"
+        control += f" --workspace-links {check_workspace_links(links)}"
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"

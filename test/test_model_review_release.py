@@ -112,6 +112,11 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
     assert f'--omx-center-config {state}/omx-center.json' in unit.read_text()
     assert f'--workspace-links {state}/workspace-links.json' in unit.read_text()
+    before = unit.read_text()
+    (state/'workspace-links.json').write_text('{"schema": "other"}')
+    with pytest.raises(ValueError):
+        release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
+    assert unit.read_text() == before  # a bad file stops the install; the unit is not rewritten without it
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
