@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fleet.server.cancel_all_store import ensure_schema as ensure_cancel_all_schema
+from fleet.server.control_stop_schema import ensure_schema as ensure_control_stop_schema
 from fleet.server.dispatch_admission import release as release_dispatch_claims
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 from fleet.server.task_payloads import safe_json as _safe_json
@@ -136,6 +137,7 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
             self._migrate_dispatch_control(connection)
             self._migrate_dispatch_claims(connection)
             ensure_cancel_all_schema(connection)  # D-421 cancel-all record and attempt tags
+            ensure_control_stop_schema(connection)
         if os.name != "nt":
             self.path.chmod(0o600)
 

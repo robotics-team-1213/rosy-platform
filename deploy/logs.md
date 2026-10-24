@@ -3248,3 +3248,10 @@
 - 변경: D-863 network-only agent·AP HTTPS 복구·장치 결속 첫 부팅 인계, bridge/기능 릴리스 discovery와 signed boot catalog/inverse를 연결했다. 전역 claim과 radio lock, 실제 연결 관측, 비밀 없는 재접속 작업 조회를 사용한다.
 - 증거: [검증 기록](../docs/validation/device-network-recovery-2026-10-24/result.md). 경계 332, 업데이트/화면 680, 설치 격리 41, opt-in 브라우저 10 passed. 선택별 중복이 있어 합산하지 않는다. 원격 skip 60은 미검증이며 PowerShell inverse 실패 중단은 별도 mock 실행했다. 독립 검토의 deferred reconcile·fallback claim·부팅 복구 오류 전파를 회귀로 보완한다.
 - gate 변화: SOURCE 근거 추가. signed ARM64 산출물·Pinky 무선/TLS 등록·정전/재부팅·OTA DEVICE/FIELD 수용은 미실시이며 배포하지 않았다. CE: 기존 첫 부팅 Wi-Fi 교훈 갱신, 호스트 회귀와 실물을 구분했다.
+
+
+## 2026-10-25 · uncommitted · D-862 opt-in 관제 설정 mount
+
+- 변경: 별도 Compose overlay가 승인 private 관제 디렉터리를 Fleet에만 읽기 전용으로 mount하고 ROSY_CONTROL_UNIT_CONFIG를 전달한다. CLI의 명시 옵션이 환경 기본값보다 우선하며 기본 site 배치는 그대로다.
+- 증거: CA/hostname/encoding 실제 synthetic TLS 회귀는 root test에, Fleet의 fake transport/CLI 구성 회귀는 Fleet test에 분리했다. 원격 실행과 실제 배포 수용은 구분한다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.

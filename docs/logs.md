@@ -10379,3 +10379,9 @@ osy-d395-s1d\`.
 - 변경: [모델 왕복 기록](validation/omx-hf-model-roundtrip-2026-10-24/result.md)과 [교차 플랫폼 byte 결속 교훈](solutions/workflow-issues/cross-platform-manifest-pins-must-separate-payload-from-serialization-2026-10-24.md)을 추가했다.
 - 증거: private Hub 고정 commit의6파일 SHA, fresh-process ACTInference 숫자 출력1회, 원래 fixture/정규화/출력 일치, 원격·회수 EXIT0·잠금 해제. 두 pre-write 중단과 미제출 요청도 보존했다.
 - gate 변화: 실제 모델 전달·숫자 재적재 수용. 정책 task 성공·실물/양팔/주행·서비스 배포는 별도다. CE 새 교훈 기록; 추가 학습·로봇 명령 없음.
+
+## 2026-10-25 · uncommitted · D-862 실제 통합관제 구현과 수용 경계 연결
+
+- 변경: 전용 service의 namespace 경계와 실제 직접 장치 소유 검사·worker 종료/재시운전 제약을 D-862/API에 명시했다. 기존 D-855 navigation 위임과 새 정보/정지 경로의 책임을 구분한다.
+- 증거: P1 contract7a3d0dc892는 FULL27 호출 뒤 로컬 main 착지했다. G1 timing은 suite/재실행 실패와 공식 격리 통과의 LOAD-FLAKY를 구분한다. 새 runtime source는 RED 후 구현 중이며 GREEN·최종 착지는 후속 검증이다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.

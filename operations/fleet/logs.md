@@ -4401,3 +4401,10 @@
 - 증거: 이동 전후39개 함수/메서드/예외 AST가 모두 같고 트랜잭션·SQL·메서드 서명이 변하지 않음을 확인했다. 기존 caller/import/monkeypatch를 검색했고 query-position 상수의 기존 import를 유지했다. 동작 회귀·구조 검사는 커밋된 source로 공식 원격 실행한다.
 - gate 변화: 없음. 새 정지 요청·rearm guard·장치 동작을 추가하지 않은 선행 책임 분리다.
 - CE: 해당 없음 — 동작 보존의 근거를 AST·기존 회귀·writer 소유 검사로 직접 남긴다.
+
+
+## 2026-10-25 · uncommitted · D-862 통합 정보 수집과 조건부 하위 정지 결속
+
+- 변경: SharedGather·직접 소유 SQL·최소 지도 projection과 직계 자식 collector/routes를 연결했다. 전용 자격의 일반 API 우회를 막고 CA·방향별 자격·deadline·byte cap을 적용했다. 정지 journal/latch/rearm guard·owned 작업과 기존 Console/OMX callback을 결속했다.
+- 증거: source0fe4d9825e의 공식 원격 RED: 자격 범위8 FAIL, 미구현 정보/정지/collector3 import ERROR. 기존 pure split은 a400의 AST39 일치·집중255 PASS·독립 검토 근거를 유지한다. 현재 구현 source의 원격 GREEN과 실제 helper/safety 검토는 다음 단계다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.

@@ -24,3 +24,10 @@
 - 변경: Registered development scripts with the existing size guard, added scoped module instructions and functional test ownership. Sample credentials use the explicit CHANGE_ME placeholder; account passwords have one state source. HTTP evidence stores test file/function separately, and public commit/compiler/journal digests have exact reviewed provenance bindings. The scanner itself is unchanged. Cell browser replay waits for reviewer navigation before reading the job.
 - 증거: The first merged FULL snapshot b774a8b127 passed Fleet 6056 cases (323 skipped) and CORE/domain/shared contracts 7253 cases (64 skipped, 5 subtests). Root guards exposed the registration/provenance omissions, and the Cell browser exposed the navigation race. Corrections: 294 focused cases passed at 826bf356e2 with two remaining failures, then both were resolved; final repository secret/provenance checks plus real Cell form/reviewer/overview passed 98 cases at a7ef52c3aa with zero skips. Independent review confirmed all nine digest bindings are public lineage, not credential exceptions.
 - gate 변화: Frontend LOCAL remains GO for scoped evidence. Standard FULL must run again on the corrected commit before landing. Timing load sensitivity, skipped checks and physical deployment/device/field acceptance remain separate.
+
+
+## 2026-10-25 · uncommitted · D-862 독립·중첩 통합관제 합성 예제
+
+- 변경: 기존 sample router에 R/A/A1/B overview/detail/map과 불변 정지 요청·GET 이력·명시 재시운전 확인을 연결했다. R만 기존 로봇·작업·지도를 소유하고 자식의 직접 자원은 빈 합성 예다. 기존 위임 로직을 유지한다.
+- 증거: 기존 sample-unit fixture를 R로 함께 정렬했다. 실제 sample flow/browser 회귀는 구현 커밋의 원격 시험으로 확인한다. 이 예제는 네트워크·장치 수용 증거가 아니다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.

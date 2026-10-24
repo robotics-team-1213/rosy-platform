@@ -465,3 +465,10 @@
 - 변경: main의 TRIP_JOB_NOT_FOUND 문구를 새 trip-display 소유로 통합했다. 지도 fitView 선언 정리를 유지하고 지도 ratchet을606으로 낮췄다. 문구 반환 Node 단언을 추가한다.
 - 증거: [통합 기록](../../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 고정 커밋의 오류 어휘·Node·소유·8화면 집중 검증과 공식 착지 결과는 후속 보고로 구분한다.
 - gate 변화: 없음. 동료 실행 계약·권한·문구는 유지한다. CE 해당 없음: 기존 소유 설계와 회귀에 판단을 남겼다.
+
+
+## 2026-10-25 · uncommitted · D-862 관제별 정보·지도·정지 요청 화면
+
+- 변경: 기존 delegation 화면에 통합 tree/detail/evidence/task와 소유 단위별 읽기 전용 지도를 연결했다. 하위 정지와 단위별 UNVERIFIED 결과·조회 이력·명시 로컬 재시운전 확인을 표시하며 auth/lifecycle reset을 유지한다.
+- 증거: 준비 patch의 JS/JSON/Python 구문과 독립 범위 검토를 확인했다. 실제 browser·Node와 backend HTTP의 새 source 증거는 원격 GREEN 후 기록한다. feature matrix의 verified 등록도 실제 HTTP 통과 후 수행한다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.

@@ -16,7 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FLEET = ROOT / "operations/fleet/fleet"
-LEDGER_TABLES = ("fleet_tasks", "fleet_task_history", "fleet_robot_reservations", "fleet_action_claims")
+LEDGER_TABLES = ("fleet_tasks", "fleet_task_history", "fleet_robot_reservations", "fleet_action_claims",
+                 "fleet_control_stops", "fleet_control_stop_deliveries")
 _WRITE = re.compile(r"\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM)\s+("
                     + "|".join(LEDGER_TABLES) + r")\b", re.IGNORECASE)
 
@@ -25,6 +26,7 @@ KNOWN_WRITERS = {
     "server/ledger/task_store.py": {"fleet_tasks", "fleet_task_history", "fleet_robot_reservations"},
     "server/ledger/task_dispatch_control.py": {"fleet_tasks", "fleet_robot_reservations", "fleet_action_claims"},
     "server/ledger/task_dispatch_queue.py": {"fleet_tasks", "fleet_robot_reservations", "fleet_action_claims"},
+    "server/ledger/control_stop_store.py": {"fleet_control_stops", "fleet_control_stop_deliveries"},
     "server/ledger/task_results.py": {"fleet_tasks", "fleet_robot_reservations"},
     "server/ledger/action_claims.py": {"fleet_action_claims"},
     "server/dispatch_admission.py": {"fleet_action_claims"},
@@ -54,9 +56,13 @@ def _writers() -> dict[str, set[str]]:
 
 
 def test_ledger_tables_are_created_by_the_task_store():
-    source = (FLEET / "server/ledger/task_store.py").read_text(encoding="utf-8")
+    task_source = (FLEET / "server/ledger/task_store.py").read_text(encoding="utf-8")
+    creators = {"fleet_control_stops": "server/ledger/control_stop_schema.py",
+                "fleet_control_stop_deliveries": "server/ledger/control_stop_schema.py"}
     for table in LEDGER_TABLES:
+        source = (FLEET / creators[table]).read_text(encoding="utf-8") if table in creators else task_source
         assert f"CREATE TABLE IF NOT EXISTS {table} (" in source
+    assert "ensure_control_stop_schema(connection)" in task_source
 
 
 def test_only_the_listed_modules_write_the_ledger_tables():

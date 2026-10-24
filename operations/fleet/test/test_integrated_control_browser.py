@@ -179,11 +179,13 @@ def test_unknown_stop_reply_is_read_only_on_manual_check_and_storage_free_reload
 
 
 @pytest.mark.parametrize("role", ["operator", "viewer"])
-def test_local_history_reconciliation_requires_named_operator_and_both_typed_attestations(site, role):
+@pytest.mark.parametrize("state", ["UNKNOWN", "PARTIAL"])
+def test_local_history_reconciliation_requires_named_operator_and_both_typed_attestations(site, role, state):
     from playwright.sync_api import expect, sync_playwright
     api, posts = integrated_api(role), []
     body = {"stop_id": "existing-stop", "target_unit": "R"}
     result = stop_snapshot(body, local=True)
+    result["results"][0]["state"] = state
     api[PREFIX + "/stops/R/existing-stop"] = result
     api[PREFIX + "/stops"]["stops"] = [{"origin_id": "R", "stop_id": "existing-stop", "target_unit": "R",
         "config_revision": "v1", "revision": 1, "incomplete": True,
