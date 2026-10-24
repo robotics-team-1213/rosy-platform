@@ -29,6 +29,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `platform-folder-responsibilities.md` | Current semantic tree (D-625, D-626, D-627, D-628, D-630, D-637). Ownership stays in `tools/harness/platform_parts.yaml` |
 | `core-drive-responsibilities.md` | CORE, Drive, and Arm responsibility map (D-625 through D-630) |
 | `fleet-rulebook.md` | Fleet rule pipeline index (D-674, D-678). `FL-*` and `FR-*` are search ids, not API fields |
+| `application-contract-support.md` | 외부 업무 앱이 소비하는 Fleet HTTP 경로·권한·상태 의미와 정본·복구 책임 (D-836 W0) |
 | `site-lan-discovery-profile.md` | mDNS/DNS-SD discovery contract. Tests and `deploy/site` read this path (D-341, D-361, D-370, D-382) |
 | `team-discord-incidents.md` | Operator procedure for the team Discord incident channel. Webhook URL, channel id, and receipts stay out of the public repo |
 | `ROSY_Platform_Architecture_Design_v0.2.md` | Architecture design v0.2. Accepted ADRs, including D-413, name this path |
