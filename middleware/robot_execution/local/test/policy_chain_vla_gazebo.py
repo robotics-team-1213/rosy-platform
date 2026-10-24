@@ -18,6 +18,7 @@ import subprocess
 import threading
 import time
 from types import SimpleNamespace
+import uvicorn
 from uuid import uuid4
 import xml.etree.ElementTree as ET
 
@@ -179,6 +180,13 @@ def scenario(case, out, runtime, rig, controllers, calibration):
             policy_revision=revision, rig_revision=RIG, calibration_revision=cfg.calibration_revision))
         scope = LeaseScope(identity, 'sim-episode', revision, runtime.owner.session_id, fleet.window['window_id'], RIG,
                            cfg.calibration_revision, fleet.scope)
+        # Same preparation as policy_chain_gazebo.py: import and build CORE/uvicorn and touch Fleet before the
+        # short lease starts, so first-use cost is not charged to the lease (2026-10-25 P0 run expired it).
+        began = runtime.monotonic()
+        closed_app = create_app({}, SimpleNamespace(arm_policy=None, safety=SimpleNamespace(estop=False, estop_listeners=[])))
+        uvicorn.Config(closed_app, log_level='warning', lifespan='off').load()
+        fleet.admin('GET', '/api/fleet/workcells/'+cfg.workcell_id+'/policy')
+        (out/'preparation-timing.json').write_text(json.dumps(dict(prepared_s=runtime.monotonic()-began)))
         consumer = FleetLeaseConsumer(scope, request=fleet.device, monotonic=runtime.monotonic)
         journal = PolicyExecutionJournal(out/'execution.sqlite3')
         chain = stack.enter_context(SimPolicyChain(policy=policy, runtime=runtime, fence=fence, consumer=consumer,
