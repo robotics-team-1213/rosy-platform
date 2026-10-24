@@ -76,3 +76,5 @@ receipt 저장과 해당 generation의 claim 해제는 같은 원장 transaction
 canonical export 공간은 기존 device-action/stop DTO의 정의를 별도 `device_actions.py`로 그대로 이동하고 `schemas.py`에 동일 클래스 re-export를 둬 확보한다. AST·JSON schema·기존 digest/stop/receipt 소비자 회귀로 의미 보존을 확인한다. 기존 grant와 stop 필드·validator·기본값은 바꾸지 않는다. 새 API 참조 버전은 모델 등록과 함께 예약하며 공개 submit route가 생겼다고 기록하지 않는다.
 
 이 등록은 commit `1258314f51`, API v1.303으로 구현했다. 신규·기존 소비자 공식 원격 **1385 passed, skip0, 0 NEW**와 독립 검토를 확인했다. DTO 14개의 AST 동일성과 canonical identity/JSON schema 생성은 확인했으며 전체 JSON schema 문서 전후 비교는 별도다. [정확한 범위와 한계](../validation/harbor-neutral-arm-grant-2026-10-24/result.md)를 따른다. 실제 소비자·원장·자원 종료·Harbor 연결은 계속 진행한다.
+
+다음 원장 변경은 [provenance migration 설계](2026-10-24-neutral-arm-ledger-design.md)를 따른다. Cell/기존 TRIP 데이터 보존과 물리 형식의 구분, parent FK·mirror·projection·startup 소비자 검증을 함께 수행한 뒤 실제 creator를 연결한다.
