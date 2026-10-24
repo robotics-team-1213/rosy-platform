@@ -4394,3 +4394,10 @@
 - 증거: 새 통합관제 wire RED134건 확인 후 모델·API reference를 함께 구현한다. 기존 동작 회귀와 실제 collector/stop/runtime 경로의 증거는 다음 단계에서 별도로 남긴다.
 - gate 변화: 없음. 이번 변경은 공유 계약의 버전 pin이며 새 runtime·배포·장치 활성화가 아니다.
 - CE: 해당 없음 — 공식 버전 도구와 계약 회귀로 직접 설명되는 정렬이다.
+
+## 2026-10-24 · uncommitted · TaskStore의 dispatch 통제·queue 책임 분리
+
+- 변경: 기존 dispatch 통제/자원 claim/정지 세대11개 메서드와 queue/lease/traffic wait5개 메서드를 같은 FleetTaskStore의 sibling mixin으로 옮겼다. 예외·시계 helper는 작은 leaf에 두고 canonical imports를 유지했다. TaskStore955→505줄로 줄여 초과 ratchet 행을 제거하고 실제 SQL 작성 위치에 맞춰 기존 writer 검사를 정렬했다.
+- 증거: 이동 전후39개 함수/메서드/예외 AST가 모두 같고 트랜잭션·SQL·메서드 서명이 변하지 않음을 확인했다. 기존 caller/import/monkeypatch를 검색했고 query-position 상수의 기존 import를 유지했다. 동작 회귀·구조 검사는 커밋된 source로 공식 원격 실행한다.
+- gate 변화: 없음. 새 정지 요청·rearm guard·장치 동작을 추가하지 않은 선행 책임 분리다.
+- CE: 해당 없음 — 동작 보존의 근거를 AST·기존 회귀·writer 소유 검사로 직접 남긴다.
