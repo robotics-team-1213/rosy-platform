@@ -38,7 +38,7 @@ from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_pref
 from fleet.server.arm_transfer_job_routes import install_arm_transfer_job_routes
 from fleet.server.mission_storage import validate_mission_storage
 from fleet.server.simulation_pose_binding import validate_simulation_pose_binding
-from fleet.server.local_stop_transport import UnixLocalStopTransport
+from fleet.server.physical_transfer_stop_targets import configure_omx_stops
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_model_turn_store import MissionModelTurnStore
@@ -198,11 +198,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                         or console.uses_agent_pairing_token(discovery_token)):
         raise ValueError("discovery credential must differ from Fleet and robot credentials")
     configured_omx = dict(omx_instances or {})
-    if len(set(configured_omx.values())) != len(configured_omx):
-        raise ValueError("each OMX instance may be configured only once")
-    stop_transport = omx_stop_transport
-    if configured_omx and stop_transport is None:
-        stop_transport = UnixLocalStopTransport(omx_socket_root)
+    stop_targets, stop_transport = configure_omx_stops(
+        configured_omx, arm_transfer_installation, omx_stop_transport, omx_socket_root)
     if enable_mission_dispatcher and not mission_configured:
         raise ValueError("Mission dispatcher requires the complete Mission API")
     if enable_mission_dispatcher and not configured_omx:
@@ -734,7 +731,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,
-                                 stop_transport=stop_transport,
+                                 stop_transport=stop_transport, stop_targets=stop_targets,
                                  require_viewer=require_viewer,
                                  require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
@@ -874,7 +871,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
-                              fanout_local_omx_stops, configured_omx, stop_transport),
+                              fanout_local_omx_stops, configured_omx, stop_transport, targets=stop_targets),
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
     from .channel.conversation.runtime import install_conversation_routes

@@ -64,17 +64,18 @@ class LineFollowModeRequest(BaseModel):
 
 
 def fanout_local_omx_stops(configured_omx: Mapping[str, str], stop_transport,
-                           control: Mapping | None, *, reason: str) -> dict:
-    if not configured_omx:
+                           control: Mapping | None, *, reason: str, targets=None) -> dict:
+    targets = tuple(dict.fromkeys((*configured_omx.items(), *(targets or ()))))
+    if not targets:
         return {"state": "NOT_CONFIGURED", "instances": []}
     if stop_transport is None or control is None:
         return {"state": "UNKNOWN", "instances": [
             {"workcell_id": workcell_id, "instance_id": instance_id,
              "state": "UNKNOWN", "reason": "FLEET_DISPATCH_CONTROL_UNAVAILABLE"}
-            for workcell_id, instance_id in configured_omx.items()
+            for workcell_id, instance_id in targets
         ]}
     results = []
-    for workcell_id, instance_id in configured_omx.items():
+    for workcell_id, instance_id in targets:
         try:
             outcome = stop_transport.stop(
                 workcell_id=workcell_id, instance_id=instance_id,
@@ -108,9 +109,10 @@ def cancel_pending_task_queue(task_service, console, robot_id: Optional[str] = N
 def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
-    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator,
+    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator, stop_targets=None,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
+    stop_targets = tuple(dict.fromkeys((*configured_omx.items(), *(stop_targets or ()))))
     if require_named_operator is not None:
         install_owner_recovery_routes(app, configured_omx=configured_omx, stop_transport=stop_transport,
                                       task_service=task_service, require_viewer=require_viewer,
@@ -137,9 +139,9 @@ def install_task_dispatch_routes(
                 raise HTTPException(status_code=409, detail={
                     "code": "DISPATCH_REARM_REFUSED", "message": str(exc),
                 }) from exc
-            if configured_omx:
+            if stop_targets:
                 local_rearm = []
-                for workcell_id, instance_id in configured_omx.items():
+                for workcell_id, instance_id in stop_targets:
                     try:
                         # The owner reads Fleet's live fence while rearming. Keep the
                         # event loop available to serve that authenticated readback.
@@ -170,7 +172,7 @@ def install_task_dispatch_routes(
                             stopped = None
                     await asyncio.to_thread(
                         fanout_local_omx_stops, configured_omx, stop_transport, stopped,
-                        reason="OMX_REARM_ROLLBACK",
+                        reason="OMX_REARM_ROLLBACK", targets=stop_targets,
                     )
                     raise HTTPException(status_code=409, detail={
                         "code": "LOCAL_WORKCELL_REARM_FAILED",
@@ -294,7 +296,7 @@ def install_task_dispatch_routes(
                     _LOG.exception("emergency stop dispatch readback unavailable")
         local_stop_task = asyncio.to_thread(
             fanout_local_omx_stops, configured_omx, stop_transport, stop_control,
-            reason="FLEET_ESTOP",
+            reason="FLEET_ESTOP", targets=stop_targets,
         )
         result, local_stop = await asyncio.gather(console.estop_all(), local_stop_task)
         try:
