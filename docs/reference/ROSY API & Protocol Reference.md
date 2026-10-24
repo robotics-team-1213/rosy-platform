@@ -5,9 +5,91 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.307
+v1.312
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.312 Physical observations and execution receipts (D-856)
+
+An explicitly installed simulation physical profile may additionally bind one
+expiring independent World-observer credential. Without it the new execution
+surfaces return503; v1.307 proposal/read/admit remains available as before.
+The observer credential and producer identity are separate from application,
+operator and other registered producer credentials. Applications cannot install
+policy/capabilities, publish clearance verdicts or substitute an operator token
+for the observer. Default and production execution stay closed.
+
+| Method/path | Authority and result |
+| --- | --- |
+| `GET /api/fleet/arm-transfers/observation-context` | `X-Physical-Observation-Token`; returns `{context: ArmTransferObservationContext \| null}` for the installed profile's current observation request. Null means no request, never robot/resource clearance. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/observations` | Same independent observer credential and present-Origin check. Closed `ArmTransferObservationRequest`: `phase` (`PRE_DISPATCH` or `POST_ACTION`), `expected_request_digest`, exactly two `observations`. Returns `ArmTransferObservationReply` with `job` and nullable `receipt`. |
+| `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
+
+With an execution profile, admission also prepares stable step/action/attempt and
+the full installed grant after the durable two-person approval. Current simulation
+identity and typed managed capabilities are read for every participant outside
+SQLite before preparation/submission. Failure can leave the existing job HOLD
+after approval; read that ID/key instead of creating a new request.
+
+Observation context is closed and contains `mission_id`, `request_digest`,
+`action_id`, `attempt_id`, `status` (PREPARED/SUBMITTING/ACTION_SUCCEEDED/HOLD/UNKNOWN),
+`phase`, `not_before_ns`, nullable `capture_deadline`, `producer_id`,
+`evaluator_revision`, `frame_id`, `policy_digest`, `catalog_digest`,
+`bindings_digest`, `object_ref`, `object_origin_id`, `min_separation_ns`,
+`max_age_ns` and `owners`. Each owner context has `workcell_id`, `instance_id`,
+`journal_id`, `owner_session_id`, `model_digest`, `calibration_revision`,
+`transform_revision`. Expected target poses and clearance verdicts are not
+supplied as measurements. The producer captures original UTC nanosecond facts.
+
+`ArmTransferObservation` is closed: `evidence_id`, `producer_id`,
+`evaluator_revision`, `sequence`, `action_id`, `attempt_id`, `frame_id`,
+`policy_digest`, `catalog_digest`, `bindings_digest`, `object_ref`,
+`object_origin_id`, `object_observed_at_ns`, nullable `object_pose`, `owners`.
+Pose is `{position_m:[x,y,z], orientation_xyzw:[x,y,z,w]}` with finite numbers
+and a unit quaternion (squared norm tolerance1e-6); bounds are
+`{min_m:[x,y,z], max_m:[x,y,z]}` with ordered finite coordinates.
+Each owner observation is closed: `workcell_id`, `instance_id`, `journal_id`,
+`owner_session_id`, `model_digest`, `calibration_revision`, `transform_revision`,
+`links_observed_at_ns`, `links`, `gripper_observed_at_ns`, `gripper_state`
+(OPEN/CLOSED/MOVING/UNKNOWN), `held_state` (NONE/HELD/UNKNOWN), nullable
+`held_object_ref`. `links` maps at most128 trimmed link references to closed
+`{bounds, linear_velocity_m_s, angular_velocity_rad_s}` records. Both velocities
+are finite 3-vectors or explicit null; null is never measured zero. At most32
+unique owner scopes are allowed. Timestamps/counters are strict integers in
+`[0,2^63)`; all references/digests use the existing trimmed-reference/SHA256 rules.
+
+PRE_DISPATCH facts bind to the prepared identities and post-reservation boundary.
+Fleet validates two fresh complete source-pose/rest/clearance samples and records
+the first-send intent atomically with claim state. A journal-scoped process guard
+serializes RPCs; immediately before SDK send Fleet rechecks the committed proof,
+grant, current fence/claims and time/capability/fact freshness. It submits once.
+The Fleet-owned monitor observes existing attempts via GetAction independently of
+application polling; GET never resubmits. Receipt timestamps and every phase must
+strictly follow the committed first-send intent boundary. Loss/404/session change/restart,
+cancel and HOLD retain occupancy and do not automatically resume.
+
+Action SUCCEEDED still retains all claims. POST_ACTION requires distinct new
+observation IDs/sequences, target-pose/rest/clearance samples after the durable
+success boundary, and current installation/capabilities/fence/original claims.
+Physical receipt, exact original owner/generation claim release and internal
+GOAL_CONFIRMED commit together. Exact evidence replay returns the historical
+receipt without affecting any subsequent owner; other evidence conflicts.
+
+`ArmTransferPhysicalReceipt` is closed: `receipt_id`, `mission_id`, `action_id`,
+`attempt_id`, `request_digest`, `workcell_id`, `instance_id`, `policy_digest`,
+`evidence_digest`, `object_ref`, `source`, `target`, `authority_epoch`,
+`dispatch_generation`, `validated_at_ns`, `physical_status` (AT_TARGET_AND_CLEAR).
+Here and in observation context, request_digest hashes the complete execution
+grant; job.request_digest hashes only the physical proposal request. These are
+different typed resources. A reply's receipt must match its GOAL_CONFIRMED job's
+mission/scope/object/source/target. Physical confirmation is not Harbor business
+completion; that decision and cargo/process binding remain application-owned.
+
+Unauthorized/expired observer401, scope/origin403, unknown job404,
+state/snapshot/evidence conflict or receipt-pending409, malformed/extra fields422,
+unbound profile/storage/owner unavailability503. A200 HOLD job reports retained
+uncertainty, not availability. Credentials and raw grants are never returned.
 
 ### v1.307 Neutral ARM transfer job proposals and approval (D-856)
 
@@ -3845,6 +3927,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.312 | 2026-10-24 | D-856: opt-in independent physical-observer HTTP, simulation execution monitoring/cancel and immutable physical receipt read; two-sample pre/post checks, original claim release and application-owned business completion. |
 | v1.307 | 2026-10-24 | D-856: closed simulation ARM job proposal/read/two-person admission HTTP, host-read current capabilities and scoped idempotency; dispatcher/observer/physical closure remain closed. |
 | v1.306 | 2026-10-24 | D-856: Fleet-authenticated live managed transfer capability, mandatory ARM target journal/session, canonical receipt matching and fenced 404 reconciliation; no physical producer or claim release. |
 | v1.305 | 2026-10-24 | D-856: explicitly installed neutral arm owner phase execution through IPC v2, mandatory shared control/gripper/fence and durable workflow completion; no Fleet producer or business/zone completion. |
