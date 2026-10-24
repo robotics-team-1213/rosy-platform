@@ -72,6 +72,24 @@ def test_the_grasp_chunk_is_judged_by_the_runner_and_steps_stay_small(planned):
             assert max(abs(u - v) for u, v in zip(a[:5], b[:5])) <= m.MAX_STEP
 
 
+def test_the_cycle_trajectory_is_a_valid_recordable_a_b_replay(tmp_path):
+    sys.path.insert(0, str(OMX))
+    try:
+        trajectory = m.Planner(PLAN).cycle_trajectory()
+        teach = importlib.import_module("teach_trajectory")
+    finally:
+        sys.path.remove(str(OMX))
+    path = tmp_path / "cycle.json"
+    path.write_text(json.dumps(trajectory))
+    loaded = teach.load(path, fps=PLAN["fps"])  # what record_session --replay checks before the arm moves
+    a, reset, b = (loaded["segments"][k] for k in ("A", "reset", "B"))
+    assert a[1] - a[0] == b[1] - b[0] and reset[1] > reset[0]
+    frames = loaded["frames"]
+    assert max(max(abs(u - v) for u, v in zip(p[:5], q[:5])) for p, q in zip(frames, frames[1:])) <= m.MAX_STEP
+    assert frames[0][:5] == pytest.approx(PLAN["home"], abs=0.5) and frames[-1][:5] == pytest.approx(PLAN["home"], abs=0.01)
+    assert loaded["source"]["planner"].startswith("grasp_planner")
+
+
 def test_an_unreachable_target_is_refused_before_any_chunk_exists():
     plan = dict(PLAN, pick=dict(PLAN["pick"], x=0.30, y=0.20))
     with pytest.raises(SystemExit, match="IK"):

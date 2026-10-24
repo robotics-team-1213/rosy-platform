@@ -58,6 +58,7 @@ class Planner:
                                workspace_max_m=tuple(lim["workspace_max_m"]),
                                singularity_radius_m=lim["singularity_radius_m"])
         self.fps = plan["fps"]
+        self.kinematics_root = kinematics_root
 
     def solve(self, x, y, z, yaw_deg, reference_q5):
         result = self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits,
@@ -120,16 +121,48 @@ class Planner:
                 "source": {"planner": "grasp_planner.py top-down v1", "pick": p["pick"], "place": p["place"]}}
 
 
+    def leg(self, library):
+        """One recordable leg from home: travel to above pick, pick, travel to above place, place, travel home.
+        Travel uses chunk_runner's rise-turn-descend path, the same one goto and park take."""
+        from chunk_runner import transit_path
+
+        c, p = library["chunks"], self.plan
+        transit = {NAMES.index(k): float(v) for k, v in p.get("transit", {}).items()} or None
+        home = list(p["home"]) + [p["grip_closed"]]
+        frames = transit_path(home, c["above_pick"][0], p["grip_closed"], self.fps, transit)
+        frames += c["descend_pick"] + c["grasp_pick"] + c["lift_pick"]
+        frames += transit_path(frames[-1], c["above_place"][0], p["grip_closed"], self.fps, transit)
+        frames += c["descend_place"] + c["release_place"] + c["lift_place"]
+        frames += transit_path(frames[-1], home, p["grip_closed"], self.fps, transit)
+        return [[round(v, 3) for v in f] for f in frames]
+
+    def cycle_trajectory(self, reset_s: float = 2.0) -> dict:
+        """A self-resetting cycle for record_session --replay: A carries pick -> place, B carries it back."""
+        from teach_trajectory import compose
+
+        a = self.leg(self.library())
+        back = Planner(dict(self.plan, pick=self.plan["place"], place=self.plan["pick"]), self.kinematics_root)
+        b = back.leg(back.library())
+        source = {"planner": "grasp_planner.py top-down v1", "pick": self.plan["pick"], "place": self.plan["place"]}
+        return compose(a + b, self.fps, len(a) / self.fps, len(a + b) / self.fps, reset_s, source)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("plan", type=Path)
     parser.add_argument("out", type=Path)
     parser.add_argument("--kinematics-root", type=Path)
+    parser.add_argument("--trajectory", type=Path, help="also write a recordable A/B cycle for record_session --replay")
     args = parser.parse_args(argv)
     library = Planner(json.loads(args.plan.read_text()), args.kinematics_root).library()
     library = {k: v for k, v in library.items() if v is not None}
     args.out.write_text(json.dumps(library))
     print(json.dumps({"out": str(args.out), "chunks": {k: len(v) for k, v in library["chunks"].items()}}))
+    if args.trajectory:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_trajectory
+        trajectory = Planner(json.loads(args.plan.read_text()), args.kinematics_root).cycle_trajectory()
+        args.trajectory.write_text(json.dumps(trajectory))
+        print(json.dumps({"trajectory": str(args.trajectory), "segments": trajectory["segments"]}))
 
 
 if __name__ == "__main__":
