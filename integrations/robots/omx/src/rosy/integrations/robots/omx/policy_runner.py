@@ -210,7 +210,7 @@ def checkpoint_digest(path):
     """sha256 over every file's relative path and bytes, so the report names exactly what ran (D-854 §2)."""
     digest = hashlib.sha256()
     root = Path(path)
-    files = sorted(p for p in root.rglob('*') if p.is_file() and '.cache' not in p.parts) if root.is_dir() else []
+    files = sorted(p for p in root.rglob('*') if p.is_file() and '.cache' not in p.relative_to(root).parts) if root.is_dir() else []
     if not files:
         raise ValueError('a local checkpoint directory with files is required')  # a Hub ID would hash nothing
     for item in files:

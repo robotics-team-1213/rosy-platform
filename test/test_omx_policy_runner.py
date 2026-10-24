@@ -97,6 +97,17 @@ def test_checkpoint_digest_needs_local_files(tmp_path):
     assert len(first) == 64 and runner.checkpoint_digest(tmp_path) != first
 
 
+def test_checkpoint_digest_works_inside_a_cache_directory(tmp_path):
+    # Hugging Face snapshots live under ~/.cache/huggingface; only caches inside the checkpoint are skipped.
+    snapshot = tmp_path / '.cache' / 'huggingface' / 'snapshot'
+    (snapshot / '.cache').mkdir(parents=True)
+    (snapshot / 'config.json').write_text('{}')
+    (snapshot / '.cache' / 'lock').write_text('x')
+    first = runner.checkpoint_digest(snapshot)
+    (snapshot / '.cache' / 'lock').write_text('changed')
+    assert runner.checkpoint_digest(snapshot) == first
+
+
 def test_output_must_match_installed_joints():
     assert runner.check_output([0.1, 0.2], ['a', 'b']) == [0.1, 0.2]
     for bad in ([0.1], [0.1, float('nan')]):
