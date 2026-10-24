@@ -479,3 +479,39 @@ def test_startup_rejects_a_stable_sample_after_the_settle_deadline():
                    clock=lambda: bus.t, sleep=bus.sleep)
     with pytest.raises(RuntimeError, match="settle"):
         runner.settle("hold", timeout=0.15, still=0.15, grace=0)
+
+
+# The #118 commissioning guards also reach the local leader wrist-roll (ID 5).
+@pytest.mark.parametrize("drive_mode", [4, 8, 12])
+def test_leader_refuses_time_profiles_or_automatic_torque_before_any_write(drive_mode):
+    bus = leader()
+    bus.reg["drive_mode"] = drive_mode
+    with pytest.raises(SystemExit, match="drive mode"):
+        run(bus, ["move", "--delta", "10"])
+    assert bus.writes == []
+
+
+def test_leader_refuses_a_target_outside_its_position_range_before_any_write():
+    bus = Motor(motor=5, position=1048570)
+    with pytest.raises(SystemExit, match="target|position|range"):
+        run(bus, ["move", "--delta", "10"])
+    assert bus.writes == []
+
+
+def test_leader_rechecks_position_after_configuration_before_enabling_torque():
+    bus = leader()
+    original = bus.write
+    changed = False
+
+    def write(name, value):
+        nonlocal changed
+        original(name, value)
+        if name == "profile_vel" and not changed:
+            changed = True
+            bus.reg["present_pos"] += 100
+
+    bus.write = write
+    with pytest.raises(RuntimeError, match="startup|position.*changed"):
+        run(bus, ["move", "--delta", "40"])
+    assert ("torque", 1) not in bus.writes
+    assert_restored(bus)
