@@ -45,11 +45,13 @@ from rosy.execution.local.policy_chain import SimPolicyChain
 from policy_chain_fixtures import approved_fleet, HttpServer
 
 SHAPE = (3, 240, 320)
-# Observation age above action age, so a late action reaches the action-age check itself (owner order).
-TIMING = dict(period_ns=800_000_000, max_observation_age_ns=800_000_000, max_action_age_ns=500_000_000)
+# Contract timing, not a performance claim: headless Gazebo on the lab PCs renders cameras on the CPU (EGL falls
+# back to software), so a SmolVLA step there took ~0.5 s (2026-10-25). Observation age stays above action age so a
+# late action reaches the action-age check itself; latency is measured GPU-exclusively instead (D-866 §4).
+TIMING = dict(period_ns=1_500_000_000, max_observation_age_ns=3_000_000_000, max_action_age_ns=2_000_000_000)
 CAMERAS = (('front', '/front_camera/image_raw'), ('top', '/top_camera/image_raw'))
 RIG = 'sim-rig-vla-p0'
-MAX_STEP_RAD, PRELUDE_STEPS, STALE_DELAY_S = .04, 3, .6
+MAX_STEP_RAD, PRELUDE_STEPS, STALE_DELAY_S = .04, 3, 2.5
 TASK = 'pick up the cube and place it on the pallet'
 
 
