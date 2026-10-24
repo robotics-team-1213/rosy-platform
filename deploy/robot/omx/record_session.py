@@ -5,7 +5,8 @@ LeRobot's OmxFollower.configure() writes modes and PID but never the PWM/Current
 commissioning caps (PWM 20, Current 50) keep the follower from following. This wrapper:
 
 1. validates the record config (record_config.py) and requires follower IDs 11-16 idle (torque OFF,
-   no hardware error);
+   no hardware error), and reboots torque-OFF leader motors 1-6 that latched a hardware alert (its
+   supply sags below XL330 spec), again after the session so the next one starts clean;
 2. saves the follower PWM Limit (36) and XL330 Current Limit (38) and writes the caps file values
    with torque OFF, reading each back;
 3. stops the active camera services, because the recorder opens the V4L devices itself (D-770 §3:
@@ -53,6 +54,7 @@ from record_config import validate_config
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
             "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service")
 LEADER_GRIPPER = 6
+LEADER = range(1, 7)
 PWM_MAX = CURRENT_MAX = CAP_MAX  # first sessions stay well below the hardware maximum (885 / 1750)
 TORQUE_OFF_DEADLINE_S = 30.0
 
@@ -178,6 +180,34 @@ class Session:
                                  "session did not restore them - lower them with commissioning_limits.py --baseline "
                                  "(torque OFF) before recording")
 
+    def clear_leader_alerts(self, bus) -> list:
+        """The leader's supply sags below XL330 spec (3.6 V on the S cell, 2026-10-24) and latches an
+        input-voltage alert; LeRobot then reports every leader motor missing. A reboot of a torque-OFF
+        motor clears the latch; a motor whose alert returns at once is refused."""
+        alerted = []
+        for motor in LEADER:
+            bus.motor = motor
+            torque, alert = bus.alert()
+            if alert:
+                if torque:
+                    raise SystemExit(f"leader {motor} reports a hardware alert with torque ON")
+                bus.reboot()
+                alerted.append(motor)
+        if alerted:
+            self.sleep(1.5)
+            for motor in alerted:
+                bus.motor = motor
+                if bus.alert()[1]:
+                    raise SystemExit(f"leader {motor} alert persists after reboot: check the leader supply")
+        return alerted
+
+    def _with_leader(self, action):
+        bus = self.open_bus("leader")
+        try:
+            return action(bus)
+        finally:
+            bus.close()
+
     def baseline(self) -> dict:
         return {motor: {name: BASELINE[name] for name in self._cap_registers(motor)} for motor in FOLLOWER}
 
@@ -263,6 +293,8 @@ class Session:
         pairs = self.pair_sessions(config)
         for session in pairs.values():
             session._with_follower(session.check_idle)
+        if pairs.get("single") is self:  # shortcut: one-arm cells only; extend to pairs when a two-arm leader browns out
+            record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
         try:
             for session in pairs.values():
@@ -349,8 +381,13 @@ class Session:
             try:
                 leader.motor = LEADER_GRIPPER
                 leader.cleanup_write("torque", 0)
+                self.note_fault(leader, leader=True)  # keep the evidence before the reboot below clears it
+                try:  # leave the leader clean for the next session; a refusal here must not skip the caps
+                    record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
+                except SystemExit as exc:
+                    record["leader_rebooted_after"] = f"error: {exc}"
+                leader.motor = LEADER_GRIPPER
                 record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
-                self.note_fault(leader, leader=True)
             finally:
                 leader.close()
         except Exception as exc:

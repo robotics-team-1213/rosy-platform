@@ -176,6 +176,18 @@ class SerialBus:
         comm, error = fn(self.port, self.motor, address, value)
         self._cleanup_check(comm, error)
 
+    def alert(self) -> tuple[int, bool]:
+        """Torque and the status packet's hardware-alert bit, readable while an alert makes read() fail."""
+        torque, comm, error = self.packet.read1ByteTxRx(self.port, self.motor, READS["torque"][0])
+        if comm:
+            raise RuntimeError(f"motor {self.motor}: comm {comm}")
+        return torque, bool(error & 0x80)
+
+    def reboot(self) -> None:
+        comm, _ = self.packet.reboot(self.port, self.motor)
+        if comm:
+            raise RuntimeError(f"reboot motor {self.motor}: comm {comm}")
+
     def close(self) -> None:
         self.port.ser.close()
 
