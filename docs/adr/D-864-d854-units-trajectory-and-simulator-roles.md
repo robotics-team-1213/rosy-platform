@@ -15,7 +15,9 @@
   - `gripper_joint_1`은 회전 관절이다.
   - 모터 ID 11~16이 `joint1..5`, `gripper_joint_1` 순서이고, 이는 `omx_follower` 모터 순서와 같다.
   - 이 드라이버는 시작할 때 모터 EEPROM(Operating Mode, Drive Mode, 위치 한계, 게인)을 쓰고, 활성화할 때 토크를 켠다. 그 뒤 몸 관절 12~15는 Operating Mode 3으로 남는데, native 경로(`guarded_native.py`)는 모드 4를 요구한다. 그래서 실물 확인에 이 드라이버를 쓰지 않는다.
-- 모델 PC에는 Isaac Sim 5.1이 있다(D-434). 저장소의 Isaac 경로는 OMX에 대해서는 공식 OMX-F URDF를 USD로 가져와 관절 이름을 검사하는 데까지다(`learning/envs/isaac/import_omx.py`). Pinky에는 별도의 ROS 그래프가 있다(`run_rosy.py`). 카메라, 작업 장면, 팔 제어 ROS 연결, 데이터 수집은 없다. Gazebo에는 OMX 장면, 작업대 카메라 1대(`workcell_camera`), ROS owner, CORE·Fleet lease 연결, 교사 시연 수집이 있다.
+- 모델 PC에는 Isaac Sim 5.1이 있다(D-434). 저장소의 Isaac 경로는 OMX에 대해서는 공식 OMX-F URDF를 USD로 가져와 관절 이름을 검사하는 데까지다(`learning/envs/isaac/import_omx.py`). Pinky에는 별도의 ROS 그래프가 있다(`run_rosy.py`). 카메라, 작업 장면, 팔 제어 ROS 연결, 데이터 수집은 없다. Gazebo에는 OMX 장면, top·front 카메라, ROS owner, CORE·Fleet lease 연결, 교사 시연 수집이 있다.
+
+**정정 (2026-10-25):** 위 문단의 "top·front 카메라"는 틀렸다. 설치된 Gazebo world의 카메라는 작업대 카메라 1대(`workcell_camera`)다. D-866 P0 시험(`policy_chain_vla_gazebo.py`)이 이 카메라를 복제해 top 카메라를 덧붙이고 두 대로 실행한다.
 
 ### Decision
 
