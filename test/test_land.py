@@ -687,6 +687,45 @@ def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, c
     assert "LOAD-FLAKY pkg/test/test_a.py::test_a" in out
     candidates = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
     assert candidates.startswith("pkg/test/test_a.py::test_a  # LOAD-FLAKY ") and "flaky_quarantine" in candidates
+
+
+def test_head_move_during_remote_checks_cannot_create_flaky_receipt(repos, monkeypatch, capsys):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    original = land.remote_pytest.run
+
+    def run(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if len(calls) == 1:
+            commit(wt, {"pkg/a.py": "x = 3\n"}, "fix while original tests run")
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert len(calls) == 1
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+    assert git(main, "rev-parse", "HEAD") == before
+    assert "HEAD changed" in capsys.readouterr().err
+
+
+def test_isolated_rerun_keeps_original_revision_even_when_head_moves(repos, tmp_path):
+    main, wt = repos
+    tested = git(wt, "rev-parse", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "later fix")
+    received = []
+
+    def run(invocations, logs, sha, **kwargs):
+        received.append(sha)
+        return [0] * len(invocations)
+
+    ids, why = land.land_checks.load_flaky(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
+        tmp_path, "pinned", sys.executable, run, tested_sha=tested)
+    assert ids == ["pkg/test/test_a.py::test_a"] and not why
+    assert received == [tested]
+    text = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
+    assert "on " + tested[:10] in text
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
