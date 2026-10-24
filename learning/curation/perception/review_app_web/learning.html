@@ -12,8 +12,6 @@
 <main id="learning-main" class="learning-main" tabindex="-1">
 <div class="workspace-heading"><div><h2>학습센터</h2><p>로봇·과제별 자료와 모델을 연결하고 개선 근거를 확인합니다.</p></div><div class="heading-links"><a class="workspace-link" data-action-icon="robot" href="/learning/tasks">로봇·과제 등록하고 학습 시작</a><a class="workspace-link" data-action-icon="robot" href="/learning/sim">SIM 실험</a><a class="workspace-link" data-action-icon="account" href="/accounts">계정·외부 자료</a></div></div>
 <ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
-<section id="domain-home" class="learning-section" aria-labelledby="domain-title"><h2 id="domain-title">도메인별 진행</h2><p id="domain-filter" class="quiet" role="status">도메인 상태를 불러오는 중입니다.</p>
-<ol id="domain-rows" class="domain-rows"></ol></section>
 <ui-section class="learning-section pipeline" aria-labelledby="pipeline-title" aria-busy="true" id="pipeline">
 <div class="ui-workspace-bar"><h2 id="pipeline-title" class="ui-section-heading">현재 인식 자료의 학습 흐름</h2><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">최신 결과 확인</ui-button></div>
 <p id="pipeline-status" role="status">현재 자료와 학습 결과를 연결하는 중입니다.</p>
@@ -24,6 +22,8 @@
 <details id="pipeline-evidence"><summary>현재 자료·모델의 연결 근거</summary><div id="pipeline-records"></div></details>
 <details id="pipeline-setup"><summary>학습 실행기 연결 안내</summary><p>이 작업대의 소유 학습 실행기를 연결하면 데이터셋 확인과 학습을 여기서 시작할 수 있습니다. 운영 담당자에게 이 작업대의 실행기 연결을 요청하세요.</p><p class="quiet">연결된 실행기는 승인 자료의 최신 결정, 학습·평가 데이터 분리와 시도 한도를 확인합니다.</p></details>
 </ui-section>
+<section id="domain-home" class="learning-section" aria-labelledby="domain-title"><h2 id="domain-title">도메인별 진행</h2><p id="domain-filter" class="quiet" role="status">도메인 상태를 불러오는 중입니다.</p>
+<ol id="domain-rows" class="domain-rows"></ol></section>
 <section id="learning-start" class="learning-section learning-panel" aria-labelledby="learning-start-title"><h2 id="learning-start-title">어떤 로봇의 어떤 과제를 개선할까요?</h2>
 <p>로봇 종류와 개별 장치·그룹, 과제의 성공 조건을 먼저 정합니다. 사용할 자료와 학습 방법을 연결하고, 같은 조건의 성공률과 사람이 들인 시간을 비교하세요.</p>
 <p class="quiet">현재 인식 학습은 위 자료 흐름에서 이어갑니다. 행동 정책 학습은 OMX 로봇암의 ACT 시범·교정 학습과 HIL-SERL 경험 학습을 지원하며, 다른 로봇의 정책 학습과 현장 실행은 아직 연결되지 않았습니다.</p>

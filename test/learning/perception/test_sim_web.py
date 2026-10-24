@@ -76,8 +76,12 @@ def test_sim_control_needs_manage_token_and_current_source(tmp_path):
 def test_unidentified_local_mode_cannot_start_or_stop(tmp_path):
     with running(tmp_path, authenticated=False) as (base, runs):
         _, workspace = request(base, '/api/learning')
+        sim = next(row for row in workspace['domains'] if row['id'] == 'sim')
+        assert sim['stages'][0]['state'] == 'active' and '최근 RUNNING' in sim['stages'][0]['evidence']
         code, _ = request(base, '/api/learning/sim/start', body={'request_id': 'b' * 32}, token=workspace['token'])
-        assert code == 403 and runs.calls == []
+        assert code == 403 and runs.calls == [{'action': 'list'}]  # the home row reads; nothing starts
+        request(base, '/api/learning')
+        assert runs.calls == [{'action': 'list'}], 'the home row reads the SIM list at most once a minute'
 
 
 def test_start_retry_and_stop_use_shared_run_and_revision(tmp_path):

@@ -197,7 +197,7 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
 
             def opened(selector, href):
                 page.locator(selector).click()
-                page.wait_for_load_state('networkidle')
+                page.wait_for_load_state('load')  # the SIM page keeps polling, so the network never idles
                 playwright.expect(page.locator('main')).to_be_visible()
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_have_attribute('href', '/accounts')
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_be_visible()
