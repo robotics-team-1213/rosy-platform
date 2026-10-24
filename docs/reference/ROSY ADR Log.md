@@ -33,6 +33,8 @@
 | D-823 | OMX Leader를 통한 자동 운용 중 수동 개입·복구·자동 복귀 | Proposed (2026-10-20) |
 | D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
+| D-809 | Legacy 937 Learning Account boundary and protected human audit | Accepted (2026-10-20) |
+| D-808 | Vault 권한은 명시적 site grant로 부여한다 | Accepted (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
@@ -1227,3 +1229,7 @@ Dedicated D-772 measurement sources request the existing demand while their inst
 ## D-776 - Installed station charge facts
 
 Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
+
+## D-809 - Legacy 937 Learning Account boundary
+
+The existing dataset review writer keeps its original human results behind a loopback-only Account boundary. Project grants and a protected server-attributed audit bind review writes; uncertain writes are never retried automatically. Details: [D-809](../adr/D-809-legacy-learning-account-boundary.md).

@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -22,6 +23,8 @@ SERVICE = "rosy-review-v13.service"
 APP = Path("learning/curation/perception/review_app.py")
 WEB = Path("learning/curation/perception/review_app_web")
 LEGACY_APP = Path("learning/training/perception/dataset/review_app.py")
+
+
 SPLIT_REQUIRED = (
                   'middleware/perception/nodes/calib_node.py',
                   'middleware/perception/nodes/calibrated_values.py',
@@ -85,6 +88,12 @@ SPLIT_REQUIRED = (
                   "middleware/drive/tracking/wander/__init__.py")
 
 
+def validate_service(service: str) -> str:
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.@-]*\.service', service):
+        raise ValueError('service must be one safe systemd service name')
+    return service
+
+
 def check_source(source: Path, root: Path, state: Path) -> None:
     if (source == root or root in source.parents or source in state.parents
             or state in source.parents or state == root or root in state.parents):
@@ -116,7 +125,10 @@ def digest_tree(source: Path) -> str:
 
 
 def unit_contents(current: Path, state: Path, python: Path, host: str, port: int) -> str:
-    if not 1 <= port <= 55535:
+    collaboration = state / 'learning-collaboration.json'
+    if collaboration.is_file() and not ipaddress.ip_address(host).is_loopback:
+        raise ValueError('collaboration requires a loopback listener behind HTTPS')
+    if not 1 <= port <= (65535 if collaboration.is_file() else 55535):
         raise ValueError('review port must leave room for its loopback decisions port')
     dataset = current / "learning/curation/perception"
     paths = (
@@ -133,32 +145,61 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     control = f" --learning-control {state / 'learning-control.json'}" if (state / 'learning-control.json').is_file() else ''
     if (state / 'review-ai.json').is_file():
         control += f" --review-ai-config {state / 'review-ai.json'}"
+    control += (f' --collaboration {collaboration}' if collaboration.is_file()
+                else f' --decisions-port {port + 10000}')
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
-            f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host} --decisions-port {port + 10000}{control}\n"
+            f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host}{control}\n"
             "Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
+
+
+def check_collaboration(app: Path, binding: Path, host: str) -> dict:
+    if not ipaddress.ip_address(host).is_loopback:
+        raise ValueError('collaboration requires a loopback listener behind HTTPS')
+    config = json.loads(binding.read_text(encoding='utf-8'))
+    if not isinstance(config, dict):
+        raise ValueError('collaboration configuration must be an object')
+    if '--collaboration' not in app.read_text(encoding='utf-8'):
+        raise ValueError('release does not support the bound collaboration configuration')
+    if config.get('account_client_file') and not (app.parent / 'learning_rosy_accounts.py').is_file():
+        raise ValueError('release does not support central Account collaboration')
+    return config
 
 
 def run_systemctl(*args: str) -> None:
     subprocess.run(("systemctl", "--user", *args), check=True)
 
 
-def check_live(host: str, port: int) -> None:
+def check_live(host: str, port: int, service: str = SERVICE, collaboration: dict | None = None) -> None:
+    validate_service(service)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     for _ in range(15):
         try:
-            run_systemctl("is-active", "--quiet", SERVICE)
-            with opener.open(f"http://{host}:{port}/api/workspace", timeout=3) as response:
-                if not isinstance(json.load(response), dict):
-                    raise ValueError("workspace response is not an object")
-            with opener.open(f"http://{host}:{port}/pixels", timeout=3) as response:
+            run_systemctl("is-active", "--quiet", service)
+            try:
+                with opener.open(f"http://{host}:{port}/api/workspace", timeout=3) as response:
+                    if collaboration is not None or not isinstance(json.load(response), dict):
+                        raise ValueError("workspace did not enforce expected authentication")
+            except urllib.error.HTTPError as exc:
+                if collaboration is None or exc.code != 401:
+                    raise
+                exc.close()
+            if collaboration is not None:
+                with opener.open(f"http://{host}:{port}/api/accounts/options", timeout=3) as response:
+                    options = json.load(response)
+                    if (not isinstance(options, dict) or options.get('enabled') is not True
+                            or options.get('project_id') != collaboration.get('project_id')
+                            or options.get('rosy_account') is not bool(collaboration.get('account_client_file'))):
+                        raise ValueError('collaboration options differ from the configured project')
+            page = 'accounts' if collaboration is not None else 'pixels'
+            with opener.open(f"http://{host}:{port}/{page}", timeout=3) as response:
                 if response.status != 200:
-                    raise ValueError("pixel review page is unavailable")
+                    raise ValueError("review account or pixel page is unavailable")
             return
         except (OSError, ValueError, subprocess.CalledProcessError):
             time.sleep(1)
-    raise RuntimeError("review service did not pass workspace and pixel-page checks")
+    raise RuntimeError("review service did not pass authentication, workspace and page checks")
 
 
 def switch(current: Path, target: Path) -> None:
@@ -170,7 +211,8 @@ def switch(current: Path, target: Path) -> None:
 
 
 def install(source: Path | None, release: str, root: Path, state: Path | None,
-            python: Path | None, host: str, port: int, unit: Path) -> Path:
+            python: Path | None, host: str, port: int, unit: Path, service: str = SERVICE) -> Path:
+    validate_service(service)
     if not re.fullmatch(r"[A-Za-z0-9._-]+", release) or release in (".", ".."):
         raise ValueError("release must be one safe path component")
     address = ipaddress.IPv4Address(host)
@@ -193,6 +235,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         raise ValueError("a release switch is already pending")
     old_target = current.resolve() if current.is_symlink() else None
     old_unit = unit.read_bytes()
+    collaboration = None
     if source is not None:
         if state is None or python is None:
             raise ValueError("new releases require --state and --python")
@@ -206,6 +249,11 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         if target.exists():
             raise ValueError(f"release already exists: {target}")
         unit_text = unit_contents(current, state, python, host, port)
+        binding = state / 'learning-collaboration.json'
+        if b' --collaboration ' in old_unit and not binding.is_file():
+            raise ValueError('bound collaboration configuration is missing')
+        if binding.is_file():
+            collaboration = check_collaboration(source / APP, binding, host)
         target.parent.mkdir(parents=True, exist_ok=True)
         staging = target.with_name(f".staging-{release}-{os.getpid()}")
         shutil.copytree(source, staging)
@@ -268,6 +316,16 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 if port_arg and '--decisions-port' in cli:
                     line = line.rstrip('\n') + f' --decisions-port {int(port_arg[1]) + 10000}\n'
                 state_arg = re.search(r' --state ([^\s]+)', line)
+                bound = re.search(r' --collaboration ([^\s]+)', line)
+                binding = Path(bound[1]) if bound else (Path(state_arg[1]) / 'learning-collaboration.json' if state_arg else None)
+                if binding and (bound or binding.is_file()):
+                    collaboration = check_collaboration(app, binding, host)
+                    listener = re.search(r' --host ([^\s]+)', line)
+                    if not listener or not ipaddress.ip_address(listener[1]).is_loopback:
+                        raise ValueError('collaboration requires a loopback listener behind HTTPS')
+                    line = re.sub(r' --decisions-port [^\s]+', '', line)
+                    if not bound:
+                        line = line.rstrip('\n') + f' --collaboration {binding}\n'
                 if state_arg and '--learning-control' in cli:
                     binding = Path(state_arg[1]) / 'learning-control.json'
                     if binding.is_file(): line = line.rstrip('\n') + f' --learning-control {binding}\n'
@@ -281,7 +339,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         return target
     try:
         if unit_text is not None:
-            backup = root / "rosy-review-v13.service.before-managed"
+            backup = root / (service + ".before-managed")
             if not backup.exists():
                 backup.write_bytes(old_unit)
             temporary = unit.with_name(unit.name + ".next")
@@ -289,8 +347,8 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
             os.replace(temporary, unit)
         switch(current, target)
         run_systemctl("daemon-reload")
-        run_systemctl("restart", SERVICE)
-        check_live(host, port)
+        run_systemctl("restart", service)
+        check_live(host, port, service, collaboration)
     except Exception:
         if old_target is None:
             current.unlink(missing_ok=True)
@@ -298,7 +356,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
             switch(current, old_target)
         unit.write_bytes(old_unit)
         run_systemctl("daemon-reload")
-        run_systemctl("restart", SERVICE)
+        run_systemctl("restart", service)
         raise
     return target
 
@@ -312,11 +370,12 @@ def main() -> None:
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--root", type=Path, default=Path.home() / "rosy-ml/review-v13-code")
+    parser.add_argument("--service", type=validate_service, default=SERVICE)
     args = parser.parse_args()
-    unit = Path.home() / ".config/systemd/user" / SERVICE
+    unit = Path.home() / ".config/systemd/user" / args.service
     try:
         release = install(args.source, args.release, args.root, args.state, args.python,
-                          args.host, args.port, unit)
+                          args.host, args.port, unit, args.service)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"review release failed: {exc}\n")
     print(f"active review release: {release}")

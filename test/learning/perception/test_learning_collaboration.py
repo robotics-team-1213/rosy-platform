@@ -4,11 +4,52 @@ import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
+from types import SimpleNamespace
+from http.cookies import SimpleCookie
 
 import pytest
 from test_review_app import open_store
 from review_app import make_server
 from test_learning_accounts import accounts, sign_in
+
+
+def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
+    from learning_collaboration import Collaboration, COOKIE, BINDING
+    jar = SimpleCookie()
+    apps = []
+    try:
+        for project, port in [('alpha', 9444), ('beta', 9445), ('alpha', 9446)]:
+            folder = tmp_path / str(port); folder.mkdir()
+            account = Accounts()
+            account.project_id = project
+            account.public_origin = f'https://learning.example:{port}'
+            account.receiver = SimpleNamespace(retry_revocations=lambda: None)
+            app = Collaboration(account, open_store(folder))
+            apps.append(app)
+            handler = SimpleNamespace(extra_headers=[])
+            for name in (COOKIE, BINDING, 'rosy_account_flow'):
+                app.set_cookie(handler, name, f'{port}-value')
+            for _, value in handler.extra_headers:
+                parsed = SimpleCookie(value)
+                morsel = next(iter(parsed.values()))
+                assert morsel['secure'] and morsel['httponly'] and morsel['samesite'] == 'Lax'
+                assert morsel['path'] == '/' and not morsel['domain']
+                jar.load(value)
+        assert len(jar) == 9
+        for app, port in zip(apps, (9444, 9445, 9446)):
+            assert app.cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
+            seen = []
+            app.accounts.authenticate = lambda value: seen.append(value) or {'capabilities': ['view']}
+            handler = SimpleNamespace(headers={'Cookie': jar.output(header='', sep=';')})
+            app.identity(handler)
+            assert seen == [f'{port}-value']
+            handler.extra_headers = []
+            app.set_cookie(handler, COOKIE, '', clear=True)
+            assert 'Max-Age=0' in handler.extra_headers[0][1]
+            jar.load(handler.extra_headers[0][1])
+    finally:
+        for app in apps:
+            app.shutdown()
 
 
 class Accounts:

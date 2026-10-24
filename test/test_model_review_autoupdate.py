@@ -35,6 +35,8 @@ def test_new_generation_activates_and_recheck_is_idle(tmp_path, monkeypatch):
     seen = []
 
     def install(source, release, review_root, *_args):
+        if source is None:
+            return
         assert (source / module.APP).read_text() == "signed"
         assert not (source / "data").exists()
         seen.append(release)
@@ -66,3 +68,14 @@ def test_old_or_mismatched_generation_does_not_activate(tmp_path, monkeypatch):
     (root / "current").symlink_to(wrong, target_is_directory=True)
     with pytest.raises(ValueError, match="differs"):
         module.apply(*args)
+
+
+def test_cli_selects_explicit_service(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(module, 'apply', lambda *args: seen.append(args) or 'waiting')
+    monkeypatch.setattr(sys, 'argv', ['auto_review_release.py', '--model-code-root', str(tmp_path),
+        '--review-root', str(tmp_path), '--state', str(tmp_path), '--python', '/usr/bin/python3',
+        '--host', '127.0.0.1', '--minimum-sequence', '29', '--service', 'rosy-edge-review.service'])
+    module.main()
+    assert seen[0][-1] == 'rosy-edge-review.service'
+    assert seen[0][6].name == 'rosy-edge-review.service'

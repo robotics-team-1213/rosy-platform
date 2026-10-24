@@ -194,3 +194,87 @@ def test_generated_unit_can_opt_in_to_private_owner_controls(tmp_path):
     text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
     assert f'--learning-control {state / "learning-control.json"}' in text
     assert f'--review-ai-config {state / "review-ai.json"}' in text
+
+
+def test_collaboration_unit_is_loopback_and_has_no_unprotected_decisions_port(tmp_path):
+    state = tmp_path / 'state'; state.mkdir()
+    (state / 'learning-collaboration.json').write_text('{}')
+    text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
+    assert f'--collaboration {state / "learning-collaboration.json"}' in text
+    assert '--decisions-port' not in text
+    with pytest.raises(ValueError, match='loopback'):
+        release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '100.100.1.2', 8774)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
+def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypatch):
+    source = tmp_path / 'source'; source_tree(source)
+    (source / release.APP).write_text("parser.add_argument('--collaboration')")
+    state = tmp_path / 'state'; state.mkdir()
+    (state / 'reviews.sqlite3').write_bytes(b'human decisions')
+    (state / 'learning-collaboration.json').write_text('{}')
+    root = tmp_path / 'root'; unit = tmp_path / 'rosy-edge-review.service'
+    unit.write_text('original unit')
+    calls = []
+    monkeypatch.setattr(release.subprocess, 'run', lambda *a, **kw: None)
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: calls.append(a))
+    monkeypatch.setattr(release, 'check_live', lambda *a: None)
+    service = 'rosy-edge-review.service'
+    for name in ('first', 'second'):
+        release.install(source, name, root, state, Path(sys.executable), '127.0.0.1', 8768, unit, service)
+    text = unit.read_text()
+    release.install(None, 'first', root, None, None, '127.0.0.1', 8768, unit, service)
+    assert unit.read_text() == text
+    assert '--collaboration' in text and '--decisions-port' not in text
+    assert ('restart', service) in calls
+    assert (root / (service + '.before-managed')).read_text() == 'original unit'
+    old = root / 'releases/old'; source_tree(old)
+    with pytest.raises(ValueError, match='collaboration'):
+        release.install(None, 'old', root, None, None, '127.0.0.1', 8768, unit, service)
+    assert (root / 'current').resolve().name == 'first'
+    assert (state / 'reviews.sqlite3').read_bytes() == b'human decisions'
+
+
+@pytest.mark.parametrize('service', ['../other.service', 'bad name.service', 'bad;name.service', '--other.service', 'other'])
+def test_service_name_rejects_unsafe_names(service):
+    with pytest.raises(ValueError, match='service'):
+        release.validate_service(service)
+
+
+def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, monkeypatch):
+    import io
+    import urllib.error
+    from types import SimpleNamespace
+    seen = []
+    public_workspace = False
+    def open_url(url, timeout):
+        seen.append(url)
+        path = url.split(':8774')[-1]
+        if path == '/api/workspace' and not public_workspace:
+            raise urllib.error.HTTPError(url, 401, 'login required', {}, io.BytesIO(b'{}'))
+        payload = (b'{"enabled":true,"rosy_account":true,"project_id":"alpha"}' if path.endswith('options')
+                   else b'{}' if path == '/api/workspace' else b'accounts page')
+        response = io.BytesIO(payload)
+        response.status = 200
+        return response
+    monkeypatch.setattr(release.urllib.request, 'build_opener', lambda *a: SimpleNamespace(open=open_url))
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: None)
+    monkeypatch.setattr(release.time, 'sleep', lambda *a: None)
+    release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha', 'account_client_file': '/private/client.json'})
+    assert [url.split(':8774')[-1] for url in seen] == ['/api/workspace', '/api/accounts/options', '/accounts']
+    with pytest.raises(RuntimeError):
+        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'wrong'})
+    public_workspace = True
+    with pytest.raises(RuntimeError):
+        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha', 'account_client_file': '/private/client.json'})
+
+
+def test_bound_central_account_refuses_source_without_account_bridge(tmp_path):
+    app = tmp_path / 'review_app.py'
+    app.write_text("parser.add_argument('--collaboration')")
+    binding = tmp_path / 'learning-collaboration.json'
+    binding.write_text('{"account_client_file":"/private/client.json"}')
+    with pytest.raises(ValueError, match='central Account'):
+        release.check_collaboration(app, binding, '127.0.0.1')
+    (tmp_path / 'learning_rosy_accounts.py').write_text('bridge')
+    assert release.check_collaboration(app, binding, '127.0.0.1')['account_client_file'] == '/private/client.json'
