@@ -54,8 +54,10 @@ def test_network_failure_retries_then_stops_without_blocking_other_exports(tmp_p
     assert next(iter(state["steps"].values()))["status"] == "failed"
 
 
-def state_authority(store, **change):
+def state_authority(store, folder=0o700, db=0o600, **change):
+    import os
     import review_evidence
+    os.chmod(store.state, folder); os.chmod(store.state / "reviews.sqlite3", db)
     value = {"state": str(store.state), "workspace_id": review_evidence.metadata(store, "workspace_id")}
     return dict(value, **change)
 
@@ -87,12 +89,13 @@ def test_state_authority_opens_database_read_only(tmp_path):
     from test_review_app import open_store
     store = open_store(tmp_path)
     database = store.state / "reviews.sqlite3"
+    authority = state_authority(store)
     def tables():
         with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as db:
             return sorted(r[0] for r in db.execute("SELECT name FROM sqlite_master"))
     before = (database.stat().st_mtime_ns, database.stat().st_size, tables(),
               sorted(p.name for p in store.state.iterdir()))
-    review_bridge.fetch_current({"authority": state_authority(store)})
+    review_bridge.fetch_current({"authority": authority})
     assert (database.stat().st_mtime_ns, database.stat().st_size, tables(),
             sorted(p.name for p in store.state.iterdir())) == before
 
@@ -109,7 +112,7 @@ def test_authority_requires_exactly_one_of_endpoint_or_state(tmp_path, case):
         review_bridge.run_once(cfg, tmp_path / "bridge")
 
 
-@pytest.mark.parametrize("case", ["relative", "symlink", "workspace", "missing"])
+@pytest.mark.parametrize("case", ["relative", "symlink", "dotdot", "workspace", "missing"])
 def test_state_authority_refuses_unsafe_or_foreign_state(tmp_path, case, monkeypatch):
     from test_review_app import open_store
     store = open_store(tmp_path)
@@ -120,6 +123,8 @@ def test_state_authority_refuses_unsafe_or_foreign_state(tmp_path, case, monkeyp
     elif case == "symlink":
         link = tmp_path / "linked"; link.symlink_to(store.state, target_is_directory=True)
         authority["state"] = str(link)
+    elif case == "dotdot":
+        authority["state"] = str(store.state / ".." / "state")
     elif case == "workspace":
         authority["workspace_id"] = "other-workspace"
     else:
@@ -151,3 +156,39 @@ def test_bridge_once_reads_state_authority_and_delivers_export(tmp_path):
     delivered = json.loads((destination / ".authority/current.json").read_text())
     assert delivered["available"] is True
     assert delivered["authority"] == review_evidence.decisions(store)
+
+
+@pytest.mark.parametrize("folder,db,sidecar", [(0o755, 0o600, None), (0o700, 0o644, None),
+                                               (0o755, 0o644, None), (0o700, 0o600, 0o644)])
+def test_state_authority_refuses_group_or_other_permissions(tmp_path, folder, db, sidecar):
+    import os
+    from test_review_app import open_store
+    store = open_store(tmp_path)
+    authority = state_authority(store, folder, db)
+    if sidecar is not None:
+        journal = store.state / "reviews.sqlite3-journal"
+        journal.write_bytes(b""); os.chmod(journal, sidecar)
+    with pytest.raises(review_bridge.JobError, match="owner-only") as error:
+        review_bridge.fetch_current({"authority": authority})
+    assert str(store.state) not in str(error.value)
+
+
+def test_state_authority_accepts_owner_only_permissions(tmp_path):
+    import review_evidence
+    from test_review_app import open_store
+    store = open_store(tmp_path)
+    current = review_bridge.fetch_current({"authority": state_authority(store, 0o700, 0o600)})
+    assert current == review_evidence.decisions(store)
+
+
+def test_state_authority_refuses_wal_database(tmp_path):
+    import sqlite3
+    from test_review_app import open_store
+    store = open_store(tmp_path)
+    database = store.state / "reviews.sqlite3"
+    db = sqlite3.connect(database)
+    assert db.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+    db.close()
+    authority = state_authority(store)
+    with pytest.raises(review_bridge.JobError, match="WAL"):
+        review_bridge.fetch_current({"authority": authority})

@@ -55,8 +55,23 @@ def read_current_state(authority):
     if not state.is_absolute() or any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction())
                                       for p in (database, state, *state.parents)):
         raise JobError("current authority state must be an absolute path without links")
+    if state != state.resolve():
+        raise JobError("current authority state must be a canonical path")
     if not database.is_file():
         raise JobError("current authority state has no review database")
+    if os.name == "posix":
+        # The port's replacement is only narrower if the files really are owner-only.
+        # Windows keeps its ACL defaults; no mode check there.
+        sidecars = [Path(str(database) + s) for s in ("-journal", "-wal", "-shm")]
+        for path in (state, database, *(p for p in sidecars if os.path.lexists(p))):
+            info = os.lstat(path)
+            if info.st_uid != os.getuid() or info.st_mode & 0o077:
+                raise JobError("current authority state must be owner-only (folder 0700, files 0600)")
+    with database.open("rb") as stream:
+        header = stream.read(20)
+    if len(header) == 20 and (header[18] == 2 or header[19] == 2):
+        # journal_mode=wal is persisted here; a mode=ro reader could create -wal/-shm.
+        raise JobError("current authority state in WAL mode refused")
     from review_store import ReviewStore
     import review_evidence
     current = review_evidence.decisions(ReviewStore.read_only(state))

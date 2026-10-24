@@ -9603,3 +9603,9 @@ osy-d395-s1d\`.
 - 변경: `review_bridge.py`의 `authority`가 `endpoint` 대신 `state`(절대 경로)를 받으면 `ReviewStore.read_only`(SQLite `mode=ro`, 생성·이전·쓰기 없음)로 `review_evidence.decisions`를 같은 PC에서 읽는다. 둘 다/둘 다 없음, 상대·링크 경로, DB 없음, 다른 `workspace_id`는 거절한다. endpoint 경로와 이후 검증·revision·전달은 그대로다. review-app 문서와 D-742 addendum에 설정 예와 이유를 적었다.
 - 증거: 협업 모드 앱이 `--decisions-port`를 거절해 bridge가 `current authority unavailable or not delivered`로 멈춘 관측(2026-10-22경부터)이 원인이다. 원격 시험은 HTTP 문서와 바이트 동일, DB mtime·크기·표 불변, 설정 거절, `-E -s` `--once` 전달 성공을 확인한다.
 - gate 변화: 없음. 모델 PC의 비공개 bridge 설정 교체와 운영 수용은 별도다.
+
+## 2026-10-24 · uncommitted · 검수 bridge state 읽기의 소유자 전용 권한·WAL·정규 경로 강제
+
+- 변경: `read_current_state`가 POSIX에서 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 `mode & 0o077 == 0`일 때만 읽는다(오류 문구에 경로 없음, Windows는 검사 없음). DB 헤더가 WAL이면 거절하고, `..`·정규화되지 않은 경로를 거절한다. review-app 문서에 배포 단계 `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`와 심볼릭 링크 홈 거절을 적고, D-742 addendum에 D-757 관계와 "D-742를 뒤집지 않는 같은 PC state 출처"임을 적었다.
+- 증거: 검토(APPROVE WITH FIXES)가 권한 주장을 강제로 바꾸라고 지적했다. 운영 모델 PC state는 0755·DB 0644이므로 배포 시 권한 변경이 필요하다. 원격 시험은 0755/0644·journal 0644 거절, 0700/0600 성공, WAL 거절, `..` 거절을 확인한다.
+- gate 변화: 없음. 모델 PC 권한 변경·bridge 설정 교체·운영 수용은 별도다.
