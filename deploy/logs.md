@@ -3200,3 +3200,9 @@
 - 변경: 기존 contact observer에 원본 JointState7관절 수집을 추가하고 homing 전·policy 전의 clean/fresh 상태 및 종료 artifact를 검증한다. [검증 기록](../docs/validation/omx-policy-articulation-2026-10-24/result.md).
 - 증거: RED26FAIL→원격52PASS/SDK1SKIP/NEW0. 별도 실제 SDK1PASS0SKIP, 합성100메시지85샘플·invalid0·정리true. 독립 검토2건 Important0.
 - gate 변화: 실제 정책 성공·실물·HF 승격 없음. SDK 관절값은 synthetic transport이며 기존 독립 SIM HOLD를 유지한다. CE 미해결 — 물리 원인 확정은 다음 실제 관절/접촉 event 대조가 필요하다.
+
+## 2026-10-24 · b2421f9f7b · articulation 최종 원본 시각 보존
+
+- 변경: 마지막 유효 메시지가 downsample될 때도 처음·마지막 source stamp를 요약에 보존한다. 기존 sample·신선도·권한 경로는 유지한다.
+- 증거: 최종 원격53PASS/SDK1SKIP/NEW0, 별도 SDK1PASS0SKIP2.64초·93메시지93샘플·invalid0·정리true. 실제 producer pose 수용은 합성 transport와 구분한다.
+- gate 변화: 기존 정책 HOLD, formal·실물·HF0. CE 미해결 — 물리 원인은 아직 확정하지 않았다.

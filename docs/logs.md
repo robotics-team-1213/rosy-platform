@@ -10342,3 +10342,9 @@ osy-d395-s1d\`.
 - 변경: [7관절 관측 기록](validation/omx-policy-articulation-2026-10-24/result.md)에 원본 state·launch freshness·종료 검증과 합성 ROS transport의 수용 경계를 남겼다.
 - 증거: 원격52PASS/SDK1SKIP/NEW0; 별도 실제 SDK1PASS0SKIP/EXIT0,100메시지85샘플, 원본 JSON hash와 정리true. 독립 구현 검토2건 Important0.
 - gate 변화: 실제 정책 episode/formal/물리/HF0. 기존 정책 HOLD 유지. CE 미해결 — 관측 보강은 원인 해결·학습 품질 수용을 뜻하지 않는다.
+
+## 2026-10-24 · b2421f9f7b · articulation 최종 source 시각 검증
+
+- 변경: [관측 기록](validation/omx-policy-articulation-2026-10-24/result.md)을 첫·마지막 source stamp를 포함한 최종 source와 별도 SDK 결과로 갱신했다. 이전 실행 원본은 보존했다.
+- 증거: 원격53PASS/SDK1SKIP/NEW0, 실제 SDK1PASS0SKIP/EXIT0·93메시지93샘플, 양쪽 capture hash와 cleanuptrue 대조.
+- gate 변화: 관절 transport 수용이며 실제 event geometry·정책 성공은 미수용이다. CE 미해결.

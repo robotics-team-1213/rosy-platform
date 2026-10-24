@@ -8,12 +8,14 @@ The existing independent policy evaluation remains HOLD.
 
 ## Committed source and remote checks
 
-Source commit `afd400b7bc8ae856b813a11048cf068b332f4271` contains the collector,
+Source commit `b2421f9f7bab712278d4fa847fe130e38455b7c7` contains the collector,
 observer/job integration and tests. RED commit `57ec5935f3` failed26 remote tests:
 the articulation module/readiness/final-artifact integration did not exist.
 Production commit `c7e10f5ae1` passed50 tests with one SDK skip; the source commit
 then passed52 tests with one SDK skip after adding zero-time warmup and the
-post-homing launch-refusal integration test. Known-failure comparison: NEW0.
+post-homing launch-refusal integration test. The final source additionally
+preserves first/latest source stamps even when the last message is throttled:
+53PASS, one SDK skip, NEW0. Prior artifacts remain in their original directories.
 
 The collector validates every message before storage throttling. It preserves
 publisher order, all seven positions, optional velocities, frame/source stamps
@@ -34,7 +36,7 @@ no Important findings.
 
 ## Actual isolated SDK transport
 
-AI-PC native SDK run at the source commit:1PASS,0SKIP, terminal EXIT0,2.89seconds
+AI-PC native SDK run at the source commit:1PASS,0SKIP, terminal EXIT0,2.64seconds
 pytest time. The runner selected4CPU/4GiB with a5-minute total limit; its startup
 output and preserved wrapper record that selection. No separate live-scope
 resource-property snapshot was collected for this transport probe. The existing
@@ -45,24 +47,25 @@ closure and child cleanup. Its source is `synthetic_transport_only`; the closure
 explicitly records `actual_robot_articulation_verified=false`. There were zero
 robot models, robot commands, policy inferences and optimizer steps.
 
-The captured trace contains100 received messages and85 stored samples,
-invalid0/truncatedfalse. Source stamps span1792830243548157406 through
-1792830245628261091ns. Maximum observed receipt gap123894889ns; end gap9613182ns.
+The captured trace contains93 received messages and93 stored samples,
+invalid0/truncatedfalse. Source stamps span1792831657819855364 through
+1792831659659407545ns. Maximum observed receipt gap21169316ns; end gap21362112ns.
 These are transport observations, not timing acceptance for actual robot poses.
 
 External evidence root: `C:/DevTemp/learning-execution-20261023/`.
 
 | Artifact | SHA256 |
 |---|---|
-| articulation-transport-sdk/out/pytest-tmp/**/policy-articulation.json | `529eab0d951085d22dd6fc7d830a3a3a90524ff1f3b33e69afeba9ffb54fc32e` |
-| articulation-transport-sdk/out/pytest-tmp/**/policy-contacts.json | `a25163caa5c5023dfe974806a2d021fdeb3449b0e6f339754f3670c672952f3f` |
-| articulation-transport-sdk/out/pytest-tmp/**/contact-probe-closure.json | `28f8ff797ec288264d725a6131f757d197542beb062bb8d97d7e819c1d55ddd0` |
+| articulation-transport-sdk-final/out/pytest-tmp/**/policy-articulation.json | `8911ceb94ff3c49b38c749a24e05e0669f347ae34fd23b256ebd8b912b61e024` |
+| articulation-transport-sdk-final/out/pytest-tmp/**/policy-contacts.json | `4c108ad4d17bcb4653599430d9ef468407f6c5b85d39c296c17a794dd06bf876` |
+| articulation-transport-sdk-final/out/pytest-tmp/**/contact-probe-closure.json | `1538dbb5b3c5f121dd6d64b07df296cd4b1b7c220280e7e8d34827e0039b19c9` |
 
-Commands: ordinary runner `python tools/remote/remote_pytest.py --log-dir <external>/articulation-green-final -- test/test_omx_sim_policy_articulation.py test/test_omx_sim_policy_contacts.py test/test_omx_sim_contacts_ros.py -q`;
-separate SDK wrapper `<external>/run_articulation_transport.py --sha afd400b7bc`.
+Commands: ordinary runner `python tools/remote/remote_pytest.py --log-dir <external>/articulation-final-stamps -- test/test_omx_sim_policy_articulation.py test/test_omx_sim_policy_contacts.py test/test_omx_sim_contacts_ros.py -q`;
+separate SDK wrapper `<external>/run_articulation_transport_final.py --sha b2421f9f7b`.
 SDK uses the official remote_sim runner with AI placement and source-HEAD check.
-Logs are `articulation-red/run-1.txt`, `articulation-green-final/run-1.txt` and
-`articulation-transport-sdk/run.txt`. General-run SDK skips are not counted as
+Wrapper SHA256 is `8a501bd10a9f53d30d17f11fb6dde836b2cd752c3584fe192b76018530f5df49`.
+Logs are `articulation-red/run-1.txt`, `articulation-final-stamps/run-1.txt` and
+`articulation-transport-sdk-final/run.txt`. General-run SDK skips are not counted as
 actual SDK execution. There is no physical-device acceptance or real HF transfer.
 
 ## Next acceptance
