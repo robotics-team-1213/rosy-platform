@@ -11,6 +11,23 @@ const result = {asset_sha256: asset, projection_sha256: hash};
 const source = () => ({map_id: 'old-site', places: [{id: 'a', x: 4, y: 5}],
   edges: [{id: 'ab', polyline: [[4, 5], [6, 7]], evidence: {source: 'camera', status: 'reviewed', note: 'old'}}]});
 
+test('raster registration uses normalized pixels and explicit content type', async () => {
+  let map = source(), uploaded;
+  const importer = createDrawingImport({map: () => map, replaceDraft: next => { map = next; },
+    confirmDiscard: async () => true, request: async (path, init) => {
+      if (path.endsWith('/projections')) return {...result, kind: 'raster'};
+      uploaded = init.headers['Content-Type'];
+      return {asset_sha256: asset, format: 'png', width_px: 100, height_px: 50};
+    }});
+  await importer.load({size: 5, type: 'image/png'});
+  assert.equal(uploaded, 'image/png');
+  await importer.register({source_origin_px: [0, 0], map_origin_m: [2, 3], heading_rad: 0,
+    meters_per_pixel: .02}, reference);
+  assert.deepEqual(map.survey.origin, [2, 3]);
+  assert.equal(map.survey.reviewed, false);
+  assert.notEqual(map.map_id, 'old-site');
+});
+
 test('registration preserves geometry and starts a fresh site frame and review', async () => {
   const original = source(); let map = original;
   const importer = createDrawingImport({map: () => map, replaceDraft: next => { map = next; },

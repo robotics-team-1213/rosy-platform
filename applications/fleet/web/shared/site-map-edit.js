@@ -60,6 +60,7 @@ export function appendSurveyElement(map, item) {
     if (kind === 'traffic_signal' && (!item.signal_id || !['physical', 'virtual'].includes(item.signal_kind) || !approaches.length))
       throw new Error('신호등 ID·종류와 제어 진입 차로를 지정하세요');
     next.facilities = [...(next.facilities || []), {id, name: name.trim(), kind, geometry: copy(geometry), approaches: copy(approaches),
+      ...(item.evidence ? {evidence: copy(item.evidence)} : {}),
       ...(kind === 'traffic_signal' ? {signal_id: item.signal_id, signal_kind: item.signal_kind} : {})}];
   } else throw new Error('알 수 없는 지도 요소입니다');
   return next;
@@ -69,7 +70,8 @@ export function reviewSurveyDraft(map, note) {
   if ((!map?.survey && !map?.edges?.some(e => e.evidence)) || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
   const next = copy(map);
   if (next.survey) next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
-  for (const edge of next.edges) {
+  for (const edge of [...next.edges, ...(next.facilities || [])]) {
+    if (next.facilities?.includes(edge) && !edge.evidence) continue;
     if (!next.survey && !edge.evidence) continue;
     const evidenceNote = [edge.evidence?.note, note.trim()].filter(Boolean).join('\n');
     if (evidenceNote.length > 1000) throw new Error('관측 근거와 검토 메모의 합계는 1000자 이내여야 합니다');
@@ -97,6 +99,8 @@ export function editSurveyElement(map, item) {
     edge.speed_cap_mps = old.speed_cap_mps;
     if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
   }
+  if (group === map.facilities && old.evidence)
+    next.facilities.find(row => row.id === item.id).evidence = {...copy(old.evidence), status: 'observed'};
   if (group === map.places && item.yaw === undefined && old.yaw !== undefined)
     next.places.find(row => row.id === item.id).yaw = old.yaw;
   if (group === map.places) {

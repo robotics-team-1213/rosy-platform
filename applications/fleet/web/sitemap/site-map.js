@@ -55,7 +55,7 @@ const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: show
   begin: () => { survey.cancel(); clearPlane(); $('trip-pick').checked = false; state.band = null; },
   changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
     state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
-  render, notice});
+  render, notice, epoch: () => state.sessionEpoch});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 

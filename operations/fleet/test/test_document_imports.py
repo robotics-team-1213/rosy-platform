@@ -37,6 +37,7 @@ SHARED = {
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
     "route-attention.js",
+    "drawing-errors.js",
 }
 
 OWN = {
@@ -100,6 +101,7 @@ OWN = {
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
+        "map-topology.js", "extraction-review.js",
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",

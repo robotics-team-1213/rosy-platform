@@ -5,9 +5,27 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.300
+**Version:** v1.301
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.301 이미지 도면 등록과 범용 추출 후보 (D-835)
+
+기존 STL 입력·변환·해시는 유지한다. `POST /api/fleet/site-map/drawings`는 추가로 `Content-Type: image/png|image/jpeg` raw bytes를 받고 실제 format과 일치하는 단일 프레임 PNG/JPEG만 허용한다. 응답은 `{asset_sha256,format:png|jpeg,width_px,height_px}`다. 원본 bytes는 보존하며 EXIF 방향을 적용하고 투명 배경을 흰색에 합성한 별도 RGB PNG를 표시/추출 기준으로 사용한다. width_px/height_px는 정규화 후 크기다. SVG/HTML/외부 URL/다중 프레임은 거절한다.
+
+기존 projection POST는 `RasterDrawingTransform`도 받는다. 필수 `source_origin_px:[x,y]`, `map_origin_m:[x,y]`, `heading_rad∈[-2π,2π]`, 양수 `meters_per_pixel`이며 모든 수는 유한하다. 원본 픽셀 원점은 정규화 자료의 좌상단, x 오른쪽/y 아래다. 등록 원점은 이미지 경계 안이어야 한다. `p_map=map_origin_m+R(heading_rad)*[px-source_x,source_y-py]*meters_per_pixel`. 이 변환은 원근을 보정하지 않는다. 기존 DrawingTransform과 혼합하거나 다른 source 종류에 적용하면 422다.
+
+Raster projection은 기존 응답에 `kind:raster,format,width_px,height_px,render_sha256`을 추가하고 segments는 빈 배열이다. bounds_m은 변환한 네 모서리의 경계다. hash는 converter version `rosy.raster_projection/1`과 원본/렌더 hash·변환·크기를 포함한 canonical JSON으로 결속한다. `GET /api/fleet/site-map/drawing-projections/{projection_sha256}/render`는 기존 read guard 뒤에서 PNG를 제공하고 `nosniff, Cache-Control: private, no-store`를 설정한다. 원본 GET은 계속 named operator 전용 attachment다.
+
+Raster 원본과 정규화 PNG는 각각 16 MiB 이하, 축별 8192 px 이하·전체 16,000,000 px 이하다. 업로드 60초, worker 10초/512 MiB, 동시 1개·보관 합계 1 GiB이며 기존 drawing error code를 재사용한다. STL의 5초/256 MiB 한도는 바꾸지 않는다. 지도 revision·새 map_id·검토 해제·CAS/활성화 경계는 D-825와 같다. 새 입력은 지도 저장·활성화나 로봇 명령을 발생시키지 않는다.
+
+`POST /api/fleet/site-map/drawing-projections/{projection_sha256}/extractions`는 named operator·기존 CSRF 뒤에서 `DrawingExtractionRequest`를 받는다. `crop_px:[x0,y0,x1,y1]`는 정규화 이미지 경계 안의 양수 크기 정수 사각형, `method=lines|contours`다. 선택 settings는 extra forbid이며 `canny_low=50, canny_high=150`(0…255, low<high), `threshold=20`(1…8192), `min_line_length_px=30`(2…8192), `max_gap_px=3`(0…64), `tolerance_px=1`(0…10, 유한)이다. 정수 설정은 bool·문자열·소수를 거절한다. 입력/출력은 원본 픽셀 좌표이고 ROI offset을 복원한다. 직선은 Canny/HoughLinesP, 윤곽은 반전 Otsu/contour tree와 명시한 허용 오차의 단순화를 사용한다.
+
+응답은 `{extraction_sha256,asset_sha256,projection_sha256,render_sha256,crop_px,method,settings,extractor_version,library_version,candidates}`다. candidate는 `{candidate_id,geometry_px,closed,is_hole}`이며 도로 의미·안전 점수를 포함하지 않는다. 빈 배열은 정상적으로 후보를 찾지 못한 경우이고 잘못된 자료/실행 실패와 구별한다. 후보 ≤2000개·합계 꼭짓점 ≤50,000개·응답 ≤8 MiB를 초과하면 413이며 일부를 몰래 버리지 않는다. 기존 drawing slot/worker/저장량을 공유한다. canonical result에서 extraction_sha256을 뺀 body의 SHA-256으로 보관하며, source/projection/settings/라이브러리 버전을 결속한다. read guard 뒤의 `GET /api/fleet/site-map/drawing-extractions/{extraction_sha256}`로 같은 결과를 읽는다. 결과 생성/읽기는 초안·활성 지도·운행 명령을 바꾸지 않는다.
+
+`POST /api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate`는 named operator·기존 CSRF 뒤에서 기존 DraftRequest의 `{map,expected_revision?}`을 최대 2 MiB·수신 10초로 검증하고 `{map}` canonical body만 반환한다. 저장·CAS·revision 발행·활성화는 하지 않는다. 도형·참조는 기존 SiteMap validator를 사용하며 drawing/survey는 추출의 source/projection과 일치해야 한다. 후보 추출 POST도 같은 2 MiB/10초 수신 한도를 사용한다. 잘못된 요청/도형은 `SITE_MAP_DRAWING_INVALID` 422다. 응답 수락 전 브라우저는 초안 identity·계정 epoch·원본/projection·요청 세대를 다시 검사한다.
+
+선택 `SiteFacility.evidence`는 기존 RoadEvidence와 같은 `{source,status,reference_revision,note}` 형식을 쓰고, 없으면 기존 지도 body에서 생략한다. 후보의 도로/시설에는 운영자가 지정한 용도와 수정한 geometry를 저장하고 note에 `extraction:<sha256> candidate:<id>`를 남긴다. immutable 추출 원본과 저장된 geometry를 대조할 수 있으며 이는 운영자 출처 기록이지 AI 정확도 보증이 아니다. 시설 근거도 survey revision과 일치해야 하며 검토 전 활성화는 기존 `SITE_MAP_ROAD_UNREVIEWED`로 거절한다. 직접 수정·도면 교체·템플릿 복사는 시설 근거도 미검토로 돌리고, 명시적 조사 검토는 해당 근거를 함께 검토한다.
 
 ### v1.300 STL 도면 참조와 Fleet 평면 지도 편집 (D-825)
 
@@ -3666,7 +3684,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.300 | 2026-10-24 | Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
+| v1.301 | 2026-10-24 | (origin #135 v1.293, 2026-10-24 port) Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
+| v1.300 | 2026-10-24 | (origin #133 v1.291, 2026-10-24 port) Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |

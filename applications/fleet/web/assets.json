@@ -371,6 +371,18 @@
       "path": "sitemap/map-editor.css",
       "media_type": "text/css"
     },
+    "map-topology.js": {
+      "path": "sitemap/map-topology.js",
+      "media_type": "application/javascript"
+    },
+    "extraction-review.js": {
+      "path": "sitemap/extraction-review.js",
+      "media_type": "application/javascript"
+    },
+    "drawing-errors.js": {
+      "path": "shared/drawing-errors.js",
+      "media_type": "application/javascript"
+    },
     "site-layer.js": {
       "path": "map/site-layer.js",
       "media_type": "application/javascript"
