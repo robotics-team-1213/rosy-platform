@@ -12,6 +12,7 @@ def grant():
     now = datetime.now(timezone.utc)
     return FleetArmTransferGrant(
         mission_id="m-1", step_id="s-1", action_id="a-1", attempt_id="t-1",
+        owner_journal_id="journal-1", owner_session_id="session-1",
         request_digest="0" * 64, workcell_id="w-1", instance_id="arm-1",
         action_kind="ARM_TRANSFER", arm_transfer=dict(
             object_ref="o-1", source="p-1", target="p-2", catalog_digest="a" * 64,

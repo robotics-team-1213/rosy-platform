@@ -10,6 +10,7 @@ from core_common.protocol import schemas
 def grant(**changes):
     now = datetime(2026, 10, 24, tzinfo=timezone.utc)
     return {**dict(mission_id="m-1", step_id="s-1", action_id="a-1", attempt_id="t-1",
+                   owner_journal_id="journal-1", owner_session_id="session-1",
                    request_digest="0" * 64, workcell_id="workcell-1", instance_id="arm-1",
                    action_kind="ARM_TRANSFER", arm_transfer=payload(), capability_revision="cap-1",
                    config_revision="config-1", authority_epoch=1, dispatch_generation=2,

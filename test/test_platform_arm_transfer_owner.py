@@ -36,8 +36,13 @@ def _setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, w
     catalog = _catalog(kin, profile, workcell_id="omx-1", instance_id="omx-1-control")
     installation = api().ArmTransferInstallation(
         TransferObjectBindings(catalog, {"object-1": "g1"}), "arm-cap-1", "cfg-1", "d" * 64)
+    from omx_adapter.journal_identity import journal_identity
+
+    store, driver, runner = _runner(tmp_path, capability_current=installation.capability_current)
     now = datetime.now(timezone.utc)
     body = dict(mission_id="m-1", step_id="s-1", action_id="a-1", attempt_id="t-1",
+                owner_journal_id=journal_identity(store.path),
+                owner_session_id="session-1" if managed else runner.control_admission.owner.session_id,
                 workcell_id=catalog.workcell_id, instance_id=catalog.instance_id, action_kind="ARM_TRANSFER",
                 request_digest="0" * 64, capability_revision="arm-cap-1", config_revision="cfg-1",
                 authority_epoch=2, dispatch_generation=8, issued_at=now, expires_at=now + timedelta(minutes=1),
@@ -46,7 +51,6 @@ def _setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, w
                                   resource_policy_digest="d" * 64))
     body["request_digest"] = action_grant_digest(body)
     grant = FleetArmTransferGrant.model_validate(body)
-    store, driver, runner = _runner(tmp_path, capability_current=installation.capability_current)
     states = [_state(kin, profile)]
     port = _GoalPort()
     if managed:
@@ -85,7 +89,8 @@ def _setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, w
         installation=installation, profile=profile, kinematics=kin, execution_state=lambda: states[0],
         command_for_phase=lambda accepted, phase: TrajectoryCommand(
             workcell_id=accepted.workcell_id, instance_id=accepted.instance_id,
-            command_id=f"{accepted.action_id}-{phase.phase_id}", session_id="session-1", owner="rule_based",
+            command_id=f"{accepted.action_id}-{phase.phase_id}",
+            session_id=accepted.owner_session_id, owner="rule_based",
             positions=dict(zip(phase.joint_names, phase.points[-1].positions)),
             duration_s=phase.points[-1].time_from_start_s, source_state_sequence=phase.source_state_sequence,
             calibration_revision=phase.calibration_revision, joint_names=phase.joint_names,
@@ -196,6 +201,7 @@ def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_d
     read = ActionApi(reopened).dispatch(dict(version=2, operation="GetAction", action_id=grant.action_id),
                                        peer_uid=1001)
     assert read["status"] == 200 and read["receipt"]["state"] == "SUCCEEDED"
+    assert read["receipt"]["journal_id"] == grant.owner_journal_id
     assert not reopened._phase_runners and not reopened_driver.submissions
 
 

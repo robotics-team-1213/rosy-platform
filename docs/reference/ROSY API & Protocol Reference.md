@@ -5,9 +5,46 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.305
+**Version:** v1.306
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.306 Managed transfer capability and target-owner binding (D-856)
+
+Local IPC v2 adds Fleet-authenticated read-only `GetTransferCapability`. Its request
+has exactly `version: 2` and `operation: GetTransferCapability`; success has exactly
+`version: 2`, `status: 200`, and `capability: ArmTransferCapability`. A coordinator
+or unknown UID cannot obtain this report through Fleet principal authentication.
+Wrong version/shape is 400; an unavailable, disabled, unmanaged or mismatched
+installation is 503 `ARM_TRANSFER_CAPABILITY_UNAVAILABLE`; peer refusal is 403.
+The existing `GetOwnerIdentity` contract and envelope protocol_version 1.0 remain.
+
+The closed immutable capability contains exactly `action_kind: ARM_TRANSFER`,
+`control_mode: fleet_managed`, `workcell_id`, `instance_id`, `journal_id`,
+`owner_session_id`, `catalog_digest`, `bindings_digest`, `resource_policy_digest`,
+`capability_revision`, and `config_revision`. It derives from the actual registered
+managed phase factory, its shared admission/store/final owner, and the current
+canonical journal identity read in the same SQLite snapshot as managed scope.
+It cannot be supplied by a static identity dict. A read never creates a missing
+journal identity. It describes installation, without proving idle/admission,
+planning feasibility, collision checking, simulation contact or physical clearance.
+
+ARM grants now require `owner_journal_id` and `owner_session_id` in their complete
+canonical digest. Journal identifiers are strict trimmed control-free strings of
+1..64 characters; session identifiers use the physical-reference 1..192 limit.
+The owner checks both before journaling and repeats the binding at managed phase
+submission. Missing/stale target bindings do not inherit approval or replay an
+earlier ARM grant. This revises the unreleased ARM library path; existing
+CELL_TRANSFER and TRIP grant formats are unchanged. Fleet HTTP/registry dispatch
+of ARM remains closed pending approval/claims/closure/consumer integration.
+
+ARM receipts expose the actual canonical journal from the Action snapshot;
+static identity metadata cannot overwrite it. Fleet rejects a missing/different
+journal ID against the grant. A same-journal past Action stays readable after an
+owner session change, while a new execution targeting the old session is refused.
+For ARM, SDK GetAction 404 always means fenced reconciliation is needed; it does
+not return verified absence or permit automatic replay, reassignment or claim
+release. Read-only capability lookup and action success also do not release claims.
 
 ### v1.305 Installed neutral arm owner execution (D-856)
 

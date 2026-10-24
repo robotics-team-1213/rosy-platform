@@ -10,6 +10,7 @@ from core_common.protocol.schemas import FleetArmTransferGrant
 from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
+from omx_adapter.installed_transfer_factory import InstalledArmTransferFactory
 from omx_adapter.managed_transfer_port import _ManagedTransferPort
 from omx_adapter.phase_gate import PHASE_WAIT
 from omx_adapter.pick_place_runner import PickPlaceRunner
@@ -139,7 +140,8 @@ def create_arm_transfer_phase_factory(*, installation, profile, kinematics, exec
             recorder, grant, plan, command_for_phase=lambda phase: command_for_phase(grant, phase),
             goal_port=admitted_port, submission_fence=submission_fence, phase_gate=gate,
             current_fence=current_fence, current_execution_state=execution_state,
-            start_state_tolerances=profile.start_state_tolerances(), max_joint_state_age_s=profile.max_joint_state_age_s,
+            start_state_tolerances=profile.start_state_tolerances(),
+            max_joint_state_age_s=profile.max_joint_state_age_s,
             monotonic=clock, now=now, cell_profile=profile, gripper_readback=readback,
             held_object_id=grant.arm_transfer.object_ref)
         if control_admission is not None:
@@ -161,4 +163,7 @@ def create_arm_transfer_phase_factory(*, installation, profile, kinematics, exec
                                              max_age_s=profile.max_joint_state_age_s, monotonic=clock,
                                              complete_if_current=complete_if_current, now=now)
 
-    return create
+    if control_admission is None:
+        return create
+    return InstalledArmTransferFactory(create, installation.bindings, installation.capability_revision,
+        installation.config_revision, installation.resource_policy_digest, control_admission, goal_port)

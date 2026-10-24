@@ -11,7 +11,7 @@ from .device_actions import (  # noqa: F401
     StopRequestSource, ResolvedTargetEvidence, FleetActionGrant, DeviceActionReceipt,
     DeviceActionLookup, DeviceActionCancelRequest, LocalStopRequest, LocalStopQuery,
     LocalStopRearmRequest, LocalStopSnapshot)
-from .arm_transfer import ArmTransferPayload, FleetArmTransferGrant  # noqa: F401
+from .arm_transfer import ArmTransferCapability, ArmTransferPayload, FleetArmTransferGrant  # noqa: F401
 
 from .arm_transfer_preflight import (  # noqa: F401
     ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)

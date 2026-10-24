@@ -8,6 +8,22 @@ from .arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 ArmActionId = Annotated[ArmPhysicalRef, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")]
 ArmScopeId = Annotated[ArmActionId, Field(max_length=96)]
 ArmRevision = Annotated[ArmPhysicalRef, Field(max_length=128)]
+ArmJournalId = Annotated[ArmPhysicalRef, Field(max_length=64)]
+
+
+class ArmTransferCapability(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    action_kind: Literal["ARM_TRANSFER"]
+    control_mode: Literal["fleet_managed"]
+    workcell_id: ArmScopeId
+    instance_id: ArmScopeId
+    journal_id: ArmJournalId
+    owner_session_id: ArmPhysicalRef
+    catalog_digest: ArmDigest
+    bindings_digest: ArmDigest
+    resource_policy_digest: ArmDigest
+    capability_revision: ArmRevision
+    config_revision: ArmRevision
 
 
 class ArmTransferPayload(BaseModel):
@@ -32,6 +48,8 @@ class FleetArmTransferGrant(BaseModel):
     step_id: ArmActionId
     action_id: ArmActionId
     attempt_id: ArmActionId
+    owner_journal_id: ArmJournalId
+    owner_session_id: ArmPhysicalRef
     request_digest: ArmDigest
     workcell_id: ArmScopeId
     instance_id: ArmScopeId

@@ -7,6 +7,7 @@ import os
 import socket
 import struct
 import threading
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -21,6 +22,8 @@ from core_common.protocol.workcell_barrier import CoordinatorStopReason
 
 from .action_runner import ActionRunner, action_grant_digest, parse_action_grant
 from .local_stop import LocalStopBlocked, LocalStopController
+from .installed_transfer_factory import InstalledArmTransferFactory
+from .journal_identity import existing_journal_identity
 
 # A phase-runner-only kind is never journaled from a v1 frame, whose reply drops the
 # ordered phase summaries Fleet needs to reconcile it (D-403 §2).
@@ -64,7 +67,7 @@ class ActionApi:
 
     def _success(self, version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(receipt)
-        if self.identity and self.identity.get("journal_id"):
+        if "journal_id" not in payload and self.identity and self.identity.get("journal_id"):
             payload["journal_id"] = self.identity["journal_id"]
         if version == 1:
             payload.pop("phase_summaries", None)
@@ -87,6 +90,22 @@ class ActionApi:
             if routed is not None:
                 return routed
         try:
+            if operation == "GetTransferCapability":
+                self.runner._principal(peer_uid)
+                if version != 2:
+                    return self._error("UNSUPPORTED_VERSION", "transfer capability requires v2",
+                                       status=400, version=version)
+                if set(request) != {"version", "operation"}:
+                    raise ValueError("GetTransferCapability contains unsupported fields")
+                try:
+                    factory = self.runner.phase_runner_factories.get("ARM_TRANSFER")
+                    if not isinstance(factory, InstalledArmTransferFactory):
+                        raise PermissionError("managed transfer factory is unavailable")
+                    capability = factory.describe(self.runner, self.identity)
+                except Exception:
+                    return self._error("ARM_TRANSFER_CAPABILITY_UNAVAILABLE",
+                                       "installed managed transfer owner is unavailable", status=503, version=version)
+                return {"version": 2, "status": 200, "capability": capability.model_dump(mode="json")}
             if operation == "CheckTransfer" and self.transfer_preflight_api is not None:
                 return self.transfer_preflight_api.dispatch(request, peer_uid=peer_uid)
             if operation == "SubmitAction":
@@ -112,7 +131,11 @@ class ActionApi:
                 if receipt is None:
                     missing = self._error("ACTION_NOT_FOUND", "Action is unavailable",
                                           status=404, version=version)
-                    if self.identity and self.identity.get("journal_id"):
+                    with closing(self.runner.store._connect()) as connection:
+                        journal = existing_journal_identity(connection)
+                    if journal is not None:
+                        missing["journal_id"] = journal
+                    elif self.identity and self.identity.get("journal_id"):
                         missing["journal_id"] = self.identity["journal_id"]
                     return missing
                 return self._success(version, receipt)

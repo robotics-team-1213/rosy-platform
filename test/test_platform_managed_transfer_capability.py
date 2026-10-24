@@ -41,7 +41,7 @@ def test_capability_is_derived_from_registered_factory_and_has_no_action_side_ef
 
 
 @pytest.mark.parametrize("fault", ["unmanaged", "uninstalled", "static-only", "disabled", "port-owner",
-                                    "session", "journal", "scope", "admission"])
+                                    "session", "journal", "scope", "admission", "missing-journal", "factory"])
 def test_unproven_or_changed_installation_does_not_advertise_a_capability(tmp_path, kin, profile, fault):
     api, _, store, port, _ = _api(tmp_path, kin, profile, managed=fault != "unmanaged",
                                  install=fault not in {"uninstalled", "static-only"})
@@ -60,10 +60,19 @@ def test_unproven_or_changed_installation_does_not_advertise_a_capability(tmp_pa
             connection.commit()
     elif fault == "admission":
         api.runner.control_admission = None
+    elif fault == "missing-journal":
+        with closing(sqlite3.connect(store.path)) as connection:
+            connection.execute("DROP TABLE omx_journal_identity")
+            connection.commit()
+    elif fault == "factory":
+        api.runner.phase_runner_factories["ARM_TRANSFER"] = lambda *_: None
     reply = api.dispatch(FRAME, peer_uid=1001)
     assert reply["status"] == 503, reply
     assert reply["error"]["code"] == "ARM_TRANSFER_CAPABILITY_UNAVAILABLE"
     assert not port.submissions and store.unresolved_actions() == []
+    if fault == "missing-journal":
+        with closing(sqlite3.connect(store.path)) as connection:
+            assert not connection.execute("SELECT 1 FROM sqlite_master WHERE name='omx_journal_identity'").fetchone()
 
 
 @pytest.mark.parametrize("frame,uid,status", [

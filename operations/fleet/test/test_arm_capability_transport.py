@@ -42,7 +42,7 @@ def test_capability_read_is_single_exchange_and_validates_scope_and_closed_contr
 
 @pytest.mark.parametrize("journal", [None, "other-journal"])
 def test_arm_receipt_requires_the_grants_canonical_journal(tmp_path, journal):
-    body = grant().model_copy(update={"owner_journal_id": "journal-1", "owner_session_id": "session-1"})
+    body = grant()
     response = _response(body, phases=[])
     response["receipt"]["journal_id"] = journal
     client = UnixLocalActionTransport(tmp_path)
@@ -52,7 +52,7 @@ def test_arm_receipt_requires_the_grants_canonical_journal(tmp_path, journal):
 
 
 def test_arm_404_is_not_returned_as_verified_absence(tmp_path):
-    body = grant().model_copy(update={"owner_journal_id": "journal-1", "owner_session_id": "session-1"})
+    body = grant()
     client = UnixLocalActionTransport(tmp_path)
     client._exchange = lambda *_: {"version": 2, "status": 404, "journal_id": "journal-1",
                                    "error": {"code": "ACTION_NOT_FOUND"}}

@@ -12,10 +12,11 @@ RECEIPT_IDENTITY = ("mission_id", "step_id", "action_id", "attempt_id", "workcel
 
 def receipt_matches_grant(grant: FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant,
                           receipt: DeviceActionReceipt) -> bool:
-    return all(getattr(receipt, name) == getattr(grant, name) for name in RECEIPT_IDENTITY)
+    return (all(getattr(receipt, name) == getattr(grant, name) for name in RECEIPT_IDENTITY)
+            and (not isinstance(grant, FleetArmTransferGrant) or receipt.journal_id == grant.owner_journal_id))
 
 
-def verify_phase_receipt(grant: FleetActionGrant | FleetCellTransferGrant, response: object, *,
+def verify_phase_receipt(grant: FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant, response: object, *,
                          phase_ids: tuple[str, ...] | None = None) -> DeviceActionReceipt:
     """``phase_ids`` names the ordered phases a success must report; without it, ordinals 0-3."""
     raw = response

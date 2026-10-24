@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import re
 import uuid
 
+from .journal_identity import existing_journal_identity
+
 
 @dataclass(frozen=True)
 class ManagedTransferScope:
@@ -57,6 +59,24 @@ def load_scope(store, workcell_id, instance_id):
     if scope is not None and (scope.workcell_id, scope.instance_id) != (workcell_id, instance_id):
         raise PermissionError("managed Action journal belongs to another physical owner")
     return scope
+
+
+def validate_transfer_owner(admission, grant):
+    with closing(admission.store._connect()) as connection:
+        connection.execute("BEGIN")
+        if (existing_journal_identity(connection) != grant.owner_journal_id
+                or read_scope(connection) != admission._managed_scope):
+            raise PermissionError("transfer targets another owner journal")
+
+    def current(_state):
+        with admission._lock:
+            admission._session()
+            owner = admission.owner
+            if (owner._control_admission is not admission or owner.session_id != grant.owner_session_id
+                    or (owner.config.workcell_id, owner.config.instance_id) != (
+                        grant.workcell_id, grant.instance_id)):
+                raise PermissionError("transfer targets another owner session or scope")
+    admission.owner.run_admission_policy(current)
 
 
 def bind_scope(store, workcell_id, instance_id, policy_digest):

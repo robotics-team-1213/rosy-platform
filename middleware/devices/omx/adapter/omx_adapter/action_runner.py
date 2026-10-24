@@ -12,6 +12,7 @@ from core_common.protocol.schemas import FleetActionGrant, FleetArmTransferGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
+from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
 
 
@@ -207,6 +208,7 @@ class ActionRunner:
             "observed_at": action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
             "phase_summaries": projection(snapshot)['phase_summaries'] if action.get('attempt_id') else [],
+            **({"journal_id": snapshot["journal_id"]} if action["action_kind"] == "ARM_TRANSFER" else {}),
         }
 
     def submit(self, grant: ActionGrant, *, peer_uid: int) -> dict[str, object]:
@@ -221,6 +223,8 @@ class ActionRunner:
         self._validate(grant)
         if grant.action_kind in {"CELL_TRANSFER", "ARM_TRANSFER"} and self.control_admission is None:
             raise PermissionError(f"{grant.action_kind} requires shared control admission")
+        if isinstance(grant, FleetArmTransferGrant):
+            validate_transfer_owner(self.control_admission, grant)
         request = grant.model_dump(mode="json")
         def create_action():
             return self.store.create_action(

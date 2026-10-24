@@ -4,7 +4,7 @@ from datetime import datetime
 
 from core_common.protocol.schemas import FleetArmTransferGrant
 
-from .managed_transfer_scope import load_scope
+from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
 from .pick_place_runner import PickPlaceRunner
 
@@ -45,6 +45,8 @@ class _ManagedTransferPort:
             with admission._lock:
                 admission._session()
                 self._current_time()
+                if command.session_id != self.grant.owner_session_id:
+                    raise PermissionError("managed command targets another owner session")
                 if (getattr(admission._managed_command, "command", None) is not None
                         or admission._managed_scope != self.scope):
                     raise PermissionError("managed command context is already occupied or changed")
@@ -62,8 +64,7 @@ class _ManagedTransferPort:
         digest = self.executor.current_submission_digest(command)
         if digest is None:
             raise PermissionError("command is outside the validated phase submission")
-        if load_scope(self.admission.store, self.grant.workcell_id, self.grant.instance_id) != self.scope:
-            raise PermissionError("managed owner journal changed")
+        validate_transfer_owner(self.admission, self.grant)
         parent = self.recorder.parent()
         phase = next((p for p in self.recorder.phases() if p["phase_id"] == command.phase_id), None)
         if (parent is None or parent["state"] not in {"SUBMITTING", "ACCEPTED", "RUNNING"}

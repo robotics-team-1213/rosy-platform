@@ -11,6 +11,7 @@ from typing import Any, Mapping, Protocol
 
 from core_common.protocol.schemas import (
     ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckRejection,
+    ArmTransferCapability,
     DeviceActionReceipt,
     FleetActionGrant,
     FleetArmTransferGrant,
@@ -104,6 +105,8 @@ class UnixLocalActionTransport:
         error = response.get("error")
         if (response.get("status") == 404 and isinstance(error, Mapping)
                 and error.get("code") == "ACTION_NOT_FOUND"):
+            if isinstance(grant, FleetArmTransferGrant):
+                raise LocalActionUnavailable("ARM_TRANSFER absence requires fenced reconciliation")
             return None  # only the owner's explicit "no such Action"; other 404s are errors
         return self._parse_receipt(grant, response)
 
@@ -117,6 +120,20 @@ class UnixLocalActionTransport:
             "reason": reason,
             "requested_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    def transfer_capability(self, instance_id: str, *, workcell_id: str) -> ArmTransferCapability:
+        response = self._exchange(instance_id, {"version": 2, "operation": "GetTransferCapability"})
+        try:
+            if (set(response) != {"version", "status", "capability"}
+                    or type(response.get("version")) is not int or response["version"] != 2
+                    or type(response.get("status")) is not int or response["status"] != 200):
+                raise ValueError("capability response is unavailable or unsupported")
+            capability = ArmTransferCapability.model_validate(response.get("capability"))
+            if (capability.workcell_id, capability.instance_id) != (workcell_id, instance_id):
+                raise ValueError("capability response targets another owner")
+        except (TypeError, ValueError) as exc:
+            raise LocalActionUnavailable("invalid or unavailable managed transfer capability") from exc
+        return capability
 
     def owner_identity(self, instance_id: str) -> Mapping[str, Any]:
         """The owner's self-reported identity (simulation flag, D-390 §5), read over the same UDS."""
