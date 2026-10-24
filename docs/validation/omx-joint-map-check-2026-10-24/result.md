@@ -13,7 +13,8 @@
 
 ## 판정의 범위
 
-- 판정의 `arm`은 `omx-cell-s-follower`다. 이 팔의 native 데이터셋을 검수할 때 `--rig-revision`으로 같은 값을 쓴다. 변환은 데이터셋의 rig revision이 이 값과 같을 때만 열린다.
+- 판정의 `arm`은 `omx-cell-s-follower`다. 한 팔 셀이므로 팔 키는 붙이지 않는다. 이 팔의 native 데이터셋을 검수할 때 `--rig-revision`으로 같은 값을 쓴다. 변환은 데이터의 팔 정체가 이 값과 같을 때만 열린다.
+- 이 이름은 운영자가 정한 것이며 하드웨어가 증명하지 않는다. 측정과 판정에는 장치 시리얼을 넣지 않았다. 배선을 바꾸거나 팔을 교체하면 새 rig revision으로 다시 측정하고 판정한다.
 - 판정은 보정 range digest(sha256 `41b49d250f4f35cbdc8ddc3695fdd9318a2c1b132cd2199cd9d708ca39f9770a`)도 기록한다. 다만 이 PC의 팔로워 보정은 S 셀, arm_a, arm_b 모두 range가 0~4095로 같아서, 이 digest만으로는 팔을 구분하지 못한다. 팔 구분은 rig revision이 맡는다.
 
 ## 결과

@@ -77,7 +77,9 @@ def check(probes, *, still_ticks=4, arm=None, probe_files=(), calibration_digest
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('probes', type=Path, nargs='+', help='two or more register_probe.py JSON outputs of a resting arm')
-    parser.add_argument('--arm', required=True, help="the rig_revision this arm's datasets are reviewed under")
+    parser.add_argument('--arm', required=True,
+                        help="this follower's identity: its datasets' rig_revision, plus /arm_a or /arm_b on a two-arm rig "
+                             "(action_space.arm_identity); an operator-declared label, not hardware-proven")
     parser.add_argument('--calibration', type=Path, required=True, help='LeRobot follower calibration JSON in use')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)

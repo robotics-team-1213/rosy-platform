@@ -75,6 +75,9 @@ def test_main_exit_codes(tmp_path):
     assert check_map.main([good, again, *arm, '--out', str(tmp_path / 'ok.json')]) == 2  # never replaces a verdict
     assert check_map.main([good, good, *arm, '--out', str(tmp_path / 'same.json')]) == 2  # one file named twice
     assert check_map.main([good, *arm, '--out', str(tmp_path / 'one.json')]) == 2  # one snapshot is not enough
+    for bad_cal in (str(tmp_path / 'missing.json'), write('half.json', {'gripper': CAL['gripper']})):
+        assert check_map.main([good, again, '--arm', ARM, '--calibration', bad_cal,
+                               '--out', str(tmp_path / 'badcal.json')]) == 2
     failed = [write(n, {'error': 'busy'}) for n in ('f1.json', 'f2.json')]  # register_probe output without motors
     assert check_map.main([*failed, *arm, '--out', str(tmp_path / 'f.json')]) == 2
     for probes, bind in (([probe()], BIND), ([probe(), probe()], dict(BIND, arm=' ')),
