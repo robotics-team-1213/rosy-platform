@@ -48,6 +48,7 @@ Create a private LeRobot RecordConfig using `robot.type: rosy_omx` and:
 | `policy_revision` | Exact revision authorized in CORE's installed session |
 | `joint_names` | Exact installed ordered names; no aliases |
 | `camera_name`, `camera_height`, `camera_width` | Exact installed RGB camera |
+| `extra_cameras` | D-854: further installed cameras after the first, in installed order: `{name: [height, width]}`. Empty for one camera |
 
 Use a new private dataset path, an explicit task and `push_to_hub: false`.
 Recordings from this adapter use **radians**, `*.pos` joint features and an HWC

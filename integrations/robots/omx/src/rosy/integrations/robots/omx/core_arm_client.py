@@ -22,6 +22,10 @@ class CoreArmError(RuntimeError):
         self.code, self.status = code, status
 
 
+def _camera_layout(cameras):
+    return [(c['name'], c['shape']) for c in cameras]
+
+
 class CoreArmClient:
     def __init__(self, url, *, token, policy_revision, timeout=2.0):
         parsed = urlsplit(url)
@@ -61,6 +65,8 @@ class CoreArmClient:
         if (info.get('policy_revision') != self.policy_revision or info.get('simulation') is not True
                 or info.get('units') != 'rad'):
             raise ValueError('CORE installed policy pin or supported units differ')
+        if not info.get('cameras'):  # A D-800 CORE reports only the single ``camera``.
+            info = dict(info, cameras=[info['camera']])
         self.info = info
 
     def _stop_best_effort(self):
@@ -85,11 +91,11 @@ class CoreArmClient:
                     time.sleep(0.01)
             if (source['policy_revision'] != self.policy_revision
                     or set(source['positions']) != set(self.info['joint_names'])
-                    or source['camera']['name'] != self.info['camera']['name']
-                    or source['camera']['shape'] != self.info['camera']['shape']):
+                    or _camera_layout(source.get('cameras') or [source['camera']])
+                    != _camera_layout(self.info['cameras'])):
                 raise ValueError('CORE observation differs from installed policy')
             self._observation_id = source['observation_id']
-            return source
+            return dict(source, cameras=source.get('cameras') or [source['camera']])
         except Exception:
             self._stop_best_effort()
             raise
