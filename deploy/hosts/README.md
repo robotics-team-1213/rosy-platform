@@ -23,6 +23,9 @@
      --source <upstream-a> --source <upstream-b> --source <upstream-c> --allow <client-cidr>
    ```
 
+   관제의 외부 공용 시간원은 64초마다 조회한다. 현장 Linux 클라이언트는 승인된 내부
+   관제 서버만 16–64초 간격으로 조회한다. 공용 서버에 내부용 16초 간격을 적용하지 않는다.
+
 3. **각 Linux PC·로봇:** 관제 서버가 먼저 동기된 뒤 같은 도구로 등록한다. 서버는 DHCP가
    바뀌어도 유지되는 승인된 DNS/mDNS 이름을 쓴다. 서로 다른 공용 pool로 우회하지 않는다.
    모든 기기에 같은 `--source` 하나를 사용한다. 두 번째 source와 개별 공용 fallback은 거부한다.
@@ -47,6 +50,9 @@
    w32tm /query /status /verbose
    w32tm /stripchart /computer:<site-ntp-name> /dataonly /samples:10
    ```
+
+   Windows 설치기는 registry 원본을 먼저 보존하고 내부 관제 peer의 최소·최대 polling을
+   64초로 맞춘다. 실제 서비스 설정은 관리자 창에서 `w32tm /query /configuration`으로 확인한다.
 
 5. **수용:** Linux `check`의 JSON `synchronized=true`와 exit 0, 선택된 시간원, 표본 시각을
    장치별로 기록한다. 보고 오차 상한 50ms·표본 나이 180초 기준을 벗어나면 exit 1이다.
