@@ -10244,3 +10244,10 @@ osy-d395-s1d\`.
 - 소스 대조: Fleet의 topology/runtime/routes/service, CLI, site Caddy·Compose를 확인했다. 기본 site Compose에는 control-unit 인자·mount가 없고 peer client의 기본 TLS 신뢰에 site `SSL_CERT_FILE`이 자동 적용되지 않으므로 설치만으로 중첩 연결 완료를 주장하지 않는다. 새 API·장치 권한·배포 변경은 없다.
 - 검증: 독립 계약 검토와 커밋된 revision의 공식 원격 회귀·known failures 비교 후 착지한다. 기존 소프트웨어 검증은 동결된 pipeline 기록을 참조하며 현장 검증으로 확대하지 않는다.
 - CE: 해당 없음 — 역할·배치 제약과 다음 수용 기준을 해당 정본에 직접 남겼다. 실제 네트워크 장애를 해결한 사례는 아니다.
+
+## 2026-10-24 · bbf2af074bb7 · SIM 제어기 추종 기록 보완
+
+- 변경: [관측 검증 기록](validation/omx-policy-controller-tracking-2026-10-24/result.md)과 읽기 전용 Jazzy reference/feedback/error 수집기를 추가했다. 최대10Hz·6000개이며 진단 오류는 원래 정책 결과와 분리한다.
+- 증거: committed RED 후 AI 원격 회귀116개 통과·NEW0·skip0. 독립 검토에서 owner/session 권한·허용치·목표 판정과 cleanup 경계를 확인했다.
+- gate 변화: 실제 정책 작업 성공은 기존 HOLD다. 수집기 회귀는 물리 원인 해결·운영·실물·HF 수용을 뜻하지 않는다. CE 미해결 — 실제 추종 원인을 진단한다.
+- 실제 진단: 별도 manifest로 calibration1회 종료0·331추종 샘플·96파일을 검증한 뒤 정책1회 종료1·748샘플·126파일을 검증했다. 41목표 모두 성공했지만42번째 intent의 journal_prepare733.731ms 중 기존 lease가 만료돼 제출 전 HOLD했다. 원래 JTC 실패는 재현되지 않았고 formal0·optimizer0을 유지한다. archive·SQLite·timing·closure 독립 검토 Important 없음.
