@@ -13,7 +13,7 @@ Isaac 버전은 D-434 §3이 정한 5.1이다(D-322 개정 완료). D-434 §3이
 
 ### Context
 
-- VLA는 영상이 핵심 입력이라 렌더링 차이가 성능을 좌우한다. 파지는 접촉 물리의 영향을 받는다. Isaac Sim은 RTX 렌더링, Replicator 무작위화, PhysX GPU, Isaac Lab 병렬 환경을 준다. Gazebo는 렌더링이 단순하지만, OMX 장면, top·front 카메라, CORE·owner·Fleet lease 연결, `remote_sim` 시험 자산을 이미 갖고 있다.
+- VLA는 영상이 핵심 입력이라 렌더링 차이가 성능을 좌우한다. 파지는 접촉 물리의 영향을 받는다. Isaac Sim은 RTX 렌더링, Replicator 무작위화, PhysX GPU, Isaac Lab 병렬 환경을 준다. Gazebo는 렌더링이 단순하지만, OMX 장면, 작업대 카메라 1대(`workcell_camera`, top·front 2대는 P0 시험이 world에 덧붙인다), CORE·owner·Fleet lease 연결, `remote_sim` 시험 자산을 이미 갖고 있다.
 - 저장소의 Isaac 경로는 OMX에 대해서는 OMX-F 가져오기와 관절 검사까지다. 카메라, 장면, 팔 제어 ROS 연결은 아직 없다.
 - 두 GPU PC는 모두 RTX 5080 16GB다. 2026-10-24~25에 `nvidia-smi`로 본 사용량은 모델 PC 약 0.4GB, AI PC 약 10GB(ollama 등)였다. AI PC 지연 재측정에서는 전처리가 1차보다 느렸고, 기록은 원인을 CPU 공유 부하로 추정했다(`docs/validation/policy-latency-smolvla-2026-10-24b/`, 원인 미확인).
 - D-516은 모델 PC를 학습·평가, AI PC를 승인된 추론으로만 나눴다. 한 PC로는 Isaac 구축, 데이터 생산, 학습, 평가가 줄을 서서 늦어진다.
