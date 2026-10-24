@@ -3230,3 +3230,9 @@
 - 변경: `maxdistance`를 chrony 기본 3초로 복구해 WAN root distance가 100ms를 넘는 공통 서버도 시계를 보정하도록 했다. 50ms UTC 정밀도·stale 검사는 유지했다. 모델·AI 설정은 백업·구문 검사 및 step 없는 재시작으로 복구했고, 관제는 기존 NTS를 유지한 채 최대 polling 64초를 적용했다.
 - 증거: [후속 검증](../docs/validation/shared-time-sync-source-selection-2026-10-24/result.md). 원격 red 재현→34개/영향 354개 통과·NEW 0, 독립 검토 주요 지적 없음. 두 PC가 같은 source를 실제 선택, stratum 4/Normal/enabled 및 남은 correction 1ms 미만을 관측했다.
 - gate 변화: PC 공통 NTP 실제 동기는 복구했다. 보고 UTC 상한 약 140ms로 정밀도 수용은 HOLD, 오프라인 Pinky 두 대·모바일/MCU·재부팅 수용도 남는다. 임시 워크트리 한 개는 사용자 예외 승인 범위다. CE 미해결 — 전체 장치 수용 전이며 원인·회귀·운영 안내는 보존했다.
+
+## 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성
+
+- 변경: D-863 network-only agent·AP HTTPS 복구·장치 결속 첫 부팅 인계, bridge/기능 릴리스 discovery와 signed boot catalog/inverse를 연결했다. 전역 claim과 radio lock, 실제 연결 관측, 비밀 없는 재접속 작업 조회를 사용한다.
+- 증거: [검증 기록](../docs/validation/device-network-recovery-2026-10-24/result.md). 경계 332, 업데이트/화면 680, 설치 격리 41, opt-in 브라우저 10 passed. 선택별 중복이 있어 합산하지 않는다. 원격 skip 60은 미검증이며 PowerShell inverse 실패 중단은 별도 mock 실행했다. 독립 검토의 deferred reconcile·fallback claim·부팅 복구 오류 전파를 회귀로 보완한다.
+- gate 변화: SOURCE 근거 추가. signed ARM64 산출물·Pinky 무선/TLS 등록·정전/재부팅·OTA DEVICE/FIELD 수용은 미실시이며 배포하지 않았다. CE: 기존 첫 부팅 Wi-Fi 교훈 갱신, 호스트 회귀와 실물을 구분했다.

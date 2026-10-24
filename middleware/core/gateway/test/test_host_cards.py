@@ -118,7 +118,7 @@ def test_an_unparseable_reply_is_distinct_from_no_reply():
 def test_a_non_boolean_agent_ok_cannot_make_status_fresh(client, monkeypatch):
     payload = {"ok": "false", "code": "OK", "observed_at": datetime.now(timezone.utc).isoformat(),
                "data": {"mode": "SITE_STA"}}
-    monkeypatch.setattr("core_api_web.api.v1.host._agent", lambda _svc: HostAgentClient(
+    monkeypatch.setattr("core_api_web.api.v1.host._network_agent", lambda _svc: HostAgentClient(
         connect=lambda: FakeConnection(payload)))
 
     body = client.get("/api/v1/host/network", headers=_auth(VIEWER_TOKEN)).json()
@@ -213,7 +213,8 @@ def test_host_status_evidence_is_judged_from_agent_observation(client, monkeypat
     observed = (datetime.now(timezone.utc) - timedelta(seconds=offset_s)).isoformat()
     payload = {"ok": True, "code": "OK", "observed_at": observed,
                "data": {"mode": "SITE_STA"}}
-    monkeypatch.setattr("core_api_web.api.v1.host._agent", lambda _svc: HostAgentClient(
+    helper = "_network_agent" if path.endswith("/network") else "_agent"
+    monkeypatch.setattr("core_api_web.api.v1.host." + helper, lambda _svc: HostAgentClient(
         connect=lambda: FakeConnection(payload)))
 
     body = client.get(path, headers=_auth(VIEWER_TOKEN)).json()
@@ -231,7 +232,8 @@ def test_missing_or_invalid_agent_observation_is_unavailable(client, monkeypatch
     payload = {"ok": True, "code": "OK", "data": {"mode": "SITE_STA"}}
     if observed is not None:
         payload["observed_at"] = observed
-    monkeypatch.setattr("core_api_web.api.v1.host._agent", lambda _svc: HostAgentClient(
+    helper = "_network_agent" if path.endswith("/network") else "_agent"
+    monkeypatch.setattr("core_api_web.api.v1.host." + helper, lambda _svc: HostAgentClient(
         connect=lambda: FakeConnection(payload)))
 
     body = client.get(path, headers=_auth(VIEWER_TOKEN)).json()
@@ -362,7 +364,7 @@ def test_a_card_does_not_echo_a_secret_the_agent_sent(client, monkeypatch):
     def fake_agent(_svc):
         return HostAgentClient(connect=lambda: FakeConnection(payload))
 
-    monkeypatch.setattr("core_api_web.api.v1.host._agent", fake_agent)
+    monkeypatch.setattr("core_api_web.api.v1.host._network_agent", fake_agent)
 
     body = client.get("/api/v1/host/network", headers=_auth(VIEWER_TOKEN)).json()
 
@@ -615,7 +617,7 @@ def test_connect_relays_ssid_and_psk_but_does_not_echo_the_secret(client, monkey
     def fake_agent(_svc):
         return HostAgentClient(connect=lambda: connection)
 
-    monkeypatch.setattr("core_api_web.api.v1.host._agent", fake_agent)
+    monkeypatch.setattr("core_api_web.api.v1.host._network_agent", fake_agent)
 
     secret = "supersecretpsk"
     body = client.post(
@@ -651,3 +653,106 @@ def test_set_mode_relays_enumerated_d26_mode(client, monkeypatch):
     assert sent["params"] == {"mode": "SITE_STA"}
     assert body["available"] is True
     assert body["data"]["mode"] == "SITE_STA"
+
+
+@pytest.mark.parametrize("configured", [None, "/test/network-only.sock"])
+def test_network_reads_use_dedicated_socket_and_optional_job_identity(client, monkeypatch, configured):
+    from core_api_web.api.host_agent_client import AgentReply
+
+    if configured:
+        monkeypatch.setitem(CONFIG, "network_agent", {"socket_path": configured, "timeout_s": 2})
+    else:
+        monkeypatch.delitem(CONFIG, "network_agent", raising=False)
+    sent = []
+    def request(agent, command, **kwargs):
+        sent.append((agent.socket_path, command, kwargs))
+        return AgentReply(True, "OK", data={"state": "activating", "request_id": "known-job"},
+                          observed_at=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setattr(HostAgentClient, "request", request)
+    body = client.get("/api/v1/host/network?request_id=known-job", headers=_auth(VIEWER_TOKEN)).json()
+    assert sent == [(configured or "/run/rosy-network-agent/core.sock", "network.status",
+                     {"role": "viewer", "params": {"request_id": "known-job"}})]
+    assert body["data"]["state"] == "activating"
+
+
+def test_network_start_runs_only_after_response_body_is_sent(client, monkeypatch):
+    from fastapi.testclient import TestClient
+    from core_api_web.api.host_agent_client import AgentReply
+
+    events = []
+    sent = []
+    def request(agent, command, **kwargs):
+        events.append(command)
+        sent.append((agent.socket_path, command, kwargs))
+        if command == "network.connect":
+            return AgentReply(True, "OK", data={"state": "prepared", "request_id": "browser-job", "job_id": "browser-job"})
+        assert command == "network.start"
+        assert "response_sent" in events, "starting the radio first can lose the acknowledgment"
+        return AgentReply(True, "OK", data={"state": "running", "request_id": "browser-job"})
+    monkeypatch.setattr(HostAgentClient, "request", request)
+    async def observed_app(scope, receive, send):
+        async def observed_send(message):
+            await send(message)
+            if message["type"] == "http.response.body" and not message.get("more_body"):
+                events.append("response_sent")
+        await client.app(scope, receive, observed_send)
+    response = TestClient(observed_app).post("/api/v1/host/network/connect", headers=_auth(ADMIN_TOKEN),
+                                            json={"ssid": "site", "psk": "test-passphrase", "confirmed": True,
+                                                  "idempotency_key": "browser-job"})
+    assert response.json()["data"]["state"] == "prepared"
+    assert events == ["network.connect", "response_sent", "network.start"]
+    assert all(item[0] == "/run/rosy-network-agent/core.sock" for item in sent)
+    assert sent[0][2]["idempotency_key"] == "browser-job"
+    assert sent[1][2]["params"] == {"request_id": "browser-job"}
+    assert "psk" not in sent[1][2]["params"]
+    assert sent[1][2]["user_id"] == sent[0][2]["user_id"]
+    assert sent[1][2]["confirmed"] is True
+
+
+@pytest.mark.parametrize("state", ["held", "committed", "rolled_back", "busy"])
+def test_nonprepared_network_reply_never_starts_radio(client, monkeypatch, state):
+    from core_api_web.api.host_agent_client import AgentReply
+
+    commands = []
+    def request(agent, command, **kwargs):
+        commands.append(command)
+        return AgentReply(True, "OK", data={"state": state, "request_id": "known"})
+    monkeypatch.setattr(HostAgentClient, "request", request)
+    result = client.post("/api/v1/host/network/connect", headers=_auth(ADMIN_TOKEN),
+                         json={"ssid": "site", "psk": "test-passphrase", "confirmed": True,
+                               "idempotency_key": "known"}).json()
+    assert result["data"]["state"] == state
+    assert commands == ["network.connect"]
+
+
+@pytest.mark.parametrize("case", ["short", "long", "list", "missing_ssid", "missing_psk", "nested_confirmed", "list_body"])
+def test_network_connect_validation_never_echoes_credentials(client, case):
+    secret = "private-wifi-passphrase"
+    payload = {"ssid": "site", "psk": secret, "confirmed": True}
+    if case == "short":
+        secret = "shh123"
+        payload["psk"] = secret
+    elif case == "long":
+        secret = "x" * 64
+        payload["psk"] = secret
+    elif case == "list":
+        payload["psk"] = [secret]
+    elif case == "missing_ssid":
+        del payload["ssid"]
+    elif case == "missing_psk":
+        del payload["psk"]
+        payload["confirmed"] = {"credential": secret}
+    elif case == "nested_confirmed":
+        payload["confirmed"] = {"credential": secret}
+    elif case == "list_body":
+        payload = [payload]
+    response = client.post("/api/v1/host/network/connect", headers=_auth(ADMIN_TOKEN), json=payload)
+    assert response.status_code == 400
+    assert secret not in response.text
+    assert all("input" not in error for error in response.json()["error"]["detail"])
+
+
+def test_other_route_validation_keeps_default_error_contract(client):
+    response = client.post("/api/v1/host/release/install", headers=_auth(ADMIN_TOKEN), json={"confirmed": True})
+    assert response.status_code == 400
+    assert response.json()["error"]["detail"][0]["loc"] == ["body", "release_id"]

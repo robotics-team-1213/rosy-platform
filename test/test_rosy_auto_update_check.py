@@ -91,7 +91,7 @@ def test_api_request_carries_user_agent_and_etag(device, host, hub, keys):
     first = hub.list_requests()[-1]
     assert first["user-agent"].startswith("rosy-auto-update")
     assert "if-none-match" not in first
-    assert state(device)["etag"] == hub.etag
+    assert state(device)["etag_v2"] == hub.etag
 
     up.run()
     second = hub.list_requests()[-1]
@@ -412,7 +412,8 @@ def test_only_known_release_errors_are_definitive(device, host, hub, keys, error
     result = updater(host, hub).run()
 
     assert (NEXT in state(device).get("failed", {})) is definitive
-    assert result["phase"] == ("failed" if definitive else "error")
+    assert result["phase"] == ("image_required" if error.startswith("NATIVE_PYTHON_RUNTIME:")
+                               else "failed" if definitive else "error")
 
 
 def test_staging_verify_with_an_unreadable_key_is_transient(device, host, hub, keys):

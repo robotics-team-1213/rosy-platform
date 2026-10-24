@@ -29,6 +29,10 @@ function agentBlock(wrap, work) {
     : `호스트 에이전트에 연결할 수 없어 ${work} 작업을 막았습니다. 장치 전원과 서비스를 확인하세요.`;
 }
 let noteSerial = 0;
+const NETWORK_JOB = "rosy.network.pending";
+function networkObservation(data) {
+  return data.observed || (data.request_id ? {} : data);
+}
 function pointAt(button, note, on) {
   const ids = (button.getAttribute("aria-describedby") || "").split(/\s+/).filter((id) => id && id !== note.id);
   if (on) ids.unshift(note.id);
@@ -122,8 +126,10 @@ export function mount(root, ctx) {
   const lifetime = new AbortController(); let disposed = false; let confirming = false;
   const hold = value => value === true ? "승인 대기" : value === false ? "확인됨" : "확인 전";
   const head = el("ui-head", "", "네트워크 및 장치 운영 상태");
-  const network = card("네트워크", "/api/v1/host/network", 10_000, ctx, (data) => [["모드", data.mode == null ? null : enumLabel(NETWORK_MODE_LABEL, data.mode)], ["SSID", data.ssid], ["액세스 포인트", data.ap_active == null ? null : data.ap_active ? "켜짐" : "꺼짐"], ["IPv4", data.ipv4], ["기본 경로", data.default_route], ["DNS", (data.dns || []).join(", ")], ["인터넷", data.internet == null ? null : data.internet ? "도달" : "도달 안 됨"], ["단말 접근", data.peer_reachable == null ? null : data.peer_reachable ? "가능" : "확인 필요"]],
-    (data) => `${enumLabel(NETWORK_MODE_LABEL, data.mode, "모드 미확인")} · ${data.ssid || "SSID 없음"}`);
+  const network = card("네트워크", "/api/v1/host/network", 10_000, ctx, (data) => {
+    const observed = networkObservation(data);
+    return [["모드", data.mode == null ? null : enumLabel(NETWORK_MODE_LABEL, data.mode)], ["SSID", observed.ssid], ["액세스 포인트", data.ap_active == null ? null : data.ap_active ? "켜짐" : "꺼짐"], ["IPv4", observed.ipv4], ["기본 경로", observed.default_route], ["DNS", (data.dns || []).join(", ")], ["인터넷", observed.internet == null ? null : observed.internet ? "도달" : "도달 안 됨"], ["단말 접근", data.peer_reachable == null ? null : data.peer_reachable ? "가능" : "확인 필요"]];
+  }, (data) => `${enumLabel(NETWORK_MODE_LABEL, data.mode, "모드 미확인")} · ${networkObservation(data).ssid || "SSID 미확인"}`);
   const release = card("릴리스", "/api/v1/host/release", 15_000, ctx, (data) => [["상태", data.state], ["현재 버전", data.current], ["이전 버전", data.previous], ["대기 버전", data.staged], ["마지막 실패", data.last_failure], ["리비전", data.git_revision], ["설정/데이터 스키마", data.config_schema == null ? null : `${data.config_schema} / ${data.data_schema}`]],
     (data) => `${data.state || "상태 미확인"} · 현재 ${data.current || "버전 미확인"} · 이전 ${data.previous || "없음"}`);
   const commissioning = card("커미셔닝", "/api/v1/host/commissioning", 15_000, ctx, (data) => [["실행 모드", data.runtime_mode], ["동작 차단 사유", data.motion_reason], ["모터", hold(data.motor_hold)], ["LiDAR", hold(data.lidar_hold)], ["배터리", hold(data.battery_hold)], ["IMU", hold(data.imu_hold)], ["SLAM", hold(data.slam_hold)], ["Fleet", hold(data.fleet_hold)], ["세부 정보", data.detail]],
@@ -158,7 +164,16 @@ export function mount(root, ctx) {
   const networkResult = el("ui-status"); networkResult.hidden = true; networkResult.setAttribute("state", "ready"); networkResult.setAttribute("role", "status"); networkActions.append(networkResult);
   networkNote.id = `host-network-note-${++noteSerial}`;
   network.wrap.insertBefore(networkActions, network.readout);
-  let networkPending = false;
+  let networkJob = null; let stopJob = null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(NETWORK_JOB));
+    if (saved && typeof saved.request_id === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(saved.request_id)
+        && typeof saved.ssid === "string" && new TextEncoder().encode(saved.ssid).length >= 1
+        && new TextEncoder().encode(saved.ssid).length <= 32) {
+      networkJob = {request_id: saved.request_id, ssid: saved.ssid, state: "prepared"};
+    }
+  } catch (_) { /* No radio request has been sent if storage is unavailable. */ }
+  let networkPending = Boolean(networkJob);
   function networkEnabled(enabled) {
     for (const control of [profile, ssid, field]) setOff(control, !enabled || networkPending, "");
     const blocked = !enabled && !networkPending;
@@ -175,6 +190,55 @@ export function mount(root, ctx) {
   }
   network.onUpdate(() => networkEnabled(network.wrap.dataset.available === "true"));
   networkEnabled(network.wrap.dataset.available === "true");
+
+  function forgetJob() {
+    stopJob?.(); stopJob = null; networkJob = null;
+    sessionStorage.removeItem(NETWORK_JOB);
+    networkPending = false;
+  }
+  function jobMessage(message, state = "pending") {
+    networkResult.hidden = false;
+    networkResult.textContent = `${message} 작업 ID: ${networkJob.request_id}. 새 Wi-Fi에 다시 접속하면 같은 작업 결과를 확인합니다.`;
+    networkResult.setAttribute("state", state);
+  }
+  function jobUpdate(payload) {
+    if (disposed || !networkJob) return;
+    const data = payload?.data;
+    if (payload?.available !== true || payload?.ok !== true || !data || data.request_id !== networkJob.request_id) {
+      jobMessage("연결 결과를 아직 확인하지 못했습니다."); return;
+    }
+    const observed = data.observed || {};
+    networkJob.state = data.state;
+    if (data.state === "committed" && data.profile_uuid && observed.uuid === data.profile_uuid
+        && observed.ssid === networkJob.ssid && observed.ipv4 && observed.active === true) {
+      forgetJob(); networkResult.textContent = "Wi-Fi 연결을 확인했습니다."; networkResult.setAttribute("state", "ready");
+    } else if (["rolled_back", "rejected", "busy"].includes(data.state)) {
+      forgetJob(); networkResult.textContent = data.state === "rolled_back" ? "이전 연결로 복구했습니다. Wi-Fi 설정을 확인한 뒤 다시 시도하세요."
+        : data.state === "busy" ? "다른 네트워크 작업이 진행 중입니다. 완료 후 다시 시도하세요." : "네트워크 변경이 거부되었습니다. 장치의 유지보수 상태를 확인하세요.";
+      networkResult.setAttribute("state", "warning");
+    } else if (["needs_resubmit", "unknown"].includes(data.state)) {
+      networkPending = false; ssid.value = networkJob.ssid;
+      jobMessage("암호를 다시 입력해 같은 작업을 접수하세요.", "warning");
+    } else {
+      networkPending = true;
+      jobMessage(data.state === "held" ? "변경이 보류되었습니다. 장치의 복구 안내를 확인하세요."
+        : "연결 결과를 확인 중입니다.", data.state === "held" ? "warning" : "pending");
+    }
+    networkEnabled(network.wrap.dataset.available === "true");
+  }
+  function watchJob() {
+    stopJob?.();
+    if (!networkJob) return;
+    jobMessage("연결 결과를 확인 중입니다.");
+    stopJob = ctx.store.poll(`/api/v1/host/network?request_id=${encodeURIComponent(networkJob.request_id)}`, 2_000,
+      payload => {
+        if (payload?.evidence?.evidence !== "fresh") {
+          if (!disposed && networkJob) jobMessage("연결 결과의 새 조회를 기다리는 중입니다.");
+          return;
+        }
+        jobUpdate(payload);
+      }, () => { if (!disposed && networkJob) jobMessage("연결이 끊겨 결과 확인을 기다리는 중입니다."); });
+  }
 
   const releaseActions = el("ui-actions", "surface-actions");
   const rollback = el("ui-button", "", "이전 릴리스로 복귀"); rollback.setAttribute("kind", "quiet"); rollback.type = "button";
@@ -240,7 +304,7 @@ export function mount(root, ctx) {
     if (button.disabled || (isNetwork ? networkPending : releasePending)
         || (isNetwork && networkMode !== network.data.mode)
         || (body.profile_id && body.profile_id !== profile.value.trim())
-        || (body.ssid && (body.ssid !== ssid.value.trim() || body.psk !== field.value))
+        || (body.ssid && (body.ssid !== ssid.value || body.psk !== field.value))
         || (!isNetwork && previous !== release.data.previous)) return;
     note = isNetwork ? networkResult : releaseResult;
     if (isNetwork) networkPending = true;
@@ -250,17 +314,40 @@ export function mount(root, ctx) {
     note.hidden = false;
     note.textContent = "요청 결과를 기다리는 중입니다.";
     note.setAttribute("state", "pending");
+    const wifi = isNetwork && body.psk !== undefined;
     try {
-      const result = await ctx.api(path, {method: "POST", body: JSON.stringify({...body, confirmed: true, idempotency_key: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`})});
+      let key = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      if (wifi) {
+        if (networkJob?.ssid === body.ssid) key = networkJob.request_id;
+        const job = {request_id: key, ssid: body.ssid};
+        sessionStorage.setItem(NETWORK_JOB, JSON.stringify(job));
+        networkJob = {...job, state: "prepared"};
+      }
+      const result = await ctx.api(path, {method: "POST", body: JSON.stringify({...body, confirmed: true, idempotency_key: key})});
       if (disposed) return;
+      if (wifi && networkJob) {
+        if (result.available === true && result.ok === false) {
+          forgetJob(); note.textContent = result.detail || "요청이 거부되었습니다."; note.setAttribute("state", "error");
+        } else {
+          watchJob(); jobUpdate(result);
+        }
+        return;
+      }
       note.textContent = result.available === false ? (result.detail || "호스트 에이전트에 연결할 수 없습니다.")
         : result.ok === false ? (result.detail || "요청이 거부되었습니다.") : success;
       note.setAttribute("state", result.available === false ? "unavailable" : result.ok === false ? "error" : "ready");
-    } catch (error) { if (disposed) return; note.textContent = `요청 실패: ${error.message}`; note.setAttribute("state", "error"); }
+    } catch (error) {
+      if (disposed) return;
+      if (wifi && networkJob) watchJob();
+      else { note.textContent = `요청 실패: ${error.message}`; note.setAttribute("state", "error"); }
+    }
     finally {
       if (disposed) return;
       if (isNetwork && body.psk !== undefined) field.value = "";
-      if (isNetwork) { networkPending = false; networkEnabled(network.wrap.dataset.available === "true"); }
+      if (isNetwork) {
+        networkPending = Boolean(networkJob && !["needs_resubmit", "unknown"].includes(networkJob.state));
+        networkEnabled(network.wrap.dataset.available === "true");
+      }
       else { releasePending = false; syncReleaseActions(); }
     }
   }
@@ -271,8 +358,8 @@ export function mount(root, ctx) {
     postHost(applyProfile, "/api/v1/host/network/apply", {profile_id: id}, `${id} 네트워크 프로파일을 적용할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "프로파일 적용을 요청했습니다.");
   });
   connectForm.addEventListener("submit", (event) => {
-    event.preventDefault(); const name = ssid.value.trim();
-    if (!name || field.value.length < 8 || field.value.length > 63) { networkResult.hidden = false; networkResult.textContent = "SSID와 8~63자 Wi-Fi 암호를 입력하세요."; networkResult.setAttribute("state", "error"); return; }
+    event.preventDefault(); const name = ssid.value;
+    if (!name || new TextEncoder().encode(name).length > 32 || field.value.length < 8 || field.value.length > 63) { networkResult.hidden = false; networkResult.textContent = "SSID(1~32바이트)와 8~63자 Wi-Fi 암호를 입력하세요."; networkResult.setAttribute("state", "error"); return; }
     postHost(connect, "/api/v1/host/network/connect", {ssid: name, psk: field.value}, `${name} Wi-Fi에 연결할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "Wi-Fi 연결을 요청했습니다.");
   });
   rollback.addEventListener("click", () => postHost(rollback, "/api/v1/host/release/rollback", {}, `${release.data.previous || "이전 릴리스"}로 복귀할까요? 현재 실행이 중단될 수 있습니다.`, releaseNote, "롤백을 요청했습니다."));
@@ -280,5 +367,6 @@ export function mount(root, ctx) {
 
   root.append(head, ...cards.map(({wrap}) => wrap));
   syncGroup();
-  return () => { disposed = true; lifetime.abort(); cards.forEach(({stop}) => stop()); };
+  if (networkJob) watchJob();
+  return () => { disposed = true; lifetime.abort(); stopJob?.(); cards.forEach(({stop}) => stop()); };
 }

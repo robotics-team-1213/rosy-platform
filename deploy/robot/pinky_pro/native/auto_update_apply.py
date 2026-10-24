@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import datetime as _dt
 from pathlib import Path
 import shlex
@@ -101,6 +100,10 @@ class UpdaterApply:
             cwd = self.host.process_cwd(pid) if pid else None
             if cwd != want:
                 problems.append(f"{unit} runs from {cwd}, not {want}")
+        if (Path(want) / "deploy/robot/native/image-layer/boot/catalog.json").is_file():
+            for unit in ("rosy-network-agent.service", "rosy-network-recovery.timer"):
+                if self._systemctl("is-active", "--quiet", unit).returncode != 0:
+                    problems.append(f"{unit} is not active")
         failed = self._failed_units()
         if failed is None:
             problems.append("cannot list failed units")
@@ -126,8 +129,13 @@ class UpdaterApply:
         state["applying"]["step"] = step
         self._save_state(state)
         self._update_marker(state["applying"])
-        with contextlib.suppress(OSError, ValueError, rosy_claim.ClaimBusy):
-            rosy_claim.refresh(self.root, CLAIM_HOLDER, CLAIM_TTL_S, now=self.host.now())
+        try:
+            claim = rosy_claim.check(self.root, now=self.host.now())
+            if (claim is None or claim.get("holder") != CLAIM_HOLDER
+                    or not rosy_claim.refresh(self.root, CLAIM_HOLDER, CLAIM_TTL_S, now=self.host.now())):
+                raise Deferred("update claim was lost; waiting before the next step")
+        except (OSError, ValueError, rosy_claim.ClaimBusy) as exc:
+            raise Deferred("update claim could not be verified") from exc
 
     def _settle(self, state: dict, release_id: str) -> dict:
         """Everything after activation; commit, or roll back on any failure."""
@@ -172,6 +180,10 @@ class UpdaterApply:
 
     def _rollback_tail(self, release_id: str) -> list[str]:
         """Bring the image layer and CORE back to whatever release is current now."""
+        try:
+            self._inverse_boot_layer(release_id)
+        except (UpdateError, OSError, ValueError) as exc:
+            return [str(exc)]  # Never downgrade the coordinator while its inverse is unresolved.
         # The release now current may predate D-388; fall back to the copy in the
         # release rolled away from (it syncs from current all the same).
         current = self.host.current_release() or ""
@@ -188,6 +200,17 @@ class UpdaterApply:
             except Exception as exc:  # noqa: BLE001 - finish the other steps
                 problems.append(f"UNEXPECTED: {exc!r}")
         return problems
+
+    def _inverse_boot_layer(self, release_id: str) -> None:
+        journal = self.root / "var/lib/rosy/image-layer-backup/boot-transition.json"
+        if not journal.exists() and not journal.is_symlink():
+            return
+        script = str(Path(self.release_path(release_id)) / RELEASE_SYNC)
+        inverse = self.host.run(["python3", "-B", script, "--root", str(self.root),
+                                 "--inverse-before-legacy-sync"], SYNC_TIMEOUT_S)
+        result = _last_json(inverse.stdout)
+        if inverse.returncode != 0 or not result or result.get("ok") is not True:
+            raise UpdateError("BOOT_INVERSE: rollback held; continuity inverse could not be verified")
 
     def _roll_back(self, state: dict, release_id: str, why: str, mark_failed: bool = True) -> dict:
         """Roll back. A rollback that cannot run now stays journaled and is retried (review M7)."""
@@ -225,6 +248,8 @@ class UpdaterApply:
         moved = not gave_up and not refused and self.host.current_release() != release_id
         if not problems:
             problems = self._rollback_tail(release_id)
+        if any("BOOT_INVERSE" in problem for problem in problems):
+            return self._finish(state, "held", "; ".join(problems), release_id)
         if not mark_failed and moved:
             # previous is now above current: not an operator rollback (N9), and the
             # release stays retryable (N7). HIGH 2: the apply error is counted even
@@ -338,8 +363,10 @@ class UpdaterApply:
                 return self._finish(state, "error", f"ACTIVATION_TRANSIENT: {error}; retrying on the next run",
                                     release_id)
             self._mark_failed(state, release_id, f"activation: {error}")
-            self._result(state, release_id, "refused", f"activation: {error}")
-            return self._finish(state, "failed", f"activation refused: {error}", release_id)
+            image_required = error.startswith("NATIVE_PYTHON_RUNTIME:")
+            self._result(state, release_id, "image_required" if image_required else "refused", f"activation: {error}")
+            return self._finish(state, "image_required" if image_required else "failed",
+                                f"activation refused: {error}", release_id)
         finally:
             self._release_claim()
 
