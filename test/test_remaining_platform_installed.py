@@ -84,7 +84,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
             assessment_files = {Path(name).name for name in archive.getnames()
                                 if '/_source_roots/assessment/' in name and name.endswith('.py')}
-            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py',
+                                        'wait_graph.py', 'fact_rules.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'applications/fleet/web')

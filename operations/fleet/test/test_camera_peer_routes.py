@@ -16,6 +16,17 @@ from fleet.server.site_auth import build_authorize, build_role_guards, parse_sit
 from test_camera_peer_service import receiver, request, sign
 
 
+def test_site_anchor_refuses_missing_chain_verifier(monkeypatch):
+    from fleet.server import camera_peer_tls
+
+    monkeypatch.setattr(camera_peer_tls, 'PolicyBuilder', None, raising=False)
+    def unexpected_parse(*_args):
+        raise AssertionError('certificate APIs must not run without a chain verifier')
+    monkeypatch.setattr(camera_peer_tls.x509, 'load_pem_x509_certificates', unexpected_parse)
+    with pytest.raises(ValueError, match='does not validate'):
+        camera_peer_tls.configured_site_anchor('CA', 'LEAF', 'site.local')
+
+
 def certificates(hostname='site.local', *, with_key=False):
     now = datetime.now(timezone.utc)
     ca_key, key = [ec.generate_private_key(ec.SECP256R1()) for _ in range(2)]

@@ -42,6 +42,16 @@
 | D-824 | 워크트리 기본 상한을 50개로 낮추고 기존 작업과 명시적 예외를 보존한다 | Accepted (2026-10-20) |
 | D-823 | OMX Leader를 통한 자동 운용 중 수동 개입·복구·자동 복귀 | Proposed (2026-10-20) |
 | D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
+| D-820 | Discord 알림과 답글 전송의 공통 소유권 | Proposed |
+| D-819 | local action과 stop 전송의 공통 구현 | Proposed |
+| D-818 | 모델 PC guard 설치 스크립트의 존치 | Proposed |
+| D-817 | 움직임을 요청하는 보정 노드의 holder | Proposed |
+| D-816 | Isaac 시뮬레이션 holder의 소유권 | Proposed |
+| D-815 | Gazebo scripts의 manifest와 책임 문서 일치 | Proposed |
+| D-814 | Fleet localization 자세 판정의 소유권 | Proposed |
+| D-813 | CORE와 Fleet peer 암호·TLS 사본의 소유권 | Proposed |
+| D-812 | learning의 실행 코드 의존과 부트스트랩 경계 | Proposed |
+| D-811 | contracts의 동작 코드 소유권 | Proposed |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
 | D-809 | Legacy 937 Learning Account boundary and protected human audit | Accepted (2026-10-20) |
 | D-808 | Vault 권한은 명시적 site grant로 부여한다 | Accepted (2026-10-20) |

@@ -4,12 +4,32 @@ The escape mixin imported std_msgs and had no host test at all. GoalNode now
 owns its topics and publish_escape; a plain subclass stands in for the node.
 """
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 from control import goal_escape
 from control.goal_escape import GoalEscape
+
+
+def test_escape_runtime_source_is_owned_by_drive():
+    assert Path(goal_escape.__file__).resolve().parent == Path(__file__).resolve().parents[2] / 'drive/runtime'
+
+
+def test_escape_imports_from_built_distribution_outside_checkout(tmp_path):
+    stage = tmp_path / 'installed'
+    result = subprocess.run([sys.executable, 'setup.py', 'build_py', '--build-lib', str(stage)],
+                            cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    code = ('from control.goal_escape import GoalEscape; import control, sys; from pathlib import Path; '
+            'assert Path(control.__file__).resolve().is_relative_to(Path(sys.argv[1]))')
+    result = subprocess.run([sys.executable, '-c', code, str(stage)], cwd=tmp_path,
+                            env={**os.environ, 'PYTHONPATH': str(stage)}, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 class FakeGoal(GoalEscape):

@@ -17,6 +17,11 @@ release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 
 
+def test_current_checkout_satisfies_review_source_inventory():
+    root = SCRIPT.parents[2]
+    assert not [name for name in release.SPLIT_REQUIRED if not (root / name).is_file()]
+
+
 def source_tree(path):
     for name in (release.APP, release.WEB / "index.html", release.WEB / "pixels.html",
                  Path("shared/web/shared-assets.json")):

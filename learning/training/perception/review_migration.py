@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 from job_state import JobError
 
 
+# Format pinned: migrated state input_signature hashes these bytes; test_canonical_hash_formats.
 def _canonical(value):
     return json.dumps(value, sort_keys=True, allow_nan=False).encode()
 

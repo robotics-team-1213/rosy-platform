@@ -44,7 +44,7 @@ SPLIT_REQUIRED = (
                   'middleware/perception/nodes/camera_region_range.py',
                   'middleware/perception/nodes/dock_observer_node.py',
                   'middleware/perception/nodes/executor_choice.py',
-                  'middleware/perception/nodes/goal_escape.py',
+                  'middleware/drive/runtime/goal_escape.py',
                   'middleware/perception/nodes/ir_adc_node.py',
                   'middleware/perception/nodes/learned_lane_node.py',
                   'middleware/perception/nodes/obstacle_observer_node.py',
