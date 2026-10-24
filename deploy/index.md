@@ -77,7 +77,7 @@
 ## 최근 기록
 
 - 2026-10-24 · uncommitted · 서명된 review payload의 OMX action-space 의존성 포함
+- 2026-10-24 · fe0519eea1 · 공용·내부 NTP polling과 Windows 최신성
 - 2026-10-24 · c50c268c1410 · 공통 NTP 시간원 선택과 정밀도 수용 분리
 - 2026-10-24 · 528962cb8d · 공통 NTP Windows 실제 적용과 workgroup 트리거
 - 2026-10-24 · 29002a4845 · D-861 전체 기기의 동일한 단일 NTP endpoint
-- 2026-10-24 · ce5018413b · D-859 공통 UTC 시간 동기화
