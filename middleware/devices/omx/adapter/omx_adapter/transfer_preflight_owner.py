@@ -5,10 +5,13 @@ from .transfer_preflight_api import TransferPreflightApi
 
 
 def build_transfer_preflight_api(runtime, *, catalog, profile, kinematics,
-                                 journal_id: str, allowed_peer_uids: set[int]) -> TransferPreflightApi:
+                                 transform_revision: str, journal_id: str,
+                                 allowed_peer_uids: set[int]) -> TransferPreflightApi:
     config = runtime.owner.config
     if (catalog.workcell_id, catalog.instance_id) != (config.workcell_id, config.instance_id):
         raise ValueError("physical catalog must belong to this existing owner")
+    if catalog.transform_revision != transform_revision:
+        raise ValueError("physical catalog does not match the owner's installed transform")
 
     def measured_state():
         state = runtime.owner.joint_state
@@ -17,7 +20,7 @@ def build_transfer_preflight_api(runtime, *, catalog, profile, kinematics,
         return ExecutionStateSnapshot(
             sequence=state.sequence, joint_positions=state.positions,
             calibration_revision=state.calibration_revision,
-            transform_revision=catalog.transform_revision,
+            transform_revision=transform_revision,
             planning_scene_revision=kinematics.planning_scene_revision,
             observed_at_monotonic_s=state.received_at)
 

@@ -258,6 +258,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         from omx_adapter.transfer_preflight_owner import build_transfer_preflight_api
         transfer_preflight_api = build_transfer_preflight_api(
             runtime, catalog=transfer_catalog, profile=profile, kinematics=kinematics,
+            transform_revision=settings.transform_revision,
             journal_id=owner_journal_id, allowed_peer_uids={settings.fleet_peer_uid})
     action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api, identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,

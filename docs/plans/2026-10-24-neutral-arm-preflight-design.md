@@ -97,6 +97,8 @@ owner의 지원 거절은 다음 안정된 code/reason만 Fleet가 전달한다.
 
 기존 `build_cell_owner`에는 선택적인 설치 catalog 인수만 추가해 같은 runtime·journal의 읽기 API를 연결한다. 기존 호출자는 None으로 새 operation이 닫힌다. 독립 simulation 시험은 같은 helper와 기존 `ArmCommandOwner`/ActionApi를 조립하고 palletizing import를 차단해 계산 경로를 검증한다. 이 시험은 새 실물 capability나 neutral grant dispatch의 증거가 아니다.
 
+helper는 owner의 신뢰된 `transform_revision` 인수를 필수로 받고 catalog와 시작 시 대조한다. 기존 Cell 조립은 `settings.transform_revision`을 전달하고 새 snapshot에도 그 설치 값을 사용한다. catalog 자신의 transform 값을 관측 provenance로 다시 채워 대조를 통과시키지 않는다. calibration은 실제 admitted joint state의 revision을 보존한다.
+
 변경 대상은 foundation의 새 `arm_transfer_preflight.py`/schemas exports와 API reference, adapter의 새 `transfer_preflight_api.py`와 기존 ActionApi, agent helper와 선택적 Cell 조립, Fleet transport와 새 `arm_transfer_preflight_routes.py`/app 설치다. 새 dependency·owner server·자동 등록/수정 API·catalog discovery API를 추가하지 않는다. Harbor는 설치 binding에 기록한 catalog digest/refs를 사용하며 binding이 없으면 임의 좌표로 대체하지 않는다.
 
 시험은 계약 strictness·cross-field result 결속, owner peer/v1/unsupported/참조 거절과 admitted-vs-latest 상태, Fleet role/profile/설치 scope/timeout/응답 교체를 포함한다. 커밋된 RED를 원격 확인한 뒤 구현하고 기존 ActionApi/Cell owner 회귀를 실행한다. 마지막에 임시 UDS owner → 실제 Fleet HTTP → 플랫폼 import 없는 최소 클라이언트를 같은 고정 SHA로 검증한다.
