@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""D-864 §2: compare a read-only register probe with one /joint_states sample; never opens a device.
+"""D-864 §2: check register_probe readings against the vendor joint-map hypothesis; never opens a device.
 
-Hypothesis from the pinned ROBOTIS stack: with homing offset 0 and drive-mode reverse bit 0, each ROS joint
-radian equals the same-order motor's dynamixel_rad_v1 (raw * 2pi/4096 - pi). Run on a resting arm:
-  1. driver stopped: register_probe.py --device <by-id> > probe.json
-  2. vendor driver up with torque disabled at init: ros2 topic echo --once /joint_states > joint_states.yaml
-  3. register_probe.py again > probe-after.json (the arm must not have moved between)
-  4. joint_map_check.py probe.json joint_states.yaml probe-after.json --out <new-verdict.json>
-Exit 0: hypothesis holds; 3: it does not; 2: invalid input.
+The pinned ROBOTIS driver converts Present Position with identity transmission matrices and the XL330/XL430
+model unit (2pi/4096 rad per tick, offset -pi), so ros_joint_rad equals dynamixel_rad_v1 by construction.
+What the hardware can break is the register state the motors apply before Present Position: a non-zero
+homing offset or the reverse bit. This tool checks only that, from read-only register_probe.py outputs taken
+with no driver running (the vendor driver writes EEPROM and enables torque on start, so it is not used here).
+It does not show that the physical zero matches the URDF zero.
+Exit 0: every probe agrees and the hypothesis holds; 3: it does not; 2: invalid input.
 """
 import argparse
 import json
@@ -17,62 +17,63 @@ import sys
 
 #: Motor ID -> ROS joint (open_manipulator omx_f.ros2_control.xacro at the pinned revision).
 JOINTS = {11: 'joint1', 12: 'joint2', 13: 'joint3', 14: 'joint4', 15: 'joint5', 16: 'gripper_joint_1'}
+#: Registers that must not change between probes; a change means something wrote the motor in between.
+STATE = ('drive_mode', 'homing_offset_raw', 'operating_mode')
 TICKS = 4096
 
 
-def motor_rad(raw):
+def ros_rad(raw):
+    """The vendor driver's Present Position conversion (model unit 2pi/4096, offset -pi, identity matrix)."""
     return raw * 2 * math.pi / TICKS - math.pi
 
 
 def motors(probe):
-    rows = {row['id']: row for row in probe.get('motors', [])}
-    if set(rows) != set(JOINTS):
-        raise ValueError('probe must list motors 11..16')
+    rows = {row.get('id'): row for row in probe.get('motors', [])}
+    if set(rows) != set(JOINTS) or any(key not in row for row in rows.values() for key in STATE + ('position_raw',)):
+        raise ValueError('each probe must list motors 11..16 with position and register state')
     return rows
 
 
-def check(before, joint_states, after, *, tolerance_rad=0.01, still_ticks=4):
-    """Pure comparison; returns the verdict document."""
-    first, last = motors(before), motors(after)
-    names, positions = list(joint_states.get('name', [])), list(joint_states.get('position', []))
-    if len(names) != len(positions) or not set(JOINTS.values()) <= set(names):
-        raise ValueError('joint_states must carry every OMX joint with a position')
-    ros = dict(zip(names, positions))
+def check(probes, *, still_ticks=4):
+    """Pure comparison over one or more probes of a resting arm; returns the verdict document."""
+    if not probes:
+        raise ValueError('at least one probe required')
+    readings = [motors(probe) for probe in probes]
     rows, holds = [], True
     for motor_id, joint in JOINTS.items():
-        a, b = first[motor_id], last[motor_id]
-        moved = abs(a['position_raw'] - b['position_raw']) > still_ticks
-        predicted = motor_rad((a['position_raw'] + b['position_raw']) / 2)
-        error = float(ros[joint]) - predicted
-        row = dict(motor_id=motor_id, joint=joint, homing_offset_raw=a['homing_offset_raw'],
-                   drive_mode=a['drive_mode'], reverse=bool(a['drive_mode'] & 1), moved=moved,
-                   ros_rad=float(ros[joint]), predicted_rad=predicted, error_rad=error,
-                   holds=(not moved and a['homing_offset_raw'] == 0 and not a['drive_mode'] & 1
-                          and abs(error) <= tolerance_rad))
-        holds &= row['holds']
-        rows.append(row)
-    return dict(schema='rosy.omx-joint-map-check/1', hypothesis='ros_joint_rad == dynamixel_rad_v1',
-                tolerance_rad=tolerance_rad, still_ticks=still_ticks, holds=holds, joints=rows)
+        seen = [reading[motor_id] for reading in readings]
+        first = seen[0]
+        reasons = []
+        if any(row[key] != first[key] for row in seen for key in STATE):
+            reasons.append('register_changed_between_probes')
+        if max(r['position_raw'] for r in seen) - min(r['position_raw'] for r in seen) > still_ticks:
+            reasons.append('moved_between_probes')
+        if first['homing_offset_raw'] != 0:
+            reasons.append('homing_offset_nonzero')
+        if first['drive_mode'] & 1:
+            reasons.append('reverse_bit_set')
+        raw = sum(r['position_raw'] for r in seen) / len(seen)
+        rows.append(dict(motor_id=motor_id, joint=joint, homing_offset_raw=first['homing_offset_raw'],
+                         drive_mode=first['drive_mode'], operating_mode=first['operating_mode'],
+                         position_raw=raw, ros_rad=ros_rad(raw), reasons=reasons, holds=not reasons))
+        holds &= not reasons
+    return dict(schema='rosy.omx-joint-map-check/2', hypothesis='ros_joint_rad == dynamixel_rad_v1',
+                proves='register state only; physical zero vs URDF zero is not checked',
+                probes=len(probes), still_ticks=still_ticks, holds=holds, joints=rows)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('probe', type=Path)
-    parser.add_argument('joint_states', type=Path, help='`ros2 topic echo --once /joint_states` output (YAML)')
-    parser.add_argument('probe_after', type=Path)
-    parser.add_argument('--tolerance-rad', type=float, default=0.01)
+    parser.add_argument('probes', type=Path, nargs='+', help='register_probe.py JSON outputs of a resting arm')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        import yaml
         if args.out.exists():
             raise ValueError('verdict exists; choose a new path')
-        load = lambda path: json.loads(path.read_text(encoding='utf-8'))
-        sample = yaml.safe_load(args.joint_states.read_text(encoding='utf-8'))
-        verdict = check(load(args.probe), sample, load(args.probe_after), tolerance_rad=args.tolerance_rad)
+        verdict = check([json.loads(path.read_text(encoding='utf-8')) for path in args.probes])
         with args.out.open('x', encoding='utf-8') as stream:
             json.dump(verdict, stream, indent=2)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, AttributeError, TypeError) as exc:
         print(f'joint_map_check: {exc}', file=sys.stderr)
         return 2
     print(json.dumps({'holds': verdict['holds']}))

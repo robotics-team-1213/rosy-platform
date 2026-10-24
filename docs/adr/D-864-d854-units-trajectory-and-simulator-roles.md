@@ -6,15 +6,16 @@
 
 ### Context
 
-- D-854 1~4단계 구현과 5단계 1차 실측이 끝났다(`docs/validation/policy-latency-smolvla-2026-10-24/`).
-- SmolVLA 기본 모델을 한 걸음마다 동기 추론하면 종단 p99가 208ms다(CORE와 망 제외). `act_job.py`가 만드는 설치 정책은 주기 100ms, 관측·행동 나이 한계 50ms라서 이 방식으로는 실행할 수 없다.
+- D-854 1~4단계 구현과 5단계 1차 실측이 끝났다. 실측 기록 `docs/validation/policy-latency-smolvla-2026-10-24/`는 실행기 브랜치 `feat/omx-policy-runner`와 함께 착지한다.
+- SmolVLA 기본 모델을 한 걸음마다 동기 추론하면 종단 p99가 208ms다. 이 값은 CORE와 망을 제외한 1회 측정이고, 카메라 3대 합성 프레임으로 다른 작업과 GPU를 같이 쓰는 조건이었다. `act_job.py`가 만드는 설치 정책은 주기 100ms, 관측·행동 나이 한계 50ms라서 이 방식으로는 실행할 수 없다.
 - D-854 §3은 목표 K개를 관측 하나에 묶어 하나씩 승인하는 방식이었다. 그런데 owner는 목표마다 **관측 당시 관절 자세**를 시작 자세로 검사한다(`TrajectoryCommand.expected_start_state_positions`). 그래서 두 번째 목표부터는 팔이 이미 움직여 항상 거부된다. 이 검사를 풀면 안전 의미가 약해진다.
-- 실물 native 데이터(lerobot 정규화 값)를 CORE의 ROS 관절 rad로 바꾸려면 ROS 관절 ↔ Dynamixel 모터 대응이 필요하다. 저장소가 고정한 ROBOTIS 공식 스택(`deploy/robot/omx/stack.lock.yaml`: `open_manipulator` `0a4af6a9`, `dynamixel_hardware_interface` `3375b3d0`)을 읽은 결과는 다음과 같다.
-  - `omx_f.ros2_control.xacro`에는 변환 행렬이 없어서 드라이버가 단위 행렬을 쓴다(드라이버 소스의 기본값).
+- 실물 native 데이터(lerobot 정규화 값)를 CORE의 ROS 관절 rad로 바꾸려면 ROS 관절 ↔ Dynamixel 모터 대응이 필요하다. 저장소가 고정한 ROBOTIS 공식 스택(`deploy/robot/omx/stack.lock.yaml`: `open_manipulator` `0a4af6a9`, `dynamixel_hardware_interface` `3375b3d0`)의 소스를 읽은 결과는 다음과 같다.
+  - `omx_f.ros2_control.xacro`에는 변환 행렬이 없어서 드라이버가 단위 행렬을 쓴다(드라이버 소스의 기본값). 위치는 XL330·XL430 모델 파일의 단위(약 0.00153398 rad/tick, 오프셋 −π)로 바꾸므로 2048이 0 rad다.
   - 모든 모터의 Drive Mode는 4다. 방향 반전 비트(bit0)는 꺼져 있다.
   - `gripper_joint_1`은 회전 관절이다.
   - 모터 ID 11~16이 `joint1..5`, `gripper_joint_1` 순서이고, 이는 `omx_follower` 모터 순서와 같다.
-- 모델 PC에는 Isaac Sim 5.1이 있다(D-434). 저장소의 Isaac 경로는 공식 OMX-F URDF를 USD로 가져와 관절 이름을 검사하는 데까지다(`learning/envs/isaac/import_omx.py`). 카메라, 작업 장면, 팔 제어 ROS 연결, 데이터 수집은 없다. Gazebo에는 OMX 장면, top·front 카메라, ROS owner, CORE·Fleet lease 연결, 교사 시연 수집이 있다.
+  - 이 드라이버는 시작할 때 모터 EEPROM(Operating Mode, Drive Mode, 위치 한계, 게인)을 쓰고, 활성화할 때 토크를 켠다. 그 뒤 몸 관절 12~15는 Operating Mode 3으로 남는데, native 경로(`guarded_native.py`)는 모드 4를 요구한다. 그래서 실물 확인에 이 드라이버를 쓰지 않는다.
+- 모델 PC에는 Isaac Sim 5.1이 있다(D-434). 저장소의 Isaac 경로는 OMX에 대해서는 공식 OMX-F URDF를 USD로 가져와 관절 이름을 검사하는 데까지다(`learning/envs/isaac/import_omx.py`). Pinky에는 별도의 ROS 그래프가 있다(`run_rosy.py`). 카메라, 작업 장면, 팔 제어 ROS 연결, 데이터 수집은 없다. Gazebo에는 OMX 장면, top·front 카메라, ROS owner, CORE·Fleet lease 연결, 교사 시연 수집이 있다.
 
 ### Decision
 
@@ -22,14 +23,16 @@
 
 - Gazebo, Isaac Sim, 실물 ROS 경로의 정책 입출력 단위는 ROS 관절 rad(`joint1..5`, `gripper_joint_1`)다. CORE 정책 계약과 실행기 대상이 이미 이 단위를 쓴다.
 - `lerobot_norm_v1`은 리더 native 녹화의 원본 단위로 남는다. 학습 전에 `ros_joint_rad`로 바꾼다.
-- D-854 §5의 "정본 단위 `lerobot_norm_v1`"은 이 결정으로 바뀐다. 데이터셋의 단위 선언 구조와 "선언 없으면 거부" 규칙은 그대로다. SIM rad 데이터셋은 이미 `ros_joint_rad`다.
+- D-854 §5의 "정본 단위 `lerobot_norm_v1`"과 "기존 rad 데이터셋은 `dynamixel_rad_v1 → lerobot_norm_v1` 변환기로 새 데이터셋을 만든다"는 이 결정으로 대체된다. 데이터셋의 단위 선언 구조와 "선언 없으면 거부" 규칙은 그대로다.
+- SIM rad 데이터셋은 ROS 관절 rad이므로 `ros_joint_rad`로 선언한다. `dynamixel_rad_v1`로 선언하지 않는다. `ros_joint_rad`는 아직 `action_space.UNITS`에 없고, §2 확인 뒤에 추가한다.
 
-#### 2. ROS 관절 ↔ 모터 대응은 공식 스택 가설로 두고, 읽기 전용 대조로 확인한다
+#### 2. ROS 관절 ↔ 모터 대응은 공식 스택 가설로 두고, 모터 레지스터만 읽어 확인한다
 
-- **가설:** 몸 관절의 homing offset이 0이고 드라이버 모델 파일의 0 rad 값이 2048이면, 각 관절의 `ros_joint_rad`는 같은 순서 모터의 `dynamixel_rad_v1`과 같다.
-- **확인 방법:** 실물 팔에서 움직이지 않고 읽기만 한다. 같은 순간의 `/joint_states`와 모터별 Present Position·Homing Offset·Drive Mode를 몇 번 읽어 대조한다. 그리퍼는 `guarded_native`의 homing offset 검사 대상이 아니므로 따로 본다.
-- **확인 뒤:** 결과가 오차 한계 안이면 `contracts/learning` `action_space`에 `ros_joint_rad` 단위와 변환기(버전 1)를 추가한다. 실행기의 `ActionSpace`는 이 변환만 연다. 확인 기록이 없으면 변환은 계속 거부한다.
-- 결과가 다르면 관절별 부호·원점을 잰 대응표를 보정 해시와 함께 산출물로 두고 변환기에 넣는다.
+- **가설:** 몸 관절과 그리퍼 모터의 homing offset이 0이고 Drive Mode 반전 비트가 꺼져 있으면, 각 관절의 `ros_joint_rad`는 같은 순서 모터의 `dynamixel_rad_v1`과 같다. 드라이버 쪽 변환(단위 행렬, 모델 파일 단위)은 소스로 확인했으므로 실물에서 다시 재지 않는다.
+- **확인 방법:** 드라이버를 띄우지 않고, 쉬는 자세의 팔에서 기존 읽기 전용 도구 `deploy/robot/omx/register_probe.py`(ID 11~16에 PING과 READ만 허용)로 레지스터를 두 번 이상 읽는다. `deploy/robot/omx/joint_map_check.py`가 측정 사이에 레지스터나 위치가 바뀌지 않았는지, homing offset과 반전 비트가 맞는지를 판정한다. 그리퍼도 같은 기준으로 본다.
+- **증명하지 않는 것:** 실물의 기계적 0점이 URDF의 0점과 맞는지는 이 확인으로 알 수 없다. 이 차이는 단위 변환 문제가 아니라 시뮬레이터와 실물 사이의 보정 문제다. ACT를 포함한 모든 정책에 똑같이 걸리며, 별도 승인된 실물 절차로 다룬다.
+- **확인 뒤:** 판정이 통과하면 `contracts/learning` `action_space`에 `ros_joint_rad` 단위와 `lerobot_norm_v1` ↔ `ros_joint_rad` 변환기(버전 1)를 추가한다. 실행기의 `ActionSpace`는 이 변환만 연다. 판정 기록이 없으면 변환은 계속 거부한다.
+- 판정이 실패하면 어느 레지스터가 다른지 기록하고, 그 모터를 다시 커미셔닝할지 관절별 부호·원점 보정을 둘지는 따로 정한다.
 
 #### 3. 목표 묶음은 여러 점을 가진 궤적 명령 하나로 보낸다 (D-854 §3 보완)
 

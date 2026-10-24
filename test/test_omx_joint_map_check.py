@@ -1,4 +1,4 @@
-"""D-864 §2 joint map comparison: pure function over a register probe and one /joint_states sample."""
+"""D-864 §2 joint map check: register state from read-only probes only; no ROS driver, no device."""
 import json
 import math
 from pathlib import Path
@@ -15,47 +15,53 @@ RAW = {11: 2048, 12: 1024, 13: 3000, 14: 2600, 15: 1500, 16: 2300}
 def probe(raw=RAW, change=None):
     rows = []
     for motor_id, position in raw.items():
-        row = dict(id=motor_id, model_number=1200, position_raw=position, homing_offset_raw=0, drive_mode=4)
+        row = dict(id=motor_id, model_number=1200, position_raw=position, homing_offset_raw=0,
+                   drive_mode=4, operating_mode=4)
         row.update((change or {}).get(motor_id, {}))
         rows.append(row)
     return {'motors': rows}
 
 
-def states(offset=0.0):
-    names = list(check_map.JOINTS.values()) + ['gripper_joint_2']
-    positions = [RAW[m] * 2 * math.pi / 4096 - math.pi + offset for m in check_map.JOINTS] + [0.0]
-    return {'name': names, 'position': positions}
-
-
-def test_vendor_hypothesis_holds_on_matching_reads():
-    verdict = check_map.check(probe(), states(), probe())
+def test_hypothesis_holds_on_clean_registers():
+    verdict = check_map.check([probe(), probe()])
     assert verdict['holds'] and all(row['holds'] for row in verdict['joints'])
-    assert verdict['joints'][0]['predicted_rad'] == pytest.approx(0.0)
+    # Independent of the code's formula: 2048 ticks is 0 rad, 1024 is -pi/2 (vendor model unit, offset -pi).
+    assert verdict['joints'][0]['ros_rad'] == pytest.approx(0.0)
+    assert verdict['joints'][1]['ros_rad'] == pytest.approx(-math.pi / 2)
 
 
-@pytest.mark.parametrize('fault', ['offset', 'homing', 'reverse', 'moved'])
-def test_any_mismatch_breaks_the_hypothesis(fault):
-    before, sample, after = probe(), states(), probe()
-    if fault == 'offset':
-        sample = states(offset=0.05)
-    elif fault == 'homing':
-        before = probe(change={16: {'homing_offset_raw': 120}})
-    elif fault == 'reverse':
-        before = probe(change={12: {'drive_mode': 5}})
-    else:
-        after = probe({**RAW, 13: 3100})
-    assert not check_map.check(before, sample, after)['holds']
+@pytest.mark.parametrize('second,reason', [
+    (probe(change={16: {'homing_offset_raw': 120}}), 'register_changed_between_probes'),
+    (probe(change={12: {'operating_mode': 3}}), 'register_changed_between_probes'),
+    (probe({**RAW, 13: 3005}), 'moved_between_probes'),
+])
+def test_changes_between_probes_are_named(second, reason):
+    verdict = check_map.check([probe(), second])
+    assert not verdict['holds'] and any(reason in row['reasons'] for row in verdict['joints'])
 
 
-def test_incomplete_inputs_are_invalid(tmp_path):
+def test_still_tolerance_boundary():
+    assert check_map.check([probe(), probe({**RAW, 13: 3004})])['holds']
+
+
+@pytest.mark.parametrize('change,reason', [({16: {'homing_offset_raw': -50}}, 'homing_offset_nonzero'),
+                                           ({12: {'drive_mode': 5}}, 'reverse_bit_set')])
+def test_register_state_breaks_the_hypothesis(change, reason):
+    verdict = check_map.check([probe(change=change)])
+    assert not verdict['holds'] and any(reason in row['reasons'] for row in verdict['joints'])
+
+
+def test_main_exit_codes(tmp_path):
+    def write(name, doc):
+        path = tmp_path / name
+        path.write_text(json.dumps(doc))
+        return str(path)
+    good, bad = write('a.json', probe()), write('b.json', probe(change={12: {'drive_mode': 5}}))
+    assert check_map.main([good, good, '--out', str(tmp_path / 'ok.json')]) == 0
+    assert json.loads((tmp_path / 'ok.json').read_text())['holds'] is True
+    assert check_map.main([bad, '--out', str(tmp_path / 'no.json')]) == 3
+    assert check_map.main([good, '--out', str(tmp_path / 'ok.json')]) == 2  # never replaces a verdict
+    failed_probe = write('failed.json', {'error': 'busy'})  # register_probe output without motors
+    assert check_map.main([failed_probe, '--out', str(tmp_path / 'f.json')]) == 2
     with pytest.raises(ValueError):
-        check_map.check({'motors': probe()['motors'][:5]}, states(), probe())
-    with pytest.raises(ValueError):
-        check_map.check(probe(), {'name': ['joint1'], 'position': [0.0]}, probe())
-    paths = {}
-    for name, doc in (('a', probe()), ('b', probe())):
-        paths[name] = tmp_path / f'{name}.json'
-        paths[name].write_text(json.dumps(doc))
-    sample = tmp_path / 'js.yaml'
-    sample.write_text('name: [joint1]\nposition: [0.0]\n')
-    assert check_map.main([str(paths['a']), str(sample), str(paths['b']), '--out', str(tmp_path / 'v.json')]) == 2
+        check_map.check([])
