@@ -269,7 +269,7 @@ def test_a_bend_whose_chord_leaves_the_lane_uses_a_shorter_step():
 
 def test_route_contract_is_in_the_api_reference_and_goal_stays_a_point():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
-    assert "**Version:** v1.313" in reference
+    assert "**Version:** v1.314" in reference
     assert "`/api/fleet/robots/{robot_id}/route`" in reference
     assert "ROUTE_POSE_UNTRUSTED" in reference
     assert "D-463" in reference

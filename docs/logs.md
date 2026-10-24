@@ -10387,3 +10387,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 구현·활성화·현장 수용은 D-865 실행 계획 P1~P5의 별도 단계다.
 - 결정: D-865 Proposed.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) v1.314 절(경로·권한·의미), [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P1 상태 표시.
+- 증거: 미실행 — 문서·계약 변경. 원격 회귀로 계약 시험 확인 예정.
+- gate 변화: 없음.
+- 결정: D-865 P1.
+- 교훈: 없음
