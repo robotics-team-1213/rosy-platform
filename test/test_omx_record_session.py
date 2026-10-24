@@ -38,6 +38,15 @@ class Arm:
         self.writes.append((self.motor, name, value))
         self.motors[self.motor][name] = value
 
+    def alert(self):
+        return self.motors[self.motor]["torque"], self.motors[self.motor].get("alert", False)
+
+    def reboot(self):
+        self.writes.append((self.motor, "reboot", None))
+        motor = self.motors[self.motor]
+        motor["alert"] = motor.get("sticky", False)
+        motor["torque"] = 0
+
     def close(self):
         self.closed += 1
 
@@ -100,8 +109,49 @@ def session(arm, leader, *, active=("rosy-omx-camera@top.service",), activating=
     return s, calls
 
 
-def leader_arm():
-    return Arm({6: {"torque": 0}})
+def leader_arm(**state):
+    return Arm({motor: {"torque": 0, **state} for motor in m.LEADER})
+
+
+def test_a_latched_leader_voltage_alert_is_cleared_before_lerobot_connects(tmp_path):
+    # 2026-10-24: LeRobot reported all six leader motors missing while each answered with alert 0x80.
+    arm, leader = follower(), leader_arm(alert=True)
+
+    def run(command):
+        assert not any(motor.get("alert") for motor in leader.motors.values())
+        return 0
+
+    s, calls = session(arm, leader, run=run)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert record["leader_rebooted"] == list(m.LEADER) and record["safe_end"] is True
+    assert_restored(arm, leader)
+
+
+def test_an_alert_latched_during_the_session_is_cleared_for_the_next_one(tmp_path):
+    arm, leader = follower(), leader_arm()
+
+    def run(command):
+        leader.motors[4]["alert"] = True  # the supply sagged while the leader moved
+        return 0
+
+    s, _ = session(arm, leader, run=run)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert record["leader_rebooted"] == [] and record["leader_rebooted_after"] == [4]
+    assert record["safe_end"] is True and not leader.motors[4]["alert"]
+    assert_restored(arm, leader)
+
+
+@pytest.mark.parametrize("state, message", [
+    ({"alert": True, "torque": 1}, "torque ON"),
+    ({"alert": True, "sticky": True}, "persists"),
+])
+def test_a_leader_alert_that_reboot_cannot_safely_clear_refuses_before_any_cap(tmp_path, state, message):
+    arm, leader = follower(), leader_arm()
+    leader.motors[3].update(state)
+    s, _ = session(arm, leader)
+    with pytest.raises(SystemExit, match=message):
+        s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert arm.writes == []
 
 
 def assert_restored(arm, leader):
