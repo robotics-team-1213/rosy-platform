@@ -40,10 +40,14 @@ def snapshot(ledger):
             revision=revision if isinstance(revision, str) and 0 < len(revision) <= 200 else None,
             error=str(row.get('error', ''))[:500]))
     blockers = pipeline.get('blockers', [])
+    share = pipeline.get('build', {}).get('external_sources') if isinstance(pipeline.get('build'), dict) else None
+    external = ({'huggingface_frames': share['huggingface_frames'], 'percent': float(share['percent'])}
+                if isinstance(share, dict) and type(share.get('huggingface_frames')) is int
+                and share['huggingface_frames'] > 0 and type(share.get('percent')) in (int, float) else None)
     return dict(status=str(pipeline.get('status', 'waiting'))[:100], authority=authority,
         dataset=dataset, cycles=selected,
         blockers=[reason[:500] for reason in blockers[:20] if isinstance(reason, str)]
-        if isinstance(blockers, list) else [])
+        if isinstance(blockers, list) else [], **({'external': external} if external else {}))
 
 
 def project(current, *, counts, pixel_counts, preparation, control):
@@ -91,7 +95,8 @@ def project(current, *, counts, pixel_counts, preparation, control):
              '입력 조건을 확인한 뒤 다시 시도하세요.' if owner.get('status') == 'held'
              else '실행기가 현재 검수 결정을 대조하고 데이터셋을 확인합니다.')
     else:
-        result.update(dataset=owner['dataset'], cycles=owner.get('cycles', []))
+        result.update(dataset=owner['dataset'], cycles=owner.get('cycles', []),
+                      **({'external': owner['external']} if owner.get('external') else {}))
         name, _, revision = owner['dataset'].partition('@')
         mark('dataset', 'done', f'{name} · 버전 {revision[:12]}')
         rows = result['cycles']

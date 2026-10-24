@@ -99,6 +99,7 @@ function renderPipeline() {
   text(records,'p',`검수 버전 ${identity.generation} · 작업대 ${identity.workspace_id}`);
   text(records,'p',`검수 결정 ${identity.decision_sha256}`,'quiet');
   if(pipeline.dataset)text(records,'p',`현재 데이터셋 · ${pipeline.dataset}`);
+  if(pipeline.external)text(records,'p',`외부(HF) 사진 ${pipeline.external.huggingface_frames}장 · ${pipeline.external.percent}% (학습에만)`);
   if(!pipeline.current)text(records,'p','현재 검수 결정과 연결된 학습 결과가 아직 없습니다.');
   for(const [index,row] of pipeline.cycles.entries()) {
     const phase={ready:'평가·READY 기록 확인',candidate:'후보 생성 · 독립 평가 대기'}[row.status]||states[row.status]||row.status;

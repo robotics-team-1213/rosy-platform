@@ -432,6 +432,8 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .evaluate-source a{display:inline-flex;align-items:center;min-block-size:var(--target-secondary)}
 .evaluate-source table{display:block;max-inline-size:100%;overflow-x:auto;border-collapse:collapse;margin-block-end:var(--space-2);font-size:var(--text-label)}
 .evaluate-source th,.evaluate-source td{text-align:start;padding:var(--space-1) var(--space-2);border-block-end:1px solid var(--border-subtle)}
+.evaluate-runs{display:grid;gap:var(--space-2);margin:0 0 var(--space-2);padding:0;list-style:none}
+.evaluate-runs .workspace-link{white-space:normal;overflow-wrap:anywhere}
 @media (width < 64rem){.domain-row{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "stages" "blocked" "next"}.domain-stages{grid-template-columns:repeat(3,minmax(0,1fr))}}
 /* D-857 §3: on phones the stage sub-menu row is only its 48px targets, so the review photo keeps its first view. */
 @container (width < 64rem){.ui-subnav-nav{padding-block:0}}
@@ -450,3 +452,4 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .workspace-entry{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3);padding:var(--space-4);border:1px solid var(--border-subtle);border-radius:var(--radius-control);background:var(--surface-flat)}
 .workspace-entry h3{flex:1 1 12rem;min-width:0;margin:0;overflow-wrap:anywhere}
 .workspace-entry p{flex-basis:100%;margin:0;overflow-wrap:anywhere}
+#hf-imports ui-actions > a { display: inline-flex; align-items: center; min-height: var(--target-secondary); }

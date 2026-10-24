@@ -406,3 +406,52 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 browser.close()
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=5)
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_catalog_sends_a_verified_hf_import_to_review_browser(tmp_path, width):
+    """자료 stage: a completed import gets 「검수로 보내기」 and then shows its pending state."""
+    import cv2
+    import numpy as np
+    import review_masks
+    from test_learning_collaboration import Accounts
+    from test_learning_imports import RIGHTS
+    from test_review_cycle import CLASSES
+    playwright = pytest.importorskip('playwright.sync_api')
+    fake = Accounts()
+    def authorize(actor, project, capability):
+        fake.require(actor, capability)
+    transport = Transport()
+    transport.data = {'img/a.png': cv2.imencode('.png', np.full((24, 32, 3), 90, np.uint8))[1].tobytes()}
+    imports = LearningImports(tmp_path / 'imports', authorize, transport=transport,
+                              credential=lambda *args, **kwargs: {'token': 'selected-secret', 'generation': 1})
+    reviewer = fake.authenticate('reviewer')
+    job = imports.create(reviewer, 'alpha', 'hf-a', 'dataset', 'org/data', 'main', ['img/a.png'], RIGHTS)
+    imports.run(job['id'], reviewer)
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    server = make_server(store, free_port(), accounts=fake, imports=imports)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with playwright.sync_playwright() as runtime:
+            browser, page, errors = open_page(runtime, width, 900, url=url)
+            try:
+                expect = playwright.expect
+                page.context.add_cookies([{'name': 'rosy_learning_session', 'value': 'reviewer', 'url': url}])
+                page.goto(url + '/catalog', wait_until='networkidle')
+                send = page.locator('#hf-imports ui-button', has_text='검수로 보내기')
+                expect(send).to_be_visible()
+                assert send.bounding_box()['height'] >= 44
+                send.click()
+                expect(page.locator('#hf-imports ui-tag')).to_have_text('검수 대기로 보냄')
+                expect(page.locator('#hf-imports')).to_contain_text('새 사진 1장')
+                expect(page.locator('#hf-imports ui-button')).to_have_count(0)
+                assert page.locator('#hf-imports a').bounding_box()['height'] >= 44
+                assert imports.get(reviewer, 'alpha', job['id'])['review']['registered_by'] == 'reviewer'
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                assert not errors
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=5)

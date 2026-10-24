@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
-- 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
-- 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
-- 2026-10-25 · uncommitted · 로컬 main과 origin/main 이력 합치기, D-868 게시 순서
-- 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
+- 2026-10-25 · uncommitted · HF 학습 사진 검토 반영 (own_forced_train)
+- 2026-10-25 · uncommitted · 승인한 HF 사진을 학습 데이터셋에만 (D-857)
+- 2026-10-25 · uncommitted · HF 가져오기를 검수 대기열로 보내기 (D-857 P1)
+- 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
+- 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용

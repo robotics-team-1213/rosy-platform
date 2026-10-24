@@ -40,6 +40,31 @@ def _delivery(fetch, workspace, previous, max_age, now):
     return current, revision
 
 
+def hf_group(frame, source):
+    """`hf:<repo_type>/<repo_id>@<revision>` for an HF still frame with full upstream provenance, else None.
+
+    Its pixels are bound to the pinned provider file hash instead of a capture video (D-857: train only).
+    """
+    up = source.get('upstream') if source.get('source_kind') == 'huggingface' else None
+    if (not isinstance(up, dict) or up.get('provider') != 'huggingface' or up.get('repo_type') not in ('dataset', 'model')
+            or not isinstance(up.get('repo_id'), str) or not up['repo_id'] or not isinstance(up.get('path'), str)
+            or not up['path'] or not re.fullmatch('[0-9a-f]{40}', str(up.get('revision')))
+            or up.get('sha256') != frame['image_sha256']):
+        return None
+    group = f"hf:{up['repo_type']}/{up['repo_id']}@{up['revision']}"
+    if (frame['source_session'], frame['capture_group'], frame['source_video_sha256']) != (group, group, None):
+        return None
+    return group
+
+
+def frame_sources(current, files):
+    """Each frame's full source from the verified bundle snapshot (`verify_bundle` binds its order and digest)."""
+    rows = [json.loads(line) for line in files['inputs/source.jsonl'].splitlines() if line.strip()]
+    if len(rows) != len(current['frames']):
+        raise ValueError('complete source snapshot required')
+    return {frame['frame']: row for frame, row in zip(current['frames'], rows)}
+
+
 def source_components(rows, representation_hashes):
     """Connect sessions/groups and source identities; never synthesize a session."""
     parents = {r['frame']: r['frame'] for r in rows}
@@ -208,16 +233,18 @@ def inspect_candidates(export_root, *, fetch_current, workspace_id,
     image_bytes = {hashlib.sha256(raw).hexdigest(): raw for name, raw in files.items()
                    if name.startswith('inputs/images/')}
     components = source_components(current['frames'], representations)
+    sources = frame_sources(current, files)
     diagnostics = []
     for frame in current['frames']:
         blockers = []
+        video = hf_group(frame, sources[frame['frame']]) is None   # an HF still frame has no capture video
         if frame['mask_decision'] != 'approved': blockers.append('mask_not_approved')
         if frame['object_decision'] == 'excluded' or frame.get('frame_excluded') is True: blockers.append('frame_excluded')
         if frame['source_session'] is None: blockers.append('source_session_unknown')
         if frame['capture_group'] is None: blockers.append('source_group_unknown')
-        if frame['source_video_sha256'] is None: blockers.append('source_video_hash_unknown')
-        if frame['video_frame'] is None: blockers.append('source_video_frame_unknown')
-        if frame['original_video_verified'] is not True: blockers.append('original_video_unverified')
+        if video and frame['source_video_sha256'] is None: blockers.append('source_video_hash_unknown')
+        if video and frame['video_frame'] is None: blockers.append('source_video_frame_unknown')
+        if video and frame['original_video_verified'] is not True: blockers.append('original_video_unverified')
         if frame['fixed_eval_overlap'] is None: blockers.append('fixed_eval_overlap_unknown')
         if not complete: blockers.append('eval_source_group_inventory_incomplete')
         hashes = {frame['image_sha256'], *representations.get(frame['frame'], [])}
@@ -377,6 +404,8 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
         selected = {m['frame']: m for m in masks}
         image_bytes = {hashlib.sha256(raw).hexdigest(): raw for key, raw in files.items() if key.startswith('inputs/images/')}
         by_frame = {r['frame']: r for r in current['frames']}
+        frame_source = frame_sources(current, files)
+        hf_of = {i: hf_group(by_frame[i], frame_source[i]) for i in by_frame}
         eligible_components = []
         for component in components:
             approved = [i for i in component if i in selected]
@@ -385,7 +414,7 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             for i in component:
                 frame = by_frame[i]
                 if (frame['source_session'] is None or frame['capture_group'] is None
-                        or frame['source_video_sha256'] is None or frame['video_frame'] is None
+                        or (hf_of[i] is None and (frame['source_video_sha256'] is None or frame['video_frame'] is None))
                         or frame['fixed_eval_overlap'] is None):
                     raise ValueError('source component provenance UNKNOWN')
                 images = {frame['image_sha256'], *hashes.get(i, [])}
@@ -394,7 +423,8 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                         or frame['source_video_sha256'] in {sha for sha, _ in videos}):
                     raise ValueError('source component overlaps fixed evaluation')
             eligible_components.append(component)
-        if len(eligible_components) < 2:
+        external = {tuple(c) for c in eligible_components if any(hf_of[i] for i in c)}
+        if len(eligible_components) - len(external) < 2:   # val stays our own camera only
             raise ValueError('at least two disconnected source components required')
         scratch_parent = Path(staging_parent).absolute()
         if os.name == 'nt' and scratch_parent.drive.upper() != 'X:':
@@ -436,17 +466,21 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             for i, mask in selected.items():
                 frame = by_frame[i]
                 proof_key = (frame['source_session'], frame['capture_group'], frame['source_video_sha256'])
-                if proof_key not in proofs:
+                if hf_of[i] is None and proof_key not in proofs:
                     raise ValueError('approved original source proof unavailable')
                 mask_errors = mask_blockers(files[mask['mask']], width=frame['width'], height=frame['height'], indices=indices)
                 if mask_errors:
                     raise ValueError('approved mask integrity: ' + ','.join(mask_errors))
-                video_requests.append((proofs[proof_key], frame['video_frame'], image_bytes[frame['image_sha256']]))
+                if hf_of[i] is None:
+                    video_requests.append((proofs[proof_key], frame['video_frame'], image_bytes[frame['image_sha256']]))
+                elif frame['image_sha256'] not in image_bytes:
+                    raise ValueError('approved HF image bytes unavailable')
             _verify_video_requests(video_requests, scratch)
             from build import assign_splits, load_classes
             component_keys = {tuple(component): hashlib.sha256(json.dumps(sorted({(by_frame[i]['source_session'], by_frame[i]['capture_group'], by_frame[i]['source_video_sha256']) for i in component})).encode()).hexdigest()
                               for component in eligible_components}
-            splits = assign_splits(component_keys.values())
+            splits = assign_splits(component_keys[c] for c in map(tuple, eligible_components) if c not in external)
+            splits.update({component_keys[c]: 'train' for c in external})   # D-857: never val, eval or promotion
             entries, sources = [], []
             dataset.mkdir()
             for component in eligible_components:
@@ -456,16 +490,28 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                         continue
                     frame, mask = by_frame[i], selected[i]
                     proof_key = (frame['source_session'], frame['capture_group'], frame['source_video_sha256'])
-                    if proof_key not in proofs:
+                    if hf_of[i] is None and proof_key not in proofs:
                         raise ValueError('approved original source proof unavailable')
-                    proof = proofs[proof_key]; image_raw = image_bytes[frame['image_sha256']]; mask_raw = files[mask['mask']]
+                    image_raw = image_bytes[frame['image_sha256']]; mask_raw = files[mask['mask']]
                     image_name, mask_name = f'images/{i:06d}.png', f'masks/{i:06d}.png'
                     for relative, raw in [(image_name, image_raw), (mask_name, mask_raw)]:
                         path = dataset / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
-                    proof_name = 'evidence/source-proofs/' + proof['sha256'] + '.json'
-                    path = dataset / proof_name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(proof['bytes'])
                     entries.append(dict(image=image_name, mask=mask_name, session=frame['source_session'],
                                         split=splits[component_key], source_component=component_key))
+                    if hf_of[i]:
+                        sources.append(dict(annotation_origin='human_reviewed_pinky_indexed', session=frame['source_session'],
+                                            capture_group=frame['capture_group'], group_basis='huggingface_revision',
+                                            source_kind='huggingface', upstream=copy.deepcopy(frame_source[i]['upstream']),
+                                            source_video_sha256=None, video_frame=None, upstream_file_sha256_verified=True,
+                                            independent_source_pixels_verified=False, source_proof=None,
+                                            approval=copy.deepcopy(frame), export_contract_sha256=verified['contract_sha'],
+                                            authority=revision, image_sha256=frame['image_sha256'],
+                                            mask_sha256=frame['mask_sha256'], classes_sha256=current['pixel_classes_sha256'],
+                                            classes_signature=current['classes_signature']))
+                        continue
+                    proof = proofs[proof_key]
+                    proof_name = 'evidence/source-proofs/' + proof['sha256'] + '.json'
+                    path = dataset / proof_name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(proof['bytes'])
                     sources.append(dict(annotation_origin='human_reviewed_pinky_indexed', session=frame['source_session'],
                                         capture_group=frame['capture_group'], group_basis='operator_collection_assertion',
                                         source_video_sha256=frame['source_video_sha256'], video_frame=frame['video_frame'],
@@ -490,9 +536,15 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             for relative in ['pixel-classes.yaml', 'pixel-reviews.jsonl', 'review-contract.json', 'AUTHORITY_COMPLETE']:
                 (evidence / relative).write_bytes(files[relative])
             (evidence / 'current-decisions.json').write_text(json.dumps(current, sort_keys=True), encoding='utf-8')
+            hf_frames = [hf_of[i] for i in selected if hf_of[i]]
+            # An own frame linked to an HF frame (e.g. by a shared representation hash) is forced into train too.
+            forced = sum(1 for c in external for i in c if i in selected and not hf_of[i])
+            share = dict(huggingface_frames=len(hf_frames), percent=round(100 * len(hf_frames) / len(entries), 1),
+                         groups=sorted(set(hf_frames)), split='train_only', own_forced_train=forced)
             manifest = dict(schema='rosy.perception.dataset/1', builder='review_dataset.py (D-464)',
                             classes=load_classes('captured', require_color=False, source_bytes=files['pixel-classes.yaml']),
-                            frames=entries, sources=sources, ignore_index=255, disjoint_from=refs)
+                            frames=entries, sources=sources, ignore_index=255, disjoint_from=refs,
+                            **({'external_sources': share} if hf_frames else {}))   # own-only content stays identical
             (dataset / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True, indent=2), encoding='utf-8')
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
@@ -508,7 +560,8 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                 if any(_sha256(path) != digest for path, digest in companions.get('source_hashes', {}).items()):
                     raise ValueError('MCAP source changed before publication')
             published, sha = store.put_dataset(dataset, name)
-            result.update(dataset_path=str(published), dataset_revision=sha, authority=revision, frames=len(entries))
+            result.update(dataset_path=str(published), dataset_revision=sha, authority=revision, frames=len(entries),
+                          external_sources=share)
             from store import content_sha
             if content_sha(published) != sha:
                 raise ValueError('published immutable content hash differs')

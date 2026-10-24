@@ -4,6 +4,7 @@ from http.cookies import SimpleCookie
 import hashlib
 import hmac
 import threading
+import time
 from urllib.parse import parse_qs, urlparse
 
 from learning_repos import create_private, delete_private, list_repos
@@ -24,6 +25,7 @@ def cookie(handler, name):
 class Collaboration:
     def __init__(self, accounts, store, *, oauth=None, imports=None, repos=None):
         self.accounts, self.oauth, self.imports, self.repos = accounts, oauth, imports, repos
+        self.store = store
         self.receiver = getattr(accounts, 'receiver', None)
         self.unavailable = ()
         if self.receiver:
@@ -300,6 +302,19 @@ class Collaboration:
         elif path.startswith('/api/learning/imports/'):
             if not self.imports:
                 raise ValueError('자료 가져오기가 설정되지 않았습니다.')
+            if path == '/api/learning/imports/review':
+                # `import` (not `edit`/`approve`): this only queues verified bytes as pending, never a decision.
+                import review_ingest
+                job, files = self.imports.verified(principal, self.accounts.project_id, body.get('id'))
+                if not job.get('review'):
+                    result = review_ingest.import_hf(self.store, job, files, principal['user_id'])
+                    job = self.imports.record_review(principal, self.accounts.project_id, job['id'], dict(
+                        registered_by=principal['user_id'], registered_at=time.time(), status='pending_human',
+                        added=result['added'], indices=result['indices'],
+                        pixel_reviews_pending=result['pixel_reviews_pending'],
+                        catalog_sha256=result['catalog_sha256']))
+                handler.send(job)
+                return True
             if path.endswith('/create'):
                 job = self.imports.create(principal, self.accounts.project_id,
                     body.get('connection_id'), body.get('repo_type'), body.get('repo_id'),

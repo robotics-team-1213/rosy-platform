@@ -41,4 +41,3 @@ D-842 reserved outside this branch; remove when its ADR lands
 D-843 reserved outside this branch; remove when its ADR lands
 D-844 reserved outside this branch; remove when its ADR lands
 D-860 reserved by another session outside this branch; remove when its ADR lands
-D-867 reserved by feat/omx-vla-p0 outside this branch; remove when its ADR lands
