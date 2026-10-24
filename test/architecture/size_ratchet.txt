@@ -37,7 +37,7 @@
 834 fleet/web/shared/styles.css
 788 fleet/web/shared/vision-view.js
 771 fleet/web/sitemap/site-map.js
-800 foundation/core_common/protocol/schemas.py
+767 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
 629 learning/registry/perception/deliver.py
 1533 middleware/core/events/test/test_audit.py

@@ -16,6 +16,12 @@ from .arm_transfer_jobs import (  # noqa: F401
     ArmTransferRequest, ArmTransferRequestKey, ArmTransferJobCreate, ArmTransferJobAdmit,
     ArmTransferJobSnapshot, ArmTransferJobResponse)
 from .task_state import FleetTaskStatus
+from .wire_status import RobotMode, NavigationState, HealthState, Severity, AckStatus
+from .arm_transfer_observations import (  # noqa: F401
+    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmOwnerObservation,
+    ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
+    ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
+    ArmTransferPhysicalReceiptResponse, ArmTransferObservationReply, ArmTransferCancelRequest)
 
 from .arm_transfer_preflight import (  # noqa: F401
     ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)
@@ -90,45 +96,6 @@ def new_msg_id() -> str:
 
 
 # --- 공용 enum (API Ref §4) ----------------------------------------------
-
-class RobotMode(str, enum.Enum):
-    IDLE = "IDLE"
-    MANUAL = "MANUAL"
-    NAVIGATION = "NAVIGATION"
-    DOCKING = "DOCKING"
-    EMERGENCY = "EMERGENCY"
-
-
-class NavigationState(str, enum.Enum):
-    IDLE = "IDLE"
-    PLANNING = "PLANNING"
-    NAVIGATING = "NAVIGATING"
-    ARRIVED = "ARRIVED"
-    CANCELED = "CANCELED"
-    FAILED = "FAILED"
-    BLOCKED = "BLOCKED"
-
-
-class HealthState(str, enum.Enum):
-    OK = "OK"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    UNKNOWN = "UNKNOWN"
-
-
-class Severity(str, enum.Enum):
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    CRITICAL = "critical"
-
-
-class AckStatus(str, enum.Enum):
-    ACCEPTED = "ACCEPTED"
-    STARTED = "STARTED"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-
 
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
 
