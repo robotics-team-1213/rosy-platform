@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-871 | 모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면 | Accepted for implementation (2026-10-25) |
 | D-854 | OMX 학습 정책 실행기 하나로 — 정책 종류를 갈아 끼우는 AI PC 정책 실행기와 행동 단위 변환 | Proposed (2026-10-23) |
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |

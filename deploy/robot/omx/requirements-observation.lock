@@ -1,0 +1,7 @@
+# D-871: what the torque-OFF observers and the observation bridge add over the host's Python 3.14 and its
+# system ROS Jazzy packages (rclpy, sensor_msgs, cv2, numpy, pydantic, yaml), matching the hand-installed
+# release 126e5cd5 that ran on the Fleet PC (2026-10-22). omx_autoupdate.py builds it with
+# "system_site_packages": true, one venv per sha256 of this file.
+dynamixel-sdk==3.8.4
+pyserial==3.5
+websockets==17.0.1

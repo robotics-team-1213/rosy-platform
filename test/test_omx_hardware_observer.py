@@ -241,3 +241,11 @@ def test_observer_unit_restarts_only_into_an_idle_cell():
     guard = service['ExecStartPre']
     assert 'flock -n 9' in guard and '%h/rosy-omx/session.lock' in guard  # the lock joint_tune.session_lock takes
     assert 'fuser "$ROSY_OBSERVER_DEVICE"' in guard and 'exit 1' in guard
+
+
+def test_observer_unit_writes_its_instances_health_file_into_a_folder_it_creates():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / 'deploy/robot/omx/rosy-omx-observer@.service').read_text()
+    # D-871: no sha-named drop-in; the auto-updater reads this file as the torque-OFF evidence
+    assert 'ExecStartPre=/bin/mkdir -p -m 0700 %h/.local/state/rosy/motor-health\n' in text
+    assert '--health-file "%h/.local/state/rosy/motor-health/%i.json" --health-owner %i' in text

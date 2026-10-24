@@ -342,3 +342,16 @@ def test_native_main_subscribes_only_to_configured_sources_with_localhost_discov
     assert {source for source, _ in delivered} == {"arm_feedback", "top"}
     assert lifecycle == [{"args": [], "domain_id": 13}, "destroyed", "shutdown"]
     assert os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST" and os.environ["ROS_STATIC_PEERS"] == ""
+
+
+def test_the_cells_arm_health_files_come_from_the_environment_when_not_given(manifest, tmp_path, monkeypatch, capsys):
+    # D-871: the auto-updated unit names no arms; the private env lists this cell's one or two health files
+    path = tmp_path / "manifest.yaml"
+    path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
+    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret",
+                       "ROSY_OBSERVATION_ARM_HEALTH": f"not_a_registered_arm={tmp_path / 'x.json'}"}.items():
+        monkeypatch.setenv(key, value)
+    with pytest.raises(SystemExit):
+        bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
+                     "--vision-url", "wss://vision.example", "--domain-id", "13"])
+    assert "observation configuration invalid: ValueError" in capsys.readouterr().err
