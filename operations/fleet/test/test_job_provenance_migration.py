@@ -164,3 +164,22 @@ def test_physical_row_is_not_read_or_dispatched_as_a_cell_process(tmp_path):
     assert "legacy-2" not in {row["mission_id"] for row in store.jobs("READY")}
     with pytest.raises(KeyError):
         store.cancel("legacy-2", actor_id="operator-1")
+
+
+@pytest.mark.parametrize("constraint", ["", " DEFAULT 'legacy'"])
+def test_matching_columns_without_provenance_constraints_are_not_accepted(tmp_path, constraint):
+    path = tmp_path / "weak-schema.sqlite3"
+    sql = (Path(__file__).parent / "fixtures/cell_jobs_v4.sql").read_text()
+    for name in ("job_id", "recipe_digest", "cell_digest", "process_artifact_digest"):
+        sql = sql.replace(name + " TEXT NOT NULL", name + " TEXT")
+    with closing(connect(path)) as connection:
+        connection.executescript(sql)
+        connection.execute("ALTER TABLE fleet_cell_jobs ADD COLUMN provenance_kind TEXT NOT NULL" + constraint)
+        connection.execute("INSERT INTO fleet_component_migrations VALUES('cell_jobs',4,'weak')")
+        connection.commit()
+        before = connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0]
+        with pytest.raises(RuntimeError, match="unsupported.*schema"):
+            with initialize()(connection, version=5, now="after"):
+                pass
+        assert connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0] == before
+        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 4
