@@ -10466,8 +10466,20 @@ osy-d395-s1d\`.
 
 ## 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
 
+<<<<<<< HEAD
 - 변경: 측정 도구 `--amp`(CUDA autocast), [재측정 기록](validation/policy-latency-smolvla-2026-10-25/result.md).
 - 증거: AI PC GPU 연산 단독, 카메라 2대 480×640, 1000걸음씩 fp32·amp·fp32. 추론 p50 95/106/96ms, 종단 p99 182/181/182ms. 단일 카메라 Gazebo 회귀는 단독 실행에서 통과.
 - gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
+=======
+- 변경: `read_current_state`가 POSIX에서 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 `mode & 0o077 == 0`일 때만 읽는다(오류 문구에 경로 없음, Windows는 검사 없음). DB 헤더가 WAL이면 거절하고, `..`·정규화되지 않은 경로를 거절한다. review-app 문서에 배포 단계 `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`와 심볼릭 링크 홈 거절을 적고, D-742 addendum에 D-757 관계와 "D-742를 뒤집지 않는 같은 PC state 출처"임을 적었다.
+- 증거: 검토(APPROVE WITH FIXES)가 권한 주장을 강제로 바꾸라고 지적했다. 운영 모델 PC state는 0755·DB 0644이므로 배포 시 권한 변경이 필요하다. 원격 시험은 0755/0644·journal 0644 거절, 0700/0600 성공, WAL 거절, `..` 거절을 확인한다.
+- gate 변화: 없음. 모델 PC 권한 변경·bridge 설정 교체·운영 수용은 별도다.
+
+## 2026-10-24 · uncommitted · 공급암 S 셀 점검·상한 복구·카메라 재시도 코드화
+
+- 변경: `cell_check.py`(읽기 전용 단암 셀 판정, 실패마다 고칠 명령)와 `commissioning_limits.py --baseline`을 추가했다. `joint_tune.py`·`record_session.py`의 거부 문구가 `--baseline`을 안내하고, `rosy-omx-camera-readiness.service`를 `Restart=on-failure`(15 s, 300 s에 3회)로 바꿨다. `services.yaml`의 관제 PC 관측기 arm_a/b를 `off`로 고쳤다(이 PC는 단암 S 셀).
+- 증거: 관제 PC 실측 — 팔로워 6개 PWM 300/전류 500이 남아 joint_tune이 거부했다. 수동 상한 복구 뒤 ID 15가 +40/50으로 이동했다. 부팅 거부 뒤 restore는 성공했지만 재시작이 없어 50분 동안 미준비였고, 수동 restart로 READY가 됐다. 새 시험 `test_omx_cell_check.py`, `--baseline` 시험, 유닛 재시도 단언을 추가했다. 1틱 떨림 거부는 의도된 안전 계약이라 바꾸지 않았다.
+- gate 변화: 없음. 실물 동작을 승인하지 않는다. CE: 새 교훈 `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`, 기존 교훈 갱신 `omx-camera-readiness-…-2026-10-23.md`(세 번째 실패).
+>>>>>>> 14c8eabf82 (fix(omx): one-arm cell check, baseline cap restore, camera readiness retry)

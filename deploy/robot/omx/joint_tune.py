@@ -245,7 +245,7 @@ class Run:
                 raise SystemExit("leader wrist permits bounded move only")
         elif any(found[name] != BASELINE[name] for name in limits):
             raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
-                             "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
+                             "run did not restore them - lower them with commissioning_limits.py --baseline (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
             if leader_wrist:

@@ -22,6 +22,7 @@ Workstation development and simulation preparation for the OMX-AI workcell: a se
 | `host_inventory.py`, `host-inventory.yaml.example` | Static `rosy.omx-host-inventory.v1` loader and a disabled placement template |
 | `preflight.py` | Multi-workcell preflight over the host inventory |
 | `run_pilot_sim.sh`, `probe_*.py`, `probe_*.sh` | Simulation and pilot probes (vendor owner, Fleet ROS vendor sim, pilot HTTP, pilot recording) |
+| `cell_check.py` | Read-only one-arm cell verdict before motion: boards, follower torque/error/voltage/caps via `register_probe.py`, camera readiness; each failure names its fix |
 | `joint_tune.py` | Follower joint commissioning (IDs 11-16): bounded move of one joint (sag check at torque ON), gripper sweep of its ends; temporary limits/gains, always torque OFF and restored, camera frames per settled position |
 | `record_session.py` | One leader→follower LeRobot record/teleoperate session: follower caps raised only for the run, camera services handed over and back, always torque OFF and caps restored |
 | `leader_actuator.py` | Drive the Leader as a commanded reference arm under an explicit hands-off attestation: caps raised with torque OFF and read back, Follower-alignment rate, load and hardware-error stops, torque OFF and the found caps restored on every exit (D-846) |
