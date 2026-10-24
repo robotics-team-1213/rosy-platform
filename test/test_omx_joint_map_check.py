@@ -12,11 +12,11 @@ import joint_map_check as check_map  # noqa: E402
 RAW = {11: 2048, 12: 1024, 13: 3000, 14: 2600, 15: 1500, 16: 2300}
 
 
-def probe(raw=RAW, **change):
+def probe(raw=RAW, change=None):
     rows = []
     for motor_id, position in raw.items():
         row = dict(id=motor_id, model_number=1200, position_raw=position, homing_offset_raw=0, drive_mode=4)
-        row.update(change.get(motor_id, {}))
+        row.update((change or {}).get(motor_id, {}))
         rows.append(row)
     return {'motors': rows}
 
@@ -39,9 +39,9 @@ def test_any_mismatch_breaks_the_hypothesis(fault):
     if fault == 'offset':
         sample = states(offset=0.05)
     elif fault == 'homing':
-        before = probe(**{16: {'homing_offset_raw': 120}})
+        before = probe(change={16: {'homing_offset_raw': 120}})
     elif fault == 'reverse':
-        before = probe(**{12: {'drive_mode': 5}})
+        before = probe(change={12: {'drive_mode': 5}})
     else:
         after = probe({**RAW, 13: 3100})
     assert not check_map.check(before, sample, after)['holds']
