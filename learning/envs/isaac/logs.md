@@ -344,4 +344,4 @@
 
 - 변경: 고정 합성 fixture와 CAD IK·접촉 관측·독립 판정을 공통 catalog/runner/CLI에 연결했다. 기존 import와 실행 잠금·상한·종료 검증을 유지한다.
 - 증거: run36041b241ee25366986bb3a6262ba0be의3,624 physics step·양방향 접촉 lift/이송·해제 후 안정·FINAL6파일·GPU 해제. 독립 검토와 원격377 PASS/1 SKIP, NEW0. 앞선4개 SDK 실패를 보존했다.
-- 범위: Pinky 정지 tray proxy·컨베이어 proxy의 단일 SIM 스모크다. full Pinky·실측 카메라 정합·주행·learned AI·실물 수용이 아니다. 상세는 docs/validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md. CE 구동 방식 교훈 새 기록.
+- gate 변화: Pinky 정지 tray proxy·컨베이어 proxy의 단일 SIM 스모크 수용이다. full Pinky·실측 카메라 정합·주행·learned AI·실물 수용이 아니다. 상세는 docs/validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md. CE 구동 방식 교훈 새 기록.

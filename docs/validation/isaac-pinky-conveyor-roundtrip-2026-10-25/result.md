@@ -4,7 +4,7 @@ Isaac Sim 5.1.0.0에서 OMX-F CAD 집게가 동적 물체를 Pinky 적재면 pro
 
 ## 실행과 판정
 
-- 실행 source: `7d0cfcd6e94fd0181e324319e12c274f3e2f3890`.
+- 실행 source commit: `7d0cfcd6e94fd0181e324319e12c274f3e2f3890`.
 - run: `36041b241ee25366986bb3a6262ba0be`, 최종 `SUCCEEDED`, `task_success=true`, `PHYSICS_GRASP`, 실패 목록 없음.
 - 기존 공식 `remote_isaac.py` check/start/status/fetch와 계정·source·SDK binding, 두 학습 잠금, 165/180초 supervisor를 사용했다. 설치·서비스 활성화·실물 명령은 없었다.
 - `stationary-proxy-v3`: 18 mm 정육면체·0.05 kg, 120 Hz, Pinky 지지면 `(0.14,-0.07,0.09)` m, 컨베이어 `(0.14,0.07,0.09)` m. 두 지지면은 정지한다. 합성 좌표이며 실제 카메라와 정합하지 않았다.
@@ -39,10 +39,10 @@ Isaac Sim 5.1.0.0에서 OMX-F CAD 집게가 동적 물체를 Pinky 적재면 pro
 
 ## 지문·보관·남은 범위
 
-- input: `63504c7ffcdc1a90bb140fc03d1f3c7e9e4aa1e2ce6e4668d6921ea71c353d3a`
-- result: `354d8bf48f179a4ebbf706d8649f1567a00584e287f85373552af62a7cc05bcf`
-- artifacts: `424e8dd6d972af6009065628eefa8fbcea34d998e2d2d8a204427276d39647ea`
-- contact report: `b91a359bc461a110d86d30e44f1bbd10a69bfb072cb388d10672c7336bdc0568`
+- input SHA-256: `63504c7ffcdc1a90bb140fc03d1f3c7e9e4aa1e2ce6e4668d6921ea71c353d3a`
+- result SHA-256: `354d8bf48f179a4ebbf706d8649f1567a00584e287f85373552af62a7cc05bcf`
+- artifacts SHA-256: `424e8dd6d972af6009065628eefa8fbcea34d998e2d2d8a204427276d39647ea`
+- contact report SHA-256: `b91a359bc461a110d86d30e44f1bbd10a69bfb072cb388d10672c7336bdc0568`
 
 비공개 작업 공간 기록의 `2026-10-25/omx-camera-map-reference/`에 실제 top/front 원본·수신 상태, 배치도 HTML, 회차별 request/receipt/FINAL snapshot·원문·요약·해시 확인을 보존했다. 공개 저장소에는 원시 실제 카메라 영상·실장치 identity를 넣지 않는다.
 
